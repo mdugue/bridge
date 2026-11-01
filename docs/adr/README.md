@@ -35,6 +35,7 @@ how it is built.
 | [0047](./0047-phone-memory-budget-in-true-bytes.md) | Every device gets a budget in true bytes, a phone's memory never grows, a device that lost its GPU gets a lighter page |
 | [0048](./0048-network-failures-are-retried.md) | A network failure is retried for a budget of the page's visible time, never decided at once |
 | [0054](./0054-a-design-is-loaded-on-the-device.md) | A planner's design is read on the device, never uploaded, placed by its coordinates or by hand, and stands in for the buildings it covers |
+| [0055](./0055-stadtwissen-and-written-walks.md) | What the twin knows is baked as files for agents; walks are written ahead, checked against the data, their narration marked as Claude's |
 
 ## Numbering
 

@@ -37,7 +37,8 @@
  * Writes public/data/<site>/ (gitignored), the folder the route /<site>
  * streams from.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { PLATE_N, type PlateExtras } from "../lib/city/ground-plate";
 import { type LandmarkFile, siteLandmarks } from "../lib/city/landmarks";
 import {
@@ -55,6 +56,15 @@ import {
   siteProvenance,
 } from "../lib/city/provenance";
 import { tileExtentOf } from "../lib/city/site";
+import {
+  type Walk,
+  WALKS_DIR,
+  WALKS_FILE,
+  photoCredited,
+  walkBundle,
+  walkPhotoFile,
+  type WalksExtras,
+} from "../lib/city/walks";
 import { groundRelief, type ValleyRim } from "../lib/city/valley-fog";
 import {
   ASK_KINDS,
@@ -103,6 +113,7 @@ import { bakeTerrain, dropTerrain } from "./prepare/terrain";
 import { bakePlate } from "./prepare/plate";
 import { publishHero } from "./prepare/hero";
 import { publishStats } from "./prepare/stats";
+import { publishStadtwissen } from "./prepare/stadtwissen";
 
 /** The valley's rim around each tile, where the sky-view bake read the
  *  land beyond the site (pipeline/bake/glo30.py `rims`, in the horizon
@@ -203,16 +214,12 @@ function readProvenance(): ProvenanceRecord {
   }
   return readJson<ProvenanceRecord>(path);
 }
-const provenanceFile = publish(
-  PROVENANCE_FILE,
-  utf8(
-    siteProvenance(
-      readProvenance(),
-      baked.map((t) => t.id),
-      SITE
-    )
-  )
+const provenance = siteProvenance(
+  readProvenance(),
+  baked.map((t) => t.id),
+  SITE
 );
+const provenanceFile = publish(PROVENANCE_FILE, utf8(provenance));
 // The trams' timetable, site-wide (pipeline/bake/transit.py): optional.
 const tramSource = at(tramTimetableSource(siteDataDir(SITE)));
 // The landmarks' facts, site-wide (pipeline/bake/landmark_facts.py): what
@@ -253,10 +260,68 @@ const muralsFile =
       )
     : undefined;
 
+// --- the walks --------------------------------------------------------------------
+// Erzählte Spaziergänge (lib/city/walks.ts, ADR 0055): the site's written
+// walks, checked and bundled into one file the HUD loads when it lists them.
+
+const walksDir = at(`${siteDataDir(SITE)}/${WALKS_DIR}`);
+const walkFiles = existsSync(walksDir)
+  ? readdirSync(walksDir)
+      .filter((name) => name.endsWith(".json"))
+      .sort()
+  : [];
+/** A walk with each stop's photo published beside it (`photo.src`). A
+ *  stop whose copy or credit is missing shows none, so a preview still
+ *  builds; the walks' unit test fails until both are committed. */
+function withPhotos(walk: Walk): Walk {
+  return {
+    ...walk,
+    stops: walk.stops.map((stop) => {
+      if (!stop.photo) {
+        return stop;
+      }
+      const file = join(walksDir, walkPhotoFile(walk.id, stop.id));
+      if (!(existsSync(file) && photoCredited(stop.photo))) {
+        log(
+          `${walk.id}/${stop.id}: no photo copy or credit, shown without (bun scripts/walks.ts ${SITE.id} photos)`
+        );
+        const { photo: _missing, ...rest } = stop;
+        return rest;
+      }
+      const src = publish(
+        `walk-photo_${walk.id}--${stop.id}.webp`,
+        readFileSync(file)
+      );
+      return { ...stop, photo: { ...stop.photo, src } };
+    }),
+  };
+}
+const walks =
+  walkFiles.length > 0
+    ? publish(
+        WALKS_FILE,
+        utf8(
+          walkBundle(
+            SITE.id,
+            walkFiles.map((name) =>
+              withPhotos(readJson<Walk>(join(walksDir, name)))
+            )
+          )
+        )
+      )
+    : undefined;
+
+await publishStadtwissen(
+  baked.map((t) => t.id),
+  frame.epsg,
+  provenance.sources
+);
+
 type SiteExtras = TilesetExtras &
   PlateExtras &
   LandmarkFactsExtras &
-  MuralExtras;
+  MuralExtras &
+  WalksExtras;
 
 const extras: SiteExtras = {
   site: SITE.id,
@@ -283,6 +348,7 @@ const extras: SiteExtras = {
     ask: pickFiles(sideFiles.get(t.id) ?? {}, ASK_KINDS),
   })),
   ...(trams ? { trams } : {}),
+  ...(walks ? { walks } : {}),
   ...(landmarkFacts ? { landmarkFacts } : {}),
   ...(muralsFile
     ? { murals: { credits: murals.map(muralCredit), file: muralsFile } }

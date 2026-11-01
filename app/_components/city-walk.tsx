@@ -28,6 +28,8 @@ import { dataLayersOf } from "@/lib/city/data-layers";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { createLookState } from "@/lib/city/look-state";
 import type { CameraState } from "@/lib/city/pose";
+import type { RenderStyle } from "@/lib/city/render-style";
+import { stopCamera, stopDate, stopView, type Walk } from "@/lib/city/walks";
 import {
   decodeLook,
   encodeSnapshot,
@@ -83,6 +85,12 @@ import {
   TramStatusLine,
 } from "./data-layers-panel";
 import { SceneSidebar } from "./scene-sidebar";
+import { WalkCard } from "./walk-player";
+/** A walk's glides take this much longer than a jump to a place: the
+ *  stop's story starts on the way. */
+const WALK_PACE = 2.2;
+/** The visitor's day, read when a walk's stop is shown (not in a render). */
+const today = () => new Date();
 import { SidebarPace } from "./sidebar-pace";
 import {
   afterTask,
@@ -666,6 +674,51 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     }
     return true;
   };
+  // A walk under way (walk-player.tsx): which stop the card tells, and the
+  // picture style and time it found, to give back when it ends.
+  const [walking, setWalking] = useState<{ index: number; walk: Walk } | null>(
+    null
+  );
+  const beforeWalk = useRef<{ at: Date; style: RenderStyle } | null>(null);
+  /**
+   * Shows a walk's stop: a slow glide to its view (the card can be read,
+   * or heard, on the way) — a jump only out of Modell, which no glide
+   * leaves —, today at the stop's hour, in its picture style.
+   */
+  const showStop = (walk: Walk, index: number) => {
+    const stop = walk.stops[index];
+    const h = handleRef.current;
+    if (!(stop && h)) {
+      return;
+    }
+    if (walking === null) {
+      beforeWalk.current = { at: time.current(), style: look.get().style };
+    }
+    setWalking({ index, walk });
+    // the sun travels with the camera: no jump from one hour to the next
+    const hour = time.glideTo(stopDate(stop, today()));
+    if (h.getViewMode() === "model") {
+      h.applyCameraState(stopCamera(stop, h.offset));
+      hour(1);
+    } else {
+      // a slow glide the visitor looks about in while the text is read:
+      // a drag on the way turns the view, it does not stop the walk
+      h.flyToViewpoint(stopView(stop), {
+        lookAround: true,
+        onProgress: hour,
+        pace: WALK_PACE,
+      });
+    }
+    look.set({ style: stop.style ?? "pastel" });
+  };
+  const endWalk = () => {
+    setWalking(null);
+    if (beforeWalk.current) {
+      time.setInstant(beforeWalk.current.at);
+      look.set({ style: beforeWalk.current.style });
+      beforeWalk.current = null;
+    }
+  };
   const [snapshotText, setSnapshotText] = useState("");
   const [snapshotMsg, setSnapshotMsg] = useState<string | null>(null);
   const [tab, setTab] = useState<SceneTabId>("erkunden");
@@ -1083,23 +1136,36 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
                 onTab={setTab}
               />
 
+              {walking && (
+                <WalkCard
+                  coarse={coarse}
+                  index={walking.index}
+                  onClose={endWalk}
+                  onIndex={(i) => showStop(walking.walk, i)}
+                  walk={walking.walk}
+                />
+              )}
               <InquiryPanel
                 coarse={coarse}
                 onClose={closeInquiry}
                 onPreview={(i) => handleRef.current?.previewCandidate(i)}
                 onSelect={(i) => handleRef.current?.selectCandidate(i)}
               />
-              <SceneOverlays
-                coarse={coarse}
-                live={live}
-                locate={locate}
-                onClimb={(v) => handleRef.current?.setClimbInput(v)}
-                onMovementMode={(m) => handleRef.current?.setMovementMode(m)}
-                onMove={(x, y) => handleRef.current?.setMoveInput(x, y)}
-                onNorth={() => handleRef.current?.turnModelTo(0)}
-                onToggleModel={() => handleRef.current?.toggleModel()}
-                onTurn={(deg) => handleRef.current?.turnModel(deg)}
-              />
+              {/* a phone's walk sheet owns the bottom: the stick and the
+                  toolbar would stand under it (a drag still looks about) */}
+              {!(coarse && walking) && (
+                <SceneOverlays
+                  coarse={coarse}
+                  live={live}
+                  locate={locate}
+                  onClimb={(v) => handleRef.current?.setClimbInput(v)}
+                  onMovementMode={(m) => handleRef.current?.setMovementMode(m)}
+                  onMove={(x, y) => handleRef.current?.setMoveInput(x, y)}
+                  onNorth={() => handleRef.current?.turnModelTo(0)}
+                  onToggleModel={() => handleRef.current?.toggleModel()}
+                  onTurn={(deg) => handleRef.current?.turnModel(deg)}
+                />
+              )}
             </>
           )}
         </div>
@@ -1149,6 +1215,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
           minutes={time.minutes}
           onLook={look.set}
           onResetQuality={resetQuality}
+          onStartWalk={(walk) => showStop(walk, 0)}
           onDefaultTime={() => time.set(time.day, INITIAL_MINUTES)}
           onExport={exportImage}
           onStudy={exportStudy}

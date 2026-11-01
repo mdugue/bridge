@@ -106,6 +106,7 @@ import {
   tileTopsOf,
 } from "@/lib/city/tileset";
 import type { Inquiry, InquiryAlong } from "@/lib/city/inquiry";
+import type { WalksExtras } from "@/lib/city/walks";
 import { isLandmarkInquiry } from "@/lib/city/nameplate";
 import { type NameplateBody, nameplateBody } from "@/lib/city/nameplate-place";
 import { valleyFalloff } from "@/lib/city/valley-fog";
@@ -116,6 +117,7 @@ import {
 } from "@/lib/city/vegetation-lod";
 import { stopBvhWorker } from "./bvh-client";
 import { stopGroundWorker } from "./ground-prep-client";
+import type { GlideOptions } from "./camera-flight";
 import { createCameraPose, type FollowAim } from "./camera-pose";
 import { canvasSizeFor } from "./canvas-size";
 import {
@@ -412,10 +414,23 @@ function sceneBuffers(
   };
 }
 
+/** A file the tileset's extras name, resolved beside it; null without one. */
+function besideTileset(
+  file: string | undefined,
+  tilesetUrl: string
+): string | null {
+  return file ? new URL(file, tilesetUrl).href : null;
+}
+
 /** What the HUD knows of the site from the tileset alone (`onSiteInfo`). */
 export type SiteInfo = Pick<
   CityWalkHandle,
-  "landcoverTiles" | "landmarks" | "latLng" | "provenanceUrl" | "terrainBounds"
+  | "landcoverTiles"
+  | "landmarks"
+  | "latLng"
+  | "provenanceUrl"
+  | "terrainBounds"
+  | "walksUrl"
 > & {
   /** the murals' photos, credited (lib/city/murals.ts `muralCredit`): the
    *  sources in the HUD's footer list them */
@@ -620,6 +635,9 @@ export interface CityWalkHandle {
   /** The provenance manifest (lib/city/provenance.ts), when the tileset
    *  names one: the inquiry card's source lines. */
   provenanceUrl: string | null;
+  /** The site's walks (lib/city/walks.ts), when the tileset names them:
+   *  the Erkunden panel's Spaziergänge. */
+  walksUrl: string | null;
   /** Opt-in pointer-lock mouse-look (desktop); Esc exits natively. */
   enterImmersive: () => void;
   /**
@@ -646,9 +664,16 @@ export interface CityWalkHandle {
   flyTo: (position: Xyz, lookAt: Xyz) => void;
   /**
    * Smoothly glides the camera to a curated scenic Viewpoint (animated, unlike
-   * the instant applyCameraState), landing in the viewpoint's movement mode.
+   * the instant applyCameraState), landing in the viewpoint's movement mode
+   * (in Modell: centres on it); `glide` paces it, lets a drag look about
+   * on the way and hears its progress (camera-pose.ts). Returns how long
+   * the glide takes (s; 0 in Modell, which centres at once and tells
+   * `onProgress` 1).
    */
-  flyToViewpoint: (viewpoint: ViewpointGeometry) => void;
+  flyToViewpoint: (
+    viewpoint: ViewpointGeometry,
+    glide?: GlideOptions
+  ) => number;
   /**
    * The current pose as a vantage — what the HUD stores when you save a view,
    * so restoring it is the same animated glide as any curated one.
@@ -1376,6 +1401,8 @@ async function bootApp(
   const tilesetUrl = new URL(opts.tilesetUrl, window.location.href).href;
   const tileset = await fetchRequiredJson<unknown>(tilesetUrl, opts.signal);
   const extras = parseTilesetExtras(tileset);
+  // the walks name their file beside the tileset's own extras (WalksExtras)
+  const walksFile = (extras as WalksExtras).walks;
   ensureAlive();
   const { offset } = extras;
   // The tile the boot starts on and waits for: the spawn tile, or the one
@@ -1458,10 +1485,9 @@ async function bootApp(
     })),
     latLng,
     photoCredits: murals.credits,
-    provenanceUrl: extras.provenance
-      ? new URL(extras.provenance, tilesetUrl).href
-      : null,
+    provenanceUrl: besideTileset(extras.provenance, tilesetUrl),
     terrainBounds: siteBounds,
+    walksUrl: besideTileset(walksFile, tilesetUrl),
   };
   opts.onSiteInfo?.(siteInfo);
   const sunRig = createSunRig(
@@ -4132,10 +4158,18 @@ async function bootApp(
       pose.flyTo(position, lookAt);
     },
     // In Modell a place is where the picture is centred (plan 055).
-    flyToViewpoint: (view) =>
-      modelRig.owns()
-        ? modelRig.centreOn(vantageTarget(view))
-        : pose.flyToViewpoint(view),
+    flyToViewpoint: (view, glide) => {
+      if (viewMode === "model") {
+        modelRig.centreOn(vantageTarget(view));
+        glide?.onProgress?.(1);
+        return 0;
+      }
+      // Modell still animating out: land it at once, then glide from there
+      if (modelRig.owns()) {
+        modelRig.exitNow();
+      }
+      return pose.flyToViewpoint(view, glide);
+    },
     captureViewpoint: pose.captureViewpoint,
     placeAt: (view) =>
       modelRig.owns()

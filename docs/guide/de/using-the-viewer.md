@@ -405,6 +405,39 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   Belichtung, *Sin City* rot, *Papier* als farbiges Seidenpapier (nachts
   von innen beleuchtet), *Strich* in Planfarben mit Tuschekante (nachts
   als warmes Licht), der *Schwarzplan* als schwarz umrandetes Band.
+- **Spaziergänge** — Rundgänge durch die Stadt, erzählt von Claude,
+  einer KI, und an jeder Station so gekennzeichnet. In Dresden vier:
+  *Augusts Bühne* (die Altstadt als Theater der Macht), *Narben und
+  Nähte* (wie die Stadt mit ihren Wunden lebt), *Gold, Milch und
+  Eigensinn* (die Neustadt) und *Wunder am Elbhang* (flussaufwärts nach
+  Loschwitz); in Leipzig, Hamburg, München, Meißen, Grimma und Unna
+  je einer: *Messe, Musik und Montag*
+  (Leipzig), *Backstein und Wasser* (Hamburg), *Teufel, Tanz und Löwen*
+  (München), *Schloss, Dom und Porzellan* (Meißen), *Grimma an der
+  Mulde* und *Licht unter der Stadt* (Unna). Ein Spaziergang öffnet eine
+  Karte über der Szene: Jede Station gleitet langsam zu ihrem Blick,
+  stellt das heutige Datum zu der Stunde ein, in der sie am besten
+  aussieht (eine Fassade im Abendlicht, ein Platz bei Nacht), und, wo
+  die Station es will, einen Bildstil; aus dem Modell geht ein
+  Spaziergang einmal hinaus, denn erzählt wird, was man sieht. Die
+  Karte erzählt die Station schon während des Flugs dorthin; während des
+  Flugs kannst du dich umschauen, er landet trotzdem an der Station, und
+  das Licht wandert mit dem Flug zur Uhrzeit der nächsten Station. Sie
+  ergänzt, was heute oder in dieser Jahreszeit besonders ist, und nennt
+  ein Detail, das im Bild zu finden ist. Was das Modell nicht zeigt —
+  eine Statue, ein Relief, eine Inschrift, ein Innenraum —, zeigt ein Foto
+  von Wikimedia Commons in der Karte, mit Urheber und Lizenz: ein
+  Querformat oben über die ganze Breite, ein Hochformat neben dem Text
+  (auf dem Handy darüber); ein Klick zeigt es ganz. Es liegt auf dieser
+  Seite, nicht bei Wikimedia. *Belege* klappt jede Angabe der Station mit ihrer Quelle
+  auf — Wikipedia, die Seite einer Einrichtung, die Daten des
+  Stadtmodells selbst; Legenden werden als Legenden erzählt. *Weiter*
+  und *Zurück* gehen von Station zu Station, ✕ beendet den Spaziergang
+  und stellt Bildstil und Uhrzeit zurück. Auf dem Telefon ist die
+  Karte ein Blatt am unteren Rand, das eingeklappt beginnt: Antippen oder
+  Hochziehen am Griff öffnet es, Herunterziehen klappt es wieder ein;
+  Joystick und Werkzeugleiste weichen ihm, solange der Spaziergang läuft. Wie sie geschrieben werden:
+  [walks.md](../../walks.md).
 - **Steuerung** — die vollständige Tastentabelle, eingeklappt, bis du
   sie öffnest (die Leiste über der Szene zeigt die ersten Tasten).
 

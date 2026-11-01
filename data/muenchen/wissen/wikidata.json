@@ -1,0 +1,5528 @@
+{
+ "attribution": "Wikidata (CC0)",
+ "retrieved": "2026-10-30",
+ "entities": {
+  "Q110552": {
+   "label": "Palais Ludwig Ferdinand",
+   "description": "Baudenkmal in München",
+   "wiki": "Palais Ludwig Ferdinand",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q15848826",
+      "v": "Stadtpalais"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q60163",
+      "v": "Leo von Klenze"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q62263",
+      "v": "Ludwig Ferdinand von Bayern"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q81230",
+      "v": "Siemens"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1826"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Wittelsbacherplatz 4"
+     }
+    ]
+   }
+  },
+  "Q12013372": {
+   "label": "St. Franziskus",
+   "description": "Kirche in München",
+   "wiki": "St. Franziskus (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q317557",
+      "v": "Pfarrkirche"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q21034852",
+      "v": "Richard Steidle"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Arminiusstraße 15"
+     }
+    ]
+   }
+  },
+  "Q1208925": {
+   "label": "Dianatempel",
+   "description": "Bauwerk im Hofgarten der Münchner Residenz",
+   "wiki": "Dianatempel (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q276173",
+      "v": "Pavillon"
+     }
+    ],
+    "P88": [
+     {
+      "id": "Q57206",
+      "v": "Maximilian I."
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q132543",
+      "v": "Diana"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q236122",
+      "v": "Architektur der Renaissance"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1617"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Hofgarten"
+     },
+     {
+      "v": "Dianatempel"
+     },
+     {
+      "v": "Hofgartenstraße 6, 80539 München"
+     }
+    ]
+   }
+  },
+  "Q1228868": {
+   "label": "Palais Seyssel d’Aix",
+   "description": "Gebäude in München",
+   "wiki": "Palais Seyssel d’Aix",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q95452015",
+      "v": "Seyssel d'Aix"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Kaulbachstraße 13"
+     }
+    ]
+   }
+  },
+  "Q123406274": {
+   "label": "Planetarium im Deutschen Museum",
+   "description": "Planetarium in München",
+   "wiki": "Planetarium im Deutschen Museum",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q148319",
+      "v": "Planetarium"
+     }
+    ]
+   }
+  },
+  "Q1254126": {
+   "label": "Dr. von Haunersches Kinderspital",
+   "description": "Kinderklinik des Klinikum der Universität München",
+   "wiki": "Dr. von Haunersches Kinderspital",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q129005486",
+      "v": "Universitätskinderkrankenhaus"
+     },
+     {
+      "id": "Q695416",
+      "v": "Poliklinik"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q105134",
+      "v": "August Hauner"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1998"
+     },
+     {
+      "v": "1846"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Lindwurmstraße 4"
+     }
+    ]
+   }
+  },
+  "Q130609": {
+   "label": "Justizpalast",
+   "description": "Gebäude in München, Bayern, Deutschland",
+   "wiki": "Justizpalast (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1137809",
+      "v": "Gerichtsgebäude"
+     },
+     {
+      "id": "Q2519340",
+      "v": "Verwaltungsgebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q75204",
+      "v": "Friedrich von Thiersch"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q911397",
+      "v": "Neobarock"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1898"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q1075723",
+      "v": "Richtfest"
+     },
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "10.5.1897"
+     }
+    ]
+   }
+  },
+  "Q1346774": {
+   "label": "Ludwigsbrücke",
+   "description": "Straßenbrücke in München, Deutschland",
+   "wiki": "Ludwigsbrücke (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q537127",
+      "v": "Straßenbrücke"
+     },
+     {
+      "id": "Q158438",
+      "v": "Bogenbrücke"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q44361",
+      "v": "Ludwig I."
+     }
+    ],
+    "P571": [
+     {
+      "v": "3.11.1935"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q18752057",
+      "v": "Grundsteinlegung"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "3.5.1828"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Ludwigsbrücke"
+     }
+    ]
+   }
+  },
+  "Q1388047": {
+   "label": "Hotel Vier Jahreszeiten",
+   "description": "Luxushotel in München",
+   "wiki": "Hotel Vier Jahreszeiten (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q455403",
+      "v": "Grand Hotel"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q2172755",
+      "v": "Rudolf Gottgetreu"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q24265256",
+      "v": "Maximilianstil"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1858"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "25.7.1858"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Maximilianstraße 17"
+     }
+    ]
+   }
+  },
+  "Q139366": {
+   "label": "Heizkraftwerk Süd",
+   "description": "Heizkraftwerk",
+   "wiki": "Heizkraftwerk Süd (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1601458",
+      "v": "Heizkraftwerk"
+     },
+     {
+      "id": "Q900729",
+      "v": "Gas-und-Dampf-Kombikraftwerk"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q667",
+      "v": "Süden"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "176 m"
+     }
+    ]
+   }
+  },
+  "Q1410082": {
+   "label": "Wittelsbacherbrücke",
+   "description": "Brücke in München",
+   "wiki": "Wittelsbacherbrücke",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q537127",
+      "v": "Straßenbrücke"
+     },
+     {
+      "id": "Q158438",
+      "v": "Bogenbrücke"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q61259",
+      "v": "Theodor Fischer"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q131621",
+      "v": "Wittelsbach"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q22657",
+      "v": "Beton"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1904"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Wittelsbacherbrücke"
+     }
+    ]
+   }
+  },
+  "Q1424325": {
+   "label": "Jazzclub Unterfahrt",
+   "description": "Jazzclub in München",
+   "wiki": "Jazzclub Unterfahrt",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1684522",
+      "v": "Jazzclub"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1978"
+     }
+    ]
+   }
+  },
+  "Q1451784": {
+   "label": "Frauenklinik in der Maistraße",
+   "description": "Krankenhaus",
+   "wiki": "Frauenklinik an der Maistraße",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16917",
+      "v": "Krankenhaus"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1916"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Frauenlobstraße 20,Maistraße 11"
+     }
+    ]
+   }
+  },
+  "Q1497789": {
+   "label": "Luitpoldbrücke München",
+   "description": "steinerne Bogenbrücke über die Isar in München",
+   "wiki": "Luitpoldbrücke (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3397526",
+      "v": "Steinbrücke"
+     },
+     {
+      "id": "Q537127",
+      "v": "Straßenbrücke"
+     },
+     {
+      "id": "Q158438",
+      "v": "Bogenbrücke"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q61259",
+      "v": "Theodor Fischer"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q44785",
+      "v": "Luitpold von Bayern"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q2933645",
+      "v": "Muschelkalk"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1901"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q1441983",
+      "v": "Umnutzung"
+     },
+     {
+      "id": "Q1441983",
+      "v": "Umnutzung"
+     },
+     {
+      "id": "Q1441983",
+      "v": "Umnutzung"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "29.9.1901"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Luitpoldbrücke"
+     }
+    ]
+   }
+  },
+  "Q1519239": {
+   "label": "Landratsamt München",
+   "description": "Verwaltungsbehörde des Landkreises München",
+   "wiki": "Landratsamt München",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1803690",
+      "v": "Landratsamt"
+     },
+     {
+      "id": "Q327333",
+      "v": "Behörde"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Mariahilfplatz 17, 81541 München"
+     }
+    ]
+   }
+  },
+  "Q152971": {
+   "label": "Hofbräuhaus am Platzl",
+   "description": "Bierpalast in München, Bayern, Deutschland, auch Baudenkmal",
+   "wiki": "Hofbräuhaus am Platzl",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q858012",
+      "v": "Bierpalast"
+     }
+    ],
+    "P88": [
+     {
+      "id": "Q60568",
+      "v": "Wilhelm V."
+     }
+    ],
+    "P571": [
+     {
+      "v": "1589"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Platzl 9"
+     }
+    ]
+   }
+  },
+  "Q152973": {
+   "label": "Asamkirche",
+   "description": "Kirchengebäude in München, Deutschland",
+   "wiki": "Asamkirche (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1129743",
+      "v": "Filialkirche"
+     },
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q778568",
+      "v": "Brüder Asam"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q778568",
+      "v": "Brüder Asam"
+     },
+     {
+      "id": "Q221522",
+      "v": "Johannes Nepomuk"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q840829",
+      "v": "Barockarchitektur"
+     },
+     {
+      "id": "Q122960",
+      "v": "Rokoko"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1746"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Sendlinger Straße 32"
+     }
+    ]
+   }
+  },
+  "Q152979": {
+   "label": "Neues Rathaus",
+   "description": "denkmalgeschütztes Gebäudeensemble in München",
+   "wiki": "Neues Rathaus (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q543654",
+      "v": "Rathaus"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q45399",
+      "v": "Georg von Hauberrisser"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q186363",
+      "v": "Neogotik"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q1145473",
+      "v": "Münchner Stadtrat"
+     },
+     {
+      "id": "Q1958954",
+      "v": "Oberbürgermeister von München"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1909"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Marienplatz 8"
+     }
+    ]
+   }
+  },
+  "Q154568": {
+   "label": "Alte Pinakothek",
+   "description": "Kunstmuseum in München",
+   "wiki": "Alte Pinakothek",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q207694",
+      "v": "Kunstmuseum"
+     },
+     {
+      "id": "Q17431399",
+      "v": "staatliches Museum"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q60163",
+      "v": "Leo von Klenze"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1836"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Barer Straße 27, 80333 München, Germany"
+     }
+    ]
+   }
+  },
+  "Q1550678": {
+   "label": "Grundschule am Agilolfingerplatz",
+   "description": "Grundschule im Münchner Stadtteil Untergiesing, Baudenkmal",
+   "wiki": "Grundschule am Agilolfingerplatz",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q56345406",
+      "v": "Grundschule"
+     },
+     {
+      "id": "Q1244442",
+      "v": "Schulgebäude"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1907"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Agilolfingerplatz 1"
+     }
+    ]
+   }
+  },
+  "Q1559177": {
+   "label": "Gebäude der Regierung von Oberbayern",
+   "description": "Gebäude um Lehel, München",
+   "wiki": "Regierung von Oberbayern (Gebäude)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q2519340",
+      "v": "Verwaltungsgebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q70722",
+      "v": "Georg Friedrich Christian Bürklein"
+     }
+    ],
+    "P88": [
+     {
+      "id": "Q44530",
+      "v": "Maximilian II. Joseph"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q2137657",
+      "v": "Regierung von Oberbayern"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q24265256",
+      "v": "Maximilianstil"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q2137657",
+      "v": "Regierung von Oberbayern"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1864"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q18752057",
+      "v": "Grundsteinlegung"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Maximilianstraße 39"
+     }
+    ]
+   }
+  },
+  "Q1593573": {
+   "label": "Kapuzinerkloster München",
+   "description": "ehemaliges Kloster in München",
+   "wiki": "Kapuzinerkloster St. Anton",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q44613",
+      "v": "Kloster"
+     },
+     {
+      "id": "Q2742167",
+      "v": "religiöse Gemeinschaft"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Isartalstraße 4,Kapuzinerstraße 38"
+     }
+    ]
+   }
+  },
+  "Q1594945": {
+   "label": "Heilig Kreuz (Giesing)",
+   "description": "Kirchengebäude in München-Giesing",
+   "wiki": "Heilig Kreuz (Giesing)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q77138",
+      "v": "Georg von Dollmann"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q380356",
+      "v": "Wahres Kreuz"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q186363",
+      "v": "Neogotik"
+     },
+     {
+      "id": "Q24265256",
+      "v": "Maximilianstil"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q40089",
+      "v": "Mauerziegel"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q1441983",
+      "v": "Umnutzung"
+     },
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1886"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "95 m"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Ichostraße 1"
+     }
+    ]
+   }
+  },
+  "Q161751": {
+   "label": "Jüdisches Zentrum München",
+   "description": "Bauwerk in Bayern",
+   "wiki": "Jüdisches Zentrum München",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q109300353",
+      "v": "Hauptsynagoge"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q435610",
+      "v": "Alte Hauptsynagoge München"
+     }
+    ],
+    "P571": [
+     {
+      "v": "2004"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q1075723",
+      "v": "Richtfest"
+     },
+     {
+      "id": "Q18752057",
+      "v": "Grundsteinlegung"
+     }
+    ],
+    "P1083": [
+     {
+      "v": "585"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "9.11.2006"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "28 m"
+     }
+    ]
+   }
+  },
+  "Q162077": {
+   "label": "Glyptothek",
+   "description": "Museum in München, Bayern, Deutschland",
+   "wiki": "Glyptothek (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q17431399",
+      "v": "staatliches Museum"
+     },
+     {
+      "id": "Q957433",
+      "v": "Glyptothek"
+     },
+     {
+      "id": "Q207694",
+      "v": "Kunstmuseum"
+     },
+     {
+      "id": "Q811165",
+      "v": "Baudenkmal"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q60163",
+      "v": "Leo von Klenze"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q1513688",
+      "v": "Greek Revival"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1830"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1816"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Königsplatz 3"
+     }
+    ]
+   }
+  },
+  "Q1623083": {
+   "label": "Hofgartenkaserne",
+   "description": "Kaserne der Bayerischen Armee in München",
+   "wiki": "Hofgartenkaserne",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q131263",
+      "v": "Kaserne"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1801"
+     }
+    ]
+   }
+  },
+  "Q1630636": {
+   "label": "Isarwerk 3",
+   "description": "Laufwasserkraftwerk in München",
+   "wiki": "Isarwerk 3",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1411996",
+      "v": "Laufwasserkraftwerk"
+     }
+    ]
+   }
+  },
+  "Q16320752": {
+   "label": "Rosenheimer Platz 4",
+   "description": "Bürohaus in München",
+   "wiki": "Rosenheimer Platz 4",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1021645",
+      "v": "Bürogebäude"
+     }
+    ],
+    "P88": [
+     {
+      "id": "Q812231",
+      "v": "Bayerische Hausbau"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q18046528",
+      "v": "Deloitte Netherlands"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1/2002"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Rosenheimer Platz 4"
+     }
+    ]
+   }
+  },
+  "Q1642649": {
+   "label": "St. Maximilian",
+   "description": "Kirchengebäude in München",
+   "wiki": "St. Maximilian (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q317557",
+      "v": "Pfarrkirche"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q335854",
+      "v": "Heinrich von Schmidt"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q744373",
+      "v": "Neuromanik"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1908"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Auenstraße 1"
+     }
+    ]
+   }
+  },
+  "Q1666575": {
+   "label": "Kabelsteg (München)",
+   "description": "Fußgängerbrücke über die Kleine Isar in München",
+   "wiki": "Kabelsteg (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1068842",
+      "v": "Fußgängerbrücke"
+     },
+     {
+      "id": "Q158438",
+      "v": "Bogenbrücke"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q364208",
+      "v": "Adolf Schwiening"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q1294605",
+      "v": "Jugendstil"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1898"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Kabelsteg"
+     }
+    ]
+   }
+  },
+  "Q1669848": {
+   "label": "Schmerzhafte Kapelle",
+   "description": "Kirchengebäude in München",
+   "wiki": "Schmerzhafte Kapelle",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q840829",
+      "v": "Barockarchitektur"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ]
+   }
+  },
+  "Q167193": {
+   "label": "Frauenkirche, München",
+   "description": "Kathedralkirche des katholischen Erzbistums München und Freising, Deutschland",
+   "wiki": "Frauenkirche (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q56242215",
+      "v": "katholische Kathedrale"
+     },
+     {
+      "id": "Q55876909",
+      "v": "Katholische Pfarrkirche"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q123464",
+      "v": "Jörg von Halspach"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q93205414",
+      "v": "Unsere Liebe Frau"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q176483",
+      "v": "Gotische Architektur"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q40089",
+      "v": "Mauerziegel"
+     }
+    ],
+    "P571": [
+     {
+      "v": "15. Jahrhundert"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "14.4.1494"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "99 m"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Frauenplatz 1"
+     }
+    ]
+   }
+  },
+  "Q1681903": {
+   "label": "Marstall",
+   "description": "1819–22 von Leo von Klenze, klassizistischer Monumentalbau als Mittelteil der ehemals den Marstallplatz im Osten dreiseitig umfassenden Gebäudegruppe des Hofmarstalls, von dem nur noch Reste erhalten sind; siehe Maximilianstraße 15.",
+   "wiki": "Marstall (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q24354",
+      "v": "Theatergebäude"
+     },
+     {
+      "id": "Q3503155",
+      "v": "Reithalle"
+     },
+     {
+      "id": "Q4309761",
+      "v": "Marstall"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q60163",
+      "v": "Leo von Klenze"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q4309761",
+      "v": "Marstall"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q812446",
+      "v": "Bayerisches Staatsschauspiel"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1822"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Marstallplatz 4"
+     }
+    ]
+   }
+  },
+  "Q1687174": {
+   "label": "München Klinik Thalkirchner Straße",
+   "description": "Krankenhaus",
+   "wiki": "München Klinik Thalkirchner Straße",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16917",
+      "v": "Krankenhaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Frauenlobstraße 9,Frauenlobstraße 11,Thalkirchner Straße 48"
+     }
+    ]
+   }
+  },
+  "Q1688729": {
+   "label": "Stadtbachstufe",
+   "description": "Kleinwasserkraftwerk in München",
+   "wiki": "Stadtbachstufe",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q15911738",
+      "v": "Wasserkraftwerk"
+     }
+    ]
+   }
+  },
+  "Q176018": {
+   "label": "St. Johann Baptist",
+   "description": "Pfarrkirche im Münchener Stadtteil Haidhausen",
+   "wiki": "Neue Pfarrkirche St. Johann Baptist (Haidhausen)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q317557",
+      "v": "Pfarrkirche"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q104323",
+      "v": "Matthias Berger"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q40662",
+      "v": "Johannes der Täufer"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q186363",
+      "v": "Neogotik"
+     },
+     {
+      "id": "Q24265256",
+      "v": "Maximilianstil"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1874"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "97 m"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Johannisplatz 22"
+     }
+    ]
+   }
+  },
+  "Q1788660": {
+   "label": "Kriegerdenkmal im Hofgarten (München)",
+   "description": "Bauwerk in Deutschland",
+   "wiki": "Kriegerdenkmal im Hofgarten (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q575759",
+      "v": "Kriegerdenkmal"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Franz-Josef-Strauß-Ring 1"
+     }
+    ]
+   }
+  },
+  "Q18125641": {
+   "label": "Hitlers Wohnungen in München",
+   "description": "Wohnungen von Adolf Hitler in München",
+   "wiki": "Hitlers Wohnungen in München",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q188507",
+      "v": "Wohnung"
+     }
+    ]
+   }
+  },
+  "Q18674870": {
+   "label": "Balanstraße 23 (München)",
+   "description": "denkmalgeschütztes Mietshaus im Münchner Stadtteil Haidhausen",
+   "wiki": "Balanstraße 23 (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1577547",
+      "v": "Mietshaus"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q911397",
+      "v": "Neobarock"
+     }
+    ],
+    "P571": [
+     {
+      "v": "19. Jahrhundert"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Balanstraße 23"
+     }
+    ]
+   }
+  },
+  "Q18674876": {
+   "label": "Balanstraße 29",
+   "description": "denkmalgeschütztes Mietshaus im Münchner Stadtteil Haidhausen",
+   "wiki": "Balanstraße 29 (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1577547",
+      "v": "Mietshaus"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q911397",
+      "v": "Neobarock"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1890er"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Balanstraße 29"
+     }
+    ]
+   }
+  },
+  "Q18692777": {
+   "label": "Pfarrhaus von Giesing",
+   "description": "katholische Pfarrhaus von Giesing im heutigen Münchner Stadtteil Obergiesing",
+   "wiki": "Pfarrhaus (Giesing)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q607241",
+      "v": "Pfarrhaus"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q106449",
+      "v": "Carl Hocheder"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q911397",
+      "v": "Neobarock"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1894"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Gietlstraße 2"
+     }
+    ]
+   }
+  },
+  "Q18718856": {
+   "label": "Belfortstraße 5 (München)",
+   "description": "denkmalgeschütztes Mietshaus im Münchner Stadtteil Haidhausen",
+   "wiki": "Belfortstraße 5 (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1577547",
+      "v": "Mietshaus"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1900"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Belfortstraße 5"
+     }
+    ]
+   }
+  },
+  "Q18785050": {
+   "label": "Schubertstraße 10 (München)",
+   "description": "denkmalgeschütztes Mietshaus im Münchner Stadtteil Ludwigsvorstadt",
+   "wiki": "Schubertstraße 10 (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1577547",
+      "v": "Mietshaus"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1895"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Schubertstraße 10"
+     }
+    ]
+   }
+  },
+  "Q18785067": {
+   "label": "Mozartstraße 18 (München)",
+   "description": "denkmalgeschütztes Mietshaus im Münchner Stadtteil Ludwigsvorstadt",
+   "wiki": "Mozartstraße 18 (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1577547",
+      "v": "Mietshaus"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1896"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Mozartstraße 18"
+     }
+    ]
+   }
+  },
+  "Q18785080": {
+   "label": "Mozartstraße 23 (München)",
+   "description": "denkmalgeschütztes Mietshaus im Münchner Stadtteil Ludwigsvorstadt",
+   "wiki": "Mozartstraße 23 (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1577547",
+      "v": "Mietshaus"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1896"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Mozartstraße 23"
+     }
+    ]
+   }
+  },
+  "Q1896063": {
+   "label": "Maria, Königin des Friedens",
+   "description": "Kirchengebäude in München",
+   "wiki": "Maria, Königin des Friedens (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q317557",
+      "v": "Pfarrkirche"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q104993",
+      "v": "Robert Vorhoelzer"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q1358870",
+      "v": "Maria Königin"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q245188",
+      "v": "Moderne"
+     },
+     {
+      "id": "Q11784483",
+      "v": "Neues Bauen"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1947"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Untersbergstraße 1"
+     }
+    ]
+   }
+  },
+  "Q189645": {
+   "label": "Zenneckbrücke",
+   "description": "Brücke über die Isar in München",
+   "wiki": "Zenneckbrücke",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q537127",
+      "v": "Straßenbrücke"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q51879728",
+      "v": "August Blössner"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q71722",
+      "v": "Jonathan Zenneck"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1935"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ]
+   }
+  },
+  "Q1896579": {
+   "label": "Mariahilfkirche",
+   "description": "Kirchengebäude in München",
+   "wiki": "Mariahilfkirche (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q317557",
+      "v": "Pfarrkirche"
+     },
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q90665",
+      "v": "Joseph Daniel Ohlmüller"
+     },
+     {
+      "id": "Q84473",
+      "v": "Georg Friedrich Ziebland"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q1895556",
+      "v": "Maria, Hilfe der Christen"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q186363",
+      "v": "Neogotik"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1839"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Mariahilfplatz 42"
+     }
+    ]
+   }
+  },
+  "Q1896945": {
+   "label": "Mariannenbrücke",
+   "description": "Brücke über die Isar in München",
+   "wiki": "Mariannenbrücke",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1068842",
+      "v": "Fußgängerbrücke"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q51879728",
+      "v": "August Blössner"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q237706",
+      "v": "Maria Anna von Sachsen"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q184190",
+      "v": "Stahlbeton"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1888"
+     }
+    ]
+   }
+  },
+  "Q1916336": {
+   "label": "Medienbrücke",
+   "description": "Hochhaus in München",
+   "wiki": "Medienbrücke",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q18142",
+      "v": "Hochhaus"
+     },
+     {
+      "id": "Q1021645",
+      "v": "Bürogebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1453765",
+      "v": "Otto Steidle"
+     }
+    ],
+    "P571": [
+     {
+      "v": "2012"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "46 m"
+     }
+    ]
+   }
+  },
+  "Q19274904": {
+   "label": "Belfortstraße 3 (München)",
+   "description": "denkmalgeschütztes Mietshaus im Münchner Stadtteil Haidhausen",
+   "wiki": "Belfortstraße 3 (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1577547",
+      "v": "Mietshaus"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1900"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Belfortstraße 3"
+     }
+    ]
+   }
+  },
+  "Q1951759": {
+   "label": "Muffatwerk",
+   "description": "Gebäude im Münchner Stadtteil Haidhausen",
+   "wiki": "Muffatwerk",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1329623",
+      "v": "Kulturzentrum"
+     },
+     {
+      "id": "Q857909",
+      "v": "Biergarten"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q106449",
+      "v": "Carl Hocheder"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q1298940",
+      "v": "Karl Muffat"
+     },
+     {
+      "id": "Q1730373",
+      "v": "Karl August Muffat"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q54111",
+      "v": "klassizistische Architektur"
+     },
+     {
+      "id": "Q1295040",
+      "v": "Jugendstilarchitektur"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1837"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Zellstraße 4"
+     }
+    ]
+   }
+  },
+  "Q1954465": {
+   "label": "Museum Lichtspiele",
+   "description": "Kino in München",
+   "wiki": "Museum Lichtspiele (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41253",
+      "v": "Kino"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1910"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Lilienstraße 2, 81669 München"
+     }
+    ]
+   }
+  },
+  "Q1958790": {
+   "label": "Müllersches Volksbad",
+   "description": "Hallenbad in München",
+   "wiki": "Müllersches Volksbad",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q357380",
+      "v": "Hallenbad"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q106449",
+      "v": "Carl Hocheder"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q1517715",
+      "v": "Karl von Müller"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q911397",
+      "v": "Neobarock"
+     },
+     {
+      "id": "Q1294605",
+      "v": "Jugendstil"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     },
+     {
+      "id": "Q1441983",
+      "v": "Umnutzung"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1.5.1901"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Rosenheimer Straße 1"
+     }
+    ]
+   }
+  },
+  "Q1958870": {
+   "label": "München Isartalbahnhof",
+   "description": "ehemaliges Empfangsgebäude des Bahnhofs der Isartalbahn in München",
+   "wiki": "München Isartalbahnhof",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q55488",
+      "v": "Bahnhof"
+     },
+     {
+      "id": "Q4663385",
+      "v": "ehemaliger Bahnhof"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q1673729",
+      "v": "Isartalbahn"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q14751117",
+      "v": "Johanniter-Unfall-Hilfe"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1892"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Schäftlarnstraße 9"
+     }
+    ]
+   }
+  },
+  "Q201939": {
+   "label": "Palais Leuchtenberg",
+   "description": "Baudenkmal in München",
+   "wiki": "Palais Leuchtenberg",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q15848826",
+      "v": "Stadtpalais"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q60163",
+      "v": "Leo von Klenze"
+     }
+    ],
+    "P88": [
+     {
+      "id": "Q155545",
+      "v": "Eugène de Beauharnais"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q155545",
+      "v": "Eugène de Beauharnais"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q502163",
+      "v": "Neorenaissance"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q812436",
+      "v": "Bayerisches Staatsministerium der Finanzen und für Heimat"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1821"
+     },
+     {
+      "v": "1967"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q18752057",
+      "v": "Grundsteinlegung"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Odeonsplatz 4"
+     }
+    ]
+   }
+  },
+  "Q2107901": {
+   "label": "Praterwehrbrücke",
+   "description": "Brücke in München",
+   "wiki": "Praterwehrbrücke",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q537127",
+      "v": "Straßenbrücke"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q315709",
+      "v": "Praterinsel"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1966"
+     }
+    ]
+   }
+  },
+  "Q2139186": {
+   "label": "Reichenbachbrücke",
+   "description": "Brücke in München",
+   "wiki": "Reichenbachbrücke",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q537127",
+      "v": "Straßenbrücke"
+     },
+     {
+      "id": "Q158438",
+      "v": "Bogenbrücke"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q75204",
+      "v": "Friedrich von Thiersch"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q69736",
+      "v": "Georg von Reichenbach"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q22657",
+      "v": "Beton"
+     },
+     {
+      "id": "Q2933645",
+      "v": "Muschelkalk"
+     }
+    ],
+    "P571": [
+     {
+      "v": "17.7.1903"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q1441983",
+      "v": "Umnutzung"
+     },
+     {
+      "id": "Q1441983",
+      "v": "Umnutzung"
+     },
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Reichenbachbrücke"
+     }
+    ]
+   }
+  },
+  "Q2237851": {
+   "label": "Schlachthof München",
+   "description": "Anlage zur Schlachtung und zum Großhandel für Lebensmittel im Münchner Stadtteil Isarvorstadt",
+   "wiki": "Schlacht- und Viehhof München",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q385557",
+      "v": "Schlachthof"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q696599",
+      "v": "Arnold Zenetti"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1878"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     },
+     {
+      "id": "Q1875563",
+      "v": "Luftangriffe auf München"
+     }
+    ]
+   }
+  },
+  "Q2317005": {
+   "label": "St. Andreas",
+   "description": "Kirchengebäude in München",
+   "wiki": "St. Andreas (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q317557",
+      "v": "Pfarrkirche"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1359416",
+      "v": "Ernst Maria Lang"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q43399",
+      "v": "Andreas"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q245188",
+      "v": "Moderne"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1953"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Zenettistraße 44"
+     }
+    ]
+   }
+  },
+  "Q2317231": {
+   "label": "St. Anton",
+   "description": "Kirchengebäude in München",
+   "wiki": "St. Anton (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q317557",
+      "v": "Pfarrkirche"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1582426",
+      "v": "Hans Schurr"
+     },
+     {
+      "id": "Q17418081",
+      "v": "Ludwig Marckert"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q744373",
+      "v": "Neuromanik"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Kapuzinerstraße 36"
+     }
+    ]
+   }
+  },
+  "Q2323756": {
+   "label": "St. Wolfgang",
+   "description": "Kirchengebäude im Stadtteil Haidhausen in München",
+   "wiki": "St. Wolfgang (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q317557",
+      "v": "Pfarrkirche"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1582426",
+      "v": "Hans Schurr"
+     },
+     {
+      "id": "Q1929467",
+      "v": "Michael Steinbrecher"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "St.-Wolfgangs-Platz 8 a"
+     }
+    ]
+   }
+  },
+  "Q251087": {
+   "label": "Heilig-Geist-Kirche",
+   "description": "Kirchengebäude in München",
+   "wiki": "Heilig-Geist-Kirche (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q728266",
+      "v": "Hallenkirche"
+     },
+     {
+      "id": "Q1594905",
+      "v": "Heilig-Geist-Kirche"
+     },
+     {
+      "id": "Q2311284",
+      "v": "Spitalkirche"
+     },
+     {
+      "id": "Q317557",
+      "v": "Pfarrkirche"
+     },
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q715693",
+      "v": "Cosmas Damian Asam"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q37302",
+      "v": "Heiliger Geist"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q176483",
+      "v": "Gotische Architektur"
+     },
+     {
+      "id": "Q840829",
+      "v": "Barockarchitektur"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1208"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1730"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Prälat-Miller-Weg 1"
+     }
+    ]
+   }
+  },
+  "Q251948": {
+   "label": "Bürgersaal",
+   "description": "Kirchengebäude in München, Deutschland",
+   "wiki": "Bürgersaal (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     },
+     {
+      "id": "Q108325",
+      "v": "Kapelle"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q124379",
+      "v": "Giovanni Antonio Viscardi"
+     },
+     {
+      "id": "Q1693814",
+      "v": "Johann Georg Ettenhofer"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q345",
+      "v": "Maria"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q840829",
+      "v": "Barockarchitektur"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1710"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Neuhauser Straße 14"
+     }
+    ]
+   }
+  },
+  "Q254394": {
+   "label": "Sendlinger Tor",
+   "description": "Stadttor der historischen Altstadt von München",
+   "wiki": "Sendlinger Tor",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q685204",
+      "v": "Torturm"
+     },
+     {
+      "id": "Q82117",
+      "v": "Stadttor"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q696599",
+      "v": "Arnold Zenetti"
+     },
+     {
+      "id": "Q15854446",
+      "v": "Wilhelm Bertsch"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q262879",
+      "v": "Sendling"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1308"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q1441983",
+      "v": "Umnutzung"
+     },
+     {
+      "id": "Q217102",
+      "v": "Restaurierung"
+     },
+     {
+      "id": "Q106334491",
+      "v": "Umbau"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Sendlinger Straße 49"
+     }
+    ]
+   }
+  },
+  "Q2554699": {
+   "label": "Wehrsteg (München)",
+   "description": "Fußgängerbrücke in München",
+   "wiki": "Wehrsteg (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1068842",
+      "v": "Fußgängerbrücke"
+     },
+     {
+      "id": "Q158626",
+      "v": "Balkenbrücke"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q184190",
+      "v": "Stahlbeton"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1966"
+     }
+    ]
+   }
+  },
+  "Q258597": {
+   "label": "Museum Brandhorst",
+   "description": "Kunstmuseum in München, Deutschland",
+   "wiki": "Museum Brandhorst",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q207694",
+      "v": "Kunstmuseum"
+     }
+    ],
+    "P571": [
+     {
+      "v": "2009"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "2009"
+     }
+    ]
+   }
+  },
+  "Q25932706": {
+   "label": "Zweibrückenstraße 8 (München)",
+   "description": "Baudenkmal in München",
+   "wiki": "Zweibrückenstraße 8 (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q11755880",
+      "v": "Wohngebäude"
+     },
+     {
+      "id": "Q655686",
+      "v": "Geschäftshaus"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q502163",
+      "v": "Neorenaissance"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q151954",
+      "v": "Lidl"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1903"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Zweibrückenstraße 8"
+     }
+    ]
+   }
+  },
+  "Q259799": {
+   "label": "Theatinerkirche",
+   "description": "Kirchengebäude in München",
+   "wiki": "Theatinerkirche (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1088552",
+      "v": "Katholisches Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q395578",
+      "v": "Agostino Barelli"
+     },
+     {
+      "id": "Q55761504",
+      "v": "Lorenzo Perti"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q379914",
+      "v": "Kajetan von Thiene"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q840829",
+      "v": "Barockarchitektur"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1663"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q18752057",
+      "v": "Grundsteinlegung"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "11.6.1675"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Salvatorplatz 2,Salvatorplatz 2a,Salvatorstraße 2,Theatinerstraße 22"
+     },
+     {
+      "v": "Salvatorplatz 2A, 80333 München"
+     }
+    ]
+   }
+  },
+  "Q260660": {
+   "label": "Isartor",
+   "description": "Stadttor der historischen Altstadt von München",
+   "wiki": "Isartor",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q685204",
+      "v": "Torturm"
+     },
+     {
+      "id": "Q82117",
+      "v": "Stadttor"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q106588",
+      "v": "Isar"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q264209",
+      "v": "Valentin-Karlstadt-Musäum"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1337"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q217102",
+      "v": "Restaurierung"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "40 m"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Tal 50"
+     }
+    ]
+   }
+  },
+  "Q262234": {
+   "label": "Städtische Galerie im Lenbachhaus und Kunstbau München",
+   "description": "Kunstmuseum in München",
+   "wiki": "Städtische Galerie im Lenbachhaus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q207694",
+      "v": "Kunstmuseum"
+     },
+     {
+      "id": "Q24699794",
+      "v": "Museumsgebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q86955",
+      "v": "Gabriel von Seidl"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q585323",
+      "v": "Franz von Lenbach"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1891"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     },
+     {
+      "id": "Q19841649",
+      "v": "Erweiterung"
+     },
+     {
+      "id": "Q19841649",
+      "v": "Erweiterung"
+     },
+     {
+      "id": "Q19841649",
+      "v": "Erweiterung"
+     },
+     {
+      "id": "Q2146005",
+      "v": "Restitution von NS-Raubgut"
+     },
+     {
+      "id": "Q107614552",
+      "v": "Klage auf Restitution eines Kunstwerks"
+     },
+     {
+      "id": "Q2146005",
+      "v": "Restitution von NS-Raubgut"
+     },
+     {
+      "id": "Q2146005",
+      "v": "Restitution von NS-Raubgut"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1929"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Luisenstraße 33"
+     }
+    ]
+   }
+  },
+  "Q264573": {
+   "label": "Villa Stuck",
+   "description": "Kunstmuseum in München",
+   "wiki": "Villa Stuck",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q207694",
+      "v": "Kunstmuseum"
+     },
+     {
+      "id": "Q1797122",
+      "v": "Künstlerhaus"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q20192147",
+      "v": "Neoklassizismus"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1898"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Prinzregentenstraße 60"
+     }
+    ]
+   }
+  },
+  "Q265745": {
+   "label": "St. Michael",
+   "description": "Kirchengebäude in München",
+   "wiki": "St. Michael (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1129743",
+      "v": "Filialkirche"
+     },
+     {
+      "id": "Q56395672",
+      "v": "Jesuitenkirche"
+     },
+     {
+      "id": "Q1679899",
+      "v": "Wandpfeilerkirche"
+     },
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q67350",
+      "v": "Friedrich Sustris"
+     },
+     {
+      "id": "Q314147",
+      "v": "Wendel Dietterlin"
+     }
+    ],
+    "P88": [
+     {
+      "id": "Q60568",
+      "v": "Wilhelm V."
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q45581",
+      "v": "Erzengel Michael"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q236122",
+      "v": "Architektur der Renaissance"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1583"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     },
+     {
+      "id": "Q1309431",
+      "v": "Einsturz"
+     },
+     {
+      "id": "Q1309431",
+      "v": "Einsturz"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Neuhauser Straße 6, 80333 München"
+     }
+    ]
+   }
+  },
+  "Q266759": {
+   "label": "Maximilianeum",
+   "description": "Baudenkmal in München und Sitz des Bayerischen Landtags",
+   "wiki": "Maximilianeum",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q7138926",
+      "v": "Parlamentsgebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q70722",
+      "v": "Georg Friedrich Christian Bürklein"
+     },
+     {
+      "id": "Q61342",
+      "v": "Gottfried Semper"
+     },
+     {
+      "id": "Q1345384",
+      "v": "Karl Kergl"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q44530",
+      "v": "Maximilian II. Joseph"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q502163",
+      "v": "Neorenaissance"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q1259702",
+      "v": "Stiftung Maximilianeum"
+     },
+     {
+      "id": "Q641439",
+      "v": "Bayerischer Landtag"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q811972",
+      "v": "Bauzeit"
+     },
+     {
+      "id": "Q811972",
+      "v": "Bauzeit"
+     },
+     {
+      "id": "Q811972",
+      "v": "Bauzeit"
+     },
+     {
+      "id": "Q18752057",
+      "v": "Grundsteinlegung"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Max-Planck-Straße 1"
+     }
+    ]
+   }
+  },
+  "Q26736720": {
+   "label": "Postamt an der Tegernseer Landstraße",
+   "description": "Wohn- und Geschäftshaus in München, Baudenkmal",
+   "wiki": "Postamt an der Tegernseer Landstraße",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q35054",
+      "v": "Postamt"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q104993",
+      "v": "Robert Vorhoelzer"
+     },
+     {
+      "id": "Q2547424",
+      "v": "Walther Schmidt"
+     },
+     {
+      "id": "Q1285518",
+      "v": "Hans Schnetzer"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q574561",
+      "v": "Neue Sachlichkeit"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q157645",
+      "v": "DHL AG"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1929"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Tegernseer Platz 7"
+     }
+    ]
+   }
+  },
+  "Q26772403": {
+   "label": "Lutherkirche",
+   "description": "Kirche in München-Giesing",
+   "wiki": "Lutherkirche (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q73874",
+      "v": "Hans Grässel"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q9554",
+      "v": "Martin Luther"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1927"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Martin-Luther-Straße 4"
+     }
+    ]
+   }
+  },
+  "Q26821732": {
+   "label": "Altersheim St. Martin",
+   "description": "Altersheim in München, dreiflügelige, dreigeschossige Anlage mit Satteldach, reich gegliedert mit mittigem Schweifzwerchgiebel, Kapelle (samt Ausstattung) mit dreiseitigem Chorabschluss und Dachreiter am Südende des Haupttraktes",
+   "wiki": "Armenversorgungshaus St. Martin",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q22908",
+      "v": "Altenheim"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Severinstraße 2,Severinstraße 4,Severinstraße 6,Werinherstraße 33"
+     }
+    ]
+   }
+  },
+  "Q26974027": {
+   "label": "Kriechbaumhof",
+   "description": "Gebäude im Stil eines alpenländischen Bauernhofs in München-Haidhausen",
+   "wiki": "Kriechbaumhof",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q811979",
+      "v": "Bauwerk"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Preysingstraße 71"
+     }
+    ]
+   }
+  },
+  "Q27927869": {
+   "label": "Postamt und Wohngebäude am Goetheplatz",
+   "description": "Haus",
+   "wiki": "Postamt und Wohngebäude am Goetheplatz",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q11755880",
+      "v": "Wohngebäude"
+     },
+     {
+      "id": "Q35054",
+      "v": "Postamt"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q2547424",
+      "v": "Walther Schmidt"
+     },
+     {
+      "id": "Q1447300",
+      "v": "Franz Holzhammer"
+     },
+     {
+      "id": "Q104993",
+      "v": "Robert Vorhoelzer"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q574561",
+      "v": "Neue Sachlichkeit"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q157645",
+      "v": "DHL AG"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1932"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Goetheplatz 1"
+     }
+    ]
+   }
+  },
+  "Q279303": {
+   "label": "Abtei St. Bonifaz",
+   "description": "Benediktinerkloster in München",
+   "wiki": "Abtei St. Bonifaz (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q160742",
+      "v": "Abtei"
+     },
+     {
+      "id": "Q334383",
+      "v": "Abteikirche"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q84473",
+      "v": "Georg Friedrich Ziebland"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q160445",
+      "v": "Bonifatius"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q245188",
+      "v": "Moderne"
+     },
+     {
+      "id": "Q744373",
+      "v": "Neuromanik"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1835"
+     },
+     {
+      "v": "1850"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "24.11.1850"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Karlstraße 34"
+     }
+    ]
+   }
+  },
+  "Q30133833": {
+   "label": "Alte Utting",
+   "description": "Kultur- und Partylocation in einem ehemaligen Fahrgastschiff in München",
+   "wiki": "Alte Utting",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q402092",
+      "v": "Motorschiff"
+     },
+     {
+      "id": "Q256020",
+      "v": "Gasthof"
+     },
+     {
+      "id": "Q2055880",
+      "v": "Passagierschiff"
+     },
+     {
+      "id": "Q187456",
+      "v": "Bar"
+     },
+     {
+      "id": "Q622425",
+      "v": "Nachtclub"
+     },
+     {
+      "id": "Q8719053",
+      "v": "Spielstätte für Musik"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q167673",
+      "v": "Utting am Ammersee"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1950"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q14592615",
+      "v": "Kiellegung"
+     },
+     {
+      "id": "Q7497950",
+      "v": "Ausmusterung"
+     },
+     {
+      "id": "Q370553",
+      "v": "Schiffstaufe"
+     }
+    ],
+    "P1083": [
+     {
+      "v": "400"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "26.7.2018"
+     }
+    ]
+   }
+  },
+  "Q318058": {
+   "label": "Staatstheater am Gärtnerplatz",
+   "description": "Opernhaus in München",
+   "wiki": "Staatstheater am Gärtnerplatz",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q24354",
+      "v": "Theatergebäude"
+     },
+     {
+      "id": "Q153562",
+      "v": "Opernhaus"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q1558849",
+      "v": "Gärtnerplatz"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q113532008",
+      "v": "Staatstheater am Gärtnerplatz"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q1441983",
+      "v": "Umnutzung"
+     },
+     {
+      "id": "Q2478058",
+      "v": "Rekonstruktion"
+     },
+     {
+      "id": "Q2478058",
+      "v": "Rekonstruktion"
+     },
+     {
+      "id": "Q2478058",
+      "v": "Rekonstruktion"
+     },
+     {
+      "id": "Q2478058",
+      "v": "Rekonstruktion"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1865"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Gärtnerplatz 3,Reichenbachstraße 16 g"
+     }
+    ]
+   }
+  },
+  "Q318800": {
+   "label": "Damenstiftskirche",
+   "description": "Kirchengebäude in München, Bayern",
+   "wiki": "Damenstiftskirche (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1129743",
+      "v": "Filialkirche"
+     },
+     {
+      "id": "Q334383",
+      "v": "Abteikirche"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1363416",
+      "v": "Erwin Schleich"
+     },
+     {
+      "id": "Q1692535",
+      "v": "Johann Baptist Gunetzrhainer"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q840829",
+      "v": "Barockarchitektur"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1735"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Damenstiftstraße 1"
+     },
+     {
+      "v": "Damenstiftstraße 1, 80331 München"
+     }
+    ]
+   }
+  },
+  "Q318804": {
+   "label": "St. Anna im Lehel",
+   "description": "Kirchengebäude in München, Bayern",
+   "wiki": "St. Anna im Lehel",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q317557",
+      "v": "Pfarrkirche"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q86955",
+      "v": "Gabriel von Seidl"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q164294",
+      "v": "Heilige Anna"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q744373",
+      "v": "Neuromanik"
+     },
+     {
+      "id": "Q236122",
+      "v": "Architektur der Renaissance"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1892"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "St.-Anna-Platz 5"
+     }
+    ]
+   }
+  },
+  "Q320557": {
+   "label": "Münchner Haus der Kulturinstitute",
+   "description": "Baudenkmal in München",
+   "wiki": "Münchner Haus der Kulturinstitute",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q24699794",
+      "v": "Museumsgebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q63199",
+      "v": "Paul Ludwig Troost"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q190617",
+      "v": "Zentralinstitut für Kunstgeschichte"
+     },
+     {
+      "id": "Q323280",
+      "v": "Museum für Abgüsse Klassischer Bildwerke"
+     },
+     {
+      "id": "Q464404",
+      "v": "Staatliche Graphische Sammlung München"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1935"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Katharina-von-Bora-Straße 10"
+     }
+    ]
+   }
+  },
+  "Q321485": {
+   "label": "St. Lukas",
+   "description": "Kirchengebäude in München",
+   "wiki": "St. Lukas (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q2638748",
+      "v": "Albert Schmidt"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q128538",
+      "v": "Lukas der Evangelist"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q277466",
+      "v": "Historismus"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1893"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Mariannenplatz 3"
+     }
+    ]
+   }
+  },
+  "Q328188": {
+   "label": "St. Salvator",
+   "description": "Kirchengebäude in München",
+   "wiki": "St. Salvator (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q51625",
+      "v": "Salvator Mundi"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q176483",
+      "v": "Gotische Architektur"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q40089",
+      "v": "Mauerziegel"
+     }
+    ],
+    "P571": [
+     {
+      "v": "15. Jahrhundert"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Salvatorstraße 17"
+     }
+    ]
+   }
+  },
+  "Q414542": {
+   "label": "Akademietheater",
+   "description": "Theater in München-Bogenhausen",
+   "wiki": "Akademietheater (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q24354",
+      "v": "Theatergebäude"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q812296",
+      "v": "Bayerische Theaterakademie August Everding"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q812296",
+      "v": "Bayerische Theaterakademie August Everding"
+     }
+    ],
+    "P1083": [
+     {
+      "v": "250"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "11.11.1996"
+     }
+    ]
+   }
+  },
+  "Q436026": {
+   "label": "Alte Münze",
+   "description": "historisches Gebäude in München, ehemaliges Museum",
+   "wiki": "Alte Münze (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q214252",
+      "v": "Stall"
+     }
+    ],
+    "P88": [
+     {
+      "id": "Q60907",
+      "v": "Albrecht V."
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q812404",
+      "v": "Bayerisches Hauptmünzamt"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q236122",
+      "v": "Architektur der Renaissance"
+     },
+     {
+      "id": "Q54111",
+      "v": "klassizistische Architektur"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q812412",
+      "v": "Bayerisches Landesamt für Denkmalpflege"
+     },
+     {
+      "id": "Q99756620",
+      "v": "Kunstkammer München"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1567"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Hofgraben 4"
+     }
+    ]
+   }
+  },
+  "Q439458": {
+   "label": "Altes Rathaus",
+   "description": "denkmalgeschütztes Gebäude in München, Bayern",
+   "wiki": "Altes Rathaus (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q543654",
+      "v": "Rathaus"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q123464",
+      "v": "Jörg von Halspach"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q46261",
+      "v": "Romanische Architektur"
+     },
+     {
+      "id": "Q10924220",
+      "v": "Spätgotik"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1480"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     },
+     {
+      "id": "Q94394406",
+      "v": "Wiederaufbau"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "56 m"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Marienplatz 15"
+     }
+    ]
+   }
+  },
+  "Q452685": {
+   "label": "Münchner Stadtmuseum",
+   "description": "Museum in Deutschland",
+   "wiki": "Münchner Stadtmuseum",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q2327632",
+      "v": "Stadtmuseum"
+     },
+     {
+      "id": "Q33506",
+      "v": "Museum"
+     },
+     {
+      "id": "Q131560554",
+      "v": "Puppentheatermuseum"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1888"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Rosental 16,St.-Jakobs-Platz 1"
+     }
+    ]
+   }
+  },
+  "Q456586": {
+   "label": "Prinzregententheater",
+   "description": "Theater in München",
+   "wiki": "Prinzregententheater",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q24354",
+      "v": "Theatergebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q67407",
+      "v": "Max Littmann"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q44785",
+      "v": "Luitpold von Bayern"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q1295040",
+      "v": "Jugendstilarchitektur"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1901"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q168983",
+      "v": "Brand"
+     },
+     {
+      "id": "Q1370468",
+      "v": "bauliche Rekonstruktion"
+     },
+     {
+      "id": "Q1370468",
+      "v": "bauliche Rekonstruktion"
+     }
+    ],
+    "P1083": [
+     {
+      "v": "1029"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "20.8.1901"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Prinzregentenplatz 12"
+     }
+    ]
+   }
+  },
+  "Q504642": {
+   "label": "Friedensengel",
+   "description": "denkmalgeschützte Anlage in München",
+   "wiki": "Friedensdenkmal (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q4989906",
+      "v": "Monument"
+     }
+    ],
+    "P88": [
+     {
+      "id": "Q1293262",
+      "v": "Prinzregent-Luitpold-Stiftung zur Förderung der Kunst, des Kunstgewerbes und des Handwerks in München"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q277466",
+      "v": "Historismus"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q34095",
+      "v": "Bronze"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q18752057",
+      "v": "Grundsteinlegung"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "16.7.1899"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Friedensengel"
+     }
+    ]
+   }
+  },
+  "Q520185": {
+   "label": "Münchner Kammerspiele",
+   "description": "Theater in München (Ensemble)",
+   "wiki": "Münchner Kammerspiele",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q24354",
+      "v": "Theatergebäude"
+     },
+     {
+      "id": "Q2416217",
+      "v": "Theatergruppe"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1911"
+     }
+    ]
+   }
+  },
+  "Q523652": {
+   "label": "Sammlung Schack",
+   "description": "Kunstmuseum und Kunstsammlung in München",
+   "wiki": "Sammlung Schack",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q207694",
+      "v": "Kunstmuseum"
+     },
+     {
+      "id": "Q7328910",
+      "v": "Kunstsammlung"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q63876",
+      "v": "Adolf Friedrich von Schack"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1857"
+     },
+     {
+      "v": "1865"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Prinzregentenstraße 9"
+     }
+    ]
+   }
+  },
+  "Q524044": {
+   "label": "Dreifaltigkeitskirche",
+   "description": "Kirchengebäude in München",
+   "wiki": "Dreifaltigkeitskirche (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     },
+     {
+      "id": "Q693842",
+      "v": "Votivkirche"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q124379",
+      "v": "Giovanni Antonio Viscardi"
+     },
+     {
+      "id": "Q1693814",
+      "v": "Johann Georg Ettenhofer"
+     },
+     {
+      "id": "Q124421",
+      "v": "Enrico Zuccalli"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q37090",
+      "v": "Dreifaltigkeit"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q840829",
+      "v": "Barockarchitektur"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1718"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1718"
+     }
+    ]
+   }
+  },
+  "Q529345": {
+   "label": "Gasteig",
+   "description": "Kultur- und Bildungszentrum in München mit Konzertsaal (Philharmonie), Volkshochschule und Stadtbibliothek",
+   "wiki": "Gasteig",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1329623",
+      "v": "Kulturzentrum"
+     },
+     {
+      "id": "Q2190251",
+      "v": "Kunstzentrum"
+     },
+     {
+      "id": "Q1060829",
+      "v": "Konzerthaus"
+     },
+     {
+      "id": "Q170087",
+      "v": "Volkshochschule"
+     },
+     {
+      "id": "Q856584",
+      "v": "Bibliotheksgebäude"
+     },
+     {
+      "id": "Q3469910",
+      "v": "Zentrum für darstellende Künste"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q40089",
+      "v": "Mauerziegel"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1985"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q1068633",
+      "v": "Spatenstich"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "10.11.1985"
+     }
+    ]
+   }
+  },
+  "Q532191": {
+   "label": "Cuvilliés-Theater",
+   "description": "Opernhaus und Theater in München",
+   "wiki": "Cuvilliés-Theater",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q153562",
+      "v": "Opernhaus"
+     },
+     {
+      "id": "Q24354",
+      "v": "Theatergebäude"
+     },
+     {
+      "id": "Q133873024",
+      "v": "Schlosstheater"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q60739",
+      "v": "François de Cuvilliés der Ältere"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q60739",
+      "v": "François de Cuvilliés der Ältere"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q122960",
+      "v": "Rokoko"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q812446",
+      "v": "Bayerisches Staatsschauspiel"
+     },
+     {
+      "id": "Q681931",
+      "v": "Bayerische Staatsoper"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     },
+     {
+      "id": "Q1370468",
+      "v": "bauliche Rekonstruktion"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "14.6.1958"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Residenzstraße 1"
+     }
+    ]
+   }
+  },
+  "Q567400": {
+   "label": "Karlstor (München)",
+   "description": "Wehrturm in München",
+   "wiki": "Karlstor (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q685204",
+      "v": "Torturm"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q696599",
+      "v": "Arnold Zenetti"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q44961",
+      "v": "Karl Theodor"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q186363",
+      "v": "Neogotik"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ]
+   }
+  },
+  "Q571767": {
+   "label": "Führerbau",
+   "description": "denkmalgeschütztes Gebäude in München",
+   "wiki": "Führerbau",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q63199",
+      "v": "Paul Ludwig Troost"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q352",
+      "v": "Adolf Hitler"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q287025",
+      "v": "Architektur im Nationalsozialismus"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q657167",
+      "v": "Hochschule für Musik und Theater München"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1937"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Arcisstraße 12"
+     }
+    ]
+   }
+  },
+  "Q582795": {
+   "label": "Antiquarium",
+   "description": "Teil der Münchner Residenz",
+   "wiki": "Antiquarium (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q2133296",
+      "v": "Raum"
+     },
+     {
+      "id": "Q31838271",
+      "v": "Festsaal"
+     },
+     {
+      "id": "Q856584",
+      "v": "Bibliotheksgebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q574388",
+      "v": "Jacopo Strada"
+     }
+    ],
+    "P88": [
+     {
+      "id": "Q60907",
+      "v": "Albrecht V."
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     },
+     {
+      "id": "Q1370468",
+      "v": "bauliche Rekonstruktion"
+     }
+    ]
+   }
+  },
+  "Q636743": {
+   "label": "Archäologische Staatssammlung",
+   "description": "bayerisches Landesmuseum für Vor- und Frühgeschichte in München, Deutschland",
+   "wiki": "Archäologische Staatssammlung München",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3329412",
+      "v": "archäologisches Museum"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "14.10.1885"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Lerchenfeldstraße 2, 80538 München"
+     }
+    ]
+   }
+  },
+  "Q686548": {
+   "label": "Residenz München",
+   "description": "größtes Innenstadtschloss Deutschlands",
+   "wiki": "Münchner Residenz",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q751876",
+      "v": "Schloss"
+     },
+     {
+      "id": "Q53536964",
+      "v": "königlicher Palast"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q236122",
+      "v": "Architektur der Renaissance"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1385"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Residenzstraße 1, 80333 München"
+     }
+    ]
+   }
+  },
+  "Q686997": {
+   "label": "Palais Holnstein",
+   "description": "Stadtpalais in München",
+   "wiki": "Palais Holnstein",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q15848826",
+      "v": "Stadtpalais"
+     },
+     {
+      "id": "Q1802963",
+      "v": "Herrenhaus"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q60739",
+      "v": "François de Cuvilliés der Ältere"
+     }
+    ],
+    "P88": [
+     {
+      "id": "Q76736",
+      "v": "Karl VII."
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q18411753",
+      "v": "Franz Ludwig von Holnstein"
+     },
+     {
+      "id": "Q50821835",
+      "v": "Erzbischof von München und Freising"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q840829",
+      "v": "Barockarchitektur"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1733"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     },
+     {
+      "id": "Q2144402",
+      "v": "Renovierung"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Kardinal-Faulhaber-Straße 7, 80333 München"
+     }
+    ]
+   }
+  },
+  "Q697782": {
+   "label": "Haus der Kunst",
+   "description": "Ausstellungsgebäude in München",
+   "wiki": "Haus der Kunst",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q207694",
+      "v": "Kunstmuseum"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q63199",
+      "v": "Paul Ludwig Troost"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q287025",
+      "v": "Architektur im Nationalsozialismus"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1937"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1937"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Prinzregentenstraße 1"
+     }
+    ]
+   }
+  },
+  "Q69908442": {
+   "label": "Blitz Club",
+   "description": "Techno-Club in München",
+   "wiki": "Blitz Club",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q2399482",
+      "v": "Techno-Club"
+     },
+     {
+      "id": "Q622425",
+      "v": "Nachtclub"
+     },
+     {
+      "id": "Q51167626",
+      "v": "schwule Disco"
+     }
+    ],
+    "P571": [
+     {
+      "v": "4/2017"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "22.4.2017"
+     }
+    ]
+   }
+  },
+  "Q707645": {
+   "label": "St. Peter (München)",
+   "description": "Kirchengebäude in München",
+   "wiki": "St. Peter (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q317557",
+      "v": "Pfarrkirche"
+     },
+     {
+      "id": "Q120560",
+      "v": "Basilica minor"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q2172608",
+      "v": "Rudolf Esterer"
+     },
+     {
+      "id": "Q1363416",
+      "v": "Erwin Schleich"
+     },
+     {
+      "id": "Q1657410",
+      "v": "Ignaz Anton Gunetzrhainer"
+     },
+     {
+      "id": "Q1673482",
+      "v": "Isaak Bader"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q33923",
+      "v": "Petrus"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q176483",
+      "v": "Gotische Architektur"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q1370468",
+      "v": "bauliche Rekonstruktion"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1294"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Petersplatz 1"
+     },
+     {
+      "v": "Rindermarkt 1, 80331 München"
+     }
+    ]
+   }
+  },
+  "Q707679": {
+   "label": "Nationaltheater München",
+   "description": "Operngebäude",
+   "wiki": "Nationaltheater (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q153562",
+      "v": "Opernhaus"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q70487",
+      "v": "Karl von Fischer"
+     },
+     {
+      "id": "Q60163",
+      "v": "Leo von Klenze"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q54111",
+      "v": "klassizistische Architektur"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q681931",
+      "v": "Bayerische Staatsoper"
+     },
+     {
+      "id": "Q568401",
+      "v": "Bayerisches Staatsballett"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1818"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q168983",
+      "v": "Brand"
+     },
+     {
+      "id": "Q168983",
+      "v": "Brand"
+     },
+     {
+      "id": "Q1370468",
+      "v": "bauliche Rekonstruktion"
+     }
+    ],
+    "P1083": [
+     {
+      "v": "2100"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1818"
+     },
+     {
+      "v": "1963"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Max-Joseph-Platz 2"
+     }
+    ]
+   }
+  },
+  "Q707981": {
+   "label": "Staatliche Antikensammlungen",
+   "description": "Sammlung antiker Kunst am Königsplatz in München",
+   "wiki": "Staatliche Antikensammlungen",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3329412",
+      "v": "archäologisches Museum"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1847"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Königsplatz 1,Königsplatz 1a"
+     }
+    ]
+   }
+  },
+  "Q728213": {
+   "label": "Hotel Bayerischer Hof",
+   "description": "Luxushotel in München",
+   "wiki": "Hotel Bayerischer Hof (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q455403",
+      "v": "Grand Hotel"
+     },
+     {
+      "id": "Q63099748",
+      "v": "Hotelgebäude"
+     },
+     {
+      "id": "Q27686",
+      "v": "Hotel"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q66149",
+      "v": "Friedrich von Gärtner"
+     }
+    ],
+    "P88": [
+     {
+      "id": "Q72598",
+      "v": "Joseph Anton von Maffei"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1841"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Promenadeplatz 2-6"
+     }
+    ]
+   }
+  },
+  "Q822301": {
+   "label": "Propyläen",
+   "description": "antikisierendes Gebäude in München",
+   "wiki": "Propyläen (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q82117",
+      "v": "Stadttor"
+     },
+     {
+      "id": "Q143912",
+      "v": "Triumphbogen"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q60163",
+      "v": "Leo von Klenze"
+     }
+    ],
+    "P88": [
+     {
+      "id": "Q44361",
+      "v": "Ludwig I."
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q3407649",
+      "v": "Propyläen"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q1513688",
+      "v": "Greek Revival"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1862"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Königsplatz 2"
+     }
+    ]
+   }
+  },
+  "Q874045": {
+   "label": "Löwenbräukeller",
+   "description": "denkmalgeschütztes Gebäude in München",
+   "wiki": "Löwenbräukeller",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q858012",
+      "v": "Bierpalast"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q2638748",
+      "v": "Albert Schmidt"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "14.6.1883"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Nymphenburger Straße 2,Nymphenburger Straße 10 c,Nymphenburger Straße 10 d"
+     }
+    ]
+   }
+  },
+  "Q875536": {
+   "label": "Klosterkirche St. Anna im Lehel",
+   "description": "Kirchengebäude in München",
+   "wiki": "Klosterkirche St. Anna im Lehel",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q334383",
+      "v": "Abteikirche"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q72959",
+      "v": "Johann Michael Fischer"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q164294",
+      "v": "Heilige Anna"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q122960",
+      "v": "Rokoko"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1733"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q811122",
+      "v": "Bauarbeiter"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "St.-Anna-Straße 21"
+     },
+     {
+      "v": "St.-Anna-Straße 19, 80538 München"
+     }
+    ]
+   }
+  },
+  "Q875754": {
+   "label": "Allerheiligenkirche am Kreuz",
+   "description": "Kirchengebäude in München, Deutschland",
+   "wiki": "Allerheiligenkirche am Kreuz",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1129743",
+      "v": "Filialkirche"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q123464",
+      "v": "Jörg von Halspach"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q587",
+      "v": "Allerheiligen"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q176483",
+      "v": "Gotische Architektur"
+     },
+     {
+      "id": "Q840829",
+      "v": "Barockarchitektur"
+     },
+     {
+      "id": "Q186363",
+      "v": "Neogotik"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1478"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1485"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Kreuzstr. 10"
+     }
+    ]
+   }
+  },
+  "Q877929": {
+   "label": "Großmarkthalle München",
+   "description": "Großhandelsmarkt für Lebensmittel und Blumen in München",
+   "wiki": "Großmarkthalle München",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q2080521",
+      "v": "Markthalle"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1723527",
+      "v": "Richard Schachner"
+     },
+     {
+      "id": "Q122987",
+      "v": "Karl Meitinger"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1912"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q1875563",
+      "v": "Luftangriffe auf München"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Schäftlarnstraße 10"
+     }
+    ]
+   }
+  },
+  "Q880338": {
+   "label": "Hofbräukeller",
+   "description": "denkmalgeschütztes Gebäude in München",
+   "wiki": "Hofbräukeller",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q857909",
+      "v": "Biergarten"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q502163",
+      "v": "Neorenaissance"
+     }
+    ],
+    "P571": [
+     {
+      "v": "19. Jahrhundert"
+     }
+    ],
+    "P1083": [
+     {
+      "v": "2770 Mensch"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ]
+   }
+  },
+  "Q880394": {
+   "label": "Prinz-Carl-Palais",
+   "description": "denkmalgeschütztes Gebäude in München",
+   "wiki": "Prinz-Carl-Palais (München)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q15848826",
+      "v": "Stadtpalais"
+     },
+     {
+      "id": "Q751876",
+      "v": "Schloss"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Franz-Josef-Strauß-Ring 5"
+     }
+    ]
+   }
+  },
+  "Q883813": {
+   "label": "Klinikum rechts der Isar",
+   "description": "Klinikum der Technischen Universität München",
+   "wiki": "TUM Klinikum Rechts der Isar",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1059324",
+      "v": "Universitätsklinikum"
+     },
+     {
+      "id": "Q16917",
+      "v": "Krankenhaus"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q106588",
+      "v": "Isar"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1834"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Ismaninger Straße 22"
+     }
+    ]
+   }
+  },
+  "Q894378": {
+   "label": "Boschbrücke",
+   "description": "Brücke in München",
+   "wiki": "Boschbrücke",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q537127",
+      "v": "Straßenbrücke"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q51879728",
+      "v": "August Blössner"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q51879699",
+      "v": "Johann Baptist Bosch"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1925"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ]
+   }
+  },
+  "Q955838": {
+   "label": "Maximiliansbrücke",
+   "description": "Brücke in München",
+   "wiki": "Maximiliansbrücke",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q158438",
+      "v": "Bogenbrücke"
+     },
+     {
+      "id": "Q3397526",
+      "v": "Steinbrücke"
+     },
+     {
+      "id": "Q537127",
+      "v": "Straßenbrücke"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q75204",
+      "v": "Friedrich von Thiersch"
+     },
+     {
+      "id": "Q696599",
+      "v": "Arnold Zenetti"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q44530",
+      "v": "Maximilian II. Joseph"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q22657",
+      "v": "Beton"
+     },
+     {
+      "id": "Q2933645",
+      "v": "Muschelkalk"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1905"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q1441983",
+      "v": "Umnutzung"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Isar,Maximiliansbrücke,Nähe Maximiliansbrücke,Praterinsel"
+     }
+    ]
+   }
+  },
+  "Q98644036": {
+   "label": "Asamstraße 18",
+   "description": "Mietshaus, fünfgeschossiger, traufseitiger Satteldachbau mit Zwerchgiebel und zwei Erkern mit dazwischengespannten Eisenbalkonen, Jugendstil, Anfang 20. Jh.",
+   "wiki": "Asamstraße 18",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1577547",
+      "v": "Mietshaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q17297633",
+      "v": "Baudenkmal in Bayern"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Asamstraße 18"
+     }
+    ]
+   }
+  }
+ }
+}
