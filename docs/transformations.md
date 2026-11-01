@@ -1797,6 +1797,55 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   before the output transform, so every picture style shows it). It
   replaced the pencil loop (🗃️ below). **Not yet judged on a real
   GPU.**
+- **The nameplate: the thing asked, named in the city** `❝ taken` (2026-10-31)
+  — what the card's title and address say, set as lettering in the
+  scene beside it (`lib/city/nameplate.ts`): a Wikidata landmark (flag 16)
+  by its name large, with up to two lines of facts under it — "erbaut
+  1726–1734 · George Bähr", "wiederaufgebaut 2005 · 91 m" (each fact
+  where Wikidata has one, the card's height where it has none,
+  `factLines` in `lib/city/landmark-facts.ts`); a named building, bridge
+  or monument by its name with its address or kind; an ordinary house by
+  its address, small; nothing for a house without one, a tree, a lamp.
+  The facts are a site file baked once (`landmark-facts.json`, Wikidata
+  CC0: inception P571 or opening P1619, architect P84, height P2048, and
+  the P793 events that begin, end or span the building's construction
+  or its reconstruction, each with its own dates — years only where
+  Wikidata states the year, not a decade or a century; an end more than
+  100 years after the start left out; a rebuild with no end stated reads
+  "wiederaufgebaut ab"), matched to the Buildings through the landmark
+  tiles' objects, fetched with the first landmark asked (an
+  organisation's inception, often its founding, stands back where
+  construction events date the building). Where several
+  items share the asked Buildings, the one the card's title names, else
+  none. The card lists the
+  same facts as rows (Bauzeit, Architekt, Wiederaufbau, Höhe laut
+  Wikidata) with Wikidata as their source, so the plate never says what
+  the card does not. **Where it stands** follows the camera
+  (`lib/city/nameplate-place.ts`), in multiples of the building's size
+  S (its height, at least half its long side): from above (1.5 S over its
+  top, a pitch over 35°, or Modell) it lies flat on the ground beside the
+  footprint, reading along the footprint's axis nearest the screen's;
+  in the street it stands upright 1.5 m before the facade the camera
+  faces best (kept until that facade is seen flatter than 25°), over the
+  highest point or beside the building, with a hairline to a dot at the
+  facade; within 1 S it is an inscription at the plinth; beyond 8 S its
+  name alone. Thresholds hold 20 % of hysteresis; the place is chosen
+  every 250 ms among its candidates by what of it would be off screen,
+  hidden by the city (rays through the buildings' BVHs, never a tile
+  whose BVH is being built), under the HUD's panels (`data-scene-cover`)
+  or over its own building, and a change cross-fades. Its capitals are 7 %
+  of the footprint's long side, kept on screen between a size per rank (a
+  landmark 26–72 CSS px, 22–48 on a phone; its facts at 0.4–0.45 of that). Where the city covers it
+  anyway, it shows as a pale outline (the scene's depth). **How it is
+  set** follows the picture style (`lib/city/nameplate-type.ts`): Pastell
+  and Papier a book serif (Cormorant Garamond) with small caps for the
+  facts, Comic a caption box (Bangers, yellow, a hard shadow and a tail
+  to the building), Noir and Sin City a condensed grotesque (Oswald) with
+  a monospaced line, Strich spaced capitals with a dimension line,
+  Schwarzplan on the ground like a plan's lettering from anywhere above
+  the building; by night the
+  ink turns light on a dark halo and dims a little. Drawn after the frame
+  (`nameplate-layer.ts`, rendering.md). **Not yet judged on a real GPU.**
 
 ### Vegetation
 - **Cultivated land** `❝ taken` `≈ assumed` (plan 028) — OSM `landuse=allotments|orchard|vineyard`

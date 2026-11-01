@@ -894,6 +894,8 @@ export function SceneSidebar(props: SceneSidebarProps) {
     <Sidebar
       className="p-3 [&>[data-slot=sidebar-inner]]:rounded-xl [&>[data-slot=sidebar-inner]]:shadow-xl"
       collapsible="offcanvas"
+      // the nameplate keeps clear of it (nameplate-ask.ts)
+      data-scene-cover=""
       side="right"
       variant="floating"
     >
