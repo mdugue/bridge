@@ -29,8 +29,9 @@ const nextConfig: NextConfig = {
   outputFileTracingExcludes: { "/**": ["public/data/*/**/*"] },
   // ...except a copy of each site's Stadtwissen, which the chat's server
   // tools read (ADR 0056; scripts/prepare-sites.ts writes it): a few MB a
-  // site, in that one function (the key is matched as a substring: no
-  // other route's path may contain it).
+  // site, in the chat's functions only — the key is matched as a substring
+  // (picomatch `contains`), so /api/frag/pruefen gets it too, and no other
+  // route's path may contain it.
   outputFileTracingIncludes: { "/api/frag": ["./.stadtwissen/**/*"] },
   reactCompiler: true,
   experimental: {

@@ -18,6 +18,7 @@ import {
   useChat,
 } from "@tanstack/ai-react";
 import {
+  ClipboardCheckIcon,
   EarIcon,
   KeyRoundIcon,
   LoaderIcon,
@@ -34,7 +35,15 @@ import {
   WrenchIcon,
   XIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ASK_KEY_HEADER,
   ASK_LIMITS,
@@ -95,6 +104,17 @@ import { useSite } from "./site-context";
 import { VoicePicker } from "./voice-picker";
 import { type Speech, useDictation, useSpeech } from "./ask-voice";
 
+// the Prüfstand (`?pruefstand=1`): its own chunk, only with the knob
+const AskQa = lazy(() => import("./ask-qa"));
+
+/** Whether the page was opened with the Prüfstand's knob. */
+function wantsQa(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("pruefstand") === "1"
+  );
+}
+
 interface Props {
   coarse: boolean;
   onClose: () => void;
@@ -116,6 +136,9 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
   const [reading, setReading] = useState(false);
   // a new conversation is a new card body: a new thread, new first questions
   const [round, setRound] = useState(0);
+  const [qa] = useState(wantsQa);
+  const [checking, setChecking] = useState(false);
+  const city = useSite().name;
   useEffect(() => {
     scene.setListening(hearing);
     return () => scene.setListening(false);
@@ -169,6 +192,22 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
                 : "Mit deinem eigenen Schlüssel"}
             </h2>
           </div>
+          {key && qa && (
+            <button
+              aria-label="Prüfstand"
+              aria-pressed={checking}
+              className={cn(
+                "rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground",
+                checking && "bg-muted text-foreground"
+              )}
+              data-testid="ask-qa-open"
+              onClick={() => setChecking((on) => !on)}
+              title="Prüfstand: alle Startfragen prüfen"
+              type="button"
+            >
+              <ClipboardCheckIcon className="size-4" />
+            </button>
+          )}
           {key && (
             <button
               aria-label="Neues Gespräch"
@@ -202,7 +241,11 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
             <XIcon className="size-4" />
           </button>
         </header>
-        {key ? (
+        {key && checking ? (
+          <Suspense fallback={null}>
+            <AskQa askKey={key} city={city} site={site} />
+          </Suspense>
+        ) : key ? (
           <Conversation
             askKey={key}
             hearing={hearing}

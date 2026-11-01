@@ -23,27 +23,14 @@ import {
   lastQuestion,
   parseAskProps,
   parseAskVisitor,
-  plausibleKey,
 } from "@/lib/city/ask-city";
 import { runAsk, scrubbed } from "@/lib/city/ask-run";
-import { verifyAskToken } from "@/lib/city/ask-token";
 import { siteById } from "@/sites";
 import { askAdapter, fakeAskAdapter } from "./adapters";
+import { keyRefusal, refuse } from "./guard";
 import { siteKnowledge } from "./knowledge";
 
 export const maxDuration = 60;
-
-/**
- * A refused request: its reason as a code in the log (never the key, the
- * token or the conversation) and as words for the visitor.
- */
-function refuse(status: number, code: string, message: string): Response {
-  console.warn(`[frag] ${status} ${code}`);
-  return Response.json(
-    { code, message },
-    { status, headers: { "Cache-Control": "no-store" } }
-  );
-}
 
 export async function POST(request: Request): Promise<Response> {
   const fake = process.env.FRAG_FAKE === "1";
@@ -58,31 +45,9 @@ export async function POST(request: Request): Promise<Response> {
   if (typeof props === "string") {
     return refuse(400, "bad-props", props);
   }
-  if (!fake && !plausibleKey(key)) {
-    return refuse(401, "no-key", "Ohne Schlüssel geht es nicht.");
-  }
-  const secret = process.env.FRAG_SECRET;
-  // on the host the key check must hold: without its secret, no relay
-  if (!(fake || secret) && process.env.VERCEL) {
-    // 501, not 503: the client retries a 503 as a passing outage
-    return refuse(
-      501,
-      "no-secret",
-      "Frag die Stadt ist auf diesem Server nicht eingerichtet."
-    );
-  }
-  if (
-    !fake &&
-    secret &&
-    !(await verifyAskToken(
-      secret,
-      props.token,
-      props.provider,
-      key,
-      Date.now()
-    ))
-  ) {
-    return refuse(401, "bad-token", "Der Schlüssel muss neu geprüft werden.");
+  const refused = await keyRefusal(props, key, fake);
+  if (refused) {
+    return refused;
   }
   const problem = conversationProblem(
     params.messages,

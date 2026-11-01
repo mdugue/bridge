@@ -74,6 +74,13 @@ load into the browser.
 - Abuse is bounded by the token, the caps and the curated models; rate
   limits, bot protection and the spend limit are host and provider
   settings, not code.
+- The first questions are checked, not guessed: the Prüfstand
+  (`?pruefstand=1`, `lib/city/ask-qa.ts`, `/api/frag/pruefen`) asks every
+  question of `starterPool` at the city's most notable landmarks and far
+  from all of them, at every kind of hour, of every model the key reaches,
+  has a thorough model judge each answer, and reports per question keep,
+  change or replace and per model the time to the first word. It runs on
+  the visitor's key like any question.
 - `FRAG_SECRET` must be set on a deployment, or the routes answer 501;
   every refusal logs a status and reason code, never the key or the
   conversation. `FRAG_FAKE=1` is a scripted model for local tests only.

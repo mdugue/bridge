@@ -49,6 +49,7 @@ import {
   floodShowTool,
   floodTool,
   layerTool,
+  lookTool,
   NEAR_RADIUS,
   nearTool,
   searchTool,
@@ -196,6 +197,9 @@ export interface AskRun {
   today: Date;
   /** where the visitor stands, as the request's header said */
   visitor?: AskVisitor | null;
+  /** answers `was_ist_da` on the server (the Prüfstand, which has no
+   *  browser); without, the browser does */
+  look?: () => Record<string, unknown>;
   /** the answers are read aloud */
   voice?: boolean;
 }
@@ -213,7 +217,7 @@ export function runAsk(run: AskRun) {
     tools: [
       ...knowledgeTools(run.knowledge, run.site, run.visitor ?? null),
       ...shownTools(run.site),
-      ...BROWSER_TOOLS,
+      ...(run.look ? [lookTool.server(run.look)] : BROWSER_TOOLS),
     ],
     agentLoopStrategy: combineStrategies([
       maxIterations(ASK_LIMITS.iterations),
