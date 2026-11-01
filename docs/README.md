@@ -21,6 +21,7 @@ pages follow.
 | about to **change a data → feature transformation** | [data-flow.md](./data-flow.md) + [transformations.md](./transformations.md) (and the rule below) |
 | about to **render another place** | [portability.md](./portability.md), the site config ([ADR 0037](./adr/0037-sites-providers-and-per-site-data.md)) and [plan 017](./plans/017-germany-wide-sites.md) |
 | about to **write a walk** (the *Spaziergänge*) | [walks.md](./walks.md): what makes a walk worth taking, the file, the Stadtwissen to write from, the checks ([ADR 0055](./adr/0055-stadtwissen-and-written-walks.md)) |
+| looking at what the **scheduled agents** do (Sentry, open data, OSM gaps, street photos) | [routines.md](./routines.md): each routine's skill, script, schedule and the issue it reports to |
 | wondering **why** something is the way it is | [adr/](./adr/README.md), the architecture decision records — including the move to WebGPU + TSL node materials ([ADR 0027](./adr/0027-webgpu-renderer-and-tsl.md)) |
 | looking for **what is planned or was rejected** | [plans/](./plans/README.md), the implementation plans, backlog and audit history — open now: [019](./plans/019-gpu-verification.md) (the one GPU checklist), [021](./plans/021-wissen-astro-starlight.md) (`/wissen` on Astro Starlight) and the plans of the 2026-10-01 audit — the [index](./plans/README.md) gives their order |
 | looking for **data we do not use yet** | [data-streams.md](./data-streams.md), a measured survey of every source with a ranking |
@@ -39,6 +40,8 @@ docs/
 ├── data-flow.md           source → feature provenance diagram + feature table
 ├── transformations.md     the ledger: every transformation built / experimental / planned / discontinued, with why
 ├── portability.md         degradation matrix + porting checklist for other locations
+├── walks.md               writing a walk: what makes one worth taking, the file, the checks
+├── routines.md            the scheduled agents: skills, scripts, what they may and never do
 ├── data-streams.md        what the sources carry that no bake reads yet (survey, 2026-09-27)
 ├── adr/                   architecture decision records (one decision per file, numbered)
 ├── plans/                 implementation plans: open work, condensed history, backlog, audit findings
