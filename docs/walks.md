@@ -132,7 +132,8 @@ A `source` is an https URL (Wikipedia, an institution's page, a paper) or
 - **On a phone** the card is a sheet at the bottom, at most 62 % of the
   screen high, that starts folded: the title and the way on, the scene
   above free. Its handle unfolds it by a tap or a drag up and folds it by
-  a drag down; folded, it shows no photo and no story.
+  a drag down; folded, it shows no photo and no story. The stick and
+  the toolbar step aside while it is up; a drag still looks about.
 
 ## Writing one
 

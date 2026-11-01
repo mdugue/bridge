@@ -668,21 +668,35 @@ function SheetHandle({
   onFold: (folded: boolean) => void;
 }) {
   const [from, setFrom] = useState<number | null>(null);
+  // a drag folds or unfolds on its own; the click that follows it is not
+  // a second toggle (a tap, and a key, toggle through the click)
+  const [dragged, setDragged] = useState(false);
   return (
     <button
       aria-expanded={!folded}
       aria-label={folded ? "Text zeigen" : "Text einklappen"}
       className="flex w-full shrink-0 touch-none justify-center pt-2 pb-1"
       data-testid="walk-sheet-handle"
+      onClick={() => {
+        if (dragged) {
+          setDragged(false);
+          return;
+        }
+        onFold(!folded);
+      }}
       onPointerCancel={() => setFrom(null)}
       onPointerDown={(e) => {
         e.currentTarget.setPointerCapture(e.pointerId);
+        setDragged(false);
         setFrom(e.clientY);
       }}
       onPointerUp={(e) => {
         const dy = from === null ? 0 : e.clientY - from;
         setFrom(null);
-        onFold(Math.abs(dy) < SHEET_DRAG_PX ? !folded : dy > 0);
+        if (Math.abs(dy) >= SHEET_DRAG_PX) {
+          setDragged(true);
+          onFold(dy > 0);
+        }
       }}
       type="button"
     >
