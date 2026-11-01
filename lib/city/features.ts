@@ -485,13 +485,16 @@ export interface PlinthFeature {
  *  measured top (`top`), the roof's slope (degrees) and the LoD2 object it
  *  sits on (`of`). A shed dormer carries its roof's fall (`tf`, degrees,
  *  down the slope); its `top` is then where that roof meets the main
- *  roof, the line it falls from. */
+ *  roof, the line it falls from. A chimney (`k`) is the same record on any
+ *  roof: its box `w` × `d` along `ax`, `ay` (on a level roof its
+ *  footprint's longer side), from the roof up to `top`. */
 export interface DormerFeature {
   geometry: PointGeometry;
   properties: {
     ax: number;
     ay: number;
     d: number;
+    k?: "chimney";
     of: string;
     slope: number;
     tf?: number;

@@ -23,6 +23,7 @@ import {
 } from "three/tsl";
 import {
   DOOR_GAP_M,
+  DORMER_WINDOW,
   DOOR_NONE_CODE,
   DOOR_SLOT,
   FACADE_SCALE_M,
@@ -160,11 +161,14 @@ interface Grid {
 }
 
 /** The columns: centred on the wall at the axis spacing, the outer ones
- *  `WINDOW_ROWS.edge` in from its ends, a loose grid's a little off. */
+ *  `WINDOW_ROWS.edge` in from its ends (a dormer's front: `DORMER_WINDOW`'s),
+ *  a loose grid's a little off. */
 function columns(i: WindowInputs, s: F, length: F) {
   const axis = max(i.spec.x, 0.1);
   const style = floor(i.spec.w.add(0.5));
-  const room = length.sub(2 * WINDOW_ROWS.edge).sub(i.spec.y);
+  const dormer = bit(style, WINDOW_STYLE.dormer);
+  const edge = mix(float(WINDOW_ROWS.edge), float(DORMER_WINDOW.edge), dormer);
+  const room = length.sub(edge.mul(2)).sub(i.spec.y);
   // steps and mixes, never a select: three emits a select as if/else, and
   // what an arm builds first it builds again outside it
   const n = step(0, room).mul(floor(max(room, 0).div(axis).add(1e-4)).add(1));
@@ -182,7 +186,7 @@ function columns(i: WindowInputs, s: F, length: F) {
     .mul(bit(style, WINDOW_STYLE.loose));
   const centre = j.sub(off).mul(axis).add(jitter);
   const extent = off.mul(axis).add(i.spec.y.mul(0.5));
-  return { axis, centre, extent, j, n, style };
+  return { axis, centre, dormer, extent, j, n, style };
 }
 
 /** 1 where a ground-floor window on `centre` (m along the wall), `half`
@@ -223,10 +227,15 @@ function grid(i: WindowInputs): Grid {
       WINDOW_DEPTH.step
     )
   );
-  const sill = float(WINDOW_SILL.base).add(
-    mod(floor(c.style.div(WINDOW_STYLE.sill)), WINDOW_SILL.classes).mul(
-      WINDOW_SILL.step
-    )
+  // a dormer's front: its one row DORMER_WINDOW.sill over its foot
+  const sill = mix(
+    float(WINDOW_SILL.base).add(
+      mod(floor(c.style.div(WINDOW_STYLE.sill)), WINDOW_SILL.classes).mul(
+        WINDOW_SILL.step
+      )
+    ),
+    float(DORMER_WINDOW.sill),
+    c.dormer
   );
   const storey = max(i.storey, 0.5);
   const first = max(storey, WINDOW_ROWS.firstLine);
@@ -241,7 +250,9 @@ function grid(i: WindowInputs): Grid {
     .mul(WINDOW_LIFT.step)
     .mul(step(k, 0.5));
   // a top floor's windows end at the eave's clearance, shorter if they must
-  const top = i.eave.sub(WINDOW_ROWS.eaveClear);
+  const top = i.eave.sub(
+    mix(float(WINDOW_ROWS.eaveClear), float(DORMER_WINDOW.eaveClear), c.dormer)
+  );
   const height = min(line.add(sill).add(tall), top)
     .sub(line)
     .sub(sill)

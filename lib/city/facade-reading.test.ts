@@ -39,3 +39,16 @@ test("every part of a building takes the building's reading", () => {
   expect(changed).toBe(true);
   expect([...flags]).toEqual([FACADE_UNIT * 6, FACADE_UNIT * 6, 2]);
 });
+
+test("a row high on its building takes the reading without the shop", () => {
+  // a host and its dormers: the street's shop is the host's ground floor
+  const flags = new Uint16Array([0, 0]);
+  applyFacadeReadings(
+    flags,
+    () => "a",
+    { attribution: "", buildings: { a: [1, 2, 1] } },
+    (i) => i === 1
+  );
+  expect(flags[0]).toBe(FACADE_UNIT * (1 + 4 * 2 + 16));
+  expect(flags[1]).toBe(FACADE_UNIT * (1 + 4 * 2));
+});

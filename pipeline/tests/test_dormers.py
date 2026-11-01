@@ -57,12 +57,120 @@ def test_a_dormer_faces_down_the_slope():
 
 def test_what_is_no_dormer():
     s = roof_falling_east()
-    # a chimney: too small
-    assert blob(s, 10, 10, 1, 2, 1.5) is None
     # a crown: too high over the roof
     assert blob(s, 10, 10, 3, 3, dormers.MAX_TOP_M + 1) is None
-    # a long ridge feature: wider than a dormer
-    assert blob(s, 2, 10, dormers.MAX_SIDE_M + 2, 2, 1.5) is None
+    # the roof drawn low: deeper down the slope than a dormer
+    assert blob(s, 10, 2, 3, dormers.MAX_SIDE_M + 2, 1.5) is None
+
+
+def test_a_row_of_dormers_is_as_wide_as_it_runs():
+    s = roof_falling_east()
+    d = blob(s, 2, 10, dormers.MAX_SIDE_M + 6, 2, 1.5)
+    assert d is not None and d["w"] == dormers.MAX_SIDE_M + 6
+
+
+def test_dormers_side_by_side_part_at_the_gap():
+    # two dormers 1.6 m over the roof, a gap of 0.9 m (read as one blob at
+    # MIN_EXCESS_M) between them
+    m = np.zeros((4, 9), bool)
+    m[:, :] = True
+    ex = np.full((4, 9), 1.6)
+    ex[:, 4] = 0.9
+    parts = dormers.split(m, ex)
+    assert len(parts) == 2
+    assert sum(int(p.sum()) for p in parts) == m.sum()
+    # one dormer, its back sinking into the roof: one core, kept whole
+    ex = np.tile(np.linspace(0.8, 1.8, 9), (4, 1))
+    assert len(dormers.split(m, ex)) == 1
+
+
+def test_a_seam_is_where_the_roof_bends_not_its_outline():
+    # a gabled roof, 45°, its ridge along column 5, beside a void
+    cols = np.arange(12, dtype=float)
+    roof = np.tile(10.0 - np.abs(cols - 5.0), (6, 1))
+    roof[:, 10:] = np.nan
+    seam = dormers.seams(roof)
+    assert seam[:, 5].all()
+    # a cell from the ridge counts with it, the faces beyond do not
+    assert seam[:, 4].all() and seam[:, 6].all()
+    assert not seam[:, 1:3].any() and not seam[:, 8].any()
+    # the roof's edge by the void is no seam
+    assert not seam[:, 9].any()
+
+
+def test_where_a_small_blob_stands_says_what_it_is():
+    k = dormers.kind_of
+    ridge = 20.0
+    # small at the ridge: a chimney (on its seam too); lower down: a dormer
+    assert k(1, True, ridge - 0.2, ridge, True, False) == "chimney"
+    assert k(2, True, ridge - 3.0, ridge, False, False) == "dormer"
+    # four cells over the ridge: a stack; more: no dormer's shape to test
+    assert k(4, True, ridge + 1.0, ridge, False, False) == "chimney"
+    assert k(9, True, ridge + 1.0, ridge, False, False) == "dormer"
+    # a blob along a seam below the ridge: the roof drawn off, nothing
+    assert k(6, True, ridge - 2.0, ridge, True, False) is None
+    # a flat roof: a chimney clear of its edge and seams, nothing else
+    assert k(1, False, ridge, ridge, False, False) == "chimney"
+    assert k(1, False, ridge, ridge, False, True) is None
+    assert k(1, False, ridge, ridge, True, False) is None
+    assert k(3, False, ridge + 1.0, ridge, False, False) is None
+
+
+def test_a_chimney_stands_its_measured_height_a_little_wider_than_drawn():
+    s = roof_falling_east()
+    excess = np.zeros_like(s.roof)
+    excess[10, 10] = 1.0
+    labels, _ = ndi.label(excess >= dormers.MIN_EXCESS_M)
+    sl = ndi.find_objects(labels)[0]
+    m = labels[sl] == 1
+    c = dormers.chimney(s, sl, m, excess, (1.0, 0.0, 45.0), False, 200.0)
+    assert c is not None and c["k"] == "chimney"
+    assert c["w"] == c["d"] == dormers.CHIMNEY_SIDE_M
+    assert c["top"] == round(s.roof[10, 10] + 1.0, 2)
+    # too low on a seam, far over the ridge: none
+    assert dormers.chimney(s, sl, m, excess, (1.0, 0.0, 45.0), True, 200.0) is None
+    assert dormers.chimney(s, sl, m, excess, (1.0, 0.0, 45.0), False, 80.0) is None
+
+
+def test_chimneys_in_a_crowd_on_a_flat_roof_are_something_else():
+    def chimney(x: float) -> dict:
+        return {"geometry": {"coordinates": [x, 0.0]}, "properties": {"k": "chimney"}}
+
+    dormer = {"geometry": {"coordinates": [1.0, 0.0]}, "properties": {}}
+    # a pair of stacks stays; a row of masts a metre and a half apart goes
+    pair = [chimney(0.0), chimney(1.0), dormer]
+    assert dormers.uncrowded(pair, [True, True, False]) == pair
+    row = [chimney(1.5 * i) for i in range(6)] + [dormer]
+    assert dormers.uncrowded(row, [True] * 6 + [False]) == [dormer]
+    # on a pitched roof a row of stacks stays, however close
+    assert dormers.uncrowded(row, [False] * 7) == row
+
+
+def test_a_ridge_is_pitched_roof_a_flat_roof_is_not():
+    # a gabled roof, 45°, its ridge along column 5: the gradient's central
+    # differences read the ridge's own cells level
+    cols = np.arange(12, dtype=float)
+    roof = np.tile(10.0 - np.abs(cols - 5.0), (6, 1))
+    gx, gy = dormers.roof_gradient(roof, 1.0)
+    slope = np.degrees(np.arctan(np.hypot(gx, gy)))
+    assert slope[2, 5] < dormers.MIN_SLOPE
+    assert dormers.pitched_cells(slope)[1:5, 1:10].all()
+    # a flat roof stays flat, a 1 m step in it too
+    flat = np.zeros((8, 8))
+    flat[:, 4] = 40.0
+    assert not dormers.pitched_cells(flat)[:, :4].any()
+
+
+def test_a_roof_form_is_its_own_or_its_parents():
+    city = {
+        "CityObjects": {
+            "a": {"attributes": {"roofType": "3400"}},
+            "a-1": {"parents": ["a"]},
+            "b": {"attributes": {"roofType": 3100}},
+            "c": {},
+        }
+    }
+    assert dormers.roof_forms(city, ["a", "a-1", "b", "c"]) == ["3400", "3400", "3100", None]
 
 
 # --- G11: a shed dormer's fall -----------------------------------------------

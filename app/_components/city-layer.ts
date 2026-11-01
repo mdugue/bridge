@@ -26,6 +26,7 @@ import {
   liveTriangles,
   OBJECT_TEXEL_BANDS,
   OBJECT_TEXTURE_WIDTH,
+  OBJECT_SOURCE_DORMER,
   objectBandRows,
   packObjectTexels,
 } from "@/lib/city/city-mesh";
@@ -493,7 +494,8 @@ export function dressCity(
         applyFacadeReadings(
           table.flags,
           (i) => String(ids.getPropertyValue("buildingId", i)),
-          readings
+          readings,
+          (i) => table.source[i] === OBJECT_SOURCE_DORMER
         ) &&
         markObjects(objects.texture, table, marked)
       ) {

@@ -92,7 +92,7 @@ import {
   wallShiftAlong,
   wallShiftKnots,
 } from "../lib/city/doors";
-import { dormerMesh } from "../lib/city/dormers";
+import { chimneyMesh, dormerMesh } from "../lib/city/dormers";
 import {
   type BandKind,
   bandMeshes,
@@ -170,6 +170,7 @@ import {
   GROUND_REACH_M,
   TALL_STOREY_M,
   wallRises,
+  dormerWindows,
   type WindowHost,
   type WindowWall,
   windowSpecs,
@@ -1644,13 +1645,14 @@ function dressWalls(
       doors: outsidePassages(onBuilt.doors, passages, keys, baked),
     }),
   };
-  appendBeyondLod2(tile, baked, keys, { ...onWalls, ...extra });
+  const blind = appendBeyondLod2(tile, baked, keys, { ...onWalls, ...extra });
   // standing on the ground or on a roof: as LoD2 built them
   markGrounded(baked.objects, asBuilt);
   // the parts laid on the walls copied their host's row: windows are the
-  // LoD2 walls' alone
+  // LoD2 walls' and the dormers' fronts' alone
   for (const o of baked.objects) {
-    if ((o.source ?? OBJECT_SOURCE_LOD2) !== OBJECT_SOURCE_LOD2) {
+    const source = o.source ?? OBJECT_SOURCE_LOD2;
+    if (source !== OBJECT_SOURCE_LOD2 && source !== OBJECT_SOURCE_DORMER) {
       delete o.windows;
     }
   }
@@ -1661,7 +1663,8 @@ function dressWalls(
     onWalls,
     reachOf,
     rises && { at: rises, reach: reachOf },
-    portalDoors(passages)
+    portalDoors(passages),
+    blind
   );
   return passages;
 }
@@ -1767,7 +1770,8 @@ function facadeFlags(flags: number, own: boolean): number {
 
 /** What the tile's mesh carries beyond LoD2: the scan's sheds, the
  *  surface model's structures and dormers, OSM's doors (each on its LoD2
- *  host). */
+ *  host). Returns the walls' vertices of a windowed object that take no
+ *  window (a dormer's cheeks, `appendDormers`). */
 function appendBeyondLod2(
   tile: string,
   baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
@@ -1782,7 +1786,7 @@ function appendBeyondLod2(
     roofColours?: RoofColours;
     scan?: readonly SmallBuildingFeature[];
   }
-): void {
+): number[] {
   // Each append copies the whole vertex stream and leaves its parts' plain
   // arrays behind: Bun's lazy collector let them pile up over the six, and
   // a München tile's bands alone left 2.5 GiB (its cold bake peaked at
@@ -1818,10 +1822,12 @@ function appendBeyondLod2(
     appendDoors(baked, extra.doors, objectIndex);
     appended();
   }
-  if (extra.dormers) {
-    appendDormers(baked, extra.dormers, objectIndex);
-    appended();
+  if (!extra.dormers) {
+    return [];
   }
+  const blind = appendDormers(baked, extra.dormers, objectIndex);
+  appended();
+  return blind;
 }
 
 /** Each building tree's triangles (its root → each triangle's first vertex):
@@ -2406,65 +2412,145 @@ function shopHost(
 }
 
 /**
- * The dormers the surface model shows on the pitched LoD2 roofs (pipeline/
- * bake/dormers.py), appended as part of the object they sit on: one object
- * per host, in the host's tint and roof colour, the host's building tree
- * (asking or demolishing a dormer takes the building), no footprint, `source`
- * 4. Its walls carry no storey band, eave line, plinth or shop zone (its
- * base is its own, high on the roof). A dormer whose host the tile does not
- * hold is dropped.
+ * How far apart (m) the feet of two dormers on one host may lie and still
+ * be one object: the window's sill is read from the object's base, so a
+ * row of dormers along one eave shares one, a row higher up the roof
+ * another.
+ */
+const DORMER_FOOT_BAND_M = 0.15;
+
+/** One host's dormers, or its chimneys, as one object's triangles. */
+interface DormerPart {
+  base: number;
+  chimney: boolean;
+  front: number[];
+  isRoof: number[];
+  positions: number[];
+  top: number;
+}
+
+/** A host's dormers and chimneys as the objects they are appended as:
+ *  its chimneys one, its dormers one per band of feet
+ *  (`DORMER_FOOT_BAND_M`). */
+function dormerParts(
+  list: readonly DormerFeature[],
+  offset: BakedCityMesh["offset"]
+): DormerPart[] {
+  const meshes = list.map((f) => {
+    const chimney = f.properties?.k === "chimney";
+    const mesh = chimney ? chimneyMesh(f, offset) : dormerMesh(f, offset);
+    return { chimney, mesh, top: f.properties?.top ?? mesh.base };
+  });
+  const parts: DormerPart[] = [];
+  const add = (into: DormerPart | undefined, m: (typeof meshes)[number]) => {
+    const part = into ?? {
+      base: m.mesh.base,
+      chimney: m.chimney,
+      front: [],
+      isRoof: [],
+      positions: [],
+      top: m.top,
+    };
+    part.base = Math.min(part.base, m.mesh.base);
+    part.top = Math.max(part.top, m.top);
+    part.positions.push(...m.mesh.positions);
+    part.isRoof.push(...m.mesh.isRoof);
+    part.front.push(...m.mesh.front);
+    if (!into) {
+      parts.push(part);
+    }
+  };
+  const stacks = meshes.filter((m) => m.chimney);
+  for (const m of stacks) {
+    add(parts[0], m);
+  }
+  let band: DormerPart | undefined;
+  for (const m of meshes
+    .filter((d) => !d.chimney)
+    .sort((a, b) => a.mesh.base - b.mesh.base)) {
+    if (band && m.mesh.base - band.base > DORMER_FOOT_BAND_M) {
+      band = undefined;
+    }
+    add(band, m);
+    band ??= parts.at(-1);
+  }
+  return parts;
+}
+
+/**
+ * The dormers and chimneys the surface model shows on the LoD2 roofs
+ * (pipeline/bake/dormers.py), appended as part of the object they sit on:
+ * per host its chimneys one object and its dormers one per band of feet
+ * (`dormerParts`), in the host's tint and roof colour, the host's building
+ * tree (asking or demolishing a dormer takes the building), no footprint,
+ * `source` 4. Their walls carry no storey band, plinth or shop zone (their
+ * base is their own, high on the roof); a dormer's front its window
+ * (lib/city/windows.ts `dormerWindows`, under its own eave) where its
+ * host has windows, its cheeks and a chimney none. A dormer whose host the tile does not hold is dropped.
+ * Returns the vertices of the dormers' walls that take no window (their
+ * cheeks), for `facadeOf`.
  */
 export function appendDormers(
   baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
   dormers: readonly DormerFeature[],
   objectIndex: ReadonlyMap<string, number>
-): void {
+): number[] {
   const byHost = new Map<number, DormerFeature[]>();
   for (const f of dormers) {
     const hostIndex = f.properties
       ? objectIndex.get(f.properties.of)
       : undefined;
     if (hostIndex !== undefined && baked.objects[hostIndex]) {
-      byHost.set(hostIndex, [...(byHost.get(hostIndex) ?? []), f]);
+      const list = byHost.get(hostIndex);
+      if (list) {
+        list.push(f);
+      } else {
+        byHost.set(hostIndex, [f]);
+      }
     }
   }
+  const blind: number[] = [];
   if (byHost.size === 0) {
-    return;
+    return blind;
   }
+  const v = baked.vertices;
+  const first = v.objectIds.length;
   const positions: number[] = [];
   const objectIds: number[] = [];
   const isRoof: number[] = [];
   for (const [hostIndex, list] of byHost) {
     const host = baked.objects[hostIndex];
-    const index = baked.objects.length;
-    let base = Number.POSITIVE_INFINITY;
-    let top = Number.NEGATIVE_INFINITY;
-    for (const f of list) {
-      const mesh = dormerMesh(f, baked.offset);
-      positions.push(...mesh.positions);
-      isRoof.push(...mesh.isRoof);
-      for (let i = 0; i < mesh.isRoof.length; i++) {
+    for (const part of dormerParts(list, baked.offset)) {
+      const index = baked.objects.length;
+      // a host the clay draws no windows on (a landmark, glass, a hall)
+      // has none in its dormers either
+      const windowed = !part.chimney && (host.windows?.axis ?? 0) > 0;
+      for (let i = 0; i < part.isRoof.length; i++) {
+        if (windowed && part.isRoof[i] === 0 && part.front[i] === 0) {
+          blind.push(first + objectIds.length);
+        }
         objectIds.push(index);
       }
-      base = Math.min(base, mesh.base);
-      top = Math.max(top, f.properties?.top ?? mesh.base);
+      positions.push(...part.positions);
+      isRoof.push(...part.isRoof);
+      const above = cm(part.top - part.base + 1);
+      baked.objects.push({
+        ...host,
+        building: false,
+        baseZ: cm(part.base),
+        // each front's eave is its own (its wall's top, `facadeOf`): the
+        // object's under the roof, no storey band on it
+        eaveH: windowed ? 0 : above,
+        storeyH: above,
+        glow: 0,
+        // the host's facts but its ground floor's: no shop wash up here
+        flags: host.flags & ~OBJECT_FLAG_SHOP,
+        source: OBJECT_SOURCE_DORMER,
+        footprints: [],
+        windows: windowed ? dormerWindows(host.windows) : undefined,
+      });
     }
-    const above = cm(top - base + 1);
-    baked.objects.push({
-      ...host,
-      building: false,
-      baseZ: cm(base),
-      // above its top: no eave stroke, no storey band on it
-      eaveH: above,
-      storeyH: above,
-      glow: 0,
-      // the host's facts but its ground floor's: no shop wash up here
-      flags: host.flags & ~OBJECT_FLAG_SHOP,
-      source: OBJECT_SOURCE_DORMER,
-      footprints: [],
-    });
   }
-  const v = baked.vertices;
   baked.vertices = {
     positions: concat(v.positions, positions),
     objectIds: concat(v.objectIds, objectIds),
@@ -2473,6 +2559,7 @@ export function appendDormers(
 
     ...lod2RoofColours(v),
   };
+  return blind;
 }
 
 /** An object's footprint centre (EPSG): its first ring's mean. */
@@ -2731,7 +2818,8 @@ function facadeOf(
   },
   reach: (object: number) => number,
   rises?: Parameters<typeof facadeAttribute>[4],
-  portals: readonly FacadeDoor[] = []
+  portals: readonly FacadeDoor[] = [],
+  blind: readonly number[] = []
 ): Int16Array<ArrayBuffer> {
   const { cx, cy } = baked.offset;
   const index = new Map(keys.map((id, i) => [id, i]));
@@ -2764,23 +2852,32 @@ function facadeOf(
           },
         ];
   });
-  return facadeAttribute(
+  const facade = facadeAttribute(
     baked.vertices,
     (i) => (baked.objects[i]?.windows?.axis ?? 0) > 0,
     [...osmDoors, ...portals],
     [...shops, ...buriedWalls(baked, index, onWalls.plinths ?? [], reach)],
     rises,
     // every LoD2 wall carries its own eave (a front over its object's
-    // lowest roof), with windows or not
+    // lowest roof), with windows or not, and a dormer's front its own top
     {
       of: (i) => {
         const o = baked.objects[i];
-        return o && (o.source ?? OBJECT_SOURCE_LOD2) === OBJECT_SOURCE_LOD2
+        const source = o?.source ?? OBJECT_SOURCE_LOD2;
+        return o &&
+          (source === OBJECT_SOURCE_LOD2 ||
+            (source === OBJECT_SOURCE_DORMER && o.windows))
           ? { base: o.baseZ, eave: o.baseZ + o.eaveH }
           : undefined;
       },
     }
   );
+  // a wall of no length has no window (a dormer's cheek)
+  for (const v of blind) {
+    facade[4 * v] = 0;
+    facade[4 * v + 1] = 0;
+  }
+  return facade;
 }
 
 /** The walls whose plinth or ground rises past their object's reach
