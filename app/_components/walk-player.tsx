@@ -7,25 +7,39 @@ import {
   EyeIcon,
   FootprintsIcon,
   MessageCircleQuestionIcon,
+  Maximize2Icon,
   RouteIcon,
-  Volume2Icon,
-  VolumeXIcon,
   XIcon,
 } from "lucide-react";
 import { Newsreader } from "next/font/google";
-import { useEffect, useState } from "react";
+import Image from "next/image";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import {
   isWalkBundle,
   CLOSER_LABEL,
+  photoIsTall,
+  photoPosition,
   stopNotes,
-  stopSpeech,
   type Walk,
   type WalkFact,
+  type WalkPhoto,
   type WalkStop,
 } from "@/lib/city/walks";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+} from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "cn";
-import { useSpeech } from "./ask-voice";
 import { useSceneStatus } from "./scene-status";
 
 /**
@@ -254,11 +268,21 @@ function Facts({ facts }: { facts: WalkFact[] }) {
   );
 }
 
-/** What the stop says: its narration, today's notes, the closer look. */
-function StopBody({ notes, stop }: { notes: string[]; stop: WalkStop }) {
+/** What the stop says: its narration, today's notes, the closer look.
+ *  A tall photo stands beside it, the text flowing round it. */
+function StopBody({
+  aside,
+  notes,
+  stop,
+}: {
+  aside: ReactNode;
+  notes: string[];
+  stop: WalkStop;
+}) {
   return (
     <>
-      <p className="flow-root text-[15.5px] leading-[1.62] text-foreground/90 text-pretty first-letter:float-left first-letter:mt-[0.06em] first-letter:mr-1.5 first-letter:font-medium first-letter:text-[3.1em] first-letter:leading-[0.82] first-letter:text-primary">
+      {aside}
+      <p className="text-[15.5px] leading-[1.62] text-foreground/90 text-pretty first-letter:float-left first-letter:mt-[0.06em] first-letter:mr-1.5 first-letter:font-medium first-letter:text-[3.1em] first-letter:leading-[0.82] first-letter:text-primary">
         {stop.text}
       </p>
       {notes.map((note) => (
@@ -274,7 +298,7 @@ function StopBody({ notes, stop }: { notes: string[]; stop: WalkStop }) {
         </p>
       ))}
       {stop.closer && (
-        <aside className="mt-3.5 rounded-lg bg-primary/[0.06] px-3 py-2.5">
+        <aside className="mt-3.5 flow-root rounded-lg bg-primary/[0.06] px-3 py-2.5">
           <span className="flex items-center gap-1.5 font-sans text-[10px] font-medium tracking-[0.14em] text-primary uppercase">
             <EyeIcon aria-hidden className="size-3" />
             {CLOSER_LABEL}
@@ -284,10 +308,327 @@ function StopBody({ notes, stop }: { notes: string[]; stop: WalkStop }) {
           </p>
         </aside>
       )}
-      <div className="font-sans">
+      <div className="clear-both font-sans">
         <Facts facts={stop.facts} />
       </div>
     </>
+  );
+}
+
+/** Commons' credit, as a reader can follow it: the author, the licence,
+ *  the file's page. */
+function PhotoCredit({ photo }: { photo: WalkPhoto }) {
+  return (
+    <a
+      className="hover:text-foreground hover:underline"
+      href={photo.page}
+      rel="noreferrer"
+      target="_blank"
+      title={`${photo.file} auf Wikimedia Commons`}
+    >
+      Foto: {photo.author} · {photo.licence} · Wikimedia Commons
+    </a>
+  );
+}
+
+/** The photo whole, over the scene: the card crops it, this does not. */
+function PhotoView({
+  onOpenChange,
+  open,
+  photo,
+  src,
+  title,
+}: {
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+  photo: WalkPhoto;
+  /** the published copy's URL */
+  src: string;
+  title: string;
+}) {
+  return (
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogContent
+        className="w-auto max-w-[min(calc(100vw-2rem),64rem)] gap-0 overflow-hidden bg-black p-0 text-white ring-white/10 sm:max-w-[min(calc(100vw-2rem),64rem)]"
+        data-testid="walk-photo-view"
+      >
+        {/* the published copy at its own size: not resized again */}
+        <Image
+          alt={photo.caption ?? `Foto: ${title}`}
+          className="mx-auto block h-auto max-h-[calc(100dvh-8rem)] w-auto max-w-full object-contain"
+          height={photo.h}
+          src={src}
+          unoptimized
+          width={photo.w}
+        />
+        <div className="flex flex-col gap-0.5 px-4 py-2.5 font-sans">
+          <DialogTitle className="text-[13px] font-normal text-white/95">
+            {photo.caption ?? title}
+          </DialogTitle>
+          <DialogDescription className="text-[10.5px] text-white/65">
+            <PhotoCredit photo={photo} />
+          </DialogDescription>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** The photo's button: a click shows it whole; the corner says so. */
+function PhotoButton({
+  children,
+  className,
+  coarse,
+  onOpen,
+}: {
+  children: ReactNode;
+  className?: string;
+  coarse: boolean;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      aria-label="Foto groß zeigen"
+      className={cn(
+        "group/photo relative block w-full cursor-zoom-in overflow-hidden focus-visible:outline-2 focus-visible:outline-primary",
+        className
+      )}
+      onClick={onOpen}
+      type="button"
+    >
+      {children}
+      <span
+        aria-hidden
+        className={cn(
+          "absolute top-2 right-2 rounded-full bg-black/40 p-1.5 text-white backdrop-blur-sm transition-opacity",
+          coarse
+            ? "opacity-80"
+            : "opacity-0 group-hover/photo:opacity-100 group-focus-visible/photo:opacity-100"
+        )}
+      >
+        <Maximize2Icon className="size-3.5" />
+      </span>
+    </button>
+  );
+}
+
+/** Whether a stop's photo stands beside its story (`photoIsTall`), not
+ *  over it: on a phone's narrow card the story would be left a sliver. */
+function besideStory(photo: WalkPhoto | undefined, coarse: boolean) {
+  return photo !== undefined && !coarse && photoIsTall(photo);
+}
+
+/**
+ * The stop's photograph: what the model cannot draw (a gilded rider, a
+ * relief, a room). A wide one spans the card above the story at its own
+ * proportion, cut only past a height and then round its `focus`, its
+ * caption and credit laid on its lower edge; a tall one stands beside the
+ * story, which flows round it (`besideStory`). A click shows it whole.
+ * Served by the site itself (ADR 0043: no request to Wikimedia from the
+ * visitor's browser), with its credit.
+ */
+function StopPhoto({
+  base,
+  coarse,
+  photo,
+  title,
+}: {
+  base: string | null;
+  coarse: boolean;
+  photo: WalkPhoto;
+  title: string;
+}) {
+  const [open, setOpen] = useState(false);
+  if (!(base && photo.src)) {
+    return null;
+  }
+  const tall = besideStory(photo, coarse);
+  const src = new URL(photo.src, base).href;
+  const image = (
+    // a small published WebP: not resized again (unoptimized)
+    <Image
+      // the story points at the photo: never a decorative one
+      alt={photo.caption ?? `Foto: ${title}`}
+      className={cn(
+        "block h-auto w-full bg-muted object-cover",
+        tall
+          ? "max-h-[20rem] rounded-lg"
+          : coarse
+            ? "max-h-32"
+            : "max-h-[17rem]"
+      )}
+      height={photo.h}
+      loading="lazy"
+      src={src}
+      style={{ objectPosition: photoPosition(photo) }}
+      unoptimized
+      width={photo.w}
+    />
+  );
+  const view = (
+    <PhotoView
+      onOpenChange={setOpen}
+      open={open}
+      photo={photo}
+      src={src}
+      title={title}
+    />
+  );
+  if (tall) {
+    return (
+      <figure
+        className="float-right m-0 mt-1 mb-2 ml-4 w-[42%]"
+        data-testid="walk-photo"
+      >
+        <PhotoButton
+          className="rounded-lg"
+          coarse={coarse}
+          onOpen={() => setOpen(true)}
+        >
+          {image}
+        </PhotoButton>
+        <figcaption className="mt-1.5 flex flex-col gap-0.5 font-sans text-[10px] text-muted-foreground leading-snug">
+          {photo.caption && (
+            <span className="text-[11.5px] text-foreground/75">
+              {photo.caption}
+            </span>
+          )}
+          <PhotoCredit photo={photo} />
+        </figcaption>
+        {view}
+      </figure>
+    );
+  }
+  return (
+    <figure className="relative m-0 shrink-0" data-testid="walk-photo">
+      <PhotoButton coarse={coarse} onOpen={() => setOpen(true)}>
+        {image}
+      </PhotoButton>
+      <figcaption className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-0.5 bg-linear-to-t from-black/70 via-black/35 to-transparent px-6 pt-10 pb-2 font-sans text-[10px] text-white/75 leading-snug [text-shadow:0_1px_2px_rgb(0_0_0/0.45)]">
+        {photo.caption && (
+          <span className="text-[12px] text-white/95">{photo.caption}</span>
+        )}
+        <span className="pointer-events-auto self-start">
+          <PhotoCredit photo={photo} />
+        </span>
+      </figcaption>
+      {view}
+    </figure>
+  );
+}
+
+/** Where in the walk (one dot a stop) and the stop's title. */
+function StopHeading({ index, walk }: { index: number; walk: Walk }) {
+  const stop = walk.stops[index];
+  return (
+    <div className="min-w-0 flex-1">
+      <p className="flex items-center gap-2.5 text-[10px] font-medium tracking-[0.16em] text-primary uppercase">
+        <span className="truncate">{walk.title}</span>
+        {/* where in the walk: one dot a stop */}
+        <span className="sr-only">
+          Station {index + 1} von {walk.stops.length}
+        </span>
+        <span aria-hidden className="flex shrink-0 items-center gap-1">
+          {walk.stops.map((s, i) => (
+            <span
+              className={cn(
+                "block h-1 rounded-full transition-all",
+                i === index
+                  ? "w-3.5 bg-primary"
+                  : i < index
+                    ? "w-1 bg-primary/60"
+                    : "w-1 bg-foreground/15"
+              )}
+              key={s.id}
+            />
+          ))}
+        </span>
+      </p>
+      <h2
+        aria-live="polite"
+        className={cn(
+          story.className,
+          "mt-2 text-[1.7rem] font-medium italic leading-[1.1] tracking-[-0.012em] text-balance"
+        )}
+      >
+        {stop.title}
+      </h2>
+    </div>
+  );
+}
+
+/** How far (px) a drag on a phone's sheet handle must go to fold or
+ *  unfold it; less is a tap, which toggles. */
+const SHEET_DRAG_PX = 24;
+
+/**
+ * A phone's walk card is a sheet at the bottom with two heights: low, the
+ * title and the way on, the scene above it free; high, the story too. Its
+ * handle folds and unfolds it, by a tap or a drag up or down.
+ */
+function SheetHandle({
+  folded,
+  onFold,
+}: {
+  folded: boolean;
+  onFold: (folded: boolean) => void;
+}) {
+  const [from, setFrom] = useState<number | null>(null);
+  return (
+    <button
+      aria-expanded={!folded}
+      aria-label={folded ? "Text zeigen" : "Text einklappen"}
+      className="flex w-full shrink-0 touch-none justify-center pt-2 pb-1"
+      data-testid="walk-sheet-handle"
+      onPointerCancel={() => setFrom(null)}
+      onPointerDown={(e) => {
+        e.currentTarget.setPointerCapture(e.pointerId);
+        setFrom(e.clientY);
+      }}
+      onPointerUp={(e) => {
+        const dy = from === null ? 0 : e.clientY - from;
+        setFrom(null);
+        onFold(Math.abs(dy) < SHEET_DRAG_PX ? !folded : dy > 0);
+      }}
+      type="button"
+    >
+      <span aria-hidden className="h-1.5 w-10 rounded-full bg-foreground/20" />
+    </button>
+  );
+}
+
+/** The way on: back, on or the end. */
+function WalkFooter({
+  index,
+  last,
+  onClose,
+  onIndex,
+}: {
+  index: number;
+  last: boolean;
+  onClose: () => void;
+  onIndex: (index: number) => void;
+}) {
+  return (
+    <CardFooter className="gap-2 border-t px-5 py-3">
+      <Button
+        disabled={index === 0}
+        onClick={() => onIndex(index - 1)}
+        size="lg"
+        variant="ghost"
+      >
+        <ChevronLeftIcon /> Zurück
+      </Button>
+      <span className="flex-1" />
+      <Button
+        className="px-3.5"
+        data-testid="walk-next"
+        onClick={() => (last ? onClose() : onIndex(index + 1))}
+        size="lg"
+      >
+        {last ? "Ende" : "Weiter"} <ChevronRightIcon />
+      </Button>
+    </CardFooter>
   );
 }
 
@@ -309,145 +650,111 @@ export function WalkCard({
   onIndex: (index: number) => void;
   walk: Walk;
 }) {
-  const [folded, setFolded] = useState(false);
+  // a phone's sheet starts low: the title and the way on, the scene above
+  const [folded, setFolded] = useState(coarse);
   // the visitor's day: the notes for today and the season
   const [today] = useState(() => new Date());
-  // read aloud: each stop from the start of its glide (the browser's own
-  // voice, ADR 0057); a closed card stops talking
-  const speech = useSpeech();
-  const [reading, setReading] = useState(false);
   const { isMobile, openMobile } = useSidebar();
+  const walksUrl = useSceneStatus("site")?.walksUrl ?? null;
   const stop = walk.stops[index];
-  const notes = stop ? stopNotes(stop, today) : [];
-  const said = stop && reading ? stopSpeech(stop, notes) : "";
-  useEffect(() => {
-    if (said) {
-      speech.speak(said);
-      // a new stop, or reading switched off, cuts this one off
-      return speech.stop;
-    }
-  }, [said, speech]);
+  const notes = useMemo(
+    () => (stop ? stopNotes(stop, today) : []),
+    [stop, today]
+  );
   // the phone's panel sheet covers the scene, and the card with it
   if (!stop || (isMobile && openMobile)) {
     return null;
   }
   const last = index === walk.stops.length - 1;
+  const beside = besideStory(stop.photo, coarse);
+  // a phone's sheet, folded: the title and the way on
+  const low = coarse && folded;
   return (
     <section
       aria-label={`Spaziergang: ${walk.title}`}
       className={cn(
-        "pointer-events-auto absolute z-30 flex flex-col rounded-xl bg-background/95 shadow-xl backdrop-blur-lg",
+        "pointer-events-auto absolute z-30 flex flex-col",
         coarse
-          ? "top-3 right-16 left-3 max-h-[45dvh]"
-          : "bottom-6 left-4 max-h-[min(36rem,calc(100%-3rem))] w-[min(24rem,calc(100%-2rem))] lg:w-[26rem]"
+          ? "inset-x-0 bottom-0 max-h-[62dvh]"
+          : "bottom-6 left-5 max-h-[min(44rem,calc(100%-3rem))] w-[min(28rem,calc(100%-2.5rem))] lg:w-[30rem]"
       )}
+      data-folded={low ? "" : undefined}
       data-testid="walk-card"
     >
-      <header className="flex items-start gap-2 px-4 pt-3">
-        <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-2 text-[10px] font-medium tracking-[0.14em] text-primary uppercase">
-            <span className="truncate">{walk.title}</span>
-            {/* where in the walk: one dot a stop */}
-            <span className="sr-only">
-              Station {index + 1} von {walk.stops.length}
-            </span>
-            <span aria-hidden className="flex shrink-0 items-center gap-1">
-              {walk.stops.map((s, i) => (
-                <span
-                  className={cn(
-                    "block h-1 rounded-full transition-all",
-                    i === index
-                      ? "w-3 bg-primary"
-                      : i < index
-                        ? "w-1 bg-primary/60"
-                        : "w-1 bg-foreground/15"
-                  )}
-                  key={s.id}
-                />
-              ))}
-            </span>
+      <Card
+        className={cn(
+          "min-h-0 flex-1 gap-0 bg-background/95 py-0 shadow-xl ring-foreground/[0.07] backdrop-blur-lg",
+          coarse
+            ? "rounded-t-2xl rounded-b-none pb-[env(safe-area-inset-bottom)]"
+            : "rounded-2xl"
+        )}
+      >
+        {coarse && <SheetHandle folded={folded} onFold={setFolded} />}
+        {stop.photo && !beside && !low && (
+          <StopPhoto
+            base={walksUrl}
+            coarse={coarse}
+            key={`photo:${walk.id}/${stop.id}`}
+            photo={stop.photo}
+            title={stop.title}
+          />
+        )}
+        <CardHeader className="flex items-start gap-3 px-6 pt-5 pb-1">
+          <StopHeading index={index} walk={walk} />
+          <div className="-mt-1 -mr-2 flex shrink-0 items-center gap-0.5">
+            <Button
+              aria-label="Spaziergang beenden"
+              className="rounded-full text-muted-foreground"
+              onClick={onClose}
+              size="icon-lg"
+              title="Spaziergang beenden"
+              variant="ghost"
+            >
+              <XIcon />
+            </Button>
+          </div>
+        </CardHeader>
+        {low && (
+          <p className="px-6 pt-1 font-sans text-[10.5px] text-muted-foreground">
+            Erzählt von {walk.by} (KI)
           </p>
-          <h2
-            aria-live="polite"
+        )}
+        {!low && (
+          <CardContent
             className={cn(
               story.className,
-              "mt-1 text-[1.45rem] font-medium italic leading-[1.12] tracking-[-0.01em] text-balance"
+              "min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pt-3 pb-2"
             )}
+            key={`${walk.id}/${stop.id}`}
           >
-            {stop.title}
-          </h2>
-        </div>
-        {speech.supported && (
-          <button
-            aria-label="Vorlesen"
-            aria-pressed={reading}
-            className="-mt-1 rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground aria-pressed:bg-primary/10 aria-pressed:text-primary"
-            data-testid="walk-read"
-            onClick={() => setReading((r) => !r)}
-            title={reading ? "Nicht mehr vorlesen" : "Vorlesen, schon im Flug"}
-            type="button"
-          >
-            {reading ? (
-              <Volume2Icon className="size-4" />
-            ) : (
-              <VolumeXIcon className="size-4" />
-            )}
-          </button>
+            <StopBody
+              aside={
+                stop.photo && beside ? (
+                  <StopPhoto
+                    base={walksUrl}
+                    coarse={coarse}
+                    photo={stop.photo}
+                    title={stop.title}
+                  />
+                ) : null
+              }
+              notes={notes}
+              stop={stop}
+            />
+            <p className="mt-4 pb-2 font-sans text-[10.5px] text-muted-foreground leading-snug">
+              <FootprintsIcon aria-hidden className="mr-1 inline size-3" />
+              Erzählt von {walk.by} (KI), {walk.written}. Die Erzählung ist
+              generiert; die Angaben stehen unter „Belege“ mit ihrer Quelle.
+            </p>
+          </CardContent>
         )}
-        <button
-          aria-label="Spaziergang beenden"
-          className="-mt-1 -mr-1 rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-          onClick={onClose}
-          title="Spaziergang beenden"
-          type="button"
-        >
-          <XIcon className="size-4" />
-        </button>
-      </header>
-      {!(coarse && folded) && (
-        <div
-          className={cn(
-            story.className,
-            "min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-2"
-          )}
-          key={`${walk.id}/${stop.id}`}
-        >
-          <StopBody notes={notes} stop={stop} />
-          <p className="mt-3 pb-1 font-sans text-[10px] text-muted-foreground leading-snug">
-            <FootprintsIcon aria-hidden className="mr-1 inline size-3" />
-            Erzählt von {walk.by} (KI), {walk.written}. Die Erzählung ist
-            generiert; die Angaben stehen unter „Belege“ mit ihrer Quelle.
-          </p>
-        </div>
-      )}
-      <footer className="flex items-center gap-2 border-t px-3 py-2">
-        <button
-          className="flex items-center gap-1 rounded-md px-2 py-1 text-xs hover:bg-accent disabled:opacity-40"
-          disabled={index === 0}
-          onClick={() => onIndex(index - 1)}
-          type="button"
-        >
-          <ChevronLeftIcon className="size-3.5" /> Zurück
-        </button>
-        {coarse && (
-          <button
-            className="text-[11px] text-muted-foreground underline decoration-dotted underline-offset-2"
-            onClick={() => setFolded((f) => !f)}
-            type="button"
-          >
-            {folded ? "Text zeigen" : "Text einklappen"}
-          </button>
-        )}
-        <span className="flex-1" />
-        <button
-          className="flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 font-medium text-primary-foreground text-xs hover:bg-primary/90"
-          data-testid="walk-next"
-          onClick={() => (last ? onClose() : onIndex(index + 1))}
-          type="button"
-        >
-          {last ? "Ende" : "Weiter"} <ChevronRightIcon className="size-3.5" />
-        </button>
-      </footer>
+        <WalkFooter
+          index={index}
+          last={last}
+          onClose={onClose}
+          onIndex={onIndex}
+        />
+      </Card>
     </section>
   );
 }

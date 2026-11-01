@@ -169,6 +169,21 @@ test("a drag mid-glide takes the wheel: the glide stops where it is", () => {
   expect(headingAfterDrag * RAD2DEG).toBeLessThan(90);
 });
 
+test("a walk's glide lets a drag look about and still lands on its stop", () => {
+  const { camera, pose } = rig();
+  pose.flyToViewpoint(VIEW, { lookAround: true, pace: 2.2 });
+  pose.step(0.5);
+  pose.turn(40, 0);
+  const headingAfterDrag = pose.getPose().heading;
+  settle(pose);
+  // it carried on to the stop and landed on foot, the drag's heading kept
+  expect(pose.getMode()).toBe("walk");
+  expect(pose.getCameraState().epsg.x).toBeCloseTo(VIEW.epsg.x, 6);
+  expect(pose.getCameraState().epsg.y).toBeCloseTo(VIEW.epsg.y, 6);
+  expect(camera.position.y).toBeCloseTo(GROUND + EYE_HEIGHT, 6);
+  expect(pose.getPose().heading).toBeCloseTo(headingAfterDrag, 6);
+});
+
 test("a camera state applied mid-glide wins: the glide does not take the camera back", () => {
   const { pose } = rig();
   pose.flyToViewpoint(VIEW);

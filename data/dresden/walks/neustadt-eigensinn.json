@@ -21,7 +21,7 @@
         118
       ],
       "hour": 10,
-      "text": "Der Goldene Reiter zeigt August den Starken als römischen Caesar auf einem steigenden Pferd. Er blickt nach Nordosten, Richtung Polen, dem Königreich, für das er konvertiert war. Gegossen ist er nicht: Der Bronzeguss misslang, also trieb Ludwig Wiedemann die Figur aus Kupfer und vergoldete sie im Feuer. Enthüllt wurde sie 1736, drei Jahre nach Augusts Tod, mit unfertigem Sockel. Hinter dir beginnt die Hauptstraße, gerade wie eine Bühnenachse. Für sie ließ der Kurfürst sogar die alte Dreikönigskirche abreißen.",
+      "text": "Im Modell steht hier nur eine Figur, das Foto zeigt das Original: August den Starken als römischen Caesar auf einem steigenden Pferd. Er blickt nach Nordosten, Richtung Polen, dem Königreich, für das er konvertiert war. Gegossen ist er nicht: Der Bronzeguss misslang, also trieb Ludwig Wiedemann die Figur aus Kupfer und vergoldete sie im Feuer. Enthüllt wurde sie 1736, drei Jahre nach Augusts Tod, mit unfertigem Sockel. Hinter dir beginnt die Hauptstraße, gerade wie eine Bühnenachse. Für sie ließ der Kurfürst sogar die alte Dreikönigskirche abreißen.",
       "closer": "Ein paar Schritte Richtung Brücke steht Joseph Fröhlich, Augusts Hoftaschenspieler. Der König nannte ihn spöttisch „Graf Saumagen“. Im Grünen Gewölbe sitzt er als Elfenbeinfigur auf einem Karren, den zwei Schweine ziehen, und der Karren ist ein Nachttopf.",
       "days": [
         {
@@ -64,7 +64,21 @@
       "refs": [
         "m411791_5657042",
         "m411797_5656938"
-      ]
+      ],
+      "photo": {
+        "file": "Dresden Germany Golden-Rider-03.jpg",
+        "caption": "Der Goldene Reiter",
+        "author": "CEphoto, Uwe Aranas",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Dresden_Germany_Golden-Rider-03.jpg",
+        "h": 533,
+        "w": 800,
+        "focus": [
+          0.5,
+          0.35
+        ]
+      }
     },
     {
       "id": "japanisches-palais",
@@ -81,7 +95,7 @@
         124
       ],
       "hour": 15,
-      "text": "Schau auf die Dächer: Sie schwingen nach oben wie in Ostasien. August kaufte das Palais 1717 und wollte es zum Porzellanschloss machen, für seine ostasiatische Sammlung und für das, was seine eigene Manufaktur in Meißen konnte. 35.798 Stücke lieferte Meißen dafür, dazu Kändlers lebensgroße Tiere. Im Giebelrelief bringen Sachsen und Chinesen der Göttin Saxonia ihr Porzellan dar, und man hat den Sachsen die bessere Pose gegeben. Eine Behauptung in Stein: Unser Porzellan ist das bessere.",
+      "text": "Das Foto zeigt, was das Modell glättet: Die Dächer schwingen nach oben wie in Ostasien. August kaufte das Palais 1717 und wollte es zum Porzellanschloss machen, für seine ostasiatische Sammlung und für das, was seine eigene Manufaktur in Meißen konnte. 35.798 Stücke lieferte Meißen dafür, dazu Kändlers lebensgroße Tiere. Im Giebelrelief bringen Sachsen und Chinesen der Göttin Saxonia ihr Porzellan dar, und man hat den Sachsen die bessere Pose gegeben. Eine Behauptung in Stein: Unser Porzellan ist das bessere.",
       "closer": "Über dem Eingang steht „Museum usui publico patens“, ein Museum, offen zum öffentlichen Gebrauch. Seit 1786 war hier die kurfürstliche Bibliothek.",
       "facts": [
         {
@@ -99,7 +113,21 @@
       ],
       "refs": [
         "Q468137"
-      ]
+      ],
+      "photo": {
+        "file": "20080629015DR Dresden-Neustadt Japanische Palais Palaisplatz.jpg",
+        "caption": "Das Japanische Palais vom Palaisplatz",
+        "author": "Jörg Blobelt",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:20080629015DR_Dresden-Neustadt_Japanische_Palais_Palaisplatz.jpg",
+        "h": 603,
+        "w": 800,
+        "focus": [
+          0.5,
+          0.3
+        ]
+      }
     },
     {
       "id": "kuegelgenhaus",
@@ -117,7 +145,7 @@
       ],
       "hour": 10,
       "text": "Ein unscheinbares Barockhaus an der Hauptstraße, Nummer 13. Unter der Traufe steht sein Motto: „An Gottes Segen ist alles gelegen.“ Hier wohnte von 1808 an der Maler Gerhard von Kügelgen, bis er im März 1820 ermordet wurde. Bei ihm saß Goethe Modell, und am 24. April 1813 stand Goethe hier am Fenster und sah den russischen Zaren und den preußischen König in Dresden einziehen. Heute ist im zweiten Stock das Museum der Dresdner Romantik. Bei der Sanierung 1974 bis 1980 fand man unter einer Stuckdecke bemalte Balken aus dem 17. Jahrhundert.",
-      "closer": "Schau unter die Traufe: Dort steht das Hausmotto, nach dem das Haus seit etwa 1730 „Gottessegen“ heißt.",
+      "closer": "Nach diesem Motto heißt das Haus seit etwa 1730 „Gottessegen“.",
       "facts": [
         {
           "claim": "Das Haus Hauptstraße 13 trägt seit etwa 1730 den Namen „Haus Gottessegen“ nach dem Spruch „AN GOTTES SEGEN IST ALLES GELEGEN“ unter der Traufe.",
@@ -138,7 +166,17 @@
       ],
       "refs": [
         "Q1746253"
-      ]
+      ],
+      "photo": {
+        "file": "Dresden Kuegelgenhaus.jpg",
+        "caption": "Das Kügelgenhaus an der Hauptstraße",
+        "author": "X-Weinzar",
+        "licence": "CC BY-SA 2.5",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/2.5",
+        "page": "https://commons.wikimedia.org/wiki/File:Dresden_Kuegelgenhaus.jpg",
+        "h": 1067,
+        "w": 800
+      }
     },
     {
       "id": "dreikoenigskirche",
@@ -188,7 +226,17 @@
       ],
       "refs": [
         "Q1257935"
-      ]
+      ],
+      "photo": {
+        "file": "Dreikoenigskirche Totentanz 07.JPG",
+        "caption": "Ein Ausschnitt des Dresdner Totentanzes",
+        "author": "Concord",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Dreikoenigskirche_Totentanz_07.JPG",
+        "h": 600,
+        "w": 800
+      }
     },
     {
       "id": "albertplatz",
@@ -240,7 +288,21 @@
           "to": "02-26",
           "text": "Am 23. Februar 1899 wurde Erich Kästner geboren, ein paar Straßen von hier."
         }
-      ]
+      ],
+      "photo": {
+        "file": "Denkmal Erich Kästner Albertplatz Dresden Sachsen Germany 1.jpg",
+        "caption": "Erich Kästner als Bronzefigur auf der Mauer",
+        "author": "Lupus in Saxonia",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Denkmal_Erich_K%C3%A4stner_Albertplatz_Dresden_Sachsen_Germany_1.jpg",
+        "h": 600,
+        "w": 800,
+        "focus": [
+          0.5,
+          0.3
+        ]
+      }
     },
     {
       "id": "pfunds-molkerei",
@@ -279,7 +341,17 @@
       ],
       "refs": [
         "Q2084468"
-      ]
+      ],
+      "photo": {
+        "file": "20070208095DR Dresden-Neustadt Pfunds Molkerei Bautzner 79.jpg",
+        "caption": "Der Laden mit den Fliesen von Villeroy & Boch",
+        "author": "Jörg Blobelt",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:20070208095DR_Dresden-Neustadt_Pfunds_Molkerei_Bautzner_79.jpg",
+        "h": 604,
+        "w": 800
+      }
     },
     {
       "id": "kunsthofpassage",
@@ -323,7 +395,21 @@
       "refs": [
         "m412702_5658124",
         "m412717_5658086"
-      ]
+      ],
+      "photo": {
+        "file": "Dresden - Kunsthofpassage Hof der Elemente.jpg",
+        "caption": "Der Hof der Elemente mit seinen Rinnen und Trichtern",
+        "author": "Fred Romero from Paris, France",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Dresden_-_Kunsthofpassage_Hof_der_Elemente.jpg",
+        "h": 533,
+        "w": 800,
+        "focus": [
+          0.5,
+          0.45
+        ]
+      }
     },
     {
       "id": "bunte-republik",
