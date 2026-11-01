@@ -403,6 +403,14 @@ function sceneBuffers(
   };
 }
 
+/** A file the tileset's extras name, resolved beside it; null without one. */
+function besideTileset(
+  file: string | undefined,
+  tilesetUrl: string
+): string | null {
+  return file ? new URL(file, tilesetUrl).href : null;
+}
+
 /** What the HUD knows of the site from the tileset alone (`onSiteInfo`). */
 export type SiteInfo = Pick<
   CityWalkHandle,
@@ -1448,11 +1456,9 @@ async function bootApp(
       bridges: t.bridges ? new URL(t.bridges, tilesetUrl).href : undefined,
     })),
     latLng,
-    provenanceUrl: extras.provenance
-      ? new URL(extras.provenance, tilesetUrl).href
-      : null,
+    provenanceUrl: besideTileset(extras.provenance, tilesetUrl),
     terrainBounds: siteBounds,
-    walksUrl: walksFile ? new URL(walksFile, tilesetUrl).href : null,
+    walksUrl: besideTileset(walksFile, tilesetUrl),
   };
   opts.onSiteInfo?.(siteInfo);
   const sunRig = createSunRig(
