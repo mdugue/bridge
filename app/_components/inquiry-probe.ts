@@ -318,10 +318,12 @@ export function createInquiryProbe(deps: {
   /** distance along the pick ray to the ground, or null within `far` */
   groundAlong: (raycaster: Raycaster, far: number) => number | null;
   /** the outline's subjects: what is picked, or null when nothing is; a
-   *  hover over a candidate passes `flash` false (selection-outline.ts) */
+   *  hover over a candidate passes `flash` false (selection-outline.ts);
+   *  `redraw`: the same picks' outline again (another level shows) */
   outline: (
     subjects: readonly OutlineSubject[] | null,
-    flash?: boolean
+    flash?: boolean,
+    redraw?: boolean
   ) => void;
   /** the trees, monuments and decks on screen now (lib/city/ask-items.ts) */
   things: () => Iterable<AskSet<FeatureInquiry>>;
@@ -540,18 +542,22 @@ export function createInquiryProbe(deps: {
       if (!("building" in o)) {
         return o;
       }
+      let own = false;
       const parts = o.building.map((part) => {
         const layer = shown.includes(part.layer)
           ? part.layer
           : (shown.find((l) => l.tile === part.layer.tile) ?? part.layer);
-        changed ||= layer !== part.layer || part.layer === redraw;
+        own ||= layer !== part.layer || part.layer === redraw;
         return layer === part.layer ? part : { ...part, layer };
       });
-      return { building: parts };
+      changed ||= own;
+      // an unchanged pick stays the same subject (its nameplate body is
+      // kept by it)
+      return own ? { building: parts } : o;
     });
     if (changed) {
       outlined = moved;
-      deps.outline(moved);
+      deps.outline(moved, true, true);
     }
   };
 
