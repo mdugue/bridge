@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { composeDate, frameGate, splitDate } from "./scene-time";
+import { composeDate, frameGate, splitDate, tweenMinutes } from "./scene-time";
 
 test("a day and a minute compose to a local instant and split back", () => {
   const day = new Date(2026, 11, 21);
@@ -81,4 +81,16 @@ test("a cancelled gate drops the step still waiting for its frame", () => {
   expect(runs).toBe(1);
   gate.request();
   expect(runs).toBe(2);
+});
+
+test("the hour glides as the camera does, in whole minutes, and lands", () => {
+  expect(tweenMinutes(600, 990, 0)).toBe(600);
+  expect(tweenMinutes(600, 990, 0.5)).toBe(795);
+  expect(tweenMinutes(600, 990, 1)).toBe(990);
+  // eased: slow at the start, as the glide leaves
+  expect(tweenMinutes(600, 990, 0.1)).toBeLessThan(600 + 39);
+  // back to an earlier hour, and past the ends held
+  expect(tweenMinutes(990, 600, 0.5)).toBe(795);
+  expect(tweenMinutes(600, 990, 1.4)).toBe(990);
+  expect(tweenMinutes(600, 990, -1)).toBe(600);
 });

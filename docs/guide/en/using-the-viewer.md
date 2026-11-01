@@ -384,21 +384,33 @@ The button in the corner opens a panel with three tabs.
   *Strich* in plan colours with a pen's edge (a warm light at night), the
   *Schwarzplan* as a band outlined in black.
 - **Spaziergänge** ("walks") — guided walks through the city, written by
-  Claude, an AI, and marked as such on every stop (so far in Dresden, in
-  German): *Augusts Bühne* (the old town as a stage of power), *Narben
+  Claude, an AI, and marked as such on every stop (in German). Dresden
+  has four: *Augusts Bühne* (the old town as a stage of power), *Narben
   und Nähte* (how the city lives with its wounds), *Gold, Milch und
   Eigensinn* (the Neustadt) and *Wunder am Elbhang* (upriver to
-  Loschwitz). A walk opens a card over the scene: each stop glides to
-  its view, sets today's date at the hour the stop is best seen (a
-  facade in evening light, a square at night) and, where the stop asks,
-  a picture style or the Modell view; the card tells the stop, adds what
-  is special about today or this season, and names one detail to find in
-  the picture. *Belege* ("sources") folds out every claim the stop makes
+  Loschwitz); Leipzig, Hamburg, Munich, Meißen, Grimma and Unna have
+  one each: *Messe, Musik und Montag*
+  (Leipzig), *Backstein und Wasser* (Hamburg), *Teufel, Tanz und Löwen*
+  (Munich), *Schloss, Dom und Porzellan* (Meißen), *Grimma an der Mulde*
+  and *Licht unter der Stadt* (Unna). A walk opens a card over the
+  scene: each stop glides slowly to its view, sets today's date at the
+  hour the stop is best seen (a facade in evening light, a square at
+  night) and, where the stop asks, a picture style; a walk leaves Modell
+  once, since it tells what you see. The card tells the stop already
+  during the glide there; you can look around during the glide, it still
+  lands at the stop, and the light moves with it to the next stop's hour.
+  It adds what is special about today or this season and names one detail
+  to find in the picture. What the model does not show — a statue, a
+  relief, an inscription, an interior — a Wikimedia Commons photo in the
+  card shows, with its author and licence: a landscape one across the top,
+  a portrait one beside the text (above it on a phone); a click shows it
+  whole. It is served by this site, not by Wikimedia. *Belege* ("sources") folds out every claim the stop makes
   with the source it comes from — Wikipedia, an institution's page, the
   city model's own data; legends are told as legends. *Weiter* and
   *Zurück* move between the stops, × ends the walk and gives the picture
-  style and the time back. On a phone the card sits at the top and folds
-  its text away. How they are written: [walks.md](../../walks.md).
+  style and the time back. On a phone the card is a sheet at the bottom
+  that starts folded: tap or pull up its handle to open it, pull it down
+  to fold it again. How they are written: [walks.md](../../walks.md).
 - **Frag die Stadt** (ask the city) — questions about the city in your
   own words ("Who built the Frauenkirche?", "What is in front of me?",
   "What does this look like in the evening?"). A language model searches

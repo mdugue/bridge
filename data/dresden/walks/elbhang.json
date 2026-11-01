@@ -21,8 +21,8 @@
         112
       ],
       "hour": 12,
-      "text": "Von 2004 an war dieses Tal Welterbe: die Elbwiesen, die Hänge, die Schlösser, eine Kulturlandschaft mitten in der Großstadt. 2005 stimmten die Dresdner in einem Bürgerentscheid für eine Brücke genau hier, die Waldschlößchenbrücke. Die UNESCO warnte, setzte das Tal 2006 auf die Rote Liste und strich es im Juni 2009. Es war die erste Kulturstätte, die je von der Liste gestrichen wurde. Die Brücke ging am 24. August 2013 in Betrieb. Eine Umfrage von 2009 fand übrigens 57 Prozent der Dresdner, die den Titel für verzichtbar hielten. Du siehst sie da vorn über die Wiesen laufen, und du kannst selbst entscheiden, was du davon hältst.",
-      "closer": "Rechts oben auf dem Hang reihen sich drei weiße Schlösser. Zu einem davon geht es als Nächstes.",
+      "text": "Von 2004 an war dieses Tal Welterbe: Wiesen, Hänge, Schlösser, eine Kulturlandschaft mitten in der Großstadt. 2005 stimmten die Dresdner in einem Bürgerentscheid für eine Brücke genau hier, die Waldschlößchenbrücke. Die UNESCO setzte das Tal 2006 auf die Rote Liste und strich es im Juni 2009, als erste Kulturstätte überhaupt. Die Brücke ging 2013 in Betrieb. Eine Umfrage fand 2009 übrigens 57 Prozent, die den Titel für verzichtbar hielten. Da vorn läuft sie über die Wiesen. Entscheide selbst.",
+      "closer": "Rechts oben auf dem Hang reihen sich drei Schlösser. Zu einem davon geht es als Nächstes.",
       "days": [
         {
           "from": "06-20",
@@ -51,7 +51,21 @@
       ],
       "refs": [
         "Q2541853"
-      ]
+      ],
+      "photo": {
+        "file": "Waldschlösschenbrücke Dresden 2024 Luftbild Toni Klemm 2500px.jpg",
+        "caption": "Die Waldschlößchenbrücke über den Elbwiesen, 2024",
+        "author": "Toniklemm",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Waldschl%C3%B6sschenbr%C3%BCcke_Dresden_2024_Luftbild_Toni_Klemm_2500px.jpg",
+        "h": 533,
+        "w": 800,
+        "focus": [
+          0.5,
+          0.65
+        ]
+      }
     },
     {
       "id": "lingnerschloss",
@@ -69,7 +83,7 @@
       ],
       "hour": 15.5,
       "fov": 45,
-      "text": "Das mittlere der drei Elbschlösser heißt eigentlich Villa Stockhausen. Der Name, unter dem es jeder kennt, kommt vom Käufer: Karl August Lingner, der Mann, der Odol vermarktete und das Hygiene-Museum gründete. Er baute sich eine eigene Schrägbahn vom Tal hinauf und eine Orgel, deren Klang er per Telefon zu Freunden übertragen konnte. Sein Testament von 1916 ist das Schönste daran: Er vermachte das Anwesen der Stadt, unter der Bedingung, dass Park und Schloss frei zugänglich sind und dort ein Lokal mit den niedrigsten Preisen der Gegend betrieben wird. Bis heute gibt es dort deshalb ein alkoholfreies Getränk für 75 Cent.",
+      "text": "Das mittlere der drei Elbschlösser heißt eigentlich Villa Stockhausen. Den bekannten Namen gab ihm sein Käufer Karl August Lingner, der Mann, der Odol vermarktete und das Hygiene-Museum gründete. Er ließ eine Orgel einbauen, deren Klang er per Telefon zu Freunden übertrug. Am schönsten ist sein Testament von 1916: Die Stadt bekam das Anwesen unter der Bedingung, dass Park und Schloss frei zugänglich bleiben und dort ein Lokal mit den niedrigsten Preisen der Gegend läuft. Darum gibt es dort bis heute ein Getränk für 75 Cent.",
       "closer": "Links daneben Schloss Albrechtsberg, rechts Schloss Eckberg. Lingner ist im Park begraben, in einem Mausoleum von Hans Poelzig und Georg Kolbe.",
       "facts": [
         {
@@ -92,7 +106,16 @@
       "refs": [
         "Q1826549",
         "Q882139"
-      ]
+      ],
+      "photo": {
+        "file": "Lingnerschloss Dresden Frühling.jpg",
+        "author": "Ruben Gläser",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Lingnerschloss_Dresden_Fr%C3%BChling.jpg",
+        "w": 800,
+        "h": 450
+      }
     },
     {
       "id": "blaues-wunder",
@@ -109,7 +132,7 @@
         128
       ],
       "hour": 16,
-      "text": "Woher der Name? Ein Wunder war sie 1893, weil sie die Elbe mit 146,68 Metern überspannt, ohne einen einzigen Pfeiler im Fluss. Blau, weil sie hellblau gestrichen ist. Eine Zeitung behauptete 1936, sie sei ursprünglich grün gewesen und blau verwittert, das gilt heute als Ente. Am 7. Mai 1945 wollte die abziehende Wehrmacht sie sprengen. Mehrere Dresdner haben das unabhängig voneinander verhindert, eine Tafel nennt Paul Zickler und Erich Stöckel. Bis 1924 kostete die Überquerung Brückenzoll, zwei bis drei Pfennig. Mit dem Überschuss wurde in Loschwitz eine Stützmauer gebaut, die bis heute „Zwee-Pfeng-Mauer“ heißt.",
+      "text": "Ein Wunder war sie 1893, weil sie die Elbe mit 146,68 Metern überspannt, ohne einen Pfeiler im Fluss. Blau, weil sie hellblau gestrichen ist; dass sie einst grün war und blau verwitterte, gilt als Zeitungsente. Am 7. Mai 1945 wollte die Wehrmacht sie sprengen, mehrere Dresdner verhinderten das, eine Tafel nennt Paul Zickler und Erich Stöckel. Bis 1924 kostete die Überquerung zwei bis drei Pfennig Zoll. Vom Überschuss baute Loschwitz eine Stützmauer, die bis heute „Zwee-Pfeng-Mauer“ heißt.",
       "closer": "Offiziell heißt sie Loschwitzer Brücke. „König-Albert-Brücke“ hieß sie nur bei der Eröffnung.",
       "days": [
         {
@@ -143,7 +166,20 @@
       ],
       "refs": [
         "Q567518"
-      ]
+      ],
+      "photo": {
+        "file": "Blaues Wunder.jpg",
+        "author": "Nikater",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "http://creativecommons.org/licenses/by-sa/3.0/",
+        "page": "https://commons.wikimedia.org/wiki/File:Blaues_Wunder.jpg",
+        "w": 800,
+        "h": 533,
+        "focus": [
+          0.5,
+          0.4
+        ]
+      }
     },
     {
       "id": "schillerhaeuschen",
@@ -160,7 +196,7 @@
         149
       ],
       "hour": 14,
-      "text": "Ein Gartenhaus am Hang, früher Teil des Weinbergs von Christian Gottfried Körner. Schiller kam 1785 nach Dresden, verbrachte die Sommer 1786 und 1787 auf Körners Landsitz in Loschwitz. Hier ist das kleinste Museum der Stadt. Und jetzt die ehrliche Fußnote, die jede gute Führung braucht: Ob Schiller je in diesem Häuschen saß, ist nicht belegt. Ebenso unklar ist, ob hier Teile von „An die Freude“ entstanden. Der Blick übers Tal hat ihn wahrscheinlich inspiriert, mehr weiß man nicht. Gegenüber stand einmal eine weiße Schillerstatue. König Friedrich August III. soll gesagt haben, gut, dass der weiße Schiller endlich weg sei, sein Brauner habe sich immer so gefürchtet.",
+      "text": "Ein Gartenhaus am Hang, einst im Weinberg von Christian Gottfried Körner. Schiller verbrachte die Sommer 1786 und 1787 auf Körners Landsitz, und hier ist das kleinste Museum der Stadt. Nun die ehrliche Fußnote: Ob Schiller je in diesem Häuschen saß, ist nicht belegt, ebenso wenig, ob hier Teile von „An die Freude“ entstanden. Gegenüber stand einmal eine weiße Schillerstatue. König Friedrich August III. soll gesagt haben, gut, dass der weiße Schiller weg sei, sein Brauner habe sich immer gefürchtet.",
       "closer": "Daneben erinnert seit 1912 ein Relief an Schiller und Körner.",
       "facts": [
         {
@@ -186,7 +222,17 @@
       ],
       "refs": [
         "m416830_5656910"
-      ]
+      ],
+      "photo": {
+        "file": "Schillerhäuschen in Loschwitz 1.jpg",
+        "caption": "Das Schillerhäuschen am Hang",
+        "author": "Brücke-Osteuropa",
+        "licence": "CC0",
+        "licenceUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+        "page": "https://commons.wikimedia.org/wiki/File:Schillerh%C3%A4uschen_in_Loschwitz_1.jpg",
+        "h": 600,
+        "w": 800
+      }
     },
     {
       "id": "standseilbahn",
@@ -228,7 +274,21 @@
           "claim": "Bei Luftalarm wurden die Wagen in die Tunnel gefahren und blieben so im Februar 1945 unbeschädigt.",
           "source": "https://de.wikipedia.org/wiki/Standseilbahn_Dresden"
         }
-      ]
+      ],
+      "photo": {
+        "file": "051030-Standseilbahn-Dresden-Talfahrt-Begegnung-Viadukt.jpg",
+        "caption": "Die beiden Wagen weichen sich auf dem Viadukt aus",
+        "author": "Martin Röll Martinroell",
+        "licence": "CC BY-SA 2.0 de",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/2.0/de/deed.en",
+        "page": "https://commons.wikimedia.org/wiki/File:051030-Standseilbahn-Dresden-Talfahrt-Begegnung-Viadukt.jpg",
+        "h": 533,
+        "w": 800,
+        "focus": [
+          0.6,
+          0.5
+        ]
+      }
     },
     {
       "id": "schwebebahn",
@@ -245,7 +305,7 @@
         222
       ],
       "hour": 11,
-      "text": "Und gleich daneben die zweite Bergbahn, eröffnet am 6. Mai 1901. Die Wagen hängen unter einem Stahlgerüst und werden an einem Seil 274 Meter weit und 84 Meter hoch gezogen, bis zu fast 40 Prozent Steigung. Zwei Feinheiten für Besserwisser: Technisch ist sie gar keine Schwebebahn, sondern eine Hängebahn, weil die Wagen ständig die Schiene berühren. Und die berühmte Schwebebahn in Wuppertal ist zwei Monate älter. Bei der großen Sanierung 1984 bis 1992 setzten Hubschrauber die Träger ein. Und 2014 blieb ein Lastwagen an der Durchfahrt über dem Veilchenweg hängen, die Fahrgäste mussten mit Leitern geborgen werden.",
+      "text": "Gleich daneben die zweite Bergbahn, eröffnet am 6. Mai 1901. Die Wagen hängen unter einem Stahlgerüst und werden am Seil 274 Meter weit und 84 Meter hoch gezogen. Zwei Feinheiten für Besserwisser: Technisch ist sie eine Hängebahn, keine Schwebebahn, und die in Wuppertal ist zwei Monate älter. Bei der Sanierung 1984 bis 1992 setzten Hubschrauber die Träger ein. Und 2014 blieb ein Lastwagen an der Durchfahrt über dem Veilchenweg hängen; die Fahrgäste stiegen über Leitern aus.",
       "closer": "Die Wagen haben keinen Motor. Gezogen werden sie von der Bergstation aus, an einem 390 Meter langen Seil.",
       "days": [
         {
@@ -274,7 +334,17 @@
       ],
       "refs": [
         "DESNATPU1000GMdW"
-      ]
+      ],
+      "photo": {
+        "file": "Dresden-Loschwitz,Schwebebahn 13.jpg",
+        "caption": "Ein Wagen unter dem Stahlgerüst",
+        "author": "Bybbisch94; Christian Gebhardt",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Dresden-Loschwitz,Schwebebahn_13.jpg",
+        "h": 533,
+        "w": 800
+      }
     },
     {
       "id": "oberloschwitz",

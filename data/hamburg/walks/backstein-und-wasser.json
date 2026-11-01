@@ -1,0 +1,295 @@
+{
+  "id": "backstein-und-wasser",
+  "title": "Backstein und Wasser",
+  "teaser": "Hamburg von der Elbe her: ein Konzerthaus, das elfmal so teuer wurde, ein Haus wie ein Schiffsbug, ein Turm, der Bombern den Weg zeigte, ein Rathaus auf Eichen, ein Turm mit Trompete und ein Tunnel mit Fahrstühlen für Autos.",
+  "by": "Claude",
+  "written": "2026-10-30",
+  "minutes": 22,
+  "stops": [
+    {
+      "id": "elbphilharmonie",
+      "title": "Elfmal so teuer",
+      "from": [
+        565076,
+        5932557,
+        120
+      ],
+      "ground": 5.9,
+      "at": [
+        565220,
+        5932952,
+        46
+      ],
+      "hour": 16,
+      "text": "Unten ein Backsteinspeicher von 1963, der Kaispeicher A, oben eine Glaswelle bis rund 110 Meter. Dazwischen, in 37 Metern Höhe, die Plaza, die jeder betreten darf. Hinauf führt die Tube, eine leicht gewölbte Rolltreppe von über 80 Metern, so lang, dass man ihr Ende nicht sieht. Geplant waren 77 Millionen Euro. Am Ende kostete das Haus rund 866 Millionen, mehr als das Elffache. Eröffnet wurde es am 11. Januar 2017, und seitdem redet kaum noch jemand über das Geld.",
+      "closer": "Die Fuge zwischen Backstein und Glas: Dort liegt die Plaza, einmal rund ums Haus.",
+      "facts": [
+        {
+          "claim": "Die Elbphilharmonie wurde am 11. und 12. Januar 2017 eröffnet.",
+          "source": "https://de.wikipedia.org/wiki/Elbphilharmonie"
+        },
+        {
+          "claim": "Die Baukosten lagen bei rund 866 Millionen Euro, mehr als das Elffache der ursprünglich geplanten 77 Millionen.",
+          "source": "https://de.wikipedia.org/wiki/Elbphilharmonie"
+        },
+        {
+          "claim": "Das Gebäude steht auf dem Kaispeicher A von 1963; die Plaza liegt in 37 Metern Höhe, die Tube ist eine über 80 Meter lange, leicht gewölbte Rolltreppe.",
+          "source": "https://de.wikipedia.org/wiki/Elbphilharmonie"
+        },
+        {
+          "claim": "Der Entwurf stammt von Herzog & de Meuron; das Haus ist rund 110 Meter hoch.",
+          "source": "https://de.wikipedia.org/wiki/Elbphilharmonie"
+        }
+      ],
+      "refs": [
+        "Q673223"
+      ],
+      "photo": {
+        "file": "2019-05-10 Elbphilharmonie Hamburg.jpg",
+        "author": "Burkhard Mücke",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:2019-05-10_Elbphilharmonie_Hamburg.jpg",
+        "h": 450,
+        "w": 800
+      }
+    },
+    {
+      "id": "chilehaus",
+      "title": "Ein Haus wie ein Schiffsbug",
+      "from": [
+        566542,
+        5933707,
+        60
+      ],
+      "ground": 6,
+      "at": [
+        566362,
+        5933723,
+        17.2
+      ],
+      "hour": 11,
+      "text": "Ein Kontorhaus, das nach Osten in einer Spitze ausläuft, wie der Bug eines Schiffes. Fritz Höger baute es 1922 bis 1924 für Henry B. Sloman, und den Namen trägt es nach der Quelle seines Geldes: Sloman hatte sein Vermögen mit Abbau und Handel von Chilesalpeter gemacht. Rund 2800 gleiche Fenster hat das Haus. Seit 2015 ist es zusammen mit dem Kontorhausviertel und der Speicherstadt Welterbe.",
+      "closer": "Die Spitze im Osten. Von unten, an der Ecke, sieht man den Bug am besten.",
+      "facts": [
+        {
+          "claim": "Fritz Höger baute das Chilehaus 1922–1924; es wurde sein Hauptwerk.",
+          "source": "https://de.wikipedia.org/wiki/Chilehaus"
+        },
+        {
+          "claim": "Bauherr Henry B. Sloman verdankte sein Vermögen Abbau und Handel mit Chilesalpeter.",
+          "source": "https://de.wikipedia.org/wiki/Chilehaus"
+        },
+        {
+          "claim": "Die östliche Spitze erinnert an einen Schiffsbug; das Haus hat etwa 2800 gleiche Fenster.",
+          "source": "https://de.wikipedia.org/wiki/Chilehaus"
+        },
+        {
+          "claim": "Seit dem 5. Juli 2015 ist das Kontorhausviertel zusammen mit der Speicherstadt Welterbe.",
+          "source": "https://de.wikipedia.org/wiki/Chilehaus"
+        }
+      ],
+      "refs": [
+        "Q542783"
+      ],
+      "photo": {
+        "file": "Chilehaus - Hamburg.jpg",
+        "author": "Esther Westerveld from Haarlemmermeer, Nederland",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Chilehaus_-_Hamburg.jpg",
+        "h": 808,
+        "w": 800
+      }
+    },
+    {
+      "id": "st-nikolai",
+      "title": "Ein Turm, der den Weg zeigte",
+      "from": [
+        565419,
+        5933382,
+        110
+      ],
+      "ground": 0,
+      "at": [
+        565632,
+        5933635,
+        50.8
+      ],
+      "hour": 12,
+      "text": "Von 1874 bis 1877 war dieser Turm das höchste Bauwerk der Welt, 147 Meter. Das Kirchenschiff darunter fehlt. Im Juli 1943, bei der Operation Gomorrha, diente der Turm den britischen und amerikanischen Bombern als Zielmarkierung, und die Bomben trafen auch die Kirche selbst. Man hat sie nicht wieder aufgebaut. Turm und Chorruine sind heute das Mahnmal St. Nikolai, für die Opfer von Krieg und Gewaltherrschaft zwischen 1933 und 1945. Ein gläserner Aufzug fährt in 76 Meter Höhe.",
+      "closer": "Wo das Kirchenschiff war, ist heute ein Platz. Seine Umrisse sind noch zu ahnen.",
+      "days": [
+        {
+          "from": "07-24",
+          "to": "08-03",
+          "text": "Ende Juli 1943 trafen die Angriffe der Operation Gomorrha die Stadt."
+        }
+      ],
+      "facts": [
+        {
+          "claim": "Der Turm ist 147,3 Meter hoch und war von 1874 bis 1877 das höchste Bauwerk der Welt.",
+          "source": "https://de.wikipedia.org/wiki/Ehemalige_Hauptkirche_St._Nikolai"
+        },
+        {
+          "claim": "Bei der Operation Gomorrha 1943 diente der Turm den alliierten Luftstreitkräften als Zielmarkierung; am 25. Juli 1943 wurde die Kirche getroffen.",
+          "source": "https://de.wikipedia.org/wiki/Ehemalige_Hauptkirche_St._Nikolai"
+        },
+        {
+          "claim": "Die Ruine ist das Mahnmal St. Nikolai für die Opfer von Krieg und Gewaltherrschaft 1933–1945; ein gläserner Aufzug führt zu einer Plattform in 76 Metern Höhe.",
+          "source": "https://de.wikipedia.org/wiki/Ehemalige_Hauptkirche_St._Nikolai"
+        }
+      ],
+      "refs": [
+        "Q425622"
+      ],
+      "photo": {
+        "file": "St Nikolai.jpg",
+        "author": "LuxTonnerre",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "page": "https://commons.wikimedia.org/wiki/File:St_Nikolai.jpg",
+        "h": 1264,
+        "w": 800
+      }
+    },
+    {
+      "id": "rathaus",
+      "title": "Ein Rathaus auf Eichen",
+      "from": [
+        565774,
+        5933639,
+        95
+      ],
+      "ground": 0,
+      "at": [
+        565774,
+        5933939,
+        49.9
+      ],
+      "hour": 14,
+      "text": "647 Räume, ein Turm von 112 Metern, eröffnet am 26. Oktober 1897 nach Plänen von Martin Haller. Und das alles steht auf mehr als 4000 Eichenpfählen, weil der Boden hier nachgibt. Im Innenhof steht der Hygieia-Brunnen: die Göttin der Gesundheit auf einem Drachen. Der Drache ist die Cholera, die 1892 in Hamburg wütete. Eine Seuche, besiegt von einer Göttin, mitten im Hof der Regierung.",
+      "closer": "Der Brunnen steht im Innenhof hinter dem Turm; das Foto zeigt die Göttin und den Drachen.",
+      "facts": [
+        {
+          "claim": "Das Rathaus wurde 1886–1897 nach Plänen von Martin Haller gebaut und am 26. Oktober 1897 eröffnet; es hat 647 Räume.",
+          "source": "https://de.wikipedia.org/wiki/Hamburger_Rathaus"
+        },
+        {
+          "claim": "Es steht auf mehr als 4000 Eichenpfählen; der Turm ist 112 Meter hoch.",
+          "source": "https://de.wikipedia.org/wiki/Hamburger_Rathaus"
+        },
+        {
+          "claim": "Im Innenhof steht der Hygieia-Brunnen von 1895–1896; Hygieia steht auf einem Drachen, der die Cholera-Epidemie von 1892 symbolisiert.",
+          "source": "https://de.wikipedia.org/wiki/Hamburger_Rathaus"
+        }
+      ],
+      "refs": [
+        "Q3987"
+      ],
+      "photo": {
+        "file": "Hamburg - Rathaus - Hygieia-Brunnen 01.jpg",
+        "caption": "Der Hygieia-Brunnen im Innenhof",
+        "author": "Llez",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Hamburg_-_Rathaus_-_Hygieia-Brunnen_01.jpg",
+        "h": 654,
+        "w": 800,
+        "focus": [
+          0.5,
+          0.6
+        ]
+      }
+    },
+    {
+      "id": "michel",
+      "title": "Ein Turm mit Trompete",
+      "from": [
+        564547,
+        5933604,
+        110
+      ],
+      "ground": 19.1,
+      "at": [
+        564857,
+        5933716,
+        63.6
+      ],
+      "hour": 10,
+      "text": "Der Michel, 132 Meter, mit der größten Turmuhr Deutschlands: vier Zifferblätter mit je acht Metern Durchmesser. Werktags um 10 und um 21 Uhr spielt ein Türmer von oben einen Choral auf der Trompete, nacheinander in alle vier Himmelsrichtungen, sonntags nur mittags. Bis 1861 meldete der Choral das Öffnen und Schließen der Stadttore. Zweimal ist die Kirche ganz abgebrannt, 1750 nach einem Blitz und 1906 bei Lötarbeiten am Kupferdach. Beim zweiten Brand starb der Turmwächter.",
+      "closer": "Hoch oben im Turm öffnet der Türmer vier kleine Fenster, eins für jede Himmelsrichtung.",
+      "facts": [
+        {
+          "claim": "Der Turm ist 132,14 Meter hoch; die vier Zifferblätter haben je 8 Meter Durchmesser und sind die größten ihrer Art in Deutschland.",
+          "source": "https://de.wikipedia.org/wiki/Hauptkirche_St._Michaelis_(Hamburg)"
+        },
+        {
+          "claim": "Werktags spielt der Türmer um 10 und 21 Uhr einen Choral in alle vier Himmelsrichtungen, sonn- und feiertags nur um 12 Uhr; bis 1861 zeigte er das Öffnen und Schließen der Stadttore an.",
+          "source": "https://de.wikipedia.org/wiki/Hauptkirche_St._Michaelis_(Hamburg)"
+        },
+        {
+          "claim": "1750 brannte die Kirche nach einem Blitzschlag ab, 1906 bei Lötarbeiten am Turm; dabei starb der Turmwächter Carl Beurle.",
+          "source": "https://de.wikipedia.org/wiki/Hauptkirche_St._Michaelis_(Hamburg)"
+        }
+      ],
+      "refs": [
+        "Q674472"
+      ],
+      "photo": {
+        "file": "Sankt-Michaelis-Kirche Hamburg.jpg",
+        "author": "Thomas Wolf, www.foto-tw.de",
+        "licence": "CC BY-SA 3.0 de",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/de/deed.en",
+        "page": "https://commons.wikimedia.org/wiki/File:Sankt-Michaelis-Kirche_Hamburg.jpg",
+        "h": 1291,
+        "w": 800
+      }
+    },
+    {
+      "id": "alter-elbtunnel",
+      "title": "Fahrstühle für Autos",
+      "from": [
+        564372,
+        5933413,
+        90
+      ],
+      "ground": 5.8,
+      "at": [
+        564043,
+        5933223,
+        13.9
+      ],
+      "hour": 20,
+      "text": "Zum Schluss unter die Elbe. Der Alte Elbtunnel von 1911 hat keine Rampen. Wer hinunter will, fährt Fahrstuhl, auch ein Auto: In den Kuppelhäusern an beiden Ufern stehen Aufzüge für Fahrzeuge bis zu zehn Tonnen. Unten laufen zwei Röhren 426,5 Meter weit unter der Norderelbe, 24 Meter tief. Seit 2019 dürfen keine Autos mehr hinein, Fußgänger und Räder schon, umsonst und fast immer. Nur an Silvester ist von 21 bis 4 Uhr geschlossen.",
+      "facts": [
+        {
+          "claim": "Der Tunnel wurde 1911 eröffnet; er hat keine Rampen, Fahrzeuge werden mit Aufzügen befördert, die mittleren mit 10 Tonnen Tragfähigkeit.",
+          "source": "https://de.wikipedia.org/wiki/St._Pauli-Elbtunnel"
+        },
+        {
+          "claim": "Die zwei Röhren sind 426,5 Meter lang; die Sohle liegt 24 Meter tief.",
+          "source": "https://de.wikipedia.org/wiki/St._Pauli-Elbtunnel"
+        },
+        {
+          "claim": "2019 beschloss der Senat die dauerhafte Sperrung für Autos; der Tunnel ist kostenlos und jederzeit offen, außer an Silvester von 21 bis 4 Uhr.",
+          "source": "https://de.wikipedia.org/wiki/St._Pauli-Elbtunnel"
+        }
+      ],
+      "refs": [
+        "Q460264",
+        "Q458970"
+      ],
+      "photo": {
+        "file": "Alter Elbtunnel Roehre.jpg",
+        "caption": "Eine der beiden Röhren unter der Elbe",
+        "author": "Alexander Sölch (Aliosos)",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Alter_Elbtunnel_Roehre.jpg",
+        "h": 658,
+        "w": 800
+      }
+    }
+  ]
+}
