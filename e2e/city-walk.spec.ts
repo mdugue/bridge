@@ -1428,6 +1428,33 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       await page.keyboard.press("Escape");
       await expect(card).toBeHidden();
     });
+    // the nameplate: a building with a name or an address is named in
+    // the scene while the question stands (present, never judged)
+    const named = await page.evaluate(() => {
+      const asked = window.__poc?.handle?.inquireAt();
+      return (
+        asked?.kind === "building" &&
+        asked.tree.some((o) => o.facts.addr !== "" || o.facts.name !== "")
+      );
+    });
+    if (named) {
+      await expect
+        .poll(
+          () =>
+            page.evaluate(
+              () => window.__poc?.handle?.nameplateShown()?.title ?? null
+            ),
+          { timeout: slow(60_000) }
+        )
+        .not.toBeNull();
+    }
+    await withFramesHeld(page, async () => {
+      await page.keyboard.press("Escape");
+      await expect(page.getByTestId("inquiry-card")).toBeHidden();
+    });
+    expect(
+      await page.evaluate(() => window.__poc?.handle?.nameplateShown() ?? null)
+    ).toBeNull();
     expectNoErrors(errors);
   });
 
