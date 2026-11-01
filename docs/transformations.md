@@ -1429,11 +1429,11 @@ visual-variable codebook is in
   building bake, so a cut piece keeps its wall's place in `_FACADE`.
   Dresden: 482 passages on fifteen tiles (106 on the Zwinger's), Leipzig
   245, München 763, Hamburg 353, Meißen 10, Unna 12, Grimma none.
-- **Murals as photographs** (*Wandbilder*, 2026-11-01) `❝ taken`
+- **Murals as drawings** (*Wandbilder*, 2026-11-01) `❝ taken`
   `= computed` `≈ assumed` — a mural OSM maps (`tourism=artwork`,
   `artwork_type` mural, mosaic, graffiti or sgraffito; a node, or a way
-  drawn along its wall, never an area) is drawn as a photograph of itself
-  on its LoD2 wall where three things are known
+  drawn along its wall, never an area) is drawn as a pen-and-wash drawing
+  after a photograph of itself on its LoD2 wall where three things are known
   (`pipeline/bake/murals.py`): its **size** — OSM `width` and `height`, a
   way's length along the wall, else its Wikidata item's P2049 / P2048
   (the item of `wikidata`, never `subject:wikidata`, which names whom it
@@ -1457,17 +1457,30 @@ visual-variable codebook is in
   0.8 m in front of it, lower where the wall has no room, none where the
   mural stands more than 1 m taller than its wall (a mapping error). The
   photo is fetched once by `bun run fetch` (at a standard thumbnail width:
-  upload.wikimedia.org refuses the originals), resized to 64 px a metre
-  (at most 3 840) and committed as WebP beside
-  `data/<site>/murals/murals.json`; its author and licence are listed in
-  the HUD's sources. The viewer (`mural-layer.ts`) draws each as one strip
-  under the scene's sun, shadows and fog — paint, never a glow; at night
-  as dark as its wall (a floodlit wall's light does not reach it) — on
-  the full LoD2 only (the far level's walls are simplified by half a
-  metre), decoded one at a time (at 32 px a metre on a phone) and its
-  texels dropped once uploaded, the texture's bytes on its tile's cache
-  budget, hidden with its building (`CityLayer.hang`); Papier draws
-  it as paper. Dresden: the Fürstenzug (the band of its 102 m frieze its
+  upload.wikimedia.org refuses the originals) and resized to 64 px a
+  metre (at most 3 840). A photograph broke the pastel clay model (its
+  own light, its grain, its contrast), so the bake redraws it
+  (`pipeline/bake/mural_drawing.py`, `= computed`, one rule for every
+  mural): its own light flattened, its grain calmed by an edge-keeping
+  filter, **pen lines** where its lightness turns (XDoG, a fleck of ink
+  with too little ink around it dropped), a **wash** of its own colours
+  (five k-means fields in CIELAB, seeded, lifted into the clay's light
+  register and muted, at 12 px a metre) and an **ink**, its darkest
+  field darkened. The lines and the wash are committed as WebP beside
+  `data/<site>/murals/murals.json`, the photo is not; the drawing is an
+  adaptation of the photo under its licence, whose author and licence
+  the HUD's sources list ("gezeichnet nach Foto …"). The viewer
+  (`mural-layer.ts`) draws each as one strip, a **glaze**: it multiplies
+  the wall's own lit colour by the drawing taken relative to the clay's
+  base colour (the paper: the wall shows where nothing is drawn), so the
+  wall's sun, shadow, sky, floodlight and night carry over it, and the
+  fog fades it to white, which multiplies nothing. On the full LoD2 only
+  (the far level's walls are simplified by half a metre), the lines one
+  channel and decoded one at a time (at 32 px a metre on a phone), their
+  texels dropped once uploaded, the textures' bytes on the tile's cache
+  budget (2.7 MB for Dresden's two, 2.0 MB on a phone — a photo in RGBA
+  weighed 7.9 and 5.2), hidden with its building (`CityLayer.hang`);
+  Papier and the Schwarzplan leave it out. Dresden: the Fürstenzug (the band of its 102 m frieze its
   photo shows, 6.3 m of the 10.5 m mapped with the window zone, a storey
   up) and *Der Weg der Roten Fahne* on the Kulturpalast (30 × 10.5 m; it
   starts lower than a storey up — about 2 m too high until OSM maps its

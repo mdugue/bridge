@@ -45,7 +45,7 @@ import {
   type MuralFile,
   MURALS_FILE,
   muralCredit,
-  muralImageSource,
+  muralFileSource,
   muralsSource,
   parseMurals,
 } from "../lib/city/murals";
@@ -214,20 +214,25 @@ const trams = existsSync(tramSource)
   ? publish(TRAM_TIMETABLE_FILE, readFileSync(tramSource))
   : undefined;
 // The murals on their walls, site-wide (pipeline/bake/murals.py): optional,
-// each photo under its own published name, the file naming them so.
+// each drawing's pen lines and wash under their own published names, the
+// file naming them so.
 const muralsDir = siteDataDir(SITE);
 const muralsPath = at(muralsSource(muralsDir));
 const muralFile = existsSync(muralsPath)
   ? readJson<Partial<MuralFile>>(muralsPath)
   : null;
+const muralPath = (name: string) => at(muralFileSource(muralsDir, name));
 const murals = (parseMurals(muralFile) ?? [])
-  .filter((m) => existsSync(at(muralImageSource(muralsDir, m.image))))
+  .filter(
+    (m) => existsSync(muralPath(m.lines)) && existsSync(muralPath(m.wash))
+  )
   .map((m) => ({
     ...m,
-    image: publish(
-      `mural-${m.id}.webp`,
-      readFileSync(at(muralImageSource(muralsDir, m.image)))
+    lines: publish(
+      `mural-${m.id}.lines.webp`,
+      readFileSync(muralPath(m.lines))
     ),
+    wash: publish(`mural-${m.id}.wash.webp`, readFileSync(muralPath(m.wash))),
   }));
 const muralsFile =
   murals.length > 0

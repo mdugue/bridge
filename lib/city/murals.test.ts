@@ -25,8 +25,11 @@ const weg: Mural = {
   top: 126.84,
   size: [30, 10.5],
   how: "whole",
-  image: "n5978926932.webp",
+  ink: [66, 61, 49],
+  lines: "n5978926932.lines.webp",
   px: [1280, 448],
+  wash: "n5978926932.wash.webp",
+  washPx: [360, 126],
   photo: {
     title: "File:Weg der Roten Fahne, version a.jpg",
     author: "User:Heiko S",
@@ -40,9 +43,18 @@ const offset = { cx: 411_000, cy: 5_656_000 };
 test("the file's murals, the malformed left out", () => {
   const { path: _path, ...pathless } = weg;
   const { size: _size, ...sizeless } = weg;
+  const { wash: _wash, ...washless } = weg;
   expect(
     parseMurals({
-      murals: [weg, pathless, sizeless, { ...weg, top: weg.bottom }, null],
+      murals: [
+        weg,
+        pathless,
+        sizeless,
+        washless,
+        { ...weg, ink: [66, 61, 300] },
+        { ...weg, top: weg.bottom },
+        null,
+      ],
     })
   ).toEqual([weg]);
   expect(parseMurals({})).toBeNull();
@@ -58,12 +70,12 @@ test("the extras name the murals only well-formed", () => {
   expect(muralsOf(null)).toBeUndefined();
 });
 
-test("a photo's credit names the mural, its author, licence and Commons", () => {
+test("a photo's credit names the mural, the drawing's photo, its author, licence and Commons", () => {
   expect(muralCredit(weg)).toBe(
-    "Wandbild „Der Weg der Roten Fahne“: Foto Heiko S, CC BY 2.0, Wikimedia Commons"
+    "Wandbild „Der Weg der Roten Fahne“: gezeichnet nach Foto Heiko S, CC BY 2.0, Wikimedia Commons"
   );
   expect(muralCredit({ ...weg, name: "" })).toBe(
-    "Wandbild: Foto Heiko S, CC BY 2.0, Wikimedia Commons"
+    "Wandbild: gezeichnet nach Foto Heiko S, CC BY 2.0, Wikimedia Commons"
   );
 });
 
@@ -136,6 +148,8 @@ test("a phone decodes a mural at most PHONE_PX_PER_M a metre, never above the fi
   ]);
 });
 
-test("a decoded mural weighs its texture with mipmaps", () => {
-  expect(muralBytes([960, 336])).toBe(Math.round(960 * 336 * 4 * (4 / 3)));
+test("a decoded mural weighs its pen lines (one channel) and its wash (RGBA), with mipmaps", () => {
+  const wash = Math.round(360 * 126 * 4 * (4 / 3));
+  expect(muralBytes(weg, false)).toBe(Math.round(1280 * 448 * (4 / 3)) + wash);
+  expect(muralBytes(weg, true)).toBe(Math.round(960 * 336 * (4 / 3)) + wash);
 });

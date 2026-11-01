@@ -1,5 +1,5 @@
 {
- "attribution": "© OpenStreetMap contributors (ODbL); Wikidata (CC0); photos: Wikimedia Commons, each under its own licence",
+ "attribution": "© OpenStreetMap contributors (ODbL); Wikidata (CC0); drawings after photos from Wikimedia Commons, each under its photo's licence",
  "murals": [
   {
    "id": "n5978926932",
@@ -24,10 +24,20 @@
     10.5
    ],
    "how": "whole",
-   "image": "n5978926932.webp",
+   "lines": "n5978926932.lines.webp",
    "px": [
     1280,
     448
+   ],
+   "wash": "n5978926932.wash.webp",
+   "washPx": [
+    360,
+    126
+   ],
+   "ink": [
+    66,
+    61,
+    49
    ],
    "photo": {
     "title": "File:Weg der Roten Fahne, version a.jpg",
@@ -59,10 +69,20 @@
     6.3
    ],
    "how": "band",
-   "image": "w106540348.webp",
+   "lines": "w106540348.lines.webp",
    "px": [
     3840,
     237
+   ],
+   "wash": "w106540348.wash.webp",
+   "washPx": [
+    1223,
+    75
+   ],
+   "ink": [
+    63,
+    60,
+    56
    ],
    "photo": {
     "title": "File:Dresden-Fuerstenzug3.jpg",

@@ -1829,7 +1829,7 @@ export class DressingPlugin {
   }
 
   /**
-   * A city tile's murals land after its buildings show: their photos
+   * A city tile's murals land after its buildings show: their drawings
    * fetched and decoded, compiled before they hang, weighed on the tile,
    * each shown while its building is (CityLayer.hang). A tile that left
    * meanwhile aborts their fetches; one that left while they compiled
@@ -1855,7 +1855,7 @@ export class DressingPlugin {
       // the tile's release aborts them (`releaseDressed`)
       entry.aborter ??= aborter;
       layer = await buildMurals(murals, {
-        imageUrl: source.imageUrl,
+        fileUrl: source.fileUrl,
         offset: this.ctx.offset,
         phone: this.ctx.tier === "mobile",
         signal: entry.aborter.signal,

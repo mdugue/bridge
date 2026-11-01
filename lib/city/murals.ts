@@ -1,6 +1,7 @@
 /**
- * The murals as photo textures on their walls (pipeline/bake/murals.py →
- * `data/<site>/murals/murals.json` and one WebP each): the file's shape,
+ * The murals as drawings on their walls (pipeline/bake/murals.py →
+ * `data/<site>/murals/murals.json` and two WebPs each, the drawing's pen
+ * lines and its wash; pipeline/bake/mural_drawing.py): the file's shape,
  * what the tileset's extras say of it, the credit each photo needs, and
  * the strip a mural is drawn as. The pure half of
  * app/_components/mural-layer.ts. No THREE, no DOM.
@@ -18,9 +19,9 @@ export function muralsSource(dataDir: string): string {
 }
 export const MURALS_FILE = "murals.json";
 
-/** The committed WebP of a mural (`Mural.image` is its file name). */
-export function muralImageSource(dataDir: string, image: string): string {
-  return `${dataDir}/murals/${image}`;
+/** A committed WebP of a mural (`Mural.lines`, `Mural.wash` name it). */
+export function muralFileSource(dataDir: string, file: string): string {
+  return `${dataDir}/murals/${file}`;
 }
 
 /** A photo's Commons credit. */
@@ -42,21 +43,28 @@ export interface Mural {
   how: "band" | "whole";
   /** OSM's id: `n…` a node, `w…` a way */
   id: string;
-  /** the WebP: its file name in the committed folder, its published name
-   *  once prepare-data has published it */
-  image: string;
+  /** the pen's colour (sRGB, 0–255) */
+  ink: [number, number, number];
   kind: string;
+  /** the pen lines' WebP (its red: 255 paper, 0 ink): its file name in
+   *  the committed folder, its published name once prepare-data has
+   *  published it */
+  lines: string;
   name: string;
   /** along the wall, a few cm in front of it, the wall's outside on its
    *  right (projected metres) */
   path: [number, number][];
+  /** the photo the drawing was made after */
   photo: MuralPhoto;
-  /** the WebP's width and height (pixels) */
+  /** the pen lines' width and height (pixels) */
   px: [number, number];
   /** its width along the wall and its height (m) */
   size: [number, number];
   /** the tile whose buildings hold its wall */
   tile: string;
+  /** the wash's WebP (sRGB), named as `lines` is, and its size (pixels) */
+  wash: string;
+  washPx: [number, number];
   /** above sea level (m) */
   bottom: number;
   top: number;
@@ -68,8 +76,8 @@ export interface MuralFile {
 }
 
 /** What the tileset's extras say of the murals: the published file and the
- *  photos' credits (the HUD's sources list them). Absent where the site has
- *  none. */
+ *  credits of the photos the drawings were made after (the HUD's sources
+ *  list them). Absent where the site has none. */
 export interface MuralExtras {
   murals?: { credits: string[]; file: string };
 }
@@ -85,11 +93,12 @@ export function muralsOf(extras: unknown): MuralExtras["murals"] {
     : undefined;
 }
 
-/** A photo's credit line, as the HUD's sources list it. */
+/** A photo's credit line, as the HUD's sources list it: the drawing is an
+ *  adaptation of the photo, under its licence. */
 export function muralCredit(mural: Pick<Mural, "name" | "photo">): string {
   const author = mural.photo.author.replace(/^User:/, "");
   const name = mural.name ? `„${mural.name}“` : "";
-  return `Wandbild ${name}: Foto ${author}, ${mural.photo.licence}, Wikimedia Commons`
+  return `Wandbild ${name}: gezeichnet nach Foto ${author}, ${mural.photo.licence}, Wikimedia Commons`
     .replace(/ {2,}/g, " ")
     .replace(" :", ":");
 }
@@ -102,6 +111,25 @@ function isPoint(p: unknown): p is [number, number] {
   );
 }
 
+function isRgb(c: unknown): c is [number, number, number] {
+  return (
+    Array.isArray(c) &&
+    c.length === 3 &&
+    c.every((v) => typeof v === "number" && v >= 0 && v <= 255)
+  );
+}
+
+/** The drawing's fields: its two files, their sizes and its ink. */
+function hasDrawing(o: Partial<Mural>): boolean {
+  return (
+    typeof o.lines === "string" &&
+    typeof o.wash === "string" &&
+    isRgb(o.ink) &&
+    isPoint(o.px) &&
+    isPoint(o.washPx)
+  );
+}
+
 function isMural(m: unknown): m is Mural {
   const o = m as Partial<Mural> | null;
   return (
@@ -110,14 +138,13 @@ function isMural(m: unknown): m is Mural {
     (o.how === "band" || o.how === "whole") &&
     typeof o.tile === "string" &&
     typeof o.building === "string" &&
-    typeof o.image === "string" &&
+    hasDrawing(o) &&
     Array.isArray(o.path) &&
     o.path.length >= 2 &&
     o.path.every(isPoint) &&
     typeof o.bottom === "number" &&
     typeof o.top === "number" &&
     o.top > o.bottom &&
-    isPoint(o.px) &&
     isPoint(o.size) &&
     typeof o.photo?.author === "string" &&
     typeof o.photo.licence === "string"
@@ -202,8 +229,9 @@ export function muralStrip(
  *  keeps for a desktop (pipeline/bake/murals.py `PX_PER_M`). */
 export const PHONE_PX_PER_M = 32;
 
-/** The size a mural's photo is decoded at: as baked, on a phone at most
- *  PHONE_PX_PER_M a metre — never larger than the file. */
+/** The size a mural's pen lines are decoded at: as baked, on a phone at
+ *  most PHONE_PX_PER_M a metre — never larger than the file. (The wash is
+ *  small already: decoded as baked.) */
 export function muralTexels(
   mural: Pick<Mural, "px" | "size">,
   phone: boolean
@@ -216,8 +244,22 @@ export function muralTexels(
   return [Math.max(width, 1), Math.max(Math.round((h * width) / w), 1)];
 }
 
-/** The bytes a decoded mural holds: its texture with mipmaps (RGBA; the
+/** The bytes of one texture with its mipmaps, `channels` a texel (the
  *  texels themselves leave the page once uploaded). */
-export function muralBytes(texels: readonly [number, number]): number {
-  return Math.round(texels[0] * texels[1] * 4 * (4 / 3));
+export function textureBytes(
+  texels: readonly [number, number],
+  channels: number
+): number {
+  return Math.round(texels[0] * texels[1] * channels * (4 / 3));
+}
+
+/** The bytes a decoded mural holds: its pen lines (one channel) and its
+ *  wash (RGBA). */
+export function muralBytes(
+  mural: Pick<Mural, "px" | "size" | "washPx">,
+  phone: boolean
+): number {
+  return (
+    textureBytes(muralTexels(mural, phone), 1) + textureBytes(mural.washPx, 4)
+  );
 }

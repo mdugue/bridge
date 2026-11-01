@@ -95,6 +95,7 @@ why Munich is yellow there in [Sources by city](./sources-by-city.md).
 | Passages through buildings, their width | OpenStreetMap, the passages (`tunnel=building_passage`) | `❝ taken` |
 | A passage's height where none is mapped, its rectangular opening | the viewer, from the ground storey | `≈ assumed` |
 | A mural's picture | Wikimedia Commons, a photo that shows the whole mural straight on | `❝ taken` |
+| A mural's drawing: its pen lines, its wash and its ink | computed from that photo (its light flattened, lines where its lightness turns, its colours sorted into five fields and lifted into the pastel) | `= computed` |
 | A mural's size and its place on the wall | OpenStreetMap (else Wikidata), on the nearest wall of the building model | `= computed` |
 | How high a mural starts where OpenStreetMap does not say | the viewer, a storey up | `≈ assumed` |
 | Shop or restaurant on the ground floor | OpenStreetMap, assigned to the building | `◎ detected` |

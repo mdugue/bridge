@@ -1,38 +1,52 @@
 /**
- * The murals as photo textures on their walls (lib/city/murals.ts, baked by
- * pipeline/bake/murals.py): a mural is one strip along its LoD2 wall, a few
- * centimetres in front of it, wearing the photo under the scene's own sun,
- * shadow and fog — paint on the wall, never a glow. Built per city tile
- * when its full LoD2 lands (the far level is simplified by half a metre:
- * a strip 3 cm off the true wall would sink into it), freed with the tile,
- * and hidden with the building it hangs on (city-layer.ts `hang`).
+ * The murals as drawings glazed on their walls (lib/city/murals.ts, baked
+ * by pipeline/bake/murals.py and mural_drawing.py): a mural is one strip
+ * along its LoD2 wall, a few centimetres in front of it, wearing a
+ * pen-and-wash drawing made after its photo — pen lines in one dark ink
+ * over a light wash of its own colours. A photograph broke the pastel clay
+ * model; a drawing in the clay's register belongs to it.
  *
- * The photo is fetched from the site's own files and decoded by the
- * browser — one at a time, so a tile's photos never stand decoded side by
- * side — a phone's at PHONE_PX_PER_M (lib/city/murals.ts `muralTexels`).
- * Its texels go to the GPU as data and leave the page once uploaded
- * (raster-upload.ts `dropDataOnUpload`); the texture with its mipmaps
- * weighs on the tile in the cache (tile-stream.ts `calculateBytesUsed`),
+ * The strip is a glaze, not a poster: it multiplies the wall's own lit
+ * colour by the drawing, taken relative to the clay (`CLAY_BASE`, the
+ * drawing's paper: the wall shows where nothing is drawn). The wall's
+ * sun, shadow, sky, floodlight and night carry over it, as they would
+ * over paint; the fog fades the glaze to white, which multiplies nothing
+ * (height-fog.ts). Papier and the Schwarzplan leave it out (a see-through
+ * material; paper-scene.ts); the other picture styles draw what it made.
+ *
+ * Built per city tile when its full LoD2 lands (the far level is
+ * simplified by half a metre: a strip 3 cm off the true wall would sink
+ * into it), freed with the tile, and hidden with the building it hangs on
+ * (city-layer.ts `hang`).
+ *
+ * The drawing's files are fetched from the site's own files and decoded by
+ * the browser — one at a time, so a tile's never stand decoded side by
+ * side. The pen lines are one channel (`RedFormat`), a phone's at
+ * PHONE_PX_PER_M (lib/city/murals.ts `muralTexels`); the wash is small.
+ * Their texels go to the GPU as data and leave the page once uploaded
+ * (raster-upload.ts `dropDataOnUpload`); the textures with their mipmaps
+ * weigh on the tile in the cache (tile-stream.ts `calculateBytesUsed`),
  * so a phone keeps fewer other tiles rather than more memory (ADR 0047).
- *
- * Night: a lit material, dimmed by the night's own light like the wall.
- * Papier draws it as paper (paper-scene.ts: one material for every
- * surface); the other picture styles draw it as they draw the scene.
  */
 import {
   BufferAttribute,
   BufferGeometry,
+  Color,
   DataTexture,
   FrontSide,
   Group,
   LinearFilter,
   LinearMipmapLinearFilter,
   Mesh,
-  MeshStandardNodeMaterial,
+  MeshBasicNodeMaterial,
+  MultiplyBlending,
+  NoColorSpace,
+  RedFormat,
   RGBAFormat,
   SRGBColorSpace,
   type Texture,
 } from "three/webgpu";
+import { min, mix, texture, uv, vec3, vec4 } from "three/tsl";
 import {
   type Mural,
   muralBytes,
@@ -40,21 +54,21 @@ import {
   muralTexels,
   muralsOf,
   parseMurals,
+  textureBytes,
 } from "@/lib/city/murals";
 import { fetchOptionalBinary, fetchOptionalJson } from "./fetch-optional";
 import { dropDataOnUpload } from "./raster-upload";
 import { estimateGeometryBytes, trackTexture } from "./three-utils";
+import { CLAY_BASE } from "./visual-style";
 
-/** How rough the paint reads: matte, a sheen in a grazing sun at most. */
-const MURAL_ROUGHNESS = 0.85;
-/** How sharp a photo stays along a wall seen at a slant. */
+/** How sharp a drawing stays along a wall seen at a slant. */
 const MURAL_ANISOTROPY = 8;
 
 /** The site's murals by tile, fetched once on the first tile that asks. */
 export interface MuralSource {
+  /** a drawing's published WebP (`Mural.lines`, `Mural.wash`) as a URL */
+  fileUrl: (file: string) => string;
   forTile: (tile: string) => Promise<readonly Mural[]>;
-  /** a mural's published WebP as a URL */
-  imageUrl: (mural: Mural) => string;
 }
 
 /** The site's murals as the tileset's extras name them: their source (null
@@ -73,7 +87,7 @@ export function siteMurals(
 }
 
 /** The murals of the published file at `url` (null where the site has
- *  none): its URL resolves the images' names too. */
+ *  none): its URL resolves the drawings' names too. */
 export function createMuralSource(url: string | null): MuralSource | null {
   if (!url) {
     return null;
@@ -86,8 +100,8 @@ export function createMuralSource(url: string | null): MuralSource | null {
     return all;
   };
   return {
+    fileUrl: (file) => new URL(file, url).href,
     forTile: async (tile) => (await load()).filter((m) => m.tile === tile),
-    imageUrl: (mural) => new URL(mural.image, url).href,
   };
 }
 
@@ -101,12 +115,12 @@ export interface MuralLayer {
   murals: readonly Mural[];
 }
 
-/** A photo's texels, top row first, at `texels`: decoded by the browser
- *  and read back once; null where it could not be. */
-async function decodePhoto(
+/** An image's texels, top row first, at `texels`, RGBA: decoded by the
+ *  browser and read back once; null where it could not be. */
+async function decodeImage(
   bytes: ArrayBuffer,
   [width, height]: readonly [number, number]
-): Promise<Uint8Array | null> {
+): Promise<Uint8ClampedArray | null> {
   let bitmap: ImageBitmap | undefined;
   try {
     bitmap = await createImageBitmap(
@@ -124,9 +138,7 @@ async function decodePhoto(
       return null;
     }
     context.drawImage(bitmap, 0, 0);
-    return new Uint8Array(
-      context.getImageData(0, 0, width, height).data.buffer
-    );
+    return context.getImageData(0, 0, width, height).data;
   } catch {
     return null;
   } finally {
@@ -134,42 +146,67 @@ async function decodePhoto(
   }
 }
 
-/** A mural's photo decoded at `texels` as a texture, or null where it
- *  could not be fetched or decoded. Rethrows an abort. */
-async function loadPhoto(
+/** The red of RGBA texels: the pen lines' one channel. */
+function redOf(rgba: Uint8ClampedArray): Uint8Array {
+  const red = new Uint8Array(rgba.length / 4);
+  for (let i = 0; i < red.length; i++) {
+    red[i] = rgba[i * 4];
+  }
+  return red;
+}
+
+/** One of a drawing's files decoded at `texels` as a texture — the pen
+ *  lines as one channel, the wash as sRGB — or null where it could not be
+ *  fetched or decoded. Rethrows an abort. */
+async function loadLayer(
   url: string,
   texels: readonly [number, number],
+  kind: "lines" | "wash",
   signal: AbortSignal
 ): Promise<Texture | null> {
   const bytes = await fetchOptionalBinary(url, signal);
   if (!bytes) {
     return null;
   }
-  const data = await decodePhoto(bytes, texels);
+  const rgba = await decodeImage(bytes, texels);
   if (signal.aborted) {
     throw signal.reason;
   }
-  if (!data) {
+  if (!rgba) {
     return null;
   }
-  // flipY false: row 0 is the photo's top (`muralStrip`'s v)
-  const texture = new DataTexture(data, texels[0], texels[1], RGBAFormat);
-  texture.flipY = false;
-  texture.colorSpace = SRGBColorSpace;
-  texture.generateMipmaps = true;
-  texture.minFilter = LinearMipmapLinearFilter;
-  texture.magFilter = LinearFilter;
-  texture.anisotropy = MURAL_ANISOTROPY;
-  texture.needsUpdate = true;
-  dropDataOnUpload(texture);
-  trackTexture(texture, muralBytes(texels));
-  return texture;
+  const lines = kind === "lines";
+  const layer = lines
+    ? new DataTexture(redOf(rgba), texels[0], texels[1], RedFormat)
+    : new DataTexture(
+        new Uint8Array(rgba.buffer),
+        texels[0],
+        texels[1],
+        RGBAFormat
+      );
+  // flipY false: row 0 is the drawing's top (`muralStrip`'s v)
+  layer.flipY = false;
+  layer.colorSpace = lines ? NoColorSpace : SRGBColorSpace;
+  // a row of one-channel texels is not four-byte aligned
+  layer.unpackAlignment = 1;
+  layer.generateMipmaps = true;
+  layer.minFilter = LinearMipmapLinearFilter;
+  layer.magFilter = LinearFilter;
+  layer.anisotropy = MURAL_ANISOTROPY;
+  layer.needsUpdate = true;
+  dropDataOnUpload(layer);
+  trackTexture(layer, textureBytes(texels, lines ? 1 : 4));
+  return layer;
 }
 
-/** The strip of one mural, wearing its photo. */
+/** The clay's base colour in the working (linear) space: the paper. */
+const PAPER = new Color(CLAY_BASE);
+
+/** The strip of one mural, glazed with its drawing. */
 function muralMesh(
   mural: Mural,
-  texture: Texture,
+  lines: Texture,
+  wash: Texture,
   offset: { cx: number; cy: number }
 ): Mesh {
   const strip = muralStrip(mural, offset);
@@ -179,12 +216,24 @@ function muralMesh(
   geometry.setAttribute("uv", new BufferAttribute(strip.uvs, 2));
   geometry.setIndex(new BufferAttribute(strip.index, 1));
   geometry.computeBoundingSphere();
-  const material = new MeshStandardNodeMaterial({
-    map: texture,
-    roughness: MURAL_ROUGHNESS,
-    metalness: 0,
-    side: FrontSide,
-  });
+  const material = new MeshBasicNodeMaterial({ side: FrontSide });
+  const [r, g, b] = mural.ink;
+  const ink = new Color().setRGB(r / 255, g / 255, b / 255, SRGBColorSpace);
+  // the drawing over the paper; the paper multiplies the wall by one
+  const drawn = mix(
+    vec3(ink.r, ink.g, ink.b),
+    texture(wash, uv()).rgb,
+    texture(lines, uv()).r
+  );
+  material.colorNode = vec4(
+    min(drawn.div(vec3(PAPER.r, PAPER.g, PAPER.b)), vec3(1)),
+    1
+  );
+  // a glaze: the wall's lit colour times the drawing (dst × src)
+  material.blending = MultiplyBlending;
+  material.premultipliedAlpha = true;
+  material.transparent = true;
+  material.depthWrite = false;
   // in front of the wall's clay at every distance the near level shows
   material.polygonOffset = true;
   material.polygonOffsetFactor = -1;
@@ -192,40 +241,70 @@ function muralMesh(
   material.name = "mural";
   const mesh = new Mesh(geometry, material);
   mesh.name = `mural:${mural.id}`;
-  // paint casts no shadow of its own; the wall's falls on it
+  // the wall's light and shadow are under it already
   mesh.castShadow = false;
-  mesh.receiveShadow = true;
+  mesh.receiveShadow = false;
   mesh.userData.mural = mural.id;
   return mesh;
 }
 
+/** A mural's two layers, loaded one after the other; null where either
+ *  does not load (the other freed). Rethrows an abort, having freed what
+ *  it made. */
+async function loadDrawing(
+  mural: Mural,
+  opts: { fileUrl: (file: string) => string; phone: boolean },
+  signal: AbortSignal
+): Promise<[Texture, Texture] | null> {
+  const lines = await loadLayer(
+    opts.fileUrl(mural.lines),
+    muralTexels(mural, opts.phone),
+    "lines",
+    signal
+  );
+  if (!lines) {
+    return null;
+  }
+  let wash: Texture | null;
+  try {
+    wash = await loadLayer(
+      opts.fileUrl(mural.wash),
+      mural.washPx,
+      "wash",
+      signal
+    );
+  } catch (err) {
+    lines.dispose();
+    throw err;
+  }
+  if (!wash) {
+    lines.dispose();
+    return null;
+  }
+  return [lines, wash];
+}
+
 /**
- * Builds a tile's murals: each photo fetched and decoded, its strip made.
- * A mural whose photo does not load is left out; null where none loads.
- * Rethrows an abort (the tile left), having freed what it made.
+ * Builds a tile's murals: each drawing fetched and decoded, its strip
+ * made. A mural whose drawing does not load is left out; null where none
+ * loads. Rethrows an abort (the tile left), having freed what it made.
  */
 export async function buildMurals(
   murals: readonly Mural[],
   opts: {
-    imageUrl: (mural: Mural) => string;
+    fileUrl: (file: string) => string;
     offset: { cx: number; cy: number };
     phone: boolean;
     signal: AbortSignal;
   }
 ): Promise<MuralLayer | null> {
-  const textures: (Texture | null)[] = [];
+  const drawings: ([Texture, Texture] | null)[] = [];
   try {
     for (const mural of murals) {
-      textures.push(
-        await loadPhoto(
-          opts.imageUrl(mural),
-          muralTexels(mural, opts.phone),
-          opts.signal
-        )
-      );
+      drawings.push(await loadDrawing(mural, opts, opts.signal));
     }
   } catch (err) {
-    for (const t of textures) {
+    for (const t of drawings.flat()) {
       t?.dispose();
     }
     throw err;
@@ -236,20 +315,20 @@ export async function buildMurals(
   const shown: Mural[] = [];
   let bytes = 0;
   murals.forEach((mural, i) => {
-    const texture = textures[i];
-    if (!texture) {
+    const drawing = drawings[i];
+    if (!drawing) {
       return;
     }
-    const mesh = muralMesh(mural, texture, opts.offset);
+    const mesh = muralMesh(mural, drawing[0], drawing[1], opts.offset);
     group.add(mesh);
     meshes.push(mesh);
     shown.push(mural);
-    bytes +=
-      muralBytes(muralTexels(mural, opts.phone)) + estimateGeometryBytes(mesh);
+    bytes += muralBytes(mural, opts.phone) + estimateGeometryBytes(mesh);
   });
   if (meshes.length === 0) {
     return null;
   }
+  const textures = drawings.flatMap((d) => d ?? []);
   return {
     bytes,
     group,
@@ -259,9 +338,10 @@ export async function buildMurals(
       group.removeFromParent();
       for (const mesh of meshes) {
         mesh.geometry.dispose();
-        const material = mesh.material as MeshStandardNodeMaterial;
-        material.map?.dispose();
-        material.dispose();
+        (mesh.material as MeshBasicNodeMaterial).dispose();
+      }
+      for (const t of textures) {
+        t.dispose();
       }
       group.clear();
     },

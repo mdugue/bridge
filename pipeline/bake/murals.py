@@ -1,7 +1,8 @@
-"""OSM's murals whose photo fits → photo textures on their LoD2 walls,
-`data/<site>/murals/murals.json` and one WebP per mural beside it, which the
-viewer hangs on the wall (app/_components/mural-layer.ts). Site-wide: a
-handful per city at most.
+"""OSM's murals whose photo fits → drawings on their LoD2 walls,
+`data/<site>/murals/murals.json` and two WebPs per mural beside it (the
+drawing's pen lines and its wash, mural_drawing.py), which the viewer
+glazes on the wall (app/_components/mural-layer.ts). Site-wide: a handful
+per city at most.
 
 One rule for every city, no list of murals:
 
@@ -46,10 +47,13 @@ and name, the tile whose buildings hold its wall and that building's id
 (`building`: what it hides with), its `path` on the wall (projected, `OFFSET_M`
 off it, the wall's outside on its right — the photo's left edge at its
 start), `bottom` and `top` (m above sea level), its size, how the photo
-fits (`whole` or `band`), the WebP (`image`, `px`) and the photo's credit
-(`photo`: Commons title, author, licence, page). The WebP is the photo
-stretched to the mural's size, at most `PX_PER_M` pixels a metre and
-`MAX_PX` wide, never more than the photo has."""
+fits (`whole` or `band`), the drawing (`lines` and `px`: the pen lines'
+WebP and its size; `wash` and `washPx`: the wash's; `ink`: the pen's
+colour, sRGB) and the photo's credit (`photo`: Commons title, author,
+licence, page). The drawing is made from the photo stretched to the
+mural's size, at most `PX_PER_M` pixels a metre and `MAX_PX` wide, never
+more than the photo has; the photo itself is not kept. The drawing is an
+adaptation of the photo, under the photo's licence."""
 
 from __future__ import annotations
 
@@ -74,6 +78,7 @@ from pyproj import Transformer
 
 from . import net
 from .common import OSM_ATTRIBUTION, Sampler, owns
+from .mural_drawing import drawing
 from .osm import read_extract
 from .osm_buildings import footprints, root_of
 from .roof_colour import surface_rings
@@ -121,7 +126,8 @@ RETRIES = 5
 TITLES_PER_ASK = 50
 METRE, CENTIMETRE = "Q11573", "Q174728"
 ATTRIBUTION = (
-    f"{OSM_ATTRIBUTION}; Wikidata (CC0); photos: Wikimedia Commons, each under its own licence"
+    f"{OSM_ATTRIBUTION}; Wikidata (CC0); drawings after photos from Wikimedia Commons,"
+    " each under its photo's licence"
 )
 
 
@@ -758,8 +764,8 @@ def run_site(spec) -> None:
         if span is None:
             print(f"  {c.id} {c.name}: taller than its wall")
             continue
-        image, px = write_image(source, out_dir / f"{c.id}.webp", width, height, photo)
-        images.add(image)
+        drawn = write_drawing(source, out_dir, c.id, width, height)
+        images.update((drawn["lines"], drawn["wash"]))
         murals.append(
             {
                 "id": c.id,
@@ -772,8 +778,7 @@ def run_site(spec) -> None:
                 "top": round(span[1], 2),
                 "size": [round(width, 2), round(height, 2)],
                 "how": how,
-                "image": image,
-                "px": px,
+                **drawn,
                 "photo": {
                     "title": photo.title,
                     "author": photo.author,
@@ -818,9 +823,10 @@ def hang(c: Candidate, width: float, tiles, loaded: dict) -> tuple[str, Placed] 
     return None
 
 
-def write_image(source: Path, dest: Path, width: float, height: float, photo: Photo):
-    """The photo stretched to the mural's size as a WebP: (file name,
-    [width, height] in pixels)."""
+def write_drawing(source: Path, out_dir: Path, mural_id: str, width: float, height: float) -> dict:
+    """The photo stretched to the mural's size and redrawn
+    (mural_drawing.py): its pen lines and its wash written as WebPs
+    beside murals.json; the fields murals.json gives the drawing."""
     with Image.open(source) as img:
         rgb = img.convert("RGB")
         px_w = int(min(MAX_PX, round(width * PX_PER_M), rgb.width))
@@ -828,6 +834,16 @@ def write_image(source: Path, dest: Path, width: float, height: float, photo: Ph
         # a band photo already has the mural's shape; a whole one is
         # stretched by at most FIT
         rgb = rgb.resize((px_w, px_h), Image.Resampling.LANCZOS)
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        rgb.save(dest, "WEBP", quality=85, method=6)
-    return dest.name, [px_w, px_h]
+    drawn = drawing(np.asarray(rgb), px_w / width)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    lines, wash = f"{mural_id}.lines.webp", f"{mural_id}.wash.webp"
+    # WebP keeps no grey: the lines go as RGB, the viewer reads the red
+    Image.fromarray(drawn.lines).convert("RGB").save(out_dir / lines, "WEBP", quality=90, method=6)
+    Image.fromarray(drawn.wash).save(out_dir / wash, "WEBP", quality=90, method=6)
+    return {
+        "lines": lines,
+        "px": [px_w, px_h],
+        "wash": wash,
+        "washPx": [drawn.wash.shape[1], drawn.wash.shape[0]],
+        "ink": list(drawn.ink),
+    }
