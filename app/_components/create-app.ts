@@ -1922,6 +1922,8 @@ async function bootApp(
     nameplate.dispose();
   });
   const landmarkFactsUrl = landmarkFactsHref(extras, tilesetUrl);
+  // the canvas's CSS size for the plate's placing (`renderer.getSize`)
+  const plateSize = new Vector2();
   const plateAsk = createNameplateAsk({
     plate: nameplate,
     site: opts.site,
@@ -3730,14 +3732,14 @@ async function bootApp(
     // the plate's placing (its rays, a few times a second) is CPU work
     // before the render, not render time
     nameplate.setNight(currentNight);
-    // the canvas's CSS size read only while a plate is asked (a layout
-    // read in the frame otherwise for nothing)
+    // the canvas's CSS size as the renderer was last sized (no layout
+    // read in the frame), and only while a plate is asked
     nameplate.update(
       view,
-      () => ({
-        width: renderer.domElement.clientWidth || 1,
-        height: renderer.domElement.clientHeight || 1,
-      }),
+      () => {
+        const css = renderer.getSize(plateSize);
+        return { width: css.x || 1, height: css.y || 1 };
+      },
       exporting
     );
     const renderStart = streamTimings.now();

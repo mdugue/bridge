@@ -53,11 +53,10 @@ function buildingPlate(
   if (isLandmarkInquiry(inquiry) && named) {
     // the card's height where Wikidata has none
     const height = cardHeight(inquiry);
-    const drawn = height === NO_FACT ? 0 : height;
     return {
       rank: "landmark",
       title: card.title,
-      lines: factLines(facts, drawn > 0 ? drawn : undefined),
+      lines: factLines(facts, height === NO_FACT ? undefined : height),
     };
   }
   if (named) {

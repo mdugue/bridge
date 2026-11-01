@@ -493,9 +493,12 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   const withFaces = () => {
     const from = deps.fonts();
     const asked = ++generation;
-    const text = subject
+    // the letters as drawn (a style may set them in capitals, whose
+    // part of a face can differ)
+    const raw = subject
       ? [subject.text.title, ...subject.text.lines].join(" ")
       : "";
+    const text = `${raw} ${raw.toLocaleUpperCase("de-DE")}`;
     if (!from || facesReady(type(), from, text)) {
       rebuild();
       return;
@@ -716,7 +719,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     if (layout === null) {
       layout = chosen;
       rebuild();
-    } else if (!sameLayout(chosen, layout) && !sameLayout(chosen, pending)) {
+    } else if (!sameLayout(chosen, layout)) {
       pending = chosen;
       crossAt = now;
     }
@@ -803,6 +806,8 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       }
       style = next;
       forget();
+      // the plate set anew in the new style arrives as a new one does
+      askedAt = performance.now();
       if (subject) {
         withFaces();
       }
@@ -824,8 +829,14 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       }
       const now = performance.now();
       const cam = plateCamera(camera, viewport());
-      // no new choice while a cross-fade runs: it finishes first
-      if (now - chosenAt >= CHOOSE_MS && !hold && !pending) {
+      // no new choice while a cross-fade runs, out or in: it finishes
+      // first (a flip back would flash the half-faded plate full)
+      if (
+        now - chosenAt >= CHOOSE_MS &&
+        now - crossAt >= CROSS_MS &&
+        !hold &&
+        !pending
+      ) {
         chosenAt = now;
         choose(body, camera, cam, now);
       }
