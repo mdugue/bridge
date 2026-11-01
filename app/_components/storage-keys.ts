@@ -24,6 +24,9 @@ export const STORAGE_KEYS = {
   gpuSafety: "gpu-safety",
   /** Frag die Stadt's key, where the visitor asked to keep it (ask-key.ts) */
   askKey: "frag-die-stadt",
+  /** three's Inspector panel layout, written by three only on
+   *  `?inspect=1` (inspector.ts) */
+  inspector: "threejs-inspector",
 } as const;
 
 /** Session storage: gone with the tab. */

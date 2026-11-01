@@ -50,6 +50,7 @@ import {
   NEAR_BAND_FADE_FROM,
   NEAR_MAX_DEG,
 } from "@/lib/city/skyview";
+import { groundUnderDesign } from "./design-site";
 import { isAbortError } from "./fetch-optional";
 import { nightShadowFree } from "./lantern";
 import {
@@ -344,6 +345,8 @@ export function groundLitMaterial(
 ): MeshStandardNodeMaterial {
   const material = new MeshStandardNodeMaterial(params);
   material.name = "ground-lit";
+  // walls, kerbs, stairs, fences: under a loaded design with the ground
+  material.positionNode = groundUnderDesign;
   applyGroundLight(material, light, skyView);
   setGraph(material, `${kind}|${groundLightKey(light, skyView)}`);
   return material;

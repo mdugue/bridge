@@ -26,6 +26,11 @@ export interface Ground {
   /** `heightAt` over the sources as they are now, whatever comes later:
    *  one ground for a build that runs in slices (build-steps.ts) */
   pinned: () => (x: number, y: number) => number | null;
+  /** a ceiling on the walked ground (projected x, y → elevation, null:
+   *  none there): a loaded design's site pressed under its floor, as the
+   *  terrain is drawn (design-site.ts) — for the world-side reads; the
+   *  projected `heightAt` stays the terrain's own. `null` lifts it. */
+  setCap: (cap: ((x: number, y: number) => number | null) | null) => void;
   /** world (x, z) → elevation, null off every source */
   atWorld: (x: number, z: number) => number | null;
   /** world (x, z) → elevation, falling back to the floor (then 0) */
@@ -49,13 +54,19 @@ export function createGround(offset: RecenterOffset): Ground {
       return null;
     };
   const heightAt = over(() => sources);
+  let cap: ((x: number, y: number) => number | null) | null = null;
   const atWorld = (x: number, z: number): number | null => {
     const e = worldToEpsg(x, z, offset);
-    return heightAt(e.x, e.y);
+    const h = heightAt(e.x, e.y);
+    const ceiling = h === null || !cap ? null : cap(e.x, e.y);
+    return ceiling === null || h === null ? h : Math.min(h, ceiling);
   };
   return {
     setSources: (next) => {
       sources = next;
+    },
+    setCap: (next) => {
+      cap = next;
     },
     lowerFloor: (minElevation) => {
       if (minElevation < floor) {
