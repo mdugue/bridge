@@ -331,8 +331,14 @@ export function nameplateSide(
   ) {
     return previous;
   }
-  let best: NameplateSide = 0;
-  for (const side of [1, 2, 3] as const) {
+  // the best-facing side the camera stands before (a plate behind it
+  // would read mirrored); from inside every plane, the best-facing
+  const sides = [0, 1, 2, 3] as const;
+  const before = sides.filter(
+    (side) => mode === "air" || beforePlate(body, side, camera.position)
+  );
+  let best: NameplateSide = before[0] ?? 0;
+  for (const side of before.length > 0 ? before : sides) {
     if (facing(side) > facing(best)) {
       best = side;
     }

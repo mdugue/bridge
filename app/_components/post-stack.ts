@@ -677,10 +677,10 @@ export function createPostStack(
     target,
     occlusion
   );
-  // The asked element's outline: its own antialiasing (a smooth band of a
-  // blurred mask), so after SMAA, and under the paper grain like the ink.
   // drawn after the frame, onto the canvas (`setOverlay`)
   let overlay: Overlay | null = null;
+  // The asked element's outline: its own antialiasing (a smooth band of a
+  // blurred mask), so after SMAA, and under the paper grain like the ink.
   const outline = createSelectionOutline({
     lens,
     depthTexture,
@@ -1290,7 +1290,9 @@ export function createPostStack(
         views.push(view);
       }
       await outline.compile(renderer, view);
-      await overlay?.compile(renderer, view);
+      // the plate's programs: a failed build costs the plate its first
+      // frame, never the scene's warm-up after it
+      await overlay?.compile(renderer, view).catch(() => undefined);
       await compileBuilds([scene], view);
     },
     dropView: (view) => {
@@ -1327,7 +1329,7 @@ export function createPostStack(
       // question builds nothing
       stylesWarm ??= outline
         .compile(renderer, camera)
-        .then(() => overlay?.compile(renderer, camera))
+        .then(() => overlay?.compile(renderer, camera).catch(() => undefined))
         .then(warmStyles)
         .catch(() => undefined);
       return stylesWarm;

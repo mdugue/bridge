@@ -228,3 +228,11 @@ test("a kept facade turns once the camera is behind its plate", () => {
   const behind = look([25, 1.7, 45], [0, 10, 0]);
   expect(nameplateSide(deep, behind, side)).not.toBe(side);
 });
+
+test("a fresh facade is one the camera stands before", () => {
+  // 100 × 10 m: from (45, 40) +u faces best, but its plate (at u = 51.5)
+  // would stand behind the camera
+  const hall = nameplateBody(box(-50, 50, -5, 5, 15)) as NameplateBody;
+  const side = nameplateSide(hall, look([45, 1.7, 40], [0, 7, 0]), null);
+  expect(side % 2).toBe(1);
+});

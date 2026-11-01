@@ -170,13 +170,6 @@ export interface Nameplate {
   dispose: () => void;
 }
 
-/** Whether two plates say the same (rank, title and lines). */
-const sameText = (a: NameplateText, b: NameplateText): boolean =>
-  a.rank === b.rank &&
-  a.title === b.title &&
-  a.lines.length === b.lines.length &&
-  a.lines.every((line, i) => line === b.lines[i]);
-
 const isOrtho = (c: Camera): c is OrthographicCamera =>
   (c as OrthographicCamera).isOrthographicCamera === true;
 
@@ -770,12 +763,6 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   return {
     set: (next) => {
       if (disposed) {
-        return;
-      }
-      if (next && subject && sameText(next.text, subject.text)) {
-        // the same words asked again: it keeps its place, no new arrival
-        subject = next;
-        body = next.body;
         return;
       }
       subject = next;

@@ -119,7 +119,9 @@ function useLandmarkFacts(inquiry: Inquiry): LandmarkFactsIndex | null {
     return () => {
       live = false;
     };
-  }, [url]);
+    // each question asks again (a failed load is not kept): the plate
+    // retries on the next landmark, and so does the card
+  }, [url, inquiry]);
   return url && loaded?.url === url ? loaded.index : null;
 }
 

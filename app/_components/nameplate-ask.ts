@@ -18,6 +18,7 @@ import {
 import {
   inquiryBuildings,
   isLandmarkInquiry,
+  type NameplateText,
   nameplateText,
 } from "@/lib/city/nameplate";
 import type { NameplateBody, Vec3 } from "@/lib/city/nameplate-place";
@@ -65,6 +66,7 @@ export function createNameplateAsk(deps: {
   let waiting: Inquiry | null = null;
   // the building the plate names now, so asking it again keeps the plate
   let named: string | null = null;
+  let namedText: NameplateText | null = null;
   const ask = (inquiry: Inquiry | null, next: NameplateBody | null) => {
     const token = ++asked;
     body = next;
@@ -85,7 +87,13 @@ export function createNameplateAsk(deps: {
         card,
         index ? factsFor(index, inquiryBuildings(inquiry), card.title) : null
       );
+      if (text && key !== null && key === named && sameText(text, namedText)) {
+        // the named building asked again: it keeps its place, no arrival
+        deps.plate.reshape(body);
+        return;
+      }
       named = text ? key : null;
+      namedText = text;
       deps.plate.set(text ? { text, body } : null);
     };
     if (isLandmarkInquiry(inquiry) && deps.factsUrl) {
@@ -113,6 +121,17 @@ export function createNameplateAsk(deps: {
     },
     ask,
   };
+}
+
+/** Whether two plates say the same (rank, title and lines). */
+function sameText(a: NameplateText, b: NameplateText | null): boolean {
+  return (
+    b !== null &&
+    a.rank === b.rank &&
+    a.title === b.title &&
+    a.lines.length === b.lines.length &&
+    a.lines.every((line, i) => line === b.lines[i])
+  );
 }
 
 /** A building question's identity (its tile and Buildings); null for
@@ -149,8 +168,12 @@ export function cityHides(
     if (ortho) {
       const ndc = to.clone().project(camera);
       setPickRay(raycaster, { x: ndc.x, y: ndc.y }, camera);
-      // from the near plane to the point
-      const length = raycaster.ray.origin.distanceTo(to);
+      // from the near plane to the point; a point the cut put before
+      // the near plane is not drawn, so nothing hides it
+      const length = to
+        .clone()
+        .sub(raycaster.ray.origin)
+        .dot(raycaster.ray.direction);
       if (length <= RAY_SHORT_M) {
         continue;
       }

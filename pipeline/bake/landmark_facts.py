@@ -198,14 +198,17 @@ def cache_path(raw: Path, site: str) -> Path:
 
 
 def landmark_ids(data: Path, raw: Path | None = None, tiles: Iterable[str] = ()) -> list[str]:
-    """Every item the site's committed landmark files name, and every item
-    the raw Wikidata caches of the site's `tiles` know (a new site has no
-    committed file before its first bake; the provider's other tiles are
-    other cities': not read)."""
+    """Every item the site's committed landmark files name; for a site not
+    baked yet (no such file), every item the raw Wikidata caches of its
+    `tiles` know (the provider's other tiles are other cities': not read)."""
     ids: set[str] = set()
-    for path in (data / "dlm").glob("landmarks_*.json"):
+    committed = sorted((data / "dlm").glob("landmarks_*.json"))
+    for path in committed:
         doc = json.loads(path.read_text())
         ids.update(i["id"] for i in doc.get("landmarks", []) if "id" in i)
+    if committed:
+        # the bake has matched them: only those
+        return sorted(ids)
     for tile in tiles if raw is not None else ():
         path = raw / "wikidata" / f"landmarks_{tile}.json"
         if path.exists():
@@ -374,12 +377,9 @@ def facts_of(records: list[dict]) -> dict:
     out: dict = {}
     start = min(starts) if starts else None
     # the last end that belongs to the building: a consecration centuries
-    # on does not hide its opening
+    # on does not hide its opening (no start: the latest opening)
     fitting = (y for y in ends if start is None or start < y <= start + MAX_BUILD_YEARS)
     end = max(fitting, default=None)
-    if start is None and ends:
-        # no start to measure by: the latest opening, the building that stands
-        end = max(ends)
     if (built := _span(start, end)) is not None:
         out["built"] = built
     out.update(_rebuild(rebuilds))
