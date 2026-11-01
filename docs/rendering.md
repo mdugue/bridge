@@ -157,7 +157,7 @@ is the codebook.
 | Landmark | a Wikidata landmark's objects (column `flags`, bit 16): no look of its own — the roof relief is measured on these objects only, and the HUD's *Wahrzeichen* list glides to the landmark | Wikidata, OSM `wikidata=` | `scripts/prepare/city.ts` `withLandmarks`, `lib/city/landmarks.ts` |
 | Roughness jitter | `hash(objectid)` (column `rough`) → [0.55, 1.0] | — | (*Materialstreuung*) |
 | The asked building | the probe's pick on a click, a long press or `I` — the first solid thing on the ray, a tree's crown only with nothing solid behind it; the rest of the ray's things a strip of candidates (`inquiry-strip.tsx`) — (the whole building tree, or its ensemble's trees — `lib/city/ensembles.ts`) → flag 32 in the packed texture at runtime: lifted 40 % towards paper white with a faint paper light of its own; a pencil hatch every 0.9 m on the building near (up the facade at 45°, across the roof), 45° strokes every 7 px in screen space where those would crowd; and the outline (below); no slider, the hatch not in *Papier* | the viewer's question | `inquiry-probe.ts`, `city-layer.ts` `mark`, `visual-style.ts` `askedColour` |
-| The asked tree, monument, bridge, hedge, lamp, street furniture, tram stop or landing stage | the probe's pick among the tile's askable things (ray vs. data solids; bridges vs. their drawn meshes) → the outline (next row) alone | the viewer's question | `inquiry-probe.ts`, `lib/city/ask-items.ts`, `lib/city/ask-more.ts`, `bridge-ask.ts` |
+| The asked tree, monument, bridge, hedge, lamp, street furniture, tram stop, landing stage or a loaded design's part | the probe's pick among the tile's askable things (ray vs. data solids; bridges vs. their drawn meshes; a design vs. its mesh, by part — `design-layer.ts` `asks`; an instance a design folded away is not found) → the outline (next row) alone | the viewer's question | `inquiry-probe.ts`, `lib/city/ask-items.ts`, `lib/city/ask-more.ts`, `bridge-ask.ts` |
 | The asked traffic flow or bicycle counter | while its layer shows: a ray on the flow's drawn bodies (the vertex names its section) or on the counter's columns as tall as they stand → the outline alone, a flow's with the layer's own grown and widened positions, tested only against what stands in front of the glass | the viewer's question | `traffic-ask.ts`, `bike-ask.ts`, `lib/city/inquiry-traffic.ts` |
 | The outline of the asked element | its triangles (a building's or bridge's own; a tree's crown and trunk, a monument's cylinder, a basin's prism as stand-ins) → a two-byte mask, red the whole element, green where the scene's depth shows it (MAX blending), blurred at half resolution by its own two-byte blur (GaussianBlurNode's kernel, `outlineKernel`) → the band 0.07–0.66 of red's blur: one rounded line round the element's whole silhouette, never along what stands in front, 4.5 CSS px of the HUD's accent pink (`SELECTION_ACCENT`, the hatch's too) on a hair of its pale, flashing wider and in the accent for 650 ms on a new question (`OUTLINE_PULSE`), fwidth-smoothed, at 42 % of its ink where green says the element is hidden (`OUTLINE_HIDDEN`, the hidden edge); over the finished frame and everything in it, in every picture style; mask and blur drawn only while something is asked | the viewer's question | `selection-outline.ts`, `selection-shape.ts`, `lib/city/outline.ts`, `post-stack.ts` |
 | The inquiry card (HUD, not the scene; a bottom sheet on touch) | the fact columns (`buildingId`, ALKIS use, roof form and pitch, height, area, OSM name, address, storeys, and `drawn`: where each drawn value came from — its *Daten* section lists them with the object's style row, `lib/city/drawn-lines.ts`), a tree's register facts (`treefacts_<tile>.json`), a monument's or bridge's feature, and the provenance manifest (each source's edition and licence), on demand only | LoD2, OSM, `data/<site>/provenance.json` | `lib/city/object-facts.ts`, `lib/city/inquiry.ts`, `lib/city/provenance.ts`, `inquiry-card.tsx` (ADR 0042) |
@@ -249,6 +249,7 @@ is the codebook.
 | Schnitt | the near plane through the pivot; the clay drawn two-sided with its back faces near-black (the poché, `clayPoche`), the ground's profile along the cut as a poché strip from the terrain heights | the terrain heights | `visual-style.ts` `setClaySection`, `model-cuts.ts`, `lib/city/section.ts` |
 | Ausschnitt | the city's group in a `ClippingGroup` with the rectangle's four planes, shown once its programs are compiled and held off the frames (`holdCut`); shadows not clipped; a plinth of four poché strips from the ground down to a common base | the terrain heights | `model-cuts.ts`, `lib/city/section.ts`, `post-stack.ts` |
 | Ink lines | the second difference of inverse view depth (`1/z` is affine across a plane): relative jump → silhouette, relative change of slope → crease; per style a pen: Papier and Film noir sway (±2 px over ~120 px) and tremble, swell and thin within a stroke, lift off now and then and sit a little off the fill, the other styles' pens hold still in a flight; detail falls away with distance (silhouette ramp widens, folds fade, the pen gets finer); no folds in open ground; a step under ~3 px tall well below the horizon (a rail, a kerb, a track's bed hiding the ground behind it) draws no line, measured as the height between the taps in pixels on every axis but the level one — such a step's raster flips in a move; faded towards a per-style floor (`farInk`) with the fog factor, so the far city keeps its outlines | depth buffer | `stylize-effect.ts` (*Tuschelinien*) |
+| A loaded design | the visitor's glTF, IFC, OBJ or Rhino file, or a landscape plan (DXF, Shapefile, GeoPackage, LandXML: surfaces in the palette's colours on the ground, low-poly trees, blocks, a planned ground) (ADR 0054): one geometry, model-maker's white (`design-white`, one scene material, double-sided, matte) or the file's colours and textures; casts and takes the sun's shadows; the LoD2 objects whose footprints its plan covers for half or more drop out of their tile's index; its plan's hull drawn on the minimap as a building; in its site (the plan with its ground plate, one raster, `designSite`) the instanced sets fold their instances away (`instancePosition`) and the ground with its walls, kerbs, stairs and fences, the water and (within 4 m of the floor, `lineUnderDesign`) rails, ballast, platforms and tram tracks are pressed under its floor, the tiles under it cutting the ground above the floor (`maskNode`, there only: it costs the early depth test) | the visitor's file | `design-layer.ts`, `design-read.ts`, `design-ifc.ts`, `design-formats.ts`, `design-plan.ts`, `lib/city/plan-geometry.ts`, `design-site.ts`, `lib/city/design-cover.ts`, `lib/city/ifc-georef.ts` |
 | Minimap | site tile bounds + 512² class raster in the palette + the bridge decks in the colour of the class they carry (hairline edge) + footprints of the visible tiles | DGM1, Basis-DLM, LoD2 | `minimap.tsx`, `lib/city/minimap.ts` |
 | Scenario water and box (*Frag die Stadt*, ADR 0058) | a flood: one 128-cell grid over the site at the river's water level per vertex (gauge zeros between the gauges + the reading), a deep blue, 78 % opaque, receives shadow; a planned volume: a light box on the lowest ground under its corners, casting and receiving the sun's shadow; neither is picked or walked into | PEGELONLINE, Umweltatlas Dresden, the model's tool call | `scenario-layer.ts`, `lib/city/scenario.ts` |
 
@@ -419,6 +420,23 @@ carries the anti-aliasing. There is no tone mapping: the look was tuned
 without it. The GTAO sample count is a construction-time setting (16;
 8 on a phone and in the lite profile). 3DTilesRendererJS's fade and overlay plugins patch
 GLSL and stay unused.
+
+**The depth runs reversed** (three's `reversedDepthBuffer`,
+`create-app.ts`): 1 at the near plane, 0 at the far one, stored as floats
+(`depth32float`, the four bytes a pixel the 24-bit buffer takes). With a
+0.3 m near plane and a 6 km far one, the plain buffer spent almost all its
+precision on the first metres and let roofs, kerbs and decals fight
+kilometres off; the float's exponent gives the far range back. three turns
+the depth test, the clear, the polygon offsets, the shadow maps (their
+compare function and bias) and its depth helpers (`getViewPosition`,
+`perspectiveDepthToViewZ`, GTAO) round itself, and a camera it has drawn
+into the buffer carries `reversedDepth` and a projection to match. What
+reads raw depth on its own must ask: the styles' sky test and their
+shadow lookup (`stylize-effect.ts`, `StylizeInputs.reversedDepth`), the
+parallel view's pick ray (`view-ray.ts`), the scene target's depth type
+(`post-stack.ts`). A WebGL2 without `EXT_clip_control` keeps the plain
+buffer (three falls back and says so). `?depth=standard` draws with the
+plain buffer, to compare.
 
 **What the stack builds follows the device tier** (`postProfileFor` in
 `scene-profile.ts`,
@@ -1538,6 +1556,15 @@ loaded and 20 s later (`console.table`). The names are a contract for
 later perf work: add one rather than rename one. None of it reaches the
 crash trail or the reports — a tile's id names where the player was.
 
+**The renderer itself: `?inspect=1`** (`inspector.ts`) puts three's own
+Inspector (`three/addons/inspector`) over the canvas: time per pass (GPU
+timestamps where the adapter has them — Chromium; on Safari only CPU
+time), memory by kind (geometries, textures, render targets), draw calls
+and the node graphs. The module loads only on that knob, so no other page
+carries it; it keeps its panel layout under `threejs-inspector` in local
+storage (the privacy page names it). Use it beside `?trace=1`, which times
+the stream, not the passes.
+
 ## Workarounds for upstream bugs
 
 Each entry is a bug in a dependency, the code that works around it and
@@ -1600,11 +1627,29 @@ geometry throws on it midway (`destroyAttribute`). *Worked around* in
 `three-utils.ts` (`untilThrough`): the dispose is tried again past it.
 *Once fixed:* one dispose. Not looked for upstream yet.
 
+**three r187: SkyMesh ignores a reversed depth buffer.** Its vertex
+node pins the dome to the far plane by `z = w`, which is depth 1, the
+near plane of a reversed buffer. The dome draws after the opaque clay
+without depth write, so it passed the depth test everywhere and painted
+walls, kerbs and river walls sky-blue. *Worked around* in `sun-rig.ts`
+(`createSkyDome`): under `reversedDepthBuffer` the dome's z is 0. *Once
+fixed:* the vertex node stays SkyMesh's own. Not reported yet.
+
 Changes in three r187 we adapted to and that are meant, not bugs: builds
 are keyed by the kind of camera
 ([#35123](https://github.com/mrdoob/three.js/pull/35123); Modell's
 warm-up, `PostStack.warmView`), and PMREMs are cube targets of at least
 256 px a face (the sky reflection's own 64 px cube, `sky-reflection.ts`).
+
+**three r187: `ClusteredLighting` assumes a centred perspective camera.**
+`ClusteredLightsNode` bounds each cluster in view space by
+`ndc · (−z) / projection[0][0]` and ignores the projection's off-centre
+terms, so Modell's parallel camera and the image export's frustum slide
+(`setViewOffset`) would shade lights in the wrong clusters or not at
+all. The lamps therefore keep their fixed pool (ADR 0009) rather than
+48 clustered lights on a desktop (tried 2026-10-31: the perspective view
+was right). *Once fixed:* revisit, with the pool's lights fading by rank.
+Not reported yet.
 
 **3d-tiles-renderer 0.5.3: `resetFailedTiles()` alone never asks for a
 cached tile again.** *Worked around* in `tile-retry.ts`: the heal removes

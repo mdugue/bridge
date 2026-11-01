@@ -263,6 +263,8 @@ function thingKey(t: FeatureInquiry): string {
       return `${t.kind}:${t.tile}:${t.index}`;
     case "bikes":
       return `bikes:${t.id}:${t.position.join(",")}`;
+    case "design":
+      return `design:${t.file}:${t.partIndex}`;
     case "bridge":
     case "monument":
     case "canopy":
@@ -327,6 +329,9 @@ export function createInquiryProbe(deps: {
   viewport: () => { height: number; width: number };
   /** a world point in the site's CRS (easting, northing) */
   toSite: (world: Vector3) => [number, number];
+  /** whether a thing the ray met is not drawn: an instance a design's
+   *  site folded away (design-site.ts); `at` where the ray met it */
+  folded?: (thing: AskHit<FeatureInquiry>, at: Vector3) => boolean;
 }): InquiryProbe {
   let marked: CityLayer[] = [];
   // each pick's subject as last outlined (a building's parts per tile)
@@ -376,12 +381,13 @@ export function createInquiryProbe(deps: {
     reach: number,
     ground: number | null
   ): PickSample<ProbeHit>[] => {
+    const at = new Vector3();
     const things = hitsInSets(
       ray.ray.origin,
       ray.ray.direction,
       deps.things(),
       reach
-    );
+    ).filter((t) => !deps.folded?.(t, ray.ray.at(t.distance, at)));
     const hits: PickSample<ProbeHit>[] = [
       ...buildings.map(({ distance, layer, objectIndex }) => ({
         distance,
@@ -401,7 +407,15 @@ export function createInquiryProbe(deps: {
         porous: porous(thing.target),
       })),
     ].sort((a, b) => a.distance - b.distance);
-    return ground === null ? hits : hits.filter((h) => h.distance <= ground);
+    // (a design stands on ground pressed under it, which the ground's
+    // rays do not know: it is never behind it)
+    return ground === null
+      ? hits
+      : hits.filter(
+          (h) =>
+            h.distance <= ground ||
+            ("thing" in h.hit && h.hit.thing.target.kind === "design")
+        );
   };
 
   /** One ray: everything it meets before the ground, nearest first. */
