@@ -83,6 +83,7 @@ import { furnitureSteps } from "./furniture-layer";
 import { buildLamps, type LampControl } from "./lamp-layer";
 import { buildLowVegetation } from "./low-vegetation-layer";
 import { buildMonuments, type MonumentLayer } from "./monument-layer";
+import { buildMurals, type MuralLayer, type MuralSource } from "./mural-layer";
 import { railSteps } from "./rail-layer";
 import { bridgeAskSet } from "./bridge-ask";
 import { buildRiverside } from "./riverside-layer";
@@ -256,6 +257,9 @@ export interface TileStreamContext {
   lowRasters: boolean;
   /** bytes of out-of-view tile content kept cached (scene-profile.ts) */
   cacheBytes: { max: number; min: number };
+  /** the site's murals (mural-layer.ts), hung on a city tile's full LoD2;
+   *  null where it has none */
+  murals?: MuralSource | null;
   /** the scene fog's colour (height-fog.ts): the water's sky tint */
   fogColor: UniformNode<"color", Color>;
   /** ground height over every loaded terrain (projected coordinates) */
@@ -364,6 +368,8 @@ interface Dressed {
   dressing?: TileDressing;
   /** the dressing's geometry bytes, once it hangs on the tile */
   dressingBytes?: number;
+  /** the city tile's murals, once they hang on it */
+  murals?: MuralLayer;
   /** the bytes of the site's shared buffers its content holds (the coarse
    *  grid's index and water index): the tile renderer counts them in the
    *  tile's glTF, but they stay when the tile goes */
@@ -1664,7 +1670,10 @@ export class DressingPlugin {
     const dressed = scene ? this.dressed.get(scene) : undefined;
     const rasters = this.rasterShares.bytesOf(dressed?.terrain?.rasters ?? []);
     return (
-      rasters + (dressed?.dressingBytes ?? 0) - (dressed?.sharedBytes ?? 0)
+      rasters +
+      (dressed?.dressingBytes ?? 0) +
+      (dressed?.murals?.bytes ?? 0) -
+      (dressed?.sharedBytes ?? 0)
     );
   }
 
@@ -1723,6 +1732,11 @@ export class DressingPlugin {
         () => this.dressCity(scene, mesh, extras),
         extras.tileId
       );
+      // the murals hang on the full LoD2 only (the far level's walls are
+      // simplified by half a metre: lib/city/tileset.ts FAR_CITY_ERROR)
+      if ((tile as { geometricError?: number }).geometricError === 0) {
+        void this.hangMurals(scene, extras.tileId);
+      }
     } else if (extras.kind === "terrain") {
       ({ dressed } = await streamTimings.timed(
         "tile:rasters",
@@ -1815,6 +1829,78 @@ export class DressingPlugin {
         }
       );
     }
+  }
+
+  /**
+   * A city tile's murals land after its buildings show: their drawings
+   * fetched and decoded, compiled before they hang, weighed on the tile,
+   * each shown while its building is (CityLayer.hang). A tile that left
+   * meanwhile aborts their fetches; one that left while they compiled
+   * frees them.
+   */
+  private async hangMurals(scene: Object3D, tileId: string): Promise<void> {
+    const source = this.ctx.murals;
+    const entry = this.dressed.get(scene);
+    if (!(source && entry?.city)) {
+      return;
+    }
+    const murals = await source.forTile(tileId);
+    if (murals.length === 0 || this.dressed.get(scene) !== entry) {
+      return;
+    }
+    const aborter = new AbortController();
+    const gone = () =>
+      this.disposed ||
+      this.released.has(scene) ||
+      this.dressed.get(scene) !== entry;
+    let layer: MuralLayer | null;
+    try {
+      // the tile's release aborts them (`releaseDressed`)
+      entry.aborter ??= aborter;
+      layer = await buildMurals(murals, {
+        fileUrl: source.fileUrl,
+        offset: this.ctx.offset,
+        phone: this.ctx.tier === "mobile",
+        signal: entry.aborter.signal,
+      });
+    } catch (err) {
+      if (!(isAbortError(err) || gone())) {
+        this.ctx.onDressingFailed?.(err, tileId);
+      }
+      return;
+    } finally {
+      if (entry.aborter === aborter) {
+        entry.aborter = undefined;
+      }
+    }
+    if (!layer) {
+      return;
+    }
+    const built = layer;
+    if (gone()) {
+      built.dispose();
+      return;
+    }
+    const compiled = await this.compileUnder(
+      scene,
+      [built.group],
+      `murals ${tileId}`
+    );
+    await this.loaded.get(scene);
+    if (gone() || compiled === "out of memory") {
+      built.dispose();
+      return;
+    }
+    scene.add(built.group);
+    entry.murals = built;
+    built.meshes.forEach((mesh, i) => {
+      entry.city?.hang(mesh, built.murals[i].building);
+    });
+    const tile = this.tileOf.get(scene);
+    if (tile) {
+      this.tiles?.recalculateBytesUsed(tile);
+    }
+    this.ctx.onChange();
   }
 
   /** The facades' sky view lands after the buildings show (the clay binds
@@ -2371,6 +2457,9 @@ export class DressingPlugin {
     }
     if (dressed.svf) {
       this.skyView.release(dressed.svf);
+    }
+    if (dressed.murals) {
+      free(() => dressed.murals?.dispose());
     }
     if (dressed.terrain) {
       this.stream.terrains.delete(dressed.terrain);
