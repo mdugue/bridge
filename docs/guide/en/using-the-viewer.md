@@ -426,7 +426,8 @@ The button in the corner opens a panel with three tabs.
   *Zurück* move between the stops, × ends the walk and gives the picture
   style and the time back. On a phone the card is a sheet at the bottom
   that starts folded: tap or pull up its handle to open it, pull it down
-  to fold it again. How they are written: [walks.md](../../walks.md).
+  to fold it again; the joystick and the toolbar step aside while the
+  walk runs. How they are written: [walks.md](../../walks.md).
 - **Frag die Stadt** (ask the city) — questions about the city in your
   own words ("Who built the Frauenkirche?", "What is in front of me?",
   "What does this look like in the evening?"). The four first
