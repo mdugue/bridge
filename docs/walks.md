@@ -31,7 +31,14 @@ guides who write about their craft:
   small, odd and funny ones: the gilded king looking towards Poland, the
   dairy shop tiled like a chapel, the bridge that cost two pfennigs, the
   drainpipes that play music in the rain. Each stop has a *closer look*:
-  something to find in the picture.
+  something to find in the picture or in the stop's photo.
+- **Point only at what the model draws** (ADR 0055). The twin has
+  masses, roof planes, towers, bridges, river and ground; a statue is a
+  generic figure, and reliefs, inscriptions, colours and interiors are
+  not there. "Vor dir die Kuppel" is fine; "Schau auf das Relief" is
+  not, unless the photo shows it: then say so ("Auf dem Foto …"). A
+  sentence starting with *Schau, Sieh, Achte, Zoom, Zähl* or *Such* must
+  name the photo, or the check refuses it.
 - **People with their flaws.** Kings, mistresses, architects and
   shopkeepers are more interesting than styles; their vanity and their
   stubbornness carry a story.
@@ -73,13 +80,17 @@ Cullen, *Townscape* (1961); Forbidden Vancouver,
     "fov": 60,                      // optional lens
     "hour": 10.5,                   // today at 10:30
     "style": "pastel",              // optional picture style
-    "model": { "preset": "military", "scale": 1500, "turnDeg": 45 }, // optional Modell view
-    "text": "…",                    // ≤ 900 characters
+    "text": "…",                    // ≤ 560 characters, a phone screen
     "closer": "…",                  // the detail to find
     "days": [{ "from": "10-25", "to": "11-04", "text": "…" }],
     "seasons": { "winter": "…" },
     "facts": [{ "claim": "…", "source": "https://…" }],
-    "refs": ["Q4176", "m411594_5656615"]
+    "refs": ["Q4176", "m411594_5656615"],
+    "photo": {
+      "file": "Kronentor (Zwinger, Dresden).jpg",
+      "caption": "…",
+      "focus": [0.5, 0.3]             // optional: what a crop keeps in sight
+    }
   }]
 }
 ```
@@ -87,6 +98,26 @@ Cullen, *Townscape* (1961); Forbidden Vancouver,
 A `source` is an https URL (Wikipedia, an institution's page, a paper) or
 `stadtwissen:<id>` — a Q-id, a building's gml:id or a monument's
 `m<x>_<y>` from the Stadtwissen.
+
+## How the card shows it
+
+- **The photo** keeps its proportion. A wide one spans the card above
+  the story, cut only past a height (17rem, 8rem on a phone) and then
+  round its `focus` (shares of width and height from the top left, the
+  centre when absent); its caption and credit lie on its lower edge. A
+  tall one (narrower than 0.85 of its height, `photoIsTall`) stands
+  beside the story, which flows round it; on a phone, whose card is too
+  narrow for both, it lies above the story like a wide one. A click
+  shows it whole.
+- **The hour** turns with the glide: the light travels from the last
+  stop's hour to this one's at the camera's own progress (`glideTo`,
+  fed by the flight's `onProgress`), eased as the glide is, so it stops
+  where the camera stops (an export's held frames) and lands with it.
+  The scene follows every frame, the HUD a few times a second.
+- **On a phone** the card is a sheet at the bottom, at most 62 % of the
+  screen high, that starts folded: the title and the way on, the scene
+  above free. Its handle unfolds it by a tap or a drag up and folds it by
+  a drag down; folded, it shows no photo and no story.
 
 ## Writing one
 
@@ -105,7 +136,15 @@ A `source` is an https URL (Wikipedia, an institution's page, a paper) or
    ground` writes each stop's `ground` from the DGM1.
 5. **Check it:** `bun scripts/walks.ts dresden check` and
    `bun test scripts/walks.test.ts`.
-6. **Look at it:** `bun scripts/walks.ts dresden shots [walk]` writes a
+6. **Pick a photo** where the text needs one: a Commons file that shows
+   the detail the text tells (the statue, the relief, the interior), named
+   in `photo.file`, with a `caption` where it is not obvious. `bun
+   scripts/walks.ts dresden photos` copies it as an 800 px WebP into
+   `walks/photos/` and writes the credit (author, licence, page); `--refs`
+   suggests the first ref's Wikidata image for stops that name none,
+   `--force` fetches again. Commit the WebP and credit with the walk: without them the
+   build shows the stop without a photo and the walks' unit test fails.
+7. **Look at it:** `bun scripts/walks.ts dresden shots [walk]` writes a
    snapshot per stop into `shots/` (today's date at the stop's hour, its
    style), `bun run shots` renders them on a real GPU. Move `from`/`at`
    until the picture shows what the text says, then measure the ground
@@ -115,7 +154,8 @@ A `source` is an https URL (Wikipedia, an institution's page, a paper) or
 
 `scripts/walks.test.ts`, over every committed walk: well formed
 (`walkProblems`: ids, a fact per stop, a checkable source per fact, the
-hour, the style, the Modell preset, MM-DD days, the text's length);
+hour, the style, no Modell view, MM-DD days, the text's length, a
+photo's credit, no look sent where the model shows nothing);
 every eye and target inside the site's tiles; every `ground` within
 0.2 m of the DGM1; every Stadtwissen id named one the build publishes.
 `prepare-data.ts` refuses to bundle a walk with a problem.

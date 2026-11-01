@@ -1,0 +1,2209 @@
+{
+ "attribution": "Wikidata (CC0)",
+ "retrieved": "2026-10-30",
+ "entities": {
+  "Q1054368": {
+   "label": "Centrum-Moschee Hamburg",
+   "description": "Moschee im Hamburger Stadtteil St. Georg",
+   "wiki": "Centrum-Moschee Hamburg",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q32815",
+      "v": "Moschee"
+     }
+    ]
+   }
+  },
+  "Q115988686": {
+   "label": "Gänsemarkt Passage",
+   "description": "Einkaufszentrum in Hamburg, Deutschland",
+   "wiki": "Gänsemarkt-Passage",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q11315",
+      "v": "Einkaufszentrum"
+     }
+    ]
+   }
+  },
+  "Q1183156": {
+   "label": "Deichtorhallen",
+   "description": "Ausstellungshaus für zeitgenössische Kunst und Fotografie in Hamburg",
+   "wiki": "Deichtorhallen",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q207694",
+      "v": "Kunstmuseum"
+     },
+     {
+      "id": "Q1497375",
+      "v": "Bauensemble"
+     },
+     {
+      "id": "Q26944969",
+      "v": "Fotografiemuseum"
+     },
+     {
+      "id": "Q1329623",
+      "v": "Kulturzentrum"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q1295040",
+      "v": "Jugendstilarchitektur"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1913"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q28661501",
+      "v": "Kulturdenkmal in Hamburg"
+     }
+    ]
+   }
+  },
+  "Q1229183": {
+   "label": "Hamburger Hof",
+   "description": "Gebäude am Jungfernstieg in Hamburg mit Einkaufspassage",
+   "wiki": "Hamburger Hof",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q11315",
+      "v": "Einkaufszentrum"
+     },
+     {
+      "id": "Q1783234",
+      "v": "Kontorhaus"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1881"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q28661501",
+      "v": "Kulturdenkmal in Hamburg"
+     }
+    ]
+   }
+  },
+  "Q12307568": {
+   "label": "Benedikte-Kirche",
+   "description": "Kirchengebäude in Hamburg",
+   "wiki": "Dänische Seemannskirche Hamburg",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1112170",
+      "v": "Otto Kindt"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q817052",
+      "v": "Benedikte zu Dänemark"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1952"
+     }
+    ]
+   }
+  },
+  "Q1285521": {
+   "label": "Tanzende Türme",
+   "description": "Hochhaus in Hamburg",
+   "wiki": "Tanzende Türme",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q11303",
+      "v": "Wolkenkratzer"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q96271",
+      "v": "Hadi Teherani"
+     }
+    ],
+    "P571": [
+     {
+      "v": "2012"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "2012"
+     }
+    ]
+   }
+  },
+  "Q1329956": {
+   "label": "Alsterhaus",
+   "description": "gehobenes Warenhaus am Jungfernstieg in Hamburg",
+   "wiki": "Alsterhaus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q216107",
+      "v": "Kaufhaus"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1912"
+     }
+    ]
+   }
+  },
+  "Q1339402": {
+   "label": "Emporio-Hochhaus",
+   "description": "Hochhaus in Hamburg",
+   "wiki": "Emporio-Hochhaus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1021645",
+      "v": "Bürogebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q105214",
+      "v": "Helmut Hentrich"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1964"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q1375224": {
+   "label": "Europa Passage",
+   "description": "Einkaufszentrum in der Hamburger Innenstadt",
+   "wiki": "Europa Passage",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q11315",
+      "v": "Einkaufszentrum"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q96271",
+      "v": "Hadi Teherani"
+     }
+    ],
+    "P571": [
+     {
+      "v": "2006"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "5.10.2006"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Ballindamm 40, 20095 Hamburg"
+     }
+    ]
+   }
+  },
+  "Q1418221": {
+   "label": "Finnlandhaus",
+   "description": "Hochhaus in Hamburg-Neustadt",
+   "wiki": "Finnlandhaus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q18142",
+      "v": "Hochhaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q28661501",
+      "v": "Kulturdenkmal in Hamburg"
+     }
+    ]
+   }
+  },
+  "Q14906769": {
+   "label": "Hanseviertel",
+   "description": "Einkaufspassage in der Hamburger Innenstadt",
+   "wiki": "Hanseviertel (Hamburg)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q11315",
+      "v": "Einkaufszentrum"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q109445",
+      "v": "Volkwin Marg"
+     }
+    ],
+    "P88": [
+     {
+      "id": "Q107359737",
+      "v": "Allianz Lebensversicherungs AG"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "14.11.1980"
+     }
+    ]
+   }
+  },
+  "Q1492309": {
+   "label": "Galleria",
+   "description": "Einkaufspassage in der Hamburger Innenstadt",
+   "wiki": "Galleria",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q11315",
+      "v": "Einkaufszentrum"
+     },
+     {
+      "id": "Q13634881",
+      "v": "Passage"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Große Bleichen 2120354 Hamburg"
+     }
+    ]
+   }
+  },
+  "Q15041844": {
+   "label": "Atlantic-Haus",
+   "description": "Hochhaus (Bürohaus) in Hamburg",
+   "wiki": "Atlantic-Haus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q18142",
+      "v": "Hochhaus"
+     },
+     {
+      "id": "Q1021645",
+      "v": "Bürogebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q108899",
+      "v": "Thomas Herzog"
+     }
+    ],
+    "P571": [
+     {
+      "v": "2007"
+     }
+    ]
+   }
+  },
+  "Q1527803": {
+   "label": "Ratsherrn Brauerei",
+   "description": "Hamburger Brauerei mit überregionalem Vertrieb",
+   "wiki": "Ratsherrn Brauerei",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q167270",
+      "v": "Markenzeichen"
+     },
+     {
+      "id": "Q131734",
+      "v": "Brauerei"
+     }
+    ]
+   }
+  },
+  "Q1545737": {
+   "label": "Meßberghof",
+   "description": "Kontorhaus im Hamburg",
+   "wiki": "Meßberghof",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1783234",
+      "v": "Kontorhaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q1555405": {
+   "label": "Gustaf Adolfskyrkan",
+   "description": "Kirchengebäude in Hamburg",
+   "wiki": "Gustaf Adolfskyrkan (Hamburg)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1907"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "12.5.1906"
+     }
+    ]
+   }
+  },
+  "Q1573209": {
+   "label": "Hamburger Öffentliche Bücherhallen",
+   "description": "Stiftung privaten Rechts, die in Hamburg öffentliche Bibliotheken betreibt",
+   "wiki": "Bücherhallen Hamburg",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q7075",
+      "v": "Bibliothek"
+     },
+     {
+      "id": "Q856584",
+      "v": "Bibliotheksgebäude"
+     },
+     {
+      "id": "Q28564",
+      "v": "öffentliche Bibliothek"
+     },
+     {
+      "id": "Q163740",
+      "v": "Non-Profit-Organisation"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1899"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Hühnerposten 1, 20097 Hamburg"
+     }
+    ]
+   }
+  },
+  "Q15816032": {
+   "label": "Reichshof Hamburg, Curio Collection by Hilton",
+   "description": "Hotel am Hamburger Hauptbahnhof",
+   "wiki": "Reichshof Hamburg",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q27686",
+      "v": "Hotel"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1910"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "17.7.2015"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Kirchenallee 34 – 36, 20099 Hamburg"
+     }
+    ]
+   }
+  },
+  "Q1583703": {
+   "label": "Hanseatic Trade Center",
+   "description": "Bürokomplex in der Speicherstadt in Hamburg",
+   "wiki": "Hanseatic Trade Center",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1021645",
+      "v": "Bürogebäude"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1997"
+     }
+    ]
+   }
+  },
+  "Q15850587": {
+   "label": "Theater an der Elbe",
+   "description": "Musical-Theater in Hamburg",
+   "wiki": "Theater an der Elbe",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1954948",
+      "v": "Musical-Theater"
+     }
+    ]
+   }
+  },
+  "Q1631062": {
+   "label": "Hotel Vier Jahreszeiten",
+   "description": "Luxushotel am Neuen Jungfernstieg in Hamburg",
+   "wiki": "Hotel Vier Jahreszeiten (Hamburg)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q27686",
+      "v": "Hotel"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1905"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q28661501",
+      "v": "Kulturdenkmal in Hamburg"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1905"
+     }
+    ]
+   }
+  },
+  "Q169542": {
+   "label": "Hamburger Kunsthalle",
+   "description": "Kunstmuseum in Hamburg",
+   "wiki": "Hamburger Kunsthalle",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q207694",
+      "v": "Kunstmuseum"
+     },
+     {
+      "id": "Q2668072",
+      "v": "Sammlung"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q104292",
+      "v": "Hermann von der Hude"
+     },
+     {
+      "id": "Q96283681",
+      "v": "Georg Theodor Schirrmacher"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1868"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q28661501",
+      "v": "Kulturdenkmal in Hamburg"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1868"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Glockengießerwall 5, 20095 Hamburg"
+     }
+    ]
+   }
+  },
+  "Q1739852": {
+   "label": "Markthalle Hamburg",
+   "description": "Gebäudekomplex am Klosterwall im Hamburger Stadtteil Hammerbrook",
+   "wiki": "Markthalle Hamburg",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1497364",
+      "v": "Gebäudekomplex"
+     },
+     {
+      "id": "Q3469910",
+      "v": "Zentrum für darstellende Künste"
+     },
+     {
+      "id": "Q2080521",
+      "v": "Markthalle"
+     },
+     {
+      "id": "Q1378975",
+      "v": "Kongresszentrum"
+     },
+     {
+      "id": "Q8719053",
+      "v": "Spielstätte für Musik"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q77353",
+      "v": "Fritz Schumacher"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1913"
+     }
+    ],
+    "P1083": [
+     {
+      "v": "1550"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q28661501",
+      "v": "Kulturdenkmal in Hamburg"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Kosterwall 11, 20095 Hamburg"
+     }
+    ]
+   }
+  },
+  "Q1821722": {
+   "label": "Levantehaus",
+   "description": "Kontorhaus in Hamburg",
+   "wiki": "Levantehaus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q19259073": {
+   "label": "Alte Oberpostdirektion",
+   "description": "Gebäude in Hamburg-Neustadt, heute u.a. Einkaufszentrum",
+   "wiki": "Alte Oberpostdirektion (Hamburg)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1887"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     },
+     {
+      "id": "Q1441983",
+      "v": "Umnutzung"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q2026630": {
+   "label": "Operettenhaus",
+   "description": "Theater am Spielbudenplatz in Hamburg",
+   "wiki": "Operettenhaus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q24354",
+      "v": "Theatergebäude"
+     }
+    ],
+    "P1083": [
+     {
+      "v": "1335"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1952"
+     }
+    ]
+   }
+  },
+  "Q22952556": {
+   "label": "Theater am Großmarkt",
+   "description": "Multifunktionstheater in Hamburg",
+   "wiki": "Theater am Großmarkt",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q24354",
+      "v": "Theatergebäude"
+     },
+     {
+      "id": "Q17350442",
+      "v": "Örtlichkeit"
+     }
+    ],
+    "P571": [
+     {
+      "v": "7.5.2015"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q28661501",
+      "v": "Kulturdenkmal in Hamburg"
+     }
+    ]
+   }
+  },
+  "Q26217273": {
+   "label": "Speicherstadtrathaus",
+   "description": "Verwaltungsgebäude der Hamburger Hafen und Logistik AG in Hamburg",
+   "wiki": "Speicherstadtrathaus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q40089",
+      "v": "Mauerziegel"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q28661501",
+      "v": "Kulturdenkmal in Hamburg"
+     }
+    ]
+   }
+  },
+  "Q264222": {
+   "label": "Hansa-Theater",
+   "description": "Varietétheater in Hamburg",
+   "wiki": "Hansa-Theater (Hamburg)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q24354",
+      "v": "Theatergebäude"
+     },
+     {
+      "id": "Q41253",
+      "v": "Kino"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q28661501",
+      "v": "Kulturdenkmal in Hamburg"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Steindamm 17, 20099 Hamburg"
+     }
+    ]
+   }
+  },
+  "Q2651483": {
+   "label": "Alsterarkaden",
+   "description": "Bauwerk in Hamburg",
+   "wiki": "Alsterarkaden",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q79007",
+      "v": "Innerortsstraße"
+     },
+     {
+      "id": "Q1497375",
+      "v": "Bauensemble"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q2651509": {
+   "label": "Alsterschwimmhalle",
+   "description": "Hallenbad im Hamburger Stadtteil Hohenfelde",
+   "wiki": "Alsterschwimmhalle",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q357380",
+      "v": "Hallenbad"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q2545604",
+      "v": "Walter Neuhäusser"
+     },
+     {
+      "id": "Q139819488",
+      "v": "Horst Niessen"
+     },
+     {
+      "id": "Q1489814",
+      "v": "Rolf Störmer"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q28661501",
+      "v": "Kulturdenkmal in Hamburg"
+     }
+    ]
+   }
+  },
+  "Q27478711": {
+   "label": "Wasserschloss Speicherstadt Hamburg",
+   "description": "Gebäude in der Hamburger Speicherstadt",
+   "wiki": "Wasserschloss (Hamburg)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q811979",
+      "v": "Bauwerk"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1899"
+     },
+     {
+      "v": "1912"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q28661501",
+      "v": "Kulturdenkmal in Hamburg"
+     }
+    ]
+   }
+  },
+  "Q2801439": {
+   "label": "Sprinkenhof",
+   "description": "Kontorhaus im Hamburger Kontorhausviertel",
+   "wiki": "Sprinkenhof",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1021645",
+      "v": "Bürogebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q18957674",
+      "v": "Hans Gerson"
+     },
+     {
+      "id": "Q21506178",
+      "v": "Oskar Gerson"
+     },
+     {
+      "id": "Q77380",
+      "v": "Fritz Höger"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q28661501",
+      "v": "Kulturdenkmal in Hamburg"
+     }
+    ]
+   }
+  },
+  "Q28381828": {
+   "label": "Miramar-Haus",
+   "description": "historisches Kontorhaus in Hamburg",
+   "wiki": "Miramar-Haus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1783234",
+      "v": "Kontorhaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q3987": {
+   "label": "Hamburger Rathaus",
+   "description": "Sitz der Bürgerschaft und des Senats von Hamburg",
+   "wiki": "Hamburger Rathaus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q543654",
+      "v": "Rathaus"
+     },
+     {
+      "id": "Q7138926",
+      "v": "Parlamentsgebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q77382",
+      "v": "Martin Haller"
+     },
+     {
+      "id": "Q124611",
+      "v": "Bernhard Hanssen"
+     },
+     {
+      "id": "Q126499",
+      "v": "Emil Meerwein"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q502163",
+      "v": "Neorenaissance"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1886"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q28661501",
+      "v": "Kulturdenkmal in Hamburg"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "112 m"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Rathausmarkt 1, 20095 Hamburg"
+     }
+    ]
+   }
+  },
+  "Q425622": {
+   "label": "Ehemalige Hauptkirche St. Nikolai",
+   "description": "Kirchengebäude in Hamburg",
+   "wiki": "Ehemalige Hauptkirche St. Nikolai (Hamburg)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     },
+     {
+      "id": "Q1885014",
+      "v": "Mahnmal"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q681007",
+      "v": "George Gilbert Scott"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q44269",
+      "v": "Nikolaus von Myra"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q186363",
+      "v": "Neogotik"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q40089",
+      "v": "Mauerziegel"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1195"
+     }
+    ],
+    "P576": [
+     {
+      "v": "1943"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "147.88 m"
+     }
+    ]
+   }
+  },
+  "Q450777": {
+   "label": "Deutsches Schauspielhaus",
+   "description": "großes Theatergebäude im Hamburger Stadtteil St. Georg",
+   "wiki": "Deutsches Schauspielhaus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q24354",
+      "v": "Theatergebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q694854",
+      "v": "Büro Fellner & Helmer"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q118288065",
+      "v": "Deutsches Schauspielhaus"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1901"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q1370468",
+      "v": "bauliche Rekonstruktion"
+     },
+     {
+      "id": "Q1370468",
+      "v": "bauliche Rekonstruktion"
+     },
+     {
+      "id": "Q1370468",
+      "v": "bauliche Rekonstruktion"
+     },
+     {
+      "id": "Q1370468",
+      "v": "bauliche Rekonstruktion"
+     }
+    ],
+    "P1083": [
+     {
+      "v": "1192"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q28661501",
+      "v": "Kulturdenkmal in Hamburg"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1901"
+     }
+    ]
+   }
+  },
+  "Q456499": {
+   "label": "Thalia Theater",
+   "description": "Theater in Hamburg",
+   "wiki": "Thalia Theater (Hamburg)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q24354",
+      "v": "Theatergebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1877438",
+      "v": "Lundt & Kallmorgen"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q113044298",
+      "v": "Thalia Theater"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1912"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q1370468",
+      "v": "bauliche Rekonstruktion"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q28661501",
+      "v": "Kulturdenkmal in Hamburg"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1912"
+     }
+    ]
+   }
+  },
+  "Q458970": {
+   "label": "St.-Pauli-Landungsbrücken",
+   "description": "Verkehrsknotenpunkt in Hamburg",
+   "wiki": "St. Pauli-Landungsbrücken",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3082251",
+      "v": "Pier"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1839"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1839"
+     }
+    ]
+   }
+  },
+  "Q460264": {
+   "label": "St.-Pauli-Elbtunnel",
+   "description": "Tunnel von 1911 unter der Elbe in Hamburg, der nur über Aufzüge zugänglich ist",
+   "wiki": "St.-Pauli-Elbtunnel",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q2354973",
+      "v": "Straßentunnel"
+     },
+     {
+      "id": "Q11129889",
+      "v": "Unterwassertunnel"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1911"
+     }
+    ]
+   }
+  },
+  "Q47542267": {
+   "label": "The Fontenay",
+   "description": "Luxushotel in Hamburg",
+   "wiki": "The Fontenay",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q4830453",
+      "v": "Gewerbebetrieb"
+     },
+     {
+      "id": "Q27686",
+      "v": "Hotel"
+     }
+    ],
+    "P571": [
+     {
+      "v": "2018"
+     }
+    ]
+   }
+  },
+  "Q51912": {
+   "label": "Al-Quds-Moschee Hamburg",
+   "description": "ehemalige Moschee in Hamburg",
+   "wiki": "Al-Quds-Moschee Hamburg",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q32815",
+      "v": "Moschee"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1993"
+     }
+    ]
+   }
+  },
+  "Q535443": {
+   "label": "Hauptkirche St. Petri",
+   "description": "Hauptkirche Hamburgs",
+   "wiki": "Hauptkirche Sankt Petri",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1573033",
+      "v": "Hamburger Hauptkirche"
+     },
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q33923",
+      "v": "Petrus"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q695863",
+      "v": "Backsteingotik"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q40089",
+      "v": "Mauerziegel"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q90151269",
+      "v": "Kirchengemeinde Sankt Petri"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1310"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q28661501",
+      "v": "Kulturdenkmal in Hamburg"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "132.2 m"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Mönckebergstraße"
+     }
+    ]
+   }
+  },
+  "Q542783": {
+   "label": "Chilehaus",
+   "description": "Kontorhaus im Hamburger Kontorhausviertel",
+   "wiki": "Chilehaus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1021645",
+      "v": "Bürogebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q77380",
+      "v": "Fritz Höger"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q468050",
+      "v": "Backsteinexpressionismus"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1924"
+     },
+     {
+      "v": "1922"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q28661501",
+      "v": "Kulturdenkmal in Hamburg"
+     },
+     {
+      "id": "Q43113623",
+      "v": "Teil einer UNESCO Welterbestätte"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1924"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Depenau 1­–3, 20095 Hamburg"
+     },
+     {
+      "v": "Burchardplatz 1–2, 20095 Hamburg"
+     },
+     {
+      "v": "Burchardstraße 13–15, 20095 Hamburg"
+     },
+     {
+      "v": "Pumpen 6–8, 20095 Hamburg"
+     },
+     {
+      "v": "Meßberg 2–3, 20095 Hamburg"
+     },
+     {
+      "v": "Fischertwiete, 20095 Hamburg"
+     },
+     {
+      "v": "Klingberg 1–3, 20095 Hamburg"
+     }
+    ]
+   }
+  },
+  "Q564532": {
+   "label": "St. Jacobi",
+   "description": "Kirchengebäude in Hamburg",
+   "wiki": "Hauptkirche Sankt Jacobi",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q43999",
+      "v": "Jakobus der Ältere"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q695863",
+      "v": "Backsteingotik"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q40089",
+      "v": "Mauerziegel"
+     }
+    ],
+    "P571": [
+     {
+      "v": "13. Jahrhundert"
+     }
+    ],
+    "P576": [
+     {
+      "v": "1944"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q28661501",
+      "v": "Kulturdenkmal in Hamburg"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "125 m"
+     }
+    ]
+   }
+  },
+  "Q573491": {
+   "label": "St. Marien-Dom",
+   "description": "Kathedralkirche, Kirchengebäude in Hamburg",
+   "wiki": "St. Marien-Dom (Hamburg)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q2977",
+      "v": "Kathedrale"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q105467",
+      "v": "Arnold Güldenpfennig"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q859115",
+      "v": "Jungfrauengeburt"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q744373",
+      "v": "Neuromanik"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q40089",
+      "v": "Mauerziegel"
+     }
+    ],
+    "P571": [
+     {
+      "v": "28.6.1893"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q28661501",
+      "v": "Kulturdenkmal in Hamburg"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "64 m"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Am Mariendom 1"
+     }
+    ]
+   }
+  },
+  "Q616790": {
+   "label": "St. Katharinen (Hamburg)",
+   "description": "Kirchengebäude in Hamburg",
+   "wiki": "Hauptkirche Sankt Katharinen",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1573033",
+      "v": "Hamburger Hauptkirche"
+     },
+     {
+      "id": "Q317557",
+      "v": "Pfarrkirche"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q179718",
+      "v": "Katharina von Alexandrien"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q695863",
+      "v": "Backsteingotik"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q40089",
+      "v": "Mauerziegel"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q28661501",
+      "v": "Kulturdenkmal in Hamburg"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "116.7 m"
+     }
+    ]
+   }
+  },
+  "Q648375": {
+   "label": "Heinrich-Hertz-Turm",
+   "description": "Sendeturm in Hamburg",
+   "wiki": "Heinrich-Hertz-Turm",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q11166728",
+      "v": "Fernsehturm"
+     }
+    ],
+    "P88": [
+     {
+      "id": "Q181653",
+      "v": "Deutsche Bundespost"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q41257",
+      "v": "Heinrich Hertz"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q22657",
+      "v": "Beton"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1968"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q28661501",
+      "v": "Kulturdenkmal in Hamburg"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "279.2 m"
+     }
+    ]
+   }
+  },
+  "Q665171": {
+   "label": "Museum für Hamburgische Geschichte",
+   "description": "Kulturhistorisches Museum in Hamburg",
+   "wiki": "Museum für Hamburgische Geschichte",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16735822",
+      "v": "Historisches Museum"
+     },
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q77353",
+      "v": "Fritz Schumacher"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1908"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q28661501",
+      "v": "Kulturdenkmal in Hamburg"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1922"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Holstenwall 24, 20355 Hamburg"
+     }
+    ]
+   }
+  },
+  "Q673223": {
+   "label": "Elbphilharmonie",
+   "description": "Konzerthaus in Hamburg",
+   "wiki": "Elbphilharmonie",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1060829",
+      "v": "Konzerthaus"
+     },
+     {
+      "id": "Q27686",
+      "v": "Hotel"
+     },
+     {
+      "id": "Q39919471",
+      "v": "ehemalige Lagerhalle"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q308776",
+      "v": "Herzog & de Meuron"
+     },
+     {
+      "id": "Q1456008",
+      "v": "Werner Kallmorgen"
+     }
+    ],
+    "P88": [
+     {
+      "id": "Q811085",
+      "v": "Elbphilharmonie Bau KG"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q1644",
+      "v": "Elbe"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q184190",
+      "v": "Stahlbeton"
+     },
+     {
+      "id": "Q11469",
+      "v": "Glas"
+     },
+     {
+      "id": "Q11427",
+      "v": "Stahl"
+     },
+     {
+      "id": "Q22657",
+      "v": "Beton"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1963"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     },
+     {
+      "id": "Q59913255",
+      "v": "Bauende"
+     },
+     {
+      "id": "Q3010369",
+      "v": "Einweihungsfeier"
+     }
+    ],
+    "P1449": [
+     {
+      "v": "Elphi"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "11.1.2017"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "110 m"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Platz der Deutschen Einheit 4, 20457 Hamburg"
+     }
+    ]
+   }
+  },
+  "Q674472": {
+   "label": "Hauptkirche St. Michaelis",
+   "description": "barocker Sakralbau in Hamburg",
+   "wiki": "Hauptkirche Sankt Michaelis",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1712602",
+      "v": "Julius Faulwasser"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q45581",
+      "v": "Erzengel Michael"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q840829",
+      "v": "Barockarchitektur"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q40089",
+      "v": "Mauerziegel"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1647"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q28661501",
+      "v": "Kulturdenkmal in Hamburg"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "132.14 m"
+     }
+    ]
+   }
+  },
+  "Q705453": {
+   "label": "Hamburgische Staatsoper",
+   "description": "Opernhaus",
+   "wiki": "Hamburgische Staatsoper",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q153562",
+      "v": "Opernhaus"
+     },
+     {
+      "id": "Q24354",
+      "v": "Theatergebäude"
+     },
+     {
+      "id": "Q11812394",
+      "v": "Theatergesellschaft"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1527062",
+      "v": "Girolamo Sartorio"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1677"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q17781833",
+      "v": "Zerstörung"
+     },
+     {
+      "id": "Q1370468",
+      "v": "bauliche Rekonstruktion"
+     },
+     {
+      "id": "Q16571590",
+      "v": "Wiedereröffnung"
+     },
+     {
+      "id": "Q2478058",
+      "v": "Rekonstruktion"
+     },
+     {
+      "id": "Q3010369",
+      "v": "Einweihungsfeier"
+     }
+    ],
+    "P1083": [
+     {
+      "v": "1690"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q28661501",
+      "v": "Kulturdenkmal in Hamburg"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1955"
+     }
+    ]
+   }
+  },
+  "Q76164745": {
+   "label": "Hübner-Haus",
+   "description": "Kontorhaus in Hamburg, Deutschland",
+   "wiki": "Hübner-Haus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1783234",
+      "v": "Kontorhaus"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q20979064",
+      "v": "Henry Grell"
+     }
+    ]
+   }
+  },
+  "Q81332733": {
+   "label": "Flakturm IV",
+   "description": "Flakturm in St. Pauli, Hamburg",
+   "wiki": "Grüner Bunker",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q91914",
+      "v": "Flakturm"
+     }
+    ]
+   }
+  },
+  "Q826376": {
+   "label": "Radisson Blu Hotel Hamburg",
+   "description": "Hochhaus und Hotel in Hamburg",
+   "wiki": "Radisson Blu Hotel Hamburg",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q27686",
+      "v": "Hotel"
+     },
+     {
+      "id": "Q18142",
+      "v": "Hochhaus"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q19964131",
+      "v": "Jost Schramm"
+     },
+     {
+      "id": "Q1515298",
+      "v": "Gerd Pempelfort"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1973"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q811165",
+      "v": "Baudenkmal"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1973"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "108 m"
+     }
+    ]
+   }
+  },
+  "Q835524": {
+   "label": "Theater im Hafen Hamburg",
+   "description": "Musical-Theater im Hafen Hamburg",
+   "wiki": "Theater im Hafen Hamburg",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1954948",
+      "v": "Musical-Theater"
+     }
+    ]
+   }
+  },
+  "Q873918": {
+   "label": "Hotel Atlantic",
+   "description": "Luxushotel in Hamburg",
+   "wiki": "Hotel Atlantic",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q455403",
+      "v": "Grand Hotel"
+     }
+    ],
+    "P88": [
+     {
+      "id": "Q696056",
+      "v": "HAPAG"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1909"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q28661501",
+      "v": "Kulturdenkmal in Hamburg"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1909"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "An der Alster 72 – 79, 20099 Hamburg"
+     }
+    ]
+   }
+  },
+  "Q875571": {
+   "label": "Rödingsmarkt",
+   "description": "U-Bahnhof in Hamburg",
+   "wiki": "U-Bahnhof Rödingsmarkt",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q928830",
+      "v": "U-Bahnhof"
+     },
+     {
+      "id": "Q11670533",
+      "v": "Hochbahnhof"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q2124783",
+      "v": "Raabe & Wöhlecke"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q15059619",
+      "v": "Rödingsmarkt"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q28661501",
+      "v": "Kulturdenkmal in Hamburg"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "29.6.1912"
+     }
+    ]
+   }
+  },
+  "Q881121": {
+   "label": "Laeiszhalle",
+   "description": "Konzerthalle in Hamburg, Deutschland",
+   "wiki": "Laeiszhalle",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1060829",
+      "v": "Konzerthaus"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q77382",
+      "v": "Martin Haller"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q911397",
+      "v": "Neobarock"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1908"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q28661501",
+      "v": "Kulturdenkmal in Hamburg"
+     }
+    ]
+   }
+  },
+  "Q896052": {
+   "label": "Museum für Kunst und Gewerbe Hamburg",
+   "description": "Museum für angewandte Kunst in Hamburg, Deutschland",
+   "wiki": "Museum für Kunst und Gewerbe Hamburg",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q207694",
+      "v": "Kunstmuseum"
+     },
+     {
+      "id": "Q24699794",
+      "v": "Museumsgebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q96639",
+      "v": "Carl Johann Christian Zimmermann"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1868"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q28661501",
+      "v": "Kulturdenkmal in Hamburg"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1874"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Steintorplatz"
+     }
+    ]
+   }
+  },
+  "Q896114": {
+   "label": "Congress Center Hamburg",
+   "description": "Kongresszentrum am Bahnhof Hamburg-Dammtor in Hamburg, Deutschland",
+   "wiki": "Congress Center Hamburg",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1378975",
+      "v": "Kongresszentrum"
+     },
+     {
+      "id": "Q1763828",
+      "v": "Mehrzweckhalle"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q994776",
+      "v": "Brutalismus"
+     }
+    ],
+    "P1083": [
+     {
+      "v": "12500"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "14.4.1973"
+     }
+    ]
+   }
+  },
+  "Q896171": {
+   "label": "Ohnsorg-Theater",
+   "description": "plattdeutsches Theater in Hamburg nördlich des Hauptbahnhofs",
+   "wiki": "Ohnsorg-Theater",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q24354",
+      "v": "Theatergebäude"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q91724",
+      "v": "Richard Ohnsorg"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1902"
+     }
+    ]
+   }
+  },
+  "Q9187671": {
+   "label": "Gnadenkirche",
+   "description": "russisch-orthodoxe Kirche in Hamburg-St.Pauli",
+   "wiki": "Kirche des Hl. Johannes von Kronstadt zu Hamburg",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q2031836",
+      "v": "orthodoxes Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1406726",
+      "v": "Fernando Lorenzen"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q561659",
+      "v": "Johannes von Kronstadt"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q51879601",
+      "v": "Historismus"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q8063",
+      "v": "Gestein"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1906"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  }
+ }
+}
