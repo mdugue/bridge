@@ -1091,20 +1091,25 @@ and format); the tokens can rotate. The batch page
 token and file-name template per product in `batchConfig.products`, which
 is what `providers/sn.py` reads. The
 Basis-DLM is one statewide package replaced quarterly under the same URL
-(`basisdlm_sn_shape.zip`, 1.23 GB, `Last-Modified` 2026-07-28 when
-checked; `BASIS_DLM` in `providers/sn.py`), so its edition must be noted at
-download time: `curl -sI -r 0-0` on the URL prints the file date, and the
-ZIP carries a metadata file.
+(`basisdlm_sn_shape.zip`, 1.26 GB; `BASIS_DLM` in `providers/sn.py`), so
+its edition must be noted at download time: the ZIP carries
+`basisdlm_akt.csv`, dated with the release (2026-10-20 for the package
+every committed site is baked from since 2026-11-01), recorded as
+`geosn["Basis-DLM"].lastModified` in each Saxon site's `provenance.json`.
 
 **Where the OSM values come from.** The pipeline reads the Geofabrik
 extract in `data/_raw/<provider>/osm/`; its timestamp is printed by
 `osmium fileinfo -e <file>.osm.pbf` (`osmosis_replication_timestamp`).
-The committed walls came from such an extract; the committed lamps,
-platforms and bridge structures came from Overpass queries in the old bash
-bakes, whose cached responses carried the data timestamp in
-`osm3s.timestamp_osm_base`. `data/dresden/provenance.json` records both sources.
-No raw file is committed, so the record keeps git dates as bounds until
-someone reads the timestamps.
+Geofabrik resets connections from the cloud container, so the extract is
+placed by hand under the Geofabrik name the spec expects (`spec.osm`):
+BBBike's city extracts (Dresden for Dresden and Meißen, Leipzig for
+Leipzig and Grimma, Hamburg, München) and openstreetmap.fr's Arnsberg
+region for Unna — every committed site was re-baked from them on
+2026-11-01, except the two steps that need the laser scan GeoSN did not
+serve that day (`lowveg`, `small-buildings` on the Saxon sites). The
+extract's date is its `Last-Modified` (BBBike) or `state.txt`
+(openstreetmap.fr), recorded as each product's `dataAsOf` in the site's
+`provenance.json`.
 
 **Licences.** Per provider in `sites/providers.ts` (`licence`, `credit`):
 *Datenlizenz Deutschland – Namensnennung 2.0* for GeoSN and Hamburg,

@@ -380,17 +380,12 @@ before it.
 | DOM1 | all fifteen | the **same laser flight** as the DGM1: 2024-11-30 / 2024-11-27 and 2024-11-30 | GeoSN download service (DOM1, DGM1 and the point cloud carry identical dates) | derived canopy files 2026-06-12; the eleven new tiles 2026-09-25 |
 | LoD2 | all fifteen | the western column (33408_*) and 33410_5656/5658: model **2023**, built from the 2016 laser scan, the 2021 Basis-DLM footprints and the 2016 DGM; 33412_5656/5658 and 33414_5656/5658: model **2024**, from the 2016 laser scan, the 2022 Basis-DLM and the 2016 DGM; the southern row (5654) and 33416_5656: model **2023**, footprints from the 2020–2024 Basis-DLM; 33416_5658 (forest, one building): model **2021**. The objects were exported 2025-04-26 … 2025-07-07 (`creationDate`) | GeoSN download service; a few older objects still carry `Stand_*` attributes with the same values | 2026-06-11; the eleven new tiles 2026-09-25 |
 | DOP (RGBI) | all fifteen | flown **2024-03-19** (leaf-off) | GeoSN download service | derived roof colours and NDVI 2026-06-16/17; the eleven new tiles 2026-09-25 |
-| Basis-DLM | statewide package | the quarterly package current in **June 2026**; the exact release date was not noted and cannot be read from the portal afterwards because the package is replaced under the same file name (the share's file was dated 2026-07-28 when checked) | download page: "updated quarterly"; git history | derived files 2026-06-12, rail and bridge files re-baked 2026-09-18; the eleven new tiles baked 2026-09-25 from the package dated 2026-07-28 |
-| OSM via Overpass (no longer used by the bakes; the committed lamp, platform and bridge-structure files still come from it) | the original four | the live database on the fetch day: 2026-06-12 or earlier (lamps), 2026-06-17 or earlier (platforms, bridge structure) | git history; the cached raw responses carry the exact `timestamp_osm_base` | 2026-06-12 / 2026-06-17 |
-| OSM via BBBike | Dresden extract | the extract of 2026-09-19 (fountains, stairs, paving, sports grounds, trams, landing stages, and every OSM layer of the eleven tiles added 2026-09-25: Geofabrik could not be reached from the build machine) | `data/dresden/provenance.json` | 2026-09-24 |
-| OSM via Geofabrik | statewide extract | the daily extract of 2026-09-18 or shortly before | git history (walls re-baked that day); `osmium fileinfo -e` on the raw file prints the exact timestamp | 2026-09-18 |
-| OSM via BBBike (stairs; every OSM layer of the eleven tiles added 2026-09-25) | the Dresden city extract | the extract of 2026-09-19 | the file's `Last-Modified`; `data/dresden/provenance.json` | 2026-09-24 |
-| OSM via BBBike (paving; also the eleven tiles added 2026-09-25) | the Dresden city extract | the extract of 2026-09-19 | the file's `Last-Modified`; `data/dresden/provenance.json` | 2026-09-25 |
-| OSM via BBBike (building names, addresses, storeys, entrances, shops, listed buildings; all fifteen tiles) | the Dresden city extract | the extract of 2026-09-26 | the file's `Last-Modified`; `data/dresden/provenance.json` | 2026-09-27 |
+| Basis-DLM | statewide package | the package released **2026-10-20** (`basisdlm_akt.csv` and the package inside the ZIP are dated that day) | the ZIP's metadata; `data/dresden/provenance.json` | every derived file re-baked 2026-11-01 |
+| OSM via BBBike | the Dresden city extract | the extract of **2026-10-31** (`Last-Modified` 16:49 UTC), every OSM layer of all fifteen tiles; only the hedges and the scan's small buildings still come from the extracts of 2026-09-19/23, because their re-bake needs the laser scan GeoSN does not serve at the moment | the file's `Last-Modified`; `data/dresden/provenance.json` | 2026-11-01 |
 | Verkehrsmengen | all fifteen | counts from 2010 to 2026, mostly 2023–2026, read on **2026-10-01** | the city's WFS; `data/dresden/provenance.json` | 2026-10-01 |
 | Rad-Dauerzählstellen | — | live, when the layer is switched on and every five minutes | the city's WFS | not committed |
 | GTFS timetable | the whole site | the feed of **2026-09-26**; the days 2026-10-01 (working day), 2026-10-10 (Saturday), 2026-10-04 (Sunday) | the file's `Last-Modified`; `data/dresden/transit/trams.json` | 2026-10-01 |
-| Mapillary objects (street lamps) | Dresden (fifteen tiles), Grimma (two), Meißen (one), Unna (two) | detections last seen 2020 – 2026 | each object's `last_seen_at`, each photo's place and time; the cache under `data/_raw/<provider>/mapillary/<tile>.v2.json` | 2026-10-21 |
+| Mapillary objects (street lamps) | Dresden (fifteen tiles), Grimma (two), Meißen (one), Unna (two) | detections last seen 2020 – 2026 | each object's `last_seen_at`, each photo's place and time; the cache under `data/_raw/<provider>/mapillary/<tile>.v2.json`, fetched again 2026-11-01 | 2026-11-01 |
 | Mapillary panoramas (facade readings, shop windows) | Dresden (fifteen tiles), Leipzig, München, Hamburg (four each), Grimma (two), Meißen (one); Unna has none | taken 2017 – 2026: Dresden mostly 2025, Leipzig 2023 – 2025, München 2021 – 2026, mostly 2026, Hamburg 2025, Grimma 2024 – 2026, Meißen 2026 | each image's `captured_at`; the measurements under `data/_raw/<provider>/mapillary/facades/` (the photos are not kept) | 2026-10-08 (Dresden), 2026-10-09 |
 | Copernicus DEM GLO-30 | every site: its tiles and 10 km around them | the model as its public cloud copy serves it on the fetch day (© DLR e.V. 2010-2014, © Airbus Defence and Space GmbH 2014-2018) | the window cached under `data/_raw/glo30/<site>.tif`, read 2026-10-21 | not committed (only the sky view and horizon baked from it) |
 | DWD phenology | the observers within 30 km of each city | the years 2010–2023 | the viewer's season table | as part of the code |
@@ -398,12 +393,15 @@ before it.
 Note the **mismatch of dates inside one picture**: the ground and the tree
 heights are from late 2024, the building shapes from a 2016 laser scan with
 2021/2022 footprints, the roof colours from March 2024, and the lamps and
-walls from mid-2026 OpenStreetMap. A building finished in 2023 can have a
+walls from late-October-2026 OpenStreetMap. A building finished in 2023 can have a
 2024 roof colour and no 3D shape.
 
-Still to record at the next download: the Basis-DLM package's release date
-(read the `Last-Modified` of the ZIP or the metadata inside it) and the
-Geofabrik extract's timestamp.
+The other sites took the same re-bake on 2026-11-01: Leipzig and Grimma
+from BBBike's Leipzig extract, Meißen from its Dresden extract, Hamburg and
+München from their own (all 2026-10-31), Unna from openstreetmap.fr's
+Arnsberg extract (2026-11-01); the Saxon sites from the Basis-DLM of
+2026-10-20, Unna from NRW's of 2026-10-20 and München from Bavaria's of
+2026-07-03. Each site's `provenance.json` records it.
 
 ## Where exactly each file came from
 
