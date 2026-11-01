@@ -230,7 +230,7 @@ Quellenvermerken.
 
 ## Ein Gebäude befragen
 
-Die Stadt selbst trägt keine Schrift. Du kannst sie stattdessen fragen:
+Die Stadt trägt keine Beschriftung, bis du fragst. Frag sie:
 Mit der Maus genügt ein **Klick** auf ein Gebäude, auf einem Touchscreen
 **langes Drücken** (den Finger eine halbe Sekunde ruhig halten); `I`
 fragt, was unter dem Mauszeiger steht (im immersiven Modus, der den
@@ -238,7 +238,19 @@ Zeiger ausblendet, was in der Bildmitte steht; nur dort markiert ein
 Punkt die Mitte). Das Gebäude bekommt eine feine
 Schraffur und eine Linie um seinen Umriss, beide in der pinken
 Akzentfarbe der Bedienelemente, und eine Karte öffnet sich. Ein Klick ins Leere
-schließt sie wieder. Ein kleines Haus musst du
+schließt sie wieder. Neben dem Gebäude steht jetzt sein **Name** in der
+Stadt selbst, solange die Frage gilt: bei einem Wahrzeichen groß, darunter
+wann und von wem es erbaut, wann es wiederaufgebaut wurde und wie hoch es
+ist (aus Wikidata, auch auf der Karte); bei einem benannten Gebäude mit seiner Adresse; bei
+einem gewöhnlichen Haus nur die Adresse, klein. Von der Straße aus steht
+der Name aufrecht über oder neben dem Gebäude, zur Fassade gedreht, die
+du am besten siehst, mit einer feinen Linie dorthin; aus der Luft liegt
+er neben ihm auf dem Boden; ganz nah ist er eine Inschrift am Sockel; von
+weit nur der Name. Er weicht aus, wenn ein anderes Gebäude ihn verdecken
+oder ein Bedienfeld ihn überdecken würde, erscheint als blasse Kontur, wo
+die Stadt ihn doch verdeckt, und ist in jedem Darstellungsstil anders
+gesetzt — im Comic in einem gelben Erzählkasten, im Schwarzplan, von oben
+gesehen, auf dem Boden wie die Beschriftung eines Plans. Ein kleines Haus musst du
 nicht genau treffen: Steht direkt unter dem Finger nichts, antwortet das
 Gebäude, zu dem das meiste rund um die Stelle gehört. Auf dem Telefon ist
 die Karte ein Blatt am unteren Rand: eingeklappt sagt es, was das Gebäude

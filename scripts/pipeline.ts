@@ -23,7 +23,8 @@
  *                                     roofs, lowveg, cultivated, skyview,
  *                                     small-buildings, landmarks,
  *                                     structures, roof-colour, dormers;
- *                                     then, once for the site, transit)
+ *                                     then, once for the site, transit
+ *                                     and landmark-facts)
  *   bun run bake <site> --step lowveg --research   also every hedge/shrub
  *                                     candidate, under the raw folder
  *   bun run bake <site> --jobs 3      each step's tiles three at a time,
