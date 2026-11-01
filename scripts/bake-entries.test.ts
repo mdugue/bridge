@@ -20,6 +20,7 @@ const NOT_A_BAKE: Record<string, string> = {
   "lib/city/provenance.ts": "published uncached every run",
   "lib/city/tram-timetable.ts": "published uncached every run",
   "lib/city/landmark-facts.ts": "published uncached every run",
+  "lib/city/murals.ts": "published uncached every run",
   "lib/city/landmarks.ts": "the tileset's extras, built uncached every run",
   "lib/city/valley-fog.ts": "the tileset's extras, built uncached every run",
   "lib/city/walks.ts": "the walks' bundle, published uncached every run",

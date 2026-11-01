@@ -8,6 +8,7 @@ import {
   type Matrix4,
   type Mesh,
   NearestFilter,
+  type Object3D,
   type Ray,
   RGBAFormat,
   Raycaster,
@@ -88,6 +89,14 @@ export interface CityLayer {
   /** marks the objects someone asks about (the clay's pencil hatch); an
    *  empty set clears the mark */
   mark: (objects: ReadonlySet<number>) => void;
+  /**
+   * Hangs something drawn beside the mesh on a building (a mural,
+   * mural-layer.ts): it is shown while all of the building is — gone with
+   * a demolish of any of its parts, and while a design stands in for one.
+   * `buildingId` is the building's LoD2 id (`buildingId` in the table,
+   * every part's alike); one the tile does not hold is shown always.
+   */
+  hang: (object: Object3D, buildingId: string) => void;
   mesh: Mesh;
   table: CityObjectTable;
   /** what the table's columns and the texture packed from them keep on the
@@ -254,6 +263,20 @@ export function ensureCityBvh(mesh: Mesh): void {
 }
 
 /**
+ * Whether what hangs on a building (CityLayer.hang) shows: while every
+ * object of it stands — none demolished (`alive`), none a design stands in
+ * for (`hidden`). One whose building the tile does not hold (no objects)
+ * always shows.
+ */
+export function hangsShown(
+  objects: readonly number[],
+  alive: Uint8Array,
+  hidden: ReadonlySet<number>
+): boolean {
+  return objects.every((i) => alive[i] === 1 && !hidden.has(i));
+}
+
+/**
  * Dresses a streamed city mesh: the glTF feature id and place on the wall
  * (the windows', a roof vertex flagged in it) under the names the clay
  * shader reads, the tile's clay material; its BVH comes when a ray needs
@@ -395,6 +418,13 @@ export function dressCity(
   };
   // the asked objects, kept for the facade readings' repack
   let marked: ReadonlySet<number> = new Set();
+  /** what hangs on a building (`hang`): shown while its objects are */
+  const hangers: { at: number[]; object: Object3D }[] = [];
+  const showHangers = () => {
+    for (const { at, object } of hangers) {
+      object.visible = hangsShown(at, alive, hidden);
+    }
+  };
   const layer: CityLayer = {
     tile,
     mesh,
@@ -412,6 +442,7 @@ export function dressCity(
       for (const i of doomed) {
         alive[i] = 0;
       }
+      showHangers();
       // the index is the worker's while it builds the BVH: rebuilt after
       // (unless the tile has left by then), its BVH left to the worker
       // again rather than built here in the frame
@@ -435,6 +466,7 @@ export function dressCity(
         return false;
       }
       hidden = new Set(next);
+      showHangers();
       // the index is the worker's while it builds the BVH: as a demolish
       if (prepared) {
         held ??= prepared.then(settle, settle).finally(() => {
@@ -491,6 +523,19 @@ export function dressCity(
           prepared = null;
         });
       return prepared;
+    },
+    hang: (object, buildingId) => {
+      const ids = metadata.tableAccessors[0];
+      const at: number[] = [];
+      if (ids && "buildingId" in ids.properties) {
+        for (let i = 0; i < count; i++) {
+          if (String(ids.getPropertyValue("buildingId", i)) === buildingId) {
+            at.push(i);
+          }
+        }
+      }
+      hangers.push({ at, object });
+      showHangers();
     },
     mark: (next) => {
       marked = next;
