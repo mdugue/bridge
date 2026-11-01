@@ -129,6 +129,10 @@ A `source` is an https URL (Wikipedia, an institution's page, a paper) or
   higher, then a pause; the story; today's notes and the closer look
   after its label, each set off by a pause and said a little lower
   (`stopSpeech`, `spokenLines`).
+- **On a phone** the card is a sheet at the bottom, at most 62 % of the
+  screen high, that starts folded: the title and the way on, the scene
+  above free. Its handle unfolds it by a tap or a drag up and folds it by
+  a drag down; folded, it shows no photo and no story.
 
 ## Writing one
 

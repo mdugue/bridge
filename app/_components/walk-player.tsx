@@ -651,22 +651,56 @@ function StopHeading({ index, walk }: { index: number; walk: Walk }) {
   );
 }
 
-/** The way on: back, fold the text away (a phone), on or the end. */
-function WalkFooter({
-  coarse,
+/** How far (px) a drag on a phone's sheet handle must go to fold or
+ *  unfold it; less is a tap, which toggles. */
+const SHEET_DRAG_PX = 24;
+
+/**
+ * A phone's walk card is a sheet at the bottom with two heights: low, the
+ * title and the way on, the scene above it free; high, the story too. Its
+ * handle folds and unfolds it, by a tap or a drag up or down.
+ */
+function SheetHandle({
   folded,
+  onFold,
+}: {
+  folded: boolean;
+  onFold: (folded: boolean) => void;
+}) {
+  const [from, setFrom] = useState<number | null>(null);
+  return (
+    <button
+      aria-expanded={!folded}
+      aria-label={folded ? "Text zeigen" : "Text einklappen"}
+      className="flex w-full shrink-0 touch-none justify-center pt-2 pb-1"
+      data-testid="walk-sheet-handle"
+      onPointerCancel={() => setFrom(null)}
+      onPointerDown={(e) => {
+        e.currentTarget.setPointerCapture(e.pointerId);
+        setFrom(e.clientY);
+      }}
+      onPointerUp={(e) => {
+        const dy = from === null ? 0 : e.clientY - from;
+        setFrom(null);
+        onFold(Math.abs(dy) < SHEET_DRAG_PX ? !folded : dy > 0);
+      }}
+      type="button"
+    >
+      <span aria-hidden className="h-1.5 w-10 rounded-full bg-foreground/20" />
+    </button>
+  );
+}
+
+/** The way on: back, on or the end. */
+function WalkFooter({
   index,
   last,
   onClose,
-  onFold,
   onIndex,
 }: {
-  coarse: boolean;
-  folded: boolean;
   index: number;
   last: boolean;
   onClose: () => void;
-  onFold: () => void;
   onIndex: (index: number) => void;
 }) {
   return (
@@ -679,15 +713,6 @@ function WalkFooter({
       >
         <ChevronLeftIcon /> Zurück
       </Button>
-      {coarse && (
-        <button
-          className="text-[11px] text-muted-foreground underline decoration-dotted underline-offset-2"
-          onClick={onFold}
-          type="button"
-        >
-          {folded ? "Text zeigen" : "Text einklappen"}
-        </button>
-      )}
       <span className="flex-1" />
       <Button
         className="px-3.5"
@@ -699,6 +724,70 @@ function WalkFooter({
       </Button>
     </CardFooter>
   );
+}
+
+/** The card's corner: read aloud (where the browser speaks) and the end. */
+function CardActions({
+  onClose,
+  onRead,
+  reading,
+  supported,
+}: {
+  onClose: () => void;
+  onRead: () => void;
+  reading: boolean;
+  supported: boolean;
+}) {
+  return (
+    <div className="-mt-1 -mr-2 flex shrink-0 items-center gap-0.5">
+      {supported && (
+        <Button
+          aria-label="Vorlesen"
+          aria-pressed={reading}
+          className="rounded-full text-muted-foreground aria-pressed:bg-primary/10 aria-pressed:text-primary"
+          data-testid="walk-read"
+          onClick={onRead}
+          size="icon-lg"
+          title={reading ? "Nicht mehr vorlesen" : "Vorlesen, schon im Flug"}
+          variant="ghost"
+        >
+          {reading ? <Volume2Icon /> : <VolumeXIcon />}
+        </Button>
+      )}
+      <Button
+        aria-label="Spaziergang beenden"
+        className="rounded-full text-muted-foreground"
+        onClick={onClose}
+        size="icon-lg"
+        title="Spaziergang beenden"
+        variant="ghost"
+      >
+        <XIcon />
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * Read aloud: each stop from the start of its glide (the browser's own
+ * voice, ADR 0057); a closed card stops talking.
+ */
+function useStopReading(stop: WalkStop | undefined, notes: string[]) {
+  const speech = useSpeech();
+  const [reading, setReading] = useState(false);
+  // the parts once a stop: a render of the card does not start it again
+  const said = useMemo(
+    () => (stop && reading ? stopSpeech(stop, notes) : null),
+    [stop, reading, notes]
+  );
+  useEffect(() => {
+    if (said) {
+      speech.speakParts(said);
+      // a new stop, or reading switched off, cuts this one off
+      return speech.stop;
+    }
+  }, [said, speech]);
+  return { reading, setReading, speech };
 }
 
 /**
@@ -722,13 +811,10 @@ export function WalkCard({
   onPlace: ((place: WalkPlace) => void) | null;
   walk: Walk;
 }) {
-  const [folded, setFolded] = useState(false);
+  // a phone's sheet starts low: the title and the way on, the scene above
+  const [folded, setFolded] = useState(coarse);
   // the visitor's day: the notes for today and the season
   const [today] = useState(() => new Date());
-  // read aloud: each stop from the start of its glide (the browser's own
-  // voice, ADR 0057); a closed card stops talking
-  const speech = useSpeech();
-  const [reading, setReading] = useState(false);
   const { isMobile, openMobile } = useSidebar();
   const walksUrl = useSceneStatus("site")?.walksUrl ?? null;
   const stop = walk.stops[index];
@@ -736,37 +822,37 @@ export function WalkCard({
     () => (stop ? stopNotes(stop, today) : []),
     [stop, today]
   );
-  // the parts once a stop: a render of the card does not start it again
-  const said = useMemo(
-    () => (stop && reading ? stopSpeech(stop, notes) : null),
-    [stop, reading, notes]
-  );
-  useEffect(() => {
-    if (said) {
-      speech.speakParts(said);
-      // a new stop, or reading switched off, cuts this one off
-      return speech.stop;
-    }
-  }, [said, speech]);
+  const { reading, setReading, speech } = useStopReading(stop, notes);
   // the phone's panel sheet covers the scene, and the card with it
   if (!stop || (isMobile && openMobile)) {
     return null;
   }
   const last = index === walk.stops.length - 1;
   const beside = besideStory(stop.photo, coarse);
+  // a phone's sheet, folded: the title and the way on
+  const low = coarse && folded;
   return (
     <section
       aria-label={`Spaziergang: ${walk.title}`}
       className={cn(
         "pointer-events-auto absolute z-30 flex flex-col",
         coarse
-          ? "top-3 right-16 left-3 max-h-[52dvh]"
+          ? "inset-x-0 bottom-0 max-h-[62dvh]"
           : "bottom-6 left-5 max-h-[min(44rem,calc(100%-3rem))] w-[min(28rem,calc(100%-2.5rem))] lg:w-[30rem]"
       )}
+      data-folded={low ? "" : undefined}
       data-testid="walk-card"
     >
-      <Card className="min-h-0 flex-1 gap-0 rounded-2xl bg-background/95 py-0 shadow-xl ring-foreground/[0.07] backdrop-blur-lg">
-        {stop.photo && !beside && !(coarse && folded) && (
+      <Card
+        className={cn(
+          "min-h-0 flex-1 gap-0 bg-background/95 py-0 shadow-xl ring-foreground/[0.07] backdrop-blur-lg",
+          coarse
+            ? "rounded-t-2xl rounded-b-none pb-[env(safe-area-inset-bottom)]"
+            : "rounded-2xl"
+        )}
+      >
+        {coarse && <SheetHandle folded={folded} onFold={setFolded} />}
+        {stop.photo && !beside && !low && (
           <StopPhoto
             base={walksUrl}
             coarse={coarse}
@@ -777,41 +863,24 @@ export function WalkCard({
         )}
         <CardHeader className="flex items-start gap-3 px-6 pt-5 pb-1">
           <StopHeading index={index} walk={walk} />
-          <div className="-mt-1 -mr-2 flex shrink-0 items-center gap-0.5">
-            {speech.supported && (
-              <Button
-                aria-label="Vorlesen"
-                aria-pressed={reading}
-                className="rounded-full text-muted-foreground aria-pressed:bg-primary/10 aria-pressed:text-primary"
-                data-testid="walk-read"
-                onClick={() => setReading((r) => !r)}
-                size="icon-lg"
-                title={
-                  reading ? "Nicht mehr vorlesen" : "Vorlesen, schon im Flug"
-                }
-                variant="ghost"
-              >
-                {reading ? <Volume2Icon /> : <VolumeXIcon />}
-              </Button>
-            )}
-            <Button
-              aria-label="Spaziergang beenden"
-              className="rounded-full text-muted-foreground"
-              onClick={onClose}
-              size="icon-lg"
-              title="Spaziergang beenden"
-              variant="ghost"
-            >
-              <XIcon />
-            </Button>
-          </div>
+          <CardActions
+            onClose={onClose}
+            onRead={() => setReading((r) => !r)}
+            reading={reading}
+            supported={speech.supported}
+          />
         </CardHeader>
         {reading && (
           <div className="px-6 pt-1">
             <VoicePicker speech={speech} />
           </div>
         )}
-        {!(coarse && folded) && (
+        {low && (
+          <p className="px-6 pt-1 font-sans text-[10.5px] text-muted-foreground">
+            Erzählt von {walk.by} (KI)
+          </p>
+        )}
+        {!low && (
           <CardContent
             className={cn(
               story.className,
@@ -842,12 +911,9 @@ export function WalkCard({
           </CardContent>
         )}
         <WalkFooter
-          coarse={coarse}
-          folded={folded}
           index={index}
           last={last}
           onClose={onClose}
-          onFold={() => setFolded((f) => !f)}
           onIndex={onIndex}
         />
       </Card>

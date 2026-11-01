@@ -432,8 +432,9 @@ The button in the corner opens a panel with three tabs.
   with the source it comes from — Wikipedia, an institution's page, the
   city model's own data; legends are told as legends. *Weiter* and
   *Zurück* move between the stops, × ends the walk and gives the picture
-  style and the time back. On a phone the card sits at the top and folds
-  its text away. How they are written: [walks.md](../../walks.md).
+  style and the time back. On a phone the card is a sheet at the bottom
+  that starts folded: tap or pull up its handle to open it, pull it down
+  to fold it again. How they are written: [walks.md](../../walks.md).
 - **Frag die Stadt** (ask the city) — questions about the city in your
   own words ("Who built the Frauenkirche?", "What is in front of me?",
   "What does this look like in the evening?"). The four first
