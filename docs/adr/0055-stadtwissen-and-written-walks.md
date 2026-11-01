@@ -39,10 +39,12 @@ memory and first load must not grow (ADR 0047).
    their sources. A legend is told as a legend; a claim in `facts` is one
    a source states.
 4. **A walk is told on the way.** Each stop glides at 2.2× the usual
-   pace, and the card can read the stop aloud from the start of the
-   glide (the browser's voice, as in ADR 0057); a stop's text fits a
-   phone screen (560 characters). A look from the air or the street does
-   not stop the glide: the stop still lands.
+   pace, so the stop's story starts on the way, and the light glides to
+   the next stop's hour with it; the card can read the stop aloud from
+   the start of the glide (the browser's voice, as in ADR 0057); a stop's
+   text fits a phone screen (560 characters). A look from the air or the street does not stop the
+   glide: the stop still lands. On a phone the card is a bottom sheet
+   that starts folded, so the scene stays in view.
 5. **The text points only at what the model draws; a photo shows the
    rest.** The model has masses, roofs as planes, towers, bridges, the
    river and the ground; a statue is a generic figure, and reliefs,
