@@ -16,6 +16,7 @@ import {
   type CityLayer,
   cityObjectsAlong,
   ensureCityBvh,
+  hangsShown,
   nearestCityHit,
   nearestWithoutBvh,
 } from "./city-layer";
@@ -161,4 +162,17 @@ test("a pick waits for a tile whose BVH the worker builds: no answer from the bu
   expect(nearestCityHit(rayAlongX(1000), [near, far], false)?.layer).toBe(far);
   await done;
   expect(nearestCityHit(rayAlongX(1000), [near, far], true)?.layer).toBe(near);
+});
+
+test("what hangs on a building shows while all of it stands", () => {
+  const alive = new Uint8Array([1, 1, 1]);
+  expect(hangsShown([0, 2], alive, new Set())).toBe(true);
+  // a design stands in for one of its parts
+  expect(hangsShown([0, 2], alive, new Set([2]))).toBe(false);
+  // a part demolished
+  alive[0] = 0;
+  expect(hangsShown([0, 2], alive, new Set())).toBe(false);
+  expect(hangsShown([1], alive, new Set())).toBe(true);
+  // a building the tile does not hold
+  expect(hangsShown([], alive, new Set([1]))).toBe(true);
 });
