@@ -51,7 +51,7 @@ state (a 2 km tile at 0.5 m is 4000², ~64 MB per float64 plane).
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Collection, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -293,11 +293,18 @@ def rasterise(
 MERGED_DIMS = ("intensity", "return_number", "number_of_returns", "classification")
 
 
+def echoless(header: laspy.LasHeader) -> bool:
+    """Whether a scan's header counts no point by return: its points carry
+    no return numbers to tell a crown's echoes by."""
+    return not any(int(n) for n in header.number_of_points_by_return)
+
+
 def merge_laz(
     sources: list[Path],
     dest: Path,
     intensity_scale: float = 1.0,
     classes: Callable[[laspy.LasHeader], Mapping[int, int]] | None = None,
+    echo_classes: Collection[int] = (),
 ) -> Path:
     """Several LAZ files (a provider's 1 km tiles) as the one scan per 2 km
     tile the rasters read, in the first file's point format and scale. Only
@@ -305,7 +312,13 @@ def merge_laz(
 
     `classes` maps a source's classes into the AdV scheme the rasters read
     (`ADV`), given the source's header (a provider's scheme may change with
-    the survey year); a class it does not list is dropped. `intensity_scale`
+    the survey year); a class it does not list is dropped.
+
+    `echo_classes`: the source classes that hold only a pulse's non-last
+    echoes, read as multi-echo (`number_of_returns` 2) in a source whose
+    header counts no return at all (`echoless`) — a file republished
+    without its return numbers would otherwise read every crown as a roof
+    (NRW, 2026-10). `intensity_scale`
     is a fixed pre-scale, kept for callers that set one: `rasterise`
     normalises every scan by its own ground median anyway, which a fixed
     factor does not change."""
@@ -321,6 +334,7 @@ def merge_laz(
         for src in sources:
             with laspy.open(src) as reader:
                 table = class_table(classes(reader.header)) if classes else None
+                echoes = np.asarray(sorted(echo_classes)) if echoless(reader.header) else None
             for pts in _chunks(src):
                 if table is not None:
                     mapped = table[np.asarray(pts.classification)]
@@ -330,6 +344,10 @@ def merge_laz(
                 rec.x, rec.y, rec.z = pts.x, pts.y, pts.z
                 for dim in MERGED_DIMS:
                     rec[dim] = pts[dim]
+                if echoes is not None and len(echoes):
+                    rec.number_of_returns = np.where(
+                        np.isin(np.asarray(pts.classification), echoes), 2, rec.number_of_returns
+                    )
                 if table is not None:
                     rec.classification = mapped[keep]
                 if intensity_scale != 1.0:

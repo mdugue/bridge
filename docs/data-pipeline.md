@@ -331,6 +331,12 @@ Two inputs are not the provider's alone:
   class 1: Unna's re-bake with the table found 14 457 scan trees outside
   the canopy mask where it had found 2 385, and 897 small structures where
   it had found 1 596 — the gaps in the crowns had read as low roofs.
+  In 2026-10 NRW republished three of Unna's eight 1 km files
+  (`3dm_32_409_5709…5711`, created 2025-10-12) without return numbers (0
+  everywhere, no point counted by return in the header): `merge_laz`
+  writes such a file's class 1 (`ECHO_CLASSES`) as multi-echo
+  (`lsc.echoless`), or its crowns read as roofs and the re-bake of
+  2026-11-01 kept ~40 % fewer scan trees.
 
   *Intensity.* The low-vegetation cue (`intensity ≥ 1250`) was measured on
   GeoSN's flight over Dresden; two sensors' intensities are not calibrated
