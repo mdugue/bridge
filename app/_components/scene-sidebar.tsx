@@ -1129,8 +1129,9 @@ function SourcesFooter() {
     <Collapsible>
       <CollapsibleContent>
         <ul className="flex flex-col gap-1 pb-2">
-          {[...siteAttribution(site), ...photos].map((line) => (
-            <li key={line}>{line}</li>
+          {[...siteAttribution(site), ...photos].map((line, i) => (
+            // two murals' credits can read alike: a fixed list, keyed by place
+            <li key={`${i}:${line}`}>{line}</li>
           ))}
         </ul>
       </CollapsibleContent>

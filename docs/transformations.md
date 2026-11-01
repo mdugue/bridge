@@ -1437,8 +1437,9 @@ visual-variable codebook is in
   (`pipeline/bake/murals.py`): its **size** — OSM `width` and `height`, a
   way's length along the wall, else its Wikidata item's P2049 / P2048
   (the item of `wikidata`, never `subject:wikidata`, which names whom it
-  shows); a **free photo** on Wikimedia Commons — OSM `image` or
-  `wikimedia_commons`, else the item's P18; and that the photo shows it
+  shows); a **free photo** on Wikimedia Commons, at least 500 px wide —
+  OSM `image` or `wikimedia_commons`, else the item's P18 (a renamed file
+  followed to its new title); and that the photo shows it
   **straight on** — its aspect within 15 % of the size's (`FIT`), or, for
   a way, wider than that and showing at least half its height
   (`BAND_MIN`): the band of its whole length the photo shows, as tall as
@@ -1449,7 +1450,9 @@ visual-variable codebook is in
   its ends' projections the shorter way round, a node is centred on the
   straight stretch of the outline nearest it and kept on the wall — 3 cm
   in front of it, its outside on the right (the photo reads from the
-  street), corner stubs under 0.6 m trimmed. Its height: OSM `min_height`
+  street), corner stubs under 0.6 m trimmed; it is drawn as long as that
+  wall runs, so a whole photo must fit the wall's length too (a band keeps
+  the photo's proportions). Its height: OSM `min_height`
   where mapped; else `≈ assumed` one storey (3 m) above the highest ground
   0.8 m in front of it, lower where the wall has no room, none where the
   mural stands more than 1 m taller than its wall (a mapping error). The
@@ -1461,8 +1464,9 @@ visual-variable codebook is in
   under the scene's sun, shadows and fog — paint, never a glow; at night
   as dark as its wall (a floodlit wall's light does not reach it) — on
   the full LoD2 only (the far level's walls are simplified by half a
-  metre), decoded at 32 px a metre on a phone, its bytes on its tile's
-  cache budget, hidden with its building (`CityLayer.hang`); Papier draws
+  metre), decoded one at a time (at 32 px a metre on a phone) and its
+  texels dropped once uploaded, the texture's bytes on its tile's cache
+  budget, hidden with its building (`CityLayer.hang`); Papier draws
   it as paper. Dresden: the Fürstenzug (the band of its 102 m frieze its
   photo shows, 6.3 m of the 10.5 m mapped with the window zone, a storey
   up) and *Der Weg der Roten Fahne* on the Kulturpalast (30 × 10.5 m; it

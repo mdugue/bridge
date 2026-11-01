@@ -263,10 +263,12 @@ for those with an item, its size `P2049`/`P2048` and photo `P18` from
 `Special:EntityData` (the SPARQL endpoint and the Commons API answer the
 container with 429s; one request per 1.5 s, `Retry-After` honoured),
 then each candidate photo's size, type, author and licence from the Commons
-API (50 titles a request), and the photo the rule picks downloaded at a
-standard thumbnail width (upload.wikimedia.org refuses the originals and
-odd widths) into `murals/` (`murals.fetch`, `fetch.fetch_murals`;
-optional: a failure is noted, the fetch goes on). Per tile too, **the days its
+API (50 titles a request, renamed files followed to their new title; a
+title without an answer is asked again next time), and the photo the rule
+picks downloaded at a standard thumbnail width (upload.wikimedia.org
+refuses the originals and odd widths) into `murals/` (`murals.fetch`,
+`fetch.fetch_murals`; optional: a failed download or fetch is noted, the
+rest goes on). Per tile too, **the days its
 orthophoto was flown** (`dop/<tile>.flight.json`; GeoSN's download-link
 service, the metadata table of Hamburg's DOP edition, Bavaria's and NRW's
 DOP info services), and once for the site **the GLO-30 window** around it

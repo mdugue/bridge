@@ -8,11 +8,12 @@
  * and hidden with the building it hangs on (city-layer.ts `hang`).
  *
  * The photo is fetched from the site's own files and decoded by the
- * browser; a phone decodes it at PHONE_PX_PER_M (lib/city/murals.ts
- * `muralTexels`). Its bytes — the texture with mipmaps and the bitmap
- * three keeps for an upload again — weigh on the tile in the cache
- * (tile-stream.ts `calculateBytesUsed`), so a phone keeps fewer other
- * tiles rather than more memory (ADR 0047).
+ * browser — one at a time, so a tile's photos never stand decoded side by
+ * side — a phone's at PHONE_PX_PER_M (lib/city/murals.ts `muralTexels`).
+ * Its texels go to the GPU as data and leave the page once uploaded
+ * (raster-upload.ts `dropDataOnUpload`); the texture with its mipmaps
+ * weighs on the tile in the cache (tile-stream.ts `calculateBytesUsed`),
+ * so a phone keeps fewer other tiles rather than more memory (ADR 0047).
  *
  * Night: a lit material, dimmed by the night's own light like the wall.
  * Papier draws it as paper (paper-scene.ts: one material for every
@@ -21,14 +22,16 @@
 import {
   BufferAttribute,
   BufferGeometry,
+  DataTexture,
   FrontSide,
   Group,
   LinearFilter,
   LinearMipmapLinearFilter,
   Mesh,
   MeshStandardNodeMaterial,
+  RGBAFormat,
   SRGBColorSpace,
-  Texture,
+  type Texture,
 } from "three/webgpu";
 import {
   type Mural,
@@ -39,7 +42,8 @@ import {
   parseMurals,
 } from "@/lib/city/murals";
 import { fetchOptionalBinary, fetchOptionalJson } from "./fetch-optional";
-import { trackTexture } from "./three-utils";
+import { dropDataOnUpload } from "./raster-upload";
+import { estimateGeometryBytes, trackTexture } from "./three-utils";
 
 /** How rough the paint reads: matte, a sheen in a grazing sun at most. */
 const MURAL_ROUGHNESS = 0.85;
@@ -97,6 +101,39 @@ export interface MuralLayer {
   murals: readonly Mural[];
 }
 
+/** A photo's texels, top row first, at `texels`: decoded by the browser
+ *  and read back once; null where it could not be. */
+async function decodePhoto(
+  bytes: ArrayBuffer,
+  [width, height]: readonly [number, number]
+): Promise<Uint8Array | null> {
+  let bitmap: ImageBitmap | undefined;
+  try {
+    bitmap = await createImageBitmap(
+      new Blob([bytes], { type: "image/webp" }),
+      {
+        imageOrientation: "none",
+        premultiplyAlpha: "none",
+        resizeWidth: width,
+        resizeHeight: height,
+        resizeQuality: "high",
+      }
+    );
+    const context = new OffscreenCanvas(width, height).getContext("2d");
+    if (!context) {
+      return null;
+    }
+    context.drawImage(bitmap, 0, 0);
+    return new Uint8Array(
+      context.getImageData(0, 0, width, height).data.buffer
+    );
+  } catch {
+    return null;
+  } finally {
+    bitmap?.close();
+  }
+}
+
 /** A mural's photo decoded at `texels` as a texture, or null where it
  *  could not be fetched or decoded. Rethrows an abort. */
 async function loadPhoto(
@@ -108,27 +145,15 @@ async function loadPhoto(
   if (!bytes) {
     return null;
   }
-  let bitmap: ImageBitmap;
-  try {
-    bitmap = await createImageBitmap(
-      new Blob([bytes], { type: "image/webp" }),
-      {
-        // flipY false: row 0 is the photo's top (`muralStrip`'s v)
-        imageOrientation: "none",
-        premultiplyAlpha: "none",
-        resizeWidth: texels[0],
-        resizeHeight: texels[1],
-        resizeQuality: "high",
-      }
-    );
-  } catch {
-    return null;
-  }
+  const data = await decodePhoto(bytes, texels);
   if (signal.aborted) {
-    bitmap.close();
     throw signal.reason;
   }
-  const texture = new Texture(bitmap);
+  if (!data) {
+    return null;
+  }
+  // flipY false: row 0 is the photo's top (`muralStrip`'s v)
+  const texture = new DataTexture(data, texels[0], texels[1], RGBAFormat);
   texture.flipY = false;
   texture.colorSpace = SRGBColorSpace;
   texture.generateMipmaps = true;
@@ -136,10 +161,8 @@ async function loadPhoto(
   texture.magFilter = LinearFilter;
   texture.anisotropy = MURAL_ANISOTROPY;
   texture.needsUpdate = true;
-  // Kept until the texture goes: three uploads the image again where it
-  // re-creates the GPU texture, and a closed bitmap uploads empty.
-  texture.addEventListener("dispose", () => bitmap.close());
-  trackTexture(texture, muralBytes(texels) - texels[0] * texels[1] * 4);
+  dropDataOnUpload(texture);
+  trackTexture(texture, muralBytes(texels));
   return texture;
 }
 
@@ -221,13 +244,8 @@ export async function buildMurals(
     group.add(mesh);
     meshes.push(mesh);
     shown.push(mural);
-    const geometry = mesh.geometry;
     bytes +=
-      muralBytes(muralTexels(mural, opts.phone)) +
-      Object.values(geometry.attributes).reduce(
-        (sum, a) => sum + (a.array as Float32Array).byteLength,
-        geometry.index?.array.byteLength ?? 0
-      );
+      muralBytes(muralTexels(mural, opts.phone)) + estimateGeometryBytes(mesh);
   });
   if (meshes.length === 0) {
     return null;

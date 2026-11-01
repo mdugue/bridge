@@ -106,6 +106,8 @@ function isMural(m: unknown): m is Mural {
   const o = m as Partial<Mural> | null;
   return (
     typeof o?.id === "string" &&
+    typeof o.name === "string" &&
+    (o.how === "band" || o.how === "whole") &&
     typeof o.tile === "string" &&
     typeof o.building === "string" &&
     typeof o.image === "string" &&
@@ -116,7 +118,9 @@ function isMural(m: unknown): m is Mural {
     typeof o.top === "number" &&
     o.top > o.bottom &&
     isPoint(o.px) &&
-    typeof o.photo?.author === "string"
+    isPoint(o.size) &&
+    typeof o.photo?.author === "string" &&
+    typeof o.photo.licence === "string"
   );
 }
 
@@ -212,9 +216,8 @@ export function muralTexels(
   return [Math.max(width, 1), Math.max(Math.round((h * width) / w), 1)];
 }
 
-/** The GPU and CPU bytes a decoded mural holds: its texture with mipmaps
- *  and the bitmap kept for an upload again (RGBA). */
+/** The bytes a decoded mural holds: its texture with mipmaps (RGBA; the
+ *  texels themselves leave the page once uploaded). */
 export function muralBytes(texels: readonly [number, number]): number {
-  const base = texels[0] * texels[1] * 4;
-  return Math.round(base * (4 / 3)) + base;
+  return Math.round(texels[0] * texels[1] * 4 * (4 / 3));
 }

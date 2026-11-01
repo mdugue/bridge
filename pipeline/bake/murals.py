@@ -84,6 +84,9 @@ WHERE = "other_tags LIKE '%\"artwork_type\"=>%'"
 FIT = 0.15
 # a band photo of a line shows at least this share of the mapped height
 BAND_MIN = 0.5
+# a photo narrower than this is too coarse to paint a wall with (and has
+# no standard thumbnail at its width or below)
+MIN_PX = 500
 # how far a point or a line's vertex may lie off its footprint's edge
 SNAP_M = 3.0
 # a line's way along the wall may differ from its own length by this share
@@ -268,14 +271,19 @@ def photo_titles(c: Candidate, item: dict | None) -> list[str]:
     return list(dict.fromkeys(titles))
 
 
+def fits(a: float, b: float) -> bool:
+    """Whether two aspects (width over height) agree within FIT."""
+    return abs(math.log(a / b)) <= math.log(1 + FIT)
+
+
 def choose(
     width: float, height: float, line: bool, photos: list[Photo]
 ) -> tuple[Photo, float, float, str] | None:
     """The photo that shows the mural straight on and the size it is drawn
     at: (photo, width, height, "whole" | "band"), or None."""
-    usable = [p for p in photos if p.mime in PHOTO_TYPES and p.w > 0 and p.h > 0]
+    usable = [p for p in photos if p.mime in PHOTO_TYPES and p.w >= MIN_PX and p.h > 0]
     aspect = width / height
-    whole = [p for p in usable if abs(math.log(p.aspect / aspect)) <= math.log(1 + FIT)]
+    whole = [p for p in usable if fits(p.aspect, aspect)]
     if whole:
         best = max(whole, key=lambda p: (p.w * p.h, p.title))
         return best, width, height, "whole"
@@ -402,7 +410,9 @@ def fetch(spec) -> int:
         _write(items_path, items)
     sized = [c for c in found if all(size_of(c, items.get(c.item or "")))]
     wanted = sorted({t for c in sized for t in photo_titles(c, items.get(c.item or ""))})
-    missing = [t for t in wanted if t not in photos]
+    # a title without an answer is asked again: a file renamed or uploaded
+    # since may answer now
+    missing = [t for t in wanted if not photos.get(t)]
     for k in range(0, len(missing), TITLES_PER_ASK):
         batch = missing[k : k + TITLES_PER_ASK]
         query = urllib.parse.urlencode(
@@ -413,16 +423,24 @@ def fetch(spec) -> int:
                 "prop": "imageinfo",
                 "iiprop": "size|mime|url|extmetadata",
                 "iiextmetadatafilter": "Artist|Credit|LicenseShortName",
+                "redirects": "1",
                 "titles": "|".join(batch),
             }
         )
-        answer = json.loads(_get(f"{COMMONS_API}?{query}"))
-        for page in answer.get("query", {}).get("pages", []):
+        answer = json.loads(_get(f"{COMMONS_API}?{query}")).get("query", {})
+        for page in answer.get("pages", []):
             photo = photo_of(page)
             photos[page["title"]] = photo.__dict__ if photo else None
+        # a renamed file (OSM and Wikidata keep the old name) is the file
+        # it now redirects to, credited under its new title
+        moved = answer.get("normalized", []) + answer.get("redirects", [])
+        hops = {r["from"]: r["to"] for r in moved}
         for title in batch:
+            end = title
+            for _ in range(3):
+                end = hops.get(end, end)
             # a title Commons does not know (a typo, a deleted file): none
-            photos.setdefault(title, None)
+            photos[title] = photos.get(end)
         _write(photos_path, photos)
     chosen = 0
     for c in sized:
@@ -432,7 +450,12 @@ def fetch(spec) -> int:
         dest = photo_file(cache, pick[0])
         if not dest.exists():
             time.sleep(PAUSE_S)
-            net.download(pick[0].thumb, dest)
+            try:
+                net.download(pick[0].thumb, dest)
+            except OSError as err:
+                # this mural waits for the next fetch; the others go on
+                print(f"  {c.id} {c.name}: its photo not downloaded ({err})")
+                continue
         chosen += 1
     print(f"{spec.site}: {len(found)} murals, {len(sized)} with a size, {chosen} with a photo")
     return chosen
@@ -723,9 +746,14 @@ def run_site(spec) -> None:
             print(f"  {c.id} {c.name}: on no LoD2 wall")
             continue
         tile, placed = hung
-        if c.line:
-            width = shapely.LineString(placed.path).length
-            height = width / photo.aspect if how == "band" else height
+        # drawn as long as its wall runs: a band keeps the photo's
+        # proportions, a whole photo must still fit the wall
+        width = shapely.LineString(placed.path).length
+        if how == "band":
+            height = width / photo.aspect
+        elif not fits(photo.aspect, width / height):
+            print(f"  {c.id} {c.name}: its wall is not as long as it is mapped")
+            continue
         span = heights_on(placed, height, metres(c.tags.get("min_height")))
         if span is None:
             print(f"  {c.id} {c.name}: taller than its wall")

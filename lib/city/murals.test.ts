@@ -39,9 +39,10 @@ const offset = { cx: 411_000, cy: 5_656_000 };
 
 test("the file's murals, the malformed left out", () => {
   const { path: _path, ...pathless } = weg;
+  const { size: _size, ...sizeless } = weg;
   expect(
     parseMurals({
-      murals: [weg, pathless, { ...weg, top: weg.bottom }, null],
+      murals: [weg, pathless, sizeless, { ...weg, top: weg.bottom }, null],
     })
   ).toEqual([weg]);
   expect(parseMurals({})).toBeNull();
@@ -135,7 +136,6 @@ test("a phone decodes a mural at most PHONE_PX_PER_M a metre, never above the fi
   ]);
 });
 
-test("a decoded mural weighs its texture with mipmaps and its bitmap", () => {
-  const base = 960 * 336 * 4;
-  expect(muralBytes([960, 336])).toBe(Math.round(base * (4 / 3)) + base);
+test("a decoded mural weighs its texture with mipmaps", () => {
+  expect(muralBytes([960, 336])).toBe(Math.round(960 * 336 * 4 * (4 / 3)));
 });

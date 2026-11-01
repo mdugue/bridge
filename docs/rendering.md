@@ -948,9 +948,9 @@ stays their measure; the tile cache counts true bytes.
 - **The tile cache** weighs a tile as the GPU holds it: the glTF (by
   count, so a buffer whose CPU copy is gone weighs what it did), the
   terrain's rasters, the dressing's geometry and a city tile's murals
-  (their photos with mipmaps and the bitmap kept for a re-upload: 13.8 MB
-  for Dresden's two on their tile, 9.1 MB on a phone, which decodes them
-  at 32 px a metre), less the buffers the site shares
+  (their photos with mipmaps, the texels dropped once uploaded: 7.9 MB for
+  Dresden's two on their tile, 5.2 MB on a phone, which decodes them at
+  32 px a metre), less the buffers the site shares
   (`DressingPlugin.calculateBytesUsed`). A phone's bounds are
   derived (`tileCacheBytesFor`): `max` = the governor's soft line − the
   fixed costs (24 bytes per drawn pixel and the shadow map: 38 MiB at

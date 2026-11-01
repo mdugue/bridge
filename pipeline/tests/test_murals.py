@@ -124,6 +124,14 @@ def test_a_frontal_photo_of_the_whole_mural_fits():
     # a drawing or an animation is no photo
     drawing = photo("File:S.svg", 300, 100, "image/svg+xml")
     assert murals.choose(30.0, 10.5, False, [drawing]) is None
+    # nor is one too coarse to paint a wall with
+    assert murals.choose(30.0, 10.5, False, [photo("File:Small.jpg", 400, 134)]) is None
+
+
+def test_aspects_fit_within_fit_either_way():
+    assert murals.fits(3.0, 3.0 * 1.149)
+    assert murals.fits(3.0 * 1.149, 3.0)
+    assert not murals.fits(3.0, 3.0 * 1.16)
 
 
 def test_a_line_takes_a_band_of_its_whole_length():
