@@ -3,6 +3,7 @@ import {
   type Camera,
   type ClippingGroup,
   DepthTexture,
+  FloatType,
   HalfFloatType,
   type Node,
   NoToneMapping,
@@ -569,6 +570,11 @@ export function createPostStack(
 ): PostStack {
   const size = renderer.getDrawingBufferSize(new Vector2());
   const depthTexture = new DepthTexture(size.x, size.y);
+  // a reversed buffer keeps its precision as floats (depth32float), the
+  // four bytes a pixel the 24-bit one takes
+  if (renderer.reversedDepthBuffer) {
+    depthTexture.type = FloatType;
+  }
   const target = new RenderTarget(size.x, size.y, {
     type: HalfFloatType,
     depthTexture,
@@ -614,6 +620,7 @@ export function createPostStack(
     litAt,
     sunDirection,
     sunShadow,
+    reversedDepth: renderer.reversedDepthBuffer,
   });
   const paperScene = createPaperScene(scene, fog.color);
   const styleDressing = createStyleDressing(scene);

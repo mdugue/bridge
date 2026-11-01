@@ -420,6 +420,23 @@ without it. The GTAO sample count is a construction-time setting (16;
 8 on a phone and in the lite profile). 3DTilesRendererJS's fade and overlay plugins patch
 GLSL and stay unused.
 
+**The depth runs reversed** (three's `reversedDepthBuffer`,
+`create-app.ts`): 1 at the near plane, 0 at the far one, stored as floats
+(`depth32float`, the four bytes a pixel the 24-bit buffer takes). With a
+0.3 m near plane and a 6 km far one, the plain buffer spent almost all its
+precision on the first metres and let roofs, kerbs and decals fight
+kilometres off; the float's exponent gives the far range back. three turns
+the depth test, the clear, the polygon offsets, the shadow maps (their
+compare function and bias) and its depth helpers (`getViewPosition`,
+`perspectiveDepthToViewZ`, GTAO) round itself, and a camera it has drawn
+into the buffer carries `reversedDepth` and a projection to match. What
+reads raw depth on its own must ask: the styles' sky test and their
+shadow lookup (`stylize-effect.ts`, `StylizeInputs.reversedDepth`), the
+parallel view's pick ray (`view-ray.ts`), the scene target's depth type
+(`post-stack.ts`). A WebGL2 without `EXT_clip_control` keeps the plain
+buffer (three falls back and says so). `?depth=standard` draws with the
+plain buffer, to compare.
+
 **What the stack builds follows the device tier** (`postProfileFor` in
 `scene-profile.ts`,
 [ADR 0047](./adr/0047-phone-memory-budget-in-true-bytes.md)): its
@@ -1538,6 +1555,15 @@ loaded and 20 s later (`console.table`). The names are a contract for
 later perf work: add one rather than rename one. None of it reaches the
 crash trail or the reports — a tile's id names where the player was.
 
+**The renderer itself: `?inspect=1`** (`inspector.ts`) puts three's own
+Inspector (`three/addons/inspector`) over the canvas: time per pass (GPU
+timestamps where the adapter has them — Chromium; on Safari only CPU
+time), memory by kind (geometries, textures, render targets), draw calls
+and the node graphs. The module loads only on that knob, so no other page
+carries it; it keeps its panel layout under `threejs-inspector` in local
+storage (the privacy page names it). Use it beside `?trace=1`, which times
+the stream, not the passes.
+
 ## Workarounds for upstream bugs
 
 Each entry is a bug in a dependency, the code that works around it and
@@ -1600,11 +1626,29 @@ geometry throws on it midway (`destroyAttribute`). *Worked around* in
 `three-utils.ts` (`untilThrough`): the dispose is tried again past it.
 *Once fixed:* one dispose. Not looked for upstream yet.
 
+**three r187: SkyMesh ignores a reversed depth buffer.** Its vertex
+node pins the dome to the far plane by `z = w`, which is depth 1, the
+near plane of a reversed buffer. The dome draws after the opaque clay
+without depth write, so it passed the depth test everywhere and painted
+walls, kerbs and river walls sky-blue. *Worked around* in `sun-rig.ts`
+(`createSkyDome`): under `reversedDepthBuffer` the dome's z is 0. *Once
+fixed:* the vertex node stays SkyMesh's own. Not reported yet.
+
 Changes in three r187 we adapted to and that are meant, not bugs: builds
 are keyed by the kind of camera
 ([#35123](https://github.com/mrdoob/three.js/pull/35123); Modell's
 warm-up, `PostStack.warmView`), and PMREMs are cube targets of at least
 256 px a face (the sky reflection's own 64 px cube, `sky-reflection.ts`).
+
+**three r187: `ClusteredLighting` assumes a centred perspective camera.**
+`ClusteredLightsNode` bounds each cluster in view space by
+`ndc · (−z) / projection[0][0]` and ignores the projection's off-centre
+terms, so Modell's parallel camera and the image export's frustum slide
+(`setViewOffset`) would shade lights in the wrong clusters or not at
+all. The lamps therefore keep their fixed pool (ADR 0009) rather than
+48 clustered lights on a desktop (tried 2026-10-31: the perspective view
+was right). *Once fixed:* revisit, with the pool's lights fading by rank.
+Not reported yet.
 
 **3d-tiles-renderer 0.5.3: `resetFailedTiles()` alone never asks for a
 cached tile again.** *Worked around* in `tile-retry.ts`: the heal removes
