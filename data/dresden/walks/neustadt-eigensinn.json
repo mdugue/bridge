@@ -21,7 +21,7 @@
         118
       ],
       "hour": 10,
-      "text": "Der Goldene Reiter zeigt August den Starken als römischen Caesar, in Rüstung, auf einem Pferd, das sich aufbäumt. Er blickt nach Nordosten, in Richtung Polen, dem Königreich, für das er konvertiert war. Gegossen ist er nicht: Der Bronzeguss misslang, also trieb Ludwig Wiedemann die Figur aus Kupfer und vergoldete sie im Feuer. Enthüllt wurde sie am 26. November 1736, drei Jahre nach Augusts Tod, mit unfertigem Sockel. Bei der letzten Restaurierung 2001 bis 2003 kamen 500 Gramm Blattgold drauf. Hinter dir beginnt die Hauptstraße, gerade wie eine Bühnenachse. Für sie ließ der Kurfürst sogar die alte Dreikönigskirche abreißen.",
+      "text": "Im Modell steht hier nur eine Figur, das Foto zeigt das Original: August den Starken als römischen Caesar auf einem steigenden Pferd. Er blickt nach Nordosten, Richtung Polen, dem Königreich, für das er konvertiert war. Gegossen ist er nicht: Der Bronzeguss misslang, also trieb Ludwig Wiedemann die Figur aus Kupfer und vergoldete sie im Feuer. Enthüllt wurde sie 1736, drei Jahre nach Augusts Tod, mit unfertigem Sockel. Hinter dir beginnt die Hauptstraße, gerade wie eine Bühnenachse. Für sie ließ der Kurfürst sogar die alte Dreikönigskirche abreißen.",
       "closer": "Ein paar Schritte Richtung Brücke steht Joseph Fröhlich, Augusts Hoftaschenspieler. Der König nannte ihn spöttisch „Graf Saumagen“. Im Grünen Gewölbe sitzt er als Elfenbeinfigur auf einem Karren, den zwei Schweine ziehen, und der Karren ist ein Nachttopf.",
       "days": [
         {
@@ -64,7 +64,21 @@
       "refs": [
         "m411791_5657042",
         "m411797_5656938"
-      ]
+      ],
+      "photo": {
+        "file": "Dresden Germany Golden-Rider-03.jpg",
+        "caption": "Der Goldene Reiter",
+        "author": "CEphoto, Uwe Aranas",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Dresden_Germany_Golden-Rider-03.jpg",
+        "h": 533,
+        "w": 800,
+        "focus": [
+          0.5,
+          0.35
+        ]
+      }
     },
     {
       "id": "japanisches-palais",
@@ -81,7 +95,7 @@
         124
       ],
       "hour": 15,
-      "text": "Schau auf die Dächer: Sie schwingen nach oben wie in Ostasien. August kaufte das Palais 1717 und wollte es zum Porzellanschloss machen, für seine ostasiatische Sammlung und für das, was seine eigene Manufaktur in Meißen konnte. 35.798 Stücke lieferte Meißen dafür, dazu Kändlers lebensgroße Tiere. Im Giebelrelief bringen Sachsen und Chinesen der Göttin Saxonia ihr Porzellan dar, und man hat den Sachsen die bessere Pose gegeben. Eine Behauptung in Stein: Unser Porzellan ist das bessere.",
+      "text": "Das Foto zeigt, was das Modell glättet: Die Dächer schwingen nach oben wie in Ostasien. August kaufte das Palais 1717 und wollte es zum Porzellanschloss machen, für seine ostasiatische Sammlung und für das, was seine eigene Manufaktur in Meißen konnte. 35.798 Stücke lieferte Meißen dafür, dazu Kändlers lebensgroße Tiere. Im Giebelrelief bringen Sachsen und Chinesen der Göttin Saxonia ihr Porzellan dar, und man hat den Sachsen die bessere Pose gegeben. Eine Behauptung in Stein: Unser Porzellan ist das bessere.",
       "closer": "Über dem Eingang steht „Museum usui publico patens“, ein Museum, offen zum öffentlichen Gebrauch. Seit 1786 war hier die kurfürstliche Bibliothek.",
       "facts": [
         {
@@ -99,7 +113,21 @@
       ],
       "refs": [
         "Q468137"
-      ]
+      ],
+      "photo": {
+        "file": "20080629015DR Dresden-Neustadt Japanische Palais Palaisplatz.jpg",
+        "caption": "Das Japanische Palais vom Palaisplatz",
+        "author": "Jörg Blobelt",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:20080629015DR_Dresden-Neustadt_Japanische_Palais_Palaisplatz.jpg",
+        "h": 603,
+        "w": 800,
+        "focus": [
+          0.5,
+          0.3
+        ]
+      }
     },
     {
       "id": "kuegelgenhaus",
@@ -117,7 +145,7 @@
       ],
       "hour": 10,
       "text": "Ein unscheinbares Barockhaus an der Hauptstraße, Nummer 13. Unter der Traufe steht sein Motto: „An Gottes Segen ist alles gelegen.“ Hier wohnte von 1808 an der Maler Gerhard von Kügelgen, bis er im März 1820 ermordet wurde. Bei ihm saß Goethe Modell, und am 24. April 1813 stand Goethe hier am Fenster und sah den russischen Zaren und den preußischen König in Dresden einziehen. Heute ist im zweiten Stock das Museum der Dresdner Romantik. Bei der Sanierung 1974 bis 1980 fand man unter einer Stuckdecke bemalte Balken aus dem 17. Jahrhundert.",
-      "closer": "Schau unter die Traufe: Dort steht das Hausmotto, nach dem das Haus seit etwa 1730 „Gottessegen“ heißt.",
+      "closer": "Nach diesem Motto heißt das Haus seit etwa 1730 „Gottessegen“.",
       "facts": [
         {
           "claim": "Das Haus Hauptstraße 13 trägt seit etwa 1730 den Namen „Haus Gottessegen“ nach dem Spruch „AN GOTTES SEGEN IST ALLES GELEGEN“ unter der Traufe.",
@@ -138,7 +166,17 @@
       ],
       "refs": [
         "Q1746253"
-      ]
+      ],
+      "photo": {
+        "file": "Dresden Kuegelgenhaus.jpg",
+        "caption": "Das Kügelgenhaus an der Hauptstraße",
+        "author": "X-Weinzar",
+        "licence": "CC BY-SA 2.5",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/2.5",
+        "page": "https://commons.wikimedia.org/wiki/File:Dresden_Kuegelgenhaus.jpg",
+        "h": 1067,
+        "w": 800
+      }
     },
     {
       "id": "dreikoenigskirche",
@@ -155,7 +193,7 @@
         160
       ],
       "hour": 12,
-      "text": "Drinnen, unter der Orgelempore, hängt eines der seltsamsten Kunstwerke der Stadt: der Dresdner Totentanz, um 1534 von Christoph Walther in Stein gehauen, zwölfeinhalb Meter lang. 24 Menschen und drei Gestalten des Todes. Ursprünglich hing er außen am Georgentor des Schlosses, überstand dort einen Brand und wanderte durch die Stadt, bis er 1990 hier ankam. Auch die Kirche hat ihre Eigenheiten: Ihr Altar steht im Westen, nicht im Osten. Und nach der Wende tagte in ihrem Festsaal der Sächsische Landtag, von der konstituierenden Sitzung bis zum Umzug ins neue Haus 1993. Der Turm, 87,5 Meter, ist ganzjährig offen.",
+      "text": "Drinnen, unter der Orgelempore, hängt eines der seltsamsten Kunstwerke der Stadt: der Dresdner Totentanz, um 1534 von Christoph Walther in Stein gehauen, zwölfeinhalb Meter lang, 24 Menschen und drei Gestalten des Todes. Er hing einst außen am Georgentor des Schlosses, überstand dort einen Brand und kam 1990 hierher. Auch die Kirche ist eigen: Ihr Altar steht im Westen. Nach der Wende tagte in ihrem Festsaal der Sächsische Landtag, bis 1993. Der Turm, 87,5 Meter, ist ganzjährig offen.",
       "closer": "Den Turm hat die Kirche erst 1854 bis 1857 bekommen, über hundert Jahre nach dem Bau.",
       "days": [
         {
@@ -188,7 +226,17 @@
       ],
       "refs": [
         "Q1257935"
-      ]
+      ],
+      "photo": {
+        "file": "Dreikoenigskirche Totentanz 07.JPG",
+        "caption": "Ein Ausschnitt des Dresdner Totentanzes",
+        "author": "Concord",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Dreikoenigskirche_Totentanz_07.JPG",
+        "h": 600,
+        "w": 800
+      }
     },
     {
       "id": "albertplatz",
@@ -205,7 +253,7 @@
         117
       ],
       "hour": 14,
-      "text": "Die Villa an der Ecke gehörte Franz Augustin, Erich Kästners Onkel, einem reichen Pferdehändler. Der kleine Erich war oft hier, und vieles in „Als ich ein kleiner Junge war“ spielt rund um diesen Platz. Auf der Mauer sitzt heute eine Bronzefigur und schaut auf den Platz. Drinnen ist das Museum selbst ein Möbel: ein Mikromuseum aus Schubladen, das sich zu einer Kiste zusammenklappen lässt und schon bis Tokio gereist ist. Ein paar Schritte weiter steht der Artesische Brunnen. 1832 bis 1836 bohrten Freiberger Bergleute 243 Meter tief, das Wasser stieg von allein hoch und die Leute zapften es wie Mineralwasser. Seit dem 21. Juni 2023 fließt er nicht mehr.",
+      "text": "Die Villa an der Ecke gehörte Franz Augustin, Erich Kästners Onkel, einem reichen Pferdehändler. Der kleine Erich war oft hier, und vieles in „Als ich ein kleiner Junge war“ spielt um diesen Platz. Auf der Mauer sitzt heute eine Bronzefigur von ihm. Ein paar Schritte weiter steht der Artesische Brunnen: 1832 bis 1836 bohrten Freiberger Bergleute 243 Meter tief, das Wasser stieg von allein hoch, und die Leute zapften es wie Mineralwasser. Seit dem 21. Juni 2023 fließt er nicht mehr.",
       "closer": "Kästner wurde am 23. Februar 1899 ein paar Straßen weiter geboren, Königsbrücker Straße 66.",
       "facts": [
         {
@@ -240,7 +288,21 @@
           "to": "02-26",
           "text": "Am 23. Februar 1899 wurde Erich Kästner geboren, ein paar Straßen von hier."
         }
-      ]
+      ],
+      "photo": {
+        "file": "Denkmal Erich Kästner Albertplatz Dresden Sachsen Germany 1.jpg",
+        "caption": "Erich Kästner als Bronzefigur auf der Mauer",
+        "author": "Lupus in Saxonia",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Denkmal_Erich_K%C3%A4stner_Albertplatz_Dresden_Sachsen_Germany_1.jpg",
+        "h": 600,
+        "w": 800,
+        "focus": [
+          0.5,
+          0.3
+        ]
+      }
     },
     {
       "id": "pfunds-molkerei",
@@ -257,7 +319,7 @@
         118
       ],
       "hour": 13,
-      "text": "Von außen ein Eckhaus an der Bautzner Straße. Drinnen sind die Wände mit handbemalten Fliesen von Villeroy & Boch bedeckt, Szenen und Sinnsprüche im Stil der Neorenaissance, und 1997 trug das Guinness-Buch ihn als „schönsten Milchladen der Welt“ ein. Paul Pfund, ein Landwirt aus Reinholdshain, gründete die Molkerei, 1880 stieg sein Bruder Friedrich ein. Er soll als Erster in Deutschland Kondensmilch hergestellt haben, er verkaufte Kefir, Joghurt nach bulgarischer Art, Milchkaffee in Tuben. 1890 richtete er eine Krankenkasse für seine Leute ein. Die DDR enteignete die Firma 1972. Dass der Laden überlebte, ist Johanne Pfund und dem Denkmalschutz zu verdanken. 1995 öffnete er wieder unter altem Namen.",
+      "text": "Von außen ein Eckhaus an der Bautzner Straße. Drinnen sind die Wände mit handbemalten Fliesen von Villeroy & Boch bedeckt, und 1997 trug das Guinness-Buch ihn als „schönsten Milchladen der Welt“ ein. Paul Pfund gründete die Molkerei; sie soll als erste in Deutschland Kondensmilch hergestellt haben, verkaufte Kefir und Milchkaffee in Tuben, und 1890 bekamen die Leute eine eigene Krankenkasse. Die DDR enteignete die Firma 1972. Dass der Laden überlebte, ist dem Denkmalschutz zu verdanken; 1995 öffnete er wieder.",
       "closer": "Milchkaffee in Tuben, kein Witz: Das stand im Sortiment.",
       "facts": [
         {
@@ -279,7 +341,17 @@
       ],
       "refs": [
         "Q2084468"
-      ]
+      ],
+      "photo": {
+        "file": "20070208095DR Dresden-Neustadt Pfunds Molkerei Bautzner 79.jpg",
+        "caption": "Der Laden mit den Fliesen von Villeroy & Boch",
+        "author": "Jörg Blobelt",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:20070208095DR_Dresden-Neustadt_Pfunds_Molkerei_Bautzner_79.jpg",
+        "h": 604,
+        "w": 800
+      }
     },
     {
       "id": "kunsthofpassage",
@@ -323,7 +395,21 @@
       "refs": [
         "m412702_5658124",
         "m412717_5658086"
-      ]
+      ],
+      "photo": {
+        "file": "Dresden - Kunsthofpassage Hof der Elemente.jpg",
+        "caption": "Der Hof der Elemente mit seinen Rinnen und Trichtern",
+        "author": "Fred Romero from Paris, France",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Dresden_-_Kunsthofpassage_Hof_der_Elemente.jpg",
+        "h": 533,
+        "w": 800,
+        "focus": [
+          0.5,
+          0.45
+        ]
+      }
     },
     {
       "id": "bunte-republik",
@@ -340,7 +426,7 @@
         112
       ],
       "hour": 22,
-      "text": "Zum Schluss von oben, bei Nacht, über die Äußere Neustadt. Im Juni 1990, zwischen Mauerfall und Einheit, erklärte sich dieses Viertel zur Bunten Republik Neustadt. Eine weiße Linie auf der Straße markierte die Grenze, an den Zufahrten stand „Hier beginnt das freie Territorium der Bunten Republik Neustadt“. Es gab eine Währung, die Neustadtmark, und eine Flagge mit Micky-Maus-Kopf im Ährenkranz. Die provisorische Regierung forderte den Anschluss an den Vatikan und hatte ein Ministerium für Unkultur und Unterseeboote. 1993 löste sie sich auf, indem sie in der Elbe baden ging. Das Fest dazu gab es noch bis 2019 jedes Jahr im Juni. Der Eigensinn ist geblieben.",
+      "text": "Zum Schluss von oben, bei Nacht. Im Juni 1990, zwischen Mauerfall und Einheit, erklärte sich dieses Viertel zur Bunten Republik Neustadt. Eine weiße Linie markierte die Grenze, es gab eine Währung, die Neustadtmark, und eine Flagge mit Micky-Maus-Kopf im Ährenkranz. Die provisorische Regierung forderte den Anschluss an den Vatikan und hatte ein Ministerium für Unkultur und Unterseeboote. 1993 löste sie sich auf, indem sie in der Elbe baden ging. Das Fest gab es bis 2019 jeden Juni. Der Eigensinn ist geblieben.",
       "days": [
         {
           "from": "06-18",

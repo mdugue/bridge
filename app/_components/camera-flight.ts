@@ -30,12 +30,30 @@ export interface FlightTarget {
   pos: Xyz;
 }
 
+/** How a walk's glide differs from a curated viewpoint's (camera-pose.ts
+ *  `flyToViewpoint`). */
+export interface GlideOptions {
+  /** a drag on the way looks about and the glide carries on */
+  lookAround?: boolean;
+  onProgress?: FlightShape["onProgress"];
+  pace?: FlightShape["pace"];
+}
+
 /** How a flight differs from a scenic glide. */
 export interface FlightShape {
   /** m the path bows upward at its middle; default from the distance */
   arc?: number;
   /** s; default from the distance */
   duration?: number;
+  /** stretches the duration (a told walk glides slower: 2) */
+  pace?: number;
+  /**
+   * Hears the flight's progress (0…1, before its easing) after each step
+   * that moved the camera, and 1 once when it lands, is cancelled or gives
+   * way to another flight: what travels with the camera (a walk's hour)
+   * stops where the camera stops — an export's held frames, a slow one.
+   */
+  onProgress?: (t: number) => void;
 }
 
 interface ActiveFlight {
@@ -49,6 +67,7 @@ interface ActiveFlight {
   hull: LiftPoint[];
   /** the player took the view: the flight moves the camera, not its aim */
   lookFree: boolean;
+  onProgress?: (t: number) => void;
   startFov: number;
   startPos: Vector3;
   startQuat: Quaternion;
@@ -68,13 +87,13 @@ export interface CameraFlight {
    * Begins gliding the camera from its current pose to `target`. With
    * `floorAt` — the lowest height the camera may pass at over world (x, z)
    * — the path climbs over whatever stands between the two poses instead
-   * of cutting through it.
+   * of cutting through it. Returns how long it takes (s).
    */
   start: (
     target: FlightTarget,
     floorAt?: (x: number, z: number) => number,
     shape?: FlightShape
-  ) => void;
+  ) => number;
   /**
    * Advances the active flight by `dt` seconds, driving the camera. Returns
    * true while a flight owns the camera (so the caller suspends player input).
@@ -101,6 +120,12 @@ export function createCameraFlight(camera: PerspectiveCamera): CameraFlight {
   const rot = new Matrix4();
   const tmpPos = new Vector3();
   const tmpQuat = new Quaternion();
+  // the flight ends: what travels with it lands too
+  const land = () => {
+    const ended = flight;
+    flight = null;
+    ended?.onProgress?.(1);
+  };
 
   const targetQuat = (
     endPos: Vector3,
@@ -120,7 +145,7 @@ export function createCameraFlight(camera: PerspectiveCamera): CameraFlight {
         ? { x: flight.endPos.x, y: flight.endPos.y, z: flight.endPos.z }
         : null,
     cancel: () => {
-      flight = null;
+      land();
     },
     releaseLook: () => {
       if (flight) {
@@ -128,6 +153,7 @@ export function createCameraFlight(camera: PerspectiveCamera): CameraFlight {
       }
     },
     start: (target, floorAt, shape = {}) => {
+      land();
       const startPos = camera.position.clone();
       const endPos = new Vector3(target.pos.x, target.pos.y, target.pos.z);
       const dist = startPos.distanceTo(endPos);
@@ -141,15 +167,17 @@ export function createCameraFlight(camera: PerspectiveCamera): CameraFlight {
         endFov: target.fov,
         arc: shape.arc ?? Math.min(dist * ARC_RATIO, MAX_ARC),
         duration:
-          shape.duration ??
-          clamp(
-            BASE_DURATION + dist * SECONDS_PER_METRE,
-            MIN_DURATION,
-            MAX_DURATION
-          ),
+          (shape.duration ??
+            clamp(
+              BASE_DURATION + dist * SECONDS_PER_METRE,
+              MIN_DURATION,
+              MAX_DURATION
+            )) * (shape.pace ?? 1),
         elapsed: 0,
         lookFree: false,
+        onProgress: shape.onProgress,
       };
+      return flight.duration;
     },
     update: (dt) => {
       if (!flight) {
@@ -178,7 +206,9 @@ export function createCameraFlight(camera: PerspectiveCamera): CameraFlight {
       }
       camera.updateMatrixWorld(true);
       if (t >= 1) {
-        flight = null;
+        land();
+      } else {
+        flight.onProgress?.(t);
       }
       return true;
     },

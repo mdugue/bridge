@@ -1932,16 +1932,20 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   sources each claim names, committed as `data/<site>/walks/<id>.json`
   (`lib/city/walks.ts`) and bundled into `walks.json` by the build. A
   stop is a view (eye in the site CRS on the DGM's ground, the point it
-  looks at, lens, hour, Modell preset or picture style), a narration of
-  at most 900 characters, a closer look, notes for days of the year and
+  looks at, lens, hour, picture style; never Modell), a narration of
+  at most 560 characters, a closer look, notes for days of the year and
   seasons, and its facts with an https source or a Stadtwissen id each.
-  The walk card (`walk-player.tsx`) glides there, sets today at the
-  stop's hour and the style, tells the stop and today's notes, folds out
-  the sources, and says on every stop that the narration is Claude's.
+  The walk card (`walk-player.tsx`) glides there at 2.2× the pace, sets
+  today at the stop's hour and the style, tells the stop and today's
+  notes in a book face (Newsreader, self-hosted) and, if asked, reads it
+  aloud from the start of the glide, folds out the sources, and says on
+  every stop that the narration is Claude's.
   `scripts/walks.test.ts` holds every walk to its data (form, extent,
   ground within 0.2 m, references). Dresden: four walks, 31 stops
   (*Augusts Bühne*, *Narben und Nähte*, *Gold, Milch und Eigensinn*,
-  *Wunder am Elbhang*); how they are written:
+  *Wunder am Elbhang*); one each in Leipzig (6 stops), Hamburg (6),
+  München (5), Meißen (3), Grimma (3) and Unna (2); Berlin none yet;
+  how they are written:
   [walks.md](./walks.md).
 - **Szenario Hochwasser** `= computed` `≈ assumed` — *Frag die Stadt*'s
   flood ([ADR 0058](./adr/0058-scenarios-are-model-sums-on-open-data.md),

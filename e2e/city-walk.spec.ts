@@ -1048,11 +1048,21 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       await walks.locator('[data-walk="augusts-buehne"]').click();
       const card = page.getByTestId("walk-card");
       await expect(card).toBeVisible();
-      await expect(card).toContainText("1/9");
+      await expect(card).toContainText("Station 1 von 9");
       await expect(card).toContainText("Erzählt von Claude (KI)");
+      // the detail the model lacks is on the stop's photo, with its credit
+      const photo = card.getByTestId("walk-photo");
+      await expect(photo.locator("img")).toBeVisible();
+      await expect(photo).toContainText("Wikimedia Commons");
+      // a click shows it whole, Escape closes it
+      await photo.getByRole("button", { name: "Foto groß zeigen" }).click();
+      const view = page.getByTestId("walk-photo-view");
+      await expect(view.locator("img")).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(view).toHaveCount(0);
       const first = await card.getByRole("heading").textContent();
       await card.getByTestId("walk-next").click();
-      await expect(card).toContainText("2/9");
+      await expect(card).toContainText("Station 2 von 9");
       await expect(card.getByRole("heading")).not.toHaveText(first ?? "");
       await card.getByText(/^Belege \(\d+\)$/).click();
       await expect(card.locator('a[href^="https://"]').first()).toBeVisible();

@@ -24,7 +24,11 @@ import {
   nearestFree,
   ROOF_CLEARANCE,
 } from "@/lib/city/clearance";
-import { createCameraFlight, type FlightTarget } from "./camera-flight";
+import {
+  createCameraFlight,
+  type FlightTarget,
+  type GlideOptions,
+} from "./camera-flight";
 import {
   createFpsMovement,
   type FpsMovementOptions,
@@ -123,6 +127,12 @@ export interface CameraPoseOptions {
   groundFloor: () => number;
   /** ground elevation (world Y) at EPSG (x, y); null = off every tile */
   heightAt: (epsgX: number, epsgY: number) => number | null;
+  /**
+   * A coarser ground where `heightAt` has none yet (the site's plate):
+   * what a vantage's height above the ground is taken over before its
+   * tile has landed, so a glide to a hill ends over the hill.
+   */
+  coarseHeightAt?: (epsgX: number, epsgY: number) => number | null;
   offset: RecenterOffset;
   /**
    * Live mode ended because the player took over by hand — looked around,
@@ -189,9 +199,16 @@ export interface CameraPose {
   flyTo: (position: Xyz, lookAt: Xyz) => void;
   /**
    * Smoothly glides the camera to a curated scenic Viewpoint (animated, unlike
-   * the instant applyCameraState), landing in the viewpoint's movement mode.
+   * the instant applyCameraState), landing in the viewpoint's movement mode;
+   * `pace` stretches the glide and `onProgress` hears it (camera-flight.ts).
+   * With `lookAround` a drag on the way looks about and the glide carries
+   * on (a walk's long glide), as in the player's own glides; without, it
+   * stops the glide. Returns how long the glide takes (s).
    */
-  flyToViewpoint: (viewpoint: ViewpointGeometry) => void;
+  flyToViewpoint: (
+    viewpoint: ViewpointGeometry,
+    glide?: GlideOptions
+  ) => number;
   /**
    * The pose as a vantage the glide can fly back to. Height is captured
    * ABOVE THE TERRAIN, like the curated viewpoints, so the saved view still
@@ -313,8 +330,12 @@ export function createCameraPose(
   const dir = new Vector3();
   const euler = new Euler(0, 0, 0, "YXZ");
 
+  // where a tile's terrain has not landed, the plate's coarse ground,
+  // then the lowest terrain so far
   const groundAt = (epsgX: number, epsgY: number): number =>
-    opts.heightAt(epsgX, epsgY) ?? opts.groundFloor();
+    opts.heightAt(epsgX, epsgY) ??
+    opts.coarseHeightAt?.(epsgX, epsgY) ??
+    opts.groundFloor();
   const groundWorld = (x: number, z: number): number => {
     const epsg = worldToEpsg(x, z, offset);
     return groundAt(epsg.x, epsg.y);
@@ -826,14 +847,21 @@ export function createCameraPose(
         mode: movement.getMode(),
       };
     },
-    flyToViewpoint: (viewpoint) => {
+    flyToViewpoint: (
+      viewpoint,
+      { lookAround = false, onProgress, pace } = {}
+    ) => {
       endFollow();
       // Fly during the glide so the ground clamp can't fight the vertical arc;
       // pendingMode restores walk (and snaps to the ground) once it settles.
       settle("fly");
-      flight.start(targetOf(viewpoint), glideFloor);
+      const seconds = flight.start(targetOf(viewpoint), glideFloor, {
+        onProgress,
+        pace,
+      });
       pendingMode = viewpoint.mode;
-      ownGlide = false;
+      ownGlide = lookAround;
+      return seconds;
     },
     placeAt: (viewpoint) => {
       cancelGlide();

@@ -1,0 +1,2213 @@
+{
+ "attribution": "Wikidata (CC0)",
+ "retrieved": "2026-10-30",
+ "entities": {
+  "Q1025601": {
+   "label": "Café Felsche",
+   "description": "von 1835 bis 1943 existierendes bekanntes Leipziger Kaffeehaus",
+   "wiki": "Café Felsche",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q30022",
+      "v": "Café"
+     }
+    ]
+   }
+  },
+  "Q107577445": {
+   "label": "Messehalle 11",
+   "description": "Alte Messe Leipzig, Messehalle 11",
+   "wiki": "Messehalle 11",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q115470553": {
+   "label": "Listhaus (Leipzig)",
+   "description": "Bürokomplex im Ortsteil Zentrum-Ost in Leipzig, Sachsen",
+   "wiki": "Listhaus (Leipzig)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1021645",
+      "v": "Bürogebäude"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q116956690": {
+   "label": "Carolabad",
+   "description": "bis 1943 existierendes Hallenbad im Hofbereich des Gebäudes Dufourstraße 14 (nunmehr Nr. 6–8) im Süden Leipzigs, heute Ortsteil Zentrum-Süd",
+   "wiki": "Carolabad (Leipzig)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q357380",
+      "v": "Hallenbad"
+     }
+    ]
+   }
+  },
+  "Q1205574": {
+   "label": "Deutsches Buchhändlerhaus",
+   "description": "ehemaliger Sitz des Börsenvereins der Deutschen Buchhändler",
+   "wiki": "Deutsches Buchhändlerhaus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q15838829",
+      "v": "Kayser und von Großheim"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q502163",
+      "v": "Neorenaissance"
+     }
+    ]
+   }
+  },
+  "Q1238002": {
+   "label": "Dominikanerkloster St. Pauli Leipzig",
+   "description": "Kloster in Deutschland",
+   "wiki": "Dominikanerkloster St. Pauli Leipzig",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q44613",
+      "v": "Kloster"
+     },
+     {
+      "id": "Q2742167",
+      "v": "religiöse Gemeinschaft"
+     }
+    ]
+   }
+  },
+  "Q125487973": {
+   "label": "Glaswerkstatt Stokinger",
+   "description": "denkmalgeschütztes Gebäude in einem Hinterhof in Leipzig",
+   "wiki": "Glaswerkstatt Stokinger",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     },
+     {
+      "id": "Q656720",
+      "v": "Werkstatt"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Scharnhorststraße 3 (Hinterhof), Leipzig"
+     }
+    ]
+   }
+  },
+  "Q1258475": {
+   "label": "Kinderkrankenhaus",
+   "description": "ehemaliges Kinderkrankenhaus der Uniklinik Leipzig",
+   "wiki": "Kinderkrankenhaus (Leipzig)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q644264",
+      "v": "Kinderkrankenhaus"
+     },
+     {
+      "id": "Q64578911",
+      "v": "ehemaliges Krankenhaus"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q98519",
+      "v": "Arwed Roßbach"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "6.12.1891"
+     }
+    ]
+   }
+  },
+  "Q1283607": {
+   "label": "Großmarkthalle",
+   "description": "Großmarkthalle in Leipzig, auch Kohlrabizirkus genannt",
+   "wiki": "Kohlrabizirkus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q56062468",
+      "v": "Großmarkthalle"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q97698",
+      "v": "Hubert Ritter"
+     },
+     {
+      "id": "Q102514",
+      "v": "Franz Dischinger"
+     },
+     {
+      "id": "Q15816096",
+      "v": "Hubert Rüsch"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q184190",
+      "v": "Stahlbeton"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1928"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "29 m"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "An den Tierkliniken 38, 04103 Leipzig"
+     }
+    ]
+   }
+  },
+  "Q1296522": {
+   "label": "Höfe am Brühl",
+   "description": "Einkaufszentrum in Leipzig",
+   "wiki": "Höfe am Brühl",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q11315",
+      "v": "Einkaufszentrum"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "25.9.2012"
+     }
+    ]
+   }
+  },
+  "Q136324274": {
+   "label": "Villa Philipp",
+   "description": "Bauwerk in Leipzig",
+   "wiki": "Villa Philipp",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ]
+   }
+  },
+  "Q1375330": {
+   "label": "Europahaus",
+   "description": "Hochhaus in Leipzig",
+   "wiki": "Europahaus (Leipzig)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q811979",
+      "v": "Bauwerk"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q2040119",
+      "v": "Otto Paul Burghardt"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q245188",
+      "v": "Moderne"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1928"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1930"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "56 m"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Augustusplatz 7"
+     }
+    ]
+   }
+  },
+  "Q1453739": {
+   "label": "Fregehaus",
+   "description": "barockes Kaufmannshaus in Leipzig",
+   "wiki": "Fregehaus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q11755880",
+      "v": "Wohngebäude"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1550"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Katharinenstraße 11"
+     }
+    ]
+   }
+  },
+  "Q1491479": {
+   "label": "Mädlerpassage",
+   "description": "Ladenpassage in der Innenstadt von Leipzig",
+   "wiki": "Mädlerpassage",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1320830",
+      "v": "Durchgang"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q51879601",
+      "v": "Historismus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q1491911": {
+   "label": "Galerie für Zeitgenössische Kunst",
+   "description": "Ausstellungshaus und Museum in Leipzig",
+   "wiki": "Galerie für Zeitgenössische Kunst",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q207694",
+      "v": "Kunstmuseum"
+     },
+     {
+      "id": "Q27032254",
+      "v": "Kunstarchiv"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1990"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Karl-Tauchnitz-Straße 9-11, 04107 Leipzig"
+     }
+    ]
+   }
+  },
+  "Q1508719": {
+   "label": "Georgenhalle",
+   "description": "ehemaliger Gebäudekomplex in Leipzig an der Goethestraße",
+   "wiki": "Georgenhalle",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ]
+   }
+  },
+  "Q1557577": {
+   "label": "Kongreßhalle Leipzig",
+   "description": "Veranstaltungsgebäude an der Pfaffendorfer Straße in Leipzig",
+   "wiki": "Kongreßhalle Leipzig",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1763828",
+      "v": "Mehrzweckhalle"
+     },
+     {
+      "id": "Q1060829",
+      "v": "Konzerthaus"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1899"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Pfaffendorfer Straße 31"
+     }
+    ]
+   }
+  },
+  "Q1562138": {
+   "label": "Stadthaus",
+   "description": "Stadthaus in Ecklage Lotterstraße, Martin-Luther-Ring 8, 8a, 10 und Markgrafenstraße 3, mit Innenhof und Verbindungsbrücke zum Neuen Rathaus über die Lotterstraße (Muschelkalksteinfassade)",
+   "wiki": "Stadthaus (Leipzig)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3947",
+      "v": "Haus"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1912"
+     },
+     {
+      "v": "1908"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Burgplatz 1"
+     }
+    ]
+   }
+  },
+  "Q15853128": {
+   "label": "Volkshaus",
+   "description": "Gebäude in Leipzig",
+   "wiki": "Volkshaus (Leipzig)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1435490",
+      "v": "Volkshaus"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q108600285",
+      "v": "Oscar Schade"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1905"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Karl-Liebknecht-Straße 30; 32"
+     }
+    ]
+   }
+  },
+  "Q1631047": {
+   "label": "Hotel The Westin Leipzig",
+   "description": "Hochhaus in Leipzig",
+   "wiki": "The Westin Leipzig",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q27686",
+      "v": "Hotel"
+     },
+     {
+      "id": "Q63099748",
+      "v": "Hotelgebäude"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q245188",
+      "v": "Moderne"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1981"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     },
+     {
+      "id": "Q1441983",
+      "v": "Umnutzung"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "13.3.1981"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Gerberstraße 15, 04105 Leipzig"
+     }
+    ]
+   }
+  },
+  "Q170402": {
+   "label": "Thomaskirche",
+   "description": "Kirchengebäude in Leipzig",
+   "wiki": "Thomaskirche (Leipzig)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q96786",
+      "v": "Constantin Lipsius"
+     },
+     {
+      "id": "Q14272603",
+      "v": "Kunz Nierade"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q43669",
+      "v": "Thomas"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q176483",
+      "v": "Gotische Architektur"
+     }
+    ],
+    "P571": [
+     {
+      "v": "15. Jahrhundert"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "68 m"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Thomaskirchhof 19, 04109 Leipzig, Deutschland"
+     }
+    ]
+   }
+  },
+  "Q1789670": {
+   "label": "Krochhochhaus",
+   "description": "Hochhaus in Leipzig",
+   "wiki": "Krochhochhaus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q18142",
+      "v": "Hochhaus"
+     },
+     {
+      "id": "Q655686",
+      "v": "Geschäftshaus"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1927"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "43 m"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Goethestraße 2, 04109 Leipzig, Deutschland"
+     }
+    ]
+   }
+  },
+  "Q1877000": {
+   "label": "Lukaskirche",
+   "description": "Kirchengebäude in Leipzig-Volkmarsdorf",
+   "wiki": "St.-Lukas-Kirche (Leipzig)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1469367",
+      "v": "Julius Zeißig"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q128538",
+      "v": "Lukas der Evangelist"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q186363",
+      "v": "Neogotik"
+     }
+    ],
+    "P571": [
+     {
+      "v": "19.3.1893"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q1068633",
+      "v": "Spatenstich"
+     },
+     {
+      "id": "Q25640113",
+      "v": "Kirchweihe"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Lukasstraße 1, 04315 Leipzig"
+     }
+    ]
+   }
+  },
+  "Q19297177": {
+   "label": "Neue Propsteikirche St. Trinitatis",
+   "description": "moderner römisch-katholischer Kirchenbau in der Innenstadt von Leipzig",
+   "wiki": "Propsteikirche St. Trinitatis",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q317557",
+      "v": "Pfarrkirche"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q37090",
+      "v": "Dreifaltigkeit"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q595448",
+      "v": "Postmoderne Architektur"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Nonnenmühlgasse 2, 04107 Leipzig"
+     }
+    ]
+   }
+  },
+  "Q2063901": {
+   "label": "Paulinum",
+   "description": "Gebäude der Universität Leipzig",
+   "wiki": "Paulinum (Universität Leipzig)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q2496382",
+      "v": "Universitätskirche"
+     },
+     {
+      "id": "Q1940809",
+      "v": "Aula"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q586951",
+      "v": "Erick van Egeraat"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q318798",
+      "v": "Paulinerkirche"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "12/2017"
+     }
+    ]
+   }
+  },
+  "Q2079690": {
+   "label": "Peterskirche",
+   "description": "Kirchengebäude in Leipzig",
+   "wiki": "Peterskirche (Leipzig)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q761637",
+      "v": "August Hartel"
+     },
+     {
+      "id": "Q96786",
+      "v": "Constantin Lipsius"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q33923",
+      "v": "Petrus"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q186363",
+      "v": "Neogotik"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1882"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Schletterstraße 5, 04107 Leipzig, Deutschland"
+     }
+    ]
+   }
+  },
+  "Q20804412": {
+   "label": "Heilig-Kreuz-Kirche, Leipzig",
+   "description": "evangelisch-lutherisches Gotteshaus in Sachsen",
+   "wiki": "Heilig-Kreuz-Kirche (Leipzig)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q2060823",
+      "v": "Paul Lange"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q380356",
+      "v": "Wahres Kreuz"
+     }
+    ]
+   }
+  },
+  "Q2136803": {
+   "label": "Reformierte Kirche",
+   "description": "Kirchengebäude in Leipzig, Sachsen",
+   "wiki": "Reformierte Kirche (Leipzig)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1506339",
+      "v": "Georg Weidenbach"
+     },
+     {
+      "id": "Q2150766",
+      "v": "Richard Tschammer"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q502163",
+      "v": "Neorenaissance"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1896"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Tröndlinring 7"
+     }
+    ]
+   }
+  },
+  "Q2139484": {
+   "label": "Reichsgerichtsgebäude",
+   "description": "Gebäude in Leipzig, seit 2002 Bundesverwaltungsgericht",
+   "wiki": "Reichsgerichtsgebäude",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1137809",
+      "v": "Gerichtsgebäude"
+     },
+     {
+      "id": "Q1516079",
+      "v": "Denkmalensemble"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q71886",
+      "v": "Ludwig Hoffmann"
+     },
+     {
+      "id": "Q91941",
+      "v": "Peter Dybwad"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q502163",
+      "v": "Neorenaissance"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q512552",
+      "v": "Reichsgericht"
+     },
+     {
+      "id": "Q702424",
+      "v": "Bundesverwaltungsgericht"
+     },
+     {
+      "id": "Q72113664",
+      "v": "Fachsenat nach § 189 VwGO des Bundesverwaltungsgerichts"
+     },
+     {
+      "id": "Q72113671",
+      "v": "Großer Senat des Bundesverwaltungsgerichts"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1888"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Simsonplatz 1, 04107 Leipzig"
+     }
+    ]
+   }
+  },
+  "Q2164978": {
+   "label": "Romanushaus",
+   "description": "historisches Bauwerk in der Leipziger Innenstadt",
+   "wiki": "Romanushaus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1701"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Katharinenstraße 23"
+     }
+    ]
+   }
+  },
+  "Q2202613": {
+   "label": "Römisches Haus",
+   "description": "nicht erhaltenes Wohngebäude in Leipzig",
+   "wiki": "Römisches Haus (Leipzig)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ]
+   }
+  },
+  "Q2251842": {
+   "label": "Schumann-Haus",
+   "description": "Wohnhaus von Clara und Robert Schumann",
+   "wiki": "Schumann-Haus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q5773747",
+      "v": "historisches Haus"
+     },
+     {
+      "id": "Q33506",
+      "v": "Museum"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q132232",
+      "v": "Clara Schumann"
+     },
+     {
+      "id": "Q7351",
+      "v": "Robert Schumann"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q132232",
+      "v": "Clara Schumann"
+     },
+     {
+      "id": "Q7351",
+      "v": "Robert Schumann"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1838"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Inselstraße 18"
+     }
+    ]
+   }
+  },
+  "Q228926": {
+   "label": "Zum Arabischen Coffe Baum",
+   "description": "Café in der Kleinen Fleischergasse in Leipzig",
+   "wiki": "Zum Arabischen Coffe Baum",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q30022",
+      "v": "Café"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q23562860": {
+   "label": "Erlöserkirche",
+   "description": "Kirchengebäude in Leipzig",
+   "wiki": "Erlöserkirche (Leipzig)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q2474888",
+      "v": "Ulf Zimmermann"
+     }
+    ]
+   }
+  },
+  "Q2453500": {
+   "label": "Trinitatiskirche",
+   "description": "Kirchengebäude in Leipzig",
+   "wiki": "Evangelisch-Lutherische Trinitatiskirche Leipzig",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q62322",
+      "v": "Otto Bartning"
+     },
+     {
+      "id": "Q2060823",
+      "v": "Paul Lange"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q37090",
+      "v": "Dreifaltigkeit"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "27.9.1891"
+     },
+     {
+      "v": "1916"
+     }
+    ]
+   }
+  },
+  "Q2525777": {
+   "label": "Villa Petersmann",
+   "description": "Villa in Leipzig, mit Garten, Remise und Kutscherwohnung (im Stil der deutschen Renaissance; Putzfassade); Architekt: Peter Dybwad",
+   "wiki": "Villa Petersmann",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q91941",
+      "v": "Peter Dybwad"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1898"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Schwägrichenstraße 23"
+     }
+    ]
+   }
+  },
+  "Q2525817": {
+   "label": "Villa Swiderski",
+   "description": "Ehemalige Villa in Leipzig",
+   "wiki": "Villa Swiderski",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P88": [
+     {
+      "id": "Q138939492",
+      "v": "Philipp Swiderski"
+     }
+    ]
+   }
+  },
+  "Q2585007": {
+   "label": "Wintergartenhochhaus",
+   "description": "Hochhaus in Leipzig",
+   "wiki": "Wintergartenhochhaus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q18142",
+      "v": "Hochhaus"
+     },
+     {
+      "id": "Q11755880",
+      "v": "Wohngebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1337234",
+      "v": "Horst Siegel"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q245188",
+      "v": "Moderne"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1972"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q385378",
+      "v": "Bauausführung"
+     },
+     {
+      "id": "Q1441983",
+      "v": "Umnutzung"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "106.8 m"
+     }
+    ]
+   }
+  },
+  "Q267248": {
+   "label": "Opernhaus Leipzig",
+   "description": "Opernhaus in Leipzig, Sachsen, Deutschland",
+   "wiki": "Opernhaus (Leipzig)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q153562",
+      "v": "Opernhaus"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q66687537",
+      "v": "Oper Leipzig"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1956"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q168983",
+      "v": "Brand"
+     },
+     {
+      "id": "Q1370468",
+      "v": "bauliche Rekonstruktion"
+     },
+     {
+      "id": "Q1370468",
+      "v": "bauliche Rekonstruktion"
+     },
+     {
+      "id": "Q1370468",
+      "v": "bauliche Rekonstruktion"
+     }
+    ],
+    "P1083": [
+     {
+      "v": "1426"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1960"
+     },
+     {
+      "v": "1868"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Augustusplatz 12"
+     }
+    ]
+   }
+  },
+  "Q26821504": {
+   "label": "Haus des Buches",
+   "description": "Büro- und Veranstaltungsgebäude in Leipzig",
+   "wiki": "Haus des Buches (Leipzig)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ]
+   }
+  },
+  "Q28102548": {
+   "label": "Paket- und Zeitungspostamt",
+   "description": "Bauwerk in Leipzig",
+   "wiki": "Paket- und Zeitungspostamt (Leipzig)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q811979",
+      "v": "Bauwerk"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "16.10.1880"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Prager Straße 4–10"
+     }
+    ]
+   }
+  },
+  "Q284771": {
+   "label": "Augusteum",
+   "description": "Gebäude der Universität Leipzig",
+   "wiki": "Augusteum (Universität Leipzig)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     },
+     {
+      "id": "Q19860854",
+      "v": "zerstörtes Gebäude oder Bauwerk"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1836"
+     }
+    ]
+   }
+  },
+  "Q2932977": {
+   "label": "Zimmermannsches Kaffeehaus",
+   "description": "ehemaliges Café in Leipzig",
+   "wiki": "Zimmermannsches Kaffeehaus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q30022",
+      "v": "Café"
+     }
+    ]
+   }
+  },
+  "Q315599": {
+   "label": "Moritzbastei",
+   "description": "einzig erhaltene Befestigungsanlage der Stadt Leipzig",
+   "wiki": "Moritzbastei",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     },
+     {
+      "id": "Q264542",
+      "v": "Studierende"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1549"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Universitätsstraße 9, 04109 Leipzig, Deutschland"
+     }
+    ]
+   }
+  },
+  "Q435606": {
+   "label": "Alte Handelsbörse",
+   "description": "Gebäude in Leipzig",
+   "wiki": "Alte Handelsbörse (Leipzig)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q10882966",
+      "v": "Börsengebäude"
+     },
+     {
+      "id": "Q18674739",
+      "v": "Veranstaltungsort"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1693964",
+      "v": "Johann Georg Starcke"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q840829",
+      "v": "Barockarchitektur"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1678"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Naschmarkt 2, 04109 Leipzig"
+     }
+    ]
+   }
+  },
+  "Q436052": {
+   "label": "Alte Nikolaischule",
+   "description": "Schule in Leipzig",
+   "wiki": "Alte Nikolaischule (Leipzig)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1244442",
+      "v": "Schulgebäude"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q236122",
+      "v": "Architektur der Renaissance"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1553"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Nikolaikirchhof 2"
+     }
+    ]
+   }
+  },
+  "Q436368": {
+   "label": "Alte Waage",
+   "description": "Gebäude in Leipzig",
+   "wiki": "Alte Waage (Leipzig)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q236122",
+      "v": "Architektur der Renaissance"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q439431": {
+   "label": "Altes Rathaus",
+   "description": "Gebäude in Leipzig, Deutschland",
+   "wiki": "Altes Rathaus (Leipzig)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q543654",
+      "v": "Rathaus"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q236122",
+      "v": "Architektur der Renaissance"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1556"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Markt 1"
+     }
+    ]
+   }
+  },
+  "Q455058": {
+   "label": "Russische Gedächtniskirche",
+   "description": "Kirchengebäude in Leipzig",
+   "wiki": "Russische Gedächtniskirche",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q2031836",
+      "v": "orthodoxes Kirchengebäude"
+     },
+     {
+      "id": "Q114785346",
+      "v": "Russisch-orthodoxe Kirche"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1506339",
+      "v": "Georg Weidenbach"
+     },
+     {
+      "id": "Q2150766",
+      "v": "Richard Tschammer"
+     },
+     {
+      "id": "Q3561845",
+      "v": "Wladimir Alexandrowitsch Pokrowski"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q137947",
+      "v": "Alexius von Edessa"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q2026876",
+      "v": "Neorussische Architektur"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q40089",
+      "v": "Mauerziegel"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "65 m"
+     }
+    ]
+   }
+  },
+  "Q471329": {
+   "label": "City-Hochhaus Leipzig",
+   "description": "Hochhaus in Leipzig",
+   "wiki": "City-Hochhaus Leipzig",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q11303",
+      "v": "Wolkenkratzer"
+     },
+     {
+      "id": "Q18142",
+      "v": "Hochhaus"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q66490",
+      "v": "Hermann Henselmann"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q245188",
+      "v": "Moderne"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q158948",
+      "v": "Mitteldeutscher Rundfunk"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1972"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1973"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "142 m"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Augustusplatz 9"
+     }
+    ]
+   }
+  },
+  "Q49232796": {
+   "label": "Villa Chopinstraße 13",
+   "description": "Villa mit Nebengebäude, Vorgarten und Einfriedung (Putzfassade mit Sandsteingliederung; 1848/1849 Wohnort von Nobelpreisträger Theodor Mommsen)",
+   "wiki": "Angelika-Hartmann-Haus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1847"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Chopinstraße 13"
+     }
+    ]
+   }
+  },
+  "Q49232868": {
+   "label": "Dresdner Straße 11/13",
+   "description": "Gebäude in Leipzig",
+   "wiki": "Haus des Handwerks (Leipzig)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q138668047",
+      "v": "Curt Nebel"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q2032669",
+      "v": "Oscar Brandstetter Verlag"
+     },
+     {
+      "id": "Q1575305",
+      "v": "Handwerkskammer zu Leipzig"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1906"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Dresdner Straße 11; 13"
+     }
+    ]
+   }
+  },
+  "Q49234336": {
+   "label": "Verbandshaus Karl-Liebknecht-Straße 8; 10; 12; 14",
+   "description": "Wohn- und Geschäftshaus an der Karl-Liebknecht-Straße 8–14 in der Inneren Südvorstadt von Leipzig.",
+   "wiki": "Wünschmann-Haus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3947",
+      "v": "Haus"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1913"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Karl-Liebknecht-Straße 8; 10; 12; 14"
+     }
+    ]
+   }
+  },
+  "Q49235245": {
+   "label": "Hotel Paul-List-Straße 5",
+   "description": "Hotel in Leipzig, Sachsen",
+   "wiki": "Hotel am Bayrischen Platz",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q27686",
+      "v": "Hotel"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1858"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q811165",
+      "v": "Baudenkmal"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Paul-List-Straße 5"
+     }
+    ]
+   }
+  },
+  "Q49235514": {
+   "label": "Grieg-Begegnungsstätte",
+   "description": "Museum und Begegnungsstätte",
+   "wiki": "Grieg-Begegnungsstätte",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3947",
+      "v": "Haus"
+     },
+     {
+      "id": "Q33506",
+      "v": "Museum"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1873"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "7.11.2005"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Talstraße 10"
+     }
+    ]
+   }
+  },
+  "Q49240521": {
+   "label": "Villa Kohlgartenstraße 33; 35",
+   "description": "Villa (mit zwei Hausnummern) mit Villengarten und Brunnen; repräsentative Klinkerfassade der Gründerzeit, baugeschichtlich von Bedeutung, erbaut von Willmar Schwabe",
+   "wiki": "Villa Willmar Schwabe",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3947",
+      "v": "Haus"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1879"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Kohlgartenstraße 33; 35"
+     }
+    ]
+   }
+  },
+  "Q49272809": {
+   "label": "St. Laurentius (Leipzig-Reudnitz)",
+   "description": "Kirchengebäude in Leipzig, Sachsen",
+   "wiki": "St. Laurentius (Leipzig-Reudnitz)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1892"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Stötteritzer Straße 47"
+     }
+    ]
+   }
+  },
+  "Q519613": {
+   "label": "Gewandhaus",
+   "description": "Konzertgebäude in Leipzig",
+   "wiki": "Gewandhaus (Leipzig)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1060829",
+      "v": "Konzerthaus"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q2173830",
+      "v": "Rudolf Skoda"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q994776",
+      "v": "Brutalismus"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1976"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "8.10.1981"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Augustusplatz 8"
+     }
+    ]
+   }
+  },
+  "Q523117": {
+   "label": "Auerbachs Keller",
+   "description": "bekannteste Gaststätte in Leipzig",
+   "wiki": "Auerbachs Keller",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q256020",
+      "v": "Gasthof"
+     }
+    ]
+   }
+  },
+  "Q566661": {
+   "label": "Museum der bildenden Künste",
+   "description": "Kunstmuseum in Leipzig",
+   "wiki": "Museum der bildenden Künste Leipzig",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q207694",
+      "v": "Kunstmuseum"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1848"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1848"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Katharinenstraße 10, 04109 Leipzig"
+     }
+    ]
+   }
+  },
+  "Q58172679": {
+   "label": "Café Grundmann",
+   "description": "Kaffeehaus in Leipzig",
+   "wiki": "Café Grundmann",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q30022",
+      "v": "Café"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Mahlmannstraße 16, 04275 Leipzig"
+     }
+    ]
+   }
+  },
+  "Q60617506": {
+   "label": "Galerie Hotel Leipziger Hof",
+   "description": "im Stadtteil Neustadt in Leipzig gelegenes Hotel",
+   "wiki": "Galerie Hotel Leipziger Hof",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q27686",
+      "v": "Hotel"
+     }
+    ]
+   }
+  },
+  "Q661291": {
+   "label": "Mendelssohn-Haus",
+   "description": "letztes Wohnhaus von Felix Mendelssohn Bartholdy, Museum und Sitz des Internationalen Kurt-Masur-Instituts",
+   "wiki": "Mendelssohn-Haus (Leipzig)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q2087181",
+      "v": "Museumshaus"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q46096",
+      "v": "Felix Mendelssohn Bartholdy"
+     }
+    ],
+    "P571": [
+     {
+      "v": "4.11.1997"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Goldschmidtstraße 12"
+     }
+    ]
+   }
+  },
+  "Q676338": {
+   "label": "Neues Rathaus",
+   "description": "Gebäude in Leipzig",
+   "wiki": "Neues Rathaus (Leipzig)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q543654",
+      "v": "Rathaus"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q2537632",
+      "v": "Eklektizismus"
+     },
+     {
+      "id": "Q502163",
+      "v": "Neorenaissance"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q13085",
+      "v": "Sandstein"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "114.7 m"
+     }
+    ]
+   }
+  },
+  "Q694286": {
+   "label": "Nikolaikirche",
+   "description": "Kirchengebäude in Leipzig",
+   "wiki": "Nikolaikirche (Leipzig)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q96020",
+      "v": "Johann Carl Friedrich Dauthe"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q44269",
+      "v": "Nikolaus von Myra"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q176483",
+      "v": "Gotische Architektur"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q121649",
+      "v": "Werkstein"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1513"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "75 m"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Nikolaikirchhof 4b, 04109 Leipzig, Deutschland"
+     }
+    ]
+   }
+  },
+  "Q809277": {
+   "label": "Barthels Hof",
+   "description": "historischer Gebäudekomplex in der Leipziger Innenstadt",
+   "wiki": "Barthels Hof",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q894408": {
+   "label": "Bosehaus",
+   "description": "Gebäude in Leipzig",
+   "wiki": "Bosehaus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q24699794",
+      "v": "Museumsgebäude"
+     },
+     {
+      "id": "Q5773747",
+      "v": "historisches Haus"
+     },
+     {
+      "id": "Q8719053",
+      "v": "Spielstätte für Musik"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1586"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Thomaskirchhof 16, 04109 Leipzig, Deutschland"
+     }
+    ]
+   }
+  },
+  "Q96054809": {
+   "label": "Wohnhaus Philipp-Rosenthal-Straße 21",
+   "description": "Jugendstilbau im Leipziger Ortsteil Zentrum Südost",
+   "wiki": "Wohnhaus Philipp-Rosenthal-Straße 21",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q97650039": {
+   "label": "Bowlingtreff",
+   "description": "Sport- und Freizeitanlage in Leipzig, ehemals Strom-Umspannwerk Leipzig-Mitte",
+   "wiki": "Bowlingtreff (Leipzig)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1987"
+     }
+    ]
+   }
+  }
+ }
+}
