@@ -7,7 +7,7 @@
  * does, and the model writes on without a round trip through the
  * browser and another model turn for each.
  */
-import { AERIAL_REACH, type AskTarget } from "./ask-view";
+import { AERIAL_REACH, type AskTarget, frameTargets } from "./ask-view";
 import {
   clampVolume,
   floodReading,
@@ -20,48 +20,62 @@ import {
 /** What the model gets back for a call. */
 export type ToolAnswer = Record<string, unknown>;
 
-/** The widest two of `places` stand apart (m, on the ground). */
-export function placesSpread(places: readonly AskTarget[]): number {
-  let widest = 0;
-  for (const a of places) {
-    for (const b of places) {
-      widest = Math.max(
-        widest,
-        Math.hypot(a.x - b.x, a.y - b.y) + (a.r ?? 0) + (b.r ?? 0)
-      );
-    }
-  }
-  return widest;
+/** The screen's shape the rule assumes where the browser names none:
+ *  square, between a phone held upright and a desktop. */
+export const DEFAULT_ASPECT = 1;
+
+/**
+ * Whether `places` fit one aerial view on a screen of `aspect`: the
+ * distance the framing needs for all of them (`frameTargets`, on flat
+ * ground, from no side in particular) within AERIAL_REACH. The server
+ * answers `zeige` with it, the card shows with it — so both say the same.
+ */
+export function fitsOneView(
+  places: readonly AskTarget[],
+  aspect: number = DEFAULT_ASPECT
+): boolean {
+  return frameTargets(places, { aspect, from: null }).distance <= AERIAL_REACH;
 }
 
-/** `zeige`'s answer: what the view will show. The card frames them on
- *  the screen it has; places further apart than an aerial view reaches
- *  it shows one at a time (`showPlaces`). */
-export function showAnswer(ask: {
-  alle?: boolean;
-  aus_der_luft?: boolean;
-  ziele: readonly (AskTarget & { name: string })[];
-}): ToolAnswer {
+/** `zeige`'s answer: what the view will show — all places in one view,
+ *  or the first alone (`alle` false, on foot, or too far apart for one
+ *  view on the visitor's screen: `fitsOneView`). */
+export function showAnswer(
+  ask: {
+    alle?: boolean;
+    aus_der_luft?: boolean;
+    ziele: readonly (AskTarget & { name: string })[];
+  },
+  aspect?: number
+): ToolAnswer {
   const names = ask.ziele.map((p) => p.name);
   const all = ask.alle !== false && names.length > 1;
   if (ask.aus_der_luft === false || !all) {
     return { ok: true, gezeigt: names.slice(0, 1), knoepfe: names };
   }
-  return placesSpread(ask.ziele) > AERIAL_REACH
-    ? {
+  return fitsOneView(ask.ziele, aspect)
+    ? { ok: true, gezeigt: names, knoepfe: names }
+    : {
         ok: true,
         gezeigt: names.slice(0, 1),
         knoepfe: names,
         hinweis:
           "Die Orte liegen zu weit auseinander für eine Ansicht: gezeigt ist der erste, die anderen stehen als Knöpfe unter der Antwort.",
-      }
-    : { ok: true, gezeigt: names, knoepfe: names };
+      };
 }
 
-/** `setze_zeit`'s answer: the hour as a clock reads it, and the day. */
+/** An hour of the day as minutes, as the scene's clock takes it: within
+ *  the day, 24 its last minute. */
+export function clockMinutes(hour: number): number {
+  const minutes = Math.round(Math.min(Math.max(hour, 0), 24) * 60);
+  return Math.min(minutes, 24 * 60 - 1);
+}
+
+/** `setze_zeit`'s answer: the hour as the scene's clock sets it, and the
+ *  day (the tool's schema holds it to a calendar day). */
 export function timeAnswer(ask: { datum?: string; stunde: number }) {
-  const minutes = Math.round(Math.min(Math.max(ask.stunde, 0), 24) * 60);
-  const clock = `${String(Math.floor(minutes / 60) % 24).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+  const minutes = clockMinutes(ask.stunde);
+  const clock = `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
   return { ok: true, zeit: `${ask.datum ?? "heute"}, ${clock} Uhr` };
 }
 
@@ -147,7 +161,12 @@ export function volumeShown(ask: Partial<PlannedVolume> & { aus?: boolean }): {
     drehung: ask.drehung ?? 0,
   });
   return {
-    answer: { ok: true, baukoerper: volume, hinweis: SCENARIO_NOTE },
+    answer: {
+      ok: true,
+      baukoerper: volume,
+      // the card places it once the ground there has loaded
+      hinweis: `Der Quader erscheint, sobald dort das Gelände geladen ist — zeig den Ort mit zeige, wenn er nicht im Bild ist. ${SCENARIO_NOTE}`,
+    },
     volume,
   };
 }

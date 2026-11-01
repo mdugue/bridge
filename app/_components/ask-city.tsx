@@ -138,6 +138,7 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
   const [round, setRound] = useState(0);
   const [qa] = useState(wantsQa);
   const [checking, setChecking] = useState(false);
+  const [qaOpened, setQaOpened] = useState(false);
   const city = useSite().name;
   useEffect(() => {
     scene.setListening(hearing);
@@ -201,7 +202,10 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
                 checking && "bg-muted text-foreground"
               )}
               data-testid="ask-qa-open"
-              onClick={() => setChecking((on) => !on)}
+              onClick={() => {
+                setQaOpened(true);
+                setChecking((on) => !on);
+              }}
               title="Prüfstand: alle Startfragen prüfen"
               type="button"
             >
@@ -241,22 +245,42 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
             <XIcon className="size-4" />
           </button>
         </header>
-        {key && checking ? (
-          <Suspense fallback={null}>
-            <AskQa askKey={key} city={city} site={site} />
-          </Suspense>
-        ) : key ? (
-          <Conversation
-            askKey={key}
-            hearing={hearing}
-            onHearing={setHearing}
-            key={`${key.token || key.key}:${round}`}
-            onKeyProblem={() => setKey(null)}
-            reading={reading}
-            setReading={setReading}
-            scene={scene}
-            site={site}
-          />
+        {key ? (
+          <>
+            {/* once opened, the Prüfstand stays while the card is open (a
+                run goes on behind the conversation); the conversation
+                stays behind it, its answer still streaming */}
+            {qaOpened && (
+              <div
+                className={cn(
+                  "flex min-h-0 flex-1 flex-col",
+                  !checking && "hidden"
+                )}
+              >
+                <Suspense fallback={null}>
+                  <AskQa askKey={key} city={city} site={site} />
+                </Suspense>
+              </div>
+            )}
+            <div
+              className={cn(
+                "flex min-h-0 flex-1 flex-col",
+                checking && "hidden"
+              )}
+            >
+              <Conversation
+                askKey={key}
+                hearing={hearing}
+                onHearing={setHearing}
+                key={`${key.token || key.key}:${round}`}
+                onKeyProblem={() => setKey(null)}
+                reading={reading}
+                setReading={setReading}
+                scene={scene}
+                site={site}
+              />
+            </div>
+          </>
         ) : (
           <KeyForm
             onKey={(k) => {
@@ -699,7 +723,10 @@ function Conversation({
       // per request: where the visitor stands now goes with each question
       // (and each resume), so the server answers `wo_bin_ich` itself
       fetchServerSentEvents("/api/frag", () => {
-        const at = askVisitorHeader(scene.where());
+        const at = askVisitorHeader({
+          ...scene.where(),
+          seitenverhaeltnis: scene.frame().aspect,
+        });
         return {
           headers: {
             [ASK_KEY_HEADER]: secret,

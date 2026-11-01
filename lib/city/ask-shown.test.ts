@@ -2,12 +2,11 @@ import { describe, expect, test } from "bun:test";
 import {
   floodShown,
   layerAnswer,
-  placesSpread,
+  fitsOneView,
   showAnswer,
   timeAnswer,
   volumeShown,
 } from "./ask-shown";
-import { AERIAL_REACH } from "./ask-view";
 import { riverOf } from "./scenario";
 
 describe("zeige", () => {
@@ -34,17 +33,26 @@ describe("zeige", () => {
     expect(far.knoepfe).toHaveLength(2);
   });
 
-  test("the spread counts the footprints", () => {
-    expect(placesSpread([{ x: 0, y: 0 }])).toBe(0);
-    expect(placesSpread(near)).toBeCloseTo(Math.hypot(250, 150) + 60);
-    expect(placesSpread(near)).toBeLessThan(AERIAL_REACH);
+  test("one view or one at a time depends on the screen", () => {
+    const pair = [
+      { name: "A", x: 0, y: 0, r: 30 },
+      { name: "B", x: 880, y: 0, r: 30 },
+    ];
+    // upright on a phone the eye would stand over 900 m off, on a wide
+    // screen about half that
+    expect(fitsOneView(pair, 0.46)).toBe(false);
+    expect(fitsOneView(pair, 1.8)).toBe(true);
+    expect(showAnswer({ ziele: pair }, 0.46).gezeigt).toEqual(["A"]);
+    expect(showAnswer({ ziele: pair }, 1.8).gezeigt).toEqual(["A", "B"]);
+    expect(fitsOneView(near)).toBe(true);
   });
 });
 
 test("setze_zeit says the hour as a clock does", () => {
   expect(timeAnswer({ stunde: 18.5 }).zeit).toBe("heute, 18:30 Uhr");
+  // 24 is the day's last minute, as the scene's clock sets it
   expect(timeAnswer({ stunde: 24, datum: "2026-12-21" }).zeit).toBe(
-    "2026-12-21, 00:00 Uhr"
+    "2026-12-21, 23:59 Uhr"
   );
 });
 

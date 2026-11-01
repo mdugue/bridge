@@ -62,22 +62,31 @@ test("plans the cases, asks one with the scripted model and judges it", async ()
     site: "dresden",
     provider: "anthropic",
     model: "claude-haiku-5-5",
-    richter: "claude-opus-5-5",
     token: "",
     fall: c,
   });
   expect(res.status).toBe(200);
-  const body = (await res.json()) as {
+  const { antwort } = (await res.json()) as {
     antwort: { calls: { name: string }[]; text: string };
-    urteil: { urteil: string } | null;
   };
   // was_ist_da answered on the server: the answer goes on to its text
-  expect(body.antwort.calls.map((x) => x.name)).toContain("was_ist_da");
-  expect(body.antwort.text).toContain("Testantwort");
-  expect(body.urteil?.urteil).toBe("behalten");
+  expect(antwort.calls.map((x) => x.name)).toContain("was_ist_da");
+  expect(antwort.text).toContain("Testantwort");
+  // the verdict in a request of its own
+  const judged = await post({
+    art: "urteil",
+    site: "dresden",
+    provider: "anthropic",
+    model: "claude-opus-5-5",
+    token: "",
+    fall: c,
+    antwort,
+  });
+  const { urteil } = (await judged.json()) as { urteil: { urteil: string } };
+  expect(urteil.urteil).toBe("behalten");
 });
 
-test("refuses a judge the provider does not offer, and a broken case", async () => {
+test("refuses a model the provider does not offer, a broken case or answer", async () => {
   const base = {
     art: "fall",
     site: "dresden",
@@ -85,10 +94,20 @@ test("refuses a judge the provider does not offer, and a broken case", async () 
     model: "claude-haiku-5-5",
     token: "",
   };
-  expect((await post({ ...base, richter: "gpt-6-luna" })).status).toBe(400);
+  expect((await post({ ...base, model: "gpt-6-luna" })).status).toBe(400);
+  expect((await post({ ...base, fall: { id: "x" } })).status).toBe(400);
+  const plan = (await (
+    await post({ art: "plan", site: "dresden", orte: 1 })
+  ).json()) as { faelle: QaCase[] };
   expect(
-    (await post({ ...base, richter: "claude-opus-5-5", fall: { id: "x" } }))
-      .status
+    (
+      await post({
+        ...base,
+        art: "urteil",
+        fall: plan.faelle[0],
+        antwort: { text: "x".repeat(9000), calls: [] },
+      })
+    ).status
   ).toBe(400);
   expect((await post({ art: "plan", site: "atlantis" })).status).toBe(404);
 });

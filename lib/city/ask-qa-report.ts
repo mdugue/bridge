@@ -142,6 +142,11 @@ export function modelSums(results: readonly QaResult[]): QaModelSum[] {
   }));
 }
 
+const CLOCK = new Intl.DateTimeFormat("de-DE", {
+  timeZone: "Europe/Berlin",
+  hour: "2-digit",
+  minute: "2-digit",
+});
 const s = (ms: number | null) =>
   ms === null ? "–" : `${(ms / 1000).toFixed(1)} s`;
 const n1 = (v: number) => v.toFixed(1);
@@ -187,7 +192,7 @@ export function qaReport(
     lines.push(
       `### ${r.case.question} — ${r.model}`,
       "",
-      `${r.case.place.name}, ${r.case.at.slice(11, 16)} UTC · ${s(r.answer.firstTextMs)} bis zum ersten Wort, ${s(r.answer.totalMs)} gesamt, ${r.answer.turns} Schritte · Werkzeuge: ${r.answer.calls.map((c) => c.name).join(", ") || "keine"}`,
+      `${r.case.place.name}, ${CLOCK.format(new Date(r.case.at))} Uhr · ${s(r.answer.firstTextMs)} bis zum ersten Wort, ${s(r.answer.totalMs)} gesamt, ${r.answer.turns} Schritte · Werkzeuge: ${r.answer.calls.map((c) => c.name).join(", ") || "keine"}`,
       "",
       `> ${(r.answer.text.trim() || "(kein Text)").replace(/\n+/g, "\n> ")}`,
       "",

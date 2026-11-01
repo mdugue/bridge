@@ -5,12 +5,15 @@
  *
  * - `{ art: "plan", site, orte }`: the places and every case of a run,
  *   from the site's Stadtwissen — no key, nothing spent.
- * - `{ art: "fall", site, provider, model, richter, token, fall }` with
- *   the key in `x-frag-key`: one case asked of `model` as a visitor
- *   standing at its place would ask it (the same prompt, tools and loop
- *   as /api/frag; `was_ist_da` answered from the twin, as there is no
- *   browser view), then judged by `richter`. The answer, its timings and
- *   the verdict come back as JSON.
+ * - `{ art: "fall", site, provider, model, token, fall }` with the key
+ *   in `x-frag-key`: one case asked of `model` as a visitor standing at
+ *   its place would ask it (the same prompt, tools and loop as
+ *   /api/frag; `was_ist_da` answered from the twin, as there is no
+ *   browser view). The answer and its timings come back as JSON.
+ * - `{ art: "urteil", site, provider, model, token, fall, antwort }`
+ *   with the key: that answer judged by `model`. A request of its own,
+ *   so a slow answer and a thorough judge each have the function's
+ *   whole time.
  *
  * The key goes to the provider and nowhere else; nothing is kept or
  * logged but a refusal's reason code.
@@ -22,7 +25,6 @@ import {
   ASK_LIMITS,
   askPromptSite,
   askReasoning,
-  isAskModel,
   parseAskProps,
 } from "@/lib/city/ask-city";
 import {
@@ -30,7 +32,9 @@ import {
   judgeMessage,
   QA_JUDGE_PROMPT,
   QA_VERDICT,
+  type QaAnswer,
   type QaCase,
+  RESULT_CHARS,
   qaCases,
   qaLook,
   qaPlaces,
@@ -80,6 +84,53 @@ function parseCase(value: unknown): QaCase | null {
   return c as QaCase;
 }
 
+/** The most an answer the judge reads may carry: its text, its calls. */
+const ANSWER_CHARS = 8000;
+const ANSWER_CALLS = 24;
+
+/** An answer as the panel sends it back to be judged, checked and
+ *  capped: what the judge reads is what the case's request recorded. */
+function parseAnswer(value: unknown): QaAnswer | null {
+  const a = value as Partial<QaAnswer> | null;
+  const num = (n: unknown): n is number =>
+    typeof n === "number" && Number.isFinite(n) && n >= 0;
+  if (
+    !(
+      a &&
+      typeof a.text === "string" &&
+      a.text.length <= ANSWER_CHARS &&
+      Array.isArray(a.calls) &&
+      a.calls.length <= ANSWER_CALLS &&
+      num(a.totalMs) &&
+      num(a.turns) &&
+      (a.firstTextMs === null || num(a.firstTextMs))
+    )
+  ) {
+    return null;
+  }
+  const calls = a.calls.flatMap((call) =>
+    typeof call?.name === "string" && call.name.length <= 40
+      ? [
+          {
+            name: call.name,
+            input: call.input,
+            ...(typeof call.result === "string"
+              ? { result: call.result.slice(0, RESULT_CHARS) }
+              : {}),
+          },
+        ]
+      : []
+  );
+  return {
+    calls,
+    firstTextMs: a.firstTextMs ?? null,
+    text: a.text,
+    totalMs: a.totalMs,
+    turns: a.turns,
+    ...(typeof a.error === "string" ? { error: a.error.slice(0, 300) } : {}),
+  };
+}
+
 export async function POST(request: Request): Promise<Response> {
   const fake = process.env.FRAG_FAKE === "1";
   let body: Record<string, unknown>;
@@ -116,9 +167,6 @@ export async function POST(request: Request): Promise<Response> {
   if (typeof props === "string") {
     return refuse(400, "bad-props", props);
   }
-  if (!isAskModel(props.provider, body.richter)) {
-    return refuse(400, "bad-judge", "unbekanntes Modell für die Bewertung");
-  }
   const key = request.headers.get(ASK_KEY_HEADER)?.trim() ?? "";
   const refused = await keyRefusal(props, key, fake);
   if (refused) {
@@ -130,6 +178,19 @@ export async function POST(request: Request): Promise<Response> {
   }
   const abortController = new AbortController();
   request.signal.addEventListener("abort", () => abortController.abort());
+  if (body.art === "urteil") {
+    const answer = parseAnswer(body.antwort);
+    if (!answer) {
+      return refuse(400, "bad-answer", "Die Antwort ist unvollständig.");
+    }
+    return judged(c, answer, {
+      adapter: fake
+        ? fakeJudgeAdapter()
+        : askAdapter(props.provider, props.model, key),
+      abortController,
+      key,
+    });
+  }
   const record = answerRecorder();
   const start = Date.now();
   const stream = runAsk({
@@ -149,33 +210,40 @@ export async function POST(request: Request): Promise<Response> {
   for await (const chunk of scrubbed(stream, key)) {
     record.take(chunk, Date.now() - start);
   }
-  const judge = String(body.richter);
-  let verdict: unknown = null;
-  let judgeError: string | undefined;
+  return Response.json({ antwort: record.answer }, { headers: NO_STORE });
+}
+
+/** The verdict on one answer, or the judge's error, as JSON. */
+async function judged(
+  c: QaCase,
+  answer: QaAnswer,
+  run: {
+    adapter: ReturnType<typeof askAdapter>;
+    abortController: AbortController;
+    key: string;
+  }
+): Promise<Response> {
   try {
-    verdict = await chat({
-      adapter: fake
-        ? fakeJudgeAdapter()
-        : askAdapter(props.provider, judge, key),
-      messages: [{ role: "user", content: judgeMessage(c, record.answer) }],
+    const verdict = await chat({
+      adapter: run.adapter,
+      messages: [{ role: "user", content: judgeMessage(c, answer) }],
       systemPrompts: [QA_JUDGE_PROMPT],
       outputSchema: QA_VERDICT,
       reasoning: { level: "low", summary: false },
       threadId: crypto.randomUUID(),
-      abortController,
+      abortController: run.abortController,
     });
+    return Response.json({ urteil: verdict }, { headers: NO_STORE });
   } catch (error) {
-    judgeError = scrubSecrets(
-      error instanceof Error ? error.message : "Die Bewertung schlug fehl.",
-      [key]
+    return Response.json(
+      {
+        urteil: null,
+        urteil_fehler: scrubSecrets(
+          error instanceof Error ? error.message : "Die Bewertung schlug fehl.",
+          [run.key]
+        ),
+      },
+      { headers: NO_STORE }
     );
   }
-  return Response.json(
-    {
-      antwort: record.answer,
-      urteil: verdict,
-      ...(judgeError ? { urteil_fehler: judgeError } : {}),
-    },
-    { headers: NO_STORE }
-  );
 }

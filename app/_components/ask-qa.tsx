@@ -10,7 +10,7 @@
  * download. Its own chunk: nothing of it loads without the knob.
  */
 import { DownloadIcon, PlayIcon, SquareIcon } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ASK_KEY_HEADER, ASK_PROVIDER_BY_ID } from "@/lib/city/ask-city";
 import type { QaAnswer, QaCase, QaPlace, QaVerdict } from "@/lib/city/ask-qa";
 import {
@@ -92,6 +92,8 @@ export default function AskQa({ askKey, city, site }: Props) {
   const [running, setRunning] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const stop = useRef<AbortController | null>(null);
+  // a closed panel stops its run: nothing spends the key unseen
+  useEffect(() => () => stop.current?.abort(), []);
 
   const loadPlan = async () => {
     setProblem(null);
@@ -117,7 +119,12 @@ export default function AskQa({ askKey, city, site }: Props) {
     }
   };
 
-  const ask = async (c: QaCase, model: string, signal: AbortSignal) => {
+  /** One request of the Prüfstand with the key: a case's answer, or the
+   *  verdict on it. */
+  const call = async (
+    signal: AbortSignal,
+    fields: Record<string, unknown>
+  ): Promise<{ body: CaseReply; status: number }> => {
     const res = await fetch("/api/frag/pruefen", {
       method: "POST",
       signal,
@@ -126,17 +133,55 @@ export default function AskQa({ askKey, city, site }: Props) {
         [ASK_KEY_HEADER]: askKey.key,
       },
       body: JSON.stringify({
-        art: "fall",
         site,
         provider: askKey.provider,
-        model,
-        richter: judge,
         token: askKey.token,
-        fall: c,
+        ...fields,
       }),
     });
     const body = (await res.json().catch(() => ({}))) as CaseReply;
-    return { res, body };
+    return { body, status: res.status };
+  };
+
+  /** Asks one case of one model, then has the judge read the answer;
+   *  false where the run must stop (a refused key or request). */
+  const runCase = async (
+    controller: AbortController,
+    c: QaCase,
+    model: string
+  ): Promise<boolean> => {
+    const asked = await call(controller.signal, {
+      art: "fall",
+      model,
+      fall: c,
+    });
+    if (asked.status === 401 || asked.status === 400) {
+      // the key or the request is wrong for every case: stop them all
+      setProblem(asked.body.message ?? `Abgelehnt (${asked.status}).`);
+      controller.abort();
+      return false;
+    }
+    const answer: QaAnswer = asked.body.antwort ?? {
+      calls: [],
+      error: asked.body.message ?? `Antwort ${asked.status}`,
+      firstTextMs: null,
+      text: "",
+      totalMs: 0,
+      turns: 0,
+    };
+    const judgedBy = asked.body.antwort
+      ? await call(controller.signal, {
+          art: "urteil",
+          model: judge,
+          fall: c,
+          antwort: answer,
+        })
+      : null;
+    setResults((r) => [
+      ...r,
+      { case: c, model, answer, verdict: judgedBy?.body.urteil ?? null },
+    ]);
+    return true;
   };
 
   const start = async () => {
@@ -155,25 +200,7 @@ export default function AskQa({ askKey, city, site }: Props) {
       jobs,
       async ({ c, model }) => {
         try {
-          const { res, body } = await ask(c, model, controller.signal);
-          if (res.status === 401 || res.status === 400) {
-            // the key or the request is wrong for every case: stop
-            setProblem(body.message ?? `Abgelehnt (${res.status}).`);
-            return false;
-          }
-          const answer: QaAnswer = body.antwort ?? {
-            calls: [],
-            error: body.message ?? `Antwort ${res.status}`,
-            firstTextMs: null,
-            text: "",
-            totalMs: 0,
-            turns: 0,
-          };
-          setResults((r) => [
-            ...r,
-            { case: c, model, answer, verdict: body.urteil ?? null },
-          ]);
-          return true;
+          return await runCase(controller, c, model);
         } catch {
           return !controller.signal.aborted;
         }

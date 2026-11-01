@@ -125,10 +125,11 @@ export function knowledgeTools(
 
 /** The view-changing tools, acknowledged at once: the card carries each
  *  out when its result reaches the stream (app/_components/ask-effects.ts). */
-export function shownTools(site: ToolSite) {
+export function shownTools(site: ToolSite, visitor: AskVisitor | null = null) {
   const river = riverOf(site.id);
   return [
-    showTool.server((ask) => showAnswer(ask)),
+    // framed for the visitor's screen, as the card will frame it
+    showTool.server((ask) => showAnswer(ask, visitor?.seitenverhaeltnis)),
     timeTool.server((ask) => timeAnswer(ask)),
     styleTool.server(() => ({ ok: true })),
     layerTool.server((ask) => layerAnswer(site.layerKeys, ask)),
@@ -216,7 +217,7 @@ export function runAsk(run: AskRun) {
     systemPrompts: [askSystemPrompt(run.site, run.today, run.voice)],
     tools: [
       ...knowledgeTools(run.knowledge, run.site, run.visitor ?? null),
-      ...shownTools(run.site),
+      ...shownTools(run.site, run.visitor ?? null),
       ...(run.look ? [lookTool.server(run.look)] : BROWSER_TOOLS),
     ],
     agentLoopStrategy: combineStrategies([

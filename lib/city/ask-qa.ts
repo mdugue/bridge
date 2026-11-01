@@ -82,14 +82,20 @@ export function qaPlaces(k: Knowledge, count: number): QaPlace[] {
       picked.push(lm);
     }
   }
-  const places: QaPlace[] = picked.map((lm) => ({
-    name: `vor ${lm.name}`,
-    x: Math.round(lm.x),
-    y: Math.round(lm.y - standOff(lm.h)),
-    heading: 0,
-    ground: lm.z ?? null,
-    ahead: lm.id,
-  }));
+  const places: QaPlace[] = picked.map((lm) => {
+    const x = Math.round(lm.x);
+    const y = Math.round(lm.y - standOff(lm.h));
+    return {
+      name: `vor ${lm.name}`,
+      x,
+      y,
+      heading: 0,
+      // where the camera stands, not the landmark's foot: a slope to the
+      // river between them decides the flood questions
+      ground: groundNear(k, x, y),
+      ahead: lm.id,
+    };
+  });
   const lonely = loneliestBuilding(k);
   if (lonely && places.length < count) {
     places.push({
@@ -102,6 +108,49 @@ export function qaPlaces(k: Knowledge, count: number): QaPlace[] {
     });
   }
   return places;
+}
+
+/** How far the nearest building may stand for its base to be the ground
+ *  at a pose (m). */
+const GROUND_M = 80;
+
+/** The ground at (x, y): the base of the nearest building within
+ *  GROUND_M, or null — the twin keeps no terrain of its own. */
+function groundNear(k: Knowledge, x: number, y: number): number | null {
+  let best: { d: number; z: number } | null = null;
+  for (const b of k.buildings) {
+    const d = Math.hypot(b.x - x, b.y - y);
+    if (d <= GROUND_M && (!best || d < best.d)) {
+      best = { d, z: b.z };
+    }
+  }
+  return best?.z ?? null;
+}
+
+const BERLIN_DAY = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Europe/Berlin",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+const BERLIN_HOUR = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Europe/Berlin",
+  hour: "2-digit",
+  hourCycle: "h23",
+});
+
+/** The instant `hour`:00 on `day`'s date in Berlin, in Berlin's time —
+ *  winter or summer: the hour the model and the judge read. */
+export function berlinAt(day: Date, hour: number): Date {
+  const date = BERLIN_DAY.format(day);
+  const hh = String(hour).padStart(2, "0");
+  for (const offset of ["+01:00", "+02:00"]) {
+    const at = new Date(`${date}T${hh}:00:00${offset}`);
+    if (Number(BERLIN_HOUR.format(at)) === hour) {
+      return at;
+    }
+  }
+  return new Date(`${date}T${hh}:00:00+01:00`);
 }
 
 /** The named or addressed building farthest from every landmark, if it
@@ -156,8 +205,12 @@ export function qaCases(
   }));
   const out: QaCase[] = [];
   places.forEach((place, i) => {
-    const now = new Date(today);
-    now.setHours(HOURS[i % HOURS.length], 0, 0, 0);
+    const hour = HOURS[i % HOURS.length];
+    const at = berlinAt(today, hour);
+    // the draw reads the hour and the day as a clock does where it runs:
+    // Berlin's date and hour on this machine's clock
+    const [y, m, d] = BERLIN_DAY.format(today).split("-").map(Number);
+    const now = new Date(y, m - 1, d, hour);
     const name = place.ahead ? (hitOf(k, place.ahead)?.name ?? null) : null;
     const pool = starterPool({
       at: { x: place.x, y: place.y, headingDeg: place.heading },
@@ -176,7 +229,7 @@ export function qaCases(
         question: c.question,
         template: templateOf(c.question, name),
         place,
-        at: now.toISOString(),
+        at: at.toISOString(),
       });
     }
   });
@@ -251,7 +304,7 @@ export interface QaAnswer {
 }
 
 /** The most of a tool's result the judge reads (characters). */
-const RESULT_CHARS = 1500;
+export const RESULT_CHARS = 1500;
 
 type Chunk = { type: string } & Record<string, unknown>;
 

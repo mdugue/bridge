@@ -147,6 +147,7 @@ export const timeTool = toolDefinition({
     datum: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .refine(isCalendarDay, "kein Kalendertag zwischen 1900 und 2100")
       .optional()
       .describe("JJJJ-MM-TT"),
   }),

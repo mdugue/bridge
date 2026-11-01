@@ -20,7 +20,7 @@ const SHOWN = new Set<string>(SHOWN_TOOLS.map((t) => t.name));
 
 /** How long a planned volume waits for its ground to load (ms), and how
  *  often it tries. */
-const VOLUME_WAIT_MS = 8000;
+const VOLUME_WAIT_MS = 20_000;
 const VOLUME_TRY_MS = 400;
 
 /** A shown call the server answered ok, as the card reads it. */
@@ -116,32 +116,31 @@ export function runShown(
   }
 }
 
-/** Carries out every shown call of the conversation once, as it arrives. */
+/** Carries out every shown call of the conversation once, as it arrives.
+ *  Only the latest volume keeps waiting for its ground: a newer call of
+ *  `plane_baukoerper` (another box, or `aus`) stops the one before, so a
+ *  box placed late never lands on a newer one or comes back. */
 export function useShownEffects(
   messages: readonly UIMessage[],
   scene: AskScene
 ): void {
   const done = useRef(new Set<string>());
-  const stops = useRef<(() => void)[]>([]);
+  const waiting = useRef<(() => void) | undefined>(undefined);
   useEffect(() => {
     for (const call of shownCalls(messages)) {
-      if (!done.current.has(call.id)) {
-        done.current.add(call.id);
-        const stop = runShown(scene, call);
-        if (stop) {
-          stops.current.push(stop);
-        }
+      if (done.current.has(call.id)) {
+        continue;
+      }
+      done.current.add(call.id);
+      if (call.name === "plane_baukoerper") {
+        waiting.current?.();
+        waiting.current = runShown(scene, call);
+      } else {
+        runShown(scene, call);
       }
     }
   }, [messages, scene]);
-  useEffect(() => {
-    const pending = stops.current;
-    return () => {
-      for (const stop of pending) {
-        stop();
-      }
-    };
-  }, []);
+  useEffect(() => () => waiting.current?.(), []);
 }
 
 /**

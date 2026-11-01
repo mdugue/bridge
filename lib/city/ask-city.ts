@@ -197,6 +197,8 @@ export interface AskVisitor {
   zeit?: string;
   stil?: string;
   ebenen?: string[];
+  /** the screen's width over its height: how `zeige` frames for it */
+  seitenverhaeltnis?: number;
 }
 
 /** The most characters the visitor header may carry. */
@@ -252,6 +254,10 @@ export function parseAskVisitor(raw: string | null): AskVisitor | null {
     if (w !== undefined) {
       out[k] = w;
     }
+  }
+  const aspect = v.seitenverhaeltnis;
+  if (typeof aspect === "number" && aspect >= 0.2 && aspect <= 5) {
+    out.seitenverhaeltnis = Math.round(aspect * 100) / 100;
   }
   if (Array.isArray(v.ebenen)) {
     out.ebenen = v.ebenen

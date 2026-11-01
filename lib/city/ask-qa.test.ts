@@ -3,6 +3,7 @@ import { fakeText } from "@tanstack/ai/testing";
 import { knowledgeOf } from "./ask-knowledge";
 import {
   answerRecorder,
+  berlinAt,
   judgeMessage,
   QA_VERDICT,
   qaCases,
@@ -67,6 +68,24 @@ describe("the plan", () => {
     expect(places[0].y).toBeLessThan(5_656_350);
     expect(places[0].heading).toBe(0);
     expect(places[2].name).toBe("Hof am Rand");
+    // the ground where the camera stands: the nearest building's base
+    expect(places[0].ground).toBe(111);
+  });
+
+  test("the hours are Berlin's, winter or summer", () => {
+    const hour = (d: Date) =>
+      new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Europe/Berlin",
+        hour: "2-digit",
+        hourCycle: "h23",
+      }).format(d);
+    expect(berlinAt(new Date("2026-11-01T12:00:00Z"), 8).toISOString()).toBe(
+      "2026-11-01T07:00:00.000Z"
+    );
+    expect(berlinAt(new Date("2026-07-01T12:00:00Z"), 23).toISOString()).toBe(
+      "2026-07-01T21:00:00.000Z"
+    );
+    expect(hour(berlinAt(new Date("2026-03-29T12:00:00Z"), 19))).toBe("19");
   });
 
   test("asks every question of a place there, the free ones at two places only", () => {

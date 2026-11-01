@@ -65,8 +65,9 @@ export type AskPlace = AskTarget & { name: string };
 
 /**
  * Flies to `places` — every one in one view, or the first alone (`alle`
- * false, or spread too far for one: `showAnswer`, which the server
- * answered the model with) — and says what it showed. On foot the
+ * false, or too far apart for one on this screen: `showAnswer`, which
+ * the server answered the model with for the same screen) — and says
+ * what it showed. On foot the
  * walker stands before the first. What it names is selected: every
  * place with `alle` (spread too far, their cards are a click apart in
  * the selection), the first alone without.
@@ -77,19 +78,17 @@ export function showPlaces(
 ): Record<string, unknown> {
   const [first] = ask.ziele;
   const from = scene.from();
-  const answer = showAnswer(ask);
+  const frame = scene.frame();
+  const answer = showAnswer(ask, frame.aspect);
   scene.select(
     ask.alle !== false && ask.ziele.length > 1 ? ask.ziele : [first]
   );
   if (ask.aus_der_luft === false) {
-    scene.show(streetView(first, from ?? first, scene.frame().groundAt));
+    scene.show(streetView(first, from ?? first, frame.groundAt));
     return answer;
   }
   const shown = (answer.gezeigt as unknown[]).length;
-  const framed = frameTargets(ask.ziele.slice(0, shown), {
-    ...scene.frame(),
-    from,
-  });
+  const framed = frameTargets(ask.ziele.slice(0, shown), { ...frame, from });
   scene.show(framed.view);
   return { ...answer, abstand_m: framed.distance };
 }
