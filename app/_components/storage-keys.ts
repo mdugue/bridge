@@ -26,6 +26,9 @@ export const STORAGE_KEYS = {
   askKey: "frag-die-stadt",
   /** the voice the visitor picked for reading aloud (ask-voice.ts) */
   voice: "vorlese-stimme",
+  /** three's Inspector panel layout, written by three only on
+   *  `?inspect=1` (inspector.ts) */
+  inspector: "threejs-inspector",
 } as const;
 
 /** Session storage: gone with the tab. */

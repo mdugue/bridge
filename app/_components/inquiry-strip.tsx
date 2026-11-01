@@ -11,6 +11,7 @@ import {
   LampFloorIcon,
   LandmarkIcon,
   type LucideIcon,
+  PencilRulerIcon,
   ShrubIcon,
   TramFrontIcon,
   TreeDeciduousIcon,
@@ -54,6 +55,8 @@ function kindIcon(inquiry: Inquiry): LucideIcon {
       return TramFrontIcon;
     case "landing":
       return AnchorIcon;
+    case "design":
+      return PencilRulerIcon;
   }
 }
 
