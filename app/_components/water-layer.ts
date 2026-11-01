@@ -52,6 +52,7 @@ import {
   WATER_SHEET,
   type WaterLook,
 } from "@/lib/city/water-bodies";
+import { groundUnderDesign, inDesignSite } from "./design-site";
 import { lampNight } from "./lamp-layer";
 import { dataXY, type F, type V2, type V3 } from "./shader-chunks";
 import { type SplatLayer, splatUv } from "./terrain-layer";
@@ -198,7 +199,9 @@ function createWaterMist(
     MIST_FULL_M,
     distance(cameraPosition, positionWorld)
   );
-  const alpha = wcov.mul(steam).mul(nearFade).mul(MIST_OPACITY);
+  // none over a planner's design: its water lies under it (design-site.ts)
+  const clear = Fn(() => float(1).sub(inDesignSite(positionWorld.xz)))();
+  const alpha = wcov.mul(steam).mul(nearFade).mul(MIST_OPACITY).mul(clear);
   material.maskNode = cov.greaterThan(0.01).and(alpha.greaterThan(0.002));
   // A haze a little brighter than the sky's tint, so it reads as mist over
   // the water; near-white, it turned the far river into a white band.
@@ -408,6 +411,8 @@ export function createWaterLayer(
     polygonOffsetFactor: -1,
     polygonOffsetUnits: -1,
   });
+  // under a planner's design, with the ground (design-site.ts)
+  material.positionNode = groundUnderDesign;
   // A widened, feathered band dissolves the bank instead of stair-stepping.
   const wcov = smoothstep(0.28, 0.72, texture(splat.colorTexture, uv).a);
   material.maskNode = wcov.greaterThan(0.001);

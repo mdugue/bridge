@@ -22,6 +22,9 @@ export const STORAGE_KEYS = {
   reportsDeclined: "crash-reports.declined",
   /** the device's safety level (gpu-safety.ts, ADR 0047) */
   gpuSafety: "gpu-safety",
+  /** three's Inspector panel layout, written by three only on
+   *  `?inspect=1` (inspector.ts) */
+  inspector: "threejs-inspector",
 } as const;
 
 /** Session storage: gone with the tab. */

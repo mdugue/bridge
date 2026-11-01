@@ -1,6 +1,7 @@
 import {
   Color,
   DepthTexture,
+  GreaterEqualCompare,
   LessEqualCompare,
   Matrix3,
   type Matrix4,
@@ -395,6 +396,10 @@ export interface StylizeInputs {
   sunDirection: Vector3;
   /** the sun's shadow map */
   sunShadow: SunShadowMap;
+  /** the renderer's depth runs from 1 at the near plane to 0 at the far
+   *  one (three's `reversedDepthBuffer`), the scene's and the shadow map's
+   *  alike */
+  reversedDepth: boolean;
 }
 
 /** What the styles read of the sun's shadow map (sun-rig.ts `shadowMap`). */
@@ -457,7 +462,9 @@ export function createStylize(inputs: StylizeInputs): Stylize {
   // not a build) in `update`. The stand-in compares like the map.
   const frameFog = uniform(new Color());
   const shadowStandIn = new DepthTexture(1, 1);
-  shadowStandIn.compareFunction = LessEqualCompare;
+  shadowStandIn.compareFunction = inputs.reversedDepth
+    ? GreaterEqualCompare
+    : LessEqualCompare;
   // every read of it, so `update` can bind the map to each
   const shadowReads: ReturnType<typeof texture>[] = [];
   const shadowMatrix = uniform(inputs.sunShadow.matrix);
@@ -488,8 +495,14 @@ export function createStylize(inputs: StylizeInputs): Stylize {
   const viewDistance = (at: V2): F =>
     lens.distance(texture(inputs.depth, at).r);
   /** Is the pixel at `at` (whose distance is `z`) sky — the background? */
+  // the sky at a parallel view's far plane: depth 1, or 0 where the buffer
+  // runs reversed
+  const skyDepth = (depth: F): F =>
+    inputs.reversedDepth
+      ? step(depth, float(1 - SKY_DEPTH))
+      : step(SKY_DEPTH, depth);
   const isSky = (at: V2, z: F): F =>
-    select(ortho, step(SKY_DEPTH, texture(inputs.depth, at).r), step(skyZ, z));
+    select(ortho, skyDepth(texture(inputs.depth, at).r), step(skyZ, z));
 
   /**
    * What the stencil differences: in perspective w = 1/z, which is affine
@@ -522,10 +535,18 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       min(at.x, float(1).sub(at.x)),
       min(at.y, float(1).sub(at.y))
     );
-    const inside = smoothstep(0, 0.04, edge).mul(step(c.z, 1)).mul(shadowReady);
+    // nearer than the map's far plane, and the bias towards the light, as
+    // three's own lookup takes them (ShadowNode): a reversed map holds 1
+    // at the light and compares the other way round
+    const reversed = inputs.reversedDepth;
+    const inside = smoothstep(0, 0.04, edge)
+      .mul(reversed ? step(0, c.z) : step(c.z, 1))
+      .mul(shadowReady);
     const read = texture(shadowStandIn, at);
     shadowReads.push(read);
-    const shadowed = read.compare(c.z.add(shadowBias)).x;
+    const shadowed = read.compare(
+      reversed ? c.z.sub(shadowBias) : c.z.add(shadowBias)
+    ).x;
     const cast = mix(beyond, shadowed, inside);
     return towards.mul(cast).mul(smoothstep(SUN_GONE_Y, 0.04, sunWorld.y));
   };
