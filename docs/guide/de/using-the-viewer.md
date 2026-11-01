@@ -460,7 +460,8 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   und *Zurück* gehen von Station zu Station, ✕ beendet den Spaziergang
   und stellt Bildstil und Uhrzeit zurück. Auf dem Telefon ist die
   Karte ein Blatt am unteren Rand, das eingeklappt beginnt: Antippen oder
-  Hochziehen am Griff öffnet es, Herunterziehen klappt es wieder ein. Wie sie geschrieben werden:
+  Hochziehen am Griff öffnet es, Herunterziehen klappt es wieder ein;
+  Joystick und Werkzeugleiste weichen ihm, solange der Spaziergang läuft. Wie sie geschrieben werden:
   [walks.md](../../walks.md).
 - **Frag die Stadt** — Fragen zur Stadt in eigenen Worten („Wer hat
   die Frauenkirche gebaut?“, „Was steht hier vor mir?“, „Wie sieht es
