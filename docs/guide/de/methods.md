@@ -104,6 +104,7 @@ Vegetationsindex nur mäßig überein (r ≈ 0,7), deshalb steht München in
 | Höhe eines Durchgangs, wo keine eingetragen ist, seine rechteckige Öffnung | der Viewer, aus dem Erdgeschoss | `≈ angenommen` |
 | Laden oder Gastronomie im Erdgeschoss | OpenStreetMap, dem Gebäude zugeordnet | `◎ erkannt` |
 | Wahrzeichen | Wikidata, den Gebäudeteilen zugeordnet | `◎ erkannt` |
+| Die Angaben unter dem Namen eines befragten Wahrzeichens in der Szene (Bauzeit, Architekt, Wiederaufbau, Höhe) | Wikidata | `❝ übernommen` |
 | Mehrere Gebäude des Stadtmodells als ein Bau (das Residenzschloss mit dem Hausmannsturm) | OpenStreetMap, ein benannter Gebäudeumriss über mehreren Gebäuden, auch über Kachelgrenzen | `◎ erkannt` |
 | Straßenbäume: Standort, Art, Maße | Baumkataster | `❝ übernommen` |
 | Bäume ohne Kataster: Standort | DOM1 oder Laserscan | `◎ erkannt` |

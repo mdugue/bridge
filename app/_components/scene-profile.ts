@@ -235,10 +235,10 @@ const TILE_CACHE_BYTES: Record<
     { min: 0.6 * GB, max: 1 * GB },
   ],
   mobile: [
-    { min: 168 * MB, max: 336 * MB },
-    { min: 148 * MB, max: 296 * MB },
-    { min: 136 * MB, max: 272 * MB },
-    { min: 96 * MB, max: 232 * MB },
+    { min: 168 * MB, max: 335 * MB },
+    { min: 148 * MB, max: 295 * MB },
+    { min: 136 * MB, max: 271 * MB },
+    { min: 96 * MB, max: 231 * MB },
   ],
 };
 
@@ -268,9 +268,11 @@ const TILE_CACHE_BYTES: Record<
  * headroom: tiles in flight weigh nothing in the cache, it unloads only
  * past `max` and one tile over, and three counts a tree set's instance
  * matrices once per view. Against 480/432/389/350 MiB of soft line that
- * leaves 346, 303.5, 277 and 240 MiB: `max` is 336, 296, 272, 232 (set
+ * leaves 346, 303.5, 277 and 240 MiB: `max` was 336, 296, 272, 232 (set
  * while the shadow map still carried a colour target; a few MiB more
- * headroom since). Until it was derived the
+ * headroom since) and is 1 MiB less since the nameplate (nameplate-layer.ts:
+ * its glyph atlas, ≤ 0.5 MiB at the phone's raster size, and its few
+ * buffers) — a phone pays for it in tiles, not in memory. Until it was derived the
  * phone's `max` was 600 MB, above the governor's own hard line (560): the
  * cache never bound anything before Safari took the GPU away, at 614 MB
  * held.

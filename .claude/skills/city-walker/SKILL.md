@@ -142,7 +142,10 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   only while a style is on; no tier warms more than the outline's programs
   (a picture style builds on its first frame); the AO
   smoothing and the outline's mask and blur are one-byte targets, the
-  outline drawn only while something is asked. The picture styles (Comic, Film noir, Sin City,
+  outline drawn only while something is asked; the nameplate
+  (`nameplate-layer.ts`, the asked thing's name in the scene) is an
+  overlay drawn onto the canvas after the frame (`setOverlay`), its colours
+  sRGB, its atlas held only while asked. The picture styles (Comic, Film noir, Sin City,
   Papier; `lib/city/render-style.ts`) are one node, `stylize-effect.ts`
   (ADR 0034), in a styled pipeline pair the default pastel never draws:
   ink from the second difference of `1/z` (zero on planes; relative to `w`
