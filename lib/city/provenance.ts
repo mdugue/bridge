@@ -61,6 +61,8 @@ export interface ProvenanceRecord {
   geosn?: Record<string, { tiles?: Record<string, { stand?: string }> }>;
   openstreetmap?: {
     bbbike?: { products?: Record<string, { dataAsOf?: string }> };
+    /** Unna's stand-in extract (openstreetmap.fr's Arnsberg region) */
+    openstreetmapFr?: { products?: Record<string, { dataAsOf?: string }> };
   };
   wikidata?: { dataAsOf?: string };
 }
@@ -162,7 +164,9 @@ export function siteProvenance(
 ): SiteProvenance {
   const official = site.provider.credit;
   const licence = site.provider.licence;
-  const products = record.openstreetmap?.bbbike?.products;
+  const products =
+    record.openstreetmap?.bbbike?.products ??
+    record.openstreetmap?.openstreetmapFr?.products;
   const osmStand = leadingDate(products?.osmBuildings?.dataAsOf);
   const stands = osmStands(products);
   const wikidataStand = leadingDate(record.wikidata?.dataAsOf);
