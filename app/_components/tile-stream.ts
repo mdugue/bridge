@@ -1253,12 +1253,14 @@ async function buildDressing(
     vegetation.applyLook(ctx.look.get());
     vegetation.setSeason(ctx.season());
     await nextTask(signal);
+    // the OSM hedges and the DLM's hedge rows, drawn as one kind of hedge
     const lowVegetation =
-      hedges.length > 0
-        ? buildLowVegetation(hedges, {
-            offset: ctx.offset,
-            heightAt: terrain.heightAt,
-          })
+      hedges.length > 0 || rows.some((f) => f.properties?.kind === "hedge")
+        ? buildLowVegetation(
+            hedges,
+            { offset: ctx.offset, heightAt: terrain.heightAt },
+            rows
+          )
         : undefined;
     made.lowVegetation = lowVegetation;
     // The bake reads lamps with a margin around the tile; a lamp on or past a

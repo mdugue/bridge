@@ -1,5 +1,4 @@
 import {
-  BoxGeometry,
   type BufferGeometry,
   Color,
   CylinderGeometry,
@@ -60,7 +59,6 @@ import {
 } from "@/lib/city/tree-inventory";
 import {
   BASE_TREE_H,
-  bucketByCell,
   canopyPlacements,
   cellKey,
   GENERIC_CROWN_FOOT,
@@ -146,7 +144,7 @@ export interface VegetationFeatures {
   keepTree?: TreeVeto;
   /** the DOP NDVI sampler (loadNdviSampler), for lush↔dry crown colour */
   ndviAt?: RasterSampler;
-  /** ATKIS veg04 hedges and tree rows */
+  /** ATKIS veg04 tree rows (its hedges are low-vegetation-layer.ts's) */
   rows: VegRowFeature[];
 }
 
@@ -299,9 +297,6 @@ export function padCrownSphere(g: BufferGeometry): BufferGeometry {
   return g;
 }
 
-const HEDGE_H = 1.3;
-const HEDGE_W = 0.9;
-
 /** One chunk's trees: the uniform-scale placements plus the precomputed
  *  ones. A chunk's needle trees (the canopy's evergreens) are a cell of
  *  their own per form (`canopyForm`): the cone's, and the pine's. */
@@ -450,11 +445,6 @@ function finishInstances(mesh: Instances): void {
   // wrongly culls the whole spread-out instance cloud whenever the world
   // origin is off-screen.
   mesh.computeBoundingSphere();
-}
-
-function writeInstances(mesh: Instances, items: Placement[]): void {
-  writePlacements(mesh, items);
-  finishInstances(mesh);
 }
 
 /**
@@ -898,6 +888,17 @@ const MARK_BARE = vec3(0.9, 0.2, 0);
  *  printed, told on its kept cells' colour (`kept`, before any veil): an
  *  autumn crown (red over green) yellow; a mostly bare one, or one in
  *  blossom (pale, blue over green: pink or white), the paper's ink. */
+/** A hedge's marker ink: the leafy one, dimmed below the pass's light
+ *  step (`comic`, crownLit at 0.3) so the hedge prints in the deep green
+ *  even in the sun — on a lawn printed green it would otherwise vanish. */
+const MARK_HEDGE = MARK_LEAFY.mul(0.25);
+
+/** A hedge's colour, or its marker ink while the crowns are printed
+ *  (low-vegetation-layer.ts: a hedge is printed flat like a crown). */
+export function printedLeaf(shown: V3): V3 {
+  return mix(shown, MARK_HEDGE, crownsPrinted);
+}
+
 function printedCrown(shown: V3, kept: V3, twig: F): V3 {
   const leaf = mix(MARK_LEAFY, MARK_AUTUMN, step(kept.y, kept.x));
   // (blossom is pale: a copper beech, blue over green too, is dark)
@@ -1304,31 +1305,6 @@ function* buildTrees(
   return { chunks, meshes, seasons };
 }
 
-/** The ATKIS row hedges' material (scene-wide: nothing of a tile). */
-function rowHedgeMaterial(): MeshStandardNodeMaterial {
-  return sceneMaterial("vegetation-row-hedge", () => {
-    const m = new MeshStandardNodeMaterial({ color: 0x55_6b_3e, roughness: 1 });
-    m.name = "row-hedge";
-    m.positionNode = instancePosition();
-    return m;
-  });
-}
-
-function buildHedges(hedges: Placement[]): Instances[] {
-  const geo = new BoxGeometry(HEDGE_W, HEDGE_H, HEDGE_W * 1.4);
-  geo.translate(0, HEDGE_H / 2, 0);
-  const mat = rowHedgeMaterial();
-  const meshes: Instances[] = [];
-  for (const cell of bucketByCell(hedges)) {
-    const mesh = new Instances(geo, mat, cell.length);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    writeInstances(mesh, cell);
-    meshes.push(mesh);
-  }
-  return meshes;
-}
-
 /**
  * Loads the DOP NDVI PNG into a CPU sampler (EPSG → 0..1). The bytes are
  * inflated as written (lib/city/png-raster.ts), never through the browser's
@@ -1355,7 +1331,7 @@ export async function loadNdviSampler(
 }
 
 /**
- * Builds stylized vegetation from the ATKIS veg04 rows GeoJSON (hedges + tree
+ * Builds stylized vegetation from the ATKIS veg04 rows GeoJSON (the tree
  * rows) and, when given, the DOM1-derived canopy GeoJSON (area trees scaled to
  * their measured height). Everything is drawn with `Instances` sets so tens of
  * thousands of plants stay cheap; each is dropped onto the terrain via
@@ -1393,11 +1369,13 @@ export function* vegetationSteps(
 
   const { ndviAt, keepTree } = features;
   // whole rows per run: a row's trees are seeded by their place along it
-  const rows = yield* inRuns(features.rows, ROW_RUN, (run) => [
+  // The DLM's hedge rows are not planted here: low-vegetation-layer.ts
+  // draws them with the OSM hedges, as one kind of hedge.
+  const treeRows = features.rows.filter((f) => f.properties?.kind !== "hedge");
+  const rows = yield* inRuns(treeRows, ROW_RUN, (run) => [
     rowPlacements(run, ctx, ndviAt, keepTree),
   ]);
   const trees = rows.flatMap((r) => r.trees);
-  const hedges = rows.flatMap((r) => r.hedges);
   trees.push(
     ...(yield* inRuns(features.canopy, PLACEMENT_RUN, (run) =>
       canopyPlacements(run, ctx, ndviAt, keepTree)
@@ -1410,10 +1388,6 @@ export function* vegetationSteps(
     chunks = built.chunks;
     seasons = built.seasons;
   }
-  if (hedges.length > 0) {
-    group.add(...buildHedges(hedges));
-  }
-
   return {
     group,
     chunks,
