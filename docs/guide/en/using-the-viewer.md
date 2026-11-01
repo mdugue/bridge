@@ -441,7 +441,8 @@ The button in the corner opens a panel with three tabs.
   "What does this look like in the evening?"). The four first
   suggestions are drawn anew for each conversation and read the moment:
   the landmark you look at, the time set, the season, the city's river
-  or data layers; the pen at the top starts a new conversation. A
+  (the water where you stand only where its highest flood reached) or
+  data layers; the pen at the top starts a new conversation. A
   language model searches
   what the city model knows — the buildings' names, addresses, use and
   height, the landmarks with what Wikidata says of them —, flies the view

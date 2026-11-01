@@ -8,6 +8,8 @@ import { type RefObject, useMemo } from "react";
 import { cardCredits } from "@/lib/city/card-lines";
 import { activeDataLayers, siteDataLayers } from "@/lib/city/data-layers";
 import type { FramePace } from "@/lib/city/frame-pace";
+import { clockMinutes } from "@/lib/city/ask-shown";
+import { starterRiver } from "@/lib/city/ask-starters";
 import { inquiryCard } from "@/lib/city/inquiry";
 import type { LookState } from "@/lib/city/look-state";
 import { riverOf } from "@/lib/city/scenario";
@@ -27,8 +29,7 @@ export function instantAt(hour: number, day: Date, date?: string): Date {
   const [y, m, d] = date
     ? date.split("-").map(Number)
     : [day.getFullYear(), day.getMonth() + 1, day.getDate()];
-  const minutes = Math.round(Math.min(Math.max(hour, 0), 24) * 60);
-  return new Date(y, m - 1, d, 0, Math.min(minutes, 24 * 60 - 1));
+  return new Date(y, m - 1, d, 0, clockMinutes(hour));
 }
 
 export function useAskScene(
@@ -96,7 +97,13 @@ export function useAskScene(
           at: c ? { x: c.epsg.x, y: c.epsg.y, headingDeg: c.headingDeg } : null,
           now: current(),
           landmarks: h?.landmarks ?? [],
-          river: riverOf(site.id)?.name ?? null,
+          // whether the river's highest flood reached the ground here
+          river: starterRiver(
+            riverOf(site.id),
+            site.provider.epsg,
+            c ? c.epsg : null,
+            c && h ? h.groundAt(c.epsg.x, c.epsg.y) : null
+          ),
           layers: [...offered],
         };
       },

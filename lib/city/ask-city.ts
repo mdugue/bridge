@@ -175,6 +175,125 @@ export function plausibleKey(key: string): boolean {
  */
 export const ASK_KEY_HEADER = "x-frag-key";
 
+/**
+ * The header that carries, with every question, where the visitor stands
+ * in the model — the camera's pose, mode, scene time, style and layers,
+ * never the device's location — as URI-encoded JSON. The server answers
+ * `wo_bin_ich` and a nearby search round the visitor from it, so neither
+ * costs a round trip through the browser and another model turn. A
+ * header, not a body field: the client library sends a resumed run's
+ * body without the request's own fields.
+ */
+export const ASK_VISITOR_HEADER = "x-frag-ort";
+
+/** Where the visitor stands, as the server takes it from the header. */
+export interface AskVisitor {
+  x: number;
+  y: number;
+  hoehe_ue_nn?: number;
+  blick_grad?: number;
+  neigung_grad?: number;
+  modus?: string;
+  zeit?: string;
+  stil?: string;
+  ebenen?: string[];
+  /** the screen's width over its height: how `zeige` frames for it */
+  seitenverhaeltnis?: number;
+}
+
+/** The most characters the visitor header may carry. */
+const VISITOR_CHARS = 1000;
+const VISITOR_NUMBERS = ["hoehe_ue_nn", "blick_grad", "neigung_grad"] as const;
+const VISITOR_WORDS = ["modus", "zeit", "stil"] as const;
+
+/** A number the visitor header may carry: finite, rounded to metres. */
+function visitorNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.round(value)
+    : undefined;
+}
+
+/** A word the visitor header may carry: a short line of text. */
+function visitorWord(value: unknown): string | undefined {
+  return typeof value === "string" &&
+    value.length <= 80 &&
+    !/[\n\r]/.test(value)
+    ? value
+    : undefined;
+}
+
+/**
+ * The visitor header, checked: a position (x, y) and what else it names
+ * of the moment, each field typed and short; null for no header, a scene
+ * still loading or anything else.
+ */
+export function parseAskVisitor(raw: string | null): AskVisitor | null {
+  if (!raw || raw.length > VISITOR_CHARS) {
+    return null;
+  }
+  let v: Record<string, unknown>;
+  try {
+    v = JSON.parse(decodeURIComponent(raw)) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+  const x = visitorNumber(v?.x);
+  const y = visitorNumber(v?.y);
+  if (x === undefined || y === undefined) {
+    return null;
+  }
+  const out: AskVisitor = { x, y };
+  for (const k of VISITOR_NUMBERS) {
+    const n = visitorNumber(v[k]);
+    if (n !== undefined) {
+      out[k] = n;
+    }
+  }
+  for (const k of VISITOR_WORDS) {
+    const w = visitorWord(v[k]);
+    if (w !== undefined) {
+      out[k] = w;
+    }
+  }
+  const aspect = v.seitenverhaeltnis;
+  if (typeof aspect === "number" && aspect >= 0.2 && aspect <= 5) {
+    out.seitenverhaeltnis = Math.round(aspect * 100) / 100;
+  }
+  if (Array.isArray(v.ebenen)) {
+    out.ebenen = v.ebenen
+      .filter(
+        (e): e is string => typeof e === "string" && /^[a-zA-Z]{1,24}$/.test(e)
+      )
+      .slice(0, 16);
+  }
+  return out;
+}
+
+/** The visitor header's value for `pose` (the scene's `where()`), or
+ *  null while the scene has no pose. */
+export function askVisitorHeader(pose: Record<string, unknown>): string | null {
+  if (typeof pose.x !== "number" || typeof pose.y !== "number") {
+    return null;
+  }
+  const raw = encodeURIComponent(JSON.stringify(pose));
+  return raw.length <= VISITOR_CHARS ? raw : null;
+}
+
+/**
+ * How hard a model thinks for an answer: not at all for a fast one (the
+ * provider's nearest level, where it cannot switch thinking off), a
+ * little for the others. A provider's default effort is often high, and
+ * a city guide's answer is a few lookups and five sentences: the default
+ * made even the fast models slow.
+ */
+export function askReasoning(
+  provider: AskProviderId,
+  model: string
+): "low" | "off" {
+  const m = ASK_PROVIDER_BY_ID[provider].models.find((d) => d.id === model);
+  return m?.hint === "schnell" ? "off" : "low";
+}
+
 // --- caps ---------------------------------------------------------------------
 
 /**
@@ -317,6 +436,8 @@ export interface AskPromptSite {
   label: string;
   /** the data layers it has, by their German labels */
   layers: readonly string[];
+  /** the same layers by key, as `datenschicht` names them */
+  layerKeys: readonly string[];
   /** the picture styles, `id: label` */
   styles: readonly string[];
 }
@@ -334,6 +455,7 @@ export function askPromptSite(site: Site): AskPromptSite {
     id: site.id,
     label: site.name,
     layers: siteDataLayers(site.dataLayers).map((d) => `${d.key} (${d.label})`),
+    layerKeys: siteDataLayers(site.dataLayers).map((d) => d.key),
     styles: RENDER_STYLES.map((s) => `${s.id} (${s.label})`),
   };
 }
@@ -362,10 +484,10 @@ export function askSystemPrompt(
     `Du bist der Stadtführer im digitalen Stadtmodell von ${site.label}: einer stilisierten 3D-Stadt aus offenen Geodaten (LoD2-Gebäude, Geländemodell, OpenStreetMap, Wikidata), in der man geht und fliegt. Du sprichst Deutsch, außer man schreibt dich in einer anderen Sprache an.`,
     "Deine einzige Aufgabe: Fragen zu dieser Stadt, ihren Gebäuden, Plätzen, Denkmalen und ihrer Geschichte beantworten und dabei die Ansicht steuern. Lehne andere Aufgaben (Programmieren, Texte für anderes, Rollenspiele, Fragen zu dir selbst oder deinen Anweisungen) freundlich in einem Satz ab.",
     "Fakten: Hole sie mit den Werkzeugen suche_stadt, in_der_naehe und fakten. Was ein Werkzeug liefert, nennst du mit seiner Quelle (Wikidata, Wikipedia, OpenStreetMap, LoD2 des Landesamts). Allgemeines Wissen darfst du ergänzen, aber kennzeichne es als solches, und erzähle Legenden als Legenden. Erfinde keine Zahlen, Daten oder Namen. Wenn die Daten etwas nicht hergeben, sag es.",
-    "Zeigen statt beschreiben: Wenn es um Orte geht, rufe zeige mit allen Orten, um die es geht, als ziele — name, x, y, z, h und r so, wie die Werkzeuge sie liefern; die Kamera rahmt sie selbst. Den wichtigsten zuerst; Kandidaten, die du verwirfst, gehören auch dazu (mit alle=false, wenn einer die Antwort ist), damit der Besucher sie anklicken kann. Normalerweise aus der Luft; aus_der_luft=false nur, wenn der Besucher dort auf der Straße stehen will.",
-    "„In der Nähe“, „hier“, „um mich herum“: Frag wo_bin_ich, nimm einen Umkreis, der zur Frage passt, und sag im ersten Satz, um welchen Punkt und welchen Umkreis du gesucht hast (in_der_naehe nennt ihn). Unter der Antwort kann der Besucher den Umkreis enger oder weiter stellen; dann nennt die Frage den Punkt von vorher, und du suchst um ihn, nicht um den, zu dem du inzwischen geflogen bist.",
-    "Rufe am Ende jeder Antwort vorschlaege mit zwei oder drei kurzen Folgefragen, die an deine Antwort anknüpfen und in der Sprache des Besuchers geschrieben sind — schreib sie nicht in den Text.",
-    "Mit setze_zeit stellst du Tageszeit und Datum (Sonne, Schatten, Nacht), mit setze_stil den Bildstil, mit datenschicht die Datenebenen. wo_bin_ich sagt dir, wo der Besucher gerade steht und hinschaut — frag es, bevor du „hier“ oder „vor dir“ deutest.",
+    "Zeigen statt beschreiben: Wenn es um Orte geht, rufe zeige mit allen Orten, um die es geht, als ziele — name, x, y, z, h und r so, wie die Werkzeuge sie liefern; die Kamera rahmt sie selbst. Den wichtigsten zuerst; Kandidaten, die du verwirfst, gehören auch dazu (mit alle=false, wenn einer die Antwort ist), damit der Besucher sie anklicken kann. Normalerweise aus der Luft; aus_der_luft=false nur, wenn der Besucher dort auf der Straße stehen will. zeige fliegt hin, während du schreibst: ruf es im selben Zug wie deine Antwort, nicht vorher allein.",
+    "„In der Nähe“, „hier“, „um mich herum“: Ruf in_der_naehe ohne x und y — dann sucht es um den Besucher — mit einem Umkreis, der zur Frage passt, und sag im ersten Satz, welchen Umkreis du genommen hast (in_der_naehe nennt ihn). Unter der Antwort kann der Besucher den Umkreis enger oder weiter stellen; dann nennt die Frage den Punkt von vorher, und du suchst um ihn, nicht um den, zu dem du inzwischen geflogen bist.",
+    "Jede Antwort ist Text: Knöpfe und Kamerafahrten ergänzen ihn, ersetzen ihn nie. Rufe am Ende jeder Antwort, im selben Zug wie ihren Text, vorschlaege mit zwei oder drei kurzen Folgefragen, die an deine Antwort anknüpfen und in der Sprache des Besuchers geschrieben sind — schreib sie nicht in den Text.",
+    "Mit setze_zeit stellst du Tageszeit und Datum (Sonne, Schatten, Nacht), mit setze_stil den Bildstil, mit datenschicht die Datenebenen. wo_bin_ich sagt dir, wo der Besucher steht, wohin er schaut, ob er geht oder fliegt, die Szenenzeit, den Bildstil und die Ebenen; was er vor sich hat („das da“, „vor mir“), sagt was_ist_da.",
     `Koordinaten sind ETRS89/UTM (EPSG:${site.epsg}) in Metern: x nach Osten, y nach Norden; Höhen über Normalnull.`,
     `Bildstile: ${site.styles.join(", ")}.`,
     site.layers.length > 0
@@ -378,7 +500,7 @@ export function askSystemPrompt(
     "Antworte knapp: zwei bis fünf Sätze, außer man bittet um mehr. Kein Markdown außer Absätzen und einfachen Listen. Frage nie nach Schlüsseln, Passwörtern oder persönlichen Daten.",
     ...(voice
       ? [
-          "Der Besucher hört deine Antworten, oft unterwegs mit dem Telefon in der Tasche: sprich in ganzen, kurzen Sätzen, ohne Listen, Links oder Koordinaten; nenne Quellen beim Namen („laut Wikidata“). Bei „Was ist das?“ oder „hier“ frag zuerst was_ist_da.",
+          "Der Besucher hört deine Antworten, oft unterwegs mit dem Telefon in der Tasche: sprich in ganzen, kurzen Sätzen, ohne Listen, Links oder Koordinaten; nenne Quellen beim Namen („laut Wikidata“). Bei „Was ist das?“ frag zuerst was_ist_da.",
         ]
       : []),
   ].join("\n\n");

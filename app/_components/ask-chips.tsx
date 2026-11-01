@@ -27,7 +27,22 @@ export interface AnswerChips {
 interface ToolCallPart {
   input?: unknown;
   name: string;
+  output?: unknown;
   type: "tool-call";
+}
+
+/** The centre a neighbourhood search took: the one it was given, or —
+ *  round the visitor — the one its result names. */
+function nearCentre(call: ToolCallPart): { x: number; y: number } | null {
+  const input = (call.input ?? {}) as Record<string, unknown>;
+  if (typeof input.x === "number" && typeof input.y === "number") {
+    return { x: input.x, y: input.y };
+  }
+  const mitte = (call.output as { mitte?: { x?: unknown; y?: unknown } })
+    ?.mitte;
+  return typeof mitte?.x === "number" && typeof mitte.y === "number"
+    ? { x: mitte.x, y: mitte.y }
+    : null;
 }
 
 /** A place as a tool call's input holds it, checked. */
@@ -83,17 +98,17 @@ export function answerChips(
         .map(placeOf)
         .filter((p): p is AskPlace => p !== null);
       out.onFoot = input.aus_der_luft === false;
-    } else if (
-      call.name === "in_der_naehe" &&
-      typeof input.x === "number" &&
-      typeof input.y === "number"
-    ) {
+    } else if (call.name === "in_der_naehe") {
+      const at = nearCentre(call);
+      if (!at) {
+        continue;
+      }
       const radius =
         typeof input.radius === "number" ? input.radius : NEAR_RADIUS;
       out.near = {
         reach: nearReach(radius).buildings,
-        x: Math.round(input.x),
-        y: Math.round(input.y),
+        x: Math.round(at.x),
+        y: Math.round(at.y),
       };
     } else if (call.name === "vorschlaege" && Array.isArray(input.fragen)) {
       out.questions = input.fragen

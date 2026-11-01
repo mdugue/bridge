@@ -1,11 +1,7 @@
 import { expect, test } from "bun:test";
-import { SCENE_TOOLS } from "@/lib/city/ask-tools";
-import {
-  AERIAL_REACH,
-  type AskScene,
-  sceneTools,
-  showPlaces,
-} from "./ask-scene-tools";
+import { BROWSER_TOOLS } from "@/lib/city/ask-tools";
+import { AERIAL_REACH } from "@/lib/city/ask-view";
+import { type AskScene, sceneTools, showPlaces } from "./ask-scene-tools";
 import type { ViewpointGeometry } from "@/lib/city/site";
 
 const STUB: AskScene = {
@@ -31,34 +27,12 @@ const STUB: AskScene = {
   where: () => ({}),
 };
 
-test("the card runs every scene tool the server hands the browser", () => {
+test("the card runs every tool the server hands the browser", () => {
   // one it does not bind leaves the run waiting for ever
   const bound = sceneTools(STUB).map((t) => t.name);
   expect(bound.sort((a, b) => a.localeCompare(b))).toEqual(
-    SCENE_TOOLS.map((t) => t.name).sort((a, b) => a.localeCompare(b))
+    BROWSER_TOOLS.map((t) => t.name).sort((a, b) => a.localeCompare(b))
   );
-});
-
-test("a box is taken away with aus alone, and not placed off the loaded ground", async () => {
-  const placed: unknown[] = [];
-  const tools = sceneTools({
-    ...STUB,
-    setVolume: (v) => {
-      placed.push(v);
-      return v === null;
-    },
-  });
-  const tool = tools.find((t) => t.name === "plane_baukoerper")!;
-  expect(await tool.execute!({ aus: true })).toEqual({ ok: true });
-  const off = (await tool.execute!({
-    x: 1,
-    y: 2,
-    breite: 10,
-    tiefe: 10,
-    hoehe: 20,
-  })) as { ok: boolean };
-  expect(off.ok).toBe(false);
-  expect(placed).toHaveLength(2);
 });
 
 test("zeige frames the places together, or the first alone when they lie too far apart", () => {

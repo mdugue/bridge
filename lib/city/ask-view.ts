@@ -37,6 +37,14 @@ const EYE = 1.6;
 export const ASK_FOV = 60;
 
 /**
+ * The farthest an aerial view of several places stands off them (m):
+ * beyond it a 20 m house is a few pixels on a phone and the fog nears
+ * (on a phone the stream ends at 2.2 km). Further spread places are
+ * shown one at a time, from their chips.
+ */
+export const AERIAL_REACH = 900;
+
+/**
  * On foot: the walker on the street in front of `target`, on the side of
  * `from` (the camera's place now; straight from the south where it stands
  * on the target), far enough back to see it whole. The pitch takes the
