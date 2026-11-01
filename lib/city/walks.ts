@@ -46,6 +46,54 @@ export interface WalkDay {
 
 export type Season = "autumn" | "spring" | "summer" | "winter";
 
+/**
+ * A photograph of what the stop is about, from Wikimedia Commons: what
+ * the model cannot draw (a gilded rider, a carved portal) is seen here.
+ * The author names `file`; `bun scripts/walks.ts <site> photos` fetches
+ * a small copy into `walks/photos/` (the site serves it itself: no
+ * request to Wikimedia from the visitor's browser) and writes the credit
+ * Commons gives. `src` is the published copy's name, set by the build.
+ */
+export interface WalkPhoto {
+  /** the photographer as Commons credits them */
+  author: string;
+  /** what the photo shows, where the text needs it said */
+  caption?: string;
+  /** the Commons file name ("Dresden Goldener Reiter.jpg") */
+  file: string;
+  /**
+   * What must stay in sight where the card crops the photo: x, y as
+   * shares of its width and height from the top left (the centre when
+   * absent) — the quadriga at the top, the bridge low in the frame.
+   */
+  focus?: [number, number];
+  /** the copy's size (px) */
+  h: number;
+  /** its licence's short name ("CC BY-SA 4.0", "Public domain") */
+  licence: string;
+  /** the licence's text, where it has one */
+  licenceUrl?: string;
+  /** the file's page on Commons */
+  page: string;
+  /** the published copy, beside walks.json (set by prepare-data) */
+  src?: string;
+  w: number;
+}
+
+/** A ref the card can pick: its name and where it stands (site CRS),
+ *  with its footprint's radius where the twin knows it. */
+export interface WalkPlace {
+  id: string;
+  name: string;
+  r?: number;
+  x: number;
+  y: number;
+}
+
+/** Where a stop's photo lies in the site's walks folder. */
+export const walkPhotoFile = (walk: string, stop: string): string =>
+  `photos/${walk}--${stop}.webp`;
+
 export interface WalkStop {
   /** what the eye looks at: site CRS x, y and the height (m a.s.l.) */
   at: [number, number, number];
@@ -73,6 +121,11 @@ export interface WalkStop {
   mode?: MovementMode;
   /** the Stadtwissen entries it is about (Q-ids, Building ids) */
   refs?: string[];
+  /** the refs as the scene can pick them, set by the build from the
+   *  Stadtwissen (prepare-data.ts): the card makes their names buttons */
+  places?: WalkPlace[];
+  /** the photo the card shows above the text */
+  photo?: WalkPhoto;
   /** the picture style for this stop; Pastell when absent */
   style?: RenderStyle;
   /** the narration, written by Claude */
@@ -244,6 +297,93 @@ function textProblems(stop: WalkStop): string[] {
   for (const d of stop.days ?? []) {
     if (!(MD.test(d.from) && MD.test(d.to))) {
       out.push(`days ${d.from}–${d.to} must be MM-DD`);
+    }
+  }
+  out.push(...photoProblems(stop), ...lookProblems(stop));
+  return out;
+}
+
+/** "Schau …", "Sieh …": a sentence that sends the eye somewhere. */
+const LOOK = /(?:^|[.!?:;]\s+)(?:Schau|Sieh|Achte|Zoom|Zähl|Such)(?:e|t)?\b/;
+
+/**
+ * The model draws masses, not details: a statue is a generic figure, a
+ * relief or an inscription is not there at all. A sentence that sends the
+ * eye to look therefore points at the photo (docs/walks.md).
+ */
+function lookProblems(stop: WalkStop): string[] {
+  const told = [stop.text, stop.closer ?? ""].flatMap((t) =>
+    t.split(/(?<=[.!?])\s+/)
+  );
+  return told
+    .filter((s) => LOOK.test(s) && !(stop.photo && /\b(?:Foto|Bild)\b/.test(s)))
+    .map((s) => `"${s.slice(0, 40)}…" points at what the model may not show`);
+}
+
+/** Whether a stop's photo carries the credit it is shown with. */
+export function photoCredited(p: NonNullable<WalkStop["photo"]>): boolean {
+  return Boolean(p.author && p.licence && p.page.startsWith("https://"));
+}
+
+/** A photo carries its credit, or it is not shown. */
+function photoProblems(stop: WalkStop): string[] {
+  const p = stop.photo;
+  if (!p) {
+    return [];
+  }
+  if (!photoCredited(p)) {
+    return [
+      `photo ${p.file} has no credit (bun scripts/walks.ts <site> photos)`,
+    ];
+  }
+  if (!(finite(p.w) && finite(p.h))) {
+    return [`photo ${p.file} has no size`];
+  }
+  const share = (v: unknown) =>
+    finite(v) && (v as number) >= 0 && (v as number) <= 1;
+  return p.focus === undefined || (p.focus.length === 2 && p.focus.every(share))
+    ? []
+    : [`photo ${p.file}: focus must be [x, y] in 0…1`];
+}
+
+/** Below this width-to-height a photo is tall (Kronentor 0.67, a
+ *  near-square Chilehaus 0.99 is not). */
+const TALL_ASPECT = 0.85;
+
+/** The photo's shape as the card lays it out: tall ones stand beside
+ *  the story, the rest span the card. */
+export function photoIsTall(p: Pick<WalkPhoto, "h" | "w">): boolean {
+  return p.w / p.h < TALL_ASPECT;
+}
+
+/** `object-position` for a photo's focus: the centre when it has none. */
+export function photoPosition(p: Pick<WalkPhoto, "focus">): string {
+  const [x, y] = p.focus ?? [0.5, 0.5];
+  return `${Math.round(x * 100)}% ${Math.round(y * 100)}%`;
+}
+
+/**
+ * The stop's refs as the card picks them: each one the twin knows, with
+ * its name, place and radius, by `lookup` (the Stadtwissen, at build
+ * time); a ref it lacks, or one without a name, is left out.
+ */
+export function stopPlaces(
+  stop: Pick<WalkStop, "refs">,
+  lookup: (
+    id: string
+  ) => { name: string; r?: number; x: number; y: number } | null
+): WalkPlace[] {
+  const out: WalkPlace[] = [];
+  for (const id of stop.refs ?? []) {
+    const hit = lookup(id);
+    if (hit?.name && !out.some((p) => p.id === id)) {
+      out.push({
+        id,
+        name: hit.name,
+        x: hit.x,
+        y: hit.y,
+        ...(hit.r === undefined ? {} : { r: hit.r }),
+      });
     }
   }
   return out;

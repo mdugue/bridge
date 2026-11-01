@@ -397,14 +397,20 @@ The button in the corner opens a panel with three tabs.
   hour the stop is best seen (a facade in evening light, a square at
   night) and, where the stop asks, a picture style; a walk leaves Modell
   once, since it tells what you see. The card tells the stop already
-  during the glide there, adds what
-  is special about today or this season, and names one detail to find in
-  the picture. *Belege* ("sources") folds out every claim the stop makes
+  during the glide there; you can look around during the glide, it still
+  lands at the stop, and the light moves with it to the next stop's hour.
+  It adds what is special about today or this season and names one detail
+  to find in the picture. What the model does not show — a statue, a
+  relief, an inscription, an interior — a Wikimedia Commons photo in the
+  card shows, with its author and licence: a landscape one across the top,
+  a portrait one beside the text (above it on a phone); a click shows it
+  whole. It is served by this site, not by Wikimedia. *Belege* ("sources") folds out every claim the stop makes
   with the source it comes from — Wikipedia, an institution's page, the
   city model's own data; legends are told as legends. *Weiter* and
   *Zurück* move between the stops, × ends the walk and gives the picture
-  style and the time back. On a phone the card sits at the top and folds
-  its text away. How they are written: [walks.md](../../walks.md).
+  style and the time back. On a phone the card is a sheet at the bottom
+  that starts folded: tap or pull up its handle to open it, pull it down
+  to fold it again. How they are written: [walks.md](../../walks.md).
 - **Steuerung** ("controls") — the full controls table, folded until you
   open it (the bar over the scene shows the first few).
 

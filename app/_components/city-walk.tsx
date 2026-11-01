@@ -695,14 +695,20 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
       beforeWalk.current = { at: time.current(), style: look.get().style };
     }
     setWalking({ index, walk });
+    // the sun travels with the camera: no jump from one hour to the next
+    const hour = time.glideTo(stopDate(stop, today()));
     if (h.getViewMode() === "model") {
       h.applyCameraState(stopCamera(stop, h.offset));
+      hour(1);
     } else {
       // a slow glide the visitor looks about in while the text is read:
       // a drag on the way turns the view, it does not stop the walk
-      h.flyToViewpoint(stopView(stop), WALK_PACE, true);
+      h.flyToViewpoint(stopView(stop), {
+        lookAround: true,
+        onProgress: hour,
+        pace: WALK_PACE,
+      });
     }
-    time.setInstant(stopDate(stop, today()));
     look.set({ style: stop.style ?? "pastel" });
   };
   const endWalk = () => {

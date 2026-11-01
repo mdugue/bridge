@@ -39,8 +39,21 @@ memory and first load must not grow (ADR 0047).
    their sources. A legend is told as a legend; a claim in `facts` is one
    a source states.
 4. **A walk is told on the way.** Each stop glides at 2.2× the usual
-   pace, so the stop's story starts on the way; a stop's text fits a
-   phone screen (560 characters).
+   pace, so the stop's story starts on the way, and the light glides to
+   the next stop's hour with it; a stop's text fits a phone screen (560
+   characters). A look from the air or the street does not stop the
+   glide: the stop still lands. On a phone the card is a bottom sheet
+   that starts folded, so the scene stays in view.
+5. **The text points only at what the model draws; a photo shows the
+   rest.** The model has masses, roofs as planes, towers, bridges, the
+   river and the ground; a statue is a generic figure, and reliefs,
+   inscriptions, colours and interiors are not there. A sentence that
+   sends the eye to look ("Schau …", "Sieh …") points at the stop's
+   photo, which `walks.test.ts` checks. The photo is a Wikimedia Commons
+   file the stop names, copied once by `bun scripts/walks.ts <site>
+   photos` as an 800 px WebP into `data/<site>/walks/photos/`, committed
+   and served by the site itself with its author, licence and link on the
+   card: the viewer asks no third party for it.
 
 ## Consequences
 
@@ -50,5 +63,7 @@ memory and first load must not grow (ADR 0047).
   with `bun scripts/walks.ts <site> shots` and `bun run shots` when it is
   written or the scene changes.
 - Another city's walks are a writing task, not a code change.
+- A photo is a few dozen kilobytes in the repository and loads only with
+  its stop's card.
 - Text other than the inquiry card's shows in the viewer, in the walk
   card only, marked as narration (amends ADR 0042).

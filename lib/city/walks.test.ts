@@ -2,10 +2,13 @@ import { expect, test } from "bun:test";
 import {
   inDaySpan,
   isWalkBundle,
+  photoIsTall,
+  photoPosition,
   seasonOf,
   stopCamera,
   stopDate,
   stopNotes,
+  stopPlaces,
   stopView,
   type Walk,
   walkBundle,
@@ -111,8 +114,76 @@ test("a walk's problems are named", () => {
   expect(() => walkBundle("probe", [broken])).toThrow("probe walks");
 });
 
+test("a look is sent to the photo, never to a detail the model lacks", () => {
+  const looking = { ...stop, closer: "Schau auf die Krone." };
+  expect(
+    walkProblems({ ...walk, stops: [looking, { ...stop, id: "zwei" }] })
+  ).toHaveLength(1);
+  const photo = {
+    author: "A",
+    file: "Krone.jpg",
+    h: 600,
+    licence: "CC BY 4.0",
+    page: "https://commons.wikimedia.org/wiki/File:Krone.jpg",
+    w: 800,
+  };
+  const onPhoto = {
+    ...looking,
+    closer: "Schau auf dem Foto auf die Krone.",
+    photo,
+  };
+  expect(
+    walkProblems({ ...walk, stops: [onPhoto, { ...stop, id: "zwei" }] })
+  ).toEqual([]);
+  // without a photo, naming one is no help
+  const noPhoto = { ...onPhoto, photo: undefined };
+  expect(
+    walkProblems({ ...walk, stops: [noPhoto, { ...stop, id: "zwei" }] })
+  ).toHaveLength(1);
+});
+
 test("a bundle is recognised by its shape", () => {
   expect(isWalkBundle(walkBundle("probe", [walk]))).toBe(true);
   expect(isWalkBundle({ site: "probe" })).toBe(false);
   expect(isWalkBundle(null)).toBe(false);
+});
+
+test("a tall photo stands beside the story, its focus kept in a crop", () => {
+  expect(photoIsTall({ w: 800, h: 1200 })).toBe(true);
+  expect(photoIsTall({ w: 800, h: 808 })).toBe(false);
+  expect(photoIsTall({ w: 800, h: 335 })).toBe(false);
+  expect(photoPosition({})).toBe("50% 50%");
+  expect(photoPosition({ focus: [0.45, 0.3] })).toBe("45% 30%");
+  const photo = {
+    author: "A",
+    file: "K.jpg",
+    h: 600,
+    licence: "CC0",
+    page: "https://commons.wikimedia.org/wiki/File:K.jpg",
+    w: 800,
+  };
+  const at = (focus: [number, number]) =>
+    walkProblems({
+      ...walk,
+      stops: [
+        { ...stop, photo: { ...photo, focus } },
+        { ...stop, id: "zwei" },
+      ],
+    });
+  expect(at([0.5, 0.3])).toEqual([]);
+  expect(at([0.5, 1.3]).join()).toContain("focus must be");
+});
+
+test("a stop's refs become the places the twin knows by name", () => {
+  const known: Record<
+    string,
+    { name: string; r?: number; x: number; y: number }
+  > = {
+    Q1: { name: "Frauenkirche", r: 30, x: 1, y: 2 },
+    b: { name: "", x: 3, y: 4 },
+  };
+  expect(
+    stopPlaces({ refs: ["Q1", "b", "nope", "Q1"] }, (id) => known[id] ?? null)
+  ).toEqual([{ id: "Q1", name: "Frauenkirche", r: 30, x: 1, y: 2 }]);
+  expect(stopPlaces({}, () => null)).toEqual([]);
 });
