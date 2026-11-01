@@ -56,6 +56,8 @@ reproducible, but they can be wrong where the world does not fit the rule.
 - **Assignments:** a shop from OpenStreetMap belongs to the building whose
   footprint holds its point, else to the nearest within a few metres; a
   landmark from Wikidata to the building parts its outline covers.
+  A bridge is no landmark (it belongs to the bridges) unless Wikidata
+  also knows it as a building.
 - **Someone else's recognition:** lamps Mapillary found in street photos
   were detected there by Mapillary's own image recognition — trained
   networks whose hits the viewer takes over.
