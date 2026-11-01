@@ -146,7 +146,12 @@ def test_a_scan_without_return_numbers_reads_its_echo_class_as_multi_echo(tmp_pa
     assert lsc.echoless(laspy.read(bare).header)
     kept = scan(tmp_path / "kept.laz", xs, ys, zs, cls, [1000] * 3, returns=[1, 1, 2])
     assert not lsc.echoless(laspy.read(kept).header)
-    for src, multi in ((bare, [0, 2, 0]), (kept, [1, 1, 2])):
+    # a header that forgot its counts over points that carry their returns
+    counted = scan(tmp_path / "counted.laz", xs, ys, zs, cls, [1000] * 3, returns=[1, 1, 2])
+    las = laspy.read(counted)
+    las.header.number_of_points_by_return = np.zeros(15, np.uint64)
+    las.write(counted, do_compress=True)
+    for src, multi in ((bare, [0, 2, 0]), (kept, [1, 1, 2]), (counted, [1, 1, 2])):
         out = lsc.merge_laz(
             [src],
             tmp_path / f"m_{src.stem}.laz",

@@ -648,9 +648,10 @@ def test_an_old_cache_is_completed_with_the_state(tmp_path, monkeypatch):
             "dissolved": {"value": "1894-01-01T00:00:00Z"},
             "states": {"value": "http://www.wikidata.org/entity/Q56556915"},
         },
-        {"i": {"value": "http://www.wikidata.org/entity/Q2"}, "bridge": {"value": "1"}},
+        {"i": {"value": "http://www.wikidata.org/entity/Q2"}},
     ]
-    monkeypatch.setattr(landmarks, "_ask", lambda query: rows)
+    bridges = [{"i": {"value": "http://www.wikidata.org/entity/Q2"}}]
+    monkeypatch.setattr(landmarks, "_ask", lambda query: bridges if "Q12280" in query else rows)
     assert landmarks.complete_status(dest)
     a, b = json.loads(dest.read_text())["landmarks"]
     assert a["dissolved"] == "1894-01-01" and a["states"] == [landmarks.DEMOLISHED]
@@ -661,6 +662,30 @@ def test_an_old_cache_is_completed_with_the_state(tmp_path, monkeypatch):
     dest.write_text(json.dumps({"landmarks": [{"id": "Q2", "label": "B", "states": []}]}))
     assert landmarks.complete_status(dest)
     assert json.loads(dest.read_text())["landmarks"][0]["bridge"]
+
+
+def test_a_failed_bridge_query_keeps_the_state_and_asks_again(tmp_path, monkeypatch):
+    dest = tmp_path / "landmarks_t.json"
+    dest.write_text(json.dumps({"landmarks": [{"id": "Q1", "label": "A"}]}))
+    rows = [
+        {
+            "i": {"value": "http://www.wikidata.org/entity/Q1"},
+            "dissolved": {"value": "1894-01-01T00:00:00Z"},
+        }
+    ]
+
+    def ask(query):
+        if "Q12280" in query:
+            raise TimeoutError("query timed out")
+        return rows
+
+    monkeypatch.setattr(landmarks, "_ask", ask)
+    assert landmarks.complete_status(dest)
+    (a,) = json.loads(dest.read_text())["landmarks"]
+    assert a["dissolved"] == "1894-01-01" and "bridge" not in a
+    monkeypatch.setattr(landmarks, "_ask", lambda query: [] if "Q12280" in query else rows)
+    assert landmarks.complete_status(dest)  # the next fetch completes it
+    assert json.loads(dest.read_text())["landmarks"][0]["bridge"] is False
 
 
 def test_a_bridge_is_no_landmark_unless_it_is_a_building():

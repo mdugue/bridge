@@ -334,7 +334,11 @@ def merge_laz(
         for src in sources:
             with laspy.open(src) as reader:
                 table = class_table(classes(reader.header)) if classes else None
-                echoes = np.asarray(sorted(echo_classes)) if echoless(reader.header) else None
+                echoes = (
+                    np.asarray(sorted(echo_classes))
+                    if echo_classes and echoless(reader.header)
+                    else None
+                )
             for pts in _chunks(src):
                 if table is not None:
                     mapped = table[np.asarray(pts.classification)]
@@ -344,10 +348,13 @@ def merge_laz(
                 rec.x, rec.y, rec.z = pts.x, pts.y, pts.z
                 for dim in MERGED_DIMS:
                     rec[dim] = pts[dim]
-                if echoes is not None and len(echoes):
-                    rec.number_of_returns = np.where(
-                        np.isin(np.asarray(pts.classification), echoes), 2, rec.number_of_returns
+                if echoes is not None:
+                    # only the points that really carry no echo count: a file
+                    # whose header forgot the counts keeps its own returns
+                    bare = (np.asarray(pts.number_of_returns) == 0) & np.isin(
+                        np.asarray(pts.classification), echoes
                     )
+                    rec.number_of_returns = np.where(bare, 2, rec.number_of_returns)
                 if table is not None:
                     rec.classification = mapped[keep]
                 if intensity_scale != 1.0:

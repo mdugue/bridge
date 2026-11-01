@@ -141,13 +141,19 @@ def query_box(
 
 STATUS_QUERY = """
 SELECT ?i (MIN(?end) AS ?dissolved) (GROUP_CONCAT(DISTINCT ?st; separator="|") AS ?states)
-       (MAX(?b) AS ?bridge)
 WHERE {
   VALUES ?i { %(ids)s }
   OPTIONAL { ?i wdt:P576 ?end . }
   OPTIONAL { ?i wdt:P5816 ?st . }
-  OPTIONAL { ?i wdt:P31/wdt:P279* wd:Q12280 . BIND(1 AS ?b) }
 } GROUP BY ?i
+"""
+# its own query: the subclass walk is the slow part, and a timeout here must
+# not cost the items their state
+BRIDGE_QUERY = """
+SELECT DISTINCT ?i WHERE {
+  VALUES ?i { %(ids)s }
+  ?i wdt:P31/wdt:P279* wd:Q12280 .
+}
 """
 STATUS_BATCH = 200
 
@@ -172,7 +178,9 @@ def fetch_status(ids: list[str]) -> dict[str, dict]:
     out: dict[str, dict] = {}
     for k in range(0, len(ids), STATUS_BATCH):
         batch = ids[k : k + STATUS_BATCH]
-        for r in _ask(STATUS_QUERY % {"ids": " ".join(f"wd:{i}" for i in batch)}):
+        values = " ".join(f"wd:{i}" for i in batch)
+        bridges = _bridges(values)
+        for r in _ask(STATUS_QUERY % {"ids": values}):
             qid = r["i"]["value"].rsplit("/", 1)[-1]
             end = r.get("dissolved", {}).get("value")
             states = r.get("states", {}).get("value", "")
@@ -180,14 +188,26 @@ def fetch_status(ids: list[str]) -> dict[str, dict]:
                 # a date, or a blank node where Wikidata knows only that it ended
                 "dissolved": (end[:10] if end[:4].isdigit() else "unknown") if end else None,
                 "states": sorted(s.rsplit("/", 1)[-1] for s in states.split("|") if s),
-                "bridge": "bridge" in r,
             }
+            if bridges is not None:
+                out[qid]["bridge"] = qid in bridges
     return out
+
+
+def _bridges(values: str) -> set[str] | None:
+    """The bridges among a batch, or None when Wikidata did not answer: the
+    items then carry no `bridge` member, and the next fetch asks again."""
+    try:
+        rows = _ask(BRIDGE_QUERY % {"ids": values})
+    except (OSError, ValueError, KeyError) as e:
+        print(f"Wikidata bridge query failed ({e}); fetch again to complete it")
+        return None
+    return {r["i"]["value"].rsplit("/", 1)[-1] for r in rows}
 
 
 def _with_status(items: list[dict]) -> list[dict]:
     status = fetch_status([i["id"] for i in items])
-    unknown = {"dissolved": None, "states": [], "bridge": False}
+    unknown = {"dissolved": None, "states": []}
     return [{**i, **status.get(i["id"], unknown)} for i in items]
 
 
@@ -453,7 +473,7 @@ def run(tile: Tile) -> None:
     heights = object_heights(city)
     names = osm_names(tile)
     if any(gone(i) is None or "bridge" not in i for i in items):
-        print(f"{tile.id}: the Wikidata cache predates the buildings' state — run bun run fetch")
+        print(f"{tile.id}: Wikidata cache lacks state or bridges — run bun run fetch")
     landmarks = []
     floor = notable_floor(items)
     for item in items:
