@@ -1525,9 +1525,18 @@ visual-variable codebook is in
   2026-10-21 (G11): 8–25 % shed dormers per tile (Meißen 15.6, Grimma
   16–25, Leipzig 12, Dresden 11–14, Hamburg 8–10, München 21, Unna
   11–13 %); about half the blobs are under 3 m deep and stay flat. A
-  host's dormers and chimneys are appended as one object in its tint and
-  roof colour (`source` 4), no storey band, eave line, plinth or shop zone
-  on it. No window in the front: the veto stands. Dresden: 13 231 dormers (10 399
+  host's chimneys are appended as one object, its dormers as one per band
+  of feet 0.15 m deep (`dormerParts`: the sill is read from the object's
+  base), in its tint and roof colour (`source` 4), no storey band, eave
+  line, plinth or shop zone on them. Where the host has windows, a
+  dormer's front takes one row of its own (`dormerWindows`, style bit
+  `dormer`): 0.8 × 1.3 m on a 1.35 m axis, 0.2 m in from the front's ends,
+  its sill 0.2 m over the roof, its head 0.15 m under the dormer's eave
+  (the front's own `WALL_EAVE`), shorter where the front is lower; the
+  cheeks stay blind (facade length 0). The street photos' shop reading
+  (`facade-reading.ts`) is the host's ground floor and never reaches a
+  dormer's row: on Dresden's 33410_5656 146 of 237 read buildings carry
+  one, and it had taken their dormers' windows. Dresden: 13 231 dormers (10 399
   before) and 19 676 chimneys on fifteen tiles; Leipzig 6 852 and 10 114,
   München 7 095 (10 233 before: the edges of flat roofs and the roof
   terraces it had drawn as dormers are gone; checked on the 20 cm

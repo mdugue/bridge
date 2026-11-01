@@ -568,13 +568,29 @@ test("a chimney joins its host with the dormers as a box, all wall", () => {
     undefined,
     { dormers: [at(43), at(47, "chimney")] }
   );
-  // one object for the host's dormer and chimney
-  expect(baked.objects.length).toBe(lod2.objects.length + 1);
+  // the host's chimneys one object, its dormers another
+  expect(baked.objects.length).toBe(lod2.objects.length + 2);
   const added = baked.vertices.isRoof.length - lod2.vertices.isRoof.length;
   // the dormer's 6 triangles, the chimney's four sides and top
   expect(added).toBe((6 + 5 * 2) * 3);
   const roofs = Array.from(baked.vertices.isRoof.slice(-added));
   expect(roofs.filter((r) => r === 1)).toHaveLength(2 * 3);
+  // the dormer's front takes a window, its cheeks and the chimney none
+  const [stack, dormer] = baked.objects.slice(-2);
+  expect(stack.windows).toBeUndefined();
+  expect(dormer.windows?.axis).toBeGreaterThan(0);
+  expect(unpackStyle(dormer.windows?.style ?? 0).dormer).toBe(true);
+  const facade = baked.vertices.facade;
+  const ids = baked.vertices.objectIds;
+  const lengths = (object: number) =>
+    new Set(
+      Array.from(ids.keys())
+        .filter((v) => ids[v] === object && baked.vertices.isRoof[v] === 0)
+        .map((v) => Math.round(((facade?.[4 * v + 1] ?? 0) / 32_767) * 512))
+    );
+  // the front 2 m long, the cheeks none
+  expect(lengths(baked.objects.length - 1)).toEqual(new Set([2, 0]));
+  expect(lengths(baked.objects.length - 2)).toEqual(new Set([0]));
 });
 
 test("a shopfront joins its host as glass, frame and canopy, source 6", () => {

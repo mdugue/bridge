@@ -47,15 +47,23 @@ export function withFacadeReading(
 }
 
 /** The table's flags with each row's building's reading; `buildingOf`
- *  names a row's Building (its tree's root id). True when a row changed. */
+ *  names a row's Building (its tree's root id). A row `aloft` stands high
+ *  on its building (a dormer, a chimney): it has no ground floor, so the
+ *  reading's shop is not its own — on a dormer it took the window, which
+ *  sits in the dormer's only row. True when a row changed. */
 export function applyFacadeReadings(
   flags: Uint16Array,
   buildingOf: (row: number) => string,
-  readings: FacadeReadings
+  readings: FacadeReadings,
+  aloft: (row: number) => boolean = () => false
 ): boolean {
   let changed = false;
   for (let i = 0; i < flags.length; i++) {
-    const next = withFacadeReading(flags[i], readings.buildings[buildingOf(i)]);
+    const reading = readings.buildings[buildingOf(i)];
+    const next = withFacadeReading(
+      flags[i],
+      reading && aloft(i) ? [reading[0], reading[1], 0] : reading
+    );
     if (next !== flags[i]) {
       flags[i] = next;
       changed = true;

@@ -6,8 +6,9 @@
  * meet it — flat at the measured top, or for a shed dormer (`tf`, its
  * measured fall) falling from that top line down to its front, at least
  * `MIN_FRONT` over the main roof there; per chimney (`k`) a box from
- * under the roof to its measured top. No window in the front (the
- * window-grid veto); the clay's own look. Pure, no THREE.
+ * under the roof to its measured top. The clay draws a window into the
+ * front (lib/city/windows.ts `DORMER_WINDOW`: the front is the wall
+ * `front` marks), none into the cheeks or a chimney. Pure, no THREE.
  */
 import type { DormerFeature } from "./features";
 
@@ -24,6 +25,9 @@ export const MIN_FRONT = 0.6;
 const SHED_SHALLOWER = 1;
 
 export interface DormerMesh {
+  /** 1 on the dormer's front, where its window goes, 0 elsewhere (its
+   *  cheeks, its roof, a chimney), per vertex */
+  front: number[];
   /** 1 on the dormer's roof, 0 on its walls, per vertex */
   isRoof: number[];
   positions: number[];
@@ -45,7 +49,7 @@ export function chimneyMesh(
   f: DormerFeature,
   offset: { cx: number; cy: number }
 ): DormerMesh {
-  const out: DormerMesh = { isRoof: [], positions: [], base: 0 };
+  const out: DormerMesh = { front: [], isRoof: [], positions: [], base: 0 };
   const p = f.properties;
   if (!p) {
     return out;
@@ -67,6 +71,7 @@ export function chimneyMesh(
     for (const q of [q0, q1, q2, q0, q2, q3]) {
       out.positions.push(...q);
       out.isRoof.push(0);
+      out.front.push(0);
     }
   };
   const a = p.w / 2;
@@ -101,7 +106,7 @@ export function dormerMesh(
   f: DormerFeature,
   offset: { cx: number; cy: number }
 ): DormerMesh {
-  const out: DormerMesh = { isRoof: [], positions: [], base: 0 };
+  const out: DormerMesh = { front: [], isRoof: [], positions: [], base: 0 };
   const p = f.properties;
   if (!p) {
     return out;
@@ -130,15 +135,18 @@ export function dormerMesh(
     ey - offset.cy + t[1] * a + n[1] * b,
     c,
   ];
+  let onFront = 0;
   const tri = (roof: number, ...v: V3[]) => {
     for (const q of v) {
       out.positions.push(...q);
       out.isRoof.push(roof);
+      out.front.push(onFront);
     }
   };
   const quad = (roof: number, q0: V3, q1: V3, q2: V3, q3: V3) =>
     tri(roof, q0, q1, q2, q0, q2, q3);
   // front (+b)
+  onFront = 1;
   quad(
     0,
     at(-half, bf, low),
@@ -146,6 +154,7 @@ export function dormerMesh(
     at(half, bf, front),
     at(half, bf, low)
   );
+  onFront = 0;
   // cheeks (+a, −a): from the front's foot up to the roof line behind
   tri(0, at(half, bf, low), at(half, bf, front), at(half, bb, top));
   tri(0, at(-half, bf, low), at(-half, bb, top), at(-half, bf, front));

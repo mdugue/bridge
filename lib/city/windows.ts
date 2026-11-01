@@ -42,6 +42,7 @@
  */
 
 import { isStructure } from "./building-tint";
+import { DORMER_SINK } from "./dormers";
 import { OPEN_ROOF_FUNCTIONS } from "./open-roofs";
 
 /** What windows.py models on a wall (metres). */
@@ -122,7 +123,10 @@ export const NO_WINDOWS: WindowSpec = { axis: 0, h: 0, style: 0, w: 0 };
  *    start that much higher than the upper floors' over their storey
  *    line — a Hochparterre's (`WINDOW_ROWS.raise`), or clear of the
  *    plinth's top (`WINDOW_ROWS.plinthGap`) —, their heads where they
- *    were.
+ *    were;
+ *  - `dormer`: a dormer's front (lib/city/dormers.ts): one row from its
+ *    foot, kept `DORMER_WINDOW` clear of the roof, its cheeks and its
+ *    eave in place of `WINDOW_ROWS`' margins.
  */
 export const WINDOW_STYLE = {
   loose: 1,
@@ -134,6 +138,7 @@ export const WINDOW_STYLE = {
   depth: 64,
   sill: 512,
   lift: 65_536,
+  dormer: 2_097_152,
 } as const;
 
 /** The reveal's depth: `base + step · class`, class 0–7 (6–27 cm). */
@@ -166,6 +171,36 @@ export const WINDOW_ROWS = {
   raise: 0.45,
   squat: 0.8,
 } as const;
+
+/**
+ * A dormer's window (m), in place of `WINDOW_ROWS`' margins: wall kept
+ * beside it at the front's ends (`edge`), its sill over the front's foot
+ * (`sill`: the front reaches DORMER_SINK under the roof, its window starts
+ * a hand's width over the roof), under the dormer's eave (`eaveClear`); a
+ * window `w` wide and at most `h` tall, the axes `axis` apart on a wide
+ * front (a shed dormer's row). A front narrower than `w` and its edges, or
+ * too low for `WINDOW_ROWS.min` of window, has none.
+ */
+export const DORMER_WINDOW = {
+  axis: 1.35,
+  eaveClear: 0.15,
+  edge: 0.2,
+  h: 1.3,
+  sill: DORMER_SINK + 0.2,
+  w: 0.8,
+} as const;
+
+/** The windows of a dormer's front: the rhythm `DORMER_WINDOW` sets, the
+ *  reveal as deep as its host's. */
+export function dormerWindows(host: WindowSpec | undefined): WindowSpec {
+  const depth = host ? unpackStyle(host.style).depth : undefined;
+  return {
+    axis: DORMER_WINDOW.axis,
+    h: DORMER_WINDOW.h,
+    style: packStyle({ depth, dormer: true }),
+    w: DORMER_WINDOW.w,
+  };
+}
 
 /** A loose grid shifts each axis by up to this share of the spacing. */
 export const LOOSE_JITTER = 0.08;
@@ -296,6 +331,8 @@ export interface WindowStyle {
   measured: boolean;
   near: boolean;
   noGround: boolean;
+  /** a dormer's front (`DORMER_WINDOW`) */
+  dormer?: boolean;
   /** the ground floor's lift (m, `WINDOW_LIFT`) */
   lift: number;
   sill: number;
@@ -319,6 +356,7 @@ export function packStyle(s: Partial<WindowStyle>): number {
     (s.noGround ? WINDOW_STYLE.noGround : 0) +
     (s.measured ? WINDOW_STYLE.measured : 0) +
     (s.near ? WINDOW_STYLE.near : 0) +
+    (s.dormer ? WINDOW_STYLE.dormer : 0) +
     WINDOW_STYLE.lift * classOf(s.lift ?? 0, WINDOW_LIFT) +
     WINDOW_STYLE.depth * classOf(s.depth ?? 0.12, WINDOW_DEPTH) +
     WINDOW_STYLE.sill * classOf(s.sill ?? 0.9, WINDOW_SILL)
@@ -335,6 +373,7 @@ export function unpackStyle(style: number): WindowStyle {
     noGround: bit(WINDOW_STYLE.noGround),
     measured: bit(WINDOW_STYLE.measured),
     near: bit(WINDOW_STYLE.near),
+    dormer: bit(WINDOW_STYLE.dormer),
     lift:
       WINDOW_LIFT.base +
       WINDOW_LIFT.step *
