@@ -28,6 +28,11 @@ import {
   objectBandRows,
   packObjectTexels,
 } from "@/lib/city/city-mesh";
+import {
+  appendTriangles,
+  takeTriangles,
+  wholeTrees,
+} from "@/lib/city/hidden-triangles";
 import { type ObjectFacts, readFacts } from "@/lib/city/object-facts";
 import type { StructuralMetadata } from "@/lib/city/property-table";
 import {
@@ -48,6 +53,13 @@ export interface CityLayer {
   alive: Uint8Array;
   /** drops the object's building tree; true when anything changed */
   demolish: (objectIndex: number) => boolean;
+  /**
+   * The objects a loaded design stands in for (design-layer.ts, ADR
+   * 0054): their triangles leave the index as a demolish's do, and come
+   * back when they leave the set — kept aside meanwhile, not reparsed.
+   * True when anything changed.
+   */
+  setHidden: (objects: ReadonlySet<number>) => boolean;
   dispose: () => void;
   /** what street photos say about the tile's facades, once they land
    *  (lib/city/facade-reading.ts) */
@@ -64,6 +76,12 @@ export interface CityLayer {
   /** builds the tile's BVH in the BVH worker (bvh-client.ts): what the
    *  tiles near the camera get ahead of a ray; settles once it is built */
   prepareBvh: () => Promise<void>;
+  /** the index a demolish or a design's hiding set is on the GPU now (a
+   *  compile of the mesh, create-app.ts): until then the worker may not
+   *  take it — handed over before its upload, its buffer is gone when the
+   *  renderer first copies it. `index`: the one the compile drew (a
+   *  newer one set meanwhile stays fresh) */
+  indexUploaded: (index: BufferAttribute | null) => void;
   /** a demolish the worker's build holds back, settling once it has
    *  reached the index (null: none waits) — the shadows are drawn again then */
   held: () => Promise<void> | null;
@@ -274,6 +292,8 @@ export function dressCity(
   mesh.receiveShadow = true;
 
   const alive = new Uint8Array(count).fill(1);
+  /** an index set here that the GPU may not have yet (`indexUploaded`) */
+  let fresh = false;
   const featureIds = geometry.getAttribute("featureId");
   /** `again`: a BVH there was is built again now (else when a ray or the
    *  worker gets to it) */
@@ -289,9 +309,51 @@ export function dressCity(
         1
       )
     );
+    fresh = true;
     // A BVH is built over its index: a new index needs a new one — now
     // where there was one (a demolish picks through it), else when a ray
     // needs it.
+    geometry.disposeBoundsTree();
+    if (had) {
+      geometry.computeBoundsTree();
+    }
+  };
+  /** what a design hides (wanted), what is out of the index now, and
+   *  the triangles kept aside */
+  let hidden: ReadonlySet<number> = new Set();
+  const applied = new Set<number>();
+  const stashed = new Map<number, Uint32Array>();
+  /** brings the index to `hidden`: triangles aside and back; `again` as
+   *  `rebuild`'s */
+  const applyHidden = (again = true) => {
+    const index = geometry.getIndex();
+    const hide = new Set([...hidden].filter((i) => !applied.has(i)));
+    const show = [...applied].filter((i) => !hidden.has(i));
+    if (!index || (hide.size === 0 && show.length === 0)) {
+      return;
+    }
+    const had = again && Boolean(geometry.boundsTree);
+    const { kept, taken } = takeTriangles(index.array, featureIds.array, (i) =>
+      hide.has(i)
+    );
+    for (const [object, list] of taken) {
+      stashed.set(object, list);
+    }
+    for (const object of hide) {
+      applied.add(object);
+    }
+    const back: Uint32Array[] = [];
+    for (const object of show) {
+      applied.delete(object);
+      const list = stashed.get(object);
+      stashed.delete(object);
+      // (an object demolished while hidden stays gone)
+      if (list && alive[object] === 1) {
+        back.push(list);
+      }
+    }
+    geometry.setIndex(new BufferAttribute(appendTriangles(kept, back), 1));
+    fresh = true;
     geometry.disposeBoundsTree();
     if (had) {
       geometry.computeBoundsTree();
@@ -315,9 +377,22 @@ export function dressCity(
 
   /** the worker's build of the BVH, while it runs */
   let prepared: Promise<void> | null = null;
-  /** a demolish waiting for that build to give the index back */
+  /** a demolish or a design's hiding waiting for that build to give the
+   *  index back */
   let held: Promise<void> | null = null;
+  let demolishWaits = false;
   let disposed = false;
+  /** what waited on the worker, once it is done */
+  const settle = () => {
+    if (disposed) {
+      return;
+    }
+    if (demolishWaits) {
+      demolishWaits = false;
+      rebuild(false);
+    }
+    applyHidden(false);
+  };
   // the asked objects, kept for the facade readings' repack
   let marked: ReadonlySet<number> = new Set();
   const layer: CityLayer = {
@@ -341,16 +416,35 @@ export function dressCity(
       // (unless the tile has left by then), its BVH left to the worker
       // again rather than built here in the frame
       if (prepared) {
-        const after = () => {
-          if (!disposed) {
-            rebuild(false);
-          }
-        };
-        held ??= prepared.then(after, after).finally(() => {
+        demolishWaits = true;
+        held ??= prepared.then(settle, settle).finally(() => {
           held = null;
         });
       } else {
         rebuild();
+      }
+      return true;
+    },
+    setHidden: (asked) => {
+      // a covered house goes with what hangs on it (its plinth, cornices,
+      // doors, parts): they have no footprint of their own
+      const next = wholeTrees(table.root, asked);
+      const same =
+        next.size === hidden.size && [...next].every((i) => hidden.has(i));
+      if (same || bvhLost(geometry)) {
+        return false;
+      }
+      hidden = new Set(next);
+      // the index is the worker's while it builds the BVH: as a demolish
+      if (prepared) {
+        held ??= prepared.then(settle, settle).finally(() => {
+          held = null;
+        });
+      } else {
+        // the BVH built again in the worker once the new index is on the
+        // GPU (`indexUploaded`), not here in the frame: a design moved by
+        // hand re-hides on every settle (ADR 0024)
+        applyHidden(false);
       }
       return true;
     },
@@ -378,7 +472,15 @@ export function dressCity(
     hasBvh: () => Boolean(geometry.boundsTree),
     ensureBvh: () => ensureCityBvh(mesh),
     held: () => held,
+    indexUploaded: (uploaded) => {
+      if (uploaded !== null && uploaded === geometry.getIndex()) {
+        fresh = false;
+      }
+    },
     prepareBvh: () => {
+      if (fresh) {
+        return Promise.resolve();
+      }
       prepared ??= streamTimings
         .timed(
           "tile:bvh-worker",

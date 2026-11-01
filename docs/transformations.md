@@ -135,7 +135,7 @@ visual-variable codebook is in
   The coarse GeoTIFF is resampled **at build time** (`scripts/bake-tiles.ts`
   `readDgm`, bilinear, NoData → NaN → the quads touching it are left out),
   the wall breaklines are burned in (below), normals computed, and the mesh
-  written as glTF (`EXT_meshopt_compression` + `KHR_mesh_quantization`,
+  written as glTF (`KHR_meshopt_compression` + `KHR_mesh_quantization`,
   pre-gzipped `terrain_<tile>_l0|l1.glb.gz`). The browser never decodes the
   DGM: it reads ground height back from the grid vertices
   (`gridElevations`), or from the TIN's triangles.
@@ -4689,6 +4689,76 @@ GPU**.
   (printed at 300 dpi), the north arrow from its turn, the credits from
   the site's attribution lines (`siteAttribution`) — drawn into the PNG,
   never into the scene (ADR 0042).
+- **A planner's design in the city** `❝ taken` `◎ detected` `≈ assumed` —
+  a glTF or IFC the visitor loads in the sidebar's *Entwurf* panel, read
+  on the device and never uploaded (`design-read.ts`; ADR 0054): its nodes and
+  instances flattened into one geometry about its anchor, moved there in
+  doubles. An IFC is tessellated by web-ifc (`design-ifc.ts`, its .wasm
+  served by the site itself), spaces and openings left out, a material
+  per element colour; its `IfcMapConversion` (`◎ detected`; the other
+  German UTM zone carried over through lat/lng, other CRSs not read;
+  its values in the CRS's MapUnit, else the project's length unit) or,
+  failing that, its IfcSite's latitude and longitude at the site's own
+  placement, turned by the context's TrueNorth (`≈ assumed`: approximate, the panel says so) put
+  its origin in the Land's coordinates (`lib/city/ifc-georef.ts`);
+  geometry already in them keeps its place. An
+  OBJ (metres, Y up, its MTL and textures from the picked files) and a
+  Rhino .3dm (its unit, Z up turned to Y up, placed `◎ detected` by its
+  earth anchor where one is set — its elevation as NHN unless it says
+  ground level or the earth's centre, or is unread and Rhino's default
+  0, then set on the ground; hidden
+  layers left out; breps by
+  their saved render meshes) are read alike
+  (`design-formats.ts`). A place more than 2 km beyond the site's tiles,
+  or in another place's coordinates, is not taken: `≈ assumed` in front
+  of the player, the panel saying why. Its scale is `❝ taken` from the
+  panel's unit and factor (metres unless set; a hint under 4 m or over
+  3 km) and kept in the placement file. A **landscape plan** (DXF, Shapefile,
+  GeoPackage, LandXML; `design-plan.ts`) becomes surfaces `◎ detected`
+  by their layer's or attributes' names (`lib/city/plan-classes.ts`,
+  German and English keywords; class-like attributes first, names and
+  addresses last; unnamed: grey) in the city's palette, laid
+  on the loaded ground in triangles of a few metres, at most 150 000 in
+  all (its own heights
+  kept), what is drawn into an area 10 cm above it; trees as
+  low-poly crowns of the plan's size (`≈ assumed` 6 m and 10 m where it
+  gives none), buildings with a height or storeys as blocks, TINs as a
+  planned ground (`lib/city/plan-geometry.ts`). Its surfaces clear the
+  site but take no house away. Its place is `◎ detected` from its own coordinates where they
+  are the site's UTM zone (an easting in X, plain or zone-prefixed, a
+  northing in −Z; `lib/city/design-placement.ts`), its own Y kept as NHN
+  where the ground under it agrees within 40 m; without one it is
+  `≈ assumed` on the ground ahead of the player. The panel moves, turns
+  and lifts it and saves the placement as a small JSON file. The LoD2
+  objects whose footprints its plan covers for half or more (every
+  triangle laid flat on 1 m cells, the flat ones at its lowest level left
+  out; `lib/city/design-cover.ts`) leave their tiles' index and come
+  back when it moves or goes (`CityLayer.setHidden`). Drawn in a
+  model-maker's white or the file's own colours; casts and takes
+  shadows; walked against. Its bytes come out of the tile cache; past
+  250 000 triangles / 40 MB on a phone (3 M / 400 MB on a desktop) its
+  textures go, then it is refused (`lib/city/design-budget.ts`).
+  Its **site** — the plan with its ground plate — clears what else stands
+  there (`design-site.ts`, one raster the vertex stages read): every
+  instanced set (trees, hedges, lamps, furniture, monuments) folds an
+  instance whose foot stands in it (and a question no longer finds it,
+  `foldedThing`), and the terrain with its walls, kerbs, stairs and
+  fences and the water are pressed under the lowest height the design
+  reaches in each cell (a sloping plate's slope, a house's lowest floor);
+  on the tiles under it the ground is also cut
+  where a triangle reaching out of the site lifts it through the plate.
+  Rails, ballast, platforms and tram tracks within 4 m over that floor go
+  under it too (`lineUnderDesign`; a line on a bridge above it stays).
+  The walked ground follows (`Ground.setCap`). A building's plinths,
+  cornices, doors and parts go with it (`wholeTrees`). **Asked**, a
+  design answers by the part its triangle belongs to (`DesignParts`, the
+  merged triangles' runs): an IFC element's entity, Name and GlobalId, a
+  plan's class, a glTF's or OBJ's object and material names, and its
+  placement (`lib/city/inquiry-design.ts`); outlined by that part's own
+  triangles.
+  **Fallback:** without coordinates, the player's place; without a
+  ground under it, the player's ground. **Not yet:** the tram's
+  overhead wires and a river's mist over a site stay; sharing by link.
 
 ## 🧪 Experimental
 
