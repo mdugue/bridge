@@ -6,6 +6,7 @@ import {
   ChevronRightIcon,
   EyeIcon,
   FootprintsIcon,
+  MessageCircleQuestionIcon,
   Maximize2Icon,
   RouteIcon,
   XIcon,
@@ -158,6 +159,51 @@ export function WalksList({
       </ul>
       <p className="text-[10px] text-muted-foreground leading-snug">
         Erzählt von Claude (KI), jede Angabe mit ihrer Quelle.
+      </p>
+    </section>
+  );
+}
+
+/**
+ * The Erkunden panel's way into *Frag die Stadt* (ask-city.tsx, ADR 0056),
+ * beside the written walks: the same city, asked instead of told.
+ */
+export function AskEntry({
+  disabled,
+  onAsk,
+}: {
+  disabled: boolean;
+  onAsk: () => void;
+}) {
+  const { isMobile, setOpenMobile } = useSidebar();
+  return (
+    <section
+      aria-label="Frag die Stadt"
+      className="flex flex-col gap-1.5 border-t px-4 pt-3 pb-3.5"
+    >
+      <span className={SECTION_LABEL}>Frag die Stadt</span>
+      <button
+        className="-mx-2 flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-xs hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
+        data-testid="ask-open"
+        disabled={disabled}
+        onClick={() => {
+          onAsk();
+          if (isMobile) {
+            setOpenMobile(false);
+          }
+        }}
+        type="button"
+      >
+        <MessageCircleQuestionIcon
+          aria-hidden
+          className="size-3.5 shrink-0 opacity-60"
+        />
+        <span className="min-w-0 flex-1">
+          Fragen stellen, die Antwort zeigt den Ort
+        </span>
+      </button>
+      <p className="text-[10px] text-muted-foreground leading-snug">
+        Mit deinem eigenen KI-Schlüssel (Anthropic, OpenAI, OpenRouter, Vercel).
       </p>
     </section>
   );

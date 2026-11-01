@@ -79,8 +79,8 @@ das OpenStreetMap ohne sie erfasst, kann Wikidata seine Größe und ein Foto
 nennen. Ein Auszug dessen, was Wikidata über jedes Wahrzeichen sagt
 (Architekt, Stil, Baubeginn, Höhe, Denkmalstatus, wonach es benannt ist
 …), liegt bei den Daten der Stadt — einmal abgerufen, nicht von deinem
-Browser — als Material für die Spaziergänge und später für Fragen in
-Worten.
+Browser — als Material für die Spaziergänge und für *Frag die Stadt*,
+die Fragen in Worten.
 
 **Wikimedia Commons** — das freie Medienarchiv hinter Wikipedia, in dem
 Fotografinnen und Fotografen ihre Bilder teilen, jedes unter einer freien

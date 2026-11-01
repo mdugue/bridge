@@ -75,8 +75,8 @@ until 1894. For a mural OpenStreetMap maps without them, Wikidata may give
 its size and a photo. An excerpt of what Wikidata states about each
 landmark (architect, style, inception, height, heritage status, what it
 is named after …) is kept with the city's data — fetched once, not by
-your browser — as material for the walks and, later, for questions in
-words.
+your browser — as material for the walks and for *Frag die Stadt*, the
+questions in words.
 
 **Wikimedia Commons** — the free media archive behind Wikipedia, where
 photographers share their pictures, each under a free licence of their

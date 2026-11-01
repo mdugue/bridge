@@ -127,6 +127,8 @@ und liest es nur auf deinem Gerät:
   `crash-trail.previous`) und ob der vorige schon gemeldet wurde
   (`crash-trail.reported`; siehe [Fehlerberichte](#fehlerberichte)),
 - deine Wahl zu den Fehlerberichten (`crash-reports.declined`),
+- deinen Schlüssel für *Frag die Stadt*, wenn du einen eingibst
+  (`frag-die-stadt`; siehe [Frag die Stadt](#frag-die-stadt)),
 - wenn sich die Seite nach einem Grafikfehler selbst neu lädt, bis du den Tab
   schließt: die Stelle, an der du in der Stadt standest, und wann das war –
   damit sie dich dorthin zurückbringt und nicht endlos neu lädt
@@ -186,6 +188,35 @@ zu deinem Browser; mich erreicht davon nichts. Es gelten die
 Datenschutzhinweise der jeweiligen Stadt. Rechtsgrundlage ist mein
 berechtigtes Interesse, die Ebene, die du eingeschaltet hast, mit aktuellen
 Zahlen zu zeigen (Art. 6 Abs. 1 lit. f DSGVO).
+
+<h2 id="frag-die-stadt">Frag die Stadt</h2>
+
+*Frag die Stadt* beantwortet Fragen zur Stadt mit einem Sprachmodell –
+nur, wenn du es öffnest und einen eigenen Schlüssel eines KI-Anbieters
+eingibst (Anthropic, OpenAI, OpenRouter oder Vercel AI Gateway). Der
+Schlüssel bleibt in deinem Browser: für diesen Tab im Session Storage,
+und wenn du *Auf diesem Gerät merken* wählst, im lokalen Speicher
+(`frag-die-stadt`, mit Anbieter und Modell); *gespeicherten Schlüssel
+löschen* entfernt ihn.
+
+Mit jeder Frage schickt dein Browser an diese Seite (`/api/frag`): das
+bisherige Gespräch, den Schlüssel, Anbieter und Modell, welche Stadt du
+ansiehst und – wenn das Modell danach fragt – wo du in der Stadt stehst,
+wohin du schaust, die Uhrzeit der Szene, den Bildstil und die
+eingeschalteten Datenebenen. Die Seite reicht Gespräch und Schlüssel an
+den gewählten Anbieter weiter und schickt die Antwort zurück; sie
+speichert weder das Gespräch noch den Schlüssel und protokolliert beides
+nicht. Beim Prüfen eines neuen Schlüssels (`/api/schluessel`) fragt
+sie den Anbieter, ob er gilt, ohne etwas zu verarbeiten. Was der Anbieter
+mit deinen Fragen tut, regeln deine Vereinbarung mit ihm und seine
+Datenschutzhinweise – es ist dein Konto, und die Kosten trägst du.
+Schreib in deine Fragen nichts, was du dem Anbieter nicht anvertrauen
+willst.
+
+Rechtsgrundlage ist die Erfüllung dessen, worum du mit deiner Frage
+bittest (Art. 6 Abs. 1 lit. b DSGVO); das Speichern des Schlüssels in
+deinem Browser ist dafür unbedingt erforderlich oder, wenn du ihn dir
+merken lässt, deine Wahl (§ 25 Abs. 2 Nr. 2 und Abs. 1 TDDDG).
 
 ## Schriften und Links
 

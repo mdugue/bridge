@@ -76,3 +76,6 @@ __pycache__/
 .ruff_cache/
 
 certificates
+
+# the Stadtwissen for the chat server (scripts/prepare-sites.ts)
+/.stadtwissen/

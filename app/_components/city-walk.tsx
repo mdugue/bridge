@@ -7,6 +7,7 @@ import type { Site } from "@/lib/city/site";
 import {
   BoxIcon,
   LocateFixedIcon,
+  MessageCircleQuestionIcon,
   NavigationIcon,
   PlaneIcon,
   SlidersHorizontalIcon,
@@ -20,6 +21,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
@@ -86,6 +88,16 @@ import {
 } from "./data-layers-panel";
 import { SceneSidebar } from "./scene-sidebar";
 import { WalkCard } from "./walk-player";
+import { useAskScene } from "./ask-scene";
+
+/**
+ * *Frag die Stadt* (ADR 0056): the chat client, its tool schemas and the
+ * card are a chunk of their own, loaded on the first open. (The import
+ * stays written out inside dynamic(): Next matches the call to its chunk
+ * by it.)
+ */
+const AskCity = dynamic(() => import("./ask-city"), { ssr: false });
+
 /** A walk's glides take this much longer than a jump to a place: the
  *  stop's story starts on the way. */
 const WALK_PACE = 2.2;
@@ -218,17 +230,21 @@ function SettingsToggle() {
  * fly, the F key's stand-in, and everywhere Modell (plan 055), the M key's.
  */
 function sceneTools({
+  asking,
   coarse,
   live,
   locate,
   mode,
+  onAsk,
   onToggleMode,
   onToggleModel,
 }: {
+  asking: boolean;
   coarse: boolean;
   live: ReturnType<typeof useLiveMode>;
   locate: ReturnType<typeof useLocateMe>;
   mode: ViewMode;
+  onAsk: () => void;
   onToggleMode: () => void;
   onToggleModel: () => void;
 }): HudTool[] {
@@ -273,6 +289,14 @@ function sceneTools({
     title:
       "Modell: die Stadt in Parallelprojektion — Isometrie, Lageplan, Ansicht (M)",
   });
+  tools.push({
+    id: "ask",
+    label: "Fragen",
+    icon: MessageCircleQuestionIcon,
+    pressed: asking,
+    onClick: onAsk,
+    title: "Frag die Stadt: Fragen zur Stadt, mit deinem eigenen KI-Schlüssel",
+  });
   return tools;
 }
 
@@ -286,9 +310,11 @@ function sceneTools({
  * can still see.
  */
 function SceneOverlays({
+  asking,
   coarse,
   live,
   locate,
+  onAsk,
   onClimb,
   onMovementMode,
   onMove,
@@ -296,9 +322,12 @@ function SceneOverlays({
   onToggleModel,
   onTurn,
 }: {
+  asking: boolean;
   coarse: boolean;
   live: ReturnType<typeof useLiveMode>;
   locate: ReturnType<typeof useLocateMe>;
+  /** opens or closes Frag die Stadt */
+  onAsk: () => void;
   onClimb: (v: number) => void;
   /** walk or fly (the touch toolbar's switch) */
   onMovementMode: (mode: "fly" | "walk") => void;
@@ -348,10 +377,12 @@ function SceneOverlays({
         {flying && <AltitudeStick onChange={onClimb} />}
         <HudToolbar
           tools={sceneTools({
+            asking,
             coarse,
             live,
             locate,
             mode,
+            onAsk,
             onToggleMode: () => onMovementMode(flying ? "walk" : "fly"),
             onToggleModel,
           })}
@@ -694,6 +725,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     if (walking === null) {
       beforeWalk.current = { at: time.current(), style: look.get().style };
     }
+    setAsking(false);
     setWalking({ index, walk });
     // the sun travels with the camera: no jump from one hour to the next
     const hour = time.glideTo(stopDate(stop, today()));
@@ -710,6 +742,16 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
       });
     }
     look.set({ style: stop.style ?? "pastel" });
+  };
+  // Frag die Stadt (ask-city.tsx): its card in the walk card's place, so
+  // one ends the other.
+  const [asking, setAsking] = useState(false);
+  const askScene = useAskScene(handleRef, look, time, site);
+  const toggleAsk = () => {
+    if (!asking && walking) {
+      endWalk();
+    }
+    setAsking((open) => !open);
   };
   const endWalk = () => {
     setWalking(null);
@@ -1136,6 +1178,14 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
                 onTab={setTab}
               />
 
+              {asking && (
+                <AskCity
+                  coarse={coarse}
+                  onClose={() => setAsking(false)}
+                  scene={askScene}
+                  site={site.id}
+                />
+              )}
               {walking && (
                 <WalkCard
                   coarse={coarse}
@@ -1155,7 +1205,9 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
                   toolbar would stand under it (a drag still looks about) */}
               {!(coarse && walking) && (
                 <SceneOverlays
+                  asking={asking}
                   coarse={coarse}
+                  onAsk={toggleAsk}
                   live={live}
                   locate={locate}
                   onClimb={(v) => handleRef.current?.setClimbInput(v)}
@@ -1216,6 +1268,12 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
           onLook={look.set}
           onResetQuality={resetQuality}
           onStartWalk={(walk) => showStop(walk, 0)}
+          onAsk={() => {
+            if (walking) {
+              endWalk();
+            }
+            setAsking(true);
+          }}
           onDefaultTime={() => time.set(time.day, INITIAL_MINUTES)}
           onExport={exportImage}
           onStudy={exportStudy}
