@@ -33,7 +33,13 @@ export interface TouchControlsCallbacks {
   onLongPress?: (ndcX: number, ndcY: number) => void;
   /** a single tap or click, in ndc (every tap, before any double), and
    *  what made it: "mouse", "touch" or "pen" */
-  onTap?: (ndcX: number, ndcY: number, pointerType: string) => void;
+  /** `shift`: the click held Shift (it adds to what is picked) */
+  onTap?: (
+    ndcX: number,
+    ndcY: number,
+    pointerType: string,
+    shift?: boolean
+  ) => void;
   /** drag delta in CSS pixels since the last event */
   onLook: (dxPx: number, dyPx: number) => void;
   /** pointer-locked mouse motion in CSS pixels */
@@ -334,7 +340,7 @@ export function attachTouchControls(
         y: e.clientY,
       };
       const [ndcX, ndcY] = ndcOf(e.clientX, e.clientY);
-      callbacks.onTap?.(ndcX, ndcY, e.pointerType);
+      callbacks.onTap?.(ndcX, ndcY, e.pointerType, e.shiftKey);
       if (isDoubleTap(lastTap, tap)) {
         lastTap = null;
         callbacks.onDoubleTap(ndcX, ndcY);

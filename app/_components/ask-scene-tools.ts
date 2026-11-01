@@ -32,6 +32,7 @@ import {
   SCENARIO_NOTE,
 } from "@/lib/city/scenario";
 import type { ViewpointGeometry } from "@/lib/city/site";
+import type { StarterContext } from "@/lib/city/ask-starters";
 
 /** What the card may do to the scene: the scene tools' other half. */
 export interface AskScene {
@@ -44,9 +45,14 @@ export interface AskScene {
    *  the instant it set, as text */
   setTime: (hour: number, date?: string) => string;
   show: (view: ViewpointGeometry) => void;
+  /** selects what stands at each place (site CRS), as Shift+click does:
+   *  the places an answer shows */
+  select: (places: readonly { r?: number; x: number; y: number }[]) => void;
   /** what the framing reads of the moment: the screen, the sun, the
    *  loaded buildings' sight lines (lib/city/ask-view.ts) */
   frame: () => Omit<FrameContext, "from">;
+  /** what the first questions read of the moment (plan 081) */
+  moment: () => StarterContext;
   /** the player's pose, mode, time, style and layers, for the model */
   where: () => Record<string, unknown>;
   /** asks what stands at the centre of the view (and opens its card) */
@@ -100,7 +106,9 @@ export const AERIAL_REACH = 900;
 /**
  * Flies to `places` — every one in one view, or the first alone (`alle`
  * false, or spread too far for one) — and says what it showed. On foot
- * the walker stands before the first.
+ * the walker stands before the first. What it names is selected: every
+ * place with `alle` (spread too far, their cards are a click apart in
+ * the selection), the first alone without.
  */
 export function showPlaces(
   scene: AskScene,
@@ -108,12 +116,13 @@ export function showPlaces(
 ): Record<string, unknown> {
   const [first] = ask.ziele;
   const from = scene.from();
+  const all = ask.alle !== false && ask.ziele.length > 1;
+  scene.select(all ? ask.ziele : [first]);
   if (ask.aus_der_luft === false) {
     scene.show(streetView(first, from ?? first));
     return { ok: true, gezeigt: [first.name] };
   }
   const context = { ...scene.frame(), from };
-  const all = ask.alle !== false && ask.ziele.length > 1;
   const framed = all ? frameTargets(ask.ziele, context) : null;
   if (framed && framed.distance <= AERIAL_REACH) {
     scene.show(framed.view);

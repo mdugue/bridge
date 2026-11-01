@@ -217,7 +217,7 @@ test("off the terrain the eye height is held, not dropped", () => {
   expect(camera.position.y).toBeCloseTo(EYE, 5);
 });
 
-test("fly mode moves vertically with Space and Shift", () => {
+test("fly mode moves vertically with Space and C; Shift does not sink", () => {
   const up = rig(UNKNOWN_GROUND);
   up.movement.setMode("fly");
   up.movement.press("Space");
@@ -227,9 +227,17 @@ test("fly mode moves vertically with Space and Shift", () => {
   const down = rig(UNKNOWN_GROUND);
   down.camera.position.y = 100;
   down.movement.setMode("fly");
-  down.movement.press("ShiftLeft");
+  down.movement.press("KeyC");
   down.movement.update(1);
   expect(down.camera.position.y).toBeCloseTo(100 - FLY_STEP, 5);
+
+  // Shift+click adds to the selection: it must not drop the camera
+  const shift = rig(UNKNOWN_GROUND);
+  shift.camera.position.y = 100;
+  shift.movement.setMode("fly");
+  shift.movement.press("ShiftLeft");
+  shift.movement.update(1);
+  expect(shift.camera.position.y).toBeCloseTo(100, 5);
 
   const walking = rig();
   walking.movement.press("ShiftLeft");
@@ -237,7 +245,7 @@ test("fly mode moves vertically with Space and Shift", () => {
   expect(walking.camera.position.y).toBeCloseTo(EYE, 5);
 });
 
-test("E and Q climb and sink like Space and Shift", () => {
+test("E and Q climb and sink like Space and C", () => {
   const { camera, movement } = rig(UNKNOWN_GROUND);
   camera.position.y = 100;
   movement.setMode("fly");
@@ -286,7 +294,7 @@ test("a pose already below the floor is held, not yanked up", () => {
   const { camera, movement } = rig({ groundHeight: () => 20 });
   camera.position.y = 5;
   movement.setMode("fly");
-  movement.press("ShiftLeft");
+  movement.press("KeyC");
   movement.update(1);
   expect(camera.position.y).toBeCloseTo(5, 5);
 });

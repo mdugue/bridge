@@ -57,6 +57,10 @@ export interface AskedInquiry {
   inquiry: Inquiry;
   /** everything the question's ray met (the strip beside the tap) */
   along: InquiryAlong | null;
+  /** everything picked (Shift+click, *Mehrere*, *Frag die Stadt*'s
+   *  places), `inquiry` among them at `active`; `adding`: the card's
+   *  *Mehrere* is on */
+  picked: { active: number; adding: boolean; picks: Inquiry[] };
 }
 
 export interface SceneStatusSlices {
@@ -257,8 +261,17 @@ export function sceneReports(
     onBikeCounts: on((counters) => status.set("bikeCounters", counters)),
     onModeChange: on((mode) => status.set("mode", mode)),
     onModelView: on((view) => status.set("modelView", view)),
-    onInquiry: on((inquiry, along) =>
-      status.set("inquiry", inquiry ? { inquiry, along } : null)
+    onInquiry: on((inquiry, along, picked) =>
+      status.set(
+        "inquiry",
+        inquiry
+          ? {
+              inquiry,
+              along,
+              picked: picked ?? { active: 0, adding: false, picks: [inquiry] },
+            }
+          : null
+      )
     ),
     onPose: on((pose) => status.set("pose", pose)),
     onDesign: on((design) => status.set("design", design)),
