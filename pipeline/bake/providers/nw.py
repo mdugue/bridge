@@ -41,6 +41,13 @@ PATTERNS = {
 # ground (24) are dropped. Intensities are normalised per scan in
 # lsc.rasterise, against the scan's own ground.
 LSC_CLASSES = {2: 2, 26: 30, 1: 20, 20: 20, 17: 20}
+# NRW's class 1 holds only a pulse's non-last echoes (every point of it
+# multi-echo where a file records its returns). Some 1 km files were
+# republished in 2026-10 without return numbers (their headers count no
+# point by return: 3dm_32_409_5710 of 2025-10-12); there class 1 is read
+# as multi-echo, or Unna's crowns read as roofs and lost ~40 % of the
+# scan's extra trees.
+ECHO_CLASSES = (1,)
 DLM = f"{BASE}/lm/akt/basis-dlm/basis-dlm_EPSG25832_Shape.zip"
 # The DOP's metadata per 1 km tile (`Bildflugdatum`), through the DOP WMS.
 DOP_INFO = (
@@ -112,7 +119,14 @@ def lsc(ctx: Ctx, tile: Tile) -> list[Path]:
     each) merged into the one scan the rasters read, its classes mapped by
     `LSC_CLASSES`."""
     merged = ctx.scratch / "lsc" / f"{tile.id}.laz"
-    return [merge_laz(_files(ctx, tile, "lsc"), merged, classes=lambda _: LSC_CLASSES)]
+    return [
+        merge_laz(
+            _files(ctx, tile, "lsc"),
+            merged,
+            classes=lambda _: LSC_CLASSES,
+            echo_classes=ECHO_CLASSES,
+        )
+    ]
 
 
 def dlm(ctx: Ctx) -> None:

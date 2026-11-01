@@ -31,19 +31,23 @@
   },
   "openstreetmap": {
     "licence": "Open Database License (ODbL); credit: © OpenStreetMap contributors",
-    "extract": "data/_raw/by/osm/oberbayern-latest.osm.pbf (Geofabrik extract), retrieved 2026-09-24",
+    "extract": "a stand-in: BBBike city extract Muenchen.osm.pbf (download.bbbike.org), because download.geofabrik.de was unreachable from the build container",
     "usedFor": "walls, stairs, lamps, street furniture, fountains, paving, markings, trams, riverside, sport, shops and heritage",
     "bbbike": {
       "products": {
         "osmBuildings": {
-          "dataAsOf": "2026-10-17 (re-baked 2026-10-19 from the BBBike city extract Muenchen.osm.pbf, Last-Modified 2026-10-17: shops, heritage, looks, and now the names, addresses, storeys and named outlines per building tree, lib/city/ensembles.ts)"
+          "dataAsOf": "2026-10-31 (re-baked 2026-11-01 with every step from the BBBike city extract Muenchen.osm.pbf, Last-Modified 2026-10-31 16:37 UTC)"
+        },
+        "all": {
+          "dataAsOf": "2026-10-31 (re-baked 2026-11-01 with every step from the BBBike city extract Muenchen.osm.pbf, Last-Modified 2026-10-31 16:37 UTC)"
         }
       }
     }
   },
   "wikidata": {
     "licence": "CC0",
-    "usedFor": "bridge names and types, cached per tile under data/_raw/by/wikidata/"
+    "usedFor": "bridge names and types, cached per tile under data/_raw/by/wikidata/",
+    "dataAsOf": "2026-11-01 (fetched again for the re-bake)"
   },
   "dataLayers": {
     "trams": {
@@ -58,5 +62,10 @@
         "pipeline/bake/transit.py"
       ]
     }
+  },
+  "basisDlm": {
+    "download": "https://geodaten.bayern.de/odd/m/2/basisdlm/bkg_shape/bkg_shape_712.zip",
+    "lastModified": "2026-07-03",
+    "editionInUse": "the package Last-Modified 2026-07-03, baked 2026-11-01"
   }
 }
