@@ -3205,7 +3205,10 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   a window in from its ends, and its length slot holds their count and
   spacing instead of its length (`MEASURED_AXES`: from code 16 384 on,
   64 counts × 1–6.1 m in 2 cm steps; no wall length reaches 256 m), the
-  window as wide as its object's, never wider than the spacing leaves.
+  window as wide as its object's, never wider than the spacing leaves
+  (the shader holds it there too), and a loose grid's jitter left off.
+  Every mesh wall in the footprint wall's plane that overlaps it keeps
+  the lattice, so a facade of several LoD2 polygons runs on unbroken.
   Elsewhere the axes are centred on the wall at the object's spacing with
   0.7 m kept at its ends.
   **The drawing** (`app/_components/clay-windows.ts`, in the clay's

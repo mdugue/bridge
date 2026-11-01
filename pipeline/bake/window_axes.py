@@ -57,8 +57,10 @@ def register(a: np.ndarray, b: np.ndarray) -> tuple[float, float] | None:
     shift stands out (see the module)."""
     n = min(len(a), len(b))
     a, b = a[:n], b[:n]
-    reach = int(round(REG_MAX_M / JX_M))
     least = int(round(MIN_OVERLAP_M / JX_M))
+    if n < least:
+        return None
+    reach = min(int(round(REG_MAX_M / JX_M)), n - least)
     scores = np.full(2 * reach + 1, np.nan)
     for k, s in enumerate(range(-reach, reach + 1)):
         x, y = (a[s:], b[: n - s]) if s >= 0 else (a[:s], b[-s:])

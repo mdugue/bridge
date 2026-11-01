@@ -116,10 +116,10 @@ def traits_path(tile: Tile) -> Path:
 
 
 def grid_convergence(epsg: int, x: float, y: float) -> float:
-    """The angle (rad, counter-clockwise) from true north to the grid's
-    north at (x, y): Mapillary's rotations are in a local east-north-up
-    frame, the walls in UTM, whose north turns by ~1° 90 km off the
-    central meridian (Dresden −0.98°, München +1.9°) — 0.25 m along a
+    """pyproj's meridian convergence γ (rad) at (x, y): the angle from
+    true north to grid north, clockwise positive (Dresden −0.98°: grid
+    north lies west of true north; München +1.9°). Mapillary's rotations
+    are in a local east-north-up frame, the walls in UTM: 0.25 m along a
     wall 15 m away."""
     lon, lat = Transformer.from_crs(epsg, 4326, always_xy=True).transform(x, y)
     return math.radians(Proj(f"EPSG:{epsg}").get_factors(lon, lat).meridian_convergence)
@@ -127,7 +127,8 @@ def grid_convergence(epsg: int, x: float, y: float) -> float:
 
 def onto_grid(rot: np.ndarray, gamma: float) -> np.ndarray:
     """A world → camera rotation in east-north-up as one from the grid:
-    a grid vector is turned by −gamma into east-north-up first."""
+    a grid vector is first turned clockwise by γ (`grid_convergence`) into
+    east-north-up — grid north becomes (sin γ, cos γ)."""
     c, s = math.cos(gamma), math.sin(gamma)
     return rot @ np.array([[c, s, 0.0], [-s, c, 0.0], [0.0, 0.0, 1.0]])
 
@@ -603,7 +604,9 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
     )
     out = traits_path(tile) if kind == "traits" else cache_path(tile)
     x0, y0, x1, y1 = tile.bounds
-    gamma = grid_convergence(tile.epsg, (x0 + x1) / 2, (y0 + y1) / 2)
+    # the poses turned onto the grid only in the traits cache (v4): the
+    # facades cache keeps its measurements as they were taken
+    gamma = grid_convergence(tile.epsg, (x0 + x1) / 2, (y0 + y1) / 2) if kind == "traits" else 0.0
     done = _done(out)
     todo = sorted(set(jobs) - done)
     print(f"{tile.id}: {len(jobs)} panoramas see its walls, {len(todo)} to measure ({kind})")

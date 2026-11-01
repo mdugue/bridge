@@ -208,6 +208,9 @@ export const MEASURED_AXES = {
   step: 0.02,
   maxN: 63,
 } as const;
+/** The widest spacing a measured wall's slot holds (m). */
+export const MEASURED_AXIS_MAX_M =
+  MEASURED_AXES.axis0 + (MEASURED_AXES.perN - 1) * MEASURED_AXES.step;
 /** The longest wall `_FACADE`'s length slot holds as a length (m). */
 export const LENGTH_MAX_M =
   ((MEASURED_AXES.base - 1) / 32_767) * FACADE_SCALE_M;
@@ -1502,8 +1505,19 @@ function placeOnWalls(
       m.a[0] + (m.b[0] - m.a[0]) * k,
       m.a[1] + (m.b[1] - m.a[1]) * k,
     ];
-    for (const { s, w } of wallsAt(byObject, m.object, at, m.n)) {
-      w.axes = { at: s, axis: m.axis, w: m.w };
+    // the lattice runs on along the footprint wall: every mesh wall in its
+    // plane that overlaps it keeps it (a facade of several LoD2 polygons)
+    for (const w of byObject.get(m.object) ?? []) {
+      const sOf = (q: readonly [number, number]) =>
+        q[0] * w.n[1] - q[1] * w.n[0];
+      const [sa, sb] = [sOf(m.a), sOf(m.b)];
+      if (
+        w.n[0] * m.n[0] + w.n[1] * m.n[1] >= ON_WALL_COS &&
+        Math.abs(w.n[0] * at[0] + w.n[1] * at[1] - w.d) <= ON_WALL_M &&
+        Math.min(w.s1, Math.max(sa, sb)) - Math.max(w.s0, Math.min(sa, sb)) > 0
+      ) {
+        w.axes = { at: sOf(at), axis: m.axis, w: m.w };
+      }
     }
   }
 }
@@ -1518,8 +1532,6 @@ export function measuredAxes(
   specOf: (object: number) => WindowSpec | undefined,
   offset: { cx: number; cy: number }
 ): FacadeAxes[] {
-  const top =
-    MEASURED_AXES.axis0 + (MEASURED_AXES.perN - 1) * MEASURED_AXES.step;
   return walls.flatMap((w) => {
     const object = index.get(w.oid);
     const m = w.model;
@@ -1530,7 +1542,7 @@ export function measuredAxes(
       !spec ||
       spec.axis <= 0 ||
       m.axis < MEASURED_AXES.axis0 ||
-      m.axis > top
+      m.axis > MEASURED_AXIS_MAX_M
     ) {
       return [];
     }
@@ -1556,7 +1568,7 @@ export function measuredColumns(
   s0: number,
   s1: number,
   axes: { at: number; axis: number; w: number }
-): { c: number; n: number } | undefined {
+): { axis: number; c: number; n: number } | undefined {
   const { at, axis, w } = axes;
   if (axis <= 0) {
     return undefined;
@@ -1569,7 +1581,7 @@ export function measuredColumns(
   if (n < 1 || n > MEASURED_AXES.maxN) {
     return undefined;
   }
-  return { c: at + ((first + last) / 2) * axis, n };
+  return { axis, c: at + ((first + last) / 2) * axis, n };
 }
 
 /** A measured wall's length slot (`MEASURED_AXES`, snorm16 units). */
@@ -1700,8 +1712,8 @@ function wallSlots(
   // a measured wall holds its axes in the length slot (`MEASURED_AXES`)
   const length = party
     ? 0
-    : measured && w.axes
-      ? measuredSlot(measured.n, w.axes.axis)
+    : measured
+      ? measuredSlot(measured.n, measured.axis)
       : snorm(Math.min(w.s1 - w.s0, LENGTH_MAX_M));
   const [d0, d1] = w.doors
     .map((d) => ({ at: d.s - c, w: d.w }))

@@ -53,6 +53,10 @@ def test_two_strips_register_at_their_drives_difference():
     assert r > 0.8
 
 
+def test_a_short_strip_does_not_register():
+    assert window_axes.register(np.ones(20), np.ones(30)) is None
+
+
 def test_a_plain_wall_does_not_register():
     rng = np.random.default_rng(2)
     a = rng.normal(0, 0.01, 400)

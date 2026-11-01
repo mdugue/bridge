@@ -3,8 +3,10 @@ LoD2 wall, reduced to profiles and a few ratios that do not change when
 the image is moved along the wall (facades.py rectifies it, 20 px a metre).
 
 One image's pose is off along the wall by ~0.2 m and two drives' by up
-to a metre, so where a window lies is read only from several drives
-registered onto each other (window_axes.py, by `jx`); a period, a share,
+to a metre, so where a window lies is read only from images registered
+onto each other (window_axes.py, by `jx`; the drives' errors averaged
+where several saw the wall, one drive's kept where it alone did); a
+period, a share,
 a regularity or a proportion one image gives alone (docs/transformations.md,
 *Windows on every house*).
 The fetch therefore caches, per image and wall, profiles in `STEP_M` bins
