@@ -6,18 +6,21 @@ extract instead.
 
 - rails: `railway` = rail, light_rail, subway, narrow_gauge (Hamburg's
   S-Bahn is `light_rail`, its U-Bahn `subway`; the trams are the tram
-  layer's), out of tunnels and off the underground (a way `covered` for
-  more than 30 m runs under a lid or a building, and its rails would lie on
-  the lid's top), with `tracks`, `electrified` (1 an overhead contact line,
-  2 a third rail: Hamburg's S- and U-Bahn), OSM's `bridge` and `layer` (the
-  line levels prefer a deck on a bridge way, and cut through a lid over a
-  way below ground, lib/city/levels.ts), the `gauge` where it is not
-  standard, `paved` where the track is set in the paving (`embedded`, or a
-  service track whose both sides are paved: a harbour's quays, a factory's
-  yard — no ballast bed there), and `m`, the catenary masts OSM maps beside
-  an overhead track — each way clipped to the tile, fragments of the same
-  properties merged. A yard's every siding is its own way: the DLM's one
-  centreline per line drew two tracks for fifteen at Dresden's Hauptbahnhof;
+  layer's) and funicular (`steep`: a Standseilbahn or a Schrägaufzug climbs
+  far past a railway's grade, and the build lays it on its own,
+  lib/city/levels.ts `STEEP_GRADE`; no catenary), out of tunnels and off the
+  underground (a way `covered` for more than 30 m runs under a lid or a
+  building, and its rails would lie on the lid's top), with `tracks`,
+  `electrified` (1 an overhead contact line, 2 a third rail: Hamburg's S-
+  and U-Bahn), OSM's `bridge` and `layer` (the line levels prefer a deck on
+  a bridge way, and cut through a lid over a way below ground,
+  lib/city/levels.ts), the `gauge` where it is not standard, `paved` where
+  the track is set in the paving (`embedded`, or a service track whose both
+  sides are paved: a harbour's quays, a factory's yard — no ballast bed
+  there), and `m`, the catenary masts OSM maps beside an overhead track —
+  each way clipped to the tile, fragments of the same properties merged. A
+  yard's every siding is its own way: the DLM's one centreline per line drew
+  two tracks for fifteen at Dresden's Hauptbahnhof;
 - ballast: those rails on the ground (not on a bridge, not paved), buffered
   by their bed width (4.5 m for one track, 4 m more for each further one);
 - bridge decks: every way with a `bridge` tag on a road, path or railway
@@ -27,7 +30,12 @@ extract instead.
   their `width` (or `lanes` × 3.25 m + 2 m, or the kind's width). The deck
   heights, the superstructure, the fairway clearance and Wikidata are
   rail.py's and bridge.py's, unchanged;
-- platforms: rail.py's (OSM in either case).
+- platforms: rail.py's (OSM in either case);
+- monorails (`monorails`), in the rails' file as features of their own
+  (`mono`: "hanging" where the cars hang under the beam, Dresden's
+  Schwebebahn, else "top"): no track, no bed, no deck — a beam over the
+  ground with its foot's height per vertex (`bz`), and the viewer stands
+  it on supports (rail-layer.ts).
 
 What the DLM's centrelines know that OSM knows too (name, kind, tracks)
 comes from the tags; the deck height is measured (DOM1 over the DGM ramp)
@@ -41,12 +49,19 @@ import re
 from collections import defaultdict
 from collections.abc import Callable
 
+import numpy as np
 import shapely
 
 from .common import Tile, column, feature, label_line, value_at
 from .osm import in_tunnel, read_osm, tag
 
 RAILWAYS = ("rail", "light_rail", "subway", "narrow_gauge")
+# A funicular (Standseilbahn, Schrägaufzug) is a track like a railway's,
+# but steep: its features carry `steep` (the build's grade for it), and a
+# deck it runs on is measured within STEEP_DECK_GRADE.
+STEEP = ("funicular",)
+TRACKED = RAILWAYS + STEEP
+STEEP_DECK_GRADE = 1.0
 PATHS = {"footway", "path", "cycleway", "pedestrian", "steps", "bridleway", "corridor"}
 NOT_BUILT = {"proposed", "construction", "abandoned", "disused", "razed", "platform"}
 BED_ONE, BED_MORE = 4.5, 4.0  # ballast bed width: one track, each further one (m)
@@ -86,18 +101,25 @@ def rail_ways(tile: Tile, margin: float = 0.001, every: bool = False):
     above ground, not in a tunnel or underground, not `covered` for longer
     than COVERED_MAX_M. `every`: all of them, tunnels too (what OSM maps
     where the DLM has a line)."""
-    kinds = ",".join(f"'{k}'" for k in RAILWAYS)
+    for g, _, other in tracked_ways(tile, margin, every):
+        yield g, other
+
+
+def tracked_ways(tile: Tile, margin: float = 0.001, every: bool = False):
+    """(geometry, railway, other_tags) of `rail_ways`: the kind too."""
+    kinds = ",".join(f"'{k}'" for k in TRACKED)
     geoms, fields = read_osm(
         tile, "lines", f"railway IN ({kinds})", ["railway", "other_tags"], margin=margin
     )
     for g, railway, other in zip(
         geoms, column(fields, "railway", geoms), column(fields, "other_tags", geoms), strict=True
     ):
-        if g is None or g.is_empty or (railway or tag(other, "railway")) not in RAILWAYS:
+        kind = railway or tag(other, "railway")
+        if g is None or g.is_empty or kind not in TRACKED:
             continue
         if not every and not drawn(g, other):
             continue
-        yield g, other
+        yield g, kind, other
 
 
 def drawn(g: shapely.Geometry, other: str | None) -> bool:
@@ -199,9 +221,9 @@ class Paving:
         ]
 
 
-def track_props(other: str | None, electrified: int, paved: bool) -> tuple:
+def track_props(other: str | None, electrified: int, paved: bool, steep: bool = False) -> tuple:
     """A way's properties as a grouping key: tracks, electrified, bridge,
-    layer, gauge, paved."""
+    layer, gauge, paved, steep."""
     return (
         tracks_of(other),
         electrified,
@@ -209,12 +231,13 @@ def track_props(other: str | None, electrified: int, paved: bool) -> tuple:
         layer_of(other),
         gauge_of(other),
         1 if paved else 0,
+        1 if steep else 0,
     )
 
 
 def props_json(key: tuple) -> dict:
     """The feature properties of a grouping key (`track_props`)."""
-    tracks, electrified, bridge, layer, gauge, paved = key
+    tracks, electrified, bridge, layer, gauge, paved, steep = key
     out: dict = {"tracks": tracks, "electrified": electrified, "bridge": bridge}
     if layer:
         out["layer"] = layer
@@ -222,6 +245,8 @@ def props_json(key: tuple) -> dict:
         out["g"] = gauge
     if paved:
         out["paved"] = 1
+    if steep:
+        out["steep"] = 1
     return out
 
 
@@ -237,15 +262,16 @@ def rails(
     box = shapely.box(*tile.bounds)
     paving = Paving(tile)
     groups: dict[tuple, list] = defaultdict(list)
-    for g, other in rail_ways(tile):
-        electrified = electrified_of(other)
+    for g, kind, other in tracked_ways(tile):
+        steep = kind in STEEP
+        electrified = 0 if steep else electrified_of(other)
         if electrified is None:
             electrified = electrified_near(g) if electrified_near else 0
         for line in shapely.get_parts(g):
             if not isinstance(line, shapely.LineString) or line.length < 0.5:
                 continue
             for piece, paved in paving.pieces(line, other):
-                key = track_props(other, electrified, paved)
+                key = track_props(other, electrified, paved, steep)
                 for part in shapely.get_parts(shapely.intersection(piece, box)):
                     # (a sliver along the tile's edge is the neighbour's)
                     if isinstance(part, shapely.LineString) and part.length >= 0.5:
@@ -328,7 +354,9 @@ def beds(features: list[dict]) -> list[shapely.Geometry]:
     return [
         bed(shapely.geometry.shape(f["geometry"]), f["properties"].get("tracks", 1))
         for f in features
-        if not f["properties"].get("bridge") and not f["properties"].get("paved")
+        if not f["properties"].get("bridge")
+        and not f["properties"].get("paved")
+        and not f["properties"].get("mono")
     ]
 
 
@@ -361,7 +389,7 @@ def width_of(other: str | None, kind: str) -> float | None:
 
 
 def kind_of(highway: str | None, railway: str | None) -> str | None:
-    if railway in RAILWAYS:
+    if railway in TRACKED:
         return "rail"
     if not highway or highway in NOT_BUILT:
         return None
@@ -472,3 +500,183 @@ def under_ways(tile: Tile) -> list[tuple[shapely.Geometry, float]]:
             continue  # a flight climbs the bank to the bridge, it passes under nothing
         out.append((g, passage_half(highway, other)))
     return out
+
+
+# A monorail's beam: its foot this far over the ground at the least (m) —
+# over a hanging car's 3 m and the headroom below it, or under the beam a
+# car rides on top of — sampled every BEAM_STEP_M, read over the whole
+# chain of ways within MONORAIL_MARGIN (deg, ~3.5 km) around the tile: two
+# neighbours agree on a chain that lies within it from both, as Dresden's
+# 274 m Schwebebahn does (the only monorail of the sites). The upper hull
+# spans the whole chain, right for a short line; a long one over hills
+# would need its spans limited.
+HANGING_CLEARANCE_M = 5.5
+TOP_CLEARANCE_M = 4.5
+BEAM_STEP_M = 2.0
+MONORAIL_MARGIN = 0.05
+# The beam leaves out samples while every one left out stays within this of
+# the straight line that replaces it (in plan and in height, m).
+BEAM_TOLERANCE_M = 0.02
+
+
+def monorail_kind(other: str | None) -> str:
+    return "hanging" if tag(other, "monorail") == "hanging" else "top"
+
+
+def upper_hull(s: list[float], z: list[float]) -> list[float]:
+    """The upper convex hull of the points (s, z), s ascending, read back at
+    every s: a line stretched over posts of height z — straight across a
+    hollow, bent only over a crest."""
+    hull: list[int] = []
+    for i in range(len(s)):
+        while len(hull) >= 2:
+            a, b = hull[-2], hull[-1]
+            # b lies on or under the chord a→i: no corner of the hull
+            if (z[b] - z[a]) * (s[i] - s[a]) <= (z[i] - z[a]) * (s[b] - s[a]):
+                hull.pop()
+            else:
+                break
+        hull.append(i)
+    out = []
+    k = 0
+    for i in range(len(s)):
+        while k + 1 < len(hull) - 1 and s[hull[k + 1]] <= s[i]:
+            k += 1
+        a, b = hull[k], hull[min(k + 1, len(hull) - 1)]
+        t = 0.0 if s[b] == s[a] else (s[i] - s[a]) / (s[b] - s[a])
+        out.append(z[a] + (z[b] - z[a]) * t)
+    return out
+
+
+def _off_chord(a, b, c) -> float:
+    """How far b lies off the 3D chord a→c (m)."""
+    ax, ay, az = c[0] - a[0], c[1] - a[1], c[2] - a[2]
+    bx, by, bz = b[0] - a[0], b[1] - a[1], b[2] - a[2]
+    n = ax * ax + ay * ay + az * az
+    t = 0.0 if n == 0 else max(0.0, min(1.0, (ax * bx + ay * by + az * bz) / n))
+    return math.dist((bx, by, bz), (ax * t, ay * t, az * t))
+
+
+def beam_samples(
+    line: shapely.LineString, ground: Callable[[float, float], float | None], clearance: float
+) -> list[tuple[float, float, float]] | None:
+    """(x, y, foot height) along a monorail: every BEAM_STEP_M and at its
+    vertices, the upper hull of the ground plus the clearance, a sample left
+    out while every one left out stays within BEAM_TOLERANCE_M of the line
+    that replaces it. None where the ground is unknown along it."""
+    stations = sorted(
+        {i * BEAM_STEP_M for i in range(int(line.length // BEAM_STEP_M) + 1)}
+        | {line.length}
+        | {line.project(shapely.Point(c[:2])) for c in line.coords}
+    )
+    pts = [line.interpolate(d) for d in stations]
+    heights = [ground(p.x, p.y) for p in pts]
+    if any(h is None for h in heights):
+        return None
+    feet = upper_hull(stations, [h + clearance for h in heights])  # type: ignore[operator]
+    out = [(p.x, p.y, z) for p, z in zip(pts, feet, strict=True)]
+    keep = [0]
+    for i in range(1, len(out) - 1):
+        # out[i] goes while every sample since the last kept one stays near
+        # the line from it to the next: checked against only its own chord,
+        # the error left out over a long crest adds up
+        a, c = out[keep[-1]], out[i + 1]
+        if any(_off_chord(a, out[j], c) > BEAM_TOLERANCE_M for j in range(keep[-1] + 1, i + 1)):
+            keep.append(i)
+    keep.append(len(out) - 1)
+    return [out[k] for k in keep]
+
+
+def _clipped_beam(
+    beam: list[tuple[float, float, float]], box, kind: str, tracks: int
+) -> list[dict]:
+    """A beam's pieces on the tile, each vertex with its foot's height."""
+    plan = shapely.LineString([(x, y) for x, y, _ in beam])
+    along = [plan.project(shapely.Point(x, y)) for x, y, _ in beam]
+    feet = [z for *_, z in beam]
+
+    def foot(d: float) -> float:
+        k = max(0, min(len(along) - 2, int(np.searchsorted(along, d, side="right")) - 1))
+        a, b = along[k], along[k + 1]
+        t = 0.0 if b == a else max(0.0, min(1.0, (d - a) / (b - a)))
+        return feet[k] + (feet[k + 1] - feet[k]) * t
+
+    out = []
+    for part in shapely.get_parts(shapely.intersection(plan, box)):
+        if not isinstance(part, shapely.LineString) or part.length < 0.5:
+            continue
+        coords = [(x, y) for x, y, *_ in part.coords]
+        out.append(
+            feature(
+                {
+                    "type": "LineString",
+                    "coordinates": [[round(x, 2), round(y, 2)] for x, y in coords],
+                },
+                {
+                    "mono": kind,
+                    "tracks": tracks,
+                    "bz": [round(foot(plan.project(shapely.Point(c))), 2) for c in coords],
+                },
+            )
+        )
+    return out
+
+
+def dgm_ground(tile: Tile, bounds) -> Callable[[float, float], float | None]:
+    """The site's DGM1 over `bounds` (every tile's, so a beam across a seam
+    reads the same ground from either side), as a height lookup."""
+    from rasterio.transform import rowcol
+
+    from .rail import mosaic
+
+    dgm, transform = mosaic(sorted((tile.data / "dgm").glob("dgm1_*_tiff/dgm1_*.tif")), bounds)
+
+    def at(x: float, y: float) -> float | None:
+        if dgm is None:
+            return None
+        r, c = rowcol(transform, x, y)
+        if not (0 <= r < dgm.shape[0] and 0 <= c < dgm.shape[1]):
+            return None
+        v = float(dgm[r, c])
+        return None if math.isnan(v) else v
+
+    return at
+
+
+def monorails(tile: Tile) -> list[dict]:
+    """The tile's monorails (`railway=monorail`, drawn as `drawn` says): one
+    feature per chain of ways of one kind (`monorail_kind`) and `tracks`,
+    the beam's line clipped to the tile with its foot's height per vertex
+    (`bz`, `beam_samples` over the whole chain, on the DGM)."""
+    from .rail import merge_lines
+
+    geoms, fields = read_osm(
+        tile, "lines", "railway = 'monorail'", ["other_tags"], margin=MONORAIL_MARGIN
+    )
+    groups: dict[tuple[str, int], list] = defaultdict(list)
+    for g, other in zip(geoms, column(fields, "other_tags", geoms), strict=True):
+        if g is None or g.is_empty or not drawn(g, other):
+            continue
+        key = (monorail_kind(other), tracks_of(other))
+        for line in shapely.get_parts(g):
+            if isinstance(line, shapely.LineString) and line.length >= 0.5:
+                groups[key].append([(x, y) for x, y, *_ in line.coords])
+    box = shapely.box(*tile.bounds)
+    chains = [
+        (kind, tracks, shapely.LineString(chain))
+        for (kind, tracks), lines in sorted(groups.items())
+        for chain in merge_lines(lines)
+    ]
+    chains = [c for c in chains if c[2].intersects(box)]
+    if not chains:
+        return []
+    # one read of the DGM for every chain on the tile
+    xmin, ymin, xmax, ymax = shapely.MultiLineString([c[2] for c in chains]).bounds
+    ground = dgm_ground(tile, (xmin - 5, ymin - 5, xmax + 5, ymax + 5))
+    features = []
+    for kind, tracks, whole in chains:
+        clearance = HANGING_CLEARANCE_M if kind == "hanging" else TOP_CLEARANCE_M
+        beam = beam_samples(whole, ground, clearance)
+        if beam is not None:
+            features += _clipped_beam(beam, box, kind, tracks)
+    return features

@@ -3564,8 +3564,13 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   or a building over it) is not drawn; `layer` < 0 marks a line below,
   which cuts under a lid up to 800 m at 0.5 % grade (`lib/city/levels.ts`
   `coverCuts`; 832 m of Hamburg's rails had lain on such lids); a cut more
-  than 0.5 m under the ground with no deck over it is buried: no rails,
-  ballast or catenary. Hamburg's passages 17 (405 m) → 41 (1 224 m), a
+  than 4.5 m under the ground with no deck over it is buried: no rails,
+  ballast or catenary (`BURIED_M`: a lid needs room for a train under
+  it). A shallower cut is open, whatever its `layer`: its trench is burned
+  down to the track, so a drawn track never sinks into the ground. The
+  line was 0.5 m until 2026-11-01, when the Standseilbahn's open cut at
+  its top (`layer` −1, 0.6–1 m under the DGM) and the cuts before its
+  tunnel portals vanished. Hamburg's passages 17 (405 m) → 41 (1 224 m), a
   199 m opening at the Hauptbahnhof among them. Line jumps Dresden
   12 → 16 (budget 20), Hamburg 62 → 29, Leipzig 0 → 2, München 5 → 4.
   **Paved track** (`paved`, `rail_osm.Paving`): `embedded`, or a service
@@ -3716,6 +3721,32 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   rails for a kilometre of track; in Hamburg a station building (ALKIS
   31001_3091) a track runs on, 1.2 m; a roof on posts — ALKIS Überdachung, drawn open —
   is never one, the track runs under it).
+- **Funiculars and monorails** `❝ taken` `= computed` `≈ assumed`
+  (2026-10-31, [ADR 0041](./adr/0041-line-levels-along-the-whole-line.md))
+  — OSM's `railway=funicular` is a track like a railway's, marked `steep`
+  (`rail_osm.rails`; no catenary, a cable hauls it): its level and profile
+  are solved at 100 % grade with vertical curves of ≥ 100 m
+  (`STEEP_GRADE`, `STEEP_RADIUS`), its context only through other steep
+  pieces, and a deck it runs on is a rail deck measured within 100 %
+  grade — Dresden's Standseilbahn climbs 17–29 % on the ground and over
+  its Gerüstviadukt (until then a path deck, its line flattened), Meißen's
+  Panoramaaufzug 65 %. OSM's `railway=monorail` is no track but a beam
+  (`rail_osm.monorails`, in the rails' file as `mono` with `bz`): its
+  underside is the upper hull of the DGM + 5.5 m for cars hanging under
+  it (`monorail=hanging`), 4.5 m for cars on top, over the whole chain —
+  straight across a hollow, bent over a crest; the rail layer draws a
+  closed girder (2.6 m wide for two tracks, 1.4 m deep) and every 8 m a
+  steel portal (legs 1.5 m outside the cars' way, a crossbeam on the
+  girder) or, for a beam ridden on top, a column, each foot `SINK.box`
+  under the lowest ground at its corners and reporting its joins
+  (`monorailJoins`, scripts/ground-joins.ts: 32 portals, no miss); none
+  over unknown ground or a leg under 2 m (`lib/city/monorail.ts`,
+  `monorail-beam.ts`). The hull spans the whole chain, right for a short
+  line (the Schwebebahn's 274 m, the sites' only one); a long line over
+  hills would need its spans limited. In the model Dresden's Schwebebahn
+  runs up to 18 m over its hollow. The clearance, the
+  section and the supports' spacing are assumed; no cars (they would
+  move, ADR 0009). Before: both missing, as neither railway kind was read.
 - **Passages under decks** `◎ detected` (2026-10-01, ADR 0041) — a *cut* lying ≥ 30 %
   under a drawn deck (any kind, within 2 m) opens the fill in the terrain
   bake (`lib/city/passages.ts`, `shapeDgm`'s last pass, both levels): along

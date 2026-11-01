@@ -195,3 +195,61 @@ test("a ramp the DGM does not hold beside a lower line is a viaduct", () => {
   expect(runLevelAt(solved[1].runs, d, at)?.mode).toBe("span");
   expect(solved[0].runs.some((r) => r[2] === "s")).toBe(false);
 });
+
+test("a funicular's track lies on its slope; a railway's could not climb it", () => {
+  // a 25 % slope, as Dresden's Standseilbahn climbs between its tunnels
+  const slope = (x: number) => 120 + 0.25 * x;
+  const piece = (steep: boolean): LinePiece => ({
+    coords: [
+      [0, 0],
+      [200, 0],
+    ],
+    line: "rail",
+    steep,
+  });
+  const offBy = (steep: boolean) => {
+    const [solved] = solvePieces([piece(steep)], {
+      decks: [],
+      heightAt: slope,
+      offset,
+    });
+    const pts = pieceSamples(piece(steep));
+    return Math.max(
+      ...solved.profile.map((z, i) =>
+        z === null ? Infinity : Math.abs(z - slope(pts[i][0]))
+      )
+    );
+  };
+  expect(offBy(true)).toBeLessThan(0.3);
+  expect(offBy(false)).toBeGreaterThan(5);
+});
+
+test("a steep piece runs on into steep pieces only", () => {
+  // a railway ending where a funicular starts, in its very direction:
+  // the funicular's context is not the railway's flat line
+  const slope = (x: number) => (x <= 200 ? 120 : 120 + 0.25 * (x - 200));
+  const flat: LinePiece = {
+    coords: [
+      [0, 0],
+      [200, 0],
+    ],
+    line: "rail",
+  };
+  const steep: LinePiece = {
+    coords: [
+      [200, 0],
+      [400, 0],
+    ],
+    line: "rail",
+    steep: true,
+  };
+  const [, solved] = solvePieces([flat, steep], {
+    decks: [],
+    heightAt: slope,
+    offset,
+  });
+  const pts = pieceSamples(steep);
+  solved.profile.forEach((z, i) => {
+    expect(Math.abs((z ?? Infinity) - slope(pts[i][0]))).toBeLessThan(0.3);
+  });
+});

@@ -122,6 +122,7 @@ Vegetationsindex nur mäßig überein (r ≈ 0,7), deshalb steht München in
 | Brücken: Pfeiler | der Viewer, außerhalb der Fahrrinne | `≈ angenommen` |
 | Gleise und ihr Verlauf | Basis-DLM oder OpenStreetMap | `❝ übernommen` |
 | Auf welcher Ebene ein Gleis liegt (Boden, Deck, Einschnitt) | aus Gelände und Decks entlang der ganzen Linie | `◎ erkannt` |
+| Träger einer Einschienenbahn: Höhe und Stützen | aus dem Gelände entlang der ganzen Linie und dem Lichtraum eines Wagens; die Stützen vom Viewer | `= berechnet` `≈ angenommen` |
 | Lampen, Bänke, Stadtmöbel: Standort | OpenStreetMap | `❝ übernommen` |
 | Lampen aus Straßenfotos | Mapillary | `◎ erkannt` |
 | Ihre Form; wohin eine Bank ohne Angabe blickt | der Viewer | `≈ angenommen` |

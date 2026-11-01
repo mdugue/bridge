@@ -794,18 +794,24 @@ export interface TrafficFeature {
  *  contact line, 2 a third rail, 0 none. `lv` and `lz` are added by the
  *  build step (scripts/line-levels.ts), never committed: the line's runs
  *  off the ground (lib/city/levels.ts) and its profile
- *  (lib/city/line-profile.ts). */
+ *  (lib/city/line-profile.ts). `steep` 1 marks a funicular's track (a
+ *  Standseilbahn, a Schrägaufzug: lib/city/levels.ts `STEEP_GRADE`). A
+ *  monorail is a feature of its own, no track: `mono` how its cars ride
+ *  the beam, `bz` the beam's underside per vertex (m, lib/city/monorail.ts). */
 export interface RailFeature {
   geometry: LineGeometry;
   properties: {
     bridge?: number;
+    bz?: number[];
     electrified?: number;
     g?: number;
     layer?: number;
     lv?: LevelRun[];
     lz?: (number | null)[];
     m?: [number, number][];
+    mono?: "hanging" | "top";
     paved?: number;
+    steep?: number;
     tracks?: number;
   } | null;
 }
