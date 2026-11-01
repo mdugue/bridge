@@ -32,6 +32,7 @@ import type {
 } from "./inquiry-features";
 import type { CanopyInquiry, MoreInquiry } from "./inquiry-more";
 import type { BikeInquiry, TrafficInquiry } from "./inquiry-traffic";
+import { type DesignInquiry, PLACED } from "./inquiry-design";
 import { isMeasuredRoof, type ObjectFacts } from "./object-facts";
 import {
   type OsmProduct,
@@ -229,6 +230,9 @@ export function lineage(
       break;
     case "bikes":
       bikeLineage(l, inquiry);
+      break;
+    case "design":
+      designLineage(l, inquiry);
       break;
     case "canopy":
     case "furniture":
@@ -564,6 +568,24 @@ function bikeLineage(l: Lineage, b: BikeInquiry): void {
     credit: b.credit ?? "",
   });
   l.source("dgm", ["der Boden"], "taken");
+}
+
+/** A planner's design: their file alone, read on the device, and where
+ *  it was set. */
+function designLineage(l: Lineage, d: DesignInquiry): void {
+  l.other({
+    source: `${d.file} (deine Datei)`,
+    used: [
+      { text: "die Form, der Name und die Art des Bauteils", method: "taken" },
+      { text: "die Lage", method: PLACED[d.source][1] },
+    ],
+    stand: "",
+    credit: "",
+  });
+  l.viewer([
+    ["das Weiß des Modells oder die Farben der Datei", "taken"],
+    ["was der Entwurf an Häusern, Bäumen und Boden verdeckt", "computed"],
+  ]);
 }
 
 /** Where each OSM thing was read, and what the viewer gave it. */

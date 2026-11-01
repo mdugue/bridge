@@ -20,6 +20,7 @@ import {
   stated,
   whole,
 } from "./card-lines";
+import type { DesignInquiry } from "./inquiry-design";
 import type { MoreInquiry } from "./inquiry-more";
 import type { Stated } from "./methods";
 import type { BikeInquiry, TrafficInquiry } from "./inquiry-traffic";
@@ -106,6 +107,7 @@ export interface BridgeInquiry {
 export type FeatureInquiry =
   | BikeInquiry
   | BridgeInquiry
+  | DesignInquiry
   | MonumentInquiry
   | MoreInquiry
   | TrafficInquiry

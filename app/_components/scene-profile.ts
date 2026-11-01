@@ -71,6 +71,12 @@ export function forceWebGLFromSearch(search: string): boolean {
   return new URLSearchParams(search).get("gpu") === "webgl2";
 }
 
+/** The reversed depth buffer (create-app.ts), unless the page asks for
+ *  `?depth=standard` — the plain one, to compare. Pure. */
+export function reversedDepthFromSearch(search: string): boolean {
+  return new URLSearchParams(search).get("depth") !== "standard";
+}
+
 /**
  * `?scene=lite&block=1` streams the whole site in the lite profile — a QA
  * knob for exercising the tile streaming (tile-stream.ts) headless,

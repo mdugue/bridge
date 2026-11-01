@@ -5,6 +5,7 @@ import {
   liteKeepsBlockFromSearch,
   pixelRatioFor,
   postProfileFor,
+  reversedDepthFromSearch,
   sceneBudgetFor,
   sceneProfileFromSearch,
   shadowMapBytesFor,
@@ -33,6 +34,13 @@ test("sceneProfileFromSearch reads the lite opt-in", () => {
   expect(sceneProfileFromSearch("?scene=lite")).toBe("lite");
   expect(sceneProfileFromSearch("?a=1&scene=lite")).toBe("lite");
   expect(sceneProfileFromSearch("scene=lite")).toBe("lite");
+});
+
+test("the depth buffer runs reversed unless ?depth=standard asks", () => {
+  expect(reversedDepthFromSearch("")).toBe(true);
+  expect(reversedDepthFromSearch("?scene=lite")).toBe(true);
+  expect(reversedDepthFromSearch("?depth=standard")).toBe(false);
+  expect(reversedDepthFromSearch("?scene=lite&depth=standard")).toBe(false);
 });
 
 test("shadowMapSizeFor keeps the product map and shrinks the lite one", () => {
