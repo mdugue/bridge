@@ -66,10 +66,10 @@ const canopy = (x: number, h: number, y = 0): CanopyFeature => ({
   properties: { h },
 });
 
-test("a hedge is one instance per 1.1 m, a tree row one tree per 9 m", () => {
+test("a hedge row is not planted here, a tree row one tree per 9 m", () => {
+  // the DLM's hedges are low-vegetation-layer.ts's
   const hedges = buildVegetation({ rows: [row("hedge", 10)], canopy: [] }, ctx);
-  // samplePolyline: 0, 1.1, …, 9.9 → 10 samples, one Instances set.
-  expect(instancesIn(hedges.group)).toBe(10);
+  expect(instancesIn(hedges.group)).toBe(0);
 
   const trees = buildVegetation(
     { rows: [row("treerow", 20)], canopy: [] },
@@ -278,22 +278,6 @@ describe("a tree's crown base", () => {
     // the trunks' cull sphere still holds the foot on the ground
     const sphere = chunk.trunks.geometry.boundingSphere;
     expect((sphere?.center.y ?? 0) - (sphere?.radius ?? 0)).toBeLessThan(100);
-  });
-
-  test("a hedge keeps the old frame: no lift, no drop", () => {
-    const built = buildVegetation(
-      { rows: [row("hedge", 10)], canopy: [] },
-      ctx
-    );
-    const feet: number[] = [];
-    built.group.traverse((o) => {
-      if (isInstances(o)) {
-        feet.push(o.getMatrixAt(0, new Matrix4()).elements[13]);
-        expect(o.geometry.getAttribute("iDrop")).toBeUndefined();
-      }
-    });
-    expect(feet.length).toBeGreaterThan(0);
-    expect(feet.every((y) => y === 100)).toBe(true);
   });
 });
 
