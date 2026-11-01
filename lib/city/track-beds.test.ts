@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { type Bed, BedIndex, burnBeds, tramBed } from "./track-beds";
+import { type Bed, BedIndex, BURIED_M, burnBeds, tramBed } from "./track-beds";
 
 // a 100 m square grid of 1 m cells, row 0 = north
 const n = 100;
@@ -114,4 +114,17 @@ test("a cut's bed opens a shallow trench, never a tunnel's lid", () => {
   const low = new Float32Array(n * n).fill(99);
   const kept = burnBeds({ elevations: low, n, bounds, beds: [inCut] });
   expect(kept[cell(50.5, 50.5)]).toBe(99);
+});
+
+test("an open cut a few metres deep is burned down to its track", () => {
+  // the Standseilbahn's cut at its top: 1 m of ground over the profile,
+  // no room for a lid over a train — the trench opens, the track shows
+  const inCut: Bed = { ...bed, shallow: BURIED_M };
+  const deep = new Float32Array(n * n).fill(102);
+  const trench = burnBeds({ elevations: deep, n, bounds, beds: [inCut] });
+  expect(trench[cell(50.5, 50.5)]).toBeCloseTo(100.9, 5);
+  // deeper than BURIED_M: a lid the source left out stays
+  const lid = new Float32Array(n * n).fill(101 + BURIED_M + 1);
+  const kept = burnBeds({ elevations: lid, n, bounds, beds: [inCut] });
+  expect(kept[cell(50.5, 50.5)]).toBe(101 + BURIED_M + 1);
 });

@@ -3564,8 +3564,13 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   or a building over it) is not drawn; `layer` < 0 marks a line below,
   which cuts under a lid up to 800 m at 0.5 % grade (`lib/city/levels.ts`
   `coverCuts`; 832 m of Hamburg's rails had lain on such lids); a cut more
-  than 0.5 m under the ground with no deck over it is buried: no rails,
-  ballast or catenary. Hamburg's passages 17 (405 m) → 41 (1 224 m), a
+  than 4.5 m under the ground with no deck over it is buried: no rails,
+  ballast or catenary (`BURIED_M`: a lid needs room for a train under
+  it). A shallower cut is open, whatever its `layer`: its trench is burned
+  down to the track, so a drawn track never sinks into the ground. The
+  line was 0.5 m until 2026-11-01, when the Standseilbahn's open cut at
+  its top (`layer` −1, 0.6–1 m under the DGM) and the cuts before its
+  tunnel portals vanished. Hamburg's passages 17 (405 m) → 41 (1 224 m), a
   199 m opening at the Hauptbahnhof among them. Line jumps Dresden
   12 → 16 (budget 20), Hamburg 62 → 29, Leipzig 0 → 2, München 5 → 4.
   **Paved track** (`paved`, `rail_osm.Paving`): `embedded`, or a service
