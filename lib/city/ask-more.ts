@@ -354,6 +354,11 @@ function lineLength(coords: readonly (readonly [number, number])[]): number {
   return sum;
 }
 
+/** A hedge's size (m) where the data gives none (the Basis-DLM's): its
+ *  card and its drawn block (low-vegetation-layer.ts) both use it. */
+export const DEFAULT_HEDGE_H = 1.6;
+export const DEFAULT_HEDGE_W = 1.2;
+
 /** The hedges (OSM's and the Basis-DLM's): a pick every HEDGE_STEP. */
 export function hedgeItems(
   osm: readonly LowVegFeature[],
@@ -371,8 +376,8 @@ export function hedgeItems(
     if (coords.length < 2) {
       continue;
     }
-    const h = p?.h ?? 1.6;
-    const w = p?.w ?? 1.2;
+    const h = p?.h ?? DEFAULT_HEDGE_H;
+    const w = p?.w ?? DEFAULT_HEDGE_W;
     const solids = samplePolyline(coords, HEDGE_STEP).flatMap((at) => {
       const s = standing(at, Math.max(w / 2, 0.6), h, ctx);
       return s ? [s] : [];
