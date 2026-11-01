@@ -27,6 +27,7 @@ from . import (
     lamp_heights,
     lamps,
     landcover,
+    landmark_facts,
     landmarks,
     lowveg,
     mapillary,
@@ -147,7 +148,7 @@ STEPS = {
 
 # Run once for the site, after every tile (they read the tiles' files: the
 # timetable trams ride the tram tracks).
-SITE_STEPS = ("transit",)
+SITE_STEPS = ("transit", "landmark-facts")
 
 
 def site_extent(spec) -> tuple[float, float, float, float]:
@@ -166,6 +167,9 @@ def run_site_step(spec, step: str) -> None:
             print(f"{spec.site}: the site runs no timetable trams — skipping transit")
             return
         transit.run_site(spec.raw, spec.data, site_extent(spec), spec.epsg)
+    elif step == "landmark-facts":
+        # the nameplates' facts for the landmarks the tiles' step matched
+        landmark_facts.run_site(spec.raw, spec.data, spec.site)
 
 
 def run_tile(step: str, tile, site_tiles, research: bool = False) -> None:
