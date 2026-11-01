@@ -2,12 +2,15 @@ import { describe, expect, test } from "bun:test";
 import {
   ASK_LIMITS,
   ASK_PROVIDERS,
+  askReasoning,
   askSystemPrompt,
+  askVisitorHeader,
   conversationProblem,
   isAskModel,
   lastQuestion,
   maskedKey,
   parseAskProps,
+  parseAskVisitor,
   plausibleKey,
   providerForKey,
 } from "./ask-city";
@@ -124,6 +127,7 @@ test("the prompt names the site, the date and the rules", () => {
       id: "dresden",
       label: "Dresden",
       layers: [],
+      layerKeys: [],
       styles: ["pastel (Pastell)"],
     },
     new Date(2026, 9, 31, 12)
@@ -133,4 +137,53 @@ test("the prompt names the site, the date and the rules", () => {
   expect(prompt).toContain("31. Oktober 2026");
   expect(prompt).toContain("keine Datenebenen");
   expect(prompt).toContain("Legenden als Legenden");
+});
+
+describe("the visitor header", () => {
+  test("carries the pose there and back, rounded, and nothing else", () => {
+    const raw = askVisitorHeader({
+      x: 411_803.4,
+      y: 5_656_354.6,
+      blick_grad: 271.6,
+      modus: "walk",
+      zeit: "Samstag, 31. Oktober 2026 um 12:00",
+      stil: "pastel",
+      ebenen: ["trees", "<script>"],
+      fremd: "nie",
+    });
+    expect(raw).not.toBeNull();
+    // a header value: no line break, nothing but URI characters
+    expect(raw).toMatch(/^[\x21-\x7e]+$/);
+    expect(parseAskVisitor(raw)).toEqual({
+      x: 411_803,
+      y: 5_656_355,
+      blick_grad: 272,
+      modus: "walk",
+      zeit: "Samstag, 31. Oktober 2026 um 12:00",
+      stil: "pastel",
+      ebenen: ["trees"],
+    });
+  });
+
+  test("without a position, or anything else, there is no visitor", () => {
+    expect(askVisitorHeader({ fehler: "Die Szene lädt noch." })).toBeNull();
+    expect(parseAskVisitor(null)).toBeNull();
+    expect(parseAskVisitor("%7B")).toBeNull();
+    expect(parseAskVisitor(encodeURIComponent('{"x":"1","y":2}'))).toBeNull();
+    expect(parseAskVisitor("x".repeat(2000))).toBeNull();
+    const line = encodeURIComponent(
+      JSON.stringify({ x: 1, y: 2, modus: "a\nb" })
+    );
+    expect(parseAskVisitor(line)).toEqual({ x: 1, y: 2 });
+  });
+});
+
+test("a fast model answers without thinking, the others think a little", () => {
+  for (const p of ASK_PROVIDERS) {
+    for (const m of p.models) {
+      expect(askReasoning(p.id, m.id)).toBe(
+        m.hint === "schnell" ? "off" : "low"
+      );
+    }
+  }
 });

@@ -1,11 +1,14 @@
 /**
  * POST /api/frag — one answer of *Frag die Stadt* (ADR 0056), streamed as
  * server-sent events. Stateless: the browser sends the conversation, its
- * key in the `x-frag-key` header and the token the key check gave it;
- * this relays the turn to the visitor's provider with the fixed prompt
- * and tools (lib/city/ask-run.ts), runs the Stadtwissen tools itself and
- * leaves the scene's to the browser. The key goes to the provider and
- * nowhere else; an error the provider sends back is scrubbed of it.
+ * key in the `x-frag-key` header, where the visitor stands in the model
+ * in `x-frag-ort` and the token the key check gave it; this relays the
+ * turn to the visitor's provider with the fixed prompt and tools
+ * (lib/city/ask-run.ts), runs the Stadtwissen tools and `wo_bin_ich`
+ * itself, acknowledges the view's and leaves only `was_ist_da` to the
+ * browser. The key goes to the provider and nowhere else; an error the
+ * provider sends back is scrubbed of it. Neither the pose nor anything
+ * else of the request is kept or logged.
  */
 import {
   chatParamsFromRequestBody,
@@ -13,10 +16,13 @@ import {
 } from "@tanstack/ai";
 import {
   ASK_KEY_HEADER,
-  conversationProblem,
+  ASK_VISITOR_HEADER,
   askPromptSite,
+  askReasoning,
+  conversationProblem,
   lastQuestion,
   parseAskProps,
+  parseAskVisitor,
   plausibleKey,
 } from "@/lib/city/ask-city";
 import { runAsk, scrubbed } from "@/lib/city/ask-run";
@@ -103,12 +109,14 @@ export async function POST(request: Request): Promise<Response> {
     abortController,
     knowledge,
     messages: params.messages,
+    reasoning: askReasoning(props.provider, props.model),
     ...(params.resume ? { resume: params.resume } : {}),
     ...(params.parentRunId ? { parentRunId: params.parentRunId } : {}),
     site: askPromptSite(site),
     runId: params.runId,
     threadId: params.threadId,
     today: new Date(),
+    visitor: parseAskVisitor(request.headers.get(ASK_VISITOR_HEADER)),
     voice: props.voice,
   });
   return toServerSentEventsResponse(scrubbed(stream, key), {

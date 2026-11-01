@@ -1,20 +1,12 @@
 /**
- * *Frag die Stadt*'s scene tools on the browser's side (ADR 0056, 0057):
- * each tool the server hands the browser, bound to what the card may do
- * to the scene. In the card's chunk, not the scene's: it carries the
- * tool schemas.
+ * *Frag die Stadt*'s scene on the browser's side (ADR 0056, 0057): what
+ * the card may do to the scene, the one tool the browser answers
+ * (`was_ist_da`) and how `zeige` frames its places. In the card's chunk,
+ * not the scene's: it carries the tool schemas.
  */
 import { clientTools } from "@tanstack/ai-client";
-import {
-  floodShowTool,
-  layerTool,
-  lookTool,
-  showTool,
-  styleTool,
-  timeTool,
-  volumeTool,
-  whereTool,
-} from "@/lib/city/ask-tools";
+import { showAnswer } from "@/lib/city/ask-shown";
+import { lookTool } from "@/lib/city/ask-tools";
 import {
   type AskTarget,
   type FrameContext,
@@ -23,14 +15,7 @@ import {
 } from "@/lib/city/ask-view";
 import type { DataLayerKey } from "@/lib/city/data-layers";
 import type { RenderStyle } from "@/lib/city/render-style";
-import {
-  clampVolume,
-  floodReading,
-  levelAtReference,
-  type PlannedVolume,
-  type River,
-  SCENARIO_NOTE,
-} from "@/lib/city/scenario";
+import type { PlannedVolume, River } from "@/lib/city/scenario";
 import type { ViewpointGeometry } from "@/lib/city/site";
 import type { StarterContext } from "@/lib/city/ask-starters";
 
@@ -68,45 +53,21 @@ export interface AskScene {
   setVolume: (volume: PlannedVolume | null) => boolean;
 }
 
-/** The tools the browser runs, bound to the scene. */
+/** The tools the browser answers, bound to the scene: `was_ist_da`
+ *  alone, a ray through the crosshair. The view-changing ones the server
+ *  acknowledges and the card carries out from the stream (ask-effects.ts). */
 export function sceneTools(scene: AskScene) {
-  return clientTools(
-    whereTool.client(() => scene.where()),
-    lookTool.client(() => scene.look()),
-    showTool.client((input) => showPlaces(scene, input)),
-    timeTool.client(({ stunde, datum }) => ({
-      ok: true,
-      zeit: scene.setTime(stunde, datum),
-    })),
-    styleTool.client(({ stil }) => {
-      scene.setStyle(stil);
-      return { ok: true };
-    }),
-    layerTool.client(({ schicht, an }) =>
-      scene.setLayer(schicht, an)
-        ? { ok: true }
-        : { ok: false, hinweis: "Diese Stadt hat diese Ebene nicht." }
-    ),
-    floodShowTool.client((ask) => showFlood(scene, ask)),
-    volumeTool.client((ask) => placeVolume(scene, ask))
-  );
+  return clientTools(lookTool.client(() => scene.look()));
 }
 
 /** A place `zeige` names: where it is, what it is called. */
 export type AskPlace = AskTarget & { name: string };
 
 /**
- * The farthest an aerial view of several places stands off them (m):
- * beyond it a 20 m house is a few pixels on a phone and the fog nears
- * (on a phone the stream ends at 2.2 km). Further spread places are
- * shown one at a time, from their chips.
- */
-export const AERIAL_REACH = 900;
-
-/**
  * Flies to `places` — every one in one view, or the first alone (`alle`
- * false, or spread too far for one) — and says what it showed. On foot
- * the walker stands before the first. What it names is selected: every
+ * false, or spread too far for one: `showAnswer`, which the server
+ * answered the model with) — and says what it showed. On foot the
+ * walker stands before the first. What it names is selected: every
  * place with `alle` (spread too far, their cards are a click apart in
  * the selection), the first alone without.
  */
@@ -116,102 +77,19 @@ export function showPlaces(
 ): Record<string, unknown> {
   const [first] = ask.ziele;
   const from = scene.from();
-  const all = ask.alle !== false && ask.ziele.length > 1;
-  scene.select(all ? ask.ziele : [first]);
+  const answer = showAnswer(ask);
+  scene.select(
+    ask.alle !== false && ask.ziele.length > 1 ? ask.ziele : [first]
+  );
   if (ask.aus_der_luft === false) {
     scene.show(streetView(first, from ?? first, scene.frame().groundAt));
-    return { ok: true, gezeigt: [first.name] };
+    return answer;
   }
-  const context = { ...scene.frame(), from };
-  const framed = all ? frameTargets(ask.ziele, context) : null;
-  if (framed && framed.distance <= AERIAL_REACH) {
-    scene.show(framed.view);
-    return {
-      ok: true,
-      gezeigt: ask.ziele.map((p) => p.name),
-      abstand_m: framed.distance,
-    };
-  }
-  const alone = frameTargets([first], context);
-  scene.show(alone.view);
-  return {
-    ok: true,
-    gezeigt: [first.name],
-    abstand_m: alone.distance,
-    ...(framed
-      ? {
-          hinweis:
-            "Die Orte liegen zu weit auseinander für eine Ansicht: gezeigt ist der erste, die anderen stehen als Knöpfe unter der Antwort.",
-        }
-      : {}),
-  };
-}
-
-function placeVolume(
-  scene: AskScene,
-  ask: Partial<PlannedVolume> & { aus?: boolean }
-): Record<string, unknown> {
-  if (ask.aus) {
-    scene.setVolume(null);
-    return { ok: true };
-  }
-  const { x, y, breite, tiefe, hoehe } = ask;
-  if (
-    x === undefined ||
-    y === undefined ||
-    breite === undefined ||
-    tiefe === undefined ||
-    hoehe === undefined
-  ) {
-    return { ok: false, fehler: "x, y, breite, tiefe und hoehe fehlen." };
-  }
-  const v = clampVolume({
-    x,
-    y,
-    breite,
-    tiefe,
-    hoehe,
-    drehung: ask.drehung ?? 0,
+  const shown = (answer.gezeigt as unknown[]).length;
+  const framed = frameTargets(ask.ziele.slice(0, shown), {
+    ...scene.frame(),
+    from,
   });
-  if (!scene.setVolume(v)) {
-    return {
-      ok: false,
-      hinweis:
-        "Dort ist das Gelände noch nicht geladen — erst mit zeige hinfliegen, dann noch einmal.",
-    };
-  }
-  return { ok: true, baukoerper: v, hinweis: SCENARIO_NOTE };
-}
-
-function showFlood(
-  scene: AskScene,
-  ask: { aus?: boolean; ereignis?: string; pegel_cm?: number }
-): Record<string, unknown> {
-  if (ask.aus) {
-    scene.setFlood(null);
-    return { ok: true };
-  }
-  const river = scene.river;
-  if (!river) {
-    return {
-      ok: false,
-      hinweis: "Für diese Stadt hat das Stadtmodell keine Pegeldaten.",
-    };
-  }
-  const reading = floodReading(river, ask);
-  if (!reading) {
-    return {
-      ok: false,
-      ereignisse: river.events.map((e) => `${e.id}: ${e.label}`),
-    };
-  }
-  scene.setFlood(reading.cm);
-  return {
-    ok: true,
-    pegel_cm: reading.cm,
-    ...(reading.event ? { ereignis: reading.event.label } : {}),
-    wasserspiegel_am_pegel_m_nhn:
-      Math.round(levelAtReference(river, reading.cm) * 100) / 100,
-    hinweis: SCENARIO_NOTE,
-  };
+  scene.show(framed.view);
+  return { ...answer, abstand_m: framed.distance };
 }

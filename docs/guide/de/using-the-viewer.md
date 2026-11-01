@@ -453,7 +453,8 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   die Frauenkirche gebaut?“, „Was steht hier vor mir?“, „Wie sieht es
   hier am Abend aus?“). Die vier ersten Vorschläge sind bei jedem neuen
   Gespräch neu gezogen und lesen den Moment: das Wahrzeichen, auf das du
-  blickst, die eingestellte Uhrzeit, die Jahreszeit, den Fluss oder die
+  blickst, die eingestellte Uhrzeit, die Jahreszeit, den Fluss (nach dem
+  Wasser an deiner Stelle nur, wo sein höchstes Hochwasser hinkam) oder die
   Datenebenen der Stadt; der Stift oben beginnt ein neues Gespräch. Ein Sprachmodell sucht im Wissen des
   Stadtmodells — Namen, Adressen, Nutzung und Höhe der Gebäude, die
   Wahrzeichen mit dem, was Wikidata über sie sagt —, fliegt die Ansicht

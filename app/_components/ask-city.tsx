@@ -38,6 +38,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ASK_KEY_HEADER,
   ASK_LIMITS,
+  ASK_VISITOR_HEADER,
+  askVisitorHeader,
   ASK_PROVIDER_BY_ID,
   ASK_PROVIDERS,
   type AskModel,
@@ -81,6 +83,7 @@ import {
 } from "@/components/ui/trace";
 import { cn } from "cn";
 import { AnswerChipRows, answerChips } from "./ask-chips";
+import { lastAnswer, useShownEffects } from "./ask-effects";
 import { type AskKey, clearAskKey, readAskKey, writeAskKey } from "./ask-key";
 import {
   type AskPlace,
@@ -501,31 +504,6 @@ function errorText(error: Error): { key: boolean; text: string } {
 }
 
 /**
- * The text of a finished answer: its assistant messages since the last
- * question — empty while the last of them still waits on a tool (a scene
- * tool's run ends at the interrupt, and the answer comes after it).
- */
-function lastAnswer(messages: readonly UIMessage[]): string {
-  const last = messages.at(-1);
-  if (last?.role !== "assistant" || last.parts.at(-1)?.type !== "text") {
-    return "";
-  }
-  const texts: string[] = [];
-  for (
-    let i = messages.length - 1;
-    i >= 0 && messages[i].role !== "user";
-    i--
-  ) {
-    texts.unshift(
-      messages[i].parts
-        .map((p) => (p.type === "text" ? p.content : ""))
-        .join(" ")
-    );
-  }
-  return texts.join(" ").trim();
-}
-
-/**
  * Reads each finished answer aloud while `on` — not one that broke off,
  * failed or was stopped (the returned call, for the stop button).
  */
@@ -675,12 +653,20 @@ function Conversation({
   const secret = askKey.key;
   const connection = useMemo(
     () =>
-      fetchServerSentEvents("/api/frag", {
-        headers: { [ASK_KEY_HEADER]: secret },
-        // the route keeps no run to rejoin: a drop is the answer's end
-        reconnect: { maxAttempts: 0 },
+      // per request: where the visitor stands now goes with each question
+      // (and each resume), so the server answers `wo_bin_ich` itself
+      fetchServerSentEvents("/api/frag", () => {
+        const at = askVisitorHeader(scene.where());
+        return {
+          headers: {
+            [ASK_KEY_HEADER]: secret,
+            ...(at ? { [ASK_VISITOR_HEADER]: at } : {}),
+          },
+          // the route keeps no run to rejoin: a drop is the answer's end
+          reconnect: { maxAttempts: 0 },
+        };
       }),
-    [secret]
+    [secret, scene]
   );
   // one conversation per card: the provider's prompt cache is keyed by it
   const [threadId] = useState(() => crypto.randomUUID());
@@ -698,6 +684,7 @@ function Conversation({
       voice: reading,
     },
   });
+  useShownEffects(chat.messages, scene);
   const stopReading = useReadAloud(
     chat.messages,
     chat.isLoading,

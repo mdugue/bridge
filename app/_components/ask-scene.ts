@@ -8,6 +8,7 @@ import { type RefObject, useMemo } from "react";
 import { cardCredits } from "@/lib/city/card-lines";
 import { activeDataLayers, siteDataLayers } from "@/lib/city/data-layers";
 import type { FramePace } from "@/lib/city/frame-pace";
+import { starterRiver } from "@/lib/city/ask-starters";
 import { inquiryCard } from "@/lib/city/inquiry";
 import type { LookState } from "@/lib/city/look-state";
 import { riverOf } from "@/lib/city/scenario";
@@ -96,7 +97,13 @@ export function useAskScene(
           at: c ? { x: c.epsg.x, y: c.epsg.y, headingDeg: c.headingDeg } : null,
           now: current(),
           landmarks: h?.landmarks ?? [],
-          river: riverOf(site.id)?.name ?? null,
+          // whether the river's highest flood reached the ground here
+          river: starterRiver(
+            riverOf(site.id),
+            site.provider.epsg,
+            c ? c.epsg : null,
+            c && h ? h.groundAt(c.epsg.x, c.epsg.y) : null
+          ),
           layers: [...offered],
         };
       },
