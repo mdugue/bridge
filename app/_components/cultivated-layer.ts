@@ -325,7 +325,8 @@ export function vineInstances(
 ): VineInstance[] {
   const out: VineInstance[] = [];
   for (const row of rows) {
-    for (const piece of hedgePieces(row, VINE_ROW.h, VINE_ROW.w)) {
+    // (unmitred: a vine row's boxes overlap at a bend by OVERLAP_M instead)
+    for (const piece of hedgePieces(row, VINE_ROW.h, VINE_ROW.w, false)) {
       const ground = ctx.heightAt(piece.x, piece.y);
       if (ground === null) {
         continue;

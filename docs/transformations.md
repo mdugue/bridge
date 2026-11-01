@@ -1872,7 +1872,10 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   judged on a GPU** (the chessboard check is the plan's other STOP).
 - **Tree/hedge rows** `❝ taken` `◎ detected` `≈ assumed` — Basis-DLM (or OSM) hedge & tree-row lines → instanced sets
   (`Instances`), chunked into 250 m cells for frustum culling. `pipeline/bake/landcover.py`
-  (`vegrows_<tile>.geojson`) → `vegetation-layer.ts`, per fine terrain tile.
+  (`vegrows_<tile>.geojson`) → `vegetation-layer.ts` (the tree rows) and
+  `low-vegetation-layer.ts` (the hedges, since 2026-11-01 drawn like the
+  OSM hedges at the size their card states, 1.6 m × 1.2 m — they were
+  dark 0.9 m boxes every 1.1 m), per fine terrain tile.
   **Where DOM1 exists the canopy step places a row's trees itself**
   (2026-10-21, P7, `canopy.py` `row_trees`): DOM1's crown peaks within 3 m
   of the line (nDOM smoothed 1 m, over 3 m, off LoD2 and the traffic),
@@ -1880,7 +1883,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   none within 4.5 m of a canopy or scan crown; written into
   `canopy_<t>.geojson` as `row: 1` with a `rows` member, which the pack
   carries as `ROWS_MEASURED` (`lib/city/point-pack.ts`), and the viewer
-  then plants only the hedges from `vegrows`. Without DOM1 the trees stand
+  then draws only the hedges from `vegrows`. Without DOM1 the trees stand
   every 9 m along the line as before. Row trees: Dresden's 33408_5656
   1 176 → 540 (doubles 26 % → 2 trees, standing on a crown 80 → 97 %),
   33412_5656 927 → 274, Leipzig's 33316_5688 1 378 → 408, Unna 904 → 85
@@ -2454,6 +2457,19 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   bake still finds them (`bun run bake <site> --step lowveg --research`
   writes every candidate under `data/_raw/` for research), but the
   committed `lowveg_<tile>.geojson` holds only what renders.
+  **Drawn** (`low-vegetation-layer.ts`, 2026-11-01): a trimmed hedge —
+  tapered flanks, rounded shoulders, a flattish top, square-cut ends — one
+  instance per ≤ 2.5 m piece, the pieces meeting end to end, mitred at a
+  bend (a closed ring at its closing corner too) and sheared to the
+  ground's slope, so a run reads as one hedge, not a row of sausages.
+  Leafy lumps (~0.8 m, ±9 cm) and a slow rise and fall of the top (~6 m,
+  ±14 cm) are pushed out in the vertex stage by a world-space noise, so
+  pieces agree at every joint; the same noise lights the lumps' crests and
+  shades their hollows. The sage drifts over ~40 m in world space, never
+  per piece or per line, so a tile seam does not show. In Comic the hedge
+  wears a dimmed leafy marker ink and prints in the deep green. *Why:* the
+  old chain of soft blocks pinched at every join and the DLM's hedges
+  were boxes (Manuel, 2026-11-01).
   - *Why:* the canopy bake (`canopy.py`) keeps nothing under `MIN_H = 3 m` and only
     forest/copse/sport-and-leisure areas, so courtyard and garden trees are
     dropped at any height; the Basis-DLM carries a hedge only when it is
