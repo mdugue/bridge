@@ -102,6 +102,7 @@ why Munich is yellow there in [Sources by city](./sources-by-city.md).
 | A passage's height where none is mapped, its rectangular opening | the viewer, from the ground storey | `≈ assumed` |
 | Shop or restaurant on the ground floor | OpenStreetMap, assigned to the building | `◎ detected` |
 | Landmarks | Wikidata, assigned to the building parts | `◎ detected` |
+| An asked landmark's facts under its name in the scene (built, architect, rebuilt, height) | Wikidata | `❝ taken` |
 | Several buildings of the city model as one (the Residenzschloss with the Hausmannsturm) | OpenStreetMap, one named building outline over several buildings, across tile edges too | `◎ detected` |
 | Street trees: place, species, size | Street-tree register | `❝ taken` |
 | Trees without a register: place | DOM1 or laser scan | `◎ detected` |
