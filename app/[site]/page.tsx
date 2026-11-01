@@ -1,9 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
+import { cn } from "cn";
 import { notFound } from "next/navigation";
 import { siteTitle } from "@/lib/city/site";
 import { builtSite, builtSites } from "../_lib/built-sites";
 import { CityWalkClient } from "../_components/city-walk-client";
+import { NAMEPLATE_FONT_VARIABLES } from "./nameplate-fonts";
 
 interface Props {
   params: Promise<{ site: string }>;
@@ -41,7 +43,7 @@ export const viewport: Viewport = {
 // every city (partialPrefetching), the viewer itself comes on the click.
 export default function SitePage({ params }: Props) {
   return (
-    <main className="h-dvh w-full">
+    <main className={cn("h-dvh w-full", ...NAMEPLATE_FONT_VARIABLES)}>
       <Suspense fallback={null}>
         <Viewer params={params} />
       </Suspense>
