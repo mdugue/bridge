@@ -620,6 +620,8 @@ export function WalkCard({
   }
   const last = index === walk.stops.length - 1;
   const beside = besideStory(stop.photo, coarse);
+  // a phone's sheet, folded: the title and the way on
+  const low = coarse && folded;
   return (
     <section
       aria-label={`Spaziergang: ${walk.title}`}
@@ -629,7 +631,7 @@ export function WalkCard({
           ? "inset-x-0 bottom-0 max-h-[62dvh]"
           : "bottom-6 left-5 max-h-[min(44rem,calc(100%-3rem))] w-[min(28rem,calc(100%-2.5rem))] lg:w-[30rem]"
       )}
-      data-folded={coarse && folded ? "" : undefined}
+      data-folded={low ? "" : undefined}
       data-testid="walk-card"
     >
       <Card
@@ -641,7 +643,7 @@ export function WalkCard({
         )}
       >
         {coarse && <SheetHandle folded={folded} onFold={setFolded} />}
-        {stop.photo && !beside && !(coarse && folded) && (
+        {stop.photo && !beside && !low && (
           <StopPhoto
             base={walksUrl}
             coarse={coarse}
@@ -665,12 +667,12 @@ export function WalkCard({
             </Button>
           </div>
         </CardHeader>
-        {coarse && folded && (
+        {low && (
           <p className="px-6 pt-1 font-sans text-[10.5px] text-muted-foreground">
             Erzählt von {walk.by} (KI)
           </p>
         )}
-        {!(coarse && folded) && (
+        {!low && (
           <CardContent
             className={cn(
               story.className,
