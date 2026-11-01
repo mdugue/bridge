@@ -26,6 +26,7 @@ import {
   DOOR_NONE_CODE,
   DOOR_SLOT,
   FACADE_SCALE_M,
+  MEASURED_AXES,
   LOOSE_JITTER,
   WINDOW_DEPTH,
   WINDOW_LIFT,
@@ -160,14 +161,28 @@ interface Grid {
 }
 
 /** The columns: centred on the wall at the axis spacing, the outer ones
- *  `WINDOW_ROWS.edge` in from its ends, a loose grid's a little off. */
+ *  `WINDOW_ROWS.edge` in from its ends, a loose grid's a little off; on a
+ *  wall whose axes the drives placed, its own count and spacing from the
+ *  length slot (lib/city/windows.ts `MEASURED_AXES`, `slotAxes`). */
 function columns(i: WindowInputs, s: F, length: F) {
-  const axis = max(i.spec.x, 0.1);
+  const units = floor(abs(i.facade.y).mul(32_767).add(0.5));
+  const measured = step(MEASURED_AXES.base - 0.5, units);
+  const code = max(units.sub(MEASURED_AXES.base), 0);
+  const nMeasured = floor(code.add(0.5).div(MEASURED_AXES.perN));
+  const axisMeasured = code
+    .sub(nMeasured.mul(MEASURED_AXES.perN))
+    .mul(MEASURED_AXES.step)
+    .add(MEASURED_AXES.axis0);
+  const axis = mix(max(i.spec.x, 0.1), axisMeasured, measured);
   const style = floor(i.spec.w.add(0.5));
   const room = length.sub(2 * WINDOW_ROWS.edge).sub(i.spec.y);
   // steps and mixes, never a select: three emits a select as if/else, and
   // what an arm builds first it builds again outside it
-  const n = step(0, room).mul(floor(max(room, 0).div(axis).add(1e-4)).add(1));
+  const n = mix(
+    step(0, room).mul(floor(max(room, 0).div(axis).add(1e-4)).add(1)),
+    nMeasured,
+    measured
+  );
   const off = n.sub(1).mul(0.5);
   const j = clamp(floor(s.div(axis).add(off).add(0.5)), 0, max(n.sub(1), 0));
   const free = clamp(

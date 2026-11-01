@@ -2,9 +2,11 @@
 LoD2 wall, reduced to profiles and a few ratios that do not change when
 the image is moved along the wall (facades.py rectifies it, 20 px a metre).
 
-The poses of two drives past the same wall differ by about 0.6 m, so where
-a single window lies on the wall is not reproducible; a period, a share, a
-regularity or a proportion is (docs/transformations.md, *Facade traits*).
+One image's pose is off along the wall by ~0.2 m and two drives' by up
+to a metre, so where a window lies is read only from several drives
+registered onto each other (window_axes.py, by `jx`); a period, a share,
+a regularity or a proportion one image gives alone (docs/transformations.md,
+*Windows on every house*).
 The fetch therefore caches, per image and wall, profiles in `STEP_M` bins
 and a handful of scalars (`traits`); the features are computed from them
 in the bake (windows.py), so a feature can be redefined without fetching
@@ -17,6 +19,10 @@ under the eave):
     plaster (0 plaster … 1 black) and the openings' share
     (`facade_measure._holes`), ‰, −1 where less than `MIN_SEEN` is seen;
   - `rd` / `rh`: the same per row bin, bottom row (at GROUND_M) first;
+  - `jx`: the upper wall's vertical edges (the windows' jambs, the
+    pilasters, the downpipes) per `JX_M` column, as `dark_map` packs its
+    cells (`jamb_profile`, `decode_profile`): what windows.py registers
+    one drive's strip of the wall against another's by;
   - `ev` / `eh`: the plaster's vertical edges per column bin (lisenen,
     pilasters) and horizontal edges per row bin (sill bands, cornices,
     panel joints), mean gradient ‰ — on the plaster only, the openings
@@ -55,6 +61,8 @@ from .facade_measure import (
 
 STEP_M = 0.1  # a profile's bin
 MAP_M = 0.2  # a cell of the darkness map
+JX_M = 0.05  # a column of the jamb profile (one pixel)
+JX_SCALE = 800  # its mean gradient (lum a pixel / 8) to 0–254
 MIN_SEEN = 0.3  # a bin's share that must be seen
 EDGE_CLEAR_M = 0.15  # the edges are read this far clear of an opening
 RING_M = (0.05, 0.2)  # a window's surround (a Fasche: 10–20 cm)
@@ -96,6 +104,28 @@ def dark_map(dark: np.ndarray, seen: np.ndarray) -> dict:
     mean = (d * s).sum((1, 3)) / np.maximum(n, 1)
     cells = np.where(n >= MIN_SEEN * k * k, np.round(np.clip(mean, 0, 1) * 254), 255)
     return {"w": w, "h": h, "d": base64.b64encode(cells.astype(np.uint8).tobytes()).decode()}
+
+
+def jamb_profile(grad: np.ndarray, seen: np.ndarray) -> str:
+    """Per JX_M column the mean vertical-edge gradient over the seen pixels,
+    base64 bytes 0–254, 255 where less than MIN_SEEN of the column is
+    seen (decode: `decode_profile`)."""
+    k = max(1, int(round(JX_M * PX)))
+    w = grad.shape[1] // k
+    g = grad[:, : w * k].reshape(grad.shape[0], w, k)
+    s = seen[:, : w * k].reshape(seen.shape[0], w, k).astype(float)
+    n = s.sum((0, 2))
+    mean = (g * s).sum((0, 2)) / np.maximum(n, 1)
+    cells = np.where(
+        n >= MIN_SEEN * grad.shape[0] * k, np.round(np.clip(mean * JX_SCALE, 0, 254)), 255
+    )
+    return base64.b64encode(cells.astype(np.uint8).tobytes()).decode()
+
+
+def decode_profile(b64: str) -> np.ndarray:
+    """A `jamb_profile` back to gradients, NaN where unseen."""
+    a = np.frombuffer(base64.b64decode(b64), np.uint8).astype(float)
+    return np.where(a == 255, np.nan, a / JX_SCALE)
 
 
 def decode_map(m: dict) -> np.ndarray:
@@ -183,6 +213,7 @@ def traits_of(rgb: np.ndarray, valid: np.ndarray, eave: float) -> dict:
     up_plain = plain.copy()
     up_plain[:a] = False
     up_plain[b:] = False
+    out["jx"] = jamb_profile(gs[a:b], band)
     out["ev"] = _bins(gs[a:b], up_plain[a:b], 1)
     out["eh"] = _rows_up(_bins(gz[a:b], up_plain[a:b], 0))
     if up_plain.sum() > PX * PX:
