@@ -884,10 +884,6 @@ const MARK_LEAFY = vec3(0, 0.9, 0.24);
 const MARK_AUTUMN = vec3(0.95, 0.72, 0);
 const MARK_BARE = vec3(0.9, 0.2, 0);
 
-/** The crown's colour `shown`, or its marker ink while the crowns are
- *  printed, told on its kept cells' colour (`kept`, before any veil): an
- *  autumn crown (red over green) yellow; a mostly bare one, or one in
- *  blossom (pale, blue over green: pink or white), the paper's ink. */
 /** A hedge's marker ink: the leafy one, dimmed below the pass's light
  *  step (`comic`, crownLit at 0.3) so the hedge prints in the deep green
  *  even in the sun — on a lawn printed green it would otherwise vanish. */
@@ -899,6 +895,10 @@ export function printedLeaf(shown: V3): V3 {
   return mix(shown, MARK_HEDGE, crownsPrinted);
 }
 
+/** The crown's colour `shown`, or its marker ink while the crowns are
+ *  printed, told on its kept cells' colour (`kept`, before any veil): an
+ *  autumn crown (red over green) yellow; a mostly bare one, or one in
+ *  blossom (pale, blue over green: pink or white), the paper's ink. */
 function printedCrown(shown: V3, kept: V3, twig: F): V3 {
   const leaf = mix(MARK_LEAFY, MARK_AUTUMN, step(kept.y, kept.x));
   // (blossom is pale: a copper beech, blue over green too, is dark)

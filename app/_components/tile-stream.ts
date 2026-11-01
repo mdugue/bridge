@@ -166,7 +166,8 @@ export interface TileDressing {
   buildAsks?: Steps<void>;
   furniture?: Group;
   lamps?: LampControl;
-  /** OSM hedges (low-vegetation-layer.ts): static, no per-frame work */
+  /** the hedges, OSM's and the DLM's (low-vegetation-layer.ts): static,
+   *  no per-frame work */
   lowVegetation?: Group;
   monuments?: MonumentLayer;
   rail?: Group;

@@ -2458,16 +2458,18 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   writes every candidate under `data/_raw/` for research), but the
   committed `lowveg_<tile>.geojson` holds only what renders.
   **Drawn** (`low-vegetation-layer.ts`, 2026-11-01): a trimmed hedge —
-  tapered flanks, rounded shoulders, a flattish top — one instance per
-  ≤ 2.5 m piece, the pieces overlapping past their rounded ends so a run
-  reads as one hedge, not a row of sausages. Leafy lumps (~0.8 m, ±9 cm)
-  and a slow rise and fall of the top (~6 m, ±14 cm) are pushed out in the
-  vertex stage by a world-space noise, so overlapping pieces agree; the
-  same noise lights the lumps' crests and shades their hollows; one tint
-  and height per hedge. In Comic the hedge wears the crowns' leafy marker
-  ink and is printed flat like them. *Why:* the old chain of soft blocks
-  pinched at every join and the DLM's hedges were boxes (Manuel,
-  2026-11-01).
+  tapered flanks, rounded shoulders, a flattish top, square-cut ends — one
+  instance per ≤ 2.5 m piece, the pieces meeting end to end, mitred at a
+  bend (a closed ring at its closing corner too) and sheared to the
+  ground's slope, so a run reads as one hedge, not a row of sausages.
+  Leafy lumps (~0.8 m, ±9 cm) and a slow rise and fall of the top (~6 m,
+  ±14 cm) are pushed out in the vertex stage by a world-space noise, so
+  pieces agree at every joint; the same noise lights the lumps' crests and
+  shades their hollows. The sage drifts over ~40 m in world space, never
+  per piece or per line, so a tile seam does not show. In Comic the hedge
+  wears a dimmed leafy marker ink and prints in the deep green. *Why:* the
+  old chain of soft blocks pinched at every join and the DLM's hedges
+  were boxes (Manuel, 2026-11-01).
   - *Why:* the canopy bake (`canopy.py`) keeps nothing under `MIN_H = 3 m` and only
     forest/copse/sport-and-leisure areas, so courtyard and garden trees are
     dropped at any height; the Basis-DLM carries a hedge only when it is

@@ -4,11 +4,11 @@ import type { LowVegFeature } from "@/lib/city/features";
 import {
   buildHedgeGeo,
   buildLowVegetation,
-  DLM_HEDGE_H,
   hedgeLines,
   hedgePieces,
 } from "./low-vegetation-layer";
 import type { VegRowFeature } from "@/lib/city/features";
+import { DEFAULT_HEDGE_H } from "@/lib/city/ask-more";
 import { isInstances } from "./instancing";
 import { sceneCensus } from "./scene-census";
 
@@ -79,10 +79,11 @@ test("hedges become instances; off-terrain ones are skipped", () => {
   const sets = group.children.filter(isInstances);
   expect(sets).toHaveLength(1);
   expect(sets[0].drawCount).toBe(2);
-  // the moss is one scene-wide node material, tinted per instance
+  // the moss is one scene-wide node material, its colour drifting in world
+  // space: no per-instance tint (it would step at a joint or a tile seam)
   expect(sets[0].material).toBeInstanceOf(MeshStandardNodeMaterial);
   expect(sets[0].material.userData.shared).toBe(true);
-  expect(sets[0].instanceTints).not.toBeNull();
+  expect(sets[0].instanceTints).toBeNull();
   expect(buildLowVegetation([line], ctx).children[0]).toHaveProperty(
     "material",
     sets[0].material
@@ -121,7 +122,7 @@ test("the DLM's hedge rows are drawn like OSM's hedges, tree rows not", () => {
       ),
     ]
   );
-  expect(lines.map((l) => l.h)).toEqual([1.5, DLM_HEDGE_H]);
+  expect(lines.map((l) => l.h)).toEqual([1.5, DEFAULT_HEDGE_H]);
   const group = buildLowVegetation([], ctx, [
     dlmRow([
       [0, 0],
@@ -131,7 +132,7 @@ test("the DLM's hedge rows are drawn like OSM's hedges, tree rows not", () => {
   expect(group.children.filter(isInstances)[0].drawCount).toBe(2);
 });
 
-test("a hedge's pieces share one tint and one height, so no seam shows", () => {
+test("a hedge's pieces share one height, so no step shows", () => {
   const group = buildLowVegetation(
     [
       hedge([
@@ -142,15 +143,44 @@ test("a hedge's pieces share one tint and one height, so no seam shows", () => {
     ctx
   );
   const set = group.children.filter(isInstances)[0];
-  const tints = set.instanceTints?.array ?? [];
   const m = new Matrix4();
   const heights: number[] = [];
   for (let i = 0; i < set.drawCount; i++) {
     set.getMatrixAt(i, m);
     heights.push(new Vector3().setFromMatrixColumn(m, 1).length());
-    expect(tints[i * 3]).toBe(tints[0]);
   }
   expect(new Set(heights).size).toBe(1);
+});
+
+test("a closed ring of hedge is mitred where it closes too", () => {
+  const ring = hedgePieces(
+    [
+      [0, 0],
+      [2, 0],
+      [2, 2],
+      [0, 2],
+      [0, 0],
+    ],
+    1.5,
+    1
+  );
+  // every piece of a 2 m square reaches half the width past both corners
+  for (const p of ring) {
+    expect(p.len).toBeCloseTo(3);
+  }
+  // a vine row's boxes are not mitred
+  expect(
+    hedgePieces(
+      [
+        [0, 0],
+        [2, 0],
+        [2, 2],
+      ],
+      1,
+      1,
+      false
+    ).map((p) => p.len)
+  ).toEqual([2, 2]);
 });
 
 test("the unit hedge block stays small and sits on the ground", () => {

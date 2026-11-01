@@ -11,7 +11,6 @@ import {
 import {
   float,
   length,
-  materialColor,
   max,
   mix,
   modelWorldMatrix,
@@ -27,15 +26,11 @@ import {
 import type { LowVegFeature, VegRowFeature } from "@/lib/city/features";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { type Point2, subdividePolyline } from "@/lib/city/polyline";
-import {
-  Instances,
-  instanceMatrix,
-  instancePosition,
-  instanceTint,
-} from "./instancing";
+import { Instances, instanceMatrix, instancePosition } from "./instancing";
 import type { F, V3 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
-import { bucketByCell, hash, leafNoise, printedLeaf } from "./vegetation-layer";
+import { bucketByCell, leafNoise, printedLeaf } from "./vegetation-layer";
+import { DEFAULT_HEDGE_H, DEFAULT_HEDGE_W } from "@/lib/city/ask-more";
 import { clamp } from "@/lib/city/math";
 
 /**
@@ -53,11 +48,12 @@ import { clamp } from "@/lib/city/math";
  *
  * - A hedge is a chain of trimmed blocks, one instance per ≤2.5 m piece of
  *   the polyline, stretched to the piece's length and to the height and
- *   width, overlapping past their rounded ends so a run reads as one hedge.
- *   Its leafy lumps and the rise and fall of its top are pushed out in the
- *   vertex stage by a noise read in world space, so overlapping pieces
- *   agree and no seam shows (`hedgeShape`). One tint per hedge, not per
- *   piece, for the same reason.
+ *   width, meeting end to end (mitred at a bend, sheared to the slope) so
+ *   a run reads as one hedge. Its leafy lumps and the rise and fall of its
+ *   top are pushed out in the vertex stage by a noise read in world space,
+ *   so the pieces agree at every joint (`hedgeShape`); its colour varies
+ *   in world space too, never per piece or per line (a tile seam cuts a
+ *   hedge in two lines).
  * - The material: pastel moss with a darker rooted base (the trunks'
  *   trick), the lumps' relief as light and shade, a fine mottle near the
  *   eye; the scene's fog (height-fog.ts) reaches it like every material.
@@ -84,10 +80,6 @@ const HEDGE_SWELL_M = 0.14;
 /** the fine leaf mottle fades out between these distances (m) */
 const HEDGE_MOTTLE_NEAR_M = 40;
 const HEDGE_MOTTLE_FAR_M = 120;
-/** a DLM hedge's size (the bake has none for it): what its card says
- *  (lib/city/ask-more.ts `hedgeItems`) */
-export const DLM_HEDGE_H = 1.6;
-export const DLM_HEDGE_W = 1.2;
 /** sanity clamps on the baked sizes */
 const H_RANGE: [number, number] = [0.4, 3.5];
 const W_RANGE: [number, number] = [0.5, 3];
@@ -124,13 +116,15 @@ function turnBetween(a: number, b: number): number {
  * Splits a hedge polyline into pieces no longer than HEDGE_PIECE_M, each
  * carrying the hedge's height and width. On a straight run the pieces meet
  * end to end, so their open-ended cross-sections join without a seam; at a
- * bend each reaches on by its mitre so the corner closes. Pure (EPSG in,
- * EPSG out), for tests.
+ * bend each reaches on by its mitre so the corner closes, a closed ring's
+ * last corner too (`mitred` = false: a vine row's boxes overlap instead).
+ * Pure (EPSG in, EPSG out), for tests.
  */
 export function hedgePieces(
   coords: Point2[],
   h: number,
-  w: number
+  w: number,
+  mitred = true
 ): HedgePiece[] {
   const pts = subdividePolyline(coords, HEDGE_PIECE_M);
   const segs: { a: Point2; angle: number; b: Point2; len: number }[] = [];
@@ -142,9 +136,18 @@ export function hedgePieces(
       segs.push({ a, b, len, angle: Math.atan2(b[1] - a[1], b[0] - a[0]) });
     }
   }
+  // a ring (a garden's hedge, first point = last) closes with a mitre too
+  const first = coords[0];
+  const last = coords.at(-1);
+  const ring =
+    segs.length > 2 &&
+    last !== undefined &&
+    Math.hypot(first[0] - last[0], first[1] - last[1]) < 0.05;
+  const at = (i: number): (typeof segs)[number] | undefined =>
+    ring ? segs[(i + segs.length) % segs.length] : segs[i];
   return segs.map(({ a, b, len, angle }, i) => {
-    const prev = segs[i - 1];
-    const next = segs[i + 1];
+    const prev = mitred ? at(i - 1) : undefined;
+    const next = mitred ? at(i + 1) : undefined;
     const e0 = prev ? mitre(w, turnBetween(prev.angle, angle)) : 0;
     const e1 = next ? mitre(w, turnBetween(angle, next.angle)) : 0;
     const dx = Math.cos(angle);
@@ -173,8 +176,6 @@ interface Instance {
   sx: number;
   sy: number;
   sz: number;
-  /** tint jitter −0.5..0.5 */
-  tint: number;
   x: number;
   y: number;
   z: number;
@@ -308,7 +309,7 @@ const HEDGE_AXIS_Y = 0.35;
  * last ring and the cap's rim — and the ends of two pieces at a joint —
  * move as one. The foot stays put (it meets the lawn).
  */
-function hedgeShape(): V3 {
+function hedgeShape(): { local: V3; lumps: F } {
   const local = positionGeometry;
   const m = instanceMatrix();
   const world = modelWorldMatrix.mul(m.mul(vec4(local, 1))).xyz;
@@ -319,13 +320,19 @@ function hedgeShape(): V3 {
   const dir = out.div(max(length(out), 1e-3));
   const foot = smoothstep(0.08, 0.55, local.y);
   const top = smoothstep(0.55, 1, local.y).mul(max(dir.y, 0));
-  const lumps = hedgeLumps(world).sub(0.5);
+  const lumps = hedgeLumps(world);
   const swell = leafNoise(world.xz.div(HEDGE_SWELL_WAVE_M).add(13.7)).sub(0.5);
   const push = lumps
+    .sub(0.5)
     .mul(HEDGE_LUMP_M * 2)
     .mul(foot)
     .add(swell.mul(HEDGE_SWELL_M * 2).mul(top));
-  return local.add(vec3(0, dir.y.div(sy), dir.z.div(sz)).mul(push));
+  return {
+    local: local.add(vec3(0, dir.y.div(sy), dir.z.div(sz)).mul(push)),
+    // the noise where the vertex stood, for the fragment's light and shade:
+    // read again at the pushed-out place it would slide off the lumps
+    lumps: varying(lumps),
+  };
 }
 
 /**
@@ -345,13 +352,14 @@ function hedgeMaterial(): MeshStandardNodeMaterial {
   return sceneMaterial("low-vegetation-hedge", () => {
     const m = new MeshStandardNodeMaterial({ color: 0xff_ff_ff, roughness: 1 });
     m.name = "lowveg-hedge";
-    m.positionNode = instancePosition(hedgeShape());
+    const shape = hedgeShape();
+    m.positionNode = instancePosition(shape.local);
     const rooted = mix(
       0.78,
       1.04,
       smoothstep(0.02, 0.6, varying(positionGeometry.y))
     );
-    const lumps = hedgeLumps(positionWorld);
+    const lumps = shape.lumps;
     const near = float(1).sub(
       smoothstep(
         HEDGE_MOTTLE_NEAR_M,
@@ -362,7 +370,11 @@ function hedgeMaterial(): MeshStandardNodeMaterial {
     const uv = positionWorld.xz.add(positionWorld.y.mul(vec2(0.63, -0.41)));
     const mottle = leafNoise(uv.mul(3.1)).sub(0.5).mul(near);
     const relief = lumps.mul(0.2).add(0.9).add(mottle.mul(0.1));
-    const moss = materialColor.mul(instanceTint()).mul(rooted).mul(relief);
+    // the sage drifts over tens of metres, in world space: a hedge cut in
+    // two by a tile seam (or into pieces) keeps one colour across it
+    const drift = leafNoise(positionWorld.xz.div(HEDGE_TINT_WAVE_M).add(3.3));
+    const sage = mix(HEDGE_SAGE[0], HEDGE_SAGE[1], drift);
+    const moss = sage.mul(rooted).mul(relief);
     const lit = mix(
       moss,
       moss.mul(vec3(1.06, 1.05, 0.88)),
@@ -374,10 +386,19 @@ function hedgeMaterial(): MeshStandardNodeMaterial {
 }
 
 /** Hedges read deeper and cooler than the crowns and the lawn — a dense
- *  evergreen, in the same soft sage family, never a lime. */
-function tintColor(col: Color, t: number): void {
-  col.setHSL(0.29 + t * 0.03, 0.26 + t * 0.05, 0.35 + t * 0.06);
+ *  evergreen, in the same soft sage family, never a lime: the two ends of
+ *  the drift (`hedgeMaterial`). */
+function hedgeSage(t: number): V3 {
+  const c = new Color().setHSL(
+    0.29 + t * 0.03,
+    0.26 + t * 0.05,
+    0.35 + t * 0.06
+  );
+  return vec3(c.r, c.g, c.b);
 }
+const HEDGE_SAGE = [hedgeSage(-0.5), hedgeSage(0.5)] as const;
+/** how far (m) the sage drifts from one end to the other */
+const HEDGE_TINT_WAVE_M = 40;
 
 function buildChunks(
   items: Instance[],
@@ -387,7 +408,6 @@ function buildChunks(
   const dummy = new Object3D();
   const shear = new Matrix4();
   const matrix = new Matrix4();
-  const col = new Color();
   return bucketByCell(items).map((cell) => {
     const mesh = new Instances(geo, mat, cell.length);
     mesh.name = "lowveg-hedge";
@@ -401,13 +421,8 @@ function buildChunks(
       // the shear: local x lifts by `rise` over the piece's length
       shear.makeShear(p.rise / p.sy, 0, 0, 0, 0, 0);
       mesh.setMatrixAt(i, matrix.multiplyMatrices(dummy.matrix, shear));
-      tintColor(col, p.tint);
-      mesh.setColorAt(i, col);
     });
     mesh.instanceMatrix.needsUpdate = true;
-    if (mesh.instanceTints) {
-      mesh.instanceTints.needsUpdate = true;
-    }
     // Without this the cull test uses the unit geometry's sphere at the origin.
     mesh.computeBoundingSphere();
     return mesh;
@@ -436,8 +451,8 @@ export function hedgeLines(
     if (f.geometry?.type === "LineString" && f.properties) {
       out.push({
         coords: f.geometry.coordinates,
-        h: clamp(f.properties.h ?? DLM_HEDGE_H, ...H_RANGE),
-        w: clamp(f.properties.w ?? DLM_HEDGE_W, ...W_RANGE),
+        h: clamp(f.properties.h ?? DEFAULT_HEDGE_H, ...H_RANGE),
+        w: clamp(f.properties.w ?? DEFAULT_HEDGE_W, ...W_RANGE),
       });
     }
   }
@@ -445,8 +460,8 @@ export function hedgeLines(
     if (f.geometry?.type === "LineString" && f.properties?.kind === "hedge") {
       out.push({
         coords: f.geometry.coordinates,
-        h: DLM_HEDGE_H,
-        w: DLM_HEDGE_W,
+        h: DEFAULT_HEDGE_H,
+        w: DEFAULT_HEDGE_W,
       });
     }
   }
@@ -459,13 +474,10 @@ function hedgeInstances(lines: HedgeLine[], ctx: GroundContext): Instance[] {
     if (coords.length < 2) {
       continue;
     }
-    // One tint and one height per hedge, not per piece: overlapping pieces
-    // that disagreed would show their seam (the lumps and the rise and
-    // fall of the top come from the world-space noise, `hedgeShape`).
-    const [hx, hy] = coords[0];
-    const seed = hx * 0.37 + hy * 0.11;
-    const tint = hash(seed * 2.1) - 0.5;
-    const sy = (h + SINK_M) * (0.94 + hash(seed * 1.3) * 0.12);
+    // One height for the whole hedge, no jitter: pieces that disagreed
+    // would show a step at their joint (the rise and fall of the top comes
+    // from the world-space noise, `hedgeShape`).
+    const sy = h + SINK_M;
     for (const piece of hedgePieces(coords, h, w)) {
       const ground = ctx.heightAt(piece.x, piece.y);
       if (ground === null) {
@@ -487,7 +499,6 @@ function hedgeInstances(lines: HedgeLine[], ctx: GroundContext): Instance[] {
         sx: piece.len,
         sy,
         sz: w,
-        tint,
       });
     }
   }
