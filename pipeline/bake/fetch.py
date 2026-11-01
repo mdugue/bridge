@@ -21,6 +21,8 @@ already there, so a rerun only fetches what is missing:
     data/_raw/<provider>/wikidata/monuments_<tile>.json  the monuments it knows the material of
     data/_raw/<provider>/wikidata/landmark_facts_<site>.json  the landmarks' dates and makers
     data/_raw/<provider>/lsc/<tile>.laz                  laser scan (`--lsc` only)
+    data/_raw/<provider>/murals/{items,photos}.json      the murals' items and photos (murals.py)
+    data/_raw/<provider>/murals/photos/*                 the photo each mural's rule chose
 
 Statewide packages, and the LoD2 files a tile shares with its neighbours
 (the one-cell ring), are cached under data/_raw/<provider>/downloads/; a
@@ -56,6 +58,7 @@ from . import (
     landmarks,
     mapillary,
     monuments,
+    murals,
     traffic_sources,
     transit,
 )
@@ -330,6 +333,15 @@ def fetch_glo30(spec: Spec) -> bool:
         return False
 
 
+def fetch_murals(spec: Spec) -> None:
+    """The murals' items and photos (murals.py), read off the extract:
+    optional — without them the walls stay plaster."""
+    try:
+        murals.fetch(spec)
+    except Exception as err:  # noqa: BLE001 — optional: report, fetch the rest
+        print(f"{spec.site}: murals not fetched ({type(err).__name__}: {err})")
+
+
 def run(spec: Spec, tiles: list[Tile], lsc: bool = False) -> None:
     spec.raw.mkdir(parents=True, exist_ok=True)
     source = adapter(spec.provider)
@@ -350,6 +362,8 @@ def run(spec: Spec, tiles: list[Tile], lsc: bool = False) -> None:
         landmark_facts.fetch_wikidata(spec.raw, spec.data, spec.site, [t.id for t in tiles])
     except Exception as err:  # noqa: BLE001 — optional: the nameplates show the name alone
         print(f"{spec.site}: the landmarks' facts not fetched ({type(err).__name__}: {err})")
+    if not site_failed:
+        fetch_murals(spec)
     failures = {tid: what for tid, what in failures.items() if what}
     if site_failed:
         print(f"fetch: {', '.join(site_failed)} not fetched — the bakes cannot run without it")
