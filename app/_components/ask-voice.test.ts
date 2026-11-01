@@ -1,5 +1,12 @@
 import { expect, test } from "bun:test";
-import { dictationProblem, sentences, speakable, yearWords } from "./ask-voice";
+import {
+  dictationProblem,
+  sentences,
+  speakable,
+  lineDeadline,
+  spokenLines,
+  yearWords,
+} from "./ask-voice";
 
 test("an answer is heard without links, list marks or Markdown, with units as words", () => {
   expect(
@@ -66,4 +73,37 @@ test("a text is read sentence by sentence", () => {
     "Geweiht 1494.",
     "Die Hauben kamen später.",
   ]);
+});
+
+test("a told text is read in its tones: the title slower and higher, a pause after each part", () => {
+  const lines = spokenLines([
+    { tone: "title", text: "Die Kuppel." },
+    { tone: "story", text: "Sie ist aus Stein. Sie wurde 1743 fertig." },
+    { tone: "label", text: "Genauer hingesehen." },
+    { tone: "aside", text: "Oben." },
+  ]);
+  expect(lines.map((l) => l.text)).toEqual([
+    "Die Kuppel.",
+    "Sie ist aus Stein.",
+    "Sie wurde siebzehnhundertdreiundvierzig fertig.",
+    "Genauer hingesehen.",
+    "Oben.",
+  ]);
+  const [title, first, last, label, aside] = lines;
+  expect(title.rate).toBeLessThan(first.rate);
+  expect(title.pitch).toBeGreaterThan(first.pitch);
+  expect(label.pitch).toBeLessThan(first.pitch);
+  // a breath between sentences, a pause after a part
+  expect(first.pause).toBeLessThan(last.pause);
+  expect(title.pause).toBeGreaterThan(last.pause);
+  expect(aside.text).toBe("Oben.");
+  expect(spokenLines([{ tone: "story", text: "  " }])).toEqual([]);
+});
+
+test("a line's end counts as lost only well past its time", () => {
+  const short = lineDeadline({ rate: 1, text: "Hier." });
+  const long = lineDeadline({ rate: 0.84, text: "x".repeat(260) });
+  expect(short).toBeGreaterThanOrEqual(2000);
+  // 260 characters at rate 0.84 take some 24 s: lost only past ~36 s
+  expect(long).toBeGreaterThan((260 / 13 / 0.84) * 1000 * 1.4);
 });

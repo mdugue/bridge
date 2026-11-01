@@ -6,23 +6,33 @@ import {
   ChevronRightIcon,
   EyeIcon,
   FootprintsIcon,
-  MessageCircleQuestionIcon,
+  MapPinIcon,
   Maximize2Icon,
+  MessageCircleQuestionIcon,
   RouteIcon,
+  Volume2Icon,
+  VolumeXIcon,
   XIcon,
 } from "lucide-react";
 import { Newsreader } from "next/font/google";
 import Image from "next/image";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import {
+  type MentionRun,
+  mentionRuns,
+  placeLabel,
+} from "@/lib/city/ask-mentions";
+import {
   isWalkBundle,
   CLOSER_LABEL,
   photoIsTall,
   photoPosition,
   stopNotes,
+  stopSpeech,
   type Walk,
   type WalkFact,
   type WalkPhoto,
+  type WalkPlace,
   type WalkStop,
 } from "@/lib/city/walks";
 import { Button } from "@/components/ui/button";
@@ -40,7 +50,10 @@ import {
 } from "@/components/ui/dialog";
 import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "cn";
+import { useSpeech } from "./ask-voice";
 import { useSceneStatus } from "./scene-status";
+import { useSite } from "./site-context";
+import { VoicePicker } from "./voice-picker";
 
 /**
  * Erzählte Spaziergänge in the viewer (lib/city/walks.ts, ADR 0055): the
@@ -268,22 +281,100 @@ function Facts({ facts }: { facts: WalkFact[] }) {
   );
 }
 
-/** What the stop says: its narration, today's notes, the closer look.
- *  A tall photo stands beside it, the text flowing round it. */
+/**
+ * A text with the names of the stop's places as buttons (lib/city/
+ * ask-mentions.ts, as in *Frag die Stadt*'s answers): a click picks the
+ * place in the scene and opens its card.
+ */
+function named(
+  runs: readonly MentionRun[],
+  places: readonly WalkPlace[],
+  onPlace: (place: WalkPlace) => void
+): ReactNode {
+  return runs.map((run, i) =>
+    "place" in run ? (
+      <button
+        className="rounded-sm text-primary underline decoration-primary/35 decoration-dotted underline-offset-[3px] hover:decoration-solid"
+        data-testid="walk-mention"
+        // reason: runs never reorder, the index is stable
+        key={i}
+        onClick={() => onPlace(places[run.place])}
+        title={`${places[run.place].name} auswählen`}
+        type="button"
+      >
+        {run.text}
+      </button>
+    ) : (
+      // reason: runs never reorder, the index is stable
+      <span key={i}>{run.text}</span>
+    )
+  );
+}
+
+/** The places the story points at without naming them ("das Opernhaus
+ *  vor dir"): a row of their names to pick. */
+function OtherPlaces({
+  city,
+  onPlace,
+  places,
+}: {
+  city: string;
+  onPlace: (place: WalkPlace) => void;
+  places: readonly WalkPlace[];
+}) {
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-1.5 font-sans">
+      <span className="text-[10px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
+        Im Bild
+      </span>
+      {places.map((place) => (
+        <button
+          className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/[0.04] px-2 py-0.5 text-[11.5px] text-primary hover:bg-primary/10"
+          data-testid="walk-place"
+          key={place.id}
+          onClick={() => onPlace(place)}
+          title={`${place.name} auswählen`}
+          type="button"
+        >
+          <MapPinIcon aria-hidden className="size-3" />
+          {placeLabel(place.name, city)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** What the stop says: its narration, today's notes, the closer look,
+ *  the places it shows. A tall photo stands beside it, the text flowing
+ *  round it. */
 function StopBody({
   aside,
   notes,
+  onPlace,
   stop,
 }: {
   aside: ReactNode;
   notes: string[];
+  onPlace: ((place: WalkPlace) => void) | null;
   stop: WalkStop;
 }) {
+  const city = useSite().name;
+  const places = onPlace ? (stop.places ?? []) : [];
+  // each place a button once, where the stop first names it: one set for
+  // the story and the closer look; the ones never named go in a row
+  const linked = new Set<number>();
+  const story = mentionRuns(stop.text, places, city, linked);
+  const closer = stop.closer
+    ? mentionRuns(stop.closer, places, city, linked)
+    : [];
+  const others = places.filter((_, i) => !linked.has(i));
+  const say = (runs: MentionRun[], text: string) =>
+    onPlace ? named(runs, places, onPlace) : text;
   return (
     <>
       {aside}
       <p className="text-[15.5px] leading-[1.62] text-foreground/90 text-pretty first-letter:float-left first-letter:mt-[0.06em] first-letter:mr-1.5 first-letter:font-medium first-letter:text-[3.1em] first-letter:leading-[0.82] first-letter:text-primary">
-        {stop.text}
+        {say(story, stop.text)}
       </p>
       {notes.map((note) => (
         <p
@@ -304,9 +395,12 @@ function StopBody({
             {CLOSER_LABEL}
           </span>
           <p className="mt-1 text-[14.5px] leading-snug text-foreground/90">
-            {stop.closer}
+            {say(closer, stop.closer)}
           </p>
         </aside>
+      )}
+      {onPlace && others.length > 0 && (
+        <OtherPlaces city={city} onPlace={onPlace} places={others} />
       )}
       <div className="clear-both font-sans">
         <Facts facts={stop.facts} />
@@ -646,6 +740,70 @@ function WalkFooter({
   );
 }
 
+/** The card's corner: read aloud (where the browser speaks) and the end. */
+function CardActions({
+  onClose,
+  onRead,
+  reading,
+  supported,
+}: {
+  onClose: () => void;
+  onRead: () => void;
+  reading: boolean;
+  supported: boolean;
+}) {
+  return (
+    <div className="-mt-1 -mr-2 flex shrink-0 items-center gap-0.5">
+      {supported && (
+        <Button
+          aria-label="Vorlesen"
+          aria-pressed={reading}
+          className="rounded-full text-muted-foreground aria-pressed:bg-primary/10 aria-pressed:text-primary"
+          data-testid="walk-read"
+          onClick={onRead}
+          size="icon-lg"
+          title={reading ? "Nicht mehr vorlesen" : "Vorlesen, schon im Flug"}
+          variant="ghost"
+        >
+          {reading ? <Volume2Icon /> : <VolumeXIcon />}
+        </Button>
+      )}
+      <Button
+        aria-label="Spaziergang beenden"
+        className="rounded-full text-muted-foreground"
+        onClick={onClose}
+        size="icon-lg"
+        title="Spaziergang beenden"
+        variant="ghost"
+      >
+        <XIcon />
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * Read aloud: each stop from the start of its glide (the browser's own
+ * voice, ADR 0057); a closed card stops talking.
+ */
+function useStopReading(stop: WalkStop | undefined, notes: string[]) {
+  const speech = useSpeech();
+  const [reading, setReading] = useState(false);
+  // the parts once a stop: a render of the card does not start it again
+  const said = useMemo(
+    () => (stop && reading ? stopSpeech(stop, notes) : null),
+    [stop, reading, notes]
+  );
+  useEffect(() => {
+    if (said) {
+      speech.speakParts(said);
+      // a new stop, or reading switched off, cuts this one off
+      return speech.stop;
+    }
+  }, [said, speech]);
+  return { reading, setReading, speech };
+}
+
 /**
  * The card of a walk under way: where in the walk, the stop's story, and
  * the way on. On a touch screen it sits at the top and folds its text
@@ -656,12 +814,15 @@ export function WalkCard({
   index,
   onClose,
   onIndex,
+  onPlace,
   walk,
 }: {
   coarse: boolean;
   index: number;
   onClose: () => void;
   onIndex: (index: number) => void;
+  /** picks a place the story names and opens its card; null: names stay text */
+  onPlace: ((place: WalkPlace) => void) | null;
   walk: Walk;
 }) {
   // a phone's sheet starts low: the title and the way on, the scene above
@@ -675,6 +836,7 @@ export function WalkCard({
     () => (stop ? stopNotes(stop, today) : []),
     [stop, today]
   );
+  const { reading, setReading, speech } = useStopReading(stop, notes);
   // the phone's panel sheet covers the scene, and the card with it
   if (!stop || (isMobile && openMobile)) {
     return null;
@@ -715,19 +877,18 @@ export function WalkCard({
         )}
         <CardHeader className="flex items-start gap-3 px-6 pt-5 pb-1">
           <StopHeading index={index} walk={walk} />
-          <div className="-mt-1 -mr-2 flex shrink-0 items-center gap-0.5">
-            <Button
-              aria-label="Spaziergang beenden"
-              className="rounded-full text-muted-foreground"
-              onClick={onClose}
-              size="icon-lg"
-              title="Spaziergang beenden"
-              variant="ghost"
-            >
-              <XIcon />
-            </Button>
-          </div>
+          <CardActions
+            onClose={onClose}
+            onRead={() => setReading((r) => !r)}
+            reading={reading}
+            supported={speech.supported}
+          />
         </CardHeader>
+        {reading && (
+          <div className="px-6 pt-1">
+            <VoicePicker speech={speech} />
+          </div>
+        )}
         {low && (
           <p className="px-6 pt-1 font-sans text-[10.5px] text-muted-foreground">
             Erzählt von {walk.by} (KI)
@@ -753,6 +914,7 @@ export function WalkCard({
                 ) : null
               }
               notes={notes}
+              onPlace={onPlace}
               stop={stop}
             />
             <p className="mt-4 pb-2 font-sans text-[10.5px] text-muted-foreground leading-snug">

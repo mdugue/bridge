@@ -109,11 +109,26 @@ A `source` is an https URL (Wikipedia, an institution's page, a paper) or
   beside the story, which flows round it; on a phone, whose card is too
   narrow for both, it lies above the story like a wide one. A click
   shows it whole.
+- **The places.** The build turns each `refs` id the Stadtwissen knows
+  into a place (`places`: name, position, footprint radius;
+  `stopPlaces`). Where the story or the closer look names one — by its
+  name, its name without Wikidata's subtitle or place ("Kügelgenhaus",
+  "Pöppelmannbrücke"), with its adjective declined ("der Katholischen
+  Hofkirche"), or its noun alone ("diese Hofkirche": not where another
+  place, or the adjective before it, says another is meant — "das Alte
+  Rathaus" — nor where a name goes on, "Bahnhof Mitte") — the name is a
+  button that picks it in the scene and
+  opens its card, as in *Frag die Stadt*. The ones the text only points
+  at ("das Opernhaus vor dir") stand in a row, *Im Bild*, under it.
 - **The hour** turns with the glide: the light travels from the last
   stop's hour to this one's at the camera's own progress (`glideTo`,
   fed by the flight's `onProgress`), eased as the glide is, so it stops
   where the camera stops (an export's held frames) and lands with it.
   The scene follows every frame, the HUD a few times a second.
+- **The voice** reads the title as its own sentence, slower and a little
+  higher, then a pause; the story; today's notes and the closer look
+  after its label, each set off by a pause and said a little lower
+  (`stopSpeech`, `spokenLines`).
 - **On a phone** the card is a sheet at the bottom, at most 62 % of the
   screen high, that starts folded: the title and the way on, the scene
   above free. Its handle unfolds it by a tap or a drag up and folds it by

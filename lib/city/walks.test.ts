@@ -9,6 +9,7 @@ import {
   stopDate,
   stopNotes,
   stopPlaces,
+  stopSpeech,
   stopView,
   type Walk,
   walkBundle,
@@ -49,6 +50,19 @@ test("a walk is never drawn in Modell", () => {
   expect(walkProblems({ ...walk, stops: [drawn, stop] }).join()).toContain(
     "model is not a walk's view"
   );
+});
+
+test("the voice reads the title, the story, today's notes and the closer look", () => {
+  expect(stopSpeech({ ...stop, closer: "Oben." }, ["Heute."])).toEqual([
+    { tone: "title", text: `${stop.title}.` },
+    { tone: "story", text: stop.text },
+    { tone: "aside", text: "Heute." },
+    { tone: "label", text: "Genauer hingesehen." },
+    { tone: "aside", text: "Oben." },
+  ]);
+  expect(
+    stopSpeech({ ...stop, closer: undefined }, []).map((p) => p.tone)
+  ).toEqual(["title", "story"]);
 });
 
 test("a stop's camera is in the scene frame, never Modell", () => {

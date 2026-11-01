@@ -11,6 +11,7 @@
  * ADR 0055). No THREE, no DOM.
  */
 import { isRenderStyle, type RenderStyle } from "./render-style";
+import type { SpokenPart } from "./spoken";
 import type { MovementMode, ViewpointGeometry } from "./site";
 import type { CameraStateJson } from "./snapshot";
 
@@ -239,8 +240,28 @@ export function stopNotes(stop: WalkStop, today: Date): string[] {
   return season ? [...days, season] : days;
 }
 
-/** The closer look's label on the card. */
+/** The closer look's label, on the card and in the voice. */
 export const CLOSER_LABEL = "Genauer hingesehen";
+
+/** What the voice reads at a stop: its title (set off, a little
+ *  slower), its story, today's notes and the closer look after its label
+ *  — the sources stay on the card. */
+export function stopSpeech(
+  stop: WalkStop,
+  notes: readonly string[]
+): SpokenPart[] {
+  return [
+    { tone: "title", text: `${stop.title}.` },
+    { tone: "story", text: stop.text },
+    ...notes.map((text): SpokenPart => ({ tone: "aside", text })),
+    ...(stop.closer
+      ? [
+          { tone: "label", text: `${CLOSER_LABEL}.` } as const,
+          { tone: "aside", text: stop.closer } as const,
+        ]
+      : []),
+  ];
+}
 
 // --- checks ----------------------------------------------------------------------
 

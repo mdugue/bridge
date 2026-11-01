@@ -1060,6 +1060,8 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       await expect(view.locator("img")).toBeVisible();
       await page.keyboard.press("Escape");
       await expect(view).toHaveCount(0);
+      // the place the story names is a button that picks it
+      await expect(card.getByTestId("walk-mention").first()).toBeVisible();
       const first = await card.getByRole("heading").textContent();
       await card.getByTestId("walk-next").click();
       await expect(card).toContainText("Station 2 von 9");
