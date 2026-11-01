@@ -46,9 +46,11 @@ test("a mesh glb is meshopt-compressed, quantised and Y-up", async () => {
       normalized?: boolean;
     }[];
     extensionsRequired: string[];
+    extensionsUsed: string[];
     scenes: { extras: unknown }[];
   };
-  expect(json.extensionsRequired).toContain("EXT_meshopt_compression");
+  expect(json.extensionsRequired).toContain("KHR_meshopt_compression");
+  expect(json.extensionsUsed).not.toContain("EXT_meshopt_compression");
   expect(json.extensionsRequired).toContain("KHR_mesh_quantization");
   expect(json.scenes[0].extras).toEqual({ kind: "terrain", tileId: "t" });
   // Positions and normals are normalised integers now.
