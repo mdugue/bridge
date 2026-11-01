@@ -129,6 +129,7 @@ import {
 } from "./model-rig";
 import type { ModelCamera } from "./model-camera";
 import { setViewDirection } from "./view-direction";
+import { siteMurals } from "./mural-layer";
 import { createViewLens } from "./view-lens";
 import { setPickRay } from "./view-ray";
 import {
@@ -432,7 +433,11 @@ export type SiteInfo = Pick<
   | "provenanceUrl"
   | "terrainBounds"
   | "walksUrl"
->;
+> & {
+  /** the murals' photos, credited (lib/city/murals.ts `muralCredit`): the
+   *  sources in the HUD's footer list them */
+  photoCredits: readonly string[];
+};
 
 export interface CityWalkOptions {
   /**
@@ -1479,6 +1484,9 @@ async function bootApp(
   // Where the site sits on the globe: the sun rig needs it, and so does the
   // HUD's sunrise/sunset readout.
   const latLng = siteLatLng(opts.site, extras.epsg, offset);
+  // The murals the bake hung on walls (mural-layer.ts): the stream hangs
+  // them on their city tiles, the HUD credits their photos.
+  const murals = siteMurals(extras, tilesetUrl);
   const siteInfo: SiteInfo = {
     landmarks: extras.landmarks ?? [],
     landcoverTiles: extras.tiles.map((t) => ({
@@ -1487,6 +1495,7 @@ async function bootApp(
       bridges: t.bridges ? new URL(t.bridges, tilesetUrl).href : undefined,
     })),
     latLng,
+    photoCredits: murals.credits,
     provenanceUrl: besideTileset(extras.provenance, tilesetUrl),
     terrainBounds: siteBounds,
     walksUrl: besideTileset(walksFile, tilesetUrl),
@@ -1678,6 +1687,7 @@ async function bootApp(
       night: () => currentNight,
       season: () => climateDay(seasonClock.day(), climate),
       offset,
+      murals: murals.source,
       onChange: queueChange,
       renderer,
       styleResources,
