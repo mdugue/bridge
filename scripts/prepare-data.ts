@@ -71,6 +71,11 @@ import {
   type TilesetExtras,
 } from "../lib/city/tileset";
 import {
+  LANDMARK_FACTS_FILE,
+  type LandmarkFactsExtras,
+  landmarkFactsSource,
+} from "../lib/city/landmark-facts";
+import {
   TRAM_TIMETABLE_FILE,
   tramTimetableSource,
 } from "../lib/city/tram-timetable";
@@ -208,6 +213,12 @@ const provenance = siteProvenance(
 const provenanceFile = publish(PROVENANCE_FILE, utf8(provenance));
 // The trams' timetable, site-wide (pipeline/bake/transit.py): optional.
 const tramSource = at(tramTimetableSource(siteDataDir(SITE)));
+// The landmarks' facts, site-wide (pipeline/bake/landmark_facts.py): what
+// the nameplate says under a landmark's name; optional.
+const factsSource = at(landmarkFactsSource(siteDataDir(SITE)));
+const landmarkFacts = existsSync(factsSource)
+  ? publish(LANDMARK_FACTS_FILE, readFileSync(factsSource))
+  : undefined;
 const trams = existsSync(tramSource)
   ? publish(TRAM_TIMETABLE_FILE, readFileSync(tramSource))
   : undefined;
@@ -270,7 +281,12 @@ await publishStadtwissen(
   provenance.sources
 );
 
-const extras: TilesetExtras & PlateExtras & WalksExtras = {
+type SiteExtras = TilesetExtras &
+  PlateExtras &
+  LandmarkFactsExtras &
+  WalksExtras;
+
+const extras: SiteExtras = {
   site: SITE.id,
   landmarks: siteLandmarks(
     TILES.map(landmarkFile).filter((f): f is LandmarkFile => f !== undefined)
@@ -296,6 +312,7 @@ const extras: TilesetExtras & PlateExtras & WalksExtras = {
   })),
   ...(trams ? { trams } : {}),
   ...(walks ? { walks } : {}),
+  ...(landmarkFacts ? { landmarkFacts } : {}),
 };
 publish(TILESET_FILE, utf8(buildTileset(baked, extras)));
 publish(

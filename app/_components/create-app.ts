@@ -113,6 +113,8 @@ import {
 } from "@/lib/city/tileset";
 import type { Inquiry, InquiryAlong } from "@/lib/city/inquiry";
 import type { WalksExtras } from "@/lib/city/walks";
+import { isLandmarkInquiry } from "@/lib/city/nameplate";
+import { type NameplateBody, nameplateBody } from "@/lib/city/nameplate-place";
 import { valleyFalloff } from "@/lib/city/valley-fog";
 import {
   createLodSchedule,
@@ -200,6 +202,13 @@ import {
   updatePocDebug,
 } from "./poc-debug";
 import { createPostStack, type PostStack } from "./post-stack";
+import { createNameplate } from "./nameplate-layer";
+import {
+  cityHides,
+  coverBoxes,
+  createNameplateAsk,
+  landmarkFactsHref,
+} from "./nameplate-ask";
 import { createScenarioLayer } from "./scenario-layer";
 import { type SceneCensus, sceneCensus } from "./scene-census";
 import { retainOpenSkyTexture } from "./sky-light";
@@ -642,6 +651,9 @@ export interface CityWalkHandle {
    * for `PLACES_WAIT_MS`.
    */
   pickPlaces: (places: readonly { r?: number; x: number; y: number }[]) => void;
+  /** What the nameplate sets in the city and where (nameplate-layer.ts),
+   *  null while nothing is named; tests and QA read it. */
+  nameplateShown: () => { title: string; mode: string; spot: string } | null;
   /** Shows another candidate of the last question (the strip's click):
    *  marks it and reports it through `onInquiry`. */
   selectCandidate: (index: number) => Inquiry | null;
@@ -1970,6 +1982,31 @@ async function bootApp(
   );
   cleanups.push(() => postStack.dispose());
   compileWith = postStack.compile;
+  // The thing asked, named in the city beside it (nameplate-layer.ts):
+  // drawn after the frame, onto the canvas.
+  const nameplate = createNameplate({
+    lens,
+    depthTexture: postStack.sceneDepth,
+    fonts: () => opts.container,
+    hidden: (view, points) => cityHides(view, points, stream.visibleCities()),
+    groundAt: (x, z) => siteGround.underWorld(x, z),
+    hud: () => coverBoxes(renderer.domElement),
+    phone: budget.tier === "mobile",
+  });
+  postStack.setOverlay(nameplate);
+  cleanups.push(() => {
+    postStack.setOverlay(null);
+    nameplate.dispose();
+  });
+  const landmarkFactsUrl = landmarkFactsHref(extras, tilesetUrl);
+  // the canvas's CSS size for the plate's placing (`renderer.getSize`)
+  const plateSize = new Vector2();
+  const plateAsk = createNameplateAsk({
+    plate: nameplate,
+    site: opts.site,
+    factsUrl: landmarkFactsUrl,
+    signal: opts.signal,
+  });
   // The plate joins once its programs are built (a few tens of kB: it is
   // there long before the boot's tiles).
   void plateLoad.then(async (plate) => {
@@ -2100,6 +2137,7 @@ async function bootApp(
       sceneRows[key](look[key]);
     }
     postStack.applyLook(look);
+    nameplate.applyLook(look.style);
     for (const d of stream.dressings) {
       d.vegetation?.applyLook(look);
       showDataLayers(d, look);
@@ -2310,20 +2348,49 @@ async function bootApp(
   // What the outline goes around (selection-shape.ts): a building's own
   // triangles, a bridge's out of its tile's bridge meshes, a tree's or a
   // monument's shape after its data.
+  // Each outlined subject's body (`nameplateBody` of its outline's
+  // triangles): the nameplate stands on the active pick's. Kept by the
+  // subject the probe outlined, so a hover's outline (another subject for
+  // a moment) never moves the plate, and a redraw (`probe.refresh`:
+  // another level of its tile shows) moves it with the new subject. Only
+  // the body is kept, not the triangles (the outline holds its own copy).
+  const bodies = new WeakMap<OutlineSubject, NameplateBody | null>();
+  const bodyOf = (shape: OutlineSelection | null): NameplateBody | null =>
+    shape && "positions" in shape ? nameplateBody(shape.positions) : null;
+  /** The body of the pick at `index`, as last outlined. */
+  const pickBody = (index: number): NameplateBody | null => {
+    const subject = probe.subjects()[index];
+    if (!subject) {
+      return null;
+    }
+    if (!bodies.has(subject)) {
+      bodies.set(subject, bodyOf(outlineShape(subject)));
+    }
+    return bodies.get(subject) ?? null;
+  };
   const outline = (
     subjects: readonly OutlineSubject[] | null,
-    flash = true
+    flash = true,
+    redraw = false
   ) => {
-    postStack.setSelection(outlineShapes(subjects), flash);
+    const shapes = (subjects ?? []).map((subject) => {
+      const shape = outlineShape(subject);
+      if (!bodies.has(subject)) {
+        bodies.set(subject, bodyOf(shape));
+      }
+      return shape;
+    });
+    if (redraw) {
+      plateAsk.reshape(pickBody(probe.picks().active));
+    }
+    postStack.setSelection(outlineShapes(shapes), flash);
   };
   /** Every pick's shape in one mask (a counted flow is drawn alone: its
    *  program is the layer's, not the triangles'). */
   const outlineShapes = (
-    subjects: readonly OutlineSubject[] | null
+    all: readonly (OutlineSelection | null)[]
   ): OutlineSelection | null => {
-    const shapes = (subjects ?? [])
-      .map(outlineShape)
-      .filter((o): o is OutlineSelection => o !== null);
+    const shapes = all.filter((o): o is OutlineSelection => o !== null);
     const flow = shapes.find((o) => "flow" in o);
     if (flow || shapes.length <= 1) {
       return flow ?? shapes[0] ?? null;
@@ -2453,6 +2520,10 @@ async function bootApp(
     if (asked?.kind === "bikes") {
       return { ...asked, credit: layerSources?.bikes?.credit };
     }
+    if (asked?.kind === "building" && landmarkFactsUrl) {
+      // the card lists what the nameplate says under the name
+      return isLandmarkInquiry(asked) ? { ...asked, landmarkFactsUrl } : asked;
+    }
     // the others carry all their card needs
     return asked;
   };
@@ -2486,7 +2557,10 @@ async function bootApp(
       // nothing picked: the next question starts a selection again
       addingPicks = false;
     }
-    opts.onInquiry?.(now.picks[now.active] ?? null, alongNow(), {
+    const inquiry = now.picks[now.active] ?? null;
+    // the active pick named in the city beside it (nameplate-layer.ts)
+    plateAsk.ask(inquiry, inquiry ? pickBody(now.active) : null);
+    opts.onInquiry?.(inquiry, alongNow(), {
       ...now,
       adding: addingPicks,
     });
@@ -3871,6 +3945,19 @@ async function bootApp(
     // The counters cover this frame's passes only (autoReset is off: the
     // loop's own reset also ran on held frames, which read back as zero).
     renderer.info.reset();
+    // the plate's placing (its rays, a few times a second) is CPU work
+    // before the render, not render time
+    nameplate.setNight(currentNight);
+    // the canvas's CSS size as the renderer was last sized (no layout
+    // read in the frame), and only while a plate is asked
+    nameplate.update(
+      view,
+      () => {
+        const css = renderer.getSize(plateSize);
+        return { width: css.x || 1, height: css.y || 1 };
+      },
+      exporting
+    );
     const renderStart = streamTimings.now();
     framedBuilds.draw(postStack.render);
     const renderEnd = streamTimings.now();
@@ -4224,6 +4311,7 @@ async function bootApp(
       pendingPlaces = null;
       addingPicks = false;
       probe.clear();
+      plateAsk.ask(null, null);
     },
     selectCandidate,
     selectPick,
@@ -4251,6 +4339,7 @@ async function bootApp(
       status: () => design?.status() ?? null,
     },
     inquireAt,
+    nameplateShown: () => nameplate.shown(),
     enterImmersive: canvasControls.lockPointer,
     releaseGpu: () => releaseGpu(renderer),
     flyTo: (position, lookAt) => {

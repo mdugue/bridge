@@ -25,6 +25,7 @@ import {
 import type { SiteProvenance } from "./provenance";
 import type { CardCredits } from "./card-lines";
 import type { Stated } from "./methods";
+import { indexLandmarkFacts } from "./landmark-facts";
 
 const lines = (sources: readonly Stated[]) => sources.map((l) => l.text);
 
@@ -510,4 +511,43 @@ test("a roof on posts LoD2 lacks is named by ALKIS's word for one", () => {
     DRESDEN
   );
   expect(card.title).toBe("Überdachung");
+});
+
+test("a landmark's card lists the nameplate's Wikidata facts and credits Wikidata", () => {
+  const church = object({
+    building: true,
+    facts: facts({ buildingId: "DESN_fk", name: "Frauenkirche" }),
+  });
+  const ask: Inquiry = {
+    kind: "building",
+    tile: "t",
+    picked: church,
+    tree: [church],
+  };
+  const landmarks = indexLandmarkFacts({
+    attribution: "Wikidata (CC0)",
+    landmarks: [
+      {
+        id: "Q157229",
+        name: "Frauenkirche",
+        buildings: ["DESN_fk"],
+        built: [1726, 1743],
+        architects: ["George Bähr"],
+        rebuilt: [1994, 2005],
+      },
+    ],
+  });
+  const card = inquiryCard(ask, null, DRESDEN, null, landmarks);
+  const fact = (label: string) =>
+    card.facts.find((f) => f.label === label)?.value;
+  expect(fact("Bauzeit")).toBe("1726–1743");
+  expect(fact("Architekt")).toBe("George Bähr");
+  expect(fact("Wiederaufbau")).toBe("1994–2005");
+  expect(lines(card.sources)).toContain(
+    "Bauzeit, Architekt, Wiederaufbau: Wikidata Q157229 · CC0"
+  );
+  // without the file: the card as it always was
+  expect(
+    inquiryCard(ask, null, DRESDEN).facts.map((f) => f.label)
+  ).not.toContain("Bauzeit");
 });
