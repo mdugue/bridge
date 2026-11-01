@@ -61,6 +61,12 @@ export interface WalkPhoto {
   caption?: string;
   /** the Commons file name ("Dresden Goldener Reiter.jpg") */
   file: string;
+  /**
+   * What must stay in sight where the card crops the photo: x, y as
+   * shares of its width and height from the top left (the centre when
+   * absent) — the quadriga at the top, the bridge low in the frame.
+   */
+  focus?: [number, number];
   /** the copy's size (px) */
   h: number;
   /** its licence's short name ("CC BY-SA 4.0", "Public domain") */
@@ -72,6 +78,16 @@ export interface WalkPhoto {
   /** the published copy, beside walks.json (set by prepare-data) */
   src?: string;
   w: number;
+}
+
+/** A ref the card can pick: its name and where it stands (site CRS),
+ *  with its footprint's radius where the twin knows it. */
+export interface WalkPlace {
+  id: string;
+  name: string;
+  r?: number;
+  x: number;
+  y: number;
 }
 
 /** Where a stop's photo lies in the site's walks folder. */
@@ -105,6 +121,9 @@ export interface WalkStop {
   mode?: MovementMode;
   /** the Stadtwissen entries it is about (Q-ids, Building ids) */
   refs?: string[];
+  /** the refs as the scene can pick them, set by the build from the
+   *  Stadtwissen (prepare-data.ts): the card makes their names buttons */
+  places?: WalkPlace[];
   /** the photo the card shows above the text */
   photo?: WalkPhoto;
   /** the picture style for this stop; Pastell when absent */
@@ -220,21 +239,8 @@ export function stopNotes(stop: WalkStop, today: Date): string[] {
   return season ? [...days, season] : days;
 }
 
-/** The closer look's label, on the card and in the voice. */
+/** The closer look's label on the card. */
 export const CLOSER_LABEL = "Genauer hingesehen";
-
-/** What the voice reads at a stop: its title, its story, today's notes
- *  and the closer look — the sources stay on the card. */
-export function stopSpeech(stop: WalkStop, notes: readonly string[]): string {
-  return [
-    `${stop.title}.`,
-    stop.text,
-    ...notes,
-    stop.closer ? `${CLOSER_LABEL}: ${stop.closer}` : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-}
 
 // --- checks ----------------------------------------------------------------------
 
@@ -330,7 +336,57 @@ function photoProblems(stop: WalkStop): string[] {
       `photo ${p.file} has no credit (bun scripts/walks.ts <site> photos)`,
     ];
   }
-  return finite(p.w) && finite(p.h) ? [] : [`photo ${p.file} has no size`];
+  if (!(finite(p.w) && finite(p.h))) {
+    return [`photo ${p.file} has no size`];
+  }
+  const share = (v: unknown) =>
+    finite(v) && (v as number) >= 0 && (v as number) <= 1;
+  return p.focus === undefined || (p.focus.length === 2 && p.focus.every(share))
+    ? []
+    : [`photo ${p.file}: focus must be [x, y] in 0…1`];
+}
+
+/** Below this width-to-height a photo is tall (Kronentor 0.67, a
+ *  near-square Chilehaus 0.99 is not). */
+const TALL_ASPECT = 0.85;
+
+/** The photo's shape as the card lays it out: tall ones stand beside
+ *  the story, the rest span the card. */
+export function photoIsTall(p: Pick<WalkPhoto, "h" | "w">): boolean {
+  return p.w / p.h < TALL_ASPECT;
+}
+
+/** `object-position` for a photo's focus: the centre when it has none. */
+export function photoPosition(p: Pick<WalkPhoto, "focus">): string {
+  const [x, y] = p.focus ?? [0.5, 0.5];
+  return `${Math.round(x * 100)}% ${Math.round(y * 100)}%`;
+}
+
+/**
+ * The stop's refs as the card picks them: each one the twin knows, with
+ * its name, place and radius, by `lookup` (the Stadtwissen, at build
+ * time); a ref it lacks, or one without a name, is left out.
+ */
+export function stopPlaces(
+  stop: Pick<WalkStop, "refs">,
+  lookup: (
+    id: string
+  ) => { name: string; r?: number; x: number; y: number } | null
+): WalkPlace[] {
+  const out: WalkPlace[] = [];
+  for (const id of stop.refs ?? []) {
+    const hit = lookup(id);
+    if (hit?.name && !out.some((p) => p.id === id)) {
+      out.push({
+        id,
+        name: hit.name,
+        x: hit.x,
+        y: hit.y,
+        ...(hit.r === undefined ? {} : { r: hit.r }),
+      });
+    }
+  }
+  return out;
 }
 
 function stopProblems(stop: WalkStop, where: string): string[] {

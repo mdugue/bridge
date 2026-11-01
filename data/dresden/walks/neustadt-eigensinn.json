@@ -73,7 +73,11 @@
         "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
         "page": "https://commons.wikimedia.org/wiki/File:Dresden_Germany_Golden-Rider-03.jpg",
         "h": 533,
-        "w": 800
+        "w": 800,
+        "focus": [
+          0.5,
+          0.35
+        ]
       }
     },
     {
@@ -118,7 +122,11 @@
         "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
         "page": "https://commons.wikimedia.org/wiki/File:20080629015DR_Dresden-Neustadt_Japanische_Palais_Palaisplatz.jpg",
         "h": 603,
-        "w": 800
+        "w": 800,
+        "focus": [
+          0.5,
+          0.3
+        ]
       }
     },
     {
@@ -289,7 +297,11 @@
         "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
         "page": "https://commons.wikimedia.org/wiki/File:Denkmal_Erich_K%C3%A4stner_Albertplatz_Dresden_Sachsen_Germany_1.jpg",
         "h": 600,
-        "w": 800
+        "w": 800,
+        "focus": [
+          0.5,
+          0.3
+        ]
       }
     },
     {
@@ -392,7 +404,11 @@
         "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
         "page": "https://commons.wikimedia.org/wiki/File:Dresden_-_Kunsthofpassage_Hof_der_Elemente.jpg",
         "h": 533,
-        "w": 800
+        "w": 800,
+        "focus": [
+          0.5,
+          0.45
+        ]
       }
     },
     {

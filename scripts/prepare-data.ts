@@ -296,7 +296,6 @@ function withPhotos(walk: Walk): Walk {
     }),
   };
 }
-
 const walks =
   walkFiles.length > 0
     ? publish(
