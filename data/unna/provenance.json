@@ -31,11 +31,22 @@
     "licence": "Open Database License (ODbL); credit: © OpenStreetMap contributors",
     "extract": "a stand-in: the Arnsberg region extract from download.openstreetmap.fr, because download.geofabrik.de was unreachable from the build container",
     "usedFor": "walls, stairs, lamps, street furniture, fountains, paving, markings, trams, riverside, sport, shops and heritage",
-    "buildings": "the building flags, names, addresses, storeys and named outlines (pipeline/bake/osm_buildings.py) re-baked 2026-10-19 from download.openstreetmap.fr's arnsberg-latest.osm.pbf, Last-Modified 2026-10-19"
+    "openstreetmapFr": {
+      "download": "https://download.openstreetmap.fr/extracts/europe/germany/nordrhein_westfalen/arnsberg.osm.pbf",
+      "products": {
+        "osmBuildings": {
+          "dataAsOf": "2026-11-01 (state.txt timestamp 2026-11-01T01:17:45Z; re-baked 2026-11-01 with every step)"
+        },
+        "all": {
+          "dataAsOf": "2026-11-01 (state.txt timestamp 2026-11-01T01:17:45Z; re-baked 2026-11-01 with every step)"
+        }
+      }
+    }
   },
   "wikidata": {
     "licence": "CC0",
-    "usedFor": "bridge names and types, cached per tile under data/_raw/nw/wikidata/"
+    "usedFor": "bridge names and types, cached per tile under data/_raw/nw/wikidata/",
+    "dataAsOf": "2026-11-01 (fetched again for the re-bake)"
   },
   "dataLayers": {
     "traffic": {
@@ -56,5 +67,10 @@
         "32408_5708_2_nw": 11
       }
     }
+  },
+  "basisDlm": {
+    "download": "https://www.opengeodata.nrw.de/produkte/geobasis/lm/akt/basis-dlm/basis-dlm_EPSG25832_Shape.zip",
+    "lastModified": "2026-10-20",
+    "editionInUse": "the package Last-Modified 2026-10-20 23:10 UTC, baked 2026-11-01"
   }
 }

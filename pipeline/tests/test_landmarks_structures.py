@@ -650,9 +650,73 @@ def test_an_old_cache_is_completed_with_the_state(tmp_path, monkeypatch):
         },
         {"i": {"value": "http://www.wikidata.org/entity/Q2"}},
     ]
-    monkeypatch.setattr(landmarks, "_ask", lambda query: rows)
+    bridges = [{"i": {"value": "http://www.wikidata.org/entity/Q2"}}]
+    monkeypatch.setattr(landmarks, "_ask", lambda query: bridges if "Q12280" in query else rows)
     assert landmarks.complete_status(dest)
     a, b = json.loads(dest.read_text())["landmarks"]
     assert a["dissolved"] == "1894-01-01" and a["states"] == [landmarks.DEMOLISHED]
     assert landmarks.gone(a) and not landmarks.gone(b)
+    assert not a["bridge"] and b["bridge"]
     assert not landmarks.complete_status(dest)  # complete already
+    # a cache with the state but from before the bridges is completed too
+    dest.write_text(json.dumps({"landmarks": [{"id": "Q2", "label": "B", "states": []}]}))
+    assert landmarks.complete_status(dest)
+    assert json.loads(dest.read_text())["landmarks"][0]["bridge"]
+
+
+def test_a_failed_bridge_query_keeps_the_state_and_asks_again(tmp_path, monkeypatch):
+    dest = tmp_path / "landmarks_t.json"
+    dest.write_text(json.dumps({"landmarks": [{"id": "Q1", "label": "A"}]}))
+    rows = [
+        {
+            "i": {"value": "http://www.wikidata.org/entity/Q1"},
+            "dissolved": {"value": "1894-01-01T00:00:00Z"},
+        }
+    ]
+
+    def ask(query):
+        if "Q12280" in query:
+            raise TimeoutError("query timed out")
+        return rows
+
+    monkeypatch.setattr(landmarks, "_ask", ask)
+    assert landmarks.complete_status(dest)
+    (a,) = json.loads(dest.read_text())["landmarks"]
+    assert a["dissolved"] == "1894-01-01" and "bridge" not in a
+    monkeypatch.setattr(landmarks, "_ask", lambda query: [] if "Q12280" in query else rows)
+    assert landmarks.complete_status(dest)  # the next fetch completes it
+    assert json.loads(dest.read_text())["landmarks"][0]["bridge"] is False
+
+
+def test_a_bridge_is_no_landmark_unless_it_is_a_building():
+    # München's Isar bridges (Luitpoldbrücke, Kabelsteg): the rail layer's
+    assert landmarks.is_bridge({"bridge": True, "building": False})
+    # a bridge house, a covered landing stage: a building
+    assert not landmarks.is_bridge({"bridge": True, "building": True})
+    assert not landmarks.is_bridge({"bridge": False, "building": False})
+    assert not landmarks.is_bridge({"building": False})  # an old cache
+
+
+def test_a_bridge_slab_the_mesh_leaves_out_is_never_matched():
+    ring = [[0, 1, 2, 3]]
+    solid = {
+        "boundaries": [ring],
+        "semantics": {"surfaces": [{"type": "GroundSurface"}], "values": [0]},
+    }
+    city = {
+        "vertices": [[0, 0, 0], [40, 0, 0], [40, 40, 0], [0, 40, 0]],
+        "CityObjects": {
+            "slab": {
+                "attributes": {"function": "53001_1800"},
+                "children": ["deck"],
+                "geometry": [{"type": "MultiSurface", **solid}],
+            },
+            "deck": {"parents": ["slab"], "geometry": [{"type": "MultiSurface", **solid}]},
+            "house": {
+                "attributes": {"function": "31001_1000"},
+                "geometry": [{"type": "MultiSurface", **solid}],
+            },
+        },
+    }
+    ids, _ = landmarks.drawn_footprints(city)
+    assert ids == ["house"]

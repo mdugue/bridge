@@ -396,17 +396,12 @@ Download fand an diesem Tag oder kurz davor statt.
 | DOM1 | alle fünfzehn | **dieselbe Laserbefliegung** wie das DGM1: 2024-11-30 bzw. 2024-11-27 und 2024-11-30 | GeoSN-Download-Dienst (DOM1, DGM1 und Punktwolke tragen identische Daten) | abgeleitete Kronen-Dateien 2026-06-12; die elf neuen Kacheln 2026-09-25 |
 | LoD2 | alle fünfzehn | die westliche Spalte (33408_*) und 33410_5656/5658: Modell **2023**, gebaut aus dem Laserscan 2016, den Basis-DLM-Grundrissen 2021 und dem DGM 2016; 33412_5656/5658 und 33414_5656/5658: Modell **2024**, aus dem Laserscan 2016, dem Basis-DLM 2022 und dem DGM 2016; die südliche Reihe (5654) und 33416_5656: Modell **2023**, Grundrisse aus dem Basis-DLM 2020–2024; 33416_5658 (Wald, ein Gebäude): Modell **2021**. Exportiert wurden die Objekte 2025-04-26 … 2025-07-07 (`creationDate`) | GeoSN-Download-Dienst; einige ältere Objekte tragen noch `Stand_*`-Attribute mit denselben Werten | 2026-06-11; die elf neuen Kacheln 2026-09-25 |
 | DOP (RGBI) | alle fünfzehn | beflogen am **2024-03-19** (ohne Laub) | GeoSN-Download-Dienst | abgeleitete Dachfarben und NDVI 2026-06-16/17; die elf neuen Kacheln 2026-09-25 |
-| Basis-DLM | landesweites Paket | das im **Juni 2026** aktuelle Quartalspaket; das genaue Freigabedatum wurde nicht notiert und lässt sich nachträglich nicht vom Portal ablesen, weil das Paket unter demselben Dateinamen ersetzt wird (die Datei auf dem Share trug beim Prüfen das Datum 2026-07-28) | Download-Seite: „quartalsweise aktualisiert“; Git-History | abgeleitete Dateien 2026-06-12, Bahn- und Brückendateien neu gebacken 2026-09-18; die elf neuen Kacheln 2026-09-25 aus dem Paket vom 2026-07-28 |
-| OSM über Overpass (von den Bakes nicht mehr genutzt; die eingecheckten Lampen-, Bahnsteig- und Brückentragwerk-Dateien stammen noch daher) | die ursprünglichen vier | die Live-Datenbank am Abfragetag: 2026-06-12 oder früher (Lampen), 2026-06-17 oder früher (Bahnsteige, Brückentragwerk) | Git-History; die zwischengespeicherten Rohantworten tragen den exakten `timestamp_osm_base` | 2026-06-12 / 2026-06-17 |
-| OSM über BBBike | Auszug Dresden | der Auszug vom 2026-09-19 (Brunnen, Treppen, Beläge, Sportplätze, Straßenbahn, Anlegestellen, und alle OSM-Ebenen der elf am 2026-09-25 hinzugekommenen Kacheln: Geofabrik war vom Build-Rechner aus nicht erreichbar) | `data/dresden/provenance.json` | 2026-09-24 |
-| OSM über Geofabrik | landesweiter Auszug | der Tagesauszug vom 2026-09-18 oder kurz davor | Git-History (Mauern an dem Tag neu gebacken); `osmium fileinfo -e` auf der Rohdatei zeigt den exakten Zeitstempel | 2026-09-18 |
-| OSM über BBBike (Treppen) | der Stadtauszug Dresden | der Auszug vom 2026-09-19 | `Last-Modified` der Datei; `data/dresden/provenance.json` | 2026-09-24 |
-| OSM über BBBike (Beläge) | der Stadtauszug Dresden | der Auszug vom 2026-09-19 | `Last-Modified` der Datei; `data/dresden/provenance.json` | 2026-09-25 |
-| OSM über BBBike (Gebäudenamen, Adressen, Geschosse, Eingänge, Läden, Baudenkmale; alle fünfzehn Kacheln) | der Stadtauszug Dresden | der Auszug vom 2026-09-26 | `Last-Modified` der Datei; `data/dresden/provenance.json` | 2026-09-27 |
+| Basis-DLM | landesweites Paket | das am **2026-10-20** freigegebene Paket (`basisdlm_akt.csv` und das Paket in der ZIP tragen dieses Datum) | die Metadaten in der ZIP; `data/dresden/provenance.json` | alle abgeleiteten Dateien neu gebacken am 2026-11-01 |
+| OSM über BBBike | der Stadtauszug Dresden | der Auszug vom **2026-10-31** (`Last-Modified` 16:49 UTC), alle OSM-Ebenen aller fünfzehn Kacheln; nur die Hecken und die kleinen Bauten aus dem Laserscan stammen noch aus den Auszügen vom 2026-09-19/23, weil ihr Neubacken den Laserscan braucht, den das GeoSN derzeit nicht ausliefert | `Last-Modified` der Datei; `data/dresden/provenance.json` | 2026-11-01 |
 | Verkehrsmengen | alle fünfzehn | Zählungen von 2010 bis 2026, meist 2023–2026, abgefragt am **2026-10-01** | WFS der Stadt; `data/dresden/provenance.json` | 2026-10-01 |
 | Rad-Dauerzählstellen | — | live, beim Einschalten der Ebene und alle fünf Minuten | WFS der Stadt | nicht eingecheckt |
 | GTFS-Fahrplan | das ganze Gebiet | der Feed vom **2026-09-26**; die Tage 2026-10-01 (Werktag), 2026-10-10 (Samstag), 2026-10-04 (Sonntag) | `Last-Modified` der Datei; `data/dresden/transit/trams.json` | 2026-10-01 |
-| Mapillary-Objekte (Straßenlampen) | Dresden (fünfzehn Kacheln), Grimma (zwei), Meißen (eine), Unna (zwei) | Erkennungen, zuletzt gesehen 2020 – 2026 | `last_seen_at` jedes Objekts, Ort und Zeit jedes Fotos; der Zwischenspeicher unter `data/_raw/<provider>/mapillary/<tile>.v2.json` | 2026-10-21 |
+| Mapillary-Objekte (Straßenlampen) | Dresden (fünfzehn Kacheln), Grimma (zwei), Meißen (eine), Unna (zwei) | Erkennungen, zuletzt gesehen 2020 – 2026 | `last_seen_at` jedes Objekts, Ort und Zeit jedes Fotos; der Zwischenspeicher unter `data/_raw/<provider>/mapillary/<tile>.v2.json`, neu abgerufen am 2026-11-01 | 2026-11-01 |
 | Mapillary-Rundumfotos (Fassadenbild, Schaufenster) | Dresden (fünfzehn Kacheln), Leipzig, München, Hamburg (je vier), Grimma (zwei), Meißen (eine); Unna hat keine | aufgenommen 2017 – 2026: Dresden meist 2025, Leipzig 2023 – 2025, München 2021 – 2026, meist 2026, Hamburg 2025, Grimma 2024 – 2026, Meißen 2026 | `captured_at` jedes Bildes; die Messwerte unter `data/_raw/<provider>/mapillary/facades/` (die Fotos werden nicht behalten) | 2026-10-08 (Dresden), 2026-10-09 |
 | Copernicus DEM GLO-30 | jede Stadt: ihre Kacheln und 10 km darum | das Modell, wie seine öffentliche Cloud-Kopie es am Abruftag bereitstellt (© DLR e.V. 2010-2014, © Airbus Defence and Space GmbH 2014-2018) | der Ausschnitt im Zwischenspeicher `data/_raw/glo30/<site>.tif`, abgerufen am 2026-10-21 | nicht eingecheckt (nur Himmelslicht und Horizont, die daraus gebacken sind) |
 | DWD-Phänologie | die Beobachter im Umkreis von 30 km jeder Stadt | die Jahre 2010–2023 | die Jahreszeiten-Tabelle des Viewers | als Teil des Codes |
@@ -414,12 +409,16 @@ Download fand an diesem Tag oder kurz davor statt.
 Beachte die **unterschiedlichen Stände in einem Bild**: Boden und Baumhöhen
 stammen von Ende 2024, die Gebäudeformen aus einem Laserscan von 2016 mit
 Grundrissen von 2021/2022, die Dachfarben vom März 2024 und Lampen und
-Mauern aus OpenStreetMap von Mitte 2026. Ein 2023 fertiggestelltes Haus
+Mauern aus OpenStreetMap von Ende Oktober 2026. Ein 2023 fertiggestelltes Haus
 kann eine Dachfarbe von 2024 und keine 3D-Form haben.
 
-Beim nächsten Download noch festzuhalten: das Freigabedatum des
-Basis-DLM-Pakets (`Last-Modified` der ZIP oder die Metadaten darin) und der
-Zeitstempel des Geofabrik-Auszugs.
+Die anderen Orte wurden am 2026-11-01 ebenso neu gebacken: Leipzig und
+Grimma aus BBBikes Leipzig-Auszug, Meißen aus dessen Dresden-Auszug,
+Hamburg und München aus ihren eigenen (alle vom 2026-10-31), Unna aus dem
+Arnsberg-Auszug von openstreetmap.fr (2026-11-01); die sächsischen Orte
+aus dem Basis-DLM vom 2026-10-20, Unna aus dem Nordrhein-Westfalens vom
+2026-10-20 und München aus dem Bayerns vom 2026-07-03. Das `provenance.json`
+jedes Orts hält es fest.
 
 ## Woher genau jede Datei stammt
 
