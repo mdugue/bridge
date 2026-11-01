@@ -679,13 +679,22 @@ from which the viewer sets the valley haze's depth
 ### The glTF content
 
 Standard glTF 2.0 binaries, written by `scripts/tile-glb.ts` with
-glTF-Transform: `EXT_meshopt_compression`, `KHR_mesh_quantization`
+glTF-Transform: `KHR_meshopt_compression`, `KHR_mesh_quantization`
 (16-bit positions, 8-bit normals, the dequantisation on the node), Y-up
-(data `(x, y, z)` → glTF `(x, z, −y)`). Pre-gzipped at level 9 as
+(data `(x, y, z)` → glTF `(x, z, −y)`). glTF-Transform writes meshopt
+only as `EXT_meshopt_compression` with its first attribute codec (v0);
+the writer's last step (`scripts/khr-meshopt.ts`) renames it KHR and
+re-encodes each attribute stream in meshopt's v1 codec where that gzips
+smaller — the buildings' streams, not a TIN's positions. Over Dresden's
+60 glbs: 132.9 → 126.9 MB gzipped (−4.5 %; near buildings −6.1 %, far
+buildings −4.3 %, terrain −2.4 %), decoded to the same bytes. three's
+GLTFLoader reads both names; `simplifyGlb` hands a written glb back to
+glTF-Transform under the EXT name (`toExtMeshopt`). Pre-gzipped at level 9 as
 `.glb.gz`, because static hosts do not compress binary types; the client
 inflates them with `DecompressionStream` when the gzip magic is there (a
 host that adds `Content-Encoding: gzip` has the browser do it first). They
-open in any glTF or 3D Tiles tool.
+open in any glTF or 3D Tiles tool that reads `KHR_meshopt_compression`
+(three.js, gltfpack; glTF-Transform after `toExtMeshopt`).
 
 | File | From | Via | Contents |
 |---|---|---|---|

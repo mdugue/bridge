@@ -497,6 +497,56 @@ The other picture styles and Modell keep their sharp lines.
   not undoable. *Bild speichern* saves the view as a PNG with its sources
   (see [Modell](#modell-the-city-as-a-planner-draws-it)). *Immersiver Modus* locks the mouse pointer
   for a first-person feel; `Esc` leaves it.
+- **Entwurf** ("design") — loads a design of your own into the city: a
+  glTF file (`.glb`, or a `.gltf` picked together with its `.bin` and
+  textures) as SketchUp, Rhino, Revit, Archicad, Vectorworks or Blender
+  export it, an IFC model (`.ifc`), an OBJ (`.obj`, with its `.mtl` and
+  textures picked together; read as metres with Y up) or a Rhino file
+  (`.3dm`, saved with its render meshes); dropping it on the panel works
+  too. A Rhino file whose earth anchor is set stands at its place (on the
+  ground, where the anchor gives no height or Rhino's default 0).
+  Landscape plans load the same way: an ASCII DXF, a Shapefile (pick the
+  `.shp` with its `.dbf`, `.prj` and `.cpg`), a GeoPackage (`.gpkg`) or
+  LandXML (`.xml`). Their hatches and areas become lawn, beds, paving,
+  paths, water, sand or gravel by their layer's or attributes' names
+  (German or English, e.g. "Rasen", "Pflaster", "Staudenbeet"; an
+  attribute such as *Nutzung*, *Art* or *Belag* first, a name or address
+  last, so a "Kamenzer Straße" park stays lawn), drawn in
+  the city's colours on the ground; tree symbols become trees of the
+  drawn crown size, a TIN a planned ground. A layer whose name says
+  nothing stays grey, and the panel names it. A plan in UTM coordinates
+  lies at its place on the ground already loaded there.
+  An IFC that carries its place (`IfcMapConversion` in ETRS89/UTM) stands
+  there by itself; one with only the site's latitude and longitude stands
+  roughly there, and the panel asks you to check it. A design whose file
+  puts it more than 2 km beyond the city's tiles, or in another place's
+  coordinates, is set down in front of you, and the panel says why. The file is read in your
+  browser only and uploaded nowhere. Where it carries the Land's
+  coordinates (UTM, with or without the zone in front), the design stands
+  at its place straight away, at its NHN heights where they agree with the
+  ground; otherwise it is set on the ground in front of you — at its
+  origin (±0) where it has a basement below that. *Hierher
+  holen* (bring here), *Aufs Gelände* (onto the ground), *Ost*, *Nord*,
+  *Höhe* and *Drehung* (east, north, height, turn) move, set and turn it;
+  *Maßstab* (scale) reads the file in another unit (m, cm, mm, inch,
+  foot) and times a factor — for an OBJ, which has no unit, or a model at
+  1:100; a design under 4 m or over 3 km gets the panel's suggestion
+  (landscape plans have none: their coordinates say it).
+  *Lage sichern* saves the placement, with its scale, as a small file (`….lage.json`) to
+  load with the design next time. Buildings whose footprint the design
+  covers for more than half step aside (*Bestand im Umriss ausblenden*);
+  flat plates at the design's lowest point do not count. The design is
+  model-maker's white, or in the file's own colours (*Farben der Datei*);
+  it casts shadows, you cannot walk through it, and Modell and the shading
+  study show it. On a phone it may have at most 250,000 triangles and
+  40 MB (3 million and 400 MB on a computer); textures that do not fit
+  are left out. With the buildings, the trees, hedges, lamps and street
+  furniture in the design's plan (its ground plate included) go too, and
+  the ground, walls, kerbs, stairs, tracks, platforms and water there lie
+  under its floor (a line on a bridge above it stays). A click on the
+  design asks it like a building: the card names the part — an IFC
+  element with its type and GlobalId, a plan's surface by its class, a
+  glTF's or OBJ's object by its name — and where the design stands.
 - **Snapshot** — *Kopieren* copies your exact position, the date and time,
   the picture style, *Nebel*, the crown switch and the data layers as a
   small JSON text; paste such a text into the box and press *Anwenden* to

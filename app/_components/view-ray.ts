@@ -21,9 +21,14 @@ const far = new Vector3();
 /** A screen point (NDC) of a parallel camera unprojected onto its near
  *  plane (`near`) and its far plane (`far`). */
 function unprojectDepths(ndc: { x: number; y: number }, camera: Camera): void {
-  const nearZ = camera.coordinateSystem === WebGPUCoordinateSystem ? 0 : -1;
+  // NDC depth at the near plane: 0 (WebGPU) or −1 (WebGL) — and 1, with
+  // the far plane at 0, once the renderer has drawn the camera into a
+  // reversed depth buffer (three's `reversedDepthBuffer` sets
+  // `camera.reversedDepth` and rebuilds its projection)
+  const open = camera.coordinateSystem === WebGPUCoordinateSystem ? 0 : -1;
+  const [nearZ, farZ] = camera.reversedDepth ? [1, 0] : [open, 1];
   near.set(ndc.x, ndc.y, nearZ).unproject(camera);
-  far.set(ndc.x, ndc.y, 1).unproject(camera);
+  far.set(ndc.x, ndc.y, farZ).unproject(camera);
 }
 
 /**
