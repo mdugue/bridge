@@ -48,6 +48,7 @@ next-env.d.ts
 
 # POC tile data copied from data/ by scripts/prepare-data.ts
 /public/data/
+/public/wasm/
 
 # Site data: data/<site>/ is what `bun run fetch` and `bun run bake` write
 # for a site, data/_raw/<provider>/ the bulk downloads (never committed).

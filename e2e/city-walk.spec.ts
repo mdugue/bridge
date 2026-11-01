@@ -1,9 +1,11 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { Document, WebIO } from "@gltf-transform/core";
 import { expect, type Page, test } from "@playwright/test";
 import { fromArrayBuffer } from "geotiff";
 import proj4 from "proj4";
 import type { LookValues } from "../lib/city/look-controls";
+import { utmToLatLng } from "../lib/city/crs";
 import { EYE_HEIGHT } from "../lib/city/pose";
 import { tfwToBounds } from "../lib/city/tfw";
 
@@ -59,6 +61,269 @@ test.use({
 interface ErrorLog {
   console: string[];
   page: string[];
+}
+
+/**
+ * A design as a planner's export: a 40 × 30 m block, 20 m high (x east,
+ * y up, z south), under a node at `at` — the Land's coordinates, NHN.
+ */
+async function designBlockGlb(at: [number, number, number]) {
+  const doc = new Document();
+  const buffer = doc.createBuffer();
+  const [x0, x1, y0, y1, z0, z1] = [-20, 20, 0, 20, -15, 15];
+  const c = [
+    [x0, y0, z0],
+    [x1, y0, z0],
+    [x1, y0, z1],
+    [x0, y0, z1],
+    [x0, y1, z0],
+    [x1, y1, z0],
+    [x1, y1, z1],
+    [x0, y1, z1],
+  ];
+  const faces = [
+    [4, 7, 6, 5],
+    [0, 1, 2, 3],
+    [3, 2, 6, 7],
+    [1, 0, 4, 5],
+    [2, 1, 5, 6],
+    [0, 3, 7, 4],
+  ];
+  const positions = faces.flatMap(([a, b, d, e]) =>
+    [a, b, d, a, d, e].flatMap((i) => c[i])
+  );
+  const accessor = doc
+    .createAccessor()
+    .setType("VEC3")
+    .setArray(new Float32Array(positions))
+    .setBuffer(buffer);
+  const mesh = doc
+    .createMesh("block")
+    .addPrimitive(doc.createPrimitive().setAttribute("POSITION", accessor));
+  doc
+    .createScene()
+    .addChild(doc.createNode("block").setTranslation(at).setMesh(mesh));
+  return new WebIO().writeBinary(doc);
+}
+
+/**
+ * The same block as an IFC4 export in millimetres: drawn about its own
+ * origin, put at `east`/`north`/`height` (metres, its map unit) by its
+ * IfcMapConversion.
+ */
+function designBlockIfc(east: number, north: number, height: number) {
+  const lines = [
+    "IFCCARTESIANPOINT((0.,0.,0.))",
+    "IFCDIRECTION((0.,0.,1.))",
+    "IFCDIRECTION((1.,0.,0.))",
+    "IFCAXIS2PLACEMENT3D(#1,#2,#3)",
+    "IFCDIRECTION((0.,1.))",
+    "IFCGEOMETRICREPRESENTATIONCONTEXT($,'Model',3,1.E-05,#4,#5)",
+    "IFCGEOMETRICREPRESENTATIONSUBCONTEXT('Body','Model',*,*,*,*,#6,$,.MODEL_VIEW.,$)",
+    "IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.)",
+    "IFCUNITASSIGNMENT((#8))",
+    "IFCPROJECT('0YvctVUKr0kugbFTf53O9L',$,'Test',$,$,$,$,(#6),#9)",
+    "IFCPROJECTEDCRS('EPSG:25833',$,$,$,$,$,#25)",
+    `IFCMAPCONVERSION(#6,#11,${east}.,${north}.,${height}.,1.,0.,1.)`,
+    "IFCLOCALPLACEMENT($,#4)",
+    "IFCSITE('1YvctVUKr0kugbFTf53O9L',$,'Site',$,$,#13,$,$,.ELEMENT.,$,$,$,$,$)",
+    "IFCRELAGGREGATES('2YvctVUKr0kugbFTf53O9L',$,$,$,#10,(#14))",
+    "IFCCARTESIANPOINT((0.,0.))",
+    "IFCAXIS2PLACEMENT2D(#16,$)",
+    "IFCRECTANGLEPROFILEDEF(.AREA.,$,#17,40000.,30000.)",
+    "IFCEXTRUDEDAREASOLID(#18,#4,#2,20000.)",
+    "IFCSHAPEREPRESENTATION(#7,'Body','SweptSolid',(#19))",
+    "IFCPRODUCTDEFINITIONSHAPE($,$,(#20))",
+    "IFCLOCALPLACEMENT(#13,#4)",
+    "IFCBUILDINGELEMENTPROXY('3YvctVUKr0kugbFTf53O9L',$,'Block',$,$,#22,#21,$,$)",
+    "IFCRELCONTAINEDINSPATIALSTRUCTURE('5YvctVUKr0kugbFTf53O9L',$,$,$,(#23),#14)",
+    // the map's unit: without it the eastings would be the project's mm
+    "IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.)",
+  ];
+  return [
+    "ISO-10303-21;",
+    "HEADER;",
+    "FILE_DESCRIPTION((''),'2;1');",
+    "FILE_NAME('block.ifc','2026-10-29T00:00:00',(''),(''),'','','');",
+    "FILE_SCHEMA(('IFC4'));",
+    "ENDSEC;",
+    "DATA;",
+    ...lines.map((line, i) => `#${i + 1}=${line};`),
+    "ENDSEC;",
+    "END-ISO-10303-21;",
+    "",
+  ].join("\n");
+}
+
+/** The block as OBJ: metres, Y up, about its own origin, no place. */
+function designBlockObj() {
+  const v = [
+    [-20, 0, -15],
+    [20, 0, -15],
+    [20, 0, 15],
+    [-20, 0, 15],
+    [-20, 20, -15],
+    [20, 20, -15],
+    [20, 20, 15],
+    [-20, 20, 15],
+  ];
+  const faces = [
+    [5, 8, 7, 6],
+    [1, 2, 3, 4],
+    [4, 3, 7, 8],
+    [2, 1, 5, 6],
+    [3, 2, 6, 7],
+    [1, 4, 8, 5],
+  ];
+  return [
+    ...v.map((p) => `v ${p.join(" ")}`),
+    ...faces.map((f) => `f ${f.join(" ")}`),
+    "",
+  ].join("\n");
+}
+
+/**
+ * The block as a Rhino .3dm in millimetres, Z up, its earth anchor at
+ * (`east`, `north`) in EPSG:25833 and `height` m.
+ */
+async function designBlock3dm(east: number, north: number, height: number) {
+  const { default: rhino3dm } = await import("rhino3dm");
+  const rhino = await rhino3dm();
+  const doc = new rhino.File3dm();
+  doc.settings().modelUnitSystem = rhino.UnitSystem.Millimeters;
+  const anchor = doc.settings().earthAnchorPoint;
+  const ll = utmToLatLng(25_833, east, north);
+  anchor.earthBasepointLatitude = ll?.lat ?? 0;
+  anchor.earthBasepointLongitude = ll?.lng ?? 0;
+  anchor.earthBasepointElevation = height;
+  anchor.modelBasePoint = [0, 0, 0];
+  anchor.modelNorth = [0, 1, 0];
+  anchor.modelEast = [1, 0, 0];
+  doc.settings().earthAnchorPoint = anchor;
+  const c = [
+    [-20_000, -15_000, 0],
+    [20_000, -15_000, 0],
+    [20_000, 15_000, 0],
+    [-20_000, 15_000, 0],
+    [-20_000, -15_000, 20_000],
+    [20_000, -15_000, 20_000],
+    [20_000, 15_000, 20_000],
+    [-20_000, 15_000, 20_000],
+  ];
+  const quads = [
+    [0, 3, 2, 1],
+    [4, 5, 6, 7],
+    [0, 1, 5, 4],
+    [1, 2, 6, 5],
+    [2, 3, 7, 6],
+    [3, 0, 4, 7],
+  ];
+  // (createFromThreejsJSON takes three's Y-up and turns it to Rhino's Z-up)
+  const array = quads.flatMap((q) =>
+    [q[0], q[1], q[2], q[0], q[2], q[3]].flatMap((i) => {
+      const [x, y, z] = c[i];
+      return [x, z, -y];
+    })
+  );
+  const mesh = rhino.Mesh.createFromThreejsJSON({
+    data: { attributes: { position: { itemSize: 3, array } } },
+  });
+  doc.objects().add(mesh, new rhino.ObjectAttributes());
+  return [...doc.toByteArray()];
+}
+
+/**
+ * A landscape plan as DXF in the Land's coordinates (metres): a lawn
+ * hatch of 60 × 40 m south-west of `at` with a paved square in it, and
+ * two trees on a tree layer.
+ */
+function designPlanDxf([e, n]: [number, number]) {
+  const groups: (string | number)[][] = [
+    [0, "SECTION"],
+    [2, "HEADER"],
+    [9, "$INSUNITS"],
+    [70, 6],
+    [0, "ENDSEC"],
+    [0, "SECTION"],
+    [2, "ENTITIES"],
+  ];
+  const hatch = (
+    layer: string,
+    x0: number,
+    y0: number,
+    w: number,
+    h: number
+  ) => [
+    [0, "HATCH"],
+    [8, layer],
+    [91, 1],
+    [92, 2],
+    [72, 0],
+    [73, 1],
+    [93, 4],
+    [10, x0],
+    [20, y0],
+    [10, x0 + w],
+    [20, y0],
+    [10, x0 + w],
+    [20, y0 + h],
+    [10, x0],
+    [20, y0 + h],
+    [97, 0],
+  ];
+  groups.push(...hatch("L-RASEN", e - 60, n - 40, 60, 40));
+  groups.push(...hatch("L-PFLASTER", e - 40, n - 30, 15, 15));
+  for (const [x, y] of [
+    [e - 50, n - 10],
+    [e - 10, n - 30],
+  ]) {
+    groups.push([0, "CIRCLE"], [8, "BAUM NEU"], [10, x], [20, y], [40, 3]);
+  }
+  groups.push([0, "ENDSEC"], [0, "EOF"]);
+  return `${groups.flatMap(([c, v]) => [String(c), String(v)]).join("\n")}\n`;
+}
+
+/** The same lawn as a GeoPackage (one polygon layer, EPSG:25833). */
+async function designPlanGpkg([e, n]: [number, number]) {
+  const { default: initSqlJs } = await import("sql.js");
+  const SQL = await initSqlJs();
+  const db = new SQL.Database();
+  db.run(`CREATE TABLE gpkg_spatial_ref_sys (srs_name TEXT, srs_id INTEGER PRIMARY KEY,
+    organization TEXT, organization_coordsys_id INTEGER, definition TEXT);
+    INSERT INTO gpkg_spatial_ref_sys VALUES ('ETRS89 / UTM 33N', 25833, 'EPSG', 25833, '');
+    CREATE TABLE gpkg_contents (table_name TEXT PRIMARY KEY, data_type TEXT, srs_id INTEGER);
+    INSERT INTO gpkg_contents VALUES ('flaechen', 'features', 25833);
+    CREATE TABLE gpkg_geometry_columns (table_name TEXT, column_name TEXT,
+      geometry_type_name TEXT, srs_id INTEGER, z INTEGER, m INTEGER);
+    INSERT INTO gpkg_geometry_columns VALUES ('flaechen', 'geom', 'POLYGON', 25833, 0, 0);
+    CREATE TABLE flaechen (fid INTEGER PRIMARY KEY, geom BLOB, nutzung TEXT);`);
+  const ring = [
+    [e - 60, n - 40],
+    [e, n - 40],
+    [e, n],
+    [e - 60, n],
+    [e - 60, n - 40],
+  ];
+  const wkb = new DataView(
+    new ArrayBuffer(8 + 1 + 4 + 4 + 4 + ring.length * 16)
+  );
+  [0x47, 0x50, 0, 1].forEach((b, i) => wkb.setUint8(i, b));
+  wkb.setInt32(4, 25_833, true);
+  wkb.setUint8(8, 1);
+  wkb.setUint32(9, 3, true);
+  wkb.setUint32(13, 1, true);
+  wkb.setUint32(17, ring.length, true);
+  ring.forEach(([x, y], i) => {
+    wkb.setFloat64(21 + i * 16, x, true);
+    wkb.setFloat64(29 + i * 16, y, true);
+  });
+  db.run("INSERT INTO flaechen (geom, nutzung) VALUES (?, ?)", [
+    new Uint8Array(wkb.buffer),
+    "Rasen",
+  ]);
+  const bytes = db.export();
+  db.close();
+  return [...bytes];
 }
 
 /** Starts collecting page + console errors for the whole life of the page. */
@@ -1268,6 +1533,156 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     // back where it was entered from (the pivot did not move)
     expect(after?.pos.x).toBeCloseTo(before?.pos.x ?? 0, 0);
     expect(after?.pos.z).toBeCloseTo(before?.pos.z ?? 0, 0);
+    expectNoErrors(errors);
+  });
+
+  test("a design file takes its place and sets the buildings it covers aside", async () => {
+    // A 40 × 30 m block in the Land's coordinates by the Albertplatz, on
+    // the primary tile: read on the page, placed by its own coordinates,
+    // the LoD2 buildings under it out of the index — and back once it goes.
+    const glb = await designBlockGlb([412_300, 112, -5_657_420]);
+    const before = await page.evaluate(
+      () => window.__poc?.stats?.layerStats.city.triangles ?? 0
+    );
+    const status = await page.evaluate(
+      async (bytes) => {
+        const design = window.__poc?.handle?.design;
+        await design?.load([new File([new Uint8Array(bytes)], "block.glb")]);
+        return design?.status() ?? null;
+      },
+      [...glb]
+    );
+    expect(status?.source).toBe("file");
+    expect(status?.placement.east).toBeCloseTo(412_300, 3);
+    expect(status?.placement.north).toBeCloseTo(5_657_420, 3);
+    expect(status?.placement.base).toBe(112);
+    expect(status?.hidden ?? 0).toBeGreaterThan(0);
+    await page.waitForFunction(
+      (n) => (window.__poc?.stats?.layerStats.city.triangles ?? 0) < n,
+      before,
+      { timeout: slow(30_000) }
+    );
+    await waitForFrames(page, 1);
+    await page.evaluate(() => window.__poc?.handle?.design.remove());
+    await page.waitForFunction(
+      (n) => (window.__poc?.stats?.layerStats.city.triangles ?? 0) === n,
+      before,
+      { timeout: slow(30_000) }
+    );
+    expectNoErrors(errors);
+  });
+
+  test("an IFC model takes the place its map conversion gives it", async () => {
+    // The block again, as IFC in millimetres about its own origin: web-ifc
+    // (its .wasm from the site's own /wasm/) reads it, IfcMapConversion
+    // puts it by the Albertplatz, and the buildings under it step aside.
+    const ifc = designBlockIfc(412_300, 5_657_420, 112);
+    const status = await page.evaluate(async (text) => {
+      const design = window.__poc?.handle?.design;
+      await design?.load([new File([text], "block.ifc")]);
+      return design?.status() ?? null;
+    }, ifc);
+    expect(status?.source).toBe("file");
+    expect(status?.note).toContain("IfcMapConversion");
+    expect(status?.placement.east).toBeCloseTo(412_300, 3);
+    expect(status?.placement.north).toBeCloseTo(5_657_420, 3);
+    expect(status?.placement.base).toBeCloseTo(112, 3);
+    expect(status?.triangles).toBe(12);
+    expect(status?.hidden ?? 0).toBeGreaterThan(0);
+    // asked like a building: its element's card, with its GlobalId
+    await page.evaluate(() => {
+      const api = window.__poc?.handle;
+      if (!api) {
+        throw new Error("scene handle not published");
+      }
+      api.teleportTo(412_300, 5_657_420 - 90);
+      const x = 412_300 - api.offset.cx;
+      const z = -(5_657_420 - api.offset.cy);
+      api.flyTo({ x, y: 140, z: z + 90 }, { x, y: 122, z });
+    });
+    await waitForFrames(page, 1);
+    const asked = await page.evaluate(() => window.__poc?.handle?.inquireAt());
+    expect(asked?.kind).toBe("design");
+    await withFramesHeld(page, async () => {
+      const card = page.getByTestId("inquiry-card");
+      await expect(card).toBeVisible();
+      await expect(card).toContainText("Entwurf");
+      await expect(card).toContainText("Bauteil (IfcBuildingElementProxy)");
+      await expect(card).toContainText("3YvctVUKr0kugbFTf53O9L");
+      await page.keyboard.press("Escape");
+      await expect(card).toBeHidden();
+    });
+    await page.evaluate(() => window.__poc?.handle?.design.remove());
+    expectNoErrors(errors);
+  });
+
+  test("an OBJ without a place lands in front, a Rhino file at its earth anchor", async () => {
+    const obj = await page.evaluate(async (text) => {
+      const design = window.__poc?.handle?.design;
+      await design?.load([new File([text], "block.obj")]);
+      return design?.status() ?? null;
+    }, designBlockObj());
+    expect(obj?.source).toBe("here");
+    expect(obj?.triangles).toBe(12);
+    expect(obj?.size).toEqual([40, 30, 20]);
+    // read in centimetres it shrinks about its foot, which stays
+    const cm = await page.evaluate(() => {
+      const design = window.__poc?.handle?.design;
+      design?.setScale({ unit: "cm", factor: 1 });
+      return design?.status() ?? null;
+    });
+    expect(cm?.scale).toEqual({ unit: "cm", factor: 1 });
+    expect(cm?.size[2]).toBeCloseTo(0.2, 6);
+    expect(cm?.placement.base).toBe(obj?.placement.base);
+    expect(cm?.scaleHint).toContain("Zentimetern");
+    // three's Rhino3dmLoader with rhino3dm from the site's own /wasm/
+    const rhino = await page.evaluate(
+      async (bytes) => {
+        const design = window.__poc?.handle?.design;
+        await design?.load([new File([new Uint8Array(bytes)], "block.3dm")]);
+        return design?.status() ?? null;
+      },
+      await designBlock3dm(412_300, 5_657_420, 112)
+    );
+    expect(rhino?.note).toContain("Geo-Ankerpunkt");
+    expect(rhino?.placement.east).toBeCloseTo(412_300, 1);
+    expect(rhino?.placement.north).toBeCloseTo(5_657_420, 1);
+    expect(rhino?.placement.base).toBeCloseTo(112, 3);
+    expect(rhino?.hidden ?? 0).toBeGreaterThan(0);
+    await page.evaluate(() => window.__poc?.handle?.design.remove());
+    expectNoErrors(errors);
+  });
+
+  test("a landscape plan lies on the ground in its colours and takes no house away", async () => {
+    // DXF in the Land's coordinates by the Albertplatz: hatches as lawn
+    // and paving, circles on a tree layer as trees
+    const dxf = await page.evaluate(
+      async (text) => {
+        const design = window.__poc?.handle?.design;
+        await design?.load([new File([text], "plan.dxf")]);
+        return design?.status() ?? null;
+      },
+      designPlanDxf([412_300, 5_657_420])
+    );
+    expect(dxf?.note).toContain("Landschaftsplan");
+    expect(dxf?.note).toContain("Rasen");
+    expect(dxf?.note).toContain("2 Bäume");
+    expect(dxf?.source).toBe("file");
+    expect(dxf?.placement.east).toBeCloseTo(412_270, 0);
+    expect(dxf?.fileColours).toBe(true);
+    expect(dxf?.hidden).toBe(0);
+    // a GeoPackage, read with sql.js from the site's own /wasm/
+    const gpkg = await page.evaluate(
+      async (bytes) => {
+        const design = window.__poc?.handle?.design;
+        await design?.load([new File([new Uint8Array(bytes)], "plan.gpkg")]);
+        return design?.status() ?? null;
+      },
+      await designPlanGpkg([412_300, 5_657_420])
+    );
+    expect(gpkg?.note).toContain("Rasen");
+    expect(gpkg?.placement.north).toBeCloseTo(5_657_400, 0);
+    await page.evaluate(() => window.__poc?.handle?.design.remove());
     expectNoErrors(errors);
   });
 

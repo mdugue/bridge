@@ -85,6 +85,7 @@ import {
   TinIndex,
 } from "@/lib/city/terrain-tin";
 import type { TerrainExtras } from "@/lib/city/tileset";
+import { groundUnderDesign } from "./design-site";
 import { colonyGarden } from "./cultivated-layer";
 import { prepareGroundOffThread } from "./ground-prep-client";
 import {
@@ -1244,6 +1245,8 @@ export function createTerrainMaterial(
     roughness: 1,
   });
   material.name = "terrain";
+  // pressed under a loaded design's floor where it stands (design-site.ts)
+  material.positionNode = groundUnderDesign;
   // The variant's graph, shared by every tile of it: a tile that arrives
   // builds no shader; its own rasters go into the slots.
   const graph = terrainGraph(splat);
