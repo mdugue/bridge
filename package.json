@@ -22,6 +22,7 @@
     "site": "bun scripts/site-report.ts",
     "fetch": "bun scripts/pipeline.ts fetch",
     "bake": "bun scripts/pipeline.ts bake",
+    "osm-coverage": "bun scripts/pipeline.ts coverage",
     "test:pipeline": "cd pipeline && uv run pytest -q tests && uv run ruff check . && uv run ruff format --check ."
   },
   "dependencies": {

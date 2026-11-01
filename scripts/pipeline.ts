@@ -30,6 +30,10 @@
  *   bun run bake <site> --jobs 3      each step's tiles three at a time,
  *                                     one process each (a step still waits
  *                                     for the one before on every tile)
+ *   bun run osm-coverage <site>       what the bakes make of each built
+ *                                     thing OSM maps in the site (pipeline/
+ *                                     bake/coverage.py); fails on one seen
+ *                                     3+ times that nobody decided about
  *   bun run bake <site> --force       run every step again, even one whose
  *                                     code and inputs did not change (a
  *                                     step is otherwise skipped then:
@@ -85,6 +89,7 @@ export function siteSpec(site: Site) {
 const OPTIONS = {
   fetch: ["--lsc"],
   bake: ["--step", "--research", "--jobs", "--force"],
+  coverage: [],
 } as const;
 const VALUED = new Set(["--step", "--jobs"]);
 
@@ -99,9 +104,9 @@ export function unknownOptions(
 
 if (import.meta.main) {
   const [command, ...argv] = process.argv.slice(2);
-  if (command !== "fetch" && command !== "bake") {
+  if (command !== "fetch" && command !== "bake" && command !== "coverage") {
     process.stderr.write(
-      "usage: bun scripts/pipeline.ts fetch|bake <site> [tile…]\n"
+      "usage: bun scripts/pipeline.ts fetch|bake|coverage <site> [tile…]\n"
     );
     process.exit(2);
   }
