@@ -24,6 +24,12 @@ data and stays under the licence of its source:
 
   - Wikidata: CC0 1.0.
 
+  - Wikimedia Commons (the photos the murals' drawings are made after,
+    data/<site>/murals/*.webp: adaptations, redrawn as pen lines and a
+    wash): each drawing under its photo's free licence, credited with the
+    photo's author and licence in data/<site>/murals/murals.json and in
+    the viewer's sources.
+
   - The walks' photos (data/<site>/walks/photos/): Wikimedia Commons
     files, each under the licence its Commons page states and credited
     with its author, licence and page in the walk's file (photo) and on
