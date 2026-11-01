@@ -532,6 +532,60 @@ und das Modell behalten ihre scharfen Linien.
   lässt sich nicht rückgängig machen. *Bild speichern* speichert die
   Ansicht als PNG mit ihren Quellen (siehe [Modell](#modell-die-stadt-als-planzeichnung)). *Immersiver Modus* fängt den
   Mauszeiger für ein Ego-Perspektive-Gefühl ein; `Esc` verlässt ihn.
+- **Entwurf** — lädt einen eigenen Entwurf in die Stadt: eine glTF-Datei
+  (`.glb`, oder `.gltf` mit ihrer `.bin` und den Texturen zusammen
+  ausgewählt), wie sie SketchUp, Rhino, Revit, Archicad, Vectorworks oder
+  Blender exportieren, ein IFC-Modell (`.ifc`), ein OBJ (`.obj`, mit
+  `.mtl` und Texturen zusammen ausgewählt; gelesen als Meter, Y nach oben)
+  oder eine Rhino-Datei (`.3dm`, mit Render-Netzen gespeichert); auch auf
+  das Feld ziehen. Eine Rhino-Datei mit gesetztem Geo-Ankerpunkt steht an
+  ihrem Ort (auf dem Gelände, wenn der Anker keine Höhe oder Rhinos
+  Voreinstellung 0 nennt). Landschaftspläne lädt man genauso: ein ASCII-DXF, ein
+  Shapefile (die `.shp` mit `.dbf`, `.prj` und `.cpg` zusammen
+  auswählen), ein GeoPackage (`.gpkg`) oder LandXML (`.xml`). Schraffuren
+  und Flächen werden nach dem Namen ihres Layers oder ihren Attributen
+  zu Rasen, Beet, Pflaster, Weg, Wasser, Sand oder Kies (deutsch oder
+  englisch, etwa „Rasen“, „Pflaster“, „Staudenbeet“; ein Attribut wie
+  *Nutzung*, *Art* oder *Belag* zuerst, Namen und Adressen zuletzt, damit
+  ein Park an der „Kamenzer Straße“ Rasen bleibt), in den Farben der
+  Stadt aufs Gelände gelegt; Baumsymbole werden Bäume in der gezeichneten
+  Kronengröße, ein DGM ein geplantes Gelände. Ein Layer, dessen Name
+  nichts sagt, bleibt grau, und das Feld nennt ihn. Ein Plan in
+  UTM-Koordinaten liegt an seinem Ort auf dem dort schon geladenen
+  Gelände. Eine IFC mit Verortung (`IfcMapConversion` in ETRS89/UTM) steht
+  von selbst an ihrem Ort; eine, die nur Breite und Länge des Grundstücks
+  kennt, steht ungefähr dort, und das Feld bittet ums Prüfen. Liegt der
+  Ort aus der Datei mehr als 2 km außerhalb der Kacheln der Stadt oder in
+  den Koordinaten eines anderen Orts, wird der Entwurf vor dir abgesetzt,
+  und das Feld sagt warum. Die Datei wird nur in
+  deinem Browser gelesen und nirgends hochgeladen. Stehen Landeskoordinaten
+  (UTM, auch mit vorangestellter Zone) in der Datei, steht der Entwurf
+  gleich an seinem Ort, mit seinen NHN-Höhen, wenn sie zum Gelände passen;
+  sonst wird er vor dir aufs Gelände gesetzt — mit seinem Nullpunkt (±0),
+  wenn er ein Untergeschoss darunter hat. *Hierher holen*, *Aufs
+  Gelände*, *Ost*, *Nord*, *Höhe* und *Drehung* verschieben, setzen und
+  drehen ihn; *Maßstab* liest die Datei in einer anderen Einheit (m, cm,
+  mm, Zoll, Fuß) und mit einem Faktor, etwa für ein OBJ, das keine
+  Einheit kennt, oder ein Modell im Maßstab 1:100; ist ein Entwurf kleiner
+  als 4 m oder größer als 3 km, schlägt das Feld das vor (Landschaftspläne
+  haben keinen Maßstab: ihre Koordinaten sagen ihn). *Lage sichern* speichert die Lage samt Maßstab als kleine Datei
+  (`….lage.json`), die beim nächsten Mal mit dem Entwurf zusammen geladen
+  wird. Gebäude, deren Grundriss der Entwurf zu mehr als der Hälfte
+  überdeckt, treten beiseite (*Bestand im Umriss ausblenden*); flache
+  Bodenplatten am tiefsten Punkt des Entwurfs zählen dabei nicht. Der
+  Entwurf ist modellweiß, oder in den *Farben der Datei*; er wirft
+  Schatten, man läuft nicht durch ihn hindurch, und Modell und
+  Verschattungsstudie zeigen ihn mit. Auf dem Handy darf er höchstens
+  250 000 Dreiecke und 40 MB haben (am Rechner 3 Millionen und 400 MB);
+  Texturen, die nicht hineinpassen, bleiben weg. Mit den Gebäuden
+  verschwinden auch Bäume, Hecken, Laternen und Stadtmöbel im Grundriss
+  des Entwurfs (seine Bodenplatte eingeschlossen), und das Gelände, Mauern,
+  Bordsteine, Treppen, Gleise, Bahnsteige und Wasser liegen dort unter
+  seinem Boden (eine Strecke auf einer Brücke darüber bleibt). Ein Klick
+  auf den Entwurf befragt ihn wie ein Gebäude: Die Karte nennt das
+  Bauteil — ein IFC-Element mit Typ und GlobalId, eine Fläche des Plans
+  nach ihrer Art, ein Objekt aus glTF oder OBJ mit seinem Namen — und wo
+  der Entwurf steht.
 - **Snapshot** — *Kopieren* kopiert deine genaue Position, Datum und
   Uhrzeit, den Bildstil, den *Nebel*, den Kronen-Schalter und die
   Datenebenen als kleinen JSON-Text; einen solchen Text in das Feld
