@@ -67,6 +67,8 @@ zur Regel passt.
 - **Zuordnungen:** Ein Laden aus OpenStreetMap gehört zu dem Gebäude, in
   dessen Umriss sein Punkt liegt, sonst zum nächsten in wenigen Metern; ein
   Wahrzeichen aus Wikidata zu den Gebäudeteilen, die sein Umriss deckt.
+  Eine Brücke ist kein Wahrzeichen (sie gehört zu den Brücken), es sei
+  denn, Wikidata führt sie zugleich als Gebäude.
 - **Fremde Erkennung:** Laternen, die Mapillary in Straßenfotos gefunden
   hat, sind dort von Mapillarys eigener Bilderkennung erkannt worden —
   trainierte Netze, deren Treffer der Viewer übernimmt.
