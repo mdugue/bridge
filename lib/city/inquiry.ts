@@ -40,6 +40,7 @@ import {
 import { moreCard } from "./inquiry-more";
 import type { Stated } from "./methods";
 import { bikeCard, trafficCard } from "./inquiry-traffic";
+import { designCard } from "./inquiry-design";
 import {
   isMeasuredRoof,
   MEASURED_ROOF,
@@ -388,6 +389,8 @@ export function inquiryCard(
       return trafficCard(inquiry);
     case "bikes":
       return bikeCard(inquiry);
+    case "design":
+      return designCard(inquiry);
     case "canopy":
     case "furniture":
     case "hedge":

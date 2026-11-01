@@ -5,6 +5,7 @@ import {
   Color,
   Group,
   Matrix4,
+  type MeshStandardNodeMaterial,
   type Object3D,
   PCFShadowMap,
   PerspectiveCamera,
@@ -94,8 +95,10 @@ import { createRegressionState, stepRegression } from "@/lib/city/regression";
 import {
   type Site,
   spawnViewpoint,
+  tileExtentOf,
   type ViewpointGeometry,
 } from "@/lib/city/site";
+import { beyondExtents } from "@/lib/city/design-placement";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
   parseTilesetExtras,
@@ -144,6 +147,13 @@ import {
 import type { OutlineSelection } from "./selection-outline";
 import { trafficMesh } from "./traffic-flow";
 import { createCityCollider } from "./collision";
+import {
+  createDesignLayer,
+  type DesignLayer,
+  type DesignStatus,
+} from "./design-layer";
+import { cutsGround, foldedThing, groundKeptUnderDesign } from "./design-site";
+import { graphOf, setGraph } from "./material-slots";
 import type { CrashTrail } from "./crash-trail";
 import { createSeasonClock } from "./crown-season";
 import { climateDay, seasonShiftFor } from "@/lib/city/tree-season";
@@ -188,6 +198,7 @@ import {
   pixelRatioFor,
   type SceneBudget,
   shadowMapSizeFor,
+  reversedDepthFromSearch,
   tileCacheBytesFor,
 } from "./scene-profile";
 import {
@@ -229,6 +240,7 @@ import {
   streamTimings,
   traceRequested,
 } from "./stream-timing";
+import { attachInspector, inspectRequested } from "./inspector";
 import { attachTouchControls } from "./touch-controls";
 import {
   createVegetationLod,
@@ -495,6 +507,9 @@ export interface CityWalkOptions {
   onInquiry?: (inquiry: Inquiry | null, along: InquiryAlong | null) => void;
   /** walk, fly or Modell (plan 055): at the start of a switch */
   onModeChange?: (mode: ViewMode) => void;
+  /** the loaded design as the *Entwurf* panel shows it (ADR 0054), null
+   *  without one */
+  onDesign?: (status: DesignStatus | null) => void;
   /**
    * Modell's view for the HUD (the scale bar, the north arrow, the
    * projection cards, the minimap's footprint), throttled like the pose;
@@ -551,12 +566,34 @@ export interface CapturedImage {
   imagePxPerCssPx: number;
 }
 
+/** What the HUD drives of the design layer. */
+export type DesignControls = Pick<
+  DesignLayer,
+  | "applyPlacementFile"
+  | "load"
+  | "placeHere"
+  | "placementText"
+  | "remove"
+  | "setFileColours"
+  | "setOnGround"
+  | "setPlacement"
+  | "setReplaceExisting"
+  | "setScale"
+  | "status"
+>;
+
 export interface CityWalkHandle {
   /** Restores a camera pose captured by getCameraState (snapshot replay). */
   applyCameraState: (state: CameraState) => void;
   /** Removes the inquiry mark (the card was closed). */
   clearInquiry: () => void;
   demolishAtCrosshair: () => void;
+  /**
+   * A planner's design in the city (design-layer.ts, ADR 0054): read on
+   * the device, placed, turned, lifted; its status comes through
+   * `onDesign`.
+   */
+  design: DesignControls;
   dispose: () => void;
   /**
    * Asks what stands at a screen point (NDC; the centre when omitted),
@@ -750,6 +787,15 @@ async function createRenderer(
     // three asks for `timestamp-query` only where the adapter has it
     // (Chromium; not Safari) and writes two timestamps per pass.
     trackTimestamp: timed && !budget.forceWebGL,
+    // Depth from 1 at the near plane to 0 at the far one, in floats: the
+    // float's precision then grows with the distance the 1/z mapping loses,
+    // so surfaces kilometres off stop fighting. three turns the depth test,
+    // the clear, the polygon offsets, the shadow maps and its depth helpers
+    // round itself, and falls back to the plain buffer on a WebGL2 without
+    // EXT_clip_control; what reads raw depth here asks
+    // `reversedDepthBuffer` (stylize-effect.ts, view-ray.ts). `?depth=standard`
+    // draws with the plain buffer, to compare.
+    reversedDepthBuffer: reversedDepthFromSearch(window.location.search),
   });
   try {
     await renderer.init();
@@ -1126,6 +1172,11 @@ export async function createCityWalkApp(
   const tracing = traceRequested(window.location.search);
   if (tracing) {
     cleanups.push(startTrace());
+  }
+  // `?inspect=1`: three's Inspector over the canvas (inspector.ts)
+  if (inspectRequested(window.location.search)) {
+    // a QA aid: a chunk that fails to load leaves the boot as it was
+    cleanups.push(await attachInspector(renderer).catch(() => () => undefined));
   }
   try {
     return await bootApp(opts, renderer, scene, cleanups);
@@ -1995,8 +2046,19 @@ async function bootApp(
   // page's process ran out there. The frames before see no building, and
   // the placing asks again.
   let bvhOnDemand = false;
+  // A loaded design (design-layer.ts): walked against like a building. It
+  // is created with the minimap's footprints, below.
+  let design: DesignLayer | null = null;
+  // what the tile cache leaves to it (the memory governor's section)
+  let designReserve = 0;
+  let reserveCache = (bytes: number) => {
+    designReserve = bytes;
+  };
   const collider = createCityCollider(
-    () => stream.visibleCities().map((c) => c.mesh),
+    () => [
+      ...stream.visibleCities().map((c) => c.mesh),
+      ...(design?.meshes() ?? []),
+    ],
     (mesh) => {
       if (bvhOnDemand) {
         ensureCityBvh(mesh);
@@ -2192,6 +2254,14 @@ async function bootApp(
       return { positions, reach: 0 };
     }
     const { target, solids } = subject.thing;
+    if (target.kind === "design") {
+      return {
+        positions:
+          design?.partShape(target.file, target.partIndex) ??
+          new Float32Array(),
+        reach: 0,
+      };
+    }
     const first = solids[0];
     if (target.kind === "bridge" && first && "slab" in first) {
       // on the level that answered: a tile's fine and coarse terrain each
@@ -2238,12 +2308,16 @@ async function bootApp(
     things: () => [
       ...stream.visibleDressings().flatMap(asksOf),
       ...(dataLayers.current()?.asks() ?? []),
+      ...(design?.asks() ?? []),
     ],
     viewport: () => ({
       width: renderer.domElement.clientWidth || 1,
       height: renderer.domElement.clientHeight || 1,
     }),
     toSite: (p) => [p.x + offset.cx, offset.cy - p.z],
+    // an instance a design's site folded away is not there to be asked
+    // (a hedge's by where the ray met it: a row folds piece by piece)
+    folded: ({ target }, at) => foldedThing(target, at, offset),
   });
   // A tree's card fetches what the register says about it (ADR 0042).
   const treeFactsUrl = (tile: string) => {
@@ -2256,32 +2330,22 @@ async function bootApp(
   // (a section is asked only on bodies the data layers built: they are here)
   const trafficHour = () => dataLayers.current()?.trafficHour();
   const answered = (asked: Inquiry | null): Inquiry | null => {
-    switch (asked?.kind) {
-      case "tree": {
-        const factsUrl = treeFactsUrl(asked.tile);
-        return factsUrl ? { ...asked, factsUrl } : asked;
-      }
-      case "traffic":
-        return {
-          ...asked,
-          credit: layerSources?.traffic?.credit,
-          hour: trafficHour(),
-        };
-      case "bikes":
-        return { ...asked, credit: layerSources?.bikes?.credit };
-      case undefined:
-        return null;
-      case "building":
-      case "bridge":
-      case "monument":
-      case "canopy":
-      case "furniture":
-      case "hedge":
-      case "lamp":
-      case "landing":
-      case "stop":
-        return asked;
+    if (asked?.kind === "tree") {
+      const factsUrl = treeFactsUrl(asked.tile);
+      return factsUrl ? { ...asked, factsUrl } : asked;
     }
+    if (asked?.kind === "traffic") {
+      return {
+        ...asked,
+        credit: layerSources?.traffic?.credit,
+        hour: trafficHour(),
+      };
+    }
+    if (asked?.kind === "bikes") {
+      return { ...asked, credit: layerSources?.bikes?.credit };
+    }
+    // the others carry all their card needs
+    return asked;
   };
   // the last question's candidates, with what the card needs of each
   let along: InquiryAlong | null = null;
@@ -2490,10 +2554,21 @@ async function bootApp(
   // tile event.
   let flattened: FootprintPoly[] | null = null;
   const currentFootprints = (): FootprintPoly[] => {
-    flattened ??= [...footprints].flatMap(([tile, polys]) => {
-      const gone = stream.demolished.get(tile);
-      return footprintPolys(polys, (i) => !gone?.has(i));
-    });
+    if (!flattened) {
+      flattened = [...footprints].flatMap(([tile, polys]) => {
+        const gone = stream.demolished.get(tile);
+        const replaced = design?.hiddenFor(tile);
+        return footprintPolys(
+          polys,
+          (i) => gone?.has(i) !== true && replaced?.has(i) !== true
+        );
+      });
+      // the design's plan, drawn as a building
+      const outline = design?.outline();
+      if (outline) {
+        flattened.push({ pts: outline });
+      }
+    }
     return flattened;
   };
   function loadFootprints(): void {
@@ -2506,12 +2581,121 @@ async function bootApp(
           if (polys && !disposed) {
             footprints.set(tile.id, polys);
             flattened = null;
+            // a design loaded before the tile's footprints came
+            design?.refresh();
             scheduleStats();
           }
         })
         .catch(() => undefined);
     }
   }
+
+  // A planner's design (design-layer.ts, ADR 0054): nothing is built until
+  // a file is loaded. The buildings it stands in for leave every loaded
+  // level of their tile, and those of a tile that lands later as it lands
+  // (`hideReplaced`, from the stream's change).
+  //
+  // A new index goes to the GPU in a compile of its tile before the BVH
+  // worker may take it (city-layer.ts `indexUploaded`): handed over first,
+  // its buffer was gone when the frame came to copy it.
+  const uploadIndex = (layer: CityLayer) => {
+    const upload = () => {
+      if (disposed || !stream.cities.has(layer)) {
+        return;
+      }
+      const index = layer.mesh.geometry.getIndex();
+      void postStack
+        .compile(layer.mesh)
+        .then(() => layer.indexUploaded(index))
+        .catch(() => undefined);
+    };
+    const held = layer.held();
+    if (held) {
+      void held.then(upload, upload);
+    } else {
+      upload();
+    }
+  };
+  // The ground under a design's site is cut where a triangle reaching out
+  // of it lifts the ground through its plate (design-site.ts): on the
+  // tiles under the site only — the cut costs the ground its early depth
+  // test.
+  const cutGround = () => {
+    for (const t of stream.terrains) {
+      const material = t.mesh.material as MeshStandardNodeMaterial;
+      const want = cutsGround(t.bounds);
+      if ((material.maskNode !== null) !== want) {
+        material.maskNode = want ? groundKeptUnderDesign : null;
+        // its own shared build (pipeline-anchors.ts keys stand-ins by it)
+        const graph = graphOf(material);
+        if (graph !== undefined) {
+          setGraph(
+            material,
+            want ? `${graph}|design-cut` : graph.replace(/\|design-cut$/, "")
+          );
+        }
+        material.needsUpdate = true;
+        // built off the frame where it can be
+        void postStack.compile(t.mesh).catch(() => undefined);
+      }
+    }
+  };
+  const hideReplaced = (): boolean => {
+    cutGround();
+    let changed = false;
+    for (const layer of stream.cities) {
+      if (layer.setHidden(design?.hiddenFor(layer.tile) ?? new Set())) {
+        changed = true;
+        uploadIndex(layer);
+      }
+    }
+    return changed;
+  };
+  design = createDesignLayer({
+    parent: cuts.group,
+    offset,
+    epsg: opts.site.provider.epsg,
+    tier: budget.tier,
+    heightAt,
+    beyondSite: (x, y) =>
+      beyondExtents(opts.site.tiles.map(tileExtentOf), x, y),
+    capGround: (cap) => {
+      siteGround.setCap(cap);
+      // what reads the ground by its version (the Ausschnitt's plinth)
+      groundVersion++;
+      const cut = cuts.cutOut();
+      if (cut) {
+        cuts.setCutOut(cut, siteGround.atWorld, groundVersion);
+      }
+    },
+    pose: () => pose.getPose(),
+    compile: (object) => postStack.compile(object),
+    footprints: () => footprints,
+    changed: () => {
+      if (disposed) {
+        return;
+      }
+      hideReplaced();
+      flattened = null;
+      probe.refresh();
+      postStack.sceneChanged();
+      invalidateShadows();
+      scheduleStats();
+      // a tile whose index the BVH worker had hides once it is back
+      const held = [...stream.cities].flatMap((l) => l.held() ?? []);
+      if (held.length > 0) {
+        void Promise.all(held).then(() => {
+          if (!disposed) {
+            invalidateShadows();
+            scheduleStats();
+          }
+        });
+      }
+    },
+    reserve: (bytes) => reserveCache(bytes),
+    report: (status) => opts.onDesign?.(status),
+  });
+  cleanups.push(() => design?.dispose());
 
   // Everything that follows from the tile set changing: the ground, the
   // lamp heads, the fog floor, the shadows, the stats.
@@ -2530,6 +2714,10 @@ async function bootApp(
     }
     terrains = stream.visibleTerrains();
     siteGround.setSources(terrains);
+    // a building level that landed under the design steps aside too
+    if (hideReplaced()) {
+      flattened = null;
+    }
     groundPlate?.showUnder(new Set(terrains.map((t) => t.tile)));
     // a tile whose other building level landed or took over keeps the mark
     probe.refresh();
@@ -3283,9 +3471,13 @@ async function bootApp(
     isWebGPUBackend?: boolean;
     trackTimestamp?: boolean;
   };
+  // Not under three's Inspector (`?inspect=1`): it turns the timestamps on
+  // and resolves them every frame itself, so a readback here would get its
+  // leftovers and steer the resolution by them.
   const timesGpu =
     timedBackend.isWebGPUBackend === true &&
-    timedBackend.trackTimestamp === true;
+    timedBackend.trackTimestamp === true &&
+    !inspectRequested(window.location.search);
   let gpuReadDue = 0;
   let gpuReading = false;
   // three hands back its last value when nothing new resolved (the map
@@ -3585,15 +3777,26 @@ async function bootApp(
   );
   const baseError = stream.tiles.errorTarget;
   const baseMin = stream.tiles.lruCache.minBytesSize;
+  const baseMax = stream.tiles.lruCache.maxBytesSize;
   // A phone's page in the background keeps no tile it does not use (the
   // resume guard, below): its lower bound is 0 until it is shown again,
   // whatever step the governor takes meanwhile.
   const shedding = () => budget.tier === "mobile" && document.hidden;
   const applyStep = (step: MemoryStep) => {
     stream.tiles.errorTarget = baseError * step.errorScale;
+    // a loaded design's bytes come out of the cache (ADR 0054): the page
+    // holds no more with it than without
     stream.tiles.lruCache.minBytesSize = shedding()
       ? 0
-      : baseMin * step.minScale;
+      : Math.max(0, baseMin * step.minScale - designReserve);
+    stream.tiles.lruCache.maxBytesSize = Math.max(
+      stream.tiles.lruCache.minBytesSize,
+      baseMax - designReserve
+    );
+  };
+  reserveCache = (bytes) => {
+    designReserve = bytes;
+    applyStep(governor.step());
   };
   applyStep(governor.step());
   const govern = setInterval(() => {
@@ -3830,6 +4033,20 @@ async function bootApp(
     selectCandidate,
     previewCandidate: probe.preview,
     demolishAtCrosshair,
+    design: {
+      applyPlacementFile: (text) =>
+        design?.applyPlacementFile(text) ?? "Keine Szene.",
+      load: (files) => design?.load(files) ?? Promise.resolve(),
+      placeHere: () => design?.placeHere(),
+      placementText: () => design?.placementText() ?? null,
+      remove: () => design?.remove(),
+      setFileColours: (on) => design?.setFileColours(on) ?? Promise.resolve(),
+      setOnGround: () => design?.setOnGround(),
+      setPlacement: (patch) => design?.setPlacement(patch),
+      setReplaceExisting: (on) => design?.setReplaceExisting(on),
+      setScale: (scale) => design?.setScale(scale),
+      status: () => design?.status() ?? null,
+    },
     inquireAt,
     enterImmersive: canvasControls.lockPointer,
     releaseGpu: () => releaseGpu(renderer),
