@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { dictationProblem, speakable } from "./ask-voice";
+import { dictationProblem, sentences, speakable, yearWords } from "./ask-voice";
 
 test("an answer is heard without links, list marks or Markdown, with units as words", () => {
   expect(
@@ -20,4 +20,50 @@ test("a recognition error the visitor caused says nothing, others say why", () =
   expect(dictationProblem("aborted")).toBeNull();
   expect(dictationProblem("not-allowed")).toContain("Mikrofon");
   expect(dictationProblem("whatever")).toBeTruthy();
+});
+
+test("a count is not read as a year", () => {
+  expect(speakable("eine Bude für 1800 Leute, 1200 m lang")).toBe(
+    "eine Bude für 1800 Leute, 1200 Meter lang"
+  );
+  expect(speakable("Im Februar 1945 brannte es, von 1808 an wohnte er")).toBe(
+    "Im Februar neunzehnhundertfünfundvierzig brannte es, von achtzehnhundertacht an wohnte er"
+  );
+  expect(speakable("seit 1990 Denkmal")).toBe(
+    "seit neunzehnhundertneunzig Denkmal"
+  );
+});
+
+test("a year is heard as German says it, other numbers as written", () => {
+  expect(yearWords(1711)).toBe("siebzehnhundertelf");
+  expect(yearWords(1901)).toBe("neunzehnhunderteins");
+  expect(yearWords(1100)).toBe("elfhundert");
+  expect(yearWords(1945)).toBe("neunzehnhundertfünfundvierzig");
+  expect(yearWords(2013)).toBe("zweitausenddreizehn");
+  expect(
+    speakable(
+      "Am 13. Februar 1985 – nach 40 Jahren – öffnete es, 35.798 Stücke, ca. 4000 Pfähle."
+    )
+  ).toBe(
+    "Am 13. Februar neunzehnhundertfünfundachtzig, nach 40 Jahren, öffnete es, 35.798 Stücke, circa 4000 Pfähle."
+  );
+  expect(speakable("„Fest der vier Elemente“ in St. Petersburg, Nr. 13")).toBe(
+    "Fest der vier Elemente in Sankt Petersburg, Nummer 13"
+  );
+});
+
+test("a text is read sentence by sentence", () => {
+  expect(sentences("Ein Satz. Noch einer! Und 1711 der dritte.")).toEqual([
+    "Ein Satz.",
+    "Noch einer!",
+    "Und 1711 der dritte.",
+  ]);
+  // an ordinal's point is no sentence's end
+  expect(sentences("Am 15. September feierte man.")).toEqual([
+    "Am 15. September feierte man.",
+  ]);
+  expect(sentences("Geweiht 1494. Die Hauben kamen später.")).toEqual([
+    "Geweiht 1494.",
+    "Die Hauben kamen später.",
+  ]);
 });
