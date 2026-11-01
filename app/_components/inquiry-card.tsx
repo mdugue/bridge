@@ -22,12 +22,14 @@ import {
   inquiryCard,
 } from "@/lib/city/inquiry";
 import type { TreeFactsFile } from "@/lib/city/features";
+import type { LandmarkFactsIndex } from "@/lib/city/landmark-facts";
 import { type TreeFacts, treeFactsAt } from "@/lib/city/inquiry-features";
 import { isSiteProvenance, type SiteProvenance } from "@/lib/city/provenance";
 import type { Drawer as DrawerPrimitive } from "@base-ui/react/drawer";
 import { cardCredits } from "@/lib/city/card-lines";
 import { InquiryData } from "./inquiry-data";
 import { isTextEntry } from "./keyboard-controls";
+import { loadLandmarkFacts } from "./landmark-facts-load";
 import { MethodMark } from "./method-badge";
 import { useSite } from "./site-context";
 
@@ -95,6 +97,34 @@ const isTreeFacts = (json: unknown): json is TreeFactsFile =>
   Array.isArray((json as Partial<TreeFactsFile>).known) &&
   Array.isArray((json as Partial<TreeFactsFile>).names);
 
+/** The site's landmark facts (loaded with the first landmark asked, the
+ *  same index the nameplate reads), or null until they have arrived. */
+function useLandmarkFacts(inquiry: Inquiry): LandmarkFactsIndex | null {
+  const url =
+    inquiry.kind === "building" ? inquiry.landmarkFactsUrl : undefined;
+  const [loaded, setLoaded] = useState<{
+    index: LandmarkFactsIndex | null;
+    url: string;
+  } | null>(null);
+  useEffect(() => {
+    if (!url) {
+      return;
+    }
+    let live = true;
+    void loadLandmarkFacts(url).then((index) => {
+      if (live) {
+        setLoaded({ url, index });
+      }
+    });
+    return () => {
+      live = false;
+    };
+    // each question asks again (a failed load is not kept): the plate
+    // retries on the next landmark, and so does the card
+  }, [url, inquiry]);
+  return url && loaded?.url === url ? loaded.index : null;
+}
+
 /**
  * The provenance manifest, fetched when the first card opens and kept for
  * the session. A failed fetch leaves the card without editions; each
@@ -114,8 +144,9 @@ function useTreeFacts(inquiry: Inquiry): TreeFacts | null {
 
 /**
  * The card of the "Befragen" mode (ADR 0042): what the data says
- * about the building someone asked, on demand only — the scene itself
- * carries no text (plan 032's lettering was removed for that reason). A
+ * about the building someone asked, on demand only — the scene carries
+ * no text unasked, only the asked thing's nameplate (nameplate-layer.ts),
+ * which says nothing the card does not. A
  * non-modal landmark, not a dialog: the city stays live behind it, and the
  * next click asks the next building. Esc or the × closes it and clears
  * the mark in the scene (the hatch, the outline). It looks like the HUD's other cards (the
@@ -136,11 +167,12 @@ export function InquiryCard({
 }) {
   const provenance = useProvenance(provenanceUrl);
   const treeFacts = useTreeFacts(inquiry);
+  const landmarks = useLandmarkFacts(inquiry);
   const site = useSite();
   const credits = useMemo(() => cardCredits(site), [site]);
   const card = useMemo(
-    () => inquiryCard(inquiry, provenance, credits, treeFacts),
-    [inquiry, provenance, credits, treeFacts]
+    () => inquiryCard(inquiry, provenance, credits, treeFacts, landmarks),
+    [inquiry, provenance, credits, treeFacts, landmarks]
   );
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -175,6 +207,7 @@ export function InquiryCard({
     <aside
       aria-labelledby="inquiry-title"
       className="pointer-events-auto flex min-h-0 shrink flex-col rounded-lg bg-card text-card-foreground shadow-lg ring-1 ring-foreground/10 select-text"
+      data-scene-cover=""
       data-testid="inquiry-card"
       data-variant="card"
     >
@@ -288,6 +321,7 @@ function InquirySheet({
       <DrawerContent
         // closed, unanimated, until the fold is measured (useSheetEntrance)
         className="not-data-[sheet-entered]:transform-(--closed-transform) not-data-[sheet-entered]:duration-0"
+        data-scene-cover=""
         data-sheet-entered={entered ? "" : undefined}
         data-testid="inquiry-card"
         data-variant="sheet"

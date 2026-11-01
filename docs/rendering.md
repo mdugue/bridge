@@ -685,6 +685,52 @@ halo is HDR). The only branch in the node is on the mode (a uniform);
 per pixel it selects, so every derivative and texture read stays in
 uniform control flow, as WGSL requires.
 
+### The nameplate: the thing asked, named beside it
+
+What the inquiry card's title says is also set in the scene while the
+question stands ([ADR 0042](./adr/0042-inquiry-cards-on-demand-facts-in-the-tileset.md);
+what it says and where it stands: transformations.md, *The nameplate*).
+It is drawn **after the frame, onto the canvas** (`PostStack.setOverlay`,
+`nameplate-layer.ts`): no screen-sized target of its own, and the post
+pipelines, the picture styles and the outline stay as they were. For its
+render the renderer's tone mapping is off and its output colour space
+linear — the plate's colours are sRGB already — and both are restored
+after; its programs are compiled in `warmView`/`warmStyles` after the
+outline's, each in its turn (`compileInTurn`).
+
+- **Lettering.** Signed distance fields of the glyphs the plate needs, no
+  more: rasterised from the self-hosted faces (`app/[site]/nameplate-fonts.ts`,
+  next/font, not preloaded: they load with the first question) at 64 px
+  for the title and 40 px for the lines (40 and 26 on a phone), an exact
+  Euclidean distance transform each (`lib/city/sdf.ts`, 8 px reach, 5 on a
+  phone), packed into one R8 atlas ≤ 512 × 1024 (≤ 0.5 MB on the GPU; the
+  CPU copies go after upload), freed when the question goes. A phone pays
+  for it in its tile cache, 1 MiB less per safety level
+  (`tileCacheBytesFor`, ADR 0047). Kerning from the
+  canvas's own measure of each prefix; tracking per style.
+- **One material, three kinds of quad** (`uvk`: atlas uv and a kind): a
+  glyph (fill at 0.5, halo outward to a share of the reach, antialiased by
+  `fwidth`), a solid (the comic box, its edge and shadow, the leader's
+  strokes, antialiased by their uv), a disc (the leader's dot). Colour and
+  halo ride per vertex (`ink`, `halo`): three vertex buffers past
+  position, four inter-stage variables (`uvk`, `ink`, `halo` and the view
+  position the depth test reads); a fade uniform carries the arrival and
+  the cross-fades.
+- **Occlusion** per pixel: the fragment's view depth against the scene's
+  (the scene target's depth texture through `view-lens.ts`, whose
+three helpers follow the reversed buffer); behind the
+  city it keeps 0.45 of its outline only, so a plate the placing could
+  not keep clear reads as a ghost, never as text over a facade. Depth
+  test and write are off; it is no part of the shadow map.
+- **The plate** is one mesh placed by a matrix (right, up and normal
+  scaled by the capital height, the block's corner as origin); the leader
+  is a second small mesh rebuilt in world space per frame.
+- **Choosing** runs every 250 ms on the CPU (`lib/city/nameplate-place.ts`):
+  per candidate 9 points against the buildings' BVHs (`cityHides` in
+  `nameplate-ask.ts`, `nearestCityHit` with `build = false`) and the
+  HUD's panels marked `data-scene-cover`. While an image is exported the
+  place is held.
+
 ## Modell: the parallel camera
 
 Modell ([ADR 0044](./adr/0044-modell-parallel-projections.md), plan 055)
@@ -784,7 +830,7 @@ the safety levels 1, 2 and 3:
 | Real lamp lights (`LAMP_LIGHTS`, every lit fragment shades each, by day too) | 3 | 1 | as the tier |
 | The walker's lantern (`lantern.ts`, one more light) | with a 512² cube shadow | no shadow | as the tier |
 | Tile contents at once | 5 parses, 25 downloads per origin | 2 parses, 4 downloads per origin | as the tier |
-| Tile cache (GPU bytes: glTF + a tile's rasters and dressing) | 1.2–1.6 GB (1.0–1.4, 0.8–1.2, 0.6–1.0) | 168–336 MiB (148–296, 136–272, 96–232) | as the tier |
+| Tile cache (GPU bytes: glTF + a tile's rasters and dressing) | 1.2–1.6 GB (1.0–1.4, 0.8–1.2, 0.6–1.0) | 168–335 MiB (148–295, 136–271, 96–231) | as the tier |
 | Memory governor (`lib/city/memory-governor.ts`) | steps at 2 / 2.5 GB (a last one 10 s past 2.5); lines × 0.9 a level, starting at step 0 (0, 1, 2) | steps at 480 / 560 MB (a last one 10 s past 560); lines × 0.9 a level, starting at step 0 (1, 2, 3) | as the tier |
 
 **The resolution follows the frame rate** (`lib/city/resolution-scale.ts`,
@@ -972,7 +1018,8 @@ stays their measure; the tile cache counts true bytes.
   sky, lamp pool, data layers, uniform buffers, shader text — and ~60 of
   headroom: tiles in flight weigh nothing, the cache can run a tile over
   `max` before it unloads, three counts a tree set's matrices once per
-  view) = **336 MiB** at level 0 (296, 272, 232 at levels 1–3), `min`
+  view) = **336 MiB** at level 0 (296, 272, 232 at levels 1–3), less
+  1 MiB each for the nameplate (**335**, 295, 271, 231), `min`
   about half (168, 148, 136, 96), and `max − min` above the largest tile
   (`LARGEST_TILE_BYTES`, 128 MiB on a phone). The 320–600 MB before were
   wrong the other way: `max` sat above the governor's own hard line
@@ -1590,6 +1637,20 @@ plans to rework this code
 ([#35086](https://github.com/mrdoob/three.js/issues/35086), the review of
 [#35092](https://github.com/mrdoob/three.js/pull/35092)); not reported
 yet.
+
+**three r187: a canvas pipeline is keyed by the output colour space when
+`compileAsync` builds it.** The work items run after its first await, and
+`getCurrentColorSpace` reads `renderer.outputColorSpace` then, not when the
+compile was called. The nameplate draws onto the canvas with its own
+output settings (linear, no tone mapping) and sets them back as its
+compile call returns — held across the await, every frame drawn meanwhile
+would take them (wrong colours, the final pass rebuilt). So its warm-up
+builds the plate's programs and shader modules, and on WebGPU the first
+plate still makes its pipeline object from them inside its frame.
+*Accepted*, no workaround (`nameplate-layer.ts`, *upstream workaround*
+names the place). *Once fixed* (the compile takes the output settings
+with its render context): nothing to undo; the first plate builds
+nothing.
 
 **three r187: a compile sets a stale render target.** Since
 [#35191](https://github.com/mrdoob/three.js/pull/35191) each work item of
