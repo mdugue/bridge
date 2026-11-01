@@ -37,7 +37,8 @@ type V3 = [number, number, number];
  * A chimney's triangles (the mesh frame of `dormerMesh`): a box `w` across
  * and `d` along its axis (`ax`, `ay`, down the slope), its four sides from
  * DORMER_SINK under the roof's lowest point under it (the roof falls
- * `slope` along the axis) up to its measured top, and its top; all walls
+ * `slope` over its larger side: along the axis, or across it where the
+ * stack stands astride a ridge) up to its measured top, and its top; all walls
  * (`isRoof` 0), brick or plaster in the host's tint.
  */
 export function chimneyMesh(
@@ -51,7 +52,8 @@ export function chimneyMesh(
   }
   const slope = Math.min(Math.max(p.slope, 0), 80);
   const tan = Math.tan((slope * Math.PI) / 180);
-  const low = p.z - (tan * p.d) / 2 - DORMER_SINK;
+  // the roof falls along its axis, or across it astride a ridge
+  const low = p.z - (tan * Math.max(p.w, p.d)) / 2 - DORMER_SINK;
   const top = Math.max(p.top, p.z + MIN_FRONT);
   out.base = low;
   const [ex, ey] = f.geometry.coordinates;

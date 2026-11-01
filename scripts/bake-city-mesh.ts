@@ -2425,7 +2425,12 @@ export function appendDormers(
       ? objectIndex.get(f.properties.of)
       : undefined;
     if (hostIndex !== undefined && baked.objects[hostIndex]) {
-      byHost.set(hostIndex, [...(byHost.get(hostIndex) ?? []), f]);
+      const list = byHost.get(hostIndex);
+      if (list) {
+        list.push(f);
+      } else {
+        byHost.set(hostIndex, [f]);
+      }
     }
   }
   if (byHost.size === 0) {

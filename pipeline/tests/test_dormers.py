@@ -133,21 +133,32 @@ def test_a_chimney_stands_its_measured_height_a_little_wider_than_drawn():
 
 
 def test_chimneys_in_a_crowd_on_a_flat_roof_are_something_else():
-    def chimney(x: float, slope: float = 0.0) -> dict:
-        return {
-            "geometry": {"coordinates": [x, 0.0]},
-            "properties": {"k": "chimney", "slope": slope},
-        }
+    def chimney(x: float) -> dict:
+        return {"geometry": {"coordinates": [x, 0.0]}, "properties": {"k": "chimney"}}
 
-    dormer = {"geometry": {"coordinates": [1.0, 0.0]}, "properties": {"slope": 40.0}}
+    dormer = {"geometry": {"coordinates": [1.0, 0.0]}, "properties": {}}
     # a pair of stacks stays; a row of masts a metre and a half apart goes
     pair = [chimney(0.0), chimney(1.0), dormer]
-    assert dormers.uncrowded(pair) == pair
+    assert dormers.uncrowded(pair, [True, True, False]) == pair
     row = [chimney(1.5 * i) for i in range(6)] + [dormer]
-    assert dormers.uncrowded(row) == [dormer]
+    assert dormers.uncrowded(row, [True] * 6 + [False]) == [dormer]
     # on a pitched roof a row of stacks stays, however close
-    stacks = [chimney(1.5 * i, 40.0) for i in range(6)] + [dormer]
-    assert dormers.uncrowded(stacks) == stacks
+    assert dormers.uncrowded(row, [False] * 7) == row
+
+
+def test_a_ridge_is_pitched_roof_a_flat_roof_is_not():
+    # a gabled roof, 45°, its ridge along column 5: the gradient's central
+    # differences read the ridge's own cells level
+    cols = np.arange(12, dtype=float)
+    roof = np.tile(10.0 - np.abs(cols - 5.0), (6, 1))
+    gx, gy = dormers.roof_gradient(roof, 1.0)
+    slope = np.degrees(np.arctan(np.hypot(gx, gy)))
+    assert slope[2, 5] < dormers.MIN_SLOPE
+    assert dormers.pitched_cells(slope)[1:5, 1:10].all()
+    # a flat roof stays flat, a 1 m step in it too
+    flat = np.zeros((8, 8))
+    flat[:, 4] = 40.0
+    assert not dormers.pitched_cells(flat)[:, :4].any()
 
 
 def test_a_roof_form_is_its_own_or_its_parents():

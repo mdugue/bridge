@@ -1467,13 +1467,15 @@ visual-variable codebook is in
   11–13 %); about half the blobs are under 3 m deep and stay flat. A
   host's dormers and chimneys are appended as one object in its tint and
   roof colour (`source` 4), no storey band, eave line, plinth or shop zone
-  on it. No window in the front: the veto stands. Dresden: 13 321 dormers (10 399
-  before) and 19 117 chimneys on fifteen tiles; Leipzig 6 879 and 9 881,
-  München 7 132 (10 233 before: the edges of flat roofs and the roof
+  on it. No window in the front: the veto stands. Dresden: 13 231 dormers (10 399
+  before) and 19 676 chimneys on fifteen tiles; Leipzig 6 852 and 10 114,
+  München 7 095 (10 233 before: the edges of flat roofs and the roof
   terraces it had drawn as dormers are gone; checked on the 20 cm
   orthophoto, where small Altstadt dormers stand under 0.5 m out of
-  DOM1 and stay undrawn) and 4 768, Hamburg 1 764 and 7 231, Unna 2 074
-  and 3 519, Meißen 1 813 and 1 514, Grimma 1 425 and 1 642.
+  DOM1 and stay undrawn) and 5 302, Hamburg 1 755 and 7 746, Unna 2 070
+  and 3 621, Meißen 1 803 and 1 520, Grimma 1 421 and 1 660. More than
+  half the chimneys stand on flat roofs, where some are rooftop plant or
+  the foot of a higher wall rather than a stack.
 - **Eave line** `= computed` (*Traufkante*) — cornice stroke at min RoofSurface-Z per building
   (geometry-derived; the attribute is ~4 %).
 - **Night light on facades** `❝ taken` `≈ assumed` (*Abendlicht*) — after dark

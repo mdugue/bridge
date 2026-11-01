@@ -14,7 +14,8 @@ tree (canopy, cadastre, `TREE_CLEAR_M`), is read by where it stands
 (`kind_of`):
 
 - on a pitched roof (`MIN_SLOPE`–`MAX_SLOPE`; a mansard roof, LoD2's
-  `roofType` 3400, up to `MANSARD_MAX_SLOPE`) a dormer: its top
+  `roofType` 3400, up to `MANSARD_MAX_SLOPE`; the line of a ridge or a
+  valley between two faces with them, `pitched_cells`) a dormer: its top
   `MIN_TOP_M`–`MAX_TOP_M` over the roof and under its object's ridge,
   compact (`MIN_FILL` of its box), at most `MAX_SIDE_M` down the slope and
   as wide across it as it runs (a row of dormers, one over the whole
@@ -35,8 +36,8 @@ tree (canopy, cadastre, `TREE_CLEAR_M`), is read by where it stands
 
 A crown overhanging a roof is irregular, overtops the ridge or stands on
 a tree point. Checked against the 20 cm orthophoto on Dresden's
-33410_5656 (2026-10-31): 1 002 dormers (654 before, a third of them
-valleys), rows of small gabled dormers now in, 1 880 chimneys at ridges
+33410_5656 (2026-10-31): 996 dormers (654 before, a third of them
+valleys), rows of small gabled dormers now in, 1 952 chimneys at ridges
 and on flat roofs; DOM1's 1 m cells still miss the smallest dormers, and
 a roof LoD2 drew flat over a pitched one is no dormer's.
 
@@ -256,6 +257,15 @@ def split(m: np.ndarray, ex: np.ndarray) -> list[np.ndarray]:
     return [m & (nearest == k) for k in keep]
 
 
+def pitched_cells(slope: np.ndarray) -> np.ndarray:
+    """The cells of the pitched roofs: MIN_SLOPE or steeper, and the line
+    of a cell or two between two such faces — a ridge or a valley, which
+    the central differences of the gradient read as level, so a stack on
+    the ridge stays one blob with the faces beside it."""
+    steep = np.nan_to_num(slope) >= MIN_SLOPE
+    return ndi.binary_closing(steep) | steep
+
+
 def blobs(excess: np.ndarray, pitched: np.ndarray):
     """(slice, mask, on a pitched roof) of every blob of excess over
     MIN_EXCESS_M: on the pitched roofs split into its dormers (`split`), on
@@ -271,14 +281,20 @@ def blobs(excess: np.ndarray, pitched: np.ndarray):
                 yield sl, part, on_slope
 
 
-def centre(s: Surfaces, sl, m: np.ndarray) -> tuple[float, float]:
-    """A blob's centre (EPSG)."""
+def cells_xy(s: Surfaces, sl, m: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """The centres (EPSG) of a blob's cells."""
     f = s.field
     rr, cc = np.nonzero(m)
     return (
-        float(f.xmin + (sl[1].start + cc.mean() + 0.5) * f.res),
-        float(f.ymax - (sl[0].start + rr.mean() + 0.5) * f.res),
+        f.xmin + (sl[1].start + cc + 0.5) * f.res,
+        f.ymax - (sl[0].start + rr + 0.5) * f.res,
     )
+
+
+def centre(s: Surfaces, sl, m: np.ndarray) -> tuple[float, float]:
+    """A blob's centre (EPSG)."""
+    xs, ys = cells_xy(s, sl, m)
+    return float(xs.mean()), float(ys.mean())
 
 
 def host_axis(poly: shapely.Geometry) -> tuple[float, float]:
@@ -314,6 +330,7 @@ class Roofs:
         # the roof's outermost cell measured: its eaves, a parapet's foot
         self.edge = inner & ~ndi.binary_erosion(inner, iterations=1)
         self.polys = polys
+        self.ridges: dict[int, float] = {}
         self.hosts = shapely.STRtree(polys)
         trees = tree_points(tile)
         self.trees = shapely.STRtree(shapely.points(trees)) if len(trees) else None
@@ -336,7 +353,17 @@ class Roofs:
         down = downslope(self.s, sl, m, self.gx, self.gy, self.slope)
         if down is not None and down[2] >= LEVEL_DEG:
             return down
-        return (*host_axis(self.polys[of]), down[2] if down is not None else 0.0)
+        # level, or a ring whose falls cancel (a stack astride a ridge): how
+        # steep the roof round it is, whichever way it falls
+        pad, ring = ring_round(sl, m, self.slope.shape, self.slope)
+        lean = float(np.median(self.slope[pad][ring])) if ring.any() else 0.0
+        return (*host_axis(self.polys[of]), lean)
+
+    def ridge(self, of: int) -> float:
+        """The host's highest roof cell, read once per host."""
+        if of not in self.ridges:
+            self.ridges[of] = ridge(self.s, self.polys[of])
+        return self.ridges[of]
 
     def on_seam(self, sl, m: np.ndarray) -> bool:
         return float(self.seam[sl][m].mean()) >= SEAM_SHARE
@@ -344,7 +371,7 @@ class Roofs:
     def read(self, sl, m: np.ndarray, pitched: bool, of: int) -> dict | None:
         """One blob on its host: a dormer, a chimney, or None."""
         s, ex = self.s, self.excess
-        highest = ridge(s, self.polys[of])
+        highest = self.ridge(of)
         seam = self.on_seam(sl, m)
         kind = kind_of(
             int(m.sum()),
@@ -394,7 +421,8 @@ def find(
     (`roof_forms`)."""
     roofs = Roofs(tile, s, polys, forms or [None] * len(polys))
     out: list[dict] = []
-    for sl, m, pitched in blobs(roofs.excess, roofs.slope >= MIN_SLOPE):
+    level: list[bool] = []
+    for sl, m, pitched in blobs(roofs.excess, pitched_cells(roofs.slope)):
         of = roofs.host(*centre(s, sl, m))
         if of is None:
             continue
@@ -404,18 +432,20 @@ def find(
         x, y = found.pop("x"), found.pop("y")
         point = {"type": "Point", "coordinates": [round(x, 2), round(y, 2)]}
         out.append(feature(point, {"of": ids[of], **found}))
-    return uncrowded(out)
+        level.append(not pitched)
+    return uncrowded(out, level)
 
 
-def uncrowded(found: list[dict]) -> list[dict]:
-    """`found` without the flat roofs' chimneys in a crowd: CHIMNEY_CROWD
-    others within CHIMNEY_CROWD_M of one there are a row of something else
-    — masts along a platform roof, the ducts of a plant room, a skylight's
-    ridge. On a pitched roof every stack stays, however close."""
+def uncrowded(found: list[dict], level: list[bool]) -> list[dict]:
+    """`found` without the flat roofs' chimneys in a crowd (`level`: each
+    one read on a flat roof): CHIMNEY_CROWD others within CHIMNEY_CROWD_M
+    of one there are a row of something else — masts along a platform
+    roof, the ducts of a plant room, a skylight's ridge. On a pitched roof
+    every stack stays, however close."""
     at = [
         (i, f["geometry"]["coordinates"])
         for i, f in enumerate(found)
-        if f["properties"].get("k") == "chimney" and f["properties"]["slope"] < MIN_SLOPE
+        if f["properties"].get("k") == "chimney" and level[i]
     ]
     if not at:
         return found
@@ -441,9 +471,7 @@ def roof_fall(
     blob (its excess shrinks to nothing where it meets the roof), a flat
     one's top stays level there."""
     f = s.field
-    rr, cc = np.nonzero(m)
-    xs = f.xmin + (sl[1].start + cc + 0.5) * f.res
-    ys = f.ymax - (sl[0].start + rr + 0.5) * f.res
+    xs, ys = cells_xy(s, sl, m)
     ax, ay = d["ax"], d["ay"]
     along = (xs - d["x"]) * ax + (ys - d["y"]) * ay
     back = float(along.min()) - (FALL_BACK_M if excess is not None else 0.0)
@@ -502,12 +530,11 @@ def ridge(s: Surfaces, poly: shapely.Geometry) -> float:
     return float(s.roof[win][m].max()) if m.any() else -math.inf
 
 
-def downslope(s: Surfaces, sl, m: np.ndarray, gx, gy, slope) -> tuple[float, float, float] | None:
-    """Which way the roof around a blob falls (a unit vector, EPSG) and how
-    steeply (degrees): the median of the ring two cells round it. None
-    where too little roof is round it or it is level."""
+def ring_round(sl, m: np.ndarray, shape: tuple[int, int], *fields: np.ndarray):
+    """The ring two cells round a blob: the window it lies in (`pad`) and
+    its cells there where every one of `fields` is measured."""
     rows, cols = sl
-    nr, nc = gx.shape
+    nr, nc = shape
     pad = (
         slice(max(rows.start - 2, 0), min(rows.stop + 2, nr)),
         slice(max(cols.start - 2, 0), min(cols.stop + 2, nc)),
@@ -516,7 +543,16 @@ def downslope(s: Surfaces, sl, m: np.ndarray, gx, gy, slope) -> tuple[float, flo
     r0, c0 = rows.start - pad[0].start, cols.start - pad[1].start
     big[r0 : r0 + m.shape[0], c0 : c0 + m.shape[1]] = m
     ring = ndi.binary_dilation(big, iterations=2) & ~big
-    ring &= np.isfinite(gx[pad]) & np.isfinite(gy[pad])
+    for f in fields:
+        ring &= np.isfinite(f[pad])
+    return pad, ring
+
+
+def downslope(s: Surfaces, sl, m: np.ndarray, gx, gy, slope) -> tuple[float, float, float] | None:
+    """Which way the roof around a blob falls (a unit vector, EPSG) and how
+    steeply (degrees): the median of the ring two cells round it. None
+    where too little roof is round it or it is level."""
+    pad, ring = ring_round(sl, m, gx.shape, gx, gy)
     if ring.sum() < 4:
         return None
     dx, dy = -float(np.median(gx[pad][ring])), -float(np.median(gy[pad][ring]))
@@ -529,14 +565,11 @@ def downslope(s: Surfaces, sl, m: np.ndarray, gx, gy, slope) -> tuple[float, flo
 def extent(s: Surfaces, sl, m: np.ndarray, ax: float, ay: float):
     """A blob's centre (EPSG), and its extent across the axis (ax, ay) and
     along it (m, a cell's width included)."""
-    f = s.field
-    rr, cc = np.nonzero(m)
-    xs = f.xmin + (sl[1].start + cc + 0.5) * f.res
-    ys = f.ymax - (sl[0].start + rr + 0.5) * f.res
+    xs, ys = cells_xy(s, sl, m)
     cx, cy = float(xs.mean()), float(ys.mean())
     along = (xs - cx) * ax + (ys - cy) * ay
     across = (xs - cx) * ay - (ys - cy) * ax
-    return cx, cy, float(np.ptp(across)) + f.res, float(np.ptp(along)) + f.res
+    return cx, cy, float(np.ptp(across)) + s.field.res, float(np.ptp(along)) + s.field.res
 
 
 def roof_at(s: Surfaces, sl, m: np.ndarray, x: float, y: float) -> float:
