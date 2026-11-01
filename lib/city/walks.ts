@@ -10,11 +10,6 @@
  * by Claude wherever it shows; the facts carry their sources (ADR 0042,
  * ADR 0055). No THREE, no DOM.
  */
-import {
-  isModelPreset,
-  MODEL_PRESET_BY_ID,
-  type ModelPresetId,
-} from "./model-view";
 import { isRenderStyle, type RenderStyle } from "./render-style";
 import type { MovementMode, ViewpointGeometry } from "./site";
 import type { CameraStateJson } from "./snapshot";
@@ -51,16 +46,53 @@ export interface WalkDay {
 
 export type Season = "autumn" | "spring" | "summer" | "winter";
 
-/** Modell's view of a stop (ADR 0044): the parallel camera on `at`. */
-export interface WalkModel {
-  preset: ModelPresetId;
-  /** scale denominator (1 : n at 96 dpi) */
-  scale: number;
-  /** Vogelschau's tilt (degrees below the horizon); the preset's otherwise */
-  tiltDeg?: number;
-  /** compass heading of the view (0 = looking north) */
-  turnDeg: number;
+/**
+ * A photograph of what the stop is about, from Wikimedia Commons: what
+ * the model cannot draw (a gilded rider, a carved portal) is seen here.
+ * The author names `file`; `bun scripts/walks.ts <site> photos` fetches
+ * a small copy into `walks/photos/` (the site serves it itself: no
+ * request to Wikimedia from the visitor's browser) and writes the credit
+ * Commons gives. `src` is the published copy's name, set by the build.
+ */
+export interface WalkPhoto {
+  /** the photographer as Commons credits them */
+  author: string;
+  /** what the photo shows, where the text needs it said */
+  caption?: string;
+  /** the Commons file name ("Dresden Goldener Reiter.jpg") */
+  file: string;
+  /**
+   * What must stay in sight where the card crops the photo: x, y as
+   * shares of its width and height from the top left (the centre when
+   * absent) — the quadriga at the top, the bridge low in the frame.
+   */
+  focus?: [number, number];
+  /** the copy's size (px) */
+  h: number;
+  /** its licence's short name ("CC BY-SA 4.0", "Public domain") */
+  licence: string;
+  /** the licence's text, where it has one */
+  licenceUrl?: string;
+  /** the file's page on Commons */
+  page: string;
+  /** the published copy, beside walks.json (set by prepare-data) */
+  src?: string;
+  w: number;
 }
+
+/** A ref the card can pick: its name and where it stands (site CRS),
+ *  with its footprint's radius where the twin knows it. */
+export interface WalkPlace {
+  id: string;
+  name: string;
+  r?: number;
+  x: number;
+  y: number;
+}
+
+/** Where a stop's photo lies in the site's walks folder. */
+export const walkPhotoFile = (walk: string, stop: string): string =>
+  `photos/${walk}--${stop}.webp`;
 
 export interface WalkStop {
   /** what the eye looks at: site CRS x, y and the height (m a.s.l.) */
@@ -87,10 +119,13 @@ export interface WalkStop {
   id: string;
   /** walk (on the ground) or fly; walk when the eye is below 3 m */
   mode?: MovementMode;
-  /** shows the stop in Modell instead of the perspective view */
-  model?: WalkModel;
   /** the Stadtwissen entries it is about (Q-ids, Building ids) */
   refs?: string[];
+  /** the refs as the scene can pick them, set by the build from the
+   *  Stadtwissen (prepare-data.ts): the card makes their names buttons */
+  places?: WalkPlace[];
+  /** the photo the card shows above the text */
+  photo?: WalkPhoto;
   /** the picture style for this stop; Pastell when absent */
   style?: RenderStyle;
   /** the narration, written by Claude */
@@ -143,9 +178,8 @@ export function stopView(stop: WalkStop): ViewpointGeometry {
 
 /**
  * The stop as a camera state (snapshot.ts), put in place at once: the
- * perspective pose and, for a Modell stop, Modell's pivot on `at`. The
- * player jumps with it where a glide cannot go — into Modell, or out of
- * it. World = (x − cx, z, −(y − cy)).
+ * player jumps with it out of Modell, where a glide cannot go, and the
+ * shot plates start from it. World = (x − cx, z, −(y − cy)).
  */
 export function stopCamera(
   stop: WalkStop,
@@ -153,28 +187,13 @@ export function stopCamera(
 ): CameraStateJson {
   const view = stopView(stop);
   const [fx, fy, above] = stop.from;
-  const [ax, ay, az] = stop.at;
-  const pose: CameraStateJson = {
+  return {
     epsg: { x: fx, y: fy },
     pos: { x: fx - offset.cx, y: stop.ground + above, z: -(fy - offset.cy) },
     headingDeg: view.headingDeg,
     pitchDeg: view.pitchDeg,
     fov: view.fov,
-    mode: stop.model ? "fly" : view.mode,
-  };
-  if (!stop.model) {
-    return pose;
-  }
-  return {
-    ...pose,
-    model: {
-      pivot: { x: ax - offset.cx, y: az, z: -(ay - offset.cy) },
-      preset: stop.model.preset,
-      scale: stop.model.scale,
-      tiltDeg:
-        stop.model.tiltDeg ?? MODEL_PRESET_BY_ID[stop.model.preset].tiltDeg,
-      turnDeg: stop.model.turnDeg,
-    },
+    mode: view.mode,
   };
 }
 
@@ -220,12 +239,15 @@ export function stopNotes(stop: WalkStop, today: Date): string[] {
   return season ? [...days, season] : days;
 }
 
+/** The closer look's label on the card. */
+export const CLOSER_LABEL = "Genauer hingesehen";
+
 // --- checks ----------------------------------------------------------------------
 
 const MD = /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 const SOURCE = /^(https:\/\/\S+|stadtwissen:\S+)$/;
 /** The longest narration a stop shows: a phone screen, not an essay. */
-export const STOP_TEXT_MAX = 900;
+export const STOP_TEXT_MAX = 560;
 
 const finite = (v: unknown) => typeof v === "number" && Number.isFinite(v);
 
@@ -247,8 +269,9 @@ function viewProblems(stop: WalkStop): string[] {
   if (stop.style !== undefined && !isRenderStyle(stop.style)) {
     out.push(`style ${String(stop.style)} is not a picture style`);
   }
-  if (stop.model && !isModelPreset(stop.model.preset)) {
-    out.push(`model.preset ${String(stop.model.preset)} is not a Modell view`);
+  if ("model" in stop) {
+    // a walk is seen, not drawn: Modell's jump broke the glide between stops
+    out.push("model is not a walk's view (a steep aerial shows a plan)");
   }
   return out;
 }
@@ -274,6 +297,93 @@ function textProblems(stop: WalkStop): string[] {
   for (const d of stop.days ?? []) {
     if (!(MD.test(d.from) && MD.test(d.to))) {
       out.push(`days ${d.from}–${d.to} must be MM-DD`);
+    }
+  }
+  out.push(...photoProblems(stop), ...lookProblems(stop));
+  return out;
+}
+
+/** "Schau …", "Sieh …": a sentence that sends the eye somewhere. */
+const LOOK = /(?:^|[.!?:;]\s+)(?:Schau|Sieh|Achte|Zoom|Zähl|Such)(?:e|t)?\b/;
+
+/**
+ * The model draws masses, not details: a statue is a generic figure, a
+ * relief or an inscription is not there at all. A sentence that sends the
+ * eye to look therefore points at the photo (docs/walks.md).
+ */
+function lookProblems(stop: WalkStop): string[] {
+  const told = [stop.text, stop.closer ?? ""].flatMap((t) =>
+    t.split(/(?<=[.!?])\s+/)
+  );
+  return told
+    .filter((s) => LOOK.test(s) && !(stop.photo && /\b(?:Foto|Bild)\b/.test(s)))
+    .map((s) => `"${s.slice(0, 40)}…" points at what the model may not show`);
+}
+
+/** Whether a stop's photo carries the credit it is shown with. */
+export function photoCredited(p: NonNullable<WalkStop["photo"]>): boolean {
+  return Boolean(p.author && p.licence && p.page.startsWith("https://"));
+}
+
+/** A photo carries its credit, or it is not shown. */
+function photoProblems(stop: WalkStop): string[] {
+  const p = stop.photo;
+  if (!p) {
+    return [];
+  }
+  if (!photoCredited(p)) {
+    return [
+      `photo ${p.file} has no credit (bun scripts/walks.ts <site> photos)`,
+    ];
+  }
+  if (!(finite(p.w) && finite(p.h))) {
+    return [`photo ${p.file} has no size`];
+  }
+  const share = (v: unknown) =>
+    finite(v) && (v as number) >= 0 && (v as number) <= 1;
+  return p.focus === undefined || (p.focus.length === 2 && p.focus.every(share))
+    ? []
+    : [`photo ${p.file}: focus must be [x, y] in 0…1`];
+}
+
+/** Below this width-to-height a photo is tall (Kronentor 0.67, a
+ *  near-square Chilehaus 0.99 is not). */
+const TALL_ASPECT = 0.85;
+
+/** The photo's shape as the card lays it out: tall ones stand beside
+ *  the story, the rest span the card. */
+export function photoIsTall(p: Pick<WalkPhoto, "h" | "w">): boolean {
+  return p.w / p.h < TALL_ASPECT;
+}
+
+/** `object-position` for a photo's focus: the centre when it has none. */
+export function photoPosition(p: Pick<WalkPhoto, "focus">): string {
+  const [x, y] = p.focus ?? [0.5, 0.5];
+  return `${Math.round(x * 100)}% ${Math.round(y * 100)}%`;
+}
+
+/**
+ * The stop's refs as the card picks them: each one the twin knows, with
+ * its name, place and radius, by `lookup` (the Stadtwissen, at build
+ * time); a ref it lacks, or one without a name, is left out.
+ */
+export function stopPlaces(
+  stop: Pick<WalkStop, "refs">,
+  lookup: (
+    id: string
+  ) => { name: string; r?: number; x: number; y: number } | null
+): WalkPlace[] {
+  const out: WalkPlace[] = [];
+  for (const id of stop.refs ?? []) {
+    const hit = lookup(id);
+    if (hit?.name && !out.some((p) => p.id === id)) {
+      out.push({
+        id,
+        name: hit.name,
+        x: hit.x,
+        y: hit.y,
+        ...(hit.r === undefined ? {} : { r: hit.r }),
+      });
     }
   }
   return out;

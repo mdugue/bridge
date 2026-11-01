@@ -30,6 +30,21 @@ export function splitDate(date: Date): { day: Date; minutes: number } {
   };
 }
 
+/**
+ * The minute of day a glide of the hour shows at share `t` (0–1) of its
+ * way: eased as the camera's glide is (smootherstep, camera-flight.ts),
+ * so light and camera arrive together; whole minutes, as the slider.
+ */
+export function tweenMinutes(from: number, to: number, t: number): number {
+  const k = Math.min(Math.max(t, 0), 1);
+  const e = k * k * k * (k * (k * 6 - 15) + 10);
+  return Math.round(from + (to - from) * e);
+}
+
+/** How often a glide of the hour shows its minute in the HUD (ms): the
+ *  scene follows every frame, the sidebar and the card need not. */
+export const GLIDE_HUD_MS = 250;
+
 export interface FrameGate {
   /** runs now, or once the frame that already ran it is over */
   request: () => void;
@@ -95,6 +110,14 @@ export interface SceneTime {
   preview: (day: Date, minutes: number) => void;
   /** moves the scene to an instant (to the minute the sliders can show) */
   setInstant: (date: Date) => void;
+  /**
+   * Moves the scene to an instant along a camera's glide: the day at once,
+   * the hour by the returned step, which takes the glide's progress (0…1,
+   * camera-flight.ts `onProgress`) — so the light stops where the camera
+   * stops, an export's held frames too — and lands at 1. Any other change
+   * of the time ends the glide where it is; its step then does nothing.
+   */
+  glideTo: (date: Date) => (t: number) => void;
   /** tells a (new) scene the current instant */
   sync: () => void;
   /** the current instant, for a scene that boots */
@@ -121,10 +144,18 @@ export function useSceneTime(
 
   // A drag's steps reach the scene through the gate, and the scene's answer
   // reaches the HUD as a transition: one sun a frame, no HUD render in one.
-  const previewed = useRef({ day: initialDay, minutes: INITIAL_MINUTES });
+  // A glide's steps reach the HUD only now and then (`hud`).
+  const previewed = useRef({
+    day: initialDay,
+    hud: true,
+    minutes: INITIAL_MINUTES,
+  });
   const toScene = useCallback(() => {
     const state = applyRef.current(now.current, true);
     const step = previewed.current;
+    if (!step.hud) {
+      return;
+    }
     startTransition(() => {
       setDay(step.day);
       setMinutes(step.minutes);
@@ -143,7 +174,16 @@ export function useSceneTime(
     };
   }, [toScene]);
 
-  const set = useCallback((nextDay: Date, nextMinutes: number) => {
+  // A glide of the hour: its steps through the drag's path (the shadows
+  // and the sky refresh as in a drag), the last through `set`'s. A glide is
+  // its own object: a later one, or any other change, retires it.
+  const glide = useRef<object | null>(null);
+  const endGlide = useCallback(() => {
+    glide.current = null;
+  }, []);
+  useEffect(() => endGlide, [endGlide]);
+
+  const setNow = useCallback((nextDay: Date, nextMinutes: number) => {
     gate.current?.cancel();
     setDay(nextDay);
     setMinutes(nextMinutes);
@@ -154,10 +194,10 @@ export function useSceneTime(
       setSun(state);
     }
   }, []);
-  const preview = useCallback(
-    (nextDay: Date, nextMinutes: number) => {
+  const previewNow = useCallback(
+    (nextDay: Date, nextMinutes: number, hud = true) => {
       now.current = composeDate(nextDay, nextMinutes);
-      previewed.current = { day: nextDay, minutes: nextMinutes };
+      previewed.current = { day: nextDay, hud, minutes: nextMinutes };
       if (gate.current) {
         gate.current.request();
       } else {
@@ -166,12 +206,59 @@ export function useSceneTime(
     },
     [toScene]
   );
+  const set = useCallback(
+    (nextDay: Date, nextMinutes: number) => {
+      endGlide();
+      setNow(nextDay, nextMinutes);
+    },
+    [endGlide, setNow]
+  );
+  const preview = useCallback(
+    (nextDay: Date, nextMinutes: number) => {
+      endGlide();
+      previewNow(nextDay, nextMinutes);
+    },
+    [endGlide, previewNow]
+  );
   const setInstant = useCallback(
     (instant: Date) => {
       const parts = splitDate(instant);
       set(parts.day, parts.minutes);
     },
     [set]
+  );
+  const glideTo = useCallback(
+    (instant: Date) => {
+      const mine = {};
+      glide.current = mine;
+      const to = splitDate(instant);
+      const from = splitDate(now.current);
+      let shown = from.minutes;
+      let hudAt = -Infinity;
+      return (t: number) => {
+        if (glide.current !== mine) {
+          return;
+        }
+        if (t >= 1) {
+          glide.current = null;
+          setNow(to.day, to.minutes);
+          return;
+        }
+        const minutes = tweenMinutes(from.minutes, to.minutes, t);
+        // the camera held (an export), or the minute not yet moved
+        if (minutes === shown) {
+          return;
+        }
+        shown = minutes;
+        const at = performance.now();
+        const hud = at - hudAt >= GLIDE_HUD_MS;
+        if (hud) {
+          hudAt = at;
+        }
+        previewNow(to.day, minutes, hud);
+      };
+    },
+    [setNow, previewNow]
   );
   const sync = useCallback(() => {
     const state = applyRef.current(now.current);
@@ -188,6 +275,7 @@ export function useSceneTime(
     set,
     preview,
     setInstant,
+    glideTo,
     sync,
     current,
   };

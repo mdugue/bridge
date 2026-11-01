@@ -831,8 +831,8 @@ the safety levels 1, 2 and 3:
 | Real lamp lights (`LAMP_LIGHTS`, every lit fragment shades each, by day too) | 3 | 1 | as the tier |
 | The walker's lantern (`lantern.ts`, one more light) | with a 512² cube shadow | no shadow | as the tier |
 | Tile contents at once | 5 parses, 25 downloads per origin | 2 parses, 4 downloads per origin | as the tier |
-| Tile cache (GPU bytes: glTF + a tile's rasters and dressing) | 1.2–1.6 GB (1.0–1.4, 0.8–1.2, 0.6–1.0) | 168–335 MiB (148–295, 136–271, 96–231) | as the tier |
-| Memory governor (`lib/city/memory-governor.ts`) | steps at 2 / 2.5 GB (a last one 10 s past 2.5); lines × 0.9 a level, starting at step 0 (0, 1, 2) | steps at 480 / 560 MB (a last one 10 s past 560); lines × 0.9 a level, starting at step 0 (1, 2, 3) | as the tier |
+| Tile cache (GPU bytes: glTF + a tile's rasters and dressing) | 1.2–1.6 GB (1.0–1.4, 0.8–1.2, 0.6–1.0) | 150–285 MiB (118–249, 96–228, 64–196) | as the tier |
+| Memory governor (`lib/city/memory-governor.ts`) | steps at 2 / 2.5 GB (a last one 10 s past 2.5); lines × 0.9 a level, starting at step 0 (0, 1, 2) | steps at 420 / 460 MB (a last one 10 s past 460; 480 / 560 until two walk crashes); lines × 0.9 a level, starting at step 0 (1, 2, 3) | as the tier |
 
 **The resolution follows the frame rate** (`lib/city/resolution-scale.ts`,
 wired in `create-app.ts`). The scene is fill-bound, so a page whose GPU
@@ -1023,9 +1023,11 @@ stays their measure; the tile cache counts true bytes.
   sky, lamp pool, data layers, uniform buffers, shader text — and ~60 of
   headroom: tiles in flight weigh nothing, the cache can run a tile over
   `max` before it unloads, three counts a tree set's matrices once per
-  view) = **336 MiB** at level 0 (296, 272, 232 at levels 1–3), less
-  1 MiB each for the nameplate (**335**, 295, 271, 231), `min`
-  about half (168, 148, 136, 96), and `max − min` above the largest tile
+  view) = **285 MiB** at level 0 against the soft line of 420 (249, 228,
+  196 at levels 1–3; 335, 295, 271, 231 against the old 480 until two
+  iPhones lost their GPU in a walk's glide, Sentry CITY-WALK-4 and -6),
+  `min` about half or what leaves the gap (150, 118, 96, 64), and
+  `max − min` above the largest tile
   (`LARGEST_TILE_BYTES`, 128 MiB on a phone). The 320–600 MB before were
   wrong the other way: `max` sat above the governor's own hard line
   (560), so with the fixed costs and three's count on top — ~750 MB held —
@@ -1049,7 +1051,7 @@ stays their measure; the tile cache counts true bytes.
   freed back (measured while it held; forgotten after two minutes) — a
   camera standing still used to give its fine tiles up and stream them
   back in every ten seconds. At a raised safety level both lines are
-  × 0.9 per level (a phone's soft line 480, 432, 389, 350 MiB) and the
+  × 0.9 per level (a phone's soft line 420, 378, 340, 306 MiB) and the
   governor starts at a **floor** it never leaves for a finer step: the
   level itself on a phone, one lower on a desktop — already for the
   stream's first update. A **memory emergency** (`memoryEmergency` in
