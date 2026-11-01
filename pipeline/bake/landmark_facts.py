@@ -36,13 +36,20 @@ from __future__ import annotations
 
 import contextlib
 import json
+import math
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .osm_buildings import root_of
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 SPARQL = "https://query.wikidata.org/sparql"
 ATTRIBUTION = "Wikidata (CC0)"
@@ -82,13 +89,20 @@ REBUILDS = {
     "Q3422086",  # Wiederaufbau nach dem Krieg
 }
 
+# Times come with their precision (`?vp`, `?tp`, `?sp`, `?ep`: 9 = year,
+# 8 = decade, 7 = century): a decade or a century is no year to print.
+# Deprecated statements are left out, as `wdt:` would.
 QUERY = """
-SELECT ?i ?p ?v ?lang ?ev ?t ?s ?e WHERE {
+SELECT ?i ?p ?v ?vp ?lang ?ev ?t ?tp ?s ?sp ?e ?ep WHERE {
   VALUES ?i { %(ids)s }
   {
-    ?i wdt:P571 ?v . BIND("inception" AS ?p)
+    ?i p:P571 ?st . ?st psv:P571 [ wikibase:timeValue ?v ; wikibase:timePrecision ?vp ] .
+    ?st wikibase:rank ?r . FILTER(?r != wikibase:DeprecatedRank)
+    BIND("inception" AS ?p)
   } UNION {
-    ?i wdt:P1619 ?v . BIND("opening" AS ?p)
+    ?i p:P1619 ?st . ?st psv:P1619 [ wikibase:timeValue ?v ; wikibase:timePrecision ?vp ] .
+    ?st wikibase:rank ?r . FILTER(?r != wikibase:DeprecatedRank)
+    BIND("opening" AS ?p)
   } UNION {
     ?i wdt:P84 ?a . ?a rdfs:label ?v . BIND(LANG(?v) AS ?lang)
     FILTER(?lang IN ("de", "mul", "en")) BIND("architect" AS ?p)
@@ -96,9 +110,10 @@ SELECT ?i ?p ?v ?lang ?ev ?t ?s ?e WHERE {
     ?i p:P2048/psn:P2048/wikibase:quantityAmount ?v . BIND("height" AS ?p)
   } UNION {
     ?i p:P793 ?st . ?st ps:P793 ?ev . BIND("event" AS ?p)
-    OPTIONAL { ?st pq:P585 ?t . }
-    OPTIONAL { ?st pq:P580 ?s . }
-    OPTIONAL { ?st pq:P582 ?e . }
+    ?st wikibase:rank ?r . FILTER(?r != wikibase:DeprecatedRank)
+    OPTIONAL { ?st pqv:P585 [ wikibase:timeValue ?t ; wikibase:timePrecision ?tp ] . }
+    OPTIONAL { ?st pqv:P580 [ wikibase:timeValue ?s ; wikibase:timePrecision ?sp ] . }
+    OPTIONAL { ?st pqv:P582 [ wikibase:timeValue ?e ; wikibase:timePrecision ?ep ] . }
   }
 }
 """
@@ -117,10 +132,27 @@ def _post(query: str) -> list[dict]:
         except urllib.error.HTTPError as err:
             if err.code != 429 or attempt == RETRIES:
                 raise
-            wait = max(RETRY_S, int(err.headers.get("Retry-After") or 0))
+            wait = max(RETRY_S, retry_after(err.headers.get("Retry-After")))
             print(f"Wikidata asks to wait {wait} s (429)")
             time.sleep(wait)
     raise AssertionError("unreachable")
+
+
+def retry_after(value: str | None) -> int:
+    """Seconds a Retry-After header asks for: a number of seconds or an
+    HTTP date; 0 where it says neither."""
+    if not value:
+        return 0
+    value = value.strip()
+    if value.isdigit():
+        return int(value)
+    try:
+        when = parsedate_to_datetime(value)
+    except (TypeError, ValueError):
+        return 0
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=UTC)
+    return max(0, math.ceil((when - datetime.now(UTC)).total_seconds()))
 
 
 def _value(row: dict, key: str) -> str | None:
@@ -140,7 +172,7 @@ def rows_by_item(rows: list[dict]) -> dict[str, list[dict]]:
         if not qid:
             continue
         rec = {"p": _value(r, "p")}
-        for key in ("v", "lang", "t", "s", "e"):
+        for key in ("v", "vp", "lang", "t", "tp", "s", "sp", "e", "ep"):
             if (val := _value(r, key)) is not None:
                 rec[key] = val
         if (ev := _qid(_value(r, "ev"))) is not None:
@@ -153,21 +185,29 @@ def cache_path(raw: Path, site: str) -> Path:
     return raw / "wikidata" / f"landmark_facts_{site}.json"
 
 
-def landmark_ids(data: Path) -> list[str]:
-    """Every item the site's committed landmark files name (the provider's
-    raw caches are shared by every city of the Land: not read)."""
+def landmark_ids(data: Path, raw: Path | None = None, tiles: Iterable[str] = ()) -> list[str]:
+    """Every item the site's committed landmark files name, and every item
+    the raw Wikidata caches of the site's `tiles` know (a new site has no
+    committed file before its first bake; the provider's other tiles are
+    other cities': not read)."""
     ids: set[str] = set()
     for path in (data / "dlm").glob("landmarks_*.json"):
         doc = json.loads(path.read_text())
         ids.update(i["id"] for i in doc.get("landmarks", []) if "id" in i)
+    for tile in tiles if raw is not None else ():
+        path = raw / "wikidata" / f"landmarks_{tile}.json"
+        if path.exists():
+            with contextlib.suppress(ValueError):
+                doc = json.loads(path.read_text())
+                ids.update(i["id"] for i in doc.get("landmarks", []) if "id" in i)
     return sorted(ids)
 
 
-def fetch_wikidata(raw: Path, data: Path, site: str) -> None:
+def fetch_wikidata(raw: Path, data: Path, site: str, tiles: Iterable[str] = ()) -> None:
     """Asks Wikidata for the facts of the site's landmarks (fetch time
     only) and caches the answer; a rerun asks only for the items the cache
     has not asked for yet."""
-    ids = landmark_ids(data)
+    ids = landmark_ids(data, raw, tiles)
     if not ids:
         print(f"{site}: no landmarks known yet — the landmark facts are not fetched")
         return
@@ -195,10 +235,16 @@ def fetch_wikidata(raw: Path, data: Path, site: str) -> None:
     print(f"{site}: Wikidata facts for {len(items)} of {len(ids)} landmarks")
 
 
-def year(value: str | None) -> int | None:
+YEAR_PRECISION = 9
+
+
+def year(value: str | None, precision: str | None = None) -> int | None:
     """The year of a Wikidata time ("1726-01-01T00:00:00Z"); None for an
-    unknown value (a blank node) or a date before the common era."""
+    unknown value (a blank node), a date before the common era, or one
+    known only to the decade or century (`precision` below 9)."""
     if not value or not value[:4].isdigit():
+        return None
+    if precision is not None and precision.isdigit() and int(precision) < YEAR_PRECISION:
         return None
     return int(value[:4])
 
@@ -211,20 +257,41 @@ def _span(start: int | None, end: int | None) -> list[int] | None:
     return [start, end]
 
 
+def _times(r: dict) -> tuple[int | None, int | None, int | None]:
+    """An event's point in time, start and end, as years (or None)."""
+    return (
+        year(r.get("t"), r.get("tp")),
+        year(r.get("s"), r.get("sp")),
+        year(r.get("e"), r.get("ep")),
+    )
+
+
+def _rebuild(events: list[tuple[int | None, int | None]]) -> dict:
+    """`rebuilt` (or `rebuiltFrom`) from the rebuilding events, each its
+    (start, end): the latest event with an end, its own start where that
+    fits; else the latest start alone."""
+    ended = [(s, e) for s, e in events if e is not None]
+    if ended:
+        start, end = max(ended, key=lambda se: (se[1], se[0] or 0))
+        fits = start is not None and 0 < end - start <= MAX_BUILD_YEARS
+        return {"rebuilt": [start, end] if fits else [end]}
+    starts = [s for s, _ in events if s is not None]
+    # begun, its end not stated: "from"
+    return {"rebuiltFrom": max(starts)} if starts else {}
+
+
 def facts_of(records: list[dict]) -> dict:
     """The nameplate's facts from one item's cached records."""
     starts: list[int] = []
     ends: list[int] = []
-    rebuilt_from: list[int] = []
-    rebuilt_to: list[int] = []
-    rebuilt_at: list[int] = []
+    rebuilds: list[tuple[int | None, int | None]] = []
     names: dict[str, list[str]] = {}
     heights: list[float] = []
     for r in records:
         p = r.get("p")
-        if p == "inception" and (y := year(r.get("v"))) is not None:
+        if p == "inception" and (y := year(r.get("v"), r.get("vp"))) is not None:
             starts.append(y)
-        elif p == "opening" and (y := year(r.get("v"))) is not None:
+        elif p == "opening" and (y := year(r.get("v"), r.get("vp"))) is not None:
             ends.append(y)
         elif p == "architect" and r.get("v"):
             names.setdefault(r.get("lang", ""), []).append(r["v"])
@@ -233,7 +300,7 @@ def facts_of(records: list[dict]) -> dict:
                 heights.append(float(r["v"]))
         elif p == "event":
             ev = r.get("ev")
-            at, s, e = year(r.get("t")), year(r.get("s")), year(r.get("e"))
+            at, s, e = _times(r)
             if ev in STARTS:
                 starts += [y for y in (at, s) if y is not None]
             elif ev in ENDS:
@@ -242,26 +309,18 @@ def facts_of(records: list[dict]) -> dict:
                 starts += [y for y in (s,) if y is not None]
                 ends += [y for y in (e,) if y is not None]
             elif ev in REBUILDS:
-                if s is not None:
-                    rebuilt_from.append(s)
-                if e is not None:
-                    rebuilt_to.append(e)
-                if at is not None:
-                    rebuilt_at.append(at)
+                rebuilds.append((s, e if e is not None else at))
     out: dict = {}
     start = min(starts) if starts else None
-    end = max((y for y in ends if start is None or y >= start), default=None)
+    # the last end that belongs to the building: a consecration centuries
+    # on does not hide its opening
+    fitting = (y for y in ends if start is None or start < y <= start + MAX_BUILD_YEARS)
+    end = max(fitting, default=None)
+    if start is None and ends:
+        end = min(ends)
     if (built := _span(start, end)) is not None:
         out["built"] = built
-    r_start = min(rebuilt_from) if rebuilt_from else None
-    r_end = max(rebuilt_to + rebuilt_at) if (rebuilt_to or rebuilt_at) else None
-    if r_end is not None:
-        # a stated end is the rebuild's year; its start only where it fits
-        fits = r_start is not None and 0 < r_end - r_start <= MAX_BUILD_YEARS
-        out["rebuilt"] = [r_start, r_end] if fits else [r_end]
-    elif r_start is not None:
-        # begun, its end not stated: "from"
-        out["rebuiltFrom"] = r_start
+    out.update(_rebuild(rebuilds))
     for lang in ("de", "mul", "en"):
         if names.get(lang):
             out["architects"] = sorted(set(names[lang]))[:MAX_ARCHITECTS]

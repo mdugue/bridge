@@ -241,7 +241,7 @@ Akzentfarbe der Bedienelemente, und eine Karte öffnet sich. Ein Klick ins Leere
 schließt sie wieder. Neben dem Gebäude steht jetzt sein **Name** in der
 Stadt selbst, solange die Frage gilt: bei einem Wahrzeichen groß, darunter
 wann und von wem es erbaut, wann es wiederaufgebaut wurde und wie hoch es
-ist (aus Wikidata); bei einem benannten Gebäude mit seiner Adresse; bei
+ist (aus Wikidata, auch auf der Karte); bei einem benannten Gebäude mit seiner Adresse; bei
 einem gewöhnlichen Haus nur die Adresse, klein. Von der Straße aus steht
 der Name aufrecht über oder neben dem Gebäude, zur Fassade gedreht, die
 du am besten siehst, mit einer feinen Linie dorthin; aus der Luft liegt

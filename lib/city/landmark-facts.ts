@@ -5,6 +5,7 @@
  * The site's file is fetched on the first landmark asked (ADR 0042) and
  * found by the Buildings it names. No THREE, no DOM.
  */
+import type { CardFact } from "./card-lines";
 
 /** One landmark's facts as the bake writes them. */
 export interface LandmarkFactsEntry {
@@ -91,42 +92,60 @@ export function isLandmarkFactsFile(v: unknown): v is LandmarkFactsFile {
   );
 }
 
-/** Building id → its landmark's facts. */
-export type LandmarkFactsIndex = ReadonlyMap<string, LandmarkFactsEntry>;
+/** Building id → the landmarks' facts on it (two items on one building:
+ *  an institution in a palace, a church and its parish). */
+export type LandmarkFactsIndex = ReadonlyMap<
+  string,
+  readonly LandmarkFactsEntry[]
+>;
 
 export function indexLandmarkFacts(
   file: LandmarkFactsFile
 ): LandmarkFactsIndex {
-  const index = new Map<string, LandmarkFactsEntry>();
+  const index = new Map<string, LandmarkFactsEntry[]>();
   for (const entry of file.landmarks) {
     for (const b of entry.buildings) {
-      // two items on one building (an institution in a palace): the first,
-      // the file is sorted by id — the notable one wins below
-      if (!index.has(b)) {
-        index.set(b, entry);
+      const on = index.get(b);
+      if (on) {
+        on.push(entry);
+      } else {
+        index.set(b, [entry]);
       }
     }
   }
   return index;
 }
 
-/** The facts of the landmark among `buildings` (a picked ensemble's every
- *  Building) that has the most to say; null where none has facts. */
+const nameKey = (name: string) =>
+  name
+    .normalize("NFC")
+    .toLocaleLowerCase("de-DE")
+    .replaceAll(/\s+/g, " ")
+    .trim();
+
+/**
+ * The facts of the landmark among `buildings` (a picked ensemble's every
+ * Building) the plate names: the one whose name is the card's `title`
+ * where one is, else the one with the most to say; null where none has
+ * facts. The name decides first, so an institution housed in a palace
+ * never lends the palace its founding year.
+ */
 export function factsFor(
   index: LandmarkFactsIndex,
-  buildings: readonly string[]
+  buildings: readonly string[],
+  title = ""
 ): LandmarkFactsEntry | null {
+  const wanted = nameKey(title);
   let best: LandmarkFactsEntry | null = null;
   let bestScore = 0;
   for (const b of buildings) {
-    const entry = index.get(b);
-    if (!entry) {
-      continue;
-    }
-    const score = factCount(entry);
-    if (score > bestScore) {
-      best = entry;
-      bestScore = score;
+    for (const entry of index.get(b) ?? []) {
+      const named = wanted !== "" && nameKey(entry.name) === wanted;
+      const score = (named ? 100 : 0) + factCount(entry);
+      if (score > bestScore) {
+        best = entry;
+        bestScore = score;
+      }
     }
   }
   return best;
@@ -180,4 +199,37 @@ export function factLines(
   return [first, second]
     .filter((line) => line.length > 0)
     .map((line) => line.join(" · "));
+}
+
+/** The inquiry card's rows of a landmark's facts — what its nameplate
+ *  says under the name, labelled. */
+export function landmarkCardFacts(facts: LandmarkFactsEntry): CardFact[] {
+  const rows: CardFact[] = [];
+  if (facts.built) {
+    rows.push({ label: "Bauzeit", value: span(facts.built) });
+  }
+  if (facts.architects && facts.architects.length > 0) {
+    rows.push({
+      label: facts.architects.length > 1 ? "Architekten" : "Architekt",
+      value: facts.architects.join(" und "),
+    });
+  }
+  if (facts.rebuilt) {
+    rows.push({ label: "Wiederaufbau", value: span(facts.rebuilt) });
+  } else if (facts.rebuiltFrom !== undefined) {
+    rows.push({ label: "Wiederaufbau", value: `ab ${facts.rebuiltFrom}` });
+  }
+  if (facts.height !== undefined) {
+    rows.push({
+      label: "Höhe laut Wikidata",
+      value: `${heightFormat.format(facts.height)} m`,
+    });
+  }
+  return rows;
+}
+
+/** The source line of a landmark's facts: "Bauzeit, Architekt: Wikidata
+ *  Q157229 · CC0". */
+export function wikidataSource(what: readonly string[], id: string): string {
+  return `${what.join(", ")}: Wikidata ${id} · CC0`;
 }

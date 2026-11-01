@@ -59,12 +59,25 @@ test("an ensemble takes the landmark with the most to say", () => {
   expect(factsFor(index, ["DESN_none"])).toBeNull();
 });
 
-test("the first item on a Building keeps it", () => {
+test("the item named as the card names it wins on a shared Building", () => {
+  const school: LandmarkFactsEntry = {
+    id: "Q9",
+    name: "Hochschule für Bildende Künste",
+    buildings: ["DESN_fk"],
+    built: [1764],
+    architects: ["A", "B"],
+    height: 30,
+    rebuilt: [1950],
+  };
   const index = indexLandmarkFacts({
     attribution: "",
-    landmarks: [FRAUENKIRCHE, { ...FRAUENKIRCHE, id: "Q9" }],
+    landmarks: [school, FRAUENKIRCHE],
   });
-  expect(index.get("DESN_fk")?.id).toBe("Q157229");
+  expect(index.get("DESN_fk")?.length).toBe(2);
+  expect(factsFor(index, ["DESN_fk"], "Frauenkirche")?.id).toBe("Q157229");
+  expect(factsFor(index, ["DESN_fk"], " frauenkirche ")?.id).toBe("Q157229");
+  // no name to go by: the one with the most to say
+  expect(factsFor(index, ["DESN_fk"])?.id).toBe("Q9");
 });
 
 test("the file is checked before it is read", () => {

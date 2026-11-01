@@ -106,6 +106,7 @@ import {
   tileTopsOf,
 } from "@/lib/city/tileset";
 import type { Inquiry, InquiryAlong } from "@/lib/city/inquiry";
+import { isLandmarkInquiry } from "@/lib/city/nameplate";
 import { valleyFalloff } from "@/lib/city/valley-fog";
 import {
   createLodSchedule,
@@ -1919,10 +1920,11 @@ async function bootApp(
     postStack.setOverlay(null);
     nameplate.dispose();
   });
+  const landmarkFactsUrl = landmarkFactsHref(extras, tilesetUrl);
   const plateAsk = createNameplateAsk({
     plate: nameplate,
     site: opts.site,
-    factsUrl: landmarkFactsHref(extras, tilesetUrl),
+    factsUrl: landmarkFactsUrl,
     signal: opts.signal,
   });
   // The plate joins once its programs are built (a few tens of kB: it is
@@ -2251,12 +2253,16 @@ async function bootApp(
   // triangles, a bridge's out of its tile's bridge meshes, a tree's or a
   // monument's shape after its data.
   // the asked thing's triangles, as last outlined for a question (a
-  // hover's outline is a moment's: the nameplate stays with the question)
+  // hover's outline is a moment's: the nameplate stays with the question).
+  // The probe outlines before it answers, so a question reads them after
+  // `probe.ask`/`select`; a redraw of the same question (`probe.refresh`:
+  // another level of its tile shows) moves the plate's body with it.
   let askedShape: Float32Array | null = null;
   const outline = (subject: OutlineSubject | null, flash = true) => {
     const shape = outlineShape(subject);
     if (flash) {
       askedShape = shape && "positions" in shape ? shape.positions : null;
+      plateAsk.reshape(askedShape);
     }
     postStack.setSelection(shape, flash);
   };
@@ -2371,6 +2377,10 @@ async function bootApp(
     }
     if (asked?.kind === "bikes") {
       return { ...asked, credit: layerSources?.bikes?.credit };
+    }
+    if (asked?.kind === "building" && landmarkFactsUrl) {
+      // the card lists what the nameplate says under the name
+      return isLandmarkInquiry(asked) ? { ...asked, landmarkFactsUrl } : asked;
     }
     // the others carry all their card needs
     return asked;

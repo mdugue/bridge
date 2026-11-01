@@ -27,6 +27,8 @@
  * No THREE, no DOM.
  */
 
+import { minimumRectangle } from "./open-roofs";
+
 export type Vec3 = [number, number, number];
 
 /** The building as the plate reads it: its footprint's minimum-area
@@ -179,45 +181,15 @@ const smooth = (a: number, b: number, x: number) => {
 
 // --- the body ------------------------------------------------------------
 
-/** The convex hull of (x, z) points (monotone chain), counter-clockwise. */
-export function hull2(points: readonly [number, number][]): [number, number][] {
-  const p = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  if (p.length < 3) {
-    return p;
-  }
-  const cross = (o: number[], a: number[], b: number[]) =>
-    (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
-  const lower: [number, number][] = [];
-  for (const q of p) {
-    while (
-      lower.length >= 2 &&
-      cross(lower[lower.length - 2], lower[lower.length - 1], q) <= 0
-    ) {
-      lower.pop();
-    }
-    lower.push(q);
-  }
-  const upper: [number, number][] = [];
-  for (let i = p.length - 1; i >= 0; i--) {
-    const q = p[i];
-    while (
-      upper.length >= 2 &&
-      cross(upper[upper.length - 2], upper[upper.length - 1], q) <= 0
-    ) {
-      upper.pop();
-    }
-    upper.push(q);
-  }
-  lower.pop();
-  upper.pop();
-  return [...lower, ...upper];
-}
+/** A footprint vertex's decimetre cell as one number (|x|, |z| < 50 km). */
+const cellKey = (x: number, z: number) =>
+  Math.round(x * 10) * 1_048_576 + Math.round(z * 10);
 
 /**
  * The body from world-space triangle positions (x, y, z per vertex, as
  * the selection outline gets them): the footprint's minimum-area
- * rectangle (one side on a hull edge), its long side `u`. Null for fewer
- * than three vertices.
+ * rectangle (`minimumRectangle`), its long side `u`. Null for fewer than
+ * three vertices.
  */
 export function nameplateBody(positions: Float32Array): NameplateBody | null {
   const n = Math.floor(positions.length / 3);
@@ -226,7 +198,7 @@ export function nameplateBody(positions: Float32Array): NameplateBody | null {
   }
   // the footprint on a decimetre grid: a landmark has many thousands of
   // vertices, most over the same few corners
-  const seen = new Set<string>();
+  const seen = new Set<number>();
   const pts: [number, number][] = [];
   let base = Number.POSITIVE_INFINITY;
   let top = Number.NEGATIVE_INFINITY;
@@ -240,67 +212,26 @@ export function nameplateBody(positions: Float32Array): NameplateBody | null {
       top = y;
       peak = [x, y, z];
     }
-    const key = `${Math.round(x * 10)},${Math.round(z * 10)}`;
+    const key = cellKey(x, z);
     if (!seen.has(key)) {
       seen.add(key);
       pts.push([x, z]);
     }
   }
-  const h = hull2(pts);
-  let best: NameplateBody | null = null;
-  let bestArea = Number.POSITIVE_INFINITY;
-  const edges = h.length >= 2 ? h.length : 0;
-  for (let i = 0; i < edges; i++) {
-    const a = h[i];
-    const b = h[(i + 1) % h.length];
-    const l = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    if (l < 1e-6) {
-      continue;
-    }
-    const e: [number, number] = [(b[0] - a[0]) / l, (b[1] - a[1]) / l];
-    const f: [number, number] = [-e[1], e[0]];
-    let minE = Number.POSITIVE_INFINITY;
-    let maxE = Number.NEGATIVE_INFINITY;
-    let minF = Number.POSITIVE_INFINITY;
-    let maxF = Number.NEGATIVE_INFINITY;
-    for (const q of h) {
-      const pe = q[0] * e[0] + q[1] * e[1];
-      const pf = q[0] * f[0] + q[1] * f[1];
-      minE = Math.min(minE, pe);
-      maxE = Math.max(maxE, pe);
-      minF = Math.min(minF, pf);
-      maxF = Math.max(maxF, pf);
-    }
-    const area = (maxE - minE) * (maxF - minF);
-    if (area < bestArea - 1e-6) {
-      bestArea = area;
-      const ce = (minE + maxE) / 2;
-      const cf = (minF + maxF) / 2;
-      const center: [number, number] = [
-        e[0] * ce + f[0] * cf,
-        e[1] * ce + f[1] * cf,
-      ];
-      const he = (maxE - minE) / 2;
-      const hf = (maxF - minF) / 2;
-      best =
-        he >= hf
-          ? { center, u: e, v: f, half: [he, hf], base, top, peak }
-          : {
-              center,
-              u: f,
-              v: [-e[0], -e[1]],
-              half: [hf, he],
-              base,
-              top,
-              peak,
-            };
-    }
-  }
-  if (best) {
-    return best;
+  const rect = minimumRectangle(pts);
+  if (rect && rect.length > 1e-6) {
+    return {
+      center: [rect.centre[0], rect.centre[1]],
+      u: [rect.u[0], rect.u[1]],
+      v: [rect.v[0], rect.v[1]],
+      half: [rect.length / 2, rect.width / 2],
+      base,
+      top,
+      peak,
+    };
   }
   // a single point or a line: a square metre round it
-  const [x, z] = h[0] ?? [peak[0], peak[2]];
+  const [x, z] = pts[0] ?? [peak[0], peak[2]];
   return {
     center: [x, z],
     u: [1, 0],
@@ -379,11 +310,15 @@ export function nameplateMode(
 export function nameplateSide(
   body: NameplateBody,
   camera: NameplateCamera,
-  previous: NameplateSide | null
+  previous: NameplateSide | null,
+  mode: NameplateMode = "street"
 ): NameplateSide {
+  // from above, the side towards the screen's foot (cross(right, Y): it
+  // holds looking straight down, too); else the side towards the camera
   const c = centre3(body, camera.position[1]);
   const to = sub(camera.position, c);
-  const flat: Vec3 = [to[0], 0, to[2]];
+  const flat: Vec3 =
+    mode === "air" ? [-camera.right[2], 0, camera.right[0]] : [to[0], 0, to[2]];
   const l = Math.max(len(flat), 1e-6);
   const facing = (side: NameplateSide) =>
     dot(sideFrame(body, side).normal, flat) / l;
@@ -402,18 +337,12 @@ export function nameplateSide(
   return best;
 }
 
-/** The ground plate's text direction: the body axis nearest the camera's
- *  right on the ground, signed to read left to right. */
-function groundRight(body: NameplateBody, camera: NameplateCamera): Vec3 {
-  const r: Vec3 = [camera.right[0], 0, camera.right[2]];
-  // straight down a parallel view's right is its own; looking straight
-  // down a perspective one's, too
-  const axes: Vec3[] = [
-    [body.u[0], 0, body.u[1]],
-    [body.v[0], 0, body.v[1]],
-  ];
-  const a = Math.abs(dot(axes[0], r)) >= Math.abs(dot(axes[1], r)) ? 0 : 1;
-  return dot(axes[a], r) >= 0 ? axes[a] : scale(axes[a], -1);
+/** The ground plate's text direction: along the side the screen's foot
+ *  faces (`nameplateSide`), reading left to right from there — a quarter
+ *  turn only when that side changes, with its hysteresis. */
+function groundRight(body: NameplateBody, side: NameplateSide): Vec3 {
+  const n = sideFrame(body, side).normal;
+  return [n[2], 0, -n[0]];
 }
 
 /** The ground plate's half extents of the body along its right and up. */
@@ -465,7 +394,7 @@ export function nameplatePose(
   groundAt: (x: number, z: number) => number
 ): NameplatePose {
   if (layout.mode === "air") {
-    return groundPose(body, layout.spot, camera, block, range, groundAt);
+    return groundPose(body, layout, camera, block, range, groundAt);
   }
   const { normal, halfWidth, depth } = sideFrame(body, layout.side);
   // the facade's right seen from outside: cross(Y, n)
@@ -534,13 +463,13 @@ export function nameplatePose(
 
 function groundPose(
   body: NameplateBody,
-  spot: NameplateSpot,
+  { side, spot }: NameplateLayout,
   camera: NameplateCamera,
   block: NameplateBlock,
   range: CapRange,
   groundAt: (x: number, z: number) => number
 ): NameplatePose {
-  const right = groundRight(body, camera);
+  const right = groundRight(body, side);
   // up the text on the ground: away from the camera, cross(Y, right)
   const up: Vec3 = [right[2], 0, -right[0]];
   const { along, across } = groundExtents(body, right);
@@ -708,7 +637,7 @@ export function chooseNameplate(
 ): NameplateLayout {
   const mode =
     force ?? nameplateMode(body, scene.camera, previous?.mode ?? null);
-  const side = nameplateSide(body, scene.camera, previous?.side ?? null);
+  const side = nameplateSide(body, scene.camera, previous?.side ?? null, mode);
   let best: NameplateLayout = { mode, side, spot: NAMEPLATE_SPOTS[mode][0] };
   let bestCost = Number.POSITIVE_INFINITY;
   for (const spot of NAMEPLATE_SPOTS[mode]) {

@@ -18,7 +18,7 @@
  * a few times a second (`CHOOSE_MS`) with rays through the city's BVHs,
  * so it avoids what would hide it in the first place; a new place
  * cross-fades. Nothing of it reaches the shadow map, and it holds memory
- * only while something is asked (its atlas ≈ 0.25 MB at most, a few
+ * only while something is asked (its atlas ≤ 0.5 MB on the GPU, no CPU copy, a few
  * hundred vertices).
  */
 import {
@@ -70,6 +70,7 @@ import {
   type NameplateScene,
   type Vec3,
   add,
+  bodySize,
   chooseNameplate,
   cross,
   dot,
@@ -88,6 +89,7 @@ import {
 } from "@/lib/city/nameplate-type";
 import type { RenderStyle } from "@/lib/city/render-style";
 import { compileInTurn } from "./compile-lanes";
+import { dropDataOnUpload } from "./raster-upload";
 import {
   type Align,
   FIELD_RADIUS,
@@ -95,7 +97,10 @@ import {
   PAINT,
   type PlateGeometry,
   type PlateRaster,
+  DESKTOP_RESOLUTION,
+  facesReady,
   layPlate,
+  PHONE_RESOLUTION,
   loadFaces,
   rasterPlate,
 } from "./nameplate-glyphs";
@@ -146,6 +151,9 @@ export interface NameplateDeps {
 
 export interface Nameplate {
   set: (subject: NameplateSubject | null) => void;
+  /** the same thing's triangles again (its outline moved to the level the
+   *  renderer shows): the plate keeps its words and its place's choice */
+  reshape: (positions: Float32Array) => void;
   applyLook: (style: RenderStyle) => void;
   setNight: (factor: number) => void;
   /** places the plate for this frame's camera; `hold` keeps its place
@@ -174,6 +182,8 @@ function atlasTexture(data: Uint8Array, width: number, height: number) {
   t.colorSpace = "";
   t.needsUpdate = true;
   t.name = "NameplateAtlas";
+  // the GPU holds it: no CPU copy kept (ADR 0047)
+  dropDataOnUpload(t);
   return t;
 }
 
@@ -229,7 +239,7 @@ function plateMaterial(
     .add(discA.mul(isDisc));
   const ghostA = ghostGlyph
     .mul(isGlyph)
-    .add(solidA.add(discA.mul(isDisc)).mul(float(1).sub(isGlyph)).mul(0.35))
+    .add(solidA.mul(isSolid).add(discA.mul(isDisc)).mul(0.35))
     .mul(GHOST.alpha);
   // hidden: the scene's surface in front of this fragment
   const sceneZ = deps.lens.viewZ(texture(deps.depthTexture, screenUV).r);
@@ -247,6 +257,8 @@ function plateMaterial(
   m.depthTest = false;
   m.depthWrite = false;
   m.side = DoubleSide;
+  // one pass for both faces: a plate is flat, one side is always away
+  m.forceSinglePass = true;
   m.fog = false;
   m.name = "nameplate";
   return m;
@@ -291,6 +303,10 @@ function paintColours(
 }
 
 const tmp = new Vector3();
+
+/** A camera's near plane (m). */
+const nearOf = (camera: Camera): number =>
+  (camera as PerspectiveCamera).near ?? 0.1;
 
 /** The scene's camera as the placement reads it. */
 function plateCamera(
@@ -407,7 +423,12 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     if (rasterFor?.text === s.text && rasterFor.style === style) {
       return raster;
     }
-    raster = rasterPlate(s.text, type(), from);
+    raster = rasterPlate(
+      s.text,
+      type(),
+      from,
+      deps.phone ? PHONE_RESOLUTION : DESKTOP_RESOLUTION
+    );
     rasterFor = { text: s.text, style };
     if (raster) {
       atlas.dispose();
@@ -417,6 +438,8 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
         raster.atlas.height
       );
       atlasNode.value = atlas;
+      // the texture has the bytes now; the layout needs only the size
+      raster.atlas.data = new Uint8Array(0);
     }
     return raster;
   };
@@ -468,7 +491,8 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   const withFaces = () => {
     const from = deps.fonts();
     const asked = ++generation;
-    if (!from) {
+    // set in its faces already: nothing to set again
+    if (!from || facesReady(type(), from)) {
       return;
     }
     void loadFaces(type(), from).then(() => {
@@ -525,47 +549,49 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       }
     };
     const r = p.right;
+    const quad = (
+      from: Vec3,
+      to: Vec3,
+      width: number,
+      c: readonly [number, number, number]
+    ) => {
+      // the plate's normal × the line: across it, in the plate's plane;
+      // antialiased across by its u
+      const d = sub(to, from);
+      const l = Math.hypot(d[0], d[1], d[2]) || 1;
+      const x = scale(cross(cross(p.right, p.up), d), 1 / l);
+      const o = (q: Vec3, s: number): Vec3 => add(q, scale(x, s));
+      push(
+        [o(from, -width), o(from, width), o(to, width), o(to, -width)],
+        [
+          [0, 0.5],
+          [1, 0.5],
+          [1, 0.5],
+          [0, 0.5],
+        ],
+        KIND.solid,
+        c
+      );
+    };
     if (t.leader === "tail" && t.box) {
-      // the caption box's tail: from its foot to the anchor, edged
+      // the caption box's tail: from its foot to the anchor, filled, its
+      // two slanted sides edged by antialiased strokes over the fill's
       const half = Math.min(0.5, b.width * 0.12);
       const a = at(footS - half, 0.2);
       const c = at(footS + half, 0.2);
       const edge = atNight(t.box.edge, night);
       const fill = atNight(t.box.fill, night);
-      const grow = 0.09 * p.cap;
-      const out = (q: Vec3, s: number): Vec3 => add(q, scale(r, s));
+      const stroke = 0.045 * p.cap;
       const solid = [
         [0.5, 0.5],
         [0.5, 0.5],
         [0.5, 0.5],
       ];
-      push([out(a, -grow), out(c, grow), anchor], solid, KIND.solid, edge);
       push([a, c, anchor], solid, KIND.solid, fill);
+      quad(a, anchor, stroke, edge);
+      quad(c, anchor, stroke, edge);
     } else {
       const line = atNight(t.lines.ink, night);
-      const quad = (
-        from: Vec3,
-        to: Vec3,
-        width: number,
-        c: readonly [number, number, number]
-      ) => {
-        // the plate's normal × the line: across it, in the plate's plane
-        const d = sub(to, from);
-        const l = Math.hypot(d[0], d[1], d[2]) || 1;
-        const x = scale(cross(cross(p.right, p.up), d), 1 / l);
-        const o = (q: Vec3, s: number): Vec3 => add(q, scale(x, s));
-        push(
-          [o(from, -width), o(from, width), o(to, width), o(to, -width)],
-          [
-            [0, 0.5],
-            [1, 0.5],
-            [1, 0.5],
-            [0, 0.5],
-          ],
-          KIND.solid,
-          c
-        );
-      };
       quad(foot, anchor, w, line);
       if (t.leader === "dimension") {
         // ticks across both ends, a drawn dimension line
@@ -628,8 +654,12 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   ): NameplateScene => ({
     camera: cam,
     project: (p) => {
+      // in front by the view space's own z: NDC depth runs the other way
+      // round under a reversed buffer (three's `reversedDepth` camera)
+      tmp.set(p[0], p[1], p[2]).applyMatrix4(camera.matrixWorldInverse);
+      const front = cam.ortho || tmp.z < -nearOf(camera);
       tmp.set(p[0], p[1], p[2]).project(camera);
-      return { x: tmp.x, y: tmp.y, front: tmp.z > -1 && tmp.z < 1 };
+      return { x: tmp.x, y: tmp.y, front };
     },
     hidden: (points) => deps.hidden(camera, points),
     hud: deps.hud(),
@@ -650,6 +680,80 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     chosenAt = Number.NEGATIVE_INFINITY;
     plate.visible = false;
     leader.visible = false;
+  };
+
+  /** Chooses the place again; a new one cross-fades in. */
+  const choose = (
+    b: NameplateBody,
+    camera: Camera,
+    cam: NameplateCamera,
+    now: number
+  ) => {
+    // Schwarzplan letters the ground from above the building (its ground
+    // places are the ones weighed); from the street the ground beside it
+    // is hidden, so it stands upright. The roof line holds a fifth of the
+    // building's size either way.
+    const margin = 0.2 * bodySize(b) * (layout?.mode === "air" ? -1 : 1);
+    const onGround = type().onGround && cam.position[1] > b.top + margin;
+    const chosen = chooseNameplate(
+      b,
+      layout,
+      block(),
+      range(),
+      placeScene(camera, cam),
+      onGround ? "air" : undefined
+    );
+    if (layout === null) {
+      layout = chosen;
+      rebuild();
+    } else if (!sameLayout(chosen, layout) && !sameLayout(chosen, pending)) {
+      pending = chosen;
+      crossAt = now;
+    }
+  };
+
+  /** The cross-fade's share now: out of the old place, then into the new
+   *  one; while an image is exported, done at once. */
+  const crossing = (now: number, hold: boolean): number => {
+    if (pending && (hold || now - crossAt >= CROSS_MS)) {
+      layout = pending;
+      pending = null;
+      crossAt = hold ? Number.NEGATIVE_INFINITY : now;
+      rebuild();
+      return hold ? 1 : 0;
+    }
+    if (pending) {
+      return 1 - (now - crossAt) / CROSS_MS;
+    }
+    return hold ? 1 : Math.min((now - crossAt) / CROSS_MS, 1);
+  };
+
+  /** The plate's mesh at its pose: right, up and normal scaled by the
+   *  capital height, the block's corner as origin. */
+  const placePlate = (p: NameplatePose) => {
+    const n = cross(p.right, p.up);
+    const c = p.cap;
+    matrix.set(
+      p.right[0] * c,
+      p.up[0] * c,
+      n[0] * c,
+      p.origin[0],
+      p.right[1] * c,
+      p.up[1] * c,
+      n[1] * c,
+      p.origin[1],
+      p.right[2] * c,
+      p.up[2] * c,
+      n[2] * c,
+      p.origin[2],
+      0,
+      0,
+      0,
+      1
+    );
+    plate.matrix.copy(matrix);
+    plate.matrixWorld.copy(matrix);
+    plate.matrixWorldNeedsUpdate = false;
   };
 
   return {
@@ -677,6 +781,14 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       rebuild();
       withFaces();
     },
+    reshape: (positions) => {
+      const next = subject ? nameplateBody(positions) : null;
+      if (disposed || !(subject && next)) {
+        return;
+      }
+      subject = { ...subject, positions };
+      body = next;
+    },
     applyLook: (next) => {
       if (next === style) {
         return;
@@ -696,82 +808,27 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       recolour();
     },
     update: (camera, viewport, hold = false) => {
-      if (!(subject && body && geometry)) {
+      if (!(subject && body && geometry) || (hold && !layout)) {
+        // nothing asked; or an export began before a place was chosen
+        // (its tiles' projections would choose a wrong one)
         plate.visible = false;
         leader.visible = false;
         return;
       }
       const now = performance.now();
       const cam = plateCamera(camera, viewport);
-      if (now - chosenAt >= CHOOSE_MS && !(hold && layout)) {
+      if (now - chosenAt >= CHOOSE_MS && !hold) {
         chosenAt = now;
-        // Schwarzplan letters the ground whenever the camera is above the
-        // building (its ground places are the ones weighed); from the
-        // street the ground beside it is hidden, so it stands upright
-        const onGround = type().onGround && cam.position[1] > body.top;
-        const chosen = chooseNameplate(
-          body,
-          layout,
-          block(),
-          range(),
-          placeScene(camera, cam),
-          onGround ? "air" : undefined
-        );
-        if (layout === null) {
-          layout = chosen;
-          rebuild();
-        } else if (
-          !sameLayout(chosen, layout) &&
-          !sameLayout(chosen, pending)
-        ) {
-          pending = chosen;
-          crossAt = now;
-        }
+        choose(body, camera, cam, now);
       }
-      // a change of place: out, then the new place in
-      let crossFade = 1;
-      if (pending) {
-        const t = (now - crossAt) / CROSS_MS;
-        if (t >= 1) {
-          layout = pending;
-          pending = null;
-          crossAt = now;
-          rebuild();
-          crossFade = 0;
-        } else {
-          crossFade = 1 - t;
-        }
-      } else if (now - crossAt < CROSS_MS) {
-        crossFade = (now - crossAt) / CROSS_MS;
-      }
+      const crossFade = crossing(now, hold);
       if (!layout || !geometry) {
         return;
       }
       pose = nameplatePose(body, layout, cam, block(), range(), deps.groundAt);
-      const n = cross(pose.right, pose.up);
-      const c = pose.cap;
-      matrix.set(
-        pose.right[0] * c,
-        pose.up[0] * c,
-        n[0] * c,
-        pose.origin[0],
-        pose.right[1] * c,
-        pose.up[1] * c,
-        n[1] * c,
-        pose.origin[1],
-        pose.right[2] * c,
-        pose.up[2] * c,
-        n[2] * c,
-        pose.origin[2],
-        0,
-        0,
-        0,
-        1
-      );
-      plate.matrix.copy(matrix);
-      plate.matrixWorld.copy(matrix);
-      plate.matrixWorldNeedsUpdate = false;
-      const arrive = Math.min((now - askedAt) / ARRIVE_MS, 1);
+      placePlate(pose);
+      // an export draws every tile alike: no fade still running
+      const arrive = hold ? 1 : Math.min((now - askedAt) / ARRIVE_MS, 1);
       fade.value = pose.fade * crossFade * (arrive * arrive * (3 - 2 * arrive));
       plate.visible = fade.value > 0.001;
       if (plate.visible) {

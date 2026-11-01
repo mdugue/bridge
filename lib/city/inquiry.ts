@@ -50,6 +50,12 @@ import {
 } from "./object-facts";
 import { parseLod2Stand, type SiteProvenance } from "./provenance";
 import type { WindowSpec } from "./windows";
+import {
+  factsFor,
+  landmarkCardFacts,
+  type LandmarkFactsIndex,
+  wikidataSource,
+} from "./landmark-facts";
 
 export type { CardFact, InquiryCard } from "./card-lines";
 export { germanDates, metres, squareMetres } from "./card-lines";
@@ -116,6 +122,9 @@ export interface BuildingInquiry {
    *  trees, in every tile it stands in), the picked one too */
   tree: InquiryObject[];
   tile: string;
+  /** the site's landmark facts file (Wikidata), set where the building is
+   *  a landmark: the card lists what the nameplate says under its name */
+  landmarkFactsUrl?: string;
 }
 
 /** Whatever someone asked about (ADR 0042, plan 052 phase 4). */
@@ -374,11 +383,16 @@ export function inquiryCard(
   inquiry: Inquiry,
   provenance: SiteProvenance | null,
   credits: CardCredits,
-  treeFacts: TreeFacts | null = null
+  treeFacts: TreeFacts | null = null,
+  landmarks: LandmarkFactsIndex | null = null
 ): InquiryCard {
   switch (inquiry.kind) {
     case "building":
-      return buildingCard(inquiry, provenance, credits);
+      return withLandmarkFacts(
+        buildingCard(inquiry, provenance, credits),
+        inquiry,
+        landmarks
+      );
     case "tree":
       return treeCard(inquiry, treeFacts, provenance, credits);
     case "monument":
@@ -399,6 +413,35 @@ export function inquiryCard(
     case "stop":
       return moreCard(inquiry, provenance, credits);
   }
+}
+
+/** A landmark's card with its Wikidata facts (the nameplate's lines) as
+ *  rows and Wikidata as their source; the card as it was without any. */
+function withLandmarkFacts(
+  card: InquiryCard,
+  inquiry: BuildingInquiry,
+  landmarks: LandmarkFactsIndex | null
+): InquiryCard {
+  const buildings = [...new Set(inquiry.tree.map((o) => o.facts.buildingId))];
+  const entry = landmarks ? factsFor(landmarks, buildings, card.title) : null;
+  const rows = entry ? landmarkCardFacts(entry) : [];
+  if (!entry || rows.length === 0) {
+    return card;
+  }
+  return {
+    ...card,
+    facts: [...card.facts, ...rows],
+    sources: [
+      ...card.sources,
+      ...stated(
+        "taken",
+        wikidataSource(
+          rows.map((r) => r.label),
+          entry.id
+        )
+      ),
+    ],
+  };
 }
 
 /** Where a building's card says it came from first: the city model, the

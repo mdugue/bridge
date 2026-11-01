@@ -22,6 +22,12 @@ import {
   inquiryCard,
 } from "@/lib/city/inquiry";
 import type { TreeFactsFile } from "@/lib/city/features";
+import {
+  indexLandmarkFacts,
+  isLandmarkFactsFile,
+  type LandmarkFactsFile,
+  type LandmarkFactsIndex,
+} from "@/lib/city/landmark-facts";
 import { type TreeFacts, treeFactsAt } from "@/lib/city/inquiry-features";
 import { isSiteProvenance, type SiteProvenance } from "@/lib/city/provenance";
 import type { Drawer as DrawerPrimitive } from "@base-ui/react/drawer";
@@ -95,6 +101,20 @@ const isTreeFacts = (json: unknown): json is TreeFactsFile =>
   Array.isArray((json as Partial<TreeFactsFile>).known) &&
   Array.isArray((json as Partial<TreeFactsFile>).names);
 
+const landmarkFactsFetches = new Map<
+  string,
+  Promise<LandmarkFactsFile | null>
+>();
+
+/** The site's landmark facts (fetched with the first landmark asked, as
+ *  the nameplate fetches them), indexed by Building; null until then. */
+function useLandmarkFacts(inquiry: Inquiry): LandmarkFactsIndex | null {
+  const url =
+    inquiry.kind === "building" ? inquiry.landmarkFactsUrl : undefined;
+  const file = useFetched(landmarkFactsFetches, url, isLandmarkFactsFile);
+  return useMemo(() => (file ? indexLandmarkFacts(file) : null), [file]);
+}
+
 /**
  * The provenance manifest, fetched when the first card opens and kept for
  * the session. A failed fetch leaves the card without editions; each
@@ -136,11 +156,12 @@ export function InquiryCard({
 }) {
   const provenance = useProvenance(provenanceUrl);
   const treeFacts = useTreeFacts(inquiry);
+  const landmarks = useLandmarkFacts(inquiry);
   const site = useSite();
   const credits = useMemo(() => cardCredits(site), [site]);
   const card = useMemo(
-    () => inquiryCard(inquiry, provenance, credits, treeFacts),
-    [inquiry, provenance, credits, treeFacts]
+    () => inquiryCard(inquiry, provenance, credits, treeFacts, landmarks),
+    [inquiry, provenance, credits, treeFacts, landmarks]
   );
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

@@ -26,6 +26,7 @@ import type { Vec3 } from "@/lib/city/nameplate-place";
 import type { Site } from "@/lib/city/site";
 import { type CityLayer, nearestCityHit } from "./city-layer";
 import type { Nameplate } from "./nameplate-layer";
+import { parallelDirection } from "./view-ray";
 
 /** How far short of a point a ray stops (m): the plate's own building
  *  stands right behind it. */
@@ -43,9 +44,24 @@ export function landmarkFactsHref(
   return file ? new URL(file, tilesetUrl).href : null;
 }
 
+/** How long the facts may take before the plate shows the name alone. */
+const FACTS_TIMEOUT_MS = 8000;
+
+function factsSignal(signal: AbortSignal | undefined): AbortSignal | undefined {
+  if (typeof AbortSignal.timeout !== "function") {
+    return signal;
+  }
+  const timeout = AbortSignal.timeout(FACTS_TIMEOUT_MS);
+  return signal && typeof AbortSignal.any === "function"
+    ? AbortSignal.any([signal, timeout])
+    : (signal ?? timeout);
+}
+
 export interface NameplateAsk {
   /** a question answered (or nothing asked), with the outline's triangles */
   ask: (inquiry: Inquiry | null, positions: Float32Array | null) => void;
+  /** the question's outline redrawn (another level of its tile shows) */
+  reshape: (positions: Float32Array | null) => void;
 }
 
 export function createNameplateAsk(deps: {
@@ -63,7 +79,7 @@ export function createNameplateAsk(deps: {
     if (!url) {
       return Promise.resolve(null);
     }
-    facts ??= fetch(url, { signal: deps.signal })
+    facts ??= fetch(url, { signal: factsSignal(deps.signal) })
       .then((r) => {
         if (!r.ok) {
           throw new Error(`landmark facts: ${r.status}`);
@@ -81,6 +97,11 @@ export function createNameplateAsk(deps: {
     return facts;
   };
   return {
+    reshape: (positions) => {
+      if (positions && positions.length >= 9) {
+        deps.plate.reshape(positions);
+      }
+    },
     ask: (inquiry, positions) => {
       const token = ++asked;
       if (!(inquiry && positions && positions.length >= 9)) {
@@ -95,11 +116,13 @@ export function createNameplateAsk(deps: {
         const text = nameplateText(
           inquiry,
           card,
-          index ? factsFor(index, inquiryBuildings(inquiry)) : null
+          index ? factsFor(index, inquiryBuildings(inquiry), card.title) : null
         );
         deps.plate.set(text ? { text, positions } : null);
       };
       if (isLandmarkInquiry(inquiry) && deps.factsUrl) {
+        // the last plate goes at once: it named another thing
+        deps.plate.set(null);
         void loadFacts().then(show);
       } else {
         show(null);
@@ -125,7 +148,11 @@ export function cityHides(
   const ortho = (camera as { isOrthographicCamera?: boolean })
     .isOrthographicCamera;
   camera.getWorldPosition(from);
-  const forward = camera.getWorldDirection(new Vector3());
+  // a parallel camera's true view (sheared in a Militärperspektive, which
+  // its forward axis does not show), as the pick ray reads it
+  const forward = ortho
+    ? parallelDirection(camera, new Vector3())
+    : camera.getWorldDirection(new Vector3());
   let hidden = 0;
   for (const p of points) {
     to.set(p[0], p[1], p[2]);
@@ -147,6 +174,14 @@ export function cityHides(
   return hidden / points.length;
 }
 
+/**
+ * The HUD's panels over the canvas: those marked `data-scene-cover`, and
+ * the phone's sidebar sheet, which the vendored sidebar renders without
+ * our props (components/ui stays as `shadcn add` wrote it).
+ */
+const COVER_SELECTOR =
+  "[data-scene-cover], [data-slot='sidebar'][data-mobile='true']";
+
 /** The HUD's panels over the canvas as NDC boxes [x0, y0, x1, y1]. */
 export function coverBoxes(
   canvas: HTMLElement
@@ -159,7 +194,7 @@ export function coverBoxes(
     return [];
   }
   const out: [number, number, number, number][] = [];
-  for (const el of document.querySelectorAll("[data-scene-cover]")) {
+  for (const el of document.querySelectorAll(COVER_SELECTOR)) {
     const r = el.getBoundingClientRect();
     if (r.width <= 0 || r.height <= 0) {
       continue;

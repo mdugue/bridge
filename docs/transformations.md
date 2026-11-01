@@ -1808,10 +1808,16 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   its address, small; nothing for a house without one, a tree, a lamp.
   The facts are a site file baked once (`landmark-facts.json`, Wikidata
   CC0: inception P571 or opening P1619, architect P84, height P2048, and
-  the P793 events construction, destruction, reconstruction with their
-  dates — a rebuild with no end stated reads "wiederaufgebaut ab"),
-  matched to the Buildings through the landmark tiles' objects, fetched
-  with the first landmark asked. **Where it stands** follows the camera
+  the P793 events that begin, end or span the building's construction
+  or its reconstruction, each with its own dates — years only where
+  Wikidata states the year, not a decade or a century; an end more than
+  100 years after the start left out; a rebuild with no end stated reads
+  "wiederaufgebaut ab"), matched to the Buildings through the landmark
+  tiles' objects, fetched with the first landmark asked. Where two items
+  share a Building, the one the card's title names. The card lists the
+  same facts as rows (Bauzeit, Architekt, Wiederaufbau, Höhe laut
+  Wikidata) with Wikidata as their source, so the plate never says what
+  the card does not. **Where it stands** follows the camera
   (`lib/city/nameplate-place.ts`), in multiples of the building's size
   S (its height, at least half its long side): from above (1.5 S over its
   top, a pitch over 35°, or Modell) it lies flat on the ground beside the

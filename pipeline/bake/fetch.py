@@ -347,7 +347,7 @@ def run(spec: Spec, tiles: list[Tile], lsc: bool = False) -> None:
     failures = {tile.id: fetch_tile(spec, tile, source, lsc) for tile in tiles}
     # after the tiles' landmark caches: the facts of every item they name
     try:
-        landmark_facts.fetch_wikidata(spec.raw, spec.data, spec.site)
+        landmark_facts.fetch_wikidata(spec.raw, spec.data, spec.site, [t.id for t in tiles])
     except Exception as err:  # noqa: BLE001 — optional: the nameplates show the name alone
         print(f"{spec.site}: the landmarks' facts not fetched ({type(err).__name__}: {err})")
     failures = {tid: what for tid, what in failures.items() if what}

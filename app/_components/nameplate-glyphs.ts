@@ -2,7 +2,7 @@
  * The nameplate's lettering as geometry (nameplate-layer.ts): each letter
  * of its title and lines rasterised once in the page's own web font, turned
  * into a signed distance field (lib/city/sdf.ts) and packed into a one-byte
- * atlas holding only the letters this plate shows (≈ 0.25 MB at most,
+ * atlas holding only the letters this plate shows (≤ 0.5 MB, 512 × 1024 R8,
  * freed with the plate); then one quad per letter, set with the canvas's
  * own advances (its kerning) and the style's tracking, in the plate's own
  * units — one title capital high. The comic's caption box is three quads
@@ -25,6 +25,25 @@ const TITLE_PX = 64;
 const LINES_PX = 40;
 /** The field's reach (px) — also each letter's margin in the atlas. */
 export const FIELD_RADIUS = 8;
+
+/** How finely the letters are rasterised: the title's and the lines' size
+ *  (px) and the field's reach (px), in proportion. A phone's plates are at
+ *  most 48 CSS px high: ~0.4 of the bytes there (ADR 0047). */
+export interface PlateResolution {
+  linesPx: number;
+  radius: number;
+  titlePx: number;
+}
+export const DESKTOP_RESOLUTION: PlateResolution = {
+  titlePx: TITLE_PX,
+  linesPx: LINES_PX,
+  radius: FIELD_RADIUS,
+};
+export const PHONE_RESOLUTION: PlateResolution = {
+  titlePx: 40,
+  linesPx: 26,
+  radius: 5,
+};
 const ATLAS_WIDTH = 512;
 const ATLAS_MAX_HEIGHT = 1024;
 /** The gap between the title's baseline area and the lines, the lines'
@@ -94,6 +113,18 @@ const fontOf = (s: NameplateSetting, px: number, from: Element) =>
 
 /** Loads the faces a type sets (the browser fetches a face on first use:
  *  the page only declares them). */
+/** Whether the type's faces are loaded already (the letters set now are
+ *  their own, not a fallback's). */
+export function facesReady(type: NameplateType, from: Element): boolean {
+  if (typeof document === "undefined" || !("fonts" in document)) {
+    return true;
+  }
+  return [
+    fontOf(type.title, TITLE_PX, from),
+    fontOf(type.lines, LINES_PX, from),
+  ].every((f) => document.fonts.check(f));
+}
+
 export async function loadFaces(
   type: NameplateType,
   from: Element
@@ -140,14 +171,13 @@ function context(width: number, height: number): Ctx | null {
 }
 
 /** One letter's field, drawn in `font`. */
-function rasterise(ctx: Ctx, font: string, ch: string): Glyph {
+function rasterise(ctx: Ctx, font: string, ch: string, r: number): Glyph {
   ctx.font = font;
   const m = ctx.measureText(ch);
   const left = Math.ceil(m.actualBoundingBoxLeft);
   const right = Math.ceil(m.actualBoundingBoxRight);
   const asc = Math.ceil(m.actualBoundingBoxAscent);
   const desc = Math.ceil(m.actualBoundingBoxDescent);
-  const r = FIELD_RADIUS;
   const bw = Math.max(left + right, 1) + 2 * r;
   const bh = Math.max(asc + desc, 1) + 2 * r;
   ctx.clearRect(0, 0, bw, bh);
@@ -188,6 +218,7 @@ function setLine(
   text: string,
   setting: NameplateSetting,
   px: number,
+  radius: number,
   from: Element,
   cache: Map<string, Glyph>,
   paint: Paint
@@ -208,7 +239,7 @@ function setLine(
     const key = `${font}\u0000${ch}`;
     let g = cache.get(key);
     if (!g) {
-      g = rasterise(ctx, font, ch);
+      g = rasterise(ctx, font, ch, radius);
       cache.set(key, g);
       ctx.font = font;
     }
@@ -277,7 +308,8 @@ class Builder {
 export function rasterPlate(
   text: NameplateText,
   type: NameplateType,
-  from: Element
+  from: Element,
+  res: PlateResolution = DESKTOP_RESOLUTION
 ): PlateRaster | null {
   const ctx = context(256, 256);
   if (!ctx) {
@@ -288,13 +320,23 @@ export function rasterPlate(
     ctx,
     text.title,
     type.title,
-    TITLE_PX,
+    res.titlePx,
+    res.radius,
     from,
     cache,
     PAINT.title
   );
   const lines = text.lines.map((l) =>
-    setLine(ctx, l, type.lines, LINES_PX, from, cache, PAINT.lines)
+    setLine(
+      ctx,
+      l,
+      type.lines,
+      res.linesPx,
+      res.radius,
+      from,
+      cache,
+      PAINT.lines
+    )
   );
   // plate units: one title capital
   title.scale = 1 / title.cap;
@@ -315,6 +357,8 @@ export function rasterPlate(
         (g.ay + row) * ATLAS_WIDTH + g.ax
       );
     }
+    // in the atlas now: the layout reads the glyph's metrics only
+    g.field = new Uint8Array(0);
   }
   return {
     atlas: { data: atlas, width: ATLAS_WIDTH, height: packed.height },

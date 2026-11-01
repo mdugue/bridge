@@ -6,7 +6,6 @@ import {
   type Vec3,
   capHeight,
   chooseNameplate,
-  hull2,
   nameplateBody,
   nameplateMode,
   nameplatePose,
@@ -67,17 +66,6 @@ test("a turned footprint keeps its own axes", () => {
   expect(body.half[0]).toBeCloseTo(20, 1);
   expect(body.half[1]).toBeCloseTo(5, 1);
   expect(Math.abs(body.u[0])).toBeCloseTo(c, 2);
-});
-
-test("the hull drops inner points", () => {
-  const hull = hull2([
-    [0, 0],
-    [2, 0],
-    [1, 1],
-    [2, 2],
-    [0, 2],
-  ]);
-  expect(hull).toHaveLength(4);
 });
 
 test("the laying follows the camera, with hysteresis", () => {
@@ -214,4 +202,17 @@ test("the choice avoids hidden and covered places and keeps its own", () => {
   expect(sameLayout(open, { ...open })).toBe(true);
   expect(sameLayout(open, aside)).toBe(false);
   expect(sameLayout(null, open)).toBe(false);
+});
+
+test("from above, the ground plate's side follows the screen's foot, with hysteresis", () => {
+  const yawed = (deg: number) => {
+    const a = (deg * Math.PI) / 180;
+    return look([60 * Math.sin(a), 300, 60 * Math.cos(a)], [0, 0, 0]);
+  };
+  const side = nameplateSide(BODY, yawed(0), null, "air");
+  expect(side % 2).toBe(1); // the screen's foot towards +z
+  // the view turned 50°: the side stays (no quarter turn of the text)
+  expect(nameplateSide(BODY, yawed(50), side, "air")).toBe(side);
+  // turned 80°: it takes the side along x
+  expect(nameplateSide(BODY, yawed(80), side, "air") % 2).toBe(0);
 });

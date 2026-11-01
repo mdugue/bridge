@@ -229,7 +229,7 @@ both in the controls' pink accent, and a card opens; a
 click on nothing closes it again. Beside the building its **name** now
 stands in the city itself, as long as the question does: a landmark's
 large, with when it was built and by whom, when it was rebuilt and how
-tall it is (from Wikidata) underneath; a named building with its
+tall it is (from Wikidata, listed on the card too) underneath; a named building with its
 address; an ordinary house just its address, small. From the street the
 name stands upright over or beside the building, turned to the facade
 you see best, with a fine line to it; from the air it lies on the

@@ -700,9 +700,12 @@ outline's, each in its turn (`compileInTurn`).
 - **Lettering.** Signed distance fields of the glyphs the plate needs, no
   more: rasterised from the self-hosted faces (`app/[site]/nameplate-fonts.ts`,
   next/font, not preloaded: they load with the first question) at 64 px
-  for the title and 40 px for the lines, an exact Euclidean distance
-  transform each (`lib/city/sdf.ts`, 8 px reach), packed into one R8 atlas
-  ≤ 512 × 1024 (≤ 0.5 MB), freed when the question goes. Kerning from the
+  for the title and 40 px for the lines (40 and 26 on a phone), an exact
+  Euclidean distance transform each (`lib/city/sdf.ts`, 8 px reach, 5 on a
+  phone), packed into one R8 atlas ≤ 512 × 1024 (≤ 0.5 MB on the GPU; the
+  CPU copies go after upload), freed when the question goes. A phone pays
+  for it in its tile cache, 1 MiB less per safety level
+  (`tileCacheBytesFor`, ADR 0047). Kerning from the
   canvas's own measure of each prefix; tracking per style.
 - **One material, three kinds of quad** (`uvk`: atlas uv and a kind): a
   glyph (fill at 0.5, halo outward to a share of the reach, antialiased by

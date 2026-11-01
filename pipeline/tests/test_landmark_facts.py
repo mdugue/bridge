@@ -148,3 +148,63 @@ def test_run_site_climbs_to_buildings(tmp_path):
     assert [e["id"] for e in doc["landmarks"]] == ["Q1"]
     assert doc["landmarks"][0]["buildings"] == ["B1"]
     assert doc["landmarks"][0]["built"] == [1726, 1734]
+
+
+def test_a_late_consecration_does_not_hide_the_opening():
+    facts = lf.facts_of(
+        [
+            {"p": "inception", "v": "1868-01-01T00:00:00Z"},
+            {"p": "opening", "v": "1871-01-01T00:00:00Z"},
+            {"p": "event", "ev": "Q25640113", "t": "1990-10-15T00:00:00Z"},
+        ]
+    )
+    assert facts == {"built": [1868, 1871]}
+
+
+def test_a_decade_or_century_is_no_year():
+    facts = lf.facts_of(
+        [
+            {"p": "inception", "v": "1700-01-01T00:00:00Z", "vp": "7"},
+            {"p": "event", "ev": "Q1762010", "t": "1730-01-01T00:00:00Z", "tp": "8"},
+            {"p": "opening", "v": "1734-02-28T00:00:00Z", "vp": "11"},
+        ]
+    )
+    assert facts == {"built": [1734]}
+
+
+def test_a_rebuild_pairs_its_own_start_and_end():
+    # two rebuilds: the latest with its own start, not the first one's
+    facts = lf.facts_of(
+        [
+            {
+                "p": "event",
+                "ev": "Q94394406",
+                "s": "1950-01-01T00:00:00Z",
+                "e": "1955-01-01T00:00:00Z",
+            },
+            {
+                "p": "event",
+                "ev": "Q94394406",
+                "s": "1993-01-01T00:00:00Z",
+                "e": "2005-01-01T00:00:00Z",
+            },
+        ]
+    )
+    assert facts == {"rebuilt": [1993, 2005]}
+
+
+def test_retry_after_reads_seconds_and_dates():
+    assert lf.retry_after("120") == 120
+    assert lf.retry_after(None) == 0
+    assert lf.retry_after("soon") == 0
+    assert lf.retry_after("Wed, 21 Oct 2015 07:28:00 GMT") == 0
+
+
+def test_a_new_site_reads_the_tiles_raw_caches(tmp_path):
+    raw, data = tmp_path / "raw", tmp_path / "data"
+    (raw / "wikidata").mkdir(parents=True)
+    (raw / "wikidata" / "landmarks_t1.json").write_text(json.dumps({"landmarks": [{"id": "Q7"}]}))
+    (raw / "wikidata" / "landmarks_other.json").write_text(
+        json.dumps({"landmarks": [{"id": "Q8"}]})
+    )
+    assert lf.landmark_ids(data, raw, ["t1"]) == ["Q7"]
