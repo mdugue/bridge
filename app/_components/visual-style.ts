@@ -1018,6 +1018,10 @@ export function createStyleResources(
   };
 }
 
+/** The clay's base colour (sRGB): what a building without a tint of its
+ *  own is, and the paper a mural's drawing is glazed on (mural-layer.ts). */
+export const CLAY_BASE = 0xec_e7_df;
+
 /** The clay graph per app (keyed by its live uniforms). */
 const clayGraphs = new WeakMap<ClayDetailUniforms, ClayGraph>();
 
@@ -1037,7 +1041,7 @@ export function createClayMaterial(
     clayGraphs.set(d, graph);
   }
   const clay = new MeshStandardNodeMaterial({
-    color: 0xec_e7_df,
+    color: CLAY_BASE,
     roughness: 1,
     metalness: 0,
   });
