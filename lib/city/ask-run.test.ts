@@ -275,13 +275,33 @@ describe("an answer that stops says why", () => {
       ended(
         list(
           chunk("TOOL_CALL_START"),
-          chunk("TOOL_CALL_RESULT"),
+          {
+            ...chunk("TOOL_CALL_RESULT"),
+            metadata: { tanstack: { state: "output-error" } },
+          },
           finished("length")
         ),
         new AbortController().signal
       )
     );
     expect(out.at(-1)).toContain("zu viele Schritte");
+  });
+
+  test("a turn that spends its output before a word is cut, not capped", async () => {
+    const out = await types(
+      ended(
+        list(chunk("TOOL_CALL_RESULT"), finished("length")),
+        new AbortController().signal
+      )
+    );
+    expect(out.at(-1)).toContain("abgeschnitten");
+  });
+
+  test("a refusal says so", async () => {
+    const out = await types(
+      ended(list(finished("content_filter")), new AbortController().signal)
+    );
+    expect(out.at(-1)).toContain("verweigert");
   });
 
   test("an answer the model's output cut mid-sentence says so", async () => {

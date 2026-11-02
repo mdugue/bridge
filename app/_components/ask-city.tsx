@@ -36,6 +36,7 @@ import {
   type AskProviderId,
   maskedKey,
   plausibleKey,
+  CUT_SHORT,
   providerForKey,
   TOO_MANY_STEPS,
 } from "@/lib/city/ask-city";
@@ -407,6 +408,8 @@ const OUTSIDE =
 /** A provider's error that names the key or the account's credit. */
 const KEY_TROUBLE =
   /\b(401|402|403|unauthori[sz]ed|forbidden|authenticat\w*|api[ _-]?key|credits?|credentials?|quota|billing|insufficient)\b/i;
+/** A provider's own words for an output budget spent. */
+const OUT_OF_WORDS = /max(imum)?[ _-]?(output[ _-])?tokens?|token limit/i;
 /** The same, as the code a provider's error carries. */
 const KEY_CODES = new Set(["401", "402", "403"]);
 
@@ -450,6 +453,10 @@ function errorText(error: Error): {
   // a key revoked or out of credit after the check fails in the stream,
   // in the provider's words: offer the check again for those only
   const message = error.message || "Die Antwort brach ab.";
+  // the direct adapters report a spent output budget as a raw error
+  if (OUT_OF_WORDS.test(message)) {
+    return say(CUT_SHORT);
+  }
   if (message === TOO_MANY_STEPS) {
     return say(`${TOO_MANY_STEPS} Frag bitte anders.`, false, true);
   }

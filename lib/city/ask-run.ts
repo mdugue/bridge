@@ -21,6 +21,7 @@ import {
   ASK_LIMITS,
   type AskPromptSite,
   askSystemPrompt,
+  CUT_SHORT,
   TOO_MANY_STEPS,
 } from "./ask-city";
 import {
@@ -181,7 +182,7 @@ export async function* ended(
  * model's output ran out mid-answer) or `other` (an error already said
  * why, or nothing came).
  */
-type RunEnd = "stop" | "waits" | "cut" | "length" | "other";
+type RunEnd = "stop" | "waits" | "cut" | "length" | "refused" | "other";
 
 /** Why a run stopped, where the stream would not say it. */
 function stopText(end: RunEnd, late: boolean): string | null {
@@ -192,9 +193,9 @@ function stopText(end: RunEnd, late: boolean): string | null {
     case "cut":
       return late ? "Die Antwort dauerte zu lange." : TOO_MANY_STEPS;
     case "length":
-      return late
-        ? "Die Antwort dauerte zu lange."
-        : "Die Antwort wurde abgeschnitten: dem Modell gingen die Wörter aus.";
+      return late ? "Die Antwort dauerte zu lange." : CUT_SHORT;
+    case "refused":
+      return "Das Modell hat diese Antwort verweigert.";
     case "other":
       return late ? "Die Antwort dauerte zu lange." : null;
   }
@@ -222,10 +223,15 @@ function runEnd(
     return "cut";
   }
   if (reason === "length") {
-    // chat() ends a capped run on `length` right after the results
-    return before?.type === "TOOL_CALL_RESULT" ? "cut" : "length";
+    // a capped run whose last tool call the length cut: chat() ends it on
+    // `length` right after that call's failed result
+    const state = (before as { metadata?: { tanstack?: { state?: unknown } } })
+      ?.metadata?.tanstack?.state;
+    return before?.type === "TOOL_CALL_RESULT" && state === "output-error"
+      ? "cut"
+      : "length";
   }
-  return "stop";
+  return reason === "content_filter" ? "refused" : "stop";
 }
 
 /** The stream with the key taken out of any error, thrown or sent. */

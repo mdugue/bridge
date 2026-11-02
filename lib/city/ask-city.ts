@@ -173,6 +173,10 @@ export const ASK_LIMITS = {
 /** Why an answer stopped at its turn cap, in the stream or as a 422. */
 export const TOO_MANY_STEPS = "Die Antwort brauchte zu viele Schritte.";
 
+/** Why an answer ended mid-text: the model's output ran out. */
+export const CUT_SHORT =
+  "Die Antwort wurde abgeschnitten: dem Modell gingen die Wörter aus.";
+
 /** What the server reads of a request beyond the messages. */
 export interface AskRequestProps {
   model: string;
