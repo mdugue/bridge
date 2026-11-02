@@ -44,16 +44,22 @@ import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { SINK } from "@/lib/city/ground-join";
 import {
   type Level,
-  LEVEL_GRADE,
   LEVEL_STEP,
   type LevelLine,
   type LevelRun,
+  lineGrade,
   lineLevels,
   modeRuns,
   runLevelAt,
 } from "@/lib/city/levels";
 import { OVERPASS_DEPTH_M, OVERPASS_M } from "@/lib/city/catenary";
-import { DECK_REACH_M, RIDES, railPrefer } from "@/lib/city/line-levels";
+import {
+  DECK_REACH_M,
+  isMonorail,
+  RIDES,
+  railPrefer,
+  railSteep,
+} from "@/lib/city/line-levels";
 import {
   platformTops,
   TrackIndex,
@@ -96,6 +102,7 @@ import {
   tangentsXZ,
   unit,
 } from "./mesh-kit";
+import { addMonorail } from "./monorail-beam";
 import {
   addSleepers,
   SLEEPER_TOP,
@@ -129,6 +136,8 @@ import {
  *    track beside them (lib/city/platform-level.ts).
  *  - Catenary: over the contact lines, masts and portals with their wires
  *    (catenary-layer.ts, lib/city/catenary.ts).
+ *  - Monorails: the beam on its supports (monorail-beam.ts); a funicular is
+ *    a track like any, on its steep profile.
  *
  * All geometry is hand-wound to match its supplied normal (mesh-kit.ts `pushTri`), so every
  * material is FrontSide. Authored in Y-up world coords → added to `scene`.
@@ -2137,7 +2146,7 @@ export function isProfiled(
  * lib/city/line-profile.ts) the height: the track lies on its grade and
  * vertical curves, the ground was laid under it (lib/city/track-beds.ts).
  * Else the line is solved over this piece alone (with what its source
- * says: `prefer`, `below`), on the ground sample by sample, riding an
+ * says: `prefer`, `below`, `steep`), on the ground sample by sample, riding an
  * approach ramp close above it; on a deck it rides the deck top nearest
  * the run's line. Null where the ground is unknown and no level holds it
  * (the line breaks there).
@@ -2149,7 +2158,8 @@ export function lineLevelsAt(
   ctx: GroundContext,
   decks: DeckPoly[],
   prefer?: "deck" | "ground",
-  below?: boolean
+  below?: boolean,
+  steep = false
 ): (Level | null)[] {
   if (baked && isProfiled(baked, pts.length)) {
     return profiledLevels(pts, baked.lv ?? [], decodeProfile(baked.lz ?? []));
@@ -2179,7 +2189,7 @@ export function lineLevelsAt(
           decks: under[i],
           below,
         })),
-        { grade: LEVEL_GRADE[line], prefer }
+        { grade: lineGrade(line, steep), prefer }
       ).map((l) => (l?.mode === "ground" ? null : l));
   return solved.map((level, i) => {
     if (level?.mode === "deck") {
@@ -2383,7 +2393,8 @@ function* drawnLines(
 ): Steps<DrawnLine[]> {
   const out: DrawnLine[] = [];
   for (const f of features) {
-    if (f.geometry?.type !== "LineString") {
+    // a monorail's beam is no track (`monorails`)
+    if (f.geometry?.type !== "LineString" || isMonorail(f)) {
       continue;
     }
     const p = f.properties ?? {};
@@ -2395,7 +2406,8 @@ function* drawnLines(
       ctx,
       decks,
       railPrefer(f),
-      (p.layer ?? 0) < 0
+      (p.layer ?? 0) < 0,
+      railSteep(f)
     );
     const d: number[] = [];
     const world: XZ[] = [];
@@ -2808,12 +2820,34 @@ function buildPlatforms(
   return mesh;
 }
 
+/** The monorails' beams and supports (monorail-beam.ts), in painted
+ *  steel; null where the tile has none. */
+function* monorailsMesh(
+  features: readonly RailFeature[],
+  ctx: RailContext
+): Steps<Mesh | null> {
+  const acc = mesh3();
+  let any = false;
+  for (const f of features) {
+    any = addMonorail(acc, f, ctx) || any;
+  }
+  if (!any) {
+    return null;
+  }
+  const mesh = yield* meshSteps(acc, COLORS.steel, { cast: true });
+  if (mesh) {
+    mesh.name = "rail-monorail";
+  }
+  return mesh;
+}
+
 /**
  * Builds the WHOLE tile block's rails, bridges, ballast and platforms (one
  * call, cross-tile heightAt) as stylized geometry on the Y-up scene. Bridges
  * build first so the rails can ride their decks; the rails' levels next,
  * so the ballast leaves out where a track runs buried and the platforms
- * stand on their track's level; the catenary over the contact lines last.
+ * stand on their track's level; the catenary over the contact lines and
+ * the monorails' beams last.
  * Empty inputs yield an empty group; the group is freed with the scene
  * (disposeObject3D).
  */
@@ -2894,12 +2928,14 @@ export function* railSteps(
   if (masts) {
     masts.name = "rail-catenary-masts";
   }
+  const monorails = yield* monorailsMesh(features.rails, ctx);
   for (const m of [
     spanTop,
     spanStone,
     platforms,
     masts,
     catenaryWires(catenary),
+    monorails,
   ]) {
     if (m) {
       group.add(m);

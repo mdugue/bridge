@@ -69,6 +69,17 @@ export const LEVEL_GRADE: Readonly<Record<LevelLine, number>> = {
   tram: 0.08,
 };
 
+/** The steepest a steep track climbs (rise over run): a funicular's
+ *  (`steep` in the rails' file, pipeline/bake/rail_osm.py) — Dresden's
+ *  Standseilbahn climbs 29 %, Meißen's Schrägaufzug 65 %; at a railway's
+ *  grade the line would read its slope as jumps. */
+export const STEEP_GRADE = 1;
+
+/** The grade a line climbs at most: its kind's, a steep track's. */
+export function lineGrade(line: LevelLine, steep = false): number {
+  return steep ? STEEP_GRADE : LEVEL_GRADE[line];
+}
+
 /** The level a line runs on at one sample. */
 export interface Level {
   mode: LevelMode;

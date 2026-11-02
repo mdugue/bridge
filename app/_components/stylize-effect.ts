@@ -1,8 +1,6 @@
 import {
   Color,
-  DepthTexture,
-  GreaterEqualCompare,
-  LessEqualCompare,
+  type DepthTexture,
   Matrix3,
   type Matrix4,
   Vector2,
@@ -52,6 +50,7 @@ import { DATA_HUE } from "./glass";
 import { fogFactorAt, type SceneFog } from "./height-fog";
 import type { F, V2, V3, V4 } from "./shader-chunks";
 import { styleNight } from "./sun-rig";
+import { readSunShadow, shadowStandIn } from "./sun-shadow-read";
 import type { ViewLens } from "./view-lens";
 
 /**
@@ -443,7 +442,8 @@ export function createStylize(inputs: StylizeInputs): Stylize {
   const camera = lens.camera;
   const skyZ = uniform(6000 * SKY_FAR_SHARE);
   const ortho = lens.ortho.greaterThan(0.5);
-  const inverseProjection = uniform(camera.projectionMatrixInverse);
+  // the lens's one shared node (the shadow of the nameplate reads it too)
+  const { inverseProjection } = lens;
   const mode = uniform(1);
   const ink = uniform(0.7);
   const dusk = uniform(0);
@@ -461,10 +461,7 @@ export function createStylize(inputs: StylizeInputs): Stylize {
   // the read binds a stand-in until then, swapped for the map (a binding,
   // not a build) in `update`. The stand-in compares like the map.
   const frameFog = uniform(new Color());
-  const shadowStandIn = new DepthTexture(1, 1);
-  shadowStandIn.compareFunction = inputs.reversedDepth
-    ? GreaterEqualCompare
-    : LessEqualCompare;
+  const standIn = shadowStandIn(inputs.reversedDepth);
   // every read of it, so `update` can bind the map to each
   const shadowReads: ReturnType<typeof texture>[] = [];
   const shadowMatrix = uniform(inputs.sunShadow.matrix);
@@ -528,25 +525,13 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     const towards = aaStep(0.02, dot(n, sunWorld));
     // off the surface a little, against its own depth's quantisation
     const lifted = world.add(n.mul(z.mul(0.0015).add(0.12)));
-    const s = shadowMatrix.mul(vec4(lifted, 1));
-    const c = s.xyz.div(s.w);
-    const at = vec2(c.x, float(1).sub(c.y));
-    const edge = min(
-      min(at.x, float(1).sub(at.x)),
-      min(at.y, float(1).sub(at.y))
+    const { inside, shadowed, read } = readSunShadow(
+      lifted,
+      { matrix: shadowMatrix, bias: shadowBias, ready: shadowReady },
+      standIn,
+      inputs.reversedDepth
     );
-    // nearer than the map's far plane, and the bias towards the light, as
-    // three's own lookup takes them (ShadowNode): a reversed map holds 1
-    // at the light and compares the other way round
-    const reversed = inputs.reversedDepth;
-    const inside = smoothstep(0, 0.04, edge)
-      .mul(reversed ? step(0, c.z) : step(c.z, 1))
-      .mul(shadowReady);
-    const read = texture(shadowStandIn, at);
     shadowReads.push(read);
-    const shadowed = read.compare(
-      reversed ? c.z.sub(shadowBias) : c.z.add(shadowBias)
-    ).x;
     const cast = mix(beyond, shadowed, inside);
     return towards.mul(cast).mul(smoothstep(SUN_GONE_Y, 0.04, sunWorld.y));
   };
@@ -1650,7 +1635,7 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       frameFog.value.copy(fog.color.value);
     },
     dispose: () => {
-      shadowStandIn.dispose();
+      standIn.dispose();
     },
     update: (pixelRatio, size) => {
       skyZ.value = camera.far * SKY_FAR_SHARE;

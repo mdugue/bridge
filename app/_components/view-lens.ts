@@ -1,4 +1,9 @@
-import { type Camera, Matrix4, PerspectiveCamera } from "three/webgpu";
+import {
+  type Camera,
+  Matrix4,
+  PerspectiveCamera,
+  type UniformNode,
+} from "three/webgpu";
 import {
   orthographicDepthToViewZ,
   perspectiveDepthToViewZ,
@@ -28,6 +33,10 @@ export interface ViewLens {
   readonly camera: PerspectiveCamera;
   /** 1 while the active camera is a parallel one */
   readonly ortho: Live;
+  /** the active camera's inverse projection (written in place each
+   *  update): a depth sample's view position, shear and all, through
+   *  `getViewPosition` */
+  readonly inverseProjection: UniformNode<"mat4", Matrix4>;
   /** the equivalent distance (m) a parallel view's far field reads */
   readonly equivalent: Live;
   /** Copies the active camera's projection into the stand-in. */
@@ -57,9 +66,11 @@ export function createViewLens(): ViewLens {
     );
   let isOrtho = false;
   const scratch = new Matrix4();
+  const inverseProjection = uniform(camera.projectionMatrixInverse);
   return {
     camera,
     ortho,
+    inverseProjection,
     equivalent,
     update: (active, equivalentDistance) => {
       const a = active as Camera & {

@@ -52,6 +52,7 @@ import {
   vec4,
 } from "three/tsl";
 import { LOOK_DEFAULTS, type LookValues } from "@/lib/city/look-controls";
+import { NAMEPLATE_TYPES } from "@/lib/city/nameplate-type";
 import {
   type PaperKind,
   RENDER_STYLE_BY_ID,
@@ -79,6 +80,7 @@ import { aloneUnder, compileRepresentatives } from "./three-utils";
 import { createStyleDressing } from "./style-dressing";
 import { createStylize, type SunShadowMap } from "./stylize-effect";
 import type { ViewLens } from "./view-lens";
+import { setAskedColours } from "./visual-style";
 
 /** Initial focus distance before the first crosshair raycast lands. */
 const HYPERFOCAL_M = 600;
@@ -843,6 +845,9 @@ export function createPostStack(
     crownsPrinted.value = style.crowns === "comic" ? 1 : 0;
     dataMarks.value = DATA_MARKS[style.dataMarks];
     crownSwayShare.value = style.sway;
+    const { outline: accent } = NAMEPLATE_TYPES[style.id];
+    outline.setColours(accent.line, accent.halo);
+    setAskedColours(accent.line, accent.halo);
   };
   applyStyleWeights();
 
