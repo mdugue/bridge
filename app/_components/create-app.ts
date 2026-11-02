@@ -59,6 +59,7 @@ import {
 import type { Landmark } from "@/lib/city/landmarks";
 import {
   BOOT_VEIL,
+  bootFrontier,
   loadFrontier,
   stepVeil,
   type VeilState,
@@ -1365,11 +1366,14 @@ async function bootApp(
    */
   const stagesDone = new Set<LoadStageId>();
   const stagesSent = new Map<LoadStageId, string>();
+  // the last fraction each stage reported (the loading veil's boot ring)
+  const stageFractions = new Map<LoadStageId, number>();
   const stage = (id: LoadStageId, fraction: number, skipped?: boolean) => {
     if ((fraction >= 1 || skipped) && !stagesDone.has(id)) {
       stagesDone.add(id);
       opts.trail?.note(`stage ${id}`, skipped ? "skipped" : undefined);
     }
+    stageFractions.set(id, skipped ? 1 : fraction);
     const said = `${fraction}${skipped ? "s" : ""}`;
     if (stagesSent.get(id) === said) {
       return;
@@ -3048,14 +3052,27 @@ async function bootApp(
   // way, as a ring around the camera that walks outward as the city fills.
   const tileBounds = new Map(extras.tiles.map((t) => [t.id, t.bounds]));
   let loadVeil: VeilState = BOOT_VEIL;
+  // the first load is through (`checkLoaded`)
+  let bootLoaded = false;
   const stepLoadVeil = (dt: number, exporting: boolean) => {
     const at = streamCamera.position;
-    const frontier = loadFrontier(
+    const truth = loadFrontier(
       tileBounds,
       stream.pendingSiteTiles(),
       at.x + offset.cx,
       offset.cy - at.z
     );
+    // Until the first load is through, the ring also walks out with the
+    // last two stages' progress: the tile underfoot would hold it at the
+    // feet until its own details are built.
+    const frontier = bootLoaded
+      ? truth
+      : bootFrontier(
+          truth,
+          ((stageFractions.get("surroundings") ?? 0) +
+            (stageFractions.get("details") ?? 0)) /
+            2
+        );
     // The boot's veil holds at the feet until the first site tile is on
     // its way (the tileset's own JSON is none): it must not sweep out and
     // lift before anything has come.
@@ -4093,6 +4110,7 @@ async function bootApp(
     }
     if (step.loaded) {
       sceneSettled = true;
+      bootLoaded = true;
       flushStats();
       opts.trail?.note("loaded");
       worldPartial = false;

@@ -437,7 +437,11 @@ beyond; by day the ink only darkens, at night it is a dim line of its own.
 The ring breathes (a 3.4 s cycle, slow in, quicker out, a few per cent of
 its radius) and eases to a new frontier rather than jumping a tile's
 width. With nothing pending it sweeps to the horizon in about a second and
-the veil fades. The boot starts veiled with the ring at the feet; after
+the veil fades. The boot starts veiled with the ring at the feet. Until the first load is
+through, the ring also walks out with the last two stages' progress, to
+2.6 km at full (`bootFrontier`): a site tile is 2 km wide, and the one
+under the camera stays pending until its own details are built, so by the
+frontier alone the whole view stayed clay for most of the load; after
 the first load a pending spell shorter than 1.2 s never shows. The veil
 only takes away, so the unfinished picture is never brighter than the
 finished one, in every style. It costs no target or texture: a few
