@@ -14,6 +14,14 @@ import type { SourceInfo } from "./provenance";
 
 /** The site-wide index under `public/data/<site>/`. */
 export const STADTWISSEN_FILE = "stadtwissen.json";
+/**
+ * Where the build keeps a copy of each site's Stadtwissen for the server
+ * (the chat's tools, ADR 0056), relative to the project: outside
+ * `public/`, whose data folders stay out of every server function
+ * (next.config.ts). `<dir>/<site>/stadtwissen.json` and the tiles' files
+ * under their published names.
+ */
+export const SERVER_WISSEN_DIR = ".stadtwissen";
 /** The committed Wikidata excerpt, relative to the site's data folder. */
 export const WIKIDATA_FACTS_FILE = "wissen/wikidata.json";
 

@@ -1,10 +1,13 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   foldName,
   matchesQuery,
   nearby,
   type RawEntity,
   referencedItems,
+  SERVER_WISSEN_DIR,
   wikidataFacts,
   wikidataTime,
   wikipediaUrl,
@@ -122,4 +125,12 @@ test("nearby sorts by distance within the radius", () => {
     ["near", 5],
     ["mid", 20],
   ]);
+});
+
+test("the chat route reads the server copy where the build writes it", () => {
+  const route = readFileSync(
+    join(import.meta.dir, "../../app/api/frag/knowledge.ts"),
+    "utf8"
+  );
+  expect(route).toContain(`"${SERVER_WISSEN_DIR}"`);
 });
