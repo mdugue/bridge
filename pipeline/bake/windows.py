@@ -1,11 +1,13 @@
 """The facade traits per LoD2 wall, from the street panoramas' trait
-profiles (facade_traits.py, the `<tile>.v3.jsonl` cache), and the abstract
-facade they model (docs/transformations.md, *Facade traits*).
+profiles (facade_traits.py, the `<tile>.v4.jsonl` cache), and the abstract
+facade they model (docs/transformations.md, *Windows on every house*).
 
 Per image and wall the profiles give features that do not change when the
-image is moved along the wall — the poses of two drives differ by ~0.6 m,
-which is why the first reading's window size, count and storey height
-did not agree between two of them (2026-10-07):
+image is moved along the wall — one drive's pose is off along it by
+~0.2 m, two drives' by up to a metre, which is why the first reading's
+window size, count and storey height did not agree between two of them
+(2026-10-07); where the axes stand comes from the drives registered onto
+each other (window_axes.py):
 
    1 `axis`    the period of the column darkness profile (`cd`): the
                window axes' spacing (`period`, `AXIS_M`);
@@ -35,8 +37,10 @@ axis periods agree within `AXIS_TOL` (`axis_agrees`):
 
   - windows only on a regular or loose grid (`grid`); none without a
     period — no window is invented where nothing was measured;
-  - the axis spacing measured, the axes centred on the wall (their
-    position is not measured);
+  - the axis spacing measured; where the drives that saw the wall
+    register onto each other, the axes where they stand (`phase`, metres
+    from the wall's start `a` to an axis, window_axes.py), else centred
+    on the wall;
   - width and height from the measured duty and share where those are
     reliable, else the median proportions of Dresden's measured walls;
   - a frame, sill band, lisenes or ornament where that feature is
@@ -47,7 +51,8 @@ The bake writes `dlm/windows_<tile>.json`:
     {"attribution", "reliability": {feature: [ρ, walls]},
      "buildings": {"<gml:id>": [{"oid", "wi", "a", "b", "L", "n", "z",
        "imgs", "seqs", "traits": {...}, "model": {"axis", "grid", "w",
-       "h", "storey"?, "frame"?, "sill"?, "lisene"?, "orn"?}}, …]}}
+       "h", "phase"?, "storey"?, "frame"?, "sill"?, "lisene"?, "orn"?},
+       "drives"?}, …]}}
 
 with the wall's frame as in shopfronts.py (`_wall_entry`). Its own file,
 credited to Mapillary (CC BY-SA 4.0)."""
@@ -66,6 +71,7 @@ from .facade_traits import STEP_M
 from .facades import ATTRIBUTION, traits_path, walls
 from .osm_buildings import root_of
 from .shopfronts import _Raster, _wall_entry
+from .window_axes import wall_phase
 
 AXIS_M = (1.2, 7.0)  # a window axis' spacing
 STOREY_M = (2.6, 5.0)  # a storey
@@ -431,6 +437,9 @@ def windows(city: dict, by_wall: dict, ground=None) -> tuple[dict, dict]:
             "traits": traits,
         }
         if (m := model(traits, axis_agrees(seqs))) is not None:
+            if (at := wall_phase(recs, m["axis"])) is not None:
+                m["phase"] = at["phase"]
+                entry["drives"] = at["drives"]
             entry["model"] = m
         out[root_of(city, w["oid"])].append(entry)
     return dict(sorted(out.items())), agreement(all_seqs)

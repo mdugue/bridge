@@ -37,8 +37,10 @@
  * stands against, back to back — gets none, but a low house's above its
  * neighbour's top (`PARTY_LOW_EAVE_M`).
  *
- * Positions along the wall are not measured (two drives' poses differ by
- * ~0.6 m), the rhythm is: the axes are centred on each wall. Pure, no DOM.
+ * Where the drives that photographed a wall registered onto each other
+ * (pipeline/bake/window_axes.py, `FacadeModel.phase`), its axes stand where
+ * the photos saw them (`measuredAxes`, `measuredColumns`); elsewhere they
+ * are centred on the wall. Pure, no DOM.
  */
 
 import { isStructure } from "./building-tint";
@@ -57,6 +59,10 @@ export interface FacadeModel {
   grid: "loose" | "regular";
   /** the window's height */
   h: number;
+  /** where an axis stands: metres from the wall's start `a`, in [0, axis)
+   *  — where the drives that saw the wall registered onto each other
+   *  (pipeline/bake/window_axes.py); else the axes are centred */
+  phase?: number;
   /** flat lisenes between the axes (not drawn: no agreement) */
   lisene?: boolean;
   /** much fine texture in the plaster: ornament */
@@ -186,6 +192,28 @@ export const NO_DOOR = 1;
  *  clay's roof flag rides there, a vertex buffer less (a door's code never
  *  comes near, `DOOR_SLOT`). */
 export const FACADE_ROOF = -1;
+
+/**
+ * A wall whose axes the drives placed (`FacadeAxes`) holds in `_FACADE`'s
+ * length slot, instead of its length, the snorm16 code `base + n · perN +
+ * round((axis − axis0) / step)`, signed as a length is: its `n` axes at
+ * its own measured spacing (`axis0` to `axis0 + (perN − 1) · step` m),
+ * centred on its middle — a house's front and side often keep different
+ * rhythms, its object's spec one. No length reaches `base` (`LENGTH_MAX_M`).
+ */
+export const MEASURED_AXES = {
+  base: 16_384,
+  perN: 256,
+  axis0: 1,
+  step: 0.02,
+  maxN: 63,
+} as const;
+/** The widest spacing a measured wall's slot holds (m). */
+export const MEASURED_AXIS_MAX_M =
+  MEASURED_AXES.axis0 + (MEASURED_AXES.perN - 1) * MEASURED_AXES.step;
+/** The longest wall `_FACADE`'s length slot holds as a length (m). */
+export const LENGTH_MAX_M =
+  ((MEASURED_AXES.base - 1) / 32_767) * FACADE_SCALE_M;
 
 /**
  * A door slot of `_FACADE` (its third and fourth number) holds the snorm16
@@ -1049,6 +1077,10 @@ interface Wall {
    *  where it is known */
   ground: number;
   shop: boolean;
+  /** where its measured axes stand (`FacadeAxes`): one axis' place along
+   *  it (as `s0`, `s1`), its measured spacing and its object's window
+   *  width */
+  axes?: { at: number; axis: number; w: number };
   /** its eave (absolute m): the lower of its two ends' tops — a gable
    *  wall's eave corners, a wall under a roof sloping along it its lower
    *  end (`wallTop`) */
@@ -1064,6 +1096,19 @@ export interface FacadeDoor {
   at: [number, number];
   n: [number, number];
   object: number;
+  w: number;
+}
+
+/** A measured wall's window axes (data frame): the footprint wall `a` →
+ *  `b` with its outward normal, one axis `phase` metres from `a`, the
+ *  wall's measured spacing and the window's width its object draws. */
+export interface FacadeAxes {
+  a: [number, number];
+  axis: number;
+  b: [number, number];
+  n: [number, number];
+  object: number;
+  phase: number;
   w: number;
 }
 
@@ -1423,7 +1468,8 @@ function roofColourAt(
 function placeOnWalls(
   walls: readonly Wall[],
   doors: readonly FacadeDoor[],
-  shops: readonly FacadeShop[]
+  shops: readonly FacadeShop[],
+  axes: readonly FacadeAxes[] = []
 ): void {
   const byObject = new Map<number, Wall[]>();
   for (const w of walls) {
@@ -1449,6 +1495,114 @@ function placeOnWalls(
       w.ground = Math.max(w.ground, shop.ground ?? Number.NEGATIVE_INFINITY);
     }
   }
+  for (const m of axes) {
+    const len = Math.hypot(m.b[0] - m.a[0], m.b[1] - m.a[1]);
+    if (len <= 0) {
+      continue;
+    }
+    const k = m.phase / len;
+    const at: [number, number] = [
+      m.a[0] + (m.b[0] - m.a[0]) * k,
+      m.a[1] + (m.b[1] - m.a[1]) * k,
+    ];
+    // the lattice runs on along the footprint wall: every mesh wall in its
+    // plane that overlaps it keeps it (a facade of several LoD2 polygons)
+    for (const w of byObject.get(m.object) ?? []) {
+      const sOf = (q: readonly [number, number]) =>
+        q[0] * w.n[1] - q[1] * w.n[0];
+      const [sa, sb] = [sOf(m.a), sOf(m.b)];
+      if (
+        w.n[0] * m.n[0] + w.n[1] * m.n[1] >= ON_WALL_COS &&
+        Math.abs(w.n[0] * at[0] + w.n[1] * at[1] - w.d) <= ON_WALL_M &&
+        Math.min(w.s1, Math.max(sa, sb)) - Math.max(w.s0, Math.min(sa, sb)) > 0
+      ) {
+        w.axes = { at: sOf(at), axis: m.axis, w: m.w };
+      }
+    }
+  }
+}
+
+/** The measured walls whose axes stand where the photos saw them
+ *  (`FacadeModel.phase`), at their own spacing (within `MEASURED_AXES`'
+ *  range), on an object that draws windows, in the mesh's data frame
+ *  (`cx`, `cy` off the CRS). */
+export function measuredAxes(
+  walls: readonly WindowWall[],
+  index: ReadonlyMap<string, number>,
+  specOf: (object: number) => WindowSpec | undefined,
+  offset: { cx: number; cy: number }
+): FacadeAxes[] {
+  return walls.flatMap((w) => {
+    const object = index.get(w.oid);
+    const m = w.model;
+    const spec = object === undefined ? undefined : specOf(object);
+    if (
+      object === undefined ||
+      m?.phase === undefined ||
+      !spec ||
+      spec.axis <= 0 ||
+      m.axis < MEASURED_AXES.axis0 ||
+      m.axis > MEASURED_AXIS_MAX_M
+    ) {
+      return [];
+    }
+    return [
+      {
+        a: [w.a[0] - offset.cx, w.a[1] - offset.cy],
+        axis: m.axis,
+        b: [w.b[0] - offset.cx, w.b[1] - offset.cy],
+        n: w.n,
+        object,
+        phase: m.phase,
+        w: Math.min(spec.w, m.axis - WINDOW_ROWS.gap),
+      },
+    ];
+  });
+}
+
+/** Where a wall's windows stand when its axes were measured: the middle
+ *  of the measured lattice's axes that fit on it (`WINDOW_ROWS.edge` in
+ *  from its ends) and how many they are; undefined where none fits or
+ *  more than `MEASURED_AXES.maxN`. */
+export function measuredColumns(
+  s0: number,
+  s1: number,
+  axes: { at: number; axis: number; w: number }
+): { axis: number; c: number; n: number } | undefined {
+  const { at, axis, w } = axes;
+  if (axis <= 0) {
+    return undefined;
+  }
+  const lo = s0 + WINDOW_ROWS.edge + w / 2;
+  const hi = s1 - WINDOW_ROWS.edge - w / 2;
+  const first = Math.ceil((lo - at) / axis - 1e-6);
+  const last = Math.floor((hi - at) / axis + 1e-6);
+  const n = last - first + 1;
+  if (n < 1 || n > MEASURED_AXES.maxN) {
+    return undefined;
+  }
+  return { axis, c: at + ((first + last) / 2) * axis, n };
+}
+
+/** A measured wall's length slot (`MEASURED_AXES`, snorm16 units). */
+export function measuredSlot(n: number, axis: number): number {
+  const { axis0, base, perN, step } = MEASURED_AXES;
+  const k = Math.min(Math.max(Math.round((axis - axis0) / step), 0), perN - 1);
+  return base + n * perN + k;
+}
+
+/** The axes a length slot holds, as the shader reads it (`clay-windows.ts`
+ *  `columns`): undefined on a wall that holds its length. */
+export function slotAxes(
+  units: number
+): { axis: number; n: number } | undefined {
+  const { axis0, base, perN, step } = MEASURED_AXES;
+  const code = Math.abs(units) - base;
+  if (code < 0) {
+    return undefined;
+  }
+  const n = Math.floor(code / perN);
+  return { axis: axis0 + (code - n * perN) * step, n };
 }
 
 /** What `facadeAttribute` reads of the objects' heights. */
@@ -1487,7 +1641,8 @@ export function facadeAttribute(
   doors: readonly FacadeDoor[] = [],
   shops: readonly FacadeShop[] = [],
   rises?: { at: ArrayLike<number>; reach: (object: number) => number },
-  heights?: FacadeHeights
+  heights?: FacadeHeights,
+  axes: readonly FacadeAxes[] = []
 ): Int16Array<ArrayBuffer> {
   const count = mesh.objectIds.length;
   const out = new Int16Array(4 * count);
@@ -1505,7 +1660,7 @@ export function facadeAttribute(
   // party walls, doors and shopfronts among the walls that carry windows
   const windowed = walls.filter((w) => drawn(w.object));
   markParty(windowed);
-  placeOnWalls(windowed, doors, shops);
+  placeOnWalls(windowed, doors, shops, axes);
   if (rises) {
     for (const w of windowed) {
       for (const t of w.tris) {
@@ -1545,7 +1700,8 @@ function wallSlots(
   eave: number,
   h: { base: number; eave: number } | undefined
 ): { c: number; length: number; door0: number; door1: number } {
-  const c = (w.s0 + w.s1) / 2;
+  const measured = w.axes && measuredColumns(w.s0, w.s1, w.axes);
+  const c = measured ? measured.c : (w.s0 + w.s1) / 2;
   const above = partyAbove(w, h);
   if (above !== undefined) {
     // a facade above its neighbour: no window under the neighbour's top
@@ -1553,14 +1709,19 @@ function wallSlots(
     w.ground = Math.max(w.ground, above);
   }
   const party = w.party > PARTY_SHARE && above === undefined;
-  const length = party ? 0 : w.s1 - w.s0;
+  // a measured wall holds its axes in the length slot (`MEASURED_AXES`)
+  const length = party
+    ? 0
+    : measured
+      ? measuredSlot(measured.n, measured.axis)
+      : snorm(Math.min(w.s1 - w.s0, LENGTH_MAX_M));
   const [d0, d1] = w.doors
     .map((d) => ({ at: d.s - c, w: d.w }))
     .sort((a, b) => Math.abs(a.at) - Math.abs(b.at));
   const noGround = w.shop || w.doors.length > 2;
   return {
     c,
-    length: snorm(noGround ? -length : length),
+    length: noGround ? -length : length,
     // a wall without ground-floor windows has none to keep off its doors:
     // its first slot holds the height its windows clear
     door0: noGround

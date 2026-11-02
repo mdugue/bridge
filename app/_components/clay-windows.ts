@@ -26,6 +26,7 @@ import {
   DOOR_NONE_CODE,
   DOOR_SLOT,
   FACADE_SCALE_M,
+  MEASURED_AXES,
   LOOSE_JITTER,
   WINDOW_DEPTH,
   WINDOW_LIFT,
@@ -160,18 +161,35 @@ interface Grid {
 }
 
 /** The columns: centred on the wall at the axis spacing, the outer ones
- *  `WINDOW_ROWS.edge` in from its ends, a loose grid's a little off. */
+ *  `WINDOW_ROWS.edge` in from its ends, a loose grid's a little off; on a
+ *  wall whose axes the drives placed, its own count and spacing from the
+ *  length slot (lib/city/windows.ts `MEASURED_AXES`, `slotAxes`). */
 function columns(i: WindowInputs, s: F, length: F) {
-  const axis = max(i.spec.x, 0.1);
+  const units = floor(abs(i.facade.y).mul(32_767).add(0.5));
+  const measured = step(MEASURED_AXES.base - 0.5, units);
+  const code = max(units.sub(MEASURED_AXES.base), 0);
+  const nMeasured = floor(code.add(0.5).div(MEASURED_AXES.perN));
+  const axisMeasured = code
+    .sub(nMeasured.mul(MEASURED_AXES.perN))
+    .mul(MEASURED_AXES.step)
+    .add(MEASURED_AXES.axis0);
+  const axis = mix(max(i.spec.x, 0.1), axisMeasured, measured);
+  // a measured wall's window never wider than its spacing leaves room for
+  // (lib/city/windows.ts `measuredAxes`)
+  const w = mix(i.spec.y, min(i.spec.y, axis.sub(WINDOW_ROWS.gap)), measured);
   const style = floor(i.spec.w.add(0.5));
-  const room = length.sub(2 * WINDOW_ROWS.edge).sub(i.spec.y);
+  const room = length.sub(2 * WINDOW_ROWS.edge).sub(w);
   // steps and mixes, never a select: three emits a select as if/else, and
   // what an arm builds first it builds again outside it
-  const n = step(0, room).mul(floor(max(room, 0).div(axis).add(1e-4)).add(1));
+  const n = mix(
+    step(0, room).mul(floor(max(room, 0).div(axis).add(1e-4)).add(1)),
+    nMeasured,
+    measured
+  );
   const off = n.sub(1).mul(0.5);
   const j = clamp(floor(s.div(axis).add(off).add(0.5)), 0, max(n.sub(1), 0));
   const free = clamp(
-    axis.sub(i.spec.y).sub(WINDOW_ROWS.gap).mul(0.5),
+    axis.sub(w).sub(WINDOW_ROWS.gap).mul(0.5),
     0,
     axis.mul(LOOSE_JITTER)
   );
@@ -179,10 +197,12 @@ function columns(i: WindowInputs, s: F, length: F) {
     .mul(2)
     .sub(1)
     .mul(free)
-    .mul(bit(style, WINDOW_STYLE.loose));
+    .mul(bit(style, WINDOW_STYLE.loose))
+    // where the drives placed the axes they stay put
+    .mul(float(1).sub(measured));
   const centre = j.sub(off).mul(axis).add(jitter);
-  const extent = off.mul(axis).add(i.spec.y.mul(0.5));
-  return { axis, centre, extent, j, n, style };
+  const extent = off.mul(axis).add(w.mul(0.5));
+  return { axis, centre, extent, j, n, style, w };
 }
 
 /** 1 where a ground-floor window on `centre` (m along the wall), `half`
@@ -246,7 +266,7 @@ function grid(i: WindowInputs): Grid {
     .sub(line)
     .sub(sill)
     .sub(lift);
-  const half = i.spec.y.mul(0.5);
+  const half = c.w.mul(0.5);
   const groundOk = float(1)
     .sub(bit(c.style, WINDOW_STYLE.noGround))
     .mul(float(1).sub(i.shop))
@@ -271,7 +291,7 @@ function grid(i: WindowInputs): Grid {
   return {
     axis: c.centre,
     band: here.mul(step(abs(s), c.extent)),
-    coverage: i.spec.y.mul(tall).div(max(c.axis.mul(storey), 0.1)),
+    coverage: c.w.mul(tall).div(max(c.axis.mul(storey), 0.1)),
     depth,
     half,
     here,

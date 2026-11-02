@@ -169,6 +169,7 @@ import {
   flatTownHouse,
   GROUND_REACH_M,
   TALL_STOREY_M,
+  measuredAxes,
   wallRises,
   type WindowHost,
   type WindowWall,
@@ -2728,6 +2729,7 @@ function facadeOf(
     doors?: readonly DoorFeature[];
     plinths?: readonly PlinthFeature[];
     shopfronts?: readonly ShopfrontWall[];
+    windows?: readonly WindowWall[];
   },
   reach: (object: number) => number,
   rises?: Parameters<typeof facadeAttribute>[4],
@@ -2779,7 +2781,14 @@ function facadeOf(
           ? { base: o.baseZ, eave: o.baseZ + o.eaveH }
           : undefined;
       },
-    }
+    },
+    // the walls whose axes the drives placed (window_axes.py)
+    measuredAxes(
+      onWalls.windows ?? [],
+      index,
+      (i) => baked.objects[i]?.windows,
+      baked.offset
+    )
   );
 }
 
