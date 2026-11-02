@@ -134,3 +134,23 @@ export function fakeAskAdapter(): AnyTextAdapter {
   adapter.setResponses([step, step, step, step]);
   return adapter;
 }
+
+/** The Prüfstand's judge for local tests only (`FRAG_FAKE=1`): every
+ *  answer kept, with a fixed reason. */
+export function fakeJudgeAdapter(): AnyTextAdapter {
+  const adapter = fakeText({ model: "fake" });
+  adapter.setResponses([
+    {
+      text: JSON.stringify({
+        ort_passt: 2,
+        daten_reichen: 2,
+        antwort: 1,
+        erfunden: false,
+        urteil: "behalten",
+        vorschlag: "",
+        begruendung: "Testurteil.",
+      }),
+    },
+  ]);
+  return adapter;
+}

@@ -65,3 +65,24 @@ test("the reach steps halve and double within the tool's limits", () => {
   expect(reachSteps(ASK_LIMITS.radius).wider).toBeNull();
   expect(reachSteps(15).narrower).toBeNull();
 });
+
+test("a search round the visitor takes its centre from the result", () => {
+  const round = [
+    answer[0],
+    {
+      id: "a",
+      role: "assistant",
+      parts: [
+        {
+          ...call("in_der_naehe", { radius: 120 }),
+          output: { mitte: { x: 411_790, y: 5_656_340 }, treffer: [] },
+        },
+      ],
+    },
+  ] as unknown as UIMessage[];
+  expect(answerChips(round, 1).near).toEqual({
+    reach: 120,
+    x: 411_790,
+    y: 5_656_340,
+  });
+});

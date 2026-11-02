@@ -20,7 +20,9 @@ Kurz gesagt:
 - Damit Abstürze und langsame Geräte auffallen, schickt der Viewer Fehler- und
   Leistungsberichte – ohne Standort und ohne IP-Adresse. Du kannst sie
   [unten ausschalten](#fehlerberichte).
-- Dein Standort verlässt dein Gerät nie.
+- Dein Standort verlässt dein Gerät nie – außer du fragst *Frag die Stadt*,
+  während er dich in die Stadt gesetzt hat: dann geht die Stelle mit der
+  Frage mit ([siehe dort](#frag-die-stadt)).
 
 ## Verantwortlich
 
@@ -170,6 +172,9 @@ Ausrichtung deines Telefons – erst, wenn du sie antippst, und nur mit deiner
 Erlaubnis im Browser (Art. 6 Abs. 1 lit. a DSGVO, § 25 Abs. 1 TDDDG). Beides
 wird nur in deinem Browser verwendet, um dich in die Stadt zu setzen, und nie
 an mich oder Dritte gesendet; auch die Fehlerberichte enthalten es nicht.
+Nur wenn du an dieser Stelle *Frag die Stadt* eine Frage stellst, geht die
+Stelle in der Stadt, an der du dann stehst, mit der Frage mit (siehe
+[Frag die Stadt](#frag-die-stadt)).
 Bietet das Standort-Fenster den Sprung in eine andere Stadt dieser Seite an,
 reist dein Standort dabei im Fragment der Adresse (hinter dem `#`) mit: den
 sieht nur dein Browser, nicht der Hoster, und die Seite entfernt ihn, sobald
@@ -203,17 +208,30 @@ löschen* entfernt ihn.
 
 Mit jeder Frage schickt dein Browser an diese Seite (`/api/frag`): das
 bisherige Gespräch, den Schlüssel, Anbieter und Modell, welche Stadt du
-ansiehst und – wenn das Modell danach fragt – wo du in der Stadt stehst,
-wohin du schaust, die Uhrzeit der Szene, den Bildstil und die
-eingeschalteten Datenebenen. Die Seite reicht Gespräch und Schlüssel an
-den gewählten Anbieter weiter und schickt die Antwort zurück; sie
-speichert weder das Gespräch noch den Schlüssel und protokolliert beides
-nicht. Beim Prüfen eines neuen Schlüssels (`/api/schluessel`) fragt
+ansiehst, wo du in der Stadt stehst und wohin du schaust, ob du gehst
+oder fliegst, die Uhrzeit der Szene, den Bildstil, die eingeschalteten
+Datenebenen und das Seitenverhältnis deines Bildschirms (damit die Ansicht
+passend gerahmt wird) – damit sie „hier“ ohne Umweg über deinen Browser beantworten
+kann. Die Seite reicht Gespräch und Schlüssel an den gewählten Anbieter
+weiter und schickt die Antwort zurück; deine Stelle in der Stadt und den
+Rest des Moments nur, wenn das Modell danach fragt oder um dich herum
+sucht (dann mit dem, was dort steht). Hast du dich mit *Standort* oder
+*Live* in die Stadt gesetzt, ist diese Stelle ungefähr dein wirklicher
+Standort. Die Seite speichert weder das Gespräch noch den Schlüssel noch
+deine Stelle und protokolliert nichts davon. Beim Prüfen eines neuen Schlüssels (`/api/schluessel`) fragt
 sie den Anbieter, ob er gilt, ohne etwas zu verarbeiten. Was der Anbieter
 mit deinen Fragen tut, regeln deine Vereinbarung mit ihm und seine
 Datenschutzhinweise – es ist dein Konto, und die Kosten trägst du.
 Schreib in deine Fragen nichts, was du dem Anbieter nicht anvertrauen
 willst.
+
+Der *Prüfstand* (nur, wenn die Adresse `?pruefstand=1` trägt) stellt mit
+deinem Schlüssel alle Startfragen an vorgegebenen Orten der Stadt und lässt
+jede Antwort von einem Modell desselben Anbieters bewerten
+(`/api/frag/pruefen`). Dabei gehen an diese Seite und an den Anbieter
+dieselben Angaben wie bei einer Frage – statt deiner Stelle in der Stadt
+die des Prüforts; der Bericht entsteht in deinem Browser und wird nur
+gespeichert, wenn du ihn herunterlädst.
 
 *Vorlesen* spricht die Antworten (und in den Spaziergängen die
 Stationen), sobald du es einschaltest. In Chrome liest dabei
