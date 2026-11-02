@@ -6,7 +6,11 @@
  * every one of them into the screen as it is shaped, and the heading the
  * best of twelve — near, from the side the visitor comes from, the sun
  * behind the camera, the places beside rather than behind each other,
- * and none hidden behind a building the scene has loaded. On foot
+ * and none hidden behind a building the scene has loaded or behind the
+ * ground. The eye's height is taken over the ground beneath the eye, not
+ * the places' (on a slope the two differ by the slope), and an eye a
+ * hillside would bury backs off along its sight line until it stands
+ * clear. On foot
  * (`streetView`) the walker stands in front of one, far enough back to see
  * it whole. Pure: the card hands the result to the scene's glide.
  */
@@ -36,12 +40,13 @@ export const ASK_FOV = 60;
  * On foot: the walker on the street in front of `target`, on the side of
  * `from` (the camera's place now; straight from the south where it stands
  * on the target), far enough back to see it whole. The pitch takes the
- * eye's ground for the target's (the scene measures the real one on
- * arrival).
+ * eye's ground for the target's unless `groundAt` knows both: on a slope
+ * the walker looks up or down to it.
  */
 export function streetView(
   target: AskTarget,
-  from: { x: number; y: number }
+  from: { x: number; y: number },
+  groundAt?: (x: number, y: number) => number | null
 ): ViewpointGeometry {
   const h = Math.max(target.h ?? 15, 4);
   let dx = from.x - target.x;
@@ -56,8 +61,11 @@ export function streetView(
   const back = Math.max(35, h * 1.4 + 15, (target.r ?? 0) * 2.2);
   const ex = target.x + (dx / len) * back;
   const ey = target.y + (dy / len) * back;
-  // look at a third of its height
-  const pitch = Math.atan2(h * 0.35 - EYE, back) * DEG;
+  // look at a third of its height, from the eye's ground to its own
+  const foot = target.z ?? groundAt?.(target.x, target.y) ?? null;
+  const stand = groundAt?.(ex, ey) ?? null;
+  const rise = foot !== null && stand !== null ? foot - stand : 0;
+  const pitch = Math.atan2(rise + h * 0.35 - EYE, back) * DEG;
   const heading = (Math.atan2(target.x - ex, target.y - ey) * DEG + 360) % 360;
   return {
     epsg: { x: round1(ex), y: round1(ey) },
@@ -92,7 +100,14 @@ export interface FrameContext {
   sightHit?: (eye: SitePoint, point: SitePoint) => SitePoint | null;
   /** towards the sun, east and north (any length), or null by night */
   sun?: { east: number; north: number } | null;
+  /**
+   * The terrain's height at a point of the site (m a.s.l.), or null where
+   * none is loaded. Absent: the ground is flat at the places' foot.
+   */
+  groundAt?: (x: number, y: number) => number | null;
 }
+
+type GroundAt = NonNullable<FrameContext["groundAt"]>;
 
 /** A computed vantage: the view and how far its eye stands off the aim. */
 export interface Framed {
@@ -121,6 +136,15 @@ const DEFAULT_RADIUS = 8;
 const PITCH_TALL = 30;
 const PITCH_FLAT = 55;
 
+/** The least an aerial eye stands over the ground beneath it (m). */
+const CLEARANCE = 25;
+/** How far an eye a slope would bury backs off each step, and how often:
+ *  1.2⁸ ≈ 4.3 times its distance at most. */
+const BACK_OFF = 1.2;
+const BACK_OFF_STEPS = 8;
+/** Where a sight line asks the terrain, as shares of its length. */
+const TERRAIN_STEPS = 12;
+
 /** How much each judgement weighs in a heading's score. */
 const WEIGHTS = { near: 1, from: 0.8, sun: 0.5, beside: 0.6, seen: 3 };
 
@@ -138,14 +162,18 @@ interface Sample {
  *  and round its footprint. Places without a ground take the others' —
  *  a guess the frame survives, a sight line does not: theirs are not
  *  drawn. */
-function samples(targets: readonly AskTarget[]): Sample[] {
-  const known = targets.filter((t) => t.z !== undefined);
+function samples(
+  targets: readonly AskTarget[],
+  groundAt: GroundAt | undefined
+): Sample[] {
+  // a place without its ground stands on the terrain, where that is known
+  const footOf = (t: AskTarget) => t.z ?? groundAt?.(t.x, t.y) ?? undefined;
+  const feet = targets.map(footOf);
+  const known = feet.filter((z): z is number => z !== undefined);
   const ground =
-    known.length > 0
-      ? known.reduce((s, t) => s + (t.z ?? 0), 0) / known.length
-      : 0;
+    known.length > 0 ? known.reduce((s, z) => s + z, 0) / known.length : 0;
   return targets.flatMap((t, i) => {
-    const z = t.z ?? ground;
+    const z = feet[i] ?? ground;
     const h = Math.max(t.h ?? DEFAULT_HEIGHT, 3);
     const r = Math.max(t.r ?? DEFAULT_RADIUS, 2);
     const ring = [
@@ -154,7 +182,7 @@ function samples(targets: readonly AskTarget[]): Sample[] {
       [0, r],
       [0, -r],
     ];
-    const sight = t.z !== undefined;
+    const sight = feet[i] !== undefined;
     return [
       { i, sight, x: t.x, y: t.y, z: z + h },
       { i, sight, x: t.x, y: t.y, z: z + h * 0.6 },
@@ -220,13 +248,15 @@ interface Candidate {
   beside: number;
 }
 
-/** The heading's eye: as near as holds every point within the lens. */
+/** The heading's eye: as near as holds every point within the lens,
+ *  backed off along its axis where the ground beneath would bury it. */
 function candidate(
   points: readonly Sample[],
   aim: SitePoint,
   heading: number,
   pitch: number,
-  aspect: number
+  aspect: number,
+  groundAt: GroundAt | undefined
 ): Candidate {
   const { f, r, u } = axes(heading, pitch);
   // the lens narrowed by the margin: room round the places on every side
@@ -250,16 +280,43 @@ function candidate(
     deep = Math.max(deep, Math.abs(z));
   }
   distance = Math.max(distance, MIN_DISTANCE);
+  const eyeAt = (d: number): SitePoint => ({
+    x: aim.x - f[0] * d,
+    y: aim.y - f[1] * d,
+    z: aim.z - f[2] * d,
+  });
+  let eye = eyeAt(distance);
+  // further back along a downward axis is higher: it clears a slope that
+  // climbs towards the eye less steeply than the view looks down
+  for (let k = 0; groundAt && k < BACK_OFF_STEPS; k++) {
+    const under = groundAt(eye.x, eye.y);
+    if (under === null || eye.z >= under + CLEARANCE) {
+      break;
+    }
+    distance *= BACK_OFF;
+    eye = eyeAt(distance);
+  }
   return {
     heading,
     distance,
-    eye: {
-      x: aim.x - f[0] * distance,
-      y: aim.y - f[1] * distance,
-      z: aim.z - f[2] * distance,
-    },
+    eye,
     beside: across / (across + deep + 1e-6),
   };
+}
+
+/** Whether the terrain rises above the line from `eye` to `point`. */
+function groundCuts(eye: SitePoint, point: SitePoint, groundAt: GroundAt) {
+  for (let k = 1; k < TERRAIN_STEPS; k++) {
+    const t = k / TERRAIN_STEPS;
+    const under = groundAt(
+      eye.x + (point.x - eye.x) * t,
+      eye.y + (point.y - eye.y) * t
+    );
+    if (under !== null && under > eye.z + (point.z - eye.z) * t) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /** The unit plan vector from `a` towards `b`, or null where they meet. */
@@ -281,12 +338,14 @@ function agreement(
   return b ? (1 + a[0] * b[0] + a[1] * b[1]) / 2 : 0.5;
 }
 
-/** The share of the places' sight lines no other building cuts. */
+/** The share of the places' sight lines neither the ground nor (where
+ *  `sightHit` is given) another building cuts. */
 function seenShare(
   c: Candidate,
   points: readonly Sample[],
   targets: readonly AskTarget[],
-  sightHit: NonNullable<FrameContext["sightHit"]>
+  groundAt: GroundAt | undefined,
+  sightHit: FrameContext["sightHit"]
 ): number {
   let lines = 0;
   let seen = 0;
@@ -295,7 +354,10 @@ function seenShare(
       continue;
     }
     lines++;
-    const hit = sightHit(c.eye, p);
+    if (groundAt && groundCuts(c.eye, p, groundAt)) {
+      continue;
+    }
+    const hit = sightHit ? sightHit(c.eye, p) : null;
     const t = targets[p.i];
     // a hit on the place itself (its own roof before its top) is a sight
     const own = Math.max(t.r ?? DEFAULT_RADIUS, 2) * 1.2 + 3;
@@ -313,8 +375,9 @@ function seenShare(
  * that nearness, on coming from the visitor's side (no turn about), on
  * the sun behind the camera (lit facades), on the places standing beside
  * rather than behind each other, and — heaviest — on the sight lines to
- * their tops that no loaded building cuts. The eye's height is taken
- * above the places' ground (the scene's glide measures the real one).
+ * their tops that neither the ground nor a loaded building cuts. The
+ * eye's height is given over the ground beneath the eye (`groundAt`;
+ * without it, over the places' foot), which is how the glide reads it.
  */
 export function frameTargets(
   targets: readonly AskTarget[],
@@ -323,11 +386,19 @@ export function frameTargets(
   if (targets.length === 0) {
     throw new Error("frameTargets: nothing to frame");
   }
-  const points = samples(targets);
+  const { groundAt } = context;
+  const points = samples(targets, groundAt);
   const aim = middle(points);
   const pitch = pitchFor(points, aim);
   const candidates = Array.from({ length: HEADINGS }, (_, k) =>
-    candidate(points, aim, (k * 360) / HEADINGS, pitch, context.aspect)
+    candidate(
+      points,
+      aim,
+      (k * 360) / HEADINGS,
+      pitch,
+      context.aspect,
+      groundAt
+    )
   );
   const nearest = Math.min(...candidates.map((c) => c.distance));
   const comeFrom = context.from ? towards(aim, context.from) : null;
@@ -336,32 +407,46 @@ export function frameTargets(
     : null;
   const scored = candidates
     .map((c) => {
+      // the ground's cut is cheap (a few height lookups): every heading
+      const ground = groundAt
+        ? seenShare(c, points, targets, groundAt, undefined)
+        : 0;
       // where the eye stands, seen from the aim
       const back = towards(aim, c.eye) ?? [0, -1];
       const score =
         WEIGHTS.near * (nearest / c.distance) +
         WEIGHTS.from * agreement(back, comeFrom) +
         WEIGHTS.sun * agreement(back, sun) +
-        WEIGHTS.beside * (targets.length > 1 ? c.beside : 0.5);
-      return { c, score };
+        WEIGHTS.beside * (targets.length > 1 ? c.beside : 0.5) +
+        WEIGHTS.seen * ground;
+      return { c, score, ground };
     })
     .sort((a, b) => b.score - a.score);
-  // the sight lines weigh most and cost most: drawn for the best few
-  // headings only, which then compete on them
+  // the buildings' sight lines weigh as much and cost most: drawn for the
+  // best few headings only, which then compete on ground and buildings
   const sightHit = context.sightHit;
   const finalists = scored.slice(0, sightHit ? SIGHT_CANDIDATES : 1);
   if (sightHit) {
     for (const s of finalists) {
-      s.score += WEIGHTS.seen * seenShare(s.c, points, targets, sightHit);
+      s.score +=
+        WEIGHTS.seen *
+        (seenShare(s.c, points, targets, groundAt, sightHit) - s.ground);
     }
   }
   const best = finalists.reduce((a, b) => (b.score > a.score ? b : a)).c;
-  const ground = Math.min(...points.map((p) => p.z));
+  const foot = Math.min(...points.map((p) => p.z));
+  const under = groundAt?.(best.eye.x, best.eye.y) ?? null;
+  // an eye the back-off could not lift clear of a steep slope still
+  // stands clear over the ground beneath it (the glide sets it there)
+  const above =
+    under === null
+      ? best.eye.z - foot
+      : Math.max(best.eye.z - under, CLEARANCE);
   return {
     distance: Math.round(best.distance),
     view: {
       epsg: { x: round1(best.eye.x), y: round1(best.eye.y) },
-      aboveGround: Math.round(best.eye.z - ground),
+      aboveGround: Math.round(above),
       headingDeg: best.heading,
       pitchDeg: -round1(pitch),
       fov: ASK_FOV,

@@ -181,3 +181,61 @@ test("a selection's place is its triangles' footprint centre, foot, height and r
   expect(box?.r).toBeCloseTo(Math.hypot(20, 10) / 2, 6);
   expect(boundsTarget([])).toBeNull();
 });
+
+// a house on the brow of a valley side: the ground falls 100 m to the
+// south-west within 150 m and rises gently behind it (the Elbhang)
+const brow = (x: number, y: number) => {
+  const down = Math.max(0, -(x + y) / Math.SQRT2);
+  return (
+    205 - Math.min(100, down / 1.5) + Math.max(0, (x + y) / Math.SQRT2) / 20
+  );
+};
+const luisenhof: AskTarget = { x: 0, y: 0, z: 205, h: 29, r: 32 };
+
+test("on a slope the eye's height is over the ground beneath the eye", () => {
+  for (const sun of [{ east: -1, north: -1 }, { east: 1, north: 1 }, null]) {
+    const framed = frameTargets([luisenhof], {
+      aspect: 16 / 9,
+      from: { x: -3000, y: -3000 },
+      sun,
+      groundAt: brow,
+    });
+    const { view } = framed;
+    const under = brow(view.epsg.x, view.epsg.y);
+    // the house stands whole in the lens from the eye the glide sets
+    for (const p of corners([luisenhof])) {
+      expect(inView(framed, under, 16 / 9, p)).toBe(true);
+    }
+    // and the eye stands well clear of the hillside
+    expect(view.aboveGround).toBeGreaterThanOrEqual(25);
+  }
+});
+
+test("an eye a hill would bury backs off until it stands clear", () => {
+  // a ridge 145 m over the house, 60 m south of it
+  const ridge = (_x: number, y: number) => (y < -60 && y > -400 ? 265 : 100);
+  const framed = frameTargets([{ x: 0, y: 0, z: 100, h: 20, r: 10 }], {
+    aspect: 1.5,
+    from: { x: 0, y: -3000 },
+    groundAt: ridge,
+  });
+  // clear of the ridge, and the house's top in sight over it
+  const { epsg, aboveGround } = framed.view;
+  const eyeZ = ridge(epsg.x, epsg.y) + aboveGround;
+  expect(aboveGround).toBeGreaterThanOrEqual(25);
+  for (let k = 1; k < 20; k++) {
+    const t = k / 20;
+    const y = epsg.y * (1 - t);
+    expect(ridge(epsg.x * (1 - t), y)).toBeLessThan(eyeZ + (120 - eyeZ) * t);
+  }
+});
+
+test("on foot below a house on a slope, the walker looks up to it", () => {
+  const flat = streetView({ x: 0, y: 0, h: 20 }, { x: -1, y: -1 });
+  const below = streetView(
+    { x: 0, y: 0, z: 205, h: 20 },
+    { x: -1, y: -1 },
+    brow
+  );
+  expect(below.pitchDeg).toBeGreaterThan(flat.pitchDeg);
+});

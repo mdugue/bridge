@@ -1147,6 +1147,10 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       await card
         .getByTestId("ask-key")
         .fill("sk-ant-api03-0123456789abcdefghij");
+      // the key names its provider; the picker offers its fast model first
+      await expect(card.getByTestId("ask-model")).toContainText(
+        "Claude Haiku 5.5"
+      );
       await card.getByRole("button", { name: "Prüfen und loslegen" }).click();
       await expect(card.getByRole("alert")).toContainText("nicht an");
       // the refused check is the browser's logged 401, asked for above
@@ -1404,7 +1408,13 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       await page.keyboard.up("Shift");
       // the first pick waits behind the open card, a little turned
       await expect(stack.getByTestId("pick-card")).toHaveCount(1);
-      await expect(stack).toContainText("2 ausgewählt");
+      await expect(stack.getByTestId("pick-count")).toHaveText("2 / 2");
+      await expect(card).toContainText(centreId);
+      // the arrows leaf through the deck, round it
+      await stack.getByTestId("pick-next").click();
+      await expect(stack.getByTestId("pick-count")).toHaveText("1 / 2");
+      await expect(card).not.toContainText(centreId);
+      await stack.getByTestId("pick-next").click();
       await expect(card).toContainText(centreId);
       // a click brings it to the front, the centre's building behind
       await stack.getByTestId("pick-card").getByRole("button").first().click();

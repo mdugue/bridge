@@ -40,7 +40,10 @@ import {
   ASK_LIMITS,
   ASK_PROVIDER_BY_ID,
   ASK_PROVIDERS,
+  type AskModel,
+  type AskProviderDef,
   type AskProviderId,
+  isAskProvider,
   maskedKey,
   plausibleKey,
   providerForKey,
@@ -51,6 +54,15 @@ import { starterQuestions } from "@/lib/city/ask-starters";
 import { NEAR_RADIUS } from "@/lib/city/ask-tools";
 import { Button } from "@/components/ui/button";
 import { Message, MessageContent } from "@/components/ui/message";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   MessageScroller,
   MessageScrollerContent,
@@ -213,6 +225,30 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
 
 // --- the key ------------------------------------------------------------------
 
+/** A provider's models by maker, in the catalogue's order. */
+function makersOf(
+  models: readonly AskModel[]
+): [AskModel["maker"], AskModel[]][] {
+  const by = new Map<AskModel["maker"], AskModel[]>();
+  for (const m of models) {
+    by.set(m.maker, [...(by.get(m.maker) ?? []), m]);
+  }
+  return [...by];
+}
+
+const modelOf = (def: AskProviderDef, id: string): AskModel | undefined =>
+  def.models.find((m) => m.id === id);
+
+/** A model as the picker lists it: its name, and what it is good for. */
+function ModelName({ model }: { model: AskModel | undefined }) {
+  return model ? (
+    <span className="flex items-baseline gap-1.5">
+      {model.label}
+      <span className="text-muted-foreground">{model.hint}</span>
+    </span>
+  ) : null;
+}
+
 function KeyForm({ onKey }: { onKey: (key: AskKey) => void }) {
   const stored = readAskKey();
   const [provider, setProvider] = useState<AskProviderId>(
@@ -281,34 +317,73 @@ function KeyForm({ onKey }: { onKey: (key: AskKey) => void }) {
         Ort im Modell. Das Sprachmodell läuft mit deinem eigenen Schlüssel und
         auf deine Kosten; eine Frage kostet meist unter einem Cent.
       </p>
-      <label className="flex flex-col gap-1">
-        <span className="text-[11px] text-muted-foreground">Anbieter</span>
-        <select
-          className="rounded-md border bg-background px-2 py-1.5"
-          onChange={(e) => pickProvider(e.target.value as AskProviderId)}
+      <div className="flex flex-col gap-1">
+        <span className="text-[11px] text-muted-foreground" id="ask-provider">
+          Woher dein Schlüssel ist
+        </span>
+        <Select
+          items={ASK_PROVIDERS.map((p) => ({ value: p.id, label: p.label }))}
+          onValueChange={(v) => {
+            if (isAskProvider(v)) {
+              pickProvider(v);
+            }
+          }}
           value={provider}
         >
-          {ASK_PROVIDERS.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="flex flex-col gap-1">
-        <span className="text-[11px] text-muted-foreground">Modell</span>
-        <select
-          className="rounded-md border bg-background px-2 py-1.5"
-          onChange={(e) => setModel(e.target.value)}
+          <SelectTrigger
+            aria-labelledby="ask-provider"
+            className="w-full"
+            data-testid="ask-provider"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {ASK_PROVIDERS.map((p) => (
+              <SelectItem key={p.id} value={p.id}>
+                {p.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex flex-col gap-1">
+        <span className="text-[11px] text-muted-foreground" id="ask-model">
+          Modell
+        </span>
+        <Select
+          items={def.models.map((m) => ({ value: m.id, label: m.label }))}
+          onValueChange={(v) => {
+            if (typeof v === "string") {
+              setModel(v);
+            }
+          }}
           value={model}
         >
-          {def.models.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-      </label>
+          <SelectTrigger
+            aria-labelledby="ask-model"
+            className="w-full"
+            data-testid="ask-model"
+          >
+            <SelectValue>
+              {(id: string) => <ModelName model={modelOf(def, id)} />}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {makersOf(def.models).map(([maker, models]) => (
+              <SelectGroup key={maker}>
+                {def.models.length > models.length && (
+                  <SelectLabel>{maker}</SelectLabel>
+                )}
+                {models.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    <ModelName model={m} />
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
       <label className="flex flex-col gap-1">
         <span className="text-[11px] text-muted-foreground">
           Schlüssel ({def.prefix}…) ·{" "}

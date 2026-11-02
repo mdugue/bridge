@@ -19,9 +19,14 @@ import { issueAskToken } from "@/lib/city/ask-token";
 export const maxDuration = 15;
 
 function authHeaders(def: AskProviderDef, key: string): Record<string, string> {
-  return def.check.auth === "anthropic"
-    ? { "x-api-key": key, "anthropic-version": "2023-06-01" }
-    : { Authorization: `Bearer ${key}` };
+  switch (def.check.auth) {
+    case "anthropic":
+      return { "x-api-key": key, "anthropic-version": "2023-06-01" };
+    case "google":
+      return { "x-goog-api-key": key };
+    case "bearer":
+      return { Authorization: `Bearer ${key}` };
+  }
 }
 
 const answer = (status: number, body: Record<string, unknown>) =>

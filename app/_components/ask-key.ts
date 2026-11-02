@@ -6,6 +6,7 @@
  */
 import {
   type AskProviderId,
+  ASK_PROVIDER_BY_ID,
   isAskModel,
   isAskProvider,
 } from "@/lib/city/ask-city";
@@ -30,14 +31,16 @@ function parse(text: string | null, remember: boolean): AskKey | null {
     const v = JSON.parse(text) as Partial<AskKey>;
     if (
       isAskProvider(v.provider) &&
-      isAskModel(v.provider, v.model) &&
       typeof v.key === "string" &&
       typeof v.token === "string" &&
       typeof v.expires === "number"
     ) {
       return {
         provider: v.provider,
-        model: v.model as string,
+        // a model the picker no longer offers: the provider's first
+        model: isAskModel(v.provider, v.model)
+          ? (v.model as string)
+          : ASK_PROVIDER_BY_ID[v.provider].models[0].id,
         key: v.key,
         token: v.token,
         expires: v.expires,
