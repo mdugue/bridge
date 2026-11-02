@@ -121,16 +121,40 @@ const BUDGET: Record<JoinPart, number> = {
   doors: 0.01,
   shopfronts: 0.005,
   plinths: 0.01,
+  monorails: 0,
+};
+
+/** Parts the spawn tile does not have, and the tile measured for them:
+ *  Dresden's Schwebebahn stands in Loschwitz. */
+const ELSEWHERE: Partial<Record<JoinPart, string>> = {
+  monorails: "33416_5656_2_sn",
 };
 
 test("the committed parts meet the ground within their budgets", async () => {
   const reports = await measureJoins(["33412_5656_2_sn"]);
-  for (const part of JOIN_PARTS) {
+  for (const part of JOIN_PARTS.filter((k) => !ELSEWHERE[k])) {
     const r = reports[part];
     expect(r.edges + r.feet).toBeGreaterThan(0);
     // a failure names the part and its share
     const share = missShare(r);
     expect({ part, share: share <= BUDGET[part] ? "within" : share }).toEqual({
+      part,
+      share: "within",
+    });
+  }
+}, 60_000);
+
+test("the parts the spawn tile lacks meet the ground where they stand", async () => {
+  for (const [part, tile] of Object.entries(ELSEWHERE) as [
+    JoinPart,
+    string,
+  ][]) {
+    const r = (await measureJoins([tile]))[part];
+    expect(r.edges + r.feet).toBeGreaterThan(0);
+    expect({
+      part,
+      share: missShare(r) <= BUDGET[part] ? "within" : missShare(r),
+    }).toEqual({
       part,
       share: "within",
     });
