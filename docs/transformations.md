@@ -1927,13 +1927,14 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   the facade the camera faces best (1.5 m, less for a small thing; kept
   until that facade is seen flatter than 25°), standing on it like rooftop
   letters — under a tower on the highest LoD2 eave that lies clearly
-  under the tallest (1.75 times lower, each over its object's own base)
-  of an object at least a quarter of the largest footprint (a root's or
-  an ensemble lead's is its whole tree's), where that lies a quarter of
-  the height or more under the top, so a church's name stands on its
-  nave, not on its spire's tip; a house's own pitched roof, its annex or
-  a wing up the slope is no tower, its letters stand on the top; else on
-  the top — or beside it in the sky (no line to
+  under the tallest (1.75 times lower, each over its object's own base,
+  and under it in height) of an object at least a quarter of the largest
+  footprint (a root's or an ensemble lead's area is its whole tree's: it
+  passes as a carrier and, as the tallest, is no tower), where that lies
+  a quarter of the height or more under the top, so a church's name
+  stands on its nave, not on its spire's tip; a house's own pitched roof,
+  its annex or a wing up the slope is no tower, its letters stand on the
+  top; else on the top — or beside it in the sky (no line to
   it: the selection outline marks the thing, in the lettering's ink);
   within 1 S an inscription before the facade, its foot a quarter of the
   height up (2.5–15 m); beyond 8 S its name alone. The letters are built,

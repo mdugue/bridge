@@ -201,10 +201,30 @@ test("rooftop letters stand on the eave under a tower", () => {
     baseZ: 106,
     eaveH: 15,
   });
-  // the root's own geometry the tower, the nave a part: the same
-  const towerRoot = at(100, 40, 1000, { lead: true });
-  const navePart = at(106, 15, 900, { building: false, objectIndex: 4 });
-  expect(nameplateEave(building([towerRoot, navePart]))?.eaveH).toBe(15);
+  // the root (a lead) is its own small sacristy, its area the tree's;
+  // the nave a part under a fifth of that: on the nave's eave
+  const sacristyRoot = at(104, 4, 1500, { lead: true });
+  const navePart = at(106, 15, 300, { building: false, objectIndex: 4 });
+  expect(nameplateEave(building([sacristyRoot, navePart, tower]))?.eaveH).toBe(
+    15
+  );
+  // the root itself the tallest (its area the whole tree's): it may be
+  // the whole house, so the letters stand on the top
+  const houseRoot = at(110, 9, 230, { lead: true });
+  const annexPart = at(110, 3, 30, { building: false, objectIndex: 5 });
+  expect(nameplateEave(building([houseRoot, annexPart]))).toBeNull();
+  // a nave up the slope whose eave stands over the tower's: none
+  const upNave = at(115, 15, 900, { objectIndex: 6 });
+  const downTower = at(95, 30, 36, { building: false, objectIndex: 7 });
+  expect(nameplateEave(building([upNave, downTower]))).toBeNull();
+  // areas unknown (an older bake): the highest eave under the tower
+  const unknown = (o: InquiryObject) => ({
+    ...o,
+    facts: facts({ area: NO_FACT }),
+  });
+  expect(nameplateEave(building([unknown(nave), unknown(tower)]))?.eaveH).toBe(
+    15
+  );
   // the nave alone: nothing over it
   const alone: Inquiry = {
     kind: "building",

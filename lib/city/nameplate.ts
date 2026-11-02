@@ -50,12 +50,14 @@ const ownMass = (o: InquiryObject): o is InquiryObject & { baseZ: number } =>
 
 /** What a building's rooftop letters stand on under its tower: the highest
  *  eave (over its object's own base) that lies clearly under the tallest
- *  one, of an object with a large footprint (the nave under the tower, a
+ *  one's, on an object with a large footprint (the nave under the tower, a
  *  church's body under its dome); null where none does (a house's own
  *  roof: its letters stand on the top), where none states an eave and a
  *  base, or for anything else. Heights are each object's own over its own
  *  base, so a building straddling two tiles or a slope compares like with
- *  like. */
+ *  like. A root's or an ensemble lead's area is its whole tree's: as the
+ *  tallest it may be the whole building, so nothing is a tower then (the
+ *  letters stand on the top); as a carrier it passes the footprint test. */
 export function nameplateEave(
   inquiry: Inquiry
 ): { baseZ: number; eaveH: number } | null {
@@ -67,20 +69,32 @@ export function nameplateEave(
   const all = (
     inquiry.tree.length > 0 ? inquiry.tree : [inquiry.picked]
   ).filter(ownMass);
-  let tallest = 0;
+  const hasParts = all.some((o) => !o.building);
+  const spans = (o: InquiryObject) =>
+    all.length > 1 && (o.lead === true || (o.building && hasParts));
+  let tower: (typeof all)[number] | null = null;
   let largest = 0;
   for (const o of all) {
-    tallest = Math.max(tallest, o.eaveH);
-    largest = Math.max(largest, o.facts.area);
+    if (tower === null || o.eaveH > tower.eaveH) {
+      tower = o;
+    }
+    if (!spans(o)) {
+      largest = Math.max(largest, o.facts.area);
+    }
   }
+  if (!tower || spans(tower)) {
+    return null;
+  }
+  const towerEave = tower.baseZ + tower.eaveH;
   let mass: (typeof all)[number] | null = null;
   for (const o of all) {
+    const large =
+      spans(o) || o.facts.area < 0 || o.facts.area >= MASS_AREA_SHARE * largest;
     if (
-      o.eaveH * TOWER_OVER_EAVE <= tallest &&
-      o.facts.area >= MASS_AREA_SHARE * largest &&
-      (mass === null ||
-        o.eaveH > mass.eaveH ||
-        (o.eaveH === mass.eaveH && o.facts.area > mass.facts.area))
+      large &&
+      o.eaveH * TOWER_OVER_EAVE <= tower.eaveH &&
+      o.baseZ + o.eaveH < towerEave &&
+      (mass === null || o.eaveH > mass.eaveH)
     ) {
       mass = o;
     }

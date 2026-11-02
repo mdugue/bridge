@@ -555,25 +555,29 @@ export function layPlate(
   if (pad > 0) {
     // the block's lower left at 0, the box included: its lowest corner,
     // tilted or not, on the foot (a box stands on what carries it)
+    let left = Number.POSITIVE_INFINITY;
     let low = Number.POSITIVE_INFINITY;
-    for (let i = 1; i < positions.length; i += 3) {
-      low = Math.min(low, positions[i]);
+    for (let i = 0; i < positions.length; i += 3) {
+      left = Math.min(left, positions[i]);
+      low = Math.min(low, positions[i + 1]);
     }
     for (let i = 0; i < positions.length; i += 3) {
-      positions[i] += pad;
+      positions[i] -= left;
       positions[i + 1] -= low;
     }
   }
-  // a box's top: its edge and its lean reach past the text's
+  // a box's extent: its edge and its lean reach past the text's
+  let right = width + 2 * pad;
   let top = height + pad;
   if (pad > 0) {
-    for (let i = 1; i < positions.length; i += 3) {
-      top = Math.max(top, positions[i]);
+    for (let i = 0; i < positions.length; i += 3) {
+      right = Math.max(right, positions[i]);
+      top = Math.max(top, positions[i + 1]);
     }
   }
   const block = {
     foot: pad > 0 ? 0 : firstBaseline,
-    width: width + 2 * pad,
+    width: right,
     height: top,
   };
   return {

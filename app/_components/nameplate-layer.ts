@@ -64,6 +64,7 @@ import {
 import {
   abs,
   attribute,
+  cameraProjectionMatrixInverse,
   cameraWorldMatrix,
   dot,
   float,
@@ -157,6 +158,9 @@ const SIDE_SHADE = { ambient: 0.62, sun: 0.5, away: 0.12 } as const;
 const SHADOW_REACH_M = 400;
 const SHADOW_STEP_M = 4;
 const SHADOW_SUN = { from: 0.03, full: 0.18 } as const;
+/** How far the plate's corner may slide before the ground is asked again
+ *  (m): the march is ~100 ground reads, cheap, but not each frame. */
+const SHADOW_SLIDE_M = 0.5;
 /** How long a march's length holds before the ground is asked again (ms):
  *  terrain that streamed in since lengthens a shadow cut short. */
 const SHADOW_REMARCH_MS = 1000;
@@ -459,12 +463,13 @@ function shadowMaterial(
   sunStandIn: DepthTexture,
   reversed: boolean
 ) {
-  // the view position through the inverse projection: right for the
-  // perspective and the parallel camera (and Modell's shear) alike
+  // the view position through the drawing camera's own inverse
+  // projection: right for the perspective and the parallel camera (and
+  // Modell's shear) alike
   const surface = getViewPosition(
     screenUV,
     texture(deps.depthTexture, screenUV).r,
-    deps.lens.inverseProjection
+    cameraProjectionMatrixInverse
   );
   const world = cameraWorldMatrix.mul(vec4(surface, 1));
   const local = u.inverse.mul(world).xyz;
@@ -998,10 +1003,10 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     const now = performance.now();
     const m = lastMarch;
     // the corner slides with the screen-held cap while the camera moves:
-    // within a march step's half along the ray it keeps its length (a
-    // corner raised by dy meets the ground dy / sun.y further on); a held
-    // view (an export's tiles) keeps it outright
-    const near = SHADOW_STEP_M / 2;
+    // within `SHADOW_SLIDE_M` (less upward: a corner raised by dy meets
+    // the ground dy / sun.y further on) it keeps its length; a held view
+    // (an export's tiles: the plate keeps its place) keeps it outright
+    const near = SHADOW_SLIDE_M;
     if (
       m &&
       Math.abs(m.corner[0] - o[0]) < near &&
