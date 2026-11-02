@@ -908,3 +908,33 @@ test("no catenary support stands under a bridge over the track", () => {
   const box = new Box3().setFromObject(wires as Mesh);
   expect(box.max.y).toBeGreaterThan(106);
 });
+
+test("a monorail is a beam on supports, no track", () => {
+  // the beam's underside 6 m over the ground, then 20 m over a hollow
+  const hollow: RailContext = {
+    offset: { cx: 0, cy: 0 },
+    heightAt: (x) => (x > 20 && x < 60 ? 86 : 100),
+  };
+  const beam: RailFeature = {
+    geometry: {
+      type: "LineString",
+      coordinates: [
+        [0, 0],
+        [80, 0],
+      ],
+    },
+    properties: { mono: "hanging", tracks: 2, bz: [106, 106] },
+  };
+  const built = buildRail(
+    { rails: [beam], bridges: [], ballast: [], platforms: [] },
+    hollow
+  );
+  expect(built.children.map((c) => c.name)).toEqual(["rail-monorail"]);
+  const box = new Box3().setFromObject(built.children[0]);
+  // the girder's top over its underside, the feet in the hollow's floor
+  expect(box.max.y).toBeGreaterThan(107);
+  expect(box.min.y).toBeLessThan(86);
+  expect(box.min.y).toBeGreaterThan(85);
+  // the portals' legs stand either side of the cars' way
+  expect(box.max.z - box.min.z).toBeGreaterThan(6);
+});

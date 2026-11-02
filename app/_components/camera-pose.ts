@@ -556,11 +556,18 @@ export function createCameraPose(
    * clear of it — beside a building rather than in it on foot, over its
    * roof in the air.
    */
-  const targetOf = (viewpoint: ViewpointGeometry): FlightTarget => {
+  const targetOf = (
+    viewpoint: ViewpointGeometry,
+    ground?: number
+  ): FlightTarget => {
     const { x, y } = viewpoint.epsg;
     const w = epsgToWorld(x, y, offset);
     const { pos } = clearOf(
-      { x: w.x, y: groundAt(x, y) + viewpoint.aboveGround, z: w.z },
+      {
+        x: w.x,
+        y: (ground ?? groundAt(x, y)) + viewpoint.aboveGround,
+        z: w.z,
+      },
       viewpoint.mode === "walk"
     );
     return {
@@ -849,13 +856,13 @@ export function createCameraPose(
     },
     flyToViewpoint: (
       viewpoint,
-      { lookAround = false, onProgress, pace } = {}
+      { ground, lookAround = false, onProgress, pace } = {}
     ) => {
       endFollow();
       // Fly during the glide so the ground clamp can't fight the vertical arc;
       // pendingMode restores walk (and snaps to the ground) once it settles.
       settle("fly");
-      const seconds = flight.start(targetOf(viewpoint), glideFloor, {
+      const seconds = flight.start(targetOf(viewpoint, ground), glideFloor, {
         onProgress,
         pace,
       });
