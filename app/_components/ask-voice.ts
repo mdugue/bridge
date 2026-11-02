@@ -7,6 +7,7 @@
  * neither, the card shows neither.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { SpokenPart, SpokenTone } from "@/lib/city/spoken";
 import { STORAGE_KEYS } from "./storage-keys";
 
 // reason: SpeechRecognition is not in TypeScript's DOM library yet; the
@@ -189,12 +190,16 @@ function germanVoices(): SpeechSynthesisVoice[] {
     .sort((a, b) => voiceRank(b) - voiceRank(a));
 }
 
+/** The voice that reads where the visitor picked none: Chrome's online
+ *  German, the one that reads a story best (the privacy page says the
+ *  text goes to Google with it). */
+const DEFAULT_VOICE = "Google Deutsch";
+
 /**
  * The voice to read with: the visitor's choice where the device has it,
- * else the best one on the device — an online voice only by choice (the
- * privacy page: nothing leaves the device unless the visitor picks one).
- * Null where the device has only online voices and none was picked: then
- * nothing is read, since the browser's own default may be online.
+ * else Google Deutsch where the browser has it, else the best one on the
+ * device. Null where the device has only other online voices and none
+ * was picked: then nothing is read until one is.
  */
 function chosenVoice(
   chosen: string | null,
@@ -202,6 +207,7 @@ function chosenVoice(
 ): SpeechSynthesisVoice | null {
   return (
     voices.find((v) => v.name === chosen) ??
+    voices.find((v) => v.name === DEFAULT_VOICE) ??
     voices.find((v) => v.localService) ??
     null
   );
@@ -228,12 +234,62 @@ export function sentences(text: string): string[] {
   );
 }
 
-/** The pace the voices read at: a touch slower than their default, which
- *  hurries a told story. */
-const RATE = 0.94;
+/**
+ * The voice's settings for a tone: its pace (a touch slower than the
+ * voices' default, which hurries a told story), its pitch, and the pause
+ * (ms) after its last sentence. The browser's speech API knows no
+ * emphasis of single words (SSML); pace, pitch and pauses are what it
+ * has.
+ */
+const TONES: Record<
+  SpokenTone,
+  { pause: number; pitch: number; rate: number }
+> = {
+  title: { rate: 0.84, pitch: 1.08, pause: 750 },
+  story: { rate: 0.94, pitch: 1, pause: 600 },
+  label: { rate: 0.88, pitch: 0.92, pause: 350 },
+  aside: { rate: 0.94, pitch: 0.96, pause: 600 },
+};
+/** The breath between two sentences of one part (ms). */
+const SENTENCE_PAUSE = 120;
+
+/** One utterance as it is queued: its words, its tone, the wait after. */
+export interface SpokenLine {
+  pause: number;
+  pitch: number;
+  rate: number;
+  text: string;
+}
+
+/** About how many characters a German voice says a second at rate 1. */
+const CHARS_PER_SECOND = 13;
+
+/** How long a line may take before its end counts as lost (ms): half as
+ *  long again as a voice would need, and two seconds more. */
+export function lineDeadline(line: { rate: number; text: string }): number {
+  const speaking = (line.text.length / (CHARS_PER_SECOND * line.rate)) * 1000;
+  return Math.round(speaking * 1.5 + 2000);
+}
+
+/** The parts as the voice reads them: sentence by sentence, each with
+ *  its tone's pace and pitch, a longer pause after a part's last one. */
+export function spokenLines(parts: readonly SpokenPart[]): SpokenLine[] {
+  return parts.flatMap((part) => {
+    const tone = TONES[part.tone];
+    const said = sentences(speakable(part.text));
+    return said.map((text, i) => ({
+      text,
+      rate: tone.rate,
+      pitch: tone.pitch,
+      pause: i === said.length - 1 ? tone.pause : SENTENCE_PAUSE,
+    }));
+  });
+}
 
 export interface Speech {
   speak: (text: string) => void;
+  /** reads a told text part by part, each in its tone */
+  speakParts: (parts: readonly SpokenPart[]) => void;
   stop: () => void;
   supported: boolean;
   /** the German voices the device offers, the best first */
@@ -271,30 +327,90 @@ export function useSpeech(): Speech {
     speechSynthesis.addEventListener("voiceschanged", list);
     return () => speechSynthesis.removeEventListener("voiceschanged", list);
   }, [supported]);
+  // The lines are spoken one after the other, each after the last one's
+  // end and its pause: the queue of the speech API has no pauses. A new
+  // text or a stop bumps the run, and what an old run had planned stops.
+  const run = useRef(0);
+  const wait = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // the utterance speaking, held: Chrome may drop its end event otherwise
+  const speaking = useRef<SpeechSynthesisUtterance | null>(null);
   const stop = useCallback(() => {
+    run.current += 1;
+    if (wait.current !== null) {
+      clearTimeout(wait.current);
+      wait.current = null;
+    }
+    speaking.current = null;
     if (supported) {
       speechSynthesis.cancel();
     }
   }, [supported]);
-  const speak = useCallback(
-    (text: string) => {
-      const words = speakable(text);
+  const speakParts = useCallback(
+    (parts: readonly SpokenPart[]) => {
       const voice = chosenVoice(chosen, voices);
-      if (!(voice && words)) {
+      const lines = spokenLines(parts);
+      if (!(voice && lines.length > 0)) {
         return;
       }
-      speechSynthesis.cancel();
-      for (const sentence of sentences(words)) {
-        const utterance = new SpeechSynthesisUtterance(sentence);
+      stop();
+      const mine = run.current;
+      const say = (i: number) => {
+        const line = lines[i];
+        if (!line || run.current !== mine) {
+          return;
+        }
+        const utterance = new SpeechSynthesisUtterance(line.text);
         utterance.lang = voice.lang;
-        utterance.rate = RATE;
+        utterance.rate = line.rate;
+        utterance.pitch = line.pitch;
         utterance.voice = voice;
+        // once per line: a browser may send both an error and an end
+        let done = false;
+        let watch: ReturnType<typeof setTimeout> | null = null;
+        const next = () => {
+          if (done) {
+            return;
+          }
+          done = true;
+          if (watch !== null) {
+            clearTimeout(watch);
+          }
+          if (run.current === mine) {
+            wait.current = setTimeout(() => say(i + 1), line.pause);
+          }
+        };
+        utterance.onend = next;
+        // a line the voice could not say does not end the reading
+        utterance.onerror = next;
+        // An end that never comes (Chrome's online voices drop it, or hang
+        // with `speaking` on): past its time (`lineDeadline`) a silent voice
+        // has finished the line; one still busy gets that time once more,
+        // then it is stopped, so the next line is heard.
+        const late = lineDeadline(line);
+        const check = (again: boolean) => {
+          if (done || run.current !== mine) {
+            return;
+          }
+          if (again && (speechSynthesis.speaking || speechSynthesis.pending)) {
+            watch = setTimeout(() => check(false), late);
+            return;
+          }
+          speechSynthesis.cancel();
+          next();
+        };
+        watch = setTimeout(() => check(true), late);
+        speaking.current = utterance;
         speechSynthesis.speak(utterance);
-      }
+      };
+      say(0);
     },
     // the first list arrives late: a text asked for before it is read
     // once the voices are there (the caller's effect runs again)
-    [chosen, voices]
+    [chosen, voices, stop]
+  );
+  const speak = useCallback(
+    (text: string) => speakParts([{ text, tone: "story" }]),
+    [speakParts]
   );
   const setVoice = useCallback((name: string) => {
     setChosen(name);
@@ -315,8 +431,16 @@ export function useSpeech(): Speech {
     [voices, chosen]
   );
   return useMemo(
-    () => ({ speak, stop, supported, voices: choices, voice, setVoice }),
-    [speak, stop, supported, choices, voice, setVoice]
+    () => ({
+      speak,
+      speakParts,
+      stop,
+      supported,
+      voices: choices,
+      voice,
+      setVoice,
+    }),
+    [speak, speakParts, stop, supported, choices, voice, setVoice]
   );
 }
 

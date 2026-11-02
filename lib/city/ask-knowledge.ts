@@ -127,6 +127,21 @@ function buildingHit(b: WissenBuilding): KnowledgeHit {
   };
 }
 
+/** The entry an id names (a landmark's Q-id, a monument's, a Building's
+ *  `gml:id`), as the tools return it; null for an id the twin lacks. */
+export function hitOf(k: Knowledge, id: string): KnowledgeHit | null {
+  const lm = k.index.landmarks.find((l) => l.id === id);
+  if (lm) {
+    return landmarkHit(k, lm);
+  }
+  const m = k.monuments.find((x) => x.id === id);
+  if (m) {
+    return monumentHit(m);
+  }
+  const b = k.buildings.find((x) => x.id === id);
+  return b ? buildingHit(b) : null;
+}
+
 /**
  * Landmarks, monuments and buildings whose name or address holds every
  * word, the most notable first; a building that draws a found landmark

@@ -24,6 +24,8 @@ const NOT_A_BAKE: Record<string, string> = {
   "lib/city/landmarks.ts": "the tileset's extras, built uncached every run",
   "lib/city/valley-fog.ts": "the tileset's extras, built uncached every run",
   "lib/city/walks.ts": "the walks' bundle, published uncached every run",
+  "lib/city/ask-knowledge.ts":
+    "the walks' places, read from the Stadtwissen uncached every run",
 };
 
 /** What the plumbing (`KEY_PLUMBING`) may import: no key walks it, so

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
   factsOf,
+  hitOf,
   knowledgeOf,
   nearKnowledge,
   searchKnowledge,
@@ -77,4 +78,11 @@ test("facts read Wikidata's statements with their sources", () => {
   expect(sourcesOf(K)).toEqual([
     { quelle: "OpenStreetMap", lizenz: "ODbL", vermerk: "© OSM" },
   ]);
+});
+
+test("an id names its entry as the tools return it", () => {
+  expect(hitOf(K, "Q1")?.name).toBe("Frauenkirche");
+  expect(hitOf(K, "m120_100")).toMatchObject({ name: "Luther", x: 120 });
+  expect(hitOf(K, "c")).toMatchObject({ name: "Neumarkt 1", h: 20 });
+  expect(hitOf(K, "nope")).toBeNull();
 });
