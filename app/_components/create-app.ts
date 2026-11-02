@@ -813,6 +813,8 @@ export interface CityWalkHandle {
   glideToSpot: (epsgX: number, epsgY: number) => void;
   /** Where the glide in progress lands (EPSG), or null. */
   getGlideTarget: () => { epsgX: number; epsgY: number } | null;
+  /** Stops a glide in progress where it is (a walk ended on the way). */
+  stopGlide: () => void;
   /** the site's extent in EPSG coordinates — the minimap frame */
   terrainBounds: TerrainBounds;
 }
@@ -1970,6 +1972,9 @@ async function bootApp(
     groundAt: (x, z) => siteGround.underWorld(x, z),
     hud: () => coverBoxes(renderer.domElement),
     phone: budget.tier === "mobile",
+    sunDirection,
+    sunShadow: sunRig.shadowMap,
+    reversedDepth: renderer.reversedDepthBuffer,
   });
   postStack.setOverlay(nameplate);
   cleanups.push(() => {
@@ -2184,14 +2189,21 @@ async function bootApp(
     }
     opts.onModeChange?.(mode);
   };
+  /** the pose's mode changes go unheard (a Modell state applied in Modell) */
+  let quietPose = false;
   const pose = createCameraPose(camera, {
     groundFloor: () => siteGround.floor() ?? 0,
     heightAt,
+    coarseHeightAt: (x, y) => groundPlate?.heightAt(x, y) ?? null,
     offset,
     resolveStep: collider.resolveStep,
     solids: collider,
     onFollowEnd: opts.onFollowEnd,
-    onModeChange: modeChanged,
+    onModeChange: (mode) => {
+      if (!quietPose) {
+        modeChanged(mode);
+      }
+    },
     onPose: (p) => {
       if (!rig?.owns()) {
         opts.onPose?.(p);
@@ -4196,7 +4208,9 @@ async function bootApp(
     },
     // In Modell a place is where the picture is centred (plan 055).
     flyToViewpoint: (view, glide) => {
-      if (viewMode === "model") {
+      // the rig's own phase: the view mode can lag it (a snapshot's
+      // perspective settles to walk while Modell stays)
+      if (modelRig.staying()) {
         modelRig.centreOn(vantageTarget(view));
         glide?.onProgress?.(1);
         return 0;
@@ -4244,6 +4258,7 @@ async function bootApp(
         ? modelRig.centreOn(groundPoint(x, y))
         : pose.glideToSpot(x, y),
     getGlideTarget: pose.getGlideTarget,
+    stopGlide: pose.cancelGlide,
     getPose: () => {
       const hud = modelRig.hud();
       if (!hud) {
@@ -4272,7 +4287,14 @@ async function bootApp(
       if (!model) {
         modelRig.exitNow();
       }
-      pose.applyCameraState(perspective);
+      // a Modell state's perspective settles walk or fly, which is not the
+      // mode shown: unheard, so the HUD and Modell's programs stay put
+      quietPose = model !== undefined && modelRig.staying();
+      try {
+        pose.applyCameraState(perspective);
+      } finally {
+        quietPose = false;
+      }
       if (model) {
         modelRig.applyState(model);
       }

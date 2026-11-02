@@ -94,6 +94,9 @@ export function objectLook(table: CityObjectTable, i: number): ObjectLook {
 
 /** One object of the asked building, as the scene read it. */
 export interface InquiryObject {
+  /** its lowest point (m, the data frame's height; absent where the scene
+   *  did not say) */
+  baseZ?: number;
   /** the Building itself (true) or one of its parts */
   building: boolean;
   /** eave height above the base (m) */

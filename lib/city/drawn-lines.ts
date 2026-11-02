@@ -251,7 +251,7 @@ export function drawnGroups(b: BuildingInquiry, epsg?: number): DrawnGroup[] {
   rows.row(roofColourRow(look, d, places));
   rows.row(
     has(OBJECT_SOURCE_DORMER) && {
-      label: "Gauben",
+      label: "Gauben und Schornsteine",
       value: "gezeichnet",
       method: "detected",
       source: "dom",
