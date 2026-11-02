@@ -51,6 +51,33 @@ export function loadFrontier(
   return nearest;
 }
 
+/**
+ * How far (m) the boot's ring reaches at full progress: about where the
+ * fine level gives way to the coarse one (tileset.ts
+ * `COARSE_TERRAIN_ERROR`), the farthest the details reach.
+ */
+export const BOOT_REACH_M = 2600;
+
+/**
+ * The boot's ring by progress: until the first load is through, the
+ * ring stands at least `progress` (0..1, what the HUD's last two stages
+ * report) of the way to `BOOT_REACH_M`. A site tile is 2 km wide, and the
+ * one under the camera stays pending until its own details are built —
+ * by the frontier alone the whole view would stay clay until then. The
+ * stream loads nearer first, so progress walks outward much as the
+ * frontier would at a finer grain. Null (nothing pending) stays null.
+ */
+export function bootFrontier(
+  frontier: number | null,
+  progress: number
+): number | null {
+  if (frontier === null) {
+    return null;
+  }
+  const p = Math.min(1, Math.max(0, progress));
+  return Math.max(frontier, p * BOOT_REACH_M);
+}
+
 /** A pending spell shorter than this (s) never brings the veil in. */
 export const VEIL_DELAY_S = 1.2;
 /** The ring's time constant (s) as it eases to a new frontier. */

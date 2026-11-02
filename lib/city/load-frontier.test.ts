@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import {
+  BOOT_REACH_M,
   BOOT_VEIL,
+  bootFrontier,
   distanceToBounds,
   loadFrontier,
   NO_VEIL,
@@ -84,4 +86,13 @@ test("a top-up while the veil lifts waits too, and keeps lifting", () => {
   expect(short.radius).toBe(VEIL_HORIZON_M);
   const long = run(lifting, 1500, VEIL_DELAY_S + 0.1);
   expect(long.radius).toBeCloseTo(1500, 0);
+});
+
+test("the boot's ring walks out with progress, never inside the truth", () => {
+  // the tile underfoot pending: the frontier alone would hold at 0
+  expect(bootFrontier(0, 0)).toBe(0);
+  expect(bootFrontier(0, 0.5)).toBe(BOOT_REACH_M / 2);
+  expect(bootFrontier(2000, 0.1)).toBe(2000);
+  expect(bootFrontier(null, 0.5)).toBeNull();
+  expect(bootFrontier(0, 2)).toBe(BOOT_REACH_M);
 });
