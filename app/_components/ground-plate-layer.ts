@@ -30,6 +30,7 @@ import {
   platePositions,
 } from "@/lib/city/ground-plate";
 import { landcoverSrgb, srgbToLinear } from "@/lib/city/landcover";
+import { plateHeightAt } from "@/lib/city/plate-height";
 import { fetchOptionalBinary } from "./fetch-optional";
 import { disposeObject3D, sceneMaterial } from "./three-utils";
 
@@ -38,6 +39,8 @@ export interface GroundPlate {
   /** Shows each tile's plate unless that tile has a terrain level on
    *  screen (`covered`: tile ids). */
   showUnder: (covered: ReadonlySet<string>) => void;
+  /** the plate's coarse ground (m) at EPSG (x, y); undefined off it */
+  heightAt: (x: number, y: number) => number | undefined;
   dispose: () => void;
 }
 
@@ -113,6 +116,7 @@ export function buildGroundPlate(
         mesh.visible = !covered.has(id);
       }
     },
+    heightAt: plateHeightAt(tiles, n),
     dispose: () => {
       group.removeFromParent();
       disposeObject3D(group);

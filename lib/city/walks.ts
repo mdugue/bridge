@@ -121,8 +121,9 @@ export interface WalkStop {
   mode?: MovementMode;
   /** the Stadtwissen entries it is about (Q-ids, Building ids) */
   refs?: string[];
-  /** the refs as the scene can pick them, set by the build from the
-   *  Stadtwissen (prepare-data.ts): the card makes their names buttons */
+  /** the refs as the scene can pick them, for the card's name buttons;
+   *  nothing sets them yet (the buttons come with Frag die Stadt, whose
+   *  build fills them from the Stadtwissen by `stopPlaces`) */
   places?: WalkPlace[];
   /** the photo the card shows above the text */
   photo?: WalkPhoto;
@@ -199,7 +200,8 @@ export function stopCamera(
 
 /** The stop's hour on the visitor's day (local time). */
 export function stopDate(stop: WalkStop, today: Date): Date {
-  const minutes = Math.round(stop.hour * 60);
+  // 23.995 stays on this day (23:59), not the next one's midnight
+  const minutes = Math.min(Math.round(stop.hour * 60), 24 * 60 - 1);
   return new Date(
     today.getFullYear(),
     today.getMonth(),

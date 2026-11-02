@@ -2156,6 +2156,7 @@ async function bootApp(
   const pose = createCameraPose(camera, {
     groundFloor: () => siteGround.floor() ?? 0,
     heightAt,
+    coarseHeightAt: (x, y) => groundPlate?.heightAt(x, y) ?? null,
     offset,
     resolveStep: collider.resolveStep,
     solids: collider,

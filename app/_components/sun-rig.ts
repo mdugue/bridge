@@ -776,6 +776,8 @@ export function createSunRig(
   const update = (date: Date, preview = false): SunState => {
     const d = sunDirectionWorld(date, latLng.lat, latLng.lng);
     dir.set(d.x, d.y, d.z);
+    // every step, unlike the light: the sky and the drawn shading follow
+    // smoothly, and nothing drawn from it is held to the shadow map
     sunDirectionOut?.copy(dir);
     const aboveHorizon = dir.y > 0;
     sunUp = aboveHorizon;

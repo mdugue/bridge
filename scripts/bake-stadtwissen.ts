@@ -221,14 +221,20 @@ export function monumentsOf(
   file: MonumentCollection | undefined
 ): WissenMonument[] {
   const out: WissenMonument[] = [];
+  const taken = new Map<string, number>();
   for (const f of file?.features ?? []) {
     const { name, kind, material, wikidata } = f.properties;
     const at = anchorOf(f.geometry);
     if (!(name && at)) {
       continue;
     }
+    // by the metre; a second monument in the same metre (a pair of
+    // plaques) takes a suffix, in the file's order
+    const base = `m${Math.round(at[0])}_${Math.round(at[1])}`;
+    const seen = (taken.get(base) ?? 0) + 1;
+    taken.set(base, seen);
     out.push({
-      id: `m${Math.round(at[0])}_${Math.round(at[1])}`,
+      id: seen === 1 ? base : `${base}_${seen}`,
       name,
       kind: kind ?? "",
       x: round1(at[0]),

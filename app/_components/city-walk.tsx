@@ -86,11 +86,6 @@ import {
 } from "./data-layers-panel";
 import { SceneSidebar } from "./scene-sidebar";
 import { WalkCard } from "./walk-player";
-/** A walk's glides take this much longer than a jump to a place: the
- *  stop's story starts on the way. */
-const WALK_PACE = 2.2;
-/** The visitor's day, read when a walk's stop is shown (not in a render). */
-const today = () => new Date();
 import { SidebarPace } from "./sidebar-pace";
 import {
   afterTask,
@@ -108,6 +103,12 @@ import { INITIAL_MINUTES, useSceneTime } from "./scene-time";
 import { useSite } from "./site-context";
 import { VirtualJoystick } from "./virtual-joystick";
 import { missingPrerequisite } from "./gpu-support";
+
+/** A walk's glides take this much longer than a jump to a place: the
+ *  stop's story starts on the way. */
+const WALK_PACE = 2.2;
+/** The visitor's day, read when a walk's stop is shown (not in a render). */
+const today = () => new Date();
 
 interface Props {
   /** The render budget the page was opened with (see scene-profile.ts) */
