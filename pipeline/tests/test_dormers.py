@@ -220,22 +220,22 @@ def face(x0: float, x1: float, z0: float, z1: float, depth: float = 20.0):
     return [(x0, 0, z0), (x1, 0, z1), (x1, depth, z1), (x0, depth, z0)]
 
 
-def test_a_steep_roof_under_a_shallow_one_is_a_mansard_whatever_lod2_calls_it():
+def test_a_steep_face_an_upper_roof_goes_on_from_is_a_mansards_whatever_lod2_calls_it():
     rise = 4 * math.tan(math.radians(70))
     lower = [face(0, 4, 100, 100 + rise), face(20, 16, 100, 100 + rise)]
     upper = [face(4, 10, 100 + rise, 102 + rise), face(16, 10, 100 + rise, 102 + rise)]
     # its parts may carry the faces: the building decides
-    city = city_of({"a": upper, "a-1": lower})
-    assert dormers.mansard_shaped(city, ["a", "a-1"]) == [True, True]
-    # a spire: the steep faces over the roof, not under it
+    assert len(dormers.mansard_flanks(city_of({"a": upper, "a-1": lower}))) == 2
+    # a spire: its steep faces meet at the tip, no roof goes on from there
     spire = [face(8, 10, 120, 140), face(12, 10, 120, 140)]
-    assert dormers.mansard_shaped(city_of({"t": upper + spire}), ["t"]) == [False]
-    # a flat roof with a lower wing: no steep face at all
-    flat = [face(0, 20, 120, 120), face(20, 30, 110, 110)]
-    assert dormers.mansard_shaped(city_of({"f": flat}), ["f"]) == [False]
+    assert dormers.mansard_flanks(city_of({"t": upper + spire})) == []
+    # a steep annex under a tall flat roof touches nothing at its top
+    annex = [face(30, 34, 100, 100 + rise), face(38, 34, 100, 100 + rise)]
+    hall = [face(0, 20, 130, 130)]
+    assert dormers.mansard_flanks(city_of({"h": hall + annex})) == []
     # a small steep sliver
-    sliver = [face(0, 1, 100, 103, depth=5)]
-    assert dormers.mansard_shaped(city_of({"s": upper + sliver}), ["s"]) == [False]
+    sliver = [face(0, 1, 100 + rise - 3, 100 + rise, depth=5)]
+    assert dormers.mansard_flanks(city_of({"s": upper + sliver})) == []
 
 
 def test_a_building_lod2_drew_too_high_as_a_whole_is_read_against_the_scan():

@@ -58,9 +58,9 @@ reproducible, but they can be wrong where the world does not fit the rule.
   stands on a flat roof in a row of others (masts on a platform roof).
   Where the whole building model lies evenly higher than the
   measurement (the Taschenbergpalais by 1.2 m), it is set onto it first.
-  A steep lower roof under a shallower upper one is a mansard, even where
-  the building model does not call it one; its dormers may stand on up
-  to 80°.
+  A steep roof face a shallower upper roof goes on from is a mansard,
+  even where the building model does not call it one; its dormers may
+  stand on up to 80°.
 - **Bridge superstructure:** what stands at least 3 m above the deck along
   the bridge's axis, for at least 25 m, becomes an arch or a truss.
 - **Assignments:** a shop from OpenStreetMap belongs to the building whose

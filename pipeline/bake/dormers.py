@@ -16,7 +16,7 @@ tree (canopy, cadastre, `TREE_CLEAR_M`), is read by where it stands
 (`kind_of`):
 
 - on a pitched roof (`MIN_SLOPE`–`MAX_SLOPE`; a mansard roof, LoD2's
-  `roofType` 3400 or one of that shape, `mansard_shaped`, up to
+  `roofType` 3400 or a lower face of that shape, `mansard_flanks`, up to
   `MANSARD_MAX_SLOPE`; the line of a ridge or a
   valley between two faces with them, `pitched_cells`) a dormer: its top
   `MIN_TOP_M`–`MAX_TOP_M` over the roof and under its object's ridge,
@@ -83,31 +83,34 @@ import math
 
 import numpy as np
 import shapely
+from rasterio.features import rasterize
 from scipy import ndimage as ndi
 from scipy.ndimage import map_coordinates
 
 from .common import Tile, feature, owns, write_geojson
-from .osm_buildings import footprints, root_of
-from .roof_colour import surface_rings
+from .osm_buildings import _lod2, footprints, root_of
+from .roof_colour import ring_slope, surface_rings
 from .structures import Surfaces
 
 MIN_SLOPE = 25.0
 MAX_SLOPE = 62.0
 # A mansard roof's lower face is steeper: its dormers stand on it up to
 # this slope (degrees). LoD2 may name the roof's form (`roofType`), but
-# Saxony's never does (its mansards are "9999", other): a building whose
-# roof has MANSARD_SHARE of its area in faces steeper than MAX_SLOPE, and
-# its other faces MANSARD_BREAK_M higher than those (the upper roof over
-# the steep lower one), is a mansard roof too (`mansard_shaped`). A tower's
-# spire stands over its roof, not under it.
+# Saxony's never does (its mansards are "9999", other), so the lower faces
+# are read from the LoD2 roof faces too (`mansard_flanks`): a face steeper
+# than MAX_SLOPE whose top edge an upper roof face (MAX_SLOPE or less)
+# goes on from — within MANSARD_BREAK_M in height and in plan —, where
+# such faces make MANSARD_SHARE and MANSARD_MIN_AREA_M2 of the building's
+# roof. A spire's faces meet at its tip, a step between two parts is a
+# wall, a steep annex under a tall flat roof touches nothing at its top.
+# Only those faces take the steeper cap and lose their seams (`seams`): on
+# the burned 1 m roof a step between two parts reads as a steep band (a
+# first, raster reading drew a dormer every metre along such edges in
+# München).
 MANSARD_MAX_SLOPE = 80.0
 MANSARD = "3400"
 MANSARD_SHARE = 0.15
-MANSARD_BREAK_M = 1.0
-# ... and at least this much of it (m²). Read from the LoD2 faces, not the
-# burned roof: a step between two parts reads as a steep band there (in
-# München a flat-roofed block with a lower wing drew a dormer every metre
-# along its edge).
+MANSARD_BREAK_M = 0.5
 MANSARD_MIN_AREA_M2 = 50.0
 # A building LoD2 drew as a whole over the surface model (the
 # Taschenbergpalais 1.2 m over it, its flat roofs too) has the surface
@@ -255,14 +258,32 @@ def slope_cap(s: Surfaces, polys: list[shapely.Geometry], forms: list[str | None
     return cap
 
 
+def flank_cells(s: Surfaces, flanks: list[shapely.Geometry]) -> np.ndarray:
+    """The cells a mansard's steep lower face covers (`mansard_flanks`)."""
+    shapes = [(f, 1) for f in flanks if not f.is_empty]
+    if not shapes:
+        return np.zeros(s.roof.shape, bool)
+    return rasterize(
+        shapes, out_shape=s.roof.shape, transform=s.field.transform, fill=0, dtype=np.uint8
+    ).astype(bool)
+
+
 def building_labels(s: Surfaces, polys: list[shapely.Geometry], groups: list[int]) -> np.ndarray:
     """Per cell the building (`groups`: each footprint's, from 1) whose
-    footprint covers it, 0 where none; a building's parts share its label."""
-    labels = np.zeros(s.roof.shape, np.int32)
-    for poly, group in zip(polys, groups, strict=True):
-        win = s.window(poly, 0)
-        if win is not None:
-            labels[win][s.mask(poly, win)] = group
+    footprint covers it — a building's parts share its label — and the
+    roof's cells past the footprints (the eaves) the nearest one's within
+    two cells; 0 elsewhere."""
+    shapes = [(p, g) for p, g in zip(polys, groups, strict=True) if not p.is_empty]
+    if not shapes:
+        return np.zeros(s.roof.shape, np.int32)
+    labels = rasterize(
+        shapes, out_shape=s.roof.shape, transform=s.field.transform, fill=0, dtype=np.int32
+    )
+    eaves = (labels == 0) & np.isfinite(s.roof)
+    if eaves.any():
+        dist, (ir, ic) = ndi.distance_transform_edt(labels == 0, return_indices=True)
+        near = eaves & (dist <= 2)
+        labels[near] = labels[ir[near], ic[near]]
     return labels
 
 
@@ -292,49 +313,54 @@ def shifts(dom: np.ndarray, roof: np.ndarray, slope: np.ndarray, labels: np.ndar
     return out
 
 
-def roof_faces(city: dict, oid: str) -> list[tuple[float, float, float]]:
-    """(area m², slope degrees, mean height) of each of the object's LoD2
-    roof faces."""
+def roof_faces(city: dict, oid: str) -> list[tuple[float, float, float, float, shapely.Geometry]]:
+    """(area m², slope degrees, lowest and highest height, plan) of each of
+    the object's LoD2 roof faces."""
     obj = city["CityObjects"].get(oid, {})
     scale = city.get("transform", {}).get("scale", [1, 1, 1])
     translate = city.get("transform", {}).get("translate", [0, 0, 0])
     vertices = city["vertices"]
+
+    def to_metres(i: int) -> tuple[float, float, float]:
+        v = vertices[i]
+        return tuple(float(v[k]) * scale[k] + translate[k] for k in range(3))
+
     out = []
-    for geometry in obj.get("geometry", []):
+    for geometry in _lod2(obj.get("geometry", [])):
         for ring in surface_rings(geometry, "RoofSurface"):
             if len(ring) < 3:
                 continue
-            p = np.asarray([vertices[i] for i in ring], float) * scale + translate
-            n = np.cross(p, np.roll(p, -1, axis=0)).sum(axis=0) / 2
-            area = float(np.linalg.norm(n))
-            if area > 0:
-                slope = math.degrees(math.acos(min(abs(n[2]) / area, 1.0)))
-                out.append((area, slope, float(p[:, 2].mean())))
+            p = np.asarray([to_metres(i) for i in ring])
+            plan = shapely.make_valid(shapely.Polygon(p[:, :2]))
+            slope = ring_slope(ring, to_metres)
+            area = plan.area / max(math.cos(math.radians(slope)), 1e-6)
+            if plan.area > 0:
+                out.append((area, slope, float(p[:, 2].min()), float(p[:, 2].max()), plan))
     return out
 
 
-def mansard_shaped(city: dict, ids: list[str]) -> list[bool]:
-    """Each object whether its building's LoD2 roof is a mansard's by its
-    faces (see MANSARD_SHARE): MANSARD_SHARE and MANSARD_MIN_AREA_M2 of its
-    roof steeper than MAX_SLOPE (up to MANSARD_MAX_SLOPE), the rest on
-    average MANSARD_BREAK_M higher than those faces."""
-    faces: dict[str, list[tuple[float, float, float]]] = {}
+def mansard_flanks(city: dict) -> list[shapely.Geometry]:
+    """The plans of the mansard roofs' steep lower faces (see
+    MANSARD_SHARE), every building's."""
+    faces: dict[str, list] = {}
     for oid in city["CityObjects"]:
         faces.setdefault(root_of(city, oid), []).extend(roof_faces(city, oid))
-
-    def shaped(fs: list[tuple[float, float, float]]) -> bool:
-        if not fs:
-            return False
-        a, s, z = (np.asarray(v) for v in zip(*fs, strict=True))
-        steep = (s > MAX_SLOPE) & (s <= MANSARD_MAX_SLOPE)
-        if a[steep].sum() < max(MANSARD_MIN_AREA_M2, MANSARD_SHARE * a.sum()) or steep.all():
-            return False
-        low = np.average(z[steep], weights=a[steep])
-        high = np.average(z[~steep], weights=a[~steep])
-        return bool(high >= low + MANSARD_BREAK_M)
-
-    roots = {r: shaped(fs) for r, fs in faces.items()}
-    return [roots.get(root_of(city, oid), False) for oid in ids]
+    out: list[shapely.Geometry] = []
+    for fs in faces.values():
+        upper = [f for f in fs if f[1] <= MAX_SLOPE]
+        lower = [
+            f
+            for f in fs
+            if MAX_SLOPE < f[1] <= MANSARD_MAX_SLOPE
+            and any(
+                abs(f[3] - u[2]) <= MANSARD_BREAK_M and f[4].distance(u[4]) <= MANSARD_BREAK_M
+                for u in upper
+            )
+        ]
+        area = sum(f[0] for f in lower)
+        if lower and area >= max(MANSARD_MIN_AREA_M2, MANSARD_SHARE * sum(f[0] for f in fs)):
+            out += [f[4] for f in lower]
+    return out
 
 
 def _shifted(a: np.ndarray, dr: int, dc: int) -> np.ndarray:
@@ -439,7 +465,13 @@ class Roofs:
     the roof's fit, its gradient, slope and seams, and the footprints."""
 
     def __init__(
-        self, tile: Tile, s: Surfaces, polys: list[shapely.Geometry], forms, groups: list[int]
+        self,
+        tile: Tile,
+        s: Surfaces,
+        polys: list[shapely.Geometry],
+        forms,
+        groups: list[int],
+        flanks: list[shapely.Geometry],
     ) -> None:
         f = s.field
         under = np.isfinite(s.roof)
@@ -449,16 +481,20 @@ class Roofs:
         # the surface model raised onto each building LoD2 drew too high as
         # a whole: what the fit, the tops and the falls read
         s = copy.copy(s)
-        s.dom = s.dom + shifts(s.dom, s.roof, self.slope, labels)[labels]
+        lift = shifts(s.dom, s.roof, self.slope, labels)[labels]
+        s.dom = s.dom + lift
+        s.above = s.above + lift
+        s.gap = s.gap + lift
         self.s = s
         inner = ndi.binary_erosion(under, iterations=1)
         raw = np.where(inner & np.isfinite(s.dom), s.dom - s.roof, np.nan)
         local = ndi.median_filter(np.nan_to_num(raw), size=FIT_M)
         fits = inner & (np.abs(local) < FIT_TOLERANCE_M)
-        cap = slope_cap(s, polys, forms)
+        on_flank = flank_cells(s, flanks)
+        cap = np.where(on_flank, MANSARD_MAX_SLOPE, slope_cap(s, polys, forms))
         fits &= self.slope <= cap
         self.excess = np.where(fits, raw - local, np.nan)
-        flank = (cap > MAX_SLOPE) & (self.slope > MAX_SLOPE) & (self.slope <= MANSARD_MAX_SLOPE)
+        flank = on_flank & (self.slope > MAX_SLOPE) & (self.slope <= MANSARD_MAX_SLOPE)
         self.seam = seams(s.roof, flank)
         # the roof's outermost cell measured: its eaves, a parapet's foot
         self.edge = inner & ~ndi.binary_erosion(inner, iterations=1)
@@ -549,17 +585,19 @@ def find(
     polys: list[shapely.Geometry],
     forms: list[str | None] | None = None,
     groups: list[int] | None = None,
+    flanks: list[shapely.Geometry] | None = None,
 ) -> list[dict]:
     """Every dormer and chimney the surface model shows on the tile's own
     roofs (see the module); `forms` each object's roof form
     (`roof_forms`), `groups` its building (`building_groups`; each its own
-    where not given)."""
+    where not given), `flanks` the mansards' lower faces (`mansard_flanks`)."""
     roofs = Roofs(
         tile,
         s,
         polys,
         forms or [None] * len(polys),
         groups or list(range(1, len(polys) + 1)),
+        flanks or [],
     )
     out: list[dict] = []
     level: list[bool] = []
@@ -803,12 +841,15 @@ def run(tile: Tile) -> None:
         return
     city = json.loads(city_path.read_text())
     ids, polys = footprints(city)
-    # a roof of a mansard's shape is one, whatever LoD2 calls it
-    forms = [
-        MANSARD if shaped else form
-        for form, shaped in zip(roof_forms(city, ids), mansard_shaped(city, ids), strict=True)
-    ]
-    found = find(tile, Surfaces(tile), ids, polys, forms, building_groups(city, ids))
+    found = find(
+        tile,
+        Surfaces(tile),
+        ids,
+        polys,
+        roof_forms(city, ids),
+        building_groups(city, ids),
+        mansard_flanks(city),
+    )
     write_geojson(out, found, tile.epsg, tile.credit)
     chimneys = sum(1 for f in found if f["properties"].get("k") == "chimney")
     print(f"{tile.id}: {len(found) - chimneys} dormers, {chimneys} chimneys")

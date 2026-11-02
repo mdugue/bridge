@@ -1500,10 +1500,12 @@ visual-variable codebook is in
   a surface over the roof may be its own dormers and eaves); until 2026-11-02 such a roof failed the fit and had no
   dormers at all. On a pitched roof (25–62°, a mansard to 80°) a dormer;
   a mansard is LoD2's `roofType` 3400 or, as Saxony never writes 3400,
-  a building whose LoD2 roof faces put ≥ 15 % and ≥ 50 m² of its area
-  over 62° and the other faces 1 m higher on average (an upper roof over
-  a steep lower one, not a spire over its roof; read from the faces, as
-  the burned roof reads a step between two parts as a steep band); the break between the two is no seam to the
+  read from the LoD2 roof faces: a face over 62° whose top edge a face of
+  62° or less goes on from (within 0.5 m in height and plan), where such
+  faces make ≥ 15 % and ≥ 50 m² of the building's roof; only those faces
+  take the 80° cap (a spire's faces meet at its tip, a steep annex under
+  a tall flat roof touches nothing at its top; read from the faces, as the
+  burned roof reads a step between two parts as a steep band); the break between the two is no seam to the
   dormers on the lower roof. A dormer: its top 0.9–3.5 m over the
   roof and under the object's ridge, compact, at most 8 m down the slope
   and as wide across it as it runs; dormers the 1 m cells join are parted
