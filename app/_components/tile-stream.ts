@@ -2130,10 +2130,15 @@ export class DressingPlugin {
     // the coarse levels' first: a third of the trees on every tile in view
     // before the full set on the nearest
     const rank = extras.dressing ? FINE_DRESSING_RANK : COARSE_DRESSING_RANK;
-    void this.turn(async () => {
+    // The lane holds the build only: the compile wait and the hanging run
+    // after it, so the next tile's build overlaps this one's compile
+    // (the compiles still take their turns, `compileInTurn`). Waiting on
+    // the compile inside the lane left it idle for up to COMPILE_WAIT_MS
+    // a tile.
+    void this.turn(async (): Promise<(() => Promise<void>) | undefined> => {
       const entry = this.dressed.get(scene);
       if (!entry || this.disposed) {
-        return; // the tile (or the stream) left before its turn
+        return undefined; // the tile (or the stream) left before its turn
       }
       streamTimings.since("dressing:queue-wait", queuedAt, extras.tileId);
       entry.aborter = new AbortController();
@@ -2165,42 +2170,45 @@ export class DressingPlugin {
           outcome = ended;
         })
         .catch(() => undefined);
-      await streamTimings.timed(
-        "dressing:compile",
-        () => withinCompileWait(compiled),
-        extras.tileId
-      );
-      built();
-      // Not before the renderer has recorded the tile's own content (see
-      // `loaded`): the dressing's materials are the scene's.
-      await this.loaded.get(scene);
-      // A dressing whose compile ran out of GPU memory stays off: the
-      // tile goes bare rather than the GPU further under. Nor does one
-      // whose tile left while a compile ran: its release waits for the
-      // compile (`compiles`), so its entry is still there.
-      if (
-        this.disposed ||
-        this.released.has(scene) ||
-        this.dressed.get(scene) !== entry ||
-        outcome === "out of memory"
-      ) {
-        // freed once its compile has ended (see `compiles`)
+      return async () => {
+        await streamTimings.timed(
+          "dressing:compile",
+          () => withinCompileWait(compiled),
+          extras.tileId
+        );
+        built();
+        // Not before the renderer has recorded the tile's own content (see
+        // `loaded`): the dressing's materials are the scene's.
+        await this.loaded.get(scene);
+        // A dressing whose compile ran out of GPU memory stays off: the
+        // tile goes bare rather than the GPU further under. Nor does one
+        // whose tile left while a compile ran: its release waits for the
+        // compile (`compiles`), so its entry is still there.
+        if (
+          this.disposed ||
+          this.released.has(scene) ||
+          this.dressed.get(scene) !== entry ||
+          outcome === "out of memory"
+        ) {
+          // freed once its compile has ended (see `compiles`)
+          compiled
+            .then(() => this.disposeFailed(disposeDressing(dressing), scene))
+            .catch(() => undefined);
+          return;
+        }
+        this.hangDressing(scene, entry, dressing);
+        // ...and one whose compile outlasted the wait and then ran out of
+        // memory comes down again
         compiled
-          .then(() => this.disposeFailed(disposeDressing(dressing), scene))
+          .then((ended) => {
+            if (ended === "out of memory") {
+              this.dropDressing(scene, entry, dressing);
+            }
+          })
           .catch(() => undefined);
-        return;
-      }
-      this.hangDressing(scene, entry, dressing);
-      // ...and one whose compile outlasted the wait and then ran out of
-      // memory comes down again
-      compiled
-        .then((ended) => {
-          if (ended === "out of memory") {
-            this.dropDressing(scene, entry, dressing);
-          }
-        })
-        .catch(() => undefined);
+      };
     }, rank)
+      .then((after) => after?.())
       .catch((err: unknown) => {
         // A dressing that fails leaves its tile bare, never the stream
         // stuck — but never silently: a builder's throw is a bug or a
