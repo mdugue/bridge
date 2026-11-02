@@ -720,8 +720,10 @@ outline's, each in its turn (`compileInTurn`).
   the cross-fades.
 - **Depth.** The letters stand 0.14 of a capital deep (`EXTRUDE_CAPS`):
   the plate's one geometry is drawn by ten meshes more behind the face
-  (six on a phone; one material, the layer a per-object uniform,
-  `onObjectUpdate`, that pushes the quads back), deepest first. A layer
+  (six on a phone; a returns material of their own, the layer a
+  per-object uniform, `onObjectUpdate`, that pushes the quads back),
+  far to near: deepest first, or the face first where the camera sees
+  the plate's back (no depth test sorts them). A layer
   draws the fill alone in the style's return colour, lit by the sun
   through the letter's outward normal — two more atlas reads give the
   field's gradient — and none of what the city hides.
@@ -732,7 +734,8 @@ outline's, each in its turn (`compileInTurn`).
   ray runs straight), follows the sun's ray from there to the plate's
   plane in the plate's own units and reads a silhouette mask there (R8,
   12 px per capital, ≤ 512 × 128, softened, laid out on the CPU from the
-  glyphs' coverage: `shadowMask`). So the letters shade a facade, a roof
+  glyphs' coverage over the rectangle the quads cover, a comic box's
+  tilted corners too: `shadowMask`). So the letters shade a facade, a roof
   or the ground alike; none with the sun down.
 - **Occlusion** per pixel: the fragment's view depth against the scene's
   (the scene target's depth texture through `view-lens.ts`, whose
