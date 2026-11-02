@@ -169,6 +169,7 @@ import {
   flatTownHouse,
   GROUND_REACH_M,
   TALL_STOREY_M,
+  measuredAxes,
   wallRises,
   dormerWindows,
   type WindowHost,
@@ -2815,6 +2816,7 @@ function facadeOf(
     doors?: readonly DoorFeature[];
     plinths?: readonly PlinthFeature[];
     shopfronts?: readonly ShopfrontWall[];
+    windows?: readonly WindowWall[];
   },
   reach: (object: number) => number,
   rises?: Parameters<typeof facadeAttribute>[4],
@@ -2870,7 +2872,14 @@ function facadeOf(
           ? { base: o.baseZ, eave: o.baseZ + o.eaveH }
           : undefined;
       },
-    }
+    },
+    // the walls whose axes the drives placed (window_axes.py)
+    measuredAxes(
+      onWalls.windows ?? [],
+      index,
+      (i) => baked.objects[i]?.windows,
+      baked.offset
+    )
   );
   // a wall of no length has no window (a dormer's cheek)
   for (const v of blind) {

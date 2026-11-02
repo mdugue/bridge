@@ -57,7 +57,7 @@ from pathlib import Path
 
 import numpy as np
 import shapely
-from pyproj import Transformer
+from pyproj import Proj, Transformer
 
 from .common import Tile
 from .net import _request
@@ -77,6 +77,9 @@ MIN_DIST_M = 5.0  # closer, the wall is too oblique at its ends
 MIN_COS = 0.5  # at most 60° off the wall's normal
 PER_SEQ = 2
 MAX_SEQ = 3
+# the traits' fetch: the window axes' place is the mean of the drives that
+# saw the wall (window_axes.py), so as many as there are, up to this
+MAX_SEQ_TRAITS = 6
 
 BUSY_CALM, BUSY_BUSY = 0.35, 0.7
 DARK_LOW, DARK_HIGH = 0.15, 0.25
@@ -106,8 +109,28 @@ def legacy_cache_path(tile: Tile) -> Path:
 
 def traits_path(tile: Tile) -> Path:
     """The trait profiles (facade_traits.py), measured on the same
-    panoramas in a fetch of their own: the v1/v2 caches stay as they are."""
-    return cache_dir(tile) / f"{tile.id}.v3.jsonl"
+    panoramas in a fetch of their own: the v1/v2 caches stay as they are.
+    v4 turns each pose onto the grid (`grid_convergence`) and adds the
+    jamb profile the drives are registered by (windows.py)."""
+    return cache_dir(tile) / f"{tile.id}.v4.jsonl"
+
+
+def grid_convergence(epsg: int, x: float, y: float) -> float:
+    """pyproj's meridian convergence γ (rad) at (x, y): the angle from
+    true north to grid north, clockwise positive (Dresden −0.98°: grid
+    north lies west of true north; München +1.9°). Mapillary's rotations
+    are in a local east-north-up frame, the walls in UTM: 0.25 m along a
+    wall 15 m away."""
+    lon, lat = Transformer.from_crs(epsg, 4326, always_xy=True).transform(x, y)
+    return math.radians(Proj(f"EPSG:{epsg}").get_factors(lon, lat).meridian_convergence)
+
+
+def onto_grid(rot: np.ndarray, gamma: float) -> np.ndarray:
+    """A world → camera rotation in east-north-up as one from the grid:
+    a grid vector is first turned clockwise by γ (`grid_convergence`) into
+    east-north-up — grid north becomes (sin γ, cos γ)."""
+    c, s = math.cos(gamma), math.sin(gamma)
+    return rot @ np.array([[c, s, 0.0], [-s, c, 0.0], [0.0, 0.0, 1.0]])
 
 
 def measured_path(tile: Tile) -> Path:
@@ -179,7 +202,9 @@ def walls(city: dict, min_len: float = MIN_WALL_M, min_eave: float = MIN_EAVE_M)
     return out
 
 
-def candidates(wall: dict, images: list[dict], pos: np.ndarray, ptree, ftree) -> dict:
+def candidates(
+    wall: dict, images: list[dict], pos: np.ndarray, ptree, ftree, max_seq: int = MAX_SEQ
+) -> dict:
     """The images that see `wall` well, by sequence: within NEAR_M, at least
     MIN_DIST_M away, at most 60° off its normal, no other footprint in the
     line of sight; the most frontal and closest first, PER_SEQ of each of
@@ -206,7 +231,7 @@ def candidates(wall: dict, images: list[dict], pos: np.ndarray, ptree, ftree) ->
         seq = images[i]["sequence"]
         if len(by_seq[seq]) < PER_SEQ:
             by_seq[seq].append(i)
-    seqs = sorted(by_seq, key=lambda q: -len(by_seq[q]))[:MAX_SEQ]
+    seqs = sorted(by_seq, key=lambda q: -len(by_seq[q]))[:max_seq]
     return {q: by_seq[q] for q in seqs}
 
 
@@ -226,7 +251,7 @@ def panoramas(images: list[dict], epsg: int) -> tuple[list[dict], np.ndarray]:
     return keep, pos
 
 
-def plan(city: dict, images: list[dict], epsg: int) -> dict[str, dict]:
+def plan(city: dict, images: list[dict], epsg: int, max_seq: int = MAX_SEQ) -> dict[str, dict]:
     """Per image id: its sequence, position and the walls it is to be
     measured on."""
     ws = walls(city)
@@ -236,7 +261,7 @@ def plan(city: dict, images: list[dict], epsg: int) -> dict[str, dict]:
     ptree = shapely.STRtree(shapely.points(pos))
     jobs: dict[str, dict] = {}
     for w in ws:
-        for seq, idx in candidates(w, keep, pos, ptree, ftree).items():
+        for seq, idx in candidates(w, keep, pos, ptree, ftree, max_seq).items():
             for i in idx:
                 o = keep[i]
                 job = jobs.setdefault(
@@ -500,7 +525,7 @@ def measure_image(job: dict) -> dict:
     finally:
         if ours:
             path.unlink(missing_ok=True)
-    rot = rotation_matrix(job["rot"])
+    rot = onto_grid(rotation_matrix(job["rot"]), job.get("gamma", 0.0))
     x, y = job["xy"]
     out = []
     for w in job["walls"]:
@@ -571,8 +596,17 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
         _images_path(tile),
         lambda: _search_tile(tile, "images", {"fields": IMAGE_FIELDS, "is_pano": "true"}, NEAR_M),
     )
-    jobs = plan(json.loads(tile.cityjson.read_text()), images, tile.epsg)
+    jobs = plan(
+        json.loads(tile.cityjson.read_text()),
+        images,
+        tile.epsg,
+        MAX_SEQ_TRAITS if kind == "traits" else MAX_SEQ,
+    )
     out = traits_path(tile) if kind == "traits" else cache_path(tile)
+    x0, y0, x1, y1 = tile.bounds
+    # the poses turned onto the grid only in the traits cache (v4): the
+    # facades cache keeps its measurements as they were taken
+    gamma = grid_convergence(tile.epsg, (x0 + x1) / 2, (y0 + y1) / 2) if kind == "traits" else 0.0
     done = _done(out)
     todo = sorted(set(jobs) - done)
     print(f"{tile.id}: {len(jobs)} panoramas see its walls, {len(todo)} to measure ({kind})")
@@ -602,6 +636,7 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
                     "scratch": str(scratch),
                     "source": source,
                     "kind": kind,
+                    "gamma": gamma,
                 }
                 for i in batch
             ]
