@@ -439,7 +439,10 @@ async function recordStands(site: SiteId): Promise<number> {
       }
     }
   }
-  writeFileSync(file, `${JSON.stringify(provenance, null, 2)}\n`);
+  // nothing new: the hand-formatted file stays as it is
+  if (written > 0) {
+    writeFileSync(file, `${JSON.stringify(provenance, null, 2)}\n`);
+  }
   return written;
 }
 

@@ -37,11 +37,16 @@ current ones into the tiles that record none, right after a fetch.
    any file already there, so first move the changed product's files of
    those tiles aside (the committed `data/<site>/dgm/dgm1_<tile>_tiff/`,
    `data/<site>/cityjson/lod2_<tile>.city.json`, or the raw ones under
-   `data/_raw/`), then `bun run fetch <site> <tile…>` (plus `--lsc` where
-   the provider has it). A download that comes back byte for byte the
-   same is no new data: report it, record nothing. Then bake the whole
-   site, `bun run bake <site>` — steps read their neighbours across a
-   seam, so a tile alone leaves the seams stale — `bun run test:pipeline`,
+   `data/_raw/`), then fetch the whole site, `bun run fetch <site>` (plus
+   `--lsc` where its provenance names the laser scan): a fresh container
+   holds no raw inputs, and a step without them rewrites its committed
+   output with less (hedges without the scan, lamps without their
+   measured heights). A download of the changed tiles that comes back
+   byte for byte the same is no new data: report it, record nothing.
+   Then bake the whole site, `bun run bake <site>` — steps read their
+   neighbours across a seam, so a tile alone leaves the seams stale. A
+   bake that prints „skipping“ for a missing input is not a re-bake: no
+   PR, a line in the report. Then `bun run test:pipeline`,
    `bun run verify`, then update `data/<site>/provenance.json` (the new
    `Stand` and the date; after a new Basis-DLM, its `lastModified` day
    under `geosn["Basis-DLM"]`, which the check compares against) and the guide's dataset table in both languages.
