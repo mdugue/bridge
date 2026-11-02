@@ -17,8 +17,12 @@
  * It downloads no data and changes nothing: it prints a report (German
  * Markdown, or JSON) for the scheduled task to turn into an issue or a
  * re-bake. Exit code 0 whatever it finds; 2 on a usage error.
+ *
+ * `--record` instead writes the editions the service names into the
+ * provenance of tiles that record none (a Saxon site's per-tile `Stand`),
+ * so that the next edition is a finding: run it right after a fetch.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { siteExtentOf } from "../lib/city/site-extent";
 import { tileIdOf } from "../lib/city/site";
@@ -156,8 +160,6 @@ export function httpDay(header: string | null): string | null {
 }
 
 interface Provenance {
-  /** when the provider products were fetched: its first day counts */
-  retrieved?: string;
   geosn?: Record<
     string,
     { lastModified?: string; tiles?: Record<string, { stand?: string }> }
@@ -259,25 +261,6 @@ function provenanceOf(site: SiteId): Provenance | null {
     : null;
 }
 
-/**
- * A `Stand` published after the products were fetched (`retrieved`), for
- * a tile whose own edition no record holds: what was fetched cannot be it.
- * A year-only stand counts only from the year after.
- */
-export function newerThanFetch(
-  retrieved: string | undefined,
-  current: string
-): boolean {
-  const fetched = retrieved?.match(/\b\d{4}-\d\d-\d\d\b/)?.[0];
-  if (!fetched) {
-    return false;
-  }
-  const edition = standEdition(current);
-  return edition.length === 4
-    ? edition > fetched.slice(0, 4)
-    : edition > fetched;
-}
-
 /** One product's editions over a site: what is new, what is unrecorded. */
 function productFindings(
   site: SiteId,
@@ -285,8 +268,7 @@ function productFindings(
   stands: Map<string, string>
 ): Finding[] {
   const config = SITES[site];
-  const provenance = provenanceOf(site);
-  const record = provenance?.geosn?.[product]?.tiles;
+  const record = provenanceOf(site)?.geosn?.[product]?.tiles;
   const out: Finding[] = [];
   // the editions no record holds: one line per edition, not one a tile
   const unrecorded = new Map<string, number>();
@@ -303,13 +285,6 @@ function productFindings(
         kind: "edition",
         act: true,
         text: `${product} ${tile}: neuer Stand ${current} (eingecheckt: ${recorded})`,
-      });
-    } else if (!recorded && newerThanFetch(provenance?.retrieved, current)) {
-      out.push({
-        site,
-        kind: "edition",
-        act: true,
-        text: `${product} ${tile}: neuer Stand ${current} (nach dem Abruf ${provenance?.retrieved?.slice(0, 10)})`,
       });
     } else if (!recorded) {
       unrecorded.set(current, (unrecorded.get(current) ?? 0) + 1);
@@ -433,6 +408,41 @@ export function report(findings: readonly Finding[], now: Date): string {
   ].join("\n");
 }
 
+/**
+ * Writes the service's current `Stand` into each tile of `site` whose
+ * provenance records none; returns how many it wrote.
+ */
+async function recordStands(site: SiteId): Promise<number> {
+  const file = join(ROOT, "data", site, "provenance.json");
+  const config = SITES[site];
+  if (config.provider.id !== "sn" || !existsSync(file)) {
+    return 0;
+  }
+  const provenance = JSON.parse(readFileSync(file, "utf8")) as Provenance &
+    Record<string, unknown>;
+  const extent = siteExtentOf(config);
+  let written = 0;
+  for (const [product, layer] of Object.entries(SN_LAYERS)) {
+    const stands = await snStands(extent, layer);
+    if (stands instanceof Error) {
+      throw stands;
+    }
+    const geosn = (provenance.geosn ??= {});
+    const entry = (geosn[product] ??= {});
+    const tiles = (entry.tiles ??= {});
+    for (const cell of config.tiles) {
+      const tile = tileIdOf(config, cell);
+      const current = stands.get(snKachel(cell));
+      if (current && !tiles[tile]?.stand) {
+        tiles[tile] = { ...tiles[tile], stand: current };
+        written++;
+      }
+    }
+  }
+  writeFileSync(file, `${JSON.stringify(provenance, null, 2)}\n`);
+  return written;
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const json = args.includes("--json");
@@ -446,6 +456,12 @@ async function main() {
   const sites = (asked.length > 0 ? asked : Object.keys(SITES)).filter((s) =>
     existsSync(join(ROOT, "data", s, "provenance.json"))
   ) as SiteId[];
+  if (args.includes("--record")) {
+    for (const site of sites) {
+      process.stdout.write(`${site}: ${await recordStands(site)} Stand(s)\n`);
+    }
+    return;
+  }
   const now = new Date();
   const providers = new Set(sites.map((s) => SITES[s].provider.id));
   const parts = await Promise.all([

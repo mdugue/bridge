@@ -20,7 +20,7 @@ or `bun scripts/prepare-sites.ts` — without arguments: with one site it
 prunes the others' `public/data`).
 
 ```bash
-bun scripts/osm-gaps.ts dresden            # all committed sites in turn
+bun scripts/osm-gaps.ts dresden            # one site: run it for each
 bun scripts/osm-gaps.ts dresden --top 30
 ```
 

@@ -186,11 +186,14 @@ export function newestIn<T extends PanoramaxItem & { x: number; y: number }>(
   return best;
 }
 
+/** Cells the service may fail on in a row before the run gives up. */
+const FAILS_IN_A_ROW = 5;
+
 /**
- * One cell's photos since 2023 (a page: a cell rarely holds more). A cell
- * the service fails on is skipped, not the run: the next cell is asked.
+ * One cell's photos since 2023 (a page: a cell rarely holds more), or
+ * null where the service fails on it: that cell is skipped, not the run.
  */
-async function searchCell(bbox: number[]): Promise<PanoramaxItem[]> {
+async function searchCell(bbox: number[]): Promise<PanoramaxItem[] | null> {
   try {
     const r = await fetch(
       `${API}/search?bbox=${bbox.join(",")}&limit=200&datetime=2023-01-01T00:00:00Z/..`,
@@ -198,12 +201,12 @@ async function searchCell(bbox: number[]): Promise<PanoramaxItem[]> {
     );
     if (!r.ok) {
       process.stderr.write(`Panoramax: HTTP ${r.status}, Zelle übersprungen\n`);
-      return [];
+      return null;
     }
     return ((await r.json()) as { features: PanoramaxItem[] }).features;
   } catch (error) {
     process.stderr.write(`Panoramax: ${String(error)}, Zelle übersprungen\n`);
-    return [];
+    return null;
   }
 }
 
@@ -228,8 +231,10 @@ async function pickPhotos(
 }> {
   const picked: (PanoramaxItem & { x: number; y: number })[] = [];
   let looked = 0;
+  let failed = 0;
   for (const cell of cells) {
-    if (picked.length >= n) {
+    // a service that keeps failing is down: the run ends with what it has
+    if (picked.length >= n || failed >= FAILS_IN_A_ROW) {
       break;
     }
     const bbox = lonLatBox(epsg, cell);
@@ -237,7 +242,9 @@ async function pickPhotos(
       continue;
     }
     looked++;
-    const items = (await searchCell(bbox)).flatMap((item) => {
+    const found = await searchCell(bbox);
+    failed = found ? 0 : failed + 1;
+    const items = (found ?? []).flatMap((item) => {
       const [lon, lat] = item.geometry.coordinates;
       const p = latLngToUtm(epsg, lat, lon);
       return p ? [{ ...item, ...p }] : [];
@@ -265,10 +272,11 @@ async function main() {
     );
   }
   const epsg = site.provider.epsg;
+  // twice as many as asked: a pair without ground or photo is replaced
   const { picked, looked } = await pickPhotos(
     epsg,
     cellsInOrder(siteExtentOf(site), seed),
-    n
+    2 * n
   );
   const heightAt = await siteDgm(site, (tif, tfw) =>
     readDgmFile(tif, tfw, "native")
@@ -286,8 +294,11 @@ async function main() {
   const photos = join(ROOT, "street-photos", site.id);
   mkdirSync(photos, { recursive: true });
   mkdirSync(join(ROOT, "shots"), { recursive: true });
-  const pairs = [];
-  for (const [i, item] of picked.entries()) {
+  const pairs: Record<string, string | boolean>[] = [];
+  for (const item of picked) {
+    if (pairs.length >= n) {
+      break;
+    }
     const ground = heightAt(item.x, item.y);
     if (ground === null) {
       continue;
@@ -298,7 +309,7 @@ async function main() {
     const heading =
       ((((p["view:azimuth"] ?? 0) + convergence) % 360) + 360) % 360;
     const hfov = p["pers:interior_orientation"]?.field_of_view ?? PHONE_HFOV;
-    const name = `foto-${site.id}-${String(i + 1).padStart(2, "0")}`;
+    const name = `foto-${site.id}-${String(pairs.length + 1).padStart(2, "0")}`;
     const snapshot = {
       v: 1,
       camera: {

@@ -20,10 +20,11 @@ bun scripts/open-data-watch.ts --json     # for a script
 ```
 
 It downloads no data. Its report has two parts: **Zu tun** (a service
-that does not answer, a newer `Stand` than `provenance.json` records —
-or, for a tile whose edition no record holds, a `Stand` published after
-the site's `retrieved` day — a newer Basis-DLM, OSM data older than 60
-days) and **Stand** (what answered, and editions no record holds yet).
+that does not answer, a newer `Stand` than `provenance.json` records, a
+newer Basis-DLM, OSM data older than 60 days) and **Stand** (what answered,
+and editions no record holds yet). Only a recorded edition can be
+outdone: `bun scripts/open-data-watch.ts <site> --record` writes the
+current ones into the tiles that record none, right after a fetch.
 
 ## Act on it
 
@@ -32,9 +33,15 @@ days) and **Stand** (what answered, and editions no record holds yet).
    the issue: was it down last week too?), and whether a re-bake is
    blocked by it. Three weeks in a row is worth a line to the maintainer.
 3. **A new edition of a committed tile** (DGM1, LoD2, DOM1, DOP): try the
-   re-bake on a branch `claude/rebake-<site>-<date>`:
-   `bun run fetch <site> <tile…>` (plus `--lsc` where the provider has
-   it), `bun run bake <site> <tile…>`, `bun run test:pipeline`,
+   re-bake on a branch `claude/rebake-<site>-<date>`. The fetch keeps
+   any file already there, so first move the changed product's files of
+   those tiles aside (the committed `data/<site>/dgm/dgm1_<tile>_tiff/`,
+   `data/<site>/cityjson/lod2_<tile>.city.json`, or the raw ones under
+   `data/_raw/`), then `bun run fetch <site> <tile…>` (plus `--lsc` where
+   the provider has it). A download that comes back byte for byte the
+   same is no new data: report it, record nothing. Then bake the whole
+   site, `bun run bake <site>` — steps read their neighbours across a
+   seam, so a tile alone leaves the seams stale — `bun run test:pipeline`,
    `bun run verify`, then update `data/<site>/provenance.json` (the new
    `Stand` and the date; after a new Basis-DLM, its `lastModified` day
    under `geosn["Basis-DLM"]`, which the check compares against) and the guide's dataset table in both languages.

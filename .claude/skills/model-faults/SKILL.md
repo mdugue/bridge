@@ -92,8 +92,12 @@ or time explains.
 3. A proposal that is clear, small and testable may become a **draft PR**
    on its own branch, with a unit test, the bake re-run on the tiles of
    the site the photos came from (the maintainer's rule: never dodge a
-   re-bake) and snapshots (`pr-snapshots`). The other sites' re-bake is
-   named in the PR body for the maintainer to start, not started here
+   re-bake) and snapshots (`pr-snapshots`). A fresh container has no raw
+   inputs (`data/_raw/`): `bun run site <site>` says which the step
+   needs; a bake that prints „skipping“ ran on nothing, and a PR from it
+   would claim a re-bake that did not happen — then the proposal is an
+   issue comment instead. The other sites' re-bake is named in the PR
+   body for the maintainer to start, not started here
    (`docs/routines.md`: hours and gigabytes the container does not
    have). Anything larger is an issue comment for the maintainer.
 
