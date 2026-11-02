@@ -163,7 +163,7 @@ const COST = {
   hidden: 2.5,
   hud: 2,
   overBody: 0.6,
-  overBodyOpaque: 2.4,
+  overBodyOpaque: 1.2,
   kept: 0.5,
 } as const;
 const SPOT_COST: Record<NameplateSpot, number> = {

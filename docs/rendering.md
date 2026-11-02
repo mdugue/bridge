@@ -765,7 +765,7 @@ three helpers follow the reversed buffer); behind the
   (`SETTLE_MS`; a new laying moves at once, its thresholds hold their own
   hysteresis), and the kept
   place weighs 0.5 less: a passing view does not shift it. The comic's
-  opaque box keeps off its building four times harder, stands over the
+  opaque box keeps off its building twice as hard, stands over the
   whole thing rather than on an eave, and is never an inscription on the
   facade. While an image is exported the place is held.
 
