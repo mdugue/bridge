@@ -247,9 +247,15 @@ export function monumentsOf(
   // suffix by what they are, not by the file's order, so a re-bake keeps
   // them (plain code-unit order: the same on every machine)
   const key = (m: (typeof found)[number]) =>
-    [m.base, m.name, m.kind, m.wd ?? "", String(m.x), String(m.y)].join(
-      "\u0000"
-    );
+    [
+      m.base,
+      m.name,
+      m.kind,
+      m.material ?? "",
+      m.wd ?? "",
+      String(m.x),
+      String(m.y),
+    ].join("\u0000");
   found.sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
   const out: WissenMonument[] = [];
   let nth = 0;

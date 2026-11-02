@@ -584,10 +584,13 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     })
   );
   const lookValues = useSyncExternalStore(look.subscribe, look.get, look.get);
+  /** the time and style before a walk, put back when it ends; while it
+   *  runs, its stops' styles are not the visitor's to remember */
+  const beforeWalk = useRef<{ at: Date; style: RenderStyle } | null>(null);
   useEffect(() => {
     let remembered = look.get().style;
     return look.subscribe((values) => {
-      if (values.style !== remembered) {
+      if (beforeWalk.current === null && values.style !== remembered) {
         remembered = values.style;
         writeStoredStyle(values.style);
       }
@@ -680,7 +683,6 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
   const [walking, setWalking] = useState<{ index: number; walk: Walk } | null>(
     null
   );
-  const beforeWalk = useRef<{ at: Date; style: RenderStyle } | null>(null);
   /** the walk's own glide while it flies: its flight tells when it ends,
    *  is cancelled or gives way to another (`onProgress` 1) */
   const walkGlide = useRef<object | null>(null);
