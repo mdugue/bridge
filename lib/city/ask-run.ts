@@ -149,7 +149,7 @@ export async function* ended(
   signal: AbortSignal,
   onEnd: () => void = () => {}
 ): AsyncIterable<StreamChunk> {
-  let end: RunEnd = { whole: false, interrupted: false };
+  let last: StreamChunk | undefined;
   // a tool's result the model has not answered with text yet
   let owed = false;
   try {
@@ -158,7 +158,7 @@ export async function* ended(
       if (signal.reason === DEADLINE && chunk.type === "RUN_ERROR") {
         continue;
       }
-      end = runEnd(chunk);
+      last = chunk;
       if (chunk.type === "TOOL_CALL_RESULT") {
         owed = true;
       } else if (chunk.type === "TEXT_MESSAGE_CONTENT") {
@@ -169,34 +169,36 @@ export async function* ended(
   } finally {
     onEnd();
   }
-  if (signal.reason === DEADLINE && !end.whole) {
+  const end = runEnd(last);
+  if (signal.reason === DEADLINE && end !== "done") {
     yield runError("Die Antwort dauerte zu lange.");
-  } else if (owed && !end.interrupted) {
+  } else if (owed && end === "cut") {
     yield runError(TOO_MANY_STEPS);
   }
 }
 
-interface RunEnd {
-  /** the run handed a scene tool to the browser and waits for it */
-  interrupted: boolean;
-  /** the chunk closes the run, not one of its tool rounds */
-  whole: boolean;
-}
-
-/** What a chunk says of the run's end, were it the stream's last. */
-function runEnd(chunk: StreamChunk): RunEnd {
-  if (chunk.type !== "RUN_FINISHED") {
-    return { whole: false, interrupted: false };
+/**
+ * How the stream's last chunk leaves the run: `done` (the model chose to
+ * stop, or a scene tool waits for the browser), `cut` (it stopped between
+ * a tool's result and the model's turn on it: the turn cap, a cut
+ * answer) or `other` (an error already said why, or nothing came).
+ */
+function runEnd(last: StreamChunk | undefined): "done" | "cut" | "other" {
+  if (last?.type === "TOOL_CALL_RESULT") {
+    return "cut";
   }
-  const c = chunk as {
+  if (last?.type !== "RUN_FINISHED") {
+    return "other";
+  }
+  const c = last as {
     metadata?: { tanstack?: { finishReason?: unknown } };
     outcome?: { type?: unknown };
   };
-  const interrupted = c.outcome?.type === "interrupt";
-  return {
-    interrupted,
-    whole: interrupted || c.metadata?.tanstack?.finishReason !== "tool_calls",
-  };
+  const reason = c.metadata?.tanstack?.finishReason;
+  return c.outcome?.type !== "interrupt" &&
+    (reason === "tool_calls" || reason === "length")
+    ? "cut"
+    : "done";
 }
 
 /** The stream with the key taken out of any error, thrown or sent. */

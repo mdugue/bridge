@@ -255,14 +255,44 @@ describe("an answer that stops says why", () => {
     expect(out.at(-1)).toContain("zu viele Schritte");
   });
 
+  const finished = (finishReason: string) =>
+    ({
+      ...chunk("RUN_FINISHED"),
+      metadata: { tanstack: { finishReason } },
+    }) as StreamChunk;
+  async function* list(...chunks: StreamChunk[]) {
+    yield* chunks;
+  }
+
   test("a cut run that ends on its RUN_FINISHED after the results", async () => {
     const out = await types(
       ended(
-        of("RUN_STARTED", "TOOL_CALL_RESULT", "RUN_FINISHED"),
+        list(chunk("TOOL_CALL_RESULT"), finished("length")),
         new AbortController().signal
       )
     );
     expect(out.at(-1)).toContain("zu viele Schritte");
+  });
+
+  test("a model that stops without words after a result is done", async () => {
+    const out = await types(
+      ended(
+        list(chunk("TOOL_CALL_RESULT"), chunk("RUN_STARTED"), finished("stop")),
+        new AbortController().signal
+      )
+    );
+    expect(out.at(-1)).toBe("RUN_FINISHED");
+  });
+
+  test("a provider's error after a result keeps its own words", async () => {
+    const error = { ...chunk("RUN_ERROR"), message: "401 invalid x-api-key" };
+    const out = await types(
+      ended(
+        list(chunk("TOOL_CALL_RESULT"), error),
+        new AbortController().signal
+      )
+    );
+    expect(out.at(-1)).toBe("RUN_ERROR:401 invalid x-api-key");
   });
 
   test("a scene tool's interrupt is not a stop", async () => {
