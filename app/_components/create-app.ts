@@ -1925,6 +1925,7 @@ async function bootApp(
     groundAt: (x, z) => siteGround.underWorld(x, z),
     hud: () => coverBoxes(renderer.domElement),
     phone: budget.tier === "mobile",
+    sunDirection,
   });
   postStack.setOverlay(nameplate);
   cleanups.push(() => {

@@ -21,12 +21,12 @@ import {
   type InquiryCard as InquiryCardModel,
   inquiryCard,
 } from "@/lib/city/inquiry";
-import type { TreeFactsFile } from "@/lib/city/features";
 import type { LandmarkFactsIndex } from "@/lib/city/landmark-facts";
 import { type TreeFacts, treeFactsAt } from "@/lib/city/inquiry-features";
 import { isSiteProvenance, type SiteProvenance } from "@/lib/city/provenance";
 import type { Drawer as DrawerPrimitive } from "@base-ui/react/drawer";
 import { cardCredits } from "@/lib/city/card-lines";
+import { cachedFetch, isTreeFacts, treeFactsFetches } from "./card-fetch";
 import { InquiryData } from "./inquiry-data";
 import { isTextEntry } from "./keyboard-controls";
 import { loadLandmarkFacts } from "./landmark-facts-load";
@@ -34,33 +34,6 @@ import { MethodMark } from "./method-badge";
 import { useSite } from "./site-context";
 
 type DrawerSnapPoint = DrawerPrimitive.Root.SnapPoint;
-
-/**
- * One fetch per URL for the page's life (the files are content-hashed and
- * immutable, ADR 0024); a failed one is not kept, so the next card tries
- * again.
- */
-function cachedFetch<T>(
-  cache: Map<string, Promise<T | null>>,
-  url: string,
-  accept: (json: unknown) => json is T
-): Promise<T | null> {
-  let pending = cache.get(url);
-  if (!pending) {
-    pending = fetch(url)
-      .then((res) => (res.ok ? (res.json() as Promise<unknown>) : null))
-      .then((json) => (accept(json) ? json : null))
-      .catch(() => null)
-      .then((value) => {
-        if (!value) {
-          cache.delete(url);
-        }
-        return value;
-      });
-    cache.set(url, pending);
-  }
-  return pending;
-}
 
 /** A file fetched when a card first needs it, never at boot. */
 function useFetched<T>(
@@ -89,13 +62,6 @@ function useFetched<T>(
 }
 
 const provenanceFetches = new Map<string, Promise<SiteProvenance | null>>();
-const treeFactsFetches = new Map<string, Promise<TreeFactsFile | null>>();
-
-const isTreeFacts = (json: unknown): json is TreeFactsFile =>
-  typeof json === "object" &&
-  json !== null &&
-  Array.isArray((json as Partial<TreeFactsFile>).known) &&
-  Array.isArray((json as Partial<TreeFactsFile>).names);
 
 /** The site's landmark facts (loaded with the first landmark asked, the
  *  same index the nameplate reads), or null until they have arrived. */
