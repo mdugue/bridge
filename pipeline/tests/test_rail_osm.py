@@ -203,3 +203,78 @@ def test_a_mapped_catenary_mast_stands_beside_its_track(tmp_path, monkeypatch):
     [(station, offset)] = track["properties"]["m"]
     assert abs(station - 80) < 0.5
     assert abs(offset - 4) < 0.1  # on its left, going east
+
+
+def test_a_funicular_is_a_steep_track_under_no_catenary(tmp_path, monkeypatch):
+    nodes = {**straight(20, first=1), **straight(60, first=3)}
+    ways = way(
+        1, [1, 2], {"railway": "funicular", "electrified": "contact_line", "gauge": "1000"}
+    ) + way(2, [3, 4], {"railway": "funicular", "bridge": "yes", "layer": "1"})
+    tile = osm_tile(tmp_path, monkeypatch, nodes, ways)
+    features = rail_osm.rails(tile)
+    on_ground = along(features, 20)[0]["properties"]
+    assert on_ground["steep"] == 1
+    assert on_ground["electrified"] == 0  # a cable hauls it
+    assert on_ground["g"] == 1.0
+    assert along(features, 60)[0]["properties"]["bridge"] == 1
+    # a deck it runs on is a rail deck, measured at a funicular's grade
+    bridge = rail.bridge_way(
+        shapely.LineString([(0, 0), (50, 0)]), None, '"bridge"=>"yes"', "funicular"
+    )
+    assert bridge is not None and bridge.steep
+
+
+def test_a_beam_stretched_over_posts_spans_a_hollow_and_bends_over_a_crest():
+    assert rail_osm.upper_hull([0, 10, 20, 30], [0, -5, -5, 0]) == [0, 0, 0, 0]
+    assert rail_osm.upper_hull([0, 10, 20], [0, 5, 0]) == [0, 5, 0]
+    # on a slope it is the slope
+    assert rail_osm.upper_hull([0, 10, 20], [0, 3, 6]) == [0, 3, 6]
+
+
+def test_a_monorails_beam_clears_the_ground_everywhere_and_crosses_a_hollow_straight():
+    line = shapely.LineString([(0, 0), (100, 0)])
+
+    def hollow(x: float, _y: float) -> float:
+        return 100.0 - max(0.0, 20.0 - abs(x - 50.0))  # 20 m deep at x = 50
+
+    beam = rail_osm.beam_samples(line, hollow, rail_osm.HANGING_CLEARANCE_M)
+    assert beam is not None
+    # one straight span from rim to rim: only its ends are kept
+    assert [(round(x), round(z, 2)) for x, _, z in beam] == [(0, 105.5), (100, 105.5)]
+    assert rail_osm.beam_samples(line, lambda x, _y: None, 5.5) is None
+
+    def crest(x: float, _y: float) -> float:
+        return 100.0 + max(0.0, 10.0 - abs(x - 50.0))  # a 10 m crest at x = 50
+
+    over = rail_osm.beam_samples(line, crest, 5.5)
+    assert over is not None
+    for x, _, z in over:
+        assert z >= crest(x, 0) + 5.5 - 1e-6
+    assert max(z for *_, z in over) == 115.5
+
+
+def test_a_monorails_beam_over_a_long_gentle_crest_stays_near_its_hull():
+    # a dome 400 m long, 4 m high: every sample bends the beam by less than
+    # the tolerance, but leaving all of them out would sag it metres
+    line = shapely.LineString([(0, 0), (400, 0)])
+
+    def dome(x: float, _y: float) -> float:
+        return 100.0 + 4.0 * (1.0 - ((x - 200.0) / 200.0) ** 2)
+
+    beam = rail_osm.beam_samples(line, dome, 5.5)
+    assert beam is not None and len(beam) > 2
+    xs = np.array([x for x, *_ in beam])
+    zs = np.array([z for *_, z in beam])
+    for x in np.arange(0.0, 400.0, 1.0):
+        drawn = float(np.interp(x, xs, zs))
+        assert drawn >= dome(x, 0) + 5.5 - 2 * rail_osm.BEAM_TOLERANCE_M
+
+
+def test_a_monorails_beam_is_cut_at_the_tile_with_its_heights():
+    beam = [(0.0, 0.0, 100.0), (200.0, 0.0, 140.0)]
+    box = shapely.box(50, -10, 250, 10)
+    [f] = rail_osm._clipped_beam(beam, box, "hanging", 2)
+    assert f["properties"]["mono"] == "hanging"
+    assert f["properties"]["tracks"] == 2
+    assert f["geometry"]["coordinates"][0] == [50.0, 0.0]
+    assert f["properties"]["bz"] == [110.0, 140.0]
