@@ -146,7 +146,7 @@ is the codebook.
 | Murals (*Wandbilder*) | OSM `tourism=artwork` murals with a known size (OSM, a way's length, Wikidata) and a free Commons photo that shows them straight on (its aspect within 15 %; a way's frieze: a band of its whole length): the photo redrawn by the bake as a pen-and-wash drawing (pen lines in one ink over a light wash of its own colours, in the clay's register), glazed on a strip 3 cm in front of the LoD2 wall — it multiplies the wall's lit colour, so the wall's light, shadow and night carry over it, and the fog fades it to white; a storey up unless OSM says `min_height`; full LoD2 only; hidden with its building; Papier and Schwarzplan leave it out | OSM, Wikidata, Wikimedia Commons, LoD2, DGM1 | `pipeline/bake/murals.py`, `mural_drawing.py`, `lib/city/murals.ts`, `mural-layer.ts`, `height-fog.ts` |
 | Shopfronts (*Schaufenster*) | the ground floor's bays and store signs measured per LoD2 wall in Mapillary's street panoramas (`shopfronts_<t>.json`; a glazed row — the seen bins 75 % open — runs its glass from pier to pier; a wall no photo shows as a shopfront gets none), and the canopy over them where DOM1 shows a level roof 2.6–6.5 m up running 1.5–8 m out of the wall (under it the glass runs the canopy's length), laid onto the host's own wall triangles at build time (`wallShiftAt`), **soft and abstract** (*Weiche Nische*): per run of bays (bays with less than two piers and 0.4 m of wall between them share one) a **surround** 15 cm proud — its outer edge rolling over a 6 cm quarter round into its flat front, its foot in the ground, piers 0.25 m (at least 0.2 m between two bays), a head 18 cm over the glass — with a **niche** per bay: the front turns into it over a 7 cm quarter round (smooth per-vertex normals, no edge where reveal and front meet), and the **glass** at its back, 6 cm out of the wall, from 0.5 m above the ground (a glazed row: 0.3 m) to the measured ground-floor top (else 3 m; under the first storey line, under a measured sign, under a canopy's slab, into which the head reaches where less than 0.25 m of wall would be left between them). **No mullions**, no frame boards. A fascia band 10 cm proud at the measured sign band, rounded the same way (at most 1 m tall; reaching down into the head; none under a canopy); a bay is cut where an OSM door stands. Every face along the wall stands at least two of the building glTF's position quanta off it (16 bits over the tile's buildings ≈ 3.4 cm), and no two faces lie on one another — the earlier 2 cm pane, 6 cm mullions and coincident frame and canopy faces flickered while walking (`lib/city/shopfronts.test.ts` holds both). A **canopy** is a slab 0.3 m thick under its measured top from the wall out to its measured depth, with a fascia 0.2 m deep and at most 1 m tall at its edge (2.6 m headroom), its outer edges rounded (9 cm), its foot rounded too, in the host's own clay and tint (its shop flag off); it shades the glass, and its columns are not drawn (not measured). Per wall in the host's building tree (column `source` = 6): one glass object per run (flags 64 + 4: own colour, glass — a **muted tone a little darker and cooler than its wall**, the wall as shown at ×0.4 drawn 45 % towards a cool slate, not black; its `rough` column read as the pane's roughness, 0.2, so the sun glints calmly in it; its `eaveH` the glass's top, under which the head's **soft shadow** darkens its upper 0.6 m — `paneShade`, a gradient — and no eave stroke; in place of the rim and the glass sheen its own sky, `paneSky`: the pane a little brighter upwards, as if the sky were mirrored, and a Schlick Fresnel lift at grazing angles — at most about a seventh of the sky, dimmed at night; a glass facade, flag 4 without 64, keeps its sheen), the surrounds and fascias (flag 64, the wall as shown a shade darker and a touch cooler; their faces that look up are half as bright and take no Streiflicht rim, faded in over the rounds) and the canopy. None on a glass or metal facade, none on a part standing more than 2 m above the ground in front. The one exception to the glass veto: shop windows on a shop's ground floor only; none where an OSM passage (`tunnel=building_passage`, `covered=arcade`) crosses the bay | Mapillary, DOM1, LoD2, DGM1, OSM doors and passages | `lib/city/shopfronts.ts`, `bake-city-mesh.ts` `appendShopfronts`; `pipeline/bake/shopfronts.py` |
 | Windows (*Fenster*) | every house's window rhythm (per building, one band of the object table: axis spacing, width, height and a style word — `lib/city/windows.ts` `windowSpecs`), best first: its own walls' rhythm measured in street photos (`windows_<t>.json`, `model`: each feature only where two sequences agree at Spearman ρ ≥ 0.6), another part of its building, the nearest measured building within 30 m of its roof form and about its eave, its type (town house, walk-up, house, block, low; a flat-roofed house from 9 m of wall with 3.4 m storeys or listed as a town house, type `tall` — numbers calibrated to the photos' medians), a measured rhythm drawn towards its type's (`TOWARD_TYPE`); a window's height follows its storey (head a type's distance under the next floor), the storey snapped to a whole number of floors under the eave. Per wall vertex its place (`_FACADE`, snorm16 vec4: metres from the wall's middle — on a wall whose axes the photos placed (`model.phase`, `measuredColumns`), from the middle of the measured axes that fit on it —, the wall's length (there instead, from code 16 384 on, the count of those axes and the wall's own measured spacing, `MEASURED_AXES`) — negative where the ground floor has no windows (over a shopfront, or with more than two doors), 0 on a party wall — and up to two OSM doors, each its place and width — the second slot, where it holds no door, the wall's own eave over its object's (`WALL_EAVE`, 0.1 m steps), so the top row sits under its own eave —; on a wall without ground-floor windows the first slot the ground's height in front over the base instead, under which no row of windows is drawn; a roof vertex −1 in the first door's slot, the clay's roof flag). Drawn in the clay's fragment pass, walls only, no geometry: a **recess** per window, the eye looking into its box (back, side reveal, head or sill reveal, each with its normal, 9–18 cm deep by type), the reveals the plaster ×0.93, the back the wall's colour ×(0.40, 0.43, 0.50) lit by a quarter of the sun, the sun reaching in only through the opening (`receivedShadowNode`); a sill 6 cm tall, 4.5 cm proud, with its drop shadow; a town house's Fasche (11 cm, 1.5 cm proud, 3.5 % lighter; a type's only on a rendered wall, never on brick) and raised ground floor (0.45 m); the storeys counted from the street (each LoD2 base moved up to the street its building's plinths stand on, from at most 1.5 m under it — `liftToStreet`); every ground floor's windows at least 0.2 m over the plinth's highest top and over the fine terrain in front of every wall (read 0.5 m out, every 2 m along it, also on a wall standing on a step of its building, `wallRises`; a lift in classes of 0.05 m up to 1.55 m; a wall whose ground rises past 2.2 m over the base, `GROUND_REACH_M`, or higher than leaves the windows 0.8 of their width tall, `overGround`, has no ground-floor windows, signed like a shopfront's; none past it, or where it leaves them lower than 0.8 of their width); a top floor's windows end 0.5 m under the eave; measured ornament's Verdachung (9 cm, 5 cm proud); the wall rolling in over a 3 cm quarter round (normals). Every edge anti-aliased by the pixel's footprint along the wall and up; under 6 px wide the windows hand over to the facade's mean tone, under 2.5 px only that tone. At night 25 % glow warm, at 0.6 of the dusk glow (`NIGHT_WINDOWS`; far off the facade's mean of them) × night. **No glass, no panes, no mullions.** None on a party wall (a house of at most 9 m of wall: none only up to its neighbour's top, where it rises 2 m over it, `PARTY_LOW_EAVE_M`), within 0.6 m of a door's opening (its place and width in the `_FACADE` slot), over a shopfront's ground floor, past the eave's clearance, on a church, a hall or another facade of its own (`ownFacade`, `partFacade`) — except a palace's: a Schloss, museum, theatre, parliament, court, school or hospital (ALKIS 31001_3010–3072 but the churches' 3038–3048 — no barracks, bunker or prison, no station, no sports hall; `palatialFacade`) gets windows of its own type `palace` (3.6 m axis, 1.45 m wide, a Fasche, deep reveals), storeys from OSM's count where it gives 2.4–7.5 m, else the eave split into ~5.5 m storeys (`palaceStorey`), and only its own measured rhythm, never a town house's nearby —, glass or metal (flags 4, 8), own colour (64), a garage, shed or plant, a structure that is no building (ALKIS function outside `31001`: a tank, a crane, a canopy — no doors, plinth or shop band either), a wall under 3.2 m, or a part the bake adds (ADR 0010) | Mapillary, LoD2, OSM levels and doors, ALKIS function, the plinths | `lib/city/windows.ts`, `bake-city-mesh.ts` `assignWindows`, `app/_components/clay-windows.ts` (*Fenster*); `pipeline/bake/facade_traits.py`, `pipeline/bake/windows.py` |
-| Dormers | DOM1 over the pitched LoD2 roofs (25–62°): the excess over the roof's own 9 m median, a blob of 3–30 m² standing 0.9–3.5 m over it, under the ridge and clear of every tree point → a front down the slope, two cheeks and a roof running back into the main roof: flat at the measured top, or a shed dormer's falling `tf` from where it meets the main roof to its front, ≥ 0.6 m over the roof; one object per host (column `source` = 4) in the host's tint and roof colour, roof vertices flagged in `_FACADE`; no storey band, eave stroke, plinth or shop zone; no window | DOM1, LoD2 | `lib/city/dormers.ts`, `bake-city-mesh.ts` `appendDormers`; `pipeline/bake/dormers.py` |
+| Dormers and chimneys | DOM1 over the LoD2 roofs: the excess over the roof's own 9 m median, any blob ≥ 0.7 m over it clear of every tree point and the roof's seams; on a pitched roof (25–62°, a mansard to 80°) standing 0.9–3.5 m over it and under the ridge → a dormer: a front down the slope, two cheeks and a roof running back into the main roof: flat at the measured top, or a shed dormer's falling `tf` from where it meets the main roof to its front, ≥ 0.6 m over the roof; one object per host (column `source` = 4) in the host's tint and roof colour, roof vertices flagged in `_FACADE`; no storey band, eave stroke, plinth or shop zone; where the host has windows, one row in each dormer's front (`dormerWindows`; the cheeks blind, the street photos' shop reading not on its row). A small one at the ridge, a stack over it or one on a flat roof → a chimney: a box from under the roof to its measured top (`chimneyMesh`), all wall, in the host's tint | DOM1, LoD2 | `lib/city/dormers.ts`, `bake-city-mesh.ts` `appendDormers`; `pipeline/bake/dormers.py` |
 | Eave line | min RoofSurface Z per building (column `eaveH`) | LoD2 geometry | (*Traufkante*) |
 | Ground darkening on walls | height above the building's own base (column `baseZ`: the street its plinths stand on, from at most 1.5 m over the lowest ground round its footprint — `liftToStreet` —, else that lowest ground) | LoD2 geometry, the plinths | (*Boden-Verlauf*) |
 | Rim light | view/normal/sun geometry | — | (*Streiflicht*) |
@@ -708,29 +708,71 @@ outline's, each in its turn (`compileInTurn`).
   CPU copies go after upload), freed when the question goes. A phone pays
   for it in its tile cache, 1 MiB less per safety level
   (`tileCacheBytesFor`, ADR 0047). Kerning from the
-  canvas's own measure of each prefix; tracking per style.
-- **One material, three kinds of quad** (`uvk`: atlas uv and a kind): a
-  glyph (fill at 0.5, halo outward to a share of the reach, antialiased by
-  `fwidth`), a solid (the comic box, its edge and shadow, the leader's
-  strokes, antialiased by their uv), a disc (the leader's dot). Colour and
-  halo ride per vertex (`ink`, `halo`): three vertex buffers past
-  position, four inter-stage variables (`uvk`, `ink`, `halo` and the view
-  position the depth test reads); a fade uniform carries the arrival and
-  the cross-fades.
+  canvas's own measure of each prefix; tracking per style. Each glyph
+  also keeps its coverage at ~16 px per capital (a few kB) for the
+  shadow's mask.
+- **Two kinds of quad** (`uvk`: atlas uv and a kind) in the face's
+  material: a glyph (fill at 0.5, halo outward to a share of the reach,
+  antialiased by `fwidth`) and a solid (the comic box and its edge,
+  antialiased by their uv); the returns (below) have a material of their
+  own over the same geometry. No line ties the plate to its thing
+  (maintainer review 2026-11-02); the selection outline marks it, in the
+  style's own lettering ink (`NameplateType.outline`,
+  `SelectionOutline.setColours`), and the clay's lift and hatch on the
+  asked building follow (`setAskedColours`: towards the lighter, hatched
+  in the darker). A long title breaks between words into even lines
+  (`titleLines`, a joined `A / B` name at its slash). Colour and halo ride
+  per vertex (`ink`, `halo`): three vertex buffers past position, four
+  inter-stage variables (`uvk`, `ink`, `halo` and the view position the
+  depth test reads); a fade uniform carries the arrival and the
+  cross-fades.
+- **Depth.** The letters stand 0.14 of a capital deep (`EXTRUDE_CAPS`):
+  the plate's one geometry is drawn by ten meshes more behind the face
+  (six on a phone; a returns material of their own, the layer a
+  per-object uniform, `onObjectUpdate`, that pushes the quads back),
+  far to near: deepest first, or the face first where the camera sees
+  the plate's back (no depth test sorts them). A layer
+  draws the fill alone in the style's return colour, lit by the sun
+  through the letter's outward normal — two more atlas reads give the
+  field's gradient — and none of what the city hides.
+- **Cast shadow.** A box swept from the plate's rectangle away from the
+  sun down to the ground (stepped along the sun's ray from its highest
+  corner against `groundAt`, so the top line's ray reaches it too, ≤ 400
+  m: a terrace's letters throw theirs onto the river below; asked again
+  each second for ground that streamed in, and a box that never meets the
+  ground fades out inside itself), drawn on its back faces (each pixel
+  once, the camera inside it or not): each pixel takes the scene's surface
+  from the depth through the lens's inverse projection (`getViewPosition`:
+  perspective, parallel and Modell's shear alike), follows the sun's ray
+  from there to the plate's plane in the plate's own units and reads a
+  silhouette mask there (R8, 12 px per capital, ≤ 512 × 128, softened,
+  laid out on the CPU from the glyphs' coverage over the rectangle the
+  quads cover, a comic box's tilted corners too: `shadowMask`). So the
+  letters shade a facade, a roof or the ground alike — only where the sun
+  reaches it: the surface is tested against the scene's own shadow map
+  through the read the styles' `inSun` shares (`sun-shadow-read.ts`), so
+  the letters' shadow joins the city's instead of darkening a shade twice;
+  none with the sun down.
 - **Occlusion** per pixel: the fragment's view depth against the scene's
   (the scene target's depth texture through `view-lens.ts`, whose
 three helpers follow the reversed buffer); behind the
   city it keeps 0.45 of its outline only, so a plate the placing could
   not keep clear reads as a ghost, never as text over a facade. Depth
   test and write are off; it is no part of the shadow map.
-- **The plate** is one mesh placed by a matrix (right, up and normal
-  scaled by the capital height, the block's corner as origin); the leader
-  is a second small mesh rebuilt in world space per frame.
+- **The plate** is one group placed by a matrix (right, up and normal
+  scaled by the capital height, the block's corner as origin); the
+  shadow's box is a small mesh rebuilt in world space per frame.
 - **Choosing** runs every 250 ms on the CPU (`lib/city/nameplate-place.ts`):
   per candidate 9 points against the buildings' BVHs (`cityHides` in
   `nameplate-ask.ts`, `nearestCityHit` with `build = false`) and the
-  HUD's panels marked `data-scene-cover`. While an image is exported the
-  place is held.
+  HUD's panels marked `data-scene-cover`. A better place in the same
+  laying moves the plate only once it has stayed the best for 900 ms
+  (`SETTLE_MS`; a new laying moves at once, its thresholds hold their own
+  hysteresis), and the kept
+  place weighs 0.5 less: a passing view does not shift it. The comic's
+  opaque box keeps off its building twice as hard, stands over the
+  whole thing rather than on an eave, and is never an inscription on the
+  facade. While an image is exported the place is held.
 
 ## Modell: the parallel camera
 

@@ -362,6 +362,7 @@ export function createInquiryProbe(deps: {
     }
     const object = (from: CityLayer, i: number): InquiryObject => ({
       objectIndex: i,
+      baseZ: from.table.baseZ[i],
       building: from.table.building[i] === 1,
       eaveH: from.table.eaveH[i],
       flags: from.table.flags[i],

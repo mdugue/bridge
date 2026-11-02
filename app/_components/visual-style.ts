@@ -1,4 +1,5 @@
 import {
+  Color,
   type DataTexture,
   DoubleSide,
   FrontSide,
@@ -6,6 +7,7 @@ import {
   MeshStandardNodeMaterial,
   type Node,
   type Texture,
+  SRGBColorSpace,
   type UniformNode,
   Vector3,
 } from "three/webgpu";
@@ -199,6 +201,37 @@ export interface StyleResources {
  */
 export const clayPoche = uniform(0);
 const POCHE = vec3(0.025, 0.024, 0.027);
+
+/**
+ * The asked building's colours (linear): the pale it is lifted towards and
+ * the hatch drawn over it. Shared uniforms the picture style sets
+ * (`setAskedColours`), so the mark on the clay is drawn in the same hand
+ * as the outline and the lettering; Pastell's are the HUD's accent.
+ */
+const askedPale = uniform(new Color(...SELECTION_ACCENT.halo));
+const askedInk = uniform(new Color(...SELECTION_ACCENT.ink));
+// reason: a colour uniform is a vec3 in the graph; its type says Color.
+const ASKED_PALE = askedPale as unknown as Node<"vec3">;
+// reason: as above.
+const ASKED_INK = askedInk as unknown as Node<"vec3">;
+/** The hatch's share of the darker colour (Pastell's magenta to the
+ *  HUD's own ink). */
+const ASKED_INK_SHARE = 0.7;
+
+/** The asked building's colours from a style's outline (sRGB 0…1): lifted
+ *  towards the lighter of the two, hatched in the darker. */
+export function setAskedColours(
+  line: readonly [number, number, number],
+  halo: readonly [number, number, number]
+): void {
+  const lum = (c: readonly [number, number, number]) =>
+    0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  const [pale, dark] = lum(line) > lum(halo) ? [line, halo] : [halo, line];
+  askedPale.value.setRGB(pale[0], pale[1], pale[2], SRGBColorSpace);
+  askedInk.value
+    .setRGB(dark[0], dark[1], dark[2], SRGBColorSpace)
+    .multiplyScalar(ASKED_INK_SHARE);
+}
 
 /**
  * Procedural facade detail on the opaque clay node material, keyed to each
@@ -814,7 +847,7 @@ function clayGlow(
     .mul(float(1).sub(REFLECTIONS));
   // The asked building's light, in the accent's pale: faint by day, a
   // glow after dark.
-  const askedLight = vec3(...SELECTION_ACCENT.halo).mul(
+  const askedLight = ASKED_PALE.mul(
     askedFlag(flags).mul(d.uNight.mul(0.08).add(0.06))
   );
   return rim
@@ -970,8 +1003,9 @@ function askedFlag(flags: F): F {
  * The building someone asks about (flag 32, OBJECT_FLAG_ASKED — set in the
  * packed table at runtime by the inquiry probe, ADR 0042): lifted towards
  * the accent's pale (a faint light of its own in clayGlow, so it reads in
- * shade too), and drawn over with a hatch in the HUD's accent
- * (`SELECTION_ACCENT`, lib/city/outline.ts) — the selection is the
+ * shade too), and drawn over with a hatch in the accent — the HUD's
+ * (`SELECTION_ACCENT`, lib/city/outline.ts) in Pastell, else the picture
+ * style's lettering ink (`setAskedColours`): the selection is the
  * interface's, so it leaves the city's palette. Near, the
  * strokes lie on the building — every 0.9 m, along the wall and up it (so
  * they climb the facade at 45°), straight across the roof, fwidth-constant
@@ -998,8 +1032,8 @@ function askedColour(col: V3, h: F, wall: F, flags: F, wn: V3): V3 {
     min(abs(fract(s.sub(0.5)).sub(0.5)).mul(7 / 1.2), 1)
   );
   const ink = mix(paper.mul(0.55), line.mul(0.6), near).mul(asked);
-  const lifted = mix(col, vec3(...SELECTION_ACCENT.halo), asked.mul(0.4));
-  return mix(lifted, vec3(...SELECTION_ACCENT.ink), ink);
+  const lifted = mix(col, ASKED_PALE, asked.mul(0.4));
+  return mix(lifted, ASKED_INK, ink);
 }
 
 /**
