@@ -6,6 +6,7 @@ import {
   inquiryBuildings,
   isLandmarkInquiry,
   nameplateText,
+  titleLines,
 } from "./nameplate";
 import { NO_FACT, type ObjectFacts } from "./object-facts";
 
@@ -159,4 +160,26 @@ test("a thing of the street: its name and one small line", () => {
   expect(
     nameplateText(fountain, card({ title: "Brunnen", kicker: "Brunnen" }))
   ).toEqual({ rank: "object", title: "Brunnen", lines: [] });
+});
+
+test("a long title breaks between words into even lines, a joined one at its slash", () => {
+  expect(titleLines("Frauenkirche")).toEqual(["Frauenkirche"]);
+  expect(titleLines("Sächsisches Staatsministerium für Kultus")).toEqual([
+    "Sächsisches",
+    "Staatsministerium für Kultus",
+  ]);
+  const joined = titleLines(
+    "Sächsisches Staatsministerium für Kultus / Sächsisches Staatsministerium der Finanzen"
+  );
+  expect(joined.length).toBe(4);
+  expect(joined.join(" ")).toBe(
+    "Sächsisches Staatsministerium für Kultus Sächsisches Staatsministerium der Finanzen"
+  );
+  for (const line of joined) {
+    expect(line.length).toBeLessThanOrEqual(30);
+  }
+  // one long word stays whole
+  expect(titleLines("Donaudampfschifffahrtsgesellschaftskapitän")).toEqual([
+    "Donaudampfschifffahrtsgesellschaftskapitän",
+  ]);
 });

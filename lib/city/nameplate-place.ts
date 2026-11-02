@@ -165,7 +165,8 @@ const COST = {
   hidden: 2.5,
   hud: 2,
   overBody: 0.6,
-  kept: 0.25,
+  overBodyOpaque: 2.4,
+  kept: 0.5,
 } as const;
 const SPOT_COST: Record<NameplateSpot, number> = {
   above: 0,
@@ -640,6 +641,10 @@ export interface NameplateScene {
   /** the HUD's panels over the canvas, as NDC boxes [x0, y0, x1, y1] */
   hud: readonly [number, number, number, number][];
   groundAt: (x: number, z: number) => number;
+  /** the plate hides what is behind it (a comic's caption box): it keeps
+   *  off its thing harder, rooftop letters included, and never stands as
+   *  an inscription on its facade */
+  opaque?: boolean;
 }
 
 /** The plate's corners and a 3 × 3 grid of points on it. */
@@ -742,8 +747,13 @@ export function nameplateCost(
     cost += (COST.hud * overlap(box, panel)) / total;
   }
   const own = bodyBox(body, scene);
-  if (own && layout.mode !== "air" && layout.spot !== "above") {
-    cost += (COST.overBody * overlap(box, own)) / total;
+  if (
+    own &&
+    layout.mode !== "air" &&
+    (scene.opaque || layout.spot !== "above")
+  ) {
+    const weight = scene.opaque ? COST.overBodyOpaque : COST.overBody;
+    cost += (weight * overlap(box, own)) / total;
   }
   cost += COST.hidden * scene.hidden(grid);
   cost += SPOT_COST[layout.spot];
@@ -813,8 +823,10 @@ export function chooseNameplate(
   scene: NameplateScene,
   force?: NameplateMode
 ): NameplateLayout {
-  const mode =
+  const asked =
     force ?? nameplateMode(body, scene.camera, previous?.mode ?? null);
+  // an opaque plate as an inscription would cover the facade it names
+  const mode = scene.opaque && asked === "near" ? "street" : asked;
   const best = bestIn(body, mode, previous, block, range, scene);
   if (mode !== "air" || Number.isFinite(best.cost)) {
     return best.layout;

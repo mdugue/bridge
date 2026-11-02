@@ -52,6 +52,7 @@ import {
   vec4,
 } from "three/tsl";
 import { LOOK_DEFAULTS, type LookValues } from "@/lib/city/look-controls";
+import { NAMEPLATE_TYPES } from "@/lib/city/nameplate-type";
 import {
   type PaperKind,
   RENDER_STYLE_BY_ID,
@@ -843,6 +844,8 @@ export function createPostStack(
     crownsPrinted.value = style.crowns === "comic" ? 1 : 0;
     dataMarks.value = DATA_MARKS[style.dataMarks];
     crownSwayShare.value = style.sway;
+    const { outline: accent } = NAMEPLATE_TYPES[style.id];
+    outline.setColours(accent.line, accent.halo);
   };
   applyStyleWeights();
 

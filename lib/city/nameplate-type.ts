@@ -3,7 +3,7 @@
  * and by night: its faces, cases and tracking, its ink, its letters'
  * returns (the sides of built letters: they stand a little deep) and the
  * shadow they cast, a halo where a style draws one, the comic's caption
- * box, the leader's kind. The plate itself is placed the
+ * box, and the selection outline's colours that go with them. The plate itself is placed the
  * same in every style (lib/city/nameplate-place.ts); only Schwarzplan
  * lays it on the ground from every view above the building, the plan's
  * own place for lettering. Colours are sRGB (0…1): the plate is drawn after the output
@@ -42,8 +42,6 @@ export interface DayNight {
 }
 
 export interface NameplateType {
-  /** the leader's foot: the selection's accent, or a colour of its own */
-  accent: Rgb;
   /** the comic's caption box behind the text */
   box?: {
     edge: DayNight;
@@ -62,8 +60,10 @@ export interface NameplateType {
   /** the shadow the letters cast on the city: its colour and strength in
    *  full sun */
   shadow: { colour: Rgb; alpha: number };
-  /** a hairline, a dimension line with ticks, a caption box's tail */
-  leader: "hair" | "dimension" | "tail";
+  /** the selection outline round the asked thing in this style
+   *  (selection-outline.ts): its line and the halo it lies on, so mark
+   *  and lettering read as one hand */
+  outline: { line: Rgb; halo: Rgb };
   /** the small lines' setting and ink */
   lines: NameplateSetting & { ink: DayNight; size: number };
   /** laid on the ground from every view above the building */
@@ -80,10 +80,6 @@ const dn = (day: number, night: number): DayNight => ({
   day: hex(day),
   night: hex(night),
 });
-
-/** The selection's accent (lib/city/outline.ts `SELECTION_ACCENT.line`) in
- *  sRGB. */
-const ACCENT = hex(0xc6_00_de);
 
 /** A built sign's lettering: the HUD's Inter, heavy and set tight; its
  *  facts in small tracked capitals. */
@@ -111,8 +107,7 @@ export const NAMEPLATE_TYPES: Readonly<Record<RenderStyle, NameplateType>> = {
     side: dn(0x6a_10_82, 0x5a_1a_70),
     shadow: { colour: hex(0x3a_1a_55), alpha: 0.42 },
     halo: { ...dn(0xf6_ef_e4, 0x1d_24_33), ...NO_HALO },
-    accent: ACCENT,
-    leader: "hair",
+    outline: { line: hex(0xc6_00_de), halo: hex(0xfd_f4_ff) },
     onGround: false,
   },
   comic: {
@@ -135,8 +130,7 @@ export const NAMEPLATE_TYPES: Readonly<Record<RenderStyle, NameplateType>> = {
       pad: 0.45,
       tilt: 2,
     },
-    accent: hex(0x11_11_11),
-    leader: "tail",
+    outline: { line: hex(0x11_11_11), halo: hex(0xff_d2_3f) },
     onGround: false,
   },
   noir: {
@@ -153,8 +147,7 @@ export const NAMEPLATE_TYPES: Readonly<Record<RenderStyle, NameplateType>> = {
     side: dn(0x8a_8a_8a, 0x5a_5a_5a),
     shadow: { colour: hex(0x00_00_00), alpha: 0.5 },
     halo: { ...dn(0x0a_0a_0a, 0x0a_0a_0a), alpha: 0.5, width: 0.4 },
-    accent: hex(0xf4_f4_f4),
-    leader: "hair",
+    outline: { line: hex(0xf4_f4_f4), halo: hex(0x1a_1a_1a) },
     onGround: false,
   },
   sincity: {
@@ -172,20 +165,19 @@ export const NAMEPLATE_TYPES: Readonly<Record<RenderStyle, NameplateType>> = {
     side: dn(0xd0_1a_1a, 0xd0_1a_1a),
     shadow: { colour: hex(0x00_00_00), alpha: 0.8 },
     halo: { ...dn(0x00_00_00, 0x00_00_00), alpha: 0.9, width: 0.5 },
-    accent: hex(0xd0_1a_1a),
-    leader: "hair",
+    outline: { line: hex(0xd0_1a_1a), halo: hex(0xff_ff_ff) },
     onGround: false,
   },
   paper: {
     title: SANS_TITLE,
-    // a printer's vermilion on the paper, its returns burnt
-    lines: { ...SANS_LINES, size: 0.44, ink: dn(0x3a_2a_26, 0xf2_d8_cc) },
-    ink: dn(0xe4_3d_12, 0xff_8a_5c),
-    side: dn(0x7a_1e_08, 0x6a_24_14),
+    // a printer's violet on the paper (the selection's own hue), its
+    // returns deep plum
+    lines: { ...SANS_LINES, size: 0.44, ink: dn(0x3a_1a_48, 0xec_d4_f4) },
+    ink: dn(0x8e_1f_b8, 0xd8_8c_f4),
+    side: dn(0x40_10_4f, 0x4a_18_5c),
     shadow: { colour: hex(0x30_34_3c), alpha: 0.22 },
     halo: { ...dn(0xfb_fa_f6, 0x22_26_30), ...NO_HALO },
-    accent: ACCENT,
-    leader: "hair",
+    outline: { line: hex(0x8e_1f_b8), halo: hex(0xfb_f6_ff) },
     onGround: false,
   },
   line: {
@@ -202,8 +194,7 @@ export const NAMEPLATE_TYPES: Readonly<Record<RenderStyle, NameplateType>> = {
     side: dn(0xb4_b4_b4, 0x60_60_60),
     shadow: { colour: hex(0x1a_1a_1a), alpha: 0.18 },
     halo: { ...dn(0xff_ff_ff, 0x1c_22_30), alpha: 0.6, width: 0.4 },
-    accent: hex(0x1a_1a_1a),
-    leader: "dimension",
+    outline: { line: hex(0x1a_1a_1a), halo: hex(0xff_ff_ff) },
     onGround: false,
   },
   figure: {
@@ -220,8 +211,7 @@ export const NAMEPLATE_TYPES: Readonly<Record<RenderStyle, NameplateType>> = {
     side: dn(0x88_88_88, 0x88_88_88),
     shadow: { colour: hex(0x11_11_11), alpha: 0.15 },
     halo: { ...dn(0xff_fd_f6, 0xff_fd_f6), alpha: 1, width: 0.75 },
-    accent: hex(0xc2_26_1f),
-    leader: "hair",
+    outline: { line: hex(0xc2_26_1f), halo: hex(0xff_fd_f6) },
     onGround: true,
   },
 };

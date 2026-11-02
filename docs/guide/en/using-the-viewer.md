@@ -225,22 +225,23 @@ The city carries no labels until you ask. Ask it: with a mouse, a
 finger still for half a second); `I` asks what stands under the
 mouse pointer (in immersive mode, which hides the pointer, what stands at
 the centre; only there a dot marks it). The building gets a fine hatch and a line round its outline,
-both in the controls' pink accent, and a card opens; a
+both in the controls' pink accent (in the other picture styles in that
+style's lettering colour), and a card opens; a
 click on nothing closes it again. Beside the building its **name** now
 stands in the city itself, as long as the question does: a landmark's
 large, with when it was built and by whom, when it was rebuilt and how
 tall it is (from Wikidata, listed on the card too) underneath; a named building with its
 address; an ordinary house just its address, small; a tree, a lamp or a
 bench what it is. The letters are built: a little deep, lit by the sun
-and casting a shadow. From the street they stand on the building's roof
+and casting a shadow wherever the sun reaches, down to the ground below. From the street they stand on the building's roof
 (a church's on its nave),
-turned to the facade you see best, or beside it with a fine line to it;
+turned to the facade you see best, or beside it;
 looking steeply down from the air they lie on the ground beside it (from
 a flatter angle they stand up, so they stay readable); close up they
 stand before its facade like an inscription; from far off only the name.
-It moves aside when another building would hide it or a panel covers it, shows as a pale outline where the city still
+A long name breaks over a few lines. It moves aside when another building would hide it or a panel covers it, but only once the new place has stayed better for a moment, shows as a pale outline where the city still
 covers it, and is set in each picture style's own type — in Comic in a
-yellow caption box, in Schwarzplan, seen from above, on the ground
+yellow caption box that stays clear of the building, in Schwarzplan, seen from above, on the ground
 like a plan's lettering. You need not hit a small house exactly:
 when nothing stands right under your finger, the building most of the
 ground around it belongs to answers. On a phone the card is a sheet at
@@ -287,7 +288,8 @@ measured them. For a building of several parts it describes the part you
 clicked.
 
 Trees, monuments and fountains, and bridges answer the same way.
-Whatever you asked is framed by a soft pink line on a pale fringe —
+Whatever you asked is framed by a soft line on a pale fringe (pink, or
+the picture style's lettering colour) —
 along its outline as you see it now, the same width on screen near or
 far. The fringe flashes briefly when you ask. A **street tree**
 says its species (German and botanical), its street and number in the

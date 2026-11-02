@@ -362,3 +362,31 @@ test("a fresh facade is one the camera stands before", () => {
   const side = nameplateSide(hall, look([45, 1.7, 40], [0, 7, 0]), null);
   expect(side % 2).toBe(1);
 });
+
+test("an opaque plate is never an inscription before its facade", () => {
+  const camera = look([0, 1.7, 20], [0, 15, 0]);
+  const scene: NameplateScene = {
+    camera,
+    project: (p) => {
+      const d: Vec3 = [
+        p[0] - camera.position[0],
+        p[1] - camera.position[1],
+        p[2] - camera.position[2],
+      ];
+      const z =
+        d[0] * camera.forward[0] +
+        d[1] * camera.forward[1] +
+        d[2] * camera.forward[2];
+      return { x: 0, y: 0, front: z > 0 };
+    },
+    hidden: () => 0,
+    hud: [],
+    groundAt: () => 0,
+  };
+  const block = { width: 6, height: 2 };
+  const range = { min: 20, max: 60 };
+  expect(chooseNameplate(BODY, null, block, range, scene).mode).toBe("near");
+  expect(
+    chooseNameplate(BODY, null, block, range, { ...scene, opaque: true }).mode
+  ).toBe("street");
+});

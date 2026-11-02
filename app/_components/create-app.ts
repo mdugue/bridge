@@ -1926,6 +1926,8 @@ async function bootApp(
     hud: () => coverBoxes(renderer.domElement),
     phone: budget.tier === "mobile",
     sunDirection,
+    sunShadow: sunRig.shadowMap,
+    reversedDepth: renderer.reversedDepthBuffer,
   });
   postStack.setOverlay(nameplate);
   cleanups.push(() => {

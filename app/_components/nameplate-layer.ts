@@ -3,7 +3,7 @@
  * (lib/city/nameplate.ts says what, lib/city/nameplate-place.ts where,
  * lib/city/nameplate-type.ts in which letters). Built letters, not a
  * label: a landmark's name stands large on its roof with its facts under
- * it (or beside it in the sky, a hairline down to it); seen steeply from
+ * it (or beside it in the sky); seen steeply from
  * above it lies on the free ground like map lettering; up close the
  * letters stand on the ground before it. A named building, bridge or
  * monument shows its name, an ordinary house its address, a tree, a lamp
@@ -37,10 +37,12 @@ import {
   BufferGeometry,
   type Camera,
   DataTexture,
-  type DepthTexture,
+  DepthTexture,
   DoubleSide,
+  GreaterEqualCompare,
   Group,
   Float32BufferAttribute,
+  LessEqualCompare,
   LinearFilter,
   LinearSRGBColorSpace,
   Matrix4,
@@ -92,14 +94,12 @@ import {
   type NameplateScene,
   type Vec3,
   EXTRUDE_CAPS,
-  add,
   bodySize,
   chooseNameplate,
   cross,
   dot as dot3,
   nameplatePose,
   sameLayout,
-  scale,
   sub,
 } from "@/lib/city/nameplate-place";
 import {
@@ -115,7 +115,6 @@ import { dropDataOnUpload } from "./raster-upload";
 import { trackTexture } from "./three-utils";
 import {
   type Align,
-  KIND,
   PAINT,
   type PlateGeometry,
   type PlateRaster,
@@ -127,12 +126,16 @@ import {
   rasterPlate,
 } from "./nameplate-glyphs";
 import type { F, Live, V3 } from "./shader-chunks";
+import type { SunShadowMap } from "./stylize-effect";
 import type { ViewLens } from "./view-lens";
 
 /** How often the place is chosen again (ms). */
 const CHOOSE_MS = 250;
 /** A change of place: out, then in (ms). */
 const CROSS_MS = 180;
+/** How long a new place must stay the best before the plate moves there:
+ *  a passing view does not shift it. */
+const SETTLE_MS = 900;
 /** The plate's letters build in this long after a question (ms). */
 const ARRIVE_MS = 420;
 /** Hidden: the scene's surface this far in front (m, and a share of the
@@ -141,20 +144,17 @@ const HIDDEN_SLACK_M = 0.8;
 const HIDDEN_SLACK_SHARE = 0.01;
 /** The hidden part's outline: how strong, how wide (field units). */
 const GHOST = { alpha: 0.45, width: 0.05 } as const;
-/** The leader: its width (title caps) and at least this (CSS px); the
- *  anchor dot's radius (title caps). */
-const LEADER_CAPS = 0.045;
-const LEADER_MIN_PX = 1.1;
-const DOT_CAPS = 0.16;
 /** The layers the letters' depth is drawn in, behind the face: enough
  *  that their steps stay under a pixel at a plate's largest. */
 const SIDE_LAYERS = { desktop: 10, phone: 6 } as const;
 /** The returns' light: in shade, and what full sun adds (and takes on the
  *  side away from it). */
 const SIDE_SHADE = { ambient: 0.62, sun: 0.5, away: 0.12 } as const;
-/** The shadow reaches this far from the letters (m) at most, and fades
- *  in over its last fifth; it shows from this sun height (sin) up. */
-const SHADOW_REACH_M = 220;
+/** The shadow reaches this far from the letters (m) at most, found in
+ *  steps of `SHADOW_STEP_M` along the sun's ray down to the ground; it
+ *  shows from this sun height (sin) up. */
+const SHADOW_REACH_M = 400;
+const SHADOW_STEP_M = 4;
 const SHADOW_SUN = { from: 0.03, full: 0.18 } as const;
 
 /** What is asked, and what the plate is to say of it. */
@@ -182,6 +182,11 @@ export interface NameplateDeps {
   phone: boolean;
   /** the world direction to the sun (the rig keeps it) */
   sunDirection: Vector3;
+  /** the sun's shadow map (sun-rig.ts `shadowMap`): the letters' shadow
+   *  falls only where the sun reaches */
+  sunShadow: SunShadowMap;
+  /** the renderer's depth runs reversed, the shadow map's too */
+  reversedDepth: boolean;
 }
 
 export interface Nameplate {
@@ -308,8 +313,8 @@ function writePrism(
 }
 
 /** The plate's two materials over one geometry (the quad's kind picks,
- *  by `step`, never a branch): the face, for the letters, the box and the
- *  leader; and the returns, drawn by every layer behind it (the drawn
+ *  by `step`, never a branch): the face, for the letters and the box;
+ *  and the returns, drawn by every layer behind it (the drawn
  *  object's layer, a per-object uniform, pushes it back that far), lit by
  *  the sun from the letters' field. Each graph holds only its own work. */
 function plateMaterials(
@@ -433,6 +438,12 @@ interface ShadowUniforms {
   reach: Live;
   strength: Live;
   colour: UniformNode<"vec3", Vector3>;
+  /** the way to the sun in the world */
+  sunWorld: UniformNode<"vec3", Vector3>;
+  /** world → the sun's shadow map ([0, 1]³), its bias, whether it exists */
+  sunMatrix: UniformNode<"mat4", Matrix4>;
+  sunBias: Live;
+  sunReady: Live;
 }
 
 /**
@@ -446,7 +457,9 @@ function shadowMaterial(
   deps: Pick<NameplateDeps, "depthTexture" | "lens">,
   mask: TextureNode<"vec4">,
   fade: Live,
-  u: ShadowUniforms
+  u: ShadowUniforms,
+  sunStandIn: DepthTexture,
+  reversed: boolean
 ) {
   const sceneZ = deps.lens.viewZ(texture(deps.depthTexture, screenUV).r);
   const ray = positionView;
@@ -465,7 +478,28 @@ function shadowMaterial(
   const reach = step(0, k).mul(
     float(1).sub(smoothstep(u.reach.mul(0.8), u.reach, k))
   );
-  const a = mask.sample(hit).r.mul(inside).mul(reach).mul(u.strength);
+  // only where the sun reaches: the surface against the scene's own
+  // shadow map, lifted towards the sun off its depth's quantisation (as
+  // stylize-effect.ts `inSun`); off the map's frustum it counts as lit
+  const lifted = world.xyz.add(
+    u.sunWorld.mul(surface.z.negate().mul(0.0015).add(0.12))
+  );
+  const s = u.sunMatrix.mul(vec4(lifted, 1));
+  const c = s.xyz.div(s.w);
+  const at = vec2(c.x, float(1).sub(c.y));
+  const onMap = step(0, at.x)
+    .mul(step(at.x, 1))
+    .mul(step(0, at.y))
+    .mul(step(at.y, 1))
+    .mul(reversed ? step(0, c.z) : step(c.z, 1))
+    .mul(u.sunReady);
+  // the map's read: a stand-in until the first lit material made it
+  const read = texture(sunStandIn, at);
+  const sunlit = read.compare(
+    reversed ? c.z.sub(u.sunBias) : c.z.add(u.sunBias)
+  ).x;
+  const lit = mix(float(1), sunlit, onMap);
+  const a = mask.sample(hit).r.mul(inside).mul(reach).mul(lit).mul(u.strength);
   const m = new MeshBasicNodeMaterial();
   m.colorNode = vec4(u.colour, 1);
   m.opacityNode = a.mul(fade);
@@ -476,7 +510,7 @@ function shadowMaterial(
   m.side = BackSide;
   m.fog = false;
   m.name = "nameplate-shadow";
-  return m;
+  return { material: m, read };
 }
 
 /** An empty geometry with every attribute (the build needs them all). */
@@ -612,13 +646,15 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       side.geometry = g;
     }
   };
-  const leader = new Mesh(emptyGeometry(), material);
-  leader.frustumCulled = false;
-  leader.visible = false;
-  leader.renderOrder = 1;
   // the cast shadow: its box in world space, rewritten each frame
   let mask = maskTexture(new Uint8Array(16), 4, 4);
   const maskNode = texture(mask);
+  // the sun's map is made by the first lit material, maybe after this:
+  // a stand-in that compares like it until then
+  const sunStandIn = new DepthTexture(1, 1);
+  sunStandIn.compareFunction = deps.reversedDepth
+    ? GreaterEqualCompare
+    : LessEqualCompare;
   const shadowUniforms: ShadowUniforms = {
     inverse: uniform(new Matrix4()),
     sun: uniform(new Vector3(0, 0, 1)),
@@ -626,13 +662,24 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     reach: uniform(1),
     strength: uniform(0),
     colour: uniform(new Vector3()),
+    sunWorld: uniform(deps.sunDirection),
+    sunMatrix: uniform(deps.sunShadow.matrix),
+    sunBias: uniform(0).onRenderUpdate(() => deps.sunShadow.bias()),
+    sunReady: uniform(0),
   };
-  const shadowMat = shadowMaterial(deps, maskNode, fade, shadowUniforms);
+  const { material: shadowMat, read: sunRead } = shadowMaterial(
+    deps,
+    maskNode,
+    fade,
+    shadowUniforms,
+    sunStandIn,
+    deps.reversedDepth
+  );
   const shadow = new Mesh(prismGeometry(), shadowMat);
   shadow.frustumCulled = false;
   shadow.visible = false;
   shadow.renderOrder = 0;
-  scene.add(shadow, leader, letters);
+  scene.add(shadow, letters);
 
   let style: RenderStyle = "pastel";
   let night = 0;
@@ -650,6 +697,9 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   } | null = null;
   let layout: NameplateLayout | null = null;
   let pending: NameplateLayout | null = null;
+  // a better place seen since `wantedAt`, not yet moved to
+  let wanted: NameplateLayout | null = null;
+  let wantedAt = 0;
   let chosenAt = Number.NEGATIVE_INFINITY;
   let crossAt = Number.NEGATIVE_INFINITY;
   let askedAt = Number.NEGATIVE_INFINITY;
@@ -801,150 +851,6 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     });
   };
 
-  /** The leader and the anchor's dot (or the comic's tail), in world
-   *  space, for this frame's pose. */
-  const placeLeader = (p: NameplatePose, camera: NameplateCamera) => {
-    const t = type();
-    const anchor = p.anchor;
-    if (!anchor || !geometry) {
-      leader.visible = false;
-      return;
-    }
-    const b = block();
-    const at = (s: number, u: number): Vec3 =>
-      add(p.origin, add(scale(p.right, s * p.cap), scale(p.up, u * p.cap)));
-    // the leader leaves the plate's foot on the side nearest the anchor
-    const along = dot3(sub(anchor, p.origin), p.right) / p.cap;
-    const footS = Math.min(Math.max(along, 0.15), b.width - 0.15);
-    const foot = at(footS, 0.05);
-    const distance = camera.ortho
-      ? 1
-      : Math.max(dot3(sub(anchor, camera.position), camera.forward), 0.5);
-    const minW = (LEADER_MIN_PX * distance) / camera.pxPerM;
-    const w = Math.max(LEADER_CAPS * p.cap, minW) / 2;
-    const pos: number[] = [];
-    const uvk: number[] = [];
-    const ink: number[] = [];
-    const idx: number[] = [];
-    const dim = nightDim(night);
-    const push = (
-      corners: Vec3[],
-      uv: number[][],
-      kind: number,
-      c: readonly [number, number, number]
-    ) => {
-      const base = pos.length / 3;
-      for (const [i, q] of corners.entries()) {
-        pos.push(q[0], q[1], q[2]);
-        uvk.push(uv[i][0], uv[i][1], kind);
-        ink.push(c[0], c[1], c[2], dim);
-      }
-      if (corners.length === 4) {
-        idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
-      } else {
-        idx.push(base, base + 1, base + 2);
-      }
-    };
-    const r = p.right;
-    const quad = (
-      from: Vec3,
-      to: Vec3,
-      width: number,
-      c: readonly [number, number, number]
-    ) => {
-      // the plate's normal × the line: across it, in the plate's plane;
-      // antialiased across by its u
-      const d = sub(to, from);
-      const l = Math.hypot(d[0], d[1], d[2]) || 1;
-      const x = scale(cross(cross(p.right, p.up), d), 1 / l);
-      const o = (q: Vec3, s: number): Vec3 => add(q, scale(x, s));
-      push(
-        [o(from, -width), o(from, width), o(to, width), o(to, -width)],
-        [
-          [0, 0.5],
-          [1, 0.5],
-          [1, 0.5],
-          [0, 0.5],
-        ],
-        KIND.solid,
-        c
-      );
-    };
-    if (t.leader === "tail" && t.box) {
-      // the caption box's tail: from its foot to the anchor, filled, its
-      // two slanted sides edged by antialiased strokes over the fill's
-      const half = Math.min(0.5, b.width * 0.12);
-      const a = at(footS - half, 0.2);
-      const c = at(footS + half, 0.2);
-      const edge = atNight(t.box.edge, night);
-      const fill = atNight(t.box.fill, night);
-      const stroke = 0.045 * p.cap;
-      const solid = [
-        [0.5, 0.5],
-        [0.5, 0.5],
-        [0.5, 0.5],
-      ];
-      push([a, c, anchor], solid, KIND.solid, fill);
-      quad(a, anchor, stroke, edge);
-      quad(c, anchor, stroke, edge);
-    } else {
-      const line = atNight(t.lines.ink, night);
-      quad(foot, anchor, w, line);
-      if (t.leader === "dimension") {
-        // ticks across both ends, a drawn dimension line
-        const tick = 0.35 * p.cap;
-        const o = (q: Vec3, s: number): Vec3 => add(q, scale(r, s));
-        quad(o(foot, -tick), o(foot, tick), w, line);
-        quad(o(anchor, -tick), o(anchor, tick), w, line);
-      } else {
-        const d = DOT_CAPS * p.cap;
-        const u = p.up;
-        const q = (sx: number, sy: number): Vec3 =>
-          add(anchor, add(scale(r, sx * d), scale(u, sy * d)));
-        push(
-          [q(-1, -1), q(1, -1), q(1, 1), q(-1, 1)],
-          [
-            [0, 0],
-            [1, 0],
-            [1, 1],
-            [0, 1],
-          ],
-          KIND.disc,
-          t.accent
-        );
-      }
-    }
-    const g = leader.geometry;
-    const posAttr = g.getAttribute("position") as Float32BufferAttribute;
-    if (posAttr.array.length !== pos.length) {
-      g.dispose();
-      leader.geometry = new BufferGeometry();
-      leader.geometry.setAttribute(
-        "position",
-        new Float32BufferAttribute(pos, 3)
-      );
-      leader.geometry.setAttribute("uvk", new Float32BufferAttribute(uvk, 3));
-      leader.geometry.setAttribute("ink", new Float32BufferAttribute(ink, 4));
-      leader.geometry.setAttribute(
-        "halo",
-        new Float32BufferAttribute(new Float32Array((pos.length / 3) * 4), 4)
-      );
-      leader.geometry.setIndex(
-        new Uint16BufferAttribute(new Uint16Array(idx), 1)
-      );
-    } else {
-      (posAttr.array as Float32Array).set(pos);
-      posAttr.needsUpdate = true;
-      const inkAttr = g.getAttribute("ink") as Float32BufferAttribute;
-      (inkAttr.array as Float32Array).set(ink);
-      inkAttr.needsUpdate = true;
-      const uvAttr = g.getAttribute("uvk") as Float32BufferAttribute;
-      (uvAttr.array as Float32Array).set(uvk);
-      uvAttr.needsUpdate = true;
-    }
-    leader.visible = true;
-  };
-
   const placeScene = (
     camera: Camera,
     cam: NameplateCamera
@@ -961,6 +867,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     hidden: (points) => deps.hidden(camera, points),
     hud: deps.hud(),
     groundAt: deps.groundAt,
+    opaque: type().box !== undefined,
   });
 
   const matrix = new Matrix4();
@@ -973,10 +880,10 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   const forget = () => {
     layout = null;
     pending = null;
+    wanted = null;
     pose = null;
     chosenAt = Number.NEGATIVE_INFINITY;
     letters.visible = false;
-    leader.visible = false;
     shadow.visible = false;
   };
 
@@ -1004,7 +911,14 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     if (layout === null) {
       layout = chosen;
       rebuild();
-    } else if (!sameLayout(chosen, layout)) {
+    } else if (sameLayout(chosen, layout)) {
+      wanted = null;
+    } else if (!sameLayout(chosen, wanted)) {
+      // a new place must stay the best a while before the plate moves
+      wanted = chosen;
+      wantedAt = now;
+    } else if (now - wantedAt >= SETTLE_MS) {
+      wanted = null;
       pending = chosen;
       crossAt = now;
     }
@@ -1069,9 +983,28 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     [0, 0, 0],
   ];
   const sweep: Vec3 = [0, 0, 0];
+  /** How far the shadow box reaches (m): along the sun's ray from the
+   *  plate's lowest corner until it meets the ground (a terrace's letters
+   *  throw their shadow down onto the river below it), a little beyond. */
+  const shadowLength = (lowest: number, base: number, sun: Vector3) => {
+    const o = prismCorners[0];
+    const floor = base - 2;
+    for (let t = 0; t <= SHADOW_REACH_M; t += SHADOW_STEP_M) {
+      const y = lowest - sun.y * t;
+      const ground = Math.min(
+        deps.groundAt(o[0] - sun.x * t, o[2] - sun.z * t),
+        floor
+      );
+      if (y < ground) {
+        return Math.max(t + SHADOW_STEP_M, 2);
+      }
+    }
+    return SHADOW_REACH_M;
+  };
+
   /** The cast shadow for this frame's pose: the plate's rectangle swept
-   *  away from the sun to below the thing's foot (at most
-   *  `SHADOW_REACH_M`); none with the sun down or in the plate's plane. */
+   *  away from the sun down to the ground (at most `SHADOW_REACH_M`);
+   *  none with the sun down or in the plate's plane. */
   const placeShadow = (p: NameplatePose, b: NameplateBody) => {
     const sun = deps.sunDirection;
     const t = type();
@@ -1096,10 +1029,12 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       }
       lowest = Math.min(lowest, c[1]);
     }
-    const length = Math.min(
-      Math.max((lowest - (b.base - 2)) / Math.max(sun.y, 0.05), 2),
-      SHADOW_REACH_M
-    );
+    const length = shadowLength(lowest, b.base, sun);
+    const map = deps.sunShadow.depth();
+    if (map && sunRead.value !== map) {
+      sunRead.value = map;
+    }
+    shadowUniforms.sunReady.value = map ? 1 : 0;
     sweep[0] = -sun.x * length;
     sweep[1] = -sun.y * length;
     sweep[2] = -sun.z * length;
@@ -1107,7 +1042,9 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     writePrism(shadow.geometry, prismCorners, sweep, handed);
     shadowUniforms.sun.value.copy(sunLocal);
     shadowUniforms.area.value.set(area.x, area.y, area.width, area.height);
-    shadowUniforms.reach.value = length / p.cap;
+    // its fade (the last fifth) lies past the box's end: the ground stops
+    // the shadow, not the fade
+    shadowUniforms.reach.value = (length * 1.25) / p.cap;
     shadowUniforms.strength.value = strength;
     const c = t.shadow.colour;
     shadowUniforms.colour.value.set(c[0], c[1], c[2]);
@@ -1171,12 +1108,17 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
         // nothing asked; or an export began before a place was chosen
         // (its tiles' projections would choose a wrong one)
         letters.visible = false;
-        leader.visible = false;
         shadow.visible = false;
         return;
       }
       const now = performance.now();
       const cam = plateCamera(camera, viewport());
+      // an opaque plate (the comic's box) stands over the whole thing,
+      // never on an eave before a tower it would cover
+      const b =
+        type().box && body.eave !== undefined
+          ? { ...body, eave: undefined }
+          : body;
       // no new choice while a cross-fade runs, out or in: it finishes
       // first (a flip back would flash the half-faded plate full)
       if (
@@ -1186,23 +1128,21 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
         !pending
       ) {
         chosenAt = now;
-        choose(body, camera, cam, now);
+        choose(b, camera, cam, now);
       }
       const crossFade = crossing(now, hold);
       if (!layout || !geometry) {
         return;
       }
-      pose = nameplatePose(body, layout, cam, block(), range(), deps.groundAt);
+      pose = nameplatePose(b, layout, cam, block(), range(), deps.groundAt);
       placePlate(pose, cam);
       // an export draws every tile alike: no fade still running
       const arrive = hold ? 1 : Math.min((now - askedAt) / ARRIVE_MS, 1);
       fade.value = pose.fade * crossFade * (arrive * arrive * (3 - 2 * arrive));
       letters.visible = fade.value > 0.001;
       if (letters.visible) {
-        placeLeader(pose, cam);
-        placeShadow(pose, body);
+        placeShadow(pose, b);
       } else {
-        leader.visible = false;
         shadow.visible = false;
       }
     },
@@ -1242,16 +1182,11 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
         if (disposed) {
           return Promise.resolve();
         }
-        const shown = [
-          letters.visible,
-          leader.visible,
-          shadow.visible,
-        ] as const;
+        const shown = [letters.visible, shadow.visible] as const;
         const previous = renderer.getRenderTarget();
         const toneMapping = renderer.toneMapping;
         const colorSpace = renderer.outputColorSpace;
         letters.visible = true;
-        leader.visible = true;
         shadow.visible = true;
         renderer.setRenderTarget(null);
         renderer.toneMapping = NoToneMapping;
@@ -1259,7 +1194,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
         try {
           return renderer.compileAsync(scene, camera);
         } finally {
-          [letters.visible, leader.visible, shadow.visible] = shown;
+          [letters.visible, shadow.visible] = shown;
           renderer.outputColorSpace = colorSpace;
           renderer.toneMapping = toneMapping;
           renderer.setRenderTarget(previous);
@@ -1272,11 +1207,11 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     dispose: () => {
       disposed = true;
       plate.geometry.dispose();
-      leader.geometry.dispose();
       shadow.geometry.dispose();
       material.dispose();
       sideMaterial.dispose();
       shadowMat.dispose();
+      sunStandIn.dispose();
       atlas.dispose();
       mask.dispose();
     },

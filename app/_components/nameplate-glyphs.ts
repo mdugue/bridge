@@ -10,7 +10,7 @@
  * tilt. Beside the geometry, the block's silhouette as a small coverage
  * mask (`PlateGeometry.mask`): what the letters' cast shadow reads.
  */
-import type { NameplateText } from "@/lib/city/nameplate";
+import { type NameplateText, titleLines } from "@/lib/city/nameplate";
 import {
   NAMEPLATE_FACE_VARS,
   type NameplateFace,
@@ -51,6 +51,8 @@ const ATLAS_MAX_HEIGHT = 1024;
  *  leading, in their own capitals. */
 const TITLE_GAP = 0.55;
 const LINE_LEADING = 1.75;
+/** A long title's line spacing, in its caps. */
+const TITLE_LEADING = 1.32;
 /** Room under the last baseline for descenders, over the title for
  *  accents, in title caps. */
 const FOOT = 0.32;
@@ -85,7 +87,9 @@ export interface PlateRaster {
   atlas: { data: Uint8Array; height: number; width: number };
   lineCap: number;
   lines: SetLine[];
-  title: SetLine;
+  /** the title's lines, the first on top (a long name breaks:
+   *  lib/city/nameplate.ts `titleLines`) */
+  titles: SetLine[];
   type: NameplateType;
 }
 
@@ -392,15 +396,17 @@ export function rasterPlate(
     return null;
   }
   const cache = new Map<string, Glyph>();
-  const title = setLine(
-    ctx,
-    text.title,
-    type.title,
-    res.titlePx,
-    res.radius,
-    from,
-    cache,
-    PAINT.title
+  const titles = titleLines(text.title).map((t) =>
+    setLine(
+      ctx,
+      t,
+      type.title,
+      res.titlePx,
+      res.radius,
+      from,
+      cache,
+      PAINT.title
+    )
   );
   const lines = text.lines.map((l) =>
     setLine(
@@ -415,7 +421,9 @@ export function rasterPlate(
     )
   );
   // plate units: one title capital
-  title.scale = 1 / title.cap;
+  for (const t of titles) {
+    t.scale = 1 / t.cap;
+  }
   const lineCap = linesSize(type, text.rank);
   for (const l of lines) {
     l.scale = lineCap / l.cap;
@@ -440,7 +448,7 @@ export function rasterPlate(
     atlas: { data: atlas, width: ATLAS_WIDTH, height: packed.height },
     lineCap,
     lines,
-    title,
+    titles,
     type,
   };
 }
@@ -454,7 +462,7 @@ export function layPlate(
   align: Align,
   withLines: boolean
 ): PlateGeometry {
-  const { title, lineCap, type } = raster;
+  const { titles, lineCap, type } = raster;
   const lines = withLines ? raster.lines : [];
   const atlasHeight = raster.atlas.height;
   // baselines from the foot up: the last line first
@@ -466,9 +474,9 @@ export function layPlate(
   }
   const titleBase =
     lines.length > 0 ? y - LINE_LEADING * lineCap + lineCap + TITLE_GAP : y;
-  const height = titleBase + 1 + HEAD;
+  const height = titleBase + (titles.length - 1) * TITLE_LEADING + 1 + HEAD;
   const widthOf = (l: SetLine) => l.width * l.scale;
-  const width = Math.max(widthOf(title), ...lines.map(widthOf));
+  const width = Math.max(...titles.map(widthOf), ...lines.map(widthOf));
   const b = new Builder();
   const box = type.box;
   const pad = box?.pad ?? 0;
@@ -515,7 +523,9 @@ export function layPlate(
       );
     }
   };
-  place(title, titleBase);
+  for (const [i, t] of titles.entries()) {
+    place(t, titleBase + (titles.length - 1 - i) * TITLE_LEADING);
+  }
   for (const [i, l] of lines.entries()) {
     place(l, baselines[i]);
   }

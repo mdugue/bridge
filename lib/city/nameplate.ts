@@ -130,3 +130,67 @@ export function nameplateText(
   }
   return null;
 }
+
+/** A title longer than this (characters) breaks over lines; a line holds
+ *  about this many, never fewer than its longest word. */
+const TITLE_WRAP = { after: 24, line: 22 } as const;
+
+/**
+ * A title's lines on the plate: one where it is short; a long one broken
+ * between words into lines of about the same length (the fewest lines of
+ * `TITLE_WRAP.line`), a joined name (`A / B`, an ensemble's) first at
+ * its slash, each part on lines of its own.
+ */
+export function titleLines(title: string): string[] {
+  const t = title.trim();
+  if (t.length <= TITLE_WRAP.after) {
+    return [t];
+  }
+  const parts = t
+    .split(/\s+\/\s+/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+  if (parts.length > 1) {
+    return parts.flatMap((p) => balanced(p));
+  }
+  return balanced(t);
+}
+
+/** Words into the fewest lines of about `TITLE_WRAP.line`, as even as
+ *  they go: the narrowest width that still fits that many lines. */
+function balanced(text: string): string[] {
+  const words = text.split(/\s+/);
+  if (text.length <= TITLE_WRAP.after || words.length < 2) {
+    return [text];
+  }
+  const longest = Math.max(...words.map((w) => w.length));
+  const count = Math.max(
+    Math.ceil(text.length / TITLE_WRAP.line),
+    Math.min(2, words.length)
+  );
+  for (let width = longest; width <= text.length; width++) {
+    const lines = greedy(words, width);
+    if (lines.length <= count) {
+      return lines;
+    }
+  }
+  return [text];
+}
+
+/** Words filled into lines of at most `width` characters. */
+function greedy(words: string[], width: number): string[] {
+  const lines: string[] = [];
+  let line = "";
+  for (const w of words) {
+    if (line === "") {
+      line = w;
+    } else if (line.length + 1 + w.length <= width) {
+      line = `${line} ${w}`;
+    } else {
+      lines.push(line);
+      line = w;
+    }
+  }
+  lines.push(line);
+  return lines;
+}

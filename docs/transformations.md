@@ -1897,12 +1897,16 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   rooftop letters — on the main mass's eave (LoD2's, of its largest
   object) where that lies a quarter of the height or more under the top,
   so a church's name stands on its nave, not on its spire's tip; else on
-  the top — or beside it in the sky with a hairline to a dot at the
-  facade; within 1 S an inscription before the facade, its foot a quarter
+  the top — or beside it in the sky (no line to it: the selection
+  outline marks the thing, in the lettering's ink); within 1 S an inscription before the facade, its foot a quarter
   of the height up (2.5–15 m);
   beyond 8 S its name alone. The letters are built, not printed: 0.14 of
   their capital height deep, their returns lit by the sun, casting a
-  shadow on whatever stands behind them from the sun. Thresholds hold 20 % of hysteresis; the place is chosen
+  shadow on whatever stands behind them from the sun, down to the ground
+  and only where the sun reaches. A long name breaks between words into
+  even lines (an `A / B` name at its slash). Thresholds hold 20 % of
+  hysteresis; a new place must stay the best 900 ms before the plate
+  moves (maintainer review 2026-11-02: it moved too often); the place is chosen
   every 250 ms among its candidates by what of it would be off screen,
   hidden by the city (rays through the buildings' BVHs, never a tile
   whose BVH is being built), under the HUD's panels (`data-scene-cover`)
@@ -1914,15 +1918,20 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   set** follows the picture style (`lib/city/nameplate-type.ts`): Pastell
   and Papier the HUD's grotesque (Inter, heavy, set tight) with tracked
   capitals for the facts, in loud colours — Pastell the selection's
-  magenta with plum returns, Papier a printer's vermilion — and no halo
+  magenta with plum returns, Papier a printer's violet (vermilion for a
+  day, 2026-11-01: the selection's hue reads as one hand) — and no halo
   (a book serif with a pale halo until 2026-11-01: maintainer review found
   it old-fashioned and too much like a tooltip); Comic a caption box
-  (Bangers, yellow, its returns black, a tail to the building), Noir and
+  (Bangers, yellow, its returns black; opaque, so it keeps off the
+  building and stands over it), Noir and
   Sin City a condensed grotesque (Oswald) with a monospaced line, Sin
-  City's returns red, Strich spaced capitals with a dimension line,
+  City's returns red, Strich spaced capitals,
   Schwarzplan on the ground like a plan's lettering from above the
   building where it reads; by night the ink turns light and dims a
-  little, and the shadow goes with the sun. Drawn after the frame
+  little, and the shadow goes with the sun. The selection outline takes
+  each style's lettering ink (Schwarzplan red on white, Sin City red,
+  Comic black on yellow, Noir white, Strich graphite, Pastell and Papier
+  the violet). Drawn after the frame
   (`nameplate-layer.ts`, rendering.md). **Not yet judged on a real GPU.**
 
 ### Vegetation
