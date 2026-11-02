@@ -30,11 +30,14 @@ export interface NameplateText {
   title: string;
 }
 
-/** Another object's eave stands this many times the main mass's eave
- *  height over the mass's base to be a tower it stands under (a house's
- *  second roof part rarely reaches 1.75 eave heights; a church's tower,
- *  a dome's drum many). */
+/** A tower's eave stands this many times the carrying eave's height (each
+ *  over its own base) or more: a church's tower or a dome's drum over its
+ *  nave, not a house's second roof part or a wing up the slope. */
 const TOWER_OVER_EAVE = 1.75;
+/** The carrying object's footprint at least this share of the largest
+ *  one's (a root's or an ensemble lead's is its whole tree's): a nave,
+ *  not a sacristy or an annex. */
+const MASS_AREA_SHARE = 0.25;
 
 /** Whether an object weighs in: a LoD2 object (the surface model's
  *  additions copy their host's facts) with an eave and a base of its own
@@ -45,14 +48,14 @@ const ownMass = (o: InquiryObject): o is InquiryObject & { baseZ: number } =>
   o.baseZ !== undefined &&
   o.baseZ !== 0;
 
-/** A building's main eave: its largest object's (the main mass, not a
- *  tower or a dome's drum), over that object's own base, where another of
- *  its objects' eave stands well over it (a tower, a dome's drum); null
- *  where none does (a house's own roof: its letters stand on the top),
- *  where none states an eave and base, or for anything else. Only the
- *  objects' own eaves and bases are read: a root's or an ensemble lead's
- *  height and area span its whole tree, so it is the mass only where no
- *  part of its own qualifies. */
+/** What a building's rooftop letters stand on under its tower: the highest
+ *  eave (over its object's own base) that lies clearly under the tallest
+ *  one, of an object with a large footprint (the nave under the tower, a
+ *  church's body under its dome); null where none does (a house's own
+ *  roof: its letters stand on the top), where none states an eave and a
+ *  base, or for anything else. Heights are each object's own over its own
+ *  base, so a building straddling two tiles or a slope compares like with
+ *  like. */
 export function nameplateEave(
   inquiry: Inquiry
 ): { baseZ: number; eaveH: number } | null {
@@ -64,22 +67,25 @@ export function nameplateEave(
   const all = (
     inquiry.tree.length > 0 ? inquiry.tree : [inquiry.picked]
   ).filter(ownMass);
-  const spans = (o: InquiryObject) =>
-    o.lead === true || (o.building && all.some((x) => !x.building));
-  const largest = (from: typeof all) =>
-    from.reduce<(typeof all)[number] | null>(
-      (best, o) => (best === null || o.facts.area > best.facts.area ? o : best),
-      null
-    );
-  const mass = largest(all.filter((o) => !spans(o))) ?? largest(all);
-  if (!mass) {
-    return null;
+  let tallest = 0;
+  let largest = 0;
+  for (const o of all) {
+    tallest = Math.max(tallest, o.eaveH);
+    largest = Math.max(largest, o.facts.area);
   }
-  const { baseZ, eaveH } = mass;
-  const over = baseZ + TOWER_OVER_EAVE * eaveH;
-  // the mass's own copy from a neighbouring tile stands at its own eave
-  const tower = all.some((o) => o.baseZ + o.eaveH >= over);
-  return tower ? { baseZ, eaveH } : null;
+  let mass: (typeof all)[number] | null = null;
+  for (const o of all) {
+    if (
+      o.eaveH * TOWER_OVER_EAVE <= tallest &&
+      o.facts.area >= MASS_AREA_SHARE * largest &&
+      (mass === null ||
+        o.eaveH > mass.eaveH ||
+        (o.eaveH === mass.eaveH && o.facts.area > mass.facts.area))
+    ) {
+      mass = o;
+    }
+  }
+  return mass ? { baseZ: mass.baseZ, eaveH: mass.eaveH } : null;
 }
 
 /** Whether a building inquiry is (part of) a landmark. */

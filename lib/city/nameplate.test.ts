@@ -185,25 +185,27 @@ test("a long title breaks between words into even lines, a joined one at its sla
   ]);
 });
 
-test("the eave is the main mass's, over its own base", () => {
-  // a tower (small, high eave) beside the nave (large, standing higher on
-  // a slope than the tower's foot)
-  const tower = object({
-    baseZ: 100,
-    eaveH: 40,
-    facts: facts({ area: 80 }),
-  });
-  const nave = object({
+test("rooftop letters stand on the eave under a tower", () => {
+  const at = (
+    baseZ: number,
+    eaveH: number,
+    area: number,
+    over: Partial<InquiryObject> = {}
+  ) => object({ baseZ, eaveH, facts: facts({ area }), ...over });
+  // the nave as the root (lead, its area the whole tree's), the tower a
+  // part, a sacristy too: on the nave's eave
+  const nave = at(106, 15, 900, { lead: true });
+  const tower = at(100, 40, 36, { building: false, objectIndex: 1 });
+  const sacristy = at(104, 4, 60, { building: false, objectIndex: 2 });
+  expect(nameplateEave(building([nave, tower, sacristy]))).toEqual({
     baseZ: 106,
     eaveH: 15,
-    objectIndex: 1,
-    facts: facts({ area: 900 }),
   });
-  expect(nameplateEave(building([tower, nave]))).toEqual({
-    baseZ: 106,
-    eaveH: 15,
-  });
-  // asked without its tree: the picked object alone, nothing over it
+  // the root's own geometry the tower, the nave a part: the same
+  const towerRoot = at(100, 40, 1000, { lead: true });
+  const navePart = at(106, 15, 900, { building: false, objectIndex: 4 });
+  expect(nameplateEave(building([towerRoot, navePart]))?.eaveH).toBe(15);
+  // the nave alone: nothing over it
   const alone: Inquiry = {
     kind: "building",
     tile: "t",
@@ -211,59 +213,17 @@ test("the eave is the main mass's, over its own base", () => {
     tree: [],
   };
   expect(nameplateEave(alone)).toBeNull();
-  // a gabled house and its lower annex: the letters stand on the top
-  const house = object({
-    baseZ: 110,
-    eaveH: 9,
-    facts: facts({ area: 200, height: 15 }),
-  });
-  const annex = object({
-    baseZ: 110,
-    eaveH: 3,
-    objectIndex: 2,
-    facts: facts({ area: 30, height: 5 }),
-  });
-  expect(nameplateEave(building([house, annex]))).toBeNull();
-  // the nave as the root, its height the whole tree's (spire included):
-  // still on the nave's eave
-  const root = object({
-    baseZ: 106,
-    eaveH: 15,
-    facts: facts({ area: 900, height: 90 }),
-  });
-  expect(nameplateEave(building([root, tower]))?.eaveH).toBe(15);
-  // a Building drawn by its parts alone (base 0: no geometry of its own)
-  // is no tower over a low-lying house
-  const bare = object({ baseZ: 0, eaveH: 0, facts: facts({ height: 19 }) });
-  const low = object({
-    baseZ: 3,
-    eaveH: 9,
-    objectIndex: 3,
-    facts: facts({ area: 120, height: 12 }),
-  });
-  expect(nameplateEave(building([bare, low]))).toBeNull();
-  // a root whose own geometry is the tower (its area the whole tree's)
-  // over a nave part: on the nave's eave
-  const towerRoot = object({
-    baseZ: 100,
-    eaveH: 40,
-    facts: facts({ area: 1000 }),
-  });
-  const navePart = object({
-    baseZ: 106,
-    building: false,
-    eaveH: 15,
-    objectIndex: 4,
-    facts: facts({ area: 900 }),
-  });
-  expect(nameplateEave(building([towerRoot, navePart]))?.eaveH).toBe(15);
-  // a steep house twice (from both tiles it straddles): no tower
-  const steep = object({
-    baseZ: 100,
-    eaveH: 6,
-    facts: facts({ area: 150, height: 12 }),
-  });
-  expect(nameplateEave(building([steep, { ...steep }]))).toBeNull();
-  // nothing states an eave: none
-  expect(nameplateEave(building([object()]))).toBeNull();
+  // a gabled house and its annex, a wing up the slope, a house straddling
+  // two tiles: the letters stand on the top
+  const house = at(110, 9, 200);
+  expect(nameplateEave(building([house, at(110, 3, 30)]))).toBeNull();
+  expect(
+    nameplateEave(building([at(100, 8, 150), at(107, 8, 140)]))
+  ).toBeNull();
+  expect(nameplateEave(building([house, { ...house }]))).toBeNull();
+  // a Building drawn by its parts alone (base 0) and a surface-model
+  // addition with its host's facts weigh nothing
+  const bare = at(0, 30, 2000);
+  const relief = at(130, 40, 900, { source: 2 });
+  expect(nameplateEave(building([bare, relief, house]))).toBeNull();
 });

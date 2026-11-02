@@ -564,10 +564,17 @@ export function layPlate(
       positions[i + 1] -= low;
     }
   }
+  // a box's top: its edge and its lean reach past the text's
+  let top = height + pad;
+  if (pad > 0) {
+    for (let i = 1; i < positions.length; i += 3) {
+      top = Math.max(top, positions[i]);
+    }
+  }
   const block = {
     foot: pad > 0 ? 0 : firstBaseline,
     width: width + 2 * pad,
-    height: height + pad,
+    height: top,
   };
   return {
     block,
