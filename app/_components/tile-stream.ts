@@ -144,6 +144,7 @@ import {
   type VegetationControl,
   type VegetationFeatures,
 } from "./vegetation-layer";
+import { footMaterialFor } from "./tree-foot";
 import { setClaySkyView, type StyleResources } from "./visual-style";
 import { dressWalls } from "./wall-layer";
 
@@ -1251,6 +1252,7 @@ async function buildDressing(
           offset: ctx.offset,
           heightAt: terrain.heightAt,
           sunDirection: ctx.sunDirection,
+          footMaterial: footMaterialFor(terrain),
         }
       ),
       { signal }

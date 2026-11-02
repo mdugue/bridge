@@ -333,6 +333,29 @@ visual-variable codebook is in
   0.5 m ramp at each end (`low` on the kerb lines, `kerbHeightAt`). 0.8–3.4 %
   of the kerb per tile, 0.6–3.8 km. The painted band and its shadow leave
   the lowered stretches out; the ramps keep them.
+- **Path edges** `= computed` `≈ assumed` (*Wegränder*, 2026-11-02) — a path (class
+  6) beside anything but itself, near the camera. The splat paints a 1 m
+  colour texel (a phone's 2 m) as the mean of the class texels under it
+  and the ground read it bilinear, and the paving kinds, the sand, the
+  grey of sealed ground and the urban green switched per class or paving
+  texel: a narrow path at a slant — a forest path, or a park path two
+  texels wide in built-up land, which no baked edge distance covers (the
+  edge raster knows roads and meadows) — came out as a mosaic of
+  diamonds and teeth. Where the 4×4 class texels round a fragment hold a
+  path, `ground-detail.ts` `smoothPaths` weights them by a cubic B-spline
+  (a C2-smooth coverage at the class raster's own resolution, whatever
+  the splat's), cuts the edge on its iso line (0.45), wandering ±0.12 m by
+  a world-space noise and frayed over 0.25 m, and paints the palette
+  colours of the path and of the nearest texel beside it across it. The
+  same weight (`GroundColour.path`) then decides the sand, the slabs'
+  share and the urban green's, and a path texel off the smooth edge is
+  paved as the land beside it. The paving raster's walk kinds are read
+  as their shares of the four texels round the fragment (`walkShares`),
+  so a sealed texel among a path's sanded ones — where a tagged way's
+  buffer and the class raster's path disagree, the bake gives the rest
+  the town's default, asphalt — is a faint grey, not a block. Out to
+  1.2 m a pixel (the shares to 1 m), then the splat as before. No bake,
+  no raster.
 - **Paving materials** `❝ taken` `≈ assumed` (*Beläge*) — OSM `surface=*` on the highways (plus
   `sidewalk:*:surface` bands beside the roads, `footway:surface`, pedestrian
   squares, parking lots) → a 2048² four-byte raster per tile
@@ -2577,6 +2600,26 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   Only the register's trees: measured, so they may stand on a plan; the
   canopy's are inferred. On the fine terrain level only, so a Schwarzplan
   zoomed out past it shows none.
+
+- **Tree feet** `≈ assumed` (*Baumfuß*, 2026-11-02) — every trunk on the fine
+  level stands in a foot (`tree-foot.ts`): in paving — the class raster's
+  built-up, road, railway or unclassified land, off the baked lawn (the
+  edge raster's meadow side) — a round **tree pit** of earth with a fine
+  grain, 0.75 m beyond the trunk's flared foot (0.95–1.5 m), edged by a
+  10 cm stone ring between two joints; anywhere else a **root zone**, a
+  soft, slightly irregular patch of warmer, darker ground ~1.4 m beyond
+  the trunk; both with a contact shadow at the bark (−55 %, over 0.8 m),
+  which the sun's shadow map, a texel of several centimetres spread by
+  PCF, cannot draw. Which one is read once per vertex at the trunk's
+  foot. The foot is a glaze (MultiplyBlending, like the murals): the
+  ground's light, shadow, sky view and fog are under it already; 1 at its
+  rim, faded out between 70 and 150 m. It is an `Instances` set per chunk
+  on the trunks' own matrix and drop buffers and a site-shared quad, with
+  a material per tile whose slots hold the tile's class and edge rasters
+  — no bytes of its own on a phone. On a slope it lies level at the foot,
+  so the upslope rim, already faint, is cut by the ground. Transparent:
+  the paper styles leave it out. Before, the trunk stabbed straight into
+  a flat ground, which read cheap.
 
 - **Hedges (OSM, laser-scan height)** `◎ detected` `❝ taken` and **trees outside the canopy mask**
   (laser scan) — on by default. The laser scan is baked for every tile of the

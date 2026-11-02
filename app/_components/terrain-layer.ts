@@ -100,6 +100,7 @@ import {
   groundDetail,
   groundFields,
   groundNormal,
+  smoothPaths,
   urbanGreen,
 } from "./ground-detail";
 import {
@@ -873,8 +874,11 @@ function grassMottle(inp: GroundInputs, colorTexture: Tex): GroundColour {
         .mul(0.3)
     )
     .toVar();
+  const paths = smoothPaths(inp, texture(colorTexture, inp.uv).rgb);
   const col: GroundColour = {
-    baseCol: texture(colorTexture, inp.uv).rgb.toVar(),
+    baseCol: paths.col,
+    path: paths.path,
+    pathSide: paths.side,
     meadow,
     detail: meadow.mul(float(1).sub(smoothstep(0.5, 2.5, fw))).toVar(),
     mottle,

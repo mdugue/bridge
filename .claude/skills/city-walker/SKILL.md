@@ -117,6 +117,10 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   (`buildTileVegetation`) joins both into the tile's one vegetation
   control. `low-vegetation-layer.ts` draws every hedge (OSM's and the
   DLM's), its lumps pushed out by a world-space noise so pieces agree.
+  `tree-foot.ts` puts a foot under every trunk — a tree pit in paving, a
+  root zone elsewhere, a contact shadow at the bark — as a multiplied
+  glaze on the trunks' own instance buffers (no bytes of its own), its
+  material per tile with the class and edge rasters in its slots.
 - `shader-chunks.ts` — the shared TSL pieces: the node types (`F`, `V2`,
   `V3`, `V4`, `Live`), `dataXY()` / `dataPosition()` (glTF positions are
   quantised, so the data frame comes from world space: world (x, y, z) =
@@ -177,7 +181,10 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   hydrants, clocks, drinking fountains, bus-stop signs), `crown-season.ts`
   (per-day crown colour and bare stipple, `lib/city/tree-season.ts`).
 - Terms of the terrain's colour node (node functions called in order):
-  `ground-detail.ts`, `sport-ground.ts`, `road-markings.ts`
+  `ground-detail.ts` (first `smoothPaths`: a path's edge near the camera
+  cut on the B-spline-smoothed class texels, which sand, slabs and urban
+  green then follow — never a class or paving texel read NEAREST for a
+  tint), `sport-ground.ts`, `road-markings.ts`
   (`lib/city/markings.ts`), `cultivated-layer.ts` (colony gardens, vine
   rows; `lib/city/cultivated.ts`); and `sky-light.ts` (sky view → `aoNode`,
   far horizon → `receivedShadowNode`; `lib/city/skyview.ts`, the raster
