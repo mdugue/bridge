@@ -126,6 +126,12 @@ const CROWN_MAX = 7;
  *  by (linear; a cool, sky-lit shade), and a lawn's moss in it. */
 const SHADE = vec3(0.86, 0.88, 0.93);
 const SHADE_MOSS = vec3(0.93, 0.99, 0.86);
+/** The unmown grass round a park tree (the mower keeps off the trunk):
+ *  how far out it reaches past the trunk (m), the factor its long, darker,
+ *  yellower blades multiply the lawn by, and its seed heads'. */
+const UNMOWN_REACH = 0.85;
+const UNMOWN = vec3(0.8, 0.9, 0.66);
+const SEED_HEADS = vec3(1.14, 1.1, 0.9);
 /** Sun flecks in the crown's shadow: how much a fleck lifts the shaded
  *  ground (×, a shadow is about half the sun), their size (m) and how far
  *  off (m) they still show (beyond, they would only shimmer). */
@@ -651,6 +657,7 @@ function shadeGraph(r: FootRasters, sun?: V3): ShadeGraph {
   const offset = varying(q, "vShadeOffset");
   const crown = flat(f.crown, "vShadeCrown");
   const green = flat(f.green, "vShadeGreen");
+  const rt = flat(f.rt, "vShadeTrunk");
   const fade = varying(f.fade, "vShadeFade");
   const near = varying(
     float(1)
@@ -681,6 +688,27 @@ function shadeGraph(r: FootRasters, sun?: V3): ShadeGraph {
     const k = mix(vec3(1), SHADE, cover.mul(0.75))
       .mul(mix(vec3(1), SHADE_MOSS, moss.mul(0.6)))
       .toVar();
+    // the unmown ring on a lawn: long blades, streaked out from the trunk,
+    // their seed heads catching the light; ragged at its edge
+    const angle = atan(offset.y, offset.x);
+    const reach = rt.add(UNMOWN_REACH).add(
+      gdNoise(vec2(angle.mul(2.2), crown))
+        .sub(0.5)
+        .mul(0.5)
+    );
+    const ring = float(1)
+      .sub(smoothstep(reach.sub(0.18), reach, d))
+      .mul(green)
+      .toVar();
+    const blades = gdNoise(vec2(angle.mul(rt.add(0.6).mul(38)), d.mul(3)));
+    const heads = smoothstep(0.7, 0.8, gdNoise(xy.div(0.05).add(3.3))).mul(
+      float(1).sub(smoothstep(0.006, 0.02, fwidth(xy.x)))
+    );
+    k.mulAssign(
+      mix(vec3(1), UNMOWN, ring.mul(blades.mul(0.5).add(0.6))).mul(
+        mix(vec3(1), SEED_HEADS, ring.mul(heads))
+      )
+    );
     // sun flecks: in the crown's thrown shadow, where the ground is shaded
     const rel = offset.sub(shadowAt);
     const axis = vec2(shadowAt.x, shadowAt.y).div(max(length(shadowAt), 0.001));

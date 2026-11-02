@@ -2709,7 +2709,11 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
     (0.55 m noise cells, two octaves drifting on the crowns' wind clock)
     lift it back up to about the sun, by day, within 60 m (the glaze
     catches the shadow term through its `receivedShadowNode` and draws its
-    factor as its `outputNode`); and in autumn fallen leaves — covering
+    factor as its `outputNode`);
+    on a lawn or meadow a ring of unmown grass round the trunk (the mower
+    keeps off it), reaching 0.85 m past the bark with a ragged edge: long
+    blades streaked out from the trunk, darker and yellower, and seed
+    heads catching the light where they are larger than a pixel; and in autumn fallen leaves — covering
     flecks in yellow, orange, russet and brown in 11 cm cells, thick under
     the crown, thinning 25 % beyond it and swept against the kerb (the edge
     raster's road distance), a mean tint where a cell is under a few
