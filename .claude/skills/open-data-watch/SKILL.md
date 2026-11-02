@@ -45,12 +45,12 @@ current ones into the tiles that record none, right after a fetch.
    byte for byte the same is no new data: report it, record nothing.
    Then bake the whole site, `bun run bake <site>` — steps read their
    neighbours across a seam, so a tile alone leaves the seams stale.
-   Some „skipping“ lines are the site's design (no traffic counts, no
-   timetable trams, a tile without lamps); one for a raw input the fetch
-   should have brought (no DGM, DOM1, DOP, laser scan, OSM extract) means
-   the bake ran on less: then no PR, a line in the report. When unsure,
-   `git diff --stat data/<site>/` tells: outputs of unchanged tiles that
-   shrink or vanish are that case. Then `bun run test:pipeline`,
+   Some „skipping“ lines are the site's design: they name the site's
+   configuration („the site names no …“, „the site runs no …“) or an
+   empty tile („no lamps“). Every other one names a missing file, folder
+   or cache („no … at/under …“, „no complete …“, „not cached“): that step
+   kept its old outputs, so the PR would mix two editions — then no PR, a
+   line in the report naming the skipped steps. Then `bun run test:pipeline`,
    `bun run verify`, then update `data/<site>/provenance.json` (the new
    `Stand` and the date; after a new Basis-DLM, its `lastModified` day
    under `geosn["Basis-DLM"]`, which the check compares against) and the guide's dataset table in both languages.
