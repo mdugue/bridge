@@ -1489,12 +1489,29 @@ visual-variable codebook is in
   photo (Georg Elser's 23 m graffito has its size, its photos are
   slanted); Meißen, Grimma and Unna map none. A site without the file
   draws its walls as before.
-- **Dormers** `◎ detected` — what DOM1 shows over a pitched LoD2 roof (25–62°) that
+- **Dormers and chimneys** `◎ detected` — what DOM1 shows over a LoD2 roof that
   LoD2 leaves out (`pipeline/bake/dormers.py`): the excess `DOM − roof`
-  against its own 9 m median, blobs 0.7 m and more over it, 3–30 m² and
-  compact, their top 0.9–3.5 m over the roof and under the object's
-  ridge, clear of every tree point — a chimney is too small, a crown
-  overhanging the roof irregular or too high. Each becomes a front facing
+  against its own 9 m median, every blob 0.7 m and more over it, at any
+  size and spacing (2026-10-31; until then 3–30 m², no side over 8 m),
+  clear of every tree point. On a pitched roof (25–62°, a mansard —
+  LoD2's `roofType` 3400 — to 80°) a dormer: its top 0.9–3.5 m over the
+  roof and under the object's ridge, compact, at most 8 m down the slope
+  and as wide across it as it runs; dormers the 1 m cells join are parted
+  at their cores ≥ 1.2 m over the roof; none along a seam of the LoD2
+  roof (a ridge, hip, valley or step drawn half a metre off reads as a
+  band: on Dresden's 33410_5656 a third of the dormers drawn until then
+  were such bands in hipped roofs' valleys). A **chimney**: a blob of one
+  or two cells reaching within 0.5 m of the ridge (one as small lower
+  down is a small dormer), up to four cells over the ridge, or one or two
+  on a flat roof clear of its outline and seams; 0.8–5 m over the roof
+  (1.2 m on a seam), at most 3 m over the ridge; on a flat roof not one
+  of three within 4 m (masts on a platform roof, a plant room's ducts),
+  on a pitched roof every stack, however close. Checked against
+  the 20 cm orthophoto: rows of small gabled dormers now in; DOM1 still
+  misses the smallest, and a roof LoD2 drew flat over a pitched one has
+  none. A chimney is a box 0.6 m a cell (at most 1.6 m) from under the
+  roof to its highest measured point, along the roof's fall or the
+  footprint's longer side (`chimneyMesh`). Each dormer becomes a front facing
   down the slope, two cheeks and a roof running back into the main roof:
   flat at the measured top, or a **shed dormer** (*Schleppgaube*) falling
   with the main roof (`lib/city/dormers.ts`). Its fall (`tf`) is read
@@ -1508,9 +1525,26 @@ visual-variable codebook is in
   2026-10-21 (G11): 8–25 % shed dormers per tile (Meißen 15.6, Grimma
   16–25, Leipzig 12, Dresden 11–14, Hamburg 8–10, München 21, Unna
   11–13 %); about half the blobs are under 3 m deep and stay flat. A
-  host's dormers are appended as one object in its tint and roof colour
-  (`source` 4), no storey band, eave line, plinth or shop zone on it. No window in the front: the veto
-  stands. Dresden: 10 514 on fifteen tiles, 862 on the spawn tile.
+  host's chimneys are appended as one object, its dormers as one per band
+  of feet 0.15 m deep (`dormerParts`: the sill is read from the object's
+  base), in its tint and roof colour (`source` 4), no storey band, eave
+  line, plinth or shop zone on them. Where the host has windows, a
+  dormer's front takes one row of its own (`dormerWindows`, style bit
+  `dormer`): 0.8 × 1.3 m on a 1.35 m axis, 0.2 m in from the front's ends,
+  its sill 0.2 m over the roof, its head 0.15 m under the dormer's eave
+  (the front's own `WALL_EAVE`), shorter where the front is lower; the
+  cheeks stay blind (facade length 0). The street photos' shop reading
+  (`facade-reading.ts`) is the host's ground floor and never reaches a
+  dormer's row: on Dresden's 33410_5656 146 of 237 read buildings carry
+  one, and it had taken their dormers' windows. Dresden: 13 231 dormers (10 399
+  before) and 19 676 chimneys on fifteen tiles; Leipzig 6 852 and 10 114,
+  München 7 095 (10 233 before: the edges of flat roofs and the roof
+  terraces it had drawn as dormers are gone; checked on the 20 cm
+  orthophoto, where small Altstadt dormers stand under 0.5 m out of
+  DOM1 and stay undrawn) and 5 302, Hamburg 1 755 and 7 746, Unna 2 070
+  and 3 621, Meißen 1 803 and 1 520, Grimma 1 421 and 1 660. More than
+  half the chimneys stand on flat roofs, where some are rooftop plant or
+  the foot of a higher wall rather than a stack.
 - **Eave line** `= computed` (*Traufkante*) — cornice stroke at min RoofSurface-Z per building
   (geometry-derived; the attribute is ~4 %).
 - **Night light on facades** `❝ taken` `≈ assumed` (*Abendlicht*) — after dark
@@ -3051,17 +3085,21 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   drawn by the clay ([ADR 0010](./adr/0010-opaque-clay-buildings-only.md)), their rhythm
   measured where street photos saw the house and inferred where not.
   **The measurement:** the same panoramas measured a third time per LoD2 wall, over the upper
-  storeys (from 3.6 m to 0.3 m under the eave; `<raw>/mapillary/facades/<t>.v3.jsonl`,
-  the v1/v2 caches stay; `pipeline/bake/facade_traits.py`): column and row
+  storeys (from 3.6 m to 0.3 m under the eave; `<raw>/mapillary/facades/<t>.v4.jsonl`,
+  the v1/v2 caches stay; `pipeline/bake/facade_traits.py`), up to six
+  drives a wall, each pose turned from Mapillary's east-north-up onto the
+  UTM grid by the meridian convergence (−0.98° in Dresden, +1.9° in
+  München; before 2026-11-01 it was left out, 0.25 m along a wall 15 m
+  away): column and row
   profiles in 0.1 m bins of how dark the wall is against its local plaster
-  and how much of it is an opening, the plaster's vertical and horizontal
+  and how much of it is an opening, the upper wall's vertical edges in
+  5 cm columns (the **jamb profile**), the plaster's vertical and horizontal
   edges, its fine texture, the openings' surround against the plaster
-  further out, and the ground floor's plaster rows. Two drives' poses
-  differ by about 0.6 m, so *where* a window lies is not reproducible —
-  the facade-reading spike found window size, count and storey height did
-  not agree (2026-10-07). The bake (`pipeline/bake/windows.py`, step
-  `windows`) therefore reads only features that do not move with the
-  camera: the column profile's period (autocorrelation: the **window
+  further out, and the ground floor's plaster rows. One drive's pose is off
+  along a wall by about 0.2 m, two drives' by up to a metre, so the
+  features (`pipeline/bake/windows.py`, step `windows`) are read from what
+  does not move with the camera — and *where* the axes stand from the
+  drives registered onto each other (below). The column profile's period (autocorrelation: the **window
   axis** spacing, 1.2–7 m) and its peak (**grid** regular ≥ 0.45, loose
   ≥ 0.25), the row profile's period (**storey**, 2.6–5 m), the openings'
   **share**, the profiles' dark duty times their periods (**width**,
@@ -3206,9 +3244,39 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   −1 in the first door's slot, the clay's roof flag. A wall is one object's coplanar,
   vertex-connected triangles; a party wall is one with another wall back
   to back against it (opposite normals within 10°, planes within 0.5 m,
-  over a quarter of it covered). Positions along the wall are not
-  measured, so the axes are centred on it with 0.7 m of wall kept at its
-  ends.
+  over a quarter of it covered). **Where the axes stand**
+  (`pipeline/bake/window_axes.py`, 2026-11-01): each pair of a wall's images
+  is registered by its jamb profile (the shift within 2 m with the best
+  normalised correlation, at least 0.5 and 0.12 above any shift 0.4 m
+  away — a period's alias), one offset per image solved from the pairs
+  (robust least squares, Huber at 0.12 m) with the drives' mean offsets
+  averaging to zero, the openings profiles moved by their offsets and
+  averaged, a window a run of it at least half its peak and 0.25 open,
+  0.4–3 m wide; the **phase** (`model.phase`, metres from the wall's start
+  to an axis) the circular mean of their centres modulo the measured
+  spacing where they agree (resultant ≥ 0.8) and at least two windows were
+  found. On Dresden's spawn tile the drives' offsets spread by 0.2 m
+  (robust), the registered pairs close to 1 cm, the mean of three or more
+  drives has a standard error of 0.12 m (median); 66 of 199 modelled walls
+  got a phase (42 of them seen by one drive, placed too — still nearer
+  than a centred axis; a phase needs two images that register). The
+  building bake (`lib/city/windows.ts` `measuredAxes`, `measuredColumns`)
+  lays it on the mesh wall at that wall's own measured spacing — a house's
+  front and side often keep different rhythms (the test wall: 3.88 m on
+  the front, 2.14 m on the side, its object's spec 2.27 m) —: the wall's
+  middle moves to the middle of the lattice's axes that fit 0.7 m and half
+  a window in from its ends, and its length slot holds their count and
+  spacing instead of its length (`MEASURED_AXES`: from code 16 384 on,
+  64 counts × 1–6.1 m in 2 cm steps; no wall length reaches 256 m), the
+  window as wide as its object's, never wider than the spacing leaves
+  (the shader holds it there too), and a loose grid's jitter left off.
+  Every mesh wall in the footprint wall's plane that overlaps it keeps
+  the lattice, so a facade of several LoD2 polygons runs on unbroken.
+  Every site measured 2026-11-02 (walls modelled / phased): München
+  1 697 / 580, Dresden 577 / 157, Leipzig 448 / 79, Grimma 87 / 32,
+  Meißen 18 / 6, Hamburg 12 / 1, Unna none (no panoramas).
+  Elsewhere the axes are centred on the wall at the object's spacing with
+  0.7 m kept at its ends.
   **The drawing** (`app/_components/clay-windows.ts`, in the clay's
   fragment pass, walls only): per storey a row of openings from the
   ground floor's (a top floor's windows end 0.5 m under the eave, under
@@ -3593,8 +3661,13 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   or a building over it) is not drawn; `layer` < 0 marks a line below,
   which cuts under a lid up to 800 m at 0.5 % grade (`lib/city/levels.ts`
   `coverCuts`; 832 m of Hamburg's rails had lain on such lids); a cut more
-  than 0.5 m under the ground with no deck over it is buried: no rails,
-  ballast or catenary. Hamburg's passages 17 (405 m) → 41 (1 224 m), a
+  than 4.5 m under the ground with no deck over it is buried: no rails,
+  ballast or catenary (`BURIED_M`: a lid needs room for a train under
+  it). A shallower cut is open, whatever its `layer`: its trench is burned
+  down to the track, so a drawn track never sinks into the ground. The
+  line was 0.5 m until 2026-11-01, when the Standseilbahn's open cut at
+  its top (`layer` −1, 0.6–1 m under the DGM) and the cuts before its
+  tunnel portals vanished. Hamburg's passages 17 (405 m) → 41 (1 224 m), a
   199 m opening at the Hauptbahnhof among them. Line jumps Dresden
   12 → 16 (budget 20), Hamburg 62 → 29, Leipzig 0 → 2, München 5 → 4.
   **Paved track** (`paved`, `rail_osm.Paving`): `embedded`, or a service
@@ -3745,6 +3818,32 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   rails for a kilometre of track; in Hamburg a station building (ALKIS
   31001_3091) a track runs on, 1.2 m; a roof on posts — ALKIS Überdachung, drawn open —
   is never one, the track runs under it).
+- **Funiculars and monorails** `❝ taken` `= computed` `≈ assumed`
+  (2026-10-31, [ADR 0041](./adr/0041-line-levels-along-the-whole-line.md))
+  — OSM's `railway=funicular` is a track like a railway's, marked `steep`
+  (`rail_osm.rails`; no catenary, a cable hauls it): its level and profile
+  are solved at 100 % grade with vertical curves of ≥ 100 m
+  (`STEEP_GRADE`, `STEEP_RADIUS`), its context only through other steep
+  pieces, and a deck it runs on is a rail deck measured within 100 %
+  grade — Dresden's Standseilbahn climbs 17–29 % on the ground and over
+  its Gerüstviadukt (until then a path deck, its line flattened), Meißen's
+  Panoramaaufzug 65 %. OSM's `railway=monorail` is no track but a beam
+  (`rail_osm.monorails`, in the rails' file as `mono` with `bz`): its
+  underside is the upper hull of the DGM + 5.5 m for cars hanging under
+  it (`monorail=hanging`), 4.5 m for cars on top, over the whole chain —
+  straight across a hollow, bent over a crest; the rail layer draws a
+  closed girder (2.6 m wide for two tracks, 1.4 m deep) and every 8 m a
+  steel portal (legs 1.5 m outside the cars' way, a crossbeam on the
+  girder) or, for a beam ridden on top, a column, each foot `SINK.box`
+  under the lowest ground at its corners and reporting its joins
+  (`monorailJoins`, scripts/ground-joins.ts: 32 portals, no miss); none
+  over unknown ground or a leg under 2 m (`lib/city/monorail.ts`,
+  `monorail-beam.ts`). The hull spans the whole chain, right for a short
+  line (the Schwebebahn's 274 m, the sites' only one); a long line over
+  hills would need its spans limited. In the model Dresden's Schwebebahn
+  runs up to 18 m over its hollow. The clearance, the
+  section and the supports' spacing are assumed; no cars (they would
+  move, ADR 0009). Before: both missing, as neither railway kind was read.
 - **Passages under decks** `◎ detected` (2026-10-01, ADR 0041) — a *cut* lying ≥ 30 %
   under a drawn deck (any kind, within 2 m) opens the fill in the terrain
   bake (`lib/city/passages.ts`, `shapeDgm`'s last pass, both levels): along

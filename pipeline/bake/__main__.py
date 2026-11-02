@@ -1,4 +1,4 @@
-"""`python -m bake {fetch,bake} --spec JSON [--step S] [--tile ID ...]
+"""`python -m bake {fetch,bake,coverage} --spec JSON [--step S] [--tile ID ...]
 [--jobs N]`.
 
 `bun run fetch` / `bun run bake` (scripts/pipeline.ts) call this with the
@@ -16,6 +16,7 @@ from pathlib import Path
 
 from . import (
     canopy,
+    coverage,
     cultivated,
     doors,
     dop_balance,
@@ -308,7 +309,7 @@ class Bake:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="bake")
-    parser.add_argument("command", choices=["fetch", "bake"])
+    parser.add_argument("command", choices=["fetch", "bake", "coverage"])
     parser.add_argument("--spec", required=True, help="the site spec as JSON")
     parser.add_argument("--step", choices=[*STEPS, *SITE_STEPS, "all"], default="all")
     parser.add_argument("--tile", nargs="*", default=[], help="only these tile ids")
@@ -342,6 +343,8 @@ def main() -> None:
     if args.command == "fetch":
         fetch.run(spec, tiles, lsc=args.lsc)
         return
+    if args.command == "coverage":
+        raise SystemExit(coverage.run(tiles[0].osm_extract() if tiles else None, tiles, spec.site))
     if args.step in SITE_STEPS:
         run_site_step(spec, args.step)
         return
