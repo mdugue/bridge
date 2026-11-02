@@ -114,6 +114,7 @@ import { viewDirection } from "./view-direction";
 import { TRUNK_BASE } from "@/lib/city/tree-family";
 import {
   buildFootGeos,
+  footClock,
   FOOT_SHOWN_M,
   type FootGeos,
   type FootMaterials,
@@ -676,6 +677,7 @@ const crownTime = uniform(0);
 /** Advances every crown's wind sway (elapsed seconds; once per frame). */
 export function setCrownTime(seconds: number): void {
   crownTime.value = seconds;
+  footClock.value = seconds;
 }
 
 /** Fresh crown uniforms (the wind clock is the one `crownTime`). */

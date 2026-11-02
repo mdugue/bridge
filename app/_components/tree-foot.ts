@@ -3,7 +3,8 @@ import {
   BufferGeometry,
   InterpolationSamplingType,
   type Material,
-  MeshBasicNodeMaterial,
+  type Node,
+  MeshLambertNodeMaterial,
   MeshStandardNodeMaterial,
   MultiplyBlending,
   type Texture,
@@ -28,6 +29,7 @@ import {
   mix,
   modelWorldMatrix,
   positionGeometry,
+  property,
   sin,
   smoothstep,
   step,
@@ -124,6 +126,12 @@ const CROWN_MAX = 7;
  *  by (linear; a cool, sky-lit shade), and a lawn's moss in it. */
 const SHADE = vec3(0.86, 0.88, 0.93);
 const SHADE_MOSS = vec3(0.93, 0.99, 0.86);
+/** Sun flecks in the crown's shadow: how much a fleck lifts the shaded
+ *  ground (×, a shadow is about half the sun), their size (m) and how far
+ *  off (m) they still show (beyond, they would only shimmer). */
+const DAPPLE = 1.1;
+const DAPPLE_CELL = 0.55;
+const DAPPLE_TO = 60;
 /** Fallen leaves (sRGB): yellow, orange, russet, old brown. */
 const LEAF_YELLOW = [214, 176, 78] as const;
 const LEAF_ORANGE = [204, 128, 62] as const;
@@ -161,6 +169,10 @@ export const FOOT_REACH = CROWN_MAX * LEAF_BEYOND + 0.5;
 /** How much fallen leaf lies (0..1): the scene's season, one value for
  *  every tile (create-app.ts, lib/city/tree-season.ts `leafLitterAt`). */
 export const footLitter = uniform(0);
+
+/** The wind's clock (s) the sun flecks drift by: the crowns' own
+ *  (vegetation-layer.ts `setCrownTime` keeps it). */
+export const footClock = uniform(0);
 
 /** The tile-shared geometry: the pit's quad. */
 export interface FootGeos {
@@ -589,23 +601,75 @@ function litterGraph(r: FootRasters): PitGraph {
   return { color: graph.xyz, opacity: graph.w, position };
 }
 
+/** A shade glaze's graph: the factor it multiplies by, and where. */
+interface ShadeGraph {
+  /** the factor, read after the lighting (the material's `outputNode`) */
+  output: V3;
+  position: V3;
+  /** the sun's share reaching the fragment (the shadow map), caught by
+   *  the material's `receivedShadowNode` */
+  sunLit: F;
+}
+
 /**
  * The shade under a crown, as a glaze the ground is multiplied by: a little
  * darker and cooler (less of the sky reaches it), and on a lawn mossier,
- * fading out round the crown's ragged edge. Collapsed in a wood (its floor
- * is shade already) and far off.
+ * fading out round the crown's ragged edge. Where the crown's shadow lies
+ * (thrown off by the sun, so the quad reaches out to it) and the shadow
+ * map says the ground is shaded, sun flecks drift with the wind and lift
+ * the shade back towards the sun. The glaze's own lighting is never drawn:
+ * it only catches the shadow term (`sunLit`). Collapsed in a wood (its
+ * floor is shade already) and far off.
  */
-function shadeGraph(r: FootRasters): { color: V3; position: V3 } {
+function shadeGraph(r: FootRasters, sun?: V3): ShadeGraph {
   const s = footSlots(r);
   const f = footFrame(s, r.size);
   const shown = float(1).sub(f.wood).mul(step(0.001, f.fade));
-  const { q, position } = footQuad(f, f.crown.mul(1.1), shown);
+  // where the crown's shadow falls: its middle, thrown off along the sun
+  // by its height (a low sun throws it far; held to three crowns)
+  const up = sun ? max(sun.y, 0.2) : float(1);
+  const day = sun ? smoothstep(0.02, 0.12, sun.y) : float(0);
+  const height = f.crown.mul(0.4).add(
+    float(TRUNK_UNIT_H)
+      .add(instanceFloat(DROP))
+      .mul(length(attribute("iMat1", "vec4").xyz))
+  );
+  const throwRaw = sun
+    ? vec2(sun.x, sun.z).negate().div(up).mul(height)
+    : vec2(0, 0);
+  const throwLen = length(throwRaw);
+  const thrown = throwRaw.mul(
+    clamp(f.crown.mul(3).div(max(throwLen, 0.001)), 0, 1)
+  );
+  const half = f.crown.mul(1.1).add(length(thrown).mul(0.5));
+  const lift = float(0.05).add(distance(cameraPosition, f.world).mul(0.0015));
+  const q = positionGeometry.xz
+    .mul(half)
+    .mul(shown)
+    .add(thrown.mul(0.5).mul(shown));
+  const position = folded(f.foot.add(vec3(q.x, lift, q.y)), f.foot);
   const offset = varying(q, "vShadeOffset");
   const crown = flat(f.crown, "vShadeCrown");
   const green = flat(f.green, "vShadeGreen");
   const fade = varying(f.fade, "vShadeFade");
+  const near = varying(
+    float(1)
+      .sub(
+        smoothstep(
+          DAPPLE_TO * 0.6,
+          DAPPLE_TO,
+          distance(cameraPosition, f.world)
+        )
+      )
+      .mul(day),
+    "vShadeDay"
+  );
+  const shadowAt = flat(thrown, "vShadeThrown");
+  // the shadow's ellipse: drawn out along the sun by 1 / its elevation
+  const stretch = flat(float(1).div(up).min(3), "vShadeStretch");
   const xy = varying(vec2(f.world.x, f.world.z).add(q), "vShadeXY");
-  const color = Fn(() => {
+  const sunLit = property("float", "footSunLit");
+  const output = Fn(() => {
     const d = length(offset);
     const ragged = gdNoise(xy.mul(0.7)).sub(0.5).mul(crown.mul(0.35));
     const cover = float(1)
@@ -614,12 +678,29 @@ function shadeGraph(r: FootRasters): { color: V3; position: V3 } {
     const moss = smoothstep(0.45, 0.75, gdNoise(xy.mul(1.3).add(9.1)))
       .mul(green)
       .mul(cover);
-    const k = mix(vec3(1), SHADE, cover.mul(0.75)).mul(
-      mix(vec3(1), SHADE_MOSS, moss.mul(0.6))
+    const k = mix(vec3(1), SHADE, cover.mul(0.75))
+      .mul(mix(vec3(1), SHADE_MOSS, moss.mul(0.6)))
+      .toVar();
+    // sun flecks: in the crown's thrown shadow, where the ground is shaded
+    const rel = offset.sub(shadowAt);
+    const axis = vec2(shadowAt.x, shadowAt.y).div(max(length(shadowAt), 0.001));
+    const along = rel.x.mul(axis.x).add(rel.y.mul(axis.y)).div(stretch);
+    const across = rel.x.mul(axis.y).sub(rel.y.mul(axis.x));
+    const inShadow = float(1).sub(
+      smoothstep(crown.mul(0.5), crown.mul(1.05), length(vec2(along, across)))
     );
+    const drift = vec2(footClock.mul(0.21), footClock.mul(0.13));
+    const flecks = gdNoise(xy.div(DAPPLE_CELL).add(drift))
+      .mul(0.6)
+      .add(gdNoise(xy.div(DAPPLE_CELL * 0.45).sub(drift.mul(1.7))).mul(0.4));
+    const fleck = smoothstep(0.6, 0.72, flecks)
+      .mul(inShadow)
+      .mul(float(1).sub(sunLit))
+      .mul(near);
+    k.mulAssign(fleck.mul(DAPPLE).add(1));
     return mix(vec3(1), k, fade);
   })();
-  return { color, position };
+  return { output, position, sunLit };
 }
 
 function litMaterial(
@@ -645,24 +726,40 @@ function litMaterial(
   return m;
 }
 
-const shades = new Map<string, { color: V3; position: V3 }>();
+const shades = new Map<string, ShadeGraph>();
 
-/** A tile's shade glaze: multiplied into what is drawn under it. */
+/**
+ * A tile's shade glaze: multiplied into what is drawn under it. Lit only to
+ * catch the shadow map's term for the sun flecks; what it draws is its
+ * factor (`outputNode`), never its lighting.
+ */
 function shadeMaterial(
   r: FootRasters,
   slots: Slots,
-  variant: string
-): MeshBasicNodeMaterial {
-  const key = `tree-shade|${variant}`;
+  variant: string,
+  light?: GroundLight
+): MeshLambertNodeMaterial {
+  const key = `tree-shade|${variant}|${light ? groundLightKey(light) : ""}`;
   let graph = shades.get(key);
   if (!graph) {
-    graph = shadeGraph(r);
+    graph = shadeGraph(r, light?.sunDirection);
     shades.set(key, graph);
   }
-  const m = new MeshBasicNodeMaterial();
+  const { sunLit } = graph;
+  const m = new MeshLambertNodeMaterial();
   m.name = "tree-shade";
   m.positionNode = graph.position;
-  m.colorNode = graph.color;
+  m.colorNode = Fn(() => {
+    sunLit.assign(1);
+    return vec3(1);
+  })();
+  m.receivedShadowNode = (shadow?: Node) => {
+    if (shadow) {
+      sunLit.mulAssign(shadow as F);
+    }
+    return shadow ?? float(1);
+  };
+  m.outputNode = vec4(graph.output, 1);
   m.blending = MultiplyBlending;
   m.premultipliedAlpha = true;
   m.transparent = true;
@@ -712,7 +809,7 @@ export function createFootMaterials(
     ring: make("ring"),
     earth: make("earth"),
     litter: make("litter"),
-    shade: shadeMaterial(r, slots, variant),
+    shade: shadeMaterial(r, slots, variant, light),
   };
 }
 

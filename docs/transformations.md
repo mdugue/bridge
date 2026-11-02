@@ -2703,7 +2703,13 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   - **under the crown** (off forest and copse, whose floor is its own; the
     crown's reach 0.8 × the trunk's drawn length, 1.5–7 m): a multiplied
     glaze darkens and cools the ground in the crown's shade, ragged at the
-    edge, with moss on a lawn; and in autumn fallen leaves — covering
+    edge, with moss on a lawn; where the crown's shadow falls (thrown off
+    along the sun by the tree's height, at most three crowns away, drawn
+    out by a low sun) and the shadow map shades the ground, sun flecks
+    (0.55 m noise cells, two octaves drifting on the crowns' wind clock)
+    lift it back up to about the sun, by day, within 60 m (the glaze
+    catches the shadow term through its `receivedShadowNode` and draws its
+    factor as its `outputNode`); and in autumn fallen leaves — covering
     flecks in yellow, orange, russet and brown in 11 cm cells, thick under
     the crown, thinning 25 % beyond it and swept against the kerb (the edge
     raster's road distance), a mean tint where a cell is under a few
