@@ -149,30 +149,54 @@ export async function* ended(
   signal: AbortSignal,
   onEnd: () => void = () => {}
 ): AsyncIterable<StreamChunk> {
-  let last: StreamChunk["type"] | undefined;
-  // whether the last chunk closed the run, not a tool round of it
-  let whole = false;
+  let end: RunEnd = { whole: false, interrupted: false };
+  // a tool's result the model has not answered with text yet
+  let owed = false;
   try {
     for await (const chunk of stream) {
       // the abort's own error would say less than the deadline's
       if (signal.reason === DEADLINE && chunk.type === "RUN_ERROR") {
         continue;
       }
-      last = chunk.type;
-      whole =
-        chunk.type === "RUN_FINISHED" &&
-        (chunk as { finishReason?: unknown }).finishReason !== "tool_calls";
+      end = runEnd(chunk);
+      if (chunk.type === "TOOL_CALL_RESULT") {
+        owed = true;
+      } else if (chunk.type === "TEXT_MESSAGE_CONTENT") {
+        owed = false;
+      }
       yield chunk;
     }
   } finally {
     onEnd();
   }
-  // a run that finished before the deadline fired is whole
-  if (signal.reason === DEADLINE && !whole) {
+  if (signal.reason === DEADLINE && !end.whole) {
     yield runError("Die Antwort dauerte zu lange.");
-  } else if (last === "TOOL_CALL_RESULT") {
+  } else if (owed && !end.interrupted) {
     yield runError(TOO_MANY_STEPS);
   }
+}
+
+interface RunEnd {
+  /** the run handed a scene tool to the browser and waits for it */
+  interrupted: boolean;
+  /** the chunk closes the run, not one of its tool rounds */
+  whole: boolean;
+}
+
+/** What a chunk says of the run's end, were it the stream's last. */
+function runEnd(chunk: StreamChunk): RunEnd {
+  if (chunk.type !== "RUN_FINISHED") {
+    return { whole: false, interrupted: false };
+  }
+  const c = chunk as {
+    metadata?: { tanstack?: { finishReason?: unknown } };
+    outcome?: { type?: unknown };
+  };
+  const interrupted = c.outcome?.type === "interrupt";
+  return {
+    interrupted,
+    whole: interrupted || c.metadata?.tanstack?.finishReason !== "tool_calls",
+  };
 }
 
 /** The stream with the key taken out of any error, thrown or sent. */

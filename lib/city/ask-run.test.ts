@@ -255,6 +255,29 @@ describe("an answer that stops says why", () => {
     expect(out.at(-1)).toContain("zu viele Schritte");
   });
 
+  test("a cut run that ends on its RUN_FINISHED after the results", async () => {
+    const out = await types(
+      ended(
+        of("RUN_STARTED", "TOOL_CALL_RESULT", "RUN_FINISHED"),
+        new AbortController().signal
+      )
+    );
+    expect(out.at(-1)).toContain("zu viele Schritte");
+  });
+
+  test("a scene tool's interrupt is not a stop", async () => {
+    async function* interrupt() {
+      yield chunk("TOOL_CALL_RESULT");
+      yield {
+        ...chunk("RUN_FINISHED"),
+        outcome: { type: "interrupt", interrupts: [] },
+        metadata: { tanstack: { finishReason: "tool_calls" } },
+      } as StreamChunk;
+    }
+    const out = await types(ended(interrupt(), new AbortController().signal));
+    expect(out).toEqual(["TOOL_CALL_RESULT", "RUN_FINISHED"]);
+  });
+
   test("an answered run ends as it is", async () => {
     const out = await types(
       ended(
@@ -285,7 +308,10 @@ describe("an answer that stops says why", () => {
     c.abort(DEADLINE);
     async function* whole() {
       yield chunk("RUN_STARTED");
-      yield { ...chunk("RUN_FINISHED"), finishReason: "stop" } as StreamChunk;
+      yield {
+        ...chunk("RUN_FINISHED"),
+        metadata: { tanstack: { finishReason: "stop" } },
+      } as StreamChunk;
     }
     const out = await types(ended(whole(), c.signal));
     expect(out).toEqual(["RUN_STARTED", "RUN_FINISHED"]);
