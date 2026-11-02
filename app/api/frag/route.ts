@@ -9,13 +9,13 @@
  */
 import {
   chatParamsFromRequestBody,
-  type StreamChunk,
   toServerSentEventsResponse,
 } from "@tanstack/ai";
 import {
   ASK_KEY_HEADER,
   ASK_LIMITS,
   type AskRequestProps,
+  TOO_MANY_STEPS,
   conversationProblem,
   askPromptSite,
   lastQuestion,
@@ -64,23 +64,10 @@ function turnsLeft(
   }
 }
 
-/** A conversation past the caps, or an answer with no turns left. */
-function conversationRefusal(
-  messages: Parameters<typeof roundsSinceQuestion>[0],
-  turns: number
-): Response | null {
+/** A conversation past the caps. */
+function conversationRefusal(messages: readonly unknown[]): Response | null {
   const problem = conversationProblem(messages, lastQuestion(messages));
-  if (problem) {
-    return refuse(413, "too-long", problem);
-  }
-  if (turns <= 0) {
-    return refuse(
-      422,
-      "too-many-steps",
-      "Die Antwort brauchte zu viele Schritte."
-    );
-  }
-  return null;
+  return problem ? refuse(413, "too-long", problem) : null;
 }
 
 /** A key the route does not relay: none, no secret to check it with in
@@ -136,13 +123,16 @@ export async function POST(request: Request): Promise<Response> {
   if (keyProblem) {
     return keyProblem;
   }
+  const tooMuch = conversationRefusal(params.messages);
+  if (tooMuch) {
+    return tooMuch;
+  }
   const turns = turnsLeft(params.messages);
   if (turns === null) {
     return refuse(400, "bad-request", "Die Anfrage ist unvollständig.");
   }
-  const tooMuch = conversationRefusal(params.messages, turns);
-  if (tooMuch) {
-    return tooMuch;
+  if (turns <= 0) {
+    return refuse(422, "too-many-steps", TOO_MANY_STEPS);
   }
   const site = siteById(props.site);
   const knowledge = site ? await siteKnowledge(site.id) : null;
@@ -157,10 +147,13 @@ export async function POST(request: Request): Promise<Response> {
   // stops the run, and the response still carries the error that says so
   const abortController = new AbortController();
   const runController = new AbortController();
-  request.signal.addEventListener("abort", () => {
-    abortController.abort();
-    runController.abort();
-  });
+  // a closed tab or a cancelled body stops the run too
+  const stop = () => runController.abort();
+  abortController.signal.addEventListener("abort", stop);
+  request.signal.addEventListener("abort", () => abortController.abort());
+  if (request.signal.aborted) {
+    return refuse(499, "gone", "Die Anfrage wurde abgebrochen.");
+  }
   const stream = runAsk({
     adapter: fake
       ? fakeAskAdapter()
@@ -183,22 +176,12 @@ export async function POST(request: Request): Promise<Response> {
     (maxDuration - 10) * 1000
   );
   return toServerSentEventsResponse(
-    timed(ended(scrubbed(stream, key), runController.signal), deadline),
+    ended(scrubbed(stream, key), runController.signal, () =>
+      clearTimeout(deadline)
+    ),
     {
       abortController,
       headers: { "Cache-Control": "no-store" },
     }
   );
-}
-
-/** The stream, with the deadline's timer cleared when it ends. */
-async function* timed(
-  stream: AsyncIterable<StreamChunk>,
-  deadline: ReturnType<typeof setTimeout>
-): AsyncIterable<StreamChunk> {
-  try {
-    yield* stream;
-  } finally {
-    clearTimeout(deadline);
-  }
 }

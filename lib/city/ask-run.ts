@@ -17,7 +17,12 @@ import {
   type UIMessage,
 } from "@tanstack/ai";
 import { scrubSecrets } from "@tanstack/ai/byok";
-import { ASK_LIMITS, type AskPromptSite, askSystemPrompt } from "./ask-city";
+import {
+  ASK_LIMITS,
+  type AskPromptSite,
+  askSystemPrompt,
+  TOO_MANY_STEPS,
+} from "./ask-city";
 import {
   factsOf,
   type Knowledge,
@@ -78,11 +83,14 @@ export interface AskRun {
 export function roundsSinceQuestion(
   messages: ReadonlyArray<UIMessage | ModelMessage>
 ): number {
-  // only what follows the question is converted
-  const question = messages.findLastIndex((m) => m.role === "user");
-  return convertMessagesToModelMessages(messages.slice(question + 1)).filter(
-    (m) => m.role === "assistant" && (m.toolCalls?.length ?? 0) > 0
-  ).length;
+  // the whole conversation converts, as the run will convert it: one that
+  // does not is refused here, not halfway through the answer
+  const model = convertMessagesToModelMessages([...messages]);
+  const question = model.findLastIndex((m) => m.role === "user");
+  return model
+    .slice(question + 1)
+    .filter((m) => m.role === "assistant" && (m.toolCalls?.length ?? 0) > 0)
+    .length;
 }
 
 /** The answer as a stream of AG-UI events, for an SSE response. */
@@ -113,16 +121,19 @@ export function runAsk(run: AskRun) {
  * request.
  */
 function errorChunk(message: string, key: string, code?: unknown): StreamChunk {
+  return runError(
+    scrubSecrets(message, [key]),
+    typeof code === "string" ? code : undefined
+  );
+}
+
+function runError(message: string, code?: string): StreamChunk {
   return {
     type: "RUN_ERROR",
     timestamp: Date.now(),
-    message: scrubSecrets(message, [key]),
-    ...(typeof code === "string" ? { code } : {}),
+    message,
+    ...(code ? { code } : {}),
   } as StreamChunk;
-}
-
-function runError(message: string): StreamChunk {
-  return { type: "RUN_ERROR", timestamp: Date.now(), message } as StreamChunk;
 }
 
 /** The reason the route aborts a run that nears the host's limit. */
@@ -135,9 +146,11 @@ export const DEADLINE = "deadline";
  */
 export async function* ended(
   stream: AsyncIterable<StreamChunk>,
-  signal: AbortSignal
+  signal: AbortSignal,
+  onEnd: () => void = () => {}
 ): AsyncIterable<StreamChunk> {
   let last: StreamChunk["type"] | undefined;
+  let finished = false;
   try {
     for await (const chunk of stream) {
       // the abort's own error would say less than the deadline's
@@ -145,17 +158,17 @@ export async function* ended(
         continue;
       }
       last = chunk.type;
+      finished ||= last === "RUN_FINISHED";
       yield chunk;
     }
-  } catch (error) {
-    if (signal.reason !== DEADLINE) {
-      throw error;
-    }
+  } finally {
+    onEnd();
   }
-  if (signal.reason === DEADLINE) {
+  // a run that finished before the deadline fired is whole
+  if (signal.reason === DEADLINE && !finished) {
     yield runError("Die Antwort dauerte zu lange.");
   } else if (last === "TOOL_CALL_RESULT") {
-    yield runError("Die Antwort brauchte zu viele Schritte.");
+    yield runError(TOO_MANY_STEPS);
   }
 }
 

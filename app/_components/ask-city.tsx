@@ -37,6 +37,7 @@ import {
   maskedKey,
   plausibleKey,
   providerForKey,
+  TOO_MANY_STEPS,
 } from "@/lib/city/ask-city";
 import {
   layerTool,
@@ -435,11 +436,7 @@ function errorText(error: Error): {
     return say("Das Gespräch ist zu lang geworden.", false, true);
   }
   if (status === 422) {
-    return say(
-      "Die Antwort brauchte zu viele Schritte — frag bitte anders.",
-      false,
-      true
-    );
+    return say(`${TOO_MANY_STEPS} Frag bitte anders.`, false, true);
   }
   if (status === 404) {
     return say("Für diese Stadt gibt es kein Stadtwissen.");
@@ -453,6 +450,9 @@ function errorText(error: Error): {
   // a key revoked or out of credit after the check fails in the stream,
   // in the provider's words: offer the check again for those only
   const message = error.message || "Die Antwort brach ab.";
+  if (message === TOO_MANY_STEPS) {
+    return say(`${TOO_MANY_STEPS} Frag bitte anders.`, false, true);
+  }
   const code = argText((error as { code?: unknown }).code);
   return say(message, KEY_CODES.has(code) || KEY_TROUBLE.test(message));
 }
@@ -502,15 +502,16 @@ function Conversation({
     }
   };
   // a renewed token (same key, no remount) clears the error it answered
+  // (each check sets a new expiry, with or without a token)
   const [renewed, setRenewed] = useState({
-    token: askKey.token,
+    at: askKey.expires,
     error: undefined as Error | undefined,
   });
-  if (renewed.token !== askKey.token) {
+  if (renewed.at !== askKey.expires) {
     // only an error the check answers: one about the key
     const keyError = chat.error && errorText(chat.error).key;
     setRenewed({
-      token: askKey.token,
+      at: askKey.expires,
       error: keyError ? chat.error : undefined,
     });
   }

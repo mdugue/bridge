@@ -170,6 +170,9 @@ export const ASK_LIMITS = {
   tokenMs: 12 * 3600 * 1000,
 } as const;
 
+/** Why an answer stopped at its turn cap, in the stream or as a 422. */
+export const TOO_MANY_STEPS = "Die Antwort brauchte zu viele Schritte.";
+
 /** What the server reads of a request beyond the messages. */
 export interface AskRequestProps {
   model: string;
