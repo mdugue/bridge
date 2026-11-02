@@ -13,11 +13,13 @@ import {
 } from "@tanstack/ai";
 import {
   ASK_KEY_HEADER,
+  ASK_LIMITS,
   conversationProblem,
   askPromptSite,
   lastQuestion,
   parseAskProps,
   plausibleKey,
+  toolCallsSinceQuestion,
 } from "@/lib/city/ask-city";
 import { runAsk, scrubbed } from "@/lib/city/ask-run";
 import { verifyAskToken } from "@/lib/city/ask-token";
@@ -40,6 +42,22 @@ function refuse(status: number, code: string, message: string): Response {
     { code, message },
     { status, headers: { "Cache-Control": "no-store" } }
   );
+}
+
+/** A conversation past the caps, or an answer past its tool calls. */
+function conversationRefusal(messages: readonly unknown[]): Response | null {
+  const problem = conversationProblem(messages, lastQuestion(messages));
+  if (problem) {
+    return refuse(413, "too-long", problem);
+  }
+  if (toolCallsSinceQuestion(messages) > ASK_LIMITS.toolCalls) {
+    return refuse(
+      422,
+      "too-many-steps",
+      "Die Antwort brauchte zu viele Schritte."
+    );
+  }
+  return null;
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -81,12 +99,9 @@ export async function POST(request: Request): Promise<Response> {
   ) {
     return refuse(401, "bad-token", "Der Schlüssel muss neu geprüft werden.");
   }
-  const problem = conversationProblem(
-    params.messages,
-    lastQuestion(params.messages)
-  );
-  if (problem) {
-    return refuse(413, "too-long", problem);
+  const tooMuch = conversationRefusal(params.messages);
+  if (tooMuch) {
+    return tooMuch;
   }
   const site = siteById(props.site);
   const knowledge = site ? await siteKnowledge(site.id) : null;

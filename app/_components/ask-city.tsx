@@ -72,7 +72,8 @@ export interface AskScene {
   /** the scene's time to `hour` (of `date`, YYYY-MM-DD, or today's day);
    *  the instant it set, as text */
   setTime: (hour: number, date?: string) => string;
-  show: (view: ViewpointGeometry) => void;
+  /** glides to a view; false while there is no scene to move */
+  show: (view: ViewpointGeometry) => boolean;
   /** whether a point (site CRS) lies on one of the site's tiles */
   within: (x: number, y: number) => boolean;
   /** the player's pose, mode, time, style and layers, for the model */
@@ -93,6 +94,8 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
     // one) is checked again rather than refused at the first question
     return stored?.token && stored.expires > Date.now() ? stored : null;
   });
+  // the key the conversation runs on, kept while the form is open
+  const [held, setHeld] = useState(key);
   return (
     <section
       aria-label="Frag die Stadt"
@@ -136,19 +139,25 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
           <XIcon className="size-4" />
         </button>
       </header>
-      {key ? (
-        <Conversation
-          askKey={key}
-          key={key.token || key.key}
-          onKeyProblem={() => setKey(null)}
-          scene={scene}
-          site={site}
-        />
-      ) : (
+      {held && (
+        // a renewed token keeps the conversation: it stays mounted, hidden,
+        // while the key is checked again, and remounts only for another key
+        <div className={key ? "contents" : "hidden"}>
+          <Conversation
+            askKey={key ?? held}
+            key={`${held.provider}:${held.key}`}
+            onKeyProblem={() => setKey(null)}
+            scene={scene}
+            site={site}
+          />
+        </div>
+      )}
+      {!key && (
         <KeyForm
           onKey={(k) => {
             writeAskKey(k);
             setKey(k);
+            setHeld(k);
           }}
         />
       )}
@@ -358,10 +367,11 @@ function sceneTools(scene: AskScene) {
       if (!scene.within(target.x, target.y)) {
         return { ok: false, hinweis: OUTSIDE };
       }
-      scene.show(
+      return scene.show(
         askView(target, scene.from() ?? target, input.aus_der_luft ?? false)
-      );
-      return { ok: true };
+      )
+        ? { ok: true }
+        : { ok: false, hinweis: "Die Szene lädt noch." };
     }),
     timeTool.client(({ stunde, datum }) => ({
       ok: true,
@@ -407,6 +417,13 @@ function errorText(error: Error): {
   if (status === 413) {
     return say("Das Gespräch ist zu lang geworden.", false, true);
   }
+  if (status === 422) {
+    return say(
+      "Die Antwort brauchte zu viele Schritte — frag bitte anders.",
+      false,
+      true
+    );
+  }
   if (status === 404) {
     return say("Für diese Stadt gibt es kein Stadtwissen.");
   }
@@ -416,7 +433,9 @@ function errorText(error: Error): {
   if (typeof status === "number") {
     return say(`Der Server antwortet mit Status ${status}.`);
   }
-  return say(error.message || "Die Antwort brach ab.");
+  // an error in the stream comes from the provider: a revoked or empty
+  // key shows here, after the check, so the check is offered again
+  return say(error.message || "Die Antwort brach ab.", true);
 }
 
 function Conversation({
@@ -431,7 +450,7 @@ function Conversation({
   site: string;
 }) {
   const tools = useMemo(() => sceneTools(scene), [scene]);
-  // the card remounts for another key (keyed by it), so this one is fixed
+  // the conversation remounts for another key (keyed by it): fixed here
   const secret = askKey.key;
   const connection = useMemo(
     () =>
@@ -628,7 +647,10 @@ function toolIcon(name: string) {
 /** Text with its web links clickable; nothing else is interpreted. */
 function Linked({ text }: { text: string }) {
   // a sentence's closing punctuation after a link is not part of it
-  const parts = text.split(/(https:\/\/[^\s)\]]*[^\s)\].,;:!?»“”"'])/g);
+  // and a bracketed part, as in Wikipedia's „Zwinger_(Dresden)“, is
+  const parts = text.split(
+    /(https:\/\/(?:[^\s()[\]]|\([^\s()]*\))*(?:[^\s()[\].,;:!?»“”"']|\([^\s()]*\)))/g
+  );
   return (
     <>
       {parts.map((part, i) =>

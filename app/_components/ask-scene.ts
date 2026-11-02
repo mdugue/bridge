@@ -60,7 +60,11 @@ export function useAskScene(
           ebenen: activeDataLayers(values).map((d) => d.key),
         };
       },
-      show: (view) => handleRef.current?.flyToViewpoint(view),
+      show: (view) => {
+        const h = handleRef.current;
+        h?.flyToViewpoint(view);
+        return h !== null;
+      },
       within: (x, y) =>
         extents.some(
           ([x0, y0, x1, y1]) => x >= x0 && x <= x1 && y >= y0 && y <= y1

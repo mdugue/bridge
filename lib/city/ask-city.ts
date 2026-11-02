@@ -158,8 +158,10 @@ export const ASK_LIMITS = {
   messages: 40,
   /** characters of the whole conversation the server takes */
   conversationChars: 60_000,
-  /** model turns of one answer (each tool round is one) */
+  /** model turns of one request (each tool round is one) */
   iterations: 8,
+  /** tool calls of one answer, across the requests a scene tool resumes */
+  toolCalls: 16,
   /** entries one search or neighbourhood tool returns */
   results: 12,
   /** the radius the neighbourhood tool reaches (m) */
@@ -270,6 +272,36 @@ export function conversationProblem(
     return `Die Frage ist zu lang (höchstens ${ASK_LIMITS.questionChars} Zeichen).`;
   }
   return null;
+}
+
+/** The tool calls one message asks for, as a UI or a model message. */
+function toolCallsOf(message: unknown): number {
+  const m = message as { parts?: unknown; toolCalls?: unknown };
+  if (Array.isArray(m.toolCalls)) {
+    return m.toolCalls.length;
+  }
+  if (Array.isArray(m.parts)) {
+    return m.parts.filter(
+      (p) => (p as { type?: unknown } | null)?.type === "tool-call"
+    ).length;
+  }
+  return 0;
+}
+
+/**
+ * The tool calls since the last question: each scene tool ends a request
+ * and the browser resumes with a new one, so the per-request turn cap
+ * alone never bounds an answer.
+ */
+export function toolCallsSinceQuestion(messages: readonly unknown[]): number {
+  let calls = 0;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if ((messages[i] as { role?: unknown }).role === "user") {
+      break;
+    }
+    calls += toolCallsOf(messages[i]);
+  }
+  return calls;
 }
 
 // --- the prompt -----------------------------------------------------------------
