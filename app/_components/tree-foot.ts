@@ -189,18 +189,18 @@ function buildFlareGeo(): BufferGeometry {
   const index: number[] = [];
   for (let r = 0; r <= FLARE_RINGS; r++) {
     const t = r / FLARE_RINGS;
-    // the nominal profile's slope: d(height)/d(radius)
-    const dr = FLARE_REACH * 2 * t + 0.001;
-    const dy = -FLARE_H * 2 * (1 - t) - FLARE_SINK;
-    const len = Math.hypot(dr, dy);
+    // lit as the bark it grows from: outward, tipping up only toward the
+    // rim (the true profile's normal faces the sky and glowed a collar
+    // lighter than both the trunk and the ground)
+    const up = 0.5 * t * t;
+    const len = Math.hypot(1 - up, up);
     for (let a = 0; a <= FLARE_AROUND; a++) {
       const ang = (a / FLARE_AROUND) * Math.PI * 2;
       pos.push(Math.cos(ang), t, Math.sin(ang));
-      // outward and up, perpendicular to the profile
       nrm.push(
-        (Math.cos(ang) * -dy) / len,
-        dr / len,
-        (Math.sin(ang) * -dy) / len
+        (Math.cos(ang) * (1 - up)) / len,
+        up / len,
+        (Math.sin(ang) * (1 - up)) / len
       );
     }
   }
