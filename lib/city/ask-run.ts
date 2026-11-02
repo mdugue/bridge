@@ -141,8 +141,12 @@ export const DEADLINE = "deadline";
 
 /**
  * The stream, closed by an error the visitor sees where it would stop
- * without one: at the deadline, or when the turn cap ends the run right
- * after a server tool ran, before the model could answer with its result.
+ * without one: at the deadline, at the turn cap (the run ends on a tool's
+ * result, or on a tool round's RUN_FINISHED, before the model's turn on
+ * it), or when the model's output ran out mid-answer. A run that ends on
+ * its own, waits for a scene tool, or already sent an error is left as
+ * it is: an answer without words is not told from one that said enough
+ * before its last tool.
  */
 export async function* ended(
   stream: AsyncIterable<StreamChunk>,
@@ -150,70 +154,56 @@ export async function* ended(
   onEnd: () => void = () => {}
 ): AsyncIterable<StreamChunk> {
   let last: StreamChunk | undefined;
-  // the calls this request made, and whether the model still owes words
-  // on one's result: a scene tool's result a resume brings back was asked
-  // for in an earlier request, and its words came before it
-  const called = new Set<string>();
-  let owed = false;
+  let before: StreamChunk | undefined;
   try {
     for await (const chunk of stream) {
       // the abort's own error would say less than the deadline's
       if (signal.reason === DEADLINE && chunk.type === "RUN_ERROR") {
         continue;
       }
+      before = last;
       last = chunk;
-      if (chunk.type === "TOOL_CALL_START") {
-        called.add(chunk.toolCallId);
-      } else if (chunk.type === "TOOL_CALL_RESULT") {
-        owed ||= called.has(chunk.toolCallId);
-      } else if (chunk.type === "TEXT_MESSAGE_CONTENT") {
-        owed = false;
-      }
       yield chunk;
     }
   } finally {
     onEnd();
   }
-  const why = stopText(runEnd(last), owed, signal.reason === DEADLINE);
+  const why = stopText(runEnd(last, before), signal.reason === DEADLINE);
   if (why) {
     yield runError(why);
   }
 }
 
-/** Why a run stopped, where the stream would not say: null where it is
- *  whole, waits for the browser, or an error already said it. */
-function stopText(end: RunEnd, owed: boolean, late: boolean): string | null {
-  if (late) {
-    return end === "stop" || end === "waits"
-      ? null
-      : "Die Antwort dauerte zu lange.";
-  }
-  if (!owed) {
-    return null;
-  }
-  switch (end) {
-    case "cut":
-      return TOO_MANY_STEPS;
-    case "length":
-      return "Die Antwort wurde abgeschnitten: dem Modell gingen die Wörter aus.";
-    case "stop":
-      return "Das Modell gab keine Antwort. Frag bitte noch einmal.";
-    case "waits":
-    case "other":
-      return null;
-  }
-}
-
 /**
  * How the stream's last chunk leaves the run: `stop` (the model chose to
- * end), `waits` (a scene tool waits for the browser), `cut` (it stopped
- * between a tool's result and the model's turn on it: the turn cap),
- * `length` (the model's output ran out) or `other` (an error already
- * said why, or nothing came).
+ * end), `waits` (a scene tool waits for the browser), `cut` (between a
+ * tool's result and the model's turn on it: the turn cap), `length` (the
+ * model's output ran out mid-answer) or `other` (an error already said
+ * why, or nothing came).
  */
 type RunEnd = "stop" | "waits" | "cut" | "length" | "other";
 
-function runEnd(last: StreamChunk | undefined): RunEnd {
+/** Why a run stopped, where the stream would not say it. */
+function stopText(end: RunEnd, late: boolean): string | null {
+  switch (end) {
+    case "stop":
+    case "waits":
+      return null;
+    case "cut":
+      return late ? "Die Antwort dauerte zu lange." : TOO_MANY_STEPS;
+    case "length":
+      return late
+        ? "Die Antwort dauerte zu lange."
+        : "Die Antwort wurde abgeschnitten: dem Modell gingen die Wörter aus.";
+    case "other":
+      return late ? "Die Antwort dauerte zu lange." : null;
+  }
+}
+
+function runEnd(
+  last: StreamChunk | undefined,
+  before: StreamChunk | undefined
+): RunEnd {
   if (last?.type === "TOOL_CALL_RESULT") {
     return "cut";
   }
@@ -231,7 +221,11 @@ function runEnd(last: StreamChunk | undefined): RunEnd {
   if (reason === "tool_calls") {
     return "cut";
   }
-  return reason === "length" ? "length" : "stop";
+  if (reason === "length") {
+    // chat() ends a capped run on `length` right after the results
+    return before?.type === "TOOL_CALL_RESULT" ? "cut" : "length";
+  }
+  return "stop";
 }
 
 /** The stream with the key taken out of any error, thrown or sent. */

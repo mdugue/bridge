@@ -281,21 +281,17 @@ describe("an answer that stops says why", () => {
         new AbortController().signal
       )
     );
-    expect(out.at(-1)).toContain("abgeschnitten");
+    expect(out.at(-1)).toContain("zu viele Schritte");
   });
 
-  test("a model that stops without words on its own call's result", async () => {
+  test("an answer the model's output cut mid-sentence says so", async () => {
     const out = await types(
       ended(
-        list(
-          chunk("TOOL_CALL_START"),
-          chunk("TOOL_CALL_RESULT"),
-          finished("stop")
-        ),
+        list(chunk("TEXT_MESSAGE_CONTENT"), finished("length")),
         new AbortController().signal
       )
     );
-    expect(out.at(-1)).toContain("keine Antwort");
+    expect(out.at(-1)).toContain("abgeschnitten");
   });
 
   test("a resumed scene tool's result needs no new words", async () => {
