@@ -30,10 +30,21 @@ export interface NameplateText {
   title: string;
 }
 
+/** How far another object must rise over the main mass's top, as a
+ *  share of the mass's own height, to be a tower it stands under. */
+const TOWER_OVER_SHARE = 0.25;
+
+/** An object's top over the data frame's zero (m): its measured height,
+ *  else its eave, over its base. */
+const topOf = (o: InquiryObject): number =>
+  (o.baseZ ?? 0) + (o.facts.height > 0 ? o.facts.height : o.eaveH);
+
 /** A building's main eave: its largest object's (the main mass, not a
  *  tower or a dome's drum), over that object's own base (absent where the
- *  scene did not say: then over the outline's foot); null where none
- *  states one or for anything else. */
+ *  scene did not say: then over the outline's foot), where another of its
+ *  objects rises well over the mass (a tower, a dome); null where nothing
+ *  does (a house's own roof: its letters stand on the top), where none
+ *  states an eave, or for anything else. */
 export function nameplateEave(
   inquiry: Inquiry
 ): { baseZ?: number; eaveH: number } | null {
@@ -52,7 +63,14 @@ export function nameplateEave(
       area = a;
     }
   }
-  return best ? { baseZ: best.baseZ, eaveH: best.eaveH } : null;
+  if (!best) {
+    return null;
+  }
+  const mass = best;
+  const massTop = topOf(mass);
+  const over = massTop + TOWER_OVER_SHARE * (massTop - (mass.baseZ ?? 0));
+  const tower = all.some((o) => o !== mass && topOf(o) >= over);
+  return tower ? { baseZ: mass.baseZ, eaveH: mass.eaveH } : null;
 }
 
 /** Whether a building inquiry is (part of) a landmark. */

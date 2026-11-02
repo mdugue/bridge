@@ -68,6 +68,7 @@ import {
   dot,
   float,
   fwidth,
+  getViewPosition,
   max,
   min,
   mix,
@@ -156,6 +157,9 @@ const SIDE_SHADE = { ambient: 0.62, sun: 0.5, away: 0.12 } as const;
 const SHADOW_REACH_M = 400;
 const SHADOW_STEP_M = 4;
 const SHADOW_SUN = { from: 0.03, full: 0.18 } as const;
+/** How long a march's length holds before the ground is asked again (ms):
+ *  terrain that streamed in since lengthens a shadow cut short. */
+const SHADOW_REMARCH_MS = 1000;
 
 /** What is asked, and what the plate is to say of it. */
 export interface NameplateSubject {
@@ -436,7 +440,7 @@ interface ShadowUniforms {
 /**
  * The letters' cast shadow: drawn on the back faces of a box swept from
  * the plate away from the sun. Each pixel takes the scene's surface on its
- * ray (the depth; a parallel view's ray runs straight), follows the sun's
+ * pixel (the depth through the inverse projection), follows the sun's
  * ray from there back to the plate's plane and reads the silhouette mask
  * where it crosses: shadow where a letter stands between.
  */
@@ -448,11 +452,13 @@ function shadowMaterial(
   sunStandIn: DepthTexture,
   reversed: boolean
 ) {
-  const sceneZ = deps.lens.viewZ(texture(deps.depthTexture, screenUV).r);
-  const ray = positionView;
-  const perspective = ray.mul(sceneZ.div(min(ray.z, -1e-4)));
-  const parallel = vec3(ray.x, ray.y, sceneZ);
-  const surface = mix(perspective, parallel, deps.lens.ortho);
+  // the view position through the inverse projection: right for the
+  // perspective and the parallel camera (and Modell's shear) alike
+  const surface = getViewPosition(
+    screenUV,
+    texture(deps.depthTexture, screenUV).r,
+    uniform(deps.lens.camera.projectionMatrixInverse)
+  );
   const world = cameraWorldMatrix.mul(vec4(surface, 1));
   const local = u.inverse.mul(world).xyz;
   // along the sun's ray to the plate's plane: k caps
@@ -700,6 +706,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       : "center";
 
   const block = (): NameplateBlock => ({
+    foot: geometry?.block.foot,
     width: geometry?.block.width ?? 6,
     height: geometry?.block.height ?? 2,
   });
@@ -977,6 +984,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
    *  river below it), a little beyond. */
   const shadowLength = (o: Vec3, base: number, sun: Vector3) => {
     const key = shadowKey;
+    const now = performance.now();
     // the corner slides with the screen-held cap while the camera moves:
     // within a march step's half it keeps its length
     const near = SHADOW_STEP_M / 2;
@@ -987,17 +995,19 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       key[3] === base &&
       Math.abs(key[4] - sun.x) < 1e-3 &&
       Math.abs(key[5] - sun.y) < 1e-3 &&
-      Math.abs(key[6] - sun.z) < 1e-3
+      Math.abs(key[6] - sun.z) < 1e-3 &&
+      now - key[8] < SHADOW_REMARCH_MS
     ) {
       return key[7];
     }
     const length = marchToGround(o, base, sun);
-    key.splice(0, 8, o[0], o[1], o[2], base, sun.x, sun.y, sun.z, length);
+    key.splice(0, 9, o[0], o[1], o[2], base, sun.x, sun.y, sun.z, length, now);
     return length;
   };
-  // the last march's corner, foot, sun and length: a still view (and a
-  // moving one, within half a step) asks the ground nothing
-  const shadowKey: number[] = [Number.NaN, 0, 0, 0, 0, 0, 0, 0];
+  // the last march's corner, foot, sun, length and time: a still view
+  // (and a moving one, within half a step) asks the ground again only
+  // each `SHADOW_REMARCH_MS`, for ground that streamed in since
+  const shadowKey: number[] = [Number.NaN, 0, 0, 0, 0, 0, 0, 0, 0];
   const marchToGround = (o: Vec3, base: number, sun: Vector3) => {
     const top = o[1];
     const floor = base - 2;
@@ -1057,8 +1067,10 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     shadowUniforms.sun.value.copy(sunLocal);
     shadowUniforms.area.value.set(area.x, area.y, area.width, area.height);
     // its fade (the last fifth) lies past the box's end: the ground stops
-    // the shadow, not the fade
-    shadowUniforms.reach.value = (length * 1.25) / p.cap;
+    // the shadow, not the fade; a box that never met the ground fades
+    // out inside itself, no hard edge in mid-air
+    const fadeEnd = length >= SHADOW_REACH_M ? length : length * 1.25;
+    shadowUniforms.reach.value = fadeEnd / p.cap;
     shadowUniforms.strength.value = strength;
     const c = t.shadow.colour;
     shadowUniforms.colour.value.set(c[0], c[1], c[2]);

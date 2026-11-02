@@ -102,8 +102,9 @@ export interface MaskArea {
 }
 
 export interface PlateGeometry {
-  /** the block's size in title caps (the box's included) */
-  block: { height: number; width: number };
+  /** the block's size in title caps (the box's included), and its
+   *  lowest baseline over its foot (0 for a box, which itself stands) */
+  block: { foot: number; height: number; width: number };
   /** the block's silhouette (R8, row 0 at its foot) over `area`: the
    *  rectangle (title caps, the block's frame) its quads cover, a tilted
    *  box's corners and edge too */
@@ -185,7 +186,15 @@ interface Glyph {
   field: Uint8Array;
   /** its coverage, coarse (every `f`-th px of the bitmap, averaged), for
    *  the shadow mask; kept while the plate is */
-  cover: { data: Uint8Array; f: number; height: number; width: number };
+  cover: {
+    /** the bitmap's size (px) the grid coarsens */
+    bh: number;
+    bw: number;
+    data: Uint8Array;
+    f: number;
+    height: number;
+    width: number;
+  };
 }
 
 /** A bitmap's coverage averaged over f × f blocks. */
@@ -211,7 +220,7 @@ function coarse(
       data[y * width + x] = n > 0 ? Math.round(sum / n) : 0;
     }
   }
-  return { data, f, width, height };
+  return { bh, bw, data, f, width, height };
 }
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
@@ -549,7 +558,11 @@ export function layPlate(
       positions[i + 1] += pad * 0.6;
     }
   }
-  const block = { width: width + 2 * pad, height: height + pad };
+  const block = {
+    foot: pad > 0 ? 0 : FOOT * (lines.length > 0 ? lineCap : 1),
+    width: width + 2 * pad,
+    height: height + pad,
+  };
   return {
     block,
     mask: shadowMask(positions, b.casts, coveredArea(positions)),
@@ -584,10 +597,11 @@ function coveredArea(positions: Float32Array): MaskArea {
   };
 }
 
-/** A coverage's value at (s, t) of its quad (t up), nearest texel. */
+/** A coverage's value at (s, t) of its quad (t up), nearest texel: the
+ *  quad spans the bitmap, whose last cells the coarse grid rounds past. */
 function coverAt(c: Glyph["cover"], s: number, t: number): number {
-  const x = Math.min(Math.floor(s * c.width), c.width - 1);
-  const y = Math.min(Math.floor((1 - t) * c.height), c.height - 1);
+  const x = Math.min(Math.floor((s * c.bw) / c.f), c.width - 1);
+  const y = Math.min(Math.floor(((1 - t) * c.bh) / c.f), c.height - 1);
   return c.data[y * c.width + x];
 }
 

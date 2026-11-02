@@ -197,6 +197,29 @@ test("rooftop letters stand on the nave's eave under a tower", () => {
   expect(over.origin[1]).toBeGreaterThan(27);
 });
 
+test("the lowest baseline stands over the roof, lines or not", () => {
+  const camera = look([0, 1.7, 150], [0, 15, 0]);
+  const side = nameplateSide(BODY, camera, null);
+  const at = (foot: number) =>
+    nameplatePose(
+      BODY,
+      { mode: "street", side, spot: "above" },
+      camera,
+      { foot, width: 6, height: 3 },
+      { min: 20, max: 60 },
+      () => 0
+    );
+  // a title alone (its baseline 0.32 caps up) and small facts under it
+  // (theirs 0.14): both baselines just over the top
+  for (const foot of [0.32, 0.14]) {
+    const p = at(foot);
+    expect(p.origin[1] + foot * p.cap).toBeGreaterThan(30);
+    expect(p.origin[1] + foot * p.cap).toBeLessThan(30 + 0.2 * p.cap);
+  }
+  // a box stands on the top itself
+  expect(at(0).origin[1]).toBeCloseTo(30);
+});
+
 test("up close the letters stand on the ground before the facade", () => {
   const camera = look([0, 1.7, 25], [0, 10, 0]);
   const pose = nameplatePose(

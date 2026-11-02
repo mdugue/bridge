@@ -86,6 +86,9 @@ export interface NameplateCamera {
 /** The block of text, in cap heights: its width and its height (the title
  *  and the lines with their leading). */
 export interface NameplateBlock {
+  /** its lowest baseline over its foot (title caps; 0 where the block's
+   *  own edge stands, a box) */
+  foot?: number;
   height: number;
   width: number;
 }
@@ -135,9 +138,13 @@ const GAP_CAPS = 0.8;
 const STAND_OFF_M = 1.5;
 const STAND_OFF_SHARE = 0.15;
 const STAND_OFF_MIN_M = 0.3;
-/** Rooftop letters sink their descenders' room this far (title caps)
- *  below the top: the baseline sits just over it. */
-const SIT_CAPS = 0.2;
+/** Rooftop letters' lowest baseline stands this far (title caps) over
+ *  the top, their descenders' room hanging below it; a block without
+ *  baselines at its foot (a box) stands on the top itself. */
+const SIT_CAPS = 0.12;
+/** A block's foot under its lowest baseline where the layer gives none
+ *  (title caps; the glyph module's FOOT for a title alone). */
+const FOOT_CAPS = 0.32;
 /** An inscription's foot over the ground: this share of the building's
  *  height, within these (m). */
 const INSCRIPTION_SHARE = 0.25;
@@ -528,9 +535,11 @@ export function nameplatePose(
       const along = eave === null ? dot(sub(body.peak, face), r) : 0;
       const centreAlong = Math.max(Math.min(along, halfWidth), -halfWidth);
       const sits = (eave ?? body.top) - body.base;
+      const foot = block.foot ?? FOOT_CAPS;
+      const rise = foot > 0 ? SIT_CAPS - foot : 0;
       origin = add(
         face,
-        add(scale(r, centreAlong - w / 2), [0, sits - SIT_CAPS * cap, 0])
+        add(scale(r, centreAlong - w / 2), [0, sits + rise * cap, 0])
       );
       break;
     }

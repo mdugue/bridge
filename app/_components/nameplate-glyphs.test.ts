@@ -21,6 +21,8 @@ test("the shadow mask covers what the quads cast, row 0 at the foot", () => {
   // a solid over the block's left half, a glyph's coverage (solid at its
   // top row only) over the right half's upper part
   const cover = {
+    bh: 2,
+    bw: 2,
     data: new Uint8Array([255, 255, 0, 0]),
     f: 1,
     width: 2,
@@ -64,4 +66,28 @@ test("the mask covers its own area, beyond the block where a box reaches", () =>
   });
   expect(mask.area.x).toBe(-1);
   expect(mask.data[1 * mask.width + 1]).toBe(255);
+});
+
+test("a glyph's coarse coverage keeps to its bitmap, not the rounded grid", () => {
+  // 3 px coarsened by 2: two cells, the second only half filled by the
+  // bitmap; its first two px covered
+  const cover = {
+    bh: 1,
+    bw: 3,
+    data: new Uint8Array([255, 0]),
+    f: 2,
+    width: 2,
+    height: 1,
+  };
+  const mask = shadowMask(new Float32Array(quad(0, 0, 3, 1)), [cover], {
+    x: 0,
+    y: 0,
+    width: 3,
+    height: 1,
+  });
+  const row = Math.floor(mask.height / 2) * mask.width;
+  const at = (x: number) => mask.data[row + Math.floor((x / 3) * mask.width)];
+  // 1.6 px in lies in the first cell (covered); 2.6 px in, in the second
+  expect(at(1.6)).toBeGreaterThan(200);
+  expect(at(2.6)).toBeLessThan(60);
 });

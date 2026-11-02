@@ -738,11 +738,14 @@ outline's, each in its turn (`compileInTurn`).
 - **Cast shadow.** A box swept from the plate's rectangle away from the
   sun down to the ground (stepped along the sun's ray from its highest
   corner against `groundAt`, so the top line's ray reaches it too,
-  ≤ 400 m: a terrace's letters throw theirs onto the river below), drawn
+  ≤ 400 m: a terrace's letters throw theirs onto the river below; asked
+  again each second for ground that streamed in, and a box that never
+  meets the ground fades out inside itself), drawn
   on its back faces (each
   pixel once, the camera inside it or not): each pixel takes the scene's
-  surface on its ray from the depth (`cameraWorldMatrix`; a parallel
-  ray runs straight), follows the sun's ray from there to the plate's
+  surface from the depth through the lens's inverse projection
+  (`getViewPosition`: perspective, parallel and Modell's shear alike),
+  follows the sun's ray from there to the plate's
   plane in the plate's own units and reads a silhouette mask there (R8,
   12 px per capital, ≤ 512 × 128, softened, laid out on the CPU from the
   glyphs' coverage over the rectangle the quads cover, a comic box's

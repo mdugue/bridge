@@ -203,14 +203,27 @@ test("the eave is the main mass's, over its own base", () => {
     baseZ: 106,
     eaveH: 15,
   });
-  // asked without its tree: the picked object alone
+  // asked without its tree: the picked object alone, nothing over it
   const alone: Inquiry = {
     kind: "building",
     tile: "t",
     picked: nave,
     tree: [],
   };
-  expect(nameplateEave(alone)?.eaveH).toBe(15);
+  expect(nameplateEave(alone)).toBeNull();
+  // a gabled house and its lower annex: the letters stand on the top
+  const house = object({
+    baseZ: 110,
+    eaveH: 9,
+    facts: facts({ area: 200, height: 15 }),
+  });
+  const annex = object({
+    baseZ: 110,
+    eaveH: 3,
+    objectIndex: 2,
+    facts: facts({ area: 30, height: 5 }),
+  });
+  expect(nameplateEave(building([house, annex]))).toBeNull();
   // nothing states an eave: none
   expect(nameplateEave(building([object()]))).toBeNull();
 });
