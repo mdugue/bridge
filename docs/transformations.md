@@ -1927,9 +1927,9 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   the facade the camera faces best (1.5 m, less for a small thing; kept
   until that facade is seen flatter than 25°), standing on it like rooftop
   letters — a landmark's under its tower on the highest eave (in height)
-  of a broad LoD2 object that lies clearly under a slender one's (a
-  tower: twice as high at its eave as the square root of its own
-  footprint; the carrier's eave 1.75 times lower, each over its object's
+  of its broad LoD2 objects where that lies clearly under a slender one's
+  (never a lower annex in its stead; a tower: twice as high at its eave
+  as the square root of its own footprint; the carrier's eave 1.75 times lower, each over its object's
   own base, and under the tower's in height; a root's or an ensemble
   lead's area is its whole tree's, so it is never judged slender), where
   that lies a quarter of the height or more under the top, so a church's

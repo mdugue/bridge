@@ -1021,7 +1021,10 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       if (!m.grounded || dy === 0) {
         return m;
       }
-      slid.length = Math.max(m.length + dy / Math.max(sun.y, 1e-3), 2);
+      slid.length = Math.min(
+        Math.max(m.length + dy / Math.max(sun.y, 1e-3), 2),
+        SHADOW_REACH_M + SHADOW_STEP_M
+      );
       return slid;
     }
     lastMarch = {

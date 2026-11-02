@@ -255,6 +255,23 @@ test("a landmark's rooftop letters stand on the eave under its tower", () => {
   expect(eave([at(0, 0, 36), at(130, 40, 36, { source: 2 }), house])).toBe(
     null
   );
+  // a broad hall too tall to stand under its stair turret, beside a low
+  // annex; a nave up the slope over its tower beside an annex: the
+  // letters on the top, never on the annex
+  expect(
+    eave([
+      at(100, 20, 1200),
+      at(100, 12, 16, { objectIndex: 14 }),
+      at(100, 5, 80, { objectIndex: 15 }),
+    ])
+  ).toBeNull();
+  expect(
+    eave([
+      at(115, 15, 900),
+      at(95, 30, 36, { objectIndex: 16 }),
+      at(95, 4, 60, { objectIndex: 17 }),
+    ])
+  ).toBeNull();
   // an ordinary building, tower or not: its letters on the top
   const plain = (o: InquiryObject) => ({ ...o, flags: 0 });
   expect(eave([plain(nave), plain(tower)])).toBeNull();

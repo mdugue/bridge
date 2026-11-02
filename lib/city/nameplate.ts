@@ -46,9 +46,10 @@ const ownMass = (o: InquiryObject): o is InquiryObject & { baseZ: number } =>
 
 /**
  * What a landmark's rooftop letters stand on under its tower (m, the
- * data frame's height): the highest eave (in height) of a broad object
- * that lies clearly under a slender one's — the nave under the tower, a
- * church's body under its dome's drum. A tower is `TOWER_SLENDER` times
+ * data frame's height): the highest eave (in height) of its broad
+ * objects, where that lies clearly under a slender one's — the nave
+ * under the tower, a church's body under its dome's drum; never a lower
+ * annex in its stead. A tower is `TOWER_SLENDER` times
  * higher at its eave than it is wide; a lead's area (a tree's root, an
  * ensemble's lead) is its whole tree's, so a lead is never judged slender
  * (a tower Building leading its nave's ensemble leaves the letters on the
@@ -62,32 +63,28 @@ export function nameplateEave(inquiry: Inquiry): number | null {
   if (inquiry.kind !== "building" || !isLandmarkInquiry(inquiry)) {
     return null;
   }
-  // a building asked without its tree is its picked object alone
-  // (mergedFacts reads it the same way)
-  const all = (
-    inquiry.tree.length > 0 ? inquiry.tree : [inquiry.picked]
-  ).filter(ownMass);
+  const all = inquiry.tree.filter(ownMass);
   const own = (o: InquiryObject) => all.length === 1 || o.lead !== true;
   const slender = (o: InquiryObject) =>
     own(o) &&
     o.facts.area > 0 &&
     TOWER_SLENDER * Math.sqrt(o.facts.area) <= o.eaveH;
   const tower = highestEave(all.filter(slender));
-  if (!tower) {
-    return null;
-  }
-  const towerEave = tower.baseZ + tower.eaveH;
+  // the highest broad eave of all (in height): it carries the letters
+  // only where it lies clearly under the tower, never a lower annex in
+  // its stead
   const mass = highestEave(
-    all.filter(
-      (o) =>
-        !slender(o) &&
-        (o.facts.area > 0 || !own(o)) &&
-        o.eaveH * TOWER_OVER_EAVE <= tower.eaveH &&
-        o.baseZ + o.eaveH < towerEave
-    ),
+    all.filter((o) => !slender(o) && (o.facts.area > 0 || !own(o))),
     true
   );
-  return mass ? mass.baseZ + mass.eaveH : null;
+  if (
+    !(tower && mass) ||
+    mass.eaveH * TOWER_OVER_EAVE > tower.eaveH ||
+    mass.baseZ + mass.eaveH >= tower.baseZ + tower.eaveH
+  ) {
+    return null;
+  }
+  return mass.baseZ + mass.eaveH;
 }
 
 /** The object with the highest eave: over its own base, or in height. */
