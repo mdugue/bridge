@@ -899,7 +899,8 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
   let disposed = false;
   const gone = (h: TrafficHost) => disposed || h.gone();
   /** The bodies built, hung hidden and their compile started — in the
-   *  host's turn, which waits on the compile as a dressing's does. */
+   *  host's turn, which waits on the compile (a dressing's waits after
+   *  its turn: queueDressing). */
   const start = (h: TrafficHost, builder: TrafficBuilder) =>
     h.turn(async () => {
       await nextTask();
@@ -2015,6 +2016,9 @@ export class DressingPlugin {
   /** Dressings build one at a time, after the gate: each is a long task.
    *  The crowns' seasonal programs warm up beside them (warmCrowns). */
   private readonly lane = createTaskGate(1, MAX_DRESSING_OVERTAKES);
+  /** the last dressing's compile wait, which the next build waits out
+   *  first (queueDressing: one compile ahead at most) */
+  private compileAhead: Promise<void> = Promise.resolve();
   /** `work` in the dressings' turn: after the gate, one at a time, the
    *  lower rank first */
   private turn<T>(work: () => Promise<T>, rank: number): Promise<T> {
@@ -2130,12 +2134,16 @@ export class DressingPlugin {
     // the coarse levels' first: a third of the trees on every tile in view
     // before the full set on the nearest
     const rank = extras.dressing ? FINE_DRESSING_RANK : COARSE_DRESSING_RANK;
-    // The lane holds the build only: the compile wait and the hanging run
+    // The lane holds the build only; the compile wait and the hanging run
     // after it, so the next tile's build overlaps this one's compile
     // (the compiles still take their turns, `compileInTurn`). Waiting on
     // the compile inside the lane left it idle for up to COMPILE_WAIT_MS
-    // a tile.
+    // a tile. One compile ahead at most: a build waits for the last
+    // one's compile wait first, so built dressings (unweighed until they
+    // hang) and the compile queue never pile up behind a slow GPU — a
+    // queue past the wait would hang them before their compile.
     void this.turn(async (): Promise<(() => Promise<void>) | undefined> => {
+      await this.compileAhead;
       const entry = this.dressed.get(scene);
       if (!entry || this.disposed) {
         return undefined; // the tile (or the stream) left before its turn
@@ -2170,12 +2178,14 @@ export class DressingPlugin {
           outcome = ended;
         })
         .catch(() => undefined);
+      const waited = streamTimings.timed(
+        "dressing:compile",
+        () => withinCompileWait(compiled),
+        extras.tileId
+      );
+      this.compileAhead = waited.catch(() => undefined);
       return async () => {
-        await streamTimings.timed(
-          "dressing:compile",
-          () => withinCompileWait(compiled),
-          extras.tileId
-        );
+        await waited;
         built();
         // Not before the renderer has recorded the tile's own content (see
         // `loaded`): the dressing's materials are the scene's.
