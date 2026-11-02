@@ -1926,12 +1926,14 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   maintainer review 2026-11-01); in the street it stands upright before
   the facade the camera faces best (1.5 m, less for a small thing; kept
   until that facade is seen flatter than 25°), standing on it like rooftop
-  letters — on the main mass's eave (LoD2's, of its largest object, over
-  that object's own base) where another of its objects rises a quarter of
-  the mass's height over the mass's top and the eave lies a quarter of the
-  height or more under the top, so a church's name stands on its nave, not
-  on its spire's tip; a house's own pitched roof is no tower, its letters
-  stand on the top; else on the top — or beside it in the sky (no line to
+  letters — on the main mass's eave (LoD2's, of its largest object by its
+  own eave and base: a root's or an ensemble lead's area and height span
+  its tree, so it is the mass only where no part qualifies) where another
+  LoD2 object's eave stands 1.75 of the mass's eave height or more over
+  the mass's base and the eave lies a quarter of the height or more under
+  the top, so a church's name stands on its nave, not on its spire's tip;
+  a house's own pitched roof is no tower, its letters stand on the top;
+  else on the top — or beside it in the sky (no line to
   it: the selection outline marks the thing, in the lettering's ink);
   within 1 S an inscription before the facade, its foot a quarter of the
   height up (2.5–15 m); beyond 8 S its name alone. The letters are built,

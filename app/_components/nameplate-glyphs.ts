@@ -553,10 +553,15 @@ export function layPlate(
     }
   }
   if (pad > 0) {
-    // the block's lower left at 0, the box included
+    // the block's lower left at 0, the box included: its lowest corner,
+    // tilted or not, on the foot (a box stands on what carries it)
+    let low = Number.POSITIVE_INFINITY;
+    for (let i = 1; i < positions.length; i += 3) {
+      low = Math.min(low, positions[i]);
+    }
     for (let i = 0; i < positions.length; i += 3) {
       positions[i] += pad;
-      positions[i + 1] += pad * 0.6;
+      positions[i + 1] -= low;
     }
   }
   const block = {

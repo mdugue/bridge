@@ -242,6 +242,28 @@ test("the eave is the main mass's, over its own base", () => {
     facts: facts({ area: 120, height: 12 }),
   });
   expect(nameplateEave(building([bare, low]))).toBeNull();
+  // a root whose own geometry is the tower (its area the whole tree's)
+  // over a nave part: on the nave's eave
+  const towerRoot = object({
+    baseZ: 100,
+    eaveH: 40,
+    facts: facts({ area: 1000 }),
+  });
+  const navePart = object({
+    baseZ: 106,
+    building: false,
+    eaveH: 15,
+    objectIndex: 4,
+    facts: facts({ area: 900 }),
+  });
+  expect(nameplateEave(building([towerRoot, navePart]))?.eaveH).toBe(15);
+  // a steep house twice (from both tiles it straddles): no tower
+  const steep = object({
+    baseZ: 100,
+    eaveH: 6,
+    facts: facts({ area: 150, height: 12 }),
+  });
+  expect(nameplateEave(building([steep, { ...steep }]))).toBeNull();
   // nothing states an eave: none
   expect(nameplateEave(building([object()]))).toBeNull();
 });

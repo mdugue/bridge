@@ -464,7 +464,7 @@ function shadowMaterial(
   const surface = getViewPosition(
     screenUV,
     texture(deps.depthTexture, screenUV).r,
-    uniform(deps.lens.camera.projectionMatrixInverse)
+    deps.lens.inverseProjection
   );
   const world = cameraWorldMatrix.mul(vec4(surface, 1));
   const local = u.inverse.mul(world).xyz;
@@ -998,13 +998,14 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     const now = performance.now();
     const m = lastMarch;
     // the corner slides with the screen-held cap while the camera moves:
-    // within a march step's half it keeps its length; a held view (an
-    // export's tiles) keeps it outright
+    // within a march step's half along the ray it keeps its length (a
+    // corner raised by dy meets the ground dy / sun.y further on); a held
+    // view (an export's tiles) keeps it outright
     const near = SHADOW_STEP_M / 2;
     if (
       m &&
       Math.abs(m.corner[0] - o[0]) < near &&
-      Math.abs(m.corner[1] - o[1]) < near &&
+      Math.abs(m.corner[1] - o[1]) < near * Math.max(sun.y, 0) &&
       Math.abs(m.corner[2] - o[2]) < near &&
       m.base === base &&
       Math.abs(m.sun[0] - sun.x) < 1e-3 &&

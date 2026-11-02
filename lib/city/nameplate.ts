@@ -8,7 +8,7 @@
  * DOM.
  */
 import type { InquiryCard } from "./card-lines";
-import { OBJECT_FLAG_LANDMARK } from "./city-mesh";
+import { OBJECT_FLAG_LANDMARK, OBJECT_SOURCE_LOD2 } from "./city-mesh";
 import { cardHeight, type Inquiry, type InquiryObject } from "./inquiry";
 import { UNKNOWN_SPECIES } from "./inquiry-more";
 import {
@@ -30,49 +30,55 @@ export interface NameplateText {
   title: string;
 }
 
-/** Another object rises this many times the main mass's eave height
- *  over the mass's base to be a tower it stands under (a house's ridge
- *  rarely reaches 1.7 eave heights; a church's tower many). */
+/** Another object's eave stands this many times the main mass's eave
+ *  height over the mass's base to be a tower it stands under (a house's
+ *  second roof part rarely reaches 1.75 eave heights; a church's tower,
+ *  a dome's drum many). */
 const TOWER_OVER_EAVE = 1.75;
 
-/** An object's top (m, the data frame's height): its measured height,
- *  else its eave, over its base; null where its base is unknown (no
- *  geometry of its own: the bake's base is then 0, not a height). */
-const topOf = (o: InquiryObject): number | null =>
-  o.baseZ === undefined || o.baseZ === 0
-    ? null
-    : o.baseZ + (o.facts.height > 0 ? o.facts.height : o.eaveH);
+/** Whether an object weighs in: a LoD2 object (the surface model's
+ *  additions copy their host's facts) with an eave and a base of its own
+ *  (base 0 is a Building drawn by its parts alone, not a height). */
+const ownMass = (o: InquiryObject): o is InquiryObject & { baseZ: number } =>
+  o.source === OBJECT_SOURCE_LOD2 &&
+  o.eaveH > 0 &&
+  o.baseZ !== undefined &&
+  o.baseZ !== 0;
 
 /** A building's main eave: its largest object's (the main mass, not a
  *  tower or a dome's drum), over that object's own base, where another of
- *  its objects rises well over that eave (a tower, a dome); null where
- *  nothing does (a house's own roof: its letters stand on the top), where
- *  none states an eave or base, or for anything else. The mass's own
- *  height is not asked: a root's or an ensemble lead's spans its tree. */
+ *  its objects' eave stands well over it (a tower, a dome's drum); null
+ *  where none does (a house's own roof: its letters stand on the top),
+ *  where none states an eave and base, or for anything else. Only the
+ *  objects' own eaves and bases are read: a root's or an ensemble lead's
+ *  height and area span its whole tree, so it is the mass only where no
+ *  part of its own qualifies. */
 export function nameplateEave(
   inquiry: Inquiry
 ): { baseZ: number; eaveH: number } | null {
   if (inquiry.kind !== "building") {
     return null;
   }
-  let mass: InquiryObject | null = null;
-  let area = -1;
   // a building asked without its tree is its picked object alone
   // (mergedFacts reads it the same way)
-  const all = inquiry.tree.length > 0 ? inquiry.tree : [inquiry.picked];
-  for (const o of all) {
-    const a = o.facts.area > 0 ? o.facts.area : 0;
-    if (o.eaveH > 0 && topOf(o) !== null && a > area) {
-      mass = o;
-      area = a;
-    }
-  }
-  if (mass?.baseZ === undefined) {
+  const all = (
+    inquiry.tree.length > 0 ? inquiry.tree : [inquiry.picked]
+  ).filter(ownMass);
+  const spans = (o: InquiryObject) =>
+    o.lead === true || (o.building && all.some((x) => !x.building));
+  const largest = (from: typeof all) =>
+    from.reduce<(typeof all)[number] | null>(
+      (best, o) => (best === null || o.facts.area > best.facts.area ? o : best),
+      null
+    );
+  const mass = largest(all.filter((o) => !spans(o))) ?? largest(all);
+  if (!mass) {
     return null;
   }
   const { baseZ, eaveH } = mass;
   const over = baseZ + TOWER_OVER_EAVE * eaveH;
-  const tower = all.some((o) => o !== mass && (topOf(o) ?? 0) >= over);
+  // the mass's own copy from a neighbouring tile stands at its own eave
+  const tower = all.some((o) => o.baseZ + o.eaveH >= over);
   return tower ? { baseZ, eaveH } : null;
 }
 
