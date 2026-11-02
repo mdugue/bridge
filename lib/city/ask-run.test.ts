@@ -3,7 +3,7 @@ import { fakeText } from "@tanstack/ai/testing";
 import type { AskPromptSite } from "./ask-city";
 import { knowledgeOf } from "./ask-knowledge";
 import type { StreamChunk } from "@tanstack/ai";
-import { runAsk, scrubbed } from "./ask-run";
+import { roundsSinceQuestion, runAsk, scrubbed } from "./ask-run";
 import type { StadtwissenIndex, WissenTile } from "./stadtwissen";
 
 const INDEX: StadtwissenIndex = {
@@ -173,4 +173,51 @@ describe("scrubbed", () => {
     ]);
     expect(out[1].code).toBe("401");
   });
+});
+
+test("an answer's turns count across resumed requests, not its calls", () => {
+  const call = (id: string, name: string) => ({
+    type: "tool-call" as const,
+    id,
+    name,
+    arguments: "{}",
+    state: "input-complete" as const,
+  });
+  const messages = [
+    {
+      id: "1",
+      role: "user" as const,
+      parts: [{ type: "text" as const, content: "Alt" }],
+    },
+    { id: "2", role: "assistant" as const, parts: [call("o", "zeige")] },
+    {
+      id: "3",
+      role: "user" as const,
+      parts: [{ type: "text" as const, content: "Neu" }],
+    },
+    {
+      id: "4",
+      role: "assistant" as const,
+      parts: [
+        call("a", "suche_stadt"),
+        call("b", "fakten"),
+        {
+          type: "tool-result" as const,
+          toolCallId: "a",
+          content: "{}",
+          state: "complete" as const,
+        },
+        {
+          type: "tool-result" as const,
+          toolCallId: "b",
+          content: "{}",
+          state: "complete" as const,
+        },
+        { ...call("c", "zeige"), output: { ok: true } },
+      ],
+    },
+  ];
+  // two parallel calls are one turn, the zeige after their results another
+  expect(roundsSinceQuestion(messages as never)).toBe(2);
+  expect(roundsSinceQuestion([])).toBe(0);
 });

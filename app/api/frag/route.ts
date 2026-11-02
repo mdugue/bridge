@@ -9,6 +9,7 @@
  */
 import {
   chatParamsFromRequestBody,
+  type StreamChunk,
   toServerSentEventsResponse,
 } from "@tanstack/ai";
 import {
@@ -19,12 +20,12 @@ import {
   lastQuestion,
   parseAskProps,
   plausibleKey,
-  toolCallsSinceQuestion,
 } from "@/lib/city/ask-city";
-import { runAsk, scrubbed } from "@/lib/city/ask-run";
+import { roundsSinceQuestion, runAsk, scrubbed } from "@/lib/city/ask-run";
 import { verifyAskToken } from "@/lib/city/ask-token";
 import { siteById } from "@/sites";
-import { askAdapter, fakeAskAdapter, fakeModel } from "./adapters";
+import { askAdapter, fakeAskAdapter } from "./adapters";
+import { fakeModel } from "./env";
 import { siteKnowledge } from "./knowledge";
 
 /** Up to eight model calls with tool rounds between them: a careful
@@ -44,13 +45,16 @@ function refuse(status: number, code: string, message: string): Response {
   );
 }
 
-/** A conversation past the caps, or an answer past its tool calls. */
-function conversationRefusal(messages: readonly unknown[]): Response | null {
+/** A conversation past the caps, or an answer with no turns left. */
+function conversationRefusal(
+  messages: Parameters<typeof roundsSinceQuestion>[0],
+  turns: number
+): Response | null {
   const problem = conversationProblem(messages, lastQuestion(messages));
   if (problem) {
     return refuse(413, "too-long", problem);
   }
-  if (toolCallsSinceQuestion(messages) > ASK_LIMITS.toolCalls) {
+  if (turns <= 0) {
     return refuse(
       422,
       "too-many-steps",
@@ -99,7 +103,8 @@ export async function POST(request: Request): Promise<Response> {
   ) {
     return refuse(401, "bad-token", "Der Schlüssel muss neu geprüft werden.");
   }
-  const tooMuch = conversationRefusal(params.messages);
+  const turns = ASK_LIMITS.answerRounds - roundsSinceQuestion(params.messages);
+  const tooMuch = conversationRefusal(params.messages, turns);
   if (tooMuch) {
     return tooMuch;
   }
@@ -127,9 +132,39 @@ export async function POST(request: Request): Promise<Response> {
     runId: params.runId,
     threadId: params.threadId,
     today: new Date(),
+    turns,
   });
-  return toServerSentEventsResponse(scrubbed(stream, key), {
-    abortController,
-    headers: { "Cache-Control": "no-store" },
-  });
+  // the host ends the function at maxDuration without a word: end the
+  // answer a little before, with an error the visitor sees
+  const deadline = setTimeout(
+    () => abortController.abort("deadline"),
+    (maxDuration - 10) * 1000
+  );
+  return toServerSentEventsResponse(
+    timed(scrubbed(stream, key), abortController.signal, deadline),
+    {
+      abortController,
+      headers: { "Cache-Control": "no-store" },
+    }
+  );
+}
+
+/** The stream, closed by an error when the deadline aborts it. */
+async function* timed(
+  stream: AsyncIterable<StreamChunk>,
+  signal: AbortSignal,
+  deadline: ReturnType<typeof setTimeout>
+): AsyncIterable<StreamChunk> {
+  try {
+    yield* stream;
+  } finally {
+    clearTimeout(deadline);
+  }
+  if (signal.reason === "deadline") {
+    yield {
+      type: "RUN_ERROR",
+      timestamp: Date.now(),
+      message: "Die Antwort dauerte zu lange.",
+    } as StreamChunk;
+  }
 }

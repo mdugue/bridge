@@ -10,8 +10,11 @@
 import {
   type AnyTextAdapter,
   chat,
+  convertMessagesToModelMessages,
+  type ModelMessage,
   maxIterations,
   type StreamChunk,
+  type UIMessage,
 } from "@tanstack/ai";
 import { scrubSecrets } from "@tanstack/ai/byok";
 import { ASK_LIMITS, type AskPromptSite, askSystemPrompt } from "./ask-city";
@@ -57,11 +60,36 @@ export interface AskRun {
   parentRunId?: string;
   /** the scene tools' results, when the browser resumes an interrupted run */
   resume?: Parameters<typeof chat>[0]["resume"];
+  /** the model turns this request may still take (the answer's rest) */
+  turns?: number;
   /** the client's run id: an interrupted run (a scene tool) resumes under it */
   runId?: string;
   site: AskPromptSite;
   threadId: string;
   today: Date;
+}
+
+/**
+ * The model turns that asked for tools since the last question. Each
+ * scene tool ends a request and the browser resumes with a new one, so
+ * the per-request turn cap alone never bounds an answer; the client's
+ * UI messages fold several turns into one, the conversion splits them.
+ */
+export function roundsSinceQuestion(
+  messages: ReadonlyArray<UIMessage | ModelMessage>
+): number {
+  const model = convertMessagesToModelMessages([...messages]);
+  let rounds = 0;
+  for (let i = model.length - 1; i >= 0; i--) {
+    const m = model[i];
+    if (m.role === "user") {
+      break;
+    }
+    if (m.role === "assistant" && (m.toolCalls?.length ?? 0) > 0) {
+      rounds++;
+    }
+  }
+  return rounds;
 }
 
 /** The answer as a stream of AG-UI events, for an SSE response. */
@@ -75,7 +103,9 @@ export function runAsk(run: AskRun) {
     ...(run.parentRunId ? { parentRunId: run.parentRunId } : {}),
     systemPrompts: [askSystemPrompt(run.site, run.today)],
     tools: [...knowledgeTools(run.knowledge), ...SCENE_TOOLS],
-    agentLoopStrategy: maxIterations(ASK_LIMITS.iterations),
+    agentLoopStrategy: maxIterations(
+      Math.min(ASK_LIMITS.iterations, run.turns ?? ASK_LIMITS.iterations)
+    ),
     // the prompt and the tools are the same for every request of a site:
     // the provider's cache holds them (Anthropic's cache_control, OpenAI's
     // automatic prefix cache), the conversation's thread is the key

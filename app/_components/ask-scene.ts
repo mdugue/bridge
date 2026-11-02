@@ -7,7 +7,8 @@
 import { type RefObject, useMemo } from "react";
 import { activeDataLayers, siteDataLayers } from "@/lib/city/data-layers";
 import type { LookState } from "@/lib/city/look-state";
-import { type Site, tileExtentOf } from "@/lib/city/site";
+import { siteHoldsPoint } from "@/lib/city/geolocation";
+import type { Site } from "@/lib/city/site";
 import type { AskScene } from "./ask-city";
 import type { CityWalkHandle } from "./create-app";
 import type { SceneTime } from "./scene-time";
@@ -35,7 +36,6 @@ export function useAskScene(
   const { current, setInstant } = time;
   return useMemo(() => {
     const offered = new Set(siteDataLayers(site.dataLayers).map((d) => d.key));
-    const extents = site.tiles.map(tileExtentOf);
     return {
       from: () => {
         const c = handleRef.current?.getCameraState();
@@ -65,10 +65,7 @@ export function useAskScene(
         h?.flyToViewpoint(view);
         return h !== null;
       },
-      within: (x, y) =>
-        extents.some(
-          ([x0, y0, x1, y1]) => x >= x0 && x <= x1 && y >= y0 && y <= y1
-        ),
+      within: (x, y) => siteHoldsPoint(site, x, y),
       setTime: (hour, date) => {
         const at = instantAt(hour, current(), date);
         setInstant(at);

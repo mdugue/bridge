@@ -154,6 +154,8 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
       )}
       {!key && (
         <KeyForm
+          // a forgotten key ends the conversation that runs on it
+          onForget={() => setHeld(null)}
           onKey={(k) => {
             writeAskKey(k);
             setKey(k);
@@ -167,7 +169,13 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
 
 // --- the key ------------------------------------------------------------------
 
-function KeyForm({ onKey }: { onKey: (key: AskKey) => void }) {
+function KeyForm({
+  onForget,
+  onKey,
+}: {
+  onForget: () => void;
+  onKey: (key: AskKey) => void;
+}) {
   const [stored, setStored] = useState(readAskKey);
   const [provider, setProvider] = useState<AskProviderId>(
     stored?.provider ?? "anthropic"
@@ -337,6 +345,7 @@ function KeyForm({ onKey }: { onKey: (key: AskKey) => void }) {
               onClick={() => {
                 clearAskKey();
                 setStored(null);
+                onForget();
                 setText("");
               }}
               type="button"
@@ -394,6 +403,10 @@ function sceneTools(scene: AskScene) {
 const OUTSIDE =
   "Dieser Punkt liegt nicht in der Stadt. x ist der Rechtswert, y der Hochwert in Metern, wie suche_stadt sie liefert — keine Grad.";
 
+/** A provider's error that names the key or the account's credit. */
+const KEY_TROUBLE =
+  /\b(401|403|unauthori[sz]ed|forbidden|authenticat\w*|api[ _-]?key|credit|quota|billing|insufficient)\b/i;
+
 /** A failed answer in words, by the status the server sent, and what
  *  the visitor can do about it: check the key again or start over. */
 function errorText(error: Error): {
@@ -411,8 +424,10 @@ function errorText(error: Error): {
     return say("Der Schlüssel muss neu geprüft werden.", true);
   }
   if (status === 400) {
-    // the model or provider stored with the key is no longer offered
-    return say("Die Auswahl passt nicht mehr zu diesem Server.", true);
+    // an older page, or a model the server no longer offers
+    return say(
+      "Die Anfrage passt nicht zu diesem Server — lade die Seite neu."
+    );
   }
   if (status === 413) {
     return say("Das Gespräch ist zu lang geworden.", false, true);
@@ -433,9 +448,10 @@ function errorText(error: Error): {
   if (typeof status === "number") {
     return say(`Der Server antwortet mit Status ${status}.`);
   }
-  // an error in the stream comes from the provider: a revoked or empty
-  // key shows here, after the check, so the check is offered again
-  return say(error.message || "Die Antwort brach ab.", true);
+  // a key revoked or out of credit after the check fails in the stream,
+  // in the provider's words: offer the check again for those only
+  const message = error.message || "Die Antwort brach ab.";
+  return say(message, KEY_TROUBLE.test(message));
 }
 
 function Conversation({
@@ -482,7 +498,16 @@ function Conversation({
       void chat.sendMessage(q);
     }
   };
-  const failure = chat.error ? errorText(chat.error) : null;
+  // a renewed token (same key, no remount) clears the error it answered
+  const [renewed, setRenewed] = useState({
+    token: askKey.token,
+    error: undefined as Error | undefined,
+  });
+  if (renewed.token !== askKey.token) {
+    setRenewed({ token: askKey.token, error: chat.error });
+  }
+  const failure =
+    chat.error && chat.error !== renewed.error ? errorText(chat.error) : null;
 
   return (
     <>
@@ -607,8 +632,11 @@ function argText(value: unknown): string {
 }
 
 /** What a tool call says it did, in the trace under an answer. */
-function toolLine(name: string, input: unknown): string {
+function toolLine(name: string, input: unknown, output?: unknown): string {
   const args = (input ?? {}) as Record<string, unknown>;
+  if ((output as { ok?: unknown } | undefined)?.ok === false) {
+    return name === "zeige" ? "Findet den Ort nicht in der Stadt" : name;
+  }
   switch (name) {
     case "suche_stadt":
       return `Sucht „${argText(args.anfrage)}“`;
@@ -715,7 +743,7 @@ function ChatMessage({
                 }
               >
                 <TraceIcon>{toolIcon(c.name)}</TraceIcon>
-                <TraceTitle>{toolLine(c.name, c.input)}</TraceTitle>
+                <TraceTitle>{toolLine(c.name, c.input, c.output)}</TraceTitle>
               </TraceLine>
             ))}
           </Trace>

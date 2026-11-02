@@ -15,7 +15,7 @@ import {
   plausibleKey,
 } from "@/lib/city/ask-city";
 import { issueAskToken } from "@/lib/city/ask-token";
-import { fakeModel } from "../frag/adapters";
+import { fakeModel } from "../frag/env";
 
 export const maxDuration = 15;
 

@@ -10,7 +10,6 @@ import {
   parseAskProps,
   plausibleKey,
   providerForKey,
-  toolCallsSinceQuestion,
 } from "./ask-city";
 
 describe("providers", () => {
@@ -99,20 +98,6 @@ describe("requests", () => {
     ];
     expect(conversationProblem(huge, "kurz")).not.toBeNull();
   });
-});
-
-test("an answer's tool calls count across resumed requests", () => {
-  const call = { type: "tool-call", name: "zeige" };
-  const messages = [
-    { role: "user", parts: [{ type: "text", content: "Alt" }] },
-    { role: "assistant", parts: [call, call, call] },
-    { role: "user", parts: [{ type: "text", content: "Neu" }] },
-    { role: "assistant", parts: [{ type: "text", content: "…" }, call] },
-    { role: "assistant", toolCalls: [{}, {}] },
-    { role: "tool", content: "{}" },
-  ];
-  expect(toolCallsSinceQuestion(messages)).toBe(3);
-  expect(toolCallsSinceQuestion([])).toBe(0);
 });
 
 test("the prompt names the site, the date and the rules", () => {
