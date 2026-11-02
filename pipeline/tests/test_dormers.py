@@ -337,3 +337,127 @@ def test_a_shallow_dormer_has_no_fall_to_read():
     d, fall = read(s)
     assert d is not None
     assert fall is None
+
+
+# --- rows ---------------------------------------------------------------------
+
+
+def row_of(us, depth=0.0, jitter=(), w=1.6, d=1.4, lift=1.5, building=1):
+    """Dormers on a roof falling towards −y (south) at x = `us`, y =
+    −depth, each `jitter` m off down the slope."""
+    out = []
+    for n, u in enumerate(us):
+        dv = jitter[n] if n < len(jitter) else 0.0
+        out.append(
+            {
+                "x": float(u),
+                "y": -depth - dv,
+                "ax": 0.0,
+                "ay": -1.0,
+                "w": w,
+                "d": d,
+                "z": 100.0,
+                "top": 100.0 + lift,
+                "slope": 45.0,
+                "of": building,
+                "level": False,
+            }
+        )
+    return out
+
+
+def flat_roof(x, y, d):
+    return 100.0, d["of"], 120.0
+
+
+def test_a_row_is_one_buildings_dormers_falling_one_way_at_one_depth():
+    found = row_of([0, 3, 6]) + row_of([0, 3], depth=4) + row_of([9], building=2)
+    found.append(row_of([12])[0] | {"ax": -1.0, "ay": 0.0})
+    building = [d["of"] for d in found]
+    assert sorted(map(sorted, dormers.rows(found, building))) == [[0, 1, 2], [3, 4], [5], [6]]
+
+
+def test_a_row_reads_the_rhythm_its_dormers_stand_in():
+    u = np.asarray([0.1, 3.3, 6.5, 9.9, 13.1, 16.6, 19.8])
+    p, at, score, whence = dormers.rhythm(u)
+    assert abs(p - 3.3) < 0.1 and score > 0.9 and whence == "own"
+    # a slot missed is still the same rhythm, not one twice as wide
+    p2, *_ = dormers.rhythm(np.delete(u, 3))
+    assert abs(p2 - p) < 0.15
+    # scattered dormers show none
+    assert dormers.rhythm(np.asarray([0.0, 2.1, 6.9, 8.0, 13.5, 15.2])) is None
+
+
+def test_a_rows_runs_keep_each_its_own_rhythm():
+    # a risalit's wider axes after the wings' narrower
+    u = np.asarray([0.0, 2.5, 5.0, 7.5, 10.0, 14.0, 18.0, 22.0, 26.0])
+    got = [(sorted(u[idx].tolist()), round(fit[0], 1)) for idx, fit in dormers.runs(u)]
+    assert [p for _, p in got] == [2.5, 4.0]
+    assert got[0][0][:4] == [0.0, 2.5, 5.0, 7.5]
+
+
+def test_the_window_axes_below_set_the_slots():
+    u = np.asarray([0.3, 5.6, 11.1, 16.2])
+    # every second axis of 2.7 m, the axes measured at 0.0
+    p, at, _, whence = dormers.rhythm(u, (2.7, 0.0))
+    assert whence == "windows" and p == 5.4 and at == 0.0
+    # axes the dormers do not follow are not taken
+    assert dormers.rhythm(u, (2.3, 1.0))[3] == "own"
+
+
+def test_dormers_snap_to_their_slots_and_two_on_one_are_one():
+    u = np.asarray([0.2, 3.1, 3.6, 6.4, 7.6])
+    moved, drop = dormers.snap(u, 3.0, 0.0)
+    assert moved.tolist()[:2] == [0.0, 3.0] and drop == [2]
+    assert moved[3] == 6.0
+    # one well off every slot stays put
+    assert moved[4] == 7.6
+
+
+def test_a_row_is_set_straight_on_its_slots_in_one_shape():
+    found = row_of(
+        [0.4, 3.0, 6.3, 9.0, 12.5],
+        jitter=[0.0, 0.6, -0.5, 0.2, 0.0],
+    )
+    found[1] |= {"w": 3.9, "top": 102.6}
+    found[4] |= {"w": 1.0}
+    got = dormers.in_rows(found, [1] * len(found), {}, flat_roof)
+    xs = sorted(d["x"] for d in got)
+    gaps = np.diff(xs)
+    assert len(got) == 5 and np.ptp(gaps) < 1e-6
+    assert len({d["y"] for d in got}) == 1
+    assert {d["w"] for d in got} == {1.6} and {d["top"] for d in got} == {101.5}
+
+
+def test_a_dormer_that_would_leave_its_roof_stays_where_it_stood():
+    found = row_of([0.4, 3.0, 6.3, 9.0])
+    got = dormers.in_rows(found, [1] * 4, {}, lambda x, y, d: None)
+    assert [d["x"] for d in got] == [0.4, 3.0, 6.3, 9.0]
+
+
+def test_a_dormer_read_twice_one_row_behind_the_other_is_one():
+    found = row_of([0, 3, 6, 9]) + row_of([3.2, 6.1], depth=1.7)
+    got = dormers.in_rows(found, [1] * 6, {}, flat_roof)
+    assert len(got) == 4 and {d["y"] for d in got} == {0.0}
+
+
+def test_no_dormer_is_added_where_a_slot_is_empty():
+    found = row_of([0, 3, 9, 12])
+    got = dormers.in_rows(found, [1] * 4, {}, flat_roof)
+    assert len(got) == 4
+
+
+def test_the_measured_walls_under_a_row():
+    # a wall 2 m in front of a row falling towards −y; across it u = −x
+    wall = {
+        "a": [-5.0, -2.0],
+        "b": [20.0, -2.0],
+        "n": [0.0, -1.0],
+        "model": {"axis": 2.7, "phase": 1.0},
+    }
+    u, v = np.asarray([0.0, -5.0]), np.zeros(2)
+    spacing, at = dormers.wall_axes([wall], 0.0, -1.0, u, v)
+    assert spacing == 2.7 and abs(at - 4.0) < 1e-9  # 1 m from a (u = 5) towards b
+    # one facing away, or behind the row, is not under it
+    assert dormers.wall_axes([wall | {"n": [0.0, 1.0]}], 0.0, -1.0, u, v) is None
+    assert dormers.wall_axes([wall], 0.0, -1.0, u, v + 3.0) is None

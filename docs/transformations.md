@@ -1518,7 +1518,23 @@ visual-variable codebook is in
   on a flat roof clear of its outline and seams; 0.8–5 m over the roof
   (1.2 m on a seam), at most 3 m over the ridge; on a flat roof not one
   of three within 4 m (masts on a platform roof, a plant room's ducts),
-  on a pitched roof every stack, however close. Checked against
+  on a pitched roof every stack, however close. **Rows** (`in_rows`): a
+  building's dormers falling the same way (within 20°) at one depth
+  (1.5 m) form a row, set straight at its median depth and in one shape
+  (the row's median width, depth and height over the roof; shed or flat
+  as most of them are). Along it, runs of three or more stand on slots
+  (`runs`): a spacing of 1.8–7 m about one dormer a slot (0.75–1.3 of
+  the run's median gap), taken where their phases' mean resultant is
+  ≥ 0.8; a run ends at the first dormer off its slots (a risalit's axes
+  differ from its wings'). Where the street photos measured the window
+  axes of the wall below (`dlm/windows_<t>.json`, within 12 m, facing the
+  same way) the slots are those axes, every one, second or third, if the
+  dormers fit them as well. Two blobs on one slot, or two rows that read
+  one dormer twice (its front and back), are one; a dormer more than 0.3
+  of the spacing off its slot stays put; no dormer is added in an empty
+  slot. The Taschenbergpalais' street photos show one identical dormer
+  over every window axis; DOM1 had read their centres up to 3 m apart
+  down the slope and 1–4 m wide. Checked against
   the 20 cm orthophoto: rows of small gabled dormers now in; DOM1 still
   misses the smallest, and a roof LoD2 drew flat over a pitched one has
   none. A chimney is a box 0.6 m a cell (at most 1.6 m) from under the

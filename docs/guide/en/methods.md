@@ -60,7 +60,11 @@ reproducible, but they can be wrong where the world does not fit the rule.
   measurement (the Taschenbergpalais by 1.2 m), it is set onto it first.
   A steep roof face a shallower upper roof goes on from is a mansard,
   even where the building model does not call it one; its dormers may
-  stand on up to 80°.
+  stand on up to 80°. A building's dormers facing the same way at one
+  height form a row: set straight, of one size and form, evenly spaced —
+  over the window axes below where the street photos measured them, else
+  in the rhythm the dormers show themselves (in runs: a risalit keeps its
+  own). An empty place in the row stays empty.
 - **Bridge superstructure:** what stands at least 3 m above the deck along
   the bridge's axis, for at least 25 m, becomes an arch or a truss.
 - **Assignments:** a shop from OpenStreetMap belongs to the building whose

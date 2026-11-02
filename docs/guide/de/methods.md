@@ -66,7 +66,12 @@ zur Regel passt.
   es vorher darauf gesetzt. Eine steile Dachfläche, an deren Oberkante
   ein flacheres Oberdach anschließt, ist eine Mansarde, auch wo das
   Gebäudemodell sie nicht so nennt; ihre Gauben dürfen bis 80° steil
-  stehen.
+  stehen. Gauben eines Hauses, die zur selben Seite in gleicher Höhe
+  stehen, bilden eine Reihe: gerade ausgerichtet, gleich groß und gleich
+  geformt, in gleichen Abständen — über den Fensterachsen darunter, wo
+  die Straßenfotos sie gemessen haben, sonst im Takt, den die Gauben
+  selbst zeigen (abschnittsweise: ein Risalit hat seinen eigenen). Eine
+  leere Stelle im Raster bleibt leer.
 - **Brückentragwerk:** Was entlang der Brückenachse mindestens 3 m über dem
   Deck steht, auf mindestens 25 m Länge, wird ein Bogen oder ein Fachwerk.
 - **Zuordnungen:** Ein Laden aus OpenStreetMap gehört zu dem Gebäude, in
