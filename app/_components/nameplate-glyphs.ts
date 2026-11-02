@@ -552,37 +552,29 @@ export function layPlate(
       positions[i + 1] = cy + dx * Math.sin(a) + dy * Math.cos(a);
     }
   }
-  if (pad > 0) {
-    // the block's lower left at 0, the box included: its lowest corner,
-    // tilted or not, on the foot (a box stands on what carries it)
-    let left = Number.POSITIVE_INFINITY;
-    let low = Number.POSITIVE_INFINITY;
-    for (let i = 0; i < positions.length; i += 3) {
-      left = Math.min(left, positions[i]);
-      low = Math.min(low, positions[i + 1]);
-    }
-    for (let i = 0; i < positions.length; i += 3) {
-      positions[i] -= left;
-      positions[i + 1] -= low;
-    }
-  }
-  // a box's extent: its edge and its lean reach past the text's
-  let right = width + 2 * pad;
-  let top = height + pad;
-  if (pad > 0) {
-    for (let i = 0; i < positions.length; i += 3) {
-      right = Math.max(right, positions[i]);
-      top = Math.max(top, positions[i + 1]);
-    }
+  // a box's lowest corner, tilted or not, on the foot (it stands on what
+  // carries it) and its leftmost at 0; its edge and lean reach past the
+  // text's extent
+  const raw = quadBounds(positions);
+  const shift = pad > 0 ? raw : { x0: 0, y0: 0, x1: 0, y1: 0 };
+  for (let i = 0; i < positions.length; i += 3) {
+    positions[i] -= shift.x0;
+    positions[i + 1] -= shift.y0;
   }
   const block = {
     foot: pad > 0 ? 0 : firstBaseline,
-    width: right,
-    height: top,
+    width: pad > 0 ? Math.max(width + 2 * pad, raw.x1 - shift.x0) : width,
+    height: pad > 0 ? Math.max(height + pad, raw.y1 - shift.y0) : height,
+  };
+  const bounds = {
+    x0: raw.x0 - shift.x0,
+    y0: raw.y0 - shift.y0,
+    x1: raw.x1 - shift.x0,
+    y1: raw.y1 - shift.y0,
   };
   return {
     block,
-    mask: shadowMask(positions, b.casts, coveredArea(positions)),
+    mask: shadowMask(positions, b.casts, coveredArea(bounds)),
     index: new Uint16Array(b.index),
     paint: new Uint8Array(b.paint),
     positions,
@@ -590,18 +582,32 @@ export function layPlate(
   };
 }
 
-/** The rectangle the quads cover, a softened pixel's margin round it. */
-function coveredArea(positions: Float32Array): MaskArea {
-  let x0 = Number.POSITIVE_INFINITY;
-  let y0 = Number.POSITIVE_INFINITY;
-  let x1 = Number.NEGATIVE_INFINITY;
-  let y1 = Number.NEGATIVE_INFINITY;
+interface Bounds {
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+}
+
+/** The quads' corners' extent. */
+function quadBounds(positions: Float32Array): Bounds {
+  const b = {
+    x0: Number.POSITIVE_INFINITY,
+    y0: Number.POSITIVE_INFINITY,
+    x1: Number.NEGATIVE_INFINITY,
+    y1: Number.NEGATIVE_INFINITY,
+  };
   for (let i = 0; i < positions.length; i += 3) {
-    x0 = Math.min(x0, positions[i]);
-    x1 = Math.max(x1, positions[i]);
-    y0 = Math.min(y0, positions[i + 1]);
-    y1 = Math.max(y1, positions[i + 1]);
+    b.x0 = Math.min(b.x0, positions[i]);
+    b.x1 = Math.max(b.x1, positions[i]);
+    b.y0 = Math.min(b.y0, positions[i + 1]);
+    b.y1 = Math.max(b.y1, positions[i + 1]);
   }
+  return b;
+}
+
+/** The rectangle the quads cover, a softened pixel's margin round it. */
+function coveredArea({ x0, x1, y0, y1 }: Bounds): MaskArea {
   if (!(x1 > x0 && y1 > y0)) {
     return { x: 0, y: 0, width: 1, height: 1 };
   }

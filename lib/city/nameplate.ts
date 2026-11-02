@@ -31,13 +31,8 @@ export interface NameplateText {
 }
 
 /** A tower's eave stands this many times the carrying eave's height (each
- *  over its own base) or more: a church's tower or a dome's drum over its
- *  nave, not a house's second roof part or a wing up the slope. */
+ *  over its own base) or more. */
 const TOWER_OVER_EAVE = 1.75;
-/** The carrying object's footprint at least this share of the largest
- *  one's (a root's or an ensemble lead's is its whole tree's): a nave,
- *  not a sacristy or an annex. */
-const MASS_AREA_SHARE = 0.25;
 
 /** Whether an object weighs in: a LoD2 object (the surface model's
  *  additions copy their host's facts) with an eave and a base of its own
@@ -45,30 +40,20 @@ const MASS_AREA_SHARE = 0.25;
 const ownMass = (o: InquiryObject): o is InquiryObject & { baseZ: number } =>
   o.source === OBJECT_SOURCE_LOD2 && o.eaveH > 0 && o.baseZ !== undefined;
 
-/** The object with the highest eave over its own base. */
-function tallestOf<T extends InquiryObject>(all: readonly T[]): T | null {
-  let top: T | null = null;
-  for (const o of all) {
-    if (top === null || o.eaveH > top.eaveH) {
-      top = o;
-    }
-  }
-  return top;
-}
-
-/** What a building's rooftop letters stand on under its tower: the highest
- *  eave (over its object's own base) that lies clearly under the tallest
- *  one's, on an object with a large footprint (the nave under the tower, a
- *  church's body under its dome); null where none does (a house's own
- *  roof: its letters stand on the top), where none states an eave and a
- *  base, or for anything else. Heights are each object's own over its own
- *  base, so a building straddling two tiles or a slope compares like with
- *  like. A lead's area (a tree's root, an ensemble's lead) is its whole
- *  tree's: it passes as a carrier, and as the tallest it is a tower only
- *  where another object's own footprint is a large share of that. */
-export function nameplateEave(
-  inquiry: Inquiry
-): { baseZ: number; eaveH: number } | null {
+/**
+ * What a building's rooftop letters stand on under its tower (m, the data
+ * frame's height): the highest eave of a broad object that lies clearly
+ * under a slender one's — the nave under the tower, a church's body under
+ * its dome's drum. A tower is higher at its eave than it is wide (the
+ * square root of its own footprint); a lead's area (a tree's root, an
+ * ensemble's lead) is its whole tree's, so a lead is never judged slender.
+ * Each height is an object's own over its own base, so a building
+ * straddling two tiles or a slope compares like with like. Null where no
+ * tower stands over a broad eave (a house, its wing or its garage: the
+ * letters stand on the top), where the footprints are unknown, or for
+ * anything else.
+ */
+export function nameplateEave(inquiry: Inquiry): number | null {
   if (inquiry.kind !== "building") {
     return null;
   }
@@ -77,38 +62,35 @@ export function nameplateEave(
   const all = (
     inquiry.tree.length > 0 ? inquiry.tree : [inquiry.picked]
   ).filter(ownMass);
-  const spans = (o: InquiryObject) => all.length > 1 && o.lead === true;
-  // every area unknown (an older bake): footprints decide nothing
-  const blind = all.every((o) => o.facts.area < 0);
-  const top = tallestOf(all);
-  if (!top) {
+  const own = (o: InquiryObject) => all.length === 1 || o.lead !== true;
+  const slender = (o: InquiryObject) =>
+    own(o) && o.facts.area > 0 && Math.sqrt(o.facts.area) <= o.eaveH;
+  const tower = highestEave(all.filter(slender));
+  if (!tower) {
     return null;
   }
-  const largest = Math.max(
-    0,
-    ...all.filter((o) => !spans(o)).map((o) => o.facts.area)
+  const towerEave = tower.baseZ + tower.eaveH;
+  const mass = highestEave(
+    all.filter(
+      (o) =>
+        !slender(o) &&
+        (o.facts.area > 0 || !own(o)) &&
+        o.eaveH * TOWER_OVER_EAVE <= tower.eaveH &&
+        o.baseZ + o.eaveH < towerEave
+    )
   );
-  // a lead the tallest: the whole building (a house over its annex), or
-  // a tower over a nave of its own
-  if (spans(top) && !blind && largest < MASS_AREA_SHARE * top.facts.area) {
-    return null;
-  }
-  const towerEave = top.baseZ + top.eaveH;
-  let mass: (typeof all)[number] | null = null;
+  return mass ? mass.baseZ + mass.eaveH : null;
+}
+
+/** The object with the highest eave over its own base. */
+function highestEave<T extends InquiryObject>(all: readonly T[]): T | null {
+  let top: T | null = null;
   for (const o of all) {
-    const large =
-      blind || spans(o) || o.facts.area >= MASS_AREA_SHARE * largest;
-    if (
-      o !== top &&
-      large &&
-      o.eaveH * TOWER_OVER_EAVE <= top.eaveH &&
-      o.baseZ + o.eaveH < towerEave &&
-      (mass === null || o.eaveH > mass.eaveH)
-    ) {
-      mass = o;
+    if (top === null || o.eaveH > top.eaveH) {
+      top = o;
     }
   }
-  return mass ? { baseZ: mass.baseZ, eaveH: mass.eaveH } : null;
+  return top;
 }
 
 /** Whether a building inquiry is (part of) a landmark. */

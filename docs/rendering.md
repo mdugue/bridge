@@ -742,7 +742,7 @@ outline's, each in its turn (`compileInTurn`).
   each second for ground that streamed in, and a box that never meets the
   ground fades out inside itself), drawn on its back faces (each pixel
   once, the camera inside it or not): each pixel takes the scene's surface
-  from the depth through the drawing camera's inverse projection (`getViewPosition`:
+  from the depth through the lens's inverse projection (`getViewPosition`:
   perspective, parallel and Modell's shear alike), follows the sun's ray
   from there to the plate's plane in the plate's own units and reads a
   silhouette mask there (R8, 12 px per capital, ≤ 512 × 128, softened,

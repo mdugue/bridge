@@ -64,7 +64,6 @@ import {
 import {
   abs,
   attribute,
-  cameraProjectionMatrixInverse,
   cameraWorldMatrix,
   dot,
   float,
@@ -456,20 +455,20 @@ interface ShadowUniforms {
  * where it crosses: shadow where a letter stands between.
  */
 function shadowMaterial(
-  deps: Pick<NameplateDeps, "depthTexture">,
+  deps: Pick<NameplateDeps, "depthTexture" | "lens">,
   mask: TextureNode<"vec4">,
   fade: Live,
   u: ShadowUniforms,
   sunStandIn: DepthTexture,
   reversed: boolean
 ) {
-  // the view position through the drawing camera's own inverse
-  // projection: right for the perspective and the parallel camera (and
-  // Modell's shear) alike
+  // the view position through the lens's inverse projection (ADR 0044):
+  // right for the perspective and the parallel camera (and Modell's
+  // shear) alike
   const surface = getViewPosition(
     screenUV,
     texture(deps.depthTexture, screenUV).r,
-    cameraProjectionMatrixInverse
+    deps.lens.inverseProjection
   );
   const world = cameraWorldMatrix.mul(vec4(surface, 1));
   const local = u.inverse.mul(world).xyz;
@@ -998,9 +997,9 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     o: Vec3,
     base: number,
     sun: Vector3,
-    hold: boolean
+    hold: boolean,
+    now: number
   ): ShadowMarch => {
-    const now = performance.now();
     const m = lastMarch;
     // the corner slides with the screen-held cap while the camera moves:
     // within `SHADOW_SLIDE_M` (less upward: a corner raised by dy meets
@@ -1054,7 +1053,12 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   /** The cast shadow for this frame's pose: the plate's rectangle swept
    *  away from the sun down to the ground (at most `SHADOW_REACH_M`);
    *  none with the sun down or in the plate's plane. */
-  const placeShadow = (p: NameplatePose, b: NameplateBody, hold: boolean) => {
+  const placeShadow = (
+    p: NameplatePose,
+    b: NameplateBody,
+    hold: boolean,
+    now: number
+  ) => {
     const sun = deps.sunDirection;
     const t = type();
     const light = MathUtils.smoothstep(sun.y, SHADOW_SUN.from, SHADOW_SUN.full);
@@ -1080,7 +1084,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
         high = c;
       }
     }
-    const { length, grounded } = shadowLength(high, b.base, sun, hold);
+    const { length, grounded } = shadowLength(high, b.base, sun, hold, now);
     const map = deps.sunShadow.depth();
     if (map && sunRead.value !== map) {
       sunRead.value = map;
@@ -1196,7 +1200,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       fade.value = pose.fade * crossFade * (arrive * arrive * (3 - 2 * arrive));
       letters.visible = fade.value > 0.001;
       if (letters.visible) {
-        placeShadow(pose, body, hold);
+        placeShadow(pose, body, hold, now);
       } else {
         shadow.visible = false;
       }

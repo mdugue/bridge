@@ -72,9 +72,9 @@ export function createNameplateAsk(deps: {
   let namedText: NameplateText | null = null;
   // the asked building's main eave: what rooftop letters stand on under
   // a tower
-  let eave: ReturnType<typeof nameplateEave> = null;
+  let eave: number | null = null;
   const withEave = (b: NameplateBody): NameplateBody =>
-    eave ? { ...b, eave: eave.baseZ + eave.eaveH } : b;
+    eave === null ? b : { ...b, eave };
   const ask = (inquiry: Inquiry | null, next: NameplateBody | null) => {
     const token = ++asked;
     body = next;
