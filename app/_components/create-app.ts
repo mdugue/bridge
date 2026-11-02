@@ -794,6 +794,8 @@ export interface CityWalkHandle {
   glideToSpot: (epsgX: number, epsgY: number) => void;
   /** Where the glide in progress lands (EPSG), or null. */
   getGlideTarget: () => { epsgX: number; epsgY: number } | null;
+  /** Stops a glide in progress where it is (a walk ended on the way). */
+  stopGlide: () => void;
   /** the site's extent in EPSG coordinates — the minimap frame */
   terrainBounds: TerrainBounds;
 }
@@ -4163,7 +4165,9 @@ async function bootApp(
     },
     // In Modell a place is where the picture is centred (plan 055).
     flyToViewpoint: (view, glide) => {
-      if (viewMode === "model") {
+      // the rig's own phase: the view mode can lag it (a snapshot's
+      // perspective settles to walk while Modell stays)
+      if (modelRig.staying()) {
         modelRig.centreOn(vantageTarget(view));
         glide?.onProgress?.(1);
         return 0;
@@ -4188,6 +4192,7 @@ async function bootApp(
         ? modelRig.centreOn(groundPoint(x, y))
         : pose.glideToSpot(x, y),
     getGlideTarget: pose.getGlideTarget,
+    stopGlide: pose.cancelGlide,
     getPose: () => {
       const hud = modelRig.hud();
       if (!hud) {
@@ -4219,6 +4224,11 @@ async function bootApp(
       pose.applyCameraState(perspective);
       if (model) {
         modelRig.applyState(model);
+        // the perspective settled the mode to walk or fly; a rig already
+        // in Modell does not say so again
+        if (viewMode !== "model" && modelRig.staying()) {
+          modeChanged("model");
+        }
       }
     },
     getRenderInfo: () => ({

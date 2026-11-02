@@ -714,6 +714,8 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
   };
   const endWalk = () => {
     setWalking(null);
+    // ended on the way: the camera stays where it is, not flying on alone
+    handleRef.current?.stopGlide();
     if (beforeWalk.current) {
       time.setInstant(beforeWalk.current.at);
       look.set({ style: beforeWalk.current.style });

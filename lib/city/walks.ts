@@ -288,10 +288,12 @@ function textProblems(stop: WalkStop): string[] {
       `text is ${stop.text.length} characters (at most ${STOP_TEXT_MAX})`
     );
   }
-  if (stop.facts.length === 0) {
+  // hand-written JSON: a left-out list is named, not a crash
+  const facts = Array.isArray(stop.facts) ? stop.facts : [];
+  if (facts.length === 0) {
     out.push("a stop rests on at least one fact");
   }
-  for (const f of stop.facts) {
+  for (const f of facts) {
     if (!SOURCE.test(f.source)) {
       out.push(`fact "${f.claim.slice(0, 40)}…" has no checkable source`);
     }
@@ -406,11 +408,12 @@ export function walkProblems(walk: Walk): string[] {
   if (!walk.title || !walk.teaser || !walk.by) {
     out.push(`${walk.id}: title, teaser and by are required`);
   }
-  if (walk.stops.length < 2) {
+  const stops = Array.isArray(walk.stops) ? walk.stops : [];
+  if (stops.length < 2) {
     out.push(`${walk.id}: a walk has at least two stops`);
   }
   const ids = new Set<string>();
-  walk.stops.forEach((stop, i) => {
+  stops.forEach((stop, i) => {
     if (ids.has(stop.id)) {
       out.push(`${walk.id}: stop id ${stop.id} twice`);
     }

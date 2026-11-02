@@ -196,7 +196,7 @@ export interface MonumentCollection {
   }[];
 }
 
-/** A point of a Point or the first vertex's ring centre of a Polygon. */
+/** A point of a Point, or the mean of a Polygon's outer ring's corners. */
 function anchorOf(geometry: {
   coordinates: unknown;
   type: string;
@@ -205,7 +205,13 @@ function anchorOf(geometry: {
     return geometry.coordinates as [number, number];
   }
   if (geometry.type === "Polygon") {
-    const ring = (geometry.coordinates as [number, number][][])[0] ?? [];
+    const closed = (geometry.coordinates as [number, number][][])[0] ?? [];
+    // GeoJSON closes a ring on its first vertex: counted once, not twice
+    const [first, last] = [closed[0], closed.at(-1)];
+    const ring =
+      closed.length > 1 && first[0] === last?.[0] && first[1] === last[1]
+        ? closed.slice(0, -1)
+        : closed;
     if (ring.length === 0) {
       return undefined;
     }
