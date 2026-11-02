@@ -11,6 +11,7 @@ import type { FramePace } from "@/lib/city/frame-pace";
 import { inquiryCard } from "@/lib/city/inquiry";
 import type { LookState } from "@/lib/city/look-state";
 import { riverOf } from "@/lib/city/scenario";
+import { sunDirectionEnu } from "@/lib/city/sun";
 import type { Site } from "@/lib/city/site";
 import type { AskScene } from "./ask-scene-tools";
 import type { CityWalkHandle } from "./create-app";
@@ -93,6 +94,19 @@ export function useAskScene(
       setFlood: (cm) => handleRef.current?.setFlood(cm),
       setVolume: (volume) => handleRef.current?.setVolume(volume) ?? false,
       show: (view) => handleRef.current?.flyToViewpoint(view),
+      frame: () => {
+        const h = handleRef.current;
+        const sun = h
+          ? sunDirectionEnu(current(), h.latLng.lat, h.latLng.lng)
+          : null;
+        return {
+          aspect: h
+            ? h.viewAspect()
+            : window.innerWidth / Math.max(window.innerHeight, 1),
+          sun: sun && sun.up > 0 ? { east: sun.east, north: sun.north } : null,
+          ...(h ? { sightHit: h.sightHit } : {}),
+        };
+      },
       setTime: (hour, date) => {
         const at = instantAt(hour, current(), date);
         setInstant(at);

@@ -48,8 +48,9 @@ export function askAdapter(
 
 /**
  * A scripted model for local tests only (`FRAG_FAKE=1`, never set on a
- * deployment): it searches for the question, shows the first hit and
- * says so; asked "was ist das", it asks the view's centre — the whole
+ * deployment): it searches for the question, shows the hits (the first
+ * alone, the others as chips), says so and offers two follow-ups; asked
+ * "was ist das", it asks the view's centre — the whole
  * round trip through both kinds of tools, with no
  * key and no provider.
  */
@@ -89,17 +90,21 @@ export function fakeAskAdapter(): AnyTextAdapter {
         text: `Testantwort: Wasserstand ${n ?? "?"} cm am Pegel — eine Modellrechnung, kein amtliches Ergebnis.`,
       };
     }
-    const hit = /"name":"([^"]+)","x":(\d+),"y":(\d+)(?:,"z":(\d+))?/.exec(
-      result
-    );
-    if (result.includes("treffer") && hit) {
+    const hits = [
+      ...result.matchAll(/"name":"([^"]+)","x":(\d+),"y":(\d+)/g),
+    ].slice(0, 3);
+    if (result.includes("treffer") && hits.length > 0) {
       return {
         toolCalls: [
           {
             name: "zeige",
             input: {
-              x: Number(hit[2]),
-              y: Number(hit[3]),
+              ziele: hits.map((h) => ({
+                name: h[1],
+                x: Number(h[2]),
+                y: Number(h[3]),
+              })),
+              alle: false,
             },
           },
         ],
@@ -108,6 +113,12 @@ export function fakeAskAdapter(): AnyTextAdapter {
     const seen = /"name":"([^"]+)"/.exec(result)?.[1];
     return {
       text: `Testantwort: Hier ist es${seen && result.includes("gefunden") ? `, ${seen}` : ""} (Quelle: Wikidata).`,
+      toolCalls: [
+        {
+          name: "vorschlaege",
+          input: { fragen: ["Wer hat es gebaut?", "Was steht daneben?"] },
+        },
+      ],
     };
   };
   adapter.setResponses([step, step, step, step]);
