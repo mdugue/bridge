@@ -10,9 +10,9 @@ there is nothing to say, and never merges, resolves or deletes.
 | Routine | When | Skill | Script | Reports to | May open |
 |---|---|---|---|---|---|
 | Sentry-Triage | weekly, Monday morning | `sentry-triage` | — (the Sentry MCP) | issue `sentry-triage` | draft fix PRs, one per proven root cause |
-| Open-Data-Wächter | weekly, Monday | `open-data-watch` | `scripts/open-data-watch.ts` | issue `open-data` | a draft re-bake PR for a new edition of a committed tile |
+| Open-Data-Wächter | weekly, Monday | `open-data-watch` | `scripts/open-data-watch.ts` | issue `open-data` | none: a new edition is reported for the maintainer's re-bake |
 | OSM-Lücken | monthly, the first | `osm-gaps` | `scripts/osm-gaps.ts` | issue `osm-gaps` | nothing: tasks for mappers (GeoJSON, list) |
-| Modellfehler aus Straßenfotos | weekly, Thursday | `model-faults` | `scripts/street-photos.ts` + `bun run shots` | issue `model-faults` | a draft PR for a small, tested change to a general heuristic |
+| Modellfehler aus Straßenfotos | weekly, Thursday | `model-faults` | `scripts/street-photos.ts` + `bun run shots` | issue `model-faults` | a draft PR for a small, tested change to a general heuristic, re-baked by the maintainer |
 
 ## What they share
 
@@ -71,8 +71,8 @@ times in Europe/Berlin. The prompts, as the tasks carry them:
 - **Open-Data-Wächter**, Monday 10:12: „Weekly open-data watch for
   mdugue/bridge. Follow `.claude/skills/open-data-watch/SKILL.md` exactly:
   run `bun scripts/open-data-watch.ts`, report in German as one comment on
-  the open issue labelled `open-data`, a draft re-bake PR only for a new
-  edition of a committed tile, never a whole-Land re-bake, never merge.“
+  the open issue labelled `open-data`; a new edition is reported, never
+  re-baked here, never merge.“
 - **OSM-Lücken**, the 1st of the month, 11:27: „Monthly OSM-gaps run for
   mdugue/bridge. Follow `.claude/skills/osm-gaps/SKILL.md` exactly and
   report in German as one comment on the open issue labelled `osm-gaps`.

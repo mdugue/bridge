@@ -1,6 +1,6 @@
 ---
 name: open-data-watch
-description: "The weekly Open-Data-Wächter of city walk, run by a scheduled task (or by hand): check the Länder's download services, new editions of DGM1, DOM1, LoD2, DOP and the Basis-DLM, and the age of the OSM data the bakes used; report on the open-data issue, and where a new edition of a committed tile is out, try the re-bake as a draft PR."
+description: "The weekly Open-Data-Wächter of city walk, run by a scheduled task (or by hand): check the Länder's download services, new editions of DGM1, DOM1, LoD2, DOP and the Basis-DLM, and the age of the OSM data the bakes used; report on the open-data issue, with what a re-bake of a new edition would touch, for the maintainer."
 ---
 
 # Open-Data-Wächter
@@ -32,37 +32,16 @@ current ones into the tiles that record none, right after a fetch.
 2. **A service down:** say which, since when (look at the last comment on
    the issue: was it down last week too?), and whether a re-bake is
    blocked by it. Three weeks in a row is worth a line to the maintainer.
-3. **A new edition of a committed tile** (DGM1, LoD2, DOM1, DOP): try the
-   re-bake on a branch `claude/rebake-<site>-<date>`. The fetch keeps
-   any file already there, so first move the changed product's files of
-   those tiles aside (the committed `data/<site>/dgm/dgm1_<tile>_tiff/`,
-   `data/<site>/cityjson/lod2_<tile>.city.json`, or the raw ones under
-   `data/_raw/`), then fetch the whole site, `bun run fetch <site>` (plus
-   `--lsc` where its provenance names the laser scan): a fresh container
-   holds no raw inputs, and a step without them rewrites its committed
-   output with less (hedges without the scan, lamps without their
-   measured heights). A download of the changed tiles that comes back
-   byte for byte the same is no new data: report it, record nothing.
-   Then bake the whole site, `bun run bake <site>` — steps read their
-   neighbours across a seam, so a tile alone leaves the seams stale.
-   Some „skipping“ lines are the site's design: they name the site's
-   configuration („the site names no …“, „the site runs no …“) or an
-   empty tile („no lamps“). Every other one names a missing file, folder
-   or cache („no … at/under …“, „no complete …“, „not cached“): that step
-   kept its old outputs, so the PR would mix two editions. Some steps
-   instead write an empty file without their cache (the Mapillary
-   facades, windows and lamps: „no facade measurements“, „no Mapillary
-   cache“; the container has no `MAPILLARY_TOKEN`), so also check
-   `git diff --stat data/<site>/`: an output of a tile whose edition did
-   not change must not shrink or vanish. Either case: no PR, a line in
-   the report naming the steps. Then `bun run test:pipeline`,
-   `bun run verify`, then update `data/<site>/provenance.json` (the new
-   `Stand` and the date; after a new Basis-DLM, its `lastModified` day
-   under `geosn["Basis-DLM"]`, which the check compares against) and the guide's dataset table in both languages.
-   Open a **draft PR**; it changes what the viewer shows, so it carries
-   snapshots (the `pr-snapshots` skill) of the changed tiles. A fetch
-   that fails (the service is down, the raw data is gigabytes the
-   container cannot hold) is a line in the report, not a half PR.
+3. **A new edition of a committed tile** (DGM1, LoD2, DOM1, DOP): report
+   it for the maintainer, with the tiles, the old and new `Stand` and
+   what a re-bake touches; do not re-bake here. A re-bake needs the whole
+   site's raw inputs, which a fresh container lacks: the OSM extract
+   (Geofabrik does not answer from it), the Mapillary caches (no
+   `MAPILLARY_TOKEN`; without them the facade, window and lamp steps
+   write empty files over the committed ones), gigabytes of scan and
+   orthophoto. A bake on less rewrites committed outputs with less, and
+   no check in the run reliably tells. Record nothing in
+   `provenance.json` either: the record names what was baked.
 4. **A newer Basis-DLM, OSM older than 60 days:** these re-bake every
    tile of every site of that Land (hours, gigabytes). Do not start it:
    report it with what it would touch, for the maintainer to schedule.
@@ -81,5 +60,5 @@ current ones into the tiles that record none, right after a fetch.
 
 - commit raw downloads (`data/_raw/` is gitignored for a reason) or
   another site's data folder that is not committed yet (ADR 0037);
-- merge, or push to a branch other than the re-bake's own;
+- merge, push, or open a PR (the report is the whole output);
 - re-bake a whole Land on your own initiative.

@@ -90,16 +90,13 @@ or time explains.
    share the trait (the Stadtwissen, `bun scripts/stadtwissen.ts`, or the
    bake's own outputs)? A proposal states that count.
 3. A proposal that is clear, small and testable may become a **draft PR**
-   on its own branch, with a unit test, the bake re-run on the tiles of
-   the site the photos came from (the maintainer's rule: never dodge a
-   re-bake) and snapshots (`pr-snapshots`). A fresh container has no raw
-   inputs (`data/_raw/`): `bun run site <site>` says which the step
-   needs; a bake that prints „skipping“ ran on nothing, and a PR from it
-   would claim a re-bake that did not happen — then the proposal is an
-   issue comment instead. The other sites' re-bake is named in the PR
-   body for the maintainer to start, not started here
-   (`docs/routines.md`: hours and gigabytes the container does not
-   have). Anything larger is an issue comment for the maintainer.
+   on its own branch: the rule's change and a unit test that pins it,
+   no baked data. Its body says the re-bake is the maintainer's (the
+   maintainer's rule: never dodge a re-bake), names the sites and steps
+   it touches and the count from step 2. Do not bake here: a fresh
+   container lacks the raw inputs (`data/_raw/`, the OSM extract, the
+   Mapillary caches), and a bake on less rewrites committed outputs with
+   less. Anything larger is an issue comment for the maintainer.
 
 ## Report
 
