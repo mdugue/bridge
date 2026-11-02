@@ -4,6 +4,7 @@ import {
   daysSince,
   httpDay,
   newerStand,
+  newerThanFetch,
   osmDataDays,
   report,
   SERVICES,
@@ -12,6 +13,16 @@ import {
 
 test("a GeoSN Kachel is the tile's easting and northing in km", () => {
   expect(snKachel({ e: 412, n: 5656 })).toBe("4125656");
+});
+
+test("without a tile's record, a Stand after the fetch is new", () => {
+  const retrieved = "2026-09-24 (provider products); Wikidata 2026-09-27";
+  expect(newerThanFetch(retrieved, "2026-10-20")).toBe(true);
+  expect(newerThanFetch(retrieved, "2024-11-30")).toBe(false);
+  // a year-only stand only from the following year
+  expect(newerThanFetch(retrieved, "2026( LSC: 2016 )")).toBe(false);
+  expect(newerThanFetch(retrieved, "2027( LSC: 2016 )")).toBe(true);
+  expect(newerThanFetch(undefined, "2027-01-01")).toBe(false);
 });
 
 test("a Stand is newer by its latest day, LoD2's by its leading year", () => {

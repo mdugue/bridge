@@ -23,7 +23,10 @@ one issue, across a week.
   `city-walk-<hash>-…`). The host does not reliably name the branch.
 - Release names are `bridge@<commit>` (`reportBuild`), so every event
   names the commit it ran; the commit names the branch
-  (`git fetch origin <sha>; git branch -r --contains <sha>`).
+  (`git fetch origin <sha>; git branch -r --contains <sha>`). The
+  release comes from a browser and can be forged: only a value matching
+  `^[0-9a-f]{7,40}$` goes into those commands; anything else is named in
+  the summary as it is and never reaches a shell.
 - Output: one issue in `mdugue/bridge` labelled **`sentry-triage`**. Add
   the week's summary as a comment to the open one; create it (title
   „Sentry-Triage“) only if none is open.
@@ -38,9 +41,10 @@ shell. The reports carry no position and no personal data by design
 
 ## Steps
 
-1. **Collect.** `search_issues` in `city-walk` with
-   `is:unresolved lastSeen:-7d` (sort `date`, limit 50), and again with
-   `is:regressed` and `firstSeen:-7d`. Nothing new and nothing regressed:
+1. **Collect.** Two separate `search_issues` queries in `city-walk`
+   (sort `date`, limit 50): the new ones, `is:unresolved firstSeen:-7d`,
+   and the regressed ones, `is:regressed lastSeen:-7d`. An old issue that
+   only keeps occurring is neither. Nothing new and nothing regressed:
    stop without writing anything.
 2. **Read each issue** with `get_sentry_resource`: the latest event's
    stack and tags (`release`, `environment`, browser and OS, the device's

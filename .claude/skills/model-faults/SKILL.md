@@ -47,11 +47,12 @@ container's own Chromium, which the repository's Playwright pin does not
 find by itself. `SHOTS_AT=1` boots each page at its photo (`#at=lat,lng`):
 `lite` streams only around where it booted, so a pose a kilometre from the
 spawn would show the wrong part of town. A shot takes 7–11 minutes
-there (`SHOTS_SMALL` waits up to 15 for the scene); eight are over an hour,
-so start the render in the background and read the photos meanwhile.
-Look at the photos first and render only the pairs that show a building
-or a street (move the other snapshots out of `shots/`): a close-up or a
-photo of a hedge is skipped, not rendered.
+there (`SHOTS_SMALL` waits up to 15 for the scene); eight are over an hour.
+So look at the photos first and keep only the pairs that show a building
+or a street — move the other snapshots out of `shots/` before the render
+starts (Playwright lists them when it begins); a close-up or a photo of a
+hedge is skipped, not rendered. Then start the render in the background
+and read the kept photos closely meanwhile.
 SwiftShader is good for geometry and colour, wrong for light and shadow
 — never judge shading from it; a lite render is coarse (half the pixel
 ratio), enough for roofs, heights and storeys.
@@ -89,10 +90,12 @@ or time explains.
    share the trait (the Stadtwissen, `bun scripts/stadtwissen.ts`, or the
    bake's own outputs)? A proposal states that count.
 3. A proposal that is clear, small and testable may become a **draft PR**
-   on its own branch, with a unit test, the bake re-run on every tile
-   (the maintainer's rule: never dodge a re-bake) and snapshots
-   (`pr-snapshots`); anything larger is an issue comment for the
-   maintainer.
+   on its own branch, with a unit test, the bake re-run on the tiles of
+   the site the photos came from (the maintainer's rule: never dodge a
+   re-bake) and snapshots (`pr-snapshots`). The other sites' re-bake is
+   named in the PR body for the maintainer to start, not started here
+   (`docs/routines.md`: hours and gigabytes the container does not
+   have). Anything larger is an issue comment for the maintainer.
 
 ## Report
 

@@ -20,9 +20,10 @@ bun scripts/open-data-watch.ts --json     # for a script
 ```
 
 It downloads no data. Its report has two parts: **Zu tun** (a service
-that does not answer, a newer `Stand` than `provenance.json` records, a
-newer Basis-DLM, OSM data older than 60 days) and **Stand** (what answered,
-and editions no record holds yet).
+that does not answer, a newer `Stand` than `provenance.json` records —
+or, for a tile whose edition no record holds, a `Stand` published after
+the site's `retrieved` day — a newer Basis-DLM, OSM data older than 60
+days) and **Stand** (what answered, and editions no record holds yet).
 
 ## Act on it
 

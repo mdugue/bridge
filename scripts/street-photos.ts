@@ -186,16 +186,35 @@ export function newestIn<T extends PanoramaxItem & { x: number; y: number }>(
   return best;
 }
 
-/** One cell's photos since 2023 (a page: a cell rarely holds more). */
+/**
+ * One cell's photos since 2023 (a page: a cell rarely holds more). A cell
+ * the service fails on is skipped, not the run: the next cell is asked.
+ */
 async function searchCell(bbox: number[]): Promise<PanoramaxItem[]> {
-  const r = await fetch(
-    `${API}/search?bbox=${bbox.join(",")}&limit=200&datetime=2023-01-01T00:00:00Z/..`,
-    { signal: AbortSignal.timeout(60_000) }
-  );
-  if (!r.ok) {
-    throw new Error(`Panoramax: HTTP ${r.status}`);
+  try {
+    const r = await fetch(
+      `${API}/search?bbox=${bbox.join(",")}&limit=200&datetime=2023-01-01T00:00:00Z/..`,
+      { signal: AbortSignal.timeout(60_000) }
+    );
+    if (!r.ok) {
+      process.stderr.write(`Panoramax: HTTP ${r.status}, Zelle übersprungen\n`);
+      return [];
+    }
+    return ((await r.json()) as { features: PanoramaxItem[] }).features;
+  } catch (error) {
+    process.stderr.write(`Panoramax: ${String(error)}, Zelle übersprungen\n`);
+    return [];
   }
-  return ((await r.json()) as { features: PanoramaxItem[] }).features;
+}
+
+/** A photo's file, or null where the service does not hand it out. */
+async function photoBytes(href: string): Promise<Uint8Array | null> {
+  try {
+    const image = await fetch(href, { signal: AbortSignal.timeout(60_000) });
+    return image.ok ? new Uint8Array(await image.arrayBuffer()) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** The cells' newest photos, in the seed's order, until `n` are found. */
@@ -296,19 +315,16 @@ async function main() {
       date: p.datetime,
       look: { style: "pastel" },
     };
+    // a pair needs its photo: without one, no snapshot and no render
+    const bytes = await photoBytes(item.assets.sd!.href);
+    if (!bytes) {
+      continue;
+    }
+    writeFileSync(join(photos, `${name}.jpg`), bytes);
     writeFileSync(
       join(ROOT, "shots", `${name}.json`),
       JSON.stringify(snapshot)
     );
-    const image = await fetch(item.assets.sd!.href, {
-      signal: AbortSignal.timeout(60_000),
-    });
-    if (image.ok) {
-      writeFileSync(
-        join(photos, `${name}.jpg`),
-        new Uint8Array(await image.arrayBuffer())
-      );
-    }
     pairs.push({
       name,
       snapshot: `shots/${name}.json`,

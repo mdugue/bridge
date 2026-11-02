@@ -156,6 +156,8 @@ export function httpDay(header: string | null): string | null {
 }
 
 interface Provenance {
+  /** when the provider products were fetched: its first day counts */
+  retrieved?: string;
   geosn?: Record<
     string,
     { lastModified?: string; tiles?: Record<string, { stand?: string }> }
@@ -257,6 +259,25 @@ function provenanceOf(site: SiteId): Provenance | null {
     : null;
 }
 
+/**
+ * A `Stand` published after the products were fetched (`retrieved`), for
+ * a tile whose own edition no record holds: what was fetched cannot be it.
+ * A year-only stand counts only from the year after.
+ */
+export function newerThanFetch(
+  retrieved: string | undefined,
+  current: string
+): boolean {
+  const fetched = retrieved?.match(/\b\d{4}-\d\d-\d\d\b/)?.[0];
+  if (!fetched) {
+    return false;
+  }
+  const edition = standEdition(current);
+  return edition.length === 4
+    ? edition > fetched.slice(0, 4)
+    : edition > fetched;
+}
+
 /** One product's editions over a site: what is new, what is unrecorded. */
 function productFindings(
   site: SiteId,
@@ -264,7 +285,8 @@ function productFindings(
   stands: Map<string, string>
 ): Finding[] {
   const config = SITES[site];
-  const record = provenanceOf(site)?.geosn?.[product]?.tiles;
+  const provenance = provenanceOf(site);
+  const record = provenance?.geosn?.[product]?.tiles;
   const out: Finding[] = [];
   // the editions no record holds: one line per edition, not one a tile
   const unrecorded = new Map<string, number>();
@@ -281,6 +303,13 @@ function productFindings(
         kind: "edition",
         act: true,
         text: `${product} ${tile}: neuer Stand ${current} (eingecheckt: ${recorded})`,
+      });
+    } else if (!recorded && newerThanFetch(provenance?.retrieved, current)) {
+      out.push({
+        site,
+        kind: "edition",
+        act: true,
+        text: `${product} ${tile}: neuer Stand ${current} (nach dem Abruf ${provenance?.retrieved?.slice(0, 10)})`,
       });
     } else if (!recorded) {
       unrecorded.set(current, (unrecorded.get(current) ?? 0) + 1);
