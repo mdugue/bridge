@@ -715,7 +715,9 @@ outline's, each in its turn (`compileInTurn`).
   `fwidth`), a solid (the comic box and its edge, antialiased by their
   uv), a disc. No line ties the plate to its thing (maintainer review
   2026-11-02); the selection outline marks it, in the style's own
-  lettering ink (`NameplateType.outline`, `SelectionOutline.setColours`).
+  lettering ink (`NameplateType.outline`, `SelectionOutline.setColours`),
+  and the clay's lift and hatch on the asked building follow
+  (`setAskedColours`: towards the lighter, hatched in the darker).
   A long title breaks between words into even lines (`titleLines`, a
   joined `A / B` name at its slash). Colour and
   halo ride per vertex (`ink`, `halo`): three vertex buffers past
@@ -743,8 +745,8 @@ outline's, each in its turn (`compileInTurn`).
   glyphs' coverage over the rectangle the quads cover, a comic box's
   tilted corners too: `shadowMask`). So the letters shade a facade, a roof
   or the ground alike — only where the sun reaches it: the surface is
-  tested against the scene's own shadow map, as the styles' `inSun`
-  does, so the letters' shadow joins the city's instead of darkening a
+  tested against the scene's own shadow map through the read the styles'
+  `inSun` shares (`sun-shadow-read.ts`), so the letters' shadow joins the city's instead of darkening a
   shade twice; none with the sun down.
 - **Occlusion** per pixel: the fragment's view depth against the scene's
   (the scene target's depth texture through `view-lens.ts`, whose
@@ -758,8 +760,10 @@ three helpers follow the reversed buffer); behind the
 - **Choosing** runs every 250 ms on the CPU (`lib/city/nameplate-place.ts`):
   per candidate 9 points against the buildings' BVHs (`cityHides` in
   `nameplate-ask.ts`, `nearestCityHit` with `build = false`) and the
-  HUD's panels marked `data-scene-cover`. A better place moves the plate
-  only once it has stayed the best for 900 ms (`SETTLE_MS`), and the kept
+  HUD's panels marked `data-scene-cover`. A better place in the same
+  laying moves the plate only once it has stayed the best for 900 ms
+  (`SETTLE_MS`; a new laying moves at once, its thresholds hold their own
+  hysteresis), and the kept
   place weighs 0.5 less: a passing view does not shift it. The comic's
   opaque box keeps off its building four times harder, stands over the
   whole thing rather than on an eave, and is never an inscription on the

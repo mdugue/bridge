@@ -18,7 +18,7 @@
  *   street  between: upright, parallel to the facade that faces the
  *           camera most, standing on it like rooftop letters (on the
  *           main mass's eave under a tower, else on its top), or
- *           beside it in the sky with a hairline down to an anchor on it
+ *           beside it in the sky
  *   near    nearer than `NEAR` S: letters standing before it, a plinth's
  *           height over the ground
  *   far     beyond `FAR` S: as `street`, the name alone
@@ -98,8 +98,6 @@ export interface CapRange {
 }
 
 export interface NameplatePose {
-  /** the leader's foot on the building (street, near: none on the ground) */
-  anchor: Vec3 | null;
   /** the title's capital height (m) */
   cap: number;
   /** 0…1: the plate fades as the camera comes up against it */
@@ -473,7 +471,8 @@ export function nameplatePose(
   camera: NameplateCamera,
   block: NameplateBlock,
   range: CapRange,
-  groundAt: (x: number, z: number) => number
+  groundAt: (x: number, z: number) => number,
+  opaque = false
 ): NameplatePose {
   if (layout.mode === "air") {
     return groundPose(body, layout, camera, block, range, groundAt);
@@ -494,7 +493,6 @@ export function nameplatePose(
   const gap = GAP_CAPS * cap;
   const height = body.top - body.base;
   let origin: Vec3;
-  let anchor: Vec3 | null = null;
   const spot = layout.mode === "near" ? "front" : layout.spot;
   switch (spot) {
     case "front":
@@ -522,7 +520,9 @@ export function nameplatePose(
       // church's letters stand on its nave, not on its spire's tip),
       // centred on the facade; else the top over the highest point as
       // seen on this facade's plane
-      const eave = carrier(body);
+      // an opaque plate (the comic's box) stands over the whole thing:
+      // on an eave it would cover the tower above it
+      const eave = opaque ? null : carrier(body);
       const along = eave === null ? dot(sub(body.peak, face), r) : 0;
       const centreAlong = Math.max(Math.min(along, halfWidth), -halfWidth);
       const sits = (eave ?? body.top) - body.base;
@@ -538,12 +538,6 @@ export function nameplatePose(
       const centreY = Math.max(height * 0.62, h / 2 + 2 * gap);
       const x = sign > 0 ? halfWidth + gap : -halfWidth - gap - w;
       origin = add(face, add(scale(r, x), [0, centreY - h / 2, 0]));
-      // the leader: from the plate's inner foot down to the facade's edge
-      const edgeY = Math.min(centreY - h / 2 - gap * 1.5, height);
-      anchor = add(
-        face,
-        add(scale(r, sign * halfWidth), [0, Math.max(edgeY, height * 0.3), 0])
-      );
       break;
     }
   }
@@ -553,7 +547,6 @@ export function nameplatePose(
     right: r,
     up,
     cap,
-    anchor,
     fade:
       layout.mode === "near"
         ? smooth(NEAR_FADE_GONE_M, NEAR_FADE_FULL_M, camToPlane)
@@ -604,7 +597,7 @@ function groundPose(
     [centre[0], y, centre[2]],
     add(scale(right, -w / 2), scale(up, -h / 2))
   );
-  return { origin, right, up, cap, anchor: null, fade: 1 };
+  return { origin, right, up, cap, fade: 1 };
 }
 
 /** The ground's height at a rectangle's centre and corners, the highest. */
@@ -721,7 +714,8 @@ export function nameplateCost(
     scene.camera,
     block,
     range,
-    scene.groundAt
+    scene.groundAt,
+    scene.opaque
   );
   const { corners, grid } = platePoints(pose, block);
   const onScreen = corners.map(scene.project);

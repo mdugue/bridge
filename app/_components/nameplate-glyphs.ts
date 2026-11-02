@@ -52,7 +52,7 @@ const ATLAS_MAX_HEIGHT = 1024;
 const TITLE_GAP = 0.55;
 const LINE_LEADING = 1.75;
 /** A long title's line spacing, in its caps. */
-const TITLE_LEADING = 1.32;
+const TITLE_LEADING = 1.5;
 /** Room under the last baseline for descenders, over the title for
  *  accents, in title caps. */
 const FOOT = 0.32;
@@ -73,9 +73,9 @@ export const PAINT = {
 } as const;
 export type Paint = (typeof PAINT)[keyof typeof PAINT];
 
-/** A quad's kind, the third component of its `uvk`: a letter (its field),
- *  a solid (its uv antialiases the edges), a disc. */
-export const KIND = { glyph: 0, solid: 1, disc: 2 } as const;
+/** A quad's kind, the third component of its `uvk`: a letter (its field)
+ *  or a solid (its uv antialiases the edges). */
+export const KIND = { glyph: 0, solid: 1 } as const;
 
 export type Align = "left" | "center" | "right";
 

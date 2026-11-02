@@ -147,16 +147,15 @@ test("a street plate stands on the roof in front of the facade, reading left to 
     );
   const pose = at("above");
   expect(pose.origin[2]).toBeGreaterThan(10); // before the facade at z = 10
-  // on the roof: its descenders' room just under the top, no leader
+  // on the roof: its descenders' room just under the top
   expect(pose.origin[1]).toBeLessThan(30);
   expect(pose.origin[1] + 0.3 * pose.cap).toBeGreaterThan(30);
-  expect(pose.anchor).toBeNull();
   expect(pose.up).toEqual([0, 1, 0]);
   // its right runs with the camera's
   expect(pose.right[0] * camera.right[0]).toBeGreaterThan(0);
   expect(pose.fade).toBe(1);
-  // beside it in the sky, a hairline down to it
-  expect(at("right").anchor).not.toBeNull();
+  // beside it in the sky: past the facade's edge
+  expect(Math.abs(at("right").origin[0])).toBeGreaterThan(20);
 });
 
 test("rooftop letters stand on the nave's eave under a tower", () => {
@@ -177,6 +176,17 @@ test("rooftop letters stand on the nave's eave under a tower", () => {
   expect(onEave.origin[1] + 0.3 * onEave.cap).toBeGreaterThan(18);
   // an eave just under the top (a flat roof's parapet): on the top
   expect(pose({ ...BODY, eave: 28 }).origin[1]).toBeGreaterThan(27);
+  // an opaque plate stands over the whole thing, not before its tower
+  const over = nameplatePose(
+    { ...BODY, eave: 18 },
+    { mode: "street", side, spot: "above" },
+    camera,
+    { width: 6, height: 2 },
+    { min: 20, max: 60 },
+    () => 0,
+    true
+  );
+  expect(over.origin[1]).toBeGreaterThan(27);
 });
 
 test("up close the letters stand on the ground before the facade", () => {
@@ -192,7 +202,6 @@ test("up close the letters stand on the ground before the facade", () => {
   // a quarter of the building's height over the highest ground under
   // them
   expect(pose.origin[1]).toBeCloseTo(1.2 + 7.5);
-  expect(pose.anchor).toBeNull();
 });
 
 test("a small thing's plate stands close before it", () => {
@@ -224,7 +233,6 @@ test("an air plate lies on the ground beside the building", () => {
   // over it
   expect(pose.origin[1]).toBeCloseTo(3 + 0.1 + 0.14 * pose.cap);
   expect(pose.up[1]).toBe(0);
-  expect(pose.anchor).toBeNull();
 });
 
 test("the choice avoids hidden and covered places and keeps its own", () => {

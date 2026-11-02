@@ -39,10 +39,8 @@ import {
   DataTexture,
   DepthTexture,
   DoubleSide,
-  GreaterEqualCompare,
   Group,
   Float32BufferAttribute,
-  LessEqualCompare,
   LinearFilter,
   LinearSRGBColorSpace,
   Matrix4,
@@ -127,6 +125,7 @@ import {
 } from "./nameplate-glyphs";
 import type { F, Live, V3 } from "./shader-chunks";
 import type { SunShadowMap } from "./stylize-effect";
+import { readSunShadow, shadowStandIn } from "./sun-shadow-read";
 import type { ViewLens } from "./view-lens";
 
 /** How often the place is chosen again (ms). */
@@ -327,8 +326,7 @@ function plateMaterials(
   const field = atlas.sample(uvk.xy).r;
   const kind = uvk.z;
   const isGlyph = float(1).sub(step(0.5, kind));
-  const isDisc = step(1.5, kind);
-  const isSolid = float(1).sub(isGlyph).sub(isDisc);
+  const isSolid = float(1).sub(isGlyph);
   // a letter's fill on the field's mid level
   const aa = max(fwidth(field), 1e-4);
   const fill = smoothstep(float(0.5).sub(aa), float(0.5).add(aa), field);
@@ -348,7 +346,7 @@ function plateMaterials(
     .add(HIDDEN_SLACK_M);
   const hidden = smoothstep(slack, slack.mul(2), sceneZ.sub(positionView.z));
 
-  // the face: a letter with its halo further out, a solid, a disc; its
+  // the face: a letter with its halo further out, a solid; its
   // hidden part shown as a ghost
   const halo = attribute<"vec4">("halo", "vec4");
   const haloEdge = float(0.5).sub(u.haloWidth.mul(0.5));
@@ -364,18 +362,11 @@ function plateMaterials(
       smoothstep(GHOST.width, aa.add(GHOST.width * 1.6), abs(field.sub(0.5)))
     )
     .mul(ink.a);
-  const r = uvk.xy.mul(2).sub(1).length();
-  const discA = float(1)
-    .sub(smoothstep(float(1).sub(max(fwidth(r), 1e-4).mul(1.5)), float(1), r))
-    .mul(ink.a);
   const rgb = mix(ink.rgb, glyphRgb, isGlyph);
-  const shownA = glyphA
-    .mul(isGlyph)
-    .add(solidA.mul(isSolid))
-    .add(discA.mul(isDisc));
+  const shownA = glyphA.mul(isGlyph).add(solidA.mul(isSolid));
   const ghostA = ghostGlyph
     .mul(isGlyph)
-    .add(solidA.mul(isSolid).add(discA.mul(isDisc)).mul(0.35))
+    .add(solidA.mul(isSolid).mul(0.35))
     .mul(GHOST.alpha);
   const face = plateMaterial(
     mix(rgb, ink.rgb, hidden),
@@ -484,21 +475,17 @@ function shadowMaterial(
   const lifted = world.xyz.add(
     u.sunWorld.mul(surface.z.negate().mul(0.0015).add(0.12))
   );
-  const s = u.sunMatrix.mul(vec4(lifted, 1));
-  const c = s.xyz.div(s.w);
-  const at = vec2(c.x, float(1).sub(c.y));
-  const onMap = step(0, at.x)
-    .mul(step(at.x, 1))
-    .mul(step(0, at.y))
-    .mul(step(at.y, 1))
-    .mul(reversed ? step(0, c.z) : step(c.z, 1))
-    .mul(u.sunReady);
-  // the map's read: a stand-in until the first lit material made it
-  const read = texture(sunStandIn, at);
-  const sunlit = read.compare(
-    reversed ? c.z.sub(u.sunBias) : c.z.add(u.sunBias)
-  ).x;
-  const lit = mix(float(1), sunlit, onMap);
+  const {
+    inside: onMap,
+    shadowed,
+    read,
+  } = readSunShadow(
+    lifted,
+    { matrix: u.sunMatrix, bias: u.sunBias, ready: u.sunReady },
+    sunStandIn,
+    reversed
+  );
+  const lit = mix(float(1), shadowed, onMap);
   const a = mask.sample(hit).r.mul(inside).mul(reach).mul(lit).mul(u.strength);
   const m = new MeshBasicNodeMaterial();
   m.colorNode = vec4(u.colour, 1);
@@ -651,10 +638,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   const maskNode = texture(mask);
   // the sun's map is made by the first lit material, maybe after this:
   // a stand-in that compares like it until then
-  const sunStandIn = new DepthTexture(1, 1);
-  sunStandIn.compareFunction = deps.reversedDepth
-    ? GreaterEqualCompare
-    : LessEqualCompare;
+  const sunStandIn = shadowStandIn(deps.reversedDepth);
   const shadowUniforms: ShadowUniforms = {
     inverse: uniform(new Matrix4()),
     sun: uniform(new Vector3(0, 0, 1)),
@@ -708,6 +692,8 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   let disposed = false;
 
   const type = () => NAMEPLATE_TYPES[style];
+  /** the plate hides what is behind it (the comic's box) */
+  const opaque = () => type().box !== undefined;
   const alignFor = (l: NameplateLayout | null): Align =>
     l?.mode === "street" || l?.mode === "far"
       ? l.spot === "left"
@@ -867,7 +853,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     hidden: (points) => deps.hidden(camera, points),
     hud: deps.hud(),
     groundAt: deps.groundAt,
-    opaque: type().box !== undefined,
+    opaque: opaque(),
   });
 
   const matrix = new Matrix4();
@@ -913,6 +899,12 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       rebuild();
     } else if (sameLayout(chosen, layout)) {
       wanted = null;
+    } else if (chosen.mode !== layout.mode) {
+      // a new laying (the camera crossed a threshold, which holds its
+      // own hysteresis) moves at once: the old one may be fading out
+      wanted = null;
+      pending = chosen;
+      crossAt = now;
     } else if (!sameLayout(chosen, wanted)) {
       // a new place must stay the best a while before the plate moves
       wanted = chosen;
@@ -986,8 +978,28 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   /** How far the shadow box reaches (m): along the sun's ray from the
    *  plate's lowest corner until it meets the ground (a terrace's letters
    *  throw their shadow down onto the river below it), a little beyond. */
-  const shadowLength = (lowest: number, base: number, sun: Vector3) => {
-    const o = prismCorners[0];
+  const shadowLength = (o: Vec3, base: number, sun: Vector3) => {
+    const key = shadowKey;
+    if (
+      key[0] === o[0] &&
+      key[1] === o[1] &&
+      key[2] === o[2] &&
+      key[3] === base &&
+      key[4] === sun.x &&
+      key[5] === sun.y &&
+      key[6] === sun.z
+    ) {
+      return key[7];
+    }
+    const length = marchToGround(o, base, sun);
+    key.splice(0, 8, o[0], o[1], o[2], base, sun.x, sun.y, sun.z, length);
+    return length;
+  };
+  // the last march's corner, foot, sun and length: a still view asks
+  // the ground nothing
+  const shadowKey: number[] = [Number.NaN, 0, 0, 0, 0, 0, 0, 0];
+  const marchToGround = (o: Vec3, base: number, sun: Vector3) => {
+    const lowest = o[1];
     const floor = base - 2;
     for (let t = 0; t <= SHADOW_REACH_M; t += SHADOW_STEP_M) {
       const y = lowest - sun.y * t;
@@ -1020,16 +1032,18 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     }
     // the mask's rectangle on the plate (a box reaches past the block)
     const area = geometry?.mask.area ?? { x: 0, y: 0, ...block() };
-    let lowest = Number.POSITIVE_INFINITY;
+    let low = prismCorners[0];
     for (const [i, c] of prismCorners.entries()) {
       const x = (area.x + (i === 1 || i === 2 ? area.width : 0)) * p.cap;
       const y = (area.y + (i >= 2 ? area.height : 0)) * p.cap;
       for (let k = 0; k < 3; k++) {
         c[k] = p.origin[k] + p.right[k] * x + p.up[k] * y;
       }
-      lowest = Math.min(lowest, c[1]);
+      if (c[1] < low[1]) {
+        low = c;
+      }
     }
-    const length = shadowLength(lowest, b.base, sun);
+    const length = shadowLength(low, b.base, sun);
     const map = deps.sunShadow.depth();
     if (map && sunRead.value !== map) {
       sunRead.value = map;
@@ -1113,12 +1127,6 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       }
       const now = performance.now();
       const cam = plateCamera(camera, viewport());
-      // an opaque plate (the comic's box) stands over the whole thing,
-      // never on an eave before a tower it would cover
-      const b =
-        type().box && body.eave !== undefined
-          ? { ...body, eave: undefined }
-          : body;
       // no new choice while a cross-fade runs, out or in: it finishes
       // first (a flip back would flash the half-faded plate full)
       if (
@@ -1128,20 +1136,28 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
         !pending
       ) {
         chosenAt = now;
-        choose(b, camera, cam, now);
+        choose(body, camera, cam, now);
       }
       const crossFade = crossing(now, hold);
       if (!layout || !geometry) {
         return;
       }
-      pose = nameplatePose(b, layout, cam, block(), range(), deps.groundAt);
+      pose = nameplatePose(
+        body,
+        layout,
+        cam,
+        block(),
+        range(),
+        deps.groundAt,
+        opaque()
+      );
       placePlate(pose, cam);
       // an export draws every tile alike: no fade still running
       const arrive = hold ? 1 : Math.min((now - askedAt) / ARRIVE_MS, 1);
       fade.value = pose.fade * crossFade * (arrive * arrive * (3 - 2 * arrive));
       letters.visible = fade.value > 0.001;
       if (letters.visible) {
-        placeShadow(pose, b);
+        placeShadow(pose, body);
       } else {
         shadow.visible = false;
       }
