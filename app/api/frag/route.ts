@@ -22,10 +22,13 @@ import {
 import { runAsk, scrubbed } from "@/lib/city/ask-run";
 import { verifyAskToken } from "@/lib/city/ask-token";
 import { siteById } from "@/sites";
-import { askAdapter, fakeAskAdapter } from "./adapters";
+import { askAdapter, fakeAskAdapter, fakeModel } from "./adapters";
 import { siteKnowledge } from "./knowledge";
 
-export const maxDuration = 60;
+/** Up to eight model calls with tool rounds between them: a careful
+ *  model's answer can outlast a minute (Vercel's ceiling with fluid
+ *  compute). */
+export const maxDuration = 300;
 
 /**
  * A refused request: its reason as a code in the log (never the key, the
@@ -40,7 +43,7 @@ function refuse(status: number, code: string, message: string): Response {
 }
 
 export async function POST(request: Request): Promise<Response> {
-  const fake = process.env.FRAG_FAKE === "1";
+  const fake = fakeModel();
   const key = request.headers.get(ASK_KEY_HEADER)?.trim() ?? "";
   let params: Awaited<ReturnType<typeof chatParamsFromRequestBody>>;
   try {
@@ -56,8 +59,8 @@ export async function POST(request: Request): Promise<Response> {
     return refuse(401, "no-key", "Ohne Schlüssel geht es nicht.");
   }
   const secret = process.env.FRAG_SECRET;
-  // on the host the key check must hold: without its secret, no relay
-  if (!(fake || secret) && process.env.VERCEL) {
+  // a production server holds the key check: without its secret, no relay
+  if (!(fake || secret) && process.env.NODE_ENV === "production") {
     // 501, not 503: the client retries a 503 as a passing outage
     return refuse(
       501,

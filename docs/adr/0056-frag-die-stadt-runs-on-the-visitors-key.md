@@ -46,9 +46,11 @@ load into the browser.
 - Abuse is bounded by the token, the caps and the curated models; rate
   limits, bot protection and the spend limit are host and provider
   settings, not code.
-- `FRAG_SECRET` must be set on a deployment, or the routes answer 501;
-  every refusal logs a status and reason code, never the key or the
-  conversation. `FRAG_FAKE=1` is a scripted model for local tests only.
+- `FRAG_SECRET` must be set on a production server, or the routes answer
+  501; every refusal logs a status and reason code, never the key or the
+  conversation. `FRAG_FAKE=1` is a scripted model for local tests only
+  and is ignored on Vercel. One answer may take up to 300 s of function
+  time (eight model calls with tool rounds).
 - The privacy page names what is sent, to whom, and the storage key
   (ADR 0043). Generated answers show in their own card, marked
   (ADR 0042).

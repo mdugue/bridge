@@ -46,6 +46,13 @@ export function askAdapter(
   }
 }
 
+/** Whether the scripted model answers (`FRAG_FAKE=1`): never on a
+ *  Vercel deployment, where a copied variable would switch off the key
+ *  check. */
+export function fakeModel(): boolean {
+  return process.env.FRAG_FAKE === "1" && !process.env.VERCEL;
+}
+
 /**
  * A scripted model for local tests only (`FRAG_FAKE=1`, never set on a
  * deployment): it searches for the question, shows the first hit and

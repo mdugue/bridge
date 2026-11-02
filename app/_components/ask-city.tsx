@@ -73,6 +73,8 @@ export interface AskScene {
    *  the instant it set, as text */
   setTime: (hour: number, date?: string) => string;
   show: (view: ViewpointGeometry) => void;
+  /** whether a point (site CRS) lies on one of the site's tiles */
+  within: (x: number, y: number) => boolean;
   /** the player's pose, mode, time, style and layers, for the model */
   where: () => Record<string, unknown>;
 }
@@ -157,7 +159,7 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
 // --- the key ------------------------------------------------------------------
 
 function KeyForm({ onKey }: { onKey: (key: AskKey) => void }) {
-  const stored = readAskKey();
+  const [stored, setStored] = useState(readAskKey);
   const [provider, setProvider] = useState<AskProviderId>(
     stored?.provider ?? "anthropic"
   );
@@ -325,6 +327,7 @@ function KeyForm({ onKey }: { onKey: (key: AskKey) => void }) {
               className="underline underline-offset-2 hover:text-foreground"
               onClick={() => {
                 clearAskKey();
+                setStored(null);
                 setText("");
               }}
               type="button"
@@ -352,6 +355,9 @@ function sceneTools(scene: AskScene) {
     whereTool.client(() => scene.where()),
     showTool.client((input) => {
       const target: AskTarget = input;
+      if (!scene.within(target.x, target.y)) {
+        return { ok: false, hinweis: OUTSIDE };
+      }
       scene.show(
         askView(target, scene.from() ?? target, input.aus_der_luft ?? false)
       );
@@ -373,31 +379,44 @@ function sceneTools(scene: AskScene) {
   );
 }
 
-/** A failed answer in words, by the status the server sent. */
-function errorText(error: Error): { key: boolean; text: string } {
+/** What the model hears for a point off the city's tiles: often a
+ *  latitude/longitude or swapped axes. */
+const OUTSIDE =
+  "Dieser Punkt liegt nicht in der Stadt. x ist der Rechtswert, y der Hochwert in Metern, wie suche_stadt sie liefert — keine Grad.";
+
+/** A failed answer in words, by the status the server sent, and what
+ *  the visitor can do about it: check the key again or start over. */
+function errorText(error: Error): {
+  key: boolean;
+  reset: boolean;
+  text: string;
+} {
   const status = (error as { status?: unknown }).status;
+  const say = (text: string, key = false, reset = false) => ({
+    key,
+    reset,
+    text,
+  });
   if (status === 401) {
-    return { key: true, text: "Der Schlüssel muss neu geprüft werden." };
+    return say("Der Schlüssel muss neu geprüft werden.", true);
+  }
+  if (status === 400) {
+    // the model or provider stored with the key is no longer offered
+    return say("Die Auswahl passt nicht mehr zu diesem Server.", true);
   }
   if (status === 413) {
-    return {
-      key: false,
-      text: "Das Gespräch ist zu lang geworden — bitte neu beginnen.",
-    };
+    return say("Das Gespräch ist zu lang geworden.", false, true);
   }
   if (status === 404) {
-    return { key: false, text: "Für diese Stadt gibt es kein Stadtwissen." };
+    return say("Für diese Stadt gibt es kein Stadtwissen.");
   }
   if (status === 501) {
-    return {
-      key: false,
-      text: "Frag die Stadt ist auf diesem Server nicht eingerichtet.",
-    };
+    return say("Frag die Stadt ist auf diesem Server nicht eingerichtet.");
   }
   if (typeof status === "number") {
-    return { key: false, text: `Der Server antwortet mit Status ${status}.` };
+    return say(`Der Server antwortet mit Status ${status}.`);
   }
-  return { key: false, text: error.message || "Die Antwort brach ab." };
+  return say(error.message || "Die Antwort brach ab.");
 }
 
 function Conversation({
@@ -489,6 +508,15 @@ function Conversation({
                       type="button"
                     >
                       Schlüssel prüfen
+                    </button>
+                  )}
+                  {failure.reset && (
+                    <button
+                      className="underline underline-offset-2"
+                      onClick={chat.clear}
+                      type="button"
+                    >
+                      Neu beginnen
                     </button>
                   )}
                 </p>

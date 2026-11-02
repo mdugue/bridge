@@ -15,6 +15,7 @@ import {
   plausibleKey,
 } from "@/lib/city/ask-city";
 import { issueAskToken } from "@/lib/city/ask-token";
+import { fakeModel } from "../frag/adapters";
 
 export const maxDuration = 15;
 
@@ -50,12 +51,12 @@ export async function POST(request: Request): Promise<Response> {
   }
   const def = ASK_PROVIDER_BY_ID[provider];
   // local tests only (app/api/frag/adapters.ts fakeAskAdapter)
-  if (process.env.FRAG_FAKE === "1") {
+  if (fakeModel()) {
     return answer(200, { ok: true, token: "", expires: Date.now() + 60_000 });
   }
   const secret = process.env.FRAG_SECRET;
-  // the chat route refuses without it on the host: say so at the check
-  if (!secret && process.env.VERCEL) {
+  // the chat route refuses without it in production: say so at the check
+  if (!secret && process.env.NODE_ENV === "production") {
     return refuse(
       501,
       "no-secret",
