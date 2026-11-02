@@ -222,25 +222,26 @@ function anchorOf(geometry: {
   return undefined;
 }
 
+/** How many monuments `out` already holds in `base`'s metre, plus one. */
+function nthOf(out: readonly WissenMonument[], base: string): number {
+  return (
+    out.filter((m) => m.id === base || m.id.startsWith(`${base}_`)).length + 1
+  );
+}
+
 /** The tile's named monuments. */
 export function monumentsOf(
   file: MonumentCollection | undefined
 ): WissenMonument[] {
-  const out: WissenMonument[] = [];
-  const taken = new Map<string, number>();
+  const found: (Omit<WissenMonument, "id"> & { base: string })[] = [];
   for (const f of file?.features ?? []) {
     const { name, kind, material, wikidata } = f.properties;
     const at = anchorOf(f.geometry);
     if (!(name && at)) {
       continue;
     }
-    // by the metre; a second monument in the same metre (a pair of
-    // plaques) takes a suffix, in the file's order
-    const base = `m${Math.round(at[0])}_${Math.round(at[1])}`;
-    const seen = (taken.get(base) ?? 0) + 1;
-    taken.set(base, seen);
-    out.push({
-      id: seen === 1 ? base : `${base}_${seen}`,
+    found.push({
+      base: `m${Math.round(at[0])}_${Math.round(at[1])}`,
       name,
       kind: kind ?? "",
       x: round1(at[0]),
@@ -249,6 +250,16 @@ export function monumentsOf(
       ...(wikidata ? { wd: wikidata } : {}),
     });
   }
+  // by the metre; monuments in the same metre (a pair of plaques) take a
+  // suffix by their names' order, not the file's, so a re-bake keeps them
+  found.sort(
+    (a, b) => a.base.localeCompare(b.base) || a.name.localeCompare(b.name)
+  );
+  const out: WissenMonument[] = [];
+  found.forEach(({ base, ...m }, k) => {
+    const nth = found[k - 1]?.base === base ? nthOf(out, base) : 1;
+    out.push({ id: nth === 1 ? base : `${base}_${nth}`, ...m });
+  });
   return out.sort((a, b) => a.id.localeCompare(b.id));
 }
 

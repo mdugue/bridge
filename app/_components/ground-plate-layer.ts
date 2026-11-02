@@ -30,7 +30,7 @@ import {
   platePositions,
 } from "@/lib/city/ground-plate";
 import { landcoverSrgb, srgbToLinear } from "@/lib/city/landcover";
-import { plateHeightAt } from "@/lib/city/plate-height";
+import { type DrawnPlateTile, plateHeightAt } from "@/lib/city/plate-height";
 import { fetchOptionalBinary } from "./fetch-optional";
 import { disposeObject3D, sceneMaterial } from "./three-utils";
 
@@ -83,12 +83,13 @@ export function buildGroundPlate(
   const material = plateMaterial();
   const meshes = new Map<string, Mesh>();
   const heightAt = plateHeightIndex(tiles, n);
+  const drawn: DrawnPlateTile[] = [];
   for (const tile of tiles) {
     const geometry = new BufferGeometry();
-    geometry.setAttribute(
-      "position",
-      new Float32BufferAttribute(platePositions(tile, n, offset), 3)
-    );
+    const positions = platePositions(tile, n, offset);
+    drawn.push({ bounds: tile.bounds, positions });
+    // not copied (a Float32BufferAttribute would): the coarse ground reads it
+    geometry.setAttribute("position", new BufferAttribute(positions, 3));
     geometry.setAttribute(
       "color",
       new BufferAttribute(plateColours(tile.classes), 4, true)
@@ -116,7 +117,7 @@ export function buildGroundPlate(
         mesh.visible = !covered.has(id);
       }
     },
-    heightAt: plateHeightAt(tiles, n),
+    heightAt: plateHeightAt(drawn, n),
     dispose: () => {
       group.removeFromParent();
       disposeObject3D(group);

@@ -681,6 +681,8 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     null
   );
   const beforeWalk = useRef<{ at: Date; style: RenderStyle } | null>(null);
+  /** where the walk's own glide lands, to tell it from one picked since */
+  const walkGlide = useRef<{ epsgX: number; epsgY: number } | null>(null);
   /**
    * Shows a walk's stop: a slow glide to its view (the card can be read,
    * or heard, on the way) — a jump only out of Modell, which no glide
@@ -700,22 +702,31 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     const hour = time.glideTo(stopDate(stop, today()));
     if (h.getViewMode() === "model") {
       h.applyCameraState(stopCamera(stop, h.offset));
+      walkGlide.current = null;
       hour(1);
     } else {
       // a slow glide the visitor looks about in while the text is read:
       // a drag on the way turns the view, it does not stop the walk
       h.flyToViewpoint(stopView(stop), {
+        ground: stop.ground,
         lookAround: true,
         onProgress: hour,
         pace: WALK_PACE,
       });
+      walkGlide.current = h.getGlideTarget();
     }
     look.set({ style: stop.style ?? "pastel" });
   };
   const endWalk = () => {
-    setWalking(null);
     // ended on the way: the camera stays where it is, not flying on alone
-    handleRef.current?.stopGlide();
+    // (only the walk's own glide: one to a place picked since goes on)
+    const mine = walkGlide.current;
+    const aim = handleRef.current?.getGlideTarget();
+    if (mine && aim && aim.epsgX === mine.epsgX && aim.epsgY === mine.epsgY) {
+      handleRef.current?.stopGlide();
+    }
+    walkGlide.current = null;
+    setWalking(null);
     if (beforeWalk.current) {
       time.setInstant(beforeWalk.current.at);
       look.set({ style: beforeWalk.current.style });

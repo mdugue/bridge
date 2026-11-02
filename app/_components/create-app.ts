@@ -2155,6 +2155,8 @@ async function bootApp(
     }
     opts.onModeChange?.(mode);
   };
+  /** the pose's mode changes go unheard (a Modell state applied in Modell) */
+  let quietPose = false;
   const pose = createCameraPose(camera, {
     groundFloor: () => siteGround.floor() ?? 0,
     heightAt,
@@ -2163,7 +2165,11 @@ async function bootApp(
     resolveStep: collider.resolveStep,
     solids: collider,
     onFollowEnd: opts.onFollowEnd,
-    onModeChange: modeChanged,
+    onModeChange: (mode) => {
+      if (!quietPose) {
+        modeChanged(mode);
+      }
+    },
     onPose: (p) => {
       if (!rig?.owns()) {
         opts.onPose?.(p);
@@ -4221,14 +4227,16 @@ async function bootApp(
       if (!model) {
         modelRig.exitNow();
       }
-      pose.applyCameraState(perspective);
+      // a Modell state's perspective settles walk or fly, which is not the
+      // mode shown: unheard, so the HUD and Modell's programs stay put
+      quietPose = model !== undefined && modelRig.staying();
+      try {
+        pose.applyCameraState(perspective);
+      } finally {
+        quietPose = false;
+      }
       if (model) {
         modelRig.applyState(model);
-        // the perspective settled the mode to walk or fly; a rig already
-        // in Modell does not say so again
-        if (viewMode !== "model" && modelRig.staying()) {
-          modeChanged("model");
-        }
       }
     },
     getRenderInfo: () => ({

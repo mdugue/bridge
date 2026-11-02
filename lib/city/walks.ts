@@ -295,7 +295,9 @@ function textProblems(stop: WalkStop): string[] {
   }
   for (const f of facts) {
     if (!SOURCE.test(f.source)) {
-      out.push(`fact "${f.claim.slice(0, 40)}…" has no checkable source`);
+      out.push(
+        `fact "${(f.claim ?? "").slice(0, 40)}…" has no checkable source`
+      );
     }
   }
   for (const d of stop.days ?? []) {
@@ -316,7 +318,7 @@ const LOOK = /(?:^|[.!?:;]\s+)(?:Schau|Sieh|Achte|Zoom|Zähl|Such)(?:e|t)?\b/;
  * eye to look therefore points at the photo (docs/walks.md).
  */
 function lookProblems(stop: WalkStop): string[] {
-  const told = [stop.text, stop.closer ?? ""].flatMap((t) =>
+  const told = [stop.text ?? "", stop.closer ?? ""].flatMap((t) =>
     t.split(/(?<=[.!?])\s+/)
   );
   return told
@@ -326,7 +328,7 @@ function lookProblems(stop: WalkStop): string[] {
 
 /** Whether a stop's photo carries the credit it is shown with. */
 export function photoCredited(p: NonNullable<WalkStop["photo"]>): boolean {
-  return Boolean(p.author && p.licence && p.page.startsWith("https://"));
+  return Boolean(p.author && p.licence && p.page?.startsWith("https://"));
 }
 
 /** A photo carries its credit, or it is not shown. */
