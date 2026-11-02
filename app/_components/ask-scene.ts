@@ -89,11 +89,23 @@ export function useAskScene(
           quellen: card.sources.map((s) => s.text),
         };
       },
+      moment: () => {
+        const h = handleRef.current;
+        const c = h?.getCameraState();
+        return {
+          at: c ? { x: c.epsg.x, y: c.epsg.y, headingDeg: c.headingDeg } : null,
+          now: current(),
+          landmarks: h?.landmarks ?? [],
+          river: riverOf(site.id)?.name ?? null,
+          layers: [...offered],
+        };
+      },
       setListening: (on) => pace.setListening(on),
       river: riverOf(site.id),
       setFlood: (cm) => handleRef.current?.setFlood(cm),
       setVolume: (volume) => handleRef.current?.setVolume(volume) ?? false,
       show: (view) => handleRef.current?.flyToViewpoint(view),
+      select: (places) => handleRef.current?.pickPlaces(places),
       frame: () => {
         const h = handleRef.current;
         const sun = h

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
   ASK_FOV,
   type AskTarget,
+  boundsTarget,
   type Framed,
   frameTargets,
   streetView,
@@ -165,4 +166,18 @@ test("a heading whose sight lines a building cuts loses", () => {
     sightHit: () => ({ x: 5, y: -10, z: 190 }),
   });
   expect(own.view.headingDeg).toBe(0);
+});
+
+test("a selection's place is its triangles' footprint centre, foot, height and radius", () => {
+  // a 20 × 10 m box, 30 m high, its foot at 100 m
+  const box = boundsTarget([
+    -10, 100, -5, 10, 100, 5, 10, 130, -5, -10, 130, 5,
+  ]);
+  expect(box).not.toBeNull();
+  expect(box?.x).toBe(0);
+  expect(box?.z).toBe(0);
+  expect(box?.foot).toBe(100);
+  expect(box?.h).toBe(30);
+  expect(box?.r).toBeCloseTo(Math.hypot(20, 10) / 2, 6);
+  expect(boundsTarget([])).toBeNull();
 });

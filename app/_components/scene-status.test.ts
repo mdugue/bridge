@@ -131,7 +131,11 @@ test("an inquiry is kept with what its ray met, and cleared by none", () => {
   const { status, reports } = wire();
   const asked = { kind: "building" } as never;
   reports.onInquiry(asked, null);
-  expect(status.get("inquiry")).toEqual({ inquiry: asked, along: null });
+  expect(status.get("inquiry")).toEqual({
+    inquiry: asked,
+    along: null,
+    picked: { active: 0, adding: false, picks: [asked] },
+  });
   reports.onInquiry(null, null);
   expect(status.get("inquiry")).toBeNull();
 });
