@@ -878,6 +878,8 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   /** A new place from scratch: nothing chosen, nothing pending, the plate
    *  hidden until the next choice. */
   const forget = () => {
+    // a new plate asks the ground afresh (tiles may have streamed in)
+    lastMarch = null;
     layout = null;
     pending = null;
     wanted = null;
@@ -1021,10 +1023,11 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       if (!m.grounded || dy === 0) {
         return m;
       }
-      slid.length = Math.min(
-        Math.max(m.length + dy / Math.max(sun.y, 1e-3), 2),
-        SHADOW_REACH_M + SHADOW_STEP_M
-      );
+      // slid past the march's reach it no longer meets the ground there:
+      // it fades out inside the box
+      const length = Math.max(m.length + dy / Math.max(sun.y, 1e-3), 2);
+      slid.grounded = length <= SHADOW_REACH_M;
+      slid.length = Math.min(length, SHADOW_REACH_M);
       return slid;
     }
     lastMarch = {

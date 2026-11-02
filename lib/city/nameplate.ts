@@ -40,9 +40,13 @@ const TOWER_SLENDER = 2;
 
 /** Whether an object weighs in: a LoD2 object (the surface model's
  *  additions copy their host's facts) with an eave and a base of its own
- *  (a Building drawn by its parts alone has no eave). */
+ *  (a Building drawn by its parts alone has no eave; a base of exactly 0
+ *  is a table without the column, read as 0: no height to stand on). */
 const ownMass = (o: InquiryObject): o is InquiryObject & { baseZ: number } =>
-  o.source === OBJECT_SOURCE_LOD2 && o.eaveH > 0 && o.baseZ !== undefined;
+  o.source === OBJECT_SOURCE_LOD2 &&
+  o.eaveH > 0 &&
+  o.baseZ !== undefined &&
+  o.baseZ !== 0;
 
 /**
  * What a landmark's rooftop letters stand on under its tower (m, the

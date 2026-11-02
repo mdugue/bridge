@@ -556,21 +556,18 @@ export function layPlate(
   // carries it) and its leftmost at 0; its edge and lean reach past the
   // text's extent
   const raw = quadBounds(positions);
-  const shift = box ? raw : { x0: 0, y0: 0, x1: 0, y1: 0 };
-  for (let i = 0; i < positions.length; i += 3) {
-    positions[i] -= shift.x0;
-    positions[i + 1] -= shift.y0;
+  let bounds = raw;
+  if (box) {
+    for (let i = 0; i < positions.length; i += 3) {
+      positions[i] -= raw.x0;
+      positions[i + 1] -= raw.y0;
+    }
+    bounds = { x0: 0, y0: 0, x1: raw.x1 - raw.x0, y1: raw.y1 - raw.y0 };
   }
   const block = {
     foot: box ? 0 : firstBaseline,
-    width: box ? Math.max(width + 2 * pad, raw.x1 - shift.x0) : width,
-    height: box ? Math.max(height + pad, raw.y1 - shift.y0) : height,
-  };
-  const bounds = {
-    x0: raw.x0 - shift.x0,
-    y0: raw.y0 - shift.y0,
-    x1: raw.x1 - shift.x0,
-    y1: raw.y1 - shift.y0,
+    width: box ? Math.max(width + 2 * pad, bounds.x1) : width,
+    height: box ? Math.max(height + pad, bounds.y1) : height,
   };
   return {
     block,

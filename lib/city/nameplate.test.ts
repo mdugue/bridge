@@ -241,13 +241,14 @@ test("a landmark's rooftop letters stand on the eave under its tower", () => {
       at(95, 30, 36, { building: false, objectIndex: 12 }),
     ])
   ).toBeNull();
-  // a part at sea level (Hamburg) carries like any other
+  // a base of exactly 0 (a table without the column): no frame to
+  // stand in, the letters on the top
   expect(
     eave([
       at(0, 15, 900, { building: false }),
       at(0, 40, 36, { building: false, objectIndex: 13 }),
     ])
-  ).toBe(15);
+  ).toBeNull();
   // footprints unknown (an older bake), a Building drawn by its parts
   // alone (no eave), a surface-model addition with its host's facts:
   // none of them a tower
