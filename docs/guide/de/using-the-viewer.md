@@ -237,19 +237,25 @@ fragt, was unter dem Mauszeiger steht (im immersiven Modus, der den
 Zeiger ausblendet, was in der Bildmitte steht; nur dort markiert ein
 Punkt die Mitte). Das Gebäude bekommt eine feine
 Schraffur und eine Linie um seinen Umriss, beide in der pinken
-Akzentfarbe der Bedienelemente, und eine Karte öffnet sich. Ein Klick ins Leere
+Akzentfarbe der Bedienelemente (in den anderen Darstellungsstilen in der
+Schriftfarbe des Stils), und eine Karte öffnet sich. Ein Klick ins Leere
 schließt sie wieder. Neben dem Gebäude steht jetzt sein **Name** in der
 Stadt selbst, solange die Frage gilt: bei einem Wahrzeichen groß, darunter
 wann und von wem es erbaut, wann es wiederaufgebaut wurde und wie hoch es
 ist (aus Wikidata, auch auf der Karte); bei einem benannten Gebäude mit seiner Adresse; bei
-einem gewöhnlichen Haus nur die Adresse, klein. Von der Straße aus steht
-der Name aufrecht über oder neben dem Gebäude, zur Fassade gedreht, die
-du am besten siehst, mit einer feinen Linie dorthin; aus der Luft liegt
-er neben ihm auf dem Boden; ganz nah ist er eine Inschrift am Sockel; von
-weit nur der Name. Er weicht aus, wenn ein anderes Gebäude ihn verdecken
-oder ein Bedienfeld ihn überdecken würde, erscheint als blasse Kontur, wo
+einem gewöhnlichen Haus nur die Adresse, klein; bei einem Baum, einer
+Laterne oder einer Bank, was es ist. Die Buchstaben sind gebaut: ein wenig
+tief, von der Sonne beleuchtet, mit eigenem Schatten, wo die Sonne
+hinkommt, bis hinunter auf den Boden. Von der Straße aus
+stehen sie auf dem Dach (bei einer Kirche auf dem Schiff), zur Fassade gedreht, die du am besten siehst,
+oder neben dem Gebäude; steil aus der Luft
+liegen sie neben ihm auf dem Boden (aus flacherem Winkel stehen sie auf,
+damit sie lesbar bleiben); ganz nah stehen sie wie eine Inschrift vor seiner Fassade; von
+weit nur der Name. Ein langer Name bricht auf einige Zeilen um. Er weicht aus, wenn ein anderes Gebäude ihn verdecken
+oder ein Bedienfeld ihn überdecken würde (erst wenn der neue Platz eine
+Weile besser bleibt), erscheint als blasse Kontur, wo
 die Stadt ihn doch verdeckt, und ist in jedem Darstellungsstil anders
-gesetzt — im Comic in einem gelben Erzählkasten, im Schwarzplan, von oben
+gesetzt — im Comic in einem gelben Erzählkasten, der das Gebäude frei lässt, im Schwarzplan, von oben
 gesehen, auf dem Boden wie die Beschriftung eines Plans. Ein kleines Haus musst du
 nicht genau treffen: Steht direkt unter dem Finger nichts, antwortet das
 Gebäude, zu dem das meiste rund um die Stelle gehört. Auf dem Telefon ist
@@ -286,7 +292,7 @@ keine Geschosszeile.
 Unter **Daten** (eingeklappt am Ende der Karte) steht, wie der Viewer das
 Gebäude zeichnet, Wert für Wert: Geschosse, Material und Grundton der
 Fassade, die Fenster, Sockel und Gesimse, Haustüren, Durchgänge,
-Schaufenster, Gauben, die Dachfarbe, das Abendlicht und ob es ein Wahrzeichen ist. Jeder
+Schaufenster, Gauben und Schornsteine, die Dachfarbe, das Abendlicht und ob es ein Wahrzeichen ist. Jeder
 Wert nennt seine Quelle (etwa *Material Glas — OpenStreetMap ·
 building:material*), trägt das Abzeichen, wie der Viewer zu ihm kam, und
 verlinkt, wo es geht, auf die Stelle: die OpenStreetMap-Objekte dort, die
@@ -299,7 +305,8 @@ Hauses, wo keine Fotos sie gemessen haben. Bei einem Gebäude aus mehreren
 Teilen gilt das für den angeklickten Teil.
 
 Bäume, Denkmale und Brunnen und Brücken antworten genauso. Was du
-gefragt hast, umrahmt eine weiche pinke Linie auf einem hellen Saum —
+gefragt hast, umrahmt eine weiche Linie auf einem hellen Saum (pink oder
+in der Schriftfarbe des Darstellungsstils) —
 entlang seines Umrisses, so wie du ihn gerade siehst, gleich breit auf
 dem Bildschirm, ob nah oder fern. Beim Antippen leuchtet der Saum kurz
 auf. Ein

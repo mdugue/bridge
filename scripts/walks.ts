@@ -305,6 +305,7 @@ async function fetchPhotos(force: boolean, refs: boolean): Promise<void> {
     stop.photo = {
       file: name,
       ...(stop.photo?.caption ? { caption: stop.photo.caption } : {}),
+      ...(stop.photo?.focus ? { focus: stop.photo.focus } : {}),
       author: plain(meta.Artist?.value) || plain(meta.Credit?.value),
       licence: plain(meta.LicenseShortName?.value),
       ...(meta.LicenseUrl?.value ? { licenceUrl: meta.LicenseUrl.value } : {}),
