@@ -3,11 +3,10 @@
 > Numbered 075 on 2026-10-19: it was drafted as 056, then 068, and both
 > numbers went to other plans first (068 is the fog-bounded tile stream).
 
-> **Superseded (2026-10-09)** by [ADR 0010](../adr/0010-opaque-clay-buildings-only.md):
-> the photos now drive windows on every house through what does not move
-> with the camera — the rhythm, not the positions. See *What came of it*
-> at the end; this plan stays the record of why the positions are not
-> measured.
+> **Done (2026-11-01).** The rhythm has driven windows on every house since
+> 2026-10-09 ([ADR 0010](../adr/0010-opaque-clay-buildings-only.md)); the
+> axes' positions followed on 2026-11-01 by registering the drives onto
+> each other instead of refining each pose (*What came of it* at the end).
 
 > **Executor instructions**: Read fully first. The window-grid veto
 > (`docs/transformations.md`, discontinued table) was loosened on
@@ -23,7 +22,7 @@
 - **Effort**: L (pose refinement and facade rectification are the bulk)
 - **Risk**: HIGH — a wrongly placed axis is an invented one
 - **Planned at**: 2026-10-07
-- **Status**: **SUPERSEDED** (2026-10-09, ADR 0010) — the rhythm is drawn on every house; the axes' positions stay BLOCKED on pose accuracy (Mapillary tried 2026-10-07)
+- **Status**: **DONE** (2026-11-01) — the rhythm drawn on every house since 2026-10-09 (ADR 0010); the axes where the drives saw them since 2026-11-01
 
 ## What the spike found (Panoramax, spawn tile `33412_5656_2_sn`)
 
@@ -134,5 +133,20 @@ medians. The drawing is the clay's recess per window, not pencil lines
 (step 5 above).
 
 What this plan wanted beyond that — each axis where the photo saw it —
-is still blocked on step 1: the axes are centred on each wall, and a
-measured position would need poses good to about 0.2 m along the wall.
+came on 2026-11-01 by another way than step 1. Two attempts at the pose
+itself failed: the skyline fit above, and fitting each of Mapillary's
+reconstructions (`sfm_cluster`, its 3D points) rigidly onto the LoD2
+footprints, which moved the poses by 0.5–2.5 m and made two drives agree
+*less* (a rigid fit pulls the street's two facades into a compromise and
+barely constrains the along-street offset). What works is not to need
+each pose: every drive sees the same windows, so the strips of one wall
+are registered onto each other by their vertical edges (the plan's
+earlier 0.6 m came from correlating darkness profiles, which tree
+shadows dominate; edges register two drives within 0.25 m in about 60 %
+of confident pairs, and all pairs of a wall close to 1 cm), and the
+drives' errors, ~0.2 m each, average out: three or more leave a standard
+error of 0.12 m. The meridian convergence (~1° in Dresden) had been
+missing from every pose too. The axes are not pencil lines but the
+clay's windows moved to where the photos saw them (`window_axes.py`,
+`lib/city/windows.ts` `measuredColumns`; transformations.md, *Windows on
+every house*).

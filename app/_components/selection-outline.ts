@@ -23,6 +23,7 @@ import {
   type WebGPURenderer,
   Color,
   DoubleSide,
+  SRGBColorSpace,
   Uint32BufferAttribute,
 } from "three/webgpu";
 import {
@@ -38,7 +39,6 @@ import {
   uniform,
   uv,
   vec2,
-  vec3,
   vec4,
 } from "three/tsl";
 import {
@@ -53,7 +53,7 @@ import {
   outlineSpread,
 } from "@/lib/city/outline";
 import { compileInTurn } from "./compile-lanes";
-import type { F, V4 } from "./shader-chunks";
+import type { F, V3, V4 } from "./shader-chunks";
 import { TRAFFIC_ATTRIBUTES, trafficPositionNode } from "./traffic-flow";
 import type { ViewLens } from "./view-lens";
 
@@ -125,14 +125,18 @@ export interface SelectionOutline {
   over: (colour: V4) => V4;
   /** follows the device pixel ratio (the width is in CSS px) */
   update: (pixelRatio: number) => void;
+  /** the line's and the halo's colour (sRGB 0…1): the picture style's,
+   *  so outline and lettering read as one hand (nameplate-type.ts) */
+  setColours: (
+    line: readonly [number, number, number],
+    halo: readonly [number, number, number]
+  ) => void;
   setSize: (width: number, height: number) => void;
   /** builds the mask's and the blur's programs off the frame */
   compile: (renderer: WebGPURenderer, camera: Camera) => Promise<void>;
   dispose: () => void;
 }
 
-const LINE = vec3(...SELECTION_ACCENT.line);
-const HALO = vec3(...SELECTION_ACCENT.halo);
 /** A tree sways and a proxy is not the drawn shape: how far behind the
  *  scene's surface the element may lie and still count as seen (m, and a
  *  share of the distance). */
@@ -338,6 +342,14 @@ export function createSelectionOutline(deps: {
   );
   const blurredMask = texture(blurred.texture);
 
+  // the accent (linear: the frame is drawn in the working space)
+  const lineColour = uniform(new Color(...SELECTION_ACCENT.line));
+  const haloColour = uniform(new Color(...SELECTION_ACCENT.halo));
+  // reason: a colour uniform is a vec3 in the graph; its type says Color.
+  const LINE = lineColour as unknown as V3;
+  // reason: as above.
+  const HALO = haloColour as unknown as V3;
+
   const over = (colour: V4): V4 => {
     const f = blurredMask.r;
     // the share of the element near here that the scene shows: 1 on a
@@ -469,6 +481,10 @@ export function createSelectionOutline(deps: {
     over,
     update: (pixelRatio) => {
       spread.value = outlineSpread(pixelRatio);
+    },
+    setColours: (line, halo) => {
+      lineColour.value.setRGB(line[0], line[1], line[2], SRGBColorSpace);
+      haloColour.value.setRGB(halo[0], halo[1], halo[2], SRGBColorSpace);
     },
     setSize: (width, height) => {
       // a new size frees the old textures: the blur is cleared again

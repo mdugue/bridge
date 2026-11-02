@@ -59,9 +59,9 @@ import {
 import { tileExtentOf } from "../lib/city/site";
 import {
   type Walk,
+  type WalkBundle,
   WALKS_DIR,
   WALKS_FILE,
-  photoCredited,
   stopPlaces,
   walkBundle,
   walkPhotoFile,
@@ -284,9 +284,10 @@ function withPlaces(walk: Walk, knowledge: Knowledge): Walk {
   };
 }
 
-/** A walk with each stop's photo published beside it (`photo.src`). A
- *  stop whose copy or credit is missing shows none, so a preview still
- *  builds; the walks' unit test fails until both are committed. */
+/** A walk with each stop's photo published beside it (`photo.src`). The
+ *  walks are checked as written (walkBundle), credits included; a stop
+ *  whose copy is missing then shows none, so a preview still builds — the
+ *  walks' unit test fails until it is committed. */
 function withPhotos(walk: Walk): Walk {
   return {
     ...walk,
@@ -295,9 +296,9 @@ function withPhotos(walk: Walk): Walk {
         return stop;
       }
       const file = join(walksDir, walkPhotoFile(walk.id, stop.id));
-      if (!(existsSync(file) && photoCredited(stop.photo))) {
+      if (!existsSync(file)) {
         log(
-          `${walk.id}/${stop.id}: no photo copy or credit, shown without (bun scripts/walks.ts ${SITE.id} photos)`
+          `${walk.id}/${stop.id}: no photo copy, shown without (bun scripts/walks.ts ${SITE.id} photos)`
         );
         const { photo: _missing, ...rest } = stop;
         return rest;
@@ -308,6 +309,15 @@ function withPhotos(walk: Walk): Walk {
       );
       return { ...stop, photo: { ...stop.photo, src } };
     }),
+  };
+}
+/** The checked bundle with its photos published and its refs as places
+ *  (checked before: a sentence about the photo stays right when only the
+ *  copy is missing). */
+function publishedWalks(bundle: WalkBundle, knowledge: Knowledge): WalkBundle {
+  return {
+    ...bundle,
+    walks: bundle.walks.map((w) => withPlaces(withPhotos(w), knowledge)),
   };
 }
 
@@ -325,14 +335,12 @@ const walks = knowledge
   ? publish(
       WALKS_FILE,
       utf8(
-        walkBundle(
-          SITE.id,
-          walkFiles.map((name) =>
-            withPlaces(
-              withPhotos(readJson<Walk>(join(walksDir, name))),
-              knowledge
-            )
-          )
+        publishedWalks(
+          walkBundle(
+            SITE.id,
+            walkFiles.map((name) => readJson<Walk>(join(walksDir, name)))
+          ),
+          knowledge
         )
       )
     )

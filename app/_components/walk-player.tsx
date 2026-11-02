@@ -81,8 +81,14 @@ const bundles = new Map<string, Promise<Walk[]>>();
 function loadWalks(url: string): Promise<Walk[]> {
   let pending = bundles.get(url);
   if (!pending) {
+    // a failed answer (a 503 mid-deploy) is not kept: the next mount asks again
     pending = fetch(url)
-      .then((res) => (res.ok ? (res.json() as Promise<unknown>) : null))
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`walks: ${res.status}`);
+        }
+        return res.json() as Promise<unknown>;
+      })
       .then((json) => (isWalkBundle(json) ? json.walks : []))
       .catch(() => {
         bundles.delete(url);
