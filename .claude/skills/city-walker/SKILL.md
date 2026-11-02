@@ -117,12 +117,13 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   (`buildTileVegetation`) joins both into the tile's one vegetation
   control. `low-vegetation-layer.ts` draws every hedge (OSM's and the
   DLM's), its lumps pushed out by a world-space noise so pieces agree.
-  The trunk's bark turns to earth at its foot (`buildTrunkMaterial`);
-  `tree-foot.ts` puts a tree pit under every trunk in paving as two lit,
-  blended sets on the trunks' own
+  The trunk's foot bulges into roots and turns to earth
+  (`buildTrunkMaterial`); `tree-foot.ts` adds the ground round it (pits,
+  leaves, the crown's shade glaze) as `Instances` sets on the trunks' own
   attribute objects (no bytes of their own, nothing counted twice), their
   materials per tile with the class and edge rasters and the light in
-  their slots; rings render before earth (`renderOrder`) so pits merge.
+  their slots; `renderOrder` orders the blended sets (rings before earth,
+  so pits merge); the crowns' LOD hides a far chunk's sets.
 - `shader-chunks.ts` — the shared TSL pieces: the node types (`F`, `V2`,
   `V3`, `V4`, `Live`), `dataXY()` / `dataPosition()` (glTF positions are
   quantised, so the data frame comes from world space: world (x, y, z) =

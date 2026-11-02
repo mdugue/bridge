@@ -59,6 +59,7 @@ import {
   TRUNK_RINGS,
   TRUNK_ROWS,
   TRUNK_TOP_R,
+  TRUNK_UNIT_H,
   trunkFlare,
 } from "@/lib/city/tree-inventory";
 import {
@@ -113,6 +114,7 @@ import { viewDirection } from "./view-direction";
 import { TRUNK_BASE } from "@/lib/city/tree-family";
 import {
   buildFootGeos,
+  FOOT_SHOWN_M,
   type FootGeos,
   type FootMaterials,
   treeFeet,
@@ -294,7 +296,7 @@ export function swapCrownLod(
   return changed;
 }
 
-export const TRUNK_H = 2.4;
+export const TRUNK_H = TRUNK_UNIT_H;
 const CROWN_R = 2.1;
 
 /** How far a crown's own lobes move in and out (in the geometry's units,
@@ -1547,7 +1549,7 @@ function showTier(chunk: VegetationChunk, tier: CrownTier): void {
   // A trunk 550 m out is below a pixel; the far tier drops it.
   chunk.trunks.visible = tier !== "far";
   for (const feet of chunk.feet ?? []) {
-    feet.visible = tier !== "far";
+    feet.visible = feet.visible && tier !== "far";
   }
 }
 
@@ -1595,6 +1597,13 @@ export function createVegetationLod(): (
       if (tiers[i] !== all[i].tier) {
         showTier(all[i], tiers[i]);
         changed = true;
+      }
+      // the feet only where one of their trees is near enough to show them
+      // (tree-foot.ts fades them out by FOOT_SHOWN_M): a far chunk draws
+      // none of their sets
+      const feetOn = tiers[i] !== "far" && states[i].near < FOOT_SHOWN_M;
+      for (const feet of all[i].feet ?? []) {
+        feet.visible = feetOn;
       }
     }
     return changed;

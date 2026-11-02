@@ -4,6 +4,7 @@ import {
   bloomAt,
   climateDay,
   dayOfYear,
+  leafLitterAt,
   PHENOLOGY,
   phenologyOf,
   SEASON_JITTER_DAYS,
@@ -186,4 +187,16 @@ test("a birch turns and drops when DWD's reporters saw it around Dresden", () =>
   expect(seasonAt(296, birch).leaf).toBe(1);
   expect(seasonAt(312, birch).leaf).toBeCloseTo(0.5, 1);
   expect(seasonAt(330, birch).leaf).toBe(0);
+});
+
+test("leaf litter lies from the turn of the leaves into the winter", () => {
+  expect(leafLitterAt(180)).toBe(0);
+  expect(leafLitterAt(270)).toBe(0);
+  expect(leafLitterAt(320)).toBe(1);
+  expect(leafLitterAt(360)).toBeGreaterThan(0.3);
+  expect(leafLitterAt(30)).toBeGreaterThan(0);
+  expect(leafLitterAt(30)).toBeLessThan(0.3);
+  expect(leafLitterAt(100)).toBe(0);
+  // continuous over the new year
+  expect(Math.abs(leafLitterAt(365.9) - leafLitterAt(0))).toBeLessThan(0.01);
 });

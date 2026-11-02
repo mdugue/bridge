@@ -154,6 +154,8 @@ export function treeExtents(
  * cylinder of these radii (m) at the unit scale, tapering from the foot to
  * the top; its instance scale is (girth, trunkTop / TRUNK_H, girth).
  */
+/** The unit trunk's height (m before the instance scale). */
+export const TRUNK_UNIT_H = 2.4;
 export const TRUNK_FOOT_R = 0.16;
 export const TRUNK_TOP_R = 0.09;
 /** The cylinder's rings (fractions of the trunk, foot to top): every

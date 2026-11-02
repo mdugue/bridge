@@ -2700,13 +2700,24 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
     0.32 m short of the road edge (the edge raster's road distance), off
     the kerb. Alpha-blended and lit as the ground is (its sun, shadows,
     sky view and horizon).
-  Which pit a tree gets is read once per vertex at the trunk's foot. The
-  pits fade out between 70 and 150 m. Two `Instances` sets per chunk on
-  the trunks' own attribute objects (matrices, drop, bark colour) and two
-  a quad per tile, with materials per tile whose slots hold the tile's
-  class and edge rasters and its light — no bytes per tree on a phone.
-  The paper styles leave the blended pit out. Before, the trunk stabbed
-  straight into a flat ground.
+  - **under the crown** (off forest and copse, whose floor is its own; the
+    crown's reach 0.8 × the trunk's drawn length, 1.5–7 m): a multiplied
+    glaze darkens and cools the ground in the crown's shade, ragged at the
+    edge, with moss on a lawn; and in autumn fallen leaves — covering
+    flecks in yellow, orange, russet and brown in 11 cm cells, thick under
+    the crown, thinning 25 % beyond it and swept against the kerb (the edge
+    raster's road distance), a mean tint where a cell is under a few
+    pixels. How much leaf lies follows the scene's day
+    (`leafLitterAt`: from late September, all of it in November, a third
+    left into January, none from mid-March).
+  What a tree gets is read once per vertex at the trunk's foot. All of
+  it fades out between 70 and 150 m; a chunk whose nearest tree is past
+  160 m draws none of it. One `Instances` set per part (ring, earth,
+  leaves, shade) per chunk on the trunks' own attribute objects
+  (matrices, drop, bark colour) and a quad per tile, with materials per
+  tile whose slots hold the tile's class and edge rasters and its light —
+  no bytes per tree on a phone. The paper styles leave the blended parts
+  out. Before, the trunk stabbed straight into a flat ground.
 
 - **Hedges (OSM, laser-scan height)** `◎ detected` `❝ taken` and **trees outside the canopy mask**
   (laser scan) — on by default. The laser scan is baked for every tile of the

@@ -3,7 +3,9 @@ import {
   BufferGeometry,
   InterpolationSamplingType,
   type Material,
+  MeshBasicNodeMaterial,
   MeshStandardNodeMaterial,
+  MultiplyBlending,
   type Texture,
   type UniformNode,
   Vector2,
@@ -30,6 +32,7 @@ import {
   smoothstep,
   step,
   texture,
+  uniform,
   varying,
   vec2,
   vec3,
@@ -38,11 +41,12 @@ import {
 import {
   BUILTUP_CLASS,
   EDGE_SCALE,
+  MEADOW_CLASS,
   RAILWAY_CLASS,
   ROAD_CLASS,
   srgbToLinear,
 } from "@/lib/city/landcover";
-import { trunkRadiusAt } from "@/lib/city/tree-inventory";
+import { TRUNK_UNIT_H, trunkRadiusAt } from "@/lib/city/tree-inventory";
 import { outOfDesignSite } from "./design-site";
 import { byteOf, gdHash, gdNoise, texelAt, texelSize } from "./ground-detail";
 import { instanceFloat, Instances } from "./instancing";
@@ -79,6 +83,13 @@ import {
  *   then every pit's earth, so two pits that overlap become one bed with
  *   one ring round it. Where the pit reaches the kerb (the edge raster's
  *   road distance) it stops short of it.
+ * - **under the crown** (off forest and copse, which have their own floor):
+ *   the ground in the crown's shade — a little darker and cooler, mossy
+ *   on a lawn (`shadeGraph`, a multiplied glaze, the one thing here that
+ *   lets the ground through, since a shade is one) — and, in autumn,
+ *   fallen leaves (`litterGraph`, covering flecks in the leaves' colours,
+ *   lit as the ground), thick under the crown and gathered at the kerb.
+ *   How much leaf lies is the scene's season (`footLitter`).
  *
  * The pit is lit as the ground is (its sun, shadows, sky view and far
  * horizon, sky-light.ts) and alpha-blended, so the paper styles leave it
@@ -103,9 +114,31 @@ const JOINT = 0.014;
 const KERB_CLEAR = 0.32;
 /** The quad's half-size beyond the pit (m): the ring and its antialiasing. */
 const PIT_QUAD = PIT_MAX * (1 + PIT_WOBBLE) + EDGING + 0.08;
+/** A crown's reach over the ground (m): this share of its trunk's drawn
+ *  length (a crowned tree's trunk reaches into its crown), within
+ *  CROWN_MIN..CROWN_MAX. */
+const CROWN_SPREAD = 0.8;
+const CROWN_MIN = 1.5;
+const CROWN_MAX = 7;
+/** The shade under a crown: the factor its middle multiplies the ground
+ *  by (linear; a cool, sky-lit shade), and a lawn's moss in it. */
+const SHADE = vec3(0.86, 0.88, 0.93);
+const SHADE_MOSS = vec3(0.93, 0.99, 0.86);
+/** Fallen leaves (sRGB): yellow, orange, russet, old brown. */
+const LEAF_YELLOW = [214, 176, 78] as const;
+const LEAF_ORANGE = [204, 128, 62] as const;
+const LEAF_RUSSET = [160, 92, 58] as const;
+const LEAF_BROWN = [138, 108, 78] as const;
+/** A leaf's cell (m) and how far the leaves blow beyond the crown (a
+ *  share of its reach). */
+const LEAF_CELL = 0.11;
+const LEAF_BEYOND = 1.25;
 /** The feet fade out between these camera distances (m). */
 const FADE_FROM = 70;
 const FADE_TO = 150;
+/** A chunk shows its feet while one of its trees is this near (m): past
+ *  it all of them have faded (vegetation-layer.ts, the crowns' LOD). */
+export const FOOT_SHOWN_M = FADE_TO + 10;
 const linear = (srgb: [number, number, number]): V3 =>
   vec3(...(srgb.map(srgbToLinear) as [number, number, number]));
 /** Albedos (sRGB): the pit's mulched earth, its litter, the green that
@@ -122,8 +155,12 @@ const TRUNK_FOOT = trunkRadiusAt(0);
 /** The trunks' drop to the ground (vegetation-layer.ts `TRUNK_DROP`). */
 const DROP = "iDrop";
 
-/** The cull sphere's growth over the trunks' (m). */
-export const FOOT_REACH = PIT_QUAD;
+/** The cull sphere's growth over the trunks' (m): the farthest leaf. */
+export const FOOT_REACH = CROWN_MAX * LEAF_BEYOND + 0.5;
+
+/** How much fallen leaf lies (0..1): the scene's season, one value for
+ *  every tile (create-app.ts, lib/city/tree-season.ts `leafLitterAt`). */
+export const footLitter = uniform(0);
 
 /** The tile-shared geometry: the pit's quad. */
 export interface FootGeos {
@@ -152,19 +189,26 @@ export function buildFootGeos(): FootGeos {
   return { quad };
 }
 
-/** A tile's two foot materials (`footMaterialFor`). */
+/** A tile's foot materials (`footMaterialFor`). */
 export interface FootMaterials {
   ring: Material;
   earth: Material;
+  litter: Material;
+  shade: Material;
 }
 
-/** Draw order among the blended sets: every ring, then every pit's earth. */
-const ORDER = { ring: 1, earth: 2 } as const;
+/** The sets of a chunk's feet. */
+const PARTS = ["ring", "earth", "litter", "shade"] as const;
+type Part = (typeof PARTS)[number];
+
+/** Draw order among the blended sets: every ring, then every pit's earth
+ *  (so pits that overlap merge), the leaves on them, the shade over all. */
+const ORDER: Record<Part, number> = { ring: 1, earth: 2, litter: 3, shade: 4 };
 
 /**
- * The feet of a chunk's trunks: two sets on the trunks' buffers (the
+ * The feet of a chunk's trunks: a set per part on the trunks' buffers (the
  * very attribute objects: nothing uploaded or counted twice), drawn as
- * many as the trunks, culled by their sphere grown by the pit's reach.
+ * many as the trunks, culled by their sphere grown by the leaves' reach.
  */
 export function treeFeet(
   geos: FootGeos,
@@ -172,7 +216,7 @@ export function treeFeet(
   trunks: Instances
 ): Instances[] {
   const sets: Instances[] = [];
-  for (const part of ["ring", "earth"] as const) {
+  for (const part of PARTS) {
     const feet = new Instances(
       geos.quad,
       materials[part],
@@ -218,6 +262,10 @@ const classTexel = (t: Tex, uv: V2): F => {
   return byteOf(texelAt(t, ivec2(floor(uv.mul(vec2(size)))), size).r);
 };
 
+/** The forest's and the copse's class ids (lib/city/landcover.ts). */
+const FOREST_CLASS = 2;
+const COPSE_CLASS = 3;
+
 /** 1 for |x| ≥ 0.5 (a class id differs), else 0. */
 const step01 = (x: F): F => smoothstep(0.49, 0.51, x);
 
@@ -249,6 +297,12 @@ interface FootFrame {
   pit: F;
   /** the camera's distance fade (1 near) */
   fade: F;
+  /** the crown's reach over the ground (m) */
+  crown: F;
+  /** 1 on a lawn or meadow (the baked lawn, the meadow class) */
+  green: F;
+  /** 1 in forest or copse, whose floor is its own */
+  wood: F;
 }
 
 interface FootSlots {
@@ -286,11 +340,20 @@ function footFrame(s: FootSlots, size: [number, number]): FootFrame {
         edgeDistance(texture(s.edgesTex, uv).level(float(0)).g)
       )
     : float(0);
-  const pit = pavedClass(classTexel(s.classTex, uv)).mul(float(1).sub(lawn));
+  const cls = classTexel(s.classTex, uv);
+  const pit = pavedClass(cls).mul(float(1).sub(lawn));
   const fade = float(1).sub(
     smoothstep(FADE_FROM, FADE_TO, distance(cameraPosition, world))
   );
-  return { foot, rt, world, pit, fade };
+  const isClass = (id: number): F => float(1).sub(step01(abs(cls.sub(id))));
+  const green = max(lawn, isClass(MEADOW_CLASS));
+  const wood = max(isClass(FOREST_CLASS), isClass(COPSE_CLASS));
+  // the trunk's drawn length (its foot lowered by its drop)
+  const length1 = float(TRUNK_UNIT_H)
+    .add(instanceFloat(DROP))
+    .mul(length(col(1).xyz));
+  const crown = clamp(length1.mul(CROWN_SPREAD), CROWN_MIN, CROWN_MAX);
+  return { foot, rt, world, pit, fade, crown, green, wood };
 }
 
 /** A trunk standing in a loaded design's site is folded away
@@ -332,10 +395,6 @@ function pitGraph(r: FootRasters, part: "ring" | "earth"): PitGraph {
   const position = folded(f.foot.add(vec3(q.x, lift, q.y)), f.foot);
   const offset = varying(q, "vPitOffset");
   // FLAT: they seed the rim's wobble and the litter (AGENTS.md)
-  const flat = <T extends F | V2>(v: T, name: string): T =>
-    varying(v, name).setInterpolation(
-      InterpolationSamplingType.FLAT
-    ) as unknown as T;
   const rt = flat(f.rt, "vPitTrunk");
   const seed = flat(vec2(f.world.x, f.world.z).mul(0.37), "vPitSeed");
   const fade = varying(f.fade, "vPitFade");
@@ -423,6 +482,146 @@ function pitGraph(r: FootRasters, part: "ring" | "earth"): PitGraph {
   return { color: graph.xyz, opacity: graph.w, position };
 }
 
+/** A flat varying: per instance, so a seed never smears (AGENTS.md). */
+const flat = <T extends F | V2>(v: T, name: string): T =>
+  varying(v, name).setInterpolation(
+    InterpolationSamplingType.FLAT
+  ) as unknown as T;
+
+/** A quad of half-size `half` (m) at the foot, collapsed where `shown` is
+ *  0, lifted off the ground (more with distance, the depth's precision). */
+function footQuad(f: FootFrame, half: F, shown: F): { q: V2; position: V3 } {
+  const lift = float(0.05).add(distance(cameraPosition, f.world).mul(0.0015));
+  const q = positionGeometry.xz.mul(half).mul(shown);
+  return { q, position: folded(f.foot.add(vec3(q.x, lift, q.y)), f.foot) };
+}
+
+/**
+ * Fallen leaves under a crown: in cells of LEAF_CELL, a leaf in some (the
+ * more, the thicker the litter: under the crown, and gathered against the
+ * kerb), each a small turned oval in one of four colours; past a few
+ * pixels a cell's leaves blend into their mean, so they never shimmer.
+ * Collapsed out of season, in a wood and far off.
+ */
+function litterGraph(r: FootRasters): PitGraph {
+  const s = footSlots(r);
+  const f = footFrame(s, r.size);
+  const reach = f.crown.mul(LEAF_BEYOND);
+  const shown = step(0.01, footLitter)
+    .mul(float(1).sub(f.wood))
+    .mul(step(0.001, f.fade));
+  const { q, position } = footQuad(f, reach, shown);
+  const offset = varying(q, "vLeafOffset");
+  const crown = flat(f.crown, "vLeafCrown");
+  const fade = varying(f.fade, "vLeafFade");
+  const xy = varying(vec2(f.world.x, f.world.z).add(q), "vLeafXY");
+  const edges = s.edgesTex;
+  const uv = varying(
+    rasterUv(
+      vec2(f.world.x.add(q.x), f.world.z.add(q.y).negate()),
+      s.origin,
+      r.size
+    ),
+    "vLeafUV"
+  );
+  const graph = Fn(() => {
+    const d = length(offset);
+    // thick under the crown, thinning past it; and swept against the kerb
+    const under = float(1).sub(
+      smoothstep(crown.mul(0.6), crown.mul(LEAF_BEYOND), d)
+    );
+    const kerb = edges
+      ? smoothstep(
+          -0.9,
+          -0.15,
+          edgeDistance(texture(edges, uv).level(float(0)).r)
+        )
+          .mul(
+            float(1).sub(
+              smoothstep(
+                -0.15,
+                0.05,
+                edgeDistance(texture(edges, uv).level(float(0)).r)
+              )
+            )
+          )
+          .mul(float(1).sub(smoothstep(crown, crown.mul(LEAF_BEYOND), d)))
+      : float(0);
+    const density = clamp(under.add(kerb.mul(0.8)), 0, 1).mul(footLitter);
+    const cellP = xy.div(LEAF_CELL).toVar();
+    const cell = floor(cellP).toVar();
+    const h = gdHash(cell).toVar();
+    const h2 = gdHash(cell.add(17.3)).toVar();
+    const inCell = cellP.sub(cell).sub(0.5).toVar();
+    // a turned oval, off the cell's centre
+    const turn = h2.mul(6.2832);
+    const c = cos(turn);
+    const sn = sin(turn);
+    const p = inCell.sub(vec2(h.sub(0.5), h2.sub(0.5)).mul(0.3));
+    const u = vec2(p.x.mul(c).add(p.y.mul(sn)), p.y.mul(c).sub(p.x.mul(sn)));
+    const oval = length(u.mul(vec2(1, 1.9)));
+    const w = max(fwidth(oval), 0.02);
+    const leaf = float(1)
+      .sub(smoothstep(float(0.36).sub(w), float(0.36).add(w), oval))
+      .mul(step(h, density.mul(0.75)));
+    const pick = gdHash(cell.add(5.1));
+    const colour = mix(
+      mix(
+        linear([...LEAF_YELLOW]),
+        linear([...LEAF_ORANGE]),
+        smoothstep(0.3, 0.4, pick)
+      ),
+      mix(
+        linear([...LEAF_RUSSET]),
+        linear([...LEAF_BROWN]),
+        smoothstep(0.8, 0.9, pick)
+      ),
+      smoothstep(0.6, 0.7, pick)
+    ).mul(h.mul(0.25).add(0.85));
+    // far off: the cells' mean, a soft tint as thick as the leaves are
+    const coarse = smoothstep(0.012, 0.03, fwidth(xy.x));
+    const mean = linear([186, 132, 72]);
+    return vec4(
+      mix(colour, mean, coarse),
+      mix(leaf, density.mul(0.45), coarse).mul(fade)
+    );
+  })();
+  return { color: graph.xyz, opacity: graph.w, position };
+}
+
+/**
+ * The shade under a crown, as a glaze the ground is multiplied by: a little
+ * darker and cooler (less of the sky reaches it), and on a lawn mossier,
+ * fading out round the crown's ragged edge. Collapsed in a wood (its floor
+ * is shade already) and far off.
+ */
+function shadeGraph(r: FootRasters): { color: V3; position: V3 } {
+  const s = footSlots(r);
+  const f = footFrame(s, r.size);
+  const shown = float(1).sub(f.wood).mul(step(0.001, f.fade));
+  const { q, position } = footQuad(f, f.crown.mul(1.1), shown);
+  const offset = varying(q, "vShadeOffset");
+  const crown = flat(f.crown, "vShadeCrown");
+  const green = flat(f.green, "vShadeGreen");
+  const fade = varying(f.fade, "vShadeFade");
+  const xy = varying(vec2(f.world.x, f.world.z).add(q), "vShadeXY");
+  const color = Fn(() => {
+    const d = length(offset);
+    const ragged = gdNoise(xy.mul(0.7)).sub(0.5).mul(crown.mul(0.35));
+    const cover = float(1)
+      .sub(smoothstep(crown.mul(0.45), crown.mul(1.05), d.add(ragged)))
+      .toVar();
+    const moss = smoothstep(0.45, 0.75, gdNoise(xy.mul(1.3).add(9.1)))
+      .mul(green)
+      .mul(cover);
+    const k = mix(vec3(1), SHADE, cover.mul(0.75)).mul(
+      mix(vec3(1), SHADE_MOSS, moss.mul(0.6))
+    );
+    return mix(vec3(1), k, fade);
+  })();
+  return { color, position };
+}
+
 function litMaterial(
   name: string,
   graph: PitGraph,
@@ -443,6 +642,36 @@ function litMaterial(
   setSlots(m, slots);
   applyGroundLight(m, light);
   setGraph(m, `${key}|${groundLightKey(light)}`);
+  return m;
+}
+
+const shades = new Map<string, { color: V3; position: V3 }>();
+
+/** A tile's shade glaze: multiplied into what is drawn under it. */
+function shadeMaterial(
+  r: FootRasters,
+  slots: Slots,
+  variant: string
+): MeshBasicNodeMaterial {
+  const key = `tree-shade|${variant}`;
+  let graph = shades.get(key);
+  if (!graph) {
+    graph = shadeGraph(r);
+    shades.set(key, graph);
+  }
+  const m = new MeshBasicNodeMaterial();
+  m.name = "tree-shade";
+  m.positionNode = graph.position;
+  m.colorNode = graph.color;
+  m.blending = MultiplyBlending;
+  m.premultipliedAlpha = true;
+  m.transparent = true;
+  m.depthWrite = false;
+  m.polygonOffset = true;
+  m.polygonOffsetFactor = -1;
+  m.polygonOffsetUnits = -3;
+  setSlots(m, slots);
+  setGraph(m, key);
   return m;
 }
 
@@ -472,12 +701,19 @@ export function createFootMaterials(
     class: r.classTexture,
     edges: r.edgesTexture,
   };
-  const make = (part: "ring" | "earth"): Material => {
+  const make = (part: "ring" | "earth" | "litter"): Material => {
     const key = `tree-${part}|${variant}`;
-    const graph = cached(key, () => pitGraph(r, part));
+    const graph = cached(key, () =>
+      part === "litter" ? litterGraph(r) : pitGraph(r, part)
+    );
     return litMaterial(`tree-${part}`, graph, slots, light, key);
   };
-  return { ring: make("ring"), earth: make("earth") };
+  return {
+    ring: make("ring"),
+    earth: make("earth"),
+    litter: make("litter"),
+    shade: shadeMaterial(r, slots, variant),
+  };
 }
 
 /**

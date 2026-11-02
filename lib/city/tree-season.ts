@@ -536,3 +536,29 @@ export function bloomAt(day: number, genus: number, jitter = 0): number {
   const t = d < mid ? ramp([a, mid], d) : 1 - ramp([mid, z], d);
   return b.strength * t;
 }
+
+/** Leaf litter on the ground through Dresden's year (the table's days):
+ *  none before the leaves turn, all of it once most have fallen, a thin
+ *  rest raked or rotting into the winter, gone by early spring. */
+const LITTER_KNOTS: readonly (readonly [number, number])[] = [
+  [0, 0.3],
+  [75, 0],
+  [270, 0],
+  [305, 1],
+  [335, 1],
+  [366, 0.3],
+];
+
+/** How much fallen leaf lies under the trees on `day` (0..1; a day of
+ *  Dresden's year, `climateDay`). */
+export function leafLitterAt(day: number): number {
+  const d = ((day % 366) + 366) % 366;
+  for (let i = 1; i < LITTER_KNOTS.length; i++) {
+    const [b, vb] = LITTER_KNOTS[i];
+    if (d <= b) {
+      const [a, va] = LITTER_KNOTS[i - 1];
+      return va + ((vb - va) * (d - a)) / (b - a);
+    }
+  }
+  return 0.3;
+}
