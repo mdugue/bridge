@@ -2727,10 +2727,20 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
     showing through in tufts — covering, lit as the ground (the earth set,
     never with a pit). A path leads off in a hashed direction, not to a
     neighbour: the trees know nothing of each other.
+  - **the city's details** round a street tree in paving: its roots (the
+    trunk material's three to five lobes, same hash) break the mulch as a
+    bark-brown root, heave the ring's setts over each crest and open
+    their joints, and run on under the paving as thin cracks up to 1.5 m
+    past the ring; a pit at least 5 m off any road (a pedestrian zone, by
+    the edge raster) wears a cast-iron grate (rings and spokes, the
+    mulch showing through); a pit 0.9–3 m off the kerb gets, for 70 % of
+    them, an anthracite guard hoop between it and the road, 0.45 m short
+    of the kerb and along it (the road distance's gradient is the way to
+    the road) — a small mesh, opaque, standard-lit, not a shadow caster.
   What a tree gets is read once per vertex at the trunk's foot. All of
   it fades out between 70 and 150 m; a chunk whose nearest tree is past
   160 m draws none of it. One `Instances` set per part (ring, earth,
-  leaves, shade) per chunk on the trunks' own attribute objects
+  leaves, shade, guard) per chunk on the trunks' own attribute objects
   (matrices, drop, bark colour) and a quad per tile, with materials per
   tile whose slots hold the tile's class and edge rasters and its light —
   no bytes per tree on a phone. The paper styles leave the blended parts

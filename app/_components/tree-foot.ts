@@ -1,4 +1,5 @@
 import {
+  BoxGeometry,
   BufferAttribute,
   BufferGeometry,
   InterpolationSamplingType,
@@ -11,6 +12,7 @@ import {
   type UniformNode,
   Vector2,
 } from "three/webgpu";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
   abs,
   atan,
@@ -22,12 +24,16 @@ import {
   float,
   floor,
   Fn,
+  fract,
   fwidth,
   ivec2,
   length,
   max,
+  min,
   mix,
   modelWorldMatrix,
+  normalize,
+  normalLocal,
   positionGeometry,
   property,
   sin,
@@ -39,6 +45,7 @@ import {
   vec2,
   vec3,
   vec4,
+  dot,
 } from "three/tsl";
 import {
   BUILTUP_CLASS,
@@ -92,6 +99,11 @@ import {
  *   fallen leaves (`litterGraph`, covering flecks in the leaves' colours,
  *   lit as the ground), thick under the crown and gathered at the kerb.
  *   How much leaf lies is the scene's season (`footLitter`).
+ * - **in the city**: the trunk's roots (the trunk material's lobes,
+ *   `trunkRoots`) show in its pit — a root breaking the mulch, setts
+ *   heaved and joints opened over it, cracks running on into the paving —
+ *   a pit far from any road (a pedestrian zone) wears a cast-iron grate,
+ *   and one close by the kerb a guard hoop between it and the road.
  *
  * The pit is lit as the ground is (its sun, shadows, sky view and far
  * horizon, sky-light.ts) and alpha-blended, so the paper styles leave it
@@ -133,6 +145,16 @@ const WORN_SHARE = 0.55;
 const WORN_CROWN = 2.5;
 const WORN_QUAD = 4.8;
 const WORN_SRGB = [176, 156, 122] as const;
+/** The city's details: a grate's iron and a surfaced root (sRGB), a pit
+ *  at least this far (m) off the road has a grate, and a guard hoop
+ *  stands this far (m) before the kerb by a pit within GUARD_NEAR (m) of
+ *  it, for so many of them. */
+const IRON_SRGB = [72, 74, 76] as const;
+const ROOT_SRGB = [112, 88, 64] as const;
+const GRATE_FROM = 5;
+const GUARD_BEFORE = 0.45;
+const GUARD_NEAR: [number, number] = [0.9, 3];
+const GUARD_SHARE = 0.7;
 /** The unmown grass round a park tree (the mower keeps off the trunk):
  *  how far out it reaches past the trunk (m), the factor its long, darker,
  *  yellower blades multiply the lawn by, and its seed heads'. */
@@ -187,9 +209,10 @@ export const footLitter = uniform(0);
  *  (vegetation-layer.ts `setCrownTime` keeps it). */
 export const footClock = uniform(0);
 
-/** The tile-shared geometry: the pit's quad. */
+/** The tile-shared geometries: the pit's quad, a guard hoop. */
 export interface FootGeos {
   quad: BufferGeometry;
+  hoop: BufferGeometry;
 }
 
 /** The quad (x, z in −1..1), facing up; the shader sizes it to the pit. */
@@ -211,7 +234,19 @@ export function buildFootGeos(): FootGeos {
   );
   // wound counter-clockwise seen from above (+y)
   quad.setIndex([0, 2, 1, 0, 3, 2]);
-  return { quad };
+  return { quad, hoop: buildHoop() };
+}
+
+/** A guard hoop round a street tree's pit: an inverted U of 6 cm tube,
+ *  0.75 m high and 0.6 m wide, along x (the kerb), its foot at 0. */
+function buildHoop(): BufferGeometry {
+  const t = 0.06;
+  const post = (x: number) =>
+    new BoxGeometry(t, 0.75, t).translate(x, 0.375, 0);
+  const top = new BoxGeometry(0.6 + t, t, t).translate(0, 0.75, 0);
+  const hoop = mergeGeometries([post(-0.3), post(0.3), top]);
+  hoop.deleteAttribute("uv");
+  return hoop;
 }
 
 /** A tile's foot materials (`footMaterialFor`). */
@@ -220,15 +255,23 @@ export interface FootMaterials {
   earth: Material;
   litter: Material;
   shade: Material;
+  guard: Material;
 }
 
 /** The sets of a chunk's feet. */
-const PARTS = ["ring", "earth", "litter", "shade"] as const;
+const PARTS = ["ring", "earth", "litter", "shade", "guard"] as const;
 type Part = (typeof PARTS)[number];
 
 /** Draw order among the blended sets: every ring, then every pit's earth
- *  (so pits that overlap merge), the leaves on them, the shade over all. */
-const ORDER: Record<Part, number> = { ring: 1, earth: 2, litter: 3, shade: 4 };
+ *  (so pits that overlap merge), the leaves on them, the shade over all;
+ *  the guard hoops are opaque. */
+const ORDER: Record<Part, number> = {
+  ring: 1,
+  earth: 2,
+  litter: 3,
+  shade: 4,
+  guard: 0,
+};
 
 /**
  * The feet of a chunk's trunks: a set per part on the trunks' buffers (the
@@ -243,7 +286,7 @@ export function treeFeet(
   const sets: Instances[] = [];
   for (const part of PARTS) {
     const feet = new Instances(
-      geos.quad,
+      part === "guard" ? geos.hoop : geos.quad,
       materials[part],
       trunks.capacity,
       trunks.instanceMatrix
@@ -328,6 +371,16 @@ interface FootFrame {
   green: F;
   /** 1 in forest or copse, whose floor is its own */
   wood: F;
+  /** the trunk's roots (vegetation-layer.ts `trunkRoots`, the same hash):
+   *  how many, and their phase round the stem */
+  lobes: F;
+  phase: F;
+  /** the trunk's own x and z axes over the ground (unit, content frame) */
+  axisX: V2;
+  axisZ: V2;
+  /** the edge raster's road distance at the foot (m, + on the road; −99
+   *  without the raster) */
+  road: F;
 }
 
 interface FootSlots {
@@ -378,7 +431,25 @@ function footFrame(s: FootSlots, size: [number, number]): FootFrame {
     .add(instanceFloat(DROP))
     .mul(length(col(1).xyz));
   const crown = clamp(length1.mul(CROWN_SPREAD), CROWN_MIN, CROWN_MAX);
-  return { foot, rt, world, pit, fade, crown, green, wood };
+  const seedR = fract(sin(dot(col(3).xz, vec2(12.9898, 78.233))).mul(43758.5));
+  const road = s.edgesTex
+    ? edgeDistance(texture(s.edgesTex, uv).level(float(0)).r)
+    : float(-99);
+  return {
+    foot,
+    rt,
+    world,
+    pit,
+    fade,
+    crown,
+    green,
+    wood,
+    lobes: floor(seedR.mul(2)).add(3),
+    phase: seedR.mul(40),
+    axisX: normalize(col(0).xz),
+    axisZ: normalize(col(2).xz),
+    road,
+  };
 }
 
 /** A trunk standing in a loaded design's site is folded away
@@ -397,6 +468,23 @@ function pitRadius(rt: F, angle: F, seed: V2): F {
       .mul(PIT_WOBBLE * 2)
       .add(1)
   );
+}
+
+/** A root's place about an offset from the trunk (content frame): the
+ *  lobe it lies on (1 on a root's crest) and its distance (m) across from
+ *  the nearest crest's line. */
+function rootAt(
+  offset: V2,
+  lobes: F,
+  phase: F,
+  axisX: V2,
+  axisZ: V2
+): { lobe: F; across: F } {
+  const angle = atan(dot(offset, axisZ), dot(offset, axisX));
+  const turn = angle.mul(lobes).add(phase);
+  const lobe = cos(turn).mul(0.5).add(0.5);
+  const off = fract(turn.div(6.2832).add(0.5)).sub(0.5).mul(6.2832).div(lobes);
+  return { lobe, across: abs(off).mul(length(offset)) };
 }
 
 interface PitGraph {
@@ -436,6 +524,16 @@ function pitGraph(r: FootRasters, part: "ring" | "earth"): PitGraph {
   const xy = varying(vec2(f.world.x, f.world.z).add(q), "vPitXY");
   const worn = flat(wornHere, "vPitWorn");
   const wornPick = flat(pick, "vPitPick");
+  const lobes = flat(f.lobes, "vPitLobes");
+  const phase = flat(f.phase, "vPitPhase");
+  const axisX = flat(f.axisX, "vPitAxisX");
+  const axisZ = flat(f.axisZ, "vPitAxisZ");
+  // far from any road: a pedestrian zone's pit wears a grate (not on a
+  // tile without the edge raster, whose road reads -99)
+  const grated = flat(
+    step(GRATE_FROM, f.road.negate()).mul(step(-50, f.road)).mul(f.pit),
+    "vPitGrate"
+  );
   const edges = s.edgesTex;
   const uv = varying(
     rasterUv(
@@ -450,6 +548,8 @@ function pitGraph(r: FootRasters, part: "ring" | "earth"): PitGraph {
     const w = max(fwidth(d), 0.002).toVar();
     const angle = atan(offset.y, offset.x).toVar();
     const pitR = pitRadius(rt, angle, seed).toVar();
+    const root = rootAt(offset, lobes, phase, axisX, axisZ);
+    const crest = smoothstep(0.86, 0.97, root.lobe).toVar();
     // off the kerb: the edge raster's road distance at the fragment
     const clear = edges
       ? float(1).sub(
@@ -477,9 +577,36 @@ function pitGraph(r: FootRasters, part: "ring" | "earth"): PitGraph {
       const base = mix(mix(EARTH, LITTER, litter), MOSS, moss);
       // darker toward the bark (the trunk's shade) and at the ring
       const contact = smoothstep(rt.add(0.5), rt, d).mul(0.25);
-      const pitColour = base
-        .mul(grain.sub(0.5).mul(0.22).mul(fine).add(1))
-        .mul(float(1).sub(contact));
+      // a root breaking the mulch along its crest, thinning outwards
+      const rootW = mix(float(0.07), 0.03, clamp(d.div(pitR), 0, 1));
+      const surfaced = float(1)
+        .sub(smoothstep(rootW.sub(w), rootW.add(w), root.across))
+        .mul(smoothstep(rt, rt.add(0.1), d))
+        .mul(float(1).sub(smoothstep(pitR.mul(0.7), pitR.mul(0.95), d)))
+        .mul(step(0.5, root.lobe));
+      // a grate: radial bars and rings of iron, its frame at the rim
+      const spoke = abs(fract(angle.mul(36 / 6.2832)).sub(0.5)).mul(
+        d.mul(6.2832 / 36)
+      );
+      const band = abs(fract(d.div(0.12)).sub(0.5)).mul(0.12);
+      const bar = float(1)
+        .sub(
+          smoothstep(float(0.012).sub(w), float(0.012).add(w), min(spoke, band))
+        )
+        .mul(smoothstep(rt.add(0.1), rt.add(0.14), d));
+      const frame = float(1).sub(smoothstep(0.04, 0.04 + 0.01, pitR.sub(d)));
+      const iron = max(bar, frame).mul(grated);
+      const pitColour = mix(
+        mix(
+          base
+            .mul(grain.sub(0.5).mul(0.22).mul(fine).add(1))
+            .mul(float(1).sub(contact)),
+          linear([...ROOT_SRGB]).mul(grain.mul(0.2).add(0.9)),
+          surfaced
+        ),
+        linear([...IRON_SRGB]),
+        iron
+      );
       // worn lawn: a patch on one side of the trunk where people sit, and
       // the path they wear to it, tapering and wandering, grass showing
       // through it in tufts
@@ -532,13 +659,18 @@ function pitGraph(r: FootRasters, part: "ring" | "earth"): PitGraph {
       const outerJoint = float(1).sub(
         smoothstep(jw, jw.add(w), abs(out.sub(EDGING)))
       );
+      // over a root the setts heave: lifted to the light, their joints
+      // opened and dark
       const joints = max(max(across, edgeJoint), outerJoint)
         .mul(float(1).sub(smoothstep(0.015, 0.05, w)))
+        .mul(crest.mul(0.6).add(1))
+        .min(1)
         .toVar();
       const stone = gdHash(vec2(floor(cell.add(0.5)), seed.x))
         .sub(0.5)
         .mul(0.12)
-        .add(1);
+        .add(1)
+        .mul(crest.mul(0.14).add(1));
       return vec4(
         STONE.mul(stone).mul(mix(float(1), JOINT_SHADE, joints)),
         max(inRing, outerJoint.mul(0.6)).mul(clear).mul(fade)
@@ -706,6 +838,11 @@ function shadeGraph(r: FootRasters, sun?: V3): ShadeGraph {
   const crown = flat(f.crown, "vShadeCrown");
   const green = flat(f.green, "vShadeGreen");
   const rt = flat(f.rt, "vShadeTrunk");
+  const paved = flat(step(0.5, f.pit), "vShadePit");
+  const lobes = flat(f.lobes, "vShadeLobes");
+  const phase = flat(f.phase, "vShadePhase");
+  const axisX = flat(f.axisX, "vShadeAxisX");
+  const axisZ = flat(f.axisZ, "vShadeAxisZ");
   const fade = varying(f.fade, "vShadeFade");
   const near = varying(
     float(1)
@@ -757,6 +894,21 @@ function shadeGraph(r: FootRasters, sun?: V3): ShadeGraph {
         mix(vec3(1), SEED_HEADS, ring.mul(heads))
       )
     );
+    // cracks in the paving where a root runs on under it, past the pit
+    const pitOut = clamp(rt.add(PIT_CLEAR), PIT_MIN, PIT_MAX).add(EDGING);
+    const root = rootAt(offset, lobes, phase, axisX, axisZ);
+    const jag = gdNoise(vec2(d.mul(5), phase))
+      .sub(0.5)
+      .mul(0.08);
+    const cw = max(fwidth(d), 0.004);
+    const crack = float(1)
+      .sub(smoothstep(cw.mul(0.5), cw.mul(1.5), abs(root.across.sub(jag))))
+      .mul(step(0.5, root.lobe))
+      .mul(smoothstep(pitOut, pitOut.add(0.08), d))
+      .mul(float(1).sub(smoothstep(pitOut.add(0.6), pitOut.add(1.5), d)))
+      .mul(paved)
+      .mul(float(1).sub(smoothstep(0.02, 0.06, cw)));
+    k.mulAssign(float(1).sub(crack.mul(0.35)));
     // sun flecks: in the crown's thrown shadow, where the ground is shaded
     const rel = offset.sub(shadowAt);
     const axis = vec2(shadowAt.x, shadowAt.y).div(max(length(shadowAt), 0.001));
@@ -778,6 +930,90 @@ function shadeGraph(r: FootRasters, sun?: V3): ShadeGraph {
   })();
   return { output, position, sunLit };
 }
+
+/**
+ * A guard hoop by a street tree near the road: between its pit and the
+ * kerb, GUARD_BEFORE short of it, along the kerb (the road raster's
+ * distance falls off across it: its gradient is the way to the road).
+ * Collapsed for a tree far from the road, off paving, without the edge
+ * raster, for a share of them by a hash, and far off.
+ */
+function guardGraph(r: FootRasters): { position: V3 } {
+  const s = footSlots(r);
+  const f = footFrame(s, r.size);
+  const edges = s.edgesTex;
+  if (!edges) {
+    return { position: f.foot.mul(0) };
+  }
+  const at = (dx: number, dz: number): F =>
+    edgeDistance(
+      texture(
+        edges,
+        rasterUv(
+          vec2(f.world.x.add(dx), f.world.z.add(dz).negate()),
+          s.origin,
+          r.size
+        )
+      ).level(float(0)).r
+    );
+  const toRoad = normalize(
+    vec2(at(1, 0).sub(at(-1, 0)), at(0, 1).sub(at(0, -1))).add(vec2(1e-4, 0))
+  );
+  const off = f.road.negate();
+  const pick = gdHash(vec2(f.world.x, f.world.z).mul(0.71));
+  const shown = step(0.5, f.pit)
+    .mul(step(GUARD_NEAR[0], off))
+    .mul(step(off, GUARD_NEAR[1]))
+    .mul(step(pick, GUARD_SHARE))
+    .mul(step(0.001, f.fade));
+  const place = toRoad.mul(off.sub(GUARD_BEFORE));
+  const p = positionGeometry;
+  // x along the kerb, z towards the road
+  const along = vec2(toRoad.y.negate(), toRoad.x);
+  const position = Fn(() => {
+    const n = normalLocal;
+    normalLocal.assign(
+      vec3(
+        n.x.mul(along.x).add(n.z.mul(toRoad.x)),
+        n.y,
+        n.x.mul(along.y).add(n.z.mul(toRoad.y))
+      )
+    );
+    const local = vec3(
+      p.x.mul(along.x).add(p.z.mul(toRoad.x)).add(place.x),
+      p.y,
+      p.x.mul(along.y).add(p.z.mul(toRoad.y)).add(place.y)
+    ).mul(shown);
+    return outOfDesignSite(f.foot.add(local), f.foot);
+  })();
+  return { position };
+}
+
+/** A tile's guard hoops: painted anthracite steel, lit, opaque. */
+function guardMaterial(
+  r: FootRasters,
+  slots: Slots,
+  variant: string
+): MeshStandardNodeMaterial {
+  const key = `tree-guard|${variant}`;
+  let graph = guards.get(key);
+  if (!graph) {
+    graph = guardGraph(r);
+    guards.set(key, graph);
+  }
+  const m = new MeshStandardNodeMaterial({
+    color: 0x4a_4e_50,
+    roughness: 0.55,
+    metalness: 0.3,
+  });
+  m.name = "tree-guard";
+  m.positionNode = graph.position;
+  setSlots(m, slots);
+  setGraph(m, key);
+  return m;
+}
+
+const guards = new Map<string, { position: V3 }>();
 
 function litMaterial(
   name: string,
@@ -886,6 +1122,7 @@ export function createFootMaterials(
     earth: make("earth"),
     litter: make("litter"),
     shade: shadeMaterial(r, slots, variant, light),
+    guard: guardMaterial(r, slots, variant),
   };
 }
 

@@ -119,7 +119,8 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   DLM's), its lumps pushed out by a world-space noise so pieces agree.
   The trunk's foot bulges into roots and turns to earth
   (`buildTrunkMaterial`); `tree-foot.ts` adds the ground round it (pits,
-  leaves, the crown's shade glaze) as `Instances` sets on the trunks' own
+  leaves, the crown's shade glaze, worn earth, roots in the paving,
+  grates, guard hoops — the one opaque mesh) as `Instances` sets on the trunks' own
   attribute objects (no bytes of their own, nothing counted twice), their
   materials per tile with the class and edge rasters and the light in
   their slots; `renderOrder` orders the blended sets (rings before earth,
