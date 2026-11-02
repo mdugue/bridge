@@ -107,7 +107,12 @@ import type { F, Live, V2, V3, V4 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 import { viewDirection } from "./view-direction";
 import { TRUNK_BASE } from "@/lib/city/tree-family";
-import { buildFootGeo, treeFeet } from "./tree-foot";
+import {
+  buildFootGeos,
+  type FootGeos,
+  type FootMaterials,
+  treeFeet,
+} from "./tree-foot";
 
 export { bucketByCell, hash, type TreeVeto } from "@/lib/city/tree-placement";
 
@@ -158,11 +163,12 @@ export interface VegetationContext extends GroundContext {
    */
   sunDirection?: Vector3;
   /**
-   * The tile's tree-foot material (tree-foot.ts: a pit in paving, a root
-   * zone elsewhere, read off the tile's rasters), made when the tile turns
-   * out to have trees; without it the trunks stand on the bare ground.
+   * The tile's tree-foot materials (tree-foot.ts: a root flare, and a pit
+   * in paving, read off the tile's rasters and lit by its light), made
+   * when the tile turns out to have trees; without them the trunks stand
+   * on the bare ground.
    */
-  footMaterial?: () => Material | undefined;
+  footMaterial?: () => FootMaterials | undefined;
 }
 
 /**
@@ -224,7 +230,7 @@ export interface VegetationChunk {
   trees: number;
   trunks: Instances;
   /** the trunks' feet (tree-foot.ts), shown with them */
-  feet?: Instances;
+  feet?: Instances[];
 }
 
 /** A canopy or row tree's season: the generic deciduous curve, offset by
@@ -1045,8 +1051,8 @@ export interface TreeGeos {
   mid: BufferGeometry;
   rich: BufferGeometry;
   trunk: BufferGeometry;
-  /** the trunks' foot quad (tree-foot.ts) */
-  foot?: BufferGeometry;
+  /** the trunks' feet's geometries (tree-foot.ts) */
+  foot?: FootGeos;
 }
 
 /** A crown set over the placements and the crowned precomputed trees. */
@@ -1108,7 +1114,7 @@ function buildTreeCell(
   geos: TreeGeos,
   trunkMat: Material,
   crownMats: CrownMaterials,
-  footMat?: Material
+  footMat?: FootMaterials
 ): {
   chunk: VegetationChunk | null;
   meshes: Instances[];
@@ -1126,7 +1132,7 @@ function buildTreeCell(
     const feet = feetOf(trunks, geos, footMat);
     return {
       chunk: null,
-      meshes: feet ? [trunks, feet] : [trunks],
+      meshes: [trunks, ...(feet ?? [])],
       season: null,
     };
   }
@@ -1200,7 +1206,7 @@ function buildTreeCell(
       trunks,
       feet,
     },
-    meshes: feet ? [trunks, feet, mid, rich, far] : [trunks, mid, rich, far],
+    meshes: [trunks, ...(feet ?? []), mid, rich, far],
     season: seasonCrowns({ far, farSlots, mid, rich }, keys, crownMats),
   };
 }
@@ -1209,8 +1215,8 @@ function buildTreeCell(
 function feetOf(
   trunks: Instances,
   geos: TreeGeos,
-  footMat?: Material
-): Instances | undefined {
+  footMat?: FootMaterials
+): Instances[] | undefined {
   return footMat && geos.foot
     ? treeFeet(geos.foot, footMat, trunks)
     : undefined;
@@ -1296,7 +1302,7 @@ function* buildTrees(
   trees: Placement[],
   extras: TreeInstance[],
   crownMats: CrownMaterials,
-  footMat?: Material
+  footMat?: FootMaterials
 ): Steps<{
   chunks: VegetationChunk[];
   meshes: Instances[];
@@ -1310,7 +1316,7 @@ function* buildTrees(
     mid: buildCrownGeo(),
     rich: buildCrownGeoRich(),
     trunk: buildTrunkGeo(),
-    foot: footMat ? buildFootGeo() : undefined,
+    foot: footMat ? buildFootGeos() : undefined,
   };
   // the needle trees' cones and pines, only for a tile that has any
   const needles: Partial<Record<CanopyForm, TreeGeos>> = { broad: geos };
@@ -1462,8 +1468,8 @@ function showTier(chunk: VegetationChunk, tier: CrownTier): void {
   chunk.far.visible = tier === "far";
   // A trunk 550 m out is below a pixel; the far tier drops it.
   chunk.trunks.visible = tier !== "far";
-  if (chunk.feet) {
-    chunk.feet.visible = tier !== "far";
+  for (const feet of chunk.feet ?? []) {
+    feet.visible = tier !== "far";
   }
 }
 

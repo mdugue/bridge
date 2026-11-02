@@ -269,8 +269,11 @@ visual-variable codebook is in
   Meißen (43 %). OSM's own culverts are not used on the DLM sites: they
   cut an open stream in Unna.
 - **Meadow NDVI tint** `= computed` (*Wiesenfärbung*) — on class-1 farmland/meadow only, the
-  DOP greenness (`ndvi_<tile>.png`, LINEAR-filtered to low-pass the ~2 m raster)
-  shifts the pastel sage lush deep-green↔dry hay. In the terrain's colour node
+  DOP greenness (`ndvi_<tile>.png`, read at its mip 2 — 8 m a texel —
+  through a cubic B-spline, `bsplineSample`; the plain biased mip only past
+  ~6–16 m a pixel; the bilinear mip it replaced drew ~10 m squares that
+  read as a chequerboard from afar) shifts the pastel sage lush
+  deep-green↔dry hay. In the terrain's colour node
   (`meadowNdvi`, gated by the meadow class of the raster), at
   *Wiesenfärbung*'s fixed strength (`MEADOW_NDVI`, 0.6). The higher-variance NDVI canvas the analysis
   flagged (meadow carries 1.46× the crown NDVI variance). Absent raster → no-op.
@@ -350,7 +353,9 @@ visual-variable codebook is in
   same weight (`GroundColour.path`) then decides the sand, the slabs'
   share and the urban green's, and a path texel off the smooth edge is
   paved as the land beside it. The paving raster's walk kinds are read
-  as their shares of the four texels round the fragment (`walkShares`),
+  as their shares of the 4×4 texels round the fragment under a cubic
+  B-spline, cut at one half (`walkShares`; bilinear shares of the
+  1 m texels drew a slanted edge as teeth),
   (on the ground a walk kind paints — built-up, path, unclassified, and a
   path's smooth edge — as before), so a sealed texel among a path's sanded ones — where a tagged way's
   buffer and the class raster's path disagree, the bake gives the rest
@@ -2603,24 +2608,35 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   zoomed out past it shows none.
 
 - **Tree feet** `≈ assumed` (*Baumfuß*, 2026-11-02) — every trunk on the fine
-  level stands in a foot (`tree-foot.ts`): in paving — the class raster's
-  built-up, road, railway or unclassified land, off the baked lawn (the
-  edge raster's meadow side) — a round **tree pit** of earth with a fine
-  grain, 0.75 m beyond the trunk's flared foot (0.95–1.5 m), edged by a
-  10 cm stone ring between two joints; anywhere else a **root zone**, a
-  soft, slightly irregular patch of warmer, darker ground ~1.4 m beyond
-  the trunk; both with a contact shadow at the bark (−55 %, over 0.8 m),
-  which the sun's shadow map, a texel of several centimetres spread by
-  PCF, cannot draw. Which one is read once per vertex at the trunk's
-  foot. The foot is a glaze (MultiplyBlending, like the murals): the
-  ground's light, shadow, sky view and fog are under it already; 1 at its
-  rim, faded out between 70 and 150 m. It is an `Instances` set per chunk
-  on the trunks' own matrix and drop buffers and a site-shared quad, with
-  a material per tile whose slots hold the tile's class and edge rasters
-  — no bytes of its own on a phone. On a slope it lies level at the foot,
-  so the upslope rim, already faint, is cut by the ground. Transparent:
-  the paper styles leave it out. Before, the trunk stabbed straight into
-  a flat ground, which read cheap.
+  level stands in a foot (`tree-foot.ts`) that covers the ground under it:
+  - a **root flare**: a low skirt from 0.32 m up the bark out to 0.4–0.7 m
+    beyond the trunk's foot and 8 cm under the ground, its rim lobed into
+    three to five buttress roots by a hash of where the tree stands, its
+    colour from the bark to soil (to the pit's earth in paving), its rim
+    dissolving into the ground (opaque, hashed alpha). Lit as the trunk
+    is and, like it, taking no shadow: up the bark it lies inside the
+    trunk's own shadow-map texel, which sleeved every foot in black. On a slope it sinks into the hillside as the trunk
+    does — the flat disc it replaced floated over the downhill side and
+    was cut by the uphill one.
+  - in paving — the class raster's built-up, road, railway or unclassified
+    land, off the baked lawn (the edge raster's meadow side) — a **tree
+    pit**: mulched earth with a grain, litter flecks and the odd tuft of
+    green, 0.7 m beyond the trunk's flared foot (0.85–1.4 m), its rim
+    wobbling ±6 % by a world-space noise, in a 12 cm ring of setts (a joint
+    every 14 cm and on both edges). Rings are drawn before every pit's
+    earth, so overlapping pits become one bed with one ring; a pit stops
+    0.32 m short of the road edge (the edge raster's road distance), off
+    the kerb. Alpha-blended and lit as the ground is (its sun, shadows,
+    sky view and horizon).
+  Which foot a tree gets is read once per vertex at the trunk's foot. All
+  of it fades out between 70 and 150 m. Three `Instances` sets per chunk on
+  the trunks' own attribute objects (matrices, drop, bark colour) and two
+  geometries per tile, with materials per tile whose slots hold the tile's
+  class and edge rasters and its light — no bytes per tree on a phone.
+  The paper styles leave the blended pit out and draw the flare with the
+  trunk. Before, the trunk stabbed
+  straight into a flat ground; a first multiplied glaze (a disc) let the
+  paving show through and read as a sticker.
 
 - **Hedges (OSM, laser-scan height)** `◎ detected` `❝ taken` and **trees outside the canopy mask**
   (laser scan) — on by default. The laser scan is baked for every tile of the
@@ -4666,8 +4682,10 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   from a palette with stops at −2° (blue hour) and +6° (golden hour).
   `lib/city/atmosphere.ts` `STOPS`.
 - **Meadow mottle** `≈ assumed` — DLM class 1 (farmland/meadow) → a low-frequency
-  colour + normal mottle so grass reads as ground, not paint. `terrain-layer.ts`
-  `grassMottle`/`terrainNormal`.
+  colour + normal mottle so grass reads as ground, not paint: world-space
+  value noise in two octaves (~8 m and ~2.5 m). Until 2026-11-02 it was the
+  product of two sines, a chequerboard by construction, which from afar read
+  as one. `terrain-layer.ts` `grassMottle`/`terrainNormal`.
 - **Contour ink guard** `= computed` — a flat terrain quad lying exactly on a 2 m or 10 m
   contour has `fwidth` 0, and 0/0 striped it with NaN ink (a diamond of
   lines on flat roads). No slope, no contour line. `terrain-layer.ts`.

@@ -94,6 +94,8 @@ import {
   untilAborted,
 } from "./fetch-optional";
 import {
+  bsplineSample,
+  gdNoise,
   type GroundColour,
   type GroundFields,
   type GroundInputs,
@@ -101,6 +103,7 @@ import {
   groundFields,
   groundNormal,
   smoothPaths,
+  texelSize,
   urbanGreen,
 } from "./ground-detail";
 import {
@@ -865,20 +868,19 @@ function grassMottle(inp: GroundInputs, colorTexture: Tex): GroundColour {
   const meadow = float(1)
     .sub(step(0.5, abs(cls.sub(MEADOW_CLASS))))
     .toVar();
-  const mottle = sin(xy.x.mul(0.85).add(1.3))
-    .mul(sin(xy.y.mul(0.78).sub(0.7)))
-    .mul(0.7)
-    .add(
-      sin(xy.x.mul(2.7).sub(0.5))
-        .mul(sin(xy.y.mul(2.3).add(1.1)))
-        .mul(0.3)
-    )
+  // value noise, two octaves (~8 m and ~2.5 m): the product of two sines
+  // it replaced is a chequerboard, which from afar is what it read as
+  const mottle = gdNoise(xy.mul(MOTTLE_BROAD))
+    .sub(0.5)
+    .mul(1.4)
+    .add(gdNoise(xy.mul(0.4).add(17.3)).sub(0.5).mul(0.6))
     .toVar();
   const paths = smoothPaths(inp, texture(colorTexture, inp.uv).rgb);
   const col: GroundColour = {
     baseCol: paths.col,
     path: paths.path,
     pathSide: paths.side,
+    pathNear: paths.near,
     meadow,
     detail: meadow.mul(float(1).sub(smoothstep(0.5, 2.5, fw))).toVar(),
     mottle,
@@ -893,6 +895,14 @@ function grassMottle(inp: GroundInputs, colorTexture: Tex): GroundColour {
  * heat map — fixed at what its slider stood at (plan 073).
  */
 const MEADOW_NDVI = float(0.6);
+
+/** The meadow mottle's broad octave (per m: ~8 m drifts), and how much
+ *  its slope tilts the grass normal (a noise step over half a cell). */
+const MOTTLE_BROAD = 0.125;
+const MOTTLE_SLOPE = 1.6;
+
+/** The NDVI's mip the meadows read smoothed (2: 8 m a texel). */
+const NDVI_LEVEL = 2;
 
 /**
  * Meadow NDVI tint (Wiesenfärbung): on class-1 farmland/meadow only, shift
@@ -1065,13 +1075,20 @@ function splatColour(splat: SplatNodes): V3 {
     if (splat.markings) {
       roadMarkings(inp, col, g, splat.markings);
     }
-    // the NDVI from a coarser mip (a bias of 2.5), read once for the
-    // meadows and the crops: the 2 m raster carries every path, tree
-    // shadow and bare patch, which painted the meadows in dark flecks;
-    // averaged over ~10 m it is what it should be — broad lush and dry
-    // drifts
+    // the NDVI averaged over ~10 m: the 2 m raster carries every path,
+    // tree shadow and bare patch, which painted the meadows in dark
+    // flecks; what it should give is broad lush and dry drifts. Its mip 2
+    // (8 m) read through a cubic B-spline — the biased bilinear read it
+    // replaced drew those drifts as a chequerboard of ~10 m squares from
+    // afar — and only far out, where a square is under a few pixels, the
+    // plain mip as before.
     const coarseNdvi = splat.ndvi
-      ? texture(splat.ndvi, inp.uv).bias(float(2.5)).r.toVar()
+      ? mix(
+          bsplineSample(splat.ndvi, uv, texelSize(splat.ndvi, uv), NDVI_LEVEL)
+            .r,
+          texture(splat.ndvi, inp.uv).bias(float(2.5)).r,
+          smoothstep(6, 16, inp.fw)
+        ).toVar()
       : undefined;
     if (coarseNdvi) {
       meadowNdvi(col, coarseNdvi, MEADOW_NDVI);
@@ -1184,11 +1201,13 @@ function terrainNormal(withDetail: boolean): V3 {
     if (!withDetail) {
       return calm;
     }
-    const xy = dataXY();
-    const ax = xy.x.mul(0.85).add(1.3);
-    const ay = xy.y.mul(0.78).sub(0.7);
-    const gx = cos(ax).mul(sin(ay)).mul(0.85);
-    const gy = sin(ax).mul(cos(ay)).mul(0.78);
+    // the slope of the mottle's broad octave (`grassMottle`), by central
+    // differences: the light catches the same drifts the colour has
+    const xy = dataXY().mul(MOTTLE_BROAD).toVar();
+    const e = 0.25;
+    const at = (dx: number, dy: number): F => gdNoise(xy.add(vec2(dx, dy)));
+    const gx = at(e, 0).sub(at(-e, 0)).mul(MOTTLE_SLOPE);
+    const gy = at(0, e).sub(at(0, -e)).mul(MOTTLE_SLOPE);
     const grass = normalize(
       calm.add(vec3(gx, gy, 0).mul(grassDetail.mul(0.06)))
     );
