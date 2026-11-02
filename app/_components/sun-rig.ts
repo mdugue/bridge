@@ -761,12 +761,8 @@ export function createSunRig(
     }
   };
 
-  const update = (date: Date, preview = false): SunState => {
-    const d = sunDirectionWorld(date, latLng.lat, latLng.lng);
-    dir.set(d.x, d.y, d.z);
-    sunDirectionOut?.copy(dir);
-    const aboveHorizon = dir.y > 0;
-    sunUp = aboveHorizon;
+  /** The light and its map to the sun as it stands (`dir`). */
+  const moveLight = () => {
     reposition();
     // the warp is fitted to the sun as well as to the view
     if (warpView) {
@@ -775,22 +771,36 @@ export function createSunRig(
         applyWarp(fit, false);
       }
     }
-    // The sun moved: redraw by day (a drag's step at most every
+  };
+
+  const update = (date: Date, preview = false): SunState => {
+    const d = sunDirectionWorld(date, latLng.lat, latLng.lng);
+    dir.set(d.x, d.y, d.z);
+    sunDirectionOut?.copy(dir);
+    const aboveHorizon = dir.y > 0;
+    sunUp = aboveHorizon;
+    // The sun moved: redraw by day (a drag's or a glide's step at most every
     // PREVIEW_SHADOW_MS, the last after the wait); by night drop a request
-    // still open.
+    // still open. The light and its map move only together: a light moved
+    // between two redraws reads the map it drew from where it was, and every
+    // shadow slides off its caster and snaps back at the next redraw — the
+    // whole picture wobbles while a walk's flight glides the hour.
     if (!aboveHorizon || !preview) {
       cancelShadowWait();
+      moveLight();
       sun.shadow.needsUpdate = aboveHorizon;
       shadowAskedAt = performance.now();
     } else if (shadowWait === null) {
       const wait = shadowAskedAt + PREVIEW_SHADOW_MS - performance.now();
       if (wait <= 0) {
+        moveLight();
         sun.shadow.needsUpdate = true;
         shadowAskedAt = performance.now();
       } else {
         shadowWait = setTimeout(() => {
           shadowWait = null;
           shadowAskedAt = performance.now();
+          moveLight();
           redrawShadow();
         }, wait);
       }
