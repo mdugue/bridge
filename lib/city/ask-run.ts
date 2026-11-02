@@ -150,7 +150,10 @@ export async function* ended(
   onEnd: () => void = () => {}
 ): AsyncIterable<StreamChunk> {
   let last: StreamChunk | undefined;
-  // a tool's result the model has not answered with text yet
+  // the calls this request made, and whether the model still owes words
+  // on one's result: a scene tool's result a resume brings back was asked
+  // for in an earlier request, and its words came before it
+  const called = new Set<string>();
   let owed = false;
   try {
     for await (const chunk of stream) {
@@ -159,8 +162,10 @@ export async function* ended(
         continue;
       }
       last = chunk;
-      if (chunk.type === "TOOL_CALL_RESULT") {
-        owed = true;
+      if (chunk.type === "TOOL_CALL_START") {
+        called.add(chunk.toolCallId);
+      } else if (chunk.type === "TOOL_CALL_RESULT") {
+        owed ||= called.has(chunk.toolCallId);
       } else if (chunk.type === "TEXT_MESSAGE_CONTENT") {
         owed = false;
       }
@@ -169,21 +174,46 @@ export async function* ended(
   } finally {
     onEnd();
   }
-  const end = runEnd(last);
-  if (signal.reason === DEADLINE && end !== "done") {
-    yield runError("Die Antwort dauerte zu lange.");
-  } else if (owed && end === "cut") {
-    yield runError(TOO_MANY_STEPS);
+  const why = stopText(runEnd(last), owed, signal.reason === DEADLINE);
+  if (why) {
+    yield runError(why);
+  }
+}
+
+/** Why a run stopped, where the stream would not say: null where it is
+ *  whole, waits for the browser, or an error already said it. */
+function stopText(end: RunEnd, owed: boolean, late: boolean): string | null {
+  if (late) {
+    return end === "stop" || end === "waits"
+      ? null
+      : "Die Antwort dauerte zu lange.";
+  }
+  if (!owed) {
+    return null;
+  }
+  switch (end) {
+    case "cut":
+      return TOO_MANY_STEPS;
+    case "length":
+      return "Die Antwort wurde abgeschnitten: dem Modell gingen die Wörter aus.";
+    case "stop":
+      return "Das Modell gab keine Antwort. Frag bitte noch einmal.";
+    case "waits":
+    case "other":
+      return null;
   }
 }
 
 /**
- * How the stream's last chunk leaves the run: `done` (the model chose to
- * stop, or a scene tool waits for the browser), `cut` (it stopped between
- * a tool's result and the model's turn on it: the turn cap, a cut
- * answer) or `other` (an error already said why, or nothing came).
+ * How the stream's last chunk leaves the run: `stop` (the model chose to
+ * end), `waits` (a scene tool waits for the browser), `cut` (it stopped
+ * between a tool's result and the model's turn on it: the turn cap),
+ * `length` (the model's output ran out) or `other` (an error already
+ * said why, or nothing came).
  */
-function runEnd(last: StreamChunk | undefined): "done" | "cut" | "other" {
+type RunEnd = "stop" | "waits" | "cut" | "length" | "other";
+
+function runEnd(last: StreamChunk | undefined): RunEnd {
   if (last?.type === "TOOL_CALL_RESULT") {
     return "cut";
   }
@@ -194,11 +224,14 @@ function runEnd(last: StreamChunk | undefined): "done" | "cut" | "other" {
     metadata?: { tanstack?: { finishReason?: unknown } };
     outcome?: { type?: unknown };
   };
+  if (c.outcome?.type === "interrupt") {
+    return "waits";
+  }
   const reason = c.metadata?.tanstack?.finishReason;
-  return c.outcome?.type !== "interrupt" &&
-    (reason === "tool_calls" || reason === "length")
-    ? "cut"
-    : "done";
+  if (reason === "tool_calls") {
+    return "cut";
+  }
+  return reason === "length" ? "length" : "stop";
 }
 
 /** The stream with the key taken out of any error, thrown or sent. */

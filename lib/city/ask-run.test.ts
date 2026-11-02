@@ -229,7 +229,8 @@ test("an answer's turns count across resumed requests, not its calls", () => {
 });
 
 describe("an answer that stops says why", () => {
-  const chunk = (type: string) => ({ type, timestamp: 0 }) as StreamChunk;
+  const chunk = (type: string) =>
+    ({ type, timestamp: 0, toolCallId: "t1" }) as StreamChunk;
   async function* of(...types: string[]) {
     for (const t of types) {
       yield chunk(t);
@@ -248,7 +249,12 @@ describe("an answer that stops says why", () => {
   test("a run the turn cap ends after a server tool", async () => {
     const out = await types(
       ended(
-        of("RUN_STARTED", "RUN_FINISHED", "TOOL_CALL_RESULT"),
+        of(
+          "RUN_STARTED",
+          "TOOL_CALL_START",
+          "RUN_FINISHED",
+          "TOOL_CALL_RESULT"
+        ),
         new AbortController().signal
       )
     );
@@ -267,14 +273,32 @@ describe("an answer that stops says why", () => {
   test("a cut run that ends on its RUN_FINISHED after the results", async () => {
     const out = await types(
       ended(
-        list(chunk("TOOL_CALL_RESULT"), finished("length")),
+        list(
+          chunk("TOOL_CALL_START"),
+          chunk("TOOL_CALL_RESULT"),
+          finished("length")
+        ),
         new AbortController().signal
       )
     );
-    expect(out.at(-1)).toContain("zu viele Schritte");
+    expect(out.at(-1)).toContain("abgeschnitten");
   });
 
-  test("a model that stops without words after a result is done", async () => {
+  test("a model that stops without words on its own call's result", async () => {
+    const out = await types(
+      ended(
+        list(
+          chunk("TOOL_CALL_START"),
+          chunk("TOOL_CALL_RESULT"),
+          finished("stop")
+        ),
+        new AbortController().signal
+      )
+    );
+    expect(out.at(-1)).toContain("keine Antwort");
+  });
+
+  test("a resumed scene tool's result needs no new words", async () => {
     const out = await types(
       ended(
         list(chunk("TOOL_CALL_RESULT"), chunk("RUN_STARTED"), finished("stop")),
