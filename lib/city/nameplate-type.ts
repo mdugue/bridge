@@ -64,8 +64,8 @@ export interface NameplateType {
    *  (selection-outline.ts): its line and the halo it lies on, so mark
    *  and lettering read as one hand */
   outline: { line: Rgb; halo: Rgb };
-  /** the small lines' setting and ink, and how opaque (1 where unset) */
-  lines: NameplateSetting & { ink: DayNight; size: number; alpha?: number };
+  /** the small lines' setting and ink */
+  lines: NameplateSetting & { ink: DayNight; size: number };
   /** laid on the ground from every view above the building */
   onGround: boolean;
   title: NameplateSetting;
@@ -102,14 +102,10 @@ export const NAMEPLATE_TYPES: Readonly<Record<RenderStyle, NameplateType>> = {
   pastel: {
     title: SANS_TITLE,
     // the selection's magenta, deep plum returns: loud on the pastel city
-    // the facts in the title's own magenta, a little lighter on the eye
-    // (a plum read poorly on the clay: maintainer review 2026-11-02)
-    lines: {
-      ...SANS_LINES,
-      size: 0.44,
-      ink: dn(0xc6_00_de, 0xf0_7a_f5),
-      alpha: 0.78,
-    },
+    // the facts in the title's own magenta lifted a fifth toward white,
+    // opaque: a plum read poorly on the clay (maintainer review
+    // 2026-11-02), and a translucent face shows its own plum returns
+    lines: { ...SANS_LINES, size: 0.44, ink: dn(0xd2_38_e5, 0xf4_a0_f8) },
     ink: dn(0xc6_00_de, 0xf0_7a_f5),
     side: dn(0x6a_10_82, 0x5a_1a_70),
     shadow: { colour: hex(0x3a_1a_55), alpha: 0.42 },

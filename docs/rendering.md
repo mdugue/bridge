@@ -711,10 +711,11 @@ outline's, each in its turn (`compileInTurn`).
   canvas's own measure of each prefix; tracking per style. Each glyph
   also keeps its coverage at ~16 px per capital (a few kB) for the
   shadow's mask.
-- **One material, three kinds of quad** (`uvk`: atlas uv and a kind): a
-  glyph (fill at 0.5, halo outward to a share of the reach, antialiased by
-  `fwidth`), a solid (the comic box and its edge, antialiased by their
-  uv), a disc. No line ties the plate to its thing (maintainer review
+- **Two kinds of quad** (`uvk`: atlas uv and a kind) in the face's
+  material: a glyph (fill at 0.5, halo outward to a share of the reach,
+  antialiased by `fwidth`) and a solid (the comic box and its edge,
+  antialiased by their uv); the returns (below) have a material of their
+  own over the same geometry. No line ties the plate to its thing (maintainer review
   2026-11-02); the selection outline marks it, in the style's own
   lettering ink (`NameplateType.outline`, `SelectionOutline.setColours`),
   and the clay's lift and hatch on the asked building follow

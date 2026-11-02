@@ -19,6 +19,7 @@ import {
 import {
   inquiryBuildings,
   isLandmarkInquiry,
+  nameplateEave,
   type NameplateText,
   nameplateText,
 } from "@/lib/city/nameplate";
@@ -69,16 +70,16 @@ export function createNameplateAsk(deps: {
   // the building the plate names now, so asking it again keeps the plate
   let named: string | null = null;
   let namedText: NameplateText | null = null;
-  // the asked building's eave over its foot (m; 0 none): what rooftop
-  // letters stand on under a tower
-  let eaveH = 0;
+  // the asked building's main eave: what rooftop letters stand on under
+  // a tower
+  let eave: ReturnType<typeof nameplateEave> = null;
   const withEave = (b: NameplateBody): NameplateBody =>
-    eaveH > 0 ? { ...b, eave: b.base + eaveH } : b;
+    eave ? { ...b, eave: (eave.baseZ ?? b.base) + eave.eaveH } : b;
   const ask = (inquiry: Inquiry | null, next: NameplateBody | null) => {
     const token = ++asked;
     body = next;
     waiting = inquiry && !next ? inquiry : null;
-    eaveH = inquiry ? eaveOf(inquiry) : 0;
+    eave = inquiry ? nameplateEave(inquiry) : null;
     if (!(inquiry && next)) {
       named = null;
       deps.plate.set(null);
@@ -147,28 +148,6 @@ export function createNameplateAsk(deps: {
     },
     ask,
   };
-}
-
-/** A building's eave over its foot (m): its largest object's (the main
- *  mass, not a tower or a dome's drum), 0 where none states one or for
- *  anything else. */
-function eaveOf(inquiry: Inquiry): number {
-  if (inquiry.kind !== "building") {
-    return 0;
-  }
-  let best = 0;
-  let area = -1;
-  // a building asked without its tree is its picked object alone
-  // (mergedFacts reads it the same way)
-  const all = inquiry.tree.length > 0 ? inquiry.tree : [inquiry.picked];
-  for (const o of all) {
-    const a = o.facts.area > 0 ? o.facts.area : 0;
-    if (o.eaveH > 0 && a > area) {
-      best = o.eaveH;
-      area = a;
-    }
-  }
-  return best;
 }
 
 /** Whether two plates say the same (rank, title and lines). */

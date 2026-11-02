@@ -342,9 +342,11 @@ export function nameplateMode(
   // and from over the thing (standing under a tree, its foot is seen
   // steeply too)
   const ground = centre3(body, body.base);
+  // (lying already, it keeps the air down to the top itself)
   const over =
     camera.ortho ||
-    camera.position[1] > body.top + ABOVE_TOP_SHARE * bodySize(body);
+    camera.position[1] >
+      body.top + ABOVE_TOP_SHARE * keep("air", -5) * bodySize(body);
   if (over && pitchTo(camera, ground) > GROUND_PITCH_DEG * keep("air", -1)) {
     return "air";
   }
@@ -547,8 +549,10 @@ export function nameplatePose(
     right: r,
     up,
     cap,
-    fade:
-      layout.mode === "near"
+    // a parallel view has no nearness: where its camera sits says nothing
+    fade: camera.ortho
+      ? 1
+      : layout.mode === "near"
         ? smooth(NEAR_FADE_GONE_M, NEAR_FADE_FULL_M, camToPlane)
         : smooth(FADE_GONE_M, FADE_FULL_M, camToPlane),
   };

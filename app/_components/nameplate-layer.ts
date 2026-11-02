@@ -43,6 +43,7 @@ import {
   Float32BufferAttribute,
   LinearFilter,
   LinearSRGBColorSpace,
+  MathUtils,
   Matrix4,
   Mesh,
   MeshBasicNodeMaterial,
@@ -259,11 +260,6 @@ function maskTexture(data: Uint8Array, width: number, height: number) {
   trackTexture(t, width * height);
   return t;
 }
-
-const smoothUnit = (a: number, b: number, x: number) => {
-  const t = Math.min(Math.max((x - a) / (b - a), 0), 1);
-  return t * t * (3 - 2 * t);
-};
 
 /** A box's faces, outward when its three edges turn right-handed: the
  *  plate's rectangle (corners 0–3) and the same swept (4–7). */
@@ -530,11 +526,9 @@ function paintColours(
     [PAINT.boxFill]: type.box ? atNight(type.box.fill, night) : h,
     [PAINT.boxEdge]: type.box ? atNight(type.box.edge, night) : h,
   };
-  const linesAlpha = type.lines.alpha ?? 1;
   for (let i = 0; i < paint.length; i++) {
     const c = colours[paint[i]];
-    const a = paint[i] === PAINT.lines ? dim * linesAlpha : dim;
-    ink.set([c[0], c[1], c[2], a], i * 4);
+    ink.set([c[0], c[1], c[2], dim], i * 4);
     halo.set([h[0], h[1], h[2], type.halo.alpha * dim], i * 4);
   }
 }
@@ -983,14 +977,17 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
    *  river below it), a little beyond. */
   const shadowLength = (o: Vec3, base: number, sun: Vector3) => {
     const key = shadowKey;
+    // the corner slides with the screen-held cap while the camera moves:
+    // within a march step's half it keeps its length
+    const near = SHADOW_STEP_M / 2;
     if (
-      key[0] === o[0] &&
-      key[1] === o[1] &&
-      key[2] === o[2] &&
+      Math.abs(key[0] - o[0]) < near &&
+      Math.abs(key[1] - o[1]) < near &&
+      Math.abs(key[2] - o[2]) < near &&
       key[3] === base &&
-      key[4] === sun.x &&
-      key[5] === sun.y &&
-      key[6] === sun.z
+      Math.abs(key[4] - sun.x) < 1e-3 &&
+      Math.abs(key[5] - sun.y) < 1e-3 &&
+      Math.abs(key[6] - sun.z) < 1e-3
     ) {
       return key[7];
     }
@@ -998,8 +995,8 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     key.splice(0, 8, o[0], o[1], o[2], base, sun.x, sun.y, sun.z, length);
     return length;
   };
-  // the last march's corner, foot, sun and length: a still view asks
-  // the ground nothing
+  // the last march's corner, foot, sun and length: a still view (and a
+  // moving one, within half a step) asks the ground nothing
   const shadowKey: number[] = [Number.NaN, 0, 0, 0, 0, 0, 0, 0];
   const marchToGround = (o: Vec3, base: number, sun: Vector3) => {
     const top = o[1];
@@ -1023,7 +1020,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   const placeShadow = (p: NameplatePose, b: NameplateBody) => {
     const sun = deps.sunDirection;
     const t = type();
-    const light = smoothUnit(SHADOW_SUN.from, SHADOW_SUN.full, sun.y);
+    const light = MathUtils.smoothstep(sun.y, SHADOW_SUN.from, SHADOW_SUN.full);
     uniforms.sun.value.copy(sun);
     uniforms.sunLight.value = light;
     const strength = t.shadow.alpha * light * nightDim(night);

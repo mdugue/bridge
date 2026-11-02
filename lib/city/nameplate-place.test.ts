@@ -96,6 +96,14 @@ test("the laying follows the camera, with hysteresis", () => {
   const at45 = look([0, 100, 100], [0, 0, 0]);
   expect(nameplateMode(BODY, at45, "air")).toBe("air");
   expect(nameplateMode(BODY, at45, null)).not.toBe("air");
+  // just over the top (under top + S/4) the ground is entered no more,
+  // but a lying plate keeps it down to the top itself
+  const low = look([0, 35, 5], [0, 0, 0]);
+  expect(nameplateMode(BODY, low, null)).not.toBe("air");
+  expect(nameplateMode(BODY, low, "air")).toBe("air");
+  expect(nameplateMode(BODY, look([0, 28, 5], [0, 0, 0]), "air")).not.toBe(
+    "air"
+  );
   // just past the far threshold (8 S = 240 m) it is far, from street too;
   // just inside it far holds (it is left only within 0.8 × 8 S)
   const edge = look([0, 15, 255], [0, 15, 0]);
@@ -397,4 +405,19 @@ test("an opaque plate is never an inscription before its facade", () => {
   expect(
     chooseNameplate(BODY, null, block, range, { ...scene, opaque: true }).mode
   ).toBe("street");
+});
+
+test("a parallel view's upright plate never fades", () => {
+  // Modell at a shallow angle, its camera right at the facade's plane
+  const camera = look([0, 15, 10.5], [0, 15, -100], true);
+  expect(nameplateMode(BODY, camera, null)).toBe("street");
+  const pose = nameplatePose(
+    BODY,
+    { mode: "street", side: nameplateSide(BODY, camera, null), spot: "above" },
+    camera,
+    { width: 6, height: 2 },
+    { min: 20, max: 60 },
+    () => 0
+  );
+  expect(pose.fade).toBe(1);
 });

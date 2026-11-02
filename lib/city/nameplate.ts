@@ -9,7 +9,7 @@
  */
 import type { InquiryCard } from "./card-lines";
 import { OBJECT_FLAG_LANDMARK } from "./city-mesh";
-import { cardHeight, type Inquiry } from "./inquiry";
+import { cardHeight, type Inquiry, type InquiryObject } from "./inquiry";
 import { UNKNOWN_SPECIES } from "./inquiry-more";
 import {
   factBuildings,
@@ -28,6 +28,31 @@ export interface NameplateText {
   lines: string[];
   rank: NameplateRank;
   title: string;
+}
+
+/** A building's main eave: its largest object's (the main mass, not a
+ *  tower or a dome's drum), over that object's own base (absent where the
+ *  scene did not say: then over the outline's foot); null where none
+ *  states one or for anything else. */
+export function nameplateEave(
+  inquiry: Inquiry
+): { baseZ?: number; eaveH: number } | null {
+  if (inquiry.kind !== "building") {
+    return null;
+  }
+  let best: InquiryObject | null = null;
+  let area = -1;
+  // a building asked without its tree is its picked object alone
+  // (mergedFacts reads it the same way)
+  const all = inquiry.tree.length > 0 ? inquiry.tree : [inquiry.picked];
+  for (const o of all) {
+    const a = o.facts.area > 0 ? o.facts.area : 0;
+    if (o.eaveH > 0 && a > area) {
+      best = o;
+      area = a;
+    }
+  }
+  return best ? { baseZ: best.baseZ, eaveH: best.eaveH } : null;
 }
 
 /** Whether a building inquiry is (part of) a landmark. */

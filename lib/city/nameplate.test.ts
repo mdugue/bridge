@@ -5,6 +5,7 @@ import type { Inquiry, InquiryObject } from "./inquiry";
 import {
   inquiryBuildings,
   isLandmarkInquiry,
+  nameplateEave,
   nameplateText,
   titleLines,
 } from "./nameplate";
@@ -182,4 +183,34 @@ test("a long title breaks between words into even lines, a joined one at its sla
   expect(titleLines("Donaudampfschifffahrtsgesellschaftskapitän")).toEqual([
     "Donaudampfschifffahrtsgesellschaftskapitän",
   ]);
+});
+
+test("the eave is the main mass's, over its own base", () => {
+  // a tower (small, high eave) beside the nave (large, standing higher on
+  // a slope than the tower's foot)
+  const tower = object({
+    baseZ: 100,
+    eaveH: 40,
+    facts: facts({ area: 80 }),
+  });
+  const nave = object({
+    baseZ: 106,
+    eaveH: 15,
+    objectIndex: 1,
+    facts: facts({ area: 900 }),
+  });
+  expect(nameplateEave(building([tower, nave]))).toEqual({
+    baseZ: 106,
+    eaveH: 15,
+  });
+  // asked without its tree: the picked object alone
+  const alone: Inquiry = {
+    kind: "building",
+    tile: "t",
+    picked: nave,
+    tree: [],
+  };
+  expect(nameplateEave(alone)?.eaveH).toBe(15);
+  // nothing states an eave: none
+  expect(nameplateEave(building([object()]))).toBeNull();
 });

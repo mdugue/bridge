@@ -146,11 +146,11 @@ function pointSource(
     : stated("taken", osmSource(provenance, [what], "trees"));
 }
 
-/** A tree the scene draws without a register's name. */
 /** What a canopy card says for its species: DOP saw a crown, no register
  *  names it. */
 export const UNKNOWN_SPECIES = "nicht bekannt";
 
+/** A tree the scene draws without a register's name. */
 export function canopyCard(
   t: CanopyInquiry,
   provenance: SiteProvenance | null,
