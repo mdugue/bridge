@@ -1,94 +1,195 @@
 "use client";
 
+import { cn } from "cn";
 import {
   type LoadStageState,
   loadHeadline,
   WALKABLE_PERCENT,
 } from "@/lib/city/load-stages";
-import { cn } from "cn";
+import { useId } from "react";
 import { useSite } from "./site-context";
 
 /**
  * "Laden" — the full-bleed screen shown until the spawn tile is walkable.
  *
- * Three things carry the load: a stack of plates, one per data layer, that
- * settles as its layer arrives; the stage list with each layer's own progress;
- * and a hairline bar whose tick marks where the scene becomes walkable. All
- * three read the same stage states the streaming pill reads.
+ * It speaks the scene's own loading language (load-veil.ts): the city not
+ * yet there is unfired clay drawn in contour lines, and magenta shows
+ * progress. A magenta ring stands in the middle of the survey sheet and
+ * widens with the load; inside it the clay takes on the city's colours.
+ * It breathes as the scene's ring does. When the screen gives way, the
+ * scene picks up exactly there: the city in colour around you, the ring
+ * walking out over clay.
  *
- * The surface is frosted glass, not a curtain: translucent over the canvas and
- * blurring whatever is behind it. For most of the load that is the opaque
- * scrim of the shell, so it reads as a plain dark screen; once the first frame
- * is drawn, the city itself appears through it. It is then removed in a single
- * frame, with nothing animating in between — see handover.ts for why.
+ * The surface is frosted clay, not a curtain: translucent over the canvas
+ * and blurring whatever is behind it. For most of the load that is the
+ * opaque clay scrim of the shell; once the first frame is drawn, the city
+ * itself appears through it. It is then removed in a single frame, with
+ * nothing animating in between — see handover.ts for why.
  */
 
-/** The isometric the stack is drawn in; the shadow plate shares it. */
-const PLATE_TRANSFORM = "rotateX(60deg) rotateZ(45deg)";
+/** The survey sheet's frame: a 1000-unit square, cropped to the screen. */
+const SHEET = 1000;
+const CENTRE = SHEET / 2;
+/** The ring's radius (sheet units) at 0 % and at 100 %. */
+const RING_MIN = 70;
+const RING_MAX = 430;
+const ringRadius = (percent: number) =>
+  RING_MIN +
+  ((RING_MAX - RING_MIN) * Math.min(100, Math.max(0, percent))) / 100;
 
-function PlateStack({ plates }: { plates: LoadStageState[] }) {
+/** Contour lines: one smooth closed curve per level, deterministic. */
+const CONTOURS: string[] = (() => {
+  const harmonics = [
+    { k: 2, a: 0.09, p: 0.7 },
+    { k: 3, a: 0.06, p: 2.1 },
+    { k: 5, a: 0.035, p: 4.0 },
+    { k: 7, a: 0.02, p: 1.3 },
+  ];
+  const levels = 22;
+  const steps = 96;
+  return Array.from({ length: levels }, (_, level) => {
+    const base = 40 + level * 34;
+    // the terrain leans differently at each level, as a real slope does
+    const twist = level * 0.11;
+    const points = Array.from({ length: steps }, (_, i) => {
+      const t = (i / steps) * Math.PI * 2;
+      const wobble = harmonics.reduce(
+        (sum, h) => sum + h.a * Math.sin(h.k * t + h.p + twist * h.k * 0.5),
+        0
+      );
+      const r = base * (1 + wobble);
+      return `${(CENTRE + r * Math.cos(t)).toFixed(1)},${(CENTRE + r * Math.sin(t) * 0.82).toFixed(1)}`;
+    });
+    return `M${points.join("L")}Z`;
+  });
+})();
+
+/** Where the ring stands on the walkable mark (sheet units). */
+const WALKABLE_RADIUS = ringRadius(WALKABLE_PERCENT);
+
+function SurveySheet({ percent }: { percent: number }) {
+  const r = ringRadius(percent);
+  // ids are document-wide: two screens mounted at once must not share them
+  const uid = useId();
+  const colourId = `${uid}-colour`;
+  const insideId = `${uid}-inside`;
   return (
-    <div aria-hidden className="relative hidden size-105 shrink-0 lg:block">
-      <div
-        className="absolute top-45 left-20 size-65 rounded-lg bg-black/45 blur-lg"
-        style={{ transform: `${PLATE_TRANSFORM} translate(30px,30px)` }}
+    <svg
+      aria-hidden
+      className="absolute inset-0 h-full w-full"
+      preserveAspectRatio="xMidYMid slice"
+      viewBox={`0 0 ${SHEET} ${SHEET}`}
+    >
+      <defs>
+        {/* the city's warm clay to its green edge, soft */}
+        <radialGradient id={colourId} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#f3dcc0" />
+          <stop offset="55%" stopColor="#e6dcc6" />
+          <stop offset="100%" stopColor="#c7d4b0" />
+        </radialGradient>
+        <clipPath id={insideId}>
+          <circle
+            className="load-breathe transition-[r] duration-700 ease-out"
+            cx={CENTRE}
+            cy={CENTRE}
+            r={r}
+          />
+        </clipPath>
+      </defs>
+      {/* inside the ring the clay takes on colour */}
+      {/* (translucent, as the veil is: the first frame must show through) */}
+      <g clipPath={`url(#${insideId})`}>
+        <rect
+          fill={`url(#${colourId})`}
+          fillOpacity={0.8}
+          height={SHEET}
+          width={SHEET}
+        />
+      </g>
+      <g fill="none" stroke="var(--load-line)" strokeWidth={1}>
+        {CONTOURS.map((d, i) => (
+          <path
+            d={d}
+            key={d}
+            strokeOpacity={i % 5 === 4 ? 0.7 : 0.32}
+            vectorEffect="non-scaling-stroke"
+          />
+        ))}
+      </g>
+      {/* the walkable mark: a dashed circle the ring has to reach */}
+      <circle
+        cx={CENTRE}
+        cy={CENTRE}
+        fill="none"
+        r={WALKABLE_RADIUS}
+        stroke="var(--load-ink)"
+        strokeDasharray="2 6"
+        strokeOpacity={0.55}
+        vectorEffect="non-scaling-stroke"
       />
-      <div className="absolute inset-0">
-        {/* Painted back to front: the layer that landed first sits lowest. */}
-        {plates
-          .map((stage, i) => {
-            // An unfinished layer hovers above its resting place and settles
-            // as it loads — the plate IS that layer's progress bar.
-            const hover = stage.active ? (1 - stage.fraction) * 90 : 0;
-            const lift = -i * 26 - hover;
-            return (
-              <div
-                className="absolute top-45 left-20 size-65 rounded-lg border transition-[transform,opacity,background-color] duration-500"
-                key={stage.id}
-                style={{
-                  transform: `${PLATE_TRANSFORM} translate(${lift}px,${lift}px)`,
-                  opacity: stage.done
-                    ? 1
-                    : stage.active
-                      ? 0.35 + 0.55 * stage.fraction
-                      : 0.1,
-                  background: stage.pending ? "transparent" : stage.color,
-                  borderStyle: stage.pending ? "dashed" : "solid",
-                  borderColor: stage.done
-                    ? "rgb(0 0 0 / 0.08)"
-                    : "rgb(255 255 255 / 0.5)",
-                }}
-              />
-            );
-          })
-          .reverse()}
-      </div>
-    </div>
+      <text
+        fill="var(--load-ink)"
+        fontSize={13}
+        fontWeight={600}
+        letterSpacing={3}
+        textAnchor="middle"
+        x={CENTRE}
+        y={CENTRE - WALKABLE_RADIUS - 8}
+      >
+        BEGEHBAR
+      </text>
+      {/* the ring: its halo soaking outward, then the line */}
+      <circle
+        className="load-breathe transition-[r] duration-700 ease-out"
+        cx={CENTRE}
+        cy={CENTRE}
+        fill="none"
+        r={r + 6}
+        stroke="var(--load-ink)"
+        strokeOpacity={0.18}
+        strokeWidth={14}
+        vectorEffect="non-scaling-stroke"
+      />
+      <circle
+        className="load-breathe transition-[r] duration-700 ease-out"
+        cx={CENTRE}
+        cy={CENTRE}
+        fill="none"
+        r={r}
+        stroke="var(--load-ink)"
+        strokeWidth={2.5}
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
   );
 }
 
-function StageRow({ stage }: { stage: LoadStageState }) {
+/** One stage: its name, and a magenta line that fills as it loads. */
+function StageMark({ stage }: { stage: LoadStageState }) {
+  const pct = Math.round(stage.fraction * 100);
   return (
     <div
-      className="grid min-h-12 grid-cols-[18px_1fr_auto] items-center gap-3.5 border-white/10 border-b py-2 transition-opacity duration-500"
-      style={{ opacity: stage.pending ? 0.4 : 1 }}
+      className={cn(
+        "flex min-w-0 flex-1 flex-col gap-2 transition-opacity duration-500",
+        stage.pending && "opacity-45"
+      )}
     >
-      <span
-        className="size-3.5 rotate-45 scale-80 rounded-xs border"
-        style={{
-          background: stage.pending ? "transparent" : stage.color,
-          borderStyle: stage.pending ? "dashed" : "solid",
-          borderColor: stage.pending ? "rgb(255 255 255 / 0.6)" : "transparent",
-        }}
-      />
-      <span className="flex flex-col gap-1">
-        <span className="font-medium text-sm leading-none">{stage.label}</span>
-        <span className="font-mono text-[11px] leading-none opacity-55">
-          {stage.meta}
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="truncate font-medium text-xs leading-none">
+          {stage.label}
         </span>
-      </span>
-      <span className="min-w-18 text-right font-medium font-mono text-[11px] tabular-nums opacity-85">
-        {stage.stateText}
+        <span className="shrink-0 font-mono text-[10px] tabular-nums leading-none opacity-60">
+          {stage.stateText}
+        </span>
+      </div>
+      <div className="relative h-0.5 overflow-hidden rounded-full bg-[var(--load-line)]/40">
+        <div
+          className="absolute inset-y-0 left-0 rounded-full bg-[var(--load-ink)] transition-[width] duration-500 ease-out"
+          style={{ width: `${stage.done ? 100 : pct}%` }}
+        />
+      </div>
+      <span className="hidden truncate font-mono text-[10px] leading-none opacity-50 xl:block">
+        {stage.meta}
       </span>
     </div>
   );
@@ -115,107 +216,94 @@ export function LoadScreen({
   stages: LoadStageState[];
 }) {
   const site = useSite();
-  const plates = stages.filter((stage) => stage.plate);
   const walkable = percent >= WALKABLE_PERCENT;
   return (
     <div
       aria-hidden={handedOver}
       className={cn(
-        "absolute inset-0 z-30",
-        // Once the city is behind the glass the screen is a still image: the
-        // plates, the rows and the bar stop mid-settle rather than animating
-        // through the scene's first frames, which is exactly the competition
-        // the handover was redesigned to remove.
-        handedOver && "pointer-events-none **:transition-none"
+        "absolute inset-0 z-30 text-[var(--load-text)]",
+        // Once the city is behind the glass the screen is a still image:
+        // nothing animates through the scene's first frames, which is
+        // exactly the competition the handover was redesigned to remove.
+        handedOver && "pointer-events-none **:animate-none **:transition-none"
       )}
     >
       {/* Frosted, not opaque: the canvas below shows through as soon as it has
           anything to show. `backdrop-filter` is a compositor pass, so this
           costs the main thread nothing while the scene boots. */}
-      <div className="absolute inset-0 bg-[image:var(--hud-veil)] backdrop-blur-md" />
+      <div className="absolute inset-0 bg-[image:var(--load-veil)] backdrop-blur-md" />
 
       <div
-        className="absolute inset-0 flex flex-col px-8 py-10 text-hud-foreground sm:px-12 lg:px-18 lg:py-16"
-        // (inline: it must win over every breakpoint's padding)
+        className="absolute inset-0"
+        // (inline: the sidebar width is a runtime CSS variable)
         style={
           besidePanel
-            ? { paddingRight: "calc(var(--sidebar-width) + 2.5rem)" }
+            ? { right: "calc(var(--sidebar-width) + 1rem)" }
             : undefined
         }
       >
-        <div className="flex flex-col gap-1.5">
-          <span className="font-medium text-[11px] uppercase leading-none tracking-widest opacity-60">
-            City Walk
-          </span>
-          <span className="font-semibold text-lg leading-tight sm:text-xl">
-            {site.label}
-          </span>
-          {destination && (
-            <span className="text-sm leading-tight opacity-75">
-              Start: {destination}
-            </span>
-          )}
-        </div>
+        <SurveySheet percent={percent} />
 
-        <div className="flex flex-1 items-center gap-10 xl:gap-20">
-          <PlateStack plates={plates} />
-          <div className="flex w-full max-w-140 flex-col gap-6">
-            <div className="flex flex-col gap-2">
-              {/* The one live region: the headline changes six times in a
-                    load, while the percent below it changes once per chunk —
-                    announcing the whole screen would talk over everything. */}
-              <output
-                aria-live="polite"
-                className="block text-pretty font-medium text-2xl leading-tight tracking-tight sm:text-3xl"
-              >
-                {loadHeadline(stages)}
-              </output>
-              <p className="text-sm leading-relaxed opacity-65">
-                Die erste Kachel zuerst — sobald Gelände, Gebäude und Licht
-                stehen, kannst du losgehen. Der Rest kommt im Hintergrund dazu.
-              </p>
-            </div>
-            <div className="flex flex-col">
-              {stages.map((stage) => (
-                <div key={stage.id}>
-                  {stage.showsDividerBefore && (
-                    <div className="flex justify-end py-1.5">
-                      <span className="font-medium text-[10px] uppercase leading-none tracking-widest opacity-45">
-                        ab hier begehbar
-                      </span>
-                    </div>
+        <div className="absolute inset-0 flex flex-col px-6 py-8 sm:px-10 lg:px-14 lg:py-12">
+          <div className="flex flex-col gap-1.5">
+            <span className="font-semibold text-[11px] uppercase leading-none tracking-[0.25em] text-[var(--load-ink)]">
+              City Walk
+            </span>
+            <span className="font-semibold text-2xl leading-tight tracking-tight sm:text-3xl">
+              {site.label}
+            </span>
+            {destination && (
+              <span className="text-sm leading-tight opacity-75">
+                Start: {destination}
+              </span>
+            )}
+          </div>
+
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+            <span className="font-mono font-semibold text-5xl tabular-nums leading-none tracking-tight sm:text-6xl">
+              {Math.round(percent)}
+              <span className="text-[0.5em] opacity-60"> %</span>
+            </span>
+            {/* The one live region: the headline changes six times in a
+                load, while the percent changes once per chunk — announcing
+                the whole screen would talk over everything. */}
+            <output
+              aria-live="polite"
+              className="block max-w-72 text-balance font-medium text-base leading-snug"
+            >
+              {loadHeadline(stages)}
+            </output>
+            <span className="font-medium text-[10px] uppercase leading-none tracking-[0.2em] opacity-60">
+              {walkable ? "Begehbar · Rest streamt" : "Bis zum ersten Bild"}
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <p className="max-w-120 text-xs leading-relaxed opacity-70">
+              Die Stadt färbt sich von dir aus ein. Sobald Gebäude, Gelände und
+              Licht stehen, kannst du losgehen — der magentafarbene Ring zeigt
+              dann im Bild, wie weit sie schon fertig ist.
+            </p>
+            <div className="flex gap-3 sm:gap-5">
+              {stages.map((stage, i) => (
+                <div
+                  className={cn(
+                    "flex min-w-0 flex-1 gap-3 sm:gap-5",
+                    // a phone keeps the stages up to the first frame
+                    i >= 3 && "max-sm:hidden"
                   )}
-                  <StageRow stage={stage} />
+                  key={stage.id}
+                >
+                  {stage.showsDividerBefore && (
+                    <span
+                      className="w-px shrink-0 self-stretch bg-[var(--load-ink)]"
+                      title="ab hier begehbar"
+                    />
+                  )}
+                  <StageMark stage={stage} />
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-3">
-          <div className="flex justify-between text-[11px] leading-none opacity-60">
-            <span>
-              {walkable ? "Begehbar · Rest streamt" : "Bis zum ersten Bild"}
-            </span>
-            <span className="font-mono tabular-nums">
-              {Math.round(percent)} %
-            </span>
-          </div>
-          <div className="relative h-0.5 bg-white/10">
-            <div
-              className="absolute inset-y-0 left-0 bg-hud-foreground transition-[width] duration-500 ease-out"
-              style={{ width: `${percent}%` }}
-            />
-            <div
-              className="-top-1 absolute h-2.5 w-px bg-white/50"
-              style={{ left: `${WALKABLE_PERCENT}%` }}
-            />
-            <span
-              className="absolute top-2.5 -translate-x-1/2 whitespace-nowrap font-medium text-[10px] uppercase leading-none tracking-widest opacity-55"
-              style={{ left: `${WALKABLE_PERCENT}%` }}
-            >
-              begehbar
-            </span>
           </div>
         </div>
       </div>

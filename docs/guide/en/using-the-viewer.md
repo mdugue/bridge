@@ -33,9 +33,12 @@ landmarks, the largest area.
 
 ## Loading
 
-The loading screen lists five stages and a bar. The first three
-(buildings, terrain, light) end at the mark labelled *begehbar*
-("walkable"): from that moment the overlay dissolves and you can move,
+The loading screen is a sheet of clay drawn in contour lines: a magenta
+ring in the middle widens as the city loads, the clay inside it takes on
+colour, and a dashed line marks where the scene becomes walkable. Below
+it are five stages (three on a phone). The first three
+(buildings, terrain, light) end at a thin magenta divider, the point
+where the scene becomes walkable (*begehbar*): from that moment the overlay dissolves and you can move,
 while the remaining two (the surroundings in view, then trees, lamps,
 rails and walls) stream in behind a small pill at the top of the screen.
 *Alles geladen* means everything in your view is in – not the whole city.
