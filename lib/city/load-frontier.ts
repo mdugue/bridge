@@ -57,15 +57,25 @@ export function loadFrontier(
  * `COARSE_TERRAIN_ERROR`), the farthest the details reach.
  */
 export const BOOT_REACH_M = 2600;
+/** Where the boot's ring starts (m): just beyond the walker's feet. */
+export const BOOT_NEAR_M = 40;
 
 /**
- * The boot's ring by progress: until the first load is through, the
- * ring stands at least `progress` (0..1, what the HUD's last two stages
- * report) of the way to `BOOT_REACH_M`. A site tile is 2 km wide, and the
- * one under the camera stays pending until its own details are built —
- * by the frontier alone the whole view would stay clay until then. The
- * stream loads nearer first, so progress walks outward much as the
- * frontier would at a finer grain. Null (nothing pending) stays null.
+ * The boot's ring by progress: until the first load is through, the ring
+ * stands where `progress` (0..1, what the HUD's last two stages report)
+ * says, from `BOOT_NEAR_M` out to `BOOT_REACH_M`. A site tile is 2 km wide,
+ * and the one under the camera stays pending until its own details are
+ * built, so the frontier alone would hold the whole view in clay until
+ * then — and, once that tile is in, jump past the horizon at once while
+ * the far tiles still come. The stream loads nearer first, so progress
+ * walks outward much as the frontier would at a finer grain.
+ *
+ * It walks in distance's logarithm, not in metres: how far below the
+ * horizon a ring on the ground stands goes as height over distance, so
+ * equal steps of progress move it by about equal steps on the screen.
+ * In metres it would cross the near half of the view in the first tenth
+ * of the load and spend the rest a hair's breadth under the horizon.
+ * Null (nothing pending) stays null: the sweep takes over.
  */
 export function bootFrontier(
   frontier: number | null,
@@ -75,7 +85,7 @@ export function bootFrontier(
     return null;
   }
   const p = Math.min(1, Math.max(0, progress));
-  return Math.max(frontier, p * BOOT_REACH_M);
+  return BOOT_NEAR_M * (BOOT_REACH_M / BOOT_NEAR_M) ** p;
 }
 
 /** A pending spell shorter than this (s) never brings the veil in. */

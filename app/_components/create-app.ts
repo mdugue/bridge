@@ -3062,9 +3062,9 @@ async function bootApp(
       at.x + offset.cx,
       offset.cy - at.z
     );
-    // Until the first load is through, the ring also walks out with the
-    // last two stages' progress: the tile underfoot would hold it at the
-    // feet until its own details are built.
+    // Until the first load is through, the ring walks out with the last
+    // two stages' progress instead: the tile underfoot would hold it at
+    // the feet until its own details are built, then let it jump.
     const frontier = bootLoaded
       ? truth
       : bootFrontier(
