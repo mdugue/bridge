@@ -196,7 +196,7 @@ export interface MonumentCollection {
   }[];
 }
 
-/** A point of a Point or the first vertex's ring centre of a Polygon. */
+/** A point of a Point, or the mean of a Polygon's outer ring's corners. */
 function anchorOf(geometry: {
   coordinates: unknown;
   type: string;
@@ -205,7 +205,13 @@ function anchorOf(geometry: {
     return geometry.coordinates as [number, number];
   }
   if (geometry.type === "Polygon") {
-    const ring = (geometry.coordinates as [number, number][][])[0] ?? [];
+    const closed = (geometry.coordinates as [number, number][][])[0] ?? [];
+    // GeoJSON closes a ring on its first vertex: counted once, not twice
+    const [first, last] = [closed[0], closed.at(-1)];
+    const ring =
+      closed.length > 1 && first[0] === last?.[0] && first[1] === last[1]
+        ? closed.slice(0, -1)
+        : closed;
     if (ring.length === 0) {
       return undefined;
     }
@@ -220,15 +226,15 @@ function anchorOf(geometry: {
 export function monumentsOf(
   file: MonumentCollection | undefined
 ): WissenMonument[] {
-  const out: WissenMonument[] = [];
+  const found: (Omit<WissenMonument, "id"> & { base: string })[] = [];
   for (const f of file?.features ?? []) {
     const { name, kind, material, wikidata } = f.properties;
     const at = anchorOf(f.geometry);
     if (!(name && at)) {
       continue;
     }
-    out.push({
-      id: `m${Math.round(at[0])}_${Math.round(at[1])}`,
+    found.push({
+      base: `m${Math.round(at[0])}_${Math.round(at[1])}`,
       name,
       kind: kind ?? "",
       x: round1(at[0]),
@@ -237,6 +243,26 @@ export function monumentsOf(
       ...(wikidata ? { wd: wikidata } : {}),
     });
   }
+  // by the metre; monuments in the same metre (a pair of plaques) take a
+  // suffix by what they are, not by the file's order, so a re-bake keeps
+  // them (plain code-unit order: the same on every machine)
+  const key = (m: (typeof found)[number]) =>
+    [
+      m.base,
+      m.name,
+      m.kind,
+      m.material ?? "",
+      m.wd ?? "",
+      String(m.x),
+      String(m.y),
+    ].join("\u0000");
+  found.sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
+  const out: WissenMonument[] = [];
+  let nth = 0;
+  found.forEach(({ base, ...m }, k) => {
+    nth = found[k - 1]?.base === base ? nth + 1 : 1;
+    out.push({ id: nth === 1 ? base : `${base}_${nth}`, ...m });
+  });
   return out.sort((a, b) => a.id.localeCompare(b.id));
 }
 

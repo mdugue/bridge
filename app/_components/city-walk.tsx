@@ -86,11 +86,6 @@ import {
 } from "./data-layers-panel";
 import { SceneSidebar } from "./scene-sidebar";
 import { WalkCard } from "./walk-player";
-/** A walk's glides take this much longer than a jump to a place: the
- *  stop's story starts on the way. */
-const WALK_PACE = 2.2;
-/** The visitor's day, read when a walk's stop is shown (not in a render). */
-const today = () => new Date();
 import { SidebarPace } from "./sidebar-pace";
 import {
   afterTask,
@@ -108,6 +103,12 @@ import { INITIAL_MINUTES, useSceneTime } from "./scene-time";
 import { useSite } from "./site-context";
 import { VirtualJoystick } from "./virtual-joystick";
 import { missingPrerequisite } from "./gpu-support";
+
+/** A walk's glides take this much longer than a jump to a place: the
+ *  stop's story starts on the way. */
+const WALK_PACE = 2.2;
+/** The visitor's day, read when a walk's stop is shown (not in a render). */
+const today = () => new Date();
 
 interface Props {
   /** The render budget the page was opened with (see scene-profile.ts) */
@@ -583,10 +584,13 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     })
   );
   const lookValues = useSyncExternalStore(look.subscribe, look.get, look.get);
+  /** the time and style before a walk, put back when it ends; while it
+   *  runs, its stops' styles are not the visitor's to remember */
+  const beforeWalk = useRef<{ at: Date; style: RenderStyle } | null>(null);
   useEffect(() => {
     let remembered = look.get().style;
     return look.subscribe((values) => {
-      if (values.style !== remembered) {
+      if (beforeWalk.current === null && values.style !== remembered) {
         remembered = values.style;
         writeStoredStyle(values.style);
       }
@@ -679,7 +683,9 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
   const [walking, setWalking] = useState<{ index: number; walk: Walk } | null>(
     null
   );
-  const beforeWalk = useRef<{ at: Date; style: RenderStyle } | null>(null);
+  /** the walk's own glide while it flies: its flight tells when it ends,
+   *  is cancelled or gives way to another (`onProgress` 1) */
+  const walkGlide = useRef<object | null>(null);
   /**
    * Shows a walk's stop: a slow glide to its view (the card can be read,
    * or heard, on the way) — a jump only out of Modell, which no glide
@@ -698,20 +704,35 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     // the sun travels with the camera: no jump from one hour to the next
     const hour = time.glideTo(stopDate(stop, today()));
     if (h.getViewMode() === "model") {
+      walkGlide.current = null;
       h.applyCameraState(stopCamera(stop, h.offset));
       hour(1);
     } else {
       // a slow glide the visitor looks about in while the text is read:
       // a drag on the way turns the view, it does not stop the walk
+      const mine = {};
+      walkGlide.current = mine;
       h.flyToViewpoint(stopView(stop), {
+        ground: stop.ground,
         lookAround: true,
-        onProgress: hour,
+        onProgress: (t) => {
+          hour(t);
+          if (t >= 1 && walkGlide.current === mine) {
+            walkGlide.current = null;
+          }
+        },
         pace: WALK_PACE,
       });
     }
     look.set({ style: stop.style ?? "pastel" });
   };
   const endWalk = () => {
+    // ended on the way: the camera stays where it is, not flying on alone
+    // (only the walk's own glide: one to a place picked since goes on)
+    if (walkGlide.current) {
+      walkGlide.current = null;
+      handleRef.current?.stopGlide();
+    }
     setWalking(null);
     if (beforeWalk.current) {
       time.setInstant(beforeWalk.current.at);

@@ -34,11 +34,15 @@ export function splitDate(date: Date): { day: Date; minutes: number } {
  * The minute of day a glide of the hour shows at share `t` (0–1) of its
  * way: eased as the camera's glide is (smootherstep, camera-flight.ts),
  * so light and camera arrive together; whole minutes, as the slider.
+ * It takes the shorter way round the clock: 22:00 to 06:00 runs through
+ * the night, not back through the afternoon.
  */
 export function tweenMinutes(from: number, to: number, t: number): number {
   const k = Math.min(Math.max(t, 0), 1);
   const e = k * k * k * (k * (k * 6 - 15) + 10);
-  return Math.round(from + (to - from) * e);
+  const day = 24 * 60;
+  const way = ((((to - from) % day) + day * 1.5) % day) - day / 2;
+  return ((Math.round(from + way * e) % day) + day) % day;
 }
 
 /** How often a glide of the hour shows its minute in the HUD (ms): the

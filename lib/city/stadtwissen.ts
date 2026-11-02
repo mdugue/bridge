@@ -51,7 +51,8 @@ export interface WissenBuilding {
 
 /** A named monument, fountain, column or stone (Basis-DLM, OSM). */
 export interface WissenMonument {
-  /** `m<x>_<y>`: its position to the metre, the key a walk cites */
+  /** `m<x>_<y>`: its position to the metre, the key a walk cites; a
+   *  second in the same metre `m<x>_<y>_2`, by name */
   id: string;
   /** statue, fountain, column, stone (monuments.py) */
   kind: string;

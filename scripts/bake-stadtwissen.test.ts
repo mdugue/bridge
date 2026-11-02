@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
-import { stadtwissenIndex, stadtwissenTile } from "./bake-stadtwissen";
+import {
+  monumentsOf,
+  stadtwissenIndex,
+  stadtwissenTile,
+} from "./bake-stadtwissen";
 
 const city = {
   CityObjects: {
@@ -155,4 +159,35 @@ test("the index lists each landmark once, most notable first, with its facts", (
     ["Q2", "a", "Zwei"],
     ["Q1", "a", undefined],
   ]);
+});
+
+test("monuments in one metre keep their ids by name, whatever the order", () => {
+  const plaque = (name: string) => ({
+    geometry: { type: "Point", coordinates: [411000.2, 5656000.4] },
+    properties: { name, kind: "stone" },
+  });
+  const square = {
+    geometry: {
+      type: "Polygon",
+      // closed on its first corner: the centre, not pulled towards it
+      coordinates: [
+        [
+          [0, 0],
+          [10, 0],
+          [10, 10],
+          [0, 10],
+          [0, 0],
+        ],
+      ],
+    },
+    properties: { name: "Sockel", kind: "column" },
+  };
+  const ids = (names: string[]) =>
+    monumentsOf({ features: names.map(plaque) }).map((m) => [m.id, m.name]);
+  expect(ids(["Bach", "Arndt"])).toEqual([
+    ["m411000_5656000", "Arndt"],
+    ["m411000_5656000_2", "Bach"],
+  ]);
+  expect(ids(["Arndt", "Bach"])).toEqual(ids(["Bach", "Arndt"]));
+  expect(monumentsOf({ features: [square] })[0].id).toBe("m5_5");
 });

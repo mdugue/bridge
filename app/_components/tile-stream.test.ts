@@ -453,6 +453,13 @@ function abortableLoad() {
  *  the microtasks of the call that showed it. */
 const nextTask = () => new Promise((resolve) => setTimeout(resolve, 5));
 
+/** Waits until `ready` holds, a timer at a time (at most ~2 s). */
+async function until(ready: () => boolean): Promise<void> {
+  for (let i = 0; i < 400 && !ready(); i++) {
+    await nextTask();
+  }
+}
+
 test("a load the renderer aborts after its compile is freed by the plugin (the renderer frees only its textures)", async () => {
   const { freed, plugin, scene } = abortableLoad();
   const tile: { engineData?: { scene?: Object3D } } = {};
@@ -789,6 +796,9 @@ test("the first switch-on builds and compiles the bodies once; off keeps them, t
   slot.attach(host);
   const first = slot.show();
   const second = slot.show();
+  // the build is sliced into turns: on a loaded runner (coverage, parallel
+  // files) it can outlast one short timer
+  await until(() => compiled.length > 0);
   await nextTask();
   // hung hidden while it compiles, once
   expect(compiled).toHaveLength(1);

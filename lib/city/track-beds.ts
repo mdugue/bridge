@@ -47,8 +47,13 @@ export interface Bed {
 
 /** A cut this far under the ground (m) is buried: the line runs under a
  *  lid (lib/city/levels.ts `coverCuts`), the rail layer does not draw it
- *  and its bed opens no trench (`Bed.shallow`). */
-export const BURIED_M = 0.5;
+ *  and its bed opens no trench (`Bed.shallow`). A lid needs room for a
+ *  train under it; with less ground over the profile the cut is open,
+ *  whatever the source's `layer`, and its trench is burned down to the
+ *  track: a drawn track never sinks into the ground. At 0.5 m until
+ *  2026-11-01: the Standseilbahn's open cut at its top (`layer` −1, 0.6–1
+ *  m under the DGM) and the cuts before its tunnel portals vanished. */
+export const BURIED_M = 4.5;
 
 /** How wide a bed is and how far under the profile its ground lies. */
 export type BedShape = Pick<Bed, "half" | "drop">;

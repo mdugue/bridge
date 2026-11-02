@@ -161,6 +161,8 @@ export interface ModelRig {
   readonly camera: ModelCamera;
   /** Modell owns the frame: the dolly zooms and the parallel view. */
   owns: () => boolean;
+  /** in Modell or zooming into it — not on the way out */
+  staying: () => boolean;
   /** the parallel camera draws (not in a dolly zoom) */
   parallel: () => boolean;
   /** the camera the frame is drawn with */
@@ -549,6 +551,7 @@ export function createModelRig(opts: ModelRigOptions): ModelRig {
   return {
     camera,
     owns: () => phase.kind !== "off",
+    staying: () => phase.kind === "model" || phase.kind === "entering",
     parallel: () => phase.kind === "model",
     current: () => (phase.kind === "model" ? camera : opts.camera),
     view: () => (phase.kind === "model" ? view : null),
