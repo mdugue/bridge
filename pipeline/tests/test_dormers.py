@@ -407,8 +407,8 @@ def test_the_window_axes_below_set_the_slots():
 
 def test_dormers_snap_to_their_slots_and_two_on_one_are_one():
     u = np.asarray([0.2, 3.1, 3.6, 6.4, 7.6])
-    moved, drop = dormers.snap(u, 3.0, 0.0)
-    assert moved.tolist()[:2] == [0.0, 3.0] and drop == [2]
+    moved, drop, on = dormers.snap(u, 3.0, 0.0)
+    assert moved.tolist()[:2] == [0.0, 3.0] and drop == [2] and on == [0, 1, 3]
     assert moved[3] == 6.0
     # one well off every slot stays put
     assert moved[4] == 7.6
@@ -461,3 +461,35 @@ def test_the_measured_walls_under_a_row():
     # one facing away, or behind the row, is not under it
     assert dormers.wall_axes([wall | {"n": [0.0, 1.0]}], 0.0, -1.0, u, v) is None
     assert dormers.wall_axes([wall], 0.0, -1.0, u, v + 3.0) is None
+
+
+def test_every_second_axis_from_either_of_its_axes():
+    # dormers over the 2nd, 4th, 6th … of 2.7 m axes measured at 0
+    u = np.asarray([2.7, 8.1, 13.5, 18.9])
+    p, at, _, whence = dormers.rhythm(u, (2.7, 0.0))
+    assert whence == "windows" and p == 5.4 and abs(at - 2.7) < 1e-9
+
+
+def test_a_wall_at_an_angle_spaces_its_axes_closer_across_the_row():
+    t = math.radians(15)
+    wall = {
+        "a": [0.0, -2.0],
+        "b": [20 * math.cos(t), -2.0 - 20 * math.sin(t)],
+        "n": [-math.sin(t), -math.cos(t)],
+        "model": {"axis": 3.5, "phase": 1.0},
+    }
+    spacing, at = dormers.wall_axes([wall], 0.0, -1.0, np.asarray([-1.0, -10.0]), np.zeros(2))
+    assert abs(spacing - 3.5 * math.cos(t)) < 1e-9 and abs(at + math.cos(t)) < 1e-9
+
+
+def test_a_dormer_off_the_rows_slots_or_wider_than_its_kind_stays_as_it_was():
+    found = row_of([0.0, 3.0, 6.0, 9.0, 12.0])
+    found.append(row_of([4.4], jitter=[0.3], w=1.0)[0])  # a stair head between two
+    got = dormers.in_rows(found, [1] * 6, {}, flat_roof)
+    assert got[5]["x"] == 4.4 and got[5]["y"] == -0.3 and got[5]["w"] == 1.0
+    # a Zwerchhaus between two small dormers keeps its width
+    pair = row_of([0.0, 5.0, 10.0], w=1.5)
+    pair[1] |= {"w": 6.0}
+    pair[2] |= {"x": 11.5}
+    got = dormers.in_rows(pair, [1] * 3, {}, flat_roof)
+    assert sorted(d["w"] for d in got) == [1.5, 1.5, 6.0]

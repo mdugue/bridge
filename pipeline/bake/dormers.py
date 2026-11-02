@@ -233,7 +233,13 @@ MERGE_M = 0.5
 # A dormer more than SNAP_SHARE of the spacing off its slot is something
 # else on the roof (a skylight, a stair head) and stays where it stands.
 SNAP_SHARE = 0.3
-# A dormer is at most WIDTH_SHARE of its row's spacing wide; one whose box
+# A row with no run is set straight in one shape only where its dormers'
+# widths lie within ALIKE of each other; in a run one wider than WIDE
+# times the run's median (a Zwerchhaus; two dormers DOM1 reads as one blob
+# are narrower) stays as it was.
+ALIKE = 1.5
+WIDE = 2.5
+# A dormer is at most WIDTH_SHARE of its run's spacing wide; one whose box
 # overlaps a longer row's dormer by OVERLAP_SHARE of its width is that one.
 # (down the slope within their mean depth and OVERLAP_DOWN_M).
 OVERLAP_SHARE = 0.2
@@ -589,11 +595,8 @@ class Roofs:
         of = self.host(x, y)
         if of is None or self.groups[of] != self.groups[d["of"]]:
             return None
-        f = self.s.field
-        r, c = int((f.ymax - y) / f.res), int((x - f.xmin) / f.res)
-        if not (0 <= r < f.rows and 0 <= c < f.cols and np.isfinite(self.s.roof[r, c])):
-            return None
-        return float(self.s.roof[r, c]), of, self.ridge(of)
+        z = lod2_at(self.s, x, y)
+        return None if z is None else (z, of, self.ridge(of))
 
     def on_seam(self, sl, m: np.ndarray) -> bool:
         return float(self.seam[sl][m].mean()) >= SEAM_SHARE
@@ -776,7 +779,8 @@ def rhythm(u: np.ndarray, axes=None) -> tuple[float, float, float, str] | None:
     of their median gap (half the spacing, or one over the whole run,
     fits any few as well); it is the
     measured window axes below (`axes`: spacing and place, the place None
-    where unmeasured) every AXES_EVERY'th where they fit RHYTHM_MIN
+    where unmeasured) every AXES_EVERY'th, from any of its axes, where
+    they fit RHYTHM_MIN
     (`resultant`), else the best spacing of their own where that does."""
     if len(u) < ROW_MIN:
         return None
@@ -788,7 +792,11 @@ def rhythm(u: np.ndarray, axes=None) -> tuple[float, float, float, str] | None:
     lo, hi = max(RHYTHM_M[0], RHYTHM_SHORT * gap), min(RHYTHM_M[1], RHYTHM_GAP * gap)
     if axes is not None:
         spacing, at = axes
-        fits = [(*resultant(u, k * spacing, at), k * spacing) for k in AXES_EVERY]
+        fits = [
+            (*resultant(u, k * spacing, None if at is None else at + j * spacing), k * spacing)
+            for k in AXES_EVERY
+            for j in range(k if at is not None else 1)
+        ]
         fits = [f for f in fits if lo <= f[2] <= hi and f[0] >= RHYTHM_MIN]
         if fits:
             score, place, p = max(fits)
@@ -796,12 +804,12 @@ def rhythm(u: np.ndarray, axes=None) -> tuple[float, float, float, str] | None:
     ps = np.arange(lo, hi + 1e-9, RHYTHM_STEP_M)
     if not len(ps):
         return None
-    scores = np.asarray([resultant(u, p)[0] for p in ps])
-    best = int(np.argmax(scores))
-    if scores[best] < RHYTHM_MIN:
+    z = np.exp(2j * math.pi * u[:, None] / ps[None, :]).mean(axis=0)
+    best = int(np.argmax(np.abs(z)))
+    if abs(z[best]) < RHYTHM_MIN:
         return None
-    score, place = resultant(u, float(ps[best]))
-    return float(ps[best]), place, score, "own"
+    p = float(ps[best])
+    return p, float(np.angle(z[best]) / (2 * math.pi) * p) % p, float(abs(z[best])), "own"
 
 
 def on_slot(u: float, fit: tuple[float, float, float, str]) -> bool:
@@ -817,17 +825,22 @@ def runs(u: np.ndarray, axes=None) -> list[tuple[np.ndarray, tuple[float, float,
     it: each as long as the next dormer stands on one of its slots
     (`on_slot`) and they keep one, the next starting where it breaks off
     (a façade's risalit has its own axes): each run's indices into `u`
-    and its rhythm. Dormers in no run of ROW_MIN are in none."""
+    and its rhythm. `axes(idx)` gives the measured window axes under the
+    dormers `idx` (`wall_axes`). Dormers in no run of ROW_MIN are in none."""
     order = np.argsort(u, kind="stable")
     out, start, n = [], 0, len(u)
+
+    def fit_of(idx: np.ndarray):
+        return rhythm(u[idx], axes(idx) if axes is not None else None)
+
     while start + ROW_MIN <= n:
         end = start + ROW_MIN
-        fit = rhythm(u[order[start:end]], axes)
+        fit = fit_of(order[start:end])
         if fit is None:
             start += 1
             continue
         while end < n and on_slot(float(u[order[end]]), fit):
-            longer = rhythm(u[order[start : end + 1]], axes)
+            longer = fit_of(order[start : end + 1])
             if longer is None:
                 break
             fit, end = longer, end + 1
@@ -841,8 +854,8 @@ def wall_axes(walls: list[dict], ax: float, ay: float, u: np.ndarray, v: np.ndar
     dormers at `u`, `v`) as (spacing, an axis' place across the row): of
     the walls with a measured spacing facing the row's way within
     ROW_TURN_DEG and up to WALL_REACH_M in front of it, the one under most
-    of its run; the axes' place where the photos measured it (`phase`),
-    else None."""
+    of them, its spacing and phase seen across the row; the axes' place
+    where the photos measured it (`phase`), else None."""
     turn = math.cos(math.radians(ROW_TURN_DEG))
     best, under = None, 0.0
     for w in walls:
@@ -851,6 +864,11 @@ def wall_axes(walls: list[dict], ax: float, ay: float, u: np.ndarray, v: np.ndar
             continue
         (x0, y0), (x1, y1) = w["a"], w["b"]
         ua, ub = x0 * ay - y0 * ax, x1 * ay - y1 * ax
+        length = math.hypot(x1 - x0, y1 - y0)
+        if length <= 0:
+            continue
+        # metres along the wall to metres across the row
+        scale = abs(ub - ua) / length
         front = (x0 * ax + y0 * ay + x1 * ax + y1 * ay) / 2 - float(np.median(v))
         if not 0 < front <= WALL_REACH_M:
             continue
@@ -859,13 +877,13 @@ def wall_axes(walls: list[dict], ax: float, ay: float, u: np.ndarray, v: np.ndar
         if share > under:
             at = None
             if "phase" in m and ub != ua:
-                at = ua + math.copysign(m["phase"], ub - ua)
-            best, under = (float(m["axis"]), at), share
+                at = ua + math.copysign(m["phase"] * scale, ub - ua)
+            best, under = (float(m["axis"]) * scale, at), share
     return best
 
 
 def unify(found: list[dict], row: list[int], p: float | None) -> None:
-    """A row's dormers in one shape: the shape most of them have (a shed's
+    """A run's dormers (or a row's, `row`) in one shape: the shape most of them have (a shed's
     fall or a flat top), its median width (at most WIDTH_SHARE of the
     spacing `p`), depth and height over the roof."""
     ds = [found[i] for i in row]
@@ -884,14 +902,15 @@ def unify(found: list[dict], row: list[int], p: float | None) -> None:
             d["tf"] = round(tf, 1)
 
 
-def snap(u: np.ndarray, p: float, at: float) -> tuple[np.ndarray, list[int]]:
-    """A row's dormers on its slots (`p` apart, one at `at`): each one's
-    new place across the row, and which stand on a slot another nearer
-    one takes (DOM1's cells part one dormer into two blobs, or a dormer
-    from its cheek). One more than SNAP_SHARE of `p` off stays put."""
+def snap(u: np.ndarray, p: float, at: float) -> tuple[np.ndarray, list[int], list[int]]:
+    """A run's dormers on its slots (`p` apart, one at `at`): each one's
+    new place across the row, which stand on a slot another nearer one
+    takes (DOM1's cells part one dormer into two blobs, or a dormer from
+    its cheek), and which are set on a slot. One more than SNAP_SHARE of
+    `p` off stays put."""
     k = np.rint((u - at) / p)
     off = np.abs(u - (at + k * p))
-    out, taken, drop = u.copy(), set(), []
+    out, taken, drop, on = u.copy(), set(), [], []
     for n in np.argsort(off, kind="stable"):
         if off[n] > SNAP_SHARE * p:
             continue
@@ -900,61 +919,100 @@ def snap(u: np.ndarray, p: float, at: float) -> tuple[np.ndarray, list[int]]:
             continue
         taken.add(k[n])
         out[n] = at + k[n] * p
-    return out, drop
+        on.append(int(n))
+    return out, drop, sorted(on)
+
+
+def alike(found: list[dict], row: list[int]) -> bool:
+    """Whether a row's dormers are of one size (widths within ALIKE of
+    each other): a pair or a few of one kind, not a wide dormer (a
+    Zwerchhaus) between small ones."""
+    ws = [found[i]["w"] for i in row]
+    return max(ws) <= ALIKE * min(ws)
 
 
 def in_rows(found: list[dict], building: list[int], walls: dict, place) -> list[dict]:
-    """`found` with its dormers set in rows: each row (`rows`) straight
-    down the slope at its median depth, each of its runs (`runs`: over
-    the window axes of the wall below where the street photos measured
-    them, else in their own rhythm) on its slots (`snap`), the row in one
-    shape (`unify`). `walls` are the measured walls per building,
+    """`found` with its dormers set in rows (`rows`): each run of a row
+    (`runs`: over the window axes of the wall below where the street
+    photos measured them, else in their own rhythm) on its slots (`snap`),
+    straight down the slope at the row's median depth and in one shape
+    (`unify`); a row with no run likewise where its dormers are alike
+    (`alike`). A dormer off its run's slots, more than ROW_DEPTH_M or
+    ROW_TURN_DEG off the row (a chain of rows drifts) or wider than WIDE
+    times its run's median (a Zwerchhaus) is something else and stays as
+    it was. `walls` are the measured walls per building,
     `place(x, y, d)` the roof at a dormer's new centre: (height, host, the
     host's ridge), or None where it would leave its building's roof (it
     then stays where it stood). No dormer is added where a slot is empty:
     none is drawn where none was measured."""
     drop: set[int] = set()
     lines = sorted(rows(found, building), key=len, reverse=True)
+    turn = math.cos(math.radians(ROW_TURN_DEG))
     for row in lines:
         if len(row) < 2:
             continue
         ax, ay, u, v = row_frame(found, row)
-        axes = wall_axes(walls.get(building[row[0]], []), ax, ay, u, v)
-        at, gone, spacing = u.copy(), set(), []
-        for idx, (p, slot, _, _) in runs(u, axes):
-            moved, dropped = snap(u[idx], p, slot)
-            at[idx] = moved
-            gone.update(int(idx[k]) for k in dropped)
-            spacing.append(p)
-        drop.update(row[n] for n in gone)
         depth = float(np.median(v))
-        kept = [n for n in range(len(row)) if n not in gone]
-        unify(found, [row[n] for n in kept], min(spacing) if spacing else None)
-        for n in kept:
-            d = found[row[n]]
-            x, y = at[n] * ay + depth * ax, -at[n] * ax + depth * ay
-            lift = d.pop("lift")
-            roof = place(x, y, d)
-            if roof is not None:
-                z, d["of"], ridge_z = roof
-                d |= {"x": x, "y": y, "ax": round(ax, 4), "ay": round(ay, 4), "z": round(z, 2)}
-                d["top"] = round(min(z + lift, ridge_z + RIDGE_SLACK_M), 2)
-    drop |= overlapping(found, lines, drop)
+        measured = walls.get(building[row[0]], [])
+
+        def axes(idx, ax=ax, ay=ay, u=u, v=v, measured=measured):
+            return wall_axes(measured, ax, ay, u[idx], v[idx])
+
+        at, groups = u.copy(), []
+        for idx, (p, slot, _, _) in runs(u, axes):
+            moved, dropped, on = snap(u[idx], p, slot)
+            at[idx] = moved
+            drop.update(row[int(idx[k])] for k in dropped)
+            groups.append(([int(idx[k]) for k in on], p))
+        if not groups and alike(found, row):
+            groups.append((list(range(len(row))), None))
+        for members, p in groups:
+            members = [
+                n
+                for n in members
+                if abs(v[n] - depth) <= ROW_DEPTH_M
+                and found[row[n]]["ax"] * ax + found[row[n]]["ay"] * ay >= turn
+            ]
+            if members:
+                wide = WIDE * float(np.median([found[row[n]]["w"] for n in members]))
+                members = [n for n in members if found[row[n]]["w"] <= wide]
+                unify(found, [row[n] for n in members], p)
+            for n in members:
+                move(
+                    found[row[n]], at[n] * ay + depth * ax, -at[n] * ax + depth * ay, ax, ay, place
+                )
+    drop |= overlapping(found, lines, drop, building)
     return [d for i, d in enumerate(found) if i not in drop]
 
 
-def overlapping(found: list[dict], lines: list[list[int]], drop: set[int]) -> set[int]:
-    """The dormers whose box overlaps one kept before (the rows in
-    `lines`' order, the longest first) by OVERLAP_SHARE of the narrower
-    width across: one dormer read twice — its front and its back two rows
-    a little more than ROW_DEPTH_M apart, or two blobs where two runs of a
-    row meet — now set one into the other. In a rhythm the boxes stand
-    apart (WIDTH_SHARE)."""
+def move(d: dict, x: float, y: float, ax: float, ay: float, place) -> None:
+    """A dormer `d` set at (x, y) facing (ax, ay), its top its row's
+    height over the roof there (under its host's ridge); where it would
+    leave its building's roof (`place` None) it stays where it stood."""
+    lift = d.pop("lift")
+    roof = place(x, y, d)
+    if roof is None:
+        return
+    z, d["of"], ridge_z = roof
+    d |= {"x": x, "y": y, "ax": round(ax, 4), "ay": round(ay, 4), "z": round(z, 2)}
+    d["top"] = round(min(z + lift, ridge_z + RIDGE_SLACK_M), 2)
+
+
+def overlapping(
+    found: list[dict], lines: list[list[int]], drop: set[int], building: list[int]
+) -> set[int]:
+    """The dormers whose box overlaps one of their building's kept before
+    (the rows in `lines`' order, the longest first) by OVERLAP_SHARE of
+    the narrower width across: one dormer read twice — its front and its
+    back two rows a little more than ROW_DEPTH_M apart, or two blobs where
+    two runs of a row meet — now set one into the other. In a rhythm the
+    boxes stand apart (WIDTH_SHARE)."""
     out: set[int] = set()
-    kept: list[int] = []
+    kept: dict[int, list[int]] = {}
     for i in (i for row in lines for i in row if i not in drop):
         a = found[i]
-        for j in kept:
+        mine = kept.setdefault(building[i], [])
+        for j in mine:
             b = found[j]
             dx, dy = b["x"] - a["x"], b["y"] - a["y"]
             across = abs(dx * a["ay"] - dy * a["ax"])
@@ -965,7 +1023,7 @@ def overlapping(found: list[dict], lines: list[list[int]], drop: set[int]) -> se
                 out.add(i)
                 break
         else:
-            kept.append(i)
+            mine.append(i)
     return out
 
 
@@ -1084,13 +1142,20 @@ def extent(s: Surfaces, sl, m: np.ndarray, ax: float, ay: float):
     return cx, cy, float(np.ptp(across)) + s.field.res, float(np.ptp(along)) + s.field.res
 
 
-def roof_at(s: Surfaces, sl, m: np.ndarray, x: float, y: float) -> float:
-    """The LoD2 roof's height at (x, y), else the blob's median roof."""
+def lod2_at(s: Surfaces, x: float, y: float) -> float | None:
+    """The LoD2 roof's height in the cell holding (x, y), or None off the
+    field or where LoD2 draws none."""
     f = s.field
-    r, c = int(round((f.ymax - y) / f.res - 0.5)), int(round((x - f.xmin) / f.res - 0.5))
+    r, c = math.floor((f.ymax - y) / f.res), math.floor((x - f.xmin) / f.res)
     if 0 <= r < f.rows and 0 <= c < f.cols and np.isfinite(s.roof[r, c]):
         return float(s.roof[r, c])
-    return float(np.nanmedian(s.roof[sl][m]))
+    return None
+
+
+def roof_at(s: Surfaces, sl, m: np.ndarray, x: float, y: float) -> float:
+    """The LoD2 roof's height at (x, y), else the blob's median roof."""
+    z = lod2_at(s, x, y)
+    return z if z is not None else float(np.nanmedian(s.roof[sl][m]))
 
 
 def dormer(s: Surfaces, sl, m: np.ndarray, excess, gx, gy, slope) -> dict | None:

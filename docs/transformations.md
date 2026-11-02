@@ -1529,10 +1529,15 @@ visual-variable codebook is in
   differ from its wings'). Where the street photos measured the window
   axes of the wall below (`dlm/windows_<t>.json`, within 12 m, facing the
   same way) the slots are those axes, every one, second or third, if the
-  dormers fit them as well. Two blobs on one slot, or two rows that read
+  dormers fit them as well (on Dresden's 33410_5656 twelve rows stand over
+  a measured wall and none fits its axes: DOM1 reads a dormer's centre
+  ±0.5 m, and most walls' axes are unphased). Two blobs on one slot, or two rows that read
   one dormer twice (its front and back), are one; a dormer more than 0.3
-  of the spacing off its slot stays put; no dormer is added in an empty
-  slot. The Taschenbergpalais' street photos show one identical dormer
+  of the spacing off its slot, more than 1.5 m or 20° off its row, or
+  2.5 times its run's median width (a Zwerchhaus) stays as it was; no
+  dormer is added in an empty slot. Dresden 13 495 dormers after (13 636
+  before), Leipzig 6 808, München 7 225, Unna 2 063, Meißen 1 788,
+  Hamburg 1 726, Grimma 1 419: the merged doubles. The Taschenbergpalais' street photos show one identical dormer
   over every window axis; DOM1 had read their centres up to 3 m apart
   down the slope and 1–4 m wide. Checked against
   the 20 cm orthophoto: rows of small gabled dormers now in; DOM1 still
