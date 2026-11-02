@@ -159,10 +159,10 @@ export interface VegetationContext extends GroundContext {
   sunDirection?: Vector3;
   /**
    * The tile's tree-foot material (tree-foot.ts: a pit in paving, a root
-   * zone elsewhere, read off the tile's rasters); without it the trunks
-   * stand on the bare ground.
+   * zone elsewhere, read off the tile's rasters), made when the tile turns
+   * out to have trees; without it the trunks stand on the bare ground.
    */
-  footMaterial?: Material;
+  footMaterial?: () => Material | undefined;
 }
 
 /**
@@ -1423,7 +1423,12 @@ export function* vegetationSteps(
   );
   const extras = features.extraTrees ?? [];
   if (trees.length + extras.length > 0) {
-    const built = yield* buildTrees(trees, extras, crownMats, ctx.footMaterial);
+    const built = yield* buildTrees(
+      trees,
+      extras,
+      crownMats,
+      ctx.footMaterial?.()
+    );
     group.add(...built.meshes);
     chunks = built.chunks;
     seasons = built.seasons;

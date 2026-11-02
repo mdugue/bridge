@@ -35,7 +35,7 @@ import {
   ARABLE_CLASS,
   BUILTUP_CLASS,
   LANDCOVER_CLASSES,
-  srgbToLinear,
+  linearPalette,
   RAILWAY_CLASS,
   MEADOW_CLASS,
   PATH_CLASS,
@@ -531,9 +531,10 @@ function kerbLines(inp: GroundInputs, g: GroundFields, raster: Tex): void {
   });
 }
 
-/** The class's palette colour (linear), as the splat paints it. */
-const PALETTE_LINEAR = LANDCOVER_CLASSES.map((k) =>
-  k.srgb.map((v) => srgbToLinear(v))
+/** The class's palette colour (linear), as the splat paints it (the
+ *  splat's own conversion, landcover-splat.ts). */
+const PALETTE_LINEAR = LANDCOVER_CLASSES.map((_, k) =>
+  linearPalette().slice(k * 3, k * 3 + 3)
 );
 const paletteOf = (c: I): V3 => {
   let out: V3 = vec3(...(PALETTE_LINEAR[0] as [number, number, number]));
@@ -615,22 +616,29 @@ export function smoothPaths(
     const any = float(0).toVar();
     const cover = float(0).toVar();
     const outer = int(PATH_CLASS).toVar();
+    const central: I[] = [];
     for (let y = -1; y <= 2; y++) {
       for (let x = -1; x <= 2; x++) {
         const c = classAt(inp, i.add(ivec2(x, y)), size).toVar();
+        if (x >= 0 && x <= 1 && y >= 0 && y <= 1) {
+          central.push(c);
+        }
         const on = isClass(c, PATH_CLASS);
         any.assign(max(any, on));
         cover.addAssign(on.mul(ax[x + 1].mul(ay[y + 1])));
         outer.assign(select(c.notEqual(PATH_CLASS), c, outer));
       }
     }
-    const sx = select(f.x.lessThan(0.5), int(0), int(1));
-    const sy = select(f.y.lessThan(0.5), int(0), int(1));
-    const pick = (dx: I, dy: I): I => classAt(inp, i.add(ivec2(dx, dy)), size);
-    const c0 = pick(sx, sy).toVar();
-    const c1 = pick(int(1).sub(sx), sy).toVar();
-    const c2 = pick(sx, int(1).sub(sy)).toVar();
-    const c3 = pick(int(1).sub(sx), int(1).sub(sy)).toVar();
+    // the four central texels, the fragment's nearest first
+    const [k00, k10, k01, k11] = central as [I, I, I, I];
+    const left = f.x.lessThan(0.5);
+    const low = f.y.lessThan(0.5);
+    const at = (ax: B, ay: B): I =>
+      select(ax, select(ay, k00, k01), select(ay, k10, k11));
+    const c0 = at(left, low).toVar();
+    const c1 = at(left.not(), low).toVar();
+    const c2 = at(left, low.not()).toVar();
+    const c3 = at(left.not(), low.not()).toVar();
     const other = select(
       c0.notEqual(PATH_CLASS),
       c0,
@@ -670,6 +678,21 @@ export function smoothPaths(
   });
   return { col, path, side };
 }
+
+/** 1 on the ground a walk kind paints (`pavingKind`: built-up, path,
+ *  unclassified land), and along a path's smooth edge (`smoothPaths`) —
+ *  a walk's buffer burned over a meadow or a wood leaves it as it is. */
+const walkGround = (inp: GroundInputs, col: GroundColour): F => {
+  const cls = int(inp.cls);
+  return max(
+    select(
+      or(cls.equal(BUILTUP_CLASS), cls.equal(PATH_CLASS), cls.equal(0)),
+      float(1),
+      float(0)
+    ),
+    col.path
+  );
+};
 
 /** A weight that only a class default answers to: 0 where the paving
  *  raster names the surface. */
@@ -996,8 +1019,14 @@ function paving(
   // A sanded path: the raster's own (weight 1), else the class's — which
   // follows the smooth edge `smoothPaths` cut, across the class texels
   // beside it too, so no tooth of the stairs shows.
-  const sand = clamp(g.sandW.add(col.path.mul(float(1).sub(g.walkW))), 0, 1)
-    .mul(select(g.onRoad, float(0), pave))
+  // On the carriageway: an unpaved road (its own kind, whole).
+  const walk = walkGround(inp, col);
+  const sand = select(
+    g.onRoad,
+    select(g.kind.equal(id("unpaved")), float(1), float(0)),
+    clamp(g.sandW.mul(walk).add(col.path.mul(float(1).sub(g.walkW))), 0, 1)
+  )
+    .mul(pave)
     .toVar();
   If(sand.greaterThan(0), () => {
     const n = gdNoise(xy.mul(3.1))
@@ -1125,10 +1154,11 @@ export function groundDetail(
   // concreted yard) takes on the road's grey, so it reads from afar too.
   // Its share of the texels round the fragment, so a sealed path's edge
   // (and a sealed texel among a path's sanded ones) fades, not steps.
-  If(and(g.onRoad.not(), g.sealedW.greaterThan(0)), () => {
+  const sealedW = g.sealedW.mul(walkGround(inp, col)).toVar();
+  If(and(g.onRoad.not(), sealedW.greaterThan(0)), () => {
     const tone = select(g.kind.equal(id("concrete")), 1.08, 1.0);
     col.baseCol.assign(
-      mix(col.baseCol, inp.roadColor.mul(tone), pave.mul(0.6).mul(g.sealedW))
+      mix(col.baseCol, inp.roadColor.mul(tone), pave.mul(0.6).mul(sealedW))
     );
   });
   // A path's stray class texel off its smooth edge is paved as the ground

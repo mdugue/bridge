@@ -19,7 +19,6 @@ import {
   floor,
   Fn,
   fwidth,
-  int,
   ivec2,
   length,
   max,
@@ -30,14 +29,12 @@ import {
   sin,
   smoothstep,
   texture,
-  textureLoad,
-  textureSize,
   varying,
   vec2,
   vec3,
   vec4,
 } from "three/tsl";
-import type { Node } from "three/webgpu";
+import { InterpolationSamplingType } from "three/webgpu";
 import {
   BUILTUP_CLASS,
   EDGE_SCALE,
@@ -45,7 +42,8 @@ import {
   ROAD_CLASS,
 } from "@/lib/city/landcover";
 import { trunkRadiusAt } from "@/lib/city/tree-inventory";
-import { gdNoise } from "./ground-detail";
+import { byteOf, gdNoise, texelAt, texelSize } from "./ground-detail";
+import { outOfDesignSite } from "./design-site";
 import { instanceFloat, Instances } from "./instancing";
 import {
   type Slots,
@@ -156,6 +154,15 @@ export function treeFeet(
     trunks.capacity,
     trunks.instanceMatrix
   );
+  // the trunks' own column views, not new ones over their buffer: three's
+  // info.memory charges a buffer per view, and the memory governor reads
+  // that count (instancing.ts) — so the feet cost it nothing
+  for (let c = 0; c < 4; c++) {
+    const column = trunks.geometry.getAttribute(`iMat${c}`);
+    if (column) {
+      feet.geometry.setAttribute(`iMat${c}`, column);
+    }
+  }
   const drop = trunks.geometry.getAttribute(DROP);
   if (drop) {
     feet.geometry.setAttribute(DROP, drop);
@@ -191,14 +198,10 @@ interface FootGraph {
 
 const footGraphs = new Map<string, FootGraph>();
 
-/** A class id read as a float at a texel. */
+/** A class id read as a float at a texel (clamped to the raster). */
 const classTexel = (t: Tex, uv: V2): F => {
-  // reason: TextureSizeNode is typed as a bare Node; it is a uvec2.
-  const size = ivec2(
-    textureSize(texture(t, uv), int(0)) as unknown as Node<"uvec2">
-  );
-  const p = ivec2(floor(uv.mul(vec2(size))));
-  return floor(textureLoad(t, p).r.mul(255).add(0.5));
+  const size = texelSize(t, uv);
+  return byteOf(texelAt(t, ivec2(floor(uv.mul(vec2(size)))), size).r);
 };
 
 /** 1 where `c` is ground a tree pit is cut into. */
@@ -260,9 +263,19 @@ function footGraph(r: FootRasters): FootGraph {
     distance(cameraPosition, footWorld).mul(0.0015)
   );
   const q = positionGeometry.xz;
-  const position = footLocal.add(vec3(q.x.mul(reach), lift, q.y.mul(reach)));
+  // a trunk standing in a loaded design's site is folded away
+  // (instancePosition); its foot folds with it
+  const position = Fn(() =>
+    outOfDesignSite(
+      footLocal.add(vec3(q.x.mul(reach), lift, q.y.mul(reach))),
+      footLocal
+    )
+  )();
   const offset = varying(q.mul(reach), "vFootOffset");
-  const trunkR = varying(rt, "vFootTrunk");
+  // FLAT: it seeds the wobble and the grain (AGENTS.md, hash seeds)
+  const trunkR = varying(rt, "vFootTrunk").setInterpolation(
+    InterpolationSamplingType.FLAT
+  );
   const color = Fn(() => {
     const d = length(offset).toVar();
     const w = max(fwidth(d), 0.002).toVar();

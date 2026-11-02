@@ -351,7 +351,8 @@ visual-variable codebook is in
   share and the urban green's, and a path texel off the smooth edge is
   paved as the land beside it. The paving raster's walk kinds are read
   as their shares of the four texels round the fragment (`walkShares`),
-  so a sealed texel among a path's sanded ones — where a tagged way's
+  (on the ground a walk kind paints — built-up, path, unclassified, and a
+  path's smooth edge — as before), so a sealed texel among a path's sanded ones — where a tagged way's
   buffer and the class raster's path disagree, the bake gives the rest
   the town's default, asphalt — is a faint grey, not a block. Out to
   1.2 m a pixel (the shares to 1 m), then the splat as before. No bake,
