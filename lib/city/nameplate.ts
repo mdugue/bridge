@@ -2,7 +2,8 @@
  * What the nameplate — the lettering the scene sets at the thing asked
  * (app/_components/nameplate-layer.ts) — says: a landmark's name large with
  * its facts under it, a named building, bridge or monument by its name, an
- * ordinary house by its address, small. Taken from the inquiry card's
+ * ordinary house by its address, small; a tree, a lamp, a bench, a stop by
+ * what the card calls it, with one line under it. Taken from the inquiry card's
  * model, so the lettering never says what the card does not. No THREE, no
  * DOM.
  */
@@ -17,8 +18,9 @@ import {
 import { NO_FACT } from "./object-facts";
 
 /** How much the plate says, and how large: a landmark's name and facts,
- *  a name with one small line, an address alone. */
-export type NameplateRank = "landmark" | "named" | "address";
+ *  a name with one small line, an address alone, a thing of the street
+ *  (a tree, a lamp, a bench) with one small line. */
+export type NameplateRank = "landmark" | "named" | "address" | "object";
 
 export interface NameplateText {
   /** the small lines under the title (none, one or two) */
@@ -71,10 +73,37 @@ function buildingPlate(
     : null;
 }
 
+/** The things of the street the plate names: trees, lamps, furniture,
+ *  stops, landing stages, hedges (inquiry-more.ts, inquiry-features.ts). */
+const STREET_THINGS = new Set<Inquiry["kind"]>([
+  "tree",
+  "canopy",
+  "hedge",
+  "lamp",
+  "furniture",
+  "stop",
+  "landing",
+  "monument",
+]);
+
+/** A thing's one small line: its species where the title is the German
+ *  name, else its kind where that is not the title, else its first fact. */
+function thingLine(card: InquiryCard): string {
+  const species = card.facts.find((f) => f.label === "Art");
+  if (species && species.value && species.value !== "nicht bekannt") {
+    return species.value;
+  }
+  if (card.kicker && card.kicker !== card.title) {
+    return card.kicker;
+  }
+  const first = card.facts[0];
+  return first ? `${first.label} ${first.value}` : "";
+}
+
 /**
  * The plate for an inquiry and its card; null where it would say nothing
- * worth setting in the city (a tree, a lamp, a counted street, a house
- * without an address).
+ * worth setting in the city (a counted street, a design of one's own, an
+ * unnamed bridge, a house without an address).
  */
 export function nameplateText(
   inquiry: Inquiry,
@@ -84,10 +113,19 @@ export function nameplateText(
   if (inquiry.kind === "building") {
     return buildingPlate(inquiry, card, facts);
   }
-  if (inquiry.kind === "bridge" || inquiry.kind === "monument") {
-    return inquiry.properties.name
-      ? { rank: "named", title: inquiry.properties.name, lines: [card.kicker] }
-      : null;
+  if (
+    (inquiry.kind === "bridge" || inquiry.kind === "monument") &&
+    inquiry.properties.name
+  ) {
+    return {
+      rank: "named",
+      title: inquiry.properties.name,
+      lines: [card.kicker],
+    };
+  }
+  if (STREET_THINGS.has(inquiry.kind) && card.title) {
+    const line = thingLine(card);
+    return { rank: "object", title: card.title, lines: line ? [line] : [] };
   }
   return null;
 }

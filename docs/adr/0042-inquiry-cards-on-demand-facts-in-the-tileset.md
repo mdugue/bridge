@@ -30,7 +30,7 @@ server.
    silhouette — and named beside it while the question stands: one
    nameplate, set in the picture style, saying what the card's title and
    address say (a landmark's name with its Wikidata facts, a name, an
-   address) and nothing else. It keeps clear of what hides it and of the
+   address, what a tree, a lamp or a bench is) and nothing else. It keeps clear of what hides it and of the
    HUD, and goes with the question. Nothing in the scene is labelled
    unasked.
 5. **An ensemble is asked as one:** LoD2 objects under one named OSM

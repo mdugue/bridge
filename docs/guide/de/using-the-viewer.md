@@ -242,10 +242,13 @@ schließt sie wieder. Neben dem Gebäude steht jetzt sein **Name** in der
 Stadt selbst, solange die Frage gilt: bei einem Wahrzeichen groß, darunter
 wann und von wem es erbaut, wann es wiederaufgebaut wurde und wie hoch es
 ist (aus Wikidata, auch auf der Karte); bei einem benannten Gebäude mit seiner Adresse; bei
-einem gewöhnlichen Haus nur die Adresse, klein. Von der Straße aus steht
-der Name aufrecht über oder neben dem Gebäude, zur Fassade gedreht, die
-du am besten siehst, mit einer feinen Linie dorthin; aus der Luft liegt
-er neben ihm auf dem Boden; ganz nah ist er eine Inschrift am Sockel; von
+einem gewöhnlichen Haus nur die Adresse, klein; bei einem Baum, einer
+Laterne oder einer Bank, was es ist. Die Buchstaben sind gebaut: ein wenig
+tief, von der Sonne beleuchtet, mit eigenem Schatten. Von der Straße aus
+stehen sie auf dem Dach (bei einer Kirche auf dem Schiff), zur Fassade gedreht, die du am besten siehst,
+oder neben dem Gebäude mit einer feinen Linie dorthin; steil aus der Luft
+liegen sie neben ihm auf dem Boden (aus flacherem Winkel stehen sie auf,
+damit sie lesbar bleiben); ganz nah stehen sie wie eine Inschrift vor seiner Fassade; von
 weit nur der Name. Er weicht aus, wenn ein anderes Gebäude ihn verdecken
 oder ein Bedienfeld ihn überdecken würde, erscheint als blasse Kontur, wo
 die Stadt ihn doch verdeckt, und ist in jedem Darstellungsstil anders

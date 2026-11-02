@@ -1,7 +1,9 @@
 /**
  * How the nameplate is set in each picture style (lib/city/render-style.ts)
- * and by night: its faces, cases and tracking, its ink and halo, the
- * comic's caption box, the leader's kind. The plate itself is placed the
+ * and by night: its faces, cases and tracking, its ink, its letters'
+ * returns (the sides of built letters: they stand a little deep) and the
+ * shadow they cast, a halo where a style draws one, the comic's caption
+ * box, the leader's kind. The plate itself is placed the
  * same in every style (lib/city/nameplate-place.ts); only Schwarzplan
  * lays it on the ground from every view above the building, the plan's
  * own place for lettering. Colours are sRGB (0…1): the plate is drawn after the output
@@ -13,17 +15,10 @@ import type { RenderStyle } from "./render-style";
 
 /** The faces the plates are set in (app/[site]/page.tsx loads them, self
  *  hosted, as CSS variables of these names). */
-export type NameplateFace =
-  | "serif"
-  | "serifCaps"
-  | "comic"
-  | "condensed"
-  | "grotesk"
-  | "mono";
+export type NameplateFace = "sans" | "comic" | "condensed" | "grotesk" | "mono";
 
 export const NAMEPLATE_FACE_VARS: Record<NameplateFace, string> = {
-  serif: "--font-plate-serif",
-  serifCaps: "--font-plate-serif-caps",
+  sans: "--font-plate-sans",
   comic: "--font-plate-comic",
   condensed: "--font-plate-condensed",
   grotesk: "--font-heading",
@@ -55,8 +50,6 @@ export interface NameplateType {
     fill: DayNight;
     /** the box's padding around the text, in caps */
     pad: number;
-    /** its hard shadow's offset (right, down), in caps */
-    shadow: number;
     /** its tilt (degrees, positive turns it anticlockwise) */
     tilt: number;
   };
@@ -64,6 +57,11 @@ export interface NameplateType {
    *  the field's reach, 0…1) */
   halo: DayNight & { alpha: number; width: number };
   ink: DayNight;
+  /** the letters' returns: their sides, lit by the sun */
+  side: DayNight;
+  /** the shadow the letters cast on the city: its colour and strength in
+   *  full sun */
+  shadow: { colour: Rgb; alpha: number };
   /** a hairline, a dimension line with ticks, a caption box's tail */
   leader: "hair" | "dimension" | "tail";
   /** the small lines' setting and ink */
@@ -87,25 +85,32 @@ const dn = (day: number, night: number): DayNight => ({
  *  sRGB. */
 const ACCENT = hex(0xc6_00_de);
 
-const SERIF_TITLE: NameplateSetting = {
-  face: "serif",
-  weight: 600,
+/** A built sign's lettering: the HUD's Inter, heavy and set tight; its
+ *  facts in small tracked capitals. */
+const SANS_TITLE: NameplateSetting = {
+  face: "sans",
+  weight: 800,
   upper: false,
-  tracking: 0.01,
+  tracking: -0.02,
 };
-const SERIF_LINES = {
-  face: "serifCaps",
+const SANS_LINES = {
+  face: "sans",
   weight: 600,
-  upper: false,
-  tracking: 0.12,
+  upper: true,
+  tracking: 0.1,
 } as const;
+/** No halo: built letters read by their returns and their shadow. */
+const NO_HALO = { alpha: 0, width: 0 } as const;
 
 export const NAMEPLATE_TYPES: Readonly<Record<RenderStyle, NameplateType>> = {
   pastel: {
-    title: SERIF_TITLE,
-    lines: { ...SERIF_LINES, size: 0.42, ink: dn(0x5b_52_4a, 0xe2_d6_c2) },
-    ink: dn(0x3d_38_33, 0xf4_ea_d8),
-    halo: { ...dn(0xf6_ef_e4, 0x1d_24_33), alpha: 0.85, width: 0.55 },
+    title: SANS_TITLE,
+    // the selection's magenta, deep plum returns: loud on the pastel city
+    lines: { ...SANS_LINES, size: 0.44, ink: dn(0x5a_14_70, 0xf3_c6_f5) },
+    ink: dn(0xc6_00_de, 0xf0_7a_f5),
+    side: dn(0x6a_10_82, 0x5a_1a_70),
+    shadow: { colour: hex(0x3a_1a_55), alpha: 0.42 },
+    halo: { ...dn(0xf6_ef_e4, 0x1d_24_33), ...NO_HALO },
     accent: ACCENT,
     leader: "hair",
     onGround: false,
@@ -121,12 +126,13 @@ export const NAMEPLATE_TYPES: Readonly<Record<RenderStyle, NameplateType>> = {
       ink: dn(0x1d_3f_8f, 0xf3_ea_d0),
     },
     ink: dn(0x11_11_11, 0xff_d2_3f),
-    halo: { ...dn(0xff_e1_4d, 0x0b_12_33), alpha: 0, width: 0 },
+    side: dn(0x11_11_11, 0x11_11_11),
+    shadow: { colour: hex(0x11_11_11), alpha: 0.45 },
+    halo: { ...dn(0xff_e1_4d, 0x0b_12_33), ...NO_HALO },
     box: {
       fill: dn(0xff_e1_4d, 0x0b_12_33),
       edge: dn(0x11_11_11, 0xff_d2_3f),
       pad: 0.45,
-      shadow: 0.16,
       tilt: 2,
     },
     accent: hex(0x11_11_11),
@@ -144,7 +150,9 @@ export const NAMEPLATE_TYPES: Readonly<Record<RenderStyle, NameplateType>> = {
       ink: dn(0xd6_d6_d6, 0xd6_d6_d6),
     },
     ink: dn(0xf4_f4_f4, 0xf4_f4_f4),
-    halo: { ...dn(0x0a_0a_0a, 0x0a_0a_0a), alpha: 0.65, width: 0.5 },
+    side: dn(0x8a_8a_8a, 0x5a_5a_5a),
+    shadow: { colour: hex(0x00_00_00), alpha: 0.5 },
+    halo: { ...dn(0x0a_0a_0a, 0x0a_0a_0a), alpha: 0.5, width: 0.4 },
     accent: hex(0xf4_f4_f4),
     leader: "hair",
     onGround: false,
@@ -160,16 +168,22 @@ export const NAMEPLATE_TYPES: Readonly<Record<RenderStyle, NameplateType>> = {
       ink: dn(0xff_ff_ff, 0xff_ff_ff),
     },
     ink: dn(0xff_ff_ff, 0xff_ff_ff),
-    halo: { ...dn(0x00_00_00, 0x00_00_00), alpha: 0.9, width: 0.6 },
+    // the one colour Sin City keeps
+    side: dn(0xd0_1a_1a, 0xd0_1a_1a),
+    shadow: { colour: hex(0x00_00_00), alpha: 0.8 },
+    halo: { ...dn(0x00_00_00, 0x00_00_00), alpha: 0.9, width: 0.5 },
     accent: hex(0xd0_1a_1a),
     leader: "hair",
     onGround: false,
   },
   paper: {
-    title: SERIF_TITLE,
-    lines: { ...SERIF_LINES, size: 0.42, ink: dn(0x4a_4f_57, 0xdc_dd_e0) },
-    ink: dn(0x2b_2f_36, 0xf2_f0_ea),
-    halo: { ...dn(0xfb_fa_f6, 0x22_26_30), alpha: 0.7, width: 0.45 },
+    title: SANS_TITLE,
+    // a printer's vermilion on the paper, its returns burnt
+    lines: { ...SANS_LINES, size: 0.44, ink: dn(0x3a_2a_26, 0xf2_d8_cc) },
+    ink: dn(0xe4_3d_12, 0xff_8a_5c),
+    side: dn(0x7a_1e_08, 0x6a_24_14),
+    shadow: { colour: hex(0x30_34_3c), alpha: 0.22 },
+    halo: { ...dn(0xfb_fa_f6, 0x22_26_30), ...NO_HALO },
     accent: ACCENT,
     leader: "hair",
     onGround: false,
@@ -185,7 +199,9 @@ export const NAMEPLATE_TYPES: Readonly<Record<RenderStyle, NameplateType>> = {
       ink: dn(0x3a_3a_3a, 0xe6_e2_d8),
     },
     ink: dn(0x1a_1a_1a, 0xf2_ee_e4),
-    halo: { ...dn(0xff_ff_ff, 0x1c_22_30), alpha: 0.9, width: 0.5 },
+    side: dn(0xb4_b4_b4, 0x60_60_60),
+    shadow: { colour: hex(0x1a_1a_1a), alpha: 0.18 },
+    halo: { ...dn(0xff_ff_ff, 0x1c_22_30), alpha: 0.6, width: 0.4 },
     accent: hex(0x1a_1a_1a),
     leader: "dimension",
     onGround: false,
@@ -201,6 +217,8 @@ export const NAMEPLATE_TYPES: Readonly<Record<RenderStyle, NameplateType>> = {
       ink: dn(0xc2_26_1f, 0xc2_26_1f),
     },
     ink: dn(0x11_11_11, 0x11_11_11),
+    side: dn(0x88_88_88, 0x88_88_88),
+    shadow: { colour: hex(0x11_11_11), alpha: 0.15 },
     halo: { ...dn(0xff_fd_f6, 0xff_fd_f6), alpha: 1, width: 0.75 },
     accent: hex(0xc2_26_1f),
     leader: "hair",
@@ -214,16 +232,18 @@ export const NAMEPLATE_CAPS: Record<
   NameplateRank,
   { desktop: CapRange; phone: CapRange }
 > = {
-  landmark: { desktop: { min: 26, max: 72 }, phone: { min: 22, max: 48 } },
-  named: { desktop: { min: 16, max: 40 }, phone: { min: 14, max: 30 } },
-  address: { desktop: { min: 11, max: 22 }, phone: { min: 10, max: 18 } },
+  landmark: { desktop: { min: 36, max: 96 }, phone: { min: 26, max: 56 } },
+  named: { desktop: { min: 20, max: 50 }, phone: { min: 16, max: 34 } },
+  address: { desktop: { min: 12, max: 24 }, phone: { min: 11, max: 19 } },
+  object: { desktop: { min: 13, max: 30 }, phone: { min: 12, max: 22 } },
 };
 
 /** The small lines' size against the title's, by rank (an address has
- *  none; a name's one line is a little larger than a landmark's facts):
+ *  none; a name's or a thing's one line is a little larger than a
+ *  landmark's facts):
  *  at the smallest landmark plate the facts stay above ~11 CSS px. */
 export function linesSize(type: NameplateType, rank: NameplateRank): number {
-  return rank === "named" ? type.lines.size * 1.2 : type.lines.size;
+  return rank === "landmark" ? type.lines.size : type.lines.size * 1.2;
 }
 
 /** A colour at the scene's night factor (0 day … 1 night). */

@@ -2,7 +2,7 @@
  * Between a question and its nameplate (nameplate-layer.ts): what the
  * plate says of the inquiry (lib/city/nameplate.ts — from the card's own
  * model, with a landmark's facts fetched from the site's file on the first
- * landmark asked, ADR 0042), what the city hides of a candidate place (rays
+ * landmark asked and a tree's from its tile's file, ADR 0042), what the city hides of a candidate place (rays
  * through the buildings' BVHs, never a tile whose BVH is being built), and
  * where the HUD covers the canvas (the panels marked `data-scene-cover`).
  */
@@ -10,6 +10,7 @@ import { type Camera, Raycaster, Vector3 } from "three/webgpu";
 import { cardCredits } from "@/lib/city/card-lines";
 import type { Inquiry } from "@/lib/city/inquiry";
 import { inquiryCard } from "@/lib/city/inquiry";
+import { type TreeFacts, treeFactsAt } from "@/lib/city/inquiry-features";
 import {
   factsFor,
   type LandmarkFactsIndex,
@@ -23,6 +24,7 @@ import {
 } from "@/lib/city/nameplate";
 import type { NameplateBody, Vec3 } from "@/lib/city/nameplate-place";
 import type { Site } from "@/lib/city/site";
+import { loadTreeFacts } from "./card-fetch";
 import { type CityLayer, nearestCityHit } from "./city-layer";
 import { loadLandmarkFacts } from "./landmark-facts-load";
 import type { Nameplate } from "./nameplate-layer";
@@ -67,21 +69,30 @@ export function createNameplateAsk(deps: {
   // the building the plate names now, so asking it again keeps the plate
   let named: string | null = null;
   let namedText: NameplateText | null = null;
+  // the asked building's eave over its foot (m; 0 none): what rooftop
+  // letters stand on under a tower
+  let eaveH = 0;
+  const withEave = (b: NameplateBody): NameplateBody =>
+    eaveH > 0 ? { ...b, eave: b.base + eaveH } : b;
   const ask = (inquiry: Inquiry | null, next: NameplateBody | null) => {
     const token = ++asked;
     body = next;
     waiting = inquiry && !next ? inquiry : null;
+    eaveH = inquiry ? eaveOf(inquiry) : 0;
     if (!(inquiry && next)) {
       named = null;
       deps.plate.set(null);
       return;
     }
-    const card = inquiryCard(inquiry, null, credits);
     const key = plateKey(inquiry);
-    const show = (index: LandmarkFactsIndex | null) => {
+    const show = (
+      index: LandmarkFactsIndex | null,
+      treeFacts: TreeFacts | null = null
+    ) => {
       if (token !== asked || deps.signal?.aborted || !body) {
         return;
       }
+      const card = inquiryCard(inquiry, null, credits, treeFacts);
       const text = nameplateText(
         inquiry,
         card,
@@ -89,12 +100,12 @@ export function createNameplateAsk(deps: {
       );
       if (text && key !== null && key === named && sameText(text, namedText)) {
         // the named building asked again: it keeps its place, no arrival
-        deps.plate.reshape(body);
+        deps.plate.reshape(withEave(body));
         return;
       }
       named = text ? key : null;
       namedText = text;
-      deps.plate.set(text ? { text, body } : null);
+      deps.plate.set(text ? { text, body: withEave(body) } : null);
     };
     if (isLandmarkInquiry(inquiry) && deps.factsUrl) {
       // the last plate goes at once where it named another thing
@@ -102,7 +113,16 @@ export function createNameplateAsk(deps: {
         named = null;
         deps.plate.set(null);
       }
-      void loadLandmarkFacts(deps.factsUrl).then(show);
+      void loadLandmarkFacts(deps.factsUrl).then((index) => show(index));
+    } else if (inquiry.kind === "tree" && inquiry.factsUrl) {
+      // the register's species, as the card names the tree (the same
+      // file, fetched once between them)
+      const { index } = inquiry;
+      deps.plate.set(null);
+      named = null;
+      void loadTreeFacts(inquiry.factsUrl).then((file) =>
+        show(null, file ? treeFactsAt(file, index) : null)
+      );
     } else {
       show(null);
     }
@@ -117,10 +137,29 @@ export function createNameplateAsk(deps: {
         return;
       }
       body = next;
-      deps.plate.reshape(next);
+      deps.plate.reshape(withEave(next));
     },
     ask,
   };
+}
+
+/** A building's eave over its foot (m): its largest object's (the main
+ *  mass, not a tower or a dome's drum), 0 where none states one or for
+ *  anything else. */
+function eaveOf(inquiry: Inquiry): number {
+  if (inquiry.kind !== "building") {
+    return 0;
+  }
+  let best = 0;
+  let area = -1;
+  for (const o of inquiry.tree) {
+    const a = o.facts.area > 0 ? o.facts.area : 0;
+    if (o.eaveH > 0 && a > area) {
+      best = o.eaveH;
+      area = a;
+    }
+  }
+  return best;
 }
 
 /** Whether two plates say the same (rank, title and lines). */

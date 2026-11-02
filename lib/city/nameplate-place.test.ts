@@ -81,6 +81,21 @@ test("the laying follows the camera, with hysteresis", () => {
   expect(nameplateMode(BODY, look([0, 500, 1], [0, 0, 0], true), null)).toBe(
     "air"
   );
+  // high above but far off, the ground seen flat: upright, not lying
+  expect(nameplateMode(BODY, look([0, 120, 400], [0, 0, 0]), null)).toBe("far");
+  // standing under a tree, its foot steeply below: upright
+  const tree = nameplateBody(box(-2, 2, -2, 2, 10)) as NameplateBody;
+  expect(nameplateMode(tree, look([0.5, 1.7, 1], [0, 6, 0]), null)).not.toBe(
+    "air"
+  );
+  // Modell looking in at a shallow angle: upright
+  expect(nameplateMode(BODY, look([0, 100, 300], [0, 0, 0], true), null)).toBe(
+    "street"
+  );
+  // the ground laying holds down to 40°, and is entered only past 50°
+  const at45 = look([0, 100, 100], [0, 0, 0]);
+  expect(nameplateMode(BODY, at45, "air")).toBe("air");
+  expect(nameplateMode(BODY, at45, null)).not.toBe("air");
   // just past the far threshold (8 S = 240 m) it is far, from street too;
   // just inside it far holds (it is left only within 0.8 × 8 S)
   const edge = look([0, 15, 255], [0, 15, 0]);
@@ -110,36 +125,89 @@ test("the capitals grow with nearness, clamped on screen", () => {
   const at: Vec3 = [0, 15, 10];
   const capNear = capHeight(BODY, near, at, range);
   const capFar = capHeight(BODY, far, at, range);
-  // 7 % of 40 m wide at most, the screen's minimum far off
-  expect(capNear).toBeCloseTo(2.8, 1);
+  // 9 % of 40 m wide at most, the screen's minimum far off
+  expect(capNear).toBeCloseTo(3.6, 1);
   // and no larger on screen than the range's maximum
   expect(capHeight(BODY, near, at, { min: 20, max: 60 })).toBeLessThan(capNear);
   const pxFar = (capFar * 1000) / 1990;
   expect(pxFar).toBeCloseTo(20, 0);
 });
 
-test("a street plate stands in front of the facade, reading left to right", () => {
+test("a street plate stands on the roof in front of the facade, reading left to right", () => {
   const camera = look([0, 1.7, 150], [0, 15, 0]);
-  const layout = {
-    mode: "street" as const,
-    side: nameplateSide(BODY, camera, null),
-    spot: "above" as const,
-  };
-  const pose = nameplatePose(
-    BODY,
-    layout,
-    camera,
-    { width: 6, height: 2 },
-    { min: 20, max: 60 },
-    () => 0
-  );
+  const side = nameplateSide(BODY, camera, null);
+  const at = (spot: "above" | "right") =>
+    nameplatePose(
+      BODY,
+      { mode: "street", side, spot },
+      camera,
+      { width: 6, height: 2 },
+      { min: 20, max: 60 },
+      () => 0
+    );
+  const pose = at("above");
   expect(pose.origin[2]).toBeGreaterThan(10); // before the facade at z = 10
-  expect(pose.origin[1]).toBeGreaterThan(30); // above the roof
+  // on the roof: its descenders' room just under the top, no leader
+  expect(pose.origin[1]).toBeLessThan(30);
+  expect(pose.origin[1] + 0.3 * pose.cap).toBeGreaterThan(30);
+  expect(pose.anchor).toBeNull();
   expect(pose.up).toEqual([0, 1, 0]);
   // its right runs with the camera's
   expect(pose.right[0] * camera.right[0]).toBeGreaterThan(0);
-  expect(pose.anchor).not.toBeNull();
   expect(pose.fade).toBe(1);
+  // beside it in the sky, a hairline down to it
+  expect(at("right").anchor).not.toBeNull();
+});
+
+test("rooftop letters stand on the nave's eave under a tower", () => {
+  const camera = look([0, 1.7, 150], [0, 15, 0]);
+  const side = nameplateSide(BODY, camera, null);
+  const pose = (body: NameplateBody) =>
+    nameplatePose(
+      body,
+      { mode: "street", side, spot: "above" },
+      camera,
+      { width: 6, height: 2 },
+      { min: 20, max: 60 },
+      () => 0
+    );
+  // the eave 18 m up, the tower to 30 m: on the eave
+  const onEave = pose({ ...BODY, eave: 18 });
+  expect(onEave.origin[1]).toBeLessThan(18);
+  expect(onEave.origin[1] + 0.3 * onEave.cap).toBeGreaterThan(18);
+  // an eave just under the top (a flat roof's parapet): on the top
+  expect(pose({ ...BODY, eave: 28 }).origin[1]).toBeGreaterThan(27);
+});
+
+test("up close the letters stand on the ground before the facade", () => {
+  const camera = look([0, 1.7, 25], [0, 10, 0]);
+  const pose = nameplatePose(
+    BODY,
+    { mode: "near", side: nameplateSide(BODY, camera, null), spot: "front" },
+    camera,
+    { width: 6, height: 2 },
+    { min: 20, max: 60 },
+    (x) => (x > 0 ? 1.2 : 0.4)
+  );
+  // a quarter of the building's height over the highest ground under
+  // them
+  expect(pose.origin[1]).toBeCloseTo(1.2 + 7.5);
+  expect(pose.anchor).toBeNull();
+});
+
+test("a small thing's plate stands close before it", () => {
+  const bench = nameplateBody(box(-1, 1, -0.3, 0.3, 0.9)) as NameplateBody;
+  const camera = look([0, 1.7, 12], [0, 0.5, 0]);
+  const pose = nameplatePose(
+    bench,
+    { mode: "street", side: nameplateSide(bench, camera, null), spot: "above" },
+    camera,
+    { width: 4, height: 1.5 },
+    { min: 12, max: 30 },
+    () => 0
+  );
+  // 0.3 m before its 0.3 m deep side, not the building's 1.5 m
+  expect(pose.origin[2]).toBeCloseTo(0.6, 1);
 });
 
 test("an air plate lies on the ground beside the building", () => {
@@ -152,7 +220,9 @@ test("an air plate lies on the ground beside the building", () => {
     { min: 20, max: 60 },
     () => 3
   );
-  expect(pose.origin[1]).toBeCloseTo(3.4);
+  // its letters stand on the ground: their depth and a kerb's height
+  // over it
+  expect(pose.origin[1]).toBeCloseTo(3 + 0.1 + 0.14 * pose.cap);
   expect(pose.up[1]).toBe(0);
   expect(pose.anchor).toBeNull();
 });
@@ -203,6 +273,45 @@ test("the choice avoids hidden and covered places and keeps its own", () => {
   expect(sameLayout(open, { ...open })).toBe(true);
   expect(sameLayout(open, aside)).toBe(false);
   expect(sameLayout(null, open)).toBe(false);
+});
+
+test("a ground place seen too flat is none: the plate stands up", () => {
+  // Schwarzplan asks for the ground from just over the roof, far off
+  const camera = look([0, 45, 160], [0, 0, 0]);
+  const scene: NameplateScene = {
+    camera,
+    project: (p) => {
+      const d: Vec3 = [
+        p[0] - camera.position[0],
+        p[1] - camera.position[1],
+        p[2] - camera.position[2],
+      ];
+      const z =
+        d[0] * camera.forward[0] +
+        d[1] * camera.forward[1] +
+        d[2] * camera.forward[2];
+      return { x: 0, y: 0, front: z > 0 };
+    },
+    hidden: () => 0,
+    hud: [],
+    groundAt: () => 0,
+  };
+  const block = { width: 6, height: 2 };
+  const range = { min: 20, max: 60 };
+  const chosen = chooseNameplate(BODY, null, block, range, scene, "air");
+  expect(chosen.mode).toBe("street");
+  // from steeply above it lies on the ground
+  const above = look([0, 300, 60], [0, 0, 0]);
+  expect(
+    chooseNameplate(
+      BODY,
+      null,
+      block,
+      range,
+      { ...scene, camera: above },
+      "air"
+    ).mode
+  ).toBe("air");
 });
 
 test("from above, the ground plate's side follows the screen's foot, with hysteresis", () => {

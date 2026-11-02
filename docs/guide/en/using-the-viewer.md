@@ -230,12 +230,15 @@ click on nothing closes it again. Beside the building its **name** now
 stands in the city itself, as long as the question does: a landmark's
 large, with when it was built and by whom, when it was rebuilt and how
 tall it is (from Wikidata, listed on the card too) underneath; a named building with its
-address; an ordinary house just its address, small. From the street the
-name stands upright over or beside the building, turned to the facade
-you see best, with a fine line to it; from the air it lies on the
-ground beside it; close up it is an inscription at the plinth; from far
-off only the name. It moves aside when another building would hide it
-or a panel covers it, shows as a pale outline where the city still
+address; an ordinary house just its address, small; a tree, a lamp or a
+bench what it is. The letters are built: a little deep, lit by the sun
+and casting a shadow. From the street they stand on the building's roof
+(a church's on its nave),
+turned to the facade you see best, or beside it with a fine line to it;
+looking steeply down from the air they lie on the ground beside it (from
+a flatter angle they stand up, so they stay readable); close up they
+stand before its facade like an inscription; from far off only the name.
+It moves aside when another building would hide it or a panel covers it, shows as a pale outline where the city still
 covers it, and is set in each picture style's own type — in Comic in a
 yellow caption box, in Schwarzplan, seen from above, on the ground
 like a plan's lettering. You need not hit a small house exactly:

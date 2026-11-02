@@ -1,6 +1,7 @@
 /**
  * Where the nameplate stands (app/_components/nameplate-layer.ts): a sign
- * of the building's, not a label of the screen. It snaps to one of the
+ * of the building's, not a label of the screen — built letters a little
+ * deep (`EXTRUDE_CAPS`) that stand on something. It snaps to one of the
  * building's main axes and turns only when the view along it grows too
  * flat; it looks for free sky or free ground beside the building, never
  * inside it, and keeps its place while that stays good.
@@ -8,15 +9,18 @@
  * Four layings by where the camera is, in the building's size S (its
  * height, or half its width where that is more):
  *
- *   air     the camera higher than `AIR_HEIGHT` S above the building's
- *           top, or looking down on it steeper than `AIR_PITCH_DEG`, or
- *           Modell's parallel view: flat on the free ground beside it,
- *           along the axis nearest the screen's horizontal, never upside
- *           down — map lettering
- *   street  between: upright in the sky beside or above it, parallel to
- *           the facade that faces the camera most, a hairline down to an
- *           anchor on it
- *   near    nearer than `NEAR` S: an inscription in front of its plinth
+ *   air     looking down on it steeper than `GROUND_PITCH_DEG`, from above
+ *           or in Modell's parallel view: lying on the free ground beside
+ *           it, along the axis nearest the screen's horizontal, never
+ *           upside down — map lettering; a place where the ground would be
+ *           seen flatter than `GROUND_LEGIBLE_DEG` is no place, and with
+ *           none the plate stands up as from the street
+ *   street  between: upright, parallel to the facade that faces the
+ *           camera most, standing on it like rooftop letters (on the
+ *           main mass's eave under a tower, else on its top), or
+ *           beside it in the sky with a hairline down to an anchor on it
+ *   near    nearer than `NEAR` S: letters standing before it, a plinth's
+ *           height over the ground
  *   far     beyond `FAR` S: as `street`, the name alone
  *
  * A laying is entered at its threshold and left only past it moved by
@@ -47,6 +51,8 @@ export interface NameplateBody {
   top: number;
   /** the highest vertex */
   peak: Vec3;
+  /** the main mass's eave (y, m), where the data knows it */
+  eave?: number;
 }
 
 export type NameplateMode = "air" | "street" | "near" | "far";
@@ -106,8 +112,13 @@ export interface NameplatePose {
   up: Vec3;
 }
 
-export const AIR_HEIGHT = 1.5;
-export const AIR_PITCH_DEG = 35;
+/** The ground is lettered from views steeper than this (and left below
+ *  it less the hysteresis); a ground place seen flatter than
+ *  `GROUND_LEGIBLE_DEG` would not read. */
+export const GROUND_PITCH_DEG = 50;
+export const GROUND_LEGIBLE_DEG = 35;
+/** …and only from this share of the size over the thing's top. */
+const ABOVE_TOP_SHARE = 0.25;
 export const NEAR = 1;
 export const FAR = 8;
 export const HYSTERESIS = 0.2;
@@ -115,13 +126,27 @@ export const TURN_ANGLE_DEG = 25;
 /** The title's capitals: this share of the footprint's long side (m),
  *  whichever side the plate is on (its size does not jump when the facade
  *  turns), then clamped on screen (`CapRange`). */
-export const CAP_SHARE = 0.07;
+export const CAP_SHARE = 0.09;
+/** How deep the letters are built, in their capital height: their
+ *  returns show from aside, and they stand on what carries them. */
+export const EXTRUDE_CAPS = 0.14;
 /** Gaps between the plate and the building, in cap heights. */
 const GAP_CAPS = 0.8;
-/** How far in front of the facade the plate stands (m). */
+/** How far in front of the facade the plate stands (m): this much, less
+ *  for a small thing (a share of its size, not under the minimum). */
 const STAND_OFF_M = 1.5;
-/** An inscription's foot above the ground (m). */
-const NEAR_FOOT_M = 2.5;
+const STAND_OFF_SHARE = 0.15;
+const STAND_OFF_MIN_M = 0.3;
+/** Rooftop letters sink their descenders' room this far (title caps)
+ *  below the top: the baseline sits just over it. */
+const SIT_CAPS = 0.2;
+/** An inscription's foot over the ground: this share of the building's
+ *  height, within these (m). */
+const INSCRIPTION_SHARE = 0.25;
+const INSCRIPTION_M = { min: 2.5, max: 15 } as const;
+/** Rooftop letters stand on the eave where it lies at least this share
+ *  of the height under the top (a tower, a dome over the nave). */
+const EAVE_BELOW_SHARE = 0.25;
 /** The plate fades out this near (m) to its plane, and is gone nearer
  *  than `FADE_GONE_M`; an inscription, read close up, only as one walks
  *  into it. */
@@ -129,8 +154,9 @@ const FADE_FULL_M = 6;
 const FADE_GONE_M = 4;
 const NEAR_FADE_FULL_M = 2.5;
 const NEAR_FADE_GONE_M = 1;
-/** A ground plate floats this high (m): above the kerbs and markings. */
-const GROUND_LIFT_M = 0.4;
+/** A ground plate's letters stand this high (m) over the highest ground
+ *  under them, besides their depth: above the kerbs and markings. */
+const GROUND_LIFT_M = 0.1;
 /** A candidate's score: what it pays per share of the plate off screen,
  *  hidden, over the HUD, over its own building; and its place's own
  *  standing (the order a draw is broken in), and the kept place's bonus. */
@@ -250,6 +276,37 @@ export function bodySize(body: NameplateBody): number {
   return Math.max(body.top - body.base, body.half[0], 4);
 }
 
+/** What rooftop letters stand on: the eave (y) where it lies well under
+ *  the top, else none (they stand on the top). */
+function carrier(body: NameplateBody): number | null {
+  const { eave } = body;
+  const height = body.top - body.base;
+  return eave !== undefined &&
+    eave > body.base &&
+    body.top - eave >= EAVE_BELOW_SHARE * height
+    ? eave
+    : null;
+}
+
+/** How far before the facade an upright plate stands (m). */
+export function standOff(body: NameplateBody): number {
+  const size = Math.max(body.top - body.base, body.half[0], body.half[1]);
+  return Math.min(
+    Math.max(size * STAND_OFF_SHARE, STAND_OFF_MIN_M),
+    STAND_OFF_M
+  );
+}
+
+/** How steeply (degrees) a camera looks down onto a point. */
+function pitchTo(camera: NameplateCamera, at: Vec3): number {
+  if (camera.ortho) {
+    return (Math.asin(Math.min(-camera.forward[1], 1)) * 180) / Math.PI;
+  }
+  const to = sub(at, camera.position);
+  const distance = Math.max(len(to), 1e-3);
+  return (Math.asin(-to[1] / distance) * 180) / Math.PI;
+}
+
 /** A side's outward normal (x, 0, z) and its half width along the facade,
  *  and the half depth to it from the centre. */
 export function sideFrame(
@@ -279,24 +336,26 @@ export function nameplateMode(
   camera: NameplateCamera,
   previous: NameplateMode | null
 ): NameplateMode {
-  if (camera.ortho) {
-    return "air";
-  }
-  const s = bodySize(body);
-  const mid = centre3(body, (body.base + body.top) / 2);
-  const to = sub(mid, camera.position);
-  const distance = Math.max(len(to), 1e-3);
-  const pitch = (Math.asin(-to[1] / distance) * 180) / Math.PI;
-  const above = (camera.position[1] - body.top) / s;
   // the way out of a laying is its threshold moved by the hysteresis
   const keep = (mode: NameplateMode, f: number) =>
     previous === mode ? 1 + f * HYSTERESIS : 1;
-  if (
-    above > AIR_HEIGHT * keep("air", -1) ||
-    pitch > AIR_PITCH_DEG * keep("air", -1)
-  ) {
+  // the ground is lettered only where it is seen steeply enough to read,
+  // and from over the thing (standing under a tree, its foot is seen
+  // steeply too)
+  const ground = centre3(body, body.base);
+  const over =
+    camera.ortho ||
+    camera.position[1] > body.top + ABOVE_TOP_SHARE * bodySize(body);
+  if (over && pitchTo(camera, ground) > GROUND_PITCH_DEG * keep("air", -1)) {
     return "air";
   }
+  if (camera.ortho) {
+    // a parallel view has no distance: upright, the whole plate
+    return "street";
+  }
+  const s = bodySize(body);
+  const mid = centre3(body, (body.base + body.top) / 2);
+  const distance = Math.max(len(sub(mid, camera.position)), 1e-3);
   const d = distance / s;
   if (d < NEAR * keep("near", 1)) {
     return "near";
@@ -356,7 +415,7 @@ function beforePlate(
 ): boolean {
   const { normal, depth } = sideFrame(body, side);
   const out: Vec3 = [point[0] - body.center[0], 0, point[2] - body.center[1]];
-  return dot(out, normal) > depth + STAND_OFF_M;
+  return dot(out, normal) > depth + standOff(body);
 }
 
 /** The ground plate's text direction: along the side the screen's foot
@@ -424,7 +483,7 @@ export function nameplatePose(
   const up: Vec3 = [0, 1, 0];
   const face = add(
     centre3(body, body.base),
-    scale(normal, depth + STAND_OFF_M)
+    scale(normal, depth + standOff(body))
   );
   const probe = add(face, [0, (body.top - body.base) * 0.6, 0]);
   const cap = capHeight(body, camera, probe, range);
@@ -439,19 +498,37 @@ export function nameplatePose(
   switch (spot) {
     case "front":
     case "back": {
-      origin = add(face, add(scale(r, -w / 2), [0, NEAR_FOOT_M, 0]));
+      // an inscription before the facade, its foot a share of the
+      // building's height over the highest ground under it: above the
+      // people, the cars and the paving's relief
+      const left = add(face, scale(r, -w / 2));
+      const right = add(face, scale(r, w / 2));
+      const foot = Math.max(
+        groundAt(face[0], face[2]),
+        groundAt(left[0], left[2]),
+        groundAt(right[0], right[2])
+      );
+      const lift = Math.min(
+        Math.max(height * INSCRIPTION_SHARE, INSCRIPTION_M.min),
+        INSCRIPTION_M.max
+      );
+      origin = [left[0], foot + lift, left[2]];
       break;
     }
     case "above": {
-      // over the highest point, as seen on this facade's plane
-      const along = dot(sub(body.peak, face), r);
+      // rooftop letters, their baseline just over what carries them:
+      // the main mass's eave where the data knows one under the top (a
+      // church's letters stand on its nave, not on its spire's tip),
+      // centred on the facade; else the top over the highest point as
+      // seen on this facade's plane
+      const eave = carrier(body);
+      const along = eave === null ? dot(sub(body.peak, face), r) : 0;
       const centreAlong = Math.max(Math.min(along, halfWidth), -halfWidth);
+      const sits = (eave ?? body.top) - body.base;
       origin = add(
         face,
-        add(scale(r, centreAlong - w / 2), [0, height + gap, 0])
+        add(scale(r, centreAlong - w / 2), [0, sits - SIT_CAPS * cap, 0])
       );
-      // the leader's foot: the top, on the plate's plane
-      anchor = add(face, add(scale(r, centreAlong), [0, height, 0]));
       break;
     }
     case "right":
@@ -519,7 +596,9 @@ function groundPose(
   // (a level sheet of lettering, not a part standing on the ground: it
   // joins nothing, ADR 0030)
   const y =
-    highestGround(centre, right, up, w / 2, h / 2, groundAt) + GROUND_LIFT_M;
+    highestGround(centre, right, up, w / 2, h / 2, groundAt) +
+    GROUND_LIFT_M +
+    EXTRUDE_CAPS * cap;
   const origin = add(
     [centre[0], y, centre[2]],
     add(scale(right, -w / 2), scale(up, -h / 2))
@@ -644,6 +723,9 @@ export function nameplateCost(
   if (onScreen.some((p) => !p.front)) {
     return Number.POSITIVE_INFINITY;
   }
+  if (layout.mode === "air" && !groundReads(pose, block, scene.camera)) {
+    return Number.POSITIVE_INFINITY;
+  }
   const box = boxOf(onScreen);
   const total = Math.max(area(box), 1e-9);
   const visible = overlap(box, [
@@ -673,8 +755,49 @@ export function nameplateCost(
   return cost;
 }
 
+/** Whether a ground plate is seen steeply enough to read: the view onto
+ *  its middle steeper than `GROUND_LEGIBLE_DEG`. */
+function groundReads(
+  pose: NameplatePose,
+  block: NameplateBlock,
+  camera: NameplateCamera
+): boolean {
+  const middle = add(
+    pose.origin,
+    add(
+      scale(pose.right, (block.width * pose.cap) / 2),
+      scale(pose.up, (block.height * pose.cap) / 2)
+    )
+  );
+  return pitchTo(camera, middle) > GROUND_LEGIBLE_DEG;
+}
+
+/** The best place in one laying, and its cost. */
+function bestIn(
+  body: NameplateBody,
+  mode: NameplateMode,
+  previous: NameplateLayout | null,
+  block: NameplateBlock,
+  range: CapRange,
+  scene: NameplateScene
+): { layout: NameplateLayout; cost: number } {
+  const side = nameplateSide(body, scene.camera, previous?.side ?? null, mode);
+  let layout: NameplateLayout = { mode, side, spot: NAMEPLATE_SPOTS[mode][0] };
+  let cost = Number.POSITIVE_INFINITY;
+  for (const spot of NAMEPLATE_SPOTS[mode]) {
+    const candidate = { mode, side, spot };
+    const c = nameplateCost(body, candidate, previous, block, range, scene);
+    if (c < cost) {
+      layout = candidate;
+      cost = c;
+    }
+  }
+  return { layout, cost };
+}
+
 /** The best layout for the view: the laying (unless `mode` forces one),
- *  the facade, the place. */
+ *  the facade, the place. Where no ground place would read, the plate
+ *  stands up as seen from the street. */
 export function chooseNameplate(
   body: NameplateBody,
   previous: NameplateLayout | null,
@@ -685,18 +808,11 @@ export function chooseNameplate(
 ): NameplateLayout {
   const mode =
     force ?? nameplateMode(body, scene.camera, previous?.mode ?? null);
-  const side = nameplateSide(body, scene.camera, previous?.side ?? null, mode);
-  let best: NameplateLayout = { mode, side, spot: NAMEPLATE_SPOTS[mode][0] };
-  let bestCost = Number.POSITIVE_INFINITY;
-  for (const spot of NAMEPLATE_SPOTS[mode]) {
-    const layout = { mode, side, spot };
-    const cost = nameplateCost(body, layout, previous, block, range, scene);
-    if (cost < bestCost) {
-      best = layout;
-      bestCost = cost;
-    }
+  const best = bestIn(body, mode, previous, block, range, scene);
+  if (mode !== "air" || Number.isFinite(best.cost)) {
+    return best.layout;
   }
-  return best;
+  return bestIn(body, "street", previous, block, range, scene).layout;
 }
 
 /** Whether two layouts are the same place (a change is a cross-fade). */

@@ -117,3 +117,46 @@ test("an ensemble's Buildings, each once", () => {
   ];
   expect(inquiryBuildings(building(tree))).toEqual(["A", "B"]);
 });
+
+test("a thing of the street: its name and one small line", () => {
+  const tree: Inquiry = {
+    kind: "tree",
+    conifer: false,
+    genus: "Tilia",
+    index: 0,
+    osm: false,
+    position: [0, 0],
+    tile: "t",
+    height: 14,
+    crown: 8,
+  };
+  // the register's German name, its species under it
+  expect(
+    nameplateText(
+      tree,
+      card({
+        title: "Winter-Linde",
+        kicker: "Stadtbaum",
+        facts: [{ label: "Art", value: "Tilia cordata" }],
+      })
+    )
+  ).toEqual({
+    rank: "object",
+    title: "Winter-Linde",
+    lines: ["Tilia cordata"],
+  });
+  // no species known: its kind
+  expect(
+    nameplateText(tree, card({ title: "Tilia", kicker: "Stadtbaum" }))
+  ).toEqual({ rank: "object", title: "Tilia", lines: ["Stadtbaum"] });
+  // an unnamed monument is a thing too
+  const fountain: Inquiry = {
+    kind: "monument",
+    tile: "t",
+    position: [0, 0],
+    properties: { kind: "fountain" },
+  };
+  expect(
+    nameplateText(fountain, card({ title: "Brunnen", kicker: "Brunnen" }))
+  ).toEqual({ rank: "object", title: "Brunnen", lines: [] });
+});

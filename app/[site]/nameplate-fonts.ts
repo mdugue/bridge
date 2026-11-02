@@ -4,26 +4,15 @@
  * request to a third party), and declared only — not preloaded: a
  * browser fetches a face when the scene first sets a plate in it
  * (app/_components/nameplate-glyphs.ts `loadFaces`), and only the parts
- * its letters need (Latin Extended for a Polish or Czech name).
+ * its letters need (Latin Extended for a Polish or Czech name). The sans
+ * is the HUD's own Inter (app/layout.tsx), the same files: declared here
+ * once more for its Latin Extended part and its heavy weights.
  */
-import {
-  Bangers,
-  Cormorant_Garamond,
-  Cormorant_SC,
-  IBM_Plex_Mono,
-  Oswald,
-} from "next/font/google";
+import { Bangers, IBM_Plex_Mono, Inter, Oswald } from "next/font/google";
 
-const serif = Cormorant_Garamond({
+const sans = Inter({
   subsets: ["latin", "latin-ext"],
-  weight: "600",
-  variable: "--font-plate-serif",
-  preload: false,
-});
-const serifCaps = Cormorant_SC({
-  subsets: ["latin", "latin-ext"],
-  weight: "600",
-  variable: "--font-plate-serif-caps",
+  variable: "--font-plate-sans",
   preload: false,
 });
 const comic = Bangers({
@@ -47,8 +36,7 @@ const mono = IBM_Plex_Mono({
 
 /** The class names that declare the faces' variables. */
 export const NAMEPLATE_FONT_VARIABLES = [
-  serif.variable,
-  serifCaps.variable,
+  sans.variable,
   comic.variable,
   condensed.variable,
   mono.variable,
