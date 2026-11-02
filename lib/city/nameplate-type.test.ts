@@ -15,7 +15,15 @@ test("every style sets the plate, only Schwarzplan on the ground", () => {
     expect(type.onGround).toBe(style === "figure");
   }
   expect(NAMEPLATE_TYPES.comic.box).toBeDefined();
-  expect(NAMEPLATE_TYPES.comic.leader).toBe("tail");
+});
+
+test("each style's selection outline is drawn in its lettering's ink", () => {
+  for (const { id: style } of RENDER_STYLES) {
+    const t = NAMEPLATE_TYPES[style];
+    expect([t.ink.day, t.lines.ink.day, t.side.day]).toContainEqual(
+      t.outline.line
+    );
+  }
 });
 
 test("light on dark by night where the day sets dark on light", () => {

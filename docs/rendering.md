@@ -708,29 +708,71 @@ outline's, each in its turn (`compileInTurn`).
   CPU copies go after upload), freed when the question goes. A phone pays
   for it in its tile cache, 1 MiB less per safety level
   (`tileCacheBytesFor`, ADR 0047). Kerning from the
-  canvas's own measure of each prefix; tracking per style.
-- **One material, three kinds of quad** (`uvk`: atlas uv and a kind): a
-  glyph (fill at 0.5, halo outward to a share of the reach, antialiased by
-  `fwidth`), a solid (the comic box, its edge and shadow, the leader's
-  strokes, antialiased by their uv), a disc (the leader's dot). Colour and
-  halo ride per vertex (`ink`, `halo`): three vertex buffers past
-  position, four inter-stage variables (`uvk`, `ink`, `halo` and the view
-  position the depth test reads); a fade uniform carries the arrival and
-  the cross-fades.
+  canvas's own measure of each prefix; tracking per style. Each glyph
+  also keeps its coverage at ~16 px per capital (a few kB) for the
+  shadow's mask.
+- **Two kinds of quad** (`uvk`: atlas uv and a kind) in the face's
+  material: a glyph (fill at 0.5, halo outward to a share of the reach,
+  antialiased by `fwidth`) and a solid (the comic box and its edge,
+  antialiased by their uv); the returns (below) have a material of their
+  own over the same geometry. No line ties the plate to its thing
+  (maintainer review 2026-11-02); the selection outline marks it, in the
+  style's own lettering ink (`NameplateType.outline`,
+  `SelectionOutline.setColours`), and the clay's lift and hatch on the
+  asked building follow (`setAskedColours`: towards the lighter, hatched
+  in the darker). A long title breaks between words into even lines
+  (`titleLines`, a joined `A / B` name at its slash). Colour and halo ride
+  per vertex (`ink`, `halo`): three vertex buffers past position, four
+  inter-stage variables (`uvk`, `ink`, `halo` and the view position the
+  depth test reads); a fade uniform carries the arrival and the
+  cross-fades.
+- **Depth.** The letters stand 0.14 of a capital deep (`EXTRUDE_CAPS`):
+  the plate's one geometry is drawn by ten meshes more behind the face
+  (six on a phone; a returns material of their own, the layer a
+  per-object uniform, `onObjectUpdate`, that pushes the quads back),
+  far to near: deepest first, or the face first where the camera sees
+  the plate's back (no depth test sorts them). A layer
+  draws the fill alone in the style's return colour, lit by the sun
+  through the letter's outward normal — two more atlas reads give the
+  field's gradient — and none of what the city hides.
+- **Cast shadow.** A box swept from the plate's rectangle away from the
+  sun down to the ground (stepped along the sun's ray from its highest
+  corner against `groundAt`, so the top line's ray reaches it too, ≤ 400
+  m: a terrace's letters throw theirs onto the river below; asked again
+  each second for ground that streamed in, and a box that never meets the
+  ground fades out inside itself), drawn on its back faces (each pixel
+  once, the camera inside it or not): each pixel takes the scene's surface
+  from the depth through the lens's inverse projection (`getViewPosition`:
+  perspective, parallel and Modell's shear alike), follows the sun's ray
+  from there to the plate's plane in the plate's own units and reads a
+  silhouette mask there (R8, 12 px per capital, ≤ 512 × 128, softened,
+  laid out on the CPU from the glyphs' coverage over the rectangle the
+  quads cover, a comic box's tilted corners too: `shadowMask`). So the
+  letters shade a facade, a roof or the ground alike — only where the sun
+  reaches it: the surface is tested against the scene's own shadow map
+  through the read the styles' `inSun` shares (`sun-shadow-read.ts`), so
+  the letters' shadow joins the city's instead of darkening a shade twice;
+  none with the sun down.
 - **Occlusion** per pixel: the fragment's view depth against the scene's
   (the scene target's depth texture through `view-lens.ts`, whose
 three helpers follow the reversed buffer); behind the
   city it keeps 0.45 of its outline only, so a plate the placing could
   not keep clear reads as a ghost, never as text over a facade. Depth
   test and write are off; it is no part of the shadow map.
-- **The plate** is one mesh placed by a matrix (right, up and normal
-  scaled by the capital height, the block's corner as origin); the leader
-  is a second small mesh rebuilt in world space per frame.
+- **The plate** is one group placed by a matrix (right, up and normal
+  scaled by the capital height, the block's corner as origin); the
+  shadow's box is a small mesh rebuilt in world space per frame.
 - **Choosing** runs every 250 ms on the CPU (`lib/city/nameplate-place.ts`):
   per candidate 9 points against the buildings' BVHs (`cityHides` in
   `nameplate-ask.ts`, `nearestCityHit` with `build = false`) and the
-  HUD's panels marked `data-scene-cover`. While an image is exported the
-  place is held.
+  HUD's panels marked `data-scene-cover`. A better place in the same
+  laying moves the plate only once it has stayed the best for 900 ms
+  (`SETTLE_MS`; a new laying moves at once, its thresholds hold their own
+  hysteresis), and the kept
+  place weighs 0.5 less: a passing view does not shift it. The comic's
+  opaque box keeps off its building twice as hard, stands over the
+  whole thing rather than on an eave, and is never an inscription on the
+  facade. While an image is exported the place is held.
 
 ## Modell: the parallel camera
 
