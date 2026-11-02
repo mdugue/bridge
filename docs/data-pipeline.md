@@ -407,6 +407,22 @@ layer, every area way no tag-less relation absorbs, and which relation
 absorbs each of the others, and applies the rule per read. With
 `BAKE_OSM_CHECK=1` every read is made from the extract too and must match.
 
+### What OSM maps that the twin draws
+
+A thing OSM maps and no bake reads is a thing the twin silently lacks:
+Dresden's Standseilbahn was mapped all along and drawn by nothing until a
+walk passed it. `pipeline/bake/coverage.py` holds the ledger: every value
+of the keys that name a built thing (`railway`, `aerialway`, `man_made`,
+`power`, `historic`, and `route=ferry`, `highway=elevator`) is *drawn* (by
+the named bake module, which a unit test holds to naming it), *planned*
+(decided, a follow-up draws it) or *left out* (with the reason: under the
+ground, flush with the paving, a mark on a map, smaller than a pixel).
+`bun run osm-coverage <site>` counts each value in the site's extract over
+its tiles, one count per OSM object, and fails on a value seen three times
+or more that the ledger does not know. A new city brings its own things (a
+cable car, a lift up a cliff); they are decided before it ships, not found
+by a visitor. On 2026-11-01 all seven sites pass.
+
 ### What a re-bake runs
 
 Each step's run on a tile records what it read (Python's own opens through
