@@ -38,6 +38,7 @@ import {
   plausibleKey,
   CUT_SHORT,
   providerForKey,
+  TOO_LONG,
   TOO_MANY_STEPS,
 } from "@/lib/city/ask-city";
 import {
@@ -434,7 +435,7 @@ function errorText(error: Error): {
     );
   }
   if (status === 413) {
-    return say("Das Gespräch ist zu lang geworden.", false, true);
+    return say(TOO_LONG, false, true);
   }
   if (status === 422) {
     return say(`${TOO_MANY_STEPS} Frag bitte anders.`, false, true);
@@ -455,17 +456,21 @@ function errorText(error: Error): {
   if (message === TOO_MANY_STEPS) {
     return say(`${TOO_MANY_STEPS} Frag bitte anders.`, false, true);
   }
-  if (KEY_CODES.has(code) || KEY_TROUBLE.test(message)) {
+  // the codes first, the provider's words only where no code says it
+  if (KEY_CODES.has(code)) {
     return say(message, true);
   }
   // the adapters' codes for a spent output budget and a full context
-  if (code === "max_tokens" || /max_output_tokens/.test(message)) {
+  if (
+    code === "max_tokens" ||
+    (code === "incomplete" && message === "max_output_tokens")
+  ) {
     return say(CUT_SHORT);
   }
   if (code === "context_overflow") {
-    return say("Das Gespräch ist zu lang geworden.", false, true);
+    return say(TOO_LONG, false, true);
   }
-  return say(message);
+  return say(message, KEY_TROUBLE.test(message));
 }
 
 function Conversation({

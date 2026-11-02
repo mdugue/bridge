@@ -179,8 +179,9 @@ export async function* ended(
  * How the stream's last chunk leaves the run: `stop` (the model chose to
  * end), `waits` (a scene tool waits for the browser), `cut` (between a
  * tool's result and the model's turn on it: the turn cap), `length` (the
- * model's output ran out mid-answer) or `other` (an error already said
- * why, or nothing came).
+ * model's output ran out mid-answer), `refused` (a content filter, or
+ * on OpenRouter a provider's failure mid-answer) or `other` (an error
+ * already said why, or nothing came).
  */
 type RunEnd = "stop" | "waits" | "cut" | "length" | "refused" | "other";
 

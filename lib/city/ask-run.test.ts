@@ -297,7 +297,7 @@ describe("an answer that stops says why", () => {
     expect(out.at(-1)).toContain("abgeschnitten");
   });
 
-  test("a refusal says so", async () => {
+  test("a filtered or failed answer says it broke off", async () => {
     const out = await types(
       ended(list(finished("content_filter")), new AbortController().signal)
     );

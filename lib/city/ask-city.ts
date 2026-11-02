@@ -173,6 +173,9 @@ export const ASK_LIMITS = {
 /** Why an answer stopped at its turn cap, in the stream or as a 422. */
 export const TOO_MANY_STEPS = "Die Antwort brauchte zu viele Schritte.";
 
+/** A conversation past what the server or the model takes. */
+export const TOO_LONG = "Das Gespräch ist zu lang geworden.";
+
 /** Why an answer ended mid-text: the model's output ran out. */
 export const CUT_SHORT =
   "Die Antwort wurde abgeschnitten: dem Modell gingen die Wörter aus.";
@@ -269,11 +272,11 @@ export function conversationProblem(
     return "keine Frage";
   }
   if (messages.length > ASK_LIMITS.messages) {
-    return "Das Gespräch ist zu lang geworden — bitte neu beginnen.";
+    return `${TOO_LONG} Bitte neu beginnen.`;
   }
   const chars = messages.reduce<number>((n, m) => n + messageChars(m), 0);
   if (chars > ASK_LIMITS.conversationChars) {
-    return "Das Gespräch ist zu lang geworden — bitte neu beginnen.";
+    return `${TOO_LONG} Bitte neu beginnen.`;
   }
   if (lastQuestion.length > ASK_LIMITS.questionChars) {
     return `Die Frage ist zu lang (höchstens ${ASK_LIMITS.questionChars} Zeichen).`;
