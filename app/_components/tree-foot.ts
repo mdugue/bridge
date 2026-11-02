@@ -770,23 +770,47 @@ function litterGraph(r: FootRasters): PitGraph {
           .mul(float(1).sub(smoothstep(crown, crown.mul(LEAF_BEYOND), d)))
       : float(0);
     const density = clamp(under.add(kerb.mul(0.8)), 0, 1).mul(footLitter);
-    const cellP = xy.div(LEAF_CELL).toVar();
-    const cell = floor(cellP).toVar();
-    const h = gdHash(cell).toVar();
-    const h2 = gdHash(cell.add(17.3)).toVar();
-    const inCell = cellP.sub(cell).sub(0.5).toVar();
-    // a turned oval, off the cell's centre
-    const turn = h2.mul(6.2832);
-    const c = cos(turn);
-    const sn = sin(turn);
-    const p = inCell.sub(vec2(h.sub(0.5), h2.sub(0.5)).mul(0.3));
-    const u = vec2(p.x.mul(c).add(p.y.mul(sn)), p.y.mul(c).sub(p.x.mul(sn)));
-    const oval = length(u.mul(vec2(1, 1.9)));
-    const w = max(fwidth(oval), 0.02);
-    const leaf = float(1)
-      .sub(smoothstep(float(0.36).sub(w), float(0.36).add(w), oval))
-      .mul(step(h, density.mul(0.75)));
-    const pick = gdHash(cell.add(5.1));
+    // two grids of cells turned against each other, a leaf in some cells
+    // of each: one grid alone read as rows
+    const layer = (angle: number, cellM: number, salt: number) => {
+      const ca = Math.cos(angle);
+      const sa = Math.sin(angle);
+      const at = vec2(
+        xy.x.mul(ca).add(xy.y.mul(sa)),
+        xy.y.mul(ca).sub(xy.x.mul(sa))
+      )
+        .div(cellM)
+        .add(salt);
+      const cell = floor(at).toVar();
+      const h = gdHash(cell).toVar();
+      const h2 = gdHash(cell.add(17.3)).toVar();
+      const keep = gdHash(cell.add(41.7));
+      const size = gdHash(cell.add(8.9)).mul(0.12).add(0.24);
+      // a turned oval, well off the cell's centre (inside it)
+      const turn = h2.mul(6.2832);
+      const c = cos(turn);
+      const sn = sin(turn);
+      const p = at
+        .sub(cell)
+        .sub(0.5)
+        .sub(vec2(h.sub(0.5), h2.sub(0.5)).mul(float(0.92).sub(size.mul(2))));
+      const u = vec2(p.x.mul(c).add(p.y.mul(sn)), p.y.mul(c).sub(p.x.mul(sn)));
+      const oval = length(u.mul(vec2(1, 1.9)));
+      const w = max(fwidth(oval), 0.02);
+      return {
+        leaf: float(1)
+          .sub(smoothstep(size.sub(w), size.add(w), oval))
+          .mul(step(keep, density.mul(0.5))),
+        pick: gdHash(cell.add(5.1)),
+        shade: h,
+      };
+    };
+    const a = layer(0, LEAF_CELL, 0);
+    const b = layer(0.61, LEAF_CELL * 1.27, 3.7);
+    const onB = step(a.leaf, b.leaf.sub(0.001));
+    const leaf = max(a.leaf, b.leaf);
+    const pick = mix(a.pick, b.pick, onB);
+    const h = mix(a.shade, b.shade, onB);
     const colour = mix(
       mix(
         linear([...LEAF_YELLOW]),
