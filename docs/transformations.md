@@ -3209,6 +3209,9 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   (the shader holds it there too), and a loose grid's jitter left off.
   Every mesh wall in the footprint wall's plane that overlaps it keeps
   the lattice, so a facade of several LoD2 polygons runs on unbroken.
+  Every site measured 2026-11-02 (walls modelled / phased): München
+  1 697 / 580, Dresden 577 / 157, Leipzig 448 / 79, Grimma 87 / 32,
+  Meißen 18 / 6, Hamburg 12 / 1, Unna none (no panoramas).
   Elsewhere the axes are centred on the wall at the object's spacing with
   0.7 m kept at its ends.
   **The drawing** (`app/_components/clay-windows.ts`, in the clay's
