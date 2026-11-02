@@ -2544,7 +2544,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   for the tree's height — over 15 cm per metre, or over 4 m, 0.1 % of
   the register — is dropped, not clamped). The viewer fits a measured
   trunk's girth to the radius the trunk geometry draws at 1.3 m, its
-  flared foot included (× 1.3 for the seven-sided, barkless trunk;
+  flared foot included (× 1.3 for the nine-sided, barkless trunk;
   `tree-inventory.ts` `trunkGirth` / `trunkRadiusAt`; a taper-only fit
   drew a 25 m tree's trunk half as thick again), the height rule stays
   where none is measured. **OSM trees**: the BBBike extract (2026-09-19)
@@ -2683,9 +2683,11 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
 - **Tree feet** `≈ assumed` (*Baumfuß*, 2026-11-02) — every trunk grows out
   of the ground rather than standing on it:
   - **the bark's own foot** (`buildTrunkMaterial`, every trunk, every
-    tier): up to 0.45 m over the ground it turns to damp earth in three to
-    five lobed roots (a hash of where the tree stands), the troughs about
-    half as high, darkest at the ground. A separate root-flare skirt round
+    tier): three or four roots (a hash of where the tree stands) bulge the
+    foot out by up to 55 % of its radius, fading out 0.6 m up the bark
+    (`trunkRoots`, two extra rings low in the trunk, `TRUNK_RINGS`, nine
+    sides); up to 0.45 m over the ground the bark turns to damp earth
+    along them, the troughs about half as high, darkest at the ground. A separate root-flare skirt round
     the trunk read as a shoe and was dropped; the flat disc before it
     floated on a slope and let the paving show through.
   - in paving — the class raster's built-up, road, railway or unclassified

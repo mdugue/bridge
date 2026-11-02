@@ -56,6 +56,7 @@ import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
   pineBase,
   TRUNK_FOOT_R,
+  TRUNK_RINGS,
   TRUNK_ROWS,
   TRUNK_TOP_R,
   trunkFlare,
@@ -933,6 +934,10 @@ function printedCrown(shown: V3, kept: V3, twig: F): V3 {
  * + scale); branches were dropped here because, shared, they'd repeat
  * identically — they belong on a near-distance LOD crown.
  */
+/** The trunk's sides: enough for the three or four roots its foot
+ *  bulges out to read as lobes. */
+const TRUNK_SIDES = 9;
+
 export function buildTrunkGeo(): BufferGeometry {
   // The profile (rows, taper, flare) is lib/city/tree-inventory.ts's, so a
   // measured trunk is fitted to the radius drawn (`trunkRadiusAt`).
@@ -940,10 +945,21 @@ export function buildTrunkGeo(): BufferGeometry {
     TRUNK_TOP_R,
     TRUNK_FOOT_R,
     TRUNK_H,
-    7,
+    TRUNK_SIDES,
     TRUNK_ROWS
   );
   t.translate(0, TRUNK_H / 2, 0);
+  // the cylinder's evenly spaced rows moved onto the profile's rings (two
+  // of them low in the flared foot)
+  // with the taper's radius there
+  const taper = (u: number) => TRUNK_FOOT_R + (TRUNK_TOP_R - TRUNK_FOOT_R) * u;
+  const rows = t.attributes.position;
+  for (let i = 0; i < rows.count; i++) {
+    const from = rows.getY(i) / TRUNK_H;
+    const to = TRUNK_RINGS[Math.round(from * TRUNK_ROWS)] ?? 1;
+    const k = taper(to) / taper(from);
+    rows.setXYZ(i, rows.getX(i) * k, to * TRUNK_H, rows.getZ(i) * k);
+  }
   const bend = 0.05 * TRUNK_H;
   const bx = 0.82;
   const bz = 0.57;
@@ -971,9 +987,13 @@ export function buildTrunkGeo(): BufferGeometry {
 }
 
 /** The bark's foot turns to earth up to this height (m), its lobes (the
- *  buttress roots, three to five by a hash of where the tree stands)
+ *  buttress roots, three or four by a hash of where the tree stands)
  *  reaching that high, the troughs between them about half. */
 const TRUNK_EARTH_H = 0.45;
+/** The roots bulge the foot out by up to this fraction of its radius,
+ *  fading out by `ROOT_BULGE_H` (m) up the bark. */
+const ROOT_BULGE = 0.55;
+const ROOT_BULGE_H = 0.6;
 /** The earth the foot turns to (sRGB): the pit's mulch in the bark's
  *  shade, warmer and darker than the bark so it reads. */
 const TRUNK_EARTH = new Color().setRGB(
@@ -984,37 +1004,51 @@ const TRUNK_EARTH = new Color().setRGB(
 );
 
 /**
+ * The trunk's foot as roots: the vertex's height over the ground (m, after
+ * the instance's scale and drop), the lobe round the stem it lies on (0 a
+ * trough, 1 a root's crest; three or four roots, turned by a hash of where
+ * the tree stands) and the vertex pushed out along the roots, most at the
+ * ground. One shape for every tree, no geometry of its own.
+ */
+function trunkRoots(): { lobe: F; metres: F; local: V3 } {
+  const at = instanceMatrix();
+  const local = trunkDrop();
+  const drop = instanceFloat(TRUNK_DROP);
+  const metres = local.y.add(drop).mul(length(at.mul(vec4(0, 1, 0, 0)).xyz));
+  const seed = fract(
+    sin(dot(at.mul(vec4(0, 0, 0, 1)).xz, vec2(12.9898, 78.233))).mul(43758.5)
+  );
+  const lobes = floor(seed.mul(2)).add(3);
+  const angle = atan(positionGeometry.z, positionGeometry.x);
+  const lobe = cos(angle.mul(lobes).add(seed.mul(40)))
+    .mul(0.5)
+    .add(0.5);
+  const low = float(1).sub(smoothstep(0, ROOT_BULGE_H, metres));
+  const out = lobe.mul(lobe).mul(low).mul(low).mul(ROOT_BULGE).add(1);
+  return {
+    lobe,
+    metres,
+    local: vec3(local.x.mul(out), local.y, local.z.mul(out)),
+  };
+}
+
+/**
  * Trunk material with a gentle vertical value gradient (darker rooted
  * base), from the geometry's own height (before the instance scale). At
- * the foot the bark turns to earth in a few lobed roots, so the trunk
- * grows out of the ground instead of standing on it; a separate skirt
- * read as a shoe. Scene-wide: it carries nothing of a tile.
+ * the foot it grows out of the ground in a few roots: bulged out in shape
+ * (`trunkRoots`) and turning from bark to earth, so it stands in the
+ * ground instead of on it; a separate skirt read as a shoe. Scene-wide: it
+ * carries nothing of a tile.
  */
 export function buildTrunkMaterial(): MeshStandardNodeMaterial {
   return sceneMaterial("vegetation-trunk", () => {
     const m = new MeshStandardNodeMaterial({ color: TRUNK_BASE, roughness: 1 });
     m.name = "trunk";
-    m.positionNode = instancePosition(trunkDrop());
+    const roots = trunkRoots();
+    m.positionNode = instancePosition(roots.local);
     const tg = clamp(varying(positionGeometry.y).div(TRUNK_H), 0, 1);
-    // height over the foot in metres, and the roots' lobe round the stem
-    const at = instanceMatrix();
-    const local = trunkDrop();
-    const drop = instanceFloat(TRUNK_DROP);
-    const metres = varying(
-      local.y.add(drop).mul(length(at.mul(vec4(0, 1, 0, 0)).xyz)),
-      "vTrunkFootH"
-    );
-    const seed = fract(
-      sin(dot(at.mul(vec4(0, 0, 0, 1)).xz, vec2(12.9898, 78.233))).mul(43758.5)
-    );
-    const lobes = floor(seed.mul(3)).add(3);
-    const angle = atan(positionGeometry.z, positionGeometry.x);
-    const lobe = varying(
-      cos(angle.mul(lobes).add(seed.mul(40)))
-        .mul(0.5)
-        .add(0.5),
-      "vTrunkLobe"
-    );
+    const metres = varying(roots.metres, "vTrunkFootH");
+    const lobe = varying(roots.lobe, "vTrunkLobe");
     const reach = lobe.mul(0.5).add(0.5).mul(TRUNK_EARTH_H);
     const earth = float(1).sub(smoothstep(reach.mul(0.3), reach, metres));
     // the register's bark per tree (TreeInstance.bark; white elsewhere)
