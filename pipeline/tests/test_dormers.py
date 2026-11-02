@@ -173,6 +173,67 @@ def test_a_roof_form_is_its_own_or_its_parents():
     assert dormers.roof_forms(city, ["a", "a-1", "b", "c"]) == ["3400", "3400", "3100", None]
 
 
+def mansard_profile(n: int = 40) -> tuple[np.ndarray, np.ndarray]:
+    """A mansard house over n columns: 4 m of 70° lower roof each side,
+    a 20° upper roof between; its roof heights and slopes, one row."""
+    x = np.arange(n) + 0.5
+    edge = np.minimum(x, n - x)
+    steep, shallow = math.tan(math.radians(70)), math.tan(math.radians(20))
+    z = np.where(edge < 4, 100 + edge * steep, 100 + 4 * steep + (edge - 4) * shallow)
+    slope = np.where(edge < 4, 70.0, 20.0)
+    return z, slope
+
+
+def test_a_steep_roof_under_a_shallow_one_is_a_mansard_whatever_lod2_calls_it():
+    z, slope = mansard_profile()
+    roof, sl = np.tile(z, (20, 1)), np.tile(slope, (20, 1))
+    labels = np.ones(roof.shape, np.int32)
+    assert dormers.mansards(roof, sl, labels)[1]
+    # a spire: the steep part over the roof, not under it
+    tower = np.where(sl > 60, roof + 30, roof)
+    assert not dormers.mansards(tower, sl, labels)[1]
+    # a gable with a few steep cells along a wall
+    gable = np.full(roof.shape, 45.0)
+    gable[0, :10] = 70.0
+    assert not dormers.mansards(roof, gable, labels)[1]
+    # a small house's steep sliver: too few cells
+    small = labels.copy()
+    small[:, 10:] = 2
+    small[2:, :10] = 2
+    assert not dormers.mansards(roof, sl, small)[1]
+
+
+def test_a_building_lod2_drew_too_high_as_a_whole_is_lowered_onto_the_scan():
+    roof = np.full((20, 20), 100.0)
+    slope = np.zeros_like(roof)
+    labels = np.zeros(roof.shape, np.int32)
+    labels[:, :10], labels[:, 10:] = 1, 2
+    rng = np.random.default_rng(1)
+    dom = roof - 1.2 + rng.normal(0, 0.05, roof.shape)
+    dom[:, 10:] = roof[:, 10:] + 0.2  # within the fit: read as it is
+    dom[2:4, 2:4] += 1.5  # a dormer does not move the median
+    shift = dormers.shifts(dom, roof, slope, labels)
+    assert abs(shift[1] - 1.2) < 0.05
+    assert shift[2] == 0.0
+    # a roof that is off in places only: no shift
+    dom[:, :5] = roof[:, :5]
+    assert dormers.shifts(dom, roof, slope, labels)[1] == 0.0
+
+
+def test_a_mansards_break_is_no_seam_to_its_dormers():
+    z, slope = mansard_profile()
+    roof = np.tile(z, (20, 1))
+    seam = dormers.seams(roof)
+    # the break between the lower and the upper roof is a seam ...
+    assert seam[:, 3:5].any()
+    # ... but none by the lower roof's cells, where its dormers rise to it
+    flank = np.tile(slope > dormers.MAX_SLOPE, (20, 1))
+    assert not dormers.seams(roof, flank)[:, :8].any()
+    # a seam elsewhere on the roof stays one
+    roof[:, 20:] -= 3.0
+    assert dormers.seams(roof, flank)[:, 18:22].any()
+
+
 # --- G11: a shed dormer's fall -----------------------------------------------
 
 

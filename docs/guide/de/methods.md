@@ -61,7 +61,11 @@ zur Regel passt.
   First oder auf einem Flachdach ist ein Hausschornstein — außer sie liegt
   entlang eines Firsts oder einer Kehle, die das Gebäudemodell etwas
   daneben gezeichnet hat, oder steht auf einem Flachdach in einer Reihe mit
-  anderen (Masten auf einem Bahnsteigdach).
+  anderen (Masten auf einem Bahnsteigdach). Liegt das ganze Gebäudemodell
+  gleichmäßig höher oder tiefer als die Messung (das Taschenbergpalais
+  1,2 m), wird es vorher darauf gesetzt. Ein steiles Unterdach unter einem
+  flacheren Oberdach ist eine Mansarde, auch wo das Gebäudemodell sie nicht
+  so nennt; ihre Gauben dürfen bis 80° steil stehen.
 - **Brückentragwerk:** Was entlang der Brückenachse mindestens 3 m über dem
   Deck steht, auf mindestens 25 m Länge, wird ein Bogen oder ein Fachwerk.
 - **Zuordnungen:** Ein Laden aus OpenStreetMap gehört zu dem Gebäude, in
