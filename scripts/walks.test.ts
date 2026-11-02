@@ -131,7 +131,7 @@ for (const { site, walks } of sitesWithWalks) {
       const missing = [...named].filter((id) =>
         /^Q\d+$/.test(id)
           ? !(id in wikidata.entities)
-          : /^m\d+_\d+$/.test(id)
+          : /^m\d+_\d+(?:_\d+)?$/.test(id)
             ? !monuments.has(id)
             : !inCity(id)
       );

@@ -11,12 +11,14 @@
  * Its profile is straight grades joined by vertical curves:
  *
  * - **the grade** (rise over run) stays within the line's steepest
- *   (`LEVEL_GRADE`: a main line ~4 % at most, a tram 8 %);
+ *   (`LEVEL_GRADE`: a main line ~4 % at most, a tram 8 %; a funicular
+ *   `STEEP_GRADE`);
  * - **a change of grade is rounded** by a vertical curve of at least
  *   `PROFILE_RADIUS` — the EBO's 2 000 m for the railway (Ril 800.0110:
  *   r_a ≥ 0.4·v², 2 000 m at the least on main lines), the BOStrab
- *   alignment rules' 500 m for a tram's sag — so the grade changes by at
- *   most run/R between two samples.
+ *   alignment rules' 500 m for a tram's sag, `STEEP_RADIUS` for a
+ *   funicular — so the grade changes by at most run/R between two
+ *   samples.
  *
  * Within those limits the profile stays as close to the levels as it can
  * (least squares, robust: a bump of the DGM a few metres long pulls it
@@ -26,13 +28,18 @@
  * bed is laid at the profile, the sides slope to the measured ground —
  * the embankment and the cutting a real line has.
  */
-import { type Level, LEVEL_GRADE, type LevelLine } from "./levels";
+import { type Level, type LevelLine, lineGrade } from "./levels";
 
 /** The smallest vertical curve a line's grade changes on (m). */
 export const PROFILE_RADIUS: Readonly<Record<LevelLine, number>> = {
   rail: 2000,
   tram: 500,
 };
+
+/** A steep track's (lib/city/levels.ts `STEEP_GRADE`): a funicular's
+ *  grade follows its slope, from 17 to 29 % on Dresden's Standseilbahn
+ *  within a few hundred metres. */
+export const STEEP_RADIUS = 100;
 
 /** Huber's knee (m): a sample further than this off the profile weighs
  *  less, as one off by its distance — a DGM bump, not the line's ground. */
@@ -51,9 +58,12 @@ export interface ProfileOptions {
   radius: number;
 }
 
-/** The options of a line kind. */
-export function profileOptions(line: LevelLine): ProfileOptions {
-  return { grade: LEVEL_GRADE[line], radius: PROFILE_RADIUS[line] };
+/** The options of a line kind, or of a steep track. */
+export function profileOptions(line: LevelLine, steep = false): ProfileOptions {
+  return {
+    grade: lineGrade(line, steep),
+    radius: steep ? STEEP_RADIUS : PROFILE_RADIUS[line],
+  };
 }
 
 /** A symmetric pentadiagonal matrix's banded Cholesky factor: L with
