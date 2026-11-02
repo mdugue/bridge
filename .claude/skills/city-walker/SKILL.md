@@ -117,9 +117,9 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   (`buildTileVegetation`) joins both into the tile's one vegetation
   control. `low-vegetation-layer.ts` draws every hedge (OSM's and the
   DLM's), its lumps pushed out by a world-space noise so pieces agree.
-  `tree-foot.ts` puts a foot under every trunk — a root flare, and a tree
-  pit in paving — as three lit sets (blended pits; an opaque hashed flare
-  that, like the trunk, takes no shadow) on the trunks' own
+  The trunk's bark turns to earth at its foot (`buildTrunkMaterial`);
+  `tree-foot.ts` puts a tree pit under every trunk in paving as two lit,
+  blended sets on the trunks' own
   attribute objects (no bytes of their own, nothing counted twice), their
   materials per tile with the class and edge rasters and the light in
   their slots; rings render before earth (`renderOrder`) so pits merge.

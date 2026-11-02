@@ -2607,17 +2607,14 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   canopy's are inferred. On the fine terrain level only, so a Schwarzplan
   zoomed out past it shows none.
 
-- **Tree feet** `≈ assumed` (*Baumfuß*, 2026-11-02) — every trunk on the fine
-  level stands in a foot (`tree-foot.ts`) that covers the ground under it:
-  - a **root flare**: a low skirt from 0.32 m up the bark out to 0.4–0.7 m
-    beyond the trunk's foot and 8 cm under the ground, its rim lobed into
-    three to five buttress roots by a hash of where the tree stands, its
-    colour from the bark to soil (to the pit's earth in paving), its rim
-    dissolving into the ground (opaque, hashed alpha). Lit as the trunk
-    is and, like it, taking no shadow: up the bark it lies inside the
-    trunk's own shadow-map texel, which sleeved every foot in black. On a slope it sinks into the hillside as the trunk
-    does — the flat disc it replaced floated over the downhill side and
-    was cut by the uphill one.
+- **Tree feet** `≈ assumed` (*Baumfuß*, 2026-11-02) — every trunk grows out
+  of the ground rather than standing on it:
+  - **the bark's own foot** (`buildTrunkMaterial`, every trunk, every
+    tier): up to 0.45 m over the ground it turns to damp earth in three to
+    five lobed roots (a hash of where the tree stands), the troughs about
+    half as high, darkest at the ground. A separate root-flare skirt round
+    the trunk read as a shoe and was dropped; the flat disc before it
+    floated on a slope and let the paving show through.
   - in paving — the class raster's built-up, road, railway or unclassified
     land, off the baked lawn (the edge raster's meadow side) — a **tree
     pit**: mulched earth with a grain, litter flecks and the odd tuft of
@@ -2628,15 +2625,13 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
     0.32 m short of the road edge (the edge raster's road distance), off
     the kerb. Alpha-blended and lit as the ground is (its sun, shadows,
     sky view and horizon).
-  Which foot a tree gets is read once per vertex at the trunk's foot. All
-  of it fades out between 70 and 150 m. Three `Instances` sets per chunk on
+  Which pit a tree gets is read once per vertex at the trunk's foot. The
+  pits fade out between 70 and 150 m. Two `Instances` sets per chunk on
   the trunks' own attribute objects (matrices, drop, bark colour) and two
-  geometries per tile, with materials per tile whose slots hold the tile's
+  a quad per tile, with materials per tile whose slots hold the tile's
   class and edge rasters and its light — no bytes per tree on a phone.
-  The paper styles leave the blended pit out and draw the flare with the
-  trunk. Before, the trunk stabbed
-  straight into a flat ground; a first multiplied glaze (a disc) let the
-  paving show through and read as a sticker.
+  The paper styles leave the blended pit out. Before, the trunk stabbed
+  straight into a flat ground.
 
 - **Hedges (OSM, laser-scan height)** `◎ detected` `❝ taken` and **trees outside the canopy mask**
   (laser scan) — on by default. The laser scan is baked for every tile of the

@@ -10,12 +10,15 @@ import {
   MeshStandardNodeMaterial,
   Object3D,
   Quaternion,
+  SRGBColorSpace,
   type UniformNode,
   Vector3,
 } from "three/webgpu";
 import {
+  atan,
   cameraPosition,
   clamp,
+  cos,
   distance,
   dot,
   float,
@@ -163,8 +166,8 @@ export interface VegetationContext extends GroundContext {
    */
   sunDirection?: Vector3;
   /**
-   * The tile's tree-foot materials (tree-foot.ts: a root flare, and a pit
-   * in paving, read off the tile's rasters and lit by its light), made
+   * The tile's tree-pit materials (tree-foot.ts: a pit in paving,
+   * read off the tile's rasters and lit by its light), made
    * when the tile turns out to have trees; without them the trunks stand
    * on the bare ground.
    */
@@ -967,10 +970,25 @@ export function buildTrunkGeo(): BufferGeometry {
   return t;
 }
 
+/** The bark's foot turns to earth up to this height (m), its lobes (the
+ *  buttress roots, three to five by a hash of where the tree stands)
+ *  reaching that high, the troughs between them about half. */
+const TRUNK_EARTH_H = 0.45;
+/** The earth the foot turns to (sRGB): the pit's mulch in the bark's
+ *  shade, warmer and darker than the bark so it reads. */
+const TRUNK_EARTH = new Color().setRGB(
+  128 / 255,
+  98 / 255,
+  70 / 255,
+  SRGBColorSpace
+);
+
 /**
  * Trunk material with a gentle vertical value gradient (darker rooted
- * base), from the geometry's own height (before the instance scale).
- * Scene-wide: it carries nothing of a tile.
+ * base), from the geometry's own height (before the instance scale). At
+ * the foot the bark turns to earth in a few lobed roots, so the trunk
+ * grows out of the ground instead of standing on it; a separate skirt
+ * read as a shoe. Scene-wide: it carries nothing of a tile.
  */
 export function buildTrunkMaterial(): MeshStandardNodeMaterial {
   return sceneMaterial("vegetation-trunk", () => {
@@ -978,10 +996,36 @@ export function buildTrunkMaterial(): MeshStandardNodeMaterial {
     m.name = "trunk";
     m.positionNode = instancePosition(trunkDrop());
     const tg = clamp(varying(positionGeometry.y).div(TRUNK_H), 0, 1);
+    // height over the foot in metres, and the roots' lobe round the stem
+    const at = instanceMatrix();
+    const local = trunkDrop();
+    const drop = instanceFloat(TRUNK_DROP);
+    const metres = varying(
+      local.y.add(drop).mul(length(at.mul(vec4(0, 1, 0, 0)).xyz)),
+      "vTrunkFootH"
+    );
+    const seed = fract(
+      sin(dot(at.mul(vec4(0, 0, 0, 1)).xz, vec2(12.9898, 78.233))).mul(43758.5)
+    );
+    const lobes = floor(seed.mul(3)).add(3);
+    const angle = atan(positionGeometry.z, positionGeometry.x);
+    const lobe = varying(
+      cos(angle.mul(lobes).add(seed.mul(40)))
+        .mul(0.5)
+        .add(0.5),
+      "vTrunkLobe"
+    );
+    const reach = lobe.mul(0.5).add(0.5).mul(TRUNK_EARTH_H);
+    const earth = float(1).sub(smoothstep(reach.mul(0.3), reach, metres));
     // the register's bark per tree (TreeInstance.bark; white elsewhere)
-    m.colorNode = materialColor
+    const bark = materialColor
       .mul(instanceTint())
       .mul(mix(0.74, 1.05, smoothstep(0, 0.6, tg)));
+    m.colorNode = mix(
+      bark,
+      vec3(TRUNK_EARTH.r, TRUNK_EARTH.g, TRUNK_EARTH.b),
+      earth
+    ).mul(mix(0.82, 1, smoothstep(0, 0.08, metres)));
     return m;
   });
 }
