@@ -28,6 +28,8 @@ import { dataLayersOf } from "@/lib/city/data-layers";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { createLookState } from "@/lib/city/look-state";
 import type { CameraState } from "@/lib/city/pose";
+import type { RenderStyle } from "@/lib/city/render-style";
+import { stopCamera, stopDate, stopView, type Walk } from "@/lib/city/walks";
 import {
   decodeLook,
   encodeSnapshot,
@@ -83,6 +85,7 @@ import {
   TramStatusLine,
 } from "./data-layers-panel";
 import { SceneSidebar } from "./scene-sidebar";
+import { WalkCard } from "./walk-player";
 import { SidebarPace } from "./sidebar-pace";
 import {
   afterTask,
@@ -100,6 +103,12 @@ import { INITIAL_MINUTES, useSceneTime } from "./scene-time";
 import { useSite } from "./site-context";
 import { VirtualJoystick } from "./virtual-joystick";
 import { missingPrerequisite } from "./gpu-support";
+
+/** A walk's glides take this much longer than a jump to a place: the
+ *  stop's story starts on the way. */
+const WALK_PACE = 2.2;
+/** The visitor's day, read when a walk's stop is shown (not in a render). */
+const today = () => new Date();
 
 interface Props {
   /** The render budget the page was opened with (see scene-profile.ts) */
@@ -575,10 +584,13 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     })
   );
   const lookValues = useSyncExternalStore(look.subscribe, look.get, look.get);
+  /** the time and style before a walk, put back when it ends; while it
+   *  runs, its stops' styles are not the visitor's to remember */
+  const beforeWalk = useRef<{ at: Date; style: RenderStyle } | null>(null);
   useEffect(() => {
     let remembered = look.get().style;
     return look.subscribe((values) => {
-      if (values.style !== remembered) {
+      if (beforeWalk.current === null && values.style !== remembered) {
         remembered = values.style;
         writeStoredStyle(values.style);
       }
@@ -665,6 +677,68 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
       void gone.then(() => location.reload());
     }
     return true;
+  };
+  // A walk under way (walk-player.tsx): which stop the card tells, and the
+  // picture style and time it found, to give back when it ends.
+  const [walking, setWalking] = useState<{ index: number; walk: Walk } | null>(
+    null
+  );
+  /** the walk's own glide while it flies: its flight tells when it ends,
+   *  is cancelled or gives way to another (`onProgress` 1) */
+  const walkGlide = useRef<object | null>(null);
+  /**
+   * Shows a walk's stop: a slow glide to its view (the card can be read,
+   * or heard, on the way) — a jump only out of Modell, which no glide
+   * leaves —, today at the stop's hour, in its picture style.
+   */
+  const showStop = (walk: Walk, index: number) => {
+    const stop = walk.stops[index];
+    const h = handleRef.current;
+    if (!(stop && h)) {
+      return;
+    }
+    if (walking === null) {
+      beforeWalk.current = { at: time.current(), style: look.get().style };
+    }
+    setWalking({ index, walk });
+    // the sun travels with the camera: no jump from one hour to the next
+    const hour = time.glideTo(stopDate(stop, today()));
+    if (h.getViewMode() === "model") {
+      walkGlide.current = null;
+      h.applyCameraState(stopCamera(stop, h.offset));
+      hour(1);
+    } else {
+      // a slow glide the visitor looks about in while the text is read:
+      // a drag on the way turns the view, it does not stop the walk
+      const mine = {};
+      walkGlide.current = mine;
+      h.flyToViewpoint(stopView(stop), {
+        ground: stop.ground,
+        lookAround: true,
+        onProgress: (t) => {
+          hour(t);
+          if (t >= 1 && walkGlide.current === mine) {
+            walkGlide.current = null;
+          }
+        },
+        pace: WALK_PACE,
+      });
+    }
+    look.set({ style: stop.style ?? "pastel" });
+  };
+  const endWalk = () => {
+    // ended on the way: the camera stays where it is, not flying on alone
+    // (only the walk's own glide: one to a place picked since goes on)
+    if (walkGlide.current) {
+      walkGlide.current = null;
+      handleRef.current?.stopGlide();
+    }
+    setWalking(null);
+    if (beforeWalk.current) {
+      time.setInstant(beforeWalk.current.at);
+      look.set({ style: beforeWalk.current.style });
+      beforeWalk.current = null;
+    }
   };
   const [snapshotText, setSnapshotText] = useState("");
   const [snapshotMsg, setSnapshotMsg] = useState<string | null>(null);
@@ -1083,23 +1157,36 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
                 onTab={setTab}
               />
 
+              {walking && (
+                <WalkCard
+                  coarse={coarse}
+                  index={walking.index}
+                  onClose={endWalk}
+                  onIndex={(i) => showStop(walking.walk, i)}
+                  walk={walking.walk}
+                />
+              )}
               <InquiryPanel
                 coarse={coarse}
                 onClose={closeInquiry}
                 onPreview={(i) => handleRef.current?.previewCandidate(i)}
                 onSelect={(i) => handleRef.current?.selectCandidate(i)}
               />
-              <SceneOverlays
-                coarse={coarse}
-                live={live}
-                locate={locate}
-                onClimb={(v) => handleRef.current?.setClimbInput(v)}
-                onMovementMode={(m) => handleRef.current?.setMovementMode(m)}
-                onMove={(x, y) => handleRef.current?.setMoveInput(x, y)}
-                onNorth={() => handleRef.current?.turnModelTo(0)}
-                onToggleModel={() => handleRef.current?.toggleModel()}
-                onTurn={(deg) => handleRef.current?.turnModel(deg)}
-              />
+              {/* a phone's walk sheet owns the bottom: the stick and the
+                  toolbar would stand under it (a drag still looks about) */}
+              {!(coarse && walking) && (
+                <SceneOverlays
+                  coarse={coarse}
+                  live={live}
+                  locate={locate}
+                  onClimb={(v) => handleRef.current?.setClimbInput(v)}
+                  onMovementMode={(m) => handleRef.current?.setMovementMode(m)}
+                  onMove={(x, y) => handleRef.current?.setMoveInput(x, y)}
+                  onNorth={() => handleRef.current?.turnModelTo(0)}
+                  onToggleModel={() => handleRef.current?.toggleModel()}
+                  onTurn={(deg) => handleRef.current?.turnModel(deg)}
+                />
+              )}
             </>
           )}
         </div>
@@ -1149,6 +1236,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
           minutes={time.minutes}
           onLook={look.set}
           onResetQuality={resetQuality}
+          onStartWalk={(walk) => showStop(walk, 0)}
           onDefaultTime={() => time.set(time.day, INITIAL_MINUTES)}
           onExport={exportImage}
           onStudy={exportStudy}

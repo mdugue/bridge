@@ -3,6 +3,7 @@ import {
   DatabaseIcon,
   EyeIcon,
   FileTextIcon,
+  FootprintsIcon,
   GlobeIcon,
   LayersIcon,
   LibraryIcon,
@@ -37,6 +38,7 @@ const ICONS: Record<string, Glyph> = {
   "data-flow": (p) => <WaypointsIcon {...p} />,
   transformations: (p) => <ListChecksIcon {...p} />,
   portability: (p) => <GlobeIcon {...p} />,
+  walks: (p) => <FootprintsIcon {...p} />,
   "adr/README": (p) => <ScaleIcon {...p} />,
   "plans/README": (p) => <MilestoneIcon {...p} />,
 };
