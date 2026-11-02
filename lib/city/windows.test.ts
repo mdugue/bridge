@@ -17,6 +17,13 @@ import {
   wallEaveSlot,
   wallRises,
   groundLift,
+  LENGTH_MAX_M,
+  MEASURED_AXES,
+  MEASURED_AXIS_MAX_M,
+  measuredAxes,
+  measuredColumns,
+  measuredSlot,
+  slotAxes,
   NO_DOOR,
   PALACE_STOREY_M,
   slotDoor,
@@ -497,6 +504,65 @@ describe("facadeAttribute", () => {
     expect(metres(f[0])).toBeCloseTo(-metres(f[4 * 1]), 1);
   });
 
+  test("a wall whose axes were measured: its windows where the photos saw them", () => {
+    const mesh = quads(boxWalls(0, 0, 0, 14, 10, 12));
+    const axes = [
+      {
+        a: [0, 0],
+        b: [14, 0],
+        n: [0, -1],
+        object: 0,
+        phase: 1.6,
+        axis: 3,
+        w: 1.2,
+      },
+    ] satisfies Parameters<typeof facadeAttribute>[6];
+    const f = facadeAttribute(
+      mesh,
+      () => true,
+      [],
+      [],
+      undefined,
+      undefined,
+      axes
+    );
+    // the axes at x = 1.6, 4.6, 7.6, 10.6 fit (0.7 m + half a window in
+    // from the ends): their middle, 6.1 m in, is the wall's new middle
+    expect(Math.abs(metres(f[0]))).toBeCloseTo(6.1, 1);
+    expect(Math.abs(metres(f[4]))).toBeCloseTo(7.9, 1);
+    // the length slot holds four columns at the measured 3 m
+    expect(slotAxes(f[1])).toEqual({ axis: 3, n: 4 });
+    // the east wall measured nothing: centred, its own length
+    expect(metres(f[4 * 6 + 1])).toBeCloseTo(10, 1);
+  });
+
+  test("a facade of several polygons keeps the lattice on each", () => {
+    const front = (x0: number, x1: number) => ({
+      object: 0,
+      pts: [
+        [x0, 0, 0],
+        [x1, 0, 0],
+        [x1, 0, 12],
+        [x0, 0, 12],
+      ],
+    });
+    const mesh = quads([front(0, 14), front(14.2, 28)]);
+    const f = facadeAttribute(mesh, () => true, [], [], undefined, undefined, [
+      {
+        a: [0, 0],
+        b: [28, 0],
+        n: [0, -1],
+        object: 0,
+        phase: 1.6,
+        axis: 3,
+        w: 1.2,
+      },
+    ]);
+    // the phase point lies on the first; the second runs on at 16.6, 19.6, …
+    expect(slotAxes(f[1])).toEqual({ axis: 3, n: 4 });
+    expect(slotAxes(f[4 * 6 + 1])).toEqual({ axis: 3, n: 4 });
+  });
+
   test("a party wall gets none; the other walls keep theirs", () => {
     const mesh = quads([
       ...boxWalls(0, 0, 0, 10, 10, 12),
@@ -875,5 +941,87 @@ describe("palaces", () => {
       index
     );
     expect(palace.from).toBe("type");
+  });
+});
+
+describe("measured axes", () => {
+  test("the lattice's axes that fit, counted exactly", () => {
+    const m = measuredColumns(0, 14, { at: 1.6, axis: 3, w: 1.2 });
+    expect(m?.c).toBeCloseTo(6.1, 6);
+    expect(m?.n).toBe(4);
+    expect(m?.axis).toBe(3);
+    // any axis of the lattice says the same
+    expect(
+      measuredColumns(0, 14, { at: 13.6, axis: 3, w: 1.2 })?.c
+    ).toBeCloseTo(6.1, 6);
+    // none fits on a wall shorter than a window and its edges
+    expect(measuredColumns(0, 2, { at: 1, axis: 3, w: 1.2 })).toBeUndefined();
+  });
+
+  test("the length slot holds the count and the spacing", () => {
+    const units = measuredSlot(7, 3.88);
+    expect(units).toBeGreaterThanOrEqual(MEASURED_AXES.base);
+    expect(units).toBeLessThan(32_767);
+    const got = slotAxes(-units);
+    expect(got?.n).toBe(7);
+    expect(got?.axis).toBeCloseTo(3.88, 6);
+    // the longest length the slot holds stays a length
+    expect(
+      slotAxes(Math.round((LENGTH_MAX_M / FACADE_SCALE_M) * 32_767))
+    ).toBeUndefined();
+    // the most axes at the widest spacing still fit in snorm16
+    expect(
+      measuredSlot(MEASURED_AXES.maxN, MEASURED_AXIS_MAX_M)
+    ).toBeLessThanOrEqual(32_767);
+  });
+
+  test("each wall keeps its own measured spacing", () => {
+    const wall = (axis: number): WindowWall =>
+      ({
+        a: [100, 200],
+        b: [114, 200],
+        eave: 12,
+        imgs: 6,
+        L: 14,
+        model: { axis, grid: "regular", h: 1.5, phase: 1.6, w: 1.2 },
+        n: [0, -1],
+        oid: "A",
+      }) as WindowWall;
+    const index = new Map([["A", 0]]);
+    const spec = { axis: 2.3, h: 1.5, style: 0, w: 1.2 };
+    const got = measuredAxes([wall(3.88)], index, () => spec, {
+      cx: 100,
+      cy: 200,
+    });
+    expect(got).toEqual([
+      {
+        a: [0, 0],
+        axis: 3.88,
+        b: [14, 0],
+        n: [0, -1],
+        object: 0,
+        phase: 1.6,
+        w: 1.2,
+      },
+    ]);
+    // a window never wider than its measured spacing leaves room for
+    expect(
+      measuredAxes([wall(1.5)], index, () => spec, { cx: 100, cy: 200 })[0]?.w
+    ).toBeCloseTo(1.5 - WINDOW_ROWS.gap, 6);
+    // a spacing outside what the slot holds: nothing
+    expect(
+      measuredAxes([wall(7)], index, () => spec, { cx: 100, cy: 200 })
+    ).toEqual([]);
+    // no phase measured, or no windows drawn: nothing
+    const plain = {
+      ...wall(3),
+      model: { axis: 3, grid: "regular", h: 1.5, w: 1.2 },
+    } as WindowWall;
+    expect(
+      measuredAxes([plain], index, () => spec, { cx: 100, cy: 200 })
+    ).toEqual([]);
+    expect(
+      measuredAxes([wall(3)], index, () => undefined, { cx: 100, cy: 200 })
+    ).toEqual([]);
   });
 });

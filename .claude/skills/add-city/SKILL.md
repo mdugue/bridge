@@ -17,6 +17,10 @@ ADR 0012 (sources and stand-ins), ADR 0005 (CRS).
 2. `bun run fetch <id>` (add `--lsc` where the provider reads a laser scan),
    then `bun run bake <id> --jobs N`, then `bun run site <id>` to see what
    is missing.
+   `bun run osm-coverage <id>` lists the built things OSM maps there that
+   no bake draws and nobody decided about (a cable car, a lift up a
+   cliff): decide each in `pipeline/bake/coverage.py`'s ledger, drawn,
+   planned or left out with its reason, before the city ships.
 3. `bun run dev` and walk it; take real-GPU plates (`SHOTS_SITE=<id>
    bun run shots`) at its viewpoints and landmarks.
 4. `bun run docs:matrix` (its test fails otherwise).
