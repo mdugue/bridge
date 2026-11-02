@@ -2016,9 +2016,11 @@ export class DressingPlugin {
   /** Dressings build one at a time, after the gate: each is a long task.
    *  The crowns' seasonal programs warm up beside them (warmCrowns). */
   private readonly lane = createTaskGate(1, MAX_DRESSING_OVERTAKES);
-  /** the last dressing's compile wait, which the next build waits out
-   *  first (queueDressing: one compile ahead at most) */
-  private compileAhead: Promise<void> = Promise.resolve();
+  /** the compile waits of the last two dressings built: a build waits
+   *  out the older one first (queueDressing: it overlaps the last one's
+   *  compile, never two) */
+  private lastCompile: Promise<void> = Promise.resolve();
+  private olderCompile: Promise<void> = Promise.resolve();
   /** `work` in the dressings' turn: after the gate, one at a time, the
    *  lower rank first */
   private turn<T>(work: () => Promise<T>, rank: number): Promise<T> {
@@ -2138,12 +2140,13 @@ export class DressingPlugin {
     // after it, so the next tile's build overlaps this one's compile
     // (the compiles still take their turns, `compileInTurn`). Waiting on
     // the compile inside the lane left it idle for up to COMPILE_WAIT_MS
-    // a tile. One compile ahead at most: a build waits for the last
-    // one's compile wait first, so built dressings (unweighed until they
-    // hang) and the compile queue never pile up behind a slow GPU — a
-    // queue past the wait would hang them before their compile.
+    // a tile. One compile ahead at most: a build overlaps the last one's
+    // compile but waits out the one before it, so built dressings
+    // (unweighed until they hang) and the compile queue never pile up
+    // behind a slow GPU — a queue past the wait would hang them before
+    // their compile.
     void this.turn(async (): Promise<(() => Promise<void>) | undefined> => {
-      await this.compileAhead;
+      await this.olderCompile;
       const entry = this.dressed.get(scene);
       if (!entry || this.disposed) {
         return undefined; // the tile (or the stream) left before its turn
@@ -2183,7 +2186,8 @@ export class DressingPlugin {
         () => withinCompileWait(compiled),
         extras.tileId
       );
-      this.compileAhead = waited.catch(() => undefined);
+      this.olderCompile = this.lastCompile;
+      this.lastCompile = waited.catch(() => undefined);
       return async () => {
         await waited;
         built();

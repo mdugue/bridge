@@ -1200,10 +1200,9 @@ stays their measure; the tile cache counts true bytes.
   so every tile in view has trees before the nearest has all of them.
   The lane holds a dressing's build only; its compile wait and its
   hanging run after the lane, so the next build overlaps the last one's
-  compile — one compile ahead at most, the next build waits out the last
-  compile wait first (`compileAhead`), so built dressings and the compile
-  queue never pile up (headless full profile, Dresden start: first frame
-  to *Alles geladen* 289 s → 229 s under SwiftShader). A fine level that
+  compile but waits out the one before it (`olderCompile`): at most one
+  compile ahead, so built dressings and the compile queue never pile up (headless full profile, Dresden start: first frame
+  to *Alles geladen* 289 s → 243 s under SwiftShader). A fine level that
   shows before its own trees hang — a phone shows it the moment it loads
   — borrows its coarse level's crowns until they do
   (`DressingPlugin.standInCrowns`, `coarseCrownsStandIn`): they are
