@@ -8,7 +8,9 @@ there. The surface model sees them: the excess `DOM − LoD2 roof` rises by
 a metre or two. Measured against the roof's own fit (the excess's median
 over `FIT_M` around — a roof LoD2 drew a metre off is not a dormer, and a
 roof it drew badly is skipped: `FIT_TOLERANCE_M`; a building it drew
-off as a whole is first moved onto the surface model: `shifts`), every
+off as a whole is first moved onto the surface model: `shifts`; a part
+with steep faces it drew off in plan is read a second time moved onto
+it, `plan_moves`, and what that reading adds is kept), every
 blob of
 `MIN_EXCESS_M` or more, at any size and however close to the next, not at
 the roof's outline (one cell in) and clear of every mapped or measured
@@ -42,7 +44,8 @@ same way at one depth, set straight at the row's median depth, in one
 shape (`unify`), and along it, in runs of one rhythm (`runs`), on its
 slots — over the window axes of the wall below where the street photos
 measured them (dlm/windows_<tile>.json, `wall_axes`), else in the
-dormers' own rhythm. A row reads one dormer once (`snap`,
+dormers' own rhythm (`rhythm_min`: looser the longer the run), else
+evenly where every gap is a whole number of slots (`even`). A row reads one dormer once (`snap`,
 `overlapping`); an empty slot stays empty. The Taschenbergpalais' street
 photos show one identical dormer over each window axis, where DOM1 had
 read their centres up to 3 m apart down the slope and 1–4 m wide.
@@ -93,6 +96,7 @@ import math
 
 import numpy as np
 import shapely
+import shapely.affinity
 from rasterio.features import rasterize
 from scipy import ndimage as ndi
 from scipy.ndimage import map_coordinates
@@ -140,6 +144,23 @@ SHIFT_MIN_CELLS = 30
 # may be before the roof is not trusted
 FIT_M = 9
 FIT_TOLERANCE_M = 0.4
+# A pitched part with steep (over MAX_SLOPE) faces LoD2 drew off in plan
+# (`plan_moves`; only those: a mansard's lower faces are where a metre
+# off loses the dormers, and a plain roof's fit hardly tells a metre
+# along its ridge): moved by up to
+# PLAN_MAX_M (every PLAN_STEP_M, then a quarter of it round the best)
+# where that brings its cells' spread round their median deviation from
+# the surface model (MAD) to PLAN_GAIN of what it was, PLAN_MIN_GAIN_M
+# less at least, over its steep faces too; a part of PLAN_MIN_CELLS,
+# PLAN_PITCHED of them pitched.
+# The Taschenbergpalais' north wing: 0.5 m east and 0.25 m north, MAD
+# 0.51 → 0.16 m; its north face's dormers lay outside LoD2's lower roof.
+PLAN_MAX_M = 1.0
+PLAN_STEP_M = 0.5
+PLAN_GAIN = 0.7
+PLAN_MIN_GAIN_M = 0.08
+PLAN_MIN_CELLS = 40
+PLAN_PITCHED = 0.3
 MIN_EXCESS_M = 0.7
 # A blob deeper than this along the slope is the roof drawn low, not a
 # dormer (m); across the slope a row of dormers runs as wide as it is.
@@ -219,20 +240,30 @@ ROW_GAP_M = 12.0
 # (`rhythm`): a spacing within RHYTHM_M (every RHYTHM_STEP_M) and
 # RHYTHM_SHORT–RHYTHM_GAP of the run's median gap (about one dormer a
 # slot: a dormer missed or two blobs of one are the exception), its slots
-# one spacing apart; taken where its dormers stand
-# that close to them (`RHYTHM_MIN`, the mean resultant of their phases:
-# 0.8 is a spread of about a tenth of the spacing).
+# one spacing apart; taken where its dormers stand that close to them
+# (the mean resultant of their phases, `rhythm_min`: more than chance
+# gives n of them, RHYTHM_SPREAD/√n, RHYTHM_MIN at least — 0.6 is a
+# spread of a sixth of the spacing).
 ROW_MIN = 3
 RHYTHM_M = (1.8, 7.0)
 RHYTHM_STEP_M = 0.02
-RHYTHM_MIN = 0.8
+RHYTHM_MIN = 0.55
+RHYTHM_SPREAD = 1.6
+# the measured window axes are a few fixed spacings, no search: a flat bar
+RHYTHM_WINDOWS = 0.8
 RHYTHM_SHORT = 0.75
 RHYTHM_GAP = 1.3
 # Blobs closer than this across the row are one dormer's two halves.
 MERGE_M = 0.5
+# A row set evenly (`even`) has EVEN_MIN dormers at least, none two closer
+# than EVEN_NEAREST of its spacing.
+EVEN_MIN = 4
+EVEN_NEAREST = 0.6
+# … and its spacing within EVEN_DRIFT of the row's median gap.
+EVEN_DRIFT = 0.25
 # A dormer more than SNAP_SHARE of the spacing off its slot is something
 # else on the roof (a skylight, a stair head) and stays where it stands.
-SNAP_SHARE = 0.3
+SNAP_SHARE = 0.35
 # A row with no run is set straight in one shape only where its dormers'
 # widths lie within ALIKE of each other; in a run one wider than WIDE
 # times the run's median (a Zwerchhaus; two dormers DOM1 reads as one blob
@@ -251,6 +282,12 @@ WIDTH_SHARE = 0.8
 # them (RHYTHM_MIN).
 WALL_REACH_M = 12.0
 AXES_EVERY = (1, 2, 3)
+
+
+def drawn_slope(roof: np.ndarray, res: float) -> np.ndarray:
+    """The roof's slope per cell (degrees)."""
+    gx, gy = roof_gradient(np.where(np.isfinite(roof), roof, np.nan), res)
+    return np.degrees(np.arctan(np.hypot(gx, gy)))
 
 
 def roof_gradient(roof: np.ndarray, res: float) -> tuple[np.ndarray, np.ndarray]:
@@ -311,6 +348,23 @@ def slope_cap(s: Surfaces, polys: list[shapely.Geometry], forms: list[str | None
     return cap
 
 
+def moved_flanks(
+    flanks: list[shapely.Geometry], polys: list[shapely.Geometry], moves: np.ndarray
+) -> list[shapely.Geometry]:
+    """The mansards' lower faces moved with the part (`polys`, already
+    moved) that holds most of each (`plan_moves`)."""
+    if not moves.any() or not flanks:
+        return flanks
+    tree = shapely.STRtree(polys)
+    out = []
+    for fl in flanks:
+        share = {int(k): polys[int(k)].intersection(fl).area for k in tree.query(fl)}
+        k = max(share, key=lambda k: share[k], default=None)
+        moved = k is not None and share[k] > 0 and moves[k].any()
+        out.append(shapely.affinity.translate(fl, *moves[k]) if moved else fl)
+    return out
+
+
 def flank_cells(s: Surfaces, flanks: list[shapely.Geometry]) -> np.ndarray:
     """The cells a mansard's steep lower face covers (`mansard_flanks`)."""
     shapes = [(f, 1) for f in flanks if not f.is_empty]
@@ -319,6 +373,143 @@ def flank_cells(s: Surfaces, flanks: list[shapely.Geometry]) -> np.ndarray:
     return rasterize(
         shapes, out_shape=s.roof.shape, transform=s.field.transform, fill=0, dtype=np.uint8
     ).astype(bool)
+
+
+def _moved(a: np.ndarray, dx: float, dy: float, order: int, res: float) -> np.ndarray:
+    """A raster window of `res` m cells moved dx east and dy north (m)."""
+    return ndi.shift(a, (-dy / res, dx / res), order=order, mode="nearest", prefilter=False)
+
+
+def _misfit(
+    dom: np.ndarray,
+    roof: np.ndarray,
+    mask: np.ndarray,
+    steep: np.ndarray,
+    move: tuple[float, float, float],
+) -> tuple[float, float]:
+    """The spread (MAD) of `dom` − `roof` over `mask`, the roof and its
+    mask moved by `move` (dx, dy, the cell size): over all its cells, and over its `steep` ones
+    (0 where it has too few)."""
+    m = (_moved(mask.astype(float), *move[:2], 0, move[2]) > 0.5) & np.isfinite(dom)
+    d = dom - _moved(roof, *move[:2], 1, move[2])
+    st = m & (_moved(steep.astype(float), *move[:2], 0, move[2]) > 0.5)
+    if m.sum() < PLAN_MIN_CELLS:
+        return math.inf, math.inf
+
+    def mad(v: np.ndarray) -> float:
+        return float(np.median(np.abs(v - np.median(v)))) if len(v) >= 8 else 0.0
+
+    return mad(d[m]), mad(d[st])
+
+
+def plan_offset(
+    dom: np.ndarray, roof: np.ndarray, mask: np.ndarray, steep: np.ndarray, res: float = 1.0
+) -> tuple[float, float]:
+    """How far a part's roof (`roof` over `mask`, a window) lies off the
+    surface model in plan (east, north; m), (0, 0) where moving it does
+    not fit it clearly better (PLAN_GAIN, PLAN_MIN_GAIN_M), over its
+    `steep` faces (a mansard's lower ones) as well, or where it has none
+    to tell (a plain roof's fit hardly sees a move along its ridge; the
+    best move is kept within PLAN_MAX_M): LoD2 may draw a part's
+    upper roof and its lower faces off each other, and moving it then
+    loses the lower faces' dormers."""
+    filled = np.where(mask, roof, np.nan)
+    if np.isnan(filled).all():
+        return 0.0, 0.0
+    near = ndi.distance_transform_edt(np.isnan(filled), return_distances=False, return_indices=True)
+    filled = filled[tuple(near)]
+    base, base_steep = _misfit(dom, filled, mask, steep, (0.0, 0.0, res))
+    if base_steep == 0.0:
+        return 0.0, 0.0
+
+    def tried(dx: float, dy: float) -> tuple[float, float, float, float, float]:
+        # ties (a roof along its ridge) go to the shortest move
+        mad, mad_steep = _misfit(dom, filled, mask, steep, (dx, dy, res))
+        return round(mad, 3), math.hypot(dx, dy), mad_steep, dx, dy
+
+    steps = np.arange(-PLAN_MAX_M, PLAN_MAX_M + 1e-9, PLAN_STEP_M)
+    best = min(tried(dx, dy) for dx in steps for dy in steps)
+    q = PLAN_STEP_M / 2
+    bx, by = best[3], best[4]
+    near_best = [(bx + i * q, by + j * q) for i in (-1, 0, 1) for j in (-1, 0, 1)]
+    best = min(tried(x, y) for x, y in near_best if max(abs(x), abs(y)) <= PLAN_MAX_M + 1e-9)
+    mad, _, mad_steep, dx, dy = best
+    if mad > PLAN_GAIN * base or base - mad < PLAN_MIN_GAIN_M:
+        return 0.0, 0.0
+    if mad_steep > PLAN_GAIN * base_steep:
+        return 0.0, 0.0
+    return float(dx), float(dy)
+
+
+def plan_moves(s: Surfaces, polys: list[shapely.Geometry]) -> np.ndarray:
+    """Each pitched part's move in plan onto the surface model (east,
+    north; m), (0, 0) for most (`plan_offset`)."""
+    gx, gy = roof_gradient(s.roof, s.field.res)
+    slope = np.nan_to_num(np.degrees(np.arctan(np.hypot(gx, gy))))
+    parts = building_labels(s, polys, list(range(1, len(polys) + 1)))
+    moves = np.zeros((len(polys), 2))
+    for k in range(len(polys)):
+        win = s.window(polys[k], 3.0)
+        if win is None:
+            continue
+        mask = (parts[win] == k + 1) & np.isfinite(s.roof[win])
+        if mask.sum() < PLAN_MIN_CELLS or (slope[win][mask] >= MIN_SLOPE).mean() < PLAN_PITCHED:
+            continue
+        steep = (slope[win] > MAX_SLOPE) & mask
+        moves[k] = plan_offset(s.dom[win], s.roof[win], mask, steep, s.field.res)
+    return moves
+
+
+def _moved_parts(s: Surfaces, polys: list[shapely.Geometry], moves: np.ndarray):
+    """Each moved part (`plan_moves`): its index, window, cells (its
+    footprint's, its eaves within two cells) and the cells it moves to."""
+    parts = building_labels(s, polys, list(range(1, len(polys) + 1)))
+    for k in np.nonzero(moves.any(axis=1))[0]:
+        win = s.window(polys[k], 3.0)
+        if win is None:
+            continue
+        mask = (parts[win] == k + 1) & np.isfinite(s.roof[win])
+        to = _moved(mask.astype(float), *moves[k], 0, s.field.res) > 0.5
+        yield int(k), win, mask, to
+
+
+def moved_roof(s: Surfaces, polys: list[shapely.Geometry], moves: np.ndarray) -> np.ndarray:
+    """The LoD2 roof with each part moved by `moves` (`plan_moves`): every
+    moved part's cells cleared, then its roof written where it moved to
+    (the higher where two meet)."""
+    if not moves.any():
+        return s.roof
+    moved = list(_moved_parts(s, polys, moves))
+    roof = s.roof.copy()
+    for _, win, mask, _ in moved:
+        roof[win][mask] = np.nan
+    for k, win, mask, to in moved:
+        filled = np.where(mask, s.roof[win], np.nan)
+        near = ndi.distance_transform_edt(
+            np.isnan(filled), return_distances=False, return_indices=True
+        )
+        shifted = _moved(filled[tuple(near)], *moves[k], 1, s.field.res)
+        sub = roof[win]
+        sub[to] = np.fmax(np.nan_to_num(sub[to], nan=-np.inf), shifted[to])
+    return roof
+
+
+def moved_seams(
+    s: Surfaces, polys: list[shapely.Geometry], moves: np.ndarray, seam: np.ndarray
+) -> np.ndarray:
+    """LoD2's seams (`seams`, read on the roof as drawn: a moved part's
+    step against its neighbours is none) with each moved part's moved
+    along (`moved_roof`); `s` holds the drawn roof."""
+    if not moves.any():
+        return seam
+    moved = list(_moved_parts(s, polys, moves))
+    out = seam.copy()
+    for _, win, mask, _ in moved:
+        out[win][mask] = False
+    for k, win, mask, to in moved:
+        shifted = _moved((seam[win] & mask).astype(float), *moves[k], 0, s.field.res) > 0.5
+        out[win][to] |= shifted[to]
+    return out
 
 
 def building_labels(s: Surfaces, polys: list[shapely.Geometry], groups: list[int]) -> np.ndarray:
@@ -525,15 +716,33 @@ class Roofs:
         forms,
         groups: list[int],
         flanks: list[shapely.Geometry],
+        moves: np.ndarray | None = None,
     ) -> None:
+        """`moves` each part's move in plan (`plan_moves`), none where not
+        given (LoD2 as drawn)."""
         f = s.field
+        # the parts LoD2 drew off in plan moved onto the surface model: the
+        # roof, the footprints, the mansards' faces read where it saw them
+        # (a dormer's place is turned back into LoD2's at the end: `back`)
+        s = copy.copy(s)
+        drawn_s, drawn, drawn_polys = s, s.roof, polys
+        self.moves = np.zeros((len(polys), 2)) if moves is None else moves
+        s.roof = moved_roof(s, polys, self.moves)
+        s.gap = s.dom - np.fmax(s.ground, s.roof)
+        polys = [
+            shapely.affinity.translate(p, *mv) if mv.any() else p
+            for p, mv in zip(polys, self.moves, strict=True)
+        ]
+        drawn_steep = drawn_slope(drawn, f.res)
+        drawn_flank = flank_cells(s, flanks) & (drawn_steep > MAX_SLOPE)
+        drawn_flank &= drawn_steep <= MANSARD_MAX_SLOPE
+        flanks = moved_flanks(flanks, polys, self.moves)
         under = np.isfinite(s.roof)
         self.gx, self.gy = roof_gradient(np.where(under, s.roof, np.nan), f.res)
         self.slope = np.degrees(np.arctan(np.hypot(self.gx, self.gy)))
         labels = building_labels(s, polys, groups)
         # the surface model raised onto each building LoD2 drew too high as
         # a whole: what the fit, the tops and the falls read
-        s = copy.copy(s)
         lift = shifts(s.dom, s.roof, self.slope, labels)[labels]
         s.dom = s.dom + lift
         s.above = s.above + lift
@@ -542,13 +751,13 @@ class Roofs:
         inner = ndi.binary_erosion(under, iterations=1)
         raw = np.where(inner & np.isfinite(s.dom), s.dom - s.roof, np.nan)
         local = ndi.median_filter(np.nan_to_num(raw), size=FIT_M)
-        fits = inner & (np.abs(local) < FIT_TOLERANCE_M)
         on_flank = flank_cells(s, flanks)
+        fits = inner & (np.abs(local) < FIT_TOLERANCE_M)
         cap = np.where(on_flank, MANSARD_MAX_SLOPE, slope_cap(s, polys, forms))
         fits &= self.slope <= cap
         self.excess = np.where(fits, raw - local, np.nan)
-        flank = on_flank & (self.slope > MAX_SLOPE) & (self.slope <= MANSARD_MAX_SLOPE)
-        self.seam = seams(s.roof, flank)
+        # LoD2's own seams: a moved part's step against its neighbours is none
+        self.seam = moved_seams(drawn_s, drawn_polys, self.moves, seams(drawn, drawn_flank))
         # the roof's outermost cell measured: its eaves, a parapet's foot
         self.edge = inner & ~ndi.binary_erosion(inner, iterations=1)
         self.polys = polys
@@ -559,16 +768,25 @@ class Roofs:
         self.trees = shapely.STRtree(shapely.points(trees)) if len(trees) else None
         self.bounds = tile.bounds
 
+    def back(self, d: dict) -> tuple[float, float]:
+        """A dormer's place `d` in LoD2's frame: its host's plan move
+        undone (`plan_moves`)."""
+        dx, dy = self.moves[d["of"]]
+        return d["x"] - dx, d["y"] - dy
+
     def host(self, x: float, y: float) -> int | None:
         """The footprint a blob at (x, y) sits on — the smallest that holds
         it —, or None: off the tile's own, near a tree, on no footprint."""
-        if not owns(self.bounds, x, y):
-            return None
         p = shapely.Point(x, y)
         if self.trees is not None and len(self.trees.query(p.buffer(TREE_CLEAR_M))):
             return None
         hits = [int(k) for k in self.hosts.query(p, predicate="within")]
-        return min(hits, key=lambda k: self.polys[k].area) if hits else None
+        if not hits:
+            return None
+        k = min(hits, key=lambda k: self.polys[k].area)
+        # owned where it stands in LoD2's frame (`back`), as the first reading
+        dx, dy = self.moves[k]
+        return k if owns(self.bounds, x - dx, y - dy) else None
 
     def chimney_axis(self, sl, m: np.ndarray, of: int) -> tuple[float, float, float]:
         """How a chimney stands: down the roof round it, or on a roof under
@@ -658,7 +876,7 @@ def find(
     (`building_groups`; each its own where not given), `flanks` the
     mansards' lower faces (`mansard_flanks`), `walls` the walls with
     measured window axes per building (`measured_walls`)."""
-    roofs = Roofs(
+    args = (
         tile,
         s,
         polys,
@@ -666,14 +884,18 @@ def find(
         groups or list(range(1, len(polys) + 1)),
         flanks or [],
     )
-    found: list[dict] = []
-    for sl, m, pitched in blobs(roofs.excess, pitched_cells(roofs.slope)):
-        of = roofs.host(*centre(s, sl, m))
-        if of is None:
-            continue
-        d = roofs.read(sl, m, pitched, of)
-        if d is not None:
-            found.append(d | {"of": of, "level": not pitched})
+    roofs = Roofs(*args)
+    found = read(roofs, s)
+    # the parts LoD2 drew off in plan read again where the surface model
+    # saw them: the dormers that read adds (one LoD2 put beside its lower
+    # roof), turned back into LoD2's frame
+    moves = plan_moves(s, polys)
+    if moves.any():
+        moved = Roofs(*args, moves=moves)
+        extra = [d for d in read(moved, s) if moves[d["of"]].any()]
+        for d in extra:
+            d["x"], d["y"] = moved.back(d)
+        found += [d for d in extra if not twice(d, found)]
     building = [roofs.groups[d["of"]] for d in found]
     found = in_rows(found, building, walls or {}, roofs.place)
     out: list[dict] = []
@@ -684,6 +906,32 @@ def find(
         point = {"type": "Point", "coordinates": [round(x, 2), round(y, 2)]}
         out.append(feature(point, {"of": ids[of], **d}))
     return uncrowded(out, level)
+
+
+def read(roofs: Roofs, s: Surfaces) -> list[dict]:
+    """Every dormer and chimney one reading of the roofs finds (`roofs`),
+    in its frame, with its host (`of`) and whether it stands on a flat
+    roof (`level`)."""
+    found: list[dict] = []
+    for sl, m, pitched in blobs(roofs.excess, pitched_cells(roofs.slope)):
+        of = roofs.host(*centre(s, sl, m))
+        if of is None:
+            continue
+        d = roofs.read(sl, m, pitched, of)
+        if d is not None:
+            found.append(d | {"of": of, "level": not pitched})
+    return found
+
+
+def twice(d: dict, found: list[dict]) -> bool:
+    """Whether `d` is one of `found` read again: of the same kind, its
+    centre within half their widths of one's."""
+    for e in found:
+        if (d.get("k") == e.get("k")) and math.hypot(d["x"] - e["x"], d["y"] - e["y"]) < (
+            d["w"] + e["w"]
+        ) / 2:
+            return True
+    return False
 
 
 def uncrowded(found: list[dict], level: list[bool]) -> list[dict]:
@@ -772,6 +1020,14 @@ def resultant(u: np.ndarray, p: float, at: float | None = None) -> tuple[float, 
     return float((z * np.exp(-2j * math.pi * at / p)).real), at % p
 
 
+def rhythm_min(n: int) -> float:
+    """The mean resultant `n` dormers need to show a rhythm: what the best
+    of the spacings tried reaches by chance falls as 1/√n (RHYTHM_SPREAD),
+    no less than RHYTHM_MIN — three need 0.92, five 0.72, eight or more
+    0.57."""
+    return max(RHYTHM_MIN, RHYTHM_SPREAD / math.sqrt(n))
+
+
 def rhythm(u: np.ndarray, axes=None) -> tuple[float, float, float, str] | None:
     """The rhythm dormers at `u` (their places across the row) stand in:
     (spacing, a slot's place, score, whence), or None where they show
@@ -797,7 +1053,8 @@ def rhythm(u: np.ndarray, axes=None) -> tuple[float, float, float, str] | None:
             for k in AXES_EVERY
             for j in range(k if at is not None else 1)
         ]
-        fits = [f for f in fits if lo <= f[2] <= hi and f[0] >= RHYTHM_MIN]
+        need = min(RHYTHM_WINDOWS, rhythm_min(len(u)))
+        fits = [f for f in fits if lo <= f[2] <= hi and f[0] >= need]
         if fits:
             score, place, p = max(fits)
             return p, place, score, "windows"
@@ -806,10 +1063,34 @@ def rhythm(u: np.ndarray, axes=None) -> tuple[float, float, float, str] | None:
         return None
     z = np.exp(2j * math.pi * u[:, None] / ps[None, :]).mean(axis=0)
     best = int(np.argmax(np.abs(z)))
-    if abs(z[best]) < RHYTHM_MIN:
+    if abs(z[best]) >= rhythm_min(len(u)):
+        p = float(ps[best])
+        return p, float(np.angle(z[best]) / (2 * math.pi) * p) % p, float(abs(z[best])), "own"
+    return even(u, gap, lo, hi)
+
+
+def even(u: np.ndarray, gap: float, lo: float, hi: float) -> tuple[float, float, float, str] | None:
+    """Dormers at `u` set evenly: each gap a whole number of slots (the
+    gap over the median `gap`, rounded, at least one), the spacing and the
+    first slot fitted to them by least squares; None where the spacing
+    leaves `lo`–`hi` or EVEN_DRIFT of `gap`, a dormer would move more than SNAP_SHARE of it, two
+    stand closer than EVEN_NEAREST of it (one is something else) or there
+    are fewer than EVEN_MIN.
+    The rhythm of a row its few dormers show too loosely for `rhythm`'s
+    test: a roof's dormers stand evenly, DOM1's 1 m cells read them ±0.5 m."""
+    order = np.sort(u)
+    if len(order) < EVEN_MIN:
         return None
-    p = float(ps[best])
-    return p, float(np.angle(z[best]) / (2 * math.pi) * p) % p, float(abs(z[best])), "own"
+    steps = np.maximum(np.rint(np.diff(order) / gap), 1.0)
+    k = np.concatenate([[0.0], np.cumsum(steps)])
+    p, at = np.polyfit(k, order, 1)
+    if not lo <= p <= hi or abs(p / gap - 1.0) > EVEN_DRIFT:
+        return None
+    if float(np.abs(order - (at + k * p)).max()) > SNAP_SHARE * p:
+        return None
+    if float(np.diff(order).min()) < EVEN_NEAREST * p:
+        return None
+    return float(p), float(at) % float(p), 0.0, "even"
 
 
 def on_slot(u: float, fit: tuple[float, float, float, str]) -> bool:
@@ -836,6 +1117,10 @@ def runs(u: np.ndarray, axes=None) -> list[tuple[np.ndarray, tuple[float, float,
     while start + ROW_MIN <= n:
         end = start + ROW_MIN
         fit = fit_of(order[start:end])
+        if fit is None and start + EVEN_MIN <= n:
+            # too few for `rhythm` to tell by chance; `even` may set four
+            end = start + EVEN_MIN
+            fit = fit_of(order[start:end])
         if fit is None:
             start += 1
             continue

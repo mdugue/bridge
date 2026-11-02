@@ -493,3 +493,42 @@ def test_a_dormer_off_the_rows_slots_or_wider_than_its_kind_stays_as_it_was():
     pair[2] |= {"x": 11.5}
     got = dormers.in_rows(pair, [1] * 3, {}, flat_roof)
     assert sorted(d["w"] for d in got) == [1.5, 1.5, 6.0]
+
+
+def test_a_part_lod2_drew_off_in_plan_is_moved_onto_its_steep_faces():
+    # a steep (63°) roof 20 × 16 m, the scan's 0.5 m east and 1 m north of it
+    yy, xx = np.mgrid[0:30, 0:30].astype(float)
+
+    def gable(x0, y0):
+        z = 120.0 - np.abs(yy + 0.5 - y0) * 2.0
+        inside = (np.abs(xx + 0.5 - x0) <= 10) & (np.abs(yy + 0.5 - y0) <= 8)
+        return np.where(inside, z, np.nan)
+
+    roof = gable(15.0, 15.0)
+    dom = np.nan_to_num(gable(15.5, 14.0), nan=100.0)  # rows run south
+    mask = np.isfinite(roof)
+    dx, dy = dormers.plan_offset(dom, roof, mask, mask)
+    assert dy == 1.0 and 0.0 <= dx <= 0.5  # along the ridge only its ends tell
+    # one drawn where the scan saw it stays, and so does one without a
+    # steep face (the roof's fit reads a plane moved in plan as one lifted)
+    assert dormers.plan_offset(np.nan_to_num(roof, nan=100.0), roof, mask, mask) == (0.0, 0.0)
+    assert dormers.plan_offset(dom, roof, mask, np.zeros_like(mask)) == (0.0, 0.0)
+
+
+def test_a_few_dormers_too_loose_for_a_rhythm_are_set_evenly():
+    u = np.asarray([0.0, 3.8, 6.0, 9.8, 12.0])
+    p, at, _, whence = dormers.rhythm(u)
+    assert whence == "even" and abs(p - 3.0) < 1e-9
+    # a dormer between two is no even row's
+    assert dormers.even(np.asarray([0.0, 3.0, 4.4, 6.0, 9.0]), 3.0, 2.0, 4.0) is None
+    # and a run starts from them, though no three show a rhythm alone
+    assert dormers.rhythm(u[:3]) is None
+    [(idx, fit)] = dormers.runs(u)
+    assert len(idx) == 5 and fit[3] == "even"
+
+
+def test_a_dormer_read_again_once_moved_is_one():
+    a = {"x": 0.0, "y": 0.0, "w": 2.0}
+    assert dormers.twice({"x": 0.6, "y": 0.4, "w": 2.0}, [a])
+    assert not dormers.twice({"x": 3.0, "y": 0.0, "w": 2.0}, [a])
+    assert not dormers.twice({"x": 0.2, "y": 0.0, "w": 0.6, "k": "chimney"}, [a])

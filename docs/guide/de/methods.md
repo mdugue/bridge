@@ -63,14 +63,18 @@ zur Regel passt.
   daneben gezeichnet hat, oder steht auf einem Flachdach in einer Reihe mit
   anderen (Masten auf einem Bahnsteigdach). Liegt das ganze Gebäudemodell
   gleichmäßig höher als die Messung (das Taschenbergpalais 1,2 m), wird
-  es vorher darauf gesetzt. Eine steile Dachfläche, an deren Oberkante
+  es vorher darauf gesetzt; ist ein Gebäudeteil mit steilen Dachflächen
+  im Grundriss verschoben (der Nordflügel des Palais um etwa einen Meter),
+  wird er ein zweites Mal auf die Messung gerückt gelesen. Eine steile Dachfläche, an deren Oberkante
   ein flacheres Oberdach anschließt, ist eine Mansarde, auch wo das
   Gebäudemodell sie nicht so nennt; ihre Gauben dürfen bis 80° steil
   stehen. Gauben eines Hauses, die zur selben Seite in gleicher Höhe
   stehen, bilden eine Reihe: gerade ausgerichtet, gleich groß und gleich
   geformt, in gleichen Abständen — über den Fensterachsen darunter, wo
   die Straßenfotos sie gemessen haben, sonst im Takt, den die Gauben
-  selbst zeigen (abschnittsweise: ein Risalit hat seinen eigenen). Eine
+  selbst zeigen (abschnittsweise: ein Risalit hat seinen eigenen; wo
+  kein Takt trägt, aber jeder Abstand ein Vielfaches eines Schritts ist,
+  gleichmäßig verteilt). Eine
   leere Stelle im Raster bleibt leer.
 - **Brückentragwerk:** Was entlang der Brückenachse mindestens 3 m über dem
   Deck steht, auf mindestens 25 m Länge, wird ein Bogen oder ein Fachwerk.

@@ -1498,7 +1498,16 @@ visual-variable codebook is in
   raised by that much first: where its cells up to 62° read 0.4–3 m
   under the roof with a median deviation of 0.3 m at most (only that way:
   a surface over the roof may be its own dormers and eaves); until 2026-11-02 such a roof failed the fit and had no
-  dormers at all. On a pitched roof (25–62°, a mansard to 80°) a dormer;
+  dormers at all. A part LoD2 drew off **in plan** (the Taschenbergpalais'
+  north wing about a metre south of DOM1, so that its north mansard's
+  dormers fell on the wall's edge and the eaves) is read a second time
+  moved onto DOM1: a part with steep (over 62°) faces where a move of up
+  to 1 m (0.5 m steps, the shortest of equal fits) brings the median
+  deviation over the whole part to 0.7 of what it was and at least
+  0.08 m lower, and over its steep faces to 0.7 as well; the dormers
+  that second reading finds on a moved part and the first did not
+  (none of one kind within their width) are moved back into LoD2's frame
+  and kept. Seams are read on LoD2's roof as drawn. On a pitched roof (25–62°, a mansard to 80°) a dormer;
   a mansard is LoD2's `roofType` 3400 or, as Saxony never writes 3400,
   read from the LoD2 roof faces: a face over 62° whose top edge a face of
   62° or less goes on from (within 0.5 m in height and plan), where such
@@ -1525,8 +1534,14 @@ visual-variable codebook is in
   as most of them are). Along it, runs of three or more stand on slots
   (`runs`): a spacing of 1.8–7 m about one dormer a slot (0.75–1.3 of
   the run's median gap), taken where their phases' mean resultant is
-  ≥ 0.8; a run ends at the first dormer off its slots (a risalit's axes
-  differ from its wings'). Where the street photos measured the window
+  ≥ 1.6/√n, at least 0.55 (a long run carries its rhythm with more
+  scatter than a short one; until 2026-11-02 a flat 0.8 left most long
+  rows loose); where no rhythm holds, four or more dormers whose gaps
+  are each a whole number of slots (a fit by least squares, the spacing
+  within 25 % of the median gap, none more than 0.35 of a slot off, none
+  closer than 0.6 of a slot to the next) are set evenly; a run ends at
+  the first dormer off its slots (a risalit's axes differ from its
+  wings'). Where the street photos measured the window
   axes of the wall below (`dlm/windows_<t>.json`, within 12 m, facing the
   same way) the slots are those axes, every one, second or third, if the
   dormers fit them as well (on Dresden's 33410_5656 twelve rows stand over
@@ -1537,7 +1552,12 @@ visual-variable codebook is in
   2.5 times its run's median width (a Zwerchhaus) stays as it was; no
   dormer is added in an empty slot. Dresden 13 495 dormers after (13 636
   before), Leipzig 6 808, München 7 225, Unna 2 063, Meißen 1 788,
-  Hamburg 1 726, Grimma 1 419: the merged doubles. The Taschenbergpalais' street photos show one identical dormer
+  Hamburg 1 726, Grimma 1 419: the merged doubles; with the plan moves
+  and the looser rhythm for long runs (2026-11-02) Dresden 13 518,
+  Leipzig 6 818, München 7 271, Unna 2 069, Meißen 1 798, Hamburg 1 740,
+  Grimma 1 418, and the Taschenbergpalais 77 → 88 (its north wing's north
+  face now has its row); on Dresden's 33410_5656 runs on a rhythm or set
+  evenly hold 446 of 786 row dormers, 372 before. The Taschenbergpalais' street photos show one identical dormer
   over every window axis; DOM1 had read their centres up to 3 m apart
   down the slope and 1–4 m wide. Checked against
   the 20 cm orthophoto: rows of small gabled dormers now in; DOM1 still
