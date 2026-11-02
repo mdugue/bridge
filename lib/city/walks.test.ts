@@ -1,0 +1,189 @@
+import { expect, test } from "bun:test";
+import {
+  inDaySpan,
+  isWalkBundle,
+  photoIsTall,
+  photoPosition,
+  seasonOf,
+  stopCamera,
+  stopDate,
+  stopNotes,
+  stopPlaces,
+  stopView,
+  type Walk,
+  walkBundle,
+  type WalkStop,
+  walkProblems,
+} from "./walks";
+
+const stop: WalkStop = {
+  id: "kuppel",
+  title: "Die Kuppel",
+  from: [1000, 2000, 1.6],
+  ground: 110,
+  at: [1000, 2100, 211.6],
+  hour: 16.5,
+  text: "Eine Kuppel aus Stein.",
+  facts: [{ claim: "Sie ist aus Stein.", source: "https://example.org/k" }],
+  days: [
+    { from: "12-20", to: "01-06", text: "Zwischen den Jahren." },
+    { from: "10-30", to: "10-30", text: "Weihetag." },
+  ],
+  seasons: { winter: "Im Winter.", autumn: "Im Herbst." },
+};
+
+test("a stop's view looks from its eye at its point", () => {
+  const view = stopView(stop);
+  expect(view.epsg).toEqual({ x: 1000, y: 2000 });
+  expect(view.headingDeg).toBe(0);
+  // 100 m up over 100 m: 45°
+  expect(view.pitchDeg).toBe(45);
+  expect(view.fov).toBe(60);
+  expect(view.mode).toBe("walk");
+  expect(stopView({ ...stop, from: [1100, 2100, 80] }).mode).toBe("fly");
+  expect(stopView({ ...stop, from: [1100, 2100, 1.6] }).headingDeg).toBe(270);
+});
+
+test("a walk is never drawn in Modell", () => {
+  const drawn = { ...stop, model: { preset: "military" } } as WalkStop;
+  expect(walkProblems({ ...walk, stops: [drawn, stop] }).join()).toContain(
+    "model is not a walk's view"
+  );
+});
+
+test("a stop's camera is in the scene frame, never Modell", () => {
+  const offset = { cx: 900, cy: 1900 };
+  const plain = stopCamera(stop, offset);
+  expect(plain.pos).toEqual({ x: 100, y: 111.6, z: -100 });
+  expect(plain.model).toBeUndefined();
+});
+
+test("a stop is shown today at its hour", () => {
+  const at = stopDate(stop, new Date(2026, 9, 29, 9, 12));
+  expect([at.getFullYear(), at.getMonth(), at.getDate()]).toEqual([
+    2026, 9, 29,
+  ]);
+  expect([at.getHours(), at.getMinutes()]).toEqual([16, 30]);
+});
+
+test("today's notes: the days first, then the season", () => {
+  expect(seasonOf(new Date(2026, 1, 1))).toBe("winter");
+  expect(seasonOf(new Date(2026, 4, 31))).toBe("spring");
+  expect(seasonOf(new Date(2026, 9, 29))).toBe("autumn");
+  expect(inDaySpan("01-02", "12-20", "01-06")).toBe(true);
+  expect(inDaySpan("11-02", "12-20", "01-06")).toBe(false);
+  expect(stopNotes(stop, new Date(2026, 9, 30))).toEqual([
+    "Weihetag.",
+    "Im Herbst.",
+  ]);
+  expect(stopNotes(stop, new Date(2027, 0, 3))).toEqual([
+    "Zwischen den Jahren.",
+    "Im Winter.",
+  ]);
+  expect(stopNotes(stop, new Date(2026, 6, 1))).toEqual([]);
+});
+
+const walk: Walk = {
+  id: "probe",
+  title: "Probe",
+  teaser: "Zwei Stationen.",
+  by: "Claude",
+  written: "2026-10-29",
+  minutes: 5,
+  stops: [stop, { ...stop, id: "zwei" }],
+};
+
+test("a walk's problems are named", () => {
+  expect(walkProblems(walk)).toEqual([]);
+  const broken: Walk = {
+    ...walk,
+    id: "Probe Walk",
+    stops: [
+      {
+        ...stop,
+        hour: 25,
+        text: "x".repeat(901),
+        facts: [{ claim: "Geraten.", source: "irgendwo" }],
+        days: [{ from: "13-01", to: "01-01", text: "" }],
+      },
+    ],
+  };
+  const problems = walkProblems(broken);
+  expect(problems).toHaveLength(6);
+  expect(problems.join("\n")).toContain("no checkable source");
+  expect(() => walkBundle("probe", [broken])).toThrow("probe walks");
+});
+
+test("a look is sent to the photo, never to a detail the model lacks", () => {
+  const looking = { ...stop, closer: "Schau auf die Krone." };
+  expect(
+    walkProblems({ ...walk, stops: [looking, { ...stop, id: "zwei" }] })
+  ).toHaveLength(1);
+  const photo = {
+    author: "A",
+    file: "Krone.jpg",
+    h: 600,
+    licence: "CC BY 4.0",
+    page: "https://commons.wikimedia.org/wiki/File:Krone.jpg",
+    w: 800,
+  };
+  const onPhoto = {
+    ...looking,
+    closer: "Schau auf dem Foto auf die Krone.",
+    photo,
+  };
+  expect(
+    walkProblems({ ...walk, stops: [onPhoto, { ...stop, id: "zwei" }] })
+  ).toEqual([]);
+  // without a photo, naming one is no help
+  const noPhoto = { ...onPhoto, photo: undefined };
+  expect(
+    walkProblems({ ...walk, stops: [noPhoto, { ...stop, id: "zwei" }] })
+  ).toHaveLength(1);
+});
+
+test("a bundle is recognised by its shape", () => {
+  expect(isWalkBundle(walkBundle("probe", [walk]))).toBe(true);
+  expect(isWalkBundle({ site: "probe" })).toBe(false);
+  expect(isWalkBundle(null)).toBe(false);
+});
+
+test("a tall photo stands beside the story, its focus kept in a crop", () => {
+  expect(photoIsTall({ w: 800, h: 1200 })).toBe(true);
+  expect(photoIsTall({ w: 800, h: 808 })).toBe(false);
+  expect(photoIsTall({ w: 800, h: 335 })).toBe(false);
+  expect(photoPosition({})).toBe("50% 50%");
+  expect(photoPosition({ focus: [0.45, 0.3] })).toBe("45% 30%");
+  const photo = {
+    author: "A",
+    file: "K.jpg",
+    h: 600,
+    licence: "CC0",
+    page: "https://commons.wikimedia.org/wiki/File:K.jpg",
+    w: 800,
+  };
+  const at = (focus: [number, number]) =>
+    walkProblems({
+      ...walk,
+      stops: [
+        { ...stop, photo: { ...photo, focus } },
+        { ...stop, id: "zwei" },
+      ],
+    });
+  expect(at([0.5, 0.3])).toEqual([]);
+  expect(at([0.5, 1.3]).join()).toContain("focus must be");
+});
+
+test("a stop's refs become the places the twin knows by name", () => {
+  const known: Record<
+    string,
+    { name: string; r?: number; x: number; y: number }
+  > = {
+    Q1: { name: "Frauenkirche", r: 30, x: 1, y: 2 },
+    b: { name: "", x: 3, y: 4 },
+  };
+  expect(
+    stopPlaces({ refs: ["Q1", "b", "nope", "Q1"] }, (id) => known[id] ?? null)
+  ).toEqual([{ id: "Q1", name: "Frauenkirche", r: 30, x: 1, y: 2 }]);
+  expect(stopPlaces({}, () => null)).toEqual([]);
+});

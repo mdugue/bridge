@@ -1,0 +1,155 @@
+{
+ "attribution": "Wikidata (CC0)",
+ "retrieved": "2026-10-30",
+ "entities": {
+  "Q1145709": {
+   "label": "Lindenbrauerei",
+   "description": "Braustätte in Unna",
+   "wiki": "Lindenbrauerei",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1329623",
+      "v": "Kulturzentrum"
+     },
+     {
+      "id": "Q131734",
+      "v": "Brauerei"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q15632117",
+      "v": "Baudenkmal in Nordrhein-Westfalen"
+     }
+    ]
+   }
+  },
+  "Q1380148": {
+   "label": "Evangelische Christuskirche (Königsborn)",
+   "description": "Kirchengebäude in Königsborn, einem Stadtteil von Unna (Nordrhein-Westfalen)",
+   "wiki": "Evangelische Christuskirche (Königsborn)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q694227",
+      "v": "Arno Eugen Fritsche"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q302",
+      "v": "Jesus Christus"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q744373",
+      "v": "Neuromanik"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q15632117",
+      "v": "Baudenkmal in Nordrhein-Westfalen"
+     }
+    ]
+   }
+  },
+  "Q1382317": {
+   "label": "Christliches Klinikum Unna Mitte",
+   "description": "katholisches Krankenhaus in Unna",
+   "wiki": "Christliches Klinikum Unna Mitte",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16917",
+      "v": "Krankenhaus"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1888"
+     }
+    ]
+   }
+  },
+  "Q14906631": {
+   "label": "Evangelische Stadtkirche (Unna)",
+   "description": "Kirchengebäude in Deutschland",
+   "wiki": "Evangelische Stadtkirche (Unna)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q42887",
+      "v": "Clemens von Rom"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q176483",
+      "v": "Gotische Architektur"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q15632117",
+      "v": "Baudenkmal in Nordrhein-Westfalen"
+     }
+    ]
+   }
+  },
+  "Q17540422": {
+   "label": "Christliches Klinikum Unna West",
+   "description": "Krankenhaus der Grund- und Regelversorgung in Nordrhein-Westfalen",
+   "wiki": "Christliches Klinikum Unna West",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16917",
+      "v": "Krankenhaus"
+     }
+    ]
+   }
+  },
+  "Q191212": {
+   "label": "Zentrum für Internationale Lichtkunst",
+   "description": "Kunstmuseum in Deutschland",
+   "wiki": "Zentrum für Internationale Lichtkunst",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q207694",
+      "v": "Kunstmuseum"
+     },
+     {
+      "id": "Q43229",
+      "v": "Organisation"
+     }
+    ],
+    "P571": [
+     {
+      "v": "2001"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "2002"
+     }
+    ]
+   }
+  }
+ }
+}

@@ -1,0 +1,243 @@
+{
+  "id": "teufel-tanz-und-loewen",
+  "title": "Teufel, Tanz und Löwen",
+  "teaser": "Die Münchner Altstadt in fünf Blicken: ein betrogener Teufel, ein Turm, der tanzt, zwei Brüder mit eigener Kirche, ein Bierhaus mit schwerer Geschichte und Löwen, die Glück bringen sollen.",
+  "by": "Claude",
+  "written": "2026-10-30",
+  "minutes": 16,
+  "stops": [
+    {
+      "id": "frauenkirche",
+      "title": "Ein betrogener Teufel",
+      "from": [
+        691229,
+        5334713,
+        105
+      ],
+      "ground": 517.9,
+      "at": [
+        691458,
+        5334906,
+        556.6
+      ],
+      "hour": 10,
+      "text": "Zwei Türme, 98,57 und 98,45 Meter, fast gleich hoch, auch wenn die Legende anderes erzählt. Gebaut wurde die Kirche ab 1468 von Jörg von Halspach, geweiht 1494; die runden Hauben kamen erst um 1525. Drinnen ist im Boden ein Fußabdruck, der Teufelstritt: Der Baumeister soll mit dem Teufel gewettet haben, die Kirche ohne Fenster zu bauen. Der Teufel trat an die Stelle, sah keine, stampfte vor Lachen und merkte zu spät den Betrug. Seit 2004 darf in München vorerst nicht höher gebaut werden.",
+      "closer": "Die beiden Hauben: Sie sind nicht spitz wie bei anderen gotischen Kirchen, sondern rund.",
+      "facts": [
+        {
+          "claim": "Der Nordturm ist 98,57 Meter hoch, der Südturm 98,45 Meter.",
+          "source": "https://de.wikipedia.org/wiki/Frauenkirche_(München)"
+        },
+        {
+          "claim": "Die Kirche wurde 1468 von Jörg von Halspach begonnen und 1494 geweiht; die Welschen Hauben kamen erst um 1525.",
+          "source": "https://de.wikipedia.org/wiki/Frauenkirche_(München)"
+        },
+        {
+          "claim": "Die Legende vom Teufelstritt: Der Teufel stampfte vor Lachen, weil er keine Fenster sah, und erkannte beim nächsten Schritt den Betrug.",
+          "source": "https://de.wikipedia.org/wiki/Frauenkirche_(München)"
+        },
+        {
+          "claim": "Seit einem Bürgerentscheid im November 2004 dürfen vorläufig keine höheren Gebäude im Stadtgebiet gebaut werden.",
+          "source": "https://de.wikipedia.org/wiki/Frauenkirche_(München)"
+        }
+      ],
+      "refs": [
+        "Q167193"
+      ],
+      "photo": {
+        "file": "Frauenkirche Munich - View from Peterskirche Tower.jpg",
+        "author": "Diliff",
+        "licence": "CC BY 2.5",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.5",
+        "page": "https://commons.wikimedia.org/wiki/File:Frauenkirche_Munich_-_View_from_Peterskirche_Tower.jpg",
+        "h": 499,
+        "w": 800,
+        "focus": [
+          0.5,
+          0.35
+        ]
+      }
+    },
+    {
+      "id": "glockenspiel",
+      "title": "Ein Turm, der tanzt",
+      "from": [
+        691588,
+        5334606,
+        70
+      ],
+      "ground": 520.9,
+      "at": [
+        691626,
+        5334823,
+        547.3
+      ],
+      "hour": 11,
+      "text": "Um 11 und 12 Uhr, im Sommer auch um 17 Uhr, schaut halb München nach oben. Im Turm des Neuen Rathauses spielt das Glockenspiel, 43 Glocken und 32 Figuren. Oben wird ein Turnier gefeiert, zur Hochzeit Herzog Wilhelms V. mit Renata von Lothringen 1568, hier auf dem Marienplatz. Unten tanzen die Schäffler. Ihr Tanz erinnert an die Pest von 1515 bis 1517: Er soll die Leute zurück auf die Straßen gelockt haben. Ganz oben steht das Münchner Kindl. Abends um 21 Uhr gibt es eine kurze Version.",
+      "closer": "Der Erker im Turm mit den zwei Figurenreihen: oben das Turnier, unten die Schäffler.",
+      "facts": [
+        {
+          "claim": "Das Glockenspiel hat 43 Glocken, 32 Figuren spielen die Szenen; es spielt täglich um 11 und 12 Uhr, von März bis Oktober auch um 17 Uhr.",
+          "source": "https://de.wikipedia.org/wiki/Neues_Rathaus_(München)"
+        },
+        {
+          "claim": "Oben wird ein Turnier zur Hochzeit Wilhelms V. mit Renata von Lothringen 1568 gezeigt, unten der Schäfflertanz, der an die Pest von 1515–1517 erinnert.",
+          "source": "https://de.wikipedia.org/wiki/Neues_Rathaus_(München)"
+        },
+        {
+          "claim": "Das Neue Rathaus wurde 1867–1905 von Georg von Hauberrisser gebaut; das Glockenspiel wurde 1909 eingeweiht.",
+          "source": "https://de.wikipedia.org/wiki/Neues_Rathaus_(München)"
+        }
+      ],
+      "refs": [
+        "Q152979"
+      ],
+      "photo": {
+        "file": "Figuren am Neuen Rathaus München.jpg",
+        "caption": "Die Figuren des Glockenspiels",
+        "author": "MarcelBuehner",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Figuren_am_Neuen_Rathaus_M%C3%BCnchen.jpg",
+        "h": 600,
+        "w": 800
+      }
+    },
+    {
+      "id": "asamkirche",
+      "title": "Zwei Brüder und ein Fenster",
+      "from": [
+        691016,
+        5334467,
+        55
+      ],
+      "ground": 518.3,
+      "at": [
+        691166,
+        5334521,
+        530.2
+      ],
+      "hour": 15,
+      "text": "Die Asamkirche ist schmal, das Grundstück misst 22 mal knapp 9 Meter. Die Brüder Cosmas Damian und Egid Quirin Asam bauten sie 1733 bis 1746 als Privatkirche, ohne Auftrag, für Gottes Ehre und ihr eigenes Seelenheil. Gleich daneben steht das Asamhaus. Egid Quirin konnte von dort durch ein Fenster direkt auf den Hochaltar schauen, eine Kirche als Hauskapelle. Die Münchner fanden das zu viel des Privaten und protestierten, bis die Brüder die Kirche für alle öffneten.",
+      "closer": "Das Haus gleich neben der Kirche ist das Asamhaus.",
+      "facts": [
+        {
+          "claim": "Die Brüder Cosmas Damian und Egid Quirin Asam bauten die Kirche 1733–1746 als Privatkirche.",
+          "source": "https://de.wikipedia.org/wiki/Asamkirche_(München)"
+        },
+        {
+          "claim": "Aus dem angrenzenden Asamhaus konnte Egid Quirin Asam durch ein Fenster direkt auf den Hochaltar sehen.",
+          "source": "https://de.wikipedia.org/wiki/Asamkirche_(München)"
+        },
+        {
+          "claim": "Das Grundstück misst 22,2 mal 8,8 Meter; nach Protesten der Bevölkerung mussten die Brüder die Kirche öffentlich zugänglich machen.",
+          "source": "https://de.wikipedia.org/wiki/Asamkirche_(München)"
+        }
+      ],
+      "refs": [
+        "Q152973"
+      ],
+      "photo": {
+        "file": "St. Nepomuk retusche.jpg",
+        "author": "Wikiolo, derivative work Lämpel",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:St._Nepomuk_retusche.jpg",
+        "h": 642,
+        "w": 800
+      }
+    },
+    {
+      "id": "hofbraeuhaus",
+      "title": "Ein Bierhaus mit Regalen",
+      "from": [
+        692016,
+        5334659,
+        65
+      ],
+      "ground": 515.2,
+      "at": [
+        691916,
+        5334832,
+        521.6
+      ],
+      "hour": 19,
+      "text": "Das Hofbräuhaus am Platzl gehörte von Anfang an den bayerischen Herrschern. In seiner heutigen Form öffnete es am 22. September 1897. Stammgäste können hier ihre eigenen Krüge in Regalen einschließen. Und hier hat eine Geschichte begonnen, die man nicht weglassen darf: Am 24. Februar 1920 gründete sich in diesem Haus vor etwa 2000 Menschen die NSDAP, Hitler verkündete das Parteiprogramm. Ein Ort für Blasmusik und Gemütlichkeit, und ein Ort, an dem man genau hinsehen sollte.",
+      "facts": [
+        {
+          "claim": "Das Hofbräuhaus wurde in seiner heute weitgehend erhaltenen Form am 22. September 1897 eröffnet.",
+          "source": "https://de.wikipedia.org/wiki/Hofbräuhaus_am_Platzl"
+        },
+        {
+          "claim": "Für Stammgäste gibt es Regale, in denen sie ihre Bierkrüge einschließen können.",
+          "source": "https://de.wikipedia.org/wiki/Hofbräuhaus_am_Platzl"
+        },
+        {
+          "claim": "Am 24. Februar 1920 wurde im Hofbräuhaus vor etwa 2000 Personen die NSDAP gegründet; Hitler verkündete das 25-Punkte-Programm.",
+          "source": "https://de.wikipedia.org/wiki/Hofbräuhaus_am_Platzl"
+        }
+      ],
+      "refs": [
+        "Q152971"
+      ],
+      "photo": {
+        "file": "2023-02-03 Hofbräuhaus am Platzl 07.jpg",
+        "author": "Burkhard Mücke",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:2023-02-03_Hofbr%C3%A4uhaus_am_Platzl_07.jpg",
+        "h": 600,
+        "w": 800,
+        "focus": [
+          0.5,
+          0.4
+        ]
+      }
+    },
+    {
+      "id": "residenz-loewen",
+      "title": "Löwen, die Glück bringen",
+      "from": [
+        691448,
+        5335194,
+        120
+      ],
+      "ground": 514.4,
+      "at": [
+        691828,
+        5335194,
+        532.7
+      ],
+      "hour": 17,
+      "text": "Zum Schluss die Residenz, von 1508 bis 1918 Sitz der Wittelsbacher, mit zehn Innenhöfen und dem Antiquarium, dem größten Renaissancesaal nördlich der Alpen. An den Eingängen zum Kaiserhof und zum Kapellenhof sitzen je zwei große Bronzelöwen. Sie halten Schilde mit kleinen Löwenköpfen, und deren Schnauzen glänzen golden: Wer sie berührt, soll Glück haben. Auf dem Foto sieht man genau, welche Höhe die Hände der Münchner am liebsten erreichen.",
+      "closer": "Die Löwen sitzen an den Portalen zu Kaiserhof und Kapellenhof.",
+      "facts": [
+        {
+          "claim": "Die Residenz war von 1508 bis 1918 Sitz der Wittelsbacher; sie hat zehn Innenhöfe.",
+          "source": "https://de.wikipedia.org/wiki/Residenz_München"
+        },
+        {
+          "claim": "Das Antiquarium ist der größte Renaissancesaal nördlich der Alpen.",
+          "source": "https://de.wikipedia.org/wiki/Residenz_München"
+        },
+        {
+          "claim": "Vor den Eingängen zum Kaiserhof und zum Kapellenhof stehen je zwei große Bronzelöwen; das Berühren der Schnauzen der kleinen Löwenköpfe soll Glück bringen.",
+          "source": "https://de.wikipedia.org/wiki/Residenz_München"
+        }
+      ],
+      "refs": [
+        "Q686548"
+      ],
+      "photo": {
+        "file": "Einer der 4 Löwen vor dem Eingang zur Residenz München.jpg",
+        "caption": "Einer der Bronzelöwen am Eingang",
+        "author": "Peermucl",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Einer_der_4_L%C3%B6wen_vor_dem_Eingang_zur_Residenz_M%C3%BCnchen.jpg",
+        "h": 1203,
+        "w": 800
+      }
+    }
+  ]
+}

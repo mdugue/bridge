@@ -1,0 +1,402 @@
+{
+  "id": "narben-und-naehte",
+  "title": "Narben und Nähte",
+  "teaser": "Wie eine Stadt mit ihren Wunden umgeht: dunkle Steine in einer hellen Kirche, ein Kreuz aus der Hand eines Bomberpilotensohns, ein Wandbild der DDR, eine abgerissene Kirche im Glaskasten und ein Stern, den ein Feuerwehrmann rettete.",
+  "by": "Claude",
+  "written": "2026-10-29",
+  "minutes": 22,
+  "stops": [
+    {
+      "id": "frauenkirche-steine",
+      "title": "Die dunklen Steine",
+      "from": [
+        411742,
+        5656272,
+        1.7
+      ],
+      "ground": 113.4,
+      "at": [
+        411803,
+        5656355,
+        140
+      ],
+      "hour": 14,
+      "text": "Schau dir die Fassade auf dem Foto an, bevor du weiterliest; das Modell zeigt sie einfarbig. Sie ist gefleckt: helle Steine, dazwischen dunkle. Die dunklen sind die alten. Nach dem Einsturz am 15. Februar 1945 lag die Kirche fast fünfzig Jahre als Trümmerberg mitten in der Stadt. Beim Wiederaufbau ab 1994 wurden die Trümmer wie ein Puzzle sortiert; 3539 alte Steine sitzen wieder in der Außenwand, dunkel vom oxidierten Eisen im Sandstein. Man hat sie nicht angeglichen. Die neuen werden nachdunkeln, und irgendwann sieht man die Narbe nicht mehr.",
+      "closer": "Nördlich der Kirche liegt ein großer Brocken auf dem Pflaster: ein Fragment der alten Kuppel.",
+      "days": [
+        {
+          "from": "10-25",
+          "to": "11-04",
+          "text": "Am 30. Oktober 2005 wurde die wiederaufgebaute Frauenkirche geweiht. In diesen Tagen jährt sich das."
+        },
+        {
+          "from": "02-10",
+          "to": "02-16",
+          "text": "Die Kuppel stürzte am 15. Februar 1945 gegen zehn Uhr morgens ein, zwei Tage nach dem Angriff."
+        }
+      ],
+      "facts": [
+        {
+          "claim": "Die Kuppel stürzte am 15. Februar 1945 gegen 10 Uhr ein; die Ruine wurde 1966 offiziell Mahnmal und lag über 40 Jahre als Trümmerberg im Stadtzentrum.",
+          "source": "https://de.wikipedia.org/wiki/Frauenkirche_(Dresden)"
+        },
+        {
+          "claim": "Grundsteinlegung des Wiederaufbaus am 27. Mai 1994, Weihe am 30. Oktober 2005.",
+          "source": "https://de.wikipedia.org/wiki/Frauenkirche_(Dresden)"
+        },
+        {
+          "claim": "3539 geborgene Steine wurden in die Außenfassade eingebaut; ihre schwarze Patina stammt von oxidiertem Eisen, farblich angeglichen wurde nicht, die neuen Steine dunkeln nach.",
+          "source": "https://de.wikipedia.org/wiki/Frauenkirche_(Dresden)"
+        },
+        {
+          "claim": "Die Basis-DLM verzeichnet nördlich der Kirche ein „Kuppelfragment der alten Frauenkirche“.",
+          "source": "stadtwissen:m411789_5656393"
+        }
+      ],
+      "refs": [
+        "Q157229",
+        "m411789_5656393"
+      ],
+      "photo": {
+        "file": "100130 150006 Dresden Frauenkirche winter blue sky-2.jpg",
+        "author": "Netopyr",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "page": "https://commons.wikimedia.org/wiki/File:100130_150006_Dresden_Frauenkirche_winter_blue_sky-2.jpg",
+        "w": 800,
+        "h": 1186,
+        "caption": "Helle neue und dunkle alte Steine"
+      }
+    },
+    {
+      "id": "turmkreuz",
+      "title": "Das Kreuz aus London",
+      "from": [
+        411772,
+        5656292,
+        1.7
+      ],
+      "ground": 113.2,
+      "at": [
+        411803,
+        5656355,
+        204
+      ],
+      "hour": 12,
+      "fov": 22,
+      "text": "Ganz oben, über der Laterne, sitzt ein goldenes Kreuz. Es wurde in London geschmiedet, von Alan Smith. Sein Vater war einer der britischen Piloten, die Dresden bombardiert hatten. Bezahlt hat es der Dresden Trust, eine britische Stiftung, aufgesetzt wurde es am 22. Juni 2004. Das alte, verbogene Kreuz auf dem Foto fand man 1993 im Schutt. Wenn du einen einzigen Gegenstand suchst, der erzählt, was Versöhnung praktisch bedeutet, dann ist es dieses Stück Metall, 91 Meter über dem Platz.",
+      "days": [
+        {
+          "from": "06-18",
+          "to": "06-26",
+          "text": "Am 22. Juni 2004 wurde das Kreuz aufgesetzt."
+        }
+      ],
+      "facts": [
+        {
+          "claim": "Das neue Turmkreuz fertigte der Londoner Kunstschmied Alan Smith, Sohn eines der britischen Piloten, die Dresden bombardiert hatten; finanziert vom Dresden Trust, aufgesetzt am 22. Juni 2004.",
+          "source": "https://de.wikipedia.org/wiki/Frauenkirche_(Dresden)"
+        },
+        {
+          "claim": "Das alte Kreuz wurde am 1. Juni 1993 im Schutt gefunden.",
+          "source": "https://de.wikipedia.org/wiki/Frauenkirche_(Dresden)"
+        },
+        {
+          "claim": "Wikidata gibt die Höhe der Frauenkirche mit 91,24 m an.",
+          "source": "stadtwissen:Q157229"
+        }
+      ],
+      "refs": [
+        "Q157229"
+      ],
+      "photo": {
+        "file": "Dresden - Frauenkirche - Turmkreuz.jpg",
+        "caption": "Das alte Turmkreuz, gefunden 1993 im Schutt",
+        "author": "Fototravel",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Dresden_-_Frauenkirche_-_Turmkreuz.jpg",
+        "h": 1202,
+        "w": 800
+      }
+    },
+    {
+      "id": "kulturpalast",
+      "title": "Die rote Fahne bleibt",
+      "from": [
+        411490,
+        5656170,
+        1.7
+      ],
+      "ground": 113.1,
+      "at": [
+        411518,
+        5656245,
+        124
+      ],
+      "hour": 16,
+      "text": "Ein Sprung in eine andere Zeit, ohne den Ort zu wechseln. Der Kulturpalast von Wolfgang Hänsch, eröffnet 1969, war das Haus, das die DDR an den Altmarkt setzte. An der Westseite hängt „Der Weg der roten Fahne“ (auf dem Foto), das Bild auf dem Foto, 30 mal 10,5 Meter Betonplatten mit Glassplitt. Man hätte es nach 1990 abschlagen können; stattdessen steht es seit 2001 unter Denkmalschutz. Drinnen spielt seit 2017 die Philharmonie in einem neuen Saal. Dresden hat eine unbequeme Schicht nicht weggeputzt, sondern zur Fassade eines Konzerthauses gemacht.",
+      "closer": "An den fünf Bronzetüren des Haupteingangs erzählt Gerd Jaeger die Stadtgeschichte vom Fischerdorf bis zur Großstadt.",
+      "facts": [
+        {
+          "claim": "Der Kulturpalast wurde 1969 eröffnet, Architekt war Wolfgang Hänsch.",
+          "source": "https://de.wikipedia.org/wiki/Kulturpalast_Dresden"
+        },
+        {
+          "claim": "Das Wandbild „Der Weg der roten Fahne“ an der Westfassade misst 30 × 10,5 m, steht seit 2001 unter Denkmalschutz und wurde 2016 restauriert.",
+          "source": "https://de.wikipedia.org/wiki/Kulturpalast_Dresden"
+        },
+        {
+          "claim": "Seit der Wiedereröffnung am 28. April 2017 beherbergt das Haus einen Konzertsaal der Dresdner Philharmonie, die Zentralbibliothek und die Herkuleskeule.",
+          "source": "https://de.wikipedia.org/wiki/Kulturpalast_Dresden"
+        },
+        {
+          "claim": "Fünf Bronzetüren von Gerd Jaeger (1969) zeigen Dresdens Entwicklung vom Fischerdorf zur Stadt.",
+          "source": "https://de.wikipedia.org/wiki/Kulturpalast_Dresden"
+        }
+      ],
+      "refs": [
+        "Q1791798"
+      ],
+      "photo": {
+        "file": "Der Weg der roten Fahne - Wandmosaik (DDR) - Kulturpalast Dresden - Bild 001.jpg",
+        "caption": "„Der Weg der roten Fahne“ an der Westseite",
+        "author": "Lupus in Saxonia",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Der_Weg_der_roten_Fahne_-_Wandmosaik_(DDR)_-_Kulturpalast_Dresden_-_Bild_001.jpg",
+        "h": 450,
+        "w": 800
+      }
+    },
+    {
+      "id": "kreuzkirche",
+      "title": "Fünfmal zerstört, einmal rau gelassen",
+      "from": [
+        411468,
+        5656118,
+        1.7
+      ],
+      "ground": 113.3,
+      "at": [
+        411600,
+        5656000,
+        150
+      ],
+      "hour": 11,
+      "text": "Die Kreuzkirche hält einen traurigen Rekord: Fünfmal wurde sie zerstört, unter anderem durch preußische Kanonen 1760, durch einen Brand 1897 und zuletzt im Februar 1945. Nach dem Krieg bekam der Innenraum einen groben Rauputz, gedacht als Übergang. Er ist geblieben, und mit ihm eine Höhle aus grauem Putz, die mehr über 1945 sagt als jede Tafel. 1989 wurde die Kirche zum Treffpunkt der friedlichen Revolution. Wer hinaufsteigt, nimmt 259 Stufen bis zur Aussicht in 54 Metern Höhe, vorbei an der Türmerstube, in der bis 1950 ein Türmer wohnte.",
+      "closer": "Seit 1986 hat die Kirche ein Nagelkreuz aus Coventry. Das erste dieser Kreuze wurde aus Zimmermannsnägeln der Kathedrale von Coventry gefügt, die am 14. November 1940 von deutschen Bomben zerstört worden war.",
+      "seasons": {
+        "winter": "Im Dezember steht hier vor der Kirche der Striezelmarkt. Sein Privileg stammt von 1434, er ist nach dem Striezel benannt, dem alten Wort für Stollen."
+      },
+      "days": [
+        {
+          "from": "10-28",
+          "to": "10-31",
+          "text": "Am 31. Oktober ist Reformationstag, in Sachsen seit der Wiedervereinigung ein Feiertag. Die Kreuzkirche ist die Hauptkirche der evangelischen Dresdner."
+        },
+        {
+          "from": "11-20",
+          "to": "12-24",
+          "text": "Der Striezelmarkt auf dem Altmarkt öffnet am Mittwoch vor dem ersten Advent. Sein Privileg erteilten Kurfürst Friedrich II. und sein Bruder am 19. Oktober 1434."
+        }
+      ],
+      "facts": [
+        {
+          "claim": "Die Kirche wurde fünfmal zerstört, zuletzt im Zweiten Weltkrieg; die preußische Beschießung im Juli 1760 zerstörte Schiff und Chor, 1897 brannte sie, am 13. Februar 1945 brannte sie völlig aus.",
+          "source": "https://de.wikipedia.org/wiki/Kreuzkirche_(Dresden)"
+        },
+        {
+          "claim": "Der Rauputz im Innenraum war ursprünglich als Übergangslösung gedacht.",
+          "source": "https://de.wikipedia.org/wiki/Kreuzkirche_(Dresden)"
+        },
+        {
+          "claim": "1989 war die Kirche ein wichtiger Treffpunkt der friedlichen Revolution.",
+          "source": "https://de.wikipedia.org/wiki/Kreuzkirche_(Dresden)"
+        },
+        {
+          "claim": "259 Stufen führen zur Aussichtsplattform in 54 m Höhe, vorbei an der bis 1950 bewohnten Türmerstube; seit 1986 besitzt die Kirche ein Nagelkreuz von Coventry.",
+          "source": "https://de.wikipedia.org/wiki/Kreuzkirche_(Dresden)"
+        },
+        {
+          "claim": "Das Privileg des Striezelmarkts datiert vom 19. Oktober 1434; er öffnet am Mittwoch vor dem ersten Advent und ist nach dem Striezel, dem Stollen, benannt.",
+          "source": "https://de.wikipedia.org/wiki/Striezelmarkt"
+        },
+        {
+          "claim": "Der Reformationstag ist in Sachsen seit der Wiedervereinigung gesetzlicher Feiertag.",
+          "source": "https://de.wikipedia.org/wiki/Reformationstag"
+        },
+        {
+          "claim": "Das Nagelkreuz entstand aus Zimmermannsnägeln der Kathedrale von Coventry, die beim Luftangriff vom 14. November 1940 zerstört wurde.",
+          "source": "https://de.wikipedia.org/wiki/Nagelkreuz_von_Coventry"
+        }
+      ],
+      "refs": [
+        "Q301607"
+      ],
+      "photo": {
+        "file": "20070106135DR Dresden Kreuzkirche Emporen.jpg",
+        "caption": "Der Innenraum im grauen Rauputz",
+        "author": "Jörg Blobelt",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:20070106135DR_Dresden_Kreuzkirche_Emporen.jpg",
+        "h": 599,
+        "w": 800
+      }
+    },
+    {
+      "id": "sophienkirche",
+      "title": "Die Kirche, die man abriss",
+      "from": [
+        411300,
+        5656228,
+        45
+      ],
+      "ground": 112.3,
+      "at": [
+        411326,
+        5656300,
+        114
+      ],
+      "hour": 13,
+      "text": "Hier stand bis 1963 eine gotische Kirche, die den Krieg als Ruine überlebt hatte, der letzte in seiner Substanz erhaltene gotische Kirchenbau der Stadt. Die SED-Führung ließ sie trotzdem abtragen, gegen Proteste von Denkmalpflegern und Architekten, am 1. Mai 1963 fiel das letzte Stück Wand. Seit 2020 steht im Glaskubus die wieder aufgebaute Busmannkapelle, der „DenkRaum Sophienkirche“. Das Glas ist die Naht: Es zeigt, wo etwas fehlt, ohne so zu tun, als wäre es nie weg gewesen.",
+      "closer": "Im Pflaster zeichnen rote Granitsteine den Grundriss der alten Kirche nach.",
+      "facts": [
+        {
+          "claim": "Die Ruine war zur Zeit des Abrisses der letzte in seiner Grundsubstanz erhaltene gotische Kirchenbau der Stadt.",
+          "source": "https://de.wikipedia.org/wiki/Sophienkirche_(Dresden)"
+        },
+        {
+          "claim": "Trotz Protesten beschloss die SED-Stadt- und Bezirksleitung 1962 den Abriss; die Türme fielen im Dezember 1962, der letzte Teil der Nordwand am 1. Mai 1963.",
+          "source": "https://de.wikipedia.org/wiki/Sophienkirche_(Dresden)"
+        },
+        {
+          "claim": "Walter Ulbricht soll sich überrascht gezeigt haben, dass die Ruine noch existierte.",
+          "source": "https://de.wikipedia.org/wiki/Sophienkirche_(Dresden)"
+        },
+        {
+          "claim": "Die Gedenkstätte „DenkRaum Sophienkirche“ mit der Busmannkapelle im Glaskubus wurde am 9. Oktober 2020 eröffnet; rote Granitsteine im Pflaster zeichnen den Grundriss nach.",
+          "source": "https://de.wikipedia.org/wiki/Sophienkirche_(Dresden)"
+        }
+      ],
+      "refs": [
+        "Q1497529"
+      ],
+      "photo": {
+        "file": "Dresden, Sophienstraße 2, Denkraum Sophienkirche, 17.6.2.40-060454.jpg",
+        "author": "Albrecht Voß",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Dresden,_Sophienstra%C3%9Fe_2,_Denkraum_Sophienkirche,_17.6.2.40-060454.jpg",
+        "w": 800,
+        "h": 533,
+        "caption": "Der Glaskubus des DenkRaums"
+      }
+    },
+    {
+      "id": "neue-synagoge",
+      "title": "Ein Würfel dreht sich nach Osten",
+      "from": [
+        412135,
+        5656305,
+        1.7
+      ],
+      "ground": 114.4,
+      "at": [
+        412148,
+        5656372,
+        123
+      ],
+      "hour": 13,
+      "text": "Ein Steinwürfel, der sich in sich verdreht: 34 Schichten Formstein, jede ein wenig gegen die darunter gedreht. Die unterste folgt der Grundstücksgrenze, die oberste schaut genau nach Osten. Die Drehung löst also ein praktisches Problem und sieht dabei aus wie Bewegung. Hier stand Sempers Synagoge, bis sie im November 1938 zerstört wurde. Ihren Davidstern rettete der Feuerwehrmann Alfred Neugebauer; heute hängt er über dem Eingang. Geweiht wurde der Neubau am 9. November 2001.",
+      "closer": "Über der Tür steht in goldenen hebräischen Buchstaben derselbe Satz wie an der alten Synagoge: „Mein Haus sei ein Haus der Andacht allen Völkern.“",
+      "days": [
+        {
+          "from": "11-07",
+          "to": "11-11",
+          "text": "Der 9. November ist hier doppelt besetzt: 1938 die Pogromnacht, 2001 die Weihe der Neuen Synagoge. Auch der erste Spatenstich, 1998, fiel bewusst auf diesen Tag."
+        }
+      ],
+      "facts": [
+        {
+          "claim": "Die Fassade besteht aus 34 Formsteinschichten, jede leicht gegen die untere verdreht; die unterste folgt den Grundstücksgrenzen, die oberste ist genau nach Osten ausgerichtet.",
+          "source": "https://de.wikipedia.org/wiki/Neue_Synagoge_(Dresden)"
+        },
+        {
+          "claim": "An dieser Stelle stand von 1840 bis zum Novemberpogrom 1938 die Semper-Synagoge.",
+          "source": "https://de.wikipedia.org/wiki/Neue_Synagoge_(Dresden)"
+        },
+        {
+          "claim": "Der Feuerwehrmann Alfred Neugebauer rettete den Davidstern; er hängt heute über dem Eingangsportal.",
+          "source": "https://de.wikipedia.org/wiki/Neue_Synagoge_(Dresden)"
+        },
+        {
+          "claim": "Spatenstich am 9. November 1998, Weihe am 9. November 2001; die erste neu gebaute Synagoge in Ostdeutschland.",
+          "source": "https://de.wikipedia.org/wiki/Neue_Synagoge_(Dresden)"
+        },
+        {
+          "claim": "Die goldene hebräische Inschrift über dem Portal ist dieselbe wie an der alten Synagoge.",
+          "source": "https://de.wikipedia.org/wiki/Neue_Synagoge_(Dresden)"
+        }
+      ],
+      "refs": [
+        "Q670209"
+      ],
+      "photo": {
+        "file": "Synagoge - Panorama, Dresden.jpg",
+        "author": "Maros M r a z (Maros)",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Synagoge_-_Panorama,_Dresden.jpg",
+        "w": 800,
+        "h": 428
+      }
+    },
+    {
+      "id": "frauenkirche-nacht",
+      "title": "Um 21:46 Uhr",
+      "from": [
+        411772,
+        5656468,
+        1.7
+      ],
+      "ground": 111,
+      "at": [
+        411803,
+        5656355,
+        172
+      ],
+      "hour": 21.75,
+      "text": "Zum Schluss die Kuppel noch einmal, bei Nacht. Die Steinerne Glocke, wie man sie nennt, wiegt je nach Quelle neun- bis zwölftausend Tonnen. Sie hielt preußischen Beschuss aus und 1945 das Feuer zwei Tage lang, bevor sie fiel. Wenn du an einem 13. Februar hier bist, hör um 21:46 Uhr hin: Dann läuten alle acht Glocken zur Erinnerung, eine Minute nach dem Fliegeralarm von 1945. An allen anderen Abenden ist das hier einfach eine Kuppel im Licht. Genau das war der Sinn des Wiederaufbaus.",
+      "days": [
+        {
+          "from": "02-12",
+          "to": "02-14",
+          "text": "Heute Abend um 21:46 Uhr läuten alle acht Glocken."
+        }
+      ],
+      "facts": [
+        {
+          "claim": "Das Gewicht der Kuppel wird je nach Quelle mit etwa 9000 bis 12.000 Tonnen angegeben.",
+          "source": "https://de.wikipedia.org/wiki/Frauenkirche_(Dresden)"
+        },
+        {
+          "claim": "Preußische Artillerie beschoss die Kuppel im Siebenjährigen Krieg ohne Schaden am Tragwerk.",
+          "source": "https://de.wikipedia.org/wiki/Frauenkirche_(Dresden)"
+        },
+        {
+          "claim": "Am Jahrestag der Zerstörung läuten um 21:46 Uhr alle acht Glocken zum Gedenken.",
+          "source": "https://de.wikipedia.org/wiki/Frauenkirche_(Dresden)"
+        },
+        {
+          "claim": "Am 13. Februar 1945 um 21:45 Uhr wurde in Dresden Fliegeralarm ausgelöst; die ersten Bomben fielen ab 22:13 Uhr.",
+          "source": "https://de.wikipedia.org/wiki/Luftangriffe_auf_Dresden"
+        }
+      ],
+      "refs": [
+        "Q157229"
+      ]
+    }
+  ]
+}

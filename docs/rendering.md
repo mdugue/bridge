@@ -100,7 +100,7 @@ is the codebook.
 | Visual variable | Driven by | Source | Where |
 |---|---|---|---|
 | Ground height + mesh density | fine level: an error-bounded TIN of the native 1 m DGM1 — vertices where the ground bends, within ±0.15 m everywhere; heights read from its triangles through a bucket index. Coarse level: the DGM resampled to 512², heights read back from the grid | DGM1 | `scripts/bake-tiles.ts`, `scripts/bake-terrain-tin.ts`, `lib/city/terrain-tin.ts` (`TinIndex`), `terrain-layer.ts`, `lib/city/terrain-geometry.ts` |
-| Ground where no tile has streamed yet | the ground plate: the fine ground's height at a 62.5 m grid over the whole site (33² per tile, the edges shared), its inner vertices 1.5 m under it, each vertex the commonest land-cover class around it (read across tile edges) in the palette, matte; shown per tile only while that tile has no terrain level on screen | DGM1 + Basis-DLM | `lib/city/ground-plate.ts`, `ground-plate-layer.ts`, `scripts/prepare/plate.ts` `bakePlate` |
+| Ground where no tile has streamed yet | the ground plate: the fine ground's height at a 62.5 m grid over the whole site (33² per tile, the edges shared), its inner vertices 1.5 m under it, each vertex the commonest land-cover class around it (read across tile edges) in the palette, matte; shown per tile only while that tile has no terrain level on screen; its heights (bilinear) are also the camera's ground where no terrain has landed yet, so a flight to a hill's vantage ends over the hill | DGM1 + Basis-DLM | `lib/city/ground-plate.ts`, `lib/city/plate-height.ts`, `ground-plate-layer.ts`, `scripts/prepare/plate.ts` `bakePlate` |
 | Wall ribbon placement | earth-retaining walls — and the quays the bake measures where the water meets a steep bank (`kind: "quay"`) — snap to the step the fine TIN measures (face at the ramp foot, a coping cap back to where the ground reaches its level, per column; medians only over the vertices that found the same step, one run per cap level — no slab across two terraces); other walls on the OSM line | DGM1 + OSM walls + the class raster's water | `lib/city/walls.ts`, `lib/city/wall-snap.ts` (at build) |
 | Ground shading | the grid's normals, pulled to straight up below ~12° of tilt (the DGM's micro-relief and the 8-bit normals lit as blotches); real slopes keep their shading | DGM1 | `terrain-layer.ts` (`terrainNormal()`) |
 | Ground step at walls (coarse level only) | wall line + `kind` ∈ retaining/city/embankment/cliff/quay, height ≥ 1.5 m, burned into the 512² grid at build time | OSM | `lib/city/terrain-conflate.ts` (probe 11 m each side, feather 11 m, clamp 18 m) |
@@ -233,7 +233,7 @@ is the codebook.
 | Steps | `n` treads at z0 + (k+1)·rise across `w`, cheeks down to z0 − 0.6 m; a side whose bank (3.2 m out) stands ≥ 0.4 m over the tread and that an OSM wall or building runs along (`walled`) a *Wange* instead: 3 m wide, topped at the bank (≤ 4 m over the tread), its outer edge on the ground there, a 0.5 m stone coping, the rest `0xe4dbcb`; cheeks down to the ground beside them, a face from the top landing to lower ground beyond; handrails (`rail`) as fence rails on the nosing line; base tone by `mat` (`STAIR_TONES`: stone `0xc4b090`, concrete `0xbdbab2`, brick `0xb08874`, metal `0x888a8d`, wood `0xa38a6c`), risers × 0.62, cheeks × 0.8 — baked into the fine terrain glTF (vertex colours) | OSM + DGM1 | `lib/city/stairs.ts` `stairGeometry`/`stairColors` at build, `stair-layer.ts` (material) |
 | Sun direction | date + time + the site's lat/lng (suncalc 2, north-based azimuth) | — | `lib/city/sun.ts`, `sun-rig.ts` |
 | Sun by night | the directional light stays in the scene below the horizon, at intensity 0, and its shadow map is not redrawn until sunrise: three keys every material's build by the lights it draws with, so a sun hidden at dusk rebuilt every material in view (some twenty pipelines inside the frame, at every dusk and dawn) | — | `sun-rig.ts` (`redrawShadow`) |
-| Sun while the time is dragged | the shadow map (the heaviest pass) is redrawn at most ten times a second, the sky reflection four times; letting go redraws both at once | — | `sun-rig.ts` (`PREVIEW_SHADOW_MS`), `sky-reflection.ts` |
+| Sun while the time is dragged or a walk glides it | the shadow map (the heaviest pass) is redrawn at most ten times a second, the sky reflection four times; the light itself moves only with its map (a light moved between redraws reads the map from where it was drawn, and every shadow slides off its caster and snaps back: the picture wobbles); letting go redraws both at once | — | `sun-rig.ts` (`PREVIEW_SHADOW_MS`), `sky-reflection.ts` |
 | Sky, fog and fill colours | sun altitude through palette stops at −18°, −4°, −2° (blue hour), +1°, +6° (golden hour), +12°, +60° | — | `lib/city/atmosphere.ts` |
 | Valley fog | world height below a floor derived from the lowest terrain landed so far, fading out over a depth of 0.6 × the valley's depth (`extras.ground[2]`: per tile the lower side's rise from its low ground to the rim within 5 km in GLO-30, across its deepest axis; the site's deepest tile), else 0.6 × the site's ground relief (2nd–90th height percentile, `extras.ground`), 8–28 m: Dresden, Grimma, Meißen 28 m, Unna ≈ 12.4, Leipzig ≈ 12, Munich ≈ 10.9, Hamburg ≈ 9.6; setting in with distance from the camera, none within 40 m, all of it from 900 m (`VALLEY_NEAR_M`), so nearby surfaces keep their colour — one `scene.fogNode` for every material (additive light — lamp halos and pools — fades to black in it rather than toward the fog colour) | DGM1, GLO-30 | `height-fog.ts` (*Talnebel*), `lib/city/valley-fog.ts` |
 | Distance fog | the HUD's one slider left; far plane clamped to ~1.1 km until the site has first loaded | — | `create-app.ts` (*Nebel*) |
@@ -710,29 +710,71 @@ outline's, each in its turn (`compileInTurn`).
   CPU copies go after upload), freed when the question goes. A phone pays
   for it in its tile cache, 1 MiB less per safety level
   (`tileCacheBytesFor`, ADR 0047). Kerning from the
-  canvas's own measure of each prefix; tracking per style.
-- **One material, three kinds of quad** (`uvk`: atlas uv and a kind): a
-  glyph (fill at 0.5, halo outward to a share of the reach, antialiased by
-  `fwidth`), a solid (the comic box, its edge and shadow, the leader's
-  strokes, antialiased by their uv), a disc (the leader's dot). Colour and
-  halo ride per vertex (`ink`, `halo`): three vertex buffers past
-  position, four inter-stage variables (`uvk`, `ink`, `halo` and the view
-  position the depth test reads); a fade uniform carries the arrival and
-  the cross-fades.
+  canvas's own measure of each prefix; tracking per style. Each glyph
+  also keeps its coverage at ~16 px per capital (a few kB) for the
+  shadow's mask.
+- **Two kinds of quad** (`uvk`: atlas uv and a kind) in the face's
+  material: a glyph (fill at 0.5, halo outward to a share of the reach,
+  antialiased by `fwidth`) and a solid (the comic box and its edge,
+  antialiased by their uv); the returns (below) have a material of their
+  own over the same geometry. No line ties the plate to its thing
+  (maintainer review 2026-11-02); the selection outline marks it, in the
+  style's own lettering ink (`NameplateType.outline`,
+  `SelectionOutline.setColours`), and the clay's lift and hatch on the
+  asked building follow (`setAskedColours`: towards the lighter, hatched
+  in the darker). A long title breaks between words into even lines
+  (`titleLines`, a joined `A / B` name at its slash). Colour and halo ride
+  per vertex (`ink`, `halo`): three vertex buffers past position, four
+  inter-stage variables (`uvk`, `ink`, `halo` and the view position the
+  depth test reads); a fade uniform carries the arrival and the
+  cross-fades.
+- **Depth.** The letters stand 0.14 of a capital deep (`EXTRUDE_CAPS`):
+  the plate's one geometry is drawn by ten meshes more behind the face
+  (six on a phone; a returns material of their own, the layer a
+  per-object uniform, `onObjectUpdate`, that pushes the quads back),
+  far to near: deepest first, or the face first where the camera sees
+  the plate's back (no depth test sorts them). A layer
+  draws the fill alone in the style's return colour, lit by the sun
+  through the letter's outward normal — two more atlas reads give the
+  field's gradient — and none of what the city hides.
+- **Cast shadow.** A box swept from the plate's rectangle away from the
+  sun down to the ground (stepped along the sun's ray from its highest
+  corner against `groundAt`, so the top line's ray reaches it too, ≤ 400
+  m: a terrace's letters throw theirs onto the river below; asked again
+  each second for ground that streamed in, and a box that never meets the
+  ground fades out inside itself), drawn on its back faces (each pixel
+  once, the camera inside it or not): each pixel takes the scene's surface
+  from the depth through the lens's inverse projection (`getViewPosition`:
+  perspective, parallel and Modell's shear alike), follows the sun's ray
+  from there to the plate's plane in the plate's own units and reads a
+  silhouette mask there (R8, 12 px per capital, ≤ 512 × 128, softened,
+  laid out on the CPU from the glyphs' coverage over the rectangle the
+  quads cover, a comic box's tilted corners too: `shadowMask`). So the
+  letters shade a facade, a roof or the ground alike — only where the sun
+  reaches it: the surface is tested against the scene's own shadow map
+  through the read the styles' `inSun` shares (`sun-shadow-read.ts`), so
+  the letters' shadow joins the city's instead of darkening a shade twice;
+  none with the sun down.
 - **Occlusion** per pixel: the fragment's view depth against the scene's
   (the scene target's depth texture through `view-lens.ts`, whose
 three helpers follow the reversed buffer); behind the
   city it keeps 0.45 of its outline only, so a plate the placing could
   not keep clear reads as a ghost, never as text over a facade. Depth
   test and write are off; it is no part of the shadow map.
-- **The plate** is one mesh placed by a matrix (right, up and normal
-  scaled by the capital height, the block's corner as origin); the leader
-  is a second small mesh rebuilt in world space per frame.
+- **The plate** is one group placed by a matrix (right, up and normal
+  scaled by the capital height, the block's corner as origin); the
+  shadow's box is a small mesh rebuilt in world space per frame.
 - **Choosing** runs every 250 ms on the CPU (`lib/city/nameplate-place.ts`):
   per candidate 9 points against the buildings' BVHs (`cityHides` in
   `nameplate-ask.ts`, `nearestCityHit` with `build = false`) and the
-  HUD's panels marked `data-scene-cover`. While an image is exported the
-  place is held.
+  HUD's panels marked `data-scene-cover`. A better place in the same
+  laying moves the plate only once it has stayed the best for 900 ms
+  (`SETTLE_MS`; a new laying moves at once, its thresholds hold their own
+  hysteresis), and the kept
+  place weighs 0.5 less: a passing view does not shift it. The comic's
+  opaque box keeps off its building twice as hard, stands over the
+  whole thing rather than on an eave, and is never an inscription on the
+  facade. While an image is exported the place is held.
 
 ## Modell: the parallel camera
 
@@ -833,8 +875,8 @@ the safety levels 1, 2 and 3:
 | Real lamp lights (`LAMP_LIGHTS`, every lit fragment shades each, by day too) | 3 | 1 | as the tier |
 | The walker's lantern (`lantern.ts`, one more light) | with a 512² cube shadow | no shadow | as the tier |
 | Tile contents at once | 5 parses, 25 downloads per origin | 2 parses, 4 downloads per origin | as the tier |
-| Tile cache (GPU bytes: glTF + a tile's rasters and dressing) | 1.2–1.6 GB (1.0–1.4, 0.8–1.2, 0.6–1.0) | 168–335 MiB (148–295, 136–271, 96–231) | as the tier |
-| Memory governor (`lib/city/memory-governor.ts`) | steps at 2 / 2.5 GB (a last one 10 s past 2.5); lines × 0.9 a level, starting at step 0 (0, 1, 2) | steps at 480 / 560 MB (a last one 10 s past 560); lines × 0.9 a level, starting at step 0 (1, 2, 3) | as the tier |
+| Tile cache (GPU bytes: glTF + a tile's rasters and dressing) | 1.2–1.6 GB (1.0–1.4, 0.8–1.2, 0.6–1.0) | 150–285 MiB (118–249, 96–228, 64–196) | as the tier |
+| Memory governor (`lib/city/memory-governor.ts`) | steps at 2 / 2.5 GB (a last one 10 s past 2.5); lines × 0.9 a level, starting at step 0 (0, 1, 2) | steps at 420 / 460 MB (a last one 10 s past 460; 480 / 560 until two walk crashes); lines × 0.9 a level, starting at step 0 (1, 2, 3) | as the tier |
 
 **The resolution follows the frame rate** (`lib/city/resolution-scale.ts`,
 wired in `create-app.ts`). The scene is fill-bound, so a page whose GPU
@@ -1025,9 +1067,11 @@ stays their measure; the tile cache counts true bytes.
   sky, lamp pool, data layers, uniform buffers, shader text — and ~60 of
   headroom: tiles in flight weigh nothing, the cache can run a tile over
   `max` before it unloads, three counts a tree set's matrices once per
-  view) = **336 MiB** at level 0 (296, 272, 232 at levels 1–3), less
-  1 MiB each for the nameplate (**335**, 295, 271, 231), `min`
-  about half (168, 148, 136, 96), and `max − min` above the largest tile
+  view) = **285 MiB** at level 0 against the soft line of 420 (249, 228,
+  196 at levels 1–3; 335, 295, 271, 231 against the old 480 until two
+  iPhones lost their GPU in a walk's glide, Sentry CITY-WALK-4 and -6),
+  `min` about half or what leaves the gap (150, 118, 96, 64), and
+  `max − min` above the largest tile
   (`LARGEST_TILE_BYTES`, 128 MiB on a phone). The 320–600 MB before were
   wrong the other way: `max` sat above the governor's own hard line
   (560), so with the fixed costs and three's count on top — ~750 MB held —
@@ -1051,7 +1095,7 @@ stays their measure; the tile cache counts true bytes.
   freed back (measured while it held; forgotten after two minutes) — a
   camera standing still used to give its fine tiles up and stream them
   back in every ten seconds. At a raised safety level both lines are
-  × 0.9 per level (a phone's soft line 480, 432, 389, 350 MiB) and the
+  × 0.9 per level (a phone's soft line 420, 378, 340, 306 MiB) and the
   governor starts at a **floor** it never leaves for a finer step: the
   level itself on a phone, one lower on a desktop — already for the
   stream's first update. A **memory emergency** (`memoryEmergency` in

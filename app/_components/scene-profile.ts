@@ -235,10 +235,10 @@ const TILE_CACHE_BYTES: Record<
     { min: 0.6 * GB, max: 1 * GB },
   ],
   mobile: [
-    { min: 168 * MB, max: 335 * MB },
-    { min: 148 * MB, max: 295 * MB },
-    { min: 136 * MB, max: 271 * MB },
-    { min: 96 * MB, max: 231 * MB },
+    { min: 150 * MB, max: 285 * MB },
+    { min: 118 * MB, max: 249 * MB },
+    { min: 96 * MB, max: 228 * MB },
+    { min: 64 * MB, max: 196 * MB },
   ],
 };
 
@@ -267,13 +267,16 @@ const TILE_CACHE_BYTES: Record<
  * lamp pool, data layers, uniform buffers and shader text) and ~60 of
  * headroom: tiles in flight weigh nothing in the cache, it unloads only
  * past `max` and one tile over, and three counts a tree set's instance
- * matrices once per view. Against 480/432/389/350 MiB of soft line that
- * leaves 346, 303.5, 277 and 240 MiB: `max` was 336, 296, 272, 232 (set
- * while the shadow map still carried a colour target; a few MiB more
- * headroom since) and is 1 MiB less since the nameplate (nameplate-layer.ts:
- * its glyph atlas, ≤ 0.5 MiB at the phone's raster size, and its few
- * buffers) — a phone pays for it in tiles, not in memory. Until it was derived the
- * phone's `max` was 600 MB, above the governor's own hard line (560): the
+ * matrices once per view. Against 420/378/340/306 MiB of soft line that
+ * leaves 286, 249.5, 228 and 196 MiB, and `max` is that (rounded down).
+ * The lines were 480/560 until 2026-11-01, `max` 335, 295, 271, 231: two
+ * iPhones lost their GPU during a walk's glide below the hard line
+ * (memory-governor.ts) — the cache's overshoot while tiles land fast is
+ * part of what three counts. The nameplate (nameplate-layer.ts: its glyph
+ * atlas, ≤ 0.5 MiB at the phone's raster size, and its few buffers) sits
+ * in the headroom — a phone pays for it in tiles, not in memory. Until it
+ * was derived the phone's `max` was 600 MB, above the governor's own hard
+ * line (then 560): the
  * cache never bound anything before Safari took the GPU away, at 614 MB
  * held.
  *

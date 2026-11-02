@@ -1920,55 +1920,128 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   before the output transform, so every picture style shows it). It
   replaced the pencil loop (🗃️ below). **Not yet judged on a real
   GPU.**
-- **The nameplate: the thing asked, named in the city** `❝ taken` (2026-10-31)
-  — what the card's title and address say, set as lettering in the
-  scene beside it (`lib/city/nameplate.ts`): a Wikidata landmark (flag 16)
-  by its name large, with up to two lines of facts under it — "erbaut
-  1726–1734 · George Bähr", "wiederaufgebaut 2005 · 91 m" (each fact
-  where Wikidata has one, the card's height where it has none,
+- **The nameplate: the thing asked, named in the city** `❝ taken`
+  (2026-10-31) — what the card's title and address say, set as lettering
+  in the scene beside it (`lib/city/nameplate.ts`): a Wikidata landmark
+  (flag 16) by its name large, with up to two lines of facts under it —
+  "erbaut 1726–1734 · George Bähr", "wiederaufgebaut 2005 · 91 m" (each
+  fact where Wikidata has one, the card's height where it has none,
   `factLines` in `lib/city/landmark-facts.ts`); a named building, bridge
   or monument by its name with its address or kind; an ordinary house by
-  its address, small; nothing for a house without one, a tree, a lamp.
-  The facts are a site file baked once (`landmark-facts.json`, Wikidata
-  CC0: inception P571 or opening P1619, architect P84, height P2048, and
-  the P793 events that begin, end or span the building's construction
-  or its reconstruction, each with its own dates — years only where
-  Wikidata states the year, not a decade or a century; an end more than
-  100 years after the start left out; a rebuild with no end stated reads
-  "wiederaufgebaut ab"), matched to the Buildings through the landmark
-  tiles' objects, fetched with the first landmark asked (an
+  its address, small; a tree, a lamp, a bench, a stop, a landing stage or
+  an unnamed monument by what its card calls it, with one line (a tree's
+  species from its tile's facts file, the one the card reads, else its
+  kind); nothing for a house without an address, a counted street, a
+  design. The facts are a site file baked once (`landmark-facts.json`,
+  Wikidata CC0: inception P571 or opening P1619, architect P84, height
+  P2048, and the P793 events that begin, end or span the building's
+  construction or its reconstruction, each with its own dates — years only
+  where Wikidata states the year, not a decade or a century; an end more
+  than 100 years after the start left out; a rebuild with no end stated
+  reads "wiederaufgebaut ab"), matched to the Buildings through the
+  landmark tiles' objects, fetched with the first landmark asked (an
   organisation's inception, often its founding, stands back where
-  construction events date the building). Where several
-  items share the asked Buildings, the one the card's title names, else
-  none. The card lists the
-  same facts as rows (Bauzeit, Architekt, Wiederaufbau, Höhe laut
-  Wikidata) with Wikidata as their source, so the plate never says what
-  the card does not. **Where it stands** follows the camera
-  (`lib/city/nameplate-place.ts`), in multiples of the building's size
-  S (its height, at least half its long side): from above (1.5 S over its
-  top, a pitch over 35°, or Modell) it lies flat on the ground beside the
-  footprint, reading along the footprint's axis nearest the screen's;
-  in the street it stands upright 1.5 m before the facade the camera
-  faces best (kept until that facade is seen flatter than 25°), over the
-  highest point or beside the building, with a hairline to a dot at the
-  facade; within 1 S it is an inscription at the plinth; beyond 8 S its
-  name alone. Thresholds hold 20 % of hysteresis; the place is chosen
-  every 250 ms among its candidates by what of it would be off screen,
-  hidden by the city (rays through the buildings' BVHs, never a tile
-  whose BVH is being built), under the HUD's panels (`data-scene-cover`)
-  or over its own building, and a change cross-fades. Its capitals are 7 %
-  of the footprint's long side, kept on screen between a size per rank (a
-  landmark 26–72 CSS px, 22–48 on a phone; its facts at 0.4–0.45 of that). Where the city covers it
-  anyway, it shows as a pale outline (the scene's depth). **How it is
-  set** follows the picture style (`lib/city/nameplate-type.ts`): Pastell
-  and Papier a book serif (Cormorant Garamond) with small caps for the
-  facts, Comic a caption box (Bangers, yellow, a hard shadow and a tail
-  to the building), Noir and Sin City a condensed grotesque (Oswald) with
-  a monospaced line, Strich spaced capitals with a dimension line,
-  Schwarzplan on the ground like a plan's lettering from anywhere above
-  the building; by night the
-  ink turns light on a dark halo and dims a little. Drawn after the frame
-  (`nameplate-layer.ts`, rendering.md). **Not yet judged on a real GPU.**
+  construction events date the building). Where several items share the
+  asked Buildings, the one the card's title names, else none. The card
+  lists the same facts as rows (Bauzeit, Architekt, Wiederaufbau, Höhe
+  laut Wikidata) with Wikidata as their source, so the plate never says
+  what the card does not. **Where it stands** follows the camera
+  (`lib/city/nameplate-place.ts`), in multiples of the building's size S
+  (its height, at least half its long side): looking down on it steeper
+  than 50° from over its top (from the air or in Modell) it lies on the
+  ground beside the footprint, reading along the footprint's axis nearest
+  the screen's — but only where that ground is seen steeper than 35°, else
+  it stands up (lettering on the ground seen flat could not be read,
+  maintainer review 2026-11-01); in the street it stands upright before
+  the facade the camera faces best (1.5 m, less for a small thing; kept
+  until that facade is seen flatter than 25°), standing on it like rooftop
+  letters — a landmark's under its tower on the highest eave (in height)
+  of its broad LoD2 objects where that lies clearly under a slender one's
+  (never a lower annex in its stead; a tower: twice as high at its eave
+  as the square root of its own footprint; the carrier's eave 1.75 times lower, each over its object's
+  own base, and under the tower's in height; a root's or an ensemble
+  lead's area is its whole tree's, so it is never judged slender), where
+  that lies a quarter of the height or more under the top, so a church's
+  name stands on its nave, not on its spire's tip; any other building's
+  stand on the top; else on the top — or beside it in the sky (no line to
+  it: the selection outline marks the thing, in the lettering's ink);
+  within 1 S an inscription before the facade, its foot a quarter of the
+  height up (2.5–15 m); beyond 8 S its name alone. The letters are built,
+  not printed: 0.14 of their capital height deep, their returns lit by the
+  sun, casting a shadow on whatever stands behind them from the sun, down
+  to the ground and only where the sun reaches. A long name breaks between
+  words into even lines (an `A / B` name at its slash). Thresholds hold 20
+  % of hysteresis; a new place must stay the best 900 ms before the plate
+  moves (maintainer review 2026-11-02: it moved too often); the place is
+  chosen every 250 ms among its candidates by what of it would be off
+  screen, hidden by the city (rays through the buildings' BVHs, never a
+  tile whose BVH is being built), under the HUD's panels
+  (`data-scene-cover`) or over its own building, and a change cross-fades.
+  Its capitals are 9 % of the footprint's long side, kept on screen
+  between a size per rank (a landmark 36–96 CSS px, 26–56 on a phone; its
+  facts at 0.4–0.44 of that). Where the city covers it anyway, it shows as
+  a pale outline (the scene's depth). **How it is set** follows the
+  picture style (`lib/city/nameplate-type.ts`): Pastell and Papier the
+  HUD's grotesque (Inter, heavy, set tight) with tracked capitals for the
+  facts, in loud colours — Pastell the selection's magenta with plum
+  returns and its facts in the same magenta lifted a fifth toward white
+  (plum facts read poorly over a pale facade, maintainer review
+  2026-11-02; translucent ones showed their own plum returns through),
+  Papier a printer's violet (vermilion for a day, 2026-11-01: the
+  selection's hue reads as one hand) — and no halo (a book serif with a
+  pale halo until 2026-11-01: maintainer review found it old-fashioned and
+  too much like a tooltip); Comic a caption box (Bangers, yellow, its
+  returns black; opaque, so it keeps off the building and stands over it),
+  Noir and Sin City a condensed grotesque (Oswald) with a monospaced line,
+  Sin City's returns red, Strich spaced capitals, Schwarzplan on the
+  ground like a plan's lettering from above the building where it reads;
+  by night the ink turns light and dims a little, and the shadow goes with
+  the sun. The selection outline takes each style's lettering ink
+  (Schwarzplan red on white, Sin City red, Comic black on yellow, Noir
+  white, Strich graphite, Pastell and Papier the violet). Drawn after the
+  frame (`nameplate-layer.ts`, rendering.md). **Not yet judged on a real
+  GPU.**
+
+- **Stadtwissen** `❝ taken` — what the twin knows, as files an agent
+  reads ([ADR 0055](./adr/0055-stadtwissen-and-written-walks.md)):
+  per tile every root Building that OSM names or addresses, that is
+  listed (`heritage`) or that is part of a Wikidata landmark — its
+  `gml:id`, OSM name, address, storeys and shops, the ALKIS use and roof
+  form decoded (`adv-codes.ts`), the height (the largest
+  `measuredHeight` of the Building and its parts), its position (the
+  extent's centre and base) and Q-id —, and the tile's named monuments
+  (`stadtwissen_<tile>.json`, `scripts/bake-stadtwissen.ts`); and per
+  site the landmarks with an excerpt of Wikidata's statements in words
+  (instance of, architect, style, named after, location, creator,
+  material, commemorates, inception, dissolved, significant event,
+  visitors, heritage status, motto, opening, height, current use), the
+  German article and the sources with their licences
+  (`stadtwissen.json`). The excerpt is fetched once
+  (`bun scripts/fetch-stadtwissen.ts <site>`, `wbgetentities`, CC0) and
+  committed (`data/<site>/wissen/wikidata.json`). Dresden: 15 tiles of
+  150–360 kB, the index 168 kB, 238 of 238 landmarks with facts. No look:
+  the viewer never loads it; `bun scripts/stadtwissen.ts <site>
+  such|nah|wahrzeichen|quellen` searches it.
+- **Erzählte Spaziergänge** `❝ taken` (the facts; the narration is none
+  of the four methods — generated text, marked as such wherever it shows) — walks written ahead by Claude from the Stadtwissen and the
+  sources each claim names, committed as `data/<site>/walks/<id>.json`
+  (`lib/city/walks.ts`) and bundled into `walks.json` by the build. A
+  stop is a view (eye in the site CRS on the DGM's ground, the point it
+  looks at, lens, hour, picture style; never Modell), a narration of
+  at most 560 characters, a closer look, notes for days of the year and
+  seasons, and its facts with an https source or a Stadtwissen id each.
+  The walk card (`walk-player.tsx`) glides there at 2.2× the pace, sets
+  today at the stop's hour and the style, tells the stop and today's
+  notes in a book face (Newsreader, self-hosted) and, if asked, reads it
+  aloud from the start of the glide, folds out the sources, and says on
+  every stop that the narration is Claude's.
+  `scripts/walks.test.ts` holds every walk to its data (form, extent,
+  ground within 0.2 m, references). Dresden: four walks, 31 stops
+  (*Augusts Bühne*, *Narben und Nähte*, *Gold, Milch und Eigensinn*,
+  *Wunder am Elbhang*); one each in Leipzig (6 stops), Hamburg (6),
+  München (5), Meißen (3), Grimma (3) and Unna (2); Berlin none yet;
+  how they are written:
+  [walks.md](./walks.md).
 
 ### Vegetation
 - **Cultivated land** `❝ taken` `≈ assumed` (plan 028) — OSM `landuse=allotments|orchard|vineyard`
@@ -4643,7 +4716,7 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   (a shop pane at sRGB 102/105/108 against 56/61/65 without it), and
   full from 90 m it laid one flat veil over the river and the meadows in
   the lower half of the start view, the same at 200 m as at 2 km. **Depth from the site's relief** (2026-10-01, ADR
-  0039): the pool's fade height (`heightFalloff`) was Dresden's
+  0012): the pool's fade height (`heightFalloff`) was Dresden's
   Elbe-to-rim 28 m everywhere, which hazed flat Hamburg and Munich from
   the river to the rooftops. `prepare-data.ts` samples each tile's coarse
   ground on a 32 × 32 grid and writes the site's 2nd and 90th height

@@ -237,19 +237,25 @@ fragt, was unter dem Mauszeiger steht (im immersiven Modus, der den
 Zeiger ausblendet, was in der Bildmitte steht; nur dort markiert ein
 Punkt die Mitte). Das Gebäude bekommt eine feine
 Schraffur und eine Linie um seinen Umriss, beide in der pinken
-Akzentfarbe der Bedienelemente, und eine Karte öffnet sich. Ein Klick ins Leere
+Akzentfarbe der Bedienelemente (in den anderen Darstellungsstilen in der
+Schriftfarbe des Stils), und eine Karte öffnet sich. Ein Klick ins Leere
 schließt sie wieder. Neben dem Gebäude steht jetzt sein **Name** in der
 Stadt selbst, solange die Frage gilt: bei einem Wahrzeichen groß, darunter
 wann und von wem es erbaut, wann es wiederaufgebaut wurde und wie hoch es
 ist (aus Wikidata, auch auf der Karte); bei einem benannten Gebäude mit seiner Adresse; bei
-einem gewöhnlichen Haus nur die Adresse, klein. Von der Straße aus steht
-der Name aufrecht über oder neben dem Gebäude, zur Fassade gedreht, die
-du am besten siehst, mit einer feinen Linie dorthin; aus der Luft liegt
-er neben ihm auf dem Boden; ganz nah ist er eine Inschrift am Sockel; von
-weit nur der Name. Er weicht aus, wenn ein anderes Gebäude ihn verdecken
-oder ein Bedienfeld ihn überdecken würde, erscheint als blasse Kontur, wo
+einem gewöhnlichen Haus nur die Adresse, klein; bei einem Baum, einer
+Laterne oder einer Bank, was es ist. Die Buchstaben sind gebaut: ein wenig
+tief, von der Sonne beleuchtet, mit eigenem Schatten, wo die Sonne
+hinkommt, bis hinunter auf den Boden. Von der Straße aus
+stehen sie auf dem Dach (bei einer Kirche auf dem Schiff), zur Fassade gedreht, die du am besten siehst,
+oder neben dem Gebäude; steil aus der Luft
+liegen sie neben ihm auf dem Boden (aus flacherem Winkel stehen sie auf,
+damit sie lesbar bleiben); ganz nah stehen sie wie eine Inschrift vor seiner Fassade; von
+weit nur der Name. Ein langer Name bricht auf einige Zeilen um. Er weicht aus, wenn ein anderes Gebäude ihn verdecken
+oder ein Bedienfeld ihn überdecken würde (erst wenn der neue Platz eine
+Weile besser bleibt), erscheint als blasse Kontur, wo
 die Stadt ihn doch verdeckt, und ist in jedem Darstellungsstil anders
-gesetzt — im Comic in einem gelben Erzählkasten, im Schwarzplan, von oben
+gesetzt — im Comic in einem gelben Erzählkasten, der das Gebäude frei lässt, im Schwarzplan, von oben
 gesehen, auf dem Boden wie die Beschriftung eines Plans. Ein kleines Haus musst du
 nicht genau treffen: Steht direkt unter dem Finger nichts, antwortet das
 Gebäude, zu dem das meiste rund um die Stelle gehört. Auf dem Telefon ist
@@ -299,7 +305,8 @@ Hauses, wo keine Fotos sie gemessen haben. Bei einem Gebäude aus mehreren
 Teilen gilt das für den angeklickten Teil.
 
 Bäume, Denkmale und Brunnen und Brücken antworten genauso. Was du
-gefragt hast, umrahmt eine weiche pinke Linie auf einem hellen Saum —
+gefragt hast, umrahmt eine weiche Linie auf einem hellen Saum (pink oder
+in der Schriftfarbe des Darstellungsstils) —
 entlang seines Umrisses, so wie du ihn gerade siehst, gleich breit auf
 dem Bildschirm, ob nah oder fern. Beim Antippen leuchtet der Saum kurz
 auf. Ein
@@ -405,6 +412,39 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   Belichtung, *Sin City* rot, *Papier* als farbiges Seidenpapier (nachts
   von innen beleuchtet), *Strich* in Planfarben mit Tuschekante (nachts
   als warmes Licht), der *Schwarzplan* als schwarz umrandetes Band.
+- **Spaziergänge** — Rundgänge durch die Stadt, erzählt von Claude,
+  einer KI, und an jeder Station so gekennzeichnet. In Dresden vier:
+  *Augusts Bühne* (die Altstadt als Theater der Macht), *Narben und
+  Nähte* (wie die Stadt mit ihren Wunden lebt), *Gold, Milch und
+  Eigensinn* (die Neustadt) und *Wunder am Elbhang* (flussaufwärts nach
+  Loschwitz); in Leipzig, Hamburg, München, Meißen, Grimma und Unna
+  je einer: *Messe, Musik und Montag*
+  (Leipzig), *Backstein und Wasser* (Hamburg), *Teufel, Tanz und Löwen*
+  (München), *Schloss, Dom und Porzellan* (Meißen), *Grimma an der
+  Mulde* und *Licht unter der Stadt* (Unna). Ein Spaziergang öffnet eine
+  Karte über der Szene: Jede Station gleitet langsam zu ihrem Blick,
+  stellt das heutige Datum zu der Stunde ein, in der sie am besten
+  aussieht (eine Fassade im Abendlicht, ein Platz bei Nacht), und, wo
+  die Station es will, einen Bildstil; aus dem Modell geht ein
+  Spaziergang einmal hinaus, denn erzählt wird, was man sieht. Die
+  Karte erzählt die Station schon während des Flugs dorthin; während des
+  Flugs kannst du dich umschauen, er landet trotzdem an der Station, und
+  das Licht wandert mit dem Flug zur Uhrzeit der nächsten Station. Sie
+  ergänzt, was heute oder in dieser Jahreszeit besonders ist, und nennt
+  ein Detail, das im Bild zu finden ist. Was das Modell nicht zeigt —
+  eine Statue, ein Relief, eine Inschrift, ein Innenraum —, zeigt ein Foto
+  von Wikimedia Commons in der Karte, mit Urheber und Lizenz: ein
+  Querformat oben über die ganze Breite, ein Hochformat neben dem Text
+  (auf dem Handy darüber); ein Klick zeigt es ganz. Es liegt auf dieser
+  Seite, nicht bei Wikimedia. *Belege* klappt jede Angabe der Station mit ihrer Quelle
+  auf — Wikipedia, die Seite einer Einrichtung, die Daten des
+  Stadtmodells selbst; Legenden werden als Legenden erzählt. *Weiter*
+  und *Zurück* gehen von Station zu Station, ✕ beendet den Spaziergang
+  und stellt Bildstil und Uhrzeit zurück. Auf dem Telefon ist die
+  Karte ein Blatt am unteren Rand, das eingeklappt beginnt: Antippen oder
+  Hochziehen am Griff öffnet es, Herunterziehen klappt es wieder ein;
+  Joystick und Werkzeugleiste weichen ihm, solange der Spaziergang läuft. Wie sie geschrieben werden:
+  [walks.md](../../walks.md).
 - **Steuerung** — die vollständige Tastentabelle, eingeklappt, bis du
   sie öffnest (die Leiste über der Szene zeigt die ersten Tasten).
 

@@ -419,6 +419,37 @@ test("the sun moving fits the warp to it anew", () => {
   expect(inside(onMap(sun, new Vector3(0, 100, -1200)))).toBe(true);
 });
 
+for (const [where, at] of [
+  ["on foot", new Vector3(0, 101.7, 0)],
+  ["from the air", FLYING],
+] as const) {
+  test(`a glide's light moves only with its map ${where}`, () => {
+    jest.useFakeTimers();
+    try {
+      const { sunRig, sun } = rig();
+      sunRig.update(new Date("2026-06-21T10:00:00+02:00"));
+      followAt(sunRig, at, LOOK, 100);
+      sun.shadow.needsUpdate = false; // three drew it
+      const drawn = sun.shadow.matrix.clone();
+      const lit = sun.position.clone();
+      // a step inside the pace: the map waits, so does the light — a light
+      // moved off its map reads every shadow off its caster
+      sunRig.update(new Date("2026-06-21T10:02:00+02:00"), true);
+      sunRig.update(new Date("2026-06-21T10:04:00+02:00"), true);
+      expect(sun.shadow.needsUpdate).toBe(false);
+      expect(sun.shadow.matrix.equals(drawn)).toBe(true);
+      expect(sun.position.equals(lit)).toBe(true);
+      // the paced redraw moves both, to where the sun stands now
+      jest.advanceTimersByTime(100);
+      expect(sun.shadow.needsUpdate).toBe(true);
+      expect(sun.shadow.matrix.equals(drawn)).toBe(false);
+      sunRig.dispose();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+}
+
 test("landing, and Modell, give the map back to the square", () => {
   const { sunRig, sun } = rig();
   sunRig.update(new Date("2026-06-21T10:00:00+02:00"));
