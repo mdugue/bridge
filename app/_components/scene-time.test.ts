@@ -93,4 +93,8 @@ test("the hour glides as the camera does, in whole minutes, and lands", () => {
   expect(tweenMinutes(990, 600, 0.5)).toBe(795);
   expect(tweenMinutes(600, 990, 1.4)).toBe(990);
   expect(tweenMinutes(600, 990, -1)).toBe(600);
+  // through the night, not back through the day
+  expect(tweenMinutes(22 * 60, 6 * 60, 0.5)).toBe(2 * 60);
+  expect(tweenMinutes(22 * 60, 6 * 60, 1)).toBe(6 * 60);
+  expect(tweenMinutes(1 * 60, 23 * 60, 0.5)).toBe(0);
 });

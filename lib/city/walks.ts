@@ -122,8 +122,9 @@ export interface WalkStop {
   mode?: MovementMode;
   /** the Stadtwissen entries it is about (Q-ids, Building ids) */
   refs?: string[];
-  /** the refs as the scene can pick them, set by the build from the
-   *  Stadtwissen (prepare-data.ts): the card makes their names buttons */
+  /** the refs as the scene can pick them, for the card's name buttons;
+   *  nothing sets them yet (the buttons come with Frag die Stadt, whose
+   *  build fills them from the Stadtwissen by `stopPlaces`) */
   places?: WalkPlace[];
   /** the photo the card shows above the text */
   photo?: WalkPhoto;
@@ -200,7 +201,8 @@ export function stopCamera(
 
 /** The stop's hour on the visitor's day (local time). */
 export function stopDate(stop: WalkStop, today: Date): Date {
-  const minutes = Math.round(stop.hour * 60);
+  // 23.995 stays on this day (23:59), not the next one's midnight
+  const minutes = Math.min(Math.round(stop.hour * 60), 24 * 60 - 1);
   return new Date(
     today.getFullYear(),
     today.getMonth(),
@@ -307,12 +309,16 @@ function textProblems(stop: WalkStop): string[] {
       `text is ${stop.text.length} characters (at most ${STOP_TEXT_MAX})`
     );
   }
-  if (stop.facts.length === 0) {
+  // hand-written JSON: a left-out list is named, not a crash
+  const facts = Array.isArray(stop.facts) ? stop.facts : [];
+  if (facts.length === 0) {
     out.push("a stop rests on at least one fact");
   }
-  for (const f of stop.facts) {
+  for (const f of facts) {
     if (!SOURCE.test(f.source)) {
-      out.push(`fact "${f.claim.slice(0, 40)}…" has no checkable source`);
+      out.push(
+        `fact "${(f.claim ?? "").slice(0, 40)}…" has no checkable source`
+      );
     }
   }
   for (const d of stop.days ?? []) {
@@ -333,7 +339,7 @@ const LOOK = /(?:^|[.!?:;]\s+)(?:Schau|Sieh|Achte|Zoom|Zähl|Such)(?:e|t)?\b/;
  * eye to look therefore points at the photo (docs/walks.md).
  */
 function lookProblems(stop: WalkStop): string[] {
-  const told = [stop.text, stop.closer ?? ""].flatMap((t) =>
+  const told = [stop.text ?? "", stop.closer ?? ""].flatMap((t) =>
     t.split(/(?<=[.!?])\s+/)
   );
   return told
@@ -343,7 +349,7 @@ function lookProblems(stop: WalkStop): string[] {
 
 /** Whether a stop's photo carries the credit it is shown with. */
 export function photoCredited(p: NonNullable<WalkStop["photo"]>): boolean {
-  return Boolean(p.author && p.licence && p.page.startsWith("https://"));
+  return Boolean(p.author && p.licence && p.page?.startsWith("https://"));
 }
 
 /** A photo carries its credit, or it is not shown. */
@@ -425,11 +431,12 @@ export function walkProblems(walk: Walk): string[] {
   if (!walk.title || !walk.teaser || !walk.by) {
     out.push(`${walk.id}: title, teaser and by are required`);
   }
-  if (walk.stops.length < 2) {
+  const stops = Array.isArray(walk.stops) ? walk.stops : [];
+  if (stops.length < 2) {
     out.push(`${walk.id}: a walk has at least two stops`);
   }
   const ids = new Set<string>();
-  walk.stops.forEach((stop, i) => {
+  stops.forEach((stop, i) => {
     if (ids.has(stop.id)) {
       out.push(`${walk.id}: stop id ${stop.id} twice`);
     }

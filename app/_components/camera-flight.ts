@@ -35,6 +35,12 @@ export interface FlightTarget {
 export interface GlideOptions {
   /** a drag on the way looks about and the glide carries on */
   lookAround?: boolean;
+  /**
+   * The measured ground under the vantage (m, a walk's stop): the eye is
+   * taken over it, not over the ground streamed so far, which before the
+   * tile lands is the plate's coarse one.
+   */
+  ground?: number;
   onProgress?: FlightShape["onProgress"];
   pace?: FlightShape["pace"];
 }

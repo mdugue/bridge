@@ -24,16 +24,7 @@ import {
 } from "../../lib/city/tile";
 import { BAKE_ENTRIES } from "../bake-entries";
 import { stadtwissenIndex, stadtwissenTile } from "../bake-stadtwissen";
-import {
-  SITE,
-  TILES,
-  at,
-  cacheKey,
-  cached,
-  publish,
-  readJson,
-  utf8,
-} from "./context";
+import { SITE, at, cacheKey, cached, publish, readJson, utf8 } from "./context";
 import { landmarkFile } from "./landmarks";
 
 /** One tile's directory, cached on the buildings, their OSM facts, the
@@ -95,7 +86,8 @@ export async function publishStadtwissen(
       osm: sources.osm,
       wikidata: sources.wikidata,
     },
-    landmarks: TILES.flatMap((tile) => {
+    // the baked tiles' only, as the tiles' own files
+    landmarks: tiles.flatMap((tile) => {
       const file = landmarkFile(tile);
       return file ? [{ tile, file }] : [];
     }),
