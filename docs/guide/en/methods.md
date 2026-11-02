@@ -116,6 +116,7 @@ why Munich is yellow there in [Sources by city](./sources-by-city.md).
 | Bridges: piers | the viewer, clear of the fairway | `≈ assumed` |
 | Tracks and their course | Basis-DLM or OpenStreetMap | `❝ taken` |
 | Which level a track runs on (ground, deck, cut) | from ground and decks along the whole line | `◎ detected` |
+| A monorail's beam: its height and supports | from the ground along the whole line, a car's clearance; the supports the viewer's | `= computed` `≈ assumed` |
 | Lamps, benches, street furniture: place | OpenStreetMap | `❝ taken` |
 | Lamps from street photos | Mapillary | `◎ detected` |
 | Their form; where a bench without a direction faces | the viewer | `≈ assumed` |
