@@ -2720,6 +2720,13 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
     pixels. How much leaf lies follows the scene's day
     (`leafLitterAt`: from late September, all of it in November, a third
     left into January, none from mid-March).
+  - **worn lawn** under every other big park tree (on a lawn or meadow,
+    a crown of 2.5 m or more, 55 % of them by a hash of where they
+    stand): bare earth where people sit, on one side of the trunk, and the
+    path they wear to it, 2.6–6 m long, tapering and wandering, grass
+    showing through in tufts — covering, lit as the ground (the earth set,
+    never with a pit). A path leads off in a hashed direction, not to a
+    neighbour: the trees know nothing of each other.
   What a tree gets is read once per vertex at the trunk's foot. All of
   it fades out between 70 and 150 m; a chunk whose nearest tree is past
   160 m draws none of it. One `Instances` set per part (ring, earth,

@@ -126,6 +126,13 @@ const CROWN_MAX = 7;
  *  by (linear; a cool, sky-lit shade), and a lawn's moss in it. */
 const SHADE = vec3(0.86, 0.88, 0.93);
 const SHADE_MOSS = vec3(0.93, 0.99, 0.86);
+/** Where people sit under a big park tree and the path they wear to it:
+ *  which share of the trees on a lawn have one, the crown it takes (m),
+ *  the quad's half-size (m), and the worn earth (sRGB). */
+const WORN_SHARE = 0.55;
+const WORN_CROWN = 2.5;
+const WORN_QUAD = 4.8;
+const WORN_SRGB = [176, 156, 122] as const;
 /** The unmown grass round a park tree (the mower keeps off the trunk):
  *  how far out it reaches past the trunk (m), the factor its long, darker,
  *  yellower blades multiply the lawn by, and its seed heads'. */
@@ -405,10 +412,20 @@ function pitGraph(r: FootRasters, part: "ring" | "earth"): PitGraph {
   // lifted off the ground, more with distance (the depth's precision);
   // collapsed where the tree stands in no paving
   const lift = float(0.04).add(distance(cameraPosition, f.world).mul(0.0015));
-  // none off paving, and collapsed once faded out: nothing to draw
+  // a big tree on a lawn, one in so many: the earth people wear bare
+  // (the earth set only; never with a pit)
+  const pick = gdHash(vec2(f.world.x, f.world.z).mul(0.53));
+  const wornHere =
+    part === "earth"
+      ? step(0.5, f.green)
+          .mul(step(pick, WORN_SHARE))
+          .mul(step(WORN_CROWN, f.crown))
+          .mul(float(1).sub(step(0.5, f.pit)))
+      : float(0);
+  // none off paving (or worn lawn), and collapsed once faded out
   const q = positionGeometry.xz
-    .mul(PIT_QUAD)
-    .mul(step(0.5, f.pit))
+    .mul(mix(float(PIT_QUAD), WORN_QUAD, wornHere))
+    .mul(max(step(0.5, f.pit), wornHere))
     .mul(step(0.001, f.fade));
   const position = folded(f.foot.add(vec3(q.x, lift, q.y)), f.foot);
   const offset = varying(q, "vPitOffset");
@@ -417,6 +434,8 @@ function pitGraph(r: FootRasters, part: "ring" | "earth"): PitGraph {
   const seed = flat(vec2(f.world.x, f.world.z).mul(0.37), "vPitSeed");
   const fade = varying(f.fade, "vPitFade");
   const xy = varying(vec2(f.world.x, f.world.z).add(q), "vPitXY");
+  const worn = flat(wornHere, "vPitWorn");
+  const wornPick = flat(pick, "vPitPick");
   const edges = s.edgesTex;
   const uv = varying(
     rasterUv(
@@ -458,11 +477,40 @@ function pitGraph(r: FootRasters, part: "ring" | "earth"): PitGraph {
       const base = mix(mix(EARTH, LITTER, litter), MOSS, moss);
       // darker toward the bark (the trunk's shade) and at the ring
       const contact = smoothstep(rt.add(0.5), rt, d).mul(0.25);
+      const pitColour = base
+        .mul(grain.sub(0.5).mul(0.22).mul(fine).add(1))
+        .mul(float(1).sub(contact));
+      // worn lawn: a patch on one side of the trunk where people sit, and
+      // the path they wear to it, tapering and wandering, grass showing
+      // through it in tufts
+      const turn = wornPick.mul(40);
+      const dir = vec2(cos(turn), sin(turn));
+      const seat = length(offset.sub(dir.mul(rt.add(0.55))))
+        .add(gdNoise(xy.mul(1.7)).sub(0.5).mul(0.5))
+        .toVar();
+      const along = offset.x.mul(dir.x).add(offset.y.mul(dir.y)).toVar();
+      const side = offset.x.mul(dir.y).sub(offset.y.mul(dir.x));
+      const length2 = wornPick.mul(3.5).add(2.6);
+      const t = clamp(along.div(length2), 0, 1);
+      const wander = gdNoise(vec2(along.mul(0.6), wornPick.mul(9)))
+        .sub(0.5)
+        .mul(0.6);
+      const width = mix(float(0.42), 0.16, t);
+      const path = float(1)
+        .sub(smoothstep(width.mul(0.6), width, abs(side.sub(wander.mul(t)))))
+        .mul(step(0, along))
+        .mul(float(1).sub(smoothstep(length2.mul(0.8), length2, along)));
+      const patch = float(1).sub(smoothstep(0.6, 1.05, seat));
+      const tufts = smoothstep(0.25, 0.6, gdNoise(xy.div(0.09).add(seed)));
+      const bare = max(patch, path).mul(
+        mix(tufts, float(1), max(patch, path).mul(0.6))
+      );
+      const wornColour = linear([...WORN_SRGB]).mul(
+        grain.sub(0.5).mul(0.25).mul(fine).add(1)
+      );
       return vec4(
-        base
-          .mul(grain.sub(0.5).mul(0.22).mul(fine).add(1))
-          .mul(float(1).sub(contact)),
-        inside.mul(clear).mul(fade)
+        mix(pitColour, wornColour, worn),
+        mix(inside.mul(clear), bare.mul(0.92), worn).mul(fade)
       );
     }
     {
