@@ -442,7 +442,8 @@ export function createStylize(inputs: StylizeInputs): Stylize {
   const camera = lens.camera;
   const skyZ = uniform(6000 * SKY_FAR_SHARE);
   const ortho = lens.ortho.greaterThan(0.5);
-  const inverseProjection = uniform(camera.projectionMatrixInverse);
+  // the lens's one shared node (the shadow of the nameplate reads it too)
+  const { inverseProjection } = lens;
   const mode = uniform(1);
   const ink = uniform(0.7);
   const dusk = uniform(0);

@@ -1002,22 +1002,27 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   ): ShadowMarch => {
     const m = lastMarch;
     // the corner slides with the screen-held cap while the camera moves:
-    // within `SHADOW_SLIDE_M` (less upward: a corner raised by dy meets
-    // the ground dy / sun.y further on) it keeps its length; a held view
+    // within `SHADOW_SLIDE_M` across and a march step up or down it keeps
+    // the march, its length moved by the slide along the ray (a corner
+    // raised by dy meets level ground dy / sun.y further on); a held view
     // (an export's tiles: the plate keeps its place) keeps it outright
-    const near = SHADOW_SLIDE_M;
+    const dy = m ? o[1] - m.corner[1] : 0;
     if (
       m &&
-      Math.abs(m.corner[0] - o[0]) < near &&
-      Math.abs(m.corner[1] - o[1]) < near * Math.max(sun.y, 0) &&
-      Math.abs(m.corner[2] - o[2]) < near &&
+      Math.abs(m.corner[0] - o[0]) < SHADOW_SLIDE_M &&
+      Math.abs(dy) < SHADOW_STEP_M &&
+      Math.abs(m.corner[2] - o[2]) < SHADOW_SLIDE_M &&
       m.base === base &&
       Math.abs(m.sun[0] - sun.x) < 1e-3 &&
       Math.abs(m.sun[1] - sun.y) < 1e-3 &&
       Math.abs(m.sun[2] - sun.z) < 1e-3 &&
       (hold || now - m.at < SHADOW_REMARCH_MS)
     ) {
-      return m;
+      if (!m.grounded || dy === 0) {
+        return m;
+      }
+      slid.length = Math.max(m.length + dy / Math.max(sun.y, 1e-3), 2);
+      return slid;
     }
     lastMarch = {
       ...marchToGround(o, base, sun),
@@ -1031,6 +1036,8 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   // the last march: a still view (and a moving one, within
   // `SHADOW_SLIDE_M`) asks the ground again only each
   // `SHADOW_REMARCH_MS`, for ground that streamed in since
+  // a kept march's length slid along the ray (one object, no garbage)
+  const slid: ShadowMarch = { grounded: true, length: 0 };
   let lastMarch:
     | (ShadowMarch & { at: number; base: number; corner: Vec3; sun: Vec3 })
     | null = null;

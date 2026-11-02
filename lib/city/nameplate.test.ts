@@ -185,13 +185,20 @@ test("a long title breaks between words into even lines, a joined one at its sla
   ]);
 });
 
-test("rooftop letters stand on the eave under a tower", () => {
+test("a landmark's rooftop letters stand on the eave under its tower", () => {
   const at = (
     baseZ: number,
     eaveH: number,
     area: number,
     over: Partial<InquiryObject> = {}
-  ) => object({ baseZ, eaveH, facts: facts({ area }), ...over });
+  ) =>
+    object({
+      baseZ,
+      eaveH,
+      flags: OBJECT_FLAG_LANDMARK,
+      facts: facts({ area }),
+      ...over,
+    });
   const eave = (tree: InquiryObject[]) => nameplateEave(building(tree));
   // the nave as the root (a lead, its area the whole tree's), the tower
   // a slender part (6 m wide, 40 m to its eave), a sacristy: on the nave
@@ -205,39 +212,40 @@ test("rooftop letters stand on the eave under a tower", () => {
   const navePart = at(106, 15, 900, { building: false, objectIndex: 3 });
   const turret = at(106, 18, NO_FACT, { building: false, objectIndex: 4 });
   expect(eave([sacristyRoot, navePart, tower, turret])).toBe(121);
-  // a tower Building and its nave Building, either order: on the nave
+  // an ensemble of a tower Building and its nave Building: on the nave
+  // where the nave leads; where the tower leads (its area the
+  // ensemble's) it is not judged slender and the letters stand on top
   const towerBuilding = at(100, 40, 36, { objectIndex: 5 });
   const naveBuilding = at(106, 15, 900, { objectIndex: 6 });
-  expect(eave([towerBuilding, naveBuilding])).toBe(121);
-  expect(eave([naveBuilding, towerBuilding])).toBe(121);
+  expect(eave([{ ...naveBuilding, lead: true }, towerBuilding])).toBe(121);
+  expect(eave([{ ...towerBuilding, lead: true }, naveBuilding])).toBeNull();
   // the nave alone: nothing over it
   expect(eave([nave])).toBeNull();
-  // a house over its garage, its wing up the slope, its copy from the
-  // next tile, its annex as a lead's part: the letters on the top
-  const house = at(110, 6.5, 150);
-  expect(eave([house, at(110, 3.2, 60, { objectIndex: 7 })])).toBeNull();
-  expect(eave([at(100, 8, 150), at(107, 8, 140, { objectIndex: 8 })])).toBe(
+  // two broad parts under the tower on a slope: the higher eave in
+  // height (the nave up the slope, not the hall below it)
+  const upNave = at(106, 15, 900, { building: false, objectIndex: 7 });
+  const lowHall = at(95, 18, 700, { building: false, objectIndex: 8 });
+  expect(eave([upNave, lowHall, at(95, 40, 36, { objectIndex: 9 })])).toBe(121);
+  // a tall house over its courtyard wing (not slender), a wing up the
+  // slope, a copy from the next tile: the letters on the top
+  const house = at(110, 17, 250);
+  expect(eave([house, at(110, 4, 80, { objectIndex: 10 })])).toBeNull();
+  expect(eave([at(100, 8, 150), at(107, 8, 140, { objectIndex: 11 })])).toBe(
     null
   );
   expect(eave([house, { ...house }])).toBeNull();
-  expect(
-    eave([
-      at(110, 9, 230, { lead: true }),
-      at(110, 3, 30, { building: false, objectIndex: 9 }),
-    ])
-  ).toBeNull();
   // a nave up the slope whose eave stands over the tower's: none
   expect(
     eave([
       at(115, 15, 900),
-      at(95, 30, 36, { building: false, objectIndex: 10 }),
+      at(95, 30, 36, { building: false, objectIndex: 12 }),
     ])
   ).toBeNull();
   // a part at sea level (Hamburg) carries like any other
   expect(
     eave([
       at(0, 15, 900, { building: false }),
-      at(0, 40, 40, { building: false, objectIndex: 11 }),
+      at(0, 40, 36, { building: false, objectIndex: 13 }),
     ])
   ).toBe(15);
   // footprints unknown (an older bake), a Building drawn by its parts
@@ -247,4 +255,7 @@ test("rooftop letters stand on the eave under a tower", () => {
   expect(eave([at(0, 0, 36), at(130, 40, 36, { source: 2 }), house])).toBe(
     null
   );
+  // an ordinary building, tower or not: its letters on the top
+  const plain = (o: InquiryObject) => ({ ...o, flags: 0 });
+  expect(eave([plain(nave), plain(tower)])).toBeNull();
 });
