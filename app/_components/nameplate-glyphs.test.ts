@@ -29,7 +29,7 @@ test("the shadow mask covers what the quads cast, row 0 at the foot", () => {
   const mask = shadowMask(
     new Float32Array([...quad(0, 0, 2, 2), ...quad(2, 1, 4, 2)]),
     ["solid", cover],
-    { width: 4, height: 2 }
+    { x: 0, y: 0, width: 4, height: 2 }
   );
   expect(mask.width).toBe(48);
   expect(mask.height).toBe(24);
@@ -44,10 +44,24 @@ test("the shadow mask covers what the quads cast, row 0 at the foot", () => {
 
 test("a long block's mask stays within its largest size", () => {
   const mask = shadowMask(new Float32Array(quad(0, 0, 80, 3)), ["solid"], {
+    x: 0,
+    y: 0,
     width: 80,
     height: 3,
   });
   expect(mask.width).toBeLessThanOrEqual(512);
   expect(mask.height).toBeLessThanOrEqual(128);
   expect(mask.data[Math.floor(mask.height / 2) * mask.width + 100]).toBe(255);
+});
+
+test("the mask covers its own area, beyond the block where a box reaches", () => {
+  // a box reaching one cap left of and below the block's corner
+  const mask = shadowMask(new Float32Array(quad(-1, -1, 1, 1)), ["solid"], {
+    x: -1,
+    y: -1,
+    width: 2,
+    height: 2,
+  });
+  expect(mask.area.x).toBe(-1);
+  expect(mask.data[1 * mask.width + 1]).toBe(255);
 });

@@ -57,6 +57,7 @@ import {
   UnsignedByteType,
   Vector2,
   Vector3,
+  Vector4,
   type WebGPURenderer,
 } from "three/webgpu";
 import {
@@ -125,7 +126,7 @@ import {
   loadFaces,
   rasterPlate,
 } from "./nameplate-glyphs";
-import type { Live } from "./shader-chunks";
+import type { F, Live, V3 } from "./shader-chunks";
 import type { ViewLens } from "./view-lens";
 
 /** How often the place is chosen again (ms). */
@@ -292,8 +293,10 @@ function writePrism(
   const pos = g.getAttribute("position") as Float32BufferAttribute;
   const a = pos.array as Float32Array;
   for (const [i, c] of corners.entries()) {
-    a.set(c, i * 3);
-    a.set([c[0] + d[0], c[1] + d[1], c[2] + d[2]], (i + 4) * 3);
+    for (let k = 0; k < 3; k++) {
+      a[i * 3 + k] = c[k];
+      a[(i + 4) * 3 + k] = c[k] + d[k];
+    }
   }
   pos.needsUpdate = true;
   const index = g.getIndex();
@@ -304,30 +307,45 @@ function writePrism(
   }
 }
 
-/** The plate's material: one graph for the letters, the box and the
- *  leader (the quad's kind picks, by `step`, never a branch), the face and
- *  its returns (the drawn object's layer, a per-object uniform: 0 is the
- *  face, deeper is a layer of the returns, pushed back that far). */
-function plateMaterial(
+/** The plate's two materials over one geometry (the quad's kind picks,
+ *  by `step`, never a branch): the face, for the letters, the box and the
+ *  leader; and the returns, drawn by every layer behind it (the drawn
+ *  object's layer, a per-object uniform, pushes it back that far), lit by
+ *  the sun from the letters' field. Each graph holds only its own work. */
+function plateMaterials(
   deps: Pick<NameplateDeps, "depthTexture" | "lens">,
   atlas: TextureNode<"vec4">,
   u: PlateUniforms
 ) {
-  const layer = uniform(0).onObjectUpdate(
-    ({ object }) => (object?.userData.nameplateLayer as number | undefined) ?? 0
-  );
-  const isSide = step(1e-4, layer);
   const uvk = attribute<"vec3">("uvk", "vec3");
   const ink = attribute<"vec4">("ink", "vec4");
-  const halo = attribute<"vec4">("halo", "vec4");
   const field = atlas.sample(uvk.xy).r;
   const kind = uvk.z;
   const isGlyph = float(1).sub(step(0.5, kind));
   const isDisc = step(1.5, kind);
   const isSolid = float(1).sub(isGlyph).sub(isDisc);
-  // a letter: its fill on the field's mid level, its halo further out
+  // a letter's fill on the field's mid level
   const aa = max(fwidth(field), 1e-4);
   const fill = smoothstep(float(0.5).sub(aa), float(0.5).add(aa), field);
+  // a solid: its uv's distance to the edges, antialiased
+  const uu = uvk.x;
+  const vv = uvk.y;
+  const edge = min(
+    min(uu, float(1).sub(uu)).div(max(fwidth(uu), 1e-5)),
+    min(vv, float(1).sub(vv)).div(max(fwidth(vv), 1e-5))
+  );
+  const solidA = smoothstep(0, 1, edge).mul(ink.a);
+  // hidden: the scene's surface in front of this fragment
+  const sceneZ = deps.lens.viewZ(texture(deps.depthTexture, screenUV).r);
+  const slack = deps.lens
+    .fade(positionView.z.negate())
+    .mul(HIDDEN_SLACK_SHARE)
+    .add(HIDDEN_SLACK_M);
+  const hidden = smoothstep(slack, slack.mul(2), sceneZ.sub(positionView.z));
+
+  // the face: a letter with its halo further out, a solid, a disc; its
+  // hidden part shown as a ghost
+  const halo = attribute<"vec4">("halo", "vec4");
   const haloEdge = float(0.5).sub(u.haloWidth.mul(0.5));
   const haloA = smoothstep(
     haloEdge.sub(aa),
@@ -341,15 +359,6 @@ function plateMaterial(
       smoothstep(GHOST.width, aa.add(GHOST.width * 1.6), abs(field.sub(0.5)))
     )
     .mul(ink.a);
-  // a solid: its uv's distance to the edges, antialiased
-  const uu = uvk.x;
-  const vv = uvk.y;
-  const edge = min(
-    min(uu, float(1).sub(uu)).div(max(fwidth(uu), 1e-5)),
-    min(vv, float(1).sub(vv)).div(max(fwidth(vv), 1e-5))
-  );
-  const solidA = smoothstep(0, 1, edge).mul(ink.a);
-  // a disc in its quad
   const r = uvk.xy.mul(2).sub(1).length();
   const discA = float(1)
     .sub(smoothstep(float(1).sub(max(fwidth(r), 1e-4).mul(1.5)), float(1), r))
@@ -363,9 +372,17 @@ function plateMaterial(
     .mul(isGlyph)
     .add(solidA.mul(isSolid).add(discA.mul(isDisc)).mul(0.35))
     .mul(GHOST.alpha);
+  const face = plateMaterial(
+    mix(rgb, ink.rgb, hidden),
+    mix(shownA, ghostA, hidden).mul(u.fade)
+  );
+
   // the returns: the letter's outward normal from its field (the field
   // rises inward; the atlas's v runs down the plate), in the world, lit
-  // by the sun; a box's sides take the shade alone
+  // by the sun; a box's sides take the shade alone; none of it hidden
+  const layer = uniform(0).onObjectUpdate(
+    ({ object }) => (object?.userData.nameplateLayer as number | undefined) ?? 0
+  );
   const fx = atlas.sample(uvk.xy.add(vec2(u.texel.x, 0))).r.sub(field);
   const fy = atlas.sample(uvk.xy.add(vec2(0, u.texel.y))).r.sub(field);
   const outward = u.right.mul(fx.negate()).add(u.up.mul(fy));
@@ -378,23 +395,21 @@ function plateMaterial(
         .sub(max(lit.negate(), 0).mul(SIDE_SHADE.away))
     )
   );
-  const sideRgb = u.side.mul(shade).min(1);
   const sideA = fill.mul(isGlyph).add(solidA.mul(isSolid)).mul(ink.a);
-  // hidden: the scene's surface in front of this fragment
-  const sceneZ = deps.lens.viewZ(texture(deps.depthTexture, screenUV).r);
-  const slack = deps.lens
-    .fade(positionView.z.negate())
-    .mul(HIDDEN_SLACK_SHARE)
-    .add(HIDDEN_SLACK_M);
-  const hidden = smoothstep(slack, slack.mul(2), sceneZ.sub(positionView.z));
-  // the face shows its hidden part as a ghost; the returns none of it
-  const faceA = mix(shownA, ghostA, hidden);
-  const a = mix(faceA, sideA.mul(float(1).sub(hidden)), isSide).mul(u.fade);
-  const colour = mix(mix(rgb, ink.rgb, hidden), sideRgb, isSide);
+  const side = plateMaterial(
+    u.side.mul(shade).min(1),
+    sideA.mul(float(1).sub(hidden)).mul(u.fade)
+  );
+  side.positionNode = positionLocal.sub(vec3(0, 0, layer));
+  side.name = "nameplate-returns";
+  return { face, side };
+}
+
+/** One of the plate's materials: over the frame, no depth, both sides. */
+function plateMaterial(colour: V3, alpha: F) {
   const m = new MeshBasicNodeMaterial();
-  m.positionNode = positionLocal.sub(vec3(0, 0, layer));
   m.colorNode = vec4(colour, 1);
-  m.opacityNode = a;
+  m.opacityNode = alpha;
   m.transparent = true;
   m.depthTest = false;
   m.depthWrite = false;
@@ -412,8 +427,9 @@ interface ShadowUniforms {
   inverse: UniformNode<"mat4", Matrix4>;
   /** the way to the sun in the plate's units, unit */
   sun: UniformNode<"vec3", Vector3>;
-  /** the block's size (caps), how far the shadow reaches (caps) */
-  block: UniformNode<"vec2", Vector2>;
+  /** the mask's rectangle (caps: corner x, y, width, height), how far
+   *  the shadow reaches (caps) */
+  area: UniformNode<"vec4", Vector4>;
   reach: Live;
   strength: Live;
   colour: UniformNode<"vec3", Vector3>;
@@ -441,7 +457,7 @@ function shadowMaterial(
   const local = u.inverse.mul(world).xyz;
   // along the sun's ray to the plate's plane: k caps
   const k = local.z.negate().div(u.sun.z);
-  const hit = local.xy.add(u.sun.xy.mul(k)).div(u.block);
+  const hit = local.xy.add(u.sun.xy.mul(k)).sub(u.area.xy).div(u.area.zw);
   const inside = step(0, hit.x)
     .mul(step(hit.x, 1))
     .mul(step(0, hit.y))
@@ -551,7 +567,11 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   const { fade } = uniforms;
   let atlas = atlasTexture(new Uint8Array(64 * 64), 64, 64);
   const atlasNode = texture(atlas);
-  const material = plateMaterial(deps, atlasNode, uniforms);
+  const { face: material, side: sideMaterial } = plateMaterials(
+    deps,
+    atlasNode,
+    uniforms
+  );
   // the face and its returns: one geometry, one material, a mesh per
   // layer (deepest drawn first), placed together by their group
   const letters = new Group();
@@ -561,16 +581,29 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   const layers = deps.phone ? SIDE_LAYERS.phone : SIDE_LAYERS.desktop;
   const sides: Mesh[] = [];
   for (let i = layers; i >= 1; i--) {
-    const side = new Mesh(plate.geometry, material);
+    const side = new Mesh(plate.geometry, sideMaterial);
     side.userData.nameplateLayer = (EXTRUDE_CAPS * i) / layers;
-    side.renderOrder = 2 + layers - i;
     side.frustumCulled = false;
     sides.push(side);
     letters.add(side);
   }
   plate.frustumCulled = false;
-  plate.renderOrder = 2 + layers;
   letters.add(plate);
+  /** The layers' order (they test no depth): far to near, so from the
+   *  plate's back the deepest layer comes last and the face first. */
+  let orderedBehind: boolean | null = null;
+  const orderLayers = (behind: boolean) => {
+    if (behind === orderedBehind) {
+      return;
+    }
+    orderedBehind = behind;
+    for (const [k, side] of sides.entries()) {
+      // sides[k] is layer (layers − k), deepest first
+      side.renderOrder = behind ? 3 + layers - 1 - k : 3 + k;
+    }
+    plate.renderOrder = behind ? 2 : 3 + layers;
+  };
+  orderLayers(false);
   /** The letters' geometry, the face's and every layer's. */
   const setLetters = (g: BufferGeometry) => {
     plate.geometry.dispose();
@@ -589,7 +622,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   const shadowUniforms: ShadowUniforms = {
     inverse: uniform(new Matrix4()),
     sun: uniform(new Vector3(0, 0, 1)),
-    block: uniform(new Vector2(1, 1)),
+    area: uniform(new Vector4(0, 0, 1, 1)),
     reach: uniform(1),
     strength: uniform(0),
     colour: uniform(new Vector3()),
@@ -994,9 +1027,14 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   };
 
   /** The plate's mesh at its pose: right, up and normal scaled by the
-   *  capital height, the block's corner as origin. */
-  const placePlate = (p: NameplatePose) => {
+   *  capital height, the block's corner as origin; its layers drawn far
+   *  to near (the face last, unless the camera sees the plate's back). */
+  const placePlate = (p: NameplatePose, cam: NameplateCamera) => {
     const n = cross(p.right, p.up);
+    const behind = cam.ortho
+      ? dot3(cam.forward, n) > 0
+      : dot3(sub(cam.position, p.origin), n) < 0;
+    orderLayers(behind);
     const c = p.cap;
     matrix.set(
       p.right[0] * c,
@@ -1023,6 +1061,14 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   };
 
   const sunLocal = new Vector3();
+  // the shadow box's plate corners and sweep, rewritten each frame
+  const prismCorners: Vec3[] = [
+    [0, 0, 0],
+    [0, 0, 0],
+    [0, 0, 0],
+    [0, 0, 0],
+  ];
+  const sweep: Vec3 = [0, 0, 0];
   /** The cast shadow for this frame's pose: the plate's rectangle swept
    *  away from the sun to below the thing's foot (at most
    *  `SHADOW_REACH_M`); none with the sun down or in the plate's plane. */
@@ -1039,20 +1085,28 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       shadow.visible = false;
       return;
     }
-    const { width, height } = block();
-    const w = scale(p.right, width * p.cap);
-    const h = scale(p.up, height * p.cap);
-    const corners = [p.origin, add(p.origin, w), add(add(p.origin, w), h)];
-    corners.push(add(p.origin, h));
-    const lowest = Math.min(...corners.map((c) => c[1]));
+    // the mask's rectangle on the plate (a box reaches past the block)
+    const area = geometry?.mask.area ?? { x: 0, y: 0, ...block() };
+    let lowest = Number.POSITIVE_INFINITY;
+    for (const [i, c] of prismCorners.entries()) {
+      const x = (area.x + (i === 1 || i === 2 ? area.width : 0)) * p.cap;
+      const y = (area.y + (i >= 2 ? area.height : 0)) * p.cap;
+      for (let k = 0; k < 3; k++) {
+        c[k] = p.origin[k] + p.right[k] * x + p.up[k] * y;
+      }
+      lowest = Math.min(lowest, c[1]);
+    }
     const length = Math.min(
       Math.max((lowest - (b.base - 2)) / Math.max(sun.y, 0.05), 2),
       SHADOW_REACH_M
     );
-    const d: Vec3 = [-sun.x * length, -sun.y * length, -sun.z * length];
-    writePrism(shadow.geometry, corners, d, dot3(cross(p.right, p.up), d));
+    sweep[0] = -sun.x * length;
+    sweep[1] = -sun.y * length;
+    sweep[2] = -sun.z * length;
+    const handed = dot3(cross(p.right, p.up), sweep);
+    writePrism(shadow.geometry, prismCorners, sweep, handed);
     shadowUniforms.sun.value.copy(sunLocal);
-    shadowUniforms.block.value.set(width, height);
+    shadowUniforms.area.value.set(area.x, area.y, area.width, area.height);
     shadowUniforms.reach.value = length / p.cap;
     shadowUniforms.strength.value = strength;
     const c = t.shadow.colour;
@@ -1139,7 +1193,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
         return;
       }
       pose = nameplatePose(body, layout, cam, block(), range(), deps.groundAt);
-      placePlate(pose);
+      placePlate(pose, cam);
       // an export draws every tile alike: no fade still running
       const arrive = hold ? 1 : Math.min((now - askedAt) / ARRIVE_MS, 1);
       fade.value = pose.fade * crossFade * (arrive * arrive * (3 - 2 * arrive));
@@ -1221,6 +1275,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       leader.geometry.dispose();
       shadow.geometry.dispose();
       material.dispose();
+      sideMaterial.dispose();
       shadowMat.dispose();
       atlas.dispose();
       mask.dispose();

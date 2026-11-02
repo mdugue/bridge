@@ -312,6 +312,23 @@ test("a ground place seen too flat is none: the plate stands up", () => {
       "air"
     ).mode
   ).toBe("air");
+  // a lying plate keeps lying a little flatter than a fresh one would lie:
+  // somewhere on the way down it stays where a fresh choice stands up
+  let kept = false;
+  for (let h = 45; h <= 300 && !kept; h += 5) {
+    const at = { ...scene, camera: look([0, h, 160], [0, 0, 0]) };
+    const fresh = chooseNameplate(BODY, null, block, range, at, "air");
+    const lying = chooseNameplate(
+      BODY,
+      { mode: "air", side: fresh.side, spot: "front" },
+      block,
+      range,
+      at,
+      "air"
+    );
+    kept = fresh.mode === "street" && lying.mode === "air";
+  }
+  expect(kept).toBe(true);
 });
 
 test("from above, the ground plate's side follows the screen's foot, with hysteresis", () => {

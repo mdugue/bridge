@@ -10,6 +10,7 @@
 import type { InquiryCard } from "./card-lines";
 import { OBJECT_FLAG_LANDMARK } from "./city-mesh";
 import { cardHeight, type Inquiry } from "./inquiry";
+import { UNKNOWN_SPECIES } from "./inquiry-more";
 import {
   factBuildings,
   factLines,
@@ -90,7 +91,7 @@ const STREET_THINGS = new Set<Inquiry["kind"]>([
  *  name, else its kind where that is not the title, else its first fact. */
 function thingLine(card: InquiryCard): string {
   const species = card.facts.find((f) => f.label === "Art");
-  if (species && species.value && species.value !== "nicht bekannt") {
+  if (species && species.value && species.value !== UNKNOWN_SPECIES) {
     return species.value;
   }
   if (card.kicker && card.kicker !== card.title) {

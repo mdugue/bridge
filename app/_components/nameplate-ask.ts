@@ -99,7 +99,7 @@ export function createNameplateAsk(deps: {
         index ? factsFor(index, inquiryBuildings(inquiry), card.title) : null
       );
       if (text && key !== null && key === named && sameText(text, namedText)) {
-        // the named building asked again: it keeps its place, no arrival
+        // the named thing asked again: it keeps its place, no arrival
         deps.plate.reshape(withEave(body));
         return;
       }
@@ -114,12 +114,18 @@ export function createNameplateAsk(deps: {
         deps.plate.set(null);
       }
       void loadLandmarkFacts(deps.factsUrl).then((index) => show(index));
-    } else if (inquiry.kind === "tree" && inquiry.factsUrl) {
+    } else if (
+      inquiry.kind === "tree" &&
+      inquiry.factsUrl &&
+      !inquiry.orchard
+    ) {
       // the register's species, as the card names the tree (the same
       // file, fetched once between them)
       const { index } = inquiry;
-      deps.plate.set(null);
-      named = null;
+      if (key !== named) {
+        named = null;
+        deps.plate.set(null);
+      }
       void loadTreeFacts(inquiry.factsUrl).then((file) =>
         show(null, file ? treeFactsAt(file, index) : null)
       );
@@ -152,7 +158,10 @@ function eaveOf(inquiry: Inquiry): number {
   }
   let best = 0;
   let area = -1;
-  for (const o of inquiry.tree) {
+  // a building asked without its tree is its picked object alone
+  // (mergedFacts reads it the same way)
+  const all = inquiry.tree.length > 0 ? inquiry.tree : [inquiry.picked];
+  for (const o of all) {
     const a = o.facts.area > 0 ? o.facts.area : 0;
     if (o.eaveH > 0 && a > area) {
       best = o.eaveH;
@@ -173,9 +182,12 @@ function sameText(a: NameplateText, b: NameplateText | null): boolean {
   );
 }
 
-/** A building question's identity (its tile and Buildings); null for
- *  anything else. */
+/** A question's identity: a building's tile and Buildings, a tree's tile
+ *  and row; null for anything else. */
 function plateKey(inquiry: Inquiry): string | null {
+  if (inquiry.kind === "tree") {
+    return `${inquiry.tile}~tree${inquiry.index}`;
+  }
   if (inquiry.kind !== "building") {
     return null;
   }

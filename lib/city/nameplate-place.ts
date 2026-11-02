@@ -723,7 +723,10 @@ export function nameplateCost(
   if (onScreen.some((p) => !p.front)) {
     return Number.POSITIVE_INFINITY;
   }
-  if (layout.mode === "air" && !groundReads(pose, block, scene.camera)) {
+  if (
+    layout.mode === "air" &&
+    !groundReads(pose, block, scene.camera, previous?.mode === "air")
+  ) {
     return Number.POSITIVE_INFINITY;
   }
   const box = boxOf(onScreen);
@@ -756,11 +759,13 @@ export function nameplateCost(
 }
 
 /** Whether a ground plate is seen steeply enough to read: the view onto
- *  its middle steeper than `GROUND_LEGIBLE_DEG`. */
+ *  its middle steeper than `GROUND_LEGIBLE_DEG`, a lying plate's
+ *  threshold moved by the hysteresis so it does not flip at the edge. */
 function groundReads(
   pose: NameplatePose,
   block: NameplateBlock,
-  camera: NameplateCamera
+  camera: NameplateCamera,
+  lying: boolean
 ): boolean {
   const middle = add(
     pose.origin,
@@ -769,7 +774,9 @@ function groundReads(
       scale(pose.up, (block.height * pose.cap) / 2)
     )
   );
-  return pitchTo(camera, middle) > GROUND_LEGIBLE_DEG;
+  return (
+    pitchTo(camera, middle) > GROUND_LEGIBLE_DEG * (lying ? 1 - HYSTERESIS : 1)
+  );
 }
 
 /** The best place in one laying, and its cost. */

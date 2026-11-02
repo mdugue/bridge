@@ -89,11 +89,26 @@ export interface PlateRaster {
   type: NameplateType;
 }
 
+/** A rectangle of the block's frame, in title caps. */
+export interface MaskArea {
+  height: number;
+  width: number;
+  x: number;
+  y: number;
+}
+
 export interface PlateGeometry {
   /** the block's size in title caps (the box's included) */
   block: { height: number; width: number };
-  /** the block's silhouette (R8, row 0 at its foot), covering the block */
-  mask: { data: Uint8Array; height: number; width: number };
+  /** the block's silhouette (R8, row 0 at its foot) over `area`: the
+   *  rectangle (title caps, the block's frame) its quads cover, a tilted
+   *  box's corners and edge too */
+  mask: {
+    area: MaskArea;
+    data: Uint8Array;
+    height: number;
+    width: number;
+  };
   index: Uint16Array;
   /** per vertex: what paints it (`PAINT`) */
   paint: Uint8Array;
@@ -527,11 +542,35 @@ export function layPlate(
   const block = { width: width + 2 * pad, height: height + pad };
   return {
     block,
-    mask: shadowMask(positions, b.casts, block),
+    mask: shadowMask(positions, b.casts, coveredArea(positions)),
     index: new Uint16Array(b.index),
     paint: new Uint8Array(b.paint),
     positions,
     uvk: new Float32Array(b.uvk),
+  };
+}
+
+/** The rectangle the quads cover, a softened pixel's margin round it. */
+function coveredArea(positions: Float32Array): MaskArea {
+  let x0 = Number.POSITIVE_INFINITY;
+  let y0 = Number.POSITIVE_INFINITY;
+  let x1 = Number.NEGATIVE_INFINITY;
+  let y1 = Number.NEGATIVE_INFINITY;
+  for (let i = 0; i < positions.length; i += 3) {
+    x0 = Math.min(x0, positions[i]);
+    x1 = Math.max(x1, positions[i]);
+    y0 = Math.min(y0, positions[i + 1]);
+    y1 = Math.max(y1, positions[i + 1]);
+  }
+  if (!(x1 > x0 && y1 > y0)) {
+    return { x: 0, y: 0, width: 1, height: 1 };
+  }
+  const m = 2 / MASK_PX_PER_CAP;
+  return {
+    x: x0 - m,
+    y: y0 - m,
+    width: x1 - x0 + 2 * m,
+    height: y1 - y0 + 2 * m,
   };
 }
 
@@ -543,14 +582,14 @@ function coverAt(c: Glyph["cover"], s: number, t: number): number {
 }
 
 /**
- * The block's silhouette at `MASK_PX_PER_CAP` (less where it would pass
- * `MASK_MAX`), from each quad's final corners (a tilted box's too) and
- * what it casts, softened once: what the cast shadow reads.
+ * The block's silhouette over `block` at `MASK_PX_PER_CAP` (less where it
+ * would pass `MASK_MAX`), from each quad's final corners (a tilted box's
+ * too) and what it casts, softened once: what the cast shadow reads.
  */
 export function shadowMask(
   positions: Float32Array,
   casts: readonly Casts[],
-  block: { height: number; width: number }
+  block: MaskArea
 ): PlateGeometry["mask"] {
   const ppc = Math.min(
     MASK_PX_PER_CAP,
@@ -565,7 +604,10 @@ export function shadowMask(
   for (const [q, cast] of casts.entries()) {
     const at = (corner: number) => {
       const i = (q * 4 + corner) * 3;
-      return [positions[i] * sx, positions[i + 1] * sy] as const;
+      return [
+        (positions[i] - block.x) * sx,
+        (positions[i + 1] - block.y) * sy,
+      ] as const;
     };
     const [ox, oy] = at(0);
     const [ax, ay] = at(1);
@@ -617,5 +659,5 @@ export function shadowMask(
       data[y * width + x] = Math.round(sum / 9);
     }
   }
-  return { data, width, height };
+  return { area: block, data, width, height };
 }

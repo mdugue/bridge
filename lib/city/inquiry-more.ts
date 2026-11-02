@@ -147,6 +147,10 @@ function pointSource(
 }
 
 /** A tree the scene draws without a register's name. */
+/** What a canopy card says for its species: DOP saw a crown, no register
+ *  names it. */
+export const UNKNOWN_SPECIES = "nicht bekannt";
+
 export function canopyCard(
   t: CanopyInquiry,
   provenance: SiteProvenance | null,
@@ -156,7 +160,7 @@ export function canopyCard(
     ["Höhe", t.height ? `${metres(t.height)}, gemessen` : ""],
     ["Krone", t.crown ? `Ø ${metres(t.crown)}, gemessen` : ""],
     ["Laub", t.evergreen ? "Nadelbaum, immergrün" : ""],
-    ["Art", "nicht bekannt"],
+    ["Art", UNKNOWN_SPECIES],
   ]);
   const leaf = {
     forest: rowSource("Nadelwald", provenance, credits),
