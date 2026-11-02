@@ -8,8 +8,8 @@ description: "The weekly Open-Data-Wächter of city walk, run by a scheduled tas
 The twin is built from open data that changes under it: Saxony replaces
 tiles as it flies them again, the statewide Basis-DLM every quarter, OSM
 every minute; services go down for days (GeoSN's in 2026-10). This skill
-says what changed since the committed data was fetched and does the first
-step about it.
+says what changed since the committed data was fetched and reports it for
+the maintainer.
 
 ## Run the check
 
@@ -49,11 +49,12 @@ current ones into the tiles that record none, right after a fetch.
    the container, Geofabrik does not), never dodge a re-bake — so say
    plainly when one is due.
 5. **Editions no record holds:** list them once (they stay until someone
-   records them); recording them is a small PR of its own if asked.
+   records them); recording them (`--record`) is the maintainer's, after
+   a fetch.
 6. **Report** in German as one comment on the open issue labelled
    **`open-data`** in `mdugue/bridge` (create it, titled
    „Open-Data-Wächter“, only if none is open): the „Zu tun“ lines with
-   what was done about each, links to any PR, and the report's
+   what each needs from the maintainer, and the report's
    „Stand“ folded under `<details>`.
 
 ## Never

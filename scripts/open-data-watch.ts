@@ -15,8 +15,8 @@
  *   `Last-Modified` where there is one.
  *
  * It downloads no data and changes nothing: it prints a report (German
- * Markdown, or JSON) for the scheduled task to turn into an issue or a
- * re-bake. Exit code 0 whatever it finds; 2 on a usage error.
+ * Markdown, or JSON) for the scheduled task to report on an issue, for the
+ * maintainer's re-bake. Exit code 0 whatever it finds; 2 on a usage error.
  *
  * `--record` instead writes the editions the service names into the
  * provenance of tiles that record none (a Saxon site's per-tile `Stand`),
