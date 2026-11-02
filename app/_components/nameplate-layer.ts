@@ -456,7 +456,7 @@ interface ShadowUniforms {
  * where it crosses: shadow where a letter stands between.
  */
 function shadowMaterial(
-  deps: Pick<NameplateDeps, "depthTexture" | "lens">,
+  deps: Pick<NameplateDeps, "depthTexture">,
   mask: TextureNode<"vec4">,
   fade: Live,
   u: ShadowUniforms,
@@ -1029,9 +1029,9 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     };
     return lastMarch;
   };
-  // the last march: a still view (and a moving one, within half a step)
-  // asks the ground again only each `SHADOW_REMARCH_MS`, for ground that
-  // streamed in since
+  // the last march: a still view (and a moving one, within
+  // `SHADOW_SLIDE_M`) asks the ground again only each
+  // `SHADOW_REMARCH_MS`, for ground that streamed in since
   let lastMarch:
     | (ShadowMarch & { at: number; base: number; corner: Vec3; sun: Vec3 })
     | null = null;

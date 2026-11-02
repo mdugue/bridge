@@ -1930,7 +1930,8 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   under the tallest (1.75 times lower, each over its object's own base,
   and under it in height) of an object at least a quarter of the largest
   footprint (a root's or an ensemble lead's area is its whole tree's: it
-  passes as a carrier and, as the tallest, is no tower), where that lies
+  passes as a carrier and, as the tallest, is a tower only over another
+  object whose own footprint is a quarter of it or more), where that lies
   a quarter of the height or more under the top, so a church's name
   stands on its nave, not on its spire's tip; a house's own pitched roof,
   its annex or a wing up the slope is no tower, its letters stand on the
