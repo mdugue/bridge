@@ -301,7 +301,7 @@ describe("an answer that stops says why", () => {
     const out = await types(
       ended(list(finished("content_filter")), new AbortController().signal)
     );
-    expect(out.at(-1)).toContain("verweigert");
+    expect(out.at(-1)).toContain("brach die Antwort ab");
   });
 
   test("an answer the model's output cut mid-sentence says so", async () => {

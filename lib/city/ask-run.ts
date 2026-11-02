@@ -195,7 +195,8 @@ function stopText(end: RunEnd, late: boolean): string | null {
     case "length":
       return late ? "Die Antwort dauerte zu lange." : CUT_SHORT;
     case "refused":
-      return "Das Modell hat diese Antwort verweigert.";
+      // a refusal, or (OpenRouter) a provider's failure mid-answer
+      return "Das Modell brach die Antwort ab. Frag bitte noch einmal.";
     case "other":
       return late ? "Die Antwort dauerte zu lange." : null;
   }
