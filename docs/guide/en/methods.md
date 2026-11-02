@@ -49,8 +49,13 @@ reproducible, but they can be wrong where the world does not fit the rule.
   viewer rebuilds the roof from the measurement — on a fifth of it already
   where the surface is level there and the model's roof slopes where the
   surface does not (a low hipped roof drawn over a flat department store).
-  A height above the building
-  model becomes a chimney or tower only where OpenStreetMap names one.
+  A tall height above the building
+  model becomes a chimney or tower only where OpenStreetMap names one. The
+  roof's small things come from the surface model alone: every bump over
+  a pitched roof is a dormer, however small and however close to the next;
+  a small one at the ridge, or on a flat roof, is a house chimney — unless
+  it lies along a ridge or valley the building model drew a little off, or
+  stands on a flat roof in a row of others (masts on a platform roof).
 - **Bridge superstructure:** what stands at least 3 m above the deck along
   the bridge's axis, for at least 25 m, becomes an arch or a truss.
 - **Assignments:** a shop from OpenStreetMap belongs to the building whose
@@ -86,7 +91,8 @@ why Munich is yellow there in [Sources by city](./sources-by-city.md).
 | Green of meadows and foliage | aerial photo, infrared (Munich: visible colours) | `= computed` |
 | Footprint, height and roof shape of buildings | 3D building model LoD2 | `❝ taken` |
 | Roofs where the model misses them | Surface model DOM1 | `◎ detected` |
-| Chimneys, towers, newer buildings, dormers | DOM1, confirmed by OpenStreetMap | `◎ detected` |
+| Chimneys, towers, newer buildings | DOM1, confirmed by OpenStreetMap | `◎ detected` |
+| Dormers and house chimneys | DOM1 over the building model's roof | `◎ detected` |
 | Platform roofs, carports, shelters | DOM1, confirmed by OpenStreetMap | `◎ detected` |
 | Sheds and garden houses | Laser scan | `◎ detected` |
 | Roof colour | Aerial photo | `= computed` |
