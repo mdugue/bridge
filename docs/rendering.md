@@ -441,8 +441,9 @@ the veil fades. The boot starts veiled with the ring at the feet; after
 the first load a pending spell shorter than 1.2 s never shows. The veil
 only takes away, so the unfinished picture is never brighter than the
 finished one, in every style. It costs no target or texture: a few
-uniforms and one depth read in a pass that runs anyway. An export, the
-QA's held frames (`__poc.veil`) and the shots harness draw without it.
+uniforms and one depth read in a pass that runs anyway. An export and the
+shots harness draw without it; a QA probe can set its own ring
+(`__poc.veil`). The ring, its halo and the contours stay off the sky.
 
 **The depth runs reversed** (three's `reversedDepthBuffer`,
 `create-app.ts`): 1 at the near plane, 0 at the far one, stored as floats

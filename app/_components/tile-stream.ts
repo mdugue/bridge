@@ -50,7 +50,7 @@ import { coarseCrownsStandIn, unpackCrowns } from "@/lib/city/coarse-crowns";
 import {
   keepOrder,
   type OrderedTile,
-  siteTileOf,
+  siteTileOfTile,
   streamOrder,
 } from "@/lib/city/stream-order";
 import { createTaskGate } from "@/lib/city/task-gate";
@@ -2023,8 +2023,19 @@ export class DressingPlugin {
     );
   }
   pending = 0;
-  /** the site tiles of the dressings queued or building, counted */
-  readonly pendingTiles = new Map<string, number>();
+  /** the dressings queued or building: their scene's site tile */
+  private readonly pendingScenes = new Map<Object3D, string>();
+
+  /** The site tiles of the dressings queued or building whose tile is in
+   *  view: one behind the camera does not hold the loading frontier. */
+  pendingTilesInView(into: Set<string>): void {
+    for (const [scene, id] of this.pendingScenes) {
+      const tile: OrderedTile | undefined = this.tileOf.get(scene);
+      if (tile?.traversal?.inFrustum !== false) {
+        into.add(id);
+      }
+    }
+  }
   private warmup: CrownWarmup | null = null;
   private disposed = false;
 
@@ -2108,10 +2119,7 @@ export class DressingPlugin {
     extras: TerrainExtras
   ): Promise<void> {
     this.pending++;
-    this.pendingTiles.set(
-      extras.tileId,
-      (this.pendingTiles.get(extras.tileId) ?? 0) + 1
-    );
+    this.pendingScenes.set(scene, extras.tileId);
     let built = (): void => undefined;
     const ready = new Promise<void>((resolve) => {
       built = resolve;
@@ -2210,12 +2218,7 @@ export class DressingPlugin {
         built();
         this.builtOf.delete(scene);
         this.pending--;
-        const left = (this.pendingTiles.get(extras.tileId) ?? 1) - 1;
-        if (left > 0) {
-          this.pendingTiles.set(extras.tileId, left);
-        } else {
-          this.pendingTiles.delete(extras.tileId);
-        }
+        this.pendingScenes.delete(scene);
         // A tile is dressed when its fine level is (the coarse one only
         // stands in for it).
         if (extras.level === 0) {
@@ -2664,15 +2667,14 @@ export function createTileStream(
   stream.pendingDressings = () => dressing.pending;
   stream.dressingSettled = (tileId) => dressing.settled.has(tileId);
   stream.pendingSiteTiles = () => {
-    const ids = new Set(dressing.pendingTiles.keys());
+    const ids = new Set<string>();
+    dressing.pendingTilesInView(ids);
     // reason: loadingTiles is the renderer's public Set of its tiles in
     // flight; its declaration does not list it.
     const loading = (tiles as unknown as { loadingTiles: Set<OrderedTile> })
       .loadingTiles;
     for (const tile of loading) {
-      const id = tile.traversal?.inFrustum
-        ? siteTileOf(tile.content?.uri)
-        : null;
+      const id = tile.traversal?.inFrustum ? siteTileOfTile(tile) : null;
       if (id !== null) {
         ids.add(id);
       }

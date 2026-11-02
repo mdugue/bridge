@@ -35,8 +35,8 @@ import type { ViewLens } from "./view-lens";
  * fills, it walks outward until, with nothing left to come, it sweeps out
  * to the horizon and the veil lifts.
  *
- * It only ever takes away — saturation and a fifth of the light beyond the
- * ring — so the unfinished picture is never brighter than the finished
+ * It only ever takes away — saturation and over a third of the light
+ * beyond the ring — so the unfinished picture is never brighter than the finished
  * one, in every picture style (the drained grey of Sin City is still
  * darker and flatter), and the ring's ink dims with the night.
  *
@@ -96,14 +96,13 @@ export function createLoadVeil(depth: DepthTexture, lens: ViewLens): LoadVeil {
   const radius: Live = uniform(BOOT_VEIL.radius);
   const strength: Live = uniform(BOOT_VEIL.strength);
   const centre = uniform(new Vector2());
-  // the lens's own matrices, written in place every frame
-  const projectionInverse = uniform(lens.camera.projectionMatrixInverse);
+  // the lens's own matrix, written in place every frame
   const cameraWorld = uniform(lens.camera.matrixWorld);
   const far = reference("far", "float", lens.camera);
 
   const over = (rgb: V3): V3 => {
     const z = texture(depth, screenUV).r;
-    const view = getViewPosition(screenUV, z, projectionInverse);
+    const view = getViewPosition(screenUV, z, lens.inverseProjection);
     const world = cameraWorld.mul(vec4(view, 1)).xyz;
     const d = world.xz.sub(centre).length();
     const b = breath();
@@ -114,8 +113,10 @@ export function createLoadVeil(depth: DepthTexture, lens: ViewLens): LoadVeil {
     // a breath in lets a little colour back in
     const drain = float(DRAIN).sub(b.mul(0.1));
     const clay = mix(rgb, vec3(luma), drain).mul(DIM);
+    // the ground and walls, not the sky (the far plane)
+    const solid = step(view.z.negate(), far.mul(0.97));
     // the contours, AA'd on their own derivative, gone where too dense
-    // and in the sky (the far plane)
+    // and in the sky
     const h = world.y.div(CONTOUR_M);
     const hw = max(fwidth(h), 1e-4);
     const contour = clamp(
@@ -124,7 +125,7 @@ export function createLoadVeil(depth: DepthTexture, lens: ViewLens): LoadVeil {
       1
     )
       .mul(float(1).sub(smoothstep(0.12, 0.3, hw)))
-      .mul(step(view.z.negate(), far.mul(0.97)));
+      .mul(solid);
     const clayLined = clay.mul(float(1).sub(contour.mul(CONTOUR_INK)));
     const veiled = mix(rgb, clayLined, beyond);
     // The ring: a line RING_PX wide where the ground (or a wall) crosses
@@ -141,11 +142,12 @@ export function createLoadVeil(depth: DepthTexture, lens: ViewLens): LoadVeil {
     const halo = float(1)
       .sub(smoothstep(0, radius.mul(HALO_SHARE).add(HALO_M), d.sub(ring)))
       .mul(step(ring, d))
+      .mul(solid)
       .mul(strength)
       .mul(ink)
       .mul(HALO_INK);
     const haloed = veiled.mul(mix(vec3(1), RING_INK.mul(2.2).min(1), halo));
-    const line = pow(onRing, 1.5).mul(smooth).mul(strength);
+    const line = pow(onRing, 1.5).mul(smooth).mul(solid).mul(strength);
     // By day the ink only darkens what it lies on; at night, on a city
     // near black, it is a dim line of its own colour.
     const dayInk = haloed.min(RING_INK.mul(1.9));

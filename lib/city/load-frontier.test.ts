@@ -76,3 +76,12 @@ test("a short top-up never shows; a long one comes in at its frontier", () => {
   // the next spell waits again
   expect(stepVeil(run(long, null, 10), 1500, 1 / 60).strength).toBe(0);
 });
+
+test("a top-up while the veil lifts waits too, and keeps lifting", () => {
+  const lifting = { radius: VEIL_HORIZON_M, strength: 0.6, pendingFor: 0 };
+  const short = run(lifting, 1500, VEIL_DELAY_S * 0.5);
+  expect(short.strength).toBeLessThan(0.6);
+  expect(short.radius).toBe(VEIL_HORIZON_M);
+  const long = run(lifting, 1500, VEIL_DELAY_S + 0.1);
+  expect(long.radius).toBeCloseTo(1500, 0);
+});

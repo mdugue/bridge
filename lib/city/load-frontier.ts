@@ -108,15 +108,20 @@ export function stepVeil(
     return { radius, strength, pendingFor: 0 };
   }
   const pendingFor = prev.pendingFor + step;
-  // A veil that is off waits out the delay, and comes in at the frontier
-  // (no sweep inward from the horizon).
-  if (prev.strength <= 0) {
+  // A veil that is off, or lifting after its sweep, waits out the delay
+  // (still lifting), and comes in at the frontier (no sweep inward from
+  // the horizon).
+  if (prev.strength <= 0 || prev.radius >= VEIL_HORIZON_M) {
     if (pendingFor < VEIL_DELAY_S) {
-      return { ...prev, pendingFor };
+      return {
+        radius: prev.radius,
+        strength: Math.max(0, prev.strength - VEIL_OUT_PER_S * step),
+        pendingFor,
+      };
     }
     return {
       radius: frontier,
-      strength: Math.min(1, VEIL_IN_PER_S * step),
+      strength: Math.min(1, prev.strength + VEIL_IN_PER_S * step),
       pendingFor,
     };
   }

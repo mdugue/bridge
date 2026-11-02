@@ -3056,7 +3056,12 @@ async function bootApp(
       at.x + offset.cx,
       offset.cy - at.z
     );
-    loadVeil = stepVeil(loadVeil, frontier, dt);
+    // The boot's veil holds at the feet until the first site tile is on
+    // its way (the tileset's own JSON is none): it must not sweep out and
+    // lift before anything has come.
+    if (!(frontier === null && loadVeil === BOOT_VEIL && !sceneSettled)) {
+      loadVeil = stepVeil(loadVeil, frontier, dt);
+    }
     // an exported image is the city, not its loading
     const asked = exporting ? { strength: 0 } : pocVeil();
     postStack.setLoadVeil(
