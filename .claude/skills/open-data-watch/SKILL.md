@@ -49,8 +49,13 @@ current ones into the tiles that record none, right after a fetch.
    configuration („the site names no …“, „the site runs no …“) or an
    empty tile („no lamps“). Every other one names a missing file, folder
    or cache („no … at/under …“, „no complete …“, „not cached“): that step
-   kept its old outputs, so the PR would mix two editions — then no PR, a
-   line in the report naming the skipped steps. Then `bun run test:pipeline`,
+   kept its old outputs, so the PR would mix two editions. Some steps
+   instead write an empty file without their cache (the Mapillary
+   facades, windows and lamps: „no facade measurements“, „no Mapillary
+   cache“; the container has no `MAPILLARY_TOKEN`), so also check
+   `git diff --stat data/<site>/`: an output of a tile whose edition did
+   not change must not shrink or vanish. Either case: no PR, a line in
+   the report naming the steps. Then `bun run test:pipeline`,
    `bun run verify`, then update `data/<site>/provenance.json` (the new
    `Stand` and the date; after a new Basis-DLM, its `lastModified` day
    under `geosn["Basis-DLM"]`, which the check compares against) and the guide's dataset table in both languages.
