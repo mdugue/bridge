@@ -56,7 +56,7 @@ reproducible, but they can be wrong where the world does not fit the rule.
   a small one at the ridge, or on a flat roof, is a house chimney — unless
   it lies along a ridge or valley the building model drew a little off, or
   stands on a flat roof in a row of others (masts on a platform roof).
-  Where the whole building model lies evenly higher or lower than the
+  Where the whole building model lies evenly higher than the
   measurement (the Taschenbergpalais by 1.2 m), it is set onto it first.
   A steep lower roof under a shallower upper one is a mansard, even where
   the building model does not call it one; its dormers may stand on up

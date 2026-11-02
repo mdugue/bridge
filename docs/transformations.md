@@ -1493,16 +1493,17 @@ visual-variable codebook is in
   LoD2 leaves out (`pipeline/bake/dormers.py`): the excess `DOM − roof`
   against its own 9 m median, every blob 0.7 m and more over it, at any
   size and spacing (2026-10-31; until then 3–30 m², no side over 8 m),
-  clear of every tree point. A building LoD2 drew as a whole higher or
-  lower than DOM1 (the Taschenbergpalais 1.2 m over it, flat parts and
-  all; 38 buildings on Dresden's 33410_5656) is moved onto DOM1 first:
-  where its cells up to 62° read 0.4–3 m off with a median deviation of
-  0.3 m at most; until 2026-11-02 such a roof failed the fit and had no
+  clear of every tree point. A building LoD2 drew as a whole over DOM1
+  (the Taschenbergpalais 1.2 m, flat parts and all) is read against DOM1
+  raised by that much first: where its cells up to 62° read 0.4–3 m
+  under the roof with a median deviation of 0.3 m at most (only that way:
+  a surface over the roof may be its own dormers and eaves); until 2026-11-02 such a roof failed the fit and had no
   dormers at all. On a pitched roof (25–62°, a mansard to 80°) a dormer;
   a mansard is LoD2's `roofType` 3400 or, as Saxony never writes 3400,
-  a building with ≥ 15 % and ≥ 50 m² of its roof steeper than 62° and
-  its other cells 1 m higher (an upper roof over a steep lower one, not a
-  spire over its roof); the break between the two is no seam to the
+  a building whose LoD2 roof faces put ≥ 15 % and ≥ 50 m² of its area
+  over 62° and the other faces 1 m higher on average (an upper roof over
+  a steep lower one, not a spire over its roof; read from the faces, as
+  the burned roof reads a step between two parts as a steep band); the break between the two is no seam to the
   dormers on the lower roof. A dormer: its top 0.9–3.5 m over the
   roof and under the object's ridge, compact, at most 8 m down the slope
   and as wide across it as it runs; dormers the 1 m cells join are parted

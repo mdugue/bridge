@@ -184,26 +184,61 @@ def mansard_profile(n: int = 40) -> tuple[np.ndarray, np.ndarray]:
     return z, slope
 
 
+def city_of(roofs: dict[str, list[list[tuple[float, float, float]]]]) -> dict:
+    """A CityJSON whose objects ("a", "a-1" a part of "a", ...) carry the
+    given roof faces (each a ring of x, y, z)."""
+    vertices: list[list[int]] = []
+    objs: dict = {}
+    for oid, faces in roofs.items():
+        rings = []
+        for ring in faces:
+            rings.append([[len(vertices) + i for i in range(len(ring))]])
+            vertices += [[int(v * 1000) for v in p] for p in ring]
+        objs[oid] = {
+            "geometry": [
+                {
+                    "type": "MultiSurface",
+                    "boundaries": rings,
+                    "semantics": {
+                        "surfaces": [{"type": "RoofSurface"}],
+                        "values": [0] * len(rings),
+                    },
+                }
+            ]
+        }
+        if "-" in oid:
+            objs[oid]["parents"] = [oid.split("-")[0]]
+    return {
+        "CityObjects": objs,
+        "vertices": vertices,
+        "transform": {"scale": [0.001] * 3, "translate": [0, 0, 0]},
+    }
+
+
+def face(x0: float, x1: float, z0: float, z1: float, depth: float = 20.0):
+    """A roof face rising from (x0, z0) to (x1, z1), `depth` m deep."""
+    return [(x0, 0, z0), (x1, 0, z1), (x1, depth, z1), (x0, depth, z0)]
+
+
 def test_a_steep_roof_under_a_shallow_one_is_a_mansard_whatever_lod2_calls_it():
-    z, slope = mansard_profile()
-    roof, sl = np.tile(z, (20, 1)), np.tile(slope, (20, 1))
-    labels = np.ones(roof.shape, np.int32)
-    assert dormers.mansards(roof, sl, labels)[1]
-    # a spire: the steep part over the roof, not under it
-    tower = np.where(sl > 60, roof + 30, roof)
-    assert not dormers.mansards(tower, sl, labels)[1]
-    # a gable with a few steep cells along a wall
-    gable = np.full(roof.shape, 45.0)
-    gable[0, :10] = 70.0
-    assert not dormers.mansards(roof, gable, labels)[1]
-    # a small house's steep sliver: too few cells
-    small = labels.copy()
-    small[:, 10:] = 2
-    small[2:, :10] = 2
-    assert not dormers.mansards(roof, sl, small)[1]
+    rise = 4 * math.tan(math.radians(70))
+    lower = [face(0, 4, 100, 100 + rise), face(20, 16, 100, 100 + rise)]
+    upper = [face(4, 10, 100 + rise, 102 + rise), face(16, 10, 100 + rise, 102 + rise)]
+    # its parts may carry the faces: the building decides
+    city = city_of({"a": upper, "a-1": lower})
+    assert dormers.mansard_shaped(city, ["a", "a-1"]) == [True, True]
+    # a spire: the steep faces over the roof, not under it
+    spire = [face(8, 10, 120, 140), face(12, 10, 120, 140)]
+    assert dormers.mansard_shaped(city_of({"t": upper + spire}), ["t"]) == [False]
+    # a flat roof with a lower wing: no steep face at all
+    flat = [face(0, 20, 120, 120), face(20, 30, 110, 110)]
+    assert dormers.mansard_shaped(city_of({"f": flat}), ["f"]) == [False]
+    # a small steep sliver
+    sliver = [face(0, 1, 100, 103, depth=5)]
+    assert dormers.mansard_shaped(city_of({"s": upper + sliver}), ["s"]) == [False]
 
 
-def test_a_building_lod2_drew_too_high_as_a_whole_is_lowered_onto_the_scan():
+def test_a_building_lod2_drew_too_high_as_a_whole_is_read_against_the_scan():
     roof = np.full((20, 20), 100.0)
     slope = np.zeros_like(roof)
     labels = np.zeros(roof.shape, np.int32)
@@ -215,6 +250,8 @@ def test_a_building_lod2_drew_too_high_as_a_whole_is_lowered_onto_the_scan():
     shift = dormers.shifts(dom, roof, slope, labels)
     assert abs(shift[1] - 1.2) < 0.05
     assert shift[2] == 0.0
+    # a surface over the roof as a whole may be the roof's own: no shift
+    assert dormers.shifts(roof + 1.0, roof, slope, labels)[1] == 0.0
     # a roof that is off in places only: no shift
     dom[:, :5] = roof[:, :5]
     assert dormers.shifts(dom, roof, slope, labels)[1] == 0.0
