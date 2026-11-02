@@ -593,9 +593,8 @@ const bspline = (t: F): V4 => {
  * size.
  */
 export function bsplineSample(t: Tex, uv: V2, size: I2, level: number): V4 {
-  const texels = vec2(size)
-    .div(2 ** level)
-    .toVar();
+  // a mip's size is floored (a 250 px raster's mip 2 is 62 px, not 62.5)
+  const texels = max(floor(vec2(size).div(2 ** level)), vec2(1)).toVar();
   const p = uv.mul(texels).sub(0.5).toVar();
   const i = floor(p).toVar();
   const f = p.sub(i).toVar();

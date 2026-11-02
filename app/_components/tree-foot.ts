@@ -67,7 +67,14 @@ import {
   slotTexture,
   slotUniform,
 } from "./material-slots";
-import { type F, rasterUv, type Tex, type V2, type V3 } from "./shader-chunks";
+import {
+  type F,
+  rasterUv,
+  type Tex,
+  type V2,
+  type V3,
+  type V4,
+} from "./shader-chunks";
 import {
   applyGroundLight,
   type GroundLight,
@@ -80,8 +87,8 @@ import {
  * flat disc under it read as a sticker. Every trunk of the fine level now
  * has, on the trunks' own instance buffers (their matrices, drops and bark
  * colours — the very column views, so three's memory count, which the
- * governor reads, charges nothing twice), a site-shared geometry and a
- * material per tile:
+ * governor reads, charges nothing twice), a quad and a hoop per tile
+ * (shared by its chunks, a few hundred bytes) and a material per tile:
  *
  * - at every foot, the trunk itself turns to earth (vegetation-layer.ts
  *   `buildTrunkMaterial`): no separate skirt, which read as a shoe;
@@ -200,6 +207,10 @@ const DROP = "iDrop";
 
 /** The cull sphere's growth over the trunks' (m): the farthest leaf. */
 export const FOOT_REACH = CROWN_MAX * LEAF_BEYOND + 0.5;
+/** How far a shade glaze reaches from its trunk (m): thrown up to three
+ *  crowns along the sun, half of it the quad's offset, and its half-size
+ *  1.1 crowns beyond. */
+const SHADE_REACH = CROWN_MAX * (1.5 + 1.1 + 1.5) + 0.5;
 
 /** How much fallen leaf lies (0..1): the scene's season, one value for
  *  every tile (create-app.ts, lib/city/tree-season.ts `leafLitterAt`). */
@@ -300,7 +311,8 @@ export function treeFeet(
     feet.drawCount = trunks.drawCount;
     const sphere = trunks.geometry.boundingSphere?.clone();
     if (sphere) {
-      sphere.radius += FOOT_REACH + 1;
+      // the shade is thrown off along the sun, out to SHADE_REACH
+      sphere.radius += (part === "shade" ? SHADE_REACH : FOOT_REACH) + 1;
       feet.geometry.boundingSphere = sphere;
     }
     feet.castShadow = false;
@@ -516,33 +528,42 @@ function pitGraph(r: FootRasters, part: "ring" | "earth"): PitGraph {
     .mul(max(step(0.5, f.pit), wornHere))
     .mul(step(0.001, f.fade));
   const position = folded(f.foot.add(vec3(q.x, lift, q.y)), f.foot);
-  const offset = varying(q, "vPitOffset");
-  // FLAT: they seed the rim's wobble and the litter (AGENTS.md)
-  const rt = flat(f.rt, "vPitTrunk");
-  const seed = flat(vec2(f.world.x, f.world.z).mul(0.37), "vPitSeed");
-  const fade = varying(f.fade, "vPitFade");
-  const xy = varying(vec2(f.world.x, f.world.z).add(q), "vPitXY");
-  const worn = flat(wornHere, "vPitWorn");
-  const wornPick = flat(pick, "vPitPick");
-  const lobes = flat(f.lobes, "vPitLobes");
-  const phase = flat(f.phase, "vPitPhase");
-  const axisX = flat(f.axisX, "vPitAxisX");
-  const axisZ = flat(f.axisZ, "vPitAxisZ");
   // far from any road: a pedestrian zone's pit wears a grate (not on a
   // tile without the edge raster, whose road reads -99)
-  const grated = flat(
-    step(GRATE_FROM, f.road.negate()).mul(step(-50, f.road)).mul(f.pit),
-    "vPitGrate"
-  );
-  const edges = s.edgesTex;
-  const uv = varying(
-    rasterUv(
-      vec2(f.world.x.add(q.x), f.world.z.add(q.y).negate()),
-      s.origin,
-      r.size
+  const grate = step(GRATE_FROM, f.road.negate())
+    .mul(step(-50, f.road))
+    .mul(f.pit);
+  // packed four to a varying: WebGPU has sixteen, the lit ground most
+  // of them (AGENTS.md); FLAT: per tree, they seed the rim's wobble and
+  // the litter
+  const smooth = varying(
+    vec4(
+      q,
+      rasterUv(
+        vec2(f.world.x.add(q.x), f.world.z.add(q.y).negate()),
+        s.origin,
+        r.size
+      )
     ),
-    "vPitUV"
+    "vPitQ"
   );
+  const tree = flat4(vec4(f.world.x, f.world.z, f.rt, f.fade), "vPitTree");
+  const kind = flat4(vec4(wornHere, pick, f.lobes, f.phase), "vPitKind");
+  const axes = flat4(vec4(f.axisX, f.axisZ), "vPitAxes");
+  const offset = smooth.xy;
+  const uv = smooth.zw;
+  const rt = tree.z;
+  const fade = tree.w;
+  const seed = tree.xy.mul(0.37);
+  const xy = tree.xy.add(offset);
+  const worn = kind.x;
+  const wornPick = kind.y;
+  const lobes = kind.z;
+  const phase = kind.w;
+  const axisX = axes.xy;
+  const axisZ = axes.zw;
+  const grated = flat(grate, "vPitGrate");
+  const edges = s.edgesTex;
   const graph = Fn(() => {
     const d = length(offset).toVar();
     const w = max(fwidth(d), 0.002).toVar();
@@ -685,6 +706,9 @@ const flat = <T extends F | V2>(v: T, name: string): T =>
   varying(v, name).setInterpolation(
     InterpolationSamplingType.FLAT
   ) as unknown as T;
+/** Four per-instance floats in one flat varying (they are scarce). */
+const flat4 = (v: V4, name: string): V4 =>
+  varying(v, name).setInterpolation(InterpolationSamplingType.FLAT);
 
 /** A quad of half-size `half` (m) at the foot, collapsed where `shown` is
  *  0, lifted off the ground (more with distance, the depth's precision). */
@@ -834,32 +858,42 @@ function shadeGraph(r: FootRasters, sun?: V3): ShadeGraph {
     .mul(shown)
     .add(thrown.mul(0.5).mul(shown));
   const position = folded(f.foot.add(vec3(q.x, lift, q.y)), f.foot);
-  const offset = varying(q, "vShadeOffset");
-  const crown = flat(f.crown, "vShadeCrown");
-  const green = flat(f.green, "vShadeGreen");
-  const rt = flat(f.rt, "vShadeTrunk");
-  const paved = flat(step(0.5, f.pit), "vShadePit");
-  const lobes = flat(f.lobes, "vShadeLobes");
-  const phase = flat(f.phase, "vShadePhase");
-  const axisX = flat(f.axisX, "vShadeAxisX");
-  const axisZ = flat(f.axisZ, "vShadeAxisZ");
-  const fade = varying(f.fade, "vShadeFade");
-  const near = varying(
-    float(1)
-      .sub(
-        smoothstep(
-          DAPPLE_TO * 0.6,
-          DAPPLE_TO,
-          distance(cameraPosition, f.world)
-        )
-      )
-      .mul(day),
-    "vShadeDay"
+  // the sun flecks' reach: by day, near the camera
+  const flecks = float(1)
+    .sub(
+      smoothstep(DAPPLE_TO * 0.6, DAPPLE_TO, distance(cameraPosition, f.world))
+    )
+    .mul(day);
+  // packed four to a varying: the lit ground takes most of WebGPU's
+  // sixteen (AGENTS.md); all but the offset are per tree (FLAT)
+  const offset = varying(q, "vShadeQ");
+  const tree = flat4(
+    vec4(f.world.x, f.world.z, f.crown, f.green),
+    "vShadeTree"
   );
-  const shadowAt = flat(thrown, "vShadeThrown");
+  const kind = flat4(
+    vec4(f.rt, step(0.5, f.pit), f.lobes, f.phase),
+    "vShadeKind"
+  );
+  const axes = flat4(vec4(f.axisX, f.axisZ), "vShadeAxes");
   // the shadow's ellipse: drawn out along the sun by 1 / its elevation
-  const stretch = flat(float(1).div(up).min(3), "vShadeStretch");
-  const xy = varying(vec2(f.world.x, f.world.z).add(q), "vShadeXY");
+  const throw4 = flat4(
+    vec4(thrown, float(1).div(up).min(3), f.fade),
+    "vShadeThrow"
+  );
+  const crown = tree.z;
+  const green = tree.w;
+  const rt = kind.x;
+  const paved = kind.y;
+  const lobes = kind.z;
+  const phase = kind.w;
+  const axisX = axes.xy;
+  const axisZ = axes.zw;
+  const shadowAt = throw4.xy;
+  const stretch = throw4.z;
+  const fade = throw4.w;
+  const near = flat(flecks, "vShadeDay");
+  const xy = tree.xy.add(offset);
   const sunLit = property("float", "footSunLit");
   const output = Fn(() => {
     const d = length(offset);
@@ -968,8 +1002,9 @@ function guardGraph(r: FootRasters): { position: V3 } {
     .mul(step(0.001, f.fade));
   const place = toRoad.mul(off.sub(GUARD_BEFORE));
   const p = positionGeometry;
-  // x along the kerb, z towards the road
-  const along = vec2(toRoad.y.negate(), toRoad.x);
+  // x along the kerb, z towards the road: a rotation (determinant +1), so
+  // the hoop keeps its winding and its faces stay outward
+  const along = vec2(toRoad.y, toRoad.x.negate());
   const position = Fn(() => {
     const n = normalLocal;
     normalLocal.assign(
@@ -1038,7 +1073,10 @@ function litMaterial(
   return m;
 }
 
-const shades = new Map<string, ShadeGraph>();
+/** Shade graphs by their sun (a new app has a new sun uniform; the old
+ *  one's graphs go with it) and their key. */
+const shades = new WeakMap<object, Map<string, ShadeGraph>>();
+const NO_SUN = {};
 
 /**
  * A tile's shade glaze: multiplied into what is drawn under it. Lit only to
@@ -1052,10 +1090,16 @@ function shadeMaterial(
   light?: GroundLight
 ): MeshLambertNodeMaterial {
   const key = `tree-shade|${variant}|${light ? groundLightKey(light) : ""}`;
-  let graph = shades.get(key);
+  const sun = light?.sunDirection ?? NO_SUN;
+  let bySun = shades.get(sun);
+  if (!bySun) {
+    bySun = new Map();
+    shades.set(sun, bySun);
+  }
+  let graph = bySun.get(key);
   if (!graph) {
     graph = shadeGraph(r, light?.sunDirection);
-    shades.set(key, graph);
+    bySun.set(key, graph);
   }
   const { sunLit } = graph;
   const m = new MeshLambertNodeMaterial();

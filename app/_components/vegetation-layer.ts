@@ -1050,9 +1050,14 @@ export function buildTrunkMaterial(): MeshStandardNodeMaterial {
     m.name = "trunk";
     const roots = trunkRoots();
     m.positionNode = instancePosition(roots.local);
-    const tg = clamp(varying(positionGeometry.y).div(TRUNK_H), 0, 1);
-    const metres = varying(roots.metres, "vTrunkFootH");
-    const lobe = varying(roots.lobe, "vTrunkLobe");
+    // one varying for the three (WebGPU's sixteen are scarce)
+    const along = varying(
+      vec3(positionGeometry.y, roots.metres, roots.lobe),
+      "vTrunkAlong"
+    );
+    const tg = clamp(along.x.div(TRUNK_H), 0, 1);
+    const metres = along.y;
+    const lobe = along.z;
     const reach = lobe.mul(0.5).add(0.5).mul(TRUNK_EARTH_H);
     const earth = float(1).sub(smoothstep(reach.mul(0.3), reach, metres));
     // the register's bark per tree (TreeInstance.bark; white elsewhere)

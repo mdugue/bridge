@@ -2741,7 +2741,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   it fades out between 70 and 150 m; a chunk whose nearest tree is past
   160 m draws none of it. One `Instances` set per part (ring, earth,
   leaves, shade, guard) per chunk on the trunks' own attribute objects
-  (matrices, drop, bark colour) and a quad per tile, with materials per
+  (matrices, drop, bark colour) and a quad and a hoop per tile, with materials per
   tile whose slots hold the tile's class and edge rasters and its light —
   no bytes per tree on a phone. The paper styles leave the blended parts
   out. Before, the trunk stabbed straight into a flat ground.
