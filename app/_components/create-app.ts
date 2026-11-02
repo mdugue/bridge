@@ -57,6 +57,12 @@ import {
   type LifecycleSignal,
 } from "@/lib/city/page-lifecycle";
 import type { Landmark } from "@/lib/city/landmarks";
+import {
+  BOOT_VEIL,
+  loadFrontier,
+  stepVeil,
+  type VeilState,
+} from "@/lib/city/load-frontier";
 import type { LoadStageId, LoadStageUpdate } from "@/lib/city/load-stages";
 import type { LookKey, LookValues } from "@/lib/city/look-controls";
 import type { LookState } from "@/lib/city/look-state";
@@ -188,6 +194,7 @@ import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
 import {
   pocFramesHeld,
   pocFrameTime,
+  pocVeil,
   tickPocFrame,
   updatePocDebug,
 } from "./poc-debug";
@@ -3037,6 +3044,28 @@ async function bootApp(
       });
   };
 
+  // The loading frontier (lib/city/load-frontier.ts): what is still on its
+  // way, as a ring around the camera that walks outward as the city fills.
+  const tileBounds = new Map(extras.tiles.map((t) => [t.id, t.bounds]));
+  let loadVeil: VeilState = BOOT_VEIL;
+  const stepLoadVeil = (dt: number, exporting: boolean) => {
+    const at = streamCamera.position;
+    const frontier = loadFrontier(
+      tileBounds,
+      stream.pendingSiteTiles(),
+      at.x + offset.cx,
+      offset.cy - at.z
+    );
+    loadVeil = stepVeil(loadVeil, frontier, dt);
+    // an exported image is the city, not its loading
+    const asked = exporting ? { strength: 0 } : pocVeil();
+    postStack.setLoadVeil(
+      asked ? { ...loadVeil, ...asked } : loadVeil,
+      at.x,
+      at.z
+    );
+  };
+
   // Motion-keyed quality regression. Derived from the CAMERA, not the input
   // layer: WASD, the joystick, pointer-lock mouse-look, touch look and the
   // scenic flights all move it, and only two of those go through `movement`
@@ -3700,6 +3729,7 @@ async function bootApp(
     // what the update brought into view or took out, before this frame
     // draws it (the shadow map, the lamp pool, the styles' gathering)
     streamChange.flush();
+    stepLoadVeil(dt, exporting);
     // Advance every tile's water ripple and glitter (its sky tint is the
     // fog colour's node, in lockstep with the sun by construction).
     setWaterTime(elapsed);

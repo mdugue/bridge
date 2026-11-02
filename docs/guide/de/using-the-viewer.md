@@ -46,6 +46,13 @@ Moment, etwa bei einem langen Flug, zeigt ein kleiner Hinweis *Umgebung
 lädt* oben im Bild (siehe
 [Wie ein Besuch abläuft](./how-it-works.md#wie-ein-besuch-abläuft)).
 
+Das Bild zeigt dasselbe: Solange die Stadt noch nachlädt, färbt sie sich
+von deinem Standort aus ein. Was vollständig da ist, hat seine Farben;
+hinter einer langsam atmenden magentafarbenen Linie liegt die Stadt als
+ungebrannter Ton, grau und mit Höhenlinien, bis die Linie sie erreicht.
+Kommt nichts mehr, läuft die Linie bis zum Horizont, und die Farben
+folgen.
+
 Die Seitenleiste ist von Anfang an da, über dem Ladebildschirm. Schon
 während die Stadt lädt, kannst du einen Ort wählen, einen Punkt auf der
 Karte anklicken oder einen Snapshot anwenden: Das Laden beginnt dann

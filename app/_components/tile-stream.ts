@@ -47,7 +47,12 @@ import {
   type TreeVeto,
 } from "@/lib/city/tree-placement";
 import { coarseCrownsStandIn, unpackCrowns } from "@/lib/city/coarse-crowns";
-import { keepOrder, streamOrder } from "@/lib/city/stream-order";
+import {
+  keepOrder,
+  type OrderedTile,
+  siteTileOf,
+  streamOrder,
+} from "@/lib/city/stream-order";
 import { createTaskGate } from "@/lib/city/task-gate";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
@@ -320,6 +325,13 @@ export interface TileStream {
   pendingDressings: () => number;
   /** whether a tile's dressing was tried: built, failed, or its tile left */
   dressingSettled: (tileId: string) => boolean;
+  /**
+   * The site tiles with something still on its way: a content in view the
+   * renderer is fetching or parsing (processTileModel included), or a
+   * dressing queued or building (the loading frontier,
+   * lib/city/load-frontier.ts).
+   */
+  pendingSiteTiles: () => Set<string>;
   /** demolished object indices per tile, kept across unload/reload */
   demolished: Map<string, Set<number>>;
   /** the site-wide groups (`CityObjectTable.group`) of demolished
@@ -2011,6 +2023,8 @@ export class DressingPlugin {
     );
   }
   pending = 0;
+  /** the site tiles of the dressings queued or building, counted */
+  readonly pendingTiles = new Map<string, number>();
   private warmup: CrownWarmup | null = null;
   private disposed = false;
 
@@ -2094,6 +2108,10 @@ export class DressingPlugin {
     extras: TerrainExtras
   ): Promise<void> {
     this.pending++;
+    this.pendingTiles.set(
+      extras.tileId,
+      (this.pendingTiles.get(extras.tileId) ?? 0) + 1
+    );
     let built = (): void => undefined;
     const ready = new Promise<void>((resolve) => {
       built = resolve;
@@ -2192,6 +2210,12 @@ export class DressingPlugin {
         built();
         this.builtOf.delete(scene);
         this.pending--;
+        const left = (this.pendingTiles.get(extras.tileId) ?? 1) - 1;
+        if (left > 0) {
+          this.pendingTiles.set(extras.tileId, left);
+        } else {
+          this.pendingTiles.delete(extras.tileId);
+        }
         // A tile is dressed when its fine level is (the coarse one only
         // stands in for it).
         if (extras.level === 0) {
@@ -2619,6 +2643,7 @@ export function createTileStream(
     demolishedGroups: new Set(),
     pendingDressings: () => 0,
     dressingSettled: () => false,
+    pendingSiteTiles: () => new Set(),
     visibleTerrains: memo(() =>
       [...stream.terrains]
         .filter((t) => isShown(t.mesh))
@@ -2638,6 +2663,22 @@ export function createTileStream(
   const dressing = new DressingPlugin({ ...ctx, onChange: changed }, stream);
   stream.pendingDressings = () => dressing.pending;
   stream.dressingSettled = (tileId) => dressing.settled.has(tileId);
+  stream.pendingSiteTiles = () => {
+    const ids = new Set(dressing.pendingTiles.keys());
+    // reason: loadingTiles is the renderer's public Set of its tiles in
+    // flight; its declaration does not list it.
+    const loading = (tiles as unknown as { loadingTiles: Set<OrderedTile> })
+      .loadingTiles;
+    for (const tile of loading) {
+      const id = tile.traversal?.inFrustum
+        ? siteTileOf(tile.content?.uri)
+        : null;
+      if (id !== null) {
+        ids.add(id);
+      }
+    }
+    return ids;
+  };
   tiles.registerPlugin(dressing);
   for (const { camera, width, height } of cameras) {
     tiles.setCamera(camera);

@@ -44,6 +44,13 @@ by tile, detailed near you and coarse further away. When that takes a
 moment, on a long flight for instance, a small *Umgebung lädt* ("loading
 surroundings") hint shows at the top of the screen (see [how a visit unfolds](./how-it-works.md#how-a-visit-unfolds)).
 
+The picture shows the same thing: while the city is still filling in, it
+colours in outward from where you stand. What is complete keeps its
+colours; beyond a slowly breathing magenta line the city lies as unfired
+clay, grey and lined with contours, until the line has reached it. When
+nothing is left to come, the line runs out to the horizon and the colours
+follow.
+
 The side panel is there from the start, over the loading screen. While
 the city loads you can already pick a place, click a spot on the map or
 apply a snapshot: the load starts over at that place (the loading screen
