@@ -150,7 +150,8 @@ export async function* ended(
   onEnd: () => void = () => {}
 ): AsyncIterable<StreamChunk> {
   let last: StreamChunk["type"] | undefined;
-  let finished = false;
+  // whether the last chunk closed the run, not a tool round of it
+  let whole = false;
   try {
     for await (const chunk of stream) {
       // the abort's own error would say less than the deadline's
@@ -158,14 +159,16 @@ export async function* ended(
         continue;
       }
       last = chunk.type;
-      finished ||= last === "RUN_FINISHED";
+      whole =
+        chunk.type === "RUN_FINISHED" &&
+        (chunk as { finishReason?: unknown }).finishReason !== "tool_calls";
       yield chunk;
     }
   } finally {
     onEnd();
   }
   // a run that finished before the deadline fired is whole
-  if (signal.reason === DEADLINE && !finished) {
+  if (signal.reason === DEADLINE && !whole) {
     yield runError("Die Antwort dauerte zu lange.");
   } else if (last === "TOOL_CALL_RESULT") {
     yield runError(TOO_MANY_STEPS);

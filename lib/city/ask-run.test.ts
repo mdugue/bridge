@@ -265,6 +265,32 @@ describe("an answer that stops says why", () => {
     expect(out).toEqual(["RUN_STARTED", "TEXT_MESSAGE_END", "RUN_FINISHED"]);
   });
 
+  test("the deadline after a tool round is still the deadline", async () => {
+    const c = new AbortController();
+    c.abort(DEADLINE);
+    async function* round() {
+      yield chunk("RUN_STARTED");
+      yield {
+        ...chunk("RUN_FINISHED"),
+        finishReason: "tool_calls",
+      } as StreamChunk;
+      yield chunk("TOOL_CALL_RESULT");
+    }
+    const out = await types(ended(round(), c.signal));
+    expect(out.at(-1)).toBe("RUN_ERROR:Die Antwort dauerte zu lange.");
+  });
+
+  test("a run that finished before the deadline stays whole", async () => {
+    const c = new AbortController();
+    c.abort(DEADLINE);
+    async function* whole() {
+      yield chunk("RUN_STARTED");
+      yield { ...chunk("RUN_FINISHED"), finishReason: "stop" } as StreamChunk;
+    }
+    const out = await types(ended(whole(), c.signal));
+    expect(out).toEqual(["RUN_STARTED", "RUN_FINISHED"]);
+  });
+
   test("the deadline's error replaces the abort's", async () => {
     const c = new AbortController();
     c.abort(DEADLINE);
