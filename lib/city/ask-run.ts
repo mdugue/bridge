@@ -78,18 +78,11 @@ export interface AskRun {
 export function roundsSinceQuestion(
   messages: ReadonlyArray<UIMessage | ModelMessage>
 ): number {
-  const model = convertMessagesToModelMessages([...messages]);
-  let rounds = 0;
-  for (let i = model.length - 1; i >= 0; i--) {
-    const m = model[i];
-    if (m.role === "user") {
-      break;
-    }
-    if (m.role === "assistant" && (m.toolCalls?.length ?? 0) > 0) {
-      rounds++;
-    }
-  }
-  return rounds;
+  // only what follows the question is converted
+  const question = messages.findLastIndex((m) => m.role === "user");
+  return convertMessagesToModelMessages(messages.slice(question + 1)).filter(
+    (m) => m.role === "assistant" && (m.toolCalls?.length ?? 0) > 0
+  ).length;
 }
 
 /** The answer as a stream of AG-UI events, for an SSE response. */
@@ -126,6 +119,44 @@ function errorChunk(message: string, key: string, code?: unknown): StreamChunk {
     message: scrubSecrets(message, [key]),
     ...(typeof code === "string" ? { code } : {}),
   } as StreamChunk;
+}
+
+function runError(message: string): StreamChunk {
+  return { type: "RUN_ERROR", timestamp: Date.now(), message } as StreamChunk;
+}
+
+/** The reason the route aborts a run that nears the host's limit. */
+export const DEADLINE = "deadline";
+
+/**
+ * The stream, closed by an error the visitor sees where it would stop
+ * without one: at the deadline, or when the turn cap ends the run right
+ * after a server tool ran, before the model could answer with its result.
+ */
+export async function* ended(
+  stream: AsyncIterable<StreamChunk>,
+  signal: AbortSignal
+): AsyncIterable<StreamChunk> {
+  let last: StreamChunk["type"] | undefined;
+  try {
+    for await (const chunk of stream) {
+      // the abort's own error would say less than the deadline's
+      if (signal.reason === DEADLINE && chunk.type === "RUN_ERROR") {
+        continue;
+      }
+      last = chunk.type;
+      yield chunk;
+    }
+  } catch (error) {
+    if (signal.reason !== DEADLINE) {
+      throw error;
+    }
+  }
+  if (signal.reason === DEADLINE) {
+    yield runError("Die Antwort dauerte zu lange.");
+  } else if (last === "TOOL_CALL_RESULT") {
+    yield runError("Die Antwort brauchte zu viele Schritte.");
+  }
 }
 
 /** The stream with the key taken out of any error, thrown or sent. */

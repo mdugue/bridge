@@ -374,7 +374,7 @@ function sceneTools(scene: AskScene) {
     showTool.client((input) => {
       const target: AskTarget = input;
       if (!scene.within(target.x, target.y)) {
-        return { ok: false, hinweis: OUTSIDE };
+        return { ok: false, ausserhalb: true, hinweis: OUTSIDE };
       }
       return scene.show(
         askView(target, scene.from() ?? target, input.aus_der_luft ?? false)
@@ -405,7 +405,9 @@ const OUTSIDE =
 
 /** A provider's error that names the key or the account's credit. */
 const KEY_TROUBLE =
-  /\b(401|403|unauthori[sz]ed|forbidden|authenticat\w*|api[ _-]?key|credit|quota|billing|insufficient)\b/i;
+  /\b(401|402|403|unauthori[sz]ed|forbidden|authenticat\w*|api[ _-]?key|credits?|credentials?|quota|billing|insufficient)\b/i;
+/** The same, as the code a provider's error carries. */
+const KEY_CODES = new Set(["401", "402", "403"]);
 
 /** A failed answer in words, by the status the server sent, and what
  *  the visitor can do about it: check the key again or start over. */
@@ -451,7 +453,8 @@ function errorText(error: Error): {
   // a key revoked or out of credit after the check fails in the stream,
   // in the provider's words: offer the check again for those only
   const message = error.message || "Die Antwort brach ab.";
-  return say(message, KEY_TROUBLE.test(message));
+  const code = argText((error as { code?: unknown }).code);
+  return say(message, KEY_CODES.has(code) || KEY_TROUBLE.test(message));
 }
 
 function Conversation({
@@ -504,7 +507,12 @@ function Conversation({
     error: undefined as Error | undefined,
   });
   if (renewed.token !== askKey.token) {
-    setRenewed({ token: askKey.token, error: chat.error });
+    // only an error the check answers: one about the key
+    const keyError = chat.error && errorText(chat.error).key;
+    setRenewed({
+      token: askKey.token,
+      error: keyError ? chat.error : undefined,
+    });
   }
   const failure =
     chat.error && chat.error !== renewed.error ? errorText(chat.error) : null;
@@ -634,8 +642,14 @@ function argText(value: unknown): string {
 /** What a tool call says it did, in the trace under an answer. */
 function toolLine(name: string, input: unknown, output?: unknown): string {
   const args = (input ?? {}) as Record<string, unknown>;
-  if ((output as { ok?: unknown } | undefined)?.ok === false) {
-    return name === "zeige" ? "Findet den Ort nicht in der Stadt" : name;
+  // a refused call says why, in the card's words (the model's are longer)
+  const refused = output as
+    | { ausserhalb?: unknown; hinweis?: unknown; ok?: unknown }
+    | undefined;
+  if (refused?.ok === false) {
+    return refused.ausserhalb === true
+      ? "Findet den Ort nicht in der Stadt"
+      : argText(refused.hinweis) || "Abgelehnt";
   }
   switch (name) {
     case "suche_stadt":

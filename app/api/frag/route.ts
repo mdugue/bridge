@@ -15,13 +15,20 @@ import {
 import {
   ASK_KEY_HEADER,
   ASK_LIMITS,
+  type AskRequestProps,
   conversationProblem,
   askPromptSite,
   lastQuestion,
   parseAskProps,
   plausibleKey,
 } from "@/lib/city/ask-city";
-import { roundsSinceQuestion, runAsk, scrubbed } from "@/lib/city/ask-run";
+import {
+  DEADLINE,
+  ended,
+  roundsSinceQuestion,
+  runAsk,
+  scrubbed,
+} from "@/lib/city/ask-run";
 import { verifyAskToken } from "@/lib/city/ask-token";
 import { siteById } from "@/sites";
 import { askAdapter, fakeAskAdapter } from "./adapters";
@@ -45,6 +52,18 @@ function refuse(status: number, code: string, message: string): Response {
   );
 }
 
+/** The model turns the answer has left; null for messages that do not
+ *  convert (the request's shape is checked only loosely before). */
+function turnsLeft(
+  messages: Parameters<typeof roundsSinceQuestion>[0]
+): number | null {
+  try {
+    return ASK_LIMITS.answerRounds - roundsSinceQuestion(messages);
+  } catch {
+    return null;
+  }
+}
+
 /** A conversation past the caps, or an answer with no turns left. */
 function conversationRefusal(
   messages: Parameters<typeof roundsSinceQuestion>[0],
@@ -64,19 +83,13 @@ function conversationRefusal(
   return null;
 }
 
-export async function POST(request: Request): Promise<Response> {
-  const fake = fakeModel();
-  const key = request.headers.get(ASK_KEY_HEADER)?.trim() ?? "";
-  let params: Awaited<ReturnType<typeof chatParamsFromRequestBody>>;
-  try {
-    params = await chatParamsFromRequestBody(await request.json());
-  } catch {
-    return refuse(400, "bad-request", "Die Anfrage ist unvollständig.");
-  }
-  const props = parseAskProps(params.forwardedProps);
-  if (typeof props === "string") {
-    return refuse(400, "bad-props", props);
-  }
+/** A key the route does not relay: none, no secret to check it with in
+ *  production, or a token the key check did not give for it. */
+async function keyRefusal(
+  fake: boolean,
+  key: string,
+  props: AskRequestProps
+): Promise<Response | null> {
   if (!fake && !plausibleKey(key)) {
     return refuse(401, "no-key", "Ohne Schlüssel geht es nicht.");
   }
@@ -103,7 +116,30 @@ export async function POST(request: Request): Promise<Response> {
   ) {
     return refuse(401, "bad-token", "Der Schlüssel muss neu geprüft werden.");
   }
-  const turns = ASK_LIMITS.answerRounds - roundsSinceQuestion(params.messages);
+  return null;
+}
+
+export async function POST(request: Request): Promise<Response> {
+  const fake = fakeModel();
+  const key = request.headers.get(ASK_KEY_HEADER)?.trim() ?? "";
+  let params: Awaited<ReturnType<typeof chatParamsFromRequestBody>>;
+  try {
+    params = await chatParamsFromRequestBody(await request.json());
+  } catch {
+    return refuse(400, "bad-request", "Die Anfrage ist unvollständig.");
+  }
+  const props = parseAskProps(params.forwardedProps);
+  if (typeof props === "string") {
+    return refuse(400, "bad-props", props);
+  }
+  const keyProblem = await keyRefusal(fake, key, props);
+  if (keyProblem) {
+    return keyProblem;
+  }
+  const turns = turnsLeft(params.messages);
+  if (turns === null) {
+    return refuse(400, "bad-request", "Die Anfrage ist unvollständig.");
+  }
   const tooMuch = conversationRefusal(params.messages, turns);
   if (tooMuch) {
     return tooMuch;
@@ -117,13 +153,19 @@ export async function POST(request: Request): Promise<Response> {
       "Für diese Stadt gibt es kein Stadtwissen."
     );
   }
+  // the model's run and the response's delivery stop apart: the deadline
+  // stops the run, and the response still carries the error that says so
   const abortController = new AbortController();
-  request.signal.addEventListener("abort", () => abortController.abort());
+  const runController = new AbortController();
+  request.signal.addEventListener("abort", () => {
+    abortController.abort();
+    runController.abort();
+  });
   const stream = runAsk({
     adapter: fake
       ? fakeAskAdapter()
       : askAdapter(props.provider, props.model, key),
-    abortController,
+    abortController: runController,
     knowledge,
     messages: params.messages,
     ...(params.resume ? { resume: params.resume } : {}),
@@ -137,11 +179,11 @@ export async function POST(request: Request): Promise<Response> {
   // the host ends the function at maxDuration without a word: end the
   // answer a little before, with an error the visitor sees
   const deadline = setTimeout(
-    () => abortController.abort("deadline"),
+    () => runController.abort(DEADLINE),
     (maxDuration - 10) * 1000
   );
   return toServerSentEventsResponse(
-    timed(scrubbed(stream, key), abortController.signal, deadline),
+    timed(ended(scrubbed(stream, key), runController.signal), deadline),
     {
       abortController,
       headers: { "Cache-Control": "no-store" },
@@ -149,22 +191,14 @@ export async function POST(request: Request): Promise<Response> {
   );
 }
 
-/** The stream, closed by an error when the deadline aborts it. */
+/** The stream, with the deadline's timer cleared when it ends. */
 async function* timed(
   stream: AsyncIterable<StreamChunk>,
-  signal: AbortSignal,
   deadline: ReturnType<typeof setTimeout>
 ): AsyncIterable<StreamChunk> {
   try {
     yield* stream;
   } finally {
     clearTimeout(deadline);
-  }
-  if (signal.reason === "deadline") {
-    yield {
-      type: "RUN_ERROR",
-      timestamp: Date.now(),
-      message: "Die Antwort dauerte zu lange.",
-    } as StreamChunk;
   }
 }

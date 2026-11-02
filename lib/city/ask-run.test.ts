@@ -3,7 +3,13 @@ import { fakeText } from "@tanstack/ai/testing";
 import type { AskPromptSite } from "./ask-city";
 import { knowledgeOf } from "./ask-knowledge";
 import type { StreamChunk } from "@tanstack/ai";
-import { roundsSinceQuestion, runAsk, scrubbed } from "./ask-run";
+import {
+  DEADLINE,
+  ended,
+  roundsSinceQuestion,
+  runAsk,
+  scrubbed,
+} from "./ask-run";
 import type { StadtwissenIndex, WissenTile } from "./stadtwissen";
 
 const INDEX: StadtwissenIndex = {
@@ -220,4 +226,52 @@ test("an answer's turns count across resumed requests, not its calls", () => {
   // two parallel calls are one turn, the zeige after their results another
   expect(roundsSinceQuestion(messages as never)).toBe(2);
   expect(roundsSinceQuestion([])).toBe(0);
+});
+
+describe("an answer that stops says why", () => {
+  const chunk = (type: string) => ({ type, timestamp: 0 }) as StreamChunk;
+  async function* of(...types: string[]) {
+    for (const t of types) {
+      yield chunk(t);
+    }
+  }
+  const types = async (stream: AsyncIterable<StreamChunk>) => {
+    const out: string[] = [];
+    for await (const c of stream) {
+      out.push(
+        c.type === "RUN_ERROR" ? `RUN_ERROR:${String(c.message)}` : c.type
+      );
+    }
+    return out;
+  };
+
+  test("a run the turn cap ends after a server tool", async () => {
+    const out = await types(
+      ended(
+        of("RUN_STARTED", "RUN_FINISHED", "TOOL_CALL_RESULT"),
+        new AbortController().signal
+      )
+    );
+    expect(out.at(-1)).toContain("zu viele Schritte");
+  });
+
+  test("an answered run ends as it is", async () => {
+    const out = await types(
+      ended(
+        of("RUN_STARTED", "TEXT_MESSAGE_END", "RUN_FINISHED"),
+        new AbortController().signal
+      )
+    );
+    expect(out).toEqual(["RUN_STARTED", "TEXT_MESSAGE_END", "RUN_FINISHED"]);
+  });
+
+  test("the deadline's error replaces the abort's", async () => {
+    const c = new AbortController();
+    c.abort(DEADLINE);
+    const out = await types(ended(of("RUN_STARTED", "RUN_ERROR"), c.signal));
+    expect(out).toEqual([
+      "RUN_STARTED",
+      "RUN_ERROR:Die Antwort dauerte zu lange.",
+    ]);
+  });
 });

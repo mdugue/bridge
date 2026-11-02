@@ -49,8 +49,10 @@ load into the browser.
 - `FRAG_SECRET` must be set on a production server, or the routes answer
   501; every refusal logs a status and reason code, never the key or the
   conversation. `FRAG_FAKE=1` is a scripted model for local tests only
-  and is ignored on Vercel. One answer may take up to 300 s of function
-  time (eight model calls with tool rounds).
+  and is ignored on Vercel. One request takes at most eight model turns
+  and ends with an error 10 s before its 300 s of function time; one
+  answer, across the requests the scene tools resume, takes at most
+  twelve turns.
 - The privacy page names what is sent, to whom, and the storage key
   (ADR 0043). Generated answers show in their own card, marked
   (ADR 0042).
