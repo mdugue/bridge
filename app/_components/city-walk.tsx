@@ -681,8 +681,9 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     null
   );
   const beforeWalk = useRef<{ at: Date; style: RenderStyle } | null>(null);
-  /** where the walk's own glide lands, to tell it from one picked since */
-  const walkGlide = useRef<{ epsgX: number; epsgY: number } | null>(null);
+  /** the walk's own glide while it flies: its flight tells when it ends,
+   *  is cancelled or gives way to another (`onProgress` 1) */
+  const walkGlide = useRef<object | null>(null);
   /**
    * Shows a walk's stop: a slow glide to its view (the card can be read,
    * or heard, on the way) — a jump only out of Modell, which no glide
@@ -701,31 +702,35 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     // the sun travels with the camera: no jump from one hour to the next
     const hour = time.glideTo(stopDate(stop, today()));
     if (h.getViewMode() === "model") {
-      h.applyCameraState(stopCamera(stop, h.offset));
       walkGlide.current = null;
+      h.applyCameraState(stopCamera(stop, h.offset));
       hour(1);
     } else {
       // a slow glide the visitor looks about in while the text is read:
       // a drag on the way turns the view, it does not stop the walk
+      const mine = {};
+      walkGlide.current = mine;
       h.flyToViewpoint(stopView(stop), {
         ground: stop.ground,
         lookAround: true,
-        onProgress: hour,
+        onProgress: (t) => {
+          hour(t);
+          if (t >= 1 && walkGlide.current === mine) {
+            walkGlide.current = null;
+          }
+        },
         pace: WALK_PACE,
       });
-      walkGlide.current = h.getGlideTarget();
     }
     look.set({ style: stop.style ?? "pastel" });
   };
   const endWalk = () => {
     // ended on the way: the camera stays where it is, not flying on alone
     // (only the walk's own glide: one to a place picked since goes on)
-    const mine = walkGlide.current;
-    const aim = handleRef.current?.getGlideTarget();
-    if (mine && aim && aim.epsgX === mine.epsgX && aim.epsgY === mine.epsgY) {
+    if (walkGlide.current) {
+      walkGlide.current = null;
       handleRef.current?.stopGlide();
     }
-    walkGlide.current = null;
     setWalking(null);
     if (beforeWalk.current) {
       time.setInstant(beforeWalk.current.at);
