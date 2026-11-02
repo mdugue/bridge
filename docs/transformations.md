@@ -1918,7 +1918,9 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   set** follows the picture style (`lib/city/nameplate-type.ts`): Pastell
   and Papier the HUD's grotesque (Inter, heavy, set tight) with tracked
   capitals for the facts, in loud colours — Pastell the selection's
-  magenta with plum returns, Papier a printer's violet (vermilion for a
+  magenta with plum returns and its facts in the same magenta at 78 %
+  (plum facts read poorly over a pale facade, maintainer review
+  2026-11-02), Papier a printer's violet (vermilion for a
   day, 2026-11-01: the selection's hue reads as one hand) — and no halo
   (a book serif with a pale halo until 2026-11-01: maintainer review found
   it old-fashioned and too much like a tooltip); Comic a caption box

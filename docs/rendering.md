@@ -734,7 +734,8 @@ outline's, each in its turn (`compileInTurn`).
   through the letter's outward normal — two more atlas reads give the
   field's gradient — and none of what the city hides.
 - **Cast shadow.** A box swept from the plate's rectangle away from the
-  sun down to the ground (stepped along the sun's ray against `groundAt`,
+  sun down to the ground (stepped along the sun's ray from its highest
+  corner against `groundAt`, so the top line's ray reaches it too,
   ≤ 400 m: a terrace's letters throw theirs onto the river below), drawn
   on its back faces (each
   pixel once, the camera inside it or not): each pixel takes the scene's

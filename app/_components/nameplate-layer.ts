@@ -530,9 +530,11 @@ function paintColours(
     [PAINT.boxFill]: type.box ? atNight(type.box.fill, night) : h,
     [PAINT.boxEdge]: type.box ? atNight(type.box.edge, night) : h,
   };
+  const linesAlpha = type.lines.alpha ?? 1;
   for (let i = 0; i < paint.length; i++) {
     const c = colours[paint[i]];
-    ink.set([c[0], c[1], c[2], dim], i * 4);
+    const a = paint[i] === PAINT.lines ? dim * linesAlpha : dim;
+    ink.set([c[0], c[1], c[2], a], i * 4);
     halo.set([h[0], h[1], h[2], type.halo.alpha * dim], i * 4);
   }
 }
@@ -976,8 +978,9 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   ];
   const sweep: Vec3 = [0, 0, 0];
   /** How far the shadow box reaches (m): along the sun's ray from the
-   *  plate's lowest corner until it meets the ground (a terrace's letters
-   *  throw their shadow down onto the river below it), a little beyond. */
+   *  plate's highest corner until it meets the ground, so every letter's
+   *  ray reaches it (a terrace's letters throw their shadow down onto the
+   *  river below it), a little beyond. */
   const shadowLength = (o: Vec3, base: number, sun: Vector3) => {
     const key = shadowKey;
     if (
@@ -999,10 +1002,10 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   // the ground nothing
   const shadowKey: number[] = [Number.NaN, 0, 0, 0, 0, 0, 0, 0];
   const marchToGround = (o: Vec3, base: number, sun: Vector3) => {
-    const lowest = o[1];
+    const top = o[1];
     const floor = base - 2;
     for (let t = 0; t <= SHADOW_REACH_M; t += SHADOW_STEP_M) {
-      const y = lowest - sun.y * t;
+      const y = top - sun.y * t;
       const ground = Math.min(
         deps.groundAt(o[0] - sun.x * t, o[2] - sun.z * t),
         floor
@@ -1032,18 +1035,18 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     }
     // the mask's rectangle on the plate (a box reaches past the block)
     const area = geometry?.mask.area ?? { x: 0, y: 0, ...block() };
-    let low = prismCorners[0];
+    let high = prismCorners[0];
     for (const [i, c] of prismCorners.entries()) {
       const x = (area.x + (i === 1 || i === 2 ? area.width : 0)) * p.cap;
       const y = (area.y + (i >= 2 ? area.height : 0)) * p.cap;
       for (let k = 0; k < 3; k++) {
         c[k] = p.origin[k] + p.right[k] * x + p.up[k] * y;
       }
-      if (c[1] < low[1]) {
-        low = c;
+      if (c[1] > high[1]) {
+        high = c;
       }
     }
-    const length = shadowLength(low, b.base, sun);
+    const length = shadowLength(high, b.base, sun);
     const map = deps.sunShadow.depth();
     if (map && sunRead.value !== map) {
       sunRead.value = map;
