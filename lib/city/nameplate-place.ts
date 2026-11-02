@@ -350,10 +350,9 @@ export function nameplateMode(
   // steeply too)
   const ground = centre3(body, body.base);
   // (lying already, it keeps the air down to the top itself)
+  const overShare = previous === "air" ? 0 : ABOVE_TOP_SHARE;
   const over =
-    camera.ortho ||
-    camera.position[1] >
-      body.top + ABOVE_TOP_SHARE * keep("air", -5) * bodySize(body);
+    camera.ortho || camera.position[1] > body.top + overShare * bodySize(body);
   if (over && pitchTo(camera, ground) > GROUND_PITCH_DEG * keep("air", -1)) {
     return "air";
   }

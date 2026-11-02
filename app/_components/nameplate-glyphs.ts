@@ -476,7 +476,8 @@ export function layPlate(
   const atlasHeight = raster.atlas.height;
   // baselines from the foot up: the last line first
   const baselines: number[] = [];
-  let y = FOOT * (lines.length > 0 ? lineCap : 1);
+  const firstBaseline = FOOT * (lines.length > 0 ? lineCap : 1);
+  let y = firstBaseline;
   for (let i = lines.length - 1; i >= 0; i--) {
     baselines[i] = y;
     y += LINE_LEADING * lineCap;
@@ -559,7 +560,7 @@ export function layPlate(
     }
   }
   const block = {
-    foot: pad > 0 ? 0 : FOOT * (lines.length > 0 ? lineCap : 1),
+    foot: pad > 0 ? 0 : firstBaseline,
     width: width + 2 * pad,
     height: height + pad,
   };

@@ -715,17 +715,17 @@ outline's, each in its turn (`compileInTurn`).
   material: a glyph (fill at 0.5, halo outward to a share of the reach,
   antialiased by `fwidth`) and a solid (the comic box and its edge,
   antialiased by their uv); the returns (below) have a material of their
-  own over the same geometry. No line ties the plate to its thing (maintainer review
-  2026-11-02); the selection outline marks it, in the style's own
-  lettering ink (`NameplateType.outline`, `SelectionOutline.setColours`),
-  and the clay's lift and hatch on the asked building follow
-  (`setAskedColours`: towards the lighter, hatched in the darker).
-  A long title breaks between words into even lines (`titleLines`, a
-  joined `A / B` name at its slash). Colour and
-  halo ride per vertex (`ink`, `halo`): three vertex buffers past
-  position, four inter-stage variables (`uvk`, `ink`, `halo` and the view
-  position the depth test reads); a fade uniform carries the arrival and
-  the cross-fades.
+  own over the same geometry. No line ties the plate to its thing
+  (maintainer review 2026-11-02); the selection outline marks it, in the
+  style's own lettering ink (`NameplateType.outline`,
+  `SelectionOutline.setColours`), and the clay's lift and hatch on the
+  asked building follow (`setAskedColours`: towards the lighter, hatched
+  in the darker). A long title breaks between words into even lines
+  (`titleLines`, a joined `A / B` name at its slash). Colour and halo ride
+  per vertex (`ink`, `halo`): three vertex buffers past position, four
+  inter-stage variables (`uvk`, `ink`, `halo` and the view position the
+  depth test reads); a fade uniform carries the arrival and the
+  cross-fades.
 - **Depth.** The letters stand 0.14 of a capital deep (`EXTRUDE_CAPS`):
   the plate's one geometry is drawn by ten meshes more behind the face
   (six on a phone; a returns material of their own, the layer a
@@ -737,23 +737,22 @@ outline's, each in its turn (`compileInTurn`).
   field's gradient — and none of what the city hides.
 - **Cast shadow.** A box swept from the plate's rectangle away from the
   sun down to the ground (stepped along the sun's ray from its highest
-  corner against `groundAt`, so the top line's ray reaches it too,
-  ≤ 400 m: a terrace's letters throw theirs onto the river below; asked
-  again each second for ground that streamed in, and a box that never
-  meets the ground fades out inside itself), drawn
-  on its back faces (each
-  pixel once, the camera inside it or not): each pixel takes the scene's
-  surface from the depth through the lens's inverse projection
-  (`getViewPosition`: perspective, parallel and Modell's shear alike),
-  follows the sun's ray from there to the plate's
-  plane in the plate's own units and reads a silhouette mask there (R8,
-  12 px per capital, ≤ 512 × 128, softened, laid out on the CPU from the
-  glyphs' coverage over the rectangle the quads cover, a comic box's
-  tilted corners too: `shadowMask`). So the letters shade a facade, a roof
-  or the ground alike — only where the sun reaches it: the surface is
-  tested against the scene's own shadow map through the read the styles'
-  `inSun` shares (`sun-shadow-read.ts`), so the letters' shadow joins the city's instead of darkening a
-  shade twice; none with the sun down.
+  corner against `groundAt`, so the top line's ray reaches it too, ≤ 400
+  m: a terrace's letters throw theirs onto the river below; asked again
+  each second for ground that streamed in, and a box that never meets the
+  ground fades out inside itself), drawn on its back faces (each pixel
+  once, the camera inside it or not): each pixel takes the scene's surface
+  from the depth through the lens's inverse projection (`getViewPosition`:
+  perspective, parallel and Modell's shear alike), follows the sun's ray
+  from there to the plate's plane in the plate's own units and reads a
+  silhouette mask there (R8, 12 px per capital, ≤ 512 × 128, softened,
+  laid out on the CPU from the glyphs' coverage over the rectangle the
+  quads cover, a comic box's tilted corners too: `shadowMask`). So the
+  letters shade a facade, a roof or the ground alike — only where the sun
+  reaches it: the surface is tested against the scene's own shadow map
+  through the read the styles' `inSun` shares (`sun-shadow-read.ts`), so
+  the letters' shadow joins the city's instead of darkening a shade twice;
+  none with the sun down.
 - **Occlusion** per pixel: the fragment's view depth against the scene's
   (the scene target's depth texture through `view-lens.ts`, whose
 three helpers follow the reversed buffer); behind the

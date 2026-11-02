@@ -30,47 +30,50 @@ export interface NameplateText {
   title: string;
 }
 
-/** How far another object must rise over the main mass's top, as a
- *  share of the mass's own height, to be a tower it stands under. */
-const TOWER_OVER_SHARE = 0.25;
+/** Another object rises this many times the main mass's eave height
+ *  over the mass's base to be a tower it stands under (a house's ridge
+ *  rarely reaches 1.7 eave heights; a church's tower many). */
+const TOWER_OVER_EAVE = 1.75;
 
-/** An object's top over the data frame's zero (m): its measured height,
- *  else its eave, over its base. */
-const topOf = (o: InquiryObject): number =>
-  (o.baseZ ?? 0) + (o.facts.height > 0 ? o.facts.height : o.eaveH);
+/** An object's top (m, the data frame's height): its measured height,
+ *  else its eave, over its base; null where its base is unknown (no
+ *  geometry of its own: the bake's base is then 0, not a height). */
+const topOf = (o: InquiryObject): number | null =>
+  o.baseZ === undefined || o.baseZ === 0
+    ? null
+    : o.baseZ + (o.facts.height > 0 ? o.facts.height : o.eaveH);
 
 /** A building's main eave: its largest object's (the main mass, not a
- *  tower or a dome's drum), over that object's own base (absent where the
- *  scene did not say: then over the outline's foot), where another of its
- *  objects rises well over the mass (a tower, a dome); null where nothing
- *  does (a house's own roof: its letters stand on the top), where none
- *  states an eave, or for anything else. */
+ *  tower or a dome's drum), over that object's own base, where another of
+ *  its objects rises well over that eave (a tower, a dome); null where
+ *  nothing does (a house's own roof: its letters stand on the top), where
+ *  none states an eave or base, or for anything else. The mass's own
+ *  height is not asked: a root's or an ensemble lead's spans its tree. */
 export function nameplateEave(
   inquiry: Inquiry
-): { baseZ?: number; eaveH: number } | null {
+): { baseZ: number; eaveH: number } | null {
   if (inquiry.kind !== "building") {
     return null;
   }
-  let best: InquiryObject | null = null;
+  let mass: InquiryObject | null = null;
   let area = -1;
   // a building asked without its tree is its picked object alone
   // (mergedFacts reads it the same way)
   const all = inquiry.tree.length > 0 ? inquiry.tree : [inquiry.picked];
   for (const o of all) {
     const a = o.facts.area > 0 ? o.facts.area : 0;
-    if (o.eaveH > 0 && a > area) {
-      best = o;
+    if (o.eaveH > 0 && topOf(o) !== null && a > area) {
+      mass = o;
       area = a;
     }
   }
-  if (!best) {
+  if (mass?.baseZ === undefined) {
     return null;
   }
-  const mass = best;
-  const massTop = topOf(mass);
-  const over = massTop + TOWER_OVER_SHARE * (massTop - (mass.baseZ ?? 0));
-  const tower = all.some((o) => o !== mass && topOf(o) >= over);
-  return tower ? { baseZ: mass.baseZ, eaveH: mass.eaveH } : null;
+  const { baseZ, eaveH } = mass;
+  const over = baseZ + TOWER_OVER_EAVE * eaveH;
+  const tower = all.some((o) => o !== mass && (topOf(o) ?? 0) >= over);
+  return tower ? { baseZ, eaveH } : null;
 }
 
 /** Whether a building inquiry is (part of) a landmark. */

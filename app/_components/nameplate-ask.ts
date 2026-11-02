@@ -74,7 +74,7 @@ export function createNameplateAsk(deps: {
   // a tower
   let eave: ReturnType<typeof nameplateEave> = null;
   const withEave = (b: NameplateBody): NameplateBody =>
-    eave ? { ...b, eave: (eave.baseZ ?? b.base) + eave.eaveH } : b;
+    eave ? { ...b, eave: eave.baseZ + eave.eaveH } : b;
   const ask = (inquiry: Inquiry | null, next: NameplateBody | null) => {
     const token = ++asked;
     body = next;

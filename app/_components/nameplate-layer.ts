@@ -161,6 +161,13 @@ const SHADOW_SUN = { from: 0.03, full: 0.18 } as const;
  *  terrain that streamed in since lengthens a shadow cut short. */
 const SHADOW_REMARCH_MS = 1000;
 
+/** A march along the sun's ray: how far (m), and whether it met the
+ *  ground there (else it stopped at `SHADOW_REACH_M`). */
+interface ShadowMarch {
+  grounded: boolean;
+  length: number;
+}
+
 /** What is asked, and what the plate is to say of it. */
 export interface NameplateSubject {
   text: NameplateText;
@@ -981,34 +988,48 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   /** How far the shadow box reaches (m): along the sun's ray from the
    *  plate's highest corner until it meets the ground, so every letter's
    *  ray reaches it (a terrace's letters throw their shadow down onto the
-   *  river below it), a little beyond. */
-  const shadowLength = (o: Vec3, base: number, sun: Vector3) => {
-    const key = shadowKey;
+   *  river below it), a little beyond; and whether it met the ground. */
+  const shadowLength = (
+    o: Vec3,
+    base: number,
+    sun: Vector3,
+    hold: boolean
+  ): ShadowMarch => {
     const now = performance.now();
+    const m = lastMarch;
     // the corner slides with the screen-held cap while the camera moves:
-    // within a march step's half it keeps its length
+    // within a march step's half it keeps its length; a held view (an
+    // export's tiles) keeps it outright
     const near = SHADOW_STEP_M / 2;
     if (
-      Math.abs(key[0] - o[0]) < near &&
-      Math.abs(key[1] - o[1]) < near &&
-      Math.abs(key[2] - o[2]) < near &&
-      key[3] === base &&
-      Math.abs(key[4] - sun.x) < 1e-3 &&
-      Math.abs(key[5] - sun.y) < 1e-3 &&
-      Math.abs(key[6] - sun.z) < 1e-3 &&
-      now - key[8] < SHADOW_REMARCH_MS
+      m &&
+      Math.abs(m.corner[0] - o[0]) < near &&
+      Math.abs(m.corner[1] - o[1]) < near &&
+      Math.abs(m.corner[2] - o[2]) < near &&
+      m.base === base &&
+      Math.abs(m.sun[0] - sun.x) < 1e-3 &&
+      Math.abs(m.sun[1] - sun.y) < 1e-3 &&
+      Math.abs(m.sun[2] - sun.z) < 1e-3 &&
+      (hold || now - m.at < SHADOW_REMARCH_MS)
     ) {
-      return key[7];
+      return m;
     }
-    const length = marchToGround(o, base, sun);
-    key.splice(0, 9, o[0], o[1], o[2], base, sun.x, sun.y, sun.z, length, now);
-    return length;
+    lastMarch = {
+      ...marchToGround(o, base, sun),
+      corner: [o[0], o[1], o[2]],
+      base,
+      sun: [sun.x, sun.y, sun.z],
+      at: now,
+    };
+    return lastMarch;
   };
-  // the last march's corner, foot, sun, length and time: a still view
-  // (and a moving one, within half a step) asks the ground again only
-  // each `SHADOW_REMARCH_MS`, for ground that streamed in since
-  const shadowKey: number[] = [Number.NaN, 0, 0, 0, 0, 0, 0, 0, 0];
-  const marchToGround = (o: Vec3, base: number, sun: Vector3) => {
+  // the last march: a still view (and a moving one, within half a step)
+  // asks the ground again only each `SHADOW_REMARCH_MS`, for ground that
+  // streamed in since
+  let lastMarch:
+    | (ShadowMarch & { at: number; base: number; corner: Vec3; sun: Vec3 })
+    | null = null;
+  const marchToGround = (o: Vec3, base: number, sun: Vector3): ShadowMarch => {
     const top = o[1];
     const floor = base - 2;
     for (let t = 0; t <= SHADOW_REACH_M; t += SHADOW_STEP_M) {
@@ -1018,16 +1039,16 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
         floor
       );
       if (y < ground) {
-        return Math.max(t + SHADOW_STEP_M, 2);
+        return { length: Math.max(t + SHADOW_STEP_M, 2), grounded: true };
       }
     }
-    return SHADOW_REACH_M;
+    return { length: SHADOW_REACH_M, grounded: false };
   };
 
   /** The cast shadow for this frame's pose: the plate's rectangle swept
    *  away from the sun down to the ground (at most `SHADOW_REACH_M`);
    *  none with the sun down or in the plate's plane. */
-  const placeShadow = (p: NameplatePose, b: NameplateBody) => {
+  const placeShadow = (p: NameplatePose, b: NameplateBody, hold: boolean) => {
     const sun = deps.sunDirection;
     const t = type();
     const light = MathUtils.smoothstep(sun.y, SHADOW_SUN.from, SHADOW_SUN.full);
@@ -1053,7 +1074,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
         high = c;
       }
     }
-    const length = shadowLength(high, b.base, sun);
+    const { length, grounded } = shadowLength(high, b.base, sun, hold);
     const map = deps.sunShadow.depth();
     if (map && sunRead.value !== map) {
       sunRead.value = map;
@@ -1069,7 +1090,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     // its fade (the last fifth) lies past the box's end: the ground stops
     // the shadow, not the fade; a box that never met the ground fades
     // out inside itself, no hard edge in mid-air
-    const fadeEnd = length >= SHADOW_REACH_M ? length : length * 1.25;
+    const fadeEnd = grounded ? length * 1.25 : length;
     shadowUniforms.reach.value = fadeEnd / p.cap;
     shadowUniforms.strength.value = strength;
     const c = t.shadow.colour;
@@ -1169,7 +1190,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       fade.value = pose.fade * crossFade * (arrive * arrive * (3 - 2 * arrive));
       letters.visible = fade.value > 0.001;
       if (letters.visible) {
-        placeShadow(pose, body);
+        placeShadow(pose, body, hold);
       } else {
         shadow.visible = false;
       }
