@@ -396,7 +396,11 @@ function pitGraph(r: FootRasters, part: "ring" | "earth"): PitGraph {
   // lifted off the ground, more with distance (the depth's precision);
   // collapsed where the tree stands in no paving
   const lift = float(0.04).add(distance(cameraPosition, f.world).mul(0.0015));
-  const q = positionGeometry.xz.mul(PIT_QUAD).mul(step(0.5, f.pit));
+  // none off paving, and collapsed once faded out: nothing to draw
+  const q = positionGeometry.xz
+    .mul(PIT_QUAD)
+    .mul(step(0.5, f.pit))
+    .mul(step(0.001, f.fade));
   const position = folded(f.foot.add(vec3(q.x, lift, q.y)), f.foot);
   const offset = varying(q, "vPitOffset");
   // FLAT: they seed the rim's wobble and the litter (AGENTS.md)

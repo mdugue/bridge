@@ -738,7 +738,9 @@ export function smoothPaths(
       col.assign(mix(col, mix(otherCol, pathCol, m), near));
       path.assign(mix(path, m, near));
       side.assign(other);
-      by.assign(near);
+      // how near the path is, as smooth as its coverage: a hard 1 inside
+      // the 4×4 notched the lawn line where the window ends
+      by.assign(near.mul(smoothstep(0, 0.04, cover)));
     });
   });
   return { col, path, side, near: by };
@@ -895,8 +897,9 @@ export function urbanGreen(
   const cls = int(inp.cls);
   // a path in built-up land counts as the land beside it, its own share
   // taken out along its smooth edge (`smoothPaths`) — not texel by texel
+  const builtUp = (c: I) => or(c.equal(BUILTUP_CLASS), c.equal(0));
   const built = select(
-    or(cls.equal(BUILTUP_CLASS), cls.equal(0), cls.equal(PATH_CLASS)),
+    or(builtUp(cls), and(cls.equal(PATH_CLASS), builtUp(col.pathSide))),
     float(1),
     float(0)
   ).mul(float(1).sub(col.path));
