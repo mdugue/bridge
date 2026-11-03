@@ -397,7 +397,7 @@ function errorText(error: Error): {
   reset: boolean;
   text: string;
 } {
-  const status = (error as { status?: unknown }).status;
+  const { status } = error as { status?: unknown };
   const say = (text: string, key = false, reset = false) => ({
     key,
     reset,

@@ -175,7 +175,7 @@ export function useAskScene(
         // a scene remounted while this waited (a GPU loss) is not asked
         // through the old one's handle
         const gone = () => handleRef.current !== h;
-        const signal = looks.stop.signal;
+        const { signal } = looks.stop;
         let asked: Inquiry | null = null;
         try {
           // where a glide lands, not on its way
