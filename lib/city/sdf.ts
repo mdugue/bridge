@@ -25,7 +25,7 @@ function edt1d(
   z[0] = -INF;
   z[1] = INF;
   f[0] = grid[offset];
-  for (let q = 1, k = 0, s = 0; q < length; q++) {
+  for (let k = 0, q = 1, s = 0; q < length; q++) {
     f[q] = grid[offset + q * stride];
     const q2 = q * q;
     do {
@@ -37,7 +37,7 @@ function edt1d(
     z[k] = s;
     z[k + 1] = INF;
   }
-  for (let q = 0, k = 0; q < length; q++) {
+  for (let k = 0, q = 0; q < length; q++) {
     while (z[k + 1] < q) {
       k++;
     }

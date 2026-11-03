@@ -199,7 +199,7 @@ export function forEachPoint(
     }
   }
   const alive = new Uint32Array(m);
-  for (let v = 0, k = 0; v < n; v++) {
+  for (let k = 0, v = 0; v < n; v++) {
     if (mask[v] === 1) {
       alive[k++] = v;
     }
