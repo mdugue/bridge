@@ -861,7 +861,8 @@ export function withMeasuredRoofs(
     const own = new Map(
       (colours?.parts?.[keys[index]] ?? [])
         .filter(
-          (p) => Math.abs(p[1] - (parts[p[0]]?.properties?.z ?? NaN)) < 0.01
+          (p) =>
+            Math.abs(p[1] - (parts[p[0]]?.properties?.z ?? Number.NaN)) < 0.01
         )
         .map((p) => [p[0], p.slice(2, 5)])
     );
