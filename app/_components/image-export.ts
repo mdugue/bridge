@@ -389,13 +389,13 @@ export async function saveShadowStudy(
   // the panels' hairlines
   ctx.strokeStyle = PAPER;
   ctx.lineWidth = 2 * unit;
-  for (let c = 1; c < cols; c++) {
+  for (let c = 1; c < cols; c += 1) {
     ctx.beginPath();
     ctx.moveTo(labelW + c * w, labelH);
     ctx.lineTo(labelW + c * w, sheet.height);
     ctx.stroke();
   }
-  for (let r = 1; r < rows; r++) {
+  for (let r = 1; r < rows; r += 1) {
     ctx.beginPath();
     ctx.moveTo(labelW, labelH + r * hgt);
     ctx.lineTo(sheet.width, labelH + r * hgt);

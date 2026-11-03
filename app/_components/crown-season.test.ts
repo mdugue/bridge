@@ -127,7 +127,9 @@ test("the warm-up stands in for both crown variants, laid out as a crown", () =>
   }
   let freed = 0;
   for (const m of [leafy, bare]) {
-    m.addEventListener("dispose", () => freed++);
+    m.addEventListener("dispose", () => {
+      freed += 1;
+    });
   }
   let geoFreed = false;
   geo.addEventListener("dispose", () => {

@@ -99,7 +99,7 @@ const PALETTE = sportPalette();
 /** A surface's colour by id (a select chain over the few surfaces). */
 function surfaceColour(surf: I): V3 {
   let col: V3 = vec3(PALETTE[0], PALETTE[1], PALETTE[2]);
-  for (let k = 1; k < SPORT_SURFACES.length; k++) {
+  for (let k = 1; k < SPORT_SURFACES.length; k += 1) {
     const c = vec3(PALETTE[k * 3], PALETTE[k * 3 + 1], PALETTE[k * 3 + 2]);
     col = select(surf.equal(k), c, col);
   }

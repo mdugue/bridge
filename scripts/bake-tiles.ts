@@ -128,7 +128,7 @@ export async function readDgm(
   }
   const noData = image.getGDALNoData();
   const elevations = new Float32Array(n * n);
-  for (let i = 0; i < elevations.length; i++) {
+  for (let i = 0; i < elevations.length; i += 1) {
     const z = Number((raster as unknown as ArrayLike<number>)[i]);
     elevations[i] = noData !== null && z === noData ? Number.NaN : z;
   }
@@ -163,7 +163,7 @@ function terrainNormals(
   surfaceVertexCount: number
 ): Float32Array {
   const normals = normalsOf(positions, indices.subarray(0, surfaceIndexCount));
-  for (let i = surfaceVertexCount; i < positions.length / 3; i++) {
+  for (let i = surfaceVertexCount; i < positions.length / 3; i += 1) {
     normals[3 * i] = 0;
     normals[3 * i + 1] = 0;
     normals[3 * i + 2] = 1;
@@ -264,7 +264,7 @@ export function shapeDgm(
 /** The highest surface vertex of the first `count`. */
 function maxZ(positions: Float32Array, count: number): number {
   let max = Number.NEGATIVE_INFINITY;
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < count; i += 1) {
     max = Math.max(max, positions[i * 3 + 2]);
   }
   return max;

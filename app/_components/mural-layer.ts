@@ -158,7 +158,7 @@ async function decodeImage(
 /** The red of RGBA texels: the pen lines' one channel. */
 function redOf(rgba: Uint8ClampedArray): Uint8Array {
   const red = new Uint8Array(rgba.length / 4);
-  for (let i = 0; i < red.length; i++) {
+  for (let i = 0; i < red.length; i += 1) {
     red[i] = rgba[i * 4];
   }
   return red;

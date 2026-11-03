@@ -130,12 +130,12 @@ export function raiseWater(input: WaterRaiseInput): Float32Array {
   const dy = (maxY - minY) / n;
   const sx = lift.n / (lx1 - lx0);
   const sy = lift.n / (ly1 - ly0);
-  for (let row = 0; row < n; row++) {
+  for (let row = 0; row < n; row += 1) {
     const lr = Math.floor((ly1 - (maxY - (row + 0.5) * dy)) * sy);
     if (lr < 0 || lr >= lift.n) {
       continue;
     }
-    for (let col = 0; col < n; col++) {
+    for (let col = 0; col < n; col += 1) {
       const lc = Math.floor((minX + (col + 0.5) * dx - lx0) * sx);
       const k = lc >= 0 && lc < lift.n ? lift.index[lr * lift.n + lc] : 0;
       const idx = row * n + col;

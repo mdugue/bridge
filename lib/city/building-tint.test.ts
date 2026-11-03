@@ -204,10 +204,10 @@ test("roughJitter: deterministic, in [-1,1]", () => {
 test("a brick city paints its buildings in brick, structures keep their stone", () => {
   const redness = ([r, , b]: [number, number, number]) => r - b;
   let brick = 0;
-  for (let i = 0; i < 200; i++) {
+  for (let i = 0; i < 200; i += 1) {
     const t = buildingTint(`B${i}`, { function: "31001_9998" }, "brick");
     if (redness(t) > 0.15) {
-      brick++;
+      brick += 1;
     }
   }
   // four of the five brick swatches are brick red, one pale render

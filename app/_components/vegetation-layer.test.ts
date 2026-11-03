@@ -222,7 +222,7 @@ test("the trunk geometry's rings are the profile its girth is fitted to", () => 
   for (const t of TRUNK_RINGS) {
     const y = t * TRUNK_H;
     const ring: [number, number][] = [];
-    for (let i = 0; i < pos.count; i++) {
+    for (let i = 0; i < pos.count; i += 1) {
       if (Math.abs(pos.getY(i) - y) < 1e-4) {
         ring.push([pos.getX(i), pos.getZ(i)]);
       }

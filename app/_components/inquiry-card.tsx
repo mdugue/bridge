@@ -225,7 +225,7 @@ function whenSheetMeasured(
   let frames = 0;
   let measured = false;
   let id = requestAnimationFrame(function wait() {
-    frames++;
+    frames += 1;
     if (measured || frames >= SHEET_ENTRANCE_FRAMES) {
       ready();
       return;

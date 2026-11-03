@@ -63,7 +63,7 @@ export class AxisIndex {
   constructor(axes: Iterable<TrackAxis>) {
     for (const axis of axes) {
       this.reach = Math.max(this.reach, axis.clear);
-      for (let i = 1; i < axis.coords.length; i++) {
+      for (let i = 1; i < axis.coords.length; i += 1) {
         this.add({
           a: axis.coords[i - 1],
           b: axis.coords[i],
@@ -80,12 +80,12 @@ export class AxisIndex {
     for (
       let cx = Math.floor(x0 / CELL_M);
       cx <= Math.floor(x1 / CELL_M);
-      cx++
+      cx += 1
     ) {
       for (
         let cy = Math.floor(y0 / CELL_M);
         cy <= Math.floor(y1 / CELL_M);
-        cy++
+        cy += 1
       ) {
         const key = `${cx}:${cy}`;
         const cell = this.cells.get(key);
@@ -106,12 +106,12 @@ export class AxisIndex {
     for (
       let cx = Math.floor((x0 - r) / CELL_M);
       cx <= Math.floor((x1 + r) / CELL_M);
-      cx++
+      cx += 1
     ) {
       for (
         let cy = Math.floor((y0 - r) / CELL_M);
         cy <= Math.floor((y1 + r) / CELL_M);
-        cy++
+        cy += 1
       ) {
         for (const s of this.cells.get(`${cx}:${cy}`) ?? []) {
           found.add(s);
@@ -140,11 +140,11 @@ function capsule(s: Segment): ClipPolygon {
   // around b from its left (+normal) through ahead to its right, then
   // around a from its right through behind back to its left: counter-
   // clockwise
-  for (let k = 0; k <= CAP_STEPS; k++) {
+  for (let k = 0; k <= CAP_STEPS; k += 1) {
     const t = base - Math.PI / 2 + (Math.PI * k) / CAP_STEPS;
     ring.push([bx + r * Math.cos(t), by + r * Math.sin(t)]);
   }
-  for (let k = 0; k <= CAP_STEPS; k++) {
+  for (let k = 0; k <= CAP_STEPS; k += 1) {
     const t = base + Math.PI / 2 + (Math.PI * k) / CAP_STEPS;
     ring.push([ax + r * Math.cos(t), ay + r * Math.sin(t)]);
   }
@@ -172,7 +172,7 @@ function polygonArea(rings: readonly (readonly Point2[])[]): number {
 /** A ring's perimeter, or a polyline's length (m). */
 export function ringLength(ring: readonly Point2[]): number {
   let l = 0;
-  for (let i = 1; i < ring.length; i++) {
+  for (let i = 1; i < ring.length; i += 1) {
     l += Math.hypot(ring[i][0] - ring[i - 1][0], ring[i][1] - ring[i - 1][1]);
   }
   return l;
@@ -352,7 +352,7 @@ function segmentPieces(
   const ts = [0, 1];
   for (const rings of areas) {
     for (const ring of rings) {
-      for (let i = 1; i < ring.length; i++) {
+      for (let i = 1; i < ring.length; i += 1) {
         const t = crossing(a, b, ring[i - 1], ring[i]);
         if (t !== null) {
           ts.push(t);
@@ -366,7 +366,7 @@ function segmentPieces(
     a[1] + (b[1] - a[1]) * t,
   ];
   const out: { from: Point2; inside: boolean; to: Point2 }[] = [];
-  for (let k = 1; k < ts.length; k++) {
+  for (let k = 1; k < ts.length; k += 1) {
     if (ts[k] - ts[k - 1] < 1e-9) {
       continue;
     }
@@ -423,7 +423,7 @@ export function outsideAreas(
     }
     run = [];
   };
-  for (let i = 1; i < coords.length; i++) {
+  for (let i = 1; i < coords.length; i += 1) {
     for (const piece of segmentPieces(coords[i - 1], coords[i], near)) {
       if (piece.inside) {
         crossed = true;

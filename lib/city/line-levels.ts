@@ -183,8 +183,8 @@ class SampleIndex {
     const out: { piece: number; i: number }[] = [];
     const cx = Math.floor(x / CELL_M);
     const cy = Math.floor(y / CELL_M);
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx += 1) {
+      for (let dy = -1; dy <= 1; dy += 1) {
         for (const s of this.cells.get(`${cx + dx}:${cy + dy}`) ?? []) {
           const p = this.pieces[s.piece];
           const pt = p.pts[s.i];
@@ -351,11 +351,11 @@ export function solvePieces(
     const end = own + p.pts.length;
     let from = own;
     while (from > 0 && dist[own] - dist[from - 1] <= PROFILE_CONTEXT_M) {
-      from--;
+      from -= 1;
     }
     let to = end;
     while (to < pts.length && dist[to] - dist[end - 1] <= PROFILE_CONTEXT_M) {
-      to++;
+      to += 1;
     }
     const profile = lineProfile(
       levels.slice(from, to),
@@ -393,14 +393,14 @@ function inTunnel(
   }
   let a = i;
   while (a > 0 && levels[a - 1]?.mode === "cut") {
-    a--;
+    a -= 1;
   }
   let b = i;
   while (b + 1 < levels.length && levels[b + 1]?.mode === "cut") {
-    b++;
+    b += 1;
   }
   let run = 0;
-  for (let k = a; k < b; k++) {
+  for (let k = a; k < b; k += 1) {
     run += Math.hypot(pts[k + 1][0] - pts[k][0], pts[k + 1][1] - pts[k][1]);
   }
   return run > CROSS_TUNNEL_M;

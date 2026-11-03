@@ -93,7 +93,7 @@ const steps: [string, number][] = [
 const runs = 5;
 for (const [label, day] of steps) {
   const times: number[] = [];
-  for (let r = 0; r < runs; r++) {
+  for (let r = 0; r < runs; r += 1) {
     // Start each run from the previous step's day so the transition is real.
     const from =
       steps[Math.max(steps.findIndex((s) => s[1] === day) - 1, 0)][1];

@@ -112,7 +112,7 @@ function liveRamp(dtv: F): { load: F; tint: V3 } {
   let tint = color(TRAFFIC_SCALE[0].tint) as unknown as V3;
   let load = float(0) as F;
   const span = TRAFFIC_SCALE.length - 1;
-  for (let i = 0; i < span; i++) {
+  for (let i = 0; i < span; i += 1) {
     const lo = Math.log(TRAFFIC_SCALE[i].dtv);
     const hi = Math.log(TRAFFIC_SCALE[i + 1].dtv);
     const seg = logd
@@ -239,7 +239,7 @@ function samples(
 ): { at: number; p: Point2; size: number }[] {
   const dense = subdividePolyline(lane.coords, step);
   const dist = [0];
-  for (let i = 1; i < dense.length; i++) {
+  for (let i = 1; i < dense.length; i += 1) {
     dist.push(
       dist[i - 1] +
         Math.hypot(dense[i][0] - dense[i - 1][0], dense[i][1] - dense[i - 1][1])
@@ -273,7 +273,7 @@ function addLane(
   const height = flowHeight(lane.dtv);
   const pts = samples(lane, DETAIL[detail].sample);
   let prevOk = false;
-  for (let i = 0; i < pts.length; i++) {
+  for (let i = 0; i < pts.length; i += 1) {
     const { at, p, size } = pts[i];
     const right = rightOf(
       pts[Math.max(i - 1, 0)].p,
@@ -303,7 +303,7 @@ function addLane(
       body.section.push(section);
     }
     if (prevOk) {
-      for (let k = 0; k < ring - 1; k++) {
+      for (let k = 0; k < ring - 1; k += 1) {
         const a = base - ring + k;
         const b = base + k;
         // wound so the outside faces out (forward × up points to the

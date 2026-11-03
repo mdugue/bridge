@@ -465,7 +465,7 @@ function lastAnswer(messages: readonly UIMessage[]): string {
   for (
     let i = messages.length - 1;
     i >= 0 && messages[i].role !== "user";
-    i--
+    i -= 1
   ) {
     texts.unshift(
       messages[i].parts

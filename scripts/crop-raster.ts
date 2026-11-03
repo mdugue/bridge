@@ -25,8 +25,8 @@ export function colonyCrop(rg: Uint8Array, size: number): ColonyCrop | null {
   let y0 = size;
   let x1 = -1;
   let y1 = -1;
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
       if (rg[(y * size + x) * 2] > 0) {
         x0 = Math.min(x0, x);
         x1 = Math.max(x1, x);
@@ -48,7 +48,7 @@ export function colonyCrop(rg: Uint8Array, size: number): ColonyCrop | null {
 export function cropRg(rg: Uint8Array, crop: ColonyCrop): Uint8Array {
   const [x, y, w, h, size] = crop;
   const out = new Uint8Array(w * h * 2);
-  for (let r = 0; r < h; r++) {
+  for (let r = 0; r < h; r += 1) {
     const from = ((y + r) * size + x) * 2;
     out.set(rg.subarray(from, from + w * 2), r * w * 2);
   }
@@ -63,8 +63,8 @@ export function cropRg(rg: Uint8Array, crop: ColonyCrop): Uint8Array {
 export function halveRg(rg: Uint8Array, w: number, h: number): Uint8Array {
   const [hw, hh] = [w / 2, h / 2];
   const out = new Uint8Array(hw * hh * 2);
-  for (let y = 0; y < hh; y++) {
-    for (let x = 0; x < hw; x++) {
+  for (let y = 0; y < hh; y += 1) {
+    for (let x = 0; x < hw; x += 1) {
       let sum = 0;
       let axis = 0;
       for (const [dx, dy] of [

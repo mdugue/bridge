@@ -43,9 +43,9 @@ function colorizeLandcover(
   }
   const image = ctx.createImageData(size, size);
   const { data } = image;
-  for (let y = 0; y < size; y++) {
+  for (let y = 0; y < size; y += 1) {
     const row = Math.floor(((y + 0.5) * raster.height) / size) * raster.width;
-    for (let x = 0; x < size; x++) {
+    for (let x = 0; x < size; x += 1) {
       const col = Math.floor(((x + 0.5) * raster.width) / size);
       const tint = landcoverSrgb(raster.data[row + col]);
       const i = (y * size + x) * 4;

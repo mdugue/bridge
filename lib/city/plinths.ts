@@ -149,7 +149,7 @@ function extrude(
     tri([at(0, p), at(1, p), at(1, q)], [np, np, nq]);
     tri([at(0, p), at(1, q), at(0, q)], [np, nq, nq]);
   });
-  for (let k = 1; k + 1 < profile.length; k++) {
+  for (let k = 1; k + 1 < profile.length; k += 1) {
     if (!run.ma) {
       tri(
         [at(0, profile[0]), at(0, profile[k]), at(0, profile[k + 1])],
@@ -462,8 +462,8 @@ function links(st: readonly Stretch[]): Link[] {
       Math.floor(s.b[0] / BRIDGE_M),
       Math.floor(s.b[1] / BRIDGE_M),
     ];
-    for (let gx = cx - 1; gx <= cx + 1; gx++) {
-      for (let gy = cy - 1; gy <= cy + 1; gy++) {
+    for (let gx = cx - 1; gx <= cx + 1; gx += 1) {
+      for (let gy = cy - 1; gy <= cy + 1; gy += 1) {
         for (const j of starts.get(`${gx},${gy}`) ?? []) {
           const link = linkOf(s, st[j], dir, minCos);
           if (j !== i && link) {
@@ -691,7 +691,7 @@ function along(run: Run, k: WallKnots): Run[] {
     run.a[1] + (run.b[1] - run.a[1]) * f,
   ];
   const out: Run[] = [];
-  for (let j = 0; j + 1 < k.f.length; j++) {
+  for (let j = 0; j + 1 < k.f.length; j += 1) {
     const first = j === 0;
     const last = j + 2 === k.f.length;
     out.push({

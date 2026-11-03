@@ -256,7 +256,7 @@ const cellKey = (x: number, z: number) =>
 function segmentGrid(runs: TrackRun[]): SegmentGrid {
   const grid: SegmentGrid = new Map();
   runs.forEach((run, r) => {
-    for (let i = 1; i < run.pts.length; i++) {
+    for (let i = 1; i < run.pts.length; i += 1) {
       const a = run.pts[i - 1];
       const b = run.pts[i];
       const keys = new Set([cellKey(a.x, a.z), cellKey(b.x, b.z)]);
@@ -280,8 +280,8 @@ function nearestOther(
   let best: { d: number; x: number; z: number } | null = null;
   const cx = Math.floor(p.x / CELL_M);
   const cz = Math.floor(p.z / CELL_M);
-  for (let i = -1; i <= 1; i++) {
-    for (let j = -1; j <= 1; j++) {
+  for (let i = -1; i <= 1; i += 1) {
+    for (let j = -1; j <= 1; j += 1) {
       for (const [a, b, r] of grid.get(`${cx + i},${cz + j}`) ?? []) {
         if (r === self) {
           continue;
@@ -362,7 +362,7 @@ function addLawn(acc: Mesh3, pts: Pt[], halves: LawnHalves): void {
       pts[i].z + n[i][1] * w * sign,
     ];
   };
-  for (let i = 0; i < pts.length - 1; i++) {
+  for (let i = 0; i < pts.length - 1; i += 1) {
     const l0 = edge(i, 1);
     const l1 = edge(i + 1, 1);
     const r0 = edge(i, -1);
@@ -451,7 +451,7 @@ function addContactWire(
     z: p.z,
   }));
   addWire(w, wire, WIRE_HALF.contact);
-  for (let i = 0; i < wire.length; i++) {
+  for (let i = 0; i < wire.length; i += 1) {
     const q = wire[i];
     held.push({
       x: q.x + ctx.offset.cx,
@@ -511,7 +511,7 @@ function addSpan(
   const hb = gb + anchor + lift;
   const n = 8;
   const pts: Pt[] = [];
-  for (let i = 0; i <= n; i++) {
+  for (let i = 0; i <= n; i += 1) {
     const t = i / n;
     pts.push(
       worldPt(
@@ -600,7 +600,7 @@ function buildMasts(masts: Point2[], ctx: GroundContext): Instances | null {
     return m;
   });
   const mesh = new Instances(geo, material, stood.length);
-  for (let i = 0; i < stood.length; i++) {
+  for (let i = 0; i < stood.length; i += 1) {
     mesh.setMatrixAt(i, stood[i]);
   }
   mesh.instanceMatrix.needsUpdate = true;
@@ -654,7 +654,7 @@ function* buildTracks(
       addTrack(acc, run, bed, f.properties?.g, halves.get(run));
     }
     let length = 0;
-    for (let i = 1; i < coords.length; i++) {
+    for (let i = 1; i < coords.length; i += 1) {
       length += Math.hypot(
         coords[i][0] - coords[i - 1][0],
         coords[i][1] - coords[i - 1][1]

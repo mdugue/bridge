@@ -70,7 +70,7 @@ export function minimumRectangle(points: readonly Point2[]): {
   }
   let best: ReturnType<typeof minimumRectangle> = null;
   let bestArea = Number.POSITIVE_INFINITY;
-  for (let i = 0; i < hull.length; i++) {
+  for (let i = 0; i < hull.length; i += 1) {
     const a = hull[i];
     const b = hull[(i + 1) % hull.length];
     const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -252,7 +252,7 @@ export function postsMesh(
       [x + r, y + r],
       [x - r, y + r],
     ];
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 4; i += 1) {
       const [ax, ay] = ring[i];
       const [bx, by] = ring[(i + 1) % 4];
       push(out, 0, [ax, ay, z0], [bx, by, z0], [bx, by, z1]);
@@ -270,7 +270,7 @@ export function postsMesh(
 export function clipAbove(tri: readonly number[], z: number): number[] {
   const pts = [0, 1, 2].map((k) => tri.slice(3 * k, 3 * k + 3));
   const kept: number[][] = [];
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 3; i += 1) {
     const a = pts[i];
     const b = pts[(i + 1) % 3];
     const aIn = a[2] >= z;
@@ -284,7 +284,7 @@ export function clipAbove(tri: readonly number[], z: number): number[] {
     }
   }
   const out: number[] = [];
-  for (let k = 1; k + 1 < kept.length; k++) {
+  for (let k = 1; k + 1 < kept.length; k += 1) {
     out.push(...kept[0], ...kept[k], ...kept[k + 1]);
   }
   return out;

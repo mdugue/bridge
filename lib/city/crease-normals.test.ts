@@ -10,7 +10,7 @@ function ring(sides: number, arc: number): Float32Array {
     const a = ((arc / sides) * i * Math.PI) / 180;
     return [10 * Math.cos(a), 10 * Math.sin(a)];
   };
-  for (let i = 0; i < sides; i++) {
+  for (let i = 0; i < sides; i += 1) {
     const [ax, ay] = at(i);
     const [bx, by] = at(i + 1);
     out.push(ax, ay, 0, bx, by, 0, bx, by, 5, ax, ay, 0, bx, by, 5, ax, ay, 5);
@@ -150,8 +150,8 @@ describe("forEachPoint", () => {
     const positions = new Float32Array(3 * n);
     const groups = new Float64Array(n);
     const dead = new Set<number>();
-    for (let v = 0; v < n; v++) {
-      for (let c = 0; c < 3; c++) {
+    for (let v = 0; v < n; v += 1) {
+      for (let c = 0; c < 3; c += 1) {
         // −0 and +0 are one coordinate
         const q = Math.floor(rand() * 4) - 2;
         positions[3 * v + c] = q === 0 && rand() < 0.5 ? -0 : q * 0.5;
@@ -171,7 +171,7 @@ describe("forEachPoint", () => {
       }
     );
     const expected = new Map<string, number[]>();
-    for (let v = 0; v < n; v++) {
+    for (let v = 0; v < n; v += 1) {
       if (!dead.has(v)) {
         const p = [0, 1, 2].map((c) => positions[3 * v + c] + 0);
         const key = `${p.join(",")}|${groups[v]}`;

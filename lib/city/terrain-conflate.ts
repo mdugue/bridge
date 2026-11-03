@@ -125,7 +125,7 @@ export function conflateWalls(input: ConflateInput): Float32Array {
   const cell = Math.min(dx, dy);
 
   const out = new Float32Array(n * n);
-  for (let i = 0; i < n * n; i++) {
+  for (let i = 0; i < n * n; i += 1) {
     out[i] = elevations[i];
   }
   const weight = new Float32Array(n * n); // best (nearest) influence per cell
@@ -136,7 +136,7 @@ export function conflateWalls(input: ConflateInput): Float32Array {
       continue;
     }
     const pts = subdividePolyline(wall.coords, cell);
-    for (let i = 0; i < pts.length; i++) {
+    for (let i = 0; i < pts.length; i += 1) {
       const a = pts[Math.max(0, i - 1)];
       const b = pts[Math.min(pts.length - 1, i + 1)];
       let tx = b[0] - a[0];
@@ -151,7 +151,7 @@ export function conflateWalls(input: ConflateInput): Float32Array {
     }
   }
 
-  for (let i = 0; i < n * n; i++) {
+  for (let i = 0; i < n * n; i += 1) {
     if (weight[i] > 0) {
       out[i] += (target[i] - out[i]) * weight[i];
     }
@@ -184,9 +184,9 @@ function stampStep(
   const col1 = Math.min(n - 1, Math.ceil(colC + rCol));
   const row0 = Math.max(0, Math.floor(rowC - rRow));
   const row1 = Math.min(n - 1, Math.ceil(rowC + rRow));
-  for (let row = row0; row <= row1; row++) {
+  for (let row = row0; row <= row1; row += 1) {
     const cy = maxY - (row + 0.5) * dy;
-    for (let col = col0; col <= col1; col++) {
+    for (let col = col0; col <= col1; col += 1) {
       const cx = minX + (col + 0.5) * dx;
       const dpx = cx - s.x;
       const dpy = cy - s.y;

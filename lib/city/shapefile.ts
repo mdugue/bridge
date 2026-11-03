@@ -38,7 +38,7 @@ function readParts(view: DataView, at: number, type: number): PlanPoint[][] {
   return starts.map((start, p) => {
     const end = starts[p + 1] ?? numPoints;
     const part: PlanPoint[] = [];
-    for (let i = start; i < end; i++) {
+    for (let i = start; i < end; i += 1) {
       const x = view.getFloat64(pointsAt + i * 16, true);
       const y = view.getFloat64(pointsAt + i * 16 + 8, true);
       const zi = z(i);
@@ -162,7 +162,7 @@ export function readDbf(
     });
   }
   const out: Record<string, string | number | null>[] = [];
-  for (let r = 0; r < count; r++) {
+  for (let r = 0; r < count; r += 1) {
     let at = headerLength + r * recordLength + 1;
     const record: Record<string, string | number | null> = {};
     for (const f of fields) {

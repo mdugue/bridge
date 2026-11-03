@@ -395,8 +395,8 @@ function reliefMesh(
   const pos = geo.getAttribute("position") as BufferAttribute;
   // PlaneGeometry: vertices row by row from the top-left (+y) corner, which
   // is the grid's north-west sample.
-  for (let row = 0; row < s.rows; row++) {
-    for (let col = 0; col < s.cols; col++) {
+  for (let row = 0; row < s.rows; row += 1) {
+    for (let col = 0; col < s.cols; col += 1) {
       const i = row * s.cols + col;
       const x = s.west + col * s.step;
       const y = s.north - row * s.step;
@@ -430,7 +430,7 @@ function reliefTint(
   const top = heights.reduce((a, b) => Math.max(a, b), 0);
   const tint = new Float32Array(heights.length * 3);
   const c = new Color();
-  for (let i = 0; i < heights.length; i++) {
+  for (let i = 0; i < heights.length; i += 1) {
     c.copy(base).lerp(figure, figureShare(heights[i], top));
     tint.set([c.r, c.g, c.b], i * 3);
   }
@@ -441,7 +441,7 @@ function reliefTint(
 function withLift(geo: BufferGeometry, water: number): BufferGeometry {
   const pos = geo.getAttribute("position");
   const lift = new Float32Array(pos.count);
-  for (let i = 0; i < pos.count; i++) {
+  for (let i = 0; i < pos.count; i += 1) {
     lift[i] = Math.max(pos.getY(i) - water, 0);
   }
   geo.setAttribute("aLift", new BufferAttribute(lift, 1));
@@ -625,7 +625,7 @@ function instanced(
   const q = new Quaternion();
   const up = new Vector3(0, 1, 0);
   const tinted = places.some((p) => p.tone !== null);
-  for (let i = 0; i < places.length; i++) {
+  for (let i = 0; i < places.length; i += 1) {
     q.setFromAxisAngle(up, places[i].yaw);
     mesh.setMatrixAt(i, m.compose(places[i].at, q, places[i].scale));
     if (tinted) {

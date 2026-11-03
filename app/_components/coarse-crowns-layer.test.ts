@@ -48,7 +48,7 @@ function drawn(list: Instances[]): Map<string, { m: Matrix4; c: Color }> {
   const out = new Map<string, { m: Matrix4; c: Color }>();
   for (const set of list) {
     const tints = set.instanceTints?.array;
-    for (let i = 0; i < set.drawCount; i++) {
+    for (let i = 0; i < set.drawCount; i += 1) {
       const m = set.getMatrixAt(i, new Matrix4());
       const t = new Vector3().setFromMatrixPosition(m);
       const c = tints

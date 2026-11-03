@@ -209,7 +209,7 @@ test("gates on a wall cut only freestanding walls, with a leaf as tall as the wa
 /** Metres along a closed ring (from its first vertex) of a point on it. */
 function alongRing(ring: Point2[], p: Point2): number {
   let acc = 0;
-  for (let i = 1; i < ring.length; i++) {
+  for (let i = 1; i < ring.length; i += 1) {
     const [x0, y0] = ring[i - 1];
     const [x1, y1] = ring[i];
     const len = Math.hypot(x1 - x0, y1 - y0);

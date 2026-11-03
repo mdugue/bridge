@@ -136,7 +136,7 @@ test("uploads cut off end the uploads, not the fetches", async () => {
   let puts = 0;
   const fetcher = (async (input: string | URL, init?: RequestInit) => {
     if (init?.method === "PUT") {
-      puts++;
+      puts += 1;
       throw new DOMException("The operation timed out.", "TimeoutError");
     }
     return api.fetcher(input, init);

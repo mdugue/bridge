@@ -139,7 +139,7 @@ test("a network error is retried until an answer comes", async () => {
   let calls = 0;
   const answer = await withRetry(
     async () => {
-      calls++;
+      calls += 1;
       return calls < 3
         ? Promise.reject(new TypeError("Load failed"))
         : Promise.resolve(ok());
@@ -157,7 +157,7 @@ test("an absent or fatal status is answered at once, never retried", async () =>
     let calls = 0;
     const answer = await withRetry(
       async () => {
-        calls++;
+        calls += 1;
         return { status, value: "" };
       },
       { budgetMs: 20_000, env: fakePage().env }
@@ -173,7 +173,7 @@ test("a fatal error and an abort reject as they are, without a retry", async () 
   await expect(
     withRetry(
       async () => {
-        calls++;
+        calls += 1;
         throw parse;
       },
       { budgetMs: 20_000, env: fakePage().env }
@@ -183,7 +183,7 @@ test("a fatal error and an abort reject as they are, without a retry", async () 
   await expect(
     withRetry(
       async () => {
-        calls++;
+        calls += 1;
         throw abort;
       },
       { budgetMs: 20_000, env: fakePage().env }
@@ -197,7 +197,7 @@ test("an abort during the wait ends the retries", async () => {
   let calls = 0;
   const run = withRetry(
     async () => {
-      calls++;
+      calls += 1;
       aborter.abort();
       throw new TypeError("Load failed");
     },
@@ -212,7 +212,7 @@ test("a transient status waits at least its Retry-After", async () => {
   let calls = 0;
   await withRetry(
     async () => {
-      calls++;
+      calls += 1;
       return calls === 1 ? { status: 503, retryAfter: "4", value: "" } : ok();
     },
     { budgetMs: 20_000, env: page.env }
@@ -226,7 +226,7 @@ test("the budget spent, the retries give up with a NetworkError that says how of
   let calls = 0;
   const run = withRetry(
     async () => {
-      calls++;
+      calls += 1;
       throw new TypeError("Load failed");
     },
     {
@@ -254,7 +254,7 @@ test("time the page is hidden does not count against the budget", async () => {
   let calls = 0;
   const answer = await withRetry(
     async () => {
-      calls++;
+      calls += 1;
       return calls < 5
         ? Promise.reject(new TypeError("Load failed"))
         : Promise.resolve(ok());

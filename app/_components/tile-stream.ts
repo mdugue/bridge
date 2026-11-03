@@ -2155,7 +2155,7 @@ export class DressingPlugin {
     terrain: TerrainLayer,
     extras: TerrainExtras
   ): Promise<void> {
-    this.pending++;
+    this.pending += 1;
     this.pendingScenes.set(scene, extras.tileId);
     let built = (): void => undefined;
     const ready = new Promise<void>((resolve) => {
@@ -2292,7 +2292,7 @@ export class DressingPlugin {
       .finally(() => {
         built();
         this.builtOf.delete(scene);
-        this.pending--;
+        this.pending -= 1;
         this.pendingScenes.delete(scene);
         // A tile is dressed when its fine level is (the coarse one only
         // stands in for it).
@@ -2694,7 +2694,7 @@ export function createTileStream(
   // the cities every frame).
   let version = 0;
   const changed = () => {
-    version++;
+    version += 1;
     // (the plugin is made below; the renderer calls this only later)
     dressing.standInCrowns(isShown);
     ctx.onChange();

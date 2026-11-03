@@ -46,7 +46,7 @@ test("the TIN keeps the mesher's vertices, heights and triangles", () => {
   expect(tin.gx.length).toBe(5);
   const verts = [...tin.gx].map((x, i) => `${x},${tin.gy[i]}`).sort();
   expect(verts).toEqual(["0,0", "0,2", "1,1", "2,0", "2,2"]);
-  for (let i = 0; i < tin.gx.length; i++) {
+  for (let i = 0; i < tin.gx.length; i += 1) {
     expect(tin.z[i]).toBeCloseTo(heightAt(tin.gx[i], tin.gy[i]), 2);
   }
   // Same four triangles (as sets of grid points), whatever the order.
@@ -74,7 +74,7 @@ test("the TIN keeps the mesher's vertices, heights and triangles", () => {
 
 test("every triangle is wound counter-clockwise seen from above", () => {
   const tin = roundTrip();
-  for (let t = 0; t < tin.triangles.length / 3; t++) {
+  for (let t = 0; t < tin.triangles.length / 3; t += 1) {
     expect(signedArea(tin, t)).toBeGreaterThan(0);
   }
 });
@@ -105,7 +105,7 @@ test("the mesh snaps its border to the tile edge and hangs a skirt", () => {
   expect(positions.length / 3).toBe(5 + 8);
   let minX = Number.POSITIVE_INFINITY;
   let maxX = Number.NEGATIVE_INFINITY;
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 5; i += 1) {
     minX = Math.min(minX, positions[3 * i]);
     maxX = Math.max(maxX, positions[3 * i]);
   }
@@ -120,7 +120,7 @@ test("the mesh snaps its border to the tile edge and hangs a skirt", () => {
 test("the skirt walls face away from the tile", () => {
   const tin = roundTrip();
   const { positions, indices } = buildTinGeometryData(tin, { cx: 15, cy: 15 });
-  for (let t = tin.triangles.length / 3; t < indices.length / 3; t++) {
+  for (let t = tin.triangles.length / 3; t < indices.length / 3; t += 1) {
     const [a, b, c] = [0, 1, 2].map((k) => indices[3 * t + k]);
     const e1 = [0, 1, 2].map(
       (k) => positions[3 * b + k] - positions[3 * a + k]
@@ -144,7 +144,7 @@ test("heightAt skips the vertical skirt triangles it is handed", () => {
   const count = positions.length / 3;
   const xy = new Float64Array(count * 2);
   const z = new Float32Array(count);
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < count; i += 1) {
     // a hair of float noise, as the streamed positions carry
     xy[2 * i] = positions[3 * i] + positions[3 * i + 2] * 1e-15;
     xy[2 * i + 1] = positions[3 * i + 1];
@@ -164,7 +164,7 @@ test("meshes with one index and one plan have the same water triangles, whatever
   // two tiles' quantised Y-up positions: the same plan, other heights
   const tile = (lift: number) => {
     const out = new Int16Array(count * 4);
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < count; i += 1) {
       const [x, y, z] = [0, 1, 2].map((k) => positions[3 * i + k]);
       out.set(
         [Math.round(x * 100), Math.round(z * 10) + lift, -y * 100],
@@ -195,7 +195,7 @@ test("planTriangles keeps the surface and drops the skirt, quantised or not", ()
   // the glTF's Y-up layout, one spare number per vertex (interleaved)
   const yUp = new Float32Array(count * 4);
   const quantised = new Int16Array(count * 4);
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < count; i += 1) {
     const [x, y, z] = [0, 1, 2].map((k) => positions[3 * i + k]);
     yUp.set([x, z, -y, 0], 4 * i);
     // a per-axis scale and offset, as meshopt quantises

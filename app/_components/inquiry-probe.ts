@@ -148,7 +148,7 @@ export function ringOffsets(
 ): { x: number; y: number }[] {
   const out: { x: number; y: number }[] = [];
   for (const r of [radiusPx / 2, radiusPx]) {
-    for (let i = 0; i < RING_RAYS; i++) {
+    for (let i = 0; i < RING_RAYS; i += 1) {
       const a = ((i + (r === radiusPx ? 0.5 : 0)) / RING_RAYS) * Math.PI * 2;
       out.push({
         x: ((Math.cos(a) * r) / viewport.width) * 2,
@@ -342,7 +342,7 @@ export function createInquiryProbe(deps: {
   const building = (layer: CityLayer, objectIndex: number, at?: Vector3) => {
     const { table } = layer;
     const own = new Set<number>();
-    for (let i = 0; i < table.count; i++) {
+    for (let i = 0; i < table.count; i += 1) {
       if (
         table.ensemble[i] === table.ensemble[objectIndex] &&
         layer.alive[i] === 1

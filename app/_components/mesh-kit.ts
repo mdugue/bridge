@@ -137,7 +137,7 @@ function* floats(src: readonly number[]): Steps<Float32Array> {
   const out = new Float32Array(src.length);
   for (let i = 0; i < src.length; i += FLOAT_RUN) {
     const end = Math.min(src.length, i + FLOAT_RUN);
-    for (let k = i; k < end; k++) {
+    for (let k = i; k < end; k += 1) {
       out[k] = src[k];
     }
     yield;
@@ -247,7 +247,7 @@ export function addFootprint(
     }
   }
   const winding = ringWinding(pts);
-  for (let i = 0; i < pts.length; i++) {
+  for (let i = 0; i < pts.length; i += 1) {
     const j = (i + 1) % pts.length;
     const [nx, nz] = outward(pts, i, winding);
     quad(
@@ -264,7 +264,7 @@ export function addFootprint(
 /** +1 when the ring runs counter-clockwise in (x, z), else −1. */
 export function ringWinding(pts: readonly { x: number; z: number }[]): 1 | -1 {
   let area = 0;
-  for (let i = 0; i < pts.length; i++) {
+  for (let i = 0; i < pts.length; i += 1) {
     const j = (i + 1) % pts.length;
     area += pts[i].x * pts[j].z - pts[j].x * pts[i].z;
   }
@@ -301,7 +301,7 @@ export function addColumn(
     [cx + h, cz + h],
     [cx - h, cz + h],
   ];
-  for (let s = 0; s < 4; s++) {
+  for (let s = 0; s < 4; s += 1) {
     const a = c[s];
     const b = c[(s + 1) % 4];
     let nx = b[1] - a[1];
@@ -337,7 +337,7 @@ export interface Pt {
 
 export function tangentsXZ(pts: Pt[]): Vector2[] {
   const t: Vector2[] = [];
-  for (let i = 0; i < pts.length; i++) {
+  for (let i = 0; i < pts.length; i += 1) {
     const a = pts[Math.max(0, i - 1)];
     const b = pts[Math.min(pts.length - 1, i + 1)];
     const v = new Vector2(b.x - a.x, b.z - a.z);
@@ -377,7 +377,7 @@ export function addRibbon(
     });
   const left = side(1);
   const right = side(-1);
-  for (let i = 0; i < pts.length - 1; i++) {
+  for (let i = 0; i < pts.length - 1; i += 1) {
     const l0 = left[i];
     const l1 = left[i + 1];
     const r0 = right[i];
@@ -511,7 +511,7 @@ export function addStrut(acc: Mesh3, a: P3, b: P3, half: number): void {
     [-top[0], -top[1], -top[2]],
     side,
   ];
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 4; i += 1) {
     const j = (i + 1) % 4;
     quad(
       acc,

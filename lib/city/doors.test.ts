@@ -201,7 +201,7 @@ test("trianglesOnRays keeps every triangle a ray meets within its reach, in orde
   };
   // 400 small triangles scattered over a 20 m box, most of them walls
   const positions = new Float32Array(9 * 400);
-  for (let t = 0; t < 400; t++) {
+  for (let t = 0; t < 400; t += 1) {
     const [x, y, z] = [rand() * 20, rand() * 20, rand() * 10];
     const a = rand() * 2 * Math.PI;
     const [dx, dy] = [Math.cos(a), Math.sin(a)];
@@ -212,7 +212,7 @@ test("trianglesOnRays keeps every triangle a ray meets within its reach, in orde
   }
   const triangles = Array.from({ length: 400 }, (_, t) => 3 * t);
   let met = 0;
-  for (let trial = 0; trial < 200; trial++) {
+  for (let trial = 0; trial < 200; trial += 1) {
     const a = rand() * 2 * Math.PI;
     const n: V3 = [Math.cos(a), Math.sin(a), 0];
     const origins: V3[] = [0, 1, 2].map(() => [
@@ -228,7 +228,7 @@ test("trianglesOnRays keeps every triangle a ray meets within its reach, in orde
       for (const t of triangles) {
         const hit = rayHit(o, n, positions, t);
         if (hit !== undefined && hit <= reach) {
-          met++;
+          met += 1;
           expect(near).toContain(t);
         }
       }

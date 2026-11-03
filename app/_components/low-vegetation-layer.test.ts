@@ -145,7 +145,7 @@ test("a hedge's pieces share one height, so no step shows", () => {
   const set = group.children.filter(isInstances)[0];
   const m = new Matrix4();
   const heights: number[] = [];
-  for (let i = 0; i < set.drawCount; i++) {
+  for (let i = 0; i < set.drawCount; i += 1) {
     set.getMatrixAt(i, m);
     heights.push(new Vector3().setFromMatrixColumn(m, 1).length());
   }

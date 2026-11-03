@@ -35,7 +35,7 @@ function stakeGeometry(): BufferGeometry {
     const a = (k / 3) * Math.PI * 2;
     return new Vector3(Math.cos(a) * STAKE_R, 0, Math.sin(a) * STAKE_R);
   };
-  for (let k = 0; k < 3; k++) {
+  for (let k = 0; k < 3; k += 1) {
     const post = new CylinderGeometry(STAKE_THICK, STAKE_THICK, STAKE_H, 5);
     const at = corner(k);
     post.translate(at.x, STAKE_H / 2 - 0.15, at.z);

@@ -15,10 +15,10 @@ const d = Array.from({ length: 200 }, (_, i) => i * STEP);
 function worst(z: (number | null)[]) {
   let grade = 0;
   let bend = 0;
-  for (let i = 1; i < z.length; i++) {
+  for (let i = 1; i < z.length; i += 1) {
     grade = Math.max(grade, Math.abs((z[i] ?? 0) - (z[i - 1] ?? 0)) / STEP);
   }
-  for (let i = 1; i + 1 < z.length; i++) {
+  for (let i = 1; i + 1 < z.length; i += 1) {
     bend = Math.max(
       bend,
       Math.abs((z[i + 1] ?? 0) - 2 * (z[i] ?? 0) + (z[i - 1] ?? 0))
@@ -61,7 +61,7 @@ test("on a deck the profile is the deck's top, the approaches meet it", () => {
       : { mode: "ground", y: 100 }
   );
   const z = lineProfile(levels, d, profileOptions("rail"));
-  for (let i = 0; i < d.length; i++) {
+  for (let i = 0; i < d.length; i += 1) {
     if (levels[i].mode === "deck") {
       expect(z[i] ?? 0).toBeCloseTo(101.5, 2);
     }

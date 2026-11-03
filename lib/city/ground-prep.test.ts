@@ -37,8 +37,8 @@ function level() {
   const count = N * N + 2;
   const raw = new Int16Array(count * 4);
   const q = (v: number) => Math.round(v * 32_767);
-  for (let r = 0; r < N; r++) {
-    for (let c = 0; c < N; c++) {
+  for (let r = 0; r < N; r += 1) {
+    for (let c = 0; c < N; c += 1) {
       const i = r * N + c;
       // local x east, y up, z south, all in [-1, 1]
       raw[4 * i] = q((c / (N - 1)) * 2 - 1);
@@ -50,8 +50,8 @@ function level() {
   raw.set([q(-1), q(-1), q(-1), 0], 4 * N * N);
   raw.set([q(-1), q(-1), q(-1 + 2 / (N - 1)), 0], 4 * (N * N + 1));
   const tris: number[] = [];
-  for (let r = 0; r + 1 < N; r++) {
-    for (let c = 0; c + 1 < N; c++) {
+  for (let r = 0; r + 1 < N; r += 1) {
+    for (let c = 0; c + 1 < N; c += 1) {
       const a = r * N + c;
       tris.push(a, a + N, a + 1, a + 1, a + N, a + N + 1);
     }
@@ -72,7 +72,7 @@ function level() {
 /** Water in the cells of the tile's eastern half. */
 function eastWater(cells: number): WaterMask {
   const water = new Uint8Array(cells * cells);
-  for (let y = 0; y < cells; y++) {
+  for (let y = 0; y < cells; y += 1) {
     water.fill(1, y * cells + cells / 2 + cells / 8, (y + 1) * cells);
   }
   return { cells, water };
@@ -109,7 +109,7 @@ function reference(mask: WaterMask) {
   const cx = new Uint16Array(count);
   const cy = new Uint16Array(count);
   const [minX, minY, maxX, maxY] = BOUNDS;
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < count; i += 1) {
     v.fromBufferAttribute(position, i).applyMatrix4(toData);
     data.push(v.clone());
     const x = Math.floor(
@@ -127,7 +127,7 @@ function reference(mask: WaterMask) {
     const lo = [Infinity, Infinity, Infinity];
     const hi = [-Infinity, -Infinity, -Infinity];
     const idx = new BufferAttribute(kept, 1);
-    for (let i = 0; i < idx.count; i++) {
+    for (let i = 0; i < idx.count; i += 1) {
       v.fromBufferAttribute(position, idx.getX(i));
       v.toArray().forEach((c, k) => {
         lo[k] = Math.min(lo[k], c);
@@ -151,7 +151,7 @@ describe("ground prep", () => {
     const read = localReader(input(null, null));
     const local = new Float64Array(3);
     const v = new Vector3();
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < count; i += 1) {
       v.fromBufferAttribute(position, i);
       read(i, local);
       expect([...local]).toEqual(v.toArray());
@@ -186,7 +186,7 @@ describe("ground prep", () => {
     const here = new TinIndex(surface);
     const there = TinIndex.fromBuckets(surface, tin);
     const [minX, minY, maxX, maxY] = BOUNDS;
-    for (let k = 0; k <= 40; k++) {
+    for (let k = 0; k <= 40; k += 1) {
       const x = minX + ((maxX - minX) * k) / 40;
       const y = minY + ((maxY - minY) * ((k * 7) % 41)) / 40;
       expect(there.heightAt(x, y)).toBe(here.heightAt(x, y));
@@ -204,7 +204,7 @@ describe("ground prep", () => {
     const ref = reference(eastWater(16));
     expect(prep.elevations?.length).toBe(N * N);
     expect(prep.xy).toBeUndefined();
-    for (let i = 0; i < N * N; i++) {
+    for (let i = 0; i < N * N; i += 1) {
       expect(prep.elevations?.[i]).toBe(Math.fround(ref.data[i].z));
     }
   });

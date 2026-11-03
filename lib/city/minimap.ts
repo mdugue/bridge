@@ -198,7 +198,7 @@ export function buildingFootprintPolys(
         translate
       )) {
         polys.push(poly);
-        found++;
+        found += 1;
       }
     }
     const extent = (obj as { geographicalExtent?: number[] })

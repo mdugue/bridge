@@ -52,7 +52,7 @@ export function createPublisher(
       const dest = join(outDir, hashed);
       if (!opts.warming && !existsSync(dest)) {
         writeFileSync(dest, content);
-        written++;
+        written += 1;
       }
       return hashed;
     },
@@ -75,7 +75,7 @@ export function createPublisher(
       for (const entry of readdirSync(outDir)) {
         if (!keep.has(entry)) {
           rmSync(join(outDir, entry), { recursive: true });
-          pruned++;
+          pruned += 1;
         }
       }
       return { artifacts, written, pruned };

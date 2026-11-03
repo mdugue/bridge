@@ -41,7 +41,7 @@ test("a mapped mast stands in place of the grid's supports near it", () => {
   const s = supportStations(t.pts, t.d, [118]);
   expect(s.map((p) => p.d)).toEqual([50, 118, 150, 200, 250, 300]);
   expect(s.find((p) => p.d === 118)?.key).toBeNull();
-  for (let i = 1; i < s.length; i++) {
+  for (let i = 1; i < s.length; i += 1) {
     expect(s[i].d - s[i - 1].d).toBeGreaterThanOrEqual(MIN_SPAN_M);
   }
 });

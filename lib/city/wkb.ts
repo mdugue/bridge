@@ -68,7 +68,7 @@ function readWkb(
   } else if (base >= 4 && base <= 7) {
     const n = view.getUint32(p, little);
     p += 4;
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < n; i += 1) {
       p = readWkb(view, p, out);
     }
   } else {

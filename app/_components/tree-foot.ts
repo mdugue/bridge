@@ -277,8 +277,8 @@ export function buildFootGeos(): FootGeos {
   const n = QUAD_CELLS;
   const position = new Float32Array((n + 1) * (n + 1) * 3);
   const normal = new Float32Array(position.length);
-  for (let j = 0; j <= n; j++) {
-    for (let i = 0; i <= n; i++) {
+  for (let j = 0; j <= n; j += 1) {
+    for (let i = 0; i <= n; i += 1) {
       const k = (j * (n + 1) + i) * 3;
       position[k] = -1 + (2 * i) / n;
       position[k + 2] = -1 + (2 * j) / n;
@@ -290,8 +290,8 @@ export function buildFootGeos(): FootGeos {
   quad.setAttribute("normal", new BufferAttribute(normal, 3));
   const index: number[] = [];
   const at = (i: number, j: number) => j * (n + 1) + i;
-  for (let j = 0; j < n; j++) {
-    for (let i = 0; i < n; i++) {
+  for (let j = 0; j < n; j += 1) {
+    for (let i = 0; i < n; i += 1) {
       // wound counter-clockwise seen from above (+y)
       const [p, q, r, t] = [
         at(i, j),
@@ -346,7 +346,7 @@ function buildTuft(): BufferGeometry {
     const x = Math.sin(seed * 12.9898 + 4.1) * 43_758.545;
     return x - Math.floor(x);
   };
-  for (let b = 0; b < TUFT_BLADES; b++) {
+  for (let b = 0; b < TUFT_BLADES; b += 1) {
     const angle = ((b + rnd() * 0.8) / TUFT_BLADES) * Math.PI * 2;
     // more blades close in, where the mower never reaches
     const t = rnd() ** 1.6;
@@ -362,7 +362,7 @@ function buildTuft(): BufferGeometry {
     const right = [ox * d + wx, 0, oz * d + wz];
     const tip = [ox * (d + lean * h), h, oz * (d + lean * h)];
     position.set([...left, ...right, ...tip, ...right, ...left, ...tip], k);
-    for (let v = 0; v < 6; v++) {
+    for (let v = 0; v < 6; v += 1) {
       normal[k + v * 3 + 1] = 1;
     }
   }

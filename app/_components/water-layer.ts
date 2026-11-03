@@ -107,7 +107,7 @@ function mistFbm(p: V2): F {
   let v: F = float(0);
   let q = p;
   let a = 0.5;
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 3; i += 1) {
     v = v.add(mistNoise(q).mul(a));
     q = q.mul(2);
     a *= 0.5;
@@ -232,7 +232,7 @@ export function tintTexture(look: WaterLook | undefined): DataTexture {
   const n = tint?.n ?? 1;
   const cells = tint ? fromBase64(tint.cells) : new Uint8Array(1);
   const data = new Uint8Array(n * n * 4);
-  for (let i = 0; i < n * n; i++) {
+  for (let i = 0; i < n * n; i += 1) {
     const k = cells[i] ?? 0;
     const rgb = k > 0 ? (tint?.colours[k - 1] ?? WATER_SHEET) : WATER_SHEET;
     data.set([(rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255, 255], i * 4);

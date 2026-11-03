@@ -103,7 +103,9 @@ test("Modell's view rebuilt with the same numbers is no change", () => {
     cutOutFailed: false,
   });
   let heard = 0;
-  status.subscribe("modelView", () => heard++);
+  status.subscribe("modelView", () => {
+    heard += 1;
+  });
   reports.onModelView(view(1000));
   reports.onModelView(view(1000));
   reports.onModelView(view(2000));

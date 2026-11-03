@@ -49,7 +49,7 @@ describe("planMesh", () => {
     // a park outline: 3,000 vertices on a wobbly 400 m circle, whose
     // triangulation is slivers the cut would split along their length
     const ring: [number, number][] = [];
-    for (let i = 0; i < 3000; i++) {
+    for (let i = 0; i < 3000; i += 1) {
       const a = (i / 3000) * Math.PI * 2;
       const r = 400 + 3 * Math.sin(i * 1.7);
       ring.push([r * Math.cos(a), r * Math.sin(a)]);

@@ -107,7 +107,7 @@ test("a city floodlights some of its landmarks, each building whole", () => {
     group: new Uint32Array(n),
     rough: new Float32Array(n),
   };
-  for (let i = 0; i < 400; i++) {
+  for (let i = 0; i < 400; i += 1) {
     t.group[i] = 1_000_003 + Math.floor(i / 2) * 7919;
   }
   t.flags[400] = OBJECT_FLAG_SHOP;

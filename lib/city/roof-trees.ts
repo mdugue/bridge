@@ -161,12 +161,12 @@ export function treesOffRoofs<
     for (
       let cx = Math.floor(Math.min(...xs) / CELL);
       cx <= Math.floor(Math.max(...xs) / CELL);
-      cx++
+      cx += 1
     ) {
       for (
         let cy = Math.floor(Math.min(...ys) / CELL);
         cy <= Math.floor(Math.max(...ys) / CELL);
-        cy++
+        cy += 1
       ) {
         const key = `${cx},${cy}`;
         const bucket = cells.get(key);

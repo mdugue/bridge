@@ -371,8 +371,8 @@ function groundSamples(m: {
   const [x0, y0, x1, y1] = m.bounds;
   const out: number[] = [];
   const n = 32;
-  for (let i = 0; i < n; i++) {
-    for (let j = 0; j < n; j++) {
+  for (let i = 0; i < n; i += 1) {
+    for (let j = 0; j < n; j += 1) {
       const h = m.heightAt(
         x0 + ((i + 0.5) / n) * (x1 - x0),
         y0 + ((j + 0.5) / n) * (y1 - y0)

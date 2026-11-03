@@ -96,7 +96,7 @@ const LIGHT_JITTER = 0.03;
 const HASH_MOD = 2_147_483_647; // 2^31 − 1 (Mersenne prime)
 function hash01(s: string): number {
   let h = 0;
-  for (let i = 0; i < s.length; i++) {
+  for (let i = 0; i < s.length; i += 1) {
     h = (h * 31 + s.charCodeAt(i)) % HASH_MOD;
   }
   const x = Math.sin((h / HASH_MOD) * 127.1 + 311.7) * 43_758.5453;

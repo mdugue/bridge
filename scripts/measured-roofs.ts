@@ -73,7 +73,7 @@ export function measuredRoofsById(
 /** Twice the signed area of a ring (positive = counter-clockwise). */
 function signedArea(ring: readonly Point2[]): number {
   let a = 0;
-  for (let i = 0; i < ring.length; i++) {
+  for (let i = 0; i < ring.length; i += 1) {
     const [x0, y0] = ring[i];
     const [x1, y1] = ring[(i + 1) % ring.length];
     a += x0 * y1 - x1 * y0;
@@ -113,7 +113,7 @@ function faceTin(s: MeasuredSurface, z: number): FaceTin {
   const corners = new Float64Array(count * 6);
   const planes = new Float64Array(count * 3);
   const boxes = new Float64Array(count * 4);
-  for (let k = 0; k < count; k++) {
+  for (let k = 0; k < count; k += 1) {
     const p = [0, 1, 2].map((j) => {
       const v = triangles[k * 3 + j];
       const gx = coords[v * 2];
@@ -186,7 +186,7 @@ function segmentInside(
 ): [number, number] | null {
   let t0 = 0;
   let t1 = 1;
-  for (let e = 0; e < 3; e++) {
+  for (let e = 0; e < 3; e += 1) {
     const p = tinCorner(t, k, e);
     const q = tinCorner(t, k, (e + 1) % 3);
     const fa = (q[0] - p[0]) * (a[1] - p[1]) - (q[1] - p[1]) * (a[0] - p[0]);
@@ -217,7 +217,7 @@ function segmentBox(a: Point2, b: Point2): number[] {
 function crossings(t: FaceTin, a: Point2, b: Point2): number[] {
   const box = segmentBox(a, b);
   const ts = [0, 1];
-  for (let k = 0; k < t.count; k++) {
+  for (let k = 0; k < t.count; k += 1) {
     const span = overlaps(t, k, box) ? segmentInside(t, k, a, b) : null;
     if (span) {
       ts.push(...span);
@@ -230,7 +230,7 @@ function crossings(t: FaceTin, a: Point2, b: Point2): number[] {
 /** The TIN's height at `p` (any triangle holding it: on a shared edge two
  *  give the same), `fallback` outside it. */
 function tinZ(t: FaceTin, p: Point2, fallback: number): number {
-  for (let k = 0; k < t.count; k++) {
+  for (let k = 0; k < t.count; k += 1) {
     if (!overlaps(t, k, [p[0], p[1], p[0], p[1]])) {
       continue;
     }
@@ -316,7 +316,7 @@ function profilePoints(
   const split = (i: number, j: number) => {
     let worst = -1;
     let dev = FACE_TIN_MAX_ERROR;
-    for (let k = i + 1; k < j; k++) {
+    for (let k = i + 1; k < j; k += 1) {
       const f = (us[k] - us[i]) / (us[j] - us[i]);
       const d = Math.abs(zs[k] - (zs[i] + f * (zs[j] - zs[i])));
       if (d > dev) {
@@ -380,13 +380,13 @@ function canonicalIds(points: readonly Point2[]): number[] {
  *  the outline are dropped. */
 function conformingRoof(rings: Point2[][], inner: readonly Point2[]): FaceRoof {
   let current = rings;
-  for (let round = 0; ; round++) {
+  for (let round = 0; ; round += 1) {
     const points = [...current.flat(), ...inner];
     const ids = canonicalIds(points);
     const t = new Delaunator(Float64Array.from(points.flat())).triangles;
     const edges = new Set<string>();
     for (let k = 0; k < t.length; k += 3) {
-      for (let e = 0; e < 3; e++) {
+      for (let e = 0; e < 3; e += 1) {
         const a = ids[t[k + e]];
         const b = ids[t[k + ((e + 1) % 3)]];
         edges.add(a < b ? `${a}|${b}` : `${b}|${a}`);
@@ -402,7 +402,7 @@ function conformingRoof(rings: Point2[][], inner: readonly Point2[]): FaceRoof {
         const b = ids[start + ((i + 1) % ring.length)];
         out.push(p);
         if (a !== b && !edges.has(a < b ? `${a}|${b}` : `${b}|${a}`)) {
-          missing++;
+          missing += 1;
           out.push([(p[0] + q[0]) / 2, (p[1] + q[1]) / 2]);
         }
       });
@@ -436,8 +436,8 @@ function conformingRoof(rings: Point2[][], inner: readonly Point2[]): FaceRoof {
 function innerVertices(rings: Point2[][], tin: FaceTin): Point2[] {
   const out: Point2[] = [];
   const seen = new Set<string>();
-  for (let k = 0; k < tin.count; k++) {
-    for (let j = 0; j < 3; j++) {
+  for (let k = 0; k < tin.count; k += 1) {
+    for (let j = 0; j < 3; j += 1) {
       const p = tinCorner(tin, k, j);
       const key = `${p[0]},${p[1]}`;
       if (seen.has(key)) {
@@ -507,7 +507,7 @@ function facePrism(
       u[2] * w[0] - u[0] * w[2],
       u[0] * w[1] - u[1] * w[0],
     ]);
-    for (let j = 0; j < 3; j++) {
+    for (let j = 0; j < 3; j += 1) {
       around[t[k + j]].push(k / 3);
     }
   }
@@ -516,7 +516,7 @@ function facePrism(
     return n.map((x) => x / len);
   };
   const cosCrease = Math.cos((CREASE_DEG * Math.PI) / 180);
-  for (let k = 0; k < t.length; k++) {
+  for (let k = 0; k < t.length; k += 1) {
     const own = unit(facets[Math.floor(k / 3)]);
     const n = [0, 0, 0];
     for (const f of around[t[k]]) {
@@ -532,7 +532,7 @@ function facePrism(
     push(1, p[0], p[1], z[t[k]], unit(n));
   }
   for (const ring of roof.rings) {
-    for (let i = 0; i < ring.length; i++) {
+    for (let i = 0; i < ring.length; i += 1) {
       const p = ring[i];
       const q = ring[(i + 1) % ring.length];
       const [zp, zq] = [height(p), height(q)];
@@ -550,7 +550,7 @@ function facePrism(
 function flatPrism(rings: Point2[][], base: number, top: number, push: Push) {
   const [contour, ...holes] = rings;
   for (const ring of rings) {
-    for (let i = 0; i < ring.length; i++) {
+    for (let i = 0; i < ring.length; i += 1) {
       const [ax, ay] = ring[i];
       const [bx, by] = ring[(i + 1) % ring.length];
       push(0, ax, ay, base);

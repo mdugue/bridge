@@ -171,7 +171,7 @@ export interface MuralStrip {
 /** The outside normal (x, y on the map) of each segment of `path`. */
 function segmentNormals(path: readonly [number, number][]): [number, number][] {
   const out: [number, number][] = [];
-  for (let i = 0; i + 1 < path.length; i++) {
+  for (let i = 0; i + 1 < path.length; i += 1) {
     const dx = path[i + 1][0] - path[i][0];
     const dy = path[i + 1][1] - path[i][1];
     const len = Math.hypot(dx, dy) || 1;
@@ -188,7 +188,7 @@ export function muralStrip(
   const { path } = mural;
   const n = path.length;
   const along = [0];
-  for (let i = 1; i < n; i++) {
+  for (let i = 1; i < n; i += 1) {
     along.push(
       along[i - 1] +
         Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1])
@@ -199,7 +199,7 @@ export function muralStrip(
   const positions = new Float32Array(n * 6);
   const normals = new Float32Array(n * 6);
   const uvs = new Float32Array(n * 4);
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < n; i += 1) {
     const a = segs[Math.max(i - 1, 0)];
     const b = segs[Math.min(i, segs.length - 1)];
     const nx = a[0] + b[0];
@@ -214,7 +214,7 @@ export function muralStrip(
     uvs.set([u, 1, u, 0], i * 4);
   }
   const index = new Uint16Array((n - 1) * 6);
-  for (let i = 0; i + 1 < n; i++) {
+  for (let i = 0; i + 1 < n; i += 1) {
     const b0 = i * 2;
     const t0 = b0 + 1;
     const b1 = b0 + 2;

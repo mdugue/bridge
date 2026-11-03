@@ -109,21 +109,21 @@ function unfilterRow(
     }
     case 1: {
       let left = 0;
-      for (let i = 0; i < n; i++) {
+      for (let i = 0; i < n; i += 1) {
         left = (line[i] + left) & 255;
         out[i] = left;
       }
       return;
     }
     case 2: {
-      for (let i = 0; i < n; i++) {
+      for (let i = 0; i < n; i += 1) {
         out[i] = (line[i] + prev[i]) & 255;
       }
       return;
     }
     case 3: {
       let left = 0;
-      for (let i = 0; i < n; i++) {
+      for (let i = 0; i < n; i += 1) {
         left = (line[i] + ((left + prev[i]) >> 1)) & 255;
         out[i] = left;
       }
@@ -132,7 +132,7 @@ function unfilterRow(
     case 4: {
       let left = 0;
       let upLeft = 0;
-      for (let i = 0; i < n; i++) {
+      for (let i = 0; i < n; i += 1) {
         const up = prev[i];
         const p = left + up - upLeft;
         const pa = p > left ? p - left : left - p;
@@ -194,7 +194,7 @@ export async function decodeGreyPng(png: Uint8Array): Promise<GreyRaster> {
       const above = y > 0 ? data.subarray((y - 1) * width, y * width) : zeroRow;
       unfilterRow(row[0], row.subarray(1), above, out);
       filled = 0;
-      y++;
+      y += 1;
       if (y % ROWS_PER_SLICE === 0) {
         await yieldToFrame();
       }

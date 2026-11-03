@@ -59,7 +59,7 @@ test("the committed horizon legends match the constants the shader uses", () => 
     expect(near.degPerUnit).toBeCloseTo(NEAR_MAX_DEG / 255, 9);
     expect(near.nearM).toBe(NEAR_BAND_M);
     expect(near.farM).toBe(HORIZON_NEAR_M);
-    checked++;
+    checked += 1;
   }
   expect(checked).toBeGreaterThan(0);
 });

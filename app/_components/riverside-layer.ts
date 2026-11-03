@@ -167,7 +167,7 @@ function addPier(
   }
   // The railing runs along the edges over the water, not across the
   // landward end where the pier meets the bank.
-  for (let i = 0; i < coords.length - 1; i++) {
+  for (let i = 0; i < coords.length - 1; i += 1) {
     const [ax, ay] = coords[i];
     const [bx, by] = coords[i + 1];
     if (wet((ax + bx) / 2, (ay + by) / 2) === null) {
@@ -264,8 +264,8 @@ function addBox(
 function longDir(ring: Ring2): { x: number; z: number } {
   let best = -1;
   let dir = { x: 1, z: 0 };
-  for (let i = 0; i < ring.pts.length; i++) {
-    for (let j = i + 1; j < ring.pts.length; j++) {
+  for (let i = 0; i < ring.pts.length; i += 1) {
+    for (let j = i + 1; j < ring.pts.length; j += 1) {
       const dx = ring.pts[j].x - ring.pts[i].x;
       const dz = ring.pts[j].z - ring.pts[i].z;
       const d = dx * dx + dz * dz;
@@ -383,7 +383,7 @@ function addGroyne(
       toes.push(Math.min(toe, crest - GROYNE_CREST));
     }
   }
-  for (let i = 0; i < pts.length - 1; i++) {
+  for (let i = 0; i < pts.length - 1; i += 1) {
     const a = pts[i];
     const b = pts[i + 1];
     const tx = b.x - a.x;
@@ -449,7 +449,7 @@ function ferryMesh(lines: Point2[][], ctx: GroundContext): Mesh | null {
     let prev: Point2 | null = null;
     let prevOk = false;
     const dense = subdividePolyline(coords, 2);
-    for (let i = 0; i < dense.length; i++) {
+    for (let i = 0; i < dense.length; i += 1) {
       const [ex, ey] = dense[i];
       if (prev) {
         s += Math.hypot(ex - prev[0], ey - prev[1]);
@@ -523,7 +523,7 @@ function instancedColumns(
     }
   );
   const mesh = new Instances(unit, material, mats.length);
-  for (let i = 0; i < mats.length; i++) {
+  for (let i = 0; i < mats.length; i += 1) {
     mesh.setMatrixAt(i, mats[i]);
   }
   mesh.instanceMatrix.needsUpdate = true;

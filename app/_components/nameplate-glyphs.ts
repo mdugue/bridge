@@ -207,14 +207,14 @@ function coarse(
   const width = Math.ceil(bw / f);
   const height = Math.ceil(bh / f);
   const data = new Uint8Array(width * height);
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
       let sum = 0;
       let n = 0;
-      for (let dy = 0; dy < f && y * f + dy < bh; dy++) {
-        for (let dx = 0; dx < f && x * f + dx < bw; dx++) {
+      for (let dy = 0; dy < f && y * f + dy < bh; dy += 1) {
+        for (let dx = 0; dx < f && x * f + dx < bw; dx += 1) {
           sum += alpha[(y * f + dy) * bw + x * f + dx];
-          n++;
+          n += 1;
         }
       }
       data[y * width + x] = n > 0 ? Math.round(sum / n) : 0;
@@ -263,7 +263,7 @@ function rasterise(
   ctx.fillText(ch, r + left, r + asc);
   const rgba = ctx.getImageData(0, 0, bw, bh).data;
   const alpha = new Uint8Array(bw * bh);
-  for (let i = 0; i < alpha.length; i++) {
+  for (let i = 0; i < alpha.length; i += 1) {
     alpha[i] = rgba[i * 4 + 3];
   }
   return {
@@ -445,7 +445,7 @@ export function rasterPlate(
   }
   const atlas = new Uint8Array(ATLAS_WIDTH * packed.height);
   for (const g of glyphs) {
-    for (let row = 0; row < g.bh; row++) {
+    for (let row = 0; row < g.bh; row += 1) {
       atlas.set(
         g.field.subarray(row * g.bw, (row + 1) * g.bw),
         (g.ay + row) * ATLAS_WIDTH + g.ax
@@ -479,7 +479,7 @@ export function layPlate(
   const baselines: number[] = [];
   const firstBaseline = FOOT * (lines.length > 0 ? lineCap : 1);
   let y = firstBaseline;
-  for (let i = lines.length - 1; i >= 0; i--) {
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
     baselines[i] = y;
     y += LINE_LEADING * lineCap;
   }
@@ -672,8 +672,8 @@ export function shadowMask(
     const x1 = Math.min(Math.ceil(Math.max(...xs)), width - 1);
     const y0 = Math.max(Math.floor(Math.min(...ys)), 0);
     const y1 = Math.min(Math.ceil(Math.max(...ys)), height - 1);
-    for (let y = y0; y <= y1; y++) {
-      for (let x = x0; x <= x1; x++) {
+    for (let y = y0; y <= y1; y += 1) {
+      for (let x = x0; x <= x1; x += 1) {
         const px = x + 0.5 - ox;
         const py = y + 0.5 - oy;
         const s = (px * vy - py * vx) / det;
@@ -691,11 +691,11 @@ export function shadowMask(
   }
   // softened by a 3 × 3 box: a shadow's edge is never a pixel's
   const data = new Uint8Array(width * height);
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
       let sum = 0;
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy += 1) {
+        for (let dx = -1; dx <= 1; dx += 1) {
           const xx = Math.min(Math.max(x + dx, 0), width - 1);
           const yy = Math.min(Math.max(y + dy, 0), height - 1);
           sum += raw[yy * width + xx];

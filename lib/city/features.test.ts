@@ -648,7 +648,7 @@ test.each(
       continue;
     }
     const c = f.geometry.coordinates;
-    for (let i = 1; i < c.length; i++) {
+    for (let i = 1; i < c.length; i += 1) {
       if (onEdge(c[i - 1], c[i])) {
         metres += Math.hypot(c[i][0] - c[i - 1][0], c[i][1] - c[i - 1][1]);
       }

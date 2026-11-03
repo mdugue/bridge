@@ -425,7 +425,7 @@ export function crownFrame(p: Placement): { lift: number; scale: number } {
  *  puts their feet back on the ground). */
 function writePlacements(mesh: Instances, items: Placement[], widen = 1): void {
   const dummy = new Object3D();
-  for (let i = 0; i < items.length; i++) {
+  for (let i = 0; i < items.length; i += 1) {
     const p = items[i];
     const { lift, scale } = crownFrame(p);
     dummy.position.set(p.x, p.y + lift, p.z);
@@ -524,7 +524,7 @@ export function buildCrownGeo(detail = 2): BufferGeometry {
   const nrm = g.attributes.normal;
   const v = new Vector3();
   const dir = new Vector3();
-  for (let i = 0; i < pos.count; i++) {
+  for (let i = 0; i < pos.count; i += 1) {
     v.fromBufferAttribute(pos, i);
     dir.copy(v).normalize();
     // Bumpy radius: each lobe bulges the surface where the vertex points at it.
@@ -540,7 +540,7 @@ export function buildCrownGeo(detail = 2): BufferGeometry {
   g.scale(1, 1.05, 1);
   g.translate(0, cy, 0);
   // Radial normals from the crown centre -> soft, unified shading.
-  for (let i = 0; i < pos.count; i++) {
+  for (let i = 0; i < pos.count; i += 1) {
     v.set(pos.getX(i), pos.getY(i) - cy, pos.getZ(i)).normalize();
     nrm.setXYZ(i, v.x, v.y, v.z);
   }
@@ -581,7 +581,7 @@ export function buildCrownGeoRich(): BufferGeometry {
     yLo: number,
     yHi: number
   ): void => {
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < count; i += 1) {
       const ny = yLo + rnd() * (yHi - yLo);
       dir.set(rnd() * 2 - 1, ny, rnd() * 2 - 1).normalize();
       at.copy(dir).multiplyScalar(R * (distLo + rnd() * (distHi - distLo)));
@@ -609,7 +609,7 @@ export function buildCrownGeoRich(): BufferGeometry {
   const pos = merged.attributes.position;
   const nrm = merged.attributes.normal;
   const v = new Vector3();
-  for (let i = 0; i < pos.count; i++) {
+  for (let i = 0; i < pos.count; i += 1) {
     v.set(pos.getX(i), pos.getY(i) - cy, pos.getZ(i)).normalize();
     nrm.setXYZ(i, v.x, v.y, v.z);
   }
@@ -654,7 +654,7 @@ export function buildStyleCrownGeo(
     const ball = new IcosahedronGeometry(CROWN_R * r, detail);
     const pos = ball.attributes.position;
     const nrm = ball.attributes.normal;
-    for (let i = 0; i < pos.count; i++) {
+    for (let i = 0; i < pos.count; i += 1) {
       v.fromBufferAttribute(pos, i).normalize();
       nrm.setXYZ(i, v.x, v.y, v.z);
     }
@@ -1067,7 +1067,7 @@ export function buildTrunkGeo(fork = true): BufferGeometry {
   // with the taper's radius there
   const taper = (u: number) => TRUNK_FOOT_R + (TRUNK_TOP_R - TRUNK_FOOT_R) * u;
   const rows = t.attributes.position;
-  for (let i = 0; i < rows.count; i++) {
+  for (let i = 0; i < rows.count; i += 1) {
     const from = rows.getY(i) / TRUNK_H;
     const to = TRUNK_RINGS[Math.round(from * TRUNK_ROWS)] ?? 1;
     const k = taper(to) / taper(from);
@@ -1078,7 +1078,7 @@ export function buildTrunkGeo(fork = true): BufferGeometry {
   const bz = 0.57;
   const pos = t.attributes.position;
   const v = new Vector3();
-  for (let i = 0; i < pos.count; i++) {
+  for (let i = 0; i < pos.count; i += 1) {
     v.fromBufferAttribute(pos, i);
     const tt = Math.min(Math.max(v.y / TRUNK_H, 0), 1);
     const r = Math.hypot(v.x, v.z);
@@ -1493,7 +1493,7 @@ function paintCrowns(
   extras: TreeInstance[] = []
 ): void {
   const col = new Color();
-  for (let i = 0; i < cell.length; i++) {
+  for (let i = 0; i < cell.length; i += 1) {
     const v = hash(cell[i].x * 0.3 + cell[i].z * 0.7) - 0.5;
     crownColor(col, cell[i], v);
     crowns.setColorAt(i, col);
@@ -1557,7 +1557,7 @@ function paintBark(
     return;
   }
   const white = new Color(1, 1, 1);
-  for (let i = 0; i < first; i++) {
+  for (let i = 0; i < first; i += 1) {
     trunks.setColorAt(i, white);
   }
   extras.forEach((e, i) => trunks.setColorAt(first + i, e.bark ?? white));
@@ -1724,7 +1724,7 @@ function footSlopes(
   const slopes = new Int8Array(trunks.capacity * 2);
   const m = trunks.instanceMatrix.array as Float32Array;
   const drops = trunks.geometry.getAttribute(TRUNK_DROP);
-  for (let i = 0; i < trunks.drawCount; i++) {
+  for (let i = 0; i < trunks.drawCount; i += 1) {
     const at = i * 16;
     const drop = drops ? drops.getX(i) : 0;
     const x = m[at + 12] - m[at + 4] * drop;
@@ -2094,14 +2094,14 @@ export function createVegetationLod(): (
         state.current = chunk.tier;
         state.near = nearestTree(chunk, cameraPos);
         state.trees = chunk.trees;
-        n++;
+        n += 1;
       }
     }
     all.length = n;
     states.length = n;
     const tiers = planCrownTiers(states, richBudget, scratch);
     let changed = false;
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < n; i += 1) {
       if (tiers[i] !== all[i].tier) {
         showTier(all[i], tiers[i]);
         changed = true;

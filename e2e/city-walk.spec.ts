@@ -433,7 +433,7 @@ async function dragAcrossCanvas(
           })
         );
       fire("pointerdown", 200);
-      for (let i = 1; i <= 5; i++) {
+      for (let i = 1; i <= 5; i += 1) {
         fire("pointermove", 200 + i * 20);
       }
       fire("pointerup", 300);
@@ -1087,7 +1087,7 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     // the conversation, whose answer is labelled KI.
     let checks = 0;
     await page.route("**/api/schluessel", async (route) => {
-      checks++;
+      checks += 1;
       return route.fulfill(
         checks === 1
           ? {

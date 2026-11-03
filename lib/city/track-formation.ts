@@ -91,12 +91,12 @@ class SampleGrid {
     for (
       let cx = Math.floor(x0 / CELL_M);
       cx <= Math.floor(x1 / CELL_M);
-      cx++
+      cx += 1
     ) {
       for (
         let cy = Math.floor(y0 / CELL_M);
         cy <= Math.floor(y1 / CELL_M);
-        cy++
+        cy += 1
       ) {
         for (const s of this.cells.get(`${cx}:${cy}`) ?? []) {
           if (s.x >= x0 && s.x <= x1 && s.y >= y0 && s.y <= y1) {

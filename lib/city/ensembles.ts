@@ -100,11 +100,11 @@ const side = (
  *  has no vertex inside the other). */
 function crosses(a: readonly Ring[], b: readonly Ring[]): boolean {
   for (const ra of a) {
-    for (let i = 0; i < ra.length; i++) {
+    for (let i = 0; i < ra.length; i += 1) {
       const p = ra[i];
       const q = ra[(i + 1) % ra.length];
       for (const rb of b) {
-        for (let j = 0; j < rb.length; j++) {
+        for (let j = 0; j < rb.length; j += 1) {
           const r = rb[j];
           const s = rb[(j + 1) % rb.length];
           if (
@@ -129,7 +129,7 @@ function reaches(a: readonly Ring[], b: readonly Ring[], gap: number): boolean {
         if (inside(p, other)) {
           return true;
         }
-        for (let i = 0; i < other.length; i++) {
+        for (let i = 0; i < other.length; i += 1) {
           const q = other[(i + 1) % other.length];
           if (segmentDistance2(p, other[i], q) <= gap2) {
             return true;
@@ -219,8 +219,8 @@ export function ensembleRoots(
     }
   }
   for (const named of byName.values()) {
-    for (let i = 0; i < named.length; i++) {
-      for (let j = i + 1; j < named.length; j++) {
+    for (let i = 0; i < named.length; i += 1) {
+      for (let j = i + 1; j < named.length; j += 1) {
         const [a, b] = [named[i], named[j]];
         const [oa, ob] = [find(a.root), find(b.root)].map((r) =>
           outlineOf.get(r)
@@ -260,7 +260,7 @@ export function ensembleGroup(outline: string): number {
     return 0;
   }
   let h = 0x81_1c_9d_c5;
-  for (let i = 0; i < outline.length; i++) {
+  for (let i = 0; i < outline.length; i += 1) {
     h ^= outline.charCodeAt(i);
     h = Math.imul(h, 0x01_00_01_93) >>> 0;
   }

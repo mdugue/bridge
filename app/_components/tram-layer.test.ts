@@ -189,7 +189,7 @@ test("a double lawn track shares one lawn, its inner edges at the midpoint", () 
   const pos = named(group, "tram-track")
     .map((m) => m.geometry.getAttribute("position"))
     .find((p) => {
-      for (let i = 0; i < p.count; i++) {
+      for (let i = 0; i < p.count; i += 1) {
         if (Math.abs(p.getZ(i) + 1.7) < 0.02) {
           return true;
         }

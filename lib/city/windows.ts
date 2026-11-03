@@ -1245,7 +1245,7 @@ function wallsOf(mesh: FacadeMesh, drawn: (object: number) => boolean): Wall[] {
   const byVertex = new Map<string, number[]>();
   const mm = (x: number) => Math.round(x * 1000);
   tris.forEach((t, k) => {
-    for (let c = 0; c < 3; c++) {
+    for (let c = 0; c < 3; c += 1) {
       const i = 3 * (t + c);
       const key = `${mesh.objectIds[t]}:${mm(p[i])},${mm(p[i + 1])},${mm(p[i + 2])}`;
       const list = byVertex.get(key);
@@ -1289,7 +1289,7 @@ function wallsOf(mesh: FacadeMesh, drawn: (object: number) => boolean): Wall[] {
       groups.set(root, w);
     }
     w.tris.push(t);
-    for (let c = 0; c < 3; c++) {
+    for (let c = 0; c < 3; c += 1) {
       const i = 3 * (t + c);
       const s = p[i] * w.n[1] - p[i + 1] * w.n[0];
       w.s0 = Math.min(w.s0, s);
@@ -1316,7 +1316,7 @@ function wallTop(w: Wall, p: ArrayLike<number>): number {
   let top0 = Number.NEGATIVE_INFINITY;
   let top1 = Number.NEGATIVE_INFINITY;
   for (const t of w.tris) {
-    for (let c = 0; c < 3; c++) {
+    for (let c = 0; c < 3; c += 1) {
       const i = 3 * (t + c);
       const s = p[i] * w.n[1] - p[i + 1] * w.n[0];
       if (s <= w.s0 + WALL_END_M) {
@@ -1341,7 +1341,7 @@ function cellsOf(w: Wall): Set<string> {
   const CELL = 8;
   const out = new Set<string>();
   const steps = Math.max(1, Math.ceil((w.s1 - w.s0) / (CELL / 2)));
-  for (let k = 0; k <= steps; k++) {
+  for (let k = 0; k <= steps; k += 1) {
     const [x, y] = onLine(w, w.s0 + ((w.s1 - w.s0) * k) / steps);
     out.add(`${Math.floor(x / CELL)},${Math.floor(y / CELL)}`);
   }
@@ -1461,7 +1461,7 @@ export function wallRises(
     const s1 = Math.max(...s);
     const steps = Math.max(1, Math.ceil((s1 - s0) / FOOT_STEP_M));
     let rise = Number.NaN;
-    for (let k = 0; k <= steps; k++) {
+    for (let k = 0; k <= steps; k += 1) {
       const at = s0 + ((s1 - s0) * k) / steps;
       const g = groundAt(
         n[0] * (d + FRONT_M) + n[1] * at,
@@ -1685,7 +1685,7 @@ export function facadeAttribute(
 ): Int16Array<ArrayBuffer> {
   const count = mesh.objectIds.length;
   const out = new Int16Array(4 * count);
-  for (let v = 0; v < count; v++) {
+  for (let v = 0; v < count; v += 1) {
     if (mesh.isRoof[v] === 1) {
       out[4 * v + 2] = ROOF_SNORM;
       roofColourAt(out, v, mesh.roofRgb);
@@ -1719,7 +1719,7 @@ export function facadeAttribute(
       ? wallSlots(w, eave, h)
       : { c: Number.NaN, length: 0, door0: NO_DOOR_SNORM, door1: eave };
     for (const t of w.tris) {
-      for (let k = 0; k < 3; k++) {
+      for (let k = 0; k < 3; k += 1) {
         const i = t + k;
         const s = p[3 * i] * w.n[1] - p[3 * i + 1] * w.n[0];
         out[4 * i] = Number.isNaN(slots.c) ? 0 : snorm(s - slots.c);

@@ -23,7 +23,7 @@ function stubFetch(
   let calls = 0;
   // reason: the stub takes the URL only; the helpers pass a string
   globalThis.fetch = (async (url: string) => {
-    calls++;
+    calls += 1;
     return answer(url, calls);
   }) as unknown as typeof fetch;
   return { calls: () => calls };
@@ -48,7 +48,7 @@ async function settled<T>(promise: Promise<T>, stepMs = 50): Promise<T> {
     done = true;
   });
   for (let waited = 0; !done && waited < 120_000; waited += stepMs) {
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 20; i += 1) {
       await Promise.resolve();
     }
     jest.advanceTimersByTime(stepMs);
@@ -216,7 +216,7 @@ test("an attempt that goes silent is cut and asked for again", async () => {
   // the first request never answers until its signal fires, as a fetch
   // over a connection gone quiet
   globalThis.fetch = (async (_url: string, init?: RequestInit) => {
-    calls++;
+    calls += 1;
     if (calls > 1) {
       return new Response(new Uint8Array([7, 8]));
     }

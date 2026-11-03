@@ -62,7 +62,7 @@ function scanAcross(
   const z: number[] = [];
   const reach = REACH_M + SHELF_M;
   const steps = Math.round((2 * reach) / SCAN_M);
-  for (let k = 0; k <= steps; k++) {
+  for (let k = 0; k <= steps; k += 1) {
     const s = -reach + k * SCAN_M;
     const h = heightAt(x + px * s, y + py * s);
     if (h === null) {
@@ -89,7 +89,7 @@ function steepest(scan: Scan): { i: number; rise: number } {
   for (
     let i = Math.max(first, w);
     i <= Math.min(last, scan.z.length - 1 - w);
-    i++
+    i += 1
   ) {
     const d = scan.z[i + w] - scan.z[i - w];
     if (Math.abs(d) > Math.abs(best)) {
@@ -109,7 +109,7 @@ function shelfEdge(
   reached: (z: number) => boolean
 ): number {
   const n = Math.round(SHELF_M / SCAN_M);
-  for (let k = 1; k <= n; k++) {
+  for (let k = 1; k <= n; k += 1) {
     if (reached(scan.z[k0 + dir * k])) {
       return offsetOf(k0 + dir * k);
     }
@@ -189,7 +189,7 @@ function agreeingNeighbours(
   const lo = Math.max(0, i - radius);
   const hi = Math.min(snaps.length - 1, i + radius);
   const near: StepSnap[] = [];
-  for (let k = lo; k <= hi; k++) {
+  for (let k = lo; k <= hi; k += 1) {
     const s = snaps[k];
     if (s) {
       near.push(s);

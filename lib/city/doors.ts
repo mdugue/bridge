@@ -453,7 +453,7 @@ export function trianglesOnRays(
   ];
   for (const o of origins) {
     for (const k of [0, reach]) {
-      for (let c = 0; c < 3; c++) {
+      for (let c = 0; c < 3; c += 1) {
         lo[c] = Math.min(lo[c], o[c] - n[c] * k);
         hi[c] = Math.max(hi[c], o[c] - n[c] * k);
       }
@@ -478,7 +478,7 @@ function trianglesInBox(
   const out: number[] = [];
   outer: for (const t of triangles) {
     const i = 3 * t;
-    for (let c = 0; c < 3; c++) {
+    for (let c = 0; c < 3; c += 1) {
       const p = positions[i + c];
       const q = positions[i + 3 + c];
       const r = positions[i + 6 + c];

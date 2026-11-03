@@ -254,7 +254,7 @@ function addParapetWalls(
   const { pts } = ring;
   const across = endEdges(ring, ringS);
   const winding = ringWinding(pts);
-  for (let i = 0; i < pts.length; i++) {
+  for (let i = 0; i < pts.length; i += 1) {
     const j = (i + 1) % pts.length;
     // No wall across the roadway at the abutments: an edge running across
     // the axis is where the deck meets the road, not its side.
@@ -305,7 +305,7 @@ function addRailing(
   const winding = ringWinding(pts);
   const bar = RAILING_BAR_HALF;
   let since = RAILING_POST_EVERY; // metres since the last post
-  for (let i = 0; i < pts.length; i++) {
+  for (let i = 0; i < pts.length; i += 1) {
     const j = (i + 1) % pts.length;
     if (across[i]) {
       since = RAILING_POST_EVERY; // a post where the next side begins
@@ -478,7 +478,7 @@ function endRuns(across: boolean[]): number[][] {
   }
   const runs: number[][] = [];
   let run: number[] = [];
-  for (let k = 1; k <= n; k++) {
+  for (let k = 1; k <= n; k += 1) {
     const i = (start + k) % n;
     if (across[i]) {
       if (run.length === 0) {
@@ -527,12 +527,12 @@ function endColumns(
   run: number[]
 ): { x: number; y: number; z: number }[] {
   const out: { x: number; y: number; z: number }[] = [];
-  for (let k = 0; k < run.length - 1; k++) {
+  for (let k = 0; k < run.length - 1; k += 1) {
     const a = run[k];
     const b = run[k + 1];
     const len = Math.hypot(pts[b].x - pts[a].x, pts[b].z - pts[a].z);
     const m = Math.max(1, Math.ceil(len / APPROACH_COLUMN_M));
-    for (let j = 0; j < m; j++) {
+    for (let j = 0; j < m; j += 1) {
       const t = j / m;
       out.push({
         x: pts[a].x + (pts[b].x - pts[a].x) * t,
@@ -568,7 +568,7 @@ export function approaches(
   for (const run of endRuns(endEdges(ring, ringS))) {
     let dx = 0;
     let dz = 0;
-    for (let k = 0; k < run.length - 1; k++) {
+    for (let k = 0; k < run.length - 1; k += 1) {
       const [ox, oz] = outward(pts, run[k], winding);
       dx += ox;
       dz += oz;
@@ -676,7 +676,7 @@ function addApproach(
   depth: number
 ): void {
   const cols = a.columns;
-  for (let i = 0; i < cols.length - 1; i++) {
+  for (let i = 0; i < cols.length - 1; i += 1) {
     const p = cols[i];
     const q = cols[i + 1];
     const p0: P3 = [p.x, p.y, p.z];
@@ -907,7 +907,7 @@ function onLine(
   const ys: number[] = [];
   const ringS: number[] = [];
   const n = ring.pts.length;
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < n; i += 1) {
     const a = ring.pts[i];
     const b = ring.pts[(i + 1) % n];
     const pieces = Math.max(
@@ -917,7 +917,7 @@ function onLine(
     pts.push(a);
     ys.push(frame.deckAt(frame.ringS[i]));
     ringS.push(frame.ringS[i]);
-    for (let k = 1; k < pieces; k++) {
+    for (let k = 1; k < pieces; k += 1) {
       const x = a.x + ((b.x - a.x) * k) / pieces;
       const z = a.z + ((b.z - a.z) * k) / pieces;
       const { s } = frame.project(x, z);
@@ -950,7 +950,7 @@ function* addDeckFrame(
     ? [Math.min(...frame.ringS), Math.max(...frame.ringS)]
     : [];
   const inset = Math.min(DECK_END_INSET, (ends[1] - ends[0]) / 2);
-  for (let v = first; v < top.pos.length / 3; v++) {
+  for (let v = first; v < top.pos.length / 3; v += 1) {
     if (!frame) {
       top.deck.push(0, 0, 0, 0);
       continue;
@@ -1244,7 +1244,7 @@ function ringEdgesAt(
 ): { left: number; right: number } | null {
   let left = Number.NEGATIVE_INFINITY;
   let right = Number.POSITIVE_INFINITY;
-  for (let i = 0; i < ring.length; i++) {
+  for (let i = 0; i < ring.length; i += 1) {
     const a = ring[i];
     const b = ring[(i + 1) % ring.length];
     if ((a.s - s) * (b.s - s) <= 0 && a.s !== b.s) {
@@ -1411,7 +1411,7 @@ function addBand(
     const p1 = frame.at(i * BRIDGE_STEP, 1);
     return [p1.x - p0.x, 0, p1.z - p0.z];
   };
-  for (let i = from; i < to; i++) {
+  for (let i = from; i < to; i += 1) {
     const n = lateral(i);
     for (const side of [1, -1]) {
       quad(
@@ -1472,7 +1472,7 @@ function addArchRib(
   const y = (s: number) => fit.a * s * s + fit.b * s + fit.c;
   const n = Math.max(2, Math.ceil((to - from) / BRIDGE_STEP));
   const s = (k: number) => from + ((to - from) * k) / n;
-  for (let k = 0; k < n; k++) {
+  for (let k = 0; k < n; k += 1) {
     addStrut(
       acc,
       point(frame, s(k), offset, y(s(k))),
@@ -1592,7 +1592,7 @@ function addColumnPair(
     if (ground !== null && under - ground >= PIER_MIN_GAP) {
       const w = frame.at(s, offset);
       addColumn(acc, w.x, w.z, ground, under, VIADUCT_COLUMN_HALF);
-      standing++;
+      standing += 1;
     }
   }
   if (standing === 2) {
@@ -1616,8 +1616,8 @@ function addPiers(
   let ai = 0;
   let bi = 1;
   let bd = -1;
-  for (let i = 0; i < ring.pts.length; i++) {
-    for (let j = i + 1; j < ring.pts.length; j++) {
+  for (let i = 0; i < ring.pts.length; i += 1) {
+    for (let j = i + 1; j < ring.pts.length; j += 1) {
       const d =
         (ring.pts[i].x - ring.pts[j].x) ** 2 +
         (ring.pts[i].z - ring.pts[j].z) ** 2;
@@ -1638,7 +1638,7 @@ function addPiers(
   const gb = groundEnd(b) ?? Math.min(...topY) - depth - 4;
   const span = Math.hypot(b.x - a.x, b.z - a.z);
   const n = Math.floor(span / PIER_SPACING);
-  for (let k = 1; k < n; k++) {
+  for (let k = 1; k < n; k += 1) {
     const t = k / n;
     const px = a.x + (b.x - a.x) * t;
     const pz = a.z + (b.z - a.z) * t;
@@ -1696,7 +1696,7 @@ function addMasonry(
     const pier = piers.find((p) => Math.abs(s - p.s) <= p.half);
     return pier ? pier.top : null;
   };
-  for (let i = 0; i < ring.pts.length; i++) {
+  for (let i = 0; i < ring.pts.length; i += 1) {
     if (!across[i]) {
       addSpandrel(acc, ring, i, {
         s0: frame.ringS[i],
@@ -1749,7 +1749,7 @@ function addSpandrel(
       bottom: edge.under(s),
     };
   };
-  for (let k = 0; k < n; k++) {
+  for (let k = 0; k < n; k += 1) {
     const p = at(k);
     const q = at(k + 1);
     if (p.bottom === null || q.bottom === null) {
@@ -1779,7 +1779,7 @@ function addVault(acc: Mesh3, frame: BridgeFrame, span: MasonrySpan): void {
     return { l: [l.x, y, l.z] as P3, r: [r.x, y, r.z] as P3 };
   };
   let prev = row(0);
-  for (let k = 1; k <= n; k++) {
+  for (let k = 1; k <= n; k += 1) {
     const next = row(k);
     const across: P3 = [
       prev.l[0] - prev.r[0],
@@ -1822,7 +1822,7 @@ function addMasonryPier(
   ];
   const cx = (c[0].x + c[2].x) / 2;
   const cz = (c[0].z + c[2].z) / 2;
-  for (let k = 0; k < 4; k++) {
+  for (let k = 0; k < 4; k += 1) {
     const p = c[k];
     const q = c[(k + 1) % 4];
     const mx = (p.x + q.x) / 2 - cx;
@@ -1874,11 +1874,11 @@ interface XZ {
 /** A ring's points, its edges split to at most `step` apart. */
 function densified(pts: readonly XZ[], step: number): XZ[] {
   const out: XZ[] = [];
-  for (let i = 0; i < pts.length; i++) {
+  for (let i = 0; i < pts.length; i += 1) {
     const a = pts[i];
     const b = pts[(i + 1) % pts.length];
     const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / step));
-    for (let k = 0; k < n; k++) {
+    for (let k = 0; k < n; k += 1) {
       out.push({
         x: a.x + ((b.x - a.x) * k) / n,
         z: a.z + ((b.z - a.z) * k) / n,
@@ -2017,7 +2017,7 @@ function* addDrapedArea(
   for (const [k, raw] of [outer, ...holes].entries()) {
     const ring = densified(raw, Math.min((how.fine ?? how).step * 4, DRAPE_M));
     const winding = (ringWinding(ring) * (k === 0 ? 1 : -1)) as 1 | -1;
-    for (let i = 0; i < ring.length; i++) {
+    for (let i = 0; i < ring.length; i += 1) {
       const p = ring[i];
       const q = ring[(i + 1) % ring.length];
       const yp = yAt(p.x, p.z);
@@ -2274,7 +2274,7 @@ export function addSpanDeck(
   addFootprint(stone, ring, topY, DECK_DEPTH, true);
   let run = 0;
   let next = PIER_SPACING / 2;
-  for (let i = 1; i < pts.length; i++) {
+  for (let i = 1; i < pts.length; i += 1) {
     run += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z);
     if (run < next || i === pts.length - 1) {
       continue;
@@ -2370,10 +2370,10 @@ function openedCuts(
   const opened = levels.map(() => false);
   for (const [a, b] of modeRuns(levels, "cut")) {
     let covered = 0;
-    for (let i = a; i <= b; i++) {
+    for (let i = a; i <= b; i += 1) {
       const w = epsgToWorld(dense[i][0], dense[i][1], ctx.offset);
       if (decksAt(decks, w.x, w.z, undefined, "all", DECK_REACH_M).length) {
-        covered++;
+        covered += 1;
       }
     }
     if (covered >= PASSAGE_UNDER_DECK * (b - a + 1)) {
@@ -2521,8 +2521,8 @@ function buriedTest(
   return (x, z) => {
     const cx = Math.floor(x / cell);
     const cz = Math.floor(z / cell);
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dz = -1; dz <= 1; dz++) {
+    for (let dx = -1; dx <= 1; dx += 1) {
+      for (let dz = -1; dz <= 1; dz += 1) {
         for (const p of grid.get(`${cx + dx}:${cz + dz}`) ?? []) {
           // a sample every 4 m: within its half-step along, the bed across
           if (
@@ -2541,7 +2541,7 @@ function buriedTest(
 function runsWhere(n: number, has: (i: number) => boolean): [number, number][] {
   const out: [number, number][] = [];
   let first = -1;
-  for (let i = 0; i <= n; i++) {
+  for (let i = 0; i <= n; i += 1) {
     if (i < n && has(i)) {
       if (first < 0) {
         first = i;

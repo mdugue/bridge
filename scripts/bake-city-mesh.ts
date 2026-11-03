@@ -268,7 +268,7 @@ function collectVertices(loaderScene: {
   let at = 0;
   for (const c of chunks) {
     const count = c.objectid.length;
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < count; i += 1) {
       out.positions[(at + i) * 3] = c.position[i * 3];
       out.positions[(at + i) * 3 + 1] = c.position[i * 3 + 1];
       out.positions[(at + i) * 3 + 2] = c.position[i * 3 + 2];
@@ -314,7 +314,7 @@ export function withRoofSteps(
     (v.objectIds[i] * 1024 + ids[2 * i] + 1) * 16_777_216 + ids[2 * i + 1] + 1;
   const eave = new Map<number, number>();
   const shape = new Map<number, WallShape>();
-  for (let i = 0; i < isRoof.length; i++) {
+  for (let i = 0; i < isRoof.length; i += 1) {
     const z = p[3 * i + 2];
     if (isRoof[i] === 1) {
       eave.set(v.objectIds[i], Math.min(eave.get(v.objectIds[i]) ?? z, z));
@@ -328,7 +328,7 @@ export function withRoofSteps(
       }
     }
   }
-  for (let i = 0; i < isRoof.length; i++) {
+  for (let i = 0; i < isRoof.length; i += 1) {
     const s = walls[i] === 1 ? shape.get(key(i)) : undefined;
     if (s) {
       const z = p[3 * i + 2];
@@ -340,7 +340,7 @@ export function withRoofSteps(
       }
     }
   }
-  for (let i = 0; i < isRoof.length; i++) {
+  for (let i = 0; i < isRoof.length; i += 1) {
     const s = walls[i] === 1 ? shape.get(key(i)) : undefined;
     const low = eave.get(v.objectIds[i]);
     if (
@@ -419,7 +419,7 @@ export function withFaceRoofColours(
   });
   const count = v.objectIds.length;
   const roofRgb = new Float32Array(3 * count).fill(Number.NaN);
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < count; i += 1) {
     const own = byObject.get(v.objectIds[i]);
     const c =
       v.isRoof[i] === 1
@@ -817,7 +817,7 @@ export function withMeasuredRoofs(
   }
   const base = new Map<number, number>();
   const keep: number[] = [];
-  for (let i = 0; i < v.objectIds.length; i++) {
+  for (let i = 0; i < v.objectIds.length; i += 1) {
     const idx = v.objectIds[i];
     if (replaced.has(idx)) {
       const z = v.positions[i * 3 + 2];
@@ -940,7 +940,7 @@ function objectLevels(
   of: ReadonlySet<number>
 ): Map<number, { base: number; roof: number }> {
   const out = new Map<number, { base: number; roof: number }>();
-  for (let i = 0; i < v.objectIds.length; i++) {
+  for (let i = 0; i < v.objectIds.length; i += 1) {
     const o = v.objectIds[i];
     if (!of.has(o)) {
       continue;
@@ -1023,7 +1023,7 @@ export function withOpenRoofs(
 /** A ring's signed area (counter-clockwise positive). */
 function ringArea(ring: readonly [number, number][]): number {
   let a = 0;
-  for (let i = 0; i < ring.length; i++) {
+  for (let i = 0; i < ring.length; i += 1) {
     const [x0, y0] = ring[i];
     const [x1, y1] = ring[(i + 1) % ring.length];
     a += x0 * y1 - x1 * y0;
@@ -1064,7 +1064,7 @@ function streamBuilder(v: CityVertices) {
   return {
     /** `count` vertices of the old stream from `i` on, as they were */
     copy(i: number, count: number): void {
-      for (let k = i; k < i + count; k++) {
+      for (let k = i; k < i + count; k += 1) {
         positions.push(...at(v.positions, k, 3));
         objectIds.push(v.objectIds[k]);
         isRoof.push(v.isRoof[k]);
@@ -1203,7 +1203,7 @@ export function bakeCityMesh(
   const minZ = new Map<number, number>();
   const maxZ = new Map<number, number>();
   const roofMinZ = new Map<number, number>();
-  for (let i = 0; i < v.objectIds.length; i++) {
+  for (let i = 0; i < v.objectIds.length; i += 1) {
     const idx = v.objectIds[i];
     const z = v.positions[i * 3 + 2];
     minZ.set(idx, Math.min(minZ.get(idx) ?? z, z));
@@ -1484,7 +1484,7 @@ export interface CityMesh {
  *  (lib/city/crease-normals.ts); a triangle shaded otherwise is left out. */
 export function vertexNormals(v: CityVertices): Float32Array {
   const groups = new Float64Array(v.objectIds.length);
-  for (let i = 0; i < groups.length; i++) {
+  for (let i = 0; i < groups.length; i += 1) {
     groups[i] = 2 * v.objectIds[i] + (v.isRoof[i] === 1 ? 1 : 0);
   }
   const shaded = v.normals;
@@ -1502,7 +1502,7 @@ function withShading(
   if (!shading) {
     return flat;
   }
-  for (let i = 0; i < flat.length; i++) {
+  for (let i = 0; i < flat.length; i += 1) {
     if (!Number.isNaN(shading[i])) {
       flat[i] = shading[i];
     }
@@ -2065,7 +2065,7 @@ function withParts(
   isRoof.set(v.isRoof);
   let at = own;
   for (const p of parts) {
-    for (let i = 0; i < p.positions.length; i++) {
+    for (let i = 0; i < p.positions.length; i += 1) {
       positions[3 * at + i] = p.positions[i];
       normals[3 * at + i] = p.normals[i];
     }
@@ -2183,7 +2183,7 @@ export function appendDoors(
     const part = (tris: number[], tint: [number, number, number]) => {
       const index = baked.objects.length;
       positions.push(...tris);
-      for (let i = 0; i < tris.length / 3; i++) {
+      for (let i = 0; i < tris.length / 3; i += 1) {
         objectIds.push(index);
       }
       baked.objects.push({
@@ -2317,7 +2317,7 @@ export function appendShopfronts(
     ) {
       continue;
     }
-    drawn++;
+    drawn += 1;
     const base = footAt(w, [0, w.L]);
     const above = cm(
       Math.max(...(w.z ?? [0])) -
@@ -2339,7 +2339,7 @@ export function appendShopfronts(
       const index = baked.objects.length;
       positions.push(...tris.positions);
       normals.push(...tris.normals);
-      for (let i = 0; i < tris.positions.length / 9; i++) {
+      for (let i = 0; i < tris.positions.length / 9; i += 1) {
         objectIds.push(index, index, index);
       }
       baked.objects.push({
@@ -2526,7 +2526,7 @@ export function appendDormers(
       // a host the clay draws no windows on (a landmark, glass, a hall)
       // has none in its dormers either
       const windowed = !part.chimney && (host.windows?.axis ?? 0) > 0;
-      for (let i = 0; i < part.isRoof.length; i++) {
+      for (let i = 0; i < part.isRoof.length; i += 1) {
         if (windowed && part.isRoof[i] === 0 && part.front[i] === 0) {
           blind.push(first + objectIds.length);
         }
@@ -3053,7 +3053,7 @@ function toPolyline(
   line: readonly (readonly [number, number])[]
 ): number {
   let best = Number.POSITIVE_INFINITY;
-  for (let k = 0; k + 1 < line.length; k++) {
+  for (let k = 0; k + 1 < line.length; k += 1) {
     const [a, b] = [line[k], line[k + 1]];
     const dx = b[0] - a[0];
     const dy = b[1] - a[1];
@@ -3106,10 +3106,10 @@ function inBox(
   t: number,
   box: PassagePlan["box"]
 ): boolean {
-  for (let c = 0; c < 3; c++) {
+  for (let c = 0; c < 3; c += 1) {
     let lo = Number.POSITIVE_INFINITY;
     let hi = Number.NEGATIVE_INFINITY;
-    for (let k = 0; k < 3; k++) {
+    for (let k = 0; k < 3; k += 1) {
       const x = p[3 * (t + k) + c];
       lo = Math.min(lo, x);
       hi = Math.max(hi, x);
@@ -3278,7 +3278,7 @@ function withCuts(
       if (facade && v.facade) {
         facade[4 * at] = Math.round(blend(v.facade, 4, t, w, false)[0]);
       }
-      at++;
+      at += 1;
     }
   }
   flush(count);
@@ -3287,7 +3287,7 @@ function withCuts(
     positions.set(part.positions, 3 * at);
     objectIds.fill(part.id, at, at + n);
     if (facade) {
-      for (let i = at; i < at + n; i++) {
+      for (let i = at; i < at + n; i += 1) {
         facade[4 * i + 2] = noDoor;
         facade[4 * i + 3] = noDoor;
       }

@@ -117,8 +117,8 @@ function ctPlot(q: V2): V3 {
   const best = float(1e9).toVar();
   const bc = vec2(c0).toVar();
   const bp = vec2(0).toVar();
-  for (let j = -1; j <= 1; j++) {
-    for (let i = -1; i <= 1; i++) {
+  for (let j = -1; j <= 1; j += 1) {
+    for (let i = -1; i <= 1; i += 1) {
       const c = c0.add(vec2(i, j)).toVar();
       const p = ctSeed(c).toVar();
       const e = q.sub(p);
@@ -131,8 +131,8 @@ function ctPlot(q: V2): V3 {
     }
   }
   let edge: F = float(1e9);
-  for (let j = -1; j <= 1; j++) {
-    for (let i = -1; i <= 1; i++) {
+  for (let j = -1; j <= 1; j += 1) {
+    for (let i = -1; i <= 1; i += 1) {
       if (i === 0 && j === 0) {
         continue;
       }

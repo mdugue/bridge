@@ -131,7 +131,7 @@ test("a snapped wall's cap faces up whichever side its high shelf is on", () => 
       if (nrm[t + 1] < 0.99) {
         continue; // a face, not the cap
       }
-      caps++;
+      caps += 1;
       const [ax, , az, bx, , bz, cx, , cz] = pos.slice(t, t + 9);
       expect((bz - az) * (cx - ax) - (bx - ax) * (cz - az)).toBeGreaterThan(0);
     }

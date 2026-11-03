@@ -13,7 +13,7 @@ function greyPng(
   px: Uint8Array
 ): Uint8Array<ArrayBuffer> {
   const raw = new Uint8Array((width + 1) * height);
-  for (let y = 0; y < height; y++) {
+  for (let y = 0; y < height; y += 1) {
     raw.set(px.subarray(y * width, (y + 1) * width), y * (width + 1) + 1);
   }
   const chunk = (type: string, body: Uint8Array) => {
@@ -60,7 +60,7 @@ async function settled<T>(promise: Promise<T>): Promise<T> {
     done = true;
   });
   for (let waited = 0; !done && waited < 60_000; waited += 50) {
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 20; i += 1) {
       await Promise.resolve();
     }
     jest.advanceTimersByTime(50);

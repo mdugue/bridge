@@ -179,7 +179,7 @@ function blurPass(
   const at = uv();
   const step = vec2(across[0], across[1]).mul(spread).mul(texel);
   let sum = texture(source, at).rg.mul(weights[0]);
-  for (let i = 1; i < weights.length; i++) {
+  for (let i = 1; i < weights.length; i += 1) {
     const offset = step.mul(i);
     sum = sum.add(
       texture(source, at.add(offset))

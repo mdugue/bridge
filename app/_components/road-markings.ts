@@ -242,9 +242,9 @@ export function roadMarkings(
     const w = max(g.w, 0.004).toVar();
     const paint = float(0).toVar();
     // crossings and stop lines: every distinct row among the four texels
-    for (let k = 0; k < 4; k++) {
+    for (let k = 0; k < 4; k += 1) {
       let cond = t[k].x.greaterThan(0.5);
-      for (let j = 0; j < k; j++) {
+      for (let j = 0; j < k; j += 1) {
         cond = and(cond, t[k].x.notEqual(t[j].x));
       }
       If(cond, () => {

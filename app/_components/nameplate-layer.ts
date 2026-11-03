@@ -309,7 +309,7 @@ function writePrism(
   const pos = g.getAttribute("position") as Float32BufferAttribute;
   const a = pos.array as Float32Array;
   for (const [i, c] of corners.entries()) {
-    for (let k = 0; k < 3; k++) {
+    for (let k = 0; k < 3; k += 1) {
       a[i * 3 + k] = c[k];
       a[(i + 4) * 3 + k] = c[k] + d[k];
     }
@@ -545,7 +545,7 @@ function paintColours(
     [PAINT.boxFill]: type.box ? atNight(type.box.fill, night) : h,
     [PAINT.boxEdge]: type.box ? atNight(type.box.edge, night) : h,
   };
-  for (let i = 0; i < paint.length; i++) {
+  for (let i = 0; i < paint.length; i += 1) {
     const c = colours[paint[i]];
     ink.set([c[0], c[1], c[2], dim], i * 4);
     halo.set([h[0], h[1], h[2], type.halo.alpha * dim], i * 4);
@@ -616,7 +616,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   const plate = new Mesh(emptyGeometry(), material);
   const layers = deps.phone ? SIDE_LAYERS.phone : SIDE_LAYERS.desktop;
   const sides: Mesh[] = [];
-  for (let i = layers; i >= 1; i--) {
+  for (let i = layers; i >= 1; i -= 1) {
     const side = new Mesh(plate.geometry, sideMaterial);
     side.userData.nameplateLayer = (EXTRUDE_CAPS * i) / layers;
     side.frustumCulled = false;
@@ -1092,7 +1092,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     for (const [i, c] of prismCorners.entries()) {
       const x = (area.x + (i === 1 || i === 2 ? area.width : 0)) * p.cap;
       const y = (area.y + (i >= 2 ? area.height : 0)) * p.cap;
-      for (let k = 0; k < 3; k++) {
+      for (let k = 0; k < 3; k += 1) {
         c[k] = p.origin[k] + p.right[k] * x + p.up[k] * y;
       }
       if (c[1] > high[1]) {
@@ -1144,7 +1144,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
         mask.dispose();
         mask = maskTexture(new Uint8Array(16), 4, 4);
         maskNode.value = mask;
-        generation++;
+        generation += 1;
         return;
       }
       withFaces();

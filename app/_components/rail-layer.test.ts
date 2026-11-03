@@ -94,7 +94,7 @@ test("a yard across an underpass follows the ground, not its corners", () => {
     const mx = (xs[0] + xs[1] + xs[2]) / 3;
     const top = Math.max(...[0, 1, 2].map((k) => pos.getY(i + k)));
     if (mx > 44 && mx < 56 && top > 113) {
-      overStreet++;
+      overStreet += 1;
     }
   }
   // no sheet stands over the street, closing the passage
@@ -331,7 +331,7 @@ function acrossEnds(b: BridgeFeature): number {
   for (const name of ["bridge-stone", "bridge-steel"]) {
     const mesh = built.getObjectByName(name) as Mesh | undefined;
     const pos = mesh?.geometry.getAttribute("position");
-    for (let i = 0; pos && i < pos.count; i++) {
+    for (let i = 0; pos && i < pos.count; i += 1) {
       // the deck runs along x from 0 to 200, 12 m wide: an end wall would
       // stand at x = 0 or 200 across the middle of the road
       const x = pos.getX(i);
@@ -341,7 +341,7 @@ function acrossEnds(b: BridgeFeature): number {
         Math.abs(z) < 4 &&
         pos.getY(i) > 120
       ) {
-        across++;
+        across += 1;
       }
     }
   }
@@ -355,13 +355,13 @@ test("a masonry bridge's walls hang from the deck's own edges", () => {
   const pos = stone.geometry.getAttribute("position");
   let below = 0;
   const outside: number[] = [];
-  for (let i = 0; i < pos.count; i++) {
+  for (let i = 0; i < pos.count; i += 1) {
     // nothing stands outside the deck's width...
     if (Math.abs(pos.getZ(i)) > 6.01) {
       outside.push(pos.getZ(i));
     }
     if (pos.getY(i) < 110) {
-      below++;
+      below += 1;
     }
   }
   expect(outside).toEqual([]);
@@ -396,7 +396,7 @@ test("a curved deck's sides all face out, the inner edge too", () => {
     const geo = (child as Mesh).geometry;
     const pos = geo.getAttribute("position");
     const nrm = geo.getAttribute("normal");
-    for (let i = 0; i < pos.count; i++) {
+    for (let i = 0; i < pos.count; i += 1) {
       // the deck's sides and parapets (the piers below are square columns)
       if (Math.abs(nrm.getY(i)) > 0.1 || pos.getY(i) < 119.5) {
         continue;
@@ -408,7 +408,7 @@ test("a curved deck's sides all face out, the inner edge too", () => {
       if (Math.abs(radial) < 0.5) {
         continue; // an end face: along the curve, not across it
       }
-      sides++;
+      sides += 1;
       // outer edge faces away from the centre, inner edge towards it
       if (Math.sign(radial) !== (r > 100 ? 1 : -1)) {
         inward.push({ x, z });
@@ -426,7 +426,7 @@ function vertices(b: BridgeFeature) {
     const geo = (child as Mesh).geometry;
     const pos = geo.getAttribute("position");
     const nrm = geo.getAttribute("normal");
-    for (let i = 0; i < pos.count; i++) {
+    for (let i = 0; i < pos.count; i += 1) {
       out.push({
         x: pos.getX(i),
         y: pos.getY(i),
@@ -485,7 +485,7 @@ test("a masonry bridge's piers stand where DOM1 saw them, a seventh of their spa
   const stone = stoneOf(deck({ structure: "arch", piers }));
   const pos = stone.geometry.getAttribute("position");
   const xs = new Set<number>();
-  for (let i = 0; i < pos.count; i++) {
+  for (let i = 0; i < pos.count; i += 1) {
     if (pos.getY(i) < 100.01) {
       xs.add(Math.round(pos.getX(i) * 100) / 100);
     }
@@ -541,7 +541,7 @@ test("no face of a bridge is left without a normal (it would shade black)", () =
   for (const child of buildRail({ ...empty, bridges: [b] }, ctx).children) {
     const nrm = (child as Mesh).geometry.getAttribute("normal");
     seen += nrm.count;
-    for (let i = 0; i < nrm.count; i++) {
+    for (let i = 0; i < nrm.count; i += 1) {
       if (Math.hypot(nrm.getX(i), nrm.getY(i), nrm.getZ(i)) <= 0.5) {
         unlit.push(`${child.name}#${i}`);
       }
@@ -619,7 +619,7 @@ test("a deck's top is laid out by its frame; its stone is dressed", () => {
   expect(frame.count).toBe(pos.count);
   const near = (a: number, b: number) => Math.abs(a - b) < 5e-7;
   const misplaced: number[] = [];
-  for (let i = 0; i < frame.count; i++) {
+  for (let i = 0; i < frame.count; i += 1) {
     // the station runs along the axis (x here), the offset across it
     // (left of the axis is north: −z), the edges are the outline's
     if (
@@ -640,7 +640,7 @@ test("a deck's top is laid out by its frame; its stone is dressed", () => {
   const zeros = plain.geometry.getAttribute("aDeck");
   expect(zeros.count).toBeGreaterThan(0);
   const framed: number[] = [];
-  for (let i = 0; i < zeros.count; i++) {
+  for (let i = 0; i < zeros.count; i += 1) {
     if (zeros.getZ(i) - zeros.getW(i) !== 0) {
       framed.push(i);
     }
@@ -664,7 +664,7 @@ test("a deck's slab and parapets follow its measured line, not chords between it
   let tops = 0;
   let soffits = 0;
   const offLine: { x: number; y: number }[] = [];
-  for (let i = 0; i < pos.count; i++) {
+  for (let i = 0; i < pos.count; i += 1) {
     const x = pos.getX(i);
     if (x < 0.01 || x > 199.99 || Math.abs(nrm.getY(i)) < 0.99) {
       continue; // an approach beyond the ends, or the fascia
@@ -675,9 +675,9 @@ test("a deck's slab and parapets follow its measured line, not chords between it
       offLine.push({ x, y: pos.getY(i) });
     }
     if (up) {
-      tops++;
+      tops += 1;
     } else {
-      soffits++;
+      soffits += 1;
     }
   }
   expect(offLine).toEqual([]);
@@ -686,7 +686,7 @@ test("a deck's slab and parapets follow its measured line, not chords between it
   // the railing's top along the side, mid-span too
   const sp = steel.geometry.getAttribute("position");
   let railing = 0;
-  for (let i = 0; i < sp.count; i++) {
+  for (let i = 0; i < sp.count; i += 1) {
     const x = sp.getX(i);
     if (Math.abs(x - 100) < 3 && Math.abs(Math.abs(sp.getZ(i)) - 5.85) < 0.05) {
       railing = Math.max(railing, sp.getY(i));
@@ -705,11 +705,11 @@ test("a deck's corners stand on its measured line, not at their own baked height
   const pos = top.geometry.getAttribute("position");
   let worst = 0;
   let seen = 0;
-  for (let i = 0; i < pos.count; i++) {
+  for (let i = 0; i < pos.count; i += 1) {
     const x = pos.getX(i);
     if (x > -0.01 && x < 200.01 && pos.getY(i) > 119.5) {
       worst = Math.max(worst, Math.abs(pos.getY(i) - 120));
-      seen++;
+      seen += 1;
     }
   }
   expect(seen).toBeGreaterThan(0);
@@ -749,7 +749,7 @@ test("a curved deck's frame holds inside every triangle, not only at its corners
       continue;
     }
     const at = (k: number) => [pos.getX(t + k), pos.getZ(t + k)];
-    for (let k = 0; k < 3; k++) {
+    for (let k = 0; k < 3; k += 1) {
       const [ax, az] = at(k);
       const [bx, bz] = at((k + 1) % 3);
       longest = Math.max(longest, Math.hypot(bx - ax, bz - az));
@@ -853,13 +853,13 @@ test("a mapped catenary mast stands on the side of the track it is mapped on", (
   const pos = (masts as Mesh).geometry.getAttribute("position");
   let near = 0;
   const south: number[] = [];
-  for (let i = 0; i < pos.count; i++) {
+  for (let i = 0; i < pos.count; i += 1) {
     if (Math.abs(pos.getX(i) - 200) < 1 && pos.getY(i) < 102) {
       // north is −z in the scene
       if (pos.getZ(i) >= -2) {
         south.push(pos.getZ(i));
       }
-      near++;
+      near += 1;
     }
   }
   expect(near).toBeGreaterThan(0);

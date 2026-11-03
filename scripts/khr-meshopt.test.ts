@@ -25,15 +25,15 @@ function grid(): {
 } {
   const n = 20;
   const positions = new Float32Array(n * n * 3);
-  for (let j = 0; j < n; j++) {
-    for (let i = 0; i < n; i++) {
+  for (let j = 0; j < n; j += 1) {
+    for (let i = 0; i < n; i += 1) {
       const k = (j * n + i) * 3;
       positions.set([i * 2, j * 2, Math.sin(i / 3) * Math.cos(j / 4) * 5], k);
     }
   }
   const indices: number[] = [];
-  for (let j = 0; j < n - 1; j++) {
-    for (let i = 0; i < n - 1; i++) {
+  for (let j = 0; j < n - 1; j += 1) {
+    for (let i = 0; i < n - 1; i += 1) {
       const a = j * n + i;
       indices.push(a, a + 1, a + n, a + 1, a + n + 1, a + n);
     }
@@ -90,7 +90,7 @@ test("three's GLTFLoader reads the KHR glb back to the grid", async () => {
   // within the 16-bit quantisation of a 38 m mesh
   const have = new Set<string>();
   const p = new Vector3();
-  for (let i = 0; i < (position?.count ?? 0); i++) {
+  for (let i = 0; i < (position?.count ?? 0); i += 1) {
     p.fromBufferAttribute(position as never, i).applyMatrix4(
       mesh?.matrixWorld as never
     );

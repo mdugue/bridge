@@ -116,8 +116,8 @@ function aoSmoothed(
   const tolerance = lens.fade(z0).mul(0.04).add(0.15);
   let sum: F = float(0);
   let weights: F = float(0);
-  for (let y = -2; y <= 2; y++) {
-    for (let x = -2; x <= 2; x++) {
+  for (let y = -2; y <= 2; y += 1) {
+    for (let x = -2; x <= 2; x += 1) {
       const p = at.add(texel.mul(vec2(x, y)));
       const w = clamp(
         float(1).sub(viewZ(p).sub(z0).abs().div(tolerance)),

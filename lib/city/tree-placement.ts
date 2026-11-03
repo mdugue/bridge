@@ -182,7 +182,7 @@ export function rowPlacements(
       f.geometry.coordinates,
       isHedge ? HEDGE_SPACING : TREE_SPACING
     );
-    for (let i = 0; i < pts.length; i++) {
+    for (let i = 0; i < pts.length; i += 1) {
       const [ex, ey] = pts[i];
       if (!isHedge && keepTree && !keepTree(ex, ey)) {
         continue; // an inventory tree stands here

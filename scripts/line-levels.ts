@@ -123,7 +123,7 @@ const MAST_REACH_M = 8;
 /** How far (m) a mast stands from a part of a line. */
 function distanceToPart(x: number, y: number, part: readonly Point2[]): number {
   let d = Infinity;
-  for (let i = 1; i < part.length; i++) {
+  for (let i = 1; i < part.length; i += 1) {
     d = Math.min(d, distanceToSegment(x, y, part[i - 1], part[i]));
   }
   return d;
@@ -408,10 +408,10 @@ export function sitePassages(site: Site, levels: SiteLevels): Passage[] {
         continue;
       }
       let covered = 0;
-      for (let i = a; i <= b; i++) {
+      for (let i = a; i <= b; i += 1) {
         const w = epsgToWorld(pts[i][0], pts[i][1], OFFSET);
         if (decksAt(decks, w.x, w.z, undefined, "all", DECK_REACH_M).length) {
-          covered++;
+          covered += 1;
         }
       }
       if (covered < PASSAGE_UNDER_DECK * (b - a + 1)) {
@@ -554,12 +554,12 @@ export function underDecks(
     for (
       let c = Math.floor(d.minX / DECK_CELL_M);
       c <= Math.floor(d.maxX / DECK_CELL_M);
-      c++
+      c += 1
     ) {
       for (
         let r = Math.floor(d.minZ / DECK_CELL_M);
         r <= Math.floor(d.maxZ / DECK_CELL_M);
-        r++
+        r += 1
       ) {
         const key = `${c}:${r}`;
         const list = cells.get(key);
@@ -669,13 +669,13 @@ export async function measureJumps(
       const by = Math.abs(b - a) - grade * (d[i] - d[i - 1]) - 0.35;
       return by >= minStep ? by : 0;
     };
-    for (let i = 1; i < pts.length; i++) {
+    for (let i = 1; i < pts.length; i += 1) {
       if (jump(old, i) > 0) {
-        report.before++;
+        report.before += 1;
       }
       const by = jump(now, i);
       if (by > 0) {
-        report.after++;
+        report.after += 1;
         report.worst.push({ line, x: pts[i][0], y: pts[i][1], by });
       }
     }

@@ -136,7 +136,7 @@ test("walking 500 m straight redraws the map once every 30 m", () => {
     sun.shadow.needsUpdate = false;
     walkTo(sunRig, x, 0);
     if (sun.shadow.needsUpdate) {
-      redraws++;
+      redraws += 1;
     }
   }
   // the first re-centre and one per 30 m (26 with the old 19.8 m zone)

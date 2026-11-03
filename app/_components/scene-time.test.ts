@@ -44,7 +44,7 @@ test("a drag's steps reach the scene once a frame, the first at once and the las
   let runs = 0;
   const gate = frameGate(
     () => {
-      runs++;
+      runs += 1;
     },
     frames.schedule,
     frames.unschedule
@@ -69,7 +69,7 @@ test("a cancelled gate drops the step still waiting for its frame", () => {
   let runs = 0;
   const gate = frameGate(
     () => {
-      runs++;
+      runs += 1;
     },
     frames.schedule,
     frames.unschedule

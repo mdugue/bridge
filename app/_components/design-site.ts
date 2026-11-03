@@ -260,12 +260,12 @@ export function setDesignSite(
     c >= 0 && r >= 0 && c < mask.cols && r < mask.rows
       ? mask.cells[r * mask.cols + c]
       : 0;
-  for (let r = 0; r < mask.rows; r++) {
-    for (let c = 0; c < mask.cols; c++) {
+  for (let r = 0; r < mask.rows; r += 1) {
+    for (let c = 0; c < mask.cols; c += 1) {
       if (at(c, r) === 1) {
         let core = true;
-        for (let dr = -1; dr <= 1 && core; dr++) {
-          for (let dc = -1; dc <= 1 && core; dc++) {
+        for (let dr = -1; dr <= 1 && core; dr += 1) {
+          for (let dc = -1; dc <= 1 && core; dc += 1) {
             core = at(c + dc, r + dr) === 1;
           }
         }

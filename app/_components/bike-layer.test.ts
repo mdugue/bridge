@@ -77,7 +77,7 @@ function stubFetch(body: unknown): {
   let calls = 0;
   // reason: the stub takes the URL only; the helpers pass a string
   globalThis.fetch = (async () => {
-    calls++;
+    calls += 1;
     return new Response(JSON.stringify(body));
   }) as unknown as typeof fetch;
   return {
@@ -103,7 +103,7 @@ test("an answer the feed cannot parse is no crash: the last counts stay", async 
     feed: {
       url: () => "/bikes",
       parse: () => {
-        parsed++;
+        parsed += 1;
         throw new TypeError("Cannot read properties of null");
       },
     },
@@ -146,7 +146,9 @@ test("the counters are read only while the page is in view", async () => {
     bounds: [0, 0, 1, 1],
     epsg: 25_833,
     feed: { url: () => "/bikes", parse: () => [] },
-    onCounts: () => heard++,
+    onCounts: () => {
+      heard += 1;
+    },
   });
   try {
     feed.start();

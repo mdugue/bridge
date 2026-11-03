@@ -210,7 +210,7 @@ function markObjects(
   const data = texture.image.data as Float32Array;
   const band = OBJECT_TEXTURE_WIDTH * objectBandRows(table.count) * 4;
   let changed = false;
-  for (let i = 0; i < table.count; i++) {
+  for (let i = 0; i < table.count; i += 1) {
     const want = shaderFlags(table, i, marked.has(i));
     const at = 2 * band + i * 4 + 3;
     if (data[at] !== want) {
@@ -390,10 +390,10 @@ export function dressCity(
     alive[i] = 0;
   }
   if (demolishedGroups.size > 0) {
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < count; i += 1) {
       if (alive[i] === 1 && demolishedGroups.has(table.group[i])) {
         alive[i] = 0;
-        dead++;
+        dead += 1;
       }
     }
   }
@@ -532,7 +532,7 @@ export function dressCity(
       const ids = metadata.tableAccessors[0];
       const at: number[] = [];
       if (ids && "buildingId" in ids.properties) {
-        for (let i = 0; i < count; i++) {
+        for (let i = 0; i < count; i += 1) {
           if (String(ids.getPropertyValue("buildingId", i)) === buildingId) {
             at.push(i);
           }
@@ -785,7 +785,7 @@ export function groupObjects(layer: CityLayer, group: number): Set<number> {
   if (group === 0) {
     return out;
   }
-  for (let i = 0; i < layer.table.count; i++) {
+  for (let i = 0; i < layer.table.count; i += 1) {
     if (layer.table.group[i] === group && layer.alive[i] === 1) {
       out.add(i);
     }

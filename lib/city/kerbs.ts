@@ -76,17 +76,17 @@ function profilePoints(line: Point2[], low: readonly KerbDrop[]): Point2[] {
   const pts: Point2[] = [line[0]];
   let s = 0;
   let m = 0;
-  for (let i = 1; i < line.length; i++) {
+  for (let i = 1; i < line.length; i += 1) {
     const [x0, y0] = line[i - 1];
     const [x1, y1] = line[i];
     const len = Math.hypot(x1 - x0, y1 - y0);
     while (m < marks.length && marks[m] <= s) {
-      m++;
+      m += 1;
     }
     while (m < marks.length && marks[m] < s + len) {
       const t = (marks[m] - s) / len;
       pts.push([x0 + (x1 - x0) * t, y0 + (y1 - y0) * t]);
-      m++;
+      m += 1;
     }
     pts.push(line[i]);
     s += len;
@@ -97,7 +97,7 @@ function profilePoints(line: Point2[], low: readonly KerbDrop[]): Point2[] {
 /** Each point's distance along the polyline (m). */
 function alongOf(pts: Point2[]): number[] {
   const out = [0];
-  for (let i = 1; i < pts.length; i++) {
+  for (let i = 1; i < pts.length; i += 1) {
     out.push(
       out[i - 1] +
         Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1])
@@ -277,7 +277,7 @@ export function kerbGeometry(
         low.length > 0 ? kerbHeightAt(along[i], low) : KERB_HEIGHT
       )
     );
-    for (let i = 0; i < cols.length - 1; i++) {
+    for (let i = 0; i < cols.length - 1; i += 1) {
       const a = cols[i];
       const b = cols[i + 1];
       if (a && b) {

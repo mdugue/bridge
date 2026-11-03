@@ -7,7 +7,7 @@ const WATER = 8;
 /** A `size`² class raster of meadow (3) with water in columns [x0, x1). */
 function river(size: number, x0: number, x1: number): Uint8Array {
   const data = new Uint8Array(size * size).fill(3);
-  for (let y = 0; y < size; y++) {
+  for (let y = 0; y < size; y += 1) {
     data.fill(WATER, y * size + x0, y * size + x1);
   }
   return data;
@@ -51,15 +51,15 @@ describe("triangles over water", () => {
   // A 4×4 vertex grid over 3×3 cells, two triangles a cell.
   const cellX: number[] = [];
   const cellY: number[] = [];
-  for (let y = 0; y < 4; y++) {
-    for (let x = 0; x < 4; x++) {
+  for (let y = 0; y < 4; y += 1) {
+    for (let x = 0; x < 4; x += 1) {
       cellX.push(Math.min(x, 2));
       cellY.push(Math.min(y, 2));
     }
   }
   const index: number[] = [];
-  for (let y = 0; y < 3; y++) {
-    for (let x = 0; x < 3; x++) {
+  for (let y = 0; y < 3; y += 1) {
+    for (let x = 0; x < 3; x += 1) {
       const a = y * 4 + x;
       index.push(a, a + 1, a + 4, a + 1, a + 5, a + 4);
     }

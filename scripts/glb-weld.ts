@@ -79,10 +79,10 @@ export function weldRemap(
   // never carry into the bucket
   const hash = (v: number) => {
     let h = 0;
-    for (let a = 0; a < n; a++) {
+    for (let a = 0; a < n; a += 1) {
       const words = lists[a];
       const stride = strides[a];
-      for (let k = v * stride, end = k + stride; k < end; k++) {
+      for (let k = v * stride, end = k + stride; k < end; k += 1) {
         let w = Math.imul(words[k], 0xcc_9e_2d_51);
         w = Math.imul((w << 15) | (w >>> 17), 0x1b_87_35_93);
         h ^= w;
@@ -94,10 +94,10 @@ export function weldRemap(
     return (h ^ (h >>> 16)) >>> 0;
   };
   const equal = (x: number, y: number) => {
-    for (let a = 0; a < n; a++) {
+    for (let a = 0; a < n; a += 1) {
       const words = lists[a];
       const stride = strides[a];
-      for (let k = 0; k < stride; k++) {
+      for (let k = 0; k < stride; k += 1) {
         if (words[x * stride + k] !== words[y * stride + k]) {
           return false;
         }
@@ -107,7 +107,7 @@ export function weldRemap(
   };
   const total = indices ? indices.length : vertexCount;
   let count = 0;
-  for (let i = 0; i < total; i++) {
+  for (let i = 0; i < total; i += 1) {
     const v = indices ? indices[i] : i;
     if (remap[v] !== EMPTY) {
       continue;
@@ -115,7 +115,7 @@ export function weldRemap(
     // triangular probes visit every bucket of a power-of-two table, and it
     // holds at most vertexCount < size items: an empty one is always found
     let bucket = hash(v) & mask;
-    for (let probe = 0; ; probe++) {
+    for (let probe = 0; ; probe += 1) {
       const item = table[bucket];
       if (item === EMPTY) {
         table[bucket] = v;

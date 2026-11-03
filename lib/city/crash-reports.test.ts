@@ -358,7 +358,7 @@ test("a page reports each problem once, and only so many", () => {
   expect(admit({ t: 2, kind: "gpu-error", detail: "validation 2" })).toBe(
     false
   );
-  for (let i = 1; i < PROBLEMS_PER_PAGE; i++) {
+  for (let i = 1; i < PROBLEMS_PER_PAGE; i += 1) {
     expect(
       admit({ t: 3, kind: "error", detail: `boom ${"x".repeat(i)}` })
     ).toBe(true);
@@ -377,7 +377,7 @@ test("a GPU running out costs one warning, and its end still goes out", () => {
       admit({ t: 1, kind: "alloc-failed", detail: `${where} RangeError` })
     ).toBe(where === "content");
   }
-  for (let i = 0; i < PROBLEMS_PER_PAGE; i++) {
+  for (let i = 0; i < PROBLEMS_PER_PAGE; i += 1) {
     admit({
       t: 2,
       kind: "gpu-error",

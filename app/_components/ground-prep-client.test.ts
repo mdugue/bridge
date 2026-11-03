@@ -12,7 +12,7 @@ import {
 function grid(lift = 0): GroundPrepInput {
   const backing = new Float32Array(9 * 3 + 7);
   const positions = backing.subarray(0, 27);
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < 9; i += 1) {
     positions.set([(i % 3) - 1, i * 0.1 + lift, Math.floor(i / 3) - 1], 3 * i);
   }
   const cells = 4;

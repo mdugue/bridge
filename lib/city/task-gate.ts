@@ -41,14 +41,14 @@ function placeIn(line: Waiter[], rank: number, maxOvertakes: number): number {
   if (at < 0) {
     return line.length;
   }
-  for (let i = line.length - 1; i >= at; i--) {
+  for (let i = line.length - 1; i >= at; i -= 1) {
     if (line[i].overtaken >= maxOvertakes) {
       at = i + 1;
       break;
     }
   }
-  for (let i = at; i < line.length; i++) {
-    line[i].overtaken++;
+  for (let i = at; i < line.length; i += 1) {
+    line[i].overtaken += 1;
   }
   return at;
 }
@@ -90,14 +90,14 @@ export function createTaskGate(
         overtaken: 0,
         start: () => {
           signal?.removeEventListener("abort", leave);
-          running++;
+          running += 1;
           // a task that throws synchronously is a failed task, not a stuck
           // place
           Promise.resolve()
             .then(task)
             .then(resolve, reject)
             .finally(() => {
-              running--;
+              running -= 1;
               next();
             });
         },

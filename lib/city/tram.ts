@@ -51,14 +51,14 @@ export function wireStations(length: number, supports: number[]): number[] {
     .sort((a, b) => a - b);
   const fixed = [0, ...inner, length];
   const out: number[] = [0];
-  for (let i = 1; i < fixed.length; i++) {
+  for (let i = 1; i < fixed.length; i += 1) {
     const a = fixed[i - 1];
     const b = fixed[i];
     if (b - a <= 0) {
       continue;
     }
     const n = Math.ceil((b - a) / NOMINAL_SPAN_M - 1e-9);
-    for (let k = 1; k <= n; k++) {
+    for (let k = 1; k <= n; k += 1) {
       out.push(a + ((b - a) * k) / n);
     }
   }
@@ -69,7 +69,7 @@ export function wireStations(length: number, supports: number[]): number[] {
  *  along the track: a parabola between two stations, scaled down for spans
  *  shorter than the nominal one. */
 export function wireDrop(stations: number[], d: number): number {
-  for (let i = 1; i < stations.length; i++) {
+  for (let i = 1; i < stations.length; i += 1) {
     const a = stations[i - 1];
     const b = stations[i];
     if (d <= b) {

@@ -23,7 +23,7 @@ function stubFetch(answer: (url: string) => Response): Map<string, number> {
 
 /** Waits (a few event-loop turns at a time) until `ok()` holds. */
 async function until(ok: () => boolean): Promise<void> {
-  for (let i = 0; i < 200 && !ok(); i++) {
+  for (let i = 0; i < 200 && !ok(); i += 1) {
     await new Promise((r) => setTimeout(r, 1));
   }
   expect(ok()).toBe(true);
@@ -80,7 +80,7 @@ test("trams whose compile failed leave the scene, and the next switch-on adds on
     ...base,
     parent,
     compile: async () => {
-      compiles++;
+      compiles += 1;
       return compiles === 1
         ? Promise.reject(new Error("pipeline"))
         : Promise.resolve();
@@ -131,7 +131,7 @@ test("a counter layer whose compile failed compiles again with the next counts",
     ...base,
     bikeFeed: "dresden",
     compile: async () => {
-      compiles++;
+      compiles += 1;
       return compiles === 1
         ? Promise.reject(new Error("pipeline"))
         : Promise.resolve();

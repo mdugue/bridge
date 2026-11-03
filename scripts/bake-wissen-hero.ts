@@ -38,7 +38,7 @@ async function paint(classRaster: string) {
   // Byte by byte, not `rgb.set(landcoverSrgb(id), …)` per pixel: same
   // bytes, and Dresden's map bakes in 1.1 s instead of 6.4 s.
   const rgb = new Uint8Array(info.width * info.height * 3);
-  for (let i = 0, o = 0; i < data.length; i++, o += 3) {
+  for (let i = 0, o = 0; i < data.length; i += 1, o += 3) {
     const c = data[i] * 3;
     rgb[o] = PALETTE[c];
     rgb[o + 1] = PALETTE[c + 1];

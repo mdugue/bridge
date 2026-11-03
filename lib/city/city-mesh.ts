@@ -461,7 +461,7 @@ export function packObjectTexels(table: CityObjectTable): Float32Array {
   const rows = objectBandRows(table.count);
   const band = OBJECT_TEXTURE_WIDTH * rows * 4;
   const out = new Float32Array(band * OBJECT_TEXEL_BANDS);
-  for (let i = 0; i < table.count; i++) {
+  for (let i = 0; i < table.count; i += 1) {
     const at = i * 4;
     out.set([...table.tint.subarray(i * 3, i * 3 + 3), table.baseZ[i]], at);
     out.set(
@@ -494,7 +494,7 @@ export function doomedObjects(
     return doomed;
   }
   const tree = root[objectIndex];
-  for (let i = 0; i < root.length; i++) {
+  for (let i = 0; i < root.length; i += 1) {
     if (root[i] === tree) {
       doomed.add(i);
     }
@@ -516,9 +516,12 @@ export function liveTriangles(
   let n = 0;
   for (let t = 0; t < index.length; t += 3) {
     if (alive(featureIds[index[t]])) {
-      out[n++] = index[t];
-      out[n++] = index[t + 1];
-      out[n++] = index[t + 2];
+      out[n] = index[t];
+      n += 1;
+      out[n] = index[t + 1];
+      n += 1;
+      out[n] = index[t + 2];
+      n += 1;
     }
   }
   return out.slice(0, n);
@@ -530,9 +533,9 @@ export function countBuildings(
   alive: (objectIndex: number) => boolean
 ): number {
   let count = 0;
-  for (let i = 0; i < building.length; i++) {
+  for (let i = 0; i < building.length; i += 1) {
     if (building[i] === 1 && alive(i)) {
-      count++;
+      count += 1;
     }
   }
   return count;

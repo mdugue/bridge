@@ -385,7 +385,7 @@ function sceneBuffers(
     if (!geometry) {
       return;
     }
-    drawables++;
+    drawables += 1;
     // by count, not by the array: a tile drops the CPU copies it uploaded
     if (geometry.index) {
       indices.set(geometry.index, bufferBytes(geometry.index));
@@ -909,9 +909,9 @@ function framedBuildCounter(renderer: WebGPURenderer) {
       material?: { isShadowPassMaterial?: boolean };
     };
     if (material?.isShadowPassMaterial === true) {
-      counts.shadow++;
+      counts.shadow += 1;
     } else {
-      counts.other++;
+      counts.other += 1;
     }
   };
   return {
@@ -2772,7 +2772,7 @@ async function bootApp(
     capGround: (cap) => {
       siteGround.setCap(cap);
       // what reads the ground by its version (the Ausschnitt's plinth)
-      groundVersion++;
+      groundVersion += 1;
       const cut = cuts.cutOut();
       if (cut) {
         cuts.setCutOut(cut, siteGround.atWorld, groundVersion);
@@ -2831,7 +2831,7 @@ async function bootApp(
     groundPlate?.showUnder(new Set(terrains.map((t) => t.tile)));
     // a tile whose other building level landed or took over keeps the mark
     probe.refresh();
-    groundVersion++;
+    groundVersion += 1;
     const cut = cuts.cutOut();
     if (cut) {
       cuts.setCutOut(cut, siteGround.atWorld, groundVersion);
@@ -3589,7 +3589,7 @@ async function bootApp(
       c.next = c.tiles.length;
       c.request.reject(error);
     }
-    c.next++;
+    c.next += 1;
     if (c.tiles.length > 1) {
       c.view.clearViewOffset();
     }
@@ -3854,7 +3854,7 @@ async function bootApp(
     framedBuilds.draw(postStack.render);
     const renderEnd = streamTimings.now();
     takeCaptureTile();
-    frames++;
+    frames += 1;
     timeFrame(time, frameStart, renderStart, renderEnd);
     noteStill(time, view, exporting);
     tickPocFrame(shadowRendered);

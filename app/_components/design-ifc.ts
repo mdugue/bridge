@@ -86,7 +86,7 @@ function numbers(v: unknown): number[] {
 function linesOf(api: IfcAPI, model: number, type: number): number[] {
   const ids = api.GetLineIDsWithType(model, type, true);
   const out: number[] = [];
-  for (let i = 0; i < ids.size(); i++) {
+  for (let i = 0; i < ids.size(); i += 1) {
     out.push(ids.get(i));
   }
   return out;
@@ -218,7 +218,7 @@ function geometryOf(
   const count = vertices.length / 6;
   const position = new Float32Array(count * 3);
   const normal = new Float32Array(count * 3);
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < count; i += 1) {
     position[i * 3] = vertices[i * 6];
     position[i * 3 + 1] = vertices[i * 6 + 1];
     position[i * 3 + 2] = vertices[i * 6 + 2];
@@ -280,7 +280,7 @@ export async function readIfc(
         id: text(line.GlobalId),
         material: null,
       };
-      for (let i = 0; i < flat.geometries.size(); i++) {
+      for (let i = 0; i < flat.geometries.size(); i += 1) {
         const placed = flat.geometries.get(i);
         let geometry = geometries.get(placed.geometryExpressID);
         if (!geometry) {

@@ -140,7 +140,7 @@ export function readLockfile(text: string): LockedPackages {
 function namesOf(key: string): string[] {
   const parts = key.split("/");
   const names: string[] = [];
-  for (let i = 0; i < parts.length; i++) {
+  for (let i = 0; i < parts.length; i += 1) {
     names.push(
       parts[i].startsWith("@") ? `${parts[i]}/${parts[++i]}` : parts[i]
     );
@@ -156,7 +156,7 @@ function dependencyKey(
   name: string
 ): string | undefined {
   const path = namesOf(key);
-  for (let i = path.length; i >= 0; i--) {
+  for (let i = path.length; i >= 0; i -= 1) {
     const candidate = [...path.slice(0, i), name].join("/");
     if (lock[candidate]) {
       return candidate;

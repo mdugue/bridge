@@ -75,7 +75,7 @@ export function trafficLoad(dtv: number): number {
     return 0;
   }
   const span = stops.length - 1;
-  for (let i = 0; i < span; i++) {
+  for (let i = 0; i < span; i += 1) {
     const hi = stops[i + 1].dtv;
     if (dtv < hi) {
       const lo = stops[i].dtv;
@@ -118,7 +118,7 @@ export function flowTaper(length: number): number {
  */
 export function flowProfile(segments: number): [number, number][] {
   const out: [number, number][] = [];
-  for (let i = 0; i <= segments; i++) {
+  for (let i = 0; i <= segments; i += 1) {
     const t = (Math.PI * i) / segments;
     out.push([Math.cos(t), Math.sin(t) ** 0.45]);
   }
@@ -227,8 +227,8 @@ export function openEnds(
     }
     const cx = cell(p[0]);
     const cy = cell(p[1]);
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx += 1) {
+      for (let dy = -1; dy <= 1; dy += 1) {
         for (const e of grid.get(`${cx + dx},${cy + dy}`) ?? []) {
           if (e.f !== i && Math.hypot(e.p[0] - p[0], e.p[1] - p[1]) <= JOIN_M) {
             return true;

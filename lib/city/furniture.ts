@@ -129,7 +129,7 @@ function hoops(x: number, y: number, deg: number, n: number): FurniturePiece[] {
   const ay = -Math.sin(rad);
   const yaw = yawOfBearing(deg);
   const pieces: FurniturePiece[] = [];
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < n; i += 1) {
     const t = (i - (n - 1) / 2) * HOOP_SPACING;
     pieces.push({
       model: "hoop",

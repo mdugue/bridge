@@ -130,7 +130,7 @@ export function hedgePieces(
 ): HedgePiece[] {
   const pts = subdividePolyline(coords, HEDGE_PIECE_M);
   const segs: { a: Point2; angle: number; b: Point2; len: number }[] = [];
-  for (let i = 0; i < pts.length - 1; i++) {
+  for (let i = 0; i < pts.length - 1; i += 1) {
     const a = pts[i];
     const b = pts[i + 1];
     const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -194,7 +194,7 @@ function hedgeProfile(): [number, number][] {
   const flank = (y: number): number => 0.5 * (1 - HEDGE_TAPER * y);
   left.push([-flank(0), 0], [-flank(0.3), 0.3]);
   const steps = 4;
-  for (let k = 0; k < steps; k++) {
+  for (let k = 0; k < steps; k += 1) {
     const phi = (k / steps) * (Math.PI / 2);
     const c = Math.cos(phi) ** (2 / HEDGE_SHOULDER_P);
     const s = Math.sin(phi) ** (2 / HEDGE_SHOULDER_P);
@@ -230,13 +230,13 @@ export function buildHedgeGeo(): BufferGeometry {
   const pos: number[] = [];
   const nrm: number[] = [];
   const index: number[] = [];
-  for (let r = 0; r <= HEDGE_RINGS; r++) {
+  for (let r = 0; r <= HEDGE_RINGS; r += 1) {
     for (const [z, y] of profile) {
       pos.push(-0.5 + r / HEDGE_RINGS, y, z);
     }
   }
-  for (let i = 0; i < HEDGE_RINGS; i++) {
-    for (let k = 0; k < n - 1; k++) {
+  for (let i = 0; i < HEDGE_RINGS; i += 1) {
+    for (let k = 0; k < n - 1; k += 1) {
       const a = i * n + k;
       const b = a + n;
       index.push(a, a + 1, b, b, a + 1, b + 1);
@@ -256,7 +256,7 @@ export function buildHedgeGeo(): BufferGeometry {
       pos.push(side * 0.5, y, z);
       nrm.push(side, 0, 0);
     }
-    for (let k = 0; k < n - 1; k++) {
+    for (let k = 0; k < n - 1; k += 1) {
       const a = centre + 1 + k;
       if (side < 0) {
         index.push(centre, a, a + 1);

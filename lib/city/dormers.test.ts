@@ -160,7 +160,7 @@ describe("chimneyMesh", () => {
   test("every face looks outwards", () => {
     const m = chimneyMesh(chimney, offset);
     const n = unitNormals(m.positions);
-    for (let t = 0; t < n.length; t++) {
+    for (let t = 0; t < n.length; t += 1) {
       const tri = m.positions.slice(t * 9, t * 9 + 9);
       const cx = (tri[0] + tri[3] + tri[6]) / 3 - 100;
       const cy = (tri[1] + tri[4] + tri[7]) / 3 - 200;

@@ -73,7 +73,7 @@ function extentOf(obj: CityObject, city: CityFile): number[] | undefined {
     if (!v) {
       continue;
     }
-    for (let k = 0; k < 3; k++) {
+    for (let k = 0; k < 3; k += 1) {
       const c = v[k] * scale[k] + shift[k];
       ext[k] = Math.min(ext[k], c);
       ext[k + 3] = Math.max(ext[k + 3], c);

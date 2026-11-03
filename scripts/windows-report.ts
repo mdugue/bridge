@@ -127,13 +127,13 @@ for (const tile of tiles) {
     }
     const style = o.windows ? unpackStyle(o.windows.style) : undefined;
     if (!style) {
-      counts.none++;
+      counts.none += 1;
     } else if (style.measured) {
-      counts.measured++;
+      counts.measured += 1;
     } else if (style.near) {
-      counts.near++;
+      counts.near += 1;
     } else {
-      counts.type++;
+      counts.type += 1;
     }
   }
   const area = wallAreas(baked);

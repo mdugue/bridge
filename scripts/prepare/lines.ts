@@ -200,7 +200,7 @@ export function publishPlatforms(file: string): string {
     if (clear === g) {
       return [f];
     }
-    cut++;
+    cut += 1;
     return clear ? [{ ...f, geometry: clear }] : [];
   });
   if (cut > 0) {

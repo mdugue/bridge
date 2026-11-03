@@ -245,7 +245,7 @@ function contentText(content: unknown): string {
 
 /** The last question the visitor asked: the last user message's text. */
 export function lastQuestion(messages: readonly unknown[]): string {
-  for (let i = messages.length - 1; i >= 0; i--) {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
     const m = messages[i] as {
       content?: unknown;
       parts?: unknown;

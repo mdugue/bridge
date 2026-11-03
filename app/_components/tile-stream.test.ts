@@ -81,7 +81,7 @@ test("the stream's dispose releases every dressed tile, quietly", () => {
       dressingGate: new Promise<void>(() => {}),
       bootTile: () => null,
       onChange: () => {
-        changes++;
+        changes += 1;
       },
     } as unknown as TileStreamContext,
     stream
@@ -458,7 +458,7 @@ const nextTask = async () => new Promise((resolve) => setTimeout(resolve, 5));
 
 /** Waits until `ready` holds, a timer at a time (at most ~2 s). */
 async function until(ready: () => boolean): Promise<void> {
-  for (let i = 0; i < 400 && !ready(); i++) {
+  for (let i = 0; i < 400 && !ready(); i += 1) {
     await nextTask();
   }
 }
@@ -576,8 +576,8 @@ test("a question while the ask sets build in slices finishes them, once", async 
   const asks: AskSet<FeatureInquiry>[] = [];
   let steps = 0;
   function* build() {
-    for (let i = 0; i < 3; i++) {
-      steps++;
+    for (let i = 0; i < 3; i += 1) {
+      steps += 1;
       yield;
     }
     asks.push(set);
@@ -644,7 +644,7 @@ test("a dressing whose tile leaves before its idle time never builds its ask set
       tile: "t",
       asks: [],
       buildAsks: (function* () {
-        built++;
+        built += 1;
         yield;
       })(),
       furniture: new Group(),
@@ -754,7 +754,7 @@ function trafficTile(
     },
     gone: opts.gone ?? (() => false),
     built: () => {
-      built++;
+      built += 1;
     },
     failed: (err) => {
       throw err;

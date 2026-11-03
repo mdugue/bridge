@@ -55,7 +55,7 @@ function tile(
     hasBvh: () => Boolean(geometry.boundsTree),
     ensureBvh: () => {
       if (!geometry.boundsTree) {
-        layer.builds++;
+        layer.builds += 1;
       }
       ensureCityBvh(mesh);
     },
@@ -153,7 +153,7 @@ test("a pick waits for a tile whose BVH the worker builds: no answer from the bu
   await buildBvhOffThread(new BoxGeometry(1, 1, 1));
   const done = buildBvhOffThread(geometry);
   // (its turn within a few microtasks of a worker that runs)
-  for (let i = 0; i < 20 && !bvhBuilding(geometry); i++) {
+  for (let i = 0; i < 20 && !bvhBuilding(geometry); i += 1) {
     await Promise.resolve();
   }
   expect(bvhBuilding(geometry)).toBe(true);

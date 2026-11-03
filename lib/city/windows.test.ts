@@ -602,7 +602,7 @@ describe("facadeAttribute", () => {
       // no colour of its own: the object's
       expect([f[4 * 24], f[4 * 24 + 1], f[4 * 24 + 3]]).toEqual([0, 0, 0]);
       // no wall vertex reads as one
-      for (let v = 0; v < 24; v++) {
+      for (let v = 0; v < 24; v += 1) {
         expect(f[4 * v + 2]).toBe(Math.round(32_767 * NO_DOOR));
       }
     }
@@ -794,7 +794,7 @@ describe("the door slots", () => {
   });
 
   test("the width classes rise without a gap and end at 6 m", () => {
-    for (let c = 1; c < DOOR_SLOT.widths; c++) {
+    for (let c = 1; c < DOOR_SLOT.widths; c += 1) {
       expect(doorClassWidth(c)).toBeGreaterThan(doorClassWidth(c - 1));
       expect(doorSlot(0, doorClassWidth(c))).toBe(c);
     }

@@ -20,8 +20,8 @@ const OFFSET = { cx: 411_030, cy: 5_655_020 };
 
 function dgm(hole = false) {
   const elevations = new Float32Array(N * N);
-  for (let row = 0; row < N; row++) {
-    for (let col = 0; col < N; col++) {
+  for (let row = 0; row < N; row += 1) {
+    for (let col = 0; col < N; col += 1) {
       elevations[row * N + col] =
         100 + row * 0.03 + (col < 30 ? 0 : col > 31 ? 6 : (col - 30) * 3);
     }
@@ -35,7 +35,7 @@ function dgm(hole = false) {
 /** Ground heights over the tile, off the pixel centres. */
 function heights(heightAt: (x: number, y: number) => number | null) {
   const out: (number | null)[] = [];
-  for (let i = 0; i <= 40; i++) {
+  for (let i = 0; i <= 40; i += 1) {
     out.push(heightAt(BOUNDS[0] + i * 1.63, BOUNDS[1] + i * 1.41 + 0.2));
   }
   return out;

@@ -168,7 +168,7 @@ function tinted(source: BufferGeometry, hex: number): BufferGeometry {
   const c = new Color(hex);
   const n = geo.getAttribute("position").count;
   const rgb = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < n; i += 1) {
     rgb.set([c.r, c.g, c.b], i * 3);
   }
   geo.setAttribute("color", new Float32BufferAttribute(rgb, 3));
@@ -773,7 +773,7 @@ function clockHands(model: "clock" | "wallClock", stood: Stood[]): Instances {
   const q = new Quaternion();
   const one = new Vector3(1, 1, 1);
   const up = new Vector3(0, 1, 0);
-  for (let i = 0; i < stood.length; i++) {
+  for (let i = 0; i < stood.length; i += 1) {
     q.setFromAxisAngle(up, stood[i].piece.yaw);
     mesh.setMatrixAt(i, m.compose(stood[i].at, q, one));
   }
@@ -812,7 +812,7 @@ function instanced(
   const q = new Quaternion();
   const s = new Vector3();
   const up = new Vector3(0, 1, 0);
-  for (let i = 0; i < stood.length; i++) {
+  for (let i = 0; i < stood.length; i += 1) {
     const { at, piece } = stood[i];
     q.setFromAxisAngle(up, piece.yaw);
     s.set(piece.scaleX, piece.scaleY, 1);
@@ -875,7 +875,7 @@ function addSlab(
   const centre = top
     .reduce((sum, p) => sum.add(p), new Vector3())
     .divideScalar(top.length);
-  for (let i = 0; i < top.length; i++) {
+  for (let i = 0; i < top.length; i += 1) {
     const p = top[i];
     const q = top[(i + 1) % top.length];
     const n = new Vector3(q.z - p.z, 0, p.x - q.x).normalize();

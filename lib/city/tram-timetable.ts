@@ -212,14 +212,14 @@ export interface MeasuredPattern extends TramPattern {
 
 export function measurePattern(p: TramPattern): MeasuredPattern {
   const dist = [0];
-  for (let i = 1; i < p.coords.length; i++) {
+  for (let i = 1; i < p.coords.length; i += 1) {
     const [ax, ay] = p.coords[i - 1];
     const [bx, by] = p.coords[i];
     dist.push(dist[i - 1] + Math.hypot(bx - ax, by - ay));
   }
   const onBridge = p.coords.map(() => false);
   for (const [from, to] of p.bridge) {
-    for (let i = from; i < to && i < onBridge.length; i++) {
+    for (let i = from; i < to && i < onBridge.length; i += 1) {
       onBridge[i] = true;
     }
   }
@@ -283,7 +283,7 @@ export function headAlong(
   if (elapsed < t[0] || elapsed > t[2 * stops - 1]) {
     return null;
   }
-  for (let i = 0; i < stops; i++) {
+  for (let i = 0; i < stops; i += 1) {
     const arr = t[2 * i];
     const dep = t[2 * i + 1];
     if (elapsed <= dep) {

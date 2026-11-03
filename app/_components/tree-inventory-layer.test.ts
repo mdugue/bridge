@@ -15,7 +15,7 @@ function census(root: Object3D): { instances: number; meshes: number } {
   const out = { instances: 0, meshes: 0 };
   root.traverse((o) => {
     if (isInstances(o)) {
-      out.meshes++;
+      out.meshes += 1;
       out.instances += o.drawCount;
     }
   });

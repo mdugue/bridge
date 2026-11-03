@@ -147,7 +147,7 @@ test("a second ask for a build in flight resolves once its compile has", async (
   let finish = () => {};
   let calls = 0;
   const anchors = createPipelineAnchors(async () => {
-    calls++;
+    calls += 1;
     return new Promise<void>((resolve) => {
       finish = resolve;
     });
@@ -221,7 +221,9 @@ test("a stand-in freed while its set compiles is released again once the compile
   const done = anchors.anchorAll([new Mesh(new BoxGeometry(), material)]);
   const [standIn] = standIns;
   let released = 0;
-  standIn.addEventListener("dispose" as never, () => released++);
+  standIn.addEventListener("dispose" as never, () => {
+    released += 1;
+  });
   material.dispose();
   expect(released).toBe(1);
   // what the compile built of it after that goes too

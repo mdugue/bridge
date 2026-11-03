@@ -12,10 +12,10 @@ function counted() {
     starts: () => starts,
     stops: () => stops,
     start: () => {
-      starts++;
+      starts += 1;
       return {
         dispose: () => {
-          stops++;
+          stops += 1;
         },
       };
     },
@@ -26,7 +26,7 @@ test("a feature wanted many times loads and starts once", async () => {
   let imports = 0;
   const feature = counted();
   const lazy = lazyFeature(async () => {
-    imports++;
+    imports += 1;
     return {};
   }, feature.start);
   expect(lazy.current()).toBeNull();
@@ -42,7 +42,7 @@ test("a module that did not load is asked for again on the next want", async () 
   let imports = 0;
   const feature = counted();
   const lazy = lazyFeature(async () => {
-    imports++;
+    imports += 1;
     return imports === 1
       ? Promise.reject(new Error("load"))
       : Promise.resolve({});
@@ -87,7 +87,7 @@ test("the spine asks again on the next switch-on after a load that failed, not o
   let imports = 0;
   const feature = counted();
   const lazy = lazyFeature(async () => {
-    imports++;
+    imports += 1;
     return imports === 1
       ? Promise.reject(new Error("load"))
       : Promise.resolve({});

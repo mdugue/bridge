@@ -84,13 +84,13 @@ test("pierStations keep the fairway clear", () => {
   expect(opened).toContain(90);
   expect(opened).toContain(170);
   // piers stay apart
-  for (let i = 1; i < opened.length; i++) {
+  for (let i = 1; i < opened.length; i += 1) {
     expect(opened[i] - opened[i - 1]).toBeGreaterThan(PIER_SPACING / 2);
   }
   expect(pierStations(20)).toEqual([]);
   // no span over PIER_SPACING; a short deck spans its gap alone
   const piers = [0, ...pierStations(200), 200];
-  for (let i = 1; i < piers.length; i++) {
+  for (let i = 1; i < piers.length; i += 1) {
     expect(piers[i] - piers[i - 1]).toBeLessThanOrEqual(PIER_SPACING);
   }
   expect(pierStations(38)).toEqual([]);
@@ -122,7 +122,7 @@ test("a long rail deck over land stands on paired columns, over water on piers",
   const viaduct = beamSupports(688, { kind: "rail" });
   expect(viaduct.every((p) => p.edge)).toBe(true);
   const at = [0, ...viaduct.map((p) => p.s), 688];
-  for (let i = 1; i < at.length; i++) {
+  for (let i = 1; i < at.length; i += 1) {
     expect(at[i] - at[i - 1]).toBeLessThanOrEqual(VIADUCT_BAY_M);
     expect(at[i] - at[i - 1]).toBeGreaterThan(12);
   }
@@ -133,7 +133,7 @@ test("a long rail deck over land stands on paired columns, over water on piers",
   expect(wet.length).toBeGreaterThan(0);
   expect(wet.every((p) => !p.edge)).toBe(true);
   const all = [0, ...crossing.map((p) => p.s), 300];
-  for (let i = 1; i < all.length; i++) {
+  for (let i = 1; i < all.length; i += 1) {
     expect(all[i] - all[i - 1]).toBeLessThanOrEqual(PIER_SPACING);
   }
   // a fairway it crosses stays open between two piers on the axis
@@ -270,7 +270,7 @@ test("ribProfile: straight chords to the towers, a sag between, nothing hanging"
   const sagLow = Math.min(...out.slice(towers[0], towers[1]));
   expect(sagLow).toBeCloseTo(2.6, 1);
   // no waves: the side arm rises steadily to its tower
-  for (let i = 11; i <= towers[0]; i++) {
+  for (let i = 11; i <= towers[0]; i += 1) {
     expect(out[i]).toBeGreaterThan(out[i - 1]);
   }
   // no towers: a level girder

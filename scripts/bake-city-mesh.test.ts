@@ -842,7 +842,7 @@ test("windows: a wall the ground rises past loses its ground floor alone", () =>
   expect(s.noGround).toBe(false);
   expect(s.lift).toBe(0);
   const signs = new Set<number>();
-  for (let v = 0; v < vertices.objectIds.length; v++) {
+  for (let v = 0; v < vertices.objectIds.length; v += 1) {
     const length = vertices.facade?.[4 * v + 1] ?? 0;
     if (vertices.objectIds[v] === house && length !== 0) {
       signs.add(Math.sign(length));
@@ -851,7 +851,7 @@ test("windows: a wall the ground rises past loses its ground floor alone", () =>
   // the south wall signed as a shopfront's, the others not, with the
   // ground's height (3 m) its windows keep over
   expect([...signs].sort((a, b) => a - b)).toEqual([-1, 1]);
-  for (let v = 0; v < vertices.objectIds.length; v++) {
+  for (let v = 0; v < vertices.objectIds.length; v += 1) {
     const f = vertices.facade;
     if (f && vertices.objectIds[v] === house && f[4 * v + 1] < 0) {
       expect((f[4 * v + 2] / 32_767) * FACADE_SCALE_M).toBeCloseTo(3, 1);
@@ -883,7 +883,7 @@ test("windows: the ground floor's clear the fine ground, wall by wall", () => {
     1 + WINDOW_ROWS.plinthGap - 1e-9
   );
   const signs = new Set<number>();
-  for (let v = 0; v < vertices.objectIds.length; v++) {
+  for (let v = 0; v < vertices.objectIds.length; v += 1) {
     const length = vertices.facade?.[4 * v + 1] ?? 0;
     if (vertices.objectIds[v] === house && length !== 0) {
       signs.add(Math.sign(length));
@@ -1107,10 +1107,10 @@ test("a roof face the orthophoto read apart carries its own colour", () => {
   const v = baked.vertices;
   const facade = cityMesh(baked).input.vectors?._FACADE?.array;
   let roofs = 0;
-  for (let i = 0; i < v.objectIds.length; i++) {
+  for (let i = 0; i < v.objectIds.length; i += 1) {
     const own = v.roofRgb?.slice(3 * i, 3 * i + 3);
     if (v.objectIds[i] === 2 && v.isRoof[i] === 1) {
-      roofs++;
+      roofs += 1;
       expect([...(own ?? [])]).toEqual([0.5, 0.25, 0.125]);
       expect((facade?.[4 * i] ?? 0) / 32_767).toBeCloseTo(0.5, 4);
       expect((facade?.[4 * i + 3] ?? 0) / 32_767).toBeCloseTo(0.125, 4);
@@ -1235,12 +1235,12 @@ test("a rebuilt roof's parts carry their own colour, its walls none", () => {
   const rgb = out.roofRgb ?? new Float32Array();
   expect(rgb).toHaveLength(out.positions.length);
   let red = 0;
-  for (let i = 0; i < out.isRoof.length; i++) {
+  for (let i = 0; i < out.isRoof.length; i += 1) {
     const c = Array.from(rgb.subarray(3 * i, 3 * i + 3));
     const z = out.positions[3 * i + 2];
     if (out.isRoof[i] === 1 && z === 106) {
       expect(c).toEqual([0.5, 0.25, 0.125]);
-      red++;
+      red += 1;
     } else {
       // the first part's roof (its colour read at another level) and every
       // wall: the object's colour
@@ -1620,13 +1620,13 @@ test("a passage OSM maps through a house is cut open and lined", () => {
     const y = (p[3 * t + 1] + p[3 * t + 4] + p[3 * t + 7]) / 3 + cy - 5_656_000;
     const z = (p[3 * t + 2] + p[3 * t + 5] + p[3 * t + 8]) / 3;
     if (o === lining) {
-      lined++;
+      lined += 1;
       continue;
     }
     if (o !== house || v.isRoof[t] === 1) {
       continue;
     }
-    walls++;
+    walls += 1;
     // nothing of the house left in the opening (3 m up, as a footway)
     expect(Math.abs(x - 45) < 1.25 && z < 103 && (y < 0.01 || y > 9.99)).toBe(
       false
@@ -1648,7 +1648,7 @@ test("a passage OSM maps through a house is cut open and lined", () => {
       v.isRoof[t] === 0 &&
       ys.every((y) => Math.abs(y) < 0.01)
     ) {
-      for (let k = 0; k < 3; k++) {
+      for (let k = 0; k < 3; k += 1) {
         lengths.add(facade?.[4 * (t + k) + 1] ?? 0);
       }
     }
@@ -1726,10 +1726,10 @@ test("two passages crossing in a house keep their linings out of each other", ()
     if (baked.objects[v.objectIds[t]].source !== OBJECT_SOURCE_PASSAGE) {
       continue;
     }
-    lined++;
+    lined += 1;
     // no point of a lining stands in either opening, under its ceiling
-    for (let i = 0; i <= 10; i++) {
-      for (let j = 0; i + j <= 10; j++) {
+    for (let i = 0; i <= 10; i += 1) {
+      for (let j = 0; i + j <= 10; j += 1) {
         const [a, b] = [i / 10, j / 10];
         const at = (c: number) =>
           p[3 * t + c] * (1 - a - b) +

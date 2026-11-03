@@ -242,7 +242,7 @@ function balanced(text: string): string[] {
     Math.ceil(text.length / TITLE_WRAP.line),
     Math.min(2, words.length)
   );
-  for (let width = longest; width <= text.length; width++) {
+  for (let width = longest; width <= text.length; width += 1) {
     const lines = greedy(words, width);
     if (lines.length <= count) {
       return lines;

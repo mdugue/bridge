@@ -85,7 +85,7 @@ export function monorailSupports(
   }
   let next = every / 2;
   let start = 0;
-  for (let i = 1; i < coords.length; i++) {
+  for (let i = 1; i < coords.length; i += 1) {
     const a = coords[i - 1];
     const b = coords[i];
     const len = Math.hypot(b[0] - a[0], b[1] - a[1]);

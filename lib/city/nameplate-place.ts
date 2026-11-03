@@ -237,7 +237,7 @@ export function nameplateBody(positions: Float32Array): NameplateBody | null {
   let base = Number.POSITIVE_INFINITY;
   let top = Number.NEGATIVE_INFINITY;
   let peak: Vec3 = [positions[0], positions[1], positions[2]];
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < n; i += 1) {
     const x = positions[i * 3];
     const y = positions[i * 3 + 1];
     const z = positions[i * 3 + 2];

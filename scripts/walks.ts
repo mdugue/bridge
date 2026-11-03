@@ -104,7 +104,7 @@ const USER_AGENT = "city-walk walk photos (https://mit.manuel.fyi)";
 
 /** A Wikimedia request, waiting out its rate limit (429) a few times. */
 async function wikimedia(url: string): Promise<Response> {
-  for (let attempt = 0; ; attempt++) {
+  for (let attempt = 0; ; attempt += 1) {
     // politely spaced: Wikimedia limits bursts
     await Bun.sleep(1500);
     const res = await fetch(url, { headers: { "User-Agent": USER_AGENT } });

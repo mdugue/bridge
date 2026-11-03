@@ -230,7 +230,7 @@ const clampInt = (v: number, lo: number, hi: number) =>
 export function packCrowns(crowns: readonly CoarseCrown[]): Uint8Array {
   const bytes = new Uint8Array(HEADER_BYTES + crowns.length * RECORD_BYTES);
   const view = new DataView(bytes.buffer);
-  for (let i = 0; i < MAGIC.length; i++) {
+  for (let i = 0; i < MAGIC.length; i += 1) {
     view.setUint8(i, MAGIC.charCodeAt(i));
   }
   view.setUint32(4, crowns.length, true);
@@ -278,7 +278,7 @@ export function unpackCrowns(buffer: ArrayBuffer): CoarseCrown[] | null {
     return null;
   }
   const view = new DataView(buffer);
-  for (let i = 0; i < MAGIC.length; i++) {
+  for (let i = 0; i < MAGIC.length; i += 1) {
     if (view.getUint8(i) !== MAGIC.charCodeAt(i)) {
       return null;
     }
@@ -288,7 +288,7 @@ export function unpackCrowns(buffer: ArrayBuffer): CoarseCrown[] | null {
     return null;
   }
   const out: CoarseCrown[] = [];
-  for (let k = 0; k < count; k++) {
+  for (let k = 0; k < count; k += 1) {
     const at = HEADER_BYTES + k * RECORD_BYTES;
     const code = view.getUint8(at + 8);
     const ndviByte = view.getUint8(at + 9);

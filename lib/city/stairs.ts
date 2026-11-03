@@ -154,7 +154,7 @@ export function terraceOf(f: TerraceFeature): Terrace | null {
 /** Cumulative arc length at each vertex. */
 function arcLengths(coords: Point2[]): number[] {
   const out = [0];
-  for (let i = 1; i < coords.length; i++) {
+  for (let i = 1; i < coords.length; i += 1) {
     const [x0, y0] = coords[i - 1];
     const [x1, y1] = coords[i];
     out.push(out[i - 1] + Math.hypot(x1 - x0, y1 - y0));
@@ -166,7 +166,7 @@ function arcLengths(coords: Point2[]): number[] {
 export function axisMiddle(coords: Point2[]): Point2 {
   const lengths = arcLengths(coords);
   const half = (lengths.at(-1) ?? 0) / 2;
-  for (let i = 1; i < coords.length; i++) {
+  for (let i = 1; i < coords.length; i += 1) {
     if (lengths[i] >= half) {
       const t = (half - lengths[i - 1]) / (lengths[i] - lengths[i - 1] || 1);
       const [x0, y0] = coords[i - 1];
@@ -202,7 +202,7 @@ function nearestOnAxis(
   const lengths = arcLengths(coords);
   let best: (AxisHit & { beyond: boolean }) | null = null;
   const last = coords.length - 2;
-  for (let i = 0; i <= last; i++) {
+  for (let i = 0; i <= last; i += 1) {
     const [x0, y0] = coords[i];
     const [x1, y1] = coords[i + 1];
     const len = lengths[i + 1] - lengths[i];
@@ -236,7 +236,7 @@ function crosses(a: Point2, b: Point2, c: Point2, d: Point2): boolean {
 /** Whether any wall runs between a point and the axis point nearest it. */
 function behindWall(walls: Point2[][], from: Point2, to: Point2): boolean {
   for (const wall of walls) {
-    for (let i = 0; i < wall.length - 1; i++) {
+    for (let i = 0; i < wall.length - 1; i += 1) {
       if (crosses(from, to, wall[i], wall[i + 1])) {
         return true;
       }
@@ -326,9 +326,9 @@ export function burnStairs(input: StairBurnInput): Float32Array {
       n - 1,
       Math.ceil((maxY - Math.min(...ys) + reach) / dy)
     );
-    for (let row = row0; row <= row1; row++) {
+    for (let row = row0; row <= row1; row += 1) {
       const y = maxY - (row + 0.5) * dy;
-      for (let col = col0; col <= col1; col++) {
+      for (let col = col0; col <= col1; col += 1) {
         const idx = row * n + col;
         const z = out[idx];
         const x = minX + (col + 0.5) * dx;
@@ -429,9 +429,9 @@ export function raiseTerraces(input: TerraceRaiseInput): Float32Array {
       const col1 = Math.min(n - 1, Math.ceil((Math.max(...xs) - minX) / dx));
       const row0 = Math.max(0, Math.floor((maxY - Math.max(...ys)) / dy));
       const row1 = Math.min(n - 1, Math.ceil((maxY - Math.min(...ys)) / dy));
-      for (let row = row0; row <= row1; row++) {
+      for (let row = row0; row <= row1; row += 1) {
         const y = maxY - (row + 0.5) * dy;
-        for (let col = col0; col <= col1; col++) {
+        for (let col = col0; col <= col1; col += 1) {
           const idx = row * n + col;
           const x = minX + (col + 0.5) * dx;
           if (!isInvalidElevation(out[idx]) && insidePolygon(rings, x, y)) {
@@ -529,7 +529,7 @@ function segmentNormal(a: Point2, b: Point2): [number, number] {
 function segmentSections(stair: StairLine, lengths: number[]): Section[][] {
   const length = lengths.at(-1) ?? 0;
   const out: Section[][] = [];
-  for (let i = 0; i < stair.coords.length - 1; i++) {
+  for (let i = 0; i < stair.coords.length - 1; i += 1) {
     const a = stair.coords[i];
     const b = stair.coords[i + 1];
     const s0 = lengths[i];
@@ -539,7 +539,7 @@ function segmentSections(stair: StairLine, lengths: number[]): Section[][] {
     }
     const [px, py] = segmentNormal(a, b);
     const at = [s0];
-    for (let k = 1; k < stair.n; k++) {
+    for (let k = 1; k < stair.n; k += 1) {
       const s = (k * length) / stair.n;
       if (s > s0 + 1e-4 && s < s1 - 1e-4) {
         at.push(s);
@@ -869,7 +869,7 @@ export function stairGeometry(
     }
   };
   for (const [j, sections] of segments.entries()) {
-    for (let i = 0; i < sections.length - 1; i++) {
+    for (let i = 0; i < sections.length - 1; i += 1) {
       block(sections[i], sections[i + 1]);
     }
     const next = segments[j + 1]?.[0];
@@ -902,7 +902,7 @@ export function stairGeometry(
   }
   // A riser at the front of every step, facing down the flight.
   const all = segments.flat();
-  for (let k = 0; k < stair.n; k++) {
+  for (let k = 0; k < stair.n; k += 1) {
     const s = (k * length) / stair.n;
     const c = all.find((x) => x.s >= s - 1e-3);
     if (!c) {

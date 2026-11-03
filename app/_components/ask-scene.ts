@@ -107,7 +107,7 @@ async function standing(
   gone: () => boolean,
   signal: AbortSignal
 ): Promise<boolean> {
-  for (let round = 0; round < LAND_ROUNDS; round++) {
+  for (let round = 0; round < LAND_ROUNDS; round += 1) {
     if (!(await landed(h, gone, signal))) {
       return false;
     }
@@ -189,7 +189,7 @@ export function useAskScene(
           // at the view's subject (Modell's pivot), and once the tiles
           // there have come: a miss is asked again — never mid-glide
           asked = h.inquireAt(h.focusNdc());
-          for (let i = 0; !asked && i < MISS_RETRIES; i++) {
+          for (let i = 0; !asked && i < MISS_RETRIES; i += 1) {
             await sleep(MISS_RETRY_MS, signal);
             const still = !h.viewMoving() || (await standing(h, gone, signal));
             if (gone()) {

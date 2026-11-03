@@ -7,8 +7,8 @@ const CLASS_IDS = [1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7];
 
 async function syntheticClassRaster(): Promise<Buffer> {
   const px = new Uint8Array(8 * 8 * 2);
-  for (let y = 0; y < 8; y++) {
-    for (let x = 0; x < 8; x++) {
+  for (let y = 0; y < 8; y += 1) {
+    for (let x = 0; x < 8; x += 1) {
       const id = CLASS_IDS[Math.floor(y / 2) * 4 + Math.floor(x / 2)];
       px.set([id, 255], (y * 8 + x) * 2);
     }

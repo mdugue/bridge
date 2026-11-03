@@ -113,7 +113,7 @@ async function run(query: string) {
 }
 
 const out: Record<string, unknown[]> = { canopy: [], kataster: [] };
-for (let i = 0; i < RUNS; i++) {
+for (let i = 0; i < RUNS; i += 1) {
   out.canopy.push(await run(""));
   out.kataster.push(await run("?trees=kataster"));
 }

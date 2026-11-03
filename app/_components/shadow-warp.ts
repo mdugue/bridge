@@ -180,8 +180,8 @@ export function cutToBand(
   const cut = points
     .filter((p) => p.y >= lo && p.y <= hi)
     .map((p) => p.clone());
-  for (let i = 0; i < points.length; i++) {
-    for (let j = i + 1; j < points.length; j++) {
+  for (let i = 0; i < points.length; i += 1) {
+    for (let j = i + 1; j < points.length; j += 1) {
       const a = points[i];
       const b = points[j];
       for (const h of [lo, hi]) {
@@ -306,7 +306,7 @@ function warpedBox(
     sMin: Number.POSITIVE_INFINITY,
     sMax: Number.NEGATIVE_INFINITY,
   };
-  for (let i = 0; i < points.length; i++) {
+  for (let i = 0; i < points.length; i += 1) {
     const { x, y, z } = points[i];
     const d = y - y0;
     const u = (x - cx) / d;

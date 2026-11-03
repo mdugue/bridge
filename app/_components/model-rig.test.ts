@@ -37,7 +37,7 @@ test("leaving mid-dolly at once restores the field of view the walk had", () => 
     onModeChange: () => {},
   });
   rig.enter("iso");
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 4; i += 1) {
     rig.step(0.1);
   }
   // the dolly zoom narrows the walk camera's field of view

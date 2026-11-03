@@ -197,7 +197,7 @@ export function trunkRadiusAt(t: number): number {
   const u = Math.min(Math.max(t, 0), 1);
   let i = 0;
   while (i < TRUNK_ROWS - 1 && TRUNK_RINGS[i + 1] < u) {
-    i++;
+    i += 1;
   }
   const a = TRUNK_RINGS[i];
   const b = TRUNK_RINGS[i + 1];
@@ -291,8 +291,8 @@ export function footprintIndex(
   return (x, y, h) => {
     const cx = Math.floor(x / FOOTPRINT_CELL);
     const cy = Math.floor(y / FOOTPRINT_CELL);
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
         for (const t of cells.get(key(cx + dx, cy + dy)) ?? []) {
           if (inside(t, x, y, h)) {
             return true;

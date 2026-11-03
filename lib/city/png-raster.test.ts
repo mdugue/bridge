@@ -10,9 +10,9 @@ import { siteDataDir } from "./tile";
 
 function crcTable(): Uint32Array {
   const t = new Uint32Array(256);
-  for (let n = 0; n < 256; n++) {
+  for (let n = 0; n < 256; n += 1) {
     let c = n;
-    for (let k = 0; k < 8; k++) {
+    for (let k = 0; k < 8; k += 1) {
       c = c & 1 ? 0xed_b8_83_20 ^ (c >>> 1) : c >>> 1;
     }
     t[n] = c >>> 0;
@@ -25,7 +25,7 @@ function chunk(type: string, body: Uint8Array): Uint8Array {
   const out = new Uint8Array(12 + body.length);
   const view = new DataView(out.buffer);
   view.setUint32(0, body.length);
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 4; i += 1) {
     out[4 + i] = type.charCodeAt(i);
   }
   out.set(body, 8);
@@ -56,10 +56,10 @@ function encode(
   filterOf: (y: number) => number
 ): Uint8Array {
   const raw = new Uint8Array((width + 1) * height);
-  for (let y = 0; y < height; y++) {
+  for (let y = 0; y < height; y += 1) {
     const f = filterOf(y);
     raw[y * (width + 1)] = f;
-    for (let x = 0; x < width; x++) {
+    for (let x = 0; x < width; x += 1) {
       const v = px[y * width + x];
       const left = x > 0 ? px[y * width + x - 1] : 0;
       const up = y > 0 ? px[(y - 1) * width + x] : 0;
@@ -98,7 +98,7 @@ describe("decodeGreyPng", () => {
     const height = 23;
     const px = new Uint8Array(width * height);
     let s = 12_345;
-    for (let i = 0; i < px.length; i++) {
+    for (let i = 0; i < px.length; i += 1) {
       s = (s * 1_103_515_245 + 12_345) & 0x7f_ff_ff_ff;
       // class-id-like runs with the odd random byte
       px[i] = s % 7 === 0 ? s & 255 : Math.floor(i / 17) % 9;
@@ -149,7 +149,7 @@ describe("decodeGreyPng", () => {
       );
       expect(out.data.length).toBe(out.width * out.height);
       let max = 0;
-      for (let i = 0; i < out.data.length; i++) {
+      for (let i = 0; i < out.data.length; i += 1) {
         if (out.data[i] > max) {
           max = out.data[i];
         }

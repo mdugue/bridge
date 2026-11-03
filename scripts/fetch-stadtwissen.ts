@@ -34,7 +34,7 @@ const { site } = siteFromArgs(process.argv.slice(2));
 
 /** One GET, waiting out Wikidata's rate limit (429, `Retry-After`). */
 async function politely(url: string, tries = 6): Promise<unknown> {
-  for (let attempt = 1; ; attempt++) {
+  for (let attempt = 1; ; attempt += 1) {
     const res = await fetch(url, { headers: { "User-Agent": AGENT } });
     if (res.ok) {
       return res.json();

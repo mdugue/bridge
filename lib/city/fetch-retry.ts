@@ -278,7 +278,7 @@ export async function withRetry<T>(
 ): Promise<FetchAnswer<T>> {
   const { budgetMs, env, signal, onRetry } = opts;
   const start = env.visibleMs();
-  for (let tries = 1; ; tries++) {
+  for (let tries = 1; ; tries += 1) {
     if (signal?.aborted) {
       throw abortError();
     }
@@ -318,7 +318,7 @@ export function createRetryTally(everyMs: number) {
   return {
     /** counts a retry; the note's detail when one is due */
     add(note: RetryNote, nowMs: number): string | null {
-      count++;
+      count += 1;
       last = note.cause;
       if (nowMs - notedAt < everyMs) {
         return null;

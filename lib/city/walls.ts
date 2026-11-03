@@ -460,7 +460,7 @@ function pushQuad(pos: number[], nrm: number[], a: WallCol, b: WallCol): void {
     a.top,
     a.wz
   );
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 6; i += 1) {
     nrm.push(nx, 0, nz);
   }
 }
@@ -589,7 +589,7 @@ export function wallGeometry(
     const cols = columnsOf(wall, heightAt, offset, opts);
     const first = positions.length / 3;
 
-    for (let i = 0; i < cols.length - 1; i++) {
+    for (let i = 0; i < cols.length - 1; i += 1) {
       const c0 = cols[i];
       const c1 = cols[i + 1];
       if (!(c0 && c1) || (c0.run ?? c1.run) !== (c1.run ?? c0.run)) {
@@ -604,7 +604,7 @@ export function wallGeometry(
       joins.push(...wallJoins(c0, c1));
     }
     const tone = MASONRY.indexOf(wall.mat ?? "stone");
-    for (let v = first; v < positions.length / 3; v++) {
+    for (let v = first; v < positions.length / 3; v += 1) {
       tones.push(tone);
     }
   }

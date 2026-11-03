@@ -35,8 +35,8 @@ function bank(y: number): number {
 
 function grid(): Float32Array {
   const el = new Float32Array(N * N);
-  for (let row = 0; row < N; row++) {
-    for (let col = 0; col < N; col++) {
+  for (let row = 0; row < N; row += 1) {
+    for (let col = 0; col < N; col += 1) {
       el[row * N + col] = bank(100 - (row + 0.5) * DX);
     }
   }
@@ -79,7 +79,7 @@ test("over a bank the burn only lowers, and leaves the ground alone away from th
     bounds: BOUNDS,
     stairs: [FLIGHT],
   });
-  for (let i = 0; i < el.length; i++) {
+  for (let i = 0; i < el.length; i += 1) {
     expect(out[i]).toBeLessThanOrEqual(el[i]);
   }
   expect(at(out, 20, 50)).toBe(at(el, 20, 50)); // 30 m to the side
@@ -90,8 +90,8 @@ test("over a bank the burn only lowers, and leaves the ground alone away from th
 test("no terrain triangle under a flight keeps a vertex above its tread", () => {
   // A terrace 3 m above the ramp right beside the flight, no wall between.
   const el = grid();
-  for (let row = 0; row < N; row++) {
-    for (let col = 0; col < N; col++) {
+  for (let row = 0; row < N; row += 1) {
+    for (let col = 0; col < N; col += 1) {
       if ((col + 0.5) * DX > 53) {
         el[row * N + col] += 3;
       }
@@ -145,8 +145,8 @@ test("beside a raised flight the DGM's shoulder is dug down to the ground around
   // Flat ground at 100 m, a flight climbing 4 m that the DGM has as a ramp
   // with 2 m shoulders sloping off either side of its 4 m width.
   const el = new Float32Array(N * N);
-  for (let row = 0; row < N; row++) {
-    for (let col = 0; col < N; col++) {
+  for (let row = 0; row < N; row += 1) {
+    for (let col = 0; col < N; col += 1) {
       const x = (col + 0.5) * DX;
       const y = 100 - (row + 0.5) * DX;
       const ramp = y > 40 && y < 60 ? ((y - 40) / 20) * 4 : 0;
@@ -220,7 +220,7 @@ test("the flight's treads climb one riser per step to the top landing", () => {
   expect(geo).not.toBeNull();
   const g = geo as NonNullable<typeof geo>;
   const treadY = new Set<number>();
-  for (let v = 0; v < g.kinds.length; v++) {
+  for (let v = 0; v < g.kinds.length; v += 1) {
     if (g.kinds[v] === STAIR_TREAD) {
       treadY.add(Math.round(g.positions[v * 3 + 1] * 1000) / 1000);
       expect(g.normals[v * 3 + 1]).toBe(1); // up
@@ -287,7 +287,7 @@ test("a flight cut into a bank gets Wangen at the bank's level", () => {
   // both sides, every section: two triangles of the ground-toned top
   expect(banks).toBe(2 * 25 * 6);
   // a Wange top stands at the bank beyond it (world y), not at the tread
-  for (let v = 0; v < geo.kinds.length; v++) {
+  for (let v = 0; v < geo.kinds.length; v += 1) {
     if (geo.kinds[v] === STAIR_BANK) {
       const z = -geo.positions[v * 3 + 2]; // data y
       expect(geo.positions[v * 3 + 1]).toBeGreaterThan(bank(z) + 0.5);

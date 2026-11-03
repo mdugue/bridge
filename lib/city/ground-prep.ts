@@ -106,7 +106,7 @@ export function localReader(input: GroundPrepInput): VertexReader {
     (positions instanceof Int16Array || positions instanceof Int8Array);
   return (i, out) => {
     const at = i * stride + offset;
-    for (let k = 0; k < 3; k++) {
+    for (let k = 0; k < 3; k += 1) {
       const v = positions[at + k] / scale;
       out[k] = clamp ? Math.max(v, -1) : v;
     }
@@ -140,9 +140,9 @@ export function indexBox(index: GroundIndex, read: VertexReader): Float64Array {
     Number.NEGATIVE_INFINITY,
   ]);
   const v = new Float64Array(3);
-  for (let i = 0; i < index.length; i++) {
+  for (let i = 0; i < index.length; i += 1) {
     read(index[i], v);
-    for (let k = 0; k < 3; k++) {
+    for (let k = 0; k < 3; k += 1) {
       if (v[k] < box[k]) {
         box[k] = v[k];
       }
@@ -170,7 +170,7 @@ function vertexCells(
   const sx = cells / (maxX - minX);
   const sy = cells / (maxY - minY);
   const p = new Float64Array(3);
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < count; i += 1) {
     projected(i, p);
     const cx = Math.floor((p[0] - minX) * sx);
     const cy = Math.floor((maxY - p[1]) * sy);
@@ -232,7 +232,7 @@ export function prepareGround(input: GroundPrepInput): GroundPrep {
     const { count } = input;
     const xy = new Float64Array(count * 2);
     const z = new Float32Array(count);
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < count; i += 1) {
       atData(i);
       xy[2 * i] = data[0] + cx;
       xy[2 * i + 1] = data[1] + cy;
@@ -255,7 +255,7 @@ export function prepareGround(input: GroundPrepInput): GroundPrep {
     };
   } else {
     const elevations = new Float32Array(input.grid * input.grid);
-    for (let i = 0; i < elevations.length; i++) {
+    for (let i = 0; i < elevations.length; i += 1) {
       atData(i);
       elevations[i] = data[2];
     }

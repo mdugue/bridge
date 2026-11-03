@@ -139,7 +139,7 @@ test("an emergency takes the last step at once, and it comes back like any step"
 test("each safety level lowers the lines, and a phone's floor is its level", () => {
   for (const tier of ["mobile", "desktop"] as const) {
     const lines = SAFETY_LEVELS.map((s) => memoryLimitsFor(tier, s));
-    for (let s = 1; s < lines.length; s++) {
+    for (let s = 1; s < lines.length; s += 1) {
       expect(lines[s].soft).toBeLessThan(lines[s - 1].soft);
       expect(lines[s].hard).toBeLessThan(lines[s - 1].hard);
       expect(lines[s].soft).toBeLessThan(lines[s].hard);

@@ -97,7 +97,7 @@ function gridCrossings(a: XZ, b: XZ): [string, number][] {
   for (
     let k = Math.floor(lo / SUPPORT_GRID_M) + 1;
     k * SUPPORT_GRID_M <= hi;
-    k++
+    k += 1
   ) {
     out.push([
       `${alongX ? "x" : "z"}:${k}`,
@@ -124,7 +124,7 @@ export function supportStations(
   const near = (s: number) =>
     mapped.some((m) => Math.abs(m - s) <= MAPPED_REACH_M);
   const all: Support[] = mapped.map((m) => ({ d: m, key: null }));
-  for (let i = 1; i < pts.length; i++) {
+  for (let i = 1; i < pts.length; i += 1) {
     for (const [key, t] of gridCrossings(pts[i - 1], pts[i])) {
       const s = d[i - 1] + t * (d[i] - d[i - 1]);
       if (!near(s)) {
@@ -167,7 +167,7 @@ function spanAt(
   stations: readonly number[],
   d: number
 ): { i: number; span: number; t: number } | null {
-  for (let i = 1; i < stations.length; i++) {
+  for (let i = 1; i < stations.length; i += 1) {
     if (d <= stations[i]) {
       const span = stations[i] - stations[i - 1];
       if (span <= 0 || d < stations[i - 1]) {
@@ -208,12 +208,12 @@ export function staggerSides(supports: readonly Support[]): number[] {
     }
     return Number(p.key.slice(2)) % 2 === 0 ? 1 : -1;
   });
-  for (let i = 1; i < side.length; i++) {
+  for (let i = 1; i < side.length; i += 1) {
     if (side[i] === 0) {
       side[i] = -side[i - 1];
     }
   }
-  for (let i = side.length - 1; i >= 0; i--) {
+  for (let i = side.length - 1; i >= 0; i -= 1) {
     if (side[i] === 0) {
       side[i] = i + 1 < side.length ? -side[i + 1] : 1;
     }

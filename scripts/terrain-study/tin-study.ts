@@ -204,7 +204,7 @@ function client(dir: string, grid: string, cm: number): void {
   const index = new TinIndex(surface);
   const built = performance.now() - t;
   const q = performance.now();
-  for (let i = 0; i < 100_000; i++) {
+  for (let i = 0; i < 100_000; i += 1) {
     index.heightAt(
       BOUNDS[0] + ((i * 7919) % 2000),
       BOUNDS[1] + ((i * 104_729) % 2000)

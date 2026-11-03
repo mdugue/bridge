@@ -80,7 +80,7 @@ export function packPoints(
 ): Uint8Array {
   const bytes = new Uint8Array(HEADER_BYTES + points.length * stride * 4);
   const view = new DataView(bytes.buffer);
-  for (let i = 0; i < MAGIC.length; i++) {
+  for (let i = 0; i < MAGIC.length; i += 1) {
     view.setUint8(i, MAGIC.charCodeAt(i));
   }
   view.setUint32(4, points.length, true);
@@ -113,7 +113,7 @@ export function unpackPoints(buffer: ArrayBuffer): UnpackedPoints | null {
     return null;
   }
   const view = new DataView(buffer);
-  for (let i = 0; i < MAGIC.length; i++) {
+  for (let i = 0; i < MAGIC.length; i += 1) {
     if (view.getUint8(i) !== MAGIC.charCodeAt(i)) {
       return null;
     }
@@ -133,7 +133,7 @@ export function unpackPoints(buffer: ArrayBuffer): UnpackedPoints | null {
     data = new Float32Array(buffer, HEADER_BYTES, count * stride);
   } else {
     data = new Float32Array(count * stride);
-    for (let i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i += 1) {
       data[i] = view.getFloat32(HEADER_BYTES + i * 4, true);
     }
   }
@@ -214,7 +214,7 @@ export function pointFeatures(
   const { count, data, origin, stride } = points;
   const [ox, oy] = origin;
   const out: (CanopyFeature | CanopyExtraFeature)[] = [];
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < count; i += 1) {
     const at = i * stride;
     const h = data[at + 2] ?? Number.NaN;
     const r = stride >= 4 ? (data[at + 3] ?? Number.NaN) : Number.NaN;

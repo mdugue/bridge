@@ -241,7 +241,7 @@ function groupGeometry(
   const sources: number[] = [];
   const remap = new Map<number, number>();
   const triangles: number[] = [];
-  for (let i = start; i < start + count; i++) {
+  for (let i = start; i < start + count; i += 1) {
     const v = index ? index.getX(i) : i;
     let to = remap.get(v);
     if (to === undefined) {
@@ -260,7 +260,7 @@ function groupGeometry(
     const size = from.itemSize;
     const array = new Float32Array(sources.length * size);
     sources.forEach((v, i) => {
-      for (let c = 0; c < size; c++) {
+      for (let c = 0; c < size; c += 1) {
         array[i * size + c] = from.getComponent(v, c);
       }
     });
@@ -330,7 +330,7 @@ function piecesOfPart(
     out.push({ geometry, material, matrix: mesh.matrixWorld, part });
     return;
   }
-  for (let i = 0; i < instanced.count; i++) {
+  for (let i = 0; i < instanced.count; i += 1) {
     instanced.getMatrixAt(i, instance);
     out.push({
       geometry,
@@ -350,7 +350,7 @@ function boxOf(pieces: readonly Piece[]): DesignBox {
   const v = new Vector3();
   for (const { geometry, matrix } of pieces) {
     const position = geometry.getAttribute("position");
-    for (let i = 0; i < position.count; i++) {
+    for (let i = 0; i < position.count; i += 1) {
       box.expandByPoint(
         v.fromBufferAttribute(position, i).applyMatrix4(matrix)
       );
@@ -412,7 +412,7 @@ function writePiece(
   const normal = geometry.getAttribute("normal");
   const uv = geometry.getAttribute("uv");
   const v = new Vector3();
-  for (let i = 0; i < position.count; i++) {
+  for (let i = 0; i < position.count; i += 1) {
     const at = (vertex + i) * 3;
     v.fromBufferAttribute(position, i).applyMatrix4(matrix);
     out.position[at] = v.x;
@@ -433,7 +433,7 @@ function writePiece(
   const flip = matrix.determinant() < 0;
   const triangles = triangleCount(geometry);
   const { index } = geometry;
-  for (let t = 0; t < triangles; t++) {
+  for (let t = 0; t < triangles; t += 1) {
     const a = index ? index.getX(t * 3) : t * 3;
     const b = index ? index.getX(t * 3 + 1) : t * 3 + 1;
     const c = index ? index.getX(t * 3 + 2) : t * 3 + 2;
@@ -459,7 +459,7 @@ function pieceNormals(
   triangles: number
 ): void {
   const { position: p, normal: n, index } = out;
-  for (let t = triangle; t < triangle + triangles; t++) {
+  for (let t = triangle; t < triangle + triangles; t += 1) {
     const a = index[t * 3] * 3;
     const b = index[t * 3 + 1] * 3;
     const c = index[t * 3 + 2] * 3;
@@ -478,7 +478,7 @@ function pieceNormals(
       n[k + 2] += nz;
     }
   }
-  for (let i = vertex; i < vertex + vertices; i++) {
+  for (let i = vertex; i < vertex + vertices; i += 1) {
     const len = Math.hypot(n[i * 3], n[i * 3 + 1], n[i * 3 + 2]) || 1;
     n[i * 3] /= len;
     n[i * 3 + 1] /= len;

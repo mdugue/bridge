@@ -94,7 +94,7 @@ export function createMotionBlur(
   return {
     over: (source, occlusion) => {
       let sum: V3 = vec3(0);
-      for (let i = 0; i < TAPS; i++) {
+      for (let i = 0; i < TAPS; i += 1) {
         const t = (i + 0.5) / TAPS - 0.5;
         sum = sum.add(texture(source, at.add(smear.mul(t)), float(0)).rgb);
       }

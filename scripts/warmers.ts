@@ -202,7 +202,7 @@ export function createSlots(limits: { jobs: number; memory: number }): {
         return;
       }
       waiting.shift();
-      running++;
+      running += 1;
       held += next.peak;
       next.start();
     }
@@ -221,7 +221,7 @@ export function createSlots(limits: { jobs: number; memory: number }): {
       try {
         return await task();
       } finally {
-        running--;
+        running -= 1;
         held -= peak;
         admit();
       }

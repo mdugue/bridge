@@ -72,7 +72,7 @@ test("a retry waits for a usable page: at once when it is, on 'online', and ever
   const gate = createNetGate(p.page);
   let woken = 0;
   const wake = () => {
-    woken++;
+    woken += 1;
   };
   await gate.whenUsable();
   p.online(false);

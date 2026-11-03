@@ -100,7 +100,7 @@ export function errorCoalescer(
     error: (text) => {
       const t = now();
       if (text === last.text && t - last.at < ERROR_REPEAT_S) {
-        last.count++;
+        last.count += 1;
         return;
       }
       flush();

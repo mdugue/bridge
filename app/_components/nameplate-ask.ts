@@ -225,7 +225,7 @@ export function cityHides(
       raycaster.far = length - RAY_SHORT_M;
     }
     if (nearestCityHit(raycaster, cities, false)) {
-      hidden++;
+      hidden += 1;
     }
   }
   return hidden / points.length;

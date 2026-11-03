@@ -95,7 +95,7 @@ describe("resolution scale", () => {
   test("ignores a lone long frame (medians)", () => {
     const rs = createResolutionScale(DESKTOP);
     let now = 0;
-    for (let i = 0; i < 200; i++) {
+    for (let i = 0; i < 200; i += 1) {
       const dt = i % 50 === 0 ? 400 : 16.7;
       now += dt;
       rs.frame(dt, 5);
@@ -149,7 +149,7 @@ describe("resolution scale", () => {
   test("decides nothing from an export's frames", () => {
     const rs = createResolutionScale(DESKTOP);
     let now = 0;
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < 100; i += 1) {
       now += 100;
       rs.frame(100, 5);
       rs.reset();

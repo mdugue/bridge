@@ -119,12 +119,12 @@ export function columnMesh(
     const a = (2 * Math.PI * k) / sides;
     return [cx + radius * Math.cos(a), cy + radius * Math.sin(a), z];
   };
-  for (let i = 0; i + 1 < rings.length; i++) {
+  for (let i = 0; i + 1 < rings.length; i += 1) {
     const lo = rings[i];
     const hi = rings[i + 1];
     // a horizontal step faces up (a ledge, roof) when it narrows
     const roof = lo.z === hi.z && hi.radius < lo.radius ? 1 : 0;
-    for (let k = 0; k < sides; k++) {
+    for (let k = 0; k < sides; k += 1) {
       const a0 = around(lo.radius, lo.z, k);
       const a1 = around(lo.radius, lo.z, k + 1);
       const b0 = around(hi.radius, hi.z, k);
@@ -135,7 +135,7 @@ export function columnMesh(
   }
   const top = rings[rings.length - 1];
   const bottom = rings[0];
-  for (let k = 0; k < sides; k++) {
+  for (let k = 0; k < sides; k += 1) {
     push(
       out,
       1,
@@ -162,7 +162,7 @@ export type Triangulate = (data: number[], holeIndices: number[]) => number[];
 
 function signedArea(ring: Point2[]): number {
   let a = 0;
-  for (let i = 0; i < ring.length; i++) {
+  for (let i = 0; i < ring.length; i += 1) {
     const [x0, y0] = ring[i];
     const [x1, y1] = ring[(i + 1) % ring.length];
     a += x0 * y1 - x1 * y0;
@@ -213,7 +213,7 @@ function prismMesh(
   const at = ([x, y]: Point2, z: number) => [x - offset.cx, y - offset.cy, z];
   // walls: along a CCW outline (and a CW hole) the outside is on the right
   for (const ring of [contour, ...holes]) {
-    for (let i = 0; i < ring.length; i++) {
+    for (let i = 0; i < ring.length; i += 1) {
       const a = ring[i];
       const b = ring[(i + 1) % ring.length];
       push(out, 0, at(a, base), at(b, base), at(b, top));
@@ -309,7 +309,7 @@ function cornerHeight(g: HeightField, r: number, c: number): number {
       const v = g.z[rr * g.cols + cc];
       if (v >= 0) {
         sum += v;
-        n++;
+        n += 1;
       }
     }
   }
@@ -353,8 +353,8 @@ export function reliefMesh(
     }
     return v;
   };
-  for (let r = 0; r < g.rows; r++) {
-    for (let c = 0; c < g.cols; c++) {
+  for (let r = 0; r < g.rows; r += 1) {
+    for (let c = 0; c < g.cols; c += 1) {
       if (!inside(r, c)) {
         continue;
       }
@@ -375,7 +375,7 @@ export function reliefMesh(
         [r - 1, c],
         [r, c - 1],
       ];
-      for (let k = 0; k < 4; k++) {
+      for (let k = 0; k < 4; k += 1) {
         if (inside(...across[k])) {
           continue;
         }

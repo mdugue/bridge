@@ -152,7 +152,7 @@ export function disposeMaterial(
  */
 function untilThrough(dispose: () => void, attempts: number): unknown[] {
   const errors: unknown[] = [];
-  for (let i = 0; i < attempts; i++) {
+  for (let i = 0; i < attempts; i += 1) {
     try {
       dispose();
       return errors;
@@ -380,14 +380,14 @@ export function sceneShared<T extends { dispose: () => void }>(
       return value;
     },
     retain: () => {
-      refs++;
+      refs += 1;
       let released = false;
       return () => {
         if (released) {
           return;
         }
         released = true;
-        refs--;
+        refs -= 1;
         if (refs === 0) {
           value?.dispose();
           value = null;

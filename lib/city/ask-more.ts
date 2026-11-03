@@ -339,7 +339,7 @@ function canopyInquiry(
 /** A line's length (m). */
 function lineLength(coords: readonly (readonly [number, number])[]): number {
   let sum = 0;
-  for (let i = 1; i < coords.length; i++) {
+  for (let i = 1; i < coords.length; i += 1) {
     sum += Math.hypot(
       coords[i][0] - coords[i - 1][0],
       coords[i][1] - coords[i - 1][1]

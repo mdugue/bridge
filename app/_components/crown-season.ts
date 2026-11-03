@@ -364,7 +364,7 @@ function writeInstance(
   const bare = 1 - Math.max(s.leaf, flower);
   let moved = Math.abs(arrays.bare[i] - bare) > 1e-4;
   arrays.bare[i] = bare;
-  for (let c = 0; c < 3; c++) {
+  for (let c = 0; c < 3; c += 1) {
     const j = i * 3 + c;
     const leafy =
       arrays.summer[j] + (arrays.target[j] - arrays.summer[j]) * s.autumn;

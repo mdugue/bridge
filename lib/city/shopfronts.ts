@@ -317,7 +317,7 @@ interface EdgePoint {
  *  into the front. */
 function shoulder(back: number, proud: number, r: number): EdgePoint[] {
   const out: EdgePoint[] = [{ e: 0, o: -back, nu: 1, no: 0 }];
-  for (let k = 0; k <= ROUND_STEPS; k++) {
+  for (let k = 0; k <= ROUND_STEPS; k += 1) {
     const a = ((Math.PI / 2) * k) / ROUND_STEPS;
     const c = Math.cos(a);
     const s = Math.sin(a);
@@ -330,7 +330,7 @@ function shoulder(back: number, proud: number, r: number): EdgePoint[] {
  *  quarter round of radius `r` that turns it into the front at `proud`. */
 function reveal(inner: number, proud: number, r: number): EdgePoint[] {
   const out: EdgePoint[] = [{ e: 0, o: inner, nu: -1, no: 0 }];
-  for (let k = 0; k <= ROUND_STEPS; k++) {
+  for (let k = 0; k <= ROUND_STEPS; k += 1) {
     const a = ((Math.PI / 2) * k) / ROUND_STEPS;
     const c = Math.cos(a);
     const s = Math.sin(a);
@@ -379,7 +379,7 @@ function polygon(
     return;
   }
   const flip = n[0] * facing[0] + n[1] * facing[1] + n[2] * facing[2] < 0;
-  for (let i = 1; i + 1 < keep.length; i++) {
+  for (let i = 1; i + 1 < keep.length; i += 1) {
     const tri = flip ? [0, i + 1, i] : [0, i, i + 1];
     for (const j of tri) {
       out.positions.push(...p[keep[j]]);
@@ -433,7 +433,7 @@ function softEdge(
     ]);
   }
   for (const [points, us, uz] of sides) {
-    for (let k = 0; k + 1 < profile.length; k++) {
+    for (let k = 0; k + 1 < profile.length; k += 1) {
       const [p, q] = [profile[k], profile[k + 1]];
       const lp = points(rect(p.e));
       const lq = points(rect(q.e));
@@ -445,7 +445,7 @@ function softEdge(
         p.no + q.no,
         (p.nu + q.nu) * uz
       );
-      for (let j = 0; j + 1 < lp.length; j++) {
+      for (let j = 0; j + 1 < lp.length; j += 1) {
         polygon(
           out,
           [
@@ -506,8 +506,8 @@ function softBand(
     cut.flatMap((h) => [h.z0, h.z1])
   );
   const n = dir3(f, 0, 1, 0);
-  for (let i = 0; i + 1 < s.length; i++) {
-    for (let j = 0; j + 1 < z.length; j++) {
+  for (let i = 0; i + 1 < s.length; i += 1) {
+    for (let j = 0; j + 1 < z.length; j += 1) {
       const sc = (s[i] + s[i + 1]) / 2;
       const zc = (z[j] + z[j + 1]) / 2;
       if (cut.some((h) => sc > h.s0 && sc < h.s1 && zc > h.z0 && zc < h.z1)) {
@@ -699,7 +699,7 @@ type Section = [o: number, z: number, no: number, nz: number];
 /** A quarter round about (co, cz) from angle a0 to a1 (degrees). */
 function arc(co: number, cz: number, r: number, a0: number, a1: number) {
   const out: Section[] = [];
-  for (let k = 0; k <= ROUND_STEPS; k++) {
+  for (let k = 0; k <= ROUND_STEPS; k += 1) {
     const a = ((a0 + ((a1 - a0) * k) / ROUND_STEPS) * Math.PI) / 180;
     const c = Math.cos(a);
     const s = Math.sin(a);
@@ -790,7 +790,7 @@ export function canopyMesh(
   const g = Math.max(groundAt(w, span[0]), groundAt(w, span[1]));
   const { caps, runs } = canopySection(c, top);
   for (const run of runs) {
-    for (let k = 0; k + 1 < run.length; k++) {
+    for (let k = 0; k + 1 < run.length; k += 1) {
       const [p, q] = [run[k], run[k + 1]];
       const np = dir3(f, 0, p[2], p[3]);
       const nq = dir3(f, 0, q[2], q[3]);

@@ -54,7 +54,7 @@ export function creaseNormals(
   const faces = faceNormals(positions);
   const out = new Float32Array(positions.length);
   const fn = faces.normal;
-  for (let v = 0; v < n; v++) {
+  for (let v = 0; v < n; v += 1) {
     const t = 3 * Math.floor(v / 3);
     out[3 * v] = fn[t];
     out[3 * v + 1] = fn[t + 1];
@@ -119,7 +119,7 @@ function faceNormals(p: Float32Array): Faces {
   const area = new Float32Array(count);
   const angle = new Float32Array(3 * count);
   const width = new Float32Array(count);
-  for (let t = 0; t < count; t++) {
+  for (let t = 0; t < count; t += 1) {
     const o = 9 * t;
     width[t] = Math.max(
       Math.hypot(p[o + 3] - p[o], p[o + 4] - p[o + 1]),
@@ -143,7 +143,7 @@ function faceNormals(p: Float32Array): Faces {
     normal[3 * t] = nx / len;
     normal[3 * t + 1] = ny / len;
     normal[3 * t + 2] = nz / len;
-    for (let k = 0; k < 3; k++) {
+    for (let k = 0; k < 3; k += 1) {
       angle[3 * t + k] = cornerAngle(
         p,
         3 * t + k,
@@ -192,16 +192,17 @@ export function forEachPoint(
   const key = (i: number) => (bits[i] === 0x80_00_00_00 ? 0 : bits[i]);
   const mask = new Uint8Array(n);
   let m = 0;
-  for (let v = 0; v < n; v++) {
+  for (let v = 0; v < n; v += 1) {
     if (live(v)) {
       mask[v] = 1;
-      m++;
+      m += 1;
     }
   }
   const alive = new Uint32Array(m);
-  for (let k = 0, v = 0; v < n; v++) {
+  for (let k = 0, v = 0; v < n; v += 1) {
     if (mask[v] === 1) {
-      alive[k++] = v;
+      alive[k] = v;
+      k += 1;
     }
   }
   let size = 1;
@@ -210,21 +211,21 @@ export function forEachPoint(
   }
   const hash = new Uint32Array(m);
   const start = new Uint32Array(size + 1);
-  for (let k = 0; k < m; k++) {
+  for (let k = 0; k < m; k += 1) {
     const v = alive[k];
     let h = Math.imul(key(3 * v) ^ 0x9e_37_79_b9, 0x85_eb_ca_6b);
     h = Math.imul(h ^ key(3 * v + 1) ^ (h >>> 15), 0xc2_b2_ae_35);
     h = Math.imul(h ^ key(3 * v + 2) ^ (h >>> 13), 0x27_d4_eb_2f);
     h = Math.imul(h ^ (groups[v] | 0) ^ (h >>> 16), 0x16_56_67_b1);
     hash[k] = (h ^ (h >>> 15)) & (size - 1);
-    start[hash[k] + 1]++;
+    start[hash[k] + 1] += 1;
   }
-  for (let b = 0; b < size; b++) {
+  for (let b = 0; b < size; b += 1) {
     start[b + 1] += start[b];
   }
   const fill = start.slice(0, size);
   const order = new Uint32Array(m);
-  for (let k = 0; k < m; k++) {
+  for (let k = 0; k < m; k += 1) {
     order[fill[hash[k]]++] = alive[k];
   }
   const same = (a: number, b: number) =>
@@ -232,7 +233,7 @@ export function forEachPoint(
     key(3 * a + 1) === key(3 * b + 1) &&
     key(3 * a + 2) === key(3 * b + 2) &&
     groups[a] === groups[b];
-  for (let b = 0; b < size; b++) {
+  for (let b = 0; b < size; b += 1) {
     const from = start[b];
     const to = start[b + 1];
     if (to - from < 2) {
@@ -240,7 +241,7 @@ export function forEachPoint(
     }
     const first = order[from];
     let one = true;
-    for (let k = from + 1; k < to && one; k++) {
+    for (let k = from + 1; k < to && one; k += 1) {
       one = same(order[k], first);
     }
     if (one) {

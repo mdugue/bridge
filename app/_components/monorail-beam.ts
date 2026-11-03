@@ -60,7 +60,7 @@ export function addMonorail(
 /** The girder's underside: `addRibbon` draws its top and sides. */
 function addUnderside(acc: Mesh3, top: Pt[], half: number, depth: number) {
   const tan = tangentsXZ(top);
-  for (let i = 0; i < top.length - 1; i++) {
+  for (let i = 0; i < top.length - 1; i += 1) {
     const a = top[i];
     const b = top[i + 1];
     // the side offsets at each end, as `addRibbon` takes them

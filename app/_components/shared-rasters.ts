@@ -58,7 +58,7 @@ export function createSharedRasters<T>(
         entry = fresh;
         entries.set(key, entry);
       }
-      entry.refs++;
+      entry.refs += 1;
       return entry.promise;
     },
     release: (key) => {
@@ -66,7 +66,7 @@ export function createSharedRasters<T>(
       if (!entry) {
         return;
       }
-      entry.refs--;
+      entry.refs -= 1;
       if (entry.refs > 0) {
         return;
       }

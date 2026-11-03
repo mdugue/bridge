@@ -85,10 +85,10 @@ test("a geometry left half made by a failed allocation is disposed past it, and 
   let through = 0;
   poisoned.addEventListener("dispose", () => {
     if (throws > 0) {
-      throws--;
+      throws -= 1;
       throw new TypeError("undefined is not an object (data.buffer.destroy)");
     }
-    through++;
+    through += 1;
   });
   const healthy = new BoxGeometry();
   const healthyCalls = countDisposals(healthy);

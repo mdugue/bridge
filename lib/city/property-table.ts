@@ -186,10 +186,11 @@ export function readStructuralMetadata(
           // no column (its default in every row), or not numbers (an ENUM,
           // a BOOLEAN): row by row
           const read = reader(name);
-          for (let k = 0, row = 0; row < table.count; row++) {
+          for (let k = 0, row = 0; row < table.count; row += 1) {
             const value = read(row);
             for (const v of Array.isArray(value) ? value : [value]) {
-              out[k++] = Number(v);
+              out[k] = Number(v);
+              k += 1;
             }
           }
           return true;
@@ -365,10 +366,10 @@ function fillNumbers(
   const defaults = Array.isArray(fallback)
     ? (fallback as number[])
     : [Number(fallback)];
-  for (let row = 0; row < count; row++) {
+  for (let row = 0; row < count; row += 1) {
     const base = row * n;
     const gone = missing(base);
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < n; i += 1) {
       out[base + i] = gone ? (defaults[i] ?? 0) : decode(values[base + i], i);
     }
   }

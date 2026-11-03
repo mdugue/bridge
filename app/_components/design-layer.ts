@@ -256,13 +256,16 @@ function partTriangles(loaded: Loaded, part: number): Float32Array {
   const v = new Vector3();
   let at = 0;
   for (const t of mine) {
-    for (let k = 0; k < 3; k++) {
+    for (let k = 0; k < 3; k += 1) {
       v.fromBufferAttribute(position, index.getX(t + k)).applyMatrix4(
         loaded.mesh.matrixWorld
       );
-      out[at++] = v.x;
-      out[at++] = v.y;
-      out[at++] = v.z;
+      out[at] = v.x;
+      at += 1;
+      out[at] = v.y;
+      at += 1;
+      out[at] = v.z;
+      at += 1;
     }
   }
   return out;
@@ -553,7 +556,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
   };
 
   const remove = () => {
-    loads++;
+    loads += 1;
     if (planTimer !== null) {
       clearTimeout(planTimer);
       planTimer = null;

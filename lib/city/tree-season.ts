@@ -553,7 +553,7 @@ const LITTER_KNOTS: readonly (readonly [number, number])[] = [
  *  Dresden's year, `climateDay`). */
 export function leafLitterAt(day: number): number {
   const d = ((day % YEAR) + YEAR) % YEAR;
-  for (let i = 1; i < LITTER_KNOTS.length; i++) {
+  for (let i = 1; i < LITTER_KNOTS.length; i += 1) {
     const [b, vb] = LITTER_KNOTS[i];
     if (d <= b) {
       const [a, va] = LITTER_KNOTS[i - 1];

@@ -50,14 +50,14 @@ export function waterMaskOf(
   const water = new Uint8Array(cells * cells);
   // each column's cell, once
   const column = new Uint16Array(width);
-  for (let x = 0; x < width; x++) {
+  for (let x = 0; x < width; x += 1) {
     column[x] = Math.min(cells - 1, Math.floor((x * cells) / width));
   }
   let any = false;
-  for (let y = 0; y < height; y++) {
+  for (let y = 0; y < height; y += 1) {
     const row = Math.min(cells - 1, Math.floor((y * cells) / height)) * cells;
     const at = y * width;
-    for (let x = 0; x < width; x++) {
+    for (let x = 0; x < width; x += 1) {
       if (data[at + x] === waterClass) {
         water[row + column[x]] = 1;
         any = true;
@@ -72,11 +72,11 @@ export function dilate(mask: WaterMask, r: number): WaterMask {
   const { cells } = mask;
   const run = (src: Uint8Array, horizontal: boolean) => {
     const out = new Uint8Array(src.length);
-    for (let a = 0; a < cells; a++) {
+    for (let a = 0; a < cells; a += 1) {
       // the last set cell seen along the line, for a running reach
       let last = Number.NEGATIVE_INFINITY;
       // forward: set within r after a set cell
-      for (let b = 0; b < cells; b++) {
+      for (let b = 0; b < cells; b += 1) {
         const i = horizontal ? a * cells + b : b * cells + a;
         if (src[i]) {
           last = b;
@@ -87,7 +87,7 @@ export function dilate(mask: WaterMask, r: number): WaterMask {
       }
       last = Number.POSITIVE_INFINITY;
       // backward: set within r before one
-      for (let b = cells - 1; b >= 0; b--) {
+      for (let b = cells - 1; b >= 0; b -= 1) {
         const i = horizontal ? a * cells + b : b * cells + a;
         if (src[i]) {
           last = b;
@@ -126,9 +126,9 @@ export function trianglesOver<T extends Uint8Array | Uint16Array | Uint32Array>(
   const { cells } = mask;
   const w = cells + 1;
   const sat = new Int32Array(w * w);
-  for (let y = 0; y < cells; y++) {
+  for (let y = 0; y < cells; y += 1) {
     let row = 0;
-    for (let x = 0; x < cells; x++) {
+    for (let x = 0; x < cells; x += 1) {
       row += mask.water[y * cells + x];
       sat[(y + 1) * w + x + 1] = sat[y * w + x + 1] + row;
     }
@@ -153,9 +153,12 @@ export function trianglesOver<T extends Uint8Array | Uint16Array | Uint32Array>(
       sat[(y1 + 1) * w + x0] +
       sat[y0 * w + x0];
     if (sum > 0) {
-      kept[n++] = a;
-      kept[n++] = b;
-      kept[n++] = c;
+      kept[n] = a;
+      n += 1;
+      kept[n] = b;
+      n += 1;
+      kept[n] = c;
+      n += 1;
     }
   }
   return kept.slice(0, n) as T;

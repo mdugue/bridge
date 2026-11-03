@@ -82,7 +82,7 @@ function pointAt(run: CatenaryRun, s: number) {
   const { d, pts } = run;
   let i = 1;
   while (i < d.length - 1 && d[i] < s) {
-    i++;
+    i += 1;
   }
   const a = pts[i - 1];
   const b = pts[i];
@@ -289,7 +289,7 @@ function addRunWires(
     contact.push({ x: p.x - p.tz * o, y: h.contact, z: p.z + p.tx * o });
     messenger.push({ x: p.x, y: h.messenger, z: p.z });
   }
-  for (let i = 1; i < ss.length; i++) {
+  for (let i = 1; i < ss.length; i += 1) {
     const a = contact[i - 1];
     const b = contact[i];
     if (!owned(ctx, (a.x + b.x) / 2, (a.z + b.z) / 2)) {

@@ -44,7 +44,7 @@ test("the committed tables name the kinds in the viewer's order", () => {
         expect(hw).toBeGreaterThan(0);
         expect(kind).toBeGreaterThan(0);
         expect(kind).toBeLessThan(MARKING_KINDS.length);
-        rows++;
+        rows += 1;
       }
     }
   }

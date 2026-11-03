@@ -31,7 +31,7 @@ test("an error that comes back every frame is noted once, then counted", () => {
     () => now
   );
   // a throw in every frame for a few frames
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 5; i += 1) {
     errors.error("boom");
     now += 1 / 60;
   }

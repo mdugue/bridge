@@ -246,7 +246,7 @@ let pruned = 0;
 for (const entry of readdirSync(OUT_DIR)) {
   if (entry !== SITE_INDEX_FILE && !ids.includes(entry as SiteId)) {
     rmSync(join(OUT_DIR, entry), { recursive: true });
-    pruned++;
+    pruned += 1;
   }
 }
 log(

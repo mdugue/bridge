@@ -69,8 +69,8 @@ test("the projection is proj4's over every configured site's tiles", () => {
     expect(utmZoneOf(epsg)).toBeOneOf([32, 33]);
     for (const cell of site.tiles) {
       const [minX, minY, maxX, maxY] = tileExtentOf(cell);
-      for (let i = 0; i <= 4; i++) {
-        for (let j = 0; j <= 4; j++) {
+      for (let i = 0; i <= 4; i += 1) {
+        for (let j = 0; j <= 4; j += 1) {
           const x = minX + ((maxX - minX) * i) / 4;
           const y = minY + ((maxY - minY) * j) / 4;
           const [lng, lat] = proj4(def(epsg), "WGS84", [x, y]);
@@ -95,7 +95,7 @@ test("the projection is proj4's over every configured site's tiles", () => {
                 convergence(epsg, lat, lng)
             )
           );
-          points++;
+          points += 1;
         }
       }
     }

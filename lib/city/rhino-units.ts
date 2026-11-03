@@ -59,9 +59,9 @@ const EARTH_CENTRE = 2;
 /** Row-major 4×4 product a·b. */
 function times(a: readonly number[], b: readonly number[]): number[] {
   const out = Array.from({ length: 16 }, () => 0);
-  for (let r = 0; r < 4; r++) {
-    for (let c = 0; c < 4; c++) {
-      for (let k = 0; k < 4; k++) {
+  for (let r = 0; r < 4; r += 1) {
+    for (let c = 0; c < 4; c += 1) {
+      for (let k = 0; k < 4; k += 1) {
         out[r * 4 + c] += a[r * 4 + k] * b[k * 4 + c];
       }
     }

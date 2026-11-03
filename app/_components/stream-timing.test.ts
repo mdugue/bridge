@@ -116,7 +116,7 @@ test("the boot's frames are timed from the placing on: the first with a shadow m
   draw(40, false);
   draw(900, true);
   draw(30, true);
-  for (let i = 0; i < BOOT_FRAMES; i++) {
+  for (let i = 0; i < BOOT_FRAMES; i += 1) {
     draw(10, false);
   }
   const summary = timings.summary();

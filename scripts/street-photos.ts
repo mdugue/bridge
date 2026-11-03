@@ -112,7 +112,7 @@ export function shuffled<T>(items: readonly T[], seed: string): T[] {
     return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
   };
   const out = [...items];
-  for (let i = out.length - 1; i > 0; i--) {
+  for (let i = out.length - 1; i > 0; i -= 1) {
     const j = Math.floor(next() * (i + 1));
     [out[i], out[j]] = [out[j], out[i]];
   }
@@ -241,7 +241,7 @@ async function pickPhotos(
     if (!bbox) {
       continue;
     }
-    looked++;
+    looked += 1;
     const found = await searchCell(bbox);
     failed = found ? 0 : failed + 1;
     const items = (found ?? []).flatMap((item) => {

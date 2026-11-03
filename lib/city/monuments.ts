@@ -116,7 +116,7 @@ export function fountainsRun(date: Date): boolean {
 /** Shoelace area (m²) of a ring (closed or not). */
 export function ringArea(ring: readonly Point2[]): number {
   let sum = 0;
-  for (let i = 0; i < ring.length; i++) {
+  for (let i = 0; i < ring.length; i += 1) {
     const [x0, y0] = ring[i];
     const [x1, y1] = ring[(i + 1) % ring.length];
     sum += x0 * y1 - x1 * y0;
@@ -342,8 +342,8 @@ function blurPass(
   alongRows: boolean
 ): Float32Array<ArrayBuffer> {
   const out = new Float32Array(src.length);
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
+  for (let r = 0; r < rows; r += 1) {
+    for (let c = 0; c < cols; c += 1) {
       const i = r * cols + c;
       const [a, b] = alongRows
         ? [c > 0 ? src[i - 1] : 0, c < cols - 1 ? src[i + 1] : 0]
@@ -365,16 +365,16 @@ export function reliefSurface(r: ReliefGrid): ReliefSurface {
   const cols = r.cols * RELIEF_SUB + 1;
   const rows = r.rows * RELIEF_SUB + 1;
   let heights = new Float32Array(cols * rows);
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
       heights[row * cols + col] = bilinear(r, col * step, row * step);
     }
   }
-  for (let pass = 0; pass < 1; pass++) {
+  for (let pass = 0; pass < 1; pass += 1) {
     heights = blurPass(heights, cols, rows, true);
     heights = blurPass(heights, cols, rows, false);
   }
-  for (let i = 0; i < heights.length; i++) {
+  for (let i = 0; i < heights.length; i += 1) {
     if (heights[i] < RELIEF_FLOOR) {
       heights[i] = RELIEF_SINK;
     }
@@ -553,8 +553,8 @@ interface Cell {
 
 function reliefCells(r: ReliefGrid): Cell[] {
   const cells: Cell[] = [];
-  for (let row = 0; row < r.rows; row++) {
-    for (let col = 0; col < r.cols; col++) {
+  for (let row = 0; row < r.rows; row += 1) {
+    for (let col = 0; col < r.cols; col += 1) {
       const h = (r.dm[row * r.cols + col] ?? 0) / 10;
       if (h > 0) {
         cells.push({ h, x: r.west + col + 0.5, y: r.north - row - 0.5 });

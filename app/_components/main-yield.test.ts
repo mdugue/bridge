@@ -53,12 +53,16 @@ test("without requestIdleCallback the work runs after half its timeout, and is c
   jest.useFakeTimers();
   host.requestIdleCallback = undefined;
   let ran = 0;
-  whenIdle(() => ran++, 1000);
+  whenIdle(() => {
+    ran += 1;
+  }, 1000);
   jest.advanceTimersByTime(499);
   expect(ran).toBe(0);
   jest.advanceTimersByTime(1);
   expect(ran).toBe(1);
-  const cancel = whenIdle(() => ran++, 1000);
+  const cancel = whenIdle(() => {
+    ran += 1;
+  }, 1000);
   cancel();
   jest.advanceTimersByTime(1000);
   expect(ran).toBe(1);
@@ -75,7 +79,9 @@ test("with requestIdleCallback the work waits for idle, at the latest its timeou
   };
   host.cancelIdleCallback = (id: number) => cancelled.push(id);
   let ran = 0;
-  const cancel = whenIdle(() => ran++, 1000);
+  const cancel = whenIdle(() => {
+    ran += 1;
+  }, 1000);
   expect(asked).toEqual([{ timeout: 1000 }]);
   expect(ran).toBe(0);
   (idle as (() => void) | null)?.();

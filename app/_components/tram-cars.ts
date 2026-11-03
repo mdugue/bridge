@@ -195,8 +195,8 @@ function createTrails() {
     a.setUsage(DynamicDrawUsage);
   }
   const index: number[] = [];
-  for (let t = 0; t < TRAIL_CAPACITY; t++) {
-    for (let k = 0; k < TRAIL_POINTS - 1; k++) {
+  for (let t = 0; t < TRAIL_CAPACITY; t += 1) {
+    for (let k = 0; k < TRAIL_POINTS - 1; k += 1) {
       const a = (t * TRAIL_POINTS + k) * 2;
       // left, right of each cross-section, running back along the path:
       // wound to face up
@@ -233,7 +233,7 @@ function createTrails() {
       }
       const base = count * TRAIL_POINTS * 2;
       let lastY: number | null = null;
-      for (let k = 0; k < TRAIL_POINTS; k++) {
+      for (let k = 0; k < TRAIL_POINTS; k += 1) {
         const t = k / (TRAIL_POINTS - 1);
         const at = pointAlong(p, Math.max(from - t * TRAIL_M, 0));
         const y: number | null = railTop(at.x, at.y, at.onBridge) ?? lastY;
@@ -256,7 +256,7 @@ function createTrails() {
           fade.setX(v, y === null ? 0 : left);
         }
       }
-      count++;
+      count += 1;
     },
     end: () => {
       geo.setDrawRange(0, count * (TRAIL_POINTS - 1) * 6);
@@ -420,7 +420,7 @@ export function createTramCars(
       if (ctx.heightAt(...xyOf(pointAlong(p, head))) !== null) {
         trails.add(p, head - carM, railTop, ctx.offset);
       }
-      for (let k = 0; k < sections && n < CAPACITY; k++) {
+      for (let k = 0; k < sections && n < CAPACITY; k += 1) {
         const front = head - k * (sectionM + SECTION_GAP_M);
         const a = pointAlong(p, front);
         const b = pointAlong(p, front - sectionM);
@@ -445,7 +445,7 @@ export function createTramCars(
         );
         body.setMatrixAt(n, m);
         repainted = paint(n, operator) || repainted;
-        n++;
+        n += 1;
       }
     }
     for (const set of sets) {

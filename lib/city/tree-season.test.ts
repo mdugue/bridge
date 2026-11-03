@@ -45,7 +45,7 @@ test("a lime is bare in January, in full summer leaf in July, gone by December",
 });
 
 test("leaf is monotone through leaf-out and leaf fall, autumn through colouring", () => {
-  for (let g = 0; g < TREE_GENERA.length; g++) {
+  for (let g = 0; g < TREE_GENERA.length; g += 1) {
     const p = phenologyOf(g);
     let prev = -1;
     for (let d = p.leafOut[0]; d <= p.leafOut[1]; d += 0.5) {

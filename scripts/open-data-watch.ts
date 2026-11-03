@@ -436,7 +436,7 @@ async function recordStands(site: SiteId): Promise<number> {
       const current = stands.get(snKachel(cell));
       if (current && !tiles[tile]?.stand) {
         tiles[tile] = { ...tiles[tile], stand: current };
-        written++;
+        written += 1;
       }
     }
   }

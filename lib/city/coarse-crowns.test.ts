@@ -27,9 +27,9 @@ describe("which trees the coarse level draws", () => {
     let n = 0;
     for (let x = -1000; x < 1000; x += 7.3) {
       for (let z = -1000; z < 1000; z += 9.1) {
-        n++;
+        n += 1;
         if (drawnCoarse(x, z)) {
-          kept++;
+          kept += 1;
         }
       }
     }

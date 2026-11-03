@@ -76,7 +76,7 @@ function conformalTan(tau: number): number {
  *  precision at these latitudes) */
 function geodeticTan(taup: number): number {
   let tau = taup / (1 - E2);
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 5; i += 1) {
     const taui = conformalTan(tau);
     const step =
       ((taup - taui) / Math.hypot(1, taui)) *

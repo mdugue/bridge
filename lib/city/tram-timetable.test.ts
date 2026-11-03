@@ -124,7 +124,7 @@ test.each(SITES)("%s: the committed timetable is whole", (site) => {
     expect(p.at.length).toBeGreaterThanOrEqual(2);
     const m = measurePattern(p);
     const total = m.dist.at(-1) ?? 0;
-    for (let i = 1; i < p.at.length; i++) {
+    for (let i = 1; i < p.at.length; i += 1) {
       expect(p.at[i]).toBeGreaterThanOrEqual(p.at[i - 1]);
     }
     expect(p.at.at(-1) ?? 0).toBeLessThanOrEqual(total + 0.5);
@@ -132,14 +132,14 @@ test.each(SITES)("%s: the committed timetable is whole", (site) => {
   for (const prof of tt.profiles) {
     const stops = tt.patterns[prof.pattern].at.length;
     expect(prof.t).toHaveLength(2 * stops);
-    for (let i = 1; i < prof.t.length; i++) {
+    for (let i = 1; i < prof.t.length; i += 1) {
       expect(prof.t[i]).toBeGreaterThanOrEqual(prof.t[i - 1]);
     }
   }
   for (const kind of ["weekday", "saturday", "sunday"] as const) {
     const trips = tt.days[kind]?.trips ?? [];
     expect(trips.length).toBeGreaterThan(0);
-    for (let i = 1; i < trips.length; i++) {
+    for (let i = 1; i < trips.length; i += 1) {
       expect(trips[i][1]).toBeGreaterThanOrEqual(trips[i - 1][1]);
     }
   }
@@ -170,7 +170,7 @@ test("the GTFS agencies stand for their operators' liveries", () => {
 test("a trip's car length follows its fleet's mix, the same all day", () => {
   const { dvb } = TRAM_LIVERIES;
   const counts = new Map<number, number>();
-  for (let seed = 0; seed < 4000; seed++) {
+  for (let seed = 0; seed < 4000; seed += 1) {
     const l = carLength(dvb, seed * 977 + 3600);
     counts.set(l, (counts.get(l) ?? 0) + 1);
   }

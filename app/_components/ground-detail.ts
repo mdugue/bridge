@@ -370,8 +370,8 @@ function gdSmooth(
 ): { lawn: V3; road: V3 } {
   const road: F[] = [];
   const lawn: F[] = [];
-  for (let y = 0; y < 4; y++) {
-    for (let x = 0; x < 4; x++) {
+  for (let y = 0; y < 4; y += 1) {
+    for (let x = 0; x < 4; x += 1) {
       const c = classAt(inp, i.add(ivec2(x - 1, y - 1)), size).toVar();
       road.push(isClass(c, ROAD_CLASS));
       lawn.push(isLawn(c));
@@ -381,8 +381,8 @@ function gdSmooth(
     const cx = 1 + (k & 1);
     const cy = 1 + (k >> 1);
     let sum: F = float(0);
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
         sum = sum.add(m[(cy + dy) * 4 + cx + dx]);
       }
     }
@@ -535,8 +535,8 @@ function walkShares(inp: GroundInputs, surface: Tex, g: GroundFields): void {
     const u = float(0).toVar();
     const a = float(0).toVar();
     const c = float(0).toVar();
-    for (let y = -1; y <= 2; y++) {
-      for (let x = -1; x <= 2; x++) {
+    for (let y = -1; y <= 2; y += 1) {
+      for (let x = -1; x <= 2; x += 1) {
         const k = walkOf(texelAt(surface, i.add(ivec2(x, y)), size)).toVar();
         const wgt = ax[x + 1].mul(ay[y + 1]);
         s.addAssign(sealed(k).mul(wgt));
@@ -609,7 +609,7 @@ const PALETTE_LINEAR = LANDCOVER_CLASSES.map((_, k) =>
 );
 export const paletteOf = (c: I): V3 => {
   let out: V3 = vec3(...(PALETTE_LINEAR[0] as [number, number, number]));
-  for (let k = 1; k < PALETTE_LINEAR.length; k++) {
+  for (let k = 1; k < PALETTE_LINEAR.length; k += 1) {
     out = select(
       c.equal(k),
       vec3(...(PALETTE_LINEAR[k] as [number, number, number])),
@@ -745,8 +745,8 @@ export function smoothPaths(
     const grad = vec2(0).toVar();
     const outer = int(PATH_CLASS).toVar();
     const central: I[] = [];
-    for (let y = -1; y <= 2; y++) {
-      for (let x = -1; x <= 2; x++) {
+    for (let y = -1; y <= 2; y += 1) {
+      for (let x = -1; x <= 2; x += 1) {
         const c = classAt(inp, i.add(ivec2(x, y)), size).toVar();
         if (x >= 0 && x <= 1 && y >= 0 && y <= 1) {
           central.push(c);

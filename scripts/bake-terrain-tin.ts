@@ -104,7 +104,7 @@ class ScaledDelatin extends Delatin {
     let maxError = 0;
     let mx = 0;
     let my = 0;
-    for (let y = minY; y <= maxY; y++) {
+    for (let y = minY; y <= maxY; y += 1) {
       const dx = Math.max(
         rowStart(w00, a12),
         rowStart(w01, a20),
@@ -114,7 +114,7 @@ class ScaledDelatin extends Delatin {
       let w1 = w01 + a20 * dx;
       let w2 = w02 + a01 * dx;
       let wasInside = false;
-      for (let x = minX + dx; x <= maxX; x++) {
+      for (let x = minX + dx; x <= maxX; x += 1) {
         if (w0 >= 0 && w1 >= 0 && w2 >= 0) {
           wasInside = true;
           const z = z0 * w0 + z1 * w1 + z2 * w2;
@@ -161,7 +161,7 @@ export function tinFromGrid(
   maxError: number,
   scale?: ArrayLike<number>
 ): TerrainTin {
-  for (let i = 0; i < grid.length; i++) {
+  for (let i = 0; i < grid.length; i += 1) {
     if (!Number.isFinite(grid[i])) {
       throw new TypeError("terrain TIN: the source grid has NoData");
     }

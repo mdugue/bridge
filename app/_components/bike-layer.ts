@@ -99,7 +99,7 @@ const CAPACITY = 128;
 function columnGeometry(): LatheGeometry {
   const points = [new Vector2(0, 0), new Vector2(COLUMN_RADIUS, 0)];
   points.push(new Vector2(COLUMN_RADIUS, 1 - CAP_SHARE));
-  for (let i = 1; i <= 6; i++) {
+  for (let i = 1; i <= 6; i += 1) {
     const a = (i / 6) * (Math.PI / 2);
     points.push(
       new Vector2(
@@ -324,7 +324,7 @@ export function createBikeLayer(ctx: GroundContext): BikeLayer {
         pools.setColorAt(n, tint);
         rates.setX(n, stale ? 0 : RING_SPEED * Math.sqrt(d.count));
         key.push(`${n}:${w.x.toFixed(1)}:${ground.toFixed(2)}:${h}:${stale}`);
-        n++;
+        n += 1;
       }
     }
     const next = key.join("|");

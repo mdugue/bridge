@@ -142,7 +142,7 @@ export function createResolutionScale(
   const stepDown = (now: number, interval: number): number | undefined => {
     calmSince = undefined;
     fits = 0;
-    slow++;
+    slow += 1;
     if (
       slow < SLOW_WINDOWS ||
       step >= targets.maxStep ||

@@ -117,7 +117,7 @@ export function fenceU(code: number): number {
 
 function cumulative(line: Point2[]): number[] {
   const out = [0];
-  for (let i = 1; i < line.length; i++) {
+  for (let i = 1; i < line.length; i += 1) {
     const [x0, y0] = line[i - 1];
     const [x1, y1] = line[i];
     out.push(out[i - 1] + Math.hypot(x1 - x0, y1 - y0));
@@ -139,7 +139,7 @@ function project(
 ): [number, number] {
   let best: [number, number] = [0, Number.POSITIVE_INFINITY];
   const last = line.length - 2;
-  for (let i = 0; i <= last; i++) {
+  for (let i = 0; i <= last; i += 1) {
     const [x0, y0] = line[i];
     const [x1, y1] = line[i + 1];
     const dx = x1 - x0;
@@ -164,7 +164,7 @@ function project(
 
 /** The point `s` metres along the line. */
 export function pointAlong(line: Point2[], acc: number[], s: number): Point2 {
-  for (let i = 1; i < line.length; i++) {
+  for (let i = 1; i < line.length; i += 1) {
     if (s <= acc[i] || i === line.length - 1) {
       const span = acc[i] - acc[i - 1];
       const t =
@@ -185,7 +185,7 @@ function slice(
   s1: number
 ): Point2[] {
   const out: Point2[] = [pointAlong(line, acc, s0)];
-  for (let i = 1; i < line.length - 1; i++) {
+  for (let i = 1; i < line.length - 1; i += 1) {
     if (acc[i] > s0 && acc[i] < s1) {
       out.push(line[i]);
     }
@@ -264,12 +264,12 @@ function rotateRing(line: Point2[], acc: number[], s: number): Point2[] {
   const start = pointAlong(line, acc, s);
   const out: Point2[] = [start];
   const n = line.length - 1; // line[n] repeats line[0]
-  for (let i = 1; i <= n; i++) {
+  for (let i = 1; i <= n; i += 1) {
     if (acc[i] > s) {
       out.push(line[i]);
     }
   }
-  for (let i = 1; i < n; i++) {
+  for (let i = 1; i < n; i += 1) {
     if (acc[i] < s) {
       out.push(line[i]);
     }
@@ -387,7 +387,7 @@ function simplify(line: Point2[]): Point2[] {
   const len = Math.hypot(x1 - x0, y1 - y0);
   let worst = 0;
   let at = 0;
-  for (let i = 1; i < line.length - 1; i++) {
+  for (let i = 1; i < line.length - 1; i += 1) {
     const [x, y] = line[i];
     const d =
       len > 0
@@ -417,14 +417,14 @@ function stationsOf(
 ): (Station | null)[] {
   const line = simplify(piece);
   const pts: Point2[] = [];
-  for (let i = 0; i < line.length - 1; i++) {
+  for (let i = 0; i < line.length - 1; i += 1) {
     const [x0, y0] = line[i];
     const [x1, y1] = line[i + 1];
     const steps = Math.max(
       1,
       Math.ceil(Math.hypot(x1 - x0, y1 - y0) / SAMPLE_M)
     );
-    for (let s = 0; s < steps; s++) {
+    for (let s = 0; s < steps; s += 1) {
       pts.push([x0 + ((x1 - x0) * s) / steps, y0 + ((y1 - y0) * s) / steps]);
     }
   }
@@ -525,7 +525,7 @@ function buildRun(
   h: number
 ): void {
   const lo = type === "rail" ? h - RAIL_M : -SINK_M;
-  for (let i = 1; i < run.length; i++) {
+  for (let i = 1; i < run.length; i += 1) {
     b.quad(run[i - 1], run[i], panelCode(type), lo, h);
   }
 }
@@ -544,7 +544,7 @@ function buildLeaf(
     return;
   }
   const boom = BOOM_TYPES.has(leaf.gate.type ?? "");
-  for (let i = 1; i < run.length; i++) {
+  for (let i = 1; i < run.length; i += 1) {
     if (boom) {
       b.quad(run[i - 1], run[i], FENCE_CODE.frame, h - BOOM_M, h);
     } else {

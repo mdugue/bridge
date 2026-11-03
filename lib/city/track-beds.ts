@@ -124,7 +124,7 @@ interface Hit {
 function nearestOn(bed: Bed, x: number, y: number): Hit | null {
   let best: Hit | null = null;
   const last = bed.coords.length - 2;
-  for (let i = 0; i <= last; i++) {
+  for (let i = 0; i <= last; i += 1) {
     const hit = onSegment(bed, i, x, y);
     if (hit && (!best || hit.d < best.d)) {
       best = hit;
@@ -178,11 +178,11 @@ export function burnBeds(input: {
   const dy = (maxY - minY) / n;
   for (const bed of beds) {
     const reach = bed.half + BED_SIDE_M;
-    for (let i = 0; i + 1 < bed.coords.length; i++) {
+    for (let i = 0; i + 1 < bed.coords.length; i += 1) {
       const [c0, c1, r0, r1] = segmentCells(bed, i, reach, input);
-      for (let row = r0; row <= r1; row++) {
+      for (let row = r0; row <= r1; row += 1) {
         const y = maxY - (row + 0.5) * dy;
-        for (let col = c0; col <= c1; col++) {
+        for (let col = c0; col <= c1; col += 1) {
           const hit = onSegment(bed, i, minX + (col + 0.5) * dx, y);
           const idx = row * n + col;
           if (hit && hit.d <= reach && opens(bed, hit, elevations[idx])) {
@@ -363,15 +363,15 @@ export class BedIndex {
   ) {
     for (const bed of beds) {
       const reach = bed.half + margin;
-      for (let i = 0; i + 1 < bed.coords.length; i++) {
+      for (let i = 0; i + 1 < bed.coords.length; i += 1) {
         const [ax, ay] = bed.coords[i];
         const [bx, by] = bed.coords[i + 1];
         const c0 = Math.floor((Math.min(ax, bx) - reach) / CELL_M);
         const c1 = Math.floor((Math.max(ax, bx) + reach) / CELL_M);
         const r0 = Math.floor((Math.min(ay, by) - reach) / CELL_M);
         const r1 = Math.floor((Math.max(ay, by) + reach) / CELL_M);
-        for (let c = c0; c <= c1; c++) {
-          for (let r = r0; r <= r1; r++) {
+        for (let c = c0; c <= c1; c += 1) {
+          for (let r = r0; r <= r1; r += 1) {
             const k = `${c}:${r}`;
             let list = this.cells.get(k);
             if (!list) {

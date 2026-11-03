@@ -151,7 +151,7 @@ export function nestRings(
     const [x, y] = ring[0];
     // the smallest ring placed so far that holds this one
     let container: (typeof placed)[number] | null = null;
-    for (let i = placed.length - 1; i >= 0; i--) {
+    for (let i = placed.length - 1; i >= 0; i -= 1) {
       if (inside(placed[i].ring, x, y)) {
         container = placed[i];
         break;
@@ -280,7 +280,7 @@ function writeTree(
     low: ReturnType<typeof ring>,
     high: ReturnType<typeof ring>
   ) => {
-    for (let i = 0; i < sides; i++) {
+    for (let i = 0; i < sides; i += 1) {
       const j = (i + 1) % sides;
       out.triangle(low[i].p, low[j].p, high[j].p, [
         low[i].y,
@@ -305,7 +305,7 @@ function writeTree(
   band(w, rings[1], rings[2]);
   const top: PlanPoint = [at[0], at[1]];
   const bottom: PlanPoint = [at[0], at[1]];
-  for (let i = 0; i < sides; i++) {
+  for (let i = 0; i < sides; i += 1) {
     const j = (i + 1) % sides;
     const [hi, hj] = [rings[2][i], rings[2][j]];
     w.triangle(hi.p, hj.p, top, [hi.y, hj.y, ground + height]);
@@ -332,7 +332,7 @@ function writeBuilding(
     // the outside lies right of each edge, and (a, b, b′) faces it
     const anticlockwise = ringArea(ring) >= 0;
     const r = anticlockwise === (k === 0) ? ring : [...ring].reverse();
-    for (let i = 0; i < r.length; i++) {
+    for (let i = 0; i < r.length; i += 1) {
       const a = r[i];
       const b = r[(i + 1) % r.length];
       w.vertex(a, ground);
@@ -379,7 +379,7 @@ class PlanGround {
   own(p: PlanPoint): number | null {
     const h = ownHeight(p);
     if (h !== null) {
-      this.owned++;
+      this.owned += 1;
     }
     return h;
   }
@@ -387,9 +387,9 @@ class PlanGround {
   at(p: PlanPoint): number | null {
     const h = this.heightAt(p[0], p[1]);
     if (h === null) {
-      this.undraped++;
+      this.undraped += 1;
     } else {
-      this.draped++;
+      this.draped += 1;
       this.lowest = Math.min(this.lowest, h);
     }
     return h;
@@ -435,7 +435,7 @@ function nestingDepth(
   const px = x + (x1 - x) * 0.01;
   const py = y + (y1 - y) * 0.01;
   let depth = 0;
-  for (let i = 0; i < k; i++) {
+  for (let i = 0; i < k; i += 1) {
     const b = boxes[i];
     // the box first: a plan of thousands of hatches asks few rings
     if (
@@ -445,7 +445,7 @@ function nestingDepth(
       py <= b[3] &&
       inside(outers[i], px, py)
     ) {
-      depth++;
+      depth += 1;
     }
   }
   return depth;
@@ -484,7 +484,7 @@ function cutCount(tris: readonly Tri[], edge: number, limit: number): number {
 function cutWithin(areas: readonly Tri[][], edge: number): Tri[][] {
   const all = areas.flat();
   let length = edge;
-  for (let round = 0; round < CUT_ROUNDS; round++) {
+  for (let round = 0; round < CUT_ROUNDS; round += 1) {
     if (cutCount(all, length, DRAPE_TRIANGLES) <= DRAPE_TRIANGLES) {
       break;
     }

@@ -118,7 +118,7 @@ test("a tile asked for again that the renderer no longer wants does not hold the
       onBootGiveUp: () => {},
       onClear: told
         ? () => {
-            cleared++;
+            cleared += 1;
           }
         : undefined,
     });

@@ -63,8 +63,8 @@ export class TrackIndex {
     const cz = Math.floor(z / CELL_M);
     let best: TrackSample | null = null;
     let bd = reach * reach;
-    for (let dx = -r; dx <= r; dx++) {
-      for (let dz = -r; dz <= r; dz++) {
+    for (let dx = -r; dx <= r; dx += 1) {
+      for (let dz = -r; dz <= r; dz += 1) {
         for (const s of this.cells.get(`${cx + dx}:${cz + dz}`) ?? []) {
           const d = (s.x - x) ** 2 + (s.z - z) ** 2;
           if (d <= bd) {

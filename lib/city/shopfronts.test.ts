@@ -177,8 +177,8 @@ function overlaps(tris: { p: number[] }[]): [number, number][] {
     return { n: unit(n.n), c: n.c, p };
   });
   const out: [number, number][] = [];
-  for (let i = 0; i < geo.length; i++) {
-    for (let j = i + 1; j < geo.length; j++) {
+  for (let i = 0; i < geo.length; i += 1) {
+    for (let j = i + 1; j < geo.length; j += 1) {
       const a = geo[i];
       const b = geo[j];
       const d = a.n[0] * b.n[0] + a.n[1] * b.n[1] + a.n[2] * b.n[2];
@@ -226,7 +226,7 @@ function overlap2d(
   const ta = flat(a.p);
   const tb = flat(b.p);
   for (const t of [ta, tb]) {
-    for (let k = 0; k < 3; k++) {
+    for (let k = 0; k < 3; k += 1) {
       const [x0, y0] = t[k];
       const [x1, y1] = t[(k + 1) % 3];
       const ax = [y1 - y0, x0 - x1];
@@ -380,7 +380,7 @@ describe("the mesh", () => {
       expect(n[0]).toBeCloseTo((x - (2 - reveal)) / reveal, 6);
       expect(-n[1]).toBeCloseTo((out - (proud - reveal)) / reveal, 6);
       if (-n[1] > 0.2 && -n[1] < 0.95) {
-        round++;
+        round += 1;
       }
     }
     expect(round).toBeGreaterThan(0);
@@ -418,8 +418,8 @@ describe("the mesh", () => {
       const along = tris
         .map(({ p }) => ({ p, t: triangles(p)[0] }))
         .filter(({ t }) => Math.abs(unit(t.n)[1]) > 0.99);
-      for (let i = 0; i < along.length; i++) {
-        for (let j = i + 1; j < along.length; j++) {
+      for (let i = 0; i < along.length; i += 1) {
+        for (let j = i + 1; j < along.length; j += 1) {
           const gap = Math.abs(along[i].t.c[1] - along[j].t.c[1]);
           if (gap < 0.005) {
             continue;
@@ -507,7 +507,7 @@ describe("the mesh", () => {
       for (let i = 0; i < normals.length; i += 3) {
         const out = -normals[i + 1];
         if (out > 0.3 && out < 0.95 && Math.abs(normals[i + 2]) > 0.3) {
-          soft++;
+          soft += 1;
         }
       }
       expect(soft).toBeGreaterThan(0);

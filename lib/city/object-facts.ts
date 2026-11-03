@@ -98,7 +98,7 @@ export function ringsArea(rings: readonly (readonly [number, number][])[]) {
   let total = 0;
   for (const ring of rings) {
     let twice = 0;
-    for (let i = 0; i < ring.length; i++) {
+    for (let i = 0; i < ring.length; i += 1) {
       const [x0, y0] = ring[i];
       const [x1, y1] = ring[(i + 1) % ring.length];
       twice += x0 * y1 - x1 * y0;
@@ -134,7 +134,7 @@ export function unionArea(
     spans.length = 0;
     for (const ring of rings) {
       xs.length = 0;
-      for (let i = 0; i < ring.length; i++) {
+      for (let i = 0; i < ring.length; i += 1) {
         const [ax, ay] = ring[i];
         const [bx, by] = ring[(i + 1) % ring.length];
         if (ay > y !== by > y) {

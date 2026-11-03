@@ -18,7 +18,7 @@ test("the average over a day is the average hour", () => {
   for (const kind of ["weekday", "saturday", "sunday"] as const) {
     let sum = 0;
     const steps = 24 * 60;
-    for (let i = 0; i < steps; i++) {
+    for (let i = 0; i < steps; i += 1) {
       sum += trafficFactorAt(kind, (i * 86_400) / steps);
     }
     expect(sum / steps).toBeCloseTo(1, 6);

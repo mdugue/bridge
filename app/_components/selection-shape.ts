@@ -37,7 +37,7 @@ function appendTriangles(
 ): void {
   const position = geometry.getAttribute("position");
   const count = index ? index.length : position.count;
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < count; i += 1) {
     at.fromBufferAttribute(position, index ? index[i] : i).applyMatrix4(matrix);
     out.push(at.x, at.y, at.z);
   }

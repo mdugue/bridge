@@ -105,7 +105,7 @@ export class Instances<M extends Material = Material> extends Mesh<
 
   set instanceMatrix(buffer: InstancedInterleavedBuffer) {
     this.#matrices = buffer;
-    for (let column = 0; column < 4; column++) {
+    for (let column = 0; column < 4; column += 1) {
       this.geometry.setAttribute(
         `iMat${column}`,
         new InterleavedBufferAttribute(buffer, 4, column * 4)
@@ -181,7 +181,7 @@ export class Instances<M extends Material = Material> extends Mesh<
     const m = new Matrix4();
     const p = new Vector3();
     let reach = 0;
-    for (let i = 0; i < this.drawCount; i++) {
+    for (let i = 0; i < this.drawCount; i += 1) {
       this.getMatrixAt(i, m);
       box.expandByPoint(p.copy(base.center).applyMatrix4(m));
       reach = Math.max(reach, base.radius * m.getMaxScaleOnAxis());

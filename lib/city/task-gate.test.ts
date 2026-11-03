@@ -92,10 +92,10 @@ test("never more at once than the gate has places", async () => {
   let now = 0;
   let most = 0;
   const task = async () => {
-    now++;
+    now += 1;
     most = Math.max(most, now);
     await settle();
-    now--;
+    now -= 1;
   };
   await Promise.all(Array.from({ length: 7 }, async () => gate.run(task)));
   expect(most).toBe(2);

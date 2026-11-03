@@ -73,7 +73,7 @@ function sectionEntities(groups: readonly Group[], name: string): Entity[] {
   const out: Entity[] = [];
   let inside = false;
   let current: Entity | null = null;
-  for (let i = 0; i < groups.length; i++) {
+  for (let i = 0; i < groups.length; i += 1) {
     const g = groups[i];
     if (g.code === 0 && g.value === "SECTION") {
       inside = groups[i + 1]?.code === 2 && groups[i + 1].value === name;
@@ -144,7 +144,7 @@ function bulgePoints(
   const steps = Math.max(2, Math.ceil(Math.abs(angle) / (Math.PI / 12)));
   const r = Math.abs(radius);
   const out: [number, number][] = [];
-  for (let i = 1; i < steps; i++) {
+  for (let i = 1; i < steps; i += 1) {
     const t = start + (angle * i) / steps;
     out.push([cx + r * Math.cos(t), cy + r * Math.sin(t)]);
   }
@@ -178,7 +178,7 @@ function arcPoints(
   }
   const steps = Math.max(2, Math.ceil(Math.abs(a1 - a0) / (Math.PI / 12)));
   const out: [number, number][] = [];
-  for (let i = 0; i <= steps; i++) {
+  for (let i = 0; i <= steps; i += 1) {
     const t = a0 + ((a1 - a0) * i) / steps;
     out.push([cx + r * Math.cos(t), cy + r * Math.sin(t)]);
   }
@@ -191,7 +191,7 @@ function withBulges(
   closed: boolean
 ): PlanPoint[] {
   const out: PlanPoint[] = [];
-  for (let i = 0; i < vertices.length; i++) {
+  for (let i = 0; i < vertices.length; i += 1) {
     const v = vertices[i];
     out.push(v.z === undefined ? [v.x, v.y] : [v.x, v.y, v.z]);
     const next = vertices[i + 1] ?? (closed ? vertices[0] : null);
@@ -306,14 +306,14 @@ function hatchRings(e: Entity): PlanPoint[][] {
     return rings;
   }
   const paths = Number.parseInt(g[i].value, 10);
-  i++;
+  i += 1;
   const at = (code: number) => {
     while (i < g.length && g[i].code !== code) {
-      i++;
+      i += 1;
     }
     return i < g.length ? Number.parseFloat(g[i++].value) : 0;
   };
-  for (let p = 0; p < paths && i < g.length; p++) {
+  for (let p = 0; p < paths && i < g.length; p += 1) {
     const type = at(92);
     const ring: PlanPoint[] = [];
     if (type & 2) {
@@ -322,7 +322,7 @@ function hatchRings(e: Entity): PlanPoint[][] {
       const n = at(93);
       const vertices: { x: number; y: number; z?: number; bulge: number }[] =
         [];
-      for (let k = 0; k < n; k++) {
+      for (let k = 0; k < n; k += 1) {
         const x = at(10);
         const y = at(20);
         const bulge = hasBulge ? at(42) : 0;
@@ -331,7 +331,7 @@ function hatchRings(e: Entity): PlanPoint[][] {
       ring.push(...withBulges(vertices, true));
     } else {
       const edges = at(93);
-      for (let k = 0; k < edges; k++) {
+      for (let k = 0; k < edges; k += 1) {
         ring.push(...hatchEdge(at, z));
       }
     }
@@ -393,11 +393,11 @@ function hatchEdge(
   at(74);
   const knots = at(95);
   const controls = at(96);
-  for (let k = 0; k < knots; k++) {
+  for (let k = 0; k < knots; k += 1) {
     at(40);
   }
   const out: PlanPoint[] = [];
-  for (let k = 0; k < controls; k++) {
+  for (let k = 0; k < controls; k += 1) {
     out.push(pt([at(10), at(20)]));
   }
   return out;
@@ -547,7 +547,7 @@ export function readDxf(text: string): DxfPlan {
     crowns: blockCrowns(groups),
   };
   const entities = sectionEntities(groups, "ENTITIES");
-  for (let k = 0; k < entities.length; k++) {
+  for (let k = 0; k < entities.length; k += 1) {
     const e = entities[k];
     const layer = first(e, 8)?.value ?? "0";
     // paper space and drawing furniture are not the plan
