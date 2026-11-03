@@ -37,6 +37,8 @@ export interface OrderedTile {
     distanceFromCamera: number;
     error: number;
     inFrustum: boolean;
+    /** the renderer's frame count when the traversal last visited it */
+    lastFrameVisited?: number;
     used: boolean;
   } | null;
 }
@@ -82,7 +84,9 @@ export function siteTileOf(uri: string | undefined): string | null {
 
 /** A content's site tile, read once per tile (a name scan). */
 const siteTiles = new WeakMap<object, string | null>();
-function siteTileOfTile(tile: CachedTile): string | null {
+export function siteTileOfTile(tile: {
+  content?: { uri?: string } | null;
+}): string | null {
   let id = siteTiles.get(tile);
   if (id === undefined) {
     id = siteTileOf(tile.content?.uri);

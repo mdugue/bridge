@@ -55,10 +55,12 @@ export function readAskKey(): AskKey | null {
   try {
     // remembered is what the device keeps, whichever copy is read
     const kept = localStorage.getItem(STORAGE_KEYS.askKey);
-    return (
-      parse(sessionStorage.getItem(SESSION_KEYS.askKey), kept !== null) ??
-      parse(kept, true)
-    );
+    const tab = sessionStorage.getItem(SESSION_KEYS.askKey);
+    const own = parse(tab, false);
+    // the tab's key counts as remembered only if the device keeps it
+    return own
+      ? { ...own, remember: parse(kept, true)?.key === own.key }
+      : parse(kept, true);
   } catch {
     return null;
   }

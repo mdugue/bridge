@@ -9,7 +9,8 @@ const STUB: AskScene = {
   setListening: () => undefined,
   setStyle: () => undefined,
   setTime: () => "",
-  show: () => undefined,
+  show: () => true,
+  within: () => true,
   where: () => ({}),
 };
 

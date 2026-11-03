@@ -158,8 +158,10 @@ export const ASK_LIMITS = {
   messages: 40,
   /** characters of the whole conversation the server takes */
   conversationChars: 60_000,
-  /** model turns of one answer (each tool round is one) */
+  /** model turns of one request (each tool round is one) */
   iterations: 8,
+  /** model turns of one answer, across the requests a scene tool resumes */
+  answerRounds: 12,
   /** entries one search or neighbourhood tool returns */
   results: 12,
   /** the radius the neighbourhood tool reaches (m) */
@@ -167,6 +169,16 @@ export const ASK_LIMITS = {
   /** how long a checked key's token lasts (ms) */
   tokenMs: 12 * 3600 * 1000,
 } as const;
+
+/** Why an answer stopped at its turn cap, in the stream or as a 422. */
+export const TOO_MANY_STEPS = "Die Antwort brauchte zu viele Schritte.";
+
+/** A conversation past what the server or the model takes. */
+export const TOO_LONG = "Das Gespräch ist zu lang geworden.";
+
+/** Why an answer ended mid-text: the model's output ran out. */
+export const CUT_SHORT =
+  "Die Antwort wurde abgeschnitten: dem Modell gingen die Wörter aus.";
 
 /** What the server reads of a request beyond the messages. */
 export interface AskRequestProps {
@@ -263,11 +275,11 @@ export function conversationProblem(
     return "keine Frage";
   }
   if (messages.length > ASK_LIMITS.messages) {
-    return "Das Gespräch ist zu lang geworden — bitte neu beginnen.";
+    return `${TOO_LONG} Bitte neu beginnen.`;
   }
   const chars = messages.reduce<number>((n, m) => n + messageChars(m), 0);
   if (chars > ASK_LIMITS.conversationChars) {
-    return "Das Gespräch ist zu lang geworden — bitte neu beginnen.";
+    return `${TOO_LONG} Bitte neu beginnen.`;
   }
   if (lastQuestion.length > ASK_LIMITS.questionChars) {
     return `Die Frage ist zu lang (höchstens ${ASK_LIMITS.questionChars} Zeichen).`;

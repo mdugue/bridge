@@ -10,6 +10,7 @@ import { activeDataLayers, siteDataLayers } from "@/lib/city/data-layers";
 import type { FramePace } from "@/lib/city/frame-pace";
 import { inquiryCard } from "@/lib/city/inquiry";
 import type { LookState } from "@/lib/city/look-state";
+import { siteHoldsPoint } from "@/lib/city/geolocation";
 import type { Site } from "@/lib/city/site";
 import type { AskScene } from "./ask-scene-tools";
 import type { CityWalkHandle } from "./create-app";
@@ -88,7 +89,12 @@ export function useAskScene(
         };
       },
       setListening: (on) => pace.setListening(on),
-      show: (view) => handleRef.current?.flyToViewpoint(view),
+      show: (view) => {
+        const h = handleRef.current;
+        h?.flyToViewpoint(view);
+        return h !== null;
+      },
+      within: (x, y) => siteHoldsPoint(site, x, y),
       setTime: (hour, date) => {
         const at = instantAt(hour, current(), date);
         setInstant(at);

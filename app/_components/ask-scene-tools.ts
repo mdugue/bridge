@@ -28,7 +28,10 @@ export interface AskScene {
   /** the scene's time to `hour` (of `date`, YYYY-MM-DD, or today's day);
    *  the instant it set, as text */
   setTime: (hour: number, date?: string) => string;
-  show: (view: ViewpointGeometry) => void;
+  /** glides to a view; false while there is no scene to move */
+  show: (view: ViewpointGeometry) => boolean;
+  /** whether a point (site CRS) lies on one of the site's tiles */
+  within: (x: number, y: number) => boolean;
   /** the player's pose, mode, time, style and layers, for the model */
   where: () => Record<string, unknown>;
   /** asks what stands at the centre of the view (and opens its card) */
@@ -44,10 +47,14 @@ export function sceneTools(scene: AskScene) {
     lookTool.client(() => scene.look()),
     showTool.client((input) => {
       const target: AskTarget = input;
-      scene.show(
+      if (!scene.within(target.x, target.y)) {
+        return { ok: false, ausserhalb: true, hinweis: OUTSIDE };
+      }
+      return scene.show(
         askView(target, scene.from() ?? target, input.aus_der_luft ?? false)
-      );
-      return { ok: true };
+      )
+        ? { ok: true }
+        : { ok: false, hinweis: "Die Szene lädt noch." };
     }),
     timeTool.client(({ stunde, datum }) => ({
       ok: true,
@@ -64,3 +71,8 @@ export function sceneTools(scene: AskScene) {
     )
   );
 }
+
+/** What the model hears for a point off the city's tiles: often a
+ *  latitude/longitude or swapped axes. */
+const OUTSIDE =
+  "Dieser Punkt liegt nicht in der Stadt. x ist der Rechtswert, y der Hochwert in Metern, wie suche_stadt sie liefert — keine Grad.";

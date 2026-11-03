@@ -39,7 +39,10 @@ import {
   type AskProviderId,
   maskedKey,
   plausibleKey,
+  CUT_SHORT,
   providerForKey,
+  TOO_LONG,
+  TOO_MANY_STEPS,
 } from "@/lib/city/ask-city";
 import { Button } from "@/components/ui/button";
 import { Message, MessageContent } from "@/components/ui/message";
@@ -79,6 +82,8 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
     scene.setListening(hearing);
     return () => scene.setListening(false);
   }, [scene, hearing]);
+  // the key the conversation runs on, kept while the form is open
+  const [held, setHeld] = useState(key);
   return (
     <>
       {hearing && (
@@ -141,23 +146,31 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
             <XIcon className="size-4" />
           </button>
         </header>
-        {key ? (
-          <Conversation
-            askKey={key}
-            hearing={hearing}
-            onHearing={setHearing}
-            key={key.token || key.key}
-            onKeyProblem={() => setKey(null)}
-            reading={reading}
-            setReading={setReading}
-            scene={scene}
-            site={site}
-          />
-        ) : (
+        {held && (
+          // a renewed token keeps the conversation: it stays mounted, hidden,
+          // while the key is checked again, and remounts only for another key
+          <div className={key ? "contents" : "hidden"}>
+            <Conversation
+              askKey={key ?? held}
+              hearing={hearing}
+              key={`${held.provider}:${held.key}`}
+              onHearing={setHearing}
+              onKeyProblem={() => setKey(null)}
+              reading={reading}
+              scene={scene}
+              setReading={setReading}
+              site={site}
+            />
+          </div>
+        )}
+        {!key && (
           <KeyForm
+            // a forgotten key ends the conversation that runs on it
+            onForget={() => setHeld(null)}
             onKey={(k) => {
               writeAskKey(k);
               setKey(k);
+              setHeld(k);
             }}
           />
         )}
@@ -168,8 +181,14 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
 
 // --- the key ------------------------------------------------------------------
 
-function KeyForm({ onKey }: { onKey: (key: AskKey) => void }) {
-  const stored = readAskKey();
+function KeyForm({
+  onForget,
+  onKey,
+}: {
+  onForget: () => void;
+  onKey: (key: AskKey) => void;
+}) {
+  const [stored, setStored] = useState(readAskKey);
   const [provider, setProvider] = useState<AskProviderId>(
     stored?.provider ?? "anthropic"
   );
@@ -337,6 +356,8 @@ function KeyForm({ onKey }: { onKey: (key: AskKey) => void }) {
               className="underline underline-offset-2 hover:text-foreground"
               onClick={() => {
                 clearAskKey();
+                setStored(null);
+                onForget();
                 setText("");
               }}
               type="button"
@@ -358,31 +379,71 @@ const SUGGESTIONS = [
   "Wie sieht es hier am Abend aus?",
 ];
 
-/** A failed answer in words, by the status the server sent. */
-function errorText(error: Error): { key: boolean; text: string } {
+/** A provider's error that names the key or the account's credit. */
+const KEY_TROUBLE =
+  /\b(401|402|403|unauthori[sz]ed|forbidden|authenticat\w*|api[ _-]?key|credits?|credentials?|quota|billing|insufficient)\b/i;
+/** The same, as the code a provider's error carries. */
+const KEY_CODES = new Set(["401", "402", "403"]);
+
+/** A failed answer in words, by the status the server sent, and what
+ *  the visitor can do about it: check the key again or start over. */
+function errorText(error: Error): {
+  key: boolean;
+  reset: boolean;
+  text: string;
+} {
   const status = (error as { status?: unknown }).status;
+  const say = (text: string, key = false, reset = false) => ({
+    key,
+    reset,
+    text,
+  });
   if (status === 401) {
-    return { key: true, text: "Der Schlüssel muss neu geprüft werden." };
+    return say("Der Schlüssel muss neu geprüft werden.", true);
+  }
+  if (status === 400) {
+    // an older page, or a model the server no longer offers
+    return say(
+      "Die Anfrage passt nicht zu diesem Server — lade die Seite neu."
+    );
   }
   if (status === 413) {
-    return {
-      key: false,
-      text: "Das Gespräch ist zu lang geworden — bitte neu beginnen.",
-    };
+    return say(TOO_LONG, false, true);
+  }
+  if (status === 422) {
+    return say(`${TOO_MANY_STEPS} Frag bitte anders.`, false, true);
   }
   if (status === 404) {
-    return { key: false, text: "Für diese Stadt gibt es kein Stadtwissen." };
+    return say("Für diese Stadt gibt es kein Stadtwissen.");
   }
   if (status === 501) {
-    return {
-      key: false,
-      text: "Frag die Stadt ist auf diesem Server nicht eingerichtet.",
-    };
+    return say("Frag die Stadt ist auf diesem Server nicht eingerichtet.");
   }
   if (typeof status === "number") {
-    return { key: false, text: `Der Server antwortet mit Status ${status}.` };
+    return say(`Der Server antwortet mit Status ${status}.`);
   }
-  return { key: false, text: error.message || "Die Antwort brach ab." };
+  // a key revoked or out of credit after the check fails in the stream,
+  // in the provider's words: offer the check again for those only
+  const message = error.message || "Die Antwort brach ab.";
+  const code = argText((error as { code?: unknown }).code);
+  if (message === TOO_MANY_STEPS) {
+    return say(`${TOO_MANY_STEPS} Frag bitte anders.`, false, true);
+  }
+  // the codes first, the provider's words only where no code says it
+  if (KEY_CODES.has(code)) {
+    return say(message, true);
+  }
+  // the adapters' codes for a spent output budget and a full context
+  if (
+    code === "max_tokens" ||
+    (code === "incomplete" && message === "max_output_tokens")
+  ) {
+    return say(CUT_SHORT);
+  }
+  if (code === "context_overflow") {
+    return say(TOO_LONG, false, true);
+  }
+  return say(message, KEY_TROUBLE.test(message));
 }
 
 /**
@@ -555,7 +616,7 @@ function Conversation({
 }) {
   const speech = useSpeech();
   const tools = useMemo(() => sceneTools(scene), [scene]);
-  // the card remounts for another key (keyed by it), so this one is fixed
+  // the conversation remounts for another key (keyed by it): fixed here
   const secret = askKey.key;
   const connection = useMemo(
     () =>
@@ -597,7 +658,22 @@ function Conversation({
       void chat.sendMessage(q, { body: { voice } });
     }
   };
-  const failure = chat.error ? errorText(chat.error) : null;
+  // a renewed token (same key, no remount) clears the error it answered
+  // (each check sets a new expiry, with or without a token)
+  const [renewed, setRenewed] = useState({
+    at: askKey.expires,
+    error: undefined as Error | undefined,
+  });
+  if (renewed.at !== askKey.expires) {
+    // only an error the check answers: one about the key
+    const keyError = chat.error && errorText(chat.error).key;
+    setRenewed({
+      at: askKey.expires,
+      error: keyError ? chat.error : undefined,
+    });
+  }
+  const failure =
+    chat.error && chat.error !== renewed.error ? errorText(chat.error) : null;
 
   return (
     <>
@@ -642,6 +718,15 @@ function Conversation({
                       type="button"
                     >
                       Schlüssel prüfen
+                    </button>
+                  )}
+                  {failure.reset && (
+                    <button
+                      className="underline underline-offset-2"
+                      onClick={chat.clear}
+                      type="button"
+                    >
+                      Neu beginnen
                     </button>
                   )}
                 </p>
@@ -724,8 +809,17 @@ function argText(value: unknown): string {
 }
 
 /** What a tool call says it did, in the trace under an answer. */
-function toolLine(name: string, input: unknown): string {
+function toolLine(name: string, input: unknown, output?: unknown): string {
   const args = (input ?? {}) as Record<string, unknown>;
+  // a refused call says why, in the card's words (the model's are longer)
+  const refused = output as
+    | { ausserhalb?: unknown; hinweis?: unknown; ok?: unknown }
+    | undefined;
+  if (refused?.ok === false) {
+    return refused.ausserhalb === true
+      ? "Findet den Ort nicht in der Stadt"
+      : argText(refused.hinweis) || "Abgelehnt";
+  }
   switch (name) {
     case "suche_stadt":
       return `Sucht „${argText(args.anfrage)}“`;
@@ -766,7 +860,10 @@ function toolIcon(name: string) {
 /** Text with its web links clickable; nothing else is interpreted. */
 function Linked({ text }: { text: string }) {
   // a sentence's closing punctuation after a link is not part of it
-  const parts = text.split(/(https:\/\/[^\s)\]]*[^\s)\].,;:!?»“”"'])/g);
+  // and a bracketed part, as in Wikipedia's „Zwinger_(Dresden)“, is
+  const parts = text.split(
+    /(https:\/\/(?:[^\s()[\]]|\([^\s()]*\))*(?:[^\s()[\].,;:!?»“”"']|\([^\s()]*\)))/g
+  );
   return (
     <>
       {parts.map((part, i) =>
@@ -831,7 +928,7 @@ function ChatMessage({
                 }
               >
                 <TraceIcon>{toolIcon(c.name)}</TraceIcon>
-                <TraceTitle>{toolLine(c.name, c.input)}</TraceTitle>
+                <TraceTitle>{toolLine(c.name, c.input, c.output)}</TraceTitle>
               </TraceLine>
             ))}
           </Trace>
