@@ -13,8 +13,7 @@ function ring(sides: number, arc: number): Float32Array {
   for (let i = 0; i < sides; i++) {
     const [ax, ay] = at(i);
     const [bx, by] = at(i + 1);
-    out.push(ax, ay, 0, bx, by, 0, bx, by, 5);
-    out.push(ax, ay, 0, bx, by, 5, ax, ay, 5);
+    out.push(ax, ay, 0, bx, by, 0, bx, by, 5, ax, ay, 0, bx, by, 5, ax, ay, 5);
   }
   return Float32Array.from(out);
 }

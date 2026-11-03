@@ -275,23 +275,26 @@ function sceneTools({
       title: "Zwischen Gehen und Fliegen wechseln",
     });
   }
-  tools.push({
-    id: "model",
-    label: "Modell",
-    icon: BoxIcon,
-    pressed: mode === "model",
-    onClick: onToggleModel,
-    title:
-      "Modell: die Stadt in Parallelprojektion — Isometrie, Lageplan, Ansicht (M)",
-  });
-  tools.push({
-    id: "ask",
-    label: "Fragen",
-    icon: MessageCircleQuestionIcon,
-    pressed: asking,
-    onClick: onAsk,
-    title: "Frag die Stadt: Fragen zur Stadt, mit deinem eigenen KI-Schlüssel",
-  });
+  tools.push(
+    {
+      id: "model",
+      label: "Modell",
+      icon: BoxIcon,
+      pressed: mode === "model",
+      onClick: onToggleModel,
+      title:
+        "Modell: die Stadt in Parallelprojektion — Isometrie, Lageplan, Ansicht (M)",
+    },
+    {
+      id: "ask",
+      label: "Fragen",
+      icon: MessageCircleQuestionIcon,
+      pressed: asking,
+      onClick: onAsk,
+      title:
+        "Frag die Stadt: Fragen zur Stadt, mit deinem eigenen KI-Schlüssel",
+    }
+  );
   return tools;
 }
 

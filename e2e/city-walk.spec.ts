@@ -272,8 +272,10 @@ function designPlanDxf([e, n]: [number, number]) {
     [20, y0 + h],
     [97, 0],
   ];
-  groups.push(...hatch("L-RASEN", e - 60, n - 40, 60, 40));
-  groups.push(...hatch("L-PFLASTER", e - 40, n - 30, 15, 15));
+  groups.push(
+    ...hatch("L-RASEN", e - 60, n - 40, 60, 40),
+    ...hatch("L-PFLASTER", e - 40, n - 30, 15, 15)
+  );
   for (const [x, y] of [
     [e - 50, n - 10],
     [e - 10, n - 30],
