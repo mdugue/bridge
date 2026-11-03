@@ -56,8 +56,9 @@ describe("doorMesh", () => {
     expect(faceNormals(surround).filter(([x]) => x === 1)).toHaveLength(6);
   });
 
+  const xs = (tris: number[]) => tris.filter((_, i) => i % 3 === 0);
+
   test("a shift lays it out along the normal", () => {
-    const xs = (tris: number[]) => tris.filter((_, i) => i % 3 === 0);
     const at = Math.max(...xs(doorMesh(door(1, 0), offset).surround));
     const moved = Math.max(...xs(doorMesh(door(1, 0), offset, 0.2).surround));
     expect(at).toBeCloseTo(100 + DOOR_SURROUND.proud, 6);
@@ -125,21 +126,22 @@ describe("wallShiftAlong", () => {
   });
 });
 
+const roof = (z: (x: number, y: number) => number): number[] => {
+  const q = [
+    [100, 190],
+    [100, 210],
+    [94, 210],
+    [94, 190],
+  ].map(([x, y]) => [x, y, z(x, y)]);
+  return [...q[0], ...q[1], ...q[2], ...q[0], ...q[2], ...q[3]];
+};
+
 describe("eaveAlong", () => {
   const run = [
     [100, 195],
     [100, 205],
   ] as const;
   /** A roof face over x 94..100 (y 190..210), its height at (x, y). */
-  const roof = (z: (x: number, y: number) => number): number[] => {
-    const q = [
-      [100, 190],
-      [100, 210],
-      [94, 210],
-      [94, 190],
-    ].map(([x, y]) => [x, y, z(x, y)]);
-    return [...q[0], ...q[1], ...q[2], ...q[0], ...q[2], ...q[3]];
-  };
 
   test("reads where a roof falling to the wall meets it", () => {
     const pitched = roof((x) => 12 + (100 - x));

@@ -67,12 +67,10 @@ test("the street's signs and fixtures each build an instanced model", () => {
   }
 });
 
+const build = () =>
+  buildFurniture([at({ k: "column" }), at({ k: "column", lit: true }, 5)], ctx);
+
 test("every tile wears the scene's node materials", () => {
-  const build = () =>
-    buildFurniture(
-      [at({ k: "column" }), at({ k: "column", lit: true }, 5)],
-      ctx
-    );
   const byName = (g: ReturnType<typeof build>, name: string) =>
     g.getObjectByName(name) as Instances<MeshStandardNodeMaterial>;
   const [a, b] = [build(), build()];

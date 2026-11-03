@@ -45,15 +45,16 @@ function runOrder(tiles: OrderedTile[], boot: string | null = null) {
   return [...tiles].sort(streamOrder(() => boot)).reverse();
 }
 
+const baked = (id: string, x: number): BakedTile => ({
+  bounds: [x, 0, x + 2000, 2000],
+  city: URIS.city(id),
+  cityFar: URIS.far(id),
+  id,
+  terrain: { 0: URIS.fine(id), 1: URIS.coarse(id) },
+  zRange: [100, 150],
+});
+
 test("the names rank the contents buildTileset writes", () => {
-  const baked = (id: string, x: number): BakedTile => ({
-    bounds: [x, 0, x + 2000, 2000],
-    city: URIS.city(id),
-    cityFar: URIS.far(id),
-    id,
-    terrain: { 0: URIS.fine(id), 1: URIS.coarse(id) },
-    zRange: [100, 150],
-  });
   interface Node {
     children?: Node[];
     content?: { uri: string };

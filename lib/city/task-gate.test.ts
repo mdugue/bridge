@@ -130,13 +130,14 @@ test("a waiter whose signal aborts leaves the line without running", async () =>
   expect(gate.waiting()).toBe(0);
 });
 
+const outcome = async (p: Promise<string>) =>
+  await p.then(
+    (value) => value,
+    (error: unknown) => `failed: ${(error as Error).message}`
+  );
+
 test("a task that fails frees its place", async () => {
   const gate = createTaskGate(1);
-  const outcome = async (p: Promise<string>) =>
-    await p.then(
-      (value) => value,
-      (error: unknown) => `failed: ${(error as Error).message}`
-    );
   const results = await Promise.all([
     outcome(
       gate.run(async () => {

@@ -1484,6 +1484,10 @@ const MAX_DRESSING_OVERTAKES = 4;
  * the renderer's own load (awaited before the tile is marked loaded), so a
  * tile is never shown half-dressed.
  */
+let settle = (): void => undefined;
+
+let built = (): void => undefined;
+
 export class DressingPlugin {
   name = "BRIDGE_DRESSING";
   /** every content root dressed and not yet released: a Map, not a
@@ -1745,7 +1749,6 @@ export class DressingPlugin {
 
   async processTileModel(scene: Object3D, tile: object): Promise<void> {
     this.tileOf.set(scene, tile);
-    let settle = (): void => undefined;
     this.loaded.set(
       scene,
       new Promise<void>((resolve) => {
@@ -2169,7 +2172,6 @@ export class DressingPlugin {
   ): Promise<void> {
     this.pending += 1;
     this.pendingScenes.set(scene, extras.tileId);
-    let built = (): void => undefined;
     const ready = new Promise<void>((resolve) => {
       built = resolve;
     });

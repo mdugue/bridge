@@ -138,6 +138,8 @@ describe("creaseNormals", () => {
 });
 
 describe("forEachPoint", () => {
+  const byFirst = (a: number[], b: number[]) => a[0] - b[0];
+
   test("visits each point's live corners in rising order, colliding buckets split", () => {
     // 3 000 vertices on a coarse grid, three groups, a quarter dead: many
     // shared points, and buckets that hold more than one
@@ -179,7 +181,6 @@ describe("forEachPoint", () => {
       }
     }
     const shared = [...expected.values()].filter((c) => c.length > 1);
-    const byFirst = (a: number[], b: number[]) => a[0] - b[0];
     expect(seen.filter((c) => c.length > 1).sort(byFirst)).toEqual(
       shared.sort(byFirst)
     );

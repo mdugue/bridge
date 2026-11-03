@@ -240,13 +240,14 @@ test("a building a tile edge cuts in two: its tiles' leads, the highest top and 
   expect(fact("Gebäude")).toBe("2 im Stadtmodell");
 });
 
+const twin = () =>
+  object({
+    building: true,
+    lead: true,
+    facts: facts({ buildingId: "DEBY_1", height: 30, area: 900 }),
+  });
+
 test("a Building both tiles carry whole counts once", () => {
-  const twin = () =>
-    object({
-      building: true,
-      lead: true,
-      facts: facts({ buildingId: "DEBY_1", height: 30, area: 900 }),
-    });
   const picked = twin();
   const card = inquiryCard(
     { kind: "building", tile: "t", picked, tree: [picked, twin()] },
@@ -259,8 +260,9 @@ test("a Building both tiles carry whole counts once", () => {
   expect(fact("Gebäude")).toBeUndefined();
 });
 
+const at = (addr: string) => object({ facts: facts({ addr }) });
+
 test("an ensemble names its first three addresses and counts the rest", () => {
-  const at = (addr: string) => object({ facts: facts({ addr }) });
   const card = inquiryCard(
     {
       kind: "building",
@@ -455,25 +457,27 @@ test("a shed from the laser scan is marked as not in the official model", () => 
   );
 });
 
+const gap = (drawn: string) =>
+  object({
+    building: true,
+    source: OBJECT_SOURCE_GAP,
+    facts: facts({
+      buildingId: "gap:t:1:2",
+      drawn,
+      function: "",
+      height: 51.2,
+      area: 900,
+    }),
+  });
+
+const card = (o: InquiryObject) =>
+  inquiryCard(
+    { kind: "building", tile: "t", picked: o, tree: [o] },
+    provenance,
+    DRESDEN
+  );
+
 test("a building LoD2 lacks says where its outline and height come from", () => {
-  const gap = (drawn: string) =>
-    object({
-      building: true,
-      source: OBJECT_SOURCE_GAP,
-      facts: facts({
-        buildingId: "gap:t:1:2",
-        drawn,
-        function: "",
-        height: 51.2,
-        area: 900,
-      }),
-    });
-  const card = (o: InquiryObject) =>
-    inquiryCard(
-      { kind: "building", tile: "t", picked: o, tree: [o] },
-      provenance,
-      DRESDEN
-    );
   // measured: the surface model's height, OSM's outline
   const measured = lines(card(gap("")).sources);
   expect(measured).toHaveLength(2);

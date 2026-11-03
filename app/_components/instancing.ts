@@ -199,11 +199,12 @@ export const isInstances = (object: unknown): object is Instances =>
   (object as { isInstances?: boolean } | null)?.isInstances === true;
 
 /** The drawn instance's matrix (column attributes; identity off a set). */
+const column = (i: number): V4 => attribute(`iMat${i}`, "vec4");
+
 export const instanceMatrix = Fn((builder) => {
   if (!builder.geometry.hasAttribute("iMat0")) {
     return mat4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
   }
-  const column = (i: number): V4 => attribute(`iMat${i}`, "vec4");
   return mat4(column(0), column(1), column(2), column(3));
 });
 

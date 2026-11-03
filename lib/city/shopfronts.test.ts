@@ -85,11 +85,12 @@ describe("the bays", () => {
     expect(wallBays(w, [[1.5, 5]])).toEqual([]);
   });
 
+  const door = (x: number, y: number, of = "A"): DoorFeature => ({
+    geometry: { type: "Point", coordinates: [x, y] },
+    properties: { of, w: 1, h: 2.2, kind: "yes", nx: 0, ny: -1, z: 100 },
+  });
+
   test("doors on the wall's building and line only", () => {
-    const door = (x: number, y: number, of = "A"): DoorFeature => ({
-      geometry: { type: "Point", coordinates: [x, y] },
-      properties: { of, w: 1, h: 2.2, kind: "yes", nx: 0, ny: -1, z: 100 },
-    });
     const spans = doorSpans(
       wall(),
       [door(1004, 2000.1), door(1008, 2003), door(1010, 2000, "B")],
@@ -131,11 +132,12 @@ describe("the pane's top", () => {
     expect(paneTop(wall(), 4)).toBe(SHOPFRONT_TOP_M);
   });
 
+  const sign = (z0: number) => ({
+    at: [[0, 6]] as [number, number][],
+    z: [z0, z0 + 0.6] as [number, number],
+  });
+
   test("under a sign, unless the sign hangs too low for a window", () => {
-    const sign = (z0: number) => ({
-      at: [[0, 6]] as [number, number][],
-      z: [z0, z0 + 0.6] as [number, number],
-    });
     expect(paneTop(wall({ sign: sign(2.9) }), 4)).toBeCloseTo(
       2.9 - SHOPFRONT.head
     );
@@ -408,6 +410,8 @@ describe("the mesh", () => {
     }
   });
 
+  const flat = (p: number[]) => [p[0], 0, p[2], p[3], 0, p[5], p[6], 0, p[8]];
+
   test("no two faces lie on one another; faces along the wall overlap only two quanta apart", () => {
     for (const w of [busy(), busy(true), sheltered()]) {
       const tris = parts(shopfrontMesh(w, wallBays(w, []), 5, OFFSET));
@@ -424,17 +428,6 @@ describe("the mesh", () => {
           if (gap < 0.005) {
             continue;
           }
-          const flat = (p: number[]) => [
-            p[0],
-            0,
-            p[2],
-            p[3],
-            0,
-            p[5],
-            p[6],
-            0,
-            p[8],
-          ];
           if (
             overlap2d(
               { n: [0, 1, 0], p: flat(along[i].p) },
@@ -514,18 +507,19 @@ describe("the mesh", () => {
     });
   }
 
+  const top = (gfTop: number) => {
+    const w = wall({
+      canopy: [{ at: [0, 12], d: 4, h: 4.3 }],
+      gf_top: gfTop,
+    });
+    const zs = triangles(
+      shopfrontMesh(w, wallBays(w, []), 5, OFFSET).frame.positions
+    ).map(({ c }) => c[2]);
+    return Math.max(...zs);
+  };
+
   test("a head close under a canopy reaches up into its slab, never onto it", () => {
     const slab = 104.3 - CANOPY.slab;
-    const top = (gfTop: number) => {
-      const w = wall({
-        canopy: [{ at: [0, 12], d: 4, h: 4.3 }],
-        gf_top: gfTop,
-      });
-      const zs = triangles(
-        shopfrontMesh(w, wallBays(w, []), 5, OFFSET).frame.positions
-      ).map(({ c }) => c[2]);
-      return Math.max(...zs);
-    };
     // a strip of wall under the slab: the head reaches up into it
     expect(top(3.8)).toBeGreaterThan(slab + 0.02);
     expect(top(3.8)).toBeLessThan(104.3);

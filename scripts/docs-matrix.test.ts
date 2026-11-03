@@ -19,6 +19,14 @@ test("a Land without an open DLM is drawn from OSM, marked as a stand-in", () =>
   expect(row[1].quality).toBe("best");
 });
 
+const digit = (m: string) =>
+  Number(
+    m
+      .split("")
+      .map((c) => "⁰¹²³⁴⁵⁶⁷⁸⁹".indexOf(c))
+      .join("")
+  );
+
 test("every footnote a page marks is listed once, in order", () => {
   const { sites, built } = matrixInputs();
   const page = sourceMatrixPage(sites, "en", built);
@@ -27,13 +35,6 @@ test("every footnote a page marks is listed once, in order", () => {
     Number.parseInt(s, 10)
   );
   // the marks in the order the table first shows them, as numbers
-  const digit = (m: string) =>
-    Number(
-      m
-        .split("")
-        .map((c) => "⁰¹²³⁴⁵⁶⁷⁸⁹".indexOf(c))
-        .join("")
-    );
   const marks = [...new Set((page.match(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+/gu) ?? []).map(digit))];
   const oneToN = Array.from({ length: marks.length }, (_, i) => i + 1);
   expect(marks.length).toBeGreaterThan(0);

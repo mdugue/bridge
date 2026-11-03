@@ -275,6 +275,8 @@ test("enum columns reach the schema as ENUM with NONE as noData", async () => {
   ]);
 });
 
+const flat = (v: unknown) => (v instanceof Vector3 ? v.toArray() : v);
+
 test("the viewer reads back every column the bake writes, as 3DTilesRendererJS's reader did", async () => {
   const properties: PropertyTable["properties"] = {
     baseZ: {
@@ -337,7 +339,6 @@ test("the viewer reads back every column the bake writes, as 3DTilesRendererJS's
     [0, 1],
     []
   ) as unknown as Record<string, unknown>[];
-  const flat = (v: unknown) => (v instanceof Vector3 ? v.toArray() : v);
   for (const [name, column] of Object.entries(properties)) {
     const written =
       column.type === "VEC3"

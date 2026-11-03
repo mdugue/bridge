@@ -80,14 +80,15 @@ test("orchard trees become small deciduous cadastre trees, marked as orchard tre
   });
 });
 
+const at = (properties: NonNullable<CultivatedFeature["properties"]>) => ({
+  geometry: {
+    type: "Point" as const,
+    coordinates: [1, 2] as [number, number],
+  },
+  properties,
+});
+
 test("an orchard tree takes its orchard's genus; a Christmas tree is a cone", () => {
-  const at = (properties: NonNullable<CultivatedFeature["properties"]>) => ({
-    geometry: {
-      type: "Point" as const,
-      coordinates: [1, 2] as [number, number],
-    },
-    properties,
-  });
   const [apple, fir, unknown] = orchardTrees([
     at({ k: "tree", h: 6.2, d: 5.3, src: "dom", g: "Malus" }),
     at({ k: "tree", h: 3.1, d: 2.6, src: "dom", l: "e" }),

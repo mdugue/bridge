@@ -66,14 +66,15 @@ test("the messenger sags between supports, the contact wire zig-zags", () => {
   expect(staggerAt(stations, sides, 25)).toBeCloseTo(0);
 });
 
+const zigzag = (x0: number, x1: number, at: number) => {
+  const t = track(x0, x1);
+  const supports = supportStations(t.pts, t.d);
+  return staggerAt(wireStations(supports), staggerSides(supports), at - x0);
+};
+
 test("two tiles drawing one line agree on the contact wire at their seam", () => {
   // the line along x, cut at x 280: one tile has supports to x 250 and a
   // virtual one at 300, the other its supports from x 300
-  const zigzag = (x0: number, x1: number, at: number) => {
-    const t = track(x0, x1);
-    const supports = supportStations(t.pts, t.d);
-    return staggerAt(wireStations(supports), staggerSides(supports), at - x0);
-  };
   for (const x of [255, 270, 280, 290, 300]) {
     expect(zigzag(0, 280, x)).toBeCloseTo(zigzag(280, 400, x), 6);
   }

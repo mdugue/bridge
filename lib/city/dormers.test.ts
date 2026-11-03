@@ -79,6 +79,16 @@ describe("dormerMesh", () => {
     expect(walls).not.toContainEqual([0, 1, 0]);
   });
 
+  const front = (q: { positions: number[]; isRoof: number[] }) =>
+    Math.max(
+      ...q.positions.filter(
+        (v, i) =>
+          i % 3 === 2 &&
+          q.isRoof[(i - 2) / 3] === 0 &&
+          q.positions[i - 2] === 101
+      )
+    );
+
   test("a shed dormer's roof falls from the top line to its front", () => {
     const flat = dormerMesh(dormer(), offset);
     const shed = dormerMesh(dormer(1, 0, 20), offset);
@@ -87,15 +97,6 @@ describe("dormerMesh", () => {
     const xs = shed.positions.filter((_, i) => i % 3 === 0);
     expect(Math.min(...xs)).toBeCloseTo(100 - 1.5 - 0.3, 6);
     expect(shed.base).toBeCloseTo(flat.base, 6);
-    const front = (q: { positions: number[]; isRoof: number[] }) =>
-      Math.max(
-        ...q.positions.filter(
-          (v, i) =>
-            i % 3 === 2 &&
-            q.isRoof[(i - 2) / 3] === 0 &&
-            q.positions[i - 2] === 101
-        )
-      );
     expect(front(flat)).toBeCloseTo(21.5, 6);
     // 2.5 m from the back line at b = −1.5 to the front at b = 1
     expect(front(shed)).toBeCloseTo(21.5 - 2.5 * tan20, 6);

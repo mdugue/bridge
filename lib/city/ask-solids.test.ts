@@ -103,8 +103,9 @@ test("sets of things: a box the ray misses is never opened", () => {
   expect(hits.map((h) => h.target)).toEqual(["post"]);
 });
 
+const post = (x: number) => ({ cylinder: { ...trunk, x } });
+
 test("sets of things: hits from overlapping sets interleave nearest first, a set's along before its nearest", () => {
-  const post = (x: number) => ({ cylinder: { ...trunk, x } });
   const a = askSets<string>([
     { target: "a10", solids: [post(10)] },
     { target: "a30", solids: [post(30)] },

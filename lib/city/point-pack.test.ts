@@ -135,6 +135,9 @@ test("a canopy without an evergreen packs as before", () => {
   expect(canopyStride(points, true)).toBe(4);
 });
 
+const evergreen = (fs: readonly CanopyFeature[]) =>
+  fs.filter((f) => f.properties?.l === "e").length;
+
 test("the Heide's committed evergreens reach the browser", async () => {
   const path = `${import.meta.dir}/../../data/dresden/dlm/canopy_33416_5658_2_sn.geojson`;
   const doc = (await Bun.file(path).json()) as { features: CanopyFeature[] };
@@ -145,8 +148,6 @@ test("the Heide's committed evergreens reach the browser", async () => {
     )
   );
   const back = unpacked ? pointFeatures(unpacked) : [];
-  const evergreen = (fs: readonly CanopyFeature[]) =>
-    fs.filter((f) => f.properties?.l === "e").length;
   expect(evergreen(doc.features)).toBeGreaterThan(1000);
   expect(evergreen(back)).toBe(evergreen(doc.features));
 });
@@ -199,24 +200,26 @@ test("a scan crown with a radius keeps its evergreen leaves through the pack", (
   ]);
 });
 
+const unpack = (bytes: Uint8Array) =>
+  unpackPoints(bytes.buffer.slice(0) as ArrayBuffer);
+
 test("the header tells whether the canopy holds the tree rows' trees", () => {
   const points = [{ x: ORIGIN[0] + 1, y: ORIGIN[1] + 2, h: 12 }];
-  const unpack = (bytes: Uint8Array) =>
-    unpackPoints(bytes.buffer.slice(0) as ArrayBuffer);
   expect(unpack(packPoints(points, ORIGIN, 3))?.flags).toBe(0);
   expect(unpack(packPoints(points, ORIGIN, 3, ROWS_MEASURED))?.flags).toBe(
     ROWS_MEASURED
   );
 });
 
+const at = (x: number, properties: CanopyFeature["properties"]) => ({
+  geometry: {
+    type: "Point" as const,
+    coordinates: [412_000 + x, 5_656_000] as [number, number],
+  },
+  properties,
+});
+
 test("an evergreen pine keeps its form through the pack; a broadleaf never is one", () => {
-  const at = (x: number, properties: CanopyFeature["properties"]) => ({
-    geometry: {
-      type: "Point" as const,
-      coordinates: [412_000 + x, 5_656_000] as [number, number],
-    },
-    properties,
-  });
   const features: CanopyFeature[] = [
     at(1, { h: 22, l: "e", pine: 1 }),
     at(2, { h: 21, l: "e", ls: "dop", pine: 1, c: 1 }),

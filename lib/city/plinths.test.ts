@@ -158,9 +158,10 @@ test("the Gurtgesims round a corner is mitred too", () => {
   expect(tris).toHaveLength(2 * (2 * 6) + 2 * 5);
 });
 
+const xs = (m: { positions: number[] }) =>
+  Math.max(...m.positions.filter((_, i) => i % 3 === 0));
+
 test("a wall standing off the footprint line carries the band out with it", () => {
-  const xs = (m: { positions: number[] }) =>
-    Math.max(...m.positions.filter((_, i) => i % 3 === 0));
   const shifted = plinthMesh(plinth, { cx: 0, cy: 0 }, () => [0.12, 0.12]);
   expect(xs(shifted)).toBeCloseTo(100 + PLINTH.proud + 0.12, 6);
   const cornice = corniceMesh(plinth, { cx: 0, cy: 0 }, 14, () => [
@@ -181,10 +182,11 @@ test("a wall turned against the line: the band follows it end to end", () => {
   expect(front(10)).toBeCloseTo(100 + PLINTH.proud - 0.1, 6);
 });
 
+const shift = (a: readonly number[]): [number, number] =>
+  a[0] === 100 && a[1] === 0 ? [0.1, 0.1] : [0, 0];
+
 test("round a corner the mitre meets where the two shifted walls meet", () => {
   // the wall along +y stands 0.1 out at the corner, the one along −x not
-  const shift = (a: readonly number[]): [number, number] =>
-    a[0] === 100 && a[1] === 0 ? [0.1, 0.1] : [0, 0];
   const mesh = plinthMesh(corner, { cx: 0, cy: 0 }, shift);
   const has = (x: number, y: number) =>
     mesh.positions.some(

@@ -149,10 +149,11 @@ test("fetchBytes answers a status no retry fixes as it is, without a body", asyn
   expect(stub.calls()).toBe(1);
 });
 
+const corrupt = () =>
+  new Response(new Uint8Array([0x1f, 0x8b, 8, 0, 0, 0, 0, 0, 0, 3, 7, 7]));
+
 test("a gzip read whole that does not inflate is a corrupt file, not the network's: no retry", async () => {
   // the gzip magic, then nothing a decoder takes
-  const corrupt = () =>
-    new Response(new Uint8Array([0x1f, 0x8b, 8, 0, 0, 0, 0, 0, 0, 3, 7, 7]));
   const stub = stubFetch(corrupt);
   const error = await fetchBytes("/t.glb.gz", {
     budgetMs: 20_000,
@@ -190,8 +191,9 @@ test("either signal aborts the merged one; released, neither does", () => {
   expect(eitherSignal(undefined, d.signal).signal).toBe(d.signal);
 });
 
+let land: (value: string) => void = () => {};
+
 test("an abort ends the wait at once, the work behind it going on for whoever else waits", async () => {
-  let land: (value: string) => void = () => {};
   const shared = new Promise<string>((resolve) => {
     land = resolve;
   });

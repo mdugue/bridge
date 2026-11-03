@@ -35,9 +35,10 @@ test("clearHeight lifts a camera out of a building over its roof", () => {
   );
 });
 
+const stacked = (y: number) => (y < ROOF ? ROOF : y < 40 ? 40 : null);
+
 test("clearHeight climbs through stacked parts", () => {
   // A tower on the block: its roof at 40, entered once over the block's.
-  const stacked = (y: number) => (y < ROOF ? ROOF : y < 40 ? 40 : null);
   expect(clearHeight(2, 0, stacked)).toBeGreaterThanOrEqual(
     40 + ROOF_CLEARANCE
   );
@@ -91,14 +92,15 @@ test("upperHull is pinned to zero at both ends and drops points under it", () =>
   expect(hullLift(upperHull([]), 0.5)).toBe(0);
 });
 
+const floorAt = (x: number, z: number) =>
+  (inBlock(x, z) ? ROOF + ROOF_CLEARANCE : 0) + GROUND_CLEARANCE;
+
 test("a glide's hull clears everything under its line", () => {
   // From west of the block to east of it at eye height: over the roof.
   const line = {
     from: { x: -30, y: 1.7, z: 10 },
     to: { x: 50, y: 1.7, z: 10 },
   };
-  const floorAt = (x: number, z: number) =>
-    (inBlock(x, z) ? ROOF + ROOF_CLEARANCE : 0) + GROUND_CLEARANCE;
   const hull = glideHull(line, floorAt);
   for (let i = 0; i <= 1000; i += 1) {
     const s = i / 1000;

@@ -534,16 +534,17 @@ describe("facadeAttribute", () => {
     expect(metres(f[4 * 6 + 1])).toBeCloseTo(10, 1);
   });
 
+  const front = (x0: number, x1: number) => ({
+    object: 0,
+    pts: [
+      [x0, 0, 0],
+      [x1, 0, 0],
+      [x1, 0, 12],
+      [x0, 0, 12],
+    ],
+  });
+
   test("a facade of several polygons keeps the lattice on each", () => {
-    const front = (x0: number, x1: number) => ({
-      object: 0,
-      pts: [
-        [x0, 0, 0],
-        [x1, 0, 0],
-        [x1, 0, 12],
-        [x0, 0, 12],
-      ],
-    });
     const mesh = quads([front(0, 14), front(14.2, 28)]);
     const f = facadeAttribute(mesh, () => true, [], [], undefined, undefined, [
       {
@@ -655,14 +656,15 @@ describe("facadeAttribute", () => {
     expect(metres(f[4 * 6 + 1])).toBeCloseTo(-10, 1);
   });
 
+  const door = (x: number) => ({
+    object: 0,
+    at: [x, 0] as [number, number],
+    n: [0, -1] as [number, number],
+    w: 1.2,
+  });
+
   test("a wall with more doors than the slots hold has no ground-floor windows", () => {
     const mesh = quads(boxWalls(0, 0, 0, 14, 10, 12));
-    const door = (x: number) => ({
-      object: 0,
-      at: [x, 0] as [number, number],
-      n: [0, -1] as [number, number],
-      w: 1.2,
-    });
     const two = facadeAttribute(mesh, () => true, [door(3), door(11)]);
     expect(metres(two[1])).toBeCloseTo(14, 1);
     const three = facadeAttribute(mesh, () => true, [
@@ -973,18 +975,19 @@ describe("measured axes", () => {
     ).toBeLessThanOrEqual(32_767);
   });
 
+  const wall = (axis: number): WindowWall =>
+    ({
+      a: [100, 200],
+      b: [114, 200],
+      eave: 12,
+      imgs: 6,
+      L: 14,
+      model: { axis, grid: "regular", h: 1.5, phase: 1.6, w: 1.2 },
+      n: [0, -1],
+      oid: "A",
+    }) as WindowWall;
+
   test("each wall keeps its own measured spacing", () => {
-    const wall = (axis: number): WindowWall =>
-      ({
-        a: [100, 200],
-        b: [114, 200],
-        eave: 12,
-        imgs: 6,
-        L: 14,
-        model: { axis, grid: "regular", h: 1.5, phase: 1.6, w: 1.2 },
-        n: [0, -1],
-        oid: "A",
-      }) as WindowWall;
     const index = new Map([["A", 0]]);
     const spec = { axis: 2.3, h: 1.5, style: 0, w: 1.2 };
     const got = measuredAxes([wall(3.88)], index, () => spec, {

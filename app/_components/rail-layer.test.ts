@@ -285,9 +285,10 @@ test("a measured truss becomes an open frame with towers", () => {
   expect(plain).toBeGreaterThan(0);
 });
 
+const arch = (s: number) => 128 - 28 * ((s - 100) / 60) ** 2;
+
 test("an arch rib reaches down to its springing", () => {
   // 120 m arch, crown 128 m, springing at the ground (100 m)
-  const arch = (s: number) => 128 - 28 * ((s - 100) / 60) ** 2;
   const rise = Array.from({ length: 101 }, (_, i) =>
     Math.max(0, arch(i * 2) - 120)
   );
@@ -311,8 +312,9 @@ test("a deck across a seam is drawn by its owner only", () => {
   expect(trianglesOf(bridge, { ...ctx, owns: () => true })).toBeGreaterThan(0);
 });
 
+const pierCount = (b: BridgeFeature) => triangleCount(stoneOf(b));
+
 test("the fairway stays free of piers", () => {
-  const pierCount = (b: BridgeFeature) => triangleCount(stoneOf(b));
   expect(pierCount(deck({ fairway: 0.5, span: 120 }))).toBeLessThan(
     pierCount(deck({}))
   );
@@ -369,14 +371,15 @@ test("a masonry bridge's walls hang from the deck's own edges", () => {
   expect(below).toBeGreaterThan(0);
 });
 
+const arc = (r: number) =>
+  Array.from({ length: 13 }, (_, k): [number, number] => {
+    const a = (k / 12) * (Math.PI / 2);
+    return [r * Math.cos(a), r * Math.sin(a)];
+  });
+
 test("a curved deck's sides all face out, the inner edge too", () => {
   // a quarter ring, radius 94–106 m around the origin: its centroid lies
   // off the deck, in the hollow of the curve
-  const arc = (r: number) =>
-    Array.from({ length: 13 }, (_, k): [number, number] => {
-      const a = (k / 12) * (Math.PI / 2);
-      return [r * Math.cos(a), r * Math.sin(a)];
-    });
   const ring = [...arc(106), ...arc(94).reverse()];
   ring.push(ring[0]);
   const bridge: BridgeFeature = {
@@ -608,6 +611,8 @@ test("the lift table carries the approaches for what rides up to a deck", () => 
   expect(buildDeckTable([bridge], { offset: ctx.offset }).length).toBe(1);
 });
 
+const near = (a: number, b: number) => Math.abs(a - b) < 5e-7;
+
 test("a deck's top is laid out by its frame; its stone is dressed", () => {
   const built = buildRail({ ...empty, bridges: [deck({})] }, ctx);
   const [top, stone] = built.children as Mesh[];
@@ -617,7 +622,6 @@ test("a deck's top is laid out by its frame; its stone is dressed", () => {
   const frame = top.geometry.getAttribute("aDeck");
   expect(frame.itemSize).toBe(4);
   expect(frame.count).toBe(pos.count);
-  const near = (a: number, b: number) => Math.abs(a - b) < 5e-7;
   const misplaced: number[] = [];
   for (let i = 0; i < frame.count; i += 1) {
     // the station runs along the axis (x here), the offset across it
@@ -648,6 +652,8 @@ test("a deck's top is laid out by its frame; its stone is dressed", () => {
   expect(framed).toEqual([]);
 });
 
+const lineAt = (x: number) => 120 + 3 * Math.sin((Math.PI * x) / 200);
+
 test("a deck's slab and parapets follow its measured line, not chords between its corners", () => {
   // a 200 m deck cambered 3 m over its span, with only its four corners:
   // the triangulation's faces join the abutments, so the middle of the
@@ -656,7 +662,6 @@ test("a deck's slab and parapets follow its measured line, not chords between it
     { length: 101 },
     (_, i) => 120 + 3 * Math.sin((Math.PI * i) / 100)
   );
-  const lineAt = (x: number) => 120 + 3 * Math.sin((Math.PI * x) / 200);
   const [top, , steel] = buildRail({ ...empty, bridges: [deck({ line })] }, ctx)
     .children as Mesh[];
   const pos = top.geometry.getAttribute("position");
@@ -768,22 +773,24 @@ test("a curved deck's frame holds inside every triangle, not only at its corners
   expect(worst).toBeLessThan(0.3);
 });
 
+const along = (electrified: number): RailFeature => ({
+  geometry: {
+    type: "LineString",
+    coordinates: [
+      [0, 0],
+      [400, 0],
+    ],
+  },
+  properties: { electrified, tracks: 1 },
+});
+
+const names = (f: RailFeature) =>
+  buildRail(
+    { rails: [f], bridges: [], ballast: [], platforms: [] },
+    ctx
+  ).children.map((c) => c.name);
+
 test("a track with a contact line carries a catenary, one on a third rail none", () => {
-  const along = (electrified: number): RailFeature => ({
-    geometry: {
-      type: "LineString",
-      coordinates: [
-        [0, 0],
-        [400, 0],
-      ],
-    },
-    properties: { electrified, tracks: 1 },
-  });
-  const names = (f: RailFeature) =>
-    buildRail(
-      { rails: [f], bridges: [], ballast: [], platforms: [] },
-      ctx
-    ).children.map((c) => c.name);
   expect(names(along(1))).toContain("rail-catenary");
   expect(names(along(1))).toContain("rail-catenary-masts");
   expect(names(along(2))).not.toContain("rail-catenary");

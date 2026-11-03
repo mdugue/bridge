@@ -216,6 +216,9 @@ test("every tile wears the scene's crown and trunk materials; the warm-up carrie
   warm.dispose();
 });
 
+const centre = (ps: [number, number][]) =>
+  [0, 1].map((c) => ps.reduce((s, p) => s + p[c], 0) / ps.length);
+
 test("the trunk geometry's rings are the profile its girth is fitted to", () => {
   const geo = buildTrunkGeo();
   const pos = geo.getAttribute("position");
@@ -229,8 +232,6 @@ test("the trunk geometry's rings are the profile its girth is fitted to", () => 
     }
     // The bend moves a ring sideways, not apart: measure from its centre,
     // leaving out the end caps' centre vertices.
-    const centre = (ps: [number, number][]) =>
-      [0, 1].map((c) => ps.reduce((s, p) => s + p[c], 0) / ps.length);
     const [ax, az] = centre(ring);
     const rim = ring.filter(([x, z]) => Math.hypot(x - ax, z - az) > 0.02);
     const [cx, cz] = centre(rim);
@@ -322,11 +323,12 @@ test("a canopy evergreen stands as a cone of its own, in leaf all year", () => {
   }
 });
 
+const at = (x: number, pine: boolean): CanopyFeature => ({
+  geometry: { type: "Point", coordinates: [x, 0] },
+  properties: { h: 20, l: "e", ...(pine ? { pine: 1 as const } : {}) },
+});
+
 test("a canopy pine wears the pine's crown, high on its stem, a chunk of its own", () => {
-  const at = (x: number, pine: boolean): CanopyFeature => ({
-    geometry: { type: "Point", coordinates: [x, 0] },
-    properties: { h: 20, l: "e", ...(pine ? { pine: 1 as const } : {}) },
-  });
   const built = buildVegetation(
     { rows: [], canopy: [at(5, false), at(9, true)] },
     ctx

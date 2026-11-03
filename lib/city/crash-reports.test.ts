@@ -237,14 +237,15 @@ test("a problem's level says whether the page survived it", () => {
   expect(level("alloc-failed", "RangeError: out of bounds")).toBe("warning");
 });
 
+const noted = (...kinds: string[]) => {
+  const trail = page();
+  for (const [i, kind] of kinds.entries()) {
+    pushEvent(trail, { t: 10 + i, kind });
+  }
+  return trail;
+};
+
 describe("which problems are the aftermath of the page's end", () => {
-  const noted = (...kinds: string[]) => {
-    const trail = page();
-    for (const [i, kind] of kinds.entries()) {
-      pushEvent(trail, { t: 10 + i, kind });
-    }
-    return trail;
-  };
   const error = { t: 20, kind: "rejection", detail: "buffer.destroy" };
   const lost = { t: 20, kind: "load-error", detail: "https://x/a.glb" };
 

@@ -130,16 +130,17 @@ test("without a geographicalExtent the box comes from its and its parts' vertice
   ]);
 });
 
+const entry = (id: string, links: number) => ({
+  id,
+  name: id,
+  links,
+  objects: [],
+  x: 0,
+  y: 0,
+  h: 10,
+});
+
 test("the index lists each landmark once, most notable first, with its facts", () => {
-  const entry = (id: string, links: number) => ({
-    id,
-    name: id,
-    links,
-    objects: [],
-    x: 0,
-    y: 0,
-    h: 10,
-  });
   const index = stadtwissenIndex({
     site: "probe",
     epsg: 25_833,
@@ -161,11 +162,12 @@ test("the index lists each landmark once, most notable first, with its facts", (
   ]);
 });
 
+const plaque = (name: string) => ({
+  geometry: { type: "Point", coordinates: [411_000.2, 5_656_000.4] },
+  properties: { name, kind: "stone" },
+});
+
 test("monuments in one metre keep their ids by name, whatever the order", () => {
-  const plaque = (name: string) => ({
-    geometry: { type: "Point", coordinates: [411_000.2, 5_656_000.4] },
-    properties: { name, kind: "stone" },
-  });
   const square = {
     geometry: {
       type: "Polygon",

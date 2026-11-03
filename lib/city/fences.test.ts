@@ -158,6 +158,11 @@ test("every triangle winds counter-clockwise about its vertex normals", () => {
   }
 });
 
+const codes = (d: FenceGeometryData) =>
+  new Set(
+    Array.from({ length: d.positions.length / 3 }, (_, v) => codeOf(d, v))
+  );
+
 test("gates: a leaf in the gap, a boom for a lift gate", () => {
   const fence = { coords: line, h: 1.2, type: "mesh" as const };
   const leaf = fenceGeometry([fence], [gate(5)], flat, offset);
@@ -170,10 +175,6 @@ test("gates: a leaf in the gap, a boom for a lift gate", () => {
   if (!(leaf && boom)) {
     throw new Error("no fence");
   }
-  const codes = (d: FenceGeometryData) =>
-    new Set(
-      Array.from({ length: d.positions.length / 3 }, (_, v) => codeOf(d, v))
-    );
   expect(codes(leaf).has(FENCE_CODE.gate)).toBe(true);
   expect(codes(leaf).has(FENCE_CODE.frame)).toBe(false);
   expect(codes(boom).has(FENCE_CODE.gate)).toBe(false);

@@ -16,8 +16,12 @@ test("an edge meets the ground, never above the top nor below its floor", () => 
   expect(meetGround(100.12, null)).toBe(100.12);
 });
 
+const ramp = (d: number) => 100 + Math.min(d, 3);
+
+const hole = (d: number) => (d < 1 ? null : 103);
+
 test("a level is reached where the ground comes up to it", () => {
-  const ramp = (d: number) => 100 + Math.min(d, 3); // a 3 m bank
+  // a 3 m bank
   const opts = { reach: 5, step: 0.25 };
   // a flat cap at 103: the ground reaches it 3 m out
   expect(reachLevel(ramp, () => 103, opts)).toBe(3);
@@ -32,7 +36,6 @@ test("a level is reached where the ground comes up to it", () => {
   ).toBe(2);
   // out of reach, and unknown ground skipped or stopping the search
   expect(reachLevel(ramp, () => 110, opts)).toBeNull();
-  const hole = (d: number) => (d < 1 ? null : 103);
   expect(reachLevel(hole, () => 103, opts)).toBe(1);
   expect(
     reachLevel(hole, () => 103, { ...opts, onUnknown: "stop" })
@@ -54,8 +57,9 @@ test("values are carried to their neighbours within their group", () => {
   ).toEqual([3, 3, 1, null, 1, 1]);
 });
 
+const ground = (x: number) => (x < 100 ? 10 : null);
+
 test("feet must reach the ground, edges must not stand above it", () => {
-  const ground = (x: number) => (x < 100 ? 10 : null);
   const report = checkJoins(
     [
       { kind: "foot", x: 0, y: 0, z: 9.9 },
@@ -73,9 +77,10 @@ test("feet must reach the ground, edges must not stand above it", () => {
   expect(report.misses.map((m) => m.join.x)).toEqual([4, 1]);
 });
 
+const gutter = (x: number) => (Math.abs(x - 5) < 1 ? 99 : 100);
+
 test("a line follows the ground where it bends between its points", () => {
   // a 1 m deep gutter 2 m wide around x = 5 on a 10 m span
-  const gutter = (x: number) => (Math.abs(x - 5) < 1 ? 99 : 100);
   const line = followGround(
     [
       [0, 0],

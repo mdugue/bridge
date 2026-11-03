@@ -103,9 +103,8 @@ describe("packageImports", () => {
   });
 });
 
-describe("lockedVersions", () => {
-  const lockfile = (b: string, viewer: string) =>
-    readLockfile(`{
+const lockfile = (b: string, viewer: string) =>
+  readLockfile(`{
       "lockfileVersion": 1,
       "packages": {
         "a": ["a@1.0.0", "", { "dependencies": { "b": "^1", "c": "^2" }, "optionalDependencies": { "gone": "1" }, "peerDependencies": { "@types/node": "*" } }, "sha512-a"],
@@ -116,8 +115,10 @@ describe("lockedVersions", () => {
         "viewer": ["viewer@${viewer}", "", {}, "sha512-v"],
       },
     }`);
-  const keys = (lines: string[]) => lines.map((line) => line.split(" ")[0]);
 
+const keys = (lines: string[]) => lines.map((line) => line.split(" ")[0]);
+
+describe("lockedVersions", () => {
   test("holds a package and what it depends on, the copy nested under it first", () => {
     expect(keys(lockedVersions(lockfile("1.0.0", "3.0.0"), ["a"]))).toEqual([
       "a",

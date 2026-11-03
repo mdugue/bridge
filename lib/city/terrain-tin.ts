@@ -418,6 +418,9 @@ export interface TinBuckets {
  * barycentric tests per query — vegetation and lamps call this tens of
  * thousands of times per tile.
  */
+const typed = (a: ArrayLike<number>) =>
+  ArrayBuffer.isView(a) ? a.byteLength : 0;
+
 export class TinIndex {
   private readonly cols: number;
   private readonly rows: number;
@@ -531,8 +534,6 @@ export class TinIndex {
    * which are the mesh's own index (counted with the mesh).
    */
   get bytes(): number {
-    const typed = (a: ArrayLike<number>) =>
-      ArrayBuffer.isView(a) ? a.byteLength : 0;
     const { xy, z } = this.surface;
     return this.items.byteLength + this.start.byteLength + typed(xy) + typed(z);
   }

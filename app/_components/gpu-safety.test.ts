@@ -55,6 +55,10 @@ test("a crashed previous page raises the level once, however often it is seen", 
   expect(settleSafety("", store, "2026-10-04T04:26:00Z", 30)).toBe(2);
 });
 
+const now = () => 10;
+
+const gone = async () => false;
+
 test("a previous record whose page answers is no crash: the level stays", async () => {
   const store = memoryStore();
   raiseSafety(0, { store, now: 0 });
@@ -69,12 +73,10 @@ test("a previous record whose page answers is no crash: the level stays", async 
     asked.push(trail.startedAt);
     return true;
   };
-  const now = () => 10;
   expect(await settleAfterAsking("", store, live, open, now)).toBe(1);
   expect(asked).toEqual([live.startedAt]);
   // not marked counted: the next load asks again, and a page gone by
   // then is the crash it looked like
-  const gone = async () => false;
   expect(await settleAfterAsking("", store, live, gone, now)).toBe(2);
   // nothing to ask without a crashed-looking record
   expect(await settleAfterAsking("", store, null, open, now)).toBe(2);

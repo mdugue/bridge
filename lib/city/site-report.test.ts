@@ -44,8 +44,9 @@ test("everything there: ready, nothing absent", () => {
   );
 });
 
+const exists = (p: string) => !p.endsWith("/provenance.json");
+
 test("a site without a provenance record is ready and reports it absent", () => {
-  const exists = (p: string) => !p.endsWith("/provenance.json");
   expect(siteReport(LEIPZIG, exists).every((r) => r.next === "ready")).toBe(
     true
   );
@@ -72,6 +73,8 @@ test("the DLM layer list is the pipeline's", () => {
   expect(layers).toEqual([...DLM_LAYERS]);
 });
 
+const land = () => 4;
+
 test("a walk viewpoint in a footprint or on water is flagged", () => {
   const square: [number, number][] = [
     [0, 0],
@@ -79,7 +82,6 @@ test("a walk viewpoint in a footprint or on water is flagged", () => {
     [10, 10],
     [0, 10],
   ];
-  const land = () => 4;
   expect(walkViewpointIssue({ x: 5, y: 5 }, [square], land, 8)).toBe(
     "inside a building"
   );

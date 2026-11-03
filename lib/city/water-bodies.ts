@@ -387,6 +387,8 @@ export function siteWaterTints(tiles: TileWater[]): Map<string, number[]> {
  * keeps the sheet's own — and, with `foam`, the foam lines in the data
  * frame. Undefined when there is neither.
  */
+const r = (v: number) => Math.round(v * 10) / 10;
+
 export function waterLook(
   member: WaterMember | null,
   colours: number[],
@@ -399,7 +401,6 @@ export function waterLook(
   }
   const lines = foam ? (member?.foam ?? []) : [];
   if (lines.length > 0) {
-    const r = (v: number) => Math.round(v * 10) / 10;
     look.foam = lines
       .slice(0, FOAM_LINES)
       .map(({ line: [[x0, y0], [x1, y1]], drop, down }) => [

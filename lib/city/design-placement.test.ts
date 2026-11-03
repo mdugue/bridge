@@ -108,9 +108,10 @@ describe("design placement", () => {
     ]);
   });
 
+  const heightAt = (x: number) => 100 + x / 10;
+
   test("set on the ground at the lowest ground under it", () => {
     // ground rising to the east by 1 m per 10 m
-    const heightAt = (x: number) => 100 + x / 10;
     const base = groundBase(
       { east: 0, north: 0, rotation: 0 },
       local,

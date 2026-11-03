@@ -39,9 +39,10 @@ test("a browser without scheduler.yield gets one that resolves without a frame",
   expect(order).toEqual([0, 1, 2]);
 });
 
+const own = async () => {};
+
 test("the browser's own scheduler.yield is kept", () => {
   host.window = globalThis;
-  const own = async () => {};
   host.scheduler = { yield: own };
   installMainYield();
   expect(current()?.yield).toBe(own);

@@ -302,15 +302,16 @@ test("snapToGround sets the eye height without smoothing", () => {
   expect(movement.getMode()).toBe("fly");
 });
 
+const speedAt = (height: number) => {
+  const { camera, movement } = rig();
+  camera.position.y = height;
+  movement.setMode("fly");
+  movement.press("KeyW");
+  movement.update(0.1);
+  return -camera.position.z / 0.1;
+};
+
 test("flying is slow near the ground and fast high above it", () => {
-  const speedAt = (height: number) => {
-    const { camera, movement } = rig();
-    camera.position.y = height;
-    movement.setMode("fly");
-    movement.press("KeyW");
-    movement.update(0.1);
-    return -camera.position.z / 0.1;
-  };
   expect(speedAt(EYE)).toBeCloseTo(15, 5);
   expect(speedAt(30)).toBeCloseTo(FLY_STEP - 1, 5);
   expect(speedAt(150)).toBeCloseTo(130, 5);

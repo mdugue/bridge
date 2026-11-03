@@ -305,6 +305,9 @@ function nearestGround(table: Tex, t: V3[], f: V2, mpt: F, local: V2): Nearest {
       const q = vec2(dot(d, a.zw), dot(d, vec2(a.w.negate(), a.z))).toVar();
       const shape = int(b.w.add(0.5)).shiftRight(6).toVar();
       const sd = float(0).toVar();
+      const hit = (j: number): F =>
+        select(and(t[j].x.equal(row), t[j].z.greaterThan(0.5)), 1, 0);
+
       If(shape.equal(SHAPE.stadium), () => {
         const c = length(vec2(max(abs(q.x).sub(b.x), 0), q.y))
           .sub(b.y)
@@ -312,8 +315,6 @@ function nearestGround(table: Tex, t: V3[], f: V2, mpt: F, local: V2): Nearest {
         sd.assign(max(c, c.negate().sub(spBandWidth(b.xyz))));
       })
         .ElseIf(shape.equal(SHAPE.free), () => {
-          const hit = (j: number): F =>
-            select(and(t[j].x.equal(row), t[j].z.greaterThan(0.5)), 1, 0);
           const cov = mix(
             mix(hit(0), hit(1), f.x),
             mix(hit(2), hit(3), f.x),

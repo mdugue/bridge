@@ -137,6 +137,9 @@ function slope(
  * segment at a bend (the bisector), run on square at the axis' ends, from
  * `SINK.wall` under the ground at each end up to `h` over it.
  */
+const dot = (n: readonly [number, number], q: readonly [number, number]) =>
+  n[0] * q[0] + n[1] * q[1];
+
 export function passageRegions(p: PassageAxis): Plane[][] {
   const { axis, ground, h, w } = p;
   const dirs = axis
@@ -157,8 +160,6 @@ export function passageRegions(p: PassageAxis): Plane[][] {
       k === dirs.length - 1
         ? d
         : unit(d[0] + dirs[k + 1][0], d[1] + dirs[k + 1][1]);
-    const dot = (n: readonly [number, number], q: readonly [number, number]) =>
-      n[0] * q[0] + n[1] * q[1];
     out.push([
       // past the start: −e0·(x − a) ≤ 0
       [-e0[0], -e0[1], 0, dot(e0, a)],

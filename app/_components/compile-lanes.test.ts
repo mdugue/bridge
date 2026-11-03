@@ -114,10 +114,11 @@ test("a drawable left out (its tile left) gets no step", async () => {
   expect(ran).toEqual(["kept"]);
 });
 
+const item = (id: string): Item => ({ id, material: "m" });
+
 test("the compiles on one renderer run in turn, each once the one before has settled, failed or not", async () => {
   const renderer = {};
   const { started, step, end, fail } = heldSteps();
-  const item = (id: string): Item => ({ id, material: "m" });
   const first = watch(
     compileInTurn(renderer, async () => await step(item("a")))
   );

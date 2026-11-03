@@ -90,14 +90,15 @@ test("a feature without properties or ring draws nothing", () => {
   expect(structureMesh(shed(null), { cx: 0, cy: 0 }).positions).toEqual([]);
 });
 
+const tree = (x: number, y: number) => ({
+  geometry: {
+    coordinates: [x, y] as [number, number],
+    type: "Point" as const,
+  },
+  properties: { h: 3.4 },
+});
+
 test("a canopy point in or beside a shed is the shed, not a tree", () => {
-  const tree = (x: number, y: number) => ({
-    geometry: {
-      coordinates: [x, y] as [number, number],
-      type: "Point" as const,
-    },
-    properties: { h: 3.4 },
-  });
   const trees = [
     tree(102, 201.5), // inside the 4 × 3 m shed
     tree(104.4, 201), // 0.4 m east of its wall

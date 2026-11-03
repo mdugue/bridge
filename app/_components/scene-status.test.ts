@@ -96,22 +96,23 @@ test("a stats pass with the same counters is no change, and the footprints stay 
   expect(heard).toEqual(["stats", "footprints", "stats"]);
 });
 
+const view = (scale: number): ModelHud => ({
+  preset: "iso",
+  turnDeg: 30,
+  tiltDeg: 35,
+  scale,
+  metresPerPixel: 0.5,
+  shear: 0,
+  pivot: { x: 1, y: 2, z: 3 },
+  footprint: [{ x: 0, y: 0, z: 0 }],
+  transitioning: false,
+  cutOut: false,
+  cutOutPending: false,
+  cutOutFailed: false,
+});
+
 test("Modell's view rebuilt with the same numbers is no change", () => {
   const { status, reports } = wire();
-  const view = (scale: number): ModelHud => ({
-    preset: "iso",
-    turnDeg: 30,
-    tiltDeg: 35,
-    scale,
-    metresPerPixel: 0.5,
-    shear: 0,
-    pivot: { x: 1, y: 2, z: 3 },
-    footprint: [{ x: 0, y: 0, z: 0 }],
-    transitioning: false,
-    cutOut: false,
-    cutOutPending: false,
-    cutOutFailed: false,
-  });
   let heard = 0;
   status.subscribe("modelView", () => {
     heard += 1;

@@ -335,9 +335,10 @@ test("without a Basis-DLM a bridge's deck and a tree row are OSM's, with its lic
   expect(deck.stand).toBe("01.08.2026");
 });
 
+const used = (entries: LineageEntry[], source: string) =>
+  entries.find((e) => e.source === source)?.used.map((u) => u.text) ?? [];
+
 test("a lamp says the wall it hangs on and the carriageway its arm reaches over", () => {
-  const used = (entries: LineageEntry[], source: string) =>
-    entries.find((e) => e.source === source)?.used.map((u) => u.text) ?? [];
   const lamp: LampInquiry = { kind: "lamp", tile: "t", position: [0, 0] };
   const onWall = lineage({ ...lamp, wall: "wall" }, provenance, saxony);
   expect(used(onWall, "OpenStreetMap")).toEqual([
@@ -366,16 +367,17 @@ test("a lamp says the wall it hangs on and the carriageway its arm reaches over"
   ]);
 });
 
+const entry = (drawn: string, source: string) => {
+  const b = object({ source: OBJECT_SOURCE_GAP, facts: facts({ drawn }) });
+  const found = lineage(
+    { kind: "building", tile: "t", picked: b, tree: [b] },
+    provenance,
+    saxony
+  ).find((e) => e.source === source);
+  return found?.used ?? [];
+};
+
 test("a building LoD2 lacks: OSM's outline, and its height the surface model's or OSM's", () => {
-  const entry = (drawn: string, source: string) => {
-    const b = object({ source: OBJECT_SOURCE_GAP, facts: facts({ drawn }) });
-    const found = lineage(
-      { kind: "building", tile: "t", picked: b, tree: [b] },
-      provenance,
-      saxony
-    ).find((e) => e.source === source);
-    return found?.used ?? [];
-  };
   // measured: the surface model computes its height
   expect(entry("", "Digitales Oberflächenmodell DOM1")).toEqual([
     { text: "seine Höhe über Gelände und Stadtmodell", method: "computed" },

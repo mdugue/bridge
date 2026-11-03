@@ -206,6 +206,8 @@ describe("planMesh", () => {
     }
   });
 
+  const byValue = (a: number, b: number) => a - b;
+
   test("a mesh keeps its own heights and faces up", () => {
     const mesh = planMesh(
       [
@@ -225,7 +227,6 @@ describe("planMesh", () => {
       flatGround
     );
     const p = mesh.groups[0].positions;
-    const byValue = (a: number, b: number) => a - b;
     expect([p[1], p[4], p[7]].sort(byValue)).toEqual(
       [110, 110.5, 111].map((v) => Math.fround(v))
     );

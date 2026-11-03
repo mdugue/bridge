@@ -33,10 +33,11 @@ test("ribRuns finds each stretch a rib stands on", () => {
   expect(ribRuns([0, 0])).toEqual([]);
 });
 
+const tent = (i: number, at: number) =>
+  Math.max(0, 24 - Math.abs(i - at) * 0.6);
+
 test("ribPeaks: a truss sagging between two pylons has two", () => {
   // the Blaues Wunder's shape: rise to a pylon, sag, rise, fall
-  const tent = (i: number, at: number) =>
-    Math.max(0, 24 - Math.abs(i - at) * 0.6);
   const rise = Array.from({ length: 160 }, (_, i) =>
     Math.max(tent(i, 35), tent(i, 105), 2)
   );
@@ -167,9 +168,10 @@ test("a masonry bridge keeps its ashlar parapet, every other an open railing", (
   }
 });
 
+const arch = (s: number) => 132 - 0.004 * (s - 200) ** 2;
+
 test("the ribs of one arch share the tightest rib's curve", () => {
   const line = Array.from({ length: 201 }, () => 120);
-  const arch = (s: number) => 132 - 0.004 * (s - 200) ** 2;
   const clean = line.map((deck, i) =>
     Math.max(0, arch(i * BRIDGE_STEP) - deck)
   );
@@ -277,9 +279,10 @@ test("ribProfile: straight chords to the towers, a sag between, nothing hanging"
   expect(new Set(ribProfile([0, 6, 7, 6.5, 6, 0]).slice(1, 5)).size).toBe(1);
 });
 
+const ground = (s: number) => (s < 40 || s > 220 ? 118 : 100);
+
 test("masonryArches: arches between real piers, not at the banks", () => {
   // 260 m: banks at 118 m for 40 m each end, the river at 100 m between
-  const ground = (s: number) => (s < 40 || s > 220 ? 118 : 100);
   const { spans, piers } = masonryArches(260, ground, () => 118);
   // ten bays of 26 m, the four touching a bank too low for an arch
   expect(spans).toHaveLength(6);

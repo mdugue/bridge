@@ -64,12 +64,13 @@ test("duration is clamped", () => {
   expect(farCamera.position.x).toBeCloseTo(10_000, 6);
 });
 
+const inTower = (x: number) => x > 60 && x < 140;
+
 test("given the floor on its way, the path itself climbs over a tower between", () => {
   const camera = makeCamera();
   const flight = createCameraFlight(camera);
   // A 100 m tower halfway along a 200 m hop at eye height — far above the
   // bow's own 24 m, and close to both ends.
-  const inTower = (x: number) => x > 60 && x < 140;
   flight.start(
     { pos: { x: 200, y: 1.7, z: 0 }, headingDeg: 90, pitchDeg: 0, fov: 55 },
     (x) => (inTower(x) ? 100.5 : 0.5)

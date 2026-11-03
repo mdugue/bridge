@@ -146,14 +146,17 @@ describe("shapefile", () => {
   });
 });
 
+function blob(wkb: number[]): Uint8Array {
+  const header = [0x47, 0x50, 0, 0b0000_0001, 0xe9, 0x64, 0, 0]; // srs 25833
+  return Uint8Array.from([...header, ...wkb]);
+}
+
+const f64 = (v: number) => [...new Uint8Array(new Float64Array([v]).buffer)];
+
+const u32 = (v: number) => [...new Uint8Array(new Uint32Array([v]).buffer)];
+
 describe("GeoPackage geometry", () => {
   /** A GP blob: header without envelope, then little-endian WKB. */
-  function blob(wkb: number[]): Uint8Array {
-    const header = [0x47, 0x50, 0, 0b0000_0001, 0xe9, 0x64, 0, 0]; // srs 25833
-    return Uint8Array.from([...header, ...wkb]);
-  }
-  const f64 = (v: number) => [...new Uint8Array(new Float64Array([v]).buffer)];
-  const u32 = (v: number) => [...new Uint8Array(new Uint32Array([v]).buffer)];
 
   test("a point Z and a multipolygon", () => {
     const point = readGpkgGeometry(
@@ -202,13 +205,13 @@ describe("LandXML", () => {
   });
 });
 
-describe("a record's class", () => {
-  const polygon = (attributes: Record<string, string | number | null>) => ({
-    kind: "polygon" as const,
-    parts: [],
-    attributes,
-  });
+const polygon = (attributes: Record<string, string | number | null>) => ({
+  kind: "polygon" as const,
+  parts: [],
+  attributes,
+});
 
+describe("a record's class", () => {
   test("a place's name does not make a park paving or road", () => {
     // Dresden's Park- und Grünanlagen: the place in `ort`, a form's link
     const park = polygon({

@@ -78,12 +78,13 @@ test("a surface-model crown answers with its measured height", () => {
   }
 });
 
+const crown = (x: number, extra: Partial<CanopyFeature["properties"]>) =>
+  ({
+    geometry: { type: "Point", coordinates: [412_500 + x, 5_656_500] },
+    properties: { h: 18, ...extra },
+  }) as CanopyFeature;
+
 test("an evergreen crown is outlined as the cone, a pine's not, and the pine's crown starts high", () => {
-  const crown = (x: number, extra: Partial<CanopyFeature["properties"]>) =>
-    ({
-      geometry: { type: "Point", coordinates: [412_500 + x, 5_656_500] },
-      properties: { h: 18, ...extra },
-    }) as CanopyFeature;
   const canopy = [
     crown(0, {}),
     crown(30, { l: "e" }),
@@ -154,15 +155,16 @@ test("lamps, furniture and tram stops are each askable at their point", () => {
   );
 });
 
+const hedgeAt = ([x, y]: [number, number]) =>
+  hitsInSets({ ...epsgToWorld(x, y, offset), y: 200 }, down, sets, 1000).find(
+    (h) => h.target.kind === "hedge"
+  )?.target;
+
 test("a hedge is one thing along its whole line", () => {
   const hedge = features.hedges.find((f) => f.geometry.coordinates.length > 3);
   const along = samplePolyline(hedge?.geometry.coordinates ?? [], 2);
   const [a, b] = [along[0], along.at(-1)] as [number, number][];
   // a crown may stand over the hedge: the hedge is among the hits
-  const hedgeAt = ([x, y]: [number, number]) =>
-    hitsInSets({ ...epsgToWorld(x, y, offset), y: 200 }, down, sets, 1000).find(
-      (h) => h.target.kind === "hedge"
-    )?.target;
   const first = hedgeAt(a);
   const last = hedgeAt(b);
   expect(first?.kind).toBe("hedge");
@@ -192,11 +194,12 @@ test("a landing stage on the river answers with its kind", () => {
   expect(hits.some((h) => h.target.kind === "landing")).toBe(true);
 });
 
+const pt = (x: number, y: number) => ({
+  type: "Point" as const,
+  coordinates: [x, y] as [number, number],
+});
+
 test("a lamp or a bench on a bridge is asked on its deck, a wall lantern at its head", () => {
-  const pt = (x: number, y: number) => ({
-    type: "Point" as const,
-    coordinates: [x, y] as [number, number],
-  });
   const own = moreSets(
     {
       canopy: [],

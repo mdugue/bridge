@@ -75,11 +75,12 @@ test("an orchard tree appended to the file's is askable past its end, as an orch
   expect(again?.target).toMatchObject({ orchard: true, measured: true });
 });
 
+const tree = (x: number, a: number): TreeFeature => ({
+  geometry: { type: "Point", coordinates: [412_000 + x, 5_656_000] },
+  properties: { a, h: 12, d: 6, l: a === 0 ? "d" : "e" },
+});
+
 test("a pine and a yew are needle trees on the card, as the cone's conifers are", () => {
-  const tree = (x: number, a: number): TreeFeature => ({
-    geometry: { type: "Point", coordinates: [412_000 + x, 5_656_000] },
-    properties: { a, h: 12, d: 6, l: a === 0 ? "d" : "e" },
-  });
   // round, conifer, pine, bush (tree-inventory.ts TREE_ARCHETYPES)
   const trees = [tree(0, 0), tree(40, 3), tree(80, 6), tree(120, 7)];
   const sets = treeSets(trees, ctx);

@@ -25,8 +25,9 @@ test("the average over a day is the average hour", () => {
   }
 });
 
+const at = (h: number) => trafficFactorAt("weekday", h * 3600);
+
 test("a working day is busy at the rush hours and quiet at night", () => {
-  const at = (h: number) => trafficFactorAt("weekday", h * 3600);
   expect(at(7.5)).toBeGreaterThan(1.5);
   expect(at(16.5)).toBeGreaterThan(1.5);
   expect(at(3.5)).toBeLessThan(0.15);

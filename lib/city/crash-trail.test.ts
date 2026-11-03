@@ -240,15 +240,15 @@ test("the phase says how far the page got", () => {
   expect(trailPhase(trail)).toBe("running");
 });
 
-describe("which previous record is offered as a crash", () => {
-  const died = (...kinds: string[]) => {
-    const trail = createTrail(setup);
-    for (const [i, kind] of kinds.entries()) {
-      pushEvent(trail, { t: i, kind });
-    }
-    return trail;
-  };
+const died = (...kinds: string[]) => {
+  const trail = createTrail(setup);
+  for (const [i, kind] of kinds.entries()) {
+    pushEvent(trail, { t: i, kind });
+  }
+  return trail;
+};
 
+describe("which previous record is offered as a crash", () => {
   test("a page that died in use", () => {
     expect(offerAsCrash(died("renderer", "first frame"), false)).toBe(true);
   });

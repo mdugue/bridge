@@ -27,8 +27,9 @@ test("the vertex grid includes the tile's edges, rows from the north", () => {
   expect(plateVertex(WEST, PLATE_N, 1, 0)[0] - 410_000).toBe(62.5);
 });
 
+const ground = (x: number, y: number) => 100 + x * 0.001 + y * 0.0001;
+
 test("neighbours share their edge heights, so the plate has no seam", () => {
-  const ground = (x: number, y: number) => 100 + x * 0.001 + y * 0.0001;
   const w = plateHeights(WEST, ground, 0);
   const e = plateHeights(EAST, ground, 0);
   for (let j = 0; j < PLATE_N; j += 1) {
@@ -89,14 +90,12 @@ test("a shrunk class raster keeps ids, never a blend", () => {
   expect([...r.data]).toEqual([5, 7, 13, 15]);
 });
 
+const tile = (seed: number) => ({
+  heights: Int16Array.from({ length: PLATE_N ** 2 }, (_, v) => seed + v),
+  classes: Uint8Array.from({ length: PLATE_N ** 2 }, (_, v) => (seed + v) % 12),
+});
+
 test("the file reads back as it was written", () => {
-  const tile = (seed: number) => ({
-    heights: Int16Array.from({ length: PLATE_N ** 2 }, (_, v) => seed + v),
-    classes: Uint8Array.from(
-      { length: PLATE_N ** 2 },
-      (_, v) => (seed + v) % 12
-    ),
-  });
   const a = tile(1000);
   const b = tile(-200);
   const bytes = encodePlate([a, b]);

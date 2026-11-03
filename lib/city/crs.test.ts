@@ -50,10 +50,11 @@ test("unsupported codes project nothing", () => {
   expect(gridConvergenceDeg(4326, 51, 13.7)).toBeNull();
 });
 
+const def = (epsg: number) =>
+  `+proj=utm +zone=${epsg - 25_800} +ellps=GRS80 +units=m +no_defs +type=crs`;
+
 test("the projection is proj4's over every configured site's tiles", () => {
   // what crs.ts used to hand proj4 (ETRS89 taken as WGS84: no datum shift)
-  const def = (epsg: number) =>
-    `+proj=utm +zone=${epsg - 25_800} +ellps=GRS80 +units=m +no_defs +type=crs`;
   // proj4's convergence: the grid bearing of a short step north along the
   // meridian, centred on the point (the true tangent, to ~1e-8°)
   const STEP = 1e-5;

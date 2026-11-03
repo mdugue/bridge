@@ -100,6 +100,9 @@ test("a running tram trails light along its track, fading behind it", () => {
   cars.dispose();
 });
 
+const rgb = (set: Instances) =>
+  new Color().fromArray(set.instanceTints?.array ?? [], 0).getHex();
+
 test("a car takes its operator's livery and a length its fleet runs", () => {
   const leipzig: TramTimetable = {
     ...TT,
@@ -113,8 +116,6 @@ test("a car takes its operator's livery and a length its fleet runs", () => {
   const body = byName("body");
   // LVB's cars are 37.6 or 45 m: five or six sections
   expect([5, 6]).toContain(body.drawCount);
-  const rgb = (set: Instances) =>
-    new Color().fromArray(set.instanceTints?.array ?? [], 0).getHex();
   expect(rgb(body)).toBe(TRAM_LIVERIES.lvb.body);
   expect(rgb(byName("top"))).toBe(TRAM_LIVERIES.lvb.top);
   expect(rgb(byName("skirt"))).toBe(TRAM_LIVERIES.lvb.skirt);

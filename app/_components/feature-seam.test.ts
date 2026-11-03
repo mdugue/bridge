@@ -61,8 +61,9 @@ test("a module that did not load is asked for again on the next want", async () 
   expect(feature.starts()).toBe(1);
 });
 
+let arrive = (): void => undefined;
+
 test("a spine gone before the module came never starts the feature; one gone after stops it", async () => {
-  let arrive = (): void => undefined;
   const coming = new Promise<object>((resolve) => {
     arrive = () => resolve({});
   });

@@ -372,11 +372,12 @@ test("a ground place seen too flat is none: the plate stands up", () => {
   expect(kept).toBe(true);
 });
 
+const yawed = (deg: number) => {
+  const a = (deg * Math.PI) / 180;
+  return look([60 * Math.sin(a), 300, 60 * Math.cos(a)], [0, 0, 0]);
+};
+
 test("from above, the ground plate's side follows the screen's foot, with hysteresis", () => {
-  const yawed = (deg: number) => {
-    const a = (deg * Math.PI) / 180;
-    return look([60 * Math.sin(a), 300, 60 * Math.cos(a)], [0, 0, 0]);
-  };
   const side = nameplateSide(BODY, yawed(0), null, "air");
   expect(side % 2).toBe(1); // the screen's foot towards +z
   // the view turned 50°: the side stays (no quarter turn of the text)
