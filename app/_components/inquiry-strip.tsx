@@ -92,7 +92,7 @@ export function distanceLabel(m: number): string {
 
 /** A finger-wide ring at the tap, pulsed once: how far round the point
  *  the question looked (none when asked at the centre). */
-export function InquiryTapRing({ along }: { along: InquiryAlong }) {
+export const InquiryTapRing = ({ along }: { along: InquiryAlong }) => {
   if (!along.at || along.candidates.length < 2) {
     return null;
   }
@@ -110,7 +110,7 @@ export function InquiryTapRing({ along }: { along: InquiryAlong }) {
       }}
     />
   );
-}
+};
 
 /**
  * Everything the question's ray met, front to back (plan 052), apart from
@@ -122,7 +122,7 @@ export function InquiryTapRing({ along }: { along: InquiryAlong }) {
  * pointer on a row outlines its thing in the scene for as long as it
  * stays, a click shows it in the card.
  */
-export function InquiryStrip({
+export const InquiryStrip = ({
   along,
   onPreview,
   onSelect,
@@ -133,7 +133,7 @@ export function InquiryStrip({
   onSelect: (index: number) => void;
   /** a touch screen: chips above the bottom sheet, not a list */
   sheet?: boolean;
-}) {
+}) => {
   const site = useSite();
   const items = useMemo(
     () =>
@@ -242,4 +242,4 @@ export function InquiryStrip({
       </div>
     </nav>
   );
-}
+};

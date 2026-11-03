@@ -62,7 +62,7 @@ function useLineage(wanted: boolean): LineageModule | null {
  * nears the toggle). Every line carries the badge of how the viewer came
  * by it (lib/city/methods.ts), the legend folded at the end.
  */
-export function InquiryData({
+export const InquiryData = ({
   inquiry,
   provenance,
   sources,
@@ -71,7 +71,7 @@ export function InquiryData({
   provenance: SiteProvenance | null;
   /** the card's source lines: where each fact it states comes from */
   sources: readonly Stated[];
-}) {
+}) => {
   const site = useSite();
   const [open, setOpen] = useState(false);
   const [near, setNear] = useState(false);
@@ -190,15 +190,15 @@ export function InquiryData({
       </CollapsibleContent>
     </Collapsible>
   );
-}
+};
 
-function SectionHead({ children }: { children: string }) {
+const SectionHead = ({ children }: { children: string }) => {
   return (
     <p className="mt-3 mb-1.5 text-[9.5px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
       {children}
     </p>
   );
-}
+};
 
 /**
  * One group of a building's drawn values: per row its label and value
@@ -206,13 +206,13 @@ function SectionHead({ children }: { children: string }) {
  * under them the source, what of it, and a link to where the source
  * shows this building.
  */
-function DrawnGroupRows({
+const DrawnGroupRows = ({
   group,
   names,
 }: {
   group: DrawnGroup;
   names?: Record<DrawnRow["source"], string>;
-}) {
+}) => {
   return (
     <div className="mt-2 first:mt-0" data-testid="inquiry-drawn">
       <p className="mb-0.5 text-[10.5px] font-medium text-foreground">
@@ -245,9 +245,9 @@ function DrawnGroupRows({
       </dl>
     </div>
   );
-}
+};
 
-function DrawnSourceLink({ name, row }: { name: string; row: DrawnRow }) {
+const DrawnSourceLink = ({ name, row }: { name: string; row: DrawnRow }) => {
   const text = row.detail ? `${name} · ${row.detail}` : name;
   if (!row.url) {
     return text;
@@ -263,9 +263,9 @@ function DrawnSourceLink({ name, row }: { name: string; row: DrawnRow }) {
       <ExternalLinkIcon className="size-2.5 shrink-0 self-center opacity-60" />
     </a>
   );
-}
+};
 
-function LineageRow({
+const LineageRow = ({
   brief = false,
   entry,
 }: {
@@ -273,7 +273,7 @@ function LineageRow({
    *  say what came from it */
   brief?: boolean;
   entry: LineageEntry;
-}) {
+}) => {
   const meta = [entry.stand ? `Stand ${entry.stand}` : "", entry.credit]
     .filter(Boolean)
     .join(" · ");
@@ -314,4 +314,4 @@ function LineageRow({
       )}
     </li>
   );
-}
+};

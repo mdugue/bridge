@@ -34,7 +34,7 @@ const NOTES: Record<ReportsState, string> = {
   declined: "Ausgeschaltet – aus diesem Browser wird nichts gesendet.",
 };
 
-export function ReportsChoice() {
+export const ReportsChoice = () => {
   const state = useSyncExternalStore(subscribe, reportsState, unknown);
   const [unsaved, setUnsaved] = useState(false);
   if (state === null) {
@@ -68,4 +68,4 @@ export function ReportsChoice() {
       </output>
     </div>
   );
-}
+};

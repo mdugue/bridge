@@ -13,7 +13,7 @@ import type { FramePace } from "@/lib/city/frame-pace";
  * does not bubble), passive, from any scroller inside the sidebar: the tab
  * panels scroll on their own, and a momentum scroll keeps firing.
  */
-export function SidebarPace({ pace }: { pace: FramePace }) {
+export const SidebarPace = ({ pace }: { pace: FramePace }) => {
   const { isMobile, openMobile } = useSidebar();
   const covered = isMobile && openMobile;
   useEffect(() => {
@@ -39,4 +39,4 @@ export function SidebarPace({ pace }: { pace: FramePace }) {
     };
   }, [covered, pace]);
   return null;
-}
+};

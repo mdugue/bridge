@@ -21,7 +21,7 @@ import type { TramCarsStatus } from "./tram-cars";
  * of explanation, and — while it is on — its credit and whatever the
  * layer has to say in words (`detail`; the scene itself carries no text).
  */
-export function DataLayersPanel({
+export const DataLayersPanel = ({
   detail,
   look,
   onLook,
@@ -32,7 +32,7 @@ export function DataLayersPanel({
   onLook: (patch: Partial<LookValues>) => void;
   /** the site's layers (lib/city/data-layers.ts `siteDataLayers`) */
   rows: readonly DataLayerDef[];
-}) {
+}) => {
   return (
     <div className="flex flex-col gap-3">
       {rows.map((def) => (
@@ -71,7 +71,7 @@ export function DataLayersPanel({
       ))}
     </div>
   );
-}
+};
 
 /** "07:00 Uhr" for the newest hour any counter reported. */
 function countHour(counters: BikeCounter[]): string | null {
@@ -90,11 +90,11 @@ function countHour(counters: BikeCounter[]): string | null {
  * colour; a click flies there. Read from the scene's status
  * (scene-status.ts), as the two lines below are.
  */
-export function BikeCountList({
+export const BikeCountList = ({
   onFly,
 }: {
   onFly: (counter: BikeCounter) => void;
-}) {
+}) => {
   const counters = useSceneStatus("bikeCounters");
   if (counters.length === 0) {
     return (
@@ -148,7 +148,7 @@ export function BikeCountList({
       </ul>
     </div>
   );
-}
+};
 
 const DAY_KIND_LABEL: Record<TramCarsStatus["kind"], string> = {
   weekday: "Werktag",
@@ -176,7 +176,7 @@ function busyWord(factor: number): string {
  * scene's hour on a typical daily curve — said here, so the picture is
  * not read as a live measurement.
  */
-export function TrafficHourLine() {
+export const TrafficHourLine = () => {
   const status = useSceneStatus("trafficHour");
   if (!status) {
     return null;
@@ -190,7 +190,7 @@ export function TrafficHourLine() {
       typischen Tagesgang
     </span>
   );
-}
+};
 
 /** "2026-10-01" → "1.10.2026". */
 function germanDate(iso: string): string {
@@ -200,7 +200,7 @@ function germanDate(iso: string): string {
 
 /** The timetable trams in words: how many run now, from which day's
  *  timetable. */
-export function TramStatusLine() {
+export const TramStatusLine = () => {
   const status = useSceneStatus("tramStatus");
   if (!status || status.failed) {
     return (
@@ -220,4 +220,4 @@ export function TramStatusLine() {
         : ` · kein Fahrplan für ${day}`}
     </span>
   );
-}
+};

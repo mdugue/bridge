@@ -6,7 +6,7 @@ import { cn } from "cn";
 export const SECTION_LABEL =
   "font-semibold text-[11px] uppercase leading-none tracking-widest text-muted-foreground";
 
-function Entry({ current, item }: { current: string; item: NavItem }) {
+const Entry = ({ current, item }: { current: string; item: NavItem }) => {
   const here = item.href === current;
   const open = here || item.children.some((c) => c.href === current);
   return (
@@ -32,16 +32,16 @@ function Entry({ current, item }: { current: string; item: NavItem }) {
       ) : null}
     </li>
   );
-}
+};
 
 /** The knowledge base's menu: guide (de, en) and developer docs, in index order. */
-export function DocNav({
+export const DocNav = ({
   current,
   groups,
 }: {
   current: string;
   groups: NavGroup[];
-}) {
+}) => {
   return (
     <nav aria-label="Wissen" className="flex flex-col gap-7">
       {groups.map((group) => (
@@ -56,4 +56,4 @@ export function DocNav({
       ))}
     </nav>
   );
-}
+};

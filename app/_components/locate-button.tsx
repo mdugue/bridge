@@ -115,7 +115,7 @@ export function useLocateMe(
 }
 
 /** The one-line result under the top edge. */
-export function LocateMessage({ message }: { message: string | null }) {
+export const LocateMessage = ({ message }: { message: string | null }) => {
   if (!message) {
     return null;
   }
@@ -127,4 +127,4 @@ export function LocateMessage({ message }: { message: string | null }) {
       {message}
     </output>
   );
-}
+};

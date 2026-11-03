@@ -42,7 +42,7 @@ function initialOffer(): Offer | null {
   return always || crashed ? { trail: previous, crashed, always } : null;
 }
 
-export function CrashReport() {
+export const CrashReport = () => {
   const [offer, setOffer] = useState(initialOffer);
   const [reported] = useState(crashReportsOn);
   const [copied, setCopied] = useState(false);
@@ -119,4 +119,4 @@ export function CrashReport() {
       </div>
     </section>
   );
-}
+};

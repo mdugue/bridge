@@ -31,7 +31,7 @@ function areaOf(site: Site): string {
   return `${site.tiles.length * 4} km²`;
 }
 
-function CityCard({
+const CityCard = ({
   built,
   figure,
   first,
@@ -40,7 +40,7 @@ function CityCard({
   /** the figure the chosen ordering ranks by, when it has one */
   figure?: string;
   first: boolean;
-}) {
+}) => {
   const { site, map } = built;
   const district = districtOf(site);
   return (
@@ -110,7 +110,7 @@ function CityCard({
       </Link>
     </li>
   );
-}
+};
 
 /**
  * The start page's cities, in an order the visitor picks: featured (the
@@ -119,11 +119,11 @@ function CityCard({
  * trees, the most water, the tallest houses … The chosen figure shows on
  * each card. Orderings no city has figures for are not offered.
  */
-export function CityGrid({
+export const CityGrid = ({
   cities,
 }: {
   cities: readonly { id: string; map?: string; stats?: SiteStats }[];
-}) {
+}) => {
   const [order, setOrder] = useState<SiteOrder>("featured");
   const entries = cities.flatMap(({ id, map, stats }) => {
     const site = siteById(id);
@@ -179,4 +179,4 @@ export function CityGrid({
       </ul>
     </>
   );
-}
+};

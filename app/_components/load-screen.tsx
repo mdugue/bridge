@@ -66,7 +66,7 @@ const CONTOURS: string[] = (() => {
 const WALKABLE_RADIUS = ringRadius(WALKABLE_PERCENT);
 
 /** One layer of the survey sheet: the sheet's frame, cropped to the screen. */
-function Sheet({
+const Sheet = ({
   breathes = false,
   children,
   multiply = false,
@@ -74,7 +74,7 @@ function Sheet({
   breathes?: boolean;
   children: ReactNode;
   multiply?: boolean;
-}) {
+}) => {
   return (
     <svg
       aria-hidden
@@ -91,9 +91,9 @@ function Sheet({
       {children}
     </svg>
   );
-}
+};
 
-function SurveySheet({ percent }: { percent: number }) {
+const SurveySheet = ({ percent }: { percent: number }) => {
   const r = ringRadius(percent);
   // ids are document-wide: two screens mounted at once must not share them
   const colourId = `${useId()}-colour`;
@@ -188,10 +188,10 @@ function SurveySheet({ percent }: { percent: number }) {
       </Sheet>
     </>
   );
-}
+};
 
 /** One stage: its name, and a magenta line that fills as it loads. */
-function StageMark({ stage }: { stage: LoadStageState }) {
+const StageMark = ({ stage }: { stage: LoadStageState }) => {
   const pct = Math.round(stage.fraction * 100);
   return (
     <div
@@ -219,9 +219,9 @@ function StageMark({ stage }: { stage: LoadStageState }) {
       </span>
     </div>
   );
-}
+};
 
-export function LoadScreen({
+export const LoadScreen = ({
   besidePanel = false,
   destination,
   handedOver,
@@ -240,7 +240,7 @@ export function LoadScreen({
   handedOver: boolean;
   percent: number;
   stages: LoadStageState[];
-}) {
+}) => {
   const site = useSite();
   const walkable = percent >= WALKABLE_PERCENT;
   return (
@@ -337,4 +337,4 @@ export function LoadScreen({
       </div>
     </div>
   );
-}
+};

@@ -37,7 +37,7 @@ import type { Offsite } from "./locate-me";
  * fragment, so the position never reaches the server; read after its first
  * frame, then dropped); the vantages here stay below as the other choice.
  */
-export function LocateOffsiteDialog({
+export const LocateOffsiteDialog = ({
   offsite,
   onClose,
   onShowMap,
@@ -48,7 +48,7 @@ export function LocateOffsiteDialog({
   /** opens the sidebar on the minimap */
   onShowMap: () => void;
   onTravel: (view: Viewpoint) => void;
-}) {
+}) => {
   const site = useSite();
   // The last placement is kept while the dialog animates out, so the text
   // doesn't blank mid-fade (state set during render, React's own pattern).
@@ -151,4 +151,4 @@ export function LocateOffsiteDialog({
       </DialogContent>
     </Dialog>
   );
-}
+};

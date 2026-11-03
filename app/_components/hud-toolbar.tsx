@@ -50,7 +50,7 @@ function writeCollapsed(collapsed: boolean): void {
  * a single small button; while folded, a dot on it says a toggle is on
  * (live mode keeps running behind it).
  */
-export function HudToolbar({ tools }: { tools: HudTool[] }) {
+export const HudToolbar = ({ tools }: { tools: HudTool[] }) => {
   const [collapsed, setCollapsed] = useState(readCollapsed);
   if (tools.length === 0) {
     return null;
@@ -117,4 +117,4 @@ export function HudToolbar({ tools }: { tools: HudTool[] }) {
       </button>
     </div>
   );
-}
+};

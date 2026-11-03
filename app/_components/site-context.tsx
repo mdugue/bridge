@@ -14,7 +14,7 @@ const SiteContext = createContext<SiteValue | null>(null);
 
 /** The site the route renders (/dresden), for every HUD part under it, and
  *  the other sites the deployment serves. */
-export function SiteProvider({
+export const SiteProvider = ({
   children,
   others = [],
   site,
@@ -22,9 +22,9 @@ export function SiteProvider({
   children: ReactNode;
   others?: readonly Site[];
   site: Site;
-}) {
+}) => {
   return <SiteContext value={{ others, site }}>{children}</SiteContext>;
-}
+};
 
 function useSiteValue(): SiteValue {
   const value = use(SiteContext);

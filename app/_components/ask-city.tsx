@@ -66,7 +66,7 @@ interface Props {
   site: string;
 }
 
-export default function AskCity({ coarse, onClose, scene, site }: Props) {
+const AskCity = ({ coarse, onClose, scene, site }: Props) => {
   const [key, setKey] = useState<AskKey | null>(() => {
     const stored = readAskKey();
     // a key checked without a token (a server not yet set up, or a local
@@ -182,17 +182,19 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
       </section>
     </>
   );
-}
+};
+
+export default AskCity;
 
 // --- the key ------------------------------------------------------------------
 
-function KeyForm({
+const KeyForm = ({
   onForget,
   onKey,
 }: {
   onForget: () => void;
   onKey: (key: AskKey) => void;
-}) {
+}) => {
   const [stored, setStored] = useState(readAskKey);
   const [provider, setProvider] = useState<AskProviderId>(
     stored?.provider ?? "anthropic"
@@ -374,7 +376,7 @@ function KeyForm({
       </p>
     </form>
   );
-}
+};
 
 // --- the conversation -------------------------------------------------------------
 
@@ -518,7 +520,7 @@ function useReadAloud(
 }
 
 /** Read aloud, speak a question, the Hörmodus: where the browser can. */
-function VoiceBar({
+const VoiceBar = ({
   busy,
   dictation,
   hearing,
@@ -537,7 +539,7 @@ function VoiceBar({
   reading: boolean;
   setReading: (on: boolean) => void;
   speech: Speech;
-}) {
+}) => {
   // the question goes to the conversation as it is when it is heard
   const spoken = useRef(onSpoken);
   useEffect(() => {
@@ -621,9 +623,9 @@ function VoiceBar({
       )}
     </div>
   );
-}
+};
 
-function Conversation({
+const Conversation = ({
   askKey,
   paused,
   hearing,
@@ -644,7 +646,7 @@ function Conversation({
   scene: AskScene;
   setReading: (on: boolean) => void;
   site: string;
-}) {
+}) => {
   const speech = useSpeech();
   const dictation = useDictation();
   const tools = useMemo(() => sceneTools(scene), [scene]);
@@ -875,7 +877,7 @@ function Conversation({
       </p>
     </>
   );
-}
+};
 
 /** A tool argument as text: strings and numbers as written, else nothing. */
 function argText(value: unknown): string {
@@ -951,7 +953,7 @@ function toolIcon(name: string) {
 }
 
 /** Text with its web links clickable; nothing else is interpreted. */
-function Linked({ text }: { text: string }) {
+const Linked = ({ text }: { text: string }) => {
   // a sentence's closing punctuation after a link is not part of it
   // and a bracketed part, as in Wikipedia's „Zwinger_(Dresden)“, is
   const parts = text.split(
@@ -978,9 +980,9 @@ function Linked({ text }: { text: string }) {
       )}
     </>
   );
-}
+};
 
-function ChatMessage({
+const ChatMessage = ({
   labelled,
   live,
   message,
@@ -988,7 +990,7 @@ function ChatMessage({
   labelled: boolean;
   live: boolean;
   message: UIMessage;
-}) {
+}) => {
   if (message.role === "user") {
     return (
       <Message align="end">
@@ -1048,4 +1050,4 @@ function ChatMessage({
       </MessageContent>
     </Message>
   );
-}
+};

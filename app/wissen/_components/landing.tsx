@@ -31,7 +31,7 @@ export interface LandingEntry {
  * from the pages themselves (lib/docs/content.ts); only the lead is written
  * here.
  */
-export function Landing({
+export const Landing = ({
   developer,
   guide,
   hero,
@@ -39,7 +39,7 @@ export function Landing({
   developer: LandingEntry[];
   guide: LandingEntry[];
   hero: HeroImage | null;
-}) {
+}) => {
   const first = guide[0];
   return (
     <main className="flex-1">
@@ -143,9 +143,15 @@ export function Landing({
       </section>
     </main>
   );
-}
+};
 
-function EntryCard({ entry, number }: { entry: LandingEntry; number: number }) {
+const EntryCard = ({
+  entry,
+  number,
+}: {
+  entry: LandingEntry;
+  number: number;
+}) => {
   return (
     <Card className="group/entry relative h-full transition-shadow hover:shadow-md hover:ring-primary/30">
       <CardHeader>
@@ -186,9 +192,9 @@ function EntryCard({ entry, number }: { entry: LandingEntry; number: number }) {
       </CardFooter>
     </Card>
   );
-}
+};
 
-function DevRow({ entry }: { entry: LandingEntry }) {
+const DevRow = ({ entry }: { entry: LandingEntry }) => {
   return (
     <Link
       className="group/dev -mx-3 flex gap-3 rounded-lg px-3 py-3 hover:bg-card hover:ring-1 hover:ring-foreground/10"
@@ -209,4 +215,4 @@ function DevRow({ entry }: { entry: LandingEntry }) {
       </span>
     </Link>
   );
-}
+};

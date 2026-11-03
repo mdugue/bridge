@@ -10,7 +10,7 @@ import "./wissen.css";
  * scrolling document with the viewer's type, colours and small caps labels –
  * no canvas, no HUD.
  */
-export default function WissenLayout({ children }: { children: ReactNode }) {
+const WissenLayout = ({ children }: { children: ReactNode }) => {
   return (
     <div className="flex min-h-dvh flex-col bg-(--wissen-paper)">
       <header className="sticky top-0 z-20 border-b bg-(--wissen-paper)/90 backdrop-blur">
@@ -56,4 +56,6 @@ export default function WissenLayout({ children }: { children: ReactNode }) {
       </footer>
     </div>
   );
-}
+};
+
+export default WissenLayout;

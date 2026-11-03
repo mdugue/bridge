@@ -39,7 +39,7 @@ const CHIP =
   "h-6 rounded-full px-2 font-mono text-[10px] tabular-nums text-muted-foreground data-pressed:border-ring data-pressed:bg-background data-pressed:text-foreground data-pressed:ring-1 data-pressed:ring-ring";
 
 /** A card's glyph: a cube as the view draws it (lib/city/model-view.ts). */
-function PresetGlyph({ id }: { id: ModelPresetId }) {
+const PresetGlyph = ({ id }: { id: ModelPresetId }) => {
   const lines = presetGlyph(id);
   return (
     <svg
@@ -73,7 +73,7 @@ function PresetGlyph({ id }: { id: ModelPresetId }) {
       ))}
     </svg>
   );
-}
+};
 
 /** What a view's lengths mean, under the cards. */
 function presetNote(view: ModelHud): string {
@@ -120,7 +120,7 @@ function cutOutHint(view: ModelHud): string {
  * scale is "bei 96 dpi", the CSS pixel; the export (Bild speichern) prints
  * its own at 300 dpi.
  */
-export function ProjectionPanel({
+export const ProjectionPanel = ({
   onCutOut,
   onExport,
   onPreset,
@@ -138,7 +138,7 @@ export function ProjectionPanel({
   onTilt: (deg: number) => void;
   onTurnTo: (deg: number) => void;
   view: ModelHud;
-}) {
+}) => {
   const onStep = MODEL_SCALES.find(
     (s) => Math.abs(view.scale - s) / s < ON_STEP
   );
@@ -339,4 +339,4 @@ export function ProjectionPanel({
       </button>
     </div>
   );
-}
+};

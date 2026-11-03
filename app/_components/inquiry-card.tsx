@@ -114,7 +114,7 @@ function useTreeFacts(inquiry: Inquiry): TreeFacts | null {
  * shadcn Card's surface, ring and a shadow): sober, so the scene keeps the
  * colour.
  */
-export function InquiryCard({
+export const InquiryCard = ({
   inquiry,
   onClose,
   provenanceUrl,
@@ -125,7 +125,7 @@ export function InquiryCard({
   provenanceUrl: string | null;
   /** a bottom sheet (touch screens) instead of the card top left */
   sheet?: boolean;
-}) {
+}) => {
   const provenance = useProvenance(provenanceUrl);
   const treeFacts = useTreeFacts(inquiry);
   const landmarks = useLandmarkFacts(inquiry);
@@ -180,7 +180,7 @@ export function InquiryCard({
       </div>
     </aside>
   );
-}
+};
 
 /** Each question its own key (an Inquiry is a new object per ask). */
 const inquiryKeys = new WeakMap<Inquiry, number>();
@@ -248,7 +248,7 @@ function whenSheetMeasured(
  * closes it from the fold. The scene's joystick and toolbar step aside
  * while it is open (city-walk.tsx).
  */
-function InquirySheet({
+const InquirySheet = ({
   card,
   inquiry,
   onClose,
@@ -258,7 +258,7 @@ function InquirySheet({
   inquiry: Inquiry;
   onClose: () => void;
   provenance: SiteProvenance | null;
-}) {
+}) => {
   const [open, setOpen] = useState(true);
   const [snap, setSnap] = useState<DrawerSnapPoint | null>(
     SHEET_SNAP_POINTS[0]
@@ -315,10 +315,10 @@ function InquirySheet({
       </DrawerContent>
     </Drawer>
   );
-}
+};
 
 /** The sheet's ×: the drawer's own close, so it slides away first. */
-function SheetClose() {
+const SheetClose = () => {
   return (
     <DrawerClose
       aria-label="Karte schließen"
@@ -328,10 +328,10 @@ function SheetClose() {
       <XIcon className="size-4" />
     </DrawerClose>
   );
-}
+};
 
 /** What the thing is: the kicker, the title, the address, and ×. */
-function CardHeader({
+const CardHeader = ({
   card,
   closeSlot,
   onClose,
@@ -343,7 +343,7 @@ function CardHeader({
   onClose?: () => void;
   /** the title element (the drawer's own title in the sheet) */
   titleAs?: ElementType;
-}) {
+}) => {
   return (
     <div className="flex items-start gap-2">
       <div className="min-w-0 flex-1">
@@ -377,10 +377,10 @@ function CardHeader({
       )}
     </div>
   );
-}
+};
 
 /** The facts, the id to copy and, folded, the data behind them. */
-function CardDetails({
+const CardDetails = ({
   card,
   inquiry,
   provenance,
@@ -388,7 +388,7 @@ function CardDetails({
   card: InquiryCardModel;
   inquiry: Inquiry;
   provenance: SiteProvenance | null;
-}) {
+}) => {
   // Which id was copied: a new building's card starts uncopied.
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const copied = copiedId === card.id;
@@ -441,4 +441,4 @@ function CardDetails({
       />
     </>
   );
-}
+};

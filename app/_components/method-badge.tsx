@@ -12,13 +12,13 @@ const TONE: Record<Method, string> = {
 };
 
 /** The badge saying how the viewer came by a statement (lib/city/methods.ts). */
-export function MethodBadge({
+export const MethodBadge = ({
   method,
   className,
 }: {
   method: Method;
   className?: string;
-}) {
+}) => {
   const info = METHODS[method];
   return (
     <span
@@ -36,10 +36,10 @@ export function MethodBadge({
       {info.label}
     </span>
   );
-}
+};
 
 /** The glyph alone, after a fact the viewer inferred (detected or assumed). */
-export function MethodMark({ method }: { method: Method }) {
+export const MethodMark = ({ method }: { method: Method }) => {
   const info = METHODS[method];
   return (
     <span
@@ -54,10 +54,10 @@ export function MethodMark({ method }: { method: Method }) {
       <span className="sr-only">({info.label})</span>
     </span>
   );
-}
+};
 
 /** The four badges and what they mean, deterministic first. */
-export function MethodLegend() {
+export const MethodLegend = () => {
   return (
     <dl className="space-y-1.5 text-[10.5px] leading-snug text-muted-foreground">
       {METHOD_ORDER.map((method) => (
@@ -70,4 +70,4 @@ export function MethodLegend() {
       ))}
     </dl>
   );
-}
+};

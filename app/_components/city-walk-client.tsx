@@ -32,13 +32,13 @@ import { siteById } from "@/sites";
  * behind it (see handover.ts) — and there is no canvas yet, so it gets the
  * opaque scrim the viewer's own shell would otherwise provide.
  */
-function BootScreen() {
+const BootScreen = () => {
   return (
     <div className="relative h-full w-full bg-[image:var(--hud-scrim)]">
       <LoadScreen handedOver={false} percent={0} stages={loadStageStates({})} />
     </div>
   );
-}
+};
 
 // three.js needs a real browser (WebGPU or WebGL2, pointer lock) — never
 // prerender it.
@@ -171,14 +171,14 @@ function usePageSafety(): SafetyLevel | null {
  * site itself for every part of the HUD (site-context.tsx). Takes the id, not
  * the Site, since a Server Component renders it; the registry resolves it.
  */
-export function CityWalkClient({
+export const CityWalkClient = ({
   builtIds = [],
   siteId,
 }: {
   /** every site this deployment serves (the route's own included) */
   builtIds?: readonly string[];
   siteId: string;
-}) {
+}) => {
   const site = siteById(siteId);
   const others = builtIds
     .filter((id) => id !== siteId)
@@ -192,9 +192,9 @@ export function CityWalkClient({
       <SiteViewer base={siteDataBase(site.id)} />
     </SiteProvider>
   );
-}
+};
 
-function SiteViewer({ base }: { base: string }) {
+const SiteViewer = ({ base }: { base: string }) => {
   useEffect(() => {
     // A failed chunk load is next/dynamic's to report when it renders; this
     // early start must not add an unhandled rejection of its own.
@@ -237,4 +237,4 @@ function SiteViewer({ base }: { base: string }) {
       tilesetUrl={tilesetUrl}
     />
   );
-}
+};

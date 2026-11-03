@@ -111,24 +111,26 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 // the whole knowledge base (partialPrefetching) instead of every page it
 // shows; the page itself, prerendered, comes on the click. The fallback
 // keeps the footer below the fold meanwhile.
-export default function WissenPage({ params }: Props) {
+const WissenPage = ({ params }: Props) => {
   return (
     <Suspense fallback={<div className="min-h-dvh" />}>
       <WissenBody params={params} />
     </Suspense>
   );
-}
+};
 
-async function WissenBody({ params }: Props) {
+export default WissenPage;
+
+const WissenBody = async ({ params }: Props) => {
   const file = await fileOf(params);
   if (!file) {
     notFound();
   }
   return routeOf(file) === "/wissen" ? <Entry /> : <DocPage file={file} />;
-}
+};
 
 /** /wissen: the landing, built from the menu so it lists what the site has. */
-async function Entry() {
+const Entry = async () => {
   "use cache";
   const groups = nav();
   const pages = new Set(pageFiles());
@@ -155,7 +157,7 @@ async function Entry() {
       hero={heroImage()}
     />
   );
-}
+};
 
 /**
  * Spots of the map worth a strip (x% y% of the block), picked by eye on the
@@ -172,7 +174,7 @@ const FOCUS = [
 ];
 
 /** A narrow strip of the city map above a page, a different place per page. */
-function Cover({
+const Cover = ({
   file,
   hero,
   kicker,
@@ -180,7 +182,7 @@ function Cover({
   file: string;
   hero: HeroImage | null;
   kicker: string;
-}) {
+}) => {
   let hash = 0;
   for (const c of file) {
     hash = (hash * 31 + c.charCodeAt(0)) >>> 0;
@@ -209,10 +211,10 @@ function Cover({
       </div>
     </div>
   );
-}
+};
 
 /** One end of the pager: the neighbouring page as a card, whole card the link. */
-function PagerCard({
+const PagerCard = ({
   direction,
   href,
   label,
@@ -222,7 +224,7 @@ function PagerCard({
   href: string;
   label: string;
   title: string;
-}) {
+}) => {
   const next = direction === "next";
   return (
     <Card
@@ -251,14 +253,14 @@ function PagerCard({
       </CardHeader>
     </Card>
   );
-}
+};
 
 /**
  * One page, rendered once at build time. Cached because the Markdown pipeline
  * reads the clock on its way (Cache Components refuses that in a prerender
  * otherwise), and its output only changes with the file.
  */
-async function DocPage({ file }: { file: string }) {
+const DocPage = async ({ file }: { file: string }) => {
   "use cache";
   const pages = new Set(pageFiles());
   const lang: Lang = langOf(file) ?? "de";
@@ -377,4 +379,4 @@ async function DocPage({ file }: { file: string }) {
       ) : null}
     </div>
   );
-}
+};

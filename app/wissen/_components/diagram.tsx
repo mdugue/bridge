@@ -55,7 +55,7 @@ const clamp = (s: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, s));
  * fitted to the column; when that shrinks it, a click opens it in a dialog
  * at a size of the reader's choosing, panned by scrolling or dragging.
  */
-export function Diagram({
+export const Diagram = ({
   children,
   height,
   lang,
@@ -67,7 +67,7 @@ export function Diagram({
   lang: Lang;
   title: string | null;
   width: number;
-}) {
+}) => {
   const t = LABEL[lang];
   const figure = useRef<HTMLElement>(null);
   const [shrunk, setShrunk] = useState(false);
@@ -119,9 +119,9 @@ export function Diagram({
       </Dialog>
     </figure>
   );
-}
+};
 
-function ZoomView({
+const ZoomView = ({
   children,
   height,
   labels: t,
@@ -133,7 +133,7 @@ function ZoomView({
   labels: (typeof LABEL)[Lang];
   title: string | null;
   width: number;
-}) {
+}) => {
   const stage = useRef<HTMLDivElement | null>(null);
   const drag = useRef<{
     x: number;
@@ -287,4 +287,4 @@ function ZoomView({
       </div>
     </>
   );
-}
+};

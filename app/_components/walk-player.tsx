@@ -108,13 +108,13 @@ export function useWalks(): Walk[] {
 }
 
 /** The Erkunden panel's section: one row per walk. Nothing without walks. */
-export function WalksList({
+export const WalksList = ({
   disabled,
   onStart,
 }: {
   disabled: boolean;
   onStart: (walk: Walk) => void;
-}) {
+}) => {
   const walks = useWalks();
   const { isMobile, setOpenMobile } = useSidebar();
   if (walks.length === 0) {
@@ -166,19 +166,19 @@ export function WalksList({
       </p>
     </section>
   );
-}
+};
 
 /**
  * The Erkunden panel's way into *Frag die Stadt* (ask-city.tsx, ADR 0056),
  * beside the written walks: the same city, asked instead of told.
  */
-export function AskEntry({
+export const AskEntry = ({
   disabled,
   onAsk,
 }: {
   disabled: boolean;
   onAsk: () => void;
-}) {
+}) => {
   const { isMobile, setOpenMobile } = useSidebar();
   return (
     <section
@@ -211,10 +211,10 @@ export function AskEntry({
       </p>
     </section>
   );
-}
+};
 
 /** A source as a reader can follow it: a link, or the twin's own id. */
-function SourceLink({ source }: { source: string }) {
+const SourceLink = ({ source }: { source: string }) => {
   if (source.startsWith("stadtwissen:")) {
     const id = source.slice("stadtwissen:".length);
     if (/^Q\d+$/u.test(id)) {
@@ -249,9 +249,9 @@ function SourceLink({ source }: { source: string }) {
       {label}
     </a>
   );
-}
+};
 
-function Facts({ facts }: { facts: WalkFact[] }) {
+const Facts = ({ facts }: { facts: WalkFact[] }) => {
   return (
     <details className="group mt-3 border-t pt-2 text-[12px]">
       <summary className="cursor-pointer select-none text-[11px] text-muted-foreground hover:text-foreground">
@@ -269,11 +269,11 @@ function Facts({ facts }: { facts: WalkFact[] }) {
       </ul>
     </details>
   );
-}
+};
 
 /** What the stop says: its narration, today's notes, the closer look.
  *  A tall photo stands beside it, the text flowing round it. */
-function StopBody({
+const StopBody = ({
   aside,
   notes,
   stop,
@@ -281,7 +281,7 @@ function StopBody({
   aside: ReactNode;
   notes: string[];
   stop: WalkStop;
-}) {
+}) => {
   return (
     <>
       {aside}
@@ -316,11 +316,11 @@ function StopBody({
       </div>
     </>
   );
-}
+};
 
 /** Commons' credit, as a reader can follow it: the author, the licence,
  *  the file's page. */
-function PhotoCredit({ photo }: { photo: WalkPhoto }) {
+const PhotoCredit = ({ photo }: { photo: WalkPhoto }) => {
   return (
     <a
       className="hover:text-foreground hover:underline"
@@ -332,10 +332,10 @@ function PhotoCredit({ photo }: { photo: WalkPhoto }) {
       Foto: {photo.author} · {photo.licence} · Wikimedia Commons
     </a>
   );
-}
+};
 
 /** The photo whole, over the scene: the card crops it, this does not. */
-function PhotoView({
+const PhotoView = ({
   onOpenChange,
   open,
   photo,
@@ -348,7 +348,7 @@ function PhotoView({
   /** the published copy's URL */
   src: string;
   title: string;
-}) {
+}) => {
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent
@@ -375,10 +375,10 @@ function PhotoView({
       </DialogContent>
     </Dialog>
   );
-}
+};
 
 /** The photo's button: a click shows it whole; the corner says so. */
-function PhotoButton({
+const PhotoButton = ({
   children,
   className,
   coarse,
@@ -388,7 +388,7 @@ function PhotoButton({
   className?: string;
   coarse: boolean;
   onOpen: () => void;
-}) {
+}) => {
   return (
     <button
       aria-label="Foto groß zeigen"
@@ -413,7 +413,7 @@ function PhotoButton({
       </span>
     </button>
   );
-}
+};
 
 /** Whether a stop's photo stands beside its story (`photoIsTall`), not
  *  over it: on a phone's narrow card the story would be left a sliver. */
@@ -430,7 +430,7 @@ function besideStory(photo: WalkPhoto | undefined, coarse: boolean) {
  * Served by the site itself (ADR 0043: no request to Wikimedia from the
  * visitor's browser), with its credit.
  */
-function StopPhoto({
+const StopPhoto = ({
   base,
   coarse,
   photo,
@@ -440,7 +440,7 @@ function StopPhoto({
   coarse: boolean;
   photo: WalkPhoto;
   title: string;
-}) {
+}) => {
   const [open, setOpen] = useState(false);
   if (!(base && photo.src)) {
     return null;
@@ -518,10 +518,10 @@ function StopPhoto({
       {view}
     </figure>
   );
-}
+};
 
 /** Where in the walk (one dot a stop) and the stop's title. */
-function StopHeading({ index, walk }: { index: number; walk: Walk }) {
+const StopHeading = ({ index, walk }: { index: number; walk: Walk }) => {
   const stop = walk.stops[index];
   return (
     <div className="min-w-0 flex-1">
@@ -558,7 +558,7 @@ function StopHeading({ index, walk }: { index: number; walk: Walk }) {
       </h2>
     </div>
   );
-}
+};
 
 /** How far (px) a drag on a phone's sheet handle must go to fold or
  *  unfold it; less is a tap, which toggles. */
@@ -569,13 +569,13 @@ const SHEET_DRAG_PX = 24;
  * title and the way on, the scene above it free; high, the story too. Its
  * handle folds and unfolds it, by a tap or a drag up or down.
  */
-function SheetHandle({
+const SheetHandle = ({
   folded,
   onFold,
 }: {
   folded: boolean;
   onFold: (folded: boolean) => void;
-}) {
+}) => {
   const [from, setFrom] = useState<number | null>(null);
   // a drag folds or unfolds on its own; the click that follows it is not
   // a second toggle (a tap, and a key, toggle through the click)
@@ -612,10 +612,10 @@ function SheetHandle({
       <span aria-hidden className="h-1.5 w-10 rounded-full bg-foreground/20" />
     </button>
   );
-}
+};
 
 /** The way on: back, on or the end. */
-function WalkFooter({
+const WalkFooter = ({
   index,
   last,
   onClose,
@@ -625,7 +625,7 @@ function WalkFooter({
   last: boolean;
   onClose: () => void;
   onIndex: (index: number) => void;
-}) {
+}) => {
   return (
     <CardFooter className="gap-2 border-t px-5 py-3">
       <Button
@@ -647,14 +647,14 @@ function WalkFooter({
       </Button>
     </CardFooter>
   );
-}
+};
 
 /**
  * The card of a walk under way: where in the walk, the stop's story, and
  * the way on. On a touch screen it sits at the top and folds its text
  * away, so the view it describes stays in sight.
  */
-export function WalkCard({
+export const WalkCard = ({
   coarse,
   index,
   onClose,
@@ -666,7 +666,7 @@ export function WalkCard({
   onClose: () => void;
   onIndex: (index: number) => void;
   walk: Walk;
-}) {
+}) => {
   // a phone's sheet starts low: the title and the way on, the scene above
   const [folded, setFolded] = useState(coarse);
   // the visitor's day: the notes for today and the season
@@ -774,4 +774,4 @@ export function WalkCard({
       </Card>
     </section>
   );
-}
+};

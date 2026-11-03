@@ -35,7 +35,7 @@ const DONE_LINGER_MS = 1600;
 const FADE_MS = 400;
 
 /** The three bars the plate stack collapses into. */
-function StackGlyph({ plates }: { plates: LoadStageState[] }) {
+const StackGlyph = ({ plates }: { plates: LoadStageState[] }) => {
   // The glyph reads as "layers", not as a count — the top three plate colours
   // are enough, dimmed while their layer has not landed.
   const bars = plates.slice(0, 3);
@@ -50,10 +50,10 @@ function StackGlyph({ plates }: { plates: LoadStageState[] }) {
       ))}
     </span>
   );
-}
+};
 
 /** One stage as a segment: filled when done, part-filled while it streams. */
-function Segment({ stage }: { stage: LoadStageState }) {
+const Segment = ({ stage }: { stage: LoadStageState }) => {
   const pct = Math.round(stage.fraction * 100);
   return (
     <span
@@ -67,7 +67,7 @@ function Segment({ stage }: { stage: LoadStageState }) {
       }}
     />
   );
-}
+};
 
 /**
  * After the first full load the stages are done for good, but a flight still
@@ -77,7 +77,7 @@ function Segment({ stage }: { stage: LoadStageState }) {
  */
 const HINT_DELAY_MS = 1200;
 
-function StreamingHint({ busy }: { busy: boolean }) {
+const StreamingHint = ({ busy }: { busy: boolean }) => {
   // True once the current busy spell has lasted HINT_DELAY_MS; reset when
   // it ends, so the next one waits again.
   const [late, setLate] = useState(false);
@@ -105,15 +105,15 @@ function StreamingHint({ busy }: { busy: boolean }) {
       <span className="relative">Umgebung lädt</span>
     </div>
   );
-}
+};
 
-export function StreamPill({
+export const StreamPill = ({
   busy,
   stages,
 }: {
   busy: boolean;
   stages: LoadStageState[];
-}) {
+}) => {
   const allDone = stages.every((stage) => stage.done);
   const [mountedAt] = useState(() => Date.now());
   const [phase, setPhase] = useState<"gone" | "leaving" | "shown">("shown");
@@ -171,4 +171,4 @@ export function StreamPill({
       </span>
     </div>
   );
-}
+};

@@ -22,7 +22,7 @@ const ROW =
   "flex h-8 w-full min-w-0 items-center gap-2.5 rounded-md px-2 text-left text-xs hover:bg-accent disabled:pointer-events-none disabled:opacity-50";
 
 /** What a row's icon says: on foot, from the air, or a landmark. */
-function PlaceIcon({ place }: { place: Place }) {
+const PlaceIcon = ({ place }: { place: Place }) => {
   const Icon =
     place.kind === "landmark"
       ? LandmarkIcon
@@ -30,7 +30,7 @@ function PlaceIcon({ place }: { place: Place }) {
         ? PlaneIcon
         : FootprintsIcon;
   return <Icon aria-hidden className="size-3.5 shrink-0 opacity-60" />;
-}
+};
 
 /** A row's tooltip: its line and the landmarks it shows too. */
 function titleOf(place: Place): string {
@@ -48,7 +48,7 @@ function titleOf(place: Place): string {
     .join(" — ");
 }
 
-function PlaceRow({
+const PlaceRow = ({
   disabled,
   onTravel,
   place,
@@ -58,7 +58,7 @@ function PlaceRow({
   onTravel: (place: Place) => void;
   place: Place;
   showKey: boolean;
-}) {
+}) => {
   return (
     <li>
       <button
@@ -81,7 +81,7 @@ function PlaceRow({
       </button>
     </li>
   );
-}
+};
 
 /**
  * The saved view: the first row while it is set, its ✕ beside it — clear,
@@ -89,13 +89,13 @@ function PlaceRow({
  * siblings, not nested (a button in a button is neither valid HTML nor
  * reachable by keyboard).
  */
-function RememberedRow({
+const RememberedRow = ({
   onForget,
   onRestore,
 }: {
   onForget: () => void;
   onRestore: () => void;
-}) {
+}) => {
   return (
     <li className="flex items-center gap-1">
       <button
@@ -120,7 +120,7 @@ function RememberedRow({
       </button>
     </li>
   );
-}
+};
 
 /**
  * *Orte* (lib/city/places.ts): the authored vantages and the city's
@@ -129,7 +129,7 @@ function RememberedRow({
  * with a search over every name, the folded landmarks' included. A row
  * travels there (in Modell: centres the picture on it).
  */
-export function PlacesList({
+export const PlacesList = ({
   canRemember,
   canTravel,
   onForget,
@@ -152,7 +152,7 @@ export function PlacesList({
   remembered: boolean;
   /** show the 1–9 keys (keyboard devices) */
   showKeys: boolean;
-}) {
+}) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const listId = useId();
@@ -238,4 +238,4 @@ export function PlacesList({
       )}
     </section>
   );
-}
+};

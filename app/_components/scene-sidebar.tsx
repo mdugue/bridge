@@ -167,7 +167,7 @@ function sunTimeLabel(arrow: string, date: Date | null | undefined): string {
 }
 
 /** A labelled 0–100 percent slider that writes straight to the look store. */
-function PctSlider({
+const PctSlider = ({
   description,
   id,
   label,
@@ -179,7 +179,7 @@ function PctSlider({
   label: string;
   onChange: (value: number) => void;
   value: number;
-}) {
+}) => {
   return (
     <Field>
       <FieldLabel className="justify-between font-medium text-xs" htmlFor={id}>
@@ -203,16 +203,16 @@ function PctSlider({
       ) : null}
     </Field>
   );
-}
+};
 
 /** Every percent slider, rendered from LOOK_CONTROLS. */
-function LookSliders({
+const LookSliders = ({
   look,
   onLook,
 }: {
   look: LookValues;
   onLook: (patch: Partial<LookValues>) => void;
-}) {
+}) => {
   return (
     <>
       {LOOK_CONTROLS.map((def) => (
@@ -227,20 +227,20 @@ function LookSliders({
       ))}
     </>
   );
-}
+};
 
 /**
  * The picture style: five swatch cards, exactly one pressed — the same
  * single-value ToggleGroup as walk/fly, so the keyboard moves through it
  * the same way.
  */
-function StylePicker({
+const StylePicker = ({
   onStyle,
   style,
 }: {
   onStyle: (style: RenderStyle) => void;
   style: RenderStyle;
-}) {
+}) => {
   return (
     <div className="flex flex-col gap-2 pb-2">
       <ToggleGroup
@@ -283,14 +283,14 @@ function StylePicker({
       </span>
     </div>
   );
-}
+};
 
 /**
  * The minimap card: click to teleport, the blue dot is you. The footprints
  * and the pose come from the scene's status (scene-status.ts); the pose
  * moves the dot on the map's canvas without a render.
  */
-function MinimapCard({
+const MinimapCard = ({
   bounds,
   landcoverTiles,
   onTeleport,
@@ -298,7 +298,7 @@ function MinimapCard({
   bounds: TerrainBounds;
   landcoverTiles: MapTile[];
   onTeleport: (epsgX: number, epsgY: number) => void;
-}) {
+}) => {
   const footprints = useSceneStatus("footprints");
   const status = useSceneStatusStore();
   const subscribePose = useCallback(
@@ -347,14 +347,14 @@ function MinimapCard({
       </div>
     </div>
   );
-}
+};
 
 /**
  * The key/action table — the full list the floating bar only shows the first
  * four of, folded away until asked for: the bar already teaches the first
  * steps. Touch devices get the gestures instead: a phone has no W A S D.
  */
-function ControlTable({ coarse }: { coarse: boolean }) {
+const ControlTable = ({ coarse }: { coarse: boolean }) => {
   const model = useSceneStatus("mode") === "model";
   return (
     <Collapsible className="border-t px-4 pt-1.5 pb-2">
@@ -383,21 +383,21 @@ function ControlTable({ coarse }: { coarse: boolean }) {
       </CollapsibleContent>
     </Collapsible>
   );
-}
+};
 
 /**
  * Walk, fly or Modell: one segmented control under the map, and Modell's
  * *Projektion* right beneath it while it is on — the mode and what it
  * offers stay together instead of ending up under the list of places.
  */
-function ViewModeSwitch({
+const ViewModeSwitch = ({
   disabled,
   onMode,
 }: {
   /** the scene is still loading: there is no camera to switch yet */
   disabled: boolean;
   onMode: (mode: ViewMode) => void;
-}) {
+}) => {
   const mode = useSceneStatus("mode");
   return (
     <ToggleGroup
@@ -431,7 +431,7 @@ function ViewModeSwitch({
       </ToggleGroupItem>
     </ToggleGroup>
   );
-}
+};
 
 const MODE_ITEM =
   "h-7 text-muted-foreground data-pressed:bg-background data-pressed:text-foreground data-pressed:shadow-sm";
@@ -444,7 +444,7 @@ const STUDY_CHIP =
  * of the shown year, and four hours — one click each, and the whole grid
  * as one sheet.
  */
-function ShadowStudy({
+const ShadowStudy = ({
   day,
   disabled,
   minutes,
@@ -460,7 +460,7 @@ function ShadowStudy({
   /** the scene is up: there is a picture to save */
   ready: boolean;
   updateSun: (day: Date, minutes: number) => void;
-}) {
+}) => {
   const dateKey = (d: { month: number; day: number }) => `${d.month}-${d.day}`;
   const today = STUDY_DATES.find(
     (d) => d.month === day.getMonth() && d.day === day.getDate()
@@ -534,10 +534,10 @@ function ShadowStudy({
       </button>
     </div>
   );
-}
+};
 
 /** Sun and time: the date, the minute, and where the sun stands because of it. */
-function SunControls({
+const SunControls = ({
   day,
   latLng,
   minutes,
@@ -561,7 +561,7 @@ function SunControls({
   ready: boolean;
   sun: SunState | null;
   updateSun: (day: Date, minutes: number) => void;
-}) {
+}) => {
   // The minute under the thumb while it moves: the thumb and the clock show
   // it at once, while the scene (once a frame) and the rest of the HUD (as
   // a transition) follow behind; letting go hands it over as the minute.
@@ -707,10 +707,10 @@ function SunControls({
       />
     </div>
   );
-}
+};
 
 /** A tool row: icon, what it does, and the key that also does it. */
-function ToolButton({
+const ToolButton = ({
   disabled = false,
   hint,
   icon: Icon,
@@ -725,7 +725,7 @@ function ToolButton({
   onClick: () => void;
   /** told while the button is pointed at or focused, and when it no longer is */
   onAim?: (aiming: boolean) => void;
-}) {
+}) => {
   // A panel that closes (the phone's sheet) unmounts the button without a
   // blur or a pointer leave.
   useEffect(() => () => onAim?.(false), [onAim]);
@@ -747,19 +747,19 @@ function ToolButton({
       </span>
     </button>
   );
-}
+};
 
 /**
  * Modell's *Projektion*, while Modell is shown: at its view's rate (the
  * pose tick), so it reads the view itself rather than the whole panel.
  */
-function ModelProjection({
+const ModelProjection = ({
   handleRef,
   onExport,
 }: {
   handleRef: RefObject<CityWalkHandle | null>;
   onExport: () => void;
-}) {
+}) => {
   const mode = useSceneStatus("mode");
   const view = useSceneStatus("modelView");
   if (mode !== "model" || !view) {
@@ -777,10 +777,10 @@ function ModelProjection({
       view={view}
     />
   );
-}
+};
 
 /** The counters: what the scene holds, and how fast it draws. */
-function SceneCounters() {
+const SceneCounters = () => {
   const stats = useSceneStatus("stats");
   const fps = useSceneStatus("fps");
   return (
@@ -806,7 +806,7 @@ function SceneCounters() {
       </div>
     </div>
   );
-}
+};
 
 /**
  * Everything the panel is handed is the HUD's own state (the time, the
@@ -878,7 +878,7 @@ export interface SceneSidebarProps {
   previewSun: (day: Date, minutes: number) => void;
 }
 
-export function SceneSidebar(props: SceneSidebarProps) {
+export const SceneSidebar = (props: SceneSidebarProps) => {
   const { toggleSidebar } = useSidebar();
   const { handleRef, look, onLook } = props;
   const site = useSite();
@@ -1116,7 +1116,7 @@ export function SceneSidebar(props: SceneSidebarProps) {
       </SidebarFooter>
     </Sidebar>
   );
-}
+};
 
 /**
  * The footer, two rows high: the one-line credit (OpenStreetMap and the
@@ -1124,7 +1124,7 @@ export function SceneSidebar(props: SceneSidebarProps) {
  * the murals' photos with them — so the trigger does not move; below it the way to Impressum, Datenschutz and
  * /wissen — in a new tab, so the walk stays — and the one call to action.
  */
-function SourcesFooter() {
+const SourcesFooter = () => {
   const site = useSite();
   // the murals' photos (mural-layer.ts), each credited as its licence asks
   const photos = useSceneStatus("site")?.photoCredits ?? [];
@@ -1183,4 +1183,4 @@ function SourcesFooter() {
       </div>
     </Collapsible>
   );
-}
+};

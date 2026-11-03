@@ -23,7 +23,7 @@ const TABS: { id: SceneTabId; label: string }[] = [
   { id: "erweitert", label: "Erweitert" },
 ];
 
-export function SceneTabs({
+export const SceneTabs = ({
   children,
   onValueChange,
   value,
@@ -32,7 +32,7 @@ export function SceneTabs({
   children: ReactNode;
   onValueChange: (value: SceneTabId) => void;
   value: SceneTabId;
-}) {
+}) => {
   return (
     <Tabs.Root
       className="flex min-h-0 flex-1 flex-col"
@@ -61,16 +61,16 @@ export function SceneTabs({
       {children}
     </Tabs.Root>
   );
-}
+};
 
 /** One tab's content, scrolling on its own inside the sidebar. */
-export function SceneTabPanel({
+export const SceneTabPanel = ({
   children,
   value,
 }: {
   children: ReactNode;
   value: SceneTabId;
-}) {
+}) => {
   return (
     <Tabs.Panel
       className="no-scrollbar flex min-h-0 flex-1 flex-col overflow-auto focus-visible:outline-none"
@@ -79,4 +79,4 @@ export function SceneTabPanel({
       {children}
     </Tabs.Panel>
   );
-}
+};

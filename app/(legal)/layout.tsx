@@ -9,7 +9,7 @@ import "../wissen/wissen.css";
  * /impressum and /datenschutz (ADR 0043): plain documents on the Wissen
  * pages' paper and type, with the way back to the cities.
  */
-export default function LegalLayout({ children }: { children: ReactNode }) {
+const LegalLayout = ({ children }: { children: ReactNode }) => {
   return (
     <div className="flex min-h-dvh flex-col bg-(--wissen-paper)">
       <header className="sticky top-0 z-20 border-b bg-(--wissen-paper)/90 backdrop-blur">
@@ -54,4 +54,6 @@ export default function LegalLayout({ children }: { children: ReactNode }) {
       </footer>
     </div>
   );
-}
+};
+
+export default LegalLayout;

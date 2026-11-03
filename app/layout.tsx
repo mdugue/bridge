@@ -26,11 +26,11 @@ export const metadata: Metadata = {
   description: "Deutsche Städte als begehbare 3D-Modelle aus offenen Geodaten",
 };
 
-export default function RootLayout({
+const RootLayout = ({
   children,
 }: Readonly<{
   children: React.ReactNode;
-}>) {
+}>) => {
   return (
     <html
       className={cn(
@@ -47,4 +47,6 @@ export default function RootLayout({
       </body>
     </html>
   );
-}
+};
+
+export default RootLayout;

@@ -199,7 +199,7 @@ function usePointerLocked(): boolean {
 }
 
 /** Floating button that opens the sidebar; hidden while it is open. */
-function SettingsToggle() {
+const SettingsToggle = () => {
   const { toggleSidebar, state, isMobile, openMobile } = useSidebar();
   const open = isMobile ? openMobile : state === "expanded";
   if (open) {
@@ -216,7 +216,7 @@ function SettingsToggle() {
       <SlidersHorizontalIcon />
     </Button>
   );
-}
+};
 
 /**
  * The tools the floating toolbar offers here: "take me to where I am"
@@ -307,7 +307,7 @@ function sceneTools({
  * so a joystick left mounted underneath would be a dead control the player
  * can still see.
  */
-function SceneOverlays({
+const SceneOverlays = ({
   asking,
   coarse,
   live,
@@ -333,7 +333,7 @@ function SceneOverlays({
   onNorth: () => void;
   onToggleModel: () => void;
   onTurn: (deg: number) => void;
-}) {
+}) => {
   const { state, isMobile, openMobile } = useSidebar();
   const mode = useSceneStatus("mode");
   const inquiry = useSceneStatus("inquiry");
@@ -388,14 +388,14 @@ function SceneOverlays({
       </div>
     </>
   );
-}
+};
 
 /**
  * Modell's scale bar and north arrow, at its view's rate (the pose tick):
  * the only part of the overlays that follows the view. Nothing until the
  * first view is in.
  */
-function LiveModelInstruments({
+const LiveModelInstruments = ({
   className,
   onNorth,
   onTurn,
@@ -404,7 +404,7 @@ function LiveModelInstruments({
   className?: string;
   onNorth: () => void;
   onTurn: (deg: number) => void;
-}) {
+}) => {
   const view = useSceneStatus("modelView");
   if (!view) {
     return null;
@@ -417,13 +417,13 @@ function LiveModelInstruments({
   ) : (
     instruments
   );
-}
+};
 
 /**
  * The off-site dialog, wired to the scene and the sidebar: a vantage flies
  * there, "Auf der Karte wählen" opens the sidebar on the minimap.
  */
-function OffsiteDialog({
+const OffsiteDialog = ({
   handleRef,
   locate,
   onTab,
@@ -431,7 +431,7 @@ function OffsiteDialog({
   handleRef: RefObject<CityWalkHandle | null>;
   locate: ReturnType<typeof useLocateMe>;
   onTab: (tab: SceneTabId) => void;
-}) {
+}) => {
   const { isMobile, setOpen, setOpenMobile } = useSidebar();
   return (
     <LocateOffsiteDialog
@@ -450,7 +450,7 @@ function OffsiteDialog({
       }}
     />
   );
-}
+};
 
 /**
  * The page was opened from another city's off-site dialog with where the
@@ -498,7 +498,10 @@ function standsAt(h: CityWalkHandle, view: ViewpointGeometry): boolean {
  * desktop, so its text keeps clear of the panel, and a place picked there
  * is named — the scene starts at it.
  */
-function ShellLoadScreen(props: { destination?: string; handedOver: boolean }) {
+const ShellLoadScreen = (props: {
+  destination?: string;
+  handedOver: boolean;
+}) => {
   const { isMobile, state } = useSidebar();
   const { fractions, skipped } = useSceneStatus("progress");
   return (
@@ -509,19 +512,19 @@ function ShellLoadScreen(props: { destination?: string; handedOver: boolean }) {
       stages={loadStageStates(fractions, skipped)}
     />
   );
-}
+};
 
 /** The loading screen at pill size, once the scene is up (stream-pill.tsx). */
-function ScenePill() {
+const ScenePill = () => {
   const { fractions, skipped } = useSceneStatus("progress");
   const busy = useSceneStatus("busy");
   return (
     <StreamPill busy={busy} stages={loadStageStates(fractions, skipped)} />
   );
-}
+};
 
 /** A tile that failed after the first frame, until it comes back. */
-function StreamErrorLine() {
+const StreamErrorLine = () => {
   const message = useSceneStatus("streamError");
   return message ? (
     <output
@@ -531,7 +534,7 @@ function StreamErrorLine() {
       {message}
     </output>
   ) : null;
-}
+};
 
 /**
  * No dot in the middle: the pointer aims (I and R act under it). Only
@@ -539,7 +542,7 @@ function StreamErrorLine() {
  * instead, and so does the panel's demolish button while it is pointed at
  * or focused — it acts at the centre. Never on Modell's sheet.
  */
-function CentreMark({ shown }: { shown: boolean }) {
+const CentreMark = ({ shown }: { shown: boolean }) => {
   const mode = useSceneStatus("mode");
   return shown && mode !== "model" ? (
     <div
@@ -547,23 +550,23 @@ function CentreMark({ shown }: { shown: boolean }) {
       className="pointer-events-none absolute top-1/2 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]"
     />
   ) : null;
-}
+};
 
 /** The failure card once the render stopped for good (gpu-failure-card.tsx). */
-function GpuFailure({
+const GpuFailure = ({
   onLighter,
   onReload,
 }: {
   onLighter: () => void;
   onReload: () => void;
-}) {
+}) => {
   const detail = useSceneStatus("gpuFailure");
   return detail === null ? null : (
     <GpuFailureCard detail={detail} onLighter={onLighter} onReload={onReload} />
   );
-}
+};
 
-export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
+const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
   const site = useSite();
   const mountRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<CityWalkHandle | null>(null);
@@ -1343,14 +1346,16 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
       </SidebarProvider>
     </SceneStatusContext>
   );
-}
+};
+
+export default CityWalk;
 
 /**
  * The asked thing's card and what else the ray met: on a desktop one
  * column at the left, the card over the list; on a touch screen the sheet
  * with the chips above it. The tap's ring either way.
  */
-function InquiryPanel({
+const InquiryPanel = ({
   coarse,
   onClose,
   onPreview,
@@ -1360,7 +1365,7 @@ function InquiryPanel({
   onClose: () => void;
   onPreview: (index: number | null) => void;
   onSelect: (index: number) => void;
-}) {
+}) => {
   const asked = useSceneStatus("inquiry");
   const provenanceUrl = useSceneStatus("site")?.provenanceUrl ?? null;
   if (!asked) {
@@ -1399,4 +1404,4 @@ function InquiryPanel({
       )}
     </>
   );
-}
+};

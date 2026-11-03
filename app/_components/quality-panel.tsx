@@ -77,13 +77,13 @@ function standingNote({ fallsAt, level, next, pinned }: SafetyStanding) {
  * is false when the browser would not store it. A page whose address sets
  * the level (`?safety=N`) offers no reset: the address would win.
  */
-export function QualityPanel({
+export const QualityPanel = ({
   budget,
   onReset,
 }: {
   budget: SceneBudget;
   onReset: () => boolean;
-}) {
+}) => {
   // Read when the tab opens: another tab may have raised it meanwhile.
   const [standing, setStanding] = useState(() =>
     currentSafetyStanding(budget.safety)
@@ -160,4 +160,4 @@ export function QualityPanel({
       )}
     </section>
   );
-}
+};

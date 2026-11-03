@@ -231,14 +231,14 @@ function setupCanvas(
  * CityJSON on a static canvas, the player dot + heading wedge on a dynamic
  * overlay canvas (redrawn at pose rate, ~10 Hz). Clicking teleports.
  */
-export function Minimap({
+export const Minimap = ({
   bounds,
   footprints,
   landcoverTiles,
   onTeleport,
   size = DEFAULT_SIZE,
   subscribePose,
-}: MinimapProps) {
+}: MinimapProps) => {
   // The map has the site's shape (a landscape for Dresden), edge to edge.
   const height = mapHeightPx(bounds, size);
   const staticRef = useRef<HTMLCanvasElement>(null);
@@ -382,4 +382,4 @@ export function Minimap({
       />
     </button>
   );
-}
+};

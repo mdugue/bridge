@@ -72,7 +72,7 @@ function weightLabel(status: DesignStatus): string {
 }
 
 /** A number typed in, taken on Enter or when the field is left. */
-function NumberField({
+const NumberField = ({
   digits,
   id,
   label,
@@ -89,7 +89,7 @@ function NumberField({
   step: number;
   unit: string;
   value: number;
-}) {
+}) => {
   const shown =
     digits === undefined
       ? value.toFixed(step < 1 ? 2 : 0)
@@ -123,7 +123,7 @@ function NumberField({
       />
     </Field>
   );
-}
+};
 
 /** Hands the placement file to the browser to save. */
 function savePlacement(text: string, design: string): void {
@@ -144,13 +144,13 @@ function savePlacement(text: string, design: string): void {
  * with the buildings it replaces stepped aside. The placement can be kept
  * as a small file beside the design and loaded with it next time.
  */
-export function DesignPanel({
+export const DesignPanel = ({
   controls,
   ready,
 }: {
   controls: () => DesignControls | null;
   ready: boolean;
-}) {
+}) => {
   const status = useSceneStatus("design");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -240,9 +240,9 @@ export function DesignPanel({
       )}
     </div>
   );
-}
+};
 
-function DesignControlsView({
+const DesignControlsView = ({
   controls,
   ids,
   place,
@@ -252,7 +252,7 @@ function DesignControlsView({
   ids: string;
   place: (patch: Partial<DesignPlacement>) => void;
   status: DesignStatus;
-}) {
+}) => {
   const p = status.placement;
   return (
     <div className="flex flex-col gap-2.5">
@@ -405,14 +405,14 @@ function DesignControlsView({
       </div>
     </div>
   );
-}
+};
 
 /**
  * The unit the file is read in and a factor on it: OBJ has no unit, and
  * many exports come in centimetres or millimetres; a model at 1:100 or a
  * game asset takes a factor. It scales about the design's foot.
  */
-function ScaleControls({
+const ScaleControls = ({
   controls,
   ids,
   status,
@@ -420,7 +420,7 @@ function ScaleControls({
   controls: () => DesignControls | null;
   ids: string;
   status: DesignStatus;
-}) {
+}) => {
   const { scale } = status;
   return (
     <div className="flex flex-col gap-1">
@@ -471,4 +471,4 @@ function ScaleControls({
       />
     </div>
   );
-}
+};
