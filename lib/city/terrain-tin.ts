@@ -136,7 +136,7 @@ export function tinFromMesher(src: TinSource): TerrainTin {
     const y = coords[2 * order[i] + 1];
     const h = src.heightAt(x, y);
     if (!Number.isFinite(h)) {
-      throw new Error(`terrain TIN: NoData at grid (${x}, ${y})`);
+      throw new TypeError(`terrain TIN: NoData at grid (${x}, ${y})`);
     }
     gx[i] = x;
     gy[i] = y;

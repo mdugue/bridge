@@ -163,7 +163,7 @@ export function tinFromGrid(
 ): TerrainTin {
   for (let i = 0; i < grid.length; i++) {
     if (!Number.isFinite(grid[i])) {
-      throw new Error("terrain TIN: the source grid has NoData");
+      throw new TypeError("terrain TIN: the source grid has NoData");
     }
   }
   const mesher = scale
