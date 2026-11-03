@@ -1605,9 +1605,13 @@ visual-variable codebook is in
   stretch: Dresden 13 651 (13 518 before, the filled slots), Leipzig
   6 922, München 7 309, Unna 2 080, Meißen 1 802, Hamburg 1 739, Grimma
   1 429; the Taschenbergpalais 95. **On the exact roof** (2026-11-03):
-  last, every dormer and chimney takes its height and slope from its
-  host's LoD2 roof face under its centre (the highest within 0.3 m of
-  its outline), its top moved with it (`on_planes`). The burned 1 m roof
+  last, every dormer and chimney takes its height from its host's LoD2
+  roof face under its centre (the highest of the faces over it, else the
+  nearest within 0.3 m of its outline: past a ridge, a hip or a
+  mansard's break the neighbour's plane runs on above the face beside
+  it), a dormer its slope too and its top moved with it, a chimney's
+  measured top kept; a dormer whose face is flatter than 25° keeps its
+  row's height (`on_planes`). The burned 1 m roof
   reads a cell's height, up to half a metre off a 45° face under a
   centre: over all seven cities 7 % of the dormers stood more than 0.3 m
   over the roof the building draws (0.6 % over 0.7 m), their cheeks

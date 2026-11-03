@@ -587,6 +587,54 @@ def test_roof_planes_read_the_exact_face():
     assert planes.at(0, 5.0, -2.0) is None
 
 
+def roof_city(*faces: list[list[float]]) -> dict:
+    """One object whose roof is the given faces (each a ring of points)."""
+    vertices: list[list[float]] = []
+    boundaries = []
+    for face in faces:
+        boundaries.append([list(range(len(vertices), len(vertices) + len(face)))])
+        vertices += face
+    geometry = {
+        "type": "MultiSurface",
+        "lod": "2",
+        "boundaries": boundaries,
+        "semantics": {"surfaces": [{"type": "RoofSurface"}], "values": [0] * len(faces)},
+    }
+    return {
+        "vertices": vertices,
+        "CityObjects": {"a": {"type": "Building", "geometry": [geometry]}},
+    }
+
+
+def test_roof_planes_read_the_face_a_point_is_on_at_a_break():
+    # a mansard: its 70° lower face y 0..1 up to the break at 12.75 m,
+    # its upper face on at 30° — near the break, the upper face's plane
+    # runs on above the lower face
+    rise = math.tan(math.radians(70))
+    up = math.tan(math.radians(30))
+    lower = [[0, 0, 10], [10, 0, 10], [10, 1, 10 + rise], [0, 1, 10 + rise]]
+    upper = [
+        [0, 1, 10 + rise],
+        [10, 1, 10 + rise],
+        [10, 4, 10 + rise + 3 * up],
+        [0, 4, 10 + rise + 3 * up],
+    ]
+    planes = dormers.RoofPlanes(roof_city(lower, upper), ["a"])
+    z, slope = planes.at(0, 5.0, 0.85)
+    assert abs(z - (10 + rise * 0.85)) < 1e-6
+    assert abs(slope - 70.0) < 1e-6
+    z, slope = planes.at(0, 5.0, 1.15)
+    assert abs(slope - 30.0) < 1e-6
+
+
+def test_on_planes_leaves_a_dormer_on_a_flat_face():
+    flat = [[0, 0, 10], [10, 0, 10], [10, 8, 10], [0, 8, 10]]
+    planes = dormers.RoofPlanes(roof_city(flat), ["a"])
+    d = {"of": 0, "x": 5.0, "y": 4.0, "z": 10.4, "top": 12.0, "slope": 45.0, "tf": 30.0}
+    dormers.on_planes([d], planes)
+    assert d["z"] == 10.4 and d["slope"] == 45.0 and d["tf"] == 30.0
+
+
 def test_on_planes_moves_a_dormer_onto_its_face():
     planes = dormers.RoofPlanes(gable_city(), ["a"])
     d = {"of": 0, "x": 5.0, "y": 1.3, "z": 11.8, "top": 13.0, "slope": 40.0, "tf": 44.0}
@@ -594,7 +642,8 @@ def test_on_planes_moves_a_dormer_onto_its_face():
     dormers.on_planes([d, chimney], planes)
     assert d["z"] == 11.3 and d["top"] == 12.5 and d["slope"] == 45.0
     assert d["tf"] == 45.0 - dormers.SHED_MARGIN
-    assert chimney["z"] == 11.0 and chimney["top"] == 12.5 and chimney["slope"] == 40.0
+    # a chimney's top is the surface model's own height: it stays
+    assert chimney["z"] == 11.0 and chimney["top"] == 12.0 and chimney["slope"] == 40.0
 
 
 def test_on_planes_keeps_a_dormer_under_the_ridge():

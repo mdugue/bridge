@@ -568,10 +568,8 @@ def shifts(dom: np.ndarray, roof: np.ndarray, slope: np.ndarray, labels: np.ndar
     return out
 
 
-def roof_faces(city: dict, oid: str) -> list[tuple[float, float, float, float, shapely.Geometry]]:
-    """(area m², slope degrees, lowest and highest height, plan) of each of
-    the object's LoD2 roof faces."""
-    obj = city["CityObjects"].get(oid, {})
+def metres(city: dict):
+    """A CityJSON vertex index → its (x, y, z) in metres (EPSG)."""
     scale = city.get("transform", {}).get("scale", [1, 1, 1])
     translate = city.get("transform", {}).get("translate", [0, 0, 0])
     vertices = city["vertices"]
@@ -580,6 +578,14 @@ def roof_faces(city: dict, oid: str) -> list[tuple[float, float, float, float, s
         v = vertices[i]
         return tuple(float(v[k]) * scale[k] + translate[k] for k in range(3))
 
+    return to_metres
+
+
+def roof_faces(city: dict, oid: str) -> list[tuple[float, float, float, float, shapely.Geometry]]:
+    """(area m², slope degrees, lowest and highest height, plan) of each of
+    the object's LoD2 roof faces."""
+    obj = city["CityObjects"].get(oid, {})
+    to_metres = metres(city)
     out = []
     for geometry in _lod2(obj.get("geometry", [])):
         for ring in surface_rings(geometry, "RoofSurface"):
@@ -600,14 +606,7 @@ class RoofPlanes:
     dormer on a 45° face half a cell off sat half a metre high)."""
 
     def __init__(self, city: dict, ids: list[str]):
-        scale = city.get("transform", {}).get("scale", [1, 1, 1])
-        translate = city.get("transform", {}).get("translate", [0, 0, 0])
-        vertices = city["vertices"]
-
-        def to_metres(i: int) -> tuple[float, float, float]:
-            v = vertices[i]
-            return tuple(float(v[k]) * scale[k] + translate[k] for k in range(3))
-
+        to_metres = metres(city)
         self.faces: list[list[tuple[shapely.Geometry, tuple, tuple]]] = []
         # each object's ridge: its roof faces' highest vertex
         self.ridge: list[float] = []
@@ -630,39 +629,57 @@ class RoofPlanes:
             self.ridge.append(ridge)
 
     def at(self, of: int, x: float, y: float) -> tuple[float, float] | None:
-        """The highest roof face of object `of` over (x, y) (within
-        PLANE_REACH_M of its outline): its height there and its slope
-        (degrees); None where none is."""
+        """The roof face of object `of` at (x, y): its height there and its
+        slope (degrees); None where none is. The highest of the faces over
+        the point (one drawn over another), else the nearest within
+        PLANE_REACH_M of its outline — never the highest of those: past a
+        ridge, a hip or a mansard's break the neighbour's plane runs on
+        above the face the point is beside."""
         p = shapely.Point(x, y)
-        best = None
+        over = None
+        near = None
         for plan, n, p0 in self.faces[of] if of < len(self.faces) else []:
-            if plan.distance(p) > PLANE_REACH_M:
+            gap = plan.distance(p)
+            if gap > PLANE_REACH_M:
                 continue
             z = p0[2] - (n[0] * (x - p0[0]) + n[1] * (y - p0[1])) / n[2]
-            if best is None or z > best[0]:
-                best = (z, math.degrees(math.acos(min(1.0, n[2]))))
-        return best
+            face = (z, math.degrees(math.acos(min(1.0, n[2]))))
+            if gap <= 1e-6:
+                if over is None or z > over[0]:
+                    over = face
+            elif near is None or gap < near[0]:
+                near = (gap, face)
+        if over is not None:
+            return over
+        return near[1] if near is not None else None
 
 
 def on_planes(found: list[dict], planes: RoofPlanes) -> None:
     """Each dormer and chimney at its host's exact roof (`RoofPlanes`):
-    its `z` and `slope` there, its top the same height over it (a row's
-    one height over one eave; a measured top moves with the roof only
-    where it was read against it), a shed's fall at most SHED_MARGIN under
-    the slope and a dormer's top at most RIDGE_SLACK_M over the ridge."""
+    its `z` there; a dormer's slope there too, its top the same height
+    over it (its row's one height over the roof: read against the roof,
+    it moves with it) but at most RIDGE_SLACK_M over the ridge, and a
+    shed's fall at most SHED_MARGIN under the slope. A chimney's top is
+    the surface model's own height and stays. A dormer whose face there is
+    flatter than MIN_SLOPE (beside a step onto a flat part) keeps its
+    row's height and slope."""
     for d in found:
         e = planes.at(d["of"], d["x"], d["y"])
         if e is None:
             continue
         z, slope = e
+        if d.get("k") == "chimney":
+            d["z"] = round(z, 2)
+            continue
+        if slope < MIN_SLOPE:
+            continue
         d["top"] = round(d["top"] + z - d["z"], 2)
         d["z"] = round(z, 2)
-        if d.get("k") != "chimney":
-            ridge = planes.ridge[d["of"]] + RIDGE_SLACK_M
-            d["top"] = round(max(min(d["top"], ridge), z), 2)
-            d["slope"] = round(slope, 1)
-            if "tf" in d:
-                d["tf"] = round(min(d["tf"], slope - SHED_MARGIN), 1)
+        ridge = planes.ridge[d["of"]] + RIDGE_SLACK_M
+        d["top"] = round(max(min(d["top"], ridge), z), 2)
+        d["slope"] = round(slope, 1)
+        if "tf" in d:
+            d["tf"] = round(min(d["tf"], slope - SHED_MARGIN), 1)
 
 
 def mansard_flanks(city: dict) -> list[shapely.Geometry]:
@@ -806,8 +823,8 @@ class Roofs:
         # the parts LoD2 drew off in plan moved onto the surface model: the
         # roof, the footprints, the mansards' faces read where it saw them
         # (a dormer's place is turned back into LoD2's at the end: `back`)
-        s = copy.copy(s)
         drawn_s, drawn, drawn_polys = s, s.roof, polys
+        s = copy.copy(s)
         self.moves = np.zeros((len(polys), 2)) if moves is None else moves
         s.roof = moved_roof(s, polys, self.moves)
         s.gap = s.dom - np.fmax(s.ground, s.roof)
@@ -976,7 +993,7 @@ def find(
     moves = plan_moves(s, polys)
     if moves.any():
         moved = Roofs(*args, moves=moves)
-        extra = [d for d in read(moved, s) if moves[d["of"]].any()]
+        extra = read(moved, s, moves.any(axis=1))
         for d in extra:
             d["x"], d["y"] = moved.back(d)
         found += [d for d in extra if not twice(d, found)]
@@ -994,14 +1011,15 @@ def find(
     return uncrowded(out, level)
 
 
-def read(roofs: Roofs, s: Surfaces) -> list[dict]:
+def read(roofs: Roofs, s: Surfaces, only: np.ndarray | None = None) -> list[dict]:
     """Every dormer and chimney one reading of the roofs finds (`roofs`),
     in its frame, with its host (`of`) and whether it stands on a flat
-    roof (`level`)."""
+    roof (`level`); `only` the hosts to read (each object's flag), all
+    where not given."""
     found: list[dict] = []
     for sl, m, pitched in blobs(roofs.excess, pitched_cells(roofs.slope)):
         of = roofs.host(*centre(s, sl, m))
-        if of is None:
+        if of is None or (only is not None and not only[of]):
             continue
         d = roofs.read(sl, m, pitched, of)
         if d is not None:
@@ -1408,7 +1426,9 @@ def level(line: list[dict]) -> None:
     the median slope, their tops their height over it under the part's
     ridge; a shed dormer's fall then at most SHED_MARGIN under the slope.
     The roof's 1 m cells read a mansard's 70° face ±1.4 m up and down (a
-    cell either way across it)."""
+    cell either way across it). Where the LoD2 faces are given, `on_planes`
+    then stands each on its exact face, its top the same height over it:
+    what this keeps is that one height over the roof."""
     by: dict[int, list[dict]] = {}
     for d in line:
         by.setdefault(d["of"], []).append(d)
@@ -1444,13 +1464,7 @@ def overlapping(
         a = found[i]
         mine = kept.setdefault(building[i], [])
         for j in mine:
-            b = found[j]
-            dx, dy = b["x"] - a["x"], b["y"] - a["y"]
-            across = abs(dx * a["ay"] - dy * a["ax"])
-            down = abs(dx * a["ax"] + dy * a["ay"])
-            over = (a["w"] + b["w"]) / 2 - across
-            reach = (a["d"] + b["d"]) / 2 + OVERLAP_DOWN_M
-            if over >= OVERLAP_SHARE * min(a["w"], b["w"]) and down < reach:
+            if clash(a, found[j]):
                 out.add(i)
                 break
         else:
