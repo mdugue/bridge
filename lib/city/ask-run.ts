@@ -128,9 +128,9 @@ const STOPPED_RESULT = JSON.stringify({
  */
 export function withStoppedCallsAnswered<T extends UIMessage | ModelMessage>(
   messages: readonly T[]
-): Array<T | ModelMessage> {
+): (T | ModelMessage)[] {
   const question = messages.findLastIndex((m) => m.role === "user");
-  const out: Array<T | ModelMessage> = [];
+  const out: (T | ModelMessage)[] = [];
   // the open calls of the answer since the last question row
   let open = new Set<string>();
   for (const [i, m] of messages.entries()) {
