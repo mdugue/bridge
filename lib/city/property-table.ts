@@ -217,14 +217,18 @@ function defaultOf(property: ClassProperty): unknown {
   }
   switch (property.type) {
     case "STRING":
-    case "ENUM":
+    case "ENUM": {
       return "";
-    case "BOOLEAN":
+    }
+    case "BOOLEAN": {
       return false;
-    case "SCALAR":
+    }
+    case "SCALAR": {
       return 0;
-    default:
+    }
+    default: {
       return Array.from({ length: COMPONENTS[property.type] ?? 0 }, () => 0);
+    }
   }
 }
 
@@ -282,8 +286,9 @@ function columnReader(
       const bits = new Uint8Array(view(column.values) ?? new ArrayBuffer(0));
       return (id) => noData(((bits[id >> 3] >> (id & 7)) & 1) === 1);
     }
-    default:
+    default: {
       return numberReader(property, column, view);
+    }
   }
 }
 

@@ -458,11 +458,12 @@ export function roofColor(
 ): TintRgb {
   const sampled = lut?.[objectId];
   switch (roofColourSource(objectId, lut, look)) {
-    case "dop":
+    case "dop": {
       return sampled
         ? [sampled[0], sampled[1], sampled[2]]
         : roofTint(objectId, attrs);
-    case "osm":
+    }
+    case "osm": {
       // no measured colour: what OSM says, in the clay's register
       return (
         osmColourTint(
@@ -471,8 +472,10 @@ export function roofColor(
           ROOF_LIGHTNESS
         ) ?? roofTint(objectId, attrs)
       );
-    case "palette":
+    }
+    case "palette": {
       return roofTint(objectId, attrs);
+    }
   }
 }
 

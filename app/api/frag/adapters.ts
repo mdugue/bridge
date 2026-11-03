@@ -29,22 +29,26 @@ export function askAdapter(
   key: string
 ): AnyTextAdapter {
   switch (provider) {
-    case "anthropic":
+    case "anthropic": {
       return createAnthropicChat(model as ModelId, key, CLIENT);
-    case "openai":
+    }
+    case "openai": {
       return createOpenaiChat(model as OpenAiModel, key, CLIENT);
-    case "openrouter":
+    }
+    case "openrouter": {
       return createOpenRouterText(model as OpenRouterModel, key, {
         timeoutMs: CLIENT.timeout,
         retryConfig: { strategy: "none" },
       });
-    case "gateway":
+    }
+    case "gateway": {
       return openaiCompatibleText(model, {
         name: "vercel-ai-gateway",
         baseURL: "https://ai-gateway.vercel.sh/v1",
         apiKey: key,
         ...CLIENT,
       });
+    }
   }
 }
 

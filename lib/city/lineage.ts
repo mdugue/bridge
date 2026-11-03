@@ -212,34 +212,42 @@ export function lineage(
     "tile" in inquiry ? inquiry.tile : ""
   );
   switch (inquiry.kind) {
-    case "building":
+    case "building": {
       buildingLineage(l, inquiry, site);
       break;
-    case "tree":
+    }
+    case "tree": {
       treeLineage(l, inquiry, site);
       break;
-    case "monument":
+    }
+    case "monument": {
       monumentLineage(l, inquiry);
       break;
-    case "bridge":
+    }
+    case "bridge": {
       bridgeLineage(l, inquiry, site);
       break;
-    case "traffic":
+    }
+    case "traffic": {
       trafficLineage(l, inquiry);
       break;
-    case "bikes":
+    }
+    case "bikes": {
       bikeLineage(l, inquiry);
       break;
-    case "design":
+    }
+    case "design": {
       designLineage(l, inquiry);
       break;
+    }
     case "canopy":
     case "furniture":
     case "hedge":
     case "lamp":
     case "landing":
-    case "stop":
+    case "stop": {
       moreLineage(l, inquiry, site);
+    }
   }
   return l.entries;
 }
@@ -609,10 +617,11 @@ function fromMapillary(m: MoreInquiry): boolean {
 
 function moreLineage(l: Lineage, m: MoreInquiry, site: LineageSite): void {
   switch (m.kind) {
-    case "canopy":
+    case "canopy": {
       canopyLineage(l, m, site);
       return;
-    case "hedge":
+    }
+    case "hedge": {
       l.source("dlm", [m.source === "dlm" && "Verlauf"], "taken", {
         standIn: "trees",
       });
@@ -631,11 +640,13 @@ function moreLineage(l: Lineage, m: MoreInquiry, site: LineageSite): void {
         m.source === "osm+dom" && "Breite",
       ]);
       return;
+    }
     case "furniture":
     case "lamp":
     case "landing":
-    case "stop":
+    case "stop": {
       osmThingLineage(l, m);
+    }
   }
 }
 

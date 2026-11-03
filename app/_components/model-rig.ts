@@ -556,13 +556,16 @@ export function createModelRig(opts: ModelRigOptions): ModelRig {
     settledView: () => (phase.kind === "model" ? (glide?.to ?? view) : null),
     blend: () => {
       switch (phase.kind) {
-        case "off":
+        case "off": {
           return 0;
-        case "model":
+        }
+        case "model": {
           return 1;
+        }
         case "entering":
-        case "leaving":
+        case "leaving": {
           return phase.t;
+        }
       }
     },
     enter,
@@ -747,8 +750,9 @@ export function createModelRig(opts: ModelRigOptions): ModelRig {
     },
     step: (dt) => {
       switch (phase.kind) {
-        case "off":
+        case "off": {
           return;
+        }
         case "entering": {
           phase.t = Math.min(phase.t + dt / ENTER_S, 1);
           if (view) {
@@ -771,12 +775,13 @@ export function createModelRig(opts: ModelRigOptions): ModelRig {
           }
           return;
         }
-        case "model":
+        case "model": {
           stepGlide(dt);
           stepKeys(dt);
           if (dirty) {
             placeCamera();
           }
+        }
       }
     },
     hud,

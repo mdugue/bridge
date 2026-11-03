@@ -205,10 +205,12 @@ export function describePlacement(
         ? `${at}, Blickrichtung ohne Kompass beibehalten`
         : at;
     }
-    case "outside":
+    case "outside": {
       return `Du bist ${formatDistance(placement.distanceM)} außerhalb von ${siteLabel} — dort gibt es noch keine Stadt`;
-    case "unsupported":
+    }
+    case "unsupported": {
       return "Dein Standort lässt sich nicht auf diese Karte übertragen";
+    }
   }
 }
 

@@ -187,24 +187,28 @@ export function foldedThing(
   switch (target.kind) {
     case "bridge":
     case "design":
-    case "traffic":
+    case "traffic": {
       return false;
+    }
     // a fountain's basin, a relief, a pontoon are plain meshes: they stay
     case "landing":
-    case "monument":
+    case "monument": {
       return false;
-    case "hedge":
+    }
+    case "hedge": {
       return inDesignSiteAt(at.x, at.z);
+    }
     case "bikes":
     case "canopy":
     case "furniture":
     case "lamp":
     case "stop":
-    case "tree":
+    case "tree": {
       return inDesignSiteAt(
         target.position[0] - offset.cx,
         offset.cy - target.position[1]
       );
+    }
   }
 }
 

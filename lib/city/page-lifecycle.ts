@@ -293,19 +293,24 @@ export function createPageLifecycle(opts: LifecycleOptions): PageLifecycle {
         const how = lossAt(state, signal.now, signal.hidden);
         return stopSequence(state, opts, signal.message, how, signal.message);
       }
-      case "frameFailed":
+      case "frameFailed": {
         return frameFailed(state, opts, signal);
-      case "allocationFailed":
+      }
+      case "allocationFailed": {
         return emergency(state, opts, signal);
+      }
       case "hidden":
-      case "shown":
+      case "shown": {
         return visibility(state, opts, signal);
-      case "firstFrame":
+      }
+      case "firstFrame": {
         state.firstFrameShown = true;
         return [];
-      case "dispose":
+      }
+      case "dispose": {
         state.disposed = true;
         return [];
+      }
       default: {
         const never: never = signal;
         return never;

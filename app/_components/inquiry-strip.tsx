@@ -28,32 +28,45 @@ import { useSite } from "./site-context";
 /** The icon a candidate is drawn with. */
 function kindIcon(inquiry: Inquiry): LucideIcon {
   switch (inquiry.kind) {
-    case "building":
+    case "building": {
       return Building2Icon;
-    case "tree":
+    }
+    case "tree": {
       return inquiry.conifer ? TreePineIcon : TreeDeciduousIcon;
-    case "monument":
+    }
+    case "monument": {
       return LandmarkIcon;
-    case "bridge":
+    }
+    case "bridge": {
       return BridgeIcon;
-    case "traffic":
+    }
+    case "traffic": {
       return CarIcon;
-    case "bikes":
+    }
+    case "bikes": {
       return BikeIcon;
-    case "canopy":
+    }
+    case "canopy": {
       return TreeDeciduousIcon;
-    case "hedge":
+    }
+    case "hedge": {
       return ShrubIcon;
-    case "lamp":
+    }
+    case "lamp": {
       return LampFloorIcon;
-    case "furniture":
+    }
+    case "furniture": {
       return PLAY.has(inquiry.properties.k) ? FerrisWheelIcon : ArmchairIcon;
-    case "stop":
+    }
+    case "stop": {
       return TramFrontIcon;
-    case "landing":
+    }
+    case "landing": {
       return AnchorIcon;
-    case "design":
+    }
+    case "design": {
       return PencilRulerIcon;
+    }
   }
 }
 

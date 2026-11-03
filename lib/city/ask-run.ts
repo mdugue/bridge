@@ -191,17 +191,22 @@ type RunEnd = "stop" | "waits" | "cut" | "length" | "refused" | "other";
 function stopText(end: RunEnd, late: boolean): string | null {
   switch (end) {
     case "stop":
-    case "waits":
+    case "waits": {
       return null;
-    case "cut":
+    }
+    case "cut": {
       return late ? "Die Antwort dauerte zu lange." : TOO_MANY_STEPS;
-    case "length":
+    }
+    case "length": {
       return late ? "Die Antwort dauerte zu lange." : CUT_SHORT;
-    case "refused":
+    }
+    case "refused": {
       // a refusal, or (OpenRouter) a provider's failure mid-answer
       return "Das Modell brach die Antwort ab. Frag bitte noch einmal.";
-    case "other":
+    }
+    case "other": {
       return late ? "Die Antwort dauerte zu lange." : null;
+    }
   }
 }
 

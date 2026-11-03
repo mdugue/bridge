@@ -118,14 +118,18 @@ type ReportLevel = "fatal" | "error" | "warning";
 function problemLevel(event: TrailEvent): ReportLevel {
   switch (event.kind) {
     case "device-lost":
-    case "gpu failed":
+    case "gpu failed": {
       return "fatal";
-    case "boot failed":
+    }
+    case "boot failed": {
       return event.detail?.startsWith("network:") ? "error" : "fatal";
-    case "alloc-failed":
+    }
+    case "alloc-failed": {
       return "warning";
-    default:
+    }
+    default: {
       return "error";
+    }
   }
 }
 

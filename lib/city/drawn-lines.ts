@@ -356,7 +356,7 @@ function storeyRow(
   const from =
     d.storey ?? (o.facts.levels === NO_FACT ? "height" : ("osm" as const));
   switch (from) {
-    case "osm":
+    case "osm": {
       return {
         label: "Geschosse",
         value,
@@ -368,7 +368,8 @@ function storeyRow(
             : `building:levels = ${whole.format(o.facts.levels)}`,
         url: places.osm,
       };
-    case "photos":
+    }
+    case "photos": {
       return {
         label: "Geschosse",
         value,
@@ -377,7 +378,8 @@ function storeyRow(
         detail: "Geschosshöhe in Straßenfotos gemessen",
         url: places.photos,
       };
-    case "neighbours":
+    }
+    case "neighbours": {
       return {
         label: "Geschosse",
         value,
@@ -387,7 +389,8 @@ function storeyRow(
           "von der Traufe gezählt, in der Geschosshöhe der kartierten Nachbarhäuser",
         url: places.osm,
       };
-    case "height":
+    }
+    case "height": {
       return {
         label: "Geschosse",
         value,
@@ -395,6 +398,7 @@ function storeyRow(
         source: "viewer",
         ...unusedLevels(o, places),
       };
+    }
   }
 }
 
@@ -513,37 +517,42 @@ function windowsRow(
   const base = { label: "Fenster", value: "keine" };
   const use = functionWords(o.facts.function);
   switch (d.noWindows) {
-    case "facade":
+    case "facade": {
       return { ...base, ...ownFacadeWhy(o, d, places) };
-    case "low":
+    }
+    case "low": {
       return {
         ...base,
         method: "computed",
         source: "lod2",
         detail: "weniger als 3,2 m Wand",
       };
-    case "use":
+    }
+    case "use": {
       return {
         ...base,
         method: "taken",
         source: "lod2",
         detail: `Nutzung ohne Fenster${use ? `: ${use}` : ""}`,
       };
-    case "small":
+    }
+    case "small": {
       return {
         ...base,
         method: "computed",
         source: "viewer",
         detail: "kein Fenster passt ins Geschoss",
       };
+    }
     case "beyond":
-    case undefined:
+    case undefined: {
       return {
         ...base,
         method: "assumed",
         source: "viewer",
         detail: "keine Angabe im Kachelstand",
       };
+    }
   }
 }
 
@@ -654,7 +663,7 @@ function windowsFrom(
   const from =
     d.windows ?? (style.measured ? "measured" : style.near ? "near" : "type");
   switch (from) {
-    case "measured":
+    case "measured": {
       return {
         ...base,
         method: "detected",
@@ -662,7 +671,8 @@ function windowsFrom(
         detail: "an den eigenen Wänden in Straßenfotos gemessen",
         url: places.photos,
       };
-    case "tree":
+    }
+    case "tree": {
       return {
         ...base,
         method: "detected",
@@ -670,13 +680,15 @@ function windowsFrom(
         detail: "an einem anderen Teil des Gebäudes gemessen",
         url: places.photos,
       };
-    case "near":
+    }
+    case "near": {
       return {
         ...base,
         method: "assumed",
         source: "mapillary",
         detail: "vom nächsten gemessenen Haus gleicher Art (bis 150 m)",
       };
+    }
     case "none":
     case "type": {
       // a facade of its own carries windows only as a palace's
@@ -834,14 +846,15 @@ function roofColourRow(
   const swatch = cssColour(look.roof);
   const base = { label: "Dachfarbe", value: swatch, swatch };
   switch (d.roof) {
-    case "dop":
+    case "dop": {
       return {
         ...base,
         method: "computed",
         source: "dop",
         detail: "Median der besonnten Pixel im Luftbild, je Dachfläche",
       };
-    case "osm":
+    }
+    case "osm": {
       return {
         ...base,
         method: "computed",
@@ -849,13 +862,15 @@ function roofColourRow(
         detail: `roof:colour = ${d.roofColour ?? "?"}`,
         url: places.osm,
       };
+    }
     case "palette":
-    case undefined:
+    case undefined: {
       return {
         ...base,
         method: "assumed",
         source: "viewer",
         detail: "Ziegel- oder Schieferpalette nach Dachform",
       };
+    }
   }
 }

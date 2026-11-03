@@ -239,25 +239,31 @@ export function sportFixtures(table: SportTable): SportFixture[] {
       continue;
     }
     switch (SPORT_MARKINGS[marking]) {
-      case "football":
+      case "football": {
         out.push(...footballGoals(row));
         break;
-      case "court":
+      }
+      case "court": {
         out.push(...goals(row, 3, 2));
         break;
-      case "basketball":
+      }
+      case "basketball": {
         out.push(...hoops(row));
         break;
-      case "tennis":
+      }
+      case "tennis": {
         out.push(...tennisNet(row));
         break;
-      case "volleyball":
+      }
+      case "volleyball": {
         out.push(...volleyballNet(row));
         break;
+      }
       case "lanes":
       case "board":
-      case "none":
+      case "none": {
         break;
+      }
     }
   }
   return out;

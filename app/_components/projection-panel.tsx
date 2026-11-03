@@ -78,20 +78,27 @@ function PresetGlyph({ id }: { id: ModelPresetId }) {
 /** What a view's lengths mean, under the cards. */
 function presetNote(view: ModelHud): string {
   switch (view.preset) {
-    case "iso":
+    case "iso": {
       return "Längen entlang der drei Achsen × 0,816 — die Maßstabsleiste misst parallel zum Bild";
-    case "bird":
+    }
+    case "bird": {
       return "Die Maßstabsleiste misst parallel zum Bild, waagerecht";
-    case "military":
+    }
+    case "military": {
       return "Der Grundriss ist unverzerrt; Höhen stehen senkrecht darüber";
-    case "plan":
+    }
+    case "plan": {
       return "Senkrecht von oben: jede Länge im Plan im Maßstab";
-    case "elevation":
+    }
+    case "elevation": {
       return "Was vor der Bildmitte steht, ist weggeschnitten";
-    case "section":
+    }
+    case "section": {
       return "Schnitt durch die Bildmitte: Schnittflächen gefüllt, das Gelände als Profil";
-    default:
+    }
+    default: {
       return "";
+    }
   }
 }
 

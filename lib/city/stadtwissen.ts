@@ -254,10 +254,11 @@ function snakValue(
       const label = labels[id];
       return label ? { id, v: label } : undefined;
     }
-    case "time":
+    case "time": {
       return {
         v: wikidataTime(v.value as { precision: number; time: string }),
       };
+    }
     case "quantity": {
       const q = v.value as { amount: string };
       const unit = quantityUnit(v);
@@ -270,10 +271,12 @@ function snakValue(
         ? { v: t.text }
         : undefined;
     }
-    case "string":
+    case "string": {
       return { v: String(v.value) };
-    default:
+    }
+    default: {
       return undefined;
+    }
   }
 }
 

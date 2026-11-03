@@ -103,9 +103,10 @@ function unfilterRow(
 ): void {
   const n = line.length;
   switch (filter) {
-    case 0:
+    case 0: {
       out.set(line);
       return;
+    }
     case 1: {
       let left = 0;
       for (let i = 0; i < n; i++) {
@@ -114,11 +115,12 @@ function unfilterRow(
       }
       return;
     }
-    case 2:
+    case 2: {
       for (let i = 0; i < n; i++) {
         out[i] = (line[i] + prev[i]) & 255;
       }
       return;
+    }
     case 3: {
       let left = 0;
       for (let i = 0; i < n; i++) {
@@ -143,8 +145,9 @@ function unfilterRow(
       }
       return;
     }
-    default:
+    default: {
       throw new Error(`bad PNG filter ${filter}`);
+    }
   }
 }
 

@@ -107,15 +107,17 @@ switch (command) {
       .forEach(out);
     break;
   }
-  case "quellen":
+  case "quellen": {
     for (const [key, s] of Object.entries(index.sources)) {
       out(
         `${key}: ${s?.label} · ${s?.licence} · ${s?.credit}${s?.stand ? ` · Stand ${s.stand}` : ""}`
       );
     }
     break;
-  default:
+  }
+  default: {
     out(
       "such <Wörter> | nah <x> <y> [Radius] | wahrzeichen [Wörter] | quellen"
     );
+  }
 }

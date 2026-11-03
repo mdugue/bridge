@@ -29,15 +29,19 @@ export function isAllocationFailure(error: unknown): boolean {
   const text = typeof message === "string" ? message : "";
   const trace = typeof stack === "string" ? stack : "";
   switch (name) {
-    case "RangeError":
+    case "RangeError": {
       return OUT_OF_ROOM.test(text) || GPU_CALLS.test(trace);
-    case "InvalidStateError":
+    }
+    case "InvalidStateError": {
       return /unable to/i.test(text);
+    }
     case "OperationError":
-    case "GPUOutOfMemoryError":
+    case "GPUOutOfMemoryError": {
       return true;
-    default:
+    }
+    default: {
       return /out of memory/i.test(text);
+    }
   }
 }
 

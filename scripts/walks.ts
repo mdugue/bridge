@@ -321,20 +321,25 @@ async function fetchPhotos(force: boolean, refs: boolean): Promise<void> {
 }
 
 switch (rest[0]) {
-  case "photos":
+  case "photos": {
     await fetchPhotos(rest.includes("--force"), rest.includes("--refs"));
     break;
-  case "ground":
+  }
+  case "ground": {
     await fillGround();
     break;
-  case "shots":
+  }
+  case "shots": {
     writeShots(rest[1]);
     break;
-  case "check":
+  }
+  case "check": {
     for (const { walk } of walks) {
       walkProblems(walk).forEach(out);
     }
     break;
-  default:
+  }
+  default: {
     out("ground | shots [walk] | photos [--force] [--refs] | check");
+  }
 }

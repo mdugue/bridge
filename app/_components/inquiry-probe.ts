@@ -188,12 +188,15 @@ export type OutlineSubject =
 function thingKey(t: FeatureInquiry): string {
   switch (t.kind) {
     case "tree":
-    case "traffic":
+    case "traffic": {
       return `${t.kind}:${t.tile}:${t.index}`;
-    case "bikes":
+    }
+    case "bikes": {
       return `bikes:${t.id}:${t.position.join(",")}`;
-    case "design":
+    }
+    case "design": {
       return `design:${t.file}:${t.partIndex}`;
+    }
     case "bridge":
     case "monument":
     case "canopy":
@@ -201,8 +204,9 @@ function thingKey(t: FeatureInquiry): string {
     case "hedge":
     case "lamp":
     case "landing":
-    case "stop":
+    case "stop": {
       return `${t.kind}:${t.tile}:${t.position.join(",")}`;
+    }
   }
 }
 

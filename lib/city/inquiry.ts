@@ -390,31 +390,39 @@ export function inquiryCard(
   landmarks: LandmarkFactsIndex | null = null
 ): InquiryCard {
   switch (inquiry.kind) {
-    case "building":
+    case "building": {
       return withLandmarkFacts(
         buildingCard(inquiry, provenance, credits),
         inquiry,
         landmarks
       );
-    case "tree":
+    }
+    case "tree": {
       return treeCard(inquiry, treeFacts, provenance, credits);
-    case "monument":
+    }
+    case "monument": {
       return monumentCard(inquiry, provenance, credits);
-    case "bridge":
+    }
+    case "bridge": {
       return bridgeCard(inquiry, provenance, credits);
-    case "traffic":
+    }
+    case "traffic": {
       return trafficCard(inquiry);
-    case "bikes":
+    }
+    case "bikes": {
       return bikeCard(inquiry);
-    case "design":
+    }
+    case "design": {
       return designCard(inquiry);
+    }
     case "canopy":
     case "furniture":
     case "hedge":
     case "lamp":
     case "landing":
-    case "stop":
+    case "stop": {
       return moreCard(inquiry, provenance, credits);
+    }
   }
 }
 

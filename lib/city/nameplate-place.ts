@@ -585,18 +585,22 @@ function groundPose(
   const gap = GAP_CAPS * cap;
   let centre: Vec3;
   switch (spot) {
-    case "back":
+    case "back": {
       centre = add(c, scale(up, across + gap + h / 2));
       break;
-    case "right":
+    }
+    case "right": {
       centre = add(c, scale(right, along + gap + w / 2));
       break;
-    case "left":
+    }
+    case "left": {
       centre = add(c, scale(right, -(along + gap + w / 2)));
       break;
+    }
     case "above":
-    case "front":
+    case "front": {
       centre = add(c, scale(up, -(across + gap + h / 2)));
+    }
   }
   // over the highest ground under it, so no corner sinks into a slope
   // (a level sheet of lettering, not a part standing on the ground: it

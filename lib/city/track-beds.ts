@@ -91,14 +91,17 @@ export function railBed(f: RailFeature): BedShape {
  *  (app/_components/tram-layer.ts BED_HALF). */
 export function tramBed(bed: TramBed): BedShape {
   switch (bed) {
-    case "grass":
+    case "grass": {
       return { half: 1.3, drop: BALLAST_DROP_M };
-    case "ballast":
+    }
+    case "ballast": {
       return { half: 1.4, drop: BALLAST_DROP_M };
+    }
     case "street":
-    default:
+    default: {
       // an unknown bed (a newer bake): the street's, the shallowest
       return { half: PAVED_HALF_M, drop: PAVED_DROP_M };
+    }
   }
 }
 
