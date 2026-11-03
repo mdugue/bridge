@@ -356,7 +356,7 @@ const CELL_M = 8;
  * on (the profile, not the ground the bake laid `drop` under it).
  */
 export class BedIndex {
-  private cells = new Map<string, { bed: Bed; i: number }[]>();
+  private readonly cells = new Map<string, { bed: Bed; i: number }[]>();
   constructor(
     private readonly beds: readonly Bed[],
     private readonly margin: number

@@ -58,7 +58,7 @@ interface Segment {
 /** The axes' segments by grid cell, for the platforms near them. */
 export class AxisIndex {
   private readonly cells = new Map<string, Segment[]>();
-  private reach = 0;
+  private readonly reach: number = 0;
 
   constructor(axes: Iterable<TrackAxis>) {
     for (const axis of axes) {

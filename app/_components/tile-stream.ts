@@ -1730,7 +1730,7 @@ export class DressingPlugin {
     }
   }
 
-  private url = (file: string): string =>
+  private readonly url = (file: string): string =>
     new URL(file, new URL(this.ctx.tilesetUrl, window.location.href)).href;
 
   async processTileModel(scene: Object3D, tile: object): Promise<void> {

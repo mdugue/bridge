@@ -41,7 +41,7 @@ const CELL_M = 8;
 
 /** The drawn tracks' samples by grid cell. */
 export class TrackIndex {
-  private cells = new Map<string, TrackSample[]>();
+  private readonly cells = new Map<string, TrackSample[]>();
   constructor(samples: Iterable<TrackSample>) {
     for (const s of samples) {
       const k = this.key(s.x, s.z);

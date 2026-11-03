@@ -153,7 +153,7 @@ interface Sampled {
 
 /** Every sample of every piece by grid cell. */
 class SampleIndex {
-  private cells = new Map<string, { piece: number; i: number }[]>();
+  private readonly cells = new Map<string, { piece: number; i: number }[]>();
   constructor(readonly pieces: readonly Sampled[]) {
     pieces.forEach((p, piece) => {
       p.pts.forEach((pt, i) => {
