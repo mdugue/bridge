@@ -367,7 +367,8 @@ visual-variable codebook is in
   path's sanded ones is a faint grey, not a block. Since 2026-11-03 the
   bake carries a tagged way's own kind on along its path, up to 4 texels
   past the way's buffer (`surface.py` `along_paths`; only a walkway's own
-  buffer seeds it, never an area or a sidewalk band), where the DLM's
+  buffer seeds it, never an area, a sidewalk band or a
+  `footway=sidewalk` way), where the DLM's
   `BEF` says nothing, before the town's default (asphalt) fills the rest:
   the class raster's path is often wider than the buffer, and a sand path
   came out grey at its sides. Out to
@@ -2755,7 +2756,8 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
     crown's reach 0.8 × the trunk's drawn length, 1.5–7 m): a multiplied
     glaze darkens and cools the ground in the crown's shade, ragged at the
     edge, with moss on a lawn (a bare broadleaf crown keeps 30 % of the
-    shade, `crownLeaf`; a cone's or pine's all of it the year round); where the crown's shadow falls (thrown off
+    shade, `crownLeaf`; a cone's or pine's all of it the year round;
+    fogged as the ground under it is, faded to white); where the crown's shadow falls (thrown off
     along the sun by the tree's height, at most three crowns away, drawn
     out by a low sun) and the shadow map shades the ground, sun flecks
     lift it back up to about the sun, by day, within 45 m (the glaze

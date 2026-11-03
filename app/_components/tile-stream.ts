@@ -1276,7 +1276,7 @@ async function buildDressing(
           offset: ctx.offset,
           heightAt: terrain.heightAt,
           sunDirection: ctx.sunDirection,
-          footMaterial: () => footMaterialFor(terrain),
+          footMaterial: (sun) => footMaterialFor(terrain, sun),
         }
       ),
       { signal }

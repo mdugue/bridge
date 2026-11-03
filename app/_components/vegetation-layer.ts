@@ -189,7 +189,10 @@ export interface VegetationContext extends GroundContext {
    * when the tile turns out to have trees; without them the trunks stand
    * on the bare ground.
    */
-  footMaterial?: () => FootMaterials | undefined;
+  /** (`sun`: the scene's, for a tile without baked light) */
+  footMaterial?: (
+    sun: UniformNode<"vec3", Vector3>
+  ) => FootMaterials | undefined;
 }
 
 /**
@@ -781,13 +784,19 @@ function treeGrowth(y: F): V3 {
   const world = vec3(cos(a), 0, sin(a))
     .mul(h.mul(h).mul(GROWTH_LEAN_M).mul(t))
     .add(vec3(sin(a).negate(), 0, cos(a)).mul(crook));
+  return intoInstanceFrame(world);
+}
+
+/** A world vector in the drawn instance's own frame, by its matrix's
+ *  columns (rotation × scale, no shear): no inverse. */
+function intoInstanceFrame(v: V3): V3 {
   const c0 = instanceColumn(0).xyz;
   const c1 = instanceColumn(1).xyz;
   const c2 = instanceColumn(2).xyz;
   return vec3(
-    dot(world, c0).div(dot(c0, c0)),
-    dot(world, c1).div(dot(c1, c1)),
-    dot(world, c2).div(dot(c2, c2))
+    dot(v, c0).div(dot(c0, c0)),
+    dot(v, c1).div(dot(c1, c1)),
+    dot(v, c2).div(dot(c2, c2))
   );
 }
 
@@ -1033,6 +1042,10 @@ function printedCrown(shown: V3, kept: V3, twig: F): V3 {
   return mix(shown, mark, crownsPrinted);
 }
 
+/** The trunk's sides: enough for the three or four roots its foot
+ *  bulges out to read as lobes. */
+const TRUNK_SIDES = 9;
+
 /**
  * De-sterilised trunk — a tapered cylinder with (1) a root flare at the base,
  * (2) low-amplitude radial "bark" bumps and (3) a gentle fixed lean. One shared
@@ -1040,10 +1053,6 @@ function printedCrown(shown: V3, kept: V3, twig: F): V3 {
  * + scale); branches were dropped here because, shared, they'd repeat
  * identically — they belong on a near-distance LOD crown.
  */
-/** The trunk's sides: enough for the three or four roots its foot
- *  bulges out to read as lobes. */
-const TRUNK_SIDES = 9;
-
 export function buildTrunkGeo(fork = true): BufferGeometry {
   // The profile (rows, taper, flare) is lib/city/tree-inventory.ts's, so a
   // measured trunk is fitted to the radius drawn (`trunkRadiusAt`).
@@ -1412,9 +1421,6 @@ function crownShade(
   sun: UniformNode<"vec3", Vector3> | undefined,
   evergreen: boolean
 ): F {
-  const c0 = instanceColumn(0).xyz;
-  const c1 = instanceColumn(1).xyz;
-  const c2 = instanceColumn(2).xyz;
   // the crown where the tree's growth carried it
   const centre = vec3(0, TRUNK_H + CROWN_R * 0.5, 0).add(
     treeGrowth(float(TRUNK_H))
@@ -1433,13 +1439,7 @@ function crownShade(
   if (!sun) {
     return sky;
   }
-  const toSun = normalize(
-    vec3(
-      dot(sun, c0).div(dot(c0, c0)),
-      dot(sun, c1).div(dot(c1, c1)),
-      dot(sun, c2).div(dot(c2, c2))
-    )
-  );
+  const toSun = normalize(intoInstanceFrame(sun));
   const rel = centre.sub(local);
   const ahead = dot(rel, toSun);
   const miss = length(rel.sub(toSun.mul(ahead)));
@@ -2000,7 +2000,7 @@ export function* vegetationSteps(
       extras,
       crownMats,
       ctx,
-      ctx.footMaterial?.(),
+      ctx.footMaterial?.(crownMats.uniforms.sunDirection),
       crownMats.uniforms.sunDirection
     );
     group.add(...built.meshes);

@@ -5,12 +5,14 @@ import {
   InterpolationSamplingType,
   type Material,
   type Node,
+  type NodeBuilder,
   MeshLambertNodeMaterial,
   MeshStandardNodeMaterial,
   MultiplyBlending,
   type Texture,
   type UniformNode,
   Vector2,
+  type Vector3,
 } from "three/webgpu";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
@@ -37,6 +39,7 @@ import {
   modelWorldMatrixInverse,
   normalize,
   normalLocal,
+  output,
   positionGeometry,
   property,
   sin,
@@ -1446,10 +1449,14 @@ function shadeMaterial(
   slots: Slots,
   variant: string,
   light: GroundLight | undefined,
-  evergreen: boolean
+  evergreen: boolean,
+  sceneSun?: UniformNode<"vec3", Vector3>
 ): MeshLambertNodeMaterial {
   const key = `tree-shade|${evergreen ? "evergreen|" : ""}${variant}|${light ? groundLightKey(light) : ""}`;
-  const sun = light?.sunDirection ?? NO_SUN;
+  // the tile's baked light's sun, else the scene's: a tile without the
+  // sky-view and horizon rasters still has a day
+  const sunNode = light?.sunDirection ?? sceneSun;
+  const sun = sunNode ?? NO_SUN;
   let bySun = shades.get(sun);
   if (!bySun) {
     bySun = new Map();
@@ -1457,7 +1464,7 @@ function shadeMaterial(
   }
   let graph = bySun.get(key);
   if (!graph) {
-    graph = shadeGraph(r, light?.sunDirection, evergreen);
+    graph = shadeGraph(r, sunNode, evergreen);
     bySun.set(key, graph);
   }
   const { sunLit } = graph;
@@ -1474,7 +1481,19 @@ function shadeMaterial(
     }
     return shadow ?? float(1);
   };
-  m.outputNode = vec4(graph.output, 1);
+  // the factor, fogged as three fogs any output (the scene's fog fades a
+  // multiplied glaze to white, height-fog.ts): a custom output skips it
+  m.outputNode = Fn((builder: NodeBuilder) => {
+    const glaze = vec4(graph.output, 1);
+    // reason: three's NodeBuilder reads the scene's `fogNode` (what its
+    // own setupFog uses) but its types do not declare it.
+    const fogNode = (builder as NodeBuilder & { fogNode?: V4 | null }).fogNode;
+    if (!fogNode) {
+      return glaze;
+    }
+    output.assign(glaze);
+    return vec4(fogNode.toVar());
+  })();
   m.blending = MultiplyBlending;
   m.premultipliedAlpha = true;
   m.transparent = true;
@@ -1487,13 +1506,13 @@ function shadeMaterial(
   return m;
 }
 
+/** The pit's mulch (sRGB), also the trunk's foot off the foot rasters
+ *  (vegetation-layer.ts `TRUNK_EARTH`). */
+export const MULCH_SRGB: [number, number, number] = [128, 98, 70];
 /** The ground's colour at a trunk's foot as its bark turns to it (sRGB):
  *  the pit's mulch in paving, the forest floor's leaf mould in a wood,
  *  the grass's roots on a lawn or meadow; elsewhere the ground's own
  *  class colour, darkened as damp soil. */
-/** The pit's mulch (sRGB), also the trunk's foot off the foot rasters
- *  (vegetation-layer.ts `TRUNK_EARTH`). */
-export const MULCH_SRGB: [number, number, number] = [128, 98, 70];
 const FOOT_MULCH = linear(MULCH_SRGB);
 const FOOT_MOULD = linear([104, 92, 68]);
 const FOOT_GRASS = linear([112, 120, 78]);
@@ -1561,7 +1580,8 @@ const cached = (key: string, make: () => PitGraph): PitGraph => {
  */
 export function createFootMaterials(
   r: FootRasters,
-  light?: GroundLight
+  light?: GroundLight,
+  sun?: UniformNode<"vec3", Vector3>
 ): FootMaterials {
   const variant = `${r.size.join("x")}|${r.edgesTexture ? "edges" : ""}`;
   const slots: Slots = {
@@ -1581,9 +1601,9 @@ export function createFootMaterials(
     ring: make("ring"),
     earth: make("earth"),
     litter: make("litter"),
-    shade: shadeMaterial(r, slots, variant, light, false),
+    shade: shadeMaterial(r, slots, variant, light, false, sun),
     needleShade: () =>
-      (needleShade ??= shadeMaterial(r, slots, variant, light, true)),
+      (needleShade ??= shadeMaterial(r, slots, variant, light, true, sun)),
     guard: r.edgesTexture ? guardMaterial(r, slots, variant) : undefined,
     tuft: tuftMaterial(r, slots, variant, light),
     trunkEarth: {
@@ -1599,11 +1619,14 @@ export function createFootMaterials(
  * ground material reads (its slots) and its baked light: none where the
  * tile has no class raster — its trunks then stand on the bare ground.
  */
-export function footMaterialFor(terrain: {
-  bounds: readonly [number, number, number, number];
-  mesh: { material: Material | Material[] };
-  light?: GroundLight;
-}): FootMaterials | undefined {
+export function footMaterialFor(
+  terrain: {
+    bounds: readonly [number, number, number, number];
+    mesh: { material: Material | Material[] };
+    light?: GroundLight;
+  },
+  sun?: UniformNode<"vec3", Vector3>
+): FootMaterials | undefined {
   const own = terrain.mesh.material;
   const slots = slotsOf(Array.isArray(own) ? (own[0] ?? null) : own);
   const classTexture = slots.class as Texture | undefined;
@@ -1619,6 +1642,7 @@ export function footMaterialFor(terrain: {
       origin,
       size: [maxX - minX, maxY - minY],
     },
-    terrain.light
+    terrain.light,
+    sun
   );
 }

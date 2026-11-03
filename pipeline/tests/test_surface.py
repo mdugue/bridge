@@ -14,6 +14,17 @@ from bake.common import Tile
 ROOT = Path(__file__).resolve().parents[2]
 
 
+# --- B20 the seeds of a path's carried kind --------------------------------
+
+
+def test_a_sidewalk_way_seeds_no_carried_kind():
+    lines = [shapely.LineString([(0, 0), (40, 0)])] * 2
+    tags = ['"surface"=>"asphalt","footway"=>"sidewalk"', '"surface"=>"asphalt"']
+    _, _, walks, seeds = surface.line_shapes(lines, ["footway", "footway"], tags)
+    assert len(walks) == 2 and len(seeds) == 1
+    assert seeds[0] is walks[1]
+
+
 # --- B23 parking ------------------------------------------------------------
 
 

@@ -291,7 +291,7 @@ def classify_lines(
 ) -> tuple[list[tuple[shapely.Geometry, int]], list[tuple[shapely.Geometry, int]]]:
     """(road shapes, walk shapes), each as (geometry, surface id) in burn
     order; a tagged sidewalk reaches to the `buildings` (`sidewalk_bands`)."""
-    roads, bands, walks = line_shapes(geoms, highways, other_tags, buildings)
+    roads, bands, walks, _ = line_shapes(geoms, highways, other_tags, buildings)
     return roads, bands + walks
 
 
@@ -301,12 +301,16 @@ def line_shapes(
     list[tuple[shapely.Geometry, int]],
     list[tuple[shapely.Geometry, int]],
     list[tuple[shapely.Geometry, int]],
+    list[tuple[shapely.Geometry, int]],
 ]:
     """`classify_lines`'s road shapes, and its walk shapes as the roads'
-    sidewalk bands and the walkways' own buffers apart."""
+    sidewalk bands and the walkways' own buffers apart; and of those the
+    ones a path's kind is carried from (`along_paths`): no sidewalk, which
+    runs beside a road, not along a path."""
     roads: list[tuple[int, shapely.Geometry, int]] = []
     bands: list[tuple[shapely.Geometry, int]] = []
     walks: list[tuple[shapely.Geometry, int]] = []
+    seeds: list[tuple[shapely.Geometry, int]] = []
     for g, hw, tags in zip(geoms, highways, other_tags, strict=True):
         kind = _highway_kind(hw)
         width = parse_width(tag(tags, "width"))
@@ -323,8 +327,10 @@ def line_shapes(
             wid = sid or surface_id(tag(tags, "footway:surface"))
             if wid:
                 walks.append((shapely.buffer(g, half), wid))
+                if not sidewalk:
+                    seeds.append(walks[-1])
     roads.sort(key=lambda r: r[0])
-    return [(g, s) for _, g, s in roads], bands, walks
+    return [(g, s) for _, g, s in roads], bands, walks, seeds
 
 
 # The along-street coordinate is stored modulo this period (m; the viewer's
@@ -695,7 +701,8 @@ def along_paths(
     ways: np.ndarray, walk: np.ndarray, path: np.ndarray, reach: int = WAY_REACH_PX
 ) -> np.ndarray:
     """The tagged ways' walk kinds (`ways`: the walk lines' buffers alone,
-    never an area or a sidewalk band) carried on into the path texels round
+    never an area, a sidewalk band or a sidewalk way, `line_shapes`'
+    seeds) carried on into the path texels round
     them that nothing reached (`path & walk == 0`, the texels
     `path_defaults` fills), step by step along the path only (four
     neighbours, `reach` steps): a sand path wider than its tagged way's
@@ -769,7 +776,7 @@ def run(tile: Tile, px: int = 2048) -> None:
     built = np.array([b is not None for b in column(afields, "building", areas)], dtype=bool)
     buildings = shapely.STRtree(areas[built]) if built.any() else None
     areas, afields = areas[~built], {k: v[~built] for k, v in afields.items()}
-    road_lines, bands, ways = line_shapes(
+    road_lines, bands, ways, seeds = line_shapes(
         lines, column(lfields, "highway", lines), column(lfields, "other_tags", lines), buildings
     )
     walk_lines = bands + ways
@@ -780,7 +787,7 @@ def run(tile: Tile, px: int = 2048) -> None:
     amenities, area_tags = column(afields, "amenity", areas), column(afields, "other_tags", areas)
     road = burn(road_lines + road_areas, tile, px)
     walk = burn(walk_areas + walk_lines, tile, px)
-    defaults = path_defaults(tile, px, burn(ways, tile, px), walk)
+    defaults = path_defaults(tile, px, burn(seeds, tile, px), walk)
     if defaults is not None:
         walk = np.where(walk == 0, defaults, walk)
     park = burn(parking_shapes(lines, highways, line_tags, areas, amenities, area_tags), tile, px)
