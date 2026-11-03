@@ -65,6 +65,18 @@ function turnsLeft(
   }
 }
 
+/** The history with a stand-in for every stopped call; null for rows
+ *  too malformed to read (the request's shape is checked only loosely). */
+function answeredHistory(
+  messages: Parameters<typeof withStoppedCallsAnswered>[0]
+): ReturnType<typeof withStoppedCallsAnswered> | null {
+  try {
+    return withStoppedCallsAnswered(messages);
+  } catch {
+    return null;
+  }
+}
+
 /** A conversation past the caps. */
 function conversationRefusal(messages: readonly unknown[]): Response | null {
   const problem = conversationProblem(messages, lastQuestion(messages));
@@ -129,9 +141,9 @@ export async function POST(request: Request): Promise<Response> {
     return tooMuch;
   }
   // a stopped answer's unanswered call would make the provider refuse
-  const messages = withStoppedCallsAnswered(params.messages);
-  const turns = turnsLeft(messages);
-  if (turns === null) {
+  const messages = answeredHistory(params.messages);
+  const turns = messages && turnsLeft(messages);
+  if (messages === null || turns === null) {
     return refuse(400, "bad-request", "Die Anfrage ist unvollständig.");
   }
   if (turns <= 0) {

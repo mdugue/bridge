@@ -8,7 +8,7 @@ import { describe, expect, test } from "bun:test";
 import { fakeText } from "@tanstack/ai/testing";
 import type { AskPromptSite } from "./ask-city";
 import { knowledgeOf } from "./ask-knowledge";
-import type { StreamChunk } from "@tanstack/ai";
+import type { ModelMessage, StreamChunk } from "@tanstack/ai";
 import {
   DEADLINE,
   ended,
@@ -522,4 +522,42 @@ test("a stand-in keeps a stopped answer's thinking and segments together and men
     ]
   );
   expect(model.slice(2, 4).map((m) => m.toolCallId)).toEqual(["a", "s"]);
+});
+
+test("arguments cut off before the last question are mended, answered or not; the running answer's stay", () => {
+  const call = (id: string, args: string) => ({
+    id,
+    type: "function" as const,
+    function: { name: "suche_stadt", arguments: args },
+  });
+  const rows: ModelMessage[] = [
+    { role: "user", content: "Wo?" },
+    {
+      role: "assistant",
+      content: null,
+      toolCalls: [
+        call("a", '{"anfrage":"Fra'),
+        call("b", "null"),
+        call("c", "[]"),
+        call("d", ""),
+        call("e", '{"anfrage":"x"}'),
+      ],
+    },
+    // the output cap ended the run with a failed result for each
+    ...["a", "b", "c", "d", "e"].map((id): ModelMessage => ({
+      role: "tool",
+      toolCallId: id,
+      content: "{}",
+    })),
+    { role: "user", content: "Und?" },
+    { role: "assistant", content: null, toolCalls: [call("f", '{"anf')] },
+  ];
+  const out = withStoppedCallsAnswered(rows);
+  const args = (m: ModelMessage | undefined) =>
+    m?.toolCalls?.map((c) => c.function.arguments);
+  expect(args(out[1])).toEqual(["{}", "{}", "{}", "{}", '{"anfrage":"x"}']);
+  // all answered: no stand-in, the rows as they were
+  expect(out).toHaveLength(rows.length);
+  // still streaming in the running answer: left for the resume
+  expect(out.at(-1)).toBe(rows.at(-1));
 });

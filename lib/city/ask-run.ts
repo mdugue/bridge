@@ -98,12 +98,12 @@ export function roundsSinceQuestion(
 
 /**
  * A stopped call's stand-in result. It names no cause (a stop, the
- * deadline or a dropped line end a run alike) and has the shape the
- * scene tools' own refusals have, so the trace shows it as not done when
- * a later snapshot brings it back to the browser.
+ * deadline or a dropped line end a run alike) and says `ok: false`, which
+ * the trace shows as not done when a later snapshot brings it back to the
+ * browser.
  */
 const STOPPED_RESULT = JSON.stringify({
-  gefunden: false,
+  abgebrochen: true,
   ok: false,
   hinweis: "Abgebrochen, bevor ein Ergebnis kam.",
 });
@@ -114,11 +114,13 @@ const STOPPED_RESULT = JSON.stringify({
  * tool waited): a call with no result makes the providers refuse every
  * later request. The stand-in `tool` row goes right before the next
  * question, after every row of the ended answer, so nothing it carried
- * (its thinking, a segment that continues it) loses its place; a call cut
- * off while its arguments still streamed keeps `{}` for them. Calls after
- * the last question are the answer's own, which a resume completes. The
- * route hands this the AG-UI wire rows (an assistant row's `toolCalls`, a
- * `tool` row per result); a UI message passes as it came.
+ * (its thinking, a segment that continues it) loses its place. A call
+ * whose arguments were cut off mid-stream (a stop, or the output cap)
+ * keeps `{}` for them: the OpenAI-shaped adapters pass them on unparsed.
+ * Calls after the last question are the answer's own, which a resume
+ * completes. The route hands this the AG-UI wire rows (an assistant row's
+ * `toolCalls`, a `tool` row per result); a UI message passes as it came.
+ * Throws on a malformed row.
  */
 export function withStoppedCallsAnswered<T extends UIMessage | ModelMessage>(
   messages: readonly T[]
@@ -138,12 +140,13 @@ export function withStoppedCallsAnswered<T extends UIMessage | ModelMessage>(
       out.push(...owed.map(stoppedResult));
       owed = [];
     }
-    const open =
-      i < question && m.role === "assistant" && "toolCalls" in m
-        ? (m.toolCalls ?? []).filter((c) => !answered.has(c.id))
-        : [];
-    owed.push(...open.map((c) => c.id));
-    out.push(open.some(cutOff) ? withWholeArguments(m as ModelMessage) : m);
+    if (i < question && m.role === "assistant" && "toolCalls" in m) {
+      const calls = m.toolCalls ?? [];
+      owed.push(...calls.map((c) => c.id).filter((id) => !answered.has(id)));
+      out.push(withWholeArguments(m));
+    } else {
+      out.push(m);
+    }
   }
   return out;
 }
@@ -152,25 +155,27 @@ function stoppedResult(toolCallId: string): ModelMessage {
   return { role: "tool", toolCallId, content: STOPPED_RESULT };
 }
 
-type WireCall = NonNullable<ModelMessage["toolCalls"]>[number];
-
-/** Arguments that stopped streaming halfway are no JSON object. */
-function cutOff(call: WireCall): boolean {
-  try {
-    const args: unknown = JSON.parse(call.function.arguments);
-    return typeof args !== "object" || args === null || Array.isArray(args);
-  } catch {
-    return true;
-  }
+/** The row with `{}` for arguments cut off before they were a JSON
+ *  object; the same row when none were. */
+function withWholeArguments<T extends ModelMessage>(m: T): T {
+  let mended = false;
+  const toolCalls = m.toolCalls?.map((c) => {
+    if (isArgumentObject(c.function.arguments)) {
+      return c;
+    }
+    mended = true;
+    return { ...c, function: { ...c.function, arguments: "{}" } };
+  });
+  return mended ? { ...m, toolCalls } : m;
 }
 
-function withWholeArguments(m: ModelMessage): ModelMessage {
-  return {
-    ...m,
-    toolCalls: m.toolCalls?.map((c) =>
-      cutOff(c) ? { ...c, function: { ...c.function, arguments: "{}" } } : c
-    ),
-  };
+function isArgumentObject(text: string): boolean {
+  try {
+    const args: unknown = JSON.parse(text);
+    return typeof args === "object" && args !== null && !Array.isArray(args);
+  } catch {
+    return false;
+  }
 }
 
 /** The answer as a stream of AG-UI events, for an SSE response. */
