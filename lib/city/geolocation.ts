@@ -163,6 +163,13 @@ export function placementOf(
   };
 }
 
+/** Whether a point in the site's projection lies on one of its tiles. */
+export function siteHoldsPoint(site: Site, x: number, y: number): boolean {
+  return site.tiles.some(
+    (cell) => distanceOutside(tileExtentOf(cell), x, y) === 0
+  );
+}
+
 /**
  * The site among `sites` whose tiles hold a fix (each in its own Land's
  * projection), if any: the off-site dialog offers to go there.
@@ -173,12 +180,7 @@ export function siteHolding(
 ): Site | undefined {
   return sites.find((site) => {
     const at = latLngToUtm(site.provider.epsg, fix.lat, fix.lng);
-    return (
-      at !== null &&
-      site.tiles.some(
-        (cell) => distanceOutside(tileExtentOf(cell), at.x, at.y) === 0
-      )
-    );
+    return at !== null && siteHoldsPoint(site, at.x, at.y);
   });
 }
 
