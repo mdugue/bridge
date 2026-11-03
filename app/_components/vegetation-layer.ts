@@ -1188,11 +1188,10 @@ const TRUNK_EARTH = new Color().setRGB(
  * ground. One shape for every tree, no geometry of its own.
  */
 function trunkRoots(): { lobe: F; metres: F; local: V3 } {
-  const at = instanceMatrix();
   const local = trunkDrop();
   const drop = instanceFloat(TRUNK_DROP);
-  const metres = local.y.add(drop).mul(length(at.mul(vec4(0, 1, 0, 0)).xyz));
-  const { lobes, phase } = rootSeed(at.mul(vec4(0, 0, 0, 1)).xz);
+  const metres = local.y.add(drop).mul(length(instanceColumn(1).xyz));
+  const { lobes, phase } = rootSeed(instanceColumn(3).xz);
   const angle = atan(positionGeometry.z, positionGeometry.x);
   const lobe = cos(angle.mul(lobes).add(phase)).mul(0.5).add(0.5);
   const low = float(1).sub(smoothstep(0, ROOT_BULGE_H, metres));
@@ -1216,10 +1215,12 @@ function trunkRoots(): { lobe: F; metres: F; local: V3 } {
  * `tileTrunkMaterial`).
  */
 export function buildTrunkMaterial(
-  sun?: UniformNode<"vec3", Vector3>
+  sun?: UniformNode<"vec3", Vector3>,
+  evergreen = false
 ): MeshStandardNodeMaterial {
-  return sceneMaterial("vegetation-trunk", () =>
-    trunkMaterialOf(trunkGraph(sun))
+  return sceneMaterial(
+    evergreen ? "vegetation-trunk-evergreen" : "vegetation-trunk",
+    () => trunkMaterialOf(trunkGraph(sun, undefined, evergreen))
   );
 }
 
@@ -1244,7 +1245,8 @@ function trunkMaterialOf(graph: TrunkGraph): MeshStandardNodeMaterial {
  *  at the foot, read in the vertex stage), else TRUNK_EARTH. */
 function trunkGraph(
   sun?: UniformNode<"vec3", Vector3>,
-  earth?: V3
+  earth?: V3,
+  evergreen = false
 ): TrunkGraph {
   const roots = trunkRoots();
   // one varying for the four (WebGPU's sixteen are scarce)
@@ -1253,7 +1255,7 @@ function trunkGraph(
       positionGeometry.y,
       roots.metres,
       roots.lobe,
-      crownShade(roots.local, sun)
+      crownShade(roots.local, sun, evergreen)
     ),
     "vTrunkAlong"
   );
@@ -1358,21 +1360,22 @@ const NO_SUN = {};
  */
 function tileTrunkMaterial(
   sun: UniformNode<"vec3", Vector3> | undefined,
-  foot: FootMaterials | undefined
+  foot: FootMaterials | undefined,
+  evergreen = false
 ): Material {
   const earth = foot?.trunkEarth;
   if (!earth) {
-    return buildTrunkMaterial(sun);
+    return buildTrunkMaterial(sun, evergreen);
   }
   let bySun = tileTrunks.get(sun ?? NO_SUN);
   if (!bySun) {
     bySun = new Map();
     tileTrunks.set(sun ?? NO_SUN, bySun);
   }
-  const key = `trunk|${earth.key}`;
+  const key = `trunk|${evergreen ? "evergreen|" : ""}${earth.key}`;
   let graph = bySun.get(key);
   if (!graph) {
-    graph = trunkGraph(sun, earth.colour);
+    graph = trunkGraph(sun, earth.colour, evergreen);
     bySun.set(key, graph);
   }
   const m = trunkMaterialOf(graph);
@@ -1401,16 +1404,22 @@ const BARE_CROWN = 0.3;
  * a bare season (`trunkLeaf`). Under the crown the sky is hidden too: the
  * trunk darkens toward the crown's base. Returns the factor for the colour.
  */
-function crownShade(local: V3, sun?: UniformNode<"vec3", Vector3>): F {
-  const at = instanceMatrix();
-  const c0 = at.mul(vec4(1, 0, 0, 0)).xyz;
-  const c1 = at.mul(vec4(0, 1, 0, 0)).xyz;
-  const c2 = at.mul(vec4(0, 0, 1, 0)).xyz;
+function crownShade(
+  local: V3,
+  sun: UniformNode<"vec3", Vector3> | undefined,
+  evergreen: boolean
+): F {
+  const c0 = instanceColumn(0).xyz;
+  const c1 = instanceColumn(1).xyz;
+  const c2 = instanceColumn(2).xyz;
   // the crown where the tree's growth carried it
   const centre = vec3(0, TRUNK_H + CROWN_R * 0.5, 0).add(
     treeGrowth(float(TRUNK_H))
   );
-  const leaf = mix(float(BARE_CROWN), float(1), trunkLeaf);
+  // a needle tree keeps its crown the year round
+  const leaf = evergreen
+    ? float(1)
+    : mix(float(BARE_CROWN), float(1), trunkLeaf);
   // under the crown: the sky hidden more toward its base
   const base = TRUNK_H + CROWN_R * 0.5 - CROWN_R;
   const sky = mix(
@@ -1594,7 +1603,7 @@ function buildTreeCell(
     extras.forEach((e, i) => trunks.setMatrixAt(i, e.trunk));
     paintBark(trunks, 0, extras);
     finishInstances(trunks);
-    const feet = feetOf(trunks, geos, ground, footMat);
+    const feet = feetOf(trunks, geos, ground, footMat, true);
     return {
       chunk: null,
       loose: feet ? { feet, trunks } : undefined,
@@ -1641,8 +1650,9 @@ function buildTreeCell(
   }
   trunks.castShadow = true;
   const feet = [
-    ...(feetOf(trunks, geos, ground, footMat) ?? []),
-    ...((own && feetOf(own, geos, ground, footMat)) ?? []),
+    // no autumn leaves under a needle tree (a cell of cones or pines)
+    ...(feetOf(trunks, geos, ground, footMat, cell.form === "broad") ?? []),
+    ...((own && feetOf(own, geos, ground, footMat, true)) ?? []),
   ];
   // The far tier: every other tree of a dense chunk, drawn wider (see
   // keepInFarTier), so a forest stays a closed canopy far away.
@@ -1696,10 +1706,11 @@ function feetOf(
   trunks: Instances,
   geos: TreeGeos,
   ground: GroundContext,
-  footMat?: FootMaterials
+  footMat: FootMaterials | undefined,
+  litter: boolean
 ): Instances[] | undefined {
   return footMat && geos.foot
-    ? treeFeet(geos.foot, footMat, trunks, footSlopes(trunks, ground))
+    ? treeFeet(geos.foot, footMat, trunks, footSlopes(trunks, ground), litter)
     : undefined;
 }
 
@@ -1847,6 +1858,13 @@ function* buildTrees(
     return cell.extras.length > 0 ? { ...kind, plain: plainTrunk() } : kind;
   };
   const trunkMat = tileTrunkMaterial(sun, footMat);
+  // a needle tree's trunk stays under its crown's shade in winter (the
+  // register's own trees all ride in broadleaf cells)
+  let needleMat: Material | undefined;
+  const trunkMatOf = (cell: TreeCell): Material =>
+    cell.form === "broad"
+      ? trunkMat
+      : (needleMat ??= tileTrunkMaterial(sun, footMat, true));
 
   const meshes: Instances[] = [];
   const chunks: VegetationChunk[] = [];
@@ -1856,7 +1874,7 @@ function* buildTrees(
     const built = buildTreeCell(
       cell,
       geosOf(cell),
-      trunkMat,
+      trunkMatOf(cell),
       crownMats,
       ground,
       footMat
@@ -2007,11 +2025,17 @@ export function* vegetationSteps(
   };
 }
 
-/** Metres from `cameraPos` to the chunk's nearest tree: its crowns', its
- *  trunks' and the register's own trunks' spheres (centre minus radius). */
+/** Metres from `cameraPos` to the chunk's nearest crown (sphere centre
+ *  minus radius): what the crown tiers are planned by. */
 function nearestTree(chunk: VegetationChunk, cameraPos: Vector3): number {
+  return nearestOf([chunk.mid], cameraPos);
+}
+
+/** Metres to the chunk's nearest trunk, the register's own included (their
+ *  crowns are drawn by the cadastre's layer): what the feet are shown by. */
+function nearestTrunk(chunk: VegetationChunk, cameraPos: Vector3): number {
   return nearestOf(
-    [chunk.mid, chunk.trunks, ...(chunk.ownTrunks ? [chunk.ownTrunks] : [])],
+    chunk.ownTrunks ? [chunk.trunks, chunk.ownTrunks] : [chunk.trunks],
     cameraPos
   );
 }
@@ -2091,9 +2115,13 @@ export function createVegetationLod(): (
       // the feet only where one of their trees is near enough to show them
       // (tree-foot.ts fades them out by FOOT_SHOWN_M): a far chunk draws
       // none of their sets
-      const feetOn = tiers[i] !== "far" && states[i].near < FOOT_SHOWN_M;
-      for (const feet of all[i].feet ?? []) {
-        feet.visible = feetOn;
+      const feet = all[i].feet ?? [];
+      const feetOn =
+        feet.length > 0 &&
+        tiers[i] !== "far" &&
+        nearestTrunk(all[i], cameraPos) < FOOT_SHOWN_M;
+      for (const set of feet) {
+        set.visible = feetOn;
       }
     }
     return changed;

@@ -2732,7 +2732,8 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
     the sun turned in by its columns); where it passes through, the bark
     darkens to half, softly to the rim, by day; and under the crown the
     hidden sky darkens it toward the crown's base (× 0.8). A bare season
-    keeps 30 % of it (`trunkLeaf`, the generic phenology's leaf).
+    keeps 30 % of it (`trunkLeaf`, the generic phenology's leaf; a cone's or
+    pine's trunk keeps its crown's shade the year round).
   - **the crown darker inside and underneath** (`crownOcclusion`, every
     crown, every form): a factor on the crown's colour per vertex, cool
     and dark toward its underside (the radial normal's height, down to
@@ -2762,7 +2763,8 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
     gap in the leaves, a pinhole camera: round, the gap's height × the
     sun's 0.53° wide (6–23 cm), soft-rimmed, drawn out along the sun by
     1 / its elevation (up to 3×), in clusters where the crown is thin, in
-    two grids of cells turned against each other. The wind does not carry
+    two grids of cells turned against each other (worked out only where
+    one can show: the quad reaches far past the shadow at a low sun). The wind does not carry
     them along: a branch sways a cluster 5 cm to and fro (about 7 s), a
     leaf trembles a fleck by 1 cm at 0.6–1.8 Hz and blinks almost half of
     them on and off; past a few pixels they are their mean. (Until
@@ -2779,7 +2781,8 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
     hash, leaning out from 0.28–0.8 m round a 0.25 m foot moved out to
     the trunk's own roots, turned with the trunk), opaque, lit as the ground, swaying 3.5 cm,
     shrinking into the ground as the foot fades, so the cut between bark
-    and lawn is hidden — not in paving or a wood; and in autumn fallen leaves — covering
+    and lawn is hidden — not in paving or a wood; and in autumn fallen leaves
+    (none under a cone or a pine) — covering
     flecks in yellow, orange, russet and brown in 11 cm cells, thick under
     the crown, thinning 25 % beyond it and swept against the kerb (the edge
     raster's road distance), a mean tint where a cell is under a few

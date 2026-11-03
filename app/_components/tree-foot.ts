@@ -27,6 +27,7 @@ import {
   int,
   fract,
   fwidth,
+  If,
   ivec2,
   length,
   max,
@@ -41,7 +42,6 @@ import {
   sin,
   smoothstep,
   step,
-  texture,
   uniform,
   varying,
   vec2,
@@ -51,7 +51,6 @@ import {
 } from "three/tsl";
 import {
   BUILTUP_CLASS,
-  EDGE_SCALE,
   MEADOW_CLASS,
   RAILWAY_CLASS,
   ROAD_CLASS,
@@ -62,6 +61,7 @@ import { TRUNK_UNIT_H, trunkRadiusAt } from "@/lib/city/tree-inventory";
 import { outOfDesignSite } from "./design-site";
 import {
   byteOf,
+  edgeAt,
   gdHash,
   gdNoise,
   paletteOf,
@@ -406,10 +406,14 @@ export function treeFeet(
   geos: FootGeos,
   materials: FootMaterials,
   trunks: Instances,
-  slopes: BufferAttribute
+  slopes: BufferAttribute,
+  litter = true
 ): Instances[] {
   const sets: Instances[] = [];
   for (const part of PARTS) {
+    if (part === "litter" && !litter) {
+      continue;
+    }
     const feet = new Instances(
       part === "guard" ? geos.hoop : part === "tuft" ? geos.tuft : geos.quad,
       materials[part],
@@ -480,7 +484,6 @@ const pavedClass = (c: F): F =>
   );
 
 /** An edge-raster distance (m; R the road's, + on the road; G the lawn's). */
-const edgeDistance = (v: F): F => v.mul(255).sub(128).div(EDGE_SCALE);
 
 /** What every foot graph reads per instance (the vertex stage). */
 interface FootFrame {
@@ -545,11 +548,7 @@ function footFrame(s: FootSlots, size: [number, number]): FootFrame {
   // off the baked lawn (the green courtyards and front gardens the class
   // raster counts as built-up land): the edge raster's lawn distance
   const lawn = s.edgesTex
-    ? smoothstep(
-        -0.1,
-        0.1,
-        edgeDistance(texture(s.edgesTex, uv).level(float(0)).g)
-      )
+    ? smoothstep(-0.1, 0.1, edgeAt(s.edgesTex, uv).y)
     : float(0);
   const cls = classTexel(s.classTex, uv);
   const pit = pavedClass(cls).mul(float(1).sub(lawn));
@@ -565,9 +564,7 @@ function footFrame(s: FootSlots, size: [number, number]): FootFrame {
     .mul(length(col(1).xyz));
   const crown = clamp(length1.mul(CROWN_SPREAD), CROWN_MIN, CROWN_MAX);
   const roots = rootSeed(col(3).xz);
-  const road = s.edgesTex
-    ? edgeDistance(texture(s.edgesTex, uv).level(float(0)).r)
-    : float(-99);
+  const road = s.edgesTex ? edgeAt(s.edgesTex, uv).x : float(-99);
   return {
     foot,
     rt,
@@ -735,11 +732,7 @@ function pitGraph(r: FootRasters, part: "ring" | "earth"): PitGraph {
     // off the kerb: the edge raster's road distance at the fragment
     const clear = edges
       ? float(1).sub(
-          smoothstep(
-            -KERB_CLEAR - 0.06,
-            -KERB_CLEAR,
-            edgeDistance(texture(edges, uv).level(float(0)).r)
-          )
+          smoothstep(-KERB_CLEAR - 0.06, -KERB_CLEAR, edgeAt(edges, uv).x)
         )
       : float(1);
     if (part === "earth") {
@@ -919,21 +912,10 @@ function litterGraph(r: FootRasters): PitGraph {
     const under = float(1).sub(
       smoothstep(crown.mul(0.6), crown.mul(LEAF_BEYOND), d)
     );
-    const kerb = edges
-      ? smoothstep(
-          -0.9,
-          -0.15,
-          edgeDistance(texture(edges, uv).level(float(0)).r)
-        )
-          .mul(
-            float(1).sub(
-              smoothstep(
-                -0.15,
-                0.05,
-                edgeDistance(texture(edges, uv).level(float(0)).r)
-              )
-            )
-          )
+    const road = edges ? edgeAt(edges, uv).x.toVar() : undefined;
+    const kerb = road
+      ? smoothstep(-0.9, -0.15, road)
+          .mul(float(1).sub(smoothstep(-0.15, 0.05, road)))
           .mul(float(1).sub(smoothstep(crown, crown.mul(LEAF_BEYOND), d)))
       : float(0);
     const density = clamp(under.add(kerb.mul(0.8)), 0, 1).mul(footLitter);
@@ -1159,66 +1141,68 @@ function shadeGraph(r: FootRasters, sun?: V3): ShadeGraph {
     const inShadow = float(1).sub(
       smoothstep(crown.mul(0.5), crown.mul(1.05), length(vec2(along, across)))
     );
-    // the ground in the sun's frame, its run along the sun shrunk by the
-    // stretch: there a fleck is round, on the ground drawn out along it
-    const sunXY = vec2(
-      xy.x.mul(axis.x).add(xy.y.mul(axis.y)).div(stretch),
-      xy.x.mul(axis.y).sub(xy.y.mul(axis.x))
-    ).toVar();
-    // the gaps come in clusters (where the crown is thin)
-    const gaps = smoothstep(0.38, 0.78, gdNoise(xy.mul(0.55).add(phase)));
-    const radius = clamp(gapHeight.mul(SUN_DIAMETER * 0.5), 0.035, 0.1);
+    // the flecks only where they can show: in the thrown shadow, shaded,
+    // near and by day (the quad reaches far past the shadow at a low sun)
+    const dappleW = inShadow.mul(float(1).sub(sunLit)).mul(near).toVar();
     const fleck = float(0).toVar();
     const coverMean = float(0).toVar();
-    for (const [n, cellM] of DAPPLE_CELLS.entries()) {
-      const turn = n * 0.83;
-      const ct = Math.cos(turn);
-      const st = Math.sin(turn);
-      const at = vec2(
-        sunXY.x.mul(ct).add(sunXY.y.mul(st)),
-        sunXY.y.mul(ct).sub(sunXY.x.mul(st))
-      )
-        .div(cellM)
-        .add(n * 5.3);
-      const cell = floor(at).toVar();
-      const h1 = gdHash(cell.add(1.7)).toVar();
-      const h2 = gdHash(cell.add(23.1)).toVar();
-      const h3 = gdHash(cell.add(47.9)).toVar();
-      // a branch sways its cluster to and fro, all in one phase
-      const swayPhase = gdNoise(cell.mul(0.21).add(n * 9.1)).mul(12.6);
-      const sway = sin(footClock.mul(DAPPLE_SWAY_RATE).add(swayPhase)).mul(
-        DAPPLE_SWAY / cellM
-      );
-      // a leaf flutters: the spot trembles and blinks
-      const rate = mix(DAPPLE_FLUTTER[0], DAPPLE_FLUTTER[1], h3);
-      const flutter = sin(footClock.mul(rate).add(h1.mul(40)));
-      const room = float(0.5)
-        .sub(radius.div(cellM))
-        .sub(DAPPLE_SWAY / cellM);
-      const centre = vec2(h1.sub(0.5), h2.sub(0.5))
-        .mul(room.mul(2))
-        .add(vec2(sway, sway.mul(0.4)))
-        .add(vec2(flutter.mul(0.012 / cellM), 0));
-      const r = radius.div(cellM).mul(h2.mul(0.35).add(0.8));
-      const dist = length(at.sub(cell).sub(0.5).sub(centre));
-      // the penumbra: a sun image's rim is soft
-      const spot = float(1).sub(smoothstep(r.mul(0.55), r.mul(1.15), dist));
-      // some leaves blink a fleck right out, most only dim it
-      const blink = mix(
-        float(1),
-        smoothstep(-0.3, 0.4, flutter),
-        step(0.55, h3)
-      ).mul(flutter.mul(0.15).add(0.85));
-      const lit = step(h2, gaps.mul(0.75));
-      fleck.assign(max(fleck, spot.mul(blink).mul(lit)));
-      coverMean.addAssign(gaps.mul(0.75 * 0.5).mul(r.mul(r).mul(3.1)));
-    }
+    If(dappleW.greaterThan(0), () => {
+      // the ground in the sun's frame, its run along the sun shrunk by the
+      // stretch: there a fleck is round, on the ground drawn out along it
+      const sunXY = vec2(
+        xy.x.mul(axis.x).add(xy.y.mul(axis.y)).div(stretch),
+        xy.x.mul(axis.y).sub(xy.y.mul(axis.x))
+      ).toVar();
+      // the gaps come in clusters (where the crown is thin)
+      const gaps = smoothstep(0.38, 0.78, gdNoise(xy.mul(0.55).add(phase)));
+      const radius = clamp(gapHeight.mul(SUN_DIAMETER * 0.5), 0.035, 0.1);
+      for (const [n, cellM] of DAPPLE_CELLS.entries()) {
+        const turn = n * 0.83;
+        const ct = Math.cos(turn);
+        const st = Math.sin(turn);
+        const at = vec2(
+          sunXY.x.mul(ct).add(sunXY.y.mul(st)),
+          sunXY.y.mul(ct).sub(sunXY.x.mul(st))
+        )
+          .div(cellM)
+          .add(n * 5.3);
+        const cell = floor(at).toVar();
+        const h1 = gdHash(cell.add(1.7)).toVar();
+        const h2 = gdHash(cell.add(23.1)).toVar();
+        const h3 = gdHash(cell.add(47.9)).toVar();
+        // a branch sways its cluster to and fro, all in one phase
+        const swayPhase = gdNoise(cell.mul(0.21).add(n * 9.1)).mul(12.6);
+        const sway = sin(footClock.mul(DAPPLE_SWAY_RATE).add(swayPhase)).mul(
+          DAPPLE_SWAY / cellM
+        );
+        // a leaf flutters: the spot trembles and blinks
+        const rate = mix(DAPPLE_FLUTTER[0], DAPPLE_FLUTTER[1], h3);
+        const flutter = sin(footClock.mul(rate).add(h1.mul(40)));
+        const room = float(0.5)
+          .sub(radius.div(cellM))
+          .sub(DAPPLE_SWAY / cellM);
+        const centre = vec2(h1.sub(0.5), h2.sub(0.5))
+          .mul(room.mul(2))
+          .add(vec2(sway, sway.mul(0.4)))
+          .add(vec2(flutter.mul(0.012 / cellM), 0));
+        const r = radius.div(cellM).mul(h2.mul(0.35).add(0.8));
+        const dist = length(at.sub(cell).sub(0.5).sub(centre));
+        // the penumbra: a sun image's rim is soft
+        const spot = float(1).sub(smoothstep(r.mul(0.55), r.mul(1.15), dist));
+        // some leaves blink a fleck right out, most only dim it
+        const blink = mix(
+          float(1),
+          smoothstep(-0.3, 0.4, flutter),
+          step(0.55, h3)
+        ).mul(flutter.mul(0.15).add(0.85));
+        const lit = step(h2, gaps.mul(0.75));
+        fleck.assign(max(fleck, spot.mul(blink).mul(lit)));
+        coverMean.addAssign(gaps.mul(0.75 * 0.5).mul(r.mul(r).mul(3.1)));
+      }
+    });
     // past a few pixels a fleck would shimmer: their mean
     const coarse = smoothstep(0.012, 0.03, fwidth(xy.x));
-    const dapple = mix(fleck, clamp(coverMean, 0, 0.5), coarse)
-      .mul(inShadow)
-      .mul(float(1).sub(sunLit))
-      .mul(near);
+    const dapple = mix(fleck, clamp(coverMean, 0, 0.5), coarse).mul(dappleW);
     k.mulAssign(dapple.mul(DAPPLE).add(1));
     return mix(vec3(1), k, fade);
   })();
@@ -1240,16 +1224,14 @@ function guardGraph(r: FootRasters): { position: V3 } {
     return { position: f.foot.mul(0) };
   }
   const at = (dx: number, dz: number): F =>
-    edgeDistance(
-      texture(
-        edges,
-        rasterUv(
-          vec2(f.world.x.add(dx), f.world.z.add(dz).negate()),
-          s.origin,
-          r.size
-        )
-      ).level(float(0)).r
-    );
+    edgeAt(
+      edges,
+      rasterUv(
+        vec2(f.world.x.add(dx), f.world.z.add(dz).negate()),
+        s.origin,
+        r.size
+      )
+    ).x;
   const toRoad = normalize(
     vec2(at(1, 0).sub(at(-1, 0)), at(0, 1).sub(at(0, -1))).add(vec2(1e-4, 0))
   );

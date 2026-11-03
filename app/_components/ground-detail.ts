@@ -163,8 +163,9 @@ export interface GroundColour {
   /** 1 where `smoothPaths` drew a path's edge (a path near, the camera
    *  near), else 0 */
   pathNear: F;
-  /** the way to the path (`smoothPaths`: its coverage's gradient, unit,
-   *  x east, y north; 0 where no path is near) */
+  /** the way to the path (`smoothPaths`: its coverage's gradient, x
+   *  east, y north; unit at an edge, shorter where the coverage is flat,
+   *  0 where no path is near) */
   pathToward: V2;
 }
 
@@ -413,7 +414,7 @@ function gdJoint(q: V2, size: V2, jw: number, w: F): F {
 // --- the fields ----------------------------------------------------------------
 
 /** The baked, smoothed distance fields (edges.py): signed metres. */
-const edgeAt = (edges: Tex, uv: V2): V2 =>
+export const edgeAt = (edges: Tex, uv: V2): V2 =>
   texture(edges, uv).level(float(0)).rg.mul(255).sub(128).div(EDGE_SCALE);
 
 /** The baked distances: valid out to ±6 m, straight along a diagonal kerb,
@@ -795,13 +796,16 @@ export function smoothPaths(
       // window's end draws no seam
       const own = smoothstep(0, 0.2, cover);
       col.assign(mix(col, mix(otherCol, pathCol, m), near.mul(own)));
-      path.assign(mix(path, m, near));
+      path.assign(mix(path, m, near.mul(own)));
       side.assign(other);
       // how near the path is, as smooth as its coverage: a hard 1 inside
       // the 4×4 notched the lawn line where the window ends
       by.assign(near.mul(smoothstep(0, 0.04, cover)));
       // (the raster's rows run south)
-      toward.assign(normalize(vec2(grad.x, grad.y.negate()).add(1e-6)));
+      // unit at an edge, shrinking to nothing where the coverage is flat
+      // (a narrow path's middle): no way to the path there
+      const way = vec2(grad.x, grad.y.negate());
+      toward.assign(way.div(max(length(way), 0.3)));
     });
   });
   return { col, path, side, near: by, toward };
@@ -978,7 +982,7 @@ export function urbanGreen(
     // a bare band between the two — on the lawn's side only (out of the
     // lawn is toward the path), never across the path onto the paving
     // beyond it
-    const lawnSide = smoothstep(-0.2, 0.2, dot(g.outOfLawn, col.pathToward));
+    const lawnSide = smoothstep(0.1, 0.4, dot(g.outOfLawn, col.pathToward));
     mask = smoothstep(
       -0.15,
       0.15,
