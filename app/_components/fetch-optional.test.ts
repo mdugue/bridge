@@ -86,9 +86,6 @@ test("a network failure is not the answer: the file is asked for again", async (
 test("an abort is rethrown", async () => {
   const abort = new DOMException("aborted", "AbortError");
   stubFetch(() => Promise.reject(abort));
-  // bun-types declare the `rejects` matchers as void, but bun resolves them
-  // asynchronously — dropping the await would end the test before it runs.
-  // oxlint-disable-next-line typescript/await-thenable
   await expect(fetchOptionalJson("/x")).rejects.toBe(abort);
 });
 
@@ -110,8 +107,6 @@ test("fetchFeaturesFrom merges the collections in URL order, a 404 among them co
 test("fetchFeaturesFrom rethrows an abort", async () => {
   const abort = new DOMException("aborted", "AbortError");
   stubFetch(() => Promise.reject(abort));
-  // (bun-types declare `rejects` as void; see "an abort is rethrown")
-  // oxlint-disable-next-line typescript/await-thenable
   await expect(fetchFeaturesFrom(["/a", "/b"])).rejects.toBe(abort);
 });
 
@@ -137,8 +132,6 @@ test("a missing binary artifact is off; an abort is rethrown", async () => {
   expect(await fetchOptionalBinary("/x.pts.gz")).toBeNull();
   const abort = new DOMException("aborted", "AbortError");
   stubFetch(() => Promise.reject(abort));
-  // (bun-types declare `rejects` as void; see "an abort is rethrown")
-  // oxlint-disable-next-line typescript/await-thenable
   await expect(fetchOptionalBinary("/x.pts.gz")).rejects.toBe(abort);
 });
 
@@ -171,8 +164,6 @@ test("a gzip read whole that does not inflate is a corrupt file, not the network
 
 test("a required file that is missing throws with its status", async () => {
   stubFetch(() => new Response(null, { status: 404 }));
-  // (bun-types declare `rejects` as void; see "an abort is rethrown")
-  // oxlint-disable-next-line typescript/await-thenable
   await expect(fetchRequiredJson("/tileset.json")).rejects.toThrow(
     "Failed to fetch /tileset.json: HTTP 404"
   );
@@ -201,8 +192,6 @@ test("an abort ends the wait at once, the work behind it going on for whoever el
   const aborter = new AbortController();
   const waiting = untilAborted(shared, aborter.signal);
   aborter.abort();
-  // (bun-types declare `rejects` as void; see "an abort is rethrown")
-  // oxlint-disable-next-line typescript/await-thenable
   await expect(waiting).rejects.toMatchObject({ name: "AbortError" });
   land("raster");
   expect(await shared).toBe("raster");
@@ -210,7 +199,6 @@ test("an abort ends the wait at once, the work behind it going on for whoever el
   const fresh = new AbortController();
   expect(await untilAborted(Promise.resolve(1), fresh.signal)).toBe(1);
   const failure = new Error("decode");
-  // oxlint-disable-next-line typescript/await-thenable
   await expect(
     untilAborted(Promise.reject(failure), fresh.signal)
   ).rejects.toBe(failure);
@@ -251,6 +239,5 @@ test("the caller's abort is an abort, not a stall", async () => {
     signal: aborter.signal,
   });
   aborter.abort();
-  // oxlint-disable-next-line typescript/await-thenable
   await expect(got).rejects.toMatchObject({ name: "AbortError" });
 });

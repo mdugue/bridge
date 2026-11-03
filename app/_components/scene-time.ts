@@ -130,6 +130,33 @@ export interface SceneTime {
 
 /** `apply` hands an instant to the scene, which answers with its sun (or
  *  nothing while there is no scene); `preview` marks a drag's step. */
+/**
+ * A glide's steps between two minutes: previews each new minute (none while
+ * the camera is held, an export, or the minute has not moved), telling the
+ * HUD at most every GLIDE_HUD_MS.
+ */
+function glideSteps(
+  from: number,
+  to: number,
+  preview: (minutes: number, hud: boolean) => void
+): (t: number) => void {
+  let shown = from;
+  let hudAt = -Infinity;
+  return (t) => {
+    const minutes = tweenMinutes(from, to, t);
+    if (minutes === shown) {
+      return;
+    }
+    shown = minutes;
+    const at = performance.now();
+    const hud = at - hudAt >= GLIDE_HUD_MS;
+    if (hud) {
+      hudAt = at;
+    }
+    preview(minutes, hud);
+  };
+}
+
 export function useSceneTime(
   apply: (date: Date, preview?: boolean) => SunState | undefined,
   initialDay: Date
@@ -237,8 +264,9 @@ export function useSceneTime(
       glide.current = mine;
       const to = splitDate(instant);
       const from = splitDate(now.current);
-      let shown = from.minutes;
-      let hudAt = -Infinity;
+      const step = glideSteps(from.minutes, to.minutes, (minutes, hud) =>
+        previewNow(to.day, minutes, hud)
+      );
       return (t: number) => {
         if (glide.current !== mine) {
           return;
@@ -248,19 +276,7 @@ export function useSceneTime(
           setNow(to.day, to.minutes);
           return;
         }
-        const minutes = tweenMinutes(from.minutes, to.minutes, t);
-        // the camera held (an export), or the minute not yet moved
-        if (minutes === shown) {
-          return;
-        }
-        // oxlint-disable-next-line react/immutability -- the effect's own value, never render state
-        shown = minutes;
-        const at = performance.now();
-        const hud = at - hudAt >= GLIDE_HUD_MS;
-        if (hud) {
-          hudAt = at;
-        }
-        previewNow(to.day, minutes, hud);
+        step(t);
       };
     },
     [setNow, previewNow]

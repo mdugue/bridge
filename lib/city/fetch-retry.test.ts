@@ -171,9 +171,6 @@ test("an absent or fatal status is answered at once, never retried", async () =>
 test("a fatal error and an abort reject as they are, without a retry", async () => {
   const parse = new SyntaxError("Unexpected token");
   let calls = 0;
-  // bun-types declare the `rejects` matchers as void, but bun resolves them
-  // asynchronously — dropping the await would end the test before it runs.
-  // oxlint-disable-next-line typescript/await-thenable
   await expect(
     withRetry(
       () => {
@@ -184,8 +181,6 @@ test("a fatal error and an abort reject as they are, without a retry", async () 
     )
   ).rejects.toBe(parse);
   const abort = new DOMException("aborted", "AbortError");
-  // (bun-types declare `rejects` as void; see above)
-  // oxlint-disable-next-line typescript/await-thenable
   await expect(
     withRetry(
       () => {
@@ -209,8 +204,6 @@ test("an abort during the wait ends the retries", async () => {
     },
     { budgetMs: 20_000, env: fakePage().env, signal: aborter.signal }
   );
-  // (bun-types declare `rejects` as void; see above)
-  // oxlint-disable-next-line typescript/await-thenable
   await expect(run).rejects.toMatchObject({ name: "AbortError" });
   expect(calls).toBe(1);
 });
@@ -245,8 +238,6 @@ test("the budget spent, the retries give up with a NetworkError that says how of
       onRetry: (note) => notes.push(note.attempt),
     }
   );
-  // (bun-types declare `rejects` as void; see above)
-  // oxlint-disable-next-line typescript/await-thenable
   await expect(run).rejects.toBeInstanceOf(NetworkError);
   const error = (await run.catch((err: unknown) => err)) as NetworkError;
   // 0.5 + 1 + 2 + 4 s waited; the next 8 s would pass the budget

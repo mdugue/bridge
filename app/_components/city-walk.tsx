@@ -101,7 +101,7 @@ import {
 } from "./scene-status";
 import type { SceneTabId } from "./scene-tabs";
 import { StreamPill } from "./stream-pill";
-import { readStoredStyle, writeStoredStyle } from "./style-memory";
+import { readStoredStyle, rememberStyle } from "./style-memory";
 import { INITIAL_MINUTES, useSceneTime } from "./scene-time";
 import { useSite } from "./site-context";
 import { VirtualJoystick } from "./virtual-joystick";
@@ -617,16 +617,10 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
   /** the time and style before a walk, put back when it ends; while it
    *  runs, its stops' styles are not the visitor's to remember */
   const beforeWalk = useRef<{ at: Date; style: RenderStyle } | null>(null);
-  useEffect(() => {
-    let remembered = look.get().style;
-    return look.subscribe((values) => {
-      if (beforeWalk.current === null && values.style !== remembered) {
-        // oxlint-disable-next-line react/immutability -- the effect's own value, never render state
-        remembered = values.style;
-        writeStoredStyle(values.style);
-      }
-    });
-  }, [look]);
+  useEffect(
+    () => rememberStyle(look, () => beforeWalk.current !== null),
+    [look]
+  );
   // Befragen (ADR 0042): the card closes, and the scene's mark with it.
   const closeInquiry = useCallback(() => {
     handleRef.current?.clearInquiry();
@@ -850,7 +844,6 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     if (!supported || tilesetUrl === null) {
       return;
     }
-    let cancelled = false;
     let handle: CityWalkHandle | null = null;
     let veilTimer: ReturnType<typeof setTimeout> | undefined;
     let streamFallback: ReturnType<typeof setTimeout> | undefined;
@@ -903,13 +896,13 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
           // the page's.
           ...sceneReports(sceneStatus, {
             footprints: () => handleRef.current?.getFootprints(),
-            live: () => !cancelled,
+            live: () => !aborter.signal.aborted,
           }),
           // A loss raises the level as this page's (`by`): after its own
           // memory emergency the same incident, renewed rather than raised
           // again (gpu-safety.ts).
           onGpuLost: (how) =>
-            !cancelled &&
+            !aborter.signal.aborted &&
             recoverFromGpuLoss(
               how,
               recovery.current?.capture() ?? null,
@@ -919,14 +912,14 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
               ? () => location.reload()
               : null,
           onFollowEnd: () => {
-            if (!cancelled) {
+            if (!aborter.signal.aborted) {
               liveEnded.current();
             }
           },
         });
       })
       .then((h) => {
-        if (cancelled) {
+        if (aborter.signal.aborted) {
           h.dispose();
           return;
         }
@@ -997,7 +990,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
         // Aborted = StrictMode remount / navigation away, not a failure.
         const aborted =
           err instanceof DOMException && err.name === "AbortError";
-        if (!(cancelled || aborted)) {
+        if (!(aborter.signal.aborted || aborted)) {
           // A place that failed the boot is not tried again on the next
           // load: the recovery's snapshot goes with this boot.
           takeRecoverySnapshot();
@@ -1014,7 +1007,6 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
       .finally(settled);
 
     return () => {
-      cancelled = true;
       aborter.abort();
       // The card belongs to the scene that marked its building: a route
       // kept hidden (and shown again) boots a new scene without that mark.

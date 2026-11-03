@@ -217,25 +217,31 @@ const SHEET_ENTRANCE_FRAMES = 30;
 function useSheetEntrance(): [RefObject<HTMLDivElement | null>, boolean] {
   const ref = useRef<HTMLDivElement | null>(null);
   const [ready, setReady] = useState(false);
-  useEffect(() => {
-    let frames = 0;
-    let measured = false;
-    let id = requestAnimationFrame(function wait() {
-      // oxlint-disable-next-line react/immutability -- the effect's own counter, never render state
-      frames++;
-      if (measured || frames >= SHEET_ENTRANCE_FRAMES) {
-        setReady(true);
-        return;
-      }
-      const offset = ref.current?.style.getPropertyValue(
-        "--drawer-snap-point-offset"
-      );
-      measured = Number.parseFloat(offset ?? "") > 0;
-      id = requestAnimationFrame(wait);
-    });
-    return () => cancelAnimationFrame(id);
-  }, []);
+  useEffect(() => whenSheetMeasured(ref, () => setReady(true)), []);
   return [ref, ready];
+}
+
+/** Calls `ready` a frame after the fold's offset is set, or after
+ *  SHEET_ENTRANCE_FRAMES; returns the cancel. */
+function whenSheetMeasured(
+  sheet: RefObject<HTMLDivElement | null>,
+  ready: () => void
+): () => void {
+  let frames = 0;
+  let measured = false;
+  let id = requestAnimationFrame(function wait() {
+    frames++;
+    if (measured || frames >= SHEET_ENTRANCE_FRAMES) {
+      ready();
+      return;
+    }
+    const offset = sheet.current?.style.getPropertyValue(
+      "--drawer-snap-point-offset"
+    );
+    measured = Number.parseFloat(offset ?? "") > 0;
+    id = requestAnimationFrame(wait);
+  });
+  return () => cancelAnimationFrame(id);
 }
 
 /**

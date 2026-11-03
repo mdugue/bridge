@@ -1,3 +1,4 @@
+import type { LookState } from "@/lib/city/look-state";
 import { isRenderStyle, type RenderStyle } from "@/lib/city/render-style";
 import { STORAGE_KEYS } from "./storage-keys";
 
@@ -25,4 +26,21 @@ export function writeStoredStyle(style: RenderStyle): void {
   } catch {
     // Not remembered, nothing else lost.
   }
+}
+
+/**
+ * Stores each new style of `look` unless `paused` (a walk's stops bring
+ * styles that are not the visitor's); returns the unsubscribe.
+ */
+export function rememberStyle(
+  look: Pick<LookState, "get" | "subscribe">,
+  paused: () => boolean
+): () => void {
+  let remembered = look.get().style;
+  return look.subscribe((values) => {
+    if (!paused() && values.style !== remembered) {
+      remembered = values.style;
+      writeStoredStyle(values.style);
+    }
+  });
 }

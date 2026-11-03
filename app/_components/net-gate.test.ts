@@ -100,7 +100,6 @@ test("an aborted wait rejects at once and leaves no probe behind", async () => {
   // aborted before it is asked: at once, even on a usable page
   const before = new AbortController();
   before.abort();
-  // oxlint-disable-next-line typescript/await-thenable
   await expect(gate.whenUsable(before.signal)).rejects.toMatchObject({
     name: "AbortError",
   });
@@ -109,7 +108,6 @@ test("an aborted wait rejects at once and leaves no probe behind", async () => {
   const waiting = gate.whenUsable(aborter.signal);
   expect(jest.getTimerCount()).toBe(1); // the offline probe
   aborter.abort();
-  // oxlint-disable-next-line typescript/await-thenable
   await expect(waiting).rejects.toMatchObject({ name: "AbortError" });
   // its probe is cleared (an armed one would re-arm every 15 s for good)
   expect(jest.getTimerCount()).toBe(0);

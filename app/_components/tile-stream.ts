@@ -14,7 +14,8 @@ import {
   type Vector3,
   type WebGPURenderer,
 } from "three/webgpu";
-import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
+// (lower case: rules-of-hooks reads `Pascal.useX` as a React hook)
+import { MeshoptDecoder as meshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import type {
   AreaFeature,
   BridgeFeature,
@@ -2668,9 +2669,8 @@ export function createTileStream(
   // The decoder's own workers: without them a tile's meshopt buffers (75 MB
   // decoded for a dense building tile) decode on the main thread, inside
   // the parse that lands it. Idempotent: a remount keeps the same workers.
-  // oxlint-disable-next-line react-hooks/rules-of-hooks -- the decoder's method, no React hook
-  MeshoptDecoder.useWorkers(MESHOPT_WORKERS[ctx.tier]);
-  tiles.registerPlugin(new GltfContentPlugin(MeshoptDecoder));
+  meshoptDecoder.useWorkers(MESHOPT_WORKERS[ctx.tier]);
+  tiles.registerPlugin(new GltfContentPlugin(meshoptDecoder));
   // Out-of-view tiles that are still active stay drawn (shadows, turning on
   // the spot); three's own frustum culling keeps them out of the main pass.
   tiles.displayActiveTiles = true;

@@ -256,7 +256,7 @@ export function Minimap({
   );
   const bridges = useBridges(landcoverTiles);
   useEffect(() => {
-    let cancelled = false;
+    const loads = new AbortController();
     const requested = requestedRef.current;
     // Loads this run started and has not finished: the cleanup un-requests
     // them so a re-run (StrictMode's mount → cleanup → mount in dev) requests
@@ -268,12 +268,12 @@ export function Minimap({
       }
       requested.add(tile.src);
       pending.add(tile.src);
-      fetch(tile.src)
+      fetch(tile.src, { signal: loads.signal })
         .then((res) => res.arrayBuffer())
         .then((buf) => decodeGreyPng(new Uint8Array(buf)))
         .then((raster) => {
           pending.delete(tile.src);
-          if (!cancelled) {
+          if (!loads.signal.aborted) {
             const cv = colorizeLandcover(raster, 256);
             setDecoded((prev) => new Map(prev).set(tile.src, cv));
           }
@@ -284,11 +284,10 @@ export function Minimap({
         });
     }
     return () => {
-      // oxlint-disable-next-line react/immutability -- the effect's own flag, never render state
-      cancelled = true;
       for (const src of pending) {
         requested.delete(src);
       }
+      loads.abort();
     };
   }, [landcoverTiles]);
 

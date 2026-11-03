@@ -290,6 +290,9 @@ interface SetLine {
   paint: Paint;
 }
 
+/** A letter with its combining marks stays one glyph. */
+const LETTERS = new Intl.Segmenter("de-DE", { granularity: "grapheme" });
+
 function setLine(
   ctx: Ctx,
   text: string,
@@ -303,9 +306,7 @@ function setLine(
   const font = fontOf(setting, px, from);
   ctx.font = font;
   const shown = setting.upper ? text.toLocaleUpperCase("de-DE") : text;
-  // reason: plate text is names and years; code points are what canvas measures
-  // oxlint-disable-next-line no-misused-spread
-  const chars = [...shown];
+  const chars = Array.from(LETTERS.segment(shown), (s) => s.segment);
   const tracking = setting.tracking * px;
   // the coverage at about COVER_PX_PER_CAP px per capital
   const f = Math.max(1, Math.round((px * 0.72) / COVER_PX_PER_CAP));
