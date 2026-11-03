@@ -2166,7 +2166,9 @@ export class DressingPlugin {
     void this.turn(async (): Promise<(() => Promise<void>) | undefined> => {
       await this.olderCompile;
       const entry = this.dressed.get(scene);
-      if (!entry || this.disposed) {
+      // (a tile that left with its own compile still running keeps its
+      // entry until that compile ends: it is gone all the same)
+      if (!entry || this.disposed || this.released.has(scene)) {
         return undefined; // the tile (or the stream) left before its turn
       }
       streamTimings.since("dressing:queue-wait", queuedAt, extras.tileId);
