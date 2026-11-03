@@ -2191,14 +2191,17 @@ export class DressingPlugin {
         this.disposeFailed(disposeDressing(dressing), scene);
         throw err;
       }
-      const compiled =
-        this.dressed.get(scene) === entry
-          ? this.compileUnder(
-              scene,
-              compileRepresentatives(parts),
-              `dressing ${extras.tileId}`
-            )
-          : Promise.resolve<Compiled>("not run");
+      // (a tile that left, its release held by its own compile, gets none:
+      // nor any weight, nor a place in the compile line the lane waits on)
+      const current =
+        this.dressed.get(scene) === entry && !this.released.has(scene);
+      const compiled = current
+        ? this.compileUnder(
+            scene,
+            compileRepresentatives(parts),
+            `dressing ${extras.tileId}`
+          )
+        : Promise.resolve<Compiled>("not run");
       let outcome: Compiled | undefined;
       compiled
         .then((ended) => {
@@ -2215,7 +2218,7 @@ export class DressingPlugin {
       // Weighed from the build on, not from the hang: the lane runs ahead
       // of the compile waits, and a built dressing waiting its turn to
       // hang must count against the cache's budget.
-      if (this.dressed.get(scene) === entry) {
+      if (current) {
         this.weighDressing(entry, dressing);
         this.reweigh(scene);
       }
@@ -2327,10 +2330,7 @@ export class DressingPlugin {
         entry.dressing !== dressing,
       built: () => {
         this.weighDressing(entry, dressing);
-        const tile = this.tileOf.get(scene);
-        if (tile) {
-          this.tiles?.recalculateBytesUsed(tile);
-        }
+        this.reweigh(scene);
         this.ctx.onChange();
       },
       failed: (err) => {
