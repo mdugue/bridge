@@ -110,6 +110,7 @@ import {
   instanceTint,
 } from "./instancing";
 import type { F, Live, V2, V3, V4 } from "./shader-chunks";
+import { setGraph, setSlots } from "./material-slots";
 import { sceneMaterial } from "./three-utils";
 import { viewDirection } from "./view-direction";
 import { TRUNK_BASE } from "@/lib/city/tree-family";
@@ -1193,40 +1194,98 @@ function trunkRoots(): { lobe: F; metres: F; local: V3 } {
 export function buildTrunkMaterial(
   sun?: UniformNode<"vec3", Vector3>
 ): MeshStandardNodeMaterial {
-  return sceneMaterial("vegetation-trunk", () => {
-    const m = new MeshStandardNodeMaterial({ color: TRUNK_BASE, roughness: 1 });
-    m.name = "trunk";
-    const roots = trunkRoots();
-    m.positionNode = instancePosition(roots.local);
-    // one varying for the four (WebGPU's sixteen are scarce)
-    const along = varying(
-      vec4(
-        positionGeometry.y,
-        roots.metres,
-        roots.lobe,
-        crownShade(roots.local, sun)
-      ),
-      "vTrunkAlong"
-    );
-    const tg = clamp(along.x.div(TRUNK_H), 0, 1);
-    const metres = along.y;
-    const lobe = along.z;
-    const shaded = along.w;
-    const reach = lobe.mul(0.5).add(0.5).mul(TRUNK_EARTH_H);
-    const earth = float(1).sub(smoothstep(reach.mul(0.3), reach, metres));
-    // the register's bark per tree (TreeInstance.bark; white elsewhere)
-    const bark = materialColor
-      .mul(instanceTint())
-      .mul(mix(0.74, 1.05, smoothstep(0, 0.6, tg)));
-    m.colorNode = mix(
-      bark,
-      vec3(TRUNK_EARTH.r, TRUNK_EARTH.g, TRUNK_EARTH.b),
-      earth
-    )
+  return sceneMaterial("vegetation-trunk", () =>
+    trunkMaterialOf(trunkGraph(sun))
+  );
+}
+
+/** A trunk material's nodes: shared by every material of its kind (the
+ *  scene's, or the tiles' of one raster layout). */
+interface TrunkGraph {
+  position: V3;
+  color: V3;
+}
+
+function trunkMaterialOf(graph: TrunkGraph): MeshStandardNodeMaterial {
+  const m = new MeshStandardNodeMaterial({ color: TRUNK_BASE, roughness: 1 });
+  m.name = "trunk";
+  m.positionNode = graph.position;
+  m.colorNode = graph.color;
+  return m;
+}
+
+/** The trunk's nodes; `earth` the colour its foot turns to (the ground's
+ *  at the foot, read in the vertex stage), else TRUNK_EARTH. */
+function trunkGraph(
+  sun?: UniformNode<"vec3", Vector3>,
+  earth?: V3
+): TrunkGraph {
+  const roots = trunkRoots();
+  // one varying for the four (WebGPU's sixteen are scarce)
+  const along = varying(
+    vec4(
+      positionGeometry.y,
+      roots.metres,
+      roots.lobe,
+      crownShade(roots.local, sun)
+    ),
+    "vTrunkAlong"
+  );
+  const tg = clamp(along.x.div(TRUNK_H), 0, 1);
+  const metres = along.y;
+  const lobe = along.z;
+  const shaded = along.w;
+  const reach = lobe.mul(0.5).add(0.5).mul(TRUNK_EARTH_H);
+  const toEarth = float(1).sub(smoothstep(reach.mul(0.3), reach, metres));
+  // the register's bark per tree (TreeInstance.bark; white elsewhere)
+  const bark = materialColor
+    .mul(instanceTint())
+    .mul(mix(0.74, 1.05, smoothstep(0, 0.6, tg)));
+  const soil = earth
+    ? varying(earth, "vTrunkEarth")
+    : vec3(TRUNK_EARTH.r, TRUNK_EARTH.g, TRUNK_EARTH.b);
+  return {
+    position: instancePosition(roots.local),
+    color: mix(bark, soil, toEarth)
       .mul(mix(0.82, 1, smoothstep(0, 0.08, metres)))
-      .mul(shaded);
-    return m;
-  });
+      .mul(shaded),
+  };
+}
+
+/** Tile trunk graphs by their sun (a new app's sun is a new uniform) and
+ *  their raster layout. */
+const tileTrunks = new WeakMap<object, Map<string, TrunkGraph>>();
+const NO_SUN = {};
+
+/**
+ * The trunk material of a tile with foot rasters: its foot turns to the
+ * ground's own colour there (`FootMaterials.trunkEarth`) instead of the
+ * one earth, one shared build per raster layout with the tile's rasters
+ * in its slots; the scene's trunk material elsewhere.
+ */
+function tileTrunkMaterial(
+  sun: UniformNode<"vec3", Vector3> | undefined,
+  foot: FootMaterials | undefined
+): Material {
+  const earth = foot?.trunkEarth;
+  if (!earth) {
+    return buildTrunkMaterial(sun);
+  }
+  let bySun = tileTrunks.get(sun ?? NO_SUN);
+  if (!bySun) {
+    bySun = new Map();
+    tileTrunks.set(sun ?? NO_SUN, bySun);
+  }
+  const key = `trunk|${earth.key}`;
+  let graph = bySun.get(key);
+  if (!graph) {
+    graph = trunkGraph(sun, earth.colour);
+    bySun.set(key, graph);
+  }
+  const m = trunkMaterialOf(graph);
+  setSlots(m, earth.slots);
+  setGraph(m, key);
+  return m;
 }
 
 /** How dark a trunk gets in its crown's shadow (× its colour, the sun's
@@ -1655,7 +1714,7 @@ function* buildTrees(
     needles[form] ??= (form === "pine" ? buildPineTiers : buildConeTiers)(geos);
     return needles[form];
   };
-  const trunkMat = buildTrunkMaterial(sun);
+  const trunkMat = tileTrunkMaterial(sun, footMat);
 
   const meshes: Instances[] = [];
   const chunks: VegetationChunk[] = [];

@@ -2695,7 +2695,13 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
     foot out by up to 55 % of its radius, fading out 0.6 m up the bark
     (`trunkRoots`, two extra rings low in the trunk, `TRUNK_RINGS`, nine
     sides); up to 0.45 m over the ground the bark turns to damp earth
-    along them, the troughs about half as high, darkest at the ground. A separate root-flare skirt round
+    along them, the troughs about half as high, darkest at the ground.
+    The earth is the ground's own where the tile has foot rasters
+    (`trunkEarthGraph`, read per vertex at the foot, a trunk material per
+    tile on one build per raster layout): the pit's mulch in paving, leaf
+    mould in a wood, the grass's roots on a lawn or meadow, elsewhere the
+    class colour darkened as damp soil (× 0.72); one fixed earth
+    elsewhere. A separate root-flare skirt round
     the trunk read as a shoe and was dropped; the flat disc before it
     floated on a slope and let the paving show through.
   - **the trunk in its crown's shade** (`crownShade`, every trunk): the

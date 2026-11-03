@@ -52,6 +52,7 @@ import {
 import {
   BUILTUP_CLASS,
   EDGE_SCALE,
+  LANDCOVER_CLASSES,
   MEADOW_CLASS,
   RAILWAY_CLASS,
   ROAD_CLASS,
@@ -364,6 +365,10 @@ export interface FootMaterials {
   shade: Material;
   guard: Material;
   tuft: Material;
+  /** what the trunk's foot turns to: the ground's colour there (a graph
+   *  read per vertex at the foot), the key of its build and the tile's
+   *  slots for it (vegetation-layer.ts `tileTrunkMaterial`) */
+  trunkEarth: { colour: V3; key: string; slots: Slots };
 }
 
 /** The sets of a chunk's feet. */
@@ -1413,6 +1418,37 @@ function shadeMaterial(
   return m;
 }
 
+/** The ground's colour at a trunk's foot as its bark turns to it (sRGB):
+ *  the pit's mulch in paving, the forest floor's leaf mould in a wood,
+ *  the grass's roots on a lawn or meadow; elsewhere the ground's own
+ *  class colour, darkened as damp soil. */
+const FOOT_MULCH = linear([128, 98, 70]);
+const FOOT_MOULD = linear([104, 92, 68]);
+const FOOT_GRASS = linear([112, 120, 78]);
+const DAMP = 0.72;
+const PALETTE = LANDCOVER_CLASSES.map(({ srgb }) => linear([...srgb]));
+
+/**
+ * The colour a trunk's foot turns to, read once per vertex at the foot
+ * (the class raster and the edge raster's lawn, as every foot part
+ * reads them): instead of one earth for every tree, the ground it stands
+ * in, so the bark runs into the lawn, the pit or the forest floor.
+ */
+function trunkEarthGraph(r: FootRasters): V3 {
+  const s = footSlots(r);
+  const f = footFrame(s, r.size);
+  const uv = rasterUv(vec2(f.world.x, f.world.z.negate()), s.origin, r.size);
+  const cls = classTexel(s.classTex, uv);
+  let own: V3 = PALETTE[0];
+  PALETTE.forEach((c, id) => {
+    own = mix(own, c, float(1).sub(step01(abs(cls.sub(id)))));
+  });
+  const ground = mix(own.mul(DAMP), FOOT_GRASS, f.green);
+  return mix(mix(ground, FOOT_MOULD, f.wood), FOOT_MULCH, step(0.5, f.pit));
+}
+
+const trunkEarths = new Map<string, V3>();
+
 /** A tile's grass tufts: opaque, both faces, lit as the ground. */
 function tuftMaterial(
   r: FootRasters,
@@ -1431,6 +1467,15 @@ function tuftMaterial(
   applyGroundLight(m, light);
   setGraph(m, `${key}|${groundLightKey(light)}`);
   return m;
+}
+
+function trunkEarthOf(r: FootRasters, variant: string): V3 {
+  let colour = trunkEarths.get(variant);
+  if (!colour) {
+    colour = trunkEarthGraph(r);
+    trunkEarths.set(variant, colour);
+  }
+  return colour;
 }
 
 const graphs = new Map<string, PitGraph>();
@@ -1473,6 +1518,11 @@ export function createFootMaterials(
     shade: shadeMaterial(r, slots, variant, light),
     guard: guardMaterial(r, slots, variant),
     tuft: tuftMaterial(r, slots, variant, light),
+    trunkEarth: {
+      colour: trunkEarthOf(r, variant),
+      key: `earth|${variant}`,
+      slots,
+    },
   };
 }
 
