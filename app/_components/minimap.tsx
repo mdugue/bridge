@@ -284,6 +284,7 @@ export function Minimap({
         });
     }
     return () => {
+      // oxlint-disable-next-line react/immutability -- the effect's own flag, never render state
       cancelled = true;
       for (const src of pending) {
         requested.delete(src);

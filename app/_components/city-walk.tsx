@@ -621,6 +621,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     let remembered = look.get().style;
     return look.subscribe((values) => {
       if (beforeWalk.current === null && values.style !== remembered) {
+        // oxlint-disable-next-line react/immutability -- the effect's own value, never render state
         remembered = values.style;
         writeStoredStyle(values.style);
       }
