@@ -114,35 +114,38 @@ const STOPPED_RESULT = JSON.stringify({
  * tool waited): a call with no result makes the providers refuse every
  * later request. The stand-in `tool` row goes right before the next
  * question, after every row of the ended answer, so nothing it carried
- * (its thinking, a segment that continues it) loses its place. A call
- * whose arguments were cut off mid-stream (a stop, or the output cap)
- * keeps `{}` for them: the OpenAI-shaped adapters pass them on unparsed.
- * Calls after the last question are the answer's own, which a resume
- * completes. The route hands this the AG-UI wire rows (an assistant row's
- * `toolCalls`, a `tool` row per result); a UI message passes as it came.
- * Throws on a malformed row.
+ * (its thinking, a segment that continues it) loses its place; a result
+ * counts only within its own answer, as some providers number calls
+ * afresh in each. Calls after the last question are the answer's own,
+ * which a resume completes. Arguments cut off mid-stream (a stop, or the
+ * output cap) become `{}` in every row, for no resume finishes them and
+ * the OpenAI-shaped adapters pass them on unparsed. The route hands this
+ * the AG-UI wire rows (an assistant row's `toolCalls`, a `tool` row per
+ * result); a UI message passes as it came. Throws on a malformed row.
  */
 export function withStoppedCallsAnswered<T extends UIMessage | ModelMessage>(
   messages: readonly T[]
 ): Array<T | ModelMessage> {
   const question = messages.findLastIndex((m) => m.role === "user");
-  const answered = new Set(
-    messages.flatMap((m) =>
-      m.role === "tool" && "toolCallId" in m && m.toolCallId
-        ? [m.toolCallId]
-        : []
-    )
-  );
   const out: Array<T | ModelMessage> = [];
-  let owed: string[] = [];
+  // the open calls of the answer since the last question row
+  let open = new Set<string>();
   for (const [i, m] of messages.entries()) {
     if (m.role === "user") {
-      out.push(...owed.map(stoppedResult));
-      owed = [];
+      out.push(...[...open].map(stoppedResult));
+      open = new Set();
+    } else if (m.role === "tool" && "toolCallId" in m && m.toolCallId) {
+      open.delete(m.toolCallId);
     }
-    if (i < question && m.role === "assistant" && "toolCalls" in m) {
-      const calls = m.toolCalls ?? [];
-      owed.push(...calls.map((c) => c.id).filter((id) => !answered.has(id)));
+    if (m.role === "assistant" && "toolCalls" in m) {
+      for (const c of m.toolCalls ?? []) {
+        if (typeof c.id !== "string" || c.id === "") {
+          throw new TypeError("a tool call without an id");
+        }
+        if (i < question) {
+          open.add(c.id);
+        }
+      }
       out.push(withWholeArguments(m));
     } else {
       out.push(m);

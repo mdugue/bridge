@@ -524,7 +524,7 @@ test("a stand-in keeps a stopped answer's thinking and segments together and men
   expect(model.slice(2, 4).map((m) => m.toolCallId)).toEqual(["a", "s"]);
 });
 
-test("arguments cut off before the last question are mended, answered or not; the running answer's stay", () => {
+test("cut-off arguments are mended in every row, answered or not", () => {
   const call = (id: string, args: string) => ({
     id,
     type: "function" as const,
@@ -558,6 +558,47 @@ test("arguments cut off before the last question are mended, answered or not; th
   expect(args(out[1])).toEqual(["{}", "{}", "{}", "{}", '{"anfrage":"x"}']);
   // all answered: no stand-in, the rows as they were
   expect(out).toHaveLength(rows.length);
-  // still streaming in the running answer: left for the resume
-  expect(out.at(-1)).toBe(rows.at(-1));
+  // the running answer's too: a resume never finishes them
+  expect(args(out.at(-1))).toEqual(["{}"]);
+});
+
+test("a result counts only within its own answer, and a call needs an id", () => {
+  const call = (id: string) => ({
+    id,
+    type: "function" as const,
+    function: { name: "zeige", arguments: "{}" },
+  });
+  const rows: ModelMessage[] = [
+    { role: "user", content: "Zeig!" },
+    // stopped: the provider numbers calls afresh in every answer
+    { role: "assistant", content: null, toolCalls: [call("call_0")] },
+    { role: "user", content: "Nochmal." },
+    { role: "assistant", content: null, toolCalls: [call("call_0")] },
+    { role: "tool", toolCallId: "call_0", content: "{}" },
+    { role: "user", content: "Danke." },
+  ];
+  const out = withStoppedCallsAnswered(rows);
+  expect(out.map((m) => m.role)).toEqual([
+    "user",
+    "assistant",
+    "tool",
+    "user",
+    "assistant",
+    "tool",
+    "user",
+  ]);
+  expect(() =>
+    withStoppedCallsAnswered([
+      { role: "user", content: "?" },
+      {
+        role: "assistant",
+        content: null,
+        toolCalls: [
+          {
+            function: { name: "zeige", arguments: "{}" },
+          } as unknown as ReturnType<typeof call>,
+        ],
+      },
+    ])
+  ).toThrow();
 });
