@@ -615,6 +615,13 @@ export interface CityWalkHandle {
    * marks it and reports it through `onInquiry`; tests and QA call it.
    */
   inquireAt: (ndc?: { x: number; y: number }) => Inquiry | null;
+  /** Where the view's subject stands (NDC) in Modell — the preset's
+   *  pivot, where `flyToViewpoint` puts a place — or undefined: the centre. */
+  focusNdc: () => { x: number; y: number } | undefined;
+  /** A glide (the pose's or Modell's) or a dolly zoom is under way. */
+  viewMoving: () => boolean;
+  /** Tiles or their dressing are still streaming in for the view. */
+  streamBusy: () => boolean;
   /** What the nameplate sets in the city and where (nameplate-layer.ts),
    *  null while nothing is named; tests and QA read it. */
   nameplateShown: () => { title: string; mode: string; spot: string } | null;
@@ -4191,8 +4198,24 @@ async function bootApp(
     return true;
   };
 
+  /** A spot asked for: Modell centres on it, the perspective goes. */
+  const toSpot = (x: number, y: number, perspective: () => void) => {
+    wakeStill();
+    if (modelRig.owns()) {
+      modelRig.centreOn(groundPoint(x, y));
+    } else {
+      perspective();
+    }
+  };
+  // Every call that moves the camera or relights the scene wakes a resting
+  // one for the next frame, not its next slow one (the still pace, the
+  // Hörmodus's two frames a second): the move starts at once and its first
+  // time step is not lost to the loop's clamp.
   return {
-    setSun,
+    setSun: (date, preview) => {
+      wakeStill();
+      return setSun(date, preview);
+    },
     clearInquiry: () => {
       along = null;
       probe.clear();
@@ -4216,16 +4239,22 @@ async function bootApp(
       setScale: (scale) => design?.setScale(scale),
       status: () => design?.status() ?? null,
     },
-    inquireAt,
+    // (an inquiry the HUD asks for marks the scene: draw it now)
+    inquireAt: (ndc) => {
+      wakeStill();
+      return inquireAt(ndc);
+    },
     nameplateShown: () => nameplate.shown(),
     enterImmersive: canvasControls.lockPointer,
     releaseGpu: async () => releaseGpu(renderer),
     flyTo: (position, lookAt) => {
+      wakeStill();
       modelRig.exitNow();
       pose.flyTo(position, lookAt);
     },
     // In Modell a place is where the picture is centred (plan 055).
     flyToViewpoint: (view, glide) => {
+      wakeStill();
       // the rig's own phase: the view mode can lag it (a snapshot's
       // perspective settles to walk while Modell stays)
       if (modelRig.staying()) {
@@ -4241,18 +4270,13 @@ async function bootApp(
     },
     captureViewpoint: pose.captureViewpoint,
     placeAt: (view) =>
-      modelRig.owns()
-        ? modelRig.centreOn(groundPoint(view.epsg.x, view.epsg.y))
-        : pose.placeAt(view),
-    teleportTo: (x, y) =>
-      modelRig.owns()
-        ? modelRig.centreOn(groundPoint(x, y))
-        : pose.teleportTo(x, y),
-    glideToSpot: (x, y) =>
-      modelRig.owns()
-        ? modelRig.centreOn(groundPoint(x, y))
-        : pose.glideToSpot(x, y),
+      toSpot(view.epsg.x, view.epsg.y, () => pose.placeAt(view)),
+    teleportTo: (x, y) => toSpot(x, y, () => pose.teleportTo(x, y)),
+    glideToSpot: (x, y) => toSpot(x, y, () => pose.glideToSpot(x, y)),
     getGlideTarget: pose.getGlideTarget,
+    focusNdc: modelRig.focusNdc,
+    viewMoving: () => pose.getGlideTarget() !== null || modelRig.moving(),
+    streamBusy: () => !sceneSettled,
     stopGlide: pose.cancelGlide,
     getPose: () => {
       const hud = modelRig.hud();
@@ -4278,6 +4302,7 @@ async function bootApp(
       return { ...perspective, epsg: { x: epsg.x, y: epsg.y }, model };
     },
     applyCameraState: (state) => {
+      wakeStill();
       const { model, ...perspective } = state;
       if (!model) {
         modelRig.exitNow();
@@ -4367,8 +4392,14 @@ async function bootApp(
     setModelTilt: modelRig.setTilt,
     setModelShear: modelRig.setShear,
     getModelHud: modelHud,
-    setFollowAim: pose.setFollowAim,
-    setFollowPosition: pose.setFollowPosition,
+    setFollowAim: (aim) => {
+      wakeStill();
+      pose.setFollowAim(aim);
+    },
+    setFollowPosition: (epsg) => {
+      wakeStill();
+      pose.setFollowPosition(epsg);
+    },
     setClimbInput: pose.setClimbInput,
     setMoveInput: pose.setMoveInput,
     startStreaming,

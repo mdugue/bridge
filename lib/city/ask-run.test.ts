@@ -1,13 +1,20 @@
+import {
+  chatParamsFromRequestBody,
+  convertMessagesToModelMessages,
+  uiMessagesToWire,
+  type UIMessage,
+} from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 import { fakeText } from "@tanstack/ai/testing";
 import type { AskPromptSite } from "./ask-city";
 import { knowledgeOf } from "./ask-knowledge";
-import type { StreamChunk } from "@tanstack/ai";
+import type { ModelMessage, StreamChunk } from "@tanstack/ai";
 import {
   DEADLINE,
   ended,
   roundsSinceQuestion,
   runAsk,
+  withStoppedCallsAnswered,
   scrubbed,
 } from "./ask-run";
 import type { StadtwissenIndex, WissenTile } from "./stadtwissen";
@@ -129,6 +136,7 @@ describe("runAsk", () => {
             "setze_stil",
             "setze_zeit",
             "suche_stadt",
+            "was_ist_da",
             "wo_bin_ich",
             "zeige",
           ].sort((a, b) => a.localeCompare(b))
@@ -396,4 +404,187 @@ describe("an answer that stops says why", () => {
       "RUN_ERROR:Die Antwort dauerte zu lange.",
     ]);
   });
+});
+
+test("a stopped answer's tool call gets a stand-in result, the running answer's calls stay open", async () => {
+  const call = (id: string, output?: unknown) => ({
+    type: "tool-call" as const,
+    id,
+    name: "was_ist_da",
+    arguments: "{}",
+    state: "input-complete" as const,
+    ...(output === undefined ? {} : { output }),
+  });
+  const text = (content: string) => ({ type: "text" as const, content });
+  const ui = [
+    { id: "1", role: "user" as const, parts: [text("Was ist das?")] },
+    // stopped while was_ist_da waited: no output
+    { id: "2", role: "assistant" as const, parts: [call("s")] },
+    { id: "3", role: "user" as const, parts: [text("Und das?")] },
+    {
+      id: "4",
+      role: "assistant" as const,
+      parts: [text("Moment."), call("x", { gefunden: true }), call("r")],
+    },
+  ] as UIMessage[];
+  // the way the request reaches the route: the client's wire rows, read
+  // back by the server
+  const params = await chatParamsFromRequestBody({
+    threadId: "t",
+    runId: "r",
+    messages: uiMessagesToWire(ui),
+    tools: [],
+    context: [],
+    state: {},
+    forwardedProps: {},
+  });
+  const model = convertMessagesToModelMessages(
+    withStoppedCallsAnswered(params.messages)
+  );
+  // every call before the last question has its result right after its
+  // answer, the stopped one a stand-in
+  const answer = (id: string) =>
+    model.find((m) => m.role === "tool" && m.toolCallId === id);
+  expect(model.map((m) => m.role)).toEqual([
+    "user",
+    "assistant",
+    "tool",
+    "user",
+    "assistant",
+    "tool",
+  ]);
+  expect(model[2]?.toolCallId).toBe("s");
+  expect(answer("s")?.content).toContain("Abgebrochen");
+  // after the last question the open call stays: a resume answers it
+  expect(answer("r")).toBeUndefined();
+});
+
+test("a stand-in keeps a stopped answer's thinking and segments together and mends cut-off arguments", async () => {
+  const ui = [
+    {
+      id: "1",
+      role: "user",
+      parts: [{ type: "text", content: "Was ist das?" }],
+    },
+    {
+      id: "2",
+      role: "assistant",
+      parts: [
+        { type: "thinking", content: "hm" },
+        { type: "text", content: "Ich schaue." },
+        {
+          type: "tool-call",
+          id: "a",
+          name: "suche_stadt",
+          arguments: '{"anfrage":"x"}',
+          state: "complete",
+          output: { ok: true },
+        },
+        { type: "thinking", content: "weiter" },
+        { type: "text", content: "Moment." },
+        // stopped while its arguments still streamed
+        {
+          type: "tool-call",
+          id: "s",
+          name: "suche_stadt",
+          arguments: '{"anfrage":"Fra',
+          state: "input-streaming",
+        },
+      ],
+    },
+    { id: "3", role: "user", parts: [{ type: "text", content: "Und das?" }] },
+  ] as UIMessage[];
+  const params = await chatParamsFromRequestBody({
+    threadId: "t",
+    runId: "r",
+    messages: uiMessagesToWire(ui),
+    tools: [],
+    context: [],
+    state: {},
+    forwardedProps: {},
+  });
+  const model = convertMessagesToModelMessages(
+    withStoppedCallsAnswered(params.messages)
+  );
+  expect(model.map((m) => m.role)).toEqual([
+    "user",
+    "assistant",
+    "tool",
+    "tool",
+    "user",
+  ]);
+  // one joined row: both segments, both thoughts, both calls
+  expect(model[1]?.thinking).toHaveLength(2);
+  expect(model[1]?.toolCalls?.map((c) => [c.id, c.function.arguments])).toEqual(
+    [
+      ["a", '{"anfrage":"x"}'],
+      ["s", "{}"],
+    ]
+  );
+  expect(model.slice(2, 4).map((m) => m.toolCallId)).toEqual(["a", "s"]);
+});
+
+test("cut-off arguments are mended in every row, answered or not", () => {
+  const call = (id: string, args: string) => ({
+    id,
+    type: "function" as const,
+    function: { name: "suche_stadt", arguments: args },
+  });
+  const rows: ModelMessage[] = [
+    { role: "user", content: "Wo?" },
+    {
+      role: "assistant",
+      content: null,
+      toolCalls: [
+        call("a", '{"anfrage":"Fra'),
+        call("b", "null"),
+        call("c", "[]"),
+        call("d", ""),
+        call("e", '{"anfrage":"x"}'),
+      ],
+    },
+    // the output cap ended the run with a failed result for each
+    ...["a", "b", "c", "d", "e"].map((id): ModelMessage => ({
+      role: "tool",
+      toolCallId: id,
+      content: "{}",
+    })),
+    { role: "user", content: "Und?" },
+    { role: "assistant", content: null, toolCalls: [call("f", '{"anf')] },
+  ];
+  const out = withStoppedCallsAnswered(rows);
+  const args = (m: ModelMessage | undefined) =>
+    m?.toolCalls?.map((c) => c.function.arguments);
+  expect(args(out[1])).toEqual(["{}", "{}", "{}", "{}", '{"anfrage":"x"}']);
+  // all answered: no stand-in, the rows as they were
+  expect(out).toHaveLength(rows.length);
+  // the running answer's too: a resume never finishes them
+  expect(args(out.at(-1))).toEqual(["{}"]);
+});
+
+test("a result counts only within its own answer", () => {
+  const call = (id: string) => ({
+    id,
+    type: "function" as const,
+    function: { name: "zeige", arguments: "{}" },
+  });
+  const rows: ModelMessage[] = [
+    { role: "user", content: "Zeig!" },
+    // stopped: the provider numbers calls afresh in every answer
+    { role: "assistant", content: null, toolCalls: [call("call_0")] },
+    { role: "user", content: "Nochmal." },
+    { role: "assistant", content: null, toolCalls: [call("call_0")] },
+    { role: "tool", toolCallId: "call_0", content: "{}" },
+    { role: "user", content: "Danke." },
+  ];
+  const out = withStoppedCallsAnswered(rows);
+  expect(out.map((m) => m.role)).toEqual([
+    "user",
+    "assistant",
+    "tool",
+    "user",
+    "assistant",
+    "tool",
+    "user",
+  ]);
 });

@@ -1,8 +1,8 @@
 /**
  * *Frag die Stadt*'s tools (ADR 0056), defined once for both sides: the
  * server binds the Stadtwissen ones (`suche_stadt`, `in_der_naehe`,
- * `fakten`, `quellen`), the card the scene ones (`wo_bin_ich`, `zeige`,
- * `setze_zeit`, `setze_stil`, `datenschicht`). The server passes all of
+ * `fakten`, `quellen`), the card the scene ones (`wo_bin_ich`,
+ * `was_ist_da`, `zeige`, `setze_zeit`, `setze_stil`, `datenschicht`). The server passes all of
  * them to the model and never takes a tool list from the request: what
  * the model can do is fixed here.
  */
@@ -74,6 +74,13 @@ export const whereTool = toolDefinition({
   inputSchema: z.object({}),
 });
 
+export const lookTool = toolDefinition({
+  name: "was_ist_da",
+  description:
+    "Fragt das Stadtmodell, was dort steht, wohin die Ansicht zeigt (die Bildmitte; im Modell der Ort, auf den es ausgerichtet ist) — das Gebäude, den Baum, das Denkmal oder die Brücke — und öffnet dessen Karte im Viewer. Liefert Art, Name, Adresse, gemessene Fakten und Quellen. Für „Was ist das da vorne?“.",
+  inputSchema: z.object({}),
+});
+
 export const showTool = toolDefinition({
   name: "zeige",
   description:
@@ -130,6 +137,7 @@ export const layerTool = toolDefinition({
 /** The tools the browser runs, by name: the card binds each. */
 export const SCENE_TOOLS = [
   whereTool,
+  lookTool,
   showTool,
   timeTool,
   styleTool,
