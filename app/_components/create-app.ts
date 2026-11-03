@@ -168,7 +168,14 @@ import { cutsGround, foldedThing, groundKeptUnderDesign } from "./design-site";
 import { graphOf, setGraph } from "./material-slots";
 import type { CrashTrail } from "./crash-trail";
 import { createSeasonClock } from "./crown-season";
-import { climateDay, seasonShiftFor } from "@/lib/city/tree-season";
+import {
+  climateDay,
+  dayOfYear,
+  leafLitterAt,
+  seasonAt,
+  seasonShiftFor,
+} from "@/lib/city/tree-season";
+import { crownLeaf, footLitter } from "./tree-foot";
 import {
   fetchOptionalJson,
   fetchRequiredJson,
@@ -1606,8 +1613,16 @@ async function bootApp(
   // Dresden's year (the phenology table's) that looks like it in this
   // city's climate (tree-season.ts SITE_SEASON).
   const climate = seasonShiftFor(opts.site.id);
+  // the leaves under the trees (tree-foot.ts) and the trunks' shade under
+  // their crowns (vegetation-layer.ts) follow the same day
+  const groundSeason = (day: number): void => {
+    footLitter.value = leafLitterAt(day);
+    crownLeaf.value = seasonAt(day, 0).leaf;
+  };
+  groundSeason(climateDay(Math.floor(dayOfYear(opts.initialDate)), climate));
   const seasonClock = createSeasonClock(opts.initialDate, (calendar) => {
     const day = climateDay(calendar, climate);
+    groundSeason(day);
     let changed = false;
     for (const d of stream.dressings) {
       changed = (d.vegetation?.setSeason(day) ?? false) || changed;
