@@ -141,7 +141,7 @@ test("an orchard tree says it is one, from OSM's orchard, with no register line"
   expect(lines(card.sources)).toEqual([
     "Obstwiese: OpenStreetMap · Stand 26.09.2026 · © OpenStreetMap-Mitwirkende, ODbL",
   ]);
-  expect(lines(card.sources).join()).not.toContain("Stadtbaumkataster");
+  expect(lines(card.sources).join(",")).not.toContain("Stadtbaumkataster");
 });
 
 test("an orchard tree DOM1 measured gives its height and crown, measured", () => {
@@ -203,10 +203,10 @@ test("without the manifest the register and the surveys are the site's own", () 
     "Fläche: OpenStreetMap · © OpenStreetMap-Mitwirkende, ODbL",
     "Deck im DOM1 gemessen: Digitales Oberflächenmodell DOM1 · Quelle: LGV Hamburg, dl-de/by-2-0",
   ]);
-  expect(lines(bridge.sources).join()).not.toContain("Basis-DLM");
-  expect([...lines(tree.sources), ...lines(bridge.sources)].join()).not.toMatch(
-    /GeoSN|Dresden/u
-  );
+  expect(lines(bridge.sources).join(",")).not.toContain("Basis-DLM");
+  expect(
+    [...lines(tree.sources), ...lines(bridge.sources)].join(",")
+  ).not.toMatch(/GeoSN|Dresden/u);
 });
 
 test("a named fountain with a figure, its basin from OSM, its name official", () => {
@@ -395,5 +395,5 @@ test("a column measured in the laser scan, a stele measured in the open", () => 
     DRESDEN
   );
   expect(tagged.facts).toEqual([{ label: "Höhe", value: "3 m" }]);
-  expect(lines(tagged.sources).join()).not.toContain("gemessen");
+  expect(lines(tagged.sources).join(",")).not.toContain("gemessen");
 });

@@ -428,9 +428,9 @@ test("without the manifest a card on another Land's site credits that Land, not 
     "3D-Stadtmodell LoD2 · Quelle: LGV Hamburg, dl-de/by-2-0"
   );
   expect(scan.sources[0]?.text).toContain("Quelle: LGV Hamburg, dl-de/by-2-0");
-  expect([...lines(lod2.sources), ...lines(scan.sources)].join()).not.toContain(
-    "GeoSN"
-  );
+  expect(
+    [...lines(lod2.sources), ...lines(scan.sources)].join(",")
+  ).not.toContain("GeoSN");
 });
 
 test("a shed from the laser scan is marked as not in the official model", () => {

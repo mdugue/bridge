@@ -110,7 +110,7 @@ test("a LoD2 building whose roof was rebuilt: the model, the surface model for t
   expect(model.stand).toBe("Modell 2024");
   expect(model.url).toBe("https://www.geodaten.sachsen.de/");
   // the rebuilt roof is the surface model's, not the model's
-  expect(said(model).join()).not.toContain("Dachform");
+  expect(said(model).join(",")).not.toContain("Dachform");
   expect(surface.stand).toBe("01.03.2024");
   // a roof put in where the model misses the surface is detected, the
   // model's own lines are taken as published
