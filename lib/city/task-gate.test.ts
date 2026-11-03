@@ -12,7 +12,10 @@ function held(log: string[], name: string) {
   return { task, finish: () => finish() };
 }
 
-const settle = async () => new Promise((resolve) => setTimeout(resolve, 0));
+const settle = async () =>
+  new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
 
 /** What `promise` rejects with (undefined when it resolves). */
 const failure = async (promise: Promise<unknown>): Promise<unknown> =>

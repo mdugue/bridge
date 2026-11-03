@@ -632,7 +632,9 @@ export function handOverWaitMs(tier: DeviceTier): number {
 async function withinWait(done: Promise<unknown>, ms: number): Promise<void> {
   return Promise.race([
     done.then(() => {}),
-    new Promise<void>((resolve) => setTimeout(resolve, ms)),
+    new Promise<void>((resolve) => {
+      setTimeout(resolve, ms);
+    }),
   ]);
 }
 

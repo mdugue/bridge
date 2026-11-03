@@ -119,7 +119,9 @@ test("the bake writes the bits and the offset scale the shader reads", () => {
     const names = m[1].split(",").map((n) => n.trim());
     const values = m[2].split(",").map((v) => Number(v.trim()));
     if (names.length === values.length) {
-      names.forEach((n, i) => bits.set(n, values[i]));
+      names.forEach((n, i) => {
+        bits.set(n, values[i]);
+      });
     }
   }
   expect({

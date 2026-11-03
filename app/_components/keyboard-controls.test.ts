@@ -34,15 +34,33 @@ function harness() {
 
   const calls: string[] = [];
   const actions: KeyboardActions = {
-    press: (code) => calls.push(`press:${code}`),
-    release: (code) => calls.push(`release:${code}`),
-    releaseAll: () => calls.push("releaseAll"),
-    cycleStyle: () => calls.push("cycleStyle"),
-    demolish: () => calls.push("demolish"),
-    inquire: () => calls.push("inquire"),
-    toggleMode: () => calls.push("toggleMode"),
-    toggleModel: () => calls.push("toggleModel"),
-    viewpoint: (index) => calls.push(`viewpoint:${index}`),
+    press: (code) => {
+      calls.push(`press:${code}`);
+    },
+    release: (code) => {
+      calls.push(`release:${code}`);
+    },
+    releaseAll: () => {
+      calls.push("releaseAll");
+    },
+    cycleStyle: () => {
+      calls.push("cycleStyle");
+    },
+    demolish: () => {
+      calls.push("demolish");
+    },
+    inquire: () => {
+      calls.push("inquire");
+    },
+    toggleMode: () => {
+      calls.push("toggleMode");
+    },
+    toggleModel: () => {
+      calls.push("toggleModel");
+    },
+    viewpoint: (index) => {
+      calls.push(`viewpoint:${index}`);
+    },
   };
   const detach = attachKeyboardControls(targets, actions);
   const fire = (type: string, e: FiredKey | Record<string, never> = {}) =>

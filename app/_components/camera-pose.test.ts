@@ -29,8 +29,12 @@ function rig(overrides: Partial<CameraPoseOptions> = {}) {
     groundFloor: () => GROUND - 20,
     heightAt: () => GROUND,
     offset: OFFSET,
-    onModeChange: (m) => modes.push(m),
-    onPose: (p) => poses.push(p.epsgX),
+    onModeChange: (m) => {
+      modes.push(m);
+    },
+    onPose: (p) => {
+      poses.push(p.epsgX);
+    },
     ...overrides,
   });
   pose.teleportTo(OFFSET.cx, OFFSET.cy);
@@ -668,7 +672,11 @@ test("the climb input lifts the camera in fly mode and cancels a glide", () => {
 
 test("live mode eases the view to the phone's aim; a drag ends it", () => {
   let ended = 0;
-  const { pose } = rig({ onFollowEnd: () => (ended += 1) });
+  const { pose } = rig({
+    onFollowEnd: () => {
+      ended += 1;
+    },
+  });
   pose.setFollowAim({ headingDeg: 350, pitchDeg: -20 });
   pose.step(1 / 60);
   // One frame in: part of the way, turned the short way (through north).
@@ -692,7 +700,11 @@ test("live mode eases the view to the phone's aim; a drag ends it", () => {
 
 test("live mode walks the camera to each GPS fix, gliding near ones and jumping far ones", () => {
   let ended = 0;
-  const { camera, pose, poses } = rig({ onFollowEnd: () => (ended += 1) });
+  const { camera, pose, poses } = rig({
+    onFollowEnd: () => {
+      ended += 1;
+    },
+  });
   // 12 m east: a step — eased, not jumped.
   pose.setFollowPosition({ x: OFFSET.cx + 12, y: OFFSET.cy });
   expect(camera.position.x).toBeCloseTo(0, 10);
@@ -720,7 +732,11 @@ test("live mode walks the camera to each GPS fix, gliding near ones and jumping 
 test("a jump or a glide ends live mode: the GPS does not pull the camera back", () => {
   for (const jump of ["teleport", "viewpoint"] as const) {
     let ended = 0;
-    const { camera, pose } = rig({ onFollowEnd: () => (ended += 1) });
+    const { camera, pose } = rig({
+      onFollowEnd: () => {
+        ended += 1;
+      },
+    });
     pose.setFollowPosition({ x: OFFSET.cx + 5, y: OFFSET.cy });
     pose.setFollowAim({ headingDeg: 0, pitchDeg: 0 });
     if (jump === "teleport") {
@@ -737,7 +753,11 @@ test("a jump or a glide ends live mode: the GPS does not pull the camera back", 
 
 test("live mode and flying combine: the GPS moves the camera at its altitude, climbing keeps it live", () => {
   let ended = 0;
-  const { camera, pose } = rig({ onFollowEnd: () => (ended += 1) });
+  const { camera, pose } = rig({
+    onFollowEnd: () => {
+      ended += 1;
+    },
+  });
   pose.setMovementMode("fly");
   pose.setClimbInput(1);
   settle(pose);

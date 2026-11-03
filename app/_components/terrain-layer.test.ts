@@ -146,7 +146,9 @@ function share<T>(
 ): SharedRasters<T> {
   return {
     acquire,
-    release: (key) => released.push(key),
+    release: (key) => {
+      released.push(key);
+    },
     held: () => 0,
     clear: () => {},
   };
@@ -195,7 +197,9 @@ test("a level whose tile leaves while it waits for a shared raster lets go at on
     () => "dressed",
     (error: unknown) => (error as Error).name
   );
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
   aborter.abort();
   expect(await outcome).toBe("AbortError");
   // its hold is gone already: the last holder gone, the shared load stops

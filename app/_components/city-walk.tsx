@@ -445,7 +445,9 @@ function OffsiteDialog({
           setOpen(true);
         }
       }}
-      onTravel={(view) => handleRef.current?.flyToViewpoint(view)}
+      onTravel={(view) => {
+        handleRef.current?.flyToViewpoint(view);
+      }}
     />
   );
 }
@@ -1212,7 +1214,9 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
                 coarse={coarse}
                 onClose={closeInquiry}
                 onPreview={(i) => handleRef.current?.previewCandidate(i)}
-                onSelect={(i) => handleRef.current?.selectCandidate(i)}
+                onSelect={(i) => {
+                  handleRef.current?.selectCandidate(i);
+                }}
               />
               {/* a phone's walk sheet owns the bottom: the stick and the
                   toolbar would stand under it (a drag still looks about) */}

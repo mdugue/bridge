@@ -140,13 +140,17 @@ describe("createSlots", () => {
       runs.push(
         slots.run(priority, peak, async () => {
           started.push(name);
-          await new Promise<void>((done) => releases.set(name, done));
+          await new Promise<void>((done) => {
+            releases.set(name, done);
+          });
         })
       );
     };
     const finish = async (name: string) => {
       releases.get(name)?.();
-      await new Promise((settle) => setTimeout(settle, 0));
+      await new Promise((settle) => {
+        setTimeout(settle, 0);
+      });
     };
     return { finish, runs, started, task };
   }

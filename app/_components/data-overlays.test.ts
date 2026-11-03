@@ -24,7 +24,9 @@ function stubFetch(answer: (url: string) => Response): Map<string, number> {
 /** Waits (a few event-loop turns at a time) until `ok()` holds. */
 async function until(ok: () => boolean): Promise<void> {
   for (let i = 0; i < 200 && !ok(); i += 1) {
-    await new Promise((r) => setTimeout(r, 1));
+    await new Promise((r) => {
+      setTimeout(r, 1);
+    });
   }
   expect(ok()).toBe(true);
 }
@@ -53,7 +55,9 @@ test("a timetable that failed to load says so and is tried again on the next swi
   const overlays = createDataOverlays({
     ...base,
     compile: async () => {},
-    onTramStatus: (s) => statuses.push(s),
+    onTramStatus: (s) => {
+      statuses.push(s);
+    },
     tramTimetableUrl: "/data/trams.json",
   });
   overlays.apply(layers({ tramLayer: true }));
@@ -85,7 +89,9 @@ test("trams whose compile failed leave the scene, and the next switch-on adds on
         ? Promise.reject(new Error("pipeline"))
         : Promise.resolve();
     },
-    onTramStatus: (s) => statuses.push(s),
+    onTramStatus: (s) => {
+      statuses.push(s);
+    },
     tramTimetableUrl: "/data/trams.json",
   });
   overlays.apply(layers({ tramLayer: true }));
@@ -140,7 +146,9 @@ test("a counter layer whose compile failed compiles again with the next counts",
   overlays.apply(layers({ bikeLayer: true }));
   await until(() => compiles === 1);
   // a turn for the rejection to land
-  await new Promise((r) => setTimeout(r, 1));
+  await new Promise((r) => {
+    setTimeout(r, 1);
+  });
   overlays.apply(layers({ bikeLayer: false }));
   overlays.apply(layers({ bikeLayer: true }));
   await until(() => compiles === 2);

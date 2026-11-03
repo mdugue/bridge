@@ -309,7 +309,9 @@ test("a released drawable dispatches dispose, even on a scene-wide material", ()
   const listen = (o: Object3D, name: string) =>
     (
       o as unknown as { addEventListener: (t: string, f: () => void) => void }
-    ).addEventListener("dispose", () => seen.push(name));
+    ).addEventListener("dispose", () => {
+      seen.push(name);
+    });
   listen(drawable, "drawable");
   listen(group, "group");
   releaseRenderState(root);

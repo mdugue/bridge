@@ -40,7 +40,9 @@ test("a write is read back at once, and the slice keeps its value until one chan
 test("a write equal to the slice's value notifies no one", () => {
   const store = createSliceStore(INITIAL);
   const seen: boolean[] = [];
-  store.subscribe("busy", (v) => seen.push(v));
+  store.subscribe("busy", (v) => {
+    seen.push(v);
+  });
   expect(store.set("busy", false)).toBe(false);
   store.set("busy", true);
   store.set("busy", true);
@@ -50,7 +52,9 @@ test("a write equal to the slice's value notifies no one", () => {
 test("a slice's equality decides what counts as unchanged", () => {
   const store = createSliceStore(INITIAL, { equals: { hour: dataEqual } });
   const seen: unknown[] = [];
-  store.subscribe("hour", (v) => seen.push(v));
+  store.subscribe("hour", (v) => {
+    seen.push(v);
+  });
   const first = { time: "14:00", factor: 1 };
   store.set("hour", first);
   // rebuilt with the same numbers: the same report, and the same object kept
@@ -64,8 +68,12 @@ test("a write reaches only its own slice's listeners", () => {
   const store = createSliceStore(INITIAL);
   const fps: unknown[] = [];
   const busy: unknown[] = [];
-  store.subscribe("fps", (v) => fps.push(v));
-  store.subscribe("busy", (v) => busy.push(v));
+  store.subscribe("fps", (v) => {
+    fps.push(v);
+  });
+  store.subscribe("busy", (v) => {
+    busy.push(v);
+  });
   store.set("fps", 60);
   expect(fps).toEqual([60]);
   expect(busy).toEqual([]);
@@ -76,8 +84,12 @@ test("with a schedule, a burst of writes is heard once per slice, after the task
   const store = createSliceStore(INITIAL, { schedule: clock.schedule });
   const fps: unknown[] = [];
   const busy: unknown[] = [];
-  store.subscribe("fps", (v) => fps.push(v));
-  store.subscribe("busy", (v) => busy.push(v));
+  store.subscribe("fps", (v) => {
+    fps.push(v);
+  });
+  store.subscribe("busy", (v) => {
+    busy.push(v);
+  });
   store.set("fps", 10);
   store.set("fps", 20);
   store.set("busy", true);
@@ -99,13 +111,17 @@ test("with a schedule, a burst of writes is heard once per slice, after the task
 test("a listener may unsubscribe itself or another while the slice is heard", () => {
   const store = createSliceStore(INITIAL);
   const seen: string[] = [];
-  const stopB = store.subscribe("busy", () => seen.push("b"));
+  const stopB = store.subscribe("busy", () => {
+    seen.push("b");
+  });
   const stopA = store.subscribe("busy", () => {
     seen.push("a");
     stopA();
     stopB();
   });
-  store.subscribe("busy", () => seen.push("c"));
+  store.subscribe("busy", () => {
+    seen.push("c");
+  });
   store.set("busy", true);
   // everyone subscribed at the write hears it once
   expect(seen.sort()).toEqual(["a", "b", "c"]);
@@ -121,8 +137,12 @@ test("a listener that throws keeps no one else in its burst from hearing, and it
   store.subscribe("busy", () => {
     throw new Error("listener failed");
   });
-  store.subscribe("busy", () => heard.push("busy"));
-  store.subscribe("fps", () => heard.push("fps"));
+  store.subscribe("busy", () => {
+    heard.push("busy");
+  });
+  store.subscribe("fps", () => {
+    heard.push("fps");
+  });
   // one burst, the throwing listener's slice written first
   store.set("busy", true);
   store.set("fps", 30);
@@ -137,7 +157,9 @@ test("a listener that throws keeps no one else in its burst from hearing, and it
   direct.subscribe("busy", () => {
     throw new Error("listener failed");
   });
-  direct.subscribe("busy", (v) => seen.push(v));
+  direct.subscribe("busy", (v) => {
+    seen.push(v);
+  });
   expect(() => direct.set("busy", true)).toThrow("listener failed");
   expect(direct.get("busy")).toBe(true);
   expect(seen).toEqual([true]);

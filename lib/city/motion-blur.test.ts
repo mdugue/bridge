@@ -37,7 +37,9 @@ test("a still camera does not move", () => {
 test("a turn moves the picture by its angle in pixels, everywhere", () => {
   // 1° of yaw: the centre moves focal length × tan 1° (px),
   // the wide edges up to (1 + tan²) times more
-  const m = moved((c) => c.rotateY((1 * Math.PI) / 180));
+  const m = moved((c) => {
+    c.rotateY((1 * Math.PI) / 180);
+  });
   const focal = H / 2 / Math.tan((55 / 2) * (Math.PI / 180));
   expect(m.least).toBeGreaterThan(focal * Math.tan(Math.PI / 180) * 0.99);
   expect(m.most).toBeLessThan(focal * Math.tan(Math.PI / 180) * 1.8);
@@ -47,7 +49,9 @@ test("a turn moves the picture by its angle in pixels, everywhere", () => {
 
 test("a walk's step moves the near street, not the far city", () => {
   // 2.5 cm a frame: 1.5 m/s at 60 Hz
-  const m = moved((c) => c.translateZ(-0.025));
+  const m = moved((c) => {
+    c.translateZ(-0.025);
+  });
   expect(m.most).toBeGreaterThan(1);
   expect(m.most).toBeLessThan(20);
   expect(m.median).toBeLessThan(1);
@@ -57,11 +61,17 @@ test("a walk's step moves the near street, not the far city", () => {
 });
 
 test("a teleport is a jump, not motion", () => {
-  const m = moved((c) => c.position.set(500, 200, 300));
+  const m = moved((c) => {
+    c.position.set(500, 200, 300);
+  });
   expect(m.most).toBeGreaterThan(BLUR_JUMP_PX);
   expect(blurs(m, false)).toBe(false);
 });
 
 test("a point behind the last camera is a jump", () => {
-  expect(moved((c) => c.rotateY(Math.PI)).most).toBe(Infinity);
+  expect(
+    moved((c) => {
+      c.rotateY(Math.PI);
+    }).most
+  ).toBe(Infinity);
 });

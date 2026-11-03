@@ -152,7 +152,9 @@ test("the walls of the tile the player stands in block: its box holds the eye", 
   tile.updateMatrixWorld(true);
   const collider = createCityCollider(
     () => [tile],
-    (mesh) => mesh.geometry.computeBoundsTree()
+    (mesh) => {
+      mesh.geometry.computeBoundsTree();
+    }
   );
   const step = collider.resolveStep(
     new Vector3(94.5, 1.7, 100),

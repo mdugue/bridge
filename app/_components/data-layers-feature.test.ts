@@ -24,7 +24,9 @@ test("data layers that start late catch up with the look and the clock, and let 
       compile: async () => {},
       epsg: 25_833,
       ground: { offset: { cx: 0, cy: 0 }, heightAt: () => 0 },
-      onTrafficHour: (status) => hours.push(status),
+      onTrafficHour: (status) => {
+        hours.push(status);
+      },
       parent: new Object3D(),
     }
   );

@@ -24,7 +24,10 @@ function heldSteps() {
   return { started, step, end, fail };
 }
 
-const settle = async () => new Promise((resolve) => setTimeout(resolve, 0));
+const settle = async () =>
+  new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
 
 /** Whether `promise` has settled by now, and how. */
 function watch(promise: Promise<unknown>) {

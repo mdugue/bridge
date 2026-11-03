@@ -232,7 +232,9 @@ test("the budget spent, the retries give up with a NetworkError that says how of
     {
       budgetMs: 8000,
       env: page.env,
-      onRetry: (note) => notes.push(note.attempt),
+      onRetry: (note) => {
+        notes.push(note.attempt);
+      },
     }
   );
   await expect(run).rejects.toBeInstanceOf(NetworkError);

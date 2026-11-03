@@ -1087,7 +1087,9 @@ export function createClayMaterial(
   clay.userData.figure = true;
   applySides(clay, resources.section);
   resources.materials.add(clay);
-  clay.addEventListener("dispose", () => resources.materials.delete(clay));
+  clay.addEventListener("dispose", () => {
+    resources.materials.delete(clay);
+  });
   return clay;
 }
 

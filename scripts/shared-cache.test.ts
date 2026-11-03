@@ -92,7 +92,9 @@ test("bytes that do not match their digest are a miss", async () => {
   const lines: string[] = [];
   const { cache } = sharedCache(
     ENV,
-    (l) => lines.push(l),
+    (l) => {
+      lines.push(l);
+    },
     RUNTIME,
     api.fetcher
   );
@@ -117,7 +119,9 @@ test("failures in a row end the run's use of the cache, never throwing", async (
   const lines: string[] = [];
   const { cache } = sharedCache(
     ENV,
-    (l) => lines.push(l),
+    (l) => {
+      lines.push(l);
+    },
     RUNTIME,
     api.fetcher
   );
@@ -142,7 +146,14 @@ test("uploads cut off end the uploads, not the fetches", async () => {
     return api.fetcher(input, init);
   }) as typeof fetch;
   const lines: string[] = [];
-  const { cache } = sharedCache(ENV, (l) => lines.push(l), RUNTIME, fetcher);
+  const { cache } = sharedCache(
+    ENV,
+    (l) => {
+      lines.push(l);
+    },
+    RUNTIME,
+    fetcher
+  );
   for (const name of ["a", "b", "c", "d", "e", "f", "g", "h"]) {
     cache?.put(name, "k", () => bytes(name));
   }
@@ -191,7 +202,9 @@ test("uploads wait for the run's end and skip an entry gone by then", async () =
   const lines: string[] = [];
   const { cache } = sharedCache(
     ENV,
-    (l) => lines.push(l),
+    (l) => {
+      lines.push(l);
+    },
     RUNTIME,
     api.fetcher
   );

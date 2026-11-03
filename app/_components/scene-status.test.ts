@@ -33,9 +33,15 @@ function wire(polys?: FootprintPoly[]) {
 test("each report writes its own slice, and only that one is heard", () => {
   const { status, reports } = wire();
   const heard: string[] = [];
-  status.subscribe("busy", () => heard.push("busy"));
-  status.subscribe("stats", () => heard.push("stats"));
-  status.subscribe("fps", () => heard.push("fps"));
+  status.subscribe("busy", () => {
+    heard.push("busy");
+  });
+  status.subscribe("stats", () => {
+    heard.push("stats");
+  });
+  status.subscribe("fps", () => {
+    heard.push("fps");
+  });
   reports.onBusy(true);
   reports.onFps(59.6);
   expect(status.get("busy")).toBe(true);
@@ -71,8 +77,12 @@ test("a stats pass with the same counters is no change, and the footprints stay 
   const polys: FootprintPoly[] = [];
   const { status, reports } = wire(polys);
   const heard: string[] = [];
-  status.subscribe("stats", () => heard.push("stats"));
-  status.subscribe("footprints", () => heard.push("footprints"));
+  status.subscribe("stats", () => {
+    heard.push("stats");
+  });
+  status.subscribe("footprints", () => {
+    heard.push("footprints");
+  });
   reports.onStats(stats(10));
   reports.onStats(stats(10));
   expect(status.get("stats")).toEqual({

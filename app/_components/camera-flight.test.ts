@@ -112,7 +112,9 @@ test("what travels with a glide hears its steps and lands with it, however it en
   const heard: number[] = [];
   flight.start(target, undefined, {
     duration: 2,
-    onProgress: (t) => heard.push(t),
+    onProgress: (t) => {
+      heard.push(t);
+    },
   });
   flight.update(0.5);
   flight.update(0.5);
@@ -124,14 +126,22 @@ test("what travels with a glide hears its steps and lands with it, however it en
   expect(heard).toHaveLength(3);
 
   const cancelled: number[] = [];
-  flight.start(target, undefined, { onProgress: (t) => cancelled.push(t) });
+  flight.start(target, undefined, {
+    onProgress: (t) => {
+      cancelled.push(t);
+    },
+  });
   flight.update(0.1);
   flight.cancel();
   expect(cancelled.at(-1)).toBe(1);
 
   // a glide that gives way to the next lands first
   const first: number[] = [];
-  flight.start(target, undefined, { onProgress: (t) => first.push(t) });
+  flight.start(target, undefined, {
+    onProgress: (t) => {
+      first.push(t);
+    },
+  });
   flight.update(0.1);
   flight.start(target);
   expect(first.at(-1)).toBe(1);

@@ -396,13 +396,13 @@ export function sitePassages(site: Site, levels: SiteLevels): Passage[] {
     const pts = pieceSamples(piece);
     const z = solved?.lz ? decodeProfile(solved.lz) : [];
     const d: number[] = [];
-    pts.forEach((p, i) =>
+    pts.forEach((p, i) => {
       d.push(
         i === 0
           ? 0
           : d[i - 1] + Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1])
-      )
-    );
+      );
+    });
     for (const [a, b, mode] of runs) {
       if (mode !== "c") {
         continue;
@@ -456,13 +456,13 @@ export function siteBeds(site: Site, levels: SiteLevels): Bed[] {
     const z = decodeProfile(solved.lz);
     const pts = pieceSamples(piece);
     const d: number[] = [];
-    pts.forEach((p, i) =>
+    pts.forEach((p, i) => {
       d.push(
         i === 0
           ? 0
           : d[i - 1] + Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1])
-      )
-    );
+      );
+    });
     type Kind = "lay" | "lower" | "cut";
     let run: { coords: Point2[]; z: number[]; kind: Kind } = {
       coords: [],

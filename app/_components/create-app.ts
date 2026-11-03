@@ -3436,8 +3436,9 @@ async function bootApp(
         EMERGENCY_SHADOW_HOLD_MS + GOVERN_MS
       );
     },
-    raiseSafety: () =>
-      raiseSafety(budget.safety, { by: opts.trail?.startedAt }),
+    raiseSafety: () => {
+      raiseSafety(budget.safety, { by: opts.trail?.startedAt });
+    },
   };
   const runLifecycle = (signal: LifecycleSignal): void => {
     for (const effect of lifecycle.dispatch(signal)) {

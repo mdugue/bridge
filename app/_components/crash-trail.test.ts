@@ -27,7 +27,9 @@ test("an error that comes back every frame is noted once, then counted", () => {
   const noted: string[] = [];
   let now = 0;
   const errors = errorCoalescer(
-    (kind, text) => noted.push(kind === "error" ? text : `${kind}: ${text}`),
+    (kind, text) => {
+      noted.push(kind === "error" ? text : `${kind}: ${text}`);
+    },
     () => now
   );
   // a throw in every frame for a few frames
@@ -61,7 +63,9 @@ test("the count is a breadcrumb, not a second problem", () => {
   const reports = createProblemGate();
   const sent: boolean[] = [];
   const errors = errorCoalescer(
-    (kind, detail) => sent.push(reports({ t: 0, kind, detail })),
+    (kind, detail) => {
+      sent.push(reports({ t: 0, kind, detail }));
+    },
     () => 0
   );
   errors.error("boom");
@@ -74,7 +78,9 @@ test("a page that goes to the background or leaves keeps the count", () => {
   for (const kind of ["hidden", "pagehide", "end"]) {
     const noted: string[] = [];
     const errors = errorCoalescer(
-      (k, text) => noted.push(`${k}: ${text}`),
+      (k, text) => {
+        noted.push(`${k}: ${text}`);
+      },
       () => 0
     );
     errors.error("boom");

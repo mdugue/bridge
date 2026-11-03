@@ -1,7 +1,10 @@
 import { expect, test } from "bun:test";
 import { createSharedRasters } from "./shared-rasters";
 
-const tick = async () => new Promise((resolve) => setTimeout(resolve, 0));
+const tick = async () =>
+  new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
 
 test("a shared raster loads once and is freed with its last reader", async () => {
   const loads: string[] = [];
@@ -11,7 +14,9 @@ test("a shared raster loads once and is freed with its last reader", async () =>
       loads.push(key);
       return `tex:${key}`;
     },
-    (value) => freed.push(value)
+    (value) => {
+      freed.push(value);
+    }
   );
   const [a, b] = await Promise.all([
     share.acquire("svf"),
@@ -40,7 +45,9 @@ test("a raster released before it lands is freed when it lands", async () => {
       new Promise<string>((resolve) => {
         land = resolve;
       }),
-    (value) => freed.push(value)
+    (value) => {
+      freed.push(value);
+    }
   );
   const pending = share.acquire("svf");
   share.release("svf");
@@ -70,7 +77,9 @@ test("a clear frees every held raster, pending ones when they land", async () =>
             land = resolve;
           })
         : Promise.resolve(`tex:${key}`),
-    (value) => freed.push(value)
+    (value) => {
+      freed.push(value);
+    }
   );
   await share.acquire("a");
   await share.acquire("a");

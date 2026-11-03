@@ -88,7 +88,10 @@ function stubFetch(body: unknown): {
   };
 }
 
-const settle = async () => new Promise((r) => setTimeout(r, 5));
+const settle = async () =>
+  new Promise((r) => {
+    setTimeout(r, 5);
+  });
 
 test("an answer the feed cannot parse is no crash: the last counts stay", async () => {
   const stub = stubFetch({ features: [] });
@@ -107,7 +110,9 @@ test("an answer the feed cannot parse is no crash: the last counts stay", async 
         throw new TypeError("Cannot read properties of null");
       },
     },
-    onCounts: (c) => heard.push(c),
+    onCounts: (c) => {
+      heard.push(c);
+    },
   });
   try {
     feed.start();

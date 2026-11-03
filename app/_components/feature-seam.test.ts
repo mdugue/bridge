@@ -2,7 +2,10 @@ import { expect, test } from "bun:test";
 import { lazyFeature, wantOnSwitchOn } from "./feature-seam";
 
 /** Every promise the calls before started has settled. */
-const settled = async () => new Promise((resolve) => setTimeout(resolve, 0));
+const settled = async () =>
+  new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
 
 /** A feature that counts its starts and stops. */
 function counted() {
@@ -93,7 +96,9 @@ test("the spine asks again on the next switch-on after a load that failed, not o
       : Promise.resolve({});
   }, feature.start);
   const failures: unknown[] = [];
-  const want = wantOnSwitchOn(lazy, (error) => failures.push(error));
+  const want = wantOnSwitchOn(lazy, (error) => {
+    failures.push(error);
+  });
   want(false);
   want(true);
   await settled();

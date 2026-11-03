@@ -92,9 +92,9 @@ test("the clock re-seasons on a new calendar day only, throttled, the last day w
   jest.useFakeTimers();
   try {
     const days: number[] = [];
-    const clock = createSeasonClock(new Date(2026, 6, 10, 9), (d) =>
-      days.push(d)
-    );
+    const clock = createSeasonClock(new Date(2026, 6, 10, 9), (d) => {
+      days.push(d);
+    });
     expect(clock.day()).toBe(JUL_10);
     clock.set(new Date(2026, 6, 10, 18)); // same day, later hour
     expect(days).toEqual([]);

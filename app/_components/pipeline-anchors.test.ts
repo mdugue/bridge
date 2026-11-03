@@ -164,7 +164,9 @@ test("a second ask for a build in flight resolves once its compile has", async (
   expect(calls).toBe(1);
   expect([first, second, single]).toEqual([false, false, false]);
   finish();
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
   expect([first, second, single]).toEqual([true, true, true]);
   anchors.dispose();
   release();

@@ -383,7 +383,9 @@ function createSkyDome(scene: Scene): SkyDome & { mesh: SkyMesh } {
     setHaze: (colour) => {
       haze.value.set(colour);
     },
-    setSun: (d) => sky.sunPosition.value.copy(d),
+    setSun: (d) => {
+      sky.sunPosition.value.copy(d);
+    },
   };
 }
 

@@ -36,9 +36,15 @@ function fakeTiles() {
         return true;
       },
     },
-    resetFailedTiles: () => calls.push("reset"),
-    addEventListener: (_, listener) => listeners.add(listener),
-    removeEventListener: (_, listener) => listeners.delete(listener),
+    resetFailedTiles: () => {
+      calls.push("reset");
+    },
+    addEventListener: (_, listener) => {
+      listeners.add(listener);
+    },
+    removeEventListener: (_, listener) => {
+      listeners.delete(listener);
+    },
   };
   const update = (...wanted: FakeTile[]) => {
     for (const tile of wanted) {
@@ -234,7 +240,9 @@ test("the boot gives up on the network after a minute of a usable page without i
   const watch = createNetworkWatch({
     tiles,
     bootOver: () => booted,
-    onBootGiveUp: (error) => given.push(error),
+    onBootGiveUp: (error) => {
+      given.push(error);
+    },
   });
   watch.failed(failedTile("s"), lost(), "/spawn", true);
   jest.advanceTimersByTime(58_000);
@@ -247,7 +255,9 @@ test("the boot gives up on the network after a minute of a usable page without i
   const second = createNetworkWatch({
     tiles,
     bootOver: () => booted,
-    onBootGiveUp: (error) => given.push(error),
+    onBootGiveUp: (error) => {
+      given.push(error);
+    },
   });
   second.failed(failedTile("s"), lost(), "/spawn", true);
   booted = true;
@@ -262,7 +272,9 @@ test("the boot's wait ends when what it waited for lands, and a later give-up wa
   const watch = createNetworkWatch({
     tiles,
     bootOver: () => false,
-    onBootGiveUp: (error) => given.push(error),
+    onBootGiveUp: (error) => {
+      given.push(error);
+    },
   });
   const spawn = failedTile("spawn");
   watch.failed(null, lost(), "/tileset.json", true);

@@ -454,7 +454,10 @@ function abortableLoad() {
 /** A task, long enough for the code under test's own next task: a traffic
  *  slot sets its timer only after its builder's load has resolved, past
  *  the microtasks of the call that showed it. */
-const nextTask = async () => new Promise((resolve) => setTimeout(resolve, 5));
+const nextTask = async () =>
+  new Promise((resolve) => {
+    setTimeout(resolve, 5);
+  });
 
 /** Waits until `ready` holds, a timer at a time (at most ~2 s). */
 async function until(ready: () => boolean): Promise<void> {
@@ -1015,7 +1018,9 @@ test("an ask builder that throws in idle time is reported and lets the tile go",
   buildAsksWhenIdle(d, () => true, {
     idle: later,
     run: async (steps) => Promise.resolve().then(() => finished(steps)),
-    failed: (err) => failures.push(err),
+    failed: (err) => {
+      failures.push(err);
+    },
   });
   idle.shift()?.();
   await new Promise((resolve) => {

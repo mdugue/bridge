@@ -271,7 +271,9 @@ export function createFpsMovement(
         keys.add(code);
       }
     },
-    release: (code) => keys.delete(code),
+    release: (code) => {
+      keys.delete(code);
+    },
     releaseAll: () => {
       keys.clear();
       analogX = 0;

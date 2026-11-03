@@ -19,7 +19,9 @@ test("boots at the table defaults and keeps the same object until a change", () 
 test("set notifies once per change with the new values, never for a no-op", () => {
   const look = createLookState();
   const seen: number[] = [];
-  const stop = look.subscribe((v) => seen.push(v.fogAmount));
+  const stop = look.subscribe((v) => {
+    seen.push(v.fogAmount);
+  });
   look.set({ fogAmount: 0.5, multiTuft: false });
   look.set({ fogAmount: 0.5 });
   expect(seen).toEqual([0.5]);

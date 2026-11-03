@@ -54,23 +54,35 @@ function harness() {
     zoom: [] as number[],
   };
   const callbacks: TouchControlsCallbacks = {
-    onLook: (dx, dy) => calls.look.push([dx, dy]),
-    onMouseLook: (dx, dy) => calls.mouseLook.push([dx, dy]),
+    onLook: (dx, dy) => {
+      calls.look.push([dx, dy]);
+    },
+    onMouseLook: (dx, dy) => {
+      calls.mouseLook.push([dx, dy]);
+    },
     onPinchStart: () => {
       calls.pinchStart += 1;
     },
-    onPinch: (ratio) => calls.pinch.push(ratio),
-    onDoubleTap: (x, y) => calls.doubleTap.push([x, y]),
+    onPinch: (ratio) => {
+      calls.pinch.push(ratio);
+    },
+    onDoubleTap: (x, y) => {
+      calls.doubleTap.push([x, y]);
+    },
     onWheelDolly: (amount, x, y) => {
       calls.wheel.push(amount);
       calls.wheelAt.push([x, y]);
     },
-    onWheelZoom: (ratio) => calls.zoom.push(ratio),
+    onWheelZoom: (ratio) => {
+      calls.zoom.push(ratio);
+    },
     onTap: (x, y, pointerType) => {
       calls.tap.push([x, y]);
       calls.tapBy.push(pointerType);
     },
-    onLongPress: (x, y) => calls.longPress.push([x, y]),
+    onLongPress: (x, y) => {
+      calls.longPress.push([x, y]);
+    },
   };
   // The long press waits on the page's clock, Bun's fake one here:
   // `elapse(ms)` moves it on (by default by a whole long press).

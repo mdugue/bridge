@@ -1307,9 +1307,9 @@ export function bakeCityMesh(
   // A Building with parts answers for its whole tree (the inquiry card
   // reads it): the union of the footprints, the tree's height.
   const trees = new Map<number, number[]>();
-  objects.forEach((o, i) =>
-    trees.set(o.root, [...(trees.get(o.root) ?? []), i])
-  );
+  objects.forEach((o, i) => {
+    trees.set(o.root, [...(trees.get(o.root) ?? []), i]);
+  });
   for (const [root, members] of trees) {
     const { facts } = objects[root];
     if (members.length > 1 && facts) {
