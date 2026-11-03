@@ -2696,20 +2696,20 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
     (`trunkRoots`, two extra rings low in the trunk, `TRUNK_RINGS`, nine
     sides); up to 0.45 m over the ground the bark turns to damp earth
     along them, the troughs about half as high, darkest at the ground.
-    The earth is the ground's own where the tile has foot rasters
+    A separate root-flare skirt round the trunk read as a shoe and was
+    dropped; the flat disc before it floated on a slope and let the
+    paving show through. The earth is the ground's own where the tile has foot rasters
     (`trunkEarthGraph`, read per vertex at the foot, a trunk material per
     tile on one build per raster layout): the pit's mulch in paving, leaf
     mould in a wood, the grass's roots on a lawn or meadow, elsewhere the
     class colour darkened as damp soil (× 0.72); one fixed earth
     elsewhere.
   - **bark and moss** (`barkSkin`, every trunk): 17 furrows round the
-    stem, wavering up it, tilt the normal across them (± 0.38) and shade
-    their troughs to × 0.84, faded to their mean between 10 and 35 m (they
+    stem, wavering up it, tilt the normal across them (± 0.2) and shade
+    their troughs to × 0.91, faded to their mean between 10 and 35 m (they
     would shimmer); moss (sRGB 118, 138, 80) on the weather side (west, a
     little north), highest low on the trunk and gone by 1.9 m, in
-    patches, and a little all round at the foot, at most 80 %. A separate root-flare skirt round
-    the trunk read as a shoe and was dropped; the flat disc before it
-    floated on a slope and let the paving show through.
+    patches, and a little all round at the foot, at most 50 %.
   - **the trunk in its crown's shade** (`crownShade`, every trunk): the
     trunk takes no shadow (in the shadow map the bark shadows itself, a
     black sleeve), so it stood lit under a dark crown and read as pasted
@@ -2760,8 +2760,8 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
     keeps off it), reaching 0.85 m past the bark with a ragged edge: long
     blades streaked out from the trunk, darker and yellower, and seed
     heads catching the light where they are larger than a pixel, and in
-    it a tuft of 56 real blades (`tuftGraph`, a set of its own on the
-    trunks' buffers: thin triangles 0.14–0.38 m high, 0.8–1.3 × by a
+    it a tuft of 110 real blades (`tuftGraph`, a set of its own on the
+    trunks' buffers: thin triangles 0.08–0.24 m high, both faces lit from above, 0.8–1.3 × by a
     hash, leaning out from 0.28–0.8 m round a 0.25 m foot moved out to
     the trunk's own roots), opaque, lit as the ground, swaying 3.5 cm,
     shrinking into the ground as the foot fades, so the cut between bark

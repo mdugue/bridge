@@ -1280,7 +1280,7 @@ function trunkGraph(
 /** Bark furrows round the stem, how far they tilt the normal, and the
  *  distance (m) they fade into their mean by (they would shimmer). */
 const BARK_FURROWS = 17;
-const BARK_TILT = 0.38;
+const BARK_TILT = 0.2;
 const BARK_FADE: [number, number] = [10, 35];
 /** The moss on the weather side (linear): muted, the scene's pastel. */
 const BARK_MOSS = vec3(
@@ -1331,11 +1331,11 @@ function barkSkin(metres: F): { shade: F; moss: F; normal: V3 } {
     .add(
       float(1)
         .sub(smoothstep(0.1, 0.7, metres))
-        .mul(0.3)
+        .mul(0.15)
     )
-    .min(0.8);
+    .min(0.5);
   return {
-    shade: mix(float(0.93), mix(0.84, 1, ridge), near),
+    shade: mix(float(0.96), mix(0.91, 1, ridge), near),
     moss,
     normal,
   };

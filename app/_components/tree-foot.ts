@@ -2,7 +2,6 @@ import {
   BoxGeometry,
   BufferAttribute,
   BufferGeometry,
-  DoubleSide,
   InterpolationSamplingType,
   type Material,
   type Node,
@@ -306,14 +305,16 @@ function buildHoop(): BufferGeometry {
  *  triangle leaning out, in a band TUFT_BAND (m from the axis) round a
  *  nominal foot of radius TUFT_FOOT (the shader moves the band out to
  *  the trunk's own), TUFT_H high (the shader scales it per tree). */
-const TUFT_BLADES = 56;
+const TUFT_BLADES = 110;
 const TUFT_FOOT = 0.25;
 const TUFT_BAND: [number, number] = [0.28, 0.8];
-const TUFT_H: [number, number] = [0.14, 0.38];
-const TUFT_W = 0.035;
+const TUFT_H: [number, number] = [0.08, 0.24];
+const TUFT_W = 0.018;
 
 function buildTuft(): BufferGeometry {
-  const position = new Float32Array(TUFT_BLADES * 9);
+  // each blade twice, wound both ways, its normal up on both faces (a
+  // back face's flipped normal faced the ground and drew it black)
+  const position = new Float32Array(TUFT_BLADES * 18);
   const normal = new Float32Array(position.length);
   let seed = 0;
   const rnd = () => {
@@ -332,22 +333,12 @@ function buildTuft(): BufferGeometry {
     const turn = angle + Math.PI / 2 + (rnd() - 0.5) * 1.2;
     const [wx, wz] = [Math.cos(turn) * TUFT_W, Math.sin(turn) * TUFT_W];
     const lean = 0.25 + rnd() * 0.35;
-    const k = b * 9;
-    position.set(
-      [
-        ox * d - wx,
-        0,
-        oz * d - wz,
-        ox * d + wx,
-        0,
-        oz * d + wz,
-        ox * (d + lean * h),
-        h,
-        oz * (d + lean * h),
-      ],
-      k
-    );
-    for (let v = 0; v < 3; v++) {
+    const k = b * 18;
+    const left = [ox * d - wx, 0, oz * d - wz];
+    const right = [ox * d + wx, 0, oz * d + wz];
+    const tip = [ox * (d + lean * h), h, oz * (d + lean * h)];
+    position.set([...left, ...right, ...tip, ...right, ...left, ...tip], k);
+    for (let v = 0; v < 6; v++) {
       normal[k + v * 3 + 1] = 1;
     }
   }
@@ -1292,8 +1283,8 @@ const guards = new Map<string, { position: V3 }>();
 
 /** The tufts' grass (sRGB): the lawn's green, a blade's tip paler and
  *  yellower (`UNMOWN`), its foot in the grass's own shade. */
-const TUFT_GREEN = linear([128, 152, 88]);
-const TUFT_TIP = linear([176, 178, 112]);
+const TUFT_GREEN = linear([150, 172, 112]);
+const TUFT_TIP = linear([196, 198, 140]);
 const TUFT_SWAY = 0.035;
 
 /**
@@ -1452,7 +1443,7 @@ function trunkEarthGraph(r: FootRasters): V3 {
 
 const trunkEarths = new Map<string, V3>();
 
-/** A tile's grass tufts: opaque, both faces, lit as the ground. */
+/** A tile's grass tufts: opaque, lit as the ground. */
 function tuftMaterial(
   r: FootRasters,
   slots: Slots,
@@ -1463,7 +1454,6 @@ function tuftMaterial(
   const graph = cached(key, () => tuftGraph(r));
   const m = new MeshStandardNodeMaterial({ roughness: 1, metalness: 0 });
   m.name = "tree-tuft";
-  m.side = DoubleSide;
   m.positionNode = graph.position;
   m.colorNode = graph.color;
   setSlots(m, slots);
