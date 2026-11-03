@@ -2,8 +2,9 @@
  * The first questions *Frag die Stadt* offers (plan 081): four, drawn
  * anew each time the card opens, from the moment — the landmark ahead or
  * nearby, the scene's hour, the season and the day, what the city has
- * (its data layers) — and from a pool of curious and
- * playful ones. Every question is one the tools can answer.
+ * (its data layers) — and from a pool of curious and playful ones.
+ * Every question is one the tools can answer where it is offered; the Prüfstand
+ * (ask-qa.ts) asks them all and says which to keep.
  */
 
 /** A landmark as the tileset lists it (site CRS). */
@@ -138,6 +139,9 @@ export function withArticle(name: string, c: Case): string {
 /** A template with the place filled in. */
 type Template = (place: string) => string;
 
+// Every question is one the tools can answer from where it is offered:
+// the facts in Stadtwissen (no building's age, no floodlights, no
+// counts), a lookup or two, a change of the view.
 const AHEAD: readonly Template[] = [
   (p) => `Was ist ${withArticle(p, "nom")} dort vorn?`,
   (p) => `Wer hat ${withArticle(p, "nom")} gebaut?`,
@@ -152,15 +156,13 @@ const NEAR: readonly Template[] = [
 ];
 const NO_PLACE = [
   "Was steht hier vor mir?",
-  "Zeig mir die ältesten Häuser hier in der Nähe.",
+  "Welche Häuser hier stehen unter Denkmalschutz?",
   "Welche Denkmäler stehen hier um die Ecke?",
+  "Wo kann man hier einkaufen oder essen?",
 ];
 
 const HOURS: Record<"morning" | "day" | "evening" | "night", string[]> = {
-  morning: [
-    "Wie sieht dieser Platz im Morgenlicht aus?",
-    "Wo fällt hier am Morgen die erste Sonne hin?",
-  ],
+  morning: ["Wie sieht dieser Platz im Morgenlicht aus?"],
   day: [
     "Zeig mir den Schattenwurf hier am späten Nachmittag.",
     "Wie sieht es hier bei Sonnenuntergang aus?",
@@ -171,7 +173,7 @@ const HOURS: Record<"morning" | "day" | "evening" | "night", string[]> = {
   ],
   night: [
     "Zeig mir den Sonnenaufgang von hier.",
-    "Welche Gebäude sind nachts angestrahlt?",
+    "Wie sieht dieser Platz am Mittag aus?",
   ],
 };
 
@@ -201,19 +203,16 @@ function seasonQuestions(now: Date): string[] {
     return ["Wie steht die Sonne hier zur Sommersonnenwende?"];
   }
   if (m === 12) {
-    return ["Wo standen hier früher Weihnachtsmärkte?"];
+    return ["Zeig mir diesen Platz an einem Dezembernachmittag."];
   }
   if (m >= 9 && m <= 11) {
-    return [
-      "Zeig mir diesen Ort im Herbstlicht.",
-      "Welche Bäume färben sich hier zuerst?",
-    ];
+    return ["Zeig mir diesen Ort im Herbstlicht."];
   }
   if (m >= 3 && m <= 5) {
     return ["Wie sieht es hier im Frühling am Morgen aus?"];
   }
   if (m >= 6 && m <= 8) {
-    return ["Wo findet man hier im Sommer Schatten?"];
+    return ["Zeig mir die Schatten hier an einem Sommermittag."];
   }
   return ["Wie lang sind die Schatten hier im Winter mittags?"];
 }
@@ -221,29 +220,24 @@ function seasonQuestions(now: Date): string[] {
 function cityQuestions(ctx: StarterContext): string[] {
   const out: string[] = [];
   if (ctx.layers.includes("tramLayer")) {
-    out.push("Wo fahren gerade Straßenbahnen?");
+    out.push("Zeig mir die Straßenbahnen.");
   }
   if (ctx.layers.includes("trafficLayer")) {
-    out.push("Wo ist hier am meisten Verkehr?");
+    out.push("Zeig mir den Autoverkehr hier.");
   }
   if (ctx.layers.includes("bikeLayer")) {
-    out.push("Wie viele Räder sind heute hier gezählt worden?");
+    out.push("Zeig mir den Radverkehr.");
   }
   return out;
 }
 
 const CURIOUS = [
-  "Welches ist das höchste Gebäude der Stadt?",
-  "Zeig mir das älteste Gebäude der Stadt.",
-  "Welches Denkmal hier ist am seltsamsten?",
-  "Welche Gebäude sind nach einer Frau benannt?",
+  "Welches Gebäude hier in der Nähe ist das höchste?",
   "Welche Kirche hat den höchsten Turm?",
-  "Wo steht das kleinste Denkmal der Stadt?",
-  "Welches Wahrzeichen wurde am häufigsten umgebaut?",
+  "Welches Denkmal hier ist am seltsamsten?",
 ];
 const PLAY = [
   "Zeig mir das Ganze als Comic.",
-  "Was würde ein 80 m hoher Turm hier beschatten?",
   "Zeig mir die Stadt wie ein Architekturmodell.",
   "Wie sähe dieser Ort als Film noir aus?",
 ];
@@ -301,29 +295,65 @@ function one<T>(list: readonly T[], random: () => number): T | undefined {
     : undefined;
 }
 
+/** Which slot of a set a question fills. */
+export type StarterKind = "ort" | "zeit" | "stadt" | "frei";
+
+/** A question the moment can offer, and its slot. */
+export interface StarterCandidate {
+  kind: StarterKind;
+  question: string;
+}
+
 /**
- * Four first questions for the moment: a place question (the landmark
- * ahead, else the nearest, else the neighbourhood), a time question (the
- * hour or the season), a city question where the site has one, and the
- * rest curious or playful — no two the same.
+ * Every question the draw could offer in `ctx`, by slot: the place's
+ * (the landmark ahead, else the nearest, else the neighbourhood), the
+ * hour's and the season's, the city's, and the free ones. The draw takes
+ * from it; the Prüfstand (ask-qa.ts) asks all of them.
+ */
+export function starterPool(ctx: StarterContext): StarterCandidate[] {
+  const { ahead, near } = placesAround(ctx);
+  const place = ahead
+    ? AHEAD.map((t) => t(ahead.name))
+    : near
+      ? NEAR.map((t) => t(near.name))
+      : NO_PLACE;
+  const time = [...HOURS[hourKind(ctx.now)], ...seasonQuestions(ctx.now)];
+  return [
+    ...place.map((question) => ({ kind: "ort" as const, question })),
+    ...time.map((question) => ({ kind: "zeit" as const, question })),
+    ...cityQuestions(ctx).map((question) => ({
+      kind: "stadt" as const,
+      question,
+    })),
+    ...[...CURIOUS, ...PLAY].map((question) => ({
+      kind: "frei" as const,
+      question,
+    })),
+  ];
+}
+
+/**
+ * Four first questions for the moment: one of the place's, one of the
+ * hour's or the season's (as likely either), one of the city's where the
+ * site has one, and the rest free — no two the same.
  */
 export function starterQuestions(
   ctx: StarterContext,
   random: () => number = Math.random
 ): string[] {
-  const { ahead, near } = placesAround(ctx);
-  const place = ahead
-    ? one(AHEAD, random)?.(ahead.name)
-    : near
-      ? one(NEAR, random)?.(near.name)
-      : one(NO_PLACE, random);
+  const pool = starterPool(ctx);
+  const of = (kind: StarterKind) =>
+    pool.filter((c) => c.kind === kind).map((c) => c.question);
+  const hours = HOURS[hourKind(ctx.now)];
+  const times = of("zeit");
   const time =
     random() < 0.5
-      ? one(HOURS[hourKind(ctx.now)], random)
-      : one(seasonQuestions(ctx.now), random);
-  const city = one(cityQuestions(ctx), random);
-  const out = [place, time, city].filter((q): q is string => q !== undefined);
-  const rest = [...CURIOUS, ...PLAY];
+      ? one(hours, random)
+      : one(times.slice(hours.length), random);
+  const out = [one(of("ort"), random), time, one(of("stadt"), random)].filter(
+    (q): q is string => q !== undefined
+  );
+  const rest = of("frei");
   while (out.length < STARTERS && rest.length > 0) {
     const i = Math.min(rest.length - 1, Math.floor(random() * rest.length));
     const [q] = rest.splice(i, 1);
