@@ -1689,10 +1689,10 @@ export class DressingPlugin {
    * buffer failed to allocate. Less the site's shared buffers it counted in
    * the glTF (`sharedBytes`): evicting the tile frees none of them.
    */
-  calculateBytesUsed(tile: object, scene: Object3D | null): number {
-    // (a tile still in processTileModel has no scene recorded yet)
-    const root = scene ?? this.sceneOf.get(tile);
-    const dressed = root ? this.dressed.get(root) : undefined;
+  calculateBytesUsed(_tile: object, scene: Object3D | null): number {
+    // (a tile still in processTileModel weighs nothing yet: the renderer
+    // drops a new tile from a full cache only while it weighs 0)
+    const dressed = scene ? this.dressed.get(scene) : undefined;
     const rasters = this.rasterShares.bytesOf(dressed?.terrain?.rasters ?? []);
     return (
       rasters +

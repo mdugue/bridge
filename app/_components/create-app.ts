@@ -3093,8 +3093,19 @@ async function bootApp(
   let bootLoaded = false;
   // the last frame drew it (the frame pacer)
   let veilShown = false;
-  const stepLoadVeil = (dt: number, unveiled: boolean) => {
+  const stepLoadVeil = (
+    dt: number,
+    { exporting, model }: { exporting: boolean; model: boolean }
+  ) => {
     const at = streamCamera.position;
+    // Modell after the boot: no veil, nor any measuring (from Modell's
+    // camera the state would come back stale to the walker's view).
+    if (model && bootLoaded) {
+      loadVeil = NO_VEIL;
+      veilShown = false;
+      postStack.setLoadVeil(NO_VEIL, at.x, at.z);
+      return;
+    }
     // Until the first load is through, the ring walks out with the last
     // two stages' progress instead: the tile underfoot would hold it at
     // the feet until its own details are built, then let it jump. Nor does
@@ -3112,12 +3123,10 @@ async function bootApp(
           at.x + offset.cx,
           offset.cy - at.z
         );
-    // Hidden after the boot (an export, Modell), it does not run on
-    // either: measured from another camera, it would come back stale.
-    loadVeil =
-      unveiled && bootLoaded ? NO_VEIL : stepVeil(loadVeil, frontier, dt);
-    // an exported image is the city, not its loading
-    const asked = unveiled ? { strength: 0 } : pocVeil();
+    loadVeil = stepVeil(loadVeil, frontier, dt);
+    // an exported image is the city, not its loading (nor is Modell's
+    // drawing, booting)
+    const asked = exporting || model ? { strength: 0 } : pocVeil();
     const drawn = asked ? { ...loadVeil, ...asked } : loadVeil;
     veilShown = drawn.strength > 0;
     postStack.setLoadVeil(drawn, at.x, at.z);
@@ -3789,7 +3798,7 @@ async function bootApp(
     // draws it (the shadow map, the lamp pool, the styles' gathering)
     streamChange.flush();
     // (Modell's parallel camera draws a model, not the walker's view)
-    stepLoadVeil(dt, exporting || modelRig.owns());
+    stepLoadVeil(dt, { exporting, model: modelRig.owns() });
     // Advance every tile's water ripple and glitter (its sky tint is the
     // fog colour's node, in lockstep with the sun by construction).
     setWaterTime(elapsed);
