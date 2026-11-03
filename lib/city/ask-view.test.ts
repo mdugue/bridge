@@ -243,7 +243,7 @@ test("on foot below a house on a slope, the walker looks up to it", () => {
 test("a foot the terrain knew is the glide's ground where none is under the eye", () => {
   // the terrain is loaded round the place only, not under the eye
   const groundAt = (x: number, y: number) =>
-    Math.hypot(x, y) < 50 ? 100 : null;
+    Math.hypot(x, y) < 15 ? 100 : null;
   const framed = frameTargets([{ x: 0, y: 0, h: 30, r: 10 }], {
     aspect: 1.5,
     from: null,
