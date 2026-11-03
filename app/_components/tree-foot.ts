@@ -2,6 +2,7 @@ import {
   BoxGeometry,
   BufferAttribute,
   BufferGeometry,
+  DoubleSide,
   InterpolationSamplingType,
   type Material,
   type Node,
@@ -88,7 +89,7 @@ import {
  * flat disc under it read as a sticker. Every trunk of the fine level now
  * has, on the trunks' own instance buffers (their matrices, drops and bark
  * colours — the very column views, so three's memory count, which the
- * governor reads, charges nothing twice), a quad and a hoop per tile
+ * governor reads, charges nothing twice), a quad, a hoop and a tuft per tile
  * (shared by its chunks, a few hundred bytes) and a material per tile:
  *
  * - at every foot, the trunk itself turns to earth (vegetation-layer.ts
@@ -112,6 +113,9 @@ import {
  *   heaved and joints opened over it, cracks running on into the paving —
  *   a pit far from any road (a pedestrian zone) wears a cast-iron grate,
  *   and one close by the kerb a guard hoop between it and the road.
+ * - **on a lawn or a meadow**: a tuft of grass blades round the foot
+ *   (`tuftGraph`, opaque, lit as the ground), the grass the mower leaves,
+ *   standing over the cut between bark and ground.
  *
  * The pit is lit as the ground is (its sun, shadows, sky view and far
  * horizon, sky-light.ts) and alpha-blended, so the paper styles leave it
@@ -244,6 +248,7 @@ export const footClock = uniform(0);
 export interface FootGeos {
   quad: BufferGeometry;
   hoop: BufferGeometry;
+  tuft: BufferGeometry;
 }
 
 /** The quad (x, z in −1..1) in QUAD_CELLS × QUAD_CELLS cells, facing up;
@@ -281,7 +286,7 @@ export function buildFootGeos(): FootGeos {
     }
   }
   quad.setIndex(index);
-  return { quad, hoop: buildHoop() };
+  return { quad, hoop: buildHoop(), tuft: buildTuft() };
 }
 
 /** A guard hoop round a street tree's pit: an inverted U of 6 cm tube,
@@ -296,6 +301,61 @@ function buildHoop(): BufferGeometry {
   return hoop;
 }
 
+/** The grass round a trunk's foot: TUFT_BLADES blades, each a thin
+ *  triangle leaning out, in a band TUFT_BAND (m from the axis) round a
+ *  nominal foot of radius TUFT_FOOT (the shader moves the band out to
+ *  the trunk's own), TUFT_H high (the shader scales it per tree). */
+const TUFT_BLADES = 56;
+const TUFT_FOOT = 0.25;
+const TUFT_BAND: [number, number] = [0.28, 0.8];
+const TUFT_H: [number, number] = [0.14, 0.38];
+const TUFT_W = 0.035;
+
+function buildTuft(): BufferGeometry {
+  const position = new Float32Array(TUFT_BLADES * 9);
+  const normal = new Float32Array(position.length);
+  let seed = 0;
+  const rnd = () => {
+    seed += 1;
+    const x = Math.sin(seed * 12.9898 + 4.1) * 43_758.545;
+    return x - Math.floor(x);
+  };
+  for (let b = 0; b < TUFT_BLADES; b++) {
+    const angle = ((b + rnd() * 0.8) / TUFT_BLADES) * Math.PI * 2;
+    // more blades close in, where the mower never reaches
+    const t = rnd() ** 1.6;
+    const d = TUFT_BAND[0] + t * (TUFT_BAND[1] - TUFT_BAND[0]);
+    const h = TUFT_H[0] + rnd() * (TUFT_H[1] - TUFT_H[0]) * (1 - t * 0.5);
+    const [ox, oz] = [Math.cos(angle), Math.sin(angle)];
+    // the blade's face turned a little off the radial
+    const turn = angle + Math.PI / 2 + (rnd() - 0.5) * 1.2;
+    const [wx, wz] = [Math.cos(turn) * TUFT_W, Math.sin(turn) * TUFT_W];
+    const lean = 0.25 + rnd() * 0.35;
+    const k = b * 9;
+    position.set(
+      [
+        ox * d - wx,
+        0,
+        oz * d - wz,
+        ox * d + wx,
+        0,
+        oz * d + wz,
+        ox * (d + lean * h),
+        h,
+        oz * (d + lean * h),
+      ],
+      k
+    );
+    for (let v = 0; v < 3; v++) {
+      normal[k + v * 3 + 1] = 1;
+    }
+  }
+  const g = new BufferGeometry();
+  g.setAttribute("position", new BufferAttribute(position, 3));
+  g.setAttribute("normal", new BufferAttribute(normal, 3));
+  return g;
+}
+
 /** A tile's foot materials (`footMaterialFor`). */
 export interface FootMaterials {
   ring: Material;
@@ -303,10 +363,11 @@ export interface FootMaterials {
   litter: Material;
   shade: Material;
   guard: Material;
+  tuft: Material;
 }
 
 /** The sets of a chunk's feet. */
-const PARTS = ["ring", "earth", "litter", "shade", "guard"] as const;
+const PARTS = ["ring", "earth", "litter", "shade", "guard", "tuft"] as const;
 type Part = (typeof PARTS)[number];
 
 /** Draw order among the blended sets: every ring, then every pit's earth
@@ -318,6 +379,7 @@ const ORDER: Record<Part, number> = {
   litter: 3,
   shade: 4,
   guard: 0,
+  tuft: 0,
 };
 
 /**
@@ -334,7 +396,7 @@ export function treeFeet(
   const sets: Instances[] = [];
   for (const part of PARTS) {
     const feet = new Instances(
-      part === "guard" ? geos.hoop : geos.quad,
+      part === "guard" ? geos.hoop : part === "tuft" ? geos.tuft : geos.quad,
       materials[part],
       trunks.capacity,
       trunks.instanceMatrix
@@ -1220,6 +1282,59 @@ function guardMaterial(
 
 const guards = new Map<string, { position: V3 }>();
 
+/** The tufts' grass (sRGB): the lawn's green, a blade's tip paler and
+ *  yellower (`UNMOWN`), its foot in the grass's own shade. */
+const TUFT_GREEN = linear([128, 152, 88]);
+const TUFT_TIP = linear([176, 178, 112]);
+const TUFT_SWAY = 0.035;
+
+/**
+ * Grass and herbs round a trunk on a lawn or a meadow (not in paving,
+ * not in a wood): the blades the mower leaves at the foot, standing up
+ * over the cut between the bark and the ground so it is not seen. Lit as
+ * the ground is, swaying a little with the clock, as tall as the tree is
+ * big (0.8–1.3 × by a hash), shrinking into the ground as the foot fades
+ * out; collapsed where none grow.
+ */
+function tuftGraph(r: FootRasters): PitGraph {
+  const s = footSlots(r);
+  const f = footFrame(s, r.size);
+  const shown = f.green
+    .mul(float(1).sub(f.wood))
+    .mul(float(1).sub(step(0.5, f.pit)))
+    .mul(step(0.001, f.fade));
+  const seed = fract(sin(dot(f.world.xz, vec2(7.13, 3.71))).mul(9631.7));
+  const p = positionGeometry;
+  const dir = normalize(p.xz.add(vec2(1e-4, 0)));
+  // out to the trunk's own foot, its roots' bulge (the trunk's lobes)
+  const lobe = cos(atan(dir.y, dir.x).mul(f.lobes).add(f.phase))
+    .mul(0.5)
+    .add(0.5);
+  const out = f.rt.mul(lobe.mul(lobe).mul(0.55).add(1)).sub(TUFT_FOOT);
+  const tall = p.y.mul(mix(0.8, 1.3, seed)).mul(smoothstep(0, 0.6, f.fade));
+  const sway = sin(footClock.mul(1.3).add(seed.mul(40)).add(p.x.mul(9)))
+    .mul(TUFT_SWAY)
+    .mul(p.y.div(TUFT_H[1]));
+  const q = p.xz.add(dir.mul(max(out, 0))).add(dir.mul(sway));
+  const local = vec3(q.x, tall, q.y).mul(shown);
+  const position = Fn(() => {
+    normalLocal.assign(vec3(0, 1, 0));
+    return folded(
+      f.foot.add(local).add(vec3(0, dot(f.slope, q.mul(shown)), 0)),
+      f.foot
+    );
+  })();
+  const up = varying(p.y.div(TUFT_H[1]), "vTuftUp");
+  const tint = gdHash(p.xz.mul(31).add(seed));
+  return {
+    position,
+    color: mix(TUFT_GREEN, TUFT_TIP, up.mul(tint.mul(0.6).add(0.4))).mul(
+      mix(0.6, 1, up)
+    ),
+    opacity: float(1),
+  };
+}
+
 function litMaterial(
   name: string,
   graph: PitGraph,
@@ -1298,6 +1413,26 @@ function shadeMaterial(
   return m;
 }
 
+/** A tile's grass tufts: opaque, both faces, lit as the ground. */
+function tuftMaterial(
+  r: FootRasters,
+  slots: Slots,
+  variant: string,
+  light?: GroundLight
+): MeshStandardNodeMaterial {
+  const key = `tree-tuft|${variant}`;
+  const graph = cached(key, () => tuftGraph(r));
+  const m = new MeshStandardNodeMaterial({ roughness: 1, metalness: 0 });
+  m.name = "tree-tuft";
+  m.side = DoubleSide;
+  m.positionNode = graph.position;
+  m.colorNode = graph.color;
+  setSlots(m, slots);
+  applyGroundLight(m, light);
+  setGraph(m, `${key}|${groundLightKey(light)}`);
+  return m;
+}
+
 const graphs = new Map<string, PitGraph>();
 const cached = (key: string, make: () => PitGraph): PitGraph => {
   const known = graphs.get(key);
@@ -1337,6 +1472,7 @@ export function createFootMaterials(
     litter: make("litter"),
     shade: shadeMaterial(r, slots, variant, light),
     guard: guardMaterial(r, slots, variant),
+    tuft: tuftMaterial(r, slots, variant, light),
   };
 }
 

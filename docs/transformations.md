@@ -2747,7 +2747,13 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
     on a lawn or meadow a ring of unmown grass round the trunk (the mower
     keeps off it), reaching 0.85 m past the bark with a ragged edge: long
     blades streaked out from the trunk, darker and yellower, and seed
-    heads catching the light where they are larger than a pixel; and in autumn fallen leaves — covering
+    heads catching the light where they are larger than a pixel, and in
+    it a tuft of 56 real blades (`tuftGraph`, a set of its own on the
+    trunks' buffers: thin triangles 0.14–0.38 m high, 0.8–1.3 × by a
+    hash, leaning out from 0.28–0.8 m round a 0.25 m foot moved out to
+    the trunk's own roots), opaque, lit as the ground, swaying 3.5 cm,
+    shrinking into the ground as the foot fades, so the cut between bark
+    and lawn is hidden — not in paving or a wood; and in autumn fallen leaves — covering
     flecks in yellow, orange, russet and brown in 11 cm cells, thick under
     the crown, thinning 25 % beyond it and swept against the kerb (the edge
     raster's road distance), a mean tint where a cell is under a few
