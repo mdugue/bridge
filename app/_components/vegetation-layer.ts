@@ -10,12 +10,18 @@ import {
   MeshStandardNodeMaterial,
   Object3D,
   Quaternion,
+  SRGBColorSpace,
   type UniformNode,
+  Vector2,
   Vector3,
 } from "three/webgpu";
 import {
+  atan,
   cameraPosition,
+  cameraViewMatrix,
   clamp,
+  cos,
+  cross,
   distance,
   dot,
   float,
@@ -27,6 +33,9 @@ import {
   min,
   modelWorldMatrix,
   mix,
+  normalGeometry,
+  normalView,
+  normalWorld,
   normalize,
   positionGeometry,
   positionWorld,
@@ -42,7 +51,8 @@ import {
 } from "three/tsl";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
-import type { GroundContext } from "@/lib/city/ground-clamp";
+import { type GroundContext, groundSlope } from "@/lib/city/ground-clamp";
+import { srgbToLinear } from "@/lib/city/landcover";
 import { LOOK_DEFAULTS, type LookValues } from "@/lib/city/look-controls";
 import { decodeGreyPng } from "@/lib/city/png-raster";
 import {
@@ -53,8 +63,10 @@ import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
   pineBase,
   TRUNK_FOOT_R,
+  TRUNK_RINGS,
   TRUNK_ROWS,
   TRUNK_TOP_R,
+  TRUNK_UNIT_H,
   trunkFlare,
 } from "@/lib/city/tree-inventory";
 import {
@@ -104,9 +116,24 @@ import {
   instanceTint,
 } from "./instancing";
 import type { F, Live, V2, V3, V4 } from "./shader-chunks";
+import { setGraph, setSlots } from "./material-slots";
+import { gdHash } from "./ground-detail";
 import { sceneMaterial } from "./three-utils";
 import { viewDirection } from "./view-direction";
 import { TRUNK_BASE } from "@/lib/city/tree-family";
+import {
+  buildFootGeos,
+  footClock,
+  BARE_SHADE,
+  crownLeaf,
+  FOOT_SHOWN_M,
+  type FootGeos,
+  MULCH_SRGB,
+  type FootMaterials,
+  rootSeed,
+  seasonalFoot,
+  treeFeet,
+} from "./tree-foot";
 
 export { bucketByCell, hash, type TreeVeto } from "@/lib/city/tree-placement";
 
@@ -156,6 +183,16 @@ export interface VegetationContext extends GroundContext {
    * direction it has — straight up until a tile hands one in).
    */
   sunDirection?: Vector3;
+  /**
+   * The tile's tree-pit materials (tree-foot.ts: a pit in paving,
+   * read off the tile's rasters and lit by its light), made
+   * when the tile turns out to have trees; without them the trunks stand
+   * on the bare ground.
+   */
+  /** (`sun`: the scene's, for a tile without baked light) */
+  footMaterial?: (
+    sun: UniformNode<"vec3", Vector3>
+  ) => FootMaterials | undefined;
 }
 
 /**
@@ -216,6 +253,10 @@ export interface VegetationChunk {
   /** crowned trees in the chunk (what the rich-crown budget counts) */
   trees: number;
   trunks: Instances;
+  /** the register's own trunks beside the placements' (unforked) */
+  ownTrunks?: Instances;
+  /** the trunks' feet (tree-foot.ts), shown with them */
+  feet?: Instances[];
 }
 
 /** A canopy or row tree's season: the generic deciduous curve, offset by
@@ -275,7 +316,7 @@ export function swapCrownLod(
   return changed;
 }
 
-export const TRUNK_H = 2.4;
+export const TRUNK_H = TRUNK_UNIT_H;
 const CROWN_R = 2.1;
 
 /** How far a crown's own lobes move in and out (in the geometry's units,
@@ -283,6 +324,14 @@ const CROWN_R = 2.1;
  *  trunk). */
 const SHAPE_BULGE = 0.62;
 const SHAPE_LEAN = 0.09;
+/** How far a tree's trunk top leans at the most (m; most trees far less:
+ *  the hash squared), and how far its trunk crooks sideways mid-way at
+ *  the most (m, either way). */
+const GROWTH_LEAN_M = 0.7;
+const GROWTH_CROOK_M = 0.12;
+/** The most `treeGrowth` moves a vertex (geometry units, on a crown or
+ *  trunk drawn down to a quarter of the generic one). */
+const GROWTH_REACH = (GROWTH_LEAN_M + GROWTH_CROOK_M) * 4;
 
 /**
  * Recomputes a crown geometry's bounding sphere and grows it by the most
@@ -292,7 +341,7 @@ const SHAPE_LEAN = 0.09;
 export function padCrownSphere(g: BufferGeometry): BufferGeometry {
   g.computeBoundingSphere();
   if (g.boundingSphere) {
-    g.boundingSphere.radius += SHAPE_BULGE + SHAPE_LEAN * 5;
+    g.boundingSphere.radius += SHAPE_BULGE + SHAPE_LEAN * 5 + GROWTH_REACH;
   }
   return g;
 }
@@ -435,7 +484,9 @@ function fitTrunks(trunks: Instances, reach: number): void {
 function trunkDrop(): V3 {
   const p = positionGeometry;
   const drop = instanceFloat(TRUNK_DROP);
-  return vec3(p.x, p.y.add(p.y.div(TRUNK_H).sub(1).mul(drop)), p.z);
+  // (the limbs above the trunk's top stay where the crown is)
+  const below = min(p.y.div(TRUNK_H), 1).sub(1);
+  return vec3(p.x, p.y.add(below.mul(drop)), p.z);
 }
 
 /** Uploads the matrices and fits the cull sphere to the instances. */
@@ -655,6 +706,7 @@ const crownTime = uniform(0);
 /** Advances every crown's wind sway (elapsed seconds; once per frame). */
 export function setCrownTime(seconds: number): void {
   crownTime.value = seconds;
+  footClock.value = seconds;
 }
 
 /** Fresh crown uniforms (the wind clock is the one `crownTime`). */
@@ -711,6 +763,44 @@ function crownSway(time: Live, base: V3): { gust: F; local: V3 } {
 }
 
 /**
+ * Every tree its own growth: a lean (most trees nearly upright, a few up
+ * to `GROWTH_LEAN_M` at the trunk's top, the hash squared) and a crook
+ * mid-way up the trunk to one side, both in world metres in a direction
+ * from where the tree stands. A vertex at height `y` (geometry units)
+ * moves by the lean up to the trunk's top and by the crook along it; the
+ * crown above moves as the trunk's top does — in metres, turned into
+ * each set's own frame by its matrix's columns, so a register tree's
+ * trunk and crown (two matrices, two scales) still meet. In the vertex
+ * stage on the shared geometry: nothing per tree is stored.
+ */
+function treeGrowth(y: F): V3 {
+  const origin = instanceColumn(3);
+  const a = gdHash(origin.xz.mul(0.71)).mul(6.2832);
+  const h = gdHash(origin.xz.mul(0.53).add(7.3));
+  const t = clamp(y.div(TRUNK_H), 0, 1);
+  const crook = sin(t.mul(Math.PI))
+    .mul(h.sub(0.5))
+    .mul(GROWTH_CROOK_M * 2);
+  const world = vec3(cos(a), 0, sin(a))
+    .mul(h.mul(h).mul(GROWTH_LEAN_M).mul(t))
+    .add(vec3(sin(a).negate(), 0, cos(a)).mul(crook));
+  return intoInstanceFrame(world);
+}
+
+/** A world vector in the drawn instance's own frame, by its matrix's
+ *  columns (rotation × scale, no shear): no inverse. */
+function intoInstanceFrame(v: V3): V3 {
+  const c0 = instanceColumn(0).xyz;
+  const c1 = instanceColumn(1).xyz;
+  const c2 = instanceColumn(2).xyz;
+  return vec3(
+    dot(v, c0).div(dot(c0, c0)),
+    dot(v, c1).div(dot(c1, c1)),
+    dot(v, c2).div(dot(c2, c2))
+  );
+}
+
+/**
  * Every tree its own crown: the shared geometry pushed in and out along
  * the direction from its centre by a few broad waves whose phases come from where
  * the tree stands, and its top leaned a little to one side. One geometry
@@ -720,7 +810,15 @@ function crownSway(time: Live, base: V3): { gust: F; local: V3 } {
  * their size on a crown of any scale and close smoothly round it; below
  * the trunk's top they fade out, so the crown still sits on its stem.
  */
-export function crownShape(): V3 {
+export function crownShape(form: V3 = crownForm()): V3 {
+  // the whole crown moves as the trunk's top does: a register crown's
+  // heights are in its own frame, not the trunk's
+  return form.add(treeGrowth(float(TRUNK_H)));
+}
+
+/** The crown's own shape (`crownShape` before the tree's growth moves
+ *  it): its waves and its top's lean. */
+function crownForm(): V3 {
   const origin = instanceColumn(3);
   const s = fract(origin.xz.mul(vec2(0.0173, 0.0219))).mul(6.2832);
   const p = positionGeometry;
@@ -811,6 +909,35 @@ function crownLight(
   };
 }
 
+/** The crown's underside at the most (its colour × this, cool): the sky
+ *  reaches it only past the crown's own rim. */
+const CROWN_UNDER = vec3(0.56, 0.62, 0.66);
+/** A trough between the crown's lobes (its colour × this): the light
+ *  reaches into it only from above. */
+const CROWN_TROUGH = vec3(0.8, 0.84, 0.86);
+
+/**
+ * The crown's own occlusion, a factor on its colour: darker and cooler
+ * underneath (the radial normal's height, so every form, broad or needle,
+ * darkens towards its base) and in the troughs between its lobes (the
+ * shaped vertex's distance from the generic crown's centre, so each
+ * tree's own bulges count; a cone's flank, nearer that centre at mid
+ * height, darkens a little too). Per vertex: the crown's light glides
+ * over it as before, only the colour it lights is deeper inside. Not on
+ * a printed crown: the Comic pass reads its light by the ink's value.
+ */
+function crownOcclusion(shape: V3): V3 {
+  const under = smoothstep(-0.85, 0.35, normalGeometry.y);
+  const reach = length(shape.sub(vec3(0, TRUNK_H + CROWN_R * 0.5, 0))).div(
+    CROWN_R
+  );
+  const lobe = smoothstep(0.72, 1.15, reach);
+  const ao = mix(CROWN_UNDER, vec3(1), under).mul(
+    mix(CROWN_TROUGH, vec3(1), lobe)
+  );
+  return mix(ao, vec3(1), crownsPrinted);
+}
+
 /**
  * Sage crown material with a backlit shimmer: when the sun is behind the
  * canopy the camera-facing leaves glow warm (crownLight). Shared by every
@@ -834,15 +961,22 @@ export function buildCrownMaterial(
   });
   m.name = bare ? "crown-bare" : "crown-leafy";
   m.userData.crownUniforms = u;
-  const shape = crownShape();
+  const form = crownForm();
+  const shape = crownShape(form);
   const sway = crownSway(u.time, shape);
   m.positionNode = instancePosition(sway.local);
   m.castShadowPositionNode = instancePosition(shape);
   const crownScale = varying(length(instanceColumn(1).xyz));
   // (a printed crown has no brightness pulse: its light is cut in two
-  // steps, and the pulse would flip it between them)
-  const gust = varying(sway.gust.mul(float(1).sub(crownsPrinted)));
-  const tinted = materialColor.mul(instanceTint());
+  // steps, and the pulse would flip it between them); one varying for
+  // the occlusion and the pulse (WebGPU's sixteen are scarce)
+  const shading = varying(
+    vec4(crownOcclusion(form), sway.gust.mul(float(1).sub(crownsPrinted))),
+    "vCrownShading"
+  );
+  const occluded = shading.xyz;
+  const gust = shading.w;
+  const tinted = materialColor.mul(instanceTint()).mul(occluded);
   if (!bare) {
     const lit = crownLight(
       u,
@@ -908,6 +1042,10 @@ function printedCrown(shown: V3, kept: V3, twig: F): V3 {
   return mix(shown, mark, crownsPrinted);
 }
 
+/** The trunk's sides: enough for the three or four roots its foot
+ *  bulges out to read as lobes. */
+const TRUNK_SIDES = 9;
+
 /**
  * De-sterilised trunk — a tapered cylinder with (1) a root flare at the base,
  * (2) low-amplitude radial "bark" bumps and (3) a gentle fixed lean. One shared
@@ -915,17 +1053,28 @@ function printedCrown(shown: V3, kept: V3, twig: F): V3 {
  * + scale); branches were dropped here because, shared, they'd repeat
  * identically — they belong on a near-distance LOD crown.
  */
-export function buildTrunkGeo(): BufferGeometry {
+export function buildTrunkGeo(fork = true): BufferGeometry {
   // The profile (rows, taper, flare) is lib/city/tree-inventory.ts's, so a
   // measured trunk is fitted to the radius drawn (`trunkRadiusAt`).
   const t = new CylinderGeometry(
     TRUNK_TOP_R,
     TRUNK_FOOT_R,
     TRUNK_H,
-    7,
+    TRUNK_SIDES,
     TRUNK_ROWS
   );
   t.translate(0, TRUNK_H / 2, 0);
+  // the cylinder's evenly spaced rows moved onto the profile's rings (two
+  // of them low in the flared foot)
+  // with the taper's radius there
+  const taper = (u: number) => TRUNK_FOOT_R + (TRUNK_TOP_R - TRUNK_FOOT_R) * u;
+  const rows = t.attributes.position;
+  for (let i = 0; i < rows.count; i++) {
+    const from = rows.getY(i) / TRUNK_H;
+    const to = TRUNK_RINGS[Math.round(from * TRUNK_ROWS)] ?? 1;
+    const k = taper(to) / taper(from);
+    rows.setXYZ(i, rows.getX(i) * k, to * TRUNK_H, rows.getZ(i) * k);
+  }
   const bend = 0.05 * TRUNK_H;
   const bx = 0.82;
   const bz = 0.57;
@@ -949,26 +1098,357 @@ export function buildTrunkGeo(): BufferGeometry {
     pos.setXYZ(i, v.x, v.y, v.z);
   }
   t.computeVertexNormals();
-  return t;
+  if (!fork) {
+    t.computeBoundingSphere();
+    if (t.boundingSphere) {
+      t.boundingSphere.radius += GROWTH_REACH;
+    }
+    return t;
+  }
+  const at = (y: number) => {
+    const k = Math.min(Math.max(y / TRUNK_H, 0), 1) ** 1.4 * bend;
+    return new Vector3(bx * k, y, bz * k);
+  };
+  const limbs = trunkLimbs(at);
+  const forked = mergeGeometries([t, ...limbs]);
+  for (const l of limbs) {
+    l.dispose();
+  }
+  if (!forked) {
+    return t; // the parts' attributes always match; kept defensively
+  }
+  t.dispose();
+  forked.computeBoundingSphere();
+  if (forked.boundingSphere) {
+    forked.boundingSphere.radius += GROWTH_REACH;
+  }
+  return forked;
+}
+
+/** Where the trunk forks (a share of its height) and its limbs: the
+ *  direction round the stem (radians), how far out (× the crown's radius)
+ *  and how high (over the crown's centre, × its radius) each ends, inside
+ *  the crown so a sway or a bulge never bares a tip. */
+const FORK_AT = 0.78;
+const LIMBS: readonly (readonly [number, number, number])[] = [
+  [0.4, 0.42, 0.05],
+  [2.5, 0.36, -0.12],
+  [4.4, 0.4, 0.18],
+];
+const LIMB_FOOT_R = 0.055;
+const LIMB_TIP_R = 0.018;
+
+/**
+ * The fork: two or three limbs from high on the trunk up into the crown,
+ * so a crown thinned to its twigs in winter shows a tree's structure, not
+ * a pole under a cloud. Part of the one shared trunk geometry (each
+ * tree's turn varies them), open five-sided tubes; `at(y)` is the bent
+ * trunk's axis at height `y`.
+ */
+function trunkLimbs(at: (y: number) => Vector3): BufferGeometry[] {
+  const cy = TRUNK_H + CROWN_R * 0.5;
+  const foot = at(FORK_AT * TRUNK_H);
+  const up = new Vector3(0, 1, 0);
+  return LIMBS.map(([turn, out, high]) => {
+    const tip = new Vector3(
+      Math.cos(turn) * out * CROWN_R,
+      cy + high * CROWN_R,
+      Math.sin(turn) * out * CROWN_R
+    );
+    const along = tip.clone().sub(foot);
+    const limb = new CylinderGeometry(
+      LIMB_TIP_R,
+      LIMB_FOOT_R,
+      along.length(),
+      5,
+      1,
+      true
+    );
+    limb.translate(0, along.length() / 2, 0);
+    limb.applyMatrix4(
+      new Matrix4().compose(
+        foot,
+        new Quaternion().setFromUnitVectors(up, along.normalize()),
+        new Vector3(1, 1, 1)
+      )
+    );
+    return limb;
+  });
+}
+
+/** The bark's foot turns to earth up to this height (m), its lobes (the
+ *  buttress roots, three or four by a hash of where the tree stands)
+ *  reaching that high, the troughs between them about half. */
+const TRUNK_EARTH_H = 0.45;
+/** The roots bulge the foot out by up to this fraction of its radius,
+ *  fading out by `ROOT_BULGE_H` (m) up the bark. */
+const ROOT_BULGE = 0.55;
+const ROOT_BULGE_H = 0.6;
+/** The earth the foot turns to (sRGB): the pit's mulch in the bark's
+ *  shade, warmer and darker than the bark so it reads. */
+const TRUNK_EARTH = new Color().setRGB(
+  MULCH_SRGB[0] / 255,
+  MULCH_SRGB[1] / 255,
+  MULCH_SRGB[2] / 255,
+  SRGBColorSpace
+);
+
+/**
+ * The trunk's foot as roots: the vertex's height over the ground (m, after
+ * the instance's scale and drop), the lobe round the stem it lies on (0 a
+ * trough, 1 a root's crest; three or four roots, turned by a hash of where
+ * the tree stands) and the vertex pushed out along the roots, most at the
+ * ground. One shape for every tree, no geometry of its own.
+ */
+function trunkRoots(): { lobe: F; metres: F; local: V3 } {
+  const local = trunkDrop();
+  const drop = instanceFloat(TRUNK_DROP);
+  const metres = local.y.add(drop).mul(length(instanceColumn(1).xyz));
+  const { lobes, phase } = rootSeed(instanceColumn(3).xz);
+  const angle = atan(positionGeometry.z, positionGeometry.x);
+  const lobe = cos(angle.mul(lobes).add(phase)).mul(0.5).add(0.5);
+  const low = float(1).sub(smoothstep(0, ROOT_BULGE_H, metres));
+  const out = lobe.mul(lobe).mul(low).mul(low).mul(ROOT_BULGE).add(1);
+  return {
+    lobe,
+    metres,
+    local: vec3(local.x.mul(out), local.y, local.z.mul(out)).add(
+      treeGrowth(positionGeometry.y)
+    ),
+  };
 }
 
 /**
  * Trunk material with a gentle vertical value gradient (darker rooted
- * base), from the geometry's own height (before the instance scale).
- * Scene-wide: it carries nothing of a tile.
+ * base), from the geometry's own height (before the instance scale). At
+ * the foot it grows out of the ground in a few roots: bulged out in shape
+ * (`trunkRoots`) and turning from bark to earth, so it stands in the
+ * ground instead of on it; a separate skirt read as a shoe. Scene-wide: it
+ * carries nothing of a tile (a tile with foot rasters wears its own,
+ * `tileTrunkMaterial`).
  */
-export function buildTrunkMaterial(): MeshStandardNodeMaterial {
-  return sceneMaterial("vegetation-trunk", () => {
-    const m = new MeshStandardNodeMaterial({ color: TRUNK_BASE, roughness: 1 });
-    m.name = "trunk";
-    m.positionNode = instancePosition(trunkDrop());
-    const tg = clamp(varying(positionGeometry.y).div(TRUNK_H), 0, 1);
-    // the register's bark per tree (TreeInstance.bark; white elsewhere)
-    m.colorNode = materialColor
-      .mul(instanceTint())
-      .mul(mix(0.74, 1.05, smoothstep(0, 0.6, tg)));
-    return m;
-  });
+export function buildTrunkMaterial(
+  sun?: UniformNode<"vec3", Vector3>,
+  evergreen = false
+): MeshStandardNodeMaterial {
+  return sceneMaterial(
+    evergreen ? "vegetation-trunk-evergreen" : "vegetation-trunk",
+    () => trunkMaterialOf(trunkGraph(sun, undefined, evergreen))
+  );
+}
+
+/** A trunk material's nodes: shared by every material of its kind (the
+ *  scene's, or the tiles' of one raster layout). */
+interface TrunkGraph {
+  position: V3;
+  color: V3;
+  normal: V3;
+}
+
+function trunkMaterialOf(graph: TrunkGraph): MeshStandardNodeMaterial {
+  const m = new MeshStandardNodeMaterial({ color: TRUNK_BASE, roughness: 1 });
+  m.name = "trunk";
+  m.positionNode = graph.position;
+  m.colorNode = graph.color;
+  m.normalNode = graph.normal;
+  return m;
+}
+
+/** The trunk's nodes; `earth` the colour its foot turns to (the ground's
+ *  at the foot, read in the vertex stage), else TRUNK_EARTH. */
+function trunkGraph(
+  sun?: UniformNode<"vec3", Vector3>,
+  earth?: V3,
+  evergreen = false
+): TrunkGraph {
+  const roots = trunkRoots();
+  // one varying for the four (WebGPU's sixteen are scarce)
+  const along = varying(
+    vec4(
+      positionGeometry.y,
+      roots.metres,
+      roots.lobe,
+      crownShade(roots.local, sun, evergreen)
+    ),
+    "vTrunkAlong"
+  );
+  const tg = clamp(along.x.div(TRUNK_H), 0, 1);
+  const metres = along.y;
+  const lobe = along.z;
+  const shaded = along.w;
+  const reach = lobe.mul(0.5).add(0.5).mul(TRUNK_EARTH_H);
+  const toEarth = float(1).sub(smoothstep(reach.mul(0.3), reach, metres));
+  // the register's bark per tree (TreeInstance.bark; white elsewhere)
+  const bark = materialColor
+    .mul(instanceTint())
+    .mul(mix(0.74, 1.05, smoothstep(0, 0.6, tg)));
+  const soil = earth
+    ? varying(earth, "vTrunkEarth")
+    : vec3(TRUNK_EARTH.r, TRUNK_EARTH.g, TRUNK_EARTH.b);
+  const skin = barkSkin(metres);
+  const mossed = mix(bark.mul(skin.shade), BARK_MOSS, skin.moss);
+  return {
+    position: instancePosition(roots.local),
+    color: mix(mossed, soil, toEarth)
+      .mul(mix(0.82, 1, smoothstep(0, 0.08, metres)))
+      .mul(shaded),
+    normal: skin.normal,
+  };
+}
+
+/** Bark furrows round the stem, how far they tilt the normal, and the
+ *  distance (m) they fade into their mean by (they would shimmer). */
+const BARK_FURROWS = 17;
+const BARK_TILT = 0.2;
+const BARK_FADE: [number, number] = [10, 35];
+/** The moss on the weather side (linear): muted, the scene's pastel. */
+const BARK_MOSS = vec3(
+  ...([118, 138, 80].map(srgbToLinear) as [number, number, number])
+);
+/** The weather side (world x, z): west, a little north (z is south). */
+const WEATHER = new Vector2(-1, -0.35).normalize();
+
+/**
+ * The bark's skin: furrows running up the stem, wavering, as a tilt of
+ * the normal across them and a little shade in them (faded to their mean
+ * past BARK_FADE), and moss on the weather side, highest low on the
+ * trunk, in patches, and a little all round at the foot. `metres` is the
+ * vertex's height over the ground.
+ */
+function barkSkin(metres: F): { shade: F; moss: F; normal: V3 } {
+  const p = positionGeometry;
+  const a = atan(p.z, p.x);
+  const phase = a
+    .mul(BARK_FURROWS)
+    .add(sin(p.y.mul(3.1).add(a.mul(5))).mul(1.4));
+  const near = float(1).sub(
+    smoothstep(
+      BARK_FADE[0],
+      BARK_FADE[1],
+      distance(cameraPosition, positionWorld)
+    )
+  );
+  const ridge = sin(phase).mul(0.5).add(0.5);
+  const up = cameraViewMatrix.mul(vec4(0, 1, 0, 0)).xyz;
+  const across = normalize(cross(up, normalView).add(vec3(1e-4, 0, 0)));
+  const normal = normalize(
+    normalView.add(across.mul(cos(phase).mul(BARK_TILT).mul(near)))
+  );
+  const facing = dot(
+    normalize(normalWorld.xz.add(vec2(1e-4, 0))),
+    vec2(WEATHER.x, WEATHER.y)
+  );
+  const patch = smoothstep(
+    -0.25,
+    0.5,
+    sin(a.mul(3).add(p.y.mul(2.3))).mul(sin(p.y.mul(5.1).sub(a.mul(2))))
+  );
+  const low = float(1).sub(smoothstep(0.4, 1.9, metres));
+  const moss = smoothstep(0.05, 0.8, facing)
+    .mul(low)
+    .mul(patch.mul(0.6).add(0.4))
+    .add(
+      float(1)
+        .sub(smoothstep(0.1, 0.7, metres))
+        .mul(0.15)
+    )
+    .min(0.5);
+  return {
+    shade: mix(float(0.96), mix(0.91, 1, ridge), near),
+    moss,
+    normal,
+  };
+}
+
+/** Tile trunk graphs by their sun (a new app's sun is a new uniform) and
+ *  their raster layout. */
+const tileTrunks = new WeakMap<object, Map<string, TrunkGraph>>();
+const NO_SUN = {};
+
+/**
+ * The trunk material of a tile with foot rasters: its foot turns to the
+ * ground's own colour there (`FootMaterials.trunkEarth`) instead of the
+ * one earth, one shared build per raster layout with the tile's rasters
+ * in its slots; the scene's trunk material elsewhere.
+ */
+function tileTrunkMaterial(
+  sun: UniformNode<"vec3", Vector3> | undefined,
+  foot: FootMaterials | undefined,
+  evergreen = false
+): Material {
+  const earth = foot?.trunkEarth;
+  if (!earth) {
+    return buildTrunkMaterial(sun, evergreen);
+  }
+  let bySun = tileTrunks.get(sun ?? NO_SUN);
+  if (!bySun) {
+    bySun = new Map();
+    tileTrunks.set(sun ?? NO_SUN, bySun);
+  }
+  const key = `trunk|${evergreen ? "evergreen|" : ""}${earth.key}`;
+  let graph = bySun.get(key);
+  if (!graph) {
+    graph = trunkGraph(sun, earth.colour, evergreen);
+    bySun.set(key, graph);
+  }
+  const m = trunkMaterialOf(graph);
+  setSlots(m, earth.slots);
+  setGraph(m, key);
+  return m;
+}
+
+/** How dark a trunk gets in its crown's shadow (× its colour, the sun's
+ *  share of its light being most of it), how much of the sky its crown
+ *  hides just under it, and how much shade a bare crown still gives (its
+ *  branches). */
+const CROWN_ON_TRUNK = 0.5;
+const CROWN_SKY = 0.8;
+
+/**
+ * Why a trunk under its crown looked pasted on: it took no shadow (in the
+ * shadow map the bark shadows itself, a black sleeve) and stood lit under
+ * a dark crown. Here, per vertex, the crown is the sphere the generic crown
+ * is drawn round (CROWN_R about TRUNK_H + CROWN_R / 2, in the matrix's
+ * frame; a register trunk's own frame puts its crown about there too), and
+ * the ray from the bark to the sun is tested against it in that frame (the
+ * sun turned in by the matrix's columns: no inverse); where it passes
+ * through the crown the trunk is in its shade, softly to the rim, less in
+ * a bare season (`crownLeaf`). Under the crown the sky is hidden too: the
+ * trunk darkens toward the crown's base. Returns the factor for the colour.
+ */
+function crownShade(
+  local: V3,
+  sun: UniformNode<"vec3", Vector3> | undefined,
+  evergreen: boolean
+): F {
+  // the crown where the tree's growth carried it
+  const centre = vec3(0, TRUNK_H + CROWN_R * 0.5, 0).add(
+    treeGrowth(float(TRUNK_H))
+  );
+  // a needle tree keeps its crown the year round
+  const leaf = evergreen
+    ? float(1)
+    : mix(float(BARE_SHADE), float(1), crownLeaf);
+  // under the crown: the sky hidden more toward its base
+  const base = TRUNK_H + CROWN_R * 0.5 - CROWN_R;
+  const sky = mix(
+    float(1),
+    float(CROWN_SKY),
+    smoothstep(base * 0.25, base, local.y).mul(leaf)
+  );
+  if (!sun) {
+    return sky;
+  }
+  const toSun = normalize(intoInstanceFrame(sun));
+  const rel = centre.sub(local);
+  const ahead = dot(rel, toSun);
+  const miss = length(rel.sub(toSun.mul(ahead)));
+  const through = float(1)
+    .sub(smoothstep(CROWN_R * 0.55, CROWN_R * 1.05, miss))
+    .mul(step(0, ahead))
+    // by day: the sun over the horizon
+    .mul(smoothstep(0.0, 0.08, sun.y));
+  return sky.mul(mix(float(1), float(CROWN_ON_TRUNK), through.mul(leaf)));
 }
 
 /**
@@ -1036,6 +1516,12 @@ export interface TreeGeos {
   mid: BufferGeometry;
   rich: BufferGeometry;
   trunk: BufferGeometry;
+  /** the trunk without its fork, for the register's own trunks (on
+   *  their own matrices the limbs, placed for the lobed crown, miss
+   *  their crowns); set for a cell that has any */
+  plain?: BufferGeometry;
+  /** the trunks' feet's geometries (tree-foot.ts) */
+  foot?: FootGeos;
 }
 
 /** A crown set over the placements and the crowned precomputed trees. */
@@ -1096,26 +1582,39 @@ function buildTreeCell(
   cell: TreeCell,
   geos: TreeGeos,
   trunkMat: Material,
-  crownMats: CrownMaterials
+  crownMats: CrownMaterials,
+  ground: GroundContext,
+  footMat?: FootMaterials
 ): {
   chunk: VegetationChunk | null;
+  /** a cell of trunks alone: their feet, which no chunk's tier keeps */
+  loose?: LooseFeet;
   meshes: Instances[];
   season: SeasonalCrowns | null;
 } {
   const crownMat = crownMats.leafy;
   const { trees, extras } = cell;
   const crowned = extras.filter((e) => e.crown);
+  const plain = geos.plain ?? geos.trunk;
   if (trees.length + crowned.length === 0) {
-    const trunks = new Instances(geos.trunk, trunkMat, extras.length);
+    const trunks = new Instances(plain, trunkMat, extras.length);
     trunks.castShadow = true;
     extras.forEach((e, i) => trunks.setMatrixAt(i, e.trunk));
     paintBark(trunks, 0, extras);
     finishInstances(trunks);
-    return { chunk: null, meshes: [trunks], season: null };
+    const feet = feetOf(trunks, geos, ground, footMat, false);
+    return {
+      chunk: null,
+      loose: feet ? { feet, trunks } : undefined,
+      meshes: [trunks, ...(feet ?? [])],
+      season: null,
+    };
   }
   const mid = crownMesh(geos.mid, crownMat, trees, crowned, "cheap");
   let rich: Instances;
   let trunks: Instances;
+  // the register's own trunks, apart from the placements' forked ones
+  let own: Instances | undefined;
   if (extras.length === 0) {
     // Born on the mid crowns' matrices (no buffer of their own to drop).
     trunks = new Instances(
@@ -1132,15 +1631,28 @@ function buildTreeCell(
     fitTrunks(trunks, writeTrunkDrops(trunks, trees));
     rich.computeBoundingSphere();
   } else {
-    trunks = new Instances(geos.trunk, trunkMat, trees.length + extras.length);
     rich = crownMesh(geos.rich, crownMat, trees, crowned, "rich");
-    writePlacements(trunks, trees);
-    extras.forEach((e, i) => trunks.setMatrixAt(trees.length + i, e.trunk));
-    paintBark(trunks, trees.length, extras);
-    trunks.instanceMatrix.needsUpdate = true;
-    fitTrunks(trunks, writeTrunkDrops(trunks, trees));
+    own = new Instances(plain, trunkMat, extras.length);
+    extras.forEach((e, i) => own?.setMatrixAt(i, e.trunk));
+    paintBark(own, 0, extras);
+    finishInstances(own);
+    own.castShadow = true;
+    if (trees.length > 0) {
+      trunks = new Instances(geos.trunk, trunkMat, trees.length);
+      writePlacements(trunks, trees);
+      trunks.instanceMatrix.needsUpdate = true;
+      fitTrunks(trunks, writeTrunkDrops(trunks, trees));
+    } else {
+      trunks = own;
+      own = undefined;
+    }
   }
   trunks.castShadow = true;
+  const feet = [
+    // a cell of cones or pines: needle trees' feet
+    ...(feetOf(trunks, geos, ground, footMat, cell.form !== "broad") ?? []),
+    ...((own && feetOf(own, geos, ground, footMat, false)) ?? []),
+  ];
   // The far tier: every other tree of a dense chunk, drawn wider (see
   // keepInFarTier), so a forest stays a closed canopy far away.
   const farTrees = trees.filter((_, i) => keepInFarTier(i, trees.length));
@@ -1180,10 +1692,50 @@ function buildTreeCell(
       tier: "mid",
       trees: trees.length + crowned.length,
       trunks,
+      ownTrunks: own,
+      feet,
     },
-    meshes: [trunks, mid, rich, far],
+    meshes: [trunks, ...(own ? [own] : []), ...feet, mid, rich, far],
     season: seasonCrowns({ far, farSlots, mid, rich }, keys, crownMats),
   };
+}
+
+/** A trunk set's feet (tree-foot.ts), on a tile that has a foot material. */
+function feetOf(
+  trunks: Instances,
+  geos: TreeGeos,
+  ground: GroundContext,
+  footMat: FootMaterials | undefined,
+  needle: boolean
+): Instances[] | undefined {
+  return footMat && geos.foot
+    ? treeFeet(geos.foot, footMat, trunks, footSlopes(trunks, ground), needle)
+    : undefined;
+}
+
+/**
+ * The ground's slope at each trunk's foot (`groundSlope`), two signed
+ * bytes a tree: the feet lie on it instead of flat (tree-foot.ts). The
+ * foot is where the trunk material puts it, its matrix's origin lowered
+ * by its drop.
+ */
+function footSlopes(
+  trunks: Instances,
+  ground: GroundContext
+): InstancedBufferAttribute {
+  const slopes = new Int8Array(trunks.capacity * 2);
+  const m = trunks.instanceMatrix.array as Float32Array;
+  const drops = trunks.geometry.getAttribute(TRUNK_DROP);
+  for (let i = 0; i < trunks.drawCount; i++) {
+    const at = i * 16;
+    const drop = drops ? drops.getX(i) : 0;
+    const x = m[at + 12] - m[at + 4] * drop;
+    const z = m[at + 14] - m[at + 6] * drop;
+    const [sx, sz] = groundSlope(ground, x, z);
+    slopes[i * 2] = Math.round(sx * 127);
+    slopes[i * 2 + 1] = Math.round(sz * 127);
+  }
+  return new InstancedBufferAttribute(slopes, 2, true);
 }
 
 /** The scene's crown materials and their uniforms (sceneCrowns). */
@@ -1230,17 +1782,19 @@ export function buildCrownWarmup(): CrownWarmup {
  * The conifer's three tiers (conifer-crown.ts), each inside the box of the
  * lobed crown the canopy draws at scale 1 — so a placement's matrix stands
  * a cone where it would stand a broadleaf crown, as tall and as wide —
- * and the broadleaf's trunk. Their cull spheres are grown like the lobed
+ * and a trunk (in a tile, the broadleaf's without its fork: the limbs
+ * are placed for the lobed crown). Their cull spheres are grown like the lobed
  * crowns' (`padCrownSphere`): the material reshapes every crown.
  * Exported for its test (the boxes), not used outside this module.
  */
-export function buildConeTiers(broad: TreeGeos): TreeGeos {
+export function buildConeTiers(broad: TreeGeos, trunk = broad.trunk): TreeGeos {
   const box = boxOf(broad.mid);
   return {
     far: padCrownSphere(buildConeGeo(box, CONE_SEGMENTS.far)),
     mid: padCrownSphere(buildConeGeo(box, CONE_SEGMENTS.mid)),
     rich: padCrownSphere(buildConeGeo(box, CONE_SEGMENTS.rich)),
-    trunk: broad.trunk,
+    trunk,
+    foot: broad.foot,
   };
 }
 
@@ -1248,24 +1802,29 @@ export function buildConeTiers(broad: TreeGeos): TreeGeos {
  * The pine's three tiers (conifer-crown.ts `buildPineGeo`): each lobed
  * tier reshaped into the pine's flat-topped crown in its own box, so the
  * placement's matrix (its crown from `pineBase` to its top) fits either,
- * and the broadleaf's trunk. Grown like the lobed crowns' cull spheres.
+ * and a trunk (in a tile, the unforked one). Grown like the lobed crowns' cull spheres.
  * Exported for its test (the boxes), not used outside this module.
  */
-export function buildPineTiers(broad: TreeGeos): TreeGeos {
+export function buildPineTiers(broad: TreeGeos, trunk = broad.trunk): TreeGeos {
   return {
     far: padCrownSphere(buildPineGeo(broad.far)),
     mid: padCrownSphere(buildPineGeo(broad.mid)),
     rich: padCrownSphere(buildPineGeo(broad.rich)),
-    trunk: broad.trunk,
+    trunk,
+    foot: broad.foot,
   };
 }
 
 function* buildTrees(
   trees: Placement[],
   extras: TreeInstance[],
-  crownMats: CrownMaterials
+  crownMats: CrownMaterials,
+  ground: GroundContext,
+  footMat?: FootMaterials,
+  sun?: UniformNode<"vec3", Vector3>
 ): Steps<{
   chunks: VegetationChunk[];
+  loose: LooseFeet[];
   meshes: Instances[];
   seasons: SeasonalCrowns[];
 }> {
@@ -1277,32 +1836,84 @@ function* buildTrees(
     mid: buildCrownGeo(),
     rich: buildCrownGeoRich(),
     trunk: buildTrunkGeo(),
+    foot: footMat ? buildFootGeos() : undefined,
   };
   // the needle trees' cones and pines, only for a tile that has any
   const needles: Partial<Record<CanopyForm, TreeGeos>> = { broad: geos };
-  const geosOf = (form: CanopyForm): TreeGeos => {
-    needles[form] ??= (form === "pine" ? buildPineTiers : buildConeTiers)(geos);
-    return needles[form];
+  // the trunk without its fork, for the needle trees and the register's
+  // own trunks (their limbs are placed for the lobed crown on its matrix)
+  let unforked: BufferGeometry | undefined;
+  const plainTrunk = (): BufferGeometry => (unforked ??= buildTrunkGeo(false));
+  const geosOf = (cell: TreeCell): TreeGeos => {
+    const form = cell.form;
+    let kind = needles[form];
+    if (!kind) {
+      kind = (form === "pine" ? buildPineTiers : buildConeTiers)(
+        geos,
+        plainTrunk()
+      );
+      needles[form] = kind;
+    }
+    return cell.extras.length > 0 ? { ...kind, plain: plainTrunk() } : kind;
   };
-  const trunkMat = buildTrunkMaterial();
+  // made for the cells that wear them: a needle tree's trunk stays under
+  // its crown's shade in winter (the register's own trees all ride in
+  // broadleaf cells)
+  let broadMat: Material | undefined;
+  let needleMat: Material | undefined;
+  const trunkMatOf = (cell: TreeCell): Material =>
+    cell.form === "broad"
+      ? (broadMat ??= tileTrunkMaterial(sun, footMat))
+      : (needleMat ??= tileTrunkMaterial(sun, footMat, true));
 
   const meshes: Instances[] = [];
   const chunks: VegetationChunk[] = [];
+  const loose: LooseFeet[] = [];
   const seasons: SeasonalCrowns[] = [];
   for (const cell of bucketTrees(trees, extras)) {
-    const built = buildTreeCell(cell, geosOf(cell.form), trunkMat, crownMats);
+    const built = buildTreeCell(
+      cell,
+      geosOf(cell),
+      trunkMatOf(cell),
+      crownMats,
+      ground,
+      footMat
+    );
     meshes.push(...built.meshes);
     if (built.chunk) {
       chunks.push(built.chunk);
+    }
+    if (built.loose) {
+      loose.push(built.loose);
     }
     if (built.season) {
       seasons.push(built.season);
     }
     yield;
   }
-  // The crown and trunk materials are scene-wide: a tile's disposal
-  // (disposeObject3D) frees its sets' geometry views and leaves them.
-  return { chunks, meshes, seasons };
+  // The crown materials, and the trunk's off a tile with foot rasters, are
+  // scene-wide: a tile's disposal (disposeObject3D) frees its sets'
+  // geometry views and leaves them; a tile's own trunk and foot materials
+  // (not shared) go with it.
+  return { chunks, loose, meshes, seasons };
+}
+
+/** A cell of trunks alone (the register's, their crowns elsewhere) and
+ *  their feet: no chunk, so `showLooseFeet` switches the feet. */
+interface LooseFeet {
+  feet: Instances[];
+  trunks: Instances;
+}
+
+/** The feet of the trunk-only cells only where one of their trunks is
+ *  near enough to show them (as `createVegetationLod` does a chunk's). */
+function showLooseFeet(all: readonly LooseFeet[], cameraPos: Vector3): void {
+  for (const { feet, trunks } of all) {
+    const on = nearestOf(trunks, cameraPos) < FOOT_SHOWN_M;
+    for (const f of feet) {
+      f.visible = on && seasonalFoot(f);
+    }
+  }
 }
 
 /**
@@ -1366,6 +1977,7 @@ export function* vegetationSteps(
   let multiTuft = LOOK_DEFAULTS.multiTuft;
   let chunks: VegetationChunk[] = [];
   let seasons: SeasonalCrowns[] = [];
+  let loose: LooseFeet[] = [];
 
   const { ndviAt, keepTree } = features;
   // whole rows per run: a row's trees are seeded by their place along it
@@ -1383,9 +1995,17 @@ export function* vegetationSteps(
   );
   const extras = features.extraTrees ?? [];
   if (trees.length + extras.length > 0) {
-    const built = yield* buildTrees(trees, extras, crownMats);
+    const built = yield* buildTrees(
+      trees,
+      extras,
+      crownMats,
+      ctx,
+      ctx.footMaterial?.(crownMats.uniforms.sunDirection),
+      crownMats.uniforms.sunDirection
+    );
     group.add(...built.meshes);
     chunks = built.chunks;
+    loose = built.loose;
     seasons = built.seasons;
   }
   return {
@@ -1397,14 +2017,34 @@ export function* vegetationSteps(
     multiTuft: () => multiTuft,
     setSeason: (day) => applySeasons(seasons, day),
     // The chunks' tiers are createVegetationLod's; the canopy keeps no other
-    // crowns.
-    updateLod: () => false,
+    // crowns, only the trunk-only cells' feet (no shadow casters).
+    updateLod: (cameraPos) => {
+      showLooseFeet(loose, cameraPos);
+      return false;
+    },
   };
 }
 
-/** Metres from `cameraPos` to the chunk's nearest tree (sphere centre minus radius). */
+/** Metres from `cameraPos` to the chunk's nearest crown (sphere centre
+ *  minus radius): what the crown tiers are planned by. */
 function nearestTree(chunk: VegetationChunk, cameraPos: Vector3): number {
-  const sphere = chunk.mid.geometry.boundingSphere;
+  return nearestOf(chunk.mid, cameraPos);
+}
+
+/** Metres to the chunk's nearest trunk, the register's own included (their
+ *  crowns are drawn by the cadastre's layer): what the feet are shown by. */
+function nearestTrunk(chunk: VegetationChunk, cameraPos: Vector3): number {
+  return Math.min(
+    nearestOf(chunk.trunks, cameraPos),
+    chunk.ownTrunks
+      ? nearestOf(chunk.ownTrunks, cameraPos)
+      : Number.POSITIVE_INFINITY
+  );
+}
+
+/** Metres from `cameraPos` to a set's sphere (centre minus radius). */
+function nearestOf(set: Instances, cameraPos: Vector3): number {
+  const sphere = set.geometry.boundingSphere;
   return sphere
     ? Math.max(cameraPos.distanceTo(sphere.center) - sphere.radius, 0)
     : Number.POSITIVE_INFINITY;
@@ -1417,6 +2057,10 @@ function showTier(chunk: VegetationChunk, tier: CrownTier): void {
   chunk.far.visible = tier === "far";
   // A trunk 550 m out is below a pixel; the far tier drops it.
   chunk.trunks.visible = tier !== "far";
+  if (chunk.ownTrunks) {
+    chunk.ownTrunks.visible = tier !== "far";
+  }
+  // (the feet: `createVegetationLod`, by the nearest tree's distance)
 }
 
 /**
@@ -1463,6 +2107,17 @@ export function createVegetationLod(): (
       if (tiers[i] !== all[i].tier) {
         showTier(all[i], tiers[i]);
         changed = true;
+      }
+      // the feet only where one of their trees is near enough to show them
+      // (tree-foot.ts fades them out by FOOT_SHOWN_M): a far chunk draws
+      // none of their sets
+      const feet = all[i].feet ?? [];
+      const feetOn =
+        feet.length > 0 &&
+        tiers[i] !== "far" &&
+        nearestTrunk(all[i], cameraPos) < FOOT_SHOWN_M;
+      for (const set of feet) {
+        set.visible = feetOn && seasonalFoot(set);
       }
     }
     return changed;

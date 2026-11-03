@@ -10,7 +10,13 @@ import {
   Vector2,
 } from "three/webgpu";
 import { texture, uv } from "three/tsl";
-import { setSlots, slotTexture, slotUniform, stubLike } from "./material-slots";
+import {
+  ownSlotValue,
+  setSlots,
+  slotTexture,
+  slotUniform,
+  stubLike,
+} from "./material-slots";
 
 interface Image {
   data?: unknown;
@@ -66,6 +72,20 @@ test("a uniform slot reads the drawn material's value", () => {
   const origin = new Vector2(1010, 20);
   setSlots(material, { origin });
   slot.update(frameFor(material));
+  expect(slot.value).toBe(origin);
+});
+
+test("an own-slot value reads the object's own material, not the drawing one", () => {
+  const slot = ownSlotValue("origin", new Vector2(0, 0));
+  const own = new MeshStandardNodeMaterial();
+  const origin = new Vector2(1010, 20);
+  setSlots(own, { origin });
+  // a style's override draws the mesh: it has no slots of its own
+  const override = new MeshStandardNodeMaterial();
+  slot.update({
+    material: override,
+    object: { material: own },
+  } as unknown as NodeFrame);
   expect(slot.value).toBe(origin);
 });
 

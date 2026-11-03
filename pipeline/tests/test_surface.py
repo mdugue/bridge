@@ -14,6 +14,17 @@ from bake.common import Tile
 ROOT = Path(__file__).resolve().parents[2]
 
 
+# --- B20 the seeds of a path's carried kind --------------------------------
+
+
+def test_a_sidewalk_way_seeds_no_carried_kind():
+    lines = [shapely.LineString([(0, 0), (40, 0)])] * 2
+    tags = ['"surface"=>"asphalt","footway"=>"sidewalk"', '"surface"=>"asphalt"']
+    _, _, walks, seeds = surface.line_shapes(lines, ["footway", "footway"], tags)
+    assert len(walks) == 2 and len(seeds) == 1
+    assert seeds[0] is walks[1]
+
+
 # --- B23 parking ------------------------------------------------------------
 
 
@@ -95,6 +106,34 @@ def test_path_defaults_asphalt_in_town_unpaved_outside(tmp_path, monkeypatch):
     bef = shapely.box(x0 + 40, y0 + 150, x0 + 60, y0 + 190)
     monkeypatch.setattr(surface, "dlm_path_surfaces", lambda t: [(bef, unpaved)])
     assert surface.path_defaults(tile, 200)[30, 51] == unpaved  # the DLM's BEF wins
+    ways = np.zeros((200, 200), np.uint8)
+    ways[:, 50] = 2  # a tagged way down the path's west half
+    kind = surface.path_defaults(tile, 200, ways, ways)
+    assert kind[180, 51] == 2  # carried on across the path's width
+    assert kind[30, 51] == unpaved  # but the BEF still wins
+
+
+def test_a_tagged_way_carries_its_kind_along_its_path():
+    sand = surface.SURFACE_OF["unpaved"]
+    path = np.zeros((20, 20), bool)
+    path[:, 5:12] = True  # a path 7 texels wide
+    walk = np.zeros((20, 20), np.uint8)
+    walk[:, 7:10] = sand  # its tagged way's buffer, 3 wide
+    walk[:, 15] = 2  # another way off the path
+    carried = surface.along_paths(walk, walk, path)
+    assert (carried[:, 5:7] == sand).all() and (carried[:, 10:12] == sand).all()
+    assert (carried[:, 7:10] == 0).all()  # the buffer keeps its own
+    assert (carried[:, 12:] == 0).all() and (carried[:, :5] == 0).all()
+    far = np.zeros((1, 30), bool)
+    far[0, :] = True
+    one = np.zeros((1, 30), np.uint8)
+    one[0, 0] = sand
+    reached = surface.along_paths(one, one, far, reach=4)
+    assert (reached[0, 1:5] == sand).all() and (reached[0, 5:] == 0).all()
+    # an area or a sidewalk band beside the path seeds nothing
+    lot = np.zeros((1, 30), np.uint8)
+    lot[0, 0] = surface.SURFACE_OF["asphalt"]
+    assert (surface.along_paths(np.zeros_like(lot), lot, far) == 0).all()
 
 
 # --- B19 the arable class ----------------------------------------------------
