@@ -155,12 +155,12 @@ function addPrimitive(
   input: Omit<MeshInput, "children" | "extras">
 ): Primitive {
   const buffer = doc.getRoot().listBuffers()[0] ?? doc.createBuffer();
-  type Array =
+  type Values =
     | Float32Array<ArrayBuffer>
     | Uint8Array<ArrayBuffer>
     | Uint16Array<ArrayBuffer>
     | Uint32Array<ArrayBuffer>;
-  const accessor = (array: Array, type: "SCALAR" | "VEC2" | "VEC3") =>
+  const accessor = (array: Values, type: "SCALAR" | "VEC2" | "VEC3") =>
     doc.createAccessor().setArray(array).setType(type).setBuffer(buffer);
   const prim = doc
     .createPrimitive()
