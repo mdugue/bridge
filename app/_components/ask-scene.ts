@@ -32,6 +32,27 @@ export function instantAt(hour: number, day: Date, date?: string): Date {
   return new Date(y, m - 1, d, 0, Math.min(minutes, 24 * 60 - 1));
 }
 
+/** How long `was_ist_da` waits for a glide to land at most (ms). */
+const GLIDE_WAIT_MS = 8000;
+/** Modell's centring glide (CENTRE_S) and a frame to spare (ms). */
+const MODELL_CENTRE_MS = 700;
+/** A miss after a glide, asked again while the tiles there stream in. */
+const MISS_RETRIES = 6;
+const MISS_RETRY_MS = 500;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+/** Resolves once `done` holds, or after `maxMs`. */
+async function until(done: () => boolean, maxMs: number): Promise<void> {
+  for (let waited = 0; !done() && waited < maxMs; waited += 100) {
+    await sleep(100);
+  }
+}
+
 export function useAskScene(
   handleRef: RefObject<CityWalkHandle | null>,
   look: LookState,
@@ -43,8 +64,8 @@ export function useAskScene(
   return useMemo(() => {
     const offered = new Set(siteDataLayers(site.dataLayers).map((d) => d.key));
     const credits = cardCredits(site);
-    // the last glide's end: `was_ist_da` asks where it lands, not on the way
-    const glide = { landing: Promise.resolve() };
+    // Modell's centring glide (no getter for it): over when this is
+    const glide = { centred: Promise.resolve() };
     return {
       from: () => {
         const c = handleRef.current?.getCameraState();
@@ -70,12 +91,19 @@ export function useAskScene(
         };
       },
       look: async () => {
-        await glide.landing;
         const h = handleRef.current;
         if (!h) {
           return { gefunden: false, hinweis: "Die Szene lädt noch." };
         }
-        const asked = h.inquireAt();
+        // where a glide lands, not on its way — any glide, at any frame rate
+        await glide.centred;
+        await until(() => h.getGlideTarget() === null, GLIDE_WAIT_MS);
+        // and once the tiles there have come: a miss is asked again
+        let asked = h.inquireAt();
+        for (let i = 0; !asked && i < MISS_RETRIES; i++) {
+          await sleep(MISS_RETRY_MS);
+          asked = h.inquireAt();
+        }
         if (!asked) {
           return {
             gefunden: false,
@@ -112,19 +140,10 @@ export function useAskScene(
         if (!h) {
           return false;
         }
-        let land = () => {};
-        glide.landing = new Promise((resolve) => {
-          land = resolve;
-        });
-        const seconds = h.flyToViewpoint(view, {
-          onProgress: (t) => {
-            if (t >= 1) {
-              land();
-            }
-          },
-        });
-        // a drag that takes the glide over never lands it: its time does
-        setTimeout(land, Math.min(seconds, 10) * 1000 + 100);
+        // 0 s: Modell centres on it, gliding for CENTRE_S (model-rig.ts)
+        if (h.flyToViewpoint(view) === 0) {
+          glide.centred = sleep(MODELL_CENTRE_MS);
+        }
         return true;
       },
       within: (x, y) => siteHoldsPoint(site, x, y),

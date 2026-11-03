@@ -228,5 +228,8 @@ export function useDictation(): Dictation {
     setListening(true);
   }, []);
   useEffect(() => () => current.current?.abort(), []);
-  return { listening, problem, start, stop, supported };
+  return useMemo(
+    () => ({ listening, problem, start, stop, supported }),
+    [listening, problem, start, stop, supported]
+  );
 }
