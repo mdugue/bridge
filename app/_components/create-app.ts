@@ -59,6 +59,7 @@ import {
 import type { Landmark } from "@/lib/city/landmarks";
 import {
   BOOT_VEIL,
+  NO_VEIL,
   bootFrontier,
   loadFrontier,
   stepVeil,
@@ -3090,6 +3091,8 @@ async function bootApp(
   let loadVeil: VeilState = BOOT_VEIL;
   // the first load is through (`checkLoaded`)
   let bootLoaded = false;
+  // the last frame drew it (the frame pacer)
+  let veilShown = false;
   const stepLoadVeil = (dt: number, unveiled: boolean) => {
     const at = streamCamera.position;
     // Until the first load is through, the ring walks out with the last
@@ -3109,14 +3112,15 @@ async function bootApp(
           at.x + offset.cx,
           offset.cy - at.z
         );
-    loadVeil = stepVeil(loadVeil, frontier, dt);
+    // Hidden after the boot (an export, Modell), it does not run on
+    // either: measured from another camera, it would come back stale.
+    loadVeil =
+      unveiled && bootLoaded ? NO_VEIL : stepVeil(loadVeil, frontier, dt);
     // an exported image is the city, not its loading
     const asked = unveiled ? { strength: 0 } : pocVeil();
-    postStack.setLoadVeil(
-      asked ? { ...loadVeil, ...asked } : loadVeil,
-      at.x,
-      at.z
-    );
+    const drawn = asked ? { ...loadVeil, ...asked } : loadVeil;
+    veilShown = drawn.strength > 0;
+    postStack.setLoadVeil(drawn, at.x, at.z);
   };
 
   // Motion-keyed quality regression. Derived from the CAMERA, not the input
@@ -3746,11 +3750,7 @@ async function bootApp(
     }
     // (the loading veil breathes, sweeps and lifts at the full rate)
     const busy =
-      moved ||
-      exporting ||
-      !sceneSettled ||
-      dataLayersMove ||
-      loadVeil.strength > 0;
+      moved || exporting || !sceneSettled || dataLayersMove || veilShown;
     sceneStill = stillness.frame(time, busy);
     opts.pace.setStill(sceneStill);
   };
