@@ -78,3 +78,19 @@ test("facts read Wikidata's statements with their sources", () => {
     { quelle: "OpenStreetMap", lizenz: "ODbL", vermerk: "© OSM" },
   ]);
 });
+
+test("a landmark's radius reaches its farthest building, a kilometre at most", () => {
+  const spread: WissenTile = {
+    ...TILE,
+    buildings: [
+      { id: "a", wd: "Q1", x: 100, y: 100, z: 110, r: 20 },
+      { id: "b", wd: "Q1", x: 140, y: 100, z: 110, r: 10 },
+    ],
+  };
+  expect(knowledgeOf(INDEX, [spread]).landmarkRadius.get("Q1")).toBe(50);
+  const park: WissenTile = {
+    ...TILE,
+    buildings: [{ id: "a", wd: "Q1", x: 2000, y: 100, z: 110, r: 30 }],
+  };
+  expect(knowledgeOf(INDEX, [park]).landmarkRadius.get("Q1")).toBe(1000);
+});

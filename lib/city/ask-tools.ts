@@ -86,6 +86,9 @@ export const lookTool = toolDefinition({
 
 /** The most places one `zeige` shows. */
 export const SHOW_TARGETS = 8;
+/** The widest footprint radius a place may name (m): what
+ *  `knowledgeOf` caps a landmark's at. */
+export const SHOW_RADIUS = 1000;
 
 export const showTool = toolDefinition({
   name: "zeige",
@@ -95,7 +98,7 @@ export const showTool = toolDefinition({
     ziele: z
       .array(
         z.object({
-          name: z.string().min(1).max(60).describe("wie der Ort heißt"),
+          name: z.string().min(1).max(200).describe("wie der Ort heißt"),
           x: coordinate.describe("Rechtswert"),
           y: coordinate.describe("Hochwert"),
           z: z
@@ -111,13 +114,13 @@ export const showTool = toolDefinition({
           r: z
             .number()
             .min(0)
-            .max(1000)
+            .max(SHOW_RADIUS)
             .optional()
             .describe("Radius des Grundrisses (m)"),
         })
       )
       .min(1)
-      .max(SHOW_TARGETS),
+      .max(ASK_LIMITS.results), // a search's whole list; the first eight are shown
     alle: z
       .boolean()
       .default(true)

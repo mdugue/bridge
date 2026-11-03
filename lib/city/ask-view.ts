@@ -98,6 +98,10 @@ export interface FrameContext {
 export interface Framed {
   /** from the eye to the middle of the places (m) */
   distance: number;
+  /** the ground the eye's height is taken over (m a.s.l.), where a
+   *  place's ground is known: the glide takes the eye over it, not over
+   *  the ground under the eye, so a slope does not lift the frame */
+  ground?: number;
   view: ViewpointGeometry;
 }
 
@@ -314,7 +318,8 @@ function seenShare(
  * the sun behind the camera (lit facades), on the places standing beside
  * rather than behind each other, and — heaviest — on the sight lines to
  * their tops that no loaded building cuts. The eye's height is taken
- * above the places' ground (the scene's glide measures the real one).
+ * above the places' lowest ground, which `ground` hands the glide where
+ * the tools knew it (else the glide measures the ground under the eye).
  */
 export function frameTargets(
   targets: readonly AskTarget[],
@@ -359,6 +364,7 @@ export function frameTargets(
   const ground = Math.min(...points.map((p) => p.z));
   return {
     distance: Math.round(best.distance),
+    ...(targets.some((t) => t.z !== undefined) ? { ground } : {}),
     view: {
       epsg: { x: round1(best.eye.x), y: round1(best.eye.y) },
       aboveGround: Math.round(best.eye.z - ground),

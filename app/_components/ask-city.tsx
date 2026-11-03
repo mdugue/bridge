@@ -795,7 +795,8 @@ function Conversation({
                     />
                     {last && !pending && (
                       <AnswerChipRows
-                        ask={ask}
+                        // a chip's question leaves a typed draft where it is
+                        ask={(q) => ask(q, reading, false)}
                         busy={chat.isLoading}
                         chips={answerChips(chat.messages, i)}
                         scene={scene}

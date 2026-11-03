@@ -70,3 +70,29 @@ test("zeige leaves out places off the city, refuses when none is on it, and wait
   const loading = { ...STUB, show: () => false };
   expect(showPlaces(loading, { ziele: [place] }).ok).toBe(false);
 });
+
+test("zeige takes the eye over the places' ground and shows eight at most", () => {
+  const grounds: (number | undefined)[] = [];
+  let shown = 0;
+  const scene = {
+    ...STUB,
+    show: (v: ViewpointGeometry, ground?: number) => {
+      grounds.push(ground);
+      shown = v.aboveGround;
+      return true;
+    },
+  };
+  const place = { name: "Kirche", x: 0, y: 0, z: 140, h: 40, r: 20 };
+  showPlaces(scene, { ziele: [place] });
+  expect(grounds).toEqual([140]);
+  expect(shown).toBeGreaterThan(0);
+  // a place whose ground nobody knew: the glide measures it
+  showPlaces(scene, { ziele: [{ ...place, z: undefined }] });
+  expect(grounds[1]).toBeUndefined();
+  const many = Array.from({ length: 12 }, (_, i) => ({
+    ...place,
+    name: `Ort ${i}`,
+    x: i * 20,
+  }));
+  expect(showPlaces(scene, { ziele: many }).gezeigt).toHaveLength(8);
+});

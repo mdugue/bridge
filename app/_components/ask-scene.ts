@@ -251,12 +251,12 @@ export function useAskScene(
         looks.stop.abort();
         looks.stop = new AbortController();
       },
-      show: (view) => {
+      show: (view, ground) => {
         const h = handleRef.current;
         if (!h) {
           return false;
         }
-        h.flyToViewpoint(view);
+        h.flyToViewpoint(view, ground === undefined ? undefined : { ground });
         return true;
       },
       within: (x, y) => siteHoldsPoint(site, x, y),

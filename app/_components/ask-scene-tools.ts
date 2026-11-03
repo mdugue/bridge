@@ -8,6 +8,7 @@ import { clientTools } from "@tanstack/ai-client";
 import {
   layerTool,
   lookTool,
+  SHOW_TARGETS,
   showTool,
   styleTool,
   timeTool,
@@ -33,8 +34,9 @@ export interface AskScene {
   /** the scene's time to `hour` (of `date`, YYYY-MM-DD, or today's day);
    *  the instant it set, as text */
   setTime: (hour: number, date?: string) => string;
-  /** glides to a view; false while there is no scene to move */
-  show: (view: ViewpointGeometry) => boolean;
+  /** glides to a view, its eye over `ground` (m a.s.l.) where given;
+   *  false while there is no scene to move */
+  show: (view: ViewpointGeometry, ground?: number) => boolean;
   /** whether a point (site CRS) lies on one of the site's tiles */
   within: (x: number, y: number) => boolean;
   /** what the framing reads of the moment: the screen, the sun, the
@@ -101,7 +103,9 @@ export function showPlaces(
   scene: AskScene,
   ask: { alle?: boolean; aus_der_luft?: boolean; ziele: readonly AskPlace[] }
 ): Record<string, unknown> {
-  const places = ask.ziele.filter((p) => scene.within(p.x, p.y));
+  const places = ask.ziele
+    .filter((p) => scene.within(p.x, p.y))
+    .slice(0, SHOW_TARGETS);
   const [first] = places;
   if (!first) {
     return { ok: false, ausserhalb: true, hinweis: OUTSIDE };
@@ -116,7 +120,7 @@ export function showPlaces(
   const all = ask.alle !== false && places.length > 1;
   const framed = all ? frameTargets(places, context) : null;
   if (framed && framed.distance <= AERIAL_REACH) {
-    return scene.show(framed.view)
+    return scene.show(framed.view, framed.ground)
       ? {
           ok: true,
           gezeigt: places.map((p) => p.name),
@@ -125,7 +129,7 @@ export function showPlaces(
       : LOADING;
   }
   const alone = frameTargets([first], context);
-  if (!scene.show(alone.view)) {
+  if (!scene.show(alone.view, alone.ground)) {
     return LOADING;
   }
   return {

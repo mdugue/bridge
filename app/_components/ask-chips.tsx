@@ -9,7 +9,7 @@ import type { UIMessage } from "@tanstack/ai-react";
 import { MapPinIcon } from "lucide-react";
 import { nearReach } from "@/lib/city/ask-knowledge";
 import { ASK_LIMITS } from "@/lib/city/ask-city";
-import { NEAR_RADIUS } from "@/lib/city/ask-tools";
+import { NEAR_RADIUS, SHOW_TARGETS } from "@/lib/city/ask-tools";
 import { type AskPlace, type AskScene, showPlaces } from "./ask-scene-tools";
 
 /** What an answer's chips offer. */
@@ -132,17 +132,18 @@ const CHIP =
 
 function PlaceRow({
   busy,
-  chips,
+  onFoot,
+  places,
   scene,
 }: {
   busy: boolean;
-  chips: AnswerChips;
+  onFoot: boolean;
+  places: readonly AskPlace[];
   scene: AskScene;
 }) {
-  const { places } = chips;
   // on foot when the answer stood on the street; not while an answer's
   // own glide may still be on its way
-  const air = !chips.onFoot;
+  const air = !onFoot;
   return (
     <fieldset aria-label="Orte" className="flex flex-wrap gap-1">
       {places.map((p, i) => (
@@ -221,14 +222,23 @@ export function AnswerChipRows({
   chips: AnswerChips;
   scene: AskScene;
 }) {
-  const { near, places, questions } = chips;
+  const { near, questions } = chips;
+  // what `zeige` showed of them: the places on the city, the first eight
+  const places = chips.places
+    .filter((p) => scene.within(p.x, p.y))
+    .slice(0, SHOW_TARGETS);
   if (places.length === 0 && questions.length === 0 && near === null) {
     return null;
   }
   return (
     <div className="flex flex-col gap-1.5 pt-1" data-testid="ask-chips">
       {places.length > 0 && (
-        <PlaceRow busy={busy} chips={chips} scene={scene} />
+        <PlaceRow
+          busy={busy}
+          onFoot={chips.onFoot}
+          places={places}
+          scene={scene}
+        />
       )}
       {near && <ReachRow ask={ask} busy={busy} near={near} />}
       {questions.length > 0 && (

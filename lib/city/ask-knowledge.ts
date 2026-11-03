@@ -6,6 +6,7 @@
  * and hands them in.
  */
 import { ASK_LIMITS } from "./ask-city";
+import { SHOW_RADIUS } from "./ask-tools";
 import {
   matchesQuery,
   nearby,
@@ -39,7 +40,12 @@ export function knowledgeOf(
   for (const b of buildings) {
     const lm = b.wd === undefined ? undefined : at.get(b.wd);
     if (lm && b.r !== undefined) {
-      const reach = Math.hypot(b.x - lm.x, b.y - lm.y) + b.r;
+      // a landmark spread over a park or a whole quarter stays one place
+      // `zeige` can take
+      const reach = Math.min(
+        Math.hypot(b.x - lm.x, b.y - lm.y) + b.r,
+        SHOW_RADIUS
+      );
       landmarkRadius.set(
         lm.id,
         Math.max(landmarkRadius.get(lm.id) ?? 0, reach)
