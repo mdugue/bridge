@@ -959,7 +959,7 @@ test("cityFrame is the frame the bake recenters a tile in, without the parse", (
   expect(frame.offset).toEqual({ cx: 412_155, cy: 5_656_105 });
   expect([...frame.matrix.elements]).toEqual([...baked.matrix.elements]);
   expect(frame.offset).toEqual(baked.offset);
-  expect(frame.epsg).toBe(25833);
+  expect(frame.epsg).toBe(25_833);
 });
 
 test("normals round a curve within one object's walls, never into its roof, another object or a measured face", () => {

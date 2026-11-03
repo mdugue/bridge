@@ -107,23 +107,23 @@ test("a pass after a tile left plans the tiles still there, from their own tiers
   // Two tiles 2 km apart, the camera at the first: its chunk rich, the
   // other's far.
   const near = buildVegetation({ rows: [], canopy: [canopy(5, 12)] }, ctx);
-  const far = buildVegetation({ rows: [], canopy: [canopy(2_005, 12)] }, ctx);
+  const far = buildVegetation({ rows: [], canopy: [canopy(2005, 12)] }, ctx);
   const lod = createVegetationLod();
   expect(lod([near, far], new Vector3(5, 100, 0))).toBe(true);
   expect([near.chunks[0].tier, far.chunks[0].tier]).toEqual(["rich", "far"]);
   // The first tile leaves; between the far tier's in and out distances of
   // the second, it keeps the far tier it has (the state reused for it is
   // its own, not the rich one the first chunk left in that slot).
-  expect(lod([far], new Vector3(2_005 + 600, 100, 0))).toBe(false);
+  expect(lod([far], new Vector3(2005 + 600, 100, 0))).toBe(false);
   expect(far.chunks[0].tier).toBe("far");
   // Walking up to it, it goes rich.
-  expect(lod([far], new Vector3(2_005, 100, 0))).toBe(true);
+  expect(lod([far], new Vector3(2005, 100, 0))).toBe(true);
   expect(far.chunks[0].tier).toBe("rich");
 });
 
 test("far away a chunk draws the far crown and no trunks", () => {
   const built = buildVegetation({ rows: [], canopy: [canopy(5, 12)] }, ctx);
-  expect(createVegetationLod()([built], new Vector3(5_000, 100, 0))).toBe(true);
+  expect(createVegetationLod()([built], new Vector3(5000, 100, 0))).toBe(true);
   const [chunk] = built.chunks;
   expect(chunk.tier).toBe("far");
   expect([chunk.far.visible, chunk.mid.visible, chunk.rich.visible]).toEqual([

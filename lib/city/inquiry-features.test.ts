@@ -81,7 +81,7 @@ const linde: TreeInquiry = {
   kind: "tree",
   tile: "t",
   index: 0,
-  position: [412089.7, 5656000.4],
+  position: [412_089.7, 5_656_000.4],
   osm: false,
   conifer: false,
   genus: "Tilia",
@@ -214,7 +214,7 @@ test("a named fountain with a figure, its basin from OSM, its name official", ()
     {
       kind: "monument",
       tile: "t",
-      position: [412015, 5656853.7],
+      position: [412_015, 5_656_853.7],
       properties: {
         kind: "fountain",
         name: "Gänsedieb-Brunnen",
@@ -247,7 +247,7 @@ test("a bridge: name and deck from the DLM, structure and span from Wikidata", (
       kind: "bridge",
       tile: "t",
       length: 263.4,
-      position: [412700, 5656900],
+      position: [412_700, 5_656_900],
       properties: {
         name: "Albertbrücke",
         kind: "road",
@@ -292,7 +292,7 @@ test("a statue typed by OSM: its form, maker and material, its name official", (
     {
       kind: "monument",
       tile: "t",
-      position: [411600, 5656500],
+      position: [411_600, 5_656_500],
       properties: {
         kind: "statue",
         name: "Martin-Luther-Denkmal",
@@ -323,7 +323,7 @@ test("a monument whose material only Wikidata names quotes it for that", () => {
     {
       kind: "monument",
       tile: "t",
-      position: [411791, 5657042],
+      position: [411_791, 5_657_042],
       properties: {
         kind: "statue",
         name: "Goldener Reiter",
@@ -353,7 +353,7 @@ test("a column measured in the laser scan, a stele measured in the open", () => 
     {
       kind: "monument",
       tile: "t",
-      position: [412000, 5656000],
+      position: [412_000, 5_656_000],
       properties: {
         kind: "column",
         name: "Nikolaisäule",
@@ -373,7 +373,7 @@ test("a column measured in the laser scan, a stele measured in the open", () => 
     {
       kind: "monument",
       tile: "t",
-      position: [412000, 5656000],
+      position: [412_000, 5_656_000],
       properties: { kind: "statue", source: "osm", form: "stele", hm: 2.4 },
     },
     provenance,
@@ -388,7 +388,7 @@ test("a column measured in the laser scan, a stele measured in the open", () => 
     {
       kind: "monument",
       tile: "t",
-      position: [412000, 5656000],
+      position: [412_000, 5_656_000],
       properties: { kind: "statue", source: "osm", height: 3, hm: 2.4 },
     },
     provenance,

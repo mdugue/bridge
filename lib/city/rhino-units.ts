@@ -26,12 +26,12 @@ const METRES: Readonly<Record<number, number>> = {
   17: 1e6, // megametres
   18: 1e9, // gigametres
   19: 0.9144, // yards
-  20: 3.527_777_8e-4, // printer's points (1/72 in)
-  21: 4.233_333e-3, // printer's picas
+  20: 3.5277778e-4, // printer's points (1/72 in)
+  21: 4.233333e-3, // printer's picas
   22: 1852, // nautical miles
-  23: 1.495_978_707e11, // astronomical units
-  24: 9.460_730_472_580_8e15, // light years
-  25: 3.085_677_581_49e16, // parsecs
+  23: 1.495978707e11, // astronomical units
+  24: 9.4607304725808e15, // light years
+  25: 3.08567758149e16, // parsecs
 };
 
 /** The unit's length in metres (1 where unknown). */

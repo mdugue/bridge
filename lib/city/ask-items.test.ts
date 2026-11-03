@@ -30,7 +30,7 @@ const read = <F>(kind: string) =>
     ) as FeatureCollection<F>
   ).features ?? [];
 
-const offset = { cx: 412000, cy: 5656000 };
+const offset = { cx: 412_000, cy: 5_656_000 };
 const ctx = { offset, tile: TILE, heightAt: () => 110 };
 const down = { x: 0, y: -1, z: 0 };
 

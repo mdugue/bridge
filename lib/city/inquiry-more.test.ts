@@ -24,7 +24,7 @@ const HAMBURG: CardCredits = {
   provider: "Freie und Hansestadt Hamburg, LGV, dl-de/by-2-0",
 };
 
-const at: [number, number] = [411000, 5656000];
+const at: [number, number] = [411_000, 5_656_000];
 
 test("a tree without a register says what was measured, and no species", () => {
   const card = canopyCard(

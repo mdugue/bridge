@@ -114,7 +114,7 @@ const decimal = new Intl.NumberFormat("de-DE", {
 /** A linear-RGB colour as CSS hex (sRGB). */
 export function cssColour([r, g, b]: Rgb): string {
   const channel = (c: number) => {
-    const v = c <= 0.003_130_8 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055;
+    const v = c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055;
     return Math.round(Math.min(Math.max(v, 0), 1) * 255)
       .toString(16)
       .padStart(2, "0");

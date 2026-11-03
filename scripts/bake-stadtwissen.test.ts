@@ -142,7 +142,7 @@ test("the index lists each landmark once, most notable first, with its facts", (
   });
   const index = stadtwissenIndex({
     site: "probe",
-    epsg: 25833,
+    epsg: 25_833,
     tiles: [{ id: "a", file: "stadtwissen_a.json" }],
     sources: {},
     landmarks: [
@@ -163,7 +163,7 @@ test("the index lists each landmark once, most notable first, with its facts", (
 
 test("monuments in one metre keep their ids by name, whatever the order", () => {
   const plaque = (name: string) => ({
-    geometry: { type: "Point", coordinates: [411000.2, 5656000.4] },
+    geometry: { type: "Point", coordinates: [411_000.2, 5_656_000.4] },
     properties: { name, kind: "stone" },
   });
   const square = {

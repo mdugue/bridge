@@ -44,7 +44,7 @@ const read = <F>(kind: string) =>
     ) as FeatureCollection<F>
   ).features ?? [];
 
-const offset = { cx: 412000, cy: 5656000 };
+const offset = { cx: 412_000, cy: 5_656_000 };
 const ctx = { offset, tile: TILE, heightAt: () => 110 };
 const down = { x: 0, y: -1, z: 0 };
 
@@ -206,15 +206,15 @@ test("a lamp or a bench on a bridge is asked on its deck, a wall lantern at its 
       river: [],
       trams: [],
       lamps: [
-        { geometry: pt(412010, 5656020), properties: { h: 5, deck: 125 } },
+        { geometry: pt(412_010, 5_656_020), properties: { h: 5, deck: 125 } },
         {
-          geometry: pt(412030, 5656020),
-          properties: { h: 3.5, wall: [412030, 5656020.5] },
+          geometry: pt(412_030, 5_656_020),
+          properties: { h: 3.5, wall: [412_030, 5_656_020.5] },
         },
       ],
       furniture: [
         {
-          geometry: pt(412050, 5656020),
+          geometry: pt(412_050, 5_656_020),
           properties: { k: "bench", deck: 125 },
         },
       ],
@@ -223,16 +223,16 @@ test("a lamp or a bench on a bridge is asked on its deck, a wall lantern at its 
   );
   // a ray along the street at height y (m), from the west
   const along = (y: number, x: number) => {
-    const w = epsgToWorld(x - 5, 5656020, offset);
+    const w = epsgToWorld(x - 5, 5_656_020, offset);
     return hitsInSets({ x: w.x, y, z: w.z }, { x: 1, y: 0, z: 0 }, own, 10)[0]
       ?.target.kind;
   };
-  expect(along(127, 412010)).toBe("lamp"); // the post on the deck
-  expect(along(112, 412010)).toBeUndefined(); // nothing on the ground below
-  expect(along(113.4, 412030)).toBe("lamp"); // the lantern's head
-  expect(along(111, 412030)).toBeUndefined(); // no post under it
-  expect(along(125.5, 412050)).toBe("furniture");
-  expect(along(110.5, 412050)).toBeUndefined();
+  expect(along(127, 412_010)).toBe("lamp"); // the post on the deck
+  expect(along(112, 412_010)).toBeUndefined(); // nothing on the ground below
+  expect(along(113.4, 412_030)).toBe("lamp"); // the lantern's head
+  expect(along(111, 412_030)).toBeUndefined(); // no post under it
+  expect(along(125.5, 412_050)).toBe("furniture");
+  expect(along(110.5, 412_050)).toBeUndefined();
 });
 
 test("a tall mast is asked at its post and at the head on its arm", () => {
@@ -246,7 +246,7 @@ test("a tall mast is asked at its post and at the head on its arm", () => {
       trams: [],
       lamps: [
         {
-          geometry: { type: "Point", coordinates: [412070, 5656020] },
+          geometry: { type: "Point", coordinates: [412_070, 5_656_020] },
           // 9 m, its arm reaching east (1.8 m)
           properties: { h: 9, hs: "street", arm: 90 },
         },
@@ -257,7 +257,7 @@ test("a tall mast is asked at its post and at the head on its arm", () => {
   );
   // a ray north at height y (m), x m east of the post
   const north = (y: number, dx: number) => {
-    const w = epsgToWorld(412070 + dx, 5655990, offset);
+    const w = epsgToWorld(412_070 + dx, 5_655_990, offset);
     return hitsInSets({ x: w.x, y, z: w.z }, { x: 0, y: 0, z: -1 }, own, 60)[0]
       ?.target;
   };

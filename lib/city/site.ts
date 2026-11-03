@@ -110,7 +110,7 @@ export interface Provider {
   /** the credit line its licence requires, in the HUD footer */
   credit: string;
   /** ETRS89 / UTM: 25832 (zone 32) or 25833 (zone 33) — one per Land */
-  epsg: 25832 | 25833;
+  epsg: 25_832 | 25_833;
   id: ProviderId;
   /** the Land it surveys, as the start page names it */
   land: string;

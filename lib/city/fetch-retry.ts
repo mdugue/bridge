@@ -28,14 +28,14 @@ export const RETRY_AFTER_CAP_MS = 60_000;
 export const TILE_FETCH_BUDGET_MS = 20_000;
 /** …an optional side file (lamps, rails, …): it must not hold up the
  *  tile's serial dressing chain for long. */
-export const OPTIONAL_FETCH_BUDGET_MS = 8_000;
+export const OPTIONAL_FETCH_BUDGET_MS = 8000;
 /** …the site's manifest, before the copy the browser cached will do. */
 export const MANIFEST_FETCH_BUDGET_MS = 20_000;
 /** How long the boot waits for the network (the tileset, the spawn tile). */
 export const BOOT_NET_WAIT_MS = 60_000;
 /** When the tiles that gave up on the network are asked for again: the
  *  last step repeats while any are left. */
-export const HEAL_DELAYS_MS = [5_000, 15_000, 45_000, 120_000] as const;
+export const HEAL_DELAYS_MS = [5000, 15_000, 45_000, 120_000] as const;
 
 /** A fetch that gave up after its budget (or a load that gave up on one). */
 export class NetworkError extends Error {

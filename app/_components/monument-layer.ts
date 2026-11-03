@@ -713,7 +713,7 @@ const jetPhase = Fn((builder) => {
   }
   const at = attribute("iMat3", "vec4");
   return fract(
-    sin(dot(vec2(at.x, at.z), vec2(12.9898, 78.233))).mul(43758.5453)
+    sin(dot(vec2(at.x, at.z), vec2(12.9898, 78.233))).mul(43_758.5453)
   ).mul(6.2831);
 });
 

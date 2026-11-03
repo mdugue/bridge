@@ -63,7 +63,7 @@ function pxOf(view: ModelView, p: { x: number; y: number; z: number }) {
 
 describe("the scale", () => {
   test("a denominator and metres per CSS pixel round-trip at 96 dpi", () => {
-    expect(metresPerPixelOf(1000)).toBeCloseTo(0.264_583, 5);
+    expect(metresPerPixelOf(1000)).toBeCloseTo(0.264583, 5);
     expect(scaleOf(metresPerPixelOf(2500))).toBeCloseTo(2500, 6);
   });
 

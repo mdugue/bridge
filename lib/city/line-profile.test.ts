@@ -83,6 +83,6 @@ test("a break in the levels breaks the profile", () => {
 test("a profile round-trips through its centimetre encoding", () => {
   const z = [101.234, 101.25, null, 99.991, 100.004];
   const lz = encodeProfile(z);
-  expect(lz).toEqual([10123, 2, null, 9999, 1]);
+  expect(lz).toEqual([10_123, 2, null, 9999, 1]);
   expect(decodeProfile(lz)).toEqual([101.23, 101.25, null, 99.99, 100]);
 });

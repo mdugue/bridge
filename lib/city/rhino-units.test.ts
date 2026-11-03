@@ -50,7 +50,7 @@ describe("rhinoPlacement", () => {
   });
 
   test("an anchor never set is none", () => {
-    const unset = -1.234_321_012_343_21e308;
+    const unset = -1.23432101234321e308;
     expect(
       rhinoPlacement(
         { ...anchor, latitude: unset, longitude: unset },

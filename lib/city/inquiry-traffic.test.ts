@@ -24,11 +24,11 @@ const antonstrasse: TrafficInquiry = {
   kind: "traffic",
   tile: "33412_5656_2_sn",
   index: 0,
-  position: [412111.6, 5657692.6],
+  position: [412_111.6, 5_657_692.6],
   // Dresden's committed section, drawn from the east end to the west one
   bearing: lineBearing([
-    [412186.6, 5657663.57],
-    [412036.59, 5657721.64],
+    [412_186.6, 5_657_663.57],
+    [412_036.59, 5_657_721.64],
   ]),
   properties: {
     t: 15_000,
@@ -114,8 +114,8 @@ test("a counter says its bicycles per direction and when they were counted", () 
     ],
     measuredAt,
     now: new Date(2026, 9, 1, 15, 0),
-    position: [412700, 5657300],
-    staleAfterMs: 3 * 3600_000,
+    position: [412_700, 5_657_300],
+    staleAfterMs: 3 * 3_600_000,
     credit: "Radzählstellen: Landeshauptstadt Dresden, dl-de/by-2-0",
   });
   expect(fresh.title).toBe("Albertbrücke");
@@ -132,8 +132,8 @@ test("a counter says its bicycles per direction and when they were counted", () 
     directions: [{ count: 3, toward: "" }],
     measuredAt,
     now: new Date(2026, 9, 1, 20, 0),
-    position: [412700, 5657300],
-    staleAfterMs: 3 * 3600_000,
+    position: [412_700, 5_657_300],
+    staleAfterMs: 3 * 3_600_000,
   });
   expect(old.facts.at(-1)?.value).toContain("älter als drei Stunden");
   expect(lines(old.sources)).toEqual([]);
@@ -150,8 +150,8 @@ test("a counter's time is the city's clock, whatever the visitor's zone", () => 
     directions: [{ count: 3, toward: "" }],
     measuredAt,
     now: measuredAt,
-    position: [412700, 5657300],
-    staleAfterMs: 3 * 3600_000,
+    position: [412_700, 5_657_300],
+    staleAfterMs: 3 * 3_600_000,
   });
   expect(card.facts.at(-1)?.value).toBe("01.10., 07:00 Uhr");
 });

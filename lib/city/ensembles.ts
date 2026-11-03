@@ -259,10 +259,10 @@ export function ensembleGroup(outline: string): number {
   if (!outline) {
     return 0;
   }
-  let h = 0x811c9dc5;
+  let h = 0x81_1c_9d_c5;
   for (let i = 0; i < outline.length; i++) {
     h ^= outline.charCodeAt(i);
-    h = Math.imul(h, 0x01000193) >>> 0;
+    h = Math.imul(h, 0x01_00_01_93) >>> 0;
   }
   return h === 0 ? 1 : h;
 }

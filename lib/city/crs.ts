@@ -14,7 +14,7 @@
  */
 
 /** UTM zone by EPSG code (ETRS89 / UTM zone N, northern hemisphere). */
-const UTM_ZONES: Partial<Record<number, number>> = { 25832: 32, 25833: 33 };
+const UTM_ZONES: Partial<Record<number, number>> = { 25_832: 32, 25_833: 33 };
 
 export const SUPPORTED_EPSG_CODES = Object.keys(UTM_ZONES).map(Number);
 
@@ -24,7 +24,7 @@ const DEG = Math.PI / 180;
 
 // GRS80
 const A = 6_378_137;
-const F = 1 / 298.257_222_101;
+const F = 1 / 298.257222101;
 const E2 = F * (2 - F);
 const E = Math.sqrt(E2);
 /** the third flattening, the series' small parameter */

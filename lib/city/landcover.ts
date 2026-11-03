@@ -198,7 +198,7 @@ export function landcoverSrgb(id: number): readonly [number, number, number] {
 /** One sRGB byte (0..255) to linear light (0..1), the IEC 61966-2-1 curve. */
 export function srgbToLinear(byte: number): number {
   const c = byte / 255;
-  return c <= 0.040_45 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
 }
 
 /**

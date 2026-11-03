@@ -169,7 +169,7 @@ const TINT_DARK: [number, number] = [12, 20];
 const TINT_HUE: [number, number] = [15, 35];
 
 type Lab = [number, number, number];
-const WHITE = [0.950_47, 1, 1.088_83];
+const WHITE = [0.95047, 1, 1.08883];
 
 const smooth = (lo: number, hi: number, x: number): number => {
   const t = Math.min(Math.max((x - lo) / (hi - lo), 0), 1);
@@ -180,7 +180,7 @@ const smooth = (lo: number, hi: number, x: number): number => {
 export function labOf(rgb: number): Lab {
   const lin = [(rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255].map((v) => {
     const c = v / 255;
-    return c <= 0.040_45 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
   });
   const xyz = [
     0.4124 * lin[0] + 0.3576 * lin[1] + 0.1805 * lin[2],
@@ -189,7 +189,7 @@ export function labOf(rgb: number): Lab {
   ];
   const f = xyz.map((v, i) => {
     const t = v / WHITE[i];
-    return t > 0.008_856 ? Math.cbrt(t) : 7.787 * t + 16 / 116;
+    return t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116;
   });
   return [116 * f[1] - 16, 500 * (f[0] - f[1]), 200 * (f[1] - f[2])];
 }
@@ -199,7 +199,7 @@ export function rgbOf(lab: Lab): number {
   const fy = (lab[0] + 16) / 116;
   const f = [fy + lab[1] / 500, fy, fy - lab[2] / 200];
   const [x, y, z] = f.map(
-    (v, i) => (v > 0.206_893 ? v ** 3 : (v - 16 / 116) / 7.787) * WHITE[i]
+    (v, i) => (v > 0.206893 ? v ** 3 : (v - 16 / 116) / 7.787) * WHITE[i]
   );
   const lin = [
     3.2406 * x - 1.5372 * y - 0.4986 * z,
@@ -208,7 +208,7 @@ export function rgbOf(lab: Lab): number {
   ];
   const [r, g, b] = lin.map((v) => {
     const c = Math.min(Math.max(v, 0), 1);
-    const s = c <= 0.003_130_8 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055;
+    const s = c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055;
     return Math.round(s * 255);
   });
   return (r << 16) | (g << 8) | b;

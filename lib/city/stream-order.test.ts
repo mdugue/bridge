@@ -56,7 +56,7 @@ test("the names rank the contents buildTileset writes", () => {
   });
   type Node = { children?: Node[]; content?: { uri: string } };
   const json = buildTileset([baked(SPAWN, 0), baked(NEIGHBOUR, 2000)], {
-    epsg: 25833,
+    epsg: 25_833,
     offset: { cx: 0, cy: 0 },
     site: "dresden",
     tiles: [],

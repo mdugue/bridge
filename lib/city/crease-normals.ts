@@ -189,7 +189,7 @@ export function forEachPoint(
     positions.length
   );
   // −0 and +0 are one coordinate
-  const key = (i: number) => (bits[i] === 0x80000000 ? 0 : bits[i]);
+  const key = (i: number) => (bits[i] === 0x80_00_00_00 ? 0 : bits[i]);
   const mask = new Uint8Array(n);
   let m = 0;
   for (let v = 0; v < n; v++) {
@@ -212,10 +212,10 @@ export function forEachPoint(
   const start = new Uint32Array(size + 1);
   for (let k = 0; k < m; k++) {
     const v = alive[k];
-    let h = Math.imul(key(3 * v) ^ 0x9e3779b9, 0x85ebca6b);
-    h = Math.imul(h ^ key(3 * v + 1) ^ (h >>> 15), 0xc2b2ae35);
-    h = Math.imul(h ^ key(3 * v + 2) ^ (h >>> 13), 0x27d4eb2f);
-    h = Math.imul(h ^ (groups[v] | 0) ^ (h >>> 16), 0x165667b1);
+    let h = Math.imul(key(3 * v) ^ 0x9e_37_79_b9, 0x85_eb_ca_6b);
+    h = Math.imul(h ^ key(3 * v + 1) ^ (h >>> 15), 0xc2_b2_ae_35);
+    h = Math.imul(h ^ key(3 * v + 2) ^ (h >>> 13), 0x27_d4_eb_2f);
+    h = Math.imul(h ^ (groups[v] | 0) ^ (h >>> 16), 0x16_56_67_b1);
     hash[k] = (h ^ (h >>> 15)) & (size - 1);
     start[hash[k] + 1]++;
   }
