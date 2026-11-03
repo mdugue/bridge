@@ -239,7 +239,8 @@
    3.4 s, slow in, quicker out). Only the ring's own layer, an element the
    compositor scales: the contours hold still, and a repaint per frame is
    what the boot cannot spare (handover.ts). In the components layer, so
-   the screen's `**:animate-none` utility stops it at the handover. */
+   the screen's `**:[animation-play-state:paused]` utility (a later layer
+   than this shorthand's implicit `running`) holds it at the handover. */
 @layer components {
   .load-breathe {
     transform-origin: center;
