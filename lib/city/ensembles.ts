@@ -251,7 +251,7 @@ const RELATION_BASE = 2 ** 31;
  * `RELATION_BASE`; an id out of that range is hashed (FNV-1a).
  */
 export function ensembleGroup(outline: string): number {
-  const match = /^([wr])(\d+)$/.exec(outline);
+  const match = /^([wr])(\d+)$/u.exec(outline);
   const id = match ? Number(match[2]) : Number.NaN;
   if (match && id > 0 && id < RELATION_BASE) {
     return match[1] === "w" ? id : RELATION_BASE + id;

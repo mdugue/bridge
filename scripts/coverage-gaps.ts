@@ -64,7 +64,7 @@ export function gapTable(gaps: Source[]): string {
 }
 
 function isTest(path: string): boolean {
-  return /\.test\.tsx?$/.test(path);
+  return /\.test\.tsx?$/u.test(path);
 }
 
 /** Every source under `root` the report should name, with its length. */

@@ -89,7 +89,7 @@ const round = (v: number, to: number): number =>
 
 /** An ISO timestamp's date ("2025-07-04T00:00:00Z" → "2025-07-04"). */
 export function isoDate(v: unknown): string {
-  const match = /^\d{4}-\d{2}-\d{2}/.exec(text(v));
+  const match = /^\d{4}-\d{2}-\d{2}/u.exec(text(v));
   return match ? match[0] : "";
 }
 

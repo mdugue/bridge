@@ -91,11 +91,11 @@ export class DesignError extends Error {}
 
 /** The formats a design can come in, by the main file's extension. */
 const FORMATS = {
-  gltf: /\.(glb|gltf)$/i,
+  gltf: /\.(glb|gltf)$/iu,
   plan: PLAN_FORMATS,
-  ifc: /\.ifc$/i,
-  obj: /\.obj$/i,
-  rhino: /\.3dm$/i,
+  ifc: /\.ifc$/iu,
+  obj: /\.obj$/iu,
+  rhino: /\.3dm$/iu,
 } as const;
 type DesignFormat = keyof typeof FORMATS;
 
@@ -113,7 +113,7 @@ export function designFormat(name: string): DesignFormat | null {
  *  (LandXML, or any metadata picked along) only where nothing else is. */
 export function designFile(files: readonly File[]): File | null {
   const read = files.filter((f) => designFormat(f.name) !== null);
-  return read.find((f) => !/\.xml$/i.test(f.name)) ?? read[0] ?? null;
+  return read.find((f) => !/\.xml$/iu.test(f.name)) ?? read[0] ?? null;
 }
 
 /** The design's objects in its own frame, and what the file said about
@@ -173,10 +173,10 @@ function loaderReason(error: unknown, missing: readonly string[]): string {
     return `Die .gltf-Datei verweist auf Dateien, die nicht mit ausgewählt wurden (${missing.join(", ")}). Bitte mit auswählen oder als .glb exportieren.`;
   }
   const message = error instanceof Error ? error.message : String(error);
-  if (/draco/i.test(message)) {
+  if (/draco/iu.test(message)) {
     return "Die Datei ist Draco-komprimiert. Bitte ohne Draco-Kompression exportieren.";
   }
-  if (/ktx2|basisu/i.test(message)) {
+  if (/ktx2|basisu/iu.test(message)) {
     return "Die Datei nutzt KTX2-Texturen. Bitte mit PNG- oder JPEG-Texturen exportieren.";
   }
   return `Die Datei ließ sich nicht als glTF lesen (${message}).`;

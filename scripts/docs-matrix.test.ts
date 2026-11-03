@@ -23,7 +23,7 @@ test("every footnote a page marks is listed once, in order", () => {
   const { sites, built } = matrixInputs();
   const page = sourceMatrixPage(sites, "en", built);
   const notes = page.split("## Why not the best source")[1];
-  const listed = (notes.match(/^\d+\. /gm) ?? []).map((s) =>
+  const listed = (notes.match(/^\d+\. /gmu) ?? []).map((s) =>
     Number.parseInt(s, 10)
   );
   // the marks in the order the table first shows them, as numbers
@@ -34,7 +34,7 @@ test("every footnote a page marks is listed once, in order", () => {
         .map((c) => "⁰¹²³⁴⁵⁶⁷⁸⁹".indexOf(c))
         .join("")
     );
-  const marks = [...new Set((page.match(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+/g) ?? []).map(digit))];
+  const marks = [...new Set((page.match(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+/gu) ?? []).map(digit))];
   const oneToN = Array.from({ length: marks.length }, (_, i) => i + 1);
   expect(marks.length).toBeGreaterThan(0);
   expect(marks).toEqual(oneToN);

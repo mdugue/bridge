@@ -23,7 +23,7 @@ describe("the guide names what the HUD shows", () => {
   for (const path of GUIDES) {
     test(path.split("docs/")[1] ?? path, () => {
       // Labels wrap across lines ("*Brühlsche\n    Terrasse*").
-      const text = readFileSync(path, "utf-8").replaceAll(/\s+/g, " ");
+      const text = readFileSync(path, "utf-8").replaceAll(/\s+/gu, " ");
       const missing = LABELS.filter((label) => !text.includes(label));
       expect(missing).toEqual([]);
     });

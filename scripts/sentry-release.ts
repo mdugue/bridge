@@ -50,13 +50,13 @@ export interface ReleasePlan {
  */
 export function apiOrigin(dsn: string | null, override?: string): string {
   if (override) {
-    return override.replace(/\/+$/, "");
+    return override.replace(/\/+$/u, "");
   }
   if (!dsn) {
     return "https://sentry.io";
   }
   const { protocol, host, hostname, pathname } = new URL(dsn);
-  const region = /\.ingest\.([a-z]+)\.sentry\.io$/.exec(hostname)?.[1];
+  const region = /\.ingest\.([a-z]+)\.sentry\.io$/u.exec(hostname)?.[1];
   if (region) {
     return `https://${region}.sentry.io`;
   }

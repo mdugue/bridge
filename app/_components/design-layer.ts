@@ -655,7 +655,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
       await deps.compile(mesh);
       // a placement file picked with it: read before the design shows, so
       // a refused one still leaves the design placed, planned and reported
-      const placementPicked = files.find((f) => /\.json$/i.test(f.name));
+      const placementPicked = files.find((f) => /\.json$/iu.test(f.name));
       const parsed = placementPicked
         ? parsePlacementFile(await placementPicked.text(), deps.epsg)
         : null;

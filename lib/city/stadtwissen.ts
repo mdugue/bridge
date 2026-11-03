@@ -188,7 +188,7 @@ export function wikidataTime(value: {
   precision: number;
   time: string;
 }): string {
-  const m = /^([+-])(\d+)-(\d\d)-(\d\d)/.exec(value.time);
+  const m = /^([+-])(\d+)-(\d\d)-(\d\d)/u.exec(value.time);
   if (!m) {
     return value.time;
   }
@@ -328,8 +328,8 @@ export function foldName(text: string): string {
     .replaceAll("ü", "ue")
     .replaceAll("ß", "ss")
     .normalize("NFD")
-    .replaceAll(/[̀-ͯ]/g, "")
-    .replaceAll(/[^a-z0-9]+/g, " ")
+    .replaceAll(/[̀-ͯ]/gu, "")
+    .replaceAll(/[^a-z0-9]+/gu, " ")
     .trim();
 }
 

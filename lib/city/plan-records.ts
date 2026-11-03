@@ -15,10 +15,10 @@ import { nestRings } from "./plan-geometry";
 import type { PlanFeature } from "./plan-geometry";
 import type { GeoRecord } from "./shapefile";
 
-const CROWN = /^(krone|kronen|kd|kronendurchm|kronen_d|crown|crown_d|canopy)/i;
+const CROWN = /^(krone|kronen|kd|kronendurchm|kronen_d|crown|crown_d|canopy)/iu;
 const HEIGHT =
-  /^(h|hoehe|höhe|height|baumhoehe|baumhöhe|geb_h|gebhoehe|hoehe_m|height_m)$/i;
-const STOREYS = /^(geschosse|geschoss|og|storeys|floors|levels)$/i;
+  /^(h|hoehe|höhe|height|baumhoehe|baumhöhe|geb_h|gebhoehe|hoehe_m|height_m)$/iu;
+const STOREYS = /^(geschosse|geschoss|og|storeys|floors|levels)$/iu;
 
 /** The first attribute named like `pattern` with a positive number. */
 function numberNamed(
@@ -37,9 +37,9 @@ function numberNamed(
 
 /** Attributes that say what a surface is, and those that name a place. */
 const CLASS_KEY =
-  /^(nutzung|nutzungsart|art|typ|type|klasse|class|kategorie|category|belag|oberfl|surface|material|objektart|funktion|landuse|kind|layer|ebene)/i;
+  /^(nutzung|nutzungsart|art|typ|type|klasse|class|kategorie|category|belag|oberfl|surface|material|objektart|funktion|landuse|kind|layer|ebene)/iu;
 const NAME_KEY =
-  /^(name|bez|bezeichnung|ort|lage|standort|adress|address|str|stra(ß|ss)e|street|antrag|url|link|bemerkung|comment|notiz)/i;
+  /^(name|bez|bezeichnung|ort|lage|standort|adress|address|str|stra(ß|ss)e|street|antrag|url|link|bemerkung|comment|notiz)/iu;
 
 /**
  * A record's class: what its class-like attributes say ("Nutzung",
@@ -56,7 +56,7 @@ export function recordClass(
   const other: string[] = [];
   const names: string[] = [];
   for (const [key, value] of Object.entries(record.attributes)) {
-    if (typeof value !== "string" || /^[a-z]+:\/\//i.test(value)) {
+    if (typeof value !== "string" || /^[a-z]+:\/\//iu.test(value)) {
       continue;
     }
     if (CLASS_KEY.test(key)) {
@@ -82,7 +82,7 @@ export function recordFeatures(
     const cls = recordClass(record, layer);
     classes.add(cls);
     if (record.kind === "point") {
-      if (cls === "tree" || /baum|tree/i.test(layer)) {
+      if (cls === "tree" || /baum|tree/iu.test(layer)) {
         for (const [at] of record.parts) {
           features.push({
             kind: "tree",

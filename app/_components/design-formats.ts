@@ -21,7 +21,7 @@ export class FormatError extends Error {}
 
 /** A URL's last path part, as the picked files are named. */
 export function baseName(url: string): string {
-  const path = url.split(/[?#]/)[0];
+  const path = url.split(/[?#]/u)[0];
   return decodeURIComponent(path.slice(path.lastIndexOf("/") + 1));
 }
 
@@ -85,8 +85,8 @@ export function pickedFiles(
  *  lines). */
 function materialLibraries(text: string): string[] {
   const names: string[] = [];
-  for (const [, list] of text.matchAll(/^\s*mtllib\s+(.+?)\s*$/gm)) {
-    names.push(...list.split(/\s+/).map(baseName));
+  for (const [, list] of text.matchAll(/^\s*mtllib\s+(.+?)\s*$/gmu)) {
+    names.push(...list.split(/\s+/u).map(baseName));
   }
   return [...new Set(names)];
 }

@@ -58,7 +58,7 @@ test("the tile id goes to the browser's timeline only, never into the summary", 
   timings.timedSync("tile:compile", () => clock.advance(9), "33412_5656_2_sn");
   timings.markOnce("boot:light-done");
   expect(names).toEqual(["tile:compile 33412_5656_2_sn", "boot:light-done"]);
-  expect(JSON.stringify(timings.summary())).not.toMatch(/\d{5}_\d{4}/);
+  expect(JSON.stringify(timings.summary())).not.toMatch(/\d{5}_\d{4}/u);
 });
 
 test("a timeline that throws (an old WebKit) costs nothing but its entry", () => {

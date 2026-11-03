@@ -16,11 +16,11 @@ export interface LandXmlPlan {
   surfaces: string[];
 }
 
-const SURFACE = /<Surface\b([^>]*)>([\s\S]*?)<\/Surface>/g;
-const POINT = /<P\b[^>]*\bid="([^"]+)"[^>]*>([^<]+)<\/P>/g;
-const FACE = /<F\b([^>]*)>([^<]+)<\/F>/g;
-const NAME = /\bname="([^"]*)"/;
-const EPSG = /<CoordinateSystem\b[^>]*\bepsgCode="(\d+)"/;
+const SURFACE = /<Surface\b([^>]*)>([\s\S]*?)<\/Surface>/gu;
+const POINT = /<P\b[^>]*\bid="([^"]+)"[^>]*>([^<]+)<\/P>/gu;
+const FACE = /<F\b([^>]*)>([^<]+)<\/F>/gu;
+const NAME = /\bname="([^"]*)"/u;
+const EPSG = /<CoordinateSystem\b[^>]*\bepsgCode="(\d+)"/u;
 
 /** Reads a LandXML file's surfaces as planned ground. */
 export function readLandXml(text: string): LandXmlPlan {
@@ -30,7 +30,7 @@ export function readLandXml(text: string): LandXmlPlan {
     surfaces.push(NAME.exec(attributes)?.[1] ?? "");
     const points = new Map<string, PlanPoint>();
     for (const [, id, coords] of body.matchAll(POINT)) {
-      const [n, e, z] = coords.trim().split(/\s+/).map(Number);
+      const [n, e, z] = coords.trim().split(/\s+/u).map(Number);
       if (Number.isFinite(n) && Number.isFinite(e)) {
         points.set(id, Number.isFinite(z) ? [e, n, z] : [e, n]);
       }
@@ -38,12 +38,12 @@ export function readLandXml(text: string): LandXmlPlan {
     const triangles: [PlanPoint, PlanPoint, PlanPoint][] = [];
     for (const [, faceAttributes, ids] of body.matchAll(FACE)) {
       // an invisible face (i="1") is outside the surface
-      if (/\bi="1"/.test(faceAttributes)) {
+      if (/\bi="1"/u.test(faceAttributes)) {
         continue;
       }
       const [a, b, c] = ids
         .trim()
-        .split(/\s+/)
+        .split(/\s+/u)
         .map((id) => points.get(id));
       if (a && b && c) {
         triangles.push([a, b, c]);

@@ -110,21 +110,21 @@ export const TRAM_LIVERIES: Record<TramOperator, TramLivery> = {
 export function operatorOf(agency: string | undefined): TramOperator {
   const a = agency ?? "";
   if (
-    /Dresdner Verkehrsbetriebe|\bDVB\b|Verkehrsverbund Oberelbe|\bVVO\b/i.test(
+    /Dresdner Verkehrsbetriebe|\bDVB\b|Verkehrsverbund Oberelbe|\bVVO\b/iu.test(
       a
     )
   ) {
     return "dvb";
   }
-  if (/Leipziger Verkehrsbetriebe|\bLVB\b/i.test(a)) {
+  if (/Leipziger Verkehrsbetriebe|\bLVB\b/iu.test(a)) {
     return "lvb";
   }
   if (
-    /Stadtwerke München|Münchner Verkehrsgesellschaft|\bMVG\b|\bSWM\b/i.test(a)
+    /Stadtwerke München|Münchner Verkehrsgesellschaft|\bMVG\b|\bSWM\b/iu.test(a)
   ) {
     return "mvg";
   }
-  if (/Berliner Verkehrsbetriebe|\bBVG\b/i.test(a)) {
+  if (/Berliner Verkehrsbetriebe|\bBVG\b/iu.test(a)) {
     return "bvg";
   }
   return "neutral";

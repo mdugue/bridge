@@ -31,7 +31,7 @@ test("atmosphereAt blends smoothly between stops", () => {
   const hi = atmosphereAt(1);
   const dusk = atmosphereAt(-1.5);
   for (const key of keys) {
-    expect(dusk[key]).toMatch(/^#[0-9a-f]{6}$/);
+    expect(dusk[key]).toMatch(/^#[0-9a-f]{6}$/u);
     expect(dusk[key]).not.toBe(lo[key]);
     expect(dusk[key]).not.toBe(hi[key]);
     // each channel on its way from one stop's to the other's

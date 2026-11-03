@@ -105,7 +105,7 @@ function isTransient(err: unknown): boolean {
 /** The browsers' texts for a request the network failed (or cancelled):
  *  the whole message, so "Failed to fetch /x: HTTP 404" is not one. */
 const NETWORK_TEXT =
-  /^(?:load failed|failed to fetch|networkerror when attempting to fetch resource|the network connection was lost|the internet connection appears to be offline|network request failed|cancelled)\.?$/i;
+  /^(?:load failed|failed to fetch|networkerror when attempting to fetch resource|the network connection was lost|the internet connection appears to be offline|network request failed|cancelled)\.?$/iu;
 
 /**
  * Whether an error that reached us from elsewhere (a tile's load-error)
@@ -146,7 +146,7 @@ export function retryAfterMs(
   if (!value) {
     return undefined;
   }
-  const wait = /^\d+$/.test(value)
+  const wait = /^\d+$/u.test(value)
     ? Number(value) * 1000
     : Date.parse(value) - nowMs;
   return Number.isFinite(wait)

@@ -48,7 +48,7 @@ const SHOTS_DIR = join(process.cwd(), "shots");
  * `?`, e.g. `SHOTS_QUERY=scene=lite`), and `SHOTS_TAG=x` writes
  * `shots/<name>.x.png` so the untagged plate is not overwritten.
  */
-const SHOTS_QUERY = (process.env.SHOTS_QUERY ?? "").replace(/^\?/, "");
+const SHOTS_QUERY = (process.env.SHOTS_QUERY ?? "").replace(/^\?/u, "");
 /** The city the shots are taken in (its route): `SHOTS_SITE=leipzig`. */
 const SHOTS_SITE = process.env.SHOTS_SITE ?? "dresden";
 const SHOTS_TAG = process.env.SHOTS_TAG ?? "";
@@ -109,7 +109,7 @@ function snapshotFiles(): string[] {
 }
 
 for (const file of snapshotFiles()) {
-  const name = file.replace(/\.json$/, "");
+  const name = file.replace(/\.json$/u, "");
   test(`snapshot: ${name}`, async ({ page }) => {
     test.setTimeout(READY_MS + 150_000);
     // Validate before rendering: a broken shot fails loudly instead of

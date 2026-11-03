@@ -799,7 +799,7 @@ test.each(cases)(
       }
       const wikidata = f.properties?.wikidata;
       if (wikidata !== undefined) {
-        expect(wikidata).toMatch(/^Q\d+$/);
+        expect(wikidata).toMatch(/^Q\d+$/u);
         expect(f.properties?.material).toBeTruthy();
       }
     }
@@ -949,7 +949,7 @@ test.each(cases)(
       expect(column).toHaveLength(trees.length);
       expect(column.every((v) => Number.isInteger(v) && v >= -1)).toBe(true);
     }
-    expect(facts.dates.every((d) => /^\d{4}-\d{2}-\d{2}$/.test(d))).toBe(true);
+    expect(facts.dates.every((d) => /^\d{4}-\d{2}-\d{2}$/u.test(d))).toBe(true);
     // an OSM tree has no place in the register
     trees.forEach((f, i) => {
       if (f.properties?.s === "osm") {

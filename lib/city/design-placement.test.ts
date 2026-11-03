@@ -214,7 +214,7 @@ describe("a design's scale", () => {
     expect("scale" in back && back.scale).toEqual({ unit: "cm", factor: 2 });
     // a file from before the scale was kept leaves the design's as it is
     const old = text
-      .replace(/,\s*"unit": "cm",\s*"factor": 2/, "")
+      .replace(/,\s*"unit": "cm",\s*"factor": 2/u, "")
       .replace("entwurf/2", "entwurf/1");
     const before = parsePlacementFile(old, 25_833);
     expect("scale" in before && before.scale).toBeNull();

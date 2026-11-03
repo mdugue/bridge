@@ -100,7 +100,7 @@ async function run(query: string) {
       [snap.camera, snap.date] as const
     );
     await page.waitForTimeout(1500);
-    views[file.replace(/\.json$/, "")] = await fps(page, 3000);
+    views[file.replace(/\.json$/u, "")] = await fps(page, 3000);
   }
   await browser.close();
   return {

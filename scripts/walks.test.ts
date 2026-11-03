@@ -131,9 +131,9 @@ for (const { site, walks } of sitesWithWalks) {
           return cityText.get(tile)?.includes(`"${id}"`) ?? false;
         });
       const missing = [...named].filter((id) =>
-        /^Q\d+$/.test(id)
+        /^Q\d+$/u.test(id)
           ? !(id in wikidata.entities)
-          : /^m\d+_\d+(?:_\d+)?$/.test(id)
+          : /^m\d+_\d+(?:_\d+)?$/u.test(id)
             ? !monuments.has(id)
             : !inCity(id)
       );

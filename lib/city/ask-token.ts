@@ -21,7 +21,7 @@ function base64url(bytes: ArrayBuffer): string {
   return btoa(text)
     .replaceAll("+", "-")
     .replaceAll("/", "_")
-    .replace(/[=]+$/, "");
+    .replace(/[=]+$/u, "");
 }
 
 async function sha256(text: string): Promise<string> {
@@ -74,7 +74,7 @@ export async function verifyAskToken(
   now: number
 ): Promise<boolean> {
   const [version, exp, sig] = token.split(".");
-  if (version !== "v1" || !exp || !sig || !/^\d+$/.test(exp)) {
+  if (version !== "v1" || !exp || !sig || !/^\d+$/u.test(exp)) {
     return false;
   }
   if (Number(exp) < now) {

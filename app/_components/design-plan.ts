@@ -45,7 +45,8 @@ export const SQL_WASM_PATH = "/wasm/sql-wasm-browser.wasm";
 export class PlanError extends Error {}
 
 /** The plan formats by the main file's extension. */
-export const PLAN_FORMATS = /\.(dxf|shp|gpkg|landxml)$|(?<!\.(shp|aux))\.xml$/i;
+export const PLAN_FORMATS =
+  /\.(dxf|shp|gpkg|landxml)$|(?<!\.(shp|aux))\.xml$/iu;
 
 /** The words the panel uses for a class. */
 const CLASS_WORDS: Record<PlanClass, string> = {
@@ -73,7 +74,7 @@ function lookWord(look: PlanLook): string {
 
 /** A file picked with `main` by its extension (same name first). */
 function sibling(main: File, files: readonly File[], ext: string) {
-  const stem = main.name.replace(/\.[^.]+$/, "").toLowerCase();
+  const stem = main.name.replace(/\.[^.]+$/u, "").toLowerCase();
   const all = files.filter((f) => f.name.toLowerCase().endsWith(ext));
   return (
     all.find((f) => f.name.toLowerCase() === `${stem}${ext}`) ?? all[0] ?? null
@@ -82,15 +83,17 @@ function sibling(main: File, files: readonly File[], ext: string) {
 
 /** The EPSG code a .prj's WKT names, where it says one. */
 function prjEpsg(wkt: string): number | null {
-  const code = /AUTHORITY\["EPSG",\s*"?(\d{4,5})"?\]\s*\]\s*$/.exec(wkt.trim());
+  const code = /AUTHORITY\["EPSG",\s*"?(\d{4,5})"?\]\s*\]\s*$/u.exec(
+    wkt.trim()
+  );
   if (code) {
     return Number(code[1]);
   }
-  const zone = /UTM[_ ]?zone[_ ]?(\d{2})N/i.exec(wkt);
-  if (zone && /ETRS|GRS[_ ]?1980|ETRF/i.test(wkt)) {
+  const zone = /UTM[_ ]?zone[_ ]?(\d{2})N/iu.exec(wkt);
+  if (zone && /ETRS|GRS[_ ]?1980|ETRF/iu.test(wkt)) {
     return 25_800 + Number(zone[1]);
   }
-  if (/DHDN|Gauss|Gauß|Kruger|Krüger/i.test(wkt)) {
+  if (/DHDN|Gauss|Gauß|Kruger|Krüger/iu.test(wkt)) {
     return 31_468;
   }
   return null;
@@ -172,7 +175,7 @@ async function readShapefiles(files: readonly File[]): Promise<{
 }> {
   const layers: PlanLayer[] = [];
   const unclassified: string[] = [];
-  for (const shp of files.filter((f) => /\.shp$/i.test(f.name))) {
+  for (const shp of files.filter((f) => /\.shp$/iu.test(f.name))) {
     const dbf = sibling(shp, files, ".dbf");
     const cpg = sibling(shp, files, ".cpg");
     const prj = sibling(shp, files, ".prj");
@@ -181,7 +184,7 @@ async function readShapefiles(files: readonly File[]): Promise<{
       dbf ? await dbf.arrayBuffer() : null,
       cpg ? await cpg.text() : null
     );
-    const name = shp.name.replace(/\.shp$/i, "");
+    const name = shp.name.replace(/\.shp$/iu, "");
     const { features, classes } = recordFeatures(records, name);
     layers.push({
       name,

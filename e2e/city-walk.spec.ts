@@ -486,7 +486,7 @@ test("city page serves the viewer shell", async ({ page }) => {
   await expect(
     page
       .getByText(
-        /Bis zum ersten Bild|Gebäude werden geladen|Gelände wird geladen|Licht und Schatten werden berechnet/
+        /Bis zum ersten Bild|Gebäude werden geladen|Gelände wird geladen|Licht und Schatten werden berechnet/u
       )
       .or(page.locator("canvas[data-engine]"))
       .first()
@@ -961,7 +961,7 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       // demand, with a search over every name (the folded landmarks too).
       const rows = places.locator("[data-place]");
       await expect(rows).toHaveCount(6);
-      const more = places.getByRole("button", { name: /^Alle \d+ Orte/ });
+      const more = places.getByRole("button", { name: /^Alle \d+ Orte/u });
       await more.click();
       await places
         .getByRole("searchbox", { name: "Orte durchsuchen" })
@@ -1067,7 +1067,7 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       await card.getByTestId("walk-next").click();
       await expect(card).toContainText("Station 2 von 9");
       await expect(card.getByRole("heading")).not.toHaveText(first ?? "");
-      await card.getByText(/^Belege \(\d+\)$/).click();
+      await card.getByText(/^Belege \(\d+\)$/u).click();
       await expect(card.locator('a[href^="https://"]').first()).toBeVisible();
       await card.getByRole("button", { name: "Spaziergang beenden" }).click();
       await expect(card).toHaveCount(0);
@@ -1306,15 +1306,15 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       const card = page.getByTestId("inquiry-card");
       await expect(card).toBeVisible();
       // The LoD2 Building's gml:id — the key every other dataset joins on.
-      await expect(card).toContainText(/DESNAT\w+/);
+      await expect(card).toContainText(/DESNAT\w+/u);
       const centreId =
-        (await card.textContent())?.match(/DESNAT\w+/)?.[0] ?? "";
+        (await card.textContent())?.match(/DESNAT\w+/u)?.[0] ?? "";
       // the sources are folded under "Daten"; unfolded, the card's own
       // lines and what the building as drawn is made of (a lazy chunk)
       await card.getByTestId("inquiry-data-toggle").click();
       await expect(card).toContainText("Quelle: GeoSN, dl-de/by-2-0");
       // the provenance manifest arrives with the first card: the edition
-      await expect(card).toContainText(/Modell \d{4}/);
+      await expect(card).toContainText(/Modell \d{4}/u);
       await expect(card.getByTestId("inquiry-data")).toContainText("Im Viewer");
       // and how it is drawn, value by value, each with its source
       await expect(card.getByTestId("inquiry-drawn").first()).toContainText(
@@ -1443,7 +1443,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       await expect(card).toContainText("Lage");
       // the facts file arrived: the source line names what it gave
       await card.getByTestId("inquiry-data-toggle").click();
-      await expect(card).toContainText(/Art.*: Stadtbaumkataster/);
+      await expect(card).toContainText(/Art.*: Stadtbaumkataster/u);
       await page.keyboard.press("Escape");
       await expect(card).toBeHidden();
     });

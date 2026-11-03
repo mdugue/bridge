@@ -247,8 +247,8 @@ export const CLOSER_LABEL = "Genauer hingesehen";
 
 // --- checks ----------------------------------------------------------------------
 
-const MD = /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
-const SOURCE = /^(https:\/\/\S+|stadtwissen:\S+)$/;
+const MD = /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/u;
+const SOURCE = /^(https:\/\/\S+|stadtwissen:\S+)$/u;
 /** The longest narration a stop shows: a phone screen, not an essay. */
 export const STOP_TEXT_MAX = 560;
 
@@ -311,7 +311,7 @@ function textProblems(stop: WalkStop): string[] {
 }
 
 /** "Schau …", "Sieh …": a sentence that sends the eye somewhere. */
-const LOOK = /(?:^|[.!?:;]\s+)(?:Schau|Sieh|Achte|Zoom|Zähl|Such)(?:e|t)?\b/;
+const LOOK = /(?:^|[.!?:;]\s+)(?:Schau|Sieh|Achte|Zoom|Zähl|Such)(?:e|t)?\b/u;
 
 /**
  * The model draws masses, not details: a statue is a generic figure, a
@@ -320,10 +320,12 @@ const LOOK = /(?:^|[.!?:;]\s+)(?:Schau|Sieh|Achte|Zoom|Zähl|Such)(?:e|t)?\b/;
  */
 function lookProblems(stop: WalkStop): string[] {
   const told = [stop.text ?? "", stop.closer ?? ""].flatMap((t) =>
-    t.split(/(?<=[.!?])\s+/)
+    t.split(/(?<=[.!?])\s+/u)
   );
   return told
-    .filter((s) => LOOK.test(s) && !(stop.photo && /\b(?:Foto|Bild)\b/.test(s)))
+    .filter(
+      (s) => LOOK.test(s) && !(stop.photo && /\b(?:Foto|Bild)\b/u.test(s))
+    )
     .map((s) => `"${s.slice(0, 40)}…" points at what the model may not show`);
 }
 
@@ -405,7 +407,7 @@ function stopProblems(stop: WalkStop, where: string): string[] {
 /** Everything wrong with a walk (empty when it is fine). */
 export function walkProblems(walk: Walk): string[] {
   const out: string[] = [];
-  if (!/^[a-z0-9-]+$/.test(walk.id)) {
+  if (!/^[a-z0-9-]+$/u.test(walk.id)) {
     out.push(`${walk.id}: id must be kebab-case`);
   }
   if (!walk.title || !walk.teaser || !walk.by) {

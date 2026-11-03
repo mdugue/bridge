@@ -2741,7 +2741,7 @@ async function bootApp(
         if (graph !== undefined) {
           setGraph(
             material,
-            want ? `${graph}|design-cut` : graph.replace(/\|design-cut$/, "")
+            want ? `${graph}|design-cut` : graph.replace(/\|design-cut$/u, "")
           );
         }
         material.needsUpdate = true;

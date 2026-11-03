@@ -66,7 +66,7 @@ export function fakeAskAdapter(): AnyTextAdapter {
     const last = messages.at(-1);
     if (last?.role !== "tool") {
       const question = lastQuestion(messages);
-      if (/was ist (das|da)|vor mir/i.test(question)) {
+      if (/was ist (das|da)|vor mir/iu.test(question)) {
         return { toolCalls: [{ name: "was_ist_da", input: {} }] };
       }
       return {
@@ -77,7 +77,7 @@ export function fakeAskAdapter(): AnyTextAdapter {
       typeof last.content === "string"
         ? last.content
         : JSON.stringify(last.content);
-    const hit = /"name":"([^"]+)","x":(\d+),"y":(\d+)(?:,"z":(\d+))?/.exec(
+    const hit = /"name":"([^"]+)","x":(\d+),"y":(\d+)(?:,"z":(\d+))?/u.exec(
       result
     );
     if (result.includes("treffer") && hit) {
@@ -93,7 +93,7 @@ export function fakeAskAdapter(): AnyTextAdapter {
         ],
       };
     }
-    const seen = /"name":"([^"]+)"/.exec(result)?.[1];
+    const seen = /"name":"([^"]+)"/u.exec(result)?.[1];
     const found = result.includes('"gefunden":true');
     return {
       text: `Testantwort: Hier ist es${seen && found ? `, ${seen}` : ""} (Quelle: Wikidata).`,

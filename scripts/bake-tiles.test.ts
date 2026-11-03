@@ -49,7 +49,7 @@ test("a raster without georeferencing is placed by its .tfw, or refused", async 
       ProjectedCSTypeGeoKey: 25_833,
     }
   );
-  await expect(readDgm(bare, null, 4)).rejects.toThrow(/\.tfw/);
+  await expect(readDgm(bare, null, 4)).rejects.toThrow(/\.tfw/u);
   // The world file references the CENTRE of the top-left pixel; the bounds
   // are the pixel edges.
   const dgm = await readDgm(bare, "1\n0\n0\n-1\n412000.5\n5657999.5\n", 4);

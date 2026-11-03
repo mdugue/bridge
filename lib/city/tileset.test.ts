@@ -87,7 +87,7 @@ test("each tile: far buildings replaced by the baked ones, coarse terrain by fin
 
 test("parseTilesetExtras accepts what the bake writes and rejects the rest", () => {
   expect(parseTilesetExtras({ extras })).toEqual(extras);
-  expect(() => parseTilesetExtras({})).toThrow(/extras/);
+  expect(() => parseTilesetExtras({})).toThrow(/extras/u);
   expect(() =>
     parseTilesetExtras({ extras: { ...extras, tiles: [] } })
   ).toThrow();

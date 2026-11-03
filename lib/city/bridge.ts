@@ -321,7 +321,7 @@ export function deckCarrier(structure: string | null | undefined): DeckCarrier {
   if (s.includes("arch") || s.includes("humpback")) {
     return "arch";
   }
-  return /truss|suspension|cable-stayed|cantilever/.test(s) ? "frame" : "beam";
+  return /truss|suspension|cable-stayed|cantilever/u.test(s) ? "frame" : "beam";
 }
 
 /** A beam is about a twentieth of its span deep... */

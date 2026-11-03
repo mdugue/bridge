@@ -30,18 +30,18 @@ import type {
 export const MIN_LEVELS_HEIGHT_M = 8;
 
 /** An official use whose storeys mean little (a nave, a hall, a tower). */
-const NO_STOREYS_USE = /kirche|kapelle|turm|halle|bahnhof|stadion/i;
+const NO_STOREYS_USE = /kirche|kapelle|turm|halle|bahnhof|stadion/iu;
 /** A name that says the same: it ends so ("Kreuzkirche", "Hausmannsturm"). */
-const NO_STOREYS_NAME = /(kirche|kapelle|dom|turm|halle|bahnhof|stadion)$/i;
+const NO_STOREYS_NAME = /(kirche|kapelle|dom|turm|halle|bahnhof|stadion)$/iu;
 
 /** What Wikidata calls a structure OSM draws as no building outline. */
-const NOT_A_BUILDING = /brücke|bridge|viadukt|steg\b/i;
+const NOT_A_BUILDING = /brücke|bridge|viadukt|steg\b/iu;
 /** A name that says so where Wikidata says nothing ("Albertbrücke"). */
-const BRIDGE_NAME = /brücke$/i;
+const BRIDGE_NAME = /brücke$/iu;
 
 /** A name without the place Wikidata disambiguates it by:
  *  "Pöppelmannbrücke (Grimma)" → "Pöppelmannbrücke". */
-const bareName = (name: string): string => name.replace(/\s*\([^)]*\)$/, "");
+const bareName = (name: string): string => name.replace(/\s*\([^)]*\)$/u, "");
 
 export type GapKind =
   | "wahrzeichen-ohne-name"
@@ -88,7 +88,7 @@ function at(epsg: number, x: number, y: number) {
 }
 
 /** An AdV use that says nothing (ALKIS's "not to be specified"). */
-const NO_USE = /nicht zu spezifizieren/i;
+const NO_USE = /nicht zu spezifizieren/iu;
 
 const describe = (b: WissenBuilding) =>
   b.name ??

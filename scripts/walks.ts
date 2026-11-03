@@ -163,11 +163,11 @@ async function refImages(ids: string[]): Promise<Map<string, string>> {
 /** Text from Commons' HTML credit fields. */
 const plain = (html: string | undefined) =>
   (html ?? "")
-    .replaceAll(/<[^>]*>/g, "")
+    .replaceAll(/<[^>]*>/gu, "")
     .replaceAll("&amp;", "&")
     .replaceAll("&quot;", '"')
-    .replaceAll(/&#0?39;/g, "'")
-    .replaceAll(/\s+/g, " ")
+    .replaceAll(/&#0?39;/gu, "'")
+    .replaceAll(/\s+/gu, " ")
     .trim();
 
 interface CommonsInfo {
@@ -205,7 +205,7 @@ async function commonsInfo(files: string[]): Promise<Map<string, CommonsInfo>> {
     for (const page of Object.values(got.query.pages)) {
       const info = page.imageinfo?.[0];
       if (info) {
-        infos.set(asked(page.title).replace(/^File:/, ""), info);
+        infos.set(asked(page.title).replace(/^File:/u, ""), info);
       }
     }
   }
@@ -263,7 +263,8 @@ async function photoJobs(force: boolean, refs: boolean): Promise<PhotoJob[]> {
   const stops = walks.flatMap(({ walk }) =>
     walk.stops.map((stop) => ({ stop, walk }))
   );
-  const firstRef = (stop: WalkStop) => stop.refs?.find((r) => /^Q\d+$/.test(r));
+  const firstRef = (stop: WalkStop) =>
+    stop.refs?.find((r) => /^Q\d+$/u.test(r));
   const unnamed = refs
     ? stops.flatMap(({ stop }) =>
         stop.photo?.file ? [] : [firstRef(stop) ?? []].flat()

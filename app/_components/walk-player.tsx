@@ -217,7 +217,7 @@ export function AskEntry({
 function SourceLink({ source }: { source: string }) {
   if (source.startsWith("stadtwissen:")) {
     const id = source.slice("stadtwissen:".length);
-    if (/^Q\d+$/.test(id)) {
+    if (/^Q\d+$/u.test(id)) {
       return (
         <a
           className="underline underline-offset-2 hover:text-foreground"
@@ -235,7 +235,7 @@ function SourceLink({ source }: { source: string }) {
   try {
     const url = new URL(source);
     const page = decodeURIComponent(url.pathname.split("/").pop() ?? "");
-    label = `${url.hostname.replace(/^www\./, "")}${page ? ` · ${page.replaceAll("_", " ")}` : ""}`;
+    label = `${url.hostname.replace(/^www\./u, "")}${page ? ` · ${page.replaceAll("_", " ")}` : ""}`;
   } catch {
     // shown as written
   }

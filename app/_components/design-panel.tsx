@@ -132,7 +132,7 @@ function savePlacement(text: string, design: string): void {
   );
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${design.replace(/\.(glb|gltf)$/i, "")}.lage.json`;
+  a.download = `${design.replace(/\.(glb|gltf)$/iu, "")}.lage.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -164,7 +164,7 @@ export function DesignPanel({
       return;
     }
     setError(null);
-    const onlyPlacement = files.every((f) => /\.json$/i.test(f.name));
+    const onlyPlacement = files.every((f) => /\.json$/iu.test(f.name));
     if (onlyPlacement && status) {
       setError(c.applyPlacementFile(await files[0].text()));
       return;

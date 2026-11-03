@@ -312,7 +312,7 @@ export function envelopeUrl(dsn: string): string | null {
   }
   const path = url.pathname.split("/").filter(Boolean);
   const project = path.pop();
-  if (!(url.username && project && /^\d+$/.test(project))) {
+  if (!(url.username && project && /^\d+$/u.test(project))) {
     return null;
   }
   const prefix = path.map((part) => `/${part}`).join("");
@@ -350,7 +350,7 @@ export function sessionEnvelope(
 }
 
 /** A URL in an event's text (a tile's file, a chunk in a stack). */
-const URL_PATTERN = /\b[a-z]+:\/\/\S+/gi;
+const URL_PATTERN = /\b[a-z]+:\/\/\S+/giu;
 
 /**
  * An event's text as it may leave the device, with no place in it: the
@@ -361,11 +361,11 @@ const URL_PATTERN = /\b[a-z]+:\/\/\S+/gi;
  * decimals and more).
  */
 export function scrub(text: string): string {
-  const blank = (s: string) => s.replaceAll(/\d/g, "#");
+  const blank = (s: string) => s.replaceAll(/\d/gu, "#");
   return text
     .replaceAll(URL_PATTERN, blank)
-    .replaceAll(/\d+(?:_\d+)+/g, blank)
-    .replaceAll(/\d+\.\d{3,}|\d{5,}(?:\.\d+)?/g, blank);
+    .replaceAll(/\d+(?:_\d+)+/gu, blank)
+    .replaceAll(/\d+\.\d{3,}|\d{5,}(?:\.\d+)?/gu, blank);
 }
 
 /** One event as a breadcrumb's line (the crumb has the time), scrubbed. */
@@ -381,7 +381,7 @@ export function problemKey(event: TrailEvent): string {
   return (event.detail ?? "")
     .split(" | ")[0]
     .replaceAll(URL_PATTERN, "<url>")
-    .replaceAll(/\d+/g, "#")
+    .replaceAll(/\d+/gu, "#")
     .slice(0, 80)
     .trim();
 }
@@ -432,7 +432,7 @@ function lastT(trail: Trail): number {
 }
 
 function path(trail: Trail): string {
-  return trail.url.split(/[?#]/)[0] ?? "/";
+  return trail.url.split(/[?#]/u)[0] ?? "/";
 }
 
 const asTag = (value: number | undefined) =>

@@ -92,7 +92,7 @@ const GEOSN_PRODUCTS: [SourceKey, string][] = [
 
 /** The leading ISO date of a free-text field ("2026-09-26 (first …)"). */
 export function leadingDate(text: string | undefined): string | undefined {
-  return /^\d{4}-\d{2}-\d{2}/.exec(text ?? "")?.[0];
+  return /^\d{4}-\d{2}-\d{2}/u.exec(text ?? "")?.[0];
 }
 
 /** Each OSM product's edition the record states. */
@@ -115,7 +115,7 @@ function treesSource(
   site: ProvenanceSite,
   record: ProvenanceRecord
 ): SourceInfo {
-  const register = site.treeCadastre?.credit.replace(/^[^:]*:\s*/, "");
+  const register = site.treeCadastre?.credit.replace(/^[^:]*:\s*/u, "");
   if (!register) {
     return {
       label: "OpenStreetMap",
@@ -215,7 +215,7 @@ export function siteProvenance(
  * (the laser scan the roofs were measured in, the footprints' Basis-DLM).
  */
 export function parseLod2Stand(stand: string): Lod2Stand {
-  const match = /^\s*([^()]+?)\s*(?:\((.*)\))?\s*$/.exec(stand);
+  const match = /^\s*([^()]+?)\s*(?:\((.*)\))?\s*$/u.exec(stand);
   const inputs: Record<string, string> = {};
   for (const part of (match?.[2] ?? "").split(",")) {
     const [key, value] = part.split(":").map((s) => s.trim());

@@ -221,7 +221,7 @@ export function titleLines(title: string): string[] {
     return [t];
   }
   const parts = t
-    .split(/\s+\/\s+/)
+    .split(/\s+\/\s+/u)
     .map((p) => p.trim())
     .filter((p) => p.length > 0);
   if (parts.length > 1) {
@@ -233,7 +233,7 @@ export function titleLines(title: string): string[] {
 /** Words into the fewest lines of about `TITLE_WRAP.line`, as even as
  *  they go: the narrowest width that still fits that many lines. */
 function balanced(text: string): string[] {
-  const words = text.split(/\s+/);
+  const words = text.split(/\s+/u);
   if (text.length <= TITLE_WRAP.after || words.length < 2) {
     return [text];
   }

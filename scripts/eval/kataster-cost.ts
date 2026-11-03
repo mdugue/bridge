@@ -270,7 +270,7 @@ for (const file of shots) {
       }),
     };
   }
-  views[file.replace(/\.json$/, "")] = entry;
+  views[file.replace(/\.json$/u, "")] = entry;
 }
 report.views = views;
 process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);

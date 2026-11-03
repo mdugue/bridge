@@ -25,7 +25,7 @@ test("the privacy page names every host the viewer reads live", () => {
 const ROOT = join(import.meta.dir, "../..");
 const SOURCES = ["app", "components", "hooks", "lib"].flatMap((dir) =>
   [...new Bun.Glob(`${dir}/**/*.{ts,tsx}`).scanSync({ cwd: ROOT })]
-    .filter((path) => !/\.test\.tsx?$/.test(path))
+    .filter((path) => !/\.test\.tsx?$/u.test(path))
     .map((path) => ({ path, text: readFileSync(join(ROOT, path), "utf-8") }))
 );
 
@@ -41,7 +41,7 @@ test("the site sets no cookies (the privacy page says so)", () => {
 test("every storage key comes from the table, none is written inline", () => {
   // a key given as a literal to a storage call, or as a literal index
   const literalKey =
-    /(?:\.\s*(?:getItem|setItem|removeItem)\s*\(|\b(?:localStorage|sessionStorage)\s*\[)\s*["'`]/;
+    /(?:\.\s*(?:getItem|setItem|removeItem)\s*\(|\b(?:localStorage|sessionStorage)\s*\[)\s*["'`]/u;
   expect(paths(SOURCES.filter(({ text }) => literalKey.test(text)))).toEqual(
     []
   );
@@ -49,7 +49,7 @@ test("every storage key comes from the table, none is written inline", () => {
   const touching = SOURCES.filter(
     ({ path, text }) =>
       !path.endsWith("storage-keys.ts") &&
-      /\b(?:localStorage|sessionStorage)\b/.test(text)
+      /\b(?:localStorage|sessionStorage)\b/u.test(text)
   );
   expect(touching.length).toBeGreaterThan(0);
   expect(

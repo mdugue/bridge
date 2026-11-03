@@ -15,7 +15,7 @@ import type { StructuralMetadataJson } from "@/lib/city/property-table";
 const METADATA = "EXT_structural_metadata";
 
 /** What the renderer looks a glTF content's loader up by (`path.glb`). */
-const GLTF_CONTENT = /\.(gltf|glb)$/;
+const GLTF_CONTENT = /\.(gltf|glb)$/u;
 
 /**
  * Reads a glTF's EXT_structural_metadata property tables

@@ -142,7 +142,7 @@ describe("decodeGreyPng", () => {
     expect(dirs.length).toBeGreaterThan(0);
     const maxId = Math.max(...LANDCOVER_CLASSES.map((c) => c.id));
     for (const dir of dirs) {
-      const file = readdirSync(dir).find((f) => /^landcover_.*\.png$/.test(f));
+      const file = readdirSync(dir).find((f) => /^landcover_.*\.png$/u.test(f));
       expect(file).toBeDefined();
       const out = await decodeGreyPng(
         new Uint8Array(readFileSync(join(dir, file ?? "")))
@@ -160,12 +160,12 @@ describe("decodeGreyPng", () => {
 
   test("decodes the committed paving rasters as four bytes per texel", async () => {
     const dir = join(import.meta.dir, "../..", siteDataDir(DRESDEN), "dlm");
-    const file = readdirSync(dir).find((f) => /^surface_.*\.png$/.test(f));
+    const file = readdirSync(dir).find((f) => /^surface_.*\.png$/u.test(f));
     if (!file) {
       throw new Error(`no committed surface raster in ${dir}`);
     }
     const { size } = JSON.parse(
-      readFileSync(join(dir, file.replace(/\.png$/, ".json")), "utf-8")
+      readFileSync(join(dir, file.replace(/\.png$/u, ".json")), "utf-8")
     ) as { size: number };
     const out = await decodeGreyPng(
       new Uint8Array(readFileSync(join(dir, file)))

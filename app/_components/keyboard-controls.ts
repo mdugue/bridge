@@ -45,7 +45,7 @@ const ONE_SHOTS = new Map<
 
 /** Digit1…Digit9 → 0…8; anything else → null. */
 function viewpointIndexOf(code: string): number | null {
-  const match = /^Digit([1-9])$/.exec(code);
+  const match = /^Digit([1-9])$/u.exec(code);
   return match ? Number(match[1]) - 1 : null;
 }
 

@@ -72,7 +72,7 @@ function readF32(path: string): Float32Array {
 }
 
 function gridN(name: string): number {
-  const m = /_(\d+)$/.exec(name);
+  const m = /_(\d+)$/u.exec(name);
   if (!m) {
     throw new Error(`grid name must end in _<n>: ${name}`);
   }

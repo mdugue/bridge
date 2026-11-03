@@ -191,7 +191,7 @@ function addPrimitive(
  *  the custom attributes are ids and flags that must stay exact (quantize
  *  would squeeze them to 12 bits), the vectors are quantised already. */
 const QUANTIZE = {
-  pattern: /^(POSITION|NORMAL|COLOR_0|TEXCOORD_0)$/,
+  pattern: /^(POSITION|NORMAL|COLOR_0|TEXCOORD_0)$/u,
   quantizePosition: 16,
   quantizeNormal: 8,
   quantizeColor: 8,

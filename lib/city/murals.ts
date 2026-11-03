@@ -96,10 +96,10 @@ export function muralsOf(extras: unknown): MuralExtras["murals"] {
 /** A photo's credit line, as the HUD's sources list it: the drawing is an
  *  adaptation of the photo, under its licence. */
 export function muralCredit(mural: Pick<Mural, "name" | "photo">): string {
-  const author = mural.photo.author.replace(/^User:/, "");
+  const author = mural.photo.author.replace(/^User:/u, "");
   const name = mural.name ? `„${mural.name}“` : "";
   return `Wandbild ${name}: gezeichnet nach Foto ${author}, ${mural.photo.licence}, Wikimedia Commons`
-    .replaceAll(/ {2,}/g, " ")
+    .replaceAll(/ {2,}/gu, " ")
     .replace(" :", ":");
 }
 

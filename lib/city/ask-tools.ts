@@ -106,7 +106,7 @@ export const timeTool = toolDefinition({
     stunde: z.number().min(0).max(24).describe("Uhrzeit, z. B. 18.5 für 18:30"),
     datum: z
       .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .regex(/^\d{4}-\d{2}-\d{2}$/u)
       .optional()
       .describe("JJJJ-MM-TT"),
   }),

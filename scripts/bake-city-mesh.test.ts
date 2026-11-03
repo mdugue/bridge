@@ -318,7 +318,7 @@ test("the scan's small structures join as their own buildings, source 1", () => 
   expect(shed.glow).toBe(0);
   expect(shed.footprints[0].length).toBe(4);
   expect(shed.facts).toMatchObject({ height: 2.5, area: 12, function: "" });
-  expect(shed.facts?.buildingId).toMatch(/^scan:t:/);
+  expect(shed.facts?.buildingId).toMatch(/^scan:t:/u);
   // the box stands where the ring says, recentred on the spawn tile's offset
   const shedXs: number[] = [];
   const shedYs: number[] = [];

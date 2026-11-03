@@ -134,7 +134,7 @@ export function maskedKey(key: string): string {
  * (a newline) from ever reaching a provider.
  */
 export function plausibleKey(key: string): boolean {
-  return /^[\x21-\x7E]{20,300}$/.test(key);
+  return /^[\x21-\x7E]{20,300}$/u.test(key);
 }
 
 /**
@@ -206,7 +206,7 @@ export function parseAskProps(
   if (typeof model !== "string" || !isAskModel(provider, model)) {
     return "unbekanntes Modell";
   }
-  if (typeof site !== "string" || !/^[a-z]{2,24}$/.test(site)) {
+  if (typeof site !== "string" || !/^[a-z]{2,24}$/u.test(site)) {
     return "unbekannte Stadt";
   }
   return {

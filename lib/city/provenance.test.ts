@@ -29,19 +29,19 @@ test("every site tile has the editions its buildings and ground came from", () =
     const row = manifest.tiles[tile];
     // The file name in the message says which tile lost an edition.
     for (const key of ["lod2", "lsc", "dgm"] as const) {
-      expect(`${tile} ${key}: ${row?.[key]}`).toMatch(/: \d{4}/);
+      expect(`${tile} ${key}: ${row?.[key]}`).toMatch(/: \d{4}/u);
     }
   }
-  expect(manifest.sources.osm.stand).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  expect(manifest.sources.osm.stand).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
   expect(manifest.sources.osm.credit).toContain("OpenStreetMap");
   expect(manifest.sources.lod2.credit).toBe("Quelle: GeoSN, dl-de/by-2-0");
   // every OSM product a card quotes has its own edition
   for (const product of ["buildings", "bridges", "fountains", "trees"]) {
     expect(
       `${product}: ${manifest.sources.osm.stands?.[product as "trees"]}`
-    ).toMatch(/: \d{4}-\d{2}-\d{2}$/);
+    ).toMatch(/: \d{4}-\d{2}-\d{2}$/u);
   }
-  expect(manifest.sources.wikidata.stand).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  expect(manifest.sources.wikidata.stand).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
   expect(manifest.sources.trees.stand).toBe("2026-10-01");
 });
 
@@ -102,6 +102,6 @@ test("Unna's OSM stand comes from its openstreetmap.fr extract", () => {
     )
   ) as ProvenanceRecord;
   const unna = siteProvenance(unnaRecord, tileIds(UNNA), UNNA);
-  expect(unna.sources.osm.stand).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  expect(unna.sources.osm.stand).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
   expect(unna.sources.osm.stands?.buildings).toBe(unna.sources.osm.stand);
 });

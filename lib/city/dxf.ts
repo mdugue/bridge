@@ -33,7 +33,7 @@ interface Group {
 
 /** The DXF's groups, in order. */
 function groupsOf(text: string): Group[] {
-  const lines = text.split(/\r?\n/);
+  const lines = text.split(/\r?\n/u);
   const out: Group[] = [];
   for (let i = 0; i + 1 < lines.length; i += 2) {
     const code = Number.parseInt(lines[i].trim(), 10);
@@ -59,7 +59,7 @@ const UNITS: Readonly<Record<number, number>> = {
 
 /** Layers that are drawing furniture, not the plan. */
 const NOT_PLAN =
-  /rahmen|frame|schriftfeld|titel|title|text|beschrift|bema(ß|ss)ung|dim|legende|legend|nordpfeil|north|viewport|defpoints|raster|grid|plot/i;
+  /rahmen|frame|schriftfeld|titel|title|text|beschrift|bema(ß|ss)ung|dim|legende|legend|nordpfeil|north|viewport|defpoints|raster|grid|plot/iu;
 
 /** An entity: its type and its groups up to the next entity. */
 interface Entity {

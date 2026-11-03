@@ -31,28 +31,28 @@ const KEYWORDS: readonly [PlanClass, RegExp][] = [
   // (not "street": "tree" only where no letter comes before it)
   [
     "tree",
-    /baum|bäume|baeume|(?<![a-z])trees?|gehölz.?punkt|solitär|solitaer|krone/,
+    /baum|bäume|baeume|(?<![a-z])trees?|gehölz.?punkt|solitär|solitaer|krone/u,
   ],
-  ["gravel", /kies|schotter|splitt|wassergeb|gravel|grus|tenne|chaussierung/],
-  ["water", /wasser|teich|becken|bach|fluss|pool|pond|water|brunnen|rinne/],
-  ["sand", /sand|spielplatz|spielfl|play|fallschutz/],
+  ["gravel", /kies|schotter|splitt|wassergeb|gravel|grus|tenne|chaussierung/u],
+  ["water", /wasser|teich|becken|bach|fluss|pool|pond|water|brunnen|rinne/u],
+  ["sand", /sand|spielplatz|spielfl|play|fallschutz/u],
   [
     "road",
-    /fahrbahn|straße|strasse|street|asphalt|road|parkpl|stellpl|zufahrt/,
+    /fahrbahn|straße|strasse|street|asphalt|road|parkpl|stellpl|zufahrt/u,
   ],
-  ["path", /weg|pfad|path|walk|fußweg|fussweg|gehweg|radweg/],
+  ["path", /weg|pfad|path|walk|fußweg|fussweg|gehweg|radweg/u],
   [
     "paving",
-    /pflaster|platte|platz|belag|paving|plaza|beton|naturstein|terrass|hof/,
+    /pflaster|platte|platz|belag|paving|plaza|beton|naturstein|terrass|hof/u,
   ],
-  ["wood", /wald|forest|woodland|baumhain|hain/],
+  ["wood", /wald|forest|woodland|baumhain|hain/u],
   [
     "planting",
-    /beet|pflanz|staude|strauch|sträucher|hecke|gebüsch|gebuesch|shrub|planting|bodendecker|gräser|graeser/,
+    /beet|pflanz|staude|strauch|sträucher|hecke|gebüsch|gebuesch|shrub|planting|bodendecker|gräser|graeser/u,
   ],
-  ["lawn", /rasen|wiese|grün|gruen|lawn|grass|meadow|green|vegetation/],
-  ["building", /gebäude|gebaeude|haus|building|bau(körper|koerper)|hochbau/],
-  ["terrain", /gelände|gelaende|dgm|terrain|surface|tin|höhen|hoehen/],
+  ["lawn", /rasen|wiese|grün|gruen|lawn|grass|meadow|green|vegetation/u],
+  ["building", /gebäude|gebaeude|haus|building|bau(körper|koerper)|hochbau/u],
+  ["terrain", /gelände|gelaende|dgm|terrain|surface|tin|höhen|hoehen/u],
 ];
 
 /** The class a name speaks of, or null. */

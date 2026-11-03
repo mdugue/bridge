@@ -109,7 +109,7 @@ export function osmDataDays(
       return;
     }
     if (key === "dataAsOf" && typeof value === "string") {
-      const day = /\b20\d\d-\d\d-\d\d\b/.exec(value)?.[0];
+      const day = /\b20\d\d-\d\d-\d\d\b/u.exec(value)?.[0];
       if (day) {
         days.push(day);
       }
@@ -137,11 +137,11 @@ export function daysSince(from: string, now: Date): number {
  * whose inner years are its sources', not its own).
  */
 export function standEdition(stand: string): string {
-  if (/^\s*\d{4}-\d\d-\d\d/.test(stand)) {
-    const days = stand.match(/\b\d{4}-\d\d-\d\d\b/g) ?? [];
+  if (/^\s*\d{4}-\d\d-\d\d/u.test(stand)) {
+    const days = stand.match(/\b\d{4}-\d\d-\d\d\b/gu) ?? [];
     return days.sort((a, b) => a.localeCompare(b)).at(-1)!;
   }
-  return /^\s*(\d{4})/.exec(stand)?.[1] ?? stand.trim();
+  return /^\s*(\d{4})/u.exec(stand)?.[1] ?? stand.trim();
 }
 
 /** A recorded `Stand` is older than the current one. */

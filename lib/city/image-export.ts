@@ -128,8 +128,8 @@ export function exportFileName(
     .replaceAll("ö", "oe")
     .replaceAll("ü", "ue")
     .replaceAll("ß", "ss")
-    .replaceAll(/[^a-z0-9]+/g, "-")
-    .replaceAll(/^-|-$/g, "");
+    .replaceAll(/[^a-z0-9]+/gu, "-")
+    .replaceAll(/^-|-$/gu, "");
   const day = `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())}`;
   const time = `${two(date.getHours())}${two(date.getMinutes())}`;
   return `${siteId}-${slug}-${day}-${time}.png`;

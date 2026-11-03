@@ -204,7 +204,7 @@ export function arrivalOf(hash: string): Pick<GeoFix, "lat" | "lng"> | null {
   const value = hash.startsWith("#")
     ? new URLSearchParams(hash.slice(1)).get(ARRIVAL_PARAM)
     : null;
-  const m = value?.match(/^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/);
+  const m = value?.match(/^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/u);
   if (!m) {
     return null;
   }

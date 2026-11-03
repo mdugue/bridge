@@ -386,7 +386,7 @@ const SUGGESTIONS = [
 
 /** A provider's error that names the key or the account's credit. */
 const KEY_TROUBLE =
-  /\b(401|402|403|unauthori[sz]ed|forbidden|authenticat\w*|api[ _-]?key|credits?|credentials?|quota|billing|insufficient)\b/i;
+  /\b(401|402|403|unauthori[sz]ed|forbidden|authenticat\w*|api[ _-]?key|credits?|credentials?|quota|billing|insufficient)\b/iu;
 /** The same, as the code a provider's error carries. */
 const KEY_CODES = new Set(["401", "402", "403"]);
 
@@ -955,7 +955,7 @@ function Linked({ text }: { text: string }) {
   // a sentence's closing punctuation after a link is not part of it
   // and a bracketed part, as in Wikipedia's „Zwinger_(Dresden)“, is
   const parts = text.split(
-    /(https:\/\/(?:[^\s()[\]]|\([^\s()]*\))*(?:[^\s()[\].,;:!?»“”"']|\([^\s()]*\)))/g
+    /(https:\/\/(?:[^\s()[\]]|\([^\s()]*\))*(?:[^\s()[\].,;:!?»“”"']|\([^\s()]*\)))/gu
   );
   return (
     <>
