@@ -9,7 +9,7 @@ test("a shared raster loads once and is freed with its last reader", async () =>
   const share = createSharedRasters(
     async (key) => {
       loads.push(key);
-      return Promise.resolve(`tex:${key}`);
+      return `tex:${key}`;
     },
     (value) => freed.push(value)
   );
@@ -52,7 +52,9 @@ test("a raster released before it lands is freed when it lands", async () => {
 
 test("a failed load is null, never a rejection", async () => {
   const share = createSharedRasters<string>(
-    async () => Promise.reject(new Error("404")),
+    async () => {
+      throw new Error("404");
+    },
     () => undefined
   );
   expect(await share.acquire("x")).toBeNull();

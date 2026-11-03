@@ -163,7 +163,7 @@ test("a level whose tile leaves while it waits for a shared raster lets go at on
       }),
     released
   );
-  const none = async () => Promise.resolve(null);
+  const none = async () => null;
   const aborter = new AbortController();
   const outcome = dressTerrain(
     new Mesh(new BoxGeometry(), new MeshStandardNodeMaterial()),

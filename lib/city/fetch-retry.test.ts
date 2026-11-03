@@ -36,17 +36,17 @@ function fakePage(hidden: [number, number][] = []) {
     random: () => 0.5,
     sleep: async (ms, signal) => {
       if (signal?.aborted) {
-        return Promise.reject(new DOMException("aborted", "AbortError"));
+        throw new DOMException("aborted", "AbortError");
       }
       now += ms;
-      return Promise.resolve();
+      return;
     },
     whenUsable: async () => {
       const span = hidden.find(([a, b]) => now >= a && now < b);
       if (span) {
         now = span[1];
       }
-      return Promise.resolve();
+      return;
     },
     visibleMs: () => visibleBetween(now),
     describe: () => "online visible",
@@ -159,7 +159,7 @@ test("an absent or fatal status is answered at once, never retried", async () =>
     const answer = await withRetry(
       async () => {
         calls++;
-        return Promise.resolve({ status, value: "" });
+        return { status, value: "" };
       },
       { budgetMs: 20_000, env: fakePage().env }
     );
@@ -175,7 +175,7 @@ test("a fatal error and an abort reject as they are, without a retry", async () 
     withRetry(
       async () => {
         calls++;
-        return Promise.reject(parse);
+        throw parse;
       },
       { budgetMs: 20_000, env: fakePage().env }
     )
@@ -185,7 +185,7 @@ test("a fatal error and an abort reject as they are, without a retry", async () 
     withRetry(
       async () => {
         calls++;
-        return Promise.reject(abort);
+        throw abort;
       },
       { budgetMs: 20_000, env: fakePage().env }
     )
@@ -200,7 +200,7 @@ test("an abort during the wait ends the retries", async () => {
     async () => {
       calls++;
       aborter.abort();
-      return Promise.reject(new TypeError("Load failed"));
+      throw new TypeError("Load failed");
     },
     { budgetMs: 20_000, env: fakePage().env, signal: aborter.signal }
   );
@@ -214,9 +214,7 @@ test("a transient status waits at least its Retry-After", async () => {
   await withRetry(
     async () => {
       calls++;
-      return Promise.resolve(
-        calls === 1 ? { status: 503, retryAfter: "4", value: "" } : ok()
-      );
+      return calls === 1 ? { status: 503, retryAfter: "4", value: "" } : ok();
     },
     { budgetMs: 20_000, env: page.env }
   );
@@ -230,7 +228,7 @@ test("the budget spent, the retries give up with a NetworkError that says how of
   const run = withRetry(
     async () => {
       calls++;
-      return Promise.reject(new TypeError("Load failed"));
+      throw new TypeError("Load failed");
     },
     {
       budgetMs: 8000,

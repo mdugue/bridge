@@ -2029,7 +2029,7 @@ async function bootApp(
   // is all there. (Their code ships with the scene: as a chunk of its own
   // it cost more first-load JS than it moved — feature-seam.ts.)
   const dataLayers = lazyFeature(
-    async () => Promise.resolve(dataLayersModule),
+    async () => dataLayersModule,
     ({ startDataLayers }) =>
       startDataLayers(hooks, {
         bikeFeed: opts.site.dataLayers?.bikes?.feed,
@@ -4412,7 +4412,7 @@ async function bootApp(
     },
     disposeForReload: async () => {
       if (!leave()) {
-        return Promise.resolve();
+        return;
       }
       const started = performance.now();
       let gone = false;

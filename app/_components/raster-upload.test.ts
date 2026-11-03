@@ -73,8 +73,7 @@ async function settled<T>(promise: Promise<T>): Promise<T> {
 
 function serve(png: Uint8Array<ArrayBuffer>): void {
   // reason: the loader reads only `ok` and the body of a Response
-  globalThis.fetch = (async () =>
-    Promise.resolve(new Response(png))) as unknown as typeof fetch;
+  globalThis.fetch = (async () => new Response(png)) as unknown as typeof fetch;
 }
 
 /** What three's `initTexture` does that the loader relies on: the upload

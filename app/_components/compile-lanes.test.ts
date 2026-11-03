@@ -102,7 +102,7 @@ test("a drawable left out (its tile left) gets no step", async () => {
     ],
     async (item) => {
       ran.push(item.id);
-      return Promise.resolve();
+      return;
     },
     done,
     { lanes: 4, skip: (item) => item.id === "gone" }

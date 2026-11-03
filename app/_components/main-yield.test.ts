@@ -41,7 +41,7 @@ test("a browser without scheduler.yield gets one that resolves without a frame",
 
 test("the browser's own scheduler.yield is kept", () => {
   host.window = globalThis;
-  const own = async () => Promise.resolve();
+  const own = async () => {};
   host.scheduler = { yield: own };
   installMainYield();
   expect(current()?.yield).toBe(own);

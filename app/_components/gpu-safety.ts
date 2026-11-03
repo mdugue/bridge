@@ -182,7 +182,7 @@ let pageLevel: Promise<SafetyLevel> | null = null;
  */
 export async function pageSafety(): Promise<SafetyLevel> {
   if (typeof window === "undefined") {
-    return Promise.resolve(0);
+    return 0;
   }
   pageLevel ??= settleAfterAsking(
     location.search,

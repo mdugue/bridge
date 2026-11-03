@@ -505,7 +505,7 @@ export function createSelectionOutline(deps: {
       const inTurn = async (into: RenderTarget, root: Object3D, view: Camera) =>
         compileInTurn(renderer, async () => {
           if (outlineDisposed) {
-            return Promise.resolve();
+            return;
           }
           held = true;
           lastUsed = performance.now();

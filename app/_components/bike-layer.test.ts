@@ -78,7 +78,7 @@ function stubFetch(body: unknown): {
   // reason: the stub takes the URL only; the helpers pass a string
   globalThis.fetch = (async () => {
     calls++;
-    return Promise.resolve(new Response(JSON.stringify(body)));
+    return new Response(JSON.stringify(body));
   }) as unknown as typeof fetch;
   return {
     calls: () => calls,

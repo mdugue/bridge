@@ -50,7 +50,7 @@ beforeEach(() => {
   };
   g.fetch = async () => {
     fetched += 1;
-    return Promise.resolve(new Response(null, { status: 200 }));
+    return new Response(null, { status: 200 });
   };
   g.window = {};
   g.location = { origin: "https://example.test" };

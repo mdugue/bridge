@@ -513,7 +513,7 @@ export function dressCity(
     },
     prepareBvh: async () => {
       if (fresh) {
-        return Promise.resolve();
+        return;
       }
       prepared ??= streamTimings
         .timed(

@@ -1252,7 +1252,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     compile: async (renderer, camera) =>
       compileInTurn(renderer, async () => {
         if (disposed) {
-          return Promise.resolve();
+          return;
         }
         const shown = [letters.visible, shadow.visible] as const;
         const previous = renderer.getRenderTarget();

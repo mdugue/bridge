@@ -924,7 +924,7 @@ export function createPostStack(
    */
   const compileNow = async (object: Object3D, view: Camera = camera) => {
     if (stackDisposed || left(object)) {
-      return Promise.resolve();
+      return;
     }
     const previous = renderer.getRenderTarget();
     const { visible, frustumCulled } = object;
@@ -1022,7 +1022,7 @@ export function createPostStack(
     held: PipelineAnchors[],
     release: () => boolean = () => true
   ) => {
-    void compileInTurn(renderer, async () => Promise.resolve()).then(() => {
+    void compileInTurn(renderer, async () => {}).then(() => {
       if (!release()) {
         return;
       }
@@ -1046,7 +1046,7 @@ export function createPostStack(
     view: Camera
   ) => {
     if (stackDisposed) {
-      return Promise.resolve();
+      return;
     }
     const previous = renderer.getRenderTarget();
     renderer.setRenderTarget(target);

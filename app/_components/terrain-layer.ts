@@ -1594,7 +1594,7 @@ async function loadTerrainRasters(
   const holds: (() => void)[] = [];
   const hold: Hold = async (share, key) => {
     if (!(share && key)) {
-      return Promise.resolve(null);
+      return null;
     }
     holds.push(() => share.release(key));
     // an abort lets go at once (`free` below), not once the raster this

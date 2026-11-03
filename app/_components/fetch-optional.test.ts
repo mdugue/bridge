@@ -24,7 +24,7 @@ function stubFetch(
   // reason: the stub takes the URL only; the helpers pass a string
   globalThis.fetch = (async (url: string) => {
     calls++;
-    return Promise.resolve(answer(url, calls));
+    return answer(url, calls);
   }) as unknown as typeof fetch;
   return { calls: () => calls };
 }
@@ -85,7 +85,9 @@ test("a network failure is not the answer: the file is asked for again", async (
 
 test("an abort is rethrown", async () => {
   const abort = new DOMException("aborted", "AbortError");
-  stubFetch(async () => Promise.reject(abort));
+  stubFetch(async () => {
+    throw abort;
+  });
   await expect(fetchOptionalJson("/x")).rejects.toBe(abort);
 });
 
@@ -106,7 +108,9 @@ test("fetchFeaturesFrom merges the collections in URL order, a 404 among them co
 
 test("fetchFeaturesFrom rethrows an abort", async () => {
   const abort = new DOMException("aborted", "AbortError");
-  stubFetch(async () => Promise.reject(abort));
+  stubFetch(async () => {
+    throw abort;
+  });
   await expect(fetchFeaturesFrom(["/a", "/b"])).rejects.toBe(abort);
 });
 
@@ -131,7 +135,9 @@ test("a missing binary artifact is off; an abort is rethrown", async () => {
   stubFetch(() => new Response(null, { status: 404 }));
   expect(await fetchOptionalBinary("/x.pts.gz")).toBeNull();
   const abort = new DOMException("aborted", "AbortError");
-  stubFetch(async () => Promise.reject(abort));
+  stubFetch(async () => {
+    throw abort;
+  });
   await expect(fetchOptionalBinary("/x.pts.gz")).rejects.toBe(abort);
 });
 
@@ -212,7 +218,7 @@ test("an attempt that goes silent is cut and asked for again", async () => {
   globalThis.fetch = (async (_url: string, init?: RequestInit) => {
     calls++;
     if (calls > 1) {
-      return Promise.resolve(new Response(new Uint8Array([7, 8])));
+      return new Response(new Uint8Array([7, 8]));
     }
     return new Promise<Response>((_, reject) => {
       init?.signal?.addEventListener("abort", () =>

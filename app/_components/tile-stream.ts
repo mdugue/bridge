@@ -991,10 +991,10 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
       wanted = true;
       if (ready && slot.group) {
         slot.group.visible = true;
-        return Promise.resolve();
+        return;
       }
       if (!host || disposed) {
-        return Promise.resolve(); // built once the dressing hangs
+        return; // built once the dressing hangs
       }
       const h = host;
       building ??= build(h).catch((err: unknown) => {

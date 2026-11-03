@@ -133,13 +133,17 @@ test("a task that fails frees its place", async () => {
       (err: unknown) => `failed: ${(err as Error).message}`
     );
   const results = await Promise.all([
-    outcome(gate.run(async () => Promise.reject(new Error("decode failed")))),
+    outcome(
+      gate.run(async () => {
+        throw new Error("decode failed");
+      })
+    ),
     outcome(
       gate.run(() => {
         throw new Error("thrown at once");
       })
     ),
-    outcome(gate.run(async () => Promise.resolve("next"))),
+    outcome(gate.run(async () => "next")),
   ]);
   expect(results).toEqual([
     "failed: decode failed",

@@ -51,7 +51,7 @@ test("only scene-wide materials are anchored, once per layout and receipt", asyn
   const compiled: Object3D[] = [];
   const anchors = createPipelineAnchors(async (o) => {
     compiled.push(o);
-    return Promise.resolve();
+    return;
   });
   const a = new Mesh(new BoxGeometry(), shared);
   const b = new Mesh(new BoxGeometry(), shared);
@@ -76,7 +76,7 @@ test("a shared build is anchored once, through a stand-in without the tile's slo
   const compiled: Object3D[] = [];
   const anchors = createPipelineAnchors(async (o) => {
     compiled.push(o);
-    return Promise.resolve();
+    return;
   });
   const tile = (raster: object) => {
     const material = new MeshBasicNodeMaterial();
@@ -99,7 +99,7 @@ test("a hold of every build anchors a tile's own material too, as itself", async
   const compiled: Object3D[] = [];
   const anchors = createPipelineAnchors(async (o) => {
     compiled.push(o);
-    return Promise.resolve();
+    return;
   }, true);
   const material = new MeshBasicNodeMaterial();
   await anchors.anchor(new Mesh(new BoxGeometry(), material));
@@ -118,7 +118,7 @@ test("anchorAll compiles the new stand-ins in one call and takes them out of its
   const compiled: { object: Object3D; children: Object3D[] }[] = [];
   const anchors = createPipelineAnchors(async (object) => {
     compiled.push({ object, children: [...object.children] });
-    return Promise.resolve();
+    return;
   });
   const a = new Mesh(new BoxGeometry(), shared);
   const b = new Mesh(new BoxGeometry(), shared);

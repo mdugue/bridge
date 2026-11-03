@@ -27,7 +27,7 @@ test("a feature wanted many times loads and starts once", async () => {
   const feature = counted();
   const lazy = lazyFeature(async () => {
     imports++;
-    return Promise.resolve({});
+    return {};
   }, feature.start);
   expect(lazy.current()).toBeNull();
   const [a, b] = await Promise.all([lazy.want(), lazy.want()]);
@@ -73,7 +73,7 @@ test("a spine gone before the module came never starts the feature; one gone aft
   expect(gone.current()).toBeNull();
 
   const late = counted();
-  const started = lazyFeature(async () => Promise.resolve({}), late.start);
+  const started = lazyFeature(async () => ({}), late.start);
   await started.want();
   started.dispose();
   expect(late.stops()).toBe(1);

@@ -216,7 +216,7 @@ test("a city drops its normals' and places on the wall's CPU copies once its com
       {
         dressingGate: new Promise<void>(() => undefined),
         bootTile: () => null,
-        compile: async () => Promise.resolve(compiled),
+        compile: async () => compiled,
         onChange: () => undefined,
       } as unknown as TileStreamContext,
       {
@@ -267,7 +267,9 @@ test("a compile the GPU had no room for is reported once, and drops nothing", as
       {
         dressingGate: new Promise<void>(() => undefined),
         bootTile: () => null,
-        compile: async () => Promise.reject(error),
+        compile: async () => {
+          throw error;
+        },
         onAllocationFailure: (_: unknown, where: string) =>
           failures.push(where),
         onChange: () => undefined,
@@ -306,7 +308,7 @@ test("a dressing whose build throws is reported, an allocation failure as one, a
     const ctx = {
       dressingGate: Promise.resolve(),
       bootTile: () => null,
-      compile: async () => Promise.resolve(true),
+      compile: async () => true,
       onAllocationFailure: (err: unknown, where: string) =>
         allocations.push([err, where]),
       onDressingFailed: (err: unknown, tile: string) =>
@@ -427,7 +429,7 @@ function abortableLoad() {
     {
       dressingGate: new Promise<void>(() => undefined),
       bootTile: () => null,
-      compile: async () => Promise.resolve(),
+      compile: async () => {},
       onChange: () => undefined,
     } as unknown as TileStreamContext,
     {
@@ -534,7 +536,7 @@ test("a hung dressing's ask sets come in idle time, into the same array; none fo
     return { tile: "t", asks, buildAsks: build() };
   };
   // the slices run at once here
-  const now = async (steps: Steps<unknown>) => Promise.resolve(finished(steps));
+  const now = async (steps: Steps<unknown>) => finished(steps);
   const hung = dressing();
   const asks = hung.asks;
   buildAsksWhenIdle(hung, () => true, { idle: later, run: now });
@@ -701,7 +703,7 @@ test("a level waits for its dressing only where it takes over from its tile's ot
 /** The data layers' traffic builder as the slot waits for it, there at
  *  once. */
 const builder: TrafficBuilder = { build: buildTraffic, askSet: trafficAskSet };
-const loaded = async () => Promise.resolve(builder);
+const loaded = async () => builder;
 
 /** A tile's counted traffic as a slot: one two-way street, its dressing's
  *  ask list, and a host whose compiles the test holds and counts. */

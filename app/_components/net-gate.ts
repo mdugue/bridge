@@ -84,10 +84,10 @@ export function createNetGate(page: GatePage): NetGate {
   });
   const whenUsable = async (signal?: AbortSignal): Promise<void> => {
     if (signal?.aborted) {
-      return Promise.reject(abortError());
+      throw abortError();
     }
     if (usable()) {
-      return Promise.resolve();
+      return;
     }
     return new Promise<void>((resolve, reject) => {
       let probe: ReturnType<typeof setTimeout> | undefined;
@@ -195,7 +195,7 @@ export async function whenUsable(signal?: AbortSignal): Promise<void> {
 /** Waits `ms`; rejects with an AbortError when `signal` aborts. */
 export async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   if (signal?.aborted) {
-    return Promise.reject(abortError());
+    throw abortError();
   }
   return new Promise<void>((resolve, reject) => {
     const abort = () => {

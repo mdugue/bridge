@@ -64,7 +64,7 @@ export function orientationNeedsPermission(): boolean {
 export async function requestOrientationPermission(): Promise<boolean> {
   const request = ctor()?.requestPermission;
   if (typeof request !== "function") {
-    return Promise.resolve(ctor() !== undefined);
+    return ctor() !== undefined;
   }
   return request().then(
     (state) => state === "granted",

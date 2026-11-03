@@ -120,7 +120,7 @@ export function lazyFeature<M, F extends { dispose: () => void }>(
       // (a start that resolved before the spine went would hand out the
       // stopped feature)
       if (disposed) {
-        return Promise.resolve(null);
+        return null;
       }
       pending ??= importer().then(
         (module) => {

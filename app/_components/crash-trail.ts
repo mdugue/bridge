@@ -206,7 +206,7 @@ export async function pageStillOpen(
   waitMs = 250
 ): Promise<boolean> {
   if (typeof BroadcastChannel === "undefined") {
-    return Promise.resolve(false);
+    return false;
   }
   return new Promise((resolve) => {
     const channel = new BroadcastChannel(CHANNEL);

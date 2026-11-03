@@ -16,7 +16,7 @@ function stubFetch(answer: (url: string) => Response): Map<string, number> {
   // reason: the stub takes the URL only; the helpers pass a string
   globalThis.fetch = (async (url: string) => {
     calls.set(url, (calls.get(url) ?? 0) + 1);
-    return Promise.resolve(answer(url));
+    return answer(url);
   }) as unknown as typeof fetch;
   return calls;
 }
@@ -52,7 +52,7 @@ test("a timetable that failed to load says so and is tried again on the next swi
   const statuses: (TramCarsStatus | null)[] = [];
   const overlays = createDataOverlays({
     ...base,
-    compile: async () => Promise.resolve(),
+    compile: async () => {},
     onTramStatus: (s) => statuses.push(s),
     tramTimetableUrl: "/data/trams.json",
   });
