@@ -157,6 +157,11 @@ interface Glide {
   duration: number;
 }
 
+/** Where a view's subject stands on screen (NDC): its preset's pivot. */
+function pivotNdc(view: ModelView): { x: number; y: number } {
+  return { x: 0, y: MODEL_PRESET_BY_ID[view.preset].pivotNdcY };
+}
+
 export interface ModelRig {
   readonly camera: ModelCamera;
   /** Modell owns the frame: the dolly zooms and the parallel view. */
@@ -175,6 +180,11 @@ export interface ModelRig {
   settledView: () => ModelView | null;
   /** the dolly zoom's progress towards the parallel view (0 = perspective) */
   blend: () => number;
+  /** a glide or a dolly zoom is under way */
+  moving: () => boolean;
+  /** where the picture's subject stands (NDC: the preset's pivot), or
+   *  undefined outside Modell */
+  focusNdc: () => { x: number; y: number } | undefined;
   /** Enters Modell from the walk/fly view, in `preset` (the last one by default). */
   enter: (preset?: ModelPresetId) => void;
   /** Leaves Modell for walk or fly (the pose it was entered from, if near). */
@@ -557,6 +567,10 @@ export function createModelRig(opts: ModelRigOptions): ModelRig {
     view: () => (phase.kind === "model" ? view : null),
     targetView: () => view,
     settledView: () => (phase.kind === "model" ? (glide?.to ?? view) : null),
+    moving: () =>
+      glide !== null || phase.kind === "entering" || phase.kind === "leaving",
+    focusNdc: () =>
+      phase.kind === "model" && view ? pivotNdc(view) : undefined,
     blend: () => {
       switch (phase.kind) {
         case "off":
@@ -599,7 +613,7 @@ export function createModelRig(opts: ModelRigOptions): ModelRig {
       const z = zoomedAbout(
         view,
         viewport(),
-        { x: 0, y: MODEL_PRESET_BY_ID[view.preset].pivotNdcY },
+        pivotNdc(view),
         view.metresPerPixel / metresPerPixelOf(denominator),
         maxScale
       );
@@ -716,7 +730,7 @@ export function createModelRig(opts: ModelRigOptions): ModelRig {
         keys.add(code);
         return;
       }
-      const centre = { x: 0, y: MODEL_PRESET_BY_ID[view.preset].pivotNdcY };
+      const centre = pivotNdc(view);
       if (code === "KeyQ" || code === "KeyE") {
         cancelGlide();
         glideTo(

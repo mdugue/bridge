@@ -73,6 +73,8 @@ export interface AskRun {
   site: AskPromptSite;
   threadId: string;
   today: Date;
+  /** the answers are read aloud */
+  voice?: boolean;
 }
 
 /**
@@ -94,6 +96,93 @@ export function roundsSinceQuestion(
     .length;
 }
 
+/**
+ * A stopped call's stand-in result. It names no cause (a stop, the
+ * deadline or a dropped line end a run alike) and says `ok: false`, which
+ * the trace shows as not done when a later snapshot brings it back to the
+ * browser.
+ */
+const STOPPED_RESULT = JSON.stringify({
+  abgebrochen: true,
+  ok: false,
+  hinweis: "Abgebrochen, bevor ein Ergebnis kam.",
+});
+
+/**
+ * The conversation with an answer for every tool call an earlier answer
+ * ended before its result came (the visitor stopped it while a scene
+ * tool waited): a call with no result makes the providers refuse every
+ * later request. The stand-in `tool` row goes right before the next
+ * question, after every row of the ended answer, so nothing it carried
+ * (its thinking, a segment that continues it) loses its place; a result
+ * counts only within its own answer, as some providers number calls
+ * afresh in each. Calls after the last question are the answer's own,
+ * which a resume completes. Arguments cut off mid-stream (a stop, or the
+ * output cap) become `{}` in every row, for no resume finishes them and
+ * the OpenAI-shaped adapters pass them on unparsed. The route hands this
+ * the AG-UI wire rows (an assistant row's `toolCalls`, a `tool` row per
+ * result); a UI message passes as it came. Throws on a row too malformed
+ * to read.
+ */
+export function withStoppedCallsAnswered<T extends UIMessage | ModelMessage>(
+  messages: readonly T[]
+): Array<T | ModelMessage> {
+  const question = messages.findLastIndex((m) => m.role === "user");
+  const out: Array<T | ModelMessage> = [];
+  // the open calls of the answer since the last question row
+  let open = new Set<string>();
+  for (const [i, m] of messages.entries()) {
+    if (m.role === "user") {
+      out.push(...[...open].map(stoppedResult));
+      open = new Set();
+    } else if (m.role === "tool" && "toolCallId" in m) {
+      open.delete(String(m.toolCallId));
+    }
+    if (m.role === "assistant" && "toolCalls" in m) {
+      // the running answer's calls are the resume's to answer; a call
+      // without an id can be answered by none
+      if (i < question) {
+        for (const c of m.toolCalls ?? []) {
+          if (typeof c.id === "string" && c.id !== "") {
+            open.add(c.id);
+          }
+        }
+      }
+      out.push(withWholeArguments(m));
+    } else {
+      out.push(m);
+    }
+  }
+  return out;
+}
+
+function stoppedResult(toolCallId: string): ModelMessage {
+  return { role: "tool", toolCallId, content: STOPPED_RESULT };
+}
+
+/** The row with `{}` for arguments cut off before they were a JSON
+ *  object; the same row when none were. */
+function withWholeArguments<T extends ModelMessage>(m: T): T {
+  let mended = false;
+  const toolCalls = m.toolCalls?.map((c) => {
+    if (isArgumentObject(c.function.arguments)) {
+      return c;
+    }
+    mended = true;
+    return { ...c, function: { ...c.function, arguments: "{}" } };
+  });
+  return mended ? { ...m, toolCalls } : m;
+}
+
+function isArgumentObject(text: string): boolean {
+  try {
+    const args: unknown = JSON.parse(text);
+    return typeof args === "object" && args !== null && !Array.isArray(args);
+  } catch {
+    return false;
+  }
+}
+
 /** The answer as a stream of AG-UI events, for an SSE response. */
 export function runAsk(run: AskRun) {
   return chat({
@@ -103,7 +192,7 @@ export function runAsk(run: AskRun) {
     ...(run.runId ? { runId: run.runId } : {}),
     ...(run.resume ? { resume: run.resume } : {}),
     ...(run.parentRunId ? { parentRunId: run.parentRunId } : {}),
-    systemPrompts: [askSystemPrompt(run.site, run.today)],
+    systemPrompts: [askSystemPrompt(run.site, run.today, run.voice)],
     tools: [...knowledgeTools(run.knowledge), ...SCENE_TOOLS],
     agentLoopStrategy: maxIterations(
       Math.min(ASK_LIMITS.iterations, run.turns ?? ASK_LIMITS.iterations)

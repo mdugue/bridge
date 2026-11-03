@@ -32,6 +32,11 @@ load into the browser.
    the scene's in the browser (`app/_components/ask-scene.ts`): a scene
    tool interrupts the run, the browser runs it and resumes. Only curated
    models are accepted, and a conversation keeps to caps (`ASK_LIMITS`).
+   A call an earlier answer ended without a result (the visitor stopped
+   it, or the run ended) gets a stand-in result, `abgebrochen`, before the
+   next question, and arguments cut off mid-stream become `{}` in every
+   row (`withStoppedCallsAnswered`): providers refuse a history with
+   either.
 3. **The key stays in the visitor's browser**, for the tab or, if asked,
    on the device (`frag-die-stadt`); the function forwards it to the
    provider and scrubs it from any error it sends back.
