@@ -63,11 +63,11 @@ reproducible, but they can be wrong where the world does not fit the rule.
   A steep roof face a shallower upper roof goes on from is a mansard,
   even where the building model does not call it one; its dormers may
   stand on up to 80°. A building's dormers facing the same way at one
-  height form a row: set straight, of one size and form, evenly spaced —
-  over the window axes below where the street photos measured them, else
-  in the rhythm the dormers show themselves (in runs: a risalit keeps its
-  own; where no rhythm holds but every gap is a whole number of one step,
-  evenly). An empty place in the row stays empty.
+  height form a row: set straight, of one size and form, at one height,
+  on one grid of equal spacing along the whole row — over the window
+  axes below where the street photos measured them, else the spacing
+  the dormers agree on best. A single empty place between two takes one
+  like its neighbour, unless a chimney stands there.
 - **Bridge superstructure:** what stands at least 3 m above the deck along
   the bridge's axis, for at least 25 m, becomes an arch or a truss.
 - **Assignments:** a shop from OpenStreetMap belongs to the building whose

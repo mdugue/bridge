@@ -1531,34 +1531,41 @@ visual-variable codebook is in
   building's dormers falling the same way (within 20°) at one depth
   (1.5 m) form a row, set straight at its median depth and in one shape
   (the row's median width, depth and height over the roof; shed or flat
-  as most of them are). Along it, runs of three or more stand on slots
-  (`runs`): a spacing of 1.8–7 m about one dormer a slot (0.75–1.3 of
-  the run's median gap), taken where their phases' mean resultant is
-  ≥ 1.6/√n, at least 0.55 (a long run carries its rhythm with more
-  scatter than a short one; until 2026-11-02 a flat 0.8 left most long
-  rows loose); where no rhythm holds, four or more dormers whose gaps
-  are each a whole number of slots (a fit by least squares, the spacing
-  within 25 % of the median gap, none more than 0.35 of a slot off, none
-  closer than 0.6 of a slot to the next) are set evenly; a run ends at
-  the first dormer off its slots (a risalit's axes differ from its
-  wings'). Where the street photos measured the window
-  axes of the wall below (`dlm/windows_<t>.json`, within 12 m, facing the
-  same way) the slots are those axes, every one, second or third, if the
-  dormers fit them as well (on Dresden's 33410_5656 twelve rows stand over
-  a measured wall and none fits its axes: DOM1 reads a dormer's centre
-  ±0.5 m, and most walls' axes are unphased). Two blobs on one slot, or two rows that read
-  one dormer twice (its front and back), are one; a dormer more than 0.3
-  of the spacing off its slot, more than 1.5 m or 20° off its row, or
-  2.5 times its run's median width (a Zwerchhaus) stays as it was; no
-  dormer is added in an empty slot. Dresden 13 495 dormers after (13 636
-  before), Leipzig 6 808, München 7 225, Unna 2 063, Meißen 1 788,
-  Hamburg 1 726, Grimma 1 419: the merged doubles; with the plan moves
-  and the looser rhythm for long runs (2026-11-02) Dresden 13 518,
-  Leipzig 6 818, München 7 271, Unna 2 069, Meißen 1 798, Hamburg 1 740,
-  Grimma 1 418, and the Taschenbergpalais 77 → 88 (its north wing's north
-  face now has its row); on Dresden's 33410_5656 runs on a rhythm or set
-  evenly hold 446 of 786 row dormers, 372 before. The Taschenbergpalais' street photos show one identical dormer
-  over every window axis; DOM1 had read their centres up to 3 m apart
+  as most of them are). **One grid** a stretch (2026-11-03; a row parts
+  where two stand more than 2.5 times its median gap apart, two wings or
+  a tower between): a spacing of 1.8–7 m about one dormer a slot
+  (0.75–1.3 of the median gap of those 1.8 m or more apart), where the
+  phases of all of them agree best, the slots then fitted by least
+  squares to the nearest dormer on each; taken where half of them stand
+  within 0.22 of a slot (at random a quarter). Every dormer goes on its
+  nearest slot; one whose slot a nearer one takes goes on the free slot
+  on its side, else it is that one's blob (within 0.35 of the spacing,
+  or a fragment narrower than 0.6 of the stretch's median, which also
+  chooses last) or something else and stays (a stair head). On each
+  LoD2 part the row stands at one height: the median roof height and
+  slope under it (the 1 m cells read a mansard's 70° face ±1.4 m up and
+  down: one cell either way). A single empty slot between two set takes
+  a dormer like its neighbour (DOM1 misses a small dormer more often than
+  a roof leaves one slot bare), but not on a chimney or a dormer of a
+  grid; a smaller stray there gives way. Until then (2026-11-02) the row
+  had parted into runs of their own rhythm: the palais' 24 south dormers
+  in five, 2.6–4.6 m, and the dormers off them kept DOM1's ±0.5 m.
+  Where the street photos measured the window axes of the wall below
+  (`dlm/windows_<t>.json`, within 12 m, facing the same way) the slots
+  are those axes, every one, second or third, if the dormers' phases on
+  them reach 0.8 (on Dresden's 33410_5656 twelve rows stand over a
+  measured wall and none does: DOM1 reads a dormer's centre ±0.5 m, and
+  most walls' axes are unphased). Two rows that read one dormer twice
+  (its front and back) are one, a dormer of a grid kept first; one more
+  than 1.5 m or 20° off its row, or 2.5 times its stretch's median width
+  (a Zwerchhaus), stays as it was. On a face of the palais the height
+  spread under a row (the median of its range) fell from 0.65 m to 0;
+  its south row stands on one 3.47 m grid. Dormers with one grid a
+  stretch: Dresden 13 651 (13 518 before, the filled slots), Leipzig
+  6 922, München 7 309, Unna 2 080, Meißen 1 802, Hamburg 1 739, Grimma
+  1 429; the Taschenbergpalais 95. The Taschenbergpalais'
+  street photos show one identical dormer over every window axis; DOM1
+  had read their centres up to 3 m apart
   down the slope and 1–4 m wide. Checked against
   the 20 cm orthophoto: rows of small gabled dormers now in; DOM1 still
   misses the smallest, and a roof LoD2 drew flat over a pitched one has

@@ -70,12 +70,11 @@ zur Regel passt.
   Gebäudemodell sie nicht so nennt; ihre Gauben dürfen bis 80° steil
   stehen. Gauben eines Hauses, die zur selben Seite in gleicher Höhe
   stehen, bilden eine Reihe: gerade ausgerichtet, gleich groß und gleich
-  geformt, in gleichen Abständen — über den Fensterachsen darunter, wo
-  die Straßenfotos sie gemessen haben, sonst im Takt, den die Gauben
-  selbst zeigen (abschnittsweise: ein Risalit hat seinen eigenen; wo
-  kein Takt trägt, aber jeder Abstand ein Vielfaches eines Schritts ist,
-  gleichmäßig verteilt). Eine
-  leere Stelle im Raster bleibt leer.
+  geformt, auf gleicher Höhe, in einem Raster gleicher Abstände über die
+  ganze Reihe — über den Fensterachsen darunter, wo die Straßenfotos sie
+  gemessen haben, sonst im Abstand, auf den sich die Gauben selbst am
+  besten einigen. Eine einzelne leere Stelle zwischen zwei Gauben bekommt
+  eine wie ihre Nachbarin, außer dort steht ein Schornstein.
 - **Brückentragwerk:** Was entlang der Brückenachse mindestens 3 m über dem
   Deck steht, auf mindestens 25 m Länge, wird ein Bogen oder ein Fachwerk.
 - **Zuordnungen:** Ein Laden aus OpenStreetMap gehört zu dem Gebäude, in
