@@ -8,8 +8,10 @@
  * a test drives it with a scripted adapter (`@tanstack/ai/testing`).
  */
 import {
+  type AgentLoopStrategy,
   type AnyTextAdapter,
   chat,
+  combineStrategies,
   convertMessagesToModelMessages,
   type ModelMessage,
   maxIterations,
@@ -28,15 +30,18 @@ import {
   factsOf,
   type Knowledge,
   nearKnowledge,
+  nearReach,
   searchKnowledge,
   sourcesOf,
 } from "./ask-knowledge";
 import {
   factsTool,
+  NEAR_RADIUS,
   nearTool,
   SCENE_TOOLS,
   searchTool,
   sourcesTool,
+  suggestTool,
 } from "./ask-tools";
 
 /** The Stadtwissen tools, bound to one site's knowledge. */
@@ -48,13 +53,34 @@ export function knowledgeTools(k: Knowledge) {
         ? { treffer: hits }
         : { treffer: [], hinweis: "Nichts gefunden — anders schreiben?" };
     }),
-    nearTool.server(({ x, y, radius }) => ({
-      treffer: nearKnowledge(k, x, y, radius ?? 120),
-    })),
+    nearTool.server(({ x, y, radius }) => {
+      // the reach said, so the answer can say what it took for near
+      const reach = nearReach(radius ?? NEAR_RADIUS);
+      return {
+        umkreis_m: reach.buildings,
+        wahrzeichen_bis_m: reach.landmarks,
+        treffer: nearKnowledge(k, x, y, reach.buildings),
+      };
+    }),
     factsTool.server(({ id }) => factsOf(k, id) ?? { fehler: "unbekannte id" }),
     sourcesTool.server(() => ({ quellen: sourcesOf(k) })),
+    // the chips are the card's: the server only takes them in
+    suggestTool.server(() => ({ ok: true })),
   ];
 }
+
+/**
+ * A turn whose only tool calls are the follow-ups (`vorschlaege`) ends
+ * the answer: the chips need no reply, and another model turn would
+ * only cost the visitor's key a round trip to acknowledge them.
+ */
+export const endsAtSuggestions: AgentLoopStrategy = ({ messages }) => {
+  const last = messages.findLast((m) => m.role === "assistant");
+  const calls = last?.toolCalls ?? [];
+  return !(
+    calls.length > 0 && calls.every((c) => c.function.name === suggestTool.name)
+  );
+};
 
 export interface AskRun {
   adapter: AnyTextAdapter;
@@ -194,9 +220,12 @@ export function runAsk(run: AskRun) {
     ...(run.parentRunId ? { parentRunId: run.parentRunId } : {}),
     systemPrompts: [askSystemPrompt(run.site, run.today, run.voice)],
     tools: [...knowledgeTools(run.knowledge), ...SCENE_TOOLS],
-    agentLoopStrategy: maxIterations(
-      Math.min(ASK_LIMITS.iterations, run.turns ?? ASK_LIMITS.iterations)
-    ),
+    agentLoopStrategy: combineStrategies([
+      maxIterations(
+        Math.min(ASK_LIMITS.iterations, run.turns ?? ASK_LIMITS.iterations)
+      ),
+      endsAtSuggestions,
+    ]),
     // the prompt and the tools are the same for every request of a site:
     // the provider's cache holds them (Anthropic's cache_control, OpenAI's
     // automatic prefix cache), the conversation's thread is the key

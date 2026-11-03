@@ -1,8 +1,14 @@
 import { expect, test } from "bun:test";
-import { askView } from "./ask-view";
+import {
+  ASK_FOV,
+  type AskTarget,
+  type Framed,
+  frameTargets,
+  streetView,
+} from "./ask-view";
 
 test("on foot the walker stands in front, on the side they come from, looking at it", () => {
-  const v = askView({ x: 1000, y: 2000, h: 20 }, { x: 1000, y: 1500 }, false);
+  const v = streetView({ x: 1000, y: 2000, h: 20 }, { x: 1000, y: 1500 });
   expect(v.mode).toBe("walk");
   expect(v.aboveGround).toBe(1.6);
   // south of it, 43 m back, looking north and up
@@ -12,17 +18,151 @@ test("on foot the walker stands in front, on the side they come from, looking at
   expect(v.pitchDeg).toBeGreaterThan(0);
 });
 
-test("from the air the camera hangs off it, looking down", () => {
-  const v = askView({ x: 0, y: 0, h: 90 }, { x: 500, y: 0 }, true);
-  expect(v.mode).toBe("fly");
-  expect(v.aboveGround).toBeGreaterThanOrEqual(90);
-  expect(v.epsg.x).toBeGreaterThan(0);
-  expect(v.headingDeg).toBe(270);
-  expect(v.pitchDeg).toBeLessThan(-10);
-});
-
 test("standing on the target, it is approached from the south", () => {
-  const v = askView({ x: 5, y: 5 }, { x: 5, y: 5 }, false);
+  const v = streetView({ x: 5, y: 5 }, { x: 5, y: 5 });
   expect(v.epsg.y).toBeLessThan(5);
   expect(v.headingDeg).toBe(0);
+});
+
+/** Whether a point lies inside the view's lens on a screen of `aspect`. */
+function inView(
+  framed: Framed,
+  ground: number,
+  aspect: number,
+  p: { x: number; y: number; z: number }
+): boolean {
+  const { view } = framed;
+  const t = (view.headingDeg * Math.PI) / 180;
+  const pitch = (-view.pitchDeg * Math.PI) / 180;
+  const f = [
+    Math.sin(t) * Math.cos(pitch),
+    Math.cos(t) * Math.cos(pitch),
+    -Math.sin(pitch),
+  ];
+  const r = [Math.cos(t), -Math.sin(t), 0];
+  const u = [
+    Math.sin(t) * Math.sin(pitch),
+    Math.cos(t) * Math.sin(pitch),
+    Math.cos(pitch),
+  ];
+  const q = [
+    p.x - view.epsg.x,
+    p.y - view.epsg.y,
+    p.z - (ground + view.aboveGround),
+  ];
+  const d = (a: number[]) => a[0] * q[0] + a[1] * q[1] + a[2] * q[2];
+  const tanV = Math.tan(((ASK_FOV / 2) * Math.PI) / 180);
+  const depth = d(f);
+  return (
+    depth > 0 &&
+    Math.abs(d(r)) <= depth * tanV * aspect + 0.5 &&
+    Math.abs(d(u)) <= depth * tanV + 0.5
+  );
+}
+
+/** Every corner of every place's box, foot and top. */
+function corners(targets: readonly AskTarget[]) {
+  return targets.flatMap((t) =>
+    [-1, 1].flatMap((sx) =>
+      [-1, 1].flatMap((sy) =>
+        [0, t.h ?? 0].map((dz) => ({
+          x: t.x + sx * (t.r ?? 0) * 0.7,
+          y: t.y + sy * (t.r ?? 0) * 0.7,
+          z: (t.z ?? 0) + dz,
+        }))
+      )
+    )
+  );
+}
+
+const church: AskTarget = { x: 0, y: 0, z: 110, h: 90, r: 25 };
+const square: AskTarget[] = [
+  { x: 0, y: 0, z: 110, h: 20, r: 15 },
+  { x: 300, y: 40, z: 112, h: 25, r: 20 },
+  { x: -250, y: -60, z: 108, h: 18, r: 12 },
+];
+
+// a tower and two low halls on one side: no symmetry to hide an error
+const lopsided: AskTarget[] = [
+  { x: 0, y: 0, z: 100, h: 150, r: 10 },
+  { x: 0, y: 200, z: 100, h: 8, r: 40 },
+  { x: 120, y: -30, z: 100, h: 8, r: 40 },
+];
+
+test("from the air every place stands whole inside the lens", () => {
+  for (const aspect of [16 / 9, 0.46, 1.5]) {
+    for (const targets of [[church], square, lopsided]) {
+      const framed = frameTargets(targets, {
+        aspect,
+        from: { x: 0, y: -2000 },
+      });
+      expect(framed.view.mode).toBe("fly");
+      const ground = Math.min(...targets.map((t) => t.z ?? 0));
+      for (const p of corners(targets)) {
+        expect(inView(framed, ground, aspect, p)).toBe(true);
+      }
+    }
+  }
+});
+
+test("a narrow phone screen stands further back than a wide one", () => {
+  const wide = frameTargets(square, { aspect: 16 / 9, from: null });
+  const narrow = frameTargets(square, { aspect: 0.46, from: null });
+  expect(narrow.distance).toBeGreaterThan(wide.distance * 1.5);
+});
+
+test("a tall tower is seen from lower down than a spread square", () => {
+  const tower = frameTargets([church], { aspect: 1.5, from: null });
+  const spread = frameTargets(square, { aspect: 1.5, from: null });
+  expect(tower.view.pitchDeg).toBeGreaterThan(spread.view.pitchDeg);
+  expect(tower.view.pitchDeg).toBeLessThanOrEqual(-30);
+  expect(spread.view.pitchDeg).toBeGreaterThanOrEqual(-55);
+});
+
+test("it comes from the visitor's side and keeps the sun behind the camera", () => {
+  const fromWest = frameTargets([church], {
+    aspect: 1.5,
+    from: { x: -3000, y: 0 },
+  });
+  // the eye west of it, looking east
+  expect(fromWest.view.epsg.x).toBeLessThan(0);
+  expect(fromWest.view.headingDeg).toBe(90);
+  // a low sun in the south: the eye south of it, looking north
+  const sunny = frameTargets([church], {
+    aspect: 1.5,
+    from: null,
+    sun: { east: 0, north: -1 },
+  });
+  expect(sunny.view.headingDeg).toBe(0);
+});
+
+test("places in a row are seen side by side, not behind each other", () => {
+  const row: AskTarget[] = [
+    { x: -200, y: 0, z: 0, h: 20, r: 10 },
+    { x: 0, y: 0, z: 0, h: 20, r: 10 },
+    { x: 200, y: 0, z: 0, h: 20, r: 10 },
+  ];
+  const framed = frameTargets(row, { aspect: 16 / 9, from: null });
+  expect([0, 180]).toContain(framed.view.headingDeg);
+});
+
+test("a heading whose sight lines a building cuts loses", () => {
+  // a block south of the church hides it from every eye south of it
+  const sightHit = (
+    eye: { x: number; y: number; z: number },
+    p: { x: number; y: number; z: number }
+  ) => (eye.y < -50 && p.y > eye.y ? { x: 0, y: -60, z: 140 } : null);
+  const framed = frameTargets([church], {
+    aspect: 1.5,
+    from: { x: 0, y: -3000 },
+    sightHit,
+  });
+  expect(framed.view.epsg.y).toBeGreaterThan(-50);
+  // its own roof met before its top is no obstacle
+  const own = frameTargets([church], {
+    aspect: 1.5,
+    from: { x: 0, y: -3000 },
+    sightHit: () => ({ x: 5, y: -10, z: 190 }),
+  });
+  expect(own.view.headingDeg).toBe(0);
 });

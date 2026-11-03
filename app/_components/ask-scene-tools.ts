@@ -13,7 +13,12 @@ import {
   timeTool,
   whereTool,
 } from "@/lib/city/ask-tools";
-import { type AskTarget, askView } from "@/lib/city/ask-view";
+import {
+  type AskTarget,
+  type FrameContext,
+  frameTargets,
+  streetView,
+} from "@/lib/city/ask-view";
 import type { DataLayerKey } from "@/lib/city/data-layers";
 import type { RenderStyle } from "@/lib/city/render-style";
 import type { ViewpointGeometry } from "@/lib/city/site";
@@ -32,6 +37,9 @@ export interface AskScene {
   show: (view: ViewpointGeometry) => boolean;
   /** whether a point (site CRS) lies on one of the site's tiles */
   within: (x: number, y: number) => boolean;
+  /** what the framing reads of the moment: the screen, the sun, the
+   *  loaded buildings' sight lines (lib/city/ask-view.ts) */
+  frame: () => Omit<FrameContext, "from">;
   /** the player's pose, mode, time, style and layers, for the model */
   where: () => Record<string, unknown>;
   /** asks what stands at the centre of the view (and opens its card) */
@@ -47,17 +55,7 @@ export function sceneTools(scene: AskScene) {
   return clientTools(
     whereTool.client(() => scene.where()),
     lookTool.client(() => scene.look()),
-    showTool.client((input) => {
-      const target: AskTarget = input;
-      if (!scene.within(target.x, target.y)) {
-        return { ok: false, ausserhalb: true, hinweis: OUTSIDE };
-      }
-      return scene.show(
-        askView(target, scene.from() ?? target, input.aus_der_luft ?? false)
-      )
-        ? { ok: true }
-        : { ok: false, hinweis: "Die Szene lädt noch." };
-    }),
+    showTool.client((input) => showPlaces(scene, input)),
     timeTool.client(({ stunde, datum }) => ({
       ok: true,
       zeit: scene.setTime(stunde, datum),
@@ -78,3 +76,67 @@ export function sceneTools(scene: AskScene) {
  *  latitude/longitude or swapped axes. */
 const OUTSIDE =
   "Dieser Punkt liegt nicht in der Stadt. x ist der Rechtswert, y der Hochwert in Metern, wie suche_stadt sie liefert — keine Grad.";
+
+/** What the model hears while there is no scene to move yet. */
+const LOADING = { ok: false, hinweis: "Die Szene lädt noch." };
+
+/** A place `zeige` names: where it is, what it is called. */
+export type AskPlace = AskTarget & { name: string };
+
+/**
+ * The farthest an aerial view of several places stands off them (m):
+ * beyond it a 20 m house is a few pixels on a phone and the fog nears
+ * (on a phone the stream ends at 2.2 km). Further spread places are
+ * shown one at a time, from their chips.
+ */
+export const AERIAL_REACH = 900;
+
+/**
+ * Flies to `places` — every one in one view, or the first alone (`alle`
+ * false, or spread too far for one) — and says what it showed. On foot
+ * the walker stands before the first. A place off the city's tiles is
+ * left out; none on them is refused.
+ */
+export function showPlaces(
+  scene: AskScene,
+  ask: { alle?: boolean; aus_der_luft?: boolean; ziele: readonly AskPlace[] }
+): Record<string, unknown> {
+  const places = ask.ziele.filter((p) => scene.within(p.x, p.y));
+  const [first] = places;
+  if (!first) {
+    return { ok: false, ausserhalb: true, hinweis: OUTSIDE };
+  }
+  const from = scene.from();
+  if (ask.aus_der_luft === false) {
+    return scene.show(streetView(first, from ?? first))
+      ? { ok: true, gezeigt: [first.name] }
+      : LOADING;
+  }
+  const context = { ...scene.frame(), from };
+  const all = ask.alle !== false && places.length > 1;
+  const framed = all ? frameTargets(places, context) : null;
+  if (framed && framed.distance <= AERIAL_REACH) {
+    return scene.show(framed.view)
+      ? {
+          ok: true,
+          gezeigt: places.map((p) => p.name),
+          abstand_m: framed.distance,
+        }
+      : LOADING;
+  }
+  const alone = frameTargets([first], context);
+  if (!scene.show(alone.view)) {
+    return LOADING;
+  }
+  return {
+    ok: true,
+    gezeigt: [first.name],
+    abstand_m: alone.distance,
+    ...(framed
+      ? {
+          hinweis:
+            "Die Orte liegen zu weit auseinander für eine Ansicht: gezeigt ist der erste, die anderen stehen als Knöpfe unter der Antwort.",
+        }
+      : {}),
+  };
+}

@@ -44,6 +44,8 @@ import {
   TOO_LONG,
   TOO_MANY_STEPS,
 } from "@/lib/city/ask-city";
+import { nearReach } from "@/lib/city/ask-knowledge";
+import { NEAR_RADIUS } from "@/lib/city/ask-tools";
 import { Button } from "@/components/ui/button";
 import { Message, MessageContent } from "@/components/ui/message";
 import {
@@ -55,6 +57,7 @@ import {
 } from "@/components/ui/message-scroller";
 import { Trace, TraceIcon, TraceLine, TraceTitle } from "@/components/ui/trace";
 import { cn } from "cn";
+import { AnswerChipRows, answerChips } from "./ask-chips";
 import { type AskKey, clearAskKey, readAskKey, writeAskKey } from "./ask-key";
 import { type AskScene, sceneTools } from "./ask-scene-tools";
 import {
@@ -773,19 +776,34 @@ function Conversation({
                   ))}
                 </div>
               )}
-              {chat.messages.map((m, i) => (
-                <MessageScrollerItem key={m.id}>
-                  <ChatMessage
-                    // an answer that used the browser's tools comes as
-                    // several messages: the label marks its first
-                    labelled={chat.messages[i - 1]?.role !== "assistant"}
-                    // only the last message of a running answer still
-                    // waits on its tools; anything else was stopped
-                    live={chat.isLoading && i === chat.messages.length - 1}
-                    message={m}
-                  />
-                </MessageScrollerItem>
-              ))}
+              {chat.messages.map((m, i) => {
+                // an answer that used the browser's tools comes as several
+                // messages: the label marks its first, the chips its last
+                const last =
+                  m.role === "assistant" &&
+                  chat.messages[i + 1]?.role !== "assistant";
+                const pending =
+                  chat.isLoading && i === chat.messages.length - 1;
+                return (
+                  <MessageScrollerItem key={m.id}>
+                    <ChatMessage
+                      labelled={chat.messages[i - 1]?.role !== "assistant"}
+                      // only the last message of a running answer still
+                      // waits on its tools; anything else was stopped
+                      live={pending}
+                      message={m}
+                    />
+                    {last && !pending && (
+                      <AnswerChipRows
+                        ask={ask}
+                        busy={chat.isLoading}
+                        chips={answerChips(chat.messages, i)}
+                        scene={scene}
+                      />
+                    )}
+                  </MessageScrollerItem>
+                );
+              })}
               {failure && (
                 <p className="text-[12px] text-destructive" role="alert">
                   {failure.text}{" "}
@@ -889,10 +907,9 @@ function argText(value: unknown): string {
     : "";
 }
 
-/** What a tool call says it did, in the trace under an answer. */
-function toolLine(name: string, input: unknown, output?: unknown): string {
-  const args = (input ?? {}) as Record<string, unknown>;
-  // a refused call says why, in the card's words (the model's are longer)
+/** Why a refused call was refused, in the card's words (the model's are
+ *  longer); null for a call that ran. */
+function refusalLine(output: unknown): string | null {
   const refused = output as
     | {
         ausserhalb?: unknown;
@@ -902,16 +919,37 @@ function toolLine(name: string, input: unknown, output?: unknown): string {
       }
     | undefined;
   // (was_ist_da says `gefunden: false` where the others say `ok: false`)
-  if (refused?.ok === false || refused?.gefunden === false) {
-    return refused.ausserhalb === true
-      ? "Findet den Ort nicht in der Stadt"
-      : argText(refused.hinweis) || "Abgelehnt";
+  if (refused?.ok !== false && refused?.gefunden !== false) {
+    return null;
+  }
+  return refused.ausserhalb === true
+    ? "Findet den Ort nicht in der Stadt"
+    : argText(refused.hinweis) || "Abgelehnt";
+}
+
+/** What `zeige` showed, once the browser has run it: the places
+ *  together, or the first alone when they lie too far apart. */
+function showLine(args: Record<string, unknown>, output: unknown): string {
+  if (args.aus_der_luft === false) {
+    return "Geht hin";
+  }
+  const shown = (output as { gezeigt?: unknown } | undefined)?.gezeigt;
+  const n = Array.isArray(shown) ? shown.length : 1;
+  return n > 1 ? `Zeigt ${n} Orte` : "Fliegt hin";
+}
+
+/** What a tool call says it did, in the trace under an answer. */
+function toolLine(name: string, input: unknown, output?: unknown): string {
+  const args = (input ?? {}) as Record<string, unknown>;
+  const refused = refusalLine(output);
+  if (refused !== null) {
+    return refused;
   }
   switch (name) {
     case "suche_stadt":
       return `Sucht „${argText(args.anfrage)}“`;
     case "in_der_naehe":
-      return "Sieht sich in der Nähe um";
+      return `Sieht sich im Umkreis von ${nearReach(typeof args.radius === "number" ? args.radius : NEAR_RADIUS).buildings} m um`;
     case "fakten":
       return `Liest die Fakten zu ${argText(args.id)}`;
     case "quellen":
@@ -921,7 +959,7 @@ function toolLine(name: string, input: unknown, output?: unknown): string {
     case "was_ist_da":
       return "Fragt, was dort steht, wohin die Ansicht zeigt";
     case "zeige":
-      return args.aus_der_luft ? "Fliegt hin" : "Geht hin";
+      return showLine(args, output);
     case "setze_zeit":
       return `Stellt die Uhr auf ${argText(args.stunde)} Uhr`;
     case "setze_stil":
@@ -996,7 +1034,10 @@ function ChatMessage({
       </Message>
     );
   }
-  const calls = message.parts.filter((p) => p.type === "tool-call");
+  // the follow-ups are the chips under the answer, not a step of it
+  const calls = message.parts
+    .filter((p) => p.type === "tool-call")
+    .filter((p) => p.name !== "vorschlaege");
   return (
     <Message>
       <MessageContent>
