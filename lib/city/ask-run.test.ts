@@ -147,6 +147,12 @@ describe("runAsk", () => {
     );
     expect(adapter.state.callCount).toBe(1);
     expect(chunks.map((c) => c.type)).toContain("TOOL_CALL_RESULT");
+    // and the end is no turn cap: the visitor sees no error
+    async function* again() {
+      yield* chunks as unknown as StreamChunk[];
+    }
+    const closed = await collect(ended(again(), new AbortController().signal));
+    expect(closed.map((c) => c.type)).not.toContain("RUN_ERROR");
   });
 
   test("the fixed prompt and tools reach the model, whatever the request", async () => {

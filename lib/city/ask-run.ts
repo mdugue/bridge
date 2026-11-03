@@ -274,6 +274,7 @@ export async function* ended(
 ): AsyncIterable<StreamChunk> {
   let last: StreamChunk | undefined;
   let before: StreamChunk | undefined;
+  const round = new LastRound();
   try {
     for await (const chunk of stream) {
       // the abort's own error would say less than the deadline's
@@ -282,14 +283,47 @@ export async function* ended(
       }
       before = last;
       last = chunk;
+      round.see(chunk);
       yield chunk;
     }
   } finally {
     onEnd();
   }
-  const why = stopText(runEnd(last, before), signal.reason === DEADLINE);
+  let end = runEnd(last, before);
+  // a round of follow-ups only ends the answer (`endsAtSuggestions`)
+  if (end === "cut" && round.onlySuggestions()) {
+    end = "stop";
+  }
+  const why = stopText(end, signal.reason === DEADLINE);
   if (why) {
     yield runError(why);
+  }
+}
+
+/** The tool names of the stream's last round of calls. */
+class LastRound {
+  private names: string[] = [];
+  private answered = false;
+
+  see(chunk: StreamChunk): void {
+    if (chunk.type === "TOOL_CALL_START") {
+      // the first call after a round's results opens the next round
+      if (this.answered) {
+        this.names = [];
+        this.answered = false;
+      }
+      const c = chunk as { toolCallName?: unknown; toolName?: unknown };
+      const name = c.toolCallName ?? c.toolName;
+      this.names.push(typeof name === "string" ? name : "");
+    } else if (chunk.type === "TOOL_CALL_RESULT") {
+      this.answered = true;
+    }
+  }
+
+  onlySuggestions(): boolean {
+    return (
+      this.names.length > 0 && this.names.every((n) => n === suggestTool.name)
+    );
   }
 }
 
