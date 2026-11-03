@@ -21,7 +21,7 @@ function base64url(bytes: ArrayBuffer): string {
   return btoa(text)
     .replaceAll("+", "-")
     .replaceAll("/", "_")
-    .replace(/=+$/, "");
+    .replace(/[=]+$/, "");
 }
 
 async function sha256(text: string): Promise<string> {
