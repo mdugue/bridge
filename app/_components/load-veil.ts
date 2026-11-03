@@ -4,8 +4,10 @@ import {
   clamp,
   dot,
   float,
+  Fn,
   fract,
   fwidth,
+  If,
   getViewPosition,
   max,
   mix,
@@ -41,7 +43,8 @@ import type { ViewLens } from "./view-lens";
  * darker and flatter), and the ring's ink dims with the night.
  *
  * Drawn in the last pass (post-stack.ts `finish`), from the depth it
- * already reads: no target, no texture, a few uniforms.
+ * already reads: no target, no texture, a few uniforms; skipped on one
+ * uniform once the veil is off.
  */
 
 /** The ring's ink: the brand's magenta (globals.css `--primary`), linear. */
@@ -100,7 +103,7 @@ export function createLoadVeil(depth: DepthTexture, lens: ViewLens): LoadVeil {
   const cameraWorld = uniform(lens.camera.matrixWorld);
   const far = reference("far", "float", lens.camera);
 
-  const over = (rgb: V3): V3 => {
+  const veil = (rgb: V3): V3 => {
     const z = texture(depth, screenUV).r;
     const view = getViewPosition(screenUV, z, lens.inverseProjection);
     const world = cameraWorld.mul(vec4(view, 1)).xyz;
@@ -154,6 +157,18 @@ export function createLoadVeil(depth: DepthTexture, lens: ViewLens): LoadVeil {
     const nightInk = RING_INK.mul(RING_NIGHT);
     return mix(haloed, mix(dayInk, nightInk, styleNight), line);
   };
+
+  // Only while it shows: after the load the pass skips the whole graph on
+  // one uniform (a branch every pixel takes alike, derivatives and all).
+  const over = (rgb: V3): V3 =>
+    Fn(() => {
+      // taken before the branch: a node first used inside it is its own
+      const out = vec3(rgb).toVar();
+      If(strength.greaterThan(0), () => {
+        out.assign(veil(out));
+      });
+      return out;
+    })();
 
   return {
     over,

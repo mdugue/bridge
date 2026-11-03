@@ -364,6 +364,16 @@ export function takesOver(
   );
 }
 
+/**
+ * Whether the traversal saw `tile` in the view this frame: `inFrustum` is
+ * only rewritten for the tiles it visits, so a tile it has left (the
+ * camera turned, a parent culled) keeps its last answer.
+ */
+function inViewNow(tile: OrderedTile, frame: number): boolean {
+  const t = tile.traversal;
+  return t?.inFrustum === true && t.lastFrameVisited === frame;
+}
+
 /** What the dressing plugin reads of the renderer it is registered on. */
 interface PluginTiles {
   /** the renderer's group of shown content roots */
@@ -2028,10 +2038,11 @@ export class DressingPlugin {
 
   /** The site tiles of the dressings queued or building whose tile is in
    *  view: one behind the camera does not hold the loading frontier. */
-  pendingTilesInView(into: Set<string>): void {
+  pendingTilesInView(into: Set<string>, frame: number): void {
     for (const [scene, id] of this.pendingScenes) {
       const tile: OrderedTile | undefined = this.tileOf.get(scene);
-      if (tile?.traversal?.inFrustum !== false) {
+      // a dressing whose tile the traversal no longer visits is out of view
+      if (!tile?.traversal || inViewNow(tile, frame)) {
         into.add(id);
       }
     }
@@ -2666,20 +2677,25 @@ export function createTileStream(
   const dressing = new DressingPlugin({ ...ctx, onChange: changed }, stream);
   stream.pendingDressings = () => dressing.pending;
   stream.dressingSettled = (tileId) => dressing.settled.has(tileId);
+  // one set, refilled each frame: this runs in every frame of the session
+  const pendingIds = new Set<string>();
+  // reason: loadingTiles (its tiles in flight) and frameCount are the
+  // renderer's public members; its declaration does not list them.
+  const inFlight = tiles as unknown as {
+    frameCount: number;
+    loadingTiles: Set<OrderedTile>;
+  };
   stream.pendingSiteTiles = () => {
-    const ids = new Set<string>();
-    dressing.pendingTilesInView(ids);
-    // reason: loadingTiles is the renderer's public Set of its tiles in
-    // flight; its declaration does not list it.
-    const loading = (tiles as unknown as { loadingTiles: Set<OrderedTile> })
-      .loadingTiles;
-    for (const tile of loading) {
-      const id = tile.traversal?.inFrustum ? siteTileOfTile(tile) : null;
+    pendingIds.clear();
+    const frame = inFlight.frameCount;
+    dressing.pendingTilesInView(pendingIds, frame);
+    for (const tile of inFlight.loadingTiles) {
+      const id = inViewNow(tile, frame) ? siteTileOfTile(tile) : null;
       if (id !== null) {
-        ids.add(id);
+        pendingIds.add(id);
       }
     }
-    return ids;
+    return pendingIds;
   };
   tiles.registerPlugin(dressing);
   for (const { camera, width, height } of cameras) {

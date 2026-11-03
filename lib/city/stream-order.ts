@@ -37,6 +37,8 @@ export interface OrderedTile {
     distanceFromCamera: number;
     error: number;
     inFrustum: boolean;
+    /** the renderer's frame count when the traversal last visited it */
+    lastFrameVisited?: number;
     used: boolean;
   } | null;
 }

@@ -75,15 +75,9 @@ export const BOOT_NEAR_M = 40;
  * equal steps of progress move it by about equal steps on the screen.
  * In metres it would cross the near half of the view in the first tenth
  * of the load and spend the rest a hair's breadth under the horizon.
- * Null (nothing pending) stays null: the sweep takes over.
+ * The sweep waits for the load's end (create-app.ts).
  */
-export function bootFrontier(
-  frontier: number | null,
-  progress: number
-): number | null {
-  if (frontier === null) {
-    return null;
-  }
+export function bootFrontier(progress: number): number {
   const p = Math.min(1, Math.max(0, progress));
   return BOOT_NEAR_M * (BOOT_REACH_M / BOOT_NEAR_M) ** p;
 }

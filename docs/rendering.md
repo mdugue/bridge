@@ -448,7 +448,9 @@ linear in metres crossed the near view in the first tenth of the load).
 After the first load a pending spell shorter than 1.2 s never shows. The veil
 only takes away, so the unfinished picture is never brighter than the
 finished one, in every style. It costs no target or texture: a few
-uniforms and one depth read in a pass that runs anyway. An export and the
+uniforms and one depth read in a pass that runs anyway, skipped on one
+uniform once the veil is off; the frame pacer keeps the full rate while
+it shows. An export and the
 shots harness draw without it; a QA probe can set its own ring
 (`__poc.veil`). The ring, its halo and the contours stay off the sky.
 
