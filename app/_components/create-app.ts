@@ -1190,7 +1190,7 @@ export async function createCityWalkApp(
   // layer controls survived a failed boot.
   // The scene-wide shared resources (three-utils.ts `sceneShared`) go with
   // the last app that holds them: first in, so they unwind last.
-  const cleanups: Array<() => void> = [
+  const cleanups: (() => void)[] = [
     retainSceneMaterials(),
     retainOpenSkyTexture(),
   ];
@@ -1223,7 +1223,7 @@ export async function createCityWalkApp(
  * of contexts; whatever still points at this one draws nothing.
  */
 async function teardown(
-  cleanups: Array<() => void>,
+  cleanups: (() => void)[],
   scene: Scene,
   renderer: WebGPURenderer
 ): Promise<void> {
@@ -1242,7 +1242,7 @@ async function teardown(
  * rejects: a cleanup that throws still lets the renderer and its device go.
  */
 async function teardownWhole(
-  cleanups: Array<() => void>,
+  cleanups: (() => void)[],
   scene: Scene,
   renderer: WebGPURenderer,
   /** what the renderer still holds once the scene is gone, before it goes */
@@ -1287,7 +1287,7 @@ async function releaseRenderer(renderer: WebGPURenderer): Promise<void> {
 }
 
 /** Unwinds registered teardowns in reverse creation order. */
-function runCleanups(cleanups: Array<() => void>): void {
+function runCleanups(cleanups: (() => void)[]): void {
   for (const cleanup of [...cleanups].reverse()) {
     cleanup();
   }
@@ -1315,7 +1315,7 @@ async function bootApp(
   opts: CityWalkOptions,
   renderer: WebGPURenderer,
   scene: Scene,
-  cleanups: Array<() => void>
+  cleanups: (() => void)[]
 ): Promise<CityWalkHandle> {
   const { container, budget } = opts;
   let disposed = false;

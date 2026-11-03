@@ -84,7 +84,7 @@ export interface AskRun {
  * UI messages fold several turns into one, the conversion splits them.
  */
 export function roundsSinceQuestion(
-  messages: ReadonlyArray<UIMessage | ModelMessage>
+  messages: readonly (UIMessage | ModelMessage)[]
 ): number {
   // the whole conversation converts, as the run will convert it: one that
   // does not is refused here, not halfway through the answer

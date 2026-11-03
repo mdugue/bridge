@@ -1699,7 +1699,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     // Driven through the look store the sliders write to — one set() per
     // step is one batch of uniform writes; each step's style is read back,
     // so a dropped write cannot pass as a frame that drew without errors.
-    const steps: Array<{ set: Partial<LookValues>; style: string }> = [
+    const steps: { set: Partial<LookValues>; style: string }[] = [
       // What is left of the look: the fog (a uniform, it compiles nothing)
       // at full strength and back down, and the crowns' switch (off swaps
       // the near multi-tuft crowns for the cheap ones, on brings them
