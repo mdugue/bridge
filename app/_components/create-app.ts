@@ -883,7 +883,7 @@ async function createRenderer(
   // Touch gestures (look/pinch/double-tap) need the browser to keep its
   // hands off scrolling and double-tap zoom on the canvas.
   renderer.domElement.style.touchAction = "none";
-  container.appendChild(renderer.domElement);
+  container.append(renderer.domElement);
   return renderer;
 }
 
