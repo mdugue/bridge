@@ -21,8 +21,10 @@
  * dark under the card, but the pose, the live mode and the questions about
  * the view still see a current scene. While it moves — a glide the answer
  * started, the live mode following the walker — it draws at
- * LISTENING_MOVING_FPS, the slowest rate whose time step the loop does not
- * clamp (0.05 s), so a glide arrives when it would on screen.
+ * LISTENING_MOVING_FPS: at every display rate from 24 to 144 Hz the
+ * frames it keeps lie at most 0.05 s apart, the loop's largest time step,
+ * so a glide arrives when it would on screen (20 fps would not: at 30 Hz
+ * it keeps every second frame, 67 ms apart, and the clamp loses a quarter).
  *
  * Otherwise every frame draws.
  */
@@ -37,8 +39,8 @@ export const STILL_FPS = 30;
 export const STILL_AFTER_MS = 1000;
 /** frames per second the scene draws while the visitor only listens */
 export const LISTENING_FPS = 2;
-/** ...and while it moves, listened to: the loop's largest time step */
-export const LISTENING_MOVING_FPS = 20;
+/** ...and while it moves, listened to: within the loop's time-step clamp */
+export const LISTENING_MOVING_FPS = 30;
 
 export interface FramePace {
   /** the HUD covers the scene (on a phone: the sidebar's sheet is open) */

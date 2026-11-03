@@ -38,6 +38,18 @@ function recognitionClass(): RecognitionClass | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
+// a web link, with at most one level of brackets in it (Zwinger_(Dresden))
+const LINK = String.raw`https?:\/\/(?:[^\s()]|\([^\s()]*\))+`;
+/** [words](link): the words stay */
+const MARKDOWN_LINK = new RegExp(String.raw`\[([^\]]+)\]\(${LINK}\)`, "g");
+/** (link) or (Quelle: link): gone with its brackets */
+const BRACKETED_LINK = new RegExp(
+  String.raw`\s?\((?:Quelle:\s*)?${LINK}\)`,
+  "g"
+);
+/** a bare link */
+const BARE_LINK = new RegExp(String.raw`\s?${LINK}`, "g");
+
 /**
  * Text as it should be heard: no web links (the card shows them; a
  * Markdown link keeps its words), no list marks or Markdown stars, "m" and
@@ -45,8 +57,9 @@ function recognitionClass(): RecognitionClass | null {
  */
 export function speakable(text: string): string {
   return text
-    .replace(/\[([^\]]+)\]\(https?:\/\/[^)]*\)/g, "$1")
-    .replace(/\s?\(?https?:\/\/[^\s)]+\)?/g, "")
+    .replace(MARKDOWN_LINK, "$1")
+    .replace(BRACKETED_LINK, "")
+    .replace(BARE_LINK, "")
     .replace(/^\s*[-*•]\s+/gm, "")
     .replace(/[*_#`]/g, "")
     .replace(/(\d)\s?m²/g, "$1 Quadratmeter")
@@ -55,50 +68,80 @@ export function speakable(text: string): string {
     .trim();
 }
 
-/** The best German voice the device has: a local one first. */
+/**
+ * The device's own German voice, or null. Only a local one: a network
+ * voice (Chrome's "Google Deutsch") would send the answer to its maker,
+ * and the privacy page promises that reading aloud stays on the device.
+ */
 function germanVoice(): SpeechSynthesisVoice | null {
-  const voices = speechSynthesis
-    .getVoices()
-    .filter((v) => v.lang.toLowerCase().startsWith("de"));
-  return voices.find((v) => v.localService) ?? voices[0] ?? null;
+  return (
+    speechSynthesis
+      .getVoices()
+      .find((v) => v.localService && v.lang.toLowerCase().startsWith("de")) ??
+    null
+  );
 }
 
 export interface Speech {
+  /**
+   * Starts the speech engine from a tap: iOS Safari speaks only what a
+   * gesture began, and an answer is read later, from an effect.
+   */
+  prime: () => void;
   speak: (text: string) => void;
   stop: () => void;
   supported: boolean;
 }
 
-/** Reading aloud, one text at a time; a new one cuts the last off. */
+/**
+ * Reading aloud, one text at a time; a new one cuts the last off. Only
+ * where the device has a German voice of its own — the voices load late,
+ * so `supported` follows them.
+ */
 export function useSpeech(): Speech {
-  const [supported] = useState(
-    () => typeof window !== "undefined" && "speechSynthesis" in window
-  );
+  const [voice, setVoice] = useState<SpeechSynthesisVoice | null>(null);
+  useEffect(() => {
+    if (!("speechSynthesis" in window)) {
+      return;
+    }
+    const pick = () => setVoice(germanVoice());
+    pick();
+    speechSynthesis.addEventListener("voiceschanged", pick);
+    return () => speechSynthesis.removeEventListener("voiceschanged", pick);
+  }, []);
+  const supported = voice !== null;
   const stop = useCallback(() => {
     if (supported) {
       speechSynthesis.cancel();
     }
   }, [supported]);
+  const primed = useRef(false);
+  const prime = useCallback(() => {
+    if (supported && !primed.current) {
+      primed.current = true;
+      speechSynthesis.speak(new SpeechSynthesisUtterance(""));
+    }
+  }, [supported]);
   const speak = useCallback(
     (text: string) => {
       const words = speakable(text);
-      if (!(supported && words)) {
+      if (!(voice && words)) {
         return;
       }
       speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(words);
-      utterance.lang = "de-DE";
-      const voice = germanVoice();
-      if (voice) {
-        utterance.voice = voice;
-      }
+      utterance.lang = voice.lang;
+      utterance.voice = voice;
       speechSynthesis.speak(utterance);
     },
-    [supported]
+    [voice]
   );
   // a closed card stops talking
   useEffect(() => stop, [stop]);
-  return useMemo(() => ({ speak, stop, supported }), [speak, stop, supported]);
+  return useMemo(
+    () => ({ prime, speak, stop, supported }),
+    [prime, speak, stop, supported]
+  );
 }
 
 export interface Dictation {

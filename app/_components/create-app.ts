@@ -4236,6 +4236,9 @@ async function bootApp(
     },
     // In Modell a place is where the picture is centred (plan 055).
     flyToViewpoint: (view, glide) => {
+      // a glide wakes a resting scene for its first frame, not the next
+      // slow one (the Hörmodus draws two a second while still)
+      wakeStill();
       // the rig's own phase: the view mode can lag it (a snapshot's
       // perspective settles to walk while Modell stays)
       if (modelRig.staying()) {

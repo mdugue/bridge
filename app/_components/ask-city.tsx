@@ -57,7 +57,12 @@ import { Trace, TraceIcon, TraceLine, TraceTitle } from "@/components/ui/trace";
 import { cn } from "cn";
 import { type AskKey, clearAskKey, readAskKey, writeAskKey } from "./ask-key";
 import { type AskScene, sceneTools } from "./ask-scene-tools";
-import { type Speech, useDictation, useSpeech } from "./ask-voice";
+import {
+  type Dictation,
+  type Speech,
+  useDictation,
+  useSpeech,
+} from "./ask-voice";
 
 interface Props {
   coarse: boolean;
@@ -480,19 +485,22 @@ function useReadAloud(
   loading: boolean,
   failed: boolean,
   on: boolean,
-  speech: Speech
+  speech: Speech,
+  listening: boolean
 ): () => void {
   const was = useRef(loading);
   const stopped = useRef(false);
   useEffect(() => {
-    if (was.current && !loading && on && !failed && !stopped.current) {
+    // not into an open microphone: it would hear the answer as a question
+    const quiet = failed || stopped.current || listening;
+    if (was.current && !loading && on && !quiet) {
       speech.speak(lastAnswer(messages));
     }
     if (loading) {
       stopped.current = false;
     }
     was.current = loading;
-  }, [loading, failed, on, messages, speech]);
+  }, [loading, failed, on, messages, speech, listening]);
   return useCallback(() => {
     stopped.current = true;
   }, []);
@@ -500,6 +508,7 @@ function useReadAloud(
 
 /** Read aloud, speak a question, the Hörmodus: where the browser can. */
 function VoiceBar({
+  dictation,
   hearing,
   onHearing,
   onSpoken,
@@ -507,6 +516,7 @@ function VoiceBar({
   setReading,
   speech,
 }: {
+  dictation: Dictation;
   hearing: boolean;
   onHearing: (on: boolean) => void;
   onSpoken: (text: string) => void;
@@ -514,7 +524,6 @@ function VoiceBar({
   setReading: (on: boolean) => void;
   speech: Speech;
 }) {
-  const dictation = useDictation();
   // the question goes to the conversation as it is when it is heard
   const spoken = useRef(onSpoken);
   useEffect(() => {
@@ -537,11 +546,8 @@ function VoiceBar({
               return;
             }
             speech.stop();
-            dictation.start((question) => {
-              // a spoken question gets a spoken answer
-              setReading(true);
-              spoken.current(question);
-            });
+            speech.prime();
+            dictation.start((question) => spoken.current(question));
           }}
           title="Frage sprechen (der Browser erkennt die Sprache)"
           type="button"
@@ -557,6 +563,10 @@ function VoiceBar({
           onClick={() => {
             if (reading) {
               speech.stop();
+              // the Hörmodus promises the answers read aloud
+              onHearing(false);
+            } else {
+              speech.prime();
             }
             setReading(!reading);
           }}
@@ -576,7 +586,10 @@ function VoiceBar({
           aria-pressed={hearing}
           className={chip}
           onClick={() => {
-            setReading(true);
+            if (!hearing) {
+              speech.prime();
+              setReading(true);
+            }
             onHearing(!hearing);
           }}
           title="Hörmodus: die Szene ruht, die Antworten werden vorgelesen — für unterwegs, das Telefon in der Tasche"
@@ -615,6 +628,7 @@ function Conversation({
   site: string;
 }) {
   const speech = useSpeech();
+  const dictation = useDictation();
   const tools = useMemo(() => sceneTools(scene), [scene]);
   // the conversation remounts for another key (keyed by it): fixed here
   const secret = askKey.key;
@@ -646,7 +660,8 @@ function Conversation({
     chat.isLoading,
     chat.error !== undefined,
     reading,
-    speech
+    speech,
+    dictation.listening
   );
   const [text, setText] = useState("");
   // `voice` with the question itself: a spoken one sets `reading` in the
@@ -655,8 +670,21 @@ function Conversation({
     const q = question.trim().slice(0, ASK_LIMITS.questionChars);
     if (q && !chat.isLoading) {
       setText("");
+      if (voice) {
+        speech.prime();
+      }
       void chat.sendMessage(q, { body: { voice } });
     }
+  };
+  // a spoken question gets a spoken answer; one heard while an answer
+  // still loads waits in the field, as a typed one would
+  const askSpoken = (question: string) => {
+    if (chat.isLoading) {
+      setText(question.slice(0, ASK_LIMITS.questionChars));
+      return;
+    }
+    setReading(true);
+    ask(question, true);
   };
   // a renewed token (same key, no remount) clears the error it answered
   // (each check sets a new expiry, with or without a token)
@@ -736,9 +764,10 @@ function Conversation({
         </MessageScroller>
       </MessageScrollerProvider>
       <VoiceBar
+        dictation={dictation}
         hearing={hearing}
         onHearing={onHearing}
-        onSpoken={(q) => ask(q, true)}
+        onSpoken={askSpoken}
         reading={reading}
         setReading={setReading}
         speech={speech}

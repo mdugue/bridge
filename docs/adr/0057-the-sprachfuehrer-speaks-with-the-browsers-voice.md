@@ -15,7 +15,10 @@ listens wastes its battery.
 
 1. **The browser speaks and listens.** `app/_components/ask-voice.ts`
    reads each finished answer aloud with `speechSynthesis` (a German
-   voice, a local one first; links, list marks and Markdown left out) and
+   voice of the device's own, never a network voice, so the answer stays
+   on the device; a device without one shows no reading aloud; links,
+   list marks and Markdown left out; a tap starts the engine, which iOS
+   needs) and
    takes a spoken question with `SpeechRecognition` (push to talk, one
    question per press). A browser without either shows neither. A spoken
    question turns reading aloud on and tells the server (`voice`), whose
@@ -24,9 +27,9 @@ listens wastes its battery.
    (`inquireAt`, ADR 0042), opens its card and gives the model the card's
    lines, so "what is that" is answered from the measured data.
 3. **The Hörmodus rests the scene.** A switch lays a soft vignette and the
-   loop draws two frames a second while the scene stands still, 20 while
-   a glide or live mode moves it (`FramePace.setListening`). A tap or
-   closing the card ends it.
+   loop draws two frames a second while the scene stands still, 30 while
+   a glide or live mode moves it (`FramePace.setListening`). Its banner,
+   its switch, turning reading aloud off or closing the card ends it.
 
 ## Consequences
 

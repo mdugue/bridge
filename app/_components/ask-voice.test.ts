@@ -21,3 +21,14 @@ test("a recognition error the visitor caused says nothing, others say why", () =
   expect(dictationProblem("not-allowed")).toContain("Mikrofon");
   expect(dictationProblem("whatever")).toBeTruthy();
 });
+
+test("a link with brackets in it goes whole, and a bracketed source with it", () => {
+  expect(
+    speakable(
+      "Die [Frauenkirche](https://de.wikipedia.org/wiki/Frauenkirche_(Dresden)) steht am Neumarkt (Quelle: https://de.wikipedia.org/wiki/Neumarkt_(Dresden))."
+    )
+  ).toBe("Die Frauenkirche steht am Neumarkt.");
+  expect(
+    speakable("Siehe https://de.wikipedia.org/wiki/Zwinger_(Dresden) dort.")
+  ).toBe("Siehe dort.");
+});

@@ -11,6 +11,7 @@ import type { FramePace } from "@/lib/city/frame-pace";
 import { inquiryCard } from "@/lib/city/inquiry";
 import type { LookState } from "@/lib/city/look-state";
 import { siteHoldsPoint } from "@/lib/city/geolocation";
+import { METHODS } from "@/lib/city/methods";
 import type { Site } from "@/lib/city/site";
 import type { AskScene } from "./ask-scene-tools";
 import type { CityWalkHandle } from "./create-app";
@@ -84,7 +85,12 @@ export function useAskScene(
           name: card.title,
           ...(card.address ? { adresse: card.address } : {}),
           ...(card.id ? { [card.idLabel || "kennung"]: card.id } : {}),
-          fakten: Object.fromEntries(card.facts.map((f) => [f.label, f.value])),
+          // a list, not an object: two facts may share a label; an
+          // inferred value says so, as the card's badge does
+          fakten: card.facts.map((f) => ({
+            [f.label]: f.value,
+            ...(f.method ? { ermittelt: METHODS[f.method].label } : {}),
+          })),
           quellen: card.sources.map((s) => s.text),
         };
       },
