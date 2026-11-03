@@ -39,7 +39,8 @@ function recognitionClass(): RecognitionClass | null {
 }
 
 // a web link, with at most one level of brackets in it (Zwinger_(Dresden))
-const LINK = String.raw`https?:\/\/(?:[^\s()]|\([^\s()]*\))+`;
+// (a sentence's full stop after it is not the link's)
+const LINK = String.raw`https?:\/\/(?:[^\s()]|\([^\s()]*\))*(?:[^\s().,;:!?]|\([^\s()]*\))`;
 /** [words](link): the words stay */
 const MARKDOWN_LINK = new RegExp(String.raw`\[([^\]]+)\]\(${LINK}\)`, "g");
 /** (link) or (Quelle: link): gone with its brackets */
@@ -56,16 +57,22 @@ const BARE_LINK = new RegExp(String.raw`\s?${LINK}`, "g");
  * "m²" as words.
  */
 export function speakable(text: string): string {
-  return text
-    .replace(MARKDOWN_LINK, "$1")
-    .replace(BRACKETED_LINK, "")
-    .replace(BARE_LINK, "")
-    .replace(/^\s*[-*•]\s+/gm, "")
-    .replace(/[*_#`]/g, "")
-    .replace(/(\d)\s?m²/g, "$1 Quadratmeter")
-    .replace(/(\d)\s?m\b/g, "$1 Meter")
-    .replace(/\s+/g, " ")
-    .trim();
+  return (
+    text
+      .replace(MARKDOWN_LINK, "$1")
+      .replace(BRACKETED_LINK, "")
+      .replace(BARE_LINK, "")
+      .replace(/^\s*(?:[-*•]|\d+\.)\s+/gm, "")
+      // Markdown's marks, but not an underscore inside a word (DESN_0815)
+      .replace(/[*#`]|(?<!\w)_|_(?!\w)/g, "")
+      // a line without its own end is a sentence still: a list item, a heading
+      .replace(/([^\s.!?:;,])[ \t]*\n+/g, "$1. ")
+      .replace(/(\d)\s?m²/g, "$1 Quadratmeter")
+      .replace(/(\d)\s?m³/g, "$1 Kubikmeter")
+      .replace(/(\d)\s?m\b/g, "$1 Meter")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
 }
 
 /**
@@ -74,12 +81,13 @@ export function speakable(text: string): string {
  * and the privacy page promises that reading aloud stays on the device.
  */
 function germanVoice(): SpeechSynthesisVoice | null {
-  return (
-    speechSynthesis
-      .getVoices()
-      .find((v) => v.localService && v.lang.toLowerCase().startsWith("de")) ??
-    null
-  );
+  const local = speechSynthesis
+    .getVoices()
+    .filter((v) => v.localService && v.lang.toLowerCase().startsWith("de"));
+  // the device's default first, then Germany's German (dictation's too)
+  const rank = (v: SpeechSynthesisVoice) =>
+    (v.default ? 0 : 2) + (v.lang.toLowerCase() === "de-de" ? 0 : 1);
+  return local.toSorted((a, b) => rank(a) - rank(b))[0] ?? null;
 }
 
 export interface Speech {

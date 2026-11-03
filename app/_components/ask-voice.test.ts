@@ -32,3 +32,10 @@ test("a link with brackets in it goes whole, and a bracketed source with it", ()
     speakable("Siehe https://de.wikipedia.org/wiki/Zwinger_(Dresden) dort.")
   ).toBe("Siehe dort.");
 });
+
+test("lines are heard as sentences, ids keep their underscores, a link leaves the full stop", () => {
+  expect(
+    speakable("**Fakten:**\n1. Höhe: 40 m\n2. Raum: 300 m³\nKennung DESN_0815")
+  ).toBe("Fakten: Höhe: 40 Meter. Raum: 300 Kubikmeter. Kennung DESN_0815");
+  expect(speakable("Siehe https://x.de/a.")).toBe("Siehe.");
+});

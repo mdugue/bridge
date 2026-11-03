@@ -15,6 +15,7 @@ import { METHODS } from "@/lib/city/methods";
 import type { Site } from "@/lib/city/site";
 import type { AskScene } from "./ask-scene-tools";
 import type { CityWalkHandle } from "./create-app";
+import { loadLandmarkFacts } from "./landmark-facts-load";
 import type { SceneTime } from "./scene-time";
 
 const WHEN = new Intl.DateTimeFormat("de-DE", {
@@ -66,7 +67,7 @@ export function useAskScene(
           ebenen: activeDataLayers(values).map((d) => d.key),
         };
       },
-      look: () => {
+      look: async () => {
         const asked = handleRef.current?.inquireAt();
         if (!asked) {
           return {
@@ -78,7 +79,11 @@ export function useAskScene(
         // the site's per-tile survey record (provenance.json) and a tree's
         // own facts file, which the visible card fetches: the model gets
         // the layers' credits, the card beside it the full sources
-        const card = inquiryCard(asked, null, credits);
+        // a landmark's facts, as the card beside it shows them
+        const url =
+          asked.kind === "building" ? asked.landmarkFactsUrl : undefined;
+        const landmarks = url ? await loadLandmarkFacts(url) : null;
+        const card = inquiryCard(asked, null, credits, null, landmarks);
         return {
           gefunden: true,
           art: card.kicker,

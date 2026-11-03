@@ -4203,7 +4203,12 @@ async function bootApp(
   };
 
   return {
-    setSun,
+    // a new hour wakes a resting scene for the next frame, not its next
+    // slow one (the Hörmodus draws two a second while still)
+    setSun: (date, preview) => {
+      wakeStill();
+      return setSun(date, preview);
+    },
     clearInquiry: () => {
       along = null;
       probe.clear();

@@ -171,7 +171,11 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
         {!key && (
           <KeyForm
             // a forgotten key ends the conversation that runs on it
-            onForget={() => setHeld(null)}
+            onForget={() => {
+              setHeld(null);
+              setHearing(false);
+              setReading(false);
+            }}
             onKey={(k) => {
               writeAskKey(k);
               setKey(k);
@@ -490,24 +494,32 @@ function useReadAloud(
 ): () => void {
   const was = useRef(loading);
   const stopped = useRef(false);
+  // an answer that ended while the microphone listened, read once it closes
+  const owed = useRef(false);
   useEffect(() => {
-    // not into an open microphone: it would hear the answer as a question
-    const quiet = failed || stopped.current || listening;
-    if (was.current && !loading && on && !quiet) {
-      speech.speak(lastAnswer(messages));
+    if (was.current && !loading) {
+      owed.current = on && !failed && !stopped.current;
     }
     if (loading) {
       stopped.current = false;
+      owed.current = false;
     }
     was.current = loading;
+    // not into an open microphone: it would hear the answer as a question
+    if (owed.current && !listening) {
+      owed.current = false;
+      speech.speak(lastAnswer(messages));
+    }
   }, [loading, failed, on, messages, speech, listening]);
   return useCallback(() => {
     stopped.current = true;
+    owed.current = false;
   }, []);
 }
 
 /** Read aloud, speak a question, the Hörmodus: where the browser can. */
 function VoiceBar({
+  busy,
   dictation,
   hearing,
   onHearing,
@@ -516,6 +528,8 @@ function VoiceBar({
   setReading,
   speech,
 }: {
+  /** an answer is on its way: no second question by voice */
+  busy: boolean;
   dictation: Dictation;
   hearing: boolean;
   onHearing: (on: boolean) => void;
@@ -539,7 +553,8 @@ function VoiceBar({
       {dictation.supported && (
         <button
           aria-pressed={dictation.listening}
-          className={chip}
+          className={cn(chip, "disabled:opacity-50")}
+          disabled={busy && !dictation.listening}
           onClick={() => {
             if (dictation.listening) {
               dictation.stop();
@@ -680,11 +695,15 @@ function Conversation({
   // still loads waits in the field, as a typed one would
   const askSpoken = (question: string) => {
     if (chat.isLoading) {
-      setText(question.slice(0, ASK_LIMITS.questionChars));
+      // the microphone opened before a typed question went: it waits
+      // in an empty field, never over what was typed
+      setText((t) => t || question.slice(0, ASK_LIMITS.questionChars));
       return;
     }
-    setReading(true);
-    ask(question, true);
+    // read aloud only where the device can: a voice-style answer nobody
+    // hears, with no switch to undo it, helps no one
+    setReading(speech.supported);
+    ask(question, speech.supported);
   };
   // a renewed token (same key, no remount) clears the error it answered
   // (each check sets a new expiry, with or without a token)
@@ -764,6 +783,7 @@ function Conversation({
         </MessageScroller>
       </MessageScrollerProvider>
       <VoiceBar
+        busy={chat.isLoading}
         dictation={dictation}
         hearing={hearing}
         onHearing={onHearing}

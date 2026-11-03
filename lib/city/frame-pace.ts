@@ -17,8 +17,8 @@
  * Any input wakes it for the very next frame (`setStill(false)`).
  *
  * While the visitor only listens (*Frag die Stadt*'s Hörmodus, ADR 0057)
- * the scene draws at LISTENING_FPS while it stands still: the screen is
- * dark under the card, but the pose, the live mode and the questions about
+ * the scene draws at LISTENING_FPS while it stands still: the city shows
+ * through a soft vignette, but nothing in it needs more, and the pose, the live mode and the questions about
  * the view still see a current scene. While it moves — a glide the answer
  * started, the live mode following the walker — it draws at
  * LISTENING_MOVING_FPS: at every display rate from 24 to 144 Hz the

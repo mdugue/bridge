@@ -35,7 +35,7 @@ export interface AskScene {
   /** the player's pose, mode, time, style and layers, for the model */
   where: () => Record<string, unknown>;
   /** asks what stands at the centre of the view (and opens its card) */
-  look: () => Record<string, unknown>;
+  look: () => Promise<Record<string, unknown>>;
   /** the Hörmodus: the scene barely draws while the visitor listens */
   setListening: (on: boolean) => void;
 }

@@ -4,7 +4,7 @@ import { type AskScene, sceneTools } from "./ask-scene-tools";
 
 const STUB: AskScene = {
   from: () => null,
-  look: () => ({}),
+  look: () => Promise.resolve({}),
   setLayer: () => true,
   setListening: () => undefined,
   setStyle: () => undefined,

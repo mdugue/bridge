@@ -88,8 +88,9 @@ export function fakeAskAdapter(): AnyTextAdapter {
       };
     }
     const seen = /"name":"([^"]+)"/.exec(result)?.[1];
+    const found = result.includes('"gefunden":true');
     return {
-      text: `Testantwort: Hier ist es${seen && result.includes("gefunden") ? `, ${seen}` : ""} (Quelle: Wikidata).`,
+      text: `Testantwort: Hier ist es${seen && found ? `, ${seen}` : ""} (Quelle: Wikidata).`,
     };
   };
   adapter.setResponses([step, step, step]);
