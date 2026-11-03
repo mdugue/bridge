@@ -249,7 +249,7 @@ function loweredTo(
 }
 
 /** Every vertex index under a geometry's boundaries. */
-function indices(b: unknown, out: Set<number> = new Set()): Set<number> {
+function indices(b: unknown, out = new Set<number>()): Set<number> {
   if (typeof b === "number") {
     out.add(b);
   } else if (Array.isArray(b)) {

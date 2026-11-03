@@ -272,7 +272,7 @@ export function estimateGeometryBytes(root: Object3D): number {
  */
 export function cpuArrayBytes(
   root: Object3D,
-  seen: Set<ArrayBufferLike> = new Set()
+  seen = new Set<ArrayBufferLike>()
 ): number {
   let bytes = 0;
   for (const geometry of geometriesUnder(root)) {
