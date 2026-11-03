@@ -42,6 +42,8 @@ const LAND_MAX_MS = 20_000;
 /** A glide started while it waited (another tool, a tap) is waited for
  *  too, this many times at most. */
 const LAND_ROUNDS = 3;
+/** How long a hidden page may hold a wait beyond its visible limit (ms). */
+const HIDDEN_GRACE_MS = 10_000;
 /** How often it looks whether the glide has landed (ms). */
 const LAND_POLL_MS = 100;
 /** How long the stream takes to notice a new view (ms, a few frames). */
@@ -61,10 +63,12 @@ async function waitWhile(
   maxMs: number,
   signal: AbortSignal
 ): Promise<boolean> {
-  // the visible clock: a hidden page draws no frames, so no glide moves
+  // the visible clock: a hidden page draws no frames, so no glide moves;
+  // and a wall clock past it, so a locked phone does not hold the answer
   const end = visibleMs() + maxMs;
+  const wallEnd = performance.now() + maxMs + HIDDEN_GRACE_MS;
   while (!gone() && holds()) {
-    if (visibleMs() >= end) {
+    if (visibleMs() >= end || performance.now() >= wallEnd) {
       return false;
     }
     await sleep(LAND_POLL_MS, signal);

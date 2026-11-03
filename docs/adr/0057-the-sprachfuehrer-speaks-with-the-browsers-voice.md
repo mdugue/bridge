@@ -21,8 +21,9 @@ listens wastes its battery.
    needs) and
    takes a spoken question with `SpeechRecognition` (push to talk, one
    question per press). A browser without either shows neither. A spoken
-   question turns reading aloud on and tells the server (`voice`), whose
-   prompt then asks for short spoken sentences.
+   question turns reading aloud on; while it is on, every request tells
+   the server (`voice`), whose prompt then asks for short spoken
+   sentences — the provider learns that much, never the audio.
 2. **`was_ist_da` asks the twin what stands where the view points** (its
    centre; in Modell the preset's pivot, where a place is put), once a
    glide has landed and the tiles there have come

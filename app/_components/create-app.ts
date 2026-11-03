@@ -4240,7 +4240,11 @@ async function bootApp(
       setScale: (scale) => design?.setScale(scale),
       status: () => design?.status() ?? null,
     },
-    inquireAt,
+    // (an inquiry the HUD asks for marks the scene: draw it now)
+    inquireAt: (ndc) => {
+      wakeStill();
+      return inquireAt(ndc);
+    },
     nameplateShown: () => nameplate.shown(),
     enterImmersive: canvasControls.lockPointer,
     releaseGpu: () => releaseGpu(renderer),
