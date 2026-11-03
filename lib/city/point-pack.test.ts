@@ -61,7 +61,7 @@ test("no points is a header and nothing else", () => {
 
 test("anything that is not a whole pack is refused", () => {
   const bytes = packPoints([{ x: 412_001, y: 5_656_001, h: 5 }], ORIGIN, 3);
-  expect(unpackPoints(toBuffer(bytes.slice(0, bytes.length - 2)))).toBeNull();
+  expect(unpackPoints(toBuffer(bytes.slice(0, -2)))).toBeNull();
   expect(unpackPoints(toBuffer(bytes.slice(0, 20)))).toBeNull();
   const wrong = bytes.slice();
   wrong[0] = "X".charCodeAt(0);
