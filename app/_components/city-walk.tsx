@@ -981,21 +981,21 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
           VEIL_HOLD_MS + STREAM_SETTLE_MS
         );
       })
-      .catch((err: unknown) => {
+      .catch((error: unknown) => {
         // Aborted = StrictMode remount / navigation away, not a failure.
         const aborted =
-          err instanceof DOMException && err.name === "AbortError";
+          error instanceof DOMException && error.name === "AbortError";
         if (!(aborter.signal.aborted || aborted)) {
           // A place that failed the boot is not tried again on the next
           // load: the recovery's snapshot goes with this boot.
           takeRecoverySnapshot();
           trail.note(
             "boot failed",
-            err instanceof Error ? err.message : String(err)
+            error instanceof Error ? error.message : String(error)
           );
           setStatus({
             phase: "error",
-            message: err instanceof Error ? err.message : String(err),
+            message: error instanceof Error ? error.message : String(error),
           });
         }
       })
@@ -1096,9 +1096,9 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     })
       .then(
         () => hud.say(done),
-        (err: unknown) =>
+        (error: unknown) =>
           hud.say(
-            `Speichern fehlgeschlagen: ${err instanceof Error ? err.message : String(err)}`
+            `Speichern fehlgeschlagen: ${error instanceof Error ? error.message : String(error)}`
           )
       )
       .finally(() => {

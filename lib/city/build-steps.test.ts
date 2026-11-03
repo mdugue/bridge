@@ -82,8 +82,8 @@ test("inSlices stops at the first pause after its signal fires", async () => {
   let thrown: unknown = null;
   try {
     await run;
-  } catch (err) {
-    thrown = err;
+  } catch (error) {
+    thrown = error;
   }
   expect((thrown as Error).name).toBe("AbortError");
   expect(log.length).toBeLessThan(100);

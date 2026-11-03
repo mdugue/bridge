@@ -86,9 +86,9 @@ async function inflate(
 ): Promise<Uint8Array<ArrayBuffer>> {
   try {
     return new Uint8Array(await new Response(gunzip(raw)).arrayBuffer());
-  } catch (err) {
-    const why = err instanceof Error ? err.message : String(err);
-    throw new Error(`Corrupt gzip: ${why}`, { cause: err });
+  } catch (error) {
+    const why = error instanceof Error ? error.message : String(error);
+    throw new Error(`Corrupt gzip: ${why}`, { cause: error });
   }
 }
 
@@ -175,11 +175,11 @@ async function attempt(
     const raw = await readBody(res, touch);
     const bytes = opts.gunzip && isGzipped(raw) ? await inflate(raw) : raw;
     return { status: res.status, value: bytes };
-  } catch (err) {
+  } catch (error) {
     if (stall.signal.aborted && !opts.signal?.aborted) {
       throw new StalledError(url, STALL_MS);
     }
-    throw err;
+    throw error;
   } finally {
     clearTimeout(timer);
     release();
@@ -283,9 +283,9 @@ async function optionalBytes(
       gunzip: inflate,
     });
     return got.ok ? got.bytes : null;
-  } catch (err) {
-    if (isAbortError(err)) {
-      throw err;
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
     }
     return null;
   }

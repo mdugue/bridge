@@ -345,10 +345,10 @@ async function decodeRaster(
   let raster: GreyRaster;
   try {
     raster = await decodeGreyPng(bytes);
-  } catch (err) {
+  } catch (error) {
     // The browser's decoder cannot de-interleave a multi-channel raster.
     if (channels > 1) {
-      throw err;
+      throw error;
     }
     return loadBitmapTexture(new Blob([bytes]));
   }
@@ -390,9 +390,9 @@ async function loadOptionalRaster(
 ): Promise<LoadedRaster | null> {
   try {
     return await loadRasterTexture(url, look, renderer, signal, inspect);
-  } catch (err) {
-    if (isAbortError(err)) {
-      throw err;
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
     }
     return null;
   }
@@ -611,9 +611,9 @@ async function loadIndexedRaster(
     idLook(4),
     renderer,
     signal
-  ).catch((err: unknown) => {
+  ).catch((error: unknown) => {
     table.dispose();
-    throw err;
+    throw error;
   });
   if (!raster) {
     table.dispose();
@@ -1613,9 +1613,9 @@ async function loadTerrainRasters(
       return { rasters, detail: NO_DETAIL, free };
     }
     return { rasters, detail, free };
-  } catch (err) {
+  } catch (error) {
     free();
-    throw err;
+    throw error;
   }
 }
 
@@ -1918,9 +1918,9 @@ export async function dressTerrain(
   let ground: GroundPrep;
   try {
     ground = await groundOf(mesh, extras, toData, opts, mask ?? null);
-  } catch (err) {
+  } catch (error) {
     free();
-    throw err;
+    throw error;
   }
   const { elevations } = ground;
   const { heightAt, bytes: heightBytes } = elevations

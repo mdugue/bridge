@@ -251,15 +251,15 @@ async function nextWait<T>(
       cause: new Error(`HTTP ${answer.status}`),
       delayMs: Math.max(backoff, after),
     };
-  } catch (err) {
+  } catch (error) {
     // an abort that surfaced as something else is still the caller's
     if (signal?.aborted) {
       throw abortError();
     }
-    if (errorVerdict(err) !== "transient") {
-      throw err;
+    if (errorVerdict(error) !== "transient") {
+      throw error;
     }
-    return { cause: err, delayMs: backoff };
+    return { cause: error, delayMs: backoff };
   }
 }
 

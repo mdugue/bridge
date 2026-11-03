@@ -18,7 +18,7 @@ const settle = async () => new Promise((resolve) => setTimeout(resolve, 0));
 const failure = async (promise: Promise<unknown>): Promise<unknown> =>
   promise.then(
     () => {},
-    (err: unknown) => err
+    (error: unknown) => error
   );
 
 test("one place runs the tasks one after another, in the order they came", async () => {
@@ -130,7 +130,7 @@ test("a task that fails frees its place", async () => {
   const outcome = async (p: Promise<string>) =>
     p.then(
       (value) => value,
-      (err: unknown) => `failed: ${(err as Error).message}`
+      (error: unknown) => `failed: ${(error as Error).message}`
     );
   const results = await Promise.all([
     outcome(

@@ -255,9 +255,9 @@ function tramOverlay(
       built = null;
       cars.group.visible = on;
       opts.onChange?.();
-    } catch (err) {
+    } catch (error) {
       // a missing or broken file is no crash: the HUD says so
-      if (!isAbortError(err)) {
+      if (!isAbortError(error)) {
         failed();
       }
     } finally {

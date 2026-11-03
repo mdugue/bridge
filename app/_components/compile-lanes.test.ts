@@ -33,9 +33,9 @@ function watch(promise: Promise<unknown>) {
     () => {
       state.settled = true;
     },
-    (err: unknown) => {
+    (error: unknown) => {
       state.settled = true;
-      state.error = err;
+      state.error = error;
     }
   );
   return state;

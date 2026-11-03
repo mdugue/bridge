@@ -117,7 +117,7 @@ describe("decodeGreyPng", () => {
     view.setUint32(8 + 8 + 4, 9);
     const err = await decodeGreyPng(png).then(
       () => null,
-      (e: unknown) => e
+      (error: unknown) => error
     );
     expect(String(err)).toContain("truncated");
   });
@@ -127,7 +127,7 @@ describe("decodeGreyPng", () => {
     png[8 + 8 + 9] = 2; // IHDR colour type → RGB
     const err = await decodeGreyPng(png).then(
       () => null,
-      (e: unknown) => e
+      (error: unknown) => error
     );
     expect(String(err)).toContain("unsupported PNG");
   });

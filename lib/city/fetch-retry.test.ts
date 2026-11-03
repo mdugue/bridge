@@ -236,7 +236,7 @@ test("the budget spent, the retries give up with a NetworkError that says how of
     }
   );
   await expect(run).rejects.toBeInstanceOf(NetworkError);
-  const error = (await run.catch((err: unknown) => err)) as NetworkError;
+  const error = (await run.catch((error_: unknown) => error_)) as NetworkError;
   // 0.5 + 1 + 2 + 4 s waited; the next 8 s would pass the budget
   expect(calls).toBe(5);
   expect(notes).toEqual([1, 2, 3, 4]);

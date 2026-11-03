@@ -473,9 +473,9 @@ async function loadLightRaster<T extends Texture>(
       }
       return tex;
     }, signal);
-  } catch (err) {
-    if (isAbortError(err)) {
-      throw err;
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
     }
     return null;
   }

@@ -1207,11 +1207,11 @@ export async function createCityWalkApp(
   }
   try {
     return await bootApp(opts, renderer, scene, cleanups);
-  } catch (err) {
+  } catch (error) {
     // Centralized teardown: covers both abort (StrictMode remount) and real
     // load failures — otherwise the dead canvas would linger in the DOM.
     void teardown(cleanups, scene, renderer);
-    throw err;
+    throw error;
   }
 }
 

@@ -193,7 +193,7 @@ test("a level whose tile leaves while it waits for a shared raster lets go at on
     }
   ).then(
     () => "dressed",
-    (err: unknown) => (err as Error).name
+    (error: unknown) => (error as Error).name
   );
   await new Promise((resolve) => setTimeout(resolve, 0));
   aborter.abort();

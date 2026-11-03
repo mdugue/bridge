@@ -102,8 +102,8 @@ export function uploadNow(
   }
   try {
     renderer.initTexture(texture);
-  } catch (err) {
+  } catch (error) {
     texture.dispose();
-    throw err;
+    throw error;
   }
 }

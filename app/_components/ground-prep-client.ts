@@ -53,8 +53,8 @@ export function groundWorkerUp(): boolean {
 function runHere(job: Job): void {
   try {
     job.resolve(prepareGround(job.input));
-  } catch (err) {
-    job.reject(err);
+  } catch (error) {
+    job.reject(error);
   }
 }
 

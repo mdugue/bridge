@@ -684,8 +684,8 @@ function disposeDressing(d: TileDressing): unknown[] {
   for (const own of [d.lamps, d.monuments, d.sport]) {
     try {
       own?.dispose();
-    } catch (err) {
-      errors.push(err);
+    } catch (error) {
+      errors.push(error);
     }
   }
   // the traffic's bodies, built or still building (it nulls its group)
@@ -755,9 +755,9 @@ export function buildAsksWhenIdle(
         yield* onlyWhile(steps, pending);
         done();
       })()
-    ).catch((err: unknown) => {
+    ).catch((error: unknown) => {
       done();
-      failed?.(err);
+      failed?.(error);
     });
   }, ASKS_IDLE_MS);
 }
@@ -1007,9 +1007,9 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
         return; // built once the dressing hangs
       }
       const h = host;
-      building ??= build(h).catch((err: unknown) => {
+      building ??= build(h).catch((error: unknown) => {
         if (!gone(h)) {
-          h.failed(err);
+          h.failed(error);
         }
       });
       return building;
@@ -1136,11 +1136,11 @@ async function buildCoarseDressing(
             sunDirection: ctx.sunDirection,
           }),
           { signal }
-        ).catch((err: unknown) => {
+        ).catch((error: unknown) => {
           // the bridges and the traffic's slot built, never hung: freed
           // with the build
           disposeDressing({ tile, rail, traffic: flows });
-          throw err;
+          throw error;
         })
       : undefined;
   return {
@@ -1456,9 +1456,9 @@ async function buildDressing(
       rail,
       sport,
     };
-  } catch (err) {
+  } catch (error) {
     disposeDressing(made);
-    throw err;
+    throw error;
   }
 }
 
@@ -1902,9 +1902,9 @@ export class DressingPlugin {
         phone: this.ctx.tier === "mobile",
         signal: entry.aborter.signal,
       });
-    } catch (err) {
-      if (!(isAbortError(err) || gone())) {
-        this.ctx.onDressingFailed?.(err, tileId);
+    } catch (error) {
+      if (!(isAbortError(error) || gone())) {
+        this.ctx.onDressingFailed?.(error, tileId);
       }
       return;
     } finally {
@@ -2094,8 +2094,8 @@ export class DressingPlugin {
     await withinCompileWait(
       Promise.all(warmup.main.map(async (mesh) => this.ctx.compile(mesh))).then(
         () => {},
-        (err: unknown) => {
-          this.compileFailed(err, "crowns");
+        (error: unknown) => {
+          this.compileFailed(error, "crowns");
         }
       )
     );
@@ -2202,9 +2202,9 @@ export class DressingPlugin {
       // hangs: it is freed, not left to nothing.
       try {
         catchUp(dressing, this.ctx);
-      } catch (err) {
+      } catch (error) {
         this.disposeFailed(disposeDressing(dressing), scene);
-        throw err;
+        throw error;
       }
       // (a tile that left, its release held by its own compile, gets none:
       // nor any weight, nor a place in the compile line the lane waits on)
@@ -2276,17 +2276,17 @@ export class DressingPlugin {
       };
     }, rank)
       .then((after) => after?.())
-      .catch((err: unknown) => {
+      .catch((error: unknown) => {
         // A dressing that fails leaves its tile bare, never the stream
         // stuck — but never silently: a builder's throw is a bug or a
         // heap that ran out.
-        if (isAbortError(err) || this.disposed || this.released.has(scene)) {
+        if (isAbortError(error) || this.disposed || this.released.has(scene)) {
           return; // a tile that left mid-build: no failure of its own
         }
-        if (isAllocationFailure(err)) {
-          this.ctx.onAllocationFailure?.(err, `dressing ${extras.tileId}`);
+        if (isAllocationFailure(error)) {
+          this.ctx.onAllocationFailure?.(error, `dressing ${extras.tileId}`);
         } else {
-          this.ctx.onDressingFailed?.(err, extras.tileId);
+          this.ctx.onDressingFailed?.(error, extras.tileId);
         }
       })
       .finally(() => {
@@ -2432,7 +2432,7 @@ export class DressingPlugin {
       objects.map(async (o) => this.ctx.compile(o))
     ).then(
       (compiled): Compiled => (compiled.every(Boolean) ? "done" : "not run"),
-      (err: unknown) => this.compileFailed(err, where)
+      (error: unknown) => this.compileFailed(error, where)
     );
     const settle = () => {
       const left = (this.compiles.get(scene) ?? 1) - 1;
@@ -2562,8 +2562,8 @@ export class DressingPlugin {
     const free = (dispose: () => void) => {
       try {
         dispose();
-      } catch (err) {
-        errors.push(err);
+      } catch (error) {
+        errors.push(error);
       }
     };
     if (dressed.city) {

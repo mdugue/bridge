@@ -107,7 +107,7 @@ export function useLocateMe(
         });
         say(describePlacement(placement, site.label));
       })
-      .catch((err: unknown) => say(describeFailure(err)))
+      .catch((error: unknown) => say(describeFailure(error)))
       .finally(() => setLocating(false));
   }, [clear, epsg, handleRef, locating, others, say, site.label]);
 

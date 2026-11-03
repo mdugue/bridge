@@ -172,8 +172,8 @@ export function DesignPanel({
     setBusy(true);
     try {
       await c.load(files);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+    } catch (error_) {
+      setError(error_ instanceof Error ? error_.message : String(error_));
     } finally {
       setBusy(false);
     }

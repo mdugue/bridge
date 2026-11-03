@@ -157,7 +157,7 @@ test("a gzip read whole that does not inflate is a corrupt file, not the network
   const error = await fetchBytes("/t.glb.gz", {
     budgetMs: 20_000,
     gunzip: true,
-  }).catch((err: unknown) => err);
+  }).catch((error_: unknown) => error_);
   expect(stub.calls()).toBe(1);
   expect(error).toBeInstanceOf(Error);
   // the tile healer and the boot do not wait for it

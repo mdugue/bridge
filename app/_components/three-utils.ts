@@ -156,8 +156,8 @@ function untilThrough(dispose: () => void, attempts: number): unknown[] {
     try {
       dispose();
       return errors;
-    } catch (err) {
-      errors.push(err);
+    } catch (error) {
+      errors.push(error);
     }
   }
   return errors;

@@ -83,16 +83,16 @@ async function loadManifest(
       budgetMs: MANIFEST_FETCH_BUDGET_MS,
       init: { cache: "no-cache" },
     });
-  } catch (err) {
-    if (!isNetworkFailure(err)) {
-      throw err;
+  } catch (error) {
+    if (!isNetworkFailure(error)) {
+      throw error;
     }
     got = await fetchBytes(url, {
       signal,
       budgetMs: 0,
       init: { cache: "force-cache" },
     }).catch(() => {
-      throw err;
+      throw error;
     });
   }
   if (!got.ok) {
@@ -126,10 +126,10 @@ function useDataManifest(base: string): {
           setState({ manifest });
         }
       },
-      (err: unknown) => {
-        if (!(aborter.signal.aborted || isAbortError(err))) {
+      (error: unknown) => {
+        if (!(aborter.signal.aborted || isAbortError(error))) {
           setState({
-            failed: err instanceof Error ? err.message : String(err),
+            failed: error instanceof Error ? error.message : String(error),
           });
         }
       }

@@ -284,9 +284,9 @@ async function loadDrawing(
       "wash",
       signal
     );
-  } catch (err) {
+  } catch (error) {
     lines.dispose();
-    throw err;
+    throw error;
   }
   if (!wash) {
     lines.dispose();
@@ -314,11 +314,11 @@ export async function buildMurals(
     for (const mural of murals) {
       drawings.push(await loadDrawing(mural, opts, opts.signal));
     }
-  } catch (err) {
+  } catch (error) {
     for (const t of drawings.flat()) {
       t?.dispose();
     }
-    throw err;
+    throw error;
   }
   const group = new Group();
   group.name = "murals";

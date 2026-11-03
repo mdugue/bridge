@@ -48,12 +48,12 @@ scope.onmessage = ({ data: job }) => {
       { id: job.id, roots, index: job.index, position: job.position.array },
       [...roots, job.index.buffer, job.position.array.buffer]
     );
-  } catch (err) {
+  } catch (error) {
     // the arrays go back whatever happened: the tile still needs them
     scope.postMessage(
       {
         id: job.id,
-        error: err instanceof Error ? err.message : String(err),
+        error: error instanceof Error ? error.message : String(error),
         index: job.index,
         position: job.position.array,
       },

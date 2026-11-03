@@ -286,10 +286,10 @@ export function parseSnapshot(text: string): SnapshotParse {
       snapshot.look = checkLook(root.look);
     }
     return { ok: true, snapshot };
-  } catch (err) {
-    if (err instanceof SnapshotError) {
-      return { ok: false, reason: err.message };
+  } catch (error) {
+    if (error instanceof SnapshotError) {
+      return { ok: false, reason: error.message };
     }
-    throw err;
+    throw error;
   }
 }

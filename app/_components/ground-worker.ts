@@ -36,9 +36,9 @@ scope.onmessage = ({ data }) => {
       shared === undefined ? input.index : (sharedIndices.get(shared) ?? null);
     const prep = prepareGround({ ...input, index });
     scope.postMessage({ prep }, groundPrepTransfer(prep));
-  } catch (err) {
+  } catch (error) {
     scope.postMessage(
-      { error: err instanceof Error ? err.message : String(err) },
+      { error: error instanceof Error ? error.message : String(error) },
       []
     );
   }
