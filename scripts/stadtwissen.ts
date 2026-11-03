@@ -76,13 +76,14 @@ switch (command) {
       .filter((lm) => matchesQuery(lm, q))
       .flatMap(landmark)
       .forEach(out);
-    monuments()
-      .filter((m) => matchesQuery(m, q))
-      .forEach((m) => out(monument(m)));
-    buildings()
+    for (const m of monuments().filter((m) => matchesQuery(m, q))) {
+      out(monument(m));
+    }
+    for (const b of buildings()
       .filter((b) => matchesQuery(b, q))
-      .slice(0, 40)
-      .forEach((b) => out(building(b)));
+      .slice(0, 40)) {
+      out(building(b));
+    }
     break;
   }
   case "nah": {
@@ -90,13 +91,17 @@ switch (command) {
     nearby(index.landmarks, x, y, Number(r) * 3)
       .flatMap(landmark)
       .forEach(out);
-    nearby(monuments(), x, y, Number(r)).forEach((m) => out(monument(m)));
-    nearby(
+    for (const m of nearby(monuments(), x, y, Number(r))) {
+      out(monument(m));
+    }
+    for (const b of nearby(
       buildings().filter((b) => b.name !== undefined || b.wd !== undefined),
       x,
       y,
       Number(r)
-    ).forEach((b) => out(building(b)));
+    )) {
+      out(building(b));
+    }
     break;
   }
   case "wahrzeichen": {

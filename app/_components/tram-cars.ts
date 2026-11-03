@@ -339,7 +339,7 @@ export function createTramCars(
   ];
   // One matrix per section, shared by every part: the body owns it.
   const sets: Instances[] = [];
-  parts.forEach(({ geo, color, name, tint: tinted }) => {
+  for (const { geo, color, name, tint: tinted } of parts) {
     const set = new Instances(
       geo,
       partMaterial(color),
@@ -359,7 +359,7 @@ export function createTramCars(
     }
     group.add(set);
     sets.push(set);
-  });
+  }
   const [body] = sets;
   // which operator's colours each slot holds (-1: none yet)
   const slotOperator = new Int8Array(CAPACITY).fill(-1);
