@@ -411,7 +411,7 @@ colour and depth from it: `GTAO (half resolution, normals from depth) ^
 AO_EXPONENT → DepthOfFieldNode (desktop; skipped while moving; in motion
 the camera's motion blur instead, pastel only) → the
 picture style → SMAANode (FXAA on a phone) → depth grading + vignette +
-paper grain + the outline → sRGB`. Rendering the scene outside the
+the loading veil + paper grain + the outline → sRGB`. Rendering the scene outside the
 pipeline lets the styles swap and dress the scene for exactly its render,
 and a tile's `compileAsync` prepare the very build its frames use (a
 build is keyed by the target's attachments and the kind of camera; up to
@@ -421,6 +421,38 @@ carries the anti-aliasing. There is no tone mapping: the look was tuned
 without it. The GTAO sample count is a construction-time setting (16;
 8 on a phone and in the lite profile). 3DTilesRendererJS's fade and overlay plugins patch
 GLSL and stay unused.
+
+**The loading veil** (`load-veil.ts`, `lib/city/load-frontier.ts`) shows
+how far from the camera the city is complete. The frontier is the
+horizontal distance to the nearest site tile with something still on its
+way: a content in view the renderer is fetching or parsing (its
+`loadingTiles`), or a dressing queued or building
+(`TileStream.pendingSiteTiles`). Inside it the picture is untouched;
+beyond it the last pass drains the colour, takes a little over a third of
+the light (linear) and draws contour lines every 2 m of height, faded
+where they would crowd a pixel and left out of the sky. The frontier
+itself is a ring on whatever the ground and walls are at that distance,
+in the brand magenta, with a halo of the same ink soaking into the clay
+beyond; by day the ink only darkens, at night it is a dim line of its own.
+The ring breathes (a 3.4 s cycle, slow in, quicker out, a few per cent of
+its radius) and eases to a new frontier rather than jumping a tile's
+width. With nothing pending it sweeps to the horizon in about a second and
+the veil fades. The boot starts veiled with the ring at the feet. Until
+the first load is through, the ring follows the last two stages' progress
+instead of the frontier, from 40 m to 2.6 km (`bootFrontier`): a site tile
+is 2 km wide, and the one under the camera stays pending until its own
+details are built, so by the frontier the view stayed clay for most of
+the load and then the ring leapt past the horizon. It walks in the
+distance's logarithm, so it moves about evenly on the screen (a ring
+linear in metres crossed the near view in the first tenth of the load).
+After the first load a pending spell shorter than 1.2 s never shows. The veil
+only takes away, so the unfinished picture is never brighter than the
+finished one, in every style. It costs no target or texture: a few
+uniforms and one depth read in a pass that runs anyway, skipped on one
+uniform once the veil is off; the frame pacer keeps the full rate while
+it shows. An export, Modell and the
+shots harness draw without it; a QA probe can set its own ring
+(`__poc.veil`). The ring, its halo and the contours stay off the sky.
 
 **The depth runs reversed** (three's `reversedDepthBuffer`,
 `create-app.ts`): 1 at the near plane, 0 at the far one, stored as floats

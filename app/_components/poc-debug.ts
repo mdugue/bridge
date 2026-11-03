@@ -10,6 +10,7 @@
  * nothing can be left out of a registration list.
  */
 
+import type { VeilState } from "@/lib/city/load-frontier";
 import type { LookState } from "@/lib/city/look-state";
 import type { CityWalkHandle, CityWalkStats } from "./create-app";
 
@@ -55,6 +56,11 @@ export interface PocDebugInfo {
   regressed?: boolean;
   /** Frames on which the sun's shadow map was redrawn; e2e asserts it stays far below `frames` while walking. */
   shadowRenders: number;
+  /**
+   * When set, the loading veil draws this ring instead of the stream's
+   * (load-veil.ts): a snapshot of the loading state at a chosen radius.
+   */
+  veil?: Pick<VeilState, "radius" | "strength">;
   /** The last stats emit: building count, per-layer census, GPU estimate. */
   stats?: CityWalkStats;
 }
@@ -93,6 +99,12 @@ export function pocFramesHeld(): boolean {
   // counted down by the frames drawn (`tickPocFrame`), not the ones
   // asked for: the pace may skip one
   return (poc.step ?? 0) <= 0;
+}
+
+/** The probe's loading veil (`veil`), if one is set; never in a
+ *  production build. */
+export function pocVeil(): PocDebugInfo["veil"] {
+  return enabled ? window.__poc?.veil : undefined;
 }
 
 let virtualMs: number | null = null;

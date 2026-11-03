@@ -124,6 +124,13 @@ for (const file of snapshotFiles()) {
     await page.waitForFunction(() => window.__poc?.ready === true, undefined, {
       timeout: READY_MS,
     });
+    // A plate shows the finished city: the snapshot's flight streams, and
+    // the loading veil (load-veil.ts) would draw over what it brings.
+    await page.evaluate(() => {
+      if (window.__poc) {
+        window.__poc.veil = { radius: 6000, strength: 0 };
+      }
+    });
 
     // The same codec (and the same minute-floored instant) the HUD's Apply
     // button uses, against the same store the sliders write — a new look

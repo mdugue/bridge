@@ -47,7 +47,12 @@ import {
   type TreeVeto,
 } from "@/lib/city/tree-placement";
 import { coarseCrownsStandIn, unpackCrowns } from "@/lib/city/coarse-crowns";
-import { keepOrder, streamOrder } from "@/lib/city/stream-order";
+import {
+  keepOrder,
+  type OrderedTile,
+  siteTileOfTile,
+  streamOrder,
+} from "@/lib/city/stream-order";
 import { createTaskGate } from "@/lib/city/task-gate";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
@@ -320,6 +325,14 @@ export interface TileStream {
   pendingDressings: () => number;
   /** whether a tile's dressing was tried: built, failed, or its tile left */
   dressingSettled: (tileId: string) => boolean;
+  /**
+   * The site tiles with something still on its way: a content in view the
+   * renderer is fetching or parsing (processTileModel included), or a
+   * dressing queued or building (the loading frontier,
+   * lib/city/load-frontier.ts). One set, refilled by every call: read it
+   * before the next.
+   */
+  pendingSiteTiles: () => ReadonlySet<string>;
   /** demolished object indices per tile, kept across unload/reload */
   demolished: Map<string, Set<number>>;
   /** the site-wide groups (`CityObjectTable.group`) of demolished
@@ -350,6 +363,16 @@ export function takesOver(
       other.tileId === level.tileId &&
       other.level !== level.level
   );
+}
+
+/**
+ * Whether the traversal saw `tile` in the view this frame: `inFrustum` is
+ * only rewritten for the tiles it visits, so a tile it has left (the
+ * camera turned, a parent culled) keeps its last answer.
+ */
+function inViewNow(tile: OrderedTile, frame: number): boolean {
+  const t = tile.traversal;
+  return t?.inFrustum === true && t.lastFrameVisited === frame;
 }
 
 /** What the dressing plugin reads of the renderer it is registered on. */
@@ -1667,6 +1690,8 @@ export class DressingPlugin {
    * the glTF (`sharedBytes`): evicting the tile frees none of them.
    */
   calculateBytesUsed(_tile: object, scene: Object3D | null): number {
+    // (a tile still in processTileModel weighs nothing yet: the renderer
+    // drops a new tile from a full cache only while it weighs 0)
     const dressed = scene ? this.dressed.get(scene) : undefined;
     const rasters = this.rasterShares.bytesOf(dressed?.terrain?.rasters ?? []);
     return (
@@ -2011,6 +2036,24 @@ export class DressingPlugin {
     );
   }
   pending = 0;
+  /** the dressings queued or building: their scene's site tile */
+  private readonly pendingScenes = new Map<Object3D, string>();
+
+  /** The site tiles of the dressings queued or building whose tile is in
+   *  view: one behind the camera does not hold the loading frontier. */
+  pendingTilesInView(into: Set<string>, frame: number): void {
+    for (const [scene, id] of this.pendingScenes) {
+      const tile: OrderedTile | undefined = this.tileOf.get(scene);
+      // a dressing whose tile the traversal no longer visits is out of
+      // view; one whose tile has left will never come
+      if (this.released.has(scene)) {
+        continue;
+      }
+      if (!tile?.traversal || inViewNow(tile, frame)) {
+        into.add(id);
+      }
+    }
+  }
   private warmup: CrownWarmup | null = null;
   private disposed = false;
 
@@ -2094,6 +2137,7 @@ export class DressingPlugin {
     extras: TerrainExtras
   ): Promise<void> {
     this.pending++;
+    this.pendingScenes.set(scene, extras.tileId);
     let built = (): void => undefined;
     const ready = new Promise<void>((resolve) => {
       built = resolve;
@@ -2192,6 +2236,7 @@ export class DressingPlugin {
         built();
         this.builtOf.delete(scene);
         this.pending--;
+        this.pendingScenes.delete(scene);
         // A tile is dressed when its fine level is (the coarse one only
         // stands in for it).
         if (extras.level === 0) {
@@ -2619,6 +2664,7 @@ export function createTileStream(
     demolishedGroups: new Set(),
     pendingDressings: () => 0,
     dressingSettled: () => false,
+    pendingSiteTiles: () => new Set(),
     visibleTerrains: memo(() =>
       [...stream.terrains]
         .filter((t) => isShown(t.mesh))
@@ -2638,6 +2684,26 @@ export function createTileStream(
   const dressing = new DressingPlugin({ ...ctx, onChange: changed }, stream);
   stream.pendingDressings = () => dressing.pending;
   stream.dressingSettled = (tileId) => dressing.settled.has(tileId);
+  // one set, refilled each frame: this runs in every frame of the session
+  const pendingIds = new Set<string>();
+  // reason: loadingTiles (its tiles in flight) and frameCount are the
+  // renderer's public members; its declaration does not list them.
+  const inFlight = tiles as unknown as {
+    frameCount: number;
+    loadingTiles: Set<OrderedTile>;
+  };
+  stream.pendingSiteTiles = () => {
+    pendingIds.clear();
+    const frame = inFlight.frameCount;
+    dressing.pendingTilesInView(pendingIds, frame);
+    for (const tile of inFlight.loadingTiles) {
+      const id = inViewNow(tile, frame) ? siteTileOfTile(tile) : null;
+      if (id !== null) {
+        pendingIds.add(id);
+      }
+    }
+    return pendingIds;
+  };
   tiles.registerPlugin(dressing);
   for (const { camera, width, height } of cameras) {
     tiles.setCamera(camera);
