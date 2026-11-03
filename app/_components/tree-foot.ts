@@ -845,12 +845,23 @@ function pitGraph(r: FootRasters, part: "ring" | "earth"): PitGraph {
           smoothstep(float(EDGING).sub(w), float(EDGING).add(w), out)
         )
       );
-      const along = angle.mul(pitR.add(EDGING / 2));
-      const cell = along.div(SETT).toVar();
+      // a whole number of setts round the ring (by the tree's mean pit,
+      // not the fragment's wobbling edge), so it closes without a seam
+      const ringR = clamp(rt.add(PIT_CLEAR), PIT_MIN, PIT_MAX).add(EDGING / 2);
+      const setts = max(floor(ringR.mul(TAU / SETT).add(0.5)), 3).toVar();
+      const cell = angle.div(TAU).mul(setts).toVar();
+      const settLen = ringR.mul(TAU).div(setts);
       const jw = w.mul(0.5).add(JOINT / 2);
       const across = float(1).sub(
-        smoothstep(jw, jw.add(w), abs(cell.sub(floor(cell.add(0.5)))).mul(SETT))
+        smoothstep(
+          jw,
+          jw.add(w),
+          abs(cell.sub(floor(cell.add(0.5)))).mul(settLen)
+        )
       );
+      // the stone's index, the same either side of the angle's wrap
+      const index = floor(cell.add(0.5));
+      const stoneId = index.sub(setts.mul(floor(index.div(setts))));
       const edgeJoint = float(1).sub(smoothstep(jw, jw.add(w), abs(out)));
       const outerJoint = float(1).sub(
         smoothstep(jw, jw.add(w), abs(out.sub(EDGING)))
@@ -862,7 +873,7 @@ function pitGraph(r: FootRasters, part: "ring" | "earth"): PitGraph {
         .mul(crest.mul(0.6).add(1))
         .min(1)
         .toVar();
-      const stone = gdHash(vec2(floor(cell.add(0.5)), seed.x))
+      const stone = gdHash(vec2(stoneId, seed.x))
         .sub(0.5)
         .mul(0.12)
         .add(1)
@@ -875,6 +886,23 @@ function pitGraph(r: FootRasters, part: "ring" | "earth"): PitGraph {
   })();
   return { color: graph.xyz, opacity: graph.w, position };
 }
+
+const TAU = Math.PI * 2;
+
+/**
+ * Value noise round a trunk, read at `angle × scale` (and `y`): `atan`
+ * jumps from π to −π on the trunk's west side, and noise read at the angle
+ * broke there in a straight line. Blended with its read one turn on, so
+ * both ends of the turn read the same.
+ */
+const aroundNoise = (angle: F, scale: F, y: F): F => {
+  const t = angle.add(Math.PI).div(TAU);
+  return mix(
+    gdNoise(vec2(angle.mul(scale), y)),
+    gdNoise(vec2(angle.sub(TAU).mul(scale), y)),
+    t
+  );
+};
 
 /** A flat varying: per instance, so a seed never smears (AGENTS.md). */
 const flat = <T extends F | V2>(v: T, name: string): T =>
@@ -1130,16 +1158,14 @@ function shadeGraph(
     // the unmown ring on a lawn: long blades, streaked out from the trunk,
     // their seed heads catching the light; ragged at its edge
     const angle = atan(offset.y, offset.x);
-    const reach = rt.add(UNMOWN_REACH).add(
-      gdNoise(vec2(angle.mul(2.2), crown))
-        .sub(0.5)
-        .mul(0.5)
-    );
+    const reach = rt
+      .add(UNMOWN_REACH)
+      .add(aroundNoise(angle, float(2.2), crown).sub(0.5).mul(0.5));
     const ring = float(1)
       .sub(smoothstep(reach.sub(0.18), reach, d))
       .mul(green)
       .toVar();
-    const blades = gdNoise(vec2(angle.mul(rt.add(0.6).mul(38)), d.mul(3)));
+    const blades = aroundNoise(angle, rt.add(0.6).mul(38), d.mul(3));
     const heads = smoothstep(0.7, 0.8, gdNoise(xy.div(0.05).add(3.3))).mul(
       float(1).sub(smoothstep(0.006, 0.02, fwidth(xy.x)))
     );
