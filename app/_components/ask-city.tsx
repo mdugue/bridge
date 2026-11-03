@@ -6,9 +6,11 @@
  * first open), so the chat client, the tool schemas and this card cost a
  * visitor nothing until they ask — and nothing of three.js is in it.
  *
- * The answers are generated and say so; each tool the model used shows
- * as a line under the answer, so the visitor sees what it looked up and
- * what it did to the view.
+ * The answers are generated and say so; the tools the model used stand
+ * in one line above the answer (a click lists each), so the visitor sees
+ * what it looked up and what it did to the view, and the places it
+ * showed are links in its text. The first questions read the moment
+ * (`lib/city/ask-starters.ts`).
  */
 import {
   fetchServerSentEvents,
@@ -24,7 +26,9 @@ import {
   MicIcon,
   SearchIcon,
   SendIcon,
+  SparklesIcon,
   SquareIcon,
+  SquarePenIcon,
   Volume2Icon,
   VolumeXIcon,
   WrenchIcon,
@@ -45,6 +49,8 @@ import {
   TOO_MANY_STEPS,
 } from "@/lib/city/ask-city";
 import { nearReach } from "@/lib/city/ask-knowledge";
+import { type MentionRun, mentionRuns } from "@/lib/city/ask-mentions";
+import { starterQuestions } from "@/lib/city/ask-starters";
 import { NEAR_RADIUS } from "@/lib/city/ask-tools";
 import { Button } from "@/components/ui/button";
 import { Message, MessageContent } from "@/components/ui/message";
@@ -55,11 +61,25 @@ import {
   MessageScrollerProvider,
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller";
-import { Trace, TraceIcon, TraceLine, TraceTitle } from "@/components/ui/trace";
+import {
+  Trace,
+  TraceCollapsible,
+  TraceCollapsibleContent,
+  TraceCollapsibleTrigger,
+  TraceIcon,
+  TraceLine,
+  TraceTitle,
+} from "@/components/ui/trace";
 import { cn } from "cn";
 import { AnswerChipRows, answerChips } from "./ask-chips";
 import { type AskKey, clearAskKey, readAskKey, writeAskKey } from "./ask-key";
-import { type AskScene, sceneTools } from "./ask-scene-tools";
+import {
+  type AskPlace,
+  type AskScene,
+  sceneTools,
+  showPlaces,
+} from "./ask-scene-tools";
+import { useSite } from "./site-context";
 import {
   type Dictation,
   type Speech,
@@ -86,6 +106,8 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
   const [hearing, setHearing] = useState(false);
   // read aloud: kept here, so a new key does not silence a Hörmodus
   const [reading, setReading] = useState(false);
+  // a new conversation is a new card body: a new thread, new first questions
+  const [round, setRound] = useState(0);
   useEffect(() => {
     scene.setListening(hearing);
     return () => scene.setListening(false);
@@ -135,6 +157,18 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
           </div>
           {key && (
             <button
+              aria-label="Neues Gespräch"
+              className="rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+              data-testid="ask-new"
+              onClick={() => setRound((r) => r + 1)}
+              title="Neues Gespräch beginnen"
+              type="button"
+            >
+              <SquarePenIcon className="size-4" />
+            </button>
+          )}
+          {key && (
+            <button
               aria-label="Schlüssel ändern"
               className="rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
               onClick={() => setKey(null)}
@@ -161,7 +195,7 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
             <Conversation
               askKey={key ?? held}
               hearing={hearing}
-              key={`${held.provider}:${held.key}`}
+              key={`${held.provider}:${held.key}:${round}`}
               onHearing={setHearing}
               onKeyProblem={() => setKey(null)}
               paused={!key}
@@ -385,12 +419,6 @@ function KeyForm({
 }
 
 // --- the conversation -------------------------------------------------------------
-
-const SUGGESTIONS = [
-  "Was steht hier vor mir?",
-  "Zeig mir das älteste Gebäude in der Nähe.",
-  "Wie sieht es hier am Abend aus?",
-];
 
 /** A provider's error that names the key or the account's credit. */
 const KEY_TROUBLE =
@@ -669,6 +697,8 @@ function Conversation({
   );
   // one conversation per card: the provider's prompt cache is keyed by it
   const [threadId] = useState(() => crypto.randomUUID());
+  // drawn once per conversation from the moment, not per render
+  const [starters] = useState(() => starterQuestions(scene.moment()));
   const chat = useChat({
     threadId,
     connection,
@@ -752,6 +782,7 @@ function Conversation({
   }
   const failure =
     chat.error && chat.error !== renewed.error ? errorText(chat.error) : null;
+  const turns = turnsOf(chat.messages);
 
   return (
     <>
@@ -764,9 +795,10 @@ function Conversation({
                   <p className="text-foreground/90 leading-relaxed">
                     Was möchtest du wissen? Die Antwort zeigt dir den Ort.
                   </p>
-                  {SUGGESTIONS.map((s) => (
+                  {starters.map((s) => (
                     <button
                       className="w-fit rounded-full border px-3 py-1 text-left text-[12px] hover:bg-accent"
+                      data-testid="ask-starter"
                       key={s}
                       onClick={() => ask(s)}
                       type="button"
@@ -776,29 +808,37 @@ function Conversation({
                   ))}
                 </div>
               )}
-              {chat.messages.map((m, i) => {
-                // an answer that used the browser's tools comes as several
-                // messages: the label marks its first, the chips its last
-                const last =
-                  m.role === "assistant" &&
-                  chat.messages[i + 1]?.role !== "assistant";
-                const pending =
-                  chat.isLoading && i === chat.messages.length - 1;
+              {turns.map((t, k) => {
+                const pending = chat.isLoading && k === turns.length - 1;
+                const chips =
+                  t.answer.length > 0
+                    ? answerChips(chat.messages, t.end)
+                    : null;
                 return (
-                  <MessageScrollerItem key={m.id}>
-                    <ChatMessage
-                      labelled={chat.messages[i - 1]?.role !== "assistant"}
-                      // only the last message of a running answer still
-                      // waits on its tools; anything else was stopped
-                      live={pending}
-                      message={m}
-                    />
-                    {last && !pending && (
+                  <MessageScrollerItem key={t.question?.id ?? t.answer[0].id}>
+                    {t.question && <Question message={t.question} />}
+                    {(t.answer.length > 0 || pending) && (
+                      <Answer
+                        messages={t.answer}
+                        onPlace={
+                          chat.isLoading
+                            ? null
+                            : (place) =>
+                                showPlaces(scene, {
+                                  ziele: [place],
+                                  aus_der_luft: !chips?.onFoot,
+                                })
+                        }
+                        pending={pending}
+                        places={chips?.places ?? []}
+                      />
+                    )}
+                    {chips && !pending && (
                       <AnswerChipRows
                         // a chip's question leaves a typed draft where it is
                         ask={(q) => ask(q, reading, false)}
                         busy={chat.isLoading}
-                        chips={answerChips(chat.messages, i)}
+                        chips={chips}
                         scene={scene}
                       />
                     )}
@@ -939,7 +979,7 @@ function showLine(args: Record<string, unknown>, output: unknown): string {
   return n > 1 ? `Zeigt ${n} Orte` : "Fliegt hin";
 }
 
-/** What a tool call says it did, in the trace under an answer. */
+/** What a tool call says it did, in the steps of an answer. */
 function toolLine(name: string, input: unknown, output?: unknown): string {
   const args = (input ?? {}) as Record<string, unknown>;
   const refused = refusalLine(output);
@@ -983,104 +1023,294 @@ function toolIcon(name: string) {
   );
 }
 
-/** Text with its web links clickable; nothing else is interpreted. */
-function Linked({ text }: { text: string }) {
-  // a sentence's closing punctuation after a link is not part of it
-  // and a bracketed part, as in Wikipedia's „Zwinger_(Dresden)“, is
-  const parts = text.split(
-    /(https:\/\/(?:[^\s()[\]]|\([^\s()]*\))*(?:[^\s()[\].,;:!?»“”"']|\([^\s()]*\)))/g
+/** A question and the messages of its answer (an answer that used the
+ *  browser's tools comes as several); `end` is the answer's last index. */
+interface Turn {
+  answer: UIMessage[];
+  end: number;
+  question?: UIMessage;
+}
+
+function turnsOf(messages: readonly UIMessage[]): Turn[] {
+  const turns: Turn[] = [];
+  messages.forEach((m, i) => {
+    const open = turns.at(-1);
+    if (m.role === "user" || !open) {
+      turns.push(
+        m.role === "user"
+          ? { answer: [], end: i, question: m }
+          : { answer: [m], end: i }
+      );
+    } else {
+      open.answer.push(m);
+      open.end = i;
+    }
+  });
+  return turns;
+}
+
+/** What the card says while the model has not answered yet. */
+const WAITING = [
+  "Fragt die Stadt …",
+  "Blättert in der Stadtchronik …",
+  "Klopft an alte Mauern …",
+  "Sortiert die Jahrhunderte …",
+  "Sucht die richtige Ecke …",
+  "Wischt den Staub von alten Plänen …",
+];
+/** How long one waiting line stands (ms). */
+const WAITING_MS = 1800;
+
+/** A line that shows at once that the question was heard, and keeps
+ *  changing while the model thinks. */
+function Waiting() {
+  const [n, setN] = useState(() => Math.floor(Math.random() * WAITING.length));
+  useEffect(() => {
+    const id = setInterval(
+      () => setN((k) => (k + 1) % WAITING.length),
+      WAITING_MS
+    );
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <TraceLine data-testid="ask-waiting" status="running">
+      <TraceIcon>
+        <SparklesIcon />
+      </TraceIcon>
+      <TraceTitle>{WAITING[n]}</TraceTitle>
+    </TraceLine>
   );
+}
+
+/** What the model looked things up with (the rest acts on the view). */
+const LOOKUPS = new Set([
+  "suche_stadt",
+  "in_der_naehe",
+  "fakten",
+  "quellen",
+  "wo_bin_ich",
+  "was_ist_da",
+]);
+
+/** The steps of a finished answer in one line: "3× nachgeschlagen ·
+ *  gezeigt". */
+function stepsSummary(names: readonly string[]): string {
+  const lookups = names.filter((n) => LOOKUPS.has(n)).length;
+  const shown = names.includes("zeige");
+  const set = names.filter((n) => !LOOKUPS.has(n) && n !== "zeige").length;
+  return [
+    lookups > 0 && `${lookups}× nachgeschlagen`,
+    shown && "gezeigt",
+    set > 0 && `${set}× die Szene gestellt`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+interface CallPart {
+  id: string;
+  input?: unknown;
+  name: string;
+  output?: unknown;
+  state: string;
+}
+
+/** Whether a call never got its result: still running while the answer
+ *  is live, stopped otherwise. */
+function unanswered(c: CallPart): boolean {
+  return (
+    c.output === undefined &&
+    (c.state === "awaiting-input" ||
+      c.state === "input-streaming" ||
+      c.state === "input-complete")
+  );
+}
+
+/** The answer's steps as one collapsed line (the chain of thought): while
+ *  the model works, its latest step; once it writes, a summary; a click
+ *  lists them all, a stopped one marked. */
+function Steps({
+  calls,
+  live,
+  working,
+}: {
+  calls: CallPart[];
+  /** the answer is still on its way: an open call runs, not stopped */
+  live: boolean;
+  working: boolean;
+}) {
+  const now = calls.at(-1);
+  const running = working && now !== undefined;
+  return (
+    <Trace data-testid="ask-steps">
+      <TraceCollapsible>
+        <TraceCollapsibleTrigger>
+          <TraceLine status={running ? "running" : undefined}>
+            <TraceIcon>
+              {running ? toolIcon(now.name) : <SparklesIcon />}
+            </TraceIcon>
+            <TraceTitle>
+              {running
+                ? toolLine(now.name, now.input, now.output)
+                : stepsSummary(calls.map((c) => c.name))}
+            </TraceTitle>
+          </TraceLine>
+        </TraceCollapsibleTrigger>
+        <TraceCollapsibleContent keepMounted>
+          <Trace>
+            {calls.map((c) => (
+              <TraceLine key={c.id}>
+                <TraceIcon>{toolIcon(c.name)}</TraceIcon>
+                <TraceTitle>
+                  {toolLine(c.name, c.input, c.output)}
+                  {!live && unanswered(c) && " (abgebrochen)"}
+                </TraceTitle>
+              </TraceLine>
+            ))}
+          </Trace>
+        </TraceCollapsibleContent>
+      </TraceCollapsible>
+    </Trace>
+  );
+}
+
+/** A paragraph's pieces: a web link, or text runs with place mentions. */
+type Piece = { url: string } | { runs: MentionRun[] };
+
+/** An answer's paragraphs as pieces, each place linked where the answer
+ *  first names it; nothing else is interpreted. */
+function piecesOf(
+  texts: readonly string[],
+  places: readonly AskPlace[],
+  city: string
+): Piece[][] {
+  const linked = new Set<number>();
+  return texts.map((text) =>
+    // a sentence's closing punctuation after a link is not part of it
+    text
+      .split(
+        // and a bracketed part, as in Wikipedia's „Zwinger_(Dresden)“, is
+        /(https:\/\/(?:[^\s()[\]]|\([^\s()]*\))*(?:[^\s()[\].,;:!?»“”"']|\([^\s()]*\)))/g
+      )
+      .map((part) =>
+        part.startsWith("https://")
+          ? { url: part }
+          : { runs: mentionRuns(part, places, city, linked) }
+      )
+  );
+}
+
+/** A paragraph with its web links clickable and the places the answer
+ *  showed as buttons that fly there. */
+function Linked({
+  onPlace,
+  pieces,
+  places,
+}: {
+  onPlace: ((place: AskPlace) => void) | null;
+  pieces: readonly Piece[];
+  places: readonly AskPlace[];
+}) {
   return (
     <>
-      {parts.map((part, i) =>
-        part.startsWith("https://") ? (
+      {pieces.map((piece, i) =>
+        "url" in piece ? (
           <a
             className="break-all underline underline-offset-2"
             // the same link may stand twice in an answer: its place keys it
-            // reason: parts never reorder, the index is stable
-            key={`${i}:${part}`}
-            href={part}
+            // reason: pieces never reorder, the index is stable
+            key={`${i}:${piece.url}`}
+            href={piece.url}
             rel="noreferrer"
             target="_blank"
           >
-            {part}
+            {piece.url}
           </a>
         ) : (
-          part
+          piece.runs.map((run, j) =>
+            "place" in run ? (
+              <button
+                className="rounded-sm font-medium text-primary underline decoration-primary/30 decoration-dotted underline-offset-[3px] hover:decoration-solid disabled:cursor-default disabled:text-inherit disabled:no-underline"
+                data-testid="ask-mention"
+                disabled={onPlace === null}
+                // reason: runs never reorder, the index is stable
+                key={`${i}.${j}`}
+                onClick={() => onPlace?.(places[run.place])}
+                title={`Zu ${places[run.place].name}`}
+                type="button"
+              >
+                {run.text}
+              </button>
+            ) : (
+              // reason: runs never reorder, the index is stable
+              <span key={`${i}.${j}`}>{run.text}</span>
+            )
+          )
         )
       )}
     </>
   );
 }
 
-function ChatMessage({
-  labelled,
-  live,
-  message,
+function Question({ message }: { message: UIMessage }) {
+  return (
+    <Message align="end">
+      <MessageContent>
+        <p className="w-fit max-w-[85%] self-end rounded-lg bg-primary px-2.5 py-1.5 text-[13px] text-primary-foreground">
+          {message.parts
+            .map((p) => (p.type === "text" ? p.content : ""))
+            .join("")}
+        </p>
+      </MessageContent>
+    </Message>
+  );
+}
+
+/** One answer: the label, its steps in one line, its text. */
+function Answer({
+  messages,
+  onPlace,
+  pending,
+  places,
 }: {
-  labelled: boolean;
-  live: boolean;
-  message: UIMessage;
+  messages: readonly UIMessage[];
+  onPlace: ((place: AskPlace) => void) | null;
+  pending: boolean;
+  places: readonly AskPlace[];
 }) {
-  if (message.role === "user") {
-    return (
-      <Message align="end">
-        <MessageContent>
-          <p className="w-fit max-w-[85%] self-end rounded-lg bg-primary px-2.5 py-1.5 text-[13px] text-primary-foreground">
-            {message.parts
-              .map((p) => (p.type === "text" ? p.content : ""))
-              .join("")}
-          </p>
-        </MessageContent>
-      </Message>
-    );
-  }
+  const city = useSite().name;
+  const parts = messages.flatMap((m) => m.parts);
   // the follow-ups are the chips under the answer, not a step of it
-  const calls = message.parts
+  const calls = parts
     .filter((p) => p.type === "tool-call")
     .filter((p) => p.name !== "vorschlaege");
+  const texts = parts
+    .map((p) => (p.type === "text" ? p.content : ""))
+    .filter((t) => t.trim() !== "");
+  // still looking things up: nothing written since the last step
+  const tail = parts.at(-1);
+  const working =
+    pending && !(tail?.type === "text" && tail.content.trim() !== "");
+  const pieces = piecesOf(texts, places, city);
   return (
     <Message>
       <MessageContent>
-        {labelled && (
-          <span className="text-[10px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
-            KI
-          </span>
-        )}
+        <span className="text-[10px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
+          KI
+        </span>
         {calls.length > 0 && (
-          <Trace>
-            {calls.map((c) => {
-              const open =
-                c.output === undefined &&
-                (c.state === "awaiting-input" ||
-                  c.state === "input-streaming" ||
-                  c.state === "input-complete");
-              return (
-                <TraceLine
-                  key={c.id}
-                  status={open && live ? "running" : undefined}
-                >
-                  <TraceIcon>{toolIcon(c.name)}</TraceIcon>
-                  <TraceTitle>
-                    {toolLine(c.name, c.input, c.output)}
-                    {open && !live && " (abgebrochen)"}
-                  </TraceTitle>
-                </TraceLine>
-              );
-            })}
-          </Trace>
+          <Steps calls={calls} live={pending} working={working} />
         )}
-        {message.parts.map((p, i) =>
-          p.type === "text" && p.content.trim() !== "" ? (
-            <p
-              className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground/90"
-              // reason: a message's parts never reorder
-              key={`t${i}`}
-            >
-              <Linked text={p.content} />
-            </p>
-          ) : null
-        )}
+        {pending && texts.length === 0 && calls.length === 0 && <Waiting />}
+        {pieces.map((p, i) => (
+          <p
+            className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground/90"
+            // reason: a message's parts never reorder
+            key={`t${i}`}
+          >
+            <Linked onPlace={onPlace} pieces={p} places={places} />
+          </p>
+        ))}
       </MessageContent>
     </Message>
   );

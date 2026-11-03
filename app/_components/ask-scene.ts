@@ -246,6 +246,16 @@ export function useAskScene(
           quellen: card.sources.map((s) => s.text),
         };
       },
+      moment: () => {
+        const h = handleRef.current;
+        const c = h?.getCameraState();
+        return {
+          at: c ? { x: c.epsg.x, y: c.epsg.y, headingDeg: c.headingDeg } : null,
+          now: current(),
+          landmarks: h?.landmarks ?? [],
+          layers: [...offered],
+        };
+      },
       setListening: (on) => pace.setListening(on),
       abandon: () => {
         looks.stop.abort();
@@ -260,6 +270,7 @@ export function useAskScene(
         return true;
       },
       within: (x, y) => siteHoldsPoint(site, x, y),
+      select: (places) => handleRef.current?.pickPlaces(places),
       frame: () => {
         const h = handleRef.current;
         const sun = h

@@ -48,6 +48,7 @@ export const MOVEMENT_KEYS: ReadonlySet<string> = new Set([
   "Space",
   "KeyE",
   "KeyQ",
+  "KeyC",
   "ShiftLeft",
   "ShiftRight",
 ]);
@@ -186,7 +187,9 @@ export function createFpsMovement(
     if (keys.has("Space") || keys.has("KeyE")) {
       v += 1;
     }
-    if (shiftHeld() || keys.has("KeyQ")) {
+    // C or Q sinks — not Shift, which with a click adds to the selection
+    // (and sprints on foot)
+    if (keys.has("KeyC") || keys.has("KeyQ")) {
       v -= 1;
     }
     return Math.min(Math.max(v, -1), 1);
