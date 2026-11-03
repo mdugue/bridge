@@ -75,7 +75,7 @@ export const whereTool = toolDefinition({
 export const lookTool = toolDefinition({
   name: "was_ist_da",
   description:
-    "Fragt das Stadtmodell, was in der Bildmitte steht — das Gebäude, den Baum, das Denkmal oder die Brücke unter dem Fadenkreuz, wohin der Besucher gerade schaut — und öffnet dessen Karte im Viewer. Liefert Art, Name, Adresse, gemessene Fakten und Quellen. Für „Was ist das da vorne?“.",
+    "Fragt das Stadtmodell, was dort steht, wohin die Ansicht zeigt (die Bildmitte; im Modell der Ort, auf den es ausgerichtet ist) — das Gebäude, den Baum, das Denkmal oder die Brücke — und öffnet dessen Karte im Viewer. Liefert Art, Name, Adresse, gemessene Fakten und Quellen. Für „Was ist das da vorne?“.",
   inputSchema: z.object({}),
 });
 

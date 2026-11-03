@@ -16,6 +16,7 @@ import { METHODS } from "@/lib/city/methods";
 import type { Site } from "@/lib/city/site";
 import type { AskScene } from "./ask-scene-tools";
 import type { CityWalkHandle } from "./create-app";
+import { isAbortError } from "./fetch-optional";
 import { loadLandmarkFacts } from "./landmark-facts-load";
 import { sleep } from "./net-gate";
 import type { SceneTime } from "./scene-time";
@@ -77,14 +78,12 @@ function aborted(signal: AbortSignal): Promise<never> {
   });
 }
 
+const LOADING = { gefunden: false, hinweis: "Die Szene lädt noch." };
+
 const CANCELLED = {
   gefunden: false,
   hinweis: "Die Frage wurde abgebrochen.",
 };
-
-function isAbort(error: unknown): boolean {
-  return error instanceof DOMException && error.name === "AbortError";
-}
 
 export function useAskScene(
   handleRef: RefObject<CityWalkHandle | null>,
@@ -126,13 +125,20 @@ export function useAskScene(
       look: async () => {
         const h = handleRef.current;
         if (!h) {
-          return { gefunden: false, hinweis: "Die Szene lädt noch." };
+          return LOADING;
         }
+        // a scene remounted while this waited (a GPU loss) is not asked
+        // through the old one's handle
+        const gone = () => handleRef.current !== h;
         const signal = looks.stop.signal;
         let asked: Inquiry | null = null;
         try {
           // where a glide lands, not on its way
-          if (!(await landed(h, signal))) {
+          const there = await landed(h, signal);
+          if (gone()) {
+            return LOADING;
+          }
+          if (!there) {
             return {
               gefunden: false,
               hinweis:
@@ -144,10 +150,13 @@ export function useAskScene(
           asked = h.inquireAt(h.focusNdc());
           for (let i = 0; !asked && i < MISS_RETRIES; i++) {
             await sleep(MISS_RETRY_MS, signal);
+            if (gone()) {
+              return LOADING;
+            }
             asked = h.inquireAt(h.focusNdc());
           }
         } catch (error) {
-          if (isAbort(error)) {
+          if (isAbortError(error)) {
             return CANCELLED;
           }
           throw error;
@@ -155,7 +164,8 @@ export function useAskScene(
         if (!asked) {
           return {
             gefunden: false,
-            hinweis: "In der Bildmitte steht nichts, was das Modell kennt.",
+            hinweis:
+              "Wohin die Ansicht zeigt, steht nichts, was das Modell kennt.",
           };
         }
         // the card the viewer opens for it, as words for the model — without
@@ -173,7 +183,7 @@ export function useAskScene(
               aborted(signal),
             ]);
           } catch (error) {
-            if (isAbort(error)) {
+            if (isAbortError(error)) {
               return CANCELLED;
             }
             throw error;
