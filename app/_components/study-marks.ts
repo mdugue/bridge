@@ -7,7 +7,7 @@
  * playground slab, built when a study shows its result and freed when it
  * closes; nothing of it exists before (ADR 0047). A place whose tile has
  * not streamed in lies on the coarse ground until it has: the marks are
- * laid again when the ground changes (`groundChanged`). It casts no shadow
+ * laid again when a tile comes under one (`groundChanged`). It casts no shadow
  * and takes the sun's, so the live shadows of the hour lie over the hatch.
  */
 import type { Object3D } from "three/webgpu";
@@ -80,20 +80,26 @@ export interface StudyMarks {
 function markGeometry(
   marks: readonly StudyMark[],
   deps: StudyMarksDeps
-): { geometry: BufferGeometry; rough: boolean } | null {
+): { geometry: BufferGeometry; rough: [number, number][] } | null {
   const position: number[] = [];
   const shade: number[] = [];
-  // any vertex off the streamed tiles: laid again when they come
-  let rough = false;
+  // per mark the first vertex off the streamed tiles: when one of them
+  // has a tile under it, the marks are laid again
+  const rough: [number, number][] = [];
+  let markRough = false;
   const groundAt = (x: number, y: number, fallback: number) => {
     const fine = deps.heightAt(x, y);
     if (fine !== null) {
       return fine;
     }
-    rough = true;
+    if (!markRough) {
+      markRough = true;
+      rough.push([x, y]);
+    }
     return deps.roughAt(x, y) ?? fallback;
   };
   for (const mark of marks) {
+    markRough = false;
     const tris = markTriangles(mark);
     const centre = groundAt(mark.x, mark.y, 0);
     for (let i = 0; i < tris.length; i += 2) {
@@ -116,9 +122,9 @@ function markGeometry(
 
 export function createStudyMarks(deps: StudyMarksDeps): StudyMarks {
   let mesh: Mesh | null = null;
-  // what shows, and whether some of it lies on the coarse ground
+  // what shows, and where some of it lies on the coarse ground
   let shown: readonly StudyMark[] = [];
-  let rough = false;
+  let rough: [number, number][] = [];
   // a newer show wins over one still compiling
   let generation = 0;
   const drop = () => {
@@ -134,7 +140,7 @@ export function createStudyMarks(deps: StudyMarksDeps): StudyMarks {
     shown = marks;
     const built = markGeometry(marks, deps);
     if (!built) {
-      rough = false;
+      rough = [];
       drop();
       return;
     }
@@ -155,16 +161,18 @@ export function createStudyMarks(deps: StudyMarksDeps): StudyMarks {
   };
   return {
     show,
+    // only when a tile came under a mark that lay on the coarse ground:
+    // a wide study's far places may never stream in
     groundChanged: () => {
-      if (rough && mesh) {
-        rough = false;
+      if (mesh && rough.some(([x, y]) => deps.heightAt(x, y) !== null)) {
+        rough = [];
         void show(shown);
       }
     },
     clear: () => {
       generation++;
       shown = [];
-      rough = false;
+      rough = [];
       drop();
     },
     dispose: () => {

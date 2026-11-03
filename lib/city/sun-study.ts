@@ -95,6 +95,10 @@ export interface SunStudyRecipe {
   y?: number;
 }
 
+/** The widest circle a recipe may name (m): the largest chip. Its inputs
+ *  (six tiles in Dresden's centre, ≈ 23 MB) are what a phone holds. */
+export const MAX_RADIUS_M = 2000;
+
 export const DEFAULT_RECIPE: SunStudyRecipe = {
   period: "sommer",
   from: 11,
@@ -131,7 +135,7 @@ export function parseRecipe(text: string | null): SunStudyRecipe | null {
     from: hours[0],
     to: hours[1],
     what: what as SubjectId,
-    radius: Math.min(Math.max(Number(radius), 100), 3000),
+    radius: Math.min(Math.max(Number(radius), 100), MAX_RADIUS_M),
     ...(x && y ? { x: Number(x), y: Number(y) } : {}),
   };
 }
@@ -547,9 +551,12 @@ export function shadePlace(
   const shades: number[] = [];
   let light = 0;
   for (const [px, py] of points) {
+    // the point's raster, found once for all its samples
+    const raster = horizonAt(px, py);
+    const here: HorizonAt = () => raster;
     let lit = 0;
     for (const s of samples) {
-      lit += lightAt(px, py, s, horizonAt, near);
+      lit += lightAt(px, py, s, here, near);
     }
     light += lit;
     shades.push(samples.length > 0 ? 1 - lit / samples.length : 0);

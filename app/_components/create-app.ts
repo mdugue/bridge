@@ -2844,22 +2844,24 @@ async function bootApp(
   cleanups.push(() => design?.dispose());
   // The sun study's marks: nothing until a study shows its places.
   let studyMarks: StudyMarks | null = null;
-  const marks = () =>
-    (studyMarks ??= createStudyMarks({
-      parent: cuts.group,
-      offset,
-      heightAt,
-      roughAt: (x, y) => groundPlate?.heightAt(x, y) ?? siteGround.floor(),
-      compile: (object) => postStack.compile(object),
-      changed: () => {
-        if (disposed) {
-          return;
-        }
-        postStack.sceneChanged();
-        invalidateShadows();
-        wakeStill();
-      },
-    }));
+  const marks = (): StudyMarks | null =>
+    disposed
+      ? null
+      : (studyMarks ??= createStudyMarks({
+          parent: cuts.group,
+          offset,
+          heightAt,
+          roughAt: (x, y) => groundPlate?.heightAt(x, y) ?? siteGround.floor(),
+          compile: (object) => postStack.compile(object),
+          changed: () => {
+            if (disposed) {
+              return;
+            }
+            postStack.sceneChanged();
+            invalidateShadows();
+            wakeStill();
+          },
+        }));
   cleanups.push(() => studyMarks?.dispose());
 
   // Everything that follows from the tile set changing: the ground, the
@@ -4281,7 +4283,7 @@ async function bootApp(
     previewCandidate: probe.preview,
     demolishAtCrosshair,
     study: {
-      show: (list) => marks().show(list),
+      show: (list) => marks()?.show(list) ?? Promise.resolve(),
       clear: () => studyMarks?.clear(),
     },
     design: {

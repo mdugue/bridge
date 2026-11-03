@@ -1,7 +1,7 @@
 "use client";
 
 import { SunIcon, XIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "cn";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { utmToLatLng } from "@/lib/city/crs";
@@ -9,6 +9,7 @@ import type { Site } from "@/lib/city/site";
 import type { StudyMark } from "./study-marks-geometry";
 import {
   type PeriodId,
+  parseRecipe,
   PERIODS,
   type PlaceShade,
   recipeText,
@@ -170,7 +171,12 @@ function centred(recipe: SunStudyRecipe, scene: AskScene): SunStudyRecipe {
     : recipe;
 }
 
-/** Runs the study whenever its recipe changes; its status. */
+/** Retry for a centre while the camera is not there yet (ms). */
+const CENTRE_RETRY_MS = 1000;
+
+/** Runs the study whenever its recipe changes; its status. Only the
+ *  recipe's text starts a run: the scene's object changes with the hour
+ *  and the look (useAskScene), and a pick sets the hour. */
 function useStudy(
   recipe: SunStudyRecipe,
   site: Site,
@@ -182,18 +188,31 @@ function useStudy(
     key: string;
     status: Status;
   } | null>(null);
+  const sceneRef = useRef(scene);
+  useEffect(() => {
+    sceneRef.current = scene;
+  });
   const key = recipeText(recipe);
   useEffect(() => {
-    const { x, y } = recipe;
-    if (x === undefined || y === undefined) {
-      // no camera yet: ask the scene again in a moment
-      const timer = setTimeout(() => setRecipe(centred(recipe, scene)), 1000);
-      return () => clearTimeout(timer);
+    const ran = parseRecipe(key);
+    if (!ran) {
+      return;
     }
-    writeRecipe(recipe);
+    const { x, y } = ran;
+    if (x === undefined || y === undefined) {
+      // no camera yet: ask the scene until it has one
+      const timer = setInterval(() => {
+        const next = centred(ran, sceneRef.current);
+        if (next !== ran) {
+          setRecipe(next);
+        }
+      }, CENTRE_RETRY_MS);
+      return () => clearInterval(timer);
+    }
+    writeRecipe(ran);
     const abort = new AbortController();
     const report = (status: Status) => setOutcome({ key, status });
-    rank(site, { ...recipe, x, y }, abort.signal, report)
+    rank(site, { ...ran, x, y }, abort.signal, report)
       .then((result) => report({ phase: "done", result }))
       .catch((err: unknown) => {
         if (!isAbortError(err) && !abort.signal.aborted) {
@@ -204,7 +223,7 @@ function useStudy(
         }
       });
     return () => abort.abort();
-  }, [key, recipe, scene, setRecipe, site]);
+  }, [key, setRecipe, site]);
   if (outcome?.key === key) {
     return outcome.status;
   }
@@ -435,17 +454,20 @@ export default function SunStudyCard({
   const [recipe, setRecipe] = useState(() => centred(initial, scene));
   const status = useStudy(recipe, site, scene, setRecipe);
   const result = status.phase === "done" ? status.result : null;
+  // the hatch shows this result only: none while another loads or failed
   useEffect(() => {
-    if (result) {
-      void marks()?.show(
-        result.places.map((p) => ({
-          rings: p.rings,
-          x: p.x,
-          y: p.y,
-          shade: p.shade,
-        }))
-      );
+    if (!result) {
+      marks()?.clear();
+      return;
     }
+    void marks()?.show(
+      result.places.map((p) => ({
+        rings: p.rings,
+        x: p.x,
+        y: p.y,
+        shade: p.shade,
+      }))
+    );
   }, [marks, result]);
   useEffect(() => () => marks()?.clear(), [marks]);
   const change = (next: SunStudyRecipe) => setRecipe(next);

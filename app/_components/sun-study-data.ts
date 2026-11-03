@@ -1,15 +1,16 @@
 /**
  * What a sun study reads (lib/city/sun-study.ts), fetched for the tiles its
  * circle and the crowns' reach touch: each tile's horizon raster, its tree
- * crowns as the viewer draws them (the register's trees, the canopy and the
- * laser scan's extra crowns, the DLM's rows where the canopy did not place
- * them; where a register tree stands the viewer's own veto drops the
- * others, tree-inventory.ts) and the places it ranks (OSM playgrounds or benches), named by the
+ * crowns as the viewer draws them (`tileCrowns`, by the viewer's own rules)
+ * and the places it ranks (OSM playgrounds or benches), named by the
  * nearest address Stadtwissen knows. Fetched on demand, held while the
  * study computes, then let go: only the results stay (ADR 0047).
  */
+import { orchardTrees } from "@/lib/city/cultivated";
 import type {
+  CultivatedFeature,
   FurnitureFeature,
+  MonumentFeature,
   TreeFeature,
   VegRowFeature,
 } from "@/lib/city/features";
@@ -39,6 +40,7 @@ import {
   canopyCrownWidth,
   CROWN_TO_HEIGHT,
   hash,
+  offMonuments,
   plantedRows,
   TREE_SPACING,
   type TreeVeto,
@@ -67,28 +69,34 @@ export interface StudyInputs {
 }
 
 interface TileFiles {
+  /** the circle itself touches it (else only the crowns' reach) */
+  inside: boolean;
   minX: number;
   minY: number;
   size: number;
   name: (stem: string, ext: string) => string;
 }
 
-/** The site's tiles the circle (with the crowns' reach) touches. */
+/** The site's tiles the circle with the crowns' reach touches; `inside`
+ *  where the circle itself does (only there is a horizon read). */
 function tilesFor(site: Site, recipe: SunStudyRecipe, x: number, y: number) {
-  const pad = recipe.radius + MAX_REACH_M;
-  return site.tiles
-    .map((cell) => ({
-      cell,
-      id: tileIdOf(site, cell),
-      ext: tileExtentOf(cell),
-    }))
-    .filter(
-      ({ ext }) =>
-        ext[0] < x + pad &&
-        ext[2] > x - pad &&
-        ext[1] < y + pad &&
-        ext[3] > y - pad
-    );
+  const touches = (ext: readonly number[], pad: number) =>
+    ext[0] < x + pad &&
+    ext[2] > x - pad &&
+    ext[1] < y + pad &&
+    ext[3] > y - pad;
+  return site.tiles.flatMap((cell) => {
+    const ext = tileExtentOf(cell);
+    return touches(ext, recipe.radius + MAX_REACH_M)
+      ? [
+          {
+            id: tileIdOf(site, cell),
+            ext,
+            inside: touches(ext, recipe.radius),
+          },
+        ]
+      : [];
+  });
 }
 
 async function horizonOf(
@@ -129,18 +137,20 @@ function canopyCrowns(points: CanopyPoint[], covers: TreeVeto): Crown[] {
   for (const f of points) {
     const p = f.properties;
     const [x, y] = f.geometry.coordinates;
-    if (!p || covers(x, y, p.h)) {
+    if (covers(x, y, p?.h)) {
       continue;
     }
+    // a point without a height stands as the generic tree, as drawn
+    const measured = p && Number.isFinite(p.h) ? p.h : BASE_TREE_H;
     const seed = x * 0.13 + y * 0.07;
     const h =
-      Math.min(Math.max(p.h / BASE_TREE_H, 0.5), 7) *
+      Math.min(Math.max(measured / BASE_TREE_H, 0.5), 7) *
       (0.9 + hash(seed) * 0.2) *
       BASE_TREE_H;
-    const r = "r" in p ? p.r : undefined;
+    const r = p && "r" in p ? p.r : undefined;
     const width = canopyCrownWidth(h, r, hash(seed * 2.3 + 0.7));
-    const road = "c" in p && p.c === 1;
-    const c = crownOf(x, y, h, width, p.l === "e", road);
+    const road = p?.c === 1;
+    const c = crownOf(x, y, h, width, p?.l === "e", road);
     if (c) {
       out.push(c);
     }
@@ -190,21 +200,29 @@ function rowCrowns(rows: VegRowFeature[], covers: TreeVeto): Crown[] {
   return crowns;
 }
 
-/** One tile's crowns as the viewer draws them: the register's trees, the
- *  canopy's and the laser scan's points and the DLM's tree rows (where the
- *  canopy did not measure them), none of the last three where a register
- *  tree stands. */
-export function tileCrowns(
-  trees: TreeFeature[],
-  points: CanopyPoint[],
-  rows: VegRowFeature[],
-  rowsMeasured: boolean
-): Crown[] {
-  const covers = inventoryCovers(trees);
+/** One tile's tree files, as tile-stream.ts reads them. */
+export interface TileTrees {
+  trees: TreeFeature[];
+  /** allotments, orchards, vineyards: the orchards' trees */
+  cultivated: CultivatedFeature[];
+  /** canopy and laser-scan points */
+  points: CanopyPoint[];
+  monuments: MonumentFeature[];
+  rows: VegRowFeature[];
+  rowsMeasured: boolean;
+}
+
+/** One tile's crowns as the viewer draws them: the register's trees with
+ *  the orchards', the canopy's and the laser scan's points off the measured
+ *  monuments, and the DLM's tree rows (where the canopy did not measure
+ *  them), none of the last two where a register tree stands. */
+export function tileCrowns(t: TileTrees): Crown[] {
+  const register = [...t.trees, ...orchardTrees(t.cultivated)];
+  const covers = inventoryCovers(register);
   return [
-    ...registerCrowns(trees),
-    ...canopyCrowns(points, covers),
-    ...rowCrowns(plantedRows(rows, rowsMeasured), covers),
+    ...registerCrowns(register),
+    ...canopyCrowns(offMonuments(t.points, t.monuments), covers),
+    ...rowCrowns(plantedRows(t.rows, t.rowsMeasured), covers),
   ];
 }
 
@@ -241,22 +259,38 @@ async function tileInputs(
   centre: { x: number; y: number },
   signal: AbortSignal
 ) {
-  const [horizon, trees, canopy, scan, rows, furniture, wissen] =
-    await Promise.all([
-      horizonOf(t, signal),
-      fetchFeatures<TreeFeature>(t.name("trees", "geojson"), signal),
-      pointsOf(t, "canopy", signal),
-      pointsOf(t, "canopyx", signal),
-      fetchFeatures<VegRowFeature>(t.name("vegrows", "geojson"), signal),
-      fetchFeatures<FurnitureFeature>(t.name("furniture", "geojson"), signal),
-      fetchOptionalJson<WissenTile>(t.name("stadtwissen", "json"), signal),
-    ]);
-  const crowns = tileCrowns(
+  // a tile only the crowns' reach touches lends its trees, nothing else
+  const [
+    horizon,
     trees,
-    [...canopy.points, ...scan.points],
+    cultivated,
+    canopy,
+    scan,
+    monuments,
     rows,
-    canopy.rowsMeasured
-  );
+    furniture,
+    wissen,
+  ] = await Promise.all([
+    t.inside ? horizonOf(t, signal) : null,
+    fetchFeatures<TreeFeature>(t.name("trees", "geojson"), signal),
+    fetchFeatures<CultivatedFeature>(t.name("cultivated", "geojson"), signal),
+    pointsOf(t, "canopy", signal),
+    pointsOf(t, "canopyx", signal),
+    fetchFeatures<MonumentFeature>(t.name("monuments", "geojson"), signal),
+    fetchFeatures<VegRowFeature>(t.name("vegrows", "geojson"), signal),
+    t.inside
+      ? fetchFeatures<FurnitureFeature>(t.name("furniture", "geojson"), signal)
+      : [],
+    fetchOptionalJson<WissenTile>(t.name("stadtwissen", "json"), signal),
+  ]);
+  const crowns = tileCrowns({
+    trees,
+    cultivated,
+    points: [...canopy.points, ...scan.points],
+    monuments,
+    rows,
+    rowsMeasured: canopy.rowsMeasured,
+  });
   const addresses = (wissen?.buildings ?? []).flatMap((b) =>
     b.addr ? [{ addr: b.addr, x: b.x, y: b.y }] : []
   );
@@ -282,9 +316,10 @@ export async function loadStudyInputs(
   );
   const tiles = tilesFor(site, recipe, centre.x, centre.y);
   const parts = await Promise.all(
-    tiles.map(({ id, ext }) =>
+    tiles.map(({ id, ext, inside }) =>
       tileInputs(
         {
+          inside,
           minX: ext[0],
           minY: ext[1],
           size: ext[2] - ext[0],

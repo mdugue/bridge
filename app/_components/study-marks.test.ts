@@ -118,3 +118,20 @@ test("marks off the streamed tiles lie on the coarse ground until the tile comes
   await Promise.resolve();
   expect(parent.children[0]).toBe(mesh);
 });
+
+test("a tile change elsewhere leaves marks on the coarse ground as they are", async () => {
+  const parent = new Group();
+  const marks = createStudyMarks({
+    parent,
+    offset: { cx: 0, cy: 0 },
+    heightAt: () => null,
+    roughAt: () => 90,
+    compile: async () => {},
+    changed: () => {},
+  });
+  await marks.show([square(0, 0.5)]);
+  const mesh = parent.children[0];
+  marks.groundChanged();
+  await Promise.resolve();
+  expect(parent.children[0]).toBe(mesh);
+});
