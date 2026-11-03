@@ -4,12 +4,13 @@ import {
   bridgeCard,
   monumentCard,
   structureLabel,
-  type TreeInquiry,
   treeCard,
   treeFactsAt,
 } from "./inquiry-features";
+import type { TreeInquiry } from "./inquiry-features";
 import type { SiteProvenance } from "./provenance";
-import { type CardCredits, cardCredits } from "./card-lines";
+import { cardCredits } from "./card-lines";
+import type { CardCredits } from "./card-lines";
 import type { Stated } from "./methods";
 
 const lines = (sources: readonly Stated[]) => sources.map((l) => l.text);

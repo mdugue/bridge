@@ -5,7 +5,8 @@
  * adapter (app/_components/locate-me.ts) feeds it. No THREE, no DOM.
  */
 import { gridConvergenceDeg, latLngToUtm } from "./crs";
-import { type Site, tileExtentOf } from "./site";
+import { tileExtentOf } from "./site";
+import type { Site } from "./site";
 import type { TerrainBounds } from "./terrain-geometry";
 
 const DEG = Math.PI / 180;

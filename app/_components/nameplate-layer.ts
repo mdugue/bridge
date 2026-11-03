@@ -35,7 +35,6 @@
 import {
   BackSide,
   BufferGeometry,
-  type Camera,
   DataTexture,
   DepthTexture,
   DoubleSide,
@@ -48,18 +47,21 @@ import {
   Mesh,
   MeshBasicNodeMaterial,
   NoToneMapping,
-  type OrthographicCamera,
-  type PerspectiveCamera,
   RedFormat,
-  type TextureNode,
-  type UniformNode,
   Scene,
   Uint16BufferAttribute,
   UnsignedByteType,
   Vector2,
   Vector3,
   Vector4,
-  type WebGPURenderer,
+} from "three/webgpu";
+import type {
+  Camera,
+  OrthographicCamera,
+  PerspectiveCamera,
+  TextureNode,
+  UniformNode,
+  WebGPURenderer,
 } from "three/webgpu";
 import {
   abs,
@@ -86,13 +88,6 @@ import {
 } from "three/tsl";
 import type { NameplateText } from "@/lib/city/nameplate";
 import {
-  type NameplateBlock,
-  type NameplateBody,
-  type NameplateCamera,
-  type NameplateLayout,
-  type NameplatePose,
-  type NameplateScene,
-  type Vec3,
   EXTRUDE_CAPS,
   bodySize,
   chooseNameplate,
@@ -102,22 +97,28 @@ import {
   sameLayout,
   sub,
 } from "@/lib/city/nameplate-place";
+import type {
+  NameplateBlock,
+  NameplateBody,
+  NameplateCamera,
+  NameplateLayout,
+  NameplatePose,
+  NameplateScene,
+  Vec3,
+} from "@/lib/city/nameplate-place";
 import {
   NAMEPLATE_CAPS,
   NAMEPLATE_TYPES,
-  type NameplateType,
   atNight,
   nightDim,
 } from "@/lib/city/nameplate-type";
+import type { NameplateType } from "@/lib/city/nameplate-type";
 import type { RenderStyle } from "@/lib/city/render-style";
 import { compileInTurn } from "./compile-lanes";
 import { dropDataOnUpload } from "./raster-upload";
 import { trackTexture } from "./three-utils";
 import {
-  type Align,
   PAINT,
-  type PlateGeometry,
-  type PlateRaster,
   DESKTOP_RESOLUTION,
   facesReady,
   layPlate,
@@ -125,6 +126,7 @@ import {
   loadFaces,
   rasterPlate,
 } from "./nameplate-glyphs";
+import type { Align, PlateGeometry, PlateRaster } from "./nameplate-glyphs";
 import type { F, Live, V3 } from "./shader-chunks";
 import type { SunShadowMap } from "./stylize-effect";
 import { readSunShadow, shadowStandIn } from "./sun-shadow-read";

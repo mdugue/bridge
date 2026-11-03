@@ -1,10 +1,5 @@
-import {
-  type Camera,
-  type Raycaster,
-  Vector2,
-  Vector3,
-  WebGPUCoordinateSystem,
-} from "three/webgpu";
+import { Vector2, Vector3, WebGPUCoordinateSystem } from "three/webgpu";
+import type { Camera, Raycaster } from "three/webgpu";
 
 /** How far a pick ray reaches beyond its origin by default (m). */
 const PERSPECTIVE_FAR = 6000;

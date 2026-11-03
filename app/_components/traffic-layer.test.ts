@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { type Mesh, type MeshBasicNodeMaterial, Vector3 } from "three/webgpu";
+import { Vector3 } from "three/webgpu";
+import type { Mesh, MeshBasicNodeMaterial } from "three/webgpu";
 import type { TrafficFeature } from "@/lib/city/features";
 import type { GroundContext } from "@/lib/city/ground-clamp";
 import { flowHeight } from "@/lib/city/traffic";

@@ -5,12 +5,8 @@
  * at a time; an index the site shares comes once, under its key, and is
  * kept here for the next level that names it.
  */
-import {
-  type GroundIndex,
-  type GroundPrepInput,
-  groundPrepTransfer,
-  prepareGround,
-} from "@/lib/city/ground-prep";
+import { groundPrepTransfer, prepareGround } from "@/lib/city/ground-prep";
+import type { GroundIndex, GroundPrepInput } from "@/lib/city/ground-prep";
 
 interface Job {
   input: GroundPrepInput;

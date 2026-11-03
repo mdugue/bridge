@@ -13,13 +13,13 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import "./collision";
 import { buildBvhOffThread, bvhBuilding } from "./bvh-client";
 import {
-  type CityLayer,
   cityObjectsAlong,
   ensureCityBvh,
   hangsShown,
   nearestCityHit,
   nearestWithoutBvh,
 } from "./city-layer";
+import type { CityLayer } from "./city-layer";
 
 type CountedLayer = CityLayer & { builds: number };
 

@@ -3,11 +3,10 @@ import { Matrix4, Vector3, Vector4 } from "three/webgpu";
 import {
   cutToBand,
   fitWarpedShadow,
-  type WarpFit,
-  type WarpView,
   warpCovers,
   warpDistance,
 } from "./shadow-warp";
+import type { WarpFit, WarpView } from "./shadow-warp";
 
 /** The desktop map's edge (texels). */
 const MAP = 3072;

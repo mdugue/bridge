@@ -9,8 +9,8 @@
 import {
   indexLandmarkFacts,
   isLandmarkFactsFile,
-  type LandmarkFactsIndex,
 } from "@/lib/city/landmark-facts";
+import type { LandmarkFactsIndex } from "@/lib/city/landmark-facts";
 
 /** How long the facts may take before the plate shows the name alone. */
 const FACTS_TIMEOUT_MS = 8000;

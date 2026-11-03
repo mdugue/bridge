@@ -6,15 +6,17 @@ import {
   FloatType,
   NearestFilter,
   RGBAFormat,
-  type Material,
   MeshBasicNodeMaterial,
   MeshStandardNodeMaterial,
-  type Node,
-  type Object3D,
-  type Scene,
-  type NodeBuilder,
-  type UniformNode,
   Vector3,
+} from "three/webgpu";
+import type {
+  Material,
+  Node,
+  Object3D,
+  Scene,
+  NodeBuilder,
+  UniformNode,
 } from "three/webgpu";
 import {
   abs,
@@ -46,7 +48,8 @@ import { FACADE_ROOF, NO_DOOR } from "@/lib/city/windows";
 import { clayWindows } from "./clay-windows";
 import { instanceTint } from "./instancing";
 import { ownSlotTexture, ownSlotUniform } from "./material-slots";
-import { dataPosition, type Live, type V3, type V4 } from "./shader-chunks";
+import { dataPosition } from "./shader-chunks";
+import type { Live, V3, V4 } from "./shader-chunks";
 import { styleNight } from "./sun-rig";
 import { viewDirection } from "./view-direction";
 import { shopOf, wallEaveUp } from "./visual-style";

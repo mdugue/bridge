@@ -37,20 +37,16 @@
  * z0 + (k+1)·rise, so the last tread is the top landing and every tread
  * lies on or above the ramp z0 → z1.
  */
-import {
-  EDGE_TOLERANCE_M,
-  type HeightAt,
-  type JoinPoint,
-  joinsAlong,
-  meetGround,
-  SINK,
-} from "./ground-join";
+import { EDGE_TOLERANCE_M, joinsAlong, meetGround, SINK } from "./ground-join";
+import type { HeightAt, JoinPoint } from "./ground-join";
 import type { StairFeature, TerraceFeature } from "./features";
 import type { FenceLine } from "./fences";
 import type { RecenterOffset } from "./ground-clamp";
 import type { Point2 } from "./polyline";
-import { isInvalidElevation, type TerrainBounds } from "./terrain-geometry";
-import { linearTone, type Masonry, masonryOf } from "./walls";
+import { isInvalidElevation } from "./terrain-geometry";
+import type { TerrainBounds } from "./terrain-geometry";
+import { linearTone, masonryOf } from "./walls";
+import type { Masonry } from "./walls";
 
 export interface StairLine {
   /** axis, bottom → top, EPSG coordinates (NOT recentered) */

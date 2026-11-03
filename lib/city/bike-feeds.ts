@@ -16,13 +16,8 @@
  *
  * No THREE, no DOM.
  */
-import {
-  type BikeCounter,
-  type BikeDirection,
-  bikeCountsUrl,
-  DRESDEN_ZONE,
-  parseBikeCounts,
-} from "./bike-counts";
+import { bikeCountsUrl, DRESDEN_ZONE, parseBikeCounts } from "./bike-counts";
+import type { BikeCounter, BikeDirection } from "./bike-counts";
 import { latLngToUtm, utmToLatLng } from "./crs";
 import type { BIKE_FEEDS } from "./site";
 

@@ -1,4 +1,5 @@
-import { LoadingManager, type Object3D } from "three/webgpu";
+import { LoadingManager } from "three/webgpu";
+import type { Object3D } from "three/webgpu";
 import {
   rhinoFrame,
   rhinoPlacement,

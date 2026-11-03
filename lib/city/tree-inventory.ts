@@ -1,9 +1,11 @@
 import { treeAge } from "./tree-age";
 import type { TreeFeature } from "./features";
-import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
+import { epsgToWorld } from "./ground-clamp";
+import type { RecenterOffset } from "./ground-clamp";
 import { clamp } from "./math";
 import type { RasterSampler } from "./raster-sampler";
-import { BASE_TREE_H, hash, type Placement } from "./tree-placement";
+import { BASE_TREE_H, hash } from "./tree-placement";
+import type { Placement } from "./tree-placement";
 import { seasonJitter } from "./tree-season";
 /**
  * Pure placement math for individually surveyed trees — a tree inventory such

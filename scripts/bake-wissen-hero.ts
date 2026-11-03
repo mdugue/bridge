@@ -9,7 +9,8 @@
  */
 import sharp from "sharp";
 import { landcoverSrgb } from "../lib/city/landcover";
-import { TILE_KM, type TileCell } from "../lib/city/site";
+import { TILE_KM } from "../lib/city/site";
+import type { TileCell } from "../lib/city/site";
 
 /** Where each cell sits in the block: easting grows east, northing north. */
 function gridOf(cells: readonly TileCell[]) {

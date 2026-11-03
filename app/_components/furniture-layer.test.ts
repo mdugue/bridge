@@ -7,7 +7,8 @@ import {
   setClockTime,
   showFurnitureNear,
 } from "./furniture-layer";
-import { type Instances, isInstances } from "./instancing";
+import { isInstances } from "./instancing";
+import type { Instances } from "./instancing";
 
 const ctx = { offset: { cx: 0, cy: 0 }, heightAt: () => 100 };
 

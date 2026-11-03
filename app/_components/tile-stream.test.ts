@@ -13,7 +13,8 @@ import {
   MeshBasicNodeMaterial,
   Object3D,
 } from "three/webgpu";
-import { finished, type Steps } from "@/lib/city/build-steps";
+import { finished } from "@/lib/city/build-steps";
+import type { Steps } from "@/lib/city/build-steps";
 import type { AskSet } from "@/lib/city/ask-solids";
 import type { TrafficFeature } from "@/lib/city/features";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
@@ -34,11 +35,13 @@ import {
   PHONE_STREAM,
   orderStreaming,
   showDataLayers,
-  type TileDressing,
-  type TileStreamContext,
-  type TrafficHost,
   takesOver,
   trafficSlot,
+} from "./tile-stream";
+import type {
+  TileDressing,
+  TileStreamContext,
+  TrafficHost,
 } from "./tile-stream";
 import type { VegetationControl } from "./vegetation-layer";
 

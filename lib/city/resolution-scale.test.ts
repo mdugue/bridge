@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
   createResolutionScale,
-  type ResolutionScale,
   resolutionTargetsFor,
   SCALE_STEPS,
   WINDOW_MS,
 } from "./resolution-scale";
+import type { ResolutionScale } from "./resolution-scale";
 
 const DESKTOP = resolutionTargetsFor("desktop");
 

@@ -11,17 +11,12 @@ import {
   archSpringing,
   axisFrame,
   BRIDGE_STEP,
-  type BridgeRib,
   beamSpan,
   beamSupports,
-  type DeckSupport,
   deckCarrier,
   deckDepth,
   intradosAt,
   masonryArches,
-  type MasonryPier,
-  type MasonrySpan,
-  type Parabola,
   PIER_SPACING,
   parapetStyle,
   placeRibs,
@@ -29,29 +24,34 @@ import {
   ribProfile,
   ribRuns,
 } from "@/lib/city/bridge";
+import type {
+  BridgeRib,
+  DeckSupport,
+  MasonryPier,
+  MasonrySpan,
+  Parabola,
+} from "@/lib/city/bridge";
 import {
   bridgeDecks,
-  type DeckPoly,
   deckPoly,
   decksAt,
   deckRing,
   longAxis,
   pointInRing,
-  type Ring2,
   ringToWorld,
 } from "@/lib/city/decks";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import type { DeckPoly, Ring2 } from "@/lib/city/decks";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import { SINK } from "@/lib/city/ground-join";
 import {
-  type Level,
   LEVEL_STEP,
-  type LevelLine,
-  type LevelRun,
   lineGrade,
   lineLevels,
   modeRuns,
   runLevelAt,
 } from "@/lib/city/levels";
+import type { Level, LevelLine, LevelRun } from "@/lib/city/levels";
 import { OVERPASS_DEPTH_M, OVERPASS_M } from "@/lib/city/catenary";
 import {
   DECK_REACH_M,
@@ -60,56 +60,50 @@ import {
   railPrefer,
   railSteep,
 } from "@/lib/city/line-levels";
-import {
-  platformTops,
-  TrackIndex,
-  type TrackSample,
-} from "@/lib/city/platform-level";
+import { platformTops, TrackIndex } from "@/lib/city/platform-level";
+import type { TrackSample } from "@/lib/city/platform-level";
 import { decodeProfile } from "@/lib/city/line-profile";
 import { PASSAGE_UNDER_DECK } from "@/lib/city/passages";
-import { type Point2, subdividePolyline } from "@/lib/city/polyline";
+import { subdividePolyline } from "@/lib/city/polyline";
+import type { Point2 } from "@/lib/city/polyline";
 import {
   BURIED_M,
-  type Bed,
   BedIndex,
   RAIL_BED_HALF_M,
   TRACK_PITCH_M,
 } from "@/lib/city/track-beds";
-import { finished, type Steps } from "@/lib/city/build-steps";
-import { type DeckKind, deckMaterial, stoneMaterial } from "./bridge-surface";
-import {
-  addCatenary,
-  type CatenaryRun,
-  catenaryParts,
-  catenaryWires,
-} from "./catenary-layer";
+import type { Bed } from "@/lib/city/track-beds";
+import { finished } from "@/lib/city/build-steps";
+import type { Steps } from "@/lib/city/build-steps";
+import { deckMaterial, stoneMaterial } from "./bridge-surface";
+import type { DeckKind } from "./bridge-surface";
+import { addCatenary, catenaryParts, catenaryWires } from "./catenary-layer";
+import type { CatenaryRun } from "./catenary-layer";
 import {
   addColumn,
   addFootprint,
   addRibbon,
   addStrut,
   cross,
-  type Mesh3,
   mesh3,
   meshFrom,
   meshSteps,
   outward,
-  type P3,
-  type Pt,
   pushTri,
   quad,
   ringWinding,
   tangentsXZ,
   unit,
 } from "./mesh-kit";
+import type { Mesh3, P3, Pt } from "./mesh-kit";
 import { addMonorail } from "./monorail-beam";
 import {
   addSleepers,
   SLEEPER_TOP,
-  type SleeperRibbons,
   sleeperMesh,
   sleeperRibbons,
 } from "./track-bed";
+import type { SleeperRibbons } from "./track-bed";
 
 /**
  * Railway + bridge layer. The railway corridor and bridges used to exist only as

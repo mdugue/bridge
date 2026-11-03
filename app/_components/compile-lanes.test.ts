@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { type Compiling, compileInLanes, compileInTurn } from "./compile-lanes";
+import { compileInLanes, compileInTurn } from "./compile-lanes";
+import type { Compiling } from "./compile-lanes";
 
 interface Item {
   id: string;

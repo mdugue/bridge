@@ -22,12 +22,10 @@ import {
   scaleBarFor,
   scaleLabel,
 } from "@/lib/city/model-view";
-import {
-  RENDER_STYLE_BY_ID,
-  type RenderStyle,
-  styleInstant,
-} from "@/lib/city/render-style";
-import { type Site, siteAttribution } from "@/lib/city/site";
+import { RENDER_STYLE_BY_ID, styleInstant } from "@/lib/city/render-style";
+import type { RenderStyle } from "@/lib/city/render-style";
+import { siteAttribution } from "@/lib/city/site";
+import type { Site } from "@/lib/city/site";
 import type { CapturedImage, CityWalkHandle } from "./create-app";
 import type { ModelHud } from "./model-rig";
 

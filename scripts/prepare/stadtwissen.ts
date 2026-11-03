@@ -11,9 +11,11 @@ import { existsSync } from "node:fs";
 import type { SourceInfo, SourceKey } from "../../lib/city/provenance";
 import {
   STADTWISSEN_FILE,
-  type StadtwissenIndex,
   WIKIDATA_FACTS_FILE,
-  type WikidataFile,
+} from "../../lib/city/stadtwissen";
+import type {
+  StadtwissenIndex,
+  WikidataFile,
 } from "../../lib/city/stadtwissen";
 import {
   cityMeshSourceFiles,

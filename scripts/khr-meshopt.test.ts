@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { LoadingManager, type Mesh, Vector3 } from "three";
+import { LoadingManager, Vector3 } from "three";
+import type { Mesh } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { readGlb } from "./glb-container";

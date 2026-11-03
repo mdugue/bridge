@@ -20,10 +20,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { isInstances } from "../../app/_components/instancing";
 import { buildTreeInventory } from "../../app/_components/tree-inventory-layer";
-import {
-  buildVegetation,
-  type VegetationControl,
-} from "../../app/_components/vegetation-layer";
+import { buildVegetation } from "../../app/_components/vegetation-layer";
+import type { VegetationControl } from "../../app/_components/vegetation-layer";
 import type {
   CanopyExtraFeature,
   CanopyFeature,

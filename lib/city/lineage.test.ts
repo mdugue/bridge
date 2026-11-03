@@ -9,8 +9,10 @@ import { encodeDrawn } from "./drawn-facts";
 import type { InquiryObject } from "./inquiry";
 import type { TreeInquiry } from "./inquiry-features";
 import type { LampInquiry } from "./inquiry-more";
-import { type LineageEntry, type LineageSite, lineage } from "./lineage";
-import { MEASURED_ROOF, NO_FACT, type ObjectFacts } from "./object-facts";
+import { lineage } from "./lineage";
+import type { LineageEntry, LineageSite } from "./lineage";
+import { MEASURED_ROOF, NO_FACT } from "./object-facts";
+import type { ObjectFacts } from "./object-facts";
 import type { SiteProvenance } from "./provenance";
 
 const geosn = {

@@ -5,26 +5,21 @@ import {
   Group,
   Mesh,
   MeshStandardMaterial,
-  type Object3D,
   SRGBColorSpace,
 } from "three/webgpu";
+import type { Object3D } from "three/webgpu";
 import { latLngToUtm, utmToLatLng } from "@/lib/city/crs";
 import { detectGeoreference, utmZone } from "@/lib/city/design-placement";
 import { readDxf } from "@/lib/city/dxf";
 import { readLandXml } from "@/lib/city/landxml";
 import type { DesignPartInfo } from "@/lib/city/inquiry-design";
-import {
-  PLAN_LOOKS,
-  type PlanClass,
-  type PlanLook,
-} from "@/lib/city/plan-classes";
-import {
-  type PlanFeature,
-  type PlanPoint,
-  planMesh,
-} from "@/lib/city/plan-geometry";
+import { PLAN_LOOKS } from "@/lib/city/plan-classes";
+import type { PlanClass, PlanLook } from "@/lib/city/plan-classes";
+import { planMesh } from "@/lib/city/plan-geometry";
+import type { PlanFeature, PlanPoint } from "@/lib/city/plan-geometry";
 import { recordFeatures } from "@/lib/city/plan-records";
-import { type GeoRecord, readShapefile } from "@/lib/city/shapefile";
+import { readShapefile } from "@/lib/city/shapefile";
+import type { GeoRecord } from "@/lib/city/shapefile";
 import { readGpkgGeometry } from "@/lib/city/wkb";
 
 /**

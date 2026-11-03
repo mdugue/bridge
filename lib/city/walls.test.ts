@@ -4,10 +4,10 @@ import {
   MASONRY,
   masonryOf,
   WALL_TONES,
-  type WallRibbon,
   wallColors,
   wallGeometry,
 } from "./walls";
+import type { WallRibbon } from "./walls";
 
 const offset = { cx: 0, cy: 0 };
 const flat = () => 100;

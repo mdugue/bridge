@@ -4,17 +4,16 @@ import {
   createRetryTally,
   createVisibleClock,
   errorVerdict,
-  type FetchAnswer,
   healDelayMs,
   isNetworkFailure,
   isNetworkMessage,
   NetworkError,
-  type RetryEnv,
   RETRY_CAP_MS,
   retryAfterMs,
   statusVerdict,
   withRetry,
 } from "./fetch-retry";
+import type { FetchAnswer, RetryEnv } from "./fetch-retry";
 
 /**
  * A page on a fake clock: sleeping moves the clock, the page is visible

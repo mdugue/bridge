@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { Box3, type Mesh, MeshStandardNodeMaterial } from "three/webgpu";
+import { Box3, MeshStandardNodeMaterial } from "three/webgpu";
+import type { Mesh } from "three/webgpu";
 import type {
   AreaFeature,
   BridgeFeature,
@@ -12,8 +13,8 @@ import {
   buildDeckTable,
   buildRail,
   COLORS,
-  type RailContext,
 } from "./rail-layer";
+import type { RailContext } from "./rail-layer";
 import { axisFrame } from "@/lib/city/bridge";
 import { deckLift, ringToWorld } from "@/lib/city/decks";
 

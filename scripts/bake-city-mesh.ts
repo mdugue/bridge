@@ -12,13 +12,8 @@
  * Called by scripts/prepare-data.ts; no DOM.
  */
 import { CityJSONLoader, CityJSONParser } from "cityjson-threejs-loader";
-import {
-  BufferGeometry,
-  type Matrix4,
-  type Mesh,
-  ShapeUtils,
-  Vector2,
-} from "three";
+import { BufferGeometry, ShapeUtils, Vector2 } from "three";
+import type { Matrix4, Mesh } from "three";
 import {
   brickWalls,
   buildingGlows,
@@ -26,13 +21,9 @@ import {
   palatialFacade,
   partFacade,
   buildingTint,
-  type FacadeMaterial,
   inheritedAttributes,
   countsStoreys,
   ownFacadeReason,
-  type RoofColourSource,
-  type RoofColours,
-  type TintRgb,
   roofColor,
   roofColourSource,
   roofTint,
@@ -41,8 +32,13 @@ import {
   storeyHeight,
   wallColourSource,
 } from "../lib/city/building-tint";
+import type {
+  FacadeMaterial,
+  RoofColourSource,
+  RoofColours,
+  TintRgb,
+} from "../lib/city/building-tint";
 import {
-  type CityObjectRow,
   hasObjectFlag,
   inheritedFlags,
   inheritedLook,
@@ -65,22 +61,25 @@ import {
   OBJECT_SOURCE_SCAN,
   OBJECT_SOURCE_SHOPFRONT,
   objectTable,
-  type OsmBuildingFacts,
-  type OsmBuildingLut,
   withoutTrafficStructures,
+} from "../lib/city/city-mesh";
+import type {
+  CityObjectRow,
+  OsmBuildingFacts,
+  OsmBuildingLut,
 } from "../lib/city/city-mesh";
 import {
   cutOut,
-  type PassageAxis,
   passageHeight,
   passageLining,
   passageRegions,
-  type Plane,
   touches,
 } from "../lib/city/building-passages";
+import type { PassageAxis, Plane } from "../lib/city/building-passages";
 import { creaseNormals } from "../lib/city/crease-normals";
 import { SINK } from "../lib/city/ground-join";
-import { type DrawnFacts, encodeDrawn } from "../lib/city/drawn-facts";
+import { encodeDrawn } from "../lib/city/drawn-facts";
+import type { DrawnFacts } from "../lib/city/drawn-facts";
 import { epsgCodeFromReferenceSystem } from "../lib/city/crs";
 import { ensembleGroup, ensembleRoots } from "../lib/city/ensembles";
 import {
@@ -94,18 +93,15 @@ import {
 } from "../lib/city/doors";
 import { chimneyMesh, dormerMesh } from "../lib/city/dormers";
 import {
-  type BandKind,
   bandMeshes,
   CORNICE,
   EAVE_CORNICE,
-  type HostShift,
   joinStretches,
   lineStretches,
   plinthStretches,
-  type Shaded,
-  type Stretch,
   straightRuns,
 } from "../lib/city/plinths";
+import type { BandKind, HostShift, Shaded, Stretch } from "../lib/city/plinths";
 import type {
   DoorFeature,
   DormerFeature,
@@ -162,8 +158,6 @@ import type { CityJsonDocument } from "../lib/city/types";
 import {
   DOOR_SLOT,
   doorClassWidth,
-  type FacadeDoor,
-  type FacadeShop,
   facadeAttribute,
   NO_DOOR,
   flatTownHouse,
@@ -172,15 +166,16 @@ import {
   measuredAxes,
   wallRises,
   dormerWindows,
-  type WindowHost,
-  type WindowWall,
   windowSpecs,
 } from "../lib/city/windows";
-import {
-  measuredRoofMesh,
-  measuredRoofsById,
-  type PrismMesh,
-} from "./measured-roofs";
+import type {
+  FacadeDoor,
+  FacadeShop,
+  WindowHost,
+  WindowWall,
+} from "../lib/city/windows";
+import { measuredRoofMesh, measuredRoofsById } from "./measured-roofs";
+import type { PrismMesh } from "./measured-roofs";
 import type { Column, MeshInput, PropertyTable } from "./tile-glb";
 
 /** WallSurface and RoofSurface in the loader's fixed `defaultSemanticsColors` order. */

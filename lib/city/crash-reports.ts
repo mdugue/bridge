@@ -5,13 +5,15 @@ import {
   formatBeat,
   resumedFor,
   round,
-  type SummaryMark,
-  type TimingSums,
   timingMeans,
-  type Trail,
-  type TrailBeat,
-  type TrailEvent,
   trailPhase,
+} from "./crash-trail";
+import type {
+  SummaryMark,
+  TimingSums,
+  Trail,
+  TrailBeat,
+  TrailEvent,
 } from "./crash-trail";
 import { RESUME_WINDOW_MS } from "./gpu-safety";
 

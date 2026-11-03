@@ -1,23 +1,22 @@
 import { expect, test } from "bun:test";
-import { Color, Matrix4, type Object3D, Vector3 } from "three/webgpu";
+import { Color, Matrix4, Vector3 } from "three/webgpu";
+import type { Object3D } from "three/webgpu";
 import {
   COARSE_TREE_WIDEN,
-  type CoarseCrown,
   coarseCrowns,
   packCrowns,
   unpackCrowns,
 } from "@/lib/city/coarse-crowns";
+import type { CoarseCrown } from "@/lib/city/coarse-crowns";
 import type { CanopyFeature, TreeFeature } from "@/lib/city/features";
 import { inventoryTrees } from "@/lib/city/tree-inventory";
 import { canopyPlacements } from "@/lib/city/tree-placement";
 import { buildCoarseCrowns } from "./coarse-crowns-layer";
-import { type Instances, isInstances } from "./instancing";
+import { isInstances } from "./instancing";
+import type { Instances } from "./instancing";
 import { buildTreeInventory } from "./tree-inventory-layer";
-import {
-  buildCrownGeo,
-  buildVegetation,
-  type VegetationContext,
-} from "./vegetation-layer";
+import { buildCrownGeo, buildVegetation } from "./vegetation-layer";
+import type { VegetationContext } from "./vegetation-layer";
 
 const ctx: VegetationContext = {
   offset: { cx: 411_000.37, cy: 5_657_000.81 },

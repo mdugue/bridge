@@ -1,10 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import {
-  parseSiteIndex,
-  SITE_INDEX_FILE,
-  type SiteIndexEntry,
-} from "@/lib/city/site-index";
+import { parseSiteIndex, SITE_INDEX_FILE } from "@/lib/city/site-index";
+import type { SiteIndexEntry } from "@/lib/city/site-index";
 import type { Site } from "@/lib/city/site";
 import type { SiteStats } from "@/lib/city/site-stats";
 import { REFERENCE_SITE, siteById } from "@/sites";

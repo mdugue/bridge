@@ -2,18 +2,18 @@ import { expect, jest, test } from "bun:test";
 import {
   Color,
   IcosahedronGeometry,
-  type Material,
   MeshBasicNodeMaterial,
   MeshStandardNodeMaterial,
 } from "three/webgpu";
+import type { Material } from "three/webgpu";
 import { TREE_GENERA } from "@/lib/city/tree-season";
 import {
   createSeasonClock,
   SEASON_THROTTLE_MS,
-  type CrownSeasonKey,
   crownWarmup,
   seasonCrowns,
 } from "./crown-season";
+import type { CrownSeasonKey } from "./crown-season";
 import { Instances } from "./instancing";
 import { sceneCrowns } from "./vegetation-layer";
 

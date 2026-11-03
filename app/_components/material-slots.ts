@@ -3,11 +3,13 @@ import {
   DataTexture,
   FloatType,
   HalfFloatType,
-  type Material,
-  type Object3D,
-  type Texture,
-  type TextureNode,
-  type UniformNode,
+} from "three/webgpu";
+import type {
+  Material,
+  Object3D,
+  Texture,
+  TextureNode,
+  UniformNode,
 } from "three/webgpu";
 import { NodeUpdateType, texture, uniform } from "three/tsl";
 

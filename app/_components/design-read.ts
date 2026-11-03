@@ -6,27 +6,24 @@ import {
   BufferAttribute,
   BufferGeometry,
   Color,
-  type InstancedMesh,
   Matrix3,
   Matrix4,
-  type Mesh,
   Vector3,
 } from "three/webgpu";
+import type { InstancedMesh, Mesh } from "three/webgpu";
 import {
-  type DesignTier,
-  type DesignWeight,
   geometryBytes,
   judgeDesign,
   judgeFile,
   textureBytesOf,
 } from "@/lib/city/design-budget";
+import type { DesignTier, DesignWeight } from "@/lib/city/design-budget";
 import {
-  type DesignBox,
   designAnchor,
   detectGeoreference,
   elsewhereFrame,
-  type Georeference,
 } from "@/lib/city/design-placement";
+import type { DesignBox, Georeference } from "@/lib/city/design-placement";
 import type { DesignPartInfo } from "@/lib/city/inquiry-design";
 import { FormatError, pickedFiles, read3dm, readObj } from "./design-formats";
 import { IfcError, readIfc } from "./design-ifc";

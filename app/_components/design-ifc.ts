@@ -7,18 +7,17 @@ import {
   Group,
   Mesh,
   MeshStandardMaterial,
-  type Object3D,
   SRGBColorSpace,
 } from "three/webgpu";
+import type { Object3D } from "three/webgpu";
 import { detectGeoreference } from "@/lib/city/design-placement";
 import type { DesignPartInfo } from "@/lib/city/inquiry-design";
 import {
-  type IfcPlacement,
-  type MapConversion,
   mapConversionPlacement,
   siPrefixFactor,
   siteReferencePlacement,
 } from "@/lib/city/ifc-georef";
+import type { IfcPlacement, MapConversion } from "@/lib/city/ifc-georef";
 
 /**
  * Reads an IFC model into the design reader's frame (design-read.ts,

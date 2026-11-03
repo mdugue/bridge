@@ -22,22 +22,15 @@
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import {
-  Frustum,
-  Matrix4,
-  type Mesh,
-  type Object3D,
-  PerspectiveCamera,
-  Vector3,
-} from "three/webgpu";
-import { type Instances, isInstances } from "../../app/_components/instancing";
+import { Frustum, Matrix4, PerspectiveCamera, Vector3 } from "three/webgpu";
+import type { Mesh, Object3D } from "three/webgpu";
+import { isInstances } from "../../app/_components/instancing";
+import type { Instances } from "../../app/_components/instancing";
 import { sceneCensus } from "../../app/_components/scene-census";
 import { buildLowVegetation } from "../../app/_components/low-vegetation-layer";
 import { buildTreeInventory } from "../../app/_components/tree-inventory-layer";
-import {
-  buildVegetation,
-  type VegetationControl,
-} from "../../app/_components/vegetation-layer";
+import { buildVegetation } from "../../app/_components/vegetation-layer";
+import type { VegetationControl } from "../../app/_components/vegetation-layer";
 import type {
   CanopyExtraFeature,
   CanopyFeature,
@@ -53,11 +46,8 @@ import {
   shadowFocusAhead,
 } from "../../lib/city/shadow-fit";
 import { sampleHeightfield } from "../../lib/city/terrain-geometry";
-import {
-  type DataManifest,
-  dgmSourceFiles,
-  tileIds,
-} from "../../lib/city/tile";
+import { dgmSourceFiles, tileIds } from "../../lib/city/tile";
+import type { DataManifest } from "../../lib/city/tile";
 import { parseTilesetExtras, TILESET_FILE } from "../../lib/city/tileset";
 import { REFERENCE_SITE, SITES, siteById } from "../../sites";
 import { readDgm } from "../bake-tiles";

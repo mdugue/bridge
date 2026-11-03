@@ -11,10 +11,10 @@ import {
   FullscreenIcon,
   HammerIcon,
   ImageDownIcon,
-  type LucideIcon,
   PlaneIcon,
   XIcon,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type {
   CSSProperties,
   Dispatch,
@@ -61,20 +61,15 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import {
-  LOOK_CONTROLS,
-  lookPatch,
-  type LookValues,
-} from "@/lib/city/look-controls";
-import { type DataLayerKey, siteDataLayers } from "@/lib/city/data-layers";
+import { LOOK_CONTROLS, lookPatch } from "@/lib/city/look-controls";
+import type { LookValues } from "@/lib/city/look-controls";
+import { siteDataLayers } from "@/lib/city/data-layers";
+import type { DataLayerKey } from "@/lib/city/data-layers";
 import { STUDY_DATES, STUDY_HOURS } from "@/lib/city/image-export";
 import { sitePlaces } from "@/lib/city/places";
 import type { MapTile } from "@/lib/city/minimap";
-import {
-  RENDER_STYLE_BY_ID,
-  RENDER_STYLES,
-  type RenderStyle,
-} from "@/lib/city/render-style";
+import { RENDER_STYLE_BY_ID, RENDER_STYLES } from "@/lib/city/render-style";
+import type { RenderStyle } from "@/lib/city/render-style";
 import type { PlayerPose } from "@/lib/city/pose";
 import { sunTimesOn } from "@/lib/city/sun";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
@@ -93,13 +88,11 @@ import { ProjectionPanel } from "./projection-panel";
 import { QualityPanel } from "./quality-panel";
 import type { SceneBudget } from "./scene-profile";
 import { useSceneStatus, useSceneStatusStore } from "./scene-status";
-import { type SceneTabId, SceneTabPanel, SceneTabs } from "./scene-tabs";
+import { SceneTabPanel, SceneTabs } from "./scene-tabs";
+import type { SceneTabId } from "./scene-tabs";
 import type { SunState } from "./sun-rig";
-import {
-  siteAttribution,
-  siteShortCredit,
-  type ViewpointGeometry,
-} from "@/lib/city/site";
+import { siteAttribution, siteShortCredit } from "@/lib/city/site";
+import type { ViewpointGeometry } from "@/lib/city/site";
 import { useSite } from "./site-context";
 
 /**

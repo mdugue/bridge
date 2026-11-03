@@ -1,12 +1,12 @@
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
-  type BufferGeometry,
   CylinderGeometry,
   Matrix4,
   MeshStandardNodeMaterial,
   Quaternion,
   Vector3,
 } from "three/webgpu";
+import type { BufferGeometry } from "three/webgpu";
 import type { InventoryTree } from "@/lib/city/tree-inventory";
 import { Instances, instancePosition } from "./instancing";
 import { sceneMaterial } from "./three-utils";

@@ -5,9 +5,9 @@ import {
   decodeLook,
   encodeSnapshot,
   parseSnapshot,
-  type Snapshot,
   snapshotInstant,
 } from "./snapshot";
+import type { Snapshot } from "./snapshot";
 
 const valid: Snapshot = {
   v: 1,

@@ -14,7 +14,8 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { bridgeDecks, type DeckPoly, decksAt } from "../lib/city/decks";
+import { bridgeDecks, decksAt } from "../lib/city/decks";
+import type { DeckPoly } from "../lib/city/decks";
 import type {
   AreaFeature,
   BridgeFeature,
@@ -22,51 +23,45 @@ import type {
   TramFeature,
 } from "../lib/city/features";
 import { epsgToWorld } from "../lib/city/ground-clamp";
-import {
-  LEVEL_JUMP_M,
-  type LevelLine,
-  type LevelRun,
-  lineGrade,
-  runLevelAt,
-} from "../lib/city/levels";
+import { LEVEL_JUMP_M, lineGrade, runLevelAt } from "../lib/city/levels";
+import type { LevelLine, LevelRun } from "../lib/city/levels";
 import {
   DECK_REACH_M,
   isMonorail,
-  type LevelGround,
-  type LinePiece,
   pieceSamples,
   RIDES,
   railPrefer,
   railSteep,
   solvePieces,
 } from "../lib/city/line-levels";
+import type { LevelGround, LinePiece } from "../lib/city/line-levels";
 import { decodeProfile, encodeProfile } from "../lib/city/line-profile";
 import {
   BURIED_M,
-  type Bed,
-  type BedShape,
   railBed,
   TRACK_PITCH_M,
   tramBed,
 } from "../lib/city/track-beds";
+import type { Bed, BedShape } from "../lib/city/track-beds";
 import {
   deckPassages,
   PASSAGE_UNDER_DECK,
-  type Passage,
   passageHalf,
 } from "../lib/city/passages";
+import type { Passage } from "../lib/city/passages";
 import {
   DLM_REST_M,
   outsideAreas,
   PLATFORM_EDGE_M,
-  type TrackAxis,
 } from "../lib/city/platform-clearance";
+import type { TrackAxis } from "../lib/city/platform-clearance";
 import type { Point2 } from "../lib/city/polyline";
 import type { Site } from "../lib/city/site";
 import { sampleHeightfield } from "../lib/city/terrain-geometry";
 import { dgmSourceFiles, sideFileSource, tileIds } from "../lib/city/tile";
 import { ownsPoint } from "../lib/city/tileset";
-import { type Dgm, readDgm } from "./bake-tiles";
+import { readDgm } from "./bake-tiles";
+import type { Dgm } from "./bake-tiles";
 
 const at = (path: string) => join(process.cwd(), path);
 

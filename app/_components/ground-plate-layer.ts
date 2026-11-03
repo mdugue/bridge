@@ -22,15 +22,15 @@ import {
 } from "three/webgpu";
 import {
   decodePlate,
-  type PlateRef,
-  type PlateTile,
   plateHeightIndex,
   plateIndex,
   plateNormals,
   platePositions,
 } from "@/lib/city/ground-plate";
+import type { PlateRef, PlateTile } from "@/lib/city/ground-plate";
 import { landcoverSrgb, srgbToLinear } from "@/lib/city/landcover";
-import { type DrawnPlateTile, plateHeightAt } from "@/lib/city/plate-height";
+import { plateHeightAt } from "@/lib/city/plate-height";
+import type { DrawnPlateTile } from "@/lib/city/plate-height";
 import { fetchOptionalBinary } from "./fetch-optional";
 import { disposeObject3D, sceneMaterial } from "./three-utils";
 

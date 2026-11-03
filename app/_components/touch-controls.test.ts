@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, expect, jest, test } from "bun:test";
-import {
-  attachTouchControls,
-  LONG_PRESS_MS,
-  type TouchControlsCallbacks,
-} from "./touch-controls";
+import { attachTouchControls, LONG_PRESS_MS } from "./touch-controls";
+import type { TouchControlsCallbacks } from "./touch-controls";
 
 beforeEach(() => {
   jest.useFakeTimers();

@@ -22,21 +22,17 @@ import {
   smoothstep,
 } from "three/tsl";
 import type { RiversideFeature } from "@/lib/city/features";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
-import { type Point2, subdividePolyline } from "@/lib/city/polyline";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
+import { subdividePolyline } from "@/lib/city/polyline";
+import type { Point2 } from "@/lib/city/polyline";
 import { Instances, instancePosition } from "./instancing";
 import { lampNight } from "./lamp-layer";
 import { mapFadeNode } from "./map-overlay";
-import {
-  addFootprint,
-  addRibbon,
-  type Mesh3,
-  meshFrom,
-  mesh3,
-  type Pt,
-  quad,
-} from "./mesh-kit";
-import { type Ring2, ringToWorld } from "@/lib/city/decks";
+import { addFootprint, addRibbon, meshFrom, mesh3, quad } from "./mesh-kit";
+import type { Mesh3, Pt } from "./mesh-kit";
+import { ringToWorld } from "@/lib/city/decks";
+import type { Ring2 } from "@/lib/city/decks";
 import type { F } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 

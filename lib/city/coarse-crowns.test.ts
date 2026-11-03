@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import {
   COARSE_TREE_SHARE,
   COARSE_TREE_WIDEN,
-  type CoarseCrown,
   coarseCrowns,
   coarseCrownsStandIn,
   coarseForm,
@@ -10,6 +9,7 @@ import {
   packCrowns,
   unpackCrowns,
 } from "./coarse-crowns";
+import type { CoarseCrown } from "./coarse-crowns";
 import type { InventoryTree } from "./tree-inventory";
 import type { Placement } from "./tree-placement";
 

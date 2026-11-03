@@ -28,7 +28,8 @@
  * bed is laid at the profile, the sides slope to the measured ground —
  * the embankment and the cutting a real line has.
  */
-import { type Level, type LevelLine, lineGrade } from "./levels";
+import { lineGrade } from "./levels";
+import type { Level, LevelLine } from "./levels";
 
 /** The smallest vertical curve a line's grade changes on (m). */
 export const PROFILE_RADIUS: Readonly<Record<LevelLine, number>> = {

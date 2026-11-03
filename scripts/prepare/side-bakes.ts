@@ -19,17 +19,14 @@ import {
   pointOf,
   ROWS_MEASURED,
 } from "../../lib/city/point-pack";
-import {
-  gapRoofs,
-  lod2Roofs,
-  type RoofFootprint,
-  treesOffRoofs,
-} from "../../lib/city/roof-trees";
+import { gapRoofs, lod2Roofs, treesOffRoofs } from "../../lib/city/roof-trees";
+import type { RoofFootprint } from "../../lib/city/roof-trees";
 import { treesOffStructures } from "../../lib/city/small-buildings";
 import { cityMeshSourceFiles, sideFileSource } from "../../lib/city/tile";
 import type { CityJsonDocument } from "../../lib/city/types";
 import { BAKE_ENTRIES } from "../bake-entries";
-import { type ColonyCrop, cropColonyRaster } from "../crop-raster";
+import { cropColonyRaster } from "../crop-raster";
+import type { ColonyCrop } from "../crop-raster";
 import { downsampleClassRaster } from "../downsample-raster";
 import {
   SITE,

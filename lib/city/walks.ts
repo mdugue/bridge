@@ -10,7 +10,8 @@
  * by Claude wherever it shows; the facts carry their sources (ADR 0042,
  * ADR 0055). No THREE, no DOM.
  */
-import { isRenderStyle, type RenderStyle } from "./render-style";
+import { isRenderStyle } from "./render-style";
+import type { RenderStyle } from "./render-style";
 import type { MovementMode, ViewpointGeometry } from "./site";
 import type { CameraStateJson } from "./snapshot";
 

@@ -26,7 +26,8 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { siteExtentOf } from "../lib/city/site-extent";
 import { tileIdOf } from "../lib/city/site";
-import { isSiteId, SITES, type SiteId } from "../sites";
+import { isSiteId, SITES } from "../sites";
+import type { SiteId } from "../sites";
 
 const ROOT = join(import.meta.dir, "..");
 const TIMEOUT_MS = 20_000;

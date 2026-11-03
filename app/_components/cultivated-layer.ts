@@ -4,11 +4,9 @@ import {
   Color,
   Group,
   MeshStandardNodeMaterial,
-  type Node,
   Object3D,
-  type UniformNode,
-  type Vector4,
 } from "three/webgpu";
+import type { Node, UniformNode, Vector4 } from "three/webgpu";
 import {
   and,
   cos,
@@ -39,7 +37,8 @@ import {
   COLONY_GARDEN as G,
   VINE_ROW,
 } from "@/lib/city/cultivated";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import { srgbToLinear } from "@/lib/city/landcover";
 import type { Point2 } from "@/lib/city/polyline";
 import {
@@ -47,12 +46,10 @@ import {
   gdHash,
   gdNoise,
   GROUND_DETAIL,
-  type GroundColour,
-  type GroundFields,
-  type GroundInputs,
   texelAt,
   texelSize,
 } from "./ground-detail";
+import type { GroundColour, GroundFields, GroundInputs } from "./ground-detail";
 import { instancePosition, Instances, instanceTint } from "./instancing";
 import { hedgePieces } from "./low-vegetation-layer";
 import { rmStripes } from "./road-markings";

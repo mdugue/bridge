@@ -14,8 +14,6 @@ import {
   MODEL_SCALE_MIN,
   MODEL_SHADOW_MAX,
   MODEL_SHADOW_MIN,
-  type ModelPresetId,
-  type ModelView,
   metresPerPixelOf,
   modelCameraGeometry,
   modelFootprint,
@@ -34,6 +32,7 @@ import {
   withPreset,
   zoomedAbout,
 } from "./model-view";
+import type { ModelPresetId, ModelView } from "./model-view";
 import { DEG2RAD, directionOf } from "./pose";
 
 const VIEWPORT = { width: 1600, height: 900 };

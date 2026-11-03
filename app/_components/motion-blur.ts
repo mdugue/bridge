@@ -1,9 +1,5 @@
-import {
-  type DepthTexture,
-  Matrix4,
-  type Texture,
-  Vector2,
-} from "three/webgpu";
+import { Matrix4, Vector2 } from "three/webgpu";
+import type { DepthTexture, Texture } from "three/webgpu";
 import {
   float,
   getScreenPosition,

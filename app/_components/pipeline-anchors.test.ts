@@ -1,11 +1,6 @@
 import { expect, test } from "bun:test";
-import {
-  BoxGeometry,
-  Mesh,
-  MeshBasicNodeMaterial,
-  type Object3D,
-  Points,
-} from "three/webgpu";
+import { BoxGeometry, Mesh, MeshBasicNodeMaterial, Points } from "three/webgpu";
+import type { Object3D } from "three/webgpu";
 import { Instances } from "./instancing";
 import { graphOf, setGraph, setSlots } from "./material-slots";
 import { createPipelineAnchors, layoutStub } from "./pipeline-anchors";

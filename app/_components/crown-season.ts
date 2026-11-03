@@ -1,9 +1,5 @@
-import {
-  type BufferGeometry,
-  Color,
-  InstancedBufferAttribute,
-  type Material,
-} from "three/webgpu";
+import { Color, InstancedBufferAttribute } from "three/webgpu";
+import type { BufferGeometry, Material } from "three/webgpu";
 import {
   abs,
   clamp,

@@ -4,7 +4,8 @@
  * picture style, the data layers, a glide. Each change goes through the
  * same stores the HUD uses, so the panel's controls show it.
  */
-import { type RefObject, useMemo } from "react";
+import { useMemo } from "react";
+import type { RefObject } from "react";
 import { activeDataLayers, siteDataLayers } from "@/lib/city/data-layers";
 import type { LookState } from "@/lib/city/look-state";
 import { siteHoldsPoint } from "@/lib/city/geolocation";

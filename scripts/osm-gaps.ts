@@ -11,11 +11,11 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   GAP_KINDS,
-  type GapKind,
   gapsGeoJson,
   osmGaps,
   osmLinks,
 } from "../lib/city/osm-gaps";
+import type { GapKind } from "../lib/city/osm-gaps";
 import { siteFromArgs } from "../sites";
 import { loadStadtwissen } from "./stadtwissen-files";
 

@@ -1,10 +1,7 @@
 import { afterEach, expect, jest, test } from "bun:test";
 import { deflateSync } from "node:zlib";
-import {
-  LinearMipmapLinearFilter,
-  type Texture,
-  type WebGPURenderer,
-} from "three/webgpu";
+import { LinearMipmapLinearFilter } from "three/webgpu";
+import type { Texture, WebGPURenderer } from "three/webgpu";
 import { loadNdviTexture } from "./terrain-layer";
 import { trackedBytesOf } from "./three-utils";
 

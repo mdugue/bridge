@@ -38,12 +38,10 @@ import {
   gdNoise,
   loadTexel,
   GROUND_DETAIL,
-  type GroundColour,
-  type GroundFields,
-  type GroundInputs,
   texelAt,
   texelSize,
 } from "./ground-detail";
+import type { GroundColour, GroundFields, GroundInputs } from "./ground-detail";
 
 /**
  * Sports grounds in the terrain's colour node (pipeline/bake/sport.py,

@@ -9,7 +9,8 @@ import {
   nameplateText,
   titleLines,
 } from "./nameplate";
-import { NO_FACT, type ObjectFacts } from "./object-facts";
+import { NO_FACT } from "./object-facts";
+import type { ObjectFacts } from "./object-facts";
 
 const facts = (over: Partial<ObjectFacts> = {}): ObjectFacts => ({
   buildingId: "DESN_a",

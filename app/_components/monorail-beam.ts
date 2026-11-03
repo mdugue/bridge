@@ -8,23 +8,22 @@
  * reaches the shadow map (ADR 0009).
  */
 import type { RailFeature } from "@/lib/city/features";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import {
-  type MonorailShape,
-  type MonorailSupport,
   monorailShape,
   monorailSupports,
   supportFeet,
 } from "@/lib/city/monorail";
+import type { MonorailShape, MonorailSupport } from "@/lib/city/monorail";
 import {
   addColumn,
   addRibbon,
   addStrut,
-  type Mesh3,
-  type Pt,
   quadXYZ,
   tangentsXZ,
 } from "./mesh-kit";
+import type { Mesh3, Pt } from "./mesh-kit";
 
 const CAP_HALF = 0.25; // a portal's crossbeam half-section, on the girder (m)
 

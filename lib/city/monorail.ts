@@ -14,12 +14,8 @@
  * ground (`monorailJoins`, ADR 0030).
  */
 import type { RailFeature } from "./features";
-import {
-  type HeightAt,
-  type JoinPoint,
-  lowestGround,
-  SINK,
-} from "./ground-join";
+import { lowestGround, SINK } from "./ground-join";
+import type { HeightAt, JoinPoint } from "./ground-join";
 import type { Point2 } from "./polyline";
 
 export type MonorailKind = "hanging" | "top";

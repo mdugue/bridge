@@ -5,12 +5,12 @@ import {
   planOf,
   planTriangles,
   sameNumbers,
-  type TerrainTin,
   TinIndex,
   tinFromMesher,
   tinSurface,
   tinVertexXY,
 } from "./terrain-tin";
+import type { TerrainTin } from "./terrain-tin";
 
 // A 3×3 grid over a 30 m tile (pixel centres at 5, 15, 25 m; the border
 // ring snaps to 0 / 30), meshed the way Delatin would: the four corners plus

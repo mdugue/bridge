@@ -1,8 +1,8 @@
-import {
-  type GroundIndex,
-  type GroundPrep,
-  type GroundPrepInput,
-  prepareGround,
+import { prepareGround } from "@/lib/city/ground-prep";
+import type {
+  GroundIndex,
+  GroundPrep,
+  GroundPrepInput,
 } from "@/lib/city/ground-prep";
 
 /**

@@ -8,20 +8,20 @@ import {
   Vector3,
 } from "three";
 import {
-  type GroundPrepInput,
   groundPrepTransfer,
   indexBox,
   localReader,
   prepareGround,
 } from "./ground-prep";
+import type { GroundPrepInput } from "./ground-prep";
 import { planTriangles, TinIndex } from "./terrain-tin";
 import {
   MIST_REACH_M,
   reach,
   trianglesOver,
   WATER_REACH_M,
-  type WaterMask,
 } from "./water-mask";
+import type { WaterMask } from "./water-mask";
 
 const BOUNDS = [1000, 5000, 1200, 5200] as const;
 const ORIGIN = { cx: 1100, cy: 5100 };

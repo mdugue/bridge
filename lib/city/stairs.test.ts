@@ -7,12 +7,12 @@ import {
   STAIR_BURN_M,
   STAIR_RISER,
   STAIR_TREAD,
-  type StairLine,
   stairColors,
   stairGeometry,
   stairLineOf,
   stairRails,
 } from "./stairs";
+import type { StairLine } from "./stairs";
 import { sampleHeightfield } from "./terrain-geometry";
 
 // A 100 m tile at 2 m/cell whose DGM is the smoothed bank a flight of steps

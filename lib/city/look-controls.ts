@@ -7,8 +7,10 @@
  * look's tuning lives as named constants with the terms it tunes. No
  * THREE, no DOM (the e2e harness imports this file).
  */
-import { DATA_LAYER_DEFAULTS, type DataLayerKey } from "./data-layers";
-import { DEFAULT_RENDER_STYLE, type RenderStyle } from "./render-style";
+import { DATA_LAYER_DEFAULTS } from "./data-layers";
+import type { DataLayerKey } from "./data-layers";
+import { DEFAULT_RENDER_STYLE } from "./render-style";
+import type { RenderStyle } from "./render-style";
 
 /**
  * Every percent row. Its owner applies it through a `Record<LookKey, …>`

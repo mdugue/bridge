@@ -1,16 +1,13 @@
 import {
   Color,
-  type DataTexture,
   DoubleSide,
   FrontSide,
   InterpolationSamplingType,
   MeshStandardNodeMaterial,
-  type Node,
-  type Texture,
   SRGBColorSpace,
-  type UniformNode,
   Vector3,
 } from "three/webgpu";
+import type { DataTexture, Node, Texture, UniformNode } from "three/webgpu";
 import {
   abs,
   attribute,
@@ -53,14 +50,8 @@ import {
 import { FACADE_UNIT } from "@/lib/city/facade-reading";
 import { SELECTION_ACCENT } from "@/lib/city/outline";
 import { FACADE_ROOF, NO_DOOR, WALL_EAVE } from "@/lib/city/windows";
-import {
-  dataPosition,
-  type F,
-  type Live,
-  type V3,
-  type V2,
-  type V4,
-} from "./shader-chunks";
+import { dataPosition } from "./shader-chunks";
+import type { F, Live, V3, V2, V4 } from "./shader-chunks";
 import {
   setGraph,
   setSlots,

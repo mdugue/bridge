@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { conflateWalls, type WallLine } from "./terrain-conflate";
+import { conflateWalls } from "./terrain-conflate";
+import type { WallLine } from "./terrain-conflate";
 
 // A 100 m × 100 m tile at 2 m/cell whose DGM is a *smoothed bank*: flat-low
 // (100 m) west of x=40, flat-high (106 m) east of x=60, a gentle ramp between —

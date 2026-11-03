@@ -1,7 +1,5 @@
 import { expect, test } from "bun:test";
 import {
-  type AskItem,
-  type AskSet,
   askSets,
   hitsInSets,
   insideRingXz,
@@ -10,6 +8,7 @@ import {
   rayPrism,
   ringDistanceXz,
 } from "./ask-solids";
+import type { AskItem, AskSet } from "./ask-solids";
 
 const east = { x: 1, y: 0, z: 0 };
 const down = { x: 0, y: -1, z: 0 };

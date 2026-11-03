@@ -18,7 +18,8 @@
  * ADR 0044) are within a few degrees of the true direction.
  */
 import { clamp } from "./math";
-import { DEG2RAD, directionOf, RAD2DEG, type Xyz } from "./pose";
+import { DEG2RAD, directionOf, RAD2DEG } from "./pose";
+import type { Xyz } from "./pose";
 
 /** The views (the HUD's *Projektion* cards). Ids are persisted: never rename. */
 export type ModelPresetId =

@@ -1,11 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import {
-  dilate,
-  reach,
-  trianglesOver,
-  type WaterMask,
-  waterMaskOf,
-} from "./water-mask";
+import { dilate, reach, trianglesOver, waterMaskOf } from "./water-mask";
+import type { WaterMask } from "./water-mask";
 
 const WATER = 8;
 

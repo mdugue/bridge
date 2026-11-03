@@ -5,11 +5,11 @@ import {
   isoWeek,
   lonLatBox,
   newestIn,
-  type PanoramaxItem,
   shuffled,
   usable,
   verticalFov,
 } from "./street-photos";
+import type { PanoramaxItem } from "./street-photos";
 
 const item = (
   id: string,

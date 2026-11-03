@@ -4,15 +4,17 @@ import {
   LinearFilter,
   LinearMipmapLinearFilter,
   MeshStandardNodeMaterial,
-  type MeshStandardNodeMaterialParameters,
   NoColorSpace,
   RedFormat,
   RGBAFormat,
-  type Texture,
   UnsignedByteType,
   Vector2,
-  type Vector3,
-  type WebGPURenderer,
+} from "three/webgpu";
+import type {
+  MeshStandardNodeMaterialParameters,
+  Texture,
+  Vector3,
+  WebGPURenderer,
 } from "three/webgpu";
 import {
   asin,
@@ -38,7 +40,8 @@ import {
   vec2,
 } from "three/tsl";
 import type { Node, UniformNode } from "three/webgpu";
-import { decodeGreyPng, type GreyRaster } from "@/lib/city/png-raster";
+import { decodeGreyPng } from "@/lib/city/png-raster";
+import type { GreyRaster } from "@/lib/city/png-raster";
 import {
   FACADE_SVF_GAIN,
   FACADE_SVF_OFFSET_M,
@@ -53,21 +56,10 @@ import {
 import { groundUnderDesign } from "./design-site";
 import { isAbortError } from "./fetch-optional";
 import { nightShadowFree } from "./lantern";
-import {
-  type Slots,
-  setGraph,
-  setSlots,
-  slotTexture,
-  slotUniform,
-} from "./material-slots";
-import {
-  dataXY,
-  type F,
-  rasterUv,
-  type Tex,
-  type V2,
-  type V3,
-} from "./shader-chunks";
+import { setGraph, setSlots, slotTexture, slotUniform } from "./material-slots";
+import type { Slots } from "./material-slots";
+import { dataXY, rasterUv } from "./shader-chunks";
+import type { F, Tex, V2, V3 } from "./shader-chunks";
 import {
   dropDataOnUpload,
   fetchRasterBytes,

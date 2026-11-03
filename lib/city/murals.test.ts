@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
 import {
-  type Mural,
   muralBytes,
   muralCredit,
   muralStrip,
@@ -9,6 +8,7 @@ import {
   PHONE_PX_PER_M,
   parseMurals,
 } from "./murals";
+import type { Mural } from "./murals";
 
 /** The Kulturpalast's west wall, north to south (as baked). */
 const weg: Mural = {

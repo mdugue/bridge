@@ -8,29 +8,31 @@
  * a test drives it with a scripted adapter (`@tanstack/ai/testing`).
  */
 import {
-  type AnyTextAdapter,
   chat,
   convertMessagesToModelMessages,
-  type ModelMessage,
   maxIterations,
-  type StreamChunk,
-  type UIMessage,
+} from "@tanstack/ai";
+import type {
+  AnyTextAdapter,
+  ModelMessage,
+  StreamChunk,
+  UIMessage,
 } from "@tanstack/ai";
 import { scrubSecrets } from "@tanstack/ai/byok";
 import {
   ASK_LIMITS,
-  type AskPromptSite,
   askSystemPrompt,
   CUT_SHORT,
   TOO_MANY_STEPS,
 } from "./ask-city";
+import type { AskPromptSite } from "./ask-city";
 import {
   factsOf,
-  type Knowledge,
   nearKnowledge,
   searchKnowledge,
   sourcesOf,
 } from "./ask-knowledge";
+import type { Knowledge } from "./ask-knowledge";
 import {
   factsTool,
   nearTool,

@@ -21,7 +21,8 @@
  */
 
 import earcut from "earcut";
-import { PLAN_LOOKS, type PlanClass, type PlanLook } from "./plan-classes";
+import { PLAN_LOOKS } from "./plan-classes";
+import type { PlanClass, PlanLook } from "./plan-classes";
 
 /** A point of the plan: x east, y north, z up where it has one. */
 export type PlanPoint = readonly [number, number, number?];

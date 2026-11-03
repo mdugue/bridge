@@ -9,7 +9,8 @@ import { join } from "node:path";
 import sharp from "sharp";
 import { WATER_CLASS } from "../lib/city/landcover";
 import { buildingFootprintPolys } from "../lib/city/minimap";
-import { type Site, tileExtentOf, tileIdOf } from "../lib/city/site";
+import { tileExtentOf, tileIdOf } from "../lib/city/site";
+import type { Site } from "../lib/city/site";
 import {
   absentSiteFiles,
   siteReport,

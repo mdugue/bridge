@@ -19,7 +19,8 @@
  */
 import Delatin from "delatin";
 import type { TerrainBounds } from "../lib/city/terrain-geometry";
-import { type TerrainTin, tinFromMesher } from "../lib/city/terrain-tin";
+import { tinFromMesher } from "../lib/city/terrain-tin";
+import type { TerrainTin } from "../lib/city/terrain-tin";
 
 /**
  * Delatin tolerance (m) of the fine level. The fine level is what the walker

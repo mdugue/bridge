@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { type StepSnap, smoothSnaps, snapToStep } from "./wall-snap";
+import { smoothSnaps, snapToStep } from "./wall-snap";
+import type { StepSnap } from "./wall-snap";
 
 /** Ground rising from `lo` to `hi` along +x between x0 and x1 (a ramp). */
 function ramp(x0: number, x1: number, lo = 100, hi = 108) {

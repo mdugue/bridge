@@ -5,7 +5,8 @@
  * down — instead of being listed twice; the rest follow the vantages, the
  * most notable first. No THREE, no DOM.
  */
-import { landmarkVantage, type Landmark } from "./landmarks";
+import { landmarkVantage } from "./landmarks";
+import type { Landmark } from "./landmarks";
 import type { MovementMode, Viewpoint, ViewpointGeometry } from "./site";
 
 export interface Place {

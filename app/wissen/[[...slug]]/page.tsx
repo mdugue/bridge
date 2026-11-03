@@ -17,21 +17,21 @@ import {
 } from "@/components/ui/card";
 import { descriptionOf } from "@/lib/docs/content";
 import {
-  type Lang,
   langOf,
   routeOf,
   segmentsOf,
   sourceUrl,
   twinOf,
 } from "@/lib/docs/routes";
+import type { Lang } from "@/lib/docs/routes";
 import { cn } from "cn";
 import { docIcon } from "../_components/doc-icon";
 import { DocNav, SECTION_LABEL } from "../_components/doc-nav";
-import { Landing, type LandingEntry } from "../_components/landing";
+import { Landing } from "../_components/landing";
+import type { LandingEntry } from "../_components/landing";
 import {
   descriptionFor,
   fileAt,
-  type HeroImage,
   heroImage,
   nav,
   neighbours,
@@ -39,6 +39,7 @@ import {
   readDoc,
   titleFor,
 } from "../_lib/docs";
+import type { HeroImage } from "../_lib/docs";
 import { renderDoc } from "../_lib/markdown";
 
 interface Props {

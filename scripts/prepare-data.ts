@@ -39,33 +39,30 @@
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { PLATE_N, type PlateExtras } from "../lib/city/ground-plate";
-import { type LandmarkFile, siteLandmarks } from "../lib/city/landmarks";
+import { PLATE_N } from "../lib/city/ground-plate";
+import type { PlateExtras } from "../lib/city/ground-plate";
+import { siteLandmarks } from "../lib/city/landmarks";
+import type { LandmarkFile } from "../lib/city/landmarks";
 import {
-  type MuralExtras,
-  type MuralFile,
   MURALS_FILE,
   muralCredit,
   muralFileSource,
   muralsSource,
   parseMurals,
 } from "../lib/city/murals";
-import {
-  PROVENANCE_FILE,
-  type ProvenanceRecord,
-  siteProvenance,
-} from "../lib/city/provenance";
+import type { MuralExtras, MuralFile } from "../lib/city/murals";
+import { PROVENANCE_FILE, siteProvenance } from "../lib/city/provenance";
+import type { ProvenanceRecord } from "../lib/city/provenance";
 import { tileExtentOf } from "../lib/city/site";
 import {
-  type Walk,
-  type WalkBundle,
   WALKS_DIR,
   WALKS_FILE,
   walkBundle,
   walkPhotoFile,
-  type WalksExtras,
 } from "../lib/city/walks";
-import { groundRelief, type ValleyRim } from "../lib/city/valley-fog";
+import type { Walk, WalkBundle, WalksExtras } from "../lib/city/walks";
+import { groundRelief } from "../lib/city/valley-fog";
+import type { ValleyRim } from "../lib/city/valley-fog";
 import {
   ASK_KINDS,
   pickFiles,
@@ -73,17 +70,16 @@ import {
   siteDataDir,
 } from "../lib/city/tile";
 import {
-  type BakedTile,
   buildTileset,
   TILESET_FILE,
   TILESET_SPAWN_FILE,
-  type TilesetExtras,
 } from "../lib/city/tileset";
+import type { BakedTile, TilesetExtras } from "../lib/city/tileset";
 import {
   LANDMARK_FACTS_FILE,
-  type LandmarkFactsExtras,
   landmarkFactsSource,
 } from "../lib/city/landmark-facts";
+import type { LandmarkFactsExtras } from "../lib/city/landmark-facts";
 import {
   TRAM_TIMETABLE_FILE,
   tramTimetableSource,

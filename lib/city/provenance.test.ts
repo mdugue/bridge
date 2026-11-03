@@ -9,9 +9,9 @@ import {
   isSiteProvenance,
   leadingDate,
   parseLod2Stand,
-  type ProvenanceRecord,
   siteProvenance,
 } from "./provenance";
+import type { ProvenanceRecord } from "./provenance";
 import { tileIds } from "./tile";
 
 const record = JSON.parse(

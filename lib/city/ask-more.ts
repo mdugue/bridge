@@ -7,14 +7,12 @@
  * layer draws it (lib/city/ask-solids.ts), with the inquiry it answers.
  * No THREE, no DOM.
  */
-import {
-  type AskItem,
-  type AskSet,
-  type AskSolid,
-  askSets,
-} from "./ask-solids";
-import { finished, inRuns, type Steps } from "./build-steps";
-import { type PackedTree, packedCylinderSets } from "./ask-items";
+import { askSets } from "./ask-solids";
+import type { AskItem, AskSet, AskSolid } from "./ask-solids";
+import { finished, inRuns } from "./build-steps";
+import type { Steps } from "./build-steps";
+import { packedCylinderSets } from "./ask-items";
+import type { PackedTree } from "./ask-items";
 import type {
   CanopyFeature,
   FurnitureFeature,
@@ -25,20 +23,16 @@ import type {
   TramFeature,
   VegRowFeature,
 } from "./features";
-import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
+import { epsgToWorld } from "./ground-clamp";
+import type { RecenterOffset } from "./ground-clamp";
 import { armOffset, postHeight } from "./lamps";
 import type { FeatureInquiry } from "./inquiry-features";
 import type { CanopyInquiry } from "./inquiry-more";
 import { ringCentre } from "./monuments";
 import { samplePolyline } from "./polyline";
 import { pineBase } from "./tree-inventory";
-import {
-  BASE_TREE_H,
-  canopyPlacements,
-  type Placement,
-  rowPlacements,
-  type TreeVeto,
-} from "./tree-placement";
+import { BASE_TREE_H, canopyPlacements, rowPlacements } from "./tree-placement";
+import type { Placement, TreeVeto } from "./tree-placement";
 
 type HeightAt = (x: number, y: number) => number | null;
 

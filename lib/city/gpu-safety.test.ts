@@ -14,8 +14,8 @@ import {
   safetyOverride,
   safetyStanding,
   shadowTilesStream,
-  type StoredSafety,
 } from "./gpu-safety";
+import type { StoredSafety } from "./gpu-safety";
 
 const DAY = 24 * 60 * 60 * 1000;
 

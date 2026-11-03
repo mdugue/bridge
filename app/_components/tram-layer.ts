@@ -14,7 +14,8 @@ import type {
 } from "@/lib/city/features";
 import type { DeckPoly } from "@/lib/city/decks";
 import { LEVEL_STEP } from "@/lib/city/levels";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import { LANDCOVER_CLASSES, MEADOW_CLASS } from "@/lib/city/landcover";
 import type { Point2 } from "@/lib/city/polyline";
 import { subdividePolyline } from "@/lib/city/polyline";
@@ -31,16 +32,11 @@ import {
   wireStations,
 } from "@/lib/city/tram";
 import { buildFurniture } from "./furniture-layer";
-import { finished, type Steps } from "@/lib/city/build-steps";
+import { finished } from "@/lib/city/build-steps";
+import type { Steps } from "@/lib/city/build-steps";
 import { Instances, instancePosition } from "./instancing";
-import {
-  addRibbon,
-  type Mesh3,
-  meshSteps,
-  mesh3,
-  type Pt,
-  quad,
-} from "./mesh-kit";
+import { addRibbon, meshSteps, mesh3, quad } from "./mesh-kit";
+import type { Mesh3, Pt } from "./mesh-kit";
 import {
   addRail,
   buildDeckTable,
@@ -50,7 +46,8 @@ import {
   spanRuns,
 } from "./rail-layer";
 import { sceneMaterial } from "./three-utils";
-import { addWire, wireMesh, wires, type Wires } from "./wire-ribbons";
+import { addWire, wireMesh, wires } from "./wire-ribbons";
+import type { Wires } from "./wire-ribbons";
 
 /**
  * Trams (pipeline/bake/tram.py, OSM, ODbL): the tracks in their bed and the

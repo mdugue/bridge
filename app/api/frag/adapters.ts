@@ -4,12 +4,14 @@
  * per request and dropped with it; nothing keeps the key.
  */
 import type { AnyTextAdapter } from "@tanstack/ai";
-import { type FakeResponseStep, fakeText } from "@tanstack/ai/testing";
+import { fakeText } from "@tanstack/ai/testing";
+import type { FakeResponseStep } from "@tanstack/ai/testing";
 import { createAnthropicChat } from "@tanstack/ai-anthropic";
 import { createOpenaiChat } from "@tanstack/ai-openai";
 import { openaiCompatibleText } from "@tanstack/ai-openai/compatible";
 import { createOpenRouterText } from "@tanstack/ai-openrouter";
-import { type AskProviderId, lastQuestion } from "@/lib/city/ask-city";
+import { lastQuestion } from "@/lib/city/ask-city";
+import type { AskProviderId } from "@/lib/city/ask-city";
 
 /** One retry of a failed call, and no answer waits longer than this. */
 const CLIENT = { maxRetries: 1, timeout: 60_000 } as const;

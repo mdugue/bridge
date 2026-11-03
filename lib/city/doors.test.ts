@@ -5,11 +5,11 @@ import {
   eaveAlong,
   rayHit,
   trianglesOnRays,
-  type V3,
   wallShift,
   wallShiftAlong,
   wallShiftKnots,
 } from "./doors";
+import type { V3 } from "./doors";
 import type { DoorFeature } from "./features";
 
 const door = (nx: number, ny: number): DoorFeature => ({

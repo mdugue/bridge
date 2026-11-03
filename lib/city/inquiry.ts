@@ -9,34 +9,26 @@
  */
 import { BUILDING_FUNCTION, ROOF_TYPE } from "./adv-codes";
 import {
-  type CityObjectTable,
   OBJECT_FLAG_HERITAGE,
   OBJECT_FLAG_SHOP,
   OBJECT_SOURCE_GAP,
   OBJECT_SOURCE_SCAN,
   hasObjectFlag,
-  type Rgb,
 } from "./city-mesh";
+import type { CityObjectTable, Rgb } from "./city-mesh";
 import { decodeDrawn } from "./drawn-facts";
 import {
-  type CardCredits,
-  type CardFact,
   factLines,
   germanDates,
-  type InquiryCard,
   metres,
   osmSource,
   squareMetres,
   stated,
   whole,
 } from "./card-lines";
-import {
-  bridgeCard,
-  type FeatureInquiry,
-  monumentCard,
-  type TreeFacts,
-  treeCard,
-} from "./inquiry-features";
+import type { CardCredits, CardFact, InquiryCard } from "./card-lines";
+import { bridgeCard, monumentCard, treeCard } from "./inquiry-features";
+import type { FeatureInquiry, TreeFacts } from "./inquiry-features";
 import { moreCard } from "./inquiry-more";
 import type { Stated } from "./methods";
 import { bikeCard, trafficCard } from "./inquiry-traffic";
@@ -46,17 +38,18 @@ import {
   MEASURED_ROOF,
   MEASURED_SHAPE,
   NO_FACT,
-  type ObjectFacts,
 } from "./object-facts";
-import { parseLod2Stand, type SiteProvenance } from "./provenance";
+import type { ObjectFacts } from "./object-facts";
+import { parseLod2Stand } from "./provenance";
+import type { SiteProvenance } from "./provenance";
 import type { WindowSpec } from "./windows";
 import {
   factBuildings,
   factsFor,
   landmarkCardFacts,
-  type LandmarkFactsIndex,
   wikidataSource,
 } from "./landmark-facts";
+import type { LandmarkFactsIndex } from "./landmark-facts";
 
 export type { CardFact, InquiryCard } from "./card-lines";
 export { germanDates, metres, squareMetres } from "./card-lines";

@@ -7,7 +7,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, join } from "node:path";
-import { type DataManifest, MANIFEST_FILE } from "../lib/city/tile";
+import { MANIFEST_FILE } from "../lib/city/tile";
+import type { DataManifest } from "../lib/city/tile";
 
 /**
  * Where scripts/prepare-data.ts puts a site's served files (ADR 0007): each

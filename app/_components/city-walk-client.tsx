@@ -9,10 +9,12 @@ import {
 import type { SafetyLevel } from "@/lib/city/gpu-safety";
 import { loadStageStates } from "@/lib/city/load-stages";
 import { siteDataBase } from "@/lib/city/site-index";
-import { type DataManifest, MANIFEST_FILE, manifestUrl } from "@/lib/city/tile";
+import { MANIFEST_FILE, manifestUrl } from "@/lib/city/tile";
+import type { DataManifest } from "@/lib/city/tile";
 import { TILESET_FILE, TILESET_SPAWN_FILE } from "@/lib/city/tileset";
 import { BootError } from "./boot-error";
-import { type FetchedBytes, fetchBytes, isAbortError } from "./fetch-optional";
+import { fetchBytes, isAbortError } from "./fetch-optional";
+import type { FetchedBytes } from "./fetch-optional";
 import { pageSafety } from "./gpu-safety";
 import { LoadScreen } from "./load-screen";
 import { currentSceneBudget } from "./scene-profile";

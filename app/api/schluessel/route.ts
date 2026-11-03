@@ -10,10 +10,10 @@ import {
   ASK_KEY_HEADER,
   ASK_LIMITS,
   ASK_PROVIDER_BY_ID,
-  type AskProviderDef,
   isAskProvider,
   plausibleKey,
 } from "@/lib/city/ask-city";
+import type { AskProviderDef } from "@/lib/city/ask-city";
 import { issueAskToken } from "@/lib/city/ask-token";
 import { fakeModel } from "../frag/env";
 

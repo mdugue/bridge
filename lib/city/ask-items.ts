@@ -7,28 +7,24 @@
  * dressing already fetched; sized as the layers draw them, so a ray meets
  * what is on screen. No THREE, no DOM.
  */
-import {
-  type Aabb,
-  type AskHit,
-  type AskItem,
-  type AskSet,
-  type AskSolid,
-  type Cylinder,
-  cylindersBox,
-  rayCylinder,
-  type Xyz,
+import { cylindersBox, rayCylinder } from "./ask-solids";
+import type {
+  Aabb,
+  AskHit,
+  AskItem,
+  AskSet,
+  AskSolid,
+  Cylinder,
+  Xyz,
 } from "./ask-solids";
 import { axisFrame, BRIDGE_STEP } from "./bridge";
 import type { BridgeFeature, MonumentFeature, TreeFeature } from "./features";
-import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
+import { epsgToWorld } from "./ground-clamp";
+import type { RecenterOffset } from "./ground-clamp";
 import type { FeatureInquiry } from "./inquiry-features";
 import { monumentMarker, pointBasinRadius, ringCentre } from "./monuments";
-import {
-  ARCHETYPE_SHAPE,
-  archetypeOf,
-  type TreeArchetype,
-  treeExtents,
-} from "./tree-inventory";
+import { ARCHETYPE_SHAPE, archetypeOf, treeExtents } from "./tree-inventory";
+import type { TreeArchetype } from "./tree-inventory";
 import { TREE_GENERA } from "./tree-season";
 
 type HeightAt = (x: number, y: number) => number | null;

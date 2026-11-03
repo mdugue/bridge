@@ -1,16 +1,14 @@
 import { expect, test } from "bun:test";
-import { Matrix4, type Object3D, Vector3 } from "three/webgpu";
+import { Matrix4, Vector3 } from "three/webgpu";
+import type { Object3D } from "three/webgpu";
 import type { CanopyFeature, TreeFeature } from "@/lib/city/features";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { PINE_CROWN_BASE } from "@/lib/city/tree-inventory";
 import { pineSilhouette } from "./conifer-crown";
 import { isInstances } from "./instancing";
 import { buildTreeInventory } from "./tree-inventory-layer";
-import {
-  buildVegetation,
-  sceneCrowns,
-  type VegetationContext,
-} from "./vegetation-layer";
+import { buildVegetation, sceneCrowns } from "./vegetation-layer";
+import type { VegetationContext } from "./vegetation-layer";
 
 /** The sets under a root and the instances they draw (`drawCount`). */
 function census(root: Object3D): { instances: number; meshes: number } {

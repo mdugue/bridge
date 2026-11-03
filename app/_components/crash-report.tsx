@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { formatTrail, offerAsCrash, type Trail } from "@/lib/city/crash-trail";
+import { formatTrail, offerAsCrash } from "@/lib/city/crash-trail";
+import type { Trail } from "@/lib/city/crash-trail";
 import { crashReportsOn } from "./crash-reports";
 import {
   dismissPreviousTrail,

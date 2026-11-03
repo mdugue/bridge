@@ -6,7 +6,8 @@
  * only what stands inside it. World frame (Y-up) as lib/city/pose.ts. No
  * THREE, no DOM; the meshes are app/_components/model-cuts.ts.
  */
-import { groundAxes, type ModelView, modelFootprint } from "./model-view";
+import { groundAxes, modelFootprint } from "./model-view";
+import type { ModelView } from "./model-view";
 
 /** A point on the ground plane (world x, z). */
 export interface GroundPoint {

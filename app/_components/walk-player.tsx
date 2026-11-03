@@ -13,18 +13,16 @@ import {
 } from "lucide-react";
 import { Newsreader } from "next/font/google";
 import Image from "next/image";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import {
   isWalkBundle,
   CLOSER_LABEL,
   photoIsTall,
   photoPosition,
   stopNotes,
-  type Walk,
-  type WalkFact,
-  type WalkPhoto,
-  type WalkStop,
 } from "@/lib/city/walks";
+import type { Walk, WalkFact, WalkPhoto, WalkStop } from "@/lib/city/walks";
 import { Button } from "@/components/ui/button";
 import {
   Card,

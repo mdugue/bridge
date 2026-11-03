@@ -53,12 +53,8 @@
  * data/<site>/ into its tileset (prepare-sites.ts → prepare-data.ts).
  */
 import { spawnSync } from "node:child_process";
-import {
-  osmExtractUrl,
-  type Site,
-  tileExtentOf,
-  tileIdOf,
-} from "../lib/city/site";
+import { osmExtractUrl, tileExtentOf, tileIdOf } from "../lib/city/site";
+import type { Site } from "../lib/city/site";
 import { providerRawDir, siteDataDir } from "../lib/city/tile";
 import { siteFromArgs } from "../sites";
 

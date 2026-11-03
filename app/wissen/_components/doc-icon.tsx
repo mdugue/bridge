@@ -8,7 +8,6 @@ import {
   LayersIcon,
   LibraryIcon,
   ListChecksIcon,
-  type LucideProps,
   MilestoneIcon,
   MousePointerClickIcon,
   RouteIcon,
@@ -17,6 +16,7 @@ import {
   WaypointsIcon,
   WorkflowIcon,
 } from "lucide-react";
+import type { LucideProps } from "lucide-react";
 import type { ReactNode } from "react";
 
 type Glyph = (props: LucideProps) => ReactNode;

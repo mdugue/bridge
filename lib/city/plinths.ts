@@ -13,7 +13,8 @@
  * Pure, no THREE.
  */
 import type { PlinthFeature } from "./features";
-import { type JoinPoint, joinsAlong, SINK } from "./ground-join";
+import { joinsAlong, SINK } from "./ground-join";
+import type { JoinPoint } from "./ground-join";
 
 /** How the band stands: how far it stands out of the wall, how far it
  *  reaches back into it (LoD2's walls stand a decimetre or so off the

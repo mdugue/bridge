@@ -17,21 +17,16 @@ import {
 import { ownsPoint, TERRAIN_LEVELS } from "../../lib/city/tileset";
 import { BAKE_ENTRIES } from "../bake-entries";
 import {
-  type Dgm,
   fineTin,
   gridHeightAt,
   readDgm,
   shapeGrid,
-  type TerrainFeatures,
   tinHeightAt,
 } from "../bake-tiles";
+import type { Dgm, TerrainFeatures } from "../bake-tiles";
 import { FINE_TIN_MAX_ERROR } from "../bake-terrain-tin";
-import {
-  type FineGround,
-  packGround,
-  readGroundHeader,
-  unpackGround,
-} from "../ground-pack";
+import { packGround, readGroundHeader, unpackGround } from "../ground-pack";
+import type { FineGround } from "../ground-pack";
 import {
   landcoverLegendFile,
   stairLines,
@@ -39,11 +34,8 @@ import {
   wallLines,
   waterMember,
 } from "../tile-sources";
-import {
-  decodeLift,
-  type WaterLift,
-  type WaterMember,
-} from "../../lib/city/water-bodies";
+import { decodeLift } from "../../lib/city/water-bodies";
+import type { WaterLift, WaterMember } from "../../lib/city/water-bodies";
 import { SITE, TILES, at, cacheKey, cachedFile, log, since } from "./context";
 import { bedsIn, passagesIn, shapedBy, underDeck } from "./lines";
 import { offset } from "./frame";

@@ -3,9 +3,9 @@ import {
   createMemoryGovernor,
   MEMORY_STEPS,
   memoryFloorFor,
-  type MemoryLimits,
   memoryLimitsFor,
 } from "./memory-governor";
+import type { MemoryLimits } from "./memory-governor";
 import { SAFETY_LEVELS } from "./gpu-safety";
 
 const MB = 1024 * 1024;

@@ -1,12 +1,8 @@
 import {
   Box3,
-  type BufferAttribute,
-  type Camera,
   Color,
   Group,
   Matrix4,
-  type MeshStandardNodeMaterial,
-  type Object3D,
   PCFShadowMap,
   PerspectiveCamera,
   Quaternion,
@@ -16,6 +12,12 @@ import {
   Vector2,
   Vector3,
   WebGPURenderer,
+} from "three/webgpu";
+import type {
+  BufferAttribute,
+  Camera,
+  MeshStandardNodeMaterial,
+  Object3D,
 } from "three/webgpu";
 import { uniform } from "three/tsl";
 import { fogRangeFor, streamFarFor } from "@/lib/city/atmosphere";
@@ -30,31 +32,29 @@ import {
   createMemoryGovernor,
   memoryFloorFor,
   memoryLimitsFor,
-  type MemoryStep,
 } from "@/lib/city/memory-governor";
+import type { MemoryStep } from "@/lib/city/memory-governor";
 import {
   REST_SLICE_MS,
   SLICE_MS,
   setSliceBudget,
 } from "@/lib/city/build-steps";
-import { createStillness, type FramePace } from "@/lib/city/frame-pace";
+import { createStillness } from "@/lib/city/frame-pace";
+import type { FramePace } from "@/lib/city/frame-pace";
 import { createFrameTiming } from "@/lib/city/frame-timing";
 import {
   createResolutionScale,
   resolutionTargetsFor,
 } from "@/lib/city/resolution-scale";
 import { isAllocationFailure } from "@/lib/city/gpu-allocation";
-import {
-  type GpuLoss,
-  type SafetyLevel,
-  shadowTilesStream,
-} from "@/lib/city/gpu-safety";
+import { shadowTilesStream } from "@/lib/city/gpu-safety";
+import type { GpuLoss, SafetyLevel } from "@/lib/city/gpu-safety";
 import { bootingPose, startOf } from "@/lib/city/boot-start";
 import { createGround } from "@/lib/city/ground";
-import {
-  createPageLifecycle,
-  type LifecycleEffect,
-  type LifecycleSignal,
+import { createPageLifecycle } from "@/lib/city/page-lifecycle";
+import type {
+  LifecycleEffect,
+  LifecycleSignal,
 } from "@/lib/city/page-lifecycle";
 import type { Landmark } from "@/lib/city/landmarks";
 import {
@@ -63,8 +63,8 @@ import {
   bootFrontier,
   loadFrontier,
   stepVeil,
-  type VeilState,
 } from "@/lib/city/load-frontier";
+import type { VeilState } from "@/lib/city/load-frontier";
 import type { LoadStageId, LoadStageUpdate } from "@/lib/city/load-stages";
 import type { LookKey, LookValues } from "@/lib/city/look-controls";
 import type { LookState } from "@/lib/city/look-state";
@@ -73,9 +73,9 @@ import { activeDataLayers, siteDataLayers } from "@/lib/city/data-layers";
 import {
   nextRenderStyle,
   RENDER_STYLE_BY_ID,
-  type RenderStyle,
   styleInstant,
 } from "@/lib/city/render-style";
+import type { RenderStyle } from "@/lib/city/render-style";
 import { footprintPolys } from "@/lib/city/city-mesh";
 import type { FootprintPoly, MapTile } from "@/lib/city/minimap";
 import {
@@ -84,39 +84,30 @@ import {
   MODEL_SCALE_MAX,
   MODEL_SCALE_MAX_PHONE,
   MODEL_SHADOW_MAX,
-  type ModelPresetId,
   modelFootprint,
 } from "@/lib/city/model-view";
+import type { ModelPresetId } from "@/lib/city/model-view";
 import {
   SHADOW_MAX_RADIUS,
   shadowStreamResolution,
 } from "@/lib/city/shadow-fit";
 import { cutOutFromView } from "@/lib/city/section";
-import {
-  type ExportTile,
-  exportScale,
-  exportTiles,
-} from "@/lib/city/image-export";
+import { exportScale, exportTiles } from "@/lib/city/image-export";
+import type { ExportTile } from "@/lib/city/image-export";
 import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
 import type { CameraState, PlayerPose, Xyz } from "@/lib/city/pose";
 import { createRegressionState, stepRegression } from "@/lib/city/regression";
-import {
-  type Site,
-  spawnViewpoint,
-  tileExtentOf,
-  type ViewpointGeometry,
-} from "@/lib/city/site";
+import { spawnViewpoint, tileExtentOf } from "@/lib/city/site";
+import type { Site, ViewpointGeometry } from "@/lib/city/site";
 import { beyondExtents } from "@/lib/city/design-placement";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
-import {
-  parseTilesetExtras,
-  type TilesetExtras,
-  tileTopsOf,
-} from "@/lib/city/tileset";
+import { parseTilesetExtras, tileTopsOf } from "@/lib/city/tileset";
+import type { TilesetExtras } from "@/lib/city/tileset";
 import type { Inquiry, InquiryAlong } from "@/lib/city/inquiry";
 import type { WalksExtras } from "@/lib/city/walks";
 import { isLandmarkInquiry } from "@/lib/city/nameplate";
-import { type NameplateBody, nameplateBody } from "@/lib/city/nameplate-place";
+import { nameplateBody } from "@/lib/city/nameplate-place";
+import type { NameplateBody } from "@/lib/city/nameplate-place";
 import { valleyFalloff } from "@/lib/city/valley-fog";
 import {
   createLodSchedule,
@@ -126,28 +117,26 @@ import {
 import { stopBvhWorker } from "./bvh-client";
 import { stopGroundWorker } from "./ground-prep-client";
 import type { GlideOptions } from "./camera-flight";
-import { createCameraPose, type FollowAim } from "./camera-pose";
+import { createCameraPose } from "./camera-pose";
+import type { FollowAim } from "./camera-pose";
 import { canvasSizeFor } from "./canvas-size";
-import {
-  createModelRig,
-  type ModelHud,
-  type ModelRig,
-  type ViewMode,
-} from "./model-rig";
+import { createModelRig } from "./model-rig";
+import type { ModelHud, ModelRig, ViewMode } from "./model-rig";
 import type { ModelCamera } from "./model-camera";
 import { setViewDirection } from "./view-direction";
 import { siteMurals } from "./mural-layer";
 import { createViewLens } from "./view-lens";
 import { setPickRay } from "./view-ray";
 import {
-  type CityLayer,
   countBuildings,
   ensureCityBvh,
   nearestCityHit,
   nearestWithoutBvh,
   pickCityObject,
 } from "./city-layer";
-import { createInquiryProbe, type OutlineSubject } from "./inquiry-probe";
+import type { CityLayer } from "./city-layer";
+import { createInquiryProbe } from "./inquiry-probe";
+import type { OutlineSubject } from "./inquiry-probe";
 import {
   bridgeShape,
   buildingShape,
@@ -159,11 +148,8 @@ import {
 import type { OutlineSelection } from "./selection-outline";
 import { trafficMesh } from "./traffic-flow";
 import { createCityCollider } from "./collision";
-import {
-  createDesignLayer,
-  type DesignLayer,
-  type DesignStatus,
-} from "./design-layer";
+import { createDesignLayer } from "./design-layer";
+import type { DesignLayer, DesignStatus } from "./design-layer";
 import { cutsGround, foldedThing, groundKeptUnderDesign } from "./design-site";
 import { graphOf, setGraph } from "./material-slots";
 import type { CrashTrail } from "./crash-trail";
@@ -209,7 +195,8 @@ import {
   tickPocFrame,
   updatePocDebug,
 } from "./poc-debug";
-import { createPostStack, type PostStack } from "./post-stack";
+import { createPostStack } from "./post-stack";
+import type { PostStack } from "./post-stack";
 import { createNameplate } from "./nameplate-layer";
 import {
   cityHides,
@@ -217,27 +204,22 @@ import {
   createNameplateAsk,
   landmarkFactsHref,
 } from "./nameplate-ask";
-import { type SceneCensus, sceneCensus } from "./scene-census";
+import { sceneCensus } from "./scene-census";
+import type { SceneCensus } from "./scene-census";
 import { retainOpenSkyTexture } from "./sky-light";
 import {
   aoSamplesFor,
   postProfileFor,
   pixelRatioFor,
-  type SceneBudget,
   shadowMapSizeFor,
   reversedDepthFromSearch,
   tileCacheBytesFor,
 } from "./scene-profile";
-import {
-  type AirView,
-  createSunRig,
-  styleNight,
-  type SunState,
-  sunStateAt,
-} from "./sun-rig";
+import type { SceneBudget } from "./scene-profile";
+import { createSunRig, styleNight, sunStateAt } from "./sun-rig";
+import type { AirView, SunState } from "./sun-rig";
 import type { GroundUniforms, TerrainLayer } from "./terrain-layer";
 import {
-  type AnyAttribute,
   bufferBytes,
   bufferOf,
   disposeObject3D,
@@ -245,19 +227,19 @@ import {
   retainSceneMaterials,
   trackedTextureBytes,
 } from "./three-utils";
+import type { AnyAttribute } from "./three-utils";
 import {
   asksOf,
-  type CpuBytes,
   cpuBytesOf,
   createTileStream,
   DRESSING_PART_NAMES,
   DRESSING_PARTS,
-  type DressingPartName,
   showDataLayers,
-  type TileDressing,
   withinCompileWait,
 } from "./tile-stream";
-import { type GroundPlate, loadGroundPlate } from "./ground-plate-layer";
+import type { CpuBytes, DressingPartName, TileDressing } from "./tile-stream";
+import { loadGroundPlate } from "./ground-plate-layer";
+import type { GroundPlate } from "./ground-plate-layer";
 import { createNetworkWatch } from "./tile-retry";
 import { installMainYield } from "./main-yield";
 import {
@@ -269,11 +251,8 @@ import {
 } from "./stream-timing";
 import { attachInspector, inspectRequested } from "./inspector";
 import { attachTouchControls } from "./touch-controls";
-import {
-  createVegetationLod,
-  setCrownTime,
-  type VegetationControl,
-} from "./vegetation-layer";
+import { createVegetationLod, setCrownTime } from "./vegetation-layer";
+import type { VegetationControl } from "./vegetation-layer";
 import { createStyleResources, setClaySection } from "./visual-style";
 import { setWaterTime } from "./water-layer";
 import { createModelCuts } from "./model-cuts";
@@ -282,10 +261,9 @@ import {
   createHook,
   createWatch,
   lazyFeature,
-  type SceneClock,
-  type SpineHooks,
   wantOnSwitchOn,
 } from "./feature-seam";
+import type { SceneClock, SpineHooks } from "./feature-seam";
 
 /**
  * Vertical FOV. 55° (~85° horizontal at 16:9) reads like a natural human

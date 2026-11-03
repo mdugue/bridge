@@ -7,10 +7,8 @@ import {
   parseTrail,
   pushBeat,
   pushEvent,
-  type Trail,
-  type TrailBeat,
-  type TrailEvent,
 } from "@/lib/city/crash-trail";
+import type { Trail, TrailBeat, TrailEvent } from "@/lib/city/crash-trail";
 import { STORAGE_KEYS } from "./storage-keys";
 
 /**

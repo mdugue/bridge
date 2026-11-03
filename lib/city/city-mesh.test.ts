@@ -4,7 +4,6 @@ import {
   markGrounded,
   OBJECT_FLAG_FLAT_ROOF,
   OBJECT_FLAG_GROUNDED,
-  type CityObjectRow,
   countBuildings,
   doomedObjects,
   footprintPolys,
@@ -26,6 +25,7 @@ import {
   packObjectTexels,
   withoutTrafficStructures,
 } from "./city-mesh";
+import type { CityObjectRow } from "./city-mesh";
 import type { CityJsonDocument } from "./types";
 
 function row(partial: Partial<CityObjectRow>): CityObjectRow {

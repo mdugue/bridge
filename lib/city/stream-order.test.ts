@@ -6,10 +6,11 @@ import {
   isTileContent,
   keepOrder,
   siteTileOf,
-  type OrderedTile,
   streamOrder,
 } from "./stream-order";
-import { type BakedTile, buildTileset } from "./tileset";
+import type { OrderedTile } from "./stream-order";
+import { buildTileset } from "./tileset";
+import type { BakedTile } from "./tileset";
 
 const SPAWN = "33412_5656_2_sn";
 const NEIGHBOUR = "33414_5656_2_sn";

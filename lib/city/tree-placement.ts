@@ -6,7 +6,8 @@
  * coarse crown stands where its fine tree does. No THREE, no DOM.
  */
 import type { CanopyFeature, MonumentFeature, VegRowFeature } from "./features";
-import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
+import { epsgToWorld } from "./ground-clamp";
+import type { RecenterOffset } from "./ground-clamp";
 import { onRelief } from "./monuments";
 import { samplePolyline } from "./polyline";
 import type { RasterSampler } from "./raster-sampler";

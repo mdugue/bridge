@@ -3,13 +3,16 @@ import {
   parseStoredSafety,
   raisedSafety,
   resolveSafety,
-  type SafetyLevel,
   safetyOverride,
-  type SafetyStanding,
   safetyStanding,
-  type StoredSafety,
 } from "@/lib/city/gpu-safety";
-import { offerAsCrash, type Trail } from "@/lib/city/crash-trail";
+import type {
+  SafetyLevel,
+  SafetyStanding,
+  StoredSafety,
+} from "@/lib/city/gpu-safety";
+import { offerAsCrash } from "@/lib/city/crash-trail";
+import type { Trail } from "@/lib/city/crash-trail";
 import { pageStillOpen, previousTrail } from "./crash-trail";
 import { recentlyRecovered } from "./gpu-recovery";
 import { STORAGE_KEYS } from "./storage-keys";

@@ -5,13 +5,13 @@ import {
   foldName,
   matchesQuery,
   nearby,
-  type RawEntity,
   referencedItems,
   SERVER_WISSEN_DIR,
   wikidataFacts,
   wikidataTime,
   wikipediaUrl,
 } from "./stadtwissen";
+import type { RawEntity } from "./stadtwissen";
 
 test("a Wikidata time reads at its precision", () => {
   expect(wikidataTime({ time: "+1726-08-26T00:00:00Z", precision: 11 })).toBe(

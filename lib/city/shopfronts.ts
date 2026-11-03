@@ -29,9 +29,11 @@
  * and own colour, with an absolute roughness in its `rough` column.
  * Pure, no THREE.
  */
-import { rayHit, trianglesOnRays, type V3 } from "./doors";
+import { rayHit, trianglesOnRays } from "./doors";
+import type { V3 } from "./doors";
 import type { DoorFeature, ShopfrontWall } from "./features";
-import { type JoinPoint, joinsAlong, SINK } from "./ground-join";
+import { joinsAlong, SINK } from "./ground-join";
+import type { JoinPoint } from "./ground-join";
 
 /** The building glTF's position step (m): 16-bit positions over a 2 km
  *  tile's buildings (scripts/tile-glb.ts). Anything along the wall stands

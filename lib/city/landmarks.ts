@@ -4,7 +4,8 @@
  * the per-tile file the build reads, the site-wide list the tileset
  * carries for the HUD, and the vantage the HUD glides to. No THREE, no DOM.
  */
-import { overlook, type ViewpointGeometry } from "./site";
+import { overlook } from "./site";
+import type { ViewpointGeometry } from "./site";
 
 /** One landmark as the bake writes it (`landmarks_<tile>.json`). */
 export interface LandmarkEntry {

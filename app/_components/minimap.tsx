@@ -2,16 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { LANDCOVER_CLASSES, landcoverSrgb } from "@/lib/city/landcover";
-import { decodeGreyPng, type GreyRaster } from "@/lib/city/png-raster";
+import { decodeGreyPng } from "@/lib/city/png-raster";
+import type { GreyRaster } from "@/lib/city/png-raster";
 import {
   epsgToMapPx,
-  type FootprintPoly,
-  type MapBridge,
   mapBridges,
   mapHeightPx,
   mapPxToEpsg,
-  type MapTile,
 } from "@/lib/city/minimap";
+import type { FootprintPoly, MapBridge, MapTile } from "@/lib/city/minimap";
 import type { PlayerPose } from "@/lib/city/pose";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 

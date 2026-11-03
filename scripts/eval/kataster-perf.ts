@@ -15,7 +15,8 @@
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { chromium, type Page } from "@playwright/test";
+import { chromium } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 const BASE = process.env.BASE ?? "http://localhost:3101";
 const ROOT = join(import.meta.dir, "..", "..");

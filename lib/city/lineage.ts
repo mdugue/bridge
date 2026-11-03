@@ -21,7 +21,8 @@ import {
   OBJECT_SOURCE_SCAN,
   OBJECT_SOURCE_SHOPFRONT,
 } from "./city-mesh";
-import { type DrawnFacts, decodeDrawn } from "./drawn-facts";
+import { decodeDrawn } from "./drawn-facts";
+import type { DrawnFacts } from "./drawn-facts";
 import { FACADE_UNIT } from "./facade-reading";
 import { germanDates } from "./card-lines";
 import type { BuildingInquiry, Inquiry } from "./inquiry";
@@ -32,14 +33,12 @@ import type {
 } from "./inquiry-features";
 import type { CanopyInquiry, MoreInquiry } from "./inquiry-more";
 import type { BikeInquiry, TrafficInquiry } from "./inquiry-traffic";
-import { type DesignInquiry, PLACED } from "./inquiry-design";
-import { isMeasuredRoof, type ObjectFacts } from "./object-facts";
-import {
-  type OsmProduct,
-  parseLod2Stand,
-  type SiteProvenance,
-  type SourceKey,
-} from "./provenance";
+import { PLACED } from "./inquiry-design";
+import type { DesignInquiry } from "./inquiry-design";
+import { isMeasuredRoof } from "./object-facts";
+import type { ObjectFacts } from "./object-facts";
+import { parseLod2Stand } from "./provenance";
+import type { OsmProduct, SiteProvenance, SourceKey } from "./provenance";
 import type { Method, Stated } from "./methods";
 import type { Provider } from "./site";
 

@@ -11,7 +11,8 @@ import {
 } from "lucide-react";
 import { useId, useState } from "react";
 import { Input } from "@/components/ui/input";
-import { filterPlaces, type Place, PLACES_FIRST } from "@/lib/city/places";
+import { filterPlaces, PLACES_FIRST } from "@/lib/city/places";
+import type { Place } from "@/lib/city/places";
 import { cn } from "cn";
 
 const SECTION_LABEL =

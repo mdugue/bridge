@@ -5,10 +5,10 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Switch } from "@/components/ui/switch";
 import {
   BIKE_DIRECTION_TINTS,
-  type BikeCounter,
   countClock,
   tintCss,
 } from "@/lib/city/bike-counts";
+import type { BikeCounter } from "@/lib/city/bike-counts";
 import type { DataLayerDef, DataLayerKey } from "@/lib/city/data-layers";
 import type { LookValues } from "@/lib/city/look-controls";
 import { DataLayerSwatch } from "./data-layer-swatch";

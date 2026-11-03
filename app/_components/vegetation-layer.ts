@@ -1,20 +1,18 @@
 import {
-  type BufferGeometry,
   Color,
   CylinderGeometry,
   Group,
   IcosahedronGeometry,
   InstancedBufferAttribute,
-  type Material,
   Matrix4,
   MeshStandardNodeMaterial,
   Object3D,
   Quaternion,
   SRGBColorSpace,
-  type UniformNode,
   Vector2,
   Vector3,
 } from "three/webgpu";
+import type { BufferGeometry, Material, UniformNode } from "three/webgpu";
 import {
   atan,
   cameraPosition,
@@ -51,14 +49,14 @@ import {
 } from "three/tsl";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
-import { type GroundContext, groundSlope } from "@/lib/city/ground-clamp";
+import { groundSlope } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import { srgbToLinear } from "@/lib/city/landcover";
-import { LOOK_DEFAULTS, type LookValues } from "@/lib/city/look-controls";
+import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
+import type { LookValues } from "@/lib/city/look-controls";
 import { decodeGreyPng } from "@/lib/city/png-raster";
-import {
-  maxWindowSampler,
-  type RasterSampler,
-} from "@/lib/city/raster-sampler";
+import { maxWindowSampler } from "@/lib/city/raster-sampler";
+import type { RasterSampler } from "@/lib/city/raster-sampler";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
   pineBase,
@@ -75,38 +73,39 @@ import {
   cellKey,
   GENERIC_CROWN_FOOT,
   hash,
-  type Placement,
   rowPlacements,
-  type TreeVeto,
 } from "@/lib/city/tree-placement";
+import type { Placement, TreeVeto } from "@/lib/city/tree-placement";
 import { seasonJitter } from "@/lib/city/tree-season";
 import {
   CROWN_BASE_COLOR,
-  type CrownMaterials,
-  type CrownSeasonKey,
   crownSeasonNodes,
   crownsPrinted,
-  type CrownWarmup,
   crownWarmup,
-  type SeasonalCrowns,
   seasonCrowns,
 } from "./crown-season";
+import type {
+  CrownMaterials,
+  CrownSeasonKey,
+  CrownWarmup,
+  SeasonalCrowns,
+} from "./crown-season";
 import {
-  type ChunkLodState,
   createCrownPlanScratch,
-  type CrownTier,
   keepInFarTier,
   planCrownTiers,
   RICH_IN_M,
   RICH_OUT_M,
 } from "@/lib/city/vegetation-lod";
+import type { ChunkLodState, CrownTier } from "@/lib/city/vegetation-lod";
 import {
   boxOf,
   buildConeGeo,
   buildPineGeo,
   CONE_SEGMENTS,
 } from "./conifer-crown";
-import { finished, inRuns, type Steps } from "@/lib/city/build-steps";
+import { finished, inRuns } from "@/lib/city/build-steps";
+import type { Steps } from "@/lib/city/build-steps";
 import { fetchOptionalBinary } from "./fetch-optional";
 import {
   instanceFloat,
@@ -127,13 +126,12 @@ import {
   BARE_SHADE,
   crownLeaf,
   FOOT_SHOWN_M,
-  type FootGeos,
   MULCH_SRGB,
-  type FootMaterials,
   rootSeed,
   seasonalFoot,
   treeFeet,
 } from "./tree-foot";
+import type { FootGeos, FootMaterials } from "./tree-foot";
 
 export { bucketByCell, hash, type TreeVeto } from "@/lib/city/tree-placement";
 

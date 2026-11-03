@@ -7,12 +7,10 @@ import {
   RedFormat,
   RenderTarget,
   SRGBColorSpace,
-  type Texture,
-  type TextureNode,
   UnsignedByteType,
   Vector3,
-  type WebGPURenderer,
 } from "three/webgpu";
+import type { Texture, TextureNode, WebGPURenderer } from "three/webgpu";
 import {
   float,
   int,

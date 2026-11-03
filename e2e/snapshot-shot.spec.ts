@@ -6,9 +6,9 @@ import { arrivalHref } from "../lib/city/geolocation";
 import {
   decodeLook,
   parseSnapshot,
-  type Snapshot,
   snapshotInstant,
 } from "../lib/city/snapshot";
+import type { Snapshot } from "../lib/city/snapshot";
 import { siteById } from "../sites";
 
 /**

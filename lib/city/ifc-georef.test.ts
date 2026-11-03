@@ -3,11 +3,11 @@ import { latLngToUtm, utmToLatLng } from "./crs";
 import {
   compoundDegrees,
   epsgOfName,
-  type IfcPlacement,
   mapConversionPlacement,
   siPrefixFactor,
   siteReferencePlacement,
 } from "./ifc-georef";
+import type { IfcPlacement } from "./ifc-georef";
 
 /** A design-frame point (x, y up, z south) through a row-major matrix. */
 function apply(m: number[], [x, y, z]: [number, number, number]) {

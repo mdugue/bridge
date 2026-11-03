@@ -6,27 +6,27 @@
  * through the buildings' BVHs, never a tile whose BVH is being built), and
  * where the HUD covers the canvas (the panels marked `data-scene-cover`).
  */
-import { type Camera, Raycaster, Vector3 } from "three/webgpu";
+import { Raycaster, Vector3 } from "three/webgpu";
+import type { Camera } from "three/webgpu";
 import { cardCredits } from "@/lib/city/card-lines";
 import type { Inquiry } from "@/lib/city/inquiry";
 import { inquiryCard } from "@/lib/city/inquiry";
-import { type TreeFacts, treeFactsAt } from "@/lib/city/inquiry-features";
-import {
-  factsFor,
-  type LandmarkFactsIndex,
-  landmarkFactsUrl,
-} from "@/lib/city/landmark-facts";
+import { treeFactsAt } from "@/lib/city/inquiry-features";
+import type { TreeFacts } from "@/lib/city/inquiry-features";
+import { factsFor, landmarkFactsUrl } from "@/lib/city/landmark-facts";
+import type { LandmarkFactsIndex } from "@/lib/city/landmark-facts";
 import {
   inquiryBuildings,
   isLandmarkInquiry,
   nameplateEave,
-  type NameplateText,
   nameplateText,
 } from "@/lib/city/nameplate";
+import type { NameplateText } from "@/lib/city/nameplate";
 import type { NameplateBody, Vec3 } from "@/lib/city/nameplate-place";
 import type { Site } from "@/lib/city/site";
 import { loadTreeFacts } from "./card-fetch";
-import { type CityLayer, nearestCityHit } from "./city-layer";
+import { nearestCityHit } from "./city-layer";
+import type { CityLayer } from "./city-layer";
 import { loadLandmarkFacts } from "./landmark-facts-load";
 import type { Nameplate } from "./nameplate-layer";
 import { setPickRay } from "./view-ray";

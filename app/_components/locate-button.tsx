@@ -1,12 +1,7 @@
 "use client";
 
-import {
-  type RefObject,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { RefObject } from "react";
 import { arrivalHref, placementOf, siteHolding } from "@/lib/city/geolocation";
 import { EYE_HEIGHT } from "@/lib/city/pose";
 import { useOtherSites, useSite } from "./site-context";
@@ -16,8 +11,8 @@ import {
   describeFailure,
   describePlacement,
   locateMe,
-  type Offsite,
 } from "./locate-me";
+import type { Offsite } from "./locate-me";
 
 /** How long the result line stays up (ms). */
 const MESSAGE_MS = 5000;

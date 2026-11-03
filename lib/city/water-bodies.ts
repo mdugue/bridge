@@ -14,7 +14,8 @@
  */
 
 import { decodeGreyPng } from "./png-raster";
-import { isInvalidElevation, type TerrainBounds } from "./terrain-geometry";
+import { isInvalidElevation } from "./terrain-geometry";
+import type { TerrainBounds } from "./terrain-geometry";
 
 /** A side of a tile. */
 export type EdgeSide = "n" | "s" | "w" | "e";

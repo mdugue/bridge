@@ -15,13 +15,8 @@
  * so shaders derive data-frame coordinates from world space, never from
  * `position`. Build-time only; no DOM.
  */
-import {
-  Document,
-  getBounds,
-  Logger,
-  NodeIO,
-  type Primitive,
-} from "@gltf-transform/core";
+import { Document, getBounds, Logger, NodeIO } from "@gltf-transform/core";
+import type { Primitive } from "@gltf-transform/core";
 import {
   EXTMeshoptCompression,
   KHRMeshQuantization,

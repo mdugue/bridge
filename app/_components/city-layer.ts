@@ -1,25 +1,26 @@
 import {
   Box3,
   BufferAttribute,
-  type Camera,
   DataTexture,
   FloatType,
-  type Intersection,
-  type Matrix4,
-  type Mesh,
   NearestFilter,
-  type Object3D,
-  type Ray,
   RGBAFormat,
   Raycaster,
   Vector2,
+} from "three/webgpu";
+import type {
+  Camera,
+  Intersection,
+  Matrix4,
+  Mesh,
+  Object3D,
+  Ray,
 } from "three/webgpu";
 import { buildBvhOffThread, bvhBuilding, bvhLost } from "./bvh-client";
 import { rayEntry } from "./collision";
 import { streamTimings } from "./stream-timing";
 import { setPickRay } from "./view-ray";
 import {
-  type CityObjectTable,
   countBuildings as countLiveBuildings,
   shaderFlags,
   doomedObjects,
@@ -30,19 +31,20 @@ import {
   objectBandRows,
   packObjectTexels,
 } from "@/lib/city/city-mesh";
+import type { CityObjectTable } from "@/lib/city/city-mesh";
 import {
   appendTriangles,
   takeTriangles,
   wholeTrees,
 } from "@/lib/city/hidden-triangles";
-import { type ObjectFacts, readFacts } from "@/lib/city/object-facts";
+import { readFacts } from "@/lib/city/object-facts";
+import type { ObjectFacts } from "@/lib/city/object-facts";
 import type { StructuralMetadata } from "@/lib/city/property-table";
-import {
-  applyFacadeReadings,
-  type FacadeReadings,
-} from "@/lib/city/facade-reading";
+import { applyFacadeReadings } from "@/lib/city/facade-reading";
+import type { FacadeReadings } from "@/lib/city/facade-reading";
 import { textureBytes, trackTexture } from "./three-utils";
-import { createClayMaterial, type StyleResources } from "./visual-style";
+import { createClayMaterial } from "./visual-style";
+import type { StyleResources } from "./visual-style";
 
 /**
  * One tile's buildings: the streamed glTF mesh (scripts/bake-city-mesh.ts), its

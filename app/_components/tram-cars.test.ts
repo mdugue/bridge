@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import { Color, Matrix4, Vector3 } from "three/webgpu";
 import type { GroundContext } from "@/lib/city/ground-clamp";
-import { TRAM_LIVERIES, type TramTimetable } from "@/lib/city/tram-timetable";
+import { TRAM_LIVERIES } from "@/lib/city/tram-timetable";
+import type { TramTimetable } from "@/lib/city/tram-timetable";
 import type { Instances } from "./instancing";
 import { carSections, createTramCars } from "./tram-cars";
 

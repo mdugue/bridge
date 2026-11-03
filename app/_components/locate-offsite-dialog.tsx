@@ -19,7 +19,8 @@ import {
 } from "@/components/ui/dialog";
 import type { Viewpoint } from "@/lib/city/site";
 import { useSite } from "./site-context";
-import { describeOffsite, type Offsite } from "./locate-me";
+import { describeOffsite } from "./locate-me";
+import type { Offsite } from "./locate-me";
 
 /**
  * "Standort" found the player, but off the tiles. Rather than a line that

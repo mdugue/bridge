@@ -22,23 +22,17 @@ import type {
 import type { RecenterOffset } from "../lib/city/ground-clamp";
 import { decodeGreyPng } from "../lib/city/png-raster";
 import {
-  type PackedPoint,
   canopyStride,
   packPoints,
   pointFeatures,
   pointOf,
   unpackPoints,
 } from "../lib/city/point-pack";
-import {
-  maxWindowSampler,
-  type RasterSampler,
-} from "../lib/city/raster-sampler";
-import {
-  gapRoofs,
-  lod2Roofs,
-  type RoofFootprint,
-  treesOffRoofs,
-} from "../lib/city/roof-trees";
+import type { PackedPoint } from "../lib/city/point-pack";
+import { maxWindowSampler } from "../lib/city/raster-sampler";
+import type { RasterSampler } from "../lib/city/raster-sampler";
+import { gapRoofs, lod2Roofs, treesOffRoofs } from "../lib/city/roof-trees";
+import type { RoofFootprint } from "../lib/city/roof-trees";
 import { treesOffStructures } from "../lib/city/small-buildings";
 import type { TerrainBounds } from "../lib/city/terrain-geometry";
 import type { CityJsonDocument } from "../lib/city/types";

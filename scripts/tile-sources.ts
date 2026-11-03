@@ -15,12 +15,8 @@ import type {
 } from "../lib/city/features";
 import type { FenceLine, FenceType, GatePoint } from "../lib/city/fences";
 import type { KerbLine } from "../lib/city/kerbs";
-import {
-  type StairLine,
-  stairLineOf,
-  type Terrace,
-  terraceOf,
-} from "../lib/city/stairs";
+import { stairLineOf, terraceOf } from "../lib/city/stairs";
+import type { StairLine, Terrace } from "../lib/city/stairs";
 import type { WallLine } from "../lib/city/terrain-conflate";
 import {
   kerbSourceFile,
@@ -30,7 +26,8 @@ import {
   wallSourceFile,
 } from "../lib/city/tile";
 import type { WaterMember } from "../lib/city/water-bodies";
-import { type Masonry, masonryOf, type WallRibbon } from "../lib/city/walls";
+import { masonryOf } from "../lib/city/walls";
+import type { Masonry, WallRibbon } from "../lib/city/walls";
 import type { Site } from "../lib/city/site";
 
 const at = (path: string) => join(process.cwd(), path);

@@ -5,7 +5,6 @@ import {
   envelope,
   envelopeUrl,
   isAftermath,
-  type Payload,
   PROBLEMS_PER_PAGE,
   problemReport,
   reportBuild,
@@ -17,7 +16,9 @@ import {
   TUNNEL_PATH,
   tunnelRewrites,
 } from "./crash-reports";
-import { createTrail, pushBeat, pushEvent, type Trail } from "./crash-trail";
+import type { Payload } from "./crash-reports";
+import { createTrail, pushBeat, pushEvent } from "./crash-trail";
+import type { Trail } from "./crash-trail";
 
 const ID = "0123456789abcdef0123456789abcdef";
 const ctx = {

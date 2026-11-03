@@ -13,7 +13,8 @@
  * the track, never over it. DOM-free, THREE-free.
  */
 
-import { difference, type Polygon as ClipPolygon } from "polygon-clipping";
+import { difference } from "polygon-clipping";
+import type { Polygon as ClipPolygon } from "polygon-clipping";
 import type { MultiPolygonGeometry, PolygonGeometry } from "./features";
 import type { Point2 } from "./polyline";
 

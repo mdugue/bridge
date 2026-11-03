@@ -1,7 +1,6 @@
 import {
   BoxGeometry,
   BufferAttribute,
-  type BufferGeometry,
   CapsuleGeometry,
   Color,
   ConeGeometry,
@@ -11,7 +10,6 @@ import {
   Group,
   InstancedBufferAttribute,
   LatheGeometry,
-  type Material,
   Matrix4,
   Mesh,
   MeshBasicNodeMaterial,
@@ -24,6 +22,7 @@ import {
   Vector2,
   Vector3,
 } from "three/webgpu";
+import type { BufferGeometry, Material } from "three/webgpu";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
   attribute,
@@ -56,23 +55,20 @@ import type {
   MonumentFeature,
   ReliefGrid,
 } from "@/lib/city/features";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import {
   basinLevels,
   coveredFigure,
   FINISH,
-  type Finish,
   figureShare,
   fountainsRun,
   jetHeight,
   jetPlaces,
-  type MarkerPiece,
-  type MarkerTones,
   markerTones,
   monumentMarker,
   partFinish,
   pedestalCourses,
-  type MarkerSolid,
   openRing,
   pointBasinRadius,
   reliefSurface,
@@ -80,11 +76,18 @@ import {
   ringCentre,
   smallBasin,
 } from "@/lib/city/monuments";
+import type {
+  Finish,
+  MarkerPiece,
+  MarkerTones,
+  MarkerSolid,
+} from "@/lib/city/monuments";
 import type { Point2 } from "@/lib/city/polyline";
 import { ashlar, footprint } from "./bridge-surface";
 import { gdNoise } from "./ground-detail";
 import { Instances, instanceFloat, instancePosition } from "./instancing";
-import { dataXY, type F, type Live } from "./shader-chunks";
+import { dataXY } from "./shader-chunks";
+import type { F, Live } from "./shader-chunks";
 import { mirrorWeight, REFLECTIONS, skyReflection } from "./sky-reflection";
 import { sceneMaterial } from "./three-utils";
 import { viewDirection } from "./view-direction";

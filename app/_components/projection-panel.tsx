@@ -10,10 +10,10 @@ import {
   MODEL_PRESET_BY_ID,
   MODEL_PRESETS,
   MODEL_SCALES,
-  type ModelPresetId,
   presetGlyph,
   scaleLabel,
 } from "@/lib/city/model-view";
+import type { ModelPresetId } from "@/lib/city/model-view";
 import { cn } from "cn";
 import type { ModelHud } from "./model-rig";
 

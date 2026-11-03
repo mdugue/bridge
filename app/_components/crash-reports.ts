@@ -4,30 +4,27 @@ import {
   envelope,
   firstSet,
   isAftermath,
-  type Payload,
   PROBLEM_KINDS,
   problemReport,
-  type ReportContext,
   sessionEnvelope,
-  type SessionPayload,
   sessionUpdate,
   summaryDue,
   summaryMark,
   summaryReport,
   TUNNEL_PATH,
 } from "@/lib/city/crash-reports";
-import { offerAsCrash, type Trail } from "@/lib/city/crash-trail";
-import {
-  pageStillOpen,
-  previousTrail,
-  type TrailListener,
-} from "./crash-trail";
+import type {
+  Payload,
+  ReportContext,
+  SessionPayload,
+} from "@/lib/city/crash-reports";
+import { offerAsCrash } from "@/lib/city/crash-trail";
+import type { Trail } from "@/lib/city/crash-trail";
+import { pageStillOpen, previousTrail } from "./crash-trail";
+import type { TrailListener } from "./crash-trail";
 import { recentlyRecovered } from "./gpu-recovery";
-import {
-  type ReportsState,
-  reportsDeclined,
-  reportsState,
-} from "./report-choice";
+import { reportsDeclined, reportsState } from "./report-choice";
+import type { ReportsState } from "./report-choice";
 import { STORAGE_KEYS } from "./storage-keys";
 
 /**

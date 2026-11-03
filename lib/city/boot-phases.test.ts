@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { type BootInputs, createBootPhases } from "./boot-phases";
+import { createBootPhases } from "./boot-phases";
+import type { BootInputs } from "./boot-phases";
 
 const at = (over: Partial<BootInputs> = {}): BootInputs => ({
   siteTiles: 15,

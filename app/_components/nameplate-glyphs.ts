@@ -10,13 +10,13 @@
  * tilt. Beside the geometry, the block's silhouette as a small coverage
  * mask (`PlateGeometry.mask`): what the letters' cast shadow reads.
  */
-import { type NameplateText, titleLines } from "@/lib/city/nameplate";
-import {
-  NAMEPLATE_FACE_VARS,
-  type NameplateFace,
-  type NameplateSetting,
-  type NameplateType,
-  linesSize,
+import { titleLines } from "@/lib/city/nameplate";
+import type { NameplateText } from "@/lib/city/nameplate";
+import { NAMEPLATE_FACE_VARS, linesSize } from "@/lib/city/nameplate-type";
+import type {
+  NameplateFace,
+  NameplateSetting,
+  NameplateType,
 } from "@/lib/city/nameplate-type";
 import { signedDistanceField } from "@/lib/city/sdf";
 

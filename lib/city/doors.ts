@@ -8,7 +8,8 @@
  * Pure, no THREE.
  */
 import type { DoorFeature } from "./features";
-import { type JoinPoint, joinsAlong, SINK } from "./ground-join";
+import { joinsAlong, SINK } from "./ground-join";
+import type { JoinPoint } from "./ground-join";
 
 /** How the surround stands: its jambs' and lintel's width, how far it
  *  stands out of the wall, and how far it reaches back into it (the LoD2

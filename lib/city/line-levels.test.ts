@@ -2,7 +2,8 @@ import { expect, test } from "bun:test";
 import { bridgeDecks } from "./decks";
 import type { BridgeFeature } from "./features";
 import { runLevelAt } from "./levels";
-import { type LinePiece, pieceSamples, solvePieces } from "./line-levels";
+import { pieceSamples, solvePieces } from "./line-levels";
+import type { LinePiece } from "./line-levels";
 
 const offset = { cx: 0, cy: 0 };
 /** An embankment at 117.5 along y = 0 with a 120 m gap (the street the

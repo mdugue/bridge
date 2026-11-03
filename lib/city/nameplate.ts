@@ -9,13 +9,11 @@
  */
 import type { InquiryCard } from "./card-lines";
 import { OBJECT_FLAG_LANDMARK, OBJECT_SOURCE_LOD2 } from "./city-mesh";
-import { cardHeight, type Inquiry, type InquiryObject } from "./inquiry";
+import { cardHeight } from "./inquiry";
+import type { Inquiry, InquiryObject } from "./inquiry";
 import { UNKNOWN_SPECIES } from "./inquiry-more";
-import {
-  factBuildings,
-  factLines,
-  type LandmarkFactsEntry,
-} from "./landmark-facts";
+import { factBuildings, factLines } from "./landmark-facts";
+import type { LandmarkFactsEntry } from "./landmark-facts";
 import { NO_FACT } from "./object-facts";
 
 /** How much the plate says, and how large: a landmark's name and facts,

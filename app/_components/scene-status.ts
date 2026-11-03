@@ -27,11 +27,8 @@ import type {
 } from "@/lib/city/load-stages";
 import type { FootprintPoly } from "@/lib/city/minimap";
 import type { PlayerPose } from "@/lib/city/pose";
-import {
-  createSliceStore,
-  dataEqual,
-  type SliceStore,
-} from "@/lib/city/slice-store";
+import { createSliceStore, dataEqual } from "@/lib/city/slice-store";
+import type { SliceStore } from "@/lib/city/slice-store";
 import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
 import { layerErrorText } from "./boot-error";
 import type { CityWalkOptions, CityWalkStats, SiteInfo } from "./create-app";

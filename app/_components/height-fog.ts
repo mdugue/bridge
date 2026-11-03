@@ -2,9 +2,9 @@ import {
   AdditiveBlending,
   Color,
   MultiplyBlending,
-  type Scene,
   Vector4,
 } from "three/webgpu";
+import type { Scene } from "three/webgpu";
 import { VALLEY_FALLOFF_MAX, VALLEY_NEAR_M } from "@/lib/city/valley-fog";
 import {
   clamp,

@@ -9,7 +9,8 @@
  *
  * Pure: no THREE, no DOM.
  */
-import { TREE_GENERA, type TreeGenus } from "./tree-season";
+import { TREE_GENERA } from "./tree-season";
+import type { TreeGenus } from "./tree-season";
 
 export const TREE_FAMILIES = [
   "generic",

@@ -14,8 +14,8 @@ import {
   sportMarkingId,
   sportShapeId,
   sportSurfaceId,
-  type SportTable,
 } from "./sport";
+import type { SportTable } from "./sport";
 import { siteDataDir } from "./tile";
 
 interface CommittedTable extends SportTable {

@@ -1,11 +1,9 @@
 import {
   AdditiveBlending,
   BoxGeometry,
-  type BufferGeometry,
   CircleGeometry,
   CylinderGeometry,
   Group,
-  type Material,
   Matrix4,
   MeshBasicNodeMaterial,
   MeshStandardNodeMaterial,
@@ -14,6 +12,7 @@ import {
   PointsNodeMaterial,
   Vector3,
 } from "three/webgpu";
+import type { BufferGeometry, Material } from "three/webgpu";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { color, float, mix, select, uniform, uv, vec3, vec4 } from "three/tsl";
 import type { LampFeature } from "@/lib/city/features";
@@ -25,13 +24,15 @@ import {
   LAMP_POST_H,
   postHeight,
 } from "@/lib/city/lamps";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import { Instances, instancePosition } from "./instancing";
 import type { Pt } from "./mesh-kit";
 import type { DeviceTier } from "./scene-profile";
 import type { F, Live } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
-import { addWire, wireMesh, wires, type Wires } from "./wire-ribbons";
+import { addWire, wireMesh, wires } from "./wire-ribbons";
+import type { Wires } from "./wire-ribbons";
 
 /** A post's height (m) where the bake measured none. */
 const LAMP_H = LAMP_POST_H;

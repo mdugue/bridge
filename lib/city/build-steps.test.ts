@@ -7,8 +7,8 @@ import {
   REST_SLICE_MS,
   SLICE_MS,
   setSliceBudget,
-  type Steps,
 } from "./build-steps";
+import type { Steps } from "./build-steps";
 
 function* counted(n: number, log: number[]): Steps<number> {
   for (let i = 0; i < n; i++) {

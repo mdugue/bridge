@@ -17,40 +17,36 @@ import {
   burnStairs,
   raiseTerraces,
   stairColors,
-  type StairLine,
   stairRails,
-  type StairSurround,
   stairGeometry,
-  type Terrace,
 } from "../lib/city/stairs";
-import { carvePassages, type Passage } from "../lib/city/passages";
-import { BED_TIN_ERROR, type Bed, burnBeds } from "../lib/city/track-beds";
-import { raiseWater, type WaterLift } from "../lib/city/water-bodies";
+import type { StairLine, StairSurround, Terrace } from "../lib/city/stairs";
+import { carvePassages } from "../lib/city/passages";
+import type { Passage } from "../lib/city/passages";
+import { BED_TIN_ERROR, burnBeds } from "../lib/city/track-beds";
+import type { Bed } from "../lib/city/track-beds";
+import { raiseWater } from "../lib/city/water-bodies";
+import type { WaterLift } from "../lib/city/water-bodies";
 import { ownsPoint } from "../lib/city/tileset";
-import { conflateWalls, type WallLine } from "../lib/city/terrain-conflate";
-import {
-  wallColors,
-  type WallOptions,
-  type WallRibbon,
-  wallGeometry,
-} from "../lib/city/walls";
-import {
-  type FenceLine,
-  fenceGeometry,
-  type GatePoint,
-} from "../lib/city/fences";
-import { kerbGeometry, type KerbLine } from "../lib/city/kerbs";
+import { conflateWalls } from "../lib/city/terrain-conflate";
+import type { WallLine } from "../lib/city/terrain-conflate";
+import { wallColors, wallGeometry } from "../lib/city/walls";
+import type { WallOptions, WallRibbon } from "../lib/city/walls";
+import { fenceGeometry } from "../lib/city/fences";
+import type { FenceLine, GatePoint } from "../lib/city/fences";
+import { kerbGeometry } from "../lib/city/kerbs";
+import type { KerbLine } from "../lib/city/kerbs";
 import {
   buildTerrainGeometryData,
   sampleHeightfield,
-  type TerrainBounds,
 } from "../lib/city/terrain-geometry";
+import type { TerrainBounds } from "../lib/city/terrain-geometry";
 import {
   buildTinGeometryData,
-  type TerrainTin,
   TinIndex,
   tinSurface,
 } from "../lib/city/terrain-tin";
+import type { TerrainTin } from "../lib/city/terrain-tin";
 import { tfwToBounds } from "../lib/city/tfw";
 import { tinFromGrid } from "./bake-terrain-tin";
 import type { MeshInput } from "./tile-glb";

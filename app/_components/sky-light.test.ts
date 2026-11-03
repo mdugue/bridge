@@ -5,11 +5,10 @@ import {
   LinearFilter,
   Mesh,
   MeshStandardNodeMaterial,
-  type Node,
   TextureNode,
-  type Vector2,
   Vector3,
 } from "three/webgpu";
+import type { Node, Vector2 } from "three/webgpu";
 import { float, uniform } from "three/tsl";
 import { dressFences } from "./fence-layer";
 import { slotsOf } from "./material-slots";
@@ -18,13 +17,13 @@ import {
   applyGroundLight,
   claySkySlots,
   createClaySky,
-  type GroundLight,
   groundLitMaterial,
   HORIZON_SHADE,
   openSkySlots,
   openSkyTexture,
   SKY_VIEW,
 } from "./sky-light";
+import type { GroundLight } from "./sky-light";
 import { dressStairs } from "./stair-layer";
 import { dressWalls } from "./wall-layer";
 

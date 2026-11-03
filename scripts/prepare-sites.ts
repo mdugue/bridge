@@ -29,17 +29,16 @@ import { createInterface } from "node:readline";
 import {
   SITE_INDEX_FILE,
   SITE_MAP_FILE,
-  type SiteIndex,
   siteDataBase,
 } from "../lib/city/site-index";
+import type { SiteIndex } from "../lib/city/site-index";
 import { siteReport } from "../lib/city/site-report";
-import {
-  SERVER_WISSEN_DIR,
-  STADTWISSEN_FILE,
-  type StadtwissenIndex,
-} from "../lib/city/stadtwissen";
-import { type DataManifest, MANIFEST_FILE, tileIds } from "../lib/city/tile";
-import { type SiteId, SITES, siteById } from "../sites";
+import { SERVER_WISSEN_DIR, STADTWISSEN_FILE } from "../lib/city/stadtwissen";
+import type { StadtwissenIndex } from "../lib/city/stadtwissen";
+import { MANIFEST_FILE, tileIds } from "../lib/city/tile";
+import type { DataManifest } from "../lib/city/tile";
+import { SITES, siteById } from "../sites";
+import type { SiteId } from "../sites";
 import {
   bakeLimits,
   createSlots,

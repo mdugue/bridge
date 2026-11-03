@@ -46,9 +46,9 @@ import {
   parkingPlaceId,
   SURFACE_ALONG_BITS,
   SURFACE_ALONG_PERIOD,
-  type SurfaceKind,
   surfaceId,
 } from "@/lib/city/landcover";
+import type { SurfaceKind } from "@/lib/city/landcover";
 import { KERB_HEIGHT } from "@/lib/city/kerbs";
 import { LANE_BITS } from "@/lib/city/markings";
 import type { F, I, Tex, V2, V3, V4 } from "./shader-chunks";

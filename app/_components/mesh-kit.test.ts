@@ -5,11 +5,11 @@ import {
   addFootprint,
   addRibbon,
   addStrut,
-  type Mesh3,
   mesh3,
   meshFrom,
   quad,
 } from "./mesh-kit";
+import type { Mesh3 } from "./mesh-kit";
 
 /** Every triangle's geometric normal points the way its stored normal
  *  does: the kit's one guarantee (every material is FrontSide). */

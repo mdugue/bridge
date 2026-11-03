@@ -3,7 +3,8 @@ import { Object3D } from "three/webgpu";
 import { createLookState } from "@/lib/city/look-state";
 import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
 import { startDataLayers } from "./data-layers-feature";
-import { createHook, createWatch, type SceneClock } from "./feature-seam";
+import { createHook, createWatch } from "./feature-seam";
+import type { SceneClock } from "./feature-seam";
 
 test("data layers that start late catch up with the look and the clock, and let go of the hooks", () => {
   const frame = createHook<[number, number]>();

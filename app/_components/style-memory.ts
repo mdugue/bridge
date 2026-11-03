@@ -1,5 +1,6 @@
 import type { LookState } from "@/lib/city/look-state";
-import { isRenderStyle, type RenderStyle } from "@/lib/city/render-style";
+import { isRenderStyle } from "@/lib/city/render-style";
+import type { RenderStyle } from "@/lib/city/render-style";
 import { STORAGE_KEYS } from "./storage-keys";
 
 /**

@@ -1,12 +1,10 @@
 "use client";
 
 import { cn } from "cn";
-import {
-  type LoadStageState,
-  loadHeadline,
-  WALKABLE_PERCENT,
-} from "@/lib/city/load-stages";
-import { type ReactNode, useId } from "react";
+import { loadHeadline, WALKABLE_PERCENT } from "@/lib/city/load-stages";
+import type { LoadStageState } from "@/lib/city/load-stages";
+import { useId } from "react";
+import type { ReactNode } from "react";
 import { useSite } from "./site-context";
 
 /**

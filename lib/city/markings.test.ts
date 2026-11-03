@@ -9,10 +9,10 @@ import {
   MARKING_OFFSET_SCALE,
   MARKING_KINDS,
   MARKING_PATTERN,
-  type MarkingTable,
   markingKindId,
   packMarkingTable,
 } from "./markings";
+import type { MarkingTable } from "./markings";
 import { sideFileSource, tileArtifacts, tileIds } from "./tile";
 
 const ROOT = join(import.meta.dir, "..", "..");

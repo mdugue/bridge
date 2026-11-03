@@ -10,11 +10,10 @@ import {
   stopNotes,
   stopPlaces,
   stopView,
-  type Walk,
   walkBundle,
-  type WalkStop,
   walkProblems,
 } from "./walks";
+import type { Walk, WalkStop } from "./walks";
 
 const stop: WalkStop = {
   id: "kuppel",

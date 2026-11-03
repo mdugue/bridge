@@ -1,11 +1,5 @@
-import {
-  type RefObject,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { RefObject } from "react";
 import { gridConvergenceDeg } from "@/lib/city/crs";
 import { normalizeDeg, placementOf } from "@/lib/city/geolocation";
 import { useSite } from "./site-context";

@@ -1,9 +1,5 @@
 import { expect, test } from "bun:test";
 import {
-  type NameplateBody,
-  type NameplateCamera,
-  type NameplateScene,
-  type Vec3,
   capHeight,
   chooseNameplate,
   nameplateBody,
@@ -11,6 +7,12 @@ import {
   nameplatePose,
   nameplateSide,
   sameLayout,
+} from "./nameplate-place";
+import type {
+  NameplateBody,
+  NameplateCamera,
+  NameplateScene,
+  Vec3,
 } from "./nameplate-place";
 
 /** A box's triangles' positions (only its corners matter here). */

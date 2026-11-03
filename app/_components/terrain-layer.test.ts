@@ -11,10 +11,9 @@ import {
   MeshStandardNodeMaterial,
   RedFormat,
   RGBAFormat,
-  type Texture,
   Vector3,
-  type WebGPURenderer,
 } from "three/webgpu";
+import type { Texture, WebGPURenderer } from "three/webgpu";
 import { uniform } from "three/tsl";
 import type { TerrainExtras } from "@/lib/city/tileset";
 import type { SharedRasters } from "./shared-rasters";
@@ -22,11 +21,13 @@ import {
   createGridShare,
   createTerrainMaterial,
   dressTerrain,
-  type GroundUniforms,
   readsSportGrounds,
-  type SplatLayer,
-  type SplatRasters,
-  type SportRasters,
+} from "./terrain-layer";
+import type {
+  GroundUniforms,
+  SplatLayer,
+  SplatRasters,
+  SportRasters,
 } from "./terrain-layer";
 import { isSceneShared } from "./three-utils";
 

@@ -1,21 +1,23 @@
 import {
-  type Box3,
-  type Camera,
   Color,
-  type DepthTexture,
   DirectionalLight,
   HemisphereLight,
-  type Light,
-  type LightShadow,
-  type Matrix4,
-  type Node,
-  type NodeBuilder,
   OrthographicCamera,
-  type PerspectiveCamera,
   RenderTarget,
   Scene,
   ShadowNode,
   Vector3,
+} from "three/webgpu";
+import type {
+  Box3,
+  Camera,
+  DepthTexture,
+  Light,
+  LightShadow,
+  Matrix4,
+  Node,
+  NodeBuilder,
+  PerspectiveCamera,
 } from "three/webgpu";
 import { SkyMesh } from "three/addons/objects/SkyMesh.js";
 import {
@@ -48,10 +50,9 @@ import {
   WARP_MAX_REACH_M,
   WARP_REACH_OF_FOG,
   WARP_UNTIL_M,
-  type WarpFit,
-  type WarpView,
   warpCovers,
 } from "./shadow-warp";
+import type { WarpFit, WarpView } from "./shadow-warp";
 import { sunDirectionWorld } from "@/lib/city/sun";
 import { shadowMapBytesFor } from "./scene-profile";
 import { createSkyReflection } from "./sky-reflection";

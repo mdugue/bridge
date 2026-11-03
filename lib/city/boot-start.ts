@@ -5,7 +5,8 @@
  * the camera stands while the boot waits for that place's tile.
  */
 
-import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
+import { epsgToWorld } from "./ground-clamp";
+import type { RecenterOffset } from "./ground-clamp";
 import type { CameraState } from "./pose";
 import type { ViewpointGeometry } from "./site";
 

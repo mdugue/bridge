@@ -17,18 +17,21 @@
  * Each wall is toned by its material (`WALL_TONES`, the mesh's vertex
  * colours).
  */
-import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
-import { type Point2, subdividePolyline } from "./polyline";
+import { epsgToWorld } from "./ground-clamp";
+import type { RecenterOffset } from "./ground-clamp";
+import { subdividePolyline } from "./polyline";
+import type { Point2 } from "./polyline";
 import {
   EDGE_TOLERANCE_M,
   farthestNear,
-  type JoinPoint,
   joinsAlong,
   lowestGround,
   reachLevel,
   SINK,
 } from "./ground-join";
-import { type StepSnap, smoothSnaps, snapToStep } from "./wall-snap";
+import type { JoinPoint } from "./ground-join";
+import { smoothSnaps, snapToStep } from "./wall-snap";
+import type { StepSnap } from "./wall-snap";
 
 export interface WallRibbon {
   /** EPSG coordinates (NOT recentered) */

@@ -8,7 +8,6 @@ import {
   doorSlot,
   FACADE_ROOF,
   FACADE_SCALE_M,
-  type FacadeModel,
   facadeAttribute,
   flatTownHouse,
   NEAR_M,
@@ -34,13 +33,12 @@ import {
   unpackStyle,
   WINDOW_LIFT,
   WINDOW_ROWS,
-  type WindowHost,
-  type WindowWall,
   windowless,
   windowSpecs,
   windowStorey,
   windowType,
 } from "./windows";
+import type { FacadeModel, WindowHost, WindowWall } from "./windows";
 
 const model = (extra: Partial<FacadeModel> = {}): FacadeModel => ({
   axis: 3,

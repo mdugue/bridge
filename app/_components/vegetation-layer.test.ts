@@ -3,9 +3,9 @@ import {
   Color,
   Matrix4,
   MeshStandardNodeMaterial,
-  type Object3D,
   Vector3,
 } from "three/webgpu";
+import type { Object3D } from "three/webgpu";
 import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import {
@@ -31,8 +31,8 @@ import {
   createVegetationLod,
   setCrownTime,
   TRUNK_H,
-  type VegetationContext,
 } from "./vegetation-layer";
+import type { VegetationContext } from "./vegetation-layer";
 
 /** Instances drawn under a root (each set's `drawCount`). */
 function instancesIn(root: Object3D): number {

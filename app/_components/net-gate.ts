@@ -1,8 +1,5 @@
-import {
-  createVisibleClock,
-  type RetryEnv,
-  type RetryNote,
-} from "@/lib/city/fetch-retry";
+import { createVisibleClock } from "@/lib/city/fetch-retry";
+import type { RetryEnv, RetryNote } from "@/lib/city/fetch-retry";
 
 /**
  * The page's one view of its network, for every retry

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { Matrix4, PerspectiveCamera } from "three";
-import { blurs, BLUR_JUMP_PX, type Motion, motionPixels } from "./motion-blur";
+import { blurs, BLUR_JUMP_PX, motionPixels } from "./motion-blur";
+import type { Motion } from "./motion-blur";
 
 const W = 1000;
 const H = 600;

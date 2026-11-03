@@ -5,11 +5,10 @@ import {
   cutWallGates,
   FENCE_CODE,
   FENCE_UV_CODES,
-  type FenceGeometryData,
   fenceGeometry,
   fenceU,
-  type GatePoint,
 } from "./fences";
+import type { FenceGeometryData, GatePoint } from "./fences";
 import type { Point2 } from "./polyline";
 
 const offset = { cx: 0, cy: 0 };

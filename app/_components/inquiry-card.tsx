@@ -1,29 +1,24 @@
 "use client";
 
 import { CheckIcon, CopyIcon, XIcon } from "lucide-react";
-import {
-  type ElementType,
-  type ReactNode,
-  type RefObject,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ElementType, ReactNode, RefObject } from "react";
 import {
   Drawer,
   DrawerClose,
   DrawerContent,
   DrawerTitle,
 } from "@/components/ui/drawer";
-import {
-  type Inquiry,
-  type InquiryCard as InquiryCardModel,
-  inquiryCard,
+import { inquiryCard } from "@/lib/city/inquiry";
+import type {
+  Inquiry,
+  InquiryCard as InquiryCardModel,
 } from "@/lib/city/inquiry";
 import type { LandmarkFactsIndex } from "@/lib/city/landmark-facts";
-import { type TreeFacts, treeFactsAt } from "@/lib/city/inquiry-features";
-import { isSiteProvenance, type SiteProvenance } from "@/lib/city/provenance";
+import { treeFactsAt } from "@/lib/city/inquiry-features";
+import type { TreeFacts } from "@/lib/city/inquiry-features";
+import { isSiteProvenance } from "@/lib/city/provenance";
+import type { SiteProvenance } from "@/lib/city/provenance";
 import type { Drawer as DrawerPrimitive } from "@base-ui/react/drawer";
 import { cardCredits } from "@/lib/city/card-lines";
 import { cachedFetch, isTreeFacts, treeFactsFetches } from "./card-fetch";

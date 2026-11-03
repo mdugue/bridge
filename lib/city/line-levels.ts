@@ -16,7 +16,8 @@
  * (lib/city/line-profile.ts, the feature's `lz`), indexed by the very
  * samples the layer takes (`subdividePolyline` at LEVEL_STEP).
  */
-import { type DeckPoly, decksAt } from "./decks";
+import { decksAt } from "./decks";
+import type { DeckPoly } from "./decks";
 import type { RailFeature } from "./features";
 import { epsgToWorld } from "./ground-clamp";
 import {
@@ -24,15 +25,13 @@ import {
   LEVEL_CUT_M,
   LEVEL_SPAN_M,
   LEVEL_STEP,
-  type Level,
-  type LevelLine,
-  type LevelRun,
-  type LevelSample,
   lineGrade,
   lineLevels,
 } from "./levels";
+import type { Level, LevelLine, LevelRun, LevelSample } from "./levels";
 import { lineProfile, profileOptions } from "./line-profile";
-import { type Point2, subdividePolyline } from "./polyline";
+import { subdividePolyline } from "./polyline";
+import type { Point2 } from "./polyline";
 
 /** One piece of a line as a tile's file has it. */
 export interface LinePiece {

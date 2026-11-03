@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, jest, test } from "bun:test";
-import { createNetGate, type GatePage } from "./net-gate";
+import { createNetGate } from "./net-gate";
+import type { GatePage } from "./net-gate";
 
 /** A page on a clock the test moves: visible and online until told. */
 function fakePage() {

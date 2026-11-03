@@ -4,22 +4,22 @@ import {
   crossSections,
   MAST_HEAD_M,
   MAST_OFFSET_M,
-  type MastPlan,
   messengerDrop,
   OVERPASS_CLEAR_M,
-  type SectionMember,
   sectionPlan,
   staggerAt,
   staggerSides,
-  type Support,
   supportStations,
   SYSTEM_HEIGHT_M,
   underBridge,
   wireStations,
 } from "@/lib/city/catenary";
+import type { MastPlan, SectionMember, Support } from "@/lib/city/catenary";
 import type { GroundContext } from "@/lib/city/ground-clamp";
-import { type Mesh3, type P3, type Pt, quad } from "./mesh-kit";
-import { addWire, wireMesh, wires, type Wires } from "./wire-ribbons";
+import { quad } from "./mesh-kit";
+import type { Mesh3, P3, Pt } from "./mesh-kit";
+import { addWire, wireMesh, wires } from "./wire-ribbons";
+import type { Wires } from "./wire-ribbons";
 
 /**
  * The main lines' overhead contact line (lib/city/catenary.ts), over the

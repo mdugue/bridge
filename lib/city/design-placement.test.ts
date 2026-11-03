@@ -7,7 +7,6 @@ import {
   beyondExtents,
   elsewhereFrame,
   elsewhereNote,
-  type DesignBox,
   designAnchor,
   detectGeoreference,
   groundBase,
@@ -21,6 +20,7 @@ import {
   trustedBase,
   utmZone,
 } from "./design-placement";
+import type { DesignBox } from "./design-placement";
 import type { TerrainBounds } from "./terrain-geometry";
 
 const local: DesignBox = { min: [-10, 0, -5], max: [10, 12, 5] };

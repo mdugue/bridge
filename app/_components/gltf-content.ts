@@ -1,16 +1,16 @@
 import type { TilesRenderer } from "3d-tiles-renderer/three";
-import {
-  type GLTF,
-  GLTFLoader,
-  type GLTFLoaderPlugin,
-  type GLTFParser,
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import type {
+  GLTF,
+  GLTFLoaderPlugin,
+  GLTFParser,
 } from "three/addons/loaders/GLTFLoader.js";
 import type { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import {
   propertyTableViews,
   readStructuralMetadata,
-  type StructuralMetadataJson,
 } from "@/lib/city/property-table";
+import type { StructuralMetadataJson } from "@/lib/city/property-table";
 
 const METADATA = "EXT_structural_metadata";
 

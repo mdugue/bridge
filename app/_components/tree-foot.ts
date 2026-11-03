@@ -3,16 +3,18 @@ import {
   BufferAttribute,
   BufferGeometry,
   InterpolationSamplingType,
-  type Material,
-  type Node,
-  type NodeBuilder,
   MeshLambertNodeMaterial,
   MeshStandardNodeMaterial,
   MultiplyBlending,
-  type Texture,
-  type UniformNode,
   Vector2,
-  type Vector3,
+} from "three/webgpu";
+import type {
+  Material,
+  Node,
+  NodeBuilder,
+  Texture,
+  UniformNode,
+  Vector3,
 } from "three/webgpu";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
@@ -75,26 +77,17 @@ import {
 } from "./ground-detail";
 import { instanceFloat, Instances } from "./instancing";
 import {
-  type Slots,
   setGraph,
   setSlots,
   slotsOf,
   ownSlotTexture,
   ownSlotValue,
 } from "./material-slots";
-import {
-  type F,
-  rasterUv,
-  type Tex,
-  type V2,
-  type V3,
-  type V4,
-} from "./shader-chunks";
-import {
-  applyGroundLight,
-  type GroundLight,
-  groundLightKey,
-} from "./sky-light";
+import type { Slots } from "./material-slots";
+import { rasterUv } from "./shader-chunks";
+import type { F, Tex, V2, V3, V4 } from "./shader-chunks";
+import { applyGroundLight, groundLightKey } from "./sky-light";
+import type { GroundLight } from "./sky-light";
 
 /**
  * Where a tree meets the ground. A trunk alone stabbed into a flat ground

@@ -6,7 +6,8 @@
 import { existsSync } from "node:fs";
 import { cityMeshSourceFiles } from "../../lib/city/tile";
 import type { CityJsonDocument } from "../../lib/city/types";
-import { type CityFrame, cityFrame } from "../bake-city-mesh";
+import { cityFrame } from "../bake-city-mesh";
+import type { CityFrame } from "../bake-city-mesh";
 import { BAKE_ENTRIES } from "../bake-entries";
 import {
   HINT,

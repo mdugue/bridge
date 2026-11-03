@@ -7,12 +7,9 @@
  */
 import type { BridgeFeature, MonumentFeature, TreeFactsFile } from "./features";
 import {
-  type CardCredits,
-  type CardFact,
   factLines,
   firstText,
   germanDates,
-  type InquiryCard,
   metres,
   osmSource,
   positionKey,
@@ -20,6 +17,7 @@ import {
   stated,
   whole,
 } from "./card-lines";
+import type { CardCredits, CardFact, InquiryCard } from "./card-lines";
 import type { DesignInquiry } from "./inquiry-design";
 import type { MoreInquiry } from "./inquiry-more";
 import type { Stated } from "./methods";

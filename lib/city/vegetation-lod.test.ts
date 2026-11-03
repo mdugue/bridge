@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import {
-  type ChunkLodState,
   createCrownPlanScratch,
   createLodSchedule,
   FAR_IN_M,
@@ -13,6 +12,7 @@ import {
   RICH_OUT_M,
   RICH_TREE_BUDGET,
 } from "./vegetation-lod";
+import type { ChunkLodState } from "./vegetation-lod";
 
 const chunk = (
   near: number,

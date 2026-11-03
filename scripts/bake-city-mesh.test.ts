@@ -12,8 +12,8 @@ import {
   OBJECT_SOURCE_GAP,
   OBJECT_SOURCE_PASSAGE,
   OBJECT_SOURCE_SHOPFRONT,
-  type OsmBuildingLut,
 } from "../lib/city/city-mesh";
+import type { OsmBuildingLut } from "../lib/city/city-mesh";
 import type {
   DoorFeature,
   DormerFeature,
@@ -30,8 +30,8 @@ import {
   TYPES,
   unpackStyle,
   WINDOW_ROWS,
-  type WindowWall,
 } from "../lib/city/windows";
+import type { WindowWall } from "../lib/city/windows";
 import { storeyHeight } from "../lib/city/building-tint";
 import {
   appendedRoofColour,

@@ -16,12 +16,8 @@
  * reclaim, which reports nothing of its own, it is the only word there is
  * (crash-reports.ts).
  */
-import {
-  frameLoss,
-  type GpuLoss,
-  RESUME_AWAY_MS,
-  RESUME_WINDOW_MS,
-} from "./gpu-safety";
+import { frameLoss, RESUME_AWAY_MS, RESUME_WINDOW_MS } from "./gpu-safety";
+import type { GpuLoss } from "./gpu-safety";
 
 /**
  * What the page hears. `now` is the monotonic clock (ms); `wall` the wall

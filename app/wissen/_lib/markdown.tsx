@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import rehypeShiki, { type RehypeShikiOptions } from "@shikijs/rehype";
+import rehypeShiki from "@shikijs/rehype";
+import type { RehypeShikiOptions } from "@shikijs/rehype";
 import type { Element, Root as HastRoot } from "hast";
 import { toJsxRuntime } from "hast-util-to-jsx-runtime";
 import { toString as hastText } from "hast-util-to-string";
@@ -17,7 +18,8 @@ import { unified } from "unified";
 import { visit } from "unist-util-visit";
 import { METHODS, methodOfToken } from "@/lib/city/methods";
 import { diagramKey } from "@/lib/docs/diagrams";
-import { type Lang, resolveHref } from "@/lib/docs/routes";
+import { resolveHref } from "@/lib/docs/routes";
+import type { Lang } from "@/lib/docs/routes";
 import { Diagram } from "../_components/diagram";
 
 export interface TocEntry {

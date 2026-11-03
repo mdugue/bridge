@@ -35,7 +35,8 @@ import type {
 import { SITES } from "../../sites";
 import { STRUCTURE_KINDS } from "./features";
 import type { WindowFile } from "./windows";
-import { type Site, tileExtentOf, tileIdOf } from "./site";
+import { tileExtentOf, tileIdOf } from "./site";
+import type { Site } from "./site";
 import { TREE_GENERA } from "./tree-season";
 import { axisFrame, BRIDGE_STEP } from "./bridge";
 import {

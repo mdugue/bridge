@@ -18,7 +18,8 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { cachedEntry, writeEntry } from "./bake-cache";
-import { type Dgm, readDgm } from "./bake-tiles";
+import { readDgm } from "./bake-tiles";
+import type { Dgm } from "./bake-tiles";
 
 /** Bump when readDgm's decode changes what it returns for the same bytes
  *  (NoData handling, resampling, bounds): every entry is keyed by it. */

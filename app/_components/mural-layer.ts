@@ -44,12 +44,11 @@ import {
   RedFormat,
   RGBAFormat,
   SRGBColorSpace,
-  type Texture,
   Vector3,
 } from "three/webgpu";
+import type { Texture } from "three/webgpu";
 import { min, mix, texture, uniform, uv, vec3, vec4 } from "three/tsl";
 import {
-  type Mural,
   muralBytes,
   muralStrip,
   muralTexels,
@@ -57,6 +56,7 @@ import {
   parseMurals,
   textureBytes,
 } from "@/lib/city/murals";
+import type { Mural } from "@/lib/city/murals";
 import { fetchOptionalBinary, fetchOptionalJson } from "./fetch-optional";
 import { dropDataOnUpload } from "./raster-upload";
 import { estimateGeometryBytes, trackTexture } from "./three-utils";

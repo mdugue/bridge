@@ -1,22 +1,17 @@
 import {
-  type BufferGeometry,
   ConeGeometry,
   CylinderGeometry,
   ExtrudeGeometry,
   Matrix4,
-  type Mesh,
-  type Object3D,
   Quaternion,
   Shape,
   SphereGeometry,
   Vector2,
   Vector3,
 } from "three/webgpu";
-import {
-  type AskSolid,
-  ringDistanceXz,
-  type Slab,
-} from "@/lib/city/ask-solids";
+import type { BufferGeometry, Mesh, Object3D } from "three/webgpu";
+import { ringDistanceXz } from "@/lib/city/ask-solids";
+import type { AskSolid, Slab } from "@/lib/city/ask-solids";
 import { liveTriangles } from "@/lib/city/city-mesh";
 import { bvhBuilding } from "./bvh-client";
 import type { CityLayer } from "./city-layer";

@@ -8,10 +8,8 @@
  * position and kind — and quotes its source. No THREE, no DOM.
  */
 import {
-  type CardCredits,
   factLines,
   firstText,
-  type InquiryCard,
   metres,
   mapillarySource,
   osmSource,
@@ -20,6 +18,7 @@ import {
   stated,
   whole,
 } from "./card-lines";
+import type { CardCredits, InquiryCard } from "./card-lines";
 import type {
   FurnitureFeature,
   FurnitureKind,

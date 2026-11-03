@@ -6,7 +6,8 @@
  */
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { type Lang, sourceMatrixPage } from "../lib/city/source-matrix";
+import { sourceMatrixPage } from "../lib/city/source-matrix";
+import type { Lang } from "../lib/city/source-matrix";
 import type { Site } from "../lib/city/site";
 import { REFERENCE_SITE, SITES } from "../sites";
 

@@ -10,10 +10,13 @@ import {
   OBJECT_SOURCE_PLINTH,
   OBJECT_SOURCE_SCAN,
 } from "./city-mesh";
-import { type DrawnFacts, encodeDrawn } from "./drawn-facts";
-import { cssColour, type DrawnRow, drawnGroups } from "./drawn-lines";
+import { encodeDrawn } from "./drawn-facts";
+import type { DrawnFacts } from "./drawn-facts";
+import { cssColour, drawnGroups } from "./drawn-lines";
+import type { DrawnRow } from "./drawn-lines";
 import type { BuildingInquiry, InquiryObject, ObjectLook } from "./inquiry";
-import { NO_FACT, type ObjectFacts } from "./object-facts";
+import { NO_FACT } from "./object-facts";
+import type { ObjectFacts } from "./object-facts";
 import { packStyle } from "./windows";
 
 const facts = (over: Partial<ObjectFacts> = {}): ObjectFacts => ({

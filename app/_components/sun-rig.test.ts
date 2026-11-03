@@ -2,19 +2,19 @@ import { expect, jest, test } from "bun:test";
 import {
   Box3,
   Color,
-  type DepthTexture,
   DirectionalLight,
   PerspectiveCamera,
   RenderTarget,
   Scene,
-  type ShadowNode,
   Vector3,
   Vector4,
 } from "three/webgpu";
+import type { DepthTexture, ShadowNode } from "three/webgpu";
 import { uniform } from "three/tsl";
 import { SHADOW_BASE_RADIUS, SHADOW_MAX_RADIUS } from "@/lib/city/shadow-fit";
 import { shadowMapSizeFor } from "./scene-profile";
-import { type AirView, createSunRig } from "./sun-rig";
+import { createSunRig } from "./sun-rig";
+import type { AirView } from "./sun-rig";
 
 // Dresden — the primary tile's latitude/longitude.
 const DRESDEN = { lat: 51.05, lng: 13.74 };

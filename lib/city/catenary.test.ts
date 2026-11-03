@@ -6,7 +6,6 @@ import {
   MAX_SAG_M,
   messengerDrop,
   MIN_SPAN_M,
-  type SectionMember,
   sectionPlan,
   STAGGER_M,
   staggerAt,
@@ -16,6 +15,7 @@ import {
   underBridge,
   wireStations,
 } from "./catenary";
+import type { SectionMember } from "./catenary";
 
 /** A straight track along x from x0 to x1 at z, stations from x0. */
 function track(x0: number, x1: number, z = 0) {

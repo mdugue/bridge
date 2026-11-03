@@ -13,14 +13,13 @@ import {
   SlidersHorizontalIcon,
 } from "lucide-react";
 import {
-  type CSSProperties,
-  type RefObject,
   useCallback,
   useEffect,
   useRef,
   useState,
   useSyncExternalStore,
 } from "react";
+import type { CSSProperties, RefObject } from "react";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
@@ -31,21 +30,23 @@ import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { createLookState } from "@/lib/city/look-state";
 import type { CameraState } from "@/lib/city/pose";
 import type { RenderStyle } from "@/lib/city/render-style";
-import { stopCamera, stopDate, stopView, type Walk } from "@/lib/city/walks";
+import { stopCamera, stopDate, stopView } from "@/lib/city/walks";
+import type { Walk } from "@/lib/city/walks";
 import {
   decodeLook,
   encodeSnapshot,
   parseSnapshot,
-  type Snapshot,
   snapshotInstant,
 } from "@/lib/city/snapshot";
+import type { Snapshot } from "@/lib/city/snapshot";
 import { restoresLook } from "@/lib/city/gpu-safety";
 import { AltitudeStick } from "./altitude-stick";
 import { BootError } from "./boot-error";
 import { ControlHintBar } from "./control-hints";
 import { CrashReport } from "./crash-report";
 import { startCrashReports } from "./crash-reports";
-import { type CrashTrail, startCrashTrail } from "./crash-trail";
+import { startCrashTrail } from "./crash-trail";
+import type { CrashTrail } from "./crash-trail";
 import { GpuFailureCard } from "./gpu-failure-card";
 import {
   keepPlaceForReload,
@@ -60,27 +61,21 @@ import { VEIL_HOLD_MS } from "./handover";
 import { streamTimings } from "./stream-timing";
 import type { CityWalkHandle } from "./create-app";
 import { LoadScreen } from "./load-screen";
-import { type HudTool, HudToolbar } from "./hud-toolbar";
+import { HudToolbar } from "./hud-toolbar";
+import type { HudTool } from "./hud-toolbar";
 import type { ExportContext } from "./image-export";
 import { InquiryCard } from "./inquiry-card";
 import { InquiryStrip, InquiryTapRing } from "./inquiry-strip";
 import { useLiveMode } from "./live-mode";
-import {
-  LocateMessage,
-  type Say,
-  useHudMessage,
-  useLocateMe,
-} from "./locate-button";
+import { LocateMessage, useHudMessage, useLocateMe } from "./locate-button";
+import type { Say } from "./locate-button";
 import { LocateOffsiteDialog } from "./locate-offsite-dialog";
 import { ModelInstruments } from "./model-instruments";
 import type { ViewMode } from "./model-rig";
 import { updatePocDebug } from "./poc-debug";
 import type { SceneBudget } from "./scene-profile";
-import {
-  overlook,
-  spawnViewpoint,
-  type ViewpointGeometry,
-} from "@/lib/city/site";
+import { overlook, spawnViewpoint } from "@/lib/city/site";
+import type { ViewpointGeometry } from "@/lib/city/site";
 import {
   BikeCountList,
   TrafficHourLine,

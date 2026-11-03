@@ -20,29 +20,33 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import { RAIL_TOP_M, RAIL_TOP_ON_DECK_M } from "@/lib/city/tram";
 import {
   carLength,
   dayKindOf,
-  type MeasuredPattern,
   measurePattern,
   pointAlong,
   previousDayKind,
   routeOperator,
   runningTrams,
   secondsOfDay,
-  type TramDayKind,
   TRAM_LIVERIES,
   TRAM_TINTS,
-  type TramLivery,
-  type TramOperator,
-  type TramTimetable,
+} from "@/lib/city/tram-timetable";
+import type {
+  MeasuredPattern,
+  TramDayKind,
+  TramLivery,
+  TramOperator,
+  TramTimetable,
 } from "@/lib/city/tram-timetable";
 import { dataMarkAlpha, dataMarkColour } from "./glass";
 import { Instances, instancePosition, instanceTint } from "./instancing";
 import { mapWidenNode } from "./map-overlay";
-import { type DeckPoly, deckLift } from "@/lib/city/decks";
+import { deckLift } from "@/lib/city/decks";
+import type { DeckPoly } from "@/lib/city/decks";
 import type { F, V3 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 

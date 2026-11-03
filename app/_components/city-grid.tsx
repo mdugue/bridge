@@ -6,14 +6,10 @@ import Link from "next/link";
 import { useState } from "react";
 import { cn } from "cn";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { landcoverCredit, type Site } from "@/lib/city/site";
-import {
-  orderingOf,
-  orderSites,
-  SITE_ORDERINGS,
-  type SiteOrder,
-  type SiteStats,
-} from "@/lib/city/site-stats";
+import { landcoverCredit } from "@/lib/city/site";
+import type { Site } from "@/lib/city/site";
+import { orderingOf, orderSites, SITE_ORDERINGS } from "@/lib/city/site-stats";
+import type { SiteOrder, SiteStats } from "@/lib/city/site-stats";
 import { REFERENCE_SITE, siteById } from "@/sites";
 import { SMALL_CAPS } from "../_lib/start-style";
 

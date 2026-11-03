@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { nestRings, type PlanFeature, planMesh } from "./plan-geometry";
+import { nestRings, planMesh } from "./plan-geometry";
+import type { PlanFeature } from "./plan-geometry";
 import { PLAN_LOOKS, planClass } from "./plan-classes";
 
 const square = (x0: number, y0: number, a: number) =>

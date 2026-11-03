@@ -1,17 +1,15 @@
 import {
   Box3,
-  type BufferGeometry,
-  type Color,
   InstancedBufferAttribute,
   InstancedBufferGeometry,
   InstancedInterleavedBuffer,
   InterleavedBufferAttribute,
-  type Material,
   Matrix4,
   Mesh,
   Sphere,
   Vector3,
 } from "three/webgpu";
+import type { BufferGeometry, Color, Material } from "three/webgpu";
 import {
   attribute,
   Fn,

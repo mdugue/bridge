@@ -1,9 +1,6 @@
 import { expect, test } from "bun:test";
-import {
-  attachKeyboardControls,
-  type KeyboardActions,
-  type KeyboardTargets,
-} from "./keyboard-controls";
+import { attachKeyboardControls } from "./keyboard-controls";
+import type { KeyboardActions, KeyboardTargets } from "./keyboard-controls";
 
 interface FiredKey {
   code: string;

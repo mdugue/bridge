@@ -10,9 +10,11 @@ import {
   siteDataDir,
   tileArtifacts,
 } from "../lib/city/tile";
-import { type Walk, WALKS_DIR, walkProblems } from "../lib/city/walks";
+import { WALKS_DIR, walkProblems } from "../lib/city/walks";
+import type { Walk } from "../lib/city/walks";
 import { SITES } from "../sites";
-import { monumentsOf, type MonumentCollection } from "./bake-stadtwissen";
+import { monumentsOf } from "./bake-stadtwissen";
+import type { MonumentCollection } from "./bake-stadtwissen";
 import { readDgmFile } from "./dgm-cache";
 import { siteDgm } from "./line-levels";
 

@@ -13,9 +13,9 @@
 import {
   clientTools,
   fetchServerSentEvents,
-  type UIMessage,
   useChat,
 } from "@tanstack/ai-react";
+import type { UIMessage } from "@tanstack/ai-react";
 import {
   KeyRoundIcon,
   LoaderIcon,
@@ -33,7 +33,6 @@ import {
   ASK_LIMITS,
   ASK_PROVIDER_BY_ID,
   ASK_PROVIDERS,
-  type AskProviderId,
   maskedKey,
   plausibleKey,
   CUT_SHORT,
@@ -41,6 +40,7 @@ import {
   TOO_LONG,
   TOO_MANY_STEPS,
 } from "@/lib/city/ask-city";
+import type { AskProviderId } from "@/lib/city/ask-city";
 import {
   layerTool,
   showTool,
@@ -48,7 +48,8 @@ import {
   timeTool,
   whereTool,
 } from "@/lib/city/ask-tools";
-import { type AskTarget, askView } from "@/lib/city/ask-view";
+import { askView } from "@/lib/city/ask-view";
+import type { AskTarget } from "@/lib/city/ask-view";
 import type { DataLayerKey } from "@/lib/city/data-layers";
 import type { RenderStyle } from "@/lib/city/render-style";
 import type { ViewpointGeometry } from "@/lib/city/site";
@@ -63,7 +64,8 @@ import {
 } from "@/components/ui/message-scroller";
 import { Trace, TraceIcon, TraceLine, TraceTitle } from "@/components/ui/trace";
 import { cn } from "cn";
-import { type AskKey, clearAskKey, readAskKey, writeAskKey } from "./ask-key";
+import { clearAskKey, readAskKey, writeAskKey } from "./ask-key";
+import type { AskKey } from "./ask-key";
 
 /** What the card may do to the scene: the scene tools' other half. */
 export interface AskScene {

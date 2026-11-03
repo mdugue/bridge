@@ -12,12 +12,14 @@ import { dirname, join } from "node:path";
 import type { LandmarkFile } from "../lib/city/landmarks";
 import {
   labelOf,
-  type RawEntity,
   referencedItems,
   WIKIDATA_FACTS_FILE,
-  type WikidataFacts,
-  type WikidataFile,
   wikidataFacts,
+} from "../lib/city/stadtwissen";
+import type {
+  RawEntity,
+  WikidataFacts,
+  WikidataFile,
 } from "../lib/city/stadtwissen";
 import { cityMeshSourceFiles, siteDataDir, tileIds } from "../lib/city/tile";
 import { siteFromArgs } from "../sites";

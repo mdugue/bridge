@@ -4,8 +4,8 @@ import {
   ChevronDownIcon,
   EllipsisVerticalIcon,
   LoaderCircleIcon,
-  type LucideIcon,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { cn } from "cn";
 import { STORAGE_KEYS } from "./storage-keys";

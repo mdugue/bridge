@@ -21,15 +21,12 @@
  * its drop's height over the road — 3 cm, or flush — and ramps back to the
  * full height over RAMP_M either side.
  */
-import {
-  followGround,
-  type JoinPoint,
-  joinsAlong,
-  meetGround,
-  SINK,
-} from "./ground-join";
-import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
-import { type Point2, subdividePolyline } from "./polyline";
+import { followGround, joinsAlong, meetGround, SINK } from "./ground-join";
+import type { JoinPoint } from "./ground-join";
+import { epsgToWorld } from "./ground-clamp";
+import type { RecenterOffset } from "./ground-clamp";
+import { subdividePolyline } from "./polyline";
+import type { Point2 } from "./polyline";
 
 type HeightAt = (x: number, y: number) => number | null;
 

@@ -1,11 +1,6 @@
 import { expect, test } from "bun:test";
-import {
-  encodeRuns,
-  type Level,
-  type LevelSample,
-  lineLevels,
-  runLevelAt,
-} from "./levels";
+import { encodeRuns, lineLevels, runLevelAt } from "./levels";
+import type { Level, LevelSample } from "./levels";
 
 /** A line sampled every 4 m: the ground and the decks per sample from
  *  functions of the distance. */

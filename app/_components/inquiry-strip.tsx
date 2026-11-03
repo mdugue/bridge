@@ -10,20 +10,17 @@ import {
   FerrisWheelIcon,
   LampFloorIcon,
   LandmarkIcon,
-  type LucideIcon,
   PencilRulerIcon,
   ShrubIcon,
   TramFrontIcon,
   TreeDeciduousIcon,
   TreePineIcon,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import { cn } from "cn";
-import {
-  type Inquiry,
-  type InquiryAlong,
-  inquiryCard,
-} from "@/lib/city/inquiry";
+import { inquiryCard } from "@/lib/city/inquiry";
+import type { Inquiry, InquiryAlong } from "@/lib/city/inquiry";
 import { cardCredits } from "@/lib/city/card-lines";
 import { TOLERANCE_PX } from "@/lib/city/inquiry";
 import { useSite } from "./site-context";

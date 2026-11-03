@@ -1,18 +1,12 @@
-import { type Camera, Raycaster, Vector2, Vector3 } from "three/webgpu";
-import { type AskHit, type AskSet, hitsInSets } from "@/lib/city/ask-solids";
+import { Raycaster, Vector2, Vector3 } from "three/webgpu";
+import type { Camera } from "three/webgpu";
+import { hitsInSets } from "@/lib/city/ask-solids";
+import type { AskHit, AskSet } from "@/lib/city/ask-solids";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
-import {
-  type Inquiry,
-  type InquiryObject,
-  objectLook,
-  TOLERANCE_PX,
-} from "@/lib/city/inquiry";
-import {
-  buildingKey,
-  type CityLayer,
-  cityObjectsAlong,
-  groupObjects,
-} from "./city-layer";
+import { objectLook, TOLERANCE_PX } from "@/lib/city/inquiry";
+import type { Inquiry, InquiryObject } from "@/lib/city/inquiry";
+import { buildingKey, cityObjectsAlong, groupObjects } from "./city-layer";
+import type { CityLayer } from "./city-layer";
 import { setPickRay } from "./view-ray";
 
 /**

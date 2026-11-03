@@ -25,14 +25,15 @@ import {
 } from "three/tsl";
 import {
   acrossStreet,
-  type BikeCounter,
   BIKE_DIRECTION_TINTS,
   BIKE_STALE_TINT,
   BIKE_POLL_MS,
   bikeColumnHeight,
   isStale,
 } from "@/lib/city/bike-counts";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import type { BikeCounter } from "@/lib/city/bike-counts";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import { fetchOptionalJson } from "./fetch-optional";
 import {
   dataMarkAlpha,

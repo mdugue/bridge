@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { type GroundPrepInput, prepareGround } from "@/lib/city/ground-prep";
+import { prepareGround } from "@/lib/city/ground-prep";
+import type { GroundPrepInput } from "@/lib/city/ground-prep";
 import {
   groundWorkerUp,
   prepareGroundOffThread,

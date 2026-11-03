@@ -20,8 +20,10 @@ import {
   vec3,
 } from "three/tsl";
 import type { BridgeFeature, TrafficFeature } from "@/lib/city/features";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
-import { type Point2, subdividePolyline } from "@/lib/city/polyline";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
+import { subdividePolyline } from "@/lib/city/polyline";
+import type { Point2 } from "@/lib/city/polyline";
 import {
   flowHeight,
   flowProfile,
@@ -30,11 +32,12 @@ import {
   rightOf,
   TRAFFIC_HEAVY_TINT,
   TRAFFIC_SCALE,
-  type TrafficLane,
   trafficLanes,
 } from "@/lib/city/traffic";
+import type { TrafficLane } from "@/lib/city/traffic";
 import { dataMarkColour, glassColour, glassGrazing } from "./glass";
-import { type DeckPoly, deckLift } from "@/lib/city/decks";
+import { deckLift } from "@/lib/city/decks";
+import type { DeckPoly } from "@/lib/city/decks";
 import { buildDeckTable } from "./rail-layer";
 import type { F, V3, V4 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";

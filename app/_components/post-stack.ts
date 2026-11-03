@@ -1,25 +1,27 @@
 import {
-  type BufferGeometry,
-  type Camera,
-  type ClippingGroup,
   DepthTexture,
   FloatType,
   HalfFloatType,
-  type Node,
   NoToneMapping,
-  type Object3D,
-  type PerspectiveCamera,
   RedFormat,
   RenderPipeline,
   RenderTarget,
   SRGBColorSpace,
-  type Scene,
-  type Texture,
-  type TextureNode,
   UnsignedByteType,
   Vector2,
   Vector3,
-  type WebGPURenderer,
+} from "three/webgpu";
+import type {
+  BufferGeometry,
+  Camera,
+  ClippingGroup,
+  Node,
+  Object3D,
+  PerspectiveCamera,
+  Scene,
+  Texture,
+  TextureNode,
+  WebGPURenderer,
 } from "three/webgpu";
 import { dof } from "three/addons/tsl/display/DepthOfFieldNode.js";
 import { ao } from "three/addons/tsl/display/GTAONode.js";
@@ -52,14 +54,13 @@ import {
   vec4,
 } from "three/tsl";
 import type { VeilState } from "@/lib/city/load-frontier";
-import { LOOK_DEFAULTS, type LookValues } from "@/lib/city/look-controls";
+import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
+import type { LookValues } from "@/lib/city/look-controls";
 import { NAMEPLATE_TYPES } from "@/lib/city/nameplate-type";
-import {
-  type PaperKind,
-  RENDER_STYLE_BY_ID,
-  type RenderStyleDef,
-} from "@/lib/city/render-style";
-import { compileInLanes, compileInTurn, type Compiling } from "./compile-lanes";
+import { RENDER_STYLE_BY_ID } from "@/lib/city/render-style";
+import type { PaperKind, RenderStyleDef } from "@/lib/city/render-style";
+import { compileInLanes, compileInTurn } from "./compile-lanes";
+import type { Compiling } from "./compile-lanes";
 import { crownsPrinted } from "./crown-season";
 import { DATA_MARKS, dataMarks } from "./glass";
 import { crownSwayShare } from "./vegetation-layer";
@@ -67,20 +68,18 @@ import { fxaa } from "./fxaa";
 import { createMotionBlur } from "./motion-blur";
 import type { SceneFog } from "./height-fog";
 import { createPaperScene } from "./paper-scene";
-import {
-  createSelectionOutline,
-  type OutlineSelection,
-} from "./selection-outline";
-import {
-  createPipelineAnchors,
-  type PipelineAnchors,
-} from "./pipeline-anchors";
+import { createSelectionOutline } from "./selection-outline";
+import type { OutlineSelection } from "./selection-outline";
+import { createPipelineAnchors } from "./pipeline-anchors";
+import type { PipelineAnchors } from "./pipeline-anchors";
 import type { PostProfile } from "./scene-profile";
 import type { F, Live, V2, V3, V4 } from "./shader-chunks";
 import { aloneUnder, compileRepresentatives } from "./three-utils";
 import { createStyleDressing } from "./style-dressing";
-import { createStylize, type SunShadowMap } from "./stylize-effect";
-import { createLoadVeil, type LoadVeil } from "./load-veil";
+import { createStylize } from "./stylize-effect";
+import type { SunShadowMap } from "./stylize-effect";
+import { createLoadVeil } from "./load-veil";
+import type { LoadVeil } from "./load-veil";
 import type { ViewLens } from "./view-lens";
 import { setAskedColours } from "./visual-style";
 

@@ -5,11 +5,8 @@
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import {
-  STADTWISSEN_FILE,
-  type StadtwissenIndex,
-  type WissenTile,
-} from "../lib/city/stadtwissen";
+import { STADTWISSEN_FILE } from "../lib/city/stadtwissen";
+import type { StadtwissenIndex, WissenTile } from "../lib/city/stadtwissen";
 
 export function loadStadtwissen(siteId: string): {
   index: StadtwissenIndex;

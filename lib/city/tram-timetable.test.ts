@@ -13,9 +13,8 @@ import {
   runningTrams,
   secondsOfDay,
   TRAM_LIVERIES,
-  type TramOperator,
-  type TramTimetable,
 } from "./tram-timetable";
+import type { TramOperator, TramTimetable } from "./tram-timetable";
 
 /** One line, one pattern: three stops 0, 400 and 1000 m along a path
  *  that turns north at 600 m; a bridge from 600 m on. */

@@ -15,7 +15,7 @@ import type {
 } from "./features";
 import { epsgToWorld } from "./ground-clamp";
 import { samplePolyline } from "./polyline";
-import { type CardCredits } from "./card-lines";
+import type { CardCredits } from "./card-lines";
 import { inquiryCard } from "./inquiry";
 import type { FeatureInquiry } from "./inquiry-features";
 

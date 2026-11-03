@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { createTrail, type Trail } from "@/lib/city/crash-trail";
+import { createTrail } from "@/lib/city/crash-trail";
+import type { Trail } from "@/lib/city/crash-trail";
 import { SAFETY_DECAY_MS } from "@/lib/city/gpu-safety";
 import {
   currentSafetyStanding,

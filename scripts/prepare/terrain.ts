@@ -12,25 +12,26 @@ import {
   COARSE_DRESSING_KINDS,
   DRESSING_KINDS,
   pickFiles,
-  type TileArtifactKind,
   dgmSourceFiles,
   sideFileSource,
   tileArtifacts,
 } from "../../lib/city/tile";
-import { TERRAIN_LEVELS, type TerrainExtras } from "../../lib/city/tileset";
+import type { TileArtifactKind } from "../../lib/city/tile";
+import { TERRAIN_LEVELS } from "../../lib/city/tileset";
+import type { TerrainExtras } from "../../lib/city/tileset";
 import { bakeCoarseCrowns } from "../coarse-crowns";
 import { BAKE_ENTRIES } from "../bake-entries";
 import {
   fenceMesh,
   kerbMesh,
   stairMesh,
-  type TerrainMesh,
   terrainMesh,
   wallMesh,
   gridMesh,
   stairRailLines,
   tinMesh,
 } from "../bake-tiles";
+import type { TerrainMesh } from "../bake-tiles";
 import { FINE_TIN_MAX_ERROR } from "../bake-terrain-tin";
 import type { ColonyCrop } from "../crop-raster";
 import { unpackGround } from "../ground-pack";
@@ -57,7 +58,8 @@ import {
   utf8,
 } from "./context";
 import { shapedBy, siteShapes } from "./lines";
-import { type Published, colonyCrops, sideFiles } from "./side-files";
+import { colonyCrops, sideFiles } from "./side-files";
+import type { Published } from "./side-files";
 import { offset } from "./frame";
 import {
   groundFeatures,

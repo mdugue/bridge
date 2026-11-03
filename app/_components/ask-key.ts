@@ -4,11 +4,8 @@
  * on this device (local storage). With it the provider, the model and the
  * token the key check gave. The site's server never stores it.
  */
-import {
-  type AskProviderId,
-  isAskModel,
-  isAskProvider,
-} from "@/lib/city/ask-city";
+import { isAskModel, isAskProvider } from "@/lib/city/ask-city";
+import type { AskProviderId } from "@/lib/city/ask-city";
 import { SESSION_KEYS, STORAGE_KEYS } from "./storage-keys";
 
 export interface AskKey {

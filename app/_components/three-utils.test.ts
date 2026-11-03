@@ -7,11 +7,11 @@ import {
   Group,
   InterleavedBuffer,
   InterleavedBufferAttribute,
-  type Material,
   Mesh,
   MeshBasicNodeMaterial,
   Object3D,
 } from "three/webgpu";
+import type { Material } from "three/webgpu";
 import {
   aloneUnder,
   cpuArrayBytes,

@@ -28,20 +28,14 @@ import type {
   SmallBuildingFeature,
 } from "../lib/city/features";
 import { cutWallGates, fenceGeometry } from "../lib/city/fences";
-import {
-  checkJoins,
-  type HeightAt,
-  type JoinPoint,
-  type JoinReport,
-} from "../lib/city/ground-join";
+import { checkJoins } from "../lib/city/ground-join";
+import type { HeightAt, JoinPoint, JoinReport } from "../lib/city/ground-join";
 import { kerbGeometry } from "../lib/city/kerbs";
 import { isMonorail } from "../lib/city/line-levels";
 import { monorailJoins } from "../lib/city/monorail";
 import { axisMiddle, stairGeometry } from "../lib/city/stairs";
-import {
-  sampleHeightfield,
-  type TerrainBounds,
-} from "../lib/city/terrain-geometry";
+import { sampleHeightfield } from "../lib/city/terrain-geometry";
+import type { TerrainBounds } from "../lib/city/terrain-geometry";
 import { tileExtentOf, tileIdOf } from "../lib/city/site";
 import { doorSpans, shopfrontJoins, wallBays } from "../lib/city/shopfronts";
 import { structureJoins } from "../lib/city/small-buildings";

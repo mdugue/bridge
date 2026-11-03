@@ -5,12 +5,10 @@
  */
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { type Knowledge, knowledgeOf } from "@/lib/city/ask-knowledge";
-import {
-  STADTWISSEN_FILE,
-  type StadtwissenIndex,
-  type WissenTile,
-} from "@/lib/city/stadtwissen";
+import { knowledgeOf } from "@/lib/city/ask-knowledge";
+import type { Knowledge } from "@/lib/city/ask-knowledge";
+import { STADTWISSEN_FILE } from "@/lib/city/stadtwissen";
+import type { StadtwissenIndex, WissenTile } from "@/lib/city/stadtwissen";
 
 const loaded = new Map<string, Promise<Knowledge | null>>();
 

@@ -8,9 +8,12 @@
  * wrong instead of yielding NaN camera matrices. No THREE, no DOM.
  */
 import { DATA_LAYERS } from "./data-layers";
-import { LOOK_CONTROLS, type LookValues } from "./look-controls";
-import { isModelPreset, type ModelPresetId } from "./model-view";
-import { isRenderStyle, RENDER_STYLES, type RenderStyle } from "./render-style";
+import { LOOK_CONTROLS } from "./look-controls";
+import type { LookValues } from "./look-controls";
+import { isModelPreset } from "./model-view";
+import type { ModelPresetId } from "./model-view";
+import { isRenderStyle, RENDER_STYLES } from "./render-style";
+import type { RenderStyle } from "./render-style";
 
 export type MovementModeJson = "fly" | "walk";
 

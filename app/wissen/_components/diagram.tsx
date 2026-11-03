@@ -1,14 +1,8 @@
 "use client";
 
 import { Maximize2Icon, MinusIcon, PlusIcon, ScanIcon } from "lucide-react";
-import {
-  type CSSProperties,
-  type PointerEvent,
-  type ReactNode,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useRef, useState } from "react";
+import type { CSSProperties, PointerEvent, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,

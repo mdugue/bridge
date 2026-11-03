@@ -1,10 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { latLngToUtm, utmToLatLng } from "./crs";
-import {
-  type RhinoAnchor,
-  rhinoPlacement,
-  rhinoUnitMetres,
-} from "./rhino-units";
+import { rhinoPlacement, rhinoUnitMetres } from "./rhino-units";
+import type { RhinoAnchor } from "./rhino-units";
 
 /** A row-major matrix applied to a point. */
 const apply = (m: readonly number[], [x, y, z]: readonly number[]) =>

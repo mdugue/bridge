@@ -1,5 +1,6 @@
 import { cn } from "cn";
-import { METHOD_ORDER, METHODS, type Method } from "@/lib/city/methods";
+import { METHOD_ORDER, METHODS } from "@/lib/city/methods";
+import type { Method } from "@/lib/city/methods";
 
 /** Each method's colours: solid for the deterministic two, dashed for the
  *  inferred two, so the family reads without the colour. */

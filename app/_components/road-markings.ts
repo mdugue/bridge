@@ -31,14 +31,12 @@ import {
   gdBand,
   gdNoise,
   GROUND_DETAIL,
-  type GroundColour,
-  type GroundFields,
-  type GroundInputs,
   loadTexel,
   parkingBandOf,
   texelAt,
   texelSize,
 } from "./ground-detail";
+import type { GroundColour, GroundFields, GroundInputs } from "./ground-detail";
 import { spLine } from "./sport-ground";
 
 /**

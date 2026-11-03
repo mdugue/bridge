@@ -9,11 +9,10 @@ import {
   InterleavedBufferAttribute,
   Line,
   LineSegments,
-  type Material,
   Mesh,
-  type Object3D,
   Points,
 } from "three/webgpu";
+import type { Material, Object3D } from "three/webgpu";
 import { graphOf } from "./material-slots";
 import { releaseRenderState } from "./three-utils";
 

@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, expect, jest, test } from "bun:test";
 import { NetworkError } from "@/lib/city/fetch-retry";
 import type { CrashTrail } from "./crash-trail";
-import { createNetworkWatch, type HealableTiles } from "./tile-retry";
+import { createNetworkWatch } from "./tile-retry";
+import type { HealableTiles } from "./tile-retry";
 
 /** 3d-tiles-renderer's loading states (FAILED, UNLOADED, LOADING). */
 const FAILED = -1;

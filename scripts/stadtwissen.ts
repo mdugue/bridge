@@ -13,11 +13,13 @@ import {
   matchesQuery,
   nearby,
   WIKIDATA_PROPERTIES,
-  type WikidataProperty,
-  type WissenBuilding,
-  type WissenLandmark,
-  type WissenMonument,
   wikipediaUrl,
+} from "../lib/city/stadtwissen";
+import type {
+  WikidataProperty,
+  WissenBuilding,
+  WissenLandmark,
+  WissenMonument,
 } from "../lib/city/stadtwissen";
 import { siteFromArgs } from "../sites";
 import { loadStadtwissen } from "./stadtwissen-files";

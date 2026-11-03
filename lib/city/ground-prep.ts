@@ -12,14 +12,15 @@
  * through three's per-vertex accessors: up to 1.4 s on a phone). No
  * THREE, no DOM.
  */
-import { planTriangles, TinIndex, type TinBuckets } from "./terrain-tin";
+import { planTriangles, TinIndex } from "./terrain-tin";
+import type { TinBuckets } from "./terrain-tin";
 import {
   MIST_REACH_M,
   reach,
   trianglesOver,
   WATER_REACH_M,
-  type WaterMask,
 } from "./water-mask";
+import type { WaterMask } from "./water-mask";
 
 export type GroundIndex = Uint16Array | Uint32Array;
 export type GroundPositions =

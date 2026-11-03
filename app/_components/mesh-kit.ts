@@ -14,13 +14,14 @@ import {
   BufferAttribute,
   BufferGeometry,
   Color,
-  type Material,
   Mesh,
   MeshStandardNodeMaterial,
   ShapeUtils,
   Vector2,
 } from "three/webgpu";
-import { finished, type Steps } from "@/lib/city/build-steps";
+import type { Material } from "three/webgpu";
+import { finished } from "@/lib/city/build-steps";
+import type { Steps } from "@/lib/city/build-steps";
 import type { Ring2 } from "@/lib/city/decks";
 import { lineUnderDesign } from "./design-site";
 import { sceneMaterial } from "./three-utils";

@@ -11,7 +11,6 @@ import {
   paneTop,
   QUANTUM_M,
   SHOPFRONT,
-  type ShopfrontMesh,
   SHOPFRONT_SINK,
   ROW_SILL_M,
   SHOPFRONT_TOP_M,
@@ -21,6 +20,7 @@ import {
   wallBays,
   wallShiftAt,
 } from "./shopfronts";
+import type { ShopfrontMesh } from "./shopfronts";
 
 const OFFSET = { cx: 1000, cy: 2000 };
 

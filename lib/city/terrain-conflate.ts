@@ -25,11 +25,8 @@
  * terrain alone. A `MAX_STEP_M` clamp stops a bad height tag gouging a canyon.
  */
 import { subdividePolyline } from "./polyline";
-import {
-  isInvalidElevation,
-  sampleHeightfield,
-  type TerrainBounds,
-} from "./terrain-geometry";
+import { isInvalidElevation, sampleHeightfield } from "./terrain-geometry";
+import type { TerrainBounds } from "./terrain-geometry";
 
 export interface WallLine {
   /** Site-CRS coordinates (NOT recentered), as baked by pipeline/bake/walls.py */

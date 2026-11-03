@@ -1,11 +1,8 @@
 import { expect, test } from "bun:test";
 import { PerspectiveCamera, Vector3 } from "three/webgpu";
 import { EYE_HEIGHT, PITCH_LIMIT, RAD2DEG } from "@/lib/city/pose";
-import {
-  type CameraPoseOptions,
-  type CameraSolids,
-  createCameraPose,
-} from "./camera-pose";
+import { createCameraPose } from "./camera-pose";
+import type { CameraPoseOptions, CameraSolids } from "./camera-pose";
 import type { MovementMode } from "./fps-movement";
 import type { Viewpoint } from "@/lib/city/site";
 

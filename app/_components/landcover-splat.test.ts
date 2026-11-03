@@ -2,13 +2,15 @@ import { expect, test } from "bun:test";
 import {
   DataTexture,
   LinearMipmapLinearFilter,
-  type Material,
-  type Node,
-  type NodeMaterial,
-  type Object3D,
-  type RenderTarget,
   SRGBColorSpace,
-  type WebGPURenderer,
+} from "three/webgpu";
+import type {
+  Material,
+  Node,
+  NodeMaterial,
+  Object3D,
+  RenderTarget,
+  WebGPURenderer,
 } from "three/webgpu";
 import { paintLandcoverSplat, splatScaleFor } from "./landcover-splat";
 import {

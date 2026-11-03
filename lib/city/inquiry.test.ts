@@ -9,19 +9,14 @@ import { encodeDrawn } from "./drawn-facts";
 import {
   functionLabel,
   germanDates,
-  type Inquiry,
-  type InquiryObject,
   inquiryCard,
   metres,
   roofLabel,
   squareMetres,
 } from "./inquiry";
-import {
-  MEASURED_ROOF,
-  MEASURED_SHAPE,
-  NO_FACT,
-  type ObjectFacts,
-} from "./object-facts";
+import type { Inquiry, InquiryObject } from "./inquiry";
+import { MEASURED_ROOF, MEASURED_SHAPE, NO_FACT } from "./object-facts";
+import type { ObjectFacts } from "./object-facts";
 import type { SiteProvenance } from "./provenance";
 import type { CardCredits } from "./card-lines";
 import type { Stated } from "./methods";

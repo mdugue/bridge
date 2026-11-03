@@ -24,8 +24,10 @@ import {
   vec4,
 } from "three/tsl";
 import type { LowVegFeature, VegRowFeature } from "@/lib/city/features";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
-import { type Point2, subdividePolyline } from "@/lib/city/polyline";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
+import { subdividePolyline } from "@/lib/city/polyline";
+import type { Point2 } from "@/lib/city/polyline";
 import { Instances, instanceMatrix, instancePosition } from "./instancing";
 import type { F, V3 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";

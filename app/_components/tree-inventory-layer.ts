@@ -1,12 +1,6 @@
 import type { RasterSampler } from "@/lib/city/raster-sampler";
-import {
-  type BufferGeometry,
-  Color,
-  Group,
-  Matrix4,
-  Quaternion,
-  Vector3,
-} from "three/webgpu";
+import { Color, Group, Matrix4, Quaternion, Vector3 } from "three/webgpu";
+import type { BufferGeometry } from "three/webgpu";
 import type { TreeFeature } from "@/lib/city/features";
 import { familyLook, TRUNK_BASE } from "@/lib/city/tree-family";
 import { ageLook } from "@/lib/city/tree-age";
@@ -15,27 +9,30 @@ import { buildTreePlan } from "./tree-plan";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import {
   CROWN_SHAPES,
-  type CrownShape,
   inventoryCovers,
-  type InventoryTree,
   inventoryTrees,
-  type TreeExtents,
   trunkGirth,
 } from "@/lib/city/tree-inventory";
-import {
-  type CrownMaterials,
-  type CrownSeasonKey,
-  type SeasonalCrowns,
-  seasonCrowns,
+import type {
+  CrownShape,
+  InventoryTree,
+  TreeExtents,
+} from "@/lib/city/tree-inventory";
+import { seasonCrowns } from "./crown-season";
+import type {
+  CrownMaterials,
+  CrownSeasonKey,
+  SeasonalCrowns,
 } from "./crown-season";
 import {
   buildConeGeo,
   buildPineGeo,
   CONE_SEGMENTS,
   reshapeCrown,
-  type SilhouetteMap,
 } from "./conifer-crown";
-import { finished, inRuns, type Steps } from "@/lib/city/build-steps";
+import type { SilhouetteMap } from "./conifer-crown";
+import { finished, inRuns } from "@/lib/city/build-steps";
+import type { Steps } from "@/lib/city/build-steps";
 import { Instances } from "./instancing";
 import {
   applySeasons,
@@ -43,17 +40,19 @@ import {
   buildCrownGeoRich,
   padCrownSphere,
   bucketByCell,
-  type CellLod,
   crownColor,
   evergreenColor,
   hash,
   sceneCrowns,
   swapCrownLod,
   TRUNK_H,
-  type TreeInstance,
-  type TreeVeto,
-  type VegetationContext,
-  type VegetationControl,
+} from "./vegetation-layer";
+import type {
+  CellLod,
+  TreeInstance,
+  TreeVeto,
+  VegetationContext,
+  VegetationControl,
 } from "./vegetation-layer";
 
 /**

@@ -42,7 +42,8 @@ import { gzipSync } from "node:zlib";
 import Delatin from "delatin";
 import { BufferAttribute, BufferGeometry } from "three";
 import type { WallFeature } from "../../lib/city/features";
-import { conflateWalls, type WallLine } from "../../lib/city/terrain-conflate";
+import { conflateWalls } from "../../lib/city/terrain-conflate";
+import type { WallLine } from "../../lib/city/terrain-conflate";
 import type { TerrainBounds } from "../../lib/city/terrain-geometry";
 import {
   buildTinGeometryData,

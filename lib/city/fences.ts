@@ -26,8 +26,10 @@
  * The UV carries only the kind: `u` = the code's slot, `v` = the height
  * fraction (the shader's top edge and rooted foot).
  */
-import { followGround, type JoinPoint, joinsAlong, SINK } from "./ground-join";
-import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
+import { followGround, joinsAlong, SINK } from "./ground-join";
+import type { JoinPoint } from "./ground-join";
+import { epsgToWorld } from "./ground-clamp";
+import type { RecenterOffset } from "./ground-clamp";
 import type { Point2 } from "./polyline";
 
 type HeightAt = (x: number, y: number) => number | null;

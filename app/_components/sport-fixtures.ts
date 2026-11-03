@@ -1,6 +1,5 @@
 import {
   BoxGeometry,
-  type BufferGeometry,
   DoubleSide,
   Group,
   Matrix4,
@@ -11,8 +10,10 @@ import {
   TorusGeometry,
   Vector3,
 } from "three/webgpu";
+import type { BufferGeometry } from "three/webgpu";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import type { SportFixture } from "@/lib/city/sport";
 import { sceneMaterial } from "./three-utils";
 

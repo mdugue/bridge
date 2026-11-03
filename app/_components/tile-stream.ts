@@ -1,18 +1,17 @@
 import { DownloadPriorityQueue, PriorityQueue } from "3d-tiles-renderer/core";
 import { TilesRenderer } from "3d-tiles-renderer/three";
-import {
-  type BufferGeometry,
-  type Camera,
-  type Color,
-  Group,
-  Matrix4,
-  type Mesh,
-  type MeshStandardNodeMaterial,
-  type Object3D,
-  type Texture,
-  type UniformNode,
-  type Vector3,
-  type WebGPURenderer,
+import { Group, Matrix4 } from "three/webgpu";
+import type {
+  BufferGeometry,
+  Camera,
+  Color,
+  Mesh,
+  MeshStandardNodeMaterial,
+  Object3D,
+  Texture,
+  UniformNode,
+  Vector3,
+  WebGPURenderer,
 } from "three/webgpu";
 // (lower case: rules-of-hooks reads `Pascal.useX` as a React hook)
 import { MeshoptDecoder as meshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
@@ -41,36 +40,37 @@ import {
   ROWS_MEASURED,
   unpackPoints,
 } from "@/lib/city/point-pack";
-import { type SportTable, sportFixtures } from "@/lib/city/sport";
-import {
-  offMonuments,
-  plantedRows,
-  type TreeVeto,
-} from "@/lib/city/tree-placement";
+import { sportFixtures } from "@/lib/city/sport";
+import type { SportTable } from "@/lib/city/sport";
+import { offMonuments, plantedRows } from "@/lib/city/tree-placement";
+import type { TreeVeto } from "@/lib/city/tree-placement";
 import { coarseCrownsStandIn, unpackCrowns } from "@/lib/city/coarse-crowns";
 import {
   keepOrder,
-  type OrderedTile,
   siteTileOfTile,
   streamOrder,
 } from "@/lib/city/stream-order";
+import type { OrderedTile } from "@/lib/city/stream-order";
 import { createTaskGate } from "@/lib/city/task-gate";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
-import {
-  type CityExtras,
-  type ContentExtras,
-  ownsPoint,
-  type TerrainExtras,
+import { ownsPoint } from "@/lib/city/tileset";
+import type {
+  CityExtras,
+  ContentExtras,
+  TerrainExtras,
 } from "@/lib/city/tileset";
-import { COARSE_DRESSING_KINDS, type DressingKind } from "@/lib/city/tile";
+import { COARSE_DRESSING_KINDS } from "@/lib/city/tile";
+import type { DressingKind } from "@/lib/city/tile";
 import { bridgeItems, monumentItems, treeSets } from "@/lib/city/ask-items";
 import { moreSetsSteps } from "@/lib/city/ask-more";
-import { askSets, type AskSet } from "@/lib/city/ask-solids";
+import { askSets } from "@/lib/city/ask-solids";
+import type { AskSet } from "@/lib/city/ask-solids";
 import { isAllocationFailure } from "@/lib/city/gpu-allocation";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import { mapillaryParts } from "@/lib/city/mapillary";
 import type { GroundContext } from "@/lib/city/ground-clamp";
-import { type CityLayer, dressCity } from "./city-layer";
+import { dressCity } from "./city-layer";
+import type { CityLayer } from "./city-layer";
 import { GltfContentPlugin } from "./gltf-content";
 import type { FacadeReadings } from "@/lib/city/facade-reading";
 import { coarseCrownSteps } from "./coarse-crowns-layer";
@@ -86,35 +86,42 @@ import {
   isAbortError,
 } from "./fetch-optional";
 import { furnitureSteps } from "./furniture-layer";
-import { buildLamps, type LampControl } from "./lamp-layer";
+import { buildLamps } from "./lamp-layer";
+import type { LampControl } from "./lamp-layer";
 import { buildLowVegetation } from "./low-vegetation-layer";
-import { buildMonuments, type MonumentLayer } from "./monument-layer";
-import { buildMurals, type MuralLayer, type MuralSource } from "./mural-layer";
+import { buildMonuments } from "./monument-layer";
+import type { MonumentLayer } from "./monument-layer";
+import { buildMurals } from "./mural-layer";
+import type { MuralLayer, MuralSource } from "./mural-layer";
 import { railSteps } from "./rail-layer";
 import { bridgeAskSet } from "./bridge-ask";
 import { buildRiverside } from "./riverside-layer";
-import { buildSportFixtures, type SportFixtureLayer } from "./sport-fixtures";
+import { buildSportFixtures } from "./sport-fixtures";
+import type { SportFixtureLayer } from "./sport-fixtures";
 import {
   cpuDroppable,
   createGridShare,
   dressTerrain,
   freeSplatRasters,
   freeSport,
-  type GridShare,
-  type GroundUniforms,
   loadNdviTexture,
   loadSplatRasters,
   loadSportKey,
-  type SplatRasters,
-  type SportRasters,
-  type TerrainLayer,
+} from "./terrain-layer";
+import type {
+  GridShare,
+  GroundUniforms,
+  SplatRasters,
+  SportRasters,
+  TerrainLayer,
 } from "./terrain-layer";
 import { dressFences } from "./fence-layer";
 import { dressKerbs } from "./kerb-layer";
 import { RasterShares } from "./raster-shares";
 import { setRasterTier } from "./raster-upload";
 import type { DeviceTier } from "./scene-profile";
-import { createSharedRasters, type SharedRasters } from "./shared-rasters";
+import { createSharedRasters } from "./shared-rasters";
+import type { SharedRasters } from "./shared-rasters";
 import { loadHorizonTexture, loadSkyViewTexture } from "./sky-light";
 import { dressStairs } from "./stair-layer";
 import { streamTimings } from "./stream-timing";
@@ -125,10 +132,9 @@ import {
   giveBack,
   inSlices,
   onlyWhile,
-  type Steps,
 } from "@/lib/city/build-steps";
+import type { Steps } from "@/lib/city/build-steps";
 import {
-  type AnyAttribute,
   compileRepresentatives,
   cpuArrayBytes,
   detachSceneShared,
@@ -138,6 +144,7 @@ import {
   estimateGeometryBytes,
   sceneSharedBytes,
 } from "./three-utils";
+import type { AnyAttribute } from "./three-utils";
 import type { TrafficBuilder } from "./data-layers-feature";
 import type { TrafficDetail } from "./traffic-layer";
 import { tramSteps } from "./tram-layer";
@@ -146,12 +153,15 @@ import {
   buildCrownWarmup,
   vegetationSteps,
   loadNdviSampler,
-  type VegetationContext,
-  type VegetationControl,
-  type VegetationFeatures,
+} from "./vegetation-layer";
+import type {
+  VegetationContext,
+  VegetationControl,
+  VegetationFeatures,
 } from "./vegetation-layer";
 import { footMaterialFor } from "./tree-foot";
-import { setClaySkyView, type StyleResources } from "./visual-style";
+import { setClaySkyView } from "./visual-style";
+import type { StyleResources } from "./visual-style";
 import { dressWalls } from "./wall-layer";
 
 /**

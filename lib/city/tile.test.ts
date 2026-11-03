@@ -6,7 +6,6 @@ import {
   wallSourceFile,
   cityMeshSourceFiles,
   COARSE_RASTER_PX,
-  type DataManifest,
   dgmSourceFiles,
   DRESSING_KINDS,
   kerbSourceFile,
@@ -19,6 +18,7 @@ import {
   tileArtifacts,
   tileIds,
 } from "./tile";
+import type { DataManifest } from "./tile";
 
 const PRIMARY_TILE = "33412_5656_2_sn";
 

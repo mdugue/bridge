@@ -3,7 +3,8 @@
  * on disk, and the one command that moves it forward. Pure — the script
  * (scripts/site-report.ts) passes in a file check. No THREE, no DOM.
  */
-import { osmExtractUrl, type Site } from "./site";
+import { osmExtractUrl } from "./site";
+import type { Site } from "./site";
 import {
   cityMeshSourceFiles,
   dgmSourceFiles,

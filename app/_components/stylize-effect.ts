@@ -1,11 +1,5 @@
-import {
-  Color,
-  type DepthTexture,
-  Matrix3,
-  type Matrix4,
-  Vector2,
-  Vector3,
-} from "three/webgpu";
+import { Color, Matrix3, Vector2, Vector3 } from "three/webgpu";
+import type { DepthTexture, Matrix4 } from "three/webgpu";
 import {
   abs,
   asin,
@@ -47,7 +41,8 @@ import {
 } from "three/tsl";
 import type { RenderStyleDef } from "@/lib/city/render-style";
 import { DATA_HUE } from "./glass";
-import { fogFactorAt, type SceneFog } from "./height-fog";
+import { fogFactorAt } from "./height-fog";
+import type { SceneFog } from "./height-fog";
 import type { F, V2, V3, V4 } from "./shader-chunks";
 import { styleNight } from "./sun-rig";
 import { readSunShadow, shadowStandIn } from "./sun-shadow-read";

@@ -6,20 +6,19 @@ import {
   DoubleSide,
   Mesh,
   MeshBasicNodeMaterial,
-  type Object3D,
   Plane,
   Vector3,
 } from "three/webgpu";
+import type { Object3D } from "three/webgpu";
 import type { ModelView } from "@/lib/city/model-view";
 import {
-  type CutOut,
   cutOutCorners,
   cutOutPlanes,
   groundStrip,
   joinStrips,
   sectionLine,
-  type StripMesh,
 } from "@/lib/city/section";
+import type { CutOut, StripMesh } from "@/lib/city/section";
 
 /**
  * Modell's cuts (plan 055 phases 3–4, ADR 0044), the scene half:

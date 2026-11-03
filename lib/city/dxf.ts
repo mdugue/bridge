@@ -20,8 +20,10 @@
  * Binary DXF is not read. No THREE, no DOM.
  */
 
-import { nestRings, type PlanFeature, type PlanPoint } from "./plan-geometry";
-import { type PlanClass, planClassOf } from "./plan-classes";
+import { nestRings } from "./plan-geometry";
+import type { PlanFeature, PlanPoint } from "./plan-geometry";
+import { planClassOf } from "./plan-classes";
+import type { PlanClass } from "./plan-classes";
 
 /** One group: its code and its value as written. */
 interface Group {

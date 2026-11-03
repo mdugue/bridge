@@ -25,12 +25,11 @@ import { siteDataDir } from "../lib/city/tile";
 import {
   stopCamera,
   stopDate,
-  type Walk,
-  type WalkStop,
   WALKS_DIR,
   walkPhotoFile,
   walkProblems,
 } from "../lib/city/walks";
+import type { Walk, WalkStop } from "../lib/city/walks";
 import { siteFromArgs } from "../sites";
 import { readDgmFile } from "./dgm-cache";
 import { siteDgm } from "./line-levels";

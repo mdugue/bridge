@@ -5,11 +5,9 @@ import {
   Color,
   DataTexture,
   FloatType,
-  type InterleavedBufferAttribute,
   LinearFilter,
   LinearMipmapLinearFilter,
   Matrix4,
-  type Mesh,
   MeshStandardNodeMaterial,
   NearestFilter,
   NoColorSpace,
@@ -22,8 +20,12 @@ import {
   Vector2,
   Vector3,
   Vector4,
-  type UniformNode,
-  type WebGPURenderer,
+} from "three/webgpu";
+import type {
+  InterleavedBufferAttribute,
+  Mesh,
+  UniformNode,
+  WebGPURenderer,
 } from "three/webgpu";
 import {
   abs,
@@ -56,10 +58,8 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
-import {
-  sampleHeightfield,
-  type TerrainBounds,
-} from "@/lib/city/terrain-geometry";
+import { sampleHeightfield } from "@/lib/city/terrain-geometry";
+import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
   ARABLE_CLASS,
   LANDCOVER_CLASSES,
@@ -68,17 +68,21 @@ import {
   srgbToLinear,
   WATER_CLASS,
 } from "@/lib/city/landcover";
-import { type WaterMask, waterMaskOf } from "@/lib/city/water-mask";
+import { waterMaskOf } from "@/lib/city/water-mask";
+import type { WaterMask } from "@/lib/city/water-mask";
 import type {
   GroundPositions,
   GroundPrep,
   GroundPrepInput,
   SheetPrep,
 } from "@/lib/city/ground-prep";
-import { decodeGreyPng, type GreyRaster } from "@/lib/city/png-raster";
+import { decodeGreyPng } from "@/lib/city/png-raster";
+import type { GreyRaster } from "@/lib/city/png-raster";
 import { colonyCropUv } from "@/lib/city/cultivated";
-import { type MarkingTable, packMarkingTable } from "@/lib/city/markings";
-import { packSportTable, type SportTable } from "@/lib/city/sport";
+import { packMarkingTable } from "@/lib/city/markings";
+import type { MarkingTable } from "@/lib/city/markings";
+import { packSportTable } from "@/lib/city/sport";
+import type { SportTable } from "@/lib/city/sport";
 import {
   planOf,
   planTriangles,
@@ -98,9 +102,6 @@ import {
   bsplineSample,
   gdNoise,
   gdNoiseSlope,
-  type GroundColour,
-  type GroundFields,
-  type GroundInputs,
   groundDetail,
   groundFields,
   groundNormal,
@@ -108,11 +109,9 @@ import {
   texelSize,
   urbanGreen,
 } from "./ground-detail";
-import {
-  type LandcoverSplat,
-  paintLandcoverSplat,
-  splatScaleFor,
-} from "./landcover-splat";
+import type { GroundColour, GroundFields, GroundInputs } from "./ground-detail";
+import { paintLandcoverSplat, splatScaleFor } from "./landcover-splat";
+import type { LandcoverSplat } from "./landcover-splat";
 import { PAPER_HEX, paperGroundOn } from "./paper-scene";
 import {
   dropDataOnUpload,
@@ -121,26 +120,15 @@ import {
   uploadNow,
 } from "./raster-upload";
 import { roadMarkings } from "./road-markings";
-import {
-  dataXY,
-  type F,
-  rasterUv,
-  type Tex,
-  type V2,
-  type V3,
-} from "./shader-chunks";
+import { dataXY, rasterUv } from "./shader-chunks";
+import type { F, Tex, V2, V3 } from "./shader-chunks";
 import type { SharedRasters } from "./shared-rasters";
-import {
-  type Slots,
-  setGraph,
-  setSlots,
-  slotTexture,
-  slotUniform,
-} from "./material-slots";
-import { applyGroundLight, type GroundLight } from "./sky-light";
+import { setGraph, setSlots, slotTexture, slotUniform } from "./material-slots";
+import type { Slots } from "./material-slots";
+import { applyGroundLight } from "./sky-light";
+import type { GroundLight } from "./sky-light";
 import { sportGround } from "./sport-ground";
 import {
-  type AnyAttribute,
   detachShared,
   disposeGeometry,
   isSceneShared,
@@ -148,7 +136,9 @@ import {
   textureBytes,
   trackTexture,
 } from "./three-utils";
-import { createWaterLayer, type WaterLayer } from "./water-layer";
+import type { AnyAttribute } from "./three-utils";
+import { createWaterLayer } from "./water-layer";
+import type { WaterLayer } from "./water-layer";
 
 /**
  * One tile's terrain at one level: the baked glTF mesh (scripts/bake-tiles.ts,

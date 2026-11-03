@@ -29,17 +29,14 @@ import {
   OBJECT_SOURCE_PASSAGE,
   OBJECT_SOURCE_PLINTH,
   OBJECT_SOURCE_SHOPFRONT,
-  type Rgb,
 } from "./city-mesh";
+import type { Rgb } from "./city-mesh";
 import { utmToLatLng } from "./crs";
-import { type DrawnFacts, decodeDrawn } from "./drawn-facts";
+import { decodeDrawn } from "./drawn-facts";
+import type { DrawnFacts } from "./drawn-facts";
 import { FACADE_UNIT } from "./facade-reading";
-import {
-  type BuildingInquiry,
-  type InquiryObject,
-  type ObjectLook,
-  roofLabel,
-} from "./inquiry";
+import { roofLabel } from "./inquiry";
+import type { BuildingInquiry, InquiryObject, ObjectLook } from "./inquiry";
 import type { Method } from "./methods";
 import { isMeasuredRoof, NO_FACT } from "./object-facts";
 import type { SourceKey } from "./provenance";
@@ -47,9 +44,9 @@ import {
   PALACE_STOREY_M,
   palaceStorey,
   unpackStyle,
-  type WindowType,
   windowType,
 } from "./windows";
+import type { WindowType } from "./windows";
 
 /** Where a drawn value came from: a dataset of the manifest, the street
  *  photos, or the viewer itself. */

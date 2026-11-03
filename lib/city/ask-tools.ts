@@ -9,8 +9,10 @@
 import { toolDefinition } from "@tanstack/ai";
 import { z } from "zod";
 import { ASK_LIMITS } from "./ask-city";
-import { DATA_LAYERS, type DataLayerKey } from "./data-layers";
-import { RENDER_STYLES, type RenderStyle } from "./render-style";
+import { DATA_LAYERS } from "./data-layers";
+import type { DataLayerKey } from "./data-layers";
+import { RENDER_STYLES } from "./render-style";
+import type { RenderStyle } from "./render-style";
 
 const coordinate = z.number();
 

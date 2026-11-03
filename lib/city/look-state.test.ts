@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { LOOK_DEFAULTS, lookPatch, type LookValues } from "./look-controls";
+import { LOOK_DEFAULTS, lookPatch } from "./look-controls";
+import type { LookValues } from "./look-controls";
 import { clampLook, createLookState } from "./look-state";
 
 test("boots at the table defaults and keeps the same object until a change", () => {

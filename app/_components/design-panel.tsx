@@ -7,7 +7,8 @@ import {
   SaveIcon,
   Trash2Icon,
 } from "lucide-react";
-import { type DragEvent, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
+import type { DragEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -15,12 +16,14 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
-  type DesignPlacement,
-  type DesignUnit,
   FACTOR_MAX,
   FACTOR_MIN,
   isDesignUnit,
-  type PlacementSource,
+} from "@/lib/city/design-placement";
+import type {
+  DesignPlacement,
+  DesignUnit,
+  PlacementSource,
 } from "@/lib/city/design-placement";
 import { decimal, metres } from "@/lib/city/card-lines";
 import { cn } from "cn";

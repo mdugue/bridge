@@ -9,8 +9,10 @@
  * THREE, no DOM.
  */
 
-import { type PlanClass, planClassOf } from "./plan-classes";
-import { nestRings, type PlanFeature } from "./plan-geometry";
+import { planClassOf } from "./plan-classes";
+import type { PlanClass } from "./plan-classes";
+import { nestRings } from "./plan-geometry";
+import type { PlanFeature } from "./plan-geometry";
 import type { GeoRecord } from "./shapefile";
 
 const CROWN = /^(krone|kronen|kd|kronendurchm|kronen_d|crown|crown_d|canopy)/i;

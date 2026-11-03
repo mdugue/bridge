@@ -12,18 +12,15 @@ import type { DesignTier } from "@/lib/city/design-budget";
 import {
   coveredObjects,
   designMasks,
-  type PlanMask,
   planHull,
   siteFloor,
 } from "@/lib/city/design-cover";
+import type { PlanMask } from "@/lib/city/design-cover";
 import {
-  type DesignPlacement,
-  type DesignScale,
   designSize,
   elsewhereNote,
   groundBase,
   normalizeRotation,
-  type PlacementSource,
   parsePlacementFile,
   placeAhead,
   METRES,
@@ -37,8 +34,14 @@ import {
   standingBase,
   trustedBase,
 } from "@/lib/city/design-placement";
+import type {
+  DesignPlacement,
+  DesignScale,
+  PlacementSource,
+} from "@/lib/city/design-placement";
 import type { RecenterOffset } from "@/lib/city/ground-clamp";
-import { DEG2RAD, type PlayerPose } from "@/lib/city/pose";
+import { DEG2RAD } from "@/lib/city/pose";
+import type { PlayerPose } from "@/lib/city/pose";
 import {
   releaseDesignSite,
   SITE_BYTES,
@@ -46,12 +49,8 @@ import {
   SITE_UNDER_M,
   setDesignSite,
 } from "./design-site";
-import {
-  type DesignModel,
-  type DesignParts,
-  partOfVertex,
-  readDesign,
-} from "./design-read";
+import { partOfVertex, readDesign } from "./design-read";
+import type { DesignModel, DesignParts } from "./design-read";
 import type { DesignInquiry } from "@/lib/city/inquiry-design";
 import { releaseRenderState, sceneMaterial } from "./three-utils";
 

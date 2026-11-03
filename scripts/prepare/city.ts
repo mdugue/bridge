@@ -5,11 +5,8 @@
  */
 import { existsSync } from "node:fs";
 import type { FacadeMaterial, RoofColours } from "../../lib/city/building-tint";
-import {
-  type OsmBuildingLut,
-  type WallMaterial,
-  withoutTrafficStructures,
-} from "../../lib/city/city-mesh";
+import { withoutTrafficStructures } from "../../lib/city/city-mesh";
+import type { OsmBuildingLut, WallMaterial } from "../../lib/city/city-mesh";
 import type { LandmarkFile } from "../../lib/city/landmarks";
 import type {
   DoorFeature,
@@ -24,10 +21,12 @@ import type {
 } from "../../lib/city/features";
 import { onFormations } from "../../lib/city/track-formation";
 import { cityMeshSourceFiles } from "../../lib/city/tile";
-import { type CityExtras, FAR_CITY_SIMPLIFY } from "../../lib/city/tileset";
+import { FAR_CITY_SIMPLIFY } from "../../lib/city/tileset";
+import type { CityExtras } from "../../lib/city/tileset";
 import type { CityJsonDocument } from "../../lib/city/types";
 import type { WindowFile } from "../../lib/city/windows";
-import { type BakedCityMesh, bakeCityMesh, cityMesh } from "../bake-city-mesh";
+import { bakeCityMesh, cityMesh } from "../bake-city-mesh";
+import type { BakedCityMesh } from "../bake-city-mesh";
 import { BAKE_ENTRIES } from "../bake-entries";
 import { simplifyGlb, writeMeshGlb } from "../tile-glb";
 import {

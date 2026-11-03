@@ -1,15 +1,14 @@
 import { expect, test } from "bun:test";
 import {
   ownsPoint,
-  type BakedTile,
   buildTileset,
   COARSE_TERRAIN_ERROR,
   FAR_CITY_ERROR,
   parseTilesetExtras,
-  type TilesetExtras,
   tileBox,
   tileTopsOf,
 } from "./tileset";
+import type { BakedTile, TilesetExtras } from "./tileset";
 
 const offset = { cx: 413_000, cy: 5_657_000 };
 const tile = (id: string, e: number): BakedTile => ({

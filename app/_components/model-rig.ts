@@ -1,4 +1,5 @@
-import { type Camera, Euler, type PerspectiveCamera } from "three/webgpu";
+import { Euler } from "three/webgpu";
+import type { Camera, PerspectiveCamera } from "three/webgpu";
 import {
   dollyFrame,
   enteringView,
@@ -8,13 +9,10 @@ import {
   MODEL_PRESET_BY_ID,
   MODEL_SCALE_MAX,
   MODEL_STANDOFF,
-  type ModelPresetId,
-  type ModelView,
   metresPerPixelOf,
   modelCameraGeometry,
   modelFootprint,
   panned,
-  type PerspectivePose,
   RETURN_RADIUS_M,
   scaleOf,
   snapTilt,
@@ -25,14 +23,13 @@ import {
   wrapDeg,
   zoomedAbout,
 } from "@/lib/city/model-view";
-import {
-  type CameraState,
-  DEG2RAD,
-  directionOf,
-  headingPitchOf,
-  RAD2DEG,
-  type Xyz,
-} from "@/lib/city/pose";
+import type {
+  ModelPresetId,
+  ModelView,
+  PerspectivePose,
+} from "@/lib/city/model-view";
+import { DEG2RAD, directionOf, headingPitchOf, RAD2DEG } from "@/lib/city/pose";
+import type { CameraState, Xyz } from "@/lib/city/pose";
 import type { ModelStateJson } from "@/lib/city/snapshot";
 import { clamp } from "@/lib/city/math";
 import { ModelCamera } from "./model-camera";

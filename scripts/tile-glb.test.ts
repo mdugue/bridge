@@ -4,14 +4,10 @@ import { Vector3 } from "three";
 import {
   propertyTableViews,
   readStructuralMetadata,
-  type StructuralMetadataJson,
 } from "../lib/city/property-table";
-import {
-  ENUM_NONE,
-  enumColumn,
-  type PropertyTable,
-  writeMeshGlb,
-} from "./tile-glb";
+import type { StructuralMetadataJson } from "../lib/city/property-table";
+import { ENUM_NONE, enumColumn, writeMeshGlb } from "./tile-glb";
+import type { PropertyTable } from "./tile-glb";
 
 /** The JSON chunk of a glb. */
 function gltfJson(glb: Uint8Array): Record<string, unknown> {

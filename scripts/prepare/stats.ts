@@ -11,8 +11,8 @@ import {
   landcoverShares,
   quantile,
   SITE_STATS_FILE,
-  type SiteStats,
 } from "../../lib/city/site-stats";
+import type { SiteStats } from "../../lib/city/site-stats";
 import {
   cityMeshSourceFiles,
   sideFileSource,

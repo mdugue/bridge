@@ -1,8 +1,5 @@
-import {
-  type DeviceAim,
-  deviceAim,
-  devicePitchDeg,
-} from "@/lib/city/geolocation";
+import { deviceAim, devicePitchDeg } from "@/lib/city/geolocation";
+import type { DeviceAim } from "@/lib/city/geolocation";
 
 /** iOS Safari's compass: degrees from north, clockwise; −1 = uncalibrated. */
 type CompassEvent = DeviceOrientationEvent & { webkitCompassHeading?: number };

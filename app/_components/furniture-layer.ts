@@ -11,12 +11,10 @@ import {
   CylinderGeometry,
   Float32BufferAttribute,
   Group,
-  type Material,
   Matrix4,
   Mesh,
   MeshBasicNodeMaterial,
   MeshStandardNodeMaterial,
-  type Object3D,
   Quaternion,
   Shape,
   ShapeUtils,
@@ -26,6 +24,7 @@ import {
   Vector2,
   Vector3,
 } from "three/webgpu";
+import type { Material, Object3D } from "three/webgpu";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
@@ -43,17 +42,21 @@ import {
 } from "three/tsl";
 import type { FurnitureFeature } from "@/lib/city/features";
 import {
-  type FurnitureArea,
   FURNITURE_MODELS,
-  type FurnitureModel,
-  type FurniturePiece,
   furnitureAreas,
   furniturePieces,
   inRing,
 } from "@/lib/city/furniture";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import type {
+  FurnitureArea,
+  FurnitureModel,
+  FurniturePiece,
+} from "@/lib/city/furniture";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import { subdividePolyline } from "@/lib/city/polyline";
-import { finished, type Steps } from "@/lib/city/build-steps";
+import { finished } from "@/lib/city/build-steps";
+import type { Steps } from "@/lib/city/build-steps";
 import { Instances, instancePosition } from "./instancing";
 import type { Live } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";

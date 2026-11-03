@@ -1,7 +1,5 @@
 import {
-  type BufferGeometry,
   ClampToEdgeWrapping,
-  type Color,
   DataTexture,
   LinearFilter,
   Mesh,
@@ -9,10 +7,14 @@ import {
   MeshStandardNodeMaterial,
   RGBAFormat,
   SRGBColorSpace,
-  type UniformArrayNode,
-  type UniformNode,
   UnsignedByteType,
   Vector4,
+} from "three/webgpu";
+import type {
+  BufferGeometry,
+  Color,
+  UniformArrayNode,
+  UniformNode,
 } from "three/webgpu";
 import {
   cameraPosition,
@@ -46,16 +48,14 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
-import {
-  FOAM_LINES,
-  fromBase64,
-  WATER_SHEET,
-  type WaterLook,
-} from "@/lib/city/water-bodies";
+import { FOAM_LINES, fromBase64, WATER_SHEET } from "@/lib/city/water-bodies";
+import type { WaterLook } from "@/lib/city/water-bodies";
 import { groundUnderDesign, inDesignSite } from "./design-site";
 import { lampNight } from "./lamp-layer";
-import { dataXY, type F, type V2, type V3 } from "./shader-chunks";
-import { type SplatLayer, splatUv } from "./terrain-layer";
+import { dataXY } from "./shader-chunks";
+import type { F, V2, V3 } from "./shader-chunks";
+import { splatUv } from "./terrain-layer";
+import type { SplatLayer } from "./terrain-layer";
 import { viewDirection } from "./view-direction";
 import { RIVER_WAVES, waveNormal, waves } from "./water-waves";
 

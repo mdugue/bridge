@@ -1,4 +1,5 @@
-import { isDoubleTap, type TapSample } from "@/lib/city/touch";
+import { isDoubleTap } from "@/lib/city/touch";
+import type { TapSample } from "@/lib/city/touch";
 
 /**
  * Street-view-style canvas gestures via Pointer Events, for touch AND mouse:

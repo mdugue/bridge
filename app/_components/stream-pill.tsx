@@ -2,11 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { cn } from "cn";
-import {
-  type LoadStageState,
-  stagesDoneLabel,
-  streamingTitle,
-} from "@/lib/city/load-stages";
+import { stagesDoneLabel, streamingTitle } from "@/lib/city/load-stages";
+import type { LoadStageState } from "@/lib/city/load-stages";
 
 /**
  * "Erster Frame" — the loading screen at pill size, pinned to the top of the

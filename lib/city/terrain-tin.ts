@@ -20,7 +20,8 @@
  * the streamed glTF's positions) for everything the viewer stands on it.
  * No THREE, no DOM.
  */
-import { SKIRT_DEPTH, type TerrainBounds } from "./terrain-geometry";
+import { SKIRT_DEPTH } from "./terrain-geometry";
+import type { TerrainBounds } from "./terrain-geometry";
 
 /** A TIN: grid-space vertices + elevations + CCW triangles. */
 export interface TerrainTin {

@@ -1,9 +1,5 @@
-import {
-  type BufferGeometry,
-  LatheGeometry,
-  Vector2,
-  Vector3,
-} from "three/webgpu";
+import { LatheGeometry, Vector2, Vector3 } from "three/webgpu";
+import type { BufferGeometry } from "three/webgpu";
 
 /**
  * The needle trees' crowns, the two forms a scale cannot make of the lobed

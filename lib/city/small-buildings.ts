@@ -7,7 +7,8 @@
  * bake appends them to a tile's buildings (scripts/bake-city-mesh.ts). No
  * THREE, no DOM.
  */
-import { type JoinPoint, joinsAlong, SINK } from "./ground-join";
+import { joinsAlong, SINK } from "./ground-join";
+import type { JoinPoint } from "./ground-join";
 import type { PointGeometry, SmallBuildingFeature } from "./features";
 
 /** Metres the box reaches below its lowest ground, so a slope shows no gap. */

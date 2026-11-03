@@ -14,9 +14,9 @@ import { join } from "node:path";
 import {
   hasObjectFlag,
   OBJECT_FLAG_FLAT_ROOF,
-  type OsmBuildingLut,
   withoutTrafficStructures,
 } from "../lib/city/city-mesh";
+import type { OsmBuildingLut } from "../lib/city/city-mesh";
 import type {
   DoorFeature,
   FeatureCollection,
@@ -25,14 +25,8 @@ import type {
 import type { LandmarkFile } from "../lib/city/landmarks";
 import { cityMeshSourceFiles, tileIds } from "../lib/city/tile";
 import type { CityJsonDocument } from "../lib/city/types";
-import {
-  FACADE_SCALE_M,
-  type FacadeModel,
-  type WindowFile,
-  type WindowType,
-  unpackStyle,
-  windowType,
-} from "../lib/city/windows";
+import { FACADE_SCALE_M, unpackStyle, windowType } from "../lib/city/windows";
+import type { FacadeModel, WindowFile, WindowType } from "../lib/city/windows";
 import { siteFromArgs } from "../sites";
 import { bakeCityMesh } from "./bake-city-mesh";
 

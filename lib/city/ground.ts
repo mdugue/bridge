@@ -5,7 +5,8 @@
  * terrain seen so far as the floor off every tile, and rays against both.
  * No THREE, no DOM.
  */
-import { type RecenterOffset, worldToEpsg } from "./ground-clamp";
+import { worldToEpsg } from "./ground-clamp";
+import type { RecenterOffset } from "./ground-clamp";
 import { groundRayDistance } from "./ground-ray";
 import type { Xyz } from "./pose";
 

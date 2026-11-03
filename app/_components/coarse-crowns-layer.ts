@@ -1,17 +1,7 @@
-import {
-  type BufferGeometry,
-  Color,
-  Group,
-  Matrix4,
-  Quaternion,
-  Vector3,
-} from "three/webgpu";
-import {
-  type CoarseCrown,
-  type CoarseForm,
-  coarseForm,
-  COARSE_TREE_WIDEN,
-} from "@/lib/city/coarse-crowns";
+import { Color, Group, Matrix4, Quaternion, Vector3 } from "three/webgpu";
+import type { BufferGeometry } from "three/webgpu";
+import { coarseForm, COARSE_TREE_WIDEN } from "@/lib/city/coarse-crowns";
+import type { CoarseCrown, CoarseForm } from "@/lib/city/coarse-crowns";
 import type { RecenterOffset } from "@/lib/city/ground-clamp";
 import { pineBase } from "@/lib/city/tree-inventory";
 import { bucketByCell, hash } from "@/lib/city/tree-placement";
@@ -21,12 +11,13 @@ import {
   buildPineGeo,
   COARSE_CONE_PROFILE,
   CONE_SEGMENTS,
-  type CrownBox,
 } from "./conifer-crown";
+import type { CrownBox } from "./conifer-crown";
 import type { CrownSeasonKey, SeasonalCrowns } from "./crown-season";
 import { seasonCrowns } from "./crown-season";
 import { Instances } from "./instancing";
-import { finished, inRuns, type Steps } from "@/lib/city/build-steps";
+import { finished, inRuns } from "@/lib/city/build-steps";
+import type { Steps } from "@/lib/city/build-steps";
 import { inventoryColor, registerCrownMatrix } from "./tree-inventory-layer";
 import {
   applySeasons,
@@ -36,8 +27,8 @@ import {
   genericSeasonKey,
   padCrownSphere,
   sceneCrowns,
-  type VegetationControl,
 } from "./vegetation-layer";
+import type { VegetationControl } from "./vegetation-layer";
 
 /**
  * The coarse terrain level's trees (lib/city/coarse-crowns.ts): a third of

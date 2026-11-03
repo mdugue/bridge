@@ -15,7 +15,8 @@ import type {
 } from "../../lib/city/features";
 import { AxisIndex, clearOfTracks } from "../../lib/city/platform-clearance";
 import type { Passage } from "../../lib/city/passages";
-import { BED_SIDE_M, type Bed } from "../../lib/city/track-beds";
+import { BED_SIDE_M } from "../../lib/city/track-beds";
+import type { Bed } from "../../lib/city/track-beds";
 import type { DeckPoly } from "../../lib/city/decks";
 import type { LevelLine } from "../../lib/city/levels";
 import { tileExtentOf } from "../../lib/city/site";
@@ -23,7 +24,6 @@ import { sideFileSource } from "../../lib/city/tile";
 import { BAKE_ENTRIES } from "../bake-entries";
 import {
   levelInputs,
-  type SiteLevels,
   siteBeds,
   siteLineLevels,
   sitePassages,
@@ -32,6 +32,7 @@ import {
   siteDecks,
   underDecks,
 } from "../line-levels";
+import type { SiteLevels } from "../line-levels";
 import {
   SITE,
   TILES,
