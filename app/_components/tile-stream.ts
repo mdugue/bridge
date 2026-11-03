@@ -2183,8 +2183,14 @@ export class DressingPlugin {
       // hour (which swap crown materials) — before it hangs anywhere: a
       // build three keys differently from what a frame asks for compiles
       // inside that frame. (A compile starts at the drawable: where it
-      // will hang does not change its build.)
-      catchUp(dressing, this.ctx);
+      // will hang does not change its build.) One that throws here never
+      // hangs: it is freed, not left to nothing.
+      try {
+        catchUp(dressing, this.ctx);
+      } catch (err) {
+        this.disposeFailed(disposeDressing(dressing), scene);
+        throw err;
+      }
       const compiled =
         this.dressed.get(scene) === entry
           ? this.compileUnder(
@@ -2294,9 +2300,6 @@ export class DressingPlugin {
     // hangs under it and leaves with its tile.
     scene.add(...parts);
     entry.dressing = dressing;
-    // (weighed at its build; catchUp may have swapped parts since)
-    this.weighDressing(entry, dressing);
-    this.reweigh(scene);
     this.stream.dressings.add(dressing);
     buildAsksWhenIdle(
       dressing,
@@ -2340,6 +2343,9 @@ export class DressingPlugin {
     });
     // Whatever changed while it compiled (the hour moves on).
     catchUp(dressing, this.ctx);
+    // weighed again as it hangs (catchUp may have swapped parts)
+    this.weighDressing(entry, dressing);
+    this.reweigh(scene);
   }
 
   /** The cache weighs `scene`'s tile again (the whole cache: none known). */
@@ -2375,7 +2381,7 @@ export class DressingPlugin {
     entry.dressingBytes = undefined;
     this.stream.dressings.delete(dressing);
     this.disposeFailed(disposeDressing(dressing), scene);
-    this.tiles?.recalculateBytesUsed();
+    this.reweigh(scene);
     this.ctx.onChange();
   }
 
