@@ -59,20 +59,20 @@ const BARE_LINK = new RegExp(String.raw`\s?${LINK}`, "g");
 export function speakable(text: string): string {
   return (
     text
-      .replace(MARKDOWN_LINK, "$1")
-      .replace(BRACKETED_LINK, "")
-      .replace(BARE_LINK, "")
-      .replace(/^[ \t]*[-*•][ \t]+/gm, "")
+      .replaceAll(MARKDOWN_LINK, "$1")
+      .replaceAll(BRACKETED_LINK, "")
+      .replaceAll(BARE_LINK, "")
+      .replaceAll(/^[ \t]*[-*•][ \t]+/gm, "")
       // Markdown's marks, but not an underscore inside a word (DESN_0815)
-      .replace(/[*#`]|(?<!\w)_|_(?!\w)/g, "")
+      .replaceAll(/[*#`]|(?<!\w)_|_(?!\w)/g, "")
       // a line without its own end is a sentence still: a list item, a heading
       // (after a number a comma: "1726." reads as an ordinal)
-      .replace(/(\d)[ \t]*\n+/g, "$1, ")
-      .replace(/([^\s.!?:;,])[ \t]*\n+/g, "$1. ")
-      .replace(/(\d)\s?m²/g, "$1 Quadratmeter")
-      .replace(/(\d)\s?m³/g, "$1 Kubikmeter")
-      .replace(/(\d)\s?m(?![\p{L}\d])/gu, "$1 Meter")
-      .replace(/\s+/g, " ")
+      .replaceAll(/(\d)[ \t]*\n+/g, "$1, ")
+      .replaceAll(/([^\s.!?:;,])[ \t]*\n+/g, "$1. ")
+      .replaceAll(/(\d)\s?m²/g, "$1 Quadratmeter")
+      .replaceAll(/(\d)\s?m³/g, "$1 Kubikmeter")
+      .replaceAll(/(\d)\s?m(?![\p{L}\d])/gu, "$1 Meter")
+      .replaceAll(/\s+/g, " ")
       .trim()
   );
 }
