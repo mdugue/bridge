@@ -389,7 +389,7 @@ interface Dressed {
   aborter?: AbortController;
   city?: CityLayer;
   dressing?: TileDressing;
-  /** the dressing's geometry bytes, once it hangs on the tile */
+  /** the dressing's geometry bytes, from its build (it waits to hang) */
   dressingBytes?: number;
   /** the city tile's murals, once they hang on it */
   murals?: MuralLayer;
@@ -2157,10 +2157,10 @@ export class DressingPlugin {
     // (the compiles still take their turns, `compileInTurn`). Waiting on
     // the compile inside the lane left it idle for up to COMPILE_WAIT_MS
     // a tile. One compile ahead at most: a build overlaps the last one's
-    // compile but waits out the one before it, so built dressings
-    // (unweighed until they hang) and the compile queue never pile up
-    // behind a slow GPU — a queue past the wait would hang them before
-    // their compile.
+    // compile but waits out the one before it, so built dressings (each
+    // weighed from its build) and the compile queue never pile up behind
+    // a slow GPU — a queue past the wait would hang them before their
+    // compile.
     void this.turn(async (): Promise<(() => Promise<void>) | undefined> => {
       await this.olderCompile;
       const entry = this.dressed.get(scene);
@@ -2177,13 +2177,6 @@ export class DressingPlugin {
       );
       entry.aborter = undefined;
       const parts = dressingParts(dressing);
-      // Weighed from the build on, not from the hang: the lane runs ahead
-      // of the compile waits, and a built dressing waiting its turn to
-      // hang must count against the cache's budget.
-      if (this.dressed.get(scene) === entry) {
-        this.weighDressing(entry, dressing);
-        this.tiles?.recalculateBytesUsed();
-      }
       // Compiled as the frames will draw it — in its season and at the
       // hour (which swap crown materials) — before it hangs anywhere: a
       // build three keys differently from what a frame asks for compiles
@@ -2211,6 +2204,13 @@ export class DressingPlugin {
       );
       this.olderCompile = this.lastCompile;
       this.lastCompile = waited.catch(() => undefined);
+      // Weighed from the build on, not from the hang: the lane runs ahead
+      // of the compile waits, and a built dressing waiting its turn to
+      // hang must count against the cache's budget.
+      if (this.dressed.get(scene) === entry) {
+        this.weighDressing(entry, dressing);
+        this.reweigh(scene);
+      }
       return async () => {
         await waited;
         built();
@@ -2229,7 +2229,7 @@ export class DressingPlugin {
         ) {
           if (this.dressed.get(scene) === entry) {
             entry.dressingBytes = undefined;
-            this.tiles?.recalculateBytesUsed();
+            this.reweigh(scene);
           }
           // freed once its compile has ended (see `compiles`)
           compiled
@@ -2292,8 +2292,9 @@ export class DressingPlugin {
     // hangs under it and leaves with its tile.
     scene.add(...parts);
     entry.dressing = dressing;
+    // (weighed at its build; catchUp may have swapped parts since)
     this.weighDressing(entry, dressing);
-    this.tiles?.recalculateBytesUsed();
+    this.reweigh(scene);
     this.stream.dressings.add(dressing);
     buildAsksWhenIdle(
       dressing,
@@ -2337,6 +2338,16 @@ export class DressingPlugin {
     });
     // Whatever changed while it compiled (the hour moves on).
     catchUp(dressing, this.ctx);
+  }
+
+  /** The cache weighs `scene`'s tile again (the whole cache: none known). */
+  private reweigh(scene: Object3D): void {
+    const tile = this.tileOf.get(scene);
+    if (tile) {
+      this.tiles?.recalculateBytesUsed(tile);
+    } else {
+      this.tiles?.recalculateBytesUsed();
+    }
   }
 
   /** A built dressing's geometry bytes, as its parts stand now (the
