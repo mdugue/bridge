@@ -14,7 +14,7 @@ afterEach(() => {
 function stubFetch(answer: (url: string) => Response): Map<string, number> {
   const calls = new Map<string, number>();
   // reason: the stub takes the URL only; the helpers pass a string
-  globalThis.fetch = ((url: string) => {
+  globalThis.fetch = (async (url: string) => {
     calls.set(url, (calls.get(url) ?? 0) + 1);
     return Promise.resolve(answer(url));
   }) as unknown as typeof fetch;
@@ -52,7 +52,7 @@ test("a timetable that failed to load says so and is tried again on the next swi
   const statuses: (TramCarsStatus | null)[] = [];
   const overlays = createDataOverlays({
     ...base,
-    compile: () => Promise.resolve(),
+    compile: async () => Promise.resolve(),
     onTramStatus: (s) => statuses.push(s),
     tramTimetableUrl: "/data/trams.json",
   });
@@ -79,7 +79,7 @@ test("trams whose compile failed leave the scene, and the next switch-on adds on
   const overlays = createDataOverlays({
     ...base,
     parent,
-    compile: () => {
+    compile: async () => {
       compiles++;
       return compiles === 1
         ? Promise.reject(new Error("pipeline"))
@@ -130,7 +130,7 @@ test("a counter layer whose compile failed compiles again with the next counts",
   const overlays = createDataOverlays({
     ...base,
     bikeFeed: "dresden",
-    compile: () => {
+    compile: async () => {
       compiles++;
       return compiles === 1
         ? Promise.reject(new Error("pipeline"))

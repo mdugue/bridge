@@ -130,7 +130,7 @@ function deadline(ms: number) {
   let timer = setTimeout(fire, ms);
   return {
     signal: controller.signal,
-    race: <T>(work: Promise<T>) => Promise.race([work, cut]),
+    race: async <T>(work: Promise<T>) => Promise.race([work, cut]),
     move(next: number) {
       clearTimeout(timer);
       timer = setTimeout(fire, next);
@@ -302,7 +302,7 @@ export function sharedCache(
       }
       // every scope at once, the first that has it in `reads`' order
       const found = (
-        await Promise.all(reads.map((from) => fetchFrom(name, key, from)))
+        await Promise.all(reads.map(async (from) => fetchFrom(name, key, from)))
       ).find((bytes) => bytes);
       if (found) {
         counts.hits += 1;

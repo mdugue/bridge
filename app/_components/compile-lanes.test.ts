@@ -13,7 +13,7 @@ function heldSteps() {
     string,
     { finish: () => void; fail: (e: Error) => void }
   >();
-  const step = (item: Item) =>
+  const step = async (item: Item) =>
     new Promise<void>((resolve, reject) => {
       started.push(item.id);
       ends.set(item.id, { finish: resolve, fail: reject });
@@ -23,7 +23,7 @@ function heldSteps() {
   return { started, step, end, fail };
 }
 
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+const settle = async () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /** Whether `promise` has settled by now, and how. */
 function watch(promise: Promise<unknown>) {
@@ -100,7 +100,7 @@ test("a drawable left out (its tile left) gets no step", async () => {
       { id: "kept", material: "m" },
       { id: "gone", material: "m" },
     ],
-    (item) => {
+    async (item) => {
       ran.push(item.id);
       return Promise.resolve();
     },
@@ -114,11 +114,11 @@ test("the compiles on one renderer run in turn, each once the one before has set
   const renderer = {};
   const { started, step, end, fail } = heldSteps();
   const item = (id: string): Item => ({ id, material: "m" });
-  const first = watch(compileInTurn(renderer, () => step(item("a"))));
-  const second = watch(compileInTurn(renderer, () => step(item("b"))));
-  const third = watch(compileInTurn(renderer, () => step(item("c"))));
+  const first = watch(compileInTurn(renderer, async () => step(item("a"))));
+  const second = watch(compileInTurn(renderer, async () => step(item("b"))));
+  const third = watch(compileInTurn(renderer, async () => step(item("c"))));
   // another renderer's (a second app's) compile does not wait for these
-  const other = watch(compileInTurn({}, () => step(item("other"))));
+  const other = watch(compileInTurn({}, async () => step(item("other"))));
   await settle();
   expect(started).toEqual(["a", "other"]);
   const lost = new RangeError("Allocation failure.");

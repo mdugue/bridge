@@ -40,7 +40,7 @@ export function createSharedRasters<T>(
     });
   };
   return {
-    acquire: (key) => {
+    acquire: async (key) => {
       let entry = entries.get(key);
       if (!entry) {
         const controller = new AbortController();

@@ -45,7 +45,7 @@ const nextConfig: NextConfig = {
   // (prepare-sites.ts) are the files that must always revalidate.
   // (Next's default for public/ is max-age=0, i.e. one revalidation round
   // trip per file per visit — 60 of them here.)
-  headers: () =>
+  headers: async () =>
     Promise.resolve([
       {
         source: "/data/:path*",
@@ -68,8 +68,8 @@ const nextConfig: NextConfig = {
   // The reports go to the site's own origin and on from here to the
   // tracker (none without a DSN): a blocker that drops requests to the
   // tracker's host lets them through.
-  rewrites: () => Promise.resolve(tunnelRewrites(reports.dsn)),
-  redirects: () =>
+  rewrites: async () => Promise.resolve(tunnelRewrites(reports.dsn)),
+  redirects: async () =>
     Promise.resolve([
       // The viewer lived at /city, then at the root route; the root is the
       // start page now and every city has its own route (/dresden).

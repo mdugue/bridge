@@ -8,7 +8,7 @@
  */
 import sharp from "sharp";
 
-export function downsampleClassRaster(
+export async function downsampleClassRaster(
   source: string | Buffer,
   px: number
 ): Promise<Buffer> {

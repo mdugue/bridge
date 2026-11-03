@@ -29,7 +29,7 @@ interface PocView {
   stats?: { gpuMegabytes: number; layerStats: Record<string, unknown> };
 }
 
-const poc = (page: Page) =>
+const poc = async (page: Page) =>
   page.evaluate(() => {
     const p = (window as unknown as { __poc?: PocView }).__poc;
     return p

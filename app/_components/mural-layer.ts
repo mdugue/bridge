@@ -98,7 +98,7 @@ export function createMuralSource(url: string | null): MuralSource | null {
     return null;
   }
   let all: Promise<readonly Mural[]> | null = null;
-  const load = (): Promise<readonly Mural[]> => {
+  const load = async (): Promise<readonly Mural[]> => {
     all ??= fetchOptionalJson<unknown>(url)
       .then((json) => parseMurals(json) ?? [])
       .catch(() => []);

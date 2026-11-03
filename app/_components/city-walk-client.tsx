@@ -43,7 +43,7 @@ function BootScreen() {
 // `ssr: false` is only allowed inside a Client Component, hence this wrapper.
 // (The import stays written out inside dynamic(): Next matches the call to
 // its chunk by it.)
-const CityWalk = dynamic(() => import("./city-walk"), {
+const CityWalk = dynamic(async () => import("./city-walk"), {
   ssr: false,
   loading: () => <BootScreen />,
 });
@@ -56,7 +56,7 @@ const CityWalk = dynamic(() => import("./city-walk"), {
  * scope: this module renders on the server too, and three must not load
  * there.
  */
-const loadViewer = () =>
+const loadViewer = async () =>
   Promise.all([import("./city-walk"), import("./create-app")]);
 
 /**

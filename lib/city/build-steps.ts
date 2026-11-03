@@ -58,7 +58,7 @@ export function finished<T>(steps: Steps<T>): T {
 }
 
 /** The main thread given back: the next slice in a later task. */
-export function giveBack(): Promise<void> {
+export async function giveBack(): Promise<void> {
   const host = globalThis as {
     scheduler?: { yield?: () => Promise<void> };
   };

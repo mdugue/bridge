@@ -40,7 +40,7 @@ const turns = new WeakMap<object, Promise<void>>();
  * stack's `releaseWhenSettled` waits for the anchors' own compiles
  * instead).
  */
-export function compileInTurn(
+export async function compileInTurn(
   renderer: object,
   start: () => Promise<void>
 ): Promise<void> {

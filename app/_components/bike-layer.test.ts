@@ -76,7 +76,7 @@ function stubFetch(body: unknown): {
   const real = globalThis.fetch;
   let calls = 0;
   // reason: the stub takes the URL only; the helpers pass a string
-  globalThis.fetch = (() => {
+  globalThis.fetch = (async () => {
     calls++;
     return Promise.resolve(new Response(JSON.stringify(body)));
   }) as unknown as typeof fetch;
@@ -88,7 +88,7 @@ function stubFetch(body: unknown): {
   };
 }
 
-const settle = () => new Promise((r) => setTimeout(r, 5));
+const settle = async () => new Promise((r) => setTimeout(r, 5));
 
 test("an answer the feed cannot parse is no crash: the last counts stay", async () => {
   const stub = stubFetch({ features: [] });

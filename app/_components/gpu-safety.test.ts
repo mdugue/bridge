@@ -64,7 +64,7 @@ test("a previous record whose page answers is no crash: the level stays", async 
     screen: "1×1@1",
   });
   const asked: string[] = [];
-  const open = (trail: Trail) => {
+  const open = async (trail: Trail) => {
     asked.push(trail.startedAt);
     return Promise.resolve(true);
   };
@@ -73,7 +73,7 @@ test("a previous record whose page answers is no crash: the level stays", async 
   expect(asked).toEqual([live.startedAt]);
   // not marked counted: the next load asks again, and a page gone by
   // then is the crash it looked like
-  const gone = () => Promise.resolve(false);
+  const gone = async () => Promise.resolve(false);
   expect(await settleAfterAsking("", store, live, gone, now)).toBe(2);
   // nothing to ask without a crashed-looking record
   expect(await settleAfterAsking("", store, null, open, now)).toBe(2);

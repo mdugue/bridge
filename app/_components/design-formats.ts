@@ -71,7 +71,7 @@ export function pickedFiles(
     manager,
     missing,
     // every load the manager started has ended, failed ones too
-    settled: () => (started && done ? done : Promise.resolve()),
+    settled: async () => (started && done ? done : Promise.resolve()),
     release: () => {
       for (const url of urls.values()) {
         URL.revokeObjectURL(url);
@@ -111,7 +111,7 @@ export async function readObj(
     const mtls = files.filter((f) => libraries.includes(f.name));
     const unpicked = libraries.filter((n) => !mtls.some((f) => f.name === n));
     if (mtls.length > 0) {
-      const texts = await Promise.all(mtls.map((f) => f.text()));
+      const texts = await Promise.all(mtls.map(async (f) => f.text()));
       const materials = new MTLLoader(picked.manager).parse(
         texts.join("\n"),
         ""

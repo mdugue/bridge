@@ -511,14 +511,14 @@ export function dressCity(
         fresh = false;
       }
     },
-    prepareBvh: () => {
+    prepareBvh: async () => {
       if (fresh) {
         return Promise.resolve();
       }
       prepared ??= streamTimings
         .timed(
           "tile:bvh-worker",
-          () => buildBvhOffThread(geometry, () => !disposed),
+          async () => buildBvhOffThread(geometry, () => !disposed),
           tile
         )
         .finally(() => {

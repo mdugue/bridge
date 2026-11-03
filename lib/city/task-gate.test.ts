@@ -4,7 +4,7 @@ import { createTaskGate } from "./task-gate";
 /** A task that runs until `finish` is called, noting when it starts. */
 function held(log: string[], name: string) {
   let finish = (): void => undefined;
-  const task = () =>
+  const task = async () =>
     new Promise<string>((resolve) => {
       log.push(`start ${name}`);
       finish = () => resolve(name);
@@ -12,10 +12,10 @@ function held(log: string[], name: string) {
   return { task, finish: () => finish() };
 }
 
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+const settle = async () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /** What `promise` rejects with (undefined when it resolves). */
-const failure = (promise: Promise<unknown>): Promise<unknown> =>
+const failure = async (promise: Promise<unknown>): Promise<unknown> =>
   promise.then(
     () => undefined,
     (err: unknown) => err
@@ -97,7 +97,7 @@ test("never more at once than the gate has places", async () => {
     await settle();
     now--;
   };
-  await Promise.all(Array.from({ length: 7 }, () => gate.run(task)));
+  await Promise.all(Array.from({ length: 7 }, async () => gate.run(task)));
   expect(most).toBe(2);
 });
 
@@ -127,19 +127,19 @@ test("a waiter whose signal aborts leaves the line without running", async () =>
 
 test("a task that fails frees its place", async () => {
   const gate = createTaskGate(1);
-  const outcome = (p: Promise<string>) =>
+  const outcome = async (p: Promise<string>) =>
     p.then(
       (value) => value,
       (err: unknown) => `failed: ${(err as Error).message}`
     );
   const results = await Promise.all([
-    outcome(gate.run(() => Promise.reject(new Error("decode failed")))),
+    outcome(gate.run(async () => Promise.reject(new Error("decode failed")))),
     outcome(
       gate.run(() => {
         throw new Error("thrown at once");
       })
     ),
-    outcome(gate.run(() => Promise.resolve("next"))),
+    outcome(gate.run(async () => Promise.resolve("next"))),
   ]);
   expect(results).toEqual([
     "failed: decode failed",

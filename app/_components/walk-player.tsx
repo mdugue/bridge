@@ -65,12 +65,12 @@ const SECTION_LABEL =
 /** One fetch per URL for the page's life (the file is content-hashed). */
 const bundles = new Map<string, Promise<Walk[]>>();
 
-function loadWalks(url: string): Promise<Walk[]> {
+async function loadWalks(url: string): Promise<Walk[]> {
   let pending = bundles.get(url);
   if (!pending) {
     // a failed answer (a 503 mid-deploy) is not kept: the next mount asks again
     pending = fetch(url)
-      .then((res) => {
+      .then(async (res) => {
         if (!res.ok) {
           throw new Error(`walks: ${res.status}`);
         }

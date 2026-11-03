@@ -502,8 +502,8 @@ export function createSelectionOutline(deps: {
     // freed them first, and its compile then held them for good), and none
     // once the outline is disposed.
     compile: async (renderer, camera) => {
-      const inTurn = (into: RenderTarget, root: Object3D, view: Camera) =>
-        compileInTurn(renderer, () => {
+      const inTurn = async (into: RenderTarget, root: Object3D, view: Camera) =>
+        compileInTurn(renderer, async () => {
           if (outlineDisposed) {
             return Promise.resolve();
           }

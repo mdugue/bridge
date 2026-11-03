@@ -305,7 +305,7 @@ async function buildThere(
  * there: one that left before its turn is not built, and one that left
  * during it gets its arrays back but no BVH.
  */
-export function buildBvhOffThread(
+export async function buildBvhOffThread(
   geometry: BufferGeometry,
   wanted: () => boolean = () => true
 ): Promise<void> {

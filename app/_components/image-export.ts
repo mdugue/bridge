@@ -263,7 +263,10 @@ function withLegend(
 }
 
 /** Hands the canvas to the browser as a PNG download. */
-function download(canvas: HTMLCanvasElement, name: string): Promise<void> {
+async function download(
+  canvas: HTMLCanvasElement,
+  name: string
+): Promise<void> {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (!blob) {

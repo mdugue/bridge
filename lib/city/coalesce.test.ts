@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { createCoalescer } from "./coalesce";
 
-const endOfTask = () => new Promise((resolve) => setTimeout(resolve, 0));
+const endOfTask = async () => new Promise((resolve) => setTimeout(resolve, 0));
 
 test("the reports of one task run once, at its end", async () => {
   let runs = 0;

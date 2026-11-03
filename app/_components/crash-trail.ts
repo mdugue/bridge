@@ -201,7 +201,10 @@ function answerFor(startedAt: string): () => void {
  * Whether the page that wrote `trail` is still open (it answers within
  * `waitMs`); false where no page can answer (no channel in this browser).
  */
-export function pageStillOpen(trail: Trail, waitMs = 250): Promise<boolean> {
+export async function pageStillOpen(
+  trail: Trail,
+  waitMs = 250
+): Promise<boolean> {
   if (typeof BroadcastChannel === "undefined") {
     return Promise.resolve(false);
   }

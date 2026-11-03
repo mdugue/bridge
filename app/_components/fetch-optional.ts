@@ -199,7 +199,7 @@ export async function fetchBytes(
   opts: FetchBytesOptions
 ): Promise<FetchedBytes> {
   const { signal, budgetMs } = opts;
-  const answer = await withRetry(() => attempt(url, opts), {
+  const answer = await withRetry(async () => attempt(url, opts), {
     budgetMs,
     env: PAGE_RETRY_ENV,
     signal,
@@ -244,7 +244,7 @@ export function eitherSignal(
  * work behind `promise` goes on for whoever else waits for it — a shared
  * raster (shared-rasters.ts) is aborted only once its last holder lets go.
  */
-export function untilAborted<T>(
+export async function untilAborted<T>(
   promise: Promise<T>,
   signal?: AbortSignal
 ): Promise<T> {
@@ -342,7 +342,7 @@ export async function fetchFeaturesFrom<T>(
   signal?: AbortSignal
 ): Promise<T[]> {
   const lists = await Promise.all(
-    urls.map((url) => fetchFeatures<T>(url, signal))
+    urls.map(async (url) => fetchFeatures<T>(url, signal))
   );
   return lists.flat();
 }

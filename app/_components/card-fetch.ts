@@ -8,7 +8,7 @@
  */
 import type { TreeFactsFile } from "@/lib/city/features";
 
-export function cachedFetch<T>(
+export async function cachedFetch<T>(
   cache: Map<string, Promise<T | null>>,
   url: string,
   accept: (json: unknown) => json is T
@@ -43,6 +43,8 @@ export const isTreeFacts = (json: unknown): json is TreeFactsFile =>
   Array.isArray((json as Partial<TreeFactsFile>).names);
 
 /** A tile's tree facts file, from the shared cache. */
-export function loadTreeFacts(url: string): Promise<TreeFactsFile | null> {
+export async function loadTreeFacts(
+  url: string
+): Promise<TreeFactsFile | null> {
   return cachedFetch(treeFactsFetches, url, isTreeFacts);
 }

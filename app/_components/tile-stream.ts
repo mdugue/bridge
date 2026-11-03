@@ -619,14 +619,14 @@ export function handOverWaitMs(tier: DeviceTier): number {
   return tier === "mobile" ? 0 : 1500;
 }
 
-function withinWait(done: Promise<unknown>, ms: number): Promise<void> {
+async function withinWait(done: Promise<unknown>, ms: number): Promise<void> {
   return Promise.race([
     done.then(() => undefined),
     new Promise<void>((resolve) => setTimeout(resolve, ms)),
   ]);
 }
 
-export function withinCompileWait(done: Promise<unknown>): Promise<void> {
+export async function withinCompileWait(done: Promise<unknown>): Promise<void> {
   return withinWait(done, COMPILE_WAIT_MS);
 }
 
@@ -914,7 +914,7 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
   /** The bodies built, hung hidden and their compile started — in the
    *  host's turn, which waits on the compile (a dressing's waits after
    *  its turn: queueDressing). */
-  const start = (h: TrafficHost, builder: TrafficBuilder) =>
+  const start = async (h: TrafficHost, builder: TrafficBuilder) =>
     h.turn(async () => {
       await nextTask();
       if (gone(h)) {
@@ -987,7 +987,7 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
   };
   const slot: TrafficSlot = {
     group: null,
-    show: () => {
+    show: async () => {
       wanted = true;
       if (ready && slot.group) {
         slot.group.visible = true;
@@ -1062,7 +1062,7 @@ async function buildCoarseDressing(
   const { offset } = ctx;
   const files = extras.coarse ?? {};
   const tile = extras.tileId;
-  const fetchKind = <T>(file: string | undefined): Features<T> =>
+  const fetchKind = async <T>(file: string | undefined): Features<T> =>
     file ? fetchFeatures<T>(url(file), signal) : Promise.resolve([]);
   const [traffic, bridges, crownBytes] = await Promise.all([
     fetchKind<TrafficFeature>(files.traffic),
@@ -1164,7 +1164,7 @@ async function buildDressing(
       : { tile };
   }
   // A kind the tile lacks is a feature off, never a request.
-  const get = <T>(kind: DressingKind): Features<T> => {
+  const get = async <T>(kind: DressingKind): Features<T> => {
     const file = d[kind];
     return file ? fetchFeatures<T>(url(file), signal) : Promise.resolve([]);
   };
@@ -1520,12 +1520,12 @@ export class DressingPlugin {
   private readonly tileOf = new WeakMap<Object3D, object>();
   /** the sky-view rasters a tile's terrain and buildings share */
   readonly skyView: SharedRasters<Texture> = createSharedRasters(
-    (url, signal) => loadSkyViewTexture(url, signal, this.ctx.renderer),
+    async (url, signal) => loadSkyViewTexture(url, signal, this.ctx.renderer),
     (texture) => texture.dispose()
   );
   /** the horizon rasters a tile's two terrain levels share */
   readonly horizon: SharedRasters<Texture> = createSharedRasters(
-    (url, signal) => loadHorizonTexture(url, signal, this.ctx.renderer),
+    async (url, signal) => loadHorizonTexture(url, signal, this.ctx.renderer),
     (texture) => texture.dispose()
   );
   /** the class rasters (and their painted splats), NDVI and sports grounds,
@@ -1535,15 +1535,15 @@ export class DressingPlugin {
    *  COARSE_RASTER_PX); the sports grounds only a desktop's fine level
    *  reads */
   readonly splats: SharedRasters<SplatRasters> = createSharedRasters(
-    (url, signal) => loadSplatRasters(url, this.ctx.renderer, signal),
+    async (url, signal) => loadSplatRasters(url, this.ctx.renderer, signal),
     freeSplatRasters
   );
   readonly ndvis: SharedRasters<Texture> = createSharedRasters(
-    (url, signal) => loadNdviTexture(url, this.ctx.renderer, signal),
+    async (url, signal) => loadNdviTexture(url, this.ctx.renderer, signal),
     (texture) => texture.dispose()
   );
   readonly sports: SharedRasters<SportRasters> = createSharedRasters(
-    (key, signal) => loadSportKey(key, this.ctx.renderer, signal),
+    async (key, signal) => loadSportKey(key, this.ctx.renderer, signal),
     freeSport
   );
   /** the coarse level's grid index and water index, one copy for the
@@ -1573,7 +1573,7 @@ export class DressingPlugin {
     // may take up to COMPILE_WAIT_MS, and the spawn tile's trees need none
     // of its programs (they compile their own).
     ctx.dressingGate
-      .then(() => {
+      .then(async () => {
         this.gateOpen = true;
         return this.warmCrowns();
       })
@@ -1769,7 +1769,7 @@ export class DressingPlugin {
     } else if (extras.kind === "terrain") {
       ({ dressed } = await streamTimings.timed(
         "tile:rasters",
-        () => this.dressTerrain(scene, mesh, extras),
+        async () => this.dressTerrain(scene, mesh, extras),
         extras.tileId
       ));
     }
@@ -1779,7 +1779,7 @@ export class DressingPlugin {
     if (!this.released.has(scene)) {
       await streamTimings.timed(
         "tile:compile",
-        () => withinCompileWait(this.compileContent(scene)),
+        async () => withinCompileWait(this.compileContent(scene)),
         extras.tileId
       );
     }
@@ -1826,7 +1826,7 @@ export class DressingPlugin {
     }
     await streamTimings.timed(
       "tile:handover-wait",
-      () => withinWait(dressed, wait),
+      async () => withinWait(dressed, wait),
       extras.tileId
     );
   }
@@ -2039,8 +2039,8 @@ export class DressingPlugin {
   private olderCompile: Promise<void> = Promise.resolve();
   /** `work` in the dressings' turn: after the gate, one at a time, the
    *  lower rank first */
-  private turn<T>(work: () => Promise<T>, rank: number): Promise<T> {
-    return this.ctx.dressingGate.then(() =>
+  private async turn<T>(work: () => Promise<T>, rank: number): Promise<T> {
+    return this.ctx.dressingGate.then(async () =>
       this.lane.run(work, undefined, rank)
     );
   }
@@ -2082,7 +2082,7 @@ export class DressingPlugin {
     const warmup = buildCrownWarmup();
     this.warmup = warmup;
     await withinCompileWait(
-      Promise.all(warmup.main.map((mesh) => this.ctx.compile(mesh))).then(
+      Promise.all(warmup.main.map(async (mesh) => this.ctx.compile(mesh))).then(
         () => undefined,
         (err: unknown) => {
           this.compileFailed(err, "crowns");
@@ -2140,7 +2140,7 @@ export class DressingPlugin {
    * tile's own content (`loaded`), before any frame — so a tile that waits
    * for it (handsOver) is shown with it.
    */
-  private queueDressing(
+  private async queueDressing(
     scene: Object3D,
     terrain: TerrainLayer,
     extras: TerrainExtras
@@ -2179,7 +2179,7 @@ export class DressingPlugin {
       const signal = entry.aborter.signal;
       const dressing = await streamTimings.timed(
         "dressing:build",
-        () => buildDressing(terrain, extras, this.ctx, this.url, signal),
+        async () => buildDressing(terrain, extras, this.ctx, this.url, signal),
         extras.tileId
       );
       entry.aborter = undefined;
@@ -2215,7 +2215,7 @@ export class DressingPlugin {
         .catch(() => undefined);
       const waited = streamTimings.timed(
         "dressing:compile",
-        () => withinCompileWait(compiled),
+        async () => withinCompileWait(compiled),
         extras.tileId
       );
       this.olderCompile = this.lastCompile;
@@ -2317,7 +2317,7 @@ export class DressingPlugin {
     // The traffic's bodies hang here once its layer is switched on.
     dressing.traffic?.attach({
       root: scene,
-      compile: (group) =>
+      compile: async (group) =>
         this.compileUnder(
           scene,
           compileRepresentatives([group]),
@@ -2325,7 +2325,7 @@ export class DressingPlugin {
         ),
       // the dressings' own chain: a switch-on builds the loaded tiles'
       // bodies one after another, never all in one task
-      turn: (work) => {
+      turn: async (work) => {
         return this.turn(work, FINE_DRESSING_RANK);
       },
       freeFailed: (errors) => this.disposeFailed(errors, scene),
@@ -2412,13 +2412,15 @@ export class DressingPlugin {
    * `scene` until they end (see `compiles`). Resolves how it ended (a
    * failure for want of memory reported as `where`); never rejects.
    */
-  private compileUnder(
+  private async compileUnder(
     scene: Object3D,
     objects: Object3D[],
     where: string
   ): Promise<Compiled> {
     this.compiles.set(scene, (this.compiles.get(scene) ?? 0) + 1);
-    const done = Promise.all(objects.map((o) => this.ctx.compile(o))).then(
+    const done = Promise.all(
+      objects.map(async (o) => this.ctx.compile(o))
+    ).then(
       (compiled): Compiled => (compiled.every(Boolean) ? "done" : "not run"),
       (err: unknown) => this.compileFailed(err, where)
     );
@@ -2442,7 +2444,7 @@ export class DressingPlugin {
    * The content's own compile — and once it has uploaded the content, the
    * CPU copies of what nothing reads any more go (`dropContentCopies`).
    */
-  private compileContent(scene: Object3D): Promise<Compiled> {
+  private async compileContent(scene: Object3D): Promise<Compiled> {
     // the content's own geometries, before any dressing hangs beside them
     // (disposeContentNow)
     const content = new Set<BufferGeometry>();

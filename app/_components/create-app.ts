@@ -1034,7 +1034,7 @@ interface ProbedDevice {
  * when the GPU process has taken it — or at once on the WebGL2 backend,
  * which has none. three ignores a loss for `destroyed` (no recovery runs).
  */
-function deviceGone(renderer: WebGPURenderer): Promise<void> {
+async function deviceGone(renderer: WebGPURenderer): Promise<void> {
   const backend = renderer.backend as {
     isWebGPUBackend?: boolean;
     device?: { lost: Promise<unknown> } | null;
@@ -1077,7 +1077,7 @@ function probeGpu(renderer: WebGPURenderer): string | null {
  * document is collected, after the new page started allocating in the
  * same process. Settles within RELEASE_WAIT_MS either way.
  */
-function releaseGpu(renderer: WebGPURenderer): Promise<void> {
+async function releaseGpu(renderer: WebGPURenderer): Promise<void> {
   let released: Promise<void>;
   try {
     released = renderer.dispose().catch(() => undefined);
@@ -1246,7 +1246,7 @@ export async function createCityWalkApp(
  * trip to /wissen) makes its own canvas, and a browser holds only a handful
  * of contexts; whatever still points at this one draws nothing.
  */
-function teardown(
+async function teardown(
   cleanups: Array<() => void>,
   scene: Scene,
   renderer: WebGPURenderer
@@ -1303,7 +1303,7 @@ function stopWorkers(): void {
 }
 
 /** The renderer and its device (or its context), and its canvas. */
-function releaseRenderer(renderer: WebGPURenderer): Promise<void> {
+async function releaseRenderer(renderer: WebGPURenderer): Promise<void> {
   // Async: it destroys the device (or loses the context) at the end.
   const released = renderer.dispose().catch(() => undefined);
   renderer.domElement.remove();
@@ -1668,7 +1668,7 @@ async function bootApp(
     {
       // whether it compiled (a tile drops the CPU copies of what it
       // uploaded); what a compile throws the stream sorts out
-      compile: (object) =>
+      compile: async (object) =>
         compileWith
           ? compileWith(object).then(() => true)
           : Promise.resolve(false),
@@ -1718,7 +1718,7 @@ async function bootApp(
       // the data layers' traffic builder (they are set up with the post
       // stack below; a slot asks only once the look has a layer on and
       // its tile has landed)
-      trafficBuilder: () =>
+      trafficBuilder: async () =>
         dataLayers.want().then((layers) => layers?.traffic ?? null),
     },
     world,
@@ -2029,7 +2029,7 @@ async function bootApp(
   // is all there. (Their code ships with the scene: as a chunk of its own
   // it cost more first-load JS than it moved — feature-seam.ts.)
   const dataLayers = lazyFeature(
-    () => Promise.resolve(dataLayersModule),
+    async () => Promise.resolve(dataLayersModule),
     ({ startDataLayers }) =>
       startDataLayers(hooks, {
         bikeFeed: opts.site.dataLayers?.bikes?.feed,
@@ -2037,7 +2037,8 @@ async function bootApp(
         bridgeUrls: extras.tiles.flatMap((t) =>
           t.bridges ? [new URL(t.bridges, tilesetUrl).href] : []
         ),
-        compile: (object) => postStack.compile(object).catch(() => undefined),
+        compile: async (object) =>
+          postStack.compile(object).catch(() => undefined),
         epsg: extras.epsg,
         ground: { offset, heightAt },
         onBikeCounts: opts.onBikeCounts,
@@ -2798,7 +2799,7 @@ async function bootApp(
       }
     },
     pose: () => pose.getPose(),
-    compile: (object) => postStack.compile(object),
+    compile: async (object) => postStack.compile(object),
     footprints: () => footprints,
     changed: () => {
       if (disposed) {
@@ -3625,7 +3626,7 @@ async function bootApp(
    * none).
    */
   let shadowFrameSeen: ((drawn: boolean) => void) | null = null;
-  const firstShadowFrame = () =>
+  const firstShadowFrame = async () =>
     new Promise<void>((resolve) => {
       let quiet = 0;
       shadowFrameSeen = (drawn) => {
@@ -4072,7 +4073,7 @@ async function bootApp(
   // the first visible frame. Bounded like a tile's compile: it resolves
   // only once every compile in flight has (compile-lanes.ts), neighbours'
   // included, and a frame skips what is not ready rather than stall.
-  await streamTimings.timed("boot:scene-compile", () =>
+  await streamTimings.timed("boot:scene-compile", async () =>
     withinCompileWait(postStack.compile(scene).catch(() => undefined))
   );
   // On the spawn vantage (or where a recovered page stood) now that its
@@ -4089,7 +4090,7 @@ async function bootApp(
   // already at 52 % and the veil's timer held up behind them — a load that
   // looked frozen. Bounded like a compile: a stalled frame never holds the
   // boot.
-  await streamTimings.timed("boot:light-wait", () =>
+  await streamTimings.timed("boot:light-wait", async () =>
     withinCompileWait(firstShadowFrame())
   );
   // The sun rig, the shadow map and the clay materials are up: this is the
@@ -4230,11 +4231,12 @@ async function bootApp(
     design: {
       applyPlacementFile: (text) =>
         design?.applyPlacementFile(text) ?? "Keine Szene.",
-      load: (files) => design?.load(files) ?? Promise.resolve(),
+      load: async (files) => design?.load(files) ?? Promise.resolve(),
       placeHere: () => design?.placeHere(),
       placementText: () => design?.placementText() ?? null,
       remove: () => design?.remove(),
-      setFileColours: (on) => design?.setFileColours(on) ?? Promise.resolve(),
+      setFileColours: async (on) =>
+        design?.setFileColours(on) ?? Promise.resolve(),
       setOnGround: () => design?.setOnGround(),
       setPlacement: (patch) => design?.setPlacement(patch),
       setReplaceExisting: (on) => design?.setReplaceExisting(on),
@@ -4244,7 +4246,7 @@ async function bootApp(
     inquireAt,
     nameplateShown: () => nameplate.shown(),
     enterImmersive: canvasControls.lockPointer,
-    releaseGpu: () => releaseGpu(renderer),
+    releaseGpu: async () => releaseGpu(renderer),
     flyTo: (position, lookAt) => {
       modelRig.exitNow();
       pose.flyTo(position, lookAt);
@@ -4379,7 +4381,7 @@ async function bootApp(
     },
     getViewMode: () => viewMode,
     setCutOut,
-    captureImage: () =>
+    captureImage: async () =>
       new Promise<CapturedImage>((resolve, reject) => {
         captureQueue.push({ resolve, reject });
       }),
@@ -4408,7 +4410,7 @@ async function bootApp(
         void teardown(cleanups, scene, renderer);
       }
     },
-    disposeForReload: () => {
+    disposeForReload: async () => {
       if (!leave()) {
         return Promise.resolve();
       }

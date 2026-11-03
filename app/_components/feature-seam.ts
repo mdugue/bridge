@@ -116,7 +116,7 @@ export function lazyFeature<M, F extends { dispose: () => void }>(
   let pending: Promise<F | null> | null = null;
   let disposed = false;
   return {
-    want: () => {
+    want: async () => {
       // (a start that resolved before the spine went would hand out the
       // stopped feature)
       if (disposed) {

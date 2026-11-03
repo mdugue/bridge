@@ -100,7 +100,7 @@ const terrains = new Map<
   string,
   Promise<TerrainMesh & { bounds: TerrainBounds }>
 >();
-function shapedTerrain(
+async function shapedTerrain(
   tile: string,
   level: 0 | 1
 ): Promise<TerrainMesh & { bounds: TerrainBounds }> {

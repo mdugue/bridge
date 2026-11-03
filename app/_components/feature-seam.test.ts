@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { lazyFeature, wantOnSwitchOn } from "./feature-seam";
 
 /** Every promise the calls before started has settled. */
-const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
+const settled = async () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /** A feature that counts its starts and stops. */
 function counted() {
@@ -25,7 +25,7 @@ function counted() {
 test("a feature wanted many times loads and starts once", async () => {
   let imports = 0;
   const feature = counted();
-  const lazy = lazyFeature(() => {
+  const lazy = lazyFeature(async () => {
     imports++;
     return Promise.resolve({});
   }, feature.start);
@@ -41,7 +41,7 @@ test("a feature wanted many times loads and starts once", async () => {
 test("a module that did not load is asked for again on the next want", async () => {
   let imports = 0;
   const feature = counted();
-  const lazy = lazyFeature(() => {
+  const lazy = lazyFeature(async () => {
     imports++;
     return imports === 1
       ? Promise.reject(new Error("load"))
@@ -64,7 +64,7 @@ test("a spine gone before the module came never starts the feature; one gone aft
     arrive = () => resolve({});
   });
   const early = counted();
-  const gone = lazyFeature(() => coming, early.start);
+  const gone = lazyFeature(async () => coming, early.start);
   const wanted = gone.want();
   gone.dispose();
   arrive();
@@ -73,7 +73,7 @@ test("a spine gone before the module came never starts the feature; one gone aft
   expect(gone.current()).toBeNull();
 
   const late = counted();
-  const started = lazyFeature(() => Promise.resolve({}), late.start);
+  const started = lazyFeature(async () => Promise.resolve({}), late.start);
   await started.want();
   started.dispose();
   expect(late.stops()).toBe(1);
@@ -86,7 +86,7 @@ test("a spine gone before the module came never starts the feature; one gone aft
 test("the spine asks again on the next switch-on after a load that failed, not on every change while on", async () => {
   let imports = 0;
   const feature = counted();
-  const lazy = lazyFeature(() => {
+  const lazy = lazyFeature(async () => {
     imports++;
     return imports === 1
       ? Promise.reject(new Error("load"))

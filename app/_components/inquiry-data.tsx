@@ -19,7 +19,7 @@ type LineageModule = typeof import("@/lib/city/lineage");
 /** The module, loaded once for the page when a card's section is first
  *  wanted (its own chunk: the boot carries none of it). */
 let lineageModule: Promise<LineageModule> | null = null;
-function loadLineage(): Promise<LineageModule> {
+async function loadLineage(): Promise<LineageModule> {
   lineageModule ??= import("@/lib/city/lineage").catch((error: unknown) => {
     // a failed chunk is not kept: the next opening tries again
     lineageModule = null;

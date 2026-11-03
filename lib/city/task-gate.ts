@@ -75,7 +75,7 @@ export function createTaskGate(
       line.shift()?.start();
     }
   };
-  const run = <T>(
+  const run = async <T>(
     task: () => Promise<T>,
     signal?: AbortSignal,
     rank = 0

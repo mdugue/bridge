@@ -61,7 +61,7 @@ export function orientationNeedsPermission(): boolean {
  * elsewhere. Must be called straight from a click — iOS only grants it
  * inside a user gesture, which is gone once the first `await` yields.
  */
-export function requestOrientationPermission(): Promise<boolean> {
+export async function requestOrientationPermission(): Promise<boolean> {
   const request = ctor()?.requestPermission;
   if (typeof request !== "function") {
     return Promise.resolve(ctor() !== undefined);

@@ -63,7 +63,7 @@ export async function publishColonies(
   const lowFile = file.replace(/\.png$/u, ".r1024.png");
   const cropFile = file.replace(/\.png$/u, ".crop.json");
   let cropping: ReturnType<typeof cropColonyRaster> | null = null;
-  const cut = () => {
+  const cut = async () => {
     cropping ??= cropColonyRaster(src);
     return cropping;
   };
@@ -170,7 +170,7 @@ export async function publishClassRaster(
   raster: number
 ): Promise<string> {
   const key = cacheKey([src], BAKE_ENTRIES.classRaster);
-  const bytes = await cached(file, key, () =>
+  const bytes = await cached(file, key, async () =>
     downsampleClassRaster(src, raster)
   );
   return publish(file, bytes);

@@ -1,13 +1,13 @@
 import { expect, test } from "bun:test";
 import { createSharedRasters } from "./shared-rasters";
 
-const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+const tick = async () => new Promise((resolve) => setTimeout(resolve, 0));
 
 test("a shared raster loads once and is freed with its last reader", async () => {
   const loads: string[] = [];
   const freed: string[] = [];
   const share = createSharedRasters(
-    (key) => {
+    async (key) => {
       loads.push(key);
       return Promise.resolve(`tex:${key}`);
     },
@@ -36,7 +36,7 @@ test("a raster released before it lands is freed when it lands", async () => {
   let land: (value: string) => void = () => undefined;
   const freed: string[] = [];
   const share = createSharedRasters(
-    () =>
+    async () =>
       new Promise<string>((resolve) => {
         land = resolve;
       }),
@@ -52,7 +52,7 @@ test("a raster released before it lands is freed when it lands", async () => {
 
 test("a failed load is null, never a rejection", async () => {
   const share = createSharedRasters<string>(
-    () => Promise.reject(new Error("404")),
+    async () => Promise.reject(new Error("404")),
     () => undefined
   );
   expect(await share.acquire("x")).toBeNull();
@@ -62,7 +62,7 @@ test("a clear frees every held raster, pending ones when they land", async () =>
   let land: (value: string) => void = () => undefined;
   const freed: string[] = [];
   const share = createSharedRasters(
-    (key) =>
+    async (key) =>
       key === "late"
         ? new Promise<string>((resolve) => {
             land = resolve;
@@ -91,7 +91,7 @@ test("a clear frees every held raster, pending ones when they land", async () =>
 test("a load every reader left before it landed is aborted", async () => {
   let seen: AbortSignal | null = null;
   const share = createSharedRasters(
-    (_key, signal) => {
+    async (_key, signal) => {
       seen = signal;
       return new Promise<string>((_resolve, reject) => {
         signal.addEventListener("abort", () => reject(new Error("aborted")));
@@ -113,7 +113,7 @@ test("a load every reader left before it landed is aborted", async () => {
 test("the stream's teardown stops the loads still on their way", async () => {
   const signals: AbortSignal[] = [];
   const share = createSharedRasters(
-    (key, signal) => {
+    async (key, signal) => {
       signals.push(signal);
       return key === "landed"
         ? Promise.resolve("tex")

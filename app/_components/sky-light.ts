@@ -493,7 +493,7 @@ async function loadLightRaster<T extends Texture>(
  * The sky-view raster as a RED texture, LINEAR + mipmapped (a soft field).
  * See `loadLightRaster`.
  */
-export function loadSkyViewTexture(
+export async function loadSkyViewTexture(
   url: string,
   signal?: AbortSignal,
   renderer?: WebGPURenderer
@@ -526,7 +526,7 @@ export function loadSkyViewTexture(
  * exactly a DataArrayTexture's layer-major layout. LINEAR (the angles
  * interpolate), no mipmaps. Absent, or an older one-band raster → null.
  */
-export function loadHorizonTexture(
+export async function loadHorizonTexture(
   url: string,
   signal?: AbortSignal,
   renderer?: WebGPURenderer

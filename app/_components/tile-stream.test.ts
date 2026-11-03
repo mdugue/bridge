@@ -145,7 +145,7 @@ test("a tile that leaves while its compile runs is freed once the compile ends",
     {
       dressingGate: new Promise<void>(() => undefined),
       bootTile: () => null,
-      compile: () => compiling,
+      compile: async () => compiling,
       onChange: () => undefined,
     } as unknown as TileStreamContext,
     {
@@ -180,7 +180,7 @@ test("a tile that leaves lets go of the site's shared index at once, while its c
     {
       dressingGate: new Promise<void>(() => undefined),
       bootTile: () => null,
-      compile: () =>
+      compile: async () =>
         new Promise<void>((resolve) => {
           finish = resolve;
         }),
@@ -216,7 +216,7 @@ test("a city drops its normals' and places on the wall's CPU copies once its com
       {
         dressingGate: new Promise<void>(() => undefined),
         bootTile: () => null,
-        compile: () => Promise.resolve(compiled),
+        compile: async () => Promise.resolve(compiled),
         onChange: () => undefined,
       } as unknown as TileStreamContext,
       {
@@ -267,7 +267,7 @@ test("a compile the GPU had no room for is reported once, and drops nothing", as
       {
         dressingGate: new Promise<void>(() => undefined),
         bootTile: () => null,
-        compile: () => Promise.reject(error),
+        compile: async () => Promise.reject(error),
         onAllocationFailure: (_: unknown, where: string) =>
           failures.push(where),
         onChange: () => undefined,
@@ -306,7 +306,7 @@ test("a dressing whose build throws is reported, an allocation failure as one, a
     const ctx = {
       dressingGate: Promise.resolve(),
       bootTile: () => null,
-      compile: () => Promise.resolve(true),
+      compile: async () => Promise.resolve(true),
       onAllocationFailure: (err: unknown, where: string) =>
         allocations.push([err, where]),
       onDressingFailed: (err: unknown, tile: string) =>
@@ -373,7 +373,7 @@ test("a tile released while a compile still runs is never dressed after the wait
     {
       dressingGate: Promise.resolve(),
       bootTile: () => null,
-      compile: (o: Object3D) =>
+      compile: async (o: Object3D) =>
         o === blocker
           ? new Promise<boolean>(() => undefined)
           : Promise.resolve(true),
@@ -427,7 +427,7 @@ function abortableLoad() {
     {
       dressingGate: new Promise<void>(() => undefined),
       bootTile: () => null,
-      compile: () => Promise.resolve(),
+      compile: async () => Promise.resolve(),
       onChange: () => undefined,
     } as unknown as TileStreamContext,
     {
@@ -451,7 +451,7 @@ function abortableLoad() {
 /** A task, long enough for the code under test's own next task: a traffic
  *  slot sets its timer only after its builder's load has resolved, past
  *  the microtasks of the call that showed it. */
-const nextTask = () => new Promise((resolve) => setTimeout(resolve, 5));
+const nextTask = async () => new Promise((resolve) => setTimeout(resolve, 5));
 
 /** Waits until `ready` holds, a timer at a time (at most ~2 s). */
 async function until(ready: () => boolean): Promise<void> {
@@ -534,7 +534,7 @@ test("a hung dressing's ask sets come in idle time, into the same array; none fo
     return { tile: "t", asks, buildAsks: build() };
   };
   // the slices run at once here
-  const now = (steps: Steps<unknown>) => Promise.resolve(finished(steps));
+  const now = async (steps: Steps<unknown>) => Promise.resolve(finished(steps));
   const hung = dressing();
   const asks = hung.asks;
   buildAsksWhenIdle(hung, () => true, { idle: later, run: now });
@@ -701,7 +701,7 @@ test("a level waits for its dressing only where it takes over from its tile's ot
 /** The data layers' traffic builder as the slot waits for it, there at
  *  once. */
 const builder: TrafficBuilder = { build: buildTraffic, askSet: trafficAskSet };
-const loaded = () => Promise.resolve(builder);
+const loaded = async () => Promise.resolve(builder);
 
 /** A tile's counted traffic as a slot: one two-way street, its dressing's
  *  ask list, and a host whose compiles the test holds and counts. */
@@ -739,13 +739,13 @@ function trafficTile(
   const freeErrors: unknown[][] = [];
   const host: TrafficHost = {
     root,
-    compile: (group) => {
+    compile: async (group) => {
       compiled.push(group);
       return new Promise((resolve) => {
         finish = () => resolve("done");
       });
     },
-    turn: opts.turn ?? ((work) => work()),
+    turn: opts.turn ?? (async (work) => work()),
     freeFailed: (errors) => {
       freeErrors.push(errors);
     },
@@ -884,7 +884,7 @@ test("bodies freed while their compile runs are freed once it ends", async () =>
 test("a switch-on builds the tiles' bodies one after another", async () => {
   // the dressings' chain, as the plugin hands it to every slot
   let chain = Promise.resolve();
-  const turn: TrafficHost["turn"] = (work) => {
+  const turn: TrafficHost["turn"] = async (work) => {
     const run = chain.then(work);
     chain = run.then(
       () => undefined,
@@ -930,7 +930,7 @@ function builderOnItsWay() {
   const coming = new Promise<TrafficBuilder>((resolve) => {
     arrive = () => resolve(builder);
   });
-  return { arrive: () => arrive(), load: () => coming };
+  return { arrive: () => arrive(), load: async () => coming };
 }
 
 test("tiles hung before the builder arrives get their bodies when it does, and later tiles too", async () => {
@@ -964,7 +964,7 @@ test("a builder that did not come builds nothing and is asked for on the next sw
   // (the host's `failed` throws: a builder that did not come is no failed
   // build of this tile, and must not be reported as one)
   const { compiled, finish, host, slot } = trafficTile({
-    load: () => (fails ? Promise.reject(new Error("start")) : loaded()),
+    load: async () => (fails ? Promise.reject(new Error("start")) : loaded()),
   });
   slot.attach(host);
   await slot.show();
@@ -1011,7 +1011,7 @@ test("an ask builder that throws in idle time is reported and lets the tile go",
   const failures: unknown[] = [];
   buildAsksWhenIdle(d, () => true, {
     idle: later,
-    run: (steps) => Promise.resolve().then(() => finished(steps)),
+    run: async (steps) => Promise.resolve().then(() => finished(steps)),
     failed: (err) => failures.push(err),
   });
   idle.shift()?.();

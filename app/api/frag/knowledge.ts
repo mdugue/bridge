@@ -23,7 +23,7 @@ async function load(site: string): Promise<Knowledge | null> {
   try {
     const index = await read<StadtwissenIndex>(STADTWISSEN_FILE);
     const tiles = await Promise.all(
-      index.tiles.map((t) => read<WissenTile>(t.file))
+      index.tiles.map(async (t) => read<WissenTile>(t.file))
     );
     return knowledgeOf(index, tiles);
   } catch {
@@ -32,7 +32,7 @@ async function load(site: string): Promise<Knowledge | null> {
 }
 
 /** The site's knowledge, or null where the build published none. */
-export function siteKnowledge(site: string): Promise<Knowledge | null> {
+export async function siteKnowledge(site: string): Promise<Knowledge | null> {
   let pending = loaded.get(site);
   if (!pending) {
     pending = load(site);

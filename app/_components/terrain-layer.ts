@@ -441,7 +441,7 @@ async function loadBitmapTexture(
  * not be interpolated) in linear space (the red channel is a class id, not
  * a colour). Non-fatal: a failure just falls back to the flat sage ground.
  */
-function loadSplatTexture(
+async function loadSplatTexture(
   url: string,
   renderer: WebGPURenderer,
   signal?: AbortSignal,
@@ -518,7 +518,7 @@ export const sportKey = (raster: string, table: string): string =>
   `${raster}\n${table}`;
 
 /** Loads the sports grounds a `sportKey` names. */
-export function loadSportKey(
+export async function loadSportKey(
   key: string,
   renderer?: WebGPURenderer,
   signal?: AbortSignal
@@ -1331,7 +1331,7 @@ function tinHeightAt(
 }
 
 /** The level's ground prep from the ground worker (ground-prep-client.ts). */
-function groundOf(
+async function groundOf(
   mesh: Mesh,
   extras: TerrainExtras,
   toData: Matrix4,
@@ -1592,7 +1592,7 @@ async function loadTerrainRasters(
 ): Promise<TerrainRasters> {
   const owned: Texture[] = [];
   const holds: (() => void)[] = [];
-  const hold: Hold = (share, key) => {
+  const hold: Hold = async (share, key) => {
     if (!(share && key)) {
       return Promise.resolve(null);
     }
@@ -1663,7 +1663,7 @@ export function readsSportGrounds(level: 0 | 1, lowRasters: boolean): boolean {
 }
 
 /** A raster the level owns, taken into `owned` as soon as it lands. */
-function owning<T extends Texture>(
+async function owning<T extends Texture>(
   owned: Texture[],
   load: Promise<T | null> | null
 ): Promise<T | null> {

@@ -73,7 +73,7 @@ async function settled<T>(promise: Promise<T>): Promise<T> {
 
 function serve(png: Uint8Array<ArrayBuffer>): void {
   // reason: the loader reads only `ok` and the body of a Response
-  globalThis.fetch = (() =>
+  globalThis.fetch = (async () =>
     Promise.resolve(new Response(png))) as unknown as typeof fetch;
 }
 
@@ -107,7 +107,7 @@ test("a raster whose download hit a blip is asked for again, not taken for absen
   const png = greyPng(2, 2, new Uint8Array(4).fill(90));
   let calls = 0;
   // reason: the loader reads only `ok` and the body of a Response
-  globalThis.fetch = (() =>
+  globalThis.fetch = (async () =>
     ++calls === 1
       ? Promise.reject(new TypeError("Load failed"))
       : Promise.resolve(new Response(png))) as unknown as typeof fetch;

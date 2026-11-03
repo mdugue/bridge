@@ -88,7 +88,7 @@ export function waterOf(tile: string): WaterMember | null {
   return waterMembers.get(tile) ?? null;
 }
 const waterLifts = new Map<string, Promise<WaterLift | null>>();
-function waterLiftOf(tile: string): Promise<WaterLift | null> {
+async function waterLiftOf(tile: string): Promise<WaterLift | null> {
   let lift = waterLifts.get(tile);
   if (!lift) {
     const bounds = tileExtentOf(SITE.tiles[TILES.indexOf(tile)]);
@@ -139,7 +139,7 @@ async function bakeFineGround(tile: string): Promise<FineGround> {
  * reads the others' grounds instead of refining their TINs again.
  */
 const groundFiles = new Map<string, Promise<string>>();
-export function groundFile(tile: string): Promise<string> {
+export async function groundFile(tile: string): Promise<string> {
   let file = groundFiles.get(tile);
   if (!file) {
     file = cachedFile(

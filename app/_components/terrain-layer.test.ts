@@ -157,13 +157,13 @@ test("a level whose tile leaves while it waits for a shared raster lets go at on
   // the test says
   let land: (rasters: SplatRasters | null) => void = () => undefined;
   const splats = share<SplatRasters>(
-    () =>
+    async () =>
       new Promise((resolve) => {
         land = resolve;
       }),
     released
   );
-  const none = () => Promise.resolve(null);
+  const none = async () => Promise.resolve(null);
   const aborter = new AbortController();
   const outcome = dressTerrain(
     new Mesh(new BoxGeometry(), new MeshStandardNodeMaterial()),

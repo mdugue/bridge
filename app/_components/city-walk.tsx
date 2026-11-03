@@ -113,7 +113,7 @@ import { missingPrerequisite } from "./gpu-support";
  * stays written out inside dynamic(): Next matches the call to its chunk
  * by it.)
  */
-const AskCity = dynamic(() => import("./ask-city"), { ssr: false });
+const AskCity = dynamic(async () => import("./ask-city"), { ssr: false });
 
 /** A walk's glides take this much longer than a jump to a place: the
  *  stop's story starts on the way. */
@@ -149,7 +149,7 @@ interface StartPick {
 }
 
 /** The three.js half of the viewer, loaded beside the HUD (create-app.ts). */
-const loadScene = () => import("./create-app");
+const loadScene = async () => import("./create-app");
 
 /**
  * Two phases, one handover. `loading` is the full-bleed Laden screen; `running`
@@ -875,7 +875,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     });
     previous
       .then(loadScene)
-      .then(({ createCityWalkApp }) => {
+      .then(async ({ createCityWalkApp }) => {
         if (aborter.signal.aborted) {
           throw new DOMException("CityWalk startup aborted", "AbortError");
         }
@@ -1114,15 +1114,17 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
   // (image-export.ts is the scene's: loaded with it, not with the HUD)
   const exportImage = () =>
     runExport(
-      (h, info) =>
-        import("./image-export").then(({ saveImage }) => saveImage(h, info)),
+      async (h, info) =>
+        import("./image-export").then(async ({ saveImage }) =>
+          saveImage(h, info)
+        ),
       "Bild wird gerendert …",
       "Bild gespeichert"
     );
   const exportStudy = () =>
     runExport(
-      (h, info) =>
-        import("./image-export").then(({ saveShadowStudy }) =>
+      async (h, info) =>
+        import("./image-export").then(async ({ saveShadowStudy }) =>
           saveShadowStudy(h, info, (n, total) =>
             hud.say(`Verschattungsstudie: Bild ${n} von ${total} …`, true)
           )

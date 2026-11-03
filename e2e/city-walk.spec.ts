@@ -371,7 +371,7 @@ async function withFramesHeld(
   target: Page,
   steps: () => Promise<void>
 ): Promise<void> {
-  const hold = (on: boolean) =>
+  const hold = async (on: boolean) =>
     target.evaluate((value) => {
       if (window.__poc) {
         window.__poc.hold = value;
@@ -398,7 +398,7 @@ async function dataUrl(page: Page, file: string): Promise<string> {
 }
 
 /** True when the browser has WebGL at all (render assertions need it). */
-function hasWebGl(page: Page): Promise<boolean> {
+async function hasWebGl(page: Page): Promise<boolean> {
   return page.evaluate(() => {
     const probe = document.createElement("canvas");
     return Boolean(probe.getContext("webgl2") ?? probe.getContext("webgl"));
@@ -406,7 +406,7 @@ function hasWebGl(page: Page): Promise<boolean> {
 }
 
 /** Turns one pointer type's drag across the canvas into synthetic events. */
-function dragAcrossCanvas(
+async function dragAcrossCanvas(
   page: Page,
   pointerType: "mouse" | "touch",
   y: number
@@ -1083,7 +1083,7 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     // provider. A key the provider refuses says so; a checked one opens
     // the conversation, whose answer is labelled KI.
     let checks = 0;
-    await page.route("**/api/schluessel", (route) => {
+    await page.route("**/api/schluessel", async (route) => {
       checks++;
       return route.fulfill(
         checks === 1
@@ -1108,7 +1108,7 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       { type: "TEXT_MESSAGE_END", messageId: "m1" },
       { type: "RUN_FINISHED", runId: "r1", threadId: "t" },
     ];
-    await page.route("**/api/frag", (route) =>
+    await page.route("**/api/frag", async (route) =>
       route.fulfill({
         contentType: "text/event-stream",
         body: events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join(""),
@@ -1147,7 +1147,7 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     // The live bicycle counts come from the city's WFS; the spec answers
     // for it (two counters on the spawn tile), so CI never waits on the
     // city's server and the counts are known.
-    await page.route("**/kommisdd.dresden.de/**", (route) =>
+    await page.route("**/kommisdd.dresden.de/**", async (route) =>
       route.fulfill({
         contentType: "application/geo+json",
         body: JSON.stringify({
@@ -1377,7 +1377,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     if (named) {
       await expect
         .poll(
-          () =>
+          async () =>
             page.evaluate(
               () => window.__poc?.handle?.nameplateShown()?.title ?? null
             ),
@@ -1921,7 +1921,7 @@ test.describe("mobile", { tag: "@phone" }, () => {
     // late, so the release waits for it — and the answer is a bottom sheet
     // that folds the joystick away.
     await aimAtBuilding(page);
-    const hold = (type: "pointerdown" | "pointerup") =>
+    const hold = async (type: "pointerdown" | "pointerup") =>
       page.evaluate((event) => {
         const canvas = document.querySelector("canvas[data-engine]");
         if (!canvas) {

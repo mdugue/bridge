@@ -17,7 +17,7 @@ const FACTS_TIMEOUT_MS = 8000;
 
 const loads = new Map<string, Promise<LandmarkFactsIndex | null>>();
 
-export function loadLandmarkFacts(
+export async function loadLandmarkFacts(
   url: string
 ): Promise<LandmarkFactsIndex | null> {
   let pending = loads.get(url);
@@ -25,7 +25,7 @@ export function loadLandmarkFacts(
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), FACTS_TIMEOUT_MS);
     pending = fetch(url, { signal: controller.signal })
-      .then((r) => {
+      .then(async (r) => {
         if (!r.ok) {
           throw new Error(`landmark facts: ${r.status}`);
         }

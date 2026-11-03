@@ -79,7 +79,7 @@ function startCompass() {
   };
 }
 
-function currentPosition(): Promise<GeolocationPosition> {
+async function currentPosition(): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => {
     navigator.geolocation.getCurrentPosition(
       resolve,

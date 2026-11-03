@@ -151,7 +151,7 @@ function unfilterRow(
 /** Rows unfiltered between yields: ~5 ms of work for a 4096-wide raster. */
 const ROWS_PER_SLICE = 256;
 
-const yieldToFrame = () =>
+const yieldToFrame = async () =>
   new Promise<void>((resolve) => {
     setTimeout(resolve, 0);
   });

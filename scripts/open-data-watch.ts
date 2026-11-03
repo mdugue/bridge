@@ -205,7 +205,7 @@ async function probe(url: string): Promise<Response | Error> {
 const answer = (r: Response | Error) =>
   r instanceof Error ? `keine Antwort (${r.message})` : `HTTP ${r.status}`;
 
-function serviceFindings(providers: Set<string>): Promise<Finding[]> {
+async function serviceFindings(providers: Set<string>): Promise<Finding[]> {
   return Promise.all(
     [...providers].flatMap((id) =>
       (SERVICES[id] ?? []).map(async (s): Promise<Finding> => {

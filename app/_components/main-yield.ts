@@ -31,7 +31,7 @@ export function installMainYield(): void {
   channel.port1.onmessage = () => {
     waiting.shift()?.();
   };
-  const yieldNow = () =>
+  const yieldNow = async () =>
     new Promise<void>((resolve) => {
       waiting.push(resolve);
       channel.port2.postMessage(null);

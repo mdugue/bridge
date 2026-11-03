@@ -922,7 +922,7 @@ export function createPostStack(
    * disposed geometry, and nothing would free them again (`compileAll`
    * skips such a drawable only when it queues it).
    */
-  const compileNow = (object: Object3D, view: Camera = camera) => {
+  const compileNow = async (object: Object3D, view: Camera = camera) => {
     if (stackDisposed || left(object)) {
       return Promise.resolve();
     }
@@ -942,9 +942,9 @@ export function createPostStack(
   /** Queues a compile made by `now` behind the ones in flight. */
   const inTurn =
     (now: (object: Object3D) => Promise<void>) =>
-    (object: Object3D): Promise<void> =>
-      compileInTurn(renderer, () => now(object));
-  const compileOne = inTurn((object) => compileNow(object));
+    async (object: Object3D): Promise<void> =>
+      compileInTurn(renderer, async () => now(object));
+  const compileOne = inTurn(async (object) => compileNow(object));
   /**
    * The cameras the frames are drawn with, one of each kind: the walk/fly
    * camera, and once it was asked for (`warmView`) Modell's parallel one.
@@ -967,18 +967,18 @@ export function createPostStack(
   // swap is made in the compile's turn, not when it is queued.
   const swappedIn =
     (kind: PaperKind, now: (object: Object3D) => Promise<void>) =>
-    (object: Object3D): Promise<void> =>
-      paperScene.swapped(object, () => now(object), kind);
+    async (object: Object3D): Promise<void> =>
+      paperScene.swapped(object, async () => now(object), kind);
   // a camera let go meanwhile (`dropView`) is compiled for no longer: the
   // rest of a walk queued nothing behind the tiles for it, and a compile
   // still queued when it was let go builds nothing
   const compileSwap = (kind: PaperKind, view: Camera) => {
     const swap = inTurn(
-      swappedIn(kind, (o) =>
+      swappedIn(kind, async (o) =>
         views.includes(view) ? compileNow(o, view) : Promise.resolve()
       )
     );
-    return (object: Drawable): Promise<void> =>
+    return async (object: Drawable): Promise<void> =>
       paperScene.drawsAsPaper(object, kind) && views.includes(view)
         ? swap(object)
         : Promise.resolve();
@@ -1022,7 +1022,7 @@ export function createPostStack(
     held: PipelineAnchors[],
     release: () => boolean = () => true
   ) => {
-    void compileInTurn(renderer, () => Promise.resolve()).then(() => {
+    void compileInTurn(renderer, async () => Promise.resolve()).then(() => {
       if (!release()) {
         return;
       }
@@ -1040,7 +1040,7 @@ export function createPostStack(
    * `aloneUnder`): the render object the call makes has the very context
    * the frames use while the cut shows. In a compile's turn only.
    */
-  const compileUnder = (
+  const compileUnder = async (
     group: ClippingGroup,
     object: Object3D,
     view: Camera
@@ -1051,7 +1051,7 @@ export function createPostStack(
     const previous = renderer.getRenderTarget();
     renderer.setRenderTarget(target);
     try {
-      return aloneUnder(group, object, () =>
+      return aloneUnder(group, object, async () =>
         renderer.compileAsync(group, view, scene)
       );
     } finally {
@@ -1063,8 +1063,8 @@ export function createPostStack(
     view: Camera,
     kind?: PaperKind
   ): CutHold => {
-    const under = (o: Object3D) => compileUnder(group, o, view);
-    const plain = (o: Object3D) => compileNow(o, view);
+    const under = async (o: Object3D) => compileUnder(group, o, view);
+    const plain = async (o: Object3D) => compileNow(o, view);
     const anchors = [
       { a: createPipelineAnchors(inTurn(under), true), paper: false },
       { a: createPipelineAnchors(inTurn(plain), true), paper: false },
@@ -1162,7 +1162,7 @@ export function createPostStack(
       viewAnchors.get(view) ??
       dropping.get(view)?.anchors ??
       createPipelineAnchors(
-        inTurn((o) => compileNow(o, view)),
+        inTurn(async (o) => compileNow(o, view)),
         true
       );
     dropping.delete(view);
@@ -1336,7 +1336,7 @@ export function createPostStack(
       }
     },
     releaseCut: letGo,
-    warmStyles: () => {
+    warmStyles: async () => {
       // the outline's mask and blur programs too, on every tier: the first
       // question builds nothing
       stylesWarm ??= outline

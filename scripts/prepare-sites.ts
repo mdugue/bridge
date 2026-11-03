@@ -70,7 +70,7 @@ function isReady(id: SiteId): boolean {
  *  line it prints under the site's id (the bakes run side by side);
  *  resolves with its exit code. It runs on this process's own Bun, not
  *  whichever `bun` comes first on the PATH. */
-function prepare(id: SiteId, args: string[]): Promise<number | null> {
+async function prepare(id: SiteId, args: string[]): Promise<number | null> {
   const child = spawn(
     process.execPath,
     ["scripts/prepare-data.ts", id, ...args],
@@ -122,13 +122,13 @@ async function prepareAll(
     if (!warm || tiles.length === 0) {
       // a cached site publishes at a small peak; only a cold one is
       // counted at a whole site's (warmers.ts SITE_PEAK)
-      const probe = await slots.run(0, IF_CACHED_RUN.peak, () =>
+      const probe = await slots.run(0, IF_CACHED_RUN.peak, async () =>
         prepare(id, IF_CACHED_RUN.args)
       );
       if (probe !== NOT_CACHED) {
         return probe === 0;
       }
-      return (await slots.run(0, SITE_PEAK, () => prepare(id, []))) === 0;
+      return (await slots.run(0, SITE_PEAK, async () => prepare(id, []))) === 0;
     }
     const [[first], ...later] = warmSteps(tiles);
     // Step 0, then step 1 in its slot: the first warmer starts at once,
@@ -144,8 +144,8 @@ async function prepareAll(
     }
     for (const step of later) {
       const codes = await Promise.all(
-        step.map(({ args, peak }) =>
-          slots.run(1, peak, () => prepare(id, args))
+        step.map(async ({ args, peak }) =>
+          slots.run(1, peak, async () => prepare(id, args))
         )
       );
       if (codes.some((code) => code !== 0)) {

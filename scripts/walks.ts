@@ -46,7 +46,7 @@ const walks = files.map((f) => ({
 const out = (line: string) => process.stdout.write(`${line}\n`);
 
 async function fillGround(): Promise<void> {
-  const heightAt = await siteDgm(site, (tif, tfw) =>
+  const heightAt = await siteDgm(site, async (tif, tfw) =>
     readDgmFile(tif, tfw, "native")
   );
   for (const { file, walk } of walks) {

@@ -1249,8 +1249,8 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     // object from them in its frame (an upstream workaround note:
     // docs/rendering.md, "Workarounds for
     // upstream bugs").
-    compile: (renderer, camera) =>
-      compileInTurn(renderer, () => {
+    compile: async (renderer, camera) =>
+      compileInTurn(renderer, async () => {
         if (disposed) {
           return Promise.resolve();
         }

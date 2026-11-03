@@ -82,7 +82,7 @@ export function createNetGate(page: GatePage): NetGate {
     }
     changed();
   });
-  const whenUsable = (signal?: AbortSignal): Promise<void> => {
+  const whenUsable = async (signal?: AbortSignal): Promise<void> => {
     if (signal?.aborted) {
       return Promise.reject(abortError());
     }
@@ -184,7 +184,7 @@ export function visibleMs(): number {
  * "pageshow", or, while it is visible but offline, every
  * OFFLINE_PROBE_MS — and rejects with an AbortError when `signal` aborts.
  */
-export function whenUsable(signal?: AbortSignal): Promise<void> {
+export async function whenUsable(signal?: AbortSignal): Promise<void> {
   const page = pageGate();
   if (page) {
     return page.whenUsable(signal);
@@ -193,7 +193,7 @@ export function whenUsable(signal?: AbortSignal): Promise<void> {
 }
 
 /** Waits `ms`; rejects with an AbortError when `signal` aborts. */
-export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+export async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   if (signal?.aborted) {
     return Promise.reject(abortError());
   }

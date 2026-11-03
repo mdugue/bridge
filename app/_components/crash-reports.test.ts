@@ -48,7 +48,7 @@ beforeEach(() => {
     userAgent: "test",
     onLine: true,
   };
-  g.fetch = () => {
+  g.fetch = async () => {
     fetched += 1;
     return Promise.resolve(new Response(null, { status: 200 }));
   };

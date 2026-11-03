@@ -34,14 +34,14 @@ function fakePage(hidden: [number, number][] = []) {
   const env: RetryEnv = {
     now: () => now,
     random: () => 0.5,
-    sleep: (ms, signal) => {
+    sleep: async (ms, signal) => {
       if (signal?.aborted) {
         return Promise.reject(new DOMException("aborted", "AbortError"));
       }
       now += ms;
       return Promise.resolve();
     },
-    whenUsable: () => {
+    whenUsable: async () => {
       const span = hidden.find(([a, b]) => now >= a && now < b);
       if (span) {
         now = span[1];
@@ -139,7 +139,7 @@ test("a network error is retried until an answer comes", async () => {
   const page = fakePage();
   let calls = 0;
   const answer = await withRetry(
-    () => {
+    async () => {
       calls++;
       return calls < 3
         ? Promise.reject(new TypeError("Load failed"))
@@ -157,7 +157,7 @@ test("an absent or fatal status is answered at once, never retried", async () =>
   for (const status of [404, 403]) {
     let calls = 0;
     const answer = await withRetry(
-      () => {
+      async () => {
         calls++;
         return Promise.resolve({ status, value: "" });
       },
@@ -173,7 +173,7 @@ test("a fatal error and an abort reject as they are, without a retry", async () 
   let calls = 0;
   await expect(
     withRetry(
-      () => {
+      async () => {
         calls++;
         return Promise.reject(parse);
       },
@@ -183,7 +183,7 @@ test("a fatal error and an abort reject as they are, without a retry", async () 
   const abort = new DOMException("aborted", "AbortError");
   await expect(
     withRetry(
-      () => {
+      async () => {
         calls++;
         return Promise.reject(abort);
       },
@@ -197,7 +197,7 @@ test("an abort during the wait ends the retries", async () => {
   const aborter = new AbortController();
   let calls = 0;
   const run = withRetry(
-    () => {
+    async () => {
       calls++;
       aborter.abort();
       return Promise.reject(new TypeError("Load failed"));
@@ -212,7 +212,7 @@ test("a transient status waits at least its Retry-After", async () => {
   const page = fakePage();
   let calls = 0;
   await withRetry(
-    () => {
+    async () => {
       calls++;
       return Promise.resolve(
         calls === 1 ? { status: 503, retryAfter: "4", value: "" } : ok()
@@ -228,7 +228,7 @@ test("the budget spent, the retries give up with a NetworkError that says how of
   const notes: number[] = [];
   let calls = 0;
   const run = withRetry(
-    () => {
+    async () => {
       calls++;
       return Promise.reject(new TypeError("Load failed"));
     },
@@ -256,7 +256,7 @@ test("time the page is hidden does not count against the budget", async () => {
   const page = fakePage([[1000, 61_000]]);
   let calls = 0;
   const answer = await withRetry(
-    () => {
+    async () => {
       calls++;
       return calls < 5
         ? Promise.reject(new TypeError("Load failed"))
