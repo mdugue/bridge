@@ -2333,8 +2333,8 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   up to ±0.12 m mid-way up the trunk, both in metres turned into each
   set's frame so a register tree's trunk and crown still meet; the trunk
   forks at 0.78 of its height into three limbs ending inside the crown
-  (`trunkLimbs`, part of the shared trunk geometry), which a bare crown
-  shows in winter. Not away from walls: the trunk knows nothing of them;
+  (`trunkLimbs`, part of the shared trunk geometry; a cone or pine keeps
+  an unforked trunk), which a bare crown shows in winter. Not away from walls: the trunk knows nothing of them;
   the mid crown is a detail-2 icosphere (180 tris) with lobes;
   **three-tier crown LOD** per 250 m chunk (`lib/city/vegetation-lod.ts`),
   planned over every loaded tile at once: the rich ~1 440-tri multi-tuft

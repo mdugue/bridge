@@ -62,6 +62,14 @@ test("the ground's slope reads along world x and world z, held to ±1", () => {
   expect(sz).toBeCloseTo(-0.2, 9);
   const cliff = { offset: at, heightAt: (e: number) => 5 * e };
   expect(groundSlope(cliff, 0, 0)[0]).toBe(1);
-  const edge = { offset: at, heightAt: (e: number) => (e > 1000 ? null : 1) };
-  expect(groundSlope(edge, 0, 0)).toEqual([0, 0]);
+  // on the terrain's edge: one-sided from the point, 0 where nothing reads
+  const edge = {
+    offset: at,
+    heightAt: (e: number, n: number) => (e > 1000 ? null : 0.1 * e + 0.2 * n),
+  };
+  const [ex, ez] = groundSlope(edge, 0, 0);
+  expect(ex).toBeCloseTo(0.1, 9);
+  expect(ez).toBeCloseTo(-0.2, 9);
+  const off = { offset: at, heightAt: () => null };
+  expect(groundSlope(off, 0, 0)).toEqual([0, 0]);
 });

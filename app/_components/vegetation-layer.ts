@@ -318,9 +318,9 @@ const SHAPE_LEAN = 0.09;
  *  the most (m, either way). */
 const GROWTH_LEAN_M = 0.7;
 const GROWTH_CROOK_M = 0.12;
-/** The most `treeGrowth` moves a vertex (geometry units, on the smallest
- *  crown drawn, ~0.5 of the generic one). */
-const GROWTH_REACH = (GROWTH_LEAN_M + GROWTH_CROOK_M) * 2;
+/** The most `treeGrowth` moves a vertex (geometry units, on a crown or
+ *  trunk drawn down to a quarter of the generic one). */
+const GROWTH_REACH = (GROWTH_LEAN_M + GROWTH_CROOK_M) * 4;
 
 /**
  * Recomputes a crown geometry's bounding sphere and grows it by the most
@@ -795,7 +795,13 @@ function treeGrowth(y: F): V3 {
  * their size on a crown of any scale and close smoothly round it; below
  * the trunk's top they fade out, so the crown still sits on its stem.
  */
-export function crownShape(): V3 {
+export function crownShape(form: V3 = crownForm()): V3 {
+  return form.add(treeGrowth(positionGeometry.y));
+}
+
+/** The crown's own shape (`crownShape` before the tree's growth moves
+ *  it): its waves and its top's lean. */
+function crownForm(): V3 {
   const origin = instanceColumn(3);
   const s = fract(origin.xz.mul(vec2(0.0173, 0.0219))).mul(6.2832);
   const p = positionGeometry;
@@ -815,8 +821,7 @@ export function crownShape(): V3 {
   const leanDir = vec3(sin(s.x.add(s.y)), 0, sin(s.x.sub(s.y).add(1.57)));
   return p
     .add(n.mul(wave.mul(SHAPE_BULGE).mul(inCrown)))
-    .add(leanDir.mul(lean))
-    .add(treeGrowth(p.y));
+    .add(leanDir.mul(lean));
 }
 
 /**
@@ -939,12 +944,13 @@ export function buildCrownMaterial(
   });
   m.name = bare ? "crown-bare" : "crown-leafy";
   m.userData.crownUniforms = u;
-  const shape = crownShape();
+  const form = crownForm();
+  const shape = crownShape(form);
   const sway = crownSway(u.time, shape);
   m.positionNode = instancePosition(sway.local);
   m.castShadowPositionNode = instancePosition(shape);
   const crownScale = varying(length(instanceColumn(1).xyz));
-  const occluded = varying(crownOcclusion(shape));
+  const occluded = varying(crownOcclusion(form));
   // (a printed crown has no brightness pulse: its light is cut in two
   // steps, and the pulse would flip it between them)
   const gust = varying(sway.gust.mul(float(1).sub(crownsPrinted)));
@@ -1025,7 +1031,7 @@ function printedCrown(shown: V3, kept: V3, twig: F): V3 {
  *  bulges out to read as lobes. */
 const TRUNK_SIDES = 9;
 
-export function buildTrunkGeo(): BufferGeometry {
+export function buildTrunkGeo(fork = true): BufferGeometry {
   // The profile (rows, taper, flare) is lib/city/tree-inventory.ts's, so a
   // measured trunk is fitted to the radius drawn (`trunkRadiusAt`).
   const t = new CylinderGeometry(
@@ -1070,6 +1076,13 @@ export function buildTrunkGeo(): BufferGeometry {
     pos.setXYZ(i, v.x, v.y, v.z);
   }
   t.computeVertexNormals();
+  if (!fork) {
+    t.computeBoundingSphere();
+    if (t.boundingSphere) {
+      t.boundingSphere.radius += GROWTH_REACH;
+    }
+    return t;
+  }
   const at = (y: number) => {
     const k = Math.min(Math.max(y / TRUNK_H, 0), 1) ** 1.4 * bend;
     return new Vector3(bx * k, y, bz * k);
@@ -1195,7 +1208,8 @@ function trunkRoots(): { lobe: F; metres: F; local: V3 } {
  * the foot it grows out of the ground in a few roots: bulged out in shape
  * (`trunkRoots`) and turning from bark to earth, so it stands in the
  * ground instead of on it; a separate skirt read as a shoe. Scene-wide: it
- * carries nothing of a tile.
+ * carries nothing of a tile (a tile with foot rasters wears its own,
+ * `tileTrunkMaterial`).
  */
 export function buildTrunkMaterial(
   sun?: UniformNode<"vec3", Vector3>
@@ -1388,7 +1402,10 @@ function crownShade(local: V3, sun?: UniformNode<"vec3", Vector3>): F {
   const c0 = at.mul(vec4(1, 0, 0, 0)).xyz;
   const c1 = at.mul(vec4(0, 1, 0, 0)).xyz;
   const c2 = at.mul(vec4(0, 0, 1, 0)).xyz;
-  const centre = vec3(0, TRUNK_H + CROWN_R * 0.5, 0);
+  // the crown where the tree's growth carried it
+  const centre = vec3(0, TRUNK_H + CROWN_R * 0.5, 0).add(
+    treeGrowth(float(TRUNK_H))
+  );
   const leaf = mix(float(BARE_CROWN), float(1), trunkLeaf);
   // under the crown: the sky hidden more toward its base
   const base = TRUNK_H + CROWN_R * 0.5 - CROWN_R;
@@ -1729,17 +1746,18 @@ export function buildCrownWarmup(): CrownWarmup {
  * The conifer's three tiers (conifer-crown.ts), each inside the box of the
  * lobed crown the canopy draws at scale 1 — so a placement's matrix stands
  * a cone where it would stand a broadleaf crown, as tall and as wide —
- * and the broadleaf's trunk. Their cull spheres are grown like the lobed
+ * and a trunk (in a tile, the broadleaf's without its fork: the limbs
+ * are placed for the lobed crown). Their cull spheres are grown like the lobed
  * crowns' (`padCrownSphere`): the material reshapes every crown.
  * Exported for its test (the boxes), not used outside this module.
  */
-export function buildConeTiers(broad: TreeGeos): TreeGeos {
+export function buildConeTiers(broad: TreeGeos, trunk = broad.trunk): TreeGeos {
   const box = boxOf(broad.mid);
   return {
     far: padCrownSphere(buildConeGeo(box, CONE_SEGMENTS.far)),
     mid: padCrownSphere(buildConeGeo(box, CONE_SEGMENTS.mid)),
     rich: padCrownSphere(buildConeGeo(box, CONE_SEGMENTS.rich)),
-    trunk: broad.trunk,
+    trunk,
     foot: broad.foot,
   };
 }
@@ -1748,15 +1766,15 @@ export function buildConeTiers(broad: TreeGeos): TreeGeos {
  * The pine's three tiers (conifer-crown.ts `buildPineGeo`): each lobed
  * tier reshaped into the pine's flat-topped crown in its own box, so the
  * placement's matrix (its crown from `pineBase` to its top) fits either,
- * and the broadleaf's trunk. Grown like the lobed crowns' cull spheres.
+ * and a trunk (in a tile, the unforked one). Grown like the lobed crowns' cull spheres.
  * Exported for its test (the boxes), not used outside this module.
  */
-export function buildPineTiers(broad: TreeGeos): TreeGeos {
+export function buildPineTiers(broad: TreeGeos, trunk = broad.trunk): TreeGeos {
   return {
     far: padCrownSphere(buildPineGeo(broad.far)),
     mid: padCrownSphere(buildPineGeo(broad.mid)),
     rich: padCrownSphere(buildPineGeo(broad.rich)),
-    trunk: broad.trunk,
+    trunk,
     foot: broad.foot,
   };
 }
@@ -1785,8 +1803,13 @@ function* buildTrees(
   };
   // the needle trees' cones and pines, only for a tile that has any
   const needles: Partial<Record<CanopyForm, TreeGeos>> = { broad: geos };
+  let unforked: BufferGeometry | undefined;
   const geosOf = (form: CanopyForm): TreeGeos => {
-    needles[form] ??= (form === "pine" ? buildPineTiers : buildConeTiers)(geos);
+    unforked ??= buildTrunkGeo(false);
+    needles[form] ??= (form === "pine" ? buildPineTiers : buildConeTiers)(
+      geos,
+      unforked
+    );
     return needles[form];
   };
   const trunkMat = tileTrunkMaterial(sun, footMat);
@@ -1812,8 +1835,10 @@ function* buildTrees(
     }
     yield;
   }
-  // The crown and trunk materials are scene-wide: a tile's disposal
-  // (disposeObject3D) frees its sets' geometry views and leaves them.
+  // The crown materials, and the trunk's off a tile with foot rasters, are
+  // scene-wide: a tile's disposal (disposeObject3D) frees its sets'
+  // geometry views and leaves them; a tile's own trunk and foot materials
+  // (not shared) go with it.
   return { chunks, meshes, seasons };
 }
 

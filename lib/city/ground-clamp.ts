@@ -63,7 +63,8 @@ export const SLOPE_STEP = 1.5;
 /**
  * The ground's slope at world (x, z): its rise (m per m) along world x
  * and along world z, from the ground SLOPE_STEP either side, each held
- * to ±1; [0, 0] where a side is off the terrain.
+ * to ±1; on the terrain's edge one-sided from the point itself, 0 along
+ * an axis it cannot read.
  */
 export function groundSlope(
   ground: GroundContext,
@@ -71,15 +72,34 @@ export function groundSlope(
   z: number
 ): [number, number] {
   const { x: e, y: n } = worldToEpsg(x, z, ground.offset);
+  const here = ground.heightAt(e, n);
   const east = ground.heightAt(e + SLOPE_STEP, n);
   const west = ground.heightAt(e - SLOPE_STEP, n);
   const north = ground.heightAt(e, n + SLOPE_STEP);
   const south = ground.heightAt(e, n - SLOPE_STEP);
   const clamp = (v: number) => Math.max(-1, Math.min(1, v));
-  const alongX =
-    east === null || west === null ? 0 : (east - west) / (2 * SLOPE_STEP);
+  const alongX = rise(west, here, east);
   // world z runs south (z = -(northing - cy))
-  const alongZ =
-    north === null || south === null ? 0 : (south - north) / (2 * SLOPE_STEP);
+  const alongZ = rise(north, here, south);
   return [clamp(alongX), clamp(alongZ)];
+}
+
+/** The rise from `before` to `after` (m per m) across a point read
+ *  SLOPE_STEP either side, one-sided from `here` where a side is
+ *  missing. */
+function rise(
+  before: number | null,
+  here: number | null,
+  after: number | null
+): number {
+  if (before !== null && after !== null) {
+    return (after - before) / (2 * SLOPE_STEP);
+  }
+  if (here === null) {
+    return 0;
+  }
+  if (after !== null) {
+    return (after - here) / SLOPE_STEP;
+  }
+  return before === null ? 0 : (here - before) / SLOPE_STEP;
 }

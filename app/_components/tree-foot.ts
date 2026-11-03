@@ -502,6 +502,8 @@ interface FootFrame {
   road: F;
   /** the ground's rise (m per m) along x and z at the foot */
   slope: V2;
+  /** the class id at the foot */
+  cls: F;
 }
 
 interface FootSlots {
@@ -571,6 +573,7 @@ function footFrame(s: FootSlots, size: [number, number]): FootFrame {
     axisZ: normalize(col(2).xz),
     road,
     slope: attribute(SLOPE, "vec2"),
+    cls,
   };
 }
 
@@ -1330,7 +1333,9 @@ function tuftGraph(r: FootRasters): PitGraph {
     );
   })();
   const up = varying(p.y.div(TUFT_H[1]), "vTuftUp");
-  const tint = gdHash(p.xz.mul(31).add(seed));
+  // a blade's own tint: hashed per vertex, flat, so the provoking
+  // vertex's holds over the blade
+  const tint = flat(gdHash(p.xz.mul(31).add(seed)), "vTuftTint");
   return {
     position,
     color: mix(TUFT_GREEN, TUFT_TIP, up.mul(tint.mul(0.6).add(0.4))).mul(
@@ -1437,11 +1442,9 @@ const PALETTE = LANDCOVER_CLASSES.map(({ srgb }) => linear([...srgb]));
 function trunkEarthGraph(r: FootRasters): V3 {
   const s = footSlots(r);
   const f = footFrame(s, r.size);
-  const uv = rasterUv(vec2(f.world.x, f.world.z.negate()), s.origin, r.size);
-  const cls = classTexel(s.classTex, uv);
   let own: V3 = PALETTE[0];
   PALETTE.forEach((c, id) => {
-    own = mix(own, c, float(1).sub(step01(abs(cls.sub(id)))));
+    own = mix(own, c, float(1).sub(step01(abs(f.cls.sub(id)))));
   });
   const ground = mix(own.mul(DAMP), FOOT_GRASS, f.green);
   return mix(mix(ground, FOOT_MOULD, f.wood), FOOT_MULCH, step(0.5, f.pit));
