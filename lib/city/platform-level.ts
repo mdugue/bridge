@@ -11,7 +11,10 @@
  * THREE-free, pure.
  */
 
-type XZ = { x: number; z: number };
+interface XZ {
+  x: number;
+  z: number;
+}
 
 /** One sample of a drawn track: where it is (world x, z), the level it
  *  runs on (y, under the rail head) and whether that is a deck or a span

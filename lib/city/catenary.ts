@@ -70,7 +70,10 @@ const SOFFIT_CLEAR_M = 0.15;
 const MIN_SYSTEM_M = 0.3;
 export const CONTACT_MIN_M = 4.95;
 
-type XZ = { x: number; z: number };
+interface XZ {
+  x: number;
+  z: number;
+}
 
 /** One support of a track: its station (m along the track) and the grid
  *  line it stands on (`x:12` = x 600 m), null for a mapped mast. */

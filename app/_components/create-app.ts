@@ -3486,10 +3486,10 @@ async function bootApp(
   // once per animation frame: a second render in the same frame would reuse
   // the first one's antialiased picture.
   let lastEquivalent = 600;
-  type CaptureRequest = {
+  interface CaptureRequest {
     resolve: (image: CapturedImage) => void;
     reject: (error: unknown) => void;
-  };
+  }
   const captureQueue: CaptureRequest[] = [];
   let capture: {
     request: CaptureRequest;

@@ -432,7 +432,11 @@ function addTrack(
 
 /** Where the contact wires are held (x, y projected; h wire height), so a
  *  hanger from a span ends exactly on its wire. */
-type WirePoint = { h: number; x: number; y: number };
+interface WirePoint {
+  h: number;
+  x: number;
+  y: number;
+}
 
 function addContactWire(
   w: Wires,

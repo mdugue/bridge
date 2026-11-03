@@ -54,7 +54,10 @@ test("the names rank the contents buildTileset writes", () => {
     terrain: { 0: URIS.fine(id), 1: URIS.coarse(id) },
     zRange: [100, 150],
   });
-  type Node = { children?: Node[]; content?: { uri: string } };
+  interface Node {
+    children?: Node[];
+    content?: { uri: string };
+  }
   const json = buildTileset([baked(SPAWN, 0), baked(NEIGHBOUR, 2000)], {
     epsg: 25_833,
     offset: { cx: 0, cy: 0 },

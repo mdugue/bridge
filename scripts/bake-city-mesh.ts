@@ -367,7 +367,11 @@ interface WallShape {
   top: Corners | null;
   foot: Corners | null;
 }
-type Corners = { x: number; y: number; more: boolean };
+interface Corners {
+  x: number;
+  y: number;
+  more: boolean;
+}
 
 function corners(c: Corners | null, x: number, y: number): Corners {
   if (!c) {

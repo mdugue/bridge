@@ -10,7 +10,9 @@ import type { RecenterOffset } from "./ground-clamp";
 import type { CameraState } from "./pose";
 import type { ViewpointGeometry } from "./site";
 
-type Tile = { bounds: readonly [number, number, number, number] };
+interface Tile {
+  bounds: readonly [number, number, number, number];
+}
 
 /** Where the boot starts, and the tile it waits for. */
 export interface BootStart<T extends Tile> {

@@ -1865,7 +1865,10 @@ const DRAPE_PROBE_M = 48;
 /** Draped triangles per step (build-steps.ts). */
 const DRAPE_RUN = 512;
 
-type XZ = { x: number; z: number };
+interface XZ {
+  x: number;
+  z: number;
+}
 
 /** A ring's points, its edges split to at most `step` apart. */
 function densified(pts: readonly XZ[], step: number): XZ[] {

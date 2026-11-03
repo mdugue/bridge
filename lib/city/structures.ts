@@ -25,7 +25,10 @@ export const COLUMN_SIDES = 16;
 
 /** A column's silhouette, foot to top: rings at a fraction `at` of its
  *  height, with a radius from the foot's `r` and the top's `rt`. */
-type Ring = { at: number; radius: (r: number, rt: number) => number };
+interface Ring {
+  at: number;
+  radius: (r: number, rt: number) => number;
+}
 
 const foot = (r: number) => r;
 const head = (_: number, rt: number) => rt;
