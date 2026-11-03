@@ -92,6 +92,7 @@ import {
   showPlaces,
 } from "./ask-scene-tools";
 import { useSite } from "./site-context";
+import { VoicePicker } from "./voice-picker";
 import {
   type Dictation,
   type Speech,
@@ -707,6 +708,7 @@ function VoiceBar({
           Vorlesen
         </button>
       )}
+      {reading && <VoicePicker className="h-6 text-[11px]" speech={speech} />}
       {speech.supported && (
         <button
           aria-pressed={hearing}
