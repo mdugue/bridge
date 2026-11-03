@@ -45,9 +45,9 @@ test("a landmark in each zone lands where PROJ puts it", () => {
 });
 
 test("unsupported codes project nothing", () => {
-  expect(utmToLatLng(4326, 13.7, 51.0)).toBeNull();
-  expect(latLngToUtm(4326, 51.0, 13.7)).toBeNull();
-  expect(gridConvergenceDeg(4326, 51.0, 13.7)).toBeNull();
+  expect(utmToLatLng(4326, 13.7, 51)).toBeNull();
+  expect(latLngToUtm(4326, 51, 13.7)).toBeNull();
+  expect(gridConvergenceDeg(4326, 51, 13.7)).toBeNull();
 });
 
 test("the projection is proj4's over every configured site's tiles", () => {

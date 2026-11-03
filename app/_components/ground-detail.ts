@@ -1119,7 +1119,7 @@ function paving(
     );
   })
     .ElseIf(g.kind.equal(id("concrete")), () => {
-      const size = vec2(5.5, 3.0);
+      const size = vec2(5.5, 3);
       const j = gdJoint(q, size, 0.015, g.w);
       const h = gdHash(floor(q.div(size).add(0.5)));
       c.mulAssign(
@@ -1196,7 +1196,7 @@ function paving(
       .mul(0.5)
       .add(gdNoise(xy.mul(0.7)).mul(0.5));
     c.mulAssign(
-      mix(vec3(1), vec3(1.03, 1.0, 0.92), sand).mul(
+      mix(vec3(1), vec3(1.03, 1, 0.92), sand).mul(
         n.sub(0.5).mul(0.1).mul(g.mid).mul(sand).add(1)
       )
     );

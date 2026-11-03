@@ -774,8 +774,8 @@ describe("a wall's own eave (G22)", () => {
 
 describe("the door slots", () => {
   test("hold a door's place to a decimetre and its width rounded up", () => {
-    for (const at of [-12.34, -0.05, 0, 3.0, 7.96, 120.5]) {
-      for (const w of [0.6, 1.2, 1.25, 1.8, 2.0, 2.24, 2.6, 4, 5.5, 6]) {
+    for (const at of [-12.34, -0.05, 0, 3, 7.96, 120.5]) {
+      for (const w of [0.6, 1.2, 1.25, 1.8, 2, 2.24, 2.6, 4, 5.5, 6]) {
         const door = slotDoor(doorSlot(at, w));
         expect(Math.abs((door?.at ?? Number.NaN) - at)).toBeLessThanOrEqual(
           DOOR_SLOT.step / 2 + 1e-9

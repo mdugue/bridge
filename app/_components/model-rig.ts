@@ -64,7 +64,7 @@ export interface ModelHud {
 
 /** s the dolly zoom in and out takes. */
 const ENTER_S = 1.1;
-const LEAVE_S = 1.0;
+const LEAVE_S = 1;
 /** s a preset switch, a turn or a re-centring glides. */
 const SWITCH_S = 0.7;
 const TURN_S = 0.35;

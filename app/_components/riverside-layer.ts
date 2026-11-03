@@ -66,7 +66,7 @@ import { sceneMaterial } from "./three-utils";
 const PIER_DEPTH = 0.3;
 const PILE_EVERY_M = 4;
 const PILE_INSET = 0.35;
-const RAIL_H = 1.0;
+const RAIL_H = 1;
 const POST_EVERY_M = 3;
 /** A pontoon's freeboard where the bake gave none (riverside.py's). */
 const PONTOON_FREEBOARD = 0.9;

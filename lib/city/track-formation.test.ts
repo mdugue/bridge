@@ -85,7 +85,7 @@ describe("onFormations", () => {
   });
 
   test("keeps a low box a track runs on (no top pressed to its foot)", () => {
-    const src = boxDoc(119.0, 120.13);
+    const src = boxDoc(119, 120.13);
     expect(onFormations(src, [bed(-10, 50, 119.33)]).doc).toBe(src);
   });
 

@@ -17,7 +17,7 @@ export const WIRE_SAG_M = 0.15;
 export const NOMINAL_SPAN_M = 30;
 /** Where a span wire is fixed above the ground (m): a mast's head, a wall
  *  rosette. */
-export const SPAN_ANCHOR_M = { mast: 7.0, rosette: 6.5 } as const;
+export const SPAN_ANCHOR_M = { mast: 7, rosette: 6.5 } as const;
 /** Sag of a span wire across the street at its middle (m). */
 export const SPAN_SAG_M = 0.3;
 /** A span wire passes at least this far above the contact wires it holds. */

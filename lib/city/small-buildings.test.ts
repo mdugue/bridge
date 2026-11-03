@@ -81,9 +81,9 @@ test("a box of 12 triangles, every face turned away from its centre", () => {
 });
 
 test("a pent roof takes its height at each written corner", () => {
-  const c = structureCorners(shed({ h: 2.6, hc: [2.2, 2.2, 3.0, 3.0], z: 0 }));
+  const c = structureCorners(shed({ h: 2.6, hc: [2.2, 2.2, 3, 3], z: 0 }));
   // reversed with the ring: the written first corner is now the last
-  expect(c?.map((p) => p.h)).toEqual([3.0, 3.0, 2.2, 2.2]);
+  expect(c?.map((p) => p.h)).toEqual([3, 3, 2.2, 2.2]);
 });
 
 test("a feature without properties or ring draws nothing", () => {

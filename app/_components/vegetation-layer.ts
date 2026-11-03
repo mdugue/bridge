@@ -1445,7 +1445,7 @@ function crownShade(
     .sub(smoothstep(CROWN_R * 0.55, CROWN_R * 1.05, miss))
     .mul(step(0, ahead))
     // by day: the sun over the horizon
-    .mul(smoothstep(0.0, 0.08, sun.y));
+    .mul(smoothstep(0, 0.08, sun.y));
   return sky.mul(mix(float(1), float(CROWN_ON_TRUNK), through.mul(leaf)));
 }
 

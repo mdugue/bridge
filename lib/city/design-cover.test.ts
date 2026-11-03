@@ -91,7 +91,7 @@ describe("design cover", () => {
     expect(site.cell).toBe(4);
     expect(Math.max(site.cols, site.rows)).toBeLessThanOrEqual(16);
     // the plate's own height under it, not its lowest corner's
-    expect(siteFloor(site, 2, 10)).toBeCloseTo(100.0, 1);
+    expect(siteFloor(site, 2, 10)).toBeCloseTo(100, 1);
     expect(siteFloor(site, 46, 10)).toBeCloseTo(100.38, 1);
     expect(siteFloor(site, 80, 10)).toBeNull();
   });

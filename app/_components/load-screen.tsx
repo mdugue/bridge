@@ -40,7 +40,7 @@ const CONTOURS: string[] = (() => {
   const harmonics = [
     { k: 2, a: 0.09, p: 0.7 },
     { k: 3, a: 0.06, p: 2.1 },
-    { k: 5, a: 0.035, p: 4.0 },
+    { k: 5, a: 0.035, p: 4 },
     { k: 7, a: 0.02, p: 1.3 },
   ];
   const levels = 22;

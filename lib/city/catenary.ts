@@ -31,7 +31,7 @@ export const SYSTEM_HEIGHT_M = 1.4;
  *  longer span sags more, to MAX_SAG_M. */
 export const MESSENGER_SAG_M = 0.9;
 /** The most the messenger sags (m): a dropper of 0.4 m at mid-span. */
-export const MAX_SAG_M = 1.0;
+export const MAX_SAG_M = 1;
 /** The supports' grid (m). A track along an axis gets one every 50 m, a
  *  diagonal one every 71. */
 export const SUPPORT_GRID_M = 50;

@@ -604,7 +604,7 @@ function drinkingWater(): BufferGeometry[] {
   basin.translate(0, 0.82, 0.16);
   return [
     block([0.34, 0.08, 0.34], [0, 0.04, 0], STONE, 0.02),
-    pillar(0.09, 1.0, [0, 0], BRONZE),
+    pillar(0.09, 1, [0, 0], BRONZE),
     tinted(basin, BRONZE),
   ];
 }
