@@ -306,6 +306,14 @@ const CROWN_R = 2.1;
  *  trunk). */
 const SHAPE_BULGE = 0.62;
 const SHAPE_LEAN = 0.09;
+/** How far a tree's trunk top leans at the most (m; most trees far less:
+ *  the hash squared), and how far its trunk crooks sideways mid-way at
+ *  the most (m, either way). */
+const GROWTH_LEAN_M = 0.7;
+const GROWTH_CROOK_M = 0.12;
+/** The most `treeGrowth` moves a vertex (geometry units, on the smallest
+ *  crown drawn, ~0.5 of the generic one). */
+const GROWTH_REACH = (GROWTH_LEAN_M + GROWTH_CROOK_M) * 2;
 
 /**
  * Recomputes a crown geometry's bounding sphere and grows it by the most
@@ -315,7 +323,7 @@ const SHAPE_LEAN = 0.09;
 export function padCrownSphere(g: BufferGeometry): BufferGeometry {
   g.computeBoundingSphere();
   if (g.boundingSphere) {
-    g.boundingSphere.radius += SHAPE_BULGE + SHAPE_LEAN * 5;
+    g.boundingSphere.radius += SHAPE_BULGE + SHAPE_LEAN * 5 + GROWTH_REACH;
   }
   return g;
 }
@@ -458,7 +466,9 @@ function fitTrunks(trunks: Instances, reach: number): void {
 function trunkDrop(): V3 {
   const p = positionGeometry;
   const drop = instanceFloat(TRUNK_DROP);
-  return vec3(p.x, p.y.add(p.y.div(TRUNK_H).sub(1).mul(drop)), p.z);
+  // (the limbs above the trunk's top stay where the crown is)
+  const below = min(p.y.div(TRUNK_H), 1).sub(1);
+  return vec3(p.x, p.y.add(below.mul(drop)), p.z);
 }
 
 /** Uploads the matrices and fits the cull sphere to the instances. */
@@ -735,6 +745,40 @@ function crownSway(time: Live, base: V3): { gust: F; local: V3 } {
 }
 
 /**
+ * Every tree its own growth: a lean (most trees nearly upright, a few up
+ * to `GROWTH_LEAN_M` at the trunk's top, the hash squared) and a crook
+ * mid-way up the trunk to one side, both in world metres in a direction
+ * from where the tree stands. A vertex at height `y` (geometry units)
+ * moves by the lean up to the trunk's top and by the crook along it; the
+ * crown above moves as the trunk's top does — in metres, turned into
+ * each set's own frame by its matrix's columns, so a register tree's
+ * trunk and crown (two matrices, two scales) still meet. In the vertex
+ * stage on the shared geometry: nothing per tree is stored.
+ */
+function treeGrowth(y: F): V3 {
+  const origin = instanceColumn(3);
+  const a = fract(sin(dot(origin.xz, vec2(12.71, 31.17))).mul(43758.5)).mul(
+    6.2832
+  );
+  const h = fract(sin(dot(origin.xz, vec2(41.31, 17.93))).mul(24634.6));
+  const t = clamp(y.div(TRUNK_H), 0, 1);
+  const crook = sin(t.mul(Math.PI))
+    .mul(h.sub(0.5))
+    .mul(GROWTH_CROOK_M * 2);
+  const world = vec3(cos(a), 0, sin(a))
+    .mul(h.mul(h).mul(GROWTH_LEAN_M).mul(t))
+    .add(vec3(sin(a).negate(), 0, cos(a)).mul(crook));
+  const c0 = instanceColumn(0).xyz;
+  const c1 = instanceColumn(1).xyz;
+  const c2 = instanceColumn(2).xyz;
+  return vec3(
+    dot(world, c0).div(dot(c0, c0)),
+    dot(world, c1).div(dot(c1, c1)),
+    dot(world, c2).div(dot(c2, c2))
+  );
+}
+
+/**
  * Every tree its own crown: the shared geometry pushed in and out along
  * the direction from its centre by a few broad waves whose phases come from where
  * the tree stands, and its top leaned a little to one side. One geometry
@@ -764,7 +808,8 @@ export function crownShape(): V3 {
   const leanDir = vec3(sin(s.x.add(s.y)), 0, sin(s.x.sub(s.y).add(1.57)));
   return p
     .add(n.mul(wave.mul(SHAPE_BULGE).mul(inCrown)))
-    .add(leanDir.mul(lean));
+    .add(leanDir.mul(lean))
+    .add(treeGrowth(p.y));
 }
 
 /**
@@ -1018,7 +1063,75 @@ export function buildTrunkGeo(): BufferGeometry {
     pos.setXYZ(i, v.x, v.y, v.z);
   }
   t.computeVertexNormals();
-  return t;
+  const at = (y: number) => {
+    const k = Math.min(Math.max(y / TRUNK_H, 0), 1) ** 1.4 * bend;
+    return new Vector3(bx * k, y, bz * k);
+  };
+  const limbs = trunkLimbs(at);
+  const forked = mergeGeometries([t, ...limbs]);
+  for (const l of limbs) {
+    l.dispose();
+  }
+  if (!forked) {
+    return t; // the parts' attributes always match; kept defensively
+  }
+  t.dispose();
+  forked.computeBoundingSphere();
+  if (forked.boundingSphere) {
+    forked.boundingSphere.radius += GROWTH_REACH;
+  }
+  return forked;
+}
+
+/** Where the trunk forks (a share of its height) and its limbs: the
+ *  direction round the stem (radians), how far out (× the crown's radius)
+ *  and how high (over the crown's centre, × its radius) each ends, inside
+ *  the crown so a sway or a bulge never bares a tip. */
+const FORK_AT = 0.78;
+const LIMBS: readonly (readonly [number, number, number])[] = [
+  [0.4, 0.42, 0.05],
+  [2.5, 0.36, -0.12],
+  [4.4, 0.4, 0.18],
+];
+const LIMB_FOOT_R = 0.055;
+const LIMB_TIP_R = 0.018;
+
+/**
+ * The fork: two or three limbs from high on the trunk up into the crown,
+ * so a crown thinned to its twigs in winter shows a tree's structure, not
+ * a pole under a cloud. Part of the one shared trunk geometry (each
+ * tree's turn varies them), open five-sided tubes; `at(y)` is the bent
+ * trunk's axis at height `y`.
+ */
+function trunkLimbs(at: (y: number) => Vector3): BufferGeometry[] {
+  const cy = TRUNK_H + CROWN_R * 0.5;
+  const foot = at(FORK_AT * TRUNK_H);
+  const up = new Vector3(0, 1, 0);
+  return LIMBS.map(([turn, out, high]) => {
+    const tip = new Vector3(
+      Math.cos(turn) * out * CROWN_R,
+      cy + high * CROWN_R,
+      Math.sin(turn) * out * CROWN_R
+    );
+    const along = tip.clone().sub(foot);
+    const limb = new CylinderGeometry(
+      LIMB_TIP_R,
+      LIMB_FOOT_R,
+      along.length(),
+      5,
+      1,
+      true
+    );
+    limb.translate(0, along.length() / 2, 0);
+    limb.applyMatrix4(
+      new Matrix4().compose(
+        foot,
+        new Quaternion().setFromUnitVectors(up, along.normalize()),
+        new Vector3(1, 1, 1)
+      )
+    );
+    return limb;
+  });
 }
 
 /** The bark's foot turns to earth up to this height (m), its lobes (the
@@ -1063,7 +1176,9 @@ function trunkRoots(): { lobe: F; metres: F; local: V3 } {
   return {
     lobe,
     metres,
-    local: vec3(local.x.mul(out), local.y, local.z.mul(out)),
+    local: vec3(local.x.mul(out), local.y, local.z.mul(out)).add(
+      treeGrowth(positionGeometry.y)
+    ),
   };
 }
 

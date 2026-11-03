@@ -2327,6 +2327,14 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   starts its crown at 0.55 H too, and only a tree drawn as a cone is
   outlined as one (`ask-items.ts` bit 16, `CanopyInquiry.cone`).
 - **Crown shaping** `≈ assumed` — radial crown normals (free), organic trunk, base darkening;
+  every tree its own growth (`treeGrowth`, vertex stage, from where it
+  stands): a lean of up to 0.7 m at the trunk's top (the hash squared, so
+  most stand nearly upright) that carries the crown along, and a crook of
+  up to ±0.12 m mid-way up the trunk, both in metres turned into each
+  set's frame so a register tree's trunk and crown still meet; the trunk
+  forks at 0.78 of its height into three limbs ending inside the crown
+  (`trunkLimbs`, part of the shared trunk geometry), which a bare crown
+  shows in winter. Not away from walls: the trunk knows nothing of them;
   the mid crown is a detail-2 icosphere (180 tris) with lobes;
   **three-tier crown LOD** per 250 m chunk (`lib/city/vegetation-lod.ts`),
   planned over every loaded tile at once: the rich ~1 440-tri multi-tuft
