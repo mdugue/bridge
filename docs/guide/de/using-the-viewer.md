@@ -527,7 +527,7 @@ Code und Wissensbasis für sie verwenden:
 | | *Laterne* | nach Einbruch der Dunkelheit trägst du zu Fuß ein kleines warmes Licht, das Boden, Bänke und Hauswände ein paar Meter um dich aufhellt; am Rechner wirft es Schatten, am Handy nicht; aus der Luft und im Modell erlischt es |
 | Gebäude | *Boden-Verlauf* | Abdunkeln der Wände zum Boden hin |
 | | *Höhenlinien* | zarte Geschossbänder, aus der gemessenen Höhe abgeleitet |
-| | *Streiflicht* | Kantenlicht an sonnenabgewandten Kanten |
+| | *Streiflicht* | Kantenlicht an schräg gesehenen Wänden, auf sonnenabgewandten Flächen auf ein Viertel gedämpft |
 | | *Farbvariation* | Wandton je Gebäude aus Nutzung und Höhe |
 | | *Dachfarbe* | wie stark die echte (oder synthetische) Dachfarbe durchkommt |
 | | *Dachsättigung* | hebt die Sättigung der Luftbild-Dachfarben, ohne den Farbton zu verschieben; 0 = rohes Luftbild |

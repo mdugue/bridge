@@ -496,7 +496,7 @@ knowledge base use for them:
 | | *Laterne* | after dark you carry a small warm light on foot that brightens the ground, benches and house fronts a few metres around you; on a computer it casts shadows, on a phone it does not; from the air and in Modell it goes out |
 | Gebäude | *Boden-Verlauf* | darkening of walls towards the ground |
 | | *Höhenlinien* | faint storey bands, spaced from the measured height |
-| | *Streiflicht* | rim light on edges facing away from the sun |
+| | *Streiflicht* | rim light on walls seen at a grazing angle, a quarter of it on faces turned from the sun |
 | | *Farbvariation* | per-building wall tint from function and height |
 | | *Dachfarbe* | how strongly the real (or synthesised) roof colour shows |
 | | *Dachsättigung* | lifts the saturation of the aerial-photo roof colours without shifting their hue; 0 = raw photo |

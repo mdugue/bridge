@@ -159,6 +159,12 @@ const FACADE_READING = float(1);
 /** Abendlicht: the lit windows' strength after dark (clay-windows.ts),
  *  and the shops' (`SHOP_LIGHT`). */
 const DUSK_GLOW = float(0.5);
+/** Streiflicht's share on a face turned from the sun, by day: the rim
+ *  is the sky's light on a grazing wall, and lit as fully there a wall in
+ *  its own shade read as bright as a sunlit one beside the dark shadow it
+ *  casts — seen from above, where every wall grazes, each shadow looked
+ *  cut loose from its caster (a dormer's cheek, a house's back). */
+const SHADE_RIM = float(0.25);
 /** Streiflicht's share left at night: a rim is the sky's light on a
  *  grazing wall, and the night sky has none to give. */
 const NIGHT_RIM = float(0.1);
@@ -829,11 +835,16 @@ function clayGlow(
   const rimOn = clayOnly.mul(float(1).sub(own.mul(float(1).sub(wall))));
   // Streiflicht stands in for the sky's light on a grazing wall: at night
   // there is none, and a full rim lit every grazing roof and wall pale
+  // … and a face turned from the sun keeps a share of it (SHADE_RIM);
+  // after dark the night's own share rules
+  const sunward = smoothstep(-0.02, 0.06, dot(wn, d.uSun));
+  const shade = mix(mix(SHADE_RIM, float(1), sunward), float(1), d.uNight);
   const rim = vec3(1, 0.95, 0.8).mul(
     fres
       .mul(fres)
       .mul(RIM)
       .mul(rimOn)
+      .mul(shade)
       .mul(float(1).sub(d.uNight.mul(float(1).sub(NIGHT_RIM))))
   );
   // Glas: the grazing angle catches a pale sky sheen, dimmed at night —
