@@ -132,11 +132,18 @@ const SPOKEN: [RegExp, string][] = [
 
 /** Words a year follows ("im Juni 1813", "seit 1990"). */
 const BEFORE_YEAR =
-  /(?:^|[\s(])(?:im|seit|bis|von|um|ab|nach|vor|anno|Jahre?|zwischen|und|oder|Ende|Anfang|Mitte|Sommer|Herbst|Winter|Frühjahr|Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\s$/;
+  /(?:^|[\s(])(?:im|seit|bis|von|um|ab|nach|vor|anno|Jahre?|zwischen|und|oder|Ende|Anfang|Mitte|Sommer|Herbst|Winter|Frühjahr|Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\s$/i;
+
+/** A measure after a number: it counts, whatever stands before it. */
+const UNIT_AFTER = /^\s(?:Meter|Kilometer|Quadratmeter|Kubikmeter|Prozent)\b/;
 
 /** "1800 Leute", "1200 Meter": a number before a noun counts something,
- *  unless the words before it make it a year ("im Mai 1945 Truppen"). */
+ *  unless the words before it make it a year ("im Mai 1945 Truppen");
+ *  one before a measure always does ("um 1900 Meter"). */
 function isCount(text: string, at: number): boolean {
+  if (UNIT_AFTER.test(text.slice(at + 4, at + 20))) {
+    return true;
+  }
   const noun = /^\s[A-ZÄÖÜ]/.test(text.slice(at + 4, at + 6));
   return noun && !BEFORE_YEAR.test(text.slice(Math.max(0, at - 16), at));
 }
@@ -157,7 +164,7 @@ export function speakable(text: string): string {
     .replace(/[*#`]|(?<!\w)_|_(?!\w)/g, "")
     // a line without its own end is a sentence still: a list item, a heading
     // (after a number a comma: "1726." reads as an ordinal)
-    .replace(/(\d)[ \t]*\n+/g, "$1, ")
+    .replace(/(\d)[ \t]*\n+/g, "$1; ")
     .replace(/([^\s.!?:;,])[ \t]*\n+/g, "$1. ")
     .replace(/(\d)\s?m²/g, "$1 Quadratmeter")
     .replace(/(\d)\s?m³/g, "$1 Kubikmeter")
@@ -169,7 +176,7 @@ export function speakable(text: string): string {
     out
       // a year alone (not 35.798, not a span's 1,5): as German says it
       .replace(
-        /(?<![\d.,])(1[1-9]\d\d|20\d\d)(?![\d.,]\d)/g,
+        /(?<![\w.,])(1[1-9]\d\d|20\d\d)(?![\d.,]\d)/g,
         (y: string, _: string, at: number, all: string) =>
           isCount(all, at) ? y : yearWords(Number(y))
       )
@@ -241,17 +248,23 @@ function storedVoice(): string | null {
   }
 }
 
+/** Where one sentence ends and the next begins: not after an ordinal's
+ *  point ("am 15. September"), after a year's; the next starts with a
+ *  capital, a figure, or a year `speakable` put in words. */
+const SENTENCE_END = new RegExp(
+  String.raw`(?<=(?:[^\d\s]|\d{3})[.!?:;]|\d[!?:;])\s+(?=[A-ZÄÖÜ„"0-9])` +
+    // a year in words starts one after a full stop, not after a label's colon
+    String.raw`|(?<=[.!?;])\s+(?=(?:${TEENS.slice(1).join("|")})hundert|zweitausend)`
+);
+
 /** Sentences, each its own utterance: a long one is cut off by some
  *  voices (Chrome's online ones stop after about fifteen seconds), and a
  *  sentence's end is where a voice should breathe anyway. */
 export function sentences(text: string): string[] {
-  return (
-    text
-      // not after an ordinal's point ("am 15. September"), after a year's
-      .split(/(?<=(?:[^\d\s]|\d{3})[.!?:;]|\d[!?:;])\s+(?=[A-ZÄÖÜ„"0-9])/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-  );
+  return text
+    .split(SENTENCE_END)
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 /**

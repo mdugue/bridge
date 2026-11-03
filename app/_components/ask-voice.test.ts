@@ -47,7 +47,7 @@ test("lines are heard as sentences, ids keep their underscores, a link leaves th
   expect(speakable("Siehe https://x.de/a.")).toBe("Siehe.");
   // a number before the line's end is no ordinal
   expect(speakable("Baujahr: 1726\nArchitekt: George Bähr")).toBe(
-    "Baujahr: siebzehnhundertsechsundzwanzig, Architekt: George Bähr"
+    "Baujahr: siebzehnhundertsechsundzwanzig; Architekt: George Bähr"
   );
 });
 
@@ -142,4 +142,21 @@ test("a line's end counts as lost only well past its time", () => {
   expect(short).toBeGreaterThanOrEqual(2000);
   // 260 characters at rate 0.84 take some 24 s: lost only past ~36 s
   expect(long).toBeGreaterThan((260 / 13 / 0.84) * 1000 * 1.4);
+});
+
+test("a year after a capital, before a measure, in an id, and a sentence it starts", () => {
+  expect(speakable("Seit 1990 Menschen hier")).toBe(
+    "Seit neunzehnhundertneunzig Menschen hier"
+  );
+  expect(speakable("um 1900 m hoch")).toBe("um 1900 Meter hoch");
+  expect(speakable("Kennung DESN_AL1718abc")).toBe("Kennung DESN_AL1718abc");
+  expect(sentences(speakable("Die Kirche brannte. 1945 fiel sie."))).toEqual([
+    "Die Kirche brannte.",
+    "neunzehnhundertfünfundvierzig fiel sie.",
+  ]);
+  expect(sentences(speakable("Bau: 1726\nWeihe: 1734\nKuppel: 1743"))).toEqual([
+    "Bau: siebzehnhundertsechsundzwanzig;",
+    "Weihe: siebzehnhundertvierunddreißig;",
+    "Kuppel: siebzehnhundertdreiundvierzig",
+  ]);
 });
