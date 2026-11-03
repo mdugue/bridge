@@ -3090,14 +3090,8 @@ async function bootApp(
   let loadVeil: VeilState = BOOT_VEIL;
   // the first load is through (`checkLoaded`)
   let bootLoaded = false;
-  const stepLoadVeil = (dt: number, exporting: boolean) => {
+  const stepLoadVeil = (dt: number, unveiled: boolean) => {
     const at = streamCamera.position;
-    const truth = loadFrontier(
-      siteTileBounds,
-      stream.pendingSiteTiles(),
-      at.x + offset.cx,
-      offset.cy - at.z
-    );
     // Until the first load is through, the ring walks out with the last
     // two stages' progress instead: the tile underfoot would hold it at
     // the feet until its own details are built, then let it jump. Nor does
@@ -3109,10 +3103,15 @@ async function bootApp(
             (stageFractions.get("details") ?? 0)) /
             2
         )
-      : truth;
+      : loadFrontier(
+          siteTileBounds,
+          stream.pendingSiteTiles(),
+          at.x + offset.cx,
+          offset.cy - at.z
+        );
     loadVeil = stepVeil(loadVeil, frontier, dt);
     // an exported image is the city, not its loading
-    const asked = exporting ? { strength: 0 } : pocVeil();
+    const asked = unveiled ? { strength: 0 } : pocVeil();
     postStack.setLoadVeil(
       asked ? { ...loadVeil, ...asked } : loadVeil,
       at.x,
@@ -3789,7 +3788,8 @@ async function bootApp(
     // what the update brought into view or took out, before this frame
     // draws it (the shadow map, the lamp pool, the styles' gathering)
     streamChange.flush();
-    stepLoadVeil(dt, exporting);
+    // (Modell's parallel camera draws a model, not the walker's view)
+    stepLoadVeil(dt, exporting || modelRig.owns());
     // Advance every tile's water ripple and glitter (its sky tint is the
     // fog colour's node, in lockstep with the sun by construction).
     setWaterTime(elapsed);

@@ -329,9 +329,10 @@ export interface TileStream {
    * The site tiles with something still on its way: a content in view the
    * renderer is fetching or parsing (processTileModel included), or a
    * dressing queued or building (the loading frontier,
-   * lib/city/load-frontier.ts).
+   * lib/city/load-frontier.ts). One set, refilled by every call: read it
+   * before the next.
    */
-  pendingSiteTiles: () => Set<string>;
+  pendingSiteTiles: () => ReadonlySet<string>;
   /** demolished object indices per tile, kept across unload/reload */
   demolished: Map<string, Set<number>>;
   /** the site-wide groups (`CityObjectTable.group`) of demolished
@@ -2041,7 +2042,11 @@ export class DressingPlugin {
   pendingTilesInView(into: Set<string>, frame: number): void {
     for (const [scene, id] of this.pendingScenes) {
       const tile: OrderedTile | undefined = this.tileOf.get(scene);
-      // a dressing whose tile the traversal no longer visits is out of view
+      // a dressing whose tile the traversal no longer visits is out of
+      // view; one whose tile has left will never come
+      if (this.released.has(scene)) {
+        continue;
+      }
       if (!tile?.traversal || inViewNow(tile, frame)) {
         into.add(id);
       }

@@ -71,9 +71,11 @@ const WALKABLE_RADIUS = ringRadius(WALKABLE_PERCENT);
 function Sheet({
   breathes = false,
   children,
+  multiply = false,
 }: {
   breathes?: boolean;
   children: ReactNode;
+  multiply?: boolean;
 }) {
   return (
     <svg
@@ -82,7 +84,8 @@ function Sheet({
       // without a repaint (an SVG child's transform repaints the sheet).
       className={cn(
         "absolute inset-0 h-full w-full",
-        breathes && "load-breathe"
+        breathes && "load-breathe",
+        multiply && "mix-blend-multiply"
       )}
       preserveAspectRatio="xMidYMid slice"
       viewBox={`0 0 ${SHEET} ${SHEET}`}
@@ -100,56 +103,7 @@ function SurveySheet({ percent }: { percent: number }) {
   const grows = "transition-[r] duration-700 ease-out";
   return (
     <>
-      {/* inside the ring the clay takes on colour (translucent, as the
-          veil is: the first frame must show through); one layer that
-          breathes, under the still survey */}
-      <Sheet breathes>
-        <defs>
-          {/* the city's warm clay to its green edge, across the sheet */}
-          <radialGradient
-            cx={CENTRE}
-            cy={CENTRE}
-            gradientUnits="userSpaceOnUse"
-            id={colourId}
-            r={CENTRE}
-          >
-            <stop offset="0%" stopColor="#f3dcc0" />
-            <stop offset="55%" stopColor="#e6dcc6" />
-            <stop offset="100%" stopColor="#c7d4b0" />
-          </radialGradient>
-        </defs>
-        <circle
-          className={grows}
-          cx={CENTRE}
-          cy={CENTRE}
-          fill={`url(#${colourId})`}
-          fillOpacity={0.8}
-          r={r}
-        />
-        {/* the ring: its halo soaking outward, then the line */}
-        <circle
-          className={grows}
-          cx={CENTRE}
-          cy={CENTRE}
-          fill="none"
-          r={r + 6}
-          stroke="var(--load-ink)"
-          strokeOpacity={0.18}
-          strokeWidth={14}
-          vectorEffect="non-scaling-stroke"
-        />
-        <circle
-          className={grows}
-          cx={CENTRE}
-          cy={CENTRE}
-          fill="none"
-          r={r}
-          stroke="var(--load-ink)"
-          strokeWidth={2.5}
-          vectorEffect="non-scaling-stroke"
-        />
-      </Sheet>
-      {/* the survey over it: contours and the walkable mark, still */}
+      {/* the survey: contours and the walkable mark, still */}
       <Sheet>
         <g fill="none" stroke="var(--load-line)" strokeWidth={1}>
           {CONTOURS.map((d, i) => (
@@ -183,6 +137,56 @@ function SurveySheet({ percent }: { percent: number }) {
         >
           BEGEHBAR
         </text>
+      </Sheet>
+      {/* over it, one layer that breathes: inside the ring the clay takes
+          on colour (translucent, as the veil is: the first frame must show
+          through), then the ring. Multiplied, so the survey's lines show
+          through the colour as ink would. */}
+      <Sheet breathes multiply>
+        <defs>
+          {/* the city's warm clay to its green edge, across the sheet */}
+          <radialGradient
+            cx={CENTRE}
+            cy={CENTRE}
+            gradientUnits="userSpaceOnUse"
+            id={colourId}
+            r={CENTRE}
+          >
+            <stop offset="0%" stopColor="#f3dcc0" />
+            <stop offset="55%" stopColor="#e6dcc6" />
+            <stop offset="100%" stopColor="#c7d4b0" />
+          </radialGradient>
+        </defs>
+        <circle
+          className={grows}
+          cx={CENTRE}
+          cy={CENTRE}
+          fill={`url(#${colourId})`}
+          fillOpacity={0.6}
+          r={r}
+        />
+        {/* the ring: its halo soaking outward, then the line */}
+        <circle
+          className={grows}
+          cx={CENTRE}
+          cy={CENTRE}
+          fill="none"
+          r={r + 6}
+          stroke="var(--load-ink)"
+          strokeOpacity={0.18}
+          strokeWidth={14}
+          vectorEffect="non-scaling-stroke"
+        />
+        <circle
+          className={grows}
+          cx={CENTRE}
+          cy={CENTRE}
+          fill="none"
+          r={r}
+          stroke="var(--load-ink)"
+          strokeWidth={2.5}
+          vectorEffect="non-scaling-stroke"
+        />
       </Sheet>
     </>
   );
