@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
   factsOf,
+  hitOf,
   knowledgeOf,
   nearKnowledge,
   searchKnowledge,
@@ -93,4 +94,11 @@ test("a landmark's radius reaches its farthest building, a kilometre at most", (
     buildings: [{ id: "a", wd: "Q1", x: 2000, y: 100, z: 110, r: 30 }],
   };
   expect(knowledgeOf(INDEX, [park]).landmarkRadius.get("Q1")).toBe(1000);
+});
+
+test("an id names its entry as the tools return it", () => {
+  expect(hitOf(K, "Q1")?.name).toBe("Frauenkirche");
+  expect(hitOf(K, "m120_100")).toMatchObject({ name: "Luther", x: 120 });
+  expect(hitOf(K, "c")).toMatchObject({ name: "Neumarkt 1", h: 20 });
+  expect(hitOf(K, "nope")).toBeNull();
 });
