@@ -95,7 +95,9 @@ function gridTile(lift: number, shift = 0) {
     [0, 100],
   ];
   const array = new Int16Array(5 * 4);
-  plan.forEach(([x, z], i) => array.set([x + shift, 10 + lift, z, 0], 4 * i));
+  for (const [i, [x, z]] of plan.entries()) {
+    array.set([x + shift, 10 + lift, z, 0], 4 * i);
+  }
   // the skirt's foot under vertex 0
   array.set([shift, -20 + lift, 0, 0], 16);
   const position = new InterleavedBufferAttribute(

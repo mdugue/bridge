@@ -371,11 +371,11 @@ export function createTramCars(
     }
     slotOperator[slot] = k;
     const livery = TRAM_LIVERIES[operator];
-    parts.forEach((p, i) => {
+    for (const [i, p] of parts.entries()) {
       if (p.tint) {
         sets[i].setColorAt(slot, tint.setHex(livery[p.tint]));
       }
-    });
+    }
     return true;
   };
   const trails = createTrails();

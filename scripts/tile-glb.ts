@@ -345,11 +345,13 @@ export function stringColumn(values: readonly string[]): {
   const encoder = new TextEncoder();
   const encoded = values.map((v) => encoder.encode(v));
   const offsets = new Uint32Array(values.length + 1);
-  encoded.forEach((e, i) => {
+  for (const [i, e] of encoded.entries()) {
     offsets[i + 1] = offsets[i] + e.length;
-  });
+  }
   const bytes = new Uint8Array(offsets[values.length]);
-  encoded.forEach((e, i) => bytes.set(e, offsets[i]));
+  for (const [i, e] of encoded.entries()) {
+    bytes.set(e, offsets[i]);
+  }
   return { bytes, offsets };
 }
 

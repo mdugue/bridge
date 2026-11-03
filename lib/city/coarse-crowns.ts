@@ -234,7 +234,7 @@ export function packCrowns(crowns: readonly CoarseCrown[]): Uint8Array {
     view.setUint8(i, MAGIC.charCodeAt(i));
   }
   view.setUint32(4, crowns.length, true);
-  crowns.forEach((c, k) => {
+  for (const [k, c] of crowns.entries()) {
     const at = HEADER_BYTES + k * RECORD_BYTES;
     view.setFloat32(at, c.x, true);
     view.setFloat32(at + 4, c.z, true);
@@ -254,7 +254,7 @@ export function packCrowns(crowns: readonly CoarseCrown[]): Uint8Array {
       const base =
         c.base === undefined ? 0 : clampInt(c.base * 1000, 1, 65_535);
       view.setUint16(at + 18, base, true);
-      return;
+      continue;
     }
     view.setUint8(
       at + 8,
@@ -268,7 +268,7 @@ export function packCrowns(crowns: readonly CoarseCrown[]): Uint8Array {
     view.setUint16(at + 14, cm(c.ext.crownBase), true);
     view.setUint16(at + 16, cm(c.ext.crownTop), true);
     view.setUint16(at + 18, cm(c.ext.crownWidth), true);
-  });
+  }
   return bytes;
 }
 

@@ -129,10 +129,10 @@ function reference(mask: WaterMask) {
     const idx = new BufferAttribute(kept, 1);
     for (let i = 0; i < idx.count; i += 1) {
       v.fromBufferAttribute(position, idx.getX(i));
-      v.toArray().forEach((c, k) => {
+      for (const [k, c] of v.toArray().entries()) {
         lo[k] = Math.min(lo[k], c);
         hi[k] = Math.max(hi[k], c);
-      });
+      }
     }
     return { index: kept, box: [...lo, ...hi] };
   };
@@ -163,11 +163,11 @@ describe("ground prep", () => {
     const prep = prepareGround(input(null, null));
     const ref = reference(mask);
     expect(prep.elevations).toBeUndefined();
-    ref.data.forEach((d, i) => {
+    for (const [i, d] of ref.data.entries()) {
       expect(prep.xy?.[2 * i]).toBe(d.x + ORIGIN.cx);
       expect(prep.xy?.[2 * i + 1]).toBe(d.y + ORIGIN.cy);
       expect(prep.z?.[i]).toBe(Math.fround(d.z));
-    });
+    }
   });
 
   test("a TIN's height index from its buckets answers as one built here", () => {

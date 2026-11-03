@@ -53,9 +53,9 @@ function arraysOf(ground: FineGround): {
 export function packGround(ground: FineGround): Uint8Array {
   const { arrays, bounds, n } = arraysOf(ground);
   const lengths = [0, 0, 0, 0];
-  arrays.forEach((a, i) => {
+  for (const [i, a] of arrays.entries()) {
     lengths[i] = a.length;
-  });
+  }
   const size = arrays.reduce((sum, a) => sum + align(a.byteLength), 0);
   const out = new Uint8Array(HEADER_BYTES + size);
   new Float64Array(out.buffer, 0, HEADER_NUMBERS).set([

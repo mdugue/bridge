@@ -401,16 +401,16 @@ function hangWire(
     return;
   }
   const top = { x: head.x, y: head.y + 0.15, z: head.z };
-  wire.forEach((end, i) => {
+  for (const [i, end] of wire.entries()) {
     const at = liftedPt(end, HUNG_H + WIRE_END_LIFT, ctx);
     if (!at) {
-      return;
+      continue;
     }
     addWire(out.wires, [at, top], WIRE_HALF);
     if (f.properties?.masts?.[i]) {
       out.masts.push({ x: at.x, y: at.y - HUNG_H - WIRE_END_LIFT, z: at.z });
     }
-  });
+  }
 }
 
 /** A wall lantern's bracket, from its facade (`wall`, a little higher) out

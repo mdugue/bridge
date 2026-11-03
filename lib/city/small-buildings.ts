@@ -38,10 +38,10 @@ export function structureCorners(
     y,
   }));
   let area = 0;
-  corners.forEach((a, i) => {
+  for (const [i, a] of corners.entries()) {
     const b = corners[(i + 1) % 4];
     area += a.x * b.y - b.x * a.y;
-  });
+  }
   return area < 0 ? corners.reverse() : corners;
 }
 

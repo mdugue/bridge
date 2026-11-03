@@ -478,14 +478,14 @@ test.each(tiles)(
       const lines = f.geometry.coordinates;
       expect(p?.g).toHaveLength(lines.length);
       expect(p?.top).toHaveLength(lines.length);
-      lines.forEach((line, i) => {
+      for (const [i, line] of lines.entries()) {
         expect(line).toHaveLength(2);
         expect(line.every(isPoint2)).toBe(true);
         // the band stands over its lowest ground, never under it; its foot
         // reaches down a light well or a ramp beside the wall, not a storey
         expect((p?.top[i] ?? 0) - (p?.g[i] ?? 0)).toBeGreaterThan(0);
         expect((p?.top[i] ?? 0) - (p?.g[i] ?? 0)).toBeLessThan(8.5);
-      });
+      }
     }
   }
 );
@@ -951,11 +951,11 @@ test.each(cases)(
     }
     expect(facts.dates.every((d) => /^\d{4}-\d{2}-\d{2}$/u.test(d))).toBe(true);
     // an OSM tree has no place in the register
-    trees.forEach((f, i) => {
+    for (const [i, f] of trees.entries()) {
       if (f.properties?.s === "osm") {
         expect(facts.place[i]).toBe(-1);
       }
-    });
+    }
   }
 );
 

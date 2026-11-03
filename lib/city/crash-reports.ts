@@ -709,10 +709,10 @@ export function summaryReport(
     measure("fps_mean", part.fpsSum / part.beats, "none");
     // The share of the stretch in view below 10, 20 and 30 fps.
     let below = 0;
-    FPS_BUCKETS.slice(0, 3).forEach((bound, i) => {
+    for (const [i, bound] of FPS_BUCKETS.slice(0, 3).entries()) {
       below += part.fps[i] ?? 0;
       measure(`fps_below_${bound}`, below / part.beats, "ratio");
-    });
+    }
     // Where the frames' time went (lib/city/frame-timing.ts): the main
     // thread's frame and the render call in it, and the GPU where the
     // browser has timestamp queries.

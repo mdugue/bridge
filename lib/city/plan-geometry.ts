@@ -514,7 +514,7 @@ function writeAreas(
     sorted.map((f) => triangulate(f.rings)),
     drapeEdge(areas)
   );
-  sorted.forEach((f, rank) => {
+  for (const [rank, f] of sorted.entries()) {
     const cls = f.cls ?? "other";
     const lift =
       PLAN_LOOKS[cls].lift + nestingDepth(outers, boxes, rank) * NEST_LIFT_M;
@@ -522,7 +522,7 @@ function writeAreas(
       const y = tri.map((p) => ground.own(p) ?? ground.at(p) ?? Number.NaN);
       laid.push({ w: writer(cls), tri, y, lift });
     }
-  });
+  }
   // (the fallback is known only once every vertex has asked)
   const { fallback } = ground;
   for (const { w, tri, y, lift } of laid) {

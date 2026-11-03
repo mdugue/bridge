@@ -132,7 +132,7 @@ test("the runs a build bakes give the layer back every level off the ground", ()
   const levels = lineLevels(samples, RAIL);
   const runs = encodeRuns(levels);
   const d = samples.map((s) => s.d);
-  samples.forEach((_, i) => {
+  for (const [i, _] of samples.entries()) {
     const level = levels[i];
     const back = runLevelAt(runs, d, i);
     if (level?.mode === "ground") {
@@ -141,7 +141,7 @@ test("the runs a build bakes give the layer back every level off the ground", ()
       expect(back?.mode).toBe(level?.mode ?? "ground");
       expect(back?.y ?? 0).toBeCloseTo(level?.y ?? 0, 1);
     }
-  });
+  }
 });
 
 test("a line the source puts below the ground cuts under a long lid", () => {

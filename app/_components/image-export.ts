@@ -214,7 +214,7 @@ function legend(
   const lines = legendLines(info, metresPerImagePx, heading);
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  lines.forEach((line, i) => {
+  for (const [i, line] of lines.entries()) {
     ctx.fillStyle = i === 0 ? INK : MUTED;
     ctx.font = `${i === 0 ? 600 : 400} ${(i === 0 ? 12 : 10) * unit}px ${FONT}`;
     ctx.fillText(
@@ -223,13 +223,13 @@ function legend(
       y + pad + i * 15 * unit,
       width - x - creditW - 2 * pad
     );
-  });
+  }
   ctx.fillStyle = MUTED;
   ctx.font = `${9 * unit}px ${FONT}`;
   ctx.textAlign = "right";
-  credits.forEach((line, i) => {
+  for (const [i, line] of credits.entries()) {
     ctx.fillText(line, width - pad, y + pad + i * 12 * unit);
-  });
+  }
   return height;
 }
 
@@ -379,13 +379,13 @@ export async function saveShadowStudy(
   ctx.font = `600 ${11 * unit}px ${FONT}`;
   ctx.textBaseline = "middle";
   ctx.textAlign = "center";
-  STUDY_HOURS.forEach((hour, col) => {
+  for (const [col, hour] of STUDY_HOURS.entries()) {
     ctx.fillText(`${hour}:00 Uhr`, labelW + (col + 0.5) * w, labelH / 2);
-  });
+  }
   ctx.textAlign = "left";
-  STUDY_DATES.forEach((d, row) => {
+  for (const [row, d] of STUDY_DATES.entries()) {
     ctx.fillText(d.label, 8 * unit, labelH + (row + 0.5) * hgt);
-  });
+  }
   // the panels' hairlines
   ctx.strokeStyle = PAPER;
   ctx.lineWidth = 2 * unit;

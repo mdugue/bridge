@@ -242,7 +242,7 @@ function sitePieces(site: Site): { pieces: LinePiece[]; of: PieceOf[] } {
   const pieces: LinePiece[] = [];
   const of: PieceOf[] = [];
   for (const tile of tileIds(site)) {
-    railFeatures(site, tile).forEach((f, index) => {
+    for (const [index, f] of railFeatures(site, tile).entries()) {
       // a monorail's beam has no track to lay (lib/city/monorail.ts)
       if (f.geometry?.type === "LineString" && !isMonorail(f)) {
         pieces.push({
@@ -260,25 +260,25 @@ function sitePieces(site: Site): { pieces: LinePiece[]; of: PieceOf[] } {
           bed: railBed(f),
         });
       }
-    });
-    features<TramFeature>(lineFile(site, LINE_FILES.tram, tile)).forEach(
-      (f, index) => {
-        if (isTrack(f) && f.geometry.type === "LineString") {
-          pieces.push({
-            coords: f.geometry.coordinates,
-            line: "tram",
-            prefer: f.properties?.bridge === 1 ? "deck" : "ground",
-          });
-          of.push({
-            tile,
-            line: "tram",
-            index,
-            tracks: 1,
-            bed: tramBed(f.properties?.bed ?? "street"),
-          });
-        }
+    }
+    for (const [index, f] of features<TramFeature>(
+      lineFile(site, LINE_FILES.tram, tile)
+    ).entries()) {
+      if (isTrack(f) && f.geometry.type === "LineString") {
+        pieces.push({
+          coords: f.geometry.coordinates,
+          line: "tram",
+          prefer: f.properties?.bridge === 1 ? "deck" : "ground",
+        });
+        of.push({
+          tile,
+          line: "tram",
+          index,
+          tracks: 1,
+          bed: tramBed(f.properties?.bed ?? "street"),
+        });
       }
-    );
+    }
   }
   return { pieces, of };
 }
@@ -363,14 +363,14 @@ export async function siteLineLevels(
     offset: OFFSET,
   };
   const out: SiteLevels = {};
-  solvePieces(pieces, ground).forEach(({ runs, profile }, k) => {
+  for (const [k, { runs, profile }] of solvePieces(pieces, ground).entries()) {
     const { tile, line, index } = of[k];
     const byLine = (out[tile] ??= {});
     (byLine[line] ??= {})[index] = {
       ...(runs.length > 0 ? { lv: runs } : {}),
       lz: encodeProfile(profile),
     };
-  });
+  }
   return out;
 }
 
@@ -386,23 +386,23 @@ export function sitePassages(site: Site, levels: SiteLevels): Passage[] {
   const decks = bridgeDecks(bridges, OFFSET);
   const { pieces, of } = sitePieces(site);
   const out: Passage[] = [];
-  pieces.forEach((piece, k) => {
+  for (const [k, piece] of pieces.entries()) {
     const { tile, line, index, tracks } = of[k];
     const solved = levels[tile]?.[line]?.[index];
     const runs = solved?.lv ?? [];
     if (!runs.some((r) => r[2] === "c")) {
-      return;
+      continue;
     }
     const pts = pieceSamples(piece);
     const z = solved?.lz ? decodeProfile(solved.lz) : [];
     const d: number[] = [];
-    pts.forEach((p, i) => {
+    for (const [i, p] of pts.entries()) {
       d.push(
         i === 0
           ? 0
           : d[i - 1] + Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1])
       );
-    });
+    }
     for (const [a, b, mode] of runs) {
       if (mode !== "c") {
         continue;
@@ -427,7 +427,7 @@ export function sitePassages(site: Site, levels: SiteLevels): Passage[] {
         y: idx.map((i) => z[i] ?? runLevelAt(runs, d, i)?.y ?? Number.NaN),
       });
     }
-  });
+  }
   // a rim is on the ground: its level is the line's own there
   // and the decks' own: the streets and paths the DGM closes under them,
   // the bridges it still holds (`under`, pipeline/bake/bridge.py)
@@ -446,23 +446,23 @@ export function sitePassages(site: Site, levels: SiteLevels): Passage[] {
 export function siteBeds(site: Site, levels: SiteLevels): Bed[] {
   const { pieces, of } = sitePieces(site);
   const out: Bed[] = [];
-  pieces.forEach((piece, k) => {
+  for (const [k, piece] of pieces.entries()) {
     const { tile, line, index, bed } = of[k];
     const solved = levels[tile]?.[line]?.[index];
     if (!solved) {
-      return;
+      continue;
     }
     const runs = solved.lv ?? [];
     const z = decodeProfile(solved.lz);
     const pts = pieceSamples(piece);
     const d: number[] = [];
-    pts.forEach((p, i) => {
+    for (const [i, p] of pts.entries()) {
       d.push(
         i === 0
           ? 0
           : d[i - 1] + Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1])
       );
-    });
+    }
     type Kind = "lay" | "lower" | "cut";
     let run: { coords: Point2[]; z: number[]; kind: Kind } = {
       coords: [],
@@ -481,11 +481,11 @@ export function siteBeds(site: Site, levels: SiteLevels): Bed[] {
       }
       run = { coords: [], z: [], kind };
     };
-    pts.forEach((p, i) => {
+    for (const [i, p] of pts.entries()) {
       const zi = z[i];
       if (zi === null || zi === undefined) {
         flush("lay");
-        return;
+        continue;
       }
       const mode = runLevelAt(runs, d, i)?.mode ?? "ground";
       const kind: Kind =
@@ -502,9 +502,9 @@ export function siteBeds(site: Site, levels: SiteLevels): Bed[] {
       }
       run.coords.push(p);
       run.z.push(zi);
-    });
+    }
     flush("lay");
-  });
+  }
   return out;
 }
 
@@ -633,7 +633,7 @@ export async function measureJumps(
   const decks = siteDecks(site);
   const { pieces, of } = sitePieces(site);
   const report: JumpReport = { before: 0, after: 0, samples: 0, worst: [] };
-  pieces.forEach((piece, k) => {
+  for (const [k, piece] of pieces.entries()) {
     const { tile, line, index } = of[k];
     const baked = solved[tile]?.[line]?.[index];
     const runs = baked?.lv ?? [];
@@ -643,7 +643,7 @@ export async function measureJumps(
     let run = 0;
     const old: (number | null)[] = [];
     const now: (number | null)[] = [];
-    pts.forEach((p, i) => {
+    for (const [i, p] of pts.entries()) {
       if (i > 0) {
         run += Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]);
       }
@@ -657,7 +657,7 @@ export async function measureJumps(
           ? profile[i]
           : drawnAt(runLevelAt(runs, d, i), g, under)
       );
-    });
+    }
     report.samples += pts.length;
     const jump = (ys: (number | null)[], i: number) => {
       const a = ys[i - 1];
@@ -679,7 +679,7 @@ export async function measureJumps(
         report.worst.push({ line, x: pts[i][0], y: pts[i][1], by });
       }
     }
-  });
+  }
   report.worst.sort((p, q) => q.by - p.by);
   return report;
 }

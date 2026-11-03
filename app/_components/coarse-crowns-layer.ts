@@ -194,11 +194,11 @@ export function* coarseCrownSteps(
     if (form === "broad") {
       set.userData.styleCrown = "far";
     }
-    cell.forEach((c, i) => {
+    for (const [i, c] of cell.entries()) {
       set.setMatrixAt(i, crownMatrix(c, c.ground, m));
       paintCrown(c, c.ground, col);
       set.setColorAt(i, col);
-    });
+    }
     set.instanceMatrix.needsUpdate = true;
     set.computeBoundingSphere();
     group.add(set);

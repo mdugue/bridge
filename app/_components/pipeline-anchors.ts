@@ -351,12 +351,12 @@ export function createPipelineAnchors(
           // builds them over several frames, so one built after it was
           // freed holds a render object and its stub's buffers again —
           // freed once more, now that nothing builds it.
-          made.forEach((anchor, i) => {
+          for (const [i, anchor] of made.entries()) {
             if (anchors.get(keys[i]) !== anchor) {
               (anchor as Drawable).geometry?.dispose();
               releaseRenderState(anchor);
             }
-          });
+          }
         }
       }
       await Promise.all(others);

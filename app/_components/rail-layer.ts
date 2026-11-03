@@ -1275,7 +1275,7 @@ function addSuperstructure(
   const structure = p.structure ?? "";
   if (structure.includes("arch")) {
     const arches: [number, number][] = [];
-    archFits(ribs, frame.line).forEach((fit, r) => {
+    for (const [r, fit] of archFits(ribs, frame.line).entries()) {
       if (fit) {
         const { offset } = ribs[r];
         const span = archSpringing(fit, frame.length, (s) =>
@@ -1284,7 +1284,7 @@ function addSuperstructure(
         addArchRib(out.steel, frame, offset, { fit, ...span }, depth);
         arches.push([span.from, span.to]);
       }
-    });
+    }
     return { arches, pylons: false };
   }
   if (structure.includes("cable-stayed")) {
@@ -1518,7 +1518,7 @@ function addPylons(
   if (peaks.every((p) => p.length === 0)) {
     return false;
   }
-  ribs.forEach((rib, r) => {
+  for (const [r, rib] of ribs.entries()) {
     for (const i of peaks[r]) {
       addPierAt(
         out.stone,
@@ -1529,7 +1529,7 @@ function addPylons(
         PYLON_PIER_HALF
       );
     }
-  });
+  }
   // portals between the first two ribs' matching pylons
   if (ribs.length >= 2) {
     for (const i of peaks[0]) {
@@ -2167,7 +2167,7 @@ export function lineLevelsAt(
   const ground: (number | null)[] = [];
   const under: number[][] = [];
   const ramps: number[][] = [];
-  pts.forEach(([ex, ey], i) => {
+  for (const [i, [ex, ey]] of pts.entries()) {
     d.push(
       i === 0
         ? 0
@@ -2177,7 +2177,7 @@ export function lineLevelsAt(
     const w = epsgToWorld(ex, ey, ctx.offset);
     under.push(decksAt(decks, w.x, w.z, RIDES[line], "decks", DECK_REACH_M));
     ramps.push(decksAt(decks, w.x, w.z, RIDES[line], "ramps"));
-  });
+  }
   const solved = runs
     ? pts.map((_, i) => runLevelAt(runs, d, i))
     : lineLevels(
@@ -2222,13 +2222,13 @@ function profiledLevels(
   profile: readonly (number | null)[]
 ): (Level | null)[] {
   const d: number[] = [];
-  pts.forEach(([ex, ey], i) => {
+  for (const [i, [ex, ey]] of pts.entries()) {
     d.push(
       i === 0
         ? 0
         : d[i - 1] + Math.hypot(ex - pts[i - 1][0], ey - pts[i - 1][1])
     );
-  });
+  }
   return profile.map((y, i) =>
     y === null ? null : { mode: runLevelAt(runs, d, i)?.mode ?? "ground", y }
   );
@@ -2411,7 +2411,7 @@ function* drawnLines(
     const world: XZ[] = [];
     const buried: XZ[] = [];
     const opened = openedCuts(levels, dense, ctx, decks);
-    dense.forEach(([ex, ey], i) => {
+    for (const [i, [ex, ey]] of dense.entries()) {
       d.push(
         i === 0
           ? 0
@@ -2430,7 +2430,7 @@ function* drawnLines(
         buried.push(world[i]);
         levels[i] = null;
       }
-    });
+    }
     out.push({
       d,
       dense,
@@ -2476,14 +2476,14 @@ function ballastBeds(lines: readonly DrawnLine[]): BedIndex | undefined {
       }
       run = { coords: [], z: [] };
     };
-    l.levels.forEach((level, i) => {
+    for (const [i, level] of l.levels.entries()) {
       if (level?.mode !== "ground") {
         flush();
-        return;
+        continue;
       }
       run.coords.push(l.dense[i]);
       run.z.push(level.y);
-    });
+    }
     flush();
   }
   if (beds.length === 0) {
@@ -2614,7 +2614,7 @@ function addLine(
       out.catenary.push(...catenaryRuns(line, [a, b], run, offsets, decks.all));
     }
   }
-  line.levels.forEach((level, i) => {
+  for (const [i, level] of line.levels.entries()) {
     if (level) {
       out.tracks.push({
         raised: level.mode === "deck" || level.mode === "span",
@@ -2623,7 +2623,7 @@ function addLine(
         z: line.world[i].z,
       });
     }
-  });
+  }
   const half =
     ((line.tracks - 1) / 2) * TRACK_PITCH + line.gauge / 2 + SPAN_SHOULDER_M;
   for (const span of spanRuns(line.levels, head)) {

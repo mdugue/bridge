@@ -1244,7 +1244,7 @@ function wallsOf(mesh: FacadeMesh, drawn: (object: number) => boolean): Wall[] {
   const uf = unionFind(tris.length);
   const byVertex = new Map<string, number[]>();
   const mm = (x: number) => Math.round(x * 1000);
-  tris.forEach((t, k) => {
+  for (const [k, t] of tris.entries()) {
     for (let c = 0; c < 3; c += 1) {
       const i = 3 * (t + c);
       const key = `${mesh.objectIds[t]}:${mm(p[i])},${mm(p[i + 1])},${mm(p[i + 2])}`;
@@ -1265,9 +1265,9 @@ function wallsOf(mesh: FacadeMesh, drawn: (object: number) => boolean): Wall[] {
       }
       list.push(k);
     }
-  });
+  }
   const groups = new Map<number, Wall>();
-  tris.forEach((t, k) => {
+  for (const [k, t] of tris.entries()) {
     const root = uf.find(k);
     let w = groups.get(root);
     if (!w) {
@@ -1297,7 +1297,7 @@ function wallsOf(mesh: FacadeMesh, drawn: (object: number) => boolean): Wall[] {
       w.z0 = Math.min(w.z0, p[i + 2]);
       w.z1 = Math.max(w.z1, p[i + 2]);
     }
-  });
+  }
   const walls = [...groups.values()];
   for (const w of walls) {
     w.top = wallTop(w, p);
@@ -1367,7 +1367,7 @@ function coveredBy(w: Wall, o: Wall): number {
 function markParty(walls: readonly Wall[]): void {
   const cells = walls.map(cellsOf);
   const grid = new Map<string, number[]>();
-  cells.forEach((cs, i) => {
+  for (const [i, cs] of cells.entries()) {
     for (const c of cs) {
       const list = grid.get(c);
       if (list) {
@@ -1376,8 +1376,8 @@ function markParty(walls: readonly Wall[]): void {
         grid.set(c, [i]);
       }
     }
-  });
-  walls.forEach((w, i) => {
+  }
+  for (const [i, w] of walls.entries()) {
     const seen = new Set<number>([i]);
     let covered = 0;
     for (const c of cells[i]) {
@@ -1394,7 +1394,7 @@ function markParty(walls: readonly Wall[]): void {
     }
     const area = (w.s1 - w.s0) * (w.z1 - w.z0);
     w.party = area > 0 ? covered / area : 0;
-  });
+  }
 }
 
 /** The walls of one object facing `n` whose plane lies within

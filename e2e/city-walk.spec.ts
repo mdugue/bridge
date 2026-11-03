@@ -310,16 +310,18 @@ async function designPlanGpkg([e, n]: [number, number]) {
   const wkb = new DataView(
     new ArrayBuffer(8 + 1 + 4 + 4 + 4 + ring.length * 16)
   );
-  [0x47, 0x50, 0, 1].forEach((b, i) => wkb.setUint8(i, b));
+  for (const [i, b] of [0x47, 0x50, 0, 1].entries()) {
+    wkb.setUint8(i, b);
+  }
   wkb.setInt32(4, 25_833, true);
   wkb.setUint8(8, 1);
   wkb.setUint32(9, 3, true);
   wkb.setUint32(13, 1, true);
   wkb.setUint32(17, ring.length, true);
-  ring.forEach(([x, y], i) => {
+  for (const [i, [x, y]] of ring.entries()) {
     wkb.setFloat64(21 + i * 16, x, true);
     wkb.setFloat64(29 + i * 16, y, true);
-  });
+  }
   db.run("INSERT INTO flaechen (geom, nutzung) VALUES (?, ?)", [
     new Uint8Array(wkb.buffer),
     "Rasen",

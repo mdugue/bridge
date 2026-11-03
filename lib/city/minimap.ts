@@ -148,12 +148,12 @@ function groundPolysFromGeometry(
     geom.type === "Solid"
       ? (sem.values as (number | null)[][])
       : [sem.values as (number | null)[]];
-  shells.forEach((faces, shellIdx) => {
+  for (const [shellIdx, faces] of shells.entries()) {
     const shellValues = values[shellIdx] ?? [];
-    faces.forEach((face, faceIdx) => {
+    for (const [faceIdx, face] of faces.entries()) {
       const surfaceId = shellValues[faceIdx];
       if (surfaceId == null || !isGround(surfaceId)) {
-        return;
+        continue;
       }
       const ring = face[0];
       if (ring?.length >= 3) {
@@ -166,8 +166,8 @@ function groundPolysFromGeometry(
           ...(holes.length > 0 ? { holes } : {}),
         });
       }
-    });
-  });
+    }
+  }
   return polys;
 }
 

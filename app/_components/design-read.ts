@@ -259,11 +259,11 @@ function groupGeometry(
     }
     const size = from.itemSize;
     const array = new Float32Array(sources.length * size);
-    sources.forEach((v, i) => {
+    for (const [i, v] of sources.entries()) {
       for (let c = 0; c < size; c += 1) {
         array[i * size + c] = from.getComponent(v, c);
       }
-    });
+    }
     out.setAttribute(name, new BufferAttribute(array, size));
   }
   out.setIndex(triangles);
@@ -516,7 +516,7 @@ function mergePieces(
   const parts = partsRecorder();
   let vertex = 0;
   let triangle = 0;
-  materials.forEach((material, group) => {
+  for (const [group, material] of materials.entries()) {
     const start = triangle;
     for (const piece of pieces) {
       if (piece.material !== material) {
@@ -528,7 +528,7 @@ function mergePieces(
       triangle += triangleCount(piece.geometry);
     }
     merged.addGroup(start * 3, (triangle - start) * 3, group);
-  });
+  }
   merged.setAttribute("position", new BufferAttribute(out.position, 3));
   merged.setAttribute("normal", new BufferAttribute(out.normal, 3));
   merged.setAttribute("uv", new BufferAttribute(out.uv, 2));

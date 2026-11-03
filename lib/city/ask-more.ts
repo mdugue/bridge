@@ -286,14 +286,14 @@ function* canopySetsSteps(
   // 0 a broadleaf (or not known), else 1 + its index in LEAVES; + CONE
   // for one drawn as the cone
   const leaf = new Uint8Array(trees.length);
-  trees.forEach((t, i) => {
+  for (const [i, t] of trees.entries()) {
     position.set(epsgOf(t.p, ctx.offset), i * 2);
     height[i] = t.height && Number.isFinite(t.height) ? t.height : 0;
     source[i] = sources.indexOf(t.source);
     leaf[i] =
       (t.leaf ? LEAVES.indexOf(t.leaf) + 1 : 0) |
       (canopyCone(t.p) ? LEAF_CONE : 0);
-  });
+  }
   return packedCylinderSets(
     trees.length,
     (i) => packedCanopy(trees[i].p),

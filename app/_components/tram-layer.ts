@@ -160,7 +160,7 @@ function trackRuns(
   let run: TrackRun = { d: [], pts: [] };
   let d = 0;
   const drawn: (Pt | null)[] = [];
-  dense.forEach((p, i) => {
+  for (const [i, p] of dense.entries()) {
     if (i > 0) {
       d += Math.hypot(p[0] - dense[i - 1][0], p[1] - dense[i - 1][1]);
     }
@@ -171,7 +171,7 @@ function trackRuns(
         runs.push(run);
       }
       run = { d: [], pts: [] };
-      return;
+      continue;
     }
     const w = epsgToWorld(p[0], p[1], ctx.offset);
     const top =
@@ -182,7 +182,7 @@ function trackRuns(
     drawn.push(pt);
     run.pts.push(pt);
     run.d.push(d);
-  });
+  }
   if (run.pts.length >= 2) {
     runs.push(run);
   }
@@ -255,7 +255,7 @@ const cellKey = (x: number, z: number) =>
 
 function segmentGrid(runs: TrackRun[]): SegmentGrid {
   const grid: SegmentGrid = new Map();
-  runs.forEach((run, r) => {
+  for (const [r, run] of runs.entries()) {
     for (let i = 1; i < run.pts.length; i += 1) {
       const a = run.pts[i - 1];
       const b = run.pts[i];
@@ -266,7 +266,7 @@ function segmentGrid(runs: TrackRun[]): SegmentGrid {
         grid.set(key, list);
       }
     }
-  });
+  }
   return grid;
 }
 
@@ -323,18 +323,18 @@ export function lawnHalves(runs: TrackRun[]): LawnHalves[] {
       sharedLeft: [],
       sharedRight: [],
     };
-    run.pts.forEach((p, i) => {
+    for (const [i, p] of run.pts.entries()) {
       out.left.push(BED_HALF.grass);
       out.right.push(BED_HALF.grass);
       out.sharedLeft.push(false);
       out.sharedRight.push(false);
       const q = nearestOther(grid, p, r);
       if (!q || q.d < 0.5) {
-        return;
+        continue;
       }
       const side = (q.x - p.x) * n[i][0] + (q.z - p.z) * n[i][1];
       if (Math.abs(side) < LAWN_ACROSS * q.d) {
-        return;
+        continue;
       }
       const half = Math.max(q.d / 2 - LAWN_SEAM_M, 0);
       if (side >= 0) {
@@ -344,7 +344,7 @@ export function lawnHalves(runs: TrackRun[]): LawnHalves[] {
         out.right[i] = half;
         out.sharedRight[i] = true;
       }
-    });
+    }
     return out;
   });
 }

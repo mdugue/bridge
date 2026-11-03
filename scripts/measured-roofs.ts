@@ -396,7 +396,7 @@ function conformingRoof(rings: Point2[][], inner: readonly Point2[]): FaceRoof {
     let start = 0;
     const next = current.map((ring) => {
       const out: Point2[] = [];
-      ring.forEach((p, i) => {
+      for (const [i, p] of ring.entries()) {
         const q = ring[(i + 1) % ring.length];
         const a = ids[start + i];
         const b = ids[start + ((i + 1) % ring.length)];
@@ -405,7 +405,7 @@ function conformingRoof(rings: Point2[][], inner: readonly Point2[]): FaceRoof {
           missing += 1;
           out.push([(p[0] + q[0]) / 2, (p[1] + q[1]) / 2]);
         }
-      });
+      }
       start += ring.length;
       return out;
     });

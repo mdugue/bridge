@@ -325,17 +325,17 @@ export async function buildMurals(
   const meshes: Mesh[] = [];
   const shown: Mural[] = [];
   let bytes = 0;
-  murals.forEach((mural, i) => {
+  for (const [i, mural] of murals.entries()) {
     const drawing = drawings[i];
     if (!drawing) {
-      return;
+      continue;
     }
     const mesh = muralMesh(mural, drawing[0], drawing[1], opts.offset);
     group.add(mesh);
     meshes.push(mesh);
     shown.push(mural);
     bytes += muralBytes(mural, opts.phone) + estimateGeometryBytes(mesh);
-  });
+  }
   if (meshes.length === 0) {
     return null;
   }

@@ -408,7 +408,7 @@ export function withFaceRoofColours(
     return v;
   }
   const byObject = new Map<number, Map<string, readonly number[]>>();
-  keys.forEach((id, index) => {
+  for (const [index, id] of keys.entries()) {
     const list = faces[id];
     if (list?.length) {
       byObject.set(
@@ -416,7 +416,7 @@ export function withFaceRoofColours(
         new Map(list.map((f) => [`${f[0]}:${f[1]}`, f.slice(2, 5)]))
       );
     }
-  });
+  }
   const count = v.objectIds.length;
   const roofRgb = new Float32Array(3 * count).fill(Number.NaN);
   for (let i = 0; i < count; i += 1) {
@@ -702,11 +702,11 @@ export function shapedGap(
   }));
   const mesh = measuredRoofMesh(parts, p.z + structureFoot(p), offset);
   let lowest = Number.POSITIVE_INFINITY;
-  mesh.isRoof.forEach((roof, i) => {
+  for (const [i, roof] of mesh.isRoof.entries()) {
     if (roof === 1) {
       lowest = Math.min(lowest, mesh.positions[i * 3 + 2]);
     }
-  });
+  }
   if (!Number.isFinite(lowest)) {
     return null;
   }
@@ -806,12 +806,12 @@ export function withMeasuredRoofs(
 ): CityVertices {
   const byId = measuredRoofsById(features);
   const replaced = new Map<number, MeasuredRoofFeature[]>();
-  keys.forEach((id, index) => {
+  for (const [index, id] of keys.entries()) {
     const parts = byId.get(id);
     if (parts) {
       replaced.set(index, parts);
     }
-  });
+  }
   if (replaced.size === 0) {
     return v;
   }
@@ -866,10 +866,10 @@ export function withMeasuredRoofs(
         )
         .map((p) => [p[0], p.slice(2, 5)])
     );
-    mesh.parts.forEach((part, k) => {
+    for (const [k, part] of mesh.parts.entries()) {
       const c = mesh.isRoof[k] === 1 ? own.get(part) : undefined;
       roofRgb.push(...(c?.length === 3 ? c : FLAT_RGB));
-    });
+    }
   }
   return {
     positions: Float32Array.from(positions),
@@ -906,7 +906,7 @@ export function openRoofObjects(
   keys: string[]
 ): Set<number> {
   const out = new Set<number>();
-  keys.forEach((id, index) => {
+  for (const [index, id] of keys.entries()) {
     const root = doc.CityObjects[keys[rootOf(doc, keys, index)]];
     const attrs = inheritedAttributes(
       doc.CityObjects[id].attributes ?? {},
@@ -915,7 +915,7 @@ export function openRoofObjects(
     if (isOpenRoof(attrs.function)) {
       out.add(index);
     }
-  });
+  }
   return out;
 }
 
@@ -1285,7 +1285,7 @@ export function bakeCityMesh(
 
   // a part of a building whose facade is its own shares it where OSM's
   // storeys are the building's (a hall's raised roof)
-  objects.forEach((o, i) => {
+  for (const [i, o] of objects.entries()) {
     const own = partFacade(
       hosts[i].monumental ?? false,
       i !== o.root && (hosts[o.root].monumental ?? false),
@@ -1302,14 +1302,14 @@ export function bakeCityMesh(
         o.drawn = { ...o.drawn, own: "part" };
       }
     }
-  });
+  }
 
   // A Building with parts answers for its whole tree (the inquiry card
   // reads it): the union of the footprints, the tree's height.
   const trees = new Map<number, number[]>();
-  objects.forEach((o, i) => {
+  for (const [i, o] of objects.entries()) {
     trees.set(o.root, [...(trees.get(o.root) ?? []), i]);
-  });
+  }
   for (const [root, members] of trees) {
     const { facts } = objects[root];
     if (members.length > 1 && facts) {
@@ -2594,7 +2594,7 @@ export function markTownHouses(
   objects: CityObjectRow[],
   hosts: WindowExtra[]
 ): void {
-  objects.forEach((o, i) => {
+  for (const [i, o] of objects.entries()) {
     if (
       hasObjectFlag(o.flags, OBJECT_FLAG_FLAT_ROOF) &&
       (o.source ?? OBJECT_SOURCE_LOD2) === OBJECT_SOURCE_LOD2 &&
@@ -2608,7 +2608,7 @@ export function markTownHouses(
       o.townHouse = true;
       hosts[i] = { ...hosts[i], town: true };
     }
-  });
+  }
 }
 
 /** What the windows read of an object beyond its row. */
@@ -2667,10 +2667,10 @@ export function liftToStreet(
     }
   }
   const asBuilt = new Map<number, { baseZ: number; eaveH: number }>();
-  objects.forEach((o, i) => {
+  for (const [i, o] of objects.entries()) {
     const g = ground.get(o.root);
     if (!g || (o.source ?? OBJECT_SOURCE_LOD2) !== OBJECT_SOURCE_LOD2) {
-      return;
+      continue;
     }
     const street = Math.min(g.hi, g.lo + STREET_RISE_M);
     const rise = street - o.baseZ;
@@ -2679,7 +2679,7 @@ export function liftToStreet(
       o.eaveH = cm(Math.max(o.eaveH - rise, 0));
       o.baseZ = cm(street);
     }
-  });
+  }
   return asBuilt;
 }
 
@@ -2785,7 +2785,7 @@ export function assignWindows(
     brick: extra[i]?.brick,
   }));
   const reach: number[] = [];
-  windowSpecs(hosts, walls, index).forEach((choice, i) => {
+  for (const [i, choice] of windowSpecs(hosts, walls, index).entries()) {
     const o = objects[i];
     reach[i] = choice.reach ?? GROUND_REACH_M;
     if (choice.spec.axis > 0) {
@@ -2800,7 +2800,7 @@ export function assignWindows(
         ...(choice.storeyFromPhotos ? { storey: "photos" as const } : {}),
       };
     }
-  });
+  }
   return reach;
 }
 

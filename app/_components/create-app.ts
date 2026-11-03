@@ -2860,11 +2860,11 @@ async function bootApp(
     }
     const keep = (layer: CityLayer) => {
       const kept = stream.demolished.get(layer.tile) ?? new Set();
-      layer.alive.forEach((alive, i) => {
+      for (const [i, alive] of layer.alive.entries()) {
         if (!alive) {
           kept.add(i);
         }
-      });
+      }
       stream.demolished.set(layer.tile, kept);
     };
     keep(picked.layer);

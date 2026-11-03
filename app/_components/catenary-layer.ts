@@ -226,14 +226,14 @@ function addPortal(
   if (feet[0] === null || feet[1] === null) {
     return;
   }
-  masts.forEach((m, k) =>
+  for (const [k, m] of masts.entries()) {
     addBeam(
       out.steel,
       [m.x, (feet[k] as number) - MAST_SINK, m.z],
       [m.x, beam + BEAM_HALF, m.z],
       MAST_HALF
-    )
-  );
+    );
+  }
   addBeam(
     out.steel,
     [masts[0].x, beam, masts[0].z],
@@ -330,7 +330,7 @@ export function addCatenary(
     const found = supportStations(run.pts, run.d, mapped).filter(
       (sp) => sp.key === null || !nearOverpass(run, sp.d)
     );
-    found.forEach((sp, support) => {
+    for (const [support, sp] of found.entries()) {
       const p = pointAt(run, sp.d);
       const member = {
         deck: p.deck,
@@ -360,7 +360,7 @@ export function addCatenary(
           },
           member
         );
-        return;
+        continue;
       }
       const line = byLine.get(sp.key);
       if (line) {
@@ -368,7 +368,7 @@ export function addCatenary(
       } else {
         byLine.set(sp.key, [member]);
       }
-    });
+    }
     return found;
   });
   for (const [key, members] of byLine) {
@@ -389,7 +389,9 @@ export function addCatenary(
       }
     }
   }
-  runs.forEach((run, k) => addRunWires(out, ctx, run, supports[k]));
+  for (const [k, run] of runs.entries()) {
+    addRunWires(out, ctx, run, supports[k]);
+  }
 }
 
 /** The catenary's meshes: the wires (null when none) and the steel in

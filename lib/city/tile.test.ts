@@ -133,18 +133,18 @@ function bakeNames(): Map<string, string> {
   const names = new Map<string, string>();
   for (const file of readdirSync(dir).filter((f) => f.endsWith(".py"))) {
     const lines = readFileSync(join(dir, file), "utf-8").split("\n");
-    lines.forEach((line, i) => {
+    for (const [i, line] of lines.entries()) {
       // data/_raw/<provider>/ holds the downloads and the bakes' own
       // caches (Wikidata answers, the laser scan's research output)
       if (/\braw\b/u.test(line.split("#")[0])) {
-        return;
+        continue;
       }
       for (const m of line.matchAll(
         /f"([a-z0-9_]+)_\{tile\.id\}\.([a-z.]+)"/gu
       )) {
         names.set(`${m[1]}_${PRIMARY_TILE}.${m[2]}`, `${file}:${i + 1}`);
       }
-    });
+    }
   }
   return names;
 }

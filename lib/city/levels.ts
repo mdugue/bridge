@@ -212,7 +212,7 @@ function viterbi(
     for (const k of cands[i]) {
       let best = Number.POSITIVE_INFINITY;
       let arg = 0;
-      cands[i - 1].forEach((p, j) => {
+      for (const [j, p] of cands[i - 1].entries()) {
         const c =
           cost[i - 1][j] +
           climbCost(p.c.y, k.c.y, run, opts.grade) +
@@ -221,7 +221,7 @@ function viterbi(
           best = c;
           arg = j;
         }
-      });
+      }
       row.push(best + k.cost);
       from.push(arg);
     }

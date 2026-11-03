@@ -155,7 +155,7 @@ interface Sampled {
 class SampleIndex {
   private readonly cells = new Map<string, { piece: number; i: number }[]>();
   constructor(readonly pieces: readonly Sampled[]) {
-    pieces.forEach((p, piece) => {
+    for (const [piece, p] of pieces.entries()) {
       p.pts.forEach((pt, i) => {
         const k = this.key(pt[0], pt[1]);
         let cell = this.cells.get(k);
@@ -165,7 +165,7 @@ class SampleIndex {
         }
         cell.push({ piece, i });
       });
-    });
+    }
   }
   private key(x: number, y: number): string {
     return `${Math.floor(x / CELL_M)}:${Math.floor(y / CELL_M)}`;

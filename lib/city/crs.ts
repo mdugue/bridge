@@ -107,7 +107,7 @@ function forward(
   // the series' derivative, for the convergence (Karney eqs. 13–15)
   let p = 1;
   let q = 0;
-  ALPHA.forEach((alpha, j) => {
+  for (const [j, alpha] of ALPHA.entries()) {
     const k = 2 * (j + 1);
     const [s, c] = [Math.sin(k * xip), Math.cos(k * xip)];
     const [sh, ch] = [Math.sinh(k * etap), Math.cosh(k * etap)];
@@ -115,7 +115,7 @@ function forward(
     eta += alpha * c * sh;
     p += k * alpha * c * ch;
     q += k * alpha * s * sh;
-  });
+  }
   const gamma =
     Math.atan((taup / Math.hypot(1, taup)) * Math.tan(lambda)) +
     Math.atan2(q, p);
@@ -150,11 +150,11 @@ export function utmToLatLng(
   const eta = (x - FALSE_EASTING) / K0_A;
   let xip = xi;
   let etap = eta;
-  BETA.forEach((beta, j) => {
+  for (const [j, beta] of BETA.entries()) {
     const k = 2 * (j + 1);
     xip -= beta * Math.sin(k * xi) * Math.cosh(k * eta);
     etap -= beta * Math.cos(k * xi) * Math.sinh(k * eta);
-  });
+  }
   const taup = Math.sin(xip) / Math.hypot(Math.sinh(etap), Math.cos(xip));
   const lambda = Math.atan2(Math.sinh(etap), Math.cos(xip));
   return {

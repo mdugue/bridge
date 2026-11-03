@@ -28,11 +28,11 @@ test("points come back where they were, to the tenth of a millimetre", () => {
   expect(unpacked?.stride).toBe(3);
   const data = unpacked?.data ?? new Float32Array();
   const [ox, oy] = unpacked?.origin ?? [0, 0];
-  points.forEach((p, i) => {
+  for (const [i, p] of points.entries()) {
     expect(Math.abs(ox + (data[i * 3] ?? 0) - p.x)).toBeLessThan(1e-3);
     expect(Math.abs(oy + (data[i * 3 + 1] ?? 0) - p.y)).toBeLessThan(1e-3);
     expect(data[i * 3 + 2]).toBeCloseTo(p.h, 4);
-  });
+  }
 });
 
 test("stride 4 keeps the crown radius; a missing one is NaN", () => {
@@ -86,7 +86,7 @@ test("a committed canopy comes back as the features it was, within a millimetre"
   const back = unpacked ? pointFeatures(unpacked) : [];
   expect(back).toHaveLength(doc.features.length);
   let worst = 0;
-  doc.features.forEach((f, i) => {
+  for (const [i, f] of doc.features.entries()) {
     const [x, y] = back[i]?.geometry.coordinates ?? [0, 0];
     worst = Math.max(
       worst,
@@ -99,7 +99,7 @@ test("a committed canopy comes back as the features it was, within a millimetre"
       f.properties?.r ?? 0,
       4
     );
-  });
+  }
   expect(worst).toBeLessThan(1e-3);
 });
 

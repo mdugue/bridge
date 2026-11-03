@@ -98,11 +98,11 @@ test("smoothing keeps each vertex at the step it found, never between two", () =
   });
   const raw = [lower(), lower(), lower(), upper(), upper(), upper(), upper()];
   const out = smoothSnaps(raw);
-  out.forEach((s, i) => {
+  for (const [i, s] of out.entries()) {
     expect(s).not.toBeNull();
     expect((s as StepSnap).crest).toBe(raw[i].crest);
     expect((s as StepSnap).hi).toBe(raw[i].hi);
-  });
+  }
   // a gap takes the step most of its neighbours found
   const gap = smoothSnaps([
     lower(),

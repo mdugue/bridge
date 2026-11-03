@@ -86,14 +86,14 @@ function drawBridges(
   ctx.lineWidth = 0.5;
   for (const deck of bridges) {
     ctx.beginPath();
-    deck.pts.forEach(([x, y], i) => {
+    for (const [i, [x, y]] of deck.pts.entries()) {
       const { px, py } = epsgToMapPx(x, y, bounds, size);
       if (i === 0) {
         ctx.moveTo(px, py);
       } else {
         ctx.lineTo(px, py);
       }
-    });
+    }
     ctx.closePath();
     ctx.fillStyle = deckFill(deck.kind);
     ctx.fill();
@@ -119,14 +119,14 @@ function drawFootprints(
       continue;
     }
     ctx.beginPath();
-    poly.pts.forEach(([x, y], i) => {
+    for (const [i, [x, y]] of poly.pts.entries()) {
       const { px, py } = epsgToMapPx(x, y, bounds, size);
       if (i === 0) {
         ctx.moveTo(px, py);
       } else {
         ctx.lineTo(px, py);
       }
-    });
+    }
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
@@ -147,14 +147,14 @@ function drawPictureFrame(
     return;
   }
   ctx.beginPath();
-  corners.forEach(([x, y], i) => {
+  for (const [i, [x, y]] of corners.entries()) {
     const { px, py } = epsgToMapPx(x, y, bounds, size);
     if (i === 0) {
       ctx.moveTo(px, py);
     } else {
       ctx.lineTo(px, py);
     }
-  });
+  }
   ctx.closePath();
   ctx.fillStyle = "rgba(37, 99, 235, 0.08)";
   ctx.fill();

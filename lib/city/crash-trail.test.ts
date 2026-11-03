@@ -243,7 +243,9 @@ test("the phase says how far the page got", () => {
 describe("which previous record is offered as a crash", () => {
   const died = (...kinds: string[]) => {
     const trail = createTrail(setup);
-    kinds.forEach((kind, i) => pushEvent(trail, { t: i, kind }));
+    for (const [i, kind] of kinds.entries()) {
+      pushEvent(trail, { t: i, kind });
+    }
     return trail;
   };
 

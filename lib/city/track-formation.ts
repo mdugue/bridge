@@ -110,12 +110,12 @@ class SampleGrid {
 
 function samplesOf(beds: readonly Bed[]): Sample[] {
   const out: Sample[] = [];
-  beds.forEach((bed, k) => {
+  for (const [k, bed] of beds.entries()) {
     if (bed.shallow !== undefined) {
-      return; // a line in a cut runs under what lies over it
+      continue; // a line in a cut runs under what lies over it
     }
     const n = bed.coords.length;
-    bed.coords.forEach(([x, y], i) => {
+    for (const [i, [x, y]] of bed.coords.entries()) {
       const prev = i > 0 ? bed.coords[i - 1] : bed.coords[i];
       const next = i + 1 < n ? bed.coords[i + 1] : bed.coords[i];
       const length =
@@ -123,8 +123,8 @@ function samplesOf(beds: readonly Bed[]): Sample[] {
           Math.hypot(next[0] - x, next[1] - y)) /
         2;
       out.push({ bed: k, length, x, y, z: bed.z[i] });
-    });
-  });
+    }
+  }
   return out;
 }
 

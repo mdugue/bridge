@@ -312,14 +312,14 @@ const base = new Color();
 function autumnTargets(keys: CrownSeasonKey[]): Float32Array {
   base.set(CROWN_BASE_COLOR);
   const out = new Float32Array(keys.length * 3);
-  keys.forEach((k, i) => {
+  for (const [i, k] of keys.entries()) {
     const [h, s, l] = phenologyOf(k.genus).hue;
     const v = k.jitter / (2 * SEASON_JITTER_DAYS); // −0.5 … 0.5
     scratch.setHSL((h + v * 0.02 + 1) % 1, s, l + v * 0.08);
     out[i * 3] = scratch.r / base.r;
     out[i * 3 + 1] = scratch.g / base.g;
     out[i * 3 + 2] = scratch.b / base.b;
-  });
+  }
   return out;
 }
 
@@ -333,13 +333,13 @@ function bloomTargets(keys: CrownSeasonKey[]): Float32Array | null {
   }
   base.set(CROWN_BASE_COLOR);
   const out = new Float32Array(keys.length * 3);
-  keys.forEach((k, i) => {
+  for (const [i, k] of keys.entries()) {
     const [h, s, l] = phenologyOf(k.genus).bloom?.colour ?? [0, 0, 1];
     scratch.setHSL(h, s, l);
     out[i * 3] = scratch.r / base.r;
     out[i * 3 + 1] = scratch.g / base.g;
     out[i * 3 + 2] = scratch.b / base.b;
-  });
+  }
   return out;
 }
 
@@ -427,10 +427,10 @@ export function seasonCrowns(
       }
       let moved = false;
       let anyBare = false;
-      keys.forEach((key, i) => {
+      for (const [i, key] of keys.entries()) {
         moved = writeInstance(i, key, day, arrays) || moved;
         anyBare ||= arrays.bare[i] > BARE_EPS;
-      });
+      }
       if (moved) {
         bareAttr.needsUpdate = true;
         colourAttr.needsUpdate = true;
@@ -467,12 +467,12 @@ function farTier(
   return {
     mesh,
     copy: (from) => {
-      slots.forEach((slot, j) => {
+      for (const [j, slot] of slots.entries()) {
         bare[j] = from.bare[slot];
         colour[j * 3] = from.colour[slot * 3];
         colour[j * 3 + 1] = from.colour[slot * 3 + 1];
         colour[j * 3 + 2] = from.colour[slot * 3 + 2];
-      });
+      }
       bareAttr.needsUpdate = true;
       colourAttr.needsUpdate = true;
     },

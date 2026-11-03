@@ -133,7 +133,7 @@ export function solidShape(
   crown: CrownForm = null
 ): Float32Array {
   const out: number[] = [];
-  solids.forEach((s, k) => {
+  for (const [k, s] of solids.entries()) {
     if ("cylinder" in s) {
       const c = s.cylinder;
       const h = Math.max(c.y1 - c.y0, 0.1);
@@ -164,7 +164,7 @@ export function solidShape(
       appendTriangles(out, geometry, placed);
       geometry.dispose();
     }
-  });
+  }
   return Float32Array.from(out);
 }
 

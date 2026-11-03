@@ -213,7 +213,9 @@ function writeCrowns(
   items: InventoryTree[],
   fit: FittedGeo
 ): void {
-  items.forEach((t, i) => mesh.setMatrixAt(i, crownMatrix(t, fit)));
+  for (const [i, t] of items.entries()) {
+    mesh.setMatrixAt(i, crownMatrix(t, fit));
+  }
   mesh.instanceMatrix.needsUpdate = true;
   // Without this the cull test uses the origin-centred geometry sphere and
   // culls the whole chunk whenever the world origin is off-screen.
@@ -356,10 +358,10 @@ function plainInventoryColor(
 
 function paint(mesh: Instances, items: InventoryTree[]): void {
   const col = new Color();
-  items.forEach((t, i) => {
+  for (const [i, t] of items.entries()) {
     inventoryColor(col, t, hash(t.x * 0.3 + t.z * 0.7) - 0.5);
     mesh.setColorAt(i, col);
-  });
+  }
   if (mesh.instanceTints) {
     mesh.instanceTints.needsUpdate = true;
   }

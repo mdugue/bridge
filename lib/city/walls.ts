@@ -306,12 +306,12 @@ const SAME_LEVEL_M = 1;
  */
 function stepRuns(steps: readonly (StepSnap | null)[]): number[] {
   const runs: number[] = [];
-  steps.forEach((s, i) => {
+  for (const [i, s] of steps.entries()) {
     const prev = steps[i - 1];
     const same =
       s && prev && s.up === prev.up && Math.abs(s.hi - prev.hi) <= SAME_LEVEL_M;
     runs.push(i === 0 ? 0 : runs[i - 1] + (same ? 0 : 1));
-  });
+  }
   return runs;
 }
 

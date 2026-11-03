@@ -240,7 +240,9 @@ test("a problem's level says whether the page survived it", () => {
 describe("which problems are the aftermath of the page's end", () => {
   const noted = (...kinds: string[]) => {
     const trail = page();
-    kinds.forEach((kind, i) => pushEvent(trail, { t: 10 + i, kind }));
+    for (const [i, kind] of kinds.entries()) {
+      pushEvent(trail, { t: 10 + i, kind });
+    }
     return trail;
   };
   const error = { t: 20, kind: "rejection", detail: "buffer.destroy" };

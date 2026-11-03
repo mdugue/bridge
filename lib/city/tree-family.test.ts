@@ -9,9 +9,9 @@ import {
 import { TREE_GENERA } from "./tree-season";
 
 test("every named genus has a family; the generic index has none", () => {
-  TREE_GENERA.forEach((name, gn) => {
+  for (const [gn, name] of TREE_GENERA.entries()) {
     expect(familyOf(gn) === "generic").toBe(name === "");
-  });
+  }
 });
 
 test("an evergreen without a genus is a conifer, a deciduous one generic", () => {

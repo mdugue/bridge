@@ -198,12 +198,12 @@ export function createModelCuts(): ModelCuts {
       if (group.clippingPlanes.length !== planes.length) {
         group.clippingPlanes = planes.map(() => new Plane());
       }
-      planes.forEach((p, i) => {
+      for (const [i, p] of planes.entries()) {
         group.clippingPlanes[i].set(
           new Vector3(p.normal.x, p.normal.y, p.normal.z),
           p.constant
         );
-      });
+      }
       group.enabled = shown;
       const corners = cutOutCorners(next);
       const step = Math.max(

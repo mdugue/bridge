@@ -62,13 +62,13 @@ export function buildTreePlan(
   const set = new Instances(planGeometry(), planMaterial(), trees.length);
   const m = new Matrix4();
   const q = new Quaternion();
-  trees.forEach((t, i) => {
+  for (const [i, t] of trees.entries()) {
     const r = t.ext.crownWidth / 2;
     set.setMatrixAt(
       i,
       m.compose(new Vector3(t.x, t.ground + LIFT, t.z), q, new Vector3(r, 1, r))
     );
-  });
+  }
   set.instanceMatrix.needsUpdate = true;
   set.computeBoundingSphere();
   set.visible = false;

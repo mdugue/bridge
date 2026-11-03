@@ -283,7 +283,7 @@ describe("the mesh", () => {
         // the per-vertex normals agree with the winding
         for (const s of [mesh.frame, mesh.canopy]) {
           expect(s.normals).toHaveLength(s.positions.length);
-          triangles(s.positions).forEach(({ n }, t) => {
+          for (const [t, { n }] of triangles(s.positions).entries()) {
             const m = [0, 1, 2].map(
               (k) =>
                 s.normals[9 * t + k] +
@@ -291,7 +291,7 @@ describe("the mesh", () => {
                 s.normals[9 * t + 6 + k]
             );
             expect(n[0] * m[0] + n[1] * m[1] + n[2] * m[2]).toBeGreaterThan(0);
-          });
+          }
         }
       }
     });

@@ -452,11 +452,11 @@ const TRUNK_DROP = "iDrop";
 function writeTrunkDrops(trunks: Instances, items: Placement[]): number {
   let reach = 0;
   const drops = new Float32Array(trunks.capacity);
-  items.forEach((p, i) => {
+  for (const [i, p] of items.entries()) {
     const { lift, scale } = crownFrame(p);
     drops[i] = lift / scale;
     reach = Math.max(reach, Math.abs(lift));
-  });
+  }
   if (reach > 0) {
     trunks.geometry.setAttribute(
       TRUNK_DROP,
@@ -1498,11 +1498,11 @@ function paintCrowns(
     crownColor(col, cell[i], v);
     crowns.setColorAt(i, col);
   }
-  extras.forEach((e, i) => {
+  for (const [i, e] of extras.entries()) {
     if (e.crown) {
       crowns.setColorAt(cell.length + i, e.crown.colour);
     }
-  });
+  }
   if (crowns.instanceTints) {
     crowns.instanceTints.needsUpdate = true;
   }
@@ -1535,11 +1535,11 @@ function crownMesh(
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   writePlacements(mesh, trees, widen);
-  crowned.forEach((e, i) => {
+  for (const [i, e] of crowned.entries()) {
     if (e.crown) {
       mesh.setMatrixAt(trees.length + i, e.crown[which]);
     }
-  });
+  }
   finishInstances(mesh);
   paintCrowns(mesh, trees, crowned);
   return mesh;
@@ -1560,7 +1560,9 @@ function paintBark(
   for (let i = 0; i < first; i += 1) {
     trunks.setColorAt(i, white);
   }
-  extras.forEach((e, i) => trunks.setColorAt(first + i, e.bark ?? white));
+  for (const [i, e] of extras.entries()) {
+    trunks.setColorAt(first + i, e.bark ?? white);
+  }
   if (trunks.instanceTints) {
     trunks.instanceTints.needsUpdate = true;
   }
@@ -1597,7 +1599,9 @@ function buildTreeCell(
   if (trees.length + crowned.length === 0) {
     const trunks = new Instances(plain, trunkMat, extras.length);
     trunks.castShadow = true;
-    extras.forEach((e, i) => trunks.setMatrixAt(i, e.trunk));
+    for (const [i, e] of extras.entries()) {
+      trunks.setMatrixAt(i, e.trunk);
+    }
     paintBark(trunks, 0, extras);
     finishInstances(trunks);
     const feet = feetOf(trunks, geos, ground, footMat, false);
@@ -1631,7 +1635,9 @@ function buildTreeCell(
   } else {
     rich = crownMesh(geos.rich, crownMat, trees, crowned, "rich");
     own = new Instances(plain, trunkMat, extras.length);
-    extras.forEach((e, i) => own?.setMatrixAt(i, e.trunk));
+    for (const [i, e] of extras.entries()) {
+      own?.setMatrixAt(i, e.trunk);
+    }
     paintBark(own, 0, extras);
     finishInstances(own);
     own.castShadow = true;

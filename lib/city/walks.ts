@@ -418,13 +418,13 @@ export function walkProblems(walk: Walk): string[] {
     out.push(`${walk.id}: a walk has at least two stops`);
   }
   const ids = new Set<string>();
-  stops.forEach((stop, i) => {
+  for (const [i, stop] of stops.entries()) {
     if (ids.has(stop.id)) {
       out.push(`${walk.id}: stop id ${stop.id} twice`);
     }
     ids.add(stop.id);
     out.push(...stopProblems(stop, `${walk.id} #${i + 1} ${stop.id}`));
-  });
+  }
   return out;
 }
 

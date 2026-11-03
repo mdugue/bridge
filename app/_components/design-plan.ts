@@ -148,12 +148,12 @@ function gpkgRecords(
       continue;
     }
     const attributes: GeoRecord["attributes"] = {};
-    result.columns.forEach((name, i) => {
+    for (const [i, name] of result.columns.entries()) {
       const v = values[i];
       if (i !== g && (typeof v === "string" || typeof v === "number")) {
         attributes[name] = v;
       }
-    });
+    }
     for (const shape of readGpkgGeometry(blob).shapes) {
       records.push({ ...shape, attributes });
     }

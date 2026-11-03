@@ -190,7 +190,7 @@ export function encodePlate(
   const per = n * n;
   const out = new Uint8Array(tiles.length * per * 3);
   const view = new DataView(out.buffer);
-  tiles.forEach((t, k) => {
+  for (const [k, t] of tiles.entries()) {
     if (t.heights.length !== per || t.classes.length !== per) {
       throw new Error(`plate: tile ${k} is not ${n}²`);
     }
@@ -198,7 +198,7 @@ export function encodePlate(
       view.setInt16((k * per + v) * 2, t.heights[v], true);
     }
     out.set(t.classes, tiles.length * per * 2 + k * per);
-  });
+  }
   return out;
 }
 

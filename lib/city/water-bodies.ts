@@ -324,22 +324,22 @@ function joinedBodies(tiles: TileWater[]): {
     }
     return r;
   };
-  tiles.forEach((a, i) => {
-    tiles.forEach((b, j) => {
+  for (const [i, a] of tiles.entries()) {
+    for (const [j, b] of tiles.entries()) {
       if (j <= i || !a.member || !b.member) {
-        return;
+        continue;
       }
       for (const [sa, sb] of sharedSides(a.bounds, b.bounds)) {
-        a.member.bodies.forEach((ra, ka) => {
+        for (const [ka, ra] of a.member.bodies.entries()) {
           b.member?.bodies.forEach((rb, kb) => {
             if (overlaps(ra.edges?.[sa], rb.edges?.[sb])) {
               parent[root(base[i] + ka)] = root(base[j] + kb);
             }
           });
-        });
+        }
       }
-    });
-  });
+    }
+  }
   return { base, root };
 }
 
@@ -352,7 +352,7 @@ function joinedBodies(tiles: TileWater[]): {
 export function siteWaterTints(tiles: TileWater[]): Map<string, number[]> {
   const { base, root } = joinedBodies(tiles);
   const pools = new Map<number, { lab: Lab; seen: number }>();
-  tiles.forEach((t, i) => {
+  for (const [i, t] of tiles.entries()) {
     t.member?.bodies.forEach((row, k) => {
       if (!row.lab || !row.core) {
         return;
@@ -365,9 +365,9 @@ export function siteWaterTints(tiles: TileWater[]): Map<string, number[]> {
       pool.seen += row.core;
       pools.set(r, pool);
     });
-  });
+  }
   const out = new Map<string, number[]>();
-  tiles.forEach((t, i) => {
+  for (const [i, t] of tiles.entries()) {
     out.set(
       t.id,
       (t.member?.bodies ?? []).map((_, k) => {
@@ -377,7 +377,7 @@ export function siteWaterTints(tiles: TileWater[]): Map<string, number[]> {
           : WATER_SHEET;
       })
     );
-  });
+  }
   return out;
 }
 

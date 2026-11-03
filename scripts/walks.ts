@@ -77,7 +77,7 @@ function writeShots(only?: string): void {
   mkdirSync(join(ROOT, "shots"), { recursive: true });
   const today = new Date();
   for (const { walk } of walks.filter((w) => !only || w.walk.id === only)) {
-    walk.stops.forEach((stop, i) => {
+    for (const [i, stop] of walk.stops.entries()) {
       const camera = stopCamera(stop, offset);
       const date = stopDate(stop, today);
       const snapshot = {
@@ -89,7 +89,7 @@ function writeShots(only?: string): void {
       const name = `walk-${walk.id}-${String(i + 1).padStart(2, "0")}-${stop.id}.json`;
       writeFileSync(join(ROOT, "shots", name), JSON.stringify(snapshot));
       out(name);
-    });
+    }
   }
 }
 

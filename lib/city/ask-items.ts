@@ -267,11 +267,11 @@ export function packedCylinderSets(
   }
   return [...cells.values()].map(({ box, trees }) => {
     const solids = new Float32Array(trees.length * TREE_STRIDE);
-    trees.forEach((i, k) => {
+    for (const [k, i] of trees.entries()) {
       for (let c = 0; c < TREE_STRIDE; c += 1) {
         solids[k * TREE_STRIDE + c] = packed[i * TREE_STRIDE + c];
       }
-    });
+    }
     return packedTreeSet(box, solids, Int32Array.from(trees), target);
   });
 }

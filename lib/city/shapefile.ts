@@ -189,10 +189,10 @@ export function readShapefile(
   const shapes = readShp(shp);
   const rows = dbf ? readDbf(dbf, cpgDecoder(cpg)) : [];
   const out: GeoRecord[] = [];
-  shapes.forEach((shape, i) => {
+  for (const [i, shape] of shapes.entries()) {
     if (shape) {
       out.push({ ...shape, attributes: rows[i] ?? {} });
     }
-  });
+  }
   return out;
 }

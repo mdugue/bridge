@@ -378,11 +378,11 @@ export function coveredObjects(
   share = COVER_SHARE
 ): Set<number> {
   const out = new Set<number>();
-  footprints.forEach((polys, i) => {
+  for (const [i, polys] of footprints.entries()) {
     if (polys.length > 0 && coveredShare(mask, polys) >= share) {
       out.add(i);
     }
-  });
+  }
   return out;
 }
 

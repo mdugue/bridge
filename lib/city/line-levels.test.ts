@@ -250,7 +250,7 @@ test("a steep piece runs on into steep pieces only", () => {
     offset,
   });
   const pts = pieceSamples(steep);
-  solved.profile.forEach((z, i) => {
+  for (const [i, z] of solved.profile.entries()) {
     expect(Math.abs((z ?? Infinity) - slope(pts[i][0]))).toBeLessThan(0.3);
-  });
+  }
 });

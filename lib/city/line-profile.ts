@@ -303,9 +303,9 @@ export function lineProfile(
         idx.map((j) => d[j]),
         opts
       );
-      idx.forEach((j, k) => {
+      for (const [k, j] of idx.entries()) {
         out[j] = fit[k];
-      });
+      }
       first = -1;
     }
   }

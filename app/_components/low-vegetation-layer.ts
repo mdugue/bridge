@@ -415,7 +415,7 @@ function buildChunks(
     mesh.name = "lowveg-hedge";
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    cell.forEach((p, i) => {
+    for (const [i, p] of cell.entries()) {
       dummy.position.set(p.x, p.y, p.z);
       dummy.rotation.set(0, p.rot, 0);
       dummy.scale.set(p.sx, p.sy, p.sz);
@@ -423,7 +423,7 @@ function buildChunks(
       // the shear: local x lifts by `rise` over the piece's length
       shear.makeShear(p.rise / p.sy, 0, 0, 0, 0, 0);
       mesh.setMatrixAt(i, matrix.multiplyMatrices(dummy.matrix, shear));
-    });
+    }
     mesh.instanceMatrix.needsUpdate = true;
     // Without this the cull test uses the unit geometry's sphere at the origin.
     mesh.computeBoundingSphere();

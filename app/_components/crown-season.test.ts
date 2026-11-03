@@ -30,7 +30,9 @@ function crowns(keys: CrownSeasonKey[]) {
   const rich = new Instances(geo, leafy, keys.length);
   const green = new Color(0.4, 0.6, 0.3);
   for (const mesh of [cheap, rich]) {
-    keys.forEach((_, i) => mesh.setColorAt(i, green));
+    for (const [i, _] of keys.entries()) {
+      mesh.setColorAt(i, green);
+    }
   }
   const season = seasonCrowns({ mid: cheap, rich }, keys, { leafy, bare });
   return { cheap, rich, season, leafy, bare, geo };

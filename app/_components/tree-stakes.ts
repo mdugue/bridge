@@ -95,10 +95,10 @@ export function buildTreeStakes(
   const m = new Matrix4();
   const q = new Quaternion();
   const one = new Vector3(1, 1, 1);
-  trees.forEach((t, i) => {
+  for (const [i, t] of trees.entries()) {
     q.setFromAxisAngle(Y_AXIS, t.rot);
     set.setMatrixAt(i, m.compose(new Vector3(t.x, t.ground, t.z), q, one));
-  });
+  }
   set.instanceMatrix.needsUpdate = true;
   set.computeBoundingSphere();
   set.castShadow = true;

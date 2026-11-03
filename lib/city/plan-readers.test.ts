@@ -18,20 +18,20 @@ function shp(
     b.setInt32(36, rings.length, true);
     b.setInt32(40, n, true);
     let start = 0;
-    rings.forEach((r, i) => {
+    for (const [i, r] of rings.entries()) {
       b.setInt32(44 + i * 4, start, true);
       start += r.length;
-    });
+    }
     const pts = rings.flat();
     const at = 44 + rings.length * 4;
-    pts.forEach(([x, y], i) => {
+    for (const [i, [x, y]] of pts.entries()) {
       b.setFloat64(at + i * 16, x, true);
       b.setFloat64(at + i * 16 + 8, y, true);
-    });
+    }
     if (z) {
-      pts.forEach(([, , h], i) => {
+      for (const [i, [, , h]] of pts.entries()) {
         b.setFloat64(at + n * 16 + 16 + i * 8, h ?? 0, true);
-      });
+      }
     }
     return new Uint8Array(b.buffer);
   });
@@ -42,12 +42,12 @@ function shp(
   out.setInt32(28, 1000, true);
   out.setInt32(32, type, true);
   let at = 100;
-  records.forEach((r, i) => {
+  for (const [i, r] of records.entries()) {
     out.setInt32(at, i + 1, false);
     out.setInt32(at + 4, r.length / 2, false);
     new Uint8Array(out.buffer).set(r, at + 8);
     at += 8 + r.length;
-  });
+  }
   return out.buffer;
 }
 
@@ -62,21 +62,21 @@ function dbf(fields: string[], rows: string[][], encoder = new TextEncoder()) {
   v.setUint32(4, rows.length, true);
   v.setUint16(8, header, true);
   v.setUint16(10, recordLength, true);
-  fields.forEach((f, i) => {
+  for (const [i, f] of fields.entries()) {
     bytes.set(encoder.encode(f), 32 + i * 32);
     bytes[32 + i * 32 + 11] = "C".charCodeAt(0);
     bytes[32 + i * 32 + 16] = width;
-  });
+  }
   bytes[header - 1] = 0x0d;
-  rows.forEach((row, r) => {
+  for (const [r, row] of rows.entries()) {
     const at = header + r * recordLength;
     bytes[at] = 0x20;
-    row.forEach((value, i) => {
+    for (const [i, value] of row.entries()) {
       const cell = new Uint8Array(width).fill(0x20);
       cell.set(encoder.encode(value).subarray(0, width));
       bytes.set(cell, at + 1 + i * width);
-    });
-  });
+    }
+  }
   return bytes.buffer;
 }
 

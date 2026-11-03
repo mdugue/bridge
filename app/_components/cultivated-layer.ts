@@ -377,7 +377,7 @@ export function buildVineyards(rows: Point2[][], ctx: GroundContext): Group {
     mesh.name = "vine-rows";
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    cell.forEach((p, i) => {
+    for (const [i, p] of cell.entries()) {
       dummy.position.set(p.x, p.y, p.z);
       dummy.rotation.set(0, p.rot, 0);
       dummy.scale.set(p.len, VINE_ROW.h + SINK_M, VINE_ROW.w);
@@ -385,7 +385,7 @@ export function buildVineyards(rows: Point2[][], ctx: GroundContext): Group {
       mesh.setMatrixAt(i, dummy.matrix);
       col.setHSL(0.25 + p.tint * 0.03, 0.36, 0.42 + p.tint * 0.06);
       mesh.setColorAt(i, col);
-    });
+    }
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceTints) {
       mesh.instanceTints.needsUpdate = true;

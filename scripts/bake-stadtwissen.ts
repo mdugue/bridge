@@ -259,10 +259,10 @@ export function monumentsOf(
   found.sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
   const out: WissenMonument[] = [];
   let nth = 0;
-  found.forEach(({ base, ...m }, k) => {
+  for (const [k, { base, ...m }] of found.entries()) {
     nth = found[k - 1]?.base === base ? nth + 1 : 1;
     out.push({ id: nth === 1 ? base : `${base}_${nth}`, ...m });
-  });
+  }
   return out.sort((a, b) => a.id.localeCompare(b.id));
 }
 

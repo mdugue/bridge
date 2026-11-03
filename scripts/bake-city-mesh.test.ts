@@ -324,13 +324,13 @@ test("the scan's small structures join as their own buildings, source 1", () => 
   const shedYs: number[] = [];
   const shedZs: number[] = [];
   const p = baked.vertices.positions;
-  baked.vertices.objectIds.forEach((id, v) => {
+  for (const [v, id] of baked.vertices.objectIds.entries()) {
     if (id === 3) {
       shedXs.push(p[3 * v]);
       shedYs.push(p[3 * v + 1]);
       shedZs.push(p[3 * v + 2]);
     }
-  });
+  }
   const { cx, cy } = baked.offset;
   expect(Math.min(...shedXs)).toBeCloseTo(412_020 - cx, 3);
   expect(Math.max(...shedXs)).toBeCloseTo(412_024 - cx, 3);

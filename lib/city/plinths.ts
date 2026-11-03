@@ -138,9 +138,9 @@ function extrude(
       out.normals.push(nn[0], nn[1], nn[2]);
     }
   };
-  profile.forEach((p, k) => {
+  for (const [k, p] of profile.entries()) {
     if (hidden.includes(k)) {
-      return;
+      continue;
     }
     const kq = (k + 1) % profile.length;
     const q = profile[kq];
@@ -148,7 +148,7 @@ function extrude(
     const nq = normalAt(k, kq);
     tri([at(0, p), at(1, p), at(1, q)], [np, np, nq]);
     tri([at(0, p), at(1, q), at(0, q)], [np, nq, nq]);
-  });
+  }
   for (let k = 1; k + 1 < profile.length; k += 1) {
     if (!run.ma) {
       tri(
@@ -206,14 +206,14 @@ export function plinthPieces(
     });
   const root = cornerGroups(pieces);
   const level = new Map<number, { foot: number; top: number }>();
-  pieces.forEach((q, i) => {
+  for (const [i, q] of pieces.entries()) {
     const r = root[i];
     const l = level.get(r);
     level.set(r, {
       foot: Math.min(l?.foot ?? q.foot, q.foot),
       top: Math.max(l?.top ?? q.top, q.top),
     });
-  });
+  }
   return pieces.map((q, i) => ({ ...q, ...level.get(root[i]) }));
 }
 
@@ -246,18 +246,18 @@ function corners(
     return [(r.b[0] - r.a[0]) / l, (r.b[1] - r.a[1]) / l];
   };
   const minCos = Math.cos((MITRE_MAX_DEG * Math.PI) / 180);
-  runs.forEach((r, i) => {
-    runs.forEach((s, j) => {
+  for (const [i, r] of runs.entries()) {
+    for (const [j, s] of runs.entries()) {
       if (i === j || Math.hypot(r.b[0] - s.a[0], r.b[1] - s.a[1]) > MEET_M) {
-        return;
+        continue;
       }
       const [u, v] = [dir(r), dir(s)];
       const cos = u[0] * v[0] + u[1] * v[1];
       if (cos < 0.9998 && cos > minCos) {
         out.push([i, j]);
       }
-    });
-  });
+    }
+  }
   return out;
 }
 
@@ -447,17 +447,17 @@ function links(st: readonly Stretch[]): Link[] {
   const cell = (x: number, y: number) =>
     `${Math.floor(x / BRIDGE_M)},${Math.floor(y / BRIDGE_M)}`;
   const starts = new Map<string, number[]>();
-  st.forEach((s, j) => {
+  for (const [j, s] of st.entries()) {
     const k = cell(s.a[0], s.a[1]);
     starts.set(k, [...(starts.get(k) ?? []), j]);
-  });
+  }
   const dir = (s: Stretch) => {
     const l = Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]) || 1;
     return [(s.b[0] - s.a[0]) / l, (s.b[1] - s.a[1]) / l];
   };
   const minCos = Math.cos((MITRE_MAX_DEG * Math.PI) / 180);
   const found: Link[] = [];
-  st.forEach((s, i) => {
+  for (const [i, s] of st.entries()) {
     const [cx, cy] = [
       Math.floor(s.b[0] / BRIDGE_M),
       Math.floor(s.b[1] / BRIDGE_M),
@@ -472,7 +472,7 @@ function links(st: readonly Stretch[]): Link[] {
         }
       }
     }
-  });
+  }
   found.sort((p, q) => p.d - q.d);
   const [ends, heads] = [new Set<number>(), new Set<number>()];
   return found.filter((l) => {
@@ -548,7 +548,7 @@ export function joinStretches(
     }
   }
   const level = new Map<number, { lo: number; hi: number; w: number }>();
-  st.forEach((s, i) => {
+  for (const [i, s] of st.entries()) {
     const r = root(i);
     const w = Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]);
     const l = level.get(r) ?? {
@@ -562,15 +562,15 @@ export function joinStretches(
         ? { lo: Math.min(l.lo, s.lo), hi: Math.max(l.hi, s.hi), w: 0 }
         : { lo: 0, hi: l.hi + s.hi * w, w: l.w + w }
     );
-  });
-  st.forEach((s, i) => {
+  }
+  for (const [i, s] of st.entries()) {
     const l = level.get(root(i));
     if (l) {
       const z = l.w > 0 ? l.hi / l.w : l.hi;
       s.lo = levelling === "plinth" ? l.lo : z;
       s.hi = z;
     }
-  });
+  }
   for (const { i, j, d } of ls) {
     if (d > MEET_M) {
       const [s, t] = [st[i], st[j]];
@@ -661,16 +661,16 @@ export function bandMeshes(
     joined.corners
   );
   const out = new Map<number, Shaded>();
-  st.forEach((s, i) => {
+  for (const [i, s] of st.entries()) {
     if (kind === "plinth" && !(s.hi - PLINTH.round > s.lo)) {
-      return;
+      continue;
     }
     const mesh = out.get(s.host) ?? empty();
     out.set(s.host, mesh);
     for (const run of along(ends[i], knots[i])) {
       extrudeBand(mesh, run, offset, kind, s);
     }
-  });
+  }
   return out;
 }
 

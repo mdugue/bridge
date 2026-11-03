@@ -203,12 +203,12 @@ export function openEnds(
   bounds?: readonly [number, number, number, number]
 ): [boolean, boolean][] {
   const ends: { f: number; p: Point2 }[] = [];
-  features.forEach((f, i) => {
+  for (const [i, f] of features.entries()) {
     const c = f.geometry.coordinates;
     if (c.length >= 2) {
       ends.push({ f: i, p: c[0] }, { f: i, p: c[c.length - 1] });
     }
-  });
+  }
   const cell = (v: number) => Math.floor(v / JOIN_M);
   const grid = new Map<string, { f: number; p: Point2 }[]>();
   for (const e of ends) {

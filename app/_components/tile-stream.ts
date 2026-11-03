@@ -1942,9 +1942,9 @@ export class DressingPlugin {
     }
     scene.add(built.group);
     entry.murals = built;
-    built.meshes.forEach((mesh, i) => {
+    for (const [i, mesh] of built.meshes.entries()) {
       entry.city?.hang(mesh, built.murals[i].building);
-    });
+    }
     const tile = this.tileOf.get(scene);
     if (tile) {
       this.tiles?.recalculateBytesUsed(tile);

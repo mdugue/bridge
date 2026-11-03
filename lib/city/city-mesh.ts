@@ -161,7 +161,7 @@ export function markFlatRoofs(
       }
     }
   }
-  objects.forEach((o, i) => {
+  for (const [i, o] of objects.entries()) {
     if (
       all[i] > 0 &&
       flat[i] >= FLAT_ROOF_SHARE * all[i] &&
@@ -169,7 +169,7 @@ export function markFlatRoofs(
     ) {
       o.flags += OBJECT_FLAG_FLAT_ROOF;
     }
-  });
+  }
 }
 
 /** A part counts as grounded when its base lies within this of its building
@@ -419,7 +419,7 @@ export function objectTable(rows: readonly CityObjectRow[]): CityObjectTable {
     winStyle: new Uint32Array(count),
     winW: new Float32Array(count),
   };
-  rows.forEach((r, i) => {
+  for (const [i, r] of rows.entries()) {
     table.baseZ[i] = r.baseZ;
     table.building[i] = r.building ? 1 : 0;
     table.eaveH[i] = r.eaveH;
@@ -437,7 +437,7 @@ export function objectTable(rows: readonly CityObjectRow[]): CityObjectTable {
     table.winH[i] = r.windows?.h ?? 0;
     table.winStyle[i] = r.windows?.style ?? 0;
     table.winW[i] = r.windows?.w ?? 0;
-  });
+  }
   return table;
 }
 
@@ -547,13 +547,13 @@ export function footprintPolys(
   alive: (objectIndex: number) => boolean
 ): FootprintPoly[] {
   const out: FootprintPoly[] = [];
-  footprints.forEach((polys, i) => {
+  for (const [i, polys] of footprints.entries()) {
     if (alive(i)) {
       for (const pts of polys) {
         out.push({ pts });
       }
     }
-  });
+  }
   return out;
 }
 
