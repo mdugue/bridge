@@ -21,6 +21,8 @@ export interface ShownCall {
   id: string;
   input: Record<string, unknown>;
   name: string;
+  /** the server's answer to it */
+  output: Record<string, unknown>;
 }
 
 /** The shown calls of `messages` the server has answered ok, in order. */
@@ -31,12 +33,13 @@ export function shownCalls(messages: readonly UIMessage[]): ShownCall[] {
       continue;
     }
     for (const p of m.parts) {
-      const ok = (p as { output?: { ok?: unknown } }).output?.ok === true;
-      if (p.type === "tool-call" && SHOWN.has(p.name) && ok) {
+      const output = (p as { output?: Record<string, unknown> }).output;
+      if (p.type === "tool-call" && SHOWN.has(p.name) && output?.ok === true) {
         out.push({
           id: p.id,
           input: (p.input ?? {}) as Record<string, unknown>,
           name: p.name,
+          output,
         });
       }
     }
@@ -50,11 +53,17 @@ export function runShown(scene: AskScene, call: ShownCall): void {
   switch (call.name) {
     case "zeige":
       if (Array.isArray(a.ziele) && a.ziele.length > 0) {
-        showPlaces(scene, {
-          ziele: a.ziele as AskPlace[],
-          alle: a.alle as boolean | undefined,
-          aus_der_luft: a.aus_der_luft as boolean | undefined,
-        });
+        showPlaces(
+          scene,
+          {
+            ziele: a.ziele as AskPlace[],
+            alle: a.alle as boolean | undefined,
+            aus_der_luft: a.aus_der_luft as boolean | undefined,
+          },
+          Array.isArray(call.output.gezeigt)
+            ? (call.output.gezeigt as string[])
+            : undefined
+        );
       }
       return;
     case "setze_zeit":

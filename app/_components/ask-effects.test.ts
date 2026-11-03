@@ -57,11 +57,13 @@ test("a time call sets the scene's clock, a layer call its layer", () => {
     id: "t",
     name: "setze_zeit",
     input: { stunde: 20, datum: "2026-12-21" },
+    output: { ok: true },
   });
   runShown(scene, {
     id: "l",
     name: "datenschicht",
     input: { schicht: "tramLayer", an: true },
+    output: { ok: true },
   });
   expect(did).toEqual([
     ["zeit", 20, "2026-12-21"],

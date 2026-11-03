@@ -389,8 +389,9 @@ export async function* ended(
     onEnd();
   }
   let end = runEnd(last, before);
-  // a round of follow-ups only ends the answer (`endsAtSuggestions`)
-  if (end === "cut" && round.onlySuggestions()) {
+  // a round that only shows ends an answer that has its text
+  // (`endsWhenAnswered`); one without text is still cut short
+  if (end === "cut" && round.endsAnswer()) {
     end = "stop";
   }
   const why = stopText(end, signal.reason === DEADLINE);
@@ -399,13 +400,18 @@ export async function* ended(
   }
 }
 
-/** The tool names of the stream's last round of calls. */
+/** The tool names of the stream's last round of calls, and whether the
+ *  stream carried words of an answer. */
 class LastRound {
   private names: string[] = [];
   private answered = false;
+  private texted = false;
 
   see(chunk: StreamChunk): void {
-    if (chunk.type === "TOOL_CALL_START") {
+    if (chunk.type === "TEXT_MESSAGE_CONTENT") {
+      const delta = (chunk as { delta?: unknown }).delta;
+      this.texted ||= typeof delta === "string" && delta.trim() !== "";
+    } else if (chunk.type === "TOOL_CALL_START") {
       // the first call after a round's results opens the next round
       if (this.answered) {
         this.names = [];
@@ -419,8 +425,12 @@ class LastRound {
     }
   }
 
-  onlySuggestions(): boolean {
-    return this.names.length > 0 && this.names.every((n) => DONE.has(n));
+  endsAnswer(): boolean {
+    return (
+      this.texted &&
+      this.names.length > 0 &&
+      this.names.every((n) => DONE.has(n))
+    );
   }
 }
 

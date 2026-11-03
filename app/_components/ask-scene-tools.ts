@@ -72,11 +72,14 @@ export type AskPlace = AskTarget & { name: string };
  * off the city's tiles is left out; none on them is refused. What it
  * names is selected: every
  * place with `alle` (spread too far, their cards are a click apart in
- * the selection), the first alone without.
+ * the selection), the first alone without. `told`: the places the
+ * server's answer said it shows, so the view frames what the model was
+ * told even where the screen changed since.
  */
 export function showPlaces(
   scene: AskScene,
-  ask: { alle?: boolean; aus_der_luft?: boolean; ziele: readonly AskPlace[] }
+  ask: { alle?: boolean; aus_der_luft?: boolean; ziele: readonly AskPlace[] },
+  told?: readonly string[]
 ): Record<string, unknown> {
   const places = placesShown(ask.ziele, scene.within);
   const [first] = places;
@@ -92,8 +95,11 @@ export function showPlaces(
       ? answer
       : LOADING;
   }
-  const shown = (answer.gezeigt as unknown[]).length;
-  const framed = frameTargets(places.slice(0, shown), { ...frame, from });
+  const names = told ?? (answer.gezeigt as string[]);
+  const framed = frameTargets(
+    places.filter((p, i) => i === 0 || names.includes(p.name)),
+    { ...frame, from }
+  );
   return scene.show(framed.view, framed.ground)
     ? { ...answer, abstand_m: framed.distance }
     : LOADING;

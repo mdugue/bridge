@@ -466,6 +466,21 @@ describe("an answer that stops says why", () => {
     expect(out.at(-1)).toContain("zu viele Schritte");
   });
 
+  test("a cut round that only shows ends an answer with words, not one without", async () => {
+    const show = { ...chunk("TOOL_CALL_START"), toolCallName: "zeige" };
+    const words = { ...chunk("TEXT_MESSAGE_CONTENT"), delta: "Dort." };
+    const run = (...chunks: StreamChunk[]) =>
+      types(ended(list(...chunks), new AbortController().signal));
+    const said = await run(
+      words as StreamChunk,
+      show,
+      chunk("TOOL_CALL_RESULT")
+    );
+    expect(said.join(" ")).not.toContain("RUN_ERROR");
+    const mute = await run(show, chunk("TOOL_CALL_RESULT"));
+    expect(mute.at(-1)).toContain("zu viele Schritte");
+  });
+
   test("a turn that spends its output before a word is cut, not capped", async () => {
     const out = await types(
       ended(
