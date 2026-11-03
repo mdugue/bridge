@@ -286,12 +286,20 @@ function sharedSides(
 ): [EdgeSide, EdgeSide][] {
   const out: [EdgeSide, EdgeSide][] = [];
   if (near(a[1], b[1]) && near(a[3], b[3])) {
-    if (near(a[2], b[0])) out.push(["e", "w"]);
-    if (near(a[0], b[2])) out.push(["w", "e"]);
+    if (near(a[2], b[0])) {
+      out.push(["e", "w"]);
+    }
+    if (near(a[0], b[2])) {
+      out.push(["w", "e"]);
+    }
   }
   if (near(a[0], b[0]) && near(a[2], b[2])) {
-    if (near(a[1], b[3])) out.push(["s", "n"]);
-    if (near(a[3], b[1])) out.push(["n", "s"]);
+    if (near(a[1], b[3])) {
+      out.push(["s", "n"]);
+    }
+    if (near(a[3], b[1])) {
+      out.push(["n", "s"]);
+    }
   }
   return out;
 }

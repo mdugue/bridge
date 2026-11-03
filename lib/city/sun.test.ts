@@ -87,7 +87,10 @@ test("sunTimesOn gives the picked day's sunrise and sunset in any zone", () => {
       expect(sunset?.toISOString().slice(0, 10)).toBe("2026-03-21");
     }
   } finally {
-    if (zone === undefined) delete process.env.TZ;
-    else process.env.TZ = zone;
+    if (zone === undefined) {
+      delete process.env.TZ;
+    } else {
+      process.env.TZ = zone;
+    }
   }
 });

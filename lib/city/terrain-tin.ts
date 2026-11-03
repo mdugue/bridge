@@ -195,10 +195,18 @@ function borderRuns(tin: TerrainTin): {
   const west: number[] = [];
   const east: number[] = [];
   for (let i = 0; i < gx.length; i++) {
-    if (gy[i] === 0) north.push(i);
-    if (gy[i] === n - 1) south.push(i);
-    if (gx[i] === 0) west.push(i);
-    if (gx[i] === n - 1) east.push(i);
+    if (gy[i] === 0) {
+      north.push(i);
+    }
+    if (gy[i] === n - 1) {
+      south.push(i);
+    }
+    if (gx[i] === 0) {
+      west.push(i);
+    }
+    if (gx[i] === n - 1) {
+      east.push(i);
+    }
   }
   north.sort((a, b) => gx[a] - gx[b]);
   south.sort((a, b) => gx[a] - gx[b]);
