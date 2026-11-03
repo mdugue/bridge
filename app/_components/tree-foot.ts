@@ -257,8 +257,9 @@ export const footLitter = uniform(0);
  *  phenology's): the shade a broadleaf crown lays on the ground and on
  *  its trunk (vegetation-layer.ts `crownShade`). */
 export const crownLeaf = uniform(1);
-/** How much of its shade a bare crown still casts (its branches). */
-const BARE_SHADE = 0.3;
+/** How much of its shade a bare crown still casts (its branches), on the
+ *  ground and on its trunk (vegetation-layer.ts `crownShade`). */
+export const BARE_SHADE = 0.3;
 
 /** The wind's clock (s) the sun flecks drift by: the crowns' own
  *  (vegetation-layer.ts `setCrownTime` keeps it). */
@@ -1041,8 +1042,9 @@ function shadeGraph(
       .add(instanceFloat(DROP))
       .mul(length(attribute("iMat1", "vec4").xyz))
   );
+  // (no throw at night: the quad shrinks to the crown's cover)
   const throwRaw = sun
-    ? vec2(sun.x, sun.z).negate().div(up).mul(height)
+    ? vec2(sun.x, sun.z).negate().div(up).mul(height).mul(day)
     : vec2(0, 0);
   const throwLen = length(throwRaw);
   const thrown = throwRaw.mul(
@@ -1051,7 +1053,7 @@ function shadeGraph(
   // the quad, laid along the throw: back past the shade under the crown
   // (and the cracks round a pit), forward past the thrown shadow's
   // ellipse; anything less cut the glaze off in a straight line
-  const stretchV = float(1).div(up).min(3);
+  const stretchV = mix(float(1), float(1).div(up).min(3), day);
   const throwAxis = mix(
     vec2(1, 0),
     thrown.div(max(length(thrown), 0.001)),
@@ -1249,7 +1251,8 @@ function guardGraph(r: FootRasters): { position: V3 } {
   const f = footFrame(s, r.size);
   const edges = s.edgesTex;
   if (!edges) {
-    return { position: f.foot.mul(0) };
+    // (`createFootMaterials` makes no hoop without the edge raster)
+    throw new Error("guard hoops need the edge raster");
   }
   const at = (dx: number, dz: number): F =>
     edgeAt(

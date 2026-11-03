@@ -203,6 +203,9 @@ export interface GroundFields {
   sealedW: F;
   sandW: F;
   walkW: F;
+  /** of the sealed share, how much is concrete (0 asphalt, 1 concrete):
+   *  the tone, as smooth as `sealedW` */
+  concreteW: F;
   /** AA half-width (m per pixel) and the three distance fades */
   w: F;
   near: F;
@@ -512,7 +515,9 @@ function walkShares(inp: GroundInputs, surface: Tex, g: GroundFields): void {
     select(or(k.equal(id("asphalt")), k.equal(id("concrete"))), 1, 0);
   const sand = (k: I): F => select(k.equal(id("unpaved")), 1, 0);
   const any = (k: I): F => select(k.greaterThan(0), 1, 0);
+  const concrete = (k: I): F => select(k.equal(id("concrete")), 1, 0);
   g.sealedW.assign(sealed(g.walkKind));
+  g.concreteW.assign(concrete(g.walkKind));
   g.sandW.assign(sand(g.walkKind));
   g.walkW.assign(any(g.walkKind));
   If(inp.fw.lessThan(WALK_SHARE_FW), () => {
@@ -529,6 +534,7 @@ function walkShares(inp: GroundInputs, surface: Tex, g: GroundFields): void {
     const s = float(0).toVar();
     const u = float(0).toVar();
     const a = float(0).toVar();
+    const c = float(0).toVar();
     for (let y = -1; y <= 2; y++) {
       for (let x = -1; x <= 2; x++) {
         const k = walkOf(texelAt(surface, i.add(ivec2(x, y)), size)).toVar();
@@ -536,6 +542,7 @@ function walkShares(inp: GroundInputs, surface: Tex, g: GroundFields): void {
         s.addAssign(sealed(k).mul(wgt));
         u.addAssign(sand(k).mul(wgt));
         a.addAssign(any(k).mul(wgt));
+        c.addAssign(concrete(k).mul(wgt));
       }
     }
     // ... cut on its half-way line, soft over a pixel or a few centimetres
@@ -550,6 +557,10 @@ function walkShares(inp: GroundInputs, surface: Tex, g: GroundFields): void {
     g.sealedW.assign(cut(s, g.sealedW));
     g.sandW.assign(cut(u, g.sandW));
     g.walkW.assign(cut(a, g.walkW));
+    // the concrete's part of the sealed texels, unsharpened: a tone
+    g.concreteW.assign(
+      mix(g.concreteW, c.div(max(s, 1e-3)).min(1), near.mul(step(1e-3, s)))
+    );
   });
 }
 
@@ -900,6 +911,7 @@ export function groundFields(
     onRoad: bool(false),
     kind: int(0),
     sealedW: float(0).toVar(),
+    concreteW: float(0).toVar(),
     sandW: float(0).toVar(),
     walkW: float(0).toVar(),
     w: float(0),
@@ -1167,7 +1179,15 @@ function paving(
   const sand = select(
     g.onRoad,
     select(g.kind.equal(id("unpaved")), float(1), float(0)),
-    clamp(g.sandW.mul(walk).add(col.path.mul(float(1).sub(g.walkW))), 0, 1)
+    // (the class's sand only well off a named walk: at the raster's
+    // smoothed edge, half named, the path's rim is the walk's own)
+    clamp(
+      g.sandW
+        .mul(walk)
+        .add(col.path.mul(float(1).sub(smoothstep(0, 0.5, g.walkW)))),
+      0,
+      1
+    )
   )
     .mul(pave)
     .toVar();
@@ -1299,7 +1319,7 @@ export function groundDetail(
   // (and a sealed texel among a path's sanded ones) fades, not steps.
   const sealedW = g.sealedW.mul(walkGround(inp, col)).toVar();
   If(and(g.onRoad.not(), sealedW.greaterThan(0)), () => {
-    const tone = select(g.kind.equal(id("concrete")), 1.08, 1.0);
+    const tone = mix(float(1), float(1.08), g.concreteW);
     col.baseCol.assign(
       mix(col.baseCol, inp.roadColor.mul(tone), pave.mul(0.6).mul(sealedW))
     );

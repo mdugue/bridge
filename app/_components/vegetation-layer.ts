@@ -124,6 +124,7 @@ import { TRUNK_BASE } from "@/lib/city/tree-family";
 import {
   buildFootGeos,
   footClock,
+  BARE_SHADE,
   crownLeaf,
   FOOT_SHOWN_M,
   type FootGeos,
@@ -1393,7 +1394,6 @@ function tileTrunkMaterial(
  *  branches). */
 const CROWN_ON_TRUNK = 0.5;
 const CROWN_SKY = 0.8;
-const BARE_CROWN = 0.3;
 
 /**
  * Why a trunk under its crown looked pasted on: it took no shadow (in the
@@ -1422,7 +1422,7 @@ function crownShade(
   // a needle tree keeps its crown the year round
   const leaf = evergreen
     ? float(1)
-    : mix(float(BARE_CROWN), float(1), crownLeaf);
+    : mix(float(BARE_SHADE), float(1), crownLeaf);
   // under the crown: the sky hidden more toward its base
   const base = TRUNK_H + CROWN_R * 0.5 - CROWN_R;
   const sky = mix(

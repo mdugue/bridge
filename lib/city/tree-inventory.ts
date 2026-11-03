@@ -187,8 +187,9 @@ function ringRadius(t: number): number {
  * The unit trunk's radius at `t` (0 the foot, 1 the top) as drawn: the
  * faces run straight from ring to ring, so it is the rings' radii (taper ×
  * flare) interpolated — not the taper alone. On a tall tree breast height
- * falls in the bottom segment, whose foot ring is flared: the taper alone
- * understated the radius there and so drew a measured trunk too thick.
+ * falls between the low rings (TRUNK_RINGS), whose flare still widens
+ * it: the taper alone understated the radius there and so drew a
+ * measured trunk too thick.
  */
 export function trunkRadiusAt(t: number): number {
   const u = Math.min(Math.max(t, 0), 1);

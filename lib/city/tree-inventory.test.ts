@@ -10,7 +10,7 @@ import {
   PINE_CROWN_BASE,
   TREE_ARCHETYPES,
   TRUNK_FOOT_R,
-  TRUNK_ROWS,
+  TRUNK_RINGS,
   TRUNK_TOP_R,
   treeExtents,
   trunkGirth,
@@ -36,19 +36,20 @@ test("the trunk is fitted to the radius drawn, flared foot included", () => {
   // The rings: the taper at the top, the taper × the flare at the foot.
   expect(trunkRadiusAt(1)).toBeCloseTo(TRUNK_TOP_R);
   expect(trunkRadiusAt(0)).toBeCloseTo(TRUNK_FOOT_R * 1.9);
-  // A 25 m tree's breast height lies in the bottom segment, between the
-  // flared foot ring and the next: wider than the taper alone says, so the
-  // fitted girth is narrower than a taper fit's (which drew it too thick).
+  // A 25 m tree's breast height lies between the low rings, still in the
+  // flare: wider than the taper alone says, so the fitted girth is
+  // narrower than a taper fit's (which drew it too thick).
   const ext = treeExtents(25, 14, "round");
   const t = 1.3 / ext.trunkTop;
-  expect(t).toBeLessThan(1 / TRUNK_ROWS);
+  expect(t).toBeGreaterThan(TRUNK_RINGS[1]);
+  expect(t).toBeLessThan(TRUNK_RINGS[3]);
   const taper = TRUNK_FOOT_R - (TRUNK_FOOT_R - TRUNK_TOP_R) * t;
   expect(trunkRadiusAt(t)).toBeGreaterThan(taper * 1.15);
   // Drawn: girth × the unit radius at 1.3 m = the measured radius × style.
   const drawnCm = trunkGirth(ext, 80) * trunkRadiusAt(t) * 200;
   expect(drawnCm).toBeCloseTo(80 * 1.3);
   // Above the flare the faces run straight between the rings.
-  const mid = (2.5 / TRUNK_ROWS + 3.5 / TRUNK_ROWS) / 2;
+  const mid = (TRUNK_RINGS[4] + TRUNK_RINGS[5]) / 2;
   expect(trunkRadiusAt(mid)).toBeCloseTo(
     TRUNK_FOOT_R - (TRUNK_FOOT_R - TRUNK_TOP_R) * mid
   );
