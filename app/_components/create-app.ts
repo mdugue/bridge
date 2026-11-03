@@ -164,6 +164,7 @@ import {
   climateDay,
   dayOfYear,
   leafLitterAt,
+  seasonAt,
   seasonShiftFor,
 } from "@/lib/city/tree-season";
 import { footLitter } from "./tree-foot";
@@ -262,6 +263,7 @@ import { attachTouchControls } from "./touch-controls";
 import {
   createVegetationLod,
   setCrownTime,
+  trunkLeaf,
   type VegetationControl,
 } from "./vegetation-layer";
 import { createStyleResources, setClaySection } from "./visual-style";
@@ -1594,12 +1596,14 @@ async function bootApp(
   // city's climate (tree-season.ts SITE_SEASON).
   const climate = seasonShiftFor(opts.site.id);
   // the leaves under the trees (tree-foot.ts) follow the same day
-  footLitter.value = leafLitterAt(
-    climateDay(Math.floor(dayOfYear(opts.initialDate)), climate)
-  );
+  const firstDay = climateDay(Math.floor(dayOfYear(opts.initialDate)), climate);
+  footLitter.value = leafLitterAt(firstDay);
+  // and the trunks' shade under their crowns (vegetation-layer.ts)
+  trunkLeaf.value = seasonAt(firstDay, 0).leaf;
   const seasonClock = createSeasonClock(opts.initialDate, (calendar) => {
     const day = climateDay(calendar, climate);
     footLitter.value = leafLitterAt(day);
+    trunkLeaf.value = seasonAt(day, 0).leaf;
     let changed = false;
     for (const d of stream.dressings) {
       changed = (d.vegetation?.setSeason(day) ?? false) || changed;

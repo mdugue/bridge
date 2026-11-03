@@ -2690,6 +2690,15 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
     along them, the troughs about half as high, darkest at the ground. A separate root-flare skirt round
     the trunk read as a shoe and was dropped; the flat disc before it
     floated on a slope and let the paving show through.
+  - **the trunk in its crown's shade** (`crownShade`, every trunk): the
+    trunk takes no shadow (in the shadow map the bark shadows itself, a
+    black sleeve), so it stood lit under a dark crown and read as pasted
+    on. Per vertex, the ray from the bark to the sun is tested against
+    the sphere the generic crown is drawn round (in the matrix's frame,
+    the sun turned in by its columns); where it passes through, the bark
+    darkens to half, softly to the rim, by day; and under the crown the
+    hidden sky darkens it toward the crown's base (× 0.8). A bare season
+    keeps 30 % of it (`trunkLeaf`, the generic phenology's leaf).
   - in paving — the class raster's built-up, road, railway or unclassified
     land, off the baked lawn (the edge raster's meadow side) — a **tree
     pit**: mulched earth with a grain, litter flecks and the odd tuft of

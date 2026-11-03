@@ -1044,20 +1044,28 @@ function trunkRoots(): { lobe: F; metres: F; local: V3 } {
  * ground instead of on it; a separate skirt read as a shoe. Scene-wide: it
  * carries nothing of a tile.
  */
-export function buildTrunkMaterial(): MeshStandardNodeMaterial {
+export function buildTrunkMaterial(
+  sun?: UniformNode<"vec3", Vector3>
+): MeshStandardNodeMaterial {
   return sceneMaterial("vegetation-trunk", () => {
     const m = new MeshStandardNodeMaterial({ color: TRUNK_BASE, roughness: 1 });
     m.name = "trunk";
     const roots = trunkRoots();
     m.positionNode = instancePosition(roots.local);
-    // one varying for the three (WebGPU's sixteen are scarce)
+    // one varying for the four (WebGPU's sixteen are scarce)
     const along = varying(
-      vec3(positionGeometry.y, roots.metres, roots.lobe),
+      vec4(
+        positionGeometry.y,
+        roots.metres,
+        roots.lobe,
+        crownShade(roots.local, sun)
+      ),
       "vTrunkAlong"
     );
     const tg = clamp(along.x.div(TRUNK_H), 0, 1);
     const metres = along.y;
     const lobe = along.z;
+    const shaded = along.w;
     const reach = lobe.mul(0.5).add(0.5).mul(TRUNK_EARTH_H);
     const earth = float(1).sub(smoothstep(reach.mul(0.3), reach, metres));
     // the register's bark per tree (TreeInstance.bark; white elsewhere)
@@ -1068,10 +1076,71 @@ export function buildTrunkMaterial(): MeshStandardNodeMaterial {
       bark,
       vec3(TRUNK_EARTH.r, TRUNK_EARTH.g, TRUNK_EARTH.b),
       earth
-    ).mul(mix(0.82, 1, smoothstep(0, 0.08, metres)));
+    )
+      .mul(mix(0.82, 1, smoothstep(0, 0.08, metres)))
+      .mul(shaded);
     return m;
   });
 }
+
+/** How dark a trunk gets in its crown's shadow (× its colour, the sun's
+ *  share of its light being most of it), how much of the sky its crown
+ *  hides just under it, and how much shade a bare crown still gives (its
+ *  branches). */
+const CROWN_ON_TRUNK = 0.5;
+const CROWN_SKY = 0.8;
+const BARE_CROWN = 0.3;
+
+/**
+ * Why a trunk under its crown looked pasted on: it took no shadow (in the
+ * shadow map the bark shadows itself, a black sleeve) and stood lit under
+ * a dark crown. Here, per vertex, the crown is the sphere the generic crown
+ * is drawn round (CROWN_R about TRUNK_H + CROWN_R / 2, in the matrix's
+ * frame; a register trunk's own frame puts its crown about there too), and
+ * the ray from the bark to the sun is tested against it in that frame (the
+ * sun turned in by the matrix's columns: no inverse); where it passes
+ * through the crown the trunk is in its shade, softly to the rim, less in
+ * a bare season (`trunkLeaf`). Under the crown the sky is hidden too: the
+ * trunk darkens toward the crown's base. Returns the factor for the colour.
+ */
+function crownShade(local: V3, sun?: UniformNode<"vec3", Vector3>): F {
+  const at = instanceMatrix();
+  const c0 = at.mul(vec4(1, 0, 0, 0)).xyz;
+  const c1 = at.mul(vec4(0, 1, 0, 0)).xyz;
+  const c2 = at.mul(vec4(0, 0, 1, 0)).xyz;
+  const centre = vec3(0, TRUNK_H + CROWN_R * 0.5, 0);
+  const leaf = mix(float(BARE_CROWN), float(1), trunkLeaf);
+  // under the crown: the sky hidden more toward its base
+  const base = TRUNK_H + CROWN_R * 0.5 - CROWN_R;
+  const sky = mix(
+    float(1),
+    float(CROWN_SKY),
+    smoothstep(base * 0.25, base, local.y).mul(leaf)
+  );
+  if (!sun) {
+    return sky;
+  }
+  const toSun = normalize(
+    vec3(
+      dot(sun, c0).div(dot(c0, c0)),
+      dot(sun, c1).div(dot(c1, c1)),
+      dot(sun, c2).div(dot(c2, c2))
+    )
+  );
+  const rel = centre.sub(local);
+  const ahead = dot(rel, toSun);
+  const miss = length(rel.sub(toSun.mul(ahead)));
+  const through = float(1)
+    .sub(smoothstep(CROWN_R * 0.55, CROWN_R * 1.05, miss))
+    .mul(step(0, ahead))
+    // by day: the sun over the horizon
+    .mul(smoothstep(0.0, 0.08, sun.y));
+  return sky.mul(mix(float(1), float(CROWN_ON_TRUNK), through.mul(leaf)));
+}
+
+/** How leafy the crowns are today (0 bare, 1 in full leaf; the generic
+ *  phenology's), for the trunks' shade under them (`crownShade`). */
+export const trunkLeaf = uniform(1);
 
 /**
  * Per-tree crown colour. `v` is the deterministic hash jitter (keeps neighbours
@@ -1417,7 +1486,8 @@ function* buildTrees(
   extras: TreeInstance[],
   crownMats: CrownMaterials,
   ground: GroundContext,
-  footMat?: FootMaterials
+  footMat?: FootMaterials,
+  sun?: UniformNode<"vec3", Vector3>
 ): Steps<{
   chunks: VegetationChunk[];
   meshes: Instances[];
@@ -1439,7 +1509,7 @@ function* buildTrees(
     needles[form] ??= (form === "pine" ? buildPineTiers : buildConeTiers)(geos);
     return needles[form];
   };
-  const trunkMat = buildTrunkMaterial();
+  const trunkMat = buildTrunkMaterial(sun);
 
   const meshes: Instances[] = [];
   const chunks: VegetationChunk[] = [];
@@ -1550,7 +1620,8 @@ export function* vegetationSteps(
       extras,
       crownMats,
       ctx,
-      ctx.footMaterial?.()
+      ctx.footMaterial?.(),
+      crownMats.uniforms.sunDirection
     );
     group.add(...built.meshes);
     chunks = built.chunks;
