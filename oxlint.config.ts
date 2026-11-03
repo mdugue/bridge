@@ -19,20 +19,11 @@ export default defineConfig({
     ],
     // An async function that only returns a promise is what
     // promise-function-async asks for: the typed require-await allows it, the
-    // base rule does not. Awaiting a return matters only inside a try.
+    // base rule does not.
     "require-await": "off",
     "typescript/require-await": "error",
-    "typescript/return-await": ["error", "in-try-catch"],
     // Objects only: `const [x] = typedArray` walks an iterator, in hot loops.
     "prefer-destructuring": ["error", { array: false, object: true }],
-    // Components are declarations, like every other function here.
-    "react/function-component-definition": [
-      "error",
-      {
-        namedComponents: "function-declaration",
-        unnamedComponents: "arrow-function",
-      },
-    ],
 
     // Takes `typedArray.slice()` for an array: its fix makes a plain one.
     "unicorn/prefer-spread": "off",
@@ -76,6 +67,10 @@ export default defineConfig({
       rules: {
         complexity: "off",
         "typescript/no-explicit-any": "off",
+        // A fake that resolves at once breaks one of three rules whichever way
+        // it is written: promise-function-async without `async`,
+        // no-useless-promise-resolve-reject with Promise.resolve, this without.
+        "typescript/require-await": "off",
       },
     },
   ],
