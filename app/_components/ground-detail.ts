@@ -560,7 +560,7 @@ function kerbLines(inp: GroundInputs, g: GroundFields, raster: Tex): void {
 const PALETTE_LINEAR = LANDCOVER_CLASSES.map((_, k) =>
   linearPalette().slice(k * 3, k * 3 + 3)
 );
-const paletteOf = (c: I): V3 => {
+export const paletteOf = (c: I): V3 => {
   let out: V3 = vec3(...(PALETTE_LINEAR[0] as [number, number, number]));
   for (let k = 1; k < PALETTE_LINEAR.length; k++) {
     out = select(

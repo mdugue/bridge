@@ -2336,8 +2336,8 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   up to ±0.12 m mid-way up the trunk, both in metres turned into each
   set's frame so a register tree's trunk and crown still meet; the trunk
   forks at 0.78 of its height into three limbs ending inside the crown
-  (`trunkLimbs`, part of the shared trunk geometry; a cone or pine keeps
-  an unforked trunk), which a bare crown shows in winter. Not away from walls: the trunk knows nothing of them;
+  (`trunkLimbs`, part of the shared trunk geometry; a cone or pine, and
+  a cell with the register's own trunks, keeps an unforked trunk), which a bare crown shows in winter. Not away from walls: the trunk knows nothing of them;
   the mid crown is a detail-2 icosphere (180 tris) with lobes;
   **three-tier crown LOD** per 250 m chunk (`lib/city/vegetation-lod.ts`),
   planned over every loaded tile at once: the rich ~1 440-tri multi-tuft
@@ -2763,7 +2763,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
     keeps off it), reaching 0.85 m past the bark with a ragged edge: long
     blades streaked out from the trunk, darker and yellower, and seed
     heads catching the light where they are larger than a pixel, and in
-    it a tuft of 110 real blades (`tuftGraph`, a set of its own on the
+    it a tuft of 88 real blades (`tuftGraph`, a set of its own on the
     trunks' buffers: thin triangles 0.08–0.24 m high, both faces lit from above, 0.8–1.3 × by a
     hash, leaning out from 0.28–0.8 m round a 0.25 m foot moved out to
     the trunk's own roots), opaque, lit as the ground, swaying 3.5 cm,

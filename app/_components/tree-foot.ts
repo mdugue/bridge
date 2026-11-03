@@ -24,6 +24,7 @@ import {
   float,
   floor,
   Fn,
+  int,
   fract,
   fwidth,
   ivec2,
@@ -51,7 +52,6 @@ import {
 import {
   BUILTUP_CLASS,
   EDGE_SCALE,
-  LANDCOVER_CLASSES,
   MEADOW_CLASS,
   RAILWAY_CLASS,
   ROAD_CLASS,
@@ -59,7 +59,14 @@ import {
 } from "@/lib/city/landcover";
 import { TRUNK_UNIT_H, trunkRadiusAt } from "@/lib/city/tree-inventory";
 import { outOfDesignSite } from "./design-site";
-import { byteOf, gdHash, gdNoise, texelAt, texelSize } from "./ground-detail";
+import {
+  byteOf,
+  gdHash,
+  gdNoise,
+  paletteOf,
+  texelAt,
+  texelSize,
+} from "./ground-detail";
 import { instanceFloat, Instances } from "./instancing";
 import {
   type Slots,
@@ -90,7 +97,7 @@ import {
  * has, on the trunks' own instance buffers (their matrices, drops and bark
  * colours — the very column views, so three's memory count, which the
  * governor reads, charges nothing twice), a quad, a hoop and a tuft per tile
- * (shared by its chunks, a few hundred bytes) and a material per tile:
+ * (shared by its chunks, about 15 KB, most of it the tuft) and a material per tile:
  *
  * - at every foot, the trunk itself turns to earth (vegetation-layer.ts
  *   `buildTrunkMaterial`): no separate skirt, which read as a shoe;
@@ -305,7 +312,7 @@ function buildHoop(): BufferGeometry {
  *  triangle leaning out, in a band TUFT_BAND (m from the axis) round a
  *  nominal foot of radius TUFT_FOOT (the shader moves the band out to
  *  the trunk's own), TUFT_H high (the shader scales it per tree). */
-const TUFT_BLADES = 110;
+const TUFT_BLADES = 88;
 const TUFT_FOOT = 0.25;
 const TUFT_BAND: [number, number] = [0.28, 0.8];
 const TUFT_H: [number, number] = [0.08, 0.24];
@@ -545,7 +552,7 @@ function footFrame(s: FootSlots, size: [number, number]): FootFrame {
     .add(instanceFloat(DROP))
     .mul(length(col(1).xyz));
   const crown = clamp(length1.mul(CROWN_SPREAD), CROWN_MIN, CROWN_MAX);
-  const seedR = fract(sin(dot(col(3).xz, vec2(12.9898, 78.233))).mul(43758.5));
+  const roots = rootSeed(col(3).xz);
   const road = s.edgesTex
     ? edgeDistance(texture(s.edgesTex, uv).level(float(0)).r)
     : float(-99);
@@ -558,14 +565,25 @@ function footFrame(s: FootSlots, size: [number, number]): FootFrame {
     crown,
     green,
     wood,
-    lobes: floor(seedR.mul(2)).add(3),
-    phase: seedR.mul(40),
+    lobes: roots.lobes,
+    phase: roots.phase,
     axisX: normalize(col(0).xz),
     axisZ: normalize(col(2).xz),
     road,
     slope: attribute(SLOPE, "vec2"),
     cls,
   };
+}
+
+/**
+ * A trunk's roots from where it stands (`origin`, its matrix's
+ * translation): how many (three or four) and their phase round the stem.
+ * The one rule for the trunk's lobes (vegetation-layer.ts `trunkRoots`)
+ * and the pit's roots, cracks and tufts that follow them.
+ */
+export function rootSeed(origin: V2): { lobes: F; phase: F } {
+  const seed = fract(sin(dot(origin, vec2(12.9898, 78.233))).mul(43758.5));
+  return { lobes: floor(seed.mul(2)).add(3), phase: seed.mul(40) };
 }
 
 /** A trunk standing in a loaded design's site is folded away
@@ -1422,7 +1440,6 @@ const FOOT_MULCH = linear([128, 98, 70]);
 const FOOT_MOULD = linear([104, 92, 68]);
 const FOOT_GRASS = linear([112, 120, 78]);
 const DAMP = 0.72;
-const PALETTE = LANDCOVER_CLASSES.map(({ srgb }) => linear([...srgb]));
 
 /**
  * The colour a trunk's foot turns to, read once per vertex at the foot
@@ -1433,10 +1450,7 @@ const PALETTE = LANDCOVER_CLASSES.map(({ srgb }) => linear([...srgb]));
 function trunkEarthGraph(r: FootRasters): V3 {
   const s = footSlots(r);
   const f = footFrame(s, r.size);
-  let own: V3 = PALETTE[0];
-  PALETTE.forEach((c, id) => {
-    own = mix(own, c, float(1).sub(step01(abs(f.cls.sub(id)))));
-  });
+  const own = paletteOf(int(f.cls));
   const ground = mix(own.mul(DAMP), FOOT_GRASS, f.green);
   return mix(mix(ground, FOOT_MOULD, f.wood), FOOT_MULCH, step(0.5, f.pit));
 }

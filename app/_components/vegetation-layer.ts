@@ -126,6 +126,7 @@ import {
   FOOT_SHOWN_M,
   type FootGeos,
   type FootMaterials,
+  rootSeed,
   treeFeet,
 } from "./tree-foot";
 
@@ -950,10 +951,15 @@ export function buildCrownMaterial(
   m.positionNode = instancePosition(sway.local);
   m.castShadowPositionNode = instancePosition(shape);
   const crownScale = varying(length(instanceColumn(1).xyz));
-  const occluded = varying(crownOcclusion(form));
   // (a printed crown has no brightness pulse: its light is cut in two
-  // steps, and the pulse would flip it between them)
-  const gust = varying(sway.gust.mul(float(1).sub(crownsPrinted)));
+  // steps, and the pulse would flip it between them); one varying for
+  // the occlusion and the pulse (WebGPU's sixteen are scarce)
+  const shading = varying(
+    vec4(crownOcclusion(form), sway.gust.mul(float(1).sub(crownsPrinted))),
+    "vCrownShading"
+  );
+  const occluded = shading.xyz;
+  const gust = shading.w;
   const tinted = materialColor.mul(instanceTint()).mul(occluded);
   if (!bare) {
     const lit = crownLight(
@@ -1183,14 +1189,9 @@ function trunkRoots(): { lobe: F; metres: F; local: V3 } {
   const local = trunkDrop();
   const drop = instanceFloat(TRUNK_DROP);
   const metres = local.y.add(drop).mul(length(at.mul(vec4(0, 1, 0, 0)).xyz));
-  const seed = fract(
-    sin(dot(at.mul(vec4(0, 0, 0, 1)).xz, vec2(12.9898, 78.233))).mul(43758.5)
-  );
-  const lobes = floor(seed.mul(2)).add(3);
+  const { lobes, phase } = rootSeed(at.mul(vec4(0, 0, 0, 1)).xz);
   const angle = atan(positionGeometry.z, positionGeometry.x);
-  const lobe = cos(angle.mul(lobes).add(seed.mul(40)))
-    .mul(0.5)
-    .add(0.5);
+  const lobe = cos(angle.mul(lobes).add(phase)).mul(0.5).add(0.5);
   const low = float(1).sub(smoothstep(0, ROOT_BULGE_H, metres));
   const out = lobe.mul(lobe).mul(low).mul(low).mul(ROOT_BULGE).add(1);
   return {
@@ -1803,14 +1804,23 @@ function* buildTrees(
   };
   // the needle trees' cones and pines, only for a tile that has any
   const needles: Partial<Record<CanopyForm, TreeGeos>> = { broad: geos };
+  // the trunk without its fork, for the needle trees and the register's
+  // own trunks (their limbs are placed for the lobed crown on its matrix)
   let unforked: BufferGeometry | undefined;
-  const geosOf = (form: CanopyForm): TreeGeos => {
-    unforked ??= buildTrunkGeo(false);
-    needles[form] ??= (form === "pine" ? buildPineTiers : buildConeTiers)(
-      geos,
-      unforked
-    );
-    return needles[form];
+  const plainTrunk = (): BufferGeometry => (unforked ??= buildTrunkGeo(false));
+  const geosOf = (cell: TreeCell): TreeGeos => {
+    const form = cell.form;
+    let kind = needles[form];
+    if (!kind) {
+      kind = (form === "pine" ? buildPineTiers : buildConeTiers)(
+        geos,
+        plainTrunk()
+      );
+      needles[form] = kind;
+    }
+    return cell.extras.length > 0 && kind.trunk === geos.trunk
+      ? { ...kind, trunk: plainTrunk() }
+      : kind;
   };
   const trunkMat = tileTrunkMaterial(sun, footMat);
 
@@ -1820,7 +1830,7 @@ function* buildTrees(
   for (const cell of bucketTrees(trees, extras)) {
     const built = buildTreeCell(
       cell,
-      geosOf(cell.form),
+      geosOf(cell),
       trunkMat,
       crownMats,
       ground,

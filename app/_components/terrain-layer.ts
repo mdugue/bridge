@@ -1201,13 +1201,19 @@ function terrainNormal(withDetail: boolean): V3 {
     if (!withDetail) {
       return calm;
     }
-    // the slope of the mottle's broad octave (`grassMottle`), by central
-    // differences: the light catches the same drifts the colour has
+    // the slope of the mottle's broad octave (`grassMottle`), by forward
+    // differences (three noise reads on every ground pixel, the detail's
+    // weight 0 or not): the light catches the same drifts the colour has
     const xy = dataXY().mul(MOTTLE_BROAD).toVar();
     const e = 0.25;
     const at = (dx: number, dy: number): F => gdNoise(xy.add(vec2(dx, dy)));
-    const gx = at(e, 0).sub(at(-e, 0)).mul(MOTTLE_SLOPE);
-    const gy = at(0, e).sub(at(0, -e)).mul(MOTTLE_SLOPE);
+    const here = at(0, 0).toVar();
+    const gx = at(e, 0)
+      .sub(here)
+      .mul(MOTTLE_SLOPE * 2);
+    const gy = at(0, e)
+      .sub(here)
+      .mul(MOTTLE_SLOPE * 2);
     const grass = normalize(
       calm.add(vec3(gx, gy, 0).mul(grassDetail.mul(0.06)))
     );
