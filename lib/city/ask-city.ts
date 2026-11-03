@@ -134,7 +134,7 @@ export function maskedKey(key: string): string {
  * (a newline) from ever reaching a provider.
  */
 export function plausibleKey(key: string): boolean {
-  return /^[\x21-\x7e]{20,300}$/.test(key);
+  return /^[\x21-\x7E]{20,300}$/.test(key);
 }
 
 /**
