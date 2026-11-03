@@ -100,7 +100,7 @@ is the codebook.
 | Visual variable | Driven by | Source | Where |
 |---|---|---|---|
 | Ground height + mesh density | fine level: an error-bounded TIN of the native 1 m DGM1 — vertices where the ground bends, within ±0.15 m everywhere; heights read from its triangles through a bucket index. Coarse level: the DGM resampled to 512², heights read back from the grid | DGM1 | `scripts/bake-tiles.ts`, `scripts/bake-terrain-tin.ts`, `lib/city/terrain-tin.ts` (`TinIndex`), `terrain-layer.ts`, `lib/city/terrain-geometry.ts` |
-| Ground where no tile has streamed yet | the ground plate: the fine ground's height at a 62.5 m grid over the whole site (33² per tile, the edges shared), its inner vertices 1.5 m under it, each vertex the commonest land-cover class around it (read across tile edges) in the palette, matte; shown per tile only while that tile has no terrain level on screen | DGM1 + Basis-DLM | `lib/city/ground-plate.ts`, `ground-plate-layer.ts`, `scripts/prepare/plate.ts` `bakePlate` |
+| Ground where no tile has streamed yet | the ground plate: the fine ground's height at a 62.5 m grid over the whole site (33² per tile, the edges shared), its inner vertices 1.5 m under it, each vertex the commonest land-cover class around it (read across tile edges) in the palette, matte; shown per tile only while that tile has no terrain level on screen; its heights (bilinear) are also the camera's ground where no terrain has landed yet, so a flight to a hill's vantage ends over the hill | DGM1 + Basis-DLM | `lib/city/ground-plate.ts`, `lib/city/plate-height.ts`, `ground-plate-layer.ts`, `scripts/prepare/plate.ts` `bakePlate` |
 | Wall ribbon placement | earth-retaining walls — and the quays the bake measures where the water meets a steep bank (`kind: "quay"`) — snap to the step the fine TIN measures (face at the ramp foot, a coping cap back to where the ground reaches its level, per column; medians only over the vertices that found the same step, one run per cap level — no slab across two terraces); other walls on the OSM line | DGM1 + OSM walls + the class raster's water | `lib/city/walls.ts`, `lib/city/wall-snap.ts` (at build) |
 | Ground shading | the grid's normals, pulled to straight up below ~12° of tilt (the DGM's micro-relief and the 8-bit normals lit as blotches); real slopes keep their shading | DGM1 | `terrain-layer.ts` (`terrainNormal()`) |
 | Ground step at walls (coarse level only) | wall line + `kind` ∈ retaining/city/embankment/cliff/quay, height ≥ 1.5 m, burned into the 512² grid at build time | OSM | `lib/city/terrain-conflate.ts` (probe 11 m each side, feather 11 m, clamp 18 m) |
@@ -231,7 +231,7 @@ is the codebook.
 | Steps | `n` treads at z0 + (k+1)·rise across `w`, cheeks down to z0 − 0.6 m; a side whose bank (3.2 m out) stands ≥ 0.4 m over the tread and that an OSM wall or building runs along (`walled`) a *Wange* instead: 3 m wide, topped at the bank (≤ 4 m over the tread), its outer edge on the ground there, a 0.5 m stone coping, the rest `0xe4dbcb`; cheeks down to the ground beside them, a face from the top landing to lower ground beyond; handrails (`rail`) as fence rails on the nosing line; base tone by `mat` (`STAIR_TONES`: stone `0xc4b090`, concrete `0xbdbab2`, brick `0xb08874`, metal `0x888a8d`, wood `0xa38a6c`), risers × 0.62, cheeks × 0.8 — baked into the fine terrain glTF (vertex colours) | OSM + DGM1 | `lib/city/stairs.ts` `stairGeometry`/`stairColors` at build, `stair-layer.ts` (material) |
 | Sun direction | date + time + the site's lat/lng (suncalc 2, north-based azimuth) | — | `lib/city/sun.ts`, `sun-rig.ts` |
 | Sun by night | the directional light stays in the scene below the horizon, at intensity 0, and its shadow map is not redrawn until sunrise: three keys every material's build by the lights it draws with, so a sun hidden at dusk rebuilt every material in view (some twenty pipelines inside the frame, at every dusk and dawn) | — | `sun-rig.ts` (`redrawShadow`) |
-| Sun while the time is dragged | the shadow map (the heaviest pass) is redrawn at most ten times a second, the sky reflection four times; letting go redraws both at once | — | `sun-rig.ts` (`PREVIEW_SHADOW_MS`), `sky-reflection.ts` |
+| Sun while the time is dragged or a walk glides it | the shadow map (the heaviest pass) is redrawn at most ten times a second, the sky reflection four times; the light itself moves only with its map (a light moved between redraws reads the map from where it was drawn, and every shadow slides off its caster and snaps back: the picture wobbles); letting go redraws both at once | — | `sun-rig.ts` (`PREVIEW_SHADOW_MS`), `sky-reflection.ts` |
 | Sky, fog and fill colours | sun altitude through palette stops at −18°, −4°, −2° (blue hour), +1°, +6° (golden hour), +12°, +60° | — | `lib/city/atmosphere.ts` |
 | Valley fog | world height below a floor derived from the lowest terrain landed so far, fading out over a depth of 0.6 × the valley's depth (`extras.ground[2]`: per tile the lower side's rise from its low ground to the rim within 5 km in GLO-30, across its deepest axis; the site's deepest tile), else 0.6 × the site's ground relief (2nd–90th height percentile, `extras.ground`), 8–28 m: Dresden, Grimma, Meißen 28 m, Unna ≈ 12.4, Leipzig ≈ 12, Munich ≈ 10.9, Hamburg ≈ 9.6; setting in with distance from the camera, none within 40 m, all of it from 900 m (`VALLEY_NEAR_M`), so nearby surfaces keep their colour — one `scene.fogNode` for every material (additive light — lamp halos and pools — fades to black in it rather than toward the fog colour) | DGM1, GLO-30 | `height-fog.ts` (*Talnebel*), `lib/city/valley-fog.ts` |
 | Distance fog | the HUD's one slider left; far plane clamped to ~1.1 km until the site has first loaded | — | `create-app.ts` (*Nebel*) |
@@ -411,7 +411,7 @@ colour and depth from it: `GTAO (half resolution, normals from depth) ^
 AO_EXPONENT → DepthOfFieldNode (desktop; skipped while moving; in motion
 the camera's motion blur instead, pastel only) → the
 picture style → SMAANode (FXAA on a phone) → depth grading + vignette +
-paper grain + the outline → sRGB`. Rendering the scene outside the
+the loading veil + paper grain + the outline → sRGB`. Rendering the scene outside the
 pipeline lets the styles swap and dress the scene for exactly its render,
 and a tile's `compileAsync` prepare the very build its frames use (a
 build is keyed by the target's attachments and the kind of camera; up to
@@ -421,6 +421,38 @@ carries the anti-aliasing. There is no tone mapping: the look was tuned
 without it. The GTAO sample count is a construction-time setting (16;
 8 on a phone and in the lite profile). 3DTilesRendererJS's fade and overlay plugins patch
 GLSL and stay unused.
+
+**The loading veil** (`load-veil.ts`, `lib/city/load-frontier.ts`) shows
+how far from the camera the city is complete. The frontier is the
+horizontal distance to the nearest site tile with something still on its
+way: a content in view the renderer is fetching or parsing (its
+`loadingTiles`), or a dressing queued or building
+(`TileStream.pendingSiteTiles`). Inside it the picture is untouched;
+beyond it the last pass drains the colour, takes a little over a third of
+the light (linear) and draws contour lines every 2 m of height, faded
+where they would crowd a pixel and left out of the sky. The frontier
+itself is a ring on whatever the ground and walls are at that distance,
+in the brand magenta, with a halo of the same ink soaking into the clay
+beyond; by day the ink only darkens, at night it is a dim line of its own.
+The ring breathes (a 3.4 s cycle, slow in, quicker out, a few per cent of
+its radius) and eases to a new frontier rather than jumping a tile's
+width. With nothing pending it sweeps to the horizon in about a second and
+the veil fades. The boot starts veiled with the ring at the feet. Until
+the first load is through, the ring follows the last two stages' progress
+instead of the frontier, from 40 m to 2.6 km (`bootFrontier`): a site tile
+is 2 km wide, and the one under the camera stays pending until its own
+details are built, so by the frontier the view stayed clay for most of
+the load and then the ring leapt past the horizon. It walks in the
+distance's logarithm, so it moves about evenly on the screen (a ring
+linear in metres crossed the near view in the first tenth of the load).
+After the first load a pending spell shorter than 1.2 s never shows. The veil
+only takes away, so the unfinished picture is never brighter than the
+finished one, in every style. It costs no target or texture: a few
+uniforms and one depth read in a pass that runs anyway, skipped on one
+uniform once the veil is off; the frame pacer keeps the full rate while
+it shows. An export, Modell and the
+shots harness draw without it; a QA probe can set its own ring
+(`__poc.veil`). The ring, its halo and the contours stay off the sky.
 
 **The depth runs reversed** (three's `reversedDepthBuffer`,
 `create-app.ts`): 1 at the near plane, 0 at the far one, stored as floats
@@ -873,8 +905,8 @@ the safety levels 1, 2 and 3:
 | Real lamp lights (`LAMP_LIGHTS`, every lit fragment shades each, by day too) | 3 | 1 | as the tier |
 | The walker's lantern (`lantern.ts`, one more light) | with a 512² cube shadow | no shadow | as the tier |
 | Tile contents at once | 5 parses, 25 downloads per origin | 2 parses, 4 downloads per origin | as the tier |
-| Tile cache (GPU bytes: glTF + a tile's rasters and dressing) | 1.2–1.6 GB (1.0–1.4, 0.8–1.2, 0.6–1.0) | 168–335 MiB (148–295, 136–271, 96–231) | as the tier |
-| Memory governor (`lib/city/memory-governor.ts`) | steps at 2 / 2.5 GB (a last one 10 s past 2.5); lines × 0.9 a level, starting at step 0 (0, 1, 2) | steps at 480 / 560 MB (a last one 10 s past 560); lines × 0.9 a level, starting at step 0 (1, 2, 3) | as the tier |
+| Tile cache (GPU bytes: glTF + a tile's rasters and dressing) | 1.2–1.6 GB (1.0–1.4, 0.8–1.2, 0.6–1.0) | 150–285 MiB (118–249, 96–228, 64–196) | as the tier |
+| Memory governor (`lib/city/memory-governor.ts`) | steps at 2 / 2.5 GB (a last one 10 s past 2.5); lines × 0.9 a level, starting at step 0 (0, 1, 2) | steps at 420 / 460 MB (a last one 10 s past 460; 480 / 560 until two walk crashes); lines × 0.9 a level, starting at step 0 (1, 2, 3) | as the tier |
 
 **The resolution follows the frame rate** (`lib/city/resolution-scale.ts`,
 wired in `create-app.ts`). The scene is fill-bound, so a page whose GPU
@@ -1065,9 +1097,11 @@ stays their measure; the tile cache counts true bytes.
   sky, lamp pool, data layers, uniform buffers, shader text — and ~60 of
   headroom: tiles in flight weigh nothing, the cache can run a tile over
   `max` before it unloads, three counts a tree set's matrices once per
-  view) = **336 MiB** at level 0 (296, 272, 232 at levels 1–3), less
-  1 MiB each for the nameplate (**335**, 295, 271, 231), `min`
-  about half (168, 148, 136, 96), and `max − min` above the largest tile
+  view) = **285 MiB** at level 0 against the soft line of 420 (249, 228,
+  196 at levels 1–3; 335, 295, 271, 231 against the old 480 until two
+  iPhones lost their GPU in a walk's glide, Sentry CITY-WALK-4 and -6),
+  `min` about half or what leaves the gap (150, 118, 96, 64), and
+  `max − min` above the largest tile
   (`LARGEST_TILE_BYTES`, 128 MiB on a phone). The 320–600 MB before were
   wrong the other way: `max` sat above the governor's own hard line
   (560), so with the fixed costs and three's count on top — ~750 MB held —
@@ -1091,7 +1125,7 @@ stays their measure; the tile cache counts true bytes.
   freed back (measured while it held; forgotten after two minutes) — a
   camera standing still used to give its fine tiles up and stream them
   back in every ten seconds. At a raised safety level both lines are
-  × 0.9 per level (a phone's soft line 480, 432, 389, 350 MiB) and the
+  × 0.9 per level (a phone's soft line 420, 378, 340, 306 MiB) and the
   governor starts at a **floor** it never leaves for a finer step: the
   level itself on a phone, one lower on a desktop — already for the
   stream's first update. A **memory emergency** (`memoryEmergency` in
@@ -1174,7 +1208,14 @@ stays their measure; the tile cache counts true bytes.
   ahead of any fine level's (`COARSE_DRESSING_RANK`; at most four of
   them ahead of one fine level's, `MAX_DRESSING_OVERTAKES`, so a long
   flight's stream of coarse levels cannot hold back the tile underfoot),
-  so every tile in view has trees before the nearest has all of them. A fine level that
+  so every tile in view has trees before the nearest has all of them.
+  The lane holds a dressing's build only; its compile wait and its
+  hanging run after the lane, so the next build overlaps the last one's
+  compile but waits out the one before it (`olderCompile`): at most one
+  compile ahead, so built dressings and the compile queue never pile up;
+  a dressing counts against the cache's budget from its build, not from
+  its hanging (headless full profile, Dresden start: first frame
+  to *Alles geladen* 289 s → 243 s under SwiftShader). A fine level that
   shows before its own trees hang — a phone shows it the moment it loads
   — borrows its coarse level's crowns until they do
   (`DressingPlugin.standInCrowns`, `coarseCrownsStandIn`): they are

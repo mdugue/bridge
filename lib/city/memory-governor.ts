@@ -96,7 +96,11 @@ export const LINE_SCALE_PER_LEVEL = 0.9;
  * A phone's lines sit under the 614–761 MB its Safari first failed at
  * (the frames in between still allocate; a page that followed a loss
  * failed lower, which is what the safety levels' lower lines are for);
- * the desktop's only catch the extreme.
+ * the desktop's only catch the extreme. They were 480/560 until two
+ * iPhones lost their GPU during a walk's glide on the preview (Sentry
+ * CITY-WALK-6: 486 MB held at level 0, flying; CITY-WALK-4: 421 MB at
+ * safety 1, walking; 2026-11-01) — a glide streams tiles faster than the
+ * governor's hold, so the hard line now sits under both.
  * Each safety level lowers both by LINE_SCALE_PER_LEVEL.
  */
 export function memoryLimitsFor(
@@ -106,8 +110,8 @@ export function memoryLimitsFor(
   const scale = LINE_SCALE_PER_LEVEL ** safety;
   return tier === "mobile"
     ? {
-        soft: 480 * MB * scale,
-        hard: 560 * MB * scale,
+        soft: 420 * MB * scale,
+        hard: 460 * MB * scale,
         margin: 60 * MB,
         holdMs: 10_000,
         retryMs: 120_000,

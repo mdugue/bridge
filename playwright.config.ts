@@ -65,7 +65,20 @@ export default defineConfig({
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    {
+      name: "chromium",
+      use: {
+        ...devices["Desktop Chrome"],
+        // A browser installed outside Playwright's own store: a cloud
+        // container ships one for another Playwright version, which this
+        // pin would not find (PW_CHROMIUM=/opt/pw-browsers/chromium).
+        ...(process.env.PW_CHROMIUM
+          ? { launchOptions: { executablePath: process.env.PW_CHROMIUM } }
+          : {}),
+      },
+    },
+  ],
   webServer: {
     command: serverCommand(),
     url: baseURL,

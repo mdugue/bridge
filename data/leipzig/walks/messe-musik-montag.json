@@ -1,0 +1,312 @@
+{
+  "id": "messe-musik-montag",
+  "title": "Messe, Musik und Montag",
+  "teaser": "Leipzig in sechs Blicken: ein Kantor, der blieb, ein Rathaus aus einem Sommer, ein Fass mit Reiter, Säulen wie Palmen, eine gesprengte Kirche und ein Hochhaus, das ein Buch sein will.",
+  "by": "Claude",
+  "written": "2026-10-30",
+  "minutes": 18,
+  "stops": [
+    {
+      "id": "thomaskirche",
+      "title": "Ein Kantor, der blieb",
+      "from": [
+        316865,
+        5690646,
+        95
+      ],
+      "ground": 110.4,
+      "at": [
+        316997,
+        5690834,
+        139
+      ],
+      "hour": 10,
+      "text": "Das steile Dach dort ist eines der steilsten Giebeldächer Deutschlands, 63 Grad. Darunter arbeitete von 1723 bis zu seinem Tod 1750 Johann Sebastian Bach als Thomaskantor, für einen Chor, den es schon seit 1212 gibt. Begraben ist Bach heute hier, aber nicht von Anfang an: Seine vermuteten Gebeine kamen 1949 aus der zerstörten Johanniskirche herüber. Vermutet, weil nie ein DNA-Vergleich gemacht wurde. Ein paar Musikwissenschaftler zweifeln bis heute.",
+      "days": [
+        {
+          "from": "07-28",
+          "to": "07-28",
+          "text": "Am 28. Juli 1750 starb Bach, am 28. Juli 1950 wurde sein Grab hier geweiht."
+        }
+      ],
+      "facts": [
+        {
+          "claim": "Bach war Thomaskantor von 1723 bis zu seinem Tod 1750.",
+          "source": "https://de.wikipedia.org/wiki/Thomaskirche_(Leipzig)"
+        },
+        {
+          "claim": "Der Thomanerchor wurde 1212 gegründet.",
+          "source": "https://de.wikipedia.org/wiki/Thomaskirche_(Leipzig)"
+        },
+        {
+          "claim": "Das Dach hat eine Neigung von 63 Grad und ist eines der steilsten Giebeldächer Deutschlands.",
+          "source": "https://de.wikipedia.org/wiki/Thomaskirche_(Leipzig)"
+        },
+        {
+          "claim": "Die vermuteten Gebeine Bachs wurden am 28. Juli 1949 aus der zerstörten Johanniskirche in die Thomaskirche überführt; ein DNA-Vergleich wurde nie gemacht.",
+          "source": "https://de.wikipedia.org/wiki/Thomaskirche_(Leipzig)"
+        }
+      ],
+      "refs": [
+        "Q170402"
+      ],
+      "photo": {
+        "file": "St. Thomas Church, Leipzig.jpg",
+        "author": "User:Zarafa",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "http://creativecommons.org/licenses/by-sa/3.0/",
+        "page": "https://commons.wikimedia.org/wiki/File:St._Thomas_Church,_Leipzig.jpg",
+        "h": 1069,
+        "w": 800
+      }
+    },
+    {
+      "id": "altes-rathaus",
+      "title": "Ein Rathaus aus einem Sommer",
+      "from": [
+        317232,
+        5690742,
+        70
+      ],
+      "ground": 115.1,
+      "at": [
+        317197,
+        5690939,
+        123.1
+      ],
+      "hour": 13,
+      "text": "Das lange Haus am Markt wurde in einem einzigen Jahr gebaut: von März bis November 1556, unter Bürgermeister Hieronymus Lotter. Der Turm steht nicht in der Mitte, sondern seitlich nach links versetzt. Unter dem Dach läuft eine Inschrift rund um das ganze Haus, etwa 220 Meter lang. Die Stadt regiert hier längst nicht mehr, seit 1905 sitzt sie im Neuen Rathaus. Drinnen ist das Stadtgeschichtliche Museum.",
+      "closer": "Der Turm: Miss mit dem Auge, wie weit er links aus der Mitte gerückt ist.",
+      "facts": [
+        {
+          "claim": "Das Alte Rathaus wurde in der kurzen Bauzeit von März bis November 1556 errichtet, Bauherr war Bürgermeister Hieronymus Lotter.",
+          "source": "https://de.wikipedia.org/wiki/Altes_Rathaus_(Leipzig)"
+        },
+        {
+          "claim": "Der Turm ist seitlich nach links versetzt und etwa 41 Meter hoch.",
+          "source": "https://de.wikipedia.org/wiki/Altes_Rathaus_(Leipzig)"
+        },
+        {
+          "claim": "Die Inschrift unter dem Dach ist etwa 220 Meter lang.",
+          "source": "https://de.wikipedia.org/wiki/Altes_Rathaus_(Leipzig)"
+        },
+        {
+          "claim": "Die Stadtverwaltung zog 1905 ins Neue Rathaus; seit 1952 ist hier das Stadtgeschichtliche Museum.",
+          "source": "https://de.wikipedia.org/wiki/Altes_Rathaus_(Leipzig)"
+        }
+      ],
+      "refs": [
+        "Q439431"
+      ],
+      "photo": {
+        "file": "Leipzig - Ancien Hotel de Ville.jpg",
+        "author": "Jean-Christophe BENOIST",
+        "licence": "CC BY 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Leipzig_-_Ancien_Hotel_de_Ville.jpg",
+        "h": 422,
+        "w": 800
+      }
+    },
+    {
+      "id": "auerbachs-keller",
+      "title": "Ein Fass mit Reiter",
+      "from": [
+        317142,
+        5690698,
+        55
+      ],
+      "ground": 114.7,
+      "at": [
+        317194,
+        5690839,
+        121.7
+      ],
+      "hour": 18,
+      "text": "Unter der Mädlerpassage liegt der Keller, den Goethe weltberühmt gemacht hat: In „Faust“ trinken hier Studenten, und Mephisto zaubert ihnen Wein aus dem Tisch. Die Szene geht auf eine Sage zurück, überliefert um 1525: Der historische Faust soll hier auf einem Fass die Treppe hinauf geritten sein. Am Eingang stehen zwei Bronzegruppen, eine davon auf dem Foto,, eine davon auf dem Foto, von Mathieu Molitor, Faust mit Mephisto und die verzauberten Studenten. Man sagt, wer Fausts Fuß berührt, kommt wieder. Belegt ist nur, dass er sehr blank ist.",
+      "closer": "Die Passage darüber ist ein Durchgang, kein Gebäude: Sie verbindet zwei Straßen wie eine überdachte Gasse.",
+      "facts": [
+        {
+          "claim": "Weltweite Berühmtheit erlangte Auerbachs Keller durch Goethes Faust.",
+          "source": "https://de.wikipedia.org/wiki/Auerbachs_Keller"
+        },
+        {
+          "claim": "Die Szene geht auf die um 1525 überlieferte Faustsage vom Fassritt zurück.",
+          "source": "https://de.wikipedia.org/wiki/Auerbachs_Keller"
+        },
+        {
+          "claim": "Die Gruppen Mephisto und Faust und die verzauberten Studenten schuf Mathieu Molitor beim Umbau 1912–1913.",
+          "source": "https://de.wikipedia.org/wiki/Auerbachs_Keller"
+        },
+        {
+          "claim": "Der Keller liegt in der Grimmaischen Straße 2–4 unter der Mädler-Passage.",
+          "source": "https://de.wikipedia.org/wiki/Auerbachs_Keller"
+        }
+      ],
+      "refs": [
+        "Q523117",
+        "Q1491479"
+      ],
+      "photo": {
+        "file": "Fotothek df ps 0000785 Mephisto verzaubert die Studenten.jpg",
+        "caption": "Molitors Bronzegruppe: Mephisto verzaubert die Studenten",
+        "author": "Richard Peter",
+        "licence": "CC BY-SA 3.0 de",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/de/deed.en",
+        "page": "https://commons.wikimedia.org/wiki/File:Fotothek_df_ps_0000785_Mephisto_verzaubert_die_Studenten.jpg",
+        "h": 1153,
+        "w": 800
+      }
+    },
+    {
+      "id": "nikolaikirche",
+      "title": "Säulen wie Palmen",
+      "from": [
+        317211,
+        5690852,
+        85
+      ],
+      "ground": 113.2,
+      "at": [
+        317418,
+        5690927,
+        142.5
+      ],
+      "hour": 17.5,
+      "text": "Von außen eine gewöhnliche Stadtkirche. Drinnen, auf dem Foto, stehen Säulen, die oben in hellgrünen Palmblättern enden, klassizistisch umgebaut 1784 bis 1797 von Johann Carl Friedrich Dauthe. Seit Anfang der 1980er Jahre trafen sich hier montags Menschen zum Friedensgebet, erst wenige, Ende der Achtziger zehntausende. Von hier aus zogen sie über den Ring, und im Herbst 1989 kippte das Land. Vor der Kirche steht seit 1999 eine Kopie einer dieser Palmensäulen, draußen auf dem Platz, als hätte sie sich hinausgewagt.",
+      "closer": "Die Säule draußen steht auf dem Platz westlich der Kirche.",
+      "days": [
+        {
+          "from": "10-01",
+          "to": "10-12",
+          "text": "Am 9. Oktober 1989 zogen nach dem Friedensgebet so viele Menschen über den Ring wie nie zuvor, und es fiel kein Schuss. Leipzig feiert den Tag jedes Jahr mit einem Lichtfest."
+        }
+      ],
+      "facts": [
+        {
+          "claim": "Der Innenraum wurde 1784–1797 von Johann Carl Friedrich Dauthe klassizistisch umgestaltet; die Kapitelle sind palmenförmig mit hellgrünen Blättern.",
+          "source": "https://de.wikipedia.org/wiki/Nikolaikirche_(Leipzig)"
+        },
+        {
+          "claim": "Die Montagsgebete fanden bereits Anfang der 1980er Jahre statt; Ende der 1980er Jahre kamen jede Woche zehntausende zu den Montagsdemonstrationen.",
+          "source": "https://de.wikipedia.org/wiki/Nikolaikirche_(Leipzig)"
+        },
+        {
+          "claim": "1999 wurde auf dem Nikolaikirchhof eine Nachbildung einer Dauthe-Säule errichtet, entworfen von Andreas Stötzner.",
+          "source": "https://de.wikipedia.org/wiki/Nikolaikirche_(Leipzig)"
+        }
+      ],
+      "refs": [
+        "Q694286"
+      ],
+      "photo": {
+        "file": "Nikolaikirche Leipzig Blick Richtung Altar 03.JPG",
+        "caption": "Die Säulen mit den Palmenkronen",
+        "author": "DerHHO",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Nikolaikirche_Leipzig_Blick_Richtung_Altar_03.JPG",
+        "h": 533,
+        "w": 800
+      }
+    },
+    {
+      "id": "paulinum",
+      "title": "Eine Kirche, die wiederkam",
+      "from": [
+        317423,
+        5690552,
+        90
+      ],
+      "ground": 116.1,
+      "at": [
+        317465,
+        5690788,
+        138.6
+      ],
+      "hour": 15,
+      "text": "Am 30. Mai 1968 um 9:58 Uhr wurde hier die Universitätskirche St. Pauli gesprengt, auf Betreiben der Universität und mit Zustimmung der SED-Führung. Einen Monat später, beim Internationalen Bachwettbewerb, rollte über der Bühne ein gelbes Plakat herunter: „Wir fordern Wiederaufbau“. Fünf junge Physiker steckten dahinter. Die Kirche kam nicht zurück, aber ihre Form: Das Paulinum von Erick van Egeraat greift Elemente der alten Kirche auf, ein Giebel aus Glas am Augustusplatz. Eingeweiht 2017.",
+      "closer": "Der spitze Giebel aus Glas und Stein: Er steht ungefähr dort, wo der alte Kirchengiebel stand.",
+      "days": [
+        {
+          "from": "05-28",
+          "to": "06-01",
+          "text": "Am 30. Mai 1968 fiel die Kirche."
+        }
+      ],
+      "facts": [
+        {
+          "claim": "Die Universitätskirche St. Pauli wurde am 30. Mai 1968 um 9:58 Uhr gesprengt, auf Betreiben der Universität und nach Beschluss der SED-geführten Stadtverwaltung.",
+          "source": "https://de.wikipedia.org/wiki/Universitätskirche_St._Pauli"
+        },
+        {
+          "claim": "Am 20. Juni 1968 entrollte sich beim III. Internationalen Bachwettbewerb ein gelbes Plakat „Wir fordern Wiederaufbau“; fünf junge Physiker waren beteiligt.",
+          "source": "https://de.wikipedia.org/wiki/Universitätskirche_St._Pauli"
+        },
+        {
+          "claim": "Der Neubau von Erick van Egeraat greift Elemente der ehemaligen Kirche auf und wurde am ersten Dezemberwochenende 2017 eingeweiht.",
+          "source": "https://de.wikipedia.org/wiki/Universitätskirche_St._Pauli"
+        }
+      ],
+      "refs": [
+        "Q2063901"
+      ],
+      "photo": {
+        "file": "Paulinum72012.JPG",
+        "author": "Concord",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Paulinum72012.JPG",
+        "h": 1425,
+        "w": 800
+      }
+    },
+    {
+      "id": "uniriese",
+      "title": "Ein Hochhaus, das ein Buch sein will",
+      "from": [
+        317956,
+        5690440,
+        170
+      ],
+      "ground": 117,
+      "at": [
+        317468,
+        5690618,
+        162.1
+      ],
+      "hour": 19.5,
+      "text": "Zum Schluss das Höchste der Stadt: 142 Meter, gebaut 1968 bis 1972 nach Hermann Henselmann, für die Universität, daher der Name Uniriese. Die drei leicht nach innen gewölbten Seiten sollen, von unten gesehen, an ein aufgeschlagenes Buch erinnern. Der Volksmund nennt es auch Weisheitszahn. Als es fertig war, war es kurz das höchste Gebäude Deutschlands. Oben, in 120 Metern Höhe, gibt es eine Aussichtsplattform. Von dort siehst du alles, was du gerade gesehen hast, auf einem Bierdeckel.",
+      "facts": [
+        {
+          "claim": "Das City-Hochhaus ist 142,5 Meter hoch, gebaut 1968–1972 nach einem Entwurf von Hermann Henselmann für die Universität Leipzig, daher Uniriese.",
+          "source": "https://de.wikipedia.org/wiki/City-Hochhaus_Leipzig"
+        },
+        {
+          "claim": "Die drei leicht nach innen gewölbten Seiten lassen manche ein aufgeschlagenes Buch sehen; ein Beiname ist Weisheitszahn.",
+          "source": "https://de.wikipedia.org/wiki/City-Hochhaus_Leipzig"
+        },
+        {
+          "claim": "1972 war es das höchste Gebäude Deutschlands.",
+          "source": "https://de.wikipedia.org/wiki/City-Hochhaus_Leipzig"
+        },
+        {
+          "claim": "Die Aussichtsplattform liegt im 31. Stock in 120 Metern Höhe.",
+          "source": "https://de.wikipedia.org/wiki/City-Hochhaus_Leipzig"
+        }
+      ],
+      "refs": [
+        "Q471329"
+      ],
+      "photo": {
+        "file": "Rainbowflash 2013 Leipzig (4).jpg",
+        "author": "Rot-Braun Magdeburg",
+        "licence": "CC BY-SA 3.0 de",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/de/deed.en",
+        "page": "https://commons.wikimedia.org/wiki/File:Rainbowflash_2013_Leipzig_(4).jpg",
+        "h": 1067,
+        "w": 800
+      }
+    }
+  ]
+}

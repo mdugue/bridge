@@ -17,14 +17,14 @@
  * genuinely frame-starved, and any animation laid over them inherits that.
  *
  * So nothing animates here any more. The loading screen is frosted glass
- * (`--hud-veil` in globals.css) rather than a curtain: while the canvas has
- * nothing to show it sits on the opaque scrim below and reads as the same dark
- * screen it always was, and the moment the first frame is drawn the city
+ * (`--load-veil` in globals.css) rather than a curtain: while the canvas has
+ * nothing to show it sits on the opaque scrim below and reads as the same clay
+ * sheet, and the moment the first frame is drawn the city
  * appears behind it, softened by the backdrop blur. That arrival costs React
  * and the main thread nothing at all — it is the renderer painting under a
  * layer that is already there. After a short hold the glass is removed in one
  * frame, from blurred city to sharp city, which is a far smaller step than
- * dark screen to city and has no in-between frames to drop.
+ * an empty screen to city and has no in-between frames to drop.
  */
 
 /**

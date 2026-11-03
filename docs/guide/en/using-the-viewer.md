@@ -33,9 +33,12 @@ landmarks, the largest area.
 
 ## Loading
 
-The loading screen lists five stages and a bar. The first three
-(buildings, terrain, light) end at the mark labelled *begehbar*
-("walkable"): from that moment the overlay dissolves and you can move,
+The loading screen is a sheet of clay drawn in contour lines: a magenta
+ring in the middle widens as the city loads, the clay inside it takes on
+colour, and a dashed line marks where the scene becomes walkable. Below
+it are five stages (three on a phone). The first three
+(buildings, terrain, light) end at a thin magenta divider, the point
+where the scene becomes walkable (*begehbar*): from that moment the overlay dissolves and you can move,
 while the remaining two (the surroundings in view, then trees, lamps,
 rails and walls) stream in behind a small pill at the top of the screen.
 *Alles geladen* means everything in your view is in – not the whole city.
@@ -43,6 +46,13 @@ After that the viewer keeps loading as you move: the city is streamed tile
 by tile, detailed near you and coarse further away. When that takes a
 moment, on a long flight for instance, a small *Umgebung lädt* ("loading
 surroundings") hint shows at the top of the screen (see [how a visit unfolds](./how-it-works.md#how-a-visit-unfolds)).
+
+The picture shows the same thing: while the city is still filling in, it
+colours in outward from where you stand. What is complete keeps its
+colours; beyond a slowly breathing magenta line the city lies as unfired
+clay, grey and lined with contours, until the line has reached it. When
+nothing is left to come, the line runs out to the horizon and the colours
+follow.
 
 The side panel is there from the start, over the loading screen. While
 the city loads you can already pick a place, click a spot on the map or
@@ -388,6 +398,48 @@ The button in the corner opens a panel with three tabs.
   City* red, *Papier* as coloured tissue paper (lit from inside at night),
   *Strich* in plan colours with a pen's edge (a warm light at night), the
   *Schwarzplan* as a band outlined in black.
+- **Spaziergänge** ("walks") — guided walks through the city, written by
+  Claude, an AI, and marked as such on every stop (in German). Dresden
+  has four: *Augusts Bühne* (the old town as a stage of power), *Narben
+  und Nähte* (how the city lives with its wounds), *Gold, Milch und
+  Eigensinn* (the Neustadt) and *Wunder am Elbhang* (upriver to
+  Loschwitz); Leipzig, Hamburg, Munich, Meißen, Grimma and Unna have
+  one each: *Messe, Musik und Montag*
+  (Leipzig), *Backstein und Wasser* (Hamburg), *Teufel, Tanz und Löwen*
+  (Munich), *Schloss, Dom und Porzellan* (Meißen), *Grimma an der Mulde*
+  and *Licht unter der Stadt* (Unna). A walk opens a card over the
+  scene: each stop glides slowly to its view, sets today's date at the
+  hour the stop is best seen (a facade in evening light, a square at
+  night) and, where the stop asks, a picture style; a walk leaves Modell
+  once, since it tells what you see. The card tells the stop already
+  during the glide there; you can look around during the glide, it still
+  lands at the stop, and the light moves with it to the next stop's hour.
+  It adds what is special about today or this season and names one detail
+  to find in the picture. What the model does not show — a statue, a
+  relief, an inscription, an interior — a Wikimedia Commons photo in the
+  card shows, with its author and licence: a landscape one across the top,
+  a portrait one beside the text (above it on a phone); a click shows it
+  whole. It is served by this site, not by Wikimedia. *Belege* ("sources") folds out every claim the stop makes
+  with the source it comes from — Wikipedia, an institution's page, the
+  city model's own data; legends are told as legends. *Weiter* and
+  *Zurück* move between the stops, × ends the walk and gives the picture
+  style and the time back. On a phone the card is a sheet at the bottom
+  that starts folded: tap or pull up its handle to open it, pull it down
+  to fold it again; the joystick and the toolbar step aside while the
+  walk runs. How they are written: [walks.md](../../walks.md).
+- **Frag die Stadt** (ask the city) — questions about the city in your
+  own words ("Who built the Frauenkirche?", "What is in front of me?",
+  "What does this look like in the evening?"). A language model searches
+  what the city model knows — the buildings' names, addresses, use and
+  height, the landmarks with what Wikidata says of them —, flies the view
+  to the place, sets the time, picture style or a data layer where it
+  helps, and answers in a few sentences with its source. Under each
+  answer it lists what it looked up and did; every answer is marked *KI*
+  (AI). It runs on your own key from a provider (Anthropic, OpenAI,
+  OpenRouter or the Vercel AI Gateway) and at your cost, mostly under a
+  cent per question; the key stays in your browser
+  ([privacy](/datenschutz#frag-die-stadt)). Also from *Fragen* in the
+  toolbar.
 - **Steuerung** ("controls") — the full controls table, folded until you
   open it (the bar over the scene shows the first few).
 

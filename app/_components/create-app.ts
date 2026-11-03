@@ -57,6 +57,14 @@ import {
   type LifecycleSignal,
 } from "@/lib/city/page-lifecycle";
 import type { Landmark } from "@/lib/city/landmarks";
+import {
+  BOOT_VEIL,
+  NO_VEIL,
+  bootFrontier,
+  loadFrontier,
+  stepVeil,
+  type VeilState,
+} from "@/lib/city/load-frontier";
 import type { LoadStageId, LoadStageUpdate } from "@/lib/city/load-stages";
 import type { LookKey, LookValues } from "@/lib/city/look-controls";
 import type { LookState } from "@/lib/city/look-state";
@@ -106,6 +114,7 @@ import {
   tileTopsOf,
 } from "@/lib/city/tileset";
 import type { Inquiry, InquiryAlong } from "@/lib/city/inquiry";
+import type { WalksExtras } from "@/lib/city/walks";
 import { isLandmarkInquiry } from "@/lib/city/nameplate";
 import { type NameplateBody, nameplateBody } from "@/lib/city/nameplate-place";
 import { valleyFalloff } from "@/lib/city/valley-fog";
@@ -116,6 +125,7 @@ import {
 } from "@/lib/city/vegetation-lod";
 import { stopBvhWorker } from "./bvh-client";
 import { stopGroundWorker } from "./ground-prep-client";
+import type { GlideOptions } from "./camera-flight";
 import { createCameraPose, type FollowAim } from "./camera-pose";
 import { canvasSizeFor } from "./canvas-size";
 import {
@@ -188,6 +198,7 @@ import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
 import {
   pocFramesHeld,
   pocFrameTime,
+  pocVeil,
   tickPocFrame,
   updatePocDebug,
 } from "./poc-debug";
@@ -412,10 +423,23 @@ function sceneBuffers(
   };
 }
 
+/** A file the tileset's extras name, resolved beside it; null without one. */
+function besideTileset(
+  file: string | undefined,
+  tilesetUrl: string
+): string | null {
+  return file ? new URL(file, tilesetUrl).href : null;
+}
+
 /** What the HUD knows of the site from the tileset alone (`onSiteInfo`). */
 export type SiteInfo = Pick<
   CityWalkHandle,
-  "landcoverTiles" | "landmarks" | "latLng" | "provenanceUrl" | "terrainBounds"
+  | "landcoverTiles"
+  | "landmarks"
+  | "latLng"
+  | "provenanceUrl"
+  | "terrainBounds"
+  | "walksUrl"
 > & {
   /** the murals' photos, credited (lib/city/murals.ts `muralCredit`): the
    *  sources in the HUD's footer list them */
@@ -620,6 +644,9 @@ export interface CityWalkHandle {
   /** The provenance manifest (lib/city/provenance.ts), when the tileset
    *  names one: the inquiry card's source lines. */
   provenanceUrl: string | null;
+  /** The site's walks (lib/city/walks.ts), when the tileset names them:
+   *  the Erkunden panel's Spaziergänge. */
+  walksUrl: string | null;
   /** Opt-in pointer-lock mouse-look (desktop); Esc exits natively. */
   enterImmersive: () => void;
   /**
@@ -646,9 +673,16 @@ export interface CityWalkHandle {
   flyTo: (position: Xyz, lookAt: Xyz) => void;
   /**
    * Smoothly glides the camera to a curated scenic Viewpoint (animated, unlike
-   * the instant applyCameraState), landing in the viewpoint's movement mode.
+   * the instant applyCameraState), landing in the viewpoint's movement mode
+   * (in Modell: centres on it); `glide` paces it, lets a drag look about
+   * on the way and hears its progress (camera-pose.ts). Returns how long
+   * the glide takes (s; 0 in Modell, which centres at once and tells
+   * `onProgress` 1).
    */
-  flyToViewpoint: (viewpoint: ViewpointGeometry) => void;
+  flyToViewpoint: (
+    viewpoint: ViewpointGeometry,
+    glide?: GlideOptions
+  ) => number;
   /**
    * The current pose as a vantage — what the HUD stores when you save a view,
    * so restoring it is the same animated glide as any curated one.
@@ -769,6 +803,8 @@ export interface CityWalkHandle {
   glideToSpot: (epsgX: number, epsgY: number) => void;
   /** Where the glide in progress lands (EPSG), or null. */
   getGlideTarget: () => { epsgX: number; epsgY: number } | null;
+  /** Stops a glide in progress where it is (a walk ended on the way). */
+  stopGlide: () => void;
   /** the site's extent in EPSG coordinates — the minimap frame */
   terrainBounds: TerrainBounds;
 }
@@ -1358,11 +1394,14 @@ async function bootApp(
    */
   const stagesDone = new Set<LoadStageId>();
   const stagesSent = new Map<LoadStageId, string>();
+  // the last fraction each stage reported (the loading veil's boot ring)
+  const stageFractions = new Map<LoadStageId, number>();
   const stage = (id: LoadStageId, fraction: number, skipped?: boolean) => {
     if ((fraction >= 1 || skipped) && !stagesDone.has(id)) {
       stagesDone.add(id);
       opts.trail?.note(`stage ${id}`, skipped ? "skipped" : undefined);
     }
+    stageFractions.set(id, skipped ? 1 : fraction);
     const said = `${fraction}${skipped ? "s" : ""}`;
     if (stagesSent.get(id) === said) {
       return;
@@ -1376,6 +1415,8 @@ async function bootApp(
   const tilesetUrl = new URL(opts.tilesetUrl, window.location.href).href;
   const tileset = await fetchRequiredJson<unknown>(tilesetUrl, opts.signal);
   const extras = parseTilesetExtras(tileset);
+  // the walks name their file beside the tileset's own extras (WalksExtras)
+  const walksFile = (extras as WalksExtras).walks;
   ensureAlive();
   const { offset } = extras;
   // The tile the boot starts on and waits for: the spawn tile, or the one
@@ -1458,10 +1499,9 @@ async function bootApp(
     })),
     latLng,
     photoCredits: murals.credits,
-    provenanceUrl: extras.provenance
-      ? new URL(extras.provenance, tilesetUrl).href
-      : null,
+    provenanceUrl: besideTileset(extras.provenance, tilesetUrl),
     terrainBounds: siteBounds,
+    walksUrl: besideTileset(walksFile, tilesetUrl),
   };
   opts.onSiteInfo?.(siteInfo);
   const sunRig = createSunRig(
@@ -1607,6 +1647,8 @@ async function bootApp(
     look: opts.look,
     clock: sceneClock,
   };
+  // each site tile's rectangle (the stream's and the loading veil's)
+  const siteTileBounds = new Map(extras.tiles.map((t) => [t.id, t.bounds]));
   const stream = createTileStream(
     {
       // whether it compiled (a tile drops the CPU copies of what it
@@ -1656,7 +1698,7 @@ async function bootApp(
       styleResources,
       sunDirection,
       tier: budget.tier,
-      tileBounds: (id) => extras.tiles.find((t) => t.id === id)?.bounds,
+      tileBounds: (id) => siteTileBounds.get(id),
       tilesetUrl,
       // the data layers' traffic builder (they are set up with the post
       // stack below; a slot asks only once the look has a layer on and
@@ -2127,14 +2169,21 @@ async function bootApp(
     }
     opts.onModeChange?.(mode);
   };
+  /** the pose's mode changes go unheard (a Modell state applied in Modell) */
+  let quietPose = false;
   const pose = createCameraPose(camera, {
     groundFloor: () => siteGround.floor() ?? 0,
     heightAt,
+    coarseHeightAt: (x, y) => groundPlate?.heightAt(x, y) ?? null,
     offset,
     resolveStep: collider.resolveStep,
     solids: collider,
     onFollowEnd: opts.onFollowEnd,
-    onModeChange: modeChanged,
+    onModeChange: (mode) => {
+      if (!quietPose) {
+        modeChanged(mode);
+      }
+    },
     onPose: (p) => {
       if (!rig?.owns()) {
         opts.onPose?.(p);
@@ -3037,6 +3086,52 @@ async function bootApp(
       });
   };
 
+  // The loading frontier (lib/city/load-frontier.ts): what is still on its
+  // way, as a ring around the camera that walks outward as the city fills.
+  let loadVeil: VeilState = BOOT_VEIL;
+  // the first load is through (`checkLoaded`)
+  let bootLoaded = false;
+  // the last frame drew it (the frame pacer)
+  let veilShown = false;
+  const stepLoadVeil = (
+    dt: number,
+    { exporting, model }: { exporting: boolean; model: boolean }
+  ) => {
+    const at = streamCamera.position;
+    // Modell after the boot: no veil, nor any measuring (from Modell's
+    // camera the state would come back stale to the walker's view).
+    if (model && bootLoaded) {
+      loadVeil = NO_VEIL;
+      veilShown = false;
+      postStack.setLoadVeil(NO_VEIL, at.x, at.z);
+      return;
+    }
+    // Until the first load is through, the ring walks out with the last
+    // two stages' progress instead: the tile underfoot would hold it at
+    // the feet until its own details are built, then let it jump. Nor does
+    // a moment with nothing in flight mid-boot (between two stages) sweep
+    // it out and lift it: only the end of the load does.
+    const frontier = !bootLoaded
+      ? bootFrontier(
+          ((stageFractions.get("surroundings") ?? 0) +
+            (stageFractions.get("details") ?? 0)) /
+            2
+        )
+      : loadFrontier(
+          siteTileBounds,
+          stream.pendingSiteTiles(),
+          at.x + offset.cx,
+          offset.cy - at.z
+        );
+    loadVeil = stepVeil(loadVeil, frontier, dt);
+    // an exported image is the city, not its loading (nor is Modell's
+    // drawing, booting)
+    const asked = exporting || model ? { strength: 0 } : pocVeil();
+    const drawn = asked ? { ...loadVeil, ...asked } : loadVeil;
+    veilShown = drawn.strength > 0;
+    postStack.setLoadVeil(drawn, at.x, at.z);
+  };
+
   // Motion-keyed quality regression. Derived from the CAMERA, not the input
   // layer: WASD, the joystick, pointer-lock mouse-look, touch look and the
   // scenic flights all move it, and only two of those go through `movement`
@@ -3662,7 +3757,9 @@ async function bootApp(
     if (!opts.pace) {
       return;
     }
-    const busy = moved || exporting || !sceneSettled || dataLayersMove;
+    // (the loading veil breathes, sweeps and lifts at the full rate)
+    const busy =
+      moved || exporting || !sceneSettled || dataLayersMove || veilShown;
     sceneStill = stillness.frame(time, busy);
     opts.pace.setStill(sceneStill);
   };
@@ -3700,6 +3797,8 @@ async function bootApp(
     // what the update brought into view or took out, before this frame
     // draws it (the shadow map, the lamp pool, the styles' gathering)
     streamChange.flush();
+    // (Modell's parallel camera draws a model, not the walker's view)
+    stepLoadVeil(dt, { exporting, model: modelRig.owns() });
     // Advance every tile's water ripple and glitter (its sky tint is the
     // fog colour's node, in lockstep with the sun by construction).
     setWaterTime(elapsed);
@@ -4058,6 +4157,7 @@ async function bootApp(
     }
     if (step.loaded) {
       sceneSettled = true;
+      bootLoaded = true;
       flushStats();
       opts.trail?.note("loaded");
       worldPartial = false;
@@ -4135,10 +4235,20 @@ async function bootApp(
       pose.flyTo(position, lookAt);
     },
     // In Modell a place is where the picture is centred (plan 055).
-    flyToViewpoint: (view) =>
-      modelRig.owns()
-        ? modelRig.centreOn(vantageTarget(view))
-        : pose.flyToViewpoint(view),
+    flyToViewpoint: (view, glide) => {
+      // the rig's own phase: the view mode can lag it (a snapshot's
+      // perspective settles to walk while Modell stays)
+      if (modelRig.staying()) {
+        modelRig.centreOn(vantageTarget(view));
+        glide?.onProgress?.(1);
+        return 0;
+      }
+      // Modell still animating out: land it at once, then glide from there
+      if (modelRig.owns()) {
+        modelRig.exitNow();
+      }
+      return pose.flyToViewpoint(view, glide);
+    },
     captureViewpoint: pose.captureViewpoint,
     placeAt: (view) =>
       modelRig.owns()
@@ -4153,6 +4263,7 @@ async function bootApp(
         ? modelRig.centreOn(groundPoint(x, y))
         : pose.glideToSpot(x, y),
     getGlideTarget: pose.getGlideTarget,
+    stopGlide: pose.cancelGlide,
     getPose: () => {
       const hud = modelRig.hud();
       if (!hud) {
@@ -4181,7 +4292,14 @@ async function bootApp(
       if (!model) {
         modelRig.exitNow();
       }
-      pose.applyCameraState(perspective);
+      // a Modell state's perspective settles walk or fly, which is not the
+      // mode shown: unheard, so the HUD and Modell's programs stay put
+      quietPose = model !== undefined && modelRig.staying();
+      try {
+        pose.applyCameraState(perspective);
+      } finally {
+        quietPose = false;
+      }
       if (model) {
         modelRig.applyState(model);
       }

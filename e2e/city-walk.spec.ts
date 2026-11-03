@@ -1033,6 +1033,116 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     expectNoErrors(errors);
   });
 
+  test("a walk tells its stops, with their sources, and gives the style and the time back", async () => {
+    // The walks are Claude's narration (ADR 0055): the card says so on
+    // every stop and folds out the sources. Where the camera stood is put
+    // back afterwards, so the tests after this one start where they did.
+    const before = await page.evaluate(() =>
+      window.__poc?.handle?.getCameraState()
+    );
+    await withFramesHeld(page, async () => {
+      await openSidebar(page);
+      await page.getByRole("tab", { name: "Erkunden" }).click();
+      const walks = page.getByRole("region", { name: "Spaziergänge" });
+      await expect(walks).toBeVisible({ timeout: slow(15_000) });
+      await walks.locator('[data-walk="augusts-buehne"]').click();
+      const card = page.getByTestId("walk-card");
+      await expect(card).toBeVisible();
+      await expect(card).toContainText("Station 1 von 9");
+      await expect(card).toContainText("Erzählt von Claude (KI)");
+      // the detail the model lacks is on the stop's photo, with its credit
+      const photo = card.getByTestId("walk-photo");
+      await expect(photo.locator("img")).toBeVisible();
+      await expect(photo).toContainText("Wikimedia Commons");
+      // a click shows it whole, Escape closes it
+      await photo.getByRole("button", { name: "Foto groß zeigen" }).click();
+      const view = page.getByTestId("walk-photo-view");
+      await expect(view.locator("img")).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(view).toHaveCount(0);
+      const first = await card.getByRole("heading").textContent();
+      await card.getByTestId("walk-next").click();
+      await expect(card).toContainText("Station 2 von 9");
+      await expect(card.getByRole("heading")).not.toHaveText(first ?? "");
+      await card.getByText(/^Belege \(\d+\)$/).click();
+      await expect(card.locator('a[href^="https://"]').first()).toBeVisible();
+      await card.getByRole("button", { name: "Spaziergang beenden" }).click();
+      await expect(card).toHaveCount(0);
+    });
+    await page.evaluate((camera) => {
+      if (camera) {
+        window.__poc?.handle?.applyCameraState(camera);
+      }
+    }, before);
+    expectNoErrors(errors);
+  });
+
+  test("Frag die Stadt checks a key and marks its answer as generated", async () => {
+    // ADR 0056: the key check and the answer are the server's and the
+    // provider's; the spec answers for both, so CI needs no key and no
+    // provider. A key the provider refuses says so; a checked one opens
+    // the conversation, whose answer is labelled KI.
+    let checks = 0;
+    await page.route("**/api/schluessel", (route) => {
+      checks++;
+      return route.fulfill(
+        checks === 1
+          ? {
+              status: 401,
+              json: {
+                ok: false,
+                message: "Anthropic nimmt diesen Schlüssel nicht an.",
+              },
+            }
+          : { json: { ok: true, token: "", expires: Date.now() + 60_000 } }
+      );
+    });
+    const events = [
+      { type: "RUN_STARTED", runId: "r1", threadId: "t" },
+      { type: "TEXT_MESSAGE_START", messageId: "m1", role: "assistant" },
+      {
+        type: "TEXT_MESSAGE_CONTENT",
+        messageId: "m1",
+        delta: "Die Frauenkirche baute George Bähr (Quelle: Wikidata).",
+      },
+      { type: "TEXT_MESSAGE_END", messageId: "m1" },
+      { type: "RUN_FINISHED", runId: "r1", threadId: "t" },
+    ];
+    await page.route("**/api/frag", (route) =>
+      route.fulfill({
+        contentType: "text/event-stream",
+        body: events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join(""),
+      })
+    );
+    await withFramesHeld(page, async () => {
+      await openSidebar(page);
+      await page.getByRole("tab", { name: "Erkunden" }).click();
+      await page.getByTestId("ask-open").click();
+      const card = page.getByTestId("ask-card");
+      await expect(card).toBeVisible();
+      await card
+        .getByTestId("ask-key")
+        .fill("sk-ant-api03-0123456789abcdefghij");
+      await card.getByRole("button", { name: "Prüfen und loslegen" }).click();
+      await expect(card.getByRole("alert")).toContainText("nicht an");
+      // the refused check is the browser's logged 401, asked for above
+      errors.console.length = 0;
+      await card.getByRole("button", { name: "Prüfen und loslegen" }).click();
+      await card.getByTestId("ask-input").fill("Wer baute die Frauenkirche?");
+      await card.getByTestId("ask-input").press("Enter");
+      await expect(card).toContainText("George Bähr");
+      await expect(card.getByText("KI", { exact: true })).toBeVisible();
+      await card
+        .getByRole("button", { name: "Frag die Stadt schließen" })
+        .click();
+      await expect(card).toHaveCount(0);
+    });
+    await page.unroute("**/api/schluessel");
+    await page.unroute("**/api/frag");
+    await page.evaluate(() => sessionStorage.clear());
+    expectNoErrors(errors);
+  });
+
   test("the data layers switch on and off from the sidebar", async () => {
     // The live bicycle counts come from the city's WFS; the spec answers
     // for it (two counters on the spawn tile), so CI never waits on the
