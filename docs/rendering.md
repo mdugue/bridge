@@ -1208,7 +1208,14 @@ stays their measure; the tile cache counts true bytes.
   ahead of any fine level's (`COARSE_DRESSING_RANK`; at most four of
   them ahead of one fine level's, `MAX_DRESSING_OVERTAKES`, so a long
   flight's stream of coarse levels cannot hold back the tile underfoot),
-  so every tile in view has trees before the nearest has all of them. A fine level that
+  so every tile in view has trees before the nearest has all of them.
+  The lane holds a dressing's build only; its compile wait and its
+  hanging run after the lane, so the next build overlaps the last one's
+  compile but waits out the one before it (`olderCompile`): at most one
+  compile ahead, so built dressings and the compile queue never pile up;
+  a dressing counts against the cache's budget from its build, not from
+  its hanging (headless full profile, Dresden start: first frame
+  to *Alles geladen* 289 s → 243 s under SwiftShader). A fine level that
   shows before its own trees hang — a phone shows it the moment it loads
   — borrows its coarse level's crowns until they do
   (`DressingPlugin.standInCrowns`, `coarseCrownsStandIn`): they are

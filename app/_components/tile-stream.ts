@@ -389,7 +389,7 @@ interface Dressed {
   aborter?: AbortController;
   city?: CityLayer;
   dressing?: TileDressing;
-  /** the dressing's geometry bytes, once it hangs on the tile */
+  /** the dressing's geometry bytes, from its build (it waits to hang) */
   dressingBytes?: number;
   /** the city tile's murals, once they hang on it */
   murals?: MuralLayer;
@@ -910,7 +910,8 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
   let disposed = false;
   const gone = (h: TrafficHost) => disposed || h.gone();
   /** The bodies built, hung hidden and their compile started — in the
-   *  host's turn, which waits on the compile as a dressing's does. */
+   *  host's turn, which waits on the compile (a dressing's waits after
+   *  its turn: queueDressing). */
   const start = (h: TrafficHost, builder: TrafficBuilder) =>
     h.turn(async () => {
       await nextTask();
@@ -2028,6 +2029,11 @@ export class DressingPlugin {
   /** Dressings build one at a time, after the gate: each is a long task.
    *  The crowns' seasonal programs warm up beside them (warmCrowns). */
   private readonly lane = createTaskGate(1, MAX_DRESSING_OVERTAKES);
+  /** the compile waits of the last two dressings built: a build waits
+   *  out the older one first (queueDressing: it overlaps the last one's
+   *  compile, never two) */
+  private lastCompile: Promise<void> = Promise.resolve();
+  private olderCompile: Promise<void> = Promise.resolve();
   /** `work` in the dressings' turn: after the gate, one at a time, the
    *  lower rank first */
   private turn<T>(work: () => Promise<T>, rank: number): Promise<T> {
@@ -2148,10 +2154,22 @@ export class DressingPlugin {
     // the coarse levels' first: a third of the trees on every tile in view
     // before the full set on the nearest
     const rank = extras.dressing ? FINE_DRESSING_RANK : COARSE_DRESSING_RANK;
-    void this.turn(async () => {
+    // The lane holds the build only; the compile wait and the hanging run
+    // after it, so the next tile's build overlaps this one's compile
+    // (the compiles still take their turns, `compileInTurn`). Waiting on
+    // the compile inside the lane left it idle for up to COMPILE_WAIT_MS
+    // a tile. One compile ahead at most: a build overlaps the last one's
+    // compile but waits out the one before it, so built dressings (each
+    // weighed from its build) and the compile queue never pile up behind
+    // a slow GPU — a queue past the wait would hang them before their
+    // compile.
+    void this.turn(async (): Promise<(() => Promise<void>) | undefined> => {
+      await this.olderCompile;
       const entry = this.dressed.get(scene);
-      if (!entry || this.disposed) {
-        return; // the tile (or the stream) left before its turn
+      // (a tile that left with its own compile still running keeps its
+      // entry until that compile ends: it is gone all the same)
+      if (!entry || this.disposed || this.released.has(scene)) {
+        return undefined; // the tile (or the stream) left before its turn
       }
       streamTimings.since("dressing:queue-wait", queuedAt, extras.tileId);
       entry.aborter = new AbortController();
@@ -2167,58 +2185,84 @@ export class DressingPlugin {
       // hour (which swap crown materials) — before it hangs anywhere: a
       // build three keys differently from what a frame asks for compiles
       // inside that frame. (A compile starts at the drawable: where it
-      // will hang does not change its build.)
-      catchUp(dressing, this.ctx);
-      const compiled =
-        this.dressed.get(scene) === entry
-          ? this.compileUnder(
-              scene,
-              compileRepresentatives(parts),
-              `dressing ${extras.tileId}`
-            )
-          : Promise.resolve<Compiled>("not run");
+      // will hang does not change its build.) One that throws here never
+      // hangs: it is freed, not left to nothing.
+      try {
+        catchUp(dressing, this.ctx);
+      } catch (err) {
+        this.disposeFailed(disposeDressing(dressing), scene);
+        throw err;
+      }
+      // (a tile that left, its release held by its own compile, gets none:
+      // nor any weight, nor a place in the compile line the lane waits on)
+      const current =
+        this.dressed.get(scene) === entry && !this.released.has(scene);
+      const compiled = current
+        ? this.compileUnder(
+            scene,
+            compileRepresentatives(parts),
+            `dressing ${extras.tileId}`
+          )
+        : Promise.resolve<Compiled>("not run");
       let outcome: Compiled | undefined;
       compiled
         .then((ended) => {
           outcome = ended;
         })
         .catch(() => undefined);
-      await streamTimings.timed(
+      const waited = streamTimings.timed(
         "dressing:compile",
         () => withinCompileWait(compiled),
         extras.tileId
       );
-      built();
-      // Not before the renderer has recorded the tile's own content (see
-      // `loaded`): the dressing's materials are the scene's.
-      await this.loaded.get(scene);
-      // A dressing whose compile ran out of GPU memory stays off: the
-      // tile goes bare rather than the GPU further under. Nor does one
-      // whose tile left while a compile ran: its release waits for the
-      // compile (`compiles`), so its entry is still there.
-      if (
-        this.disposed ||
-        this.released.has(scene) ||
-        this.dressed.get(scene) !== entry ||
-        outcome === "out of memory"
-      ) {
-        // freed once its compile has ended (see `compiles`)
-        compiled
-          .then(() => this.disposeFailed(disposeDressing(dressing), scene))
-          .catch(() => undefined);
-        return;
+      this.olderCompile = this.lastCompile;
+      this.lastCompile = waited.catch(() => undefined);
+      // Weighed from the build on, not from the hang: the lane runs ahead
+      // of the compile waits, and a built dressing waiting its turn to
+      // hang must count against the cache's budget.
+      if (current) {
+        this.weighDressing(entry, dressing);
+        this.reweigh(scene);
       }
-      this.hangDressing(scene, entry, dressing);
-      // ...and one whose compile outlasted the wait and then ran out of
-      // memory comes down again
-      compiled
-        .then((ended) => {
-          if (ended === "out of memory") {
-            this.dropDressing(scene, entry, dressing);
+      return async () => {
+        await waited;
+        built();
+        // Not before the renderer has recorded the tile's own content (see
+        // `loaded`): the dressing's materials are the scene's.
+        await this.loaded.get(scene);
+        // A dressing whose compile ran out of GPU memory stays off: the
+        // tile goes bare rather than the GPU further under. Nor does one
+        // whose tile left while a compile ran: its release waits for the
+        // compile (`compiles`), so its entry is still there.
+        if (
+          this.disposed ||
+          this.released.has(scene) ||
+          this.dressed.get(scene) !== entry ||
+          outcome === "out of memory"
+        ) {
+          if (this.dressed.get(scene) === entry) {
+            entry.dressingBytes = undefined;
+            this.reweigh(scene);
           }
-        })
-        .catch(() => undefined);
+          // freed once its compile has ended (see `compiles`)
+          compiled
+            .then(() => this.disposeFailed(disposeDressing(dressing), scene))
+            .catch(() => undefined);
+          return;
+        }
+        this.hangDressing(scene, entry, dressing);
+        // ...and one whose compile outlasted the wait and then ran out of
+        // memory comes down again
+        compiled
+          .then((ended) => {
+            if (ended === "out of memory") {
+              this.dropDressing(scene, entry, dressing);
+            }
+          })
+          .catch(() => undefined);
+      };
     }, rank)
+      .then((after) => after?.())
       .catch((err: unknown) => {
         // A dressing that fails leaves its tile bare, never the stream
         // stuck — but never silently: a builder's throw is a bug or a
@@ -2261,8 +2305,6 @@ export class DressingPlugin {
     // hangs under it and leaves with its tile.
     scene.add(...parts);
     entry.dressing = dressing;
-    this.weighDressing(entry, dressing);
-    this.tiles?.recalculateBytesUsed();
     this.stream.dressings.add(dressing);
     buildAsksWhenIdle(
       dressing,
@@ -2290,10 +2332,7 @@ export class DressingPlugin {
         entry.dressing !== dressing,
       built: () => {
         this.weighDressing(entry, dressing);
-        const tile = this.tileOf.get(scene);
-        if (tile) {
-          this.tiles?.recalculateBytesUsed(tile);
-        }
+        this.reweigh(scene);
         this.ctx.onChange();
       },
       failed: (err) => {
@@ -2304,11 +2343,27 @@ export class DressingPlugin {
         }
       },
     });
-    // Whatever changed while it compiled (the hour moves on).
-    catchUp(dressing, this.ctx);
+    // Whatever changed while it compiled (the hour moves on); weighed
+    // again as it hangs, as its parts stand after that, even if it threw.
+    try {
+      catchUp(dressing, this.ctx);
+    } finally {
+      this.weighDressing(entry, dressing);
+      this.reweigh(scene);
+    }
   }
 
-  /** A hung dressing's geometry bytes, as its parts stand now (the
+  /** The cache weighs `scene`'s tile again (the whole cache: none known). */
+  private reweigh(scene: Object3D): void {
+    const tile = this.tileOf.get(scene);
+    if (tile) {
+      this.tiles?.recalculateBytesUsed(tile);
+    } else {
+      this.tiles?.recalculateBytesUsed();
+    }
+  }
+
+  /** A built dressing's geometry bytes, as its parts stand now (the
    *  traffic's bodies count once built). */
   private weighDressing(entry: Dressed, dressing: TileDressing): void {
     entry.dressingBytes = dressingParts(dressing).reduce(
@@ -2331,7 +2386,7 @@ export class DressingPlugin {
     entry.dressingBytes = undefined;
     this.stream.dressings.delete(dressing);
     this.disposeFailed(disposeDressing(dressing), scene);
-    this.tiles?.recalculateBytesUsed();
+    this.reweigh(scene);
     this.ctx.onChange();
   }
 
