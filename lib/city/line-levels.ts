@@ -230,7 +230,7 @@ function runOn(
   let best: { piece: number; step: 1 | -1; i: number; cos: number } | null =
     null;
   for (const s of index.near(at[0], at[1], THROUGH_M, line, from, steep)) {
-    const pts = index.pieces[s.piece].pts;
+    const { pts } = index.pieces[s.piece];
     const a = pts[Math.max(s.i - 1, 0)];
     const b = pts[Math.min(s.i + 1, pts.length - 1)];
     const t = unit(a, b);
@@ -246,11 +246,11 @@ function runOn(
   if (!best) {
     return [];
   }
-  const pts = index.pieces[best.piece].pts;
+  const { pts } = index.pieces[best.piece];
   const out: ContextPoint[] = [];
   let run = 0;
   let last = at;
-  for (let i = best.i; i >= 0 && i < pts.length; i += best.step) {
+  for (let { i } = best; i >= 0 && i < pts.length; i += best.step) {
     const pt = pts[i];
     // only what lies ahead of the end
     if ((pt[0] - at[0]) * dir[0] + (pt[1] - at[1]) * dir[1] <= 0.5) {
@@ -277,7 +277,7 @@ function withContext(
   index: SampleIndex,
   piece: number
 ): { pts: ContextPoint[]; own: number } {
-  const pts = index.pieces[piece].pts;
+  const { pts } = index.pieces[piece];
   if (pts.length < 2) {
     return { pts: pts.map((pt) => ({ piece, pt })), own: 0 };
   }
@@ -418,7 +418,7 @@ function spansOver(
   piece: number
 ): (Level | null)[] {
   const { levels, profile, ground } = solved[piece];
-  const pts = index.pieces[piece].pts;
+  const { pts } = index.pieces[piece];
   return levels.map((level, k) => {
     const z = profile[k];
     const g = ground[k];

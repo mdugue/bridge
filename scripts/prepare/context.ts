@@ -70,7 +70,7 @@ export const readJson = <T>(path: string): T =>
 // --- publish ------------------------------------------------------------------
 
 export const publisher = createPublisher(OUT_DIR, { warming: WARMING });
-export const publish = publisher.publish;
+export const { publish } = publisher;
 
 // --- cache --------------------------------------------------------------------
 

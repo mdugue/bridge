@@ -240,7 +240,7 @@ async function publishCrowns(tile: string): Promise<string | undefined> {
     ...terrainInputs(tile),
   ];
   const [minX, minY] = tileExtentOf(SITE.tiles[TILES.indexOf(tile)]);
-  const file = a.crowns.file;
+  const { file } = a.crowns;
   const bytes = await cached(
     file,
     cacheKey(inputs, BAKE_ENTRIES.coarseCrowns, offset, shapedBy(tile)),

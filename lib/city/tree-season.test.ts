@@ -162,7 +162,7 @@ test("a city's day is Dresden's shifted by its spring and its autumn", () => {
     expect(climateDay(d, none)).toBeCloseTo(d, 9);
   }
   // Unna's spring comes six days early: its 10 April is Dresden's 16 April
-  const unna = SITE_SEASON.unna;
+  const { unna } = SITE_SEASON;
   expect(climateDay(99, unna)).toBe(105);
   // Hamburg colours five days late: its 15 October is Dresden's 10 October
   expect(climateDay(287, SITE_SEASON.hamburg)).toBe(282);

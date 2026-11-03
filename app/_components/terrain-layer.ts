@@ -1079,7 +1079,7 @@ function splatColour(splat: SplatNodes): V3 {
       ? texture(splat.ndvi, inp.uv).bias(float(2.5)).r.toVar()
       : undefined;
     if (splat.ndvi && coarseNdvi) {
-      const ndvi = splat.ndvi;
+      const { ndvi } = splat;
       // (explicit-level reads: safe in a branch; none past 16 m a pixel)
       If(inp.fw.lessThan(16), () => {
         coarseNdvi.assign(

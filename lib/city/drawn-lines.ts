@@ -192,7 +192,7 @@ class Rows {
  */
 export function drawnGroups(b: BuildingInquiry, epsg?: number): DrawnGroup[] {
   const o = describedObject(b);
-  const look = o.look;
+  const { look } = o;
   // a scan's building or a gap filler has no LoD2 row to read
   if (!look || o.source !== OBJECT_SOURCE_LOD2) {
     return [];
@@ -711,7 +711,7 @@ function palaceStoreys(
   places: Places
 ): Pick<DrawnRow, "detail" | "url"> {
   const what = `nichts gemessen: wie ein ${TYPE.palace}`;
-  const levels = o.facts.levels;
+  const { levels } = o.facts;
   const counted = levels !== NO_FACT && levels >= 1;
   const storey = palaceStorey(o.eaveH, counted ? levels : undefined);
   if (counted && Math.abs(storey * levels - o.eaveH) < 0.01) {

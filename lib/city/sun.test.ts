@@ -47,7 +47,7 @@ test("at local solar noon the sun is due south and above the horizon", () => {
 });
 
 test("at midnight the sun is below the horizon", () => {
-  const nadir = getTimes(new Date("2026-06-21T12:00:00Z"), LAT, LNG).nadir;
+  const { nadir } = getTimes(new Date("2026-06-21T12:00:00Z"), LAT, LNG);
   expect(sunDirectionWorld(nadir, LAT, LNG).y).toBeLessThan(0);
 });
 

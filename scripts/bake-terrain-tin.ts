@@ -98,7 +98,7 @@ class ScaledDelatin extends Delatin {
     const z0 = this.heightAt(p0x, p0y) / a;
     const z1 = this.heightAt(p1x, p1y) / a;
     const z2 = this.heightAt(p2x, p2y) / a;
-    const width = this.width;
+    const { width } = this;
     // during Delatin's constructor `this.scale` is not set yet
     const scale = this.scale ?? (ScaledDelatin.pending as ArrayLike<number>);
     let maxError = 0;

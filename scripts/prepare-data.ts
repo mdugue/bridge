@@ -120,7 +120,7 @@ function valleyRims(): ValleyRim[] {
     if (!existsSync(legend)) {
       return [];
     }
-    const valley = readJson<{ valley?: Partial<ValleyRim> }>(legend).valley;
+    const { valley } = readJson<{ valley?: Partial<ValleyRim> }>(legend);
     return typeof valley?.floorM === "number" && Array.isArray(valley.rimM)
       ? [{ floorM: valley.floorM, rimM: valley.rimM }]
       : [];

@@ -712,7 +712,7 @@ test("live mode walks the camera to each GPS fix, gliding near ones and jumping 
   pose.setMoveInput(0, 1);
   expect(ended).toBe(1);
   pose.setMoveInput(0, 0);
-  const z = camera.position.z;
+  const { z } = camera.position;
   settle(pose);
   expect(camera.position.z).toBeCloseTo(z, 1);
 });

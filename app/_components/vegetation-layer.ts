@@ -1843,7 +1843,7 @@ function* buildTrees(
   let unforked: BufferGeometry | undefined;
   const plainTrunk = (): BufferGeometry => (unforked ??= buildTrunkGeo(false));
   const geosOf = (cell: TreeCell): TreeGeos => {
-    const form = cell.form;
+    const { form } = cell;
     let kind = needles[form];
     if (!kind) {
       kind = (form === "pine" ? buildPineTiers : buildConeTiers)(
@@ -1972,7 +1972,7 @@ export function* vegetationSteps(
   // read the same nodes — the wind clock among them, which the render loop
   // advances once per frame (`setCrownTime`, the water ripple's seconds).
   const crownMats = sceneCrowns(ctx.sunDirection);
-  let multiTuft = LOOK_DEFAULTS.multiTuft;
+  let { multiTuft } = LOOK_DEFAULTS;
   let chunks: VegetationChunk[] = [];
   let seasons: SeasonalCrowns[] = [];
   let loose: LooseFeet[] = [];

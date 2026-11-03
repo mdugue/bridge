@@ -237,7 +237,7 @@ export function smoothSnaps(
     if (!agree) {
       return null;
     }
-    const up = agree[0].up;
+    const { up } = agree[0];
     return {
       up,
       hi: median(agree.map((s) => s.hi)),

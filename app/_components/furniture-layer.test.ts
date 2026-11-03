@@ -107,7 +107,7 @@ test("a playground's slab is a flush, polygon-offset plain mesh", () => {
   const slab = group.getObjectByName("furniture-playgrounds");
   expect(slab).toBeDefined();
   expect(isInstances(slab)).toBe(false);
-  const material = (slab as Instances<MeshStandardNodeMaterial>).material;
+  const { material } = slab as Instances<MeshStandardNodeMaterial>;
   expect(material.polygonOffset).toBe(true);
   expect(material.vertexColors).toBe(true);
 });

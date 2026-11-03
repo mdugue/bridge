@@ -580,7 +580,7 @@ test("a chimney joins its host with the dormers as a box, all wall", () => {
   expect(stack.windows).toBeUndefined();
   expect(dormer.windows?.axis).toBeGreaterThan(0);
   expect(unpackStyle(dormer.windows?.style ?? 0).dormer).toBe(true);
-  const facade = baked.vertices.facade;
+  const { facade } = baked.vertices;
   const ids = baked.vertices.objectIds;
   const lengths = (object: number) =>
     new Set(
@@ -1638,7 +1638,7 @@ test("a passage OSM maps through a house is cut open and lined", () => {
   // two walls along it, a quad each, and the ceiling
   expect(lined).toBe(2 * 2 + 2);
   // every cut piece keeps its wall's length in `_FACADE`
-  const facade = v.facade;
+  const { facade } = v;
   expect(facade).toBeDefined();
   const lengths = new Set<number>();
   for (let t = 0; t + 2 < v.objectIds.length; t += 3) {

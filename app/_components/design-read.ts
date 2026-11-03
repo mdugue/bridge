@@ -236,7 +236,7 @@ function groupGeometry(
   start: number,
   count: number
 ): BufferGeometry {
-  const index = geometry.index;
+  const { index } = geometry;
   // the source vertex of each output vertex
   const sources: number[] = [];
   const remap = new Map<number, number>();
@@ -280,7 +280,7 @@ function materialParts(
     return [{ geometry: mesh.geometry, material: mesh.material }];
   }
   const materials = mesh.material;
-  const groups = mesh.geometry.groups;
+  const { groups } = mesh.geometry;
   if (groups.length === 0) {
     return [{ geometry: mesh.geometry, material: materials[0] }];
   }
@@ -432,7 +432,7 @@ function writePiece(
   // a mirrored node turns its triangles inside out: wound back
   const flip = matrix.determinant() < 0;
   const triangles = triangleCount(geometry);
-  const index = geometry.index;
+  const { index } = geometry;
   for (let t = 0; t < triangles; t++) {
     const a = index ? index.getX(t * 3) : t * 3;
     const b = index ? index.getX(t * 3 + 1) : t * 3 + 1;

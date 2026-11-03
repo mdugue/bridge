@@ -489,7 +489,7 @@ export function layPlate(
   const widthOf = (l: SetLine) => l.width * l.scale;
   const width = Math.max(...titles.map(widthOf), ...lines.map(widthOf));
   const b = new Builder();
-  const box = type.box;
+  const { box } = type;
   const pad = box?.pad ?? 0;
   if (box) {
     const x0 = -pad;

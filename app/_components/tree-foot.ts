@@ -1376,7 +1376,7 @@ function tuftGraph(r: FootRasters): PitGraph {
   const dir = normalize(p.xz.add(vec2(1e-4, 0)));
   // out to the trunk's own foot, its roots' bulge (the trunk's lobes, in
   // the trunk's turned frame as `rootAt` reads them)
-  const lobe = rootAt(dir, f.lobes, f.phase, f.axisX, f.axisZ).lobe;
+  const { lobe } = rootAt(dir, f.lobes, f.phase, f.axisX, f.axisZ);
   const out = f.rt.mul(lobe.mul(lobe).mul(0.55).add(1)).sub(TUFT_FOOT);
   const tall = p.y.mul(mix(0.8, 1.3, seed)).mul(smoothstep(0, 0.6, f.fade));
   const sway = sin(footClock.mul(1.3).add(seed.mul(40)).add(p.x.mul(9)))
@@ -1484,7 +1484,7 @@ function shadeMaterial(
     const glaze = vec4(graph.output, 1);
     // reason: three's NodeBuilder reads the scene's `fogNode` (what its
     // own setupFog uses) but its types do not declare it.
-    const fogNode = (builder as NodeBuilder & { fogNode?: V4 | null }).fogNode;
+    const { fogNode } = builder as NodeBuilder & { fogNode?: V4 | null };
     if (!fogNode) {
       return glaze;
     }

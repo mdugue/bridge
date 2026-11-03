@@ -294,7 +294,7 @@ export function dressCity(
   demolished: ReadonlySet<number>,
   demolishedGroups: ReadonlySet<number> = new Set()
 ): CityLayer {
-  const geometry = mesh.geometry;
+  const { geometry } = mesh;
   const metadata = mesh.userData.structuralMetadata as StructuralMetadata;
   const count = metadata.tableAccessors[0]?.count ?? 0;
   for (const [from, to] of [
@@ -557,7 +557,7 @@ const boxes = new WeakMap<Mesh, { box: Box3; matrix: Matrix4 }>();
 function worldBox(mesh: Mesh): Box3 {
   let kept = boxes.get(mesh);
   if (!kept?.matrix.equals(mesh.matrixWorld)) {
-    const geometry = mesh.geometry;
+    const { geometry } = mesh;
     if (!geometry.boundingBox) {
       geometry.computeBoundingBox();
     }

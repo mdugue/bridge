@@ -524,7 +524,7 @@ function writeAreas(
     }
   });
   // (the fallback is known only once every vertex has asked)
-  const fallback = ground.fallback;
+  const { fallback } = ground;
   for (const { w, tri, y, lift } of laid) {
     w.triangle(
       tri[0],

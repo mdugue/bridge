@@ -122,7 +122,7 @@ const INK_FOLIAGE = 0.02;
  * paper: chosen per build from what the drawn geometry carries.
  */
 const ownColour = Fn((builder: NodeBuilder) => {
-  const geometry = builder.geometry;
+  const { geometry } = builder;
   let own: V3 | null = null;
   if (geometry?.hasAttribute("iColor")) {
     own = instanceTint();
@@ -146,7 +146,7 @@ const ownColour = Fn((builder: NodeBuilder) => {
  * building tile) gets none.
  */
 const windowGlow = Fn((builder: NodeBuilder) => {
-  const geometry = builder.geometry;
+  const { geometry } = builder;
   if (
     !(geometry?.hasAttribute("facade") && geometry.hasAttribute("featureId"))
   ) {
@@ -278,7 +278,7 @@ function roofColour(facade: V4): V3 {
  * frame's light is the light alone, not the colour of a roof or a lawn.
  */
 const inkColour = Fn((builder: NodeBuilder) => {
-  const geometry = builder.geometry;
+  const { geometry } = builder;
   if (geometry?.hasAttribute("facade")) {
     const facade = attribute("facade", "vec4") as unknown as V4;
     const roof = step(facade.z, float(FACADE_ROOF + 1e-3));
@@ -323,8 +323,9 @@ function inkMaterial(): MeshStandardNodeMaterial {
 
 /** The materials a mesh draws with. */
 function materialsOf(object: Object3D): Material[] {
-  const material = (object as Object3D & { material?: Material | Material[] })
-    .material;
+  const { material } = object as Object3D & {
+    material?: Material | Material[];
+  };
   if (!material) {
     return [];
   }
@@ -380,8 +381,9 @@ function hiddenInPaper(object: Object3D): boolean {
  * override (its first material's, for a multi-material mesh).
  */
 function positionNodeOf(object: Object3D): Node | null {
-  const material = (object as Object3D & { material?: Material | Material[] })
-    .material;
+  const { material } = object as Object3D & {
+    material?: Material | Material[];
+  };
   const first = Array.isArray(material) ? material[0] : material;
   const node = (first as { positionNode?: Node | null } | undefined)
     ?.positionNode;
@@ -390,8 +392,9 @@ function positionNodeOf(object: Object3D): Node | null {
 
 /** A mesh's materials that draw themselves as paper (`userData.paperOwn`). */
 function paperOwnMaterials(object: Object3D): Material[] {
-  const material = (object as Object3D & { material?: Material | Material[] })
-    .material;
+  const { material } = object as Object3D & {
+    material?: Material | Material[];
+  };
   if (!material) {
     return [];
   }

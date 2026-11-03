@@ -13,11 +13,11 @@ const heightAt = (x: number) => (x >= 180 && x <= 300 ? 111.5 : 117.5);
 /** The levels of `pieces[k]` at its samples, decoded as the layer reads
  *  them. */
 function levelsOf(pieces: LinePiece[], k: number, decks: BridgeFeature[]) {
-  const runs = solvePieces(pieces, {
+  const { runs } = solvePieces(pieces, {
     decks: bridgeDecks(decks, offset),
     heightAt,
     offset,
-  })[k].runs;
+  })[k];
   const pts = pieceSamples(pieces[k]);
   const d = pts.map((p) => p[0] - pts[0][0]);
   return pts.map((p, i) => ({ x: p[0], level: runLevelAt(runs, d, i) }));

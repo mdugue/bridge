@@ -259,7 +259,7 @@ const ROWS: Row[] = [
       de: "Vegetationsfarbe (Vitalität)",
     },
     cell: (s) => {
-      const dop = s.provider.products.dop;
+      const { dop } = s.provider.products;
       if (dop === "rgbi") {
         return best("DOP (NDVI)");
       }

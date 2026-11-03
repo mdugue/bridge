@@ -376,14 +376,12 @@ function sceneBuffers(
   const buffers = new Map<object, number>();
   let drawables = 0;
   scene.traverse((object) => {
-    const geometry = (
-      object as Object3D & {
-        geometry?: {
-          attributes: Record<string, AnyAttribute>;
-          index: BufferAttribute | null;
-        };
-      }
-    ).geometry;
+    const { geometry } = object as Object3D & {
+      geometry?: {
+        attributes: Record<string, AnyAttribute>;
+        index: BufferAttribute | null;
+      };
+    };
     if (!geometry) {
       return;
     }
@@ -1877,7 +1875,7 @@ async function bootApp(
   // Fog: until the first streaming pass has landed, the world may end at the
   // spawn tile's edge; a tighter fog turns that edge into haze. The slider
   // value is kept and re-applied once the stream has settled.
-  let fogAmount = opts.look.get().fogAmount;
+  let { fogAmount } = opts.look.get();
   let worldPartial = extras.tiles.length > 1;
   // The site's edge haze, kept to restore after Modell (which shows the
   // site's edge as an edge).
@@ -3885,7 +3883,7 @@ async function bootApp(
   });
   cleanups.push(() => void renderer.setAnimationLoop(null));
   // The crash trail's heartbeat: what a killed page was doing last.
-  const trail = opts.trail;
+  const { trail } = opts;
   if (trail) {
     // The rate is counted between beats: the loop's own `fps` is smoothed
     // over a clamped frame time (≥ 20 fps by construction), which hid a

@@ -163,7 +163,7 @@ export function siteProvenance(
   site: ProvenanceSite
 ): SiteProvenance {
   const official = site.provider.credit;
-  const licence = site.provider.licence;
+  const { licence } = site.provider;
   const products =
     record.openstreetmap?.bbbike?.products ??
     record.openstreetmap?.openstreetmapFr?.products;

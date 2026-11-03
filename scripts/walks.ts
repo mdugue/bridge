@@ -72,7 +72,7 @@ function writeShots(only?: string): void {
       "utf8"
     )
   ) as { extras: { offset: { cx: number; cy: number } } };
-  const offset = tileset.extras.offset;
+  const { offset } = tileset.extras;
   mkdirSync(join(ROOT, "shots"), { recursive: true });
   const today = new Date();
   for (const { walk } of walks.filter((w) => !only || w.walk.id === only)) {

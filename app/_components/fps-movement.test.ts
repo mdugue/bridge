@@ -64,7 +64,7 @@ test("the arrows walk (up, down) and turn (left, right), as in Street View", () 
   movement.release("ArrowRight");
   expect(movement.turnInput()).toBe(-1);
   // turning is not walking
-  const z = camera.position.z;
+  const { z } = camera.position;
   movement.update(1);
   expect(camera.position.z).toBeCloseTo(z, 5);
 });
@@ -349,7 +349,7 @@ test("a dolly in the air follows the view, and a mode switch drops what is left"
   movement.dolly(20);
   movement.setMode("walk");
   movement.setMode("fly");
-  const z = camera.position.z;
+  const { z } = camera.position;
   movement.update(10);
   expect(camera.position.z).toBeCloseTo(z, 5);
 });

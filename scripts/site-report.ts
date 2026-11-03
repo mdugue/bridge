@@ -50,7 +50,7 @@ async function checkViewpoints(site: Site): Promise<string[]> {
       continue;
     }
     const tile = tileIdOf(site, cell);
-    const city = cityMeshSourceFiles(site, tile).city;
+    const { city } = cityMeshSourceFiles(site, tile);
     const raster = sideFileSource(site, tileArtifacts(tile).landcover.file);
     if (!(existsSync(city) && existsSync(raster))) {
       continue;

@@ -406,7 +406,7 @@ export function buildDeckTable(
   for (const { ring, topY, props, line } of parsed) {
     decks.push(deckPoly(ring.pts, topY, props.kind, line));
   }
-  const heightAt = ctx.heightAt;
+  const { heightAt } = ctx;
   if (!heightAt) {
     return decks;
   }
@@ -1276,7 +1276,7 @@ function addSuperstructure(
     const arches: [number, number][] = [];
     archFits(ribs, frame.line).forEach((fit, r) => {
       if (fit) {
-        const offset = ribs[r].offset;
+        const { offset } = ribs[r];
         const span = archSpringing(fit, frame.length, (s) =>
           frame.groundAt(s, offset)
         );

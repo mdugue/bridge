@@ -190,7 +190,7 @@ function listen(ctx: ReportContext): TrailListener {
     ) {
       begin(trail, ctx);
     }
-    const report = trail.report;
+    const { report } = trail;
     if (!report) {
       return;
     }

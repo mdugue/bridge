@@ -1227,8 +1227,8 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       // onto the canvas, over the finished frame: the colours are sRGB
       // already, so the output transform stays off for this draw
       const previous = renderer.getRenderTarget();
-      const autoClear = renderer.autoClear;
-      const toneMapping = renderer.toneMapping;
+      const { autoClear } = renderer;
+      const { toneMapping } = renderer;
       const colorSpace = renderer.outputColorSpace;
       renderer.setRenderTarget(null);
       renderer.autoClear = false;
@@ -1258,7 +1258,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
         }
         const shown = [letters.visible, shadow.visible] as const;
         const previous = renderer.getRenderTarget();
-        const toneMapping = renderer.toneMapping;
+        const { toneMapping } = renderer;
         const colorSpace = renderer.outputColorSpace;
         letters.visible = true;
         shadow.visible = true;

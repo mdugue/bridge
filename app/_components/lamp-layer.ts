@@ -167,7 +167,7 @@ function placeInstances(
   for (let i = 0; i < places.length; i++) {
     const s = scale * (places[i].s ?? 1);
     m.makeScale(s, s, s);
-    const yaw = places[i].yaw;
+    const { yaw } = places[i];
     if (yaw !== undefined) {
       m.premultiply(turn.makeRotationY(yaw));
     }

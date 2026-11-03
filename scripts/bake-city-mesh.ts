@@ -1173,7 +1173,7 @@ export function bakeCityMesh(
     loader.matrix = sharedMatrix;
   }
   loader.load(doc);
-  const matrix = loader.matrix;
+  const { matrix } = loader;
   const offset = recenterOffset(matrix);
   // the roofs on posts LoD2 draws as blocks, opened (ALKIS Überdachung)
   const open = openRoofObjects(doc, keys);
@@ -1306,7 +1306,7 @@ export function bakeCityMesh(
     trees.set(o.root, [...(trees.get(o.root) ?? []), i])
   );
   for (const [root, members] of trees) {
-    const facts = objects[root].facts;
+    const { facts } = objects[root];
     if (members.length > 1 && facts) {
       objects[root].facts = treeFacts(
         facts,
@@ -1371,7 +1371,7 @@ function drawnOf(
   o: { eaveH: number; own: DrawnFacts["own"] | null; roof: RoofColourSource }
 ): DrawnFacts {
   const wall = wallColourSource(attrs, context, look);
-  const own = o.own;
+  const { own } = o;
   return {
     wall,
     ...(look.colour ? { colour: look.colour } : {}),
@@ -1456,7 +1456,7 @@ export function joinEnsembles(
     }
   }
   for (const [to, members] of joined) {
-    const facts = objects[to].facts;
+    const { facts } = objects[to];
     if (facts && members.some((i) => objects[i].root !== to)) {
       objects[to].facts = treeFacts(
         facts,
@@ -1917,7 +1917,7 @@ export function appendPlinths(
   const parts: AppendedPart[] = [];
   const walls = treeTriangles(baked);
   const vertices = baked.vertices.positions;
-  const isRoof = baked.vertices.isRoof;
+  const { isRoof } = baked.vertices;
   const roofs = new Map<number, number[]>();
   for (const [root, tris] of walls) {
     roofs.set(

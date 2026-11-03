@@ -183,7 +183,7 @@ export function buildingFootprintPolys(
 ): FootprintPoly[] {
   const scale = cityData.transform?.scale ?? [1, 1, 1];
   const translate = cityData.transform?.translate ?? [0, 0, 0];
-  const vertices = cityData.vertices;
+  const { vertices } = cityData;
   const polys: FootprintPoly[] = [];
   for (const obj of Object.values(cityData.CityObjects)) {
     if (obj.type !== "Building" && obj.type !== "BuildingPart") {

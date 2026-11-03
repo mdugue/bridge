@@ -259,7 +259,7 @@ function buildingLineage(
   const facts = all.map((o) => o.facts);
   const flags = all.reduce((sum, o) => sum | o.flags, 0);
   const has = (bit: number) => hasObjectFlag(flags, bit);
-  const source = b.picked.source;
+  const { source } = b.picked;
   const lod2 = source !== OBJECT_SOURCE_SCAN && source !== OBJECT_SOURCE_GAP;
   if (source === OBJECT_SOURCE_SCAN) {
     // small_buildings.py: a box where the scan's surface stands 2–6.5 m up,

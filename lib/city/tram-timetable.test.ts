@@ -168,7 +168,7 @@ test("the GTFS agencies stand for their operators' liveries", () => {
 });
 
 test("a trip's car length follows its fleet's mix, the same all day", () => {
-  const dvb = TRAM_LIVERIES.dvb;
+  const { dvb } = TRAM_LIVERIES;
   const counts = new Map<number, number>();
   for (let seed = 0; seed < 4000; seed++) {
     const l = carLength(dvb, seed * 977 + 3600);

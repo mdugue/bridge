@@ -131,7 +131,7 @@ export function createCityCollider(
   const frames = new WeakMap<Mesh, MeshFrame>();
   /** The mesh's world frame, refreshed when its matrix changed. */
   const frameOf = (mesh: Mesh): MeshFrame => {
-    const geometry = mesh.geometry;
+    const { geometry } = mesh;
     let frame = frames.get(mesh);
     if (!frame?.matrix.equals(mesh.matrixWorld)) {
       if (!geometry.boundingBox) {

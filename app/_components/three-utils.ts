@@ -42,7 +42,7 @@ export function bufferBytes(
 function geometriesUnder(root: Object3D): Set<BufferGeometry> {
   const geometries = new Set<BufferGeometry>();
   root.traverse((obj) => {
-    const geometry = (obj as Object3D & { geometry?: BufferGeometry }).geometry;
+    const { geometry } = obj as Object3D & { geometry?: BufferGeometry };
     if (geometry) {
       geometries.add(geometry);
     }
@@ -531,7 +531,7 @@ export function aloneUnder<T>(
   object: Object3D,
   during: () => T
 ): T {
-  const enabled = group.enabled;
+  const { enabled } = group;
   const shown = group.children.filter((c) => c.visible);
   for (const c of shown) {
     c.visible = false;

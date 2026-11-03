@@ -1099,7 +1099,7 @@ export function createPostStack(
     }
     // the swap's, drawable by drawable: the swap carries one drawable's
     // position node over
-    const kind = held.kind;
+    const { kind } = held;
     if (kind === undefined) {
       return;
     }

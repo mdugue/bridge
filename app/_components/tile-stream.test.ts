@@ -541,7 +541,7 @@ test("a hung dressing's ask sets come in idle time, into the same array; none fo
   // the slices run at once here
   const now = async (steps: Steps<unknown>) => finished(steps);
   const hung = dressing();
-  const asks = hung.asks;
+  const { asks } = hung;
   buildAsksWhenIdle(hung, () => true, { idle: later, run: now });
   expect(hung.asks).toEqual([]);
   idle.shift()?.();

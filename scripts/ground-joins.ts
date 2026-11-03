@@ -251,7 +251,7 @@ export async function measureJoins(
     JOIN_PARTS.map((part) => [part, [] as JoinPoint[]])
   ) as Record<JoinPart, JoinPoint[]>;
   for (const tile of tiles) {
-    const bounds = grounds[all.indexOf(tile)].bounds;
+    const { bounds } = grounds[all.indexOf(tile)];
     const found = tileJoins(site, tile, bounds, heightAt);
     for (const part of JOIN_PARTS) {
       joins[part].push(...found[part]);

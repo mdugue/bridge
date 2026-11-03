@@ -370,7 +370,7 @@ export function addPropertyTable(
   }
 
   const chunks: Uint8Array[] = [bin];
-  let length = bin.length;
+  let { length } = bin;
   const bufferViews = json.bufferViews ?? [];
   const properties: Record<string, TableProperty> = {};
   const schema: Record<string, SchemaProperty> = {};
@@ -411,7 +411,7 @@ export function addPropertyTable(
       schema[name] = { type: "STRING" };
       continue;
     }
-    const values = column.values;
+    const { values } = column;
     properties[name] = {
       values: append(
         new Uint8Array(values.buffer, values.byteOffset, values.byteLength)

@@ -271,7 +271,7 @@ async function main() {
       `${site.id} is not prepared (no public/data/${site.id}): run \`bun scripts/prepare-sites.ts ${site.id}\` first`
     );
   }
-  const epsg = site.provider.epsg;
+  const { epsg } = site.provider;
   // twice as many as asked: a pair without ground or photo is replaced
   const { picked, looked } = await pickPhotos(
     epsg,

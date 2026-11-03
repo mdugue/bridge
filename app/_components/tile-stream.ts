@@ -471,7 +471,7 @@ type Features<T> = Promise<T[]>;
  * triangles out of them.
  */
 function cityCpuDroppable(city: CityLayer): AnyAttribute[] {
-  const geometry = city.mesh.geometry;
+  const { geometry } = city.mesh;
   return [geometry.getAttribute("normal"), geometry.getAttribute("facade")];
 }
 
@@ -1027,7 +1027,7 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
     dispose: () => {
       disposed = true;
       ready = false;
-      const group = slot.group;
+      const { group } = slot;
       slot.group = null;
       if (!group) {
         return [];
@@ -1952,7 +1952,7 @@ export class DressingPlugin {
   ): void {
     const bounds = this.ctx.tileBounds(tileId);
     void this.skyView.acquire(url).then((texture) => {
-      const city = entry.city;
+      const { city } = entry;
       if (!(texture && bounds && city) || this.dressed.get(scene) !== entry) {
         return;
       }
@@ -2186,7 +2186,7 @@ export class DressingPlugin {
       }
       streamTimings.since("dressing:queue-wait", queuedAt, extras.tileId);
       entry.aborter = new AbortController();
-      const signal = entry.aborter.signal;
+      const { signal } = entry.aborter;
       const dressing = await streamTimings.timed(
         "dressing:build",
         async () => buildDressing(terrain, extras, this.ctx, this.url, signal),

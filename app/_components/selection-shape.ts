@@ -48,7 +48,7 @@ export function buildingShape(
   layer: CityLayer,
   objects: ReadonlySet<number>
 ): Float32Array {
-  const geometry = layer.mesh.geometry;
+  const { geometry } = layer.mesh;
   const ids = geometry.getAttribute("featureId");
   const index = geometry.getIndex();
   // (none while the BVH worker has the tile's index: drawn again once it

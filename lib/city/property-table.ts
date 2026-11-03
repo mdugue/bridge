@@ -319,7 +319,7 @@ function numberDecoder(
     const v = max === undefined ? raw : Math.max(raw / max, -1);
     return transformed ? v * scales[i] + offsets[i] : v;
   };
-  const noData = property.noData;
+  const { noData } = property;
   const missing =
     n === 1
       ? (base: number) => values[base] === noData

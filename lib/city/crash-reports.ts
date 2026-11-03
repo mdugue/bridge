@@ -505,7 +505,7 @@ const lastTiming = (last: TrailBeat | undefined) =>
 
 /** The page's numbers, shown with every report. */
 function pageContext(trail: Trail) {
-  const stats = trail.stats;
+  const { stats } = trail;
   const beats = stats?.beats ?? 0;
   const last = trail.beats.at(-1);
   return {
@@ -628,7 +628,7 @@ export function problemReport(
 
 /** The page's stats since its last summary (the whole page for the first). */
 function stretch(trail: Trail) {
-  const stats = trail.stats;
+  const { stats } = trail;
   const sent = trail.report?.sent;
   return {
     from: sent?.t ?? 0,
@@ -664,7 +664,7 @@ export function summaryDue(trail: Trail): boolean {
 
 /** Where a summary sent now leaves the page (`TrailReport.sent`). */
 export function summaryMark(trail: Trail): SummaryMark {
-  const stats = trail.stats;
+  const { stats } = trail;
   return {
     t: lastT(trail),
     beats: stats?.beats ?? 0,
@@ -753,7 +753,7 @@ export function sessionUpdate(
   status: SessionStatus,
   ctx: ReportContext
 ): SessionPayload | null {
-  const report = trail.report;
+  const { report } = trail;
   const { release, environment } = buildOf(trail, ctx);
   if (!(report && release)) {
     return null;

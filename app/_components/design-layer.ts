@@ -424,7 +424,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
         : null
     );
     loaded.hidden = new Map();
-    const mask = loaded.mask;
+    const { mask } = loaded;
     if (mask && replaceExisting) {
       for (const [tile, polys] of deps.footprints()) {
         const covered = coveredObjects(mask, polys);
@@ -704,7 +704,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
       if (!current) {
         return;
       }
-      const box = current.model.box;
+      const { box } = current.model;
       const at = placeAhead(deps.pose(), box);
       const ground = groundBase(at, box, deps.heightAt);
       current.placement = {
@@ -720,7 +720,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
       if (!current) {
         return;
       }
-      const box = current.model.box;
+      const { box } = current.model;
       const ground = groundBase(current.placement, box, deps.heightAt);
       if (ground !== null) {
         current.placement = {

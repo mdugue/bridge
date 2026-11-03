@@ -123,7 +123,7 @@ export function fogFactorAt(f: SceneFog, world: V3, view: V3): F {
     0,
     1
   );
-  const xz = world.xz;
+  const { xz } = world;
   const edgeD = min(xz.sub(f.siteRect.xy), f.siteRect.zw.sub(xz));
   const edge = float(1)
     .sub(smoothstep(0, SITE_EDGE_FADE_M, min(edgeD.x, edgeD.y)))

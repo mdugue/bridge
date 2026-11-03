@@ -241,7 +241,7 @@ export function prepareGround(input: GroundPrepInput): GroundPrep {
       p[1] = data[1] + cy;
     };
   } else {
-    const count = input.count;
+    const { count } = input;
     const xy = new Float64Array(count * 2);
     const z = new Float32Array(count);
     for (let i = 0; i < count; i++) {

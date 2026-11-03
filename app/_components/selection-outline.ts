@@ -464,7 +464,7 @@ export function createSelectionOutline(deps: {
       }
       clearTarget(renderer, mask);
       const previous = renderer.getRenderTarget();
-      const autoClear = renderer.autoClear;
+      const { autoClear } = renderer;
       renderer.setRenderTarget(mask);
       renderer.autoClear = false;
       try {

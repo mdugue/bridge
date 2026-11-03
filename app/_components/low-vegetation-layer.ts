@@ -361,7 +361,7 @@ function hedgeMaterial(): MeshStandardNodeMaterial {
       1.04,
       smoothstep(0.02, 0.6, varying(positionGeometry.y))
     );
-    const lumps = shape.lumps;
+    const { lumps } = shape;
     const near = float(1).sub(
       smoothstep(
         HEDGE_MOTTLE_NEAR_M,

@@ -430,7 +430,7 @@ export function* treeInventorySteps(
   group.name = "tree-inventory";
   // The scene's crown materials and uniforms, as the canopy's (sceneCrowns).
   const crownMats = sceneCrowns(ctx.sunDirection);
-  let multiTuft = LOOK_DEFAULTS.multiTuft;
+  let { multiTuft } = LOOK_DEFAULTS;
   const counts = Object.fromEntries(CROWN_SHAPES.map((k) => [k, 0])) as Record<
     CrownShape,
     number

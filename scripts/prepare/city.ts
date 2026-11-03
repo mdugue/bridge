@@ -101,7 +101,7 @@ function parseCity(
       `${tile}: ${formed.lowered.length} tops under tracks lowered to their beds`
     );
   }
-  const doc = formed.doc;
+  const { doc } = formed;
   const lowered = new Set(formed.lowered);
   const roofColours = existsSync(at(src.roofColor))
     ? readJson<RoofColours>(at(src.roofColor))

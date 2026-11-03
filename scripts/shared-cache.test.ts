@@ -90,12 +90,12 @@ test("bytes that do not match their digest are a miss", async () => {
     new Uint8Array([...sealed(bytes("good")).subarray(0, 32), ...bytes("evil")])
   );
   const lines: string[] = [];
-  const cache = sharedCache(
+  const { cache } = sharedCache(
     ENV,
     (l) => lines.push(l),
     RUNTIME,
     api.fetcher
-  ).cache;
+  );
   expect(await cache?.get("a", "k")).toBeNull();
   expect(lines[0]).toContain("digest");
   expect(text(unsealed(sealed(bytes("good"))))).toBe("good");
@@ -105,7 +105,7 @@ test("bytes that do not match their digest are a miss", async () => {
 test("an entry refused for its size is skipped alone", async () => {
   let n = 0;
   const api = fakeApi({ putStatus: () => (n++ === 0 ? 413 : 202) });
-  const cache = sharedCache(ENV, () => {}, RUNTIME, api.fetcher).cache;
+  const { cache } = sharedCache(ENV, () => {}, RUNTIME, api.fetcher);
   cache?.put("big", "k", () => bytes("x".repeat(100)));
   cache?.put("small", "k", () => bytes("y"));
   await cache?.flush();
@@ -115,12 +115,12 @@ test("an entry refused for its size is skipped alone", async () => {
 test("failures in a row end the run's use of the cache, never throwing", async () => {
   const api = fakeApi({ down: true });
   const lines: string[] = [];
-  const cache = sharedCache(
+  const { cache } = sharedCache(
     ENV,
     (l) => lines.push(l),
     RUNTIME,
     api.fetcher
-  ).cache;
+  );
   for (const name of ["a", "b", "c", "d", "e"]) {
     expect(await cache?.get(name, "k")).toBeNull();
   }
@@ -142,7 +142,7 @@ test("uploads cut off end the uploads, not the fetches", async () => {
     return api.fetcher(input, init);
   }) as typeof fetch;
   const lines: string[] = [];
-  const cache = sharedCache(ENV, (l) => lines.push(l), RUNTIME, fetcher).cache;
+  const { cache } = sharedCache(ENV, (l) => lines.push(l), RUNTIME, fetcher);
   for (const name of ["a", "b", "c", "d", "e", "f", "g", "h"]) {
     cache?.put(name, "k", () => bytes(name));
   }
@@ -189,12 +189,12 @@ test("the address is hex and differs by name, key, runtime and scope", () => {
 test("uploads wait for the run's end and skip an entry gone by then", async () => {
   const api = fakeApi();
   const lines: string[] = [];
-  const cache = sharedCache(
+  const { cache } = sharedCache(
     ENV,
     (l) => lines.push(l),
     RUNTIME,
     api.fetcher
-  ).cache;
+  );
   cache?.put("unreadable", "k", () => {
     throw new Error("EIO");
   });
@@ -212,12 +212,12 @@ test("uploads wait for the run's end and skip an entry gone by then", async () =
 
 test("a stand-in API is ignored on Vercel", async () => {
   const api = fakeApi();
-  const cache = sharedCache(
+  const { cache } = sharedCache(
     { ...ENV, BAKE_SHARED_CACHE_API: "http://elsewhere", VERCEL: "1" },
     () => {},
     RUNTIME,
     api.fetcher
-  ).cache;
+  );
   await cache?.get("a", "k");
   expect(
     api.calls.every((c) => c.url.startsWith("https://api.vercel.com/"))

@@ -73,7 +73,7 @@ export function appendTriangles(
   index: ArrayLike<number>,
   extra: readonly Uint32Array[]
 ): Uint32Array {
-  let length = index.length;
+  let { length } = index;
   for (const list of extra) {
     length += list.length;
   }

@@ -149,7 +149,7 @@ test("the tile built next in idle time is the nearest without a BVH within reach
 test("a pick waits for a tile whose BVH the worker builds: no answer from the building behind", async () => {
   const near = tile("near", 20);
   const far = tile("far", 200, true);
-  const geometry = near.mesh.geometry;
+  const { geometry } = near.mesh;
   await buildBvhOffThread(new BoxGeometry(1, 1, 1));
   const done = buildBvhOffThread(geometry);
   // (its turn within a few microtasks of a worker that runs)

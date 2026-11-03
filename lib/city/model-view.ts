@@ -459,7 +459,7 @@ export function modelFootprint(
 ): Xyz[] {
   if (isLevelView(view)) {
     const g = modelCameraGeometry(view, viewport);
-    const ahead = groundAxes(view).ahead;
+    const { ahead } = groundAxes(view);
     const halfW = g.rightEdge;
     const a = add(view.pivot, scale(g.right, -halfW));
     const b = add(view.pivot, scale(g.right, halfW));
@@ -810,7 +810,7 @@ const CUBE_EDGES: readonly (readonly [number, number])[] = [
 export function presetGlyph(id: ModelPresetId): GlyphLine[] {
   const { turnDeg, tiltDeg } = GLYPH_VIEW[id];
   const { forward, right, up } = modelAxes(turnDeg, tiltDeg);
-  const shear = MODEL_PRESET_BY_ID[id].shear;
+  const { shear } = MODEL_PRESET_BY_ID[id];
   const corners = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
     const p = { x: (i & 1) - 0.5, y: (i >> 2) - 0.5, z: ((i >> 1) & 1) - 0.5 };
     return {

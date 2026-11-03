@@ -434,7 +434,7 @@ export interface Stylize {
 
 export function createStylize(inputs: StylizeInputs): Stylize {
   const { lens, fog, litAt } = inputs;
-  const camera = lens.camera;
+  const { camera } = lens;
   const skyZ = uniform(6000 * SKY_FAR_SHARE);
   const ortho = lens.ortho.greaterThan(0.5);
   // the lens's one shared node (the shadow of the nameplate reads it too)

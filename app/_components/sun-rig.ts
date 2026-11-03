@@ -666,7 +666,7 @@ export function createSunRig(
     groundY: number,
     air: AirView
   ) => {
-    const position = camera.position;
+    const { position } = camera;
     const height = position.y - groundY;
     // hysteresis: a switch is a depth pass
     if (airborne ? height < WARP_UNTIL_M : height > WARP_FROM_M) {

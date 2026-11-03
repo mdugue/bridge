@@ -918,7 +918,7 @@ test.each(cases)(
   "%s: the tree facts follow the trees file, column by column",
   (_, a) => {
     const trees = load<TreeFeature>(a.trees);
-    const path = a.treeFacts.path;
+    const { path } = a.treeFacts;
     // a site baked before the facts file has none yet (its trees step
     // writes it on the next run); where there is one, it follows its trees
     if (!existsSync(path)) {
@@ -957,7 +957,7 @@ test.each(cases)(
 test.each(cases)(
   "%s: the trees' genus table is the season model's, in order",
   (_, a) => {
-    const path = a.trees.path;
+    const { path } = a.trees;
     if (!existsSync(path)) {
       return;
     }

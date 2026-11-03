@@ -22,7 +22,7 @@ test("the committed tables name the kinds in the viewer's order", () => {
   // every site whose bakes are on disk (Dresden's are committed)
   for (const site of Object.values(SITES)) {
     for (const tile of tileIds(site)) {
-      const file = tileArtifacts(tile).markingsTable.file;
+      const { file } = tileArtifacts(tile).markingsTable;
       const path = join(ROOT, sideFileSource(site, file));
       if (!existsSync(path)) {
         continue;

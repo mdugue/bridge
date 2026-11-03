@@ -231,7 +231,7 @@ function quantityUnit(v: RawSnak["datavalue"]): string | undefined {
   if (v?.type !== "quantity") {
     return undefined;
   }
-  const unit = (v.value as { unit: string }).unit;
+  const { unit } = v.value as { unit: string };
   return unit === "1" ? undefined : unit.split("/").at(-1);
 }
 
@@ -250,7 +250,7 @@ function snakValue(
   }
   switch (v.type) {
     case "wikibase-entityid": {
-      const id = (v.value as { id: string }).id;
+      const { id } = v.value as { id: string };
       const label = labels[id];
       return label ? { id, v: label } : undefined;
     }

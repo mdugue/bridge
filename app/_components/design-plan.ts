@@ -371,7 +371,7 @@ export async function readPlan(
     throw new PlanError(`Der Plan ließ sich nicht lesen (${message}).`);
   }
   const site = inSite(read.layers, epsg);
-  let features = site.features;
+  let { features } = site;
   if (features.length === 0) {
     throw new PlanError(
       site.foreign.length > 0

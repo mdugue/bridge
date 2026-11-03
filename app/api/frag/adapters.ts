@@ -57,7 +57,7 @@ export function askAdapter(
 export function fakeAskAdapter(): AnyTextAdapter {
   const adapter = fakeText({ model: "fake" });
   const step: FakeResponseStep = ({ request }) => {
-    const messages = request.messages;
+    const { messages } = request;
     const last = messages.at(-1);
     if (last?.role !== "tool") {
       const question = lastQuestion(messages);
