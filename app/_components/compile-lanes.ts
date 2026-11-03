@@ -48,7 +48,7 @@ export async function compileInTurn(
   const compiling = before.then(start);
   turns.set(
     renderer,
-    compiling.catch(() => undefined)
+    compiling.catch(() => {})
   );
   return compiling;
 }

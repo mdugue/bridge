@@ -59,7 +59,7 @@ function startCompass() {
   // `requestPermission` too, and grants it without a prompt).
   const stop = subscribeAim(onAim);
   if (orientationNeedsPermission()) {
-    requestOrientationPermission().catch(() => undefined);
+    requestOrientationPermission().catch(() => {});
   }
   return {
     /** The averaged heading, waiting up to `ms` for a first reading. */
@@ -107,7 +107,7 @@ export function watchFix(
 ): () => void {
   if (!canLocate()) {
     onError(new LocateError("unsupported"));
-    return () => undefined;
+    return () => {};
   }
   const id = navigator.geolocation.watchPosition(
     (pos) =>

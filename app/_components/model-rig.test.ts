@@ -17,10 +17,10 @@ test("leaving mid-dolly at once restores the field of view the walk had", () => 
   const rig = createModelRig({
     camera,
     pose: {
-      applyCameraState: () => undefined,
-      cancelGlide: () => undefined,
+      applyCameraState: () => {},
+      cancelGlide: () => {},
       getCameraState: state,
-      setMovementMode: () => undefined,
+      setMovementMode: () => {},
     },
     groundAt: () => 0,
     // the flat ground at y = 0
@@ -33,8 +33,8 @@ test("leaving mid-dolly at once restores the field of view the walk had", () => 
     },
     viewport: () => ({ width: 1280, height: 720 }),
     bounds: [-5000, -5000, 5000, 5000],
-    onSwap: () => undefined,
-    onModeChange: () => undefined,
+    onSwap: () => {},
+    onModeChange: () => {},
   });
   rig.enter("iso");
   for (let i = 0; i < 4; i++) {

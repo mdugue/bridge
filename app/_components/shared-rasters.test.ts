@@ -33,7 +33,7 @@ test("a shared raster loads once and is freed with its last reader", async () =>
 });
 
 test("a raster released before it lands is freed when it lands", async () => {
-  let land: (value: string) => void = () => undefined;
+  let land: (value: string) => void = () => {};
   const freed: string[] = [];
   const share = createSharedRasters(
     async () =>
@@ -55,13 +55,13 @@ test("a failed load is null, never a rejection", async () => {
     async () => {
       throw new Error("404");
     },
-    () => undefined
+    () => {}
   );
   expect(await share.acquire("x")).toBeNull();
 });
 
 test("a clear frees every held raster, pending ones when they land", async () => {
-  let land: (value: string) => void = () => undefined;
+  let land: (value: string) => void = () => {};
   const freed: string[] = [];
   const share = createSharedRasters(
     async (key) =>
@@ -99,7 +99,7 @@ test("a load every reader left before it landed is aborted", async () => {
         signal.addEventListener("abort", () => reject(new Error("aborted")));
       });
     },
-    () => undefined
+    () => {}
   );
   const pending = share.acquire("class");
   const second = share.acquire("class");
@@ -125,7 +125,7 @@ test("the stream's teardown stops the loads still on their way", async () => {
             );
           });
     },
-    () => undefined
+    () => {}
   );
   await share.acquire("landed");
   const pending = share.acquire("on its way");

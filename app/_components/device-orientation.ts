@@ -76,7 +76,7 @@ export async function requestOrientationPermission(): Promise<boolean> {
  */
 export function subscribeAim(cb: (aim: DeviceAim) => void): () => void {
   if (!ctor()) {
-    return () => undefined;
+    return () => {};
   }
   const onEvent = (event: Event) => {
     const aim = aimOf(event as CompassEvent);

@@ -395,7 +395,7 @@ function CardDetails({
   const copy = () => {
     navigator.clipboard?.writeText(card.id).then(
       () => setCopiedId(card.id),
-      () => undefined
+      () => {}
     );
   };
   return (

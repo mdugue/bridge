@@ -1694,7 +1694,7 @@ export function facadeAttribute(
       out[4 * v + 3] = NO_DOOR_SNORM;
     }
   }
-  const heightOf = heights?.of ?? (() => undefined);
+  const heightOf = heights?.of ?? (() => {});
   const walls = wallsOf(mesh, (o) => drawn(o) || heightOf(o) !== undefined);
   // party walls, doors and shopfronts among the walls that carry windows
   const windowed = walls.filter((w) => drawn(w.object));

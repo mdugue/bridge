@@ -232,7 +232,7 @@ describe("ground prep", () => {
   });
 
   test("an empty sheet has an empty box", () => {
-    const box = indexBox(new Uint16Array(0), () => undefined);
+    const box = indexBox(new Uint16Array(0), () => {});
     expect(box[0]).toBe(Number.POSITIVE_INFINITY);
     expect(box[3]).toBe(Number.NEGATIVE_INFINITY);
   });

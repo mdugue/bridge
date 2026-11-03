@@ -432,7 +432,7 @@ export function attachTouchControls(
     lockPointer: () => {
       // Rejects outside a user gesture or when the browser denies it; the
       // viewer then simply stays in grab-look, so there is nothing to report.
-      element.requestPointerLock()?.catch(() => undefined);
+      element.requestPointerLock()?.catch(() => {});
     },
     detach: () => {
       cancelPress();

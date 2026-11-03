@@ -42,7 +42,7 @@ function useLineage(wanted: boolean): LineageModule | null {
           setMod(m);
         }
       },
-      () => undefined
+      () => {}
     );
     return () => {
       live = false;

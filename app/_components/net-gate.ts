@@ -245,5 +245,5 @@ export function reportRetry(note: RetryNote): void {
  * navigator.onLine says, which is a hint; returns its removal.
  */
 export function onUsableAgain(listener: () => void): () => void {
-  return pageGate()?.onUsableAgain(listener) ?? (() => undefined);
+  return pageGate()?.onUsableAgain(listener) ?? (() => {});
 }

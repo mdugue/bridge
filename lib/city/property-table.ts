@@ -206,7 +206,7 @@ export function readStructuralMetadata(
       };
     }
   );
-  return { tableAccessors, dispose: () => undefined };
+  return { tableAccessors, dispose: () => {} };
 }
 
 /** A property's default: its schema's, else the type's zero. */

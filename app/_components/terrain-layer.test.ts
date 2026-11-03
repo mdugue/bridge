@@ -148,7 +148,7 @@ function share<T>(
     acquire,
     release: (key) => released.push(key),
     held: () => 0,
-    clear: () => undefined,
+    clear: () => {},
   };
 }
 
@@ -156,7 +156,7 @@ test("a level whose tile leaves while it waits for a shared raster lets go at on
   const released: string[] = [];
   // the class raster another level is still decoding: it lands only when
   // the test says
-  let land: (rasters: SplatRasters | null) => void = () => undefined;
+  let land: (rasters: SplatRasters | null) => void = () => {};
   const splats = share<SplatRasters>(
     async () =>
       new Promise((resolve) => {

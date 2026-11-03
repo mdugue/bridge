@@ -203,7 +203,7 @@ function useBridges(tiles: MapTile[] | undefined): MapBridge[] {
           setBridges(perTile.flat());
         }
       })
-      .catch(() => undefined);
+      .catch(() => {});
     return () => controller.abort();
   }, [tiles]);
   return bridges;

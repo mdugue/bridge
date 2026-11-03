@@ -165,7 +165,7 @@ async function attempt(
     touch();
     if (!res.ok) {
       // an error page's body is never read
-      void res.body?.cancel().catch(() => undefined);
+      void res.body?.cancel().catch(() => {});
       return {
         status: res.status,
         retryAfter: res.headers.get("retry-after"),
@@ -221,7 +221,7 @@ export function eitherSignal(
   b: AbortSignal
 ): { signal: AbortSignal; release: () => void } {
   if (!a) {
-    return { signal: b, release: () => undefined };
+    return { signal: b, release: () => {} };
   }
   const both = new AbortController();
   const abort = () => both.abort();

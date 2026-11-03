@@ -191,7 +191,7 @@ test("either signal aborts the merged one; released, neither does", () => {
 });
 
 test("an abort ends the wait at once, the work behind it going on for whoever else waits", async () => {
-  let land: (value: string) => void = () => undefined;
+  let land: (value: string) => void = () => {};
   const shared = new Promise<string>((resolve) => {
     land = resolve;
   });

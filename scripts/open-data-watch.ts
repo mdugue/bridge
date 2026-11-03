@@ -198,7 +198,7 @@ async function probe(url: string): Promise<Response | Error> {
     headers: { Range: "bytes=0-0", "Accept-Encoding": "identity" },
   });
   if (!(r instanceof Error)) {
-    await r.body?.cancel().catch(() => undefined);
+    await r.body?.cancel().catch(() => {});
   }
   return r;
 }

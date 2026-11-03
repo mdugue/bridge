@@ -166,7 +166,7 @@ export function createResolutionScale(
       probeWait = PROBE_WAIT_MS;
     }
     if (step === 0 || now - downAt < HOLD_MS) {
-      return undefined;
+      return;
     }
     // the finer step's pixels, against this one's
     const growth = (SCALE_STEPS[step - 1] / SCALE_STEPS[step]) ** 2;
@@ -176,7 +176,7 @@ export function createResolutionScale(
     }
     calmSince ??= now;
     if (now - calmSince < probeWait) {
-      return undefined;
+      return;
     }
     probedAt = now;
     return change(step - 1);
@@ -244,7 +244,7 @@ export function createResolutionScale(
     update: (now, still = false) => {
       windowStart ??= now;
       if (now - windowStart < WINDOW_MS) {
-        return undefined;
+        return;
       }
       windowStart = now;
       const changed = still ? decideStill(now) : decide(now);

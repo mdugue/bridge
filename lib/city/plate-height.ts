@@ -31,7 +31,7 @@ export function plateHeightAt(
       ({ bounds: [x0, y0, x1, y1] }) => x >= x0 && x <= x1 && y >= y0 && y <= y1
     );
     if (!t) {
-      return undefined;
+      return;
     }
     const [x0, y0, x1, y1] = t.bounds;
     const fi = ((x - x0) / (x1 - x0)) * (n - 1);

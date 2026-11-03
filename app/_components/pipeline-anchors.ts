@@ -251,7 +251,7 @@ export function createPipelineAnchors(
   // resolves once it is held, not as soon as its stand-in is made
   const ready = new Map<string, Promise<void>>();
   const track = async (keys: readonly string[], compiling: Promise<void>) => {
-    const settled = compiling.catch(() => undefined);
+    const settled = compiling.catch(() => {});
     for (const key of keys) {
       ready.set(key, settled);
     }

@@ -210,7 +210,7 @@ describe("weldExact", () => {
       );
     doc.createMesh().addPrimitive(prim);
     const failure = await doc.transform(weldExact()).then(
-      () => undefined,
+      () => {},
       (error: unknown) => error
     );
     expect(failure).toBeInstanceOf(Error);

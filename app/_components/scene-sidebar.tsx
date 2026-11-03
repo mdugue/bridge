@@ -132,7 +132,7 @@ const Calendar = dynamic(
 );
 const preloadCalendar = () => {
   // a failed load is next/dynamic's to report when the popover renders
-  import("@/components/ui/calendar").catch(() => undefined);
+  import("@/components/ui/calendar").catch(() => {});
 };
 
 /** The day on the date button, "5. März 2026" (what date-fns' `d. MMMM

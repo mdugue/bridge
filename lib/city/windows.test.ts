@@ -1019,7 +1019,7 @@ describe("measured axes", () => {
       measuredAxes([plain], index, () => spec, { cx: 100, cy: 200 })
     ).toEqual([]);
     expect(
-      measuredAxes([wall(3)], index, () => undefined, { cx: 100, cy: 200 })
+      measuredAxes([wall(3)], index, () => {}, { cx: 100, cy: 200 })
     ).toEqual([]);
   });
 });

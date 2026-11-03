@@ -177,7 +177,7 @@ export function useLiveMode(
           }
         }, FIRST_READING_MS);
       })
-      .catch(() => undefined);
+      .catch(() => {});
   }, [live, say, start, stop]);
 
   /** The scene ended it: the player looked around or walked by hand. */

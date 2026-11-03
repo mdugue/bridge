@@ -631,7 +631,7 @@ export function handOverWaitMs(tier: DeviceTier): number {
 
 async function withinWait(done: Promise<unknown>, ms: number): Promise<void> {
   return Promise.race([
-    done.then(() => undefined),
+    done.then(() => {}),
     new Promise<void>((resolve) => setTimeout(resolve, ms)),
   ]);
 }
@@ -950,7 +950,7 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
             compiling = null;
           }
         })
-        .catch(() => undefined);
+        .catch(() => {});
       await withinCompileWait(compiled);
       // (an object: a promise returned bare would be awaited whole)
       return { asks, compiled, group };
@@ -1038,7 +1038,7 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
         const h = host;
         running
           .finally(() => h.freeFailed(disposeObject3D(group)))
-          .catch(() => undefined);
+          .catch(() => {});
         return [];
       }
       return disposeObject3D(group);
@@ -2093,7 +2093,7 @@ export class DressingPlugin {
     this.warmup = warmup;
     await withinCompileWait(
       Promise.all(warmup.main.map(async (mesh) => this.ctx.compile(mesh))).then(
-        () => undefined,
+        () => {},
         (err: unknown) => {
           this.compileFailed(err, "crowns");
         }
@@ -2222,14 +2222,14 @@ export class DressingPlugin {
         .then((ended) => {
           outcome = ended;
         })
-        .catch(() => undefined);
+        .catch(() => {});
       const waited = streamTimings.timed(
         "dressing:compile",
         async () => withinCompileWait(compiled),
         extras.tileId
       );
       this.olderCompile = this.lastCompile;
-      this.lastCompile = waited.catch(() => undefined);
+      this.lastCompile = waited.catch(() => {});
       // Weighed from the build on, not from the hang: the lane runs ahead
       // of the compile waits, and a built dressing waiting its turn to
       // hang must count against the cache's budget.
@@ -2260,7 +2260,7 @@ export class DressingPlugin {
           // freed once its compile has ended (see `compiles`)
           compiled
             .then(() => this.disposeFailed(disposeDressing(dressing), scene))
-            .catch(() => undefined);
+            .catch(() => {});
           return;
         }
         this.hangDressing(scene, entry, dressing);
@@ -2272,7 +2272,7 @@ export class DressingPlugin {
               this.dropDressing(scene, entry, dressing);
             }
           })
-          .catch(() => undefined);
+          .catch(() => {});
       };
     }, rank)
       .then((after) => after?.())
@@ -2446,7 +2446,7 @@ export class DressingPlugin {
       }
     };
     // a release that throws must not surface as an unhandled rejection
-    done.then(settle).catch(() => undefined);
+    done.then(settle).catch(() => {});
     return done;
   }
 
@@ -2478,7 +2478,7 @@ export class DressingPlugin {
           this.dropContentCopies(scene);
         }
       })
-      .catch(() => undefined);
+      .catch(() => {});
     return compiled;
   }
 

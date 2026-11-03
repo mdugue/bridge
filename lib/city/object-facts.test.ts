@@ -169,7 +169,7 @@ test("fact columns round-trip through a table reader", () => {
 });
 
 test("reading a tile that predates the fact columns yields unknowns", () => {
-  const f = readFacts(() => undefined, "#7");
+  const f = readFacts(() => {}, "#7");
   expect(f.buildingId).toBe("#7");
   expect(f.height).toBe(NO_FACT);
   expect(f.function).toBe("");

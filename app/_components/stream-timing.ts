@@ -192,7 +192,7 @@ export function startTrace(): () => void {
     typeof PerformanceObserver !== "undefined" &&
     PerformanceObserver.supportedEntryTypes.includes("longtask");
   if (!supported) {
-    return () => undefined;
+    return () => {};
   }
   streamTimings.watchLongTasks();
   const observer = new PerformanceObserver((list) => {

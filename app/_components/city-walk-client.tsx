@@ -198,7 +198,7 @@ function SiteViewer({ base }: { base: string }) {
   useEffect(() => {
     // A failed chunk load is next/dynamic's to report when it renders; this
     // early start must not add an unhandled rejection of its own.
-    loadViewer().catch(() => undefined);
+    loadViewer().catch(() => {});
   }, []);
   const { manifest, failed, retry } = useDataManifest(base);
   const safety = usePageSafety();

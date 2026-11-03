@@ -476,7 +476,7 @@ function antialiasingOf(
         input.value = from;
         raw.value = isRaw ? 1 : 0;
       },
-      setSize: () => undefined,
+      setSize: () => {},
       dispose: () => node.dispose(),
     };
   }
@@ -487,9 +487,9 @@ function antialiasingOf(
   return {
     afterPre: fxaa(beforeAa.texture, texel),
     direct: vec4(sceneAa.rgb.mul(occlusion), sceneAa.a),
-    read: () => undefined,
+    read: () => {},
     setSize,
-    dispose: () => undefined,
+    dispose: () => {},
   };
 }
 
@@ -1303,7 +1303,7 @@ export function createPostStack(
       await outline.compile(renderer, view);
       // the plate's programs: a failed build costs the plate its first
       // frame, never the scene's warm-up after it
-      await overlay?.compile(renderer, view).catch(() => undefined);
+      await overlay?.compile(renderer, view).catch(() => {});
       await compileBuilds([scene], view);
     },
     dropView: (view) => {
@@ -1340,9 +1340,9 @@ export function createPostStack(
       // question builds nothing
       stylesWarm ??= outline
         .compile(renderer, camera)
-        .then(() => overlay?.compile(renderer, camera).catch(() => undefined))
+        .then(() => overlay?.compile(renderer, camera).catch(() => {}))
         .then(warmStyles)
-        .catch(() => undefined);
+        .catch(() => {});
       return stylesWarm;
     },
     sceneChanged: () => {

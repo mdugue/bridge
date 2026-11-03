@@ -35,7 +35,7 @@ function harness() {
     addEventListener: (type: string, fn: (e: PointerEvent) => void) =>
       handlers.set(type, fn),
     removeEventListener: (type: string) => handlers.delete(type),
-    setPointerCapture: () => undefined,
+    setPointerCapture: () => {},
     style: { cursor: "" },
     getBoundingClientRect: () => ({ left: 0, top: 0, width: 400, height: 800 }),
   } as unknown as HTMLElement;
@@ -130,7 +130,7 @@ function harness() {
       clientX,
       clientY,
       scale,
-      preventDefault: () => undefined,
+      preventDefault: () => {},
     } as unknown as PointerEvent);
   return {
     calls,

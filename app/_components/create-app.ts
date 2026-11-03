@@ -830,7 +830,7 @@ async function createRenderer(
     // No adapter and no WebGL2 either (the preflight only sees that
     // `navigator.gpu` exists): free what init made, and say why in the
     // HUD's words rather than three's raw backend error (kept as `cause`).
-    renderer.dispose().catch(() => undefined);
+    renderer.dispose().catch(() => {});
     throw new Error(NO_GPU_MESSAGE, { cause: error });
   }
   // Fallen back to WebGL2 (no adapter): its timer queries would wrap every
@@ -1016,7 +1016,7 @@ async function deviceGone(renderer: WebGPURenderer): Promise<void> {
     device?: { lost: Promise<unknown> } | null;
   };
   const device = backend.isWebGPUBackend ? backend.device : null;
-  return device ? device.lost.then(() => undefined) : Promise.resolve();
+  return device ? device.lost.then(() => {}) : Promise.resolve();
 }
 
 /**
@@ -1056,7 +1056,7 @@ function probeGpu(renderer: WebGPURenderer): string | null {
 async function releaseGpu(renderer: WebGPURenderer): Promise<void> {
   let released: Promise<void>;
   try {
-    released = renderer.dispose().catch(() => undefined);
+    released = renderer.dispose().catch(() => {});
   } catch {
     released = Promise.resolve();
   }
@@ -1203,7 +1203,7 @@ export async function createCityWalkApp(
   // `?inspect=1`: three's Inspector over the canvas (inspector.ts)
   if (inspectRequested(window.location.search)) {
     // a QA aid: a chunk that fails to load leaves the boot as it was
-    cleanups.push(await attachInspector(renderer).catch(() => () => undefined));
+    cleanups.push(await attachInspector(renderer).catch(() => () => {}));
   }
   try {
     return await bootApp(opts, renderer, scene, cleanups);
@@ -1281,7 +1281,7 @@ function stopWorkers(): void {
 /** The renderer and its device (or its context), and its canvas. */
 async function releaseRenderer(renderer: WebGPURenderer): Promise<void> {
   // Async: it destroys the device (or loses the context) at the end.
-  const released = renderer.dispose().catch(() => undefined);
+  const released = renderer.dispose().catch(() => {});
   renderer.domElement.remove();
   return released;
 }
@@ -1548,7 +1548,7 @@ async function bootApp(
   const styleResources = createStyleResources(styleNight, ground.sunDirection);
 
   // The HUD lets the heavy dressing start after the handover (startStreaming).
-  let openGate: () => void = () => undefined;
+  let openGate: () => void = () => {};
   const dressingGate = new Promise<void>((resolve) => {
     openGate = resolve;
   });
@@ -1563,7 +1563,7 @@ async function bootApp(
     siteGround.along(ray.ray.origin, ray.ray.direction, far);
 
   // The stream: what lands and leaves, and everything that follows from it.
-  let onChange: () => void = () => undefined;
+  let onChange: () => void = () => {};
   // One pass for every change of a task: an update of the tile renderer
   // reports each tile that came into or left view on its own, and each
   // report walked the lamps, the ground's sources and the styles' gathering
@@ -1983,9 +1983,7 @@ async function bootApp(
       plate?.dispose();
       return;
     }
-    await withinCompileWait(postStack.compile(plate.group)).catch(
-      () => undefined
-    );
+    await withinCompileWait(postStack.compile(plate.group)).catch(() => {});
     if (disposed) {
       plate.dispose();
       return;
@@ -2013,8 +2011,7 @@ async function bootApp(
         bridgeUrls: extras.tiles.flatMap((t) =>
           t.bridges ? [new URL(t.bridges, tilesetUrl).href] : []
         ),
-        compile: async (object) =>
-          postStack.compile(object).catch(() => undefined),
+        compile: async (object) => postStack.compile(object).catch(() => {}),
         epsg: extras.epsg,
         ground: { offset, heightAt },
         onBikeCounts: opts.onBikeCounts,
@@ -2155,7 +2152,7 @@ async function bootApp(
             `${Math.round(performance.now() - asked)} ms`
           )
         )
-        .catch(() => undefined);
+        .catch(() => {});
     } else if (rig) {
       postStack.dropView(rig.camera);
     }
@@ -2692,7 +2689,7 @@ async function bootApp(
             scheduleStats();
           }
         })
-        .catch(() => undefined);
+        .catch(() => {});
     }
   }
 
@@ -2713,7 +2710,7 @@ async function bootApp(
       void postStack
         .compile(layer.mesh)
         .then(() => layer.indexUploaded(index))
-        .catch(() => undefined);
+        .catch(() => {});
     };
     const held = layer.held();
     if (held) {
@@ -2742,7 +2739,7 @@ async function bootApp(
         }
         material.needsUpdate = true;
         // built off the frame where it can be
-        void postStack.compile(t.mesh).catch(() => undefined);
+        void postStack.compile(t.mesh).catch(() => {});
       }
     }
   };
@@ -3068,7 +3065,7 @@ async function bootApp(
     next
       .prepareBvh()
       // a failed build leaves the tile to the rays, which build it here
-      .catch(() => undefined)
+      .catch(() => {})
       .finally(() => {
         bvhPending = false;
         // an outline whose part the worker had is drawn now
@@ -3651,7 +3648,7 @@ async function bootApp(
           resolution?.gpu(ms);
         }
       })
-      .catch(() => undefined)
+      .catch(() => {})
       .finally(() => {
         gpuReading = false;
       });
@@ -4050,7 +4047,7 @@ async function bootApp(
   // only once every compile in flight has (compile-lanes.ts), neighbours'
   // included, and a frame skips what is not ready rather than stall.
   await streamTimings.timed("boot:scene-compile", async () =>
-    withinCompileWait(postStack.compile(scene).catch(() => undefined))
+    withinCompileWait(postStack.compile(scene).catch(() => {}))
   );
   // On the spawn vantage (or where a recovered page stood) now that its
   // ground exists (the pose was placed before any terrain had landed,

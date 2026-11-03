@@ -29,7 +29,7 @@ function moved(change: (camera: PerspectiveCamera) => void): Motion {
 }
 
 test("a still camera does not move", () => {
-  const m = moved(() => undefined);
+  const m = moved(() => {});
   expect(m.most).toBeCloseTo(0, 6);
   expect(blurs(m, false)).toBe(false);
 });
