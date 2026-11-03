@@ -117,6 +117,7 @@ import {
 } from "./instancing";
 import type { F, Live, V2, V3, V4 } from "./shader-chunks";
 import { setGraph, setSlots } from "./material-slots";
+import { gdHash } from "./ground-detail";
 import { sceneMaterial } from "./three-utils";
 import { viewDirection } from "./view-direction";
 import { TRUNK_BASE } from "@/lib/city/tree-family";
@@ -245,6 +246,8 @@ export interface VegetationChunk {
   /** crowned trees in the chunk (what the rich-crown budget counts) */
   trees: number;
   trunks: Instances;
+  /** the register's own trunks beside the placements' (unforked) */
+  ownTrunks?: Instances;
   /** the trunks' feet (tree-foot.ts), shown with them */
   feet?: Instances[];
 }
@@ -765,10 +768,8 @@ function crownSway(time: Live, base: V3): { gust: F; local: V3 } {
  */
 function treeGrowth(y: F): V3 {
   const origin = instanceColumn(3);
-  const a = fract(sin(dot(origin.xz, vec2(12.71, 31.17))).mul(43758.5)).mul(
-    6.2832
-  );
-  const h = fract(sin(dot(origin.xz, vec2(41.31, 17.93))).mul(24634.6));
+  const a = gdHash(origin.xz.mul(0.71)).mul(6.2832);
+  const h = gdHash(origin.xz.mul(0.53).add(7.3));
   const t = clamp(y.div(TRUNK_H), 0, 1);
   const crook = sin(t.mul(Math.PI))
     .mul(h.sub(0.5))
@@ -797,7 +798,9 @@ function treeGrowth(y: F): V3 {
  * the trunk's top they fade out, so the crown still sits on its stem.
  */
 export function crownShape(form: V3 = crownForm()): V3 {
-  return form.add(treeGrowth(positionGeometry.y));
+  // the whole crown moves as the trunk's top does: a register crown's
+  // heights are in its own frame, not the trunk's
+  return form.add(treeGrowth(float(TRUNK_H)));
 }
 
 /** The crown's own shape (`crownShape` before the tree's growth moves
@@ -1505,6 +1508,10 @@ export interface TreeGeos {
   mid: BufferGeometry;
   rich: BufferGeometry;
   trunk: BufferGeometry;
+  /** the trunk without its fork, for the register's own trunks (on
+   *  their own matrices the limbs, placed for the lobed crown, miss
+   *  their crowns); set for a cell that has any */
+  plain?: BufferGeometry;
   /** the trunks' feet's geometries (tree-foot.ts) */
   foot?: FootGeos;
 }
@@ -1578,8 +1585,9 @@ function buildTreeCell(
   const crownMat = crownMats.leafy;
   const { trees, extras } = cell;
   const crowned = extras.filter((e) => e.crown);
+  const plain = geos.plain ?? geos.trunk;
   if (trees.length + crowned.length === 0) {
-    const trunks = new Instances(geos.trunk, trunkMat, extras.length);
+    const trunks = new Instances(plain, trunkMat, extras.length);
     trunks.castShadow = true;
     extras.forEach((e, i) => trunks.setMatrixAt(i, e.trunk));
     paintBark(trunks, 0, extras);
@@ -1594,6 +1602,8 @@ function buildTreeCell(
   const mid = crownMesh(geos.mid, crownMat, trees, crowned, "cheap");
   let rich: Instances;
   let trunks: Instances;
+  // the register's own trunks, apart from the placements' forked ones
+  let own: Instances | undefined;
   if (extras.length === 0) {
     // Born on the mid crowns' matrices (no buffer of their own to drop).
     trunks = new Instances(
@@ -1610,16 +1620,27 @@ function buildTreeCell(
     fitTrunks(trunks, writeTrunkDrops(trunks, trees));
     rich.computeBoundingSphere();
   } else {
-    trunks = new Instances(geos.trunk, trunkMat, trees.length + extras.length);
     rich = crownMesh(geos.rich, crownMat, trees, crowned, "rich");
-    writePlacements(trunks, trees);
-    extras.forEach((e, i) => trunks.setMatrixAt(trees.length + i, e.trunk));
-    paintBark(trunks, trees.length, extras);
-    trunks.instanceMatrix.needsUpdate = true;
-    fitTrunks(trunks, writeTrunkDrops(trunks, trees));
+    own = new Instances(plain, trunkMat, extras.length);
+    extras.forEach((e, i) => own?.setMatrixAt(i, e.trunk));
+    paintBark(own, 0, extras);
+    finishInstances(own);
+    own.castShadow = true;
+    if (trees.length > 0) {
+      trunks = new Instances(geos.trunk, trunkMat, trees.length);
+      writePlacements(trunks, trees);
+      trunks.instanceMatrix.needsUpdate = true;
+      fitTrunks(trunks, writeTrunkDrops(trunks, trees));
+    } else {
+      trunks = own;
+      own = undefined;
+    }
   }
   trunks.castShadow = true;
-  const feet = feetOf(trunks, geos, ground, footMat);
+  const feet = [
+    ...(feetOf(trunks, geos, ground, footMat) ?? []),
+    ...((own && feetOf(own, geos, ground, footMat)) ?? []),
+  ];
   // The far tier: every other tree of a dense chunk, drawn wider (see
   // keepInFarTier), so a forest stays a closed canopy far away.
   const farTrees = trees.filter((_, i) => keepInFarTier(i, trees.length));
@@ -1659,9 +1680,10 @@ function buildTreeCell(
       tier: "mid",
       trees: trees.length + crowned.length,
       trunks,
+      ownTrunks: own,
       feet,
     },
-    meshes: [trunks, ...(feet ?? []), mid, rich, far],
+    meshes: [trunks, ...(own ? [own] : []), ...feet, mid, rich, far],
     season: seasonCrowns({ far, farSlots, mid, rich }, keys, crownMats),
   };
 }
@@ -1818,9 +1840,7 @@ function* buildTrees(
       );
       needles[form] = kind;
     }
-    return cell.extras.length > 0 && kind.trunk === geos.trunk
-      ? { ...kind, trunk: plainTrunk() }
-      : kind;
+    return cell.extras.length > 0 ? { ...kind, plain: plainTrunk() } : kind;
   };
   const trunkMat = tileTrunkMaterial(sun, footMat);
 
@@ -1971,9 +1991,10 @@ function showTier(chunk: VegetationChunk, tier: CrownTier): void {
   chunk.far.visible = tier === "far";
   // A trunk 550 m out is below a pixel; the far tier drops it.
   chunk.trunks.visible = tier !== "far";
-  for (const feet of chunk.feet ?? []) {
-    feet.visible = feet.visible && tier !== "far";
+  if (chunk.ownTrunks) {
+    chunk.ownTrunks.visible = tier !== "far";
   }
+  // (the feet: `createVegetationLod`, by the nearest tree's distance)
 }
 
 /**

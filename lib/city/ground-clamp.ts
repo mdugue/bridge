@@ -72,7 +72,16 @@ export function groundSlope(
   z: number
 ): [number, number] {
   const { x: e, y: n } = worldToEpsg(x, z, ground.offset);
-  const here = ground.heightAt(e, n);
+  // read only where a side is missing (`rise`): most feet have all four
+  let read = false;
+  let at: number | null = null;
+  const here = (): number | null => {
+    if (!read) {
+      at = ground.heightAt(e, n);
+      read = true;
+    }
+    return at;
+  };
   const east = ground.heightAt(e + SLOPE_STEP, n);
   const west = ground.heightAt(e - SLOPE_STEP, n);
   const north = ground.heightAt(e, n + SLOPE_STEP);
@@ -85,16 +94,17 @@ export function groundSlope(
 }
 
 /** The rise from `before` to `after` (m per m) across a point read
- *  SLOPE_STEP either side, one-sided from `here` where a side is
- *  missing. */
+ *  SLOPE_STEP either side, one-sided from `here` (read on demand) where a
+ *  side is missing. */
 function rise(
   before: number | null,
-  here: number | null,
+  hereAt: () => number | null,
   after: number | null
 ): number {
   if (before !== null && after !== null) {
     return (after - before) / (2 * SLOPE_STEP);
   }
+  const here = hereAt();
   if (here === null) {
     return 0;
   }

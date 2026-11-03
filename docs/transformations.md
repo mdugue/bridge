@@ -359,10 +359,12 @@ visual-variable codebook is in
   (on the ground a walk kind paints — built-up, path, unclassified, and a
   path's smooth edge — as before), so a stray sealed texel among a
   path's sanded ones is a faint grey, not a block. Since 2026-11-03 the
-  bake carries a tagged way's own kind on along its path, up to 8 texels
-  past the way's buffer (`surface.py` `along_paths`), before the town's
-  default (asphalt) fills the rest: the class raster's path is often
-  wider than the buffer, and a sand path came out grey at its sides. Out to
+  bake carries a tagged way's own kind on along its path, up to 4 texels
+  past the way's buffer (`surface.py` `along_paths`; only a walkway's own
+  buffer seeds it, never an area or a sidewalk band), where the DLM's
+  `BEF` says nothing, before the town's default (asphalt) fills the rest:
+  the class raster's path is often wider than the buffer, and a sand path
+  came out grey at its sides. Out to
   1.2 m a pixel (the shares to 1 m), then the splat as before. No bake,
   no raster.
 - **Paving materials** `❝ taken` `≈ assumed` (*Beläge*) — OSM `surface=*` on the highways (plus
@@ -2336,8 +2338,10 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   up to ±0.12 m mid-way up the trunk, both in metres turned into each
   set's frame so a register tree's trunk and crown still meet; the trunk
   forks at 0.78 of its height into three limbs ending inside the crown
-  (`trunkLimbs`, part of the shared trunk geometry; a cone or pine, and
-  a cell with the register's own trunks, keeps an unforked trunk), which a bare crown shows in winter. Not away from walls: the trunk knows nothing of them;
+  (`trunkLimbs`, part of the shared trunk geometry; a cone or pine keeps
+  an unforked trunk, and so do the register's own trunks, a set of their
+  own beside the canopy's in a cell that has both), which a bare crown
+  shows in winter; the crown moves as the trunk's top does, whole. Not away from walls: the trunk knows nothing of them;
   the mid crown is a detail-2 icosphere (180 tris) with lobes;
   **three-tier crown LOD** per 250 m chunk (`lib/city/vegetation-lod.ts`),
   planned over every loaded tile at once: the rich ~1 440-tri multi-tuft
@@ -2444,7 +2448,8 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   draws every 7 m cell, the register only the trees it tends). **Draw calls:**
   the trunks and the broadleaf crowns (≈93 % of the trees) are handed to
   `buildVegetation` as precomputed `TreeInstance`s and ride in the canopy's
-  own chunk meshes; only the flame/cone/dome silhouettes are meshes of the
+  own chunk meshes (their trunks one unforked set beside the canopy's
+  forked one); only the flame/cone/dome silhouettes are meshes of the
   inventory layer.
   *Findings* (`scripts/eval/kataster-eval.py`): only **31 %** of cadastre
   trees have a canopy point (21 % on the spawn tile) — the canopy mask
@@ -2766,7 +2771,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
     it a tuft of 88 real blades (`tuftGraph`, a set of its own on the
     trunks' buffers: thin triangles 0.08–0.24 m high, both faces lit from above, 0.8–1.3 × by a
     hash, leaning out from 0.28–0.8 m round a 0.25 m foot moved out to
-    the trunk's own roots), opaque, lit as the ground, swaying 3.5 cm,
+    the trunk's own roots, turned with the trunk), opaque, lit as the ground, swaying 3.5 cm,
     shrinking into the ground as the foot fades, so the cut between bark
     and lawn is hidden — not in paving or a wood; and in autumn fallen leaves — covering
     flecks in yellow, orange, russet and brown in 11 cm cells, thick under
@@ -2791,7 +2796,9 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
     mulch showing through); a pit 0.9–3 m off the kerb gets, for 70 % of
     them, an anthracite guard hoop between it and the road, 0.45 m short
     of the kerb and along it (the road distance's gradient is the way to
-    the road) — a small mesh, opaque, standard-lit, not a shadow caster.
+    the road; none where the trunk's foot and its roots' bulge, 1.55 ×
+    its radius, reach past it) — a small mesh, opaque, standard-lit, not a
+    shadow caster, its posts on 0.2 m under the ground.
   Every part lies on the ground's slope at its trunk (8 × 8 cells; the
   slope read off the terrain 1.5 m either side of the foot when the
   chunk is built, two signed bytes a tree, `groundSlope`); where the

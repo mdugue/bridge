@@ -57,6 +57,7 @@ import {
   ROAD_CLASS,
   srgbToLinear,
 } from "@/lib/city/landcover";
+import { SINK } from "@/lib/city/ground-join";
 import { TRUNK_UNIT_H, trunkRadiusAt } from "@/lib/city/tree-inventory";
 import { outOfDesignSite } from "./design-site";
 import {
@@ -174,6 +175,10 @@ const GRATE_FROM = 5;
 const GUARD_BEFORE = 0.45;
 const GUARD_NEAR: [number, number] = [0.9, 3];
 const GUARD_SHARE = 0.7;
+/** The hoop's tube (m), and how far out (× the trunk's foot radius) the
+ *  roots' bulge reaches (`trunkRoots`' ROOT_BULGE, with a margin). */
+const GUARD_T = 0.06;
+const GUARD_CLEAR = 1.55;
 /** The unmown grass round a park tree (the mower keeps off the trunk):
  *  how far out it reaches past the trunk (m), the factor its long, darker,
  *  yellower blades multiply the lawn by, and its seed heads'. */
@@ -297,11 +302,18 @@ export function buildFootGeos(): FootGeos {
 }
 
 /** A guard hoop round a street tree's pit: an inverted U of 6 cm tube,
- *  0.75 m high and 0.6 m wide, along x (the kerb), its foot at 0. */
+ *  0.75 m high and 0.6 m wide, along x (the kerb), its foot at 0 and its
+ *  posts on under it by SINK.box (it stands on the trunk's one slope, not
+ *  on the ground it meets; placed in the vertex stage, so it has no join
+ *  points to report). */
 function buildHoop(): BufferGeometry {
-  const t = 0.06;
+  const t = GUARD_T;
   const post = (x: number) =>
-    new BoxGeometry(t, 0.75, t).translate(x, 0.375, 0);
+    new BoxGeometry(t, 0.75 + SINK.box, t).translate(
+      x,
+      (0.75 - SINK.box) / 2,
+      0
+    );
   const top = new BoxGeometry(0.6 + t, t, t).translate(0, 0.75, 0);
   const hoop = mergeGeometries([post(-0.3), post(0.3), top]);
   hoop.deleteAttribute("uv");
@@ -407,7 +419,7 @@ export function treeFeet(
     // the ground's slope at the foot: the feet's own (two bytes a tree),
     // one attribute for all the chunk's sets
     feet.geometry.setAttribute(SLOPE, slopes);
-    for (const name of ["iMat0", "iMat1", "iMat2", "iMat3", DROP, "iColor"]) {
+    for (const name of ["iMat0", "iMat1", "iMat2", "iMat3", DROP]) {
       const shared = trunks.geometry.getAttribute(name);
       if (shared) {
         feet.geometry.setAttribute(name, shared);
@@ -582,7 +594,9 @@ function footFrame(s: FootSlots, size: [number, number]): FootFrame {
  * and the pit's roots, cracks and tufts that follow them.
  */
 export function rootSeed(origin: V2): { lobes: F; phase: F } {
-  const seed = fract(sin(dot(origin, vec2(12.9898, 78.233))).mul(43758.5));
+  // a hash that keeps its spread kilometres from the frame's centre (a
+  // sine of a large argument loses it in 32-bit floats)
+  const seed = gdHash(origin.mul(1.37));
   return { lobes: floor(seed.mul(2)).add(3), phase: seed.mul(40) };
 }
 
@@ -1245,7 +1259,9 @@ function guardGraph(r: FootRasters): { position: V3 } {
     .mul(step(GUARD_NEAR[0], off))
     .mul(step(off, GUARD_NEAR[1]))
     .mul(step(pick, GUARD_SHARE))
-    .mul(step(0.001, f.fade));
+    .mul(step(0.001, f.fade))
+    // none where the trunk's foot and its roots' bulge reach past it
+    .mul(step(f.rt.mul(GUARD_CLEAR).add(GUARD_T), off.sub(GUARD_BEFORE)));
   const place = toRoad.mul(off.sub(GUARD_BEFORE));
   const p = positionGeometry;
   // x along the kerb, z towards the road: a rotation (determinant +1), so
@@ -1320,13 +1336,12 @@ function tuftGraph(r: FootRasters): PitGraph {
     .mul(float(1).sub(f.wood))
     .mul(float(1).sub(step(0.5, f.pit)))
     .mul(step(0.001, f.fade));
-  const seed = fract(sin(dot(f.world.xz, vec2(7.13, 3.71))).mul(9631.7));
+  const seed = gdHash(f.world.xz.mul(0.83).add(19.1));
   const p = positionGeometry;
   const dir = normalize(p.xz.add(vec2(1e-4, 0)));
-  // out to the trunk's own foot, its roots' bulge (the trunk's lobes)
-  const lobe = cos(atan(dir.y, dir.x).mul(f.lobes).add(f.phase))
-    .mul(0.5)
-    .add(0.5);
+  // out to the trunk's own foot, its roots' bulge (the trunk's lobes, in
+  // the trunk's turned frame as `rootAt` reads them)
+  const lobe = rootAt(dir, f.lobes, f.phase, f.axisX, f.axisZ).lobe;
   const out = f.rt.mul(lobe.mul(lobe).mul(0.55).add(1)).sub(TUFT_FOOT);
   const tall = p.y.mul(mix(0.8, 1.3, seed)).mul(smoothstep(0, 0.6, f.fade));
   const sway = sin(footClock.mul(1.3).add(seed.mul(40)).add(p.x.mul(9)))
