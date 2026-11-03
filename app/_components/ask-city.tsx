@@ -871,9 +871,15 @@ function toolLine(name: string, input: unknown, output?: unknown): string {
   const args = (input ?? {}) as Record<string, unknown>;
   // a refused call says why, in the card's words (the model's are longer)
   const refused = output as
-    | { ausserhalb?: unknown; hinweis?: unknown; ok?: unknown }
+    | {
+        ausserhalb?: unknown;
+        gefunden?: unknown;
+        hinweis?: unknown;
+        ok?: unknown;
+      }
     | undefined;
-  if (refused?.ok === false) {
+  // (was_ist_da says `gefunden: false` where the others say `ok: false`)
+  if (refused?.ok === false || refused?.gefunden === false) {
     return refused.ausserhalb === true
       ? "Findet den Ort nicht in der Stadt"
       : argText(refused.hinweis) || "Abgelehnt";

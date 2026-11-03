@@ -71,7 +71,7 @@ export function speakable(text: string): string {
       .replace(/([^\s.!?:;,])[ \t]*\n+/g, "$1. ")
       .replace(/(\d)\s?m²/g, "$1 Quadratmeter")
       .replace(/(\d)\s?m³/g, "$1 Kubikmeter")
-      .replace(/(\d)\s?m\b/g, "$1 Meter")
+      .replace(/(\d)\s?m(?![\p{L}\d])/gu, "$1 Meter")
       .replace(/\s+/g, " ")
       .trim()
   );

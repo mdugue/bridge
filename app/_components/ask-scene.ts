@@ -16,7 +16,7 @@ import { METHODS } from "@/lib/city/methods";
 import type { Site } from "@/lib/city/site";
 import type { AskScene } from "./ask-scene-tools";
 import type { CityWalkHandle } from "./create-app";
-import { isAbortError } from "./fetch-optional";
+import { isAbortError, untilAborted } from "./fetch-optional";
 import { loadLandmarkFacts } from "./landmark-facts-load";
 import { sleep } from "./net-gate";
 import type { SceneTime } from "./scene-time";
@@ -80,21 +80,6 @@ async function landed(
   }
   await waitWhile(h.streamBusy, gone, STREAM_WAIT_MS, signal);
   return true;
-}
-
-/** Rejects when `signal` aborts (it never resolves). */
-function aborted(signal: AbortSignal): Promise<never> {
-  return new Promise((_, reject) => {
-    if (signal.aborted) {
-      reject(new DOMException("aborted", "AbortError"));
-      return;
-    }
-    signal.addEventListener(
-      "abort",
-      () => reject(new DOMException("aborted", "AbortError")),
-      { once: true }
-    );
-  });
 }
 
 const LOADING = { gefunden: false, hinweis: "Die Szene lädt noch." };
@@ -197,10 +182,7 @@ export function useAskScene(
         let landmarks: LandmarkFactsIndex | null = null;
         if (url) {
           try {
-            landmarks = await Promise.race([
-              loadLandmarkFacts(url),
-              aborted(signal),
-            ]);
+            landmarks = await untilAborted(loadLandmarkFacts(url), signal);
           } catch (error) {
             if (isAbortError(error)) {
               return CANCELLED;

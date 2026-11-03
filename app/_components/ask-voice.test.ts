@@ -49,3 +49,9 @@ test("a date at a line's start is no list mark", () => {
     "13. Februar 1945: die Bomben. 1743. Weiter"
   );
 });
+
+test("a word after a number that starts with m stays a word", () => {
+  expect(
+    speakable("Seit 1945 müssen die 2 mächtigen Türme 91 m hoch sein.")
+  ).toBe("Seit 1945 müssen die 2 mächtigen Türme 91 Meter hoch sein.");
+});

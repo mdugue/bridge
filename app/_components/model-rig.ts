@@ -183,8 +183,8 @@ export interface ModelRig {
   /** a glide or a dolly zoom is under way */
   moving: () => boolean;
   /** where the picture's subject stands (NDC: the preset's pivot), or
-   *  null outside Modell */
-  focusNdc: () => { x: number; y: number } | null;
+   *  undefined outside Modell */
+  focusNdc: () => { x: number; y: number } | undefined;
   /** Enters Modell from the walk/fly view, in `preset` (the last one by default). */
   enter: (preset?: ModelPresetId) => void;
   /** Leaves Modell for walk or fly (the pose it was entered from, if near). */
@@ -569,7 +569,8 @@ export function createModelRig(opts: ModelRigOptions): ModelRig {
     settledView: () => (phase.kind === "model" ? (glide?.to ?? view) : null),
     moving: () =>
       glide !== null || phase.kind === "entering" || phase.kind === "leaving",
-    focusNdc: () => (phase.kind === "model" && view ? pivotNdc(view) : null),
+    focusNdc: () =>
+      phase.kind === "model" && view ? pivotNdc(view) : undefined,
     blend: () => {
       switch (phase.kind) {
         case "off":

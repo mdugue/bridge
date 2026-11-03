@@ -4278,7 +4278,7 @@ async function bootApp(
         ? modelRig.centreOn(groundPoint(x, y))
         : pose.glideToSpot(x, y),
     getGlideTarget: pose.getGlideTarget,
-    focusNdc: () => modelRig.focusNdc() ?? undefined,
+    focusNdc: modelRig.focusNdc,
     viewMoving: () => pose.getGlideTarget() !== null || modelRig.moving(),
     streamBusy: () => !sceneSettled,
     stopGlide: pose.cancelGlide,
