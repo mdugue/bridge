@@ -179,9 +179,9 @@ describe("a placed plan", () => {
   });
 });
 
-describe("designMasks with ground triangles", () => {
-  const count = (cells: Uint8Array) => cells.reduce((s, c) => s + c, 0);
+const count = (cells: Uint8Array) => cells.reduce((s, c) => s + c, 0);
 
+describe("designMasks with ground triangles", () => {
   test("a triangle marked ground is in the site but not the plan", () => {
     // a 10 m wall standing up: in the plan unless marked
     const positions = [0, 0, 0, 10, 0, 0, 10, 0, 5, 0, 0, 0, 10, 0, 5, 0, 0, 5];

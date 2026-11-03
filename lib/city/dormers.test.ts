@@ -40,6 +40,14 @@ const unitNormals = (tris: number[]) => {
 const faceNormals = (tris: number[]) =>
   unitNormals(tris).map((n) => n.map((c) => Math.round(c) + 0));
 
+const front = (q: { positions: number[]; isRoof: number[] }) =>
+  Math.max(
+    ...q.positions.filter(
+      (v, i) =>
+        i % 3 === 2 && q.isRoof[(i - 2) / 3] === 0 && q.positions[i - 2] === 101
+    )
+  );
+
 describe("dormerMesh", () => {
   test("a front down the slope, two cheeks across it, a roof up", () => {
     const { positions, isRoof } = dormerMesh(dormer(), offset);
@@ -78,16 +86,6 @@ describe("dormerMesh", () => {
     expect(walls).toContainEqual([0, -1, 0]);
     expect(walls).not.toContainEqual([0, 1, 0]);
   });
-
-  const front = (q: { positions: number[]; isRoof: number[] }) =>
-    Math.max(
-      ...q.positions.filter(
-        (v, i) =>
-          i % 3 === 2 &&
-          q.isRoof[(i - 2) / 3] === 0 &&
-          q.positions[i - 2] === 101
-      )
-    );
 
   test("a shed dormer's roof falls from the top line to its front", () => {
     const flat = dormerMesh(dormer(), offset);

@@ -167,6 +167,9 @@ const plaque = (name: string) => ({
   properties: { name, kind: "stone" },
 });
 
+const ids = (names: string[]) =>
+  monumentsOf({ features: names.map(plaque) }).map((m) => [m.id, m.name]);
+
 test("monuments in one metre keep their ids by name, whatever the order", () => {
   const square = {
     geometry: {
@@ -184,8 +187,6 @@ test("monuments in one metre keep their ids by name, whatever the order", () => 
     },
     properties: { name: "Sockel", kind: "column" },
   };
-  const ids = (names: string[]) =>
-    monumentsOf({ features: names.map(plaque) }).map((m) => [m.id, m.name]);
   expect(ids(["Bach", "Arndt"])).toEqual([
     ["m411000_5656000", "Arndt"],
     ["m411000_5656000_2", "Bach"],

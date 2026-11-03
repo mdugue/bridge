@@ -474,6 +474,23 @@ function boxWalls(
 
 const metres = (v: number) => (v / 32_767) * FACADE_SCALE_M;
 
+const front = (x0: number, x1: number) => ({
+  object: 0,
+  pts: [
+    [x0, 0, 0],
+    [x1, 0, 0],
+    [x1, 0, 12],
+    [x0, 0, 12],
+  ],
+});
+
+const door = (x: number) => ({
+  object: 0,
+  at: [x, 0] as [number, number],
+  n: [0, -1] as [number, number],
+  w: 1.2,
+});
+
 describe("facadeAttribute", () => {
   test("every wall vertex: its place from the wall's middle and the wall's length", () => {
     const mesh = quads([
@@ -532,16 +549,6 @@ describe("facadeAttribute", () => {
     expect(slotAxes(f[1])).toEqual({ axis: 3, n: 4 });
     // the east wall measured nothing: centred, its own length
     expect(metres(f[4 * 6 + 1])).toBeCloseTo(10, 1);
-  });
-
-  const front = (x0: number, x1: number) => ({
-    object: 0,
-    pts: [
-      [x0, 0, 0],
-      [x1, 0, 0],
-      [x1, 0, 12],
-      [x0, 0, 12],
-    ],
   });
 
   test("a facade of several polygons keeps the lattice on each", () => {
@@ -654,13 +661,6 @@ describe("facadeAttribute", () => {
     // shopfront
     expect(metres(f[1])).toBeCloseTo(14, 1);
     expect(metres(f[4 * 6 + 1])).toBeCloseTo(-10, 1);
-  });
-
-  const door = (x: number) => ({
-    object: 0,
-    at: [x, 0] as [number, number],
-    n: [0, -1] as [number, number],
-    w: 1.2,
   });
 
   test("a wall with more doors than the slots hold has no ground-floor windows", () => {
@@ -944,6 +944,18 @@ describe("palaces", () => {
   });
 });
 
+const wall = (axis: number): WindowWall =>
+  ({
+    a: [100, 200],
+    b: [114, 200],
+    eave: 12,
+    imgs: 6,
+    L: 14,
+    model: { axis, grid: "regular", h: 1.5, phase: 1.6, w: 1.2 },
+    n: [0, -1],
+    oid: "A",
+  }) as WindowWall;
+
 describe("measured axes", () => {
   test("the lattice's axes that fit, counted exactly", () => {
     const m = measuredColumns(0, 14, { at: 1.6, axis: 3, w: 1.2 });
@@ -974,18 +986,6 @@ describe("measured axes", () => {
       measuredSlot(MEASURED_AXES.maxN, MEASURED_AXIS_MAX_M)
     ).toBeLessThanOrEqual(32_767);
   });
-
-  const wall = (axis: number): WindowWall =>
-    ({
-      a: [100, 200],
-      b: [114, 200],
-      eave: 12,
-      imgs: 6,
-      L: 14,
-      model: { axis, grid: "regular", h: 1.5, phase: 1.6, w: 1.2 },
-      n: [0, -1],
-      oid: "A",
-    }) as WindowWall;
 
   test("each wall keeps its own measured spacing", () => {
     const index = new Map([["A", 0]]);

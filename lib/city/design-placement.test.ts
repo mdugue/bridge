@@ -25,6 +25,8 @@ import type { TerrainBounds } from "./terrain-geometry";
 
 const local: DesignBox = { min: [-10, 0, -5], max: [10, 12, 5] };
 
+const heightAt = (x: number) => 100 + x / 10;
+
 describe("design placement", () => {
   test("zones of ETRS89/UTM codes", () => {
     expect(utmZone(25_833)).toBe(33);
@@ -107,8 +109,6 @@ describe("design placement", () => {
       [-10, 5],
     ]);
   });
-
-  const heightAt = (x: number) => 100 + x / 10;
 
   test("set on the ground at the lowest ground under it", () => {
     // ground rising to the east by 1 m per 10 m

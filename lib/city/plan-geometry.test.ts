@@ -26,6 +26,8 @@ function normalsY(p: Float32Array): number[] {
 
 const flatGround = () => 100;
 
+const byValue = (a: number, b: number) => a - b;
+
 describe("planMesh", () => {
   test("an area lies on the ground, lifted by its class, facing up", () => {
     const mesh = planMesh(
@@ -205,8 +207,6 @@ describe("planMesh", () => {
       }
     }
   });
-
-  const byValue = (a: number, b: number) => a - b;
 
   test("a mesh keeps its own heights and faces up", () => {
     const mesh = planMesh(

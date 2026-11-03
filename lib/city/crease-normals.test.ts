@@ -137,9 +137,9 @@ describe("creaseNormals", () => {
   });
 });
 
-describe("forEachPoint", () => {
-  const byFirst = (a: number[], b: number[]) => a[0] - b[0];
+const byFirst = (a: number[], b: number[]) => a[0] - b[0];
 
+describe("forEachPoint", () => {
   test("visits each point's live corners in rising order, colliding buckets split", () => {
     // 3 000 vertices on a coarse grid, three groups, a quarter dead: many
     // shared points, and buckets that hold more than one

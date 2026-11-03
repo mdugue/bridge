@@ -48,6 +48,8 @@ const faceNormals = (tris: number[]) => {
   return out;
 };
 
+const xs = (tris: number[]) => tris.filter((_, i) => i % 3 === 0);
+
 describe("doorMesh", () => {
   test("its fronts face out of the wall, none faces into it", () => {
     const { leaf, surround } = doorMesh(door(1, 0), offset);
@@ -55,8 +57,6 @@ describe("doorMesh", () => {
     expect(faceNormals(surround).some(([x]) => x === -1)).toBe(false);
     expect(faceNormals(surround).filter(([x]) => x === 1)).toHaveLength(6);
   });
-
-  const xs = (tris: number[]) => tris.filter((_, i) => i % 3 === 0);
 
   test("a shift lays it out along the normal", () => {
     const at = Math.max(...xs(doorMesh(door(1, 0), offset).surround));
