@@ -2701,7 +2701,13 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
     tile on one build per raster layout): the pit's mulch in paving, leaf
     mould in a wood, the grass's roots on a lawn or meadow, elsewhere the
     class colour darkened as damp soil (× 0.72); one fixed earth
-    elsewhere. A separate root-flare skirt round
+    elsewhere.
+  - **bark and moss** (`barkSkin`, every trunk): 17 furrows round the
+    stem, wavering up it, tilt the normal across them (± 0.38) and shade
+    their troughs to × 0.84, faded to their mean between 10 and 35 m (they
+    would shimmer); moss (sRGB 118, 138, 80) on the weather side (west, a
+    little north), highest low on the trunk and gone by 1.9 m, in
+    patches, and a little all round at the foot, at most 80 %. A separate root-flare skirt round
     the trunk read as a shoe and was dropped; the flat disc before it
     floated on a slope and let the paving show through.
   - **the trunk in its crown's shade** (`crownShade`, every trunk): the

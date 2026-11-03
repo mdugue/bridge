@@ -12,13 +12,16 @@ import {
   Quaternion,
   SRGBColorSpace,
   type UniformNode,
+  Vector2,
   Vector3,
 } from "three/webgpu";
 import {
   atan,
   cameraPosition,
+  cameraViewMatrix,
   clamp,
   cos,
+  cross,
   distance,
   dot,
   float,
@@ -31,6 +34,8 @@ import {
   modelWorldMatrix,
   mix,
   normalGeometry,
+  normalView,
+  normalWorld,
   normalize,
   positionGeometry,
   positionWorld,
@@ -47,6 +52,7 @@ import {
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
 import { type GroundContext, groundSlope } from "@/lib/city/ground-clamp";
+import { srgbToLinear } from "@/lib/city/landcover";
 import { LOOK_DEFAULTS, type LookValues } from "@/lib/city/look-controls";
 import { decodeGreyPng } from "@/lib/city/png-raster";
 import {
@@ -1204,6 +1210,7 @@ export function buildTrunkMaterial(
 interface TrunkGraph {
   position: V3;
   color: V3;
+  normal: V3;
 }
 
 function trunkMaterialOf(graph: TrunkGraph): MeshStandardNodeMaterial {
@@ -1211,6 +1218,7 @@ function trunkMaterialOf(graph: TrunkGraph): MeshStandardNodeMaterial {
   m.name = "trunk";
   m.positionNode = graph.position;
   m.colorNode = graph.color;
+  m.normalNode = graph.normal;
   return m;
 }
 
@@ -1244,11 +1252,78 @@ function trunkGraph(
   const soil = earth
     ? varying(earth, "vTrunkEarth")
     : vec3(TRUNK_EARTH.r, TRUNK_EARTH.g, TRUNK_EARTH.b);
+  const skin = barkSkin(metres);
+  const mossed = mix(bark.mul(skin.shade), BARK_MOSS, skin.moss);
   return {
     position: instancePosition(roots.local),
-    color: mix(bark, soil, toEarth)
+    color: mix(mossed, soil, toEarth)
       .mul(mix(0.82, 1, smoothstep(0, 0.08, metres)))
       .mul(shaded),
+    normal: skin.normal,
+  };
+}
+
+/** Bark furrows round the stem, how far they tilt the normal, and the
+ *  distance (m) they fade into their mean by (they would shimmer). */
+const BARK_FURROWS = 17;
+const BARK_TILT = 0.38;
+const BARK_FADE: [number, number] = [10, 35];
+/** The moss on the weather side (linear): muted, the scene's pastel. */
+const BARK_MOSS = vec3(
+  ...([118, 138, 80].map(srgbToLinear) as [number, number, number])
+);
+/** The weather side (world x, z): west, a little north (z is south). */
+const WEATHER = new Vector2(-1, -0.35).normalize();
+
+/**
+ * The bark's skin: furrows running up the stem, wavering, as a tilt of
+ * the normal across them and a little shade in them (faded to their mean
+ * past BARK_FADE), and moss on the weather side, highest low on the
+ * trunk, in patches, and a little all round at the foot. `metres` is the
+ * vertex's height over the ground.
+ */
+function barkSkin(metres: F): { shade: F; moss: F; normal: V3 } {
+  const p = positionGeometry;
+  const a = atan(p.z, p.x);
+  const phase = a
+    .mul(BARK_FURROWS)
+    .add(sin(p.y.mul(3.1).add(a.mul(5))).mul(1.4));
+  const near = float(1).sub(
+    smoothstep(
+      BARK_FADE[0],
+      BARK_FADE[1],
+      distance(cameraPosition, positionWorld)
+    )
+  );
+  const ridge = sin(phase).mul(0.5).add(0.5);
+  const up = cameraViewMatrix.mul(vec4(0, 1, 0, 0)).xyz;
+  const across = normalize(cross(up, normalView).add(vec3(1e-4, 0, 0)));
+  const normal = normalize(
+    normalView.add(across.mul(cos(phase).mul(BARK_TILT).mul(near)))
+  );
+  const facing = dot(
+    normalize(normalWorld.xz.add(vec2(1e-4, 0))),
+    vec2(WEATHER.x, WEATHER.y)
+  );
+  const patch = smoothstep(
+    -0.25,
+    0.5,
+    sin(a.mul(3).add(p.y.mul(2.3))).mul(sin(p.y.mul(5.1).sub(a.mul(2))))
+  );
+  const low = float(1).sub(smoothstep(0.4, 1.9, metres));
+  const moss = smoothstep(0.05, 0.8, facing)
+    .mul(low)
+    .mul(patch.mul(0.6).add(0.4))
+    .add(
+      float(1)
+        .sub(smoothstep(0.1, 0.7, metres))
+        .mul(0.3)
+    )
+    .min(0.8);
+  return {
+    shade: mix(float(0.93), mix(0.84, 1, ridge), near),
+    moss,
+    normal,
   };
 }
 
