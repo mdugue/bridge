@@ -318,17 +318,15 @@ const InquirySheet = ({
 };
 
 /** The sheet's ×: the drawer's own close, so it slides away first. */
-const SheetClose = () => {
-  return (
-    <DrawerClose
-      aria-label="Karte schließen"
-      className="-mt-1 -mr-1 rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-      title="Schließen"
-    >
-      <XIcon className="size-4" />
-    </DrawerClose>
-  );
-};
+const SheetClose = () => (
+  <DrawerClose
+    aria-label="Karte schließen"
+    className="-mt-1 -mr-1 rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+    title="Schließen"
+  >
+    <XIcon className="size-4" />
+  </DrawerClose>
+);
 
 /** What the thing is: the kicker, the title, the address, and ×. */
 const CardHeader = ({
@@ -343,41 +341,37 @@ const CardHeader = ({
   onClose?: () => void;
   /** the title element (the drawer's own title in the sheet) */
   titleAs?: ElementType;
-}) => {
-  return (
-    <div className="flex items-start gap-2">
-      <div className="min-w-0 flex-1">
-        {/* the accent the outline is drawn in: card and object are one */}
-        <p className="text-[10px] font-medium tracking-[0.14em] text-primary uppercase">
-          {card.kicker}
-        </p>
-        <Title
-          aria-live="polite"
-          className="font-heading text-lg leading-tight font-normal text-balance text-foreground"
-          id="inquiry-title"
-        >
-          {card.title}
-        </Title>
-        {card.address && (
-          <p className="mt-0.5 text-[13px] text-foreground/80">
-            {card.address}
-          </p>
-        )}
-      </div>
-      {closeSlot ?? (
-        <button
-          aria-label="Karte schließen"
-          className="-mt-1 -mr-1 rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-          onClick={onClose}
-          title="Schließen (Esc)"
-          type="button"
-        >
-          <XIcon className="size-4" />
-        </button>
+}) => (
+  <div className="flex items-start gap-2">
+    <div className="min-w-0 flex-1">
+      {/* the accent the outline is drawn in: card and object are one */}
+      <p className="text-[10px] font-medium tracking-[0.14em] text-primary uppercase">
+        {card.kicker}
+      </p>
+      <Title
+        aria-live="polite"
+        className="font-heading text-lg leading-tight font-normal text-balance text-foreground"
+        id="inquiry-title"
+      >
+        {card.title}
+      </Title>
+      {card.address && (
+        <p className="mt-0.5 text-[13px] text-foreground/80">{card.address}</p>
       )}
     </div>
-  );
-};
+    {closeSlot ?? (
+      <button
+        aria-label="Karte schließen"
+        className="-mt-1 -mr-1 rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+        onClick={onClose}
+        title="Schließen (Esc)"
+        type="button"
+      >
+        <XIcon className="size-4" />
+      </button>
+    )}
+  </div>
+);
 
 /** The facts, the id to copy and, folded, the data behind them. */
 const CardDetails = ({

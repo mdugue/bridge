@@ -74,24 +74,22 @@ const Sheet = ({
   breathes?: boolean;
   children: ReactNode;
   multiply?: boolean;
-}) => {
-  return (
-    <svg
-      aria-hidden
-      // A breathing layer scales as one element, which the compositor does
-      // without a repaint (an SVG child's transform repaints the sheet).
-      className={cn(
-        "absolute inset-0 h-full w-full",
-        breathes && "load-breathe",
-        multiply && "mix-blend-multiply"
-      )}
-      preserveAspectRatio="xMidYMid slice"
-      viewBox={`0 0 ${SHEET} ${SHEET}`}
-    >
-      {children}
-    </svg>
-  );
-};
+}) => (
+  <svg
+    aria-hidden
+    // A breathing layer scales as one element, which the compositor does
+    // without a repaint (an SVG child's transform repaints the sheet).
+    className={cn(
+      "absolute inset-0 h-full w-full",
+      breathes && "load-breathe",
+      multiply && "mix-blend-multiply"
+    )}
+    preserveAspectRatio="xMidYMid slice"
+    viewBox={`0 0 ${SHEET} ${SHEET}`}
+  >
+    {children}
+  </svg>
+);
 
 const SurveySheet = ({ percent }: { percent: number }) => {
   const r = ringRadius(percent);

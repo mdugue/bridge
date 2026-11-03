@@ -251,25 +251,23 @@ const SourceLink = ({ source }: { source: string }) => {
   );
 };
 
-const Facts = ({ facts }: { facts: WalkFact[] }) => {
-  return (
-    <details className="group mt-3 border-t pt-2 text-[12px]">
-      <summary className="cursor-pointer select-none text-[11px] text-muted-foreground hover:text-foreground">
-        Belege ({facts.length})
-      </summary>
-      <ul className="mt-2 flex flex-col gap-2">
-        {facts.map((fact) => (
-          <li className="leading-snug" key={fact.claim}>
-            <span className="text-foreground/90">{fact.claim}</span>
-            <span className="mt-0.5 block text-[11px] text-muted-foreground">
-              <SourceLink source={fact.source} />
-            </span>
-          </li>
-        ))}
-      </ul>
-    </details>
-  );
-};
+const Facts = ({ facts }: { facts: WalkFact[] }) => (
+  <details className="group mt-3 border-t pt-2 text-[12px]">
+    <summary className="cursor-pointer select-none text-[11px] text-muted-foreground hover:text-foreground">
+      Belege ({facts.length})
+    </summary>
+    <ul className="mt-2 flex flex-col gap-2">
+      {facts.map((fact) => (
+        <li className="leading-snug" key={fact.claim}>
+          <span className="text-foreground/90">{fact.claim}</span>
+          <span className="mt-0.5 block text-[11px] text-muted-foreground">
+            <SourceLink source={fact.source} />
+          </span>
+        </li>
+      ))}
+    </ul>
+  </details>
+);
 
 /** What the stop says: its narration, today's notes, the closer look.
  *  A tall photo stands beside it, the text flowing round it. */
@@ -281,58 +279,54 @@ const StopBody = ({
   aside: ReactNode;
   notes: string[];
   stop: WalkStop;
-}) => {
-  return (
-    <>
-      {aside}
-      <p className="text-[15.5px] leading-[1.62] text-foreground/90 text-pretty first-letter:float-left first-letter:mt-[0.06em] first-letter:mr-1.5 first-letter:font-medium first-letter:text-[3.1em] first-letter:leading-[0.82] first-letter:text-primary">
-        {stop.text}
+}) => (
+  <>
+    {aside}
+    <p className="text-[15.5px] leading-[1.62] text-foreground/90 text-pretty first-letter:float-left first-letter:mt-[0.06em] first-letter:mr-1.5 first-letter:font-medium first-letter:text-[3.1em] first-letter:leading-[0.82] first-letter:text-primary">
+      {stop.text}
+    </p>
+    {notes.map((note) => (
+      <p
+        className="mt-3 flex gap-2 text-[14.5px] italic leading-snug text-foreground/85"
+        key={note}
+      >
+        <CalendarDaysIcon
+          aria-hidden
+          className="mt-0.5 size-3.5 shrink-0 text-primary not-italic"
+        />
+        {note}
       </p>
-      {notes.map((note) => (
-        <p
-          className="mt-3 flex gap-2 text-[14.5px] italic leading-snug text-foreground/85"
-          key={note}
-        >
-          <CalendarDaysIcon
-            aria-hidden
-            className="mt-0.5 size-3.5 shrink-0 text-primary not-italic"
-          />
-          {note}
+    ))}
+    {stop.closer && (
+      <aside className="mt-3.5 flow-root rounded-lg bg-primary/[0.06] px-3 py-2.5">
+        <span className="flex items-center gap-1.5 font-sans text-[10px] font-medium tracking-[0.14em] text-primary uppercase">
+          <EyeIcon aria-hidden className="size-3" />
+          {CLOSER_LABEL}
+        </span>
+        <p className="mt-1 text-[14.5px] leading-snug text-foreground/90">
+          {stop.closer}
         </p>
-      ))}
-      {stop.closer && (
-        <aside className="mt-3.5 flow-root rounded-lg bg-primary/[0.06] px-3 py-2.5">
-          <span className="flex items-center gap-1.5 font-sans text-[10px] font-medium tracking-[0.14em] text-primary uppercase">
-            <EyeIcon aria-hidden className="size-3" />
-            {CLOSER_LABEL}
-          </span>
-          <p className="mt-1 text-[14.5px] leading-snug text-foreground/90">
-            {stop.closer}
-          </p>
-        </aside>
-      )}
-      <div className="clear-both font-sans">
-        <Facts facts={stop.facts} />
-      </div>
-    </>
-  );
-};
+      </aside>
+    )}
+    <div className="clear-both font-sans">
+      <Facts facts={stop.facts} />
+    </div>
+  </>
+);
 
 /** Commons' credit, as a reader can follow it: the author, the licence,
  *  the file's page. */
-const PhotoCredit = ({ photo }: { photo: WalkPhoto }) => {
-  return (
-    <a
-      className="hover:text-foreground hover:underline"
-      href={photo.page}
-      rel="noreferrer"
-      target="_blank"
-      title={`${photo.file} auf Wikimedia Commons`}
-    >
-      Foto: {photo.author} · {photo.licence} · Wikimedia Commons
-    </a>
-  );
-};
+const PhotoCredit = ({ photo }: { photo: WalkPhoto }) => (
+  <a
+    className="hover:text-foreground hover:underline"
+    href={photo.page}
+    rel="noreferrer"
+    target="_blank"
+    title={`${photo.file} auf Wikimedia Commons`}
+  >
+    Foto: {photo.author} · {photo.licence} · Wikimedia Commons
+  </a>
+);
 
 /** The photo whole, over the scene: the card crops it, this does not. */
 const PhotoView = ({
@@ -348,34 +342,32 @@ const PhotoView = ({
   /** the published copy's URL */
   src: string;
   title: string;
-}) => {
-  return (
-    <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent
-        className="w-auto max-w-[min(calc(100vw-2rem),64rem)] gap-0 overflow-hidden bg-black p-0 text-white ring-white/10 sm:max-w-[min(calc(100vw-2rem),64rem)]"
-        data-testid="walk-photo-view"
-      >
-        {/* the published copy at its own size: not resized again */}
-        <Image
-          alt={photo.caption ?? `Foto: ${title}`}
-          className="mx-auto block h-auto max-h-[calc(100dvh-8rem)] w-auto max-w-full object-contain"
-          height={photo.h}
-          src={src}
-          unoptimized
-          width={photo.w}
-        />
-        <div className="flex flex-col gap-0.5 px-4 py-2.5 font-sans">
-          <DialogTitle className="text-[13px] font-normal text-white/95">
-            {photo.caption ?? title}
-          </DialogTitle>
-          <DialogDescription className="text-[10.5px] text-white/65">
-            <PhotoCredit photo={photo} />
-          </DialogDescription>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-};
+}) => (
+  <Dialog onOpenChange={onOpenChange} open={open}>
+    <DialogContent
+      className="w-auto max-w-[min(calc(100vw-2rem),64rem)] gap-0 overflow-hidden bg-black p-0 text-white ring-white/10 sm:max-w-[min(calc(100vw-2rem),64rem)]"
+      data-testid="walk-photo-view"
+    >
+      {/* the published copy at its own size: not resized again */}
+      <Image
+        alt={photo.caption ?? `Foto: ${title}`}
+        className="mx-auto block h-auto max-h-[calc(100dvh-8rem)] w-auto max-w-full object-contain"
+        height={photo.h}
+        src={src}
+        unoptimized
+        width={photo.w}
+      />
+      <div className="flex flex-col gap-0.5 px-4 py-2.5 font-sans">
+        <DialogTitle className="text-[13px] font-normal text-white/95">
+          {photo.caption ?? title}
+        </DialogTitle>
+        <DialogDescription className="text-[10.5px] text-white/65">
+          <PhotoCredit photo={photo} />
+        </DialogDescription>
+      </div>
+    </DialogContent>
+  </Dialog>
+);
 
 /** The photo's button: a click shows it whole; the corner says so. */
 const PhotoButton = ({
@@ -388,32 +380,30 @@ const PhotoButton = ({
   className?: string;
   coarse: boolean;
   onOpen: () => void;
-}) => {
-  return (
-    <button
-      aria-label="Foto groß zeigen"
+}) => (
+  <button
+    aria-label="Foto groß zeigen"
+    className={cn(
+      "group/photo relative block w-full cursor-zoom-in overflow-hidden focus-visible:outline-2 focus-visible:outline-primary",
+      className
+    )}
+    onClick={onOpen}
+    type="button"
+  >
+    {children}
+    <span
+      aria-hidden
       className={cn(
-        "group/photo relative block w-full cursor-zoom-in overflow-hidden focus-visible:outline-2 focus-visible:outline-primary",
-        className
+        "absolute top-2 right-2 rounded-full bg-black/40 p-1.5 text-white backdrop-blur-sm transition-opacity",
+        coarse
+          ? "opacity-80"
+          : "opacity-0 group-hover/photo:opacity-100 group-focus-visible/photo:opacity-100"
       )}
-      onClick={onOpen}
-      type="button"
     >
-      {children}
-      <span
-        aria-hidden
-        className={cn(
-          "absolute top-2 right-2 rounded-full bg-black/40 p-1.5 text-white backdrop-blur-sm transition-opacity",
-          coarse
-            ? "opacity-80"
-            : "opacity-0 group-hover/photo:opacity-100 group-focus-visible/photo:opacity-100"
-        )}
-      >
-        <Maximize2Icon className="size-3.5" />
-      </span>
-    </button>
-  );
-};
+      <Maximize2Icon className="size-3.5" />
+    </span>
+  </button>
+);
 
 /** Whether a stop's photo stands beside its story (`photoIsTall`), not
  *  over it: on a phone's narrow card the story would be left a sliver. */
@@ -625,29 +615,27 @@ const WalkFooter = ({
   last: boolean;
   onClose: () => void;
   onIndex: (index: number) => void;
-}) => {
-  return (
-    <CardFooter className="gap-2 border-t px-5 py-3">
-      <Button
-        disabled={index === 0}
-        onClick={() => onIndex(index - 1)}
-        size="lg"
-        variant="ghost"
-      >
-        <ChevronLeftIcon /> Zurück
-      </Button>
-      <span className="flex-1" />
-      <Button
-        className="px-3.5"
-        data-testid="walk-next"
-        onClick={() => (last ? onClose() : onIndex(index + 1))}
-        size="lg"
-      >
-        {last ? "Ende" : "Weiter"} <ChevronRightIcon />
-      </Button>
-    </CardFooter>
-  );
-};
+}) => (
+  <CardFooter className="gap-2 border-t px-5 py-3">
+    <Button
+      disabled={index === 0}
+      onClick={() => onIndex(index - 1)}
+      size="lg"
+      variant="ghost"
+    >
+      <ChevronLeftIcon /> Zurück
+    </Button>
+    <span className="flex-1" />
+    <Button
+      className="px-3.5"
+      data-testid="walk-next"
+      onClick={() => (last ? onClose() : onIndex(index + 1))}
+      size="lg"
+    >
+      {last ? "Ende" : "Weiter"} <ChevronRightIcon />
+    </Button>
+  </CardFooter>
+);
 
 /**
  * The card of a walk under way: where in the walk, the stop's story, and

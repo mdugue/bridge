@@ -19,21 +19,19 @@ export const DataLayerSwatch = ({
 }: {
   layer: DataLayerKey;
   on: boolean;
-}) => {
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        "data-swatch relative inline-flex h-3.5 w-8 shrink-0 items-center overflow-hidden rounded-full transition-[opacity,filter]",
-        on ? "" : "data-swatch-off opacity-55 saturate-50"
-      )}
-    >
-      {layer === "trafficLayer" && <TrafficSample />}
-      {layer === "bikeLayer" && <BikeSample />}
-      {layer === "tramLayer" && <TramSample />}
-    </span>
-  );
-};
+}) => (
+  <span
+    aria-hidden
+    className={cn(
+      "data-swatch relative inline-flex h-3.5 w-8 shrink-0 items-center overflow-hidden rounded-full transition-[opacity,filter]",
+      on ? "" : "data-swatch-off opacity-55 saturate-50"
+    )}
+  >
+    {layer === "trafficLayer" && <TrafficSample />}
+    {layer === "bikeLayer" && <BikeSample />}
+    {layer === "tramLayer" && <TramSample />}
+  </span>
+);
 
 const TrafficSample = () => {
   const style: CSSProperties = {
@@ -49,22 +47,20 @@ const TrafficSample = () => {
   );
 };
 
-const BikeSample = () => {
-  return (
-    <span className="absolute inset-0 flex items-end justify-center gap-1 pb-px">
-      {BIKE_DIRECTION_TINTS.map((tint, i) => (
-        <span
-          className="data-swatch-glass data-swatch-rings h-3 w-1.5 rounded-t-full rounded-b-sm"
-          key={tint}
-          style={{
-            backgroundColor: tintCss(tint),
-            animationDelay: `${i * -0.6}s`,
-          }}
-        />
-      ))}
-    </span>
-  );
-};
+const BikeSample = () => (
+  <span className="absolute inset-0 flex items-end justify-center gap-1 pb-px">
+    {BIKE_DIRECTION_TINTS.map((tint, i) => (
+      <span
+        className="data-swatch-glass data-swatch-rings h-3 w-1.5 rounded-t-full rounded-b-sm"
+        key={tint}
+        style={{
+          backgroundColor: tintCss(tint),
+          animationDelay: `${i * -0.6}s`,
+        }}
+      />
+    ))}
+  </span>
+);
 
 const TramSample = () => {
   const style: CSSProperties = {

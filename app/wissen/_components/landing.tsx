@@ -151,68 +151,64 @@ const EntryCard = ({
 }: {
   entry: LandingEntry;
   number: number;
-}) => {
-  return (
-    <Card className="group/entry relative h-full transition-shadow hover:shadow-md hover:ring-primary/30">
-      <CardHeader>
-        <CardTitle className="font-heading text-base leading-snug">
-          {/* Stretched over the card, so the whole card is the link. */}
-          <Link className="after:absolute after:inset-0" href={entry.href}>
-            {entry.title}
-          </Link>
-        </CardTitle>
-        {entry.description ? (
-          <CardDescription className="line-clamp-3">
-            {entry.description}
-          </CardDescription>
-        ) : null}
-        <CardAction className="flex size-9 items-center justify-center rounded-lg bg-primary/8 text-primary">
-          {docIcon(entry.file, { className: "size-4.5" })}
-        </CardAction>
-      </CardHeader>
-      <CardFooter className="mt-auto justify-between gap-3">
-        <span className="inline-flex items-center gap-2">
-          <span className="font-mono text-muted-foreground tabular-nums">
-            {String(number).padStart(2, "0")}
-          </span>
-          <span className="inline-flex items-center gap-1 font-medium text-primary">
-            Lesen
-            <ArrowRightIcon className="size-3.5 transition-transform group-hover/entry:translate-x-0.5" />
-          </span>
+}) => (
+  <Card className="group/entry relative h-full transition-shadow hover:shadow-md hover:ring-primary/30">
+    <CardHeader>
+      <CardTitle className="font-heading text-base leading-snug">
+        {/* Stretched over the card, so the whole card is the link. */}
+        <Link className="after:absolute after:inset-0" href={entry.href}>
+          {entry.title}
+        </Link>
+      </CardTitle>
+      {entry.description ? (
+        <CardDescription className="line-clamp-3">
+          {entry.description}
+        </CardDescription>
+      ) : null}
+      <CardAction className="flex size-9 items-center justify-center rounded-lg bg-primary/8 text-primary">
+        {docIcon(entry.file, { className: "size-4.5" })}
+      </CardAction>
+    </CardHeader>
+    <CardFooter className="mt-auto justify-between gap-3">
+      <span className="inline-flex items-center gap-2">
+        <span className="font-mono text-muted-foreground tabular-nums">
+          {String(number).padStart(2, "0")}
         </span>
-        {entry.twin ? (
-          <Link
-            className="relative z-10 text-muted-foreground hover:text-foreground"
-            href={entry.twin.href}
-            lang="en"
-          >
-            {entry.twin.label}
-          </Link>
-        ) : null}
-      </CardFooter>
-    </Card>
-  );
-};
-
-const DevRow = ({ entry }: { entry: LandingEntry }) => {
-  return (
-    <Link
-      className="group/dev -mx-3 flex gap-3 rounded-lg px-3 py-3 hover:bg-card hover:ring-1 hover:ring-foreground/10"
-      href={entry.href}
-      lang="en"
-    >
-      {docIcon(entry.file, {
-        className:
-          "mt-0.5 size-4 shrink-0 text-muted-foreground group-hover/dev:text-primary",
-      })}
-      <span className="min-w-0">
-        <span className="block font-medium text-sm">{entry.title}</span>
-        {entry.description ? (
-          <span className="mt-0.5 line-clamp-2 block text-muted-foreground text-xs leading-relaxed">
-            {entry.description}
-          </span>
-        ) : null}
+        <span className="inline-flex items-center gap-1 font-medium text-primary">
+          Lesen
+          <ArrowRightIcon className="size-3.5 transition-transform group-hover/entry:translate-x-0.5" />
+        </span>
       </span>
-    </Link>
-  );
-};
+      {entry.twin ? (
+        <Link
+          className="relative z-10 text-muted-foreground hover:text-foreground"
+          href={entry.twin.href}
+          lang="en"
+        >
+          {entry.twin.label}
+        </Link>
+      ) : null}
+    </CardFooter>
+  </Card>
+);
+
+const DevRow = ({ entry }: { entry: LandingEntry }) => (
+  <Link
+    className="group/dev -mx-3 flex gap-3 rounded-lg px-3 py-3 hover:bg-card hover:ring-1 hover:ring-foreground/10"
+    href={entry.href}
+    lang="en"
+  >
+    {docIcon(entry.file, {
+      className:
+        "mt-0.5 size-4 shrink-0 text-muted-foreground group-hover/dev:text-primary",
+    })}
+    <span className="min-w-0">
+      <span className="block font-medium text-sm">{entry.title}</span>
+      {entry.description ? (
+        <span className="mt-0.5 line-clamp-2 block text-muted-foreground text-xs leading-relaxed">
+          {entry.description}
+        </span>
+      ) : null}
+    </span>
+  </Link>
+);

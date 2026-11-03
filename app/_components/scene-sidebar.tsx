@@ -179,31 +179,29 @@ const PctSlider = ({
   label: string;
   onChange: (value: number) => void;
   value: number;
-}) => {
-  return (
-    <Field>
-      <FieldLabel className="justify-between font-medium text-xs" htmlFor={id}>
-        {label}
-        <span className="font-mono font-normal text-[11px] text-muted-foreground tabular-nums">
-          {value} %
-        </span>
-      </FieldLabel>
-      <Slider
-        id={id}
-        max={100}
-        min={0}
-        onValueChange={(v) => onChange(Number(Array.isArray(v) ? v[0] : v))}
-        step={1}
-        value={[value]}
-      />
-      {description ? (
-        <FieldDescription className="text-[11px] leading-snug">
-          {description}
-        </FieldDescription>
-      ) : null}
-    </Field>
-  );
-};
+}) => (
+  <Field>
+    <FieldLabel className="justify-between font-medium text-xs" htmlFor={id}>
+      {label}
+      <span className="font-mono font-normal text-[11px] text-muted-foreground tabular-nums">
+        {value} %
+      </span>
+    </FieldLabel>
+    <Slider
+      id={id}
+      max={100}
+      min={0}
+      onValueChange={(v) => onChange(Number(Array.isArray(v) ? v[0] : v))}
+      step={1}
+      value={[value]}
+    />
+    {description ? (
+      <FieldDescription className="text-[11px] leading-snug">
+        {description}
+      </FieldDescription>
+    ) : null}
+  </Field>
+);
 
 /** Every percent slider, rendered from LOOK_CONTROLS. */
 const LookSliders = ({
@@ -212,22 +210,20 @@ const LookSliders = ({
 }: {
   look: LookValues;
   onLook: (patch: Partial<LookValues>) => void;
-}) => {
-  return (
-    <>
-      {LOOK_CONTROLS.map((def) => (
-        <PctSlider
-          description={def.description}
-          id={def.id}
-          key={def.key}
-          label={def.label}
-          onChange={(n) => onLook(lookPatch(def.key, n / 100))}
-          value={Math.round(look[def.key] * 100)}
-        />
-      ))}
-    </>
-  );
-};
+}) => (
+  <>
+    {LOOK_CONTROLS.map((def) => (
+      <PctSlider
+        description={def.description}
+        id={def.id}
+        key={def.key}
+        label={def.label}
+        onChange={(n) => onLook(lookPatch(def.key, n / 100))}
+        value={Math.round(look[def.key] * 100)}
+      />
+    ))}
+  </>
+);
 
 /**
  * The picture style: five swatch cards, exactly one pressed — the same
@@ -240,50 +236,48 @@ const StylePicker = ({
 }: {
   onStyle: (style: RenderStyle) => void;
   style: RenderStyle;
-}) => {
-  return (
-    <div className="flex flex-col gap-2 pb-2">
-      <ToggleGroup
-        aria-label="Bildstil"
-        className="grid w-full grid-cols-3 gap-1.5"
-        id="render-style"
-        onValueChange={(value: string[]) => {
-          const next = value[0] as RenderStyle | undefined;
-          if (next) {
-            onStyle(next);
-          }
-        }}
-        size="sm"
-        spacing={1}
-        value={[style]}
-        variant="outline"
-      >
-        {RENDER_STYLES.map((def) => (
-          <ToggleGroupItem
-            className="h-auto flex-col gap-1.5 rounded-lg p-1.5 pb-2 text-[11px] text-muted-foreground leading-none data-pressed:border-ring data-pressed:bg-background data-pressed:text-foreground data-pressed:ring-1 data-pressed:ring-ring"
-            data-style={def.id}
-            key={def.id}
-            title={def.description}
-            value={def.id}
-          >
-            <span
-              aria-hidden
-              className="h-7 w-full rounded-md ring-1 ring-black/10 ring-inset"
-              style={{
-                background: `linear-gradient(135deg, ${def.swatch[0]} 0 55%, ${def.swatch[1]} 55% 100%)`,
-              }}
-            />
-            {def.label}
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
-      <span className="text-[11px] text-muted-foreground leading-snug">
-        {RENDER_STYLE_BY_ID[style].description}
-        <span className="hidden [@media(pointer:fine)]:inline"> · Taste V</span>
-      </span>
-    </div>
-  );
-};
+}) => (
+  <div className="flex flex-col gap-2 pb-2">
+    <ToggleGroup
+      aria-label="Bildstil"
+      className="grid w-full grid-cols-3 gap-1.5"
+      id="render-style"
+      onValueChange={(value: string[]) => {
+        const next = value[0] as RenderStyle | undefined;
+        if (next) {
+          onStyle(next);
+        }
+      }}
+      size="sm"
+      spacing={1}
+      value={[style]}
+      variant="outline"
+    >
+      {RENDER_STYLES.map((def) => (
+        <ToggleGroupItem
+          className="h-auto flex-col gap-1.5 rounded-lg p-1.5 pb-2 text-[11px] text-muted-foreground leading-none data-pressed:border-ring data-pressed:bg-background data-pressed:text-foreground data-pressed:ring-1 data-pressed:ring-ring"
+          data-style={def.id}
+          key={def.id}
+          title={def.description}
+          value={def.id}
+        >
+          <span
+            aria-hidden
+            className="h-7 w-full rounded-md ring-1 ring-black/10 ring-inset"
+            style={{
+              background: `linear-gradient(135deg, ${def.swatch[0]} 0 55%, ${def.swatch[1]} 55% 100%)`,
+            }}
+          />
+          {def.label}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
+    <span className="text-[11px] text-muted-foreground leading-snug">
+      {RENDER_STYLE_BY_ID[style].description}
+      <span className="hidden [@media(pointer:fine)]:inline"> · Taste V</span>
+    </span>
+  </div>
+);
 
 /**
  * The minimap card: click to teleport, the blue dot is you. The footprints

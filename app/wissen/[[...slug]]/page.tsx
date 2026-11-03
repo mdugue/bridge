@@ -111,13 +111,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 // the whole knowledge base (partialPrefetching) instead of every page it
 // shows; the page itself, prerendered, comes on the click. The fallback
 // keeps the footer below the fold meanwhile.
-const WissenPage = ({ params }: Props) => {
-  return (
-    <Suspense fallback={<div className="min-h-dvh" />}>
-      <WissenBody params={params} />
-    </Suspense>
-  );
-};
+const WissenPage = ({ params }: Props) => (
+  <Suspense fallback={<div className="min-h-dvh" />}>
+    <WissenBody params={params} />
+  </Suspense>
+);
 
 export default WissenPage;
 

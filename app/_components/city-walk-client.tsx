@@ -32,13 +32,11 @@ import { siteById } from "@/sites";
  * behind it (see handover.ts) — and there is no canvas yet, so it gets the
  * opaque scrim the viewer's own shell would otherwise provide.
  */
-const BootScreen = () => {
-  return (
-    <div className="relative h-full w-full bg-[image:var(--hud-scrim)]">
-      <LoadScreen handedOver={false} percent={0} stages={loadStageStates({})} />
-    </div>
-  );
-};
+const BootScreen = () => (
+  <div className="relative h-full w-full bg-[image:var(--hud-scrim)]">
+    <LoadScreen handedOver={false} percent={0} stages={loadStageStates({})} />
+  </div>
+);
 
 // three.js needs a real browser (WebGPU or WebGL2, pointer lock) — never
 // prerender it.

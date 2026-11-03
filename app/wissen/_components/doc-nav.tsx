@@ -41,19 +41,17 @@ export const DocNav = ({
 }: {
   current: string;
   groups: NavGroup[];
-}) => {
-  return (
-    <nav aria-label="Wissen" className="flex flex-col gap-7">
-      {groups.map((group) => (
-        <div className="flex flex-col gap-2.5" key={group.id}>
-          <span className={cn(SECTION_LABEL, "px-2")}>{group.label}</span>
-          <ul className="flex flex-col gap-px">
-            {group.items.map((item) => (
-              <Entry current={current} item={item} key={item.file} />
-            ))}
-          </ul>
-        </div>
-      ))}
-    </nav>
-  );
-};
+}) => (
+  <nav aria-label="Wissen" className="flex flex-col gap-7">
+    {groups.map((group) => (
+      <div className="flex flex-col gap-2.5" key={group.id}>
+        <span className={cn(SECTION_LABEL, "px-2")}>{group.label}</span>
+        <ul className="flex flex-col gap-px">
+          {group.items.map((item) => (
+            <Entry current={current} item={item} key={item.file} />
+          ))}
+        </ul>
+      </div>
+    ))}
+  </nav>
+);

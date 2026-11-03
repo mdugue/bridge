@@ -187,8 +187,8 @@ function tocOf(tree: HastRoot): TocEntry[] {
   return toc;
 }
 
-const DocLink = ({ children, href = "", ...rest }: ComponentProps<"a">) => {
-  return href.startsWith("/") ? (
+const DocLink = ({ children, href = "", ...rest }: ComponentProps<"a">) =>
+  href.startsWith("/") ? (
     <Link href={href} {...rest}>
       {children}
     </Link>
@@ -197,7 +197,6 @@ const DocLink = ({ children, href = "", ...rest }: ComponentProps<"a">) => {
       {children}
     </a>
   );
-};
 
 /** The code fences' languages the highlighter loads up front (```mermaid
  *  becomes a diagram before it runs). */

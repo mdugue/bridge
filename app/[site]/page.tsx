@@ -41,15 +41,13 @@ export const viewport: Viewport = {
 
 // The site is read inside the boundary: a link prefetches one shell for
 // every city (partialPrefetching), the viewer itself comes on the click.
-const SitePage = ({ params }: Props) => {
-  return (
-    <main className={cn("h-dvh w-full", ...NAMEPLATE_FONT_VARIABLES)}>
-      <Suspense fallback={null}>
-        <Viewer params={params} />
-      </Suspense>
-    </main>
-  );
-};
+const SitePage = ({ params }: Props) => (
+  <main className={cn("h-dvh w-full", ...NAMEPLATE_FONT_VARIABLES)}>
+    <Suspense fallback={null}>
+      <Viewer params={params} />
+    </Suspense>
+  </main>
+);
 
 export default SitePage;
 

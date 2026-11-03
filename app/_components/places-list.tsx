@@ -58,30 +58,26 @@ const PlaceRow = ({
   onTravel: (place: Place) => void;
   place: Place;
   showKey: boolean;
-}) => {
-  return (
-    <li>
-      <button
-        className={ROW}
-        data-place={place.id}
-        disabled={disabled}
-        onClick={() => onTravel(place)}
-        title={titleOf(place)}
-        type="button"
-      >
-        <PlaceIcon place={place} />
-        <span className="min-w-0 flex-1 truncate font-medium">
-          {place.label}
-        </span>
-        {showKey && place.key !== undefined && (
-          <kbd className="rounded-sm bg-muted px-1 font-sans text-[10px] text-muted-foreground leading-4">
-            {place.key}
-          </kbd>
-        )}
-      </button>
-    </li>
-  );
-};
+}) => (
+  <li>
+    <button
+      className={ROW}
+      data-place={place.id}
+      disabled={disabled}
+      onClick={() => onTravel(place)}
+      title={titleOf(place)}
+      type="button"
+    >
+      <PlaceIcon place={place} />
+      <span className="min-w-0 flex-1 truncate font-medium">{place.label}</span>
+      {showKey && place.key !== undefined && (
+        <kbd className="rounded-sm bg-muted px-1 font-sans text-[10px] text-muted-foreground leading-4">
+          {place.key}
+        </kbd>
+      )}
+    </button>
+  </li>
+);
 
 /**
  * The saved view: the first row while it is set, its ✕ beside it — clear,
@@ -95,32 +91,30 @@ const RememberedRow = ({
 }: {
   onForget: () => void;
   onRestore: () => void;
-}) => {
-  return (
-    <li className="flex items-center gap-1">
-      <button
-        className={cn(ROW, "flex-1")}
-        onClick={onRestore}
-        title="Zur gemerkten Sicht zurückspringen"
-        type="button"
-      >
-        <StarIcon aria-hidden className="size-3.5 shrink-0 fill-current" />
-        <span className="flex-1 truncate font-medium">Gemerkte Sicht</span>
-      </button>
-      <button
-        aria-label="Gemerkte Sicht entfernen"
-        // 20px reads right beside the row; the ::after pad makes it a real
-        // touch target without the bulk (as the sidebar primitives do).
-        className="relative inline-flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground after:absolute after:-inset-2 hover:bg-accent hover:text-foreground"
-        onClick={onForget}
-        title="Gemerkte Sicht entfernen"
-        type="button"
-      >
-        <XIcon className="size-3" />
-      </button>
-    </li>
-  );
-};
+}) => (
+  <li className="flex items-center gap-1">
+    <button
+      className={cn(ROW, "flex-1")}
+      onClick={onRestore}
+      title="Zur gemerkten Sicht zurückspringen"
+      type="button"
+    >
+      <StarIcon aria-hidden className="size-3.5 shrink-0 fill-current" />
+      <span className="flex-1 truncate font-medium">Gemerkte Sicht</span>
+    </button>
+    <button
+      aria-label="Gemerkte Sicht entfernen"
+      // 20px reads right beside the row; the ::after pad makes it a real
+      // touch target without the bulk (as the sidebar primitives do).
+      className="relative inline-flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground after:absolute after:-inset-2 hover:bg-accent hover:text-foreground"
+      onClick={onForget}
+      title="Gemerkte Sicht entfernen"
+      type="button"
+    >
+      <XIcon className="size-3" />
+    </button>
+  </li>
+);
 
 /**
  * *Orte* (lib/city/places.ts): the authored vantages and the city's

@@ -57,17 +57,15 @@ export const MethodMark = ({ method }: { method: Method }) => {
 };
 
 /** The four badges and what they mean, deterministic first. */
-export const MethodLegend = () => {
-  return (
-    <dl className="space-y-1.5 text-[10.5px] leading-snug text-muted-foreground">
-      {METHOD_ORDER.map((method) => (
-        <div className="flex items-start gap-2" key={method}>
-          <dt className="w-[5.5rem] shrink-0">
-            <MethodBadge method={method} />
-          </dt>
-          <dd>{METHODS[method].meaning}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-};
+export const MethodLegend = () => (
+  <dl className="space-y-1.5 text-[10.5px] leading-snug text-muted-foreground">
+    {METHOD_ORDER.map((method) => (
+      <div className="flex items-start gap-2" key={method}>
+        <dt className="w-[5.5rem] shrink-0">
+          <MethodBadge method={method} />
+        </dt>
+        <dd>{METHODS[method].meaning}</dd>
+      </div>
+    ))}
+  </dl>
+);

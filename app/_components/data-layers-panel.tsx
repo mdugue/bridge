@@ -32,46 +32,44 @@ export const DataLayersPanel = ({
   onLook: (patch: Partial<LookValues>) => void;
   /** the site's layers (lib/city/data-layers.ts `siteDataLayers`) */
   rows: readonly DataLayerDef[];
-}) => {
-  return (
-    <div className="flex flex-col gap-3">
-      {rows.map((def) => (
-        <div className="flex flex-col gap-1" key={def.key}>
-          <Field orientation="horizontal">
-            <FieldLabel
-              className="flex items-center gap-2 font-medium text-xs"
-              htmlFor={def.id}
-            >
-              <DataLayerSwatch layer={def.key} on={look[def.key]} />
-              {def.label}
-            </FieldLabel>
-            <Switch
-              checked={look[def.key]}
-              id={def.id}
-              onCheckedChange={(checked) => {
-                const patch: Partial<LookValues> = {};
-                patch[def.key] = checked;
-                onLook(patch);
-              }}
-              size="sm"
-            />
-          </Field>
-          <FieldDescription className="text-[11px] leading-snug">
-            {def.description}
-          </FieldDescription>
-          {look[def.key] && (
-            <>
-              {detail?.[def.key]}
-              <span className="text-[10px] text-muted-foreground">
-                {def.source}
-              </span>
-            </>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-};
+}) => (
+  <div className="flex flex-col gap-3">
+    {rows.map((def) => (
+      <div className="flex flex-col gap-1" key={def.key}>
+        <Field orientation="horizontal">
+          <FieldLabel
+            className="flex items-center gap-2 font-medium text-xs"
+            htmlFor={def.id}
+          >
+            <DataLayerSwatch layer={def.key} on={look[def.key]} />
+            {def.label}
+          </FieldLabel>
+          <Switch
+            checked={look[def.key]}
+            id={def.id}
+            onCheckedChange={(checked) => {
+              const patch: Partial<LookValues> = {};
+              patch[def.key] = checked;
+              onLook(patch);
+            }}
+            size="sm"
+          />
+        </Field>
+        <FieldDescription className="text-[11px] leading-snug">
+          {def.description}
+        </FieldDescription>
+        {look[def.key] && (
+          <>
+            {detail?.[def.key]}
+            <span className="text-[10px] text-muted-foreground">
+              {def.source}
+            </span>
+          </>
+        )}
+      </div>
+    ))}
+  </div>
+);
 
 /** "07:00 Uhr" for the newest hour any counter reported. */
 function countHour(counters: BikeCounter[]): string | null {

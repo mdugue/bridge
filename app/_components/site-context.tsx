@@ -22,9 +22,7 @@ export const SiteProvider = ({
   children: ReactNode;
   others?: readonly Site[];
   site: Site;
-}) => {
-  return <SiteContext value={{ others, site }}>{children}</SiteContext>;
-};
+}) => <SiteContext value={{ others, site }}>{children}</SiteContext>;
 
 function useSiteValue(): SiteValue {
   const value = use(SiteContext);

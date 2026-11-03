@@ -30,23 +30,21 @@ const RootLayout = ({
   children,
 }: Readonly<{
   children: React.ReactNode;
-}>) => {
-  return (
-    <html
-      className={cn(
-        "h-full",
-        "antialiased",
-        "font-sans",
-        inter.variable,
-        spaceGroteskHeading.variable
-      )}
-      lang="de"
-    >
-      <body className="flex min-h-full flex-col">
-        <TooltipProvider>{children}</TooltipProvider>
-      </body>
-    </html>
-  );
-};
+}>) => (
+  <html
+    className={cn(
+      "h-full",
+      "antialiased",
+      "font-sans",
+      inter.variable,
+      spaceGroteskHeading.variable
+    )}
+    lang="de"
+  >
+    <body className="flex min-h-full flex-col">
+      <TooltipProvider>{children}</TooltipProvider>
+    </body>
+  </html>
+);
 
 export default RootLayout;

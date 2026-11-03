@@ -192,13 +192,11 @@ export const InquiryData = ({
   );
 };
 
-const SectionHead = ({ children }: { children: string }) => {
-  return (
-    <p className="mt-3 mb-1.5 text-[9.5px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
-      {children}
-    </p>
-  );
-};
+const SectionHead = ({ children }: { children: string }) => (
+  <p className="mt-3 mb-1.5 text-[9.5px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
+    {children}
+  </p>
+);
 
 /**
  * One group of a building's drawn values: per row its label and value
@@ -212,40 +210,38 @@ const DrawnGroupRows = ({
 }: {
   group: DrawnGroup;
   names?: Record<DrawnRow["source"], string>;
-}) => {
-  return (
-    <div className="mt-2 first:mt-0" data-testid="inquiry-drawn">
-      <p className="mb-0.5 text-[10.5px] font-medium text-foreground">
-        {group.title}
-      </p>
-      <dl className="space-y-1">
-        {group.rows.map((r) => (
-          <div className="text-[11px] leading-snug" key={r.label}>
-            <div className="flex items-start gap-2">
-              <dt className="w-[5.5rem] shrink-0 text-muted-foreground">
-                {r.label}
-              </dt>
-              <dd className="flex min-w-0 flex-1 items-start gap-1.5 text-foreground">
-                {r.swatch && (
-                  <span
-                    aria-hidden
-                    className="mt-0.5 size-3 shrink-0 rounded-sm border border-black/10"
-                    style={{ background: r.swatch }}
-                  />
-                )}
-                <span className="min-w-0 flex-1 break-words">{r.value}</span>
-              </dd>
-              <MethodBadge className="mt-px" method={r.method} />
-            </div>
-            <p className="pl-[6rem] text-[10px] text-muted-foreground">
-              <DrawnSourceLink name={names?.[r.source] ?? ""} row={r} />
-            </p>
+}) => (
+  <div className="mt-2 first:mt-0" data-testid="inquiry-drawn">
+    <p className="mb-0.5 text-[10.5px] font-medium text-foreground">
+      {group.title}
+    </p>
+    <dl className="space-y-1">
+      {group.rows.map((r) => (
+        <div className="text-[11px] leading-snug" key={r.label}>
+          <div className="flex items-start gap-2">
+            <dt className="w-[5.5rem] shrink-0 text-muted-foreground">
+              {r.label}
+            </dt>
+            <dd className="flex min-w-0 flex-1 items-start gap-1.5 text-foreground">
+              {r.swatch && (
+                <span
+                  aria-hidden
+                  className="mt-0.5 size-3 shrink-0 rounded-sm border border-black/10"
+                  style={{ background: r.swatch }}
+                />
+              )}
+              <span className="min-w-0 flex-1 break-words">{r.value}</span>
+            </dd>
+            <MethodBadge className="mt-px" method={r.method} />
           </div>
-        ))}
-      </dl>
-    </div>
-  );
-};
+          <p className="pl-[6rem] text-[10px] text-muted-foreground">
+            <DrawnSourceLink name={names?.[r.source] ?? ""} row={r} />
+          </p>
+        </div>
+      ))}
+    </dl>
+  </div>
+);
 
 const DrawnSourceLink = ({ name, row }: { name: string; row: DrawnRow }) => {
   const text = row.detail ? `${name} · ${row.detail}` : name;
