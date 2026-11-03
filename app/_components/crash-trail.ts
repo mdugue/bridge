@@ -206,7 +206,7 @@ export async function pageStillOpen(
   if (typeof BroadcastChannel === "undefined") {
     return false;
   }
-  return new Promise((resolve) => {
+  return await new Promise((resolve) => {
     const channel = new BroadcastChannel(CHANNEL);
     const done = (open: boolean) => {
       clearTimeout(timer);

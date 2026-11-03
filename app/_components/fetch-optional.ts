@@ -199,7 +199,7 @@ export async function fetchBytes(
   opts: FetchBytesOptions
 ): Promise<FetchedBytes> {
   const { signal, budgetMs } = opts;
-  const answer = await withRetry(async () => attempt(url, opts), {
+  const answer = await withRetry(async () => await attempt(url, opts), {
     budgetMs,
     env: PAGE_RETRY_ENV,
     signal,
@@ -249,7 +249,7 @@ export async function untilAborted<T>(
   signal?: AbortSignal
 ): Promise<T> {
   if (!signal) {
-    return promise;
+    return await promise;
   }
   let abort = (): void => undefined;
   const aborted = new Promise<never>((_, reject) => {
@@ -265,7 +265,7 @@ export async function untilAborted<T>(
   } else {
     signal.addEventListener("abort", abort, { once: true });
   }
-  return Promise.race([promise, aborted]).finally(() => {
+  return await Promise.race([promise, aborted]).finally(() => {
     signal.removeEventListener("abort", abort);
   });
 }
@@ -342,7 +342,7 @@ export async function fetchFeaturesFrom<T>(
   signal?: AbortSignal
 ): Promise<T[]> {
   const lists = await Promise.all(
-    urls.map(async (url) => fetchFeatures<T>(url, signal))
+    urls.map(async (url) => await fetchFeatures<T>(url, signal))
   );
   return lists.flat();
 }

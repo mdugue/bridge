@@ -36,7 +36,7 @@ test("the reference site's lines are drawn without jumps beyond the budget", asy
     SITES[REFERENCE_SITE],
     undefined,
     STEP_M,
-    async (tif, tfw) => readDgmFile(tif, tfw, "native")
+    async (tif, tfw) => await readDgmFile(tif, tfw, "native")
   );
   expect(r.samples).toBeGreaterThan(0);
   expect(r.after).toBeLessThanOrEqual(BUDGET);

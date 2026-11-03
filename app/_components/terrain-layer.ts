@@ -321,7 +321,7 @@ async function loadRasterTexture(
   inspect?: RasterInspect
 ): Promise<LoadedRaster> {
   const bytes = await fetchRasterBytes(url, signal);
-  return inRasterTurn(async () => {
+  return await inRasterTurn(async () => {
     const raster = await decodeRaster(bytes, look.channels, signal);
     if (inspect && raster.data) {
       inspect(raster.data, raster.width, raster.height);
@@ -350,7 +350,7 @@ async function decodeRaster(
     if (channels > 1) {
       throw error;
     }
-    return loadBitmapTexture(new Blob([bytes]));
+    return await loadBitmapTexture(new Blob([bytes]));
   }
   signal?.throwIfAborted();
   // A two- or four-channel raster is baked as a greyscale PNG two or four
@@ -437,7 +437,7 @@ async function loadSplatTexture(
   signal?: AbortSignal,
   inspect?: RasterInspect
 ): Promise<LoadedRaster | null> {
-  return loadOptionalRaster(url, idLook(1), renderer, signal, inspect);
+  return await loadOptionalRaster(url, idLook(1), renderer, signal, inspect);
 }
 
 /** A class raster and the colour splat painted from it. */
@@ -514,7 +514,7 @@ export async function loadSportKey(
   signal?: AbortSignal
 ): Promise<SportRasters | null> {
   const [raster = "", table = ""] = key.split("\n");
-  return loadSportGrounds(raster, table, renderer, signal);
+  return await loadSportGrounds(raster, table, renderer, signal);
 }
 
 export function freeSport(sport: SportRasters): void {
@@ -638,7 +638,7 @@ async function loadSportGrounds(
   if (!doc?.grounds?.length) {
     return null;
   }
-  return loadIndexedRaster(
+  return await loadIndexedRaster(
     rasterUrl,
     () => packSportTable(doc),
     renderer,
@@ -680,7 +680,7 @@ async function loadMarkings(
   if (!doc?.markings) {
     return null;
   }
-  return loadIndexedRaster(
+  return await loadIndexedRaster(
     rasterUrl,
     () => packMarkingTable(doc),
     renderer,
@@ -1329,7 +1329,7 @@ async function groundOf(
   mask: WaterMask | null
 ): Promise<GroundPrep> {
   const level = mesh.geometry.getIndex();
-  return prepareGroundOffThread(
+  return await prepareGroundOffThread(
     groundPrepInput(mesh, extras, toData, opts.offset, mask),
     {
       // the site's grid index (GridShare) goes to the worker once
@@ -1589,7 +1589,7 @@ async function loadTerrainRasters(
     // an abort lets go at once (`free` below), not once the raster this
     // waits for has decoded and uploaded: the last holder gone, its load
     // stops too
-    return untilAborted(share.acquire(key), opts.signal);
+    return await untilAborted(share.acquire(key), opts.signal);
   };
   const free = () => {
     for (const texture of owned.splice(0)) {
@@ -1656,7 +1656,7 @@ async function owning<T extends Texture>(
   owned: Texture[],
   load: Promise<T | null> | null
 ): Promise<T | null> {
-  return (load ?? Promise.resolve(null)).then((texture) => {
+  return await (load ?? Promise.resolve(null)).then((texture) => {
     if (texture) {
       owned.push(texture);
     }

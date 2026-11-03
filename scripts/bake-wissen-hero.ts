@@ -73,7 +73,7 @@ export async function bakeWissenHero(
       return { input, left: col * cell, top: row * cell };
     })
   );
-  return sharp({
+  return await sharp({
     create: {
       width: cell * cols,
       height: cell * rows,

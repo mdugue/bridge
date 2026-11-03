@@ -80,7 +80,7 @@ function startCompass() {
 }
 
 async function currentPosition(): Promise<GeolocationPosition> {
-  return new Promise((resolve, reject) => {
+  return await new Promise((resolve, reject) => {
     navigator.geolocation.getCurrentPosition(
       resolve,
       (err) => {

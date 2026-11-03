@@ -148,7 +148,7 @@ test("a tile that leaves while its compile runs is freed once the compile ends",
     {
       dressingGate: new Promise<void>(() => {}),
       bootTile: () => null,
-      compile: async () => compiling,
+      compile: async () => await compiling,
       onChange: () => {},
     } as unknown as TileStreamContext,
     {
@@ -184,7 +184,7 @@ test("a tile that leaves lets go of the site's shared index at once, while its c
       dressingGate: new Promise<void>(() => {}),
       bootTile: () => null,
       compile: async () =>
-        new Promise<void>((resolve) => {
+        await new Promise<void>((resolve) => {
           finish = resolve;
         }),
       onChange: () => {},
@@ -379,7 +379,9 @@ test("a tile released while a compile still runs is never dressed after the wait
       dressingGate: Promise.resolve(),
       bootTile: () => null,
       compile: async (o: Object3D) =>
-        o === blocker ? new Promise<boolean>(() => {}) : Promise.resolve(true),
+        o === blocker
+          ? await new Promise<boolean>(() => {})
+          : await Promise.resolve(true),
       look: createLookState(),
       night: () => 0,
       season: () => 180,
@@ -455,7 +457,7 @@ function abortableLoad() {
  *  slot sets its timer only after its builder's load has resolved, past
  *  the microtasks of the call that showed it. */
 const nextTask = async () =>
-  new Promise((resolve) => {
+  await new Promise((resolve) => {
     setTimeout(resolve, 5);
   });
 
@@ -747,11 +749,11 @@ function trafficTile(
     root,
     compile: async (group) => {
       compiled.push(group);
-      return new Promise((resolve) => {
+      return await new Promise((resolve) => {
         finish = () => resolve("done");
       });
     },
-    turn: opts.turn ?? (async (work) => work()),
+    turn: opts.turn ?? (async (work) => await work()),
     freeFailed: (errors) => {
       freeErrors.push(errors);
     },
@@ -896,7 +898,7 @@ test("a switch-on builds the tiles' bodies one after another", async () => {
       () => {},
       () => {}
     );
-    return run;
+    return await run;
   };
   const a = trafficTile({ turn });
   const b = trafficTile({ turn });
@@ -936,7 +938,7 @@ function builderOnItsWay() {
   const coming = new Promise<TrafficBuilder>((resolve) => {
     arrive = () => resolve(builder);
   });
-  return { arrive: () => arrive(), load: async () => coming };
+  return { arrive: () => arrive(), load: async () => await coming };
 }
 
 test("tiles hung before the builder arrives get their bodies when it does, and later tiles too", async () => {
@@ -970,7 +972,8 @@ test("a builder that did not come builds nothing and is asked for on the next sw
   // (the host's `failed` throws: a builder that did not come is no failed
   // build of this tile, and must not be reported as one)
   const { compiled, finish, host, slot } = trafficTile({
-    load: async () => (fails ? Promise.reject(new Error("start")) : loaded()),
+    load: async () =>
+      fails ? await Promise.reject(new Error("start")) : await loaded(),
   });
   slot.attach(host);
   await slot.show();
@@ -1017,7 +1020,7 @@ test("an ask builder that throws in idle time is reported and lets the tile go",
   const failures: unknown[] = [];
   buildAsksWhenIdle(d, () => true, {
     idle: later,
-    run: async (steps) => Promise.resolve().then(() => finished(steps)),
+    run: async (steps) => await Promise.resolve().then(() => finished(steps)),
     failed: (err) => {
       failures.push(err);
     },

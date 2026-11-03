@@ -325,5 +325,5 @@ export async function buildBvhOffThread(
     }
   });
   chain = run.catch(() => {});
-  return run;
+  return await run;
 }

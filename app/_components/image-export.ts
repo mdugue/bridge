@@ -265,7 +265,7 @@ async function download(
   canvas: HTMLCanvasElement,
   name: string
 ): Promise<void> {
-  return new Promise((resolve, reject) => {
+  return await new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (!blob) {
         reject(new Error("Das Bild ließ sich nicht kodieren"));

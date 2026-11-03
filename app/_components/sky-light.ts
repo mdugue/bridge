@@ -490,7 +490,7 @@ export async function loadSkyViewTexture(
   signal?: AbortSignal,
   renderer?: WebGPURenderer
 ): Promise<Texture | null> {
-  return loadLightRaster(
+  return await loadLightRaster(
     url,
     (raster) => {
       const tex = new DataTexture(
@@ -523,7 +523,7 @@ export async function loadHorizonTexture(
   signal?: AbortSignal,
   renderer?: WebGPURenderer
 ): Promise<DataArrayTexture | null> {
-  return loadLightRaster(
+  return await loadLightRaster(
     url,
     (raster) => {
       const n = raster.width / 4;

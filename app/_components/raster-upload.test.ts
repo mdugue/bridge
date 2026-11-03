@@ -65,7 +65,7 @@ async function settled<T>(promise: Promise<T>): Promise<T> {
     }
     jest.advanceTimersByTime(50);
   }
-  return watched;
+  return await watched;
 }
 
 function serve(png: Uint8Array<ArrayBuffer>): void {
@@ -105,8 +105,8 @@ test("a raster whose download hit a blip is asked for again, not taken for absen
   // reason: the loader reads only `ok` and the body of a Response
   globalThis.fetch = (async () =>
     ++calls === 1
-      ? Promise.reject(new TypeError("Load failed"))
-      : Promise.resolve(new Response(png))) as unknown as typeof fetch;
+      ? await Promise.reject(new TypeError("Load failed"))
+      : await Promise.resolve(new Response(png))) as unknown as typeof fetch;
   const seen: { mips: boolean; min: number }[] = [];
   expect(
     await settled(loadNdviTexture("ndvi.png", fakeRenderer(seen)))

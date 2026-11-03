@@ -50,7 +50,7 @@ export async function compileInTurn(
     renderer,
     compiling.catch(() => {})
   );
-  return compiling;
+  return await compiling;
 }
 
 /** A drawable's step as the record holds it: the material it compiled

@@ -31,7 +31,7 @@ interface PocView {
 }
 
 const poc = async (page: Page) =>
-  page.evaluate(() => {
+  await page.evaluate(() => {
     const p = (window as unknown as { __poc?: PocView }).__poc;
     return p
       ? {

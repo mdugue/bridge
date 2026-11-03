@@ -27,7 +27,7 @@ export async function cachedFetch<T>(
       });
     cache.set(url, pending);
   }
-  return pending;
+  return await pending;
 }
 
 /** The tiles' tree facts files (ADR 0042), by URL. */
@@ -46,5 +46,5 @@ export const isTreeFacts = (json: unknown): json is TreeFactsFile =>
 export async function loadTreeFacts(
   url: string
 ): Promise<TreeFactsFile | null> {
-  return cachedFetch(treeFactsFetches, url, isTreeFacts);
+  return await cachedFetch(treeFactsFetches, url, isTreeFacts);
 }

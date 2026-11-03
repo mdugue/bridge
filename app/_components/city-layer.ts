@@ -520,13 +520,13 @@ export function dressCity(
       prepared ??= streamTimings
         .timed(
           "tile:bvh-worker",
-          async () => buildBvhOffThread(geometry, () => !disposed),
+          async () => await buildBvhOffThread(geometry, () => !disposed),
           tile
         )
         .finally(() => {
           prepared = null;
         });
-      return prepared;
+      return await prepared;
     },
     hang: (object, buildingId) => {
       const ids = metadata.tableAccessors[0];

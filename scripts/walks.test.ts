@@ -67,8 +67,9 @@ for (const { site, walks } of sitesWithWalks) {
     });
 
     test("stand on the measured ground", async () => {
-      const heightAt = await siteDgm(site, async (tif, tfw) =>
-        readDgmFile(tif, tfw, "native")
+      const heightAt = await siteDgm(
+        site,
+        async (tif, tfw) => await readDgmFile(tif, tfw, "native")
       );
       const off = walks.flatMap((w) =>
         w.stops.flatMap((s) => {

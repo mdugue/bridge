@@ -151,7 +151,7 @@ async function glbOf(
 ): Promise<Uint8Array> {
   const doc = build();
   await doc.transform(transform());
-  return new NodeIO().writeBinary(doc);
+  return await new NodeIO().writeBinary(doc);
 }
 
 const CASES: [string, Parameters<typeof meshDoc>[0]][] = [

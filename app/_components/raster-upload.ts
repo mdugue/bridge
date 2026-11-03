@@ -72,7 +72,7 @@ export async function inRasterTurn<T>(
   task: () => Promise<T>,
   signal?: AbortSignal
 ): Promise<T> {
-  return rasterGate.run(task, signal);
+  return await rasterGate.run(task, signal);
 }
 
 /** Drops a data texture's CPU copy once the GPU has it: dead weight after

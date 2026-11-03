@@ -86,7 +86,7 @@ export function halveRg(rg: Uint8Array, w: number, h: number): Uint8Array {
 }
 
 async function encode(rg: Uint8Array, w: number, h: number): Promise<Buffer> {
-  return sharp(rg, { raw: { width: w * 2, height: h, channels: 1 } })
+  return await sharp(rg, { raw: { width: w * 2, height: h, channels: 1 } })
     .toColourspace("b-w")
     .png({ compressionLevel: 9, palette: false })
     .toBuffer();

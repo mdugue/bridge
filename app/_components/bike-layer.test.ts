@@ -89,7 +89,7 @@ function stubFetch(body: unknown): {
 }
 
 const settle = async () =>
-  new Promise((r) => {
+  await new Promise((r) => {
     setTimeout(r, 5);
   });
 

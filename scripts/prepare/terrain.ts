@@ -130,7 +130,7 @@ async function shapedTerrain(
     })();
     terrains.set(memo, built);
   }
-  return built;
+  return await built;
 }
 
 /** Frees a baked tile's shaped terrain (its meshes' arrays). */

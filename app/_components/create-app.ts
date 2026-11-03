@@ -1023,7 +1023,7 @@ async function deviceGone(renderer: WebGPURenderer): Promise<void> {
     device?: { lost: Promise<unknown> } | null;
   };
   const device = backend.isWebGPUBackend ? backend.device : null;
-  return device ? device.lost.then(() => {}) : Promise.resolve();
+  return device ? await device.lost.then(() => {}) : await Promise.resolve();
 }
 
 /**
@@ -1067,7 +1067,7 @@ async function releaseGpu(renderer: WebGPURenderer): Promise<void> {
   } catch {
     released = Promise.resolve();
   }
-  return Promise.race([
+  return await Promise.race([
     released,
     new Promise<void>((resolve) => {
       setTimeout(resolve, RELEASE_WAIT_MS);
@@ -1236,7 +1236,7 @@ async function teardown(
 ): Promise<void> {
   runCleanups(cleanups);
   disposeObject3D(scene);
-  return releaseRenderer(renderer);
+  return await releaseRenderer(renderer);
 }
 
 /**
@@ -1290,7 +1290,7 @@ async function releaseRenderer(renderer: WebGPURenderer): Promise<void> {
   // Async: it destroys the device (or loses the context) at the end.
   const released = renderer.dispose().catch(() => {});
   renderer.domElement.remove();
-  return released;
+  return await released;
 }
 
 /** Unwinds registered teardowns in reverse creation order. */
@@ -1653,8 +1653,8 @@ async function bootApp(
       // uploaded); what a compile throws the stream sorts out
       compile: async (object) =>
         compileWith
-          ? compileWith(object).then(() => true)
-          : Promise.resolve(false),
+          ? await compileWith(object).then(() => true)
+          : await Promise.resolve(false),
       // a compile the GPU had no room for (the dressing stays off): shed
       // memory before a frame's own allocation fails; the half-made
       // attribute such a failure left, met again at a tile's release, is
@@ -1702,7 +1702,7 @@ async function bootApp(
       // stack below; a slot asks only once the look has a layer on and
       // its tile has landed)
       trafficBuilder: async () =>
-        dataLayers.want().then((layers) => layers?.traffic ?? null),
+        await dataLayers.want().then((layers) => layers?.traffic ?? null),
     },
     world,
     [
@@ -2018,7 +2018,8 @@ async function bootApp(
         bridgeUrls: extras.tiles.flatMap((t) =>
           t.bridges ? [new URL(t.bridges, tilesetUrl).href] : []
         ),
-        compile: async (object) => postStack.compile(object).catch(() => {}),
+        compile: async (object) =>
+          await postStack.compile(object).catch(() => {}),
         epsg: extras.epsg,
         ground: { offset, heightAt },
         onBikeCounts: opts.onBikeCounts,
@@ -2779,7 +2780,7 @@ async function bootApp(
       }
     },
     pose: () => pose.getPose(),
-    compile: async (object) => postStack.compile(object),
+    compile: async (object) => await postStack.compile(object),
     footprints: () => footprints,
     changed: () => {
       if (disposed) {
@@ -3608,7 +3609,7 @@ async function bootApp(
    */
   let shadowFrameSeen: ((drawn: boolean) => void) | null = null;
   const firstShadowFrame = async () =>
-    new Promise<void>((resolve) => {
+    await new Promise<void>((resolve) => {
       let quiet = 0;
       shadowFrameSeen = (drawn) => {
         quiet = drawn || sunRig.shadowPending() ? 0 : quiet + 1;
@@ -4054,8 +4055,10 @@ async function bootApp(
   // the first visible frame. Bounded like a tile's compile: it resolves
   // only once every compile in flight has (compile-lanes.ts), neighbours'
   // included, and a frame skips what is not ready rather than stall.
-  await streamTimings.timed("boot:scene-compile", async () =>
-    withinCompileWait(postStack.compile(scene).catch(() => {}))
+  await streamTimings.timed(
+    "boot:scene-compile",
+    async () =>
+      await withinCompileWait(postStack.compile(scene).catch(() => {}))
   );
   // On the spawn vantage (or where a recovered page stood) now that its
   // ground exists (the pose was placed before any terrain had landed,
@@ -4071,8 +4074,9 @@ async function bootApp(
   // already at 52 % and the veil's timer held up behind them — a load that
   // looked frozen. Bounded like a compile: a stalled frame never holds the
   // boot.
-  await streamTimings.timed("boot:light-wait", async () =>
-    withinCompileWait(firstShadowFrame())
+  await streamTimings.timed(
+    "boot:light-wait",
+    async () => await withinCompileWait(firstShadowFrame())
   );
   // The sun rig, the shadow map and the clay materials are up: this is the
   // first renderable frame, and the point the HUD hands over to the pill.
@@ -4228,12 +4232,12 @@ async function bootApp(
     design: {
       applyPlacementFile: (text) =>
         design?.applyPlacementFile(text) ?? "Keine Szene.",
-      load: async (files) => design?.load(files) ?? Promise.resolve(),
+      load: async (files) => await (design?.load(files) ?? Promise.resolve()),
       placeHere: () => design?.placeHere(),
       placementText: () => design?.placementText() ?? null,
       remove: () => design?.remove(),
       setFileColours: async (on) =>
-        design?.setFileColours(on) ?? Promise.resolve(),
+        await (design?.setFileColours(on) ?? Promise.resolve()),
       setOnGround: () => design?.setOnGround(),
       setPlacement: (patch) => design?.setPlacement(patch),
       setReplaceExisting: (on) => design?.setReplaceExisting(on),
@@ -4247,7 +4251,7 @@ async function bootApp(
     },
     nameplateShown: () => nameplate.shown(),
     enterImmersive: canvasControls.lockPointer,
-    releaseGpu: async () => releaseGpu(renderer),
+    releaseGpu: async () => await releaseGpu(renderer),
     flyTo: (position, lookAt) => {
       wakeStill();
       modelRig.exitNow();
@@ -4381,7 +4385,7 @@ async function bootApp(
     getViewMode: () => viewMode,
     setCutOut,
     captureImage: async () =>
-      new Promise<CapturedImage>((resolve, reject) => {
+      await new Promise<CapturedImage>((resolve, reject) => {
         captureQueue.push({ resolve, reject });
       }),
     toggleModel: () => (modelRig.owns() ? modelRig.leave() : modelRig.enter()),
@@ -4430,7 +4434,7 @@ async function bootApp(
           `${left.geometries} geometries, ${left.textures} textures left, ${Math.round(left.total / 1_048_576)} MB`
         )
       );
-      return Promise.race([
+      return await Promise.race([
         Promise.all([released, lost]),
         new Promise<void>((resolve) => {
           setTimeout(resolve, TEARDOWN_WAIT_MS);

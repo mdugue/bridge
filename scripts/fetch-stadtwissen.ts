@@ -37,7 +37,7 @@ async function politely(url: string, tries = 6): Promise<unknown> {
   for (let attempt = 1; ; attempt += 1) {
     const res = await fetch(url, { headers: { "User-Agent": AGENT } });
     if (res.ok) {
-      return res.json();
+      return await res.json();
     }
     if (res.status !== 429 || attempt >= tries) {
       throw new Error(`Wikidata answered ${res.status}`);

@@ -59,7 +59,7 @@ export function createSharedRasters<T>(
         entries.set(key, entry);
       }
       entry.refs += 1;
-      return entry.promise;
+      return await entry.promise;
     },
     release: (key) => {
       const entry = entries.get(key);

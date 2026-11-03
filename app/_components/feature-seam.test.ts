@@ -3,7 +3,7 @@ import { lazyFeature, wantOnSwitchOn } from "./feature-seam";
 
 /** Every promise the calls before started has settled. */
 const settled = async () =>
-  new Promise((resolve) => {
+  await new Promise((resolve) => {
     setTimeout(resolve, 0);
   });
 
@@ -47,8 +47,8 @@ test("a module that did not load is asked for again on the next want", async () 
   const lazy = lazyFeature(async () => {
     imports += 1;
     return imports === 1
-      ? Promise.reject(new Error("load"))
-      : Promise.resolve({});
+      ? await Promise.reject(new Error("load"))
+      : await Promise.resolve({});
   }, feature.start);
   const failed = await lazy.want().then(
     () => null,
@@ -67,7 +67,7 @@ test("a spine gone before the module came never starts the feature; one gone aft
     arrive = () => resolve({});
   });
   const early = counted();
-  const gone = lazyFeature(async () => coming, early.start);
+  const gone = lazyFeature(async () => await coming, early.start);
   const wanted = gone.want();
   gone.dispose();
   arrive();
@@ -92,8 +92,8 @@ test("the spine asks again on the next switch-on after a load that failed, not o
   const lazy = lazyFeature(async () => {
     imports += 1;
     return imports === 1
-      ? Promise.reject(new Error("load"))
-      : Promise.resolve({});
+      ? await Promise.reject(new Error("load"))
+      : await Promise.resolve({});
   }, feature.start);
   const failures: unknown[] = [];
   const want = wantOnSwitchOn(lazy, (error) => {

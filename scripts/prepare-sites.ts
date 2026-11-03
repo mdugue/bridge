@@ -85,7 +85,7 @@ async function prepare(id: SiteId, args: string[]): Promise<number | null> {
       to.write(`[${id}] ${line}\n`);
     });
   }
-  return new Promise((resolve) => {
+  return await new Promise((resolve) => {
     child.on("close", resolve);
   });
 }
@@ -121,13 +121,17 @@ async function prepareAll(
     if (!warm || tiles.length === 0) {
       // a cached site publishes at a small peak; only a cold one is
       // counted at a whole site's (warmers.ts SITE_PEAK)
-      const probe = await slots.run(0, IF_CACHED_RUN.peak, async () =>
-        prepare(id, IF_CACHED_RUN.args)
+      const probe = await slots.run(
+        0,
+        IF_CACHED_RUN.peak,
+        async () => await prepare(id, IF_CACHED_RUN.args)
       );
       if (probe !== NOT_CACHED) {
         return probe === 0;
       }
-      return (await slots.run(0, SITE_PEAK, async () => prepare(id, []))) === 0;
+      return (
+        (await slots.run(0, SITE_PEAK, async () => await prepare(id, []))) === 0
+      );
     }
     const [[first], ...later] = warmSteps(tiles);
     // Step 0, then step 1 in its slot: the first warmer starts at once,
@@ -143,8 +147,9 @@ async function prepareAll(
     }
     for (const step of later) {
       const codes = await Promise.all(
-        step.map(async ({ args, peak }) =>
-          slots.run(1, peak, async () => prepare(id, args))
+        step.map(
+          async ({ args, peak }) =>
+            await slots.run(1, peak, async () => await prepare(id, args))
         )
       );
       if (codes.some((code) => code !== 0)) {

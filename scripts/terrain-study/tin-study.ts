@@ -166,7 +166,7 @@ async function tinGlb(
   g.setAttribute("position", new BufferAttribute(positions, 3));
   g.setIndex(new BufferAttribute(indices, 1));
   g.computeVertexNormals();
-  return writeMeshGlb({
+  return await writeMeshGlb({
     name: "terrain",
     extras: {},
     positions,

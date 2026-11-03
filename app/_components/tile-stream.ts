@@ -630,7 +630,7 @@ export function handOverWaitMs(tier: DeviceTier): number {
 }
 
 async function withinWait(done: Promise<unknown>, ms: number): Promise<void> {
-  return Promise.race([
+  return await Promise.race([
     done.then(() => {}),
     new Promise<void>((resolve) => {
       setTimeout(resolve, ms);
@@ -639,7 +639,7 @@ async function withinWait(done: Promise<unknown>, ms: number): Promise<void> {
 }
 
 export async function withinCompileWait(done: Promise<unknown>): Promise<void> {
-  return withinWait(done, COMPILE_WAIT_MS);
+  return await withinWait(done, COMPILE_WAIT_MS);
 }
 
 /**
@@ -927,7 +927,7 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
    *  host's turn, which waits on the compile (a dressing's waits after
    *  its turn: queueDressing). */
   const start = async (h: TrafficHost, builder: TrafficBuilder) =>
-    h.turn(async () => {
+    await h.turn(async () => {
       await nextTask();
       if (gone(h)) {
         return null;
@@ -1014,7 +1014,7 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
           h.failed(error);
         }
       });
-      return building;
+      return await building;
     },
     hide: () => {
       wanted = false;
@@ -1075,7 +1075,9 @@ async function buildCoarseDressing(
   const files = extras.coarse ?? {};
   const tile = extras.tileId;
   const fetchKind = async <T>(file: string | undefined): Features<T> =>
-    file ? fetchFeatures<T>(url(file), signal) : Promise.resolve([]);
+    file
+      ? await fetchFeatures<T>(url(file), signal)
+      : await Promise.resolve([]);
   const [traffic, bridges, crownBytes] = await Promise.all([
     fetchKind<TrafficFeature>(files.traffic),
     fetchKind<BridgeFeature>(files.bridge),
@@ -1165,7 +1167,7 @@ async function buildDressing(
   const tile = extras.tileId;
   if (!d) {
     return COARSE_DRESSING_KINDS.some((kind) => extras.coarse?.[kind])
-      ? buildCoarseDressing(
+      ? await buildCoarseDressing(
           terrain,
           extras,
           ctx,
@@ -1178,7 +1180,9 @@ async function buildDressing(
   // A kind the tile lacks is a feature off, never a request.
   const get = async <T>(kind: DressingKind): Features<T> => {
     const file = d[kind];
-    return file ? fetchFeatures<T>(url(file), signal) : Promise.resolve([]);
+    return file
+      ? await fetchFeatures<T>(url(file), signal)
+      : await Promise.resolve([]);
   };
   // The canopy points come packed (lib/city/point-pack.ts, prepare-data.ts):
   // no parse, the same features for the vegetation. Not a pack = off.
@@ -1532,12 +1536,14 @@ export class DressingPlugin {
   private readonly tileOf = new WeakMap<Object3D, object>();
   /** the sky-view rasters a tile's terrain and buildings share */
   readonly skyView: SharedRasters<Texture> = createSharedRasters(
-    async (url, signal) => loadSkyViewTexture(url, signal, this.ctx.renderer),
+    async (url, signal) =>
+      await loadSkyViewTexture(url, signal, this.ctx.renderer),
     (texture) => texture.dispose()
   );
   /** the horizon rasters a tile's two terrain levels share */
   readonly horizon: SharedRasters<Texture> = createSharedRasters(
-    async (url, signal) => loadHorizonTexture(url, signal, this.ctx.renderer),
+    async (url, signal) =>
+      await loadHorizonTexture(url, signal, this.ctx.renderer),
     (texture) => texture.dispose()
   );
   /** the class rasters (and their painted splats), NDVI and sports grounds,
@@ -1547,15 +1553,17 @@ export class DressingPlugin {
    *  COARSE_RASTER_PX); the sports grounds only a desktop's fine level
    *  reads */
   readonly splats: SharedRasters<SplatRasters> = createSharedRasters(
-    async (url, signal) => loadSplatRasters(url, this.ctx.renderer, signal),
+    async (url, signal) =>
+      await loadSplatRasters(url, this.ctx.renderer, signal),
     freeSplatRasters
   );
   readonly ndvis: SharedRasters<Texture> = createSharedRasters(
-    async (url, signal) => loadNdviTexture(url, this.ctx.renderer, signal),
+    async (url, signal) =>
+      await loadNdviTexture(url, this.ctx.renderer, signal),
     (texture) => texture.dispose()
   );
   readonly sports: SharedRasters<SportRasters> = createSharedRasters(
-    async (key, signal) => loadSportKey(key, this.ctx.renderer, signal),
+    async (key, signal) => await loadSportKey(key, this.ctx.renderer, signal),
     freeSport
   );
   /** the coarse level's grid index and water index, one copy for the
@@ -1587,7 +1595,7 @@ export class DressingPlugin {
     ctx.dressingGate
       .then(async () => {
         this.gateOpen = true;
-        return this.warmCrowns();
+        return await this.warmCrowns();
       })
       .catch(() => {
         // Without the warm-up a date change compiles in a frame; the
@@ -1781,7 +1789,7 @@ export class DressingPlugin {
     } else if (extras.kind === "terrain") {
       ({ dressed } = await streamTimings.timed(
         "tile:rasters",
-        async () => this.dressTerrain(scene, mesh, extras),
+        async () => await this.dressTerrain(scene, mesh, extras),
         extras.tileId
       ));
     }
@@ -1791,7 +1799,7 @@ export class DressingPlugin {
     if (!this.released.has(scene)) {
       await streamTimings.timed(
         "tile:compile",
-        async () => withinCompileWait(this.compileContent(scene)),
+        async () => await withinCompileWait(this.compileContent(scene)),
         extras.tileId
       );
     }
@@ -1838,7 +1846,7 @@ export class DressingPlugin {
     }
     await streamTimings.timed(
       "tile:handover-wait",
-      async () => withinWait(dressed, wait),
+      async () => await withinWait(dressed, wait),
       extras.tileId
     );
   }
@@ -2052,8 +2060,8 @@ export class DressingPlugin {
   /** `work` in the dressings' turn: after the gate, one at a time, the
    *  lower rank first */
   private async turn<T>(work: () => Promise<T>, rank: number): Promise<T> {
-    return this.ctx.dressingGate.then(async () =>
-      this.lane.run(work, undefined, rank)
+    return await this.ctx.dressingGate.then(
+      async () => await this.lane.run(work, undefined, rank)
     );
   }
   pending = 0;
@@ -2094,7 +2102,9 @@ export class DressingPlugin {
     const warmup = buildCrownWarmup();
     this.warmup = warmup;
     await withinCompileWait(
-      Promise.all(warmup.main.map(async (mesh) => this.ctx.compile(mesh))).then(
+      Promise.all(
+        warmup.main.map(async (mesh) => await this.ctx.compile(mesh))
+      ).then(
         () => {},
         (error: unknown) => {
           this.compileFailed(error, "crowns");
@@ -2191,7 +2201,8 @@ export class DressingPlugin {
       const { signal } = entry.aborter;
       const dressing = await streamTimings.timed(
         "dressing:build",
-        async () => buildDressing(terrain, extras, this.ctx, this.url, signal),
+        async () =>
+          await buildDressing(terrain, extras, this.ctx, this.url, signal),
         extras.tileId
       );
       entry.aborter = undefined;
@@ -2227,7 +2238,7 @@ export class DressingPlugin {
         .catch(() => {});
       const waited = streamTimings.timed(
         "dressing:compile",
-        async () => withinCompileWait(compiled),
+        async () => await withinCompileWait(compiled),
         extras.tileId
       );
       this.olderCompile = this.lastCompile;
@@ -2305,7 +2316,7 @@ export class DressingPlugin {
           this.ctx.onChange();
         }
       });
-    return ready;
+    return await ready;
   }
 
   /** Hangs a built dressing on its tile's content root. */
@@ -2330,14 +2341,14 @@ export class DressingPlugin {
     dressing.traffic?.attach({
       root: scene,
       compile: async (group) =>
-        this.compileUnder(
+        await this.compileUnder(
           scene,
           compileRepresentatives([group]),
           `traffic ${tileIdOf(scene)}`
         ),
       // the dressings' own chain: a switch-on builds the loaded tiles'
       // bodies one after another, never all in one task
-      turn: async (work) => this.turn(work, FINE_DRESSING_RANK),
+      turn: async (work) => await this.turn(work, FINE_DRESSING_RANK),
       freeFailed: (errors) => this.disposeFailed(errors, scene),
       gone: () =>
         this.disposed ||
@@ -2429,7 +2440,7 @@ export class DressingPlugin {
   ): Promise<Compiled> {
     this.compiles.set(scene, (this.compiles.get(scene) ?? 0) + 1);
     const done = Promise.all(
-      objects.map(async (o) => this.ctx.compile(o))
+      objects.map(async (o) => await this.ctx.compile(o))
     ).then(
       (compiled): Compiled => (compiled.every(Boolean) ? "done" : "not run"),
       (error: unknown) => this.compileFailed(error, where)
@@ -2447,7 +2458,7 @@ export class DressingPlugin {
     };
     // a release that throws must not surface as an unhandled rejection
     done.then(settle).catch(() => {});
-    return done;
+    return await done;
   }
 
   /**
@@ -2479,7 +2490,7 @@ export class DressingPlugin {
         }
       })
       .catch(() => {});
-    return compiled;
+    return await compiled;
   }
 
   /**

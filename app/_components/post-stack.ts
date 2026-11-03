@@ -942,8 +942,8 @@ export function createPostStack(
   const inTurn =
     (now: (object: Object3D) => Promise<void>) =>
     async (object: Object3D): Promise<void> =>
-      compileInTurn(renderer, async () => now(object));
-  const compileOne = inTurn(async (object) => compileNow(object));
+      await compileInTurn(renderer, async () => await now(object));
+  const compileOne = inTurn(async (object) => await compileNow(object));
   /**
    * The cameras the frames are drawn with, one of each kind: the walk/fly
    * camera, and once it was asked for (`warmView`) Modell's parallel one.
@@ -967,20 +967,22 @@ export function createPostStack(
   const swappedIn =
     (kind: PaperKind, now: (object: Object3D) => Promise<void>) =>
     async (object: Object3D): Promise<void> =>
-      paperScene.swapped(object, async () => now(object), kind);
+      await paperScene.swapped(object, async () => await now(object), kind);
   // a camera let go meanwhile (`dropView`) is compiled for no longer: the
   // rest of a walk queued nothing behind the tiles for it, and a compile
   // still queued when it was let go builds nothing
   const compileSwap = (kind: PaperKind, view: Camera) => {
     const swap = inTurn(
       swappedIn(kind, async (o) =>
-        views.includes(view) ? compileNow(o, view) : Promise.resolve()
+        views.includes(view)
+          ? await compileNow(o, view)
+          : await Promise.resolve()
       )
     );
     return async (object: Drawable): Promise<void> =>
       paperScene.drawsAsPaper(object, kind) && views.includes(view)
-        ? swap(object)
-        : Promise.resolve();
+        ? await swap(object)
+        : await Promise.resolve();
   };
   // The swaps' own materials: Strich wears Papier's card, so its programs
   // are Papier's.
@@ -1050,8 +1052,10 @@ export function createPostStack(
     const previous = renderer.getRenderTarget();
     renderer.setRenderTarget(target);
     try {
-      return aloneUnder(group, object, async () =>
-        renderer.compileAsync(group, view, scene)
+      return aloneUnder(
+        group,
+        object,
+        async () => await renderer.compileAsync(group, view, scene)
       );
     } finally {
       renderer.setRenderTarget(previous);
@@ -1062,8 +1066,8 @@ export function createPostStack(
     view: Camera,
     kind?: PaperKind
   ): CutHold => {
-    const under = async (o: Object3D) => compileUnder(group, o, view);
-    const plain = async (o: Object3D) => compileNow(o, view);
+    const under = async (o: Object3D) => await compileUnder(group, o, view);
+    const plain = async (o: Object3D) => await compileNow(o, view);
     const anchors = [
       { a: createPipelineAnchors(inTurn(under), true), paper: false },
       { a: createPipelineAnchors(inTurn(plain), true), paper: false },
@@ -1161,7 +1165,7 @@ export function createPostStack(
       viewAnchors.get(view) ??
       dropping.get(view)?.anchors ??
       createPipelineAnchors(
-        inTurn(async (o) => compileNow(o, view)),
+        inTurn(async (o) => await compileNow(o, view)),
         true
       );
     dropping.delete(view);
@@ -1343,7 +1347,7 @@ export function createPostStack(
         .then(() => overlay?.compile(renderer, camera).catch(() => {}))
         .then(warmStyles)
         .catch(() => {});
-      return stylesWarm;
+      return await stylesWarm;
     },
     sceneChanged: () => {
       paperScene.sceneChanged();

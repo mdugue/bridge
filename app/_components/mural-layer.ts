@@ -102,7 +102,7 @@ export function createMuralSource(url: string | null): MuralSource | null {
     all ??= fetchOptionalJson<unknown>(url)
       .then((json) => parseMurals(json) ?? [])
       .catch(() => []);
-    return all;
+    return await all;
   };
   return {
     fileUrl: (file) => new URL(file, url).href,

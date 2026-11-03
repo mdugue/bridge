@@ -193,5 +193,5 @@ export async function pageSafety(): Promise<SafetyLevel> {
     crashedBefore(),
     pageStillOpen
   );
-  return pageLevel;
+  return await pageLevel;
 }

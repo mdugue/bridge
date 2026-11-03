@@ -80,7 +80,7 @@ export function createTaskGate(
     signal?: AbortSignal,
     rank = 0
   ): Promise<T> =>
-    new Promise<T>((resolve, reject) => {
+    await new Promise<T>((resolve, reject) => {
       if (signal?.aborted) {
         reject(abortError(signal));
         return;

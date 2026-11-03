@@ -142,7 +142,7 @@ async function call(
     const text = (await response.text()).slice(0, 300);
     throw new Error(`${method} ${path}: ${response.status} ${text}`);
   }
-  return response.status === 204 ? null : response.json();
+  return response.status === 204 ? null : await response.json();
 }
 
 /**

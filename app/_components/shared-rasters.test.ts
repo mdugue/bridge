@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { createSharedRasters } from "./shared-rasters";
 
 const tick = async () =>
-  new Promise((resolve) => {
+  await new Promise((resolve) => {
     setTimeout(resolve, 0);
   });
 
@@ -42,7 +42,7 @@ test("a raster released before it lands is freed when it lands", async () => {
   const freed: string[] = [];
   const share = createSharedRasters(
     async () =>
-      new Promise<string>((resolve) => {
+      await new Promise<string>((resolve) => {
         land = resolve;
       }),
     (value) => {
@@ -73,10 +73,10 @@ test("a clear frees every held raster, pending ones when they land", async () =>
   const share = createSharedRasters(
     async (key) =>
       key === "late"
-        ? new Promise<string>((resolve) => {
+        ? await new Promise<string>((resolve) => {
             land = resolve;
           })
-        : Promise.resolve(`tex:${key}`),
+        : await Promise.resolve(`tex:${key}`),
     (value) => {
       freed.push(value);
     }
@@ -104,7 +104,7 @@ test("a load every reader left before it landed is aborted", async () => {
   const share = createSharedRasters(
     async (_key, signal) => {
       seen = signal;
-      return new Promise<string>((_resolve, reject) => {
+      return await new Promise<string>((_resolve, reject) => {
         signal.addEventListener("abort", () => reject(new Error("aborted")));
       });
     },
@@ -127,8 +127,8 @@ test("the stream's teardown stops the loads still on their way", async () => {
     async (key, signal) => {
       signals.push(signal);
       return key === "landed"
-        ? Promise.resolve("tex")
-        : new Promise<string>((_resolve, reject) => {
+        ? await Promise.resolve("tex")
+        : await new Promise<string>((_resolve, reject) => {
             signal.addEventListener("abort", () =>
               reject(new Error("aborted"))
             );

@@ -141,8 +141,8 @@ test("a network error is retried until an answer comes", async () => {
     async () => {
       calls += 1;
       return calls < 3
-        ? Promise.reject(new TypeError("Load failed"))
-        : Promise.resolve(ok());
+        ? await Promise.reject(new TypeError("Load failed"))
+        : await Promise.resolve(ok());
     },
     { budgetMs: 20_000, env: page.env }
   );
@@ -258,8 +258,8 @@ test("time the page is hidden does not count against the budget", async () => {
     async () => {
       calls += 1;
       return calls < 5
-        ? Promise.reject(new TypeError("Load failed"))
-        : Promise.resolve(ok());
+        ? await Promise.reject(new TypeError("Load failed"))
+        : await Promise.resolve(ok());
     },
     { budgetMs: 10_000, env: page.env }
   );

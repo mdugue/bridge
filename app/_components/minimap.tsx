@@ -191,11 +191,12 @@ function useBridges(tiles: MapTile[] | undefined): MapBridge[] {
     }
     const controller = new AbortController();
     Promise.all(
-      urls.map(async (url) =>
-        fetch(url, { signal: controller.signal })
-          .then((res) => (res.ok ? res.json() : null))
-          .then(mapBridges)
-          .catch((): MapBridge[] => [])
+      urls.map(
+        async (url) =>
+          await fetch(url, { signal: controller.signal })
+            .then((res) => (res.ok ? res.json() : null))
+            .then(mapBridges)
+            .catch((): MapBridge[] => [])
       )
     )
       .then((perTile) => {
@@ -268,8 +269,8 @@ export function Minimap({
       requested.add(tile.src);
       pending.add(tile.src);
       fetch(tile.src, { signal: loads.signal })
-        .then(async (res) => res.arrayBuffer())
-        .then(async (buf) => decodeGreyPng(new Uint8Array(buf)))
+        .then(async (res) => await res.arrayBuffer())
+        .then(async (buf) => await decodeGreyPng(new Uint8Array(buf)))
         .then((raster) => {
           pending.delete(tile.src);
           if (!loads.signal.aborted) {

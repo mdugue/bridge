@@ -24,7 +24,7 @@ function stubFetch(
   // reason: the stub takes the URL only; the helpers pass a string
   globalThis.fetch = (async (url: string) => {
     calls += 1;
-    return answer(url, calls);
+    return await answer(url, calls);
   }) as unknown as typeof fetch;
   return { calls: () => calls };
 }
@@ -53,7 +53,7 @@ async function settled<T>(promise: Promise<T>, stepMs = 50): Promise<T> {
     }
     jest.advanceTimersByTime(stepMs);
   }
-  return watched;
+  return await watched;
 }
 
 test("ok JSON is returned parsed", async () => {
@@ -220,7 +220,7 @@ test("an attempt that goes silent is cut and asked for again", async () => {
     if (calls > 1) {
       return new Response(new Uint8Array([7, 8]));
     }
-    return new Promise<Response>((_, reject) => {
+    return await new Promise<Response>((_, reject) => {
       init?.signal?.addEventListener("abort", () =>
         reject(new DOMException("The operation was aborted.", "AbortError"))
       );
@@ -234,7 +234,7 @@ test("an attempt that goes silent is cut and asked for again", async () => {
 
 test("the caller's abort is an abort, not a stall", async () => {
   globalThis.fetch = (async (_url: string, init?: RequestInit) =>
-    new Promise<Response>((_, reject) => {
+    await new Promise<Response>((_, reject) => {
       init?.signal?.addEventListener("abort", () =>
         reject(new DOMException("The operation was aborted.", "AbortError"))
       );

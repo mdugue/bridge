@@ -1252,7 +1252,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     // docs/rendering.md, "Workarounds for
     // upstream bugs").
     compile: async (renderer, camera) =>
-      compileInTurn(renderer, async () => {
+      await compileInTurn(renderer, async () => {
         if (disposed) {
           return;
         }

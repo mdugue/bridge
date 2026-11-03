@@ -155,7 +155,7 @@ function unfilterRow(
 const ROWS_PER_SLICE = 256;
 
 const yieldToFrame = async () =>
-  new Promise<void>((resolve) => {
+  await new Promise<void>((resolve) => {
     setTimeout(resolve, 0);
   });
 

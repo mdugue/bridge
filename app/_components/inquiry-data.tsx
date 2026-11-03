@@ -25,7 +25,7 @@ async function loadLineage(): Promise<LineageModule> {
     lineageModule = null;
     throw error;
   });
-  return lineageModule;
+  return await lineageModule;
 }
 
 /** The lineage module once `wanted`, null until it has arrived. */

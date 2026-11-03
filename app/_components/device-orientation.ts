@@ -63,7 +63,7 @@ export async function requestOrientationPermission(): Promise<boolean> {
   if (typeof request !== "function") {
     return ctor() !== undefined;
   }
-  return request().then(
+  return await request().then(
     (state) => state === "granted",
     () => false
   );

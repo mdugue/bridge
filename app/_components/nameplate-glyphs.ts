@@ -169,7 +169,7 @@ export async function loadFaces(
     [
       fontOf(type.title, TITLE_PX, from),
       fontOf(type.lines, LINES_PX, from),
-    ].map(async (f) => document.fonts.load(f, text).catch(() => []))
+    ].map(async (f) => await document.fonts.load(f, text).catch(() => []))
   );
 }
 

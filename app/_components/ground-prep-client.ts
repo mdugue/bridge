@@ -229,7 +229,7 @@ export async function prepareGroundOffThread(
   input: GroundPrepInput,
   opts: { shared?: object; signal?: AbortSignal } = {}
 ): Promise<GroundPrep> {
-  return new Promise<GroundPrep>((resolve, reject) => {
+  return await new Promise<GroundPrep>((resolve, reject) => {
     queue.push({ input, ...opts, resolve, reject });
     next();
   });

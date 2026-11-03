@@ -13,7 +13,7 @@ async function syntheticClassRaster(): Promise<Buffer> {
       px.set([id, 255], (y * 8 + x) * 2);
     }
   }
-  return sharp(px, { raw: { width: 8, height: 8, channels: 2 } })
+  return await sharp(px, { raw: { width: 8, height: 8, channels: 2 } })
     .toColourspace("b-w")
     .png()
     .toBuffer();

@@ -143,7 +143,7 @@ test("uploads cut off end the uploads, not the fetches", async () => {
       puts += 1;
       throw new DOMException("The operation timed out.", "TimeoutError");
     }
-    return api.fetcher(input, init);
+    return await api.fetcher(input, init);
   }) as typeof fetch;
   const lines: string[] = [];
   const { cache } = sharedCache(

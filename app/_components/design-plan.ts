@@ -218,7 +218,7 @@ async function readFeatures(
     };
   }
   if (name.endsWith(".shp")) {
-    return readShapefiles(files);
+    return await readShapefiles(files);
   }
   if (name.endsWith(".gpkg")) {
     const layers: PlanLayer[] = [];

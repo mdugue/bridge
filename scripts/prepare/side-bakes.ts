@@ -62,7 +62,7 @@ export async function publishColonies(
   let cropping: ReturnType<typeof cropColonyRaster> | null = null;
   const cut = async () => {
     cropping ??= cropColonyRaster(src);
-    return cropping;
+    return await cropping;
   };
   const crop = parse<ColonyCrop | null>(
     await cached(cropFile, key, async () => utf8((await cut())?.crop ?? null))
@@ -167,8 +167,10 @@ export async function publishClassRaster(
   raster: number
 ): Promise<string> {
   const key = cacheKey([src], BAKE_ENTRIES.classRaster);
-  const bytes = await cached(file, key, async () =>
-    downsampleClassRaster(src, raster)
+  const bytes = await cached(
+    file,
+    key,
+    async () => await downsampleClassRaster(src, raster)
   );
   return publish(file, bytes);
 }

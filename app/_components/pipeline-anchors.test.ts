@@ -148,7 +148,7 @@ test("a second ask for a build in flight resolves once its compile has", async (
   let calls = 0;
   const anchors = createPipelineAnchors(async () => {
     calls += 1;
-    return new Promise<void>((resolve) => {
+    return await new Promise<void>((resolve) => {
       finish = resolve;
     });
   });
@@ -182,7 +182,7 @@ test("a tile's own material freed before its set's turn leaves the set and the h
   let drawn: Object3D[] = [];
   const anchors = createPipelineAnchors(
     async (set) =>
-      new Promise<void>((resolve) => {
+      await new Promise<void>((resolve) => {
         finish = () => {
           // what the set holds once its turn comes
           drawn = [...set.children];
@@ -215,7 +215,7 @@ test("a stand-in freed while its set compiles is released again once the compile
   const anchors = createPipelineAnchors(async (set) => {
     // three takes the set's items as the call begins
     standIns = [...set.children];
-    return new Promise<void>((resolve) => {
+    return await new Promise<void>((resolve) => {
       finish = resolve;
     });
   }, true);

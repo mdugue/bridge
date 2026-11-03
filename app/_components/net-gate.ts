@@ -86,7 +86,7 @@ export function createNetGate(page: GatePage): NetGate {
     if (usable()) {
       return;
     }
-    return new Promise<void>((resolve, reject) => {
+    return await new Promise<void>((resolve, reject) => {
       let probe: ReturnType<typeof setTimeout> | undefined;
       const done = () => {
         wakers.delete(wake);
@@ -184,9 +184,11 @@ export function visibleMs(): number {
 export async function whenUsable(signal?: AbortSignal): Promise<void> {
   const page = pageGate();
   if (page) {
-    return page.whenUsable(signal);
+    return await page.whenUsable(signal);
   }
-  return signal?.aborted ? Promise.reject(abortError()) : Promise.resolve();
+  return signal?.aborted
+    ? await Promise.reject(abortError())
+    : await Promise.resolve();
 }
 
 /** Waits `ms`; rejects with an AbortError when `signal` aborts. */
@@ -194,7 +196,7 @@ export async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   if (signal?.aborted) {
     throw abortError();
   }
-  return new Promise<void>((resolve, reject) => {
+  return await new Promise<void>((resolve, reject) => {
     const abort = () => {
       clearTimeout(timer);
       reject(abortError());

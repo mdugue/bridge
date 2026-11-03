@@ -311,7 +311,7 @@ export type ReadDgm = (tif: string, tfw: string) => Promise<Dgm>;
 
 async function decodeDgm(tif: string, tfw: string): Promise<Dgm> {
   const bytes = readFileSync(tif);
-  return readDgm(
+  return await readDgm(
     bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
     existsSync(tfw) ? readFileSync(tfw, "utf-8") : null,
     "native"

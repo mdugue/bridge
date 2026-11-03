@@ -104,7 +104,7 @@ async function designBlockGlb(at: [number, number, number]) {
   doc
     .createScene()
     .addChild(doc.createNode("block").setTranslation(at).setMesh(mesh));
-  return new WebIO().writeBinary(doc);
+  return await new WebIO().writeBinary(doc);
 }
 
 /**
@@ -375,7 +375,7 @@ async function withFramesHeld(
   steps: () => Promise<void>
 ): Promise<void> {
   const hold = async (on: boolean) =>
-    target.evaluate((value) => {
+    await target.evaluate((value) => {
       if (window.__poc) {
         window.__poc.hold = value;
       }
@@ -402,7 +402,7 @@ async function dataUrl(page: Page, file: string): Promise<string> {
 
 /** True when the browser has WebGL at all (render assertions need it). */
 async function hasWebGl(page: Page): Promise<boolean> {
-  return page.evaluate(() => {
+  return await page.evaluate(() => {
     const probe = document.createElement("canvas");
     return Boolean(probe.getContext("webgl2") ?? probe.getContext("webgl"));
   });
@@ -414,7 +414,7 @@ async function dragAcrossCanvas(
   pointerType: "mouse" | "touch",
   y: number
 ): Promise<void> {
-  return page.evaluate(
+  return await page.evaluate(
     ({ kind, clientY }) => {
       const canvas = document.querySelector("canvas[data-engine]");
       if (!canvas) {
@@ -1088,7 +1088,7 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     let checks = 0;
     await page.route("**/api/schluessel", async (route) => {
       checks += 1;
-      return route.fulfill(
+      return await route.fulfill(
         checks === 1
           ? {
               status: 401,
@@ -1111,11 +1111,13 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       { type: "TEXT_MESSAGE_END", messageId: "m1" },
       { type: "RUN_FINISHED", runId: "r1", threadId: "t" },
     ];
-    await page.route("**/api/frag", async (route) =>
-      route.fulfill({
-        contentType: "text/event-stream",
-        body: events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join(""),
-      })
+    await page.route(
+      "**/api/frag",
+      async (route) =>
+        await route.fulfill({
+          contentType: "text/event-stream",
+          body: events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join(""),
+        })
     );
     await withFramesHeld(page, async () => {
       await openSidebar(page);
@@ -1150,32 +1152,34 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     // The live bicycle counts come from the city's WFS; the spec answers
     // for it (two counters on the spawn tile), so CI never waits on the
     // city's server and the counts are known.
-    await page.route("**/kommisdd.dresden.de/**", async (route) =>
-      route.fulfill({
-        contentType: "application/geo+json",
-        body: JSON.stringify({
-          type: "FeatureCollection",
-          features: [
-            ["F01092", "Albertbrücke", 412_610, 5_657_020, 309, 482],
-            ["F01093", "Glacisstraße", 412_900, 5_657_300, 0, 123],
-          ].map(([id, name, x, y, w1, w2]) => ({
-            type: "Feature",
-            geometry: { type: "Point", coordinates: [x, y] },
-            properties: {
-              fremd_id: id,
-              bezeichnung: name,
-              lage: "",
-              r1: "Richtung Nord",
-              w1,
-              r2: "Richtung Süd",
-              w2,
-              messzeit: "01.10.2026 07:00:00",
-              winkel: 0,
-              inaktiv: "0",
-            },
-          })),
-        }),
-      })
+    await page.route(
+      "**/kommisdd.dresden.de/**",
+      async (route) =>
+        await route.fulfill({
+          contentType: "application/geo+json",
+          body: JSON.stringify({
+            type: "FeatureCollection",
+            features: [
+              ["F01092", "Albertbrücke", 412_610, 5_657_020, 309, 482],
+              ["F01093", "Glacisstraße", 412_900, 5_657_300, 0, 123],
+            ].map(([id, name, x, y, w1, w2]) => ({
+              type: "Feature",
+              geometry: { type: "Point", coordinates: [x, y] },
+              properties: {
+                fremd_id: id,
+                bezeichnung: name,
+                lage: "",
+                r1: "Richtung Nord",
+                w1,
+                r2: "Richtung Süd",
+                w2,
+                messzeit: "01.10.2026 07:00:00",
+                winkel: 0,
+                inaktiv: "0",
+              },
+            })),
+          }),
+        })
     );
     const traffic = page.getByRole("switch", { name: "Kfz-Verkehr" });
     const bikes = page.getByRole("switch", { name: "Radverkehr (live)" });
@@ -1381,7 +1385,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       await expect
         .poll(
           async () =>
-            page.evaluate(
+            await page.evaluate(
               () => window.__poc?.handle?.nameplateShown()?.title ?? null
             ),
           { timeout: slow(60_000) }
@@ -1925,7 +1929,7 @@ test.describe("mobile", { tag: "@phone" }, () => {
     // that folds the joystick away.
     await aimAtBuilding(page);
     const hold = async (type: "pointerdown" | "pointerup") =>
-      page.evaluate((event) => {
+      await page.evaluate((event) => {
         const canvas = document.querySelector("canvas[data-engine]");
         if (!canvas) {
           throw new Error("no WebGL canvas");

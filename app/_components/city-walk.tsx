@@ -108,7 +108,7 @@ import { missingPrerequisite } from "./gpu-support";
  * stays written out inside dynamic(): Next matches the call to its chunk
  * by it.)
  */
-const AskCity = dynamic(async () => import("./ask-city"), { ssr: false });
+const AskCity = dynamic(async () => await import("./ask-city"), { ssr: false });
 
 /** A walk's glides take this much longer than a jump to a place: the
  *  stop's story starts on the way. */
@@ -144,7 +144,7 @@ interface StartPick {
 }
 
 /** The three.js half of the viewer, loaded beside the HUD (create-app.ts). */
-const loadScene = async () => import("./create-app");
+const loadScene = async () => await import("./create-app");
 
 /**
  * Two phases, one handover. `loading` is the full-bleed Laden screen; `running`
@@ -879,7 +879,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
         if (aborter.signal.aborted) {
           throw new DOMException("CityWalk startup aborted", "AbortError");
         }
-        return createCityWalkApp({
+        return await createCityWalkApp({
           container,
           budget,
           look,
@@ -1115,8 +1115,8 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
   const exportImage = () =>
     runExport(
       async (h, info) =>
-        import("./image-export").then(async ({ saveImage }) =>
-          saveImage(h, info)
+        await import("./image-export").then(
+          async ({ saveImage }) => await saveImage(h, info)
         ),
       "Bild wird gerendert …",
       "Bild gespeichert"
@@ -1124,10 +1124,11 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
   const exportStudy = () =>
     runExport(
       async (h, info) =>
-        import("./image-export").then(async ({ saveShadowStudy }) =>
-          saveShadowStudy(h, info, (n, total) =>
-            hud.say(`Verschattungsstudie: Bild ${n} von ${total} …`, true)
-          )
+        await import("./image-export").then(
+          async ({ saveShadowStudy }) =>
+            await saveShadowStudy(h, info, (n, total) =>
+              hud.say(`Verschattungsstudie: Bild ${n} von ${total} …`, true)
+            )
         ),
       "Verschattungsstudie wird gerendert …",
       "Verschattungsstudie gespeichert"

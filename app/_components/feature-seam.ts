@@ -135,7 +135,7 @@ export function lazyFeature<M, F extends { dispose: () => void }>(
           throw error;
         }
       );
-      return pending;
+      return await pending;
     },
     current: () => feature,
     dispose: () => {

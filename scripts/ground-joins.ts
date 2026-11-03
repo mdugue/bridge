@@ -244,7 +244,9 @@ export async function measureJoins(
   const all = [...extent.keys()].filter((t) =>
     tiles.some((m) => touches(t, m))
   );
-  const grounds = await Promise.all(all.map(async (t) => tileGround(site, t)));
+  const grounds = await Promise.all(
+    all.map(async (t) => await tileGround(site, t))
+  );
   const heightAt: HeightAt = (x, y) =>
     grounds.find((g) => ownsPoint(g.bounds, x, y))?.heightAt(x, y) ?? null;
   const joins = Object.fromEntries(

@@ -43,7 +43,7 @@ function grid(): {
 
 async function writeGrid(): Promise<Uint8Array> {
   const { positions, indices } = grid();
-  return writeMeshGlb({
+  return await writeMeshGlb({
     name: "terrain",
     positions,
     indices,

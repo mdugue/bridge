@@ -29,7 +29,7 @@ export async function loadLandmarkFacts(
         if (!r.ok) {
           throw new Error(`landmark facts: ${r.status}`);
         }
-        return r.json() as Promise<unknown>;
+        return await (r.json() as Promise<unknown>);
       })
       // a file that arrived but is not one is kept as none: asking again
       // would fetch the same; a failed or late fetch is not kept
@@ -46,5 +46,5 @@ export async function loadLandmarkFacts(
       });
     loads.set(url, pending);
   }
-  return pending;
+  return await pending;
 }

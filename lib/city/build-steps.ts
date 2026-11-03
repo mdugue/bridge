@@ -63,9 +63,9 @@ export async function giveBack(): Promise<void> {
     scheduler?: { yield?: () => Promise<void> };
   };
   if (typeof host.scheduler?.yield === "function") {
-    return host.scheduler.yield();
+    return await host.scheduler.yield();
   }
-  return new Promise((resolve) => {
+  return await new Promise((resolve) => {
     setTimeout(resolve, 0);
   });
 }

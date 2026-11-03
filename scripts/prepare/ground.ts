@@ -63,7 +63,7 @@ export async function tileDgm(
   const source = dgmSourceFiles(SITE, tile);
   const tfw = at(source.tfw);
   const buf = readFileSync(at(source.tif));
-  return readDgm(
+  return await readDgm(
     buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
     existsSync(tfw) ? readFileSync(tfw, "utf-8") : null,
     size
@@ -87,7 +87,7 @@ async function waterLiftOf(tile: string): Promise<WaterLift | null> {
     lift = decodeLift(waterOf(tile), bounds);
     waterLifts.set(tile, lift);
   }
-  return lift;
+  return await lift;
 }
 
 /** What a tile's ground is shaped with besides its walls. */
@@ -151,7 +151,7 @@ export async function groundFile(tile: string): Promise<string> {
     );
     groundFiles.set(tile, file);
   }
-  return file;
+  return await file;
 }
 
 /** Each tile's fine ground height, read from the cache when first asked

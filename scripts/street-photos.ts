@@ -278,8 +278,9 @@ async function main() {
     cellsInOrder(siteExtentOf(site), seed),
     2 * n
   );
-  const heightAt = await siteDgm(site, async (tif, tfw) =>
-    readDgmFile(tif, tfw, "native")
+  const heightAt = await siteDgm(
+    site,
+    async (tif, tfw) => await readDgmFile(tif, tfw, "native")
   );
   const manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as {
     files: Record<string, string>;

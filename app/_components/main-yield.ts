@@ -32,7 +32,7 @@ export function installMainYield(): void {
     waiting.shift()?.();
   };
   const yieldNow = async () =>
-    new Promise<void>((resolve) => {
+    await new Promise<void>((resolve) => {
       waiting.push(resolve);
       channel.port2.postMessage(null);
     });

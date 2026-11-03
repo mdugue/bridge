@@ -161,7 +161,7 @@ test("a level whose tile leaves while it waits for a shared raster lets go at on
   let land: (rasters: SplatRasters | null) => void = () => {};
   const splats = share<SplatRasters>(
     async () =>
-      new Promise((resolve) => {
+      await new Promise((resolve) => {
         land = resolve;
       }),
     released

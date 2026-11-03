@@ -72,7 +72,7 @@ async function loadWalks(url: string): Promise<Walk[]> {
         if (!res.ok) {
           throw new Error(`walks: ${res.status}`);
         }
-        return res.json() as Promise<unknown>;
+        return await (res.json() as Promise<unknown>);
       })
       .then((json) => (isWalkBundle(json) ? json.walks : []))
       .catch(() => {
@@ -81,7 +81,7 @@ async function loadWalks(url: string): Promise<Walk[]> {
       });
     bundles.set(url, pending);
   }
-  return pending;
+  return await pending;
 }
 
 /** The site's walks, once the tileset has named them; [] until then. */

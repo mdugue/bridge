@@ -254,7 +254,7 @@ export function createPipelineAnchors(
     for (const key of keys) {
       ready.set(key, settled);
     }
-    return compiling;
+    return await compiling;
   };
   // A per-tile material anchored as itself (`every`): its anchors go when
   // the tile disposes it — out of a set still waiting for its turn too, so

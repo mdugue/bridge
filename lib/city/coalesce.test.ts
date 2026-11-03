@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { createCoalescer } from "./coalesce";
 
 const endOfTask = async () =>
-  new Promise((resolve) => {
+  await new Promise((resolve) => {
     setTimeout(resolve, 0);
   });
 

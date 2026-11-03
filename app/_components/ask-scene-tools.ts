@@ -47,7 +47,7 @@ export interface AskScene {
 export function sceneTools(scene: AskScene) {
   return clientTools(
     whereTool.client(() => scene.where()),
-    lookTool.client(async () => scene.look()),
+    lookTool.client(async () => await scene.look()),
     showTool.client((input) => {
       const target: AskTarget = input;
       if (!scene.within(target.x, target.y)) {

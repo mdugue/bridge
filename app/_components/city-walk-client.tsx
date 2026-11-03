@@ -45,7 +45,7 @@ function BootScreen() {
 // `ssr: false` is only allowed inside a Client Component, hence this wrapper.
 // (The import stays written out inside dynamic(): Next matches the call to
 // its chunk by it.)
-const CityWalk = dynamic(async () => import("./city-walk"), {
+const CityWalk = dynamic(async () => await import("./city-walk"), {
   ssr: false,
   loading: () => <BootScreen />,
 });
@@ -59,7 +59,7 @@ const CityWalk = dynamic(async () => import("./city-walk"), {
  * there.
  */
 const loadViewer = async () =>
-  Promise.all([import("./city-walk"), import("./create-app")]);
+  await Promise.all([import("./city-walk"), import("./create-app")]);
 
 /**
  * The artifact manifest (logical → content-hashed file names, see

@@ -127,7 +127,7 @@ const SECTION_LABEL =
  * dynamic(): Next matches the call to its chunk by it.)
  */
 const Calendar = dynamic(
-  async () => import("@/components/ui/calendar").then((m) => m.Calendar),
+  async () => await import("@/components/ui/calendar").then((m) => m.Calendar),
   { ssr: false, loading: () => <div className="h-60 w-48" /> }
 );
 const preloadCalendar = () => {

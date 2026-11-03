@@ -5,7 +5,7 @@ import { createTaskGate } from "./task-gate";
 function held(log: string[], name: string) {
   let finish = (): void => undefined;
   const task = async () =>
-    new Promise<string>((resolve) => {
+    await new Promise<string>((resolve) => {
       log.push(`start ${name}`);
       finish = () => resolve(name);
     });
@@ -13,13 +13,13 @@ function held(log: string[], name: string) {
 }
 
 const settle = async () =>
-  new Promise((resolve) => {
+  await new Promise((resolve) => {
     setTimeout(resolve, 0);
   });
 
 /** What `promise` rejects with (undefined when it resolves). */
 const failure = async (promise: Promise<unknown>): Promise<unknown> =>
-  promise.then(
+  await promise.then(
     () => {},
     (error: unknown) => error
   );
@@ -100,7 +100,9 @@ test("never more at once than the gate has places", async () => {
     await settle();
     now -= 1;
   };
-  await Promise.all(Array.from({ length: 7 }, async () => gate.run(task)));
+  await Promise.all(
+    Array.from({ length: 7 }, async () => await gate.run(task))
+  );
   expect(most).toBe(2);
 });
 
@@ -131,7 +133,7 @@ test("a waiter whose signal aborts leaves the line without running", async () =>
 test("a task that fails frees its place", async () => {
   const gate = createTaskGate(1);
   const outcome = async (p: Promise<string>) =>
-    p.then(
+    await p.then(
       (value) => value,
       (error: unknown) => `failed: ${(error as Error).message}`
     );

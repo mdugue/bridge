@@ -86,8 +86,8 @@ test("trams whose compile failed leave the scene, and the next switch-on adds on
     compile: async () => {
       compiles += 1;
       return compiles === 1
-        ? Promise.reject(new Error("pipeline"))
-        : Promise.resolve();
+        ? await Promise.reject(new Error("pipeline"))
+        : await Promise.resolve();
     },
     onTramStatus: (s) => {
       statuses.push(s);
@@ -139,8 +139,8 @@ test("a counter layer whose compile failed compiles again with the next counts",
     compile: async () => {
       compiles += 1;
       return compiles === 1
-        ? Promise.reject(new Error("pipeline"))
-        : Promise.resolve();
+        ? await Promise.reject(new Error("pipeline"))
+        : await Promise.resolve();
     },
   });
   overlays.apply(layers({ bikeLayer: true }));

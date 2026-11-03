@@ -207,7 +207,7 @@ const answer = (r: Response | Error) =>
   r instanceof Error ? `keine Antwort (${r.message})` : `HTTP ${r.status}`;
 
 async function serviceFindings(providers: Set<string>): Promise<Finding[]> {
-  return Promise.all(
+  return await Promise.all(
     [...providers].flatMap((id) =>
       (SERVICES[id] ?? []).map(async (s): Promise<Finding> => {
         const r = await probe(s.url);
