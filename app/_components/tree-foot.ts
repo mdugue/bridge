@@ -1482,7 +1482,11 @@ function shadeMaterial(
     return shadow ?? float(1);
   };
   // the factor, fogged as three fogs any output (the scene's fog fades a
-  // multiplied glaze to white, height-fog.ts): a custom output skips it
+  // multiplied glaze to white, height-fog.ts). Three's own fog is off: it
+  // fogs the lit colour before this runs, a node builds once per shader,
+  // and this read would get that result, multiplying the ground by the
+  // lighting over the whole quad (black where quads overlap at a low sun).
+  m.fog = false;
   m.outputNode = Fn((builder: NodeBuilder) => {
     const glaze = vec4(graph.output, 1);
     // reason: three's NodeBuilder reads the scene's `fogNode` (what its
