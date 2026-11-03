@@ -805,7 +805,7 @@ export function smoothPaths(
       // unit at an edge, shrinking to nothing where the coverage is flat
       // (a narrow path's middle): no way to the path there
       const way = vec2(grad.x, grad.y.negate());
-      toward.assign(way.div(max(length(way), 0.3)));
+      toward.assign(way.div(max(length(way), 0.05)));
     });
   });
   return { col, path, side, near: by, toward };
@@ -982,7 +982,7 @@ export function urbanGreen(
     // a bare band between the two — on the lawn's side only (out of the
     // lawn is toward the path), never across the path onto the paving
     // beyond it
-    const lawnSide = smoothstep(0.1, 0.4, dot(g.outOfLawn, col.pathToward));
+    const lawnSide = smoothstep(0.05, 0.3, dot(g.outOfLawn, col.pathToward));
     mask = smoothstep(
       -0.15,
       0.15,

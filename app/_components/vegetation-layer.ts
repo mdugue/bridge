@@ -126,6 +126,7 @@ import {
   footClock,
   FOOT_SHOWN_M,
   type FootGeos,
+  MULCH_SRGB,
   type FootMaterials,
   rootSeed,
   treeFeet,
@@ -1174,9 +1175,9 @@ const ROOT_BULGE_H = 0.6;
 /** The earth the foot turns to (sRGB): the pit's mulch in the bark's
  *  shade, warmer and darker than the bark so it reads. */
 const TRUNK_EARTH = new Color().setRGB(
-  128 / 255,
-  98 / 255,
-  70 / 255,
+  MULCH_SRGB[0] / 255,
+  MULCH_SRGB[1] / 255,
+  MULCH_SRGB[2] / 255,
   SRGBColorSpace
 );
 
@@ -1857,13 +1858,14 @@ function* buildTrees(
     }
     return cell.extras.length > 0 ? { ...kind, plain: plainTrunk() } : kind;
   };
-  const trunkMat = tileTrunkMaterial(sun, footMat);
-  // a needle tree's trunk stays under its crown's shade in winter (the
-  // register's own trees all ride in broadleaf cells)
+  // made for the cells that wear them: a needle tree's trunk stays under
+  // its crown's shade in winter (the register's own trees all ride in
+  // broadleaf cells)
+  let broadMat: Material | undefined;
   let needleMat: Material | undefined;
   const trunkMatOf = (cell: TreeCell): Material =>
     cell.form === "broad"
-      ? trunkMat
+      ? (broadMat ??= tileTrunkMaterial(sun, footMat))
       : (needleMat ??= tileTrunkMaterial(sun, footMat, true));
 
   const meshes: Instances[] = [];

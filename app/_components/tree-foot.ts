@@ -483,8 +483,6 @@ const pavedClass = (c: F): F =>
     )
   );
 
-/** An edge-raster distance (m; R the road's, + on the road; G the lawn's). */
-
 /** What every foot graph reads per instance (the vertex stage). */
 interface FootFrame {
   /** the trunk's foot, content frame */
@@ -547,9 +545,10 @@ function footFrame(s: FootSlots, size: [number, number]): FootFrame {
   const uv = rasterUv(vec2(world.x, world.z.negate()), s.origin, size);
   // off the baked lawn (the green courtyards and front gardens the class
   // raster counts as built-up land): the edge raster's lawn distance
-  const lawn = s.edgesTex
-    ? smoothstep(-0.1, 0.1, edgeAt(s.edgesTex, uv).y)
-    : float(0);
+  // the edge raster's two distances, one read (x the road's, + on the
+  // road; y the lawn's)
+  const edge = s.edgesTex ? edgeAt(s.edgesTex, uv).toVar() : undefined;
+  const lawn = edge ? smoothstep(-0.1, 0.1, edge.y) : float(0);
   const cls = classTexel(s.classTex, uv);
   const pit = pavedClass(cls).mul(float(1).sub(lawn));
   const fade = float(1).sub(
@@ -564,7 +563,7 @@ function footFrame(s: FootSlots, size: [number, number]): FootFrame {
     .mul(length(col(1).xyz));
   const crown = clamp(length1.mul(CROWN_SPREAD), CROWN_MIN, CROWN_MAX);
   const roots = rootSeed(col(3).xz);
-  const road = s.edgesTex ? edgeAt(s.edgesTex, uv).x : float(-99);
+  const road = edge ? edge.x : float(-99);
   return {
     foot,
     rt,
@@ -1433,7 +1432,10 @@ function shadeMaterial(
  *  the pit's mulch in paving, the forest floor's leaf mould in a wood,
  *  the grass's roots on a lawn or meadow; elsewhere the ground's own
  *  class colour, darkened as damp soil. */
-const FOOT_MULCH = linear([128, 98, 70]);
+/** The pit's mulch (sRGB), also the trunk's foot off the foot rasters
+ *  (vegetation-layer.ts `TRUNK_EARTH`). */
+export const MULCH_SRGB: [number, number, number] = [128, 98, 70];
+const FOOT_MULCH = linear(MULCH_SRGB);
 const FOOT_MOULD = linear([104, 92, 68]);
 const FOOT_GRASS = linear([112, 120, 78]);
 const DAMP = 0.72;
