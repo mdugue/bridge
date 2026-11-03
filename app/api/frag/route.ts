@@ -26,7 +26,7 @@ import {
   DEADLINE,
   ended,
   roundsSinceQuestion,
-  withoutUnanswered,
+  withStoppedCallsAnswered,
   runAsk,
   scrubbed,
 } from "@/lib/city/ask-run";
@@ -129,7 +129,7 @@ export async function POST(request: Request): Promise<Response> {
     return tooMuch;
   }
   // a stopped answer's unanswered call would make the provider refuse
-  const messages = withoutUnanswered(params.messages);
+  const messages = withStoppedCallsAnswered(params.messages);
   const turns = turnsLeft(messages);
   if (turns === null) {
     return refuse(400, "bad-request", "Die Anfrage ist unvollständig.");

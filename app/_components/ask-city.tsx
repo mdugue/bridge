@@ -997,12 +997,6 @@ function ChatMessage({
     );
   }
   const calls = message.parts.filter((p) => p.type === "tool-call");
-  // a server tool's result comes as its own part, not on the call
-  const results = new Set(
-    message.parts.flatMap((p) =>
-      p.type === "tool-result" ? [p.toolCallId] : []
-    )
-  );
   return (
     <Message>
       <MessageContent>
@@ -1016,12 +1010,13 @@ function ChatMessage({
             {calls.map((c) => {
               const open =
                 c.output === undefined &&
-                !results.has(c.id) &&
-                (c.state === "input-complete" || c.state === "input-streaming");
+                (c.state === "awaiting-input" ||
+                  c.state === "input-streaming" ||
+                  c.state === "input-complete");
               return (
                 <TraceLine
                   key={c.id}
-                  status={open ? (live ? "running" : "pending") : undefined}
+                  status={open && live ? "running" : undefined}
                 >
                   <TraceIcon>{toolIcon(c.name)}</TraceIcon>
                   <TraceTitle>

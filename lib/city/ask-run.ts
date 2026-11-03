@@ -96,76 +96,57 @@ export function roundsSinceQuestion(
     .length;
 }
 
+/** What a stopped call's stand-in result tells the model. */
+const STOPPED_RESULT = JSON.stringify({
+  abgebrochen: true,
+  hinweis: "Die Person hat diese Antwort angehalten.",
+});
+
 /**
- * The conversation without the tool calls an answer stopped before their
- * result came (the visitor stopped it while a scene tool waited): a call
- * with no result before the last question makes the providers refuse
- * every later request. Calls after the last question are the answer's
- * own, which a resume completes, and stay. The request carries the AG-UI
- * wire rows (an assistant row's `toolCalls`, a `tool` row per result);
- * a UI message's `parts` are filtered alike.
+ * The conversation with an answer for every tool call an earlier answer
+ * stopped before its result came (the visitor stopped it while a scene
+ * tool waited): a call with no result makes the providers refuse every
+ * later request. The stand-in `tool` row goes right before the next
+ * question, after every row of the stopped answer, so nothing it carried
+ * (its thinking, a segment that continues it) loses its place. Calls after
+ * the last question are the answer's own, which a resume completes. The
+ * request carries AG-UI wire rows: an assistant row's `toolCalls`, a
+ * `tool` row per result.
  */
-export function withoutUnanswered<T extends UIMessage | ModelMessage>(
+export function withStoppedCallsAnswered<T extends UIMessage | ModelMessage>(
   messages: readonly T[]
-): T[] {
+): Array<T | ModelMessage> {
   const question = messages.findLastIndex((m) => m.role === "user");
-  const answered = new Set(messages.flatMap(resultIds));
-  return messages.flatMap((m, i) => {
-    if (i >= question || m.role !== "assistant") {
-      return [m];
-    }
-    // reason: each helper keeps the row's own type; TS cannot narrow T
-    const kept: Array<UIMessage | ModelMessage> =
-      "parts" in m
-        ? withAnsweredParts(m, answered)
-        : withAnsweredCalls(m, answered);
-    return kept as T[];
-  });
-}
-
-/** The tool calls a message answers. */
-function resultIds(m: UIMessage | ModelMessage): string[] {
-  if ("parts" in m) {
-    return m.parts.flatMap((p) =>
-      p.type === "tool-result" ? [p.toolCallId] : []
-    );
-  }
-  return m.role === "tool" && m.toolCallId ? [m.toolCallId] : [];
-}
-
-function withAnsweredParts<T extends UIMessage>(
-  m: T,
-  answered: ReadonlySet<string>
-): T[] {
-  const parts = m.parts.filter(
-    (p) =>
-      p.type !== "tool-call" || p.output !== undefined || answered.has(p.id)
+  const answered = new Set(
+    messages.flatMap((m) =>
+      m.role === "tool" && "toolCallId" in m && m.toolCallId
+        ? [m.toolCallId]
+        : []
+    )
   );
-  if (parts.length === m.parts.length) {
-    return [m];
+  const out: Array<T | ModelMessage> = [];
+  let owed: string[] = [];
+  for (const [i, m] of messages.entries()) {
+    if (m.role === "user") {
+      out.push(
+        ...owed.map((toolCallId): ModelMessage => ({
+          role: "tool",
+          toolCallId,
+          content: STOPPED_RESULT,
+        }))
+      );
+      owed = [];
+    }
+    out.push(m);
+    if (i < question && m.role === "assistant" && "toolCalls" in m) {
+      owed.push(
+        ...(m.toolCalls ?? [])
+          .map((c) => c.id)
+          .filter((id) => !answered.has(id))
+      );
+    }
   }
-  return parts.length > 0 ? [{ ...m, parts }] : [];
-}
-
-function withAnsweredCalls<T extends ModelMessage>(
-  m: T,
-  answered: ReadonlySet<string>
-): T[] {
-  const calls = m.toolCalls?.filter((c) => answered.has(c.id));
-  if (!m.toolCalls || calls?.length === m.toolCalls.length) {
-    return [m];
-  }
-  const { toolCalls: _dropped, ...rest } = m;
-  const kept = (calls?.length ? { ...rest, toolCalls: calls } : rest) as T;
-  // a row left with neither words nor calls goes
-  const content = kept.content;
-  const empty =
-    !kept.toolCalls &&
-    (content === undefined ||
-      content === null ||
-      content === "" ||
-      (Array.isArray(content) && content.length === 0));
-  return empty ? [] : [kept];
+  return out;
 }
 
 /** The answer as a stream of AG-UI events, for an SSE response. */

@@ -14,7 +14,7 @@ import {
   ended,
   roundsSinceQuestion,
   runAsk,
-  withoutUnanswered,
+  withStoppedCallsAnswered,
   scrubbed,
 } from "./ask-run";
 import type { StadtwissenIndex, WissenTile } from "./stadtwissen";
@@ -406,7 +406,7 @@ describe("an answer that stops says why", () => {
   });
 });
 
-test("a stopped answer's unanswered tool call is left out, the running answer's kept", async () => {
+test("a stopped answer's tool call gets a stand-in result, the running answer's calls stay open", async () => {
   const call = (id: string, output?: unknown) => ({
     type: "tool-call" as const,
     id,
@@ -439,11 +439,22 @@ test("a stopped answer's unanswered tool call is left out, the running answer's 
     forwardedProps: {},
   });
   const model = convertMessagesToModelMessages(
-    withoutUnanswered(params.messages)
+    withStoppedCallsAnswered(params.messages)
   );
-  const calls = model.flatMap((m) => m.toolCalls?.map((c) => c.id) ?? []);
-  // the stopped call is gone; after the last question the calls stay,
-  // a resume answers them
-  expect(calls).toEqual(["x", "r"]);
-  expect(model.filter((m) => m.role === "user")).toHaveLength(2);
+  // every call before the last question has its result right after its
+  // answer, the stopped one a stand-in
+  const answer = (id: string) =>
+    model.find((m) => m.role === "tool" && m.toolCallId === id);
+  expect(model.map((m) => m.role)).toEqual([
+    "user",
+    "assistant",
+    "tool",
+    "user",
+    "assistant",
+    "tool",
+  ]);
+  expect(model[2]?.toolCallId).toBe("s");
+  expect(answer("s")?.content).toContain("abgebrochen");
+  // after the last question the open call stays: a resume answers it
+  expect(answer("r")).toBeUndefined();
 });
