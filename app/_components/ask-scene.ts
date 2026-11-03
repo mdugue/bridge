@@ -8,7 +8,7 @@ import { type RefObject, useMemo } from "react";
 import { cardCredits } from "@/lib/city/card-lines";
 import { activeDataLayers, siteDataLayers } from "@/lib/city/data-layers";
 import type { FramePace } from "@/lib/city/frame-pace";
-import { inquiryCard } from "@/lib/city/inquiry";
+import { type Inquiry, inquiryCard } from "@/lib/city/inquiry";
 import type { LookState } from "@/lib/city/look-state";
 import { siteHoldsPoint } from "@/lib/city/geolocation";
 import { METHODS } from "@/lib/city/methods";
@@ -16,6 +16,7 @@ import type { Site } from "@/lib/city/site";
 import type { AskScene } from "./ask-scene-tools";
 import type { CityWalkHandle } from "./create-app";
 import { loadLandmarkFacts } from "./landmark-facts-load";
+import { sleep } from "./net-gate";
 import type { SceneTime } from "./scene-time";
 
 const WHEN = new Intl.DateTimeFormat("de-DE", {
@@ -32,24 +33,32 @@ export function instantAt(hour: number, day: Date, date?: string): Date {
   return new Date(y, m - 1, d, 0, Math.min(minutes, 24 * 60 - 1));
 }
 
-/** How long `was_ist_da` waits for a glide to land at most (ms). */
-const GLIDE_WAIT_MS = 8000;
-/** Modell's centring glide (CENTRE_S) and a frame to spare (ms). */
-const MODELL_CENTRE_MS = 700;
+/** How long `was_ist_da` waits for the view to come to rest at most (ms). */
+const SETTLE_MAX_MS = 8000;
+/** The view counts as at rest when it did not move over this (ms). */
+const STEADY_MS = 150;
 /** A miss after a glide, asked again while the tiles there stream in. */
 const MISS_RETRIES = 6;
 const MISS_RETRY_MS = 500;
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
-/** Resolves once `done` holds, or after `maxMs`. */
-async function until(done: () => boolean, maxMs: number): Promise<void> {
-  for (let waited = 0; !done() && waited < maxMs; waited += 100) {
-    await sleep(100);
+/**
+ * Resolves once no glide runs and the camera stood still over STEADY_MS:
+ * every kind of glide (the pose's, Modell's centring), at any frame rate.
+ * Bounded by the clock, not by turns, which a hidden page slows.
+ */
+async function viewAtRest(
+  h: CityWalkHandle,
+  signal: AbortSignal
+): Promise<void> {
+  const end = performance.now() + SETTLE_MAX_MS;
+  let last = JSON.stringify(h.getCameraState());
+  while (performance.now() < end) {
+    await sleep(STEADY_MS, signal);
+    const now = JSON.stringify(h.getCameraState());
+    if (now === last && h.getGlideTarget() === null) {
+      return;
+    }
+    last = now;
   }
 }
 
@@ -64,8 +73,8 @@ export function useAskScene(
   return useMemo(() => {
     const offered = new Set(siteDataLayers(site.dataLayers).map((d) => d.key));
     const credits = cardCredits(site);
-    // Modell's centring glide (no getter for it): over when this is
-    const glide = { centred: Promise.resolve() };
+    // was_ist_da's waits: a stopped or closed conversation ends them
+    const looks = { stop: new AbortController() };
     return {
       from: () => {
         const c = handleRef.current?.getCameraState();
@@ -95,14 +104,19 @@ export function useAskScene(
         if (!h) {
           return { gefunden: false, hinweis: "Die Szene lädt noch." };
         }
-        // where a glide lands, not on its way — any glide, at any frame rate
-        await glide.centred;
-        await until(() => h.getGlideTarget() === null, GLIDE_WAIT_MS);
-        // and once the tiles there have come: a miss is asked again
-        let asked = h.inquireAt();
-        for (let i = 0; !asked && i < MISS_RETRIES; i++) {
-          await sleep(MISS_RETRY_MS);
+        const signal = looks.stop.signal;
+        let asked: Inquiry | null = null;
+        try {
+          // where a glide lands, not on its way
+          await viewAtRest(h, signal);
+          // and once the tiles there have come: a miss is asked again
           asked = h.inquireAt();
+          for (let i = 0; !asked && i < MISS_RETRIES; i++) {
+            await sleep(MISS_RETRY_MS, signal);
+            asked = h.inquireAt();
+          }
+        } catch {
+          return { gefunden: false, hinweis: "Die Frage wurde abgebrochen." };
         }
         if (!asked) {
           return {
@@ -135,15 +149,16 @@ export function useAskScene(
         };
       },
       setListening: (on) => pace.setListening(on),
+      abandon: () => {
+        looks.stop.abort();
+        looks.stop = new AbortController();
+      },
       show: (view) => {
         const h = handleRef.current;
         if (!h) {
           return false;
         }
-        // 0 s: Modell centres on it, gliding for CENTRE_S (model-rig.ts)
-        if (h.flyToViewpoint(view) === 0) {
-          glide.centred = sleep(MODELL_CENTRE_MS);
-        }
+        h.flyToViewpoint(view);
         return true;
       },
       within: (x, y) => siteHoldsPoint(site, x, y),

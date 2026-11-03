@@ -36,6 +36,8 @@ export interface AskScene {
   where: () => Record<string, unknown>;
   /** asks what stands at the centre of the view (and opens its card) */
   look: () => Promise<Record<string, unknown>>;
+  /** ends the scene tools' waits (a stopped answer, a closed card) */
+  abandon: () => void;
   /** the Hörmodus: the scene barely draws while the visitor listens */
   setListening: (on: boolean) => void;
 }

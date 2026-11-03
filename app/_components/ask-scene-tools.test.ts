@@ -3,6 +3,7 @@ import { SCENE_TOOLS } from "@/lib/city/ask-tools";
 import { type AskScene, sceneTools } from "./ask-scene-tools";
 
 const STUB: AskScene = {
+  abandon: () => undefined,
   from: () => null,
   look: () => Promise.resolve({}),
   setLayer: () => true,

@@ -100,7 +100,7 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
           />
           <button
             aria-label="Hörmodus beenden"
-            className="pointer-events-auto absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full bg-black/45 px-3 py-1.5 text-[12px] text-white/85 shadow-sm backdrop-blur-sm hover:bg-black/60"
+            className="pointer-events-auto absolute bottom-16 left-1/2 z-20 -translate-x-1/2 rounded-full bg-black/45 px-3 py-1.5 text-[12px] text-white/85 shadow-sm backdrop-blur-sm hover:bg-black/60"
             data-testid="ask-hearing"
             onClick={() => setHearing(false)}
             type="button"
@@ -648,6 +648,8 @@ function Conversation({
 }) {
   const speech = useSpeech();
   const dictation = useDictation();
+  // a closed conversation leaves no tool waiting on the scene
+  useEffect(() => () => scene.abandon(), [scene]);
   const tools = useMemo(() => sceneTools(scene), [scene]);
   // the conversation remounts for another key (keyed by it): fixed here
   const secret = askKey.key;
@@ -689,6 +691,8 @@ function Conversation({
     const q = question.trim().slice(0, ASK_LIMITS.questionChars);
     if (q && !chat.isLoading) {
       setText("");
+      // the last answer stops: the next one is on its way
+      speech.stop();
       if (voice) {
         speech.prime();
       }
@@ -826,6 +830,7 @@ function Conversation({
             aria-label="Antwort abbrechen"
             onClick={() => {
               stopReading();
+              scene.abandon();
               chat.stop();
             }}
             size="icon-sm"

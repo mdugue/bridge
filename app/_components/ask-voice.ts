@@ -129,7 +129,10 @@ export function useSpeech(): Speech {
   const prime = useCallback(() => {
     if (supported && !primed.current) {
       primed.current = true;
-      speechSynthesis.speak(new SpeechSynthesisUtterance(""));
+      // a silent word, not an empty text: WebKit may skip that unstarted
+      const silent = new SpeechSynthesisUtterance(" ");
+      silent.volume = 0;
+      speechSynthesis.speak(silent);
     }
   }, [supported]);
   const speak = useCallback(
