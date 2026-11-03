@@ -127,6 +127,15 @@ export function reachQuestion(
   return `Dasselbe noch einmal um denselben Punkt (x ${near.x}, y ${near.y}), im Umkreis von ${reach} m.`;
 }
 
+/** What `zeige` showed of an answer's places: those on the city, the
+ *  first eight — the chips and the links in the text offer these. */
+export function shownPlaces(
+  places: readonly AskPlace[],
+  scene: Pick<AskScene, "within">
+): AskPlace[] {
+  return places.filter((p) => scene.within(p.x, p.y)).slice(0, SHOW_TARGETS);
+}
+
 const CHIP =
   "rounded-full border px-2.5 py-0.5 text-left text-[11px] hover:bg-accent disabled:opacity-50";
 
@@ -223,10 +232,7 @@ export function AnswerChipRows({
   scene: AskScene;
 }) {
   const { near, questions } = chips;
-  // what `zeige` showed of them: the places on the city, the first eight
-  const places = chips.places
-    .filter((p) => scene.within(p.x, p.y))
-    .slice(0, SHOW_TARGETS);
+  const places = shownPlaces(chips.places, scene);
   if (places.length === 0 && questions.length === 0 && near === null) {
     return null;
   }

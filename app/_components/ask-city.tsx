@@ -71,7 +71,7 @@ import {
   TraceTitle,
 } from "@/components/ui/trace";
 import { cn } from "cn";
-import { AnswerChipRows, answerChips } from "./ask-chips";
+import { AnswerChipRows, answerChips, shownPlaces } from "./ask-chips";
 import { type AskKey, clearAskKey, readAskKey, writeAskKey } from "./ask-key";
 import {
   type AskPlace,
@@ -830,7 +830,7 @@ function Conversation({
                                 })
                         }
                         pending={pending}
-                        places={chips?.places ?? []}
+                        places={shownPlaces(chips?.places ?? [], scene)}
                       />
                     )}
                     {chips && !pending && (
@@ -934,8 +934,8 @@ function Conversation({
       </form>
       <p className="px-4 pb-2 text-[10px] text-muted-foreground leading-snug">
         <MessageCircleQuestionIcon aria-hidden className="mr-1 inline size-3" />
-        Antworten sind von einer KI generiert und können irren; die Werkzeuge
-        darunter zeigen, was sie nachgeschlagen hat.
+        Antworten sind von einer KI generiert und können irren; die Zeile über
+        jeder Antwort zeigt, was sie nachgeschlagen hat.
       </p>
     </>
   );
