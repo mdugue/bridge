@@ -43,6 +43,8 @@ export function useAskScene(
   return useMemo(() => {
     const offered = new Set(siteDataLayers(site.dataLayers).map((d) => d.key));
     const credits = cardCredits(site);
+    // the last glide's end: `was_ist_da` asks where it lands, not on the way
+    const glide = { landing: Promise.resolve() };
     return {
       from: () => {
         const c = handleRef.current?.getCameraState();
@@ -68,7 +70,12 @@ export function useAskScene(
         };
       },
       look: async () => {
-        const asked = handleRef.current?.inquireAt();
+        await glide.landing;
+        const h = handleRef.current;
+        if (!h) {
+          return { gefunden: false, hinweis: "Die Szene lädt noch." };
+        }
+        const asked = h.inquireAt();
         if (!asked) {
           return {
             gefunden: false,
@@ -102,8 +109,23 @@ export function useAskScene(
       setListening: (on) => pace.setListening(on),
       show: (view) => {
         const h = handleRef.current;
-        h?.flyToViewpoint(view);
-        return h !== null;
+        if (!h) {
+          return false;
+        }
+        let land = () => {};
+        glide.landing = new Promise((resolve) => {
+          land = resolve;
+        });
+        const seconds = h.flyToViewpoint(view, {
+          onProgress: (t) => {
+            if (t >= 1) {
+              land();
+            }
+          },
+        });
+        // a drag that takes the glide over never lands it: its time does
+        setTimeout(land, Math.min(seconds, 10) * 1000 + 100);
+        return true;
       },
       within: (x, y) => siteHoldsPoint(site, x, y),
       setTime: (hour, date) => {

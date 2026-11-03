@@ -505,6 +505,10 @@ function useReadAloud(
       owed.current = false;
     }
     was.current = loading;
+    // reading switched off since: owed no more
+    if (!on) {
+      owed.current = false;
+    }
     // not into an open microphone: it would hear the answer as a question
     if (owed.current && !listening) {
       owed.current = false;

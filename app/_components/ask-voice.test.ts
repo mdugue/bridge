@@ -38,4 +38,8 @@ test("lines are heard as sentences, ids keep their underscores, a link leaves th
     speakable("**Fakten:**\n1. Höhe: 40 m\n2. Raum: 300 m³\nKennung DESN_0815")
   ).toBe("Fakten: Höhe: 40 Meter. Raum: 300 Kubikmeter. Kennung DESN_0815");
   expect(speakable("Siehe https://x.de/a.")).toBe("Siehe.");
+  // a number before the line's end is no ordinal
+  expect(speakable("Baujahr: 1726\nArchitekt: George Bähr")).toBe(
+    "Baujahr: 1726, Architekt: George Bähr"
+  );
 });
