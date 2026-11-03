@@ -121,7 +121,8 @@ const STOPPED_RESULT = JSON.stringify({
  * output cap) become `{}` in every row, for no resume finishes them and
  * the OpenAI-shaped adapters pass them on unparsed. The route hands this
  * the AG-UI wire rows (an assistant row's `toolCalls`, a `tool` row per
- * result); a UI message passes as it came. Throws on a malformed row.
+ * result); a UI message passes as it came. Throws on a row too malformed
+ * to read.
  */
 export function withStoppedCallsAnswered<T extends UIMessage | ModelMessage>(
   messages: readonly T[]
@@ -134,16 +135,17 @@ export function withStoppedCallsAnswered<T extends UIMessage | ModelMessage>(
     if (m.role === "user") {
       out.push(...[...open].map(stoppedResult));
       open = new Set();
-    } else if (m.role === "tool" && "toolCallId" in m && m.toolCallId) {
-      open.delete(m.toolCallId);
+    } else if (m.role === "tool" && "toolCallId" in m) {
+      open.delete(String(m.toolCallId));
     }
     if (m.role === "assistant" && "toolCalls" in m) {
-      for (const c of m.toolCalls ?? []) {
-        if (typeof c.id !== "string" || c.id === "") {
-          throw new TypeError("a tool call without an id");
-        }
-        if (i < question) {
-          open.add(c.id);
+      // the running answer's calls are the resume's to answer; a call
+      // without an id can be answered by none
+      if (i < question) {
+        for (const c of m.toolCalls ?? []) {
+          if (typeof c.id === "string" && c.id !== "") {
+            open.add(c.id);
+          }
         }
       }
       out.push(withWholeArguments(m));

@@ -562,7 +562,7 @@ test("cut-off arguments are mended in every row, answered or not", () => {
   expect(args(out.at(-1))).toEqual(["{}"]);
 });
 
-test("a result counts only within its own answer, and a call needs an id", () => {
+test("a result counts only within its own answer", () => {
   const call = (id: string) => ({
     id,
     type: "function" as const,
@@ -587,18 +587,4 @@ test("a result counts only within its own answer, and a call needs an id", () =>
     "tool",
     "user",
   ]);
-  expect(() =>
-    withStoppedCallsAnswered([
-      { role: "user", content: "?" },
-      {
-        role: "assistant",
-        content: null,
-        toolCalls: [
-          {
-            function: { name: "zeige", arguments: "{}" },
-          } as unknown as ReturnType<typeof call>,
-        ],
-      },
-    ])
-  ).toThrow();
 });
