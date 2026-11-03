@@ -361,11 +361,11 @@ const URL_PATTERN = /\b[a-z]+:\/\/\S+/gi;
  * decimals and more).
  */
 export function scrub(text: string): string {
-  const blank = (s: string) => s.replace(/\d/g, "#");
+  const blank = (s: string) => s.replaceAll(/\d/g, "#");
   return text
-    .replace(URL_PATTERN, blank)
-    .replace(/\d+(?:_\d+)+/g, blank)
-    .replace(/\d+\.\d{3,}|\d{5,}(?:\.\d+)?/g, blank);
+    .replaceAll(URL_PATTERN, blank)
+    .replaceAll(/\d+(?:_\d+)+/g, blank)
+    .replaceAll(/\d+\.\d{3,}|\d{5,}(?:\.\d+)?/g, blank);
 }
 
 /** One event as a breadcrumb's line (the crumb has the time), scrubbed. */
@@ -380,8 +380,8 @@ const eventLine = (e: TrailEvent) =>
 export function problemKey(event: TrailEvent): string {
   return (event.detail ?? "")
     .split(" | ")[0]
-    .replace(URL_PATTERN, "<url>")
-    .replace(/\d+/g, "#")
+    .replaceAll(URL_PATTERN, "<url>")
+    .replaceAll(/\d+/g, "#")
     .slice(0, 80)
     .trim();
 }

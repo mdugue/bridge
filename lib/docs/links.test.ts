@@ -22,7 +22,9 @@ function isRelative(target: string): boolean {
 
 /** Code is not prose: `STEPS[step](tile)` is not a link. */
 function withoutCode(markdown: string): string {
-  return markdown.replace(/```[\s\S]*?```/g, "").replace(/`[^`\n]*`/g, "");
+  return markdown
+    .replaceAll(/```[\s\S]*?```/g, "")
+    .replaceAll(/`[^`\n]*`/g, "");
 }
 
 /** The relative link targets of one file that resolve to nothing. */

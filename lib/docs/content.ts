@@ -6,12 +6,12 @@
 /** Markdown inline syntax reduced to its text: links, code, emphasis. */
 export function plainText(markdown: string): string {
   return markdown
-    .replace(/!?\[([^\]]*)\]\([^)]*\)/gu, "$1")
-    .replace(/`([^`]*)`/gu, "$1")
-    .replace(/(\*\*|__)(.*?)\1/gu, "$2")
-    .replace(/(^|[^\w*])[*_]([^*_\n]+)[*_](?![\w*])/gu, "$1$2")
-    .replace(/<[^>]+>/gu, "")
-    .replace(/\s+/gu, " ")
+    .replaceAll(/!?\[([^\]]*)\]\([^)]*\)/gu, "$1")
+    .replaceAll(/`([^`]*)`/gu, "$1")
+    .replaceAll(/(\*\*|__)(.*?)\1/gu, "$2")
+    .replaceAll(/(^|[^\w*])[*_]([^*_\n]+)[*_](?![\w*])/gu, "$1$2")
+    .replaceAll(/<[^>]+>/gu, "")
+    .replaceAll(/\s+/gu, " ")
     .trim();
 }
 
@@ -29,7 +29,7 @@ export function descriptionOf(markdown: string, max = 180): string | null {
   const body = markdown.replace(/^[\s\S]*?^# .+$/mu, "");
   const inFence = /^```[\s\S]*?^```/gmu;
   const paragraphs = body
-    .replace(inFence, "")
+    .replaceAll(inFence, "")
     .split(/\n\s*\n/u)
     .map((p) => p.trim())
     .filter(

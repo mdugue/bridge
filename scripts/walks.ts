@@ -163,11 +163,11 @@ async function refImages(ids: string[]): Promise<Map<string, string>> {
 /** Text from Commons' HTML credit fields. */
 const plain = (html: string | undefined) =>
   (html ?? "")
-    .replace(/<[^>]*>/g, "")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#0?39;/g, "'")
-    .replace(/\s+/g, " ")
+    .replaceAll(/<[^>]*>/g, "")
+    .replaceAll("&amp;", "&")
+    .replaceAll("&quot;", '"')
+    .replaceAll(/&#0?39;/g, "'")
+    .replaceAll(/\s+/g, " ")
     .trim();
 
 interface CommonsInfo {
@@ -246,8 +246,8 @@ function fetchedAs(photo: WalkStop["photo"], name: string): boolean {
   if (!photo?.author) {
     return false;
   }
-  const page = decodeURIComponent(photo.page).replace(/_/g, " ");
-  return page.endsWith(`File:${name.replace(/_/g, " ")}`);
+  const page = decodeURIComponent(photo.page).replaceAll("_", " ");
+  return page.endsWith(`File:${name.replaceAll("_", " ")}`);
 }
 
 interface PhotoJob {

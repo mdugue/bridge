@@ -235,7 +235,7 @@ function SourceLink({ source }: { source: string }) {
   try {
     const url = new URL(source);
     const page = decodeURIComponent(url.pathname.split("/").pop() ?? "");
-    label = `${url.hostname.replace(/^www\./, "")}${page ? ` · ${page.replace(/_/g, " ")}` : ""}`;
+    label = `${url.hostname.replace(/^www\./, "")}${page ? ` · ${page.replaceAll("_", " ")}` : ""}`;
   } catch {
     // shown as written
   }

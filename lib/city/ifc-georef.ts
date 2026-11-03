@@ -108,7 +108,7 @@ export function siPrefixFactor(prefix: string | null | undefined): number {
     MILLI: 0.001,
     MICRO: 1e-6,
   };
-  return prefix ? (table[prefix.replace(/\./g, "").toUpperCase()] ?? 1) : 1;
+  return prefix ? (table[prefix.replaceAll(".", "").toUpperCase()] ?? 1) : 1;
 }
 
 /**

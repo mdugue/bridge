@@ -587,7 +587,7 @@ export function scaleBarFor(metresPerPixel: number, maxPx = 160): ScaleBar {
 export function scaleLabel(denominator: number): string {
   const digits = Math.max(Math.floor(Math.log10(denominator)) - 1, 0);
   const round = Math.round(denominator / 10 ** digits) * 10 ** digits;
-  return `1 : ${round.toLocaleString("de-DE").replace(/\./g, " ")}`;
+  return `1 : ${round.toLocaleString("de-DE").replaceAll(".", " ")}`;
 }
 
 /** Degrees the north arrow turns on screen (clockwise, as CSS rotate). */

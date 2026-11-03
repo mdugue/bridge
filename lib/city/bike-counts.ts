@@ -166,7 +166,7 @@ export function parseCountTime(
 export function towardOf(label: unknown): string {
   return text(label)
     .replace(/^\s*Richtung\b/u, "")
-    .replace(/^[\s-]+|[\s-]+$/gu, "")
+    .replaceAll(/^[\s-]+|[\s-]+$/gu, "")
     .trim();
 }
 

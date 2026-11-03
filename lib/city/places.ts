@@ -65,7 +65,7 @@ const FILLER = new Set([
 export function placeWords(name: string, city = ""): string[] {
   const own = new Set(city ? placeWords(city) : []);
   return name
-    .replace(/\([^)]*\)/g, " ")
+    .replaceAll(/\([^)]*\)/g, " ")
     .toLowerCase()
     .split(/[^\p{L}\p{N}]+/u)
     .filter((w) => w.length > 0 && !FILLER.has(w))

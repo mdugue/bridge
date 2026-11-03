@@ -99,7 +99,7 @@ export function muralCredit(mural: Pick<Mural, "name" | "photo">): string {
   const author = mural.photo.author.replace(/^User:/, "");
   const name = mural.name ? `„${mural.name}“` : "";
   return `Wandbild ${name}: gezeichnet nach Foto ${author}, ${mural.photo.licence}, Wikimedia Commons`
-    .replace(/ {2,}/g, " ")
+    .replaceAll(/ {2,}/g, " ")
     .replace(" :", ":");
 }
 

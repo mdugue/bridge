@@ -45,7 +45,7 @@ const antonstrasse: TrafficInquiry = {
 
 // Intl sets a no-break space before the per-cent sign
 const value = (card: ReturnType<typeof trafficCard>, label: string) =>
-  card.facts.find((f) => f.label === label)?.value.replace(/\u00a0/g, " ");
+  card.facts.find((f) => f.label === label)?.value.replaceAll("\xA0", " ");
 
 test("a direction is named by the compass point it heads to", () => {
   expect(towardCompass(0)).toBe("Norden");

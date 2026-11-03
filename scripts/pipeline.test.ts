@@ -24,7 +24,7 @@ test("every provider's products are fields pipeline/bake/common.py takes", () =>
   const python = readFileSync(join(PYTHON, "common.py"), "utf-8");
   const block = (
     python.match(/class Products:\n([\s\S]*?)\n\n\n/u)?.[1] ?? ""
-  ).replace(/"""[\s\S]*?"""/gu, "");
+  ).replaceAll(/"""[\s\S]*?"""/gu, "");
   // `name: type`, `name: type = default` (spaced or not), a comment after
   const fields = [
     ...block.matchAll(/^ {4}(\w+): [^=#\n]+?(\s*=|\s*(?:#.*)?$)/gmu),

@@ -114,7 +114,9 @@ async function readGpkg(
     }[] = [];
     for (const row of columns?.values ?? []) {
       const [table, column, organization, code] = row.map(String);
-      const result = db.exec(`SELECT * FROM "${table.replace(/"/g, '""')}"`)[0];
+      const result = db.exec(
+        `SELECT * FROM "${table.replaceAll('"', '""')}"`
+      )[0];
       if (result) {
         layers.push({
           name: table,

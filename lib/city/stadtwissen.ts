@@ -328,8 +328,8 @@ export function foldName(text: string): string {
     .replaceAll("ü", "ue")
     .replaceAll("ß", "ss")
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
+    .replaceAll(/[̀-ͯ]/g, "")
+    .replaceAll(/[^a-z0-9]+/g, " ")
     .trim();
 }
 
