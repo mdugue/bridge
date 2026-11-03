@@ -38,7 +38,7 @@
  * streams from.
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import { PLATE_N } from "../lib/city/ground-plate";
 import type { PlateExtras } from "../lib/city/ground-plate";
 import { siteLandmarks } from "../lib/city/landmarks";
@@ -277,7 +277,7 @@ function withPhotos(walk: Walk): Walk {
       if (!stop.photo) {
         return stop;
       }
-      const file = join(walksDir, walkPhotoFile(walk.id, stop.id));
+      const file = nodePath.join(walksDir, walkPhotoFile(walk.id, stop.id));
       if (!existsSync(file)) {
         log(
           `${walk.id}/${stop.id}: no photo copy, shown without (bun scripts/walks.ts ${SITE.id} photos)`
@@ -306,7 +306,9 @@ const walks =
           publishedWalks(
             walkBundle(
               SITE.id,
-              walkFiles.map((name) => readJson<Walk>(join(walksDir, name)))
+              walkFiles.map((name) =>
+                readJson<Walk>(nodePath.join(walksDir, name))
+              )
             )
           )
         )

@@ -8,7 +8,7 @@
  * editor. It never touches OpenStreetMap: mappers do.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 import {
   GAP_KINDS,
   gapsGeoJson,
@@ -25,7 +25,7 @@ const top = topAt === -1 ? 20 : Number(rest[topAt + 1]) || 20;
 const { index, tiles } = loadStadtwissen(site.id);
 const tasks = osmGaps(index, tiles());
 
-const out = join(import.meta.dir, "..", "osm-gaps", site.id);
+const out = path.join(import.meta.dir, "..", "osm-gaps", site.id);
 mkdirSync(out, { recursive: true });
 const lines = [
   `# OSM-Lücken in ${site.name}`,
@@ -39,7 +39,7 @@ const lines = [
 ];
 for (const kind of Object.keys(GAP_KINDS) as GapKind[]) {
   const geo = gapsGeoJson(kind, tasks);
-  writeFileSync(join(out, `${kind}.geojson`), `${JSON.stringify(geo)}\n`);
+  writeFileSync(path.join(out, `${kind}.geojson`), `${JSON.stringify(geo)}\n`);
   lines.push(
     `## ${GAP_KINDS[kind].title} (${geo.features.length})`,
     "",
@@ -54,7 +54,7 @@ for (const kind of Object.keys(GAP_KINDS) as GapKind[]) {
   }
   lines.push("", `Alle als GeoJSON: \`${kind}.geojson\``, "");
 }
-writeFileSync(join(out, "aufgaben.md"), lines.join("\n"));
+writeFileSync(path.join(out, "aufgaben.md"), lines.join("\n"));
 process.stdout.write(
   `${tasks.length} Aufgaben in ${out}: ${(Object.keys(GAP_KINDS) as GapKind[])
     .map((k) => `${k} ${tasks.filter((t) => t.kind === k).length}`)

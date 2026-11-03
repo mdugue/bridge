@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import nodePath from "node:path";
 import {
   contentKey,
   createContentHasher,
@@ -43,13 +43,19 @@ describe("moduleGraph", () => {
   });
 
   test("follows relative and @/ imports, not packages", () => {
-    const dir = mkdtempSync(join(tmpdir(), "bake-sources-"));
-    writeFileSync(join(dir, "a.ts"), 'import "./b";\nimport "three";\n');
-    writeFileSync(join(dir, "b.ts"), 'export * from "./c/index";\n');
-    writeFileSync(join(dir, "c.ts"), "");
+    const dir = mkdtempSync(nodePath.join(tmpdir(), "bake-sources-"));
+    writeFileSync(
+      nodePath.join(dir, "a.ts"),
+      'import "./b";\nimport "three";\n'
+    );
+    writeFileSync(nodePath.join(dir, "b.ts"), 'export * from "./c/index";\n');
+    writeFileSync(nodePath.join(dir, "c.ts"), "");
     expect(() => moduleGraph("a.ts", dir)).toThrow("cannot resolve");
-    writeFileSync(join(dir, "b.ts"), 'import "@/d";\nexport const b = 1;\n');
-    writeFileSync(join(dir, "d.ts"), "");
+    writeFileSync(
+      nodePath.join(dir, "b.ts"),
+      'import "@/d";\nexport const b = 1;\n'
+    );
+    writeFileSync(nodePath.join(dir, "d.ts"), "");
     expect(moduleGraph("a.ts", dir)).toEqual(["a.ts", "b.ts", "d.ts"]);
     // a stop is left out with what only it reaches, unless it is the entry
     expect(moduleGraph("a.ts", dir, ["b.ts"])).toEqual(["a.ts"]);
@@ -59,8 +65,8 @@ describe("moduleGraph", () => {
 
 describe("contentKey", () => {
   test("changes with a file's content, not its mtime", () => {
-    const dir = mkdtempSync(join(tmpdir(), "bake-key-"));
-    const file = join(dir, "x.ts");
+    const dir = mkdtempSync(nodePath.join(tmpdir(), "bake-key-"));
+    const file = nodePath.join(dir, "x.ts");
     writeFileSync(file, "one");
     const first = contentKey(createContentHasher(), [file], []);
     writeFileSync(file, "one");
@@ -77,8 +83,8 @@ describe("contentKey", () => {
 
 describe("packageImports", () => {
   test("names each package a file imports, not its own modules or Node's", () => {
-    const dir = mkdtempSync(join(tmpdir(), "bake-packages-"));
-    const file = join(dir, "a.ts");
+    const dir = mkdtempSync(nodePath.join(tmpdir(), "bake-packages-"));
+    const file = nodePath.join(dir, "a.ts");
     writeFileSync(
       file,
       [

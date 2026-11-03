@@ -4,7 +4,7 @@
  * traced into this function by next.config.ts) once per instance.
  */
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import nodePath from "node:path";
 import { knowledgeOf } from "@/lib/city/ask-knowledge";
 import type { Knowledge } from "@/lib/city/ask-knowledge";
 import { STADTWISSEN_FILE } from "@/lib/city/stadtwissen";
@@ -15,9 +15,9 @@ const loaded = new Map<string, Promise<Knowledge | null>>();
 async function load(site: string): Promise<Knowledge | null> {
   // the folder written out, not SERVER_WISSEN_DIR: the bundler traces a
   // read by its literal path, and a variable one takes the whole project
-  const dir = join(process.cwd(), ".stadtwissen", site);
+  const dir = nodePath.join(process.cwd(), ".stadtwissen", site);
   const read = async <T>(file: string): Promise<T> =>
-    JSON.parse(await readFile(join(dir, file), "utf-8")) as T;
+    JSON.parse(await readFile(nodePath.join(dir, file), "utf-8")) as T;
   try {
     const index = await read<StadtwissenIndex>(STADTWISSEN_FILE);
     const tiles = await Promise.all(

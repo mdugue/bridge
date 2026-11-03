@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import type {
   AreaFeature,
   BridgeFeature,
@@ -57,7 +57,7 @@ import {
 // skipped, `bun run site` reports it), every tile, every kind — a renamed
 // property or a geometry type the bake starts writing shows up here, not as
 // a silently empty layer.
-const ROOT = join(import.meta.dir, "..", "..");
+const ROOT = nodePath.join(import.meta.dir, "..", "..");
 
 interface Source {
   path: string;
@@ -83,7 +83,7 @@ function load<F>({ path, required }: Source): F[] {
 
 /** A bake input under data/<site>/ (never served), or none. */
 function loadSource<F>(file: string): F[] {
-  const path = join(ROOT, file);
+  const path = nodePath.join(ROOT, file);
   if (!existsSync(path)) {
     return [];
   }
@@ -108,7 +108,9 @@ const baked = (site: Site) =>
   tileIds(site).every((tile) =>
     Object.values(tileArtifacts(tile))
       .filter((a) => a.required && !a.bakedFrom)
-      .every((a) => existsSync(join(ROOT, sideFileSource(site, a.file))))
+      .every((a) =>
+        existsSync(nodePath.join(ROOT, sideFileSource(site, a.file)))
+      )
   );
 
 const SITES_BAKED: Site[] = Object.values(SITES).filter(baked);
@@ -119,7 +121,7 @@ const cases = SITES_BAKED.flatMap((site) =>
       Object.entries(tileArtifacts(tile)).map(([kind, a]) => [
         kind,
         {
-          path: join(ROOT, sideFileSource(site, a.file)),
+          path: nodePath.join(ROOT, sideFileSource(site, a.file)),
           required: a.required,
         },
       ])
@@ -147,7 +149,7 @@ test.each(cases)("%s: a baked canopy has trees", (_, a) => {
 });
 
 test.each(tiles)("%s: the roof colours are { meta, roofs }", (tile, site) => {
-  const path = join(ROOT, cityMeshSourceFiles(site, tile).roofColor);
+  const path = nodePath.join(ROOT, cityMeshSourceFiles(site, tile).roofColor);
   if (!existsSync(path)) {
     return;
   }
@@ -381,7 +383,10 @@ test.each(tiles)(
 test.each(tiles)(
   "%s: shopfronts are walls with a frame, bays on them and a ground",
   (tile, site) => {
-    const path = join(ROOT, cityMeshSourceFiles(site, tile).shopfronts);
+    const path = nodePath.join(
+      ROOT,
+      cityMeshSourceFiles(site, tile).shopfronts
+    );
     if (!existsSync(path)) {
       return;
     }
@@ -427,7 +432,7 @@ test.each(tiles)(
 test.each(tiles)(
   "%s: window models keep to the ranges the bake draws",
   (tile, site) => {
-    const path = join(ROOT, cityMeshSourceFiles(site, tile).windows);
+    const path = nodePath.join(ROOT, cityMeshSourceFiles(site, tile).windows);
     if (!existsSync(path)) {
       return;
     }
@@ -1065,7 +1070,7 @@ test.each(tiles)(
       sideFileSource(site, `surface_${tile}.json`),
     ];
     for (const file of files) {
-      const path = join(ROOT, file);
+      const path = nodePath.join(ROOT, file);
       if (!existsSync(path)) {
         continue;
       }

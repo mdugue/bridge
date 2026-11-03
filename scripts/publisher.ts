@@ -6,7 +6,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { basename, join } from "node:path";
+import path from "node:path";
 import { MANIFEST_FILE } from "../lib/city/tile";
 import type { DataManifest } from "../lib/city/tile";
 
@@ -31,7 +31,7 @@ export interface Publisher {
 export function hashedName(file: string, content: Uint8Array): string {
   const hash = createHash("sha1").update(content).digest("hex").slice(0, 8);
   const ext = /(\.(?:glb|pts|crw)\.gz|\.[^.]+)$/u.exec(file)?.[0] ?? "";
-  return `${basename(file, ext)}.${hash}${ext}`;
+  return `${path.basename(file, ext)}.${hash}${ext}`;
 }
 
 export function createPublisher(
@@ -49,7 +49,7 @@ export function createPublisher(
       const hashed = hashedName(logical, content);
       manifest.files[logical] = hashed;
       keep.add(hashed);
-      const dest = join(outDir, hashed);
+      const dest = path.join(outDir, hashed);
       if (!opts.warming && !existsSync(dest)) {
         writeFileSync(dest, content);
         written += 1;
@@ -59,7 +59,7 @@ export function createPublisher(
     publishPlain: (name, content) => {
       keep.add(name);
       if (!opts.warming) {
-        writeFileSync(join(outDir, name), content);
+        writeFileSync(path.join(outDir, name), content);
       }
     },
     finish: () => {
@@ -68,13 +68,13 @@ export function createPublisher(
         return { artifacts, written: 0, pruned: 0 };
       }
       writeFileSync(
-        join(outDir, MANIFEST_FILE),
+        path.join(outDir, MANIFEST_FILE),
         `${JSON.stringify(manifest, null, 2)}\n`
       );
       let pruned = 0;
       for (const entry of readdirSync(outDir)) {
         if (!keep.has(entry)) {
-          rmSync(join(outDir, entry), { recursive: true });
+          rmSync(path.join(outDir, entry), { recursive: true });
           pruned += 1;
         }
       }

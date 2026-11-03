@@ -5,7 +5,7 @@
  * `--all` prints one line per registered site.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import sharp from "sharp";
 import { WATER_CLASS } from "../lib/city/landcover";
 import { buildingFootprintPolys } from "../lib/city/minimap";
@@ -31,7 +31,7 @@ function bytesUnder(dir: string): number {
     return 0;
   }
   return readdirSync(dir, { recursive: true, encoding: "utf-8" })
-    .map((f) => statSync(join(dir, f)))
+    .map((f) => statSync(nodePath.join(dir, f)))
     .filter((s) => s.isFile())
     .reduce((sum, s) => sum + s.size, 0);
 }

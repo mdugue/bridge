@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import {
   carLength,
   dayKindOf,
@@ -95,10 +95,10 @@ test("the trams on their way, the night's from the day before included", () => {
 });
 
 // The committed timetables read as this module expects them.
-const DATA = join(import.meta.dir, "..", "..", "data");
+const DATA = nodePath.join(import.meta.dir, "..", "..", "data");
 const SITES = existsSync(DATA)
   ? readdirSync(DATA).filter((site) =>
-      existsSync(join(DATA, site, "transit", "trams.json"))
+      existsSync(nodePath.join(DATA, site, "transit", "trams.json"))
     )
   : [];
 /** Who runs each site's trams, once its timetable names the agencies. */
@@ -110,7 +110,7 @@ const OPERATOR: Record<string, TramOperator> = {
 
 test.each(SITES)("%s: the committed timetable is whole", (site) => {
   const tt = JSON.parse(
-    readFileSync(join(DATA, site, "transit", "trams.json"), "utf-8")
+    readFileSync(nodePath.join(DATA, site, "transit", "trams.json"), "utf-8")
   ) as TramTimetable;
   if (tt.agencies) {
     expect(tt.routeAgency).toHaveLength(tt.routes.length);

@@ -5,7 +5,7 @@
  * (ground-joins.test.ts) both need them. Reads files, no side effects.
  */
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import type {
   GateFeature,
   KerbFeature,
@@ -30,7 +30,7 @@ import { masonryOf } from "../lib/city/walls";
 import type { Masonry, WallRibbon } from "../lib/city/walls";
 import type { Site } from "../lib/city/site";
 
-const at = (path: string) => join(process.cwd(), path);
+const at = (path: string) => nodePath.join(process.cwd(), path);
 const readJson = <T>(path: string): T =>
   JSON.parse(readFileSync(path, "utf-8")) as T;
 

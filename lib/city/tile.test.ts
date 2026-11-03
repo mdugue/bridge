@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import nodePath from "node:path";
 import { DRESDEN } from "../../sites/dresden";
 import {
   wallSourceFile,
@@ -129,10 +129,10 @@ test("manifestUrl resolves hashed names and falls back to the logical one", () =
  *  outside the raw downloads, as the TypeScript side would spell it. A
  *  stem built from a variable (`f"{name}_{tile.id}…"`) is not seen. */
 function bakeNames(): Map<string, string> {
-  const dir = join(import.meta.dir, "../../pipeline/bake");
+  const dir = nodePath.join(import.meta.dir, "../../pipeline/bake");
   const names = new Map<string, string>();
   for (const file of readdirSync(dir).filter((f) => f.endsWith(".py"))) {
-    const lines = readFileSync(join(dir, file), "utf-8").split("\n");
+    const lines = readFileSync(nodePath.join(dir, file), "utf-8").split("\n");
     for (const [i, line] of lines.entries()) {
       // data/_raw/<provider>/ holds the downloads and the bakes' own
       // caches (Wikidata answers, the laser scan's research output)
@@ -168,7 +168,7 @@ test("every file a bake step writes or reads is one the build knows", () => {
     terraceSourceFile(DRESDEN, PRIMARY_TILE),
   ];
   for (const path of sources) {
-    known.add(basename(path));
+    known.add(nodePath.basename(path));
   }
   // the class raster's legends: the build reads landcover's and horizon's,
   // edges' and surface's document their rasters' channels for people

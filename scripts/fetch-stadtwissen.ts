@@ -8,7 +8,7 @@
  * after a landmark bake, or to take Wikidata's newer edits.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import nodePath from "node:path";
 import type { LandmarkFile } from "../lib/city/landmarks";
 import {
   labelOf,
@@ -29,7 +29,7 @@ const AGENT = "bridge-bake/0.1 (city walker; https://github.com/mdugue/bridge)";
 /** wbgetentities takes at most 50 ids a call */
 const BATCH = 50;
 
-const ROOT = join(import.meta.dir, "..");
+const ROOT = nodePath.join(import.meta.dir, "..");
 const { site } = siteFromArgs(process.argv.slice(2));
 
 /** One GET, waiting out Wikidata's rate limit (429, `Retry-After`). */
@@ -71,7 +71,7 @@ async function entities(
 
 const landmarkIds = new Set<string>();
 for (const tile of tileIds(site)) {
-  const path = join(ROOT, cityMeshSourceFiles(site, tile).landmarks);
+  const path = nodePath.join(ROOT, cityMeshSourceFiles(site, tile).landmarks);
   if (!existsSync(path)) {
     continue;
   }
@@ -102,8 +102,8 @@ const out: WikidataFile = {
   retrieved: new Date().toISOString().slice(0, 10),
   entities: facts,
 };
-const dest = join(ROOT, siteDataDir(site), WIKIDATA_FACTS_FILE);
-mkdirSync(dirname(dest), { recursive: true });
+const dest = nodePath.join(ROOT, siteDataDir(site), WIKIDATA_FACTS_FILE);
+mkdirSync(nodePath.dirname(dest), { recursive: true });
 writeFileSync(dest, `${JSON.stringify(out, null, 1)}\n`);
 process.stdout.write(
   `${site.id}: ${Object.keys(facts).length} of ${ids.length} landmarks → ${dest}\n`

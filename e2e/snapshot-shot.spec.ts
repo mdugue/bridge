@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import { expect, test } from "@playwright/test";
 import { utmToLatLng } from "../lib/city/crs";
 import { arrivalHref } from "../lib/city/geolocation";
@@ -41,7 +41,7 @@ test.use(
  * yields shots/<name>.png.
  */
 
-const SHOTS_DIR = join(process.cwd(), "shots");
+const SHOTS_DIR = nodePath.join(process.cwd(), "shots");
 /**
  * Before/after pairs from one set of snapshots — the ONE mechanism:
  * `SHOTS_QUERY` is appended to the page URL (with or without its leading
@@ -114,7 +114,9 @@ for (const file of snapshotFiles()) {
     test.setTimeout(READY_MS + 150_000);
     // Validate before rendering: a broken shot fails loudly instead of
     // silently rendering the defaults.
-    const parsed = parseSnapshot(readFileSync(join(SHOTS_DIR, file), "utf-8"));
+    const parsed = parseSnapshot(
+      readFileSync(nodePath.join(SHOTS_DIR, file), "utf-8")
+    );
     if (!parsed.ok) {
       throw new Error(`${file}: ${parsed.reason}`);
     }
@@ -180,6 +182,8 @@ for (const file of snapshotFiles()) {
     const canvas = page.locator("canvas[data-engine]");
     await expect(canvas).toBeVisible();
     const tag = SHOTS_TAG ? `.${SHOTS_TAG}` : "";
-    await canvas.screenshot({ path: join(SHOTS_DIR, `${name}${tag}.png`) });
+    await canvas.screenshot({
+      path: nodePath.join(SHOTS_DIR, `${name}${tag}.png`),
+    });
   });
 }

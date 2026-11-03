@@ -14,13 +14,13 @@
  * Run: bun scripts/eval/kataster-perf.ts
  */
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 import { chromium } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
 const BASE = process.env.BASE ?? "http://localhost:3101";
-const ROOT = join(import.meta.dir, "..", "..");
-const SHOTS = join(ROOT, "shots");
+const ROOT = path.join(import.meta.dir, "..", "..");
+const SHOTS = path.join(ROOT, "shots");
 const RUNS = Number(process.env.RUNS ?? 2);
 
 interface PocView {
@@ -78,7 +78,7 @@ async function run(query: string) {
   for (const file of readdirSync(SHOTS)
     .filter((f) => f.startsWith("kat-") && f.endsWith(".json"))
     .sort()) {
-    const snap = JSON.parse(readFileSync(join(SHOTS, file), "utf-8")) as {
+    const snap = JSON.parse(readFileSync(path.join(SHOTS, file), "utf-8")) as {
       camera: unknown;
       date: string;
     };

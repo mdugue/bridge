@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 import {
   COLONY_AXIS_STEPS,
   COLONY_EDGE_SCALE,
@@ -17,7 +17,7 @@ test("the colony bytes' scales are the bake's", () => {
   // the shader decodes the bytes with these constants
   // (cultivated-layer.ts); the bake writes them (cultivated.py)
   const python = readFileSync(
-    join(import.meta.dir, "../../pipeline/bake/cultivated.py"),
+    path.join(import.meta.dir, "../../pipeline/bake/cultivated.py"),
     "utf-8"
   );
   expect(Number(/^EDGE_SCALE = ([\d.]+)$/mu.exec(python)?.[1])).toBe(

@@ -20,7 +20,7 @@ import {
   readFileSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 import { siteDataDir } from "../lib/city/tile";
 import {
   stopCamera,
@@ -34,13 +34,13 @@ import { siteFromArgs } from "../sites";
 import { readDgmFile } from "./dgm-cache";
 import { siteDgm } from "./line-levels";
 
-const ROOT = join(import.meta.dir, "..");
+const ROOT = path.join(import.meta.dir, "..");
 const { site, rest } = siteFromArgs(process.argv.slice(2));
-const dir = join(ROOT, siteDataDir(site), WALKS_DIR);
+const dir = path.join(ROOT, siteDataDir(site), WALKS_DIR);
 const files = readdirSync(dir).filter((f) => f.endsWith(".json"));
 const walks = files.map((f) => ({
-  file: join(dir, f),
-  walk: JSON.parse(readFileSync(join(dir, f), "utf-8")) as Walk,
+  file: path.join(dir, f),
+  walk: JSON.parse(readFileSync(path.join(dir, f), "utf-8")) as Walk,
 }));
 const out = (line: string) => process.stdout.write(`${line}\n`);
 
@@ -65,16 +65,19 @@ async function fillGround(): Promise<void> {
 
 function writeShots(only?: string): void {
   const manifest = JSON.parse(
-    readFileSync(join(ROOT, "public/data", site.id, "manifest.json"), "utf-8")
+    readFileSync(
+      path.join(ROOT, "public/data", site.id, "manifest.json"),
+      "utf-8"
+    )
   ) as { files: Record<string, string> };
   const tileset = JSON.parse(
     readFileSync(
-      join(ROOT, "public/data", site.id, manifest.files["tileset.json"]),
+      path.join(ROOT, "public/data", site.id, manifest.files["tileset.json"]),
       "utf-8"
     )
   ) as { extras: { offset: { cx: number; cy: number } } };
   const { offset } = tileset.extras;
-  mkdirSync(join(ROOT, "shots"), { recursive: true });
+  mkdirSync(path.join(ROOT, "shots"), { recursive: true });
   const today = new Date();
   for (const { walk } of walks.filter((w) => !only || w.walk.id === only)) {
     for (const [i, stop] of walk.stops.entries()) {
@@ -87,7 +90,7 @@ function writeShots(only?: string): void {
         look: { style: stop.style ?? "pastel" },
       };
       const name = `walk-${walk.id}-${String(i + 1).padStart(2, "0")}-${stop.id}.json`;
-      writeFileSync(join(ROOT, "shots", name), JSON.stringify(snapshot));
+      writeFileSync(path.join(ROOT, "shots", name), JSON.stringify(snapshot));
       out(name);
     }
   }
@@ -283,7 +286,7 @@ async function photoJobs(force: boolean, refs: boolean): Promise<PhotoJob[]> {
       }
       continue;
     }
-    const copy = join(dir, walkPhotoFile(walk.id, stop.id));
+    const copy = path.join(dir, walkPhotoFile(walk.id, stop.id));
     if (force || !(fetchedAs(stop.photo, name) && existsSync(copy))) {
       jobs.push({ copy, name, stop, where });
     }
@@ -292,7 +295,7 @@ async function photoJobs(force: boolean, refs: boolean): Promise<PhotoJob[]> {
 }
 
 async function fetchPhotos(force: boolean, refs: boolean): Promise<void> {
-  mkdirSync(join(dir, "photos"), { recursive: true });
+  mkdirSync(path.join(dir, "photos"), { recursive: true });
   const jobs = await photoJobs(force, refs);
   const infos = await commonsInfo([...new Set(jobs.map((j) => j.name))]);
   for (const { copy, name, stop, where } of jobs) {

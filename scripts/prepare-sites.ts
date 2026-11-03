@@ -24,7 +24,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { availableParallelism, totalmem } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 import { createInterface } from "node:readline";
 import {
   SITE_INDEX_FILE,
@@ -49,7 +49,7 @@ import {
   warmSteps,
 } from "./warmers";
 
-const OUT_DIR = join(process.cwd(), "public/data");
+const OUT_DIR = path.join(process.cwd(), "public/data");
 
 function log(message: string): void {
   process.stdout.write(`prepare-sites: ${message}\n`);
@@ -226,10 +226,10 @@ if (failed.length > 0) {
 const index: SiteIndex = { version: 1, sites: [] };
 for (const id of ids) {
   const manifest = JSON.parse(
-    readFileSync(join(OUT_DIR, id, MANIFEST_FILE), "utf-8")
+    readFileSync(path.join(OUT_DIR, id, MANIFEST_FILE), "utf-8")
   ) as DataManifest;
   const map = manifest.files[SITE_MAP_FILE];
-  const statsPath = join(OUT_DIR, id, SITE_STATS_FILE);
+  const statsPath = path.join(OUT_DIR, id, SITE_STATS_FILE);
   const stats = existsSync(statsPath)
     ? parseSiteStats(JSON.parse(readFileSync(statsPath, "utf-8")))
     : undefined;
@@ -241,7 +241,7 @@ for (const id of ids) {
 }
 
 writeFileSync(
-  join(OUT_DIR, SITE_INDEX_FILE),
+  path.join(OUT_DIR, SITE_INDEX_FILE),
   `${JSON.stringify(index, null, 2)}\n`
 );
 publishServerWissen(ids);
@@ -250,7 +250,7 @@ publishServerWissen(ids);
 let pruned = 0;
 for (const entry of readdirSync(OUT_DIR)) {
   if (entry !== SITE_INDEX_FILE && !ids.includes(entry as SiteId)) {
-    rmSync(join(OUT_DIR, entry), { recursive: true });
+    rmSync(path.join(OUT_DIR, entry), { recursive: true });
     pruned += 1;
   }
 }
@@ -265,25 +265,25 @@ log(
  * name. Rewritten whole, so a site no longer built leaves nothing.
  */
 function publishServerWissen(siteIds: readonly SiteId[]): void {
-  const root = join(process.cwd(), SERVER_WISSEN_DIR);
+  const root = path.join(process.cwd(), SERVER_WISSEN_DIR);
   rmSync(root, { recursive: true, force: true });
   for (const id of siteIds) {
-    const from = join(OUT_DIR, id);
+    const from = path.join(OUT_DIR, id);
     const manifest = JSON.parse(
-      readFileSync(join(from, MANIFEST_FILE), "utf-8")
+      readFileSync(path.join(from, MANIFEST_FILE), "utf-8")
     ) as DataManifest;
     const indexFile = manifest.files[STADTWISSEN_FILE];
     if (!indexFile) {
       continue;
     }
-    const to = join(root, id);
+    const to = path.join(root, id);
     mkdirSync(to, { recursive: true });
-    copyFileSync(join(from, indexFile), join(to, STADTWISSEN_FILE));
+    copyFileSync(path.join(from, indexFile), path.join(to, STADTWISSEN_FILE));
     const index = JSON.parse(
-      readFileSync(join(from, indexFile), "utf-8")
+      readFileSync(path.join(from, indexFile), "utf-8")
     ) as StadtwissenIndex;
     for (const tile of index.tiles) {
-      copyFileSync(join(from, tile.file), join(to, tile.file));
+      copyFileSync(path.join(from, tile.file), path.join(to, tile.file));
     }
   }
 }

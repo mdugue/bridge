@@ -7,12 +7,12 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 import { MANIFEST_FILE } from "../lib/city/tile";
 import { createPublisher, hashedName } from "./publisher";
 
 const bytes = (s: string) => new TextEncoder().encode(s);
-const fresh = () => mkdtempSync(join(tmpdir(), "publisher-"));
+const fresh = () => mkdtempSync(path.join(tmpdir(), "publisher-"));
 
 test("a name carries its content's hash and keeps a compound extension", () => {
   const a = hashedName("lamps_t.geojson", bytes("a"));
@@ -25,7 +25,7 @@ test("a name carries its content's hash and keeps a compound extension", () => {
 
 test("the same bytes are written once; a run names its files in the manifest and prunes the rest", () => {
   const dir = fresh();
-  writeFileSync(join(dir, "stale.1234abcd.json"), "old");
+  writeFileSync(path.join(dir, "stale.1234abcd.json"), "old");
   const first = createPublisher(dir, { warming: false });
   const name = first.publish("a.json", bytes("one"));
   first.publishPlain("site-stats.json", bytes("{}"));
@@ -34,7 +34,7 @@ test("the same bytes are written once; a run names its files in the manifest and
     [MANIFEST_FILE, name, "site-stats.json"].toSorted()
   );
   const manifest: unknown = JSON.parse(
-    readFileSync(join(dir, MANIFEST_FILE), "utf-8")
+    readFileSync(path.join(dir, MANIFEST_FILE), "utf-8")
   );
   expect(manifest).toEqual({ version: 1, files: { "a.json": name } });
 
@@ -43,12 +43,12 @@ test("the same bytes are written once; a run names its files in the manifest and
   const changed = second.publish("b.json", bytes("two"));
   // the stats are not named this run: pruned like any file
   expect(second.finish()).toEqual({ artifacts: 2, written: 1, pruned: 1 });
-  expect(existsSync(join(dir, changed))).toBe(true);
-  expect(existsSync(join(dir, "site-stats.json"))).toBe(false);
+  expect(existsSync(path.join(dir, changed))).toBe(true);
+  expect(existsSync(path.join(dir, "site-stats.json"))).toBe(false);
 });
 
 test("a warmer names what it would publish and writes nothing", () => {
-  const dir = join(fresh(), "site");
+  const dir = path.join(fresh(), "site");
   const warmer = createPublisher(dir, { warming: true });
   const name = warmer.publish("a.json", bytes("one"));
   expect(name).toBe(hashedName("a.json", bytes("one")));

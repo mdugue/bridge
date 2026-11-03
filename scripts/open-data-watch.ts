@@ -23,13 +23,13 @@
  * so that the next edition is a finding: run it right after a fetch.
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 import { siteExtentOf } from "../lib/city/site-extent";
 import { tileIdOf } from "../lib/city/site";
 import { isSiteId, SITES } from "../sites";
 import type { SiteId } from "../sites";
 
-const ROOT = join(import.meta.dir, "..");
+const ROOT = path.join(import.meta.dir, "..");
 const TIMEOUT_MS = 20_000;
 /** OSM data older than this is a finding (days). */
 export const OSM_STALE_DAYS = 60;
@@ -256,7 +256,7 @@ async function snStands(
 }
 
 function provenanceOf(site: SiteId): Provenance | null {
-  const file = join(ROOT, "data", site, "provenance.json");
+  const file = path.join(ROOT, "data", site, "provenance.json");
   return existsSync(file)
     ? (JSON.parse(readFileSync(file, "utf-8")) as Provenance)
     : null;
@@ -414,7 +414,7 @@ export function report(findings: readonly Finding[], now: Date): string {
  * provenance records none; returns how many it wrote.
  */
 async function recordStands(site: SiteId): Promise<number> {
-  const file = join(ROOT, "data", site, "provenance.json");
+  const file = path.join(ROOT, "data", site, "provenance.json");
   const config = SITES[site];
   if (config.provider.id !== "sn" || !existsSync(file)) {
     return 0;
@@ -458,7 +458,7 @@ async function main() {
   }
   // the sites whose data is committed (an uncommitted one has no record)
   const sites = (asked.length > 0 ? asked : Object.keys(SITES)).filter((s) =>
-    existsSync(join(ROOT, "data", s, "provenance.json"))
+    existsSync(path.join(ROOT, "data", s, "provenance.json"))
   ) as SiteId[];
   if (args.includes("--record")) {
     for (const site of sites) {

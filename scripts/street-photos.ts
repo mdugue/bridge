@@ -17,14 +17,14 @@
  * poses were off by ~0.6 m in 2026-10).
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 import { gridConvergenceDeg, latLngToUtm, utmToLatLng } from "../lib/city/crs";
 import { siteExtentOf } from "../lib/city/site-extent";
 import { siteFromArgs } from "../sites";
 import { readDgmFile } from "./dgm-cache";
 import { siteDgm } from "./line-levels";
 
-const ROOT = join(import.meta.dir, "..");
+const ROOT = path.join(import.meta.dir, "..");
 const API = "https://api.panoramax.xyz/api";
 /** Eye height of a phone held up (m). */
 const EYE_M = 1.6;
@@ -265,7 +265,7 @@ async function main() {
   };
   const n = Number(flag("--n") ?? 8);
   const seed = flag("--seed") ?? isoWeek(new Date());
-  const manifestPath = join(ROOT, "public/data", site.id, "manifest.json");
+  const manifestPath = path.join(ROOT, "public/data", site.id, "manifest.json");
   if (!existsSync(manifestPath)) {
     throw new Error(
       `${site.id} is not prepared (no public/data/${site.id}): run \`bun scripts/prepare-sites.ts ${site.id}\` first`
@@ -287,14 +287,14 @@ async function main() {
   };
   const tileset = JSON.parse(
     readFileSync(
-      join(ROOT, "public/data", site.id, manifest.files["tileset.json"]),
+      path.join(ROOT, "public/data", site.id, manifest.files["tileset.json"]),
       "utf-8"
     )
   ) as { extras: { offset: { cx: number; cy: number } } };
   const { cx, cy } = tileset.extras.offset;
-  const photos = join(ROOT, "street-photos", site.id);
+  const photos = path.join(ROOT, "street-photos", site.id);
   mkdirSync(photos, { recursive: true });
-  mkdirSync(join(ROOT, "shots"), { recursive: true });
+  mkdirSync(path.join(ROOT, "shots"), { recursive: true });
   const pairs: Record<string, string | boolean>[] = [];
   for (const item of picked) {
     if (pairs.length >= n) {
@@ -332,9 +332,9 @@ async function main() {
     if (!bytes) {
       continue;
     }
-    writeFileSync(join(photos, `${name}.jpg`), bytes);
+    writeFileSync(path.join(photos, `${name}.jpg`), bytes);
     writeFileSync(
-      join(ROOT, "shots", `${name}.json`),
+      path.join(ROOT, "shots", `${name}.json`),
       JSON.stringify(snapshot)
     );
     pairs.push({
@@ -352,7 +352,7 @@ async function main() {
     });
   }
   writeFileSync(
-    join(photos, "pairs.json"),
+    path.join(photos, "pairs.json"),
     `${JSON.stringify({ seed, pairs }, null, 2)}\n`
   );
   process.stdout.write(

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import { DRESDEN } from "../../sites/dresden";
 import { LOOK_CONTROLS } from "../city/look-controls";
 
@@ -11,7 +11,12 @@ import { LOOK_CONTROLS } from "../city/look-controls";
  * Großer Garten had none).
  */
 const GUIDES = ["en", "de"].map((lang) =>
-  join(import.meta.dir, "../../docs/guide", lang, "using-the-viewer.md")
+  nodePath.join(
+    import.meta.dir,
+    "../../docs/guide",
+    lang,
+    "using-the-viewer.md"
+  )
 );
 
 const LABELS = [

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import nodePath from "node:path";
 import type { TerrainBounds } from "../lib/city/terrain-geometry";
 import {
   fineTin,
@@ -88,7 +88,10 @@ test("an entry read as a Buffer at an offset comes back whole", () => {
 
 test("the header alone names the kind and the bounds", () => {
   const tin = fineTin(dgm(), [], {}, 0.1);
-  const path = join(mkdtempSync(join(tmpdir(), "ground-pack-")), "g.bin");
+  const path = nodePath.join(
+    mkdtempSync(nodePath.join(tmpdir(), "ground-pack-")),
+    "g.bin"
+  );
   writeFileSync(
     path,
     packGround({ kind: "tin", tin: tin as NonNullable<typeof tin> })

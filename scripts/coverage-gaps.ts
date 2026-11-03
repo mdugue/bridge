@@ -7,9 +7,9 @@
  * job summary). A report, not a gate.
  */
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 
-const ROOT = join(import.meta.dir, "..");
+const ROOT = nodePath.join(import.meta.dir, "..");
 
 /** The sources that should show up in the report (tests excluded): the
  *  viewer, the pure core, the build step, the routes' own helpers, the
@@ -73,7 +73,7 @@ export function sources(root: string): Source[] {
   for (const pattern of SOURCE_GLOBS) {
     for (const path of new Bun.Glob(pattern).scanSync({ cwd: root })) {
       if (!isTest(path) && !VENDORED.has(path)) {
-        const text = readFileSync(join(root, path), "utf-8");
+        const text = readFileSync(nodePath.join(root, path), "utf-8");
         out.push({ path, lines: text.split("\n").length });
       }
     }
@@ -84,7 +84,7 @@ export function sources(root: string): Source[] {
 if (import.meta.main) {
   // CI runs this even when the tests failed (`if: always()`), possibly
   // before Bun wrote the report: say so rather than fail a second time.
-  const report = join(ROOT, "coverage", "lcov.info");
+  const report = nodePath.join(ROOT, "coverage", "lcov.info");
   process.stdout.write(
     existsSync(report)
       ? gapTable(coverageGaps(readFileSync(report, "utf-8"), sources(ROOT)))

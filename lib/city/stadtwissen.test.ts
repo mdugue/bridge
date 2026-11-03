@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 import {
   foldName,
   matchesQuery,
@@ -129,7 +129,7 @@ test("nearby sorts by distance within the radius", () => {
 
 test("the chat route reads the server copy where the build writes it", () => {
   const route = readFileSync(
-    join(import.meta.dir, "../../app/api/frag/knowledge.ts"),
+    path.join(import.meta.dir, "../../app/api/frag/knowledge.ts"),
     "utf-8"
   );
   expect(route).toContain(`"${SERVER_WISSEN_DIR}"`);

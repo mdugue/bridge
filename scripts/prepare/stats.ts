@@ -4,7 +4,7 @@
  */
 import sharp from "sharp";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 import {
   buildingHeights,
   footprintArea,
@@ -109,7 +109,7 @@ async function siteStats(
     const prints = footprintFiles.get(tile);
     if (prints) {
       footprint += footprintArea(
-        readJson<[number, number][][][]>(join(OUT_DIR, prints))
+        readJson<[number, number][][][]>(path.join(OUT_DIR, prints))
       );
     }
     landmarks += landmarkFile(tile)?.landmarks.length ?? 0;

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import { SITES } from "../../sites";
 import {
   HORIZON_AZIMUTHS,
@@ -14,7 +14,7 @@ import {
 } from "./skyview";
 import { sideFileSource, tileIds } from "./tile";
 
-const ROOT = join(import.meta.dir, "..", "..");
+const ROOT = nodePath.join(import.meta.dir, "..", "..");
 
 /** Every tile of every site, with its site (the ones whose bakes are on
  *  disk are checked; Dresden's are committed). */
@@ -25,7 +25,10 @@ const TILES = Object.values(SITES).flatMap((site) =>
 test("the committed horizon legends match the constants the shader uses", () => {
   let checked = 0;
   for (const { site, tile } of TILES) {
-    const path = join(ROOT, sideFileSource(site, `horizon_${tile}.json`));
+    const path = nodePath.join(
+      ROOT,
+      sideFileSource(site, `horizon_${tile}.json`)
+    );
     if (!existsSync(path)) {
       continue;
     }

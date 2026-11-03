@@ -17,7 +17,7 @@
  * Run: bun scripts/eval/season-cost.ts
  */
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 import { isInstances } from "../../app/_components/instancing";
 import { buildTreeInventory } from "../../app/_components/tree-inventory-layer";
 import { buildVegetation } from "../../app/_components/vegetation-layer";
@@ -32,7 +32,7 @@ import type {
 import { sideFileSource, tileIds } from "../../lib/city/tile";
 import { REFERENCE_SITE, SITES, siteFromArgs } from "../../sites";
 
-const ROOT = join(import.meta.dir, "..", "..");
+const ROOT = path.join(import.meta.dir, "..", "..");
 // The site named first on the command line, else the reference site.
 const site =
   process.argv.length > 2
@@ -43,7 +43,7 @@ const features = <F>(file: string): F[] => {
     return (
       (
         JSON.parse(
-          readFileSync(join(ROOT, sideFileSource(site, file)), "utf-8")
+          readFileSync(path.join(ROOT, sideFileSource(site, file)), "utf-8")
         ) as FeatureCollection<F>
       ).features ?? []
     );

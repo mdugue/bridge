@@ -5,19 +5,21 @@
  * fails when the committed pages differ from what this writes.
  */
 import { existsSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 import { sourceMatrixPage } from "../lib/city/source-matrix";
 import type { Lang } from "../lib/city/source-matrix";
 import type { Site } from "../lib/city/site";
 import { REFERENCE_SITE, SITES } from "../sites";
 
-const ROOT = join(import.meta.dir, "..");
+const ROOT = path.join(import.meta.dir, "..");
 
 /** The sites in the table's column order, and those whose data is here. */
 export function matrixInputs(root = ROOT) {
   const all = Object.values(SITES);
   const built = new Set(
-    all.filter((s) => existsSync(join(root, "data", s.id))).map((s) => s.id)
+    all
+      .filter((s) => existsSync(path.join(root, "data", s.id)))
+      .map((s) => s.id)
   );
   // the reference site first, then the built ones, then the configured ones
   const rank = (s: Site) =>
@@ -29,7 +31,7 @@ export function matrixInputs(root = ROOT) {
 }
 
 export function matrixPath(lang: Lang, root = ROOT): string {
-  return join(root, "docs", "guide", lang, "sources-by-city.md");
+  return path.join(root, "docs", "guide", lang, "sources-by-city.md");
 }
 
 if (import.meta.main) {

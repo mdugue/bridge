@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import path from "node:path";
 import {
   contentKey,
   createContentHasher,
@@ -44,7 +44,7 @@ export function createKeyMaker(opts: {
     let graph = graphs.get(entry);
     if (!graph) {
       graph = moduleGraph(entry, opts.root, opts.stop).map((p) =>
-        join(opts.root, p)
+        path.join(opts.root, p)
       );
       graphs.set(entry, graph);
     }

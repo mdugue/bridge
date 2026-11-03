@@ -13,7 +13,7 @@
  * (the build cache keys the terrain on this module's imports).
  */
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import { bridgeDecks, decksAt } from "../lib/city/decks";
 import type { DeckPoly } from "../lib/city/decks";
 import type {
@@ -63,7 +63,7 @@ import { ownsPoint } from "../lib/city/tileset";
 import { readDgm } from "./bake-tiles";
 import type { Dgm } from "./bake-tiles";
 
-const at = (path: string) => join(process.cwd(), path);
+const at = (path: string) => nodePath.join(process.cwd(), path);
 
 const OFFSET = { cx: 0, cy: 0 }; // levels are heights: the frame does not matter
 

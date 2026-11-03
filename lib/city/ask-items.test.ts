@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 import { bridgeItems, monumentItems, treeSets } from "./ask-items";
 import { hitsInSets, nearestItem } from "./ask-solids";
 import type {
@@ -16,7 +16,7 @@ const read = <F>(kind: string) =>
   (
     JSON.parse(
       readFileSync(
-        join(
+        path.join(
           import.meta.dir,
           "..",
           "..",

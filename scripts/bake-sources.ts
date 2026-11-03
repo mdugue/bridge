@@ -10,7 +10,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { isBuiltin } from "node:module";
-import { dirname, relative, resolve } from "node:path";
+import nodePath from "node:path";
 
 const EXTENSIONS = [".ts", ".tsx", "/index.ts", "/index.tsx"];
 
@@ -37,9 +37,9 @@ function resolveImport(
 ): string | null {
   let base: string;
   if (spec.startsWith(".")) {
-    base = resolve(dirname(from), spec);
+    base = nodePath.resolve(nodePath.dirname(from), spec);
   } else if (spec.startsWith("@/")) {
-    base = resolve(root, spec.slice(2));
+    base = nodePath.resolve(root, spec.slice(2));
   } else {
     return null;
   }
@@ -57,12 +57,12 @@ function resolveImport(
 /** The source files `file` imports itself through relative and `@/`
  *  imports, as paths relative to `root`, sorted. */
 export function directImports(file: string, root = process.cwd()): string[] {
-  const from = resolve(root, file);
+  const from = nodePath.resolve(root, file);
   const out = new Set<string>();
   for (const path of importsOf(from, transpilerFor(from))) {
-    const next = resolveImport(from, path, resolve(root));
+    const next = resolveImport(from, path, nodePath.resolve(root));
     if (next) {
-      out.add(relative(root, next));
+      out.add(nodePath.relative(root, next));
     }
   }
   return [...out].toSorted();
@@ -79,9 +79,9 @@ export function moduleGraph(
   root = process.cwd(),
   stop: readonly string[] = []
 ): string[] {
-  const stopped = new Set(stop.map((p) => resolve(root, p)));
+  const stopped = new Set(stop.map((p) => nodePath.resolve(root, p)));
   const seen = new Set<string>();
-  const start = resolve(root, entry);
+  const start = nodePath.resolve(root, entry);
   const queue = [start];
   while (queue.length > 0) {
     const file = queue.pop() as string;
@@ -93,13 +93,13 @@ export function moduleGraph(
     }
     seen.add(file);
     for (const path of importsOf(file, transpilerFor(file))) {
-      const next = resolveImport(file, path, resolve(root));
+      const next = resolveImport(file, path, nodePath.resolve(root));
       if (next && !seen.has(next)) {
         queue.push(next);
       }
     }
   }
-  return [...seen].map((file) => relative(root, file)).toSorted();
+  return [...seen].map((file) => nodePath.relative(root, file)).toSorted();
 }
 
 /** The package a bare specifier names (`three/addons/x` → `three`,

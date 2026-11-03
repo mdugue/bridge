@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 import { BERLIN } from "../../sites/berlin";
 import { DRESDEN } from "../../sites/dresden";
 import { HAMBURG } from "../../sites/hamburg";
@@ -16,7 +16,14 @@ import { tileIds } from "./tile";
 
 const record = JSON.parse(
   readFileSync(
-    join(import.meta.dir, "..", "..", "data", "dresden", "provenance.json"),
+    path.join(
+      import.meta.dir,
+      "..",
+      "..",
+      "data",
+      "dresden",
+      "provenance.json"
+    ),
     "utf-8"
   )
 ) as ProvenanceRecord;
@@ -97,7 +104,7 @@ test("a manifest of another version is not read", () => {
 test("Unna's OSM stand comes from its openstreetmap.fr extract", () => {
   const unnaRecord = JSON.parse(
     readFileSync(
-      join(import.meta.dir, "..", "..", "data", "unna", "provenance.json"),
+      path.join(import.meta.dir, "..", "..", "data", "unna", "provenance.json"),
       "utf-8"
     )
   ) as ProvenanceRecord;

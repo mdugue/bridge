@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import type { WikidataFile } from "../lib/city/stadtwissen";
 import { WIKIDATA_FACTS_FILE } from "../lib/city/stadtwissen";
 import { tileExtentOf, tileIdOf } from "../lib/city/site";
@@ -24,18 +24,20 @@ import { siteDgm } from "./line-levels";
  * measured ground — the pitch of every view is reckoned from it — and every
  * Stadtwissen entry it names is one the build publishes.
  */
-const ROOT = join(import.meta.dir, "..");
+const ROOT = nodePath.join(import.meta.dir, "..");
 /** How far a stop's written ground may lie off the DGM (it is rounded to 0.1 m). */
 const GROUND_TOLERANCE_M = 0.2;
 
 const sitesWithWalks = Object.values(SITES).flatMap((site) => {
-  const dir = join(ROOT, siteDataDir(site), WALKS_DIR);
+  const dir = nodePath.join(ROOT, siteDataDir(site), WALKS_DIR);
   if (!existsSync(dir)) {
     return [];
   }
   const walks = readdirSync(dir)
     .filter((f) => f.endsWith(".json"))
-    .map((f) => JSON.parse(readFileSync(join(dir, f), "utf-8")) as Walk);
+    .map(
+      (f) => JSON.parse(readFileSync(nodePath.join(dir, f), "utf-8")) as Walk
+    );
   return [{ site, walks }];
 });
 
@@ -93,13 +95,17 @@ for (const { site, walks } of sitesWithWalks) {
           ])
         )
       );
-      const wikidataPath = join(ROOT, siteDataDir(site), WIKIDATA_FACTS_FILE);
+      const wikidataPath = nodePath.join(
+        ROOT,
+        siteDataDir(site),
+        WIKIDATA_FACTS_FILE
+      );
       const wikidata = existsSync(wikidataPath)
         ? (JSON.parse(readFileSync(wikidataPath, "utf-8")) as WikidataFile)
         : { entities: {} };
       const monuments = new Set(
         site.tiles.flatMap((cell) => {
-          const file = join(
+          const file = nodePath.join(
             ROOT,
             sideFileSource(
               site,
@@ -117,7 +123,7 @@ for (const { site, walks } of sitesWithWalks) {
       const inCity = (id: string) =>
         site.tiles.some((cell) => {
           const tile = tileIdOf(site, cell);
-          const path = join(
+          const path = nodePath.join(
             ROOT,
             siteDataDir(site),
             "cityjson",

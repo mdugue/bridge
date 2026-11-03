@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import { SITES } from "../../sites";
 import { SURFACE_ALONG_PERIOD } from "./landcover";
 import {
@@ -15,7 +15,7 @@ import {
 import type { MarkingTable } from "./markings";
 import { sideFileSource, tileArtifacts, tileIds } from "./tile";
 
-const ROOT = join(import.meta.dir, "..", "..");
+const ROOT = nodePath.join(import.meta.dir, "..", "..");
 
 test("the committed tables name the kinds in the viewer's order", () => {
   let rows = 0;
@@ -23,7 +23,7 @@ test("the committed tables name the kinds in the viewer's order", () => {
   for (const site of Object.values(SITES)) {
     for (const tile of tileIds(site)) {
       const { file } = tileArtifacts(tile).markingsTable;
-      const path = join(ROOT, sideFileSource(site, file));
+      const path = nodePath.join(ROOT, sideFileSource(site, file));
       if (!existsSync(path)) {
         continue;
       }
@@ -107,7 +107,10 @@ test("the lane bits are one bit each and keep the kerb's", () => {
 
 test("the bake writes the bits and the offset scale the shader reads", () => {
   // pipeline/bake/markings.py packs them into the raster's G and B channels
-  const python = readFileSync(join(ROOT, "pipeline/bake/markings.py"), "utf-8");
+  const python = readFileSync(
+    nodePath.join(ROOT, "pipeline/bake/markings.py"),
+    "utf-8"
+  );
   const scale = /^EDGE_SCALE = ([\d.]+)/mu.exec(python)?.[1];
   expect(Number(scale)).toBe(MARKING_OFFSET_SCALE);
   const bits = new Map<string, number>();

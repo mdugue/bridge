@@ -16,7 +16,7 @@
  *   bun scripts/ground-joins.ts [tile …]
  */
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import { doorJoins } from "../lib/city/doors";
 import { plinthJoins } from "../lib/city/plinths";
 import type {
@@ -84,8 +84,8 @@ interface Ground {
 async function tileGround(site: Site, tile: string): Promise<Ground> {
   const src = dgmSourceFiles(site, tile);
   const dgm = await readDgmFile(
-    join(process.cwd(), src.tif),
-    join(process.cwd(), src.tfw),
+    nodePath.join(process.cwd(), src.tif),
+    nodePath.join(process.cwd(), src.tfw),
     "native"
   );
   const elevations = shapeDgm(
@@ -107,7 +107,10 @@ async function tileGround(site: Site, tile: string): Promise<Ground> {
 
 /** The LoD2 walls' street side the bake draws as plinths. */
 function plinths(site: Site, tile: string): PlinthFeature[] {
-  const path = join(process.cwd(), cityMeshSourceFiles(site, tile).plinths);
+  const path = nodePath.join(
+    process.cwd(),
+    cityMeshSourceFiles(site, tile).plinths
+  );
   return existsSync(path)
     ? ((
         JSON.parse(readFileSync(path, "utf-8")) as {
@@ -119,7 +122,10 @@ function plinths(site: Site, tile: string): PlinthFeature[] {
 
 /** OSM's entrances the bake draws as doors on a tile's walls. */
 function doors(site: Site, tile: string): DoorFeature[] {
-  const path = join(process.cwd(), cityMeshSourceFiles(site, tile).doors);
+  const path = nodePath.join(
+    process.cwd(),
+    cityMeshSourceFiles(site, tile).doors
+  );
   return existsSync(path)
     ? ((
         JSON.parse(readFileSync(path, "utf-8")) as {
@@ -131,7 +137,10 @@ function doors(site: Site, tile: string): DoorFeature[] {
 
 /** The shopfront walls the bake draws on a tile's ground floors. */
 function shopfronts(site: Site, tile: string): ShopfrontWall[] {
-  const path = join(process.cwd(), cityMeshSourceFiles(site, tile).shopfronts);
+  const path = nodePath.join(
+    process.cwd(),
+    cityMeshSourceFiles(site, tile).shopfronts
+  );
   return existsSync(path)
     ? Object.values(
         (JSON.parse(readFileSync(path, "utf-8")) as ShopfrontFile).buildings
@@ -157,7 +166,10 @@ function shopfrontWallJoins(
 
 /** The scan's small structures the bake appends to a tile's buildings. */
 function smallBuildings(site: Site, tile: string): SmallBuildingFeature[] {
-  const path = join(process.cwd(), cityMeshSourceFiles(site, tile).smallBuild);
+  const path = nodePath.join(
+    process.cwd(),
+    cityMeshSourceFiles(site, tile).smallBuild
+  );
   return existsSync(path)
     ? ((
         JSON.parse(readFileSync(path, "utf-8")) as {

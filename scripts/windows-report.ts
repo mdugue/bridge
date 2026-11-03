@@ -10,7 +10,7 @@
  * output files.
  */
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import {
   hasObjectFlag,
   OBJECT_FLAG_FLAT_ROOF,
@@ -30,10 +30,10 @@ import type { FacadeModel, WindowFile, WindowType } from "../lib/city/windows";
 import { siteFromArgs } from "../sites";
 import { bakeCityMesh } from "./bake-city-mesh";
 
-const ROOT = join(import.meta.dir, "..");
+const ROOT = nodePath.join(import.meta.dir, "..");
 const read = <T>(path: string): T | undefined =>
-  existsSync(join(ROOT, path))
-    ? (JSON.parse(readFileSync(join(ROOT, path), "utf-8")) as T)
+  existsSync(nodePath.join(ROOT, path))
+    ? (JSON.parse(readFileSync(nodePath.join(ROOT, path), "utf-8")) as T)
     : undefined;
 
 const median = (xs: number[]) => {

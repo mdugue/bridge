@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 import { deflateSync } from "node:zlib";
 import { SITES } from "../../sites";
 import { DRESDEN } from "../../sites/dresden";
@@ -137,7 +137,9 @@ describe("decodeGreyPng", () => {
   test("decodes one class raster per baked site to valid class ids", async () => {
     // Dresden's is committed; another site's is there once it is baked.
     const dirs = Object.values(SITES)
-      .map((site) => join(import.meta.dir, "../..", siteDataDir(site), "dlm"))
+      .map((site) =>
+        path.join(import.meta.dir, "../..", siteDataDir(site), "dlm")
+      )
       .filter((dir) => existsSync(dir));
     expect(dirs.length).toBeGreaterThan(0);
     const maxId = Math.max(...LANDCOVER_CLASSES.map((c) => c.id));
@@ -145,7 +147,7 @@ describe("decodeGreyPng", () => {
       const file = readdirSync(dir).find((f) => /^landcover_.*\.png$/u.test(f));
       expect(file).toBeDefined();
       const out = await decodeGreyPng(
-        new Uint8Array(readFileSync(join(dir, file ?? "")))
+        new Uint8Array(readFileSync(path.join(dir, file ?? "")))
       );
       expect(out.data.length).toBe(out.width * out.height);
       let max = 0;
@@ -159,16 +161,21 @@ describe("decodeGreyPng", () => {
   });
 
   test("decodes the committed paving rasters as four bytes per texel", async () => {
-    const dir = join(import.meta.dir, "../..", siteDataDir(DRESDEN), "dlm");
+    const dir = path.join(
+      import.meta.dir,
+      "../..",
+      siteDataDir(DRESDEN),
+      "dlm"
+    );
     const file = readdirSync(dir).find((f) => /^surface_.*\.png$/u.test(f));
     if (!file) {
       throw new Error(`no committed surface raster in ${dir}`);
     }
     const { size } = JSON.parse(
-      readFileSync(join(dir, file.replace(/\.png$/u, ".json")), "utf-8")
+      readFileSync(path.join(dir, file.replace(/\.png$/u, ".json")), "utf-8")
     ) as { size: number };
     const out = await decodeGreyPng(
-      new Uint8Array(readFileSync(join(dir, file)))
+      new Uint8Array(readFileSync(path.join(dir, file)))
     );
     // Interleaved R0 G0 B0 A0 R1 …: four times as wide as the raster.
     expect(out.width).toBe(4 * size);

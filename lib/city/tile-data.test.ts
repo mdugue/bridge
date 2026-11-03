@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 import { DRESDEN } from "../../sites/dresden";
 import { SITES } from "../../sites/index";
 import type { Site } from "./site";
@@ -26,7 +26,7 @@ import {
 // is still missing. It covers every site whose data is on disk (Dresden's is
 // committed; another site's is there once it is fetched).
 
-const ROOT = join(import.meta.dir, "..", "..");
+const ROOT = path.join(import.meta.dir, "..", "..");
 
 /**
  * Artifact kinds a tile may lack for a reason in the data, not in the bake.
@@ -41,10 +41,10 @@ function kindsOnDisk(site: Site): Map<string, Set<string>> {
   const kinds = new Map<string, Set<string>>();
   for (const sub of ["dlm", "dop"]) {
     const dir = `${siteDataDir(site)}/${sub}`;
-    if (!existsSync(join(ROOT, dir))) {
+    if (!existsSync(path.join(ROOT, dir))) {
       continue;
     }
-    for (const name of readdirSync(join(ROOT, dir))) {
+    for (const name of readdirSync(path.join(ROOT, dir))) {
       const m = tileInName.exec(name);
       if (!m) {
         continue;
@@ -59,7 +59,7 @@ function kindsOnDisk(site: Site): Map<string, Set<string>> {
 }
 
 const ON_DISK = Object.values(SITES).filter((site) =>
-  existsSync(join(ROOT, siteDataDir(site), "dlm"))
+  existsSync(path.join(ROOT, siteDataDir(site), "dlm"))
 );
 
 test("the committed site's data is on disk", () => {
@@ -122,7 +122,7 @@ test("every Dresden tile has every artifact the viewer reads and every bake inpu
       dgmSourceFiles(DRESDEN, tile).tif,
       dgmSourceFiles(DRESDEN, tile).tfw,
     ];
-    missing.push(...files.filter((f) => !existsSync(join(ROOT, f))));
+    missing.push(...files.filter((f) => !existsSync(path.join(ROOT, f))));
   }
   expect(missing).toEqual([]);
 });
