@@ -173,20 +173,26 @@ export interface Dictation {
 export function dictationProblem(error: string): string | null {
   switch (error) {
     case "aborted":
-    case "no-speech":
+    case "no-speech": {
       // they stopped, or said nothing: nothing to explain
       return null;
+    }
     case "not-allowed":
-    case "service-not-allowed":
+    case "service-not-allowed": {
       return "Das Mikrofon ist für diese Seite nicht freigegeben.";
-    case "audio-capture":
+    }
+    case "audio-capture": {
       return "Kein Mikrofon gefunden.";
-    case "network":
+    }
+    case "network": {
       return "Die Spracherkennung des Browsers ist nicht erreichbar.";
-    case "language-not-supported":
+    }
+    case "language-not-supported": {
       return "Der Browser erkennt kein Deutsch.";
-    default:
+    }
+    default: {
       return "Die Spracherkennung hat nicht geklappt.";
+    }
   }
 }
 

@@ -903,28 +903,39 @@ function toolLine(name: string, input: unknown, output?: unknown): string {
       : argText(refused.hinweis) || "Abgelehnt";
   }
   switch (name) {
-    case "suche_stadt":
+    case "suche_stadt": {
       return `Sucht „${argText(args.anfrage)}“`;
-    case "in_der_naehe":
+    }
+    case "in_der_naehe": {
       return "Sieht sich in der Nähe um";
-    case "fakten":
+    }
+    case "fakten": {
       return `Liest die Fakten zu ${argText(args.id)}`;
-    case "quellen":
+    }
+    case "quellen": {
       return "Liest die Quellen";
-    case "wo_bin_ich":
+    }
+    case "wo_bin_ich": {
       return "Schaut, wo du stehst";
-    case "was_ist_da":
+    }
+    case "was_ist_da": {
       return "Fragt, was dort steht, wohin die Ansicht zeigt";
-    case "zeige":
+    }
+    case "zeige": {
       return args.aus_der_luft ? "Fliegt hin" : "Geht hin";
-    case "setze_zeit":
+    }
+    case "setze_zeit": {
       return `Stellt die Uhr auf ${argText(args.stunde)} Uhr`;
-    case "setze_stil":
+    }
+    case "setze_stil": {
       return `Wechselt den Bildstil (${argText(args.stil)})`;
-    case "datenschicht":
+    }
+    case "datenschicht": {
       return `${args.an ? "Zeigt" : "Verbirgt"} eine Datenebene`;
-    default:
+    }
+    default: {
       return name;
+    }
   }
 }
 
