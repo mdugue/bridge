@@ -2732,7 +2732,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
     the sun turned in by its columns); where it passes through, the bark
     darkens to half, softly to the rim, by day; and under the crown the
     hidden sky darkens it toward the crown's base (× 0.8). A bare season
-    keeps 30 % of it (`trunkLeaf`, the generic phenology's leaf; a cone's or
+    keeps 30 % of it (`crownLeaf`, the generic phenology's leaf; a cone's or
     pine's trunk keeps its crown's shade the year round).
   - **the crown darker inside and underneath** (`crownOcclusion`, every
     crown, every form): a factor on the crown's colour per vertex, cool
@@ -2754,7 +2754,8 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   - **under the crown** (off forest and copse, whose floor is its own; the
     crown's reach 0.8 × the trunk's drawn length, 1.5–7 m): a multiplied
     glaze darkens and cools the ground in the crown's shade, ragged at the
-    edge, with moss on a lawn; where the crown's shadow falls (thrown off
+    edge, with moss on a lawn (a bare broadleaf crown keeps 30 % of the
+    shade, `crownLeaf`; a cone's or pine's all of it the year round); where the crown's shadow falls (thrown off
     along the sun by the tree's height, at most three crowns away, drawn
     out by a low sun) and the shadow map shades the ground, sun flecks
     lift it back up to about the sun, by day, within 45 m (the glaze
@@ -2805,7 +2806,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
     mulch showing through); a pit 0.9–3 m off the kerb gets, for 70 % of
     them, an anthracite guard hoop between it and the road, 0.45 m short
     of the kerb and along it (the road distance's gradient is the way to
-    the road; none where the trunk's foot and its roots' bulge, 1.55 ×
+    the road; none on a tile without the edge raster, nor where the trunk's foot and its roots' bulge, 1.55 ×
     its radius, reach past it) — a small mesh, opaque, standard-lit, not a
     shadow caster, its posts on 0.2 m under the ground.
   Every part lies on the ground's slope at its trunk (8 × 8 cells; the

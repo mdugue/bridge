@@ -198,5 +198,6 @@ test("leaf litter lies from the turn of the leaves into the winter", () => {
   expect(leafLitterAt(30)).toBeLessThan(0.3);
   expect(leafLitterAt(100)).toBe(0);
   // continuous over the new year
-  expect(Math.abs(leafLitterAt(365.9) - leafLitterAt(0))).toBeLessThan(0.01);
+  // (climateDay's days run 0 … 365, YEAR)
+  expect(Math.abs(leafLitterAt(364.99) - leafLitterAt(0))).toBeLessThan(0.01);
 });

@@ -36,6 +36,7 @@ import {
   fract,
   Fn,
   fwidth,
+  If,
   length,
   materialColor,
   max,
@@ -1085,13 +1086,21 @@ function splatColour(splat: SplatNodes): V3 {
     // afar — and only far out, where a square is under a few pixels, the
     // plain mip as before.
     const coarseNdvi = splat.ndvi
-      ? mix(
-          bsplineSample(splat.ndvi, uv, texelSize(splat.ndvi, uv), NDVI_LEVEL)
-            .r,
-          texture(splat.ndvi, inp.uv).bias(float(2.5)).r,
-          smoothstep(6, 16, inp.fw)
-        ).toVar()
+      ? texture(splat.ndvi, inp.uv).bias(float(2.5)).r.toVar()
       : undefined;
+    if (splat.ndvi && coarseNdvi) {
+      const ndvi = splat.ndvi;
+      // (explicit-level reads: safe in a branch; none past 16 m a pixel)
+      If(inp.fw.lessThan(16), () => {
+        coarseNdvi.assign(
+          mix(
+            bsplineSample(ndvi, uv, texelSize(ndvi, uv), NDVI_LEVEL).r,
+            coarseNdvi,
+            smoothstep(6, 16, inp.fw)
+          )
+        );
+      });
+    }
     if (coarseNdvi) {
       meadowNdvi(col, coarseNdvi, MEADOW_NDVI);
     }

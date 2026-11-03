@@ -546,13 +546,13 @@ const LITTER_KNOTS: readonly (readonly [number, number])[] = [
   [270, 0],
   [305, 1],
   [335, 1],
-  [366, 0.3],
+  [YEAR, 0.3],
 ];
 
 /** How much fallen leaf lies under the trees on `day` (0..1; a day of
  *  Dresden's year, `climateDay`). */
 export function leafLitterAt(day: number): number {
-  const d = ((day % 366) + 366) % 366;
+  const d = ((day % YEAR) + YEAR) % YEAR;
   for (let i = 1; i < LITTER_KNOTS.length; i++) {
     const [b, vb] = LITTER_KNOTS[i];
     if (d <= b) {

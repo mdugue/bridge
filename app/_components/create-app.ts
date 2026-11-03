@@ -175,7 +175,7 @@ import {
   seasonAt,
   seasonShiftFor,
 } from "@/lib/city/tree-season";
-import { footLitter } from "./tree-foot";
+import { crownLeaf, footLitter } from "./tree-foot";
 import {
   fetchOptionalJson,
   fetchRequiredJson,
@@ -272,7 +272,6 @@ import { attachTouchControls } from "./touch-controls";
 import {
   createVegetationLod,
   setCrownTime,
-  trunkLeaf,
   type VegetationControl,
 } from "./vegetation-layer";
 import { createStyleResources, setClaySection } from "./visual-style";
@@ -1611,7 +1610,7 @@ async function bootApp(
   // their crowns (vegetation-layer.ts) follow the same day
   const groundSeason = (day: number): void => {
     footLitter.value = leafLitterAt(day);
-    trunkLeaf.value = seasonAt(day, 0).leaf;
+    crownLeaf.value = seasonAt(day, 0).leaf;
   };
   groundSeason(climateDay(Math.floor(dayOfYear(opts.initialDate)), climate));
   const seasonClock = createSeasonClock(opts.initialDate, (calendar) => {

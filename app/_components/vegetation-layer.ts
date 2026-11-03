@@ -124,11 +124,13 @@ import { TRUNK_BASE } from "@/lib/city/tree-family";
 import {
   buildFootGeos,
   footClock,
+  crownLeaf,
   FOOT_SHOWN_M,
   type FootGeos,
   MULCH_SRGB,
   type FootMaterials,
   rootSeed,
+  seasonalFoot,
   treeFeet,
 } from "./tree-foot";
 
@@ -1402,7 +1404,7 @@ const BARE_CROWN = 0.3;
  * the ray from the bark to the sun is tested against it in that frame (the
  * sun turned in by the matrix's columns: no inverse); where it passes
  * through the crown the trunk is in its shade, softly to the rim, less in
- * a bare season (`trunkLeaf`). Under the crown the sky is hidden too: the
+ * a bare season (`crownLeaf`). Under the crown the sky is hidden too: the
  * trunk darkens toward the crown's base. Returns the factor for the colour.
  */
 function crownShade(
@@ -1420,7 +1422,7 @@ function crownShade(
   // a needle tree keeps its crown the year round
   const leaf = evergreen
     ? float(1)
-    : mix(float(BARE_CROWN), float(1), trunkLeaf);
+    : mix(float(BARE_CROWN), float(1), crownLeaf);
   // under the crown: the sky hidden more toward its base
   const base = TRUNK_H + CROWN_R * 0.5 - CROWN_R;
   const sky = mix(
@@ -1448,10 +1450,6 @@ function crownShade(
     .mul(smoothstep(0.0, 0.08, sun.y));
   return sky.mul(mix(float(1), float(CROWN_ON_TRUNK), through.mul(leaf)));
 }
-
-/** How leafy the crowns are today (0 bare, 1 in full leaf; the generic
- *  phenology's), for the trunks' shade under them (`crownShade`). */
-export const trunkLeaf = uniform(1);
 
 /**
  * Per-tree crown colour. `v` is the deterministic hash jitter (keeps neighbours
@@ -1604,7 +1602,7 @@ function buildTreeCell(
     extras.forEach((e, i) => trunks.setMatrixAt(i, e.trunk));
     paintBark(trunks, 0, extras);
     finishInstances(trunks);
-    const feet = feetOf(trunks, geos, ground, footMat, true);
+    const feet = feetOf(trunks, geos, ground, footMat, false);
     return {
       chunk: null,
       loose: feet ? { feet, trunks } : undefined,
@@ -1651,9 +1649,9 @@ function buildTreeCell(
   }
   trunks.castShadow = true;
   const feet = [
-    // no autumn leaves under a needle tree (a cell of cones or pines)
-    ...(feetOf(trunks, geos, ground, footMat, cell.form === "broad") ?? []),
-    ...((own && feetOf(own, geos, ground, footMat, true)) ?? []),
+    // a cell of cones or pines: needle trees' feet
+    ...(feetOf(trunks, geos, ground, footMat, cell.form !== "broad") ?? []),
+    ...((own && feetOf(own, geos, ground, footMat, false)) ?? []),
   ];
   // The far tier: every other tree of a dense chunk, drawn wider (see
   // keepInFarTier), so a forest stays a closed canopy far away.
@@ -1708,10 +1706,10 @@ function feetOf(
   geos: TreeGeos,
   ground: GroundContext,
   footMat: FootMaterials | undefined,
-  litter: boolean
+  needle: boolean
 ): Instances[] | undefined {
   return footMat && geos.foot
-    ? treeFeet(geos.foot, footMat, trunks, footSlopes(trunks, ground), litter)
+    ? treeFeet(geos.foot, footMat, trunks, footSlopes(trunks, ground), needle)
     : undefined;
 }
 
@@ -1911,9 +1909,9 @@ interface LooseFeet {
  *  near enough to show them (as `createVegetationLod` does a chunk's). */
 function showLooseFeet(all: readonly LooseFeet[], cameraPos: Vector3): void {
   for (const { feet, trunks } of all) {
-    const on = nearestOf([trunks], cameraPos) < FOOT_SHOWN_M;
+    const on = nearestOf(trunks, cameraPos) < FOOT_SHOWN_M;
     for (const f of feet) {
-      f.visible = on;
+      f.visible = on && seasonalFoot(f);
     }
   }
 }
@@ -2030,30 +2028,26 @@ export function* vegetationSteps(
 /** Metres from `cameraPos` to the chunk's nearest crown (sphere centre
  *  minus radius): what the crown tiers are planned by. */
 function nearestTree(chunk: VegetationChunk, cameraPos: Vector3): number {
-  return nearestOf([chunk.mid], cameraPos);
+  return nearestOf(chunk.mid, cameraPos);
 }
 
 /** Metres to the chunk's nearest trunk, the register's own included (their
  *  crowns are drawn by the cadastre's layer): what the feet are shown by. */
 function nearestTrunk(chunk: VegetationChunk, cameraPos: Vector3): number {
-  return nearestOf(
-    chunk.ownTrunks ? [chunk.trunks, chunk.ownTrunks] : [chunk.trunks],
-    cameraPos
+  return Math.min(
+    nearestOf(chunk.trunks, cameraPos),
+    chunk.ownTrunks
+      ? nearestOf(chunk.ownTrunks, cameraPos)
+      : Number.POSITIVE_INFINITY
   );
 }
 
-function nearestOf(sets: readonly Instances[], cameraPos: Vector3): number {
-  let near = Number.POSITIVE_INFINITY;
-  for (const set of sets) {
-    const sphere = set.geometry.boundingSphere;
-    if (sphere) {
-      near = Math.min(
-        near,
-        Math.max(cameraPos.distanceTo(sphere.center) - sphere.radius, 0)
-      );
-    }
-  }
-  return near;
+/** Metres from `cameraPos` to a set's sphere (centre minus radius). */
+function nearestOf(set: Instances, cameraPos: Vector3): number {
+  const sphere = set.geometry.boundingSphere;
+  return sphere
+    ? Math.max(cameraPos.distanceTo(sphere.center) - sphere.radius, 0)
+    : Number.POSITIVE_INFINITY;
 }
 
 function showTier(chunk: VegetationChunk, tier: CrownTier): void {
@@ -2123,7 +2117,7 @@ export function createVegetationLod(): (
         tiers[i] !== "far" &&
         nearestTrunk(all[i], cameraPos) < FOOT_SHOWN_M;
       for (const set of feet) {
-        set.visible = feetOn;
+        set.visible = feetOn && seasonalFoot(set);
       }
     }
     return changed;

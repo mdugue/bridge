@@ -51,6 +51,8 @@ import {
 } from "three/tsl";
 import {
   BUILTUP_CLASS,
+  COPSE_CLASS,
+  FOREST_CLASS,
   MEADOW_CLASS,
   RAILWAY_CLASS,
   ROAD_CLASS,
@@ -74,8 +76,8 @@ import {
   setGraph,
   setSlots,
   slotsOf,
-  slotTexture,
-  slotUniform,
+  ownSlotTexture,
+  ownSlotValue,
 } from "./material-slots";
 import {
   type F,
@@ -251,6 +253,12 @@ const SHADE_BACK_MIN = 3.1;
 /** How much fallen leaf lies (0..1): the scene's season, one value for
  *  every tile (create-app.ts, lib/city/tree-season.ts `leafLitterAt`). */
 export const footLitter = uniform(0);
+/** How leafy the crowns are today (0 bare, 1 in full leaf; the generic
+ *  phenology's): the shade a broadleaf crown lays on the ground and on
+ *  its trunk (vegetation-layer.ts `crownShade`). */
+export const crownLeaf = uniform(1);
+/** How much of its shade a bare crown still casts (its branches). */
+const BARE_SHADE = 0.3;
 
 /** The wind's clock (s) the sun flecks drift by: the crowns' own
  *  (vegetation-layer.ts `setCrownTime` keeps it). */
@@ -373,7 +381,10 @@ export interface FootMaterials {
   earth: Material;
   litter: Material;
   shade: Material;
-  guard: Material;
+  /** a needle tree's shade (no bare season), made for a tile that has any */
+  needleShade: () => Material;
+  /** none without the edge raster (no road to stand a hoop by) */
+  guard?: Material;
   tuft: Material;
   /** what the trunk's foot turns to: the ground's colour there (a graph
    *  read per vertex at the foot), the key of its build and the tile's
@@ -407,16 +418,19 @@ export function treeFeet(
   materials: FootMaterials,
   trunks: Instances,
   slopes: BufferAttribute,
-  litter = true
+  needle = false
 ): Instances[] {
   const sets: Instances[] = [];
   for (const part of PARTS) {
-    if (part === "litter" && !litter) {
+    // no autumn leaves under a needle tree, and its shade has no bare season
+    const material =
+      part === "shade" && needle ? materials.needleShade() : materials[part];
+    if ((part === "litter" && needle) || !material) {
       continue;
     }
     const feet = new Instances(
       part === "guard" ? geos.hoop : part === "tuft" ? geos.tuft : geos.quad,
-      materials[part],
+      material,
       trunks.capacity,
       trunks.instanceMatrix
     );
@@ -440,9 +454,17 @@ export function treeFeet(
     feet.receiveShadow = true;
     feet.renderOrder = ORDER[part];
     feet.name = `tree-${part}`;
+    // the leaves' set is drawn only in their season (`seasonalFoot`)
+    feet.userData.seasonal = part === "litter";
     sets.push(feet);
   }
   return sets;
+}
+
+/** Whether a foot set has anything to draw today: the fallen leaves only
+ *  while some lie (`footLitter`); every other part always. */
+export function seasonalFoot(set: Instances): boolean {
+  return set.userData.seasonal !== true || footLitter.value > 0;
 }
 
 /** What the feet's graphs read of a tile (the terrain's slots). */
@@ -462,10 +484,6 @@ const classTexel = (t: Tex, uv: V2): F => {
   const size = texelSize(t, uv);
   return byteOf(texelAt(t, ivec2(floor(uv.mul(vec2(size)))), size).r);
 };
-
-/** The forest's and the copse's class ids (lib/city/landcover.ts). */
-const FOREST_CLASS = 2;
-const COPSE_CLASS = 3;
 
 /** 1 for |x| ≥ 0.5 (a class id differs), else 0. */
 const step01 = (x: F): F => smoothstep(0.49, 0.51, x);
@@ -523,15 +541,18 @@ interface FootSlots {
   edgesTex?: Tex;
 }
 
+/** The tile's rasters, read from the drawn object's own material: under
+ *  a style's override (paper-scene.ts carries the tuft's and the hoop's
+ *  positions over) the drawing material has no slots. */
 function footSlots(r: FootRasters): FootSlots {
   return {
-    // reason: a Vector2 slot is a vec2 uniform; slotUniform types it loosely.
-    origin: slotUniform("origin", r.origin) as unknown as UniformNode<
+    // reason: a Vector2 slot is a vec2 uniform; the slot types it loosely.
+    origin: ownSlotValue("origin", r.origin) as unknown as UniformNode<
       "vec2",
       Vector2
     >,
-    classTex: slotTexture("class", r.classTexture),
-    edgesTex: r.edgesTexture && slotTexture("edges", r.edgesTexture),
+    classTex: ownSlotTexture("class", r.classTexture),
+    edgesTex: r.edgesTexture && ownSlotTexture("edges", r.edgesTexture),
   };
 }
 
@@ -1003,7 +1024,11 @@ interface ShadeGraph {
  * it only catches the shadow term (`sunLit`). Collapsed in a wood (its
  * floor is shade already) and far off.
  */
-function shadeGraph(r: FootRasters, sun?: V3): ShadeGraph {
+function shadeGraph(
+  r: FootRasters,
+  sun: V3 | undefined,
+  evergreen: boolean
+): ShadeGraph {
   const s = footSlots(r);
   const f = footFrame(s, r.size);
   const shown = float(1).sub(f.wood).mul(step(0.001, f.fade));
@@ -1093,7 +1118,11 @@ function shadeGraph(r: FootRasters, sun?: V3): ShadeGraph {
     const moss = smoothstep(0.45, 0.75, gdNoise(xy.mul(1.3).add(9.1)))
       .mul(green)
       .mul(cover);
-    const k = mix(vec3(1), SHADE, cover.mul(0.75))
+    // a bare broadleaf crown shades little; a needle tree the year round
+    const leaf = evergreen
+      ? float(1)
+      : mix(float(BARE_SHADE), float(1), crownLeaf);
+    const k = mix(vec3(1), SHADE, cover.mul(0.75).mul(leaf))
       .mul(mix(vec3(1), SHADE_MOSS, moss.mul(0.6)))
       .toVar();
     // the unmown ring on a lawn: long blades, streaked out from the trunk,
@@ -1387,9 +1416,10 @@ function shadeMaterial(
   r: FootRasters,
   slots: Slots,
   variant: string,
-  light?: GroundLight
+  light: GroundLight | undefined,
+  evergreen: boolean
 ): MeshLambertNodeMaterial {
-  const key = `tree-shade|${variant}|${light ? groundLightKey(light) : ""}`;
+  const key = `tree-shade|${evergreen ? "evergreen|" : ""}${variant}|${light ? groundLightKey(light) : ""}`;
   const sun = light?.sunDirection ?? NO_SUN;
   let bySun = shades.get(sun);
   if (!bySun) {
@@ -1398,7 +1428,7 @@ function shadeMaterial(
   }
   let graph = bySun.get(key);
   if (!graph) {
-    graph = shadeGraph(r, light?.sunDirection);
+    graph = shadeGraph(r, light?.sunDirection, evergreen);
     bySun.set(key, graph);
   }
   const { sunLit } = graph;
@@ -1510,6 +1540,7 @@ export function createFootMaterials(
     class: r.classTexture,
     edges: r.edgesTexture,
   };
+  let needleShade: Material | undefined;
   const make = (part: "ring" | "earth" | "litter"): Material => {
     const key = `tree-${part}|${variant}`;
     const graph = cached(key, () =>
@@ -1521,8 +1552,10 @@ export function createFootMaterials(
     ring: make("ring"),
     earth: make("earth"),
     litter: make("litter"),
-    shade: shadeMaterial(r, slots, variant, light),
-    guard: guardMaterial(r, slots, variant),
+    shade: shadeMaterial(r, slots, variant, light, false),
+    needleShade: () =>
+      (needleShade ??= shadeMaterial(r, slots, variant, light, true)),
+    guard: r.edgesTexture ? guardMaterial(r, slots, variant) : undefined,
     tuft: tuftMaterial(r, slots, variant, light),
     trunkEarth: {
       colour: trunkEarthOf(r, variant),
