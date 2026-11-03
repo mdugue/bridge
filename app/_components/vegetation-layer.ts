@@ -30,6 +30,7 @@ import {
   min,
   modelWorldMatrix,
   mix,
+  normalGeometry,
   normalize,
   positionGeometry,
   positionWorld,
@@ -834,6 +835,35 @@ function crownLight(
   };
 }
 
+/** The crown's underside at the most (its colour × this, cool): the sky
+ *  reaches it only past the crown's own rim. */
+const CROWN_UNDER = vec3(0.56, 0.62, 0.66);
+/** A trough between the crown's lobes (its colour × this): the light
+ *  reaches into it only from above. */
+const CROWN_TROUGH = vec3(0.8, 0.84, 0.86);
+
+/**
+ * The crown's own occlusion, a factor on its colour: darker and cooler
+ * underneath (the radial normal's height, so every form, broad or needle,
+ * darkens towards its base) and in the troughs between its lobes (the
+ * shaped vertex's distance from the generic crown's centre, so each
+ * tree's own bulges count; a cone's flank, nearer that centre at mid
+ * height, darkens a little too). Per vertex: the crown's light glides
+ * over it as before, only the colour it lights is deeper inside. Not on
+ * a printed crown: the Comic pass reads its light by the ink's value.
+ */
+function crownOcclusion(shape: V3): V3 {
+  const under = smoothstep(-0.85, 0.35, normalGeometry.y);
+  const reach = length(shape.sub(vec3(0, TRUNK_H + CROWN_R * 0.5, 0))).div(
+    CROWN_R
+  );
+  const lobe = smoothstep(0.72, 1.15, reach);
+  const ao = mix(CROWN_UNDER, vec3(1), under).mul(
+    mix(CROWN_TROUGH, vec3(1), lobe)
+  );
+  return mix(ao, vec3(1), crownsPrinted);
+}
+
 /**
  * Sage crown material with a backlit shimmer: when the sun is behind the
  * canopy the camera-facing leaves glow warm (crownLight). Shared by every
@@ -862,10 +892,11 @@ export function buildCrownMaterial(
   m.positionNode = instancePosition(sway.local);
   m.castShadowPositionNode = instancePosition(shape);
   const crownScale = varying(length(instanceColumn(1).xyz));
+  const occluded = varying(crownOcclusion(shape));
   // (a printed crown has no brightness pulse: its light is cut in two
   // steps, and the pulse would flip it between them)
   const gust = varying(sway.gust.mul(float(1).sub(crownsPrinted)));
-  const tinted = materialColor.mul(instanceTint());
+  const tinted = materialColor.mul(instanceTint()).mul(occluded);
   if (!bare) {
     const lit = crownLight(
       u,

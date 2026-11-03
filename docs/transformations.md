@@ -2699,6 +2699,13 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
     darkens to half, softly to the rim, by day; and under the crown the
     hidden sky darkens it toward the crown's base (× 0.8). A bare season
     keeps 30 % of it (`trunkLeaf`, the generic phenology's leaf).
+  - **the crown darker inside and underneath** (`crownOcclusion`, every
+    crown, every form): a factor on the crown's colour per vertex, cool
+    and dark toward its underside (the radial normal's height, down to
+    × (0.56, 0.62, 0.66)) and in the troughs between its lobes (the shaped
+    vertex nearer the crown's centre than 1.15 R, down to × 0.8), so the
+    crown's mass reads as one volume over the trunk instead of a lit
+    ball. Not while Comic prints the crowns.
   - in paving — the class raster's built-up, road, railway or unclassified
     land, off the baked lawn (the edge raster's meadow side) — a **tree
     pit**: mulched earth with a grain, litter flecks and the odd tuft of
