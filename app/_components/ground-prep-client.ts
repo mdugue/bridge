@@ -94,7 +94,7 @@ function startWorker(): Worker | null {
   }
   let w: Worker;
   try {
-    w = new Worker(new URL("./ground-worker.ts", import.meta.url), {
+    w = new Worker(new URL("ground-worker.ts", import.meta.url), {
       type: "module",
       name: "ground",
     });

@@ -101,7 +101,7 @@ function startWorker(): Worker | null {
   });
   let w: Worker;
   try {
-    w = new Worker(new URL("./bvh-worker.ts", import.meta.url), {
+    w = new Worker(new URL("bvh-worker.ts", import.meta.url), {
       type: "module",
       name: "bvh",
     });
