@@ -15,7 +15,11 @@
  * `weld` itself. Build-time only.
  */
 import { Primitive } from "@gltf-transform/core";
-import type { Document, Transform } from "@gltf-transform/core";
+import type {
+  Document,
+  Transform,
+  TransformContext,
+} from "@gltf-transform/core";
 import {
   compactPrimitive,
   createTransform,
@@ -130,7 +134,10 @@ export function weldRemap(
 
 /** `weld()`, faster where it can be (see the module's comment). */
 export function weldExact(): Transform {
-  return createTransform("weldExact", (doc: Document, context) => {
+  const transform = async (
+    doc: Document,
+    context?: TransformContext
+  ): Promise<void> => {
     const meshes = doc.getRoot().listMeshes();
     const prims = meshes.flatMap((mesh) => mesh.listPrimitives());
     if (
@@ -140,9 +147,8 @@ export function weldExact(): Transform {
         (prim) => getPrimitiveVertexCount(prim, VertexCountMethod.RENDER) === 0
       )
     ) {
-      // weld's transform is async under Transform's void type; returned,
-      // doc.transform awaits it
-      return weld()(doc, context);
+      await (weld() as unknown as AsyncTransform)(doc, context);
+      return;
     }
     for (const prim of prims) {
       const position = prim.getAttribute("POSITION");
@@ -163,6 +169,13 @@ export function weldExact(): Transform {
       );
       compactPrimitive(prim, remap, count);
     }
-    return undefined;
-  });
+  };
+  return createTransform("weldExact", transform as unknown as Transform);
 }
+
+/** What `weld()` and `doc.transform` do under gltf-transform's void
+ *  `Transform` type: the transform is async, and is awaited. */
+type AsyncTransform = (
+  doc: Document,
+  context?: TransformContext
+) => Promise<void>;

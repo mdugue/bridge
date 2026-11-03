@@ -12,12 +12,19 @@ export default defineConfig({
     eqeqeq: ["error", "always", { null: "ignore" }],
     "no-eq-null": "off",
     "typescript/prefer-optional-chain": "error",
+    // `() => setKey(null)` hides nothing; a returned void expression can.
+    "typescript/no-confusing-void-expression": [
+      "error",
+      { ignoreArrowShorthand: true },
+    ],
+    // An async function that only returns a promise is what
+    // promise-function-async asks for: the typed require-await allows it, the
+    // base rule does not. Awaiting a return matters only inside a try.
+    "require-await": "off",
+    "typescript/require-await": "error",
+    "typescript/return-await": ["error", "in-try-catch"],
 
-    // Their autofix breaks working code here: a dropped return, a typed array
-    // turned into a plain one, shifted promise timing, new possibly-undefined.
-    "typescript/no-confusing-void-expression": "off",
-    "typescript/promise-function-async": "off",
-    "unicorn/prefer-at": "off",
+    // Takes `typedArray.slice()` for an array: its fix makes a plain one.
     "unicorn/prefer-spread": "off",
 
     // They fight how this code is written: helpers below their callers, the

@@ -31,6 +31,13 @@ function fakePage() {
   };
 }
 
+/** Lets settled promises run their reactions, however many hops they take. */
+async function flush(): Promise<void> {
+  for (let hop = 0; hop < 8; hop += 1) {
+    await Promise.resolve();
+  }
+}
+
 beforeEach(() => {
   jest.useFakeTimers();
 });
@@ -70,14 +77,14 @@ test("a retry waits for a usable page: at once when it is, on 'online', and ever
   p.online(false);
   void gate.whenUsable().then(wake);
   jest.advanceTimersByTime(14_999);
-  await Promise.resolve();
+  await flush();
   expect(woken).toBe(0);
   jest.advanceTimersByTime(1);
-  await Promise.resolve();
+  await flush();
   expect(woken).toBe(1);
   void gate.whenUsable().then(wake);
   p.online(true);
-  await Promise.resolve();
+  await flush();
   expect(woken).toBe(2);
 });
 
