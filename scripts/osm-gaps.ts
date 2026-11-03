@@ -21,7 +21,7 @@ import { loadStadtwissen } from "./stadtwissen-files";
 
 const { site, rest } = siteFromArgs(process.argv.slice(2));
 const topAt = rest.indexOf("--top");
-const top = topAt !== -1 ? Number(rest[topAt + 1]) || 20 : 20;
+const top = topAt === -1 ? 20 : Number(rest[topAt + 1]) || 20;
 const { index, tiles } = loadStadtwissen(site.id);
 const tasks = osmGaps(index, tiles());
 

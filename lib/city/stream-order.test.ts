@@ -210,13 +210,13 @@ test("a full cache admits a tile's ground before its buildings, and unloads it l
     a: ReturnType<typeof seen>,
     b: ReturnType<typeof seen>
   ): number =>
-    a.traversal.lastFrameVisited !== b.traversal.lastFrameVisited
-      ? a.traversal.lastFrameVisited > b.traversal.lastFrameVisited
-        ? -1
-        : 1
-      : a.internal.depth > b.internal.depth
+    a.traversal.lastFrameVisited === b.traversal.lastFrameVisited
+      ? a.internal.depth > b.internal.depth
         ? 1
-        : -1;
+        : -1
+      : a.traversal.lastFrameVisited > b.traversal.lastFrameVisited
+        ? -1
+        : 1;
   const order = keepOrder(base);
   const city = seen("city", 10);
   const far = seen("far", 10);

@@ -302,11 +302,11 @@ function inSite(
   for (const layer of layers) {
     if (layer.epsg === null || layer.epsg === epsg) {
       features.push(...layer.features);
-    } else if (utmZone(layer.epsg) !== null) {
+    } else if (utmZone(layer.epsg) === null) {
+      foreign.push(`${layer.name} (EPSG:${layer.epsg})`);
+    } else {
       features.push(...mapPoints(layer.features, carryOver(layer.epsg, epsg)));
       carried = true;
-    } else {
-      foreign.push(`${layer.name} (EPSG:${layer.epsg})`);
     }
   }
   return { features, carried, foreign };

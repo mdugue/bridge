@@ -102,13 +102,13 @@ export async function readDgm(
   let bounds: TerrainBounds;
   if (embedded && !isPixelSpaceBounds(embedded, width, height)) {
     bounds = embedded as TerrainBounds;
-  } else if (tfw !== null) {
-    bounds = tfwToBounds(tfw, width, height);
-  } else {
+  } else if (tfw === null) {
     throw new Error(
       "DGM GeoTIFF has no embedded georeferencing and no readable .tfw sidecar. " +
         "Re-run `bun run fetch` (it writes the georeferencing), or embed it: gdal_translate -a_srs EPSG:<the provider's CRS> in.tif out.tif"
     );
+  } else {
+    bounds = tfwToBounds(tfw, width, height);
   }
   const raster = await image.readRasters(
     size === "native"

@@ -91,13 +91,13 @@ export function chooseSample<T>(
   const votes = new Map<string, { best: PickSample<T>; count: number }>();
   for (const s of samples) {
     const v = votes.get(s.key);
-    if (!v) {
-      votes.set(s.key, { best: s, count: 1 });
-    } else {
+    if (v) {
       v.count += 1;
       if (s.distance < v.best.distance) {
         v.best = s;
       }
+    } else {
+      votes.set(s.key, { best: s, count: 1 });
     }
   }
   let winner: { best: PickSample<T>; count: number } | null = null;

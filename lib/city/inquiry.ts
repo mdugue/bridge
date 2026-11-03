@@ -511,7 +511,7 @@ function buildingCard(
     osmHeight ? "Höhe" : "",
     t.name ? "Name" : "",
     t.address ? "Adresse" : "",
-    t.levels !== NO_FACT ? "Geschosse" : "",
+    t.levels === NO_FACT ? "" : "Geschosse",
     t.heritage ? "Denkmal" : "",
   ].filter(Boolean);
   const sources: Stated[] = buildingSources(inquiry, provenance, credits, {

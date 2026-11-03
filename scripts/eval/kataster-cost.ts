@@ -111,7 +111,7 @@ const heights: ((x: number, y: number) => number | null)[] = [];
 // `--site <id>` measures another site than the reference one.
 const siteArg = process.argv.indexOf("--site");
 const evalSite =
-  (siteArg !== -1 ? siteById(process.argv[siteArg + 1] ?? "") : undefined) ??
+  (siteArg === -1 ? undefined : siteById(process.argv[siteArg + 1] ?? "")) ??
   SITES[REFERENCE_SITE];
 for (const tile of tileIds(evalSite)) {
   const heightAt = await heightAtFor(tile);

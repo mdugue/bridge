@@ -228,14 +228,14 @@ export function pointFeatures(
     };
     if (Number.isNaN(h)) {
       out.push({ geometry, properties: null });
-    } else if (!Number.isNaN(r)) {
+    } else if (Number.isNaN(r)) {
+      out.push({ geometry, properties: flaggedProperties(h, flags) });
+    } else {
       const extra: CanopyExtraFeature = {
         geometry,
         properties: { ...flaggedProperties(h, flags), r },
       };
       out.push(extra);
-    } else {
-      out.push({ geometry, properties: flaggedProperties(h, flags) });
     }
   }
   return out;

@@ -228,19 +228,7 @@ export function prepareGround(input: GroundPrepInput): GroundPrep {
   };
   const out: GroundPrep = {};
   let projected: (i: number, p: Float64Array) => void;
-  if (input.grid !== null) {
-    const elevations = new Float32Array(input.grid * input.grid);
-    for (let i = 0; i < elevations.length; i++) {
-      atData(i);
-      elevations[i] = data[2];
-    }
-    out.elevations = elevations;
-    projected = (i, p) => {
-      atData(i);
-      p[0] = data[0] + cx;
-      p[1] = data[1] + cy;
-    };
-  } else {
+  if (input.grid === null) {
     const { count } = input;
     const xy = new Float64Array(count * 2);
     const z = new Float32Array(count);
@@ -264,6 +252,18 @@ export function prepareGround(input: GroundPrepInput): GroundPrep {
     projected = (i, p) => {
       p[0] = xy[2 * i];
       p[1] = xy[2 * i + 1];
+    };
+  } else {
+    const elevations = new Float32Array(input.grid * input.grid);
+    for (let i = 0; i < elevations.length; i++) {
+      atData(i);
+      elevations[i] = data[2];
+    }
+    out.elevations = elevations;
+    projected = (i, p) => {
+      atData(i);
+      p[0] = data[0] + cx;
+      p[1] = data[1] + cy;
     };
   }
   if (input.mask && input.index) {

@@ -3100,17 +3100,17 @@ async function bootApp(
     // the feet until its own details are built, then let it jump. Nor does
     // a moment with nothing in flight mid-boot (between two stages) sweep
     // it out and lift it: only the end of the load does.
-    const frontier = !bootLoaded
-      ? bootFrontier(
-          ((stageFractions.get("surroundings") ?? 0) +
-            (stageFractions.get("details") ?? 0)) /
-            2
-        )
-      : loadFrontier(
+    const frontier = bootLoaded
+      ? loadFrontier(
           siteTileBounds,
           stream.pendingSiteTiles(),
           at.x + offset.cx,
           offset.cy - at.z
+        )
+      : bootFrontier(
+          ((stageFractions.get("surroundings") ?? 0) +
+            (stageFractions.get("details") ?? 0)) /
+            2
         );
     loadVeil = stepVeil(loadVeil, frontier, dt);
     // an exported image is the city, not its loading (nor is Modell's
