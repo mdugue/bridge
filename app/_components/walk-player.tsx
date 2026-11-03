@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { Newsreader } from "next/font/google";
 import Image from "next/image";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   type MentionRun,
   mentionRuns,
@@ -800,13 +800,20 @@ function useStopReading(stop: WalkStop | undefined, notes: string[]) {
     () => (stop && reading ? stopSpeech(stop, notes) : null),
     [stop, reading, notes]
   );
+  // the latest engine, read when a stop starts: a voice list that grows
+  // late (Chrome's online voices) does not start the stop over
+  const engine = useRef(speech);
+  useEffect(() => {
+    engine.current = speech;
+  });
   useEffect(() => {
     if (said) {
-      speech.speakParts(said);
-      // a new stop, or reading switched off, cuts this one off
-      return speech.stop;
+      engine.current.speakParts(said);
+      // a new stop, another voice picked, or reading switched off, cuts
+      // this one off
+      return engine.current.stop;
     }
-  }, [said, speech]);
+  }, [said, speech.voice]);
   return { reading, setReading, speech };
 }
 
@@ -885,7 +892,13 @@ export function WalkCard({
           <StopHeading index={index} walk={walk} />
           <CardActions
             onClose={onClose}
-            onRead={() => setReading((r) => !r)}
+            onRead={() => {
+              // iOS speaks only what a tap began
+              if (!reading) {
+                speech.prime();
+              }
+              setReading((r) => !r);
+            }}
             reading={reading}
             supported={speech.supported}
           />
