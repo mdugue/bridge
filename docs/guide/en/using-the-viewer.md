@@ -444,7 +444,8 @@ The button in the corner opens a panel with three tabs.
   answers aloud, and the *Hörmodus* softly darkens the edges and lets
   the scene rest — for walking with the phone in your pocket, together with
   *Live* in the toolbar. "What is that up ahead?" asks the city model
-  what stands at the centre of the view and opens its card.
+  what stands at the centre of the view (in Modell: where it is aligned)
+  and opens its card.
 - **Steuerung** ("controls") — the full controls table, folded until you
   open it (the bar over the scene shows the first few).
 

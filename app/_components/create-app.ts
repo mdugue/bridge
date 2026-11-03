@@ -637,6 +637,8 @@ export interface CityWalkHandle {
   focusNdc: () => { x: number; y: number } | undefined;
   /** A glide (the pose's or Modell's) or a dolly zoom is under way. */
   viewMoving: () => boolean;
+  /** Tiles or their dressing are still streaming in for the view. */
+  streamBusy: () => boolean;
   /** What the nameplate sets in the city and where (nameplate-layer.ts),
    *  null while nothing is named; tests and QA read it. */
   nameplateShown: () => { title: string; mode: string; spot: string } | null;
@@ -4278,6 +4280,7 @@ async function bootApp(
     getGlideTarget: pose.getGlideTarget,
     focusNdc: () => modelRig.focusNdc() ?? undefined,
     viewMoving: () => pose.getGlideTarget() !== null || modelRig.moving(),
+    streamBusy: () => !sceneSettled,
     stopGlide: pose.cancelGlide,
     getPose: () => {
       const hud = modelRig.hud();

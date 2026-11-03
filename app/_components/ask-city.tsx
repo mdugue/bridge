@@ -890,7 +890,7 @@ function toolLine(name: string, input: unknown, output?: unknown): string {
     case "wo_bin_ich":
       return "Schaut, wo du stehst";
     case "was_ist_da":
-      return "Fragt, was in der Bildmitte steht";
+      return "Fragt, was dort steht, wohin die Ansicht zeigt";
     case "zeige":
       return args.aus_der_luft ? "Fliegt hin" : "Geht hin";
     case "setze_zeit":

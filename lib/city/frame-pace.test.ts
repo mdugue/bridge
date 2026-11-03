@@ -135,7 +135,7 @@ describe("listening pace", () => {
 
   test("a moving one keeps no two frames further apart than the loop's time step, at any display rate", () => {
     // the loop clamps a frame's time step to 0.05 s: a wider gap slows a glide
-    for (const hz of [24, 30, 50, 60, 90, 120, 144]) {
+    for (const hz of [24, 30, 36, 38, 50, 60, 75, 90, 120, 144]) {
       const pace = createFramePace();
       pace.setListening(true);
       let last = Number.NaN;

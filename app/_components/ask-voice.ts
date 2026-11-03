@@ -62,7 +62,7 @@ export function speakable(text: string): string {
       .replace(MARKDOWN_LINK, "$1")
       .replace(BRACKETED_LINK, "")
       .replace(BARE_LINK, "")
-      .replace(/^\s*(?:[-*•]|\d+\.)\s+/gm, "")
+      .replace(/^[ \t]*[-*•][ \t]+/gm, "")
       // Markdown's marks, but not an underscore inside a word (DESN_0815)
       .replace(/[*#`]|(?<!\w)_|_(?!\w)/g, "")
       // a line without its own end is a sentence still: a list item, a heading

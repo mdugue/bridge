@@ -39,27 +39,46 @@ export function instantAt(hour: number, day: Date, date?: string): Date {
 const LAND_MAX_MS = 8000;
 /** How often it looks whether the glide has landed (ms). */
 const LAND_POLL_MS = 100;
+/** How long it then waits for the tiles there at most (ms): a hit on
+ *  something already loaded behind a tile still to come would be wrong. */
+const STREAM_WAIT_MS = 4000;
 /** A miss after a glide, asked again while the tiles there stream in. */
 const MISS_RETRIES = 6;
 const MISS_RETRY_MS = 500;
 
-/**
- * Whether the view has landed: no glide (the pose's, Modell's centring)
- * and no dolly zoom under way, by the scene's own state, so at any frame
- * rate and with the live mode's easing; bounded by the clock, not by
- * turns, which a hidden page slows. False when it ran out of time.
- */
-async function landed(
-  h: CityWalkHandle,
+/** Polls `holds` until it is false, `gone` holds or `maxMs` passed (by
+ *  the clock, not by turns, which a hidden page slows); whether it ended. */
+async function waitWhile(
+  holds: () => boolean,
+  gone: () => boolean,
+  maxMs: number,
   signal: AbortSignal
 ): Promise<boolean> {
-  const end = performance.now() + LAND_MAX_MS;
-  while (h.viewMoving()) {
+  const end = performance.now() + maxMs;
+  while (!gone() && holds()) {
     if (performance.now() >= end) {
       return false;
     }
     await sleep(LAND_POLL_MS, signal);
   }
+  return true;
+}
+
+/**
+ * Whether the view has landed: no glide (the pose's, Modell's centring)
+ * and no dolly zoom under way, by the scene's own state, so at any frame
+ * rate and with the live mode's easing; then, for a while, the tiles
+ * there. False when the glide outlasted the wait.
+ */
+async function landed(
+  h: CityWalkHandle,
+  gone: () => boolean,
+  signal: AbortSignal
+): Promise<boolean> {
+  if (!(await waitWhile(h.viewMoving, gone, LAND_MAX_MS, signal))) {
+    return false;
+  }
+  await waitWhile(h.streamBusy, gone, STREAM_WAIT_MS, signal);
   return true;
 }
 
@@ -134,7 +153,7 @@ export function useAskScene(
         let asked: Inquiry | null = null;
         try {
           // where a glide lands, not on its way
-          const there = await landed(h, signal);
+          const there = await landed(h, gone, signal);
           if (gone()) {
             return LOADING;
           }

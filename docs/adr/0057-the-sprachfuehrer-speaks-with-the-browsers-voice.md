@@ -23,7 +23,9 @@ listens wastes its battery.
    question per press). A browser without either shows neither. A spoken
    question turns reading aloud on and tells the server (`voice`), whose
    prompt then asks for short spoken sentences.
-2. **`was_ist_da` asks the twin what stands at the view's centre**
+2. **`was_ist_da` asks the twin what stands where the view points** (its
+   centre; in Modell the preset's pivot, where a place is put), once a
+   glide has landed and the tiles there have come
    (`inquireAt`, ADR 0042), opens its card and gives the model the card's
    lines, so "what is that" is answered from the measured data.
 3. **The Hörmodus rests the scene.** A switch lays a soft vignette and the

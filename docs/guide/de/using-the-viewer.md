@@ -474,7 +474,8 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   Ränder leicht ab und lässt die Szene ruhen — für unterwegs, das
   Telefon in der Tasche, zusammen mit *Live* in der Werkzeugleiste.
   „Was ist das da vorne?“ fragt das Stadtmodell nach dem, was in der
-  Bildmitte steht, und öffnet dessen Karte.
+  Bildmitte steht (im Modell: wo es ausgerichtet ist), und öffnet dessen
+  Karte.
 - **Steuerung** — die vollständige Tastentabelle, eingeklappt, bis du
   sie öffnest (die Leiste über der Szene zeigt die ersten Tasten).
 
