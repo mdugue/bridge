@@ -4,12 +4,12 @@ import { sceneTools } from "./ask-scene-tools";
 import type { AskScene } from "./ask-scene-tools";
 
 const STUB: AskScene = {
-  abandon: () => undefined,
+  abandon: () => {},
   from: () => null,
   look: async () => ({}),
   setLayer: () => true,
-  setListening: () => undefined,
-  setStyle: () => undefined,
+  setListening: () => {},
+  setStyle: () => {},
   setTime: () => "",
   show: () => true,
   within: () => true,
