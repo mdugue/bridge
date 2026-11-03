@@ -114,7 +114,7 @@ for (const file of snapshotFiles()) {
     test.setTimeout(READY_MS + 150_000);
     // Validate before rendering: a broken shot fails loudly instead of
     // silently rendering the defaults.
-    const parsed = parseSnapshot(readFileSync(join(SHOTS_DIR, file), "utf8"));
+    const parsed = parseSnapshot(readFileSync(join(SHOTS_DIR, file), "utf-8"));
     if (!parsed.ok) {
       throw new Error(`${file}: ${parsed.reason}`);
     }

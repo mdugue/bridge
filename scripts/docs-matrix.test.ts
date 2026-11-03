@@ -7,7 +7,7 @@ import { matrixInputs, matrixPath } from "./docs-matrix";
 test("the committed sources-by-city pages are what the configs say", () => {
   const { sites, built } = matrixInputs();
   for (const lang of ["en", "de"] as const) {
-    expect(readFileSync(matrixPath(lang), "utf8")).toBe(
+    expect(readFileSync(matrixPath(lang), "utf-8")).toBe(
       sourceMatrixPage(sites, lang, built)
     );
   }

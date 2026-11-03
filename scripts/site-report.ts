@@ -30,7 +30,7 @@ function bytesUnder(dir: string): number {
   if (!existsSync(dir)) {
     return 0;
   }
-  return readdirSync(dir, { recursive: true, encoding: "utf8" })
+  return readdirSync(dir, { recursive: true, encoding: "utf-8" })
     .map((f) => statSync(join(dir, f)))
     .filter((s) => s.isFile())
     .reduce((sum, s) => sum + s.size, 0);
@@ -55,7 +55,7 @@ async function checkViewpoints(site: Site): Promise<string[]> {
     if (!(existsSync(city) && existsSync(raster))) {
       continue;
     }
-    const doc = JSON.parse(readFileSync(city, "utf8")) as CityJsonDocument;
+    const doc = JSON.parse(readFileSync(city, "utf-8")) as CityJsonDocument;
     const footprints = buildingFootprintPolys(doc).map((p) => p.pts);
     const { data, info } = await sharp(raster)
       .extractChannel(0)

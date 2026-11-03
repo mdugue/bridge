@@ -221,12 +221,12 @@ if (failed.length > 0) {
 const index: SiteIndex = { version: 1, sites: [] };
 for (const id of ids) {
   const manifest = JSON.parse(
-    readFileSync(join(OUT_DIR, id, MANIFEST_FILE), "utf8")
+    readFileSync(join(OUT_DIR, id, MANIFEST_FILE), "utf-8")
   ) as DataManifest;
   const map = manifest.files[SITE_MAP_FILE];
   const statsPath = join(OUT_DIR, id, SITE_STATS_FILE);
   const stats = existsSync(statsPath)
-    ? parseSiteStats(JSON.parse(readFileSync(statsPath, "utf8")))
+    ? parseSiteStats(JSON.parse(readFileSync(statsPath, "utf-8")))
     : undefined;
   index.sites.push({
     id,
@@ -265,7 +265,7 @@ function publishServerWissen(siteIds: readonly SiteId[]): void {
   for (const id of siteIds) {
     const from = join(OUT_DIR, id);
     const manifest = JSON.parse(
-      readFileSync(join(from, MANIFEST_FILE), "utf8")
+      readFileSync(join(from, MANIFEST_FILE), "utf-8")
     ) as DataManifest;
     const indexFile = manifest.files[STADTWISSEN_FILE];
     if (!indexFile) {
@@ -275,7 +275,7 @@ function publishServerWissen(siteIds: readonly SiteId[]): void {
     mkdirSync(to, { recursive: true });
     copyFileSync(join(from, indexFile), join(to, STADTWISSEN_FILE));
     const index = JSON.parse(
-      readFileSync(join(from, indexFile), "utf8")
+      readFileSync(join(from, indexFile), "utf-8")
     ) as StadtwissenIndex;
     for (const tile of index.tiles) {
       copyFileSync(join(from, tile.file), join(to, tile.file));

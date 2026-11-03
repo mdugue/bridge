@@ -65,7 +65,7 @@ export async function tileDgm(
   const buf = readFileSync(at(source.tif));
   return readDgm(
     buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
-    existsSync(tfw) ? readFileSync(tfw, "utf8") : null,
+    existsSync(tfw) ? readFileSync(tfw, "utf-8") : null,
     size
   );
 }

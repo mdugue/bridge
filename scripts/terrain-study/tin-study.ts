@@ -81,7 +81,7 @@ function gridN(name: string): number {
 
 function wallLines(): WallLine[] {
   const doc = JSON.parse(
-    readFileSync(wallSourceFile(DRESDEN, SPAWN_TILE), "utf8")
+    readFileSync(wallSourceFile(DRESDEN, SPAWN_TILE), "utf-8")
   ) as {
     features: WallFeature[];
   };
@@ -100,7 +100,7 @@ async function grids(dir: string): Promise<void> {
   const tif = readFileSync(src.tif);
   const { elevations: v0 } = await readDgm(
     tif.buffer.slice(tif.byteOffset, tif.byteOffset + tif.byteLength),
-    readFileSync(src.tfw, "utf8"),
+    readFileSync(src.tfw, "utf-8"),
     1024
   );
   writeFileSync(join(dir, "v0_1024.f32"), v0);

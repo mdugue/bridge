@@ -17,7 +17,7 @@ async function load(site: string): Promise<Knowledge | null> {
   // read by its literal path, and a variable one takes the whole project
   const dir = join(process.cwd(), ".stadtwissen", site);
   const read = async <T>(file: string): Promise<T> =>
-    JSON.parse(await readFile(join(dir, file), "utf8")) as T;
+    JSON.parse(await readFile(join(dir, file), "utf-8")) as T;
   try {
     const index = await read<StadtwissenIndex>(STADTWISSEN_FILE);
     const tiles = await Promise.all(

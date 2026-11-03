@@ -33,7 +33,7 @@ import { bakeCityMesh } from "./bake-city-mesh";
 const ROOT = join(import.meta.dir, "..");
 const read = <T>(path: string): T | undefined =>
   existsSync(join(ROOT, path))
-    ? (JSON.parse(readFileSync(join(ROOT, path), "utf8")) as T)
+    ? (JSON.parse(readFileSync(join(ROOT, path), "utf-8")) as T)
     : undefined;
 
 const median = (xs: number[]) => {

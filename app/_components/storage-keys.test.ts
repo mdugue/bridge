@@ -8,7 +8,7 @@ import { SESSION_KEYS, STORAGE_KEYS } from "./storage-keys";
 /** The privacy page (ADR 0043): it names what the browser keeps and asks. */
 const PAGE = readFileSync(
   join(import.meta.dir, "../(legal)/datenschutz/page.mdx"),
-  "utf8"
+  "utf-8"
 );
 
 test("the privacy page names every key the viewer keeps in the browser", () => {
@@ -26,7 +26,7 @@ const ROOT = join(import.meta.dir, "../..");
 const SOURCES = ["app", "components", "hooks", "lib"].flatMap((dir) =>
   [...new Bun.Glob(`${dir}/**/*.{ts,tsx}`).scanSync({ cwd: ROOT })]
     .filter((path) => !/\.test\.tsx?$/.test(path))
-    .map((path) => ({ path, text: readFileSync(join(ROOT, path), "utf8") }))
+    .map((path) => ({ path, text: readFileSync(join(ROOT, path), "utf-8") }))
 );
 
 const paths = (files: { path: string }[]) => files.map(({ path }) => path);

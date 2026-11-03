@@ -35,7 +35,7 @@ const sitesWithWalks = Object.values(SITES).flatMap((site) => {
   }
   const walks = readdirSync(dir)
     .filter((f) => f.endsWith(".json"))
-    .map((f) => JSON.parse(readFileSync(join(dir, f), "utf8")) as Walk);
+    .map((f) => JSON.parse(readFileSync(join(dir, f), "utf-8")) as Walk);
   return [{ site, walks }];
 });
 
@@ -94,7 +94,7 @@ for (const { site, walks } of sitesWithWalks) {
       );
       const wikidataPath = join(ROOT, siteDataDir(site), WIKIDATA_FACTS_FILE);
       const wikidata = existsSync(wikidataPath)
-        ? (JSON.parse(readFileSync(wikidataPath, "utf8")) as WikidataFile)
+        ? (JSON.parse(readFileSync(wikidataPath, "utf-8")) as WikidataFile)
         : { entities: {} };
       const monuments = new Set(
         site.tiles.flatMap((cell) => {
@@ -107,7 +107,7 @@ for (const { site, walks } of sitesWithWalks) {
           );
           return existsSync(file)
             ? monumentsOf(
-                JSON.parse(readFileSync(file, "utf8")) as MonumentCollection
+                JSON.parse(readFileSync(file, "utf-8")) as MonumentCollection
               ).map((m) => m.id)
             : [];
         })
@@ -125,7 +125,7 @@ for (const { site, walks } of sitesWithWalks) {
           if (!cityText.has(tile)) {
             cityText.set(
               tile,
-              existsSync(path) ? readFileSync(path, "utf8") : ""
+              existsSync(path) ? readFileSync(path, "utf-8") : ""
             );
           }
           return cityText.get(tile)?.includes(`"${id}"`) ?? false;

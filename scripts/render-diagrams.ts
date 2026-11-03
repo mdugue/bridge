@@ -139,7 +139,7 @@ interface Job {
 function collect(): Job[] {
   const jobs = new Map<string, Job>();
   for (const rel of docFiles(path.join(ROOT, "docs"))) {
-    const text = readFileSync(path.join(ROOT, rel), "utf8");
+    const text = readFileSync(path.join(ROOT, rel), "utf-8");
     for (const source of mermaidBlocks(text)) {
       const key = diagramKey(source);
       if (!jobs.has(key)) {

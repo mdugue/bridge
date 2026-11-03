@@ -165,7 +165,7 @@ describe("decodeGreyPng", () => {
       throw new Error(`no committed surface raster in ${dir}`);
     }
     const { size } = JSON.parse(
-      readFileSync(join(dir, file.replace(/\.png$/, ".json")), "utf8")
+      readFileSync(join(dir, file.replace(/\.png$/, ".json")), "utf-8")
     ) as { size: number };
     const out = await decodeGreyPng(
       new Uint8Array(readFileSync(join(dir, file)))

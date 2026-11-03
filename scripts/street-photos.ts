@@ -281,13 +281,13 @@ async function main() {
   const heightAt = await siteDgm(site, async (tif, tfw) =>
     readDgmFile(tif, tfw, "native")
   );
-  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as {
     files: Record<string, string>;
   };
   const tileset = JSON.parse(
     readFileSync(
       join(ROOT, "public/data", site.id, manifest.files["tileset.json"]),
-      "utf8"
+      "utf-8"
     )
   ) as { extras: { offset: { cx: number; cy: number } } };
   const { cx, cy } = tileset.extras.offset;

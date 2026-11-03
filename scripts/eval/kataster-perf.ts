@@ -78,7 +78,7 @@ async function run(query: string) {
   for (const file of readdirSync(SHOTS)
     .filter((f) => f.startsWith("kat-") && f.endsWith(".json"))
     .sort()) {
-    const snap = JSON.parse(readFileSync(join(SHOTS, file), "utf8")) as {
+    const snap = JSON.parse(readFileSync(join(SHOTS, file), "utf-8")) as {
       camera: unknown;
       date: string;
     };

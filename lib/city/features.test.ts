@@ -71,7 +71,9 @@ function load<F>({ path, required }: Source): F[] {
     expect(required).toBe(false);
     return [];
   }
-  const doc = JSON.parse(readFileSync(path, "utf8")) as FeatureCollection<F> & {
+  const doc = JSON.parse(
+    readFileSync(path, "utf-8")
+  ) as FeatureCollection<F> & {
     type?: string;
   };
   expect(doc.type).toBe("FeatureCollection");
@@ -86,8 +88,8 @@ function loadSource<F>(file: string): F[] {
     return [];
   }
   return (
-    (JSON.parse(readFileSync(path, "utf8")) as FeatureCollection<F>).features ??
-    []
+    (JSON.parse(readFileSync(path, "utf-8")) as FeatureCollection<F>)
+      .features ?? []
   );
 }
 
@@ -149,7 +151,10 @@ test.each(tiles)("%s: the roof colours are { meta, roofs }", (tile, site) => {
   if (!existsSync(path)) {
     return;
   }
-  const doc = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+  const doc = JSON.parse(readFileSync(path, "utf-8")) as Record<
+    string,
+    unknown
+  >;
   expect(typeof doc.meta).toBe("object");
   expect(doc.roofs !== null && typeof doc.roofs === "object").toBe(true);
 });
@@ -380,7 +385,7 @@ test.each(tiles)(
     if (!existsSync(path)) {
       return;
     }
-    const doc = JSON.parse(readFileSync(path, "utf8")) as ShopfrontFile;
+    const doc = JSON.parse(readFileSync(path, "utf-8")) as ShopfrontFile;
     expect(doc.attribution).toContain("Mapillary");
     for (const walls of Object.values(doc.buildings)) {
       for (const w of walls) {
@@ -426,7 +431,7 @@ test.each(tiles)(
     if (!existsSync(path)) {
       return;
     }
-    const doc = JSON.parse(readFileSync(path, "utf8")) as WindowFile;
+    const doc = JSON.parse(readFileSync(path, "utf-8")) as WindowFile;
     expect(doc.attribution).toContain("Mapillary");
     for (const [rho, n] of Object.values(doc.reliability)) {
       expect(rho === null || Math.abs(rho) <= 1).toBe(true);
@@ -924,10 +929,10 @@ test.each(cases)(
     if (!existsSync(path)) {
       return;
     }
-    const facts = JSON.parse(readFileSync(path, "utf8")) as TreeFactsFile;
+    const facts = JSON.parse(readFileSync(path, "utf-8")) as TreeFactsFile;
     expect(facts.count).toBe(trees.length);
     // the trees file's credits: the city's register, or OSM without one
-    const { attribution } = JSON.parse(readFileSync(a.trees.path, "utf8")) as {
+    const { attribution } = JSON.parse(readFileSync(a.trees.path, "utf-8")) as {
       attribution: string;
     };
     expect(facts.attribution).toBe(attribution);
@@ -961,7 +966,7 @@ test.each(cases)(
     if (!existsSync(path)) {
       return;
     }
-    const doc = JSON.parse(readFileSync(path, "utf8")) as {
+    const doc = JSON.parse(readFileSync(path, "utf-8")) as {
       genera?: string[];
     };
     expect(doc.genera).toEqual([...TREE_GENERA]);
@@ -1064,7 +1069,7 @@ test.each(tiles)(
       if (!existsSync(path)) {
         continue;
       }
-      const { attribution } = JSON.parse(readFileSync(path, "utf8")) as {
+      const { attribution } = JSON.parse(readFileSync(path, "utf-8")) as {
         attribution?: unknown;
       };
       // The file name in the message says which one lost its credit.

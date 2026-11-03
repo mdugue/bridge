@@ -24,7 +24,7 @@ const transpilerFor = (file: string) => (file.endsWith(".tsx") ? TSX : TS);
  *  run). */
 function importsOf(file: string, transpiler: Bun.Transpiler): string[] {
   return transpiler
-    .scanImports(readFileSync(file, "utf8"))
+    .scanImports(readFileSync(file, "utf-8"))
     .map(({ path }) => path);
 }
 

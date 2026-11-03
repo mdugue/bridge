@@ -15,7 +15,7 @@ test("the committed spawn-tile DGM resamples to a grid on the Elbe", async () =>
   const src = dgmSourceFiles(DRESDEN, PRIMARY_TILE);
   const dgm = await readDgm(
     arrayBufferOf(readFileSync(src.tif)),
-    readFileSync(src.tfw, "utf8"),
+    readFileSync(src.tfw, "utf-8"),
     64
   );
   expect(dgm.bounds[2] - dgm.bounds[0]).toBe(2000);

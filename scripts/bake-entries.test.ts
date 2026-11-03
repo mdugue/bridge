@@ -93,7 +93,7 @@ test("every module prepare-data.ts imports is in some bake's key, or says why no
 
 test("prepare-data.ts orders the steps and bakes nothing itself", () => {
   // no key carries it: a cached artifact made here would go stale
-  const source = readFileSync(join(ROOT, "scripts/prepare-data.ts"), "utf8");
+  const source = readFileSync(join(ROOT, "scripts/prepare-data.ts"), "utf-8");
   expect(source).not.toMatch(/\b(cached|cachedFile|cacheKey)\(/u);
   for (const step of directImports("scripts/prepare-data.ts", ROOT).filter(
     (p) => p.startsWith("scripts/prepare/") && !p.endsWith("/context.ts")
@@ -134,7 +134,7 @@ const VALUE_EXPORTS: Record<string, Record<string, string>> = {
 test("a value module exports only what reaches keys as values", () => {
   for (const path of KEY_VALUES) {
     // the transpiler's list holds every form of export, the types aside
-    const source = readFileSync(join(ROOT, path), "utf8");
+    const source = readFileSync(join(ROOT, path), "utf-8");
     const { exports } = new Bun.Transpiler({ loader: "ts" }).scan(source);
     const types = [
       ...source.matchAll(/^export (?:type|interface) ([\w$]+)/gmu),

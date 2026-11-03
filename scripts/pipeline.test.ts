@@ -9,7 +9,7 @@ const PYTHON = join(import.meta.dir, "../pipeline/bake");
 test("the spec carries exactly the keys pipeline/bake/spec.py reads", () => {
   // a key spec.py reads with .get() and a default would go silently
   // missing; one it no longer reads would ride along unused
-  const python = readFileSync(join(PYTHON, "spec.py"), "utf8");
+  const python = readFileSync(join(PYTHON, "spec.py"), "utf-8");
   const read = new Set(
     [...python.matchAll(/doc(?:\["(\w+)"\]|\.get\("(\w+)")/gu)].map(
       (m) => m[1] ?? m[2]
@@ -21,7 +21,7 @@ test("the spec carries exactly the keys pipeline/bake/spec.py reads", () => {
 });
 
 test("every provider's products are fields pipeline/bake/common.py takes", () => {
-  const python = readFileSync(join(PYTHON, "common.py"), "utf8");
+  const python = readFileSync(join(PYTHON, "common.py"), "utf-8");
   const block = (
     python.match(/class Products:\n([\s\S]*?)\n\n\n/u)?.[1] ?? ""
   ).replace(/"""[\s\S]*?"""/gu, "");

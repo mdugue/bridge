@@ -30,7 +30,7 @@ const GEOTIFF_VERSION = (
   JSON.parse(
     readFileSync(
       Bun.resolveSync("geotiff/package.json", import.meta.dir),
-      "utf8"
+      "utf-8"
     )
   ) as { version: string }
 ).version;
@@ -110,7 +110,7 @@ export async function readDgmFile(
 ): Promise<Dgm> {
   const bytes = readFileSync(tif);
   const sidecar =
-    tfw !== null && existsSync(tfw) ? readFileSync(tfw, "utf8") : null;
+    tfw !== null && existsSync(tfw) ? readFileSync(tfw, "utf-8") : null;
   const key = dir === null ? "" : dgmKey(bytes, sidecar, size);
   const name = `${basename(tif)}.${size}.dgm`;
   const hit = dir === null ? null : cachedEntry(dir, name, key);

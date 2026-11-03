@@ -75,7 +75,7 @@ for (const tile of tileIds(site)) {
   if (!existsSync(path)) {
     continue;
   }
-  const file = JSON.parse(readFileSync(path, "utf8")) as LandmarkFile;
+  const file = JSON.parse(readFileSync(path, "utf-8")) as LandmarkFile;
   for (const lm of file.landmarks) {
     landmarkIds.add(lm.id);
   }

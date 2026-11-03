@@ -43,7 +43,7 @@ const features = <F>(file: string): F[] => {
     return (
       (
         JSON.parse(
-          readFileSync(join(ROOT, sideFileSource(site, file)), "utf8")
+          readFileSync(join(ROOT, sideFileSource(site, file)), "utf-8")
         ) as FeatureCollection<F>
       ).features ?? []
     );

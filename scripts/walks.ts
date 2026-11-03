@@ -40,7 +40,7 @@ const dir = join(ROOT, siteDataDir(site), WALKS_DIR);
 const files = readdirSync(dir).filter((f) => f.endsWith(".json"));
 const walks = files.map((f) => ({
   file: join(dir, f),
-  walk: JSON.parse(readFileSync(join(dir, f), "utf8")) as Walk,
+  walk: JSON.parse(readFileSync(join(dir, f), "utf-8")) as Walk,
 }));
 const out = (line: string) => process.stdout.write(`${line}\n`);
 
@@ -64,12 +64,12 @@ async function fillGround(): Promise<void> {
 
 function writeShots(only?: string): void {
   const manifest = JSON.parse(
-    readFileSync(join(ROOT, "public/data", site.id, "manifest.json"), "utf8")
+    readFileSync(join(ROOT, "public/data", site.id, "manifest.json"), "utf-8")
   ) as { files: Record<string, string> };
   const tileset = JSON.parse(
     readFileSync(
       join(ROOT, "public/data", site.id, manifest.files["tileset.json"]),
-      "utf8"
+      "utf-8"
     )
   ) as { extras: { offset: { cx: number; cy: number } } };
   const { offset } = tileset.extras;

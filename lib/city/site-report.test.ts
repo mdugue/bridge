@@ -65,7 +65,7 @@ test("a provider without an open DLM says so", () => {
 test("the DLM layer list is the pipeline's", () => {
   const python = readFileSync(
     join(import.meta.dir, "../../pipeline/bake/common.py"),
-    "utf8"
+    "utf-8"
   );
   const block = python.match(/DLM_LAYERS = \(([^)]*)\)/u)?.[1] ?? "";
   const layers = [...block.matchAll(/"(\w+)"/gu)].map((m) => m[1]);

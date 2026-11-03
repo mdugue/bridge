@@ -68,7 +68,7 @@ function rowsMeasured(path: string | undefined): boolean {
   if (!(path && existsSync(path))) {
     return false;
   }
-  const doc = JSON.parse(readFileSync(path, "utf8")) as { rows?: unknown };
+  const doc = JSON.parse(readFileSync(path, "utf-8")) as { rows?: unknown };
   return doc.rows !== undefined;
 }
 
@@ -77,8 +77,8 @@ function features<T>(path: string | undefined): T[] {
     return [];
   }
   return (
-    (JSON.parse(readFileSync(path, "utf8")) as FeatureCollection<T>).features ??
-    []
+    (JSON.parse(readFileSync(path, "utf-8")) as FeatureCollection<T>)
+      .features ?? []
   );
 }
 
@@ -136,7 +136,7 @@ export async function bakeCoarseCrowns(
   const roofs = [
     ...(sources.city && existsSync(sources.city)
       ? lod2Roofs(
-          JSON.parse(readFileSync(sources.city, "utf8")) as CityJsonDocument
+          JSON.parse(readFileSync(sources.city, "utf-8")) as CityJsonDocument
         )
       : []),
     ...gapRoofs(features<StructureFeature>(sources.structures)),

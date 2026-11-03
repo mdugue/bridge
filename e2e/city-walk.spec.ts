@@ -758,7 +758,7 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     ).getImage();
     const [w, h] = [image.getWidth(), image.getHeight()];
     const [minX, minY, maxX, maxY] = tfwToBounds(
-      readFileSync(`${base}.tfw`, "utf8"),
+      readFileSync(`${base}.tfw`, "utf-8"),
       w,
       h
     );

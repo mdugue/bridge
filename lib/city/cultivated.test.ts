@@ -18,7 +18,7 @@ test("the colony bytes' scales are the bake's", () => {
   // (cultivated-layer.ts); the bake writes them (cultivated.py)
   const python = readFileSync(
     join(import.meta.dir, "../../pipeline/bake/cultivated.py"),
-    "utf8"
+    "utf-8"
   );
   expect(Number(python.match(/^EDGE_SCALE = ([\d.]+)$/mu)?.[1])).toBe(
     COLONY_EDGE_SCALE

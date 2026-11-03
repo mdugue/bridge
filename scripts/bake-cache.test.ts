@@ -21,6 +21,6 @@ test("one whole entry per name; other names and other processes' parts stay", ()
     "new.terrain_a_l0.glb.gz.999999.part",
   ]);
   const path = cachedEntry(dir, "terrain_a_l0.glb.gz", "new");
-  expect(path && readFileSync(path, "utf8")).toBe("fresh");
+  expect(path && readFileSync(path, "utf-8")).toBe("fresh");
   expect(cachedEntry(dir, "terrain_a_l0.glb.gz", "old")).toBeNull();
 });

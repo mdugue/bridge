@@ -140,7 +140,7 @@ describe("lockedVersions", () => {
   });
 
   test("the bake's packages are in the repo's lockfile, down to their dependencies; the viewer's are not", () => {
-    const lock = readLockfile(readFileSync("bun.lock", "utf8"));
+    const lock = readLockfile(readFileSync("bun.lock", "utf-8"));
     const packages = moduleGraph("scripts/prepare-data.ts").flatMap(
       packageImports
     );

@@ -27,7 +27,9 @@ interface CommittedTable extends SportTable {
 const DLM = join(import.meta.dir, "../..", siteDataDir(DRESDEN), "dlm");
 const committed = readdirSync(DLM)
   .filter((f) => /^sport_.*\.json$/u.test(f))
-  .map((f) => JSON.parse(readFileSync(join(DLM, f), "utf8")) as CommittedTable);
+  .map(
+    (f) => JSON.parse(readFileSync(join(DLM, f), "utf-8")) as CommittedTable
+  );
 
 const asMap = (keys: readonly string[]) =>
   Object.fromEntries(keys.map((k, i) => [String(i), k]));

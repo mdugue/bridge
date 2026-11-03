@@ -21,7 +21,7 @@ export function pageFiles(): string[] {
 
 /** A docs file's Markdown. Paths stay inside docs/, so only docs/ is traced. */
 export function readDoc(file: string): string {
-  return readFileSync(path.join(DOCS, file.replace(/^docs\//u, "")), "utf8");
+  return readFileSync(path.join(DOCS, file.replace(/^docs\//u, "")), "utf-8");
 }
 
 /** The file published at these segments under /wissen, if any. */

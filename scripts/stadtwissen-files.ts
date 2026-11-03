@@ -14,10 +14,10 @@ export function loadStadtwissen(siteId: string): {
 } {
   const dir = join(import.meta.dir, "..", "public", "data", siteId);
   const manifest = JSON.parse(
-    readFileSync(join(dir, "manifest.json"), "utf8")
+    readFileSync(join(dir, "manifest.json"), "utf-8")
   ) as { files: Record<string, string> };
   const read = <T>(file: string): T =>
-    JSON.parse(readFileSync(join(dir, file), "utf8")) as T;
+    JSON.parse(readFileSync(join(dir, file), "utf-8")) as T;
   const indexFile = manifest.files[STADTWISSEN_FILE];
   if (!indexFile) {
     throw new Error(`no ${STADTWISSEN_FILE} for ${siteId}: run bun dev first`);

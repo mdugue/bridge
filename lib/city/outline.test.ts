@@ -72,7 +72,7 @@ function oklchLinear(l: number, c: number, h: number): number[] {
 }
 
 test("the selection's colours are the HUD's accent", () => {
-  const css = readFileSync(`${import.meta.dir}/../../app/globals.css`, "utf8");
+  const css = readFileSync(`${import.meta.dir}/../../app/globals.css`, "utf-8");
   const token = (name: string) => {
     const m = new RegExp(
       `\\n\\s*--${name}: oklch\\(([\\d.]+) ([\\d.]+) ([\\d.]+)\\)`

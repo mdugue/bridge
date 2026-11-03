@@ -68,7 +68,7 @@ function remarkDiagrams() {
       const file = path.join(process.cwd(), "docs", "diagrams", `${key}.svg`);
       let svg: string;
       try {
-        svg = readFileSync(file, "utf8").trim();
+        svg = readFileSync(file, "utf-8").trim();
       } catch {
         throw new Error(
           `No rendered diagram docs/diagrams/${key}.svg – run \`bun run docs:diagrams\``

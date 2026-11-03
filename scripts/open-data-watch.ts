@@ -258,7 +258,7 @@ async function snStands(
 function provenanceOf(site: SiteId): Provenance | null {
   const file = join(ROOT, "data", site, "provenance.json");
   return existsSync(file)
-    ? (JSON.parse(readFileSync(file, "utf8")) as Provenance)
+    ? (JSON.parse(readFileSync(file, "utf-8")) as Provenance)
     : null;
 }
 
@@ -419,7 +419,7 @@ async function recordStands(site: SiteId): Promise<number> {
   if (config.provider.id !== "sn" || !existsSync(file)) {
     return 0;
   }
-  const provenance = JSON.parse(readFileSync(file, "utf8")) as Provenance &
+  const provenance = JSON.parse(readFileSync(file, "utf-8")) as Provenance &
     Record<string, unknown>;
   const extent = siteExtentOf(config);
   let written = 0;

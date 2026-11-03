@@ -39,7 +39,7 @@ const read = <F>(kind: string) =>
           "dlm",
           `${kind}_${TILE}.geojson`
         ),
-        "utf8"
+        "utf-8"
       )
     ) as FeatureCollection<F>
   ).features ?? [];

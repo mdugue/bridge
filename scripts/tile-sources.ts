@@ -32,7 +32,7 @@ import type { Site } from "../lib/city/site";
 
 const at = (path: string) => join(process.cwd(), path);
 const readJson = <T>(path: string): T =>
-  JSON.parse(readFileSync(path, "utf8")) as T;
+  JSON.parse(readFileSync(path, "utf-8")) as T;
 
 /** The tile's kerb lines (the smoothed DLM road edge) and where they are
  *  lowered, for the kerb stones the fine level carries. */

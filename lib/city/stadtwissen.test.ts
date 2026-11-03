@@ -130,7 +130,7 @@ test("nearby sorts by distance within the radius", () => {
 test("the chat route reads the server copy where the build writes it", () => {
   const route = readFileSync(
     join(import.meta.dir, "../../app/api/frag/knowledge.ts"),
-    "utf8"
+    "utf-8"
   );
   expect(route).toContain(`"${SERVER_WISSEN_DIR}"`);
 });

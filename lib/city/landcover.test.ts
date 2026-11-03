@@ -56,7 +56,7 @@ test("every committed surface legend names the same paving kinds", () => {
   expect(legends.length).toBeGreaterThan(0);
   for (const file of legends) {
     const { surfaces, parking, alongPeriod } = JSON.parse(
-      readFileSync(`${dir}/${file}`, "utf8")
+      readFileSync(`${dir}/${file}`, "utf-8")
     ) as {
       alongPeriod: number;
       parking: Record<string, string>;
@@ -77,7 +77,7 @@ test("every committed edge legend has the viewer's scale", () => {
   );
   expect(legends.length).toBeGreaterThan(0);
   for (const file of legends) {
-    const { scale } = JSON.parse(readFileSync(`${dir}/${file}`, "utf8")) as {
+    const { scale } = JSON.parse(readFileSync(`${dir}/${file}`, "utf-8")) as {
       scale: number;
     };
     expect(scale).toBe(EDGE_SCALE);
@@ -107,7 +107,7 @@ test("every committed legend names the same classes", () => {
     );
   expect(legends.length).toBeGreaterThan(0);
   for (const file of legends) {
-    const { classes } = JSON.parse(readFileSync(file, "utf8")) as {
+    const { classes } = JSON.parse(readFileSync(file, "utf-8")) as {
       classes: Record<string, string>;
     };
     for (const c of LANDCOVER_CLASSES) {

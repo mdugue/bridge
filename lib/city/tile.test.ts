@@ -132,7 +132,7 @@ function bakeNames(): Map<string, string> {
   const dir = join(import.meta.dir, "../../pipeline/bake");
   const names = new Map<string, string>();
   for (const file of readdirSync(dir).filter((f) => f.endsWith(".py"))) {
-    const lines = readFileSync(join(dir, file), "utf8").split("\n");
+    const lines = readFileSync(join(dir, file), "utf-8").split("\n");
     lines.forEach((line, i) => {
       // data/_raw/<provider>/ holds the downloads and the bakes' own
       // caches (Wikidata answers, the laser scan's research output)

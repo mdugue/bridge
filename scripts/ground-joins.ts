@@ -110,7 +110,7 @@ function plinths(site: Site, tile: string): PlinthFeature[] {
   const path = join(process.cwd(), cityMeshSourceFiles(site, tile).plinths);
   return existsSync(path)
     ? ((
-        JSON.parse(readFileSync(path, "utf8")) as {
+        JSON.parse(readFileSync(path, "utf-8")) as {
           features?: PlinthFeature[];
         }
       ).features ?? [])
@@ -122,7 +122,7 @@ function doors(site: Site, tile: string): DoorFeature[] {
   const path = join(process.cwd(), cityMeshSourceFiles(site, tile).doors);
   return existsSync(path)
     ? ((
-        JSON.parse(readFileSync(path, "utf8")) as {
+        JSON.parse(readFileSync(path, "utf-8")) as {
           features?: DoorFeature[];
         }
       ).features ?? [])
@@ -134,7 +134,7 @@ function shopfronts(site: Site, tile: string): ShopfrontWall[] {
   const path = join(process.cwd(), cityMeshSourceFiles(site, tile).shopfronts);
   return existsSync(path)
     ? Object.values(
-        (JSON.parse(readFileSync(path, "utf8")) as ShopfrontFile).buildings
+        (JSON.parse(readFileSync(path, "utf-8")) as ShopfrontFile).buildings
       ).flat()
     : [];
 }
@@ -160,7 +160,7 @@ function smallBuildings(site: Site, tile: string): SmallBuildingFeature[] {
   const path = join(process.cwd(), cityMeshSourceFiles(site, tile).smallBuild);
   return existsSync(path)
     ? ((
-        JSON.parse(readFileSync(path, "utf8")) as {
+        JSON.parse(readFileSync(path, "utf-8")) as {
           features?: SmallBuildingFeature[];
         }
       ).features ?? [])
@@ -173,7 +173,7 @@ function monorails(site: Site, tile: string): RailFeature[] {
   return existsSync(path)
     ? (
         (
-          JSON.parse(readFileSync(path, "utf8")) as {
+          JSON.parse(readFileSync(path, "utf-8")) as {
             features?: RailFeature[];
           }
         ).features ?? []

@@ -73,7 +73,7 @@ export function sources(root: string): Source[] {
   for (const pattern of SOURCE_GLOBS) {
     for (const path of new Bun.Glob(pattern).scanSync({ cwd: root })) {
       if (!isTest(path) && !VENDORED.has(path)) {
-        const text = readFileSync(join(root, path), "utf8");
+        const text = readFileSync(join(root, path), "utf-8");
         out.push({ path, lines: text.split("\n").length });
       }
     }
@@ -87,7 +87,7 @@ if (import.meta.main) {
   const report = join(ROOT, "coverage", "lcov.info");
   process.stdout.write(
     existsSync(report)
-      ? gapTable(coverageGaps(readFileSync(report, "utf8"), sources(ROOT)))
+      ? gapTable(coverageGaps(readFileSync(report, "utf-8"), sources(ROOT)))
       : "_No coverage report (the unit tests did not finish)._\n"
   );
 }

@@ -27,7 +27,7 @@ function withoutCode(markdown: string): string {
 
 /** The relative link targets of one file that resolve to nothing. */
 function brokenLinks(file: string): string[] {
-  const markdown = withoutCode(readFileSync(path.join(ROOT, file), "utf8"));
+  const markdown = withoutCode(readFileSync(path.join(ROOT, file), "utf-8"));
   const dir = path.dirname(path.join(ROOT, file));
   return linkTargets(markdown)
     .filter(isRelative)

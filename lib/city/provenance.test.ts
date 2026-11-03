@@ -17,7 +17,7 @@ import { tileIds } from "./tile";
 const record = JSON.parse(
   readFileSync(
     join(import.meta.dir, "..", "..", "data", "dresden", "provenance.json"),
-    "utf8"
+    "utf-8"
   )
 ) as ProvenanceRecord;
 
@@ -98,7 +98,7 @@ test("Unna's OSM stand comes from its openstreetmap.fr extract", () => {
   const unnaRecord = JSON.parse(
     readFileSync(
       join(import.meta.dir, "..", "..", "data", "unna", "provenance.json"),
-      "utf8"
+      "utf-8"
     )
   ) as ProvenanceRecord;
   const unna = siteProvenance(unnaRecord, tileIds(UNNA), UNNA);

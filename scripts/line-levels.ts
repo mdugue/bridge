@@ -80,7 +80,7 @@ export function lineFile(site: Site, kind: string, tile: string): string {
 
 function features<F>(path: string): F[] {
   return existsSync(path)
-    ? ((JSON.parse(readFileSync(path, "utf8")) as { features?: F[] })
+    ? ((JSON.parse(readFileSync(path, "utf-8")) as { features?: F[] })
         .features ?? [])
     : [];
 }
@@ -313,7 +313,7 @@ async function decodeDgm(tif: string, tfw: string): Promise<Dgm> {
   const bytes = readFileSync(tif);
   return readDgm(
     bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
-    existsSync(tfw) ? readFileSync(tfw, "utf8") : null,
+    existsSync(tfw) ? readFileSync(tfw, "utf-8") : null,
     "native"
   );
 }

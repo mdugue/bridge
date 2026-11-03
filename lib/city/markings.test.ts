@@ -27,7 +27,7 @@ test("the committed tables name the kinds in the viewer's order", () => {
       if (!existsSync(path)) {
         continue;
       }
-      const doc = JSON.parse(readFileSync(path, "utf8")) as MarkingTable & {
+      const doc = JSON.parse(readFileSync(path, "utf-8")) as MarkingTable & {
         kinds: Record<string, string>;
       };
       expect(Object.values(doc.kinds)).toEqual([...MARKING_KINDS]);
@@ -107,7 +107,7 @@ test("the lane bits are one bit each and keep the kerb's", () => {
 
 test("the bake writes the bits and the offset scale the shader reads", () => {
   // pipeline/bake/markings.py packs them into the raster's G and B channels
-  const python = readFileSync(join(ROOT, "pipeline/bake/markings.py"), "utf8");
+  const python = readFileSync(join(ROOT, "pipeline/bake/markings.py"), "utf-8");
   const scale = python.match(/^EDGE_SCALE = ([\d.]+)/mu)?.[1];
   expect(Number(scale)).toBe(MARKING_OFFSET_SCALE);
   const bits = new Map<string, number>();

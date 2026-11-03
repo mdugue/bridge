@@ -65,7 +65,7 @@ export const utf8 = (value: unknown) =>
 export const parse = <T>(bytes: Uint8Array): T =>
   JSON.parse(new TextDecoder().decode(bytes)) as T;
 export const readJson = <T>(path: string): T =>
-  JSON.parse(readFileSync(path, "utf8")) as T;
+  JSON.parse(readFileSync(path, "utf-8")) as T;
 
 // --- publish ------------------------------------------------------------------
 
@@ -105,7 +105,7 @@ const keys = createKeyMaker({
   root: process.cwd(),
   common: COMMON_SOURCES,
   stop: KEY_STOPS,
-  lockfile: readLockfile(readFileSync(at(LOCKFILE), "utf8")),
+  lockfile: readLockfile(readFileSync(at(LOCKFILE), "utf-8")),
 });
 export const cacheKey = keys.key;
 

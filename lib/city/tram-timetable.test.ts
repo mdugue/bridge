@@ -110,7 +110,7 @@ const OPERATOR: Record<string, TramOperator> = {
 
 test.each(SITES)("%s: the committed timetable is whole", (site) => {
   const tt = JSON.parse(
-    readFileSync(join(DATA, site, "transit", "trams.json"), "utf8")
+    readFileSync(join(DATA, site, "transit", "trams.json"), "utf-8")
   ) as TramTimetable;
   if (tt.agencies) {
     expect(tt.routeAgency).toHaveLength(tt.routes.length);

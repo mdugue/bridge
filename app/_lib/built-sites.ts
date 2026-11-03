@@ -28,7 +28,7 @@ export function builtSites(): BuiltSite[] {
       JSON.parse(
         readFileSync(
           path.join(process.cwd(), "public", "data", SITE_INDEX_FILE),
-          "utf8"
+          "utf-8"
         )
       )
     );

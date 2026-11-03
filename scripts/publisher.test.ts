@@ -34,7 +34,7 @@ test("the same bytes are written once; a run names its files in the manifest and
     [MANIFEST_FILE, name, "site-stats.json"].toSorted()
   );
   const manifest: unknown = JSON.parse(
-    readFileSync(join(dir, MANIFEST_FILE), "utf8")
+    readFileSync(join(dir, MANIFEST_FILE), "utf-8")
   );
   expect(manifest).toEqual({ version: 1, files: { "a.json": name } });
 

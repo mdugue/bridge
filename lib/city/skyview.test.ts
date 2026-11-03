@@ -29,7 +29,7 @@ test("the committed horizon legends match the constants the shader uses", () => 
     if (!existsSync(path)) {
       continue;
     }
-    const legend = JSON.parse(readFileSync(path, "utf8")) as {
+    const legend = JSON.parse(readFileSync(path, "utf-8")) as {
       attribution: string;
       azimuthsDeg: number[];
       bands: {
