@@ -46,9 +46,13 @@ describe("dormerMesh", () => {
     const normals = faceNormals(positions);
     const roofs = normals.filter((_, i) => isRoof[3 * i] === 1);
     const walls = normals.filter((_, i) => isRoof[3 * i] === 0);
+    // its roof, and the inner lid under it facing in (the shadow map's
+    // caster over the box: it draws back faces)
     expect(roofs).toEqual([
       [0, 0, 1],
       [0, 0, 1],
+      [0, 0, -1],
+      [0, 0, -1],
     ]);
     expect(walls).toContainEqual([1, 0, 0]);
     expect(walls).toContainEqual([0, 1, 0]);
@@ -99,10 +103,11 @@ describe("dormerMesh", () => {
     expect(front(flat)).toBeCloseTo(21.5, 6);
     // 2.5 m from the back line at b = −1.5 to the front at b = 1
     expect(front(shed)).toBeCloseTo(21.5 - 2.5 * tan20, 6);
-    // its roof faces up and down the slope, at the measured fall
-    const roof = unitNormals(shed.positions).filter(
-      (_, i) => shed.isRoof[3 * i] === 1
-    );
+    // its roof faces up and down the slope, at the measured fall (its
+    // inner lid, the last two, the other way)
+    const roof = unitNormals(shed.positions)
+      .filter((_, i) => shed.isRoof[3 * i] === 1)
+      .slice(0, -2);
     for (const n of roof) {
       expect(n[0]).toBeCloseTo(Math.sin((20 * Math.PI) / 180), 6);
       expect(n[2]).toBeCloseTo(Math.cos((20 * Math.PI) / 180), 6);
