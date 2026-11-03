@@ -770,10 +770,12 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
   const showAllPicks = useCallback(() => {
     const targets = handleRef.current?.pickTargets() ?? [];
     if (targets.length > 0) {
-      askScene.show(
-        frameTargets(targets, { ...askScene.frame(), from: askScene.from() })
-          .view
-      );
+      const framed = frameTargets(targets, {
+        ...askScene.frame(),
+        from: askScene.from(),
+      });
+      // the eye over the ground its height was framed on
+      askScene.show(framed.view, framed.ground);
     }
   }, [askScene]);
   const toggleAsk = () => {
