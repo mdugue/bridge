@@ -38,67 +38,125 @@ function recognitionClass(): RecognitionClass | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
+// a web link, with at most one level of brackets in it (Zwinger_(Dresden))
+// (a sentence's full stop after it is not the link's)
+const LINK = String.raw`https?:\/\/(?:[^\s()]|\([^\s()]*\))*(?:[^\s().,;:!?]|\([^\s()]*\))`;
+/** [words](link): the words stay */
+const MARKDOWN_LINK = new RegExp(String.raw`\[([^\]]+)\]\(${LINK}\)`, "g");
+/** (link) or (Quelle: link): gone with its brackets */
+const BRACKETED_LINK = new RegExp(
+  String.raw`\s?\((?:Quelle:\s*)?${LINK}\)`,
+  "g"
+);
+/** a bare link */
+const BARE_LINK = new RegExp(String.raw`\s?${LINK}`, "g");
+
 /**
  * Text as it should be heard: no web links (the card shows them; a
  * Markdown link keeps its words), no list marks or Markdown stars, "m" and
  * "m²" as words.
  */
 export function speakable(text: string): string {
-  return text
-    .replace(/\[([^\]]+)\]\(https?:\/\/[^)]*\)/g, "$1")
-    .replace(/\s?\(?https?:\/\/[^\s)]+\)?/g, "")
-    .replace(/^\s*[-*•]\s+/gm, "")
-    .replace(/[*_#`]/g, "")
-    .replace(/(\d)\s?m²/g, "$1 Quadratmeter")
-    .replace(/(\d)\s?m\b/g, "$1 Meter")
-    .replace(/\s+/g, " ")
-    .trim();
+  return (
+    text
+      .replace(MARKDOWN_LINK, "$1")
+      .replace(BRACKETED_LINK, "")
+      .replace(BARE_LINK, "")
+      .replace(/^[ \t]*[-*•][ \t]+/gm, "")
+      // Markdown's marks, but not an underscore inside a word (DESN_0815)
+      .replace(/[*#`]|(?<!\w)_|_(?!\w)/g, "")
+      // a line without its own end is a sentence still: a list item, a heading
+      // (after a number a comma: "1726." reads as an ordinal)
+      .replace(/(\d)[ \t]*\n+/g, "$1, ")
+      .replace(/([^\s.!?:;,])[ \t]*\n+/g, "$1. ")
+      .replace(/(\d)\s?m²/g, "$1 Quadratmeter")
+      .replace(/(\d)\s?m³/g, "$1 Kubikmeter")
+      .replace(/(\d)\s?m(?![\p{L}\d])/gu, "$1 Meter")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
 }
 
-/** The best German voice the device has: a local one first. */
+/**
+ * The device's own German voice, or null. Only a local one: a network
+ * voice (Chrome's "Google Deutsch") would send the answer to its maker,
+ * and the privacy page promises that reading aloud stays on the device.
+ */
 function germanVoice(): SpeechSynthesisVoice | null {
-  const voices = speechSynthesis
+  const local = speechSynthesis
     .getVoices()
-    .filter((v) => v.lang.toLowerCase().startsWith("de"));
-  return voices.find((v) => v.localService) ?? voices[0] ?? null;
+    .filter((v) => v.localService && v.lang.toLowerCase().startsWith("de"));
+  // the device's default first, then Germany's German (dictation's too)
+  const rank = (v: SpeechSynthesisVoice) =>
+    (v.default ? 0 : 2) + (v.lang.toLowerCase() === "de-de" ? 0 : 1);
+  return local.toSorted((a, b) => rank(a) - rank(b))[0] ?? null;
 }
 
 export interface Speech {
+  /**
+   * Starts the speech engine from a tap: iOS Safari speaks only what a
+   * gesture began, and an answer is read later, from an effect.
+   */
+  prime: () => void;
   speak: (text: string) => void;
   stop: () => void;
   supported: boolean;
 }
 
-/** Reading aloud, one text at a time; a new one cuts the last off. */
+/**
+ * Reading aloud, one text at a time; a new one cuts the last off. Only
+ * where the device has a German voice of its own — the voices load late,
+ * so `supported` follows them.
+ */
 export function useSpeech(): Speech {
-  const [supported] = useState(
-    () => typeof window !== "undefined" && "speechSynthesis" in window
-  );
+  const [voice, setVoice] = useState<SpeechSynthesisVoice | null>(null);
+  useEffect(() => {
+    if (!("speechSynthesis" in window)) {
+      return;
+    }
+    // a reload that briefly lists none keeps the voice it had: a reading
+    // answer is not cut off, the switch does not vanish
+    const pick = () => setVoice((had) => germanVoice() ?? had);
+    pick();
+    speechSynthesis.addEventListener("voiceschanged", pick);
+    return () => speechSynthesis.removeEventListener("voiceschanged", pick);
+  }, []);
+  const supported = voice !== null;
   const stop = useCallback(() => {
-    if (supported) {
+    if ("speechSynthesis" in window) {
       speechSynthesis.cancel();
+    }
+  }, []);
+  const primed = useRef(false);
+  const prime = useCallback(() => {
+    if (supported && !primed.current) {
+      primed.current = true;
+      // a silent word, not an empty text: WebKit may skip that unstarted
+      const silent = new SpeechSynthesisUtterance(" ");
+      silent.volume = 0;
+      speechSynthesis.speak(silent);
     }
   }, [supported]);
   const speak = useCallback(
     (text: string) => {
       const words = speakable(text);
-      if (!(supported && words)) {
+      if (!(voice && words)) {
         return;
       }
       speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(words);
-      utterance.lang = "de-DE";
-      const voice = germanVoice();
-      if (voice) {
-        utterance.voice = voice;
-      }
+      utterance.lang = voice.lang;
+      utterance.voice = voice;
       speechSynthesis.speak(utterance);
     },
-    [supported]
+    [voice]
   );
   // a closed card stops talking
   useEffect(() => stop, [stop]);
-  return useMemo(() => ({ speak, stop, supported }), [speak, stop, supported]);
+  return useMemo(
+    () => ({ prime, speak, stop, supported }),
+    [prime, speak, stop, supported]
+  );
 }
 
 export interface Dictation {
@@ -175,5 +233,8 @@ export function useDictation(): Dictation {
     setListening(true);
   }, []);
   useEffect(() => () => current.current?.abort(), []);
-  return { listening, problem, start, stop, supported };
+  return useMemo(
+    () => ({ listening, problem, start, stop, supported }),
+    [listening, problem, start, stop, supported]
+  );
 }

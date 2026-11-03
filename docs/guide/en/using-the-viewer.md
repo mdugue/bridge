@@ -33,9 +33,12 @@ landmarks, the largest area.
 
 ## Loading
 
-The loading screen lists five stages and a bar. The first three
-(buildings, terrain, light) end at the mark labelled *begehbar*
-("walkable"): from that moment the overlay dissolves and you can move,
+The loading screen is a sheet of clay drawn in contour lines: a magenta
+ring in the middle widens as the city loads, the clay inside it takes on
+colour, and a dashed line marks where the scene becomes walkable. Below
+it are five stages (three on a phone). The first three
+(buildings, terrain, light) end at a thin magenta divider, the point
+where the scene becomes walkable (*begehbar*): from that moment the overlay dissolves and you can move,
 while the remaining two (the surroundings in view, then trees, lamps,
 rails and walls) stream in behind a small pill at the top of the screen.
 *Alles geladen* means everything in your view is in – not the whole city.
@@ -43,6 +46,13 @@ After that the viewer keeps loading as you move: the city is streamed tile
 by tile, detailed near you and coarse further away. When that takes a
 moment, on a long flight for instance, a small *Umgebung lädt* ("loading
 surroundings") hint shows at the top of the screen (see [how a visit unfolds](./how-it-works.md#how-a-visit-unfolds)).
+
+The picture shows the same thing: while the city is still filling in, it
+colours in outward from where you stand. What is complete keeps its
+colours; beyond a slowly breathing magenta line the city lies as unfired
+clay, grey and lined with contours, until the line has reached it. When
+nothing is left to come, the line runs out to the horizon and the colours
+follow.
 
 The side panel is there from the start, over the loading screen. While
 the city loads you can already pick a place, click a spot on the map or
@@ -434,7 +444,8 @@ The button in the corner opens a panel with three tabs.
   answers aloud, and the *Hörmodus* softly darkens the edges and lets
   the scene rest — for walking with the phone in your pocket, together with
   *Live* in the toolbar. "What is that up ahead?" asks the city model
-  what stands at the centre of the view and opens its card. As a
+  what stands at the centre of the view (in Modell: where it is aligned)
+  and opens its card. As a
   **scenario assistant** it works out what-ifs: "How high was the Elbe
   here in 2002?" lays a flood's water level into the model as a water
   surface and counts the buildings whose foot would stand below it (in

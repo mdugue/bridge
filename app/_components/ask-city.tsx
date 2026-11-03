@@ -39,7 +39,10 @@ import {
   type AskProviderId,
   maskedKey,
   plausibleKey,
+  CUT_SHORT,
   providerForKey,
+  TOO_LONG,
+  TOO_MANY_STEPS,
 } from "@/lib/city/ask-city";
 import { Button } from "@/components/ui/button";
 import { Message, MessageContent } from "@/components/ui/message";
@@ -54,7 +57,12 @@ import { Trace, TraceIcon, TraceLine, TraceTitle } from "@/components/ui/trace";
 import { cn } from "cn";
 import { type AskKey, clearAskKey, readAskKey, writeAskKey } from "./ask-key";
 import { type AskScene, sceneTools } from "./ask-scene-tools";
-import { type Speech, useDictation, useSpeech } from "./ask-voice";
+import {
+  type Dictation,
+  type Speech,
+  useDictation,
+  useSpeech,
+} from "./ask-voice";
 
 interface Props {
   coarse: boolean;
@@ -87,6 +95,8 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
     },
     [scene]
   );
+  // the key the conversation runs on, kept while the form is open
+  const [held, setHeld] = useState(key);
   return (
     <>
       {hearing && (
@@ -98,7 +108,7 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
           />
           <button
             aria-label="Hörmodus beenden"
-            className="pointer-events-auto absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full bg-black/45 px-3 py-1.5 text-[12px] text-white/85 shadow-sm backdrop-blur-sm hover:bg-black/60"
+            className="pointer-events-auto absolute bottom-16 left-1/2 z-20 -translate-x-1/2 rounded-full bg-black/45 px-3 py-1.5 text-[12px] text-white/85 shadow-sm backdrop-blur-sm hover:bg-black/60"
             data-testid="ask-hearing"
             onClick={() => setHearing(false)}
             type="button"
@@ -149,23 +159,36 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
             <XIcon className="size-4" />
           </button>
         </header>
-        {key ? (
-          <Conversation
-            askKey={key}
-            hearing={hearing}
-            onHearing={setHearing}
-            key={key.token || key.key}
-            onKeyProblem={() => setKey(null)}
-            reading={reading}
-            setReading={setReading}
-            scene={scene}
-            site={site}
-          />
-        ) : (
+        {held && (
+          // a renewed token keeps the conversation: it stays mounted, hidden,
+          // while the key is checked again, and remounts only for another key
+          <div className={key ? "contents" : "hidden"}>
+            <Conversation
+              askKey={key ?? held}
+              hearing={hearing}
+              key={`${held.provider}:${held.key}`}
+              onHearing={setHearing}
+              onKeyProblem={() => setKey(null)}
+              paused={!key}
+              reading={reading}
+              scene={scene}
+              setReading={setReading}
+              site={site}
+            />
+          </div>
+        )}
+        {!key && (
           <KeyForm
+            // a forgotten key ends the conversation that runs on it
+            onForget={() => {
+              setHeld(null);
+              setHearing(false);
+              setReading(false);
+            }}
             onKey={(k) => {
               writeAskKey(k);
               setKey(k);
+              setHeld(k);
             }}
           />
         )}
@@ -176,8 +199,14 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
 
 // --- the key ------------------------------------------------------------------
 
-function KeyForm({ onKey }: { onKey: (key: AskKey) => void }) {
-  const stored = readAskKey();
+function KeyForm({
+  onForget,
+  onKey,
+}: {
+  onForget: () => void;
+  onKey: (key: AskKey) => void;
+}) {
+  const [stored, setStored] = useState(readAskKey);
   const [provider, setProvider] = useState<AskProviderId>(
     stored?.provider ?? "anthropic"
   );
@@ -345,6 +374,8 @@ function KeyForm({ onKey }: { onKey: (key: AskKey) => void }) {
               className="underline underline-offset-2 hover:text-foreground"
               onClick={() => {
                 clearAskKey();
+                setStored(null);
+                onForget();
                 setText("");
               }}
               type="button"
@@ -366,31 +397,71 @@ const SUGGESTIONS = [
   "Wie sieht es hier am Abend aus?",
 ];
 
-/** A failed answer in words, by the status the server sent. */
-function errorText(error: Error): { key: boolean; text: string } {
+/** A provider's error that names the key or the account's credit. */
+const KEY_TROUBLE =
+  /\b(401|402|403|unauthori[sz]ed|forbidden|authenticat\w*|api[ _-]?key|credits?|credentials?|quota|billing|insufficient)\b/i;
+/** The same, as the code a provider's error carries. */
+const KEY_CODES = new Set(["401", "402", "403"]);
+
+/** A failed answer in words, by the status the server sent, and what
+ *  the visitor can do about it: check the key again or start over. */
+function errorText(error: Error): {
+  key: boolean;
+  reset: boolean;
+  text: string;
+} {
   const status = (error as { status?: unknown }).status;
+  const say = (text: string, key = false, reset = false) => ({
+    key,
+    reset,
+    text,
+  });
   if (status === 401) {
-    return { key: true, text: "Der Schlüssel muss neu geprüft werden." };
+    return say("Der Schlüssel muss neu geprüft werden.", true);
+  }
+  if (status === 400) {
+    // an older page, or a model the server no longer offers
+    return say(
+      "Die Anfrage passt nicht zu diesem Server — lade die Seite neu."
+    );
   }
   if (status === 413) {
-    return {
-      key: false,
-      text: "Das Gespräch ist zu lang geworden — bitte neu beginnen.",
-    };
+    return say(TOO_LONG, false, true);
+  }
+  if (status === 422) {
+    return say(`${TOO_MANY_STEPS} Frag bitte anders.`, false, true);
   }
   if (status === 404) {
-    return { key: false, text: "Für diese Stadt gibt es kein Stadtwissen." };
+    return say("Für diese Stadt gibt es kein Stadtwissen.");
   }
   if (status === 501) {
-    return {
-      key: false,
-      text: "Frag die Stadt ist auf diesem Server nicht eingerichtet.",
-    };
+    return say("Frag die Stadt ist auf diesem Server nicht eingerichtet.");
   }
   if (typeof status === "number") {
-    return { key: false, text: `Der Server antwortet mit Status ${status}.` };
+    return say(`Der Server antwortet mit Status ${status}.`);
   }
-  return { key: false, text: error.message || "Die Antwort brach ab." };
+  // a key revoked or out of credit after the check fails in the stream,
+  // in the provider's words: offer the check again for those only
+  const message = error.message || "Die Antwort brach ab.";
+  const code = argText((error as { code?: unknown }).code);
+  if (message === TOO_MANY_STEPS) {
+    return say(`${TOO_MANY_STEPS} Frag bitte anders.`, false, true);
+  }
+  // the codes first, the provider's words only where no code says it
+  if (KEY_CODES.has(code)) {
+    return say(message, true);
+  }
+  // the adapters' codes for a spent output budget and a full context
+  if (
+    code === "max_tokens" ||
+    (code === "incomplete" && message === "max_output_tokens")
+  ) {
+    return say(CUT_SHORT);
+  }
+  if (code === "context_overflow") {
+    return say(TOO_LONG, false, true);
+  }
+  return say(message, KEY_TROUBLE.test(message));
 }
 
 /**
@@ -427,26 +498,42 @@ function useReadAloud(
   loading: boolean,
   failed: boolean,
   on: boolean,
-  speech: Speech
+  speech: Speech,
+  listening: boolean
 ): () => void {
   const was = useRef(loading);
   const stopped = useRef(false);
+  // an answer that ended while the microphone listened, read once it closes
+  const owed = useRef(false);
   useEffect(() => {
-    if (was.current && !loading && on && !failed && !stopped.current) {
-      speech.speak(lastAnswer(messages));
+    if (was.current && !loading) {
+      owed.current = on && !failed && !stopped.current;
     }
     if (loading) {
       stopped.current = false;
+      owed.current = false;
     }
     was.current = loading;
-  }, [loading, failed, on, messages, speech]);
+    // reading switched off since: owed no more
+    if (!on) {
+      owed.current = false;
+    }
+    // not into an open microphone: it would hear the answer as a question
+    if (owed.current && !listening) {
+      owed.current = false;
+      speech.speak(lastAnswer(messages));
+    }
+  }, [loading, failed, on, messages, speech, listening]);
   return useCallback(() => {
     stopped.current = true;
+    owed.current = false;
   }, []);
 }
 
 /** Read aloud, speak a question, the Hörmodus: where the browser can. */
 function VoiceBar({
+  busy,
+  dictation,
   hearing,
   onHearing,
   onSpoken,
@@ -454,6 +541,9 @@ function VoiceBar({
   setReading,
   speech,
 }: {
+  /** an answer is on its way: no second question by voice */
+  busy: boolean;
+  dictation: Dictation;
   hearing: boolean;
   onHearing: (on: boolean) => void;
   onSpoken: (text: string) => void;
@@ -461,7 +551,6 @@ function VoiceBar({
   setReading: (on: boolean) => void;
   speech: Speech;
 }) {
-  const dictation = useDictation();
   // the question goes to the conversation as it is when it is heard
   const spoken = useRef(onSpoken);
   useEffect(() => {
@@ -477,18 +566,16 @@ function VoiceBar({
       {dictation.supported && (
         <button
           aria-pressed={dictation.listening}
-          className={chip}
+          className={cn(chip, "disabled:opacity-50")}
+          disabled={busy && !dictation.listening}
           onClick={() => {
             if (dictation.listening) {
               dictation.stop();
               return;
             }
             speech.stop();
-            dictation.start((question) => {
-              // a spoken question gets a spoken answer
-              setReading(true);
-              spoken.current(question);
-            });
+            speech.prime();
+            dictation.start((question) => spoken.current(question));
           }}
           title="Frage sprechen (der Browser erkennt die Sprache)"
           type="button"
@@ -504,6 +591,10 @@ function VoiceBar({
           onClick={() => {
             if (reading) {
               speech.stop();
+              // the Hörmodus promises the answers read aloud
+              onHearing(false);
+            } else {
+              speech.prime();
             }
             setReading(!reading);
           }}
@@ -523,7 +614,10 @@ function VoiceBar({
           aria-pressed={hearing}
           className={chip}
           onClick={() => {
-            setReading(true);
+            if (!hearing) {
+              speech.prime();
+              setReading(true);
+            }
             onHearing(!hearing);
           }}
           title="Hörmodus: die Szene ruht, die Antworten werden vorgelesen — für unterwegs, das Telefon in der Tasche"
@@ -544,6 +638,7 @@ function VoiceBar({
 
 function Conversation({
   askKey,
+  paused,
   hearing,
   onHearing,
   onKeyProblem,
@@ -553,6 +648,8 @@ function Conversation({
   site,
 }: {
   askKey: AskKey;
+  /** hidden while the key is checked again */
+  paused: boolean;
   hearing: boolean;
   onHearing: (on: boolean) => void;
   onKeyProblem: () => void;
@@ -562,8 +659,9 @@ function Conversation({
   site: string;
 }) {
   const speech = useSpeech();
+  const dictation = useDictation();
   const tools = useMemo(() => sceneTools(scene), [scene]);
-  // the card remounts for another key (keyed by it), so this one is fixed
+  // the conversation remounts for another key (keyed by it): fixed here
   const secret = askKey.key;
   const connection = useMemo(
     () =>
@@ -588,24 +686,77 @@ function Conversation({
       voice: reading,
     },
   });
+  // a closed conversation leaves no tool waiting on the scene
+  // (the answer stops first: a tool that returns at the abort would
+  // otherwise resume the run with one more request on the visitor's key)
+  const stopChat = useRef(chat.stop);
+  useEffect(() => {
+    stopChat.current = chat.stop;
+  });
+  useEffect(
+    () => () => {
+      stopChat.current();
+      scene.abandon();
+    },
+    [scene]
+  );
   const stopReading = useReadAloud(
     chat.messages,
     chat.isLoading,
     chat.error !== undefined,
     reading,
-    speech
+    speech,
+    dictation.listening
   );
   const [text, setText] = useState("");
   // `voice` with the question itself: a spoken one sets `reading` in the
   // same handler, before forwardedProps has seen it
-  const ask = (question: string, voice = reading) => {
+  const ask = (question: string, voice = reading, fromField = true) => {
     const q = question.trim().slice(0, ASK_LIMITS.questionChars);
     if (q && !chat.isLoading) {
-      setText("");
+      if (fromField) {
+        setText("");
+      }
+      // the last answer stops: the next one is on its way
+      speech.stop();
+      if (voice) {
+        speech.prime();
+      }
       void chat.sendMessage(q, { body: { voice } });
     }
   };
-  const failure = chat.error ? errorText(chat.error) : null;
+  // a spoken question gets a spoken answer; one heard while an answer
+  // still loads waits in the field, as a typed one would
+  const askSpoken = (question: string) => {
+    // (or while the key is checked again: its token would be refused)
+    if (chat.isLoading || paused) {
+      // the microphone opened before a typed question went: it waits
+      // in an empty field, never over what was typed
+      setText((t) => t || question.slice(0, ASK_LIMITS.questionChars));
+      return;
+    }
+    // read aloud only where the device can: a voice-style answer nobody
+    // hears, with no switch to undo it, helps no one
+    setReading(speech.supported);
+    // a spoken question leaves a typed draft where it is
+    ask(question, speech.supported, false);
+  };
+  // a renewed token (same key, no remount) clears the error it answered
+  // (each check sets a new expiry, with or without a token)
+  const [renewed, setRenewed] = useState({
+    at: askKey.expires,
+    error: undefined as Error | undefined,
+  });
+  if (renewed.at !== askKey.expires) {
+    // only an error the check answers: one about the key
+    const keyError = chat.error && errorText(chat.error).key;
+    setRenewed({
+      at: askKey.expires,
+      error: keyError ? chat.error : undefined,
+    });
+  }
+  const failure =
+    chat.error && chat.error !== renewed.error ? errorText(chat.error) : null;
 
   return (
     <>
@@ -636,6 +787,9 @@ function Conversation({
                     // an answer that used the browser's tools comes as
                     // several messages: the label marks its first
                     labelled={chat.messages[i - 1]?.role !== "assistant"}
+                    // only the last message of a running answer still
+                    // waits on its tools; anything else was stopped
+                    live={chat.isLoading && i === chat.messages.length - 1}
                     message={m}
                   />
                 </MessageScrollerItem>
@@ -652,6 +806,15 @@ function Conversation({
                       Schlüssel prüfen
                     </button>
                   )}
+                  {failure.reset && (
+                    <button
+                      className="underline underline-offset-2"
+                      onClick={chat.clear}
+                      type="button"
+                    >
+                      Neu beginnen
+                    </button>
+                  )}
                 </p>
               )}
             </MessageScrollerContent>
@@ -659,9 +822,11 @@ function Conversation({
         </MessageScroller>
       </MessageScrollerProvider>
       <VoiceBar
+        busy={chat.isLoading}
+        dictation={dictation}
         hearing={hearing}
         onHearing={onHearing}
-        onSpoken={(q) => ask(q, true)}
+        onSpoken={askSpoken}
         reading={reading}
         setReading={setReading}
         speech={speech}
@@ -696,6 +861,7 @@ function Conversation({
             aria-label="Antwort abbrechen"
             onClick={() => {
               stopReading();
+              scene.abandon();
               chat.stop();
             }}
             size="icon-sm"
@@ -732,8 +898,23 @@ function argText(value: unknown): string {
 }
 
 /** What a tool call says it did, in the trace under an answer. */
-function toolLine(name: string, input: unknown): string {
+function toolLine(name: string, input: unknown, output?: unknown): string {
   const args = (input ?? {}) as Record<string, unknown>;
+  // a refused call says why, in the card's words (the model's are longer)
+  const refused = output as
+    | {
+        ausserhalb?: unknown;
+        gefunden?: unknown;
+        hinweis?: unknown;
+        ok?: unknown;
+      }
+    | undefined;
+  // (was_ist_da says `gefunden: false` where the others say `ok: false`)
+  if (refused?.ok === false || refused?.gefunden === false) {
+    return refused.ausserhalb === true
+      ? "Findet den Ort nicht in der Stadt"
+      : argText(refused.hinweis) || "Abgelehnt";
+  }
   switch (name) {
     case "suche_stadt":
       return `Sucht „${argText(args.anfrage)}“`;
@@ -746,7 +927,7 @@ function toolLine(name: string, input: unknown): string {
     case "wo_bin_ich":
       return "Schaut, wo du stehst";
     case "was_ist_da":
-      return "Fragt, was in der Bildmitte steht";
+      return "Fragt, was dort steht, wohin die Ansicht zeigt";
     case "zeige":
       return args.aus_der_luft ? "Fliegt hin" : "Geht hin";
     case "setze_zeit":
@@ -774,7 +955,10 @@ function toolIcon(name: string) {
 /** Text with its web links clickable; nothing else is interpreted. */
 function Linked({ text }: { text: string }) {
   // a sentence's closing punctuation after a link is not part of it
-  const parts = text.split(/(https:\/\/[^\s)\]]*[^\s)\].,;:!?»“”"'])/g);
+  // and a bracketed part, as in Wikipedia's „Zwinger_(Dresden)“, is
+  const parts = text.split(
+    /(https:\/\/(?:[^\s()[\]]|\([^\s()]*\))*(?:[^\s()[\].,;:!?»“”"']|\([^\s()]*\)))/g
+  );
   return (
     <>
       {parts.map((part, i) =>
@@ -800,9 +984,11 @@ function Linked({ text }: { text: string }) {
 
 function ChatMessage({
   labelled,
+  live,
   message,
 }: {
   labelled: boolean;
+  live: boolean;
   message: UIMessage;
 }) {
   if (message.role === "user") {
@@ -829,19 +1015,25 @@ function ChatMessage({
         )}
         {calls.length > 0 && (
           <Trace>
-            {calls.map((c) => (
-              <TraceLine
-                key={c.id}
-                status={
-                  c.state === "input-complete" || c.state === "input-streaming"
-                    ? "running"
-                    : undefined
-                }
-              >
-                <TraceIcon>{toolIcon(c.name)}</TraceIcon>
-                <TraceTitle>{toolLine(c.name, c.input)}</TraceTitle>
-              </TraceLine>
-            ))}
+            {calls.map((c) => {
+              const open =
+                c.output === undefined &&
+                (c.state === "awaiting-input" ||
+                  c.state === "input-streaming" ||
+                  c.state === "input-complete");
+              return (
+                <TraceLine
+                  key={c.id}
+                  status={open && live ? "running" : undefined}
+                >
+                  <TraceIcon>{toolIcon(c.name)}</TraceIcon>
+                  <TraceTitle>
+                    {toolLine(c.name, c.input, c.output)}
+                    {open && !live && " (abgebrochen)"}
+                  </TraceTitle>
+                </TraceLine>
+              );
+            })}
           </Trace>
         )}
         {message.parts.map((p, i) =>

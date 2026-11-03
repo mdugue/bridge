@@ -205,6 +205,19 @@ export function ownSlotUniform(
   );
 }
 
+/** `ownSlotUniform` of any slot value (a vector, a colour …). */
+export function ownSlotValue<T extends object>(
+  name: string,
+  initial: T
+): UniformNode<string, T> {
+  // reason: `uniform` infers its node type from the value; the slot keeps
+  // whatever type the initial value has.
+  const node = uniform(initial as never) as unknown as UniformNode<string, T>;
+  return node.onObjectUpdate(
+    ({ object }) => (ownSlots(object)[name] as T | undefined) ?? initial
+  );
+}
+
 /** A uniform slot; `initial` gives its type (and the value off a tile). */
 export function slotUniform<T extends object | number>(
   name: string,

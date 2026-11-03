@@ -34,8 +34,12 @@ Höhenunterschied im Gelände), die meisten Wahrzeichen, die größte Fläche.
 
 ## Laden
 
-Der Ladebildschirm listet fünf Stufen und einen Balken. Die ersten drei
-(Gebäude, Gelände, Licht) enden an der Marke *begehbar*: Ab da löst sich
+Der Ladebildschirm ist ein Blatt aus Ton mit Höhenlinien: Ein
+magentafarbener Ring in der Mitte weitet sich mit dem Laden, innen nimmt
+der Ton Farbe an, und die gestrichelte Linie markiert, wo die Szene
+begehbar wird. Darunter stehen fünf Stufen (auf dem Handy drei). Die
+ersten drei (Gebäude, Gelände, Licht) enden an einem feinen magentafarbenen
+Strich, ab dem die Szene *begehbar* ist: Ab da löst sich
 der Vorhang auf, und du kannst dich bewegen, während die übrigen zwei
 (die Umgebung im Blick, dann Bäume, Lampen, Schienen und Mauern) hinter
 einer kleinen Pille oben im Bild nachladen. *Alles geladen* heißt, alles
@@ -45,6 +49,13 @@ gestreamt, in deiner Nähe detailliert, weiter weg grob. Dauert das einen
 Moment, etwa bei einem langen Flug, zeigt ein kleiner Hinweis *Umgebung
 lädt* oben im Bild (siehe
 [Wie ein Besuch abläuft](./how-it-works.md#wie-ein-besuch-abläuft)).
+
+Das Bild zeigt dasselbe: Solange die Stadt noch nachlädt, färbt sie sich
+von deinem Standort aus ein. Was vollständig da ist, hat seine Farben;
+hinter einer langsam atmenden magentafarbenen Linie liegt die Stadt als
+ungebrannter Ton, grau und mit Höhenlinien, bis die Linie sie erreicht.
+Kommt nichts mehr, läuft die Linie bis zum Horizont, und die Farben
+folgen.
 
 Die Seitenleiste ist von Anfang an da, über dem Ladebildschirm. Schon
 während die Stadt lädt, kannst du einen Ort wählen, einen Punkt auf der
@@ -463,7 +474,8 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   Ränder leicht ab und lässt die Szene ruhen — für unterwegs, das
   Telefon in der Tasche, zusammen mit *Live* in der Werkzeugleiste.
   „Was ist das da vorne?“ fragt das Stadtmodell nach dem, was in der
-  Bildmitte steht, und öffnet dessen Karte. Als **Szenario-Assistent**
+  Bildmitte steht (im Modell: wo es ausgerichtet ist), und öffnet dessen
+  Karte. Als **Szenario-Assistent**
   rechnet es Was-wäre-wenn: „Wie hoch stand die Elbe 2002 hier?“ legt
   den Wasserspiegel eines Hochwassers als Wasserfläche ins Modell und
   zählt, welche Gebäude mit dem Fuß darunter stünden (in Dresden und

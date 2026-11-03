@@ -17,12 +17,16 @@
  * Any input wakes it for the very next frame (`setStill(false)`).
  *
  * While the visitor only listens (*Frag die Stadt*'s Hörmodus, ADR 0057)
- * the scene draws at LISTENING_FPS while it stands still: the screen is
- * dark under the card, but the pose, the live mode and the questions about
+ * the scene draws at LISTENING_FPS while it stands still: the city shows
+ * through a soft vignette, but nothing in it needs more, and the pose, the live mode and the questions about
  * the view still see a current scene. While it moves — a glide the answer
  * started, the live mode following the walker — it draws at
- * LISTENING_MOVING_FPS, the slowest rate whose time step the loop does not
- * clamp (0.05 s), so a glide arrives when it would on screen.
+ * about LISTENING_MOVING_FPS, but it holds a frame back only when the
+ * next one, a frame's time later, still comes within LISTENING_MOVING_GAP_MS:
+ * so at any display rate no two kept frames lie further apart than the
+ * loop's largest time step (0.05 s), and a glide arrives when it would on
+ * screen (a fixed rate would not: 20 fps at 30 Hz keeps every second
+ * frame, 67 ms apart, and the clamp loses a quarter).
  *
  * Otherwise every frame draws.
  */
@@ -37,8 +41,11 @@ export const STILL_FPS = 30;
 export const STILL_AFTER_MS = 1000;
 /** frames per second the scene draws while the visitor only listens */
 export const LISTENING_FPS = 2;
-/** ...and while it moves, listened to: the loop's largest time step */
-export const LISTENING_MOVING_FPS = 20;
+/** ...and while it moves, listened to, at most */
+export const LISTENING_MOVING_FPS = 30;
+/** ...and never two kept frames further apart (ms; the loop clamps a
+ *  frame's time step to 50) */
+export const LISTENING_MOVING_GAP_MS = 48;
 
 export interface FramePace {
   /** the HUD covers the scene (on a phone: the sidebar's sheet is open) */
@@ -72,6 +79,8 @@ export function createFramePace(): FramePace {
   let heldBefore = false;
   let still = false;
   let listening = false;
+  // the last animation frame, drawn or not: the display's own interval
+  let lastFrame = Number.NaN;
   // A frame arrives a little before or after its slot (vsync jitter): half
   // a 60 Hz frame of slack keeps 12 fps from falling to every sixth frame.
   const interval = 1000 / COVERED_FPS - 8;
@@ -98,14 +107,20 @@ export function createFramePace(): FramePace {
       listening = on;
     },
     draws: (now) => {
-      const coveredDraws =
-        !covered || (now >= quietUntil && now - lastDrawn >= interval);
+      const frame = now - lastFrame || 0;
+      lastFrame = now;
+      const since = now - lastDrawn;
+      const coveredDraws = !covered || (now >= quietUntil && since >= interval);
+      // moving and listened to: at its rate, or now if skipping this frame
+      // would leave the next one past the loop's time step
+      const listenedDraws = still
+        ? since >= listeningInterval
+        : since >= listeningMovingInterval ||
+          since + frame > LISTENING_MOVING_GAP_MS;
       const draw =
         coveredDraws &&
-        (!still || now - lastDrawn >= stillInterval) &&
-        (!listening ||
-          now - lastDrawn >=
-            (still ? listeningInterval : listeningMovingInterval));
+        (!still || since >= stillInterval) &&
+        (!listening || listenedDraws);
       if (draw) {
         lastDrawn = now;
         heldBefore = held;

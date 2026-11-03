@@ -221,6 +221,7 @@ function useSheetEntrance(): [RefObject<HTMLDivElement | null>, boolean] {
     let frames = 0;
     let measured = false;
     let id = requestAnimationFrame(function wait() {
+      // oxlint-disable-next-line react/immutability -- the effect's own counter, never render state
       frames++;
       if (measured || frames >= SHEET_ENTRANCE_FRAMES) {
         setReady(true);

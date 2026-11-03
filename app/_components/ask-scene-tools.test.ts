@@ -3,8 +3,9 @@ import { SCENE_TOOLS } from "@/lib/city/ask-tools";
 import { type AskScene, sceneTools } from "./ask-scene-tools";
 
 const STUB: AskScene = {
+  abandon: () => undefined,
   from: () => null,
-  look: () => ({}),
+  look: () => Promise.resolve({}),
   river: null,
   setFlood: () => undefined,
   setVolume: () => true,
@@ -12,7 +13,8 @@ const STUB: AskScene = {
   setListening: () => undefined,
   setStyle: () => undefined,
   setTime: () => "",
-  show: () => undefined,
+  show: () => true,
+  within: () => true,
   where: () => ({}),
 };
 

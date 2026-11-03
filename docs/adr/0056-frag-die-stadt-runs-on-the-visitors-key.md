@@ -32,6 +32,11 @@ load into the browser.
    the scene's in the browser (`app/_components/ask-scene.ts`): a scene
    tool interrupts the run, the browser runs it and resumes. Only curated
    models are accepted, and a conversation keeps to caps (`ASK_LIMITS`).
+   A call an earlier answer ended without a result (the visitor stopped
+   it, or the run ended) gets a stand-in result, `abgebrochen`, before the
+   next question, and arguments cut off mid-stream become `{}` in every
+   row (`withStoppedCallsAnswered`): providers refuse a history with
+   either.
 3. **The key stays in the visitor's browser**, for the tab or, if asked,
    on the device (`frag-die-stadt`); the function forwards it to the
    provider and scrubs it from any error it sends back.
@@ -46,9 +51,13 @@ load into the browser.
 - Abuse is bounded by the token, the caps and the curated models; rate
   limits, bot protection and the spend limit are host and provider
   settings, not code.
-- `FRAG_SECRET` must be set on a deployment, or the routes answer 501;
-  every refusal logs a status and reason code, never the key or the
-  conversation. `FRAG_FAKE=1` is a scripted model for local tests only.
+- `FRAG_SECRET` must be set on a production server, or the routes answer
+  501; every refusal logs a status and reason code, never the key or the
+  conversation. `FRAG_FAKE=1` is a scripted model for local tests only
+  and is ignored on Vercel. One request takes at most eight model turns
+  and ends with an error 10 s before its 300 s of function time; one
+  answer, across the requests the scene tools resume, takes at most
+  twelve turns.
 - The privacy page names what is sent, to whom, and the storage key
   (ADR 0043). Generated answers show in their own card, marked
   (ADR 0042).

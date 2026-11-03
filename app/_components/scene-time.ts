@@ -253,6 +253,7 @@ export function useSceneTime(
         if (minutes === shown) {
           return;
         }
+        // oxlint-disable-next-line react/immutability -- the effect's own value, never render state
         shown = minutes;
         const at = performance.now();
         const hud = at - hudAt >= GLIDE_HUD_MS;

@@ -58,6 +58,14 @@ import {
   type LifecycleSignal,
 } from "@/lib/city/page-lifecycle";
 import type { Landmark } from "@/lib/city/landmarks";
+import {
+  BOOT_VEIL,
+  NO_VEIL,
+  bootFrontier,
+  loadFrontier,
+  stepVeil,
+  type VeilState,
+} from "@/lib/city/load-frontier";
 import type { LoadStageId, LoadStageUpdate } from "@/lib/city/load-stages";
 import type { LookKey, LookValues } from "@/lib/city/look-controls";
 import type { LookState } from "@/lib/city/look-state";
@@ -161,7 +169,14 @@ import { cutsGround, foldedThing, groundKeptUnderDesign } from "./design-site";
 import { graphOf, setGraph } from "./material-slots";
 import type { CrashTrail } from "./crash-trail";
 import { createSeasonClock } from "./crown-season";
-import { climateDay, seasonShiftFor } from "@/lib/city/tree-season";
+import {
+  climateDay,
+  dayOfYear,
+  leafLitterAt,
+  seasonAt,
+  seasonShiftFor,
+} from "@/lib/city/tree-season";
+import { crownLeaf, footLitter } from "./tree-foot";
 import {
   fetchOptionalJson,
   fetchRequiredJson,
@@ -191,6 +206,7 @@ import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
 import {
   pocFramesHeld,
   pocFrameTime,
+  pocVeil,
   tickPocFrame,
   updatePocDebug,
 } from "./poc-debug";
@@ -625,6 +641,13 @@ export interface CityWalkHandle {
    * marks it and reports it through `onInquiry`; tests and QA call it.
    */
   inquireAt: (ndc?: { x: number; y: number }) => Inquiry | null;
+  /** Where the view's subject stands (NDC) in Modell — the preset's
+   *  pivot, where `flyToViewpoint` puts a place — or undefined: the centre. */
+  focusNdc: () => { x: number; y: number } | undefined;
+  /** A glide (the pose's or Modell's) or a dolly zoom is under way. */
+  viewMoving: () => boolean;
+  /** Tiles or their dressing are still streaming in for the view. */
+  streamBusy: () => boolean;
   /** What the nameplate sets in the city and where (nameplate-layer.ts),
    *  null while nothing is named; tests and QA read it. */
   nameplateShown: () => { title: string; mode: string; spot: string } | null;
@@ -1395,11 +1418,14 @@ async function bootApp(
    */
   const stagesDone = new Set<LoadStageId>();
   const stagesSent = new Map<LoadStageId, string>();
+  // the last fraction each stage reported (the loading veil's boot ring)
+  const stageFractions = new Map<LoadStageId, number>();
   const stage = (id: LoadStageId, fraction: number, skipped?: boolean) => {
     if ((fraction >= 1 || skipped) && !stagesDone.has(id)) {
       stagesDone.add(id);
       opts.trail?.note(`stage ${id}`, skipped ? "skipped" : undefined);
     }
+    stageFractions.set(id, skipped ? 1 : fraction);
     const said = `${fraction}${skipped ? "s" : ""}`;
     if (stagesSent.get(id) === said) {
       return;
@@ -1597,8 +1623,16 @@ async function bootApp(
   // Dresden's year (the phenology table's) that looks like it in this
   // city's climate (tree-season.ts SITE_SEASON).
   const climate = seasonShiftFor(opts.site.id);
+  // the leaves under the trees (tree-foot.ts) and the trunks' shade under
+  // their crowns (vegetation-layer.ts) follow the same day
+  const groundSeason = (day: number): void => {
+    footLitter.value = leafLitterAt(day);
+    crownLeaf.value = seasonAt(day, 0).leaf;
+  };
+  groundSeason(climateDay(Math.floor(dayOfYear(opts.initialDate)), climate));
   const seasonClock = createSeasonClock(opts.initialDate, (calendar) => {
     const day = climateDay(calendar, climate);
+    groundSeason(day);
     let changed = false;
     for (const d of stream.dressings) {
       changed = (d.vegetation?.setSeason(day) ?? false) || changed;
@@ -1645,6 +1679,8 @@ async function bootApp(
     look: opts.look,
     clock: sceneClock,
   };
+  // each site tile's rectangle (the stream's and the loading veil's)
+  const siteTileBounds = new Map(extras.tiles.map((t) => [t.id, t.bounds]));
   const stream = createTileStream(
     {
       // whether it compiled (a tile drops the CPU copies of what it
@@ -1694,7 +1730,7 @@ async function bootApp(
       styleResources,
       sunDirection,
       tier: budget.tier,
-      tileBounds: (id) => extras.tiles.find((t) => t.id === id)?.bounds,
+      tileBounds: (id) => siteTileBounds.get(id),
       tilesetUrl,
       // the data layers' traffic builder (they are set up with the post
       // stack below; a slot asks only once the look has a layer on and
@@ -3097,6 +3133,52 @@ async function bootApp(
       });
   };
 
+  // The loading frontier (lib/city/load-frontier.ts): what is still on its
+  // way, as a ring around the camera that walks outward as the city fills.
+  let loadVeil: VeilState = BOOT_VEIL;
+  // the first load is through (`checkLoaded`)
+  let bootLoaded = false;
+  // the last frame drew it (the frame pacer)
+  let veilShown = false;
+  const stepLoadVeil = (
+    dt: number,
+    { exporting, model }: { exporting: boolean; model: boolean }
+  ) => {
+    const at = streamCamera.position;
+    // Modell after the boot: no veil, nor any measuring (from Modell's
+    // camera the state would come back stale to the walker's view).
+    if (model && bootLoaded) {
+      loadVeil = NO_VEIL;
+      veilShown = false;
+      postStack.setLoadVeil(NO_VEIL, at.x, at.z);
+      return;
+    }
+    // Until the first load is through, the ring walks out with the last
+    // two stages' progress instead: the tile underfoot would hold it at
+    // the feet until its own details are built, then let it jump. Nor does
+    // a moment with nothing in flight mid-boot (between two stages) sweep
+    // it out and lift it: only the end of the load does.
+    const frontier = !bootLoaded
+      ? bootFrontier(
+          ((stageFractions.get("surroundings") ?? 0) +
+            (stageFractions.get("details") ?? 0)) /
+            2
+        )
+      : loadFrontier(
+          siteTileBounds,
+          stream.pendingSiteTiles(),
+          at.x + offset.cx,
+          offset.cy - at.z
+        );
+    loadVeil = stepVeil(loadVeil, frontier, dt);
+    // an exported image is the city, not its loading (nor is Modell's
+    // drawing, booting)
+    const asked = exporting || model ? { strength: 0 } : pocVeil();
+    const drawn = asked ? { ...loadVeil, ...asked } : loadVeil;
+    veilShown = drawn.strength > 0;
+    postStack.setLoadVeil(drawn, at.x, at.z);
+  };
+
   // Motion-keyed quality regression. Derived from the CAMERA, not the input
   // layer: WASD, the joystick, pointer-lock mouse-look, touch look and the
   // scenic flights all move it, and only two of those go through `movement`
@@ -3722,7 +3804,9 @@ async function bootApp(
     if (!opts.pace) {
       return;
     }
-    const busy = moved || exporting || !sceneSettled || dataLayersMove;
+    // (the loading veil breathes, sweeps and lifts at the full rate)
+    const busy =
+      moved || exporting || !sceneSettled || dataLayersMove || veilShown;
     sceneStill = stillness.frame(time, busy);
     opts.pace.setStill(sceneStill);
   };
@@ -3760,6 +3844,8 @@ async function bootApp(
     // what the update brought into view or took out, before this frame
     // draws it (the shadow map, the lamp pool, the styles' gathering)
     streamChange.flush();
+    // (Modell's parallel camera draws a model, not the walker's view)
+    stepLoadVeil(dt, { exporting, model: modelRig.owns() });
     // Advance every tile's water ripple and glitter (its sky tint is the
     // fog colour's node, in lockstep with the sun by construction).
     setWaterTime(elapsed);
@@ -4118,6 +4204,7 @@ async function bootApp(
     }
     if (step.loaded) {
       sceneSettled = true;
+      bootLoaded = true;
       flushStats();
       opts.trail?.note("loaded");
       worldPartial = false;
@@ -4162,8 +4249,24 @@ async function bootApp(
     return true;
   };
 
+  /** A spot asked for: Modell centres on it, the perspective goes. */
+  const toSpot = (x: number, y: number, perspective: () => void) => {
+    wakeStill();
+    if (modelRig.owns()) {
+      modelRig.centreOn(groundPoint(x, y));
+    } else {
+      perspective();
+    }
+  };
+  // Every call that moves the camera or relights the scene wakes a resting
+  // one for the next frame, not its next slow one (the still pace, the
+  // Hörmodus's two frames a second): the move starts at once and its first
+  // time step is not lost to the loop's clamp.
   return {
-    setSun,
+    setSun: (date, preview) => {
+      wakeStill();
+      return setSun(date, preview);
+    },
     clearInquiry: () => {
       along = null;
       probe.clear();
@@ -4186,16 +4289,22 @@ async function bootApp(
       setScale: (scale) => design?.setScale(scale),
       status: () => design?.status() ?? null,
     },
-    inquireAt,
+    // (an inquiry the HUD asks for marks the scene: draw it now)
+    inquireAt: (ndc) => {
+      wakeStill();
+      return inquireAt(ndc);
+    },
     nameplateShown: () => nameplate.shown(),
     enterImmersive: canvasControls.lockPointer,
     releaseGpu: () => releaseGpu(renderer),
     flyTo: (position, lookAt) => {
+      wakeStill();
       modelRig.exitNow();
       pose.flyTo(position, lookAt);
     },
     // In Modell a place is where the picture is centred (plan 055).
     flyToViewpoint: (view, glide) => {
+      wakeStill();
       // the rig's own phase: the view mode can lag it (a snapshot's
       // perspective settles to walk while Modell stays)
       if (modelRig.staying()) {
@@ -4216,18 +4325,13 @@ async function bootApp(
       ),
     setVolume: scenario.setVolume,
     placeAt: (view) =>
-      modelRig.owns()
-        ? modelRig.centreOn(groundPoint(view.epsg.x, view.epsg.y))
-        : pose.placeAt(view),
-    teleportTo: (x, y) =>
-      modelRig.owns()
-        ? modelRig.centreOn(groundPoint(x, y))
-        : pose.teleportTo(x, y),
-    glideToSpot: (x, y) =>
-      modelRig.owns()
-        ? modelRig.centreOn(groundPoint(x, y))
-        : pose.glideToSpot(x, y),
+      toSpot(view.epsg.x, view.epsg.y, () => pose.placeAt(view)),
+    teleportTo: (x, y) => toSpot(x, y, () => pose.teleportTo(x, y)),
+    glideToSpot: (x, y) => toSpot(x, y, () => pose.glideToSpot(x, y)),
     getGlideTarget: pose.getGlideTarget,
+    focusNdc: modelRig.focusNdc,
+    viewMoving: () => pose.getGlideTarget() !== null || modelRig.moving(),
+    streamBusy: () => !sceneSettled,
     stopGlide: pose.cancelGlide,
     getPose: () => {
       const hud = modelRig.hud();
@@ -4253,6 +4357,7 @@ async function bootApp(
       return { ...perspective, epsg: { x: epsg.x, y: epsg.y }, model };
     },
     applyCameraState: (state) => {
+      wakeStill();
       const { model, ...perspective } = state;
       if (!model) {
         modelRig.exitNow();
@@ -4342,8 +4447,14 @@ async function bootApp(
     setModelTilt: modelRig.setTilt,
     setModelShear: modelRig.setShear,
     getModelHud: modelHud,
-    setFollowAim: pose.setFollowAim,
-    setFollowPosition: pose.setFollowPosition,
+    setFollowAim: (aim) => {
+      wakeStill();
+      pose.setFollowAim(aim);
+    },
+    setFollowPosition: (epsg) => {
+      wakeStill();
+      pose.setFollowPosition(epsg);
+    },
     setClimbInput: pose.setClimbInput,
     setMoveInput: pose.setMoveInput,
     startStreaming,

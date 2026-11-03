@@ -127,10 +127,28 @@ describe("listening pace", () => {
     expect(drawn(pace, 2000)).toBe(30);
   });
 
-  test("a moving one draws at the loop's largest time step, so a glide keeps its speed", () => {
+  test("a moving one draws at its rate", () => {
     const pace = createFramePace();
     pace.setListening(true);
     expect(drawn(pace, 0)).toBe(LISTENING_MOVING_FPS);
+  });
+
+  test("a moving one keeps no two frames further apart than the loop's time step, at any display rate", () => {
+    // the loop clamps a frame's time step to 0.05 s: a wider gap slows a glide
+    for (const hz of [24, 30, 36, 38, 50, 60, 75, 90, 120, 144]) {
+      const pace = createFramePace();
+      pace.setListening(true);
+      let last = Number.NaN;
+      let widest = 0;
+      for (let i = 0; i < hz * 2; i++) {
+        const now = (i * 1000) / hz;
+        if (pace.draws(now)) {
+          widest = Math.max(widest, now - last || 0);
+          last = now;
+        }
+      }
+      expect(widest).toBeLessThanOrEqual(50);
+    }
   });
 });
 

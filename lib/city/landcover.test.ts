@@ -9,6 +9,8 @@ import {
   LANDCOVER_CLASSES,
   landcoverSrgb,
   linearPalette,
+  COPSE_CLASS,
+  FOREST_CLASS,
   MEADOW_CLASS,
   PARKING_KINDS,
   PARKING_PLACES,
@@ -38,6 +40,8 @@ test("class ids are the table index, 0..9", () => {
   ]);
   expect(LANDCOVER_CLASSES[ARABLE_CLASS].key).toBe("arable");
   expect(LANDCOVER_CLASSES[WATER_CLASS].key).toBe("water");
+  expect(LANDCOVER_CLASSES[FOREST_CLASS].key).toBe("forest");
+  expect(LANDCOVER_CLASSES[COPSE_CLASS].key).toBe("copse");
   expect(LANDCOVER_CLASSES[MEADOW_CLASS].key).toBe("farmland");
   expect(LANDCOVER_CLASSES[BUILTUP_CLASS].key).toBe("builtup");
   expect(LANDCOVER_CLASSES[PATH_CLASS].key).toBe("path");
