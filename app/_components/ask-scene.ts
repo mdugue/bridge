@@ -79,8 +79,9 @@ async function waitWhile(
 /**
  * Whether the view has landed: no glide (the pose's, Modell's centring)
  * and no dolly zoom under way, by the scene's own state, so at any frame
- * rate and with the live mode's easing; then, for a while, the tiles
- * there. False when the glide outlasted the wait.
+ * rate (the live mode's easing is no glide: a walker's view is asked as it
+ * stands); then, for a while, the tiles there. False when the glide
+ * outlasted the wait.
  */
 async function landed(
   h: CityWalkHandle,

@@ -4209,6 +4209,15 @@ async function bootApp(
     return true;
   };
 
+  /** A spot asked for: Modell centres on it, the perspective goes. */
+  const toSpot = (x: number, y: number, perspective: () => void) => {
+    wakeStill();
+    if (modelRig.owns()) {
+      modelRig.centreOn(groundPoint(x, y));
+    } else {
+      perspective();
+    }
+  };
   // Every call that moves the camera or relights the scene wakes a resting
   // one for the next frame, not its next slow one (the still pace, the
   // Hörmodus's two frames a second): the move starts at once and its first
@@ -4270,30 +4279,10 @@ async function bootApp(
       return pose.flyToViewpoint(view, glide);
     },
     captureViewpoint: pose.captureViewpoint,
-    placeAt: (view) => {
-      wakeStill();
-      if (modelRig.owns()) {
-        modelRig.centreOn(groundPoint(view.epsg.x, view.epsg.y));
-      } else {
-        pose.placeAt(view);
-      }
-    },
-    teleportTo: (x, y) => {
-      wakeStill();
-      if (modelRig.owns()) {
-        modelRig.centreOn(groundPoint(x, y));
-      } else {
-        pose.teleportTo(x, y);
-      }
-    },
-    glideToSpot: (x, y) => {
-      wakeStill();
-      if (modelRig.owns()) {
-        modelRig.centreOn(groundPoint(x, y));
-      } else {
-        pose.glideToSpot(x, y);
-      }
-    },
+    placeAt: (view) =>
+      toSpot(view.epsg.x, view.epsg.y, () => pose.placeAt(view)),
+    teleportTo: (x, y) => toSpot(x, y, () => pose.teleportTo(x, y)),
+    glideToSpot: (x, y) => toSpot(x, y, () => pose.glideToSpot(x, y)),
     getGlideTarget: pose.getGlideTarget,
     focusNdc: modelRig.focusNdc,
     viewMoving: () => pose.getGlideTarget() !== null || modelRig.moving(),

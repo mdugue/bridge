@@ -1,3 +1,4 @@
+import type { UIMessage } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 import { fakeText } from "@tanstack/ai/testing";
 import type { AskPromptSite } from "./ask-city";
@@ -8,6 +9,7 @@ import {
   ended,
   roundsSinceQuestion,
   runAsk,
+  withoutUnanswered,
   scrubbed,
 } from "./ask-run";
 import type { StadtwissenIndex, WissenTile } from "./stadtwissen";
@@ -397,4 +399,31 @@ describe("an answer that stops says why", () => {
       "RUN_ERROR:Die Antwort dauerte zu lange.",
     ]);
   });
+});
+
+test("a stopped answer's unanswered tool call is left out, the running answer's kept", () => {
+  const call = (id: string, output?: unknown) => ({
+    type: "tool-call" as const,
+    id,
+    name: "was_ist_da",
+    arguments: "{}",
+    state: "input-complete" as const,
+    ...(output === undefined ? {} : { output }),
+  });
+  const text = (content: string) => ({ type: "text" as const, content });
+  const messages = [
+    { id: "1", role: "user" as const, parts: [text("Was ist das?")] },
+    // stopped while was_ist_da waited: no output
+    { id: "2", role: "assistant" as const, parts: [call("s")] },
+    { id: "3", role: "user" as const, parts: [text("Und das?")] },
+    {
+      id: "4",
+      role: "assistant" as const,
+      parts: [text("Moment."), call("x", { gefunden: true }), call("r")],
+    },
+  ];
+  const kept = withoutUnanswered(messages as UIMessage[]);
+  expect(kept.map((m) => m.id)).toEqual(["1", "3", "4"]);
+  // after the last question the calls stay: a resume answers them
+  expect(kept[2]?.parts).toHaveLength(3);
 });

@@ -96,6 +96,41 @@ export function roundsSinceQuestion(
     .length;
 }
 
+/**
+ * The conversation without the tool calls an answer stopped before their
+ * result came (the visitor stopped it while a scene tool waited): a call
+ * with no result before the last question makes the providers refuse
+ * every later request. Calls after the last question are the answer's
+ * own, which a resume completes, and stay.
+ */
+export function withoutUnanswered<T extends UIMessage | ModelMessage>(
+  messages: readonly T[]
+): T[] {
+  const question = messages.findLastIndex((m) => m.role === "user");
+  const answered = new Set(
+    messages.flatMap((m) =>
+      "parts" in m
+        ? m.parts.flatMap((p) =>
+            p.type === "tool-result" ? [p.toolCallId] : []
+          )
+        : []
+    )
+  );
+  return messages.flatMap((m, i) => {
+    if (i >= question || m.role !== "assistant" || !("parts" in m)) {
+      return [m];
+    }
+    const parts = m.parts.filter(
+      (p) =>
+        p.type !== "tool-call" || p.output !== undefined || answered.has(p.id)
+    );
+    if (parts.length === m.parts.length) {
+      return [m];
+    }
+    return parts.length > 0 ? [{ ...m, parts }] : [];
+  });
+}
+
 /** The answer as a stream of AG-UI events, for an SSE response. */
 export function runAsk(run: AskRun) {
   return chat({

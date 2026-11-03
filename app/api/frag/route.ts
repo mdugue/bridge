@@ -26,6 +26,7 @@ import {
   DEADLINE,
   ended,
   roundsSinceQuestion,
+  withoutUnanswered,
   runAsk,
   scrubbed,
 } from "@/lib/city/ask-run";
@@ -127,7 +128,9 @@ export async function POST(request: Request): Promise<Response> {
   if (tooMuch) {
     return tooMuch;
   }
-  const turns = turnsLeft(params.messages);
+  // a stopped answer's unanswered call would make the provider refuse
+  const messages = withoutUnanswered(params.messages);
+  const turns = turnsLeft(messages);
   if (turns === null) {
     return refuse(400, "bad-request", "Die Anfrage ist unvollständig.");
   }
@@ -160,7 +163,7 @@ export async function POST(request: Request): Promise<Response> {
       : askAdapter(props.provider, props.model, key),
     abortController: runController,
     knowledge,
-    messages: params.messages,
+    messages,
     ...(params.resume ? { resume: params.resume } : {}),
     ...(params.parentRunId ? { parentRunId: params.parentRunId } : {}),
     site: askPromptSite(site),
