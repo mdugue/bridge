@@ -2706,10 +2706,20 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
     edge, with moss on a lawn; where the crown's shadow falls (thrown off
     along the sun by the tree's height, at most three crowns away, drawn
     out by a low sun) and the shadow map shades the ground, sun flecks
-    (0.55 m noise cells, two octaves drifting on the crowns' wind clock)
-    lift it back up to about the sun, by day, within 60 m (the glaze
+    lift it back up to about the sun, by day, within 45 m (the glaze
     catches the shadow term through its `receivedShadowNode` and draws its
-    factor as its `outputNode`);
+    factor as its `outputNode`). A fleck is the sun's own image through a
+    gap in the leaves, a pinhole camera: round, the gap's height × the
+    sun's 0.53° wide (6–23 cm), soft-rimmed, drawn out along the sun by
+    1 / its elevation (up to 3×), in clusters where the crown is thin, in
+    two grids of cells turned against each other. The wind does not carry
+    them along: a branch sways a cluster 5 cm to and fro (about 7 s), a
+    leaf trembles a fleck by 1 cm at 0.6–1.8 Hz and blinks almost half of
+    them on and off; past a few pixels they are their mean. (Until
+    2026-11-03 they were noise cells drifting on the wind clock, which
+    read as flowing water.) The glaze's quad lies along the throw, back
+    past the shade under the crown and forward past the thrown ellipse;
+    a quad centred between the two cut the shade off in a straight line;
     on a lawn or meadow a ring of unmown grass round the trunk (the mower
     keeps off it), reaching 0.85 m past the bark with a ragged edge: long
     blades streaked out from the trunk, darker and yellower, and seed
@@ -2737,6 +2747,13 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
     them, an anthracite guard hoop between it and the road, 0.45 m short
     of the kerb and along it (the road distance's gradient is the way to
     the road) — a small mesh, opaque, standard-lit, not a shadow caster.
+  Every part lies on a flat grid at the trunk's foot (8 × 8 cells, nothing
+  knows the ground's height there); each vertex is drawn toward the eye
+  along its own ray by 25 % of its distance from the trunk (at most
+  2 m), so on a slope the uphill side stays over the ground and keeps
+  its place on the screen. (Until 2026-11-03 a flat quad sank into the
+  rising ground and the leaves and the shade stopped in a straight line
+  where the slope's crease crossed it.)
   What a tree gets is read once per vertex at the trunk's foot. All of
   it fades out between 70 and 150 m; a chunk whose nearest tree is past
   160 m draws none of it. One `Instances` set per part (ring, earth,

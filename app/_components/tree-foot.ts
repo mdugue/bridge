@@ -32,6 +32,7 @@ import {
   min,
   mix,
   modelWorldMatrix,
+  modelWorldMatrixInverse,
   normalize,
   normalLocal,
   positionGeometry,
@@ -168,12 +169,26 @@ const GUARD_SHARE = 0.7;
 const UNMOWN_REACH = 0.85;
 const UNMOWN = vec3(0.8, 0.9, 0.66);
 const SEED_HEADS = vec3(1.14, 1.1, 0.9);
-/** Sun flecks in the crown's shadow: how much a fleck lifts the shaded
- *  ground (×, a shadow is about half the sun), their size (m) and how far
- *  off (m) they still show (beyond, they would only shimmer). */
+/** Sun flecks in the crown's shadow. Each is the sun's own image through
+ *  a gap in the leaves (a pinhole camera): a round spot as wide as the
+ *  gap's height over the ground times the sun's 0.53° (about 9 cm under
+ *  a crown 10 m up), drawn out along the sun by 1 / its elevation,
+ *  soft-rimmed, and all of one size under one crown. The wind does not
+ *  carry them along: a branch sways a cluster of them to and fro, slowly,
+ *  and a fluttering leaf blinks one on and off — they flicker in place.
+ *  How much a fleck lifts the shaded ground (×, a shadow is about half the
+ *  sun), the cells they sit in (m, two grids turned against each other),
+ *  how far a branch sways them (m) and how often (rad/s), a leaf's
+ *  flutter (rad/s), and how far off (m) they still show. */
 const DAPPLE = 1.1;
-const DAPPLE_CELL = 0.55;
-const DAPPLE_TO = 60;
+const DAPPLE_CELLS: [number, number] = [0.5, 0.63];
+const DAPPLE_SWAY = 0.05;
+const DAPPLE_SWAY_RATE = 0.9;
+const DAPPLE_FLUTTER: [number, number] = [4, 11];
+const DAPPLE_TO = 45;
+/** The sun's angular diameter (rad): a pinhole image's width per metre
+ *  of the gap's height. */
+const SUN_DIAMETER = 0.0093;
 /** Fallen leaves (sRGB): yellow, orange, russet, old brown. */
 const LEAF_YELLOW = [214, 176, 78] as const;
 const LEAF_ORANGE = [204, 128, 62] as const;
@@ -208,9 +223,12 @@ const DROP = "iDrop";
 /** The cull sphere's growth over the trunks' (m): the farthest leaf. */
 export const FOOT_REACH = CROWN_MAX * LEAF_BEYOND + 0.5;
 /** How far a shade glaze reaches from its trunk (m): thrown up to three
- *  crowns along the sun, half of it the quad's offset, and its half-size
- *  1.1 crowns beyond. */
-const SHADE_REACH = CROWN_MAX * (1.5 + 1.1 + 1.5) + 0.5;
+ *  crowns along the sun, and its ellipse drawn out by up to three past
+ *  that (shadeGraph); behind the trunk it reaches SHADE_BACK crowns, at
+ *  least SHADE_BACK_MIN (m: a pit's cracks). */
+const SHADE_REACH = CROWN_MAX * (3 + 1.1 * 3) + 0.5;
+const SHADE_BACK = 1.3;
+const SHADE_BACK_MIN = 3.1;
 
 /** How much fallen leaf lies (0..1): the scene's season, one value for
  *  every tile (create-app.ts, lib/city/tree-season.ts `leafLitterAt`). */
@@ -226,25 +244,41 @@ export interface FootGeos {
   hoop: BufferGeometry;
 }
 
-/** The quad (x, z in −1..1), facing up; the shader sizes it to the pit. */
+/** The quad (x, z in −1..1) in QUAD_CELLS × QUAD_CELLS cells, facing up;
+ *  the shader sizes it to the pit. */
+const QUAD_CELLS = 8;
 export function buildFootGeos(): FootGeos {
+  // a grid, not one quad: each vertex is drawn toward the eye by its own
+  // distance from the trunk (`draped`), little at the trunk, more out
+  const n = QUAD_CELLS;
+  const position = new Float32Array((n + 1) * (n + 1) * 3);
+  const normal = new Float32Array(position.length);
+  for (let j = 0; j <= n; j++) {
+    for (let i = 0; i <= n; i++) {
+      const k = (j * (n + 1) + i) * 3;
+      position[k] = -1 + (2 * i) / n;
+      position[k + 2] = -1 + (2 * j) / n;
+      normal[k + 1] = 1;
+    }
+  }
   const quad = new BufferGeometry();
-  quad.setAttribute(
-    "position",
-    new BufferAttribute(
-      new Float32Array([-1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1]),
-      3
-    )
-  );
-  quad.setAttribute(
-    "normal",
-    new BufferAttribute(
-      new Float32Array([0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0]),
-      3
-    )
-  );
-  // wound counter-clockwise seen from above (+y)
-  quad.setIndex([0, 2, 1, 0, 3, 2]);
+  quad.setAttribute("position", new BufferAttribute(position, 3));
+  quad.setAttribute("normal", new BufferAttribute(normal, 3));
+  const index: number[] = [];
+  const at = (i: number, j: number) => j * (n + 1) + i;
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      // wound counter-clockwise seen from above (+y)
+      const [p, q, r, t] = [
+        at(i, j),
+        at(i + 1, j),
+        at(i + 1, j + 1),
+        at(i, j + 1),
+      ];
+      index.push(p, r, q, p, t, r);
+    }
+  }
+  quad.setIndex(index);
   return { quad, hoop: buildHoop() };
 }
 
@@ -469,6 +503,29 @@ function footFrame(s: FootSlots, size: [number, number]): FootFrame {
 const folded = (placed: V3, foot: V3): V3 =>
   Fn(() => outOfDesignSite(placed, foot))();
 
+/**
+ * A foot's quad lies flat at the trunk's foot, but the ground round it
+ * slopes: uphill it sank into the ground, and where the slope's crease
+ * crossed it the leaves and the shade stopped in a straight line. Drawn
+ * toward the eye along its own ray, each vertex by as much as a slope of
+ * DRAPE_SLOPE could raise the ground over its distance `q` from the trunk
+ * (at most DRAPE_MAX), it keeps its place on the screen and stays over
+ * the ground; at the trunk it is not moved, so it never paints over the
+ * bark. (Nothing
+ * here knows the ground's height; a quad over a slope sits a little off
+ * the ground it shades, which a soft glaze hides.)
+ */
+const DRAPE_SLOPE = 0.25;
+const DRAPE_MAX = 2;
+const draped = (placed: V3, q: V2): V3 => {
+  const eye = modelWorldMatrixInverse.mul(vec4(cameraPosition, 1)).xyz;
+  const toEye = eye.sub(placed);
+  const by = min(length(q).mul(DRAPE_SLOPE), DRAPE_MAX).min(
+    length(toEye).mul(0.5)
+  );
+  return placed.add(normalize(toEye).mul(by));
+};
+
 /** The pit's radius at an angle: its clearance, wobbling by a world-space
  *  noise round the rim. */
 function pitRadius(rt: F, angle: F, seed: V2): F {
@@ -527,7 +584,7 @@ function pitGraph(r: FootRasters, part: "ring" | "earth"): PitGraph {
     .mul(mix(float(PIT_QUAD), WORN_QUAD, wornHere))
     .mul(max(step(0.5, f.pit), wornHere))
     .mul(step(0.001, f.fade));
-  const position = folded(f.foot.add(vec3(q.x, lift, q.y)), f.foot);
+  const position = folded(draped(f.foot.add(vec3(q.x, lift, q.y)), q), f.foot);
   // far from any road: a pedestrian zone's pit wears a grate (not on a
   // tile without the edge raster, whose road reads -99)
   const grate = step(GRATE_FROM, f.road.negate())
@@ -715,7 +772,10 @@ const flat4 = (v: V4, name: string): V4 =>
 function footQuad(f: FootFrame, half: F, shown: F): { q: V2; position: V3 } {
   const lift = float(0.05).add(distance(cameraPosition, f.world).mul(0.0015));
   const q = positionGeometry.xz.mul(half).mul(shown);
-  return { q, position: folded(f.foot.add(vec3(q.x, lift, q.y)), f.foot) };
+  return {
+    q,
+    position: folded(draped(f.foot.add(vec3(q.x, lift, q.y)), q), f.foot),
+  };
 }
 
 /**
@@ -875,13 +935,27 @@ function shadeGraph(r: FootRasters, sun?: V3): ShadeGraph {
   const thrown = throwRaw.mul(
     clamp(f.crown.mul(3).div(max(throwLen, 0.001)), 0, 1)
   );
-  const half = f.crown.mul(1.1).add(length(thrown).mul(0.5));
+  // the quad, laid along the throw: back past the shade under the crown
+  // (and the cracks round a pit), forward past the thrown shadow's
+  // ellipse; anything less cut the glaze off in a straight line
+  const stretchV = float(1).div(up).min(3);
+  const throwAxis = mix(
+    vec2(1, 0),
+    thrown.div(max(length(thrown), 0.001)),
+    step(0.001, length(thrown))
+  );
+  const back = max(f.crown.mul(SHADE_BACK), float(SHADE_BACK_MIN));
+  const ahead = length(thrown).add(f.crown.mul(1.1).mul(stretchV));
+  const u = positionGeometry.x
+    .mul(ahead.add(back).mul(0.5))
+    .add(ahead.sub(back).mul(0.5));
+  const v = positionGeometry.z.mul(back);
+  const q = throwAxis
+    .mul(u)
+    .add(vec2(throwAxis.y.negate(), throwAxis.x).mul(v))
+    .mul(shown);
   const lift = float(0.05).add(distance(cameraPosition, f.world).mul(0.0015));
-  const q = positionGeometry.xz
-    .mul(half)
-    .mul(shown)
-    .add(thrown.mul(0.5).mul(shown));
-  const position = folded(f.foot.add(vec3(q.x, lift, q.y)), f.foot);
+  const position = folded(draped(f.foot.add(vec3(q.x, lift, q.y)), q), f.foot);
   // the sun flecks' reach: by day, near the camera
   const flecks = float(1)
     .sub(
@@ -901,10 +975,7 @@ function shadeGraph(r: FootRasters, sun?: V3): ShadeGraph {
   );
   const axes = flat4(vec4(f.axisX, f.axisZ), "vShadeAxes");
   // the shadow's ellipse: drawn out along the sun by 1 / its elevation
-  const throw4 = flat4(
-    vec4(thrown, float(1).div(up).min(3), f.fade),
-    "vShadeThrow"
-  );
+  const throw4 = flat4(vec4(thrown, stretchV, f.fade), "vShadeThrow");
   const crown = tree.z;
   const green = tree.w;
   const rt = kind.x;
@@ -916,7 +987,10 @@ function shadeGraph(r: FootRasters, sun?: V3): ShadeGraph {
   const shadowAt = throw4.xy;
   const stretch = throw4.z;
   const fade = throw4.w;
-  const near = flat(flecks, "vShadeDay");
+  // the flecks' reach, and the gaps' height over the ground (m)
+  const sky = flat(vec2(flecks, height), "vShadeDay");
+  const near = sky.x;
+  const gapHeight = sky.y;
   const xy = tree.xy.add(offset);
   const sunLit = property("float", "footSunLit");
   const output = Fn(() => {
@@ -975,15 +1049,67 @@ function shadeGraph(r: FootRasters, sun?: V3): ShadeGraph {
     const inShadow = float(1).sub(
       smoothstep(crown.mul(0.5), crown.mul(1.05), length(vec2(along, across)))
     );
-    const drift = vec2(footClock.mul(0.21), footClock.mul(0.13));
-    const flecks = gdNoise(xy.div(DAPPLE_CELL).add(drift))
-      .mul(0.6)
-      .add(gdNoise(xy.div(DAPPLE_CELL * 0.45).sub(drift.mul(1.7))).mul(0.4));
-    const fleck = smoothstep(0.6, 0.72, flecks)
+    // the ground in the sun's frame, its run along the sun shrunk by the
+    // stretch: there a fleck is round, on the ground drawn out along it
+    const sunXY = vec2(
+      xy.x.mul(axis.x).add(xy.y.mul(axis.y)).div(stretch),
+      xy.x.mul(axis.y).sub(xy.y.mul(axis.x))
+    ).toVar();
+    // the gaps come in clusters (where the crown is thin)
+    const gaps = smoothstep(0.38, 0.78, gdNoise(xy.mul(0.55).add(phase)));
+    const radius = clamp(gapHeight.mul(SUN_DIAMETER * 0.5), 0.035, 0.1);
+    const fleck = float(0).toVar();
+    const coverMean = float(0).toVar();
+    for (const [n, cellM] of DAPPLE_CELLS.entries()) {
+      const turn = n * 0.83;
+      const ct = Math.cos(turn);
+      const st = Math.sin(turn);
+      const at = vec2(
+        sunXY.x.mul(ct).add(sunXY.y.mul(st)),
+        sunXY.y.mul(ct).sub(sunXY.x.mul(st))
+      )
+        .div(cellM)
+        .add(n * 5.3);
+      const cell = floor(at).toVar();
+      const h1 = gdHash(cell.add(1.7)).toVar();
+      const h2 = gdHash(cell.add(23.1)).toVar();
+      const h3 = gdHash(cell.add(47.9)).toVar();
+      // a branch sways its cluster to and fro, all in one phase
+      const swayPhase = gdNoise(cell.mul(0.21).add(n * 9.1)).mul(12.6);
+      const sway = sin(footClock.mul(DAPPLE_SWAY_RATE).add(swayPhase)).mul(
+        DAPPLE_SWAY / cellM
+      );
+      // a leaf flutters: the spot trembles and blinks
+      const rate = mix(DAPPLE_FLUTTER[0], DAPPLE_FLUTTER[1], h3);
+      const flutter = sin(footClock.mul(rate).add(h1.mul(40)));
+      const room = float(0.5)
+        .sub(radius.div(cellM))
+        .sub(DAPPLE_SWAY / cellM);
+      const centre = vec2(h1.sub(0.5), h2.sub(0.5))
+        .mul(room.mul(2))
+        .add(vec2(sway, sway.mul(0.4)))
+        .add(vec2(flutter.mul(0.012 / cellM), 0));
+      const r = radius.div(cellM).mul(h2.mul(0.35).add(0.8));
+      const dist = length(at.sub(cell).sub(0.5).sub(centre));
+      // the penumbra: a sun image's rim is soft
+      const spot = float(1).sub(smoothstep(r.mul(0.55), r.mul(1.15), dist));
+      // some leaves blink a fleck right out, most only dim it
+      const blink = mix(
+        float(1),
+        smoothstep(-0.3, 0.4, flutter),
+        step(0.55, h3)
+      ).mul(flutter.mul(0.15).add(0.85));
+      const lit = step(h2, gaps.mul(0.75));
+      fleck.assign(max(fleck, spot.mul(blink).mul(lit)));
+      coverMean.addAssign(gaps.mul(0.75 * 0.5).mul(r.mul(r).mul(3.1)));
+    }
+    // past a few pixels a fleck would shimmer: their mean
+    const coarse = smoothstep(0.012, 0.03, fwidth(xy.x));
+    const dapple = mix(fleck, clamp(coverMean, 0, 0.5), coarse)
       .mul(inShadow)
       .mul(float(1).sub(sunLit))
       .mul(near);
-    k.mulAssign(fleck.mul(DAPPLE).add(1));
+    k.mulAssign(dapple.mul(DAPPLE).add(1));
     return mix(vec3(1), k, fade);
   })();
   return { output, position, sunLit };
