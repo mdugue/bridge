@@ -1579,6 +1579,8 @@ function buildTreeCell(
   footMat?: FootMaterials
 ): {
   chunk: VegetationChunk | null;
+  /** a cell of trunks alone: their feet, which no chunk's tier keeps */
+  loose?: LooseFeet;
   meshes: Instances[];
   season: SeasonalCrowns | null;
 } {
@@ -1595,6 +1597,7 @@ function buildTreeCell(
     const feet = feetOf(trunks, geos, ground, footMat);
     return {
       chunk: null,
+      loose: feet ? { feet, trunks } : undefined,
       meshes: [trunks, ...(feet ?? [])],
       season: null,
     };
@@ -1811,6 +1814,7 @@ function* buildTrees(
   sun?: UniformNode<"vec3", Vector3>
 ): Steps<{
   chunks: VegetationChunk[];
+  loose: LooseFeet[];
   meshes: Instances[];
   seasons: SeasonalCrowns[];
 }> {
@@ -1846,6 +1850,7 @@ function* buildTrees(
 
   const meshes: Instances[] = [];
   const chunks: VegetationChunk[] = [];
+  const loose: LooseFeet[] = [];
   const seasons: SeasonalCrowns[] = [];
   for (const cell of bucketTrees(trees, extras)) {
     const built = buildTreeCell(
@@ -1860,6 +1865,9 @@ function* buildTrees(
     if (built.chunk) {
       chunks.push(built.chunk);
     }
+    if (built.loose) {
+      loose.push(built.loose);
+    }
     if (built.season) {
       seasons.push(built.season);
     }
@@ -1869,7 +1877,25 @@ function* buildTrees(
   // scene-wide: a tile's disposal (disposeObject3D) frees its sets'
   // geometry views and leaves them; a tile's own trunk and foot materials
   // (not shared) go with it.
-  return { chunks, meshes, seasons };
+  return { chunks, loose, meshes, seasons };
+}
+
+/** A cell of trunks alone (the register's, their crowns elsewhere) and
+ *  their feet: no chunk, so `showLooseFeet` switches the feet. */
+interface LooseFeet {
+  feet: Instances[];
+  trunks: Instances;
+}
+
+/** The feet of the trunk-only cells only where one of their trunks is
+ *  near enough to show them (as `createVegetationLod` does a chunk's). */
+function showLooseFeet(all: readonly LooseFeet[], cameraPos: Vector3): void {
+  for (const { feet, trunks } of all) {
+    const on = nearestOf([trunks], cameraPos) < FOOT_SHOWN_M;
+    for (const f of feet) {
+      f.visible = on;
+    }
+  }
 }
 
 /**
@@ -1933,6 +1959,7 @@ export function* vegetationSteps(
   let multiTuft = LOOK_DEFAULTS.multiTuft;
   let chunks: VegetationChunk[] = [];
   let seasons: SeasonalCrowns[] = [];
+  let loose: LooseFeet[] = [];
 
   const { ndviAt, keepTree } = features;
   // whole rows per run: a row's trees are seeded by their place along it
@@ -1960,6 +1987,7 @@ export function* vegetationSteps(
     );
     group.add(...built.meshes);
     chunks = built.chunks;
+    loose = built.loose;
     seasons = built.seasons;
   }
   return {
@@ -1971,17 +1999,35 @@ export function* vegetationSteps(
     multiTuft: () => multiTuft,
     setSeason: (day) => applySeasons(seasons, day),
     // The chunks' tiers are createVegetationLod's; the canopy keeps no other
-    // crowns.
-    updateLod: () => false,
+    // crowns, only the trunk-only cells' feet (no shadow casters).
+    updateLod: (cameraPos) => {
+      showLooseFeet(loose, cameraPos);
+      return false;
+    },
   };
 }
 
-/** Metres from `cameraPos` to the chunk's nearest tree (sphere centre minus radius). */
+/** Metres from `cameraPos` to the chunk's nearest tree: its crowns', its
+ *  trunks' and the register's own trunks' spheres (centre minus radius). */
 function nearestTree(chunk: VegetationChunk, cameraPos: Vector3): number {
-  const sphere = chunk.mid.geometry.boundingSphere;
-  return sphere
-    ? Math.max(cameraPos.distanceTo(sphere.center) - sphere.radius, 0)
-    : Number.POSITIVE_INFINITY;
+  return nearestOf(
+    [chunk.mid, chunk.trunks, ...(chunk.ownTrunks ? [chunk.ownTrunks] : [])],
+    cameraPos
+  );
+}
+
+function nearestOf(sets: readonly Instances[], cameraPos: Vector3): number {
+  let near = Number.POSITIVE_INFINITY;
+  for (const set of sets) {
+    const sphere = set.geometry.boundingSphere;
+    if (sphere) {
+      near = Math.min(
+        near,
+        Math.max(cameraPos.distanceTo(sphere.center) - sphere.radius, 0)
+      );
+    }
+  }
+  return near;
 }
 
 function showTier(chunk: VegetationChunk, tier: CrownTier): void {

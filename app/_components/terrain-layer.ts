@@ -96,6 +96,7 @@ import {
 import {
   bsplineSample,
   gdNoise,
+  gdNoiseSlope,
   type GroundColour,
   type GroundFields,
   type GroundInputs,
@@ -881,6 +882,7 @@ function grassMottle(inp: GroundInputs, colorTexture: Tex): GroundColour {
     path: paths.path,
     pathSide: paths.side,
     pathNear: paths.near,
+    pathToward: paths.toward,
     meadow,
     detail: meadow.mul(float(1).sub(smoothstep(0.5, 2.5, fw))).toVar(),
     mottle,
@@ -897,7 +899,7 @@ function grassMottle(inp: GroundInputs, colorTexture: Tex): GroundColour {
 const MEADOW_NDVI = float(0.6);
 
 /** The meadow mottle's broad octave (per m: ~8 m drifts), and how much
- *  its slope tilts the grass normal (a noise step over half a cell). */
+ *  its slope tilts the grass normal (× the noise's gradient per cell). */
 const MOTTLE_BROAD = 0.125;
 const MOTTLE_SLOPE = 1.6;
 
@@ -1201,21 +1203,12 @@ function terrainNormal(withDetail: boolean): V3 {
     if (!withDetail) {
       return calm;
     }
-    // the slope of the mottle's broad octave (`grassMottle`), by forward
-    // differences (three noise reads on every ground pixel, the detail's
-    // weight 0 or not): the light catches the same drifts the colour has
-    const xy = dataXY().mul(MOTTLE_BROAD).toVar();
-    const e = 0.25;
-    const at = (dx: number, dy: number): F => gdNoise(xy.add(vec2(dx, dy)));
-    const here = at(0, 0).toVar();
-    const gx = at(e, 0)
-      .sub(here)
-      .mul(MOTTLE_SLOPE * 2);
-    const gy = at(0, e)
-      .sub(here)
-      .mul(MOTTLE_SLOPE * 2);
+    // the slope of the mottle's broad octave (`grassMottle`), analytic
+    // (four hashes on every ground pixel): the light catches the same
+    // drifts the colour has
+    const g = gdNoiseSlope(dataXY().mul(MOTTLE_BROAD)).mul(MOTTLE_SLOPE / 2);
     const grass = normalize(
-      calm.add(vec3(gx, gy, 0).mul(grassDetail.mul(0.06)))
+      calm.add(vec3(g.x, g.y, 0).mul(grassDetail.mul(0.06)))
     );
     return groundNormal(grass, groundTilt);
   })();

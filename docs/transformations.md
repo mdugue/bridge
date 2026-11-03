@@ -349,12 +349,18 @@ visual-variable codebook is in
   (a C2-smooth coverage at the class raster's own resolution, whatever
   the splat's), cuts the edge on its iso line (0.45), wandering ±0.12 m by
   a world-space noise and frayed over 0.25 m, and paints the palette
-  colours of the path and of the nearest texel beside it across it. The
+  colours of the path and of the nearest texel beside it across it, the
+  splat's own colour coming back as the coverage falls to nothing (no
+  seam where the 4×4 ends). Beside a path the baked lawn reaches on 1.2 m
+  to the path's smooth edge — on the lawn's side only (the lawn's
+  distance falls toward the path), never across a narrow path onto the
+  paving beyond it. The
   same weight (`GroundColour.path`) then decides the sand, the slabs'
   share and the urban green's, and a path texel off the smooth edge is
   paved as the land beside it. The paving raster's walk kinds are read
   as their shares of the 4×4 texels round the fragment under a cubic
-  B-spline, cut at one half (`walkShares`; bilinear shares of the
+  B-spline, cut at one half and faded into the fragment's own texel
+  between 0.65 and 1 m a pixel (`walkShares`; bilinear shares of the
   1 m texels drew a slanted edge as teeth),
   (on the ground a walk kind paints — built-up, path, unclassified, and a
   path's smooth edge — as before), so a stray sealed texel among a
@@ -2810,11 +2816,14 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   line where the slope's crease crossed it.)
   What a tree gets is read once per vertex at the trunk's foot. All of
   it fades out between 70 and 150 m; a chunk whose nearest tree is past
-  160 m draws none of it. One `Instances` set per part (ring, earth,
-  leaves, shade, guard) per chunk on the trunks' own attribute objects
-  (matrices, drop, bark colour) and a quad and a hoop per tile, with materials per
-  tile whose slots hold the tile's class and edge rasters and its light —
-  no bytes per tree on a phone. The paper styles leave the blended parts
+  160 m draws none of it (the chunk's crowns, trunks and the register's
+  own trunks count; a cell of the register's trunks alone, whose crowns
+  are drawn elsewhere, is switched by its trunks the same way). One
+  `Instances` set per part (ring, earth, leaves, shade, guard, tuft) per
+  set of trunks on the trunks' own attribute objects (matrices, drop),
+  and a quad, a hoop and a tuft per tile, with materials per tile whose
+  slots hold the tile's class and edge rasters and its light — two bytes
+  a tree (the slope) and about 15 KB a tile. The paper styles leave the blended parts
   out. Before, the trunk stabbed straight into a flat ground.
 
 - **Hedges (OSM, laser-scan height)** `◎ detected` `❝ taken` and **trees outside the canopy mask**

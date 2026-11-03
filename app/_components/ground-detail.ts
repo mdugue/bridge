@@ -163,6 +163,9 @@ export interface GroundColour {
   /** 1 where `smoothPaths` drew a path's edge (a path near, the camera
    *  near), else 0 */
   pathNear: F;
+  /** the way to the path (`smoothPaths`: its coverage's gradient, unit,
+   *  x east, y north; 0 where no path is near) */
+  pathToward: V2;
 }
 
 /** The fields every later chunk reads (vars, or JS where the GLSL knew). */
@@ -272,6 +275,33 @@ export const gdNoise = Fn(
     );
   },
   { p: "vec2", return: "float" }
+);
+
+/** `gdNoise`'s gradient at `p` (per unit of `p`), analytic: its four
+ *  corner hashes once, not a noise read per difference. */
+export const gdNoiseSlope = Fn(
+  ([p]: [V2]): V2 => {
+    const i = floor(p).toVar();
+    const f0 = fract(p).toVar();
+    const u = f0
+      .mul(f0)
+      .mul(vec2(3).sub(f0.mul(2)))
+      .toVar();
+    const du = f0.mul(float(1).sub(f0)).mul(6);
+    const a = gdHash(i).toVar();
+    const b = gdHash(i.add(vec2(1, 0)))
+      .sub(a)
+      .toVar();
+    const c = gdHash(i.add(vec2(0, 1)))
+      .sub(a)
+      .toVar();
+    const d = gdHash(i.add(vec2(1, 1)))
+      .sub(a)
+      .sub(b)
+      .sub(c);
+    return du.mul(vec2(b.add(d.mul(u.y)), c.add(d.mul(u.x))));
+  },
+  { p: "vec2", return: "vec2" }
 );
 
 /** 1 inside [a, b] (m), anti-aliased over w on either edge. */
@@ -510,10 +540,15 @@ function walkShares(inp: GroundInputs, surface: Tex, g: GroundFields): void {
     // ... cut on its half-way line, soft over a pixel or a few centimetres
     const slope = vec2(size).x.div(inp.size[0]).mul(BSPLINE_STEP_SLOPE);
     const soft = max(inp.fw.mul(0.75), float(WALK_EDGE_M)).mul(slope).toVar();
-    const cut = (v: F): F => smoothstep(float(0.5).sub(soft), soft.add(0.5), v);
-    g.sealedW.assign(cut(s));
-    g.sandW.assign(cut(u));
-    g.walkW.assign(cut(a));
+    // faded into the own texel's answer over the last third, no ring
+    const near = float(1)
+      .sub(smoothstep(WALK_SHARE_FW * 0.65, WALK_SHARE_FW, inp.fw))
+      .toVar();
+    const cut = (v: F, own: F): F =>
+      mix(own, smoothstep(float(0.5).sub(soft), soft.add(0.5), v), near);
+    g.sealedW.assign(cut(s, g.sealedW));
+    g.sandW.assign(cut(u, g.sandW));
+    g.walkW.assign(cut(a, g.walkW));
   });
 }
 
@@ -570,6 +605,18 @@ export const paletteOf = (c: I): V3 => {
     );
   }
   return out;
+};
+
+/** The cubic B-spline weights' slopes at `t` (d/dt, taps −1, 0, 1, 2). */
+const bsplineSlope = (t: F): V4 => {
+  const t2 = t.mul(t);
+  const u = float(1).sub(t);
+  return vec4(
+    u.mul(u).negate(),
+    t2.mul(3).sub(t.mul(4)),
+    t2.mul(-3).add(t.mul(2)).add(1),
+    t2
+  ).div(2);
 };
 
 /** The cubic B-spline's four weights at `t` (taps −1, 0, 1, 2). */
@@ -654,8 +701,9 @@ const BSPLINE_STEP_SLOPE = 2 / 3;
 export function smoothPaths(
   inp: GroundInputs,
   splat: V3
-): { col: V3; path: F; side: I; near: F } {
+): { col: V3; path: F; side: I; near: F; toward: V2 } {
   const col = splat.toVar();
+  const toward = vec2(0).toVar();
   const path = select(inp.cls.equal(PATH_CLASS), float(1), float(0)).toVar();
   const side = int(inp.cls).toVar();
   const by = float(0).toVar();
@@ -676,8 +724,13 @@ export function smoothPaths(
     const wy = bspline(f.y).toVar();
     const ax = [wx.x, wx.y, wx.z, wx.w];
     const ay = [wy.x, wy.y, wy.z, wy.w];
+    const dx = bsplineSlope(f.x).toVar();
+    const dy = bsplineSlope(f.y).toVar();
+    const bx = [dx.x, dx.y, dx.z, dx.w];
+    const by_ = [dy.x, dy.y, dy.z, dy.w];
     const any = float(0).toVar();
     const cover = float(0).toVar();
+    const grad = vec2(0).toVar();
     const outer = int(PATH_CLASS).toVar();
     const central: I[] = [];
     for (let y = -1; y <= 2; y++) {
@@ -689,6 +742,9 @@ export function smoothPaths(
         const on = isClass(c, PATH_CLASS);
         any.assign(max(any, on));
         cover.addAssign(on.mul(ax[x + 1].mul(ay[y + 1])));
+        grad.addAssign(
+          on.mul(vec2(bx[x + 1].mul(ay[y + 1]), ax[x + 1].mul(by_[y + 1])))
+        );
         outer.assign(select(c.notEqual(PATH_CLASS), c, outer));
       }
     }
@@ -734,15 +790,21 @@ export function smoothPaths(
         float(PATH_ISO).add(fade),
         cover.add(wander)
       ).toVar();
-      col.assign(mix(col, mix(otherCol, pathCol, m), near));
+      // the palette's colours near the path only: farther out the splat's
+      // own blend of the classes beside it comes back, smoothly, so the
+      // window's end draws no seam
+      const own = smoothstep(0, 0.2, cover);
+      col.assign(mix(col, mix(otherCol, pathCol, m), near.mul(own)));
       path.assign(mix(path, m, near));
       side.assign(other);
       // how near the path is, as smooth as its coverage: a hard 1 inside
       // the 4×4 notched the lawn line where the window ends
       by.assign(near.mul(smoothstep(0, 0.04, cover)));
+      // (the raster's rows run south)
+      toward.assign(normalize(vec2(grad.x, grad.y.negate()).add(1e-6)));
     });
   });
-  return { col, path, side, near: by };
+  return { col, path, side, near: by, toward };
 }
 
 /** 1 on the ground a walk kind paints (`pavingKind`: built-up, path,
@@ -913,11 +975,14 @@ export function urbanGreen(
     );
     // beside a path the lawn reaches on to the path's own smooth edge:
     // the baked lawn line keeps a texel off the path's stairs, which left
-    // a bare band between the two
+    // a bare band between the two — on the lawn's side only (out of the
+    // lawn is toward the path), never across the path onto the paving
+    // beyond it
+    const lawnSide = smoothstep(-0.2, 0.2, dot(g.outOfLawn, col.pathToward));
     mask = smoothstep(
       -0.15,
       0.15,
-      g.dl.add(col.pathNear.mul(PATH_LAWN_REACH_M))
+      g.dl.add(col.pathNear.mul(lawnSide).mul(PATH_LAWN_REACH_M))
     ).mul(ground);
   } else if (ndvi) {
     const paved = and(
