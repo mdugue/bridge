@@ -571,8 +571,8 @@ test("a chimney joins its host with the dormers as a box, all wall", () => {
   // the host's chimneys one object, its dormers another
   expect(baked.objects.length).toBe(lod2.objects.length + 2);
   const added = baked.vertices.isRoof.length - lod2.vertices.isRoof.length;
-  // the dormer's 8 triangles, the chimney's four sides and top
-  expect(added).toBe((8 + 5 * 2) * 3);
+  // the dormer's 8 triangles, the chimney's four sides, top and inner lid
+  expect(added).toBe((8 + 6 * 2) * 3);
   const roofs = Array.from(baked.vertices.isRoof.slice(-added));
   expect(roofs.filter((r) => r === 1)).toHaveLength(4 * 3);
   // the dormer's front takes a window, its cheeks and the chimney none

@@ -92,6 +92,10 @@ export function chimneyMesh(
     quad(at(a0, b0, low), at(a1, b1, low), at(a1, b1, top), at(a0, b0, top));
   }
   quad(at(-a, -b, top), at(a, -b, top), at(a, b, top), at(-a, b, top));
+  // its top's underside, facing in (a dormer's inner lid: the open box
+  // otherwise let the sun's shadow map light the roof inside it)
+  const under = top - INNER_LID;
+  quad(at(-a, b, under), at(a, b, under), at(a, -b, under), at(-a, -b, under));
   return out;
 }
 

@@ -1586,7 +1586,8 @@ visual-variable codebook is in
   inner lid facing in that no camera sees: the sun's shadow map draws back
   faces, so the open box let the sun onto the roof inside it, and the map's
   soft edge bled that light out as a bright line between the cheek and its
-  shadow (2026-11-03; two triangles a dormer, +0.3 % on a building tile). Its fall (`tf`) is read
+  shadow (2026-11-03; two triangles a dormer, the same under a chimney's
+  top; +0.3 % on a building tile for the dormers). Its fall (`tf`) is read
   along its axis through the centre: DOM1 every 0.5 m over the blob and
   up to 3 m behind it while it stands ≥ 0.3 m over the roof, the front
   1.5 m left out (front wall and eave smear it), a line through ≥ 3

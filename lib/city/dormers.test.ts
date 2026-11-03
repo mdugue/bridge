@@ -147,8 +147,8 @@ describe("chimneyMesh", () => {
 
   test("a closed box from under the roof's lowest point to its top", () => {
     const m = chimneyMesh(chimney, offset);
-    // four sides and a top, two triangles each
-    expect(m.positions.length).toBe(5 * 2 * 9);
+    // four sides, a top and its inner lid, two triangles each
+    expect(m.positions.length).toBe(6 * 2 * 9);
     expect(m.isRoof.every((r) => r === 0)).toBe(true);
     const zs = m.positions.filter((_, i) => i % 3 === 2);
     // the roof falls 0.8 m to its downslope side, and the box reaches under
@@ -162,10 +162,12 @@ describe("chimneyMesh", () => {
     expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(0.6);
   });
 
-  test("every face looks outwards", () => {
+  test("every face looks outwards, its inner lid in", () => {
     const m = chimneyMesh(chimney, offset);
     const n = unitNormals(m.positions);
-    for (let t = 0; t < n.length; t++) {
+    // the last two: the inner lid under the top, facing down into the box
+    expect(n.slice(-2).every((v) => v[2] < -0.99)).toBe(true);
+    for (let t = 0; t < n.length - 2; t++) {
       const tri = m.positions.slice(t * 9, t * 9 + 9);
       const cx = (tri[0] + tri[3] + tri[6]) / 3 - 100;
       const cy = (tri[1] + tri[4] + tri[7]) / 3 - 200;
