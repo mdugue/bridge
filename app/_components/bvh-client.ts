@@ -186,9 +186,8 @@ function take(geometry: BufferGeometry): Taken | null {
   if (!indexAttr) {
     return null;
   }
-  const interleaved =
-    (position as InterleavedBufferAttribute).isInterleavedBufferAttribute ===
-    true;
+  const interleaved = (position as InterleavedBufferAttribute)
+    .isInterleavedBufferAttribute;
   const source = (
     interleaved
       ? (position as InterleavedBufferAttribute).data.array

@@ -228,7 +228,7 @@ export interface Nameplate {
 }
 
 const isOrtho = (c: Camera): c is OrthographicCamera =>
-  (c as OrthographicCamera).isOrthographicCamera === true;
+  (c as OrthographicCamera).isOrthographicCamera;
 
 function atlasTexture(data: Uint8Array, width: number, height: number) {
   const t = new DataTexture(data, width, height, RedFormat, UnsignedByteType);

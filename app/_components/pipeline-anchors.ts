@@ -59,10 +59,9 @@ function sameKind(array: ArrayLike<number>, length: number) {
 
 /** Three vertices (one instance) in the layout of `geometry`. */
 export function layoutStub(geometry: BufferGeometry): BufferGeometry {
-  const stub =
-    (geometry as InstancedBufferGeometry).isInstancedBufferGeometry === true
-      ? new InstancedBufferGeometry()
-      : new BufferGeometry();
+  const stub = (geometry as InstancedBufferGeometry).isInstancedBufferGeometry
+    ? new InstancedBufferGeometry()
+    : new BufferGeometry();
   if ((stub as InstancedBufferGeometry).isInstancedBufferGeometry) {
     (stub as InstancedBufferGeometry).instanceCount = 1;
   }
@@ -163,7 +162,7 @@ function anchorKey(drawable: Drawable, material: Material): string {
       const instanced = i.isInterleavedBufferAttribute
         ? (i.data as { isInstancedInterleavedBuffer?: boolean })
             .isInstancedInterleavedBuffer === true
-        : (a as InstancedBufferAttribute).isInstancedBufferAttribute === true;
+        : (a as InstancedBufferAttribute).isInstancedBufferAttribute;
       return `${name}:${a.itemSize}:${a.normalized ? "n" : ""}:${data}:${array.constructor.name}:${instanced ? "s" : ""}`;
     })
     .sort()

@@ -48,7 +48,7 @@ function reachable(root: Node): Set<Node> {
 
 function texturesOf(root: Node): unknown[] {
   return [...reachable(root)]
-    .filter((n): n is TextureNode => (n as TextureNode).isTextureNode === true)
+    .filter((n): n is TextureNode => (n as TextureNode).isTextureNode)
     .map((n) => n.value);
 }
 

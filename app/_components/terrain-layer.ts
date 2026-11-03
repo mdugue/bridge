@@ -1377,9 +1377,8 @@ function rawPositions(position: BufferAttribute | InterleavedBufferAttribute): {
   offset: number;
   stride: number;
 } {
-  const interleaved =
-    (position as InterleavedBufferAttribute).isInterleavedBufferAttribute ===
-    true;
+  const interleaved = (position as InterleavedBufferAttribute)
+    .isInterleavedBufferAttribute;
   return interleaved
     ? {
         array: (position as InterleavedBufferAttribute).data

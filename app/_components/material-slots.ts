@@ -132,7 +132,7 @@ const shrinking = new WeakSet<Texture>();
  * it dispatches no dispose of its own.
  */
 function shrinkOnDispose(tex: Texture): void {
-  if (shrinking.has(tex) || (tex as Layered).isRenderTargetTexture === true) {
+  if (shrinking.has(tex) || (tex as Layered).isRenderTargetTexture) {
     return;
   }
   shrinking.add(tex);
