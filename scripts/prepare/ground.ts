@@ -200,7 +200,7 @@ export async function siteGround(): Promise<{
   return {
     heightAt: (x, y) => {
       const i = fine.findIndex((g) => ownsPoint(g.bounds, x, y));
-      return i < 0 ? null : heightOver(TILES[i], fine[i].path)(x, y);
+      return i === -1 ? null : heightOver(TILES[i], fine[i].path)(x, y);
     },
     tin: fine.every((g) => g.tin),
   };

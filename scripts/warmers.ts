@@ -211,7 +211,7 @@ export function createSlots(limits: { jobs: number; memory: number }): {
     run: async (priority, peak, task) => {
       await new Promise<void>((start) => {
         const at = waiting.findIndex((w) => w.priority > priority);
-        waiting.splice(at < 0 ? waiting.length : at, 0, {
+        waiting.splice(at === -1 ? waiting.length : at, 0, {
           peak,
           priority,
           start,

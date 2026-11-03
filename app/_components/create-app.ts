@@ -2879,7 +2879,7 @@ async function bootApp(
       const first = layer.table.group.indexOf(group);
       if (
         layer.tile !== picked.layer.tile &&
-        first >= 0 &&
+        first !== -1 &&
         layer.demolish(first)
       ) {
         keep(layer);

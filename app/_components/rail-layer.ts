@@ -472,7 +472,7 @@ function bridgeRingStations(f: BridgeFeature): number[] | undefined {
 function endRuns(across: boolean[]): number[][] {
   const n = across.length;
   const start = across.findIndex((a, i) => !a && across[(i + 1) % n]);
-  if (start < 0) {
+  if (start === -1) {
     return [];
   }
   const runs: number[][] = [];

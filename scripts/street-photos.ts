@@ -261,7 +261,7 @@ async function main() {
   const { site, rest } = siteFromArgs(process.argv.slice(2));
   const flag = (name: string) => {
     const at = rest.indexOf(name);
-    return at >= 0 ? rest[at + 1] : undefined;
+    return at !== -1 ? rest[at + 1] : undefined;
   };
   const n = Number(flag("--n") ?? 8);
   const seed = flag("--seed") ?? isoWeek(new Date());

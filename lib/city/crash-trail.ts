@@ -296,7 +296,7 @@ function emptyStats(): TrailStats {
 /** The bucket of FPS_BUCKETS a frame rate falls in. */
 export function fpsBucket(fps: number): number {
   const i = FPS_BUCKETS.findIndex((bound) => fps < bound);
-  return i < 0 ? FPS_BUCKETS.length : i;
+  return i === -1 ? FPS_BUCKETS.length : i;
 }
 
 /** Appends to a ring: the newest `limit` entries stay. */

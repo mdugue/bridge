@@ -53,7 +53,7 @@ export function neighbours(file: string): {
   for (const group of nav()) {
     const flat = group.items.flatMap((item) => [item, ...item.children]);
     const index = flat.findIndex((item) => item.file === file);
-    if (index >= 0) {
+    if (index !== -1) {
       return {
         group,
         index,

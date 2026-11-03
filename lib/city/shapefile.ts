@@ -156,7 +156,7 @@ export function readDbf(
     const nameBytes = raw.subarray(at, at + 11);
     const end = nameBytes.indexOf(0);
     fields.push({
-      name: decoder.decode(nameBytes.subarray(0, end < 0 ? 11 : end)),
+      name: decoder.decode(nameBytes.subarray(0, end === -1 ? 11 : end)),
       type: String.fromCharCode(raw[at + 11]),
       length: raw[at + 16],
     });

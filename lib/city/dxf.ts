@@ -541,7 +541,7 @@ export function readDxf(text: string): DxfPlan {
     classified: new Set(),
     unclassified: new Set(),
     unit:
-      units >= 0
+      units !== -1
         ? (UNITS[Number.parseInt(groups[units + 1].value, 10)] ?? 1)
         : 1,
     crowns: blockCrowns(groups),

@@ -137,8 +137,8 @@ if (import.meta.main) {
       command,
       "--spec",
       JSON.stringify(siteSpec(site)),
-      ...(step >= 0 ? ["--step", args[step + 1] ?? ""] : []),
-      ...(jobs >= 0 ? ["--jobs", args[jobs + 1] ?? ""] : []),
+      ...(step !== -1 ? ["--step", args[step + 1] ?? ""] : []),
+      ...(jobs !== -1 ? ["--jobs", args[jobs + 1] ?? ""] : []),
       ...(tiles.length > 0 ? ["--tile", ...tiles] : []),
       ...args.filter(
         (a) => a === "--lsc" || a === "--research" || a === "--force"

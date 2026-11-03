@@ -104,7 +104,7 @@ export function createTaskGate(
       };
       const leave = () => {
         const at = line.indexOf(waiter);
-        if (at >= 0) {
+        if (at !== -1) {
           line.splice(at, 1);
           reject(abortError(signal));
         }
