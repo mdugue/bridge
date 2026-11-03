@@ -545,3 +545,60 @@ def test_a_dormer_read_again_once_moved_is_one():
     assert dormers.twice({"x": 0.6, "y": 0.4, "w": 2.0}, [a])
     assert not dormers.twice({"x": 3.0, "y": 0.0, "w": 2.0}, [a])
     assert not dormers.twice({"x": 0.2, "y": 0.0, "w": 0.6, "k": "chimney"}, [a])
+
+
+def gable_city() -> dict:
+    """One object: a gable roof over x 0..10, y 0..8, eaves at 10 m, the
+    ridge along y = 4 at 14 m (45°), and a wall surface under it."""
+    vertices = [
+        [0, 0, 10],
+        [10, 0, 10],
+        [10, 4, 14],
+        [0, 4, 14],
+        [0, 8, 10],
+        [10, 8, 10],
+        [0, 0, 0],
+        [10, 0, 0],
+    ]
+    roof = {"type": "RoofSurface"}
+    wall = {"type": "WallSurface"}
+    geometry = {
+        "type": "MultiSurface",
+        "lod": "2",
+        "boundaries": [[[0, 1, 2, 3]], [[3, 2, 5, 4]], [[6, 7, 1, 0]]],
+        "semantics": {"surfaces": [roof, wall], "values": [0, 0, 1]},
+    }
+    return {
+        "vertices": vertices,
+        "CityObjects": {"a": {"type": "Building", "geometry": [geometry]}},
+    }
+
+
+def test_roof_planes_read_the_exact_face():
+    planes = dormers.RoofPlanes(gable_city(), ["a"])
+    z, slope = planes.at(0, 5.0, 1.3)
+    assert abs(z - 11.3) < 1e-6
+    assert abs(slope - 45.0) < 1e-6
+    # the north face, and the ridge reads the higher of the two
+    assert abs(planes.at(0, 5.0, 7.0)[0] - 11.0) < 1e-6
+    assert abs(planes.at(0, 5.0, 4.0)[0] - 14.0) < 1e-6
+    # a centre just past the eave still reads its face, far off none
+    assert abs(planes.at(0, 5.0, -0.2)[0] - 9.8) < 1e-6
+    assert planes.at(0, 5.0, -2.0) is None
+
+
+def test_on_planes_moves_a_dormer_onto_its_face():
+    planes = dormers.RoofPlanes(gable_city(), ["a"])
+    d = {"of": 0, "x": 5.0, "y": 1.3, "z": 11.8, "top": 13.0, "slope": 40.0, "tf": 44.0}
+    chimney = {"of": 0, "x": 5.0, "y": 7.0, "z": 10.5, "top": 12.0, "slope": 40.0, "k": "chimney"}
+    dormers.on_planes([d, chimney], planes)
+    assert d["z"] == 11.3 and d["top"] == 12.5 and d["slope"] == 45.0
+    assert d["tf"] == 45.0 - dormers.SHED_MARGIN
+    assert chimney["z"] == 11.0 and chimney["top"] == 12.5 and chimney["slope"] == 40.0
+
+
+def test_on_planes_keeps_a_dormer_under_the_ridge():
+    planes = dormers.RoofPlanes(gable_city(), ["a"])
+    d = {"of": 0, "x": 5.0, "y": 3.0, "z": 12.0, "top": 15.0, "slope": 45.0}
+    dormers.on_planes([d], planes)
+    assert d["z"] == 13.0 and d["top"] == 14.0 + dormers.RIDGE_SLACK_M

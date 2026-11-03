@@ -50,7 +50,11 @@ one height on each LoD2 part (`level`). A row reads one dormer once
 its neighbour (`holes`). The Taschenbergpalais' street photos show one
 identical dormer over each window axis, where DOM1 had read their
 centres up to 3 m apart down the slope and 1–4 m wide, and the roof's
-1 m cells read a mansard's face ±1.4 m up and down.
+1 m cells read a mansard's face ±1.4 m up and down. Last, each stands on
+its host's exact LoD2 roof face (`on_planes`): the burned 1 m roof reads
+a cell's height, which on a 45° face is up to half a metre off the face
+under a dormer's centre — one dormer in fourteen stood over 0.3 m above
+the roof the building draws, its cheeks clear of it, as many sunk in.
 
 A crown overhanging a roof is irregular, overtops the ridge or stands on
 a tree point. Checked against the 20 cm orthophoto on Dresden's
@@ -105,7 +109,7 @@ from scipy.ndimage import map_coordinates
 
 from .common import Tile, feature, owns, write_geojson
 from .osm_buildings import _lod2, footprints, root_of
-from .roof_colour import ring_slope, surface_rings
+from .roof_colour import ring_normal, ring_slope, surface_rings
 from .structures import Surfaces
 
 MIN_SLOPE = 25.0
@@ -163,6 +167,11 @@ PLAN_GAIN = 0.7
 PLAN_MIN_GAIN_M = 0.08
 PLAN_MIN_CELLS = 40
 PLAN_PITCHED = 0.3
+# A roof face is a plane up to PLANE_REACH_M past its outline (a dormer's
+# centre on the eave's edge), one facing up at least PLANE_MIN_UP (its
+# normal's height) a roof's.
+PLANE_REACH_M = 0.3
+PLANE_MIN_UP = 0.05
 MIN_EXCESS_M = 0.7
 # A blob deeper than this along the slope is the roof drawn low, not a
 # dormer (m); across the slope a row of dormers runs as wide as it is.
@@ -585,6 +594,77 @@ def roof_faces(city: dict, oid: str) -> list[tuple[float, float, float, float, s
     return out
 
 
+class RoofPlanes:
+    """Each object's LoD2 roof faces as planes: the roof's height and slope
+    at a point exactly, where the burned 1 m roof reads a cell's (a
+    dormer on a 45° face half a cell off sat half a metre high)."""
+
+    def __init__(self, city: dict, ids: list[str]):
+        scale = city.get("transform", {}).get("scale", [1, 1, 1])
+        translate = city.get("transform", {}).get("translate", [0, 0, 0])
+        vertices = city["vertices"]
+
+        def to_metres(i: int) -> tuple[float, float, float]:
+            v = vertices[i]
+            return tuple(float(v[k]) * scale[k] + translate[k] for k in range(3))
+
+        self.faces: list[list[tuple[shapely.Geometry, tuple, tuple]]] = []
+        # each object's ridge: its roof faces' highest vertex
+        self.ridge: list[float] = []
+        for oid in ids:
+            faces = []
+            ridge = -math.inf
+            for geometry in _lod2(city["CityObjects"].get(oid, {}).get("geometry", [])):
+                for ring in surface_rings(geometry, "RoofSurface"):
+                    if len(ring) < 3:
+                        continue
+                    n = ring_normal(ring, to_metres)
+                    if n[2] < PLANE_MIN_UP:
+                        continue
+                    pts = [to_metres(i) for i in ring]
+                    plan = shapely.make_valid(shapely.Polygon([q[:2] for q in pts]))
+                    if plan.area > 0:
+                        faces.append((plan, n, pts[0]))
+                        ridge = max(ridge, max(q[2] for q in pts))
+            self.faces.append(faces)
+            self.ridge.append(ridge)
+
+    def at(self, of: int, x: float, y: float) -> tuple[float, float] | None:
+        """The highest roof face of object `of` over (x, y) (within
+        PLANE_REACH_M of its outline): its height there and its slope
+        (degrees); None where none is."""
+        p = shapely.Point(x, y)
+        best = None
+        for plan, n, p0 in self.faces[of] if of < len(self.faces) else []:
+            if plan.distance(p) > PLANE_REACH_M:
+                continue
+            z = p0[2] - (n[0] * (x - p0[0]) + n[1] * (y - p0[1])) / n[2]
+            if best is None or z > best[0]:
+                best = (z, math.degrees(math.acos(min(1.0, n[2]))))
+        return best
+
+
+def on_planes(found: list[dict], planes: RoofPlanes) -> None:
+    """Each dormer and chimney at its host's exact roof (`RoofPlanes`):
+    its `z` and `slope` there, its top the same height over it (a row's
+    one height over one eave; a measured top moves with the roof only
+    where it was read against it), a shed's fall at most SHED_MARGIN under
+    the slope and a dormer's top at most RIDGE_SLACK_M over the ridge."""
+    for d in found:
+        e = planes.at(d["of"], d["x"], d["y"])
+        if e is None:
+            continue
+        z, slope = e
+        d["top"] = round(d["top"] + z - d["z"], 2)
+        d["z"] = round(z, 2)
+        if d.get("k") != "chimney":
+            ridge = planes.ridge[d["of"]] + RIDGE_SLACK_M
+            d["top"] = round(max(min(d["top"], ridge), z), 2)
+            d["slope"] = round(slope, 1)
+            if "tf" in d:
+                d["tf"] = round(min(d["tf"], slope - SHED_MARGIN), 1)
+
+
 def mansard_flanks(city: dict) -> list[shapely.Geometry]:
     """The plans of the mansard roofs' steep lower faces (see
     MANSARD_SHARE), every building's."""
@@ -871,13 +951,15 @@ def find(
     groups: list[int] | None = None,
     flanks: list[shapely.Geometry] | None = None,
     walls: dict[int, list[dict]] | None = None,
+    planes: RoofPlanes | None = None,
 ) -> list[dict]:
     """Every dormer and chimney the surface model shows on the tile's own
     roofs (see the module), the dormers set in rows (`in_rows`); `forms`
     each object's roof form (`roof_forms`), `groups` its building
     (`building_groups`; each its own where not given), `flanks` the
     mansards' lower faces (`mansard_flanks`), `walls` the walls with
-    measured window axes per building (`measured_walls`)."""
+    measured window axes per building (`measured_walls`), `planes`
+    the LoD2 roof faces each stands on at last (`on_planes`)."""
     args = (
         tile,
         s,
@@ -900,6 +982,8 @@ def find(
         found += [d for d in extra if not twice(d, found)]
     building = [roofs.groups[d["of"]] for d in found]
     found = in_rows(found, building, walls or {}, roofs.place)
+    if planes is not None:
+        on_planes(found, planes)
     out: list[dict] = []
     level: list[bool] = []
     for d in found:
@@ -1612,6 +1696,7 @@ def run(tile: Tile) -> None:
         building_groups(city, ids),
         mansard_flanks(city),
         measured_walls(tile, city, ids),
+        RoofPlanes(city, ids),
     )
     write_geojson(out, found, tile.epsg, tile.credit)
     chimneys = sum(1 for f in found if f["properties"].get("k") == "chimney")

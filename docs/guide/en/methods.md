@@ -67,7 +67,9 @@ reproducible, but they can be wrong where the world does not fit the rule.
   on one grid of equal spacing along the whole row — over the window
   axes below where the street photos measured them, else the spacing
   the dormers agree on best. A single empty place between two takes one
-  like its neighbour, unless a chimney stands there.
+  like its neighbour, unless a chimney stands there. Last, each dormer
+  takes its height from the building model's exact roof face, not from
+  the 1 m grid, so it sits on the roof that is drawn.
 - **Bridge superstructure:** what stands at least 3 m above the deck along
   the bridge's axis, for at least 25 m, becomes an arch or a truss.
 - **Assignments:** a shop from OpenStreetMap belongs to the building whose

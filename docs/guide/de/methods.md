@@ -74,7 +74,9 @@ zur Regel passt.
   ganze Reihe — über den Fensterachsen darunter, wo die Straßenfotos sie
   gemessen haben, sonst im Abstand, auf den sich die Gauben selbst am
   besten einigen. Eine einzelne leere Stelle zwischen zwei Gauben bekommt
-  eine wie ihre Nachbarin, außer dort steht ein Schornstein.
+  eine wie ihre Nachbarin, außer dort steht ein Schornstein. Ihre Höhe
+  nimmt jede Gaube zuletzt von der genauen Dachfläche des Gebäudemodells,
+  nicht vom 1-m-Raster, damit sie auf dem gezeichneten Dach sitzt.
 - **Brückentragwerk:** Was entlang der Brückenachse mindestens 3 m über dem
   Deck steht, auf mindestens 25 m Länge, wird ein Bogen oder ein Fachwerk.
 - **Zuordnungen:** Ein Laden aus OpenStreetMap gehört zu dem Gebäude, in

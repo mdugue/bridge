@@ -1563,7 +1563,15 @@ visual-variable codebook is in
   its south row stands on one 3.47 m grid. Dormers with one grid a
   stretch: Dresden 13 651 (13 518 before, the filled slots), Leipzig
   6 922, München 7 309, Unna 2 080, Meißen 1 802, Hamburg 1 739, Grimma
-  1 429; the Taschenbergpalais 95. The Taschenbergpalais'
+  1 429; the Taschenbergpalais 95. **On the exact roof** (2026-11-03):
+  last, every dormer and chimney takes its height and slope from its
+  host's LoD2 roof face under its centre (the highest within 0.3 m of
+  its outline), its top moved with it (`on_planes`). The burned 1 m roof
+  reads a cell's height, up to half a metre off a 45° face under a
+  centre: over all seven cities 7 % of the dormers stood more than 0.3 m
+  over the roof the building draws (0.6 % over 0.7 m), their cheeks
+  clear of it — dormers floating over the roof — and as many sank as
+  deep into it; now each stands on the face. The Taschenbergpalais'
   street photos show one identical dormer over every window axis; DOM1
   had read their centres up to 3 m apart
   down the slope and 1–4 m wide. Checked against
