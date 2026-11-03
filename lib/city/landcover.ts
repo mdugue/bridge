@@ -33,6 +33,8 @@ export const LANDCOVER_CLASSES: readonly LandcoverClass[] = [
 
 export const WATER_CLASS = 8;
 export const MEADOW_CLASS = 1;
+export const FOREST_CLASS = 2;
+export const COPSE_CLASS = 3;
 export const BUILTUP_CLASS = 4;
 export const RAILWAY_CLASS = 5;
 export const PATH_CLASS = 6;

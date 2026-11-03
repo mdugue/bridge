@@ -269,8 +269,11 @@ visual-variable codebook is in
   Meißen (43 %). OSM's own culverts are not used on the DLM sites: they
   cut an open stream in Unna.
 - **Meadow NDVI tint** `= computed` (*Wiesenfärbung*) — on class-1 farmland/meadow only, the
-  DOP greenness (`ndvi_<tile>.png`, LINEAR-filtered to low-pass the ~2 m raster)
-  shifts the pastel sage lush deep-green↔dry hay. In the terrain's colour node
+  DOP greenness (`ndvi_<tile>.png`, read at its mip 2 — 8 m a texel —
+  through a cubic B-spline, `bsplineSample`; the plain biased mip only past
+  ~6–16 m a pixel; the bilinear mip it replaced drew ~10 m squares that
+  read as a chequerboard from afar) shifts the pastel sage lush
+  deep-green↔dry hay. In the terrain's colour node
   (`meadowNdvi`, gated by the meadow class of the raster), at
   *Wiesenfärbung*'s fixed strength (`MEADOW_NDVI`, 0.6). The higher-variance NDVI canvas the analysis
   flagged (meadow carries 1.46× the crown NDVI variance). Absent raster → no-op.
@@ -333,6 +336,44 @@ visual-variable codebook is in
   0.5 m ramp at each end (`low` on the kerb lines, `kerbHeightAt`). 0.8–3.4 %
   of the kerb per tile, 0.6–3.8 km. The painted band and its shadow leave
   the lowered stretches out; the ramps keep them.
+- **Path edges** `= computed` `≈ assumed` (*Wegränder*, 2026-11-02) — a path (class
+  6) beside anything but itself, near the camera. The splat paints a 1 m
+  colour texel (a phone's 2 m) as the mean of the class texels under it
+  and the ground read it bilinear, and the paving kinds, the sand, the
+  grey of sealed ground and the urban green switched per class or paving
+  texel: a narrow path at a slant — a forest path, or a park path two
+  texels wide in built-up land, which no baked edge distance covers (the
+  edge raster knows roads and meadows) — came out as a mosaic of
+  diamonds and teeth. Where the 4×4 class texels round a fragment hold a
+  path, `ground-detail.ts` `smoothPaths` weights them by a cubic B-spline
+  (a C2-smooth coverage at the class raster's own resolution, whatever
+  the splat's), cuts the edge on its iso line (0.45), wandering ±0.12 m by
+  a world-space noise and frayed over 0.25 m, and paints the palette
+  colours of the path and of the nearest texel beside it across it, the
+  splat's own colour coming back as the coverage falls to nothing (no
+  seam where the 4×4 ends). Beside a path the baked lawn reaches on 1.2 m
+  to the path's smooth edge — on the lawn's side only (the lawn's
+  distance falls toward the path), never across a narrow path onto the
+  paving beyond it. The
+  same weight (`GroundColour.path`) then decides the sand, the slabs'
+  share and the urban green's, and a path texel off the smooth edge is
+  paved as the land beside it. The paving raster's walk kinds are read
+  as their shares of the 4×4 texels round the fragment under a cubic
+  B-spline, cut at one half and faded into the fragment's own texel
+  between 0.65 and 1 m a pixel (`walkShares`; bilinear shares of the
+  1 m texels drew a slanted edge as teeth),
+  (on the ground a walk kind paints — built-up, path, unclassified, and a
+  path's smooth edge — as before), so a stray sealed texel among a
+  path's sanded ones is a faint grey, not a block. Since 2026-11-03 the
+  bake carries a tagged way's own kind on along its path, up to 4 texels
+  past the way's buffer (`surface.py` `along_paths`; only a walkway's own
+  buffer seeds it, never an area, a sidewalk band or a
+  `footway=sidewalk` way), where the DLM's
+  `BEF` says nothing, before the town's default (asphalt) fills the rest:
+  the class raster's path is often wider than the buffer, and a sand path
+  came out grey at its sides. Out to
+  1.2 m a pixel (the shares to 1 m), then the splat as before. No bake,
+  no raster.
 - **Paving materials** `❝ taken` `≈ assumed` (*Beläge*) — OSM `surface=*` on the highways (plus
   `sidewalk:*:surface` bands beside the roads, `footway:surface`, pedestrian
   squares, parking lots) → a 2048² four-byte raster per tile
@@ -2371,6 +2412,16 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   starts its crown at 0.55 H too, and only a tree drawn as a cone is
   outlined as one (`ask-items.ts` bit 16, `CanopyInquiry.cone`).
 - **Crown shaping** `≈ assumed` — radial crown normals (free), organic trunk, base darkening;
+  every tree its own growth (`treeGrowth`, vertex stage, from where it
+  stands): a lean of up to 0.7 m at the trunk's top (the hash squared, so
+  most stand nearly upright) that carries the crown along, and a crook of
+  up to ±0.12 m mid-way up the trunk, both in metres turned into each
+  set's frame so a register tree's trunk and crown still meet; the trunk
+  forks at 0.78 of its height into three limbs ending inside the crown
+  (`trunkLimbs`, part of the shared trunk geometry; a cone or pine keeps
+  an unforked trunk, and so do the register's own trunks, a set of their
+  own beside the canopy's in a cell that has both), which a bare crown
+  shows in winter; the crown moves as the trunk's top does, whole. Not away from walls: the trunk knows nothing of them;
   the mid crown is a detail-2 icosphere (180 tris) with lobes;
   **three-tier crown LOD** per 250 m chunk (`lib/city/vegetation-lod.ts`),
   planned over every loaded tile at once: the rich ~1 440-tri multi-tuft
@@ -2477,7 +2528,8 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   draws every 7 m cell, the register only the trees it tends). **Draw calls:**
   the trunks and the broadleaf crowns (≈93 % of the trees) are handed to
   `buildVegetation` as precomputed `TreeInstance`s and ride in the canopy's
-  own chunk meshes; only the flame/cone/dome silhouettes are meshes of the
+  own chunk meshes (their trunks one unforked set beside the canopy's
+  forked one); only the flame/cone/dome silhouettes are meshes of the
   inventory layer.
   *Findings* (`scripts/eval/kataster-eval.py`): only **31 %** of cadastre
   trees have a canopy point (21 % on the spawn tile) — the canopy mask
@@ -2588,7 +2640,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   for the tree's height — over 15 cm per metre, or over 4 m, 0.1 % of
   the register — is dropped, not clamped). The viewer fits a measured
   trunk's girth to the radius the trunk geometry draws at 1.3 m, its
-  flared foot included (× 1.3 for the seven-sided, barkless trunk;
+  flared foot included (× 1.3 for the nine-sided, barkless trunk;
   `tree-inventory.ts` `trunkGirth` / `trunkRadiusAt`; a taper-only fit
   drew a 25 m tree's trunk half as thick again), the height rule stays
   where none is measured. **OSM trees**: the BBBike extract (2026-09-19)
@@ -2723,6 +2775,135 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   Only the register's trees: measured, so they may stand on a plan; the
   canopy's are inferred. On the fine terrain level only, so a Schwarzplan
   zoomed out past it shows none.
+
+- **Tree feet** `≈ assumed` (*Baumfuß*, 2026-11-02) — every trunk grows out
+  of the ground rather than standing on it:
+  - **the bark's own foot** (`buildTrunkMaterial`, every trunk, every
+    tier): three or four roots (a hash of where the tree stands) bulge the
+    foot out by up to 55 % of its radius, fading out 0.6 m up the bark
+    (`trunkRoots`, two extra rings low in the trunk, `TRUNK_RINGS`, nine
+    sides); up to 0.45 m over the ground the bark turns to damp earth
+    along them, the troughs about half as high, darkest at the ground.
+    A separate root-flare skirt round the trunk read as a shoe and was
+    dropped; the flat disc before it floated on a slope and let the
+    paving show through. The earth is the ground's own where the tile has foot rasters
+    (`trunkEarthGraph`, read per vertex at the foot, a trunk material per
+    tile on one build per raster layout): the pit's mulch in paving, leaf
+    mould in a wood, the grass's roots on a lawn or meadow, elsewhere the
+    class colour darkened as damp soil (× 0.72); one fixed earth
+    elsewhere.
+  - **bark and moss** (`barkSkin`, every trunk): 17 furrows round the
+    stem, wavering up it, tilt the normal across them (± 0.2) and shade
+    their troughs to × 0.91, faded to their mean between 10 and 35 m (they
+    would shimmer); moss (sRGB 118, 138, 80) on the weather side (west, a
+    little north), highest low on the trunk and gone by 1.9 m, in
+    patches, and a little all round at the foot, at most 50 %.
+  - **the trunk in its crown's shade** (`crownShade`, every trunk): the
+    trunk takes no shadow (in the shadow map the bark shadows itself, a
+    black sleeve), so it stood lit under a dark crown and read as pasted
+    on. Per vertex, the ray from the bark to the sun is tested against
+    the sphere the generic crown is drawn round (in the matrix's frame,
+    the sun turned in by its columns); where it passes through, the bark
+    darkens to half, softly to the rim, by day; and under the crown the
+    hidden sky darkens it toward the crown's base (× 0.8). A bare season
+    keeps 30 % of it (`crownLeaf`, the generic phenology's leaf; a cone's or
+    pine's trunk keeps its crown's shade the year round).
+  - **the crown darker inside and underneath** (`crownOcclusion`, every
+    crown, every form): a factor on the crown's colour per vertex, cool
+    and dark toward its underside (the radial normal's height, down to
+    × (0.56, 0.62, 0.66)) and in the troughs between its lobes (the shaped
+    vertex nearer the crown's centre than 1.15 R, down to × 0.8), so the
+    crown's mass reads as one volume over the trunk instead of a lit
+    ball. Not while Comic prints the crowns.
+  - in paving — the class raster's built-up, road, railway or unclassified
+    land, off the baked lawn (the edge raster's meadow side) — a **tree
+    pit**: mulched earth with a grain, litter flecks and the odd tuft of
+    green, 0.7 m beyond the trunk's flared foot (0.85–1.4 m), its rim
+    wobbling ±6 % by a world-space noise, in a 12 cm ring of setts (a joint
+    every 14 cm and on both edges). Rings are drawn before every pit's
+    earth, so overlapping pits become one bed with one ring; a pit stops
+    0.32 m short of the road edge (the edge raster's road distance), off
+    the kerb. Alpha-blended and lit as the ground is (its sun, shadows,
+    sky view and horizon).
+  - **under the crown** (off forest and copse, whose floor is its own; the
+    crown's reach 0.8 × the trunk's drawn length, 1.5–7 m): a multiplied
+    glaze darkens and cools the ground in the crown's shade, ragged at the
+    edge, with moss on a lawn (a bare broadleaf crown keeps 30 % of the
+    shade, `crownLeaf`; a cone's or pine's all of it the year round;
+    fogged as the ground under it is, faded to white); where the crown's shadow falls (thrown off
+    along the sun by the tree's height, at most three crowns away, drawn
+    out by a low sun) and the shadow map shades the ground, sun flecks
+    lift it back up to about the sun, by day, within 45 m (the glaze
+    catches the shadow term through its `receivedShadowNode` and draws its
+    factor as its `outputNode`). A fleck is the sun's own image through a
+    gap in the leaves, a pinhole camera: round, the gap's height × the
+    sun's 0.53° wide (6–23 cm), soft-rimmed, drawn out along the sun by
+    1 / its elevation (up to 3×), in clusters where the crown is thin, in
+    two grids of cells turned against each other (worked out only where
+    one can show: the quad reaches far past the shadow at a low sun). The wind does not carry
+    them along: a branch sways a cluster 5 cm to and fro (about 7 s), a
+    leaf trembles a fleck by 1 cm at 0.6–1.8 Hz and blinks almost half of
+    them on and off; past a few pixels they are their mean. (Until
+    2026-11-03 they were noise cells drifting on the wind clock, which
+    read as flowing water.) The glaze's quad lies along the throw, back
+    past the shade under the crown and forward past the thrown ellipse;
+    a quad centred between the two cut the shade off in a straight line;
+    on a lawn or meadow a ring of unmown grass round the trunk (the mower
+    keeps off it), reaching 0.85 m past the bark with a ragged edge: long
+    blades streaked out from the trunk, darker and yellower, and seed
+    heads catching the light where they are larger than a pixel, and in
+    it a tuft of 88 real blades (`tuftGraph`, a set of its own on the
+    trunks' buffers: thin triangles 0.08–0.24 m high, both faces lit from above, 0.8–1.3 × by a
+    hash, leaning out from 0.28–0.8 m round a 0.25 m foot moved out to
+    the trunk's own roots, turned with the trunk), opaque, lit as the ground, swaying 3.5 cm,
+    shrinking into the ground as the foot fades, so the cut between bark
+    and lawn is hidden — not in paving or a wood; and in autumn fallen leaves
+    (none under a cone or a pine) — covering
+    flecks in yellow, orange, russet and brown in 11 cm cells, thick under
+    the crown, thinning 25 % beyond it and swept against the kerb (the edge
+    raster's road distance), a mean tint where a cell is under a few
+    pixels. How much leaf lies follows the scene's day
+    (`leafLitterAt`: from late September, all of it in November, a third
+    left into January, none from mid-March).
+  - **worn lawn** under every other big park tree (on a lawn or meadow,
+    a crown of 2.5 m or more, 55 % of them by a hash of where they
+    stand): bare earth where people sit, on one side of the trunk, and the
+    path they wear to it, 2.6–6 m long, tapering and wandering, grass
+    showing through in tufts — covering, lit as the ground (the earth set,
+    never with a pit). A path leads off in a hashed direction, not to a
+    neighbour: the trees know nothing of each other.
+  - **the city's details** round a street tree in paving: its roots (the
+    trunk material's three to five lobes, same hash) break the mulch as a
+    bark-brown root, heave the ring's setts over each crest and open
+    their joints, and run on under the paving as thin cracks up to 1.5 m
+    past the ring; a pit at least 5 m off any road (a pedestrian zone, by
+    the edge raster) wears a cast-iron grate (rings and spokes, the
+    mulch showing through); a pit 0.9–3 m off the kerb gets, for 70 % of
+    them, an anthracite guard hoop between it and the road, 0.45 m short
+    of the kerb and along it (the road distance's gradient is the way to
+    the road; none on a tile without the edge raster, nor where the trunk's foot and its roots' bulge, 1.55 ×
+    its radius, reach past it) — a small mesh, opaque, standard-lit, not a
+    shadow caster, its posts on 0.2 m under the ground.
+  Every part lies on the ground's slope at its trunk (8 × 8 cells; the
+  slope read off the terrain 1.5 m either side of the foot when the
+  chunk is built, two signed bytes a tree, `groundSlope`); where the
+  ground bends away from that plane each vertex is drawn toward the eye
+  along its own ray by 8 % of its distance from the trunk (at most 1 m),
+  so it keeps its place on the screen and stays over the ground. The
+  guard hoop stands on the same slope. (Until 2026-11-03 a flat quad sank
+  into rising ground and the leaves and the shade stopped in a straight
+  line where the slope's crease crossed it.)
+  What a tree gets is read once per vertex at the trunk's foot. All of
+  it fades out between 70 and 150 m; a chunk whose nearest tree is past
+  160 m draws none of it (the chunk's crowns, trunks and the register's
+  own trunks count; a cell of the register's trunks alone, whose crowns
+  are drawn elsewhere, is switched by its trunks the same way). One
+  `Instances` set per part (ring, earth, leaves, shade, guard, tuft) per
+  set of trunks on the trunks' own attribute objects (matrices, drop),
+  and a quad, a hoop and a tuft per tile, with materials per tile whose
+  slots hold the tile's class and edge rasters and its light — two bytes
+  a tree (the slope) and about 15 KB a tile. The paper styles leave the blended parts
+  out. Before, the trunk stabbed straight into a flat ground.
 
 - **Hedges (OSM, laser-scan height)** `◎ detected` `❝ taken` and **trees outside the canopy mask**
   (laser scan) — on by default. The laser scan is baked for every tile of the
@@ -4768,8 +4949,10 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   from a palette with stops at −2° (blue hour) and +6° (golden hour).
   `lib/city/atmosphere.ts` `STOPS`.
 - **Meadow mottle** `≈ assumed` — DLM class 1 (farmland/meadow) → a low-frequency
-  colour + normal mottle so grass reads as ground, not paint. `terrain-layer.ts`
-  `grassMottle`/`terrainNormal`.
+  colour + normal mottle so grass reads as ground, not paint: world-space
+  value noise in two octaves (~8 m and ~2.5 m). Until 2026-11-02 it was the
+  product of two sines, a chequerboard by construction, which from afar read
+  as one. `terrain-layer.ts` `grassMottle`/`terrainNormal`.
 - **Contour ink guard** `= computed` — a flat terrain quad lying exactly on a 2 m or 10 m
   contour has `fwidth` 0, and 0/0 striped it with NaN ink (a diamond of
   lines on flat roads). No slope, no contour line. `terrain-layer.ts`.

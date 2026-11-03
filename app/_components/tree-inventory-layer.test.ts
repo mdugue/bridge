@@ -78,8 +78,9 @@ test("the reshaped silhouettes get meshes; trunks and broadleaf crowns join the 
   for (const child of inv.control.group.children) {
     expect((child as unknown as { material: unknown }).material).toBe(leafy);
   }
-  // Every trunk and the 3 broadleaf crowns ride in the canopy's meshes: one
-  // trunk mesh + the mid, rich and far crown, no extra draw call.
+  // Every trunk and the 3 broadleaf crowns ride in the canopy's meshes: the
+  // canopy's forked trunks, the register's own unforked ones beside them,
+  // and the mid, rich and far crown.
   expect(inv.instances).toHaveLength(6);
   expect(inv.instances.filter((t) => t.crown)).toHaveLength(3);
   const veg = buildVegetation(
@@ -87,7 +88,7 @@ test("the reshaped silhouettes get meshes; trunks and broadleaf crowns join the 
     ctx
   );
   const merged = census(veg.group);
-  expect(merged.meshes).toBe(4);
+  expect(merged.meshes).toBe(5);
   expect(merged.instances).toBe(1 + 6 + (1 + 3) * 3);
 });
 

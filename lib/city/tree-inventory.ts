@@ -149,6 +149,8 @@ export function treeExtents(
   };
 }
 
+/** The unit trunk's height (m before the instance scale). */
+export const TRUNK_UNIT_H = 2.4;
 /**
  * The shared trunk geometry (vegetation-layer.ts buildTrunkGeo) is a
  * cylinder of these radii (m) at the unit scale, tapering from the foot to
@@ -156,9 +158,15 @@ export function treeExtents(
  */
 export const TRUNK_FOOT_R = 0.16;
 export const TRUNK_TOP_R = 0.09;
-/** The cylinder's height segments: a ring of vertices at every fifth of
- *  the trunk, straight faces between them. */
-export const TRUNK_ROWS = 5;
+/** The cylinder's rings (fractions of the trunk, foot to top): every
+ *  fifth of it, and two more in the flared foot so its curve (and the
+ *  roots the trunk material bulges out there) has rows to bend. Straight
+ *  faces between them. */
+export const TRUNK_RINGS: readonly number[] = [
+  0, 0.04, 0.1, 0.2, 0.4, 0.6, 0.8, 1,
+];
+/** The cylinder's height segments. */
+export const TRUNK_ROWS = TRUNK_RINGS.length - 1;
 /** The root flare: the rings below this fraction of the trunk widen,
  *  up to 1 + TRUNK_FLARE at the ground. */
 const TRUNK_FLARE_TO = 0.16;
@@ -179,20 +187,24 @@ function ringRadius(t: number): number {
  * The unit trunk's radius at `t` (0 the foot, 1 the top) as drawn: the
  * faces run straight from ring to ring, so it is the rings' radii (taper ×
  * flare) interpolated — not the taper alone. On a tall tree breast height
- * falls in the bottom segment, whose foot ring is flared: the taper alone
- * understated the radius there and so drew a measured trunk too thick.
+ * falls between the low rings (TRUNK_RINGS), whose flare still widens
+ * it: the taper alone understated the radius there and so drew a
+ * measured trunk too thick.
  */
 export function trunkRadiusAt(t: number): number {
-  const u = Math.min(Math.max(t, 0), 1) * TRUNK_ROWS;
-  const i = Math.min(Math.floor(u), TRUNK_ROWS - 1);
-  const f = u - i;
-  return (
-    ringRadius(i / TRUNK_ROWS) * (1 - f) + ringRadius((i + 1) / TRUNK_ROWS) * f
-  );
+  const u = Math.min(Math.max(t, 0), 1);
+  let i = 0;
+  while (i < TRUNK_ROWS - 1 && TRUNK_RINGS[i + 1] < u) {
+    i++;
+  }
+  const a = TRUNK_RINGS[i];
+  const b = TRUNK_RINGS[i + 1];
+  const f = (u - a) / (b - a);
+  return ringRadius(a) * (1 - f) + ringRadius(b) * f;
 }
 /** Breast height (m), where a cadastre measures the trunk. */
 const BREAST_HEIGHT = 1.3;
-/** A flat-shaded seven-sided trunk without bark reads thinner than the real
+/** A flat-shaded nine-sided trunk without bark reads thinner than the real
  *  one of the same width; this much wider it reads right. */
 const TRUNK_STYLE = 1.3;
 const GIRTH_RANGE: [number, number] = [0.3, 5];

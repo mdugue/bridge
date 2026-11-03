@@ -10,7 +10,7 @@ import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import {
   PINE_CROWN_BASE,
-  TRUNK_ROWS,
+  TRUNK_RINGS,
   trunkRadiusAt,
 } from "@/lib/city/tree-inventory";
 import {
@@ -219,8 +219,8 @@ test("every tile wears the scene's crown and trunk materials; the warm-up carrie
 test("the trunk geometry's rings are the profile its girth is fitted to", () => {
   const geo = buildTrunkGeo();
   const pos = geo.getAttribute("position");
-  for (let k = 0; k <= TRUNK_ROWS; k++) {
-    const y = (k / TRUNK_ROWS) * TRUNK_H;
+  for (const t of TRUNK_RINGS) {
+    const y = t * TRUNK_H;
     const ring: [number, number][] = [];
     for (let i = 0; i < pos.count; i++) {
       if (Math.abs(pos.getY(i) - y) < 1e-4) {
@@ -237,9 +237,7 @@ test("the trunk geometry's rings are the profile its girth is fitted to", () => 
     const mean =
       rim.reduce((s, [x, z]) => s + Math.hypot(x - cx, z - cz), 0) / rim.length;
     // ±10 % bark bumps per vertex average out to a few per cent.
-    expect(Math.abs(mean / trunkRadiusAt(k / TRUNK_ROWS) - 1)).toBeLessThan(
-      0.08
-    );
+    expect(Math.abs(mean / trunkRadiusAt(t) - 1)).toBeLessThan(0.08);
   }
 });
 
