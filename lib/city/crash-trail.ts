@@ -639,8 +639,9 @@ export function formatStats(stats: TrailStats): string {
   const timing =
     t.cpuMs === undefined
       ? ""
-      : `  frame cpu ${round(t.cpuMs, 1)}ms render ${round(t.renderMs ?? 0, 1)}ms` +
-        (t.gpuMs === undefined ? "" : ` gpu ${round(t.gpuMs, 1)}ms`);
+      : `  frame cpu ${round(t.cpuMs, 1)}ms render ${round(t.renderMs ?? 0, 1)}ms${
+          t.gpuMs === undefined ? "" : ` gpu ${round(t.gpuMs, 1)}ms`
+        }`;
   return (
     `${stats.beats} beats, mean ${round(stats.fpsSum / stats.beats)}fps (${buckets})` +
     `  max held ${round(stats.maxHeldMB)}MB gpu ${round(stats.maxGpuMB)}MB${heap}${cpu}${timing}`
@@ -654,12 +655,13 @@ export function formatTrail(trail: Trail): string {
     `start ${trail.startedAt}`,
     `url ${trail.url}`,
     `ua ${trail.userAgent}`,
-    `backend ${trail.backend} · screen ${trail.screen}` +
-      (trail.pixelRatio === undefined ? "" : ` · pr ${trail.pixelRatio}`) +
-      (trail.deviceMemoryGB === undefined
+    `backend ${trail.backend} · screen ${trail.screen}${
+      trail.pixelRatio === undefined ? "" : ` · pr ${trail.pixelRatio}`
+    }${
+      trail.deviceMemoryGB === undefined
         ? ""
-        : ` · mem ${trail.deviceMemoryGB}GB`) +
-      (trail.safety === undefined ? "" : ` · safety ${trail.safety}`),
+        : ` · mem ${trail.deviceMemoryGB}GB`
+    }${trail.safety === undefined ? "" : ` · safety ${trail.safety}`}`,
     ...(trail.stats ? [`page ${formatStats(trail.stats)}`] : []),
     "",
     "events:",

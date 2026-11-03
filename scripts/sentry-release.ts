@@ -183,13 +183,15 @@ async function release(plan: ReleasePlan): Promise<void> {
     url: plan.url,
   });
   say(
-    `${plan.version} · ${plan.environment}` +
-      (plan.finalize ? " · finalized" : "") +
-      (linked
+    `${plan.version} · ${plan.environment}${
+      plan.finalize ? " · finalized" : ""
+    }${
+      linked
         ? ` · commits from ${plan.repository}`
         : plan.commit
           ? " · its commit (connect the repository in Sentry for the range)"
-          : " · no commit")
+          : " · no commit"
+    }`
   );
 }
 
