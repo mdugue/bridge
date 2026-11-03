@@ -114,17 +114,19 @@ export function useSpeech(): Speech {
     if (!("speechSynthesis" in window)) {
       return;
     }
-    const pick = () => setVoice(germanVoice());
+    // a reload that briefly lists none keeps the voice it had: a reading
+    // answer is not cut off, the switch does not vanish
+    const pick = () => setVoice((had) => germanVoice() ?? had);
     pick();
     speechSynthesis.addEventListener("voiceschanged", pick);
     return () => speechSynthesis.removeEventListener("voiceschanged", pick);
   }, []);
   const supported = voice !== null;
   const stop = useCallback(() => {
-    if (supported) {
+    if ("speechSynthesis" in window) {
       speechSynthesis.cancel();
     }
-  }, [supported]);
+  }, []);
   const primed = useRef(false);
   const prime = useCallback(() => {
     if (supported && !primed.current) {

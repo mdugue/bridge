@@ -18,7 +18,7 @@ import type { AskScene } from "./ask-scene-tools";
 import type { CityWalkHandle } from "./create-app";
 import { isAbortError, untilAborted } from "./fetch-optional";
 import { loadLandmarkFacts } from "./landmark-facts-load";
-import { sleep } from "./net-gate";
+import { sleep, visibleMs } from "./net-gate";
 import type { SceneTime } from "./scene-time";
 
 const WHEN = new Intl.DateTimeFormat("de-DE", {
@@ -39,6 +39,8 @@ export function instantAt(hour: number, day: Date, date?: string): Date {
 const LAND_MAX_MS = 8000;
 /** How often it looks whether the glide has landed (ms). */
 const LAND_POLL_MS = 100;
+/** How long the stream takes to notice a new view (ms, a few frames). */
+const STREAM_NOTICE_MS = 250;
 /** How long it then waits for the tiles there at most (ms): a hit on
  *  something already loaded behind a tile still to come would be wrong. */
 const STREAM_WAIT_MS = 4000;
@@ -46,17 +48,18 @@ const STREAM_WAIT_MS = 4000;
 const MISS_RETRIES = 6;
 const MISS_RETRY_MS = 500;
 
-/** Polls `holds` until it is false, `gone` holds or `maxMs` passed (by
- *  the clock, not by turns, which a hidden page slows); whether it ended. */
+/** Polls `holds` until it is false, `gone` holds or `maxMs` of visible
+ *  time passed (by the clock, not by turns); whether it ended. */
 async function waitWhile(
   holds: () => boolean,
   gone: () => boolean,
   maxMs: number,
   signal: AbortSignal
 ): Promise<boolean> {
-  const end = performance.now() + maxMs;
+  // the visible clock: a hidden page draws no frames, so no glide moves
+  const end = visibleMs() + maxMs;
   while (!gone() && holds()) {
-    if (performance.now() >= end) {
+    if (visibleMs() >= end) {
       return false;
     }
     await sleep(LAND_POLL_MS, signal);
@@ -78,6 +81,9 @@ async function landed(
   if (!(await waitWhile(h.viewMoving, gone, LAND_MAX_MS, signal))) {
     return false;
   }
+  // the stream hears of the new view a frame or two later: until then
+  // it may still say it is settled
+  await sleep(STREAM_NOTICE_MS, signal);
   await waitWhile(h.streamBusy, gone, STREAM_WAIT_MS, signal);
   return true;
 }

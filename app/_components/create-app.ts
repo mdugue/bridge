@@ -4209,9 +4209,11 @@ async function bootApp(
     return true;
   };
 
+  // Every call that moves the camera or relights the scene wakes a resting
+  // one for the next frame, not its next slow one (the still pace, the
+  // Hörmodus's two frames a second): the move starts at once and its first
+  // time step is not lost to the loop's clamp.
   return {
-    // a new hour wakes a resting scene for the next frame, not its next
-    // slow one (the Hörmodus draws two a second while still)
     setSun: (date, preview) => {
       wakeStill();
       return setSun(date, preview);
@@ -4243,13 +4245,12 @@ async function bootApp(
     enterImmersive: canvasControls.lockPointer,
     releaseGpu: () => releaseGpu(renderer),
     flyTo: (position, lookAt) => {
+      wakeStill();
       modelRig.exitNow();
       pose.flyTo(position, lookAt);
     },
     // In Modell a place is where the picture is centred (plan 055).
     flyToViewpoint: (view, glide) => {
-      // a glide wakes a resting scene for its first frame, not the next
-      // slow one (the Hörmodus draws two a second while still)
       wakeStill();
       // the rig's own phase: the view mode can lag it (a snapshot's
       // perspective settles to walk while Modell stays)
@@ -4265,18 +4266,30 @@ async function bootApp(
       return pose.flyToViewpoint(view, glide);
     },
     captureViewpoint: pose.captureViewpoint,
-    placeAt: (view) =>
-      modelRig.owns()
-        ? modelRig.centreOn(groundPoint(view.epsg.x, view.epsg.y))
-        : pose.placeAt(view),
-    teleportTo: (x, y) =>
-      modelRig.owns()
-        ? modelRig.centreOn(groundPoint(x, y))
-        : pose.teleportTo(x, y),
-    glideToSpot: (x, y) =>
-      modelRig.owns()
-        ? modelRig.centreOn(groundPoint(x, y))
-        : pose.glideToSpot(x, y),
+    placeAt: (view) => {
+      wakeStill();
+      if (modelRig.owns()) {
+        modelRig.centreOn(groundPoint(view.epsg.x, view.epsg.y));
+      } else {
+        pose.placeAt(view);
+      }
+    },
+    teleportTo: (x, y) => {
+      wakeStill();
+      if (modelRig.owns()) {
+        modelRig.centreOn(groundPoint(x, y));
+      } else {
+        pose.teleportTo(x, y);
+      }
+    },
+    glideToSpot: (x, y) => {
+      wakeStill();
+      if (modelRig.owns()) {
+        modelRig.centreOn(groundPoint(x, y));
+      } else {
+        pose.glideToSpot(x, y);
+      }
+    },
     getGlideTarget: pose.getGlideTarget,
     focusNdc: modelRig.focusNdc,
     viewMoving: () => pose.getGlideTarget() !== null || modelRig.moving(),
@@ -4306,6 +4319,7 @@ async function bootApp(
       return { ...perspective, epsg: { x: epsg.x, y: epsg.y }, model };
     },
     applyCameraState: (state) => {
+      wakeStill();
       const { model, ...perspective } = state;
       if (!model) {
         modelRig.exitNow();
@@ -4395,8 +4409,14 @@ async function bootApp(
     setModelTilt: modelRig.setTilt,
     setModelShear: modelRig.setShear,
     getModelHud: modelHud,
-    setFollowAim: pose.setFollowAim,
-    setFollowPosition: pose.setFollowPosition,
+    setFollowAim: (aim) => {
+      wakeStill();
+      pose.setFollowAim(aim);
+    },
+    setFollowPosition: (epsg) => {
+      wakeStill();
+      pose.setFollowPosition(epsg);
+    },
     setClimbInput: pose.setClimbInput,
     setMoveInput: pose.setMoveInput,
     startStreaming,

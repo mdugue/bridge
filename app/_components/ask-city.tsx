@@ -161,6 +161,7 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
               key={`${held.provider}:${held.key}`}
               onHearing={setHearing}
               onKeyProblem={() => setKey(null)}
+              paused={!key}
               reading={reading}
               scene={scene}
               setReading={setReading}
@@ -629,6 +630,7 @@ function VoiceBar({
 
 function Conversation({
   askKey,
+  paused,
   hearing,
   onHearing,
   onKeyProblem,
@@ -638,6 +640,8 @@ function Conversation({
   site,
 }: {
   askKey: AskKey;
+  /** hidden while the key is checked again */
+  paused: boolean;
   hearing: boolean;
   onHearing: (on: boolean) => void;
   onKeyProblem: () => void;
@@ -687,10 +691,12 @@ function Conversation({
   const [text, setText] = useState("");
   // `voice` with the question itself: a spoken one sets `reading` in the
   // same handler, before forwardedProps has seen it
-  const ask = (question: string, voice = reading) => {
+  const ask = (question: string, voice = reading, fromField = true) => {
     const q = question.trim().slice(0, ASK_LIMITS.questionChars);
     if (q && !chat.isLoading) {
-      setText("");
+      if (fromField) {
+        setText("");
+      }
       // the last answer stops: the next one is on its way
       speech.stop();
       if (voice) {
@@ -702,7 +708,8 @@ function Conversation({
   // a spoken question gets a spoken answer; one heard while an answer
   // still loads waits in the field, as a typed one would
   const askSpoken = (question: string) => {
-    if (chat.isLoading) {
+    // (or while the key is checked again: its token would be refused)
+    if (chat.isLoading || paused) {
       // the microphone opened before a typed question went: it waits
       // in an empty field, never over what was typed
       setText((t) => t || question.slice(0, ASK_LIMITS.questionChars));
@@ -711,7 +718,8 @@ function Conversation({
     // read aloud only where the device can: a voice-style answer nobody
     // hears, with no switch to undo it, helps no one
     setReading(speech.supported);
-    ask(question, speech.supported);
+    // a spoken question leaves a typed draft where it is
+    ask(question, speech.supported, false);
   };
   // a renewed token (same key, no remount) clears the error it answered
   // (each check sets a new expiry, with or without a token)
