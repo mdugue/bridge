@@ -23,6 +23,16 @@ export default defineConfig({
     "require-await": "off",
     "typescript/require-await": "error",
     "typescript/return-await": ["error", "in-try-catch"],
+    // Objects only: `const [x] = typedArray` walks an iterator, in hot loops.
+    "prefer-destructuring": ["error", { array: false, object: true }],
+    // Components are declarations, like every other function here.
+    "react/function-component-definition": [
+      "error",
+      {
+        namedComponents: "function-declaration",
+        unnamedComponents: "arrow-function",
+      },
+    ],
 
     // Takes `typedArray.slice()` for an array: its fix makes a plain one.
     "unicorn/prefer-spread": "off",
