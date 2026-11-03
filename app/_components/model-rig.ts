@@ -175,6 +175,8 @@ export interface ModelRig {
   settledView: () => ModelView | null;
   /** the dolly zoom's progress towards the parallel view (0 = perspective) */
   blend: () => number;
+  /** a glide or a dolly zoom is under way */
+  moving: () => boolean;
   /** Enters Modell from the walk/fly view, in `preset` (the last one by default). */
   enter: (preset?: ModelPresetId) => void;
   /** Leaves Modell for walk or fly (the pose it was entered from, if near). */
@@ -557,6 +559,8 @@ export function createModelRig(opts: ModelRigOptions): ModelRig {
     view: () => (phase.kind === "model" ? view : null),
     targetView: () => view,
     settledView: () => (phase.kind === "model" ? (glide?.to ?? view) : null),
+    moving: () =>
+      glide !== null || phase.kind === "entering" || phase.kind === "leaving",
     blend: () => {
       switch (phase.kind) {
         case "off":

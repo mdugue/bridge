@@ -632,6 +632,11 @@ export interface CityWalkHandle {
    * marks it and reports it through `onInquiry`; tests and QA call it.
    */
   inquireAt: (ndc?: { x: number; y: number }) => Inquiry | null;
+  /** Where the view's subject stands (NDC): the centre, or in Modell the
+   *  preset's pivot, where `flyToViewpoint` puts a place. */
+  focusNdc: () => { x: number; y: number };
+  /** A glide (the pose's or Modell's) or a dolly zoom is under way. */
+  viewMoving: () => boolean;
   /** What the nameplate sets in the city and where (nameplate-layer.ts),
    *  null while nothing is named; tests and QA read it. */
   nameplateShown: () => { title: string; mode: string; spot: string } | null;
@@ -4271,6 +4276,11 @@ async function bootApp(
         ? modelRig.centreOn(groundPoint(x, y))
         : pose.glideToSpot(x, y),
     getGlideTarget: pose.getGlideTarget,
+    focusNdc: () => {
+      const view = modelRig.view();
+      return { x: 0, y: view ? MODEL_PRESET_BY_ID[view.preset].pivotNdcY : 0 };
+    },
+    viewMoving: () => pose.getGlideTarget() !== null || modelRig.moving(),
     stopGlide: pose.cancelGlide,
     getPose: () => {
       const hud = modelRig.hud();

@@ -11,6 +11,7 @@ import type { FramePace } from "@/lib/city/frame-pace";
 import { type Inquiry, inquiryCard } from "@/lib/city/inquiry";
 import type { LookState } from "@/lib/city/look-state";
 import { siteHoldsPoint } from "@/lib/city/geolocation";
+import type { LandmarkFactsIndex } from "@/lib/city/landmark-facts";
 import { METHODS } from "@/lib/city/methods";
 import type { Site } from "@/lib/city/site";
 import type { AskScene } from "./ask-scene-tools";
@@ -33,33 +34,56 @@ export function instantAt(hour: number, day: Date, date?: string): Date {
   return new Date(y, m - 1, d, 0, Math.min(minutes, 24 * 60 - 1));
 }
 
-/** How long `was_ist_da` waits for the view to come to rest at most (ms). */
-const SETTLE_MAX_MS = 8000;
-/** The view counts as at rest when it did not move over this (ms). */
-const STEADY_MS = 150;
+/** How long `was_ist_da` waits for a glide to land at most (ms). */
+const LAND_MAX_MS = 8000;
+/** How often it looks whether the glide has landed (ms). */
+const LAND_POLL_MS = 100;
 /** A miss after a glide, asked again while the tiles there stream in. */
 const MISS_RETRIES = 6;
 const MISS_RETRY_MS = 500;
 
 /**
- * Resolves once no glide runs and the camera stood still over STEADY_MS:
- * every kind of glide (the pose's, Modell's centring), at any frame rate.
- * Bounded by the clock, not by turns, which a hidden page slows.
+ * Whether the view has landed: no glide (the pose's, Modell's centring)
+ * and no dolly zoom under way, by the scene's own state, so at any frame
+ * rate and with the live mode's easing; bounded by the clock, not by
+ * turns, which a hidden page slows. False when it ran out of time.
  */
-async function viewAtRest(
+async function landed(
   h: CityWalkHandle,
   signal: AbortSignal
-): Promise<void> {
-  const end = performance.now() + SETTLE_MAX_MS;
-  let last = JSON.stringify(h.getCameraState());
-  while (performance.now() < end) {
-    await sleep(STEADY_MS, signal);
-    const now = JSON.stringify(h.getCameraState());
-    if (now === last && h.getGlideTarget() === null) {
+): Promise<boolean> {
+  const end = performance.now() + LAND_MAX_MS;
+  while (h.viewMoving()) {
+    if (performance.now() >= end) {
+      return false;
+    }
+    await sleep(LAND_POLL_MS, signal);
+  }
+  return true;
+}
+
+/** Rejects when `signal` aborts (it never resolves). */
+function aborted(signal: AbortSignal): Promise<never> {
+  return new Promise((_, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException("aborted", "AbortError"));
       return;
     }
-    last = now;
-  }
+    signal.addEventListener(
+      "abort",
+      () => reject(new DOMException("aborted", "AbortError")),
+      { once: true }
+    );
+  });
+}
+
+const CANCELLED = {
+  gefunden: false,
+  hinweis: "Die Frage wurde abgebrochen.",
+};
+
+function isAbort(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
 }
 
 export function useAskScene(
@@ -108,15 +132,25 @@ export function useAskScene(
         let asked: Inquiry | null = null;
         try {
           // where a glide lands, not on its way
-          await viewAtRest(h, signal);
-          // and once the tiles there have come: a miss is asked again
-          asked = h.inquireAt();
+          if (!(await landed(h, signal))) {
+            return {
+              gefunden: false,
+              hinweis:
+                "Die Ansicht ist noch unterwegs. Frag gleich noch einmal.",
+            };
+          }
+          // at the view's subject (Modell's pivot), and once the tiles
+          // there have come: a miss is asked again
+          asked = h.inquireAt(h.focusNdc());
           for (let i = 0; !asked && i < MISS_RETRIES; i++) {
             await sleep(MISS_RETRY_MS, signal);
-            asked = h.inquireAt();
+            asked = h.inquireAt(h.focusNdc());
           }
-        } catch {
-          return { gefunden: false, hinweis: "Die Frage wurde abgebrochen." };
+        } catch (error) {
+          if (isAbort(error)) {
+            return CANCELLED;
+          }
+          throw error;
         }
         if (!asked) {
           return {
@@ -131,7 +165,20 @@ export function useAskScene(
         // a landmark's facts, as the card beside it shows them
         const url =
           asked.kind === "building" ? asked.landmarkFactsUrl : undefined;
-        const landmarks = url ? await loadLandmarkFacts(url) : null;
+        let landmarks: LandmarkFactsIndex | null = null;
+        if (url) {
+          try {
+            landmarks = await Promise.race([
+              loadLandmarkFacts(url),
+              aborted(signal),
+            ]);
+          } catch (error) {
+            if (isAbort(error)) {
+              return CANCELLED;
+            }
+            throw error;
+          }
+        }
         const card = inquiryCard(asked, null, credits, null, landmarks);
         return {
           gefunden: true,
