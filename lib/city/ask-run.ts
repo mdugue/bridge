@@ -101,34 +101,71 @@ export function roundsSinceQuestion(
  * result came (the visitor stopped it while a scene tool waited): a call
  * with no result before the last question makes the providers refuse
  * every later request. Calls after the last question are the answer's
- * own, which a resume completes, and stay.
+ * own, which a resume completes, and stay. The request carries the AG-UI
+ * wire rows (an assistant row's `toolCalls`, a `tool` row per result);
+ * a UI message's `parts` are filtered alike.
  */
 export function withoutUnanswered<T extends UIMessage | ModelMessage>(
   messages: readonly T[]
 ): T[] {
   const question = messages.findLastIndex((m) => m.role === "user");
-  const answered = new Set(
-    messages.flatMap((m) =>
-      "parts" in m
-        ? m.parts.flatMap((p) =>
-            p.type === "tool-result" ? [p.toolCallId] : []
-          )
-        : []
-    )
-  );
+  const answered = new Set(messages.flatMap(resultIds));
   return messages.flatMap((m, i) => {
-    if (i >= question || m.role !== "assistant" || !("parts" in m)) {
+    if (i >= question || m.role !== "assistant") {
       return [m];
     }
-    const parts = m.parts.filter(
-      (p) =>
-        p.type !== "tool-call" || p.output !== undefined || answered.has(p.id)
-    );
-    if (parts.length === m.parts.length) {
-      return [m];
-    }
-    return parts.length > 0 ? [{ ...m, parts }] : [];
+    // reason: each helper keeps the row's own type; TS cannot narrow T
+    const kept: Array<UIMessage | ModelMessage> =
+      "parts" in m
+        ? withAnsweredParts(m, answered)
+        : withAnsweredCalls(m, answered);
+    return kept as T[];
   });
+}
+
+/** The tool calls a message answers. */
+function resultIds(m: UIMessage | ModelMessage): string[] {
+  if ("parts" in m) {
+    return m.parts.flatMap((p) =>
+      p.type === "tool-result" ? [p.toolCallId] : []
+    );
+  }
+  return m.role === "tool" && m.toolCallId ? [m.toolCallId] : [];
+}
+
+function withAnsweredParts<T extends UIMessage>(
+  m: T,
+  answered: ReadonlySet<string>
+): T[] {
+  const parts = m.parts.filter(
+    (p) =>
+      p.type !== "tool-call" || p.output !== undefined || answered.has(p.id)
+  );
+  if (parts.length === m.parts.length) {
+    return [m];
+  }
+  return parts.length > 0 ? [{ ...m, parts }] : [];
+}
+
+function withAnsweredCalls<T extends ModelMessage>(
+  m: T,
+  answered: ReadonlySet<string>
+): T[] {
+  const calls = m.toolCalls?.filter((c) => answered.has(c.id));
+  if (!m.toolCalls || calls?.length === m.toolCalls.length) {
+    return [m];
+  }
+  const { toolCalls: _dropped, ...rest } = m;
+  const kept = (calls?.length ? { ...rest, toolCalls: calls } : rest) as T;
+  // a row left with neither words nor calls goes
+  const content = kept.content;
+  const empty =
+    !kept.toolCalls &&
+    (content === undefined ||
+      content === null ||
+      content === "" ||
+      (Array.isArray(content) && content.length === 0));
+  return empty ? [] : [kept];
 }
 
 /** The answer as a stream of AG-UI events, for an SSE response. */

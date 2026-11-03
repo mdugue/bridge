@@ -1,4 +1,9 @@
-import type { UIMessage } from "@tanstack/ai";
+import {
+  chatParamsFromRequestBody,
+  convertMessagesToModelMessages,
+  uiMessagesToWire,
+  type UIMessage,
+} from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 import { fakeText } from "@tanstack/ai/testing";
 import type { AskPromptSite } from "./ask-city";
@@ -401,7 +406,7 @@ describe("an answer that stops says why", () => {
   });
 });
 
-test("a stopped answer's unanswered tool call is left out, the running answer's kept", () => {
+test("a stopped answer's unanswered tool call is left out, the running answer's kept", async () => {
   const call = (id: string, output?: unknown) => ({
     type: "tool-call" as const,
     id,
@@ -411,7 +416,7 @@ test("a stopped answer's unanswered tool call is left out, the running answer's 
     ...(output === undefined ? {} : { output }),
   });
   const text = (content: string) => ({ type: "text" as const, content });
-  const messages = [
+  const ui = [
     { id: "1", role: "user" as const, parts: [text("Was ist das?")] },
     // stopped while was_ist_da waited: no output
     { id: "2", role: "assistant" as const, parts: [call("s")] },
@@ -421,9 +426,24 @@ test("a stopped answer's unanswered tool call is left out, the running answer's 
       role: "assistant" as const,
       parts: [text("Moment."), call("x", { gefunden: true }), call("r")],
     },
-  ];
-  const kept = withoutUnanswered(messages as UIMessage[]);
-  expect(kept.map((m) => m.id)).toEqual(["1", "3", "4"]);
-  // after the last question the calls stay: a resume answers them
-  expect(kept[2]?.parts).toHaveLength(3);
+  ] as UIMessage[];
+  // the way the request reaches the route: the client's wire rows, read
+  // back by the server
+  const params = await chatParamsFromRequestBody({
+    threadId: "t",
+    runId: "r",
+    messages: uiMessagesToWire(ui),
+    tools: [],
+    context: [],
+    state: {},
+    forwardedProps: {},
+  });
+  const model = convertMessagesToModelMessages(
+    withoutUnanswered(params.messages)
+  );
+  const calls = model.flatMap((m) => m.toolCalls?.map((c) => c.id) ?? []);
+  // the stopped call is gone; after the last question the calls stay,
+  // a resume answers them
+  expect(calls).toEqual(["x", "r"]);
+  expect(model.filter((m) => m.role === "user")).toHaveLength(2);
 });

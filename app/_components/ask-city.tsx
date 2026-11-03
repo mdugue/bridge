@@ -779,6 +779,9 @@ function Conversation({
                     // an answer that used the browser's tools comes as
                     // several messages: the label marks its first
                     labelled={chat.messages[i - 1]?.role !== "assistant"}
+                    // only the last message of a running answer still
+                    // waits on its tools; anything else was stopped
+                    live={chat.isLoading && i === chat.messages.length - 1}
                     message={m}
                   />
                 </MessageScrollerItem>
@@ -973,9 +976,11 @@ function Linked({ text }: { text: string }) {
 
 function ChatMessage({
   labelled,
+  live,
   message,
 }: {
   labelled: boolean;
+  live: boolean;
   message: UIMessage;
 }) {
   if (message.role === "user") {
@@ -992,6 +997,12 @@ function ChatMessage({
     );
   }
   const calls = message.parts.filter((p) => p.type === "tool-call");
+  // a server tool's result comes as its own part, not on the call
+  const results = new Set(
+    message.parts.flatMap((p) =>
+      p.type === "tool-result" ? [p.toolCallId] : []
+    )
+  );
   return (
     <Message>
       <MessageContent>
@@ -1002,19 +1013,24 @@ function ChatMessage({
         )}
         {calls.length > 0 && (
           <Trace>
-            {calls.map((c) => (
-              <TraceLine
-                key={c.id}
-                status={
-                  c.state === "input-complete" || c.state === "input-streaming"
-                    ? "running"
-                    : undefined
-                }
-              >
-                <TraceIcon>{toolIcon(c.name)}</TraceIcon>
-                <TraceTitle>{toolLine(c.name, c.input, c.output)}</TraceTitle>
-              </TraceLine>
-            ))}
+            {calls.map((c) => {
+              const open =
+                c.output === undefined &&
+                !results.has(c.id) &&
+                (c.state === "input-complete" || c.state === "input-streaming");
+              return (
+                <TraceLine
+                  key={c.id}
+                  status={open ? (live ? "running" : "pending") : undefined}
+                >
+                  <TraceIcon>{toolIcon(c.name)}</TraceIcon>
+                  <TraceTitle>
+                    {toolLine(c.name, c.input, c.output)}
+                    {open && !live && " (abgebrochen)"}
+                  </TraceTitle>
+                </TraceLine>
+              );
+            })}
           </Trace>
         )}
         {message.parts.map((p, i) =>
