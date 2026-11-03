@@ -652,8 +652,6 @@ function Conversation({
 }) {
   const speech = useSpeech();
   const dictation = useDictation();
-  // a closed conversation leaves no tool waiting on the scene
-  useEffect(() => () => scene.abandon(), [scene]);
   const tools = useMemo(() => sceneTools(scene), [scene]);
   // the conversation remounts for another key (keyed by it): fixed here
   const secret = askKey.key;
@@ -680,6 +678,20 @@ function Conversation({
       voice: reading,
     },
   });
+  // a closed conversation leaves no tool waiting on the scene
+  // (the answer stops first: a tool that returns at the abort would
+  // otherwise resume the run with one more request on the visitor's key)
+  const stopChat = useRef(chat.stop);
+  useEffect(() => {
+    stopChat.current = chat.stop;
+  });
+  useEffect(
+    () => () => {
+      stopChat.current();
+      scene.abandon();
+    },
+    [scene]
+  );
   const stopReading = useReadAloud(
     chat.messages,
     chat.isLoading,

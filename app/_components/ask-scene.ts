@@ -35,8 +35,13 @@ export function instantAt(hour: number, day: Date, date?: string): Date {
   return new Date(y, m - 1, d, 0, Math.min(minutes, 24 * 60 - 1));
 }
 
-/** How long `was_ist_da` waits for a glide to land at most (ms). */
-const LAND_MAX_MS = 8000;
+/** How long `was_ist_da` waits for a glide to land at most (visible ms):
+ *  a 3.8 s glide moves by at most 0.05 s a frame, so a phone at 5 fps
+ *  needs about 15 s. */
+const LAND_MAX_MS = 20_000;
+/** A glide started while it waited (another tool, a tap) is waited for
+ *  too, this many times at most. */
+const LAND_ROUNDS = 3;
 /** How often it looks whether the glide has landed (ms). */
 const LAND_POLL_MS = 100;
 /** How long the stream takes to notice a new view (ms, a few frames). */
@@ -87,6 +92,29 @@ async function landed(
   await waitWhile(h.streamBusy, gone, STREAM_WAIT_MS, signal);
   return true;
 }
+
+/** `landed`, again while a glide started during the wait; whether the
+ *  view stands. */
+async function standing(
+  h: CityWalkHandle,
+  gone: () => boolean,
+  signal: AbortSignal
+): Promise<boolean> {
+  for (let round = 0; round < LAND_ROUNDS; round++) {
+    if (!(await landed(h, gone, signal))) {
+      return false;
+    }
+    if (gone() || !h.viewMoving()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+const MOVING = {
+  gefunden: false,
+  hinweis: "Die Ansicht ist noch unterwegs. Frag gleich noch einmal.",
+};
 
 const LOADING = { gefunden: false, hinweis: "Die Szene lädt noch." };
 
@@ -144,24 +172,24 @@ export function useAskScene(
         let asked: Inquiry | null = null;
         try {
           // where a glide lands, not on its way
-          const there = await landed(h, gone, signal);
+          const there = await standing(h, gone, signal);
           if (gone()) {
             return LOADING;
           }
           if (!there) {
-            return {
-              gefunden: false,
-              hinweis:
-                "Die Ansicht ist noch unterwegs. Frag gleich noch einmal.",
-            };
+            return MOVING;
           }
           // at the view's subject (Modell's pivot), and once the tiles
-          // there have come: a miss is asked again
+          // there have come: a miss is asked again — never mid-glide
           asked = h.inquireAt(h.focusNdc());
           for (let i = 0; !asked && i < MISS_RETRIES; i++) {
             await sleep(MISS_RETRY_MS, signal);
+            const still = !h.viewMoving() || (await standing(h, gone, signal));
             if (gone()) {
               return LOADING;
+            }
+            if (!still) {
+              return MOVING;
             }
             asked = h.inquireAt(h.focusNdc());
           }
