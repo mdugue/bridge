@@ -452,7 +452,9 @@ export function frameTargets(
     distance: Math.round(best.distance),
     ...(under !== null
       ? { ground: under }
-      : targets.some((t) => t.z !== undefined)
+      : targets.some(
+            (t) => t.z !== undefined || (groundAt?.(t.x, t.y) ?? null) !== null
+          )
         ? { ground: foot }
         : {}),
     view: {

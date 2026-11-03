@@ -84,7 +84,12 @@ export async function POST(request: Request): Promise<Response> {
       `${def.label} ist gerade nicht zu erreichen.`
     );
   }
-  if (status === 401 || status === 403) {
+  // Google answers a key it does not know with 400 (INVALID_ARGUMENT)
+  if (
+    status === 401 ||
+    status === 403 ||
+    (status === 400 && def.check.auth === "google")
+  ) {
     return refuse(
       401,
       "key-rejected",
