@@ -1212,7 +1212,9 @@ stays their measure; the tile cache counts true bytes.
   The lane holds a dressing's build only; its compile wait and its
   hanging run after the lane, so the next build overlaps the last one's
   compile but waits out the one before it (`olderCompile`): at most one
-  compile ahead, so built dressings and the compile queue never pile up (headless full profile, Dresden start: first frame
+  compile ahead, so built dressings and the compile queue never pile up;
+  a dressing counts against the cache's budget from its build, not from
+  its hanging (headless full profile, Dresden start: first frame
   to *Alles geladen* 289 s → 243 s under SwiftShader). A fine level that
   shows before its own trees hang — a phone shows it the moment it loads
   — borrows its coarse level's crowns until they do

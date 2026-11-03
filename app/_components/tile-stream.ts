@@ -2172,6 +2172,13 @@ export class DressingPlugin {
       );
       entry.aborter = undefined;
       const parts = dressingParts(dressing);
+      // Weighed from the build on, not from the hang: the lane runs ahead
+      // of the compile waits, and a built dressing waiting its turn to
+      // hang must count against the cache's budget.
+      if (this.dressed.get(scene) === entry) {
+        this.weighDressing(entry, dressing);
+        this.tiles?.recalculateBytesUsed();
+      }
       // Compiled as the frames will draw it — in its season and at the
       // hour (which swap crown materials) — before it hangs anywhere: a
       // build three keys differently from what a frame asks for compiles
@@ -2215,6 +2222,10 @@ export class DressingPlugin {
           this.dressed.get(scene) !== entry ||
           outcome === "out of memory"
         ) {
+          if (this.dressed.get(scene) === entry) {
+            entry.dressingBytes = undefined;
+            this.tiles?.recalculateBytesUsed();
+          }
           // freed once its compile has ended (see `compiles`)
           compiled
             .then(() => this.disposeFailed(disposeDressing(dressing), scene))
@@ -2323,7 +2334,7 @@ export class DressingPlugin {
     catchUp(dressing, this.ctx);
   }
 
-  /** A hung dressing's geometry bytes, as its parts stand now (the
+  /** A built dressing's geometry bytes, as its parts stand now (the
    *  traffic's bodies count once built). */
   private weighDressing(entry: Dressed, dressing: TileDressing): void {
     entry.dressingBytes = dressingParts(dressing).reduce(
