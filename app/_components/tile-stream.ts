@@ -2335,9 +2335,7 @@ export class DressingPlugin {
         ),
       // the dressings' own chain: a switch-on builds the loaded tiles'
       // bodies one after another, never all in one task
-      turn: async (work) => {
-        return this.turn(work, FINE_DRESSING_RANK);
-      },
+      turn: async (work) => this.turn(work, FINE_DRESSING_RANK),
       freeFailed: (errors) => this.disposeFailed(errors, scene),
       gone: () =>
         this.disposed ||

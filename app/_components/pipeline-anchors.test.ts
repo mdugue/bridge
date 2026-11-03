@@ -178,15 +178,17 @@ test("a tile's own material freed before its set's turn leaves the set and the h
   );
   let finish = () => {};
   let drawn: Object3D[] = [];
-  const anchors = createPipelineAnchors(async (set) => {
-    return new Promise<void>((resolve) => {
-      finish = () => {
-        // what the set holds once its turn comes
-        drawn = [...set.children];
-        resolve();
-      };
-    });
-  }, true);
+  const anchors = createPipelineAnchors(
+    async (set) =>
+      new Promise<void>((resolve) => {
+        finish = () => {
+          // what the set holds once its turn comes
+          drawn = [...set.children];
+          resolve();
+        };
+      }),
+    true
+  );
   const material = new MeshBasicNodeMaterial();
   const done = anchors.anchorAll([
     new Mesh(new BoxGeometry(), material),
