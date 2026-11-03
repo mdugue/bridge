@@ -22,6 +22,8 @@ import {
 /** The two ends of a segment, as the HUD's own foreground token. */
 const FILLED = "var(--hud-foreground)";
 const EMPTY = "rgb(255 255 255 / 0.18)";
+/** What is still loading fills in the scene's progress ink (load-veil.ts). */
+const LOADING = "var(--load-ink)";
 
 /**
  * A warm cache finishes the remaining layers in well under a second, and a
@@ -63,7 +65,7 @@ function Segment({ stage }: { stage: LoadStageState }) {
         background: stage.done
           ? FILLED
           : stage.active
-            ? `linear-gradient(90deg,${FILLED} ${pct}%,${EMPTY} ${pct}%)`
+            ? `linear-gradient(90deg,${LOADING} ${pct}%,${EMPTY} ${pct}%)`
             : EMPTY,
       }}
     />

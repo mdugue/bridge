@@ -51,6 +51,7 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
+import type { VeilState } from "@/lib/city/load-frontier";
 import { LOOK_DEFAULTS, type LookValues } from "@/lib/city/look-controls";
 import { NAMEPLATE_TYPES } from "@/lib/city/nameplate-type";
 import {
@@ -79,6 +80,7 @@ import type { F, Live, V2, V3, V4 } from "./shader-chunks";
 import { aloneUnder, compileRepresentatives } from "./three-utils";
 import { createStyleDressing } from "./style-dressing";
 import { createStylize, type SunShadowMap } from "./stylize-effect";
+import { createLoadVeil, type LoadVeil } from "./load-veil";
 import type { ViewLens } from "./view-lens";
 import { setAskedColours } from "./visual-style";
 
@@ -229,6 +231,9 @@ export interface PostStack {
    * Modell's: recovery brings DoF back only where those allow it.
    */
   setRegressed: (on: boolean) => void;
+  /** The loading veil this frame (load-veil.ts): the frontier's ring
+   *  around the world-space point `centreX`, `centreZ`. */
+  setLoadVeil: (state: VeilState, centreX: number, centreZ: number) => void;
   /** Follows the canvas (the scene target is drawing-buffer sized). */
   setSize: () => void;
   /**
@@ -334,7 +339,7 @@ interface Finish {
  *   re-drawn 24 times a second and the fibres go (a film has none); like
  *   silver grain it is strongest in the mid-tones.
  */
-function finish(input: V4, viewZ: F, f: Finish): V4 {
+function finish(input: V4, viewZ: F, f: Finish, veil: LoadVeil): V4 {
   const { grading, grain, film } = f;
   const t = smoothstep(
     0.04,
@@ -373,7 +378,7 @@ function finish(input: V4, viewZ: F, f: Finish): V4 {
   const paper = float(1).add(
     speckle.sub(0.5).mul(0.13).mul(midtones).add(fibre).mul(grain)
   );
-  return vec4(graded.mul(vignette).mul(paper), input.a);
+  return vec4(veil.over(graded.mul(vignette)).mul(paper), input.a);
 }
 
 /**
@@ -689,12 +694,14 @@ export function createPostStack(
     width: size.x,
     height: size.y,
   });
+  // The loading frontier, drawn in the last pass (load-veil.ts).
+  const loadVeil = createLoadVeil(depthTexture, lens);
   // The last pass, to the canvas: one per antialiased input.
   const finishedOf = (antialiased: V4) => {
     const p = new RenderPipeline(
       renderer,
       renderOutput(
-        finish(outline.over(antialiased), viewZ, finishing),
+        finish(outline.over(antialiased), viewZ, finishing, loadVeil),
         NoToneMapping,
         SRGBColorSpace
       )
@@ -1431,6 +1438,7 @@ export function createPostStack(
       style = RENDER_STYLE_BY_ID[look.style];
       applyStyleWeights();
     },
+    setLoadVeil: loadVeil.set,
     setRegressed: (on) => {
       regressed = on;
     },

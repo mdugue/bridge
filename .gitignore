@@ -76,3 +76,10 @@ __pycache__/
 .ruff_cache/
 
 certificates
+
+# the Stadtwissen for the chat server (scripts/prepare-sites.ts)
+/.stadtwissen/
+
+# the routines' outputs (docs/routines.md)
+/osm-gaps/
+/street-photos/
