@@ -253,7 +253,9 @@ export function LoadScreen({
         // Once the city is behind the glass the screen is a still image:
         // nothing animates through the scene's first frames, which is
         // exactly the competition the handover was redesigned to remove.
-        handedOver && "pointer-events-none **:animate-none **:transition-none"
+        // Paused, not removed: the ring holds the breath it was at.
+        handedOver &&
+          "pointer-events-none **:transition-none **:[animation-play-state:paused]"
       )}
     >
       {/* Frosted, not opaque: the canvas below shows through as soon as it has
