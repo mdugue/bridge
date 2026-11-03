@@ -236,12 +236,15 @@
 }
 
 /* The loading screen's ring breathes as the scene's does (load-veil.ts:
-   3.4 s, slow in, quicker out). Only the ring: the contours hold still,
-   a full-screen repaint is what the boot cannot spare (handover.ts). */
-.load-breathe {
-  transform-box: view-box;
-  transform-origin: center;
-  animation: load-breathe 3.4s cubic-bezier(0.45, 0, 0.3, 1) infinite;
+   3.4 s, slow in, quicker out). Only the ring's own layer, an element the
+   compositor scales: the contours hold still, and a repaint per frame is
+   what the boot cannot spare (handover.ts). In the components layer, so
+   the screen's `**:animate-none` utility stops it at the handover. */
+@layer components {
+  .load-breathe {
+    transform-origin: center;
+    animation: load-breathe 3.4s cubic-bezier(0.45, 0, 0.3, 1) infinite;
+  }
 }
 @keyframes load-breathe {
   0%,
@@ -253,7 +256,9 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .load-breathe {
-    animation: none;
+  @layer components {
+    .load-breathe {
+      animation: none;
+    }
   }
 }

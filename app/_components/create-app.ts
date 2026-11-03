@@ -1646,6 +1646,8 @@ async function bootApp(
     look: opts.look,
     clock: sceneClock,
   };
+  // each site tile's rectangle (the stream's and the loading veil's)
+  const siteTileBounds = new Map(extras.tiles.map((t) => [t.id, t.bounds]));
   const stream = createTileStream(
     {
       // whether it compiled (a tile drops the CPU copies of what it
@@ -1695,7 +1697,7 @@ async function bootApp(
       styleResources,
       sunDirection,
       tier: budget.tier,
-      tileBounds: (id) => extras.tiles.find((t) => t.id === id)?.bounds,
+      tileBounds: (id) => siteTileBounds.get(id),
       tilesetUrl,
       // the data layers' traffic builder (they are set up with the post
       // stack below; a slot asks only once the look has a layer on and
@@ -3085,35 +3087,30 @@ async function bootApp(
 
   // The loading frontier (lib/city/load-frontier.ts): what is still on its
   // way, as a ring around the camera that walks outward as the city fills.
-  const tileBounds = new Map(extras.tiles.map((t) => [t.id, t.bounds]));
   let loadVeil: VeilState = BOOT_VEIL;
   // the first load is through (`checkLoaded`)
   let bootLoaded = false;
   const stepLoadVeil = (dt: number, exporting: boolean) => {
     const at = streamCamera.position;
     const truth = loadFrontier(
-      tileBounds,
+      siteTileBounds,
       stream.pendingSiteTiles(),
       at.x + offset.cx,
       offset.cy - at.z
     );
     // Until the first load is through, the ring walks out with the last
     // two stages' progress instead: the tile underfoot would hold it at
-    // the feet until its own details are built, then let it jump.
-    const frontier = bootLoaded
-      ? truth
-      : bootFrontier(
-          truth,
+    // the feet until its own details are built, then let it jump. Nor does
+    // a moment with nothing in flight mid-boot (between two stages) sweep
+    // it out and lift it: only the end of the load does.
+    const frontier = !bootLoaded
+      ? bootFrontier(
           ((stageFractions.get("surroundings") ?? 0) +
             (stageFractions.get("details") ?? 0)) /
             2
-        );
-    // The boot's veil holds at the feet until the first site tile is on
-    // its way (the tileset's own JSON is none): it must not sweep out and
-    // lift before anything has come.
-    if (!(frontier === null && loadVeil === BOOT_VEIL && !sceneSettled)) {
-      loadVeil = stepVeil(loadVeil, frontier, dt);
-    }
+        )
+      : truth;
+    loadVeil = stepVeil(loadVeil, frontier, dt);
     // an exported image is the city, not its loading
     const asked = exporting ? { strength: 0 } : pocVeil();
     postStack.setLoadVeil(
@@ -3748,7 +3745,13 @@ async function bootApp(
     if (!opts.pace) {
       return;
     }
-    const busy = moved || exporting || !sceneSettled || dataLayersMove;
+    // (the loading veil breathes, sweeps and lifts at the full rate)
+    const busy =
+      moved ||
+      exporting ||
+      !sceneSettled ||
+      dataLayersMove ||
+      loadVeil.strength > 0;
     sceneStill = stillness.frame(time, busy);
     opts.pace.setStill(sceneStill);
   };

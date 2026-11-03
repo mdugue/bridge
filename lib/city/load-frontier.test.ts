@@ -90,16 +90,14 @@ test("a top-up while the veil lifts waits too, and keeps lifting", () => {
 });
 
 test("the boot's ring walks out with progress in log distance", () => {
-  // the tile underfoot pending: the frontier alone would hold at 0
-  expect(bootFrontier(0, 0)).toBe(BOOT_NEAR_M);
-  expect(bootFrontier(0, 1)).toBeCloseTo(BOOT_REACH_M, 6);
+  expect(bootFrontier(0)).toBe(BOOT_NEAR_M);
+  expect(bootFrontier(1)).toBeCloseTo(BOOT_REACH_M, 6);
   // halfway in progress is the geometric mean, not half the reach
-  expect(bootFrontier(0, 0.5)).toBeCloseTo(
+  expect(bootFrontier(0.5)).toBeCloseTo(
     Math.sqrt(BOOT_NEAR_M * BOOT_REACH_M),
     6
   );
-  // a far frontier does not drag the ring over the horizon early
-  expect(bootFrontier(2000, 0.1)).toBeLessThan(100);
-  expect(bootFrontier(null, 0.5)).toBeNull();
-  expect(bootFrontier(0, 2)).toBeCloseTo(BOOT_REACH_M, 6);
+  // early progress keeps the ring near
+  expect(bootFrontier(0.1)).toBeLessThan(100);
+  expect(bootFrontier(2)).toBeCloseTo(BOOT_REACH_M, 6);
 });

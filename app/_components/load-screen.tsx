@@ -6,7 +6,7 @@ import {
   loadHeadline,
   WALKABLE_PERCENT,
 } from "@/lib/city/load-stages";
-import { useId } from "react";
+import { type ReactNode, useId } from "react";
 import { useSite } from "./site-context";
 
 /**
@@ -67,100 +67,124 @@ const CONTOURS: string[] = (() => {
 /** Where the ring stands on the walkable mark (sheet units). */
 const WALKABLE_RADIUS = ringRadius(WALKABLE_PERCENT);
 
-function SurveySheet({ percent }: { percent: number }) {
-  const r = ringRadius(percent);
-  // ids are document-wide: two screens mounted at once must not share them
-  const uid = useId();
-  const colourId = `${uid}-colour`;
-  const insideId = `${uid}-inside`;
+/** One layer of the survey sheet: the sheet's frame, cropped to the screen. */
+function Sheet({
+  breathes = false,
+  children,
+}: {
+  breathes?: boolean;
+  children: ReactNode;
+}) {
   return (
     <svg
       aria-hidden
-      className="absolute inset-0 h-full w-full"
+      // A breathing layer scales as one element, which the compositor does
+      // without a repaint (an SVG child's transform repaints the sheet).
+      className={cn(
+        "absolute inset-0 h-full w-full",
+        breathes && "load-breathe"
+      )}
       preserveAspectRatio="xMidYMid slice"
       viewBox={`0 0 ${SHEET} ${SHEET}`}
     >
-      <defs>
-        {/* the city's warm clay to its green edge, soft */}
-        <radialGradient id={colourId} cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#f3dcc0" />
-          <stop offset="55%" stopColor="#e6dcc6" />
-          <stop offset="100%" stopColor="#c7d4b0" />
-        </radialGradient>
-        <clipPath id={insideId}>
-          <circle
-            className="load-breathe transition-[r] duration-700 ease-out"
+      {children}
+    </svg>
+  );
+}
+
+function SurveySheet({ percent }: { percent: number }) {
+  const r = ringRadius(percent);
+  // ids are document-wide: two screens mounted at once must not share them
+  const colourId = `${useId()}-colour`;
+  // the ring's radius moves with the load, not with every frame
+  const grows = "transition-[r] duration-700 ease-out";
+  return (
+    <>
+      {/* inside the ring the clay takes on colour (translucent, as the
+          veil is: the first frame must show through); one layer that
+          breathes, under the still survey */}
+      <Sheet breathes>
+        <defs>
+          {/* the city's warm clay to its green edge, across the sheet */}
+          <radialGradient
             cx={CENTRE}
             cy={CENTRE}
-            r={r}
-          />
-        </clipPath>
-      </defs>
-      {/* inside the ring the clay takes on colour */}
-      {/* (translucent, as the veil is: the first frame must show through) */}
-      <g clipPath={`url(#${insideId})`}>
-        <rect
+            gradientUnits="userSpaceOnUse"
+            id={colourId}
+            r={CENTRE}
+          >
+            <stop offset="0%" stopColor="#f3dcc0" />
+            <stop offset="55%" stopColor="#e6dcc6" />
+            <stop offset="100%" stopColor="#c7d4b0" />
+          </radialGradient>
+        </defs>
+        <circle
+          className={grows}
+          cx={CENTRE}
+          cy={CENTRE}
           fill={`url(#${colourId})`}
           fillOpacity={0.8}
-          height={SHEET}
-          width={SHEET}
+          r={r}
         />
-      </g>
-      <g fill="none" stroke="var(--load-line)" strokeWidth={1}>
-        {CONTOURS.map((d, i) => (
-          <path
-            d={d}
-            key={d}
-            strokeOpacity={i % 5 === 4 ? 0.7 : 0.32}
-            vectorEffect="non-scaling-stroke"
-          />
-        ))}
-      </g>
-      {/* the walkable mark: a dashed circle the ring has to reach */}
-      <circle
-        cx={CENTRE}
-        cy={CENTRE}
-        fill="none"
-        r={WALKABLE_RADIUS}
-        stroke="var(--load-ink)"
-        strokeDasharray="2 6"
-        strokeOpacity={0.55}
-        vectorEffect="non-scaling-stroke"
-      />
-      <text
-        fill="var(--load-ink)"
-        fontSize={13}
-        fontWeight={600}
-        letterSpacing={3}
-        textAnchor="middle"
-        x={CENTRE}
-        y={CENTRE - WALKABLE_RADIUS - 8}
-      >
-        BEGEHBAR
-      </text>
-      {/* the ring: its halo soaking outward, then the line */}
-      <circle
-        className="load-breathe transition-[r] duration-700 ease-out"
-        cx={CENTRE}
-        cy={CENTRE}
-        fill="none"
-        r={r + 6}
-        stroke="var(--load-ink)"
-        strokeOpacity={0.18}
-        strokeWidth={14}
-        vectorEffect="non-scaling-stroke"
-      />
-      <circle
-        className="load-breathe transition-[r] duration-700 ease-out"
-        cx={CENTRE}
-        cy={CENTRE}
-        fill="none"
-        r={r}
-        stroke="var(--load-ink)"
-        strokeWidth={2.5}
-        vectorEffect="non-scaling-stroke"
-      />
-    </svg>
+        {/* the ring: its halo soaking outward, then the line */}
+        <circle
+          className={grows}
+          cx={CENTRE}
+          cy={CENTRE}
+          fill="none"
+          r={r + 6}
+          stroke="var(--load-ink)"
+          strokeOpacity={0.18}
+          strokeWidth={14}
+          vectorEffect="non-scaling-stroke"
+        />
+        <circle
+          className={grows}
+          cx={CENTRE}
+          cy={CENTRE}
+          fill="none"
+          r={r}
+          stroke="var(--load-ink)"
+          strokeWidth={2.5}
+          vectorEffect="non-scaling-stroke"
+        />
+      </Sheet>
+      {/* the survey over it: contours and the walkable mark, still */}
+      <Sheet>
+        <g fill="none" stroke="var(--load-line)" strokeWidth={1}>
+          {CONTOURS.map((d, i) => (
+            <path
+              d={d}
+              key={d}
+              strokeOpacity={i % 5 === 4 ? 0.7 : 0.32}
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+        </g>
+        {/* the walkable mark: a dashed circle the ring has to reach */}
+        <circle
+          cx={CENTRE}
+          cy={CENTRE}
+          fill="none"
+          r={WALKABLE_RADIUS}
+          stroke="var(--load-ink)"
+          strokeDasharray="2 6"
+          strokeOpacity={0.55}
+          vectorEffect="non-scaling-stroke"
+        />
+        <text
+          fill="var(--load-ink)"
+          fontSize={13}
+          fontWeight={600}
+          letterSpacing={3}
+          textAnchor="middle"
+          x={CENTRE}
+          y={CENTRE - WALKABLE_RADIUS - 8}
+        >
+          BEGEHBAR
+        </text>
+      </Sheet>
+    </>
   );
 }
 
