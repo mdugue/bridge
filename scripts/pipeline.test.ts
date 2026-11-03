@@ -23,7 +23,7 @@ test("the spec carries exactly the keys pipeline/bake/spec.py reads", () => {
 test("every provider's products are fields pipeline/bake/common.py takes", () => {
   const python = readFileSync(join(PYTHON, "common.py"), "utf-8");
   const block = (
-    python.match(/class Products:\n([\s\S]*?)\n\n\n/u)?.[1] ?? ""
+    /class Products:\n([\s\S]*?)\n\n\n/u.exec(python)?.[1] ?? ""
   ).replaceAll(/"""[\s\S]*?"""/gu, "");
   // `name: type`, `name: type = default` (spaced or not), a comment after
   const fields = [

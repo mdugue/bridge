@@ -129,7 +129,7 @@ export function epsgCodeFromReferenceSystem(
   if (!referenceSystem) {
     return null;
   }
-  const match = referenceSystem.match(TRAILING_NUMBER);
+  const match = TRAILING_NUMBER.exec(referenceSystem);
   return match ? Number(match[1]) : null;
 }
 

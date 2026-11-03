@@ -20,10 +20,10 @@ test("the colony bytes' scales are the bake's", () => {
     join(import.meta.dir, "../../pipeline/bake/cultivated.py"),
     "utf-8"
   );
-  expect(Number(python.match(/^EDGE_SCALE = ([\d.]+)$/mu)?.[1])).toBe(
+  expect(Number(/^EDGE_SCALE = ([\d.]+)$/mu.exec(python)?.[1])).toBe(
     COLONY_EDGE_SCALE
   );
-  const axis = python.match(/def axis_code[^]*?\* (\d+)\)\) % (\d+)/u);
+  const axis = /def axis_code[^]*?\* (\d+)\)\) % (\d+)/u.exec(python);
   expect(Number(axis?.[1])).toBe(COLONY_AXIS_STEPS);
   expect(Number(axis?.[2])).toBe(COLONY_AXIS_STEPS + 1);
 });

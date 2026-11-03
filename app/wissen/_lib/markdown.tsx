@@ -74,7 +74,7 @@ function remarkDiagrams() {
           `No rendered diagram docs/diagrams/${key}.svg – run \`bun run docs:diagrams\``
         );
       }
-      const box = svg.match(/viewBox="[\d.-]+ [\d.-]+ ([\d.]+) ([\d.]+)"/u);
+      const box = /viewBox="[\d.-]+ [\d.-]+ ([\d.]+) ([\d.]+)"/u.exec(svg);
       const attrs = [
         `data-width="${Math.round(Number(box?.[1] ?? 0))}"`,
         `data-height="${Math.round(Number(box?.[2] ?? 0))}"`,

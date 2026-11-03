@@ -108,11 +108,11 @@ test("the lane bits are one bit each and keep the kerb's", () => {
 test("the bake writes the bits and the offset scale the shader reads", () => {
   // pipeline/bake/markings.py packs them into the raster's G and B channels
   const python = readFileSync(join(ROOT, "pipeline/bake/markings.py"), "utf-8");
-  const scale = python.match(/^EDGE_SCALE = ([\d.]+)/mu)?.[1];
+  const scale = /^EDGE_SCALE = ([\d.]+)/mu.exec(python)?.[1];
   expect(Number(scale)).toBe(MARKING_OFFSET_SCALE);
   const bits = new Map<string, number>();
   for (const line of python.split("\n")) {
-    const m = line.match(/^([A-Z_, ]+) = ([\d, ]+?)\s*(?:#.*)?$/u);
+    const m = /^([A-Z_, ]+) = ([\d, ]+?)\s*(?:#.*)?$/u.exec(line);
     if (!m) {
       continue;
     }

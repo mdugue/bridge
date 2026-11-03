@@ -17,7 +17,7 @@ export function plainText(markdown: string): string {
 
 /** The first `# ` heading, as text. */
 export function titleOf(markdown: string): string | null {
-  const line = markdown.match(/^# (.+)$/mu)?.[1];
+  const line = /^# (.+)$/mu.exec(markdown)?.[1];
   return line ? plainText(line) : null;
 }
 
