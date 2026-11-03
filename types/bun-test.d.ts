@@ -16,7 +16,7 @@ type Settling<M> = {
 
 declare module "bun:test" {
   interface Matchers<T> {
-    rejects: Settling<Matchers<unknown>>;
+    rejects: Settling<Matchers>;
     resolves: Settling<Matchers<Awaited<T>>>;
   }
 }

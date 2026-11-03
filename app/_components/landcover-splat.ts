@@ -153,7 +153,7 @@ function tapSum<T extends F | V3>(
  * offset is read once, for the colour and the water alike.
  */
 function splatFragment(
-  classNode: TextureNode<"vec4">,
+  classNode: TextureNode,
   width: number,
   height: number,
   scale: SplatScale

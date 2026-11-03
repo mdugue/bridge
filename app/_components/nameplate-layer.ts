@@ -330,7 +330,7 @@ function writePrism(
  *  the sun from the letters' field. Each graph holds only its own work. */
 function plateMaterials(
   deps: Pick<NameplateDeps, "depthTexture" | "lens">,
-  atlas: TextureNode<"vec4">,
+  atlas: TextureNode,
   u: PlateUniforms
 ) {
   const uvk = attribute<"vec3">("uvk", "vec3");
@@ -458,7 +458,7 @@ interface ShadowUniforms {
  */
 function shadowMaterial(
   deps: Pick<NameplateDeps, "depthTexture" | "lens">,
-  mask: TextureNode<"vec4">,
+  mask: TextureNode,
   fade: Live,
   u: ShadowUniforms,
   sunStandIn: DepthTexture,

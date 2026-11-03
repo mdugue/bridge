@@ -218,7 +218,7 @@ function fitRun(
   const yg = new Float64Array(ng);
   const uc = new Float64Array(nc);
   const yc = new Float64Array(nc);
-  let z: Float64Array<ArrayBufferLike> = Float64Array.from(t);
+  let z: Float64Array = Float64Array.from(t);
   const w = Float64Array.from(base);
   const rhs = new Float64Array(n);
   for (let round = 0; round < ROUNDS; round++) {
