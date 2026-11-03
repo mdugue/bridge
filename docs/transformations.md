@@ -2747,13 +2747,15 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
     them, an anthracite guard hoop between it and the road, 0.45 m short
     of the kerb and along it (the road distance's gradient is the way to
     the road) — a small mesh, opaque, standard-lit, not a shadow caster.
-  Every part lies on a flat grid at the trunk's foot (8 × 8 cells, nothing
-  knows the ground's height there); each vertex is drawn toward the eye
-  along its own ray by 25 % of its distance from the trunk (at most
-  2 m), so on a slope the uphill side stays over the ground and keeps
-  its place on the screen. (Until 2026-11-03 a flat quad sank into the
-  rising ground and the leaves and the shade stopped in a straight line
-  where the slope's crease crossed it.)
+  Every part lies on the ground's slope at its trunk (8 × 8 cells; the
+  slope read off the terrain 1.5 m either side of the foot when the
+  chunk is built, two signed bytes a tree, `groundSlope`); where the
+  ground bends away from that plane each vertex is drawn toward the eye
+  along its own ray by 8 % of its distance from the trunk (at most 1 m),
+  so it keeps its place on the screen and stays over the ground. The
+  guard hoop stands on the same slope. (Until 2026-11-03 a flat quad sank
+  into rising ground and the leaves and the shade stopped in a straight
+  line where the slope's crease crossed it.)
   What a tree gets is read once per vertex at the trunk's foot. All of
   it fades out between 70 and 150 m; a chunk whose nearest tree is past
   160 m draws none of it. One `Instances` set per part (ring, earth,

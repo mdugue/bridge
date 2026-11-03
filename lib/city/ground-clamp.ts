@@ -56,3 +56,30 @@ export function approachHeight(
   }
   return current + (target - current) * (1 - Math.exp(-dt / tau));
 }
+
+/** How far apart (m) `groundSlope` reads the ground across a point. */
+export const SLOPE_STEP = 1.5;
+
+/**
+ * The ground's slope at world (x, z): its rise (m per m) along world x
+ * and along world z, from the ground SLOPE_STEP either side, each held
+ * to ±1; [0, 0] where a side is off the terrain.
+ */
+export function groundSlope(
+  ground: GroundContext,
+  x: number,
+  z: number
+): [number, number] {
+  const { x: e, y: n } = worldToEpsg(x, z, ground.offset);
+  const east = ground.heightAt(e + SLOPE_STEP, n);
+  const west = ground.heightAt(e - SLOPE_STEP, n);
+  const north = ground.heightAt(e, n + SLOPE_STEP);
+  const south = ground.heightAt(e, n - SLOPE_STEP);
+  const clamp = (v: number) => Math.max(-1, Math.min(1, v));
+  const alongX =
+    east === null || west === null ? 0 : (east - west) / (2 * SLOPE_STEP);
+  // world z runs south (z = -(northing - cy))
+  const alongZ =
+    north === null || south === null ? 0 : (south - north) / (2 * SLOPE_STEP);
+  return [clamp(alongX), clamp(alongZ)];
+}

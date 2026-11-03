@@ -45,7 +45,7 @@ import {
 } from "three/tsl";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
-import type { GroundContext } from "@/lib/city/ground-clamp";
+import { type GroundContext, groundSlope } from "@/lib/city/ground-clamp";
 import { LOOK_DEFAULTS, type LookValues } from "@/lib/city/look-controls";
 import { decodeGreyPng } from "@/lib/city/png-raster";
 import {
@@ -1201,6 +1201,7 @@ function buildTreeCell(
   geos: TreeGeos,
   trunkMat: Material,
   crownMats: CrownMaterials,
+  ground: GroundContext,
   footMat?: FootMaterials
 ): {
   chunk: VegetationChunk | null;
@@ -1216,7 +1217,7 @@ function buildTreeCell(
     extras.forEach((e, i) => trunks.setMatrixAt(i, e.trunk));
     paintBark(trunks, 0, extras);
     finishInstances(trunks);
-    const feet = feetOf(trunks, geos, footMat);
+    const feet = feetOf(trunks, geos, ground, footMat);
     return {
       chunk: null,
       meshes: [trunks, ...(feet ?? [])],
@@ -1251,7 +1252,7 @@ function buildTreeCell(
     fitTrunks(trunks, writeTrunkDrops(trunks, trees));
   }
   trunks.castShadow = true;
-  const feet = feetOf(trunks, geos, footMat);
+  const feet = feetOf(trunks, geos, ground, footMat);
   // The far tier: every other tree of a dense chunk, drawn wider (see
   // keepInFarTier), so a forest stays a closed canopy far away.
   const farTrees = trees.filter((_, i) => keepInFarTier(i, trees.length));
@@ -1302,11 +1303,37 @@ function buildTreeCell(
 function feetOf(
   trunks: Instances,
   geos: TreeGeos,
+  ground: GroundContext,
   footMat?: FootMaterials
 ): Instances[] | undefined {
   return footMat && geos.foot
-    ? treeFeet(geos.foot, footMat, trunks)
+    ? treeFeet(geos.foot, footMat, trunks, footSlopes(trunks, ground))
     : undefined;
+}
+
+/**
+ * The ground's slope at each trunk's foot (`groundSlope`), two signed
+ * bytes a tree: the feet lie on it instead of flat (tree-foot.ts). The
+ * foot is where the trunk material puts it, its matrix's origin lowered
+ * by its drop.
+ */
+function footSlopes(
+  trunks: Instances,
+  ground: GroundContext
+): InstancedBufferAttribute {
+  const slopes = new Int8Array(trunks.capacity * 2);
+  const m = trunks.instanceMatrix.array as Float32Array;
+  const drops = trunks.geometry.getAttribute(TRUNK_DROP);
+  for (let i = 0; i < trunks.drawCount; i++) {
+    const at = i * 16;
+    const drop = drops ? drops.getX(i) : 0;
+    const x = m[at + 12] - m[at + 4] * drop;
+    const z = m[at + 14] - m[at + 6] * drop;
+    const [sx, sz] = groundSlope(ground, x, z);
+    slopes[i * 2] = Math.round(sx * 127);
+    slopes[i * 2 + 1] = Math.round(sz * 127);
+  }
+  return new InstancedBufferAttribute(slopes, 2, true);
 }
 
 /** The scene's crown materials and their uniforms (sceneCrowns). */
@@ -1389,6 +1416,7 @@ function* buildTrees(
   trees: Placement[],
   extras: TreeInstance[],
   crownMats: CrownMaterials,
+  ground: GroundContext,
   footMat?: FootMaterials
 ): Steps<{
   chunks: VegetationChunk[];
@@ -1422,6 +1450,7 @@ function* buildTrees(
       geosOf(cell.form),
       trunkMat,
       crownMats,
+      ground,
       footMat
     );
     meshes.push(...built.meshes);
@@ -1520,6 +1549,7 @@ export function* vegetationSteps(
       trees,
       extras,
       crownMats,
+      ctx,
       ctx.footMaterial?.()
     );
     group.add(...built.meshes);

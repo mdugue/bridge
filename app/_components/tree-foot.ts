@@ -219,6 +219,8 @@ const TRUNK_FOOT = trunkRadiusAt(0);
 
 /** The trunks' drop to the ground (vegetation-layer.ts `TRUNK_DROP`). */
 const DROP = "iDrop";
+/** The feet's attribute: the ground's rise along x and z at the foot. */
+const SLOPE = "iSlope";
 
 /** The cull sphere's growth over the trunks' (m): the farthest leaf. */
 export const FOOT_REACH = CROWN_MAX * LEAF_BEYOND + 0.5;
@@ -326,7 +328,8 @@ const ORDER: Record<Part, number> = {
 export function treeFeet(
   geos: FootGeos,
   materials: FootMaterials,
-  trunks: Instances
+  trunks: Instances,
+  slopes: BufferAttribute
 ): Instances[] {
   const sets: Instances[] = [];
   for (const part of PARTS) {
@@ -336,6 +339,9 @@ export function treeFeet(
       trunks.capacity,
       trunks.instanceMatrix
     );
+    // the ground's slope at the foot: the feet's own (two bytes a tree),
+    // one attribute for all the chunk's sets
+    feet.geometry.setAttribute(SLOPE, slopes);
     for (const name of ["iMat0", "iMat1", "iMat2", "iMat3", DROP, "iColor"]) {
       const shared = trunks.geometry.getAttribute(name);
       if (shared) {
@@ -427,6 +433,8 @@ interface FootFrame {
   /** the edge raster's road distance at the foot (m, + on the road; −99
    *  without the raster) */
   road: F;
+  /** the ground's rise (m per m) along x and z at the foot */
+  slope: V2;
 }
 
 interface FootSlots {
@@ -495,6 +503,7 @@ function footFrame(s: FootSlots, size: [number, number]): FootFrame {
     axisX: normalize(col(0).xz),
     axisZ: normalize(col(2).xz),
     road,
+    slope: attribute(SLOPE, "vec2"),
   };
 }
 
@@ -504,26 +513,25 @@ const folded = (placed: V3, foot: V3): V3 =>
   Fn(() => outOfDesignSite(placed, foot))();
 
 /**
- * A foot's quad lies flat at the trunk's foot, but the ground round it
- * slopes: uphill it sank into the ground, and where the slope's crease
- * crossed it the leaves and the shade stopped in a straight line. Drawn
- * toward the eye along its own ray, each vertex by as much as a slope of
- * DRAPE_SLOPE could raise the ground over its distance `q` from the trunk
- * (at most DRAPE_MAX), it keeps its place on the screen and stays over
- * the ground; at the trunk it is not moved, so it never paints over the
- * bark. (Nothing
- * here knows the ground's height; a quad over a slope sits a little off
- * the ground it shades, which a soft glaze hides.)
+ * A foot's quad lies on the ground's slope at the trunk (`slope`, the
+ * feet's attribute); flat, it sank into rising ground and the slope's
+ * crease cut the leaves and the shade off in a straight line. Where the
+ * ground bends away from that plane each vertex is drawn toward the eye
+ * along its own ray, by DRAPE_SLOPE of its distance `q` from the trunk
+ * (at most DRAPE_MAX): it keeps its place on the screen and stays over
+ * the ground, and at the trunk it is not moved, so it never paints over
+ * the bark.
  */
-const DRAPE_SLOPE = 0.25;
-const DRAPE_MAX = 2;
-const draped = (placed: V3, q: V2): V3 => {
+const DRAPE_SLOPE = 0.08;
+const DRAPE_MAX = 1;
+const draped = (placed: V3, q: V2, slope: V2): V3 => {
+  const onSlope = placed.add(vec3(0, dot(slope, q), 0));
   const eye = modelWorldMatrixInverse.mul(vec4(cameraPosition, 1)).xyz;
-  const toEye = eye.sub(placed);
+  const toEye = eye.sub(onSlope);
   const by = min(length(q).mul(DRAPE_SLOPE), DRAPE_MAX).min(
     length(toEye).mul(0.5)
   );
-  return placed.add(normalize(toEye).mul(by));
+  return onSlope.add(normalize(toEye).mul(by));
 };
 
 /** The pit's radius at an angle: its clearance, wobbling by a world-space
@@ -584,7 +592,10 @@ function pitGraph(r: FootRasters, part: "ring" | "earth"): PitGraph {
     .mul(mix(float(PIT_QUAD), WORN_QUAD, wornHere))
     .mul(max(step(0.5, f.pit), wornHere))
     .mul(step(0.001, f.fade));
-  const position = folded(draped(f.foot.add(vec3(q.x, lift, q.y)), q), f.foot);
+  const position = folded(
+    draped(f.foot.add(vec3(q.x, lift, q.y)), q, f.slope),
+    f.foot
+  );
   // far from any road: a pedestrian zone's pit wears a grate (not on a
   // tile without the edge raster, whose road reads -99)
   const grate = step(GRATE_FROM, f.road.negate())
@@ -774,7 +785,10 @@ function footQuad(f: FootFrame, half: F, shown: F): { q: V2; position: V3 } {
   const q = positionGeometry.xz.mul(half).mul(shown);
   return {
     q,
-    position: folded(draped(f.foot.add(vec3(q.x, lift, q.y)), q), f.foot),
+    position: folded(
+      draped(f.foot.add(vec3(q.x, lift, q.y)), q, f.slope),
+      f.foot
+    ),
   };
 }
 
@@ -955,7 +969,10 @@ function shadeGraph(r: FootRasters, sun?: V3): ShadeGraph {
     .add(vec2(throwAxis.y.negate(), throwAxis.x).mul(v))
     .mul(shown);
   const lift = float(0.05).add(distance(cameraPosition, f.world).mul(0.0015));
-  const position = folded(draped(f.foot.add(vec3(q.x, lift, q.y)), q), f.foot);
+  const position = folded(
+    draped(f.foot.add(vec3(q.x, lift, q.y)), q, f.slope),
+    f.foot
+  );
   // the sun flecks' reach: by day, near the camera
   const flecks = float(1)
     .sub(
@@ -1168,7 +1185,10 @@ function guardGraph(r: FootRasters): { position: V3 } {
       p.x.mul(along.x).add(p.z.mul(toRoad.x)).add(place.x),
       p.y,
       p.x.mul(along.y).add(p.z.mul(toRoad.y)).add(place.y)
-    ).mul(shown);
+    )
+      // standing where the slope puts the ground under it
+      .add(vec3(0, dot(f.slope, place), 0))
+      .mul(shown);
     return outOfDesignSite(f.foot.add(local), f.foot);
   })();
   return { position };
