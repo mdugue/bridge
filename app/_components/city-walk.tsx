@@ -88,6 +88,7 @@ import {
 } from "./data-layers-panel";
 import { SceneSidebar } from "./scene-sidebar";
 import { WalkCard } from "./walk-player";
+import { parseRecipe, type SunStudyRecipe } from "@/lib/city/sun-study";
 import { useAskScene } from "./ask-scene";
 import { SidebarPace } from "./sidebar-pace";
 import {
@@ -114,6 +115,7 @@ import { missingPrerequisite } from "./gpu-support";
  * by it.)
  */
 const AskCity = dynamic(() => import("./ask-city"), { ssr: false });
+const SunStudyCard = dynamic(() => import("./sun-study"), { ssr: false });
 
 /** A walk's glides take this much longer than a jump to a place: the
  *  stop's story starts on the way. */
@@ -762,6 +764,14 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
   // one ends the other.
   const [asking, setAsking] = useState(false);
   const askScene = useAskScene(handleRef, look, time, site, pace);
+  // The sun study (sun-study.tsx, plan 054 phase 2 spike): open while the
+  // link says `?studie=`, read once.
+  const [study, setStudy] = useState<SunStudyRecipe | null>(() =>
+    typeof window === "undefined"
+      ? null
+      : parseRecipe(new URLSearchParams(window.location.search).get("studie"))
+  );
+  const studyMarks = useCallback(() => handleRef.current?.study ?? null, []);
   const toggleAsk = () => {
     if (!asking && walking) {
       endWalk();
@@ -1205,6 +1215,16 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
                   onClose={() => setAsking(false)}
                   scene={askScene}
                   site={site.id}
+                />
+              )}
+              {study && (
+                <SunStudyCard
+                  coarse={coarse}
+                  initial={study}
+                  marks={studyMarks}
+                  onClose={() => setStudy(null)}
+                  scene={askScene}
+                  site={site}
                 />
               )}
               {walking && (

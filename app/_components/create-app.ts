@@ -164,6 +164,8 @@ import {
   type DesignLayer,
   type DesignStatus,
 } from "./design-layer";
+import { createStudyMarks, type StudyMarks } from "./study-marks";
+import type { StudyMark } from "./study-marks-geometry";
 import { cutsGround, foldedThing, groundKeptUnderDesign } from "./design-site";
 import { graphOf, setGraph } from "./material-slots";
 import type { CrashTrail } from "./crash-trail";
@@ -633,6 +635,14 @@ export interface CityWalkHandle {
    * `onDesign`.
    */
   design: DesignControls;
+  /**
+   * The sun study's places hatched on the ground (study-marks.ts, plan 054
+   * phase 2 spike): built on the first `show`, gone with `clear`.
+   */
+  study: {
+    show: (marks: readonly StudyMark[]) => Promise<void>;
+    clear: () => void;
+  };
   dispose: () => void;
   /**
    * Asks what stands at a screen point (NDC; the centre when omitted),
@@ -2832,6 +2842,25 @@ async function bootApp(
     report: (status) => opts.onDesign?.(status),
   });
   cleanups.push(() => design?.dispose());
+  // The sun study's marks: nothing until a study shows its places.
+  let studyMarks: StudyMarks | null = null;
+  const marks = () =>
+    (studyMarks ??= createStudyMarks({
+      parent: cuts.group,
+      offset,
+      heightAt,
+      roughAt: (x, y) => groundPlate?.heightAt(x, y) ?? siteGround.floor(),
+      compile: (object) => postStack.compile(object),
+      changed: () => {
+        if (disposed) {
+          return;
+        }
+        postStack.sceneChanged();
+        invalidateShadows();
+        wakeStill();
+      },
+    }));
+  cleanups.push(() => studyMarks?.dispose());
 
   // Everything that follows from the tile set changing: the ground, the
   // lamp heads, the fog floor, the shadows, the stats.
@@ -2855,6 +2884,7 @@ async function bootApp(
       flattened = null;
     }
     groundPlate?.showUnder(new Set(terrains.map((t) => t.tile)));
+    studyMarks?.groundChanged();
     // a tile whose other building level landed or took over keeps the mark
     probe.refresh();
     groundVersion++;
@@ -4250,6 +4280,10 @@ async function bootApp(
     selectCandidate,
     previewCandidate: probe.preview,
     demolishAtCrosshair,
+    study: {
+      show: (list) => marks().show(list),
+      clear: () => studyMarks?.clear(),
+    },
     design: {
       applyPlacementFile: (text) =>
         design?.applyPlacementFile(text) ?? "Keine Szene.",
