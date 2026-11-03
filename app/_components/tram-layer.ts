@@ -1,9 +1,9 @@
+import type { Mesh } from "three/webgpu";
 import {
   Color,
   CylinderGeometry,
   Group,
   Matrix4,
-  Mesh,
   MeshStandardNodeMaterial,
 } from "three/webgpu";
 import type {

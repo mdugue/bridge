@@ -6,7 +6,6 @@ import {
   MeshLambertNodeMaterial,
   MeshStandardNodeMaterial,
   MultiplyBlending,
-  Vector2,
 } from "three/webgpu";
 import type {
   Material,
@@ -15,6 +14,7 @@ import type {
   Texture,
   UniformNode,
   Vector3,
+  Vector2,
 } from "three/webgpu";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {

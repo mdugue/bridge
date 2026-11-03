@@ -7,7 +7,6 @@ import {
   FloatType,
   LinearFilter,
   LinearMipmapLinearFilter,
-  Matrix4,
   MeshStandardNodeMaterial,
   NearestFilter,
   NoColorSpace,
@@ -26,6 +25,7 @@ import type {
   Mesh,
   UniformNode,
   WebGPURenderer,
+  Matrix4,
 } from "three/webgpu";
 import {
   abs,

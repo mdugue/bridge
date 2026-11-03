@@ -36,7 +36,6 @@ import {
   BackSide,
   BufferGeometry,
   DataTexture,
-  DepthTexture,
   DoubleSide,
   Group,
   Float32BufferAttribute,
@@ -62,6 +61,7 @@ import type {
   TextureNode,
   UniformNode,
   WebGPURenderer,
+  DepthTexture,
 } from "three/webgpu";
 import {
   abs,

@@ -12,8 +12,8 @@
  * Called by scripts/prepare-data.ts; no DOM.
  */
 import { CityJSONLoader, CityJSONParser } from "cityjson-threejs-loader";
-import { BufferGeometry, ShapeUtils, Vector2 } from "three";
-import type { Matrix4, Mesh } from "three";
+import { ShapeUtils, Vector2 } from "three";
+import type { Matrix4, Mesh, BufferGeometry } from "three";
 import {
   brickWalls,
   buildingGlows,

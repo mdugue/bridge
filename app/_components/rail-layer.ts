@@ -1,4 +1,5 @@
-import { Group, Mesh, ShapeUtils, Vector2 } from "three/webgpu";
+import type { Mesh } from "three/webgpu";
+import { Group, ShapeUtils, Vector2 } from "three/webgpu";
 import type {
   AreaFeature,
   BridgeFeature,

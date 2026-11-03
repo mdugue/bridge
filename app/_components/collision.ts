@@ -1,10 +1,9 @@
-import type { Intersection, Object3D } from "three/webgpu";
+import type { Intersection, Object3D, Matrix4 } from "three/webgpu";
 import {
   Box3,
   BufferGeometry,
   DoubleSide,
   Matrix3,
-  Matrix4,
   Mesh,
   Ray,
   Raycaster,

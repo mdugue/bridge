@@ -5,10 +5,9 @@ import {
   LinearFilter,
   Mesh,
   MeshStandardNodeMaterial,
-  TextureNode,
   Vector3,
 } from "three/webgpu";
-import type { Node, Vector2 } from "three/webgpu";
+import type { Node, Vector2, TextureNode } from "three/webgpu";
 import { float, uniform } from "three/tsl";
 import { dressFences } from "./fence-layer";
 import { slotsOf } from "./material-slots";
