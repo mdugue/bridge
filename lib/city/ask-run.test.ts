@@ -3,12 +3,11 @@ import {
   convertMessagesToModelMessages,
   uiMessagesToWire,
 } from "@tanstack/ai";
-import type { UIMessage } from "@tanstack/ai";
+import type { UIMessage, ModelMessage, StreamChunk } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 import { fakeText } from "@tanstack/ai/testing";
 import type { AskPromptSite } from "./ask-city";
 import { knowledgeOf } from "./ask-knowledge";
-import type { ModelMessage, StreamChunk } from "@tanstack/ai";
 import {
   DEADLINE,
   ended,

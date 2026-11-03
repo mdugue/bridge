@@ -1,13 +1,12 @@
 import { expect, test } from "bun:test";
 import { Matrix4, Mesh, MeshStandardNodeMaterial, Vector3 } from "three/webgpu";
-import type { LowVegFeature } from "@/lib/city/features";
+import type { LowVegFeature, VegRowFeature } from "@/lib/city/features";
 import {
   buildHedgeGeo,
   buildLowVegetation,
   hedgeLines,
   hedgePieces,
 } from "./low-vegetation-layer";
-import type { VegRowFeature } from "@/lib/city/features";
 import { DEFAULT_HEDGE_H } from "@/lib/city/ask-more";
 import { isInstances } from "./instancing";
 import { sceneCensus } from "./scene-census";

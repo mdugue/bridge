@@ -3,7 +3,7 @@
 import { createFramePace } from "@/lib/city/frame-pace";
 import { arrivalOf, placementOf } from "@/lib/city/geolocation";
 import { EYE_HEIGHT } from "@/lib/city/pose";
-import type { Site } from "@/lib/city/site";
+import type { Site, ViewpointGeometry } from "@/lib/city/site";
 import {
   BoxIcon,
   LocateFixedIcon,
@@ -75,7 +75,6 @@ import type { ViewMode } from "./model-rig";
 import { updatePocDebug } from "./poc-debug";
 import type { SceneBudget } from "./scene-profile";
 import { overlook, spawnViewpoint } from "@/lib/city/site";
-import type { ViewpointGeometry } from "@/lib/city/site";
 import {
   BikeCountList,
   TrafficHourLine,

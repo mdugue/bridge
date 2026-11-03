@@ -19,10 +19,9 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import { cn } from "cn";
-import { inquiryCard } from "@/lib/city/inquiry";
+import { inquiryCard, TOLERANCE_PX } from "@/lib/city/inquiry";
 import type { Inquiry, InquiryAlong } from "@/lib/city/inquiry";
 import { cardCredits } from "@/lib/city/card-lines";
-import { TOLERANCE_PX } from "@/lib/city/inquiry";
 import { useSite } from "./site-context";
 
 /** The icon a candidate is drawn with. */

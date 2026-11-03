@@ -1,5 +1,5 @@
 import { Color, InstancedBufferAttribute } from "three/webgpu";
-import type { BufferGeometry, Material } from "three/webgpu";
+import type { BufferGeometry, Material, Node } from "three/webgpu";
 import {
   abs,
   clamp,
@@ -26,7 +26,6 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
-import type { Node } from "three/webgpu";
 import {
   dayOfYear,
   EVERGREEN,

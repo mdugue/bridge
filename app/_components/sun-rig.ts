@@ -18,6 +18,8 @@ import type {
   Node,
   NodeBuilder,
   PerspectiveCamera,
+  UniformNode,
+  WebGPURenderer,
 } from "three/webgpu";
 import { SkyMesh } from "three/addons/objects/SkyMesh.js";
 import {
@@ -35,7 +37,6 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
-import type { UniformNode, WebGPURenderer } from "three/webgpu";
 import { atmosphereAt } from "@/lib/city/atmosphere";
 import { fitModelShadow } from "@/lib/city/model-view";
 import {

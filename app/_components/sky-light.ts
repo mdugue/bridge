@@ -15,6 +15,8 @@ import type {
   Texture,
   Vector3,
   WebGPURenderer,
+  Node,
+  UniformNode,
 } from "three/webgpu";
 import {
   asin,
@@ -39,7 +41,6 @@ import {
   texture,
   vec2,
 } from "three/tsl";
-import type { Node, UniformNode } from "three/webgpu";
 import { decodeGreyPng } from "@/lib/city/png-raster";
 import type { GreyRaster } from "@/lib/city/png-raster";
 import {

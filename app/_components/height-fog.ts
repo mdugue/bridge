@@ -4,7 +4,7 @@ import {
   MultiplyBlending,
   Vector4,
 } from "three/webgpu";
-import type { Scene } from "three/webgpu";
+import type { Scene, Node, NodeBuilder, UniformNode } from "three/webgpu";
 import { VALLEY_FALLOFF_MAX, VALLEY_NEAR_M } from "@/lib/city/valley-fog";
 import {
   clamp,
@@ -20,7 +20,6 @@ import {
   uniform,
   vec3,
 } from "three/tsl";
-import type { Node, NodeBuilder, UniformNode } from "three/webgpu";
 import type { F, V3 } from "./shader-chunks";
 
 /**

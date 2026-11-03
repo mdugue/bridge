@@ -1,6 +1,12 @@
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import type { Material, Object3D, Texture } from "three/webgpu";
+import type {
+  Material,
+  Object3D,
+  Texture,
+  InstancedMesh,
+  Mesh,
+} from "three/webgpu";
 import {
   Box3,
   BufferAttribute,
@@ -10,7 +16,6 @@ import {
   Matrix4,
   Vector3,
 } from "three/webgpu";
-import type { InstancedMesh, Mesh } from "three/webgpu";
 import {
   geometryBytes,
   judgeDesign,

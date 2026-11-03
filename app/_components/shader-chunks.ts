@@ -1,6 +1,11 @@
-import type { Texture, TextureNode, Vector2 } from "three/webgpu";
+import type {
+  Texture,
+  TextureNode,
+  Vector2,
+  Node,
+  UniformNode,
+} from "three/webgpu";
 import { positionWorld, vec2, vec3 } from "three/tsl";
-import type { Node, UniformNode } from "three/webgpu";
 
 /**
  * The TSL pieces every layer's node material shares.
