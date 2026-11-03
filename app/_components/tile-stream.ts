@@ -2341,11 +2341,14 @@ export class DressingPlugin {
         }
       },
     });
-    // Whatever changed while it compiled (the hour moves on).
-    catchUp(dressing, this.ctx);
-    // weighed again as it hangs (catchUp may have swapped parts)
-    this.weighDressing(entry, dressing);
-    this.reweigh(scene);
+    // Whatever changed while it compiled (the hour moves on); weighed
+    // again as it hangs, as its parts stand after that, even if it threw.
+    try {
+      catchUp(dressing, this.ctx);
+    } finally {
+      this.weighDressing(entry, dressing);
+      this.reweigh(scene);
+    }
   }
 
   /** The cache weighs `scene`'s tile again (the whole cache: none known). */
