@@ -10,11 +10,8 @@
  * as a line under the answer, so the visitor sees what it looked up and
  * what it did to the view.
  */
-import {
-  fetchServerSentEvents,
-  type UIMessage,
-  useChat,
-} from "@tanstack/ai-react";
+import { fetchServerSentEvents, useChat } from "@tanstack/ai-react";
+import type { UIMessage } from "@tanstack/ai-react";
 import {
   EarIcon,
   KeyRoundIcon,
@@ -36,7 +33,6 @@ import {
   ASK_LIMITS,
   ASK_PROVIDER_BY_ID,
   ASK_PROVIDERS,
-  type AskProviderId,
   maskedKey,
   plausibleKey,
   CUT_SHORT,
@@ -44,6 +40,7 @@ import {
   TOO_LONG,
   TOO_MANY_STEPS,
 } from "@/lib/city/ask-city";
+import type { AskProviderId } from "@/lib/city/ask-city";
 import { Button } from "@/components/ui/button";
 import { Message, MessageContent } from "@/components/ui/message";
 import {
@@ -55,14 +52,12 @@ import {
 } from "@/components/ui/message-scroller";
 import { Trace, TraceIcon, TraceLine, TraceTitle } from "@/components/ui/trace";
 import { cn } from "cn";
-import { type AskKey, clearAskKey, readAskKey, writeAskKey } from "./ask-key";
-import { type AskScene, sceneTools } from "./ask-scene-tools";
-import {
-  type Dictation,
-  type Speech,
-  useDictation,
-  useSpeech,
-} from "./ask-voice";
+import { clearAskKey, readAskKey, writeAskKey } from "./ask-key";
+import type { AskKey } from "./ask-key";
+import { sceneTools } from "./ask-scene-tools";
+import type { AskScene } from "./ask-scene-tools";
+import { useDictation, useSpeech } from "./ask-voice";
+import type { Dictation, Speech } from "./ask-voice";
 
 interface Props {
   coarse: boolean;

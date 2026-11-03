@@ -2,8 +2,8 @@ import {
   chatParamsFromRequestBody,
   convertMessagesToModelMessages,
   uiMessagesToWire,
-  type UIMessage,
 } from "@tanstack/ai";
+import type { UIMessage } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 import { fakeText } from "@tanstack/ai/testing";
 import type { AskPromptSite } from "./ask-city";

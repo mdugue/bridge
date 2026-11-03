@@ -13,7 +13,8 @@ import {
   timeTool,
   whereTool,
 } from "@/lib/city/ask-tools";
-import { type AskTarget, askView } from "@/lib/city/ask-view";
+import { askView } from "@/lib/city/ask-view";
+import type { AskTarget } from "@/lib/city/ask-view";
 import type { DataLayerKey } from "@/lib/city/data-layers";
 import type { RenderStyle } from "@/lib/city/render-style";
 import type { ViewpointGeometry } from "@/lib/city/site";

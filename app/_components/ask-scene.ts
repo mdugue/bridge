@@ -4,11 +4,13 @@
  * picture style, the data layers, a glide. Each change goes through the
  * same stores the HUD uses, so the panel's controls show it.
  */
-import { type RefObject, useMemo } from "react";
+import { useMemo } from "react";
+import type { RefObject } from "react";
 import { cardCredits } from "@/lib/city/card-lines";
 import { activeDataLayers, siteDataLayers } from "@/lib/city/data-layers";
 import type { FramePace } from "@/lib/city/frame-pace";
-import { type Inquiry, inquiryCard } from "@/lib/city/inquiry";
+import { inquiryCard } from "@/lib/city/inquiry";
+import type { Inquiry } from "@/lib/city/inquiry";
 import type { LookState } from "@/lib/city/look-state";
 import { siteHoldsPoint } from "@/lib/city/geolocation";
 import type { LandmarkFactsIndex } from "@/lib/city/landmark-facts";
