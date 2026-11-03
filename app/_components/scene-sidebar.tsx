@@ -83,6 +83,8 @@ import type { CityWalkHandle } from "./create-app";
 import { DataLayersPanel } from "./data-layers-panel";
 import { Minimap } from "./minimap";
 import { PlacesList } from "./places-list";
+import { AskEntry, WalksList } from "./walk-player";
+import type { Walk } from "@/lib/city/walks";
 import { hintsFor } from "./control-hints";
 import { LegalLinks } from "./legal-links";
 import type { ViewMode } from "./model-rig";
@@ -849,6 +851,10 @@ export interface SceneSidebarProps {
    * not be stored.
    */
   onResetQuality: () => boolean;
+  /** a walk from the Erkunden panel: its first stop (walk-player.tsx) */
+  onStartWalk: (walk: Walk) => void;
+  /** opens Frag die Stadt (ask-city.tsx, ADR 0056) */
+  onAsk: () => void;
   onTab: (tab: SceneTabId) => void;
   onTeleport: (epsgX: number, epsgY: number) => void;
   /** to a vantage (and its name): a glide, or while the scene loads,
@@ -956,6 +962,8 @@ export function SceneSidebar(props: SceneSidebarProps) {
               remembered={props.rememberedView !== null}
               showKeys={!props.coarse}
             />
+            <WalksList disabled={!props.ready} onStart={props.onStartWalk} />
+            <AskEntry disabled={!props.ready} onAsk={props.onAsk} />
             {siteDataLayers(site.dataLayers).length > 0 && (
               <div className="flex flex-col gap-2 border-t px-4 pt-3 pb-3.5">
                 <span className={SECTION_LABEL}>Verkehrsdaten</span>

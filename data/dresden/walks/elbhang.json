@@ -1,0 +1,381 @@
+{
+  "id": "elbhang",
+  "title": "Wunder am Elbhang",
+  "teaser": "Flussaufwärts: ein verlorener Welterbetitel, ein Schloss, das Mundwasser bezahlte, eine Brücke ohne Pfeiler, zwei Bergbahnen mit Geschichten und Schillers Gartenhaus, in dem er vielleicht nie war.",
+  "by": "Claude",
+  "written": "2026-10-29",
+  "minutes": 22,
+  "stops": [
+    {
+      "id": "elbwiesen",
+      "title": "Ein Titel, den man verlieren kann",
+      "from": [
+        414080,
+        5657080,
+        90
+      ],
+      "ground": 113,
+      "at": [
+        414420,
+        5657860,
+        112
+      ],
+      "hour": 12,
+      "text": "Von 2004 an war dieses Tal Welterbe: Wiesen, Hänge, Schlösser, eine Kulturlandschaft mitten in der Großstadt. 2005 stimmten die Dresdner in einem Bürgerentscheid für eine Brücke genau hier, die Waldschlößchenbrücke. Die UNESCO setzte das Tal 2006 auf die Rote Liste und strich es im Juni 2009, als erste Kulturstätte überhaupt. Die Brücke ging 2013 in Betrieb. Eine Umfrage fand 2009 übrigens 57 Prozent, die den Titel für verzichtbar hielten. Da vorn läuft sie über die Wiesen. Entscheide selbst.",
+      "closer": "Rechts oben auf dem Hang reihen sich drei Schlösser. Zu einem davon geht es als Nächstes.",
+      "days": [
+        {
+          "from": "06-20",
+          "to": "06-30",
+          "text": "Im Juni 2009 strich das Welterbekomitee das Dresdner Elbtal von der Liste."
+        },
+        {
+          "from": "08-20",
+          "to": "08-28",
+          "text": "Am 24. August 2013 wurde die Waldschlößchenbrücke für den Verkehr freigegeben."
+        }
+      ],
+      "facts": [
+        {
+          "claim": "Das Dresdner Elbtal wurde 2004 Welterbe, im Juli 2006 auf die Rote Liste gesetzt und im Juni 2009 von der Liste gestrichen, als erste Kulturerbestätte überhaupt.",
+          "source": "https://de.wikipedia.org/wiki/Kulturlandschaft_Dresdner_Elbtal"
+        },
+        {
+          "claim": "Im Februar 2005 stimmte ein Bürgerentscheid für den Bau der Waldschlößchenbrücke; sie wurde am 24. August 2013 für den Verkehr freigegeben.",
+          "source": "https://de.wikipedia.org/wiki/Kulturlandschaft_Dresdner_Elbtal"
+        },
+        {
+          "claim": "2009 hielten in einer Umfrage 57 % der Dresdner den Titel für verzichtbar, 41 % für unverzichtbar.",
+          "source": "https://de.wikipedia.org/wiki/Kulturlandschaft_Dresdner_Elbtal"
+        }
+      ],
+      "refs": [
+        "Q2541853"
+      ],
+      "photo": {
+        "file": "Waldschlösschenbrücke Dresden 2024 Luftbild Toni Klemm 2500px.jpg",
+        "caption": "Die Waldschlößchenbrücke über den Elbwiesen, 2024",
+        "author": "Toniklemm",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Waldschl%C3%B6sschenbr%C3%BCcke_Dresden_2024_Luftbild_Toni_Klemm_2500px.jpg",
+        "h": 533,
+        "w": 800,
+        "focus": [
+          0.5,
+          0.65
+        ]
+      }
+    },
+    {
+      "id": "lingnerschloss",
+      "title": "Ein Schloss, bezahlt mit Mundwasser",
+      "from": [
+        415700,
+        5657300,
+        1.7
+      ],
+      "ground": 109.4,
+      "at": [
+        415770,
+        5657640,
+        168
+      ],
+      "hour": 15.5,
+      "fov": 45,
+      "text": "Das mittlere der drei Elbschlösser heißt eigentlich Villa Stockhausen. Den bekannten Namen gab ihm sein Käufer Karl August Lingner, der Mann, der Odol vermarktete und das Hygiene-Museum gründete. Er ließ eine Orgel einbauen, deren Klang er per Telefon zu Freunden übertrug. Am schönsten ist sein Testament von 1916: Die Stadt bekam das Anwesen unter der Bedingung, dass Park und Schloss frei zugänglich bleiben und dort ein Lokal mit den niedrigsten Preisen der Gegend läuft. Darum gibt es dort bis heute ein Getränk für 75 Cent.",
+      "closer": "Links daneben Schloss Albrechtsberg, rechts Schloss Eckberg. Lingner ist im Park begraben, in einem Mausoleum von Hans Poelzig und Georg Kolbe.",
+      "facts": [
+        {
+          "claim": "Der offizielle Name ist Villa Stockhausen; es ist das mittlere der drei Elbschlösser.",
+          "source": "https://de.wikipedia.org/wiki/Lingnerschloss"
+        },
+        {
+          "claim": "Karl August Lingner, Vermarkter von Odol und Mitbegründer des Hygiene-Museums, kaufte das Anwesen 1906; er ließ eine private Schrägbahn bauen und eine Orgel, deren Klang per Telefon übertragen werden konnte.",
+          "source": "https://de.wikipedia.org/wiki/Lingnerschloss"
+        },
+        {
+          "claim": "Sein Testament von 1916 vermachte das Anwesen der Stadt mit der Bedingung freien Zugangs und einer Gaststätte mit den niedrigsten Preisen der Gegend; seit 2010 gibt es ein wechselndes alkoholfreies Getränk für 75 Cent.",
+          "source": "https://de.wikipedia.org/wiki/Lingnerschloss"
+        },
+        {
+          "claim": "Lingner wurde 1921 in einem Mausoleum von Hans Poelzig und Georg Kolbe im Park beigesetzt.",
+          "source": "https://de.wikipedia.org/wiki/Lingnerschloss"
+        }
+      ],
+      "refs": [
+        "Q1826549",
+        "Q882139"
+      ],
+      "photo": {
+        "file": "Lingnerschloss Dresden Frühling.jpg",
+        "author": "Ruben Gläser",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Lingnerschloss_Dresden_Fr%C3%BChling.jpg",
+        "w": 800,
+        "h": 450
+      }
+    },
+    {
+      "id": "blaues-wunder",
+      "title": "Eine Brücke ohne Fuß im Fluss",
+      "from": [
+        416540,
+        5656560,
+        1.7
+      ],
+      "ground": 105.8,
+      "at": [
+        416660,
+        5656458,
+        128
+      ],
+      "hour": 16,
+      "text": "Ein Wunder war sie 1893, weil sie die Elbe mit 146,68 Metern überspannt, ohne einen Pfeiler im Fluss. Blau, weil sie hellblau gestrichen ist; dass sie einst grün war und blau verwitterte, gilt als Zeitungsente. Am 7. Mai 1945 wollte die Wehrmacht sie sprengen, mehrere Dresdner verhinderten das, eine Tafel nennt Paul Zickler und Erich Stöckel. Bis 1924 kostete die Überquerung zwei bis drei Pfennig Zoll. Vom Überschuss baute Loschwitz eine Stützmauer, die bis heute „Zwee-Pfeng-Mauer“ heißt.",
+      "closer": "Offiziell heißt sie Loschwitzer Brücke. „König-Albert-Brücke“ hieß sie nur bei der Eröffnung.",
+      "days": [
+        {
+          "from": "07-12",
+          "to": "07-18",
+          "text": "Am 15. Juli 1893 wurde die Brücke eröffnet."
+        },
+        {
+          "from": "05-04",
+          "to": "05-10",
+          "text": "Am 7. Mai 1945 retteten Dresdner die Brücke vor der Sprengung."
+        }
+      ],
+      "facts": [
+        {
+          "claim": "Die Loschwitzer Brücke wurde am 15. Juli 1893 eröffnet; ihre größte Stützweite beträgt 146,68 m, sie hat keine Strompfeiler.",
+          "source": "https://de.wikipedia.org/wiki/Loschwitzer_Br%C3%BCcke"
+        },
+        {
+          "claim": "Der Name kommt vom hellblauen Anstrich und vom Staunen über eine Brücke ohne Strompfeiler; die Behauptung einer Zeitung von 1936, sie sei grün gewesen, gilt als Ente.",
+          "source": "https://de.wikipedia.org/wiki/Loschwitzer_Br%C3%BCcke"
+        },
+        {
+          "claim": "Am 7. Mai 1945 verhinderten mehrere Personen unabhängig voneinander die Sprengung; eine Tafel nennt Paul Zickler und Erich Stöckel.",
+          "source": "https://de.wikipedia.org/wiki/Loschwitzer_Br%C3%BCcke"
+        },
+        {
+          "claim": "Der Brückenzoll betrug für Fußgänger 3, später 2 Pfennig; vom Überschuss wurde die „Zwee-Pfeng-Mauer“ in Loschwitz gebaut.",
+          "source": "https://de.wikipedia.org/wiki/Loschwitzer_Br%C3%BCcke"
+        }
+      ],
+      "refs": [
+        "Q567518"
+      ],
+      "photo": {
+        "file": "Blaues Wunder.jpg",
+        "author": "Nikater",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "http://creativecommons.org/licenses/by-sa/3.0/",
+        "page": "https://commons.wikimedia.org/wiki/File:Blaues_Wunder.jpg",
+        "w": 800,
+        "h": 533,
+        "focus": [
+          0.5,
+          0.4
+        ]
+      }
+    },
+    {
+      "id": "schillerhaeuschen",
+      "title": "Das Gartenhaus, in dem Schiller vielleicht nie war",
+      "from": [
+        416828,
+        5656868,
+        1.7
+      ],
+      "ground": 140.6,
+      "at": [
+        416818,
+        5656894,
+        149
+      ],
+      "hour": 14,
+      "text": "Ein Gartenhaus am Hang, einst im Weinberg von Christian Gottfried Körner. Schiller verbrachte die Sommer 1786 und 1787 auf Körners Landsitz, und hier ist das kleinste Museum der Stadt. Nun die ehrliche Fußnote: Ob Schiller je in diesem Häuschen saß, ist nicht belegt, ebenso wenig, ob hier Teile von „An die Freude“ entstanden. Gegenüber stand einmal eine weiße Schillerstatue. König Friedrich August III. soll gesagt haben, gut, dass der weiße Schiller weg sei, sein Brauner habe sich immer gefürchtet.",
+      "closer": "Daneben erinnert seit 1912 ein Relief an Schiller und Körner.",
+      "facts": [
+        {
+          "claim": "Das Schillerhäuschen liegt in der Schillerstraße 19 in Loschwitz auf dem früheren Weinberg Christian Gottfried Körners; es ist das kleinste Museum Dresdens.",
+          "source": "https://de.wikipedia.org/wiki/Schillerh%C3%A4uschen"
+        },
+        {
+          "claim": "Schiller kam am 11. September 1785 nach Dresden und verbrachte die Sommer 1786 und 1787 auf Körners Landsitz in Loschwitz.",
+          "source": "https://de.wikipedia.org/wiki/Schillerh%C3%A4uschen"
+        },
+        {
+          "claim": "Es ist nicht belegt, dass Schiller im Gartenhaus wohnte; ob dort Teile von „An die Freude“ oder „Don Karlos“ entstanden, ist unklar.",
+          "source": "https://de.wikipedia.org/wiki/Schillerh%C3%A4uschen"
+        },
+        {
+          "claim": "König Friedrich August III. soll über die entfernte weiße Schillerstatue gesagt haben: „Gut, daß der weiße Schiller endlich weg ist, mein ‚Brauner‘ hat sich immer so gefürchtet.“",
+          "source": "https://de.wikipedia.org/wiki/Schillerh%C3%A4uschen"
+        },
+        {
+          "claim": "Das Schiller-Körner-Denkmal, ein Relief von Oskar Rassau, wurde am 18. Mai 1912 enthüllt.",
+          "source": "https://de.wikipedia.org/wiki/Schillerh%C3%A4uschen"
+        }
+      ],
+      "refs": [
+        "m416830_5656910"
+      ],
+      "photo": {
+        "file": "Schillerhäuschen in Loschwitz 1.jpg",
+        "caption": "Das Schillerhäuschen am Hang",
+        "author": "Brücke-Osteuropa",
+        "licence": "CC0",
+        "licenceUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+        "page": "https://commons.wikimedia.org/wiki/File:Schillerh%C3%A4uschen_in_Loschwitz_1.jpg",
+        "h": 600,
+        "w": 800
+      }
+    },
+    {
+      "id": "standseilbahn",
+      "title": "Bergauf Kohle, bergab nachts",
+      "from": [
+        416850,
+        5656390,
+        60
+      ],
+      "ground": 112.3,
+      "at": [
+        417090,
+        5656950,
+        205
+      ],
+      "hour": 13,
+      "text": "Von Körnerplatz zieht sich eine Linie den Hang hinauf nach Weißer Hirsch: die Standseilbahn, eröffnet am 26. Oktober 1895, noch mit Dampf. 547 Meter, rund 95 Meter Höhenunterschied, zwei Tunnel, in der Mitte weichen die beiden Wagen auf einem Viadukt einander aus. Lustiger ist, was sie früher transportierte: bergauf Kohle und Baustoffe, bergab Fäkalien, und zwar nur nachts, wegen des Geruchs. Im Zweiten Weltkrieg schob man die Wagen bei Luftalarm in die Tunnel. Deshalb haben sie den Februar 1945 unbeschadet überstanden.",
+      "days": [
+        {
+          "from": "10-22",
+          "to": "11-02",
+          "text": "Am 26. Oktober 1895 fuhr sie zum ersten Mal, das Jubiläum war gerade."
+        }
+      ],
+      "facts": [
+        {
+          "claim": "Die Standseilbahn wurde am 26. Oktober 1895 mit Dampfbetrieb eröffnet, 1909 elektrifiziert; sie ist 547 m lang und überwindet rund 95 m.",
+          "source": "https://de.wikipedia.org/wiki/Standseilbahn_Dresden"
+        },
+        {
+          "claim": "Sie hat zwei Tunnel (Burgbergtunnel 96 m, Prinzeß-Louisa-Tunnel 54 m) und eine Ausweiche auf einem 102 m langen Gerüstviadukt.",
+          "source": "https://de.wikipedia.org/wiki/Standseilbahn_Dresden"
+        },
+        {
+          "claim": "Früher beförderte sie bergauf Kohle und Baustoffe, bergab Fäkalien, Letztere wegen des Geruchs nur nachts.",
+          "source": "https://de.wikipedia.org/wiki/Standseilbahn_Dresden"
+        },
+        {
+          "claim": "Bei Luftalarm wurden die Wagen in die Tunnel gefahren und blieben so im Februar 1945 unbeschädigt.",
+          "source": "https://de.wikipedia.org/wiki/Standseilbahn_Dresden"
+        }
+      ],
+      "photo": {
+        "file": "051030-Standseilbahn-Dresden-Talfahrt-Begegnung-Viadukt.jpg",
+        "caption": "Die beiden Wagen weichen sich auf dem Viadukt aus",
+        "author": "Martin Röll Martinroell",
+        "licence": "CC BY-SA 2.0 de",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/2.0/de/deed.en",
+        "page": "https://commons.wikimedia.org/wiki/File:051030-Standseilbahn-Dresden-Talfahrt-Begegnung-Viadukt.jpg",
+        "h": 533,
+        "w": 800,
+        "focus": [
+          0.6,
+          0.5
+        ]
+      }
+    },
+    {
+      "id": "schwebebahn",
+      "title": "Eine Schwebebahn, die keine ist",
+      "from": [
+        417028,
+        5656420,
+        1.7
+      ],
+      "ground": 116.2,
+      "at": [
+        417290,
+        5656535,
+        222
+      ],
+      "hour": 11,
+      "text": "Gleich daneben die zweite Bergbahn, eröffnet am 6. Mai 1901. Die Wagen hängen unter einem Stahlgerüst und werden am Seil 274 Meter weit und 84 Meter hoch gezogen. Zwei Feinheiten für Besserwisser: Technisch ist sie eine Hängebahn, keine Schwebebahn, und die in Wuppertal ist zwei Monate älter. Bei der Sanierung 1984 bis 1992 setzten Hubschrauber die Träger ein. Und 2014 blieb ein Lastwagen an der Durchfahrt über dem Veilchenweg hängen; die Fahrgäste stiegen über Leitern aus.",
+      "closer": "Die Wagen haben keinen Motor. Gezogen werden sie von der Bergstation aus, an einem 390 Meter langen Seil.",
+      "days": [
+        {
+          "from": "05-03",
+          "to": "05-09",
+          "text": "Am 6. Mai 1901 wurde die Bahn feierlich eröffnet."
+        }
+      ],
+      "facts": [
+        {
+          "claim": "Feierliche Eröffnung am 6. Mai 1901; Länge 273,8 m, Höhenunterschied 84,2 m, größte Steigung 399 ‰.",
+          "source": "https://de.wikipedia.org/wiki/Schwebebahn_Dresden"
+        },
+        {
+          "claim": "Technisch ist sie eine Hängebahn, weil die Fahrzeuge ständig Kontakt zur Fahrbahn haben; die Wuppertaler Schwebebahn ist etwa zwei Monate älter.",
+          "source": "https://de.wikipedia.org/wiki/Schwebebahn_Dresden"
+        },
+        {
+          "claim": "Bei der Sanierung 1984 bis 1992 wurden Träger mit Mi-8-Hubschraubern eingesetzt; 2014 stieß ein Lkw an der Durchfahrt über dem Veilchenweg an, Fahrgäste wurden mit Leitern geborgen.",
+          "source": "https://de.wikipedia.org/wiki/Schwebebahn_Dresden"
+        },
+        {
+          "claim": "Die Wagen haben keinen Motor; ein 390 m langes Seil zieht sie, angetrieben von der Bergstation.",
+          "source": "https://de.wikipedia.org/wiki/Schwebebahn_Dresden"
+        }
+      ],
+      "refs": [
+        "DESNATPU1000GMdW"
+      ],
+      "photo": {
+        "file": "Dresden-Loschwitz,Schwebebahn 13.jpg",
+        "caption": "Ein Wagen unter dem Stahlgerüst",
+        "author": "Bybbisch94; Christian Gebhardt",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Dresden-Loschwitz,Schwebebahn_13.jpg",
+        "h": 533,
+        "w": 800
+      }
+    },
+    {
+      "id": "oberloschwitz",
+      "title": "Die ganze Stadt im Abendlicht",
+      "from": [
+        417280,
+        5656530,
+        34
+      ],
+      "ground": 196.8,
+      "at": [
+        413200,
+        5656900,
+        120
+      ],
+      "hour": 16.6,
+      "fov": 55,
+      "text": "Das Dach der Bergstation ist eine Aussichtsplattform, seit der Sanierung 2001/2002 mit einem Aufzug. Von hier schaust du flussabwärts auf die Stadt der anderen Spaziergänge: ganz hinten die Türme der Altstadt, davor die Brücken, die Wiesen, die einmal Welterbe waren. Von oben wirkt die Stadt so, wie sie sich gern selbst beschreibt, als Elbflorenz. Von unten, Station für Station, hast du gesehen, wie viel daran gebaut, verloren, gestritten und wieder geflickt wurde. Beides stimmt.",
+      "facts": [
+        {
+          "claim": "Seit der Sanierung 2001/2002 macht ein Außenaufzug das Dach der Bergstation als Aussichtsplattform zugänglich.",
+          "source": "https://de.wikipedia.org/wiki/Schwebebahn_Dresden"
+        },
+        {
+          "claim": "Dresdens Beiname „Elbflorenz“ vergleicht die Stadt mit Florenz.",
+          "source": "https://de.wikipedia.org/wiki/Kulturlandschaft_Dresdner_Elbtal"
+        }
+      ],
+      "refs": [
+        "DESNATPU1000GMdW"
+      ]
+    }
+  ]
+}

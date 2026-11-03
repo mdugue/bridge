@@ -69,6 +69,34 @@
       "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/DtPWngtLEJP8K3k/basisdlm_sn_shape.zip",
       "lastModified": "2026-10-20",
       "editionInUse": "every derived file: the package released 2026-10-20 (basisdlm_akt.csv and the inner package dated 2026-10-20), downloaded and baked 2026-11-01"
+    },
+    "DGM1": {
+      "tiles": {
+        "33392_5668_2_sn": {
+          "stand": "2024-11-27"
+        }
+      }
+    },
+    "DOM1": {
+      "tiles": {
+        "33392_5668_2_sn": {
+          "stand": "2024-11-27"
+        }
+      }
+    },
+    "LoD2": {
+      "tiles": {
+        "33392_5668_2_sn": {
+          "stand": "2024( LSC: 2019, Basis-DLM: 2022, DGM: 2019 )"
+        }
+      }
+    },
+    "DOP_RGBI": {
+      "tiles": {
+        "33392_5668_2_sn": {
+          "stand": "2024-04-07"
+        }
+      }
     }
   }
 }

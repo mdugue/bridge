@@ -70,7 +70,13 @@ bun run docs:matrix     # regenerate the guide's sources-by-city pages
   its steps in `scripts/prepare/`, the glTF bakes) and the dev CLIs.
 - `data/<site>/` — committed build sources and derived files;
   `data/_raw/` gitignored downloads; `public/data/` generated.
+- `data/<site>/walks/*.json` — the written walks (`docs/walks.md`,
+  ADR 0055); `bun scripts/stadtwissen.ts <site> such|nah|…` searches
+  what the twin knows, `bun scripts/walks.ts <site> check` checks a walk.
 - `app/[site]/`, `app/page.tsx`, `app/wissen/`, `app/(legal)/` — the routes.
+- `app/api/frag/`, `app/api/schluessel/` — *Frag die Stadt*'s one stateless
+  server function and its key check (ADR 0056); `FRAG_FAKE=1` is a scripted
+  model for local tests, never set on a deployment.
 - `docs/` — the knowledge base ([README](docs/README.md)): ADRs, plans,
   `rendering.md`, `data-pipeline.md`, `transformations.md` (the ledger of
   every data → look transformation), the bilingual guide.
@@ -87,6 +93,10 @@ bun run docs:matrix     # regenerate the guide's sources-by-city pages
   ADR.
 - **`pr-snapshots`** — the snapshots a visual PR carries.
 - **`flicker-probe`** — find and prove flicker by diffing held frames.
+- **`sentry-triage`**, **`open-data-watch`**, **`osm-gaps`**,
+  **`model-faults`** — the scheduled routines ([docs/routines.md](docs/routines.md)):
+  each reports to its GitHub issue and never merges, resolves or edits a
+  third party's data.
 - `threejs-*` are generic three.js references; in this repo only their
   WebGPU/TSL parts apply.
 - `improve` writes plans to a root `plans/` by default: point it at

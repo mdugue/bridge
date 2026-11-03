@@ -169,6 +169,21 @@ test("a drag mid-glide takes the wheel: the glide stops where it is", () => {
   expect(headingAfterDrag * RAD2DEG).toBeLessThan(90);
 });
 
+test("a walk's glide lets a drag look about and still lands on its stop", () => {
+  const { camera, pose } = rig();
+  pose.flyToViewpoint(VIEW, { lookAround: true, pace: 2.2 });
+  pose.step(0.5);
+  pose.turn(40, 0);
+  const headingAfterDrag = pose.getPose().heading;
+  settle(pose);
+  // it carried on to the stop and landed on foot, the drag's heading kept
+  expect(pose.getMode()).toBe("walk");
+  expect(pose.getCameraState().epsg.x).toBeCloseTo(VIEW.epsg.x, 6);
+  expect(pose.getCameraState().epsg.y).toBeCloseTo(VIEW.epsg.y, 6);
+  expect(camera.position.y).toBeCloseTo(GROUND + EYE_HEIGHT, 6);
+  expect(pose.getPose().heading).toBeCloseTo(headingAfterDrag, 6);
+});
+
 test("a camera state applied mid-glide wins: the glide does not take the camera back", () => {
   const { pose } = rig();
   pose.flyToViewpoint(VIEW);
@@ -875,4 +890,21 @@ test("flying low over rising ground rises with it; with nowhere to stand, a walk
   });
   expect(solid.pose.getMode()).toBe("fly");
   expect(solid.camera.position.y).toBeGreaterThanOrEqual(GROUND + 50);
+});
+
+test("before its tile lands a flight ends over the plate, or over the stop's measured ground", () => {
+  const FLY = { ...VIEW, mode: "fly" as const, aboveGround: 40 };
+  const coarse = rig({ heightAt: () => null, coarseHeightAt: () => 150 });
+  coarse.pose.flyToViewpoint(FLY);
+  settle(coarse.pose);
+  expect(coarse.camera.position.y).toBeCloseTo(150 + 40, 6);
+  const measured = rig({ heightAt: () => null, coarseHeightAt: () => 150 });
+  measured.pose.flyToViewpoint(FLY, { ground: 160 });
+  settle(measured.pose);
+  expect(measured.camera.position.y).toBeCloseTo(160 + 40, 6);
+  // neither: the lowest ground so far
+  const bare = rig({ heightAt: () => null });
+  bare.pose.flyToViewpoint(FLY);
+  settle(bare.pose);
+  expect(bare.camera.position.y).toBeCloseTo(GROUND - 20 + 40, 6);
 });
