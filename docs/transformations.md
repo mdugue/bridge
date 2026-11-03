@@ -357,9 +357,12 @@ visual-variable codebook is in
   B-spline, cut at one half (`walkShares`; bilinear shares of the
   1 m texels drew a slanted edge as teeth),
   (on the ground a walk kind paints — built-up, path, unclassified, and a
-  path's smooth edge — as before), so a sealed texel among a path's sanded ones — where a tagged way's
-  buffer and the class raster's path disagree, the bake gives the rest
-  the town's default, asphalt — is a faint grey, not a block. Out to
+  path's smooth edge — as before), so a stray sealed texel among a
+  path's sanded ones is a faint grey, not a block. Since 2026-11-03 the
+  bake carries a tagged way's own kind on along its path, up to 8 texels
+  past the way's buffer (`surface.py` `along_paths`), before the town's
+  default (asphalt) fills the rest: the class raster's path is often
+  wider than the buffer, and a sand path came out grey at its sides. Out to
   1.2 m a pixel (the shares to 1 m), then the splat as before. No bake,
   no raster.
 - **Paving materials** `❝ taken` `≈ assumed` (*Beläge*) — OSM `surface=*` on the highways (plus

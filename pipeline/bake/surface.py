@@ -43,10 +43,13 @@ says they are marked (`parking:<side>:markings`, the old `marked` or
 shader tints the parking lane faintly and draws no line. A lot is painted
 unless `markings=no` or its surface is gravel or grass.
 
-`walk` on the paths (class 6) that OSM gives no surface: the Basis-DLM's
-`BEF`, else asphalt inside the settlement and unpaved outside it
-(`path_defaults`). A street's tagged `sidewalk:*:surface` reaches from the
-kerb to the nearest OSM building within 8 m (`band_depths`), else 3 m.
+`walk` on the paths (class 6) that OSM gives no surface: a tagged way's
+own kind carried on along the path up to `WAY_REACH_PX` texels past its
+buffer (`along_paths`: the class raster's path is often wider than the
+way's buffer), else the Basis-DLM's `BEF`, else asphalt inside the
+settlement and unpaved outside it (`path_defaults`). A street's tagged
+`sidewalk:*:surface` reaches from the kerb to the nearest OSM building
+within 8 m (`band_depths`), else 3 m.
 
 The PNG is 8-bit greyscale, four times as wide as the raster, the four
 bytes of a texel side by side (R0 G0 B0 A0 R1 …). The viewer inflates it itself
@@ -665,6 +668,34 @@ def path_defaults(tile: Tile, px: int) -> np.ndarray | None:
     return np.where(path, kind, 0).astype(np.uint8)
 
 
+WAY_REACH_PX = 8  # how far (texels, ≈ m) a tagged way's kind runs on along its path
+
+
+def along_paths(walk: np.ndarray, path: np.ndarray, reach: int = WAY_REACH_PX) -> np.ndarray:
+    """The tagged ways' walk kinds carried on into the path texels round
+    them that no way's buffer reached (`path`, the texels `path_defaults`
+    fills), step by step along the path only (four neighbours, `reach`
+    steps): a sand path wider than its tagged way's buffer stays sand
+    instead of turning to the town's asphalt beside it. 0 where no way is
+    within reach."""
+    kind = np.where(walk > 0, walk, 0).astype(np.uint8)
+    open_ = path & (walk == 0)
+    for _ in range(reach):
+        grown = kind.copy()
+        for axis, shift in ((0, 1), (0, -1), (1, 1), (1, -1)):
+            near = np.roll(kind, shift, axis=axis)
+            # no wrap-around across the raster's edge
+            edge = [slice(None)] * 2
+            edge[axis] = 0 if shift == 1 else -1
+            near[tuple(edge)] = 0
+            take = open_ & (grown == 0) & (near > 0)
+            grown[take] = near[take]
+        if np.array_equal(grown, kind):
+            break
+        kind = grown
+    return np.where(open_, kind, 0).astype(np.uint8)
+
+
 def burn(shapes: list[tuple[shapely.Geometry, int]], tile: Tile, px: int) -> np.ndarray:
     """Shapes burned in order (a later one wins) into a px² raster."""
     raster = np.zeros((px, px), dtype=np.uint8)
@@ -727,7 +758,8 @@ def run(tile: Tile, px: int = 2048) -> None:
     walk = burn(walk_areas + walk_lines, tile, px)
     defaults = path_defaults(tile, px)
     if defaults is not None:
-        walk = np.where(walk == 0, defaults, walk)
+        carried = along_paths(walk, defaults > 0)
+        walk = np.where(walk == 0, np.where(carried > 0, carried, defaults), walk)
     park = burn(parking_shapes(lines, highways, line_tags, areas, amenities, area_tags), tile, px)
     frames = field_frames(tile)
     frames.extend(lot_frames(areas, amenities, area_tags))
