@@ -454,7 +454,72 @@ test("a stopped answer's tool call gets a stand-in result, the running answer's 
     "tool",
   ]);
   expect(model[2]?.toolCallId).toBe("s");
-  expect(answer("s")?.content).toContain("abgebrochen");
+  expect(answer("s")?.content).toContain("Abgebrochen");
   // after the last question the open call stays: a resume answers it
   expect(answer("r")).toBeUndefined();
+});
+
+test("a stand-in keeps a stopped answer's thinking and segments together and mends cut-off arguments", async () => {
+  const ui = [
+    {
+      id: "1",
+      role: "user",
+      parts: [{ type: "text", content: "Was ist das?" }],
+    },
+    {
+      id: "2",
+      role: "assistant",
+      parts: [
+        { type: "thinking", content: "hm" },
+        { type: "text", content: "Ich schaue." },
+        {
+          type: "tool-call",
+          id: "a",
+          name: "suche_stadt",
+          arguments: '{"anfrage":"x"}',
+          state: "complete",
+          output: { ok: true },
+        },
+        { type: "thinking", content: "weiter" },
+        { type: "text", content: "Moment." },
+        // stopped while its arguments still streamed
+        {
+          type: "tool-call",
+          id: "s",
+          name: "suche_stadt",
+          arguments: '{"anfrage":"Fra',
+          state: "input-streaming",
+        },
+      ],
+    },
+    { id: "3", role: "user", parts: [{ type: "text", content: "Und das?" }] },
+  ] as UIMessage[];
+  const params = await chatParamsFromRequestBody({
+    threadId: "t",
+    runId: "r",
+    messages: uiMessagesToWire(ui),
+    tools: [],
+    context: [],
+    state: {},
+    forwardedProps: {},
+  });
+  const model = convertMessagesToModelMessages(
+    withStoppedCallsAnswered(params.messages)
+  );
+  expect(model.map((m) => m.role)).toEqual([
+    "user",
+    "assistant",
+    "tool",
+    "tool",
+    "user",
+  ]);
+  // one joined row: both segments, both thoughts, both calls
+  expect(model[1]?.thinking).toHaveLength(2);
+  expect(model[1]?.toolCalls?.map((c) => [c.id, c.function.arguments])).toEqual(
+    [
+      ["a", '{"anfrage":"x"}'],
+      ["s", "{}"],
+    ]
+  );
+  expect(model.slice(2, 4).map((m) => m.toolCallId)).toEqual(["a", "s"]);
 });

@@ -96,22 +96,29 @@ export function roundsSinceQuestion(
     .length;
 }
 
-/** What a stopped call's stand-in result tells the model. */
+/**
+ * A stopped call's stand-in result. It names no cause (a stop, the
+ * deadline or a dropped line end a run alike) and has the shape the
+ * scene tools' own refusals have, so the trace shows it as not done when
+ * a later snapshot brings it back to the browser.
+ */
 const STOPPED_RESULT = JSON.stringify({
-  abgebrochen: true,
-  hinweis: "Die Person hat diese Antwort angehalten.",
+  gefunden: false,
+  ok: false,
+  hinweis: "Abgebrochen, bevor ein Ergebnis kam.",
 });
 
 /**
  * The conversation with an answer for every tool call an earlier answer
- * stopped before its result came (the visitor stopped it while a scene
+ * ended before its result came (the visitor stopped it while a scene
  * tool waited): a call with no result makes the providers refuse every
  * later request. The stand-in `tool` row goes right before the next
- * question, after every row of the stopped answer, so nothing it carried
- * (its thinking, a segment that continues it) loses its place. Calls after
+ * question, after every row of the ended answer, so nothing it carried
+ * (its thinking, a segment that continues it) loses its place; a call cut
+ * off while its arguments still streamed keeps `{}` for them. Calls after
  * the last question are the answer's own, which a resume completes. The
- * request carries AG-UI wire rows: an assistant row's `toolCalls`, a
- * `tool` row per result.
+ * route hands this the AG-UI wire rows (an assistant row's `toolCalls`, a
+ * `tool` row per result); a UI message passes as it came.
  */
 export function withStoppedCallsAnswered<T extends UIMessage | ModelMessage>(
   messages: readonly T[]
@@ -128,25 +135,42 @@ export function withStoppedCallsAnswered<T extends UIMessage | ModelMessage>(
   let owed: string[] = [];
   for (const [i, m] of messages.entries()) {
     if (m.role === "user") {
-      out.push(
-        ...owed.map((toolCallId): ModelMessage => ({
-          role: "tool",
-          toolCallId,
-          content: STOPPED_RESULT,
-        }))
-      );
+      out.push(...owed.map(stoppedResult));
       owed = [];
     }
-    out.push(m);
-    if (i < question && m.role === "assistant" && "toolCalls" in m) {
-      owed.push(
-        ...(m.toolCalls ?? [])
-          .map((c) => c.id)
-          .filter((id) => !answered.has(id))
-      );
-    }
+    const open =
+      i < question && m.role === "assistant" && "toolCalls" in m
+        ? (m.toolCalls ?? []).filter((c) => !answered.has(c.id))
+        : [];
+    owed.push(...open.map((c) => c.id));
+    out.push(open.some(cutOff) ? withWholeArguments(m as ModelMessage) : m);
   }
   return out;
+}
+
+function stoppedResult(toolCallId: string): ModelMessage {
+  return { role: "tool", toolCallId, content: STOPPED_RESULT };
+}
+
+type WireCall = NonNullable<ModelMessage["toolCalls"]>[number];
+
+/** Arguments that stopped streaming halfway are no JSON object. */
+function cutOff(call: WireCall): boolean {
+  try {
+    const args: unknown = JSON.parse(call.function.arguments);
+    return typeof args !== "object" || args === null || Array.isArray(args);
+  } catch {
+    return true;
+  }
+}
+
+function withWholeArguments(m: ModelMessage): ModelMessage {
+  return {
+    ...m,
+    toolCalls: m.toolCalls?.map((c) =>
+      cutOff(c) ? { ...c, function: { ...c.function, arguments: "{}" } } : c
+    ),
+  };
 }
 
 /** The answer as a stream of AG-UI events, for an SSE response. */
