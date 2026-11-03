@@ -103,13 +103,13 @@ export function readShp(
  *  none we know. */
 export function cpgDecoder(cpg: string | null): TextDecoder | null {
   const name = (cpg ?? "").trim().toLowerCase();
-  if (/8859-15/.test(name)) {
+  if (name.includes("8859-15")) {
     return new TextDecoder("iso-8859-15");
   }
   if (/1252|latin|8859-1|ansi/.test(name)) {
     return new TextDecoder("windows-1252");
   }
-  if (/1250/.test(name)) {
+  if (name.includes("1250")) {
     return new TextDecoder("windows-1250");
   }
   if (/utf-?8/.test(name)) {
