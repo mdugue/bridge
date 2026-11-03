@@ -328,8 +328,10 @@ change, not a re-bake
   stretched toward the sun to casters 120 m over that. Texels at 3072²
   from 100 m up: ~0.2–0.45 m at 100 m ahead, ~0.8–1.3 m at 800 m (the
   square: 0.14 m to 275 m, then none); from 200 m up the near texels are
-  the square's, from 400 m up finer. The depth bias is 0.15 m at the
-  nearest ground and grows with the distance, the PCF spread 3 texels
+  the square's, from 400 m up finer. The depth bias is 0.08 m at the
+  nearest ground and grows with the distance (0.15 m until 2026-11-03
+  set a dormer's shadow 0.2 m clear of it 40 m off, a tree's 0.7–0.85 m
+  at 300 m: shadows from the air began beside their casters), the PCF spread 3 texels
   (the square's 5). The map stands while the view, without the margin
   and to 85 % of its reach, lies on it and the nearest ground stays
   within a factor 1.6 (`warpCovers`); a turn of the sun fits it anew. A

@@ -455,7 +455,7 @@ Current working setup (`sun-rig.ts` / `create-app.ts`):
 | `shadow.radius` | ~5 (3 for the warped map from the air) | the actual softness knob; hides the texel staircase / fraying |
 | `shadow.normalBias` | **0** | a positive normalBias offsets the flat ground sample → bright peter-panning contact strip. Safe at 0 because terrain doesn't cast and solids cast via back faces (lit faces never self-acne) |
 | casters' depth | the material itself | no custom depth materials: the shadow pass draws `castShadowPositionNode ?? positionNode` and honours `maskNode` |
-| `shadow.bias` | ~−0.0003 (warped: 0.15 m at the nearest ground, per fit) | small constant bias, residual cleanup |
+| `shadow.bias` | ~−0.0003 (warped: 0.08 m at the nearest ground, per fit) | small constant bias, residual cleanup |
 | terrain `castShadow` | **false** | a casting terrain self-shadows into triangle/staircase acne at grazing sun; ground only receives |
 | shadow map size (`shadowMapSizeFor` in scene-profile.ts) | 3072 (phones 2048; smaller at a raised safety level, ADR 0047) | soft radius lets 3072 look like 4096 at ~44% less fill |
 | the map's colour target | none (`DepthOnlyShadowNode`, set as `sun.shadow.shadowNode`: three's depth texture in a `count: 0` target, r187) | three's shadow map carries a colour texture of the shadow's `mapType` beside the depth — RGBA, as large again as the depth (16 MB at 2048²) — though only coloured shadows read it; keep `renderer.shadowMap.transmitted` off |
