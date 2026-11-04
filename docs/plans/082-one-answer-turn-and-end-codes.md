@@ -1,6 +1,6 @@
 # 082 — One answer turn, and a code for every way it ends
 
-**Status:** TODO
+**Status:** BUILT (2026-11-04; see the row in README.md)
 
 Planned 2026-11-04 from an architecture review of *Frag die Stadt*
 (ADR 0056), verified against `04d8fad3`. A refactor with one visible

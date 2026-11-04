@@ -15,15 +15,23 @@ load into the browser.
 
 ## Decision
 
-1. **One stateless server function relays each turn.** `POST /api/frag`
-   (`app/api/frag/route.ts`) takes the conversation, the key in the
-   `x-frag-key` header and the chosen provider and model, builds that
-   provider's adapter for the request (TanStack AI: Anthropic, OpenAI,
-   OpenRouter, the Vercel AI Gateway) and streams the answer as
-   server-sent events. It keeps no conversation, no key and no log of
-   either. `POST /api/schluessel` checks a key once without spending
-   tokens and returns a token (an HMAC with the site's `FRAG_SECRET`,
-   `lib/city/ask-token.ts`) the chat route requires.
+1. **One stateless server function relays each turn, and the turn is one
+   function.** `POST /api/frag` takes the conversation, the key in the
+   `x-frag-key` header and the chosen provider and model, and streams the
+   answer as server-sent events. The turn — the request's checks in
+   their order, the run, how it ends — is `answerTurn`
+   (`lib/city/ask-run.ts`); the route (`app/api/frag/route.ts`) only
+   binds it to the provider's adapter (TanStack AI: Anthropic, OpenAI,
+   OpenRouter, the Vercel AI Gateway) or the scripted one, the
+   Stadtwissen and the secret. It keeps no conversation, no key and no
+   log of either. `POST /api/schluessel` checks a key once without
+   spending tokens and returns a token (an HMAC with the site's
+   `FRAG_SECRET`, `lib/city/ask-token.ts`) the chat route requires.
+   Every refusal, and every end the stream would not explain (the turn
+   cap, the deadline, the model's output spent, a filtered answer),
+   carries a code from one table, `lib/city/ask-failure.ts`, whose words
+   the card shows; the card turns a coded refusal into a stream error, so
+   both reach it alike.
 2. **The prompt and the tools are fixed on the server**
    (`lib/city/ask-run.ts`, `ask-city.ts`, `ask-tools.ts`): one job (this
    city, this viewer; facts from the tools with their source; legends as
@@ -53,7 +61,9 @@ load into the browser.
   settings, not code.
 - `FRAG_SECRET` must be set on a production server, or the routes answer
   501; every refusal logs a status and reason code, never the key or the
-  conversation. `FRAG_FAKE=1` is a scripted model for local tests only
+  conversation. A new reason a turn is refused or ends with is a row in
+  the table; its codes are kebab-case, so a provider's code (`"401"`,
+  `max_tokens`) is never read as ours. `FRAG_FAKE=1` is a scripted model for local tests only
   and is ignored on Vercel. One request takes at most eight model turns
   and ends with an error 10 s before its 300 s of function time; one
   answer, across the requests the scene tools resume, takes at most
