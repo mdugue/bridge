@@ -220,17 +220,20 @@ describe("the stop button", () => {
     dispatch({ type: "answerStarted" });
     since();
     dispatch({ type: "stopPressed" });
-    expect(calls).toEqual(["run.stop", "waits.abandon"]);
     dispatch({ type: "answerEnded", text: "Da halb", failed: false });
-    expect(calls).toEqual(["run.stop", "waits.abandon"]);
+    expect(calls.filter((c) => c.startsWith("speech.speak"))).toEqual([]);
   });
 
-  test("stop leaves the glide", () => {
+  test("stop halts the answer's glide, after its run and its waits", () => {
     dispatch({ type: "typed", text: "Zeig!" });
     dispatch({ type: "answerStarted" });
     since();
     dispatch({ type: "stopPressed" });
-    expect(calls).not.toContain("waits.haltAnswerGlide");
+    expect(calls).toEqual([
+      "run.stop",
+      "waits.abandon",
+      "waits.haltAnswerGlide",
+    ]);
   });
 
   test("an answer after a stopped one is read again", () => {

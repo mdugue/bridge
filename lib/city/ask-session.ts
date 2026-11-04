@@ -218,6 +218,8 @@ export function createAskSession(ports: AskSessionPorts): AskSession {
       stopped = true;
       owed = null;
       endRun();
+      // the camera stops where it is (never on closing the card)
+      waits.haltAnswerGlide();
       return "done";
     },
     micPressed: () => {
