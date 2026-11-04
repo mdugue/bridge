@@ -8,8 +8,8 @@ import { describe, expect, test } from "bun:test";
 import { cardCredits } from "./card-lines";
 import type { InquiryCard } from "./card-lines";
 import { OBJECT_SOURCE_LOD2 } from "./city-mesh";
-import { inquiryCard } from "./inquiry";
-import type { Inquiry, InquiryObject } from "./inquiry";
+import { inquiryCard, kindLabel } from "./inquiry";
+import type { Inquiry, InquiryObject, KindIcon } from "./inquiry";
 import { designCard } from "./inquiry-design";
 import {
   bridgeCard,
@@ -325,6 +325,40 @@ describe("each kind's heading, as the strip shows it", () => {
     test(name, () => {
       const card = inquiryCard(fx, null, credits);
       expect([card.kicker, card.title]).toEqual(HEADINGS[name]);
+    });
+  }
+});
+
+/** The icon the strip draws each with. */
+const ICONS: Record<string, KindIcon> = {
+  building: "building",
+  tree: "tree-deciduous",
+  monument: "landmark",
+  bridge: "bridge",
+  traffic: "car",
+  bikes: "bike",
+  design: "pencil-ruler",
+  canopy: "tree-deciduous",
+  hedge: "shrub",
+  lamp: "lamp-floor",
+  furniture: "armchair",
+  stop: "tram-front",
+  landing: "anchor",
+  "osm conifer": "tree-pine",
+  "orchard tree": "tree-deciduous",
+  "row tree": "tree-deciduous",
+  playground: "ferris-wheel",
+  swing: "ferris-wheel",
+  "wall lamp": "lamp-floor",
+  "hung lamp": "lamp-floor",
+};
+
+describe("kindLabel gives the strip the card's heading without the card", () => {
+  for (const [name, fx] of ALL) {
+    test(name, () => {
+      const label = kindLabel(fx, credits);
+      expect([label.kicker, label.title]).toEqual(HEADINGS[name]);
+      expect(label.icon).toBe(ICONS[name]);
     });
   }
 });

@@ -31,7 +31,12 @@ import {
   stated,
   whole,
 } from "./card-lines";
-import type { CardCredits, CardFact, InquiryCard } from "./card-lines";
+import type {
+  CardCredits,
+  CardFact,
+  CardHeading,
+  InquiryCard,
+} from "./card-lines";
 import type { DesignInquiry } from "./inquiry-design";
 import type { Stated } from "./methods";
 import type { BikeInquiry, TrafficInquiry } from "./inquiry-traffic";
@@ -168,6 +173,11 @@ function treeLines(t: TreeInquiry, f: TreeFacts, title: string): CardFact[] {
   ]);
 }
 
+/** An orchard tree's heading: its genus. */
+function orchardHeading(t: TreeInquiry): CardHeading {
+  return { kicker: "Obstbaum", title: firstText(t.genus, "Obstbaum") };
+}
+
 /** An orchard tree's card: the orchard from OSM; where DOM1 measured the
  *  tree (a crown peak, cultivated.py) its height and crown, else no fact
  *  (its size is the orchard's default). */
@@ -178,8 +188,7 @@ function orchardCard(
 ): InquiryCard {
   const measured = t.measured === true;
   return {
-    kicker: "Obstbaum",
-    title: firstText(t.genus, "Obstbaum"),
+    ...orchardHeading(t),
     address: "",
     facts: measured
       ? factLines([
@@ -210,6 +219,33 @@ function orchardCard(
   };
 }
 
+/** The register that names a tree: none for OSM's (provenance.ts
+ *  treesSource), nor for a site without one. */
+const registerOf = (t: TreeInquiry, credits: CardCredits) =>
+  t.osm ? undefined : credits.register;
+
+/** A tree's heading: its species, else its genus, else its kind; a
+ *  register's tree is a "Stadtbaum". */
+export function treeHeading(
+  t: TreeInquiry,
+  facts: TreeFacts | null,
+  credits: CardCredits
+): CardHeading {
+  if (t.orchard) {
+    return orchardHeading(t);
+  }
+  const f = facts ?? NO_TREE_FACTS;
+  return {
+    kicker: registerOf(t, credits) === undefined ? "Baum" : "Stadtbaum",
+    title: firstText(
+      f.german,
+      f.botanical,
+      t.genus,
+      t.conifer ? "Nadelbaum" : "Laubbaum"
+    ),
+  };
+}
+
 /** The tree's card; `facts` null until its tile's file has arrived. */
 export function treeCard(
   t: TreeInquiry,
@@ -221,19 +257,14 @@ export function treeCard(
     return orchardCard(t, provenance, credits);
   }
   const f = facts ?? NO_TREE_FACTS;
-  const title = firstText(
-    f.german,
-    f.botanical,
-    t.genus,
-    t.conifer ? "Nadelbaum" : "Laubbaum"
-  );
+  const heading = treeHeading(t, facts, credits);
   const what = [
     firstText(f.german, f.botanical) ? "Art" : "",
     f.known & (KNOWN_HEIGHT | KNOWN_CROWN | KNOWN_TRUNK) ? "Maße" : "",
   ].filter(Boolean);
   // a site without a register has OSM's trees alone (provenance.ts
   // treesSource): no register is named, nor the provider credited for one
-  const register = t.osm ? undefined : credits.register;
+  const register = registerOf(t, credits);
   const source =
     register === undefined
       ? osmSource(provenance, what.length > 0 ? what : ["Baum"], "trees")
@@ -243,10 +274,9 @@ export function treeCard(
         });
   const nr = f.nr > 0 ? ` · Baum Nr. ${whole.format(f.nr)}` : "";
   return {
-    kicker: register === undefined ? "Baum" : "Stadtbaum",
-    title,
+    ...heading,
     address: f.place ? `${f.place}${nr}` : "",
-    facts: treeLines(t, f, title),
+    facts: treeLines(t, f, heading.title),
     id: positionKey(t.position),
     idLabel: "Lage",
     sources: stated("taken", source),
@@ -345,6 +375,14 @@ function measuredSource(
       );
 }
 
+/** A monument's heading: its name, under its form or kind. */
+export function monumentHeading(m: MonumentInquiry): CardHeading {
+  const p = m.properties;
+  const kicker =
+    MONUMENT_FORM[p.form ?? ""] ?? MONUMENT_KIND[p.kind] ?? "Denkmal";
+  return { kicker, title: firstText(p.name, kicker) };
+}
+
 /** The monument's or fountain's card. */
 export function monumentCard(
   m: MonumentInquiry,
@@ -352,8 +390,6 @@ export function monumentCard(
   credits: CardCredits
 ): InquiryCard {
   const p = m.properties;
-  const kicker =
-    MONUMENT_FORM[p.form ?? ""] ?? MONUMENT_KIND[p.kind] ?? "Denkmal";
   // its measured form's top, else a tagged height, else the height
   // measured in the open around its point (`hm`)
   const relief = reliefHeight(p);
@@ -387,8 +423,7 @@ export function monumentCard(
     ),
   ];
   return {
-    kicker,
-    title: firstText(p.name, kicker),
+    ...monumentHeading(m),
     address: "",
     facts,
     id: positionKey(m.position),
@@ -477,6 +512,12 @@ function bridgeAreaLines(
   ];
 }
 
+/** A bridge's heading: its name, under its kind. */
+export function bridgeHeading(b: BridgeInquiry): CardHeading {
+  const kicker = BRIDGE_KIND[b.properties.kind ?? "other"] ?? "Brücke";
+  return { kicker, title: firstText(b.properties.name, kicker) };
+}
+
 /** The bridge's card. */
 export function bridgeCard(
   b: BridgeInquiry,
@@ -484,7 +525,6 @@ export function bridgeCard(
   credits: CardCredits
 ): InquiryCard {
   const p = b.properties;
-  const kicker = BRIDGE_KIND[p.kind ?? "other"] ?? "Brücke";
   const structure = structureLabel(p.structure);
   const facts = factLines([
     ["Tragwerk", structure],
@@ -513,8 +553,7 @@ export function bridgeCard(
     ),
   ];
   return {
-    kicker,
-    title: firstText(p.name, kicker),
+    ...bridgeHeading(b),
     address: "",
     facts,
     id: p.wikidata ?? positionKey(b.position),
@@ -643,6 +682,14 @@ function pointSource(
  *  names it. */
 export const UNKNOWN_SPECIES = "nicht bekannt";
 
+/** A canopy tree's heading: a tree, of a row or not. */
+export function canopyHeading(t: CanopyInquiry): CardHeading {
+  return {
+    kicker: t.source === "row" ? "Baum einer Baumreihe" : "Baum",
+    title: "Baum",
+  };
+}
+
 /** A tree the scene draws without a register's name. */
 export function canopyCard(
   t: CanopyInquiry,
@@ -690,8 +737,7 @@ export function canopyCard(
     row: "Die Bäume einer Reihe stehen in festem Abstand, wie gezeichnet",
   };
   return {
-    kicker: t.source === "row" ? "Baum einer Baumreihe" : "Baum",
-    title: "Baum",
+    ...canopyHeading(t),
     address: found[t.source],
     facts,
     id: positionKey(t.position),
@@ -743,6 +789,9 @@ function hedgeSources(
   ];
 }
 
+/** A hedge's heading. */
+export const HEDGE_HEADING: CardHeading = { kicker: "Hecke", title: "Hecke" };
+
 /** A hedge. */
 export function hedgeCard(
   h: HedgeInquiry,
@@ -761,8 +810,7 @@ export function hedgeCard(
   ]);
   const sources = hedgeSources(h, provenance, credits);
   return {
-    kicker: "Hecke",
-    title: "Hecke",
+    ...HEDGE_HEADING,
     address: "",
     facts,
     id: positionKey(h.position),
@@ -771,14 +819,24 @@ export function hedgeCard(
   };
 }
 
+/** A lamp's heading: a wall lantern, a lamp hung on a wire, or a post. */
+export function lampHeading(l: LampInquiry): CardHeading {
+  let title = "Straßenlaterne";
+  if (l.wall) {
+    title = "Wandleuchte";
+  } else if (l.hung) {
+    title = "Hängeleuchte";
+  }
+  return { kicker: "Straßenbeleuchtung", title };
+}
+
 /** A lantern on a facade: OSM says where it hangs, its height is assumed. */
 function wallLampCard(
   l: LampInquiry,
   provenance: SiteProvenance | null
 ): InquiryCard {
   return {
-    kicker: "Straßenbeleuchtung",
-    title: "Wandleuchte",
+    ...lampHeading(l),
     address: "",
     facts: factLines([
       ["Aufhängung", l.wall === "wall" ? "an der Mauer" : "an der Fassade"],
@@ -805,8 +863,7 @@ export function lampCard(
     class: "wie an den Laternen dieser Art Straße gemessen",
   };
   return {
-    kicker: "Straßenbeleuchtung",
-    title: l.hung ? "Hängeleuchte" : "Straßenlaterne",
+    ...lampHeading(l),
     address: "",
     facts: factLines(
       l.hung
@@ -889,13 +946,27 @@ function facing(a: number | undefined): string {
   return `nach ${names[Math.round((((a % 360) + 360) % 360) / 45) % 8]}`;
 }
 
+/** A piece of furniture's heading: its name, under its group. */
+export function furnitureHeading(f: FurnitureInquiry): CardHeading {
+  const [title, kicker] = FURNITURE[f.properties.k] ?? [
+    "Stadtmobiliar",
+    "Stadtmobiliar",
+  ];
+  return { kicker, title };
+}
+
+/** Whether a piece of furniture is a playground's. */
+export function isPlay(f: FurnitureInquiry): boolean {
+  return FURNITURE[f.properties.k]?.[1] === "Spielplatz";
+}
+
 /** A piece of street furniture or a playground. */
 export function furnitureCard(
   f: FurnitureInquiry,
   provenance: SiteProvenance | null
 ): InquiryCard {
   const p = f.properties;
-  const [title, kicker] = FURNITURE[p.k] ?? ["Stadtmobiliar", "Stadtmobiliar"];
+  const heading = furnitureHeading(f);
   const facts = factLines([
     ["Länge", p.l ? metres(p.l) : ""],
     ["Lehne", p.k === "bench" && p.back === false ? "ohne" : ""],
@@ -907,8 +978,7 @@ export function furnitureCard(
     ["Ausrichtung", p.k === "bench" || p.k === "shelter" ? facing(p.a) : ""],
   ]);
   return {
-    kicker,
-    title,
+    ...heading,
     address: "",
     facts,
     id: positionKey(f.position),
@@ -923,8 +993,13 @@ export function furnitureCard(
               credit: "",
             })
           )
-        : pointSource(title, p.src === "mly", provenance),
+        : pointSource(heading.title, p.src === "mly", provenance),
   };
+}
+
+/** A tram stop's heading: its name. */
+export function stopHeading(s: StopInquiry): CardHeading {
+  return { kicker: "Straßenbahnhaltestelle", title: s.name || "Haltestelle" };
 }
 
 /** A tram stop. */
@@ -933,8 +1008,7 @@ export function stopCard(
   provenance: SiteProvenance | null
 ): InquiryCard {
   return {
-    kicker: "Straßenbahnhaltestelle",
-    title: s.name || "Haltestelle",
+    ...stopHeading(s),
     address: "",
     facts: [],
     id: positionKey(s.position),
@@ -950,16 +1024,25 @@ const LANDING: Record<string, string> = {
   ferry: "Fähre",
 };
 
+const landingWord = (l: LandingInquiry) => LANDING[l.properties.k] ?? "Anleger";
+
+/** A landing's heading: its name, else what it is. */
+export function landingHeading(l: LandingInquiry): CardHeading {
+  return {
+    kicker: "Am Fluss",
+    title: firstText(l.properties.name, landingWord(l)),
+  };
+}
+
 /** A landing stage or pontoon. */
 export function landingCard(
   l: LandingInquiry,
   provenance: SiteProvenance | null
 ): InquiryCard {
   const p = l.properties;
-  const title = LANDING[p.k] ?? "Anleger";
+  const title = landingWord(l);
   return {
-    kicker: "Am Fluss",
-    title: firstText(p.name, title),
+    ...landingHeading(l),
     address: p.name ? title : "",
     facts: factLines([["Länge", p.len ? metres(p.len) : ""]]),
     id: positionKey(l.position),

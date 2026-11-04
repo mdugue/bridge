@@ -26,22 +26,42 @@ import {
   stated,
   whole,
 } from "./card-lines";
-import type { CardCredits, CardFact, InquiryCard } from "./card-lines";
+import type {
+  CardCredits,
+  CardFact,
+  CardHeading,
+  InquiryCard,
+} from "./card-lines";
 import {
   bridgeCard,
+  bridgeHeading,
   canopyCard,
+  canopyHeading,
   furnitureCard,
+  furnitureHeading,
+  HEDGE_HEADING,
   hedgeCard,
+  isPlay,
   lampCard,
+  lampHeading,
   landingCard,
+  landingHeading,
   monumentCard,
+  monumentHeading,
   stopCard,
+  stopHeading,
   treeCard,
+  treeHeading,
 } from "./inquiry-features";
 import type { FeatureInquiry, TreeFacts } from "./inquiry-features";
 import type { Stated } from "./methods";
-import { bikeCard, trafficCard } from "./inquiry-traffic";
-import { designCard } from "./inquiry-design";
+import {
+  bikeCard,
+  bikeHeading,
+  trafficCard,
+  trafficHeading,
+} from "./inquiry-traffic";
+import { designCard, designHeading } from "./inquiry-design";
 import {
   isMeasuredRoof,
   MEASURED_ROOF,
@@ -453,6 +473,89 @@ export function inquiryCard(
   }
 }
 
+/** The icon a kind of thing is drawn with in the strip of candidates, by
+ *  its Lucide name (the strip maps it to the component). */
+export type KindIcon =
+  | "anchor"
+  | "armchair"
+  | "bike"
+  | "bridge"
+  | "building"
+  | "car"
+  | "ferris-wheel"
+  | "lamp-floor"
+  | "landmark"
+  | "pencil-ruler"
+  | "shrub"
+  | "tram-front"
+  | "tree-deciduous"
+  | "tree-pine";
+
+/** What the strip of candidates shows of one: its icon and its card's
+ *  heading, without the card. */
+export interface KindLabel extends CardHeading {
+  icon: KindIcon;
+}
+
+/** A candidate's icon and heading (no provenance, no tree facts yet: the
+ *  heading the card shows before they arrive). */
+export function kindLabel(inquiry: Inquiry, credits: CardCredits): KindLabel {
+  switch (inquiry.kind) {
+    case "building": {
+      return {
+        icon: "building",
+        ...buildingHeading(inquiry, mergedFacts(inquiry)),
+      };
+    }
+    case "tree": {
+      return {
+        icon: inquiry.conifer ? "tree-pine" : "tree-deciduous",
+        ...treeHeading(inquiry, null, credits),
+      };
+    }
+    case "monument": {
+      return { icon: "landmark", ...monumentHeading(inquiry) };
+    }
+    case "bridge": {
+      return { icon: "bridge", ...bridgeHeading(inquiry) };
+    }
+    case "traffic": {
+      return { icon: "car", ...trafficHeading(inquiry) };
+    }
+    case "bikes": {
+      return { icon: "bike", ...bikeHeading(inquiry) };
+    }
+    case "design": {
+      return { icon: "pencil-ruler", ...designHeading(inquiry) };
+    }
+    case "canopy": {
+      return { icon: "tree-deciduous", ...canopyHeading(inquiry) };
+    }
+    case "hedge": {
+      return { icon: "shrub", ...HEDGE_HEADING };
+    }
+    case "lamp": {
+      return { icon: "lamp-floor", ...lampHeading(inquiry) };
+    }
+    case "furniture": {
+      return {
+        icon: isPlay(inquiry) ? "ferris-wheel" : "armchair",
+        ...furnitureHeading(inquiry),
+      };
+    }
+    case "stop": {
+      return { icon: "tram-front", ...stopHeading(inquiry) };
+    }
+    case "landing": {
+      return { icon: "anchor", ...landingHeading(inquiry) };
+    }
+    default: {
+      const unknown: never = inquiry;
+      throw new Error(`unknown inquiry kind: ${String(unknown)}`);
+    }
+  }
+}
+
 /** A landmark's card with its Wikidata facts (the nameplate's lines) as
  *  rows and Wikidata as their source; the card as it was without any. */
 function withLandmarkFacts(
@@ -514,6 +617,19 @@ function buildingSources(
   );
 }
 
+/** A building's heading from its merged facts: its name under its use,
+ *  else its use, else what it is (a building, or a small structure the
+ *  laser scan found). */
+function buildingHeading(
+  inquiry: BuildingInquiry,
+  t: Pick<ReturnType<typeof mergedFacts>, "functionCode" | "name">
+): CardHeading {
+  const use = functionLabel(t.functionCode);
+  const kind =
+    inquiry.picked.source === OBJECT_SOURCE_SCAN ? "Kleinbau" : "Gebäude";
+  return { kicker: t.name && use ? use : kind, title: t.name || use || kind };
+}
+
 /** A building's card (LoD2, or a scan structure LoD2 lacks). */
 function buildingCard(
   inquiry: BuildingInquiry,
@@ -528,9 +644,6 @@ function buildingCard(
   const osmHeight = gap && decodeDrawn(pick.facts.drawn).height === "osm";
   const t = mergedFacts(inquiry);
   const use = functionLabel(t.functionCode);
-  const kind = scan ? "Kleinbau" : "Gebäude";
-  const title = t.name || use || kind;
-  const kicker = t.name && use ? use : kind;
 
   const facts = cardFacts(t, pick, scan || gap, use);
   const fromOsm = [
@@ -576,8 +689,7 @@ function buildingCard(
     );
   }
   return {
-    kicker,
-    title,
+    ...buildingHeading(inquiry, t),
     address: t.address,
     facts,
     id: pick.facts.buildingId,
