@@ -3642,7 +3642,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   shared with the tram stops of plan 024). The clocks' hands show the
   **scene time**: two hand quads per face, turned in the vertex shader from
   one shared uniform that `setSun` updates on the minute only
-  (`setClockTime`); the hands (a soft slate, not black) never cast, so
+  (`clockMinutes`, `scene-environment.ts`); the hands (a soft slate, not black) never cast, so
   the shadow map is not redrawn for them. All in the furniture's soft
   pastels: nothing near-black, no fine detail. The re-bake leaves every earlier object byte-identical (checked
   per tile); the new kinds are appended. Look unverified on a GPU.
@@ -3711,8 +3711,8 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   a faint glow from below and the jets a faint warm white, and a
   fountain's sculpture is lit softly from its basin (until 2026-10-20 a
   glow and jets bright enough to outshine the lit streets, "viel zu hell",
-  the maintainer) (`setFountainTime`,
-  `setFountainNight`, one shared clock and night factor). Merged/instanced,
+  the maintainer) (`setFountainTime` and the scene's `sceneNight`, one
+  shared clock and night factor). Merged/instanced,
   nine draw calls per tile at most (eight until 2026-10-21). Not walk-blocking (collision is
   buildings only).
   **What a monument is, from OSM** (2026-10-08): the DLM's Denkmal,
@@ -3822,7 +3822,8 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   block node is ~1 m across (`r`), not the 2.2 m basin; a point fountain
   inside a LoD2 footprint moves out within 3 m or is dropped (Dresden
   3 / 2, München 6 / 6). The jets run mid-April to October
-  (`fountainsRun`, one shared uniform, `setFountainSeason`). Scratch
+  (`fountainsRun`, one shared uniform, `fountainsOn` in
+  `scene-environment.ts`). Scratch
   bakes, HEAD code → this: forms Dresden 275 → 321, Hamburg 172 → 184,
   München 197 → 222; reliefs München 34 → 54, Dresden 82 → 88; `hm`
   Dresden 25, Hamburg 17, München 11.

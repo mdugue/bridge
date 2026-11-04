@@ -33,7 +33,12 @@ retargeted/lowered as tiles land. The data layers are not wired into
 `data-layers-feature.ts`) and hear the spine through its hooks
 (`feature-seam.ts`: frame, stream change, the look store, the scene's
 clock — a watched value a late starter reads first); a tile's traffic
-slot waits for their builder. The picture styles and Modell are still
+slot waits for their builder. The scene environment
+(`scene-environment.ts`, not three's `scene.environment`) holds what the
+sun and the date move — the night node, the season watch, the clock —
+and a dressing's trees follow its season from birth to release
+(`followEnvironment`); the crown switch is read by the LOD pass, the
+traffic slot follows the look's layer from its hang. The picture styles and Modell are still
 wired by hand. The data layers' code stays in the scene chunk: the first `import()` chunk that imports three.js costs the first
 load ≈ 33 KB gz (three leaves the scene's hoisted scope), more than the
 data layers moved (ADR 0040) — measure before splitting one off.
@@ -277,8 +282,13 @@ plan 073); a slider (only *Nebel* is left) or anything else that moves
 is a `uniform()` node every tile's materials share; writing its
 `.value` retunes live, no rebuild. A shared `Vector3`
 passed to `uniform(v)` stays a live reference. Module-level uniform nodes
-that a setter writes (`fountainTime`, `lampNight`, `mapAltitude`) are
-fine. Inside `If`/branches read textures with an explicit `.level(0)` or
+that a setter writes (`fountainTime`, `mapAltitude`) are fine; what the
+sun and the date move (`sceneNight`, `fountainsOn`, `clockMinutes`) lives
+in `scene-environment.ts`, written by `setSun` through the environment —
+a layer reads it and adds no setter. A scene-wide material drawn only
+after dark wears `drawnAtNight` (its `visible`, no rebuild); a new compile
+path shows a drawable's materials for its call (`withMaterialsShown`), or
+such a material builds in the first dusk frame. Inside `If`/branches read textures with an explicit `.level(0)` or
 `textureLoad` (no implicit derivatives in non-uniform control flow).
 
 What three keys a node build (TSL → WGSL/GLSL, **on the main thread**) by,

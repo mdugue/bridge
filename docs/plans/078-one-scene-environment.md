@@ -1,6 +1,7 @@
 # 078 — One scene environment the dressings bind at birth
 
-**Status:** TODO
+**Status:** BUILT (2026-11-04) — the real-GPU plates are open; the
+README row has the measurements and the deviations.
 
 The rest of backlog item 20 (`docs/plans/README.md`, *Open work*). An
 architecture review and three verifiers on 2026-10-30 found that the

@@ -23,7 +23,8 @@ kept misbehaving.
   GLSL, no second path.
 - **Every look term is a TSL node** on a node material; a fixed strength is
   a named constant node, anything that moves a shared uniform's `.value`.
-  Fog is the one `scene.fogNode`.
+  What the sun and the date move lives in `scene-environment.ts`: a layer
+  reads it and adds no setter to `setSun`. Fog is the one `scene.fogNode`.
 - **Public API only:** no prototype patches, no private members. The
   stalls are designed out instead: the scene renders top-level into its
   own target that the post pipeline reads; instanced sets are `Instances`

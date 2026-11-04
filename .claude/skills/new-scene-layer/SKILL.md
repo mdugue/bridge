@@ -39,7 +39,11 @@ Deep reference: the `city-walker` skill, "Node materials" and "Tiles".
 7. **Ground:** feet and edges from `ground-join.ts`, joins tested
    (`JOIN_PARTS` or `checkJoins`); its doc comment says what happens where
    the ground beside it is higher and where it is lower.
-8. **Night:** emissive or additive terms scale by the night factor.
+8. **Night:** emissive or additive terms scale by `sceneNight`
+   (`scene-environment.ts`); a part drawn only after dark wears
+   `drawnAtNight` on its scene-wide material; a part whose instances
+   follow the date `follow`s the environment at birth
+   (`followEnvironment`) and lets go in `disposeDressing`.
 9. **Styles:** tag what a picture style may dress (`userData.styleCrown`,
    `userData.styleLampHeads`); never read the style.
 10. **Asking:** if a visitor may click it, a ray target from its data and
