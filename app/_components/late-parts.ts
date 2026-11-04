@@ -159,6 +159,7 @@ export interface LateHost {
   loaded: Promise<void>;
   /** the stream has gone */
   disposed: () => boolean;
+  /** the cache weighs the tile again (never once it left: see `weigh`) */
   reweigh: () => void;
   changed: () => void;
   /** a build or hang that threw for want of memory (`isAllocationFailure`) */
@@ -270,8 +271,14 @@ export function createLateParts(host: LateHost): LateParts {
       dispose: () => [],
     };
     const weigh = (bytes: number) => {
-      if (state.bytes !== bytes) {
-        state.bytes = bytes;
+      if (state.bytes === bytes) {
+        return;
+      }
+      state.bytes = bytes;
+      // a tile that left is not weighed again: the renderer's cache frees
+      // it inside its eviction, after it took the tile's bytes off its
+      // total, and a re-weigh there would add them back for good
+      if (!left && !host.disposed()) {
         host.reweigh();
       }
     };

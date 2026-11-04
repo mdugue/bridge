@@ -704,7 +704,9 @@ not sky.
   136–272, 96–232 at levels 1–3; `tileCacheBytesFor` in
   `app/_components/scene-profile.ts`, `lruCache.min/maxBytesSize`),
   weighed as the GPU holds it (the dressing plugin's `calculateBytesUsed`,
-  less the site-shared buffers). `max` is derived: the governor's soft
+  less the site-shared buffers; a tile that left is never re-weighed —
+  the cache frees it inside its eviction, and `recalculateBytesUsed`
+  there adds its bytes back to the total for good). `max` is derived: the governor's soft
   line − the fixed costs (24 B per drawn pixel + the shadow map) −
   100 MiB; `max − min` must exceed the largest tile (128 MiB on a phone).
   The 320–600 MB before had `max` above the governor's own hard line, so

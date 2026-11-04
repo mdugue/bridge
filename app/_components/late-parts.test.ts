@@ -507,3 +507,22 @@ test("a part gone while it waits in the lane, or on the compile before the last,
     "b build",
   ]);
 });
+
+test("a hung part freed as its tile leaves never asks the cache to weigh the tile again", async () => {
+  // (the renderer's cache frees a tile inside its eviction, after it took
+  // the tile's bytes off its total: a re-weigh there adds them back for good)
+  const log: string[] = [];
+  const { calls, compiles, host, load } = fakeHost();
+  const parts = createLateParts(host);
+  const handle = parts.add(fakePart("a", log).part);
+  load();
+  await flush();
+  compiles[0].end("done");
+  expect(await handle.settled).toBe("hung");
+  const weighed = calls.reweigh;
+  parts.leave();
+  expect(parts.release()).toEqual([]);
+  expect(log).toContain("a free");
+  expect(parts.bytes()).toBe(0);
+  expect(calls.reweigh).toBe(weighed);
+});
