@@ -4,8 +4,9 @@ import { ringDistanceXz } from "@/lib/city/ask-solids";
 import type { AskItem, AskSet, Slab } from "@/lib/city/ask-solids";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 
-/** A pier just outside its deck's outline still belongs to it (m). */
-const PIER_REACH = 12;
+/** A pier just outside its deck's outline still belongs to it (m); the
+ *  outline (selection-shape.ts) reaches as far. */
+export const PIER_REACH = 12;
 
 /** The slab a deck's first solid is, if it is one. */
 const slabOf = (item: AskItem<FeatureInquiry>): Slab | null => {

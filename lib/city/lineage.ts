@@ -28,10 +28,12 @@ import { germanDates } from "./card-lines";
 import type { BuildingInquiry, Inquiry } from "./inquiry";
 import type {
   BridgeInquiry,
+  CanopyInquiry,
+  HedgeInquiry,
   MonumentInquiry,
+  MoreInquiry,
   TreeInquiry,
 } from "./inquiry-features";
-import type { CanopyInquiry, MoreInquiry } from "./inquiry-more";
 import type { BikeInquiry, TrafficInquiry } from "./inquiry-traffic";
 import { PLACED } from "./inquiry-design";
 import type { DesignInquiry } from "./inquiry-design";
@@ -248,13 +250,19 @@ export function lineage(
       designLineage(l, inquiry);
       break;
     }
-    case "canopy":
+    case "canopy": {
+      canopyLineage(l, inquiry, site);
+      break;
+    }
+    case "hedge": {
+      hedgeLineage(l, inquiry);
+      break;
+    }
     case "furniture":
-    case "hedge":
     case "lamp":
     case "landing":
     case "stop": {
-      moreLineage(l, inquiry, site);
+      osmThingLineage(l, inquiry);
       break;
     }
     default: {
@@ -627,43 +635,26 @@ function fromMapillary(m: MoreInquiry): boolean {
   );
 }
 
-function moreLineage(l: Lineage, m: MoreInquiry, site: LineageSite): void {
-  switch (m.kind) {
-    case "canopy": {
-      canopyLineage(l, m, site);
-      return;
-    }
-    case "hedge": {
-      l.source("dlm", [m.source === "dlm" && "Verlauf"], "taken", {
-        standIn: "trees",
-      });
-      l.source(
-        "osm",
-        [m.source !== "dlm" && m.source !== "lsc" && "Verlauf"],
-        "taken",
-        { osm: "trees" }
-      );
-      l.source("lsc", [m.source === "lsc" && "Verlauf und Höhe"], "detected");
-      l.source("lsc", [m.source === "osm+lsc" && "Höhe"], "computed");
-      l.source("dom", [m.source === "osm+dom" && "Höhe"], "computed");
-      l.source("dgm", ["der Boden"], "taken");
-      l.viewer([
-        (m.source === "osm" || m.source === "dlm") && "Höhe und Breite",
-        m.source === "osm+dom" && "Breite",
-      ]);
-      return;
-    }
-    case "furniture":
-    case "lamp":
-    case "landing":
-    case "stop": {
-      osmThingLineage(l, m);
-      break;
-    }
-    default: {
-      break;
-    }
-  }
+/** A hedge's lineage: its line from the Basis-DLM, OSM or the laser scan,
+ *  its height where the scan or the surface model measured it. */
+function hedgeLineage(l: Lineage, m: HedgeInquiry): void {
+  l.source("dlm", [m.source === "dlm" && "Verlauf"], "taken", {
+    standIn: "trees",
+  });
+  l.source(
+    "osm",
+    [m.source !== "dlm" && m.source !== "lsc" && "Verlauf"],
+    "taken",
+    { osm: "trees" }
+  );
+  l.source("lsc", [m.source === "lsc" && "Verlauf und Höhe"], "detected");
+  l.source("lsc", [m.source === "osm+lsc" && "Höhe"], "computed");
+  l.source("dom", [m.source === "osm+dom" && "Höhe"], "computed");
+  l.source("dgm", ["der Boden"], "taken");
+  l.viewer([
+    (m.source === "osm" || m.source === "dlm") && "Höhe und Breite",
+    m.source === "osm+dom" && "Breite",
+  ]);
 }
 
 /** A lamp's, a piece of furniture's, a landing's or a stop's lineage: OSM's

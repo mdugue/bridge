@@ -42,8 +42,11 @@ Deep reference: the `city-walker` skill, "Node materials" and "Tiles".
 8. **Night:** emissive or additive terms scale by the night factor.
 9. **Styles:** tag what a picture style may dress (`userData.styleCrown`,
    `userData.styleLampHeads`); never read the style.
-10. **Asking:** if a visitor may click it, a ray target from its data and
-    card lines in `lib/city/inquiry-features.ts` (ADR 0042).
+10. **Asking:** if a visitor may click it, a ray target from its data
+    (`lib/city/ask-items.ts`), card lines and a heading in
+    `lib/city/inquiry-features.ts`, a row in the kind table
+    (`lib/city/inquiry.ts`), an arm in `lineage.ts` and a fixture in
+    `inquiry-kinds.test.ts` (ADR 0042).
 11. **Phone:** measure its bytes on the phone tier; the total must not grow
     (offset it elsewhere).
 12. **Tests:** a unit test of the node setup and geometry; a scene-census

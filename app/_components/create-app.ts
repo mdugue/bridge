@@ -140,7 +140,6 @@ import type { OutlineSubject } from "./inquiry-probe";
 import {
   bridgeShape,
   buildingShape,
-  crownFormOf,
   solidShape,
   standInDepth,
   trafficTriangles,
@@ -2452,9 +2451,9 @@ async function bootApp(
     // a stand-in: the scene's surface anywhere inside it is the thing; the
     // counters' columns are glass, which writes no depth
     return {
-      // a tree's crown as it is drawn: a cone outlined as one (not a pine
-      // or a yew), any other kind's solids as they are
-      positions: solidShape(solids, crownFormOf(target)),
+      // a tree's crown as it is drawn (its solid says: a cone outlined as
+      // one, not a pine or a yew), any other kind's solids as they are
+      positions: solidShape(solids),
       reach:
         target.kind === "bikes"
           ? Number.POSITIVE_INFINITY

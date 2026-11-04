@@ -13,6 +13,7 @@ import type { BufferGeometry, Mesh, Object3D } from "three/webgpu";
 import { ringDistanceXz } from "@/lib/city/ask-solids";
 import type { AskSolid, Slab } from "@/lib/city/ask-solids";
 import { liveTriangles } from "@/lib/city/city-mesh";
+import { PIER_REACH } from "./bridge-ask";
 import { bvhBuilding } from "./bvh-client";
 import type { CityLayer } from "./city-layer";
 
@@ -67,9 +68,6 @@ export function buildingShape(
   return Float32Array.from(out);
 }
 
-/** A pier just outside its deck's outline is still its bridge (m). */
-const PIER_REACH = 12;
-
 /** A bridge's own triangles out of its tile's bridge meshes: those whose
  *  middle lies on its deck's outline, or within a pier's reach of it. */
 export function bridgeShape(
@@ -110,24 +108,8 @@ export function bridgeShape(
 const placed = new Matrix4();
 const UPRIGHT = new Quaternion();
 
-/** How a tree's second solid is drawn: its crown as an ellipsoid or a
- *  cone (a conifer). Every other kind passes none and its cylinders are
- *  drawn as they are — a lamp's arm or a short hedge also has two. */
-export type CrownForm = "cone" | "ellipsoid" | null;
-
-/** A thing's crown form: a tree's or a canopy's, a cone where it says so. */
-export function crownFormOf(target: {
-  kind: string;
-  cone?: boolean;
-}): CrownForm {
-  if (target.kind !== "tree" && target.kind !== "canopy") {
-    return null;
-  }
-  return target.cone === true ? "cone" : "ellipsoid";
-}
-
 /** The unit geometry a cylinder solid is placed with, by crown form. */
-function cylinderGeometry(form: CrownForm) {
+function cylinderGeometry(form: "cone" | "ellipsoid" | undefined) {
   if (form === "cone") {
     return new ConeGeometry(1, 1, 24, 1);
   }
@@ -137,19 +119,15 @@ function cylinderGeometry(form: CrownForm) {
   return new CylinderGeometry(1, 1, 1, 24, 1);
 }
 
-/** A shape after a thing's solids: a tree's crown (its second solid) as
- *  `crown` says, any other cylinder as it is, a prism. */
-export function solidShape(
-  solids: readonly AskSolid[],
-  crown: CrownForm = null
-): Float32Array {
+/** A shape after a thing's solids: a tree's crown as the solid says
+ *  (`crown`), any other cylinder as it is, a prism. */
+export function solidShape(solids: readonly AskSolid[]): Float32Array {
   const out: number[] = [];
-  for (let k = 0; k < solids.length; k += 1) {
-    const s = solids[k];
+  for (const s of solids) {
     if ("cylinder" in s) {
       const c = s.cylinder;
       const h = Math.max(c.y1 - c.y0, 0.1);
-      const form = k === 1 ? crown : null;
+      const form = s.crown;
       const geometry = cylinderGeometry(form);
       // a sphere spans twice its radius; a cone or a cylinder one unit
       placed.compose(

@@ -11,7 +11,7 @@ import type { InquiryCard } from "./card-lines";
 import { OBJECT_FLAG_LANDMARK, OBJECT_SOURCE_LOD2 } from "./city-mesh";
 import { cardHeight } from "./inquiry";
 import type { Inquiry, InquiryObject } from "./inquiry";
-import { UNKNOWN_SPECIES } from "./inquiry-more";
+import { UNKNOWN_SPECIES } from "./inquiry-features";
 import { factBuildings, factLines } from "./landmark-facts";
 import type { LandmarkFactsEntry } from "./landmark-facts";
 import { NO_FACT } from "./object-facts";
@@ -149,7 +149,7 @@ function buildingPlate(
 }
 
 /** The things of the street the plate names: trees, lamps, furniture,
- *  stops, landing stages, hedges (inquiry-more.ts, inquiry-features.ts). */
+ *  stops, landing stages, hedges (inquiry-features.ts). */
 const STREET_THINGS = new Set<Inquiry["kind"]>([
   "tree",
   "canopy",

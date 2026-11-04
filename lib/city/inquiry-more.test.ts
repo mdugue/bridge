@@ -7,7 +7,7 @@ import {
   lampCard,
   landingCard,
   stopCard,
-} from "./inquiry-more";
+} from "./inquiry-features";
 import type { Stated } from "./methods";
 import type { SiteProvenance } from "./provenance";
 
