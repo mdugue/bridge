@@ -601,10 +601,11 @@ export function handOverWaitMs(tier: DeviceTier): number {
  * Binds a dressing's trees to the scene environment (scene-environment.ts)
  * from its birth: they take the season of now at once and every change
  * after — while the dressing compiles, hangs and shows — and a crown that
- * changed redraws the shadow map. Returns the call that lets go
- * (`TileDressing.unfollow`, called by `disposeDressing`). The look needs
- * no following here: the crown switch is read by the LOD pass, and the
- * traffic follows the layer once it hangs (`TrafficSlot.attach`).
+ * changed after its birth redraws the shadow map (its hang does the
+ * first). Returns the call that lets go (`TileDressing.unfollow`, called
+ * by `disposeDressing`). The look needs no following here: the crown
+ * switch is read by the LOD pass, and the traffic follows the layer once
+ * it hangs (`TrafficSlot.attach`).
  */
 export function followEnvironment(
   d: Pick<TileDressing, "vegetation">,
@@ -616,11 +617,16 @@ export function followEnvironment(
       // nothing follows
     };
   }
-  return follow(env.season, (day) => {
-    if (vegetation.setSeason(day)) {
+  // the season of its birth casts nothing anew: the dressing is in no
+  // scene yet, and its hang redraws the shadow map (the stream's change)
+  let born = false;
+  const unfollow = follow(env.season, (day) => {
+    if (vegetation.setSeason(day) && born) {
       env.castersChanged();
     }
   });
+  born = true;
+  return unfollow;
 }
 
 /** Frees a dressing; a part that throws does not keep the others (what

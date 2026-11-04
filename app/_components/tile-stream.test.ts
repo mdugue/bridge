@@ -113,6 +113,14 @@ test("a dressing's trees follow the scene's season from birth to release", () =>
   env.season.set(10);
   expect(days).toEqual([190, 9, 200]);
   expect(env.casters).toBe(1);
+  // born in winter: its crowns change at once, but it hangs in no scene
+  // yet (its hang redraws the shadow map)
+  const winter = fakeEnvironment(9);
+  followEnvironment({ vegetation }, winter);
+  expect(days).toEqual([190, 9, 200, 9]);
+  expect(winter.casters).toBe(0);
+  winter.season.set(10);
+  expect(winter.casters).toBe(1);
 });
 
 /** A dressing hung on a root of its own through its late part, over the
