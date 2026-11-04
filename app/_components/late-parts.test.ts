@@ -462,3 +462,39 @@ test("a take-down that throws still frees the part, once, and says what threw", 
   expect(parts.release()).toEqual([]);
   expect(freed.count).toBe(1);
 });
+
+/** How a part has settled by now, or "pending". */
+async function settledNow(h: { settled: Promise<unknown> }) {
+  const now = Symbol("pending");
+  const outcome = await Promise.race([h.settled, flush().then(() => now)]);
+  return outcome === now ? "pending" : outcome;
+}
+
+test("a part gone while it waits in the lane, or on the compile before the last, leaves at once", async () => {
+  const log: string[] = [];
+  const { compiles, host, load } = fakeHost();
+  load();
+  const parts = createLateParts(host);
+  // in line behind a part holding the lane through its compile
+  parts.add(fakePart("holder", log, { hangAt: "compile" }).part);
+  await flush();
+  const queued = parts.add(fakePart("queued", log).part);
+  await flush();
+  queued.dispose();
+  expect(await settledNow(queued)).toBe("gone");
+  compileOf(compiles, "holder")?.end("done");
+  await flush();
+  // two built, their compiles running: a third waits on the older one's
+  parts.add(fakePart("a", log).part);
+  parts.add(fakePart("b", log).part);
+  await flush();
+  const third = parts.add(fakePart("third", log).part);
+  await flush();
+  third.dispose();
+  expect(await settledNow(third)).toBe("gone");
+  expect(log.filter((l) => l.endsWith(" build"))).toEqual([
+    "holder build",
+    "a build",
+    "b build",
+  ]);
+});

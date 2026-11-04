@@ -180,6 +180,16 @@ interface Live {
 
 const noop = (): void => undefined;
 
+/** Settles once `signal` aborts. */
+async function untilAborted(signal: AbortSignal): Promise<void> {
+  if (signal.aborted) {
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    signal.addEventListener("abort", () => resolve(), { once: true });
+  });
+}
+
 export function createLateParts(host: LateHost): LateParts {
   const lane = host.lane as Lane;
   const live = new Set<Live>();
@@ -195,12 +205,17 @@ export function createLateParts(host: LateHost): LateParts {
     }
   };
 
-  /** `work` in the lane, after the gate; outside it for rank null */
-  const inLane = async <R>(rank: number | null, work: () => Promise<R>) =>
+  /** `work` in the lane, after the gate; outside it for rank null. One
+   *  whose `signal` aborts while it waits leaves the line */
+  const inLane = async <R>(
+    rank: number | null,
+    work: () => Promise<R>,
+    signal: AbortSignal
+  ) =>
     rank === null
       ? await work()
       : await lane.gate.then(
-          async () => await lane.tasks.run(work, undefined, rank)
+          async () => await lane.tasks.run(work, signal, rank)
         );
 
   const add = <T>(part: LatePart<T>, owner?: LateHandle): LateHandle => {
@@ -296,8 +311,9 @@ export function createLateParts(host: LateHost): LateParts {
     /** built, its compile started; resolves with the wait (as a value,
      *  not awaited inside the lane for a "wait" part) */
     const buildAndCompile = async () => {
-      if (part.rank !== null && part.hangAt === "wait") {
-        await lane.older;
+      if (part.rank !== null && part.hangAt === "wait" && !gone()) {
+        // (one gone meanwhile builds nothing: it waits no longer)
+        await Promise.race([lane.older, untilAborted(abort.signal)]);
       }
       if (gone()) {
         return null;
@@ -342,7 +358,7 @@ export function createLateParts(host: LateHost): LateParts {
 
     const queuedAt = streamTimings.now();
     const run = async (): Promise<LateOutcome> => {
-      const started = await inLane(part.rank, buildAndCompile);
+      const started = await inLane(part.rank, buildAndCompile, abort.signal);
       if (!started) {
         readyNow();
         return made.value === null && !gone() ? "nothing" : "gone";
