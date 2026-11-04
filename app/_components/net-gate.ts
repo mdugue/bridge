@@ -54,7 +54,7 @@ function abortError(): DOMException {
 export function createNetGate(page: GatePage): NetGate {
   let leaving = false;
   const visible = () => page.document.visibilityState !== "hidden";
-  const usable = () => visible() && page.navigator.onLine;
+  const usable = () => visible() && (page.navigator.onLine ?? true);
   const clock = createVisibleClock(visible(), page.now());
   const wakers = new Set<() => void>();
   const changed = () => {

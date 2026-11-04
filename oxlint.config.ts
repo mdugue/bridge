@@ -84,6 +84,12 @@ export default defineConfig({
       rules: { "unicorn/prefer-number-coercion": "off" },
     },
     {
+      // Overriding a method of ShadowNode's, which its types leave out, takes
+      // a method signature in the cast: a property's would not allow it.
+      files: ["app/_components/sun-rig.ts"],
+      rules: { "typescript/method-signature-style": "off" },
+    },
+    {
       // watchGone's listener is one per walk on purpose: three adds one
       // function once per geometry, and the first walk's stop would take it.
       files: ["app/_components/post-stack.ts"],

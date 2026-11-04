@@ -13,6 +13,7 @@ import type {
   Box3,
   Camera,
   DepthTexture,
+  Light,
   LightShadow,
   Matrix4,
   Node,
@@ -226,12 +227,11 @@ interface ShadowTargets {
 }
 // reason: setupRenderTarget is part of ShadowNode (ShadowNode.js documents
 // overriding it, TileShadowNode does) but missing from the @types.
-const shadowNodeWithTarget = ShadowNode.prototype as unknown as {
-  setupRenderTarget: (
-    this: ShadowNode,
-    shadow: LightShadow,
-    builder: NodeBuilder
-  ) => ShadowTargets;
+const ShadowNodeWithTarget = ShadowNode as unknown as new (
+  light: Light,
+  shadow: LightShadow | null
+) => ShadowNode & {
+  setupRenderTarget(shadow: LightShadow, builder: NodeBuilder): ShadowTargets;
 };
 
 /**
@@ -246,18 +246,17 @@ const shadowNodeWithTarget = ShadowNode.prototype as unknown as {
  * three's own CSM and tiled shadows plug in through — so nothing of three
  * is patched (ADR 0027).
  */
-class DepthOnlyShadowNode extends ShadowNode {
+class DepthOnlyShadowNode extends ShadowNodeWithTarget {
   /** the map's depth, once the first lit material made it */
   depth: DepthTexture | null = null;
-  setupRenderTarget(shadow: LightShadow, builder: NodeBuilder): ShadowTargets {
+  override setupRenderTarget(
+    shadow: LightShadow,
+    builder: NodeBuilder
+  ): ShadowTargets {
     // three's depth texture (its name, its compare function), in a target
     // of its own without the colour — the one made with it is never
     // allocated, and goes
-    const made = shadowNodeWithTarget.setupRenderTarget.call(
-      this,
-      shadow,
-      builder
-    );
+    const made = super.setupRenderTarget(shadow, builder);
     const { depthTexture } = made;
     // handed over: the depth belongs to the target that draws it, which
     // frees it with itself (a texture keeps the first target it was given)
