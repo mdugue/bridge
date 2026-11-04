@@ -280,7 +280,7 @@ export function monumentsOf(
  */
 export function stadtwissenTile(input: {
   city: CityFile;
-  landmarks?: LandmarkFile;
+  landmarks?: Pick<LandmarkFile, "landmarks">;
   monuments?: MonumentCollection;
   osm: Readonly<Record<string, OsmRow | undefined>>;
   tile: string;
@@ -320,7 +320,7 @@ export function stadtwissenTile(input: {
 /** The site's index: its landmarks with Wikidata's facts, its sources. */
 export function stadtwissenIndex(input: {
   epsg: number;
-  landmarks: readonly { file: LandmarkFile; tile: string }[];
+  landmarks: readonly { file: Pick<LandmarkFile, "landmarks">; tile: string }[];
   site: string;
   sources: Partial<Record<WissenSource, SourceInfo>>;
   tiles: StadtwissenIndex["tiles"];

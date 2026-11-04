@@ -6,7 +6,7 @@
 import { existsSync } from "node:fs";
 import type { FacadeMaterial, RoofColours } from "../../lib/city/building-tint";
 import { withoutTrafficStructures } from "../../lib/city/city-mesh";
-import type { OsmBuildingLut, WallMaterial } from "../../lib/city/city-mesh";
+import type { OsmBuildingLut } from "../../lib/city/city-mesh";
 import type { LandmarkFile } from "../../lib/city/landmarks";
 import type {
   DoorFeature,
@@ -72,7 +72,7 @@ function withLandmarks(
         ...own,
         landmark: 1,
         wikidata: lm.id,
-        material: own?.material ?? (lm.material as WallMaterial | undefined),
+        material: own?.material ?? lm.material,
         ...(!own?.material && lm.material
           ? { materialFrom: "wikidata" as const }
           : {}),

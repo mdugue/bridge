@@ -22,7 +22,8 @@ import type {
   FeatureCollection,
   ShopfrontFile,
 } from "../lib/city/features";
-import type { LandmarkFile } from "../lib/city/landmarks";
+import { parseBakeFile } from "../lib/city/bake-file";
+import { LANDMARKS_FILE } from "../lib/city/landmarks-file";
 import { cityMeshSourceFiles, tileIds } from "../lib/city/tile";
 import type { CityJsonDocument } from "../lib/city/types";
 import { FACADE_SCALE_M, unpackStyle, windowType } from "../lib/city/windows";
@@ -96,7 +97,11 @@ for (const tile of tiles) {
     ...(read(src.osmBuild) as { objects?: OsmBuildingLut } | undefined)
       ?.objects,
   };
-  const landmarks = read(src.landmarks) as LandmarkFile | undefined;
+  const landmarksJson = read(src.landmarks);
+  const landmarks =
+    landmarksJson === undefined
+      ? undefined
+      : parseBakeFile(LANDMARKS_FILE, landmarksJson, src.landmarks);
   for (const lm of landmarks?.landmarks ?? []) {
     for (const id of lm.objects) {
       osm[id] = { ...osm[id], landmark: 1 };
