@@ -50,7 +50,7 @@ import {
   muralsSource,
   parseMurals,
 } from "../lib/city/murals";
-import type { MuralExtras, MuralFile } from "../lib/city/murals";
+import type { MuralExtras } from "../lib/city/murals";
 import { PROVENANCE_FILE, siteProvenance } from "../lib/city/provenance";
 import type { ProvenanceRecord } from "../lib/city/provenance";
 import { tileExtentOf } from "../lib/city/site";
@@ -81,6 +81,8 @@ import {
 } from "../lib/city/landmark-facts";
 import type { LandmarkFactsExtras } from "../lib/city/landmark-facts";
 import { LANDMARK_FACTS_FILE_SPEC } from "../lib/city/landmark-facts-file";
+import { MURALS_FILE_SPEC } from "../lib/city/murals-file";
+import { TRAMS_FILE } from "../lib/city/tram-timetable-file";
 import { parseBakeFile } from "../lib/city/bake-file";
 import type { BakeFile } from "../lib/city/bake-file";
 import {
@@ -238,15 +240,16 @@ const landmarkFacts = existsSync(factsSource)
   ? publishParsed(LANDMARK_FACTS_FILE, factsSource, LANDMARK_FACTS_FILE_SPEC)
   : undefined;
 const trams = existsSync(tramSource)
-  ? publish(TRAM_TIMETABLE_FILE, readFileSync(tramSource))
+  ? publishParsed(TRAM_TIMETABLE_FILE, tramSource, TRAMS_FILE)
   : undefined;
 // The murals on their walls, site-wide (pipeline/bake/murals.py): optional,
 // each drawing's pen lines and wash under their own published names, the
 // file naming them so.
 const muralsDir = siteDataDir(SITE);
 const muralsPath = at(muralsSource(muralsDir));
+// a malformed mural fails the build (ADR 0059), never vanishes
 const muralFile = existsSync(muralsPath)
-  ? (readJson(muralsPath) as Partial<MuralFile>)
+  ? parseBakeFile(MURALS_FILE_SPEC, readJson(muralsPath), muralsPath)
   : null;
 const muralPath = (name: string) => at(muralFileSource(muralsDir, name));
 const murals = (parseMurals(muralFile) ?? [])
