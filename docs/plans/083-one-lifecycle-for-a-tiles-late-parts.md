@@ -1,8 +1,9 @@
 # 083 — One lifecycle for a tile's late parts: the dressing, the murals and the traffic bodies through one module
 
-**Status:** TODO — after 078 (all of it; step 4 at the least). Plan 076's
-steps 3–4 are already in the code (see *Interplay*), so nothing waits on
-076.
+**Status:** PARTIAL (2026-11-04) — 078 is built; steps 0 and 1 of this
+plan are built, steps 2–6 open (the README row has what was measured and
+what was not). Plan 076's steps 3–4 are already in the code (see
+*Interplay*), so nothing waits on 076.
 
 Planned 2026-11-04 from candidate K2 of an architecture review, against
 `04d8fad3`. A refactor with a short list of named behaviour changes
