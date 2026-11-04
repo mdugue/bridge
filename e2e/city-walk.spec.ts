@@ -1153,7 +1153,9 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       await card.getByTestId("ask-input").fill("Wer baute die Frauenkirche?");
       await card.getByTestId("ask-input").press("Enter");
       await expect(card).toContainText("George Bähr");
-      await expect(card.getByText("KI", { exact: true })).toBeVisible();
+      // (the refused answer keeps its empty, labelled row, as an
+      // uncoded refusal did before: the answer's label is the last)
+      await expect(card.getByText("KI", { exact: true }).last()).toBeVisible();
       await card
         .getByRole("button", { name: "Frag die Stadt schließen" })
         .click();
