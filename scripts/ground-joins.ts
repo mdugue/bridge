@@ -16,7 +16,7 @@
  *   bun scripts/ground-joins.ts [tile …]
  */
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import { doorJoins } from "../lib/city/doors";
 import { plinthJoins } from "../lib/city/plinths";
 import type {
@@ -28,20 +28,14 @@ import type {
   SmallBuildingFeature,
 } from "../lib/city/features";
 import { cutWallGates, fenceGeometry } from "../lib/city/fences";
-import {
-  checkJoins,
-  type HeightAt,
-  type JoinPoint,
-  type JoinReport,
-} from "../lib/city/ground-join";
+import { checkJoins } from "../lib/city/ground-join";
+import type { HeightAt, JoinPoint, JoinReport } from "../lib/city/ground-join";
 import { kerbGeometry } from "../lib/city/kerbs";
 import { isMonorail } from "../lib/city/line-levels";
 import { monorailJoins } from "../lib/city/monorail";
 import { axisMiddle, stairGeometry } from "../lib/city/stairs";
-import {
-  sampleHeightfield,
-  type TerrainBounds,
-} from "../lib/city/terrain-geometry";
+import { sampleHeightfield } from "../lib/city/terrain-geometry";
+import type { TerrainBounds } from "../lib/city/terrain-geometry";
 import { tileExtentOf, tileIdOf } from "../lib/city/site";
 import { doorSpans, shopfrontJoins, wallBays } from "../lib/city/shopfronts";
 import { structureJoins } from "../lib/city/small-buildings";
@@ -90,8 +84,8 @@ interface Ground {
 async function tileGround(site: Site, tile: string): Promise<Ground> {
   const src = dgmSourceFiles(site, tile);
   const dgm = await readDgmFile(
-    join(process.cwd(), src.tif),
-    join(process.cwd(), src.tfw),
+    nodePath.join(process.cwd(), src.tif),
+    nodePath.join(process.cwd(), src.tfw),
     "native"
   );
   const elevations = shapeDgm(
@@ -113,10 +107,13 @@ async function tileGround(site: Site, tile: string): Promise<Ground> {
 
 /** The LoD2 walls' street side the bake draws as plinths. */
 function plinths(site: Site, tile: string): PlinthFeature[] {
-  const path = join(process.cwd(), cityMeshSourceFiles(site, tile).plinths);
+  const path = nodePath.join(
+    process.cwd(),
+    cityMeshSourceFiles(site, tile).plinths
+  );
   return existsSync(path)
     ? ((
-        JSON.parse(readFileSync(path, "utf8")) as {
+        JSON.parse(readFileSync(path, "utf-8")) as {
           features?: PlinthFeature[];
         }
       ).features ?? [])
@@ -125,10 +122,13 @@ function plinths(site: Site, tile: string): PlinthFeature[] {
 
 /** OSM's entrances the bake draws as doors on a tile's walls. */
 function doors(site: Site, tile: string): DoorFeature[] {
-  const path = join(process.cwd(), cityMeshSourceFiles(site, tile).doors);
+  const path = nodePath.join(
+    process.cwd(),
+    cityMeshSourceFiles(site, tile).doors
+  );
   return existsSync(path)
     ? ((
-        JSON.parse(readFileSync(path, "utf8")) as {
+        JSON.parse(readFileSync(path, "utf-8")) as {
           features?: DoorFeature[];
         }
       ).features ?? [])
@@ -137,10 +137,13 @@ function doors(site: Site, tile: string): DoorFeature[] {
 
 /** The shopfront walls the bake draws on a tile's ground floors. */
 function shopfronts(site: Site, tile: string): ShopfrontWall[] {
-  const path = join(process.cwd(), cityMeshSourceFiles(site, tile).shopfronts);
+  const path = nodePath.join(
+    process.cwd(),
+    cityMeshSourceFiles(site, tile).shopfronts
+  );
   return existsSync(path)
     ? Object.values(
-        (JSON.parse(readFileSync(path, "utf8")) as ShopfrontFile).buildings
+        (JSON.parse(readFileSync(path, "utf-8")) as ShopfrontFile).buildings
       ).flat()
     : [];
 }
@@ -163,10 +166,13 @@ function shopfrontWallJoins(
 
 /** The scan's small structures the bake appends to a tile's buildings. */
 function smallBuildings(site: Site, tile: string): SmallBuildingFeature[] {
-  const path = join(process.cwd(), cityMeshSourceFiles(site, tile).smallBuild);
+  const path = nodePath.join(
+    process.cwd(),
+    cityMeshSourceFiles(site, tile).smallBuild
+  );
   return existsSync(path)
     ? ((
-        JSON.parse(readFileSync(path, "utf8")) as {
+        JSON.parse(readFileSync(path, "utf-8")) as {
           features?: SmallBuildingFeature[];
         }
       ).features ?? [])
@@ -179,7 +185,7 @@ function monorails(site: Site, tile: string): RailFeature[] {
   return existsSync(path)
     ? (
         (
-          JSON.parse(readFileSync(path, "utf8")) as {
+          JSON.parse(readFileSync(path, "utf-8")) as {
             features?: RailFeature[];
           }
         ).features ?? []
@@ -236,7 +242,7 @@ export async function measureJoins(
   tiles?: string[],
   site: Site = SITES[REFERENCE_SITE]
 ): Promise<Record<JoinPart, JoinReport>> {
-  tiles ??= tileIds(site);
+  const measured = tiles ?? tileIds(site);
   // the measured tiles and the ones touching them: a wall or a fence near
   // a seam stands on its neighbour's ground
   const extent = new Map(
@@ -248,16 +254,18 @@ export async function measureJoins(
     return ax0 <= bx1 && bx0 <= ax1 && ay0 <= by1 && by0 <= ay1;
   };
   const all = [...extent.keys()].filter((t) =>
-    tiles.some((m) => touches(t, m))
+    measured.some((m) => touches(t, m))
   );
-  const grounds = await Promise.all(all.map((t) => tileGround(site, t)));
+  const grounds = await Promise.all(
+    all.map(async (t) => await tileGround(site, t))
+  );
   const heightAt: HeightAt = (x, y) =>
     grounds.find((g) => ownsPoint(g.bounds, x, y))?.heightAt(x, y) ?? null;
   const joins = Object.fromEntries(
     JOIN_PARTS.map((part) => [part, [] as JoinPoint[]])
   ) as Record<JoinPart, JoinPoint[]>;
-  for (const tile of tiles) {
-    const bounds = grounds[all.indexOf(tile)].bounds;
+  for (const tile of measured) {
+    const { bounds } = grounds[all.indexOf(tile)];
     const found = tileJoins(site, tile, bounds, heightAt);
     for (const part of JOIN_PARTS) {
       joins[part].push(...found[part]);

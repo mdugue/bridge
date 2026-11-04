@@ -11,7 +11,6 @@ import {
   paneTop,
   QUANTUM_M,
   SHOPFRONT,
-  type ShopfrontMesh,
   SHOPFRONT_SINK,
   ROW_SILL_M,
   SHOPFRONT_TOP_M,
@@ -21,6 +20,7 @@ import {
   wallBays,
   wallShiftAt,
 } from "./shopfronts";
+import type { ShopfrontMesh } from "./shopfronts";
 
 const OFFSET = { cx: 1000, cy: 2000 };
 
@@ -69,6 +69,11 @@ function triangles(p: number[]): { c: number[]; n: number[] }[] {
   return out;
 }
 
+const door = (x: number, y: number, of = "A"): DoorFeature => ({
+  geometry: { type: "Point", coordinates: [x, y] },
+  properties: { of, w: 1, h: 2.2, kind: "yes", nx: 0, ny: -1, z: 100 },
+});
+
 describe("the bays", () => {
   test("only measured bays, clipped inside the wall's end piers", () => {
     expect(wallBays(wall({ bays: [[0, 12]] }), [])).toEqual([
@@ -86,10 +91,6 @@ describe("the bays", () => {
   });
 
   test("doors on the wall's building and line only", () => {
-    const door = (x: number, y: number, of = "A"): DoorFeature => ({
-      geometry: { type: "Point", coordinates: [x, y] },
-      properties: { of, w: 1, h: 2.2, kind: "yes", nx: 0, ny: -1, z: 100 },
-    });
     const spans = doorSpans(
       wall(),
       [door(1004, 2000.1), door(1008, 2003), door(1010, 2000, "B")],
@@ -122,6 +123,11 @@ describe("the bays", () => {
   });
 });
 
+const sign = (z0: number) => ({
+  at: [[0, 6]] as [number, number][],
+  z: [z0, z0 + 0.6] as [number, number],
+});
+
 describe("the pane's top", () => {
   test("the measured top, under the first storey line", () => {
     expect(paneTop(wall({ gf_top: 3.4 }), 4)).toBe(3.4);
@@ -132,10 +138,6 @@ describe("the pane's top", () => {
   });
 
   test("under a sign, unless the sign hangs too low for a window", () => {
-    const sign = (z0: number) => ({
-      at: [[0, 6]] as [number, number][],
-      z: [z0, z0 + 0.6] as [number, number],
-    });
     expect(paneTop(wall({ sign: sign(2.9) }), 4)).toBeCloseTo(
       2.9 - SHOPFRONT.head
     );
@@ -177,8 +179,8 @@ function overlaps(tris: { p: number[] }[]): [number, number][] {
     return { n: unit(n.n), c: n.c, p };
   });
   const out: [number, number][] = [];
-  for (let i = 0; i < geo.length; i++) {
-    for (let j = i + 1; j < geo.length; j++) {
+  for (let i = 0; i < geo.length; i += 1) {
+    for (let j = i + 1; j < geo.length; j += 1) {
       const a = geo[i];
       const b = geo[j];
       const d = a.n[0] * b.n[0] + a.n[1] * b.n[1] + a.n[2] * b.n[2];
@@ -226,7 +228,7 @@ function overlap2d(
   const ta = flat(a.p);
   const tb = flat(b.p);
   for (const t of [ta, tb]) {
-    for (let k = 0; k < 3; k++) {
+    for (let k = 0; k < 3; k += 1) {
       const [x0, y0] = t[k];
       const [x1, y1] = t[(k + 1) % 3];
       const ax = [y1 - y0, x0 - x1];
@@ -265,6 +267,19 @@ const sheltered = (reversed = false) =>
     reversed
   );
 
+const flat = (p: number[]) => [p[0], 0, p[2], p[3], 0, p[5], p[6], 0, p[8]];
+
+const top = (gfTop: number) => {
+  const w = wall({
+    canopy: [{ at: [0, 12], d: 4, h: 4.3 }],
+    gf_top: gfTop,
+  });
+  const zs = triangles(
+    shopfrontMesh(w, wallBays(w, []), 5, OFFSET).frame.positions
+  ).map(({ c }) => c[2]);
+  return Math.max(...zs);
+};
+
 describe("the mesh", () => {
   for (const reversed of [false, true]) {
     test(`every face looks out of the wall, wound as it is shaded (${reversed ? "b → a" : "a → b"})`, () => {
@@ -283,7 +298,7 @@ describe("the mesh", () => {
         // the per-vertex normals agree with the winding
         for (const s of [mesh.frame, mesh.canopy]) {
           expect(s.normals).toHaveLength(s.positions.length);
-          triangles(s.positions).forEach(({ n }, t) => {
+          for (const [t, { n }] of triangles(s.positions).entries()) {
             const m = [0, 1, 2].map(
               (k) =>
                 s.normals[9 * t + k] +
@@ -291,7 +306,7 @@ describe("the mesh", () => {
                 s.normals[9 * t + 6 + k]
             );
             expect(n[0] * m[0] + n[1] * m[1] + n[2] * m[2]).toBeGreaterThan(0);
-          });
+          }
         }
       }
     });
@@ -380,7 +395,7 @@ describe("the mesh", () => {
       expect(n[0]).toBeCloseTo((x - (2 - reveal)) / reveal, 6);
       expect(-n[1]).toBeCloseTo((out - (proud - reveal)) / reveal, 6);
       if (-n[1] > 0.2 && -n[1] < 0.95) {
-        round++;
+        round += 1;
       }
     }
     expect(round).toBeGreaterThan(0);
@@ -418,23 +433,12 @@ describe("the mesh", () => {
       const along = tris
         .map(({ p }) => ({ p, t: triangles(p)[0] }))
         .filter(({ t }) => Math.abs(unit(t.n)[1]) > 0.99);
-      for (let i = 0; i < along.length; i++) {
-        for (let j = i + 1; j < along.length; j++) {
+      for (let i = 0; i < along.length; i += 1) {
+        for (let j = i + 1; j < along.length; j += 1) {
           const gap = Math.abs(along[i].t.c[1] - along[j].t.c[1]);
           if (gap < 0.005) {
             continue;
           }
-          const flat = (p: number[]) => [
-            p[0],
-            0,
-            p[2],
-            p[3],
-            0,
-            p[5],
-            p[6],
-            0,
-            p[8],
-          ];
           if (
             overlap2d(
               { n: [0, 1, 0], p: flat(along[i].p) },
@@ -507,7 +511,7 @@ describe("the mesh", () => {
       for (let i = 0; i < normals.length; i += 3) {
         const out = -normals[i + 1];
         if (out > 0.3 && out < 0.95 && Math.abs(normals[i + 2]) > 0.3) {
-          soft++;
+          soft += 1;
         }
       }
       expect(soft).toBeGreaterThan(0);
@@ -516,16 +520,6 @@ describe("the mesh", () => {
 
   test("a head close under a canopy reaches up into its slab, never onto it", () => {
     const slab = 104.3 - CANOPY.slab;
-    const top = (gfTop: number) => {
-      const w = wall({
-        canopy: [{ at: [0, 12], d: 4, h: 4.3 }],
-        gf_top: gfTop,
-      });
-      const zs = triangles(
-        shopfrontMesh(w, wallBays(w, []), 5, OFFSET).frame.positions
-      ).map(({ c }) => c[2]);
-      return Math.max(...zs);
-    };
     // a strip of wall under the slab: the head reaches up into it
     expect(top(3.8)).toBeGreaterThan(slab + 0.02);
     expect(top(3.8)).toBeLessThan(104.3);

@@ -21,7 +21,8 @@ import {
   OBJECT_SOURCE_SCAN,
   OBJECT_SOURCE_SHOPFRONT,
 } from "./city-mesh";
-import { type DrawnFacts, decodeDrawn } from "./drawn-facts";
+import { decodeDrawn } from "./drawn-facts";
+import type { DrawnFacts } from "./drawn-facts";
 import { FACADE_UNIT } from "./facade-reading";
 import { germanDates } from "./card-lines";
 import type { BuildingInquiry, Inquiry } from "./inquiry";
@@ -32,14 +33,12 @@ import type {
 } from "./inquiry-features";
 import type { CanopyInquiry, MoreInquiry } from "./inquiry-more";
 import type { BikeInquiry, TrafficInquiry } from "./inquiry-traffic";
-import { type DesignInquiry, PLACED } from "./inquiry-design";
-import { isMeasuredRoof, type ObjectFacts } from "./object-facts";
-import {
-  type OsmProduct,
-  parseLod2Stand,
-  type SiteProvenance,
-  type SourceKey,
-} from "./provenance";
+import { PLACED } from "./inquiry-design";
+import type { DesignInquiry } from "./inquiry-design";
+import { isMeasuredRoof } from "./object-facts";
+import type { ObjectFacts } from "./object-facts";
+import { parseLod2Stand } from "./provenance";
+import type { OsmProduct, SiteProvenance, SourceKey } from "./provenance";
 import type { Method, Stated } from "./methods";
 import type { Provider } from "./site";
 
@@ -116,11 +115,19 @@ const spoken = (used: Said, method: Method): Stated[] =>
 class Lineage {
   readonly entries: LineageEntry[] = [];
 
+  readonly provenance: SiteProvenance | null;
+  private readonly site: LineageSite;
+  private readonly tile: string;
+
   constructor(
-    readonly provenance: SiteProvenance | null,
-    private readonly site: LineageSite,
-    private readonly tile: string
-  ) {}
+    provenance: SiteProvenance | null,
+    site: LineageSite,
+    tile: string
+  ) {
+    this.provenance = provenance;
+    this.site = site;
+    this.tile = tile;
+  }
 
   /** A source of the site's provider or the manifest's, with its edition
    *  for the tile (or `stand` when given). A "dlm" source on a site whose
@@ -213,34 +220,46 @@ export function lineage(
     "tile" in inquiry ? inquiry.tile : ""
   );
   switch (inquiry.kind) {
-    case "building":
+    case "building": {
       buildingLineage(l, inquiry, site);
       break;
-    case "tree":
+    }
+    case "tree": {
       treeLineage(l, inquiry, site);
       break;
-    case "monument":
+    }
+    case "monument": {
       monumentLineage(l, inquiry);
       break;
-    case "bridge":
+    }
+    case "bridge": {
       bridgeLineage(l, inquiry, site);
       break;
-    case "traffic":
+    }
+    case "traffic": {
       trafficLineage(l, inquiry);
       break;
-    case "bikes":
+    }
+    case "bikes": {
       bikeLineage(l, inquiry);
       break;
-    case "design":
+    }
+    case "design": {
       designLineage(l, inquiry);
       break;
+    }
     case "canopy":
     case "furniture":
     case "hedge":
     case "lamp":
     case "landing":
-    case "stop":
+    case "stop": {
       moreLineage(l, inquiry, site);
+      break;
+    }
+    default: {
+      break;
+    }
   }
   return l.entries;
 }
@@ -258,9 +277,9 @@ function buildingLineage(
 ): void {
   const all = b.tree.length > 0 ? b.tree : [b.picked];
   const facts = all.map((o) => o.facts);
-  const flags = all.reduce((sum, o) => sum | o.flags, 0);
-  const has = (bit: number) => hasObjectFlag(flags, bit);
-  const source = b.picked.source;
+  // (a flag any object of the tree carries)
+  const has = (bit: number) => all.some((o) => hasObjectFlag(o.flags, bit));
+  const { source } = b.picked;
   const lod2 = source !== OBJECT_SOURCE_SCAN && source !== OBJECT_SOURCE_GAP;
   if (source === OBJECT_SOURCE_SCAN) {
     // small_buildings.py: a box where the scan's surface stands 2–6.5 m up,
@@ -610,10 +629,11 @@ function fromMapillary(m: MoreInquiry): boolean {
 
 function moreLineage(l: Lineage, m: MoreInquiry, site: LineageSite): void {
   switch (m.kind) {
-    case "canopy":
+    case "canopy": {
       canopyLineage(l, m, site);
       return;
-    case "hedge":
+    }
+    case "hedge": {
       l.source("dlm", [m.source === "dlm" && "Verlauf"], "taken", {
         standIn: "trees",
       });
@@ -632,11 +652,17 @@ function moreLineage(l: Lineage, m: MoreInquiry, site: LineageSite): void {
         m.source === "osm+dom" && "Breite",
       ]);
       return;
+    }
     case "furniture":
     case "lamp":
     case "landing":
-    case "stop":
+    case "stop": {
       osmThingLineage(l, m);
+      break;
+    }
+    default: {
+      break;
+    }
   }
 }
 

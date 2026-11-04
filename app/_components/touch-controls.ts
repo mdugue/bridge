@@ -1,4 +1,5 @@
-import { isDoubleTap, type TapSample } from "@/lib/city/touch";
+import { isDoubleTap } from "@/lib/city/touch";
+import type { TapSample } from "@/lib/city/touch";
 
 /**
  * Street-view-style canvas gestures via Pointer Events, for touch AND mouse:
@@ -82,6 +83,14 @@ const MAX_WHEEL_UNITS = 0.5;
 /** px per line / page, for wheels that do not report pixels. */
 const LINE_PX = 16;
 const PAGE_PX = 800;
+
+/** Pixels per unit of a wheel event's delta in its `deltaMode`. */
+function wheelUnitPx(deltaMode: number): number {
+  if (deltaMode === 1) {
+    return LINE_PX;
+  }
+  return deltaMode === 2 ? PAGE_PX : 1;
+}
 
 /**
  * Safari's trackpad pinch (it sends no ctrl+wheel): the gesture's scale
@@ -248,7 +257,10 @@ export function attachTouchControls(
       if (e.pointerType === "mouse") {
         cancelPress();
       } else {
-        armPress(pointers.get(e.pointerId) as PointerState);
+        const pressed = pointers.get(e.pointerId);
+        if (pressed) {
+          armPress(pressed);
+        }
       }
     } else {
       cancelPress();
@@ -372,9 +384,7 @@ export function attachTouchControls(
       );
       return;
     }
-    const px =
-      e.deltaY *
-      (e.deltaMode === 1 ? LINE_PX : e.deltaMode === 2 ? PAGE_PX : 1);
+    const px = e.deltaY * wheelUnitPx(e.deltaMode);
     const units =
       -px / (e.ctrlKey ? TRACKPAD_PINCH_PX_PER_UNIT : WHEEL_PX_PER_UNIT);
     callbacks.onWheelDolly(
@@ -435,9 +445,10 @@ export function attachTouchControls(
 
   return {
     lockPointer: () => {
-      // Rejects outside a user gesture or when the browser denies it; the
-      // viewer then simply stays in grab-look, so there is nothing to report.
-      element.requestPointerLock()?.catch(() => undefined);
+      element.requestPointerLock()?.catch(() => {
+        // Rejects outside a user gesture or when the browser denies it; the
+        // viewer then simply stays in grab-look, so there is nothing to report.
+      });
     },
     detach: () => {
       cancelPress();

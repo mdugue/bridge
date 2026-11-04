@@ -26,12 +26,12 @@ const METRES: Readonly<Record<number, number>> = {
   17: 1e6, // megametres
   18: 1e9, // gigametres
   19: 0.9144, // yards
-  20: 3.527_777_8e-4, // printer's points (1/72 in)
-  21: 4.233_333e-3, // printer's picas
+  20: 3.5277778e-4, // printer's points (1/72 in)
+  21: 4.233333e-3, // printer's picas
   22: 1852, // nautical miles
-  23: 1.495_978_707e11, // astronomical units
-  24: 9.460_730_472_580_8e15, // light years
-  25: 3.085_677_581_49e16, // parsecs
+  23: 1.495978707e11, // astronomical units
+  24: 9.4607304725808e15, // light years
+  25: 3.08567758149e16, // parsecs
 };
 
 /** The unit's length in metres (1 where unknown). */
@@ -59,9 +59,9 @@ const EARTH_CENTRE = 2;
 /** Row-major 4×4 product a·b. */
 function times(a: readonly number[], b: readonly number[]): number[] {
   const out = Array.from({ length: 16 }, () => 0);
-  for (let r = 0; r < 4; r++) {
-    for (let c = 0; c < 4; c++) {
-      for (let k = 0; k < 4; k++) {
+  for (let r = 0; r < 4; r += 1) {
+    for (let c = 0; c < 4; c += 1) {
+      for (let k = 0; k < 4; k += 1) {
         out[r * 4 + c] += a[r * 4 + k] * b[k * 4 + c];
       }
     }

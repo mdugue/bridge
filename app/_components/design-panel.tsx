@@ -7,7 +7,8 @@ import {
   SaveIcon,
   Trash2Icon,
 } from "lucide-react";
-import { type DragEvent, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
+import type { DragEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -15,12 +16,14 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
-  type DesignPlacement,
-  type DesignUnit,
   FACTOR_MAX,
   FACTOR_MIN,
   isDesignUnit,
-  type PlacementSource,
+} from "@/lib/city/design-placement";
+import type {
+  DesignPlacement,
+  DesignUnit,
+  PlacementSource,
 } from "@/lib/city/design-placement";
 import { decimal, metres } from "@/lib/city/card-lines";
 import { cn } from "cn";
@@ -69,7 +72,7 @@ function weightLabel(status: DesignStatus): string {
 }
 
 /** A number typed in, taken on Enter or when the field is left. */
-function NumberField({
+const NumberField = ({
   digits,
   id,
   label,
@@ -86,7 +89,7 @@ function NumberField({
   step: number;
   unit: string;
   value: number;
-}) {
+}) => {
   const shown =
     digits === undefined
       ? value.toFixed(step < 1 ? 2 : 0)
@@ -120,7 +123,7 @@ function NumberField({
       />
     </Field>
   );
-}
+};
 
 /** Hands the placement file to the browser to save. */
 function savePlacement(text: string, design: string): void {
@@ -129,7 +132,7 @@ function savePlacement(text: string, design: string): void {
   );
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${design.replace(/\.(glb|gltf)$/i, "")}.lage.json`;
+  a.download = `${design.replace(/\.(?:glb|gltf)$/iu, "")}.lage.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -141,13 +144,13 @@ function savePlacement(text: string, design: string): void {
  * with the buildings it replaces stepped aside. The placement can be kept
  * as a small file beside the design and loaded with it next time.
  */
-export function DesignPanel({
+export const DesignPanel = ({
   controls,
   ready,
 }: {
   controls: () => DesignControls | null;
   ready: boolean;
-}) {
+}) => {
   const status = useSceneStatus("design");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -161,7 +164,7 @@ export function DesignPanel({
       return;
     }
     setError(null);
-    const onlyPlacement = files.every((f) => /\.json$/i.test(f.name));
+    const onlyPlacement = files.every((f) => /\.json$/iu.test(f.name));
     if (onlyPlacement && status) {
       setError(c.applyPlacementFile(await files[0].text()));
       return;
@@ -169,14 +172,19 @@ export function DesignPanel({
     setBusy(true);
     try {
       await c.load(files);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
+    } catch (error_) {
+      setError(error_ instanceof Error ? error_.message : String(error_));
     }
+    setBusy(false);
   };
   const place = (patch: Partial<DesignPlacement>) =>
     controls()?.setPlacement(patch);
+  let pickLabel = "Datei wählen";
+  if (busy) {
+    pickLabel = "Lädt …";
+  } else if (status) {
+    pickLabel = "Andere Datei laden";
+  }
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
     setOver(false);
@@ -220,7 +228,7 @@ export function DesignPanel({
         variant={status ? "outline" : "default"}
       >
         <FileUpIcon data-icon="inline-start" />
-        {busy ? "Lädt …" : status ? "Andere Datei laden" : "Datei wählen"}
+        {pickLabel}
       </Button>
       {error && (
         <p className="text-[11px] text-destructive leading-snug" role="alert">
@@ -237,9 +245,9 @@ export function DesignPanel({
       )}
     </div>
   );
-}
+};
 
-function DesignControlsView({
+const DesignControlsView = ({
   controls,
   ids,
   place,
@@ -249,7 +257,7 @@ function DesignControlsView({
   ids: string;
   place: (patch: Partial<DesignPlacement>) => void;
   status: DesignStatus;
-}) {
+}) => {
   const p = status.placement;
   return (
     <div className="flex flex-col gap-2.5">
@@ -370,7 +378,11 @@ function DesignControlsView({
           checked={status.fileColours}
           disabled={!status.hasLooks}
           id={`${ids}-colours`}
-          onCheckedChange={(on) => void controls()?.setFileColours(on)}
+          onCheckedChange={(on) => {
+            // a failed build stays an unhandled rejection, for the global
+            // handler (Sentry) to report
+            void controls()?.setFileColours(on);
+          }}
           size="sm"
         />
       </Field>
@@ -402,14 +414,14 @@ function DesignControlsView({
       </div>
     </div>
   );
-}
+};
 
 /**
  * The unit the file is read in and a factor on it: OBJ has no unit, and
  * many exports come in centimetres or millimetres; a model at 1:100 or a
  * game asset takes a factor. It scales about the design's foot.
  */
-function ScaleControls({
+const ScaleControls = ({
   controls,
   ids,
   status,
@@ -417,7 +429,7 @@ function ScaleControls({
   controls: () => DesignControls | null;
   ids: string;
   status: DesignStatus;
-}) {
+}) => {
   const { scale } = status;
   return (
     <div className="flex flex-col gap-1">
@@ -468,4 +480,4 @@ function ScaleControls({
       />
     </div>
   );
-}
+};

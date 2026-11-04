@@ -107,24 +107,25 @@ export const TRAM_LIVERIES: Record<TramOperator, TramLivery> = {
  *  the transport association for some (Dresden's trams come as the
  *  Verkehrsverbund Oberelbe's: within the VVO only the DVB runs city
  *  trams; Munich's as Stadtwerke München's, the MVG's parent). */
-export function operatorOf(agency: string | undefined): TramOperator {
-  const a = agency ?? "";
+export function operatorOf(agency = ""): TramOperator {
   if (
-    /Dresdner Verkehrsbetriebe|\bDVB\b|Verkehrsverbund Oberelbe|\bVVO\b/i.test(
-      a
+    /Dresdner Verkehrsbetriebe|\bDVB\b|Verkehrsverbund Oberelbe|\bVVO\b/iu.test(
+      agency
     )
   ) {
     return "dvb";
   }
-  if (/Leipziger Verkehrsbetriebe|\bLVB\b/i.test(a)) {
+  if (/Leipziger Verkehrsbetriebe|\bLVB\b/iu.test(agency)) {
     return "lvb";
   }
   if (
-    /Stadtwerke München|Münchner Verkehrsgesellschaft|\bMVG\b|\bSWM\b/i.test(a)
+    /Stadtwerke München|Münchner Verkehrsgesellschaft|\bMVG\b|\bSWM\b/iu.test(
+      agency
+    )
   ) {
     return "mvg";
   }
-  if (/Berliner Verkehrsbetriebe|\bBVG\b/i.test(a)) {
+  if (/Berliner Verkehrsbetriebe|\bBVG\b/iu.test(agency)) {
     return "bvg";
   }
   return "neutral";
@@ -150,7 +151,7 @@ export function carLength(livery: TramLivery, seed: number): number {
     }
     at -= w;
   }
-  return livery.lengths[livery.lengths.length - 1]?.[0] ?? 30;
+  return livery.lengths.at(-1)?.[0] ?? 30;
 }
 
 export type TramDayKind = "saturday" | "sunday" | "weekday";
@@ -212,14 +213,14 @@ export interface MeasuredPattern extends TramPattern {
 
 export function measurePattern(p: TramPattern): MeasuredPattern {
   const dist = [0];
-  for (let i = 1; i < p.coords.length; i++) {
+  for (let i = 1; i < p.coords.length; i += 1) {
     const [ax, ay] = p.coords[i - 1];
     const [bx, by] = p.coords[i];
     dist.push(dist[i - 1] + Math.hypot(bx - ax, by - ay));
   }
   const onBridge = p.coords.map(() => false);
   for (const [from, to] of p.bridge) {
-    for (let i = from; i < to && i < onBridge.length; i++) {
+    for (let i = from; i < to && i < onBridge.length; i += 1) {
       onBridge[i] = true;
     }
   }
@@ -283,7 +284,7 @@ export function headAlong(
   if (elapsed < t[0] || elapsed > t[2 * stops - 1]) {
     return null;
   }
-  for (let i = 0; i < stops; i++) {
+  for (let i = 0; i < stops; i += 1) {
     const arr = t[2 * i];
     const dep = t[2 * i + 1];
     if (elapsed <= dep) {

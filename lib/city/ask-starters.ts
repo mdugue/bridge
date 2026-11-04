@@ -40,7 +40,7 @@ type Gender = "f" | "m" | "n";
 /** The gender a landmark's name most likely has, by its last word's
  *  ending; null where it cannot be told (then no article is used). */
 export function genderOf(name: string): Gender | null {
-  const word = (name.split(/[\s-]/).at(-1) ?? "").toLowerCase();
+  const word = (name.split(/[\s-]/u).at(-1) ?? "").toLowerCase();
   const ends = (list: readonly string[]) => list.some((e) => word.endsWith(e));
   if (
     ends([
@@ -265,7 +265,7 @@ export function placesAround(ctx: Pick<StarterContext, "at" | "landmarks">): {
   ahead: StarterLandmark | null;
   near: StarterLandmark | null;
 } {
-  const at = ctx.at;
+  const { at } = ctx;
   if (!at) {
     return { ahead: null, near: null };
   }
@@ -312,11 +312,12 @@ export interface StarterCandidate {
  */
 export function starterPool(ctx: StarterContext): StarterCandidate[] {
   const { ahead, near } = placesAround(ctx);
-  const place = ahead
-    ? AHEAD.map((t) => t(ahead.name))
-    : near
-      ? NEAR.map((t) => t(near.name))
-      : NO_PLACE;
+  let place = NO_PLACE;
+  if (ahead) {
+    place = AHEAD.map((t) => t(ahead.name));
+  } else if (near) {
+    place = NEAR.map((t) => t(near.name));
+  }
   const time = [...HOURS[hourKind(ctx.now)], ...seasonQuestions(ctx.now)];
   return [
     ...place.map((question) => ({ kind: "ort" as const, question })),

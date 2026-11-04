@@ -113,7 +113,8 @@ export function packMarkingTable(table: MarkingTable): {
   const rows = table.markings;
   const width = rows.length;
   const data = new Float32Array(width * 8);
-  for (const [i, [cx, cy, angle, hl, hw, kind]] of rows.entries()) {
+  for (let i = 0; i < rows.length; i += 1) {
+    const [cx, cy, angle, hl, hw, kind] = rows[i];
     data.set([cx, cy, Math.cos(angle), Math.sin(angle)], i * 4);
     const known = kind > 0 && kind < MARKING_KINDS.length ? kind : 0;
     data.set([hl, hw, known, 0], (width + i) * 4);

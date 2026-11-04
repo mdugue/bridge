@@ -53,9 +53,10 @@ test("datenschicht knows which layers the city has", () => {
   expect(layerAnswer([], { schicht: "tramLayer" }).ok).toBe(false);
 });
 
+const place = (x: number) => ({ name: `P${x}`, x, y: 0 });
+const holds = (x: number) => x >= 0 && x < 100;
+
 test("zeige shows the places on the city, eight at most, and refuses none", () => {
-  const place = (x: number) => ({ name: `P${x}`, x, y: 0 });
-  const holds = (x: number) => x >= 0 && x < 100;
   const all = [place(-1), ...Array.from({ length: 10 }, (_, i) => place(i))];
   expect(showAnswer({ ziele: all }, 1, holds).knoepfe).toHaveLength(8);
   const off = showAnswer({ ziele: [place(-1), place(500)] }, 1, holds);

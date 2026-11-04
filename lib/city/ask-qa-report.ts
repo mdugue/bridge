@@ -151,7 +151,8 @@ const s = (ms: number | null) =>
   ms === null ? "–" : `${(ms / 1000).toFixed(1)} s`;
 const n1 = (v: number) => v.toFixed(1);
 /** A table cell: no pipes or line breaks. */
-const cell = (t: string) => t.replace(/\|/g, "/").replace(/\s+/g, " ").trim();
+const cell = (t: string) =>
+  t.replaceAll("|", "/").replaceAll(/\s+/gu, " ").trim();
 
 /** The run as a Markdown report: models, questions, every answer. */
 export function qaReport(
@@ -194,7 +195,7 @@ export function qaReport(
       "",
       `${r.case.place.name}, ${CLOCK.format(new Date(r.case.at))} Uhr · ${s(r.answer.firstTextMs)} bis zum ersten Wort, ${s(r.answer.totalMs)} gesamt, ${r.answer.turns} Schritte · Werkzeuge: ${r.answer.calls.map((c) => c.name).join(", ") || "keine"}`,
       "",
-      `> ${(r.answer.text.trim() || "(kein Text)").replace(/\n+/g, "\n> ")}`,
+      `> ${(r.answer.text.trim() || "(kein Text)").replaceAll(/\n+/gu, "\n> ")}`,
       "",
       ...(r.answer.error ? [`Fehler: ${r.answer.error}`, ""] : []),
       v

@@ -1,4 +1,5 @@
-import { getPosition, getTimes, type SunTimes } from "suncalc";
+import { getPosition, getTimes } from "suncalc";
+import type { SunTimes } from "suncalc";
 import { DEG2RAD } from "./pose";
 
 /**

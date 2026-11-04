@@ -25,7 +25,7 @@ export interface BridgeRib {
 export function ribRuns(rise: readonly number[]): [number, number][] {
   const out: [number, number][] = [];
   let start = -1;
-  for (let i = 0; i <= rise.length; i++) {
+  for (let i = 0; i <= rise.length; i += 1) {
     const on = i < rise.length && rise[i] > 0;
     if (on && start < 0) {
       start = i;
@@ -54,7 +54,7 @@ const PYLON_PROMINENCE = 4;
  */
 export function ribPeaks(rise: readonly number[]): number[] {
   const candidates: number[] = [];
-  for (let i = 0; i < rise.length; i++) {
+  for (let i = 0; i < rise.length; i += 1) {
     const left = i > 0 ? rise[i - 1] : Number.NEGATIVE_INFINITY;
     const right = i < rise.length - 1 ? rise[i + 1] : Number.NEGATIVE_INFINITY;
     if (
@@ -116,7 +116,7 @@ export function fitParabola(
   for (const p of points) {
     const x = p.s - mean;
     let xp = 1;
-    for (let k = 0; k < 5; k++) {
+    for (let k = 0; k < 5; k += 1) {
       m[k] += xp;
       if (k < 3) {
         r[k] += xp * p.y;
@@ -146,18 +146,22 @@ export function fitParabola(
   return { a, b, c, rms: Math.sqrt(sq / points.length) };
 }
 
-function solve3(A: number[][], y: number[]): [number, number, number] | null {
-  const det = (M: number[][]) =>
+function det3(M: number[][]): number {
+  return (
     M[0][0] * (M[1][1] * M[2][2] - M[1][2] * M[2][1]) -
     M[0][1] * (M[1][0] * M[2][2] - M[1][2] * M[2][0]) +
-    M[0][2] * (M[1][0] * M[2][1] - M[1][1] * M[2][0]);
-  const d = det(A);
+    M[0][2] * (M[1][0] * M[2][1] - M[1][1] * M[2][0])
+  );
+}
+
+function solve3(A: number[][], y: number[]): [number, number, number] | null {
+  const d = det3(A);
   if (Math.abs(d) < 1e-9) {
     return null;
   }
   const col = (k: number) =>
     A.map((row, i) => row.map((v, j) => (j === k ? y[i] : v)));
-  return [det(col(0)) / d, det(col(1)) / d, det(col(2)) / d];
+  return [det3(col(0)) / d, det3(col(1)) / d, det3(col(2)) / d];
 }
 
 /** The best rib of an arch fits its parabola at least this tightly (m). */
@@ -173,7 +177,7 @@ function ribPoints(
   line: readonly number[]
 ): { s: number; y: number }[] {
   const points: { s: number; y: number }[] = [];
-  for (let i = 0; i < rise.length && i < line.length; i++) {
+  for (let i = 0; i < rise.length && i < line.length; i += 1) {
     if (rise[i] > 0) {
       points.push({ s: i * BRIDGE_STEP, y: line[i] + rise[i] });
     }
@@ -191,8 +195,8 @@ function ribArch(points: { s: number; y: number }[]): Parabola | null {
   const first = points[0].s;
   const last = points.at(-1)?.s ?? first;
   const crown = -fit.b / (2 * fit.a);
-  const sag = -fit.a * ((last - first) / 2) ** 2;
-  return crown >= first && crown <= last && sag >= ARCH_MIN_SAG ? fit : null;
+  const drop = -fit.a * ((last - first) / 2) ** 2;
+  return crown >= first && crown <= last && drop >= ARCH_MIN_SAG ? fit : null;
 }
 
 /**
@@ -288,7 +292,7 @@ export function pierStations(
       ? null
       : opts.fairway * length;
   const half = opts.span ? opts.span / 2 : FAIRWAY_HALF;
-  for (let k = 1; k < n; k++) {
+  for (let k = 1; k < n; k += 1) {
     const s = (k / n) * length;
     // clear of the opening and of the piers that frame it
     if (centre !== null && Math.abs(s - centre) < half + PIER_SPACING / 2) {
@@ -317,11 +321,12 @@ export type DeckCarrier = "arch" | "beam" | "frame";
 /** The carrier an OSM `bridge:structure` value names (an unknown one is a
  *  beam: most bridges are). */
 export function deckCarrier(structure: string | null | undefined): DeckCarrier {
-  const s = structure ?? "";
-  if (s.includes("arch") || s.includes("humpback")) {
+  if (structure?.includes("arch") || structure?.includes("humpback")) {
     return "arch";
   }
-  return /truss|suspension|cable-stayed|cantilever/.test(s) ? "frame" : "beam";
+  return /truss|suspension|cable-stayed|cantilever/u.test(structure ?? "")
+    ? "frame"
+    : "beam";
 }
 
 /** A beam is about a twentieth of its span deep... */
@@ -349,12 +354,12 @@ export function deckDepth(
   bound?: number | null
 ): number {
   const [low, high] = BEAM_DEPTH_M;
-  const depth =
-    carrier === "arch"
-      ? ARCH_DECK_M
-      : carrier === "frame"
-        ? FRAME_DECK_M
-        : Math.min(Math.max(span / BEAM_SLENDERNESS, low), high);
+  let depth = Math.min(Math.max(span / BEAM_SLENDERNESS, low), high);
+  if (carrier === "arch") {
+    depth = ARCH_DECK_M;
+  } else if (carrier === "frame") {
+    depth = FRAME_DECK_M;
+  }
   return bound !== null && bound !== undefined && bound > 0
     ? Math.min(depth, bound)
     : depth;
@@ -406,7 +411,7 @@ export function beamSupports(
     (opts.water ?? []).some(([a, b]) => s >= a && s <= b);
   const opening = fairwayOpening(length, opts);
   const out: DeckSupport[] = [];
-  for (let k = 1; k < n; k++) {
+  for (let k = 1; k < n; k += 1) {
     const s = (k * length) / n;
     if (
       opening &&
@@ -531,10 +536,10 @@ export function smoothRise(rise: readonly number[], window = 5): number[] {
     }
     let sum = 0;
     let n = 0;
-    for (let k = i - half; k <= i + half; k++) {
+    for (let k = i - half; k <= i + half; k += 1) {
       if (k >= 0 && k < rise.length && rise[k] > 0) {
         sum += rise[k];
-        n++;
+        n += 1;
       }
     }
     return sum / n;
@@ -545,11 +550,11 @@ export function smoothRise(rise: readonly number[], window = 5): number[] {
  *  and offset, and where a point lies in those terms. */
 export interface AxisFrame {
   /** the point at station `s` (m along the axis), `offset` to its left */
-  at(s: number, offset: number): [number, number];
+  at: (s: number, offset: number) => [number, number];
   length: number;
   /** station and offset of the nearest axis point (beyond an end the
    *  station runs on along the end segment) */
-  project(x: number, y: number): { offset: number; s: number };
+  project: (x: number, y: number) => { offset: number; s: number };
 }
 
 /** The frame of a baked `axis` polyline; null for fewer than two distinct
@@ -569,7 +574,7 @@ export function axisFrame(
   }
   const dirs: [number, number][] = [];
   const cum = [0];
-  for (let i = 0; i < pts.length - 1; i++) {
+  for (let i = 0; i < pts.length - 1; i += 1) {
     const dx = pts[i + 1][0] - pts[i][0];
     const dy = pts[i + 1][1] - pts[i][1];
     const len = Math.hypot(dx, dy);
@@ -580,7 +585,7 @@ export function axisFrame(
   const segment = (s: number) => {
     let i = 0;
     while (i < last && s >= cum[i + 1]) {
-      i++;
+      i += 1;
     }
     return i;
   };
@@ -597,7 +602,7 @@ export function axisFrame(
     },
     project: (x, y) => {
       let best = { d: Number.POSITIVE_INFINITY, s: 0, offset: 0 };
-      for (let i = 0; i <= last; i++) {
+      for (let i = 0; i <= last; i += 1) {
         const [dx, dy] = dirs[i];
         const len = cum[i + 1] - cum[i];
         const rx = x - pts[i][0];
@@ -648,12 +653,12 @@ export function ribProfile(rise: readonly number[]): number[] {
   const start = runs[0][0];
   const end = runs.at(-1)?.[1] ?? start;
   const line = (a: number, ya: number, b: number, yb: number) => {
-    for (let i = a; i <= b; i++) {
+    for (let i = a; i <= b; i += 1) {
       out[i] = b === a ? yb : ya + ((yb - ya) * (i - a)) / (b - a);
     }
   };
   line(start, CHORD_END, peaks[0], rise[peaks[0]]);
-  for (let k = 0; k < peaks.length - 1; k++) {
+  for (let k = 0; k < peaks.length - 1; k += 1) {
     sag(out, rise, peaks[k], peaks[k + 1]);
   }
   const lastPeak = peaks.at(-1) ?? start;
@@ -673,7 +678,7 @@ function sag(out: number[], rise: readonly number[], p: number, q: number) {
   const hp = rise[p];
   const hq = rise[q];
   const dip = Math.max(0, (hp + hq) / 2 - low);
-  for (let i = p; i <= q; i++) {
+  for (let i = p; i <= q; i += 1) {
     const u = (i - p) / (q - p);
     out[i] = hp + (hq - hp) * u - dip * 4 * u * (1 - u);
   }
@@ -734,7 +739,7 @@ export interface MasonryKnown {
 /** `count` equal bays over [a, b]: their inner boundaries. */
 function equalBays(a: number, b: number, count: number): number[] {
   const out: number[] = [];
-  for (let k = 1; k < count; k++) {
+  for (let k = 1; k < count; k += 1) {
     out.push(a + ((b - a) * k) / count);
   }
   return out;
@@ -756,8 +761,10 @@ function aroundMain(
       ? Math.max(1, Math.round(part / ARCH_SPAN))
       : Math.round((others * part) / Math.max(a + length - b, 1e-6));
   const left = a > 1 ? side(a) : 0;
-  const right =
-    others === null ? (length - b > 1 ? side(length - b) : 0) : others - left;
+  let right = others === null ? 0 : others - left;
+  if (others === null && length - b > 1) {
+    right = side(length - b);
+  }
   // a side without arches of its own is the abutment: still a bay, which
   // opens only if it clears the ground
   return [
@@ -848,7 +855,7 @@ export function masonryArches(
     k === 0 || k === n ? 0 : pierHalf(s - bays[k - 1], bays[k + 1] - s)
   );
   const spans: (MasonrySpan | null)[] = [];
-  for (let k = 0; k < n; k++) {
+  for (let k = 0; k < n; k += 1) {
     const g0 = groundAt(bays[k]);
     const g1 = groundAt(bays[k + 1]);
     if (g0 === null || g1 === null) {
@@ -867,7 +874,7 @@ export function masonryArches(
     );
   }
   const piers: MasonryPier[] = [];
-  for (let k = 1; k < n; k++) {
+  for (let k = 1; k < n; k += 1) {
     const ground = groundAt(bays[k]);
     const sides = [spans[k - 1], spans[k]].filter(
       (sp): sp is MasonrySpan => sp !== null

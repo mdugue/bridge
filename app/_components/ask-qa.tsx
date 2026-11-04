@@ -13,12 +13,8 @@ import { DownloadIcon, PlayIcon, SquareIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ASK_KEY_HEADER, ASK_PROVIDER_BY_ID } from "@/lib/city/ask-city";
 import type { QaAnswer, QaCase, QaPlace, QaVerdict } from "@/lib/city/ask-qa";
-import {
-  modelSums,
-  type QaResult,
-  qaReport,
-  questionSums,
-} from "@/lib/city/ask-qa-report";
+import { modelSums, qaReport, questionSums } from "@/lib/city/ask-qa-report";
+import type { QaResult } from "@/lib/city/ask-qa-report";
 import { Button } from "@/components/ui/button";
 import { cn } from "cn";
 import type { AskKey } from "./ask-key";
@@ -73,7 +69,7 @@ const CALL_STYLE = {
   ersetzen: "text-destructive",
 } as const;
 
-export default function AskQa({ askKey, city, site }: Props) {
+const AskQa = ({ askKey, city, site }: Props) => {
   const def = ASK_PROVIDER_BY_ID[askKey.provider];
   // a gateway reaches every maker: its fast models first, by default
   const routed = def.models.length > 4;
@@ -292,7 +288,7 @@ export default function AskQa({ askKey, city, site }: Props) {
         </label>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        {running ? (
+        {running && (
           <Button
             onClick={() => stop.current?.abort()}
             size="sm"
@@ -300,19 +296,25 @@ export default function AskQa({ askKey, city, site }: Props) {
           >
             <SquareIcon /> Anhalten
           </Button>
-        ) : plan ? (
+        )}
+        {!running && plan && (
           <Button
             data-testid="ask-qa-start"
             disabled={models.length === 0}
-            onClick={() => void start()}
+            onClick={() => {
+              void start();
+            }}
             size="sm"
           >
             <PlayIcon /> {total} Antworten und Bewertungen starten
           </Button>
-        ) : (
+        )}
+        {!running && !plan && (
           <Button
             data-testid="ask-qa-plan"
-            onClick={() => void loadPlan()}
+            onClick={() => {
+              void loadPlan();
+            }}
             size="sm"
             variant="secondary"
           >
@@ -410,4 +412,6 @@ export default function AskQa({ askKey, city, site }: Props) {
       )}
     </div>
   );
-}
+};
+
+export default AskQa;

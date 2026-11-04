@@ -1,5 +1,6 @@
 import { cn } from "cn";
-import { METHOD_ORDER, METHODS, type Method } from "@/lib/city/methods";
+import { METHOD_ORDER, METHODS } from "@/lib/city/methods";
+import type { Method } from "@/lib/city/methods";
 
 /** Each method's colours: solid for the deterministic two, dashed for the
  *  inferred two, so the family reads without the colour. */
@@ -11,13 +12,13 @@ const TONE: Record<Method, string> = {
 };
 
 /** The badge saying how the viewer came by a statement (lib/city/methods.ts). */
-export function MethodBadge({
+export const MethodBadge = ({
   method,
   className,
 }: {
   method: Method;
   className?: string;
-}) {
+}) => {
   const info = METHODS[method];
   return (
     <span
@@ -35,10 +36,10 @@ export function MethodBadge({
       {info.label}
     </span>
   );
-}
+};
 
 /** The glyph alone, after a fact the viewer inferred (detected or assumed). */
-export function MethodMark({ method }: { method: Method }) {
+export const MethodMark = ({ method }: { method: Method }) => {
   const info = METHODS[method];
   return (
     <span
@@ -53,20 +54,18 @@ export function MethodMark({ method }: { method: Method }) {
       <span className="sr-only">({info.label})</span>
     </span>
   );
-}
+};
 
 /** The four badges and what they mean, deterministic first. */
-export function MethodLegend() {
-  return (
-    <dl className="space-y-1.5 text-[10.5px] leading-snug text-muted-foreground">
-      {METHOD_ORDER.map((method) => (
-        <div className="flex items-start gap-2" key={method}>
-          <dt className="w-[5.5rem] shrink-0">
-            <MethodBadge method={method} />
-          </dt>
-          <dd>{METHODS[method].meaning}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
+export const MethodLegend = () => (
+  <dl className="space-y-1.5 text-[10.5px] leading-snug text-muted-foreground">
+    {METHOD_ORDER.map((method) => (
+      <div className="flex items-start gap-2" key={method}>
+        <dt className="w-[5.5rem] shrink-0">
+          <MethodBadge method={method} />
+        </dt>
+        <dd>{METHODS[method].meaning}</dd>
+      </div>
+    ))}
+  </dl>
+);

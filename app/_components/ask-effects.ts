@@ -12,7 +12,8 @@ import { useEffect, useRef } from "react";
 import { SHOWN_TOOLS } from "@/lib/city/ask-tools";
 import type { DataLayerKey } from "@/lib/city/data-layers";
 import type { RenderStyle } from "@/lib/city/render-style";
-import { type AskPlace, type AskScene, showPlaces } from "./ask-scene-tools";
+import { showPlaces } from "./ask-scene-tools";
+import type { AskPlace, AskScene } from "./ask-scene-tools";
 
 const SHOWN = new Set<string>(SHOWN_TOOLS.map((t) => t.name));
 
@@ -33,7 +34,7 @@ export function shownCalls(messages: readonly UIMessage[]): ShownCall[] {
       continue;
     }
     for (const p of m.parts) {
-      const output = (p as { output?: Record<string, unknown> }).output;
+      const { output } = p as { output?: Record<string, unknown> };
       if (p.type === "tool-call" && SHOWN.has(p.name) && output?.ok === true) {
         out.push({
           id: p.id,
@@ -51,7 +52,7 @@ export function shownCalls(messages: readonly UIMessage[]): ShownCall[] {
 export function runShown(scene: AskScene, call: ShownCall): void {
   const a = call.input;
   switch (call.name) {
-    case "zeige":
+    case "zeige": {
       if (Array.isArray(a.ziele) && a.ziele.length > 0) {
         showPlaces(
           scene,
@@ -65,23 +66,28 @@ export function runShown(scene: AskScene, call: ShownCall): void {
             : undefined
         );
       }
-      return;
-    case "setze_zeit":
+      break;
+    }
+    case "setze_zeit": {
       if (typeof a.stunde === "number") {
         scene.setTime(
           a.stunde,
           typeof a.datum === "string" ? a.datum : undefined
         );
       }
-      return;
-    case "setze_stil":
+      break;
+    }
+    case "setze_stil": {
       scene.setStyle(a.stil as RenderStyle);
-      return;
-    case "datenschicht":
+      break;
+    }
+    case "datenschicht": {
       scene.setLayer(a.schicht as DataLayerKey, a.an === true);
-      return;
-    default:
-      return;
+      break;
+    }
+    default: {
+      break;
+    }
   }
 }
 
@@ -116,9 +122,9 @@ export function lastAnswer(messages: readonly UIMessage[]): string {
   for (
     let i = messages.length - 1;
     i >= 0 && messages[i].role !== "user";
-    i--
+    i -= 1
   ) {
-    const parts = messages[i].parts;
+    const { parts } = messages[i];
     if (parts.some((p) => p.type === "tool-call" && p.output === undefined)) {
       return "";
     }

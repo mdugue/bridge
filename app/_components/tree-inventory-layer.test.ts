@@ -1,23 +1,21 @@
 import { expect, test } from "bun:test";
-import { Matrix4, type Object3D, Vector3 } from "three/webgpu";
+import { Matrix4, Vector3 } from "three/webgpu";
+import type { Object3D } from "three/webgpu";
 import type { CanopyFeature, TreeFeature } from "@/lib/city/features";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { PINE_CROWN_BASE } from "@/lib/city/tree-inventory";
 import { pineSilhouette } from "./conifer-crown";
 import { isInstances } from "./instancing";
 import { buildTreeInventory } from "./tree-inventory-layer";
-import {
-  buildVegetation,
-  sceneCrowns,
-  type VegetationContext,
-} from "./vegetation-layer";
+import { buildVegetation, sceneCrowns } from "./vegetation-layer";
+import type { VegetationContext } from "./vegetation-layer";
 
 /** The sets under a root and the instances they draw (`drawCount`). */
 function census(root: Object3D): { instances: number; meshes: number } {
   const out = { instances: 0, meshes: 0 };
   root.traverse((o) => {
     if (isInstances(o)) {
-      out.meshes++;
+      out.meshes += 1;
       out.instances += o.drawCount;
     }
   });
@@ -220,12 +218,13 @@ test("a broadleaf crown rides into the canopy with its genus and trunk", () => {
   expect(girth(inv)).toBeLessThan(girth(unmeasured));
 });
 
+const at = (x: number, y: number): TreeFeature => ({
+  geometry: { type: "Point", coordinates: [x, 0] },
+  properties: { a: 0, d: 6, h: 10, l: "d", gn: 3, y },
+});
+
 test("a sapling stands between stakes, and thin; an old tree is broad-footed", () => {
   const year = new Date().getFullYear();
-  const at = (x: number, y: number): TreeFeature => ({
-    geometry: { type: "Point", coordinates: [x, 0] },
-    properties: { a: 0, d: 6, h: 10, l: "d", gn: 3, y },
-  });
   const inv = buildTreeInventory([at(0, year - 2), at(20, year - 120)], ctx);
   const stakes = inv.control.group.children.filter(
     (c) => c.userData.treePart === "stakes"

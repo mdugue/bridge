@@ -4,8 +4,8 @@ import {
   ChevronDownIcon,
   EllipsisVerticalIcon,
   LoaderCircleIcon,
-  type LucideIcon,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { cn } from "cn";
 import { STORAGE_KEYS } from "./storage-keys";
@@ -50,7 +50,7 @@ function writeCollapsed(collapsed: boolean): void {
  * a single small button; while folded, a dot on it says a toggle is on
  * (live mode keeps running behind it).
  */
-export function HudToolbar({ tools }: { tools: HudTool[] }) {
+export const HudToolbar = ({ tools }: { tools: HudTool[] }) => {
   const [collapsed, setCollapsed] = useState(readCollapsed);
   if (tools.length === 0) {
     return null;
@@ -88,6 +88,7 @@ export function HudToolbar({ tools }: { tools: HudTool[] }) {
     >
       {tools.map((tool) => {
         const Icon = tool.busy ? LoaderCircleIcon : tool.icon;
+        const handleClick = tool.onClick;
         return (
           <button
             aria-busy={tool.busy}
@@ -97,7 +98,7 @@ export function HudToolbar({ tools }: { tools: HudTool[] }) {
               tool.pressed ? "bg-white/70 text-black" : "hover:bg-white/10"
             )}
             key={tool.id}
-            onClick={tool.onClick}
+            onClick={handleClick}
             title={tool.title}
             type="button"
           >
@@ -117,4 +118,4 @@ export function HudToolbar({ tools }: { tools: HudTool[] }) {
       </button>
     </div>
   );
-}
+};

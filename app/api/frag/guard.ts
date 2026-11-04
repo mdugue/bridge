@@ -5,7 +5,8 @@
  * logs a status and a reason code — never the key, the token or the
  * conversation — and says the reason in words.
  */
-import { type AskRequestProps, plausibleKey } from "@/lib/city/ask-city";
+import { plausibleKey } from "@/lib/city/ask-city";
+import type { AskRequestProps } from "@/lib/city/ask-city";
 import { verifyAskToken } from "@/lib/city/ask-token";
 
 /** A refused request: its reason as a code in the log, words for the

@@ -1,32 +1,34 @@
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import type { Material, Object3D, Texture } from "three/webgpu";
+import type {
+  Material,
+  Object3D,
+  Texture,
+  InstancedMesh,
+  Mesh,
+} from "three/webgpu";
 import {
   Box3,
   BufferAttribute,
   BufferGeometry,
   Color,
-  type InstancedMesh,
   Matrix3,
   Matrix4,
-  type Mesh,
   Vector3,
 } from "three/webgpu";
 import {
-  type DesignTier,
-  type DesignWeight,
   geometryBytes,
   judgeDesign,
   judgeFile,
   textureBytesOf,
 } from "@/lib/city/design-budget";
+import type { DesignTier, DesignWeight } from "@/lib/city/design-budget";
 import {
-  type DesignBox,
   designAnchor,
   detectGeoreference,
   elsewhereFrame,
-  type Georeference,
 } from "@/lib/city/design-placement";
+import type { DesignBox, Georeference } from "@/lib/city/design-placement";
 import type { DesignPartInfo } from "@/lib/city/inquiry-design";
 import { FormatError, pickedFiles, read3dm, readObj } from "./design-formats";
 import { IfcError, readIfc } from "./design-ifc";
@@ -90,15 +92,17 @@ export interface DesignModel {
 }
 
 /** A design that could not be read, in words for the panel. */
-export class DesignError extends Error {}
+export class DesignError extends Error {
+  override name = "DesignError";
+}
 
 /** The formats a design can come in, by the main file's extension. */
 const FORMATS = {
-  gltf: /\.(glb|gltf)$/i,
+  gltf: /\.(?:glb|gltf)$/iu,
   plan: PLAN_FORMATS,
-  ifc: /\.ifc$/i,
-  obj: /\.obj$/i,
-  rhino: /\.3dm$/i,
+  ifc: /\.ifc$/iu,
+  obj: /\.obj$/iu,
+  rhino: /\.3dm$/iu,
 } as const;
 type DesignFormat = keyof typeof FORMATS;
 
@@ -116,7 +120,7 @@ export function designFormat(name: string): DesignFormat | null {
  *  (LandXML, or any metadata picked along) only where nothing else is. */
 export function designFile(files: readonly File[]): File | null {
   const read = files.filter((f) => designFormat(f.name) !== null);
-  return read.find((f) => !/\.xml$/i.test(f.name)) ?? read[0] ?? null;
+  return read.find((f) => !/\.xml$/iu.test(f.name)) ?? read[0] ?? null;
 }
 
 /** The design's objects in its own frame, and what the file said about
@@ -176,10 +180,10 @@ function loaderReason(error: unknown, missing: readonly string[]): string {
     return `Die .gltf-Datei verweist auf Dateien, die nicht mit ausgewählt wurden (${missing.join(", ")}). Bitte mit auswählen oder als .glb exportieren.`;
   }
   const message = error instanceof Error ? error.message : String(error);
-  if (/draco/i.test(message)) {
+  if (/draco/iu.test(message)) {
     return "Die Datei ist Draco-komprimiert. Bitte ohne Draco-Kompression exportieren.";
   }
-  if (/ktx2|basisu/i.test(message)) {
+  if (/ktx2|basisu/iu.test(message)) {
     return "Die Datei nutzt KTX2-Texturen. Bitte mit PNG- oder JPEG-Texturen exportieren.";
   }
   return `Die Datei ließ sich nicht als glTF lesen (${message}).`;
@@ -239,12 +243,12 @@ function groupGeometry(
   start: number,
   count: number
 ): BufferGeometry {
-  const index = geometry.index;
+  const { index } = geometry;
   // the source vertex of each output vertex
   const sources: number[] = [];
   const remap = new Map<number, number>();
   const triangles: number[] = [];
-  for (let i = start; i < start + count; i++) {
+  for (let i = start; i < start + count; i += 1) {
     const v = index ? index.getX(i) : i;
     let to = remap.get(v);
     if (to === undefined) {
@@ -262,11 +266,12 @@ function groupGeometry(
     }
     const size = from.itemSize;
     const array = new Float32Array(sources.length * size);
-    sources.forEach((v, i) => {
-      for (let c = 0; c < size; c++) {
+    for (let i = 0; i < sources.length; i += 1) {
+      const v = sources[i];
+      for (let c = 0; c < size; c += 1) {
         array[i * size + c] = from.getComponent(v, c);
       }
-    });
+    }
     out.setAttribute(name, new BufferAttribute(array, size));
   }
   out.setIndex(triangles);
@@ -283,7 +288,7 @@ function materialParts(
     return [{ geometry: mesh.geometry, material: mesh.material }];
   }
   const materials = mesh.material;
-  const groups = mesh.geometry.groups;
+  const { groups } = mesh.geometry;
   if (groups.length === 0) {
     return [{ geometry: mesh.geometry, material: materials[0] }];
   }
@@ -333,7 +338,7 @@ function piecesOfPart(
     out.push({ geometry, material, matrix: mesh.matrixWorld, part });
     return;
   }
-  for (let i = 0; i < instanced.count; i++) {
+  for (let i = 0; i < instanced.count; i += 1) {
     instanced.getMatrixAt(i, instance);
     out.push({
       geometry,
@@ -353,7 +358,7 @@ function boxOf(pieces: readonly Piece[]): DesignBox {
   const v = new Vector3();
   for (const { geometry, matrix } of pieces) {
     const position = geometry.getAttribute("position");
-    for (let i = 0; i < position.count; i++) {
+    for (let i = 0; i < position.count; i += 1) {
       box.expandByPoint(
         v.fromBufferAttribute(position, i).applyMatrix4(matrix)
       );
@@ -415,7 +420,7 @@ function writePiece(
   const normal = geometry.getAttribute("normal");
   const uv = geometry.getAttribute("uv");
   const v = new Vector3();
-  for (let i = 0; i < position.count; i++) {
+  for (let i = 0; i < position.count; i += 1) {
     const at = (vertex + i) * 3;
     v.fromBufferAttribute(position, i).applyMatrix4(matrix);
     out.position[at] = v.x;
@@ -435,8 +440,8 @@ function writePiece(
   // a mirrored node turns its triangles inside out: wound back
   const flip = matrix.determinant() < 0;
   const triangles = triangleCount(geometry);
-  const index = geometry.index;
-  for (let t = 0; t < triangles; t++) {
+  const { index } = geometry;
+  for (let t = 0; t < triangles; t += 1) {
     const a = index ? index.getX(t * 3) : t * 3;
     const b = index ? index.getX(t * 3 + 1) : t * 3 + 1;
     const c = index ? index.getX(t * 3 + 2) : t * 3 + 2;
@@ -462,7 +467,7 @@ function pieceNormals(
   triangles: number
 ): void {
   const { position: p, normal: n, index } = out;
-  for (let t = triangle; t < triangle + triangles; t++) {
+  for (let t = triangle; t < triangle + triangles; t += 1) {
     const a = index[t * 3] * 3;
     const b = index[t * 3 + 1] * 3;
     const c = index[t * 3 + 2] * 3;
@@ -481,7 +486,7 @@ function pieceNormals(
       n[k + 2] += nz;
     }
   }
-  for (let i = vertex; i < vertex + vertices; i++) {
+  for (let i = vertex; i < vertex + vertices; i += 1) {
     const len = Math.hypot(n[i * 3], n[i * 3 + 1], n[i * 3 + 2]) || 1;
     n[i * 3] /= len;
     n[i * 3 + 1] /= len;
@@ -519,7 +524,8 @@ function mergePieces(
   const parts = partsRecorder();
   let vertex = 0;
   let triangle = 0;
-  materials.forEach((material, group) => {
+  for (let group = 0; group < materials.length; group += 1) {
+    const material = materials[group];
     const start = triangle;
     for (const piece of pieces) {
       if (piece.material !== material) {
@@ -531,7 +537,7 @@ function mergePieces(
       triangle += triangleCount(piece.geometry);
     }
     merged.addGroup(start * 3, (triangle - start) * 3, group);
-  });
+  }
   merged.setAttribute("position", new BufferAttribute(out.position, 3));
   merged.setAttribute("normal", new BufferAttribute(out.normal, 3));
   merged.setAttribute("uv", new BufferAttribute(out.uv, 2));

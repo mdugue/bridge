@@ -54,7 +54,7 @@ test("an answer's chips come from its own tool calls, across its messages", () =
   ]);
   expect(chips.places[0]).toMatchObject({ h: 90, r: 30 });
   expect(chips.near).toEqual({ reach: 300, x: 1, y: 2 });
-  expect(reachQuestion(chips.near!, 150)).toContain("(x 1, y 2)");
+  expect(chips.near && reachQuestion(chips.near, 150)).toContain("(x 1, y 2)");
   expect(chips.questions).toEqual(["Wer baute sie?"]);
   // a question has none
   expect(answerChips(answer, 0)).toEqual({
@@ -71,8 +71,10 @@ test("the reach steps halve and double within the tool's limits", () => {
   expect(reachSteps(15).narrower).toBeNull();
 });
 
+/** A place named by its x. */
+const place = (x: number) => ({ name: `P${x}`, x, y: 0 });
+
 test("the places shown are those on the city, eight at most", () => {
-  const place = (x: number) => ({ name: `P${x}`, x, y: 0 });
   const all = [place(-1), ...Array.from({ length: 10 }, (_, i) => place(i))];
   const shown = shownPlaces(all, { within: (x) => x >= 0 });
   expect(shown.map((p) => p.x)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);

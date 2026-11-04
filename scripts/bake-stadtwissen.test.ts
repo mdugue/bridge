@@ -132,19 +132,20 @@ test("without a geographicalExtent the box comes from its and its parts' vertice
   ]);
 });
 
+const entry = (id: string, links: number) => ({
+  id,
+  name: id,
+  links,
+  objects: [],
+  x: 0,
+  y: 0,
+  h: 10,
+});
+
 test("the index lists each landmark once, most notable first, with its facts", () => {
-  const entry = (id: string, links: number) => ({
-    id,
-    name: id,
-    links,
-    objects: [],
-    x: 0,
-    y: 0,
-    h: 10,
-  });
   const index = stadtwissenIndex({
     site: "probe",
-    epsg: 25833,
+    epsg: 25_833,
     tiles: [{ id: "a", file: "stadtwissen_a.json" }],
     sources: {},
     landmarks: [
@@ -163,11 +164,15 @@ test("the index lists each landmark once, most notable first, with its facts", (
   ]);
 });
 
+const plaque = (name: string) => ({
+  geometry: { type: "Point", coordinates: [411_000.2, 5_656_000.4] },
+  properties: { name, kind: "stone" },
+});
+
+const ids = (names: string[]) =>
+  monumentsOf({ features: names.map(plaque) }).map((m) => [m.id, m.name]);
+
 test("monuments in one metre keep their ids by name, whatever the order", () => {
-  const plaque = (name: string) => ({
-    geometry: { type: "Point", coordinates: [411000.2, 5656000.4] },
-    properties: { name, kind: "stone" },
-  });
   const square = {
     geometry: {
       type: "Polygon",
@@ -184,8 +189,6 @@ test("monuments in one metre keep their ids by name, whatever the order", () => 
     },
     properties: { name: "Sockel", kind: "column" },
   };
-  const ids = (names: string[]) =>
-    monumentsOf({ features: names.map(plaque) }).map((m) => [m.id, m.name]);
   expect(ids(["Bach", "Arndt"])).toEqual([
     ["m411000_5656000", "Arndt"],
     ["m411000_5656000_2", "Bach"],

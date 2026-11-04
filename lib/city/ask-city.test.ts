@@ -36,7 +36,7 @@ describe("providers", () => {
   });
 
   test("a gateway offers every maker's models under its maker's name", () => {
-    const direct = ASK_PROVIDERS.filter((p) => !p.id.match(/gateway|router/));
+    const direct = ASK_PROVIDERS.filter((p) => !/gateway|router/u.test(p.id));
     for (const p of ASK_PROVIDERS.filter((q) => !direct.includes(q))) {
       expect(p.models.map((m) => m.label)).toEqual(
         direct.flatMap((d) => d.models.map((m) => m.label))
@@ -151,7 +151,7 @@ describe("the visitor header", () => {
     });
     expect(raw).not.toBeNull();
     // a header value: no line break, nothing but URI characters
-    expect(raw).toMatch(/^[\x21-\x7e]+$/);
+    expect(raw).toMatch(/^[!-~]+$/u);
     expect(parseAskVisitor(raw)).toEqual({
       x: 411_803,
       y: 5_656_355,

@@ -6,7 +6,8 @@
  * is born with the current look instead of a default. Values are clamped
  * here, once, so no writer can push a row past its range. No THREE, no DOM.
  */
-import { LOOK_CONTROLS, LOOK_DEFAULTS, type LookValues } from "./look-controls";
+import { LOOK_CONTROLS, LOOK_DEFAULTS } from "./look-controls";
+import type { LookValues } from "./look-controls";
 import { DATA_LAYERS } from "./data-layers";
 import { isRenderStyle } from "./render-style";
 

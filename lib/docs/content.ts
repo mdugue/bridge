@@ -6,18 +6,21 @@
 /** Markdown inline syntax reduced to its text: links, code, emphasis. */
 export function plainText(markdown: string): string {
   return markdown
-    .replace(/!?\[([^\]]*)\]\([^)]*\)/gu, "$1")
-    .replace(/`([^`]*)`/gu, "$1")
-    .replace(/(\*\*|__)(.*?)\1/gu, "$2")
-    .replace(/(^|[^\w*])[*_]([^*_\n]+)[*_](?![\w*])/gu, "$1$2")
-    .replace(/<[^>]+>/gu, "")
-    .replace(/\s+/gu, " ")
+    .replaceAll(/!?\[(?<text>[^\]]*)\]\([^)]*\)/gu, "$<text>")
+    .replaceAll(/`(?<code>[^`]*)`/gu, "$<code>")
+    .replaceAll(/(?<mark>\*\*|__)(?<inner>.*?)\k<mark>/gu, "$<inner>")
+    .replaceAll(
+      /(?<lead>^|[^\w*])[*_](?<inner>[^*_\n]+)[*_](?![\w*])/gu,
+      "$<lead>$<inner>"
+    )
+    .replaceAll(/<[^>]+>/gu, "")
+    .replaceAll(/\s+/gu, " ")
     .trim();
 }
 
 /** The first `# ` heading, as text. */
 export function titleOf(markdown: string): string | null {
-  const line = markdown.match(/^# (.+)$/mu)?.[1];
+  const line = /^# (?<title>.+)$/mu.exec(markdown)?.groups?.title;
   return line ? plainText(line) : null;
 }
 
@@ -28,17 +31,17 @@ export function titleOf(markdown: string): string | null {
 export function descriptionOf(markdown: string, max = 180): string | null {
   const body = markdown.replace(/^[\s\S]*?^# .+$/mu, "");
   const inFence = /^```[\s\S]*?^```/gmu;
-  const paragraphs = body
-    .replace(inFence, "")
+  const first = body
+    .replaceAll(inFence, "")
     .split(/\n\s*\n/u)
     .map((p) => p.trim())
-    .filter(
+    .find(
       (p) =>
         p !== "" &&
-        !/^(#|\||>|[-*] |\d+\. |<|```)/u.test(p) &&
+        !/^(?:#|\||>|[-*] |\d+\. |<|```)/u.test(p) &&
         !/^\*[^*]+\*$/u.test(p)
     );
-  const text = paragraphs[0] ? plainText(paragraphs[0]) : null;
+  const text = first ? plainText(first) : null;
   if (!text || text.length <= max) {
     return text;
   }
@@ -51,5 +54,7 @@ export function descriptionOf(markdown: string, max = 180): string | null {
 
 /** Every link target of a Markdown text, in the order they appear. */
 export function linkTargets(markdown: string): string[] {
-  return [...markdown.matchAll(/\]\(([^)\s]+)\)/gu)].map((m) => m[1] ?? "");
+  return [...markdown.matchAll(/\]\((?<target>[^)\s]+)\)/gu)].map(
+    (m) => m.groups?.target ?? ""
+  );
 }

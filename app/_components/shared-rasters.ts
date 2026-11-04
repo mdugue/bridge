@@ -37,10 +37,11 @@ export function createSharedRasters<T>(
       if (value !== null) {
         free(value);
       }
+      return null;
     });
   };
   return {
-    acquire: (key) => {
+    acquire: async (key) => {
       let entry = entries.get(key);
       if (!entry) {
         const controller = new AbortController();
@@ -58,15 +59,15 @@ export function createSharedRasters<T>(
         entry = fresh;
         entries.set(key, entry);
       }
-      entry.refs++;
-      return entry.promise;
+      entry.refs += 1;
+      return await entry.promise;
     },
     release: (key) => {
       const entry = entries.get(key);
       if (!entry) {
         return;
       }
-      entry.refs--;
+      entry.refs -= 1;
       if (entry.refs > 0) {
         return;
       }

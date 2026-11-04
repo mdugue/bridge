@@ -81,23 +81,24 @@ test("a box of 12 triangles, every face turned away from its centre", () => {
 });
 
 test("a pent roof takes its height at each written corner", () => {
-  const c = structureCorners(shed({ h: 2.6, hc: [2.2, 2.2, 3.0, 3.0], z: 0 }));
+  const c = structureCorners(shed({ h: 2.6, hc: [2.2, 2.2, 3, 3], z: 0 }));
   // reversed with the ring: the written first corner is now the last
-  expect(c?.map((p) => p.h)).toEqual([3.0, 3.0, 2.2, 2.2]);
+  expect(c?.map((p) => p.h)).toEqual([3, 3, 2.2, 2.2]);
 });
 
 test("a feature without properties or ring draws nothing", () => {
   expect(structureMesh(shed(null), { cx: 0, cy: 0 }).positions).toEqual([]);
 });
 
+const tree = (x: number, y: number) => ({
+  geometry: {
+    coordinates: [x, y] as [number, number],
+    type: "Point" as const,
+  },
+  properties: { h: 3.4 },
+});
+
 test("a canopy point in or beside a shed is the shed, not a tree", () => {
-  const tree = (x: number, y: number) => ({
-    geometry: {
-      coordinates: [x, y] as [number, number],
-      type: "Point" as const,
-    },
-    properties: { h: 3.4 },
-  });
   const trees = [
     tree(102, 201.5), // inside the 4 × 3 m shed
     tree(104.4, 201), // 0.4 m east of its wall

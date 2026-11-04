@@ -8,11 +8,11 @@ import {
 import {
   MODEL_PRESETS,
   MODEL_STANDOFF,
-  type ModelView,
   modelCameraGeometry,
   modelRay,
   withPreset,
 } from "@/lib/city/model-view";
+import type { ModelView } from "@/lib/city/model-view";
 import { ModelCamera } from "./model-camera";
 import { setViewDirection, viewParallel, viewRay } from "./view-direction";
 import { parallelDirection } from "./view-ray";

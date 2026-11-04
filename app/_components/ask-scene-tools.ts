@@ -7,12 +7,8 @@
 import { clientTools } from "@tanstack/ai-client";
 import { placesShown, showAnswer } from "@/lib/city/ask-shown";
 import { lookTool } from "@/lib/city/ask-tools";
-import {
-  type AskTarget,
-  type FrameContext,
-  frameTargets,
-  streetView,
-} from "@/lib/city/ask-view";
+import { frameTargets, streetView } from "@/lib/city/ask-view";
+import type { AskTarget, FrameContext } from "@/lib/city/ask-view";
 import type { DataLayerKey } from "@/lib/city/data-layers";
 import type { RenderStyle } from "@/lib/city/render-style";
 import type { ViewpointGeometry } from "@/lib/city/site";
@@ -55,7 +51,7 @@ export interface AskScene {
  *  alone, a ray through the crosshair. The view-changing ones the server
  *  acknowledges and the card carries out from the stream (ask-effects.ts). */
 export function sceneTools(scene: AskScene) {
-  return clientTools(lookTool.client(() => scene.look()));
+  return clientTools(lookTool.client(async () => await scene.look()));
 }
 
 /** What the model hears while there is no scene to move yet. */

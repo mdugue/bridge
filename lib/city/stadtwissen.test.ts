@@ -1,17 +1,17 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 import {
   foldName,
   matchesQuery,
   nearby,
-  type RawEntity,
   referencedItems,
   SERVER_WISSEN_DIR,
   wikidataFacts,
   wikidataTime,
   wikipediaUrl,
 } from "./stadtwissen";
+import type { RawEntity } from "./stadtwissen";
 
 test("a Wikidata time reads at its precision", () => {
   expect(wikidataTime({ time: "+1726-08-26T00:00:00Z", precision: 11 })).toBe(
@@ -129,8 +129,8 @@ test("nearby sorts by distance within the radius", () => {
 
 test("the chat route reads the server copy where the build writes it", () => {
   const route = readFileSync(
-    join(import.meta.dir, "../../app/api/frag/knowledge.ts"),
-    "utf8"
+    path.join(import.meta.dir, "../../app/api/frag/knowledge.ts"),
+    "utf-8"
   );
   expect(route).toContain(`"${SERVER_WISSEN_DIR}"`);
 });

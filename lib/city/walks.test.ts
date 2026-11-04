@@ -11,11 +11,10 @@ import {
   stopPlaces,
   stopSpeech,
   stopView,
-  type Walk,
   walkBundle,
-  type WalkStop,
   walkProblems,
 } from "./walks";
+import type { Walk, WalkStop } from "./walks";
 
 const stop: WalkStop = {
   id: "kuppel",
@@ -47,7 +46,7 @@ test("a stop's view looks from its eye at its point", () => {
 
 test("a walk is never drawn in Modell", () => {
   const drawn = { ...stop, model: { preset: "military" } } as WalkStop;
-  expect(walkProblems({ ...walk, stops: [drawn, stop] }).join()).toContain(
+  expect(walkProblems({ ...walk, stops: [drawn, stop] }).join(",")).toContain(
     "model is not a walk's view"
   );
 });
@@ -185,7 +184,7 @@ test("a tall photo stands beside the story, its focus kept in a crop", () => {
       ],
     });
   expect(at([0.5, 0.3])).toEqual([]);
-  expect(at([0.5, 1.3]).join()).toContain("focus must be");
+  expect(at([0.5, 1.3]).join(",")).toContain("focus must be");
 });
 
 test("a stop's refs become the places the twin knows by name", () => {

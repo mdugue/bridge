@@ -244,7 +244,7 @@ is the codebook.
 | Contact shadows | GTAO at half resolution (normals from depth, 2 m radius, 0.15 m thickness), its 5×5 noise averaged out by a depth-aware box in its own half-resolution, one-byte pass; never motion-gated | — | `post-stack.ts` (*Kontaktschatten*) |
 | Ambient (sky) light | the sky-view factor (1 − mean sin² of the horizon within 150 m, 16 azimuths, over the ground and LoD2 with its rebuilt roofs, the drawn crowns at half transmission, GLO-30 beyond the site; `svf_<t>.png`, ≈2 m) scales the indirect diffuse only: the terrain directly, a facade by the ground's value 2.5 m outside it, doubled, faded to 1 toward the eaves | DGM1 + LoD2, the crowns, GLO-30 | `sky-light.ts`, `terrain-layer.ts`, `visual-style.ts` (*Himmelslicht*) |
 | Far shadow | the horizon (the skyline's angle in 16 azimuths, `horizon_<t>.png`, ≈8 m, two bands: 80 m–10 km — past 1 500 m the terrain alone, over GLO-30 beyond the site — and 8–80 m out): the sun's direct light on the ground fades across ±0.8° of it, joined to the shadow map by `min`; inside the shadow frustum only the far band, beyond it (faded in over its last 20 %) the higher of the two | DGM1 + LoD2, GLO-30 | `sky-light.ts`, `terrain-layer.ts`, `sun-rig.ts` (`shadowReach`) (*Ferne Schatten*) |
-| Shadows from the air | above 30 m over the ground (back below 20 m) the sun's one map is warped over the view (LiSPSM along the view's heading as the sun sees it): fine near the camera, coarse far off, out to 80 % of the fog's end; redrawn when the view leaves it, not per frame | sun, camera | `shadow-warp.ts`, `sun-rig.ts` (`WarpedShadowCamera`) |
+| Shadows from the air | above 30 m over the ground (back below 20 m) the sun's one map is warped over the view (LiSPSM along the view's heading as the sun sees it): fine near the camera, coarse far off, out to 80 % of the fog's end; redrawn when the view leaves it, not per frame | sun, camera | `shadow-warp.ts`, `sun-rig.ts`, `warped-shadow-camera.ts` |
 | Sky reflection | the sky dome alone, a second `SkyMesh` on the same sun and haze, rendered into a 64 px cube map whose mips are the blur (≈ 0.4 MB; not three's PMREM, which since r187 takes ≈ 10 MB) whenever the sun turns by 0.5° (while the time of day is dragged, at most four times a second, the last step after the wait) — never per frame, never `scene.environment` (that would light the matte clay with its irradiance too). Sampled only by glass and metal facades, gilding and patina and fountain water (the river is matte since 2026-10-25), weighted by a softened Schlick; mirrors the sky, never the city | the sky model | `sky-reflection.ts`, `sun-rig.ts` (*Spiegelung*) |
 | Depth of field | crosshair raycast distance; only what lies beyond the focus blurs (nearer is read as at the focus; blurring the foreground had laid a veil over the lower half — three's node still runs its near-field passes, over an empty field), focus range 1.6 × distance (≥ 45 m), bokeh scale 0.5 — a hint of lens, not a tilt-shift; off while moving; always on otherwise (no switch, no manual focus); desktop only — a phone does not build it (ADR 0047) | — | `post-stack.ts` |
 | Paper grain, vignette | screen-space; animated film grain and a heavier vignette under the monochrome picture styles | — | `post-stack.ts` (*Papierkorn*) |
@@ -322,7 +322,7 @@ change, not a re-bake
   Above 30 m over the ground (back below 20 m) the same map takes a
   light-space perspective (LiSPSM): the shadow camera's `up` is the view's
   heading as the sun sees it, and a warp matrix after its ortho box
-  (`WarpedShadowCamera`, which three's `updateProjectionMatrix` keeps)
+  (`warped-shadow-camera.ts`, which three's `updateProjectionMatrix` keeps)
   puts a perspective along it, half LiSPSM's n_opt behind the nearest
   ground. Its box holds the view widened by 12° on every side, out to
   80 % of the fog's end (at most 2.5 km), cut to the site's receivers
@@ -1591,8 +1591,8 @@ what lies between ([ADR 0032](./adr/0032-camera-never-inside-a-building.md)).
 **The network fails, and is tried again**
 ([ADR 0048](./adr/0048-network-failures-are-retried.md)). Every tile and
 tileset request goes through one retrying fetch (`fetchBytes` in
-`fetch-optional.ts`; for tile content `ContentFetchPlugin`, which inflates
-the `.gz` once its body is read whole — one that does not inflate is a
+`fetch-optional.ts`; for tile content `ContentFetchPlugin` in
+`tile-content-fetch.ts`, which inflates the `.gz` once its body is read whole — one that does not inflate is a
 corrupt file, not a blip, and is not retried), and so do the terrain,
 sky-view and horizon rasters (`fetchRasterBytes`) and the trees' NDVI
 sampler: an abort is never retried, a 404 means absent, a network error

@@ -82,11 +82,12 @@ test("a text may name a place by its short name or its noun", () => {
   ]);
 });
 
+const link = (text: string, named: { name: string }[]) =>
+  mentionRuns(text, named, "Leipzig")
+    .filter((r) => "place" in r)
+    .map((r) => r.text);
+
 test("a noun names no place another place or another name could mean", () => {
-  const link = (text: string, places: { name: string }[]) =>
-    mentionRuns(text, places, "Leipzig")
-      .filter((r) => "place" in r)
-      .map((r) => r.text);
   // two Rathäuser: neither is called by the bare noun
   expect(
     link("Das Alte Rathaus steht am Markt, das Neue Rathaus am Ring.", [

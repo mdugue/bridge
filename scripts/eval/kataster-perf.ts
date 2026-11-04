@@ -14,12 +14,13 @@
  * Run: bun scripts/eval/kataster-perf.ts
  */
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import { chromium, type Page } from "@playwright/test";
+import path from "node:path";
+import { chromium } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 const BASE = process.env.BASE ?? "http://localhost:3101";
-const ROOT = join(import.meta.dir, "..", "..");
-const SHOTS = join(ROOT, "shots");
+const ROOT = path.join(import.meta.dir, "..", "..");
+const SHOTS = path.join(ROOT, "shots");
 const RUNS = Number(process.env.RUNS ?? 2);
 
 interface PocView {
@@ -29,8 +30,8 @@ interface PocView {
   stats?: { gpuMegabytes: number; layerStats: Record<string, unknown> };
 }
 
-const poc = (page: Page) =>
-  page.evaluate(() => {
+const poc = async (page: Page) =>
+  await page.evaluate(() => {
     const p = (window as unknown as { __poc?: PocView }).__poc;
     return p
       ? {
@@ -43,9 +44,11 @@ const poc = (page: Page) =>
   });
 
 async function fps(page: Page, ms: number): Promise<number> {
-  const a = (await poc(page))?.frames ?? 0;
+  const before = await poc(page);
+  const a = before?.frames ?? 0;
   await page.waitForTimeout(ms);
-  const b = (await poc(page))?.frames ?? 0;
+  const after = await poc(page);
+  const b = after?.frames ?? 0;
   return Math.round(((b - a) * 1000) / ms);
 }
 
@@ -77,7 +80,7 @@ async function run(query: string) {
   for (const file of readdirSync(SHOTS)
     .filter((f) => f.startsWith("kat-") && f.endsWith(".json"))
     .sort()) {
-    const snap = JSON.parse(readFileSync(join(SHOTS, file), "utf8")) as {
+    const snap = JSON.parse(readFileSync(path.join(SHOTS, file), "utf-8")) as {
       camera: unknown;
       date: string;
     };
@@ -99,7 +102,7 @@ async function run(query: string) {
       [snap.camera, snap.date] as const
     );
     await page.waitForTimeout(1500);
-    views[file.replace(/\.json$/, "")] = await fps(page, 3000);
+    views[file.replace(/\.json$/u, "")] = await fps(page, 3000);
   }
   await browser.close();
   return {
@@ -112,7 +115,7 @@ async function run(query: string) {
 }
 
 const out: Record<string, unknown[]> = { canopy: [], kataster: [] };
-for (let i = 0; i < RUNS; i++) {
+for (let i = 0; i < RUNS; i += 1) {
   out.canopy.push(await run(""));
   out.kataster.push(await run("?trees=kataster"));
 }

@@ -12,8 +12,10 @@
  */
 import { z } from "zod";
 import type { AskVisitor } from "./ask-city";
-import { hitOf, type Knowledge, nearKnowledge } from "./ask-knowledge";
-import { type StarterKind, starterPool, withArticle } from "./ask-starters";
+import { hitOf, nearKnowledge } from "./ask-knowledge";
+import type { Knowledge } from "./ask-knowledge";
+import { starterPool, withArticle } from "./ask-starters";
+import type { StarterKind } from "./ask-starters";
 
 /** Where a case is asked: a pose before a landmark, or one far from any. */
 export interface QaPlace {
@@ -172,10 +174,15 @@ function templateOf(question: string, name: string | null): string {
   if (!name) {
     return question;
   }
-  return [withArticle(name, "nom"), withArticle(name, "dat"), name].reduce(
-    (q, form) => q.split(form).join("{ort}"),
-    question
-  );
+  let q = question;
+  for (const form of [
+    withArticle(name, "nom"),
+    withArticle(name, "dat"),
+    name,
+  ]) {
+    q = q.split(form).join("{ort}");
+  }
+  return q;
 }
 
 /**
@@ -196,7 +203,7 @@ export function qaCases(
     y: lm.y,
   }));
   const out: QaCase[] = [];
-  places.forEach((place, i) => {
+  for (const [i, place] of places.entries()) {
     const hour = HOURS[i % HOURS.length];
     const at = berlinAt(today, hour);
     // the draw reads the hour and the day as a clock does where it runs:
@@ -223,7 +230,7 @@ export function qaCases(
         at: at.toISOString(),
       });
     }
-  });
+  }
   return out;
 }
 

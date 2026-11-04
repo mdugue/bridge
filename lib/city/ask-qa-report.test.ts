@@ -3,10 +3,10 @@ import type { QaCase, QaVerdict } from "./ask-qa";
 import {
   modelSums,
   overallCall,
-  type QaResult,
   qaReport,
   questionSums,
 } from "./ask-qa-report";
+import type { QaResult } from "./ask-qa-report";
 
 const place = {
   name: "vor Frauenkirche",

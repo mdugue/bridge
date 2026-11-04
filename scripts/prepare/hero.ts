@@ -36,7 +36,7 @@ export async function publishHero(): Promise<void> {
   const hero = await cached(
     siteWide(SITE_MAP_FILE),
     cacheKey(rasters, BAKE_ENTRIES.hero),
-    () => bakeWissenHero(SITE.tiles, rasters, 1600)
+    async () => await bakeWissenHero(SITE.tiles, rasters, 1600)
   );
   publish(SITE_MAP_FILE, hero);
 }

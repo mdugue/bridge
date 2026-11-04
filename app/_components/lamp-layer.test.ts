@@ -53,7 +53,7 @@ test("a phone's one light hands over between two lamps through darkness", () => 
   for (let x = 0.1; x <= 30; x += 0.1) {
     pool.updateNearest(eye(x));
     if (!light.position.equals(at)) {
-      moves++;
+      moves += 1;
       expect(before).toBeLessThan(full * 0.05);
       expect(light.intensity).toBeLessThan(full * 0.05);
       at = light.position.clone();

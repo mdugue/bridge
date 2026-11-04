@@ -5,7 +5,7 @@ import { createRecount } from "./recount";
 function counted() {
   const state = { value: 1, counts: 0 };
   const recount = createRecount(() => {
-    state.counts++;
+    state.counts += 1;
     return state.value;
   });
   return { state, recount };

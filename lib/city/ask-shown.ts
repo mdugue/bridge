@@ -8,7 +8,8 @@
  * browser and another model turn for each.
  */
 import { SHOW_TARGETS } from "./ask-tools";
-import { AERIAL_REACH, type AskTarget, frameTargets } from "./ask-view";
+import { AERIAL_REACH, frameTargets } from "./ask-view";
+import type { AskTarget } from "./ask-view";
 
 /** What the model gets back for a call. */
 export type ToolAnswer = Record<string, unknown>;

@@ -1,20 +1,21 @@
+import { ContentFetchPlugin } from "./tile-content-fetch";
 import { DownloadPriorityQueue, PriorityQueue } from "3d-tiles-renderer/core";
 import { TilesRenderer } from "3d-tiles-renderer/three";
-import {
-  type BufferGeometry,
-  type Camera,
-  type Color,
-  Group,
-  Matrix4,
-  type Mesh,
-  type MeshStandardNodeMaterial,
-  type Object3D,
-  type Texture,
-  type UniformNode,
-  type Vector3,
-  type WebGPURenderer,
+import { Group, Matrix4 } from "three/webgpu";
+import type {
+  BufferGeometry,
+  Camera,
+  Color,
+  Mesh,
+  MeshStandardNodeMaterial,
+  Object3D,
+  Texture,
+  UniformNode,
+  Vector3,
+  WebGPURenderer,
 } from "three/webgpu";
-import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
+// (lower case: rules-of-hooks reads `Pascal.useX` as a React hook)
+import { MeshoptDecoder as meshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import type {
   AreaFeature,
   BridgeFeature,
@@ -40,80 +41,86 @@ import {
   ROWS_MEASURED,
   unpackPoints,
 } from "@/lib/city/point-pack";
-import { type SportTable, sportFixtures } from "@/lib/city/sport";
-import {
-  offMonuments,
-  plantedRows,
-  type TreeVeto,
-} from "@/lib/city/tree-placement";
+import { sportFixtures } from "@/lib/city/sport";
+import type { SportTable } from "@/lib/city/sport";
+import { offMonuments, plantedRows } from "@/lib/city/tree-placement";
+import type { TreeVeto } from "@/lib/city/tree-placement";
 import { coarseCrownsStandIn, unpackCrowns } from "@/lib/city/coarse-crowns";
 import {
   keepOrder,
-  type OrderedTile,
   siteTileOfTile,
   streamOrder,
 } from "@/lib/city/stream-order";
+import type { OrderedTile } from "@/lib/city/stream-order";
 import { createTaskGate } from "@/lib/city/task-gate";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
-import {
-  type CityExtras,
-  type ContentExtras,
-  ownsPoint,
-  type TerrainExtras,
+import { ownsPoint } from "@/lib/city/tileset";
+import type {
+  CityExtras,
+  ContentExtras,
+  TerrainExtras,
 } from "@/lib/city/tileset";
-import { COARSE_DRESSING_KINDS, type DressingKind } from "@/lib/city/tile";
+import { COARSE_DRESSING_KINDS } from "@/lib/city/tile";
+import type { DressingKind } from "@/lib/city/tile";
 import { bridgeItems, monumentItems, treeSets } from "@/lib/city/ask-items";
 import { moreSetsSteps } from "@/lib/city/ask-more";
-import { askSets, type AskSet } from "@/lib/city/ask-solids";
+import { askSets } from "@/lib/city/ask-solids";
+import type { AskSet } from "@/lib/city/ask-solids";
 import { isAllocationFailure } from "@/lib/city/gpu-allocation";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import { mapillaryParts } from "@/lib/city/mapillary";
 import type { GroundContext } from "@/lib/city/ground-clamp";
-import { type CityLayer, dressCity } from "./city-layer";
+import { dressCity } from "./city-layer";
+import type { CityLayer } from "./city-layer";
 import { GltfContentPlugin } from "./gltf-content";
 import type { FacadeReadings } from "@/lib/city/facade-reading";
 import { coarseCrownSteps } from "./coarse-crowns-layer";
 import type { CrownWarmup } from "./crown-season";
 import { buildVineyards } from "./cultivated-layer";
-import { TILE_FETCH_BUDGET_MS } from "@/lib/city/fetch-retry";
 import {
   eitherSignal,
-  fetchBytes,
   fetchFeatures,
   fetchOptionalBinary,
   fetchOptionalJson,
   isAbortError,
 } from "./fetch-optional";
 import { furnitureSteps } from "./furniture-layer";
-import { buildLamps, type LampControl } from "./lamp-layer";
+import { buildLamps } from "./lamp-layer";
+import type { LampControl } from "./lamp-layer";
 import { buildLowVegetation } from "./low-vegetation-layer";
-import { buildMonuments, type MonumentLayer } from "./monument-layer";
-import { buildMurals, type MuralLayer, type MuralSource } from "./mural-layer";
+import { buildMonuments } from "./monument-layer";
+import type { MonumentLayer } from "./monument-layer";
+import { buildMurals } from "./mural-layer";
+import type { MuralLayer, MuralSource } from "./mural-layer";
 import { railSteps } from "./rail-layer";
 import { bridgeAskSet } from "./bridge-ask";
 import { buildRiverside } from "./riverside-layer";
-import { buildSportFixtures, type SportFixtureLayer } from "./sport-fixtures";
+import { buildSportFixtures } from "./sport-fixtures";
+import type { SportFixtureLayer } from "./sport-fixtures";
 import {
   cpuDroppable,
   createGridShare,
   dressTerrain,
   freeSplatRasters,
   freeSport,
-  type GridShare,
-  type GroundUniforms,
   loadNdviTexture,
   loadSplatRasters,
   loadSportKey,
-  type SplatRasters,
-  type SportRasters,
-  type TerrainLayer,
+} from "./terrain-layer";
+import type {
+  GridShare,
+  GroundUniforms,
+  SplatRasters,
+  SportRasters,
+  TerrainLayer,
 } from "./terrain-layer";
 import { dressFences } from "./fence-layer";
 import { dressKerbs } from "./kerb-layer";
 import { RasterShares } from "./raster-shares";
 import { setRasterTier } from "./raster-upload";
 import type { DeviceTier } from "./scene-profile";
-import { createSharedRasters, type SharedRasters } from "./shared-rasters";
+import { createSharedRasters } from "./shared-rasters";
+import type { SharedRasters } from "./shared-rasters";
 import { loadHorizonTexture, loadSkyViewTexture } from "./sky-light";
 import { dressStairs } from "./stair-layer";
 import { streamTimings } from "./stream-timing";
@@ -124,10 +131,9 @@ import {
   giveBack,
   inSlices,
   onlyWhile,
-  type Steps,
 } from "@/lib/city/build-steps";
+import type { Steps } from "@/lib/city/build-steps";
 import {
-  type AnyAttribute,
   compileRepresentatives,
   cpuArrayBytes,
   detachSceneShared,
@@ -137,6 +143,7 @@ import {
   estimateGeometryBytes,
   sceneSharedBytes,
 } from "./three-utils";
+import type { AnyAttribute } from "./three-utils";
 import type { TrafficBuilder } from "./data-layers-feature";
 import type { TrafficDetail } from "./traffic-layer";
 import { tramSteps } from "./tram-layer";
@@ -145,12 +152,15 @@ import {
   buildCrownWarmup,
   vegetationSteps,
   loadNdviSampler,
-  type VegetationContext,
-  type VegetationControl,
-  type VegetationFeatures,
+} from "./vegetation-layer";
+import type {
+  VegetationContext,
+  VegetationControl,
+  VegetationFeatures,
 } from "./vegetation-layer";
 import { footMaterialFor } from "./tree-foot";
-import { setClaySkyView, type StyleResources } from "./visual-style";
+import { setClaySkyView } from "./visual-style";
+import type { StyleResources } from "./visual-style";
 import { dressWalls } from "./wall-layer";
 
 /**
@@ -403,52 +413,6 @@ interface Dressed {
   terrain?: TerrainLayer;
 }
 
-/**
- * Every request the renderer makes — the tileset and each tile's content —
- * through the viewer's one fetch (fetch-optional.ts `fetchBytes`): a
- * network failure is retried while the page is visible, so a tile that hit
- * a blip stays loading (its coarse level shown, the boot waiting) instead
- * of failing; one that gives up is brought back later (tile-retry.ts). The
- * `.glb.gz` content is pre-gzipped (static hosts do not compress binary
- * types) and inflated natively inside the retries — unless the host already
- * did (isGzipped). Content comes back as its bytes, which the renderer
- * parses as they are (no Response to copy them through again); JSON as a
- * Response, which the renderer reads itself; a status no retry fixes as an
- * empty Response with that status, which the renderer reports.
- */
-class ContentFetchPlugin {
-  name = "BRIDGE_CONTENT_FETCH";
-  /** aborts every request in flight when the stream goes (dispose) */
-  private readonly aborter = new AbortController();
-  async fetchData(
-    url: string,
-    options: RequestInit
-  ): Promise<Response | ArrayBuffer> {
-    const { signal, ...init } = options;
-    const either = eitherSignal(signal, this.aborter.signal);
-    try {
-      const got = await fetchBytes(url, {
-        signal: either.signal,
-        budgetMs: TILE_FETCH_BUDGET_MS,
-        gunzip: url.endsWith(".gz"),
-        init,
-      });
-      if (!got.ok) {
-        return new Response(null, { status: got.status });
-      }
-      return new URL(url, window.location.href).pathname.endsWith(".json")
-        ? new Response(got.bytes, { status: got.status })
-        : got.bytes.buffer;
-    } finally {
-      either.release();
-    }
-  }
-
-  dispose(): void {
-    this.aborter.abort();
-  }
-}
-
 type Features<T> = Promise<T[]>;
 
 /**
@@ -460,7 +424,7 @@ type Features<T> = Promise<T[]>;
  * triangles out of them.
  */
 function cityCpuDroppable(city: CityLayer): AnyAttribute[] {
-  const geometry = city.mesh.geometry;
+  const { geometry } = city.mesh;
   return [geometry.getAttribute("normal"), geometry.getAttribute("facade")];
 }
 
@@ -618,15 +582,17 @@ export function handOverWaitMs(tier: DeviceTier): number {
   return tier === "mobile" ? 0 : 1500;
 }
 
-function withinWait(done: Promise<unknown>, ms: number): Promise<void> {
-  return Promise.race([
-    done.then(() => undefined),
-    new Promise<void>((resolve) => setTimeout(resolve, ms)),
+async function withinWait(done: Promise<unknown>, ms: number): Promise<void> {
+  await Promise.race([
+    done,
+    new Promise<void>((resolve) => {
+      setTimeout(resolve, ms);
+    }),
   ]);
 }
 
-export function withinCompileWait(done: Promise<unknown>): Promise<void> {
-  return withinWait(done, COMPILE_WAIT_MS);
+export async function withinCompileWait(done: Promise<unknown>): Promise<void> {
+  await withinWait(done, COMPILE_WAIT_MS);
 }
 
 /**
@@ -673,8 +639,8 @@ function disposeDressing(d: TileDressing): unknown[] {
   for (const own of [d.lamps, d.monuments, d.sport]) {
     try {
       own?.dispose();
-    } catch (err) {
-      errors.push(err);
+    } catch (error) {
+      errors.push(error);
     }
   }
   // the traffic's bodies, built or still building (it nulls its group)
@@ -728,26 +694,31 @@ export function buildAsksWhenIdle(
   }
   // neither a question (which finishes them) nor a release took them
   const pending = () => dressing.buildAsks === steps && stillHung();
-  const done = () => {
+  const release = () => {
     if (dressing.buildAsks === steps) {
       dressing.buildAsks = undefined;
     }
   };
   idle(() => {
     if (!pending()) {
-      done();
+      release();
       return;
     }
     // in slices: a dense tile's took 0.4–0.7 s on the phone profile
-    run(
-      (function* () {
-        yield* onlyWhile(steps, pending);
-        done();
-      })()
-    ).catch((err: unknown) => {
-      done();
-      failed?.(err);
-    });
+    const runAsks = async () => {
+      try {
+        await run(
+          (function* askSteps() {
+            yield* onlyWhile(steps, pending);
+            release();
+          })()
+        );
+      } catch (error) {
+        release();
+        failed?.(error);
+      }
+    };
+    void runAsks();
   }, ASKS_IDLE_MS);
 }
 
@@ -779,7 +750,8 @@ function buildSport(
   if (!table?.grounds?.length) {
     return undefined;
   }
-  const [minX, , , maxY] = terrain.bounds;
+  const minX = terrain.bounds[0];
+  const maxY = terrain.bounds[3];
   const extent = ctx.tileBounds(terrain.tile);
   const own = extent
     ? table.grounds.filter(([cx, cy]) =>
@@ -800,6 +772,7 @@ function buildSport(
  * stands on (`keepTree`), and its trunk and broadleaf crown ride in the
  * canopy's chunk meshes (instances, not draw calls); only its reshaped
  * silhouettes (flame, cone, weeping) are meshes of its own.
+ * @yields {void} once per finished run, to hand the thread back.
  */
 function* tileVegetationSteps(
   features: Omit<VegetationFeatures, "extraTrees" | "keepTree">,
@@ -913,8 +886,8 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
   /** The bodies built, hung hidden and their compile started — in the
    *  host's turn, which waits on the compile (a dressing's waits after
    *  its turn: queueDressing). */
-  const start = (h: TrafficHost, builder: TrafficBuilder) =>
-    h.turn(async () => {
+  const start = async (h: TrafficHost, builder: TrafficBuilder) =>
+    await h.turn(async () => {
       await nextTask();
       if (gone(h)) {
         return null;
@@ -939,7 +912,10 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
             compiling = null;
           }
         })
-        .catch(() => undefined);
+        .catch(() => {
+          // `compiled`'s own rejection reaches the caller through the
+          // wait below; this branch only clears `compiling`
+        });
       await withinCompileWait(compiled);
       // (an object: a promise returned bare would be awaited whole)
       return { asks, compiled, group };
@@ -984,24 +960,30 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
     group.visible = wanted;
     h.built();
   };
+  /** `build`, a failure of it reported to the host unless it is gone */
+  const buildGuarded = async (h: TrafficHost): Promise<void> => {
+    try {
+      await build(h);
+    } catch (error) {
+      if (!gone(h)) {
+        h.failed(error);
+      }
+    }
+  };
   const slot: TrafficSlot = {
     group: null,
-    show: () => {
+    show: async () => {
       wanted = true;
       if (ready && slot.group) {
         slot.group.visible = true;
-        return Promise.resolve();
+        return;
       }
       if (!host || disposed) {
-        return Promise.resolve(); // built once the dressing hangs
+        return; // built once the dressing hangs
       }
       const h = host;
-      building ??= build(h).catch((err: unknown) => {
-        if (!gone(h)) {
-          h.failed(err);
-        }
-      });
-      return building;
+      building ??= buildGuarded(h);
+      await building;
     },
     hide: () => {
       wanted = false;
@@ -1016,7 +998,7 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
     dispose: () => {
       disposed = true;
       ready = false;
-      const group = slot.group;
+      const { group } = slot;
       slot.group = null;
       if (!group) {
         return [];
@@ -1027,7 +1009,10 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
         const h = host;
         running
           .finally(() => h.freeFailed(disposeObject3D(group)))
-          .catch(() => undefined);
+          .catch(() => {
+            // a failed compile was reported where it was awaited; only the
+            // free is ours
+          });
         return [];
       }
       return disposeObject3D(group);
@@ -1061,8 +1046,8 @@ async function buildCoarseDressing(
   const { offset } = ctx;
   const files = extras.coarse ?? {};
   const tile = extras.tileId;
-  const fetchKind = <T>(file: string | undefined): Features<T> =>
-    file ? fetchFeatures<T>(url(file), signal) : Promise.resolve([]);
+  const fetchKind = async <T>(file: string | undefined): Features<T> =>
+    file ? await fetchFeatures<T>(url(file), signal) : [];
   const [traffic, bridges, crownBytes] = await Promise.all([
     fetchKind<TrafficFeature>(files.traffic),
     fetchKind<BridgeFeature>(files.bridge),
@@ -1125,11 +1110,11 @@ async function buildCoarseDressing(
             sunDirection: ctx.sunDirection,
           }),
           { signal }
-        ).catch((err: unknown) => {
+        ).catch((error: unknown) => {
           // the bridges and the traffic's slot built, never hung: freed
           // with the build
           disposeDressing({ tile, rail, traffic: flows });
-          throw err;
+          throw error;
         })
       : undefined;
   return {
@@ -1152,7 +1137,7 @@ async function buildDressing(
   const tile = extras.tileId;
   if (!d) {
     return COARSE_DRESSING_KINDS.some((kind) => extras.coarse?.[kind])
-      ? buildCoarseDressing(
+      ? await buildCoarseDressing(
           terrain,
           extras,
           ctx,
@@ -1163,9 +1148,9 @@ async function buildDressing(
       : { tile };
   }
   // A kind the tile lacks is a feature off, never a request.
-  const get = <T>(kind: DressingKind): Features<T> => {
+  const get = async <T>(kind: DressingKind): Features<T> => {
     const file = d[kind];
-    return file ? fetchFeatures<T>(url(file), signal) : Promise.resolve([]);
+    return file ? await fetchFeatures<T>(url(file), signal) : [];
   };
   // The canopy points come packed (lib/city/point-pack.ts, prepare-data.ts):
   // no parse, the same features for the vegetation. Not a pack = off.
@@ -1379,7 +1364,7 @@ async function buildDressing(
     };
     const asks: AskSet<FeatureInquiry>[] = [];
     // (lazy: nothing runs before its first step)
-    function* askSteps(): Steps<void> {
+    const askSteps = function* askSteps(): Steps<void> {
       // its span from the first step to the last, the pauses included
       const start = streamTimings.now();
       const own = [
@@ -1409,7 +1394,7 @@ async function buildDressing(
         asks.push(set);
       }
       streamTimings.since("dressing:asks", start, tile);
-    }
+    };
     const buildAsks = askSteps();
     // Sections are cut at the tile edge by the bake; a bridge street rides
     // the decks of this tile's bridge file (which names a seam deck in both).
@@ -1445,9 +1430,9 @@ async function buildDressing(
       rail,
       sport,
     };
-  } catch (err) {
+  } catch (error) {
     disposeDressing(made);
-    throw err;
+    throw error;
   }
 }
 
@@ -1461,6 +1446,18 @@ const FINE_DRESSING_RANK = 1;
  *  under the camera (the boot's spawn tile, which `ready` waits for)
  *  still gets its trees. */
 const MAX_DRESSING_OVERTAKES = 4;
+
+/** A built dressing's geometry bytes, as its parts stand now (the
+ *  traffic's bodies count once built). */
+function weighDressing(entry: Dressed, dressing: TileDressing): void {
+  entry.dressingBytes = dressingParts(dressing).reduce(
+    (sum, part) => sum + estimateGeometryBytes(part),
+    0
+  );
+}
+
+/** A promise's resolver until its executor has run. */
+const unresolved = (): void => undefined;
 
 /**
  * The 3DTilesRendererJS plugin that dresses content as it loads. Runs inside
@@ -1519,12 +1516,14 @@ export class DressingPlugin {
   private readonly tileOf = new WeakMap<Object3D, object>();
   /** the sky-view rasters a tile's terrain and buildings share */
   readonly skyView: SharedRasters<Texture> = createSharedRasters(
-    (url, signal) => loadSkyViewTexture(url, signal, this.ctx.renderer),
+    async (url, signal) =>
+      await loadSkyViewTexture(url, signal, this.ctx.renderer),
     (texture) => texture.dispose()
   );
   /** the horizon rasters a tile's two terrain levels share */
   readonly horizon: SharedRasters<Texture> = createSharedRasters(
-    (url, signal) => loadHorizonTexture(url, signal, this.ctx.renderer),
+    async (url, signal) =>
+      await loadHorizonTexture(url, signal, this.ctx.renderer),
     (texture) => texture.dispose()
   );
   /** the class rasters (and their painted splats), NDVI and sports grounds,
@@ -1534,15 +1533,17 @@ export class DressingPlugin {
    *  COARSE_RASTER_PX); the sports grounds only a desktop's fine level
    *  reads */
   readonly splats: SharedRasters<SplatRasters> = createSharedRasters(
-    (url, signal) => loadSplatRasters(url, this.ctx.renderer, signal),
+    async (url, signal) =>
+      await loadSplatRasters(url, this.ctx.renderer, signal),
     freeSplatRasters
   );
   readonly ndvis: SharedRasters<Texture> = createSharedRasters(
-    (url, signal) => loadNdviTexture(url, this.ctx.renderer, signal),
+    async (url, signal) =>
+      await loadNdviTexture(url, this.ctx.renderer, signal),
     (texture) => texture.dispose()
   );
   readonly sports: SharedRasters<SportRasters> = createSharedRasters(
-    (key, signal) => loadSportKey(key, this.ctx.renderer, signal),
+    async (key, signal) => await loadSportKey(key, this.ctx.renderer, signal),
     freeSport
   );
   /** the coarse level's grid index and water index, one copy for the
@@ -1561,25 +1562,35 @@ export class DressingPlugin {
    */
   private readonly loadAborts = new WeakMap<Object3D, AbortController>();
 
+  private readonly ctx: TileStreamContext;
+  private readonly stream: Pick<
+    TileStream,
+    "cities" | "demolished" | "demolishedGroups" | "dressings" | "terrains"
+  >;
+
   constructor(
-    private readonly ctx: TileStreamContext,
-    private readonly stream: Pick<
+    ctx: TileStreamContext,
+    stream: Pick<
       TileStream,
       "cities" | "demolished" | "demolishedGroups" | "dressings" | "terrains"
     >
   ) {
+    this.ctx = ctx;
+    this.stream = stream;
     // The warm-up runs beside the dressings, not ahead of them: its compile
     // may take up to COMPILE_WAIT_MS, and the spawn tile's trees need none
     // of its programs (they compile their own).
-    ctx.dressingGate
-      .then(() => {
-        this.gateOpen = true;
-        return this.warmCrowns();
-      })
-      .catch(() => {
-        // Without the warm-up a date change compiles in a frame; the
-        // stream goes on.
-      });
+    this.warmWhenOpen().catch(() => {
+      // Without the warm-up a date change compiles in a frame; the
+      // stream goes on.
+    });
+  }
+
+  /** Warms the crowns' programs once the dressing gate opens. */
+  private async warmWhenOpen(): Promise<void> {
+    await this.ctx.dressingGate;
+    this.gateOpen = true;
+    await this.warmCrowns();
   }
 
   init(tiles: PluginTiles): void {
@@ -1719,12 +1730,12 @@ export class DressingPlugin {
     }
   }
 
-  private url = (file: string): string =>
+  private readonly url = (file: string): string =>
     new URL(file, new URL(this.ctx.tilesetUrl, window.location.href)).href;
 
   async processTileModel(scene: Object3D, tile: object): Promise<void> {
     this.tileOf.set(scene, tile);
-    let settle = (): void => undefined;
+    let settle = unresolved;
     this.loaded.set(
       scene,
       new Promise<void>((resolve) => {
@@ -1768,7 +1779,7 @@ export class DressingPlugin {
     } else if (extras.kind === "terrain") {
       ({ dressed } = await streamTimings.timed(
         "tile:rasters",
-        () => this.dressTerrain(scene, mesh, extras),
+        async () => await this.dressTerrain(scene, mesh, extras),
         extras.tileId
       ));
     }
@@ -1778,7 +1789,7 @@ export class DressingPlugin {
     if (!this.released.has(scene)) {
       await streamTimings.timed(
         "tile:compile",
-        () => withinCompileWait(this.compileContent(scene)),
+        async () => await withinCompileWait(this.compileContent(scene)),
         extras.tileId
       );
     }
@@ -1825,7 +1836,7 @@ export class DressingPlugin {
     }
     await streamTimings.timed(
       "tile:handover-wait",
-      () => withinWait(dressed, wait),
+      async () => await withinWait(dressed, wait),
       extras.tileId
     );
   }
@@ -1854,6 +1865,7 @@ export class DressingPlugin {
           if (readings && this.dressed.get(scene) === entry) {
             city.facadeReadings(readings);
           }
+          return null;
         }
       );
     }
@@ -1891,9 +1903,9 @@ export class DressingPlugin {
         phone: this.ctx.tier === "mobile",
         signal: entry.aborter.signal,
       });
-    } catch (err) {
-      if (!(isAbortError(err) || gone())) {
-        this.ctx.onDressingFailed?.(err, tileId);
+    } catch (error) {
+      if (!(isAbortError(error) || gone())) {
+        this.ctx.onDressingFailed?.(error, tileId);
       }
       return;
     } finally {
@@ -1904,26 +1916,27 @@ export class DressingPlugin {
     if (!layer) {
       return;
     }
-    const built = layer;
+    const dressedMurals = layer;
     if (gone()) {
-      built.dispose();
+      dressedMurals.dispose();
       return;
     }
     const compiled = await this.compileUnder(
       scene,
-      [built.group],
+      [dressedMurals.group],
       `murals ${tileId}`
     );
     await this.loaded.get(scene);
     if (gone() || compiled === "out of memory") {
-      built.dispose();
+      dressedMurals.dispose();
       return;
     }
-    scene.add(built.group);
-    entry.murals = built;
-    built.meshes.forEach((mesh, i) => {
-      entry.city?.hang(mesh, built.murals[i].building);
-    });
+    scene.add(dressedMurals.group);
+    entry.murals = dressedMurals;
+    for (let i = 0; i < dressedMurals.meshes.length; i += 1) {
+      const mesh = dressedMurals.meshes[i];
+      entry.city?.hang(mesh, dressedMurals.murals[i].building);
+    }
     const tile = this.tileOf.get(scene);
     if (tile) {
       this.tiles?.recalculateBytesUsed(tile);
@@ -1941,18 +1954,18 @@ export class DressingPlugin {
   ): void {
     const bounds = this.ctx.tileBounds(tileId);
     void this.skyView.acquire(url).then((texture) => {
-      const city = entry.city;
-      if (!(texture && bounds && city) || this.dressed.get(scene) !== entry) {
-        return;
+      const { city } = entry;
+      if (texture && bounds && city && this.dressed.get(scene) === entry) {
+        const [minX, minY, maxX, maxY] = bounds;
+        const { cx, cy } = this.ctx.offset;
+        setClaySkyView(
+          city.mesh.material as MeshStandardNodeMaterial,
+          texture,
+          [minX - cx, maxY - cy],
+          [maxX - minX, maxY - minY]
+        );
       }
-      const [minX, minY, maxX, maxY] = bounds;
-      const { cx, cy } = this.ctx.offset;
-      setClaySkyView(
-        city.mesh.material as MeshStandardNodeMaterial,
-        texture,
-        [minX - cx, maxY - cy],
-        [maxX - minX, maxY - minY]
-      );
+      return null;
     });
   }
 
@@ -2038,9 +2051,9 @@ export class DressingPlugin {
   private olderCompile: Promise<void> = Promise.resolve();
   /** `work` in the dressings' turn: after the gate, one at a time, the
    *  lower rank first */
-  private turn<T>(work: () => Promise<T>, rank: number): Promise<T> {
-    return this.ctx.dressingGate.then(() =>
-      this.lane.run(work, undefined, rank)
+  private async turn<T>(work: () => Promise<T>, rank: number): Promise<T> {
+    return await this.ctx.dressingGate.then(
+      async () => await this.lane.run(work, undefined, rank)
     );
   }
   pending = 0;
@@ -2080,14 +2093,16 @@ export class DressingPlugin {
     }
     const warmup = buildCrownWarmup();
     this.warmup = warmup;
-    await withinCompileWait(
-      Promise.all(warmup.main.map((mesh) => this.ctx.compile(mesh))).then(
-        () => undefined,
-        (err: unknown) => {
-          this.compileFailed(err, "crowns");
-        }
-      )
-    );
+    const compileAll = async () => {
+      try {
+        await Promise.all(
+          warmup.main.map(async (mesh) => await this.ctx.compile(mesh))
+        );
+      } catch (error) {
+        this.compileFailed(error, "crowns");
+      }
+    };
+    await withinCompileWait(compileAll());
   }
 
   /** What a compile that threw comes to: out of memory (reported) or a
@@ -2139,14 +2154,14 @@ export class DressingPlugin {
    * tile's own content (`loaded`), before any frame — so a tile that waits
    * for it (handsOver) is shown with it.
    */
-  private queueDressing(
+  private async queueDressing(
     scene: Object3D,
     terrain: TerrainLayer,
     extras: TerrainExtras
   ): Promise<void> {
-    this.pending++;
+    this.pending += 1;
     this.pendingScenes.set(scene, extras.tileId);
-    let built = (): void => undefined;
+    let built = unresolved;
     const ready = new Promise<void>((resolve) => {
       built = resolve;
     });
@@ -2165,123 +2180,146 @@ export class DressingPlugin {
     // weighed from its build) and the compile queue never pile up behind
     // a slow GPU — a queue past the wait would hang them before their
     // compile.
-    void this.turn(async (): Promise<(() => Promise<void>) | undefined> => {
-      await this.olderCompile;
-      const entry = this.dressed.get(scene);
-      // (a tile that left with its own compile still running keeps its
-      // entry until that compile ends: it is gone all the same)
-      if (!entry || this.disposed || this.released.has(scene)) {
-        return undefined; // the tile (or the stream) left before its turn
-      }
-      streamTimings.since("dressing:queue-wait", queuedAt, extras.tileId);
-      entry.aborter = new AbortController();
-      const signal = entry.aborter.signal;
-      const dressing = await streamTimings.timed(
-        "dressing:build",
-        () => buildDressing(terrain, extras, this.ctx, this.url, signal),
-        extras.tileId
-      );
-      entry.aborter = undefined;
-      const parts = dressingParts(dressing);
-      // Compiled as the frames will draw it — in its season and at the
-      // hour (which swap crown materials) — before it hangs anywhere: a
-      // build three keys differently from what a frame asks for compiles
-      // inside that frame. (A compile starts at the drawable: where it
-      // will hang does not change its build.) One that throws here never
-      // hangs: it is freed, not left to nothing.
-      try {
-        catchUp(dressing, this.ctx);
-      } catch (err) {
-        this.disposeFailed(disposeDressing(dressing), scene);
-        throw err;
-      }
-      // (a tile that left, its release held by its own compile, gets none:
-      // nor any weight, nor a place in the compile line the lane waits on)
-      const current =
-        this.dressed.get(scene) === entry && !this.released.has(scene);
-      const compiled = current
-        ? this.compileUnder(
-            scene,
-            compileRepresentatives(parts),
-            `dressing ${extras.tileId}`
-          )
-        : Promise.resolve<Compiled>("not run");
-      let outcome: Compiled | undefined;
-      compiled
-        .then((ended) => {
-          outcome = ended;
-        })
-        .catch(() => undefined);
-      const waited = streamTimings.timed(
-        "dressing:compile",
-        () => withinCompileWait(compiled),
-        extras.tileId
-      );
-      this.olderCompile = this.lastCompile;
-      this.lastCompile = waited.catch(() => undefined);
-      // Weighed from the build on, not from the hang: the lane runs ahead
-      // of the compile waits, and a built dressing waiting its turn to
-      // hang must count against the cache's budget.
-      if (current) {
-        this.weighDressing(entry, dressing);
-        this.reweigh(scene);
-      }
-      return async () => {
-        await waited;
-        built();
-        // Not before the renderer has recorded the tile's own content (see
-        // `loaded`): the dressing's materials are the scene's.
-        await this.loaded.get(scene);
-        // A dressing whose compile ran out of GPU memory stays off: the
-        // tile goes bare rather than the GPU further under. Nor does one
-        // whose tile left while a compile ran: its release waits for the
-        // compile (`compiles`), so its entry is still there.
-        if (
-          this.disposed ||
-          this.released.has(scene) ||
-          this.dressed.get(scene) !== entry ||
-          outcome === "out of memory"
-        ) {
-          if (this.dressed.get(scene) === entry) {
-            entry.dressingBytes = undefined;
-            this.reweigh(scene);
-          }
-          // freed once its compile has ended (see `compiles`)
-          compiled
-            .then(() => this.disposeFailed(disposeDressing(dressing), scene))
-            .catch(() => undefined);
-          return;
+    const turned = this.turn(
+      async (): Promise<(() => Promise<void>) | undefined> => {
+        await this.olderCompile;
+        const entry = this.dressed.get(scene);
+        // (a tile that left with its own compile still running keeps its
+        // entry until that compile ends: it is gone all the same)
+        if (!entry || this.disposed || this.released.has(scene)) {
+          return undefined; // the tile (or the stream) left before its turn
         }
-        this.hangDressing(scene, entry, dressing);
-        // ...and one whose compile outlasted the wait and then ran out of
-        // memory comes down again
-        compiled
-          .then((ended) => {
-            if (ended === "out of memory") {
-              this.dropDressing(scene, entry, dressing);
+        streamTimings.since("dressing:queue-wait", queuedAt, extras.tileId);
+        entry.aborter = new AbortController();
+        const { signal } = entry.aborter;
+        const dressing = await streamTimings.timed(
+          "dressing:build",
+          async () =>
+            await buildDressing(terrain, extras, this.ctx, this.url, signal),
+          extras.tileId
+        );
+        entry.aborter = undefined;
+        const parts = dressingParts(dressing);
+        // Compiled as the frames will draw it — in its season and at the
+        // hour (which swap crown materials) — before it hangs anywhere: a
+        // build three keys differently from what a frame asks for compiles
+        // inside that frame. (A compile starts at the drawable: where it
+        // will hang does not change its build.) One that throws here never
+        // hangs: it is freed, not left to nothing.
+        try {
+          catchUp(dressing, this.ctx);
+        } catch (error) {
+          this.disposeFailed(disposeDressing(dressing), scene);
+          throw error;
+        }
+        // (a tile that left, its release held by its own compile, gets none:
+        // nor any weight, nor a place in the compile line the lane waits on)
+        const current =
+          this.dressed.get(scene) === entry && !this.released.has(scene);
+        const compiled = current
+          ? this.compileUnder(
+              scene,
+              compileRepresentatives(parts),
+              `dressing ${extras.tileId}`
+            )
+          : Promise.resolve<Compiled>("not run");
+        let outcome: Compiled | undefined;
+        const trackOutcome = async () => {
+          try {
+            outcome = await compiled;
+          } catch {
+            // a failed compile is reported where `waited` awaits it; there
+            // is no outcome to note
+          }
+        };
+        void trackOutcome();
+        const waited = streamTimings.timed(
+          "dressing:compile",
+          async () => await withinCompileWait(compiled),
+          extras.tileId
+        );
+        this.olderCompile = this.lastCompile;
+        this.lastCompile = waited.catch(() => {
+          // a failed wait is reported where `waited` is awaited; the lane
+          // only needs it settled
+        });
+        // Weighed from the build on, not from the hang: the lane runs ahead
+        // of the compile waits, and a built dressing waiting its turn to
+        // hang must count against the cache's budget.
+        if (current) {
+          weighDressing(entry, dressing);
+          this.reweigh(scene);
+        }
+        return async () => {
+          await waited;
+          built();
+          // Not before the renderer has recorded the tile's own content (see
+          // `loaded`): the dressing's materials are the scene's.
+          await this.loaded.get(scene);
+          // A dressing whose compile ran out of GPU memory stays off: the
+          // tile goes bare rather than the GPU further under. Nor does one
+          // whose tile left while a compile ran: its release waits for the
+          // compile (`compiles`), so its entry is still there.
+          if (
+            this.disposed ||
+            this.released.has(scene) ||
+            this.dressed.get(scene) !== entry ||
+            outcome === "out of memory"
+          ) {
+            if (this.dressed.get(scene) === entry) {
+              entry.dressingBytes = undefined;
+              this.reweigh(scene);
             }
-          })
-          .catch(() => undefined);
-      };
-    }, rank)
-      .then((after) => after?.())
-      .catch((err: unknown) => {
+            // freed once its compile has ended (see `compiles`)
+            const freeAfterCompile = async () => {
+              try {
+                await compiled;
+                this.disposeFailed(disposeDressing(dressing), scene);
+              } catch {
+                // nothing to free for a compile that failed, and a free
+                // that threw is reported by `disposeFailed`
+              }
+            };
+            void freeAfterCompile();
+            return;
+          }
+          this.hangDressing(scene, entry, dressing);
+          // ...and one whose compile outlasted the wait and then ran out of
+          // memory comes down again
+          const dropAfterCompile = async () => {
+            try {
+              if ((await compiled) === "out of memory") {
+                this.dropDressing(scene, entry, dressing);
+              }
+            } catch {
+              // a failed compile has nothing to drop
+            }
+          };
+          void dropAfterCompile();
+        };
+      },
+      rank
+    );
+    const finishDressing = async () => {
+      try {
+        const after = await turned;
+        await after?.();
+      } catch (error) {
         // A dressing that fails leaves its tile bare, never the stream
         // stuck — but never silently: a builder's throw is a bug or a
-        // heap that ran out.
-        if (isAbortError(err) || this.disposed || this.released.has(scene)) {
-          return; // a tile that left mid-build: no failure of its own
+        // heap that ran out. (A tile that left mid-build has no failure
+        // of its own.)
+        const left =
+          isAbortError(error) || this.disposed || this.released.has(scene);
+        if (!left && isAllocationFailure(error)) {
+          this.ctx.onAllocationFailure?.(error, `dressing ${extras.tileId}`);
+        } else if (!left) {
+          this.ctx.onDressingFailed?.(error, extras.tileId);
         }
-        if (isAllocationFailure(err)) {
-          this.ctx.onAllocationFailure?.(err, `dressing ${extras.tileId}`);
-        } else {
-          this.ctx.onDressingFailed?.(err, extras.tileId);
-        }
-      })
-      .finally(() => {
+      } finally {
         built();
         this.builtOf.delete(scene);
-        this.pending--;
+        this.pending -= 1;
         this.pendingScenes.delete(scene);
         // A tile is dressed when its fine level is (the coarse one only
         // stands in for it).
@@ -2291,8 +2329,10 @@ export class DressingPlugin {
         if (!this.disposed) {
           this.ctx.onChange();
         }
-      });
-    return ready;
+      }
+    };
+    void finishDressing();
+    await ready;
   }
 
   /** Hangs a built dressing on its tile's content root. */
@@ -2316,24 +2356,22 @@ export class DressingPlugin {
     // The traffic's bodies hang here once its layer is switched on.
     dressing.traffic?.attach({
       root: scene,
-      compile: (group) =>
-        this.compileUnder(
+      compile: async (group) =>
+        await this.compileUnder(
           scene,
           compileRepresentatives([group]),
           `traffic ${tileIdOf(scene)}`
         ),
       // the dressings' own chain: a switch-on builds the loaded tiles'
       // bodies one after another, never all in one task
-      turn: (work) => {
-        return this.turn(work, FINE_DRESSING_RANK);
-      },
+      turn: async (work) => await this.turn(work, FINE_DRESSING_RANK),
       freeFailed: (errors) => this.disposeFailed(errors, scene),
       gone: () =>
         this.disposed ||
         this.released.has(scene) ||
         entry.dressing !== dressing,
       built: () => {
-        this.weighDressing(entry, dressing);
+        weighDressing(entry, dressing);
         this.reweigh(scene);
         this.ctx.onChange();
       },
@@ -2350,7 +2388,7 @@ export class DressingPlugin {
     try {
       catchUp(dressing, this.ctx);
     } finally {
-      this.weighDressing(entry, dressing);
+      weighDressing(entry, dressing);
       this.reweigh(scene);
     }
   }
@@ -2363,15 +2401,6 @@ export class DressingPlugin {
     } else {
       this.tiles?.recalculateBytesUsed();
     }
-  }
-
-  /** A built dressing's geometry bytes, as its parts stand now (the
-   *  traffic's bodies count once built). */
-  private weighDressing(entry: Dressed, dressing: TileDressing): void {
-    entry.dressingBytes = dressingParts(dressing).reduce(
-      (sum, part) => sum + estimateGeometryBytes(part),
-      0
-    );
   }
 
   /** Takes a hung dressing down again and frees it (its compile ran out of
@@ -2411,17 +2440,24 @@ export class DressingPlugin {
    * `scene` until they end (see `compiles`). Resolves how it ended (a
    * failure for want of memory reported as `where`); never rejects.
    */
-  private compileUnder(
+  private async compileUnder(
     scene: Object3D,
     objects: Object3D[],
     where: string
   ): Promise<Compiled> {
     this.compiles.set(scene, (this.compiles.get(scene) ?? 0) + 1);
-    const done = Promise.all(objects.map((o) => this.ctx.compile(o))).then(
-      (compiled): Compiled => (compiled.every(Boolean) ? "done" : "not run"),
-      (err: unknown) => this.compileFailed(err, where)
-    );
-    const settle = () => {
+    const compile = async (): Promise<Compiled> => {
+      try {
+        const compiled = await Promise.all(
+          objects.map(async (o) => await this.ctx.compile(o))
+        );
+        return compiled.every(Boolean) ? "done" : "not run";
+      } catch (error) {
+        return this.compileFailed(error, where);
+      }
+    };
+    const done = compile();
+    const uncount = () => {
       const left = (this.compiles.get(scene) ?? 1) - 1;
       if (left > 0) {
         this.compiles.set(scene, left);
@@ -2433,15 +2469,23 @@ export class DressingPlugin {
       }
     };
     // a release that throws must not surface as an unhandled rejection
-    done.then(settle).catch(() => undefined);
-    return done;
+    const settleAfter = async () => {
+      try {
+        await done;
+        uncount();
+      } catch {
+        // swallowed on purpose, see above
+      }
+    };
+    void settleAfter();
+    return await done;
   }
 
   /**
    * The content's own compile — and once it has uploaded the content, the
    * CPU copies of what nothing reads any more go (`dropContentCopies`).
    */
-  private compileContent(scene: Object3D): Promise<Compiled> {
+  private async compileContent(scene: Object3D): Promise<Compiled> {
     // the content's own geometries, before any dressing hangs beside them
     // (disposeContentNow)
     const content = new Set<BufferGeometry>();
@@ -2458,15 +2502,19 @@ export class DressingPlugin {
       [scene],
       `content ${tileIdOf(scene)}`
     );
-    compiled
-      .then((ended) => {
+    const afterCompile = async () => {
+      try {
+        const ended = await compiled;
         this.contentCompiling.delete(scene);
         if (ended === "done") {
           this.dropContentCopies(scene);
         }
-      })
-      .catch(() => undefined);
-    return compiled;
+      } catch {
+        // a drop that throws must not surface as an unhandled rejection
+      }
+    };
+    void afterCompile();
+    return await compiled;
   }
 
   /**
@@ -2481,11 +2529,12 @@ export class DressingPlugin {
     if (this.disposed || this.released.has(scene) || !entry) {
       return;
     }
-    const drop = entry.terrain
-      ? cpuDroppable(entry.terrain)
-      : entry.city
-        ? cityCpuDroppable(entry.city)
-        : [];
+    let drop: Parameters<typeof dropCpuCopies>[1] = [];
+    if (entry.terrain) {
+      drop = cpuDroppable(entry.terrain);
+    } else if (entry.city) {
+      drop = cityCpuDroppable(entry.city);
+    }
     dropCpuCopies(scene, drop);
     this.ctx.onCopiesDropped?.();
   }
@@ -2549,8 +2598,8 @@ export class DressingPlugin {
     const free = (dispose: () => void) => {
       try {
         dispose();
-      } catch (err) {
-        errors.push(err);
+      } catch (error) {
+        errors.push(error);
       }
     };
     if (dressed.city) {
@@ -2668,9 +2717,8 @@ export function createTileStream(
   // The decoder's own workers: without them a tile's meshopt buffers (75 MB
   // decoded for a dense building tile) decode on the main thread, inside
   // the parse that lands it. Idempotent: a remount keeps the same workers.
-  // oxlint-disable-next-line react-hooks/rules-of-hooks -- the decoder's method, no React hook
-  MeshoptDecoder.useWorkers(MESHOPT_WORKERS[ctx.tier]);
-  tiles.registerPlugin(new GltfContentPlugin(MeshoptDecoder));
+  meshoptDecoder.useWorkers(MESHOPT_WORKERS[ctx.tier]);
+  tiles.registerPlugin(new GltfContentPlugin(meshoptDecoder));
   // Out-of-view tiles that are still active stay drawn (shadows, turning on
   // the spot); three's own frustum culling keeps them out of the main pass.
   tiles.displayActiveTiles = true;
@@ -2684,7 +2732,7 @@ export function createTileStream(
   // the cities every frame).
   let version = 0;
   const changed = () => {
-    version++;
+    version += 1;
     // (the plugin is made below; the renderer calls this only later)
     dressing.standInCrowns(isShown);
     ctx.onChange();

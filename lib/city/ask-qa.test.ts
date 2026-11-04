@@ -37,6 +37,14 @@ const landmark = (
   facts: { label: name, claims: {} },
 });
 
+/** The hour of `d` on a Berlin clock. */
+const berlinHour = (d: Date) =>
+  new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Berlin",
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).format(d);
+
 const INDEX: StadtwissenIndex = {
   epsg: 25_833,
   site: "dresden",
@@ -73,19 +81,15 @@ describe("the plan", () => {
   });
 
   test("the hours are Berlin's, winter or summer", () => {
-    const hour = (d: Date) =>
-      new Intl.DateTimeFormat("en-GB", {
-        timeZone: "Europe/Berlin",
-        hour: "2-digit",
-        hourCycle: "h23",
-      }).format(d);
     expect(berlinAt(new Date("2026-11-01T12:00:00Z"), 8).toISOString()).toBe(
       "2026-11-01T07:00:00.000Z"
     );
     expect(berlinAt(new Date("2026-07-01T12:00:00Z"), 23).toISOString()).toBe(
       "2026-07-01T21:00:00.000Z"
     );
-    expect(hour(berlinAt(new Date("2026-03-29T12:00:00Z"), 19))).toBe("19");
+    expect(berlinHour(berlinAt(new Date("2026-03-29T12:00:00Z"), 19))).toBe(
+      "19"
+    );
   });
 
   test("asks every question of a place there, the free ones at two places only", () => {

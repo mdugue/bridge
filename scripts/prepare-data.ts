@@ -38,36 +38,34 @@
  * streams from.
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import { hitOf, type Knowledge, knowledgeOf } from "../lib/city/ask-knowledge";
-import { PLATE_N, type PlateExtras } from "../lib/city/ground-plate";
-import { type LandmarkFile, siteLandmarks } from "../lib/city/landmarks";
+import nodePath from "node:path";
+import { hitOf, knowledgeOf } from "../lib/city/ask-knowledge";
+import type { Knowledge } from "../lib/city/ask-knowledge";
+import { PLATE_N } from "../lib/city/ground-plate";
+import type { PlateExtras } from "../lib/city/ground-plate";
+import { siteLandmarks } from "../lib/city/landmarks";
+import type { LandmarkFile } from "../lib/city/landmarks";
 import {
-  type MuralExtras,
-  type MuralFile,
   MURALS_FILE,
   muralCredit,
   muralFileSource,
   muralsSource,
   parseMurals,
 } from "../lib/city/murals";
-import {
-  PROVENANCE_FILE,
-  type ProvenanceRecord,
-  siteProvenance,
-} from "../lib/city/provenance";
+import type { MuralExtras, MuralFile } from "../lib/city/murals";
+import { PROVENANCE_FILE, siteProvenance } from "../lib/city/provenance";
+import type { ProvenanceRecord } from "../lib/city/provenance";
 import { tileExtentOf } from "../lib/city/site";
 import {
-  type Walk,
-  type WalkBundle,
   WALKS_DIR,
   WALKS_FILE,
   stopPlaces,
   walkBundle,
   walkPhotoFile,
-  type WalksExtras,
 } from "../lib/city/walks";
-import { groundRelief, type ValleyRim } from "../lib/city/valley-fog";
+import type { Walk, WalkBundle, WalksExtras } from "../lib/city/walks";
+import { groundRelief } from "../lib/city/valley-fog";
+import type { ValleyRim } from "../lib/city/valley-fog";
 import {
   ASK_KINDS,
   pickFiles,
@@ -75,17 +73,16 @@ import {
   siteDataDir,
 } from "../lib/city/tile";
 import {
-  type BakedTile,
   buildTileset,
   TILESET_FILE,
   TILESET_SPAWN_FILE,
-  type TilesetExtras,
 } from "../lib/city/tileset";
+import type { BakedTile, TilesetExtras } from "../lib/city/tileset";
 import {
   LANDMARK_FACTS_FILE,
-  type LandmarkFactsExtras,
   landmarkFactsSource,
 } from "../lib/city/landmark-facts";
+import type { LandmarkFactsExtras } from "../lib/city/landmark-facts";
 import {
   TRAM_TIMETABLE_FILE,
   tramTimetableSource,
@@ -126,7 +123,7 @@ function valleyRims(): ValleyRim[] {
     if (!existsSync(legend)) {
       return [];
     }
-    const valley = readJson<{ valley?: Partial<ValleyRim> }>(legend).valley;
+    const { valley } = readJson(legend) as { valley?: Partial<ValleyRim> };
     return typeof valley?.floorM === "number" && Array.isArray(valley.rimM)
       ? [{ floorM: valley.floorM, rimM: valley.rimM }]
       : [];
@@ -155,7 +152,8 @@ if (MODE.kind === "ground") {
 const baked: BakedTile[] = [];
 const footprintFiles = new Map<string, string>();
 const groundHeights: number[] = [];
-for (const [i, tile] of TILES.entries()) {
+for (let i = 0; i < TILES.length; i += 1) {
+  const tile = TILES[i];
   if (!OWN.has(tile)) {
     continue;
   }
@@ -214,7 +212,7 @@ function readProvenance(): ProvenanceRecord {
     );
     return {};
   }
-  return readJson<ProvenanceRecord>(path);
+  return readJson(path) as ProvenanceRecord;
 }
 const provenance = siteProvenance(
   readProvenance(),
@@ -239,7 +237,7 @@ const trams = existsSync(tramSource)
 const muralsDir = siteDataDir(SITE);
 const muralsPath = at(muralsSource(muralsDir));
 const muralFile = existsSync(muralsPath)
-  ? readJson<Partial<MuralFile>>(muralsPath)
+  ? (readJson(muralsPath) as Partial<MuralFile>)
   : null;
 const muralPath = (name: string) => at(muralFileSource(muralsDir, name));
 const murals = (parseMurals(muralFile) ?? [])
@@ -295,7 +293,7 @@ function withPhotos(walk: Walk): Walk {
       if (!stop.photo) {
         return stop;
       }
-      const file = join(walksDir, walkPhotoFile(walk.id, stop.id));
+      const file = nodePath.join(walksDir, walkPhotoFile(walk.id, stop.id));
       if (!existsSync(file)) {
         log(
           `${walk.id}/${stop.id}: no photo copy, shown without (bun scripts/walks.ts ${SITE.id} photos)`
@@ -338,7 +336,9 @@ const walks = knowledge
         publishedWalks(
           walkBundle(
             SITE.id,
-            walkFiles.map((name) => readJson<Walk>(join(walksDir, name)))
+            walkFiles.map(
+              (name) => readJson(nodePath.join(walksDir, name)) as Walk
+            )
           ),
           knowledge
         )

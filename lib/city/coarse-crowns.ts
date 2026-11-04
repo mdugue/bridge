@@ -230,11 +230,12 @@ const clampInt = (v: number, lo: number, hi: number) =>
 export function packCrowns(crowns: readonly CoarseCrown[]): Uint8Array {
   const bytes = new Uint8Array(HEADER_BYTES + crowns.length * RECORD_BYTES);
   const view = new DataView(bytes.buffer);
-  for (let i = 0; i < MAGIC.length; i++) {
-    view.setUint8(i, MAGIC.charCodeAt(i));
+  for (let i = 0; i < MAGIC.length; i += 1) {
+    view.setUint8(i, MAGIC.codePointAt(i) ?? 0);
   }
   view.setUint32(4, crowns.length, true);
-  crowns.forEach((c, k) => {
+  for (let k = 0; k < crowns.length; k += 1) {
+    const c = crowns[k];
     const at = HEADER_BYTES + k * RECORD_BYTES;
     view.setFloat32(at, c.x, true);
     view.setFloat32(at + 4, c.z, true);
@@ -254,7 +255,7 @@ export function packCrowns(crowns: readonly CoarseCrown[]): Uint8Array {
       const base =
         c.base === undefined ? 0 : clampInt(c.base * 1000, 1, 65_535);
       view.setUint16(at + 18, base, true);
-      return;
+      continue;
     }
     view.setUint8(
       at + 8,
@@ -268,7 +269,7 @@ export function packCrowns(crowns: readonly CoarseCrown[]): Uint8Array {
     view.setUint16(at + 14, cm(c.ext.crownBase), true);
     view.setUint16(at + 16, cm(c.ext.crownTop), true);
     view.setUint16(at + 18, cm(c.ext.crownWidth), true);
-  });
+  }
   return bytes;
 }
 
@@ -278,8 +279,8 @@ export function unpackCrowns(buffer: ArrayBuffer): CoarseCrown[] | null {
     return null;
   }
   const view = new DataView(buffer);
-  for (let i = 0; i < MAGIC.length; i++) {
-    if (view.getUint8(i) !== MAGIC.charCodeAt(i)) {
+  for (let i = 0; i < MAGIC.length; i += 1) {
+    if (view.getUint8(i) !== (MAGIC.codePointAt(i) ?? 0)) {
       return null;
     }
   }
@@ -288,7 +289,7 @@ export function unpackCrowns(buffer: ArrayBuffer): CoarseCrown[] | null {
     return null;
   }
   const out: CoarseCrown[] = [];
-  for (let k = 0; k < count; k++) {
+  for (let k = 0; k < count; k += 1) {
     const at = HEADER_BYTES + k * RECORD_BYTES;
     const code = view.getUint8(at + 8);
     const ndviByte = view.getUint8(at + 9);

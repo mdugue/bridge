@@ -4,17 +4,16 @@ import {
   createRetryTally,
   createVisibleClock,
   errorVerdict,
-  type FetchAnswer,
   healDelayMs,
   isNetworkFailure,
   isNetworkMessage,
   NetworkError,
-  type RetryEnv,
   RETRY_CAP_MS,
   retryAfterMs,
   statusVerdict,
   withRetry,
 } from "./fetch-retry";
+import type { FetchAnswer, RetryEnv } from "./fetch-retry";
 
 /**
  * A page on a fake clock: sleeping moves the clock, the page is visible
@@ -34,19 +33,17 @@ function fakePage(hidden: [number, number][] = []) {
   const env: RetryEnv = {
     now: () => now,
     random: () => 0.5,
-    sleep: (ms, signal) => {
+    sleep: async (ms, signal) => {
       if (signal?.aborted) {
-        return Promise.reject(new DOMException("aborted", "AbortError"));
+        throw new DOMException("aborted", "AbortError");
       }
       now += ms;
-      return Promise.resolve();
     },
-    whenUsable: () => {
+    whenUsable: async () => {
       const span = hidden.find(([a, b]) => now >= a && now < b);
       if (span) {
         now = span[1];
       }
-      return Promise.resolve();
     },
     visibleMs: () => visibleBetween(now),
     describe: () => "online visible",
@@ -139,11 +136,11 @@ test("a network error is retried until an answer comes", async () => {
   const page = fakePage();
   let calls = 0;
   const answer = await withRetry(
-    () => {
-      calls++;
+    async () => {
+      calls += 1;
       return calls < 3
-        ? Promise.reject(new TypeError("Load failed"))
-        : Promise.resolve(ok());
+        ? await Promise.reject(new TypeError("Load failed"))
+        : await Promise.resolve(ok());
     },
     { budgetMs: 20_000, env: page.env }
   );
@@ -157,9 +154,9 @@ test("an absent or fatal status is answered at once, never retried", async () =>
   for (const status of [404, 403]) {
     let calls = 0;
     const answer = await withRetry(
-      () => {
-        calls++;
-        return Promise.resolve({ status, value: "" });
+      async () => {
+        calls += 1;
+        return { status, value: "" };
       },
       { budgetMs: 20_000, env: fakePage().env }
     );
@@ -171,26 +168,21 @@ test("an absent or fatal status is answered at once, never retried", async () =>
 test("a fatal error and an abort reject as they are, without a retry", async () => {
   const parse = new SyntaxError("Unexpected token");
   let calls = 0;
-  // bun-types declare the `rejects` matchers as void, but bun resolves them
-  // asynchronously — dropping the await would end the test before it runs.
-  // oxlint-disable-next-line typescript/await-thenable
   await expect(
     withRetry(
-      () => {
-        calls++;
-        return Promise.reject(parse);
+      async () => {
+        calls += 1;
+        throw parse;
       },
       { budgetMs: 20_000, env: fakePage().env }
     )
   ).rejects.toBe(parse);
   const abort = new DOMException("aborted", "AbortError");
-  // (bun-types declare `rejects` as void; see above)
-  // oxlint-disable-next-line typescript/await-thenable
   await expect(
     withRetry(
-      () => {
-        calls++;
-        return Promise.reject(abort);
+      async () => {
+        calls += 1;
+        throw abort;
       },
       { budgetMs: 20_000, env: fakePage().env }
     )
@@ -202,15 +194,13 @@ test("an abort during the wait ends the retries", async () => {
   const aborter = new AbortController();
   let calls = 0;
   const run = withRetry(
-    () => {
-      calls++;
+    async () => {
+      calls += 1;
       aborter.abort();
-      return Promise.reject(new TypeError("Load failed"));
+      throw new TypeError("Load failed");
     },
     { budgetMs: 20_000, env: fakePage().env, signal: aborter.signal }
   );
-  // (bun-types declare `rejects` as void; see above)
-  // oxlint-disable-next-line typescript/await-thenable
   await expect(run).rejects.toMatchObject({ name: "AbortError" });
   expect(calls).toBe(1);
 });
@@ -219,11 +209,9 @@ test("a transient status waits at least its Retry-After", async () => {
   const page = fakePage();
   let calls = 0;
   await withRetry(
-    () => {
-      calls++;
-      return Promise.resolve(
-        calls === 1 ? { status: 503, retryAfter: "4", value: "" } : ok()
-      );
+    async () => {
+      calls += 1;
+      return calls === 1 ? { status: 503, retryAfter: "4", value: "" } : ok();
     },
     { budgetMs: 20_000, env: page.env }
   );
@@ -235,20 +223,20 @@ test("the budget spent, the retries give up with a NetworkError that says how of
   const notes: number[] = [];
   let calls = 0;
   const run = withRetry(
-    () => {
-      calls++;
-      return Promise.reject(new TypeError("Load failed"));
+    async () => {
+      calls += 1;
+      throw new TypeError("Load failed");
     },
     {
       budgetMs: 8000,
       env: page.env,
-      onRetry: (note) => notes.push(note.attempt),
+      onRetry: (note) => {
+        notes.push(note.attempt);
+      },
     }
   );
-  // (bun-types declare `rejects` as void; see above)
-  // oxlint-disable-next-line typescript/await-thenable
   await expect(run).rejects.toBeInstanceOf(NetworkError);
-  const error = (await run.catch((err: unknown) => err)) as NetworkError;
+  const error = (await run.catch((error_: unknown) => error_)) as NetworkError;
   // 0.5 + 1 + 2 + 4 s waited; the next 8 s would pass the budget
   expect(calls).toBe(5);
   expect(notes).toEqual([1, 2, 3, 4]);
@@ -265,11 +253,11 @@ test("time the page is hidden does not count against the budget", async () => {
   const page = fakePage([[1000, 61_000]]);
   let calls = 0;
   const answer = await withRetry(
-    () => {
-      calls++;
+    async () => {
+      calls += 1;
       return calls < 5
-        ? Promise.reject(new TypeError("Load failed"))
-        : Promise.resolve(ok());
+        ? await Promise.reject(new TypeError("Load failed"))
+        : await Promise.resolve(ok());
     },
     { budgetMs: 10_000, env: page.env }
   );

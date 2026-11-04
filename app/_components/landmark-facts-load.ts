@@ -9,15 +9,15 @@
 import {
   indexLandmarkFacts,
   isLandmarkFactsFile,
-  type LandmarkFactsIndex,
 } from "@/lib/city/landmark-facts";
+import type { LandmarkFactsIndex } from "@/lib/city/landmark-facts";
 
 /** How long the facts may take before the plate shows the name alone. */
 const FACTS_TIMEOUT_MS = 8000;
 
 const loads = new Map<string, Promise<LandmarkFactsIndex | null>>();
 
-export function loadLandmarkFacts(
+export async function loadLandmarkFacts(
   url: string
 ): Promise<LandmarkFactsIndex | null> {
   let pending = loads.get(url);
@@ -25,11 +25,11 @@ export function loadLandmarkFacts(
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), FACTS_TIMEOUT_MS);
     pending = fetch(url, { signal: controller.signal })
-      .then((r) => {
+      .then(async (r) => {
         if (!r.ok) {
           throw new Error(`landmark facts: ${r.status}`);
         }
-        return r.json() as Promise<unknown>;
+        return await (r.json() as Promise<unknown>);
       })
       // a file that arrived but is not one is kept as none: asking again
       // would fetch the same; a failed or late fetch is not kept
@@ -46,5 +46,5 @@ export function loadLandmarkFacts(
       });
     loads.set(url, pending);
   }
-  return pending;
+  return await pending;
 }

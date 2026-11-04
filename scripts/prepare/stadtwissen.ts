@@ -11,10 +11,12 @@ import { existsSync } from "node:fs";
 import type { SourceInfo, SourceKey } from "../../lib/city/provenance";
 import {
   STADTWISSEN_FILE,
-  type StadtwissenIndex,
   WIKIDATA_FACTS_FILE,
-  type WikidataFile,
-  type WissenTile,
+} from "../../lib/city/stadtwissen";
+import type {
+  StadtwissenIndex,
+  WikidataFile,
+  WissenTile,
 } from "../../lib/city/stadtwissen";
 import {
   cityMeshSourceFiles,
@@ -26,6 +28,8 @@ import { BAKE_ENTRIES } from "../bake-entries";
 import { stadtwissenIndex, stadtwissenTile } from "../bake-stadtwissen";
 import { SITE, at, cacheKey, cached, publish, readJson, utf8 } from "./context";
 import { landmarkFile } from "./landmarks";
+
+type TileInput = Parameters<typeof stadtwissenTile>[0];
 
 /** One tile's directory, cached on the buildings, their OSM facts, the
  *  landmarks and the monuments it is read from: its published name and
@@ -46,19 +50,21 @@ async function tileFile(
       utf8(
         stadtwissenTile({
           tile,
-          city: readJson(at(src.city)),
+          city: readJson(at(src.city)) as TileInput["city"],
           osm: existsSync(at(src.osmBuild))
-            ? readJson<{ objects: Record<string, never> }>(at(src.osmBuild))
+            ? (readJson(at(src.osmBuild)) as { objects: Record<string, never> })
                 .objects
             : {},
           landmarks: landmarkFile(tile),
-          monuments: existsSync(monuments) ? readJson(monuments) : undefined,
+          monuments: existsSync(monuments)
+            ? (readJson(monuments) as TileInput["monuments"])
+            : undefined,
         })
       )
   );
   return {
     file: publish(name, bytes),
-    directory: JSON.parse(Buffer.from(bytes).toString("utf8")) as WissenTile,
+    directory: JSON.parse(Buffer.from(bytes).toString("utf-8")) as WissenTile,
   };
 }
 
@@ -92,7 +98,7 @@ export async function publishStadtwissen(
       return file ? [{ tile, file }] : [];
     }),
     wikidata: existsSync(wikidata)
-      ? readJson<WikidataFile>(wikidata)
+      ? (readJson(wikidata) as WikidataFile)
       : undefined,
   });
   publish(STADTWISSEN_FILE, utf8(index));

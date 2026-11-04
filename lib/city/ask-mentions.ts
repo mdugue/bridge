@@ -20,18 +20,18 @@ export type MentionRun = { text: string } | { text: string; place: number };
 export function placeLabel(name: string, city: string): string {
   const bare = name
     .trim()
-    .replace(/\s+[–—-]\s.*$/, "")
-    .replace(/\s*\([^)]*\)$/, "")
-    .replace(/,\s[^,]*$/, "");
+    .replace(/\s+[–—-]\s.*$/u, "")
+    .replace(/\s*\([^)]*\)$/u, "")
+    .replace(/,\s[^,]*$/u, "");
   const c = city.trim().toLowerCase();
-  const words = bare.split(/\s+/);
+  const words = bare.split(/\s+/u);
   return c !== "" && words.length > 1 && words.at(-1)?.toLowerCase() === c
     ? words.slice(0, -1).join(" ")
     : bare;
 }
 
 /** A German adjective's case endings. */
-const DECLINED = /(?:e|es|er|en|em)$/;
+const DECLINED = /(?:e|es|er|en|em)$/u;
 /**
  * An adjective that opens a name, its stem and ending: one in -isch
  * ("Katholische"), a common one ("Altes", "Neue", "Großer"), or one made
@@ -39,12 +39,12 @@ const DECLINED = /(?:e|es|er|en|em)$/;
  * so "Kaiser" or "Bürger" are none).
  */
 const ADJECTIVE =
-  /^(?:[A-ZÄÖÜ][a-zäöüß]*isch|Alt|Neu|Groß|Klein|Golden|Rot|Weiß|Blau|Grün|Schwarz|Hoh|Ober|Unter|Heilig|Breit|Lang|Schön)(?:e|es|er|en)$|^[A-ZÄÖÜ][a-zäöüß]{4,}er$/;
+  /^(?:[A-ZÄÖÜ][a-zäöüß]*isch|Alt|Neu|Groß|Klein|Golden|Rot|Weiß|Blau|Grün|Schwarz|Hoh|Ober|Unter|Heilig|Breit|Lang|Schön)(?:e|es|er|en)$|^[A-ZÄÖÜ][a-zäöüß]{4,}er$/u;
 /** The shortest noun that stands for the whole name ("Hofkirche"). */
 const NOUN_MIN = 7;
 /** Words that open a noun phrase without saying which one. */
 const DETERMINER =
-  /^(?:d(?:ie|er|as|en|em|es)|dies(?:e|er|es|en|em)|jen(?:e|er|es|en|em)|k?ein(?:e|er|es|en|em)?|(?:mein|dein|sein|ihr|unser|euer)(?:e|er|es|en|em)?|welch(?:e|er|es|en|em))$/i;
+  /^(?:d(?:ie|er|as|en|em|es)|dies(?:e|er|es|en|em)|jen(?:e|er|es|en|em)|k?ein(?:e|er|es|en|em)?|(?:mein|dein|sein|ihr|unser|euer)(?:e|er|es|en|em)?|welch(?:e|er|es|en|em))$/iu;
 
 /** A name's adjective without its ending, compared across its forms
  *  ("Alte", "Altes", "Alten" → "alt"). */
@@ -64,7 +64,7 @@ interface Alias {
 function nounOf(
   label: string
 ): { noun: string; stem: string; written: string } | null {
-  const words = label.split(/\s+/);
+  const words = label.split(/\s+/u);
   const [adjective = "", noun = ""] = words;
   return words.length === 2 &&
     ADJECTIVE.test(adjective) &&
@@ -113,15 +113,15 @@ function sharedNouns(
 ): Set<string> {
   const labels = places.map((p) => placeLabel(p.name, city));
   const words = labels.map(
-    (l) => new Set(l.toLowerCase().split(/\s+/).filter(Boolean))
+    (l) => new Set(l.toLowerCase().split(/\s+/u).filter(Boolean))
   );
   const shared = new Set<string>();
-  labels.forEach((label, i) => {
+  for (const [i, label] of labels.entries()) {
     const noun = nounOf(label)?.noun.toLowerCase();
     if (noun && words.some((w, j) => j !== i && w.has(noun))) {
       shared.add(noun);
     }
-  });
+  }
   return shared;
 }
 
@@ -130,7 +130,7 @@ const WORD = /[\p{L}\p{N}]/u;
 const ENDING = /^(?:es|en|ns|s|n)?(?![\p{L}\p{N}])/u;
 
 /** The word before `at` in `text`, if only spaces part them. */
-const WORD_BEFORE = /([\p{L}]+)\s+$/u;
+const WORD_BEFORE = /(?<word>[\p{L}]+)\s+$/u;
 /** A capitalised word right after (a name goes on: "Bahnhof Mitte"). */
 const NAME_AFTER = /^\s+\p{Lu}/u;
 
@@ -144,7 +144,7 @@ function nounFits(text: string, at: number, end: number, stem: string) {
   if (NAME_AFTER.test(text.slice(end))) {
     return false;
   }
-  const before = WORD_BEFORE.exec(text.slice(0, at))?.[1];
+  const before = WORD_BEFORE.exec(text.slice(0, at))?.groups?.word;
   if (!before || DETERMINER.test(before)) {
     return true;
   }
@@ -185,13 +185,13 @@ export function mentionRuns(
   text: string,
   places: readonly { name: string }[],
   city: string,
-  linked: Set<number> = new Set()
+  linked = new Set<number>()
 ): MentionRun[] {
   const hits: { at: number; end: number; place: number }[] = [];
   const shared = sharedNouns(places, city);
-  places.forEach((p, place) => {
+  for (const [place, p] of places.entries()) {
     if (linked.has(place)) {
-      return;
+      continue;
     }
     // where the text first names it, by whichever of its names
     let first: { at: number; end: number } | null = null;
@@ -204,7 +204,7 @@ export function mentionRuns(
     if (first) {
       hits.push({ ...first, place });
     }
-  });
+  }
   hits.sort((a, b) => a.at - b.at || b.end - a.end);
   const runs: MentionRun[] = [];
   let pos = 0;

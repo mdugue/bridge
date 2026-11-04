@@ -32,14 +32,13 @@ import {
   judgeMessage,
   QA_JUDGE_PROMPT,
   QA_VERDICT,
-  type QaAnswer,
-  type QaCase,
   RESULT_CHARS,
   qaCases,
   qaLook,
   qaPlaces,
   qaVisitor,
 } from "@/lib/city/ask-qa";
+import type { QaAnswer, QaCase } from "@/lib/city/ask-qa";
 import { runAsk, scrubbed } from "@/lib/city/ask-run";
 import { siteById } from "@/sites";
 import { askAdapter, fakeAskAdapter, fakeJudgeAdapter } from "../adapters";
@@ -54,14 +53,21 @@ const MAX_PLACES = 8;
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
+/** A finite number. */
+const finite = (n: unknown): n is number =>
+  typeof n === "number" && Number.isFinite(n);
+
+/** A finite number, not below zero. */
+const notNegative = (n: unknown): n is number => finite(n) && n >= 0;
+
+/** A string of one to `max` characters. */
+const text = (t: unknown, max: number): t is string =>
+  typeof t === "string" && t.length > 0 && t.length <= max;
+
 /** A case as the panel sends it back, checked: the plan's shape, short. */
 function parseCase(value: unknown): QaCase | null {
   const c = value as Partial<QaCase> | null;
   const p = c?.place;
-  const num = (n: unknown): n is number =>
-    typeof n === "number" && Number.isFinite(n);
-  const text = (t: unknown, max: number): t is string =>
-    typeof t === "string" && t.length > 0 && t.length <= max;
   if (
     !(
       c &&
@@ -73,10 +79,10 @@ function parseCase(value: unknown): QaCase | null {
       text(c.at, 40) &&
       !Number.isNaN(Date.parse(c.at)) &&
       text(p.name, 120) &&
-      num(p.x) &&
-      num(p.y) &&
-      num(p.heading) &&
-      (p.ground === null || num(p.ground)) &&
+      finite(p.x) &&
+      finite(p.y) &&
+      finite(p.heading) &&
+      (p.ground === null || finite(p.ground)) &&
       (p.ahead === null || text(p.ahead, 40))
     )
   ) {
@@ -93,8 +99,6 @@ const ANSWER_CALLS = 24;
  *  capped: what the judge reads is what the case's request recorded. */
 function parseAnswer(value: unknown): QaAnswer | null {
   const a = value as Partial<QaAnswer> | null;
-  const num = (n: unknown): n is number =>
-    typeof n === "number" && Number.isFinite(n) && n >= 0;
   if (
     !(
       a &&
@@ -102,9 +106,9 @@ function parseAnswer(value: unknown): QaAnswer | null {
       a.text.length <= ANSWER_CHARS &&
       Array.isArray(a.calls) &&
       a.calls.length <= ANSWER_CALLS &&
-      num(a.totalMs) &&
-      num(a.turns) &&
-      (a.firstTextMs === null || num(a.firstTextMs))
+      notNegative(a.totalMs) &&
+      notNegative(a.turns) &&
+      (a.firstTextMs === null || notNegative(a.firstTextMs))
     )
   ) {
     return null;
@@ -184,7 +188,7 @@ export async function POST(request: Request): Promise<Response> {
     if (!answer) {
       return refuse(400, "bad-answer", "Die Antwort ist unvollständig.");
     }
-    return judged(c, answer, {
+    return await judged(c, answer, {
       adapter: fake
         ? fakeJudgeAdapter()
         : askAdapter(props.provider, props.model, key),

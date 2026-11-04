@@ -8,7 +8,6 @@ import {
   LayersIcon,
   LibraryIcon,
   ListChecksIcon,
-  type LucideProps,
   MilestoneIcon,
   MousePointerClickIcon,
   RouteIcon,
@@ -17,6 +16,7 @@ import {
   WaypointsIcon,
   WorkflowIcon,
 } from "lucide-react";
+import type { LucideProps } from "lucide-react";
 import type { ReactNode } from "react";
 
 type Glyph = (props: LucideProps) => ReactNode;
@@ -48,7 +48,7 @@ const DOCUMENT: Glyph = (p) => <FileTextIcon {...p} />;
 /** The page's glyph, as an element. */
 export function docIcon(file: string, props: LucideProps): ReactNode {
   const inner = file
-    .replace(/^docs\/(guide\/(de|en)\/)?/u, "")
+    .replace(/^docs\/(?:guide\/(?:de|en)\/)?/u, "")
     .replace(/\.md$/u, "");
   return (ICONS[inner] ?? DOCUMENT)({ "aria-hidden": true, ...props });
 }

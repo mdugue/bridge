@@ -33,14 +33,26 @@ await mock.module("../knowledge", () => ({
 
 const { POST } = await import("./route");
 
-const post = (body: unknown) =>
-  POST(
+const post = async (body: unknown) =>
+  await POST(
     new Request("http://localhost/api/frag/pruefen", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     })
   );
+
+/** The body of an answer to `body`. */
+const postJson = async (body: unknown): Promise<unknown> => {
+  const res = await post(body);
+  return await res.json();
+};
+
+/** The status of the answer to `body`. */
+const statusOf = async (body: unknown): Promise<number> => {
+  const res = await post(body);
+  return res.status;
+};
 
 beforeAll(() => {
   process.env.FRAG_FAKE = "1";
@@ -50,9 +62,9 @@ afterAll(() => {
 });
 
 test("plans the cases, asks one with the scripted model and judges it", async () => {
-  const plan = (await (
-    await post({ art: "plan", site: "dresden", orte: 2 })
-  ).json()) as { faelle: QaCase[] };
+  const plan = (await postJson({ art: "plan", site: "dresden", orte: 2 })) as {
+    faelle: QaCase[];
+  };
   expect(plan.faelle.length).toBeGreaterThan(4);
   // the scripted model asks the view for a question "vor mir"
   const c = plan.faelle.find((f) => f.question.includes("vor mir"));
@@ -94,20 +106,18 @@ test("refuses a model the provider does not offer, a broken case or answer", asy
     model: "claude-haiku-5-5",
     token: "",
   };
-  expect((await post({ ...base, model: "gpt-6-luna" })).status).toBe(400);
-  expect((await post({ ...base, fall: { id: "x" } })).status).toBe(400);
-  const plan = (await (
-    await post({ art: "plan", site: "dresden", orte: 1 })
-  ).json()) as { faelle: QaCase[] };
+  expect(await statusOf({ ...base, model: "gpt-6-luna" })).toBe(400);
+  expect(await statusOf({ ...base, fall: { id: "x" } })).toBe(400);
+  const plan = (await postJson({ art: "plan", site: "dresden", orte: 1 })) as {
+    faelle: QaCase[];
+  };
   expect(
-    (
-      await post({
-        ...base,
-        art: "urteil",
-        fall: plan.faelle[0],
-        antwort: { text: "x".repeat(9000), calls: [] },
-      })
-    ).status
+    await statusOf({
+      ...base,
+      art: "urteil",
+      fall: plan.faelle[0],
+      antwort: { text: "x".repeat(9000), calls: [] },
+    })
   ).toBe(400);
-  expect((await post({ art: "plan", site: "atlantis" })).status).toBe(404);
+  expect(await statusOf({ art: "plan", site: "atlantis" })).toBe(404);
 });

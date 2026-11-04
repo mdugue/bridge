@@ -12,8 +12,8 @@ import {
 function seeded(seed = 1): () => number {
   let s = seed;
   return () => {
-    s = (s * 16807) % 2147483647;
-    return (s - 1) / 2147483646;
+    s = (s * 16_807) % 2_147_483_647;
+    return (s - 1) / 2_147_483_646;
   };
 }
 
@@ -54,7 +54,7 @@ test("the landmark ahead is the one the view looks at, the nearest the one besid
 });
 
 test("a set holds four different questions, the first about the place", () => {
-  for (let seed = 1; seed < 40; seed++) {
+  for (let seed = 1; seed < 40; seed += 1) {
     const qs = starterQuestions(
       {
         at: { x: 0, y: 0, headingDeg: 0 },

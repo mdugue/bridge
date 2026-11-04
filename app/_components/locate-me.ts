@@ -23,6 +23,7 @@ export class LocateError extends Error {
   readonly reason: LocateFailure;
   constructor(reason: LocateFailure) {
     super(reason);
+    this.name = "LocateError";
     this.reason = reason;
   }
 }
@@ -59,7 +60,9 @@ function startCompass() {
   // `requestPermission` too, and grants it without a prompt).
   const stop = subscribeAim(onAim);
   if (orientationNeedsPermission()) {
-    requestOrientationPermission().catch(() => undefined);
+    requestOrientationPermission().catch(() => {
+      // a refused or missing permission just leaves the compass off
+    });
   }
   return {
     /** The averaged heading, waiting up to `ms` for a first reading. */
@@ -79,8 +82,8 @@ function startCompass() {
   };
 }
 
-function currentPosition(): Promise<GeolocationPosition> {
-  return new Promise((resolve, reject) => {
+async function currentPosition(): Promise<GeolocationPosition> {
+  return await new Promise((resolve, reject) => {
     navigator.geolocation.getCurrentPosition(
       resolve,
       (err) => {
@@ -107,7 +110,9 @@ export function watchFix(
 ): () => void {
   if (!canLocate()) {
     onError(new LocateError("unsupported"));
-    return () => undefined;
+    return () => {
+      // nothing was subscribed
+    };
   }
   const id = navigator.geolocation.watchPosition(
     (pos) =>
@@ -193,6 +198,8 @@ export function describeFailure(err: unknown): string {
     : "Standort konnte nicht bestimmt werden";
 }
 
+const UNMAPPABLE = "Dein Standort lässt sich nicht auf diese Karte übertragen";
+
 /** The HUD line for a placement (lib/city/geolocation.ts). */
 export function describePlacement(
   placement: Placement,
@@ -205,10 +212,16 @@ export function describePlacement(
         ? `${at}, Blickrichtung ohne Kompass beibehalten`
         : at;
     }
-    case "outside":
+    case "outside": {
       return `Du bist ${formatDistance(placement.distanceM)} außerhalb von ${siteLabel} — dort gibt es noch keine Stadt`;
-    case "unsupported":
-      return "Dein Standort lässt sich nicht auf diese Karte übertragen";
+    }
+    case "unsupported": {
+      return UNMAPPABLE;
+    }
+    default: {
+      const unknown: never = placement;
+      throw new Error(`unknown placement: ${String(unknown)}`);
+    }
   }
 }
 

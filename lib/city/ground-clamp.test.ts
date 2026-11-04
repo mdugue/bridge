@@ -29,7 +29,7 @@ test("epsgToWorld is the inverse of worldToEpsg", () => {
 test("approachHeight converges monotonically toward the target", () => {
   let y = 100;
   let previousGap = Math.abs(110 - y);
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 60; i += 1) {
     y = approachHeight(y, 110, 1 / 60, 0.12);
     const gap = Math.abs(110 - y);
     expect(gap).toBeLessThanOrEqual(previousGap);

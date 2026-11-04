@@ -4,8 +4,8 @@ import { signedDistanceField } from "./sdf";
 /** A 32 × 32 coverage map with a filled square from 8 to 24. */
 function square(): Uint8Array {
   const a = new Uint8Array(32 * 32);
-  for (let y = 8; y < 24; y++) {
-    for (let x = 8; x < 24; x++) {
+  for (let y = 8; y < 24; y += 1) {
+    for (let x = 8; x < 24; x += 1) {
       a[y * 32 + x] = 255;
     }
   }
@@ -34,7 +34,7 @@ test("the field falls evenly with distance outside", () => {
 test("antialiased coverage moves the edge", () => {
   const a = square();
   const b = square();
-  for (let y = 8; y < 24; y++) {
+  for (let y = 8; y < 24; y += 1) {
     b[y * 32 + 7] = 128;
   }
   const fa = signedDistanceField(a, 32, 32, 4);

@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { type Bed, BedIndex, BURIED_M, burnBeds, tramBed } from "./track-beds";
+import { BedIndex, BURIED_M, burnBeds, tramBed } from "./track-beds";
+import type { Bed } from "./track-beds";
 
 // a 100 m square grid of 1 m cells, row 0 = north
 const n = 100;

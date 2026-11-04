@@ -7,7 +7,8 @@ import {
   setClockTime,
   showFurnitureNear,
 } from "./furniture-layer";
-import { type Instances, isInstances } from "./instancing";
+import { isInstances } from "./instancing";
+import type { Instances } from "./instancing";
 
 const ctx = { offset: { cx: 0, cy: 0 }, heightAt: () => 100 };
 
@@ -66,12 +67,10 @@ test("the street's signs and fixtures each build an instanced model", () => {
   }
 });
 
+const build = () =>
+  buildFurniture([at({ k: "column" }), at({ k: "column", lit: true }, 5)], ctx);
+
 test("every tile wears the scene's node materials", () => {
-  const build = () =>
-    buildFurniture(
-      [at({ k: "column" }), at({ k: "column", lit: true }, 5)],
-      ctx
-    );
   const byName = (g: ReturnType<typeof build>, name: string) =>
     g.getObjectByName(name) as Instances<MeshStandardNodeMaterial>;
   const [a, b] = [build(), build()];
@@ -106,7 +105,7 @@ test("a playground's slab is a flush, polygon-offset plain mesh", () => {
   const slab = group.getObjectByName("furniture-playgrounds");
   expect(slab).toBeDefined();
   expect(isInstances(slab)).toBe(false);
-  const material = (slab as Instances<MeshStandardNodeMaterial>).material;
+  const { material } = slab as Instances<MeshStandardNodeMaterial>;
   expect(material.polygonOffset).toBe(true);
   expect(material.vertexColors).toBe(true);
 });

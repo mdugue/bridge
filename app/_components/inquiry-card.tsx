@@ -1,29 +1,24 @@
 "use client";
 
 import { CheckIcon, CopyIcon, XIcon } from "lucide-react";
-import {
-  type ElementType,
-  type ReactNode,
-  type RefObject,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ElementType, ReactNode, RefObject } from "react";
 import {
   Drawer,
   DrawerClose,
   DrawerContent,
   DrawerTitle,
 } from "@/components/ui/drawer";
-import {
-  type Inquiry,
-  type InquiryCard as InquiryCardModel,
-  inquiryCard,
+import { inquiryCard } from "@/lib/city/inquiry";
+import type {
+  Inquiry,
+  InquiryCard as InquiryCardModel,
 } from "@/lib/city/inquiry";
 import type { LandmarkFactsIndex } from "@/lib/city/landmark-facts";
-import { type TreeFacts, treeFactsAt } from "@/lib/city/inquiry-features";
-import { isSiteProvenance, type SiteProvenance } from "@/lib/city/provenance";
+import { treeFactsAt } from "@/lib/city/inquiry-features";
+import type { TreeFacts } from "@/lib/city/inquiry-features";
+import { isSiteProvenance } from "@/lib/city/provenance";
+import type { SiteProvenance } from "@/lib/city/provenance";
 import type { Drawer as DrawerPrimitive } from "@base-ui/react/drawer";
 import { cardCredits } from "@/lib/city/card-lines";
 import { cachedFetch, isTreeFacts, treeFactsFetches } from "./card-fetch";
@@ -45,15 +40,15 @@ function useFetched<T>(
     null
   );
   useEffect(() => {
-    if (!url) {
-      return;
-    }
     let live = true;
-    void cachedFetch(cache, url, accept).then((value) => {
-      if (live) {
-        setLoaded({ url, value });
-      }
-    });
+    if (url) {
+      void cachedFetch(cache, url, accept).then((value) => {
+        if (live) {
+          setLoaded({ url, value });
+        }
+        return null;
+      });
+    }
     return () => {
       live = false;
     };
@@ -73,15 +68,16 @@ function useLandmarkFacts(inquiry: Inquiry): LandmarkFactsIndex | null {
     url: string;
   } | null>(null);
   useEffect(() => {
-    if (!url) {
-      return;
-    }
     let live = true;
-    void loadLandmarkFacts(url).then((index) => {
-      if (live) {
-        setLoaded({ url, index });
-      }
-    });
+    // `inquiry` is read so that each question reruns this
+    if (url && inquiry) {
+      void loadLandmarkFacts(url).then((index) => {
+        if (live) {
+          setLoaded({ url, index });
+        }
+        return null;
+      });
+    }
     return () => {
       live = false;
     };
@@ -119,7 +115,7 @@ function useTreeFacts(inquiry: Inquiry): TreeFacts | null {
  * shadcn Card's surface, ring and a shadow): sober, so the scene keeps the
  * colour.
  */
-export function InquiryCard({
+export const InquiryCard = ({
   inquiry,
   onClose,
   provenanceUrl,
@@ -130,7 +126,7 @@ export function InquiryCard({
   provenanceUrl: string | null;
   /** a bottom sheet (touch screens) instead of the card top left */
   sheet?: boolean;
-}) {
+}) => {
   const provenance = useProvenance(provenanceUrl);
   const treeFacts = useTreeFacts(inquiry);
   const landmarks = useLandmarkFacts(inquiry);
@@ -190,7 +186,7 @@ export function InquiryCard({
       </div>
     </aside>
   );
-}
+};
 
 /** Each question its own key (an Inquiry is a new object per ask). */
 const inquiryKeys = new WeakMap<Inquiry, number>();
@@ -198,7 +194,8 @@ let nextInquiryKey = 0;
 function inquiryKey(inquiry: Inquiry): number {
   let key = inquiryKeys.get(inquiry);
   if (key === undefined) {
-    key = nextInquiryKey++;
+    key = nextInquiryKey;
+    nextInquiryKey += 1;
     inquiryKeys.set(inquiry, key);
   }
   return key;
@@ -222,25 +219,31 @@ const SHEET_ENTRANCE_FRAMES = 30;
 function useSheetEntrance(): [RefObject<HTMLDivElement | null>, boolean] {
   const ref = useRef<HTMLDivElement | null>(null);
   const [ready, setReady] = useState(false);
-  useEffect(() => {
-    let frames = 0;
-    let measured = false;
-    let id = requestAnimationFrame(function wait() {
-      // oxlint-disable-next-line react/immutability -- the effect's own counter, never render state
-      frames++;
-      if (measured || frames >= SHEET_ENTRANCE_FRAMES) {
-        setReady(true);
-        return;
-      }
-      const offset = ref.current?.style.getPropertyValue(
-        "--drawer-snap-point-offset"
-      );
-      measured = Number.parseFloat(offset ?? "") > 0;
-      id = requestAnimationFrame(wait);
-    });
-    return () => cancelAnimationFrame(id);
-  }, []);
+  useEffect(() => whenSheetMeasured(ref, () => setReady(true)), []);
   return [ref, ready];
+}
+
+/** Calls `ready` a frame after the fold's offset is set, or after
+ *  SHEET_ENTRANCE_FRAMES; returns the cancel. */
+function whenSheetMeasured(
+  sheet: RefObject<HTMLDivElement | null>,
+  ready: () => void
+): () => void {
+  let frames = 0;
+  let measured = false;
+  let id = requestAnimationFrame(function wait() {
+    frames += 1;
+    if (measured || frames >= SHEET_ENTRANCE_FRAMES) {
+      ready();
+      return;
+    }
+    const offset = sheet.current?.style.getPropertyValue(
+      "--drawer-snap-point-offset"
+    );
+    measured = Number.parseFloat(offset ?? "") > 0;
+    id = requestAnimationFrame(wait);
+  });
+  return () => cancelAnimationFrame(id);
 }
 
 /**
@@ -252,7 +255,7 @@ function useSheetEntrance(): [RefObject<HTMLDivElement | null>, boolean] {
  * closes it from the fold. The scene's joystick and toolbar step aside
  * while it is open (city-walk.tsx).
  */
-function InquirySheet({
+const InquirySheet = ({
   card,
   inquiry,
   onClose,
@@ -262,7 +265,7 @@ function InquirySheet({
   inquiry: Inquiry;
   onClose: () => void;
   provenance: SiteProvenance | null;
-}) {
+}) => {
   const [open, setOpen] = useState(true);
   const [snap, setSnap] = useState<DrawerSnapPoint | null>(
     SHEET_SNAP_POINTS[0]
@@ -319,23 +322,21 @@ function InquirySheet({
       </DrawerContent>
     </Drawer>
   );
-}
+};
 
 /** The sheet's ×: the drawer's own close, so it slides away first. */
-function SheetClose() {
-  return (
-    <DrawerClose
-      aria-label="Karte schließen"
-      className="-mt-1 -mr-1 rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-      title="Schließen"
-    >
-      <XIcon className="size-4" />
-    </DrawerClose>
-  );
-}
+const SheetClose = () => (
+  <DrawerClose
+    aria-label="Karte schließen"
+    className="-mt-1 -mr-1 rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+    title="Schließen"
+  >
+    <XIcon className="size-4" />
+  </DrawerClose>
+);
 
 /** What the thing is: the kicker, the title, the address, and ×. */
-function CardHeader({
+const CardHeader = ({
   card,
   closeSlot,
   onClose,
@@ -347,44 +348,40 @@ function CardHeader({
   onClose?: () => void;
   /** the title element (the drawer's own title in the sheet) */
   titleAs?: ElementType;
-}) {
-  return (
-    <div className="flex items-start gap-2">
-      <div className="min-w-0 flex-1">
-        {/* the accent the outline is drawn in: card and object are one */}
-        <p className="text-[10px] font-medium tracking-[0.14em] text-primary uppercase">
-          {card.kicker}
-        </p>
-        <Title
-          aria-live="polite"
-          className="font-heading text-lg leading-tight font-normal text-balance text-foreground"
-          id="inquiry-title"
-        >
-          {card.title}
-        </Title>
-        {card.address && (
-          <p className="mt-0.5 text-[13px] text-foreground/80">
-            {card.address}
-          </p>
-        )}
-      </div>
-      {closeSlot ?? (
-        <button
-          aria-label="Karte schließen"
-          className="-mt-1 -mr-1 rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-          onClick={onClose}
-          title="Schließen (Esc)"
-          type="button"
-        >
-          <XIcon className="size-4" />
-        </button>
+}) => (
+  <div className="flex items-start gap-2">
+    <div className="min-w-0 flex-1">
+      {/* the accent the outline is drawn in: card and object are one */}
+      <p className="text-[10px] font-medium tracking-[0.14em] text-primary uppercase">
+        {card.kicker}
+      </p>
+      <Title
+        aria-live="polite"
+        className="font-heading text-lg leading-tight font-normal text-balance text-foreground"
+        id="inquiry-title"
+      >
+        {card.title}
+      </Title>
+      {card.address && (
+        <p className="mt-0.5 text-[13px] text-foreground/80">{card.address}</p>
       )}
     </div>
-  );
-}
+    {closeSlot ?? (
+      <button
+        aria-label="Karte schließen"
+        className="-mt-1 -mr-1 rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+        onClick={onClose}
+        title="Schließen (Esc)"
+        type="button"
+      >
+        <XIcon className="size-4" />
+      </button>
+    )}
+  </div>
+);
 
 /** The facts, the id to copy and, folded, the data behind them. */
-function CardDetails({
+const CardDetails = ({
   card,
   inquiry,
   provenance,
@@ -392,15 +389,20 @@ function CardDetails({
   card: InquiryCardModel;
   inquiry: Inquiry;
   provenance: SiteProvenance | null;
-}) {
+}) => {
   // Which id was copied: a new building's card starts uncopied.
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const copied = copiedId === card.id;
-  const copy = () => {
-    navigator.clipboard?.writeText(card.id).then(
-      () => setCopiedId(card.id),
-      () => undefined
-    );
+  const copy = async () => {
+    if (!navigator.clipboard) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(card.id);
+      setCopiedId(card.id);
+    } catch {
+      // a refused clipboard leaves the id uncopied
+    }
   };
   return (
     <>
@@ -426,7 +428,9 @@ function CardDetails({
         <button
           aria-label={`${card.idLabel} kopieren`}
           className="rounded p-1 hover:bg-muted hover:text-foreground"
-          onClick={copy}
+          onClick={() => {
+            void copy();
+          }}
           title={`${card.idLabel} kopieren`}
           type="button"
         >
@@ -445,4 +449,4 @@ function CardDetails({
       />
     </>
   );
-}
+};

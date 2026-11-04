@@ -1,5 +1,6 @@
 import { EYE_HEIGHT } from "@/lib/city/pose";
-import { overlook, type Site } from "@/lib/city/site";
+import { overlook } from "@/lib/city/site";
+import type { Site } from "@/lib/city/site";
 import { SAXONY } from "./providers";
 
 /** Landmarks the aerial vantages frame (EPSG:25833, from their WGS84 spots). */
