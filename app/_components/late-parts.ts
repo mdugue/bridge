@@ -220,7 +220,7 @@ export function createLateParts(host: LateHost): LateParts {
     });
     leaving.add(readyNow);
     const gone = () =>
-      disposed || left || host.disposed() || (parent?.gone() ?? false);
+      disposed || freed || left || host.disposed() || (parent?.gone() ?? false);
 
     const state: Live = {
       handle: undefined as unknown as LateHandle,

@@ -346,6 +346,33 @@ test("a part with an owner goes when its owner goes", async () => {
   expect(log).toContain("traffic down");
 });
 
+test("a part added to an owner its compile's running out of memory took down never builds", async () => {
+  jest.useFakeTimers();
+  try {
+    const log: string[] = [];
+    const { compiles, host, load } = fakeHost();
+    load();
+    const parts = createLateParts(host);
+    const owner = parts.add(fakePart("dressing", log, { rank: null }).part);
+    await flush();
+    jest.advanceTimersByTime(COMPILE_WAIT_MS);
+    expect(await owner.settled).toBe("hung");
+    compiles[0].end("out of memory");
+    await flush();
+    expect(log).toContain("dressing free");
+    const child = parts.add(
+      fakePart("traffic", log, { rank: null, hangAt: "compile" }).part,
+      owner
+    );
+    await flush();
+    expect(log).not.toContain("traffic build");
+    expect(compiles).toHaveLength(1);
+    expect(await child.settled).toBe("gone");
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
 test("a root's parts weigh together, and its release frees every one", async () => {
   const log: string[] = [];
   const { compiles, host, load } = fakeHost();
