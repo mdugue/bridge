@@ -2205,6 +2205,8 @@ export class DressingPlugin {
     this.standIns.removeFromParent();
     // (release deletes the entry it is on: a Map iterates on safely)
     for (const scene of this.dressed.keys()) {
+      // left first: one whose compile still runs is released as it ends
+      this.leave(scene);
       this.release(scene);
     }
     this.skyView.clear();
