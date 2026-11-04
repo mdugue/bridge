@@ -556,7 +556,8 @@ decision (ledger 📋 #7).
 
 ## Surfaces (the land-cover splat)
 
-The bake writes only a **4096² class raster** (ids 0–8, `pipeline/bake/landcover.py`).
+The bake writes only a **4096² class raster** (ids 0–9, `pipeline/bake/landcover.py`;
+the ids and their names in `pipeline/bake/classes.py`).
 At runtime `landcover-splat.ts` paints it with the one palette
 (`lib/city/landcover.ts`, a `uniformArray`) into an RGBA target, one
 full-screen `QuadMesh` pass per tile (a scene-wide node material per raster
