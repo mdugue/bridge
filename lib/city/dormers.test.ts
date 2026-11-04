@@ -54,9 +54,13 @@ describe("dormerMesh", () => {
     const normals = faceNormals(positions);
     const roofs = normals.filter((_, i) => isRoof[3 * i] === 1);
     const walls = normals.filter((_, i) => isRoof[3 * i] === 0);
+    // its roof, and the inner lid under it facing in (the shadow map's
+    // caster over the box: it draws back faces)
     expect(roofs).toEqual([
       [0, 0, 1],
       [0, 0, 1],
+      [0, 0, -1],
+      [0, 0, -1],
     ]);
     expect(walls).toContainEqual([1, 0, 0]);
     expect(walls).toContainEqual([0, 1, 0]);
@@ -98,10 +102,11 @@ describe("dormerMesh", () => {
     expect(front(flat)).toBeCloseTo(21.5, 6);
     // 2.5 m from the back line at b = −1.5 to the front at b = 1
     expect(front(shed)).toBeCloseTo(21.5 - 2.5 * tan20, 6);
-    // its roof faces up and down the slope, at the measured fall
-    const roof = unitNormals(shed.positions).filter(
-      (_, i) => shed.isRoof[3 * i] === 1
-    );
+    // its roof faces up and down the slope, at the measured fall (its
+    // inner lid, the last two, the other way)
+    const roof = unitNormals(shed.positions)
+      .filter((_, i) => shed.isRoof[3 * i] === 1)
+      .slice(0, -2);
     for (const n of roof) {
       expect(n[0]).toBeCloseTo(Math.sin((20 * Math.PI) / 180), 6);
       expect(n[2]).toBeCloseTo(Math.cos((20 * Math.PI) / 180), 6);
@@ -141,8 +146,8 @@ describe("chimneyMesh", () => {
 
   test("a closed box from under the roof's lowest point to its top", () => {
     const m = chimneyMesh(chimney, offset);
-    // four sides and a top, two triangles each
-    expect(m.positions.length).toBe(5 * 2 * 9);
+    // four sides, a top and its inner lid, two triangles each
+    expect(m.positions.length).toBe(6 * 2 * 9);
     expect(m.isRoof.every((r) => r === 0)).toBe(true);
     const zs = m.positions.filter((_, i) => i % 3 === 2);
     // the roof falls 0.8 m to its downslope side, and the box reaches under
@@ -156,10 +161,12 @@ describe("chimneyMesh", () => {
     expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(0.6);
   });
 
-  test("every face looks outwards", () => {
+  test("every face looks outwards, its inner lid in", () => {
     const m = chimneyMesh(chimney, offset);
     const n = unitNormals(m.positions);
-    for (let t = 0; t < n.length; t += 1) {
+    // the last two: the inner lid under the top, facing down into the box
+    expect(n.slice(-2).every((v) => v[2] < -0.99)).toBe(true);
+    for (let t = 0; t < n.length - 2; t += 1) {
       const tri = m.positions.slice(t * 9, t * 9 + 9);
       const cx = (tri[0] + tri[3] + tri[6]) / 3 - 100;
       const cy = (tri[1] + tri[4] + tri[7]) / 3 - 200;

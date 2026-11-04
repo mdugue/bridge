@@ -142,8 +142,9 @@ STEPS = {
     # give its flight's cast.
     "roof-colour": roof_colour.run,
     # After roofs (the rebuilt ones are measured already) and the tree bakes
-    # (a crown over a roof is no dormer): the dormers DOM1 shows on the
-    # pitched LoD2 roofs.
+    # (a crown over a roof is no dormer) and windows (the measured window
+    # axes its rows stand over): the dormers DOM1 shows on the pitched LoD2
+    # roofs.
     "dormers": dormers.run,
 }
 
