@@ -1,20 +1,13 @@
 /**
- * POST /api/frag as the host calls it (ADR 0056): every refusal with its
- * status, code and log line, and one scripted answer (`FRAG_FAKE=1`)
- * through both requests of a scene tool's round trip. Only the
- * Stadtwissen's file read is replaced.
+ * POST /api/frag as the host calls it (ADR 0056): what the route binds to
+ * the turn (lib/city/ask-turn.test.ts holds the turn's own rules) — the
+ * environment's secret and NODE_ENV, and the scripted model
+ * (`FRAG_FAKE=1`) through both requests of a scene tool's round trip.
+ * Only the Stadtwissen's file read is replaced.
  */
 import { uiMessagesToWire } from "@tanstack/ai";
 import type { UIMessage } from "@tanstack/ai";
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  mock,
-  spyOn,
-  test,
-} from "bun:test";
+import { afterEach, beforeEach, expect, mock, spyOn, test } from "bun:test";
 import { knowledgeOf } from "@/lib/city/ask-knowledge";
 import type { StadtwissenIndex, WissenTile } from "@/lib/city/stadtwissen";
 
@@ -94,16 +87,12 @@ function body(over: Record<string, unknown> = {}): Record<string, unknown> {
   };
 }
 
-async function post(
-  sent: unknown,
-  { key = KEY, signal }: { key?: string; signal?: AbortSignal } = {}
-): Promise<Response> {
+async function post(sent: unknown): Promise<Response> {
   return await POST(
     new Request("http://localhost/api/frag", {
       method: "POST",
-      body: typeof sent === "string" ? sent : JSON.stringify(sent),
-      headers: { "Content-Type": "application/json", "x-frag-key": key },
-      ...(signal ? { signal } : {}),
+      body: JSON.stringify(sent),
+      headers: { "Content-Type": "application/json", "x-frag-key": KEY },
     })
   );
 }
@@ -144,148 +133,16 @@ afterEach(() => {
   warn.mockRestore();
 });
 
-/** Twelve tool rounds since the question: the answer's turns are spent. */
-function spentHistory() {
-  const rows: Record<string, unknown>[] = [
-    { id: "q", role: "user", content: "Frauenkirche" },
-  ];
-  for (let i = 0; i < 12; i += 1) {
-    rows.push(
-      {
-        id: `a${i}`,
-        role: "assistant",
-        toolCalls: [
-          {
-            id: `c${i}`,
-            type: "function",
-            function: { name: "suche_stadt", arguments: '{"anfrage":"x"}' },
-          },
-        ],
-      },
-      { id: `t${i}`, role: "tool", toolCallId: `c${i}`, content: "{}" }
-    );
-  }
-  return rows;
-}
-
-describe("a refused request", () => {
-  const cases: {
-    name: string;
-    setup?: () => void;
-    request: () => Promise<Response>;
-    status: number;
-    code: string;
-    message: string;
-  }[] = [
-    {
-      name: "a body that is not JSON",
-      request: async () => await post("{not json"),
-      status: 400,
-      code: "bad-request",
-      message: "Die Anfrage ist unvollständig.",
-    },
-    {
-      name: "an unknown model",
-      request: async () =>
-        await post(body({ forwardedProps: { ...PROPS, model: "gpt-0" } })),
-      status: 400,
-      code: "bad-props",
-      message: "unbekanntes Modell",
-    },
-    {
-      name: "no key, no scripted model",
-      request: async () => await post(body(), { key: "" }),
-      status: 401,
-      code: "no-key",
-      message: "Ohne Schlüssel geht es nicht.",
-    },
-    {
-      name: "a token the key check did not give",
-      setup: () => {
-        process.env.FRAG_SECRET = "s".repeat(32);
-      },
-      request: async () =>
-        await post(body({ forwardedProps: { ...PROPS, token: "forged" } })),
-      status: 401,
-      code: "bad-token",
-      message: "Der Schlüssel muss neu geprüft werden.",
-    },
-    {
-      name: "41 messages",
-      setup: () => {
-        process.env.FRAG_FAKE = "1";
-      },
-      request: async () =>
-        await post(
-          body({
-            messages: uiMessagesToWire(
-              Array.from({ length: 41 }, (_, i) => question(`${i}`, "Hallo"))
-            ),
-          })
-        ),
-      status: 413,
-      code: "too-long",
-      message: "Das Gespräch ist zu lang geworden. Bitte neu beginnen.",
-    },
-    {
-      name: "twelve tool rounds since the question",
-      setup: () => {
-        process.env.FRAG_FAKE = "1";
-      },
-      request: async () => await post(body({ messages: spentHistory() })),
-      status: 422,
-      code: "too-many-steps",
-      message: "Die Antwort brauchte zu viele Schritte.",
-    },
-    {
-      name: "a site without Stadtwissen",
-      setup: () => {
-        process.env.FRAG_FAKE = "1";
-      },
-      request: async () =>
-        await post(body({ forwardedProps: { ...PROPS, site: "atlantis" } })),
-      status: 404,
-      code: "no-knowledge",
-      message: "Für diese Stadt gibt es kein Stadtwissen.",
-    },
-    {
-      name: "a request the browser already dropped",
-      setup: () => {
-        process.env.FRAG_FAKE = "1";
-      },
-      request: async () => {
-        const gone = new AbortController();
-        gone.abort();
-        return await post(body(), { signal: gone.signal });
-      },
-      status: 499,
-      code: "gone",
-      message: "Die Anfrage wurde abgebrochen.",
-    },
-    {
-      name: "a production server without a secret",
-      setup: () => {
-        Object.assign(process.env, { NODE_ENV: "production" });
-      },
-      request: async () => await post(body()),
-      status: 501,
-      code: "no-secret",
-      message: "Frag die Stadt ist auf diesem Server nicht eingerichtet.",
-    },
-  ];
-
-  for (const c of cases) {
-    test(`${c.name}: ${c.status} ${c.code}`, async () => {
-      c.setup?.();
-      const res = await c.request();
-      expect(res.status).toBe(c.status);
-      expect(res.headers.get("Cache-Control")).toBe("no-store");
-      const text = await res.text();
-      expect(JSON.parse(text)).toEqual({ code: c.code, message: c.message });
-      expect(logged).toEqual([`[frag] ${c.status} ${c.code}`]);
-      expect(text).not.toContain(KEY);
-    });
-  }
+test("a production server without a secret refuses: 501 no-secret", async () => {
+  Object.assign(process.env, { NODE_ENV: "production" });
+  const res = await post(body());
+  expect(res.status).toBe(501);
+  expect(res.headers.get("Cache-Control")).toBe("no-store");
+  expect(await res.json()).toEqual({
+    code: "no-secret",
+    message: "Frag die Stadt ist auf diesem Server nicht eingerichtet.",
+  });
+  expect(logged).toEqual(["[frag] 501 no-secret"]);
 });
 
 test("the scripted answer shows the place, then says so on the resume", async () => {
