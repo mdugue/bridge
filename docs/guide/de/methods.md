@@ -61,7 +61,22 @@ zur Regel passt.
   First oder auf einem Flachdach ist ein Hausschornstein — außer sie liegt
   entlang eines Firsts oder einer Kehle, die das Gebäudemodell etwas
   daneben gezeichnet hat, oder steht auf einem Flachdach in einer Reihe mit
-  anderen (Masten auf einem Bahnsteigdach).
+  anderen (Masten auf einem Bahnsteigdach). Liegt das ganze Gebäudemodell
+  gleichmäßig höher als die Messung (das Taschenbergpalais 1,2 m), wird
+  es vorher darauf gesetzt; ist ein Gebäudeteil mit steilen Dachflächen
+  im Grundriss verschoben (der Nordflügel des Palais um etwa einen Meter),
+  wird er ein zweites Mal auf die Messung gerückt gelesen. Eine steile Dachfläche, an deren Oberkante
+  ein flacheres Oberdach anschließt, ist eine Mansarde, auch wo das
+  Gebäudemodell sie nicht so nennt; ihre Gauben dürfen bis 80° steil
+  stehen. Gauben eines Hauses, die zur selben Seite in gleicher Höhe
+  stehen, bilden eine Reihe: gerade ausgerichtet, gleich groß und gleich
+  geformt, auf gleicher Höhe, in einem Raster gleicher Abstände über die
+  ganze Reihe — über den Fensterachsen darunter, wo die Straßenfotos sie
+  gemessen haben, sonst im Abstand, auf den sich die Gauben selbst am
+  besten einigen. Eine einzelne leere Stelle zwischen zwei Gauben bekommt
+  eine wie ihre Nachbarin, außer dort steht ein Schornstein. Ihre Höhe
+  nimmt jede Gaube zuletzt von der genauen Dachfläche des Gebäudemodells,
+  nicht vom 1-m-Raster, damit sie auf dem gezeichneten Dach sitzt.
 - **Brückentragwerk:** Was entlang der Brückenachse mindestens 3 m über dem
   Deck steht, auf mindestens 25 m Länge, wird ein Bogen oder ein Fachwerk.
 - **Zuordnungen:** Ein Laden aus OpenStreetMap gehört zu dem Gebäude, in

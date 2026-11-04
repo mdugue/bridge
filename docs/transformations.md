@@ -1534,8 +1534,29 @@ visual-variable codebook is in
   LoD2 leaves out (`pipeline/bake/dormers.py`): the excess `DOM − roof`
   against its own 9 m median, every blob 0.7 m and more over it, at any
   size and spacing (2026-10-31; until then 3–30 m², no side over 8 m),
-  clear of every tree point. On a pitched roof (25–62°, a mansard —
-  LoD2's `roofType` 3400 — to 80°) a dormer: its top 0.9–3.5 m over the
+  clear of every tree point. A building LoD2 drew as a whole over DOM1
+  (the Taschenbergpalais 1.2 m, flat parts and all) is read against DOM1
+  raised by that much first: where its cells up to 62° read 0.4–3 m
+  under the roof with a median deviation of 0.3 m at most (only that way:
+  a surface over the roof may be its own dormers and eaves); until 2026-11-02 such a roof failed the fit and had no
+  dormers at all. A part LoD2 drew off **in plan** (the Taschenbergpalais'
+  north wing about a metre south of DOM1, so that its north mansard's
+  dormers fell on the wall's edge and the eaves) is read a second time
+  moved onto DOM1: a part with steep (over 62°) faces where a move of up
+  to 1 m (0.5 m steps, the shortest of equal fits) brings the median
+  deviation over the whole part to 0.7 of what it was and at least
+  0.08 m lower, and over its steep faces to 0.7 as well; the dormers
+  that second reading finds on a moved part and the first did not
+  (none of one kind within their width) are moved back into LoD2's frame
+  and kept. Seams are read on LoD2's roof as drawn. On a pitched roof (25–62°, a mansard to 80°) a dormer;
+  a mansard is LoD2's `roofType` 3400 or, as Saxony never writes 3400,
+  read from the LoD2 roof faces: a face over 62° whose top edge a face of
+  62° or less goes on from (within 0.5 m in height and plan), where such
+  faces make ≥ 15 % and ≥ 50 m² of the building's roof; only those faces
+  take the 80° cap (a spire's faces meet at its tip, a steep annex under
+  a tall flat roof touches nothing at its top; read from the faces, as the
+  burned roof reads a step between two parts as a steep band); the break between the two is no seam to the
+  dormers on the lower roof. A dormer: its top 0.9–3.5 m over the
   roof and under the object's ridge, compact, at most 8 m down the slope
   and as wide across it as it runs; dormers the 1 m cells join are parted
   at their cores ≥ 1.2 m over the roof; none along a seam of the LoD2
@@ -1547,7 +1568,58 @@ visual-variable codebook is in
   on a flat roof clear of its outline and seams; 0.8–5 m over the roof
   (1.2 m on a seam), at most 3 m over the ridge; on a flat roof not one
   of three within 4 m (masts on a platform roof, a plant room's ducts),
-  on a pitched roof every stack, however close. Checked against
+  on a pitched roof every stack, however close. **Rows** (`in_rows`): a
+  building's dormers falling the same way (within 20°) at one depth
+  (1.5 m) form a row, set straight at its median depth and in one shape
+  (the row's median width, depth and height over the roof; shed or flat
+  as most of them are). **One grid** a stretch (2026-11-03; a row parts
+  where two stand more than 2.5 times its median gap apart, two wings or
+  a tower between): a spacing of 1.8–7 m about one dormer a slot
+  (0.75–1.3 of the median gap of those 1.8 m or more apart), where the
+  phases of all of them agree best, the slots then fitted by least
+  squares to the nearest dormer on each; taken where half of them stand
+  within 0.22 of a slot (at random a quarter). Every dormer goes on its
+  nearest slot; one whose slot a nearer one takes goes on the free slot
+  on its side, else it is that one's blob (within 0.35 of the spacing,
+  or a fragment narrower than 0.6 of the stretch's median, which also
+  chooses last) or something else and stays (a stair head). On each
+  LoD2 part the row stands at one height: the median roof height and
+  slope under it (the 1 m cells read a mansard's 70° face ±1.4 m up and
+  down: one cell either way). A single empty slot between two set takes
+  a dormer like its neighbour (DOM1 misses a small dormer more often than
+  a roof leaves one slot bare), but not on a chimney or a dormer of a
+  grid; a smaller stray there gives way. Until then (2026-11-02) the row
+  had parted into runs of their own rhythm: the palais' 24 south dormers
+  in five, 2.6–4.6 m, and the dormers off them kept DOM1's ±0.5 m.
+  Where the street photos measured the window axes of the wall below
+  (`dlm/windows_<t>.json`, within 12 m, facing the same way) the slots
+  are those axes, every one, second or third, if the dormers' phases on
+  them reach 0.8 (on Dresden's 33410_5656 twelve rows stand over a
+  measured wall and none does: DOM1 reads a dormer's centre ±0.5 m, and
+  most walls' axes are unphased). Two rows that read one dormer twice
+  (its front and back) are one, a dormer of a grid kept first; one more
+  than 1.5 m or 20° off its row, or 2.5 times its stretch's median width
+  (a Zwerchhaus), stays as it was. On a face of the palais the height
+  spread under a row (the median of its range) fell from 0.65 m to 0;
+  its south row stands on one 3.47 m grid. Dormers with one grid a
+  stretch: Dresden 13 651 (13 518 before, the filled slots), Leipzig
+  6 922, München 7 309, Unna 2 080, Meißen 1 802, Hamburg 1 739, Grimma
+  1 429; the Taschenbergpalais 95. **On the exact roof** (2026-11-03):
+  last, every dormer and chimney takes its height from its host's LoD2
+  roof face under its centre (the highest of the faces over it, else the
+  nearest within 0.3 m of its outline: past a ridge, a hip or a
+  mansard's break the neighbour's plane runs on above the face beside
+  it), a dormer its slope too and its top moved with it, a chimney's
+  measured top kept; a dormer whose face is flatter than 25° keeps its
+  row's height (`on_planes`). The burned 1 m roof
+  reads a cell's height, up to half a metre off a 45° face under a
+  centre: over all seven cities 7 % of the dormers stood more than 0.3 m
+  over the roof the building draws (0.6 % over 0.7 m), their cheeks
+  clear of it — dormers floating over the roof — and as many sank as
+  deep into it; now each stands on the face. The Taschenbergpalais'
+  street photos show one identical dormer over every window axis; DOM1
+  had read their centres up to 3 m apart
+  down the slope and 1–4 m wide. Checked against
   the 20 cm orthophoto: rows of small gabled dormers now in; DOM1 still
   misses the smallest, and a roof LoD2 drew flat over a pitched one has
   none. A chimney is a box 0.6 m a cell (at most 1.6 m) from under the
@@ -1555,7 +1627,12 @@ visual-variable codebook is in
   footprint's longer side (`chimneyMesh`). Each dormer becomes a front facing
   down the slope, two cheeks and a roof running back into the main roof:
   flat at the measured top, or a **shed dormer** (*Schleppgaube*) falling
-  with the main roof (`lib/city/dormers.ts`). Its fall (`tf`) is read
+  with the main roof (`lib/city/dormers.ts`). Under its roof, 2 cm in, an
+  inner lid facing in that no camera sees: the sun's shadow map draws back
+  faces, so the open box let the sun onto the roof inside it, and the map's
+  soft edge bled that light out as a bright line between the cheek and its
+  shadow (2026-11-03; two triangles a dormer, the same under a chimney's
+  top; +0.3 % on a building tile for the dormers). Its fall (`tf`) is read
   along its axis through the centre: DOM1 every 0.5 m over the blob and
   up to 3 m behind it while it stands ≥ 0.3 m over the roof, the front
   1.5 m left out (front wall and eave smear it), a line through ≥ 3
