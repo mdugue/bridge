@@ -1881,9 +1881,6 @@ async function bootApp(
     streamShadowTiles(state.aboveHorizon);
     sunAltitude = state.altitudeDeg;
     sunToStyles?.(state.altitudeDeg);
-    for (const d of stream.dressings) {
-      d.lamps?.setNightFactor(state.nightFactor);
-    }
     lampLights.setNightFactor(state.nightFactor);
     lantern.setNight(state.nightFactor);
     setFountainNight(state.nightFactor);

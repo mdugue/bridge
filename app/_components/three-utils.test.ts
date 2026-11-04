@@ -25,6 +25,7 @@ import {
   sceneShared,
   sceneSharedBytes,
   textureBytes,
+  withMaterialsShown,
 } from "./three-utils";
 import { Instances } from "./instancing";
 
@@ -348,4 +349,25 @@ test("a compile under a group sees the object alone there, and then all is back"
   ).toThrow("lost device");
   expect(group.children).toEqual([city, hidden]);
   expect(city.visible).toBe(true);
+});
+
+test("a compile sees a drawable's materials shown, and then each as it was", () => {
+  const hidden = new MeshBasicNodeMaterial();
+  hidden.visible = false;
+  const shown = new MeshBasicNodeMaterial();
+  const mesh = new Mesh(new BoxGeometry(), [hidden, shown]);
+  const seen = withMaterialsShown(mesh, () => [hidden.visible, shown.visible]);
+  expect(seen).toEqual([true, true]);
+  expect([hidden.visible, shown.visible]).toEqual([false, true]);
+  // a single material, put back even when the compile throws
+  const single = new Mesh(new BoxGeometry(), hidden);
+  expect(() =>
+    withMaterialsShown(single, () => {
+      expect(hidden.visible).toBe(true);
+      throw new Error("lost device");
+    })
+  ).toThrow("lost device");
+  expect(hidden.visible).toBe(false);
+  // nothing to show on a group
+  expect(withMaterialsShown(new Group(), () => 1)).toBe(1);
 });

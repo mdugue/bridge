@@ -1,7 +1,14 @@
 import { expect, test } from "bun:test";
 import { Matrix4, Vector3 } from "three/webgpu";
+import type { BufferGeometry, Material, Mesh } from "three/webgpu";
+import { createLookState } from "@/lib/city/look-state";
 import { Instances } from "./instancing";
 import { buildLamps, createLampLights, LAMP_LIGHTS } from "./lamp-layer";
+import { createSceneEnvironment, sceneNight } from "./scene-environment";
+import type { SunState } from "./sun-rig";
+
+/** The sun at a night factor. */
+const sunAt = (nightFactor: number) => ({ nightFactor }) as SunState;
 
 /** A lamp head 5 m up at (x, z), the camera's eye 1.7 m up. */
 const head = (x: number, z = 0) => new Vector3(x, 5, z);
@@ -148,4 +155,56 @@ test("a tall mast holds its head on its arm, its light pool under it", () => {
     12, 110, -20,
   ]);
   expect([tips[1].x, tips[1].z].map((v) => +v.toFixed(3))).toEqual([30, -22]);
+});
+
+test("the halos and pools are drawn after dark only, by their shared materials", () => {
+  const ctx = { heightAt: () => 100, offset: { cx: 0, cy: 0 } };
+  const env = createSceneEnvironment({
+    initialDate: new Date(2026, 6, 15, 12),
+    climate: { spring: 0, autumn: 0 },
+    look: createLookState(),
+    castersChanged: () => {},
+  });
+  try {
+    env.light(sunAt(0));
+    const lamps = buildLamps(
+      [
+        {
+          geometry: { type: "Point", coordinates: [10, 20] },
+          properties: { h: 5 },
+        },
+        {
+          geometry: { type: "Point", coordinates: [30, 20] },
+          properties: { h: 5 },
+        },
+      ],
+      ctx
+    );
+    const nightOnly = ["lamp-glow", "lamp-pools"].map(
+      (name) =>
+        lamps.group.getObjectByName(name) as Mesh<BufferGeometry, Material>
+    );
+    // born by day: the meshes shown, their materials hidden
+    for (const mesh of nightOnly) {
+      expect(mesh.visible).toBe(true);
+      expect(mesh.material.visible).toBe(false);
+    }
+    const versions = nightOnly.map((mesh) => mesh.material.version);
+    env.light(sunAt(1));
+    expect(sceneNight.value).toBe(1);
+    for (const mesh of nightOnly) {
+      expect(mesh.visible).toBe(true);
+      expect(mesh.material.visible).toBe(true);
+    }
+    env.light(sunAt(0));
+    for (const mesh of nightOnly) {
+      expect(mesh.visible).toBe(true);
+      expect(mesh.material.visible).toBe(false);
+    }
+    // a switch of visibility is no rebuild
+    expect(nightOnly.map((mesh) => mesh.material.version)).toEqual(versions);
+  } finally {
+    env.light(sunAt(0));
+    env.dispose();
+  }
 });

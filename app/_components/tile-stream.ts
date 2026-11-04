@@ -158,7 +158,6 @@ import type {
   VegetationFeatures,
 } from "./vegetation-layer";
 import { footMaterialFor } from "./tree-foot";
-import { sceneNight } from "./scene-environment";
 import type { DressingEnvironment } from "./scene-environment";
 import { setClaySkyView } from "./visual-style";
 import type { StyleResources } from "./visual-style";
@@ -594,20 +593,19 @@ export async function withinCompileWait(done: Promise<unknown>): Promise<void> {
 
 /**
  * Brings a dressing that has just joined the stream up to the scene's
- * present. It was born with the season, night and look of the moment it
+ * present. It was born with the season and look of the moment it
  * was built, but its compile may then wait up to COMPILE_WAIT_MS, and the
  * clocks that follow a change (create-app.ts) reach only the dressings in
  * `stream.dressings` — a date drag, dusk or a slider moved meanwhile would
  * pass it by. Each setter is idempotent: nothing moves when nothing did.
  */
 export function catchUp(
-  d: Pick<TileDressing, "lamps" | "traffic" | "vegetation">,
+  d: Pick<TileDressing, "traffic" | "vegetation">,
   ctx: Pick<TileStreamContext, "environment">
 ): void {
   const look = ctx.environment.look.get();
   d.vegetation?.applyLook(look);
   d.vegetation?.setSeason(ctx.environment.season.get());
-  d.lamps?.setNightFactor(sceneNight.value);
   showDataLayers(d, look);
 }
 
@@ -1295,7 +1293,6 @@ async function buildDressing(
       heightAt: terrain.heightAt,
     });
     made.lamps = lampControl;
-    lampControl.setNightFactor(sceneNight.value);
     await nextTask(signal);
     const rail = await inSlices(
       railSteps(

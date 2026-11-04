@@ -20,10 +20,8 @@ import type { TrafficFeature } from "@/lib/city/features";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import type { CityLayer } from "./city-layer";
 import type { TrafficBuilder } from "./data-layers-feature";
-import type { LampControl } from "./lamp-layer";
 import type { TerrainLayer } from "./terrain-layer";
 import { createWatch } from "./feature-seam";
-import { sceneNight } from "./scene-environment";
 import { markSceneShared } from "./three-utils";
 import { trafficAskSet } from "./traffic-ask";
 import { buildTraffic } from "./traffic-layer";
@@ -73,7 +71,7 @@ function* broken(): Steps<void> {
   throw new Error("bad furniture");
 }
 
-test("a dressing that joins the stream late takes the season, night and look of now", () => {
+test("a dressing that joins the stream late takes the season and look of now", () => {
   const calls: string[] = [];
   const vegetation = {
     applyLook: (look: { multiTuft: boolean }) =>
@@ -83,20 +81,12 @@ test("a dressing that joins the stream late takes the season, night and look of 
       return true;
     },
   } as unknown as VegetationControl;
-  const lamps = {
-    setNightFactor: (night: number) => calls.push(`night ${night}`),
-  } as unknown as LampControl;
   const environment = fakeEnvironment(9);
   environment.look.set({ multiTuft: false });
-  // Built on 10 July by day; the scene moved on to a January night while
-  // its compile was pending.
-  sceneNight.value = 1;
-  try {
-    catchUp({ vegetation, lamps }, { environment });
-  } finally {
-    sceneNight.value = 0;
-  }
-  expect(calls).toEqual(["look false", "season 9", "night 1"]);
+  // Built on 10 July; the scene moved on to January while its compile
+  // was pending.
+  catchUp({ vegetation }, { environment });
+  expect(calls).toEqual(["look false", "season 9"]);
 });
 
 test("the stream's dispose releases every dressed tile, quietly", () => {

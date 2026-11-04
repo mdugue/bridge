@@ -1,4 +1,5 @@
 import { uniform } from "three/tsl";
+import type { Material } from "three/webgpu";
 import type { LookValues } from "@/lib/city/look-controls";
 import { climateDay } from "@/lib/city/tree-season";
 import type { SeasonShift } from "@/lib/city/tree-season";
@@ -27,6 +28,32 @@ import type { SunState } from "./sun-rig";
  *  that dims, glows or ignites after dark reads this one node. */
 export const sceneNight: Live = uniform(0);
 
+/** Night above which a material drawn only after dark is drawn. */
+export const NIGHT_DRAWN = 0.01;
+
+/** The scene-wide materials drawn only after dark (`drawnAtNight`). */
+const nightOnly = new Set<Material>();
+
+/**
+ * Marks a scene-wide material as drawn only after dark (the lamps' halos
+ * and pools): its `visible` follows `sceneNight` from now on, so by day
+ * three skips their additive passes outright. A material's `visible` is
+ * in no build's key and bumps no version: the switch costs no rebuild.
+ * A compile walks past a hidden material too, so every compile path
+ * shows a drawable's materials for its call (three-utils.ts
+ * `withMaterialsShown`). Let go of on the material's `dispose`.
+ */
+export function drawnAtNight<T extends Material>(material: T): T {
+  if (!nightOnly.has(material)) {
+    nightOnly.add(material);
+    material.addEventListener("dispose", () => {
+      nightOnly.delete(material);
+    });
+  }
+  material.visible = sceneNight.value > NIGHT_DRAWN;
+  return material;
+}
+
 /** What a dressing binds at birth and lets go at its release. */
 export interface DressingEnvironment {
   /** the crowns' day of the year in this city's climate (climateDay):
@@ -44,7 +71,7 @@ export interface SceneEnvironment extends DressingEnvironment {
   /** the scene's instant as the HUD set it last (SpineHooks.clock) */
   clock: Watch<SceneClock>;
   /** the light of now (the style's instant, create-app.ts `relight`): the
-   *  night node */
+   *  night node and the night-only materials */
   light: (sun: SunState) => void;
   /** the date the HUD asked for: the season (throttled), the clock */
   date: (date: Date) => void;
@@ -76,6 +103,10 @@ export function createSceneEnvironment(opts: {
     clock,
     light: (sun) => {
       sceneNight.value = Math.min(Math.max(sun.nightFactor, 0), 1);
+      const drawn = sceneNight.value > NIGHT_DRAWN;
+      for (const material of nightOnly) {
+        material.visible = drawn;
+      }
     },
     date: (date) => {
       seasonClock.set(date);
