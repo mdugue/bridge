@@ -438,3 +438,27 @@ test("a freed part's build is let go though its handle and its owner's are still
   expect(await collected(refs[0])).toBe(true);
   expect(owner).toBeDefined();
 });
+
+test("a take-down that throws still frees the part, once, and says what threw", async () => {
+  const log: string[] = [];
+  const { compiles, host, load } = fakeHost();
+  load();
+  const parts = createLateParts(host);
+  const thrown = new Error("down threw");
+  const { freed, part } = fakePart("a", log, {
+    rank: null,
+    hangAt: "compile",
+    hang: () => () => {
+      throw thrown;
+    },
+  });
+  const handle = parts.add(part);
+  await flush();
+  compiles[0].end("done");
+  expect(await handle.settled).toBe("hung");
+  expect(handle.dispose()).toEqual([thrown]);
+  expect(freed.count).toBe(1);
+  expect(parts.bytes()).toBe(0);
+  expect(parts.release()).toEqual([]);
+  expect(freed.count).toBe(1);
+});

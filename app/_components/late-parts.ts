@@ -245,7 +245,13 @@ export function createLateParts(host: LateHost): LateParts {
       freed = true;
       // its handle outlives it (a traffic slot's): it keeps nothing now
       made.value = null;
-      takeDown?.();
+      // a take-down that throws keeps no part from its free
+      const errors: unknown[] = [];
+      try {
+        takeDown?.();
+      } catch (error) {
+        errors.push(error);
+      }
       takeDown = null;
       weigh(0);
       const running = compiling;
@@ -255,9 +261,9 @@ export function createLateParts(host: LateHost): LateParts {
           report(part.free(built));
         };
         void freeAfter();
-        return [];
+        return errors;
       }
-      return part.free(built);
+      return [...errors, ...part.free(built)];
     };
     /** it and what it owns go */
     const goAway = (): unknown[] => {
