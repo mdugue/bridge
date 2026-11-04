@@ -70,6 +70,17 @@ test("every committed surface legend names the same paving kinds", () => {
   expect(SURFACE_KINDS.length).toBeLessThanOrEqual(8);
 });
 
+test("the edge bake writes the scale the viewer decodes", () => {
+  // the committed legends below say what was baked; this, what the next
+  // bake writes (edges.py), before a re-bake
+  const python = readFileSync(
+    nodePath.join(ROOT, "pipeline/bake/edges.py"),
+    "utf-8"
+  );
+  const scale = /^EDGE_SCALE = (?<scale>[\d.]+)/mu.exec(python)?.groups?.scale;
+  expect(Number(scale)).toBe(EDGE_SCALE);
+});
+
 test("every committed edge legend has the viewer's scale", () => {
   const dir = nodePath.join(ROOT, siteDataDir(DRESDEN), "dlm");
   const legends = readdirSync(dir).filter(
