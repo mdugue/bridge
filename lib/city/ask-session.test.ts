@@ -185,13 +185,23 @@ describe("an answer's end", () => {
     expect(calls.filter((c) => c.startsWith("speech.speak"))).toEqual([]);
   });
 
-  test("a failed answer leaves the waits", () => {
+  test("a failed answer ends its run, then its waits", () => {
     dispatch({ type: "readingPressed" });
     dispatch({ type: "typed", text: "Wo?" });
     dispatch({ type: "answerStarted" });
     since();
     dispatch({ type: "answerEnded", text: "Da.", failed: true });
-    expect(calls).toEqual([]);
+    // and is not read
+    expect(calls).toEqual(["run.stop", "waits.abandon"]);
+  });
+
+  test("an answer that fails while a scene tool waits ends its waits", () => {
+    dispatch({ type: "typed", text: "Was ist das?" });
+    dispatch({ type: "answerStarted" });
+    since();
+    // the last part is the waiting tool call: no text
+    dispatch({ type: "answerEnded", text: "", failed: true });
+    expect(calls).toEqual(["run.stop", "waits.abandon"]);
   });
 
   test("an answer that ends while the page is hidden is read at once", () => {

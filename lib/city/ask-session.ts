@@ -187,11 +187,17 @@ export function createAskSession(ports: AskSessionPorts): AskSession {
     },
     answerEnded: ({ text, failed }) => {
       loading = false;
-      // between a scene tool's requests: the answer is not done yet
-      if (text === "") {
+      // a failed answer ends its run and its waits, as a stop does: a
+      // scene tool still waiting (its text is empty then) would resume the
+      // run once it returned, after the visitor saw the error
+      if (failed) {
+        if (!stopped) {
+          endRun();
+        }
         return "done";
       }
-      if (failed || stopped) {
+      // between a scene tool's requests: the answer is not done yet
+      if (text === "" || stopped) {
         return "done";
       }
       if (reading) {
