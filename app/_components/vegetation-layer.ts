@@ -52,8 +52,6 @@ import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
 import { groundSlope } from "@/lib/city/ground-clamp";
 import type { GroundContext } from "@/lib/city/ground-clamp";
 import { srgbToLinear } from "@/lib/city/landcover";
-import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
-import type { LookValues } from "@/lib/city/look-controls";
 import { decodeGreyPng } from "@/lib/city/png-raster";
 import { maxWindowSampler } from "@/lib/city/raster-sampler";
 import type { RasterSampler } from "@/lib/city/raster-sampler";
@@ -210,22 +208,17 @@ const FAR_THIN_WIDEN = 1.35;
 
 /**
  * Runtime handle for a loaded vegetation group: the LOD swap (on the pose
- * tick, create-app.ts) plus the rich-crown toggle.
+ * tick, create-app.ts) and the season. The look's one say in the crowns,
+ * the multi-tuft toggle, is read by the pass (create-app.ts
+ * `stepVegetation`), not kept per tile. (The backlit shimmer, the
+ * translucency and the gust's brightening are fixed: `SHIMMER`,
+ * `TRANSLUCENCY`, `GUST_BRIGHTEN`.)
  */
 export interface VegetationControl {
-  /**
-   * Pushes the vegetation's part of the look into the crowns: the
-   * multi-tuft crown LOD toggle. (The backlit shimmer, the translucency
-   * and the gust's brightening are fixed: `SHIMMER`, `TRANSLUCENCY`,
-   * `GUST_BRIGHTEN`.)
-   */
-  applyLook: (look: LookValues) => void;
   /** the tile's canopy chunks; `createVegetationLod` sets their crown tier
    *  over every loaded tile at once */
   chunks: VegetationChunk[];
   group: Group;
-  /** whether the look allows the rich crown (the multi-tuft toggle) */
-  multiTuft: () => boolean;
   /**
    * Moves the crowns to `day` (days since 1 January; lib/city/tree-season.ts):
    * autumn colour and bare crowns. Called on a date change, never per frame;
@@ -233,9 +226,10 @@ export interface VegetationControl {
    */
   setSeason: (day: number) => boolean;
   /** swaps the crowns a layer keeps outside the chunks (the cadastre's own
-   *  silhouettes, swapCrownLod); true when any changed (the shadow map must
-   *  then be redrawn). The canopy's chunks are `createVegetationLod`'s. */
-  updateLod: (cameraPos: Vector3) => boolean;
+   *  silhouettes, swapCrownLod; the rich one only while `multiTuft`, the
+   *  look's toggle); true when any changed (the shadow map must then be
+   *  redrawn). The canopy's chunks are `createVegetationLod`'s. */
+  updateLod: (cameraPos: Vector3, multiTuft: boolean) => boolean;
 }
 
 /**
@@ -1991,7 +1985,6 @@ export function* vegetationSteps(
   // read the same nodes — the wind clock among them, which the render loop
   // advances once per frame (`setCrownTime`, the water ripple's seconds).
   const crownMats = sceneCrowns(ctx.sunDirection);
-  let { multiTuft } = LOOK_DEFAULTS;
   let chunks: VegetationChunk[] = [];
   let seasons: SeasonalCrowns[] = [];
   let loose: LooseFeet[] = [];
@@ -2026,10 +2019,6 @@ export function* vegetationSteps(
   return {
     group,
     chunks,
-    applyLook: (look) => {
-      ({ multiTuft } = look);
-    },
-    multiTuft: () => multiTuft,
     setSeason: (day) => applySeasons(seasons, day),
     // The chunks' tiers are createVegetationLod's; the canopy keeps no other
     // crowns, only the trunk-only cells' feet (no shadow casters).
@@ -2090,15 +2079,16 @@ function showTier(chunk: VegetationChunk, tier: CrownTier): void {
 export function createVegetationLod(): (
   controls: readonly VegetationControl[],
   cameraPos: Vector3,
+  /** the look's multi-tuft toggle: whether the rich crown may show */
+  allowRich: boolean,
   richBudget?: number
 ) => boolean {
   const all: VegetationChunk[] = [];
   const states: ChunkLodState[] = [];
   const scratch = createCrownPlanScratch();
-  return (controls, cameraPos, richBudget) => {
+  return (controls, cameraPos, allowRich, richBudget) => {
     let n = 0;
     for (const control of controls) {
-      const allowRich = control.multiTuft();
       for (const chunk of control.chunks) {
         all[n] = chunk;
         let state = states[n];

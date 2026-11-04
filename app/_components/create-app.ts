@@ -220,7 +220,6 @@ import {
   createTileStream,
   DRESSING_PART_NAMES,
   DRESSING_PARTS,
-  showDataLayers,
   withinCompileWait,
 } from "./tile-stream";
 import type { CpuBytes, DressingPartName, TileDressing } from "./tile-stream";
@@ -243,7 +242,12 @@ import { createStyleResources, setClaySection } from "./visual-style";
 import { setWaterTime } from "./water-layer";
 import { createModelCuts } from "./model-cuts";
 import * as dataLayersModule from "./data-layers-feature";
-import { createHook, lazyFeature, wantOnSwitchOn } from "./feature-seam";
+import {
+  createHook,
+  follow,
+  lazyFeature,
+  wantOnSwitchOn,
+} from "./feature-seam";
 import type { SpineHooks } from "./feature-seam";
 
 /**
@@ -1620,21 +1624,13 @@ async function bootApp(
     look: opts.look,
     castersChanged: invalidateShadows,
   });
-  cleanups.push(env.dispose);
-  // the leaves under the trees (tree-foot.ts) and the trunks' shade under
-  // their crowns (vegetation-layer.ts) follow the same day
-  groundSeason(env.season.get());
   cleanups.push(
-    env.season.subscribe(groundSeason),
-    env.season.subscribe((day) => {
-      let changed = false;
-      for (const d of stream.dressings) {
-        changed = (d.vegetation?.setSeason(day) ?? false) || changed;
-      }
-      if (changed) {
-        invalidateShadows();
-      }
-    })
+    env.dispose,
+    // the leaves under the trees (tree-foot.ts) and the trunks' shade
+    // under their crowns (vegetation-layer.ts) follow the same day (each
+    // dressing's trees follow it themselves: tile-stream.ts
+    // `followEnvironment`)
+    follow(env.season, groundSeason)
   );
   // The two walks of the whole scene that the stats and the crash trail's
   // heartbeat report — every geometry under it, and the tiles' CPU arrays
@@ -2120,10 +2116,6 @@ async function bootApp(
     }
     postStack.applyLook(look);
     nameplate.applyLook(look.style);
-    for (const d of stream.dressings) {
-      d.vegetation?.applyLook(look);
-      showDataLayers(d, look);
-    }
     // the crown switch: the tiers in the next frame, not the next tick
     crownTiers.force();
     const layersOn = activeDataLayers(look);
@@ -3221,15 +3213,17 @@ async function bootApp(
     const shown = stream.visibleDressings();
     vegetationControls.length = 0;
     let lodChanged = false;
+    // the look's crown switch, read once a pass: no tile keeps a copy
+    const { multiTuft } = opts.look.get();
     for (const d of shown) {
       if (d.vegetation) {
         vegetationControls.push(d.vegetation);
-        if (d.vegetation.updateLod(eye)) {
+        if (d.vegetation.updateLod(eye, multiTuft)) {
           lodChanged = true;
         }
       }
     }
-    if (vegetationLod(vegetationControls, eye, richTrees)) {
+    if (vegetationLod(vegetationControls, eye, multiTuft, richTrees)) {
       lodChanged = true;
     }
     // the street furniture's cells near the eye (furniture-layer.ts)

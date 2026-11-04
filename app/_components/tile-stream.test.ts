@@ -28,13 +28,12 @@ import { buildTraffic } from "./traffic-layer";
 import {
   asksOf,
   buildAsksWhenIdle,
-  catchUp,
   DressingPlugin,
   dressingParts,
+  followEnvironment,
   handOverWaitMs,
   PHONE_STREAM,
   orderStreaming,
-  showDataLayers,
   takesOver,
   trafficSlot,
 } from "./tile-stream";
@@ -57,13 +56,18 @@ const tileAt = (uri: string) => ({
 /** The slices run at once. */
 const runNow = async (steps: Steps<unknown>) => finished(steps);
 
-/** A scene environment of its own: the season `day`, a fresh look store. */
+/** A scene environment of its own: the season `day`, a fresh look store,
+ *  the casters' changes counted. */
 function fakeEnvironment(day = 180) {
-  return {
+  const env = {
     season: createWatch(day),
     look: createLookState(),
-    castersChanged: () => {},
+    casters: 0,
+    castersChanged: () => {
+      env.casters += 1;
+    },
   };
+  return env;
 }
 
 function* broken(): Steps<void> {
@@ -71,22 +75,32 @@ function* broken(): Steps<void> {
   throw new Error("bad furniture");
 }
 
-test("a dressing that joins the stream late takes the season and look of now", () => {
-  const calls: string[] = [];
+test("a dressing's trees follow the scene's season from birth to release", () => {
+  const days: number[] = [];
   const vegetation = {
-    applyLook: (look: { multiTuft: boolean }) =>
-      calls.push(`look ${look.multiTuft}`),
+    // a crown changes on a day in winter only
     setSeason: (day: number) => {
-      calls.push(`season ${day}`);
-      return true;
+      days.push(day);
+      return day < 60;
     },
   } as unknown as VegetationControl;
-  const environment = fakeEnvironment(9);
-  environment.look.set({ multiTuft: false });
-  // Built on 10 July; the scene moved on to January while its compile
-  // was pending.
-  catchUp({ vegetation }, { environment });
-  expect(calls).toEqual(["look false", "season 9"]);
+  const env = fakeEnvironment(190);
+  // born in July: the season of now, nothing cast differently
+  const unfollow = followEnvironment({ vegetation }, env);
+  expect(days).toEqual([190]);
+  expect(env.casters).toBe(0);
+  // a change while it compiles, and one after it hangs: heard alike
+  env.season.set(9);
+  expect(days).toEqual([190, 9]);
+  expect(env.casters).toBe(1);
+  env.season.set(200);
+  expect(days).toEqual([190, 9, 200]);
+  expect(env.casters).toBe(1);
+  // released: nothing more
+  unfollow();
+  env.season.set(10);
+  expect(days).toEqual([190, 9, 200]);
+  expect(env.casters).toBe(1);
 });
 
 test("the stream's dispose releases every dressed tile, quietly", () => {
@@ -117,12 +131,21 @@ test("the stream's dispose releases every dressed tile, quietly", () => {
   const city = { dispose: () => freed.push("city") } as unknown as CityLayer;
   stream.terrains.add(terrain);
   stream.cities.add(city);
-  plugin.dressed.set(new Object3D(), { terrain });
+  // a hung dressing hears the scene's season until its release
+  const dressing: TileDressing = {
+    tile: "t",
+    unfollow: () => {
+      freed.push("unfollow");
+    },
+  };
+  stream.dressings.add(dressing);
+  plugin.dressed.set(new Object3D(), { terrain, dressing });
   plugin.dressed.set(new Object3D(), { city, svf: "svf.png" });
   // 3DTilesRendererJS unregisters (and disposes) its plugins before it
   // disposes its tiles: disposeTile never comes for these.
   plugin.dispose();
-  expect(freed).toEqual(["terrain", "city"]);
+  expect(freed).toEqual(["terrain", "unfollow", "city"]);
+  expect(stream.dressings.size).toBe(0);
   expect(plugin.dressed.size).toBe(0);
   expect(stream.terrains.size).toBe(0);
   expect(stream.cities.size).toBe(0);
@@ -761,7 +784,10 @@ function trafficTile(
   let finish = nothing;
   let built = 0;
   const freeErrors: unknown[][] = [];
+  // the look store: the layer off
+  const look = createLookState();
   const host: TrafficHost = {
+    look,
     root,
     compile: async (group) => {
       compiled.push(group);
@@ -788,6 +814,7 @@ function trafficTile(
     finish: () => finish(),
     freeErrors,
     host,
+    look,
     root,
     slot,
   };
@@ -796,9 +823,8 @@ function trafficTile(
 test("the counted traffic costs nothing while the layer is off", async () => {
   const { asks, compiled, host, slot } = trafficTile();
   const d: TileDressing = { tile: "t", traffic: slot };
+  // hung with the layer off
   slot.attach(host);
-  catchUp(d, { environment: fakeEnvironment() });
-  showDataLayers(d, { trafficLayer: false });
   await nextTask();
   expect(slot.group).toBeNull();
   expect(dressingParts(d)).toEqual([]);
@@ -807,12 +833,14 @@ test("the counted traffic costs nothing while the layer is off", async () => {
 });
 
 test("the first switch-on builds and compiles the bodies once; off keeps them, the release frees them", async () => {
-  const { asks, built, compiled, finish, host, root, slot } = trafficTile();
+  const { asks, built, compiled, finish, host, look, root, slot } =
+    trafficTile();
   const d: TileDressing = { tile: "t", traffic: slot };
   // switched on before the dressing hangs: nothing to hang it on yet
-  showDataLayers(d, { trafficLayer: true });
+  look.set({ trafficLayer: true });
   await nextTask();
   expect(slot.group).toBeNull();
+  // the hang builds them, as the look has the layer on
   slot.attach(host);
   const first = slot.show();
   const second = slot.show();
@@ -839,9 +867,10 @@ test("the first switch-on builds and compiles the bodies once; off keeps them, t
   expect(asks).toHaveLength(1);
   expect(slot.asks()).toBe(asks[0]);
   // off: hidden, kept; on again: no second build
-  showDataLayers(d, { trafficLayer: false });
+  look.set({ trafficLayer: false });
   const bodies = slot.group;
   expect(bodies?.visible).toBe(false);
+  look.set({ trafficLayer: true });
   await slot.show();
   expect(slot.group).toBe(bodies);
   expect(bodies?.visible).toBe(true);
@@ -856,6 +885,12 @@ test("the first switch-on builds and compiles the bodies once; off keeps them, t
   expect(freed).toBe(true);
   expect(slot.group).toBeNull();
   expect(bodies?.parent).toBeNull();
+  // ...and it hears the look no more: a switch-on builds nothing
+  look.set({ trafficLayer: false });
+  look.set({ trafficLayer: true });
+  await nextTask();
+  expect(compiled).toHaveLength(1);
+  expect(slot.group).toBeNull();
 });
 
 test("a tile released while its traffic compiles gets nothing shown, asked or weighed", async () => {

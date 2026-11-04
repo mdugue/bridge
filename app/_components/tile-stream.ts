@@ -158,6 +158,8 @@ import type {
   VegetationFeatures,
 } from "./vegetation-layer";
 import { footMaterialFor } from "./tree-foot";
+import { follow } from "./feature-seam";
+import type { Watch } from "./feature-seam";
 import type { DressingEnvironment } from "./scene-environment";
 import { setClaySkyView } from "./visual-style";
 import type { StyleResources } from "./visual-style";
@@ -197,6 +199,9 @@ export interface TileDressing {
   /** the counted motor traffic (traffic-layer.ts): a data layer, its
    *  bodies built on the first switch-on (`TrafficSlot`) */
   traffic?: TrafficSlot;
+  /** lets go of the scene environment it follows from its birth
+   *  (`followEnvironment`); `disposeDressing` calls it first */
+  unfollow?: () => void;
   vegetation?: VegetationControl;
   /** vine rows (cultivated-layer.ts): static */
   vineyards?: Group;
@@ -207,6 +212,9 @@ export interface TileDressing {
  * (`DressingPlugin.hangDressing`).
  */
 export interface TrafficHost {
+  /** the look store: the bodies show while the layer is on, from the
+   *  hang on (`TrafficSlot.attach` follows it) */
+  look: Watch<Pick<LookValues, "trafficLayer">>;
   /** the content root the bodies hang under (the Y-up scene frame) */
   root: Object3D;
   /** compiles the bodies before they show, counted on the tile so its
@@ -244,7 +252,9 @@ export interface TrafficSlot {
   hide: () => void;
   /** the ask set for the probe, once the bodies are built */
   asks: () => AskSet<FeatureInquiry> | null;
-  /** the tile the bodies will hang on (the plugin, as the dressing hangs) */
+  /** the tile the bodies will hang on (the plugin, as the dressing hangs):
+   *  from now on they show and hide with the look's layer (its value of
+   *  now first), until `dispose` */
   attach: (host: TrafficHost) => void;
   /** frees the bodies — once their compile has ended, if one still runs
    *  (three cannot stop it, and one that resumes on freed buffers uploads
@@ -458,9 +468,9 @@ export const DRESSING_PARTS = {
   sport: (d) => d.sport?.group,
   vineyards: (d) => d.vineyards,
 } as const satisfies Record<
-  // every field but the id and the askables (data): a new part cannot be
-  // left out
-  Exclude<keyof TileDressing, "asks" | "buildAsks" | "tile">,
+  // every field but the id, the askables (data) and the environment's
+  // let-go: a new part cannot be left out
+  Exclude<keyof TileDressing, "asks" | "buildAsks" | "tile" | "unfollow">,
   (d: TileDressing) => Object3D | undefined
 >;
 
@@ -592,40 +602,37 @@ export async function withinCompileWait(done: Promise<unknown>): Promise<void> {
 }
 
 /**
- * Brings a dressing that has just joined the stream up to the scene's
- * present. It was born with the season and look of the moment it
- * was built, but its compile may then wait up to COMPILE_WAIT_MS, and the
- * clocks that follow a change (create-app.ts) reach only the dressings in
- * `stream.dressings` — a date drag, dusk or a slider moved meanwhile would
- * pass it by. Each setter is idempotent: nothing moves when nothing did.
+ * Binds a dressing's trees to the scene environment (scene-environment.ts)
+ * from its birth: they take the season of now at once and every change
+ * after — while the dressing compiles, hangs and shows — and a crown that
+ * changed redraws the shadow map. Returns the call that lets go
+ * (`TileDressing.unfollow`, called by `disposeDressing`). The look needs
+ * no following here: the crown switch is read by the LOD pass, and the
+ * traffic follows the layer once it hangs (`TrafficSlot.attach`).
  */
-export function catchUp(
-  d: Pick<TileDressing, "traffic" | "vegetation">,
-  ctx: Pick<TileStreamContext, "environment">
-): void {
-  const look = ctx.environment.look.get();
-  d.vegetation?.applyLook(look);
-  d.vegetation?.setSeason(ctx.environment.season.get());
-  showDataLayers(d, look);
-}
-
-/** A dressing's data layers shown or hidden as the look has them
- *  (lib/city/data-layers.ts): a layer that is off draws nothing, and one
- *  never switched on has built nothing. */
-export function showDataLayers(
-  d: Pick<TileDressing, "traffic">,
-  look: Pick<LookValues, "trafficLayer">
-): void {
-  if (look.trafficLayer) {
-    void d.traffic?.show();
-  } else {
-    d.traffic?.hide();
+export function followEnvironment(
+  d: Pick<TileDressing, "vegetation">,
+  env: DressingEnvironment
+): () => void {
+  const { vegetation } = d;
+  if (!vegetation) {
+    return () => {
+      // nothing follows
+    };
   }
+  return follow(env.season, (day) => {
+    if (vegetation.setSeason(day)) {
+      env.castersChanged();
+    }
+  });
 }
 
 /** Frees a dressing; a part that throws does not keep the others (what
  *  was thrown is returned). */
 function disposeDressing(d: TileDressing): unknown[] {
+  // it hears the scene no more
+  d.unfollow?.();
+  d.unfollow = undefined;
   // its ask sets, if still pending, are never built: their idle callback
   // may come after the tile has left (the entry it checks keeps the
   // dressing), over a terrain already disposed
@@ -796,11 +803,6 @@ function* tileVegetationSteps(
   const vegetation: VegetationControl = {
     group,
     chunks: canopy.chunks,
-    multiTuft: canopy.multiTuft,
-    applyLook: (look) => {
-      canopy.applyLook(look);
-      own.applyLook(look);
-    },
     setSeason: (day) => {
       const a = canopy.setSeason(day);
       const b = own.setSeason(day);
@@ -808,9 +810,9 @@ function* tileVegetationSteps(
     },
     // Both run: `||` would skip the cadastre's swap whenever the canopy's
     // changed.
-    updateLod: (cameraPos) => {
-      const a = canopy.updateLod(cameraPos);
-      const b = own.updateLod(cameraPos);
+    updateLod: (cameraPos, multiTuft) => {
+      const a = canopy.updateLod(cameraPos, multiTuft);
+      const b = own.updateLod(cameraPos, multiTuft);
       return a || b;
     },
   };
@@ -877,6 +879,8 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
   let wanted = false;
   let ready = false;
   let disposed = false;
+  /** lets go of the look (attach follows it) */
+  let unfollowLook: (() => void) | null = null;
   const gone = (h: TrafficHost) => disposed || h.gone();
   /** The bodies built, hung hidden and their compile started — in the
    *  host's turn, which waits on the compile (a dressing's waits after
@@ -989,8 +993,19 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
     asks: () => set,
     attach: (h) => {
       host = h;
+      // a layer that is off draws nothing, and one never switched on has
+      // built nothing
+      unfollowLook = follow(h.look, (look) => {
+        if (look.trafficLayer) {
+          void slot.show();
+        } else {
+          slot.hide();
+        }
+      });
     },
     dispose: () => {
+      unfollowLook?.();
+      unfollowLook = null;
       disposed = true;
       ready = false;
       const { group } = slot;
@@ -1261,10 +1276,8 @@ async function buildDressing(
       ),
       { signal }
     );
-    // Born with the current look and season, not the defaults.
+    // (its season: from the environment, as the plugin queues it)
     made.vegetation = vegetation;
-    vegetation.applyLook(ctx.environment.look.get());
-    vegetation.setSeason(ctx.environment.season.get());
     await nextTask(signal);
     // the OSM hedges and the DLM's hedge rows, drawn as one kind of hedge
     const lowVegetation =
@@ -2194,14 +2207,15 @@ export class DressingPlugin {
         );
         entry.aborter = undefined;
         const parts = dressingParts(dressing);
-        // Compiled as the frames will draw it — in its season and at the
-        // hour (which swap crown materials) — before it hangs anywhere: a
-        // build three keys differently from what a frame asks for compiles
-        // inside that frame. (A compile starts at the drawable: where it
-        // will hang does not change its build.) One that throws here never
-        // hangs: it is freed, not left to nothing.
+        // It follows the scene's season from here on, so it compiles as the
+        // frames will draw it — in its season (which swaps crown materials)
+        // — before it hangs anywhere: a build three keys differently from
+        // what a frame asks for compiles inside that frame. (A compile
+        // starts at the drawable: where it will hang does not change its
+        // build.) One that throws here never hangs: it is freed, not left
+        // to nothing.
         try {
-          catchUp(dressing, this.ctx);
+          dressing.unfollow = followEnvironment(dressing, this.ctx.environment);
         } catch (error) {
           this.disposeFailed(disposeDressing(dressing), scene);
           throw error;
@@ -2349,6 +2363,7 @@ export class DressingPlugin {
     );
     // The traffic's bodies hang here once its layer is switched on.
     dressing.traffic?.attach({
+      look: this.ctx.environment.look,
       root: scene,
       compile: async (group) =>
         await this.compileUnder(
@@ -2377,14 +2392,9 @@ export class DressingPlugin {
         }
       },
     });
-    // Whatever changed while it compiled (the hour moves on); weighed
-    // again as it hangs, as its parts stand after that, even if it threw.
-    try {
-      catchUp(dressing, this.ctx);
-    } finally {
-      weighDressing(entry, dressing);
-      this.reweigh(scene);
-    }
+    // weighed again as it hangs, as its parts stand now
+    weighDressing(entry, dressing);
+    this.reweigh(scene);
   }
 
   /** The cache weighs `scene`'s tile again (the whole cache: none known). */
