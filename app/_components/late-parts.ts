@@ -84,7 +84,8 @@ export interface LatePart<T> {
   /** what the tile cache weighs it by, from its build on */
   bytes: (built: T) => number;
   /** hangs it (once, after the content is recorded); returns what takes
-   *  it down again */
+   *  it down again. One that throws has taken down what it hung: the part
+   *  is then freed as a failure, with no take-down to call */
   hang: (built: T, self: LateHandle) => () => void;
   /** frees it (taken down already); returns what threw */
   free: (built: T) => unknown[];

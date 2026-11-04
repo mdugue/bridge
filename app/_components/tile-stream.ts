@@ -1450,26 +1450,10 @@ export function dressingPart(site: DressingSite): LatePart<TileDressing> {
         0
       ),
     hang: (d, self) => {
-      // The content root is the viewer's Y-up scene frame (the renderer's
-      // up-axis turn cancels the world group's), so the Y-up dressing
-      // hangs under it and leaves with its tile.
-      site.root.add(...dressingParts(d));
-      slot.dressing = d;
-      dressings.add(d);
-      buildAsksWhenIdle(d, () => site.live() && slot.dressing === d, {
-        failed: (err) => site.failed(err, d.tile),
-      });
-      // its traffic's bodies hang on the tile once the layer is on
-      d.traffic?.attach({
-        look: site.look,
-        parts: site.parts,
-        owner: self,
-        root: site.root,
-      });
       // taken down, its parts leave the root (or the coarse crowns'
       // stand-in) at once: its free may wait for its compile, and the
       // root's release would dispose whatever still hangs on it
-      return () => {
+      const takeDown = () => {
         if (slot.dressing === d) {
           slot.dressing = undefined;
         }
@@ -1478,6 +1462,29 @@ export function dressingPart(site: DressingSite): LatePart<TileDressing> {
           part.removeFromParent();
         }
       };
+      try {
+        // The content root is the viewer's Y-up scene frame (the
+        // renderer's up-axis turn cancels the world group's), so the Y-up
+        // dressing hangs under it and leaves with its tile.
+        site.root.add(...dressingParts(d));
+        slot.dressing = d;
+        dressings.add(d);
+        buildAsksWhenIdle(d, () => site.live() && slot.dressing === d, {
+          failed: (err) => site.failed(err, d.tile),
+        });
+        // its traffic's bodies hang on the tile once the layer is on
+        d.traffic?.attach({
+          look: site.look,
+          parts: site.parts,
+          owner: self,
+          root: site.root,
+        });
+      } catch (error) {
+        // half hung: nothing of it stays where the stream would find it
+        takeDown();
+        throw error;
+      }
+      return takeDown;
     },
     free: (d) => disposeDressing(d),
   };

@@ -52,6 +52,7 @@ import type {
   DressingSite,
   TileDressing,
   TileStreamContext,
+  TrafficSlot,
 } from "./tile-stream";
 import type { VegetationControl } from "./vegetation-layer";
 
@@ -756,6 +757,25 @@ test("a dressing hung while its compile runs leaves the root at its release, fre
   } finally {
     jest.useRealTimers();
   }
+});
+
+test("a dressing whose hang throws half-way is taken down whole and freed as a failure", async () => {
+  const furniture = new Group();
+  const traffic = {
+    attach: () => {
+      throw new Error("attach threw");
+    },
+    dispose: () => [],
+  } as unknown as TrafficSlot;
+  const dressing: TileDressing = { tile: "t", furniture, traffic };
+  const { calls, dressings, outcome, root, slot } =
+    await hungDressing(dressing);
+  expect(outcome).toBe("failed");
+  expect(calls.failed).toHaveLength(1);
+  expect(slot.dressing).toBeUndefined();
+  expect(dressings.size).toBe(0);
+  expect(furniture.parent).toBeNull();
+  expect(root.children).toHaveLength(0);
 });
 
 test("a coarse level's dressing builds ahead of a fine level's queued before it", async () => {
