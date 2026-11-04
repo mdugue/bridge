@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { askFailure } from "./ask-failure";
+import { ASK_FAILURES, askFailure, codedRefusals } from "./ask-failure";
 
 /** An error as the chat client hands it to the card. */
 const failed = (message: string, extra: Record<string, unknown> = {}) =>
@@ -14,36 +14,38 @@ describe("the card's words for a failed answer", () => {
     reset?: true;
   }[] = [
     {
-      name: "a 401",
-      error: failed("HTTP error! status: 401", { status: 401 }),
+      name: "a token the check did not give",
+      error: failed("Der Schlüssel muss neu geprüft werden.", {
+        code: "bad-token",
+      }),
       text: "Der Schlüssel muss neu geprüft werden.",
       key: true,
     },
     {
-      name: "a 400",
-      error: failed("HTTP error! status: 400", { status: 400 }),
+      name: "a request from an older page",
+      error: failed("…", { code: "bad-props" }),
       text: "Die Anfrage passt nicht zu diesem Server — lade die Seite neu.",
     },
     {
-      name: "a 413",
-      error: failed("HTTP error! status: 413", { status: 413 }),
+      name: "a conversation past the caps",
+      error: failed("…", { code: "too-long" }),
       text: "Das Gespräch ist zu lang geworden.",
       reset: true,
     },
     {
-      name: "a 422",
-      error: failed("HTTP error! status: 422", { status: 422 }),
+      name: "an answer whose turns are spent",
+      error: failed("…", { code: "too-many-steps" }),
       text: "Die Antwort brauchte zu viele Schritte. Frag bitte anders.",
       reset: true,
     },
     {
-      name: "a 404",
-      error: failed("HTTP error! status: 404", { status: 404 }),
+      name: "a site without Stadtwissen",
+      error: failed("…", { code: "no-knowledge" }),
       text: "Für diese Stadt gibt es kein Stadtwissen.",
     },
     {
-      name: "a 501",
-      error: failed("HTTP error! status: 501", { status: 501 }),
+      name: "a server not set up",
+      error: failed("…", { code: "no-secret" }),
       text: "Frag die Stadt ist auf diesem Server nicht eingerichtet.",
     },
     {
@@ -53,9 +55,29 @@ describe("the card's words for a failed answer", () => {
     },
     {
       name: "the turn cap in the stream",
-      error: failed("Die Antwort brauchte zu viele Schritte."),
+      error: failed(
+        "Die Antwort brauchte zu viele Schritte. Frag bitte anders.",
+        {
+          code: "too-many-steps",
+        }
+      ),
       text: "Die Antwort brauchte zu viele Schritte. Frag bitte anders.",
       reset: true,
+    },
+    {
+      name: "the model's output spent mid-answer",
+      error: failed("…", { code: "cut-short" }),
+      text: "Die Antwort wurde abgeschnitten: dem Modell gingen die Wörter aus.",
+    },
+    {
+      name: "the deadline",
+      error: failed("…", { code: "too-late" }),
+      text: "Die Antwort dauerte zu lange.",
+    },
+    {
+      name: "a filtered answer",
+      error: failed("…", { code: "broke-off" }),
+      text: "Das Modell brach die Antwort ab. Frag bitte noch einmal.",
     },
     {
       name: "a provider's 401",
@@ -115,5 +137,79 @@ describe("the card's words for a failed answer", () => {
       key: key === true,
       reset: reset === true,
     });
+  });
+});
+
+test("no code of ours has a provider's shape", () => {
+  // kebab-case: a provider's "401" or max_tokens is never read as ours
+  for (const code of Object.keys(ASK_FAILURES)) {
+    expect(code).toMatch(/^[a-z]+(?:-[a-z]+)*$/u);
+  }
+});
+
+/** A `fetch` that answers every request with `response`. */
+function replying(response: Response): typeof fetch {
+  return Object.assign(
+    async () => await Promise.resolve(response.clone()),
+    fetch
+  );
+}
+
+describe("a refusal on its way to the card", () => {
+  test("one with our code becomes a stream error naming it", async () => {
+    const fetchFn = codedRefusals(
+      replying(
+        Response.json(
+          {
+            code: "bad-token",
+            message: "Der Schlüssel muss neu geprüft werden.",
+          },
+          { status: 401 }
+        )
+      )
+    );
+    const res = await fetchFn("/api/frag");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("text/event-stream");
+    const text = await res.text();
+    expect(text.startsWith("data: ")).toBe(true);
+    expect(text.endsWith("\n\n")).toBe(true);
+    const event = JSON.parse(text.slice("data: ".length)) as Record<
+      string,
+      unknown
+    >;
+    expect(event).toMatchObject({
+      type: "RUN_ERROR",
+      code: "bad-token",
+      message: "Der Schlüssel muss neu geprüft werden.",
+    });
+    expect(typeof event.timestamp).toBe("number");
+  });
+
+  test("a host's page passes as it came", async () => {
+    const page = new Response("<html>Bad Gateway</html>", {
+      status: 501,
+      headers: { "Content-Type": "text/html" },
+    });
+    const res = await codedRefusals(replying(page))("/api/frag");
+    expect(res.status).toBe(501);
+    expect(await res.text()).toBe("<html>Bad Gateway</html>");
+  });
+
+  test("a code not ours passes as it came", async () => {
+    const res = await codedRefusals(
+      replying(Response.json({ code: "401", message: "nope" }, { status: 401 }))
+    )("/api/frag");
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({ code: "401", message: "nope" });
+  });
+
+  test("an answer passes as it came", async () => {
+    const stream = new Response("data: {}\n\n", {
+      headers: { "Content-Type": "text/event-stream" },
+    });
+    const res = await codedRefusals(replying(stream))("/api/frag");
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("data: {}\n\n");
   });
 });

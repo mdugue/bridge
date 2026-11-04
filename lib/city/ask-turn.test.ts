@@ -175,6 +175,8 @@ describe("a refused request", () => {
     status: number;
     code: string;
     message: string;
+    /** what the log line adds to the code, where the code says less */
+    detail?: string;
     /** the check comes after the Stadtwissen is looked up */
     knows?: true;
   }[] = [
@@ -183,14 +185,15 @@ describe("a refused request", () => {
       sent: undefined,
       status: 400,
       code: "bad-request",
-      message: "Die Anfrage ist unvollständig.",
+      message: "Die Anfrage passt nicht zu diesem Server — lade die Seite neu.",
     },
     {
       name: "an unknown model",
       sent: body({ forwardedProps: { ...PROPS, model: "gpt-0" } }),
       status: 400,
       code: "bad-props",
-      message: "unbekanntes Modell",
+      message: "Die Anfrage passt nicht zu diesem Server — lade die Seite neu.",
+      detail: "unbekanntes Modell",
     },
     {
       name: "no key, no scripted model",
@@ -198,7 +201,7 @@ describe("a refused request", () => {
       key: "",
       status: 401,
       code: "no-key",
-      message: "Ohne Schlüssel geht es nicht.",
+      message: "Der Schlüssel muss neu geprüft werden.",
     },
     {
       name: "a token the key check did not give",
@@ -217,14 +220,15 @@ describe("a refused request", () => {
       }),
       status: 413,
       code: "too-long",
-      message: "Das Gespräch ist zu lang geworden. Bitte neu beginnen.",
+      message: "Das Gespräch ist zu lang geworden.",
+      detail: "Das Gespräch ist zu lang geworden. Bitte neu beginnen.",
     },
     {
       name: "twelve tool rounds since the question",
       sent: body({ messages: roundsSinceQuestion(12) }),
       status: 422,
       code: "too-many-steps",
-      message: "Die Antwort brauchte zu viele Schritte.",
+      message: "Die Antwort brauchte zu viele Schritte. Frag bitte anders.",
     },
     {
       name: "a site without Stadtwissen",
@@ -255,7 +259,17 @@ describe("a refused request", () => {
 
   test.each(cases)(
     "$name: $status $code",
-    async ({ over, sent, key, signal, status, code, message, knows }) => {
+    async ({
+      over,
+      sent,
+      key,
+      signal,
+      status,
+      code,
+      message,
+      detail,
+      knows,
+    }) => {
       const { asked, deps, logged } = host([fakeText()], over);
       const res = await turn(deps, sent, {
         key: key ?? KEY,
@@ -265,7 +279,9 @@ describe("a refused request", () => {
       expect(res.headers.get("Cache-Control")).toBe("no-store");
       const text = await res.text();
       expect(JSON.parse(text)).toEqual({ code, message });
-      expect(logged).toEqual([`[frag] ${status} ${code}`]);
+      expect(logged).toEqual([
+        `[frag] ${status} ${code}${detail ? ` ${detail}` : ""}`,
+      ]);
       expect(text).not.toContain(KEY);
       // a refused request builds no model, and checks before the
       // Stadtwissen's do not look it up
@@ -404,8 +420,11 @@ describe("how a run ends", () => {
       body({ messages: roundsSinceQuestion(11) })
     );
     const errors = errorsOf(events(text));
-    expect(errors.map((e) => e.message)).toEqual([
-      "Die Antwort brauchte zu viele Schritte.",
+    expect(errors.map((e) => [e.code, e.message])).toEqual([
+      [
+        "too-many-steps",
+        "Die Antwort brauchte zu viele Schritte. Frag bitte anders.",
+      ],
     ]);
     expect(model.state.callCount).toBe(1);
   });
@@ -416,8 +435,8 @@ describe("how a run ends", () => {
     const { deps } = host([slow], { deadlineMs: 50 });
     const text = await answered(deps, body());
     const errors = errorsOf(events(text));
-    expect(errors.map((e) => e.message)).toEqual([
-      "Die Antwort dauerte zu lange.",
+    expect(errors.map((e) => [e.code, e.message])).toEqual([
+      ["too-late", "Die Antwort dauerte zu lange."],
     ]);
   });
 

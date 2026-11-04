@@ -2,13 +2,16 @@
  * How an answer of *Frag die Stadt* fails (ADR 0056), in one table: every
  * reason the server refuses a request or ends a run with, as a code, the
  * status a refusal answers with, and the words the card shows. The
- * server (`lib/city/ask-run.ts`, the two routes) and the card
- * (`app/_components/ask-city.tsx`) read it; nothing of the main bundle
- * does. Pure data and functions.
+ * server sends the code (a refusal's body, a stream's `RUN_ERROR`), the
+ * card looks it up; the server's words are the card's. Read by the server
+ * (`lib/city/ask-run.ts`, the two routes) and the card's chunk
+ * (`app/_components/ask-city.tsx`), never the main bundle. Our codes are
+ * kebab-case, so a provider's code (`"401"`, `max_tokens`) is never read
+ * as ours.
  */
 
 /** Why an answer stopped at its turn cap, in the stream or as a 422. */
-export const TOO_MANY_STEPS = "Die Antwort brauchte zu viele Schritte.";
+const TOO_MANY_STEPS = "Die Antwort brauchte zu viele Schritte.";
 
 /** A conversation past what the server or the model takes. */
 export const TOO_LONG = "Das Gespräch ist zu lang geworden.";
@@ -37,12 +40,14 @@ export type AskFailureCode =
  * the card's words, and whether the card offers the key check again or a
  * fresh start.
  */
-export const ASK_FAILURES: Readonly<
-  Record<
-    AskFailureCode,
-    { status?: number; text: string; key?: true; reset?: true }
-  >
-> = {
+interface AskFailureRow {
+  status?: number;
+  text: string;
+  key?: true;
+  reset?: true;
+}
+
+const ROWS = {
   // an older page, or a model the server no longer offers
   "bad-request": {
     status: 400,
@@ -85,7 +90,22 @@ export const ASK_FAILURES: Readonly<
   "broke-off": {
     text: "Das Modell brach die Antwort ab. Frag bitte noch einmal.",
   },
-};
+} as const satisfies Record<AskFailureCode, AskFailureRow>;
+
+export const ASK_FAILURES: Readonly<Record<AskFailureCode, AskFailureRow>> =
+  ROWS;
+
+/** A reason a request is refused for: a row with a status. */
+export type AskRefusalCode = {
+  [C in AskFailureCode]: (typeof ROWS)[C] extends { status: number }
+    ? C
+    : never;
+}[AskFailureCode];
+
+/** The status a refusal answers with. */
+export function askRefusalStatus(code: AskRefusalCode): number {
+  return ROWS[code].status;
+}
 
 /** A provider's error that names the key or the account's credit. */
 const KEY_TROUBLE =
@@ -100,11 +120,10 @@ const say = (text: string, key = false, reset = false) => ({
   text,
 });
 
-/** A row of the table as the card says it. */
-const sayRow = (code: AskFailureCode) => {
-  const row = ASK_FAILURES[code];
-  return say(row.text, row.key === true, row.reset === true);
-};
+/** Whether a text is one of our codes. */
+function isAskFailureCode(value: unknown): value is AskFailureCode {
+  return typeof value === "string" && Object.hasOwn(ROWS, value);
+}
 
 /** A code as text: strings and numbers as written, else nothing. */
 function codeText(value: unknown): string {
@@ -113,42 +132,26 @@ function codeText(value: unknown): string {
     : "";
 }
 
-/** A failed answer in words, by the status the server sent, and what
- *  the visitor can do about it: check the key again or start over. */
+/**
+ * What the card says and offers for a failed answer: check the key again
+ * or start over. Our code reads its row; a provider's code, its status or
+ * its words are read where no code of ours came (a host's 502 or 504
+ * keeps its status).
+ */
 export function askFailure(error: Error): {
   key: boolean;
   reset: boolean;
   text: string;
 } {
-  const { status } = error as { status?: unknown };
-  if (status === 401) {
-    return sayRow("bad-token");
-  }
-  if (status === 400) {
-    return sayRow("bad-request");
-  }
-  if (status === 413) {
-    return sayRow("too-long");
-  }
-  if (status === 422) {
-    return sayRow("too-many-steps");
-  }
-  if (status === 404) {
-    return sayRow("no-knowledge");
-  }
-  if (status === 501) {
-    return sayRow("no-secret");
-  }
-  if (typeof status === "number") {
-    return say(`Der Server antwortet mit Status ${status}.`);
+  const { code: sent, status } = error as { code?: unknown; status?: unknown };
+  if (isAskFailureCode(sent)) {
+    const row = ASK_FAILURES[sent];
+    return say(row.text, row.key === true, row.reset === true);
   }
   // a key revoked or out of credit after the check fails in the stream,
   // in the provider's words: offer the check again for those only
   const message = error.message || "Die Antwort brach ab.";
-  const code = codeText((error as { code?: unknown }).code);
-  if (message === TOO_MANY_STEPS) {
-    return sayRow("too-many-steps");
-  }
+  const code = codeText(sent);
   // the codes first, the provider's words only where no code says it
   if (KEY_CODES.has(code)) {
     return say(message, true);
@@ -163,5 +166,52 @@ export function askFailure(error: Error): {
   if (code === "context_overflow") {
     return say(TOO_LONG, false, true);
   }
+  if (typeof status === "number") {
+    return say(`Der Server antwortet mit Status ${status}.`);
+  }
   return say(message, KEY_TROUBLE.test(message));
+}
+
+/** A refusal's body, where it is ours: its code and words. */
+async function codedBody(
+  response: Response
+): Promise<{ code: AskFailureCode; message: string } | null> {
+  const body: unknown = await response
+    .clone()
+    .json()
+    .catch(() => null);
+  if (typeof body !== "object" || body === null) {
+    return null;
+  }
+  const { code, message } = body as { code?: unknown; message?: unknown };
+  return isAskFailureCode(code)
+    ? { code, message: typeof message === "string" ? message : "" }
+    : null;
+}
+
+/**
+ * `fetch` for the chat's connection: a refusal that carries one of our
+ * codes becomes a stream with one `RUN_ERROR` naming it, so it reaches the
+ * card as an answer's error with its code — one path for a refusal and an
+ * end, instead of the client's status-only error. Any other response
+ * (an answer, a host's 502 or 504) passes as it came.
+ */
+export function codedRefusals(fetchFn: typeof fetch): typeof fetch {
+  const coded = async (
+    ...args: Parameters<typeof fetch>
+  ): Promise<Response> => {
+    const response = await fetchFn(...args);
+    if (response.ok) {
+      return response;
+    }
+    const refusal = await codedBody(response);
+    if (!refusal) {
+      return response;
+    }
+    const event = { type: "RUN_ERROR", timestamp: Date.now(), ...refusal };
+    return new Response(`data: ${JSON.stringify(event)}\n\n`, {
+      headers: { "Content-Type": "text/event-stream" },
+    });
+  };
+  return Object.assign(coded, fetchFn);
 }

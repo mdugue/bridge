@@ -1079,7 +1079,9 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     // ADR 0056: the key check and the answer are the server's and the
     // provider's; the spec answers for both, so CI needs no key and no
     // provider. A key the provider refuses says so; a checked one opens
-    // the conversation, whose answer is labelled KI.
+    // the conversation. A refusal of the chat route reaches the card by its
+    // code (ADR 0056: the card looks the words up), and the answer is
+    // labelled KI.
     let checks = 0;
     await page.route("**/api/schluessel", async (route) => {
       checks += 1;
@@ -1106,14 +1108,23 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       { type: "TEXT_MESSAGE_END", messageId: "m1" },
       { type: "RUN_FINISHED", runId: "r1", threadId: "t" },
     ];
-    await page.route(
-      "**/api/frag",
-      async (route) =>
-        await route.fulfill({
-          contentType: "text/event-stream",
-          body: events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join(""),
-        })
-    );
+    let asked = 0;
+    await page.route("**/api/frag", async (route) => {
+      asked += 1;
+      await route.fulfill(
+        asked === 1
+          ? {
+              status: 401,
+              json: { code: "bad-token", message: "Token abgelaufen." },
+            }
+          : {
+              contentType: "text/event-stream",
+              body: events
+                .map((e) => `data: ${JSON.stringify(e)}\n\n`)
+                .join(""),
+            }
+      );
+    });
     await withFramesHeld(page, async () => {
       await openSidebar(page);
       await page.getByRole("tab", { name: "Erkunden" }).click();
@@ -1128,6 +1139,17 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       // the refused check is the browser's logged 401, asked for above
       errors.console.length = 0;
       await card.getByRole("button", { name: "Prüfen und loslegen" }).click();
+      await card.getByTestId("ask-input").fill("Wer baute die Frauenkirche?");
+      await card.getByTestId("ask-input").press("Enter");
+      // the route refuses the token: the card words it by its code
+      await expect(card.getByRole("alert")).toContainText(
+        "Der Schlüssel muss neu geprüft werden."
+      );
+      await expect(
+        card.getByRole("button", { name: "Schlüssel prüfen" })
+      ).toBeVisible();
+      // the refused answer is the browser's logged 401, asked for above
+      errors.console.length = 0;
       await card.getByTestId("ask-input").fill("Wer baute die Frauenkirche?");
       await card.getByTestId("ask-input").press("Enter");
       await expect(card).toContainText("George Bähr");

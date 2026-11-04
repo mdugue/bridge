@@ -38,7 +38,7 @@ import {
   providerForKey,
 } from "@/lib/city/ask-city";
 import type { AskProviderId } from "@/lib/city/ask-city";
-import { askFailure } from "@/lib/city/ask-failure";
+import { askFailure, codedRefusals } from "@/lib/city/ask-failure";
 import { Button } from "@/components/ui/button";
 import { Message, MessageContent } from "@/components/ui/message";
 import {
@@ -588,6 +588,8 @@ const Conversation = ({
   const connection = useMemo(
     () =>
       fetchServerSentEvents("/api/frag", {
+        // a refusal's code reaches the card as an answer's error does
+        fetchClient: codedRefusals(fetch),
         headers: { [ASK_KEY_HEADER]: secret },
         // the route keeps no run to rejoin: a drop is the answer's end
         reconnect: { maxAttempts: 0 },
