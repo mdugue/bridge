@@ -104,6 +104,8 @@ export function createAskSession(ports: AskSessionPorts): AskSession {
   let run: RunPort | null = null;
   let reading = false;
   let hearing = false;
+  /** reading aloud was turned on by the Hörmodus, not by the visitor */
+  let readingByHearing = false;
   let loading = false;
   let stopped = false;
   let micOpen = false;
@@ -177,6 +179,8 @@ export function createAskSession(ports: AskSessionPorts): AskSession {
       // read aloud only where the device can: a voice-style answer
       // nobody hears, with no switch to undo it, helps no one
       reading = speech.supported();
+      // the visitor chose reading by speaking
+      readingByHearing = false;
       return ask(text, reading);
     },
     answerStarted: () => {
@@ -235,6 +239,8 @@ export function createAskSession(ports: AskSessionPorts): AskSession {
       return "done";
     },
     readingPressed: () => {
+      // the visitor chose: the Hörmodus takes back nothing
+      readingByHearing = false;
       if (reading) {
         speech.stop();
         // the Hörmodus promises the answers read aloud
@@ -252,8 +258,15 @@ export function createAskSession(ports: AskSessionPorts): AskSession {
     hearingPressed: () => {
       if (hearing) {
         setHearing(false);
+        // ending it takes back only the reading it began
+        if (readingByHearing) {
+          speech.stop();
+          reading = false;
+          owed = null;
+        }
       } else {
         speech.prime();
+        readingByHearing = !reading;
         reading = true;
         setHearing(true);
       }

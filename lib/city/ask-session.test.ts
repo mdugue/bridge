@@ -280,12 +280,30 @@ describe("the switches", () => {
     expect(calls).toEqual(["speech.prime", "waits.setListening:true"]);
   });
 
-  test("hearing off keeps reading", () => {
+  test("hearing off ends the reading it began", () => {
+    dispatch({ type: "hearingPressed" });
+    since();
+    dispatch({ type: "hearingPressed" });
+    expect(session.state()).toEqual({ reading: false, hearing: false });
+    expect(calls).toEqual(["waits.setListening:false", "speech.stop"]);
+  });
+
+  test("hearing off keeps a reading the visitor chose", () => {
+    // Vorlesen on first
+    dispatch({ type: "readingPressed" });
     dispatch({ type: "hearingPressed" });
     since();
     dispatch({ type: "hearingPressed" });
     expect(session.state()).toEqual({ reading: true, hearing: false });
     expect(calls).toEqual(["waits.setListening:false"]);
+  });
+
+  test("hearing off keeps a reading chosen while it ran", () => {
+    dispatch({ type: "hearingPressed" });
+    // a spoken question chooses reading too
+    dispatch({ type: "spoken", text: "Was ist das?" });
+    dispatch({ type: "hearingPressed" });
+    expect(session.state()).toEqual({ reading: true, hearing: false });
   });
 
   test("the state stays the same object until a switch changes", () => {
