@@ -337,6 +337,14 @@ function roofFormRow(o: InquiryObject): DrawnRow | null {
       };
 }
 
+/**
+ * Compile time: every value is named. At run time a newer bake's may still
+ * come (a tab left open reads new tiles): then the row says less, and the
+ * card stays up.
+ */
+const fromNewerBake = (_value: never) =>
+  ({ method: "assumed", source: "viewer" }) as const;
+
 function storeyRow(
   o: InquiryObject,
   look: ObjectLook,
@@ -403,8 +411,7 @@ function storeyRow(
       };
     }
     default: {
-      const unknown: never = from;
-      throw new Error(`unknown case: ${String(unknown)}`);
+      return { label: "Geschosse", value, ...fromNewerBake(from) };
     }
   }
 }
@@ -561,8 +568,7 @@ function windowsRow(
       };
     }
     default: {
-      const unknown: never = d.noWindows;
-      throw new Error(`unknown case: ${String(unknown)}`);
+      return { ...base, ...fromNewerBake(d.noWindows) };
     }
   }
 }
@@ -729,8 +735,7 @@ function windowsFrom(
       };
     }
     default: {
-      const unknown: never = from;
-      throw new Error(`unknown case: ${String(unknown)}`);
+      return { ...base, ...fromNewerBake(from) };
     }
   }
 }
@@ -893,8 +898,7 @@ function roofColourRow(
       };
     }
     default: {
-      const unknown: never = d.roof;
-      throw new Error(`unknown case: ${String(unknown)}`);
+      return { ...base, ...fromNewerBake(d.roof) };
     }
   }
 }

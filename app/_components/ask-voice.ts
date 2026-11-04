@@ -125,11 +125,12 @@ export function useSpeech(): Speech {
     const pick = () => setVoice((had) => germanVoice() ?? had);
     if (available) {
       pick();
-      speechSynthesis.addEventListener("voiceschanged", pick);
+      // (older Safari: speechSynthesis is no EventTarget, the one pick stands)
+      speechSynthesis.addEventListener?.("voiceschanged", pick);
     }
     return () => {
       if (available) {
-        speechSynthesis.removeEventListener("voiceschanged", pick);
+        speechSynthesis.removeEventListener?.("voiceschanged", pick);
       }
     };
   }, []);
