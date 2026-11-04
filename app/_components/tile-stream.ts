@@ -2206,8 +2206,9 @@ export class DressingPlugin {
    * Called by the renderer when the stream is disposed — before it disposes
    * its tiles, and with this plugin already unregistered, so `disposeTile`
    * never runs for them: every dressed tile is released here, and the
-   * shared sky views with them. Whatever is still being built finds the
-   * stream gone and frees itself (processTileModel, queueDressing).
+   * shared rasters with them (once no compile runs). Whatever is still
+   * being built finds the stream gone and frees itself (processTileModel,
+   * queueDressing).
    */
   dispose(): void {
     this.disposed = true;
@@ -2220,6 +2221,16 @@ export class DressingPlugin {
       // left first: one whose compile still runs is released as it ends
       this.leave(scene);
       this.release(scene);
+    }
+    this.clearShared();
+  }
+
+  /** The site's shared rasters go with the stream — once no compile runs
+   *  (the last one to end calls this again): one still running would
+   *  upload a freed raster again, which nothing would free. */
+  private clearShared(): void {
+    if (this.compiles.size > 0) {
+      return;
     }
     this.skyView.clear();
     this.horizon.clear();
@@ -2356,6 +2367,9 @@ export class DressingPlugin {
       this.compiles.delete(scene);
       if (this.released.has(scene)) {
         this.release(scene);
+      }
+      if (this.disposed) {
+        this.clearShared();
       }
     };
     // a release that throws must not surface as an unhandled rejection

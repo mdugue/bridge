@@ -372,6 +372,49 @@ test("a stream disposed while a content it never dressed still compiles frees th
   }
 });
 
+test("a stream disposed while a compile runs keeps the site's shared rasters until that compile ends", async () => {
+  jest.useFakeTimers();
+  try {
+    let finish = nothing;
+    const compiling = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const plugin = new DressingPlugin(
+      {
+        dressingGate: new Promise<void>(() => {}),
+        bootTile: () => null,
+        compile: async () => await compiling,
+        onChange: () => {},
+      } as unknown as TileStreamContext,
+      {
+        cities: new Set(),
+        terrains: new Set(),
+        dressings: new Set(),
+        demolished: new Map(),
+        demolishedGroups: new Set<number>(),
+      }
+    );
+    const scene = new Object3D();
+    scene.add(new Mesh(new BoxGeometry(), new MeshBasicNodeMaterial()));
+    plugin.dressed.set(scene, { late: createLateParts(fakeHost().host) });
+    // a sky view the site shares, held past this tile
+    void plugin.skyView.acquire("data:,");
+    const loading = plugin.processTileModel(scene, {});
+    await flush();
+    // a remount: the stream goes while that compile still runs, which
+    // would upload a raster freed now again
+    plugin.dispose();
+    jest.advanceTimersByTime(COMPILE_WAIT_MS);
+    await loading;
+    expect(plugin.skyView.held()).toBe(1);
+    finish();
+    await flush();
+    expect(plugin.skyView.held()).toBe(0);
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
 test("a tile that leaves lets go of the site's shared index at once, while its compile still runs", async () => {
   let finish = nothing;
   const plugin = new DressingPlugin(
