@@ -1033,6 +1033,24 @@ test("a dressing whose hang and take-down both throw fails with the hang's error
   expect(root.children).toHaveLength(0);
 });
 
+test("a hung dressing's take-down reports every error its traffic's dispose threw", async () => {
+  const disposeErrors = [new Error("bodies"), new Error("slot")];
+  // a slot frees once: a second dispose throws nothing
+  let thrown: Error[] = disposeErrors;
+  const traffic = {
+    attach: () => {},
+    dispose: () => {
+      const now = thrown;
+      thrown = [];
+      return now;
+    },
+  } as unknown as TrafficSlot;
+  const dressing: TileDressing = { tile: "t", furniture: new Group(), traffic };
+  const { handle, outcome } = await hungDressing(dressing);
+  expect(outcome).toBe("hung");
+  expect(handle.dispose()).toEqual(disposeErrors);
+});
+
 test("a coarse level's dressing builds ahead of a fine level's queued before it", async () => {
   const turn = gate();
   const { compiles, host } = fakeHost(turn.opened);

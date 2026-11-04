@@ -84,9 +84,11 @@ export interface LatePart<T> {
   /** what the tile cache weighs it by, from its build on */
   bytes: (built: T) => number;
   /** hangs it (once, after the content is recorded); returns what takes
-   *  it down again. One that throws has taken down what it hung: the part
-   *  is then freed as a failure, with no take-down to call */
-  hang: (built: T, self: LateHandle) => () => void;
+   *  it down again — which throws, or returns an array of what it met
+   *  (anything else it returns is ignored). One that throws has taken
+   *  down what it hung: the part is then freed as a failure, with no
+   *  take-down to call */
+  hang: (built: T, self: LateHandle) => () => unknown;
   /** frees it (taken down already); returns what threw */
   free: (built: T) => unknown[];
 }
@@ -253,7 +255,7 @@ export function createLateParts(host: LateHost): LateParts {
     // (a holder: the closures below set it across awaits)
     const made: { value: T | null } = { value: null };
     let compiling: Promise<Compiled> | null = null;
-    let takeDown: (() => void) | null = null;
+    let takeDown: (() => unknown) | null = null;
     let freed = false;
     let readyNow = noop;
     const ready = new Promise<void>((resolve) => {
@@ -295,7 +297,10 @@ export function createLateParts(host: LateHost): LateParts {
       // a take-down that throws keeps no part from its free
       const errors: unknown[] = [];
       try {
-        takeDown?.();
+        const met = takeDown?.();
+        if (Array.isArray(met)) {
+          errors.push(...(met as unknown[]));
+        }
       } catch (error) {
         errors.push(error);
       }

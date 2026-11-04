@@ -1520,12 +1520,8 @@ export function dressingPart(site: DressingSite): LatePart<TileDressing> {
         site.freeFailed(takeDown());
         throw error;
       }
-      return () => {
-        const errors = takeDown();
-        if (errors.length > 0) {
-          throw errors[0];
-        }
-      };
+      // every error of its take-down goes to the free's report
+      return takeDown;
     },
     free: (d) => disposeDressing(d),
   };
