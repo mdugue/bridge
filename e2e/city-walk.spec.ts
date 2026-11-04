@@ -1764,6 +1764,27 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       await waitForFrames(page, 2);
       expectNoErrors(errors);
     }
+    // Night (scene-environment.ts): the lamps' halos and pools are drawn
+    // by their shared materials after dark only, and compiled ahead by day
+    // all the same — a first night builds nothing inside a frame.
+    const builtBefore = await page.evaluate(() => {
+      const handle = window.__poc?.handle;
+      if (!handle) {
+        throw new Error("handle not published");
+      }
+      const before = handle.getRenderInfo().framedBuilds.other;
+      handle.setSun(new Date("2026-07-15T23:00:00.000Z"));
+      return before;
+    });
+    await waitForFrames(page, 2);
+    const builtAfter = await page.evaluate(() => {
+      const handle = window.__poc?.handle;
+      const after = handle?.getRenderInfo().framedBuilds.other ?? -1;
+      handle?.setSun(new Date("2026-07-15T10:00:00.000Z"));
+      return after;
+    });
+    expect(builtAfter).toBe(builtBefore);
+    expectNoErrors(errors);
   });
 
   test("quality regresses while moving and recovers when still", async () => {

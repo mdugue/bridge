@@ -51,7 +51,7 @@ import {
 import { FOAM_LINES, fromBase64, WATER_SHEET } from "@/lib/city/water-bodies";
 import type { WaterLook } from "@/lib/city/water-bodies";
 import { groundUnderDesign, inDesignSite } from "./design-site";
-import { lampNight } from "./lamp-layer";
+import { sceneNight } from "./scene-environment";
 import { dataXY } from "./shader-chunks";
 import type { F, V2, V3 } from "./shader-chunks";
 import { splatUv } from "./splat-uv";
@@ -208,7 +208,7 @@ function createWaterMist(
   material.colorNode = mix(
     skyTint.rgb,
     vec3(1, 1, 1),
-    mix(float(MIST_WHITE), float(MIST_WHITE_NIGHT), lampNight)
+    mix(float(MIST_WHITE), float(MIST_WHITE_NIGHT), sceneNight)
   );
   material.opacityNode = alpha;
   const mesh = new Mesh(geometry, material);

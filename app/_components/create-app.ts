@@ -152,14 +152,7 @@ import type { DesignLayer, DesignStatus } from "./design-layer";
 import { cutsGround, foldedThing, groundKeptUnderDesign } from "./design-site";
 import { graphOf, setGraph } from "./material-slots";
 import type { CrashTrail } from "./crash-trail";
-import { createSeasonClock } from "./crown-season";
-import {
-  climateDay,
-  dayOfYear,
-  leafLitterAt,
-  seasonAt,
-  seasonShiftFor,
-} from "@/lib/city/tree-season";
+import { leafLitterAt, seasonAt, seasonShiftFor } from "@/lib/city/tree-season";
 import { crownLeaf, footLitter } from "./tree-foot";
 import {
   fetchOptionalJson,
@@ -174,16 +167,8 @@ import { createSceneFog, installSceneFog, VALLEY_HAZE } from "./height-fog";
 import { attachKeyboardControls } from "./keyboard-controls";
 import { createLampLights, LAMP_LIGHTS } from "./lamp-layer";
 import { createLantern, invalidateLanternShadow } from "./lantern";
-import {
-  setFountainNight,
-  setFountainSeason,
-  setFountainTime,
-} from "./monument-layer";
-import {
-  setClockTime,
-  setFurnitureNight,
-  showFurnitureNear,
-} from "./furniture-layer";
+import { setFountainTime } from "./monument-layer";
+import { showFurnitureNear } from "./furniture-layer";
 import { setMapAltitude } from "./map-overlay";
 import type { TramCarsStatus } from "./tram-cars";
 import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
@@ -215,7 +200,8 @@ import {
   tileCacheBytesFor,
 } from "./scene-profile";
 import type { SceneBudget } from "./scene-profile";
-import { createSunRig, styleNight, sunStateAt } from "./sun-rig";
+import { createSunRig, sunStateAt } from "./sun-rig";
+import { createSceneEnvironment, sceneNight } from "./scene-environment";
 import type { AirView, SunState } from "./sun-rig";
 import type { GroundUniforms, TerrainLayer } from "./terrain-layer";
 import {
@@ -233,9 +219,8 @@ import {
   createTileStream,
   DRESSING_PART_NAMES,
   DRESSING_PARTS,
-  showDataLayers,
-  withinCompileWait,
 } from "./tile-stream";
+import { withinCompileWait } from "./late-parts";
 import type { CpuBytes, DressingPartName, TileDressing } from "./tile-stream";
 import { loadGroundPlate } from "./ground-plate-layer";
 import type { GroundPlate } from "./ground-plate-layer";
@@ -258,11 +243,11 @@ import { createModelCuts } from "./model-cuts";
 import * as dataLayersModule from "./data-layers-feature";
 import {
   createHook,
-  createWatch,
+  follow,
   lazyFeature,
   wantOnSwitchOn,
 } from "./feature-seam";
-import type { SceneClock, SpineHooks } from "./feature-seam";
+import type { SpineHooks } from "./feature-seam";
 
 /**
  * Vertical FOV. 55° (~85° horizontal at 16:9) reads like a natural human
@@ -1576,21 +1561,10 @@ async function bootApp(
     invalidateLanternShadow(lantern);
   };
 
-  // One scalar (nightFactor ∈ [0,1]) ignites every lamp at dusk; the
-  // styles' night uniform (sun-rig.ts `styleNight`) gates the clay dusk
-  // glow by reference too.
-  let currentNight = 0;
   // The picture styles follow the sun too (Film noir's dusk exposure); the
   // post stack is built after the first setSun, so it catches up there.
   let sunAltitude = 90;
   let sunToStyles: ((altitudeDeg: number) => void) | null = null;
-  // The scene's instant as the HUD set it last: the data layers' clock
-  // (the timetable trams, the traffic's hour) runs on from it — read when
-  // they start, which may be long after (feature-seam.ts).
-  const sceneClock = createWatch<SceneClock>({
-    date: opts.initialDate,
-    atMs: performance.now(),
-  });
   // Single fixed pool of real point lights for the nearest lamps across ALL
   // tiles, built before the first render so the light count is part of
   // every lit node build once (ADR 0009): three on a desktop, one on a
@@ -1602,7 +1576,7 @@ async function bootApp(
   cleanups.push(() => lampLights.dispose());
 
   // The facades share the ground's sun (the same node).
-  const styleResources = createStyleResources(styleNight, ground.sunDirection);
+  const styleResources = createStyleResources(sceneNight, ground.sunDirection);
 
   // The HUD lets the heavy dressing start after the handover (startStreaming).
   let openGate: (() => void) | undefined;
@@ -1638,22 +1612,25 @@ async function bootApp(
   // crown that changed redraws the shadow map. The day is the one of
   // Dresden's year (the phenology table's) that looks like it in this
   // city's climate (tree-season.ts SITE_SEASON).
-  const climate = seasonShiftFor(opts.site.id);
-  // the leaves under the trees (tree-foot.ts) and the trunks' shade under
-  // their crowns (vegetation-layer.ts) follow the same day
-  groundSeason(climateDay(Math.floor(dayOfYear(opts.initialDate)), climate));
-  const seasonClock = createSeasonClock(opts.initialDate, (calendar) => {
-    const day = climateDay(calendar, climate);
-    groundSeason(day);
-    let changed = false;
-    for (const d of stream.dressings) {
-      changed = (d.vegetation?.setSeason(day) ?? false) || changed;
-    }
-    if (changed) {
-      invalidateShadows();
-    }
+  // The scene's night, season and clock (scene-environment.ts): the
+  // night node every material reads, the season the trees follow, the
+  // instant the data layers' clock (the timetable trams, the traffic's
+  // hour) runs on from — read when they start, which may be long after
+  // (feature-seam.ts).
+  const env = createSceneEnvironment({
+    initialDate: opts.initialDate,
+    climate: seasonShiftFor(opts.site.id),
+    look: opts.look,
+    castersChanged: invalidateShadows,
   });
-  cleanups.push(() => seasonClock.dispose());
+  cleanups.push(
+    env.dispose,
+    // the leaves under the trees (tree-foot.ts) and the trunks' shade
+    // under their crowns (vegetation-layer.ts) follow the same day (each
+    // dressing's trees follow it themselves: tile-stream.ts
+    // `followEnvironment`)
+    follow(env.season, groundSeason)
+  );
   // The two walks of the whole scene that the stats and the crash trail's
   // heartbeat report — every geometry under it, and the tiles' CPU arrays
   // — are taken again only once what they count may have changed
@@ -1689,7 +1666,7 @@ async function bootApp(
     frame: frameHook,
     streamChange: streamHook,
     look: opts.look,
-    clock: sceneClock,
+    clock: env.clock,
   };
   // each site tile's rectangle (the stream's and the loading veil's)
   const siteTileBounds = new Map(extras.tiles.map((t) => [t.id, t.bounds]));
@@ -1727,12 +1704,10 @@ async function bootApp(
       fogColor: sceneFog.color,
       heightAt,
       pinnedGround: siteGround.pinned,
-      look: opts.look,
       lowRasters: budget.lowRasters,
       cacheBytes: tileCacheBytesFor(budget.tier, budget.safety),
       ground,
-      night: () => currentNight,
-      season: () => climateDay(seasonClock.day(), climate),
+      environment: env,
       offset,
       murals: murals.source,
       onChange: queueChange,
@@ -1891,17 +1866,11 @@ async function bootApp(
     const date = styleInstant(RENDER_STYLE_BY_ID[opts.look.get().style], asked);
     const state = sunRig.update(date, preview);
     streamShadowTiles(state.aboveHorizon);
-    currentNight = state.nightFactor;
     sunAltitude = state.altitudeDeg;
     sunToStyles?.(state.altitudeDeg);
-    for (const d of stream.dressings) {
-      d.lamps?.setNightFactor(state.nightFactor);
-    }
     lampLights.setNightFactor(state.nightFactor);
     lantern.setNight(state.nightFactor);
-    setFountainNight(state.nightFactor);
-    setFurnitureNight(state.nightFactor);
-    styleNight.value = state.nightFactor;
+    env.light(state);
     // The sun's move has asked for the map already; a drag's step leaves
     // it to the rig's pace.
     if (!preview) {
@@ -1912,10 +1881,7 @@ async function bootApp(
   const setSun = (asked: Date, preview = false): SunState => {
     shownSun = asked;
     const state = relight(asked, preview);
-    setFountainSeason(asked);
-    setClockTime(asked);
-    seasonClock.set(asked);
-    sceneClock.set({ date: asked, atMs: performance.now() });
+    env.date(asked);
     // the HUD reads where the sun stands at the instant it asked for
     return RENDER_STYLE_BY_ID[opts.look.get().style].ownLight
       ? sunStateAt(asked, latLng)
@@ -2149,10 +2115,6 @@ async function bootApp(
     }
     postStack.applyLook(look);
     nameplate.applyLook(look.style);
-    for (const d of stream.dressings) {
-      d.vegetation?.applyLook(look);
-      showDataLayers(d, look);
-    }
     // the crown switch: the tiers in the next frame, not the next tick
     crownTiers.force();
     const layersOn = activeDataLayers(look);
@@ -3250,15 +3212,17 @@ async function bootApp(
     const shown = stream.visibleDressings();
     vegetationControls.length = 0;
     let lodChanged = false;
+    // the look's crown switch, read once a pass: no tile keeps a copy
+    const { multiTuft } = opts.look.get();
     for (const d of shown) {
       if (d.vegetation) {
         vegetationControls.push(d.vegetation);
-        if (d.vegetation.updateLod(eye)) {
+        if (d.vegetation.updateLod(eye, multiTuft)) {
           lodChanged = true;
         }
       }
     }
-    if (vegetationLod(vegetationControls, eye, richTrees)) {
+    if (vegetationLod(vegetationControls, eye, multiTuft, richTrees)) {
       lodChanged = true;
     }
     // the street furniture's cells near the eye (furniture-layer.ts)
@@ -3920,7 +3884,7 @@ async function bootApp(
     renderer.info.reset();
     // the plate's placing (its rays, a few times a second) is CPU work
     // before the render, not render time
-    nameplate.setNight(currentNight);
+    nameplate.setNight(sceneNight.value);
     // the canvas's CSS size as the renderer was last sized (no layout
     // read in the frame), and only while a plate is asked
     nameplate.update(

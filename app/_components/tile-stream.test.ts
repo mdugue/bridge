@@ -20,24 +20,24 @@ import type { TrafficFeature } from "@/lib/city/features";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import type { CityLayer } from "./city-layer";
 import type { TrafficBuilder } from "./data-layers-feature";
-import type { LampControl } from "./lamp-layer";
 import type { TerrainLayer } from "./terrain-layer";
-import { markSceneShared } from "./three-utils";
+import { createWatch } from "./feature-seam";
+import { estimateGeometryBytes, markSceneShared } from "./three-utils";
 import { trafficAskSet } from "./traffic-ask";
 import { buildTraffic } from "./traffic-layer";
 import {
   asksOf,
   buildAsksWhenIdle,
-  catchUp,
   DressingPlugin,
   dressingParts,
+  followEnvironment,
   handOverWaitMs,
   PHONE_STREAM,
   orderStreaming,
-  showDataLayers,
   takesOver,
   trafficSlot,
 } from "./tile-stream";
+import type { Compiled } from "./late-parts";
 import type {
   TileDressing,
   TileStreamContext,
@@ -57,30 +57,51 @@ const tileAt = (uri: string) => ({
 /** The slices run at once. */
 const runNow = async (steps: Steps<unknown>) => finished(steps);
 
+/** A scene environment of its own: the season `day`, a fresh look store,
+ *  the casters' changes counted. */
+function fakeEnvironment(day = 180) {
+  const env = {
+    season: createWatch(day),
+    look: createLookState(),
+    casters: 0,
+    castersChanged: () => {
+      env.casters += 1;
+    },
+  };
+  return env;
+}
+
 function* broken(): Steps<void> {
   yield;
   throw new Error("bad furniture");
 }
 
-test("a dressing that joins the stream late takes the season, night and look of now", () => {
-  const calls: string[] = [];
+test("a dressing's trees follow the scene's season from birth to release", () => {
+  const days: number[] = [];
   const vegetation = {
-    applyLook: (look: { multiTuft: boolean }) =>
-      calls.push(`look ${look.multiTuft}`),
+    // a crown changes on a day in winter only
     setSeason: (day: number) => {
-      calls.push(`season ${day}`);
-      return true;
+      days.push(day);
+      return day < 60;
     },
   } as unknown as VegetationControl;
-  const lamps = {
-    setNightFactor: (night: number) => calls.push(`night ${night}`),
-  } as unknown as LampControl;
-  const look = createLookState();
-  look.set({ multiTuft: false });
-  // Built on 10 July by day; the scene moved on to a January night while
-  // its compile was pending.
-  catchUp({ vegetation, lamps }, { look, night: () => 1, season: () => 9 });
-  expect(calls).toEqual(["look false", "season 9", "night 1"]);
+  const env = fakeEnvironment(190);
+  // born in July: the season of now, nothing cast differently
+  const unfollow = followEnvironment({ vegetation }, env);
+  expect(days).toEqual([190]);
+  expect(env.casters).toBe(0);
+  // a change while it compiles, and one after it hangs: heard alike
+  env.season.set(9);
+  expect(days).toEqual([190, 9]);
+  expect(env.casters).toBe(1);
+  env.season.set(200);
+  expect(days).toEqual([190, 9, 200]);
+  expect(env.casters).toBe(1);
+  // released: nothing more
+  unfollow();
+  env.season.set(10);
+  expect(days).toEqual([190, 9, 200]);
+  expect(env.casters).toBe(1);
 });
 
 test("the stream's dispose releases every dressed tile, quietly", () => {
@@ -111,12 +132,21 @@ test("the stream's dispose releases every dressed tile, quietly", () => {
   const city = { dispose: () => freed.push("city") } as unknown as CityLayer;
   stream.terrains.add(terrain);
   stream.cities.add(city);
-  plugin.dressed.set(new Object3D(), { terrain });
+  // a hung dressing hears the scene's season until its release
+  const dressing: TileDressing = {
+    tile: "t",
+    unfollow: () => {
+      freed.push("unfollow");
+    },
+  };
+  stream.dressings.add(dressing);
+  plugin.dressed.set(new Object3D(), { terrain, dressing });
   plugin.dressed.set(new Object3D(), { city, svf: "svf.png" });
   // 3DTilesRendererJS unregisters (and disposes) its plugins before it
   // disposes its tiles: disposeTile never comes for these.
   plugin.dispose();
-  expect(freed).toEqual(["terrain", "city"]);
+  expect(freed).toEqual(["terrain", "unfollow", "city"]);
+  expect(stream.dressings.size).toBe(0);
   expect(plugin.dressed.size).toBe(0);
   expect(stream.terrains.size).toBe(0);
   expect(stream.cities.size).toBe(0);
@@ -398,9 +428,7 @@ test("a tile released while a compile still runs is never dressed after the wait
         o === blocker
           ? await new Promise<boolean>(() => {})
           : await Promise.resolve(true),
-      look: createLookState(),
-      night: () => 0,
-      season: () => 180,
+      environment: fakeEnvironment(),
       onDressingFailed: (error: unknown) => failures.push(error),
       onChange: () => {},
     } as unknown as TileStreamContext,
@@ -644,9 +672,7 @@ test("a dressing whose tile leaves before its idle time never builds its ask set
       {
         dressingGate: new Promise<void>(() => {}),
         bootTile: () => null,
-        look: createLookState(),
-        night: () => 0,
-        season: () => 180,
+        environment: fakeEnvironment(),
         onChange: () => {},
       } as unknown as TileStreamContext,
       stream
@@ -756,15 +782,18 @@ function trafficTile(
   });
   const root = new Object3D();
   const compiled: Group[] = [];
-  let finish = nothing;
+  let finish: (outcome?: Compiled) => void = nothing;
   let built = 0;
   const freeErrors: unknown[][] = [];
+  // the look store: the layer off
+  const look = createLookState();
   const host: TrafficHost = {
+    look,
     root,
     compile: async (group) => {
       compiled.push(group);
       return await new Promise((resolve) => {
-        finish = () => resolve("done");
+        finish = (outcome: Compiled = "done") => resolve(outcome);
       });
     },
     turn: opts.turn ?? (async (work) => await work()),
@@ -783,9 +812,10 @@ function trafficTile(
     asks,
     built: () => built,
     compiled,
-    finish: () => finish(),
+    finish: (outcome?: Compiled) => finish(outcome),
     freeErrors,
     host,
+    look,
     root,
     slot,
   };
@@ -794,13 +824,8 @@ function trafficTile(
 test("the counted traffic costs nothing while the layer is off", async () => {
   const { asks, compiled, host, slot } = trafficTile();
   const d: TileDressing = { tile: "t", traffic: slot };
+  // hung with the layer off
   slot.attach(host);
-  catchUp(d, {
-    look: createLookState(),
-    night: () => 0,
-    season: () => 180,
-  });
-  showDataLayers(d, { trafficLayer: false });
   await nextTask();
   expect(slot.group).toBeNull();
   expect(dressingParts(d)).toEqual([]);
@@ -809,12 +834,14 @@ test("the counted traffic costs nothing while the layer is off", async () => {
 });
 
 test("the first switch-on builds and compiles the bodies once; off keeps them, the release frees them", async () => {
-  const { asks, built, compiled, finish, host, root, slot } = trafficTile();
+  const { asks, built, compiled, finish, host, look, root, slot } =
+    trafficTile();
   const d: TileDressing = { tile: "t", traffic: slot };
   // switched on before the dressing hangs: nothing to hang it on yet
-  showDataLayers(d, { trafficLayer: true });
+  look.set({ trafficLayer: true });
   await nextTask();
   expect(slot.group).toBeNull();
+  // the hang builds them, as the look has the layer on
   slot.attach(host);
   const first = slot.show();
   const second = slot.show();
@@ -822,7 +849,8 @@ test("the first switch-on builds and compiles the bodies once; off keeps them, t
   // files) it can outlast one short timer
   await until(() => compiled.length > 0);
   await nextTask();
-  // hung hidden while it compiles, once
+  // hung hidden while it compiles, once (plan 083 changes it in its step
+  // 4, D3: hung only once compiled)
   expect(compiled).toHaveLength(1);
   expect(slot.group?.parent).toBe(root);
   expect(slot.group?.visible).toBe(false);
@@ -841,9 +869,10 @@ test("the first switch-on builds and compiles the bodies once; off keeps them, t
   expect(asks).toHaveLength(1);
   expect(slot.asks()).toBe(asks[0]);
   // off: hidden, kept; on again: no second build
-  showDataLayers(d, { trafficLayer: false });
+  look.set({ trafficLayer: false });
   const bodies = slot.group;
   expect(bodies?.visible).toBe(false);
+  look.set({ trafficLayer: true });
   await slot.show();
   expect(slot.group).toBe(bodies);
   expect(bodies?.visible).toBe(true);
@@ -858,6 +887,12 @@ test("the first switch-on builds and compiles the bodies once; off keeps them, t
   expect(freed).toBe(true);
   expect(slot.group).toBeNull();
   expect(bodies?.parent).toBeNull();
+  // ...and it hears the look no more: a switch-on builds nothing
+  look.set({ trafficLayer: false });
+  look.set({ trafficLayer: true });
+  await nextTask();
+  expect(compiled).toHaveLength(1);
+  expect(slot.group).toBeNull();
 });
 
 test("a tile released while its traffic compiles gets nothing shown, asked or weighed", async () => {
@@ -922,7 +957,8 @@ test("a switch-on builds the tiles' bodies one after another", async () => {
   const showing = [a.slot.show(), b.slot.show()];
   await nextTask();
   await nextTask();
-  // the first tile's turn holds the chain while its compile runs
+  // the first tile's turn holds the chain while its compile runs (kept by
+  // plan 083, finding 4)
   expect(a.compiled).toHaveLength(1);
   expect(b.compiled).toHaveLength(0);
   expect(b.slot.group).toBeNull();
@@ -1043,4 +1079,174 @@ test("an ask builder that throws in idle time is reported and lets the tile go",
   expect(failures).toHaveLength(1);
   expect(d.buildAsks).toBeUndefined();
   expect(asksOf(d)).toEqual([]);
+});
+
+// Plan 083 step 0: how a tile's late parts hang today, pinned before they
+// go through one lifecycle. A pin marked with a step changes there.
+
+test("traffic: the tile weighs the bodies only once their compile has ended (plan 083 step 4 changes it, D5)", async () => {
+  const { built, compiled, finish, host, slot } = trafficTile();
+  slot.attach(host);
+  const showing = slot.show();
+  await until(() => compiled.length > 0);
+  expect(built()).toBe(0);
+  finish();
+  await showing;
+  expect(built()).toBe(1);
+});
+
+test("traffic: bodies whose compile ran out of memory are shown, asked and built never again", async () => {
+  const { asks, built, compiled, finish, host, slot } = trafficTile();
+  slot.attach(host);
+  const showing = slot.show();
+  await until(() => compiled.length > 0);
+  const bodies = slot.group;
+  finish("out of memory");
+  await showing;
+  expect(built()).toBe(0);
+  expect(asks).toHaveLength(0);
+  expect(slot.group).toBeNull();
+  expect(bodies?.parent).toBeNull();
+  // the layer stays off on this tile
+  await slot.show();
+  await nextTask();
+  expect(compiled).toHaveLength(1);
+});
+
+test("traffic: a build that throws is reported once, and not once its tile has gone", async () => {
+  for (const leaves of [false, true]) {
+    const thrown = new TypeError("bad section");
+    let gone = false;
+    const failures: unknown[] = [];
+    const { host, slot } = trafficTile({
+      gone: () => gone,
+      load: async () =>
+        await Promise.resolve({
+          ...builder,
+          build: () => {
+            // the renderer unloads the tile while it builds
+            gone = leaves;
+            throw thrown;
+          },
+        }),
+    });
+    host.failed = (err) => {
+      failures.push(err);
+    };
+    slot.attach(host);
+    await slot.show();
+    expect(failures).toEqual(leaves ? [] : [thrown]);
+  }
+});
+
+/** A plugin over a stream of its own, its gate as given, nothing built. */
+function pinnedPlugin(gate: Promise<void>, ctx: object = {}) {
+  const stream = {
+    cities: new Set<CityLayer>(),
+    terrains: new Set<TerrainLayer>(),
+    dressings: new Set<TileDressing>(),
+    demolished: new Map<string, Set<number>>(),
+    demolishedGroups: new Set<number>(),
+  };
+  const base = {
+    dressingGate: gate,
+    bootTile: () => null,
+    compile: async () => await Promise.resolve(true),
+    environment: fakeEnvironment(),
+    onChange: () => {},
+  };
+  // (its getters kept as getters: a spread would read them now)
+  Object.defineProperties(base, Object.getOwnPropertyDescriptors(ctx));
+  const plugin = new DressingPlugin(
+    base as unknown as TileStreamContext,
+    stream
+  );
+  // reason: plan 083 step 0 pins the private hang, drop and turn; its step
+  // 5 deletes these reaches with them
+  const inner = plugin as unknown as {
+    dropDressing: (scene: Object3D, entry: object, d: TileDressing) => void;
+    hangDressing: (scene: Object3D, entry: object, d: TileDressing) => void;
+    queueDressing: (
+      scene: Object3D,
+      terrain: TerrainLayer,
+      extras: unknown
+    ) => Promise<void>;
+    turn: <T>(work: () => Promise<T>, rank: number) => Promise<T>;
+  };
+  return { inner, plugin, stream };
+}
+
+test("dressing: a tile released before its turn never starts its build", async () => {
+  let open = nothing;
+  const gate = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  let reads = 0;
+  const { inner, plugin } = pinnedPlugin(gate, {
+    // the build's first read
+    get tilesetUrl(): string {
+      reads += 1;
+      return "https://example.invalid/tileset.json";
+    },
+  });
+  const scene = new Object3D();
+  const terrain = { rasters: [], dispose: () => {} } as unknown as TerrainLayer;
+  plugin.dressed.set(scene, { terrain });
+  const queued = inner.queueDressing(scene, terrain, { tileId: "t", level: 0 });
+  plugin.disposeTile({ engineData: { scene } });
+  open();
+  await queued;
+  while (plugin.pending > 0) {
+    await nextTask();
+  }
+  expect(reads).toBe(0);
+});
+
+test("dressing: a hung dressing weighs what its parts hold; dropped, nothing, and freed", () => {
+  const { inner, plugin, stream } = pinnedPlugin(new Promise<void>(() => {}));
+  const scene = new Object3D();
+  const entry = {};
+  plugin.dressed.set(scene, entry);
+  const furniture = new Group();
+  const box = new Mesh(new BoxGeometry(), new MeshBasicNodeMaterial());
+  furniture.add(box);
+  let freed = false;
+  box.geometry.addEventListener("dispose", () => {
+    freed = true;
+  });
+  const dressing: TileDressing = { tile: "t", furniture };
+  inner.hangDressing(scene, entry, dressing);
+  expect(plugin.calculateBytesUsed({}, scene)).toBe(
+    estimateGeometryBytes(furniture)
+  );
+  expect(stream.dressings.has(dressing)).toBe(true);
+  // its compile ran out of memory after it hung
+  inner.dropDressing(scene, entry, dressing);
+  expect(plugin.calculateBytesUsed({}, scene)).toBe(0);
+  expect(stream.dressings.size).toBe(0);
+  expect(freed).toBe(true);
+});
+
+test("dressing: its traffic takes its turn at the fine rank, on either level (plan 083 step 4 changes it, D10)", async () => {
+  const { inner, plugin } = pinnedPlugin(new Promise<void>(() => {}));
+  const ranks: number[] = [];
+  inner.turn = async (work, rank) => {
+    ranks.push(rank);
+    return await work();
+  };
+  const scene = new Object3D();
+  const entry = {};
+  plugin.dressed.set(scene, entry);
+  let host: TrafficHost | null = null;
+  const traffic = {
+    group: null,
+    attach: (h: TrafficHost) => {
+      host = h;
+    },
+  } as unknown as TileDressing["traffic"];
+  // a coarse level's dressing: its traffic and nothing else
+  inner.hangDressing(scene, entry, { tile: "t", traffic });
+  const attached = host as TrafficHost | null;
+  await attached?.turn(async () => await Promise.resolve(0));
+  expect(ranks).toEqual([1]);
 });
