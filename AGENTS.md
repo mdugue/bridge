@@ -139,6 +139,11 @@ ADR 0041).
   `prepare-data.ts` imports to being in some bake's key or excused; which
   artifact needs it is yours to get right). `prepare-data.ts` is in no
   key: a bake lives in its step's module in `scripts/prepare/`, never there.
+- A file a bake writes and TypeScript reads has one zod schema in
+  `lib/city/<name>-file.ts` (ADR 0059): readers take its types and
+  `parseBakeFile`, never `readJson(…) as T`; the build fails on a
+  mismatch; `bake-files.test.ts` parses every committed file. The
+  viewer imports a schema module by type only.
 - Nothing whose alpha or values carry data goes through an image resize or
   the browser's image decoder; class rasters are NEAREST and decoded by
   `lib/city/png-raster.ts`.
@@ -182,7 +187,8 @@ uploaded; nothing it names is fetched (ADR 0054).
   they disagree. `allowJs: true` stays (`next build` puts it back).
 - Exact pins for the three.js stack, the glTF build tools, `delatin`, the
   framework trio, the lint tools and `ultracite` (bump `oxlint` and
-  `oxlint-tsgolint` together) and `suncalc`; caret for the rest; the npm MCP servers in
+  `oxlint-tsgolint` together), `suncalc` and `zod`, whose version is in
+  three bake keys; caret for the rest; the npm MCP servers in
   `.mcp.json` exactly. Bun comes from `packageManager` (≥ 1.4 for
   `Bun.WebView`; the web session's start hook upgrades it).
 - No type shim for `three-mesh-bvh` (it augments `three` itself).

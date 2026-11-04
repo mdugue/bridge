@@ -1025,6 +1025,42 @@ A `required` side file that is missing fails the build
 404 on every client; so do a missing DGM GeoTIFF or CityJSON. A missing
 optional one is logged and the feature is off.
 
+### Files a bake hands over
+
+A JSON file a Python bake writes and TypeScript reads has one strict zod
+schema ([ADR 0059](./adr/0059-one-schema-per-file-a-bake-hands-over.md)),
+its type the readers' type; the GeoJSON layers are held by
+`features.test.ts` instead.
+
+| File | Writer (step) | Schema | Parsed in |
+|---|---|---|---|
+| `landmark-facts.json` | `landmark_facts.py` (`landmark-facts`) | `lib/city/landmark-facts-file.ts` | `prepare-data.ts`, every run |
+| `dlm/landmarks_<t>.json` | `landmarks.py` (`landmarks`) | `lib/city/landmarks-file.ts` | `scripts/prepare/landmarks.ts` |
+| `dlm/osmbuild_<t>.json` | `osm_buildings.py` (`osm-buildings`) | `lib/city/osm-buildings-file.ts` | `scripts/prepare/city.ts`, `stadtwissen.ts` |
+| `dlm/monuments_<t>.geojson` (as the Stadtwissen reads it) | `monuments.py` (`monuments`) | `lib/city/monuments-file.ts` | `scripts/prepare/stadtwissen.ts` |
+| `murals/murals.json` | `murals.py` (`murals`) | `lib/city/murals-file.ts` | `prepare-data.ts`, every run |
+| `transit/trams.json` | `transit.py` (`transit`) | `lib/city/tram-timetable-file.ts` | `prepare-data.ts`, every run |
+| `dop/roofcolor_<t>.json` | `roof_colour.py` (`roof-colour`) | `lib/city/roof-colours-file.ts` | `scripts/prepare/city.ts` |
+
+`parseBakeFile` (`lib/city/bake-file.ts`) returns the file as it read it
+(zod's copy would reorder the keys) or ends the build:
+
+```text
+data/dresden/dlm/landmarks_33412_5656_2_sn.json does not match lib/city/landmarks-file.ts (written by pipeline/bake/landmarks.py):
+✖ Invalid input: expected number, received string
+  → at landmarks[0].links
+Re-bake it (bun run bake dresden --step landmarks) or change the schema with the bake, in one commit.
+```
+
+A per-tile file is parsed inside its cached bake, so a cache hit means
+these bytes passed this schema before: the schema modules and zod's
+locked version are in the keys of `city`, `stadtwissen` and `siteStats`
+(zod is pinned exactly). The three site-wide files are parsed uncached,
+and their schema modules are in `NOT_A_BAKE` (`bake-entries.test.ts`).
+The viewer imports the schema modules by type only and keeps its own
+guards (`isLandmarkFactsFile`, `parseMurals`, `isTramTimetable`), each
+pinned to its schema by a test.
+
 ## The contracts the browser relies on
 
 | Contract | Module | Checked by |
@@ -1037,6 +1073,7 @@ optional one is logged and the feature is off.
 | The per-object table and its texture packing, demolish | `lib/city/city-mesh.ts` | `city-mesh.test.ts` |
 | Class ids ↔ palette | `lib/city/landcover.ts`, `pipeline/bake/landcover.py` | `landcover.test.ts` (every committed legend), `test_bakes.py` |
 | The 2048², 1024² and 512² class rasters keep exact ids | `scripts/downsample-raster.ts` | `downsample-raster.test.ts` |
+| JSON files a bake hands over (ADR 0059) | `lib/city/<name>-file.ts`, `lib/city/bake-file.ts` | `bake-files.test.ts` parses **every committed file**; the build parses each before it reads it and fails on a mismatch |
 | GeoJSON feature shapes per kind | `lib/city/features.ts` | `features.test.ts` reads **every committed file** of every tile: a bake that renames a property fails there, not as an empty layer |
 | Terrain TIN (the fine level) | `lib/city/terrain-tin.ts` (`tinFromMesher`, `buildTinGeometryData`, `TinIndex`), `TerrainExtras.tin` | `terrain-tin.test.ts`, `scripts/bake-terrain-tin.test.ts` (every grid point within the tolerance; the committed spawn DGM at its native 2000²) |
 | The Stadtwissen and the walks (ADR 0055) | `lib/city/stadtwissen.ts`, `lib/city/walks.ts`, `scripts/bake-stadtwissen.ts` | `stadtwissen.test.ts`, `walks.test.ts`; `scripts/walks.test.ts` holds every committed walk to its data (form, extent, the DGM, the Stadtwissen ids); `prepare-data.ts` refuses a walk with a problem |
