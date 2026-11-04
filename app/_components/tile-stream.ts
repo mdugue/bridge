@@ -967,11 +967,20 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
     if (!builder || disposed) {
       return;
     }
-    handle = at.parts.add(part(at, builder), at.owner);
-    if ((await handle.settled) === "out of memory") {
+    const own = at.parts.add(part(at, builder), at.owner);
+    handle = own;
+    const outcome = await own.settled;
+    if (outcome === "out of memory") {
       // the GPU had no room (reported by the compile): the layer stays
       // off on this tile rather than the GPU further under
       slot.dispose();
+    } else if ((outcome === "failed" || outcome === "gone") && handle === own) {
+      // nothing hangs (a build that threw, a tile that left): the next
+      // show tries again — none once the dressing is taken down
+      // (`disposed`), and a tile that left settles a new part "gone" at
+      // once, building nothing
+      building = null;
+      handle = null;
     }
   };
   const slot: TrafficSlot = {

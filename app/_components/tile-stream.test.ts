@@ -1619,6 +1619,44 @@ test("a traffic build that throws is reported once, and not once its tile has go
   }
 });
 
+test("a traffic build that threw is tried again on the next switch-on, and never once its dressing is taken down", async () => {
+  let throws = true;
+  let builds = 0;
+  const tile = trafficTile({
+    load: async () =>
+      await Promise.resolve({
+        ...builder,
+        build: (...args: Parameters<TrafficBuilder["build"]>) => {
+          builds += 1;
+          if (throws) {
+            throw new TypeError("bad section");
+          }
+          return builder.build(...args);
+        },
+      }),
+  });
+  tile.attach();
+  tile.look.set({ trafficLayer: true });
+  await until(() => tile.calls.failed.length > 0);
+  await nextTask();
+  expect(tile.slot.group).toBeNull();
+  // off and on again: built anew, and this time it hangs
+  throws = false;
+  tile.look.set({ trafficLayer: false });
+  tile.look.set({ trafficLayer: true });
+  await until(() => tile.compiled().length > 0);
+  tile.finish();
+  await tile.slot.show();
+  expect(builds).toBe(2);
+  expect(tile.slot.group?.parent).toBe(tile.root);
+  // taken down with its dressing: no switch-on builds it again
+  tile.slot.dispose();
+  tile.look.set({ trafficLayer: false });
+  tile.look.set({ trafficLayer: true });
+  await nextTask();
+  expect(builds).toBe(2);
+});
+
 test("an ask builder that throws in idle time is reported and lets the tile go", async () => {
   const idle: (() => void)[] = [];
   const later = (work: () => void) => {
