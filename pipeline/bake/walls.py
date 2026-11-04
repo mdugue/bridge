@@ -40,7 +40,7 @@ from rasterio.transform import from_origin
 from shapely.geometry.polygon import orient
 
 from .common import OSM_ATTRIBUTION, Tile, column, feature, geometry_json, owns, write_geojson
-from .osm import below_ground, has_extract, osm_metres, osm_number, read_osm, tag
+from .osm import below_ground, has_extract, osm_metres, read_osm, tag
 from .water import WATER, grid_classes
 
 CLIFF = 'other_tags LIKE \'%"natural"=>"cliff"%\''
@@ -194,7 +194,7 @@ def kind_of(barrier: str | None, man_made: str | None, other_tags: str | None) -
 
 def height(other_tags: str | None) -> float | None:
     for key in ("height", "est_height"):
-        value = osm_number(tag(other_tags, key), signed=True)
+        value = osm_metres(tag(other_tags, key), signed=True)
         if value is not None:
             return max(0.5, min(value, 30.0))
     return None
@@ -276,7 +276,7 @@ def fence_type(barrier: str | None, other_tags: str | None) -> str:
 def fence_height(barrier: str | None, other_tags: str | None, tall: bool = False) -> float:
     """A fence's tagged height (when plausible), else its default: a
     handrail's, a guarding fence's (`tall`: TALL_FENCE_H) or a plain one's."""
-    tagged = osm_number(tag(other_tags, "height"), signed=True)
+    tagged = osm_metres(tag(other_tags, "height"), signed=True)
     if tagged is not None and 0.3 <= tagged <= 4.0:
         return tagged
     if barrier == "handrail":
@@ -575,7 +575,7 @@ def _fences(tile: Tile, box: shapely.Geometry) -> tuple[list[dict], list, int]:
             strict=True,
         ):
             tall = False
-            if barrier == "fence" and osm_number(tag(other, "height"), signed=True) is None:
+            if barrier == "fence" and osm_metres(tag(other, "height"), signed=True) is None:
                 guards = guards or tall_guards(tile)
                 tall = any(is_tall(line, guards) for line in lines_of(g))
                 tall_count += tall

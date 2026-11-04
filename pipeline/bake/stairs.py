@@ -254,7 +254,7 @@ def tagged_rise(other_tags: str | None) -> float | None:
     count = osm_number(tag(other_tags, "step_count"))
     if count is None or count < 2:
         return None
-    return round(count) * (osm_number(tag(other_tags, "step:height")) or TAGGED_RISER)
+    return round(count) * (osm_metres(tag(other_tags, "step:height")) or TAGGED_RISER)
 
 
 def lifted(coords, z0: float, z1: float, other_tags: str | None, raised: list):

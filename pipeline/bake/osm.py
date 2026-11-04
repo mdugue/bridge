@@ -114,17 +114,20 @@ def osm_number(value: str | None, *, signed: bool = False) -> float | None:
 
 
 _METRES = re.compile(
-    r"\s*(?:(?:ca\.?|approx\.?|~)\s*)?([-+]?(?:\d+(?:[.,]\d+)?|[.,]\d+))\s*(?:m|meters?|metres?)?\s*",
+    r"\s*(?:(?:ca\.?|approx\.?|~)\s*)?([-+]?(?:\d+(?:[.,]\d+)?|[.,]\d+))\s*"
+    r"(cm|mm|m|meters?|metres?)?\s*",
     re.IGNORECASE,
 )
+_PER_METRE = {"cm": 0.01, "mm": 0.001}
 
 
 def osm_metres(value: str | None, *, signed: bool = False) -> float | None:
-    """A length tag (`width`) in metres: a bare number or one in metres
-    (`4`, `4,5`, `4.5 m`, `12 meters`), an approximate one too (`ca. 4 m`,
-    `approx 4`, `~3`). None for anything else — feet, inches or yards
-    (`12'`, `10 ft`), a range (`2-3`), a list (`3;4`), words around it —
-    where `osm_number` would take the first number as metres. A sign only
+    """A length tag (`width`, `height`, `step:height`) in metres: a bare
+    number or one in metres (`4`, `4,5`, `4.5 m`, `12 meters`), one in
+    centimetres or millimetres converted (`15 cm` → 0.15, `150 mm`), an
+    approximate one too (`ca. 4 m`, `approx 4`, `~3`). None for anything
+    else — feet, inches or yards (`12'`, `10 ft`), a range (`2-3`), a list
+    (`3;4`), words around it — where `osm_number` would take the first number as metres. A sign only
     when `signed` (a negative value is then read as written, for the caller
     to reject)."""
     m = _METRES.fullmatch(value or "")
@@ -133,7 +136,7 @@ def osm_metres(value: str | None, *, signed: bool = False) -> float | None:
     number = m.group(1)
     if number[0] == "-" and not signed:
         return None
-    return float(number.replace(",", "."))
+    return float(number.replace(",", ".")) * _PER_METRE.get((m.group(2) or "").lower(), 1.0)
 
 
 def surface_id(value: str | None, ids: dict[str, int]) -> int:
