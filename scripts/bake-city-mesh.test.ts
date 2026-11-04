@@ -743,10 +743,10 @@ test("dormers join their host as one object, roof-flagged on top, source 4", () 
   // high on the roof: no plinth
   expect((dormer?.flags ?? 0) & OBJECT_FLAG_GROUNDED).toBe(0);
   const added = baked.vertices.isRoof.length - lod2.vertices.isRoof.length;
-  // per dormer: front 2, cheeks 2, roof 2 triangles
-  expect(added).toBe(2 * 6 * 3);
+  // per dormer: front 2, cheeks 2, roof 2, inner lid 2 triangles
+  expect(added).toBe(2 * 8 * 3);
   const roofs = Array.from(baked.vertices.isRoof.slice(-added));
-  expect(roofs.filter((r) => r === 1)).toHaveLength(2 * 2 * 3);
+  expect(roofs.filter((r) => r === 1)).toHaveLength(2 * 4 * 3);
 });
 
 test("a chimney joins its host with the dormers as a box, all wall", () => {
@@ -766,10 +766,10 @@ test("a chimney joins its host with the dormers as a box, all wall", () => {
   // the host's chimneys one object, its dormers another
   expect(baked.objects.length).toBe(lod2.objects.length + 2);
   const added = baked.vertices.isRoof.length - lod2.vertices.isRoof.length;
-  // the dormer's 6 triangles, the chimney's four sides and top
-  expect(added).toBe((6 + 5 * 2) * 3);
+  // the dormer's 8 triangles, the chimney's four sides, top and inner lid
+  expect(added).toBe((8 + 6 * 2) * 3);
   const roofs = Array.from(baked.vertices.isRoof.slice(-added));
-  expect(roofs.filter((r) => r === 1)).toHaveLength(2 * 3);
+  expect(roofs.filter((r) => r === 1)).toHaveLength(4 * 3);
   // the dormer's front takes a window, its cheeks and the chimney none
   const [stack, dormer] = baked.objects.slice(-2);
   expect(stack.windows).toBeUndefined();
