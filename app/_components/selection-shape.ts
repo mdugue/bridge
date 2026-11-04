@@ -1,22 +1,17 @@
 import {
-  type BufferGeometry,
   ConeGeometry,
   CylinderGeometry,
   ExtrudeGeometry,
   Matrix4,
-  type Mesh,
-  type Object3D,
   Quaternion,
   Shape,
   SphereGeometry,
   Vector2,
   Vector3,
 } from "three/webgpu";
-import {
-  type AskSolid,
-  ringDistanceXz,
-  type Slab,
-} from "@/lib/city/ask-solids";
+import type { BufferGeometry, Mesh, Object3D } from "three/webgpu";
+import { ringDistanceXz } from "@/lib/city/ask-solids";
+import type { AskSolid, Slab } from "@/lib/city/ask-solids";
 import { liveTriangles } from "@/lib/city/city-mesh";
 import { bvhBuilding } from "./bvh-client";
 import type { CityLayer } from "./city-layer";
@@ -42,7 +37,7 @@ function appendTriangles(
 ): void {
   const position = geometry.getAttribute("position");
   const count = index ? index.length : position.count;
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < count; i += 1) {
     at.fromBufferAttribute(position, index ? index[i] : i).applyMatrix4(matrix);
     out.push(at.x, at.y, at.z);
   }
@@ -53,7 +48,7 @@ export function buildingShape(
   layer: CityLayer,
   objects: ReadonlySet<number>
 ): Float32Array {
-  const geometry = layer.mesh.geometry;
+  const { geometry } = layer.mesh;
   const ids = geometry.getAttribute("featureId");
   const index = geometry.getIndex();
   // (none while the BVH worker has the tile's index: drawn again once it
@@ -131,6 +126,17 @@ export function crownFormOf(target: {
   return target.cone === true ? "cone" : "ellipsoid";
 }
 
+/** The unit geometry a cylinder solid is placed with, by crown form. */
+function cylinderGeometry(form: CrownForm) {
+  if (form === "cone") {
+    return new ConeGeometry(1, 1, 24, 1);
+  }
+  if (form === "ellipsoid") {
+    return new SphereGeometry(1, 24, 16);
+  }
+  return new CylinderGeometry(1, 1, 1, 24, 1);
+}
+
 /** A shape after a thing's solids: a tree's crown (its second solid) as
  *  `crown` says, any other cylinder as it is, a prism. */
 export function solidShape(
@@ -138,17 +144,13 @@ export function solidShape(
   crown: CrownForm = null
 ): Float32Array {
   const out: number[] = [];
-  solids.forEach((s, k) => {
+  for (let k = 0; k < solids.length; k += 1) {
+    const s = solids[k];
     if ("cylinder" in s) {
       const c = s.cylinder;
       const h = Math.max(c.y1 - c.y0, 0.1);
       const form = k === 1 ? crown : null;
-      const geometry =
-        form === "cone"
-          ? new ConeGeometry(1, 1, 24, 1)
-          : form === "ellipsoid"
-            ? new SphereGeometry(1, 24, 16)
-            : new CylinderGeometry(1, 1, 1, 24, 1);
+      const geometry = cylinderGeometry(form);
       // a sphere spans twice its radius; a cone or a cylinder one unit
       placed.compose(
         new Vector3(c.x, (c.y0 + c.y1) / 2, c.z),
@@ -169,7 +171,7 @@ export function solidShape(
       appendTriangles(out, geometry, placed);
       geometry.dispose();
     }
-  });
+  }
   return Float32Array.from(out);
 }
 

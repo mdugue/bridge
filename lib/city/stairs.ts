@@ -37,20 +37,16 @@
  * z0 + (k+1)·rise, so the last tread is the top landing and every tread
  * lies on or above the ramp z0 → z1.
  */
-import {
-  EDGE_TOLERANCE_M,
-  type HeightAt,
-  type JoinPoint,
-  joinsAlong,
-  meetGround,
-  SINK,
-} from "./ground-join";
+import { EDGE_TOLERANCE_M, joinsAlong, meetGround, SINK } from "./ground-join";
+import type { HeightAt, JoinPoint } from "./ground-join";
 import type { StairFeature, TerraceFeature } from "./features";
 import type { FenceLine } from "./fences";
 import type { RecenterOffset } from "./ground-clamp";
 import type { Point2 } from "./polyline";
-import { isInvalidElevation, type TerrainBounds } from "./terrain-geometry";
-import { linearTone, type Masonry, masonryOf } from "./walls";
+import { isInvalidElevation } from "./terrain-geometry";
+import type { TerrainBounds } from "./terrain-geometry";
+import { linearTone, masonryOf } from "./walls";
+import type { Masonry } from "./walls";
 
 export interface StairLine {
   /** axis, bottom → top, EPSG coordinates (NOT recentered) */
@@ -111,6 +107,12 @@ export interface Terrace {
   z: number;
 }
 
+/** A two-element array as a pair of flags (true only for `true`). */
+const flagPair = (v: unknown): [boolean, boolean] | undefined =>
+  Array.isArray(v) && v.length === 2
+    ? [v[0] === true, v[1] === true]
+    : undefined;
+
 /** The bake's feature as a flight, or null when it is not one. */
 export function stairLineOf(f: StairFeature): StairLine | null {
   const p = f.properties;
@@ -126,13 +128,9 @@ export function stairLineOf(f: StairFeature): StairLine | null {
   ) {
     return null;
   }
-  const pair = (v: unknown): [boolean, boolean] | undefined =>
-    Array.isArray(v) && v.length === 2
-      ? [v[0] === true, v[1] === true]
-      : undefined;
   const mat = masonryOf(p.mat);
-  const rail = pair(p.rail);
-  const walled = pair(p.walled);
+  const rail = flagPair(p.rail);
+  const walled = flagPair(p.walled);
   return {
     coords,
     n: Math.round(p.n),
@@ -148,17 +146,17 @@ export function stairLineOf(f: StairFeature): StairLine | null {
 export function terraceOf(f: TerraceFeature): Terrace | null {
   const z = f.properties?.z;
   const g = f.geometry;
-  if (!(g && Number.isFinite(z))) {
+  if (!(g && typeof z === "number" && Number.isFinite(z))) {
     return null;
   }
   const polygons = g.type === "Polygon" ? [g.coordinates] : g.coordinates;
-  return polygons.length > 0 ? { polygons, z: z as number } : null;
+  return polygons.length > 0 ? { polygons, z } : null;
 }
 
 /** Cumulative arc length at each vertex. */
 function arcLengths(coords: Point2[]): number[] {
   const out = [0];
-  for (let i = 1; i < coords.length; i++) {
+  for (let i = 1; i < coords.length; i += 1) {
     const [x0, y0] = coords[i - 1];
     const [x1, y1] = coords[i];
     out.push(out[i - 1] + Math.hypot(x1 - x0, y1 - y0));
@@ -170,7 +168,7 @@ function arcLengths(coords: Point2[]): number[] {
 export function axisMiddle(coords: Point2[]): Point2 {
   const lengths = arcLengths(coords);
   const half = (lengths.at(-1) ?? 0) / 2;
-  for (let i = 1; i < coords.length; i++) {
+  for (let i = 1; i < coords.length; i += 1) {
     if (lengths[i] >= half) {
       const t = (half - lengths[i - 1]) / (lengths[i] - lengths[i - 1] || 1);
       const [x0, y0] = coords[i - 1];
@@ -206,7 +204,7 @@ function nearestOnAxis(
   const lengths = arcLengths(coords);
   let best: (AxisHit & { beyond: boolean }) | null = null;
   const last = coords.length - 2;
-  for (let i = 0; i <= last; i++) {
+  for (let i = 0; i <= last; i += 1) {
     const [x0, y0] = coords[i];
     const [x1, y1] = coords[i + 1];
     const len = lengths[i + 1] - lengths[i];
@@ -226,21 +224,23 @@ function nearestOnAxis(
   return best;
 }
 
+/** Which side of the line pq the point r lies on (the cross product's sign). */
+const orientation = (p: Point2, q: Point2, r: Point2) =>
+  (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+
 /** Whether segments ab and cd cross. */
 function crosses(a: Point2, b: Point2, c: Point2, d: Point2): boolean {
-  const side = (p: Point2, q: Point2, r: Point2) =>
-    (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
-  const d1 = side(c, d, a);
-  const d2 = side(c, d, b);
-  const d3 = side(a, b, c);
-  const d4 = side(a, b, d);
+  const d1 = orientation(c, d, a);
+  const d2 = orientation(c, d, b);
+  const d3 = orientation(a, b, c);
+  const d4 = orientation(a, b, d);
   return d1 * d2 < 0 && d3 * d4 < 0;
 }
 
 /** Whether any wall runs between a point and the axis point nearest it. */
 function behindWall(walls: Point2[][], from: Point2, to: Point2): boolean {
   for (const wall of walls) {
-    for (let i = 0; i < wall.length - 1; i++) {
+    for (let i = 0; i < wall.length - 1; i += 1) {
       if (crosses(from, to, wall[i], wall[i + 1])) {
         return true;
       }
@@ -249,6 +249,18 @@ function behindWall(walls: Point2[][], from: Point2, to: Point2): boolean {
   return false;
 }
 
+/** The extent of some points, grown by `pad`: [minX, minY, maxX, maxY]. */
+const boxOf = (pts: Point2[], pad: number) => {
+  const xs = pts.map((p) => p[0]);
+  const ys = pts.map((p) => p[1]);
+  return [
+    Math.min(...xs) - pad,
+    Math.min(...ys) - pad,
+    Math.max(...xs) + pad,
+    Math.max(...ys) + pad,
+  ];
+};
+
 /** The walls whose extent overlaps the axis's, grown by `reach` (a cheap
  *  prefilter). */
 function wallsNear(
@@ -256,19 +268,9 @@ function wallsNear(
   coords: Point2[],
   reach: number
 ): Point2[][] {
-  const box = (pts: Point2[], pad: number) => {
-    const xs = pts.map((p) => p[0]);
-    const ys = pts.map((p) => p[1]);
-    return [
-      Math.min(...xs) - pad,
-      Math.min(...ys) - pad,
-      Math.max(...xs) + pad,
-      Math.max(...ys) + pad,
-    ];
-  };
-  const [ax0, ay0, ax1, ay1] = box(coords, reach);
+  const [ax0, ay0, ax1, ay1] = boxOf(coords, reach);
   return walls.filter((w) => {
-    const [wx0, wy0, wx1, wy1] = box(w, 0);
+    const [wx0, wy0, wx1, wy1] = boxOf(w, 0);
     return wx0 <= ax1 && wx1 >= ax0 && wy0 <= ay1 && wy1 >= ay0;
   });
 }
@@ -330,9 +332,9 @@ export function burnStairs(input: StairBurnInput): Float32Array {
       n - 1,
       Math.ceil((maxY - Math.min(...ys) + reach) / dy)
     );
-    for (let row = row0; row <= row1; row++) {
+    for (let row = row0; row <= row1; row += 1) {
       const y = maxY - (row + 0.5) * dy;
-      for (let col = col0; col <= col1; col++) {
+      for (let col = col0; col <= col1; col += 1) {
         const idx = row * n + col;
         const z = out[idx];
         const x = minX + (col + 0.5) * dx;
@@ -396,7 +398,7 @@ function surroundAt(
 function insidePolygon(rings: Point2[][], x: number, y: number): boolean {
   let inside = false;
   for (const ring of rings) {
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
       const [xi, yi] = ring[i];
       const [xj, yj] = ring[j];
       if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
@@ -433,9 +435,9 @@ export function raiseTerraces(input: TerraceRaiseInput): Float32Array {
       const col1 = Math.min(n - 1, Math.ceil((Math.max(...xs) - minX) / dx));
       const row0 = Math.max(0, Math.floor((maxY - Math.max(...ys)) / dy));
       const row1 = Math.min(n - 1, Math.ceil((maxY - Math.min(...ys)) / dy));
-      for (let row = row0; row <= row1; row++) {
+      for (let row = row0; row <= row1; row += 1) {
         const y = maxY - (row + 0.5) * dy;
-        for (let col = col0; col <= col1; col++) {
+        for (let col = col0; col <= col1; col += 1) {
           const idx = row * n + col;
           const x = minX + (col + 0.5) * dx;
           if (!isInvalidElevation(out[idx]) && insidePolygon(rings, x, y)) {
@@ -493,7 +495,8 @@ export function stairColors(
   const stone = linearTone(mat ? STAIR_TONES[mat] : STAIR_STONE);
   const bank = linearTone(BANK_GROUND);
   const out = new Float32Array(kinds.length * 3);
-  for (const [i, kind] of kinds.entries()) {
+  for (let i = 0; i < kinds.length; i += 1) {
+    const kind = kinds[i];
     const shade = STAIR_SHADE[kind] ?? 1;
     const base = kind === STAIR_BANK ? bank : stone;
     out[i * 3] = base[0] * (kind === STAIR_BANK ? 1 : shade);
@@ -533,7 +536,7 @@ function segmentNormal(a: Point2, b: Point2): [number, number] {
 function segmentSections(stair: StairLine, lengths: number[]): Section[][] {
   const length = lengths.at(-1) ?? 0;
   const out: Section[][] = [];
-  for (let i = 0; i < stair.coords.length - 1; i++) {
+  for (let i = 0; i < stair.coords.length - 1; i += 1) {
     const a = stair.coords[i];
     const b = stair.coords[i + 1];
     const s0 = lengths[i];
@@ -543,7 +546,7 @@ function segmentSections(stair: StairLine, lengths: number[]): Section[][] {
     }
     const [px, py] = segmentNormal(a, b);
     const at = [s0];
-    for (let k = 1; k < stair.n; k++) {
+    for (let k = 1; k < stair.n; k += 1) {
       const s = (k * length) / stair.n;
       if (s > s0 + 1e-4 && s < s1 - 1e-4) {
         at.push(s);
@@ -576,7 +579,11 @@ class StairWriter {
     kinds: [],
     joins: [],
   };
-  constructor(private readonly offset: RecenterOffset) {}
+  private readonly offset: RecenterOffset;
+
+  constructor(offset: RecenterOffset) {
+    this.offset = offset;
+  }
 
   /** A point where the flight meets the ground (ADR 0030). */
   join(kind: JoinPoint["kind"], p: Point2, z: number): void {
@@ -618,7 +625,7 @@ class StairWriter {
 
 /** A vertical quad from `p` to `q` (in that order, seen from the side
  *  `normal` faces), from the bases up to the tops. */
-function side(
+function sideFace(
   out: StairWriter,
   p: Point2,
   q: Point2,
@@ -747,11 +754,11 @@ function wange(
   out.span("edge", [ao, outer[0]], [bo, outer[1]]);
   // seen from the steps (normal −n) the left side runs a → b, the right b → a
   if (sd === 1) {
-    side(out, ai, bi, bases, tops, [-n[0], -n[1]]);
-    side(out, bo, ao, bases, [outer[1], outer[0]], n);
+    sideFace(out, ai, bi, bases, tops, [-n[0], -n[1]]);
+    sideFace(out, bo, ao, bases, [outer[1], outer[0]], n);
   } else {
-    side(out, bi, ai, bases, [tops[1], tops[0]], [-n[0], -n[1]]);
-    side(out, ao, bo, bases, outer, n);
+    sideFace(out, bi, ai, bases, [tops[1], tops[0]], [-n[0], -n[1]]);
+    sideFace(out, ao, bo, bases, outer, n);
   }
   // A top strip from its inner (p at a, q at b) to its outer edge (r at b,
   // s at a), counter-clockwise seen from above: the steps' tread order
@@ -782,13 +789,13 @@ function wange(
     const [p, q] = sd === 1 ? [ao, ai] : [ai, ao];
     const t: [number, number] =
       sd === 1 ? [outer[0], tops[0]] : [tops[0], outer[0]];
-    side(out, p, q, bases, t, down);
+    sideFace(out, p, q, bases, t, down);
   }
   if (ends.last) {
     const [p, q] = sd === 1 ? [bi, bo] : [bo, bi];
     const t: [number, number] =
       sd === 1 ? [tops[1], outer[1]] : [outer[1], tops[1]];
-    side(out, p, q, bases, t, [-down[0], -down[1]]);
+    sideFace(out, p, q, bases, t, [-down[0], -down[1]]);
   }
 }
 
@@ -872,8 +879,9 @@ export function stairGeometry(
       out.span("foot", [ar, feet[0]], [br, feet[1]]);
     }
   };
-  for (const [j, sections] of segments.entries()) {
-    for (let i = 0; i < sections.length - 1; i++) {
+  for (let j = 0; j < segments.length; j += 1) {
+    const sections = segments[j];
+    for (let i = 0; i < sections.length - 1; i += 1) {
       block(sections[i], sections[i + 1]);
     }
     const next = segments[j + 1]?.[0];
@@ -898,7 +906,7 @@ export function stairGeometry(
     if (g !== null && g < top - EDGE_TOLERANCE_M) {
       const [l, r] = [edge(last, 1), edge(last, -1)];
       const feet: [number, number] = [footAt(r), footAt(l)];
-      side(out, r, l, feet, [top, top], [last.py, -last.px]);
+      sideFace(out, r, l, feet, [top, top], [last.py, -last.px]);
       out.span("foot", [r, feet[0]], [l, feet[1]]);
     } else {
       out.join("edge", beyond, top);
@@ -906,7 +914,7 @@ export function stairGeometry(
   }
   // A riser at the front of every step, facing down the flight.
   const all = segments.flat();
-  for (let k = 0; k < stair.n; k++) {
+  for (let k = 0; k < stair.n; k += 1) {
     const s = (k * length) / stair.n;
     const c = all.find((x) => x.s >= s - 1e-3);
     if (!c) {

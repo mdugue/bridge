@@ -2,13 +2,15 @@ import { expect, test } from "bun:test";
 import {
   DataTexture,
   LinearMipmapLinearFilter,
-  type Material,
-  type Node,
-  type NodeMaterial,
-  type Object3D,
-  type RenderTarget,
   SRGBColorSpace,
-  type WebGPURenderer,
+} from "three/webgpu";
+import type {
+  Material,
+  Node,
+  NodeMaterial,
+  Object3D,
+  RenderTarget,
+  WebGPURenderer,
 } from "three/webgpu";
 import { paintLandcoverSplat, splatScaleFor } from "./landcover-splat";
 import {
@@ -34,7 +36,11 @@ function fakeRenderer() {
       const { material } = object as Object3D & { material: NodeMaterial };
       // the textures the pass reads at the moment it is drawn
       const classes = new Set<unknown>();
-      (material.fragmentNode as Node).traverse((n: Node) => {
+      const fragment = material.fragmentNode;
+      if (!fragment) {
+        throw new Error("the pass has no fragment node");
+      }
+      fragment.traverse((n: Node) => {
         const t = n as Node & { isTextureNode?: boolean; value?: unknown };
         if (t.isTextureNode) {
           classes.add(t.value);

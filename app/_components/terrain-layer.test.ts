@@ -11,10 +11,9 @@ import {
   MeshStandardNodeMaterial,
   RedFormat,
   RGBAFormat,
-  type Texture,
   Vector3,
-  type WebGPURenderer,
 } from "three/webgpu";
+import type { Texture, WebGPURenderer } from "three/webgpu";
 import { uniform } from "three/tsl";
 import type { TerrainExtras } from "@/lib/city/tileset";
 import type { SharedRasters } from "./shared-rasters";
@@ -22,11 +21,13 @@ import {
   createGridShare,
   createTerrainMaterial,
   dressTerrain,
-  type GroundUniforms,
   readsSportGrounds,
-  type SplatLayer,
-  type SplatRasters,
-  type SportRasters,
+} from "./terrain-layer";
+import type {
+  GroundUniforms,
+  SplatLayer,
+  SplatRasters,
+  SportRasters,
 } from "./terrain-layer";
 import { isSceneShared } from "./three-utils";
 
@@ -46,6 +47,16 @@ const splat = (extra: Partial<SplatLayer> = {}): SplatLayer => ({
   texture: raster(RedFormat),
   ...extra,
 });
+
+/** What a dressing came to: "dressed", or the name of the error it ended in. */
+async function outcomeOf(work: Promise<unknown>): Promise<string> {
+  try {
+    await work;
+    return "dressed";
+  } catch (error) {
+    return (error as Error).name;
+  }
+}
 
 test("the terrain is one standard node material with colour and normal nodes", () => {
   for (const material of [
@@ -94,7 +105,9 @@ function gridTile(lift: number, shift = 0) {
     [0, 100],
   ];
   const array = new Int16Array(5 * 4);
-  plan.forEach(([x, z], i) => array.set([x + shift, 10 + lift, z, 0], 4 * i));
+  for (const [i, [x, z]] of plan.entries()) {
+    array.set([x + shift, 10 + lift, z, 0], 4 * i);
+  }
   // the skirt's foot under vertex 0
   array.set([shift, -20 + lift, 0, 0], 16);
   const position = new InterleavedBufferAttribute(
@@ -145,56 +158,55 @@ function share<T>(
 ): SharedRasters<T> {
   return {
     acquire,
-    release: (key) => released.push(key),
+    release: (key) => {
+      released.push(key);
+    },
     held: () => 0,
-    clear: () => undefined,
+    clear: () => {},
   };
 }
+
+const none = async () => null;
 
 test("a level whose tile leaves while it waits for a shared raster lets go at once, without waiting for that raster", async () => {
   const released: string[] = [];
   // the class raster another level is still decoding: it lands only when
   // the test says
-  let land: (rasters: SplatRasters | null) => void = () => undefined;
-  const splats = share<SplatRasters>(
-    () =>
-      new Promise((resolve) => {
-        land = resolve;
-      }),
-    released
-  );
-  const none = () => Promise.resolve(null);
+  const { promise: landing, resolve: land } =
+    Promise.withResolvers<SplatRasters | null>();
+  const splats = share<SplatRasters>(async () => await landing, released);
   const aborter = new AbortController();
-  const outcome = dressTerrain(
-    new Mesh(new BoxGeometry(), new MeshStandardNodeMaterial()),
-    {
-      kind: "terrain",
-      bounds: [0, 0, 100, 100],
-      n: 2,
-      level: 1,
-      landcover: "landcover.png",
-      landcoverLow: "landcover-low.png",
-      minElevation: 0,
-      tileId: "t",
-    } as unknown as TerrainExtras,
-    new Matrix4(),
-    {
-      fileUrl: (file) => file,
-      fogColor: uniform(new Color()),
-      lowRasters: false,
-      ground: ground(),
-      offset: { cx: 0, cy: 0 },
-      renderer: {} as WebGPURenderer,
-      splats,
-      ndvis: share<Texture>(none),
-      sports: share<SportRasters>(none),
-      signal: aborter.signal,
-    }
-  ).then(
-    () => "dressed",
-    (err: unknown) => (err as Error).name
+  const outcome = outcomeOf(
+    dressTerrain(
+      new Mesh(new BoxGeometry(), new MeshStandardNodeMaterial()),
+      {
+        kind: "terrain",
+        bounds: [0, 0, 100, 100],
+        n: 2,
+        level: 1,
+        landcover: "landcover.png",
+        landcoverLow: "landcover-low.png",
+        minElevation: 0,
+        tileId: "t",
+      } as unknown as TerrainExtras,
+      new Matrix4(),
+      {
+        fileUrl: (file) => file,
+        fogColor: uniform(new Color()),
+        lowRasters: false,
+        ground: ground(),
+        offset: { cx: 0, cy: 0 },
+        renderer: {} as WebGPURenderer,
+        splats,
+        ndvis: share<Texture>(none),
+        sports: share<SportRasters>(none),
+        signal: aborter.signal,
+      }
+    )
   );
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
   aborter.abort();
   expect(await outcome).toBe("AbortError");
   // its hold is gone already: the last holder gone, the shared load stops

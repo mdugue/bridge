@@ -1,12 +1,10 @@
 "use client";
 
 import { cn } from "cn";
-import {
-  type LoadStageState,
-  loadHeadline,
-  WALKABLE_PERCENT,
-} from "@/lib/city/load-stages";
-import { type ReactNode, useId } from "react";
+import { loadHeadline, WALKABLE_PERCENT } from "@/lib/city/load-stages";
+import type { LoadStageState } from "@/lib/city/load-stages";
+import { useId } from "react";
+import type { ReactNode } from "react";
 import { useSite } from "./site-context";
 
 /**
@@ -42,7 +40,7 @@ const CONTOURS: string[] = (() => {
   const harmonics = [
     { k: 2, a: 0.09, p: 0.7 },
     { k: 3, a: 0.06, p: 2.1 },
-    { k: 5, a: 0.035, p: 4.0 },
+    { k: 5, a: 0.035, p: 4 },
     { k: 7, a: 0.02, p: 1.3 },
   ];
   const levels = 22;
@@ -51,7 +49,7 @@ const CONTOURS: string[] = (() => {
     const base = 40 + level * 34;
     // the terrain leans differently at each level, as a real slope does
     const twist = level * 0.11;
-    const points = Array.from({ length: steps }, (_, i) => {
+    const points = Array.from({ length: steps }, (_step, i) => {
       const t = (i / steps) * Math.PI * 2;
       const wobble = harmonics.reduce(
         (sum, h) => sum + h.a * Math.sin(h.k * t + h.p + twist * h.k * 0.5),
@@ -68,7 +66,7 @@ const CONTOURS: string[] = (() => {
 const WALKABLE_RADIUS = ringRadius(WALKABLE_PERCENT);
 
 /** One layer of the survey sheet: the sheet's frame, cropped to the screen. */
-function Sheet({
+const Sheet = ({
   breathes = false,
   children,
   multiply = false,
@@ -76,26 +74,24 @@ function Sheet({
   breathes?: boolean;
   children: ReactNode;
   multiply?: boolean;
-}) {
-  return (
-    <svg
-      aria-hidden
-      // A breathing layer scales as one element, which the compositor does
-      // without a repaint (an SVG child's transform repaints the sheet).
-      className={cn(
-        "absolute inset-0 h-full w-full",
-        breathes && "load-breathe",
-        multiply && "mix-blend-multiply"
-      )}
-      preserveAspectRatio="xMidYMid slice"
-      viewBox={`0 0 ${SHEET} ${SHEET}`}
-    >
-      {children}
-    </svg>
-  );
-}
+}) => (
+  <svg
+    aria-hidden
+    // A breathing layer scales as one element, which the compositor does
+    // without a repaint (an SVG child's transform repaints the sheet).
+    className={cn(
+      "absolute inset-0 h-full w-full",
+      breathes && "load-breathe",
+      multiply && "mix-blend-multiply"
+    )}
+    preserveAspectRatio="xMidYMid slice"
+    viewBox={`0 0 ${SHEET} ${SHEET}`}
+  >
+    {children}
+  </svg>
+);
 
-function SurveySheet({ percent }: { percent: number }) {
+const SurveySheet = ({ percent }: { percent: number }) => {
   const r = ringRadius(percent);
   // ids are document-wide: two screens mounted at once must not share them
   const colourId = `${useId()}-colour`;
@@ -190,10 +186,10 @@ function SurveySheet({ percent }: { percent: number }) {
       </Sheet>
     </>
   );
-}
+};
 
 /** One stage: its name, and a magenta line that fills as it loads. */
-function StageMark({ stage }: { stage: LoadStageState }) {
+const StageMark = ({ stage }: { stage: LoadStageState }) => {
   const pct = Math.round(stage.fraction * 100);
   return (
     <div
@@ -221,9 +217,9 @@ function StageMark({ stage }: { stage: LoadStageState }) {
       </span>
     </div>
   );
-}
+};
 
-export function LoadScreen({
+export const LoadScreen = ({
   besidePanel = false,
   destination,
   handedOver,
@@ -242,7 +238,7 @@ export function LoadScreen({
   handedOver: boolean;
   percent: number;
   stages: LoadStageState[];
-}) {
+}) => {
   const site = useSite();
   const walkable = percent >= WALKABLE_PERCENT;
   return (
@@ -339,4 +335,4 @@ export function LoadScreen({
       </div>
     </div>
   );
-}
+};

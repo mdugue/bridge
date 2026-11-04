@@ -23,7 +23,7 @@ export const metadata: Metadata = {
  * build prepared, public/data/sites.json), each as its ground map — the land
  * cover in the viewer's palette — leading to its route.
  */
-export default function StartPage() {
+const StartPage = () => {
   const built = builtSites();
   const servedIds = new Set(built.map((b) => b.site.id));
   const coming = Object.values(SITES).filter((s) => !servedIds.has(s.id));
@@ -116,4 +116,6 @@ export default function StartPage() {
       </footer>
     </div>
   );
-}
+};
+
+export default StartPage;

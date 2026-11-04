@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { type Mesh, type MeshBasicNodeMaterial, Vector3 } from "three/webgpu";
+import { Vector3 } from "three/webgpu";
+import type { Mesh, MeshBasicNodeMaterial } from "three/webgpu";
 import type { TrafficFeature } from "@/lib/city/features";
 import type { GroundContext } from "@/lib/city/ground-clamp";
 import { flowHeight } from "@/lib/city/traffic";
@@ -72,11 +73,11 @@ test("the outside faces out: the crown's normals point up", () => {
   const normal = geo?.getAttribute("normal");
   const n = new Vector3();
   let crowns = 0;
-  for (let i = 0; i < (lane?.count ?? 0); i++) {
+  for (let i = 0; i < (lane?.count ?? 0); i += 1) {
     if ((lane?.getY(i) ?? 0) === 1) {
       n.fromBufferAttribute(normal as never, i);
       expect(n.y).toBeGreaterThan(0.5);
-      crowns++;
+      crowns += 1;
     }
   }
   expect(crowns).toBeGreaterThan(10);
@@ -86,7 +87,7 @@ test("a body tapers to a point at both ends of its section", () => {
   const mesh = bodies(buildTraffic([street({ t: 3000, f: 3000 })], [], ctx));
   const pos = mesh?.geometry.getAttribute("position");
   // the first cross-section has collapsed onto the line, at its foot
-  for (let k = 0; k < 11; k++) {
+  for (let k = 0; k < 11; k += 1) {
     expect(pos?.getY(k)).toBeCloseTo(109.8, 4);
     expect(pos?.getZ(k)).toBeCloseTo(0, 4);
   }
@@ -95,9 +96,10 @@ test("a body tapers to a point at both ends of its section", () => {
 test("the material is one for the whole site", () => {
   const a = bodies(buildTraffic([street({ t: 500, f: 500 })], [], ctx));
   const b = bodies(buildTraffic([street({ t: 900, b: 900 })], [], ctx));
-  expect(a).not.toBeNull();
-  expect(b).not.toBeNull();
-  expect(b?.material).toBe(a?.material as MeshBasicNodeMaterial);
+  if (!a || !b) {
+    throw new Error("a street body is missing");
+  }
+  expect(b.material).toBe(a.material);
 });
 
 test("off the loaded ground the body breaks rather than drops to zero", () => {
@@ -139,7 +141,7 @@ test("where the street runs on, the body stays full: no pinch at the joint", () 
   const lane = mesh?.geometry.getAttribute("trafficLane");
   // the crown over the joint (x = 100) stands at the full height
   let crownAtJoint = 0;
-  for (let i = 0; i < (pos?.count ?? 0); i++) {
+  for (let i = 0; i < (pos?.count ?? 0); i += 1) {
     if (Math.abs((pos?.getX(i) ?? 0) - 100) < 0.01 && lane?.getY(i) === 1) {
       crownAtJoint = Math.max(crownAtJoint, pos?.getY(i) ?? 0);
     }

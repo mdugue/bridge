@@ -1,14 +1,14 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import { CITY_WFS } from "@/lib/city/bike-counts";
 import { HAMBURG_STA } from "@/lib/city/bike-feeds";
 import { SESSION_KEYS, STORAGE_KEYS } from "./storage-keys";
 
 /** The privacy page (ADR 0043): it names what the browser keeps and asks. */
 const PAGE = readFileSync(
-  join(import.meta.dir, "../(legal)/datenschutz/page.mdx"),
-  "utf8"
+  nodePath.join(import.meta.dir, "../(legal)/datenschutz/page.mdx"),
+  "utf-8"
 );
 
 test("the privacy page names every key the viewer keeps in the browser", () => {
@@ -22,11 +22,14 @@ test("the privacy page names every host the viewer reads live", () => {
 });
 
 /** The site's own sources (not tests): what runs in a visitor's browser. */
-const ROOT = join(import.meta.dir, "../..");
+const ROOT = nodePath.join(import.meta.dir, "../..");
 const SOURCES = ["app", "components", "hooks", "lib"].flatMap((dir) =>
   [...new Bun.Glob(`${dir}/**/*.{ts,tsx}`).scanSync({ cwd: ROOT })]
-    .filter((path) => !/\.test\.tsx?$/.test(path))
-    .map((path) => ({ path, text: readFileSync(join(ROOT, path), "utf8") }))
+    .filter((path) => !/\.test\.tsx?$/u.test(path))
+    .map((path) => ({
+      path,
+      text: readFileSync(nodePath.join(ROOT, path), "utf-8"),
+    }))
 );
 
 const paths = (files: { path: string }[]) => files.map(({ path }) => path);
@@ -41,7 +44,7 @@ test("the site sets no cookies (the privacy page says so)", () => {
 test("every storage key comes from the table, none is written inline", () => {
   // a key given as a literal to a storage call, or as a literal index
   const literalKey =
-    /(?:\.\s*(?:getItem|setItem|removeItem)\s*\(|\b(?:localStorage|sessionStorage)\s*\[)\s*["'`]/;
+    /(?:\.\s*(?:getItem|setItem|removeItem)\s*\(|\b(?:localStorage|sessionStorage)\s*\[)\s*["'`]/u;
   expect(paths(SOURCES.filter(({ text }) => literalKey.test(text)))).toEqual(
     []
   );
@@ -49,7 +52,7 @@ test("every storage key comes from the table, none is written inline", () => {
   const touching = SOURCES.filter(
     ({ path, text }) =>
       !path.endsWith("storage-keys.ts") &&
-      /\b(?:localStorage|sessionStorage)\b/.test(text)
+      /\b(?:localStorage|sessionStorage)\b/u.test(text)
   );
   expect(touching.length).toBeGreaterThan(0);
   expect(

@@ -18,9 +18,9 @@ function drawn(
   n = 60
 ) {
   let count = 0;
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < n; i += 1) {
     if (pace.draws(start + i * FRAME)) {
-      count++;
+      count += 1;
     }
   }
   return count;
@@ -89,9 +89,9 @@ describe("still pace", () => {
     const pace = createFramePace();
     pace.setStill(true);
     let count = 0;
-    for (let i = 0; i < 120; i++) {
+    for (let i = 0; i < 120; i += 1) {
       if (pace.draws(i * (1000 / 120))) {
-        count++;
+        count += 1;
       }
     }
     expect(count).toBe(STILL_FPS);
@@ -140,7 +140,7 @@ describe("listening pace", () => {
       pace.setListening(true);
       let last = Number.NaN;
       let widest = 0;
-      for (let i = 0; i < hz * 2; i++) {
+      for (let i = 0; i < hz * 2; i += 1) {
         const now = (i * 1000) / hz;
         if (pace.draws(now)) {
           widest = Math.max(widest, now - last || 0);

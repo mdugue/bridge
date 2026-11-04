@@ -28,7 +28,8 @@
  * bed is laid at the profile, the sides slope to the measured ground —
  * the embankment and the cutting a real line has.
  */
-import { type Level, type LevelLine, lineGrade } from "./levels";
+import { lineGrade } from "./levels";
+import type { Level, LevelLine } from "./levels";
 
 /** The smallest vertical curve a line's grade changes on (m). */
 export const PROFILE_RADIUS: Readonly<Record<LevelLine, number>> = {
@@ -86,7 +87,7 @@ function factorPenta(
   const l0 = new Float64Array(n);
   const l1 = new Float64Array(n);
   const l2 = new Float64Array(n);
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < n; i += 1) {
     const a2 = i >= 2 ? off2[i - 2] / l0[i - 2] : 0;
     const a1 =
       i >= 1 ? (off1[i - 1] - (i >= 2 ? a2 * l1[i - 1] : 0)) / l0[i - 1] : 0;
@@ -104,7 +105,7 @@ function solvePenta(f: PentaFactor, b: Float64Array): Float64Array {
   const n = l0.length;
   // forward: L y = b
   const y = new Float64Array(n);
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < n; i += 1) {
     let s = b[i];
     if (i >= 1) {
       s -= l1[i] * y[i - 1];
@@ -116,7 +117,7 @@ function solvePenta(f: PentaFactor, b: Float64Array): Float64Array {
   }
   // backward: Lᵀ x = y
   const x = new Float64Array(n);
-  for (let i = n - 1; i >= 0; i--) {
+  for (let i = n - 1; i >= 0; i -= 1) {
     let s = y[i];
     if (i + 1 < n) {
       s -= l1[i + 1] * x[i + 1];
@@ -148,7 +149,7 @@ interface Rows {
 function rowsOf(d: readonly number[], opts: ProfileOptions): Rows {
   const n = d.length;
   const g = new Float64Array(Math.max(n - 1, 0));
-  for (let i = 0; i < n - 1; i++) {
+  for (let i = 0; i < n - 1; i += 1) {
     g[i] = opts.grade * Math.max(d[i + 1] - d[i], 1e-6);
   }
   const m = Math.max(n - 2, 0);
@@ -156,7 +157,7 @@ function rowsOf(d: readonly number[], opts: ProfileOptions): Rows {
   const c1 = new Float64Array(m);
   const c2 = new Float64Array(m);
   const k = new Float64Array(m);
-  for (let i = 0; i < m; i++) {
+  for (let i = 0; i < m; i += 1) {
     const h0 = Math.max(d[i + 1] - d[i], 1e-6);
     const h1 = Math.max(d[i + 2] - d[i + 1], 1e-6);
     const h = (h0 + h1) / 2;
@@ -174,13 +175,13 @@ function normalBands(n: number, rows: Rows, w: Float64Array) {
   const diag = Float64Array.from(w);
   const off1 = new Float64Array(Math.max(n - 1, 0));
   const off2 = new Float64Array(Math.max(n - 2, 0));
-  for (let i = 0; i < n - 1; i++) {
+  for (let i = 0; i < n - 1; i += 1) {
     diag[i] += RHO;
     diag[i + 1] += RHO;
     off1[i] -= RHO;
   }
   const { c0, c1, c2 } = rows;
-  for (let i = 0; i < c0.length; i++) {
+  for (let i = 0; i < c0.length; i += 1) {
     diag[i] += RHO * c0[i] * c0[i];
     diag[i + 1] += RHO * c1[i] * c1[i];
     diag[i + 2] += RHO * c2[i] * c2[i];
@@ -191,7 +192,7 @@ function normalBands(n: number, rows: Rows, w: Float64Array) {
   return { diag, off1, off2 };
 }
 
-const clamp = (v: number, b: number) => (v > b ? b : v < -b ? -b : v);
+const clamp = (v: number, b: number) => Math.min(Math.max(v, -b), b);
 
 /**
  * The profile of one run of known levels: the closest heights to `t`
@@ -217,23 +218,23 @@ function fitRun(
   const yg = new Float64Array(ng);
   const uc = new Float64Array(nc);
   const yc = new Float64Array(nc);
-  let z: Float64Array<ArrayBufferLike> = Float64Array.from(t);
+  let z: Float64Array = Float64Array.from(t);
   const w = Float64Array.from(base);
   const rhs = new Float64Array(n);
-  for (let round = 0; round < ROUNDS; round++) {
+  for (let round = 0; round < ROUNDS; round += 1) {
     const { diag, off1, off2 } = normalBands(n, rows, w);
     const factor = factorPenta(diag, off1, off2);
-    for (let it = 0; it < ITERATIONS; it++) {
+    for (let it = 0; it < ITERATIONS; it += 1) {
       // z: (W + ρAᵀA) z = W t + ρ Aᵀ (u − y)
-      for (let i = 0; i < n; i++) {
+      for (let i = 0; i < n; i += 1) {
         rhs[i] = w[i] * t[i];
       }
-      for (let i = 0; i < ng; i++) {
+      for (let i = 0; i < ng; i += 1) {
         const v = RHO * (ug[i] - yg[i]);
         rhs[i + 1] += v;
         rhs[i] -= v;
       }
-      for (let i = 0; i < nc; i++) {
+      for (let i = 0; i < nc; i += 1) {
         const v = RHO * (uc[i] - yc[i]);
         rhs[i] += rows.c0[i] * v;
         rhs[i + 1] += rows.c1[i] * v;
@@ -242,14 +243,14 @@ function fitRun(
       z = solvePenta(factor, rhs);
       // u: the rows' values clamped to their bounds; y: the residual
       let worst = 0;
-      for (let i = 0; i < ng; i++) {
+      for (let i = 0; i < ng; i += 1) {
         const a = z[i + 1] - z[i];
         const u = clamp(a + yg[i], rows.g[i]);
         yg[i] += a - u;
         worst = Math.max(worst, Math.abs(a - u), Math.abs(u - ug[i]));
         ug[i] = u;
       }
-      for (let i = 0; i < nc; i++) {
+      for (let i = 0; i < nc; i += 1) {
         const a =
           rows.c0[i] * z[i] + rows.c1[i] * z[i + 1] + rows.c2[i] * z[i + 2];
         const u = clamp(a + yc[i], rows.k[i]);
@@ -263,7 +264,7 @@ function fitRun(
       }
     }
     // Huber: a sample far off the profile counts as one off by its distance
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < n; i += 1) {
       const r = Math.abs(z[i] - t[i]);
       w[i] = r > ROBUST_M ? (base[i] * ROBUST_M) / r : base[i];
     }
@@ -285,7 +286,7 @@ export function lineProfile(
 ): (number | null)[] {
   const out: (number | null)[] = levels.map(() => null);
   let first = -1;
-  for (let i = 0; i <= levels.length; i++) {
+  for (let i = 0; i <= levels.length; i += 1) {
     if (i < levels.length && levels[i]) {
       if (first < 0) {
         first = i;
@@ -293,18 +294,26 @@ export function lineProfile(
       continue;
     }
     if (first >= 0) {
-      const idx = Array.from({ length: i - first }, (_, k) => first + k);
+      const idx: number[] = [];
+      const run: Level[] = [];
+      for (let j = first; j < i; j += 1) {
+        const level = levels[j];
+        if (!level) {
+          throw new Error("a run of levels holds a gap");
+        }
+        idx.push(j);
+        run.push(level);
+      }
       const fit = fitRun(
-        idx.map((j) => (levels[j] as Level).y),
-        idx.map((j) =>
-          (levels[j] as Level).mode === "deck" ? DECK_WEIGHT : 1
-        ),
+        run.map((level) => level.y),
+        run.map((level) => (level.mode === "deck" ? DECK_WEIGHT : 1)),
         idx.map((j) => d[j]),
         opts
       );
-      idx.forEach((j, k) => {
+      for (let k = 0; k < idx.length; k += 1) {
+        const j = idx[k];
         out[j] = fit[k];
-      });
+      }
       first = -1;
     }
   }

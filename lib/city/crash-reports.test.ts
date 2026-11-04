@@ -5,7 +5,6 @@ import {
   envelope,
   envelopeUrl,
   isAftermath,
-  type Payload,
   PROBLEMS_PER_PAGE,
   problemReport,
   reportBuild,
@@ -17,7 +16,9 @@ import {
   TUNNEL_PATH,
   tunnelRewrites,
 } from "./crash-reports";
-import { createTrail, pushBeat, pushEvent, type Trail } from "./crash-trail";
+import type { Payload } from "./crash-reports";
+import { createTrail, pushBeat, pushEvent } from "./crash-trail";
+import type { Trail } from "./crash-trail";
 
 const ID = "0123456789abcdef0123456789abcdef";
 const ctx = {
@@ -236,12 +237,15 @@ test("a problem's level says whether the page survived it", () => {
   expect(level("alloc-failed", "RangeError: out of bounds")).toBe("warning");
 });
 
+const noted = (...kinds: string[]) => {
+  const trail = page();
+  for (const [i, kind] of kinds.entries()) {
+    pushEvent(trail, { t: 10 + i, kind });
+  }
+  return trail;
+};
+
 describe("which problems are the aftermath of the page's end", () => {
-  const noted = (...kinds: string[]) => {
-    const trail = page();
-    kinds.forEach((kind, i) => pushEvent(trail, { t: 10 + i, kind }));
-    return trail;
-  };
   const error = { t: 20, kind: "rejection", detail: "buffer.destroy" };
   const lost = { t: 20, kind: "load-error", detail: "https://x/a.glb" };
 
@@ -357,7 +361,7 @@ test("a page reports each problem once, and only so many", () => {
   expect(admit({ t: 2, kind: "gpu-error", detail: "validation 2" })).toBe(
     false
   );
-  for (let i = 1; i < PROBLEMS_PER_PAGE; i++) {
+  for (let i = 1; i < PROBLEMS_PER_PAGE; i += 1) {
     expect(
       admit({ t: 3, kind: "error", detail: `boom ${"x".repeat(i)}` })
     ).toBe(true);
@@ -376,7 +380,7 @@ test("a GPU running out costs one warning, and its end still goes out", () => {
       admit({ t: 1, kind: "alloc-failed", detail: `${where} RangeError` })
     ).toBe(where === "content");
   }
-  for (let i = 0; i < PROBLEMS_PER_PAGE; i++) {
+  for (let i = 0; i < PROBLEMS_PER_PAGE; i += 1) {
     admit({
       t: 2,
       kind: "gpu-error",
@@ -622,5 +626,5 @@ test("a session update is its own kind of envelope item", () => {
     .map((line) => JSON.parse(line) as unknown);
   expect(header).toEqual({ dsn: DSN, sent_at: sent.toISOString() });
   expect(item).toEqual({ type: "session" });
-  expect(payload).toEqual(JSON.parse(JSON.stringify(session)));
+  expect(payload).toEqual(structuredClone(session));
 });

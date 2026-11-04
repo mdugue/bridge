@@ -38,7 +38,7 @@ function meshDoc(options: {
   const colour = new Uint8Array(
     options.vertices * (options.colour === "u8x3" ? 3 : 4)
   );
-  for (let v = 0; v < options.vertices; v++) {
+  for (let v = 0; v < options.vertices; v += 1) {
     const p = poolPos[Math.floor(rand() * options.pool)];
     const n = poolNormal[rand() < 0.5 ? 0 : 1];
     position.set(p, v * 3);
@@ -68,7 +68,7 @@ function meshDoc(options: {
   }
   if (options.indexed) {
     const index = new Uint32Array(options.vertices * 2);
-    for (let i = 0; i < index.length; i++) {
+    for (let i = 0; i < index.length; i += 1) {
       index[i] = Math.floor(rand() * options.vertices);
     }
     prim.setIndices(
@@ -110,7 +110,7 @@ function buildingDoc(seed: number, emptyMesh = false): Document {
   const feature = new Float32Array(vertices);
   const facade = new Int16Array(vertices * 4);
   const colour = new Uint8Array(vertices * 3);
-  for (let v = 0; v < vertices; v++) {
+  for (let v = 0; v < vertices; v += 1) {
     position.set([rand(12) / 2, rand(8) / 2, -rand(12) / 2], v * 3);
     normal[v * 3 + rand(3)] = rand(2) === 0 ? 1 : -1;
     feature[v] = rand(4);
@@ -118,7 +118,7 @@ function buildingDoc(seed: number, emptyMesh = false): Document {
     colour.fill(rand(2) * 100, v * 3, v * 3 + 3);
   }
   const index = new Uint32Array(vertices * 2);
-  for (let i = 0; i < index.length; i++) {
+  for (let i = 0; i < index.length; i += 1) {
     index[i] = rand(vertices);
   }
   const building = doc
@@ -151,7 +151,7 @@ async function glbOf(
 ): Promise<Uint8Array> {
   const doc = build();
   await doc.transform(transform());
-  return new NodeIO().writeBinary(doc);
+  return await new NodeIO().writeBinary(doc);
 }
 
 const CASES: [string, Parameters<typeof meshDoc>[0]][] = [
@@ -209,10 +209,12 @@ describe("weldExact", () => {
         doc.createAccessor().setType("VEC3").setArray(new Float32Array(9))
       );
     doc.createMesh().addPrimitive(prim);
-    const failure = await doc.transform(weldExact()).then(
-      () => undefined,
-      (error: unknown) => error
-    );
+    let failure: unknown;
+    try {
+      await doc.transform(weldExact());
+    } catch (error) {
+      failure = error;
+    }
     expect(failure).toBeInstanceOf(Error);
   });
 

@@ -112,8 +112,11 @@ export function upperHull(points: readonly LiftPoint[]): LiftPoint[] {
   const hull: LiftPoint[] = [];
   for (const p of sorted) {
     while (hull.length >= 2) {
-      const a = hull.at(-2) as LiftPoint;
-      const b = hull.at(-1) as LiftPoint;
+      const a = hull.at(-2);
+      const b = hull.at(-1);
+      if (!(a && b)) {
+        break;
+      }
       // b lies on or under the chord a → p: it cannot be on the upper hull.
       const cross =
         (b.s - a.s) * (p.lift - a.lift) - (b.lift - a.lift) * (p.s - a.s);

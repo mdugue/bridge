@@ -56,11 +56,12 @@ export function bakeMode(
     return { kind: "publish", ifCached: args.length === 1 };
   }
   const [arg] = args;
-  const kind = arg.startsWith(WARM_GROUND)
-    ? "ground"
-    : arg.startsWith(WARM_TILES)
-      ? "tiles"
-      : null;
+  let kind: "ground" | "tiles" | null = null;
+  if (arg.startsWith(WARM_GROUND)) {
+    kind = "ground";
+  } else if (arg.startsWith(WARM_TILES)) {
+    kind = "tiles";
+  }
   if (args.length > 1 || kind === null) {
     throw new Error(
       `unknown arguments "${args.join(" ")}"; a warmer takes one ${WARM_GROUND}<tile>,… or ${WARM_TILES}<tile>,…, a plain run ${IF_CACHED}`
@@ -202,26 +203,26 @@ export function createSlots(limits: { jobs: number; memory: number }): {
         return;
       }
       waiting.shift();
-      running++;
+      running += 1;
       held += next.peak;
       next.start();
     }
   };
   return {
     run: async (priority, peak, task) => {
-      await new Promise<void>((start) => {
+      await new Promise<void>((resolve) => {
         const at = waiting.findIndex((w) => w.priority > priority);
-        waiting.splice(at < 0 ? waiting.length : at, 0, {
+        waiting.splice(at === -1 ? waiting.length : at, 0, {
           peak,
           priority,
-          start,
+          start: resolve,
         });
         admit();
       });
       try {
         return await task();
       } finally {
-        running--;
+        running -= 1;
         held -= peak;
         admit();
       }

@@ -1026,8 +1026,6 @@ the port (2026-09-26) made of it:
   doing.
 - **"Walk-mode collider can lock the player inside a building"** — not a
   bug: `FrontSide` materials, the ray never hits back faces.
-- **ultracite / its oxlint preset** — the same style refactor its biome
-  preset was; JSON configs cannot `extends` `.mjs` presets.
 - **Street and square names as text** (lettering on the ground, a HUD
   caption) — plan 032, built and removed on 2026-09-26 after the
   maintainer saw it on a device: the map look reads better without text

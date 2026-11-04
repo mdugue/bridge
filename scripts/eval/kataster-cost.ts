@@ -21,23 +21,16 @@
  * scripts/eval/kataster-shots.py; no GPU, no browser)
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import {
-  Frustum,
-  Matrix4,
-  type Mesh,
-  type Object3D,
-  PerspectiveCamera,
-  Vector3,
-} from "three/webgpu";
-import { type Instances, isInstances } from "../../app/_components/instancing";
+import path from "node:path";
+import { Frustum, Matrix4, PerspectiveCamera, Vector3 } from "three/webgpu";
+import type { Mesh, Object3D } from "three/webgpu";
+import { isInstances } from "../../app/_components/instancing";
+import type { Instances } from "../../app/_components/instancing";
 import { sceneCensus } from "../../app/_components/scene-census";
 import { buildLowVegetation } from "../../app/_components/low-vegetation-layer";
 import { buildTreeInventory } from "../../app/_components/tree-inventory-layer";
-import {
-  buildVegetation,
-  type VegetationControl,
-} from "../../app/_components/vegetation-layer";
+import { buildVegetation } from "../../app/_components/vegetation-layer";
+import type { VegetationControl } from "../../app/_components/vegetation-layer";
 import type {
   CanopyExtraFeature,
   CanopyFeature,
@@ -53,28 +46,25 @@ import {
   shadowFocusAhead,
 } from "../../lib/city/shadow-fit";
 import { sampleHeightfield } from "../../lib/city/terrain-geometry";
-import {
-  type DataManifest,
-  dgmSourceFiles,
-  tileIds,
-} from "../../lib/city/tile";
+import { dgmSourceFiles, tileIds } from "../../lib/city/tile";
+import type { DataManifest } from "../../lib/city/tile";
 import { parseTilesetExtras, TILESET_FILE } from "../../lib/city/tileset";
 import { REFERENCE_SITE, SITES, siteById } from "../../sites";
 import { readDgm } from "../bake-tiles";
 import { DRESDEN } from "../../sites/dresden";
 
-const ROOT = join(import.meta.dir, "..", "..");
-const PUB = join(ROOT, "public", "data");
+const ROOT = path.join(import.meta.dir, "..", "..");
+const PUB = path.join(ROOT, "public", "data");
 const manifest = JSON.parse(
-  readFileSync(join(PUB, "manifest.json"), "utf8")
+  readFileSync(path.join(PUB, "manifest.json"), "utf-8")
 ) as DataManifest;
-const served = (file: string) => join(PUB, manifest.files[file] ?? file);
+const served = (file: string) => path.join(PUB, manifest.files[file] ?? file);
 const features = <F>(file: string): F[] => {
   try {
     return (
       (
         JSON.parse(
-          readFileSync(join(ROOT, "data", "dresden", "dlm", file), "utf8")
+          readFileSync(path.join(ROOT, "data", "dresden", "dlm", file), "utf-8")
         ) as FeatureCollection<F>
       ).features ?? []
     );
@@ -85,19 +75,19 @@ const features = <F>(file: string): F[] => {
 
 // The recenter offset the viewer uses, from the published tileset.
 const { offset } = parseTilesetExtras(
-  JSON.parse(readFileSync(served(TILESET_FILE), "utf8"))
+  JSON.parse(readFileSync(served(TILESET_FILE), "utf-8"))
 );
 
 /** Ground height from the committed DGM, resampled to 1024² (vegetation
  *  placement only — a few centimetres off the fine level's TIN). */
 async function heightAtFor(tile: string) {
   const src = dgmSourceFiles(DRESDEN, tile);
-  const tif = readFileSync(join(ROOT, src.tif));
-  const tfw = join(ROOT, src.tfw);
+  const tif = readFileSync(path.join(ROOT, src.tif));
+  const tfw = path.join(ROOT, src.tfw);
   const n = 1024;
   const { elevations, bounds } = await readDgm(
     tif.buffer.slice(tif.byteOffset, tif.byteOffset + tif.byteLength),
-    existsSync(tfw) ? readFileSync(tfw, "utf8") : null,
+    existsSync(tfw) ? readFileSync(tfw, "utf-8") : null,
     n
   );
   return (x: number, y: number) =>
@@ -121,7 +111,7 @@ const heights: ((x: number, y: number) => number | null)[] = [];
 // `--site <id>` measures another site than the reference one.
 const siteArg = process.argv.indexOf("--site");
 const evalSite =
-  (siteArg >= 0 ? siteById(process.argv[siteArg + 1] ?? "") : undefined) ??
+  (siteArg === -1 ? undefined : siteById(process.argv[siteArg + 1] ?? "")) ??
   SITES[REFERENCE_SITE];
 for (const tile of tileIds(evalSite)) {
   const heightAt = await heightAtFor(tile);
@@ -223,7 +213,7 @@ interface Shot {
   };
 }
 
-const shotsDir = join(ROOT, "shots");
+const shotsDir = path.join(ROOT, "shots");
 const shots = readdirSync(shotsDir)
   .filter((f) => f.startsWith("kat-") && f.endsWith(".json"))
   .sort();
@@ -240,7 +230,9 @@ const views: Record<
   Record<Mode, { main: PassCost; shadow: PassCost }>
 > = {};
 for (const file of shots) {
-  const shot = JSON.parse(readFileSync(join(shotsDir, file), "utf8")) as Shot;
+  const shot = JSON.parse(
+    readFileSync(path.join(shotsDir, file), "utf-8")
+  ) as Shot;
   const cam = new PerspectiveCamera(55, 1.6, 0.3, 6000);
   const { pos, headingDeg, pitchDeg, epsg } = shot.camera;
   cam.position.set(pos.x, pos.y, pos.z);
@@ -280,7 +272,7 @@ for (const file of shots) {
       }),
     };
   }
-  views[file.replace(/\.json$/, "")] = entry;
+  views[file.replace(/\.json$/u, "")] = entry;
 }
 report.views = views;
 process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);

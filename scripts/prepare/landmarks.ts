@@ -11,5 +11,5 @@ import { SITE, at, readJson } from "./context";
 /** A tile's landmarks (pipeline/bake/landmarks.py), or none. */
 export function landmarkFile(tile: string): LandmarkFile | undefined {
   const path = at(cityMeshSourceFiles(SITE, tile).landmarks);
-  return existsSync(path) ? readJson<LandmarkFile>(path) : undefined;
+  return existsSync(path) ? (readJson(path) as LandmarkFile) : undefined;
 }

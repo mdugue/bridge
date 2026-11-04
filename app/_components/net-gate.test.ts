@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, jest, test } from "bun:test";
-import { createNetGate, type GatePage } from "./net-gate";
+import { createNetGate } from "./net-gate";
+import type { GatePage } from "./net-gate";
 
 /** A page on a clock the test moves: visible and online until told. */
 function fakePage() {
@@ -20,8 +21,8 @@ function fakePage() {
       navigator.onLine = onLine;
       window.dispatchEvent(new Event(onLine ? "online" : "offline"));
     },
-    visible: (shown: boolean) => {
-      document.visibilityState = shown ? "visible" : "hidden";
+    visible: (isShown: boolean) => {
+      document.visibilityState = isShown ? "visible" : "hidden";
       document.dispatchEvent(new Event("visibilitychange"));
     },
     hide: () => window.dispatchEvent(new Event("pagehide")),
@@ -29,6 +30,13 @@ function fakePage() {
     show: (persisted: boolean) =>
       window.dispatchEvent(Object.assign(new Event("pageshow"), { persisted })),
   };
+}
+
+/** Lets settled promises run their reactions, however many hops they take. */
+async function flush(): Promise<void> {
+  for (let hop = 0; hop < 8; hop += 1) {
+    await Promise.resolve();
+  }
 }
 
 beforeEach(() => {
@@ -64,20 +72,20 @@ test("a retry waits for a usable page: at once when it is, on 'online', and ever
   const gate = createNetGate(p.page);
   let woken = 0;
   const wake = () => {
-    woken++;
+    woken += 1;
   };
   await gate.whenUsable();
   p.online(false);
   void gate.whenUsable().then(wake);
   jest.advanceTimersByTime(14_999);
-  await Promise.resolve();
+  await flush();
   expect(woken).toBe(0);
   jest.advanceTimersByTime(1);
-  await Promise.resolve();
+  await flush();
   expect(woken).toBe(1);
   void gate.whenUsable().then(wake);
   p.online(true);
-  await Promise.resolve();
+  await flush();
   expect(woken).toBe(2);
 });
 
@@ -100,7 +108,6 @@ test("an aborted wait rejects at once and leaves no probe behind", async () => {
   // aborted before it is asked: at once, even on a usable page
   const before = new AbortController();
   before.abort();
-  // oxlint-disable-next-line typescript/await-thenable
   await expect(gate.whenUsable(before.signal)).rejects.toMatchObject({
     name: "AbortError",
   });
@@ -109,7 +116,6 @@ test("an aborted wait rejects at once and leaves no probe behind", async () => {
   const waiting = gate.whenUsable(aborter.signal);
   expect(jest.getTimerCount()).toBe(1); // the offline probe
   aborter.abort();
-  // oxlint-disable-next-line typescript/await-thenable
   await expect(waiting).rejects.toMatchObject({ name: "AbortError" });
   // its probe is cleared (an armed one would re-arm every 15 s for good)
   expect(jest.getTimerCount()).toBe(0);

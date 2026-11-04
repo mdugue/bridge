@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 import { bridgeItems, monumentItems, treeSets } from "./ask-items";
 import { hitsInSets, nearestItem } from "./ask-solids";
 import type {
@@ -16,7 +16,7 @@ const read = <F>(kind: string) =>
   (
     JSON.parse(
       readFileSync(
-        join(
+        path.join(
           import.meta.dir,
           "..",
           "..",
@@ -25,12 +25,12 @@ const read = <F>(kind: string) =>
           "dlm",
           `${kind}_${TILE}.geojson`
         ),
-        "utf8"
+        "utf-8"
       )
     ) as FeatureCollection<F>
   ).features ?? [];
 
-const offset = { cx: 412000, cy: 5656000 };
+const offset = { cx: 412_000, cy: 5_656_000 };
 const ctx = { offset, tile: TILE, heightAt: () => 110 };
 const down = { x: 0, y: -1, z: 0 };
 
@@ -67,19 +67,23 @@ test("an orchard tree appended to the file's is askable past its end, as an orch
     orchard: true,
   });
   expect(hit?.target).not.toHaveProperty("measured");
+  if (!orchard.properties) {
+    throw new Error("the orchard tree has no properties");
+  }
   const measured = treeSets(
-    [...trees, { ...orchard, properties: { ...orchard.properties!, m: 1 } }],
+    [...trees, { ...orchard, properties: { ...orchard.properties, m: 1 } }],
     ctx
   );
   const again = hitsInSets({ x: w.x, y: 200, z: w.z }, down, measured, 500)[0];
   expect(again?.target).toMatchObject({ orchard: true, measured: true });
 });
 
+const tree = (x: number, a: number): TreeFeature => ({
+  geometry: { type: "Point", coordinates: [412_000 + x, 5_656_000] },
+  properties: { a, h: 12, d: 6, l: a === 0 ? "d" : "e" },
+});
+
 test("a pine and a yew are needle trees on the card, as the cone's conifers are", () => {
-  const tree = (x: number, a: number): TreeFeature => ({
-    geometry: { type: "Point", coordinates: [412_000 + x, 5_656_000] },
-    properties: { a, h: 12, d: 6, l: a === 0 ? "d" : "e" },
-  });
   // round, conifer, pine, bush (tree-inventory.ts TREE_ARCHETYPES)
   const trees = [tree(0, 0), tree(40, 3), tree(80, 6), tree(120, 7)];
   const sets = treeSets(trees, ctx);

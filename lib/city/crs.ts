@@ -14,17 +14,17 @@
  */
 
 /** UTM zone by EPSG code (ETRS89 / UTM zone N, northern hemisphere). */
-const UTM_ZONES: Partial<Record<number, number>> = { 25832: 32, 25833: 33 };
+const UTM_ZONES: Partial<Record<number, number>> = { 25_832: 32, 25_833: 33 };
 
 export const SUPPORTED_EPSG_CODES = Object.keys(UTM_ZONES).map(Number);
 
-const TRAILING_NUMBER = /(\d+)\s*$/;
+const TRAILING_NUMBER = /(?<code>\d+)\s*$/u;
 
 const DEG = Math.PI / 180;
 
 // GRS80
 const A = 6_378_137;
-const F = 1 / 298.257_222_101;
+const F = 1 / 298.257222101;
 const E2 = F * (2 - F);
 const E = Math.sqrt(E2);
 /** the third flattening, the series' small parameter */
@@ -76,7 +76,7 @@ function conformalTan(tau: number): number {
  *  precision at these latitudes) */
 function geodeticTan(taup: number): number {
   let tau = taup / (1 - E2);
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 5; i += 1) {
     const taui = conformalTan(tau);
     const step =
       ((taup - taui) / Math.hypot(1, taui)) *
@@ -107,7 +107,8 @@ function forward(
   // the series' derivative, for the convergence (Karney eqs. 13–15)
   let p = 1;
   let q = 0;
-  ALPHA.forEach((alpha, j) => {
+  for (let j = 0; j < ALPHA.length; j += 1) {
+    const alpha = ALPHA[j];
     const k = 2 * (j + 1);
     const [s, c] = [Math.sin(k * xip), Math.cos(k * xip)];
     const [sh, ch] = [Math.sinh(k * etap), Math.cosh(k * etap)];
@@ -115,7 +116,7 @@ function forward(
     eta += alpha * c * sh;
     p += k * alpha * c * ch;
     q += k * alpha * s * sh;
-  });
+  }
   const gamma =
     Math.atan((taup / Math.hypot(1, taup)) * Math.tan(lambda)) +
     Math.atan2(q, p);
@@ -129,8 +130,8 @@ export function epsgCodeFromReferenceSystem(
   if (!referenceSystem) {
     return null;
   }
-  const match = referenceSystem.match(TRAILING_NUMBER);
-  return match ? Number(match[1]) : null;
+  const match = TRAILING_NUMBER.exec(referenceSystem);
+  return match ? Number(match.groups?.code) : null;
 }
 
 /**
@@ -150,11 +151,12 @@ export function utmToLatLng(
   const eta = (x - FALSE_EASTING) / K0_A;
   let xip = xi;
   let etap = eta;
-  BETA.forEach((beta, j) => {
+  for (let j = 0; j < BETA.length; j += 1) {
+    const beta = BETA[j];
     const k = 2 * (j + 1);
     xip -= beta * Math.sin(k * xi) * Math.cosh(k * eta);
     etap -= beta * Math.cos(k * xi) * Math.sinh(k * eta);
-  });
+  }
   const taup = Math.sin(xip) / Math.hypot(Math.sinh(etap), Math.cos(xip));
   const lambda = Math.atan2(Math.sinh(etap), Math.cos(xip));
   return {

@@ -2,16 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { LANDCOVER_CLASSES, landcoverSrgb } from "@/lib/city/landcover";
-import { decodeGreyPng, type GreyRaster } from "@/lib/city/png-raster";
+import { decodeGreyPng } from "@/lib/city/png-raster";
+import type { GreyRaster } from "@/lib/city/png-raster";
 import {
   epsgToMapPx,
-  type FootprintPoly,
-  type MapBridge,
   mapBridges,
   mapHeightPx,
   mapPxToEpsg,
-  type MapTile,
 } from "@/lib/city/minimap";
+import type { FootprintPoly, MapBridge, MapTile } from "@/lib/city/minimap";
 import type { PlayerPose } from "@/lib/city/pose";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 
@@ -44,9 +43,9 @@ function colorizeLandcover(
   }
   const image = ctx.createImageData(size, size);
   const { data } = image;
-  for (let y = 0; y < size; y++) {
+  for (let y = 0; y < size; y += 1) {
     const row = Math.floor(((y + 0.5) * raster.height) / size) * raster.width;
-    for (let x = 0; x < size; x++) {
+    for (let x = 0; x < size; x += 1) {
       const col = Math.floor(((x + 0.5) * raster.width) / size);
       const tint = landcoverSrgb(raster.data[row + col]);
       const i = (y * size + x) * 4;
@@ -87,14 +86,15 @@ function drawBridges(
   ctx.lineWidth = 0.5;
   for (const deck of bridges) {
     ctx.beginPath();
-    deck.pts.forEach(([x, y], i) => {
+    for (let i = 0; i < deck.pts.length; i += 1) {
+      const [x, y] = deck.pts[i];
       const { px, py } = epsgToMapPx(x, y, bounds, size);
       if (i === 0) {
         ctx.moveTo(px, py);
       } else {
         ctx.lineTo(px, py);
       }
-    });
+    }
     ctx.closePath();
     ctx.fillStyle = deckFill(deck.kind);
     ctx.fill();
@@ -120,14 +120,15 @@ function drawFootprints(
       continue;
     }
     ctx.beginPath();
-    poly.pts.forEach(([x, y], i) => {
+    for (let i = 0; i < poly.pts.length; i += 1) {
+      const [x, y] = poly.pts[i];
       const { px, py } = epsgToMapPx(x, y, bounds, size);
       if (i === 0) {
         ctx.moveTo(px, py);
       } else {
         ctx.lineTo(px, py);
       }
-    });
+    }
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
@@ -148,14 +149,15 @@ function drawPictureFrame(
     return;
   }
   ctx.beginPath();
-  corners.forEach(([x, y], i) => {
+  for (let i = 0; i < corners.length; i += 1) {
+    const [x, y] = corners[i];
     const { px, py } = epsgToMapPx(x, y, bounds, size);
     if (i === 0) {
       ctx.moveTo(px, py);
     } else {
       ctx.lineTo(px, py);
     }
-  });
+  }
   ctx.closePath();
   ctx.fillStyle = "rgba(37, 99, 235, 0.08)";
   ctx.fill();
@@ -187,25 +189,32 @@ function useBridges(tiles: MapTile[] | undefined): MapBridge[] {
   const [bridges, setBridges] = useState<MapBridge[]>([]);
   useEffect(() => {
     const urls = (tiles ?? []).flatMap((t) => (t.bridges ? [t.bridges] : []));
-    if (urls.length === 0) {
-      return;
-    }
-    const controller = new AbortController();
-    Promise.all(
-      urls.map((url) =>
-        fetch(url, { signal: controller.signal })
-          .then((res) => (res.ok ? res.json() : null))
-          .then(mapBridges)
-          .catch((): MapBridge[] => [])
+    const load = () => {
+      const controller = new AbortController();
+      Promise.all(
+        urls.map(
+          async (url) =>
+            await fetch(url, { signal: controller.signal })
+              .then(async (res): Promise<unknown> =>
+                res.ok ? ((await res.json()) as unknown) : null
+              )
+              .then(mapBridges)
+              .catch((): MapBridge[] => [])
+        )
       )
-    )
-      .then((perTile) => {
-        if (!controller.signal.aborted) {
-          setBridges(perTile.flat());
-        }
-      })
-      .catch(() => undefined);
-    return () => controller.abort();
+        .then((perTile) => {
+          if (!controller.signal.aborted) {
+            setBridges(perTile.flat());
+          }
+          return null;
+        })
+        .catch(() => {
+          // Each load already falls back to no bridges; nothing else can
+          // fail, and the map is fine without them.
+        });
+      return () => controller.abort();
+    };
+    return urls.length === 0 ? undefined : load();
   }, [tiles]);
   return bridges;
 }
@@ -231,14 +240,14 @@ function setupCanvas(
  * CityJSON on a static canvas, the player dot + heading wedge on a dynamic
  * overlay canvas (redrawn at pose rate, ~10 Hz). Clicking teleports.
  */
-export function Minimap({
+export const Minimap = ({
   bounds,
   footprints,
   landcoverTiles,
   onTeleport,
   size = DEFAULT_SIZE,
   subscribePose,
-}: MinimapProps) {
+}: MinimapProps) => {
   // The map has the site's shape (a landscape for Dresden), edge to edge.
   const height = mapHeightPx(bounds, size);
   const staticRef = useRef<HTMLCanvasElement>(null);
@@ -256,7 +265,7 @@ export function Minimap({
   );
   const bridges = useBridges(landcoverTiles);
   useEffect(() => {
-    let cancelled = false;
+    const loads = new AbortController();
     const requested = requestedRef.current;
     // Loads this run started and has not finished: the cleanup un-requests
     // them so a re-run (StrictMode's mount → cleanup → mount in dev) requests
@@ -268,15 +277,16 @@ export function Minimap({
       }
       requested.add(tile.src);
       pending.add(tile.src);
-      fetch(tile.src)
-        .then((res) => res.arrayBuffer())
-        .then((buf) => decodeGreyPng(new Uint8Array(buf)))
+      fetch(tile.src, { signal: loads.signal })
+        .then(async (res) => await res.arrayBuffer())
+        .then(async (buf) => await decodeGreyPng(new Uint8Array(buf)))
         .then((raster) => {
           pending.delete(tile.src);
-          if (!cancelled) {
+          if (!loads.signal.aborted) {
             const cv = colorizeLandcover(raster, 256);
             setDecoded((prev) => new Map(prev).set(tile.src, cv));
           }
+          return null;
         })
         .catch(() => {
           // The minimap just stays without this tile's land cover.
@@ -284,11 +294,10 @@ export function Minimap({
         });
     }
     return () => {
-      // oxlint-disable-next-line react/immutability -- the effect's own flag, never render state
-      cancelled = true;
       for (const src of pending) {
         requested.delete(src);
       }
+      loads.abort();
     };
   }, [landcoverTiles]);
 
@@ -321,32 +330,32 @@ export function Minimap({
   // Dynamic layer: player dot + heading wedge.
   useEffect(() => {
     const canvas = overlayRef.current;
-    if (!canvas) {
-      return;
-    }
-    const ctx = setupCanvas(canvas, size, height);
-    return subscribePose((pose) => {
-      ctx.clearRect(0, 0, size, height);
-      if (pose.footprint) {
-        drawPictureFrame(ctx, pose.footprint, bounds, size);
-      }
-      const { px, py } = epsgToMapPx(pose.epsgX, pose.epsgY, bounds, size);
-      ctx.save();
-      ctx.translate(px, py);
-      // Heading: 0 = north = canvas "up", clockwise positive.
-      ctx.rotate(pose.heading);
-      ctx.fillStyle = "rgba(37, 99, 235, 0.25)";
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.arc(0, 0, 14, -Math.PI / 2 - 0.5, -Math.PI / 2 + 0.5);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = PLAYER;
-      ctx.beginPath();
-      ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    });
+    const watch = (target: HTMLCanvasElement) => {
+      const ctx = setupCanvas(target, size, height);
+      return subscribePose((pose) => {
+        ctx.clearRect(0, 0, size, height);
+        if (pose.footprint) {
+          drawPictureFrame(ctx, pose.footprint, bounds, size);
+        }
+        const { px, py } = epsgToMapPx(pose.epsgX, pose.epsgY, bounds, size);
+        ctx.save();
+        ctx.translate(px, py);
+        // Heading: 0 = north = canvas "up", clockwise positive.
+        ctx.rotate(pose.heading);
+        ctx.fillStyle = "rgba(37, 99, 235, 0.25)";
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, 14, -Math.PI / 2 - 0.5, -Math.PI / 2 + 0.5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = PLAYER;
+        ctx.beginPath();
+        ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      });
+    };
+    return canvas ? watch(canvas) : undefined;
   }, [subscribePose, bounds, size, height]);
 
   return (
@@ -383,4 +392,4 @@ export function Minimap({
       />
     </button>
   );
-}
+};

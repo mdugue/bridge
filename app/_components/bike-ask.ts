@@ -1,6 +1,9 @@
-import { type AskItem, type AskSet, askSets } from "@/lib/city/ask-solids";
-import { BIKE_STALE_MS, type BikeCounter } from "@/lib/city/bike-counts";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import { askSets } from "@/lib/city/ask-solids";
+import type { AskItem, AskSet } from "@/lib/city/ask-solids";
+import { BIKE_STALE_MS } from "@/lib/city/bike-counts";
+import type { BikeCounter } from "@/lib/city/bike-counts";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import { BIKE_FOOT_SINK_M, bikeColumns } from "./bike-layer";
 

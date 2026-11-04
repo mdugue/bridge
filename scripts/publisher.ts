@@ -6,8 +6,9 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { basename, join } from "node:path";
-import { type DataManifest, MANIFEST_FILE } from "../lib/city/tile";
+import path from "node:path";
+import { MANIFEST_FILE } from "../lib/city/tile";
+import type { DataManifest } from "../lib/city/tile";
 
 /**
  * Where scripts/prepare-data.ts puts a site's served files (ADR 0007): each
@@ -29,8 +30,8 @@ export interface Publisher {
  *  keep both). */
 export function hashedName(file: string, content: Uint8Array): string {
   const hash = createHash("sha1").update(content).digest("hex").slice(0, 8);
-  const ext = file.match(/(\.(?:glb|pts|crw)\.gz|\.[^.]+)$/u)?.[0] ?? "";
-  return `${basename(file, ext)}.${hash}${ext}`;
+  const ext = /(?:\.(?:glb|pts|crw)\.gz|\.[^.]+)$/u.exec(file)?.[0] ?? "";
+  return `${path.basename(file, ext)}.${hash}${ext}`;
 }
 
 export function createPublisher(
@@ -48,17 +49,17 @@ export function createPublisher(
       const hashed = hashedName(logical, content);
       manifest.files[logical] = hashed;
       keep.add(hashed);
-      const dest = join(outDir, hashed);
+      const dest = path.join(outDir, hashed);
       if (!opts.warming && !existsSync(dest)) {
         writeFileSync(dest, content);
-        written++;
+        written += 1;
       }
       return hashed;
     },
     publishPlain: (name, content) => {
       keep.add(name);
       if (!opts.warming) {
-        writeFileSync(join(outDir, name), content);
+        writeFileSync(path.join(outDir, name), content);
       }
     },
     finish: () => {
@@ -67,14 +68,14 @@ export function createPublisher(
         return { artifacts, written: 0, pruned: 0 };
       }
       writeFileSync(
-        join(outDir, MANIFEST_FILE),
+        path.join(outDir, MANIFEST_FILE),
         `${JSON.stringify(manifest, null, 2)}\n`
       );
       let pruned = 0;
       for (const entry of readdirSync(outDir)) {
         if (!keep.has(entry)) {
-          rmSync(join(outDir, entry), { recursive: true });
-          pruned++;
+          rmSync(path.join(outDir, entry), { recursive: true });
+          pruned += 1;
         }
       }
       return { artifacts, written, pruned };

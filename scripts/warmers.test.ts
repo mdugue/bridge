@@ -129,27 +129,32 @@ describe("warmersOn", () => {
   });
 });
 
+function harness(limits: { jobs: number; memory: number }) {
+  const slots = createSlots(limits);
+  const started: string[] = [];
+  const releases = new Map<string, () => void>();
+  const runs: Promise<void>[] = [];
+  const task = (name: string, priority: number, peak: number) => {
+    runs.push(
+      slots.run(priority, peak, async () => {
+        started.push(name);
+        await new Promise<void>((resolve) => {
+          releases.set(name, resolve);
+        });
+      })
+    );
+  };
+  const finish = async (name: string) => {
+    releases.get(name)?.();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  };
+  return { finish, runs, started, task };
+}
+
 describe("createSlots", () => {
   /** Tasks that run until released; what started, in order. */
-  function harness(limits: { jobs: number; memory: number }) {
-    const slots = createSlots(limits);
-    const started: string[] = [];
-    const releases = new Map<string, () => void>();
-    const runs: Promise<void>[] = [];
-    const task = (name: string, priority: number, peak: number) => {
-      runs.push(
-        slots.run(priority, peak, async () => {
-          started.push(name);
-          await new Promise<void>((done) => releases.set(name, done));
-        })
-      );
-    };
-    const finish = async (name: string) => {
-      releases.get(name)?.();
-      await new Promise((settle) => setTimeout(settle, 0));
-    };
-    return { finish, runs, started, task };
-  }
 
   test("at most `jobs` at once, a lower priority first among the waiting", async () => {
     const { finish, runs, started, task } = harness({ jobs: 2, memory: 10 });

@@ -5,15 +5,15 @@ import { downsampleClassRaster } from "./downsample-raster";
 /** 8×8 grey+alpha class raster (the DLM bake's layout): 2×2 blocks of ids. */
 const CLASS_IDS = [1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7];
 
-function syntheticClassRaster(): Promise<Buffer> {
+async function syntheticClassRaster(): Promise<Buffer> {
   const px = new Uint8Array(8 * 8 * 2);
-  for (let y = 0; y < 8; y++) {
-    for (let x = 0; x < 8; x++) {
+  for (let y = 0; y < 8; y += 1) {
+    for (let x = 0; x < 8; x += 1) {
       const id = CLASS_IDS[Math.floor(y / 2) * 4 + Math.floor(x / 2)];
       px.set([id, 255], (y * 8 + x) * 2);
     }
   }
-  return sharp(px, { raw: { width: 8, height: 8, channels: 2 } })
+  return await sharp(px, { raw: { width: 8, height: 8, channels: 2 } })
     .toColourspace("b-w")
     .png()
     .toBuffer();

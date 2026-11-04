@@ -15,13 +15,8 @@
  * so shaders derive data-frame coordinates from world space, never from
  * `position`. Build-time only; no DOM.
  */
-import {
-  Document,
-  getBounds,
-  Logger,
-  NodeIO,
-  type Primitive,
-} from "@gltf-transform/core";
+import { Document, getBounds, Logger, NodeIO } from "@gltf-transform/core";
+import type { Primitive } from "@gltf-transform/core";
 import {
   EXTMeshoptCompression,
   KHRMeshQuantization,
@@ -120,8 +115,10 @@ const PUT_BACK = new Set(["EXT_mesh_features", "EXT_structural_metadata"]);
  *  warning that it drops the extensions `simplifyGlb` puts back. */
 class BakeLogger extends Logger {
   override warn(text: string): void {
-    const missing = /^Missing optional extension, "(.+)"\.$/u.exec(text);
-    if (!missing || !PUT_BACK.has(missing[1])) {
+    const missing = /^Missing optional extension, "(?<extension>.+)"\.$/u.exec(
+      text
+    );
+    if (!missing || !PUT_BACK.has(missing.groups?.extension ?? "")) {
       super.warn(text);
     }
   }
@@ -155,12 +152,12 @@ function addPrimitive(
   input: Omit<MeshInput, "children" | "extras">
 ): Primitive {
   const buffer = doc.getRoot().listBuffers()[0] ?? doc.createBuffer();
-  type Array =
+  type Values =
     | Float32Array<ArrayBuffer>
     | Uint8Array<ArrayBuffer>
     | Uint16Array<ArrayBuffer>
     | Uint32Array<ArrayBuffer>;
-  const accessor = (array: Array, type: "SCALAR" | "VEC2" | "VEC3") =>
+  const accessor = (array: Values, type: "SCALAR" | "VEC2" | "VEC3") =>
     doc.createAccessor().setArray(array).setType(type).setBuffer(buffer);
   const prim = doc
     .createPrimitive()
@@ -196,7 +193,7 @@ function addPrimitive(
  *  the custom attributes are ids and flags that must stay exact (quantize
  *  would squeeze them to 12 bits), the vectors are quantised already. */
 const QUANTIZE = {
-  pattern: /^(POSITION|NORMAL|COLOR_0|TEXCOORD_0)$/,
+  pattern: /^(?:POSITION|NORMAL|COLOR_0|TEXCOORD_0)$/u,
   quantizePosition: 16,
   quantizeNormal: 8,
   quantizeColor: 8,
@@ -238,7 +235,8 @@ export async function writeMeshGlb(input: MeshInput): Promise<Uint8Array> {
     transforms.unshift(weldExact());
   }
   await doc.transform(...transforms);
-  const glb = await (await io()).writeBinary(doc);
+  const writer = await io();
+  const glb = await writer.writeBinary(doc);
   return toKhrMeshopt(input.table ? addPropertyTable(glb, input.table) : glb);
 }
 
@@ -257,7 +255,8 @@ export async function simplifyGlb(
 ): Promise<Uint8Array> {
   const nodeIO = await io();
   await MeshoptSimplifier.ready;
-  const doc = (await nodeIO.readBinary(toExtMeshopt(glb))).setLogger(logger);
+  const read = await nodeIO.readBinary(toExtMeshopt(glb));
+  const doc = read.setLogger(logger);
   doc
     .createExtension(EXTMeshoptCompression)
     .setRequired(true)
@@ -350,11 +349,15 @@ export function stringColumn(values: readonly string[]): {
   const encoder = new TextEncoder();
   const encoded = values.map((v) => encoder.encode(v));
   const offsets = new Uint32Array(values.length + 1);
-  encoded.forEach((e, i) => {
+  for (let i = 0; i < encoded.length; i += 1) {
+    const e = encoded[i];
     offsets[i + 1] = offsets[i] + e.length;
-  });
+  }
   const bytes = new Uint8Array(offsets[values.length]);
-  encoded.forEach((e, i) => bytes.set(e, offsets[i]));
+  for (let i = 0; i < encoded.length; i += 1) {
+    const e = encoded[i];
+    bytes.set(e, offsets[i]);
+  }
   return { bytes, offsets };
 }
 
@@ -375,7 +378,7 @@ export function addPropertyTable(
   }
 
   const chunks: Uint8Array[] = [bin];
-  let length = bin.length;
+  let { length } = bin;
   const bufferViews = json.bufferViews ?? [];
   const properties: Record<string, TableProperty> = {};
   const schema: Record<string, SchemaProperty> = {};
@@ -416,7 +419,7 @@ export function addPropertyTable(
       schema[name] = { type: "STRING" };
       continue;
     }
-    const values = column.values;
+    const { values } = column;
     properties[name] = {
       values: append(
         new Uint8Array(values.buffer, values.byteOffset, values.byteLength)

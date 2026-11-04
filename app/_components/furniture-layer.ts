@@ -11,12 +11,10 @@ import {
   CylinderGeometry,
   Float32BufferAttribute,
   Group,
-  type Material,
   Matrix4,
   Mesh,
   MeshBasicNodeMaterial,
   MeshStandardNodeMaterial,
-  type Object3D,
   Quaternion,
   Shape,
   ShapeUtils,
@@ -26,6 +24,7 @@ import {
   Vector2,
   Vector3,
 } from "three/webgpu";
+import type { Material, Object3D } from "three/webgpu";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
@@ -43,17 +42,21 @@ import {
 } from "three/tsl";
 import type { FurnitureFeature } from "@/lib/city/features";
 import {
-  type FurnitureArea,
   FURNITURE_MODELS,
-  type FurnitureModel,
-  type FurniturePiece,
   furnitureAreas,
   furniturePieces,
   inRing,
 } from "@/lib/city/furniture";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import type {
+  FurnitureArea,
+  FurnitureModel,
+  FurniturePiece,
+} from "@/lib/city/furniture";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import { subdividePolyline } from "@/lib/city/polyline";
-import { finished, type Steps } from "@/lib/city/build-steps";
+import { finished } from "@/lib/city/build-steps";
+import type { Steps } from "@/lib/city/build-steps";
 import { Instances, instancePosition } from "./instancing";
 import type { Live } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
@@ -165,7 +168,7 @@ function tinted(source: BufferGeometry, hex: number): BufferGeometry {
   const c = new Color(hex);
   const n = geo.getAttribute("position").count;
   const rgb = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < n; i += 1) {
     rgb.set([c.r, c.g, c.b], i * 3);
   }
   geo.setAttribute("color", new Float32BufferAttribute(rgb, 3));
@@ -382,13 +385,13 @@ function seesaw(): BufferGeometry[] {
 
 /** A flat disc with a rounded rim. */
 function roundabout(): BufferGeometry[] {
-  const disc = new CylinderGeometry(1, 1, 0.12, 24);
-  disc.translate(0, 0.28, 0);
+  const slab = new CylinderGeometry(1, 1, 0.12, 24);
+  slab.translate(0, 0.28, 0);
   const rim = new TorusGeometry(1, 0.06, 6, 24);
   rim.rotateX(Math.PI / 2);
   rim.translate(0, 0.34, 0);
   return [
-    tinted(disc, DUSK_BLUE),
+    tinted(slab, DUSK_BLUE),
     tinted(rim, DUSK_BLUE),
     pillar(0.12, 0.28, [0, 0], DUSK_BLUE),
   ];
@@ -601,7 +604,7 @@ function drinkingWater(): BufferGeometry[] {
   basin.translate(0, 0.82, 0.16);
   return [
     block([0.34, 0.08, 0.34], [0, 0.04, 0], STONE, 0.02),
-    pillar(0.09, 1.0, [0, 0], BRONZE),
+    pillar(0.09, 1, [0, 0], BRONZE),
     tinted(basin, BRONZE),
   ];
 }
@@ -770,7 +773,7 @@ function clockHands(model: "clock" | "wallClock", stood: Stood[]): Instances {
   const q = new Quaternion();
   const one = new Vector3(1, 1, 1);
   const up = new Vector3(0, 1, 0);
-  for (let i = 0; i < stood.length; i++) {
+  for (let i = 0; i < stood.length; i += 1) {
     q.setFromAxisAngle(up, stood[i].piece.yaw);
     mesh.setMatrixAt(i, m.compose(stood[i].at, q, one));
   }
@@ -809,7 +812,7 @@ function instanced(
   const q = new Quaternion();
   const s = new Vector3();
   const up = new Vector3(0, 1, 0);
-  for (let i = 0; i < stood.length; i++) {
+  for (let i = 0; i < stood.length; i += 1) {
     const { at, piece } = stood[i];
     q.setFromAxisAngle(up, piece.yaw);
     s.set(piece.scaleX, piece.scaleY, 1);
@@ -869,10 +872,12 @@ function addSlab(
       pushVertex(t, p, up, color);
     }
   }
-  const centre = top
-    .reduce((sum, p) => sum.add(p), new Vector3())
-    .divideScalar(top.length);
-  for (let i = 0; i < top.length; i++) {
+  const sum = new Vector3();
+  for (const p of top) {
+    sum.add(p);
+  }
+  const centre = sum.divideScalar(top.length);
+  for (let i = 0; i < top.length; i += 1) {
     const p = top[i];
     const q = top[(i + 1) % top.length];
     const n = new Vector3(q.z - p.z, 0, p.x - q.x).normalize();
@@ -883,9 +888,9 @@ function addSlab(
     const pd = p.clone().setY(p.y - PATCH_SKIRT);
     const qd = q.clone().setY(q.y - PATCH_SKIRT);
     // (p, pd, q) faces n when (pd − p) × (q − p) points along it.
-    const face = pd.clone().sub(p).cross(q.clone().sub(p));
+    const winding = pd.clone().sub(p).cross(q.clone().sub(p));
     const quad =
-      face.dot(n) > 0 ? [p, pd, q, q, pd, qd] : [p, q, pd, q, qd, pd];
+      winding.dot(n) > 0 ? [p, pd, q, q, pd, qd] : [p, q, pd, q, qd, pd];
     for (const v of quad) {
       pushVertex(t, v, n, color);
     }
@@ -1076,7 +1081,8 @@ export function* furnitureSteps(
   const byModel = new Map<FurnitureModel, Stood[]>();
   let n = 0;
   for (const piece of furniturePieces(features)) {
-    if (++n % PIECE_RUN === 0) {
+    n += 1;
+    if (n % PIECE_RUN === 0) {
       yield;
     }
     // on a bridge, its deck's top: the ground there is the river or the road
@@ -1097,16 +1103,18 @@ export function* furnitureSteps(
   for (const model of FURNITURE_MODELS) {
     const stood = byModel.get(model);
     const geo = stood ? modelGeometry(model) : null;
-    for (const cell of stood && geo ? byCell(stood) : []) {
-      const mesh = instanced(
-        model,
-        geo as BufferGeometry,
-        cell,
-        model === "columnLit" ? materials.glow() : materials.matte()
-      );
-      group.add(asCell(mesh, cell));
-      if (model === "clock" || model === "wallClock") {
-        group.add(asCell(clockHands(model, cell), cell));
+    if (stood && geo) {
+      for (const cell of byCell(stood)) {
+        const mesh = instanced(
+          model,
+          geo,
+          cell,
+          model === "columnLit" ? materials.glow() : materials.matte()
+        );
+        group.add(asCell(mesh, cell));
+        if (model === "clock" || model === "wallClock") {
+          group.add(asCell(clockHands(model, cell), cell));
+        }
       }
     }
     yield;

@@ -9,14 +9,16 @@ import { ASK_LIMITS } from "./ask-city";
 import {
   matchesQuery,
   nearby,
-  type StadtwissenIndex,
   WIKIDATA_PROPERTIES,
-  type WikidataProperty,
-  type WissenBuilding,
-  type WissenLandmark,
-  type WissenMonument,
-  type WissenTile,
   wikipediaUrl,
+} from "./stadtwissen";
+import type {
+  StadtwissenIndex,
+  WikidataProperty,
+  WissenBuilding,
+  WissenLandmark,
+  WissenMonument,
+  WissenTile,
 } from "./stadtwissen";
 
 /** A site's Stadtwissen, loaded: the index and every tile's directory. */
@@ -87,7 +89,7 @@ function monumentHit(m: WissenMonument): KnowledgeHit {
 }
 
 /** An AdV use that says nothing (ALKIS's "not to be specified"). */
-const NO_USE = /nicht zu spezifizieren/i;
+const NO_USE = /nicht zu spezifizieren/iu;
 
 function buildingHit(b: WissenBuilding): KnowledgeHit {
   return {

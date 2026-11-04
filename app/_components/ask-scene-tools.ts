@@ -13,7 +13,8 @@ import {
   timeTool,
   whereTool,
 } from "@/lib/city/ask-tools";
-import { type AskTarget, askView } from "@/lib/city/ask-view";
+import { askView } from "@/lib/city/ask-view";
+import type { AskTarget } from "@/lib/city/ask-view";
 import type { DataLayerKey } from "@/lib/city/data-layers";
 import type { RenderStyle } from "@/lib/city/render-style";
 import type { ViewpointGeometry } from "@/lib/city/site";
@@ -46,7 +47,7 @@ export interface AskScene {
 export function sceneTools(scene: AskScene) {
   return clientTools(
     whereTool.client(() => scene.where()),
-    lookTool.client(() => scene.look()),
+    lookTool.client(async () => await scene.look()),
     showTool.client((input) => {
       const target: AskTarget = input;
       if (!scene.within(target.x, target.y)) {

@@ -40,6 +40,14 @@ const unitNormals = (tris: number[]) => {
 const faceNormals = (tris: number[]) =>
   unitNormals(tris).map((n) => n.map((c) => Math.round(c) + 0));
 
+const front = (q: { positions: number[]; isRoof: number[] }) =>
+  Math.max(
+    ...q.positions.filter(
+      (v, i) =>
+        i % 3 === 2 && q.isRoof[(i - 2) / 3] === 0 && q.positions[i - 2] === 101
+    )
+  );
+
 describe("dormerMesh", () => {
   test("a front down the slope, two cheeks across it, a roof up", () => {
     const { positions, isRoof } = dormerMesh(dormer(), offset);
@@ -87,15 +95,6 @@ describe("dormerMesh", () => {
     const xs = shed.positions.filter((_, i) => i % 3 === 0);
     expect(Math.min(...xs)).toBeCloseTo(100 - 1.5 - 0.3, 6);
     expect(shed.base).toBeCloseTo(flat.base, 6);
-    const front = (q: { positions: number[]; isRoof: number[] }) =>
-      Math.max(
-        ...q.positions.filter(
-          (v, i) =>
-            i % 3 === 2 &&
-            q.isRoof[(i - 2) / 3] === 0 &&
-            q.positions[i - 2] === 101
-        )
-      );
     expect(front(flat)).toBeCloseTo(21.5, 6);
     // 2.5 m from the back line at b = −1.5 to the front at b = 1
     expect(front(shed)).toBeCloseTo(21.5 - 2.5 * tan20, 6);
@@ -160,7 +159,7 @@ describe("chimneyMesh", () => {
   test("every face looks outwards", () => {
     const m = chimneyMesh(chimney, offset);
     const n = unitNormals(m.positions);
-    for (let t = 0; t < n.length; t++) {
+    for (let t = 0; t < n.length; t += 1) {
       const tri = m.positions.slice(t * 9, t * 9 + 9);
       const cx = (tri[0] + tri[3] + tri[6]) / 3 - 100;
       const cy = (tri[1] + tri[4] + tri[7]) / 3 - 200;

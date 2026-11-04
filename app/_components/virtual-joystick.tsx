@@ -16,7 +16,7 @@ interface VirtualJoystickProps {
  * Mobile-FPS-style movement stick: drag the thumb to walk, release to stop.
  * Uses pointer capture so the gesture survives leaving the base circle.
  */
-export function VirtualJoystick({ onChange }: VirtualJoystickProps) {
+export const VirtualJoystick = ({ onChange }: VirtualJoystickProps) => {
   const baseRef = useRef<HTMLDivElement>(null);
   const pointerId = useRef<number | null>(null);
   const [thumb, setThumb] = useState({ x: 0, y: 0 });
@@ -75,4 +75,4 @@ export function VirtualJoystick({ onChange }: VirtualJoystickProps) {
       />
     </div>
   );
-}
+};

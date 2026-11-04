@@ -1,21 +1,21 @@
 import type { TilesRenderer } from "3d-tiles-renderer/three";
-import {
-  type GLTF,
-  GLTFLoader,
-  type GLTFLoaderPlugin,
-  type GLTFParser,
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import type {
+  GLTF,
+  GLTFLoaderPlugin,
+  GLTFParser,
 } from "three/addons/loaders/GLTFLoader.js";
 import type { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import {
   propertyTableViews,
   readStructuralMetadata,
-  type StructuralMetadataJson,
 } from "@/lib/city/property-table";
+import type { StructuralMetadataJson } from "@/lib/city/property-table";
 
 const METADATA = "EXT_structural_metadata";
 
 /** What the renderer looks a glTF content's loader up by (`path.glb`). */
-const GLTF_CONTENT = /\.(gltf|glb)$/;
+const GLTF_CONTENT = /\.(?:gltf|glb)$/u;
 
 /**
  * Reads a glTF's EXT_structural_metadata property tables
@@ -70,7 +70,11 @@ export class GltfContentPlugin {
   readonly name = "GLTF_CONTENT";
   private tiles: TilesRenderer | null = null;
 
-  constructor(private readonly meshopt: typeof MeshoptDecoder) {}
+  private readonly meshopt: typeof MeshoptDecoder;
+
+  constructor(meshopt: typeof MeshoptDecoder) {
+    this.meshopt = meshopt;
+  }
 
   init(tiles: TilesRenderer): void {
     const loader = new GLTFLoader(tiles.manager);

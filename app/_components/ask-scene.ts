@@ -4,11 +4,13 @@
  * picture style, the data layers, a glide. Each change goes through the
  * same stores the HUD uses, so the panel's controls show it.
  */
-import { type RefObject, useMemo } from "react";
+import { useMemo } from "react";
+import type { RefObject } from "react";
 import { cardCredits } from "@/lib/city/card-lines";
 import { activeDataLayers, siteDataLayers } from "@/lib/city/data-layers";
 import type { FramePace } from "@/lib/city/frame-pace";
-import { type Inquiry, inquiryCard } from "@/lib/city/inquiry";
+import { inquiryCard } from "@/lib/city/inquiry";
+import type { Inquiry } from "@/lib/city/inquiry";
 import type { LookState } from "@/lib/city/look-state";
 import { siteHoldsPoint } from "@/lib/city/geolocation";
 import type { LandmarkFactsIndex } from "@/lib/city/landmark-facts";
@@ -105,7 +107,7 @@ async function standing(
   gone: () => boolean,
   signal: AbortSignal
 ): Promise<boolean> {
-  for (let round = 0; round < LAND_ROUNDS; round++) {
+  for (let round = 0; round < LAND_ROUNDS; round += 1) {
     if (!(await landed(h, gone, signal))) {
       return false;
     }
@@ -173,7 +175,7 @@ export function useAskScene(
         // a scene remounted while this waited (a GPU loss) is not asked
         // through the old one's handle
         const gone = () => handleRef.current !== h;
-        const signal = looks.stop.signal;
+        const { signal } = looks.stop;
         let asked: Inquiry | null = null;
         try {
           // where a glide lands, not on its way
@@ -187,7 +189,7 @@ export function useAskScene(
           // at the view's subject (Modell's pivot), and once the tiles
           // there have come: a miss is asked again — never mid-glide
           asked = h.inquireAt(h.focusNdc());
-          for (let i = 0; !asked && i < MISS_RETRIES; i++) {
+          for (let i = 0; !asked && i < MISS_RETRIES; i += 1) {
             await sleep(MISS_RETRY_MS, signal);
             const still = !h.viewMoving() || (await standing(h, gone, signal));
             if (gone()) {

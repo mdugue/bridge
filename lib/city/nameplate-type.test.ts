@@ -26,9 +26,10 @@ test("each style's selection outline is drawn in its lettering's ink", () => {
   }
 });
 
+const lum = ([r, g, b]: readonly number[]) =>
+  0.2126 * r + 0.7152 * g + 0.0722 * b;
+
 test("light on dark by night where the day sets dark on light", () => {
-  const lum = ([r, g, b]: readonly number[]) =>
-    0.2126 * r + 0.7152 * g + 0.0722 * b;
   for (const style of ["pastel", "paper", "line"] as const) {
     const type = NAMEPLATE_TYPES[style];
     expect(lum(atNight(type.ink, 0))).toBeLessThan(lum(atNight(type.halo, 0)));

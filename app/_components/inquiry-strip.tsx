@@ -10,53 +10,66 @@ import {
   FerrisWheelIcon,
   LampFloorIcon,
   LandmarkIcon,
-  type LucideIcon,
   PencilRulerIcon,
   ShrubIcon,
   TramFrontIcon,
   TreeDeciduousIcon,
   TreePineIcon,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import { cn } from "cn";
-import {
-  type Inquiry,
-  type InquiryAlong,
-  inquiryCard,
-} from "@/lib/city/inquiry";
+import { inquiryCard, TOLERANCE_PX } from "@/lib/city/inquiry";
+import type { Inquiry, InquiryAlong } from "@/lib/city/inquiry";
 import { cardCredits } from "@/lib/city/card-lines";
-import { TOLERANCE_PX } from "@/lib/city/inquiry";
 import { useSite } from "./site-context";
 
 /** The icon a candidate is drawn with. */
 function kindIcon(inquiry: Inquiry): LucideIcon {
   switch (inquiry.kind) {
-    case "building":
+    case "building": {
       return Building2Icon;
-    case "tree":
+    }
+    case "tree": {
       return inquiry.conifer ? TreePineIcon : TreeDeciduousIcon;
-    case "monument":
+    }
+    case "monument": {
       return LandmarkIcon;
-    case "bridge":
+    }
+    case "bridge": {
       return BridgeIcon;
-    case "traffic":
+    }
+    case "traffic": {
       return CarIcon;
-    case "bikes":
+    }
+    case "bikes": {
       return BikeIcon;
-    case "canopy":
+    }
+    case "canopy": {
       return TreeDeciduousIcon;
-    case "hedge":
+    }
+    case "hedge": {
       return ShrubIcon;
-    case "lamp":
+    }
+    case "lamp": {
       return LampFloorIcon;
-    case "furniture":
+    }
+    case "furniture": {
       return PLAY.has(inquiry.properties.k) ? FerrisWheelIcon : ArmchairIcon;
-    case "stop":
+    }
+    case "stop": {
       return TramFrontIcon;
-    case "landing":
+    }
+    case "landing": {
       return AnchorIcon;
-    case "design":
+    }
+    case "design": {
       return PencilRulerIcon;
+    }
+    default: {
+      const unknown: never = inquiry;
+      throw new Error(`unknown inquiry kind: ${String(unknown)}`);
+    }
   }
 }
 
@@ -82,7 +95,7 @@ export function distanceLabel(m: number): string {
 
 /** A finger-wide ring at the tap, pulsed once: how far round the point
  *  the question looked (none when asked at the centre). */
-export function InquiryTapRing({ along }: { along: InquiryAlong }) {
+export const InquiryTapRing = ({ along }: { along: InquiryAlong }) => {
   if (!along.at || along.candidates.length < 2) {
     return null;
   }
@@ -100,7 +113,7 @@ export function InquiryTapRing({ along }: { along: InquiryAlong }) {
       }}
     />
   );
-}
+};
 
 /**
  * Everything the question's ray met, front to back (plan 052), apart from
@@ -112,7 +125,7 @@ export function InquiryTapRing({ along }: { along: InquiryAlong }) {
  * pointer on a row outlines its thing in the scene for as long as it
  * stays, a click shows it in the card.
  */
-export function InquiryStrip({
+export const InquiryStrip = ({
   along,
   onPreview,
   onSelect,
@@ -123,7 +136,7 @@ export function InquiryStrip({
   onSelect: (index: number) => void;
   /** a touch screen: chips above the bottom sheet, not a list */
   sheet?: boolean;
-}) {
+}) => {
   const site = useSite();
   const items = useMemo(
     () =>
@@ -144,7 +157,7 @@ export function InquiryStrip({
   useEffect(() => {
     const nav = chips.current;
     const chosen = nav?.querySelector<HTMLElement>("[aria-current]");
-    if (nav && chosen) {
+    if (along.candidates.length > 0 && nav && chosen) {
       nav.scrollLeft =
         chosen.offsetLeft - (nav.clientWidth - chosen.offsetWidth) / 2;
     }
@@ -232,4 +245,4 @@ export function InquiryStrip({
       </div>
     </nav>
   );
-}
+};

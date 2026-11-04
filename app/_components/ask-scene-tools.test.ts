@@ -1,14 +1,15 @@
 import { expect, test } from "bun:test";
 import { SCENE_TOOLS } from "@/lib/city/ask-tools";
-import { type AskScene, sceneTools } from "./ask-scene-tools";
+import { sceneTools } from "./ask-scene-tools";
+import type { AskScene } from "./ask-scene-tools";
 
 const STUB: AskScene = {
-  abandon: () => undefined,
+  abandon: () => {},
   from: () => null,
-  look: () => Promise.resolve({}),
+  look: async () => ({}),
   setLayer: () => true,
-  setListening: () => undefined,
-  setStyle: () => undefined,
+  setListening: () => {},
+  setStyle: () => {},
   setTime: () => "",
   show: () => true,
   within: () => true,

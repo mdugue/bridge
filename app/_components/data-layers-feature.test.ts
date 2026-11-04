@@ -3,7 +3,8 @@ import { Object3D } from "three/webgpu";
 import { createLookState } from "@/lib/city/look-state";
 import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
 import { startDataLayers } from "./data-layers-feature";
-import { createHook, createWatch, type SceneClock } from "./feature-seam";
+import { createHook, createWatch } from "./feature-seam";
+import type { SceneClock } from "./feature-seam";
 
 test("data layers that start late catch up with the look and the clock, and let go of the hooks", () => {
   const frame = createHook<[number, number]>();
@@ -20,10 +21,12 @@ test("data layers that start late catch up with the look and the clock, and let 
     {
       bounds: [408_000, 5_654_000, 418_000, 5_660_000],
       bridgeUrls: [],
-      compile: () => Promise.resolve(),
+      compile: async () => {},
       epsg: 25_833,
       ground: { offset: { cx: 0, cy: 0 }, heightAt: () => 0 },
-      onTrafficHour: (status) => hours.push(status),
+      onTrafficHour: (status) => {
+        hours.push(status);
+      },
       parent: new Object3D(),
     }
   );

@@ -1,25 +1,27 @@
 import {
-  type BufferGeometry,
-  type Camera,
-  type ClippingGroup,
   DepthTexture,
   FloatType,
   HalfFloatType,
-  type Node,
   NoToneMapping,
-  type Object3D,
-  type PerspectiveCamera,
   RedFormat,
   RenderPipeline,
   RenderTarget,
   SRGBColorSpace,
-  type Scene,
-  type Texture,
-  type TextureNode,
   UnsignedByteType,
   Vector2,
   Vector3,
-  type WebGPURenderer,
+} from "three/webgpu";
+import type {
+  BufferGeometry,
+  Camera,
+  ClippingGroup,
+  Node,
+  Object3D,
+  PerspectiveCamera,
+  Scene,
+  Texture,
+  TextureNode,
+  WebGPURenderer,
 } from "three/webgpu";
 import { dof } from "three/addons/tsl/display/DepthOfFieldNode.js";
 import { ao } from "three/addons/tsl/display/GTAONode.js";
@@ -52,14 +54,13 @@ import {
   vec4,
 } from "three/tsl";
 import type { VeilState } from "@/lib/city/load-frontier";
-import { LOOK_DEFAULTS, type LookValues } from "@/lib/city/look-controls";
+import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
+import type { LookValues } from "@/lib/city/look-controls";
 import { NAMEPLATE_TYPES } from "@/lib/city/nameplate-type";
-import {
-  type PaperKind,
-  RENDER_STYLE_BY_ID,
-  type RenderStyleDef,
-} from "@/lib/city/render-style";
-import { compileInLanes, compileInTurn, type Compiling } from "./compile-lanes";
+import { RENDER_STYLE_BY_ID } from "@/lib/city/render-style";
+import type { PaperKind, RenderStyleDef } from "@/lib/city/render-style";
+import { compileInLanes, compileInTurn } from "./compile-lanes";
+import type { Compiling } from "./compile-lanes";
 import { crownsPrinted } from "./crown-season";
 import { DATA_MARKS, dataMarks } from "./glass";
 import { crownSwayShare } from "./vegetation-layer";
@@ -67,20 +68,18 @@ import { fxaa } from "./fxaa";
 import { createMotionBlur } from "./motion-blur";
 import type { SceneFog } from "./height-fog";
 import { createPaperScene } from "./paper-scene";
-import {
-  createSelectionOutline,
-  type OutlineSelection,
-} from "./selection-outline";
-import {
-  createPipelineAnchors,
-  type PipelineAnchors,
-} from "./pipeline-anchors";
+import { createSelectionOutline } from "./selection-outline";
+import type { OutlineSelection } from "./selection-outline";
+import { createPipelineAnchors } from "./pipeline-anchors";
+import type { PipelineAnchors } from "./pipeline-anchors";
 import type { PostProfile } from "./scene-profile";
 import type { F, Live, V2, V3, V4 } from "./shader-chunks";
 import { aloneUnder, compileRepresentatives } from "./three-utils";
 import { createStyleDressing } from "./style-dressing";
-import { createStylize, type SunShadowMap } from "./stylize-effect";
-import { createLoadVeil, type LoadVeil } from "./load-veil";
+import { createStylize } from "./stylize-effect";
+import type { SunShadowMap } from "./stylize-effect";
+import { createLoadVeil } from "./load-veil";
+import type { LoadVeil } from "./load-veil";
 import type { ViewLens } from "./view-lens";
 import { setAskedColours } from "./visual-style";
 
@@ -117,8 +116,8 @@ function aoSmoothed(
   const tolerance = lens.fade(z0).mul(0.04).add(0.15);
   let sum: F = float(0);
   let weights: F = float(0);
-  for (let y = -2; y <= 2; y++) {
-    for (let x = -2; x <= 2; x++) {
+  for (let y = -2; y <= 2; y += 1) {
+    for (let x = -2; x <= 2; x += 1) {
       const p = at.add(texel.mul(vec2(x, y)));
       const w = clamp(
         float(1).sub(viewZ(p).sub(z0).abs().div(tolerance)),
@@ -407,13 +406,17 @@ function lensBlurOf(lit: V4, viewZ: F, focusDistance: Live, focusRange: Live) {
   // reason: getTextureNode is DepthOfFieldNode's documented output (its
   // composite target's texture) but missing from the @types.
   const output = node as unknown as { getTextureNode: () => TextureNode };
+  const inputTarget = input.renderTarget;
+  if (!inputTarget) {
+    throw new Error("lens blur: the frame copy has no render target");
+  }
   return {
     // reason: the effect nodes' types don't carry their vec4 output.
     focused: nodeObject(node) as unknown as V4,
     /** the target the blur composites the frame into, each frame it runs */
     composite: output.getTextureNode().value,
     /** the frame copy it blurs, idle while it does not run */
-    input: input.renderTarget as RenderTarget,
+    input: inputTarget,
     dispose: () => {
       node.dispose();
       input.dispose();
@@ -477,22 +480,37 @@ function antialiasingOf(
         input.value = from;
         raw.value = isRaw ? 1 : 0;
       },
-      setSize: () => undefined,
+      setSize: () => {
+        // SMAA follows the renderer's size by itself
+      },
       dispose: () => node.dispose(),
     };
   }
   const texel = uniform(new Vector2());
-  const setSize = (size: Vector2) => texel.value.set(1 / size.x, 1 / size.y);
+  const setSize = (size: Vector2) => {
+    texel.value.set(1 / size.x, 1 / size.y);
+  };
   setSize(new Vector2(scene.width, scene.height));
   const sceneAa = fxaa(scene.texture, texel);
   return {
     afterPre: fxaa(beforeAa.texture, texel),
     direct: vec4(sceneAa.rgb.mul(occlusion), sceneAa.a),
-    read: () => undefined,
+    read: () => {
+      // FXAA reads the targets it was built on
+    },
     setSize,
-    dispose: () => undefined,
+    dispose: () => {
+      // no nodes of its own to free
+    },
   };
 }
+
+// The swaps' own materials: Strich wears Papier's card, so its programs
+// are Papier's.
+const SWAP_KINDS = ["paper", "figure", "ink"] as const;
+type SwapKind = (typeof SWAP_KINDS)[number];
+const swapOf = (kind: PaperKind): SwapKind =>
+  kind === "line" ? "paper" : kind;
 
 /** What draws before the antialiasing, where, and what that then reads. */
 interface Pre {
@@ -777,11 +795,12 @@ export function createPostStack(
   // (motion-blur.ts), where this tier has a way to draw it
   let blurred = false;
   // ...and how: before SMAA on a desktop, in place of the FXAA on a phone
-  const moving = pastel.motion
+  const motionFrame = pastel.motion
     ? { pre: pastel.motion, finished: finished.afterPre }
-    : finished.moving
-      ? { pre: null, finished: finished.moving }
-      : null;
+    : null;
+  const moving =
+    motionFrame ??
+    (finished.moving ? { pre: null, finished: finished.moving } : null);
   /** What draws before the antialiasing this frame (null: nothing), and
    *  the last pass. */
   const frame = () => {
@@ -886,9 +905,15 @@ export function createPostStack(
    * no longer hear a geometry another walk still compiles.
    */
   const watchGone = (list: readonly Drawable[]) => {
-    const geometries = new Set(list.map((o) => o.geometry as BufferGeometry));
-    const onGone = (event: { target: BufferGeometry }) =>
+    const geometries = new Set<BufferGeometry>();
+    for (const o of list) {
+      if (o.geometry) {
+        geometries.add(o.geometry);
+      }
+    }
+    const onGone = (event: { target: BufferGeometry }) => {
       gone.add(event.target);
+    };
     for (const g of geometries) {
       g.addEventListener("dispose", onGone);
     }
@@ -922,29 +947,32 @@ export function createPostStack(
    * disposed geometry, and nothing would free them again (`compileAll`
    * skips such a drawable only when it queues it).
    */
-  const compileNow = (object: Object3D, view: Camera = camera) => {
+  const compileNow = async (object: Object3D, view: Camera = camera) => {
     if (stackDisposed || left(object)) {
-      return Promise.resolve();
+      return;
     }
     const previous = renderer.getRenderTarget();
     const { visible, frustumCulled } = object;
     object.visible = true;
     object.frustumCulled = false;
     renderer.setRenderTarget(target);
+    // not awaited inside the try: the target goes back as the call returns
+    let compiling: Promise<void>;
     try {
-      return renderer.compileAsync(object, view, scene);
+      compiling = renderer.compileAsync(object, view, scene);
     } finally {
       renderer.setRenderTarget(previous);
       object.visible = visible;
       object.frustumCulled = frustumCulled;
     }
+    await compiling;
   };
   /** Queues a compile made by `now` behind the ones in flight. */
   const inTurn =
     (now: (object: Object3D) => Promise<void>) =>
-    (object: Object3D): Promise<void> =>
-      compileInTurn(renderer, () => now(object));
-  const compileOne = inTurn((object) => compileNow(object));
+    async (object: Object3D): Promise<void> =>
+      await compileInTurn(renderer, async () => await now(object));
+  const compileOne = inTurn(async (object) => await compileNow(object));
   /**
    * The cameras the frames are drawn with, one of each kind: the walk/fly
    * camera, and once it was asked for (`warmView`) Modell's parallel one.
@@ -967,28 +995,25 @@ export function createPostStack(
   // swap is made in the compile's turn, not when it is queued.
   const swappedIn =
     (kind: PaperKind, now: (object: Object3D) => Promise<void>) =>
-    (object: Object3D): Promise<void> =>
-      paperScene.swapped(object, () => now(object), kind);
+    async (object: Object3D): Promise<void> =>
+      await paperScene.swapped(object, async () => await now(object), kind);
   // a camera let go meanwhile (`dropView`) is compiled for no longer: the
   // rest of a walk queued nothing behind the tiles for it, and a compile
   // still queued when it was let go builds nothing
   const compileSwap = (kind: PaperKind, view: Camera) => {
     const swap = inTurn(
-      swappedIn(kind, (o) =>
-        views.includes(view) ? compileNow(o, view) : Promise.resolve()
-      )
+      swappedIn(kind, async (o) => {
+        if (views.includes(view)) {
+          await compileNow(o, view);
+        }
+      })
     );
-    return (object: Drawable): Promise<void> =>
-      paperScene.drawsAsPaper(object, kind) && views.includes(view)
-        ? swap(object)
-        : Promise.resolve();
+    return async (object: Drawable): Promise<void> => {
+      if (paperScene.drawsAsPaper(object, kind) && views.includes(view)) {
+        await swap(object);
+      }
+    };
   };
-  // The swaps' own materials: Strich wears Papier's card, so its programs
-  // are Papier's.
-  const SWAP_KINDS = ["paper", "figure", "ink"] as const;
-  type SwapKind = (typeof SWAP_KINDS)[number];
-  const swapOf = (kind: PaperKind): SwapKind =>
-    kind === "line" ? "paper" : kind;
   // The Ausschnitt (model-cuts.ts) is a ClippingGroup around the city.
   // three keeps ONE render object per drawable on both sides of it and
   // keys the drawable's build by the clipping: switching the group swaps
@@ -1022,9 +1047,11 @@ export function createPostStack(
     held: PipelineAnchors[],
     release: () => boolean = () => true
   ) => {
-    void compileInTurn(renderer, () => Promise.resolve()).then(() => {
+    void compileInTurn(renderer, async () => {
+      // an empty turn: it comes once the compiles queued before it are done
+    }).then(() => {
       if (!release()) {
-        return;
+        return null;
       }
       if (stackDisposed) {
         for (const a of held) {
@@ -1033,6 +1060,7 @@ export function createPostStack(
       } else {
         releaseAfterFrame.push(...held);
       }
+      return null;
     });
   };
   /**
@@ -1040,37 +1068,42 @@ export function createPostStack(
    * `aloneUnder`): the render object the call makes has the very context
    * the frames use while the cut shows. In a compile's turn only.
    */
-  const compileUnder = (
+  const compileUnder = async (
     group: ClippingGroup,
     object: Object3D,
     view: Camera
   ) => {
     if (stackDisposed) {
-      return Promise.resolve();
+      return;
     }
     const previous = renderer.getRenderTarget();
     renderer.setRenderTarget(target);
+    // not awaited inside the try: the target goes back as the call returns
+    let compiling: Promise<void>;
     try {
-      return aloneUnder(group, object, () =>
-        renderer.compileAsync(group, view, scene)
+      compiling = aloneUnder(
+        group,
+        object,
+        async () => await renderer.compileAsync(group, view, scene)
       );
     } finally {
       renderer.setRenderTarget(previous);
     }
+    await compiling;
   };
   const newHold = (
     group: ClippingGroup,
     view: Camera,
     kind?: PaperKind
   ): CutHold => {
-    const under = (o: Object3D) => compileUnder(group, o, view);
-    const plain = (o: Object3D) => compileNow(o, view);
-    const anchors = [
+    const under = async (o: Object3D) => await compileUnder(group, o, view);
+    const plain = async (o: Object3D) => await compileNow(o, view);
+    const holds = [
       { a: createPipelineAnchors(inTurn(under), true), paper: false },
       { a: createPipelineAnchors(inTurn(plain), true), paper: false },
     ];
     if (kind) {
-      anchors.push(
+      holds.push(
         {
           a: createPipelineAnchors(inTurn(swappedIn(kind, under)), true),
           paper: true,
@@ -1081,7 +1114,7 @@ export function createPostStack(
         }
       );
     }
-    return { group, view, kind, anchors, done: new WeakMap() };
+    return { group, view, kind, anchors: holds, done: new WeakMap() };
   };
   /** Holds both sides of the cut for `roots`' drawables, one per build. */
   const holdAll = async (held: CutHold, roots: Object3D[]) => {
@@ -1100,7 +1133,7 @@ export function createPostStack(
     }
     // the swap's, drawable by drawable: the swap carries one drawable's
     // position node over
-    const kind = held.kind;
+    const { kind } = held;
     if (kind === undefined) {
       return;
     }
@@ -1162,7 +1195,7 @@ export function createPostStack(
       viewAnchors.get(view) ??
       dropping.get(view)?.anchors ??
       createPipelineAnchors(
-        inTurn((o) => compileNow(o, view)),
+        inTurn(async (o) => await compileNow(o, view)),
         true
       );
     dropping.delete(view);
@@ -1185,7 +1218,7 @@ export function createPostStack(
     let representatives: Drawable[] | null = null;
     // the representatives outlive one walk (every kind, every view): a
     // tile that leaves between two walks is heard too, not only during one
-    let unwatch = () => {};
+    let unwatch: (() => void) | null = null;
     try {
       // a copy: a view asked for or let go meanwhile does not shift the walk
       for (const view of only ? [only] : [...views]) {
@@ -1216,7 +1249,7 @@ export function createPostStack(
         }
       }
     } finally {
-      unwatch();
+      unwatch?.();
     }
   };
 
@@ -1240,6 +1273,19 @@ export function createPostStack(
   };
 
   let stylesWarm: Promise<void> | null = null;
+  const warmOnce = async () => {
+    try {
+      await outline.compile(renderer, camera);
+      try {
+        await overlay?.compile(renderer, camera);
+      } catch {
+        // the plate's programs build in its first frame instead
+      }
+      await warmStyles();
+    } catch {
+      // a failed warm-up costs the styles their first frames, no more
+    }
+  };
   const warmStyles = async () => {
     // A phone keeps the styles to their first frame: their pipelines, and
     // the sibling crown sets and lamp cones each would make and compile
@@ -1304,7 +1350,11 @@ export function createPostStack(
       await outline.compile(renderer, view);
       // the plate's programs: a failed build costs the plate its first
       // frame, never the scene's warm-up after it
-      await overlay?.compile(renderer, view).catch(() => undefined);
+      try {
+        await overlay?.compile(renderer, view);
+      } catch {
+        // the plate's programs build in its first frame instead
+      }
       await compileBuilds([scene], view);
     },
     dropView: (view) => {
@@ -1336,15 +1386,11 @@ export function createPostStack(
       }
     },
     releaseCut: letGo,
-    warmStyles: () => {
+    warmStyles: async () => {
       // the outline's mask and blur programs too, on every tier: the first
       // question builds nothing
-      stylesWarm ??= outline
-        .compile(renderer, camera)
-        .then(() => overlay?.compile(renderer, camera).catch(() => undefined))
-        .then(warmStyles)
-        .catch(() => undefined);
-      return stylesWarm;
+      stylesWarm ??= warmOnce();
+      await stylesWarm;
     },
     sceneChanged: () => {
       paperScene.sceneChanged();

@@ -85,11 +85,12 @@ export function passageHeight(
     return null;
   }
   const storey = Math.min(...hosts.map((h) => h.storeyH));
-  const own = DRIVES.has(kind)
-    ? DRIVE_H
-    : kind === "railway"
-      ? TRACK_H
-      : WALK_H;
+  let own = WALK_H;
+  if (DRIVES.has(kind)) {
+    own = DRIVE_H;
+  } else if (kind === "railway") {
+    own = TRACK_H;
+  }
   const wanted = tagged ?? Math.max(own, storey - LINTEL_M);
   const room = Math.min(...hosts.map((h) => h.eaveZ)) - groundTop - KEEP_M;
   const h = Math.min(wanted, room);
@@ -131,6 +132,9 @@ function slope(
   return below ? [a, b, 1, c0] : [-a, -b, -1, -c0];
 }
 
+const dot = (n: readonly [number, number], q: readonly [number, number]) =>
+  n[0] * q[0] + n[1] * q[1];
+
 /**
  * The volume a passage takes, one convex prism per segment of its axis
  * (each a list of half-spaces): its width across, mitred into the next
@@ -143,7 +147,7 @@ export function passageRegions(p: PassageAxis): Plane[][] {
     .slice(1)
     .map((b, k) => unit(b[0] - axis[k][0], b[1] - axis[k][1]));
   const out: Plane[][] = [];
-  for (let k = 0; k < dirs.length; k++) {
+  for (let k = 0; k < dirs.length; k += 1) {
     const a = axis[k];
     const b = axis[k + 1];
     const d = dirs[k];
@@ -157,8 +161,6 @@ export function passageRegions(p: PassageAxis): Plane[][] {
       k === dirs.length - 1
         ? d
         : unit(d[0] + dirs[k + 1][0], d[1] + dirs[k + 1][1]);
-    const dot = (n: readonly [number, number], q: readonly [number, number]) =>
-      n[0] * q[0] + n[1] * q[1];
     out.push([
       // past the start: −e0·(x − a) ≤ 0
       [-e0[0], -e0[1], 0, dot(e0, a)],
@@ -182,7 +184,7 @@ const side = (pl: Plane, v: readonly number[]): number =>
 function clip(poly: number[][], pl: Plane, inside: boolean): number[][] {
   const out: number[][] = [];
   const s = (v: number[]) => (inside ? side(pl, v) : -side(pl, v));
-  for (let i = 0; i < poly.length; i++) {
+  for (let i = 0; i < poly.length; i += 1) {
     const a = poly[i];
     const b = poly[(i + 1) % poly.length];
     const fa = s(a);
@@ -207,7 +209,7 @@ function area2(poly: number[][]): number {
   let x = 0;
   let y = 0;
   let z = 0;
-  for (let k = 1; k + 1 < poly.length; k++) {
+  for (let k = 1; k + 1 < poly.length; k += 1) {
     const [a, b, c] = [poly[0], poly[k], poly[k + 1]];
     const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
     const v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
@@ -262,7 +264,7 @@ export function cutOut(
     if (p.length < 3 || area2(p) / 2 < SLIVER_M2) {
       continue;
     }
-    for (let k = 1; k + 1 < p.length; k++) {
+    for (let k = 1; k + 1 < p.length; k += 1) {
       out.push(...p[0], ...p[k], ...p[k + 1]);
     }
   }
@@ -291,7 +293,7 @@ export function groundUnder(
 ): number {
   let best = Number.POSITIVE_INFINITY;
   let z = p.ground[0];
-  for (let k = 0; k + 1 < p.axis.length; k++) {
+  for (let k = 0; k + 1 < p.axis.length; k += 1) {
     const a = p.axis[k];
     const b = p.axis[k + 1];
     const dx = b[0] - a[0];
@@ -334,7 +336,7 @@ export function passageLining(
   const floor = (q: readonly [number, number]) => groundUnder(p, q) - SINK.wall;
   const top = (q: readonly [number, number]) => groundUnder(p, q) + p.h;
   for (const piece of part.sides) {
-    for (let k = 0; k + 1 < piece.length; k++) {
+    for (let k = 0; k + 1 < piece.length; k += 1) {
       const a = piece[k];
       const b = piece[k + 1];
       const A = [a[0], a[1], floor(a)];
@@ -346,10 +348,12 @@ export function passageLining(
     }
   }
   for (const ring of part.roof) {
+    const last = ring.at(-1);
     const open =
       ring.length > 1 &&
-      ring[0][0] === ring[ring.length - 1][0] &&
-      ring[0][1] === ring[ring.length - 1][1]
+      last !== undefined &&
+      ring[0][0] === last[0] &&
+      ring[0][1] === last[1]
         ? ring.slice(0, -1)
         : ring;
     const tris = triangulate(

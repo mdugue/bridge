@@ -69,10 +69,13 @@ test("the neighbourhood is nearest first, unnamed buildings left out", () => {
 });
 
 test("facts read Wikidata's statements with their sources", () => {
-  const f = factsOf(K, "Q1") as Record<string, unknown>;
+  const f = factsOf(K, "Q1");
+  if (!f) {
+    throw new Error("no facts for Q1");
+  }
   expect(f.aussagen).toEqual({ Architekt: "George Bähr" });
   expect(f.quellen).toContain("https://www.wikidata.org/wiki/Q1");
-  expect((factsOf(K, "c") as Record<string, unknown>).nutzung).toBe("Wohnhaus");
+  expect(factsOf(K, "c")?.nutzung).toBe("Wohnhaus");
   expect(factsOf(K, "nope")).toBeNull();
   expect(sourcesOf(K)).toEqual([
     { quelle: "OpenStreetMap", lizenz: "ODbL", vermerk: "© OSM" },

@@ -1,7 +1,5 @@
 import { expect, test } from "bun:test";
 import {
-  type AskItem,
-  type AskSet,
   askSets,
   hitsInSets,
   insideRingXz,
@@ -10,6 +8,7 @@ import {
   rayPrism,
   ringDistanceXz,
 } from "./ask-solids";
+import type { AskItem, AskSet } from "./ask-solids";
 
 const east = { x: 1, y: 0, z: 0 };
 const down = { x: 0, y: -1, z: 0 };
@@ -104,8 +103,9 @@ test("sets of things: a box the ray misses is never opened", () => {
   expect(hits.map((h) => h.target)).toEqual(["post"]);
 });
 
+const post = (x: number) => ({ cylinder: { ...trunk, x } });
+
 test("sets of things: hits from overlapping sets interleave nearest first, a set's along before its nearest", () => {
-  const post = (x: number) => ({ cylinder: { ...trunk, x } });
   const a = askSets<string>([
     { target: "a10", solids: [post(10)] },
     { target: "a30", solids: [post(30)] },

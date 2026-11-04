@@ -78,7 +78,8 @@ export async function bakePlate(baked: readonly BakedTile[]): Promise<string> {
       // a plate cell; 256 kB a tile), so a vertex's window reads across
       // the tile edges
       const classRasters = [];
-      for (const [k, t] of baked.entries()) {
+      for (let k = 0; k < baked.length; k += 1) {
+        const t = baked[k];
         if (existsSync(rasters[k])) {
           const r = await decodeGreyPng(readFileSync(rasters[k]));
           classRasters.push(
@@ -94,7 +95,8 @@ export async function bakePlate(baked: readonly BakedTile[]): Promise<string> {
       const held = new Set(heights.keys());
       const boundsOf = new Map(baked.map((t) => [t.id, t.bounds]));
       const tiles = [];
-      for (const [k, t] of baked.entries()) {
+      for (let k = 0; k < baked.length; k += 1) {
+        const t = baked[k];
         const touching = classRasters.filter((r) =>
           touches(r.bounds, t.bounds)
         );

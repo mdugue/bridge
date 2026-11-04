@@ -1,5 +1,6 @@
 import type { Mesh } from "three/webgpu";
-import { type GroundLight, groundLitMaterial } from "./sky-light";
+import { groundLitMaterial } from "./sky-light";
+import type { GroundLight } from "./sky-light";
 
 const KERB_COLOR = 0xd9_d5_cc; // pale granite, a shade above the pavement
 

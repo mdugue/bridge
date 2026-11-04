@@ -13,7 +13,8 @@
  * Pure, no THREE.
  */
 import type { PlinthFeature } from "./features";
-import { type JoinPoint, joinsAlong, SINK } from "./ground-join";
+import { joinsAlong, SINK } from "./ground-join";
+import type { JoinPoint } from "./ground-join";
 
 /** How the band stands: how far it stands out of the wall, how far it
  *  reaches back into it (LoD2's walls stand a decimetre or so off the
@@ -137,9 +138,10 @@ function extrude(
       out.normals.push(nn[0], nn[1], nn[2]);
     }
   };
-  profile.forEach((p, k) => {
+  for (let k = 0; k < profile.length; k += 1) {
+    const p = profile[k];
     if (hidden.includes(k)) {
-      return;
+      continue;
     }
     const kq = (k + 1) % profile.length;
     const q = profile[kq];
@@ -147,8 +149,8 @@ function extrude(
     const nq = normalAt(k, kq);
     tri([at(0, p), at(1, p), at(1, q)], [np, np, nq]);
     tri([at(0, p), at(1, q), at(0, q)], [np, nq, nq]);
-  });
-  for (let k = 1; k + 1 < profile.length; k++) {
+  }
+  for (let k = 1; k + 1 < profile.length; k += 1) {
     if (!run.ma) {
       tri(
         [at(0, profile[0]), at(0, profile[k]), at(0, profile[k + 1])],
@@ -205,14 +207,15 @@ export function plinthPieces(
     });
   const root = cornerGroups(pieces);
   const level = new Map<number, { foot: number; top: number }>();
-  pieces.forEach((q, i) => {
+  for (let i = 0; i < pieces.length; i += 1) {
+    const q = pieces[i];
     const r = root[i];
     const l = level.get(r);
     level.set(r, {
       foot: Math.min(l?.foot ?? q.foot, q.foot),
       top: Math.max(l?.top ?? q.top, q.top),
     });
-  });
+  }
   return pieces.map((q, i) => ({ ...q, ...level.get(root[i]) }));
 }
 
@@ -234,35 +237,45 @@ function cornerGroups(
   return runs.map((_, i) => root(i));
 }
 
+/** A run's unit direction. */
+const runDirection = (r: { a: readonly number[]; b: readonly number[] }) => {
+  const l = Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]);
+  return [(r.b[0] - r.a[0]) / l, (r.b[1] - r.a[1]) / l];
+};
+
 /** The pairs [i, j] where run i's end meets run j's start round a corner
  *  (turning, but by no more than `MITRE_MAX_DEG`). */
 function corners(
   runs: readonly { a: readonly number[]; b: readonly number[] }[]
 ): [number, number][] {
   const out: [number, number][] = [];
-  const dir = (r: { a: readonly number[]; b: readonly number[] }) => {
-    const l = Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]);
-    return [(r.b[0] - r.a[0]) / l, (r.b[1] - r.a[1]) / l];
-  };
   const minCos = Math.cos((MITRE_MAX_DEG * Math.PI) / 180);
-  runs.forEach((r, i) => {
-    runs.forEach((s, j) => {
+  for (let i = 0; i < runs.length; i += 1) {
+    const r = runs[i];
+    for (let j = 0; j < runs.length; j += 1) {
+      const s = runs[j];
       if (i === j || Math.hypot(r.b[0] - s.a[0], r.b[1] - s.a[1]) > MEET_M) {
-        return;
+        continue;
       }
-      const [u, v] = [dir(r), dir(s)];
+      const [u, v] = [runDirection(r), runDirection(s)];
       const cos = u[0] * v[0] + u[1] * v[1];
       if (cos < 0.9998 && cos > minCos) {
         out.push([i, j]);
       }
-    });
-  });
+    }
+  }
   return out;
 }
 
 /** Below this sine of their turn two runs meeting at a corner share one
  *  shift there: nearly in line, their shifted walls would meet far off. */
 const SHARED_SHIFT_SIN = 0.4;
+
+/** A run's unit normal. */
+const runNormal = (r: { a: readonly number[]; b: readonly number[] }) => {
+  const l = Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]);
+  return [(r.b[1] - r.a[1]) / l, -(r.b[0] - r.a[0]) / l];
+};
 
 /** The runs with their mitres: where run i meets run j round a corner at
  *  P, both end on the point where their shifted walls meet (n₁·X = s₁,
@@ -279,16 +292,13 @@ function mitred(
   pairs: readonly (readonly [number, number])[] = corners(runs)
 ): Run[] {
   const out: Run[] = runs.map((r) => ({ ...r }));
-  const normal = (r: { a: readonly number[]; b: readonly number[] }) => {
-    const l = Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]);
-    return [(r.b[1] - r.a[1]) / l, -(r.b[0] - r.a[0]) / l];
-  };
   for (const [i, j] of pairs) {
-    const [n1, n2] = [normal(runs[i]), normal(runs[j])];
+    const [n1, n2] = [runNormal(runs[i]), runNormal(runs[j])];
     const det = n1[0] * n2[1] - n1[1] * n2[0];
     let [s1, s2] = [out[i].sb, out[j].sa];
     if (Math.abs(det) < SHARED_SHIFT_SIN) {
-      s1 = s2 = (s1 + s2) / 2;
+      s1 = (s1 + s2) / 2;
+      s2 = s1;
       out[i].sb = s1;
       out[j].sa = s2;
     }
@@ -438,31 +448,35 @@ interface Link {
   corner: boolean;
 }
 
+/** The grid cell a point stands in, as a key. */
+const bridgeCell = (x: number, y: number) =>
+  `${Math.floor(x / BRIDGE_M)},${Math.floor(y / BRIDGE_M)}`;
+
 /** Where stretch i's end meets stretch j's start: at a corner (within
  *  `MEET_M`, turning by no more than `MITRE_MAX_DEG`), in line, or across
  *  a gap of up to `BRIDGE_M`. An end and a start take one link each, the
  *  nearest. */
 function links(st: readonly Stretch[]): Link[] {
-  const cell = (x: number, y: number) =>
-    `${Math.floor(x / BRIDGE_M)},${Math.floor(y / BRIDGE_M)}`;
   const starts = new Map<string, number[]>();
-  st.forEach((s, j) => {
-    const k = cell(s.a[0], s.a[1]);
+  for (let j = 0; j < st.length; j += 1) {
+    const s = st[j];
+    const k = bridgeCell(s.a[0], s.a[1]);
     starts.set(k, [...(starts.get(k) ?? []), j]);
-  });
+  }
   const dir = (s: Stretch) => {
     const l = Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]) || 1;
     return [(s.b[0] - s.a[0]) / l, (s.b[1] - s.a[1]) / l];
   };
   const minCos = Math.cos((MITRE_MAX_DEG * Math.PI) / 180);
   const found: Link[] = [];
-  st.forEach((s, i) => {
+  for (let i = 0; i < st.length; i += 1) {
+    const s = st[i];
     const [cx, cy] = [
       Math.floor(s.b[0] / BRIDGE_M),
       Math.floor(s.b[1] / BRIDGE_M),
     ];
-    for (let gx = cx - 1; gx <= cx + 1; gx++) {
-      for (let gy = cy - 1; gy <= cy + 1; gy++) {
+    for (let gx = cx - 1; gx <= cx + 1; gx += 1) {
+      for (let gy = cy - 1; gy <= cy + 1; gy += 1) {
         for (const j of starts.get(`${gx},${gy}`) ?? []) {
           const link = linkOf(s, st[j], dir, minCos);
           if (j !== i && link) {
@@ -471,7 +485,7 @@ function links(st: readonly Stretch[]): Link[] {
         }
       }
     }
-  });
+  }
   found.sort((p, q) => p.d - q.d);
   const [ends, heads] = [new Set<number>(), new Set<number>()];
   return found.filter((l) => {
@@ -497,12 +511,12 @@ function linkOf(
   if (d <= MEET_M) {
     return cos > minCos ? { d, corner: cos < 0.9998 } : undefined;
   }
-  const along = u[0] * g[0] + u[1] * g[1];
+  const ahead = u[0] * g[0] + u[1] * g[1];
   const aside = Math.abs(u[0] * g[1] - u[1] * g[0]);
   return d <= BRIDGE_M &&
     cos >= BRIDGE_COS &&
     aside <= BRIDGE_ASIDE_M &&
-    along > -BRIDGE_ASIDE_M
+    ahead > -BRIDGE_ASIDE_M
     ? { d, corner: false }
     : undefined;
 }
@@ -547,7 +561,8 @@ export function joinStretches(
     }
   }
   const level = new Map<number, { lo: number; hi: number; w: number }>();
-  st.forEach((s, i) => {
+  for (let i = 0; i < st.length; i += 1) {
+    const s = st[i];
     const r = root(i);
     const w = Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]);
     const l = level.get(r) ?? {
@@ -561,15 +576,16 @@ export function joinStretches(
         ? { lo: Math.min(l.lo, s.lo), hi: Math.max(l.hi, s.hi), w: 0 }
         : { lo: 0, hi: l.hi + s.hi * w, w: l.w + w }
     );
-  });
-  st.forEach((s, i) => {
+  }
+  for (let i = 0; i < st.length; i += 1) {
+    const s = st[i];
     const l = level.get(root(i));
     if (l) {
       const z = l.w > 0 ? l.hi / l.w : l.hi;
       s.lo = levelling === "plinth" ? l.lo : z;
       s.hi = z;
     }
-  });
+  }
   for (const { i, j, d } of ls) {
     if (d > MEET_M) {
       const [s, t] = [st[i], st[j]];
@@ -578,12 +594,12 @@ export function joinStretches(
       t.a = onLine(t.b, t.a, mid);
     }
   }
-  const corners = ls
+  const cornerPairs = ls
     .filter(
       (l) => l.corner && st[l.i].lo === st[l.j].lo && st[l.i].hi === st[l.j].hi
     )
     .map((l): [number, number] => [l.i, l.j]);
-  return { stretches: st, corners };
+  return { stretches: st, corners: cornerPairs };
 }
 
 /** The point on the line from `from` through `to` nearest `p`. */
@@ -660,16 +676,17 @@ export function bandMeshes(
     joined.corners
   );
   const out = new Map<number, Shaded>();
-  st.forEach((s, i) => {
+  for (let i = 0; i < st.length; i += 1) {
+    const s = st[i];
     if (kind === "plinth" && !(s.hi - PLINTH.round > s.lo)) {
-      return;
+      continue;
     }
     const mesh = out.get(s.host) ?? empty();
     out.set(s.host, mesh);
     for (const run of along(ends[i], knots[i])) {
       extrudeBand(mesh, run, offset, kind, s);
     }
-  });
+  }
   return out;
 }
 
@@ -690,7 +707,7 @@ function along(run: Run, k: WallKnots): Run[] {
     run.a[1] + (run.b[1] - run.a[1]) * f,
   ];
   const out: Run[] = [];
-  for (let j = 0; j + 1 < k.f.length; j++) {
+  for (let j = 0; j + 1 < k.f.length; j += 1) {
     const first = j === 0;
     const last = j + 2 === k.f.length;
     out.push({

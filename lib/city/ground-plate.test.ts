@@ -27,11 +27,12 @@ test("the vertex grid includes the tile's edges, rows from the north", () => {
   expect(plateVertex(WEST, PLATE_N, 1, 0)[0] - 410_000).toBe(62.5);
 });
 
+const ground = (x: number, y: number) => 100 + x * 0.001 + y * 0.0001;
+
 test("neighbours share their edge heights, so the plate has no seam", () => {
-  const ground = (x: number, y: number) => 100 + x * 0.001 + y * 0.0001;
   const w = plateHeights(WEST, ground, 0);
   const e = plateHeights(EAST, ground, 0);
-  for (let j = 0; j < PLATE_N; j++) {
+  for (let j = 0; j < PLATE_N; j += 1) {
     expect(w[j * PLATE_N + PLATE_N - 1]).toBe(e[j * PLATE_N]);
   }
 });
@@ -45,7 +46,7 @@ test("a class is the commonest around its vertex, not the nearest texel", () => 
   const width = 64;
   const data = new Uint8Array(width * width).fill(1);
   // a road one texel wide through the middle column
-  for (let y = 0; y < width; y++) {
+  for (let y = 0; y < width; y += 1) {
     data[y * width + 32] = 7;
   }
   const raster = { bounds: WEST, data, height: width, width };
@@ -53,7 +54,7 @@ test("a class is the commonest around its vertex, not the nearest texel", () => 
     Array.from({ length: 9 }, () => 1)
   );
   // a park filling the north-west quarter
-  for (let y = 0; y < 32; y++) {
+  for (let y = 0; y < 32; y += 1) {
     data.fill(3, y * width, y * width + 32);
   }
   expect(plateClasses(WEST, [raster], 3)[0]).toBe(3);
@@ -64,7 +65,7 @@ test("a vertex on a shared edge takes the same class in both tiles", () => {
   // the west tile is park but for a road strip along its east edge; the
   // east tile is road
   const west = new Uint8Array(width * width).fill(3);
-  for (let y = 0; y < width; y++) {
+  for (let y = 0; y < width; y += 1) {
     west.fill(7, y * width + 56, y * width + 64);
   }
   const east = new Uint8Array(width * width).fill(7);
@@ -74,7 +75,7 @@ test("a vertex on a shared edge takes the same class in both tiles", () => {
   ];
   const w = plateClasses(WEST, rasters, 3);
   const e = plateClasses(EAST, rasters, 3);
-  for (let j = 0; j < 3; j++) {
+  for (let j = 0; j < 3; j += 1) {
     expect(w[j * 3 + 2]).toBe(e[j * 3]);
   }
   // read from its own raster alone, the west tile's edge was park
@@ -89,14 +90,12 @@ test("a shrunk class raster keeps ids, never a blend", () => {
   expect([...r.data]).toEqual([5, 7, 13, 15]);
 });
 
+const tile = (seed: number) => ({
+  heights: Int16Array.from({ length: PLATE_N ** 2 }, (_, v) => seed + v),
+  classes: Uint8Array.from({ length: PLATE_N ** 2 }, (_, v) => (seed + v) % 12),
+});
+
 test("the file reads back as it was written", () => {
-  const tile = (seed: number) => ({
-    heights: Int16Array.from({ length: PLATE_N ** 2 }, (_, v) => seed + v),
-    classes: Uint8Array.from(
-      { length: PLATE_N ** 2 },
-      (_, v) => (seed + v) % 12
-    ),
-  });
   const a = tile(1000);
   const b = tile(-200);
   const bytes = encodePlate([a, b]);
@@ -118,13 +117,13 @@ test("the file reads back as it was written", () => {
 
 test("the triangles face up in the Y-up frame", () => {
   const n = 3;
-  const tile = {
+  const plate = {
     id: "w",
     bounds: WEST,
     classes: new Uint8Array(n * n),
     heights: new Float32Array(n * n).fill(120),
   };
-  const pos = platePositions(tile, n, { cx: 411_000, cy: 5_657_000 });
+  const pos = platePositions(plate, n, { cx: 411_000, cy: 5_657_000 });
   // the edge rows keep their heights, the inner vertices sink
   expect(pos[1]).toBe(120);
   expect(pos[4 * 3 + 1]).toBe(120 - PLATE_SINK_M);
@@ -149,20 +148,20 @@ test("the triangles face up in the Y-up frame", () => {
 test("the normals agree along a shared edge and tilt down the slope", () => {
   const n = 3;
   // the ground rises 1 m per 100 m eastwards
-  const tile = (id: string, bounds: typeof WEST) => {
+  const gradedPlate = (id: string, bounds: typeof WEST) => {
     const heights = new Float32Array(n * n);
-    for (let j = 0; j < n; j++) {
-      for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j += 1) {
+      for (let i = 0; i < n; i += 1) {
         heights[j * n + i] = plateVertex(bounds, n, i, j)[0] / 100;
       }
     }
     return { id, bounds, classes: new Uint8Array(n * n), heights };
   };
-  const tiles = [tile("w", WEST), tile("e", EAST)];
+  const tiles = [gradedPlate("w", WEST), gradedPlate("e", EAST)];
   const at = plateHeightIndex(tiles, n);
   const w = plateNormals(tiles[0], n, at);
   const e = plateNormals(tiles[1], n, at);
-  for (let j = 0; j < n; j++) {
+  for (let j = 0; j < n; j += 1) {
     const a = (j * n + n - 1) * 3;
     const b = j * n * 3;
     expect(w.slice(a, a + 3)).toEqual(e.slice(b, b + 3));

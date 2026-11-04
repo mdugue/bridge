@@ -27,11 +27,8 @@ import type {
 } from "@/lib/city/load-stages";
 import type { FootprintPoly } from "@/lib/city/minimap";
 import type { PlayerPose } from "@/lib/city/pose";
-import {
-  createSliceStore,
-  dataEqual,
-  type SliceStore,
-} from "@/lib/city/slice-store";
+import { createSliceStore, dataEqual } from "@/lib/city/slice-store";
+import type { SliceStore } from "@/lib/city/slice-store";
 import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
 import { layerErrorText } from "./boot-error";
 import type { CityWalkOptions, CityWalkStats, SiteInfo } from "./create-app";
@@ -213,12 +210,16 @@ export function sceneReports(
   const on = <A extends unknown[]>(report: (...args: A) => void) =>
     whileLive(live, report);
   return {
-    onSiteInfo: on((info) => status.set("site", info)),
-    onStage: on((update) =>
-      status.update("progress", (p) => withStage(p, update))
-    ),
+    onSiteInfo: on((info) => {
+      status.set("site", info);
+    }),
+    onStage: on((update) => {
+      status.update("progress", (p) => withStage(p, update));
+    }),
     onLoaded: on(() => updatePocDebug({ ready: true })),
-    onBusy: on((busy) => status.set("busy", busy)),
+    onBusy: on((busy) => {
+      status.set("busy", busy);
+    }),
     // One tile (or one tile's dressing) failed after the first frame: it
     // leaves a hole, and the rest keeps streaming — the stages still finish
     // on their own (a failed tile counts as done). A failure before the
@@ -251,17 +252,33 @@ export function sceneReports(
       }
     }),
     // (shown as whole frames: a report that rounds the same is no change)
-    onFps: on((fps) => status.set("fps", Math.round(fps))),
-    onTramStatus: on((tram) => status.set("tramStatus", tram)),
-    onTrafficHour: on((hour) => status.set("trafficHour", hour)),
-    onBikeCounts: on((counters) => status.set("bikeCounters", counters)),
-    onModeChange: on((mode) => status.set("mode", mode)),
-    onModelView: on((view) => status.set("modelView", view)),
-    onInquiry: on((inquiry, along) =>
-      status.set("inquiry", inquiry ? { inquiry, along } : null)
-    ),
-    onPose: on((pose) => status.set("pose", pose)),
-    onDesign: on((design) => status.set("design", design)),
+    onFps: on((fps) => {
+      status.set("fps", Math.round(fps));
+    }),
+    onTramStatus: on((tram) => {
+      status.set("tramStatus", tram);
+    }),
+    onTrafficHour: on((hour) => {
+      status.set("trafficHour", hour);
+    }),
+    onBikeCounts: on((counters) => {
+      status.set("bikeCounters", counters);
+    }),
+    onModeChange: on((mode) => {
+      status.set("mode", mode);
+    }),
+    onModelView: on((view) => {
+      status.set("modelView", view);
+    }),
+    onInquiry: on((inquiry, along) => {
+      status.set("inquiry", inquiry ? { inquiry, along } : null);
+    }),
+    onPose: on((pose) => {
+      status.set("pose", pose);
+    }),
+    onDesign: on((design) => {
+      status.set("design", design);
+    }),
   };
 }
 

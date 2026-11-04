@@ -6,7 +6,7 @@
  * so it holds plumbing only: a bake belongs in the module of its step.
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import { tileIds } from "../../lib/city/tile";
 import { siteFromArgs } from "../../sites";
 import { bakeMode, NOT_CACHED } from "../warmers";
@@ -20,7 +20,7 @@ import { createPublisher } from "../publisher";
 /** On Vercel the cache lives under `.next/cache`, the one folder (with
  *  node_modules) its Next.js builds carry from one deployment to the next;
  *  elsewhere under `.cache`, so clearing `.next` keeps a local bake. */
-const CACHE_DIR = join(
+const CACHE_DIR = nodePath.join(
   process.cwd(),
   process.env.VERCEL ? ".next/cache/prepare-data" : ".cache/prepare-data"
 );
@@ -30,10 +30,10 @@ export const { MODE, SITE } = (() => {
     return { MODE: bakeMode(rest, tileIds(site)), SITE: site };
   } catch (error) {
     process.stderr.write(`prepare-data: ${(error as Error).message}\n`);
-    process.exit(2);
+    return process.exit(2);
   }
 })();
-export const OUT_DIR = join(process.cwd(), "public/data", SITE.id);
+export const OUT_DIR = nodePath.join(process.cwd(), "public/data", SITE.id);
 export const TILES = tileIds(SITE);
 /** A warmer (warmers.ts; prepare-sites.ts bakes every cold site with
  *  them unless PREPARE_WARMERS=0) only fills the cache for its own tiles:
@@ -59,18 +59,18 @@ export function log(message: string): void {
 export const since = (t0: number) => Math.round(performance.now() - t0);
 export const started = performance.now();
 
-export const at = (path: string) => join(process.cwd(), path);
+export const at = (path: string) => nodePath.join(process.cwd(), path);
 export const utf8 = (value: unknown) =>
   new TextEncoder().encode(`${JSON.stringify(value)}\n`);
-export const parse = <T>(bytes: Uint8Array): T =>
-  JSON.parse(new TextDecoder().decode(bytes)) as T;
-export const readJson = <T>(path: string): T =>
-  JSON.parse(readFileSync(path, "utf8")) as T;
+export const parse = (bytes: Uint8Array): unknown =>
+  JSON.parse(new TextDecoder().decode(bytes));
+export const readJson = (path: string): unknown =>
+  JSON.parse(readFileSync(path, "utf-8"));
 
 // --- publish ------------------------------------------------------------------
 
 export const publisher = createPublisher(OUT_DIR, { warming: WARMING });
-export const publish = publisher.publish;
+export const { publish } = publisher;
 
 // --- cache --------------------------------------------------------------------
 
@@ -105,7 +105,7 @@ const keys = createKeyMaker({
   root: process.cwd(),
   common: COMMON_SOURCES,
   stop: KEY_STOPS,
-  lockfile: readLockfile(readFileSync(at(LOCKFILE), "utf8")),
+  lockfile: readLockfile(readFileSync(at(LOCKFILE), "utf-8")),
 });
 export const cacheKey = keys.key;
 
@@ -182,8 +182,11 @@ export async function cachedFile(
   key: string,
   bake: () => Promise<Uint8Array> | Uint8Array
 ): Promise<string> {
-  const path =
-    cachedEntry(CACHE_DIR, name, key) ?? (await fromShared(name, key))?.path;
+  let path = cachedEntry(CACHE_DIR, name, key);
+  if (!path) {
+    const shared = await fromShared(name, key);
+    path = shared?.path ?? null;
+  }
   if (path) {
     return path;
   }
