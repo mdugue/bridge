@@ -70,6 +70,17 @@ test("every committed surface legend names the same paving kinds", () => {
   expect(SURFACE_KINDS.length).toBeLessThanOrEqual(8);
 });
 
+test("the edge bake writes the scale the viewer decodes", () => {
+  // the committed legends below say what was baked; this, what the next
+  // bake writes (edges.py), before a re-bake
+  const python = readFileSync(
+    nodePath.join(ROOT, "pipeline/bake/edges.py"),
+    "utf-8"
+  );
+  const scale = /^EDGE_SCALE = (?<scale>[\d.]+)/mu.exec(python)?.groups?.scale;
+  expect(Number(scale)).toBe(EDGE_SCALE);
+});
+
 test("every committed edge legend has the viewer's scale", () => {
   const dir = nodePath.join(ROOT, siteDataDir(DRESDEN), "dlm");
   const legends = readdirSync(dir).filter(
@@ -90,7 +101,8 @@ test("a surface texel unpacks into the road and the walk material", () => {
   expect(unpackSurface(byte)).toEqual({ road: 4, walk: 3, park: 3 });
   expect(surfaceHeading(0)).toBeNull();
   expect(surfaceHeading(1)).toBe(0);
-  expect(surfaceHeading(128)).toBeCloseTo(Math.PI / 2, 10);
+  expect(surfaceHeading(128)).toBeCloseTo(Math.PI, 10);
+  expect(surfaceHeading(64)).toBeCloseTo((63 / 254) * 2 * Math.PI, 10);
 });
 
 test("every committed legend names the same classes", () => {

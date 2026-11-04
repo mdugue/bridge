@@ -32,6 +32,7 @@ import numpy as np
 import shapely
 from pyproj import Transformer
 
+from .classes import WATER
 from .common import Tile
 from .osm import read_osm, tag
 
@@ -475,7 +476,7 @@ def bastion_piers(ground, axis: Axis, deck_at, stop=None) -> list[float]:
 
 # --- what lies under a deck -----------------------------------------------------------
 
-WATER_CLASS = 8  # lib/city/landcover.ts WATER_CLASS
+WATER_CLASS = WATER  # lib/city/landcover.ts WATER_CLASS
 WATER_RUN_M = 4.0  # a stretch over water is at least this long (m)
 
 

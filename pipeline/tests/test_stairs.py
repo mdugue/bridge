@@ -2,13 +2,19 @@
 steps, sides and handrails."""
 
 import numpy as np
+import pytest
 import shapely
 
 from bake import stairs
 from tests.synthetic import SIZE, X0, Y0, features, osm_tile, read, slope_tile, way, write_raster
 
 
-def test_a_flight_is_oriented_uphill_with_its_landings_and_tagged_steps(tmp_path, monkeypatch):
+# Hamburg, Bavaria and NRW are in zone 32: the bake reads the extract into
+# the tile's own CRS
+@pytest.mark.parametrize("epsg", [25833, 25832])
+def test_a_flight_is_oriented_uphill_with_its_landings_and_tagged_steps(
+    tmp_path, monkeypatch, epsg
+):
     from bake import stairs
 
     # Drawn top → bottom; 25 steps over the 4 m rise is a 16 cm riser.
@@ -16,7 +22,7 @@ def test_a_flight_is_oriented_uphill_with_its_landings_and_tagged_steps(tmp_path
         '<way id="1" version="1"><nd ref="1"/><nd ref="2"/>'
         '<tag k="highway" v="steps"/><tag k="step_count" v="25"/><tag k="width" v="3 m"/></way>'
     )
-    tile = slope_tile(tmp_path, monkeypatch, way)
+    tile = slope_tile(tmp_path, monkeypatch, way, epsg=epsg)
     stairs.run(tile)
     doc = read(tile, "stairs")
     assert doc["attribution"].startswith("©")
@@ -218,3 +224,35 @@ def test_stairs_run_writes_the_sides_material_and_width(tmp_path, monkeypatch):
     assert railed["rail"] == [True, True]
     assert plain["walled"] == [False, False] and "rail" not in plain
     assert plain["mat"] == "concrete"  # the site's majority: too few tagged
+
+
+def test_a_flight_across_a_seam_keeps_both_landings(tmp_path, monkeypatch):
+    # the tile's ground lies at 100 m, its eastern neighbour's at 103 m; the
+    # flight runs from 10 m inside the one to 10 m inside the other
+    import rasterio
+    import rasterio.transform
+
+    nodes = {1: (190.0, 100.0, ""), 2: (210.0, 100.0, "")}
+    ways = way(1, [1, 2], {"highway": "steps"})
+    tile = osm_tile(tmp_path, monkeypatch, nodes, ways)
+    east = tile.data / "dgm" / "dgm1_u_tiff" / "dgm1_u.tif"
+    east.parent.mkdir(parents=True)
+    with rasterio.open(
+        east,
+        "w",
+        driver="GTiff",
+        width=SIZE,
+        height=SIZE,
+        count=1,
+        dtype="float32",
+        crs="EPSG:25833",
+        transform=rasterio.transform.from_origin(X0 + SIZE, Y0 + SIZE, 1.0, 1.0),
+    ) as dst:
+        dst.write(np.full((1, SIZE, SIZE), 103.0, dtype="float32"))
+    stairs.run(tile)
+    [f] = read(tile, "stairs")["features"]
+    lo, hi = f["properties"]["z"]
+    assert abs(lo - 100) < 0.01 and abs(hi - 103) < 0.01
+    # bottom → top: from this tile up onto the neighbour's ground
+    (xa, _), (xb, _) = f["geometry"]["coordinates"]
+    assert xa < X0 + SIZE < xb

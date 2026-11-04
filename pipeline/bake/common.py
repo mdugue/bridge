@@ -13,6 +13,7 @@ import rasterio
 import shapely
 import shapely.ops
 from PIL import Image
+from rasterio.merge import merge
 from rasterio.transform import from_bounds, rowcol
 
 OSM_ATTRIBUTION = "© OpenStreetMap contributors (ODbL)"
@@ -290,6 +291,42 @@ def round_coords(coords, digits: int = 2):
 
 def feature(geometry: dict, properties: dict | None = None) -> dict:
     return {"type": "Feature", "properties": properties or {}, "geometry": geometry}
+
+
+def table_json(table: dict, key: str, rows: list[list]) -> str:
+    """`table` with its `rows` under `key`, one row per line (diffable,
+    still plain JSON)."""
+    head = json.dumps(table, indent=2)[:-2]
+    body = ",\n".join(f"    {json.dumps(r)}" for r in rows)
+    listed = f"[\n{body}\n  ]" if rows else "[]"
+    return f'{head},\n  "{key}": {listed}\n}}\n'
+
+
+NODATA = -9999.0  # a mosaic's cells no raster covers, before they read NaN
+
+
+def mosaic(paths: list[Path], bounds: tuple[float, float, float, float]):
+    """The rasters that overlap `bounds`, merged on their 1 m grid (NaN where
+    none has data), with the mosaic's transform. None when none overlaps."""
+    xmin, ymin, xmax, ymax = bounds
+    sources = []
+    for path in paths:
+        src = rasterio.open(path)
+        b = src.bounds
+        if b.left < xmax and b.right > xmin and b.bottom < ymax and b.top > ymin:
+            sources.append(src)
+        else:
+            src.close()
+    if not sources:
+        return None, None
+    try:
+        arr, transform = merge(sources, bounds=bounds, nodata=NODATA)
+    finally:
+        for src in sources:
+            src.close()
+    out = arr[0].astype(np.float64)
+    out[out <= NODATA + 1] = np.nan
+    return out, transform
 
 
 def write_geojson(

@@ -4686,7 +4686,9 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   1.5 m — 2.5 m in a pedestrian area: `highway=pedestrian` or an
   `area:highway` outline within 1 m of its middle; 2026-10-21, it was
   2.5 m everywhere), `z` = the two
-  landing heights from the DGM 1 m beyond each end (3×3 m median), `n` from
+  landing heights from the DGM 1 m beyond each end (3×3 m median; the
+  committed DGMs around the tile mosaicked, so a flight across a seam keeps
+  both landings — 2026-11-04, before that both tiles dropped it), `n` from
   `step_count` when its riser is 8–25 cm, else rise ÷ 16 cm. Indoor,
   underground, tunnel and bridge flights and anything flatter than 30 cm are
   left out. Where the DGM lacks the structure a flight climbs (less than

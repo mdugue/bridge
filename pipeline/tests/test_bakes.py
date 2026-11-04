@@ -44,6 +44,18 @@ def test_the_class_ids_are_the_client_palette_order():
     assert client == CLASSES
 
 
+def test_the_named_class_ids_are_the_numbers_the_bakes_used():
+    # the bakes name classes (classes.py); a renumbering is a deliberate
+    # change of this table, the client's and every committed raster
+    from bake import classes
+
+    named = (classes.BACKGROUND, classes.FARMLAND, classes.FOREST, classes.COPSE)
+    assert named == (0, 1, 2, 3)
+    named = (classes.BUILTUP, classes.RAILWAY, classes.PATH, classes.ROAD, classes.WATER)
+    assert named == (4, 5, 6, 7, 8)
+    assert (classes.ARABLE, classes.MEADOW) == (9, 1)
+
+
 def test_rail_without_a_dlm_leaves_committed_files_alone(tmp_path):
     from bake import rail
     from bake.common import Tile
@@ -237,14 +249,15 @@ def test_playground_equipment_is_only_what_is_mapped():
 
 
 def test_surface_values_map_to_the_paving_ids():
-    from bake.surface import surface_id
+    from bake.osm import surface_id
+    from bake.surface import SURFACE_OF
 
-    assert surface_id("asphalt") == 1
-    assert surface_id("sett;asphalt") == 4
-    assert surface_id("Paving_Stones") == 3
-    assert surface_id("grass_paver") == 6
-    assert surface_id("metal") == 0
-    assert surface_id(None) == 0
+    assert surface_id("asphalt", SURFACE_OF) == 1
+    assert surface_id("sett;asphalt", SURFACE_OF) == 4
+    assert surface_id("Paving_Stones", SURFACE_OF) == 3
+    assert surface_id("grass_paver", SURFACE_OF) == 6
+    assert surface_id("metal", SURFACE_OF) == 0
+    assert surface_id(None, SURFACE_OF) == 0
 
 
 def test_widths_parse_metres_and_reject_nonsense():

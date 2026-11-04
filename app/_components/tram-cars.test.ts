@@ -8,6 +8,11 @@ import type { Instances } from "./instancing";
 import { carSections, createTramCars } from "./tram-cars";
 
 const TT: TramTimetable = {
+  // the file's members the cars do not read; no operator named
+  attribution: "",
+  crs: { type: "name", properties: { name: "urn:ogc:def:crs:EPSG::25833" } },
+  agencies: [],
+  routeAgency: [],
   routes: ["11"],
   patterns: [
     {

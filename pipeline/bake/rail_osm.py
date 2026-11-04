@@ -52,8 +52,9 @@ from collections.abc import Callable
 import numpy as np
 import shapely
 
+from .classes import BUILTUP, PATH, ROAD, WATER
 from .common import Tile, column, feature, label_line, value_at
-from .osm import in_tunnel, read_osm, tag
+from .osm import in_tunnel, osm_number, read_osm, tag
 
 RAILWAYS = ("rail", "light_rail", "subway", "narrow_gauge")
 # A funicular (Standseilbahn, Schrägaufzug) is a track like a railway's,
@@ -83,8 +84,8 @@ STANDARD_GAUGE = 1.435
 # shorter than BED_MIN_M. A main line runs on its bed whatever lies beside
 # it (a residential street, a station forecourt): only `embedded` says
 # otherwise there.
-PAVED_CLASSES = {4, 6, 7}
-WATER_CLASS = 8
+PAVED_CLASSES = {BUILTUP, PATH, ROAD}
+WATER_CLASS = WATER
 SIDE_M = 4.0
 BED_STEP_M = 4.0
 BED_WINDOW_M = 20.0
@@ -379,9 +380,9 @@ def ballast(tile: Tile, features: list[dict]) -> list[dict]:
 
 def width_of(other: str | None, kind: str) -> float | None:
     """A way's mapped width: `width`, else `lanes` × 3.25 m + verges."""
-    m = re.match(r"\d+(\.\d+)?", (tag(other, "width") or "").strip())
-    if m and 1.0 <= float(m.group()) <= 60.0:
-        return float(m.group())
+    width = osm_number(tag(other, "width"))
+    if width is not None and 1.0 <= width <= 60.0:
+        return width
     lanes = re.match(r"\d+", tag(other, "lanes") or "")
     if lanes and kind == "road":
         return int(lanes.group()) * LANE_M + VERGE_M

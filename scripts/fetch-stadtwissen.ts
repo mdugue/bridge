@@ -9,7 +9,8 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import nodePath from "node:path";
-import type { LandmarkFile } from "../lib/city/landmarks";
+import { parseBakeFile } from "../lib/city/bake-file";
+import { LANDMARKS_FILE } from "../lib/city/landmarks-file";
 import {
   labelOf,
   referencedItems,
@@ -75,7 +76,11 @@ for (const tile of tileIds(site)) {
   if (!existsSync(path)) {
     continue;
   }
-  const file = JSON.parse(readFileSync(path, "utf-8")) as LandmarkFile;
+  const file = parseBakeFile(
+    LANDMARKS_FILE,
+    JSON.parse(readFileSync(path, "utf-8")),
+    path
+  );
   for (const lm of file.landmarks) {
     landmarkIds.add(lm.id);
   }

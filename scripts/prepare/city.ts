@@ -4,9 +4,11 @@
  * footprints, the glTF and its far twin (bake-entries.ts `city`).
  */
 import { existsSync } from "node:fs";
-import type { FacadeMaterial, RoofColours } from "../../lib/city/building-tint";
 import { withoutTrafficStructures } from "../../lib/city/city-mesh";
-import type { OsmBuildingLut, WallMaterial } from "../../lib/city/city-mesh";
+import type { OsmBuildingLut } from "../../lib/city/city-mesh";
+import { parseBakeFile } from "../../lib/city/bake-file";
+import { OSM_BUILDINGS_FILE } from "../../lib/city/osm-buildings-file";
+import { ROOF_COLOURS_FILE } from "../../lib/city/roof-colours-file";
 import type { LandmarkFile } from "../../lib/city/landmarks";
 import type {
   DoorFeature,
@@ -72,7 +74,7 @@ function withLandmarks(
         ...own,
         landmark: 1,
         wikidata: lm.id,
-        material: own?.material ?? (lm.material as WallMaterial | undefined),
+        material: own?.material ?? lm.material,
         ...(!own?.material && lm.material
           ? { materialFrom: "wikidata" as const }
           : {}),
@@ -104,13 +106,18 @@ function parseCity(
   const { doc } = formed;
   const lowered = new Set(formed.lowered);
   const roofColours = existsSync(at(src.roofColor))
-    ? (readJson(at(src.roofColor)) as RoofColours)
+    ? parseBakeFile(
+        ROOF_COLOURS_FILE,
+        readJson(at(src.roofColor)),
+        src.roofColor
+      )
     : undefined;
   const osmDoc = existsSync(at(src.osmBuild))
-    ? (readJson(at(src.osmBuild)) as {
-        context?: FacadeMaterial;
-        objects?: OsmBuildingLut;
-      })
+    ? parseBakeFile(
+        OSM_BUILDINGS_FILE,
+        readJson(at(src.osmBuild)),
+        src.osmBuild
+      )
     : undefined;
   const osmLut = withLandmarks(osmDoc?.objects, landmarkFile(tile));
   const scan = existsSync(at(src.smallBuild))

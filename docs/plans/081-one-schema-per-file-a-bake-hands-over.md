@@ -1,6 +1,6 @@
 # 081 — One schema per file a bake hands over
 
-**Status:** TODO
+**Status:** PARTIAL — steps 0–7 built; 8–9 await the maintainer's re-bake session
 
 Planned 2026-11-04 against `04d8fad3` from an architecture review: the
 files the Python bakes write and TypeScript reads have their shape

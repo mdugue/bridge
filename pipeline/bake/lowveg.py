@@ -56,9 +56,10 @@ from skimage.segmentation import watershed
 
 from . import hedges as mapped
 from . import ways
+from .classes import PATH, RAILWAY, WATER
 from .common import OSM_ATTRIBUTION, Tile, column, write_geojson
 from .lsc import rasterise
-from .osm import has_extract, read_osm, tag
+from .osm import has_extract, osm_number, read_osm, tag
 
 RES = 0.5  # the LSC raster grid (m)
 
@@ -97,8 +98,8 @@ CANOPY_ECHO_T = 0.5  # tall vegetation is multi-echo (median 1.0 vs 0.0 on roofs
 CANOPY_PEAK_PX = 6  # crown peaks ≥ 3 m apart
 CANOPY_DEDUP_M = 5.0  # a peak this close to a current canopy point is covered
 CROWN_MIN_R, CROWN_MAX_R = 1.0, 12.0  # a scan crown's radius, clamped (m)
-BLOCKED_CLASSES = (5, 8)  # railway, water — never low vegetation
-TREE_BLOCKED_CLASSES = (6, 8)  # as canopy.py: no tree on a path or water,
+BLOCKED_CLASSES = (RAILWAY, WATER)  # never low vegetation
+TREE_BLOCKED_CLASSES = (PATH, WATER)  # as canopy.py: no tree on a path or water,
 # nor on a carriageway or a track bed (`inputs["traffic"]`)
 
 
@@ -211,11 +212,8 @@ def windowed_ratio(num, den, k=3):
 
 def osm_height(other_tags):
     """The tagged height (m) of a hedge or shrub, when plausible."""
-    try:
-        h = float(str(tag(other_tags, "height") or "").replace("m", "").strip())
-    except ValueError:
-        return None
-    return h if 0.3 <= h <= 4.0 else None
+    h = osm_number(tag(other_tags, "height"))
+    return h if h is not None and 0.3 <= h <= 4.0 else None
 
 
 # --- skeleton → polylines -------------------------------------------------

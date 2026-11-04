@@ -191,7 +191,7 @@ test("a lamp, a bench and a canopy tree stand on the tile's own ground, a monume
   };
   const monument: MonumentFeature = {
     geometry: geometry(60),
-    properties: { kind: "statue" },
+    properties: { kind: "statue", source: "osm" },
   };
   const sets = moreSets(
     {

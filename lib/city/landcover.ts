@@ -184,10 +184,12 @@ export function unpackSurface(byte: number): {
 
 /**
  * The street direction the raster's G channel stores (0 = unknown, else
- * 1 + bearing mod 180° over 0..254) in radians from east, or null.
+ * 1 + the bearing over 0..360° in 0..254; pipeline/bake/surface.py
+ * `heading_code`) in radians from east, or null — as the ground shader
+ * decodes it (ground-detail.ts).
  */
 export function surfaceHeading(byte: number): number | null {
-  return byte === 0 ? null : ((byte - 1) / 254) * Math.PI;
+  return byte === 0 ? null : ((byte - 1) / 254) * 2 * Math.PI;
 }
 
 /** sRGB tint of a class id; unknown ids take the background tint. */

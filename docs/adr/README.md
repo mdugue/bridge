@@ -38,12 +38,13 @@ how it is built.
 | [0055](./0055-stadtwissen-and-written-walks.md) | What the twin knows is baked as files for agents; walks are written ahead, checked against the data, their narration marked as Claude's |
 | [0056](./0056-frag-die-stadt-runs-on-the-visitors-key.md) | *Frag die Stadt* runs on the visitor's own key through one stateless function with a fixed prompt and fixed tools; the key stays in the browser, the answers are marked |
 | [0057](./0057-the-sprachfuehrer-speaks-with-the-browsers-voice.md) | The Sprachführer speaks and listens with the browser's own voice, and the scene rests while it does |
+| [0059](./0059-one-schema-per-file-a-bake-hands-over.md) | Every file a bake hands over to TypeScript has one strict zod schema; the build parses it and fails on a mismatch, a test parses every committed file, the viewer takes the types only |
 
 ## Numbering
 
 Numbers missing from the index belonged to records merged into others;
 they are never reused. A new record takes the next number after the
-highest ever used (0058), checked against main and the open PRs' branches.
+highest ever used (0059), checked against main and the open PRs' branches.
 
 ## Format
 

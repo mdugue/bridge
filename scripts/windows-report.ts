@@ -22,7 +22,9 @@ import type {
   FeatureCollection,
   ShopfrontFile,
 } from "../lib/city/features";
-import type { LandmarkFile } from "../lib/city/landmarks";
+import { parseBakeFile } from "../lib/city/bake-file";
+import { OSM_BUILDINGS_FILE } from "../lib/city/osm-buildings-file";
+import { LANDMARKS_FILE } from "../lib/city/landmarks-file";
 import { cityMeshSourceFiles, tileIds } from "../lib/city/tile";
 import type { CityJsonDocument } from "../lib/city/types";
 import { FACADE_SCALE_M, unpackStyle, windowType } from "../lib/city/windows";
@@ -92,11 +94,17 @@ for (const tile of tiles) {
   const file = read(src.windows) as WindowFile | undefined;
   const walls = Object.values(file?.buildings ?? {}).flat();
   // the OSM facts and the landmarks: the windows' gate reads them
+  const osmJson = read(src.osmBuild);
   const osm: OsmBuildingLut = {
-    ...(read(src.osmBuild) as { objects?: OsmBuildingLut } | undefined)
-      ?.objects,
+    ...(osmJson === undefined
+      ? {}
+      : parseBakeFile(OSM_BUILDINGS_FILE, osmJson, src.osmBuild).objects),
   };
-  const landmarks = read(src.landmarks) as LandmarkFile | undefined;
+  const landmarksJson = read(src.landmarks);
+  const landmarks =
+    landmarksJson === undefined
+      ? undefined
+      : parseBakeFile(LANDMARKS_FILE, landmarksJson, src.landmarks);
   for (const lm of landmarks?.landmarks ?? []) {
     for (const id of lm.objects) {
       osm[id] = { ...osm[id], landmark: 1 };
