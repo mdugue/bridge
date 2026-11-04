@@ -30,13 +30,12 @@ import {
   ASK_LIMITS,
   askSystemPrompt,
   conversationProblem,
-  CUT_SHORT,
   lastQuestion,
   parseAskProps,
   plausibleKey,
-  TOO_MANY_STEPS,
 } from "./ask-city";
 import type { AskPromptSite, AskRequestProps } from "./ask-city";
+import { CUT_SHORT, TOO_MANY_STEPS } from "./ask-failure";
 import {
   factsOf,
   nearKnowledge,

@@ -35,12 +35,10 @@ import {
   ASK_PROVIDERS,
   maskedKey,
   plausibleKey,
-  CUT_SHORT,
   providerForKey,
-  TOO_LONG,
-  TOO_MANY_STEPS,
 } from "@/lib/city/ask-city";
 import type { AskProviderId } from "@/lib/city/ask-city";
+import { askFailure } from "@/lib/city/ask-failure";
 import { Button } from "@/components/ui/button";
 import { Message, MessageContent } from "@/components/ui/message";
 import {
@@ -388,75 +386,6 @@ const SUGGESTIONS = [
   "Wie sieht es hier am Abend aus?",
 ];
 
-/** A provider's error that names the key or the account's credit. */
-const KEY_TROUBLE =
-  /\b(?:401|402|403|unauthori[sz]ed|forbidden|authenticat\w*|api[ _-]?key|credits?|credentials?|quota|billing|insufficient)\b/iu;
-/** The same, as the code a provider's error carries. */
-const KEY_CODES = new Set(["401", "402", "403"]);
-
-/** One failed answer's words and what the visitor can do about it. */
-const say = (text: string, key = false, reset = false) => ({
-  key,
-  reset,
-  text,
-});
-
-/** A failed answer in words, by the status the server sent, and what
- *  the visitor can do about it: check the key again or start over. */
-function errorText(error: Error): {
-  key: boolean;
-  reset: boolean;
-  text: string;
-} {
-  const { status } = error as { status?: unknown };
-  if (status === 401) {
-    return say("Der Schlüssel muss neu geprüft werden.", true);
-  }
-  if (status === 400) {
-    // an older page, or a model the server no longer offers
-    return say(
-      "Die Anfrage passt nicht zu diesem Server — lade die Seite neu."
-    );
-  }
-  if (status === 413) {
-    return say(TOO_LONG, false, true);
-  }
-  if (status === 422) {
-    return say(`${TOO_MANY_STEPS} Frag bitte anders.`, false, true);
-  }
-  if (status === 404) {
-    return say("Für diese Stadt gibt es kein Stadtwissen.");
-  }
-  if (status === 501) {
-    return say("Frag die Stadt ist auf diesem Server nicht eingerichtet.");
-  }
-  if (typeof status === "number") {
-    return say(`Der Server antwortet mit Status ${status}.`);
-  }
-  // a key revoked or out of credit after the check fails in the stream,
-  // in the provider's words: offer the check again for those only
-  const message = error.message || "Die Antwort brach ab.";
-  const code = argText((error as { code?: unknown }).code);
-  if (message === TOO_MANY_STEPS) {
-    return say(`${TOO_MANY_STEPS} Frag bitte anders.`, false, true);
-  }
-  // the codes first, the provider's words only where no code says it
-  if (KEY_CODES.has(code)) {
-    return say(message, true);
-  }
-  // the adapters' codes for a spent output budget and a full context
-  if (
-    code === "max_tokens" ||
-    (code === "incomplete" && message === "max_output_tokens")
-  ) {
-    return say(CUT_SHORT);
-  }
-  if (code === "context_overflow") {
-    return say(TOO_LONG, false, true);
-  }
-  return say(message, KEY_TROUBLE.test(message));
-}
-
 /**
  * The text of a finished answer: its assistant messages since the last
  * question — empty while the last of them still waits on a tool (a scene
@@ -743,14 +672,14 @@ const Conversation = ({
   });
   if (renewed.at !== askKey.expires) {
     // only an error the check answers: one about the key
-    const keyError = chat.error && errorText(chat.error).key;
+    const keyError = chat.error && askFailure(chat.error).key;
     setRenewed({
       at: askKey.expires,
       error: keyError ? chat.error : undefined,
     });
   }
   const failure =
-    chat.error && chat.error !== renewed.error ? errorText(chat.error) : null;
+    chat.error && chat.error !== renewed.error ? askFailure(chat.error) : null;
 
   return (
     <>
