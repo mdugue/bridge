@@ -82,4 +82,4 @@ def test_a_failing_step_names_its_site_tile_and_step(tmp_path, monkeypatch, caps
     tile = SimpleNamespace(id="33412_5656_2_sn")
     with pytest.raises(ValueError, match="no DOM1"):
         runner.recorded_tile(spec, "dormers", tile, False, {}, save=False)
-    assert "dresden 33412_5656_2_sn dormers: no DOM1" in capsys.readouterr().out
+    assert "dresden 33412_5656_2_sn dormers: no DOM1" in capsys.readouterr().err

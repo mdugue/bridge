@@ -11,6 +11,7 @@ import datetime
 import hashlib
 import multiprocessing
 import os
+import sys
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
@@ -223,7 +224,7 @@ def recorded_tile(spec, step: str, tile, research: bool, key: dict, save: bool) 
             run_tile(step, tile, spec.tiles, research)
         step_cache.save(manifest, key, rec)
     except Exception as exc:
-        print(f"{spec.site} {tile.id} {step}: {exc}")
+        print(f"{spec.site} {tile.id} {step}: {exc}", file=sys.stderr)
         raise
 
 
