@@ -346,7 +346,13 @@ S/M/L.
     `ask-scene.ts` guesses the loop (250 ms, 100 ms polling). *Demolitions
     as one module* (S): half in `create-app.ts`, half replayed at load,
     sharing a public mutable set. *`facades_<tile>.json`* is read by the
-    viewer unchecked (plan 081 left it out).
+    viewer unchecked (plan 081 left it out). *The tile sources' schema
+    pass* (M): ADR 0059 excuses the city mesh's and the terrain's tile
+    sources, still cast — `scripts/prepare/city.ts` (small buildings,
+    structures, measured roofs, plinths, doors, dormers, passages,
+    shopfronts, windows) and `scripts/tile-sources.ts` (kerbs, walls,
+    stairs, terraces); give each a schema
+    and `parseBakeFile`, with `features.test.ts`'s value rules kept.
 27. **The moves plan 046 left (S each; moves only, no pixel change).**
     Closed 2026-11-04 ([record](./completed.md#046--moves-only-split-the-god-modules-and-sweep--closed-2026-11-04-drifted-the-rest-in-the-backlog)).
     *The rail split:* `rail-layer.ts` (2 968 lines) still holds the deck

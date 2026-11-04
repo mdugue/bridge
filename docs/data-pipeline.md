@@ -1043,8 +1043,11 @@ optional one is logged and the feature is off.
 
 A JSON file a Python bake writes and TypeScript reads has one strict zod
 schema ([ADR 0059](./adr/0059-one-schema-per-file-a-bake-hands-over.md)),
-its type the readers' type; the GeoJSON layers are held by
-`features.test.ts` instead.
+its type the readers' type. Excused until a later schema pass: the city
+mesh's and the terrain's tile sources (the GeoJSON layers, `windows_<t>`
+and `shopfronts_<t>.json`), cast in `scripts/prepare/city.ts` and
+`scripts/tile-sources.ts` and held on the committed data by
+`features.test.ts`.
 
 | File | Writer (step) | Schema | Parsed in |
 |---|---|---|---|
