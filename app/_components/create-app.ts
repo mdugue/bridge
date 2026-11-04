@@ -1607,16 +1607,14 @@ async function bootApp(
   // scene renders into). It is created a few lines below, before the render
   // loop runs the stream's first update, so no tile lands without it.
   let compileWith: PostStack["compile"] | null = null;
-  // The trees follow the scene's calendar day (crown-season.ts): colour and
-  // leaf cover are rewritten on a change of day, never per frame, and a
-  // crown that changed redraws the shadow map. The day is the one of
-  // Dresden's year (the phenology table's) that looks like it in this
-  // city's climate (tree-season.ts SITE_SEASON).
   // The scene's night, season and clock (scene-environment.ts): the
-  // night node every material reads, the season the trees follow, the
-  // instant the data layers' clock (the timetable trams, the traffic's
-  // hour) runs on from — read when they start, which may be long after
-  // (feature-seam.ts).
+  // night node every material reads, the season the trees follow (their
+  // colour and leaf cover rewritten on a change of calendar day, never per
+  // frame — the day of Dresden's year that looks like it in this city's
+  // climate, tree-season.ts SITE_SEASON — and a crown that changed redraws
+  // the shadow map), the instant the data layers' clock (the timetable
+  // trams, the traffic's hour) runs on from — read when they start, which
+  // may be long after (feature-seam.ts).
   const env = createSceneEnvironment({
     initialDate: opts.initialDate,
     climate: seasonShiftFor(opts.site.id),
