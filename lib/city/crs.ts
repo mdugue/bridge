@@ -107,7 +107,8 @@ function forward(
   // the series' derivative, for the convergence (Karney eqs. 13–15)
   let p = 1;
   let q = 0;
-  for (const [j, alpha] of ALPHA.entries()) {
+  for (let j = 0; j < ALPHA.length; j += 1) {
+    const alpha = ALPHA[j];
     const k = 2 * (j + 1);
     const [s, c] = [Math.sin(k * xip), Math.cos(k * xip)];
     const [sh, ch] = [Math.sinh(k * etap), Math.cosh(k * etap)];
@@ -150,7 +151,8 @@ export function utmToLatLng(
   const eta = (x - FALSE_EASTING) / K0_A;
   let xip = xi;
   let etap = eta;
-  for (const [j, beta] of BETA.entries()) {
+  for (let j = 0; j < BETA.length; j += 1) {
+    const beta = BETA[j];
     const k = 2 * (j + 1);
     xip -= beta * Math.sin(k * xi) * Math.cosh(k * eta);
     etap -= beta * Math.cos(k * xi) * Math.sinh(k * eta);

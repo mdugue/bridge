@@ -572,6 +572,17 @@ export interface CityWalkOptions {
   tilesetUrl: string;
 }
 
+/** The BVH worker's holds on these tiles' indexes. */
+function heldIndexes(cities: Iterable<CityLayer>): Promise<void>[] {
+  const held: Promise<void>[] = [];
+  for (const city of cities) {
+    if (city.held) {
+      held.push(city.held);
+    }
+  }
+  return held;
+}
+
 /**
  * The imperative surface the HUD (and, in dev/test builds, `window.__poc`)
  * drives. The look values are NOT here: they live in the look store passed in
@@ -1490,8 +1501,6 @@ async function bootApp(
   );
   // The ground's shadow reach and the sun: uniform nodes every tile's
   // materials share, kept by the sun rig.
-  // The ground first: no building tile past it needs its BVH for this
-  // (`nearestCityHit` builds the ones the ray reaches before).
   const ground: GroundUniforms = {
     // the sun rig's own vector once it exists (below)
     shadowReach: uniform(new Vector3()),
@@ -2617,6 +2626,8 @@ async function bootApp(
       // pose sets a spot inside one out beside it). In the air the glide
       // goes part of the way along the line of sight (camera-pose.ts).
       tapRaycaster.setFromCamera(new Vector2(ndcX, ndcY), camera);
+      // The ground first: no building tile past it needs its BVH for this
+      // (`nearestCityHit` builds the ones the ray reaches before).
       const groundDist = groundAlong(tapRaycaster, 6000);
       tapRaycaster.far = groundDist ?? 6000;
       const building = nearestCityHit(
@@ -2848,13 +2859,7 @@ async function bootApp(
       invalidateShadows();
       scheduleStats();
       // a tile whose index the BVH worker had hides once it is back
-      const held: Promise<unknown>[] = [];
-      for (const l of stream.cities) {
-        const pending = l.held;
-        if (pending) {
-          held.push(pending);
-        }
-      }
+      const held = heldIndexes(stream.cities);
       if (held.length > 0) {
         void Promise.all(held).then(() => {
           if (!disposed) {
@@ -2960,13 +2965,7 @@ async function bootApp(
     scheduleStats();
     // a tile whose index the BVH worker had takes the demolish once it is
     // back: its shadows are drawn again then
-    const held: Promise<void>[] = [];
-    for (const l of stream.cities) {
-      const pending = l.held;
-      if (pending) {
-        held.push(pending);
-      }
-    }
+    const held = heldIndexes(stream.cities);
     if (held.length > 0) {
       void Promise.all(held).then(() => {
         if (!disposed) {

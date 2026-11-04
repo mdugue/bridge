@@ -1248,7 +1248,8 @@ function wallsOf(mesh: FacadeMesh, drawn: (object: number) => boolean): Wall[] {
   const { planes, tris } = wallTriangles(mesh, drawn);
   const uf = unionFind(tris.length);
   const byVertex = new Map<string, number[]>();
-  for (const [k, t] of tris.entries()) {
+  for (let k = 0; k < tris.length; k += 1) {
+    const t = tris[k];
     for (let c = 0; c < 3; c += 1) {
       const i = 3 * (t + c);
       const key = `${mesh.objectIds[t]}:${toMm(p[i])},${toMm(p[i + 1])},${toMm(p[i + 2])}`;
@@ -1271,7 +1272,8 @@ function wallsOf(mesh: FacadeMesh, drawn: (object: number) => boolean): Wall[] {
     }
   }
   const groups = new Map<number, Wall>();
-  for (const [k, t] of tris.entries()) {
+  for (let k = 0; k < tris.length; k += 1) {
+    const t = tris[k];
     const root = uf.find(k);
     let w = groups.get(root);
     if (!w) {

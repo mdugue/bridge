@@ -283,10 +283,6 @@ type RunEnd = "stop" | "waits" | "cut" | "length" | "refused" | "other";
 
 /** Why a run stopped, where the stream would not say it. */
 function stopText(end: RunEnd, late: boolean): string | null {
-  if (end === "other") {
-    // an error already said why, or nothing came
-    return late ? "Die Antwort dauerte zu lange." : null;
-  }
   switch (end) {
     case "stop":
     case "waits": {
@@ -302,9 +298,13 @@ function stopText(end: RunEnd, late: boolean): string | null {
       // a refusal, or (OpenRouter) a provider's failure mid-answer
       return "Das Modell brach die Antwort ab. Frag bitte noch einmal.";
     }
+    case "other": {
+      // an error already said why, or nothing came
+      return late ? "Die Antwort dauerte zu lange." : null;
+    }
     default: {
-      // unreachable: "other" is answered above
-      return null;
+      const unknown: never = end;
+      throw new Error(`unknown run end: ${String(unknown)}`);
     }
   }
 }
@@ -355,7 +355,8 @@ export async function* scrubbed(
   try {
     for await (const chunk of stream) {
       yield chunk.type === EventType.RUN_ERROR
-        ? errorChunk(chunk.message, key, chunk.code)
+        ? // (the type only promises a text: an adapter may send anything)
+          errorChunk(String(chunk.message as unknown), key, chunk.code)
         : chunk;
     }
   } catch (error) {

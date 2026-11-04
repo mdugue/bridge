@@ -354,12 +354,19 @@ export function mayRecover(
   now: number
 ): boolean {
   const recent = recentHistory(history, now);
-  if (how === "reclaimed") {
-    return recent.reclaims.length < RECLAIM_TRIES;
+  switch (how) {
+    case "reclaimed": {
+      return recent.reclaims.length < RECLAIM_TRIES;
+    }
+    case "failed": {
+      return recent.failures.length < FAILURE_TRIES;
+    }
+    case "lost": {
+      return level < MAX_SAFETY && recent.losses.length < MAX_SAFETY;
+    }
+    default: {
+      const unknown: never = how;
+      throw new Error(`unknown GPU loss: ${String(unknown)}`);
+    }
   }
-  if (how === "failed") {
-    return recent.failures.length < FAILURE_TRIES;
-  }
-  // "lost"
-  return level < MAX_SAFETY && recent.losses.length < MAX_SAFETY;
 }

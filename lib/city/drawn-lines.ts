@@ -358,47 +358,55 @@ function storeyRow(
   const value = `${whole.format(n)} × ${metres(look.storeyH)}`;
   const from =
     d.storey ?? (o.facts.levels === NO_FACT ? "height" : ("osm" as const));
-  if (from === "osm") {
-    return {
-      label: "Geschosse",
-      value,
-      method: "taken",
-      source: "osm",
-      detail:
-        o.facts.levels === NO_FACT
-          ? "building:levels"
-          : `building:levels = ${whole.format(o.facts.levels)}`,
-      url: places.osm,
-    };
+  switch (from) {
+    case "osm": {
+      return {
+        label: "Geschosse",
+        value,
+        method: "taken",
+        source: "osm",
+        detail:
+          o.facts.levels === NO_FACT
+            ? "building:levels"
+            : `building:levels = ${whole.format(o.facts.levels)}`,
+        url: places.osm,
+      };
+    }
+    case "photos": {
+      return {
+        label: "Geschosse",
+        value,
+        method: "detected",
+        source: "mapillary",
+        detail: "Geschosshöhe in Straßenfotos gemessen",
+        url: places.photos,
+      };
+    }
+    case "neighbours": {
+      return {
+        label: "Geschosse",
+        value,
+        method: "assumed",
+        source: "osm",
+        detail:
+          "von der Traufe gezählt, in der Geschosshöhe der kartierten Nachbarhäuser",
+        url: places.osm,
+      };
+    }
+    case "height": {
+      return {
+        label: "Geschosse",
+        value,
+        method: "assumed",
+        source: "viewer",
+        ...unusedLevels(o, places),
+      };
+    }
+    default: {
+      const unknown: never = from;
+      throw new Error(`unknown case: ${String(unknown)}`);
+    }
   }
-  if (from === "photos") {
-    return {
-      label: "Geschosse",
-      value,
-      method: "detected",
-      source: "mapillary",
-      detail: "Geschosshöhe in Straßenfotos gemessen",
-      url: places.photos,
-    };
-  }
-  if (from === "neighbours") {
-    return {
-      label: "Geschosse",
-      value,
-      method: "assumed",
-      source: "osm",
-      detail:
-        "von der Traufe gezählt, in der Geschosshöhe der kartierten Nachbarhäuser",
-      url: places.osm,
-    };
-  }
-  return {
-    label: "Geschosse",
-    value,
-    method: "assumed",
-    source: "viewer",
-    ...unusedLevels(o, places),
-  };
 }
 
 /** Why a storey count OSM maps was not drawn: its storeys would be
@@ -515,39 +523,48 @@ function windowsRow(
   }
   const base = { label: "Fenster", value: "keine" };
   const use = functionWords(o.facts.function);
-  if (d.noWindows === "facade") {
-    return { ...base, ...ownFacadeWhy(o, d, places) };
+  switch (d.noWindows) {
+    case "facade": {
+      return { ...base, ...ownFacadeWhy(o, d, places) };
+    }
+    case "low": {
+      return {
+        ...base,
+        method: "computed",
+        source: "lod2",
+        detail: "weniger als 3,2 m Wand",
+      };
+    }
+    case "use": {
+      return {
+        ...base,
+        method: "taken",
+        source: "lod2",
+        detail: `Nutzung ohne Fenster${use ? `: ${use}` : ""}`,
+      };
+    }
+    case "small": {
+      return {
+        ...base,
+        method: "computed",
+        source: "viewer",
+        detail: "kein Fenster passt ins Geschoss",
+      };
+    }
+    case "beyond":
+    case undefined: {
+      return {
+        ...base,
+        method: "assumed",
+        source: "viewer",
+        detail: "keine Angabe im Kachelstand",
+      };
+    }
+    default: {
+      const unknown: never = d.noWindows;
+      throw new Error(`unknown case: ${String(unknown)}`);
+    }
   }
-  if (d.noWindows === "low") {
-    return {
-      ...base,
-      method: "computed",
-      source: "lod2",
-      detail: "weniger als 3,2 m Wand",
-    };
-  }
-  if (d.noWindows === "use") {
-    return {
-      ...base,
-      method: "taken",
-      source: "lod2",
-      detail: `Nutzung ohne Fenster${use ? `: ${use}` : ""}`,
-    };
-  }
-  if (d.noWindows === "small") {
-    return {
-      ...base,
-      method: "computed",
-      source: "viewer",
-      detail: "kein Fenster passt ins Geschoss",
-    };
-  }
-  return {
-    ...base,
-    method: "assumed",
-    source: "viewer",
-    detail: "keine Angabe im Kachelstand",
-  };
 }
 
 /** Why a landmark without a reason of its own keeps its facade: Wikidata
@@ -661,52 +678,61 @@ function windowsFrom(
     guessed = "near";
   }
   const from = d.windows ?? guessed;
-  if (from === "measured") {
-    return {
-      ...base,
-      method: "detected",
-      source: "mapillary",
-      detail: "an den eigenen Wänden in Straßenfotos gemessen",
-      url: places.photos,
-    };
+  switch (from) {
+    case "measured": {
+      return {
+        ...base,
+        method: "detected",
+        source: "mapillary",
+        detail: "an den eigenen Wänden in Straßenfotos gemessen",
+        url: places.photos,
+      };
+    }
+    case "tree": {
+      return {
+        ...base,
+        method: "detected",
+        source: "mapillary",
+        detail: "an einem anderen Teil des Gebäudes gemessen",
+        url: places.photos,
+      };
+    }
+    case "near": {
+      return {
+        ...base,
+        method: "assumed",
+        source: "mapillary",
+        detail: "vom nächsten gemessenen Haus gleicher Art (bis 150 m)",
+      };
+    }
+    case "none":
+    case "type": {
+      // a facade of its own carries windows only as a palace's
+      if (hasObjectFlag(o.flags, OBJECT_FLAG_OWN_FACADE)) {
+        return {
+          ...base,
+          method: "assumed",
+          source: "viewer",
+          ...palaceStoreys(o, places),
+        };
+      }
+      const type = windowType(
+        hasObjectFlag(o.flags, OBJECT_FLAG_FLAT_ROOF),
+        o.eaveH,
+        look.storeyH
+      );
+      return {
+        ...base,
+        method: "assumed",
+        source: "viewer",
+        detail: `nichts gemessen: wie ein ${TYPE[type]}`,
+      };
+    }
+    default: {
+      const unknown: never = from;
+      throw new Error(`unknown case: ${String(unknown)}`);
+    }
   }
-  if (from === "tree") {
-    return {
-      ...base,
-      method: "detected",
-      source: "mapillary",
-      detail: "an einem anderen Teil des Gebäudes gemessen",
-      url: places.photos,
-    };
-  }
-  if (from === "near") {
-    return {
-      ...base,
-      method: "assumed",
-      source: "mapillary",
-      detail: "vom nächsten gemessenen Haus gleicher Art (bis 150 m)",
-    };
-  }
-  // a facade of its own carries windows only as a palace's
-  if (hasObjectFlag(o.flags, OBJECT_FLAG_OWN_FACADE)) {
-    return {
-      ...base,
-      method: "assumed",
-      source: "viewer",
-      ...palaceStoreys(o, places),
-    };
-  }
-  const type = windowType(
-    hasObjectFlag(o.flags, OBJECT_FLAG_FLAT_ROOF),
-    o.eaveH,
-    look.storeyH
-  );
-  return {
-    ...base,
-    method: "assumed",
-    source: "viewer",
-    detail: `nichts gemessen: wie ein ${TYPE[type]}`,
-  };
 }
 
 /** Where a palace's window storeys come from (`palaceStorey`): OSM's
@@ -839,27 +865,36 @@ function roofColourRow(
 ): DrawnRow {
   const swatch = cssColour(look.roof);
   const base = { label: "Dachfarbe", value: swatch, swatch };
-  if (d.roof === "dop") {
-    return {
-      ...base,
-      method: "computed",
-      source: "dop",
-      detail: "Median der besonnten Pixel im Luftbild, je Dachfläche",
-    };
+  switch (d.roof) {
+    case "dop": {
+      return {
+        ...base,
+        method: "computed",
+        source: "dop",
+        detail: "Median der besonnten Pixel im Luftbild, je Dachfläche",
+      };
+    }
+    case "osm": {
+      return {
+        ...base,
+        method: "computed",
+        source: "osm",
+        detail: `roof:colour = ${d.roofColour ?? "?"}`,
+        url: places.osm,
+      };
+    }
+    case "palette":
+    case undefined: {
+      return {
+        ...base,
+        method: "assumed",
+        source: "viewer",
+        detail: "Ziegel- oder Schieferpalette nach Dachform",
+      };
+    }
+    default: {
+      const unknown: never = d.roof;
+      throw new Error(`unknown case: ${String(unknown)}`);
+    }
   }
-  if (d.roof === "osm") {
-    return {
-      ...base,
-      method: "computed",
-      source: "osm",
-      detail: `roof:colour = ${d.roofColour ?? "?"}`,
-      url: places.osm,
-    };
-  }
-  return {
-    ...base,
-    method: "assumed",
-    source: "viewer",
-    detail: "Ziegel- oder Schieferpalette nach Dachform",
-  };
 }

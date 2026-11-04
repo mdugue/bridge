@@ -172,9 +172,9 @@ uploaded; nothing it names is fetched (ADR 0054).
   deployment (ADR 0056).
 - **oxlint + oxfmt, no ESLint, no biome.** `oxlint.config.ts` extends
   ultracite's core, react and next presets (loading it takes Node ≥ 22.18),
-  and each rule it changes says why there. No `oxlint-disable` comment: change the code, or the config
-  with its reason. `--type-check` stays off. typescript-eslint
-  cannot run on TypeScript 7; check oxlint's full catalogue
+  and each rule it changes says why there. No `oxlint-disable` comment:
+  change the code, or the config with its reason. `--type-check` stays off.
+  typescript-eslint cannot run on TypeScript 7; check oxlint's full catalogue
   (`oxlint --print-config -D all`) before reaching for ESLint. Markdown and
   MDX are excluded from oxfmt; prose stays hand-wrapped.
 - **One TypeScript, 7.x native.** `bun check` is the fast check; tsc (in

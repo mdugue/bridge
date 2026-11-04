@@ -86,7 +86,8 @@ function drawBridges(
   ctx.lineWidth = 0.5;
   for (const deck of bridges) {
     ctx.beginPath();
-    for (const [i, [x, y]] of deck.pts.entries()) {
+    for (let i = 0; i < deck.pts.length; i += 1) {
+      const [x, y] = deck.pts[i];
       const { px, py } = epsgToMapPx(x, y, bounds, size);
       if (i === 0) {
         ctx.moveTo(px, py);
@@ -119,7 +120,8 @@ function drawFootprints(
       continue;
     }
     ctx.beginPath();
-    for (const [i, [x, y]] of poly.pts.entries()) {
+    for (let i = 0; i < poly.pts.length; i += 1) {
+      const [x, y] = poly.pts[i];
       const { px, py } = epsgToMapPx(x, y, bounds, size);
       if (i === 0) {
         ctx.moveTo(px, py);

@@ -1591,8 +1591,8 @@ what lies between ([ADR 0032](./adr/0032-camera-never-inside-a-building.md)).
 **The network fails, and is tried again**
 ([ADR 0048](./adr/0048-network-failures-are-retried.md)). Every tile and
 tileset request goes through one retrying fetch (`fetchBytes` in
-`fetch-optional.ts`; for tile content `ContentFetchPlugin` in `tile-content-fetch.ts`, which inflates
-the `.gz` once its body is read whole — one that does not inflate is a
+`fetch-optional.ts`; for tile content `ContentFetchPlugin` in
+`tile-content-fetch.ts`, which inflates the `.gz` once its body is read whole — one that does not inflate is a
 corrupt file, not a blip, and is not retried), and so do the terrain,
 sky-view and horizon rasters (`fetchRasterBytes`) and the trees' NDVI
 sampler: an abort is never retried, a 404 means absent, a network error
