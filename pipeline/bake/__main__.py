@@ -209,15 +209,21 @@ def step_key(step: str, research: bool, spec_hash: str) -> dict:
 
 def recorded_tile(spec, step: str, tile, research: bool, key: dict, save: bool) -> None:
     """The step on the tile, its run recorded (step_cache.py) — or, with the
-    cache off, its old record dropped."""
-    manifest = step_cache.manifest_path(spec.raw, spec.site, step, tile.id)
-    if not save:
-        Path(manifest).unlink(missing_ok=True)
-        run_tile(step, tile, spec.tiles, research)
-        return
-    with step_cache.recording([os.getcwd(), str(spec.data), str(spec.raw)]) as rec:
-        run_tile(step, tile, spec.tiles, research)
-    step_cache.save(manifest, key, rec)
+    cache off, its old record dropped. A step that fails says on which
+    site, tile and step before the error goes on (in a worker of a
+    `--jobs` run as well): tile 11 of 15 names itself."""
+    try:
+        manifest = step_cache.manifest_path(spec.raw, spec.site, step, tile.id)
+        if not save:
+            Path(manifest).unlink(missing_ok=True)
+            run_tile(step, tile, spec.tiles, research)
+            return
+        with step_cache.recording([os.getcwd(), str(spec.data), str(spec.raw)]) as rec:
+            run_tile(step, tile, spec.tiles, research)
+        step_cache.save(manifest, key, rec)
+    except Exception as exc:
+        print(f"{spec.site} {tile.id} {step}: {exc}")
+        raise
 
 
 def warm(spec, step: str, tiles, jobs: int) -> None:

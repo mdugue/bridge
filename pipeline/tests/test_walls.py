@@ -5,6 +5,7 @@ import math
 from collections import Counter
 
 import numpy as np
+import pytest
 import rasterio
 import shapely
 from PIL import Image
@@ -278,7 +279,12 @@ def test_a_walls_material_comes_from_its_tags_or_the_sites_majority():
 # --- B9: tall fences ------------------------------------------------------------
 
 
-def test_an_untagged_fence_by_a_railway_or_round_a_pitch_stands_two_metres(tmp_path, monkeypatch):
+# Hamburg, Bavaria and NRW are in zone 32: the bake reads the extract into
+# the tile's own CRS
+@pytest.mark.parametrize("epsg", [25833, 25832])
+def test_an_untagged_fence_by_a_railway_or_round_a_pitch_stands_two_metres(
+    tmp_path, monkeypatch, epsg
+):
     nodes = {
         1: (0, 20, ""),
         2: (200, 20, ""),
@@ -303,7 +309,7 @@ def test_an_untagged_fence_by_a_railway_or_round_a_pitch_stands_two_metres(tmp_p
         + way(5, [11, 12], {"barrier": "fence"})
         + way(6, [13, 14], {"barrier": "fence", "height": "1"})
     )
-    tile = osm_tile(tmp_path, monkeypatch, nodes, ways)
+    tile = osm_tile(tmp_path, monkeypatch, nodes, ways, epsg=epsg)
     walls.run(tile)
     by_y = {
         round(f["geometry"]["coordinates"][0][1] - Y0, 1): f["properties"]["h"]

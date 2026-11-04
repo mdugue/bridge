@@ -2,13 +2,19 @@
 steps, sides and handrails."""
 
 import numpy as np
+import pytest
 import shapely
 
 from bake import stairs
 from tests.synthetic import SIZE, X0, Y0, features, osm_tile, read, slope_tile, way, write_raster
 
 
-def test_a_flight_is_oriented_uphill_with_its_landings_and_tagged_steps(tmp_path, monkeypatch):
+# Hamburg, Bavaria and NRW are in zone 32: the bake reads the extract into
+# the tile's own CRS
+@pytest.mark.parametrize("epsg", [25833, 25832])
+def test_a_flight_is_oriented_uphill_with_its_landings_and_tagged_steps(
+    tmp_path, monkeypatch, epsg
+):
     from bake import stairs
 
     # Drawn top → bottom; 25 steps over the 4 m rise is a 16 cm riser.
@@ -16,7 +22,7 @@ def test_a_flight_is_oriented_uphill_with_its_landings_and_tagged_steps(tmp_path
         '<way id="1" version="1"><nd ref="1"/><nd ref="2"/>'
         '<tag k="highway" v="steps"/><tag k="step_count" v="25"/><tag k="width" v="3 m"/></way>'
     )
-    tile = slope_tile(tmp_path, monkeypatch, way)
+    tile = slope_tile(tmp_path, monkeypatch, way, epsg=epsg)
     stairs.run(tile)
     doc = read(tile, "stairs")
     assert doc["attribution"].startswith("©")
