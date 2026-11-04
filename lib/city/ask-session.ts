@@ -181,10 +181,14 @@ export function createAskSession(ports: AskSessionPorts): AskSession {
       }
       // read aloud only where the device can: a voice-style answer
       // nobody hears, with no switch to undo it, helps no one
-      reading = speech.supported();
-      // the visitor chose reading by speaking
-      readingByHearing = false;
-      return ask(text, reading);
+      const voice = speech.supported();
+      const result = ask(text, voice);
+      // the visitor chose reading by speaking — only a question sent
+      if (result === "sent") {
+        reading = voice;
+        readingByHearing = false;
+      }
+      return result;
     },
     answerStarted: () => {
       loading = true;
