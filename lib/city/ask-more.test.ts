@@ -155,6 +155,7 @@ test("lamps, furniture and tram stops are each askable at their point", () => {
   );
 });
 
+// a crown may stand over the hedge: the hedge is among the hits
 const hedgeAt = ([x, y]: [number, number]) =>
   hitsInSets({ ...epsgToWorld(x, y, offset), y: 200 }, down, sets, 1000).find(
     (h) => h.target.kind === "hedge"
@@ -164,7 +165,6 @@ test("a hedge is one thing along its whole line", () => {
   const hedge = features.hedges.find((f) => f.geometry.coordinates.length > 3);
   const along = samplePolyline(hedge?.geometry.coordinates ?? [], 2);
   const [a, b] = [along[0], along.at(-1)] as [number, number][];
-  // a crown may stand over the hedge: the hedge is among the hits
   const first = hedgeAt(a);
   const last = hedgeAt(b);
   expect(first?.kind).toBe("hedge");

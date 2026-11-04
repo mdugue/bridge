@@ -129,6 +129,10 @@ test("a snapped wall's cap faces up whichever side its high shelf is on", () => 
   // the line: the walls draw both sides, so a cap wound downwards is shaded
   // from below.
   for (const north of [true, false]) {
+    // A retaining wall along y = 0 between two terrace steps the DGM blurs
+    // into 1 m ramps: at y = −4 (the taller for x < 7) and at y = +4 (the
+    // taller beyond). Its columns snap to one step or the other; joined, they
+    // stood a block 10 m deep over the terrace between (Meißen's Burgberg).
     const ramp = (_x: number, y: number) => {
       const t = Math.min(Math.max((y + 0.5) / 2, 0), 1);
       return 100 + 8 * (north ? t : 1 - t);
@@ -258,10 +262,6 @@ test("a measured quay snaps to its step like a retaining wall", () => {
 });
 
 test("a wall whose scan finds two terraces stands at each, not across them", () => {
-  // A retaining wall along y = 0 between two terrace steps the DGM blurs
-  // into 1 m ramps: at y = −4 (the taller for x < 7) and at y = +4 (the
-  // taller beyond). Its columns snap to one step or the other; joined, they
-  // stood a block 10 m deep over the terrace between (Meißen's Burgberg).
   const wall: WallRibbon = {
     coords: [
       [0, 0],

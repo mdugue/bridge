@@ -1505,7 +1505,8 @@ function paintCrowns(
     crownColor(col, cell[i], v);
     crowns.setColorAt(i, col);
   }
-  for (const [i, e] of extras.entries()) {
+  for (let i = 0; i < extras.length; i += 1) {
+    const e = extras[i];
     if (e.crown) {
       crowns.setColorAt(cell.length + i, e.crown.colour);
     }
@@ -1542,7 +1543,8 @@ function crownMesh(
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   writePlacements(mesh, trees, widen);
-  for (const [i, e] of crowned.entries()) {
+  for (let i = 0; i < crowned.length; i += 1) {
+    const e = crowned[i];
     if (e.crown) {
       mesh.setMatrixAt(trees.length + i, e.crown[which]);
     }
@@ -1567,7 +1569,8 @@ function paintBark(
   for (let i = 0; i < first; i += 1) {
     trunks.setColorAt(i, white);
   }
-  for (const [i, e] of extras.entries()) {
+  for (let i = 0; i < extras.length; i += 1) {
+    const e = extras[i];
     trunks.setColorAt(first + i, e.bark ?? white);
   }
   if (trunks.instanceTints) {
@@ -1606,7 +1609,8 @@ function buildTreeCell(
   if (trees.length + crowned.length === 0) {
     const trunks = new Instances(plain, trunkMat, extras.length);
     trunks.castShadow = true;
-    for (const [i, e] of extras.entries()) {
+    for (let i = 0; i < extras.length; i += 1) {
+      const e = extras[i];
       trunks.setMatrixAt(i, e.trunk);
     }
     paintBark(trunks, 0, extras);
@@ -1642,7 +1646,8 @@ function buildTreeCell(
   } else {
     rich = crownMesh(geos.rich, crownMat, trees, crowned, "rich");
     own = new Instances(plain, trunkMat, extras.length);
-    for (const [i, e] of extras.entries()) {
+    for (let i = 0; i < extras.length; i += 1) {
+      const e = extras[i];
       own?.setMatrixAt(i, e.trunk);
     }
     paintBark(own, 0, extras);

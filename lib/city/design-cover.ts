@@ -13,6 +13,7 @@
 
 import type { DesignPlacement } from "./design-placement";
 import { DEG2RAD } from "./pose";
+import { extendHull } from "./open-roofs";
 
 /** A design's plan: cells of `cell` m from (x0, y0), EPSG; 1 where it
  *  stands. */
@@ -416,35 +417,16 @@ export function planHull(mask: PlanMask): [number, number][] | null {
   return points.length < 3 ? null : convexHull(points);
 }
 
-const cross = (o: number[], a: number[], b: number[]) =>
-  (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
-
 /** Andrew's monotone chain, anticlockwise. */
 export function convexHull(points: [number, number][]): [number, number][] {
   const sorted = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   const lower: [number, number][] = [];
   for (const p of sorted) {
-    while (lower.length >= 2) {
-      const o = lower.at(-2);
-      const a = lower.at(-1);
-      if (!(o && a && cross(o, a, p) <= 0)) {
-        break;
-      }
-      lower.pop();
-    }
-    lower.push(p);
+    extendHull(lower, p);
   }
   const upper: [number, number][] = [];
   for (const p of sorted.toReversed()) {
-    while (upper.length >= 2) {
-      const o = upper.at(-2);
-      const a = upper.at(-1);
-      if (!(o && a && cross(o, a, p) <= 0)) {
-        break;
-      }
-      upper.pop();
-    }
-    upper.push(p);
+    extendHull(upper, p);
   }
   return [...lower.slice(0, -1), ...upper.slice(0, -1)];
 }

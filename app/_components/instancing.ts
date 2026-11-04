@@ -197,9 +197,9 @@ export class Instances<M extends Material = Material> extends Mesh<
 export const isInstances = (object: unknown): object is Instances =>
   (object as { isInstances?: boolean } | null)?.isInstances === true;
 
-/** The drawn instance's matrix (column attributes; identity off a set). */
 const column = (i: number): V4 => attribute(`iMat${i}`, "vec4");
 
+/** The drawn instance's matrix (column attributes; identity off a set). */
 export const instanceMatrix = Fn((builder) => {
   if (!builder.geometry.hasAttribute("iMat0")) {
     return mat4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);

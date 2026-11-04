@@ -25,6 +25,7 @@ import type { TerrainBounds } from "./terrain-geometry";
 
 const local: DesignBox = { min: [-10, 0, -5], max: [10, 12, 5] };
 
+// ground rising to the east by 1 m per 10 m
 const heightAt = (x: number) => 100 + x / 10;
 
 describe("design placement", () => {
@@ -111,7 +112,6 @@ describe("design placement", () => {
   });
 
   test("set on the ground at the lowest ground under it", () => {
-    // ground rising to the east by 1 m per 10 m
     const base = groundBase(
       { east: 0, north: 0, rotation: 0 },
       local,

@@ -290,7 +290,8 @@ function* canopySetsSteps(
   // 0 a broadleaf (or not known), else 1 + its index in LEAVES; + CONE
   // for one drawn as the cone
   const leaf = new Uint8Array(trees.length);
-  for (const [i, t] of trees.entries()) {
+  for (let i = 0; i < trees.length; i += 1) {
+    const t = trees[i];
     position.set(epsgOf(t.p, ctx.offset), i * 2);
     height[i] = t.height && Number.isFinite(t.height) ? t.height : 0;
     source[i] = sources.indexOf(t.source);

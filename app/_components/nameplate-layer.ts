@@ -1095,7 +1095,8 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     // the mask's rectangle on the plate (a box reaches past the block)
     const area = geometry?.mask.area ?? { x: 0, y: 0, ...block() };
     let high = prismCorners[0];
-    for (const [i, c] of prismCorners.entries()) {
+    for (let i = 0; i < prismCorners.length; i += 1) {
+      const c = prismCorners[i];
       const x = (area.x + (i === 1 || i === 2 ? area.width : 0)) * p.cap;
       const y = (area.y + (i >= 2 ? area.height : 0)) * p.cap;
       for (let k = 0; k < 3; k += 1) {

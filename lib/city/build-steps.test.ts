@@ -93,6 +93,8 @@ test("inSlices stops at the first pause after its signal fires", async () => {
   expect(log.length).toBeLessThan(100);
 });
 
+// a clock that ticks 1 ms a read: the first slice holds as many steps
+// as its budget has milliseconds
 const firstSlice = async (ms: number, holdsMs?: number) => {
   setSliceBudget(ms, holdsMs);
   const log: number[] = [];
@@ -110,8 +112,6 @@ const firstSlice = async (ms: number, holdsMs?: number) => {
 };
 
 test("inSlices takes the budget the scene set", async () => {
-  // a clock that ticks 1 ms a read: the first slice holds as many steps
-  // as its budget has milliseconds
   const moving = await firstSlice(SLICE_MS);
   const resting = await firstSlice(REST_SLICE_MS);
   // a budget no frame renewed is gone: the short slices again

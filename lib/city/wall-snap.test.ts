@@ -86,6 +86,9 @@ test("an isolated snap among failures is dropped", () => {
   expect(out.every((s) => s === null)).toBe(true);
 });
 
+// A wall between two terraces: its first vertices found the lower step
+// (crest 3.5 m to the low side), the rest the upper one (crest 5 m to the
+// high side). A median over both stood one block across the terrace.
 const lower = (): StepSnap => ({
   up: 1,
   foot: -5,
@@ -103,9 +106,6 @@ const upper = (): StepSnap => ({
 });
 
 test("smoothing keeps each vertex at the step it found, never between two", () => {
-  // A wall between two terraces: its first vertices found the lower step
-  // (crest 3.5 m to the low side), the rest the upper one (crest 5 m to the
-  // high side). A median over both stood one block across the terrace.
   const raw = [lower(), lower(), lower(), upper(), upper(), upper(), upper()];
   const out = smoothSnaps(raw);
   for (const [i, s] of out.entries()) {

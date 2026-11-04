@@ -299,10 +299,10 @@ export function sharedCache(
       if (!on()) {
         return null;
       }
-      // every scope at once, the first that has it in `reads`' order
       const fetched = await Promise.all(
         reads.map(async (from) => await fetchFrom(name, key, from))
       );
+      // every scope at once, the first that has it in `reads`' order
       const found = fetched.find(Boolean);
       if (found) {
         counts.hits += 1;

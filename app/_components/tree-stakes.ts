@@ -97,7 +97,8 @@ export function buildTreeStakes(
   const m = new Matrix4();
   const q = new Quaternion();
   const one = new Vector3(1, 1, 1);
-  for (const [i, t] of trees.entries()) {
+  for (let i = 0; i < trees.length; i += 1) {
+    const t = trees[i];
     q.setFromAxisAngle(Y_AXIS, t.rot);
     set.setMatrixAt(i, m.compose(new Vector3(t.x, t.ground, t.z), q, one));
   }

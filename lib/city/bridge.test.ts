@@ -33,11 +33,11 @@ test("ribRuns finds each stretch a rib stands on", () => {
   expect(ribRuns([0, 0])).toEqual([]);
 });
 
+// the Blaues Wunder's shape: rise to a pylon, sag, rise, fall
 const tent = (i: number, at: number) =>
   Math.max(0, 24 - Math.abs(i - at) * 0.6);
 
 test("ribPeaks: a truss sagging between two pylons has two", () => {
-  // the Blaues Wunder's shape: rise to a pylon, sag, rise, fall
   const rise = Array.from({ length: 160 }, (_, i) =>
     Math.max(tent(i, 35), tent(i, 105), 2)
   );

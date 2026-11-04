@@ -74,8 +74,11 @@ export function pickedFiles(
     manager,
     missing,
     // every load the manager started has ended, failed ones too
-    settled: async () =>
-      started && done ? await done : await Promise.resolve(),
+    settled: async () => {
+      if (started && done) {
+        await done;
+      }
+    },
     release: () => {
       for (const url of urls.values()) {
         URL.revokeObjectURL(url);

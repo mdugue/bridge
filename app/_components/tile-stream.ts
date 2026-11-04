@@ -1047,9 +1047,7 @@ async function buildCoarseDressing(
   const files = extras.coarse ?? {};
   const tile = extras.tileId;
   const fetchKind = async <T>(file: string | undefined): Features<T> =>
-    file
-      ? await fetchFeatures<T>(url(file), signal)
-      : await Promise.resolve([]);
+    file ? await fetchFeatures<T>(url(file), signal) : [];
   const [traffic, bridges, crownBytes] = await Promise.all([
     fetchKind<TrafficFeature>(files.traffic),
     fetchKind<BridgeFeature>(files.bridge),
@@ -1152,9 +1150,7 @@ async function buildDressing(
   // A kind the tile lacks is a feature off, never a request.
   const get = async <T>(kind: DressingKind): Features<T> => {
     const file = d[kind];
-    return file
-      ? await fetchFeatures<T>(url(file), signal)
-      : await Promise.resolve([]);
+    return file ? await fetchFeatures<T>(url(file), signal) : [];
   };
   // The canopy points come packed (lib/city/point-pack.ts, prepare-data.ts):
   // no parse, the same features for the vegetation. Not a pack = off.
@@ -1460,15 +1456,14 @@ function weighDressing(entry: Dressed, dressing: TileDressing): void {
   );
 }
 
+/** A promise's resolver until its executor has run. */
+const unresolved = (): void => undefined;
+
 /**
  * The 3DTilesRendererJS plugin that dresses content as it loads. Runs inside
  * the renderer's own load (awaited before the tile is marked loaded), so a
  * tile is never shown half-dressed.
  */
-let settle = (): void => undefined;
-
-let built = (): void => undefined;
-
 export class DressingPlugin {
   name = "BRIDGE_DRESSING";
   /** every content root dressed and not yet released: a Map, not a
@@ -1740,6 +1735,7 @@ export class DressingPlugin {
 
   async processTileModel(scene: Object3D, tile: object): Promise<void> {
     this.tileOf.set(scene, tile);
+    let settle = unresolved;
     this.loaded.set(
       scene,
       new Promise<void>((resolve) => {
@@ -2164,6 +2160,7 @@ export class DressingPlugin {
   ): Promise<void> {
     this.pending += 1;
     this.pendingScenes.set(scene, extras.tileId);
+    let built = unresolved;
     const ready = new Promise<void>((resolve) => {
       built = resolve;
     });

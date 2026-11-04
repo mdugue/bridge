@@ -794,10 +794,10 @@ export function createPostStack(
   // the camera moved enough this frame to draw the pastel frame blurred
   // (motion-blur.ts), where this tier has a way to draw it
   let blurred = false;
-  // ...and how: before SMAA on a desktop, in place of the FXAA on a phone
   const motionFrame = pastel.motion
     ? { pre: pastel.motion, finished: finished.afterPre }
     : null;
+  // ...and how: before SMAA on a desktop, in place of the FXAA on a phone
   const moving =
     motionFrame ??
     (finished.moving ? { pre: null, finished: finished.moving } : null);
@@ -914,6 +914,8 @@ export function createPostStack(
         geometries.add(o.geometry);
       }
     }
+    // (bind: a function of this walk's own, see above; `noteGone` itself
+    // would be the shared listener)
     const onGone = noteGone.bind(undefined);
     for (const g of geometries) {
       g.addEventListener("dispose", onGone);
@@ -1003,16 +1005,17 @@ export function createPostStack(
   // still queued when it was let go builds nothing
   const compileSwap = (kind: PaperKind, view: Camera) => {
     const swap = inTurn(
-      swappedIn(kind, async (o) =>
-        views.includes(view)
-          ? await compileNow(o, view)
-          : await Promise.resolve()
-      )
+      swappedIn(kind, async (o) => {
+        if (views.includes(view)) {
+          await compileNow(o, view);
+        }
+      })
     );
-    return async (object: Drawable): Promise<void> =>
-      paperScene.drawsAsPaper(object, kind) && views.includes(view)
-        ? await swap(object)
-        : await Promise.resolve();
+    return async (object: Drawable): Promise<void> => {
+      if (paperScene.drawsAsPaper(object, kind) && views.includes(view)) {
+        await swap(object);
+      }
+    };
   };
   // The Ausschnitt (model-cuts.ts) is a ClippingGroup around the city.
   // three keeps ONE render object per drawable on both sides of it and

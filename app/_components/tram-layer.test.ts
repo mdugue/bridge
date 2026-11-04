@@ -202,6 +202,7 @@ test("a double lawn track shares one lawn, its inner edges at the midpoint", () 
   expect(pos).toBeDefined();
 });
 
+// one track split into two ways at x 30, its points every 2 m
 const run = (x0: number) => ({
   d: Array.from({ length: 16 }, (_, k) => k * 2),
   pts: Array.from({ length: 16 }, (_, k) => ({
@@ -212,7 +213,6 @@ const run = (x0: number) => ({
 });
 
 test("a lawn track's next piece, end to end, is no neighbour", () => {
-  // one track split into two ways at x 30, its points every 2 m
   const halves = lawnHalves([run(0), run(32)]);
   expect(halves).toHaveLength(2);
   for (const h of halves) {

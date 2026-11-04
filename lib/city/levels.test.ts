@@ -144,12 +144,12 @@ test("the runs a build bakes give the layer back every level off the ground", ()
   }
 });
 
+// a trench 300 m long, the DGM's lid over it 6 m up (Hamburg's S-Bahn
+// under the streets by Hammerbrook): too long a hump for the cut at the
+// line's grade
 const lid = (d: number) => (d >= 200 && d <= 500 ? 116 : 110);
 
 test("a line the source puts below the ground cuts under a long lid", () => {
-  // a trench 300 m long, the DGM's lid over it 6 m up (Hamburg's S-Bahn
-  // under the streets by Hammerbrook): too long a hump for the cut at the
-  // line's grade
   const samples = line(700, lid);
   const plain = lineLevels(samples, RAIL);
   expect(modeAt(plain, samples, 352)?.mode).not.toBe("cut");

@@ -35,7 +35,7 @@ jobs:
       # oxlint.config.ts: oxlint strips its types on Node, from 22.18
       - uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: lts/*
       - run: bun install --frozen-lockfile
       - run: bun lint
 

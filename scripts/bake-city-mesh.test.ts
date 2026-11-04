@@ -52,6 +52,7 @@ import {
 } from "./bake-city-mesh";
 
 /** A box as a CityJSON LoD2 solid over the eight vertices from `first`. */
+// the box's flat roof stands where it has no parts, or is raised
 function box(first: number) {
   const [a, b, c, d] = [first, first + 1, first + 2, first + 3];
   const [e, f, g, k] = [first + 4, first + 5, first + 6, first + 7];
@@ -1284,6 +1285,8 @@ test("a roof on posts without an outline stays a block", () => {
   const offset = { cx: 0, cy: 0 };
   expect(withOpenRoofs(v, new Set([0]), [[]], offset)).toBe(v);
   // with its outline the wall is cut under the slab and the posts stand
+  // an 8 × 8 m outline: a 4 m wide flat wing at 106 m and a mono-pitch
+  // face rising 0.5 m a metre from 108 m
   const ring: [number, number][] = [
     [0, 0],
     [4, 0],
@@ -1500,8 +1503,6 @@ test("a structure carries no door, plinth or shopfront (G17)", () => {
 });
 
 test("a missing building the surface model shapes stands its measured parts, its eave at the lowest roof (G27)", () => {
-  // an 8 × 8 m outline: a 4 m wide flat wing at 106 m and a mono-pitch
-  // face rising 0.5 m a metre from 108 m
   const cols = 8;
   const rows = 12;
   const f: StructureFeature = {
@@ -1531,7 +1532,6 @@ test("a missing building the surface model shapes stands its measured parts, its
   const shaped = shapedGap(f, offset);
   expect(shaped?.eave).toBeCloseTo(6, 6);
   expect(shaped?.pitched).toBe(true);
-  // the box's flat roof stands where it has no parts, or is raised
   const flatBox = { ...f, properties: { h: 9, kind: "building", z: 100 } };
   expect(shapedGap(flatBox as StructureFeature, offset)).toBeNull();
   const raised = { ...f, properties: { ...f.properties, base: 4 } };

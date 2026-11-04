@@ -595,6 +595,8 @@ test.each(tiles)("%s: kerbs are LineStrings", (tile, site) => {
   }
 });
 
+// The walls first (the terrain study addresses them by index), then the
+// fences, then the gates.
 const rank = (k: string) => {
   if (k === "gate") {
     return 2;
@@ -628,8 +630,6 @@ test.each(tiles)(
         expect(["railing", "mesh", "picket", "rail"]).toContain(type);
       }
     }
-    // The walls first (the terrain study addresses them by index), then the
-    // fences, then the gates.
     const ranks = kinds.map(rank);
     expect(ranks).toEqual(ranks.toSorted((a, b) => a - b));
   }

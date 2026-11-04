@@ -77,10 +77,10 @@ test("feet must reach the ground, edges must not stand above it", () => {
   expect(report.misses.map((m) => m.join.x)).toEqual([4, 1]);
 });
 
+// a 1 m deep gutter 2 m wide around x = 5 on a 10 m span
 const gutter = (x: number) => (Math.abs(x - 5) < 1 ? 99 : 100);
 
 test("a line follows the ground where it bends between its points", () => {
-  // a 1 m deep gutter 2 m wide around x = 5 on a 10 m span
   const line = followGround(
     [
       [0, 0],

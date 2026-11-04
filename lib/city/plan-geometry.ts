@@ -346,8 +346,6 @@ function writeBuilding(
   }
   for (const [k, raw] of rings.entries()) {
     const ring = openRing(raw);
-    // walls face out: the outer ring anticlockwise, holes clockwise — then
-    // the outside lies right of each edge, and (a, b, b′) faces it
     const turnsLeft = ringArea(ring) >= 0;
     const r = turnsLeft === (k === 0) ? ring : [...ring].reverse();
     for (let i = 0; i < r.length; i += 1) {
@@ -364,6 +362,8 @@ function writeBuilding(
 }
 
 /** Turns a plan triangle anticlockwise (seen from above). */
+// walls face out: the outer ring anticlockwise, holes clockwise — then
+// the outside lies right of each edge, and (a, b, b′) faces it
 function anticlockwise(tri: readonly [PlanPoint, PlanPoint, PlanPoint]): Tri {
   const cross =
     (tri[1][0] - tri[0][0]) * (tri[2][1] - tri[0][1]) -

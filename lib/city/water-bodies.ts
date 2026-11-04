@@ -381,14 +381,14 @@ export function siteWaterTints(tiles: TileWater[]): Map<string, number[]> {
   return out;
 }
 
+const r = (v: number) => Math.round(v * 10) / 10;
+
 /**
  * What a tile's water sheet reads (TerrainExtras.water): the tint grid
  * with its bodies' colours (`siteWaterTints`) — left out where every body
  * keeps the sheet's own — and, with `foam`, the foam lines in the data
  * frame. Undefined when there is neither.
  */
-const r = (v: number) => Math.round(v * 10) / 10;
-
 export function waterLook(
   member: WaterMember | null,
   colours: number[],

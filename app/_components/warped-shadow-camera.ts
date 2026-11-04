@@ -1,3 +1,4 @@
+/** The sun's shadow camera (sun-rig.ts, shadow-warp.ts). */
 import { OrthographicCamera } from "three/webgpu";
 import type { Matrix4 } from "three/webgpu";
 

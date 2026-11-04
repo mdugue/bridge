@@ -182,11 +182,11 @@ test("a wall turned against the line: the band follows it end to end", () => {
   expect(front(10)).toBeCloseTo(100 + PLINTH.proud - 0.1, 6);
 });
 
+// the wall along +y stands 0.1 out at the corner, the one along −x not
 const shift = (a: readonly number[]): [number, number] =>
   a[0] === 100 && a[1] === 0 ? [0.1, 0.1] : [0, 0];
 
 test("round a corner the mitre meets where the two shifted walls meet", () => {
-  // the wall along +y stands 0.1 out at the corner, the one along −x not
   const mesh = plinthMesh(corner, { cx: 0, cy: 0 }, shift);
   const has = (x: number, y: number) =>
     mesh.positions.some(

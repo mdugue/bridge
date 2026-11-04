@@ -484,6 +484,7 @@ const front = (x0: number, x1: number) => ({
   ],
 });
 
+// the door 3 m from the south wall's middle, the way s runs there
 const door = (x: number) => ({
   object: 0,
   at: [x, 0] as [number, number],
@@ -651,7 +652,6 @@ describe("facadeAttribute", () => {
       [{ object: 0, at: [10, 0.1], n: [0, -1], w: 1.8 }],
       [{ object: 0, a: [14, 0], b: [14, 10], n: [1, 0] }]
     );
-    // the door 3 m from the south wall's middle, the way s runs there
     const placed = slotDoor(f[2]);
     expect(Math.abs(placed?.at ?? 0)).toBeCloseTo(3, 9);
     expect(placed?.w).toBeCloseTo(1.8, 9);

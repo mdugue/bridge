@@ -103,7 +103,7 @@ const cross = (o: Point2, a: Point2, b: Point2) =>
   (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
 
 /** `q` on a hull chain, after the points that no longer turn left. */
-function extendHull(chain: Point2[], q: Point2): void {
+export function extendHull(chain: Point2[], q: Point2): void {
   while (chain.length >= 2) {
     const a = chain.at(-2);
     const b = chain.at(-1);

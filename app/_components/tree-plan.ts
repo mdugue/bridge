@@ -62,7 +62,8 @@ export function buildTreePlan(
   const set = new Instances(planGeometry(), planMaterial(), trees.length);
   const m = new Matrix4();
   const q = new Quaternion();
-  for (const [i, t] of trees.entries()) {
+  for (let i = 0; i < trees.length; i += 1) {
+    const t = trees[i];
     const r = t.ext.crownWidth / 2;
     set.setMatrixAt(
       i,

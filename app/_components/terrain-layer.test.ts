@@ -166,14 +166,14 @@ function share<T>(
   };
 }
 
+// the class raster another level is still decoding: it lands only when
+// the test says
 let land: (rasters: SplatRasters | null) => void = () => {};
 
 const none = async () => null;
 
 test("a level whose tile leaves while it waits for a shared raster lets go at once, without waiting for that raster", async () => {
   const released: string[] = [];
-  // the class raster another level is still decoding: it lands only when
-  // the test says
   const splats = share<SplatRasters>(
     async () =>
       await new Promise((resolve) => {

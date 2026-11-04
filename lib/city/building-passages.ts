@@ -132,15 +132,15 @@ function slope(
   return below ? [a, b, 1, c0] : [-a, -b, -1, -c0];
 }
 
+const dot = (n: readonly [number, number], q: readonly [number, number]) =>
+  n[0] * q[0] + n[1] * q[1];
+
 /**
  * The volume a passage takes, one convex prism per segment of its axis
  * (each a list of half-spaces): its width across, mitred into the next
  * segment at a bend (the bisector), run on square at the axis' ends, from
  * `SINK.wall` under the ground at each end up to `h` over it.
  */
-const dot = (n: readonly [number, number], q: readonly [number, number]) =>
-  n[0] * q[0] + n[1] * q[1];
-
 export function passageRegions(p: PassageAxis): Plane[][] {
   const { axis, ground, h, w } = p;
   const dirs = axis

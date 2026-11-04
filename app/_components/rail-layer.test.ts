@@ -287,10 +287,10 @@ test("a measured truss becomes an open frame with towers", () => {
   expect(plain).toBeGreaterThan(0);
 });
 
+// 120 m arch, crown 128 m, springing at the ground (100 m)
 const arch = (s: number) => 128 - 28 * ((s - 100) / 60) ** 2;
 
 test("an arch rib reaches down to its springing", () => {
-  // 120 m arch, crown 128 m, springing at the ground (100 m)
   const rise = Array.from({ length: 101 }, (_, i) =>
     Math.max(0, arch(i * 2) - 120)
   );
@@ -376,6 +376,8 @@ test("a masonry bridge's walls hang from the deck's own edges", () => {
   expect(below).toBeGreaterThan(0);
 });
 
+// a quarter ring, radius 94–106 m around the origin: its centroid lies
+// off the deck, in the hollow of the curve
 const arc = (r: number) =>
   Array.from({ length: 13 }, (_, k): [number, number] => {
     const a = (k / 12) * (Math.PI / 2);
@@ -383,8 +385,6 @@ const arc = (r: number) =>
   });
 
 test("a curved deck's sides all face out, the inner edge too", () => {
-  // a quarter ring, radius 94–106 m around the origin: its centroid lies
-  // off the deck, in the hollow of the curve
   const ring = [...arc(106), ...arc(94).reverse()];
   ring.push(ring[0]);
   const bridge: BridgeFeature = {

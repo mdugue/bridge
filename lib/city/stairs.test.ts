@@ -266,6 +266,7 @@ test("every triangle is wound to face its normal", () => {
 });
 
 /** The ground beside the flight stands 1 m above its treads, level along it. */
+// The bank beside the flight stands 1 m above its treads, level along it.
 const cut = (x: number, y: number) =>
   Math.abs(x - 50) > 2 ? bank(y) + 1 : bank(y);
 
@@ -291,7 +292,6 @@ function windsToItsNormals(g: { normals: number[]; positions: number[] }) {
 }
 
 test("a flight cut into a bank gets Wangen at the bank's level", () => {
-  // The bank beside the flight stands 1 m above its treads, level along it.
   const g = stairGeometry(FLIGHT, { cx: 0, cy: 0 }, { groundAt: cut });
   if (!g) {
     throw new Error("the flight has no geometry");

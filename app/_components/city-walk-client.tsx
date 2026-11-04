@@ -115,9 +115,11 @@ function useDataManifest(base: string): {
     manifest?: DataManifest;
     failed?: string;
   }>({});
-  const [attempt, setAttempt] = useState(0);
   // a new object per attempt: that is what runs the effect again on a retry
-  const request = useMemo(() => ({ attempt, base }), [attempt, base]);
+  const [request, setRequest] = useState({ base });
+  if (request.base !== base) {
+    setRequest({ base });
+  }
   useEffect(() => {
     const aborter = new AbortController();
     const load = async () => {
@@ -144,8 +146,8 @@ function useDataManifest(base: string): {
   }, [request]);
   const retry = useCallback(() => {
     setState({});
-    setAttempt((n) => n + 1);
-  }, []);
+    setRequest({ base });
+  }, [base]);
   return { ...state, retry };
 }
 

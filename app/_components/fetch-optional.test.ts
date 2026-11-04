@@ -152,11 +152,11 @@ test("fetchBytes answers a status no retry fixes as it is, without a body", asyn
   expect(stub.calls()).toBe(1);
 });
 
+// the gzip magic, then nothing a decoder takes
 const corrupt = () =>
   new Response(new Uint8Array([0x1f, 0x8b, 8, 0, 0, 0, 0, 0, 0, 3, 7, 7]));
 
 test("a gzip read whole that does not inflate is a corrupt file, not the network's: no retry", async () => {
-  // the gzip magic, then nothing a decoder takes
   const stub = stubFetch(corrupt);
   const error = await fetchBytes("/t.glb.gz", {
     budgetMs: 20_000,

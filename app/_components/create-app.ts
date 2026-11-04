@@ -1490,6 +1490,8 @@ async function bootApp(
   );
   // The ground's shadow reach and the sun: uniform nodes every tile's
   // materials share, kept by the sun rig.
+  // The ground first: no building tile past it needs its BVH for this
+  // (`nearestCityHit` builds the ones the ray reaches before).
   const ground: GroundUniforms = {
     // the sun rig's own vector once it exists (below)
     shadowReach: uniform(new Vector3()),
@@ -1688,9 +1690,7 @@ async function bootApp(
       // whether it compiled (a tile drops the CPU copies of what it
       // uploaded); what a compile throws the stream sorts out
       compile: async (object) =>
-        compileWith
-          ? await compileWith(object).then(() => true)
-          : await Promise.resolve(false),
+        compileWith ? await compileWith(object).then(() => true) : false,
       // a compile the GPU had no room for (the dressing stays off): shed
       // memory before a frame's own allocation fails; the half-made
       // attribute such a failure left, met again at a tile's release, is
@@ -2372,6 +2372,7 @@ async function bootApp(
   // shows) moves the plate with it. Only the body is kept, not the
   // triangles (the outline holds its own copy).
   let askedBody: NameplateBody | null = null;
+  // the design's plan, drawn as a building
   const outline = (
     subject: OutlineSubject | null,
     flash = true,
@@ -2617,8 +2618,6 @@ async function bootApp(
       // pose sets a spot inside one out beside it). In the air the glide
       // goes part of the way along the line of sight (camera-pose.ts).
       tapRaycaster.setFromCamera(new Vector2(ndcX, ndcY), camera);
-      // The ground first: no building tile past it needs its BVH for this
-      // (`nearestCityHit` builds the ones the ray reaches before).
       const groundDist = groundAlong(tapRaycaster, 6000);
       tapRaycaster.far = groundDist ?? 6000;
       const building = nearestCityHit(
@@ -2723,7 +2722,6 @@ async function bootApp(
           (i) => gone?.has(i) !== true && replaced?.has(i) !== true
         );
       });
-      // the design's plan, drawn as a building
       const planOutline = design?.outline();
       if (planOutline) {
         flattened.push({ pts: planOutline });

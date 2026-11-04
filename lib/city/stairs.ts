@@ -623,8 +623,6 @@ class StairWriter {
   }
 }
 
-/** A vertical quad from `p` to `q` (in that order, seen from the side
- *  `normal` faces), from the bases up to the tops. */
 function sideFace(
   out: StairWriter,
   p: Point2,
@@ -681,6 +679,8 @@ function joint(
   if (Math.abs(turn) < 1e-6) {
     return;
   }
+  /** A vertical quad from `p` to `q` (in that order, seen from the side
+   *  `normal` faces), from the bases up to the tops. */
   const side = turn > 0 ? -1 : 1;
   const p: Point2 = [a.x + a.px * half * side, a.y + a.py * half * side];
   const q: Point2 = [b.x + b.px * half * side, b.y + b.py * half * side];

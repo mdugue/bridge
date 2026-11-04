@@ -421,6 +421,9 @@ export interface TinBuckets {
   triangles: number;
 }
 
+const typed = (a: ArrayLike<number>) =>
+  ArrayBuffer.isView(a) ? a.byteLength : 0;
+
 /**
  * Point → triangle lookup for `heightAt`: a uniform bucket grid over the tile
  * (CSR layout: `start[b] … start[b+1]` in `items`), each triangle listed in
@@ -428,9 +431,6 @@ export interface TinBuckets {
  * barycentric tests per query — vegetation and lamps call this tens of
  * thousands of times per tile.
  */
-const typed = (a: ArrayLike<number>) =>
-  ArrayBuffer.isView(a) ? a.byteLength : 0;
-
 export class TinIndex {
   private readonly cols: number;
   private readonly rows: number;

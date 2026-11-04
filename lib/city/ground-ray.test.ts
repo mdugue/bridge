@@ -24,10 +24,10 @@ test("a ray above the horizon never hits", () => {
   ).toBeNull();
 });
 
+// A 30 m bump between x = 100 and 120 in front of a flat plain.
 const hill = (x: number) => (x > 100 && x < 120 ? 30 : 0);
 
 test("a hill in the way is hit before the plain behind it", () => {
-  // A 30 m bump between x = 100 and 120 in front of a flat plain.
   const t = groundRayDistance(
     { x: 0, y: 20, z: 0 },
     { x: 1, y: -0.05, z: 0 },

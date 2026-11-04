@@ -1,3 +1,7 @@
+/**
+ * Where a fragment reads a tile's land-cover splat, shared by the terrain and
+ * the water (terrain-layer.ts, water-layer.ts).
+ */
 import { uniform } from "three/tsl";
 import { Vector2 } from "three/webgpu";
 import { dataXY, rasterUv } from "./shader-chunks";

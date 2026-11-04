@@ -1,3 +1,4 @@
+/** The renderer's requests through the viewer's one fetch. */
 import { TILE_FETCH_BUDGET_MS } from "@/lib/city/fetch-retry";
 import { eitherSignal, fetchBytes } from "./fetch-optional";
 

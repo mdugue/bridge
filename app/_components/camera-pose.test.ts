@@ -335,8 +335,6 @@ test("a wheel or a pinch heads for the spot under the pointer, not the centre", 
   // the view itself does not turn
   expect(walker.pose.getCameraState().headingDeg).toBeCloseTo(0, 6);
 
-  // In the air the camera runs along the ray under the pointer, so that
-  // spot stays where it is on screen while it comes nearer.
   const airborne = rig();
   airborne.pose.applyCameraState({
     mode: "fly",
@@ -383,6 +381,8 @@ test("a forward dolly in the air stops short of the ground it points at", () => 
 });
 
 /** A flyer `above` m over the ground, looking north at `pitchDeg`. */
+// In the air the camera runs along the ray under the pointer, so that
+// spot stays where it is on screen while it comes nearer.
 function flyer(above: number, pitchDeg: number, solids?: CameraSolids) {
   const r = rig(solids ? { solids } : {});
   r.pose.applyCameraState({
