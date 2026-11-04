@@ -73,8 +73,13 @@ const MIN_SUN_Y = 0.05;
 const MAX_EXTRUSION_M = 3000;
 
 /** The depth bias (m) at the nearest receiver; it grows with the distance,
- *  as the texels do. The walker's −0.0003 is ~0.09 m at 121 m. */
-const NEAR_BIAS_M = 0.15;
+ *  as the texels do. The walker's −0.0003 is ~0.09 m at 121 m. A caster
+ *  nearer its receiver than the bias throws nothing, so a shadow starts
+ *  that far off its foot: at 0.15 m a dormer's shadow 40 m off stood
+ *  0.2 m clear of it, a tree's 300 m off 0.7–0.85 m. Buildings and trees
+ *  cast with their back faces; double-sided walls and stairs are what
+ *  would stripe (acne) under a smaller one. */
+const NEAR_BIAS_M = 0.08;
 
 /** A fit is renewed when the nearest receiver came this much nearer (or
  *  went this much further): its texels no longer suit the view. */

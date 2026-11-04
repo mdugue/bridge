@@ -18,6 +18,8 @@ export const DORMER_SINK = 0.25;
 export const DORMER_EAVE = 0.15;
 /** How far the dormer's roof runs on into the main roof behind it. */
 const BACK_TUCK = 0.3;
+/** How far under its roof the dormer's inner lid lies (m). */
+const INNER_LID = 0.02;
 /** How high its front wall stands at least over the main roof there. */
 export const MIN_FRONT = 0.6;
 /** How much shallower than the main roof a shed dormer's roof stays at
@@ -90,6 +92,10 @@ export function chimneyMesh(
     quad(at(a0, b0, low), at(a1, b1, low), at(a1, b1, top), at(a0, b0, top));
   }
   quad(at(-a, -b, top), at(a, -b, top), at(a, b, top), at(-a, b, top));
+  // its top's underside, facing in (a dormer's inner lid: the open box
+  // otherwise let the sun's shadow map light the roof inside it)
+  const under = top - INNER_LID;
+  quad(at(-a, b, under), at(a, b, under), at(a, -b, under), at(-a, -b, under));
   return out;
 }
 
@@ -169,6 +175,19 @@ export function dormerMesh(
     at(half + e, bb - BACK_TUCK, back),
     at(half + e, bf + e, eave),
     at(-half - e, bf + e, eave)
+  );
+  // … and its underside, facing in, INNER_LID under it: the sun's shadow
+  // map draws back faces (sun-rig.ts), so without it the open box let the
+  // sun onto the roof inside it, and the map's soft edge bled that light
+  // out along the cheek's foot as a bright line between the cheek and its
+  // shadow; seen from outside it is never drawn
+  const under = INNER_LID;
+  quad(
+    1,
+    at(-half, bf, front - under),
+    at(half, bf, front - under),
+    at(half, bb, top - under),
+    at(-half, bb, top - under)
   );
   return out;
 }
