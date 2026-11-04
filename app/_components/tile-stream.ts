@@ -1460,12 +1460,22 @@ export function dressingPart(site: DressingSite): LatePart<TileDressing> {
       // stand-in) at once: its free may wait for its compile, and the
       // root's release would dispose whatever still hangs on it
       const takeDown = () => {
+        // it hears the scene no more — its season, its traffic's look —
+        // though its free may wait: a look change would start the
+        // traffic's builder for a tile gone. (Its bodies, a part it owns,
+        // went before it: what their slot frees here is nothing.)
+        d.unfollow?.();
+        d.unfollow = undefined;
+        const errors = d.traffic?.dispose() ?? [];
         if (slot.dressing === d) {
           slot.dressing = undefined;
         }
         dressings.delete(d);
         for (const part of dressingParts(d)) {
           part.removeFromParent();
+        }
+        if (errors.length > 0) {
+          throw errors[0];
         }
       };
       try {

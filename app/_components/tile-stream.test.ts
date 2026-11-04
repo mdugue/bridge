@@ -814,6 +814,61 @@ test("a dressing hung while its compile runs leaves the root at its release, fre
   }
 });
 
+test("a dressing taken down while its compile runs hears the scene no more", async () => {
+  jest.useFakeTimers();
+  try {
+    let loads = 0;
+    const { slot: traffic } = trafficTile({
+      load: async () => {
+        loads += 1;
+        return await loaded();
+      },
+    });
+    const heard: string[] = [];
+    const dressing: TileDressing = {
+      tile: "t",
+      furniture: new Group(),
+      traffic,
+      unfollow: () => {
+        heard.push("unfollow");
+      },
+    };
+    const fake = fakeHost();
+    const parts = createLateParts(fake.host);
+    const look = createLookState();
+    const handle = parts.add(
+      dressingPart({
+        tile: "t",
+        level: "fine",
+        root: new Object3D(),
+        slot: {},
+        dressings: new Set(),
+        parts,
+        look,
+        live: () => true,
+        failed: nothing,
+        build: async () => await Promise.resolve(dressing),
+      })
+    );
+    fake.load();
+    await flush();
+    jest.advanceTimersByTime(COMPILE_WAIT_MS);
+    expect(await handle.settled).toBe("hung");
+    // the tile goes; its free waits for the compile
+    expect(handle.dispose()).toEqual([]);
+    expect(heard).toEqual(["unfollow"]);
+    // the traffic layer switched on builds nothing for it
+    look.set({ trafficLayer: true });
+    await flush();
+    expect(loads).toBe(0);
+    fake.compiles[0].end("done");
+    await flush();
+    expect(heard).toEqual(["unfollow"]);
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
 test("a dressing whose hang throws half-way is taken down whole and freed as a failure", async () => {
   const furniture = new Group();
   const traffic = {
