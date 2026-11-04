@@ -16,6 +16,7 @@ import {
 import type {
   StadtwissenIndex,
   WikidataFile,
+  WissenTile,
 } from "../../lib/city/stadtwissen";
 import {
   cityMeshSourceFiles,
@@ -31,8 +32,11 @@ import { landmarkFile } from "./landmarks";
 type TileInput = Parameters<typeof stadtwissenTile>[0];
 
 /** One tile's directory, cached on the buildings, their OSM facts, the
- *  landmarks and the monuments it is read from. */
-async function tileFile(tile: string): Promise<string> {
+ *  landmarks and the monuments it is read from: its published name and
+ *  its content. */
+async function tileFile(
+  tile: string
+): Promise<{ file: string; directory: WissenTile }> {
   const src = cityMeshSourceFiles(SITE, tile);
   const monuments = at(
     sideFileSource(SITE, tileArtifacts(tile).monuments.file)
@@ -58,41 +62,45 @@ async function tileFile(tile: string): Promise<string> {
         })
       )
   );
-  return publish(name, bytes);
+  return {
+    file: publish(name, bytes),
+    directory: JSON.parse(Buffer.from(bytes).toString("utf-8")) as WissenTile,
+  };
 }
 
-/** Publishes the baked tiles' directories and the site's index. */
+/** Publishes the baked tiles' directories and the site's index, and
+ *  hands both back (the walks' places are read from them). */
 export async function publishStadtwissen(
   tiles: readonly string[],
   epsg: number,
   sources: Readonly<Record<SourceKey, SourceInfo>>
-): Promise<void> {
+): Promise<{ index: StadtwissenIndex; tiles: WissenTile[] }> {
   const wissenTiles: StadtwissenIndex["tiles"] = [];
+  const directories: WissenTile[] = [];
   for (const tile of tiles) {
-    wissenTiles.push({ id: tile, file: await tileFile(tile) });
+    const { file, directory } = await tileFile(tile);
+    wissenTiles.push({ id: tile, file });
+    directories.push(directory);
   }
   const wikidata = at(`${siteDataDir(SITE)}/${WIKIDATA_FACTS_FILE}`);
-  publish(
-    STADTWISSEN_FILE,
-    utf8(
-      stadtwissenIndex({
-        site: SITE.id,
-        epsg,
-        tiles: wissenTiles,
-        sources: {
-          lod2: sources.lod2,
-          osm: sources.osm,
-          wikidata: sources.wikidata,
-        },
-        // the baked tiles' only, as the tiles' own files
-        landmarks: tiles.flatMap((tile) => {
-          const file = landmarkFile(tile);
-          return file ? [{ tile, file }] : [];
-        }),
-        wikidata: existsSync(wikidata)
-          ? (readJson(wikidata) as WikidataFile)
-          : undefined,
-      })
-    )
-  );
+  const index = stadtwissenIndex({
+    site: SITE.id,
+    epsg,
+    tiles: wissenTiles,
+    sources: {
+      lod2: sources.lod2,
+      osm: sources.osm,
+      wikidata: sources.wikidata,
+    },
+    // the baked tiles' only, as the tiles' own files
+    landmarks: tiles.flatMap((tile) => {
+      const file = landmarkFile(tile);
+      return file ? [{ tile, file }] : [];
+    }),
+    wikidata: existsSync(wikidata)
+      ? (readJson(wikidata) as WikidataFile)
+      : undefined,
+  });
+  publish(STADTWISSEN_FILE, utf8(index));
+  return { index, tiles: directories };
 }

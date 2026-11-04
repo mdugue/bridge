@@ -745,7 +745,8 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
   /**
    * Shows a walk's stop: a slow glide to its view (the card can be read,
    * or heard, on the way) — a jump only out of Modell, which no glide
-   * leaves —, today at the stop's hour, in its picture style.
+   * leaves —, today at the stop's hour, the light turning to it over the
+   * glide, in its picture style.
    */
   const showStop = (walk: Walk, index: number) => {
     const stop = walk.stops[index];
@@ -1259,6 +1260,7 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
                   index={walking.index}
                   onClose={endWalk}
                   onIndex={(i) => showStop(walking.walk, i)}
+                  onPlace={(place) => handleRef.current?.pickPlaces([place])}
                   walk={walking.walk}
                 />
               )}

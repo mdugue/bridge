@@ -12,6 +12,7 @@
  */
 import { isRenderStyle } from "./render-style";
 import type { RenderStyle } from "./render-style";
+import type { SpokenPart } from "./spoken";
 import type { MovementMode, ViewpointGeometry } from "./site";
 import type { CameraStateJson } from "./snapshot";
 
@@ -242,8 +243,28 @@ export function stopNotes(stop: WalkStop, today: Date): string[] {
   return season ? [...days, season] : days;
 }
 
-/** The closer look's label on the card. */
+/** The closer look's label, on the card and in the voice. */
 export const CLOSER_LABEL = "Genauer hingesehen";
+
+/** What the voice reads at a stop: its title (set off, a little
+ *  slower), its story, today's notes and the closer look after its label
+ *  — the sources stay on the card. */
+export function stopSpeech(
+  stop: WalkStop,
+  notes: readonly string[]
+): SpokenPart[] {
+  return [
+    { tone: "title", text: `${stop.title}.` },
+    { tone: "story", text: stop.text },
+    ...notes.map((text): SpokenPart => ({ tone: "aside", text })),
+    ...(stop.closer
+      ? [
+          { tone: "label", text: `${CLOSER_LABEL}.` } as const,
+          { tone: "aside", text: stop.closer } as const,
+        ]
+      : []),
+  ];
+}
 
 // --- checks ----------------------------------------------------------------------
 
@@ -418,8 +439,7 @@ export function walkProblems(walk: Walk): string[] {
     out.push(`${walk.id}: a walk has at least two stops`);
   }
   const ids = new Set<string>();
-  for (let i = 0; i < stops.length; i += 1) {
-    const stop = stops[i];
+  for (const [i, stop] of stops.entries()) {
     if (ids.has(stop.id)) {
       out.push(`${walk.id}: stop id ${stop.id} twice`);
     }
