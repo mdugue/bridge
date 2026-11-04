@@ -11,16 +11,17 @@ import {
 const LAT = 51.05;
 const LNG = 13.74;
 
+const expectWorld = (
+  enu: { east: number; north: number; up: number },
+  want: { x: number; y: number; z: number }
+) => {
+  const got = enuToWorld(enu);
+  expect(got.x).toBeCloseTo(want.x, 12);
+  expect(got.y).toBeCloseTo(want.y, 12);
+  expect(got.z).toBeCloseTo(want.z, 12);
+};
+
 test("enuToWorld maps East=+X, Up=+Y, North=-Z", () => {
-  const expectWorld = (
-    enu: { east: number; north: number; up: number },
-    want: { x: number; y: number; z: number }
-  ) => {
-    const got = enuToWorld(enu);
-    expect(got.x).toBeCloseTo(want.x, 12);
-    expect(got.y).toBeCloseTo(want.y, 12);
-    expect(got.z).toBeCloseTo(want.z, 12);
-  };
   expectWorld({ east: 1, north: 0, up: 0 }, { x: 1, y: 0, z: 0 });
   expectWorld({ east: 0, north: 1, up: 0 }, { x: 0, y: 0, z: -1 });
   expectWorld({ east: 0, north: 0, up: 1 }, { x: 0, y: 1, z: 0 });
@@ -47,7 +48,7 @@ test("at local solar noon the sun is due south and above the horizon", () => {
 });
 
 test("at midnight the sun is below the horizon", () => {
-  const nadir = getTimes(new Date("2026-06-21T12:00:00Z"), LAT, LNG).nadir;
+  const { nadir } = getTimes(new Date("2026-06-21T12:00:00Z"), LAT, LNG);
   expect(sunDirectionWorld(nadir, LAT, LNG).y).toBeLessThan(0);
 });
 
@@ -87,7 +88,10 @@ test("sunTimesOn gives the picked day's sunrise and sunset in any zone", () => {
       expect(sunset?.toISOString().slice(0, 10)).toBe("2026-03-21");
     }
   } finally {
-    if (zone === undefined) delete process.env.TZ;
-    else process.env.TZ = zone;
+    if (zone === undefined) {
+      delete process.env.TZ;
+    } else {
+      process.env.TZ = zone;
+    }
   }
 });

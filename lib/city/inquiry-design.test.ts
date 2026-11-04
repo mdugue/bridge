@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { designCard, type DesignInquiry, ifcTypeWord } from "./inquiry-design";
+import { designCard, ifcTypeWord } from "./inquiry-design";
+import type { DesignInquiry } from "./inquiry-design";
 
 const asked: DesignInquiry = {
   kind: "design",

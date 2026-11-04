@@ -241,7 +241,7 @@ function railTop(_base: V3, l: Layout, aa: F): V3 {
   // (the photos of every rail bridge on the sites): the track bed in the
   // ballast's colour and grain, the sleepers on it the rail layer's
   // (track-bed.ts) — a truss's open floor theirs too
-  const walkway = float(1).sub(smoothstep(1.0 - 0.05, 1.0 + 0.05, l.edge));
+  const walkway = float(1).sub(smoothstep(1 - 0.05, 1 + 0.05, l.edge));
   const grain = gdNoise(positionWorld.xz.mul(4.1))
     .sub(0.5)
     .mul(0.12)

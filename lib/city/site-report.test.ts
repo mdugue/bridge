@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import { HAMBURG } from "../../sites/hamburg";
 import { LEIPZIG } from "../../sites/leipzig";
 import {
@@ -44,8 +44,9 @@ test("everything there: ready, nothing absent", () => {
   );
 });
 
+const exists = (p: string) => !p.endsWith("/provenance.json");
+
 test("a site without a provenance record is ready and reports it absent", () => {
-  const exists = (p: string) => !p.endsWith("/provenance.json");
   expect(siteReport(LEIPZIG, exists).every((r) => r.next === "ready")).toBe(
     true
   );
@@ -64,13 +65,18 @@ test("a provider without an open DLM says so", () => {
 
 test("the DLM layer list is the pipeline's", () => {
   const python = readFileSync(
-    join(import.meta.dir, "../../pipeline/bake/common.py"),
-    "utf8"
+    nodePath.join(import.meta.dir, "../../pipeline/bake/common.py"),
+    "utf-8"
   );
-  const block = python.match(/DLM_LAYERS = \(([^)]*)\)/u)?.[1] ?? "";
-  const layers = [...block.matchAll(/"(\w+)"/gu)].map((m) => m[1]);
+  const block =
+    /DLM_LAYERS = \((?<block>[^)]*)\)/u.exec(python)?.groups?.block ?? "";
+  const layers = [...block.matchAll(/"(?<name>\w+)"/gu)].map(
+    (m) => m.groups?.name
+  );
   expect(layers).toEqual([...DLM_LAYERS]);
 });
+
+const land = () => 4;
 
 test("a walk viewpoint in a footprint or on water is flagged", () => {
   const square: [number, number][] = [
@@ -79,7 +85,6 @@ test("a walk viewpoint in a footprint or on water is flagged", () => {
     [10, 10],
     [0, 10],
   ];
-  const land = () => 4;
   expect(walkViewpointIssue({ x: 5, y: 5 }, [square], land, 8)).toBe(
     "inside a building"
   );

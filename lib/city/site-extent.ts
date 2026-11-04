@@ -3,7 +3,8 @@
  * site.ts: that module is in every ground's bake key (bake-entries.ts
  * `GROUND`), and a change there re-bakes every site.
  */
-import { type Site, tileExtentOf } from "./site";
+import { tileExtentOf } from "./site";
+import type { Site } from "./site";
 
 /** A site's extent over all its tiles, [minX, minY, maxX, maxY] (m). */
 export function siteExtentOf(site: Site): [number, number, number, number] {

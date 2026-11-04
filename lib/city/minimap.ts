@@ -75,7 +75,7 @@ export function epsgToMapPx(
   bounds: TerrainBounds,
   widthPx: number
 ): { px: number; py: number } {
-  const [minX, , , maxY] = bounds;
+  const { 0: minX, 3: maxY } = bounds;
   const k = pxPerMetre(bounds, widthPx);
   return { px: (x - minX) * k, py: (maxY - y) * k };
 }
@@ -87,7 +87,7 @@ export function mapPxToEpsg(
   bounds: TerrainBounds,
   widthPx: number
 ): { x: number; y: number } {
-  const [minX, , , maxY] = bounds;
+  const { 0: minX, 3: maxY } = bounds;
   const k = pxPerMetre(bounds, widthPx);
   return { x: minX + px / k, y: maxY - py / k };
 }
@@ -148,12 +148,14 @@ function groundPolysFromGeometry(
     geom.type === "Solid"
       ? (sem.values as (number | null)[][])
       : [sem.values as (number | null)[]];
-  shells.forEach((faces, shellIdx) => {
+  for (let shellIdx = 0; shellIdx < shells.length; shellIdx += 1) {
+    const faces = shells[shellIdx];
     const shellValues = values[shellIdx] ?? [];
-    faces.forEach((face, faceIdx) => {
+    for (let faceIdx = 0; faceIdx < faces.length; faceIdx += 1) {
+      const face = faces[faceIdx];
       const surfaceId = shellValues[faceIdx];
       if (surfaceId == null || !isGround(surfaceId)) {
-        return;
+        continue;
       }
       const ring = face[0];
       if (ring?.length >= 3) {
@@ -166,8 +168,8 @@ function groundPolysFromGeometry(
           ...(holes.length > 0 ? { holes } : {}),
         });
       }
-    });
-  });
+    }
+  }
   return polys;
 }
 
@@ -183,7 +185,7 @@ export function buildingFootprintPolys(
 ): FootprintPoly[] {
   const scale = cityData.transform?.scale ?? [1, 1, 1];
   const translate = cityData.transform?.translate ?? [0, 0, 0];
-  const vertices = cityData.vertices;
+  const { vertices } = cityData;
   const polys: FootprintPoly[] = [];
   for (const obj of Object.values(cityData.CityObjects)) {
     if (obj.type !== "Building" && obj.type !== "BuildingPart") {
@@ -198,7 +200,7 @@ export function buildingFootprintPolys(
         translate
       )) {
         polys.push(poly);
-        found++;
+        found += 1;
       }
     }
     const extent = (obj as { geographicalExtent?: number[] })

@@ -6,27 +6,27 @@
  * through the buildings' BVHs, never a tile whose BVH is being built), and
  * where the HUD covers the canvas (the panels marked `data-scene-cover`).
  */
-import { type Camera, Raycaster, Vector3 } from "three/webgpu";
+import { Raycaster, Vector3 } from "three/webgpu";
+import type { Camera } from "three/webgpu";
 import { cardCredits } from "@/lib/city/card-lines";
 import type { Inquiry } from "@/lib/city/inquiry";
 import { inquiryCard } from "@/lib/city/inquiry";
-import { type TreeFacts, treeFactsAt } from "@/lib/city/inquiry-features";
-import {
-  factsFor,
-  type LandmarkFactsIndex,
-  landmarkFactsUrl,
-} from "@/lib/city/landmark-facts";
+import { treeFactsAt } from "@/lib/city/inquiry-features";
+import type { TreeFacts } from "@/lib/city/inquiry-features";
+import { factsFor, landmarkFactsUrl } from "@/lib/city/landmark-facts";
+import type { LandmarkFactsIndex } from "@/lib/city/landmark-facts";
 import {
   inquiryBuildings,
   isLandmarkInquiry,
   nameplateEave,
-  type NameplateText,
   nameplateText,
 } from "@/lib/city/nameplate";
+import type { NameplateText } from "@/lib/city/nameplate";
 import type { NameplateBody, Vec3 } from "@/lib/city/nameplate-place";
 import type { Site } from "@/lib/city/site";
 import { loadTreeFacts } from "./card-fetch";
-import { type CityLayer, nearestCityHit } from "./city-layer";
+import { nearestCityHit } from "./city-layer";
+import type { CityLayer } from "./city-layer";
 import { loadLandmarkFacts } from "./landmark-facts-load";
 import type { Nameplate } from "./nameplate-layer";
 import { setPickRay } from "./view-ray";
@@ -76,7 +76,8 @@ export function createNameplateAsk(deps: {
   const withEave = (b: NameplateBody): NameplateBody =>
     eave === null ? b : { ...b, eave };
   const ask = (inquiry: Inquiry | null, next: NameplateBody | null) => {
-    const token = ++asked;
+    asked += 1;
+    const token = asked;
     body = next;
     waiting = inquiry && !next ? inquiry : null;
     eave = inquiry ? nameplateEave(inquiry) : null;
@@ -200,32 +201,31 @@ export function cityHides(
   let hidden = 0;
   for (const p of points) {
     to.set(p[0], p[1], p[2]);
+    let length: number;
     if (ortho) {
       const ndc = to.clone().project(camera);
       setPickRay(raycaster, { x: ndc.x, y: ndc.y }, camera);
       // from the near plane to the point; a point the cut put before
       // the near plane is not drawn, so nothing hides it
-      const length = to
+      length = to
         .clone()
         .sub(raycaster.ray.origin)
         .dot(raycaster.ray.direction);
       if (length <= RAY_SHORT_M) {
         continue;
       }
-      raycaster.near = 0;
-      raycaster.far = length - RAY_SHORT_M;
     } else {
       const d = to.clone().sub(from);
-      const length = d.length();
+      length = d.length();
       if (length <= RAY_SHORT_M) {
         continue;
       }
       raycaster.set(from, d.divideScalar(length));
-      raycaster.near = 0;
-      raycaster.far = length - RAY_SHORT_M;
     }
+    raycaster.near = 0;
+    raycaster.far = length - RAY_SHORT_M;
     if (nearestCityHit(raycaster, cities, false)) {
-      hidden++;
+      hidden += 1;
     }
   }
   return hidden / points.length;

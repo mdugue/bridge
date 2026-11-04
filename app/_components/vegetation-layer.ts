@@ -1,20 +1,18 @@
 import {
-  type BufferGeometry,
   Color,
   CylinderGeometry,
   Group,
   IcosahedronGeometry,
   InstancedBufferAttribute,
-  type Material,
   Matrix4,
   MeshStandardNodeMaterial,
   Object3D,
   Quaternion,
   SRGBColorSpace,
-  type UniformNode,
   Vector2,
   Vector3,
 } from "three/webgpu";
+import type { BufferGeometry, Material, UniformNode } from "three/webgpu";
 import {
   atan,
   cameraPosition,
@@ -51,14 +49,14 @@ import {
 } from "three/tsl";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
-import { type GroundContext, groundSlope } from "@/lib/city/ground-clamp";
+import { groundSlope } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import { srgbToLinear } from "@/lib/city/landcover";
-import { LOOK_DEFAULTS, type LookValues } from "@/lib/city/look-controls";
+import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
+import type { LookValues } from "@/lib/city/look-controls";
 import { decodeGreyPng } from "@/lib/city/png-raster";
-import {
-  maxWindowSampler,
-  type RasterSampler,
-} from "@/lib/city/raster-sampler";
+import { maxWindowSampler } from "@/lib/city/raster-sampler";
+import type { RasterSampler } from "@/lib/city/raster-sampler";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
   pineBase,
@@ -75,38 +73,39 @@ import {
   cellKey,
   GENERIC_CROWN_FOOT,
   hash,
-  type Placement,
   rowPlacements,
-  type TreeVeto,
 } from "@/lib/city/tree-placement";
+import type { Placement, TreeVeto } from "@/lib/city/tree-placement";
 import { seasonJitter } from "@/lib/city/tree-season";
 import {
   CROWN_BASE_COLOR,
-  type CrownMaterials,
-  type CrownSeasonKey,
   crownSeasonNodes,
   crownsPrinted,
-  type CrownWarmup,
   crownWarmup,
-  type SeasonalCrowns,
   seasonCrowns,
 } from "./crown-season";
+import type {
+  CrownMaterials,
+  CrownSeasonKey,
+  CrownWarmup,
+  SeasonalCrowns,
+} from "./crown-season";
 import {
-  type ChunkLodState,
   createCrownPlanScratch,
-  type CrownTier,
   keepInFarTier,
   planCrownTiers,
   RICH_IN_M,
   RICH_OUT_M,
 } from "@/lib/city/vegetation-lod";
+import type { ChunkLodState, CrownTier } from "@/lib/city/vegetation-lod";
 import {
   boxOf,
   buildConeGeo,
   buildPineGeo,
   CONE_SEGMENTS,
 } from "./conifer-crown";
-import { finished, inRuns, type Steps } from "@/lib/city/build-steps";
+import { finished, inRuns } from "@/lib/city/build-steps";
+import type { Steps } from "@/lib/city/build-steps";
 import { fetchOptionalBinary } from "./fetch-optional";
 import {
   instanceFloat,
@@ -127,13 +126,12 @@ import {
   BARE_SHADE,
   crownLeaf,
   FOOT_SHOWN_M,
-  type FootGeos,
   MULCH_SRGB,
-  type FootMaterials,
   rootSeed,
   seasonalFoot,
   treeFeet,
 } from "./tree-foot";
+import type { FootGeos, FootMaterials } from "./tree-foot";
 
 export { bucketByCell, hash, type TreeVeto } from "@/lib/city/tree-placement";
 
@@ -427,7 +425,7 @@ export function crownFrame(p: Placement): { lift: number; scale: number } {
  *  puts their feet back on the ground). */
 function writePlacements(mesh: Instances, items: Placement[], widen = 1): void {
   const dummy = new Object3D();
-  for (let i = 0; i < items.length; i++) {
+  for (let i = 0; i < items.length; i += 1) {
     const p = items[i];
     const { lift, scale } = crownFrame(p);
     dummy.position.set(p.x, p.y + lift, p.z);
@@ -454,11 +452,12 @@ const TRUNK_DROP = "iDrop";
 function writeTrunkDrops(trunks: Instances, items: Placement[]): number {
   let reach = 0;
   const drops = new Float32Array(trunks.capacity);
-  items.forEach((p, i) => {
+  for (let i = 0; i < items.length; i += 1) {
+    const p = items[i];
     const { lift, scale } = crownFrame(p);
     drops[i] = lift / scale;
     reach = Math.max(reach, Math.abs(lift));
-  });
+  }
   if (reach > 0) {
     trunks.geometry.setAttribute(
       TRUNK_DROP,
@@ -526,7 +525,7 @@ export function buildCrownGeo(detail = 2): BufferGeometry {
   const nrm = g.attributes.normal;
   const v = new Vector3();
   const dir = new Vector3();
-  for (let i = 0; i < pos.count; i++) {
+  for (let i = 0; i < pos.count; i += 1) {
     v.fromBufferAttribute(pos, i);
     dir.copy(v).normalize();
     // Bumpy radius: each lobe bulges the surface where the vertex points at it.
@@ -542,7 +541,7 @@ export function buildCrownGeo(detail = 2): BufferGeometry {
   g.scale(1, 1.05, 1);
   g.translate(0, cy, 0);
   // Radial normals from the crown centre -> soft, unified shading.
-  for (let i = 0; i < pos.count; i++) {
+  for (let i = 0; i < pos.count; i += 1) {
     v.set(pos.getX(i), pos.getY(i) - cy, pos.getZ(i)).normalize();
     nrm.setXYZ(i, v.x, v.y, v.z);
   }
@@ -567,7 +566,10 @@ export function buildCrownGeoRich(): BufferGeometry {
   const mtx = new Matrix4();
   const parts: BufferGeometry[] = [];
   let k = 0;
-  const rnd = () => hash((k++ + 1) * 1.37 + 0.19);
+  const rnd = () => {
+    k += 1;
+    return hash(k * 1.37 + 0.19);
+  };
 
   const core = new IcosahedronGeometry(R * 0.72, 1);
   core.scale(1.1, 0.82, 1.1);
@@ -583,7 +585,7 @@ export function buildCrownGeoRich(): BufferGeometry {
     yLo: number,
     yHi: number
   ): void => {
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < count; i += 1) {
       const ny = yLo + rnd() * (yHi - yLo);
       dir.set(rnd() * 2 - 1, ny, rnd() * 2 - 1).normalize();
       at.copy(dir).multiplyScalar(R * (distLo + rnd() * (distHi - distLo)));
@@ -611,7 +613,7 @@ export function buildCrownGeoRich(): BufferGeometry {
   const pos = merged.attributes.position;
   const nrm = merged.attributes.normal;
   const v = new Vector3();
-  for (let i = 0; i < pos.count; i++) {
+  for (let i = 0; i < pos.count; i += 1) {
     v.set(pos.getX(i), pos.getY(i) - cy, pos.getZ(i)).normalize();
     nrm.setXYZ(i, v.x, v.y, v.z);
   }
@@ -656,7 +658,7 @@ export function buildStyleCrownGeo(
     const ball = new IcosahedronGeometry(CROWN_R * r, detail);
     const pos = ball.attributes.position;
     const nrm = ball.attributes.normal;
-    for (let i = 0; i < pos.count; i++) {
+    for (let i = 0; i < pos.count; i += 1) {
       v.fromBufferAttribute(pos, i).normalize();
       nrm.setXYZ(i, v.x, v.y, v.z);
     }
@@ -1046,6 +1048,10 @@ function printedCrown(shown: V3, kept: V3, twig: F): V3 {
  *  bulges out to read as lobes. */
 const TRUNK_SIDES = 9;
 
+/** The trunk's radius at `u` (0 foot, 1 top) on the straight taper. */
+const trunkTaper = (u: number) =>
+  TRUNK_FOOT_R + (TRUNK_TOP_R - TRUNK_FOOT_R) * u;
+
 /**
  * De-sterilised trunk — a tapered cylinder with (1) a root flare at the base,
  * (2) low-amplitude radial "bark" bumps and (3) a gentle fixed lean. One shared
@@ -1067,12 +1073,11 @@ export function buildTrunkGeo(fork = true): BufferGeometry {
   // the cylinder's evenly spaced rows moved onto the profile's rings (two
   // of them low in the flared foot)
   // with the taper's radius there
-  const taper = (u: number) => TRUNK_FOOT_R + (TRUNK_TOP_R - TRUNK_FOOT_R) * u;
   const rows = t.attributes.position;
-  for (let i = 0; i < rows.count; i++) {
+  for (let i = 0; i < rows.count; i += 1) {
     const from = rows.getY(i) / TRUNK_H;
     const to = TRUNK_RINGS[Math.round(from * TRUNK_ROWS)] ?? 1;
-    const k = taper(to) / taper(from);
+    const k = trunkTaper(to) / trunkTaper(from);
     rows.setXYZ(i, rows.getX(i) * k, to * TRUNK_H, rows.getZ(i) * k);
   }
   const bend = 0.05 * TRUNK_H;
@@ -1080,7 +1085,7 @@ export function buildTrunkGeo(fork = true): BufferGeometry {
   const bz = 0.57;
   const pos = t.attributes.position;
   const v = new Vector3();
-  for (let i = 0; i < pos.count; i++) {
+  for (let i = 0; i < pos.count; i += 1) {
     v.fromBufferAttribute(pos, i);
     const tt = Math.min(Math.max(v.y / TRUNK_H, 0), 1);
     const r = Math.hypot(v.x, v.z);
@@ -1447,7 +1452,7 @@ function crownShade(
     .sub(smoothstep(CROWN_R * 0.55, CROWN_R * 1.05, miss))
     .mul(step(0, ahead))
     // by day: the sun over the horizon
-    .mul(smoothstep(0.0, 0.08, sun.y));
+    .mul(smoothstep(0, 0.08, sun.y));
   return sky.mul(mix(float(1), float(CROWN_ON_TRUNK), through.mul(leaf)));
 }
 
@@ -1495,16 +1500,17 @@ function paintCrowns(
   extras: TreeInstance[] = []
 ): void {
   const col = new Color();
-  for (let i = 0; i < cell.length; i++) {
+  for (let i = 0; i < cell.length; i += 1) {
     const v = hash(cell[i].x * 0.3 + cell[i].z * 0.7) - 0.5;
     crownColor(col, cell[i], v);
     crowns.setColorAt(i, col);
   }
-  extras.forEach((e, i) => {
+  for (let i = 0; i < extras.length; i += 1) {
+    const e = extras[i];
     if (e.crown) {
       crowns.setColorAt(cell.length + i, e.crown.colour);
     }
-  });
+  }
   if (crowns.instanceTints) {
     crowns.instanceTints.needsUpdate = true;
   }
@@ -1537,11 +1543,12 @@ function crownMesh(
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   writePlacements(mesh, trees, widen);
-  crowned.forEach((e, i) => {
+  for (let i = 0; i < crowned.length; i += 1) {
+    const e = crowned[i];
     if (e.crown) {
       mesh.setMatrixAt(trees.length + i, e.crown[which]);
     }
-  });
+  }
   finishInstances(mesh);
   paintCrowns(mesh, trees, crowned);
   return mesh;
@@ -1559,10 +1566,13 @@ function paintBark(
     return;
   }
   const white = new Color(1, 1, 1);
-  for (let i = 0; i < first; i++) {
+  for (let i = 0; i < first; i += 1) {
     trunks.setColorAt(i, white);
   }
-  extras.forEach((e, i) => trunks.setColorAt(first + i, e.bark ?? white));
+  for (let i = 0; i < extras.length; i += 1) {
+    const e = extras[i];
+    trunks.setColorAt(first + i, e.bark ?? white);
+  }
   if (trunks.instanceTints) {
     trunks.instanceTints.needsUpdate = true;
   }
@@ -1599,7 +1609,10 @@ function buildTreeCell(
   if (trees.length + crowned.length === 0) {
     const trunks = new Instances(plain, trunkMat, extras.length);
     trunks.castShadow = true;
-    extras.forEach((e, i) => trunks.setMatrixAt(i, e.trunk));
+    for (let i = 0; i < extras.length; i += 1) {
+      const e = extras[i];
+      trunks.setMatrixAt(i, e.trunk);
+    }
     paintBark(trunks, 0, extras);
     finishInstances(trunks);
     const feet = feetOf(trunks, geos, ground, footMat, false);
@@ -1633,7 +1646,10 @@ function buildTreeCell(
   } else {
     rich = crownMesh(geos.rich, crownMat, trees, crowned, "rich");
     own = new Instances(plain, trunkMat, extras.length);
-    extras.forEach((e, i) => own?.setMatrixAt(i, e.trunk));
+    for (let i = 0; i < extras.length; i += 1) {
+      const e = extras[i];
+      own?.setMatrixAt(i, e.trunk);
+    }
     paintBark(own, 0, extras);
     finishInstances(own);
     own.castShadow = true;
@@ -1726,7 +1742,7 @@ function footSlopes(
   const slopes = new Int8Array(trunks.capacity * 2);
   const m = trunks.instanceMatrix.array as Float32Array;
   const drops = trunks.geometry.getAttribute(TRUNK_DROP);
-  for (let i = 0; i < trunks.drawCount; i++) {
+  for (let i = 0; i < trunks.drawCount; i += 1) {
     const at = i * 16;
     const drop = drops ? drops.getX(i) : 0;
     const x = m[at + 12] - m[at + 4] * drop;
@@ -1845,7 +1861,7 @@ function* buildTrees(
   let unforked: BufferGeometry | undefined;
   const plainTrunk = (): BufferGeometry => (unforked ??= buildTrunkGeo(false));
   const geosOf = (cell: TreeCell): TreeGeos => {
-    const form = cell.form;
+    const { form } = cell;
     let kind = needles[form];
     if (!kind) {
       kind = (form === "pine" ? buildPineTiers : buildConeTiers)(
@@ -1962,7 +1978,8 @@ const PLACEMENT_RUN = 256;
 const ROW_RUN = 16;
 
 /** `buildVegetation` in steps: per run of rows and canopy points, per
- *  250 m cell of trees (build-steps.ts). */
+ *  250 m cell of trees (build-steps.ts).
+ *  @yields {void} once per finished run, to hand the thread back. */
 export function* vegetationSteps(
   features: VegetationFeatures,
   ctx: VegetationContext
@@ -1974,7 +1991,7 @@ export function* vegetationSteps(
   // read the same nodes — the wind clock among them, which the render loop
   // advances once per frame (`setCrownTime`, the water ripple's seconds).
   const crownMats = sceneCrowns(ctx.sunDirection);
-  let multiTuft = LOOK_DEFAULTS.multiTuft;
+  let { multiTuft } = LOOK_DEFAULTS;
   let chunks: VegetationChunk[] = [];
   let seasons: SeasonalCrowns[] = [];
   let loose: LooseFeet[] = [];
@@ -2004,15 +2021,13 @@ export function* vegetationSteps(
       crownMats.uniforms.sunDirection
     );
     group.add(...built.meshes);
-    chunks = built.chunks;
-    loose = built.loose;
-    seasons = built.seasons;
+    ({ chunks, loose, seasons } = built);
   }
   return {
     group,
     chunks,
     applyLook: (look) => {
-      multiTuft = look.multiTuft;
+      ({ multiTuft } = look);
     },
     multiTuft: () => multiTuft,
     setSeason: (day) => applySeasons(seasons, day),
@@ -2086,24 +2101,23 @@ export function createVegetationLod(): (
       const allowRich = control.multiTuft();
       for (const chunk of control.chunks) {
         all[n] = chunk;
-        const state = (states[n] ??= {
-          allowRich,
-          current: chunk.tier,
-          near: 0,
-          trees: 0,
-        });
+        let state = states[n];
+        if (!state) {
+          state = { allowRich, current: chunk.tier, near: 0, trees: 0 };
+          states[n] = state;
+        }
         state.allowRich = allowRich;
         state.current = chunk.tier;
         state.near = nearestTree(chunk, cameraPos);
         state.trees = chunk.trees;
-        n++;
+        n += 1;
       }
     }
     all.length = n;
     states.length = n;
     const tiers = planCrownTiers(states, richBudget, scratch);
     let changed = false;
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < n; i += 1) {
       if (tiers[i] !== all[i].tier) {
         showTier(all[i], tiers[i]);
         changed = true;

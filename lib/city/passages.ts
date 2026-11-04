@@ -93,7 +93,7 @@ function nearest(
 ): { d: number; level: number } | null {
   let best: { d: number; level: number } | null = null;
   const last = p.coords.length - 2;
-  for (let i = 0; i <= last; i++) {
+  for (let i = 0; i <= last; i += 1) {
     const [ax, ay] = p.coords[i];
     const [bx, by] = p.coords[i + 1];
     const ex = bx - ax;
@@ -147,9 +147,9 @@ export function carvePassages(input: {
       n - 1,
       Math.ceil((maxY - Math.min(...ys) + p.half) / dy)
     );
-    for (let row = row0; row <= row1; row++) {
+    for (let row = row0; row <= row1; row += 1) {
       const y = maxY - (row + 0.5) * dy;
-      for (let col = col0; col <= col1; col++) {
+      for (let col = col0; col <= col1; col += 1) {
         const x = minX + (col + 0.5) * dx;
         const hit = nearest(p, x, y);
         const idx = row * n + col;

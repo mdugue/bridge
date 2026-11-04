@@ -1,9 +1,5 @@
-import {
-  type Camera,
-  Matrix4,
-  PerspectiveCamera,
-  type UniformNode,
-} from "three/webgpu";
+import { Matrix4, PerspectiveCamera } from "three/webgpu";
+import type { Camera, UniformNode } from "three/webgpu";
 import {
   orthographicDepthToViewZ,
   perspectiveDepthToViewZ,

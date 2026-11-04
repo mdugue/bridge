@@ -5,11 +5,8 @@
  */
 import { existsSync } from "node:fs";
 import type { FacadeMaterial, RoofColours } from "../../lib/city/building-tint";
-import {
-  type OsmBuildingLut,
-  type WallMaterial,
-  withoutTrafficStructures,
-} from "../../lib/city/city-mesh";
+import { withoutTrafficStructures } from "../../lib/city/city-mesh";
+import type { OsmBuildingLut, WallMaterial } from "../../lib/city/city-mesh";
 import type { LandmarkFile } from "../../lib/city/landmarks";
 import type {
   DoorFeature,
@@ -24,10 +21,12 @@ import type {
 } from "../../lib/city/features";
 import { onFormations } from "../../lib/city/track-formation";
 import { cityMeshSourceFiles } from "../../lib/city/tile";
-import { type CityExtras, FAR_CITY_SIMPLIFY } from "../../lib/city/tileset";
+import { FAR_CITY_SIMPLIFY } from "../../lib/city/tileset";
+import type { CityExtras } from "../../lib/city/tileset";
 import type { CityJsonDocument } from "../../lib/city/types";
 import type { WindowFile } from "../../lib/city/windows";
-import { type BakedCityMesh, bakeCityMesh, cityMesh } from "../bake-city-mesh";
+import { bakeCityMesh, cityMesh } from "../bake-city-mesh";
+import type { BakedCityMesh } from "../bake-city-mesh";
 import { BAKE_ENTRIES } from "../bake-entries";
 import { simplifyGlb, writeMeshGlb } from "../tile-glb";
 import {
@@ -94,7 +93,7 @@ function parseCity(
   // a top a track runs on, lowered to its bed (lib/city/track-formation.ts)
   // (the bridges' slabs left out first: bakeCityMesh drops them anyway)
   const formed = onFormations(
-    withoutTrafficStructures(readJson<CityJsonDocument>(at(src.city))),
+    withoutTrafficStructures(readJson(at(src.city)) as CityJsonDocument),
     bedsIn(tile)
   );
   if (formed.lowered.length > 0) {
@@ -102,51 +101,55 @@ function parseCity(
       `${tile}: ${formed.lowered.length} tops under tracks lowered to their beds`
     );
   }
-  const doc = formed.doc;
+  const { doc } = formed;
   const lowered = new Set(formed.lowered);
   const roofColours = existsSync(at(src.roofColor))
-    ? readJson<RoofColours>(at(src.roofColor))
+    ? (readJson(at(src.roofColor)) as RoofColours)
     : undefined;
   const osmDoc = existsSync(at(src.osmBuild))
-    ? readJson<{ context?: FacadeMaterial; objects?: OsmBuildingLut }>(
-        at(src.osmBuild)
-      )
+    ? (readJson(at(src.osmBuild)) as {
+        context?: FacadeMaterial;
+        objects?: OsmBuildingLut;
+      })
     : undefined;
   const osmLut = withLandmarks(osmDoc?.objects, landmarkFile(tile));
   const scan = existsSync(at(src.smallBuild))
-    ? readJson<FeatureCollection<SmallBuildingFeature>>(at(src.smallBuild))
+    ? (readJson(at(src.smallBuild)) as FeatureCollection<SmallBuildingFeature>)
         .features
     : undefined;
   const gaps = existsSync(at(src.structures))
-    ? readJson<FeatureCollection<StructureFeature>>(at(src.structures)).features
+    ? (readJson(at(src.structures)) as FeatureCollection<StructureFeature>)
+        .features
     : undefined;
   const measured = existsSync(at(src.measuredRoofs))
-    ? readJson<FeatureCollection<MeasuredRoofFeature>>(
-        at(src.measuredRoofs)
+    ? (
+        readJson(
+          at(src.measuredRoofs)
+        ) as FeatureCollection<MeasuredRoofFeature>
       ).features?.filter(
         // a lowered top keeps its new height, not the scan's over it
         (f) => !f.properties || !lowered.has(f.properties.id)
       )
     : undefined;
   const plinths = existsSync(at(src.plinths))
-    ? readJson<FeatureCollection<PlinthFeature>>(at(src.plinths)).features
+    ? (readJson(at(src.plinths)) as FeatureCollection<PlinthFeature>).features
     : undefined;
   const doors = existsSync(at(src.doors))
-    ? readJson<FeatureCollection<DoorFeature>>(at(src.doors)).features
+    ? (readJson(at(src.doors)) as FeatureCollection<DoorFeature>).features
     : undefined;
   const dormers = existsSync(at(src.dormers))
-    ? readJson<FeatureCollection<DormerFeature>>(at(src.dormers)).features
+    ? (readJson(at(src.dormers)) as FeatureCollection<DormerFeature>).features
     : undefined;
   const passages = existsSync(at(src.passages))
-    ? readJson<FeatureCollection<PassageFeature>>(at(src.passages)).features
+    ? (readJson(at(src.passages)) as FeatureCollection<PassageFeature>).features
     : undefined;
   const shopfronts = existsSync(at(src.shopfronts))
     ? Object.values(
-        readJson<ShopfrontFile>(at(src.shopfronts)).buildings
+        (readJson(at(src.shopfronts)) as ShopfrontFile).buildings
       ).flat()
     : undefined;
   const windows = existsSync(at(src.windows))
-    ? Object.values(readJson<WindowFile>(at(src.windows)).buildings).flat()
+    ? Object.values((readJson(at(src.windows)) as WindowFile).buildings).flat()
     : undefined;
   return bakeCityMesh(
     tile,
@@ -202,11 +205,11 @@ export async function bakeCity(
     footprintsFile,
     await cached(footprintsFile, key, () => utf8(built().footprints))
   );
-  const { maxZ } = parse<{ maxZ: number }>(
+  const { maxZ } = parse(
     await cached(`city_${tile}.json`, key, () =>
       utf8({ maxZ: built().maxElevation })
     )
-  );
+  ) as { maxZ: number };
   const svf = sideFiles.get(tile)?.svf;
   const facades = sideFiles.get(tile)?.facades;
   const extras: CityExtras = {

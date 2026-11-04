@@ -290,6 +290,8 @@ export const PLACEMENT_FORMAT = "city-walk-entwurf/2";
 /** The format before the scale was kept: read as one without it. */
 const PLACEMENT_FORMAT_1 = "city-walk-entwurf/1";
 
+const round = (v: number, d: number) => Math.round(v * 10 ** d) / 10 ** d;
+
 /** The placement as a file to keep beside the design. */
 export function placementFile(
   placement: DesignPlacement,
@@ -297,7 +299,6 @@ export function placementFile(
   design: string,
   scale: DesignScale = METRES
 ): string {
-  const round = (v: number, d: number) => Math.round(v * 10 ** d) / 10 ** d;
   return `${JSON.stringify(
     {
       format: PLACEMENT_FORMAT,

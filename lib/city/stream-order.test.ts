@@ -6,10 +6,11 @@ import {
   isTileContent,
   keepOrder,
   siteTileOf,
-  type OrderedTile,
   streamOrder,
 } from "./stream-order";
-import { type BakedTile, buildTileset } from "./tileset";
+import type { OrderedTile } from "./stream-order";
+import { buildTileset } from "./tileset";
+import type { BakedTile } from "./tileset";
 
 const SPAWN = "33412_5656_2_sn";
 const NEIGHBOUR = "33414_5656_2_sn";
@@ -44,18 +45,22 @@ function runOrder(tiles: OrderedTile[], boot: string | null = null) {
   return [...tiles].sort(streamOrder(() => boot)).reverse();
 }
 
+const baked = (id: string, x: number): BakedTile => ({
+  bounds: [x, 0, x + 2000, 2000],
+  city: URIS.city(id),
+  cityFar: URIS.far(id),
+  id,
+  terrain: { 0: URIS.fine(id), 1: URIS.coarse(id) },
+  zRange: [100, 150],
+});
+
 test("the names rank the contents buildTileset writes", () => {
-  const baked = (id: string, x: number): BakedTile => ({
-    bounds: [x, 0, x + 2000, 2000],
-    city: URIS.city(id),
-    cityFar: URIS.far(id),
-    id,
-    terrain: { 0: URIS.fine(id), 1: URIS.coarse(id) },
-    zRange: [100, 150],
-  });
-  type Node = { children?: Node[]; content?: { uri: string } };
+  interface Node {
+    children?: Node[];
+    content?: { uri: string };
+  }
   const json = buildTileset([baked(SPAWN, 0), baked(NEIGHBOUR, 2000)], {
-    epsg: 25833,
+    epsg: 25_833,
     offset: { cx: 0, cy: 0 },
     site: "dresden",
     tiles: [],
@@ -205,14 +210,12 @@ test("a full cache admits a tile's ground before its buildings, and unloads it l
   const base = (
     a: ReturnType<typeof seen>,
     b: ReturnType<typeof seen>
-  ): number =>
-    a.traversal.lastFrameVisited !== b.traversal.lastFrameVisited
-      ? a.traversal.lastFrameVisited > b.traversal.lastFrameVisited
-        ? -1
-        : 1
-      : a.internal.depth > b.internal.depth
-        ? 1
-        : -1;
+  ): number => {
+    if (a.traversal.lastFrameVisited === b.traversal.lastFrameVisited) {
+      return a.internal.depth > b.internal.depth ? 1 : -1;
+    }
+    return a.traversal.lastFrameVisited > b.traversal.lastFrameVisited ? -1 : 1;
+  };
   const order = keepOrder(base);
   const city = seen("city", 10);
   const far = seen("far", 10);

@@ -16,12 +16,8 @@
  * reclaim, which reports nothing of its own, it is the only word there is
  * (crash-reports.ts).
  */
-import {
-  frameLoss,
-  type GpuLoss,
-  RESUME_AWAY_MS,
-  RESUME_WINDOW_MS,
-} from "./gpu-safety";
+import { frameLoss, RESUME_AWAY_MS, RESUME_WINDOW_MS } from "./gpu-safety";
+import type { GpuLoss } from "./gpu-safety";
 
 /**
  * What the page hears. `now` is the monotonic clock (ms); `wall` the wall
@@ -87,11 +83,11 @@ export interface LifecycleOptions {
 }
 
 export interface PageLifecycle {
-  dispatch(signal: LifecycleSignal): LifecycleEffect[];
+  dispatch: (signal: LifecycleSignal) => LifecycleEffect[];
   /** the render stopped (once, for good) */
   readonly stopped: boolean;
   /** how a GPU that fails now went: in the background, or in use */
-  lossNow(now: number, hidden: boolean): GpuLoss;
+  lossNow: (now: number, hidden: boolean) => GpuLoss;
   /** the page had a memory emergency (frameLoss's sign) */
   readonly emergencyBefore: boolean;
 }
@@ -297,19 +293,24 @@ export function createPageLifecycle(opts: LifecycleOptions): PageLifecycle {
         const how = lossAt(state, signal.now, signal.hidden);
         return stopSequence(state, opts, signal.message, how, signal.message);
       }
-      case "frameFailed":
+      case "frameFailed": {
         return frameFailed(state, opts, signal);
-      case "allocationFailed":
+      }
+      case "allocationFailed": {
         return emergency(state, opts, signal);
+      }
       case "hidden":
-      case "shown":
+      case "shown": {
         return visibility(state, opts, signal);
-      case "firstFrame":
+      }
+      case "firstFrame": {
         state.firstFrameShown = true;
         return [];
-      case "dispose":
+      }
+      case "dispose": {
         state.disposed = true;
         return [];
+      }
       default: {
         const never: never = signal;
         return never;

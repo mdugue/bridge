@@ -1,17 +1,15 @@
 import {
   Box3,
-  type BufferGeometry,
-  type Color,
   InstancedBufferAttribute,
   InstancedBufferGeometry,
   InstancedInterleavedBuffer,
   InterleavedBufferAttribute,
-  type Material,
   Matrix4,
   Mesh,
   Sphere,
   Vector3,
 } from "three/webgpu";
+import type { BufferGeometry, Color, Material } from "three/webgpu";
 import {
   attribute,
   Fn,
@@ -107,7 +105,7 @@ export class Instances<M extends Material = Material> extends Mesh<
 
   set instanceMatrix(buffer: InstancedInterleavedBuffer) {
     this.#matrices = buffer;
-    for (let column = 0; column < 4; column++) {
+    for (let column = 0; column < 4; column += 1) {
       this.geometry.setAttribute(
         `iMat${column}`,
         new InterleavedBufferAttribute(buffer, 4, column * 4)
@@ -152,16 +150,15 @@ export class Instances<M extends Material = Material> extends Mesh<
   }
 
   setColorAt(index: number, colour: Color): void {
-    if (!this.#colours) {
-      this.instanceTints = new InstancedBufferAttribute(
+    let colours = this.#colours;
+    if (!colours) {
+      colours = new InstancedBufferAttribute(
         new Float32Array(this.capacity * 3).fill(1),
         3
       );
+      this.instanceTints = colours;
     }
-    colour.toArray(
-      (this.#colours as InstancedBufferAttribute).array,
-      index * 3
-    );
+    colour.toArray(colours.array, index * 3);
   }
 
   /**
@@ -183,7 +180,7 @@ export class Instances<M extends Material = Material> extends Mesh<
     const m = new Matrix4();
     const p = new Vector3();
     let reach = 0;
-    for (let i = 0; i < this.drawCount; i++) {
+    for (let i = 0; i < this.drawCount; i += 1) {
       this.getMatrixAt(i, m);
       box.expandByPoint(p.copy(base.center).applyMatrix4(m));
       reach = Math.max(reach, base.radius * m.getMaxScaleOnAxis());
@@ -200,12 +197,13 @@ export class Instances<M extends Material = Material> extends Mesh<
 export const isInstances = (object: unknown): object is Instances =>
   (object as { isInstances?: boolean } | null)?.isInstances === true;
 
+const column = (i: number): V4 => attribute(`iMat${i}`, "vec4");
+
 /** The drawn instance's matrix (column attributes; identity off a set). */
 export const instanceMatrix = Fn((builder) => {
   if (!builder.geometry.hasAttribute("iMat0")) {
     return mat4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
   }
-  const column = (i: number): V4 => attribute(`iMat${i}`, "vec4");
   return mat4(column(0), column(1), column(2), column(3));
 });
 

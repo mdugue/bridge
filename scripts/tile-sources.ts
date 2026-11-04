@@ -5,7 +5,7 @@
  * (ground-joins.test.ts) both need them. Reads files, no side effects.
  */
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import type {
   GateFeature,
   KerbFeature,
@@ -15,12 +15,8 @@ import type {
 } from "../lib/city/features";
 import type { FenceLine, FenceType, GatePoint } from "../lib/city/fences";
 import type { KerbLine } from "../lib/city/kerbs";
-import {
-  type StairLine,
-  stairLineOf,
-  type Terrace,
-  terraceOf,
-} from "../lib/city/stairs";
+import { stairLineOf, terraceOf } from "../lib/city/stairs";
+import type { StairLine, Terrace } from "../lib/city/stairs";
 import type { WallLine } from "../lib/city/terrain-conflate";
 import {
   kerbSourceFile,
@@ -30,12 +26,13 @@ import {
   wallSourceFile,
 } from "../lib/city/tile";
 import type { WaterMember } from "../lib/city/water-bodies";
-import { type Masonry, masonryOf, type WallRibbon } from "../lib/city/walls";
+import { masonryOf } from "../lib/city/walls";
+import type { Masonry, WallRibbon } from "../lib/city/walls";
 import type { Site } from "../lib/city/site";
 
-const at = (path: string) => join(process.cwd(), path);
-const readJson = <T>(path: string): T =>
-  JSON.parse(readFileSync(path, "utf8")) as T;
+const at = (path: string) => nodePath.join(process.cwd(), path);
+const readJson = (path: string): unknown =>
+  JSON.parse(readFileSync(path, "utf-8"));
 
 /** The tile's kerb lines (the smoothed DLM road edge) and where they are
  *  lowered, for the kerb stones the fine level carries. */
@@ -44,7 +41,7 @@ export function kerbLines(site: Site, tile: string): KerbLine[] {
   if (!existsSync(path)) {
     return [];
   }
-  const { features } = readJson<{ features: KerbFeature[] }>(path);
+  const { features } = readJson(path) as { features: KerbFeature[] };
   return features.flatMap((f) => {
     if (f.geometry?.type !== "LineString") {
       return [];
@@ -65,7 +62,7 @@ export function kerbLines(site: Site, tile: string): KerbLine[] {
 export function wallFile(site: Site, tile: string): WallFileFeature[] {
   const path = at(wallSourceFile(site, tile));
   return existsSync(path)
-    ? readJson<{ features: WallFileFeature[] }>(path).features
+    ? (readJson(path) as { features: WallFileFeature[] }).features
     : [];
 }
 
@@ -109,11 +106,12 @@ export function fenceLines(site: Site, tile: string): FenceLine[] {
   });
 }
 
+const isGate = (f: WallFileFeature): f is GateFeature =>
+  f.geometry?.type === "Point" && f.properties?.kind === "gate";
+
 /** The gates on the tile's wall and fence lines (a neighbour's too, where
  *  its gap reaches over the seam). */
 export function gatePoints(site: Site, tile: string): GatePoint[] {
-  const isGate = (f: WallFileFeature): f is GateFeature =>
-    f.geometry?.type === "Point" && f.properties?.kind === "gate";
   return wallFile(site, tile)
     .filter(isGate)
     .flatMap((f) =>
@@ -138,7 +136,7 @@ export function stairLines(site: Site, tile: string): StairLine[] {
   if (!existsSync(path)) {
     return [];
   }
-  const { features } = readJson<{ features: StairFeature[] }>(path);
+  const { features } = readJson(path) as { features: StairFeature[] };
   return features.flatMap((f) => stairLineOf(f) ?? []);
 }
 
@@ -155,7 +153,7 @@ export function waterMember(site: Site, tile: string): WaterMember | null {
   if (!existsSync(path)) {
     return null;
   }
-  return readJson<{ water?: WaterMember }>(path).water ?? null;
+  return (readJson(path) as { water?: WaterMember }).water ?? null;
 }
 
 /** The raised areas the terrain bake lifts to their level. */
@@ -164,6 +162,6 @@ export function terraces(site: Site, tile: string): Terrace[] {
   if (!existsSync(path)) {
     return [];
   }
-  const { features } = readJson<{ features: TerraceFeature[] }>(path);
+  const { features } = readJson(path) as { features: TerraceFeature[] };
   return features.flatMap((f) => terraceOf(f) ?? []);
 }

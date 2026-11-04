@@ -5,11 +5,12 @@
  * `--all` prints one line per registered site.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import sharp from "sharp";
 import { WATER_CLASS } from "../lib/city/landcover";
 import { buildingFootprintPolys } from "../lib/city/minimap";
-import { type Site, tileExtentOf, tileIdOf } from "../lib/city/site";
+import { tileExtentOf, tileIdOf } from "../lib/city/site";
+import type { Site } from "../lib/city/site";
 import {
   absentSiteFiles,
   siteReport,
@@ -29,8 +30,8 @@ function bytesUnder(dir: string): number {
   if (!existsSync(dir)) {
     return 0;
   }
-  return readdirSync(dir, { recursive: true, encoding: "utf8" })
-    .map((f) => statSync(join(dir, f)))
+  return readdirSync(dir, { recursive: true, encoding: "utf-8" })
+    .map((f) => statSync(nodePath.join(dir, f)))
     .filter((s) => s.isFile())
     .reduce((sum, s) => sum + s.size, 0);
 }
@@ -49,12 +50,12 @@ async function checkViewpoints(site: Site): Promise<string[]> {
       continue;
     }
     const tile = tileIdOf(site, cell);
-    const city = cityMeshSourceFiles(site, tile).city;
+    const { city } = cityMeshSourceFiles(site, tile);
     const raster = sideFileSource(site, tileArtifacts(tile).landcover.file);
     if (!(existsSync(city) && existsSync(raster))) {
       continue;
     }
-    const doc = JSON.parse(readFileSync(city, "utf8")) as CityJsonDocument;
+    const doc = JSON.parse(readFileSync(city, "utf-8")) as CityJsonDocument;
     const footprints = buildingFootprintPolys(doc).map((p) => p.pts);
     const { data, info } = await sharp(raster)
       .extractChannel(0)
@@ -86,7 +87,7 @@ if (process.argv.includes("--all")) {
 } else {
   let site: Site;
   try {
-    site = siteFromArgs(process.argv.slice(2)).site;
+    ({ site } = siteFromArgs(process.argv.slice(2)));
   } catch (error) {
     process.stderr.write(`site: ${(error as Error).message} (or --all)\n`);
     process.exit(2);

@@ -233,7 +233,7 @@ function middle(points: readonly Sample[]): SitePoint {
   const hi = [-Infinity, -Infinity, -Infinity];
   for (const p of points) {
     const v = [p.x, p.y, p.z];
-    for (let k = 0; k < 3; k++) {
+    for (let k = 0; k < 3; k += 1) {
       lo[k] = Math.min(lo[k], v[k]);
       hi[k] = Math.max(hi[k], v[k]);
     }
@@ -293,8 +293,8 @@ function candidate(
   let eye = eyeAt(distance);
   // further back along a downward axis is higher: it clears a slope that
   // climbs towards the eye less steeply than the view looks down
-  for (let k = 0; groundAt && k < BACK_OFF_STEPS; k++) {
-    const under = groundAt(eye.x, eye.y);
+  for (let k = 0; k < BACK_OFF_STEPS; k += 1) {
+    const under = groundAt ? groundAt(eye.x, eye.y) : null;
     if (under === null || eye.z >= under + CLEARANCE) {
       break;
     }
@@ -311,7 +311,7 @@ function candidate(
 
 /** Whether the terrain rises above the line from `eye` to `point`. */
 function groundCuts(eye: SitePoint, point: SitePoint, groundAt: GroundAt) {
-  for (let k = 1; k < TERRAIN_STEPS; k++) {
+  for (let k = 1; k < TERRAIN_STEPS; k += 1) {
     const t = k / TERRAIN_STEPS;
     const under = groundAt(
       eye.x + (point.x - eye.x) * t,
@@ -358,7 +358,7 @@ function seenShare(
     if (!p.sight) {
       continue;
     }
-    lines++;
+    lines += 1;
     if (groundAt && groundCuts(c.eye, p, groundAt)) {
       continue;
     }
@@ -367,7 +367,7 @@ function seenShare(
     // a hit on the place itself (its own roof before its top) is a sight
     const own = Math.max(t.r ?? DEFAULT_RADIUS, 2) * 1.2 + 3;
     if (!hit || Math.hypot(hit.x - t.x, hit.y - t.y) <= own) {
-      seen++;
+      seen += 1;
     }
   }
   return lines === 0 ? 1 : seen / lines;
@@ -430,7 +430,7 @@ export function frameTargets(
     .sort((a, b) => b.score - a.score);
   // the buildings' sight lines weigh as much and cost most: drawn for the
   // best few headings only, which then compete on ground and buildings
-  const sightHit = context.sightHit;
+  const { sightHit } = context;
   const finalists = scored.slice(0, sightHit ? SIGHT_CANDIDATES : 1);
   if (sightHit) {
     for (const s of finalists) {
@@ -439,7 +439,13 @@ export function frameTargets(
         (seenShare(s.c, points, targets, groundAt, sightHit) - s.ground);
     }
   }
-  const best = finalists.reduce((a, b) => (b.score > a.score ? b : a)).c;
+  let [top] = finalists;
+  for (const s of finalists) {
+    if (s.score > top.score) {
+      top = s;
+    }
+  }
+  const best = top.c;
   const foot = Math.min(...points.map((p) => p.z));
   const under = groundAt?.(best.eye.x, best.eye.y) ?? null;
   // an eye the back-off could not lift clear of a steep slope still
@@ -448,15 +454,20 @@ export function frameTargets(
     under === null
       ? best.eye.z - foot
       : Math.max(best.eye.z - under, CLEARANCE);
+  // where nothing is under the eye, the places' foot, if a place or the
+  // terrain round it said where that is
+  const footKnown = targets.some(
+    (t) => t.z !== undefined || (groundAt?.(t.x, t.y) ?? null) !== null
+  );
+  let ground: { ground?: number } = {};
+  if (under !== null) {
+    ground = { ground: under };
+  } else if (footKnown) {
+    ground = { ground: foot };
+  }
   return {
     distance: Math.round(best.distance),
-    ...(under !== null
-      ? { ground: under }
-      : targets.some(
-            (t) => t.z !== undefined || (groundAt?.(t.x, t.y) ?? null) !== null
-          )
-        ? { ground: foot }
-        : {}),
+    ...ground,
     view: {
       epsg: { x: round1(best.eye.x), y: round1(best.eye.y) },
       aboveGround: Math.round(above),

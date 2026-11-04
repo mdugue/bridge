@@ -7,28 +7,24 @@
  * dressing already fetched; sized as the layers draw them, so a ray meets
  * what is on screen. No THREE, no DOM.
  */
-import {
-  type Aabb,
-  type AskHit,
-  type AskItem,
-  type AskSet,
-  type AskSolid,
-  type Cylinder,
-  cylindersBox,
-  rayCylinder,
-  type Xyz,
+import { cylindersBox, rayCylinder } from "./ask-solids";
+import type {
+  Aabb,
+  AskHit,
+  AskItem,
+  AskSet,
+  AskSolid,
+  Cylinder,
+  Xyz,
 } from "./ask-solids";
 import { axisFrame, BRIDGE_STEP } from "./bridge";
 import type { BridgeFeature, MonumentFeature, TreeFeature } from "./features";
-import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
+import { epsgToWorld } from "./ground-clamp";
+import type { RecenterOffset } from "./ground-clamp";
 import type { FeatureInquiry } from "./inquiry-features";
 import { monumentMarker, pointBasinRadius, ringCentre } from "./monuments";
-import {
-  ARCHETYPE_SHAPE,
-  archetypeOf,
-  type TreeArchetype,
-  treeExtents,
-} from "./tree-inventory";
+import { ARCHETYPE_SHAPE, archetypeOf, treeExtents } from "./tree-inventory";
+import type { TreeArchetype } from "./tree-inventory";
 import { TREE_GENERA } from "./tree-season";
 
 type HeightAt = (x: number, y: number) => number | null;
@@ -138,7 +134,7 @@ function packedTreeSet(
     box,
     along: (o, d, far) => {
       const out: AskHit<FeatureInquiry>[] = [];
-      for (let k = 0; k < index.length; k++) {
+      for (let k = 0; k < index.length; k += 1) {
         const t = distance(o, d, k);
         if (t <= far) {
           out.push(hit(k, t));
@@ -149,7 +145,7 @@ function packedTreeSet(
     nearest: (o, d, far) => {
       let best = -1;
       let reach = far;
-      for (let k = 0; k < index.length; k++) {
+      for (let k = 0; k < index.length; k += 1) {
         const [trunk, crown] = cylinders(k);
         const t = Math.min(
           rayCylinder(o, d, trunk) ?? Number.POSITIVE_INFINITY,
@@ -250,7 +246,7 @@ export function packedCylinderSets(
 ): AskSet<FeatureInquiry>[] {
   const cells = new Map<string, { box: Aabb; trees: number[] }>();
   const packed: number[] = [];
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < n; i += 1) {
     const tree = put(i);
     if (!tree) {
       continue;
@@ -265,17 +261,18 @@ export function packedCylinderSets(
     } else {
       cells.set(key, { box, trees: [i] });
     }
-    for (let c = 0; c < TREE_STRIDE; c++) {
+    for (let c = 0; c < TREE_STRIDE; c += 1) {
       packed[i * TREE_STRIDE + c] = tree[c];
     }
   }
   return [...cells.values()].map(({ box, trees }) => {
     const solids = new Float32Array(trees.length * TREE_STRIDE);
-    trees.forEach((i, k) => {
-      for (let c = 0; c < TREE_STRIDE; c++) {
+    for (let k = 0; k < trees.length; k += 1) {
+      const i = trees[k];
+      for (let c = 0; c < TREE_STRIDE; c += 1) {
         solids[k * TREE_STRIDE + c] = packed[i * TREE_STRIDE + c];
       }
-    });
+    }
     return packedTreeSet(box, solids, Int32Array.from(trees), target);
   });
 }

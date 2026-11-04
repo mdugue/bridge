@@ -8,10 +8,8 @@
  * position and kind — and quotes its source. No THREE, no DOM.
  */
 import {
-  type CardCredits,
   factLines,
   firstText,
-  type InquiryCard,
   metres,
   mapillarySource,
   osmSource,
@@ -20,6 +18,7 @@ import {
   stated,
   whole,
 } from "./card-lines";
+import type { CardCredits, InquiryCard } from "./card-lines";
 import type {
   FurnitureFeature,
   FurnitureKind,
@@ -487,17 +486,27 @@ export function moreCard(
   credits: CardCredits
 ): InquiryCard {
   switch (inquiry.kind) {
-    case "canopy":
+    case "canopy": {
       return canopyCard(inquiry, provenance, credits);
-    case "hedge":
+    }
+    case "hedge": {
       return hedgeCard(inquiry, provenance, credits);
-    case "lamp":
+    }
+    case "lamp": {
       return lampCard(inquiry, provenance, credits);
-    case "furniture":
+    }
+    case "furniture": {
       return furnitureCard(inquiry, provenance);
-    case "stop":
+    }
+    case "stop": {
       return stopCard(inquiry, provenance);
-    case "landing":
+    }
+    case "landing": {
       return landingCard(inquiry, provenance);
+    }
+    default: {
+      const unknown: never = inquiry;
+      throw new Error(`unknown inquiry kind: ${String(unknown)}`);
+    }
   }
 }

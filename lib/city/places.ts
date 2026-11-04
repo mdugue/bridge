@@ -5,7 +5,8 @@
  * down — instead of being listed twice; the rest follow the vantages, the
  * most notable first. No THREE, no DOM.
  */
-import { landmarkVantage, type Landmark } from "./landmarks";
+import { landmarkVantage } from "./landmarks";
+import type { Landmark } from "./landmarks";
 import type { MovementMode, Viewpoint, ViewpointGeometry } from "./site";
 
 export interface Place {
@@ -64,11 +65,11 @@ const FILLER = new Set([
 export function placeWords(name: string, city = ""): string[] {
   const own = new Set(city ? placeWords(city) : []);
   return name
-    .replace(/\([^)]*\)/g, " ")
+    .replaceAll(/\([^)]*\)/gu, " ")
     .toLowerCase()
     .split(/[^\p{L}\p{N}]+/u)
     .filter((w) => w.length > 0 && !FILLER.has(w))
-    .map((w) => (w.length > 4 ? w.replace(/(en|es|er|em|e|s|n)$/u, "") : w))
+    .map((w) => (w.length > 4 ? w.replace(/(?:en|es|er|em|e|s|n)$/u, "") : w))
     .filter((w) => !own.has(w));
 }
 

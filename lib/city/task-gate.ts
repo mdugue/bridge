@@ -41,14 +41,14 @@ function placeIn(line: Waiter[], rank: number, maxOvertakes: number): number {
   if (at < 0) {
     return line.length;
   }
-  for (let i = line.length - 1; i >= at; i--) {
+  for (let i = line.length - 1; i >= at; i -= 1) {
     if (line[i].overtaken >= maxOvertakes) {
       at = i + 1;
       break;
     }
   }
-  for (let i = at; i < line.length; i++) {
-    line[i].overtaken++;
+  for (let i = at; i < line.length; i += 1) {
+    line[i].overtaken += 1;
   }
   return at;
 }
@@ -71,16 +71,19 @@ export function createTaskGate(
   let running = 0;
   const line: Waiter[] = [];
   const next = () => {
-    while (running < limit && line.length > 0) {
+    while (line.length > 0) {
+      if (running >= limit) {
+        break;
+      }
       line.shift()?.start();
     }
   };
-  const run = <T>(
+  const run = async <T>(
     task: () => Promise<T>,
     signal?: AbortSignal,
     rank = 0
   ): Promise<T> =>
-    new Promise<T>((resolve, reject) => {
+    await new Promise<T>((resolve, reject) => {
       if (signal?.aborted) {
         reject(abortError(signal));
         return;
@@ -90,21 +93,21 @@ export function createTaskGate(
         overtaken: 0,
         start: () => {
           signal?.removeEventListener("abort", leave);
-          running++;
+          running += 1;
           // a task that throws synchronously is a failed task, not a stuck
           // place
-          Promise.resolve()
+          void Promise.resolve()
             .then(task)
             .then(resolve, reject)
             .finally(() => {
-              running--;
+              running -= 1;
               next();
             });
         },
       };
       const leave = () => {
         const at = line.indexOf(waiter);
-        if (at >= 0) {
+        if (at !== -1) {
           line.splice(at, 1);
           reject(abortError(signal));
         }

@@ -3,11 +3,8 @@
 import { useState, useSyncExternalStore } from "react";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import {
-  type ReportsState,
-  reportsState,
-  setReportsDeclined,
-} from "./report-choice";
+import { reportsState, setReportsDeclined } from "./report-choice";
+import type { ReportsState } from "./report-choice";
 
 /**
  * The privacy page's switch for the crash reports (report-choice.ts): on
@@ -37,7 +34,7 @@ const NOTES: Record<ReportsState, string> = {
   declined: "Ausgeschaltet – aus diesem Browser wird nichts gesendet.",
 };
 
-export function ReportsChoice() {
+export const ReportsChoice = () => {
   const state = useSyncExternalStore(subscribe, reportsState, unknown);
   const [unsaved, setUnsaved] = useState(false);
   if (state === null) {
@@ -71,4 +68,4 @@ export function ReportsChoice() {
       </output>
     </div>
   );
-}
+};

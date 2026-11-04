@@ -20,9 +20,11 @@ test("the plate's ground is bilinear between its vertices, none off it", () => {
   expect(at(101, 50)).toBeUndefined();
 });
 
+/** A plane rising east and north. */
+const ramp = (x: number, y: number) => x - 900 + (y - 2000) / 2;
+
 test("across two tiles the plate's ground follows a ramp, by each tile's cell", () => {
   const n = 5;
-  const ramp = (x: number, y: number) => x - 900 + (y - 2000) / 2;
   const tiles = [
     [1000, 2000, 1400, 2400],
     [1400, 2000, 1800, 2400],

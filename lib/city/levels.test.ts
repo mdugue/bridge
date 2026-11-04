@@ -1,11 +1,6 @@
 import { expect, test } from "bun:test";
-import {
-  encodeRuns,
-  type Level,
-  type LevelSample,
-  lineLevels,
-  runLevelAt,
-} from "./levels";
+import { encodeRuns, lineLevels, runLevelAt } from "./levels";
+import type { Level, LevelSample } from "./levels";
 
 /** A line sampled every 4 m: the ground and the decks per sample from
  *  functions of the distance. */
@@ -137,8 +132,7 @@ test("the runs a build bakes give the layer back every level off the ground", ()
   const levels = lineLevels(samples, RAIL);
   const runs = encodeRuns(levels);
   const d = samples.map((s) => s.d);
-  samples.forEach((_, i) => {
-    const level = levels[i];
+  for (const [i, level] of levels.entries()) {
     const back = runLevelAt(runs, d, i);
     if (level?.mode === "ground") {
       expect(back).toBeNull();
@@ -146,14 +140,15 @@ test("the runs a build bakes give the layer back every level off the ground", ()
       expect(back?.mode).toBe(level?.mode ?? "ground");
       expect(back?.y ?? 0).toBeCloseTo(level?.y ?? 0, 1);
     }
-  });
+  }
 });
 
+// a trench 300 m long, the DGM's lid over it 6 m up (Hamburg's S-Bahn
+// under the streets by Hammerbrook): too long a hump for the cut at the
+// line's grade
+const lid = (d: number) => (d >= 200 && d <= 500 ? 116 : 110);
+
 test("a line the source puts below the ground cuts under a long lid", () => {
-  // a trench 300 m long, the DGM's lid over it 6 m up (Hamburg's S-Bahn
-  // under the streets by Hammerbrook): too long a hump for the cut at the
-  // line's grade
-  const lid = (d: number) => (d >= 200 && d <= 500 ? 116 : 110);
   const samples = line(700, lid);
   const plain = lineLevels(samples, RAIL);
   expect(modeAt(plain, samples, 352)?.mode).not.toBe("cut");

@@ -129,9 +129,11 @@ test("the time is Dresden's wall clock, whatever the visitor's zone; anything el
 
 test("a count's time is shown on the city's clock, whatever the visitor's zone", () => {
   // under the file's TZ (Asia/Tokyo) a local clock says 14:00
-  expect(countClock(parseCountTime("01.10.2026 07:00:00") as Date)).toBe(
-    "07:00"
-  );
+  const seven = parseCountTime("01.10.2026 07:00:00");
+  if (!seven) {
+    throw new Error("expected the count time to parse");
+  }
+  expect(countClock(seven)).toBe("07:00");
   expect(countClock(new Date("2026-12-24T17:00:00Z"))).toBe("18:00");
 });
 

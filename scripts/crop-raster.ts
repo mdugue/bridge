@@ -16,6 +16,9 @@ export type ColonyCrop = [number, number, number, number, number];
 /** Texels of margin kept around the colonies (the LINEAR edge's reach). */
 const MARGIN = 2;
 
+/** An even lower bound `MARGIN` below `v`, not under 0. */
+const cropLow = (v: number) => Math.max(0, Math.floor((v - MARGIN) / 2) * 2);
+
 /**
  * The texels that carry a colony (R > 0) with a margin, on even bounds so
  * the half-resolution twin covers exactly the same ground; null when none.
@@ -25,8 +28,8 @@ export function colonyCrop(rg: Uint8Array, size: number): ColonyCrop | null {
   let y0 = size;
   let x1 = -1;
   let y1 = -1;
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
       if (rg[(y * size + x) * 2] > 0) {
         x0 = Math.min(x0, x);
         x1 = Math.max(x1, x);
@@ -38,9 +41,8 @@ export function colonyCrop(rg: Uint8Array, size: number): ColonyCrop | null {
   if (x1 < 0) {
     return null;
   }
-  const lo = (v: number) => Math.max(0, Math.floor((v - MARGIN) / 2) * 2);
   const hi = (v: number) => Math.min(size, Math.ceil((v + 1 + MARGIN) / 2) * 2);
-  const [cx, cy] = [lo(x0), lo(y0)];
+  const [cx, cy] = [cropLow(x0), cropLow(y0)];
   return [cx, cy, hi(x1) - cx, hi(y1) - cy, size];
 }
 
@@ -48,7 +50,7 @@ export function colonyCrop(rg: Uint8Array, size: number): ColonyCrop | null {
 export function cropRg(rg: Uint8Array, crop: ColonyCrop): Uint8Array {
   const [x, y, w, h, size] = crop;
   const out = new Uint8Array(w * h * 2);
-  for (let r = 0; r < h; r++) {
+  for (let r = 0; r < h; r += 1) {
     const from = ((y + r) * size + x) * 2;
     out.set(rg.subarray(from, from + w * 2), r * w * 2);
   }
@@ -63,8 +65,8 @@ export function cropRg(rg: Uint8Array, crop: ColonyCrop): Uint8Array {
 export function halveRg(rg: Uint8Array, w: number, h: number): Uint8Array {
   const [hw, hh] = [w / 2, h / 2];
   const out = new Uint8Array(hw * hh * 2);
-  for (let y = 0; y < hh; y++) {
-    for (let x = 0; x < hw; x++) {
+  for (let y = 0; y < hh; y += 1) {
+    for (let x = 0; x < hw; x += 1) {
       let sum = 0;
       let axis = 0;
       for (const [dx, dy] of [
@@ -85,8 +87,8 @@ export function halveRg(rg: Uint8Array, w: number, h: number): Uint8Array {
   return out;
 }
 
-function encode(rg: Uint8Array, w: number, h: number): Promise<Buffer> {
-  return sharp(rg, { raw: { width: w * 2, height: h, channels: 1 } })
+async function encode(rg: Uint8Array, w: number, h: number): Promise<Buffer> {
+  return await sharp(rg, { raw: { width: w * 2, height: h, channels: 1 } })
     .toColourspace("b-w")
     .png({ compressionLevel: 9, palette: false })
     .toBuffer();
@@ -112,7 +114,8 @@ export async function cropColonyRaster(
   if (!crop) {
     return null;
   }
-  const [, , w, h] = crop;
+  const w = crop[2];
+  const h = crop[3];
   const cut = cropRg(rg, crop);
   return {
     crop,

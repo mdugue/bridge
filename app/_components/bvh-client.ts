@@ -112,7 +112,7 @@ function startWorker(): Worker | null {
   }
   worker = w;
   // a stopped worker's last word is not about the one now running
-  w.onmessage = ({ data }: MessageEvent<BvhReply>) => {
+  w.addEventListener("message", ({ data }: MessageEvent<BvhReply>) => {
     if (worker !== w) {
       return;
     }
@@ -123,19 +123,19 @@ function startWorker(): Worker | null {
     const settle = settles.get(data.id);
     settles.delete(data.id);
     settle?.(data);
-  };
+  });
   // the arrays of a reply that cannot be read are lost: so is the worker
-  w.onmessageerror = () => {
+  w.addEventListener("messageerror", () => {
     if (worker === w) {
       dieOut();
     }
-  };
-  w.onerror = (event) => {
+  });
+  w.addEventListener("error", (event) => {
     event.preventDefault();
     if (worker === w) {
       dieOut();
     }
-  };
+  });
   return w;
 }
 
@@ -186,9 +186,8 @@ function take(geometry: BufferGeometry): Taken | null {
   if (!indexAttr) {
     return null;
   }
-  const interleaved =
-    (position as InterleavedBufferAttribute).isInterleavedBufferAttribute ===
-    true;
+  const interleaved = (position as InterleavedBufferAttribute)
+    .isInterleavedBufferAttribute;
   const source = (
     interleaved
       ? (position as InterleavedBufferAttribute).data.array
@@ -260,7 +259,8 @@ async function buildThere(
   if (!taken) {
     return false;
   }
-  const id = nextId++;
+  const id = nextId;
+  nextId += 1;
   building.add(geometry);
   const reply = await new Promise<BvhReply | null | "unsent">((resolve) => {
     settles.set(id, resolve);
@@ -305,26 +305,34 @@ async function buildThere(
  * there: one that left before its turn is not built, and one that left
  * during it gets its arrays back but no BVH.
  */
-export function buildBvhOffThread(
+export async function buildBvhOffThread(
   geometry: BufferGeometry,
   wanted: () => boolean = () => true
 ): Promise<void> {
-  const run = chain.then(async () => {
-    if (geometry.boundsTree || !wanted()) {
-      return;
-    }
-    if (!(await buildThere(geometry, wanted))) {
-      // here after all, in idle time where the thread has some
-      await new Promise<void>((resolve) => {
-        whenIdle(() => {
-          if (!geometry.boundsTree && wanted()) {
-            geometry.computeBoundsTree();
-          }
-          resolve();
-        }, IDLE_BUILD_MS);
-      });
-    }
+  const run = chain.then(async () => await buildInTurn(geometry, wanted));
+  chain = run.catch(() => {
+    // the caller sees a failed build through `run`; the chain only orders
   });
-  chain = run.catch(() => undefined);
-  return run;
+  await run;
+}
+
+/** One geometry's turn in the chain: there if it can, else here. */
+async function buildInTurn(
+  geometry: BufferGeometry,
+  wanted: () => boolean
+): Promise<void> {
+  if (geometry.boundsTree || !wanted()) {
+    return;
+  }
+  if (!(await buildThere(geometry, wanted))) {
+    // here after all, in idle time where the thread has some
+    await new Promise<void>((resolve) => {
+      whenIdle(() => {
+        if (!geometry.boundsTree && wanted()) {
+          geometry.computeBoundsTree();
+        }
+        resolve();
+      }, IDLE_BUILD_MS);
+    });
+  }
 }

@@ -12,11 +12,8 @@
  * showed are links in its text. The first questions read the moment
  * (`lib/city/ask-starters.ts`).
  */
-import {
-  fetchServerSentEvents,
-  type UIMessage,
-  useChat,
-} from "@tanstack/ai-react";
+import { fetchServerSentEvents, useChat } from "@tanstack/ai-react";
+import type { UIMessage } from "@tanstack/ai-react";
 import {
   EarIcon,
   KeyRoundIcon,
@@ -40,9 +37,6 @@ import {
   ASK_LIMITS,
   ASK_PROVIDER_BY_ID,
   ASK_PROVIDERS,
-  type AskModel,
-  type AskProviderDef,
-  type AskProviderId,
   isAskProvider,
   maskedKey,
   plausibleKey,
@@ -51,8 +45,14 @@ import {
   TOO_LONG,
   TOO_MANY_STEPS,
 } from "@/lib/city/ask-city";
+import type {
+  AskModel,
+  AskProviderDef,
+  AskProviderId,
+} from "@/lib/city/ask-city";
 import { nearReach } from "@/lib/city/ask-knowledge";
-import { type MentionRun, mentionRuns } from "@/lib/city/ask-mentions";
+import { mentionRuns } from "@/lib/city/ask-mentions";
+import type { MentionRun } from "@/lib/city/ask-mentions";
 import { starterQuestions } from "@/lib/city/ask-starters";
 import { NEAR_RADIUS } from "@/lib/city/ask-tools";
 import { Button } from "@/components/ui/button";
@@ -84,20 +84,14 @@ import {
 } from "@/components/ui/trace";
 import { cn } from "cn";
 import { AnswerChipRows, answerChips, shownPlaces } from "./ask-chips";
-import { type AskKey, clearAskKey, readAskKey, writeAskKey } from "./ask-key";
-import {
-  type AskPlace,
-  type AskScene,
-  sceneTools,
-  showPlaces,
-} from "./ask-scene-tools";
+import { clearAskKey, readAskKey, writeAskKey } from "./ask-key";
+import type { AskKey } from "./ask-key";
+import { sceneTools, showPlaces } from "./ask-scene-tools";
+import type { AskPlace, AskScene } from "./ask-scene-tools";
 import { useSite } from "./site-context";
-import {
-  type Dictation,
-  type Speech,
-  useDictation,
-  useSpeech,
-} from "./ask-voice";
+import { useOnce } from "./use-once";
+import { useDictation, useSpeech } from "./ask-voice";
+import type { Dictation, Speech } from "./ask-voice";
 
 interface Props {
   coarse: boolean;
@@ -106,7 +100,7 @@ interface Props {
   site: string;
 }
 
-export default function AskCity({ coarse, onClose, scene, site }: Props) {
+const AskCity = ({ coarse, onClose, scene, site }: Props) => {
   const [key, setKey] = useState<AskKey | null>(() => {
     const stored = readAskKey();
     // a key checked without a token (a server not yet set up, or a local
@@ -236,7 +230,7 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
       </section>
     </>
   );
-}
+};
 
 // --- the key ------------------------------------------------------------------
 
@@ -255,22 +249,21 @@ const modelOf = (def: AskProviderDef, id: string): AskModel | undefined =>
   def.models.find((m) => m.id === id);
 
 /** A model as the picker lists it: its name, and what it is good for. */
-function ModelName({ model }: { model: AskModel | undefined }) {
-  return model ? (
+const ModelName = ({ model }: { model: AskModel | undefined }) =>
+  model ? (
     <span className="flex items-baseline gap-1.5">
       {model.label}
       <span className="text-muted-foreground">{model.hint}</span>
     </span>
   ) : null;
-}
 
-function KeyForm({
+const KeyForm = ({
   onForget,
   onKey,
 }: {
   onForget: () => void;
   onKey: (key: AskKey) => void;
-}) {
+}) => {
   const [stored, setStored] = useState(readAskKey);
   const [provider, setProvider] = useState<AskProviderId>(
     stored?.provider ?? "anthropic"
@@ -309,29 +302,30 @@ function KeyForm({
         message?: string;
         token?: string;
       };
-      if (!res.ok) {
+      if (res.ok) {
+        onKey({
+          provider,
+          model,
+          key,
+          remember,
+          token: body.token ?? "",
+          expires: body.expires ?? Date.now() + ASK_LIMITS.tokenMs,
+        });
+      } else {
         setProblem(body.message ?? `Die Prüfung schlug fehl (${res.status}).`);
-        return;
       }
-      onKey({
-        provider,
-        model,
-        key,
-        remember,
-        token: body.token ?? "",
-        expires: body.expires ?? Date.now() + ASK_LIMITS.tokenMs,
-      });
     } catch {
       setProblem("Keine Verbindung zum Server.");
-    } finally {
-      setBusy(false);
     }
+    setBusy(false);
   };
 
   return (
     <form
       className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-4 text-[13px]"
-      onSubmit={(e) => void submit(e)}
+      onSubmit={(e) => {
+        void submit(e);
+      }}
     >
       <p className="leading-relaxed text-foreground/90">
         Frag nach Gebäuden, Plätzen und Geschichte — die Antwort zeigt dir den
@@ -491,15 +485,22 @@ function KeyForm({
       </p>
     </form>
   );
-}
+};
 
 // --- the conversation -------------------------------------------------------------
 
 /** A provider's error that names the key or the account's credit. */
 const KEY_TROUBLE =
-  /\b(401|402|403|unauthori[sz]ed|forbidden|authenticat\w*|api[ _-]?key|credits?|credentials?|quota|billing|insufficient)\b/i;
+  /\b(?:401|402|403|unauthori[sz]ed|forbidden|authenticat\w*|api[ _-]?key|credits?|credentials?|quota|billing|insufficient)\b/iu;
 /** The same, as the code a provider's error carries. */
 const KEY_CODES = new Set(["401", "402", "403"]);
+
+/** One failed answer's words and what the visitor can do about it. */
+const say = (text: string, key = false, reset = false) => ({
+  key,
+  reset,
+  text,
+});
 
 /** A failed answer in words, by the status the server sent, and what
  *  the visitor can do about it: check the key again or start over. */
@@ -508,12 +509,7 @@ function errorText(error: Error): {
   reset: boolean;
   text: string;
 } {
-  const status = (error as { status?: unknown }).status;
-  const say = (text: string, key = false, reset = false) => ({
-    key,
-    reset,
-    text,
-  });
+  const { status } = error as { status?: unknown };
   if (status === 401) {
     return say("Der Schlüssel muss neu geprüft werden.", true);
   }
@@ -576,7 +572,7 @@ function lastAnswer(messages: readonly UIMessage[]): string {
   for (
     let i = messages.length - 1;
     i >= 0 && messages[i].role !== "user";
-    i--
+    i -= 1
   ) {
     texts.unshift(
       messages[i].parts
@@ -629,7 +625,7 @@ function useReadAloud(
 }
 
 /** Read aloud, speak a question, the Hörmodus: where the browser can. */
-function VoiceBar({
+const VoiceBar = ({
   busy,
   dictation,
   hearing,
@@ -648,7 +644,7 @@ function VoiceBar({
   reading: boolean;
   setReading: (on: boolean) => void;
   speech: Speech;
-}) {
+}) => {
   // the question goes to the conversation as it is when it is heard
   const spoken = useRef(onSpoken);
   useEffect(() => {
@@ -732,9 +728,9 @@ function VoiceBar({
       )}
     </div>
   );
-}
+};
 
-function Conversation({
+const Conversation = ({
   askKey,
   paused,
   hearing,
@@ -755,7 +751,7 @@ function Conversation({
   scene: AskScene;
   setReading: (on: boolean) => void;
   site: string;
-}) {
+}) => {
   const speech = useSpeech();
   const dictation = useDictation();
   const tools = useMemo(() => sceneTools(scene), [scene]);
@@ -771,9 +767,9 @@ function Conversation({
     [secret]
   );
   // one conversation per card: the provider's prompt cache is keyed by it
-  const [threadId] = useState(() => crypto.randomUUID());
+  const threadId = useOnce(() => crypto.randomUUID());
   // drawn once per conversation from the moment, not per render
-  const [starters] = useState(() => starterQuestions(scene.moment()));
+  const starters = useOnce(() => starterQuestions(scene.moment()));
   const chat = useChat({
     threadId,
     connection,
@@ -786,6 +782,7 @@ function Conversation({
       voice: reading,
     },
   });
+  const handleClear = chat.clear;
   // a closed conversation leaves no tool waiting on the scene
   // (the answer stops first: a tool that returns at the abort would
   // otherwise resume the run with one more request on the visitor's key)
@@ -935,7 +932,7 @@ function Conversation({
                   {failure.reset && (
                     <button
                       className="underline underline-offset-2"
-                      onClick={chat.clear}
+                      onClick={handleClear}
                       type="button"
                     >
                       Neu beginnen
@@ -1014,7 +1011,7 @@ function Conversation({
       </p>
     </>
   );
-}
+};
 
 /** A tool argument as text: strings and numbers as written, else nothing. */
 function argText(value: unknown): string {
@@ -1062,28 +1059,39 @@ function toolLine(name: string, input: unknown, output?: unknown): string {
     return refused;
   }
   switch (name) {
-    case "suche_stadt":
+    case "suche_stadt": {
       return `Sucht „${argText(args.anfrage)}“`;
-    case "in_der_naehe":
+    }
+    case "in_der_naehe": {
       return `Sieht sich im Umkreis von ${nearReach(typeof args.radius === "number" ? args.radius : NEAR_RADIUS).buildings} m um`;
-    case "fakten":
+    }
+    case "fakten": {
       return `Liest die Fakten zu ${argText(args.id)}`;
-    case "quellen":
+    }
+    case "quellen": {
       return "Liest die Quellen";
-    case "wo_bin_ich":
+    }
+    case "wo_bin_ich": {
       return "Schaut, wo du stehst";
-    case "was_ist_da":
+    }
+    case "was_ist_da": {
       return "Fragt, was dort steht, wohin die Ansicht zeigt";
-    case "zeige":
+    }
+    case "zeige": {
       return showLine(args, output);
-    case "setze_zeit":
+    }
+    case "setze_zeit": {
       return `Stellt die Uhr auf ${argText(args.stunde)} Uhr`;
-    case "setze_stil":
+    }
+    case "setze_stil": {
       return `Wechselt den Bildstil (${argText(args.stil)})`;
-    case "datenschicht":
+    }
+    case "datenschicht": {
       return `${args.an ? "Zeigt" : "Verbirgt"} eine Datenebene`;
-    default:
+    }
+    default: {
       return name;
+    }
   }
 }
 
@@ -1108,7 +1116,7 @@ interface Turn {
 
 function turnsOf(messages: readonly UIMessage[]): Turn[] {
   const turns: Turn[] = [];
-  messages.forEach((m, i) => {
+  for (const [i, m] of messages.entries()) {
     const open = turns.at(-1);
     if (m.role === "user" || !open) {
       turns.push(
@@ -1120,7 +1128,7 @@ function turnsOf(messages: readonly UIMessage[]): Turn[] {
       open.answer.push(m);
       open.end = i;
     }
-  });
+  }
   return turns;
 }
 
@@ -1138,7 +1146,7 @@ const WAITING_MS = 1800;
 
 /** A line that shows at once that the question was heard, and keeps
  *  changing while the model thinks. */
-function Waiting() {
+const Waiting = () => {
   const [n, setN] = useState(() => Math.floor(Math.random() * WAITING.length));
   useEffect(() => {
     const id = setInterval(
@@ -1155,7 +1163,7 @@ function Waiting() {
       <TraceTitle>{WAITING[n]}</TraceTitle>
     </TraceLine>
   );
-}
+};
 
 /** What the model looked things up with (the rest acts on the view). */
 const LOOKUPS = new Set([
@@ -1204,7 +1212,7 @@ function unanswered(c: CallPart): boolean {
 /** The answer's steps as one collapsed line (the chain of thought): while
  *  the model works, its latest step; once it writes, a summary; a click
  *  lists them all, a stopped one marked. */
-function Steps({
+const Steps = ({
   calls,
   live,
   working,
@@ -1213,7 +1221,7 @@ function Steps({
   /** the answer is still on its way: an open call runs, not stopped */
   live: boolean;
   working: boolean;
-}) {
+}) => {
   const now = calls.at(-1);
   const running = working && now !== undefined;
   return (
@@ -1247,7 +1255,7 @@ function Steps({
       </TraceCollapsible>
     </Trace>
   );
-}
+};
 
 /** A paragraph's pieces: a web link, or text runs with place mentions. */
 type Piece = { url: string } | { runs: MentionRun[] };
@@ -1265,7 +1273,7 @@ function piecesOf(
     text
       .split(
         // and a bracketed part, as in Wikipedia's „Zwinger_(Dresden)“, is
-        /(https:\/\/(?:[^\s()[\]]|\([^\s()]*\))*(?:[^\s()[\].,;:!?»“”"']|\([^\s()]*\)))/g
+        /(?<link>https:\/\/(?:[^\s()[\]]|\([^\s()]*\))*(?:[^\s()[\].,;:!?»“”"']|\([^\s()]*\)))/gu
       )
       .map((part) =>
         part.startsWith("https://")
@@ -1277,7 +1285,7 @@ function piecesOf(
 
 /** A paragraph with its web links clickable and the places the answer
  *  showed as buttons that fly there. */
-function Linked({
+const Linked = ({
   onPlace,
   pieces,
   places,
@@ -1285,64 +1293,60 @@ function Linked({
   onPlace: ((place: AskPlace) => void) | null;
   pieces: readonly Piece[];
   places: readonly AskPlace[];
-}) {
-  return (
-    <>
-      {pieces.map((piece, i) =>
-        "url" in piece ? (
-          <a
-            className="break-all underline underline-offset-2"
-            // the same link may stand twice in an answer: its place keys it
-            // reason: pieces never reorder, the index is stable
-            key={`${i}:${piece.url}`}
-            href={piece.url}
-            rel="noreferrer"
-            target="_blank"
-          >
-            {piece.url}
-          </a>
-        ) : (
-          piece.runs.map((run, j) =>
-            "place" in run ? (
-              <button
-                className="rounded-sm font-medium text-primary underline decoration-primary/30 decoration-dotted underline-offset-[3px] hover:decoration-solid disabled:cursor-default disabled:text-inherit disabled:no-underline"
-                data-testid="ask-mention"
-                disabled={onPlace === null}
-                // reason: runs never reorder, the index is stable
-                key={`${i}.${j}`}
-                onClick={() => onPlace?.(places[run.place])}
-                title={`Zu ${places[run.place].name}`}
-                type="button"
-              >
-                {run.text}
-              </button>
-            ) : (
+}) => (
+  <>
+    {pieces.map((piece, i) =>
+      "url" in piece ? (
+        <a
+          className="break-all underline underline-offset-2"
+          // the same link may stand twice in an answer: its place keys it
+          // reason: pieces never reorder, the index is stable
+          key={`${i}:${piece.url}`}
+          href={piece.url}
+          rel="noreferrer"
+          target="_blank"
+        >
+          {piece.url}
+        </a>
+      ) : (
+        piece.runs.map((run, j) =>
+          "place" in run ? (
+            <button
+              className="rounded-sm font-medium text-primary underline decoration-primary/30 decoration-dotted underline-offset-[3px] hover:decoration-solid disabled:cursor-default disabled:text-inherit disabled:no-underline"
+              data-testid="ask-mention"
+              disabled={onPlace === null}
               // reason: runs never reorder, the index is stable
-              <span key={`${i}.${j}`}>{run.text}</span>
-            )
+              key={`${i}.${j}`}
+              onClick={() => onPlace?.(places[run.place])}
+              title={`Zu ${places[run.place].name}`}
+              type="button"
+            >
+              {run.text}
+            </button>
+          ) : (
+            // reason: runs never reorder, the index is stable
+            <span key={`${i}.${j}`}>{run.text}</span>
           )
         )
-      )}
-    </>
-  );
-}
+      )
+    )}
+  </>
+);
 
-function Question({ message }: { message: UIMessage }) {
-  return (
-    <Message align="end">
-      <MessageContent>
-        <p className="w-fit max-w-[85%] self-end rounded-lg bg-primary px-2.5 py-1.5 text-[13px] text-primary-foreground">
-          {message.parts
-            .map((p) => (p.type === "text" ? p.content : ""))
-            .join("")}
-        </p>
-      </MessageContent>
-    </Message>
-  );
-}
+const Question = ({ message }: { message: UIMessage }) => (
+  <Message align="end">
+    <MessageContent>
+      <p className="w-fit max-w-[85%] self-end rounded-lg bg-primary px-2.5 py-1.5 text-[13px] text-primary-foreground">
+        {message.parts
+          .map((p) => (p.type === "text" ? p.content : ""))
+          .join("")}
+      </p>
+    </MessageContent>
+  </Message>
+);
 
 /** One answer: the label, its steps in one line, its text. */
-function Answer({
+const Answer = ({
   messages,
   onPlace,
   pending,
@@ -1352,7 +1356,7 @@ function Answer({
   onPlace: ((place: AskPlace) => void) | null;
   pending: boolean;
   places: readonly AskPlace[];
-}) {
+}) => {
   const city = useSite().name;
   const parts = messages.flatMap((m) => m.parts);
   // the follow-ups are the chips under the answer, not a step of it
@@ -1389,4 +1393,5 @@ function Answer({
       </MessageContent>
     </Message>
   );
-}
+};
+export default AskCity;

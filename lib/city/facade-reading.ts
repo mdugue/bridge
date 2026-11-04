@@ -58,7 +58,7 @@ export function applyFacadeReadings(
   aloft: (row: number) => boolean = () => false
 ): boolean {
   let changed = false;
-  for (let i = 0; i < flags.length; i++) {
+  for (let i = 0; i < flags.length; i += 1) {
     const reading = readings.buildings[buildingOf(i)];
     const next = withFacadeReading(
       flags[i],

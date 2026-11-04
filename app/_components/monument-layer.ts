@@ -1,7 +1,6 @@
 import {
   BoxGeometry,
   BufferAttribute,
-  type BufferGeometry,
   CapsuleGeometry,
   Color,
   ConeGeometry,
@@ -11,7 +10,6 @@ import {
   Group,
   InstancedBufferAttribute,
   LatheGeometry,
-  type Material,
   Matrix4,
   Mesh,
   MeshBasicNodeMaterial,
@@ -24,6 +22,7 @@ import {
   Vector2,
   Vector3,
 } from "three/webgpu";
+import type { BufferGeometry, Material } from "three/webgpu";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
   attribute,
@@ -56,23 +55,20 @@ import type {
   MonumentFeature,
   ReliefGrid,
 } from "@/lib/city/features";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import {
   basinLevels,
   coveredFigure,
   FINISH,
-  type Finish,
   figureShare,
   fountainsRun,
   jetHeight,
   jetPlaces,
-  type MarkerPiece,
-  type MarkerTones,
   markerTones,
   monumentMarker,
   partFinish,
   pedestalCourses,
-  type MarkerSolid,
   openRing,
   pointBasinRadius,
   reliefSurface,
@@ -80,11 +76,18 @@ import {
   ringCentre,
   smallBasin,
 } from "@/lib/city/monuments";
+import type {
+  Finish,
+  MarkerPiece,
+  MarkerTones,
+  MarkerSolid,
+} from "@/lib/city/monuments";
 import type { Point2 } from "@/lib/city/polyline";
 import { ashlar, footprint } from "./bridge-surface";
 import { gdNoise } from "./ground-detail";
 import { Instances, instanceFloat, instancePosition } from "./instancing";
-import { dataXY, type F, type Live } from "./shader-chunks";
+import { dataXY } from "./shader-chunks";
+import type { F, Live } from "./shader-chunks";
 import { mirrorWeight, REFLECTIONS, skyReflection } from "./sky-reflection";
 import { sceneMaterial } from "./three-utils";
 import { viewDirection } from "./view-direction";
@@ -392,8 +395,8 @@ function reliefMesh(
   const pos = geo.getAttribute("position") as BufferAttribute;
   // PlaneGeometry: vertices row by row from the top-left (+y) corner, which
   // is the grid's north-west sample.
-  for (let row = 0; row < s.rows; row++) {
-    for (let col = 0; col < s.cols; col++) {
+  for (let row = 0; row < s.rows; row += 1) {
+    for (let col = 0; col < s.cols; col += 1) {
       const i = row * s.cols + col;
       const x = s.west + col * s.step;
       const y = s.north - row * s.step;
@@ -424,10 +427,13 @@ function reliefTint(
 ): BufferAttribute {
   const figure = linear(tones.figure);
   const base = linear(tones.base);
-  const top = heights.reduce((a, b) => Math.max(a, b), 0);
+  let top = 0;
+  for (const h of heights) {
+    top = Math.max(top, h);
+  }
   const tint = new Float32Array(heights.length * 3);
   const c = new Color();
-  for (let i = 0; i < heights.length; i++) {
+  for (let i = 0; i < heights.length; i += 1) {
     c.copy(base).lerp(figure, figureShare(heights[i], top));
     tint.set([c.r, c.g, c.b], i * 3);
   }
@@ -438,7 +444,7 @@ function reliefTint(
 function withLift(geo: BufferGeometry, water: number): BufferGeometry {
   const pos = geo.getAttribute("position");
   const lift = new Float32Array(pos.count);
-  for (let i = 0; i < pos.count; i++) {
+  for (let i = 0; i < pos.count; i += 1) {
     lift[i] = Math.max(pos.getY(i) - water, 0);
   }
   geo.setAttribute("aLift", new BufferAttribute(lift, 1));
@@ -622,7 +628,7 @@ function instanced(
   const q = new Quaternion();
   const up = new Vector3(0, 1, 0);
   const tinted = places.some((p) => p.tone !== null);
-  for (let i = 0; i < places.length; i++) {
+  for (let i = 0; i < places.length; i += 1) {
     q.setFromAxisAngle(up, places[i].yaw);
     mesh.setMatrixAt(i, m.compose(places[i].at, q, places[i].scale));
     if (tinted) {
@@ -710,7 +716,7 @@ const jetPhase = Fn((builder) => {
   }
   const at = attribute("iMat3", "vec4");
   return fract(
-    sin(dot(vec2(at.x, at.z), vec2(12.9898, 78.233))).mul(43758.5453)
+    sin(dot(vec2(at.x, at.z), vec2(12.9898, 78.233))).mul(43_758.5453)
   ).mul(6.2831);
 });
 

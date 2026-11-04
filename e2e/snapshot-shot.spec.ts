@@ -1,14 +1,14 @@
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import { expect, test } from "@playwright/test";
 import { utmToLatLng } from "../lib/city/crs";
 import { arrivalHref } from "../lib/city/geolocation";
 import {
   decodeLook,
   parseSnapshot,
-  type Snapshot,
   snapshotInstant,
 } from "../lib/city/snapshot";
+import type { Snapshot } from "../lib/city/snapshot";
 import { siteById } from "../sites";
 
 /**
@@ -41,14 +41,14 @@ test.use(
  * yields shots/<name>.png.
  */
 
-const SHOTS_DIR = join(process.cwd(), "shots");
+const SHOTS_DIR = nodePath.join(process.cwd(), "shots");
 /**
  * Before/after pairs from one set of snapshots — the ONE mechanism:
  * `SHOTS_QUERY` is appended to the page URL (with or without its leading
  * `?`, e.g. `SHOTS_QUERY=scene=lite`), and `SHOTS_TAG=x` writes
  * `shots/<name>.x.png` so the untagged plate is not overwritten.
  */
-const SHOTS_QUERY = (process.env.SHOTS_QUERY ?? "").replace(/^\?/, "");
+const SHOTS_QUERY = (process.env.SHOTS_QUERY ?? "").replace(/^\?/u, "");
 /** The city the shots are taken in (its route): `SHOTS_SITE=leipzig`. */
 const SHOTS_SITE = process.env.SHOTS_SITE ?? "dresden";
 const SHOTS_TAG = process.env.SHOTS_TAG ?? "";
@@ -109,12 +109,14 @@ function snapshotFiles(): string[] {
 }
 
 for (const file of snapshotFiles()) {
-  const name = file.replace(/\.json$/, "");
+  const name = file.replace(/\.json$/u, "");
   test(`snapshot: ${name}`, async ({ page }) => {
     test.setTimeout(READY_MS + 150_000);
     // Validate before rendering: a broken shot fails loudly instead of
     // silently rendering the defaults.
-    const parsed = parseSnapshot(readFileSync(join(SHOTS_DIR, file), "utf8"));
+    const parsed = parseSnapshot(
+      readFileSync(nodePath.join(SHOTS_DIR, file), "utf-8")
+    );
     if (!parsed.ok) {
       throw new Error(`${file}: ${parsed.reason}`);
     }
@@ -180,6 +182,8 @@ for (const file of snapshotFiles()) {
     const canvas = page.locator("canvas[data-engine]");
     await expect(canvas).toBeVisible();
     const tag = SHOTS_TAG ? `.${SHOTS_TAG}` : "";
-    await canvas.screenshot({ path: join(SHOTS_DIR, `${name}${tag}.png`) });
+    await canvas.screenshot({
+      path: nodePath.join(SHOTS_DIR, `${name}${tag}.png`),
+    });
   });
 }

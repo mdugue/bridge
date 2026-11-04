@@ -119,6 +119,28 @@ const plan = (units = 6) =>
     [0, "EOF"]
   );
 
+const halfDisc = (arc: (string | number)[][], extrusion = 1) =>
+  dxf(
+    [0, "SECTION"],
+    [2, "ENTITIES"],
+    [0, "HATCH"],
+    [8, "Beet"],
+    [230, extrusion],
+    [91, 1],
+    [92, 1],
+    [93, 2],
+    [72, 1],
+    [10, 5],
+    [20, 0],
+    [11, -5],
+    [21, 0],
+    [72, 2],
+    ...arc,
+    [97, 0],
+    [0, "ENDSEC"],
+    [0, "EOF"]
+  );
+
 describe("readDxf", () => {
   test("hatches are areas with their holes, classed by layer", () => {
     const { features } = readDxf(plan());
@@ -199,27 +221,6 @@ describe("readDxf", () => {
   });
 
   /** A hatch on "Beet" of one edge path: a line, then an arc edge. */
-  const halfDisc = (arc: (string | number)[][], extrusion = 1) =>
-    dxf(
-      [0, "SECTION"],
-      [2, "ENTITIES"],
-      [0, "HATCH"],
-      [8, "Beet"],
-      [230, extrusion],
-      [91, 1],
-      [92, 1],
-      [93, 2],
-      [72, 1],
-      [10, 5],
-      [20, 0],
-      [11, -5],
-      [21, 0],
-      [72, 2],
-      ...arc,
-      [97, 0],
-      [0, "ENDSEC"],
-      [0, "EOF"]
-    );
 
   test("arc edges, anticlockwise and clockwise (stored mirrored), on their side", () => {
     const ccw = [

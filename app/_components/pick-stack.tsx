@@ -15,18 +15,12 @@ import {
   useDragControls,
   useTransform,
 } from "motion/react";
-import {
-  type KeyboardEvent,
-  type ReactNode,
-  type PointerEvent,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent, PointerEvent, ReactNode } from "react";
 import { cn } from "cn";
 import { cardCredits } from "@/lib/city/card-lines";
-import { type Inquiry, inquiryCard } from "@/lib/city/inquiry";
+import { inquiryCard } from "@/lib/city/inquiry";
+import type { Inquiry } from "@/lib/city/inquiry";
 import { deckBehind, stepped, swipeStep } from "@/lib/city/pick-swipe";
 import { isControlKey, isTextEntry } from "./keyboard-controls";
 import { useSite } from "./site-context";
@@ -37,6 +31,13 @@ const PEEKS = 4;
 const PEEK_PX = 26;
 /** Each card behind turns a little, alternating, as a stack in a hand. */
 const TILT_DEG = [-2.2, 1.8, -1.4, 2.6];
+/** The step an arrow key takes through the deck. */
+const ARROW_STEP: Partial<Record<string, -1 | 1>> = {
+  ArrowLeft: -1,
+  ArrowRight: 1,
+};
+/** A card's tilt by its depth in the stack. */
+const tilt = (depth: number) => TILT_DEG[depth % TILT_DEG.length];
 /** How a card settles: quick, with a little give. */
 const SPRING = { type: "spring", stiffness: 420, damping: 34 } as const;
 /** How far a card leafed on flies off (px), how it turns with its pull
@@ -67,7 +68,7 @@ function grabsText(event: PointerEvent): boolean {
  * stays in place whether it listens or not, so the sheet is never
  * mounted anew.
  */
-export function PickSwipe({
+export const PickSwipe = ({
   children,
   enabled,
   onStep,
@@ -75,7 +76,7 @@ export function PickSwipe({
   children: ReactNode;
   enabled: boolean;
   onStep: (step: -1 | 1) => void;
-}) {
+}) => {
   const start = useRef<{ t: number; x: number; y: number } | null>(null);
   return (
     <div
@@ -110,7 +111,7 @@ export function PickSwipe({
       {children}
     </div>
   );
-}
+};
 
 /**
  * The selection as a deck of cards: the open card in front, the next
@@ -126,7 +127,7 @@ export function PickSwipe({
  * On a touch screen the sheet is the card (`PickSwipe` leafs it); the
  * others are small tilted cards in a row above it.
  */
-export function PickStack({
+export const PickStack = ({
   active,
   adding,
   children,
@@ -151,7 +152,7 @@ export function PickStack({
   picks: readonly Inquiry[];
   /** a touch screen: a row of small cards above the bottom sheet */
   sheet?: boolean;
-}) {
+}) => {
   const site = useSite();
   const labels = useMemo(
     () => picks.map((p) => inquiryCard(p, null, cardCredits(site)).title),
@@ -205,10 +206,11 @@ export function PickStack({
     }
     setFlying(true);
     // a step on (to the left, as a swipe on goes) leaves to the left
-    void Promise.all([
-      animate(x, -by * FLY_PX, FLY_OUT),
-      animate(opacity, 0, FLY_OUT),
-    ]).then(() => {
+    void (async () => {
+      await Promise.all([
+        animate(x, -by * FLY_PX, FLY_OUT),
+        animate(opacity, 0, FLY_OUT),
+      ]);
       if (!alive.current) {
         return;
       }
@@ -221,7 +223,7 @@ export function PickStack({
       } else {
         onActivate(next);
       }
-    });
+    })();
   };
   const pick = (i: number) => onActivate(i);
   // whichever way a pick came forward, it comes in from the deck's top
@@ -234,11 +236,10 @@ export function PickStack({
     }
   });
   const keys = (event: KeyboardEvent) => {
-    const by =
-      event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+    const by = ARROW_STEP[event.key];
     if (
       several &&
-      by !== 0 &&
+      by !== undefined &&
       !isTextEntry(event.target) &&
       !isControlKey(event.code, event.target)
     ) {
@@ -318,7 +319,6 @@ export function PickStack({
       )}
     </div>
   );
-  const tilt = (depth: number) => TILT_DEG[depth % TILT_DEG.length];
   const pickCard = (i: number, depth: number) => (
     <motion.div
       animate={
@@ -443,4 +443,4 @@ export function PickStack({
       </div>
     </div>
   );
-}
+};

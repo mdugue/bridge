@@ -1,5 +1,11 @@
 import { afterEach, expect, test } from "bun:test";
-import { readStoredStyle, writeStoredStyle } from "./style-memory";
+import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
+import { createLookState } from "@/lib/city/look-state";
+import {
+  readStoredStyle,
+  rememberStyle,
+  writeStoredStyle,
+} from "./style-memory";
 
 const globals = globalThis as { localStorage?: unknown };
 const original = globals.localStorage;
@@ -27,6 +33,24 @@ test("a written style reads back", () => {
 test("an unknown or renamed style reads as none", () => {
   fakeStorage().set("bildstil", "ghost");
   expect(readStoredStyle()).toBeNull();
+});
+
+test("a new style is remembered, a walk's is not", () => {
+  fakeStorage();
+  const look = createLookState({ ...LOOK_DEFAULTS, style: "noir" });
+  let walking = false;
+  const stop = rememberStyle(look, () => walking);
+  look.set({ fogAmount: 0.5 });
+  expect(readStoredStyle()).toBeNull();
+  look.set({ style: "paper" });
+  expect(readStoredStyle()).toBe("paper");
+  walking = true;
+  look.set({ style: "comic" });
+  expect(readStoredStyle()).toBe("paper");
+  walking = false;
+  stop();
+  look.set({ style: "noir" });
+  expect(readStoredStyle()).toBe("paper");
 });
 
 test("storage that throws neither reads nor breaks", () => {

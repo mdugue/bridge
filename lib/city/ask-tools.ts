@@ -11,8 +11,10 @@
 import { toolDefinition } from "@tanstack/ai";
 import { z } from "zod";
 import { ASK_LIMITS } from "./ask-city";
-import { DATA_LAYERS, type DataLayerKey } from "./data-layers";
-import { RENDER_STYLES, type RenderStyle } from "./render-style";
+import { DATA_LAYERS } from "./data-layers";
+import type { DataLayerKey } from "./data-layers";
+import { RENDER_STYLES } from "./render-style";
+import type { RenderStyle } from "./render-style";
 
 const coordinate = z.number();
 
@@ -139,7 +141,7 @@ export const timeTool = toolDefinition({
     stunde: z.number().min(0).max(24).describe("Uhrzeit, z. B. 18.5 für 18:30"),
     datum: z
       .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .regex(/^\d{4}-\d{2}-\d{2}$/u)
       .optional()
       .describe("JJJJ-MM-TT"),
   }),

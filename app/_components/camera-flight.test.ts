@@ -64,12 +64,13 @@ test("duration is clamped", () => {
   expect(farCamera.position.x).toBeCloseTo(10_000, 6);
 });
 
+const inTower = (x: number) => x > 60 && x < 140;
+
 test("given the floor on its way, the path itself climbs over a tower between", () => {
   const camera = makeCamera();
   const flight = createCameraFlight(camera);
   // A 100 m tower halfway along a 200 m hop at eye height — far above the
   // bow's own 24 m, and close to both ends.
-  const inTower = (x: number) => x > 60 && x < 140;
   flight.start(
     { pos: { x: 200, y: 1.7, z: 0 }, headingDeg: 90, pitchDeg: 0, fov: 55 },
     (x) => (inTower(x) ? 100.5 : 0.5)
@@ -112,7 +113,9 @@ test("what travels with a glide hears its steps and lands with it, however it en
   const heard: number[] = [];
   flight.start(target, undefined, {
     duration: 2,
-    onProgress: (t) => heard.push(t),
+    onProgress: (t) => {
+      heard.push(t);
+    },
   });
   flight.update(0.5);
   flight.update(0.5);
@@ -124,14 +127,22 @@ test("what travels with a glide hears its steps and lands with it, however it en
   expect(heard).toHaveLength(3);
 
   const cancelled: number[] = [];
-  flight.start(target, undefined, { onProgress: (t) => cancelled.push(t) });
+  flight.start(target, undefined, {
+    onProgress: (t) => {
+      cancelled.push(t);
+    },
+  });
   flight.update(0.1);
   flight.cancel();
   expect(cancelled.at(-1)).toBe(1);
 
   // a glide that gives way to the next lands first
   const first: number[] = [];
-  flight.start(target, undefined, { onProgress: (t) => first.push(t) });
+  flight.start(target, undefined, {
+    onProgress: (t) => {
+      first.push(t);
+    },
+  });
   flight.update(0.1);
   flight.start(target);
   expect(first.at(-1)).toBe(1);

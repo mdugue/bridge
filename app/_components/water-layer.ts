@@ -1,7 +1,5 @@
 import {
-  type BufferGeometry,
   ClampToEdgeWrapping,
-  type Color,
   DataTexture,
   LinearFilter,
   Mesh,
@@ -9,10 +7,14 @@ import {
   MeshStandardNodeMaterial,
   RGBAFormat,
   SRGBColorSpace,
-  type UniformArrayNode,
-  type UniformNode,
   UnsignedByteType,
   Vector4,
+} from "three/webgpu";
+import type {
+  BufferGeometry,
+  Color,
+  UniformArrayNode,
+  UniformNode,
 } from "three/webgpu";
 import {
   cameraPosition,
@@ -46,16 +48,14 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
-import {
-  FOAM_LINES,
-  fromBase64,
-  WATER_SHEET,
-  type WaterLook,
-} from "@/lib/city/water-bodies";
+import { FOAM_LINES, fromBase64, WATER_SHEET } from "@/lib/city/water-bodies";
+import type { WaterLook } from "@/lib/city/water-bodies";
 import { groundUnderDesign, inDesignSite } from "./design-site";
 import { lampNight } from "./lamp-layer";
-import { dataXY, type F, type V2, type V3 } from "./shader-chunks";
-import { type SplatLayer, splatUv } from "./terrain-layer";
+import { dataXY } from "./shader-chunks";
+import type { F, V2, V3 } from "./shader-chunks";
+import { splatUv } from "./splat-uv";
+import type { SplatLayer } from "./terrain-layer";
 import { viewDirection } from "./view-direction";
 import { RIVER_WAVES, waveNormal, waves } from "./water-waves";
 
@@ -107,7 +107,7 @@ function mistFbm(p: V2): F {
   let v: F = float(0);
   let q = p;
   let a = 0.5;
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 3; i += 1) {
     v = v.add(mistNoise(q).mul(a));
     q = q.mul(2);
     a *= 0.5;
@@ -232,21 +232,21 @@ export function tintTexture(look: WaterLook | undefined): DataTexture {
   const n = tint?.n ?? 1;
   const cells = tint ? fromBase64(tint.cells) : new Uint8Array(1);
   const data = new Uint8Array(n * n * 4);
-  for (let i = 0; i < n * n; i++) {
+  for (let i = 0; i < n * n; i += 1) {
     const k = cells[i] ?? 0;
     const rgb = k > 0 ? (tint?.colours[k - 1] ?? WATER_SHEET) : WATER_SHEET;
     data.set([(rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255, 255], i * 4);
   }
-  const texture = new DataTexture(data, n, n, RGBAFormat, UnsignedByteType);
-  texture.colorSpace = SRGBColorSpace;
-  texture.flipY = false;
-  texture.magFilter = LinearFilter;
-  texture.minFilter = LinearFilter;
-  texture.generateMipmaps = false;
-  texture.wrapS = ClampToEdgeWrapping;
-  texture.wrapT = ClampToEdgeWrapping;
-  texture.needsUpdate = true;
-  return texture;
+  const tintMap = new DataTexture(data, n, n, RGBAFormat, UnsignedByteType);
+  tintMap.colorSpace = SRGBColorSpace;
+  tintMap.flipY = false;
+  tintMap.magFilter = LinearFilter;
+  tintMap.minFilter = LinearFilter;
+  tintMap.generateMipmaps = false;
+  tintMap.wrapS = ClampToEdgeWrapping;
+  tintMap.wrapT = ClampToEdgeWrapping;
+  tintMap.needsUpdate = true;
+  return tintMap;
 }
 
 /** A tile's foam lines as uniforms: the segments (data frame x0, y0, x1,

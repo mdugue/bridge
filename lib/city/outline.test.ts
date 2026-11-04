@@ -30,8 +30,8 @@ test("the blur's kernel keeps the mask's level and has the sigma the width assum
 
 test("the quantile inverts the normal distribution", () => {
   expect(normalQuantile(0.5)).toBeCloseTo(0, 9);
-  expect(normalQuantile(0.975)).toBeCloseTo(1.959_96, 4);
-  expect(normalQuantile(0.01)).toBeCloseTo(-2.326_35, 4);
+  expect(normalQuantile(0.975)).toBeCloseTo(1.95996, 4);
+  expect(normalQuantile(0.01)).toBeCloseTo(-2.32635, 4);
 });
 
 test("the band is the outline's width in CSS px, whatever the screen", () => {
@@ -61,21 +61,22 @@ test("the flash starts full and is gone once it has settled", () => {
 function oklchLinear(l: number, c: number, h: number): number[] {
   const a = c * Math.cos((h * Math.PI) / 180);
   const b = c * Math.sin((h * Math.PI) / 180);
-  const L = (l + 0.396_337_777_4 * a + 0.215_803_757_3 * b) ** 3;
-  const M = (l - 0.105_561_345_8 * a - 0.063_854_172_8 * b) ** 3;
-  const S = (l - 0.089_484_177_5 * a - 1.291_485_548 * b) ** 3;
+  const L = (l + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+  const M = (l - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+  const S = (l - 0.0894841775 * a - 1.291485548 * b) ** 3;
   return [
-    4.076_741_662_1 * L - 3.307_711_591_3 * M + 0.230_969_929_2 * S,
-    -1.268_438_004_6 * L + 2.609_757_401_1 * M - 0.341_319_396_5 * S,
-    -0.004_196_086_3 * L - 0.703_418_614_7 * M + 1.707_614_701 * S,
+    4.0767416621 * L - 3.3077115913 * M + 0.2309699292 * S,
+    -1.2684380046 * L + 2.6097574011 * M - 0.3413193965 * S,
+    -0.0041960863 * L - 0.7034186147 * M + 1.707614701 * S,
   ].map((v) => Math.max(v, 0));
 }
 
 test("the selection's colours are the HUD's accent", () => {
-  const css = readFileSync(`${import.meta.dir}/../../app/globals.css`, "utf8");
+  const css = readFileSync(`${import.meta.dir}/../../app/globals.css`, "utf-8");
   const token = (name: string) => {
     const m = new RegExp(
-      `\\n\\s*--${name}: oklch\\(([\\d.]+) ([\\d.]+) ([\\d.]+)\\)`
+      `\\n\\s*--${name}: oklch\\(([\\d.]+) ([\\d.]+) ([\\d.]+)\\)`,
+      "u"
     ).exec(css);
     if (!m) {
       throw new Error(`--${name} not found`);
@@ -88,6 +89,8 @@ test("the selection's colours are the HUD's accent", () => {
     [SELECTION_ACCENT.halo, token("primary-foreground")],
   ] as const;
   for (const [ours, theirs] of pairs) {
-    ours.forEach((v, i) => expect(v).toBeCloseTo(theirs[i], 2));
+    for (const [i, v] of ours.entries()) {
+      expect(v).toBeCloseTo(theirs[i], 2);
+    }
   }
 });

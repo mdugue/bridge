@@ -7,7 +7,7 @@
  * E (pixel height, negative for north-up), C (x of CENTER of top-left pixel),
  * F (y of CENTER of top-left pixel).
  */
-const WHITESPACE = /\s+/;
+const WHITESPACE = /\s+/u;
 
 export function tfwToBounds(
   tfwText: string,

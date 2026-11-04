@@ -13,18 +13,16 @@ import {
 } from "lucide-react";
 import { Newsreader } from "next/font/google";
 import Image from "next/image";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import {
   isWalkBundle,
   CLOSER_LABEL,
   photoIsTall,
   photoPosition,
   stopNotes,
-  type Walk,
-  type WalkFact,
-  type WalkPhoto,
-  type WalkStop,
 } from "@/lib/city/walks";
+import type { Walk, WalkFact, WalkPhoto, WalkStop } from "@/lib/city/walks";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -41,6 +39,7 @@ import {
 import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "cn";
 import { useSceneStatus } from "./scene-status";
+import { useOnce } from "./use-once";
 
 /**
  * Erzählte Spaziergänge in the viewer (lib/city/walks.ts, ADR 0055): the
@@ -65,16 +64,16 @@ const SECTION_LABEL =
 /** One fetch per URL for the page's life (the file is content-hashed). */
 const bundles = new Map<string, Promise<Walk[]>>();
 
-function loadWalks(url: string): Promise<Walk[]> {
+async function loadWalks(url: string): Promise<Walk[]> {
   let pending = bundles.get(url);
   if (!pending) {
     // a failed answer (a 503 mid-deploy) is not kept: the next mount asks again
     pending = fetch(url)
-      .then((res) => {
+      .then(async (res) => {
         if (!res.ok) {
           throw new Error(`walks: ${res.status}`);
         }
-        return res.json() as Promise<unknown>;
+        return await (res.json() as Promise<unknown>);
       })
       .then((json) => (isWalkBundle(json) ? json.walks : []))
       .catch(() => {
@@ -83,7 +82,26 @@ function loadWalks(url: string): Promise<Walk[]> {
       });
     bundles.set(url, pending);
   }
-  return pending;
+  return await pending;
+}
+
+/** The visitor's day, read once per player. */
+const visitDay = (): Date => new Date();
+
+/** A story photo's size classes: tall beside the text, else by the pointer. */
+function photoSize(tall: boolean, coarse: boolean): string {
+  if (tall) {
+    return "max-h-[20rem] rounded-lg";
+  }
+  return coarse ? "max-h-32" : "max-h-[17rem]";
+}
+
+/** A progress dot's look: the current stop, a passed one, one to come. */
+function dotWidth(i: number, index: number): string {
+  if (i === index) {
+    return "w-3.5 bg-primary";
+  }
+  return i < index ? "w-1 bg-primary/60" : "w-1 bg-foreground/15";
 }
 
 /** The site's walks, once the tileset has named them; [] until then. */
@@ -93,15 +111,17 @@ export function useWalks(): Walk[] {
     null
   );
   useEffect(() => {
-    if (!url) {
-      return;
-    }
     let live = true;
-    void loadWalks(url).then((got) => {
+    const load = async () => {
+      if (!url) {
+        return;
+      }
+      const got = await loadWalks(url);
       if (live) {
         setWalks({ url, walks: got });
       }
-    });
+    };
+    void load();
     return () => {
       live = false;
     };
@@ -110,13 +130,13 @@ export function useWalks(): Walk[] {
 }
 
 /** The Erkunden panel's section: one row per walk. Nothing without walks. */
-export function WalksList({
+export const WalksList = ({
   disabled,
   onStart,
 }: {
   disabled: boolean;
   onStart: (walk: Walk) => void;
-}) {
+}) => {
   const walks = useWalks();
   const { isMobile, setOpenMobile } = useSidebar();
   if (walks.length === 0) {
@@ -168,19 +188,19 @@ export function WalksList({
       </p>
     </section>
   );
-}
+};
 
 /**
  * The Erkunden panel's way into *Frag die Stadt* (ask-city.tsx, ADR 0056),
  * beside the written walks: the same city, asked instead of told.
  */
-export function AskEntry({
+export const AskEntry = ({
   disabled,
   onAsk,
 }: {
   disabled: boolean;
   onAsk: () => void;
-}) {
+}) => {
   const { isMobile, setOpenMobile } = useSidebar();
   return (
     <section
@@ -214,13 +234,13 @@ export function AskEntry({
       </p>
     </section>
   );
-}
+};
 
 /** A source as a reader can follow it: a link, or the twin's own id. */
-function SourceLink({ source }: { source: string }) {
+const SourceLink = ({ source }: { source: string }) => {
   if (source.startsWith("stadtwissen:")) {
     const id = source.slice("stadtwissen:".length);
-    if (/^Q\d+$/.test(id)) {
+    if (/^Q\d+$/u.test(id)) {
       return (
         <a
           className="underline underline-offset-2 hover:text-foreground"
@@ -238,7 +258,7 @@ function SourceLink({ source }: { source: string }) {
   try {
     const url = new URL(source);
     const page = decodeURIComponent(url.pathname.split("/").pop() ?? "");
-    label = `${url.hostname.replace(/^www\./, "")}${page ? ` · ${page.replace(/_/g, " ")}` : ""}`;
+    label = `${url.hostname.replace(/^www\./u, "")}${page ? ` · ${page.replaceAll("_", " ")}` : ""}`;
   } catch {
     // shown as written
   }
@@ -252,31 +272,29 @@ function SourceLink({ source }: { source: string }) {
       {label}
     </a>
   );
-}
+};
 
-function Facts({ facts }: { facts: WalkFact[] }) {
-  return (
-    <details className="group mt-3 border-t pt-2 text-[12px]">
-      <summary className="cursor-pointer select-none text-[11px] text-muted-foreground hover:text-foreground">
-        Belege ({facts.length})
-      </summary>
-      <ul className="mt-2 flex flex-col gap-2">
-        {facts.map((fact) => (
-          <li className="leading-snug" key={fact.claim}>
-            <span className="text-foreground/90">{fact.claim}</span>
-            <span className="mt-0.5 block text-[11px] text-muted-foreground">
-              <SourceLink source={fact.source} />
-            </span>
-          </li>
-        ))}
-      </ul>
-    </details>
-  );
-}
+const Facts = ({ facts }: { facts: WalkFact[] }) => (
+  <details className="group mt-3 border-t pt-2 text-[12px]">
+    <summary className="cursor-pointer select-none text-[11px] text-muted-foreground hover:text-foreground">
+      Belege ({facts.length})
+    </summary>
+    <ul className="mt-2 flex flex-col gap-2">
+      {facts.map((fact) => (
+        <li className="leading-snug" key={fact.claim}>
+          <span className="text-foreground/90">{fact.claim}</span>
+          <span className="mt-0.5 block text-[11px] text-muted-foreground">
+            <SourceLink source={fact.source} />
+          </span>
+        </li>
+      ))}
+    </ul>
+  </details>
+);
 
 /** What the stop says: its narration, today's notes, the closer look.
  *  A tall photo stands beside it, the text flowing round it. */
-function StopBody({
+const StopBody = ({
   aside,
   notes,
   stop,
@@ -284,61 +302,57 @@ function StopBody({
   aside: ReactNode;
   notes: string[];
   stop: WalkStop;
-}) {
-  return (
-    <>
-      {aside}
-      <p className="text-[15.5px] leading-[1.62] text-foreground/90 text-pretty first-letter:float-left first-letter:mt-[0.06em] first-letter:mr-1.5 first-letter:font-medium first-letter:text-[3.1em] first-letter:leading-[0.82] first-letter:text-primary">
-        {stop.text}
+}) => (
+  <>
+    {aside}
+    <p className="text-[15.5px] leading-[1.62] text-foreground/90 text-pretty first-letter:float-left first-letter:mt-[0.06em] first-letter:mr-1.5 first-letter:font-medium first-letter:text-[3.1em] first-letter:leading-[0.82] first-letter:text-primary">
+      {stop.text}
+    </p>
+    {notes.map((note) => (
+      <p
+        className="mt-3 flex gap-2 text-[14.5px] italic leading-snug text-foreground/85"
+        key={note}
+      >
+        <CalendarDaysIcon
+          aria-hidden
+          className="mt-0.5 size-3.5 shrink-0 text-primary not-italic"
+        />
+        {note}
       </p>
-      {notes.map((note) => (
-        <p
-          className="mt-3 flex gap-2 text-[14.5px] italic leading-snug text-foreground/85"
-          key={note}
-        >
-          <CalendarDaysIcon
-            aria-hidden
-            className="mt-0.5 size-3.5 shrink-0 text-primary not-italic"
-          />
-          {note}
+    ))}
+    {stop.closer && (
+      <aside className="mt-3.5 flow-root rounded-lg bg-primary/[0.06] px-3 py-2.5">
+        <span className="flex items-center gap-1.5 font-sans text-[10px] font-medium tracking-[0.14em] text-primary uppercase">
+          <EyeIcon aria-hidden className="size-3" />
+          {CLOSER_LABEL}
+        </span>
+        <p className="mt-1 text-[14.5px] leading-snug text-foreground/90">
+          {stop.closer}
         </p>
-      ))}
-      {stop.closer && (
-        <aside className="mt-3.5 flow-root rounded-lg bg-primary/[0.06] px-3 py-2.5">
-          <span className="flex items-center gap-1.5 font-sans text-[10px] font-medium tracking-[0.14em] text-primary uppercase">
-            <EyeIcon aria-hidden className="size-3" />
-            {CLOSER_LABEL}
-          </span>
-          <p className="mt-1 text-[14.5px] leading-snug text-foreground/90">
-            {stop.closer}
-          </p>
-        </aside>
-      )}
-      <div className="clear-both font-sans">
-        <Facts facts={stop.facts} />
-      </div>
-    </>
-  );
-}
+      </aside>
+    )}
+    <div className="clear-both font-sans">
+      <Facts facts={stop.facts} />
+    </div>
+  </>
+);
 
 /** Commons' credit, as a reader can follow it: the author, the licence,
  *  the file's page. */
-function PhotoCredit({ photo }: { photo: WalkPhoto }) {
-  return (
-    <a
-      className="hover:text-foreground hover:underline"
-      href={photo.page}
-      rel="noreferrer"
-      target="_blank"
-      title={`${photo.file} auf Wikimedia Commons`}
-    >
-      Foto: {photo.author} · {photo.licence} · Wikimedia Commons
-    </a>
-  );
-}
+const PhotoCredit = ({ photo }: { photo: WalkPhoto }) => (
+  <a
+    className="hover:text-foreground hover:underline"
+    href={photo.page}
+    rel="noreferrer"
+    target="_blank"
+    title={`${photo.file} auf Wikimedia Commons`}
+  >
+    Foto: {photo.author} · {photo.licence} · Wikimedia Commons
+  </a>
+);
 
 /** The photo whole, over the scene: the card crops it, this does not. */
-function PhotoView({
+const PhotoView = ({
   onOpenChange,
   open,
   photo,
@@ -351,37 +365,35 @@ function PhotoView({
   /** the published copy's URL */
   src: string;
   title: string;
-}) {
-  return (
-    <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent
-        className="w-auto max-w-[min(calc(100vw-2rem),64rem)] gap-0 overflow-hidden bg-black p-0 text-white ring-white/10 sm:max-w-[min(calc(100vw-2rem),64rem)]"
-        data-testid="walk-photo-view"
-      >
-        {/* the published copy at its own size: not resized again */}
-        <Image
-          alt={photo.caption ?? `Foto: ${title}`}
-          className="mx-auto block h-auto max-h-[calc(100dvh-8rem)] w-auto max-w-full object-contain"
-          height={photo.h}
-          src={src}
-          unoptimized
-          width={photo.w}
-        />
-        <div className="flex flex-col gap-0.5 px-4 py-2.5 font-sans">
-          <DialogTitle className="text-[13px] font-normal text-white/95">
-            {photo.caption ?? title}
-          </DialogTitle>
-          <DialogDescription className="text-[10.5px] text-white/65">
-            <PhotoCredit photo={photo} />
-          </DialogDescription>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
+}) => (
+  <Dialog onOpenChange={onOpenChange} open={open}>
+    <DialogContent
+      className="w-auto max-w-[min(calc(100vw-2rem),64rem)] gap-0 overflow-hidden bg-black p-0 text-white ring-white/10 sm:max-w-[min(calc(100vw-2rem),64rem)]"
+      data-testid="walk-photo-view"
+    >
+      {/* the published copy at its own size: not resized again */}
+      <Image
+        alt={photo.caption ?? `Foto: ${title}`}
+        className="mx-auto block h-auto max-h-[calc(100dvh-8rem)] w-auto max-w-full object-contain"
+        height={photo.h}
+        src={src}
+        unoptimized
+        width={photo.w}
+      />
+      <div className="flex flex-col gap-0.5 px-4 py-2.5 font-sans">
+        <DialogTitle className="text-[13px] font-normal text-white/95">
+          {photo.caption ?? title}
+        </DialogTitle>
+        <DialogDescription className="text-[10.5px] text-white/65">
+          <PhotoCredit photo={photo} />
+        </DialogDescription>
+      </div>
+    </DialogContent>
+  </Dialog>
+);
 
 /** The photo's button: a click shows it whole; the corner says so. */
-function PhotoButton({
+const PhotoButton = ({
   children,
   className,
   coarse,
@@ -391,32 +403,30 @@ function PhotoButton({
   className?: string;
   coarse: boolean;
   onOpen: () => void;
-}) {
-  return (
-    <button
-      aria-label="Foto groß zeigen"
+}) => (
+  <button
+    aria-label="Foto groß zeigen"
+    className={cn(
+      "group/photo relative block w-full cursor-zoom-in overflow-hidden focus-visible:outline-2 focus-visible:outline-primary",
+      className
+    )}
+    onClick={onOpen}
+    type="button"
+  >
+    {children}
+    <span
+      aria-hidden
       className={cn(
-        "group/photo relative block w-full cursor-zoom-in overflow-hidden focus-visible:outline-2 focus-visible:outline-primary",
-        className
+        "absolute top-2 right-2 rounded-full bg-black/40 p-1.5 text-white backdrop-blur-sm transition-opacity",
+        coarse
+          ? "opacity-80"
+          : "opacity-0 group-hover/photo:opacity-100 group-focus-visible/photo:opacity-100"
       )}
-      onClick={onOpen}
-      type="button"
     >
-      {children}
-      <span
-        aria-hidden
-        className={cn(
-          "absolute top-2 right-2 rounded-full bg-black/40 p-1.5 text-white backdrop-blur-sm transition-opacity",
-          coarse
-            ? "opacity-80"
-            : "opacity-0 group-hover/photo:opacity-100 group-focus-visible/photo:opacity-100"
-        )}
-      >
-        <Maximize2Icon className="size-3.5" />
-      </span>
-    </button>
-  );
-}
+      <Maximize2Icon className="size-3.5" />
+    </span>
+  </button>
+);
 
 /** Whether a stop's photo stands beside its story (`photoIsTall`), not
  *  over it: on a phone's narrow card the story would be left a sliver. */
@@ -433,7 +443,7 @@ function besideStory(photo: WalkPhoto | undefined, coarse: boolean) {
  * Served by the site itself (ADR 0043: no request to Wikimedia from the
  * visitor's browser), with its credit.
  */
-function StopPhoto({
+const StopPhoto = ({
   base,
   coarse,
   photo,
@@ -443,7 +453,7 @@ function StopPhoto({
   coarse: boolean;
   photo: WalkPhoto;
   title: string;
-}) {
+}) => {
   const [open, setOpen] = useState(false);
   if (!(base && photo.src)) {
     return null;
@@ -457,11 +467,7 @@ function StopPhoto({
       alt={photo.caption ?? `Foto: ${title}`}
       className={cn(
         "block h-auto w-full bg-muted object-cover",
-        tall
-          ? "max-h-[20rem] rounded-lg"
-          : coarse
-            ? "max-h-32"
-            : "max-h-[17rem]"
+        photoSize(tall, coarse)
       )}
       height={photo.h}
       loading="lazy"
@@ -521,10 +527,10 @@ function StopPhoto({
       {view}
     </figure>
   );
-}
+};
 
 /** Where in the walk (one dot a stop) and the stop's title. */
-function StopHeading({ index, walk }: { index: number; walk: Walk }) {
+const StopHeading = ({ index, walk }: { index: number; walk: Walk }) => {
   const stop = walk.stops[index];
   return (
     <div className="min-w-0 flex-1">
@@ -539,11 +545,7 @@ function StopHeading({ index, walk }: { index: number; walk: Walk }) {
             <span
               className={cn(
                 "block h-1 rounded-full transition-all",
-                i === index
-                  ? "w-3.5 bg-primary"
-                  : i < index
-                    ? "w-1 bg-primary/60"
-                    : "w-1 bg-foreground/15"
+                dotWidth(i, index)
               )}
               key={s.id}
             />
@@ -561,7 +563,7 @@ function StopHeading({ index, walk }: { index: number; walk: Walk }) {
       </h2>
     </div>
   );
-}
+};
 
 /** How far (px) a drag on a phone's sheet handle must go to fold or
  *  unfold it; less is a tap, which toggles. */
@@ -572,13 +574,13 @@ const SHEET_DRAG_PX = 24;
  * title and the way on, the scene above it free; high, the story too. Its
  * handle folds and unfolds it, by a tap or a drag up or down.
  */
-function SheetHandle({
+const SheetHandle = ({
   folded,
   onFold,
 }: {
   folded: boolean;
   onFold: (folded: boolean) => void;
-}) {
+}) => {
   const [from, setFrom] = useState<number | null>(null);
   // a drag folds or unfolds on its own; the click that follows it is not
   // a second toggle (a tap, and a key, toggle through the click)
@@ -615,10 +617,10 @@ function SheetHandle({
       <span aria-hidden className="h-1.5 w-10 rounded-full bg-foreground/20" />
     </button>
   );
-}
+};
 
 /** The way on: back, on or the end. */
-function WalkFooter({
+const WalkFooter = ({
   index,
   last,
   onClose,
@@ -628,36 +630,34 @@ function WalkFooter({
   last: boolean;
   onClose: () => void;
   onIndex: (index: number) => void;
-}) {
-  return (
-    <CardFooter className="gap-2 border-t px-5 py-3">
-      <Button
-        disabled={index === 0}
-        onClick={() => onIndex(index - 1)}
-        size="lg"
-        variant="ghost"
-      >
-        <ChevronLeftIcon /> Zurück
-      </Button>
-      <span className="flex-1" />
-      <Button
-        className="px-3.5"
-        data-testid="walk-next"
-        onClick={() => (last ? onClose() : onIndex(index + 1))}
-        size="lg"
-      >
-        {last ? "Ende" : "Weiter"} <ChevronRightIcon />
-      </Button>
-    </CardFooter>
-  );
-}
+}) => (
+  <CardFooter className="gap-2 border-t px-5 py-3">
+    <Button
+      disabled={index === 0}
+      onClick={() => onIndex(index - 1)}
+      size="lg"
+      variant="ghost"
+    >
+      <ChevronLeftIcon /> Zurück
+    </Button>
+    <span className="flex-1" />
+    <Button
+      className="px-3.5"
+      data-testid="walk-next"
+      onClick={() => (last ? onClose() : onIndex(index + 1))}
+      size="lg"
+    >
+      {last ? "Ende" : "Weiter"} <ChevronRightIcon />
+    </Button>
+  </CardFooter>
+);
 
 /**
  * The card of a walk under way: where in the walk, the stop's story, and
  * the way on. On a touch screen it sits at the top and folds its text
  * away, so the view it describes stays in sight.
  */
-export function WalkCard({
+export const WalkCard = ({
   coarse,
   index,
   onClose,
@@ -669,11 +669,11 @@ export function WalkCard({
   onClose: () => void;
   onIndex: (index: number) => void;
   walk: Walk;
-}) {
+}) => {
   // a phone's sheet starts low: the title and the way on, the scene above
   const [folded, setFolded] = useState(coarse);
   // the visitor's day: the notes for today and the season
-  const [today] = useState(() => new Date());
+  const today = useOnce(visitDay);
   const { isMobile, openMobile } = useSidebar();
   const walksUrl = useSceneStatus("site")?.walksUrl ?? null;
   const stop = walk.stops[index];
@@ -777,4 +777,4 @@ export function WalkCard({
       </Card>
     </section>
   );
-}
+};

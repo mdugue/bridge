@@ -194,7 +194,7 @@ export function createMemoryGovernor(
   };
   /** Moves to `next` with `held` at `now`, minding what a step down took. */
   const moveTo = (next: Level, held: number, now: number): MemoryStep => {
-    for (let l = level + 1; l <= next; l++) {
+    for (let l = level + 1; l <= next; l += 1) {
       taken[l] = held;
       settled[l] = held;
       takenAt[l] = now;
@@ -206,7 +206,7 @@ export function createMemoryGovernor(
   return {
     step: () => MEMORY_STEPS[level],
     update: (held, now) => {
-      for (let l = 1; l <= level; l++) {
+      for (let l = 1; l <= level; l += 1) {
         if (now - takenAt[l] < limits.holdMs) {
           settled[l] = Math.min(settled[l], held);
         }

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import { SITES } from "../../sites";
 import { SURFACE_ALONG_PERIOD } from "./landcover";
 import {
@@ -9,25 +9,25 @@ import {
   MARKING_OFFSET_SCALE,
   MARKING_KINDS,
   MARKING_PATTERN,
-  type MarkingTable,
   markingKindId,
   packMarkingTable,
 } from "./markings";
+import type { MarkingTable } from "./markings";
 import { sideFileSource, tileArtifacts, tileIds } from "./tile";
 
-const ROOT = join(import.meta.dir, "..", "..");
+const ROOT = nodePath.join(import.meta.dir, "..", "..");
 
 test("the committed tables name the kinds in the viewer's order", () => {
   let rows = 0;
   // every site whose bakes are on disk (Dresden's are committed)
   for (const site of Object.values(SITES)) {
     for (const tile of tileIds(site)) {
-      const file = tileArtifacts(tile).markingsTable.file;
-      const path = join(ROOT, sideFileSource(site, file));
+      const { file } = tileArtifacts(tile).markingsTable;
+      const path = nodePath.join(ROOT, sideFileSource(site, file));
       if (!existsSync(path)) {
         continue;
       }
-      const doc = JSON.parse(readFileSync(path, "utf8")) as MarkingTable & {
+      const doc = JSON.parse(readFileSync(path, "utf-8")) as MarkingTable & {
         kinds: Record<string, string>;
       };
       expect(Object.values(doc.kinds)).toEqual([...MARKING_KINDS]);
@@ -44,7 +44,7 @@ test("the committed tables name the kinds in the viewer's order", () => {
         expect(hw).toBeGreaterThan(0);
         expect(kind).toBeGreaterThan(0);
         expect(kind).toBeLessThan(MARKING_KINDS.length);
-        rows++;
+        rows += 1;
       }
     }
   }
@@ -80,7 +80,7 @@ test("every along-street pattern divides the paving raster's period", () => {
 test("a cycle line sits at its kind's distance, past a parking lane", () => {
   const advisory = LANE_BITS.cycle;
   const exclusive = LANE_BITS.cycle | LANE_BITS.cycleSolid;
-  const wide = exclusive | LANE_BITS.cycleWide;
+  const wide = LANE_BITS.cycle | LANE_BITS.cycleSolid | LANE_BITS.cycleWide;
   expect(cycleLineFromKerb(advisory, null)).toBe(1.5);
   expect(cycleLineFromKerb(exclusive, null)).toBe(
     MARKING_PATTERN.cycleFromKerb
@@ -107,19 +107,26 @@ test("the lane bits are one bit each and keep the kerb's", () => {
 
 test("the bake writes the bits and the offset scale the shader reads", () => {
   // pipeline/bake/markings.py packs them into the raster's G and B channels
-  const python = readFileSync(join(ROOT, "pipeline/bake/markings.py"), "utf8");
-  const scale = python.match(/^EDGE_SCALE = ([\d.]+)/mu)?.[1];
+  const python = readFileSync(
+    nodePath.join(ROOT, "pipeline/bake/markings.py"),
+    "utf-8"
+  );
+  const scale = /^EDGE_SCALE = (?<scale>[\d.]+)/mu.exec(python)?.groups?.scale;
   expect(Number(scale)).toBe(MARKING_OFFSET_SCALE);
   const bits = new Map<string, number>();
   for (const line of python.split("\n")) {
-    const m = line.match(/^([A-Z_, ]+) = ([\d, ]+?)\s*(?:#.*)?$/u);
-    if (!m) {
+    const m = /^(?<names>[A-Z_, ]+) = (?<values>[\d, ]+?)\s*(?:#.*)?$/u.exec(
+      line
+    );
+    if (m?.groups?.names === undefined || m.groups.values === undefined) {
       continue;
     }
-    const names = m[1].split(",").map((n) => n.trim());
-    const values = m[2].split(",").map((v) => Number(v.trim()));
+    const names = m.groups.names.split(",").map((n) => n.trim());
+    const values = m.groups.values.split(",").map((v) => Number(v.trim()));
     if (names.length === values.length) {
-      names.forEach((n, i) => bits.set(n, values[i]));
+      for (const [i, n] of names.entries()) {
+        bits.set(n, values[i]);
+      }
     }
   }
   expect({
