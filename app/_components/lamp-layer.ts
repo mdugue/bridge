@@ -1,11 +1,9 @@
 import {
   AdditiveBlending,
   BoxGeometry,
-  type BufferGeometry,
   CircleGeometry,
   CylinderGeometry,
   Group,
-  type Material,
   Matrix4,
   MeshBasicNodeMaterial,
   MeshStandardNodeMaterial,
@@ -14,6 +12,7 @@ import {
   PointsNodeMaterial,
   Vector3,
 } from "three/webgpu";
+import type { BufferGeometry, Material } from "three/webgpu";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { color, float, mix, select, uniform, uv, vec3, vec4 } from "three/tsl";
 import type { LampFeature } from "@/lib/city/features";
@@ -25,13 +24,15 @@ import {
   LAMP_POST_H,
   postHeight,
 } from "@/lib/city/lamps";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import { Instances, instancePosition } from "./instancing";
 import type { Pt } from "./mesh-kit";
 import type { DeviceTier } from "./scene-profile";
 import type { F, Live } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
-import { addWire, wireMesh, wires, type Wires } from "./wire-ribbons";
+import { addWire, wireMesh, wires } from "./wire-ribbons";
+import type { Wires } from "./wire-ribbons";
 
 /** A post's height (m) where the bake measured none. */
 const LAMP_H = LAMP_POST_H;
@@ -163,10 +164,10 @@ function placeInstances(
   const mesh = new Instances(geo, material, places.length);
   const m = new Matrix4();
   const turn = new Matrix4();
-  for (let i = 0; i < places.length; i++) {
+  for (let i = 0; i < places.length; i += 1) {
     const s = scale * (places[i].s ?? 1);
     m.makeScale(s, s, s);
-    const yaw = places[i].yaw;
+    const { yaw } = places[i];
     if (yaw !== undefined) {
       m.premultiply(turn.makeRotationY(yaw));
     }
@@ -400,16 +401,17 @@ function hangWire(
     return;
   }
   const top = { x: head.x, y: head.y + 0.15, z: head.z };
-  wire.forEach((end, i) => {
+  for (let i = 0; i < wire.length; i += 1) {
+    const end = wire[i];
     const at = liftedPt(end, HUNG_H + WIRE_END_LIFT, ctx);
     if (!at) {
-      return;
+      continue;
     }
     addWire(out.wires, [at, top], WIRE_HALF);
     if (f.properties?.masts?.[i]) {
       out.masts.push({ x: at.x, y: at.y - HUNG_H - WIRE_END_LIFT, z: at.z });
     }
-  });
+  }
 }
 
 /** A wall lantern's bracket, from its facade (`wall`, a little higher) out
@@ -625,7 +627,7 @@ function nearestHeads(
   if (n === 0) {
     return;
   }
-  for (let i = 0; i < heads.length; i++) {
+  for (let i = 0; i < heads.length; i += 1) {
     const d = heads[i].distanceToSquared(from);
     if (!(d < dist[n - 1])) {
       continue;
@@ -634,7 +636,7 @@ function nearestHeads(
     while (s > 0 && d < dist[s - 1]) {
       idx[s] = idx[s - 1];
       dist[s] = dist[s - 1];
-      s--;
+      s -= 1;
     }
     idx[s] = i;
     dist[s] = d;
@@ -674,7 +676,7 @@ function handOver(near: number, next: number, band: number): number {
 export function createLampLights(budget: LampLightBudget): LampLights {
   let heads: Vector3[] = [];
   const lights: PointLight[] = [];
-  for (let i = 0; i < budget.lights; i++) {
+  for (let i = 0; i < budget.lights; i += 1) {
     const light = new PointLight(LAMP_LIGHT, 0, LIGHT_RANGE, 2);
     light.castShadow = false;
     lights.push(light);
@@ -703,7 +705,7 @@ export function createLampLights(budget: LampLightBudget): LampLights {
         return;
       }
       nearestHeads(heads, camPos, idx, dist);
-      for (let s = 0; s < lights.length; s++) {
+      for (let s = 0; s < lights.length; s += 1) {
         if (idx[s] < 0) {
           lights[s].intensity = 0;
           continue;

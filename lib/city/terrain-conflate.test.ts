@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { conflateWalls, type WallLine } from "./terrain-conflate";
+import { conflateWalls } from "./terrain-conflate";
+import type { WallLine } from "./terrain-conflate";
 
 // A 100 m × 100 m tile at 2 m/cell whose DGM is a *smoothed bank*: flat-low
 // (100 m) west of x=40, flat-high (106 m) east of x=60, a gentle ramp between —
@@ -20,8 +21,8 @@ function ramp(x: number): number {
 
 function makeGrid(): Float32Array {
   const el = new Float32Array(N * N);
-  for (let row = 0; row < N; row++) {
-    for (let col = 0; col < N; col++) {
+  for (let row = 0; row < N; row += 1) {
+    for (let col = 0; col < N; col += 1) {
       const x = (col + 0.5) * DX;
       el[row * N + col] = ramp(x);
     }
@@ -85,7 +86,7 @@ test("ignores non-retaining kinds (freestanding walls leave ground alone)", () =
     bounds: BOUNDS,
     walls: [wall("wall")],
   });
-  for (let i = 0; i < el.length; i++) {
+  for (let i = 0; i < el.length; i += 1) {
     expect(out[i]).toBe(el[i]);
   }
 });
@@ -98,7 +99,7 @@ test("skips walls with no real height difference between the two sides", () => {
     bounds: BOUNDS,
     walls: [wall("retaining_wall")],
   });
-  for (let i = 0; i < flat.length; i++) {
+  for (let i = 0; i < flat.length; i += 1) {
     expect(out[i]).toBe(103);
   }
 });

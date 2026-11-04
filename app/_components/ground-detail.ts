@@ -46,9 +46,9 @@ import {
   parkingPlaceId,
   SURFACE_ALONG_BITS,
   SURFACE_ALONG_PERIOD,
-  type SurfaceKind,
   surfaceId,
 } from "@/lib/city/landcover";
+import type { SurfaceKind } from "@/lib/city/landcover";
 import { KERB_HEIGHT } from "@/lib/city/kerbs";
 import { LANE_BITS } from "@/lib/city/markings";
 import type { F, I, Tex, V2, V3, V4 } from "./shader-chunks";
@@ -355,6 +355,28 @@ function gdField(c: V4, f: V2, mpt: V2): V3 {
   return vec3(v, gu, gv.negate());
 }
 
+/** Corner `k` of the 4×4 block: the 3×3 mean of `m` round it. */
+const blockCorner = (m: F[], k: number): F => {
+  const cx = 1 + (k & 1);
+  const cy = 1 + (k >> 1);
+  let sum: F = float(0);
+  for (let dy = -1; dy <= 1; dy += 1) {
+    for (let dx = -1; dx <= 1; dx += 1) {
+      sum = sum.add(m[(cy + dy) * 4 + cx + dx]);
+    }
+  }
+  return sum.div(9);
+};
+
+/** The four corners of the 4×4 block as one vec4. */
+const blockCorners = (m: F[]): V4 =>
+  vec4(
+    blockCorner(m, 0),
+    blockCorner(m, 1),
+    blockCorner(m, 2),
+    blockCorner(m, 3)
+  );
+
 /**
  * The same field over a 4×4 texel block, each corner the 3×3 mean around
  * it before the bilinear step: a box-smoothed class edge, whose isoline
@@ -370,29 +392,16 @@ function gdSmooth(
 ): { lawn: V3; road: V3 } {
   const road: F[] = [];
   const lawn: F[] = [];
-  for (let y = 0; y < 4; y++) {
-    for (let x = 0; x < 4; x++) {
+  for (let y = 0; y < 4; y += 1) {
+    for (let x = 0; x < 4; x += 1) {
       const c = classAt(inp, i.add(ivec2(x - 1, y - 1)), size).toVar();
       road.push(isClass(c, ROAD_CLASS));
       lawn.push(isLawn(c));
     }
   }
-  const corner = (m: F[], k: number): F => {
-    const cx = 1 + (k & 1);
-    const cy = 1 + (k >> 1);
-    let sum: F = float(0);
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        sum = sum.add(m[(cy + dy) * 4 + cx + dx]);
-      }
-    }
-    return sum.div(9);
-  };
-  const corners = (m: F[]): V4 =>
-    vec4(corner(m, 0), corner(m, 1), corner(m, 2), corner(m, 3));
   return {
-    road: gdField(corners(road), f, mpt),
-    lawn: gdField(corners(lawn), f, mpt),
+    road: gdField(blockCorners(road), f, mpt),
+    lawn: gdField(blockCorners(lawn), f, mpt),
   };
 }
 
@@ -500,6 +509,12 @@ function pavingFields(inp: GroundInputs, surface: Tex, g: GroundFields) {
 /** The walk kind of a paving-raster texel (`pavingFields`' bits 3–5). */
 const walkOf = (s: V4): I => int(byteOf(s.r)).shiftRight(3).bitAnd(7);
 
+const sealedShare = (k: I): F =>
+  select(or(k.equal(id("asphalt")), k.equal(id("concrete"))), 1, 0);
+const sandShare = (k: I): F => select(k.equal(id("unpaved")), 1, 0);
+const anyShare = (k: I): F => select(k.greaterThan(0), 1, 0);
+const concreteShare = (k: I): F => select(k.equal(id("concrete")), 1, 0);
+
 /**
  * The walk kinds' shares round the fragment (`GroundFields.sealedW`,
  * `sandW`, `walkW`): the 4×4 paving texels round it under a cubic
@@ -511,15 +526,10 @@ const walkOf = (s: V4): I => int(byteOf(s.r)).shiftRight(3).bitAnd(7);
  * read bilinear as teeth along a slanted edge.
  */
 function walkShares(inp: GroundInputs, surface: Tex, g: GroundFields): void {
-  const sealed = (k: I): F =>
-    select(or(k.equal(id("asphalt")), k.equal(id("concrete"))), 1, 0);
-  const sand = (k: I): F => select(k.equal(id("unpaved")), 1, 0);
-  const any = (k: I): F => select(k.greaterThan(0), 1, 0);
-  const concrete = (k: I): F => select(k.equal(id("concrete")), 1, 0);
-  g.sealedW.assign(sealed(g.walkKind));
-  g.concreteW.assign(concrete(g.walkKind));
-  g.sandW.assign(sand(g.walkKind));
-  g.walkW.assign(any(g.walkKind));
+  g.sealedW.assign(sealedShare(g.walkKind));
+  g.concreteW.assign(concreteShare(g.walkKind));
+  g.sandW.assign(sandShare(g.walkKind));
+  g.walkW.assign(anyShare(g.walkKind));
   If(inp.fw.lessThan(WALK_SHARE_FW), () => {
     const size = texelSize(surface, inp.uv).toVar();
     const p = inp.uv.mul(vec2(size)).sub(0.5).toVar();
@@ -535,14 +545,14 @@ function walkShares(inp: GroundInputs, surface: Tex, g: GroundFields): void {
     const u = float(0).toVar();
     const a = float(0).toVar();
     const c = float(0).toVar();
-    for (let y = -1; y <= 2; y++) {
-      for (let x = -1; x <= 2; x++) {
+    for (let y = -1; y <= 2; y += 1) {
+      for (let x = -1; x <= 2; x += 1) {
         const k = walkOf(texelAt(surface, i.add(ivec2(x, y)), size)).toVar();
         const wgt = ax[x + 1].mul(ay[y + 1]);
-        s.addAssign(sealed(k).mul(wgt));
-        u.addAssign(sand(k).mul(wgt));
-        a.addAssign(any(k).mul(wgt));
-        c.addAssign(concrete(k).mul(wgt));
+        s.addAssign(sealedShare(k).mul(wgt));
+        u.addAssign(sandShare(k).mul(wgt));
+        a.addAssign(anyShare(k).mul(wgt));
+        c.addAssign(concreteShare(k).mul(wgt));
       }
     }
     // ... cut on its half-way line, soft over a pixel or a few centimetres
@@ -609,7 +619,7 @@ const PALETTE_LINEAR = LANDCOVER_CLASSES.map((_, k) =>
 );
 export const paletteOf = (c: I): V3 => {
   let out: V3 = vec3(...(PALETTE_LINEAR[0] as [number, number, number]));
-  for (let k = 1; k < PALETTE_LINEAR.length; k++) {
+  for (let k = 1; k < PALETTE_LINEAR.length; k += 1) {
     out = select(
       c.equal(k),
       vec3(...(PALETTE_LINEAR[k] as [number, number, number])),
@@ -745,8 +755,8 @@ export function smoothPaths(
     const grad = vec2(0).toVar();
     const outer = int(PATH_CLASS).toVar();
     const central: I[] = [];
-    for (let y = -1; y <= 2; y++) {
-      for (let x = -1; x <= 2; x++) {
+    for (let y = -1; y <= 2; y += 1) {
+      for (let x = -1; x <= 2; x += 1) {
         const c = classAt(inp, i.add(ivec2(x, y)), size).toVar();
         if (x >= 0 && x <= 1 && y >= 0 && y <= 1) {
           central.push(c);
@@ -764,8 +774,8 @@ export function smoothPaths(
     const [k00, k10, k01, k11] = central as [I, I, I, I];
     const left = f.x.lessThan(0.5);
     const low = f.y.lessThan(0.5);
-    const at = (ax: B, ay: B): I =>
-      select(ax, select(ay, k00, k01), select(ay, k10, k11));
+    const at = (onLeft: B, onLow: B): I =>
+      select(onLeft, select(onLow, k00, k01), select(onLow, k10, k11));
     const c0 = at(left, low).toVar();
     const c1 = at(left.not(), low).toVar();
     const c2 = at(left, low.not()).toVar();
@@ -954,6 +964,9 @@ export function groundFields(
   return g;
 }
 
+/** Whether a class is built-up land (or none). */
+const isBuiltUp = (c: I) => or(c.equal(BUILTUP_CLASS), c.equal(0));
+
 /**
  * Urban green: built-up or unclassified ground that is green — courtyards,
  * front gardens, parks inside the settlement — painted exactly as meadow
@@ -974,9 +987,8 @@ export function urbanGreen(
   const cls = int(inp.cls);
   // a path in built-up land counts as the land beside it, its own share
   // taken out along its smooth edge (`smoothPaths`) — not texel by texel
-  const builtUp = (c: I) => or(c.equal(BUILTUP_CLASS), c.equal(0));
   const built = select(
-    or(builtUp(cls), and(cls.equal(PATH_CLASS), builtUp(col.pathSide))),
+    or(isBuiltUp(cls), and(cls.equal(PATH_CLASS), isBuiltUp(col.pathSide))),
     float(1),
     float(0)
   ).mul(float(1).sub(col.path));
@@ -1119,7 +1131,7 @@ function paving(
     );
   })
     .ElseIf(g.kind.equal(id("concrete")), () => {
-      const size = vec2(5.5, 3.0);
+      const size = vec2(5.5, 3);
       const j = gdJoint(q, size, 0.015, g.w);
       const h = gdHash(floor(q.div(size).add(0.5)));
       c.mulAssign(
@@ -1196,7 +1208,7 @@ function paving(
       .mul(0.5)
       .add(gdNoise(xy.mul(0.7)).mul(0.5));
     c.mulAssign(
-      mix(vec3(1), vec3(1.03, 1.0, 0.92), sand).mul(
+      mix(vec3(1), vec3(1.03, 1, 0.92), sand).mul(
         n.sub(0.5).mul(0.1).mul(g.mid).mul(sand).add(1)
       )
     );

@@ -7,7 +7,6 @@ import {
   beyondExtents,
   elsewhereFrame,
   elsewhereNote,
-  type DesignBox,
   designAnchor,
   detectGeoreference,
   groundBase,
@@ -21,9 +20,13 @@ import {
   trustedBase,
   utmZone,
 } from "./design-placement";
+import type { DesignBox } from "./design-placement";
 import type { TerrainBounds } from "./terrain-geometry";
 
 const local: DesignBox = { min: [-10, 0, -5], max: [10, 12, 5] };
+
+// ground rising to the east by 1 m per 10 m
+const heightAt = (x: number) => 100 + x / 10;
 
 describe("design placement", () => {
   test("zones of ETRS89/UTM codes", () => {
@@ -109,8 +112,6 @@ describe("design placement", () => {
   });
 
   test("set on the ground at the lowest ground under it", () => {
-    // ground rising to the east by 1 m per 10 m
-    const heightAt = (x: number) => 100 + x / 10;
     const base = groundBase(
       { east: 0, north: 0, rotation: 0 },
       local,
@@ -214,7 +215,7 @@ describe("a design's scale", () => {
     expect("scale" in back && back.scale).toEqual({ unit: "cm", factor: 2 });
     // a file from before the scale was kept leaves the design's as it is
     const old = text
-      .replace(/,\s*"unit": "cm",\s*"factor": 2/, "")
+      .replace(/,\s*"unit": "cm",\s*"factor": 2/u, "")
       .replace("entwurf/2", "entwurf/1");
     const before = parsePlacementFile(old, 25_833);
     expect("scale" in before && before.scale).toBeNull();

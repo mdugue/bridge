@@ -86,9 +86,9 @@ async function inflate(
 ): Promise<Uint8Array<ArrayBuffer>> {
   try {
     return new Uint8Array(await new Response(gunzip(raw)).arrayBuffer());
-  } catch (err) {
-    const why = err instanceof Error ? err.message : String(err);
-    throw new Error(`Corrupt gzip: ${why}`, { cause: err });
+  } catch (error) {
+    const why = error instanceof Error ? error.message : String(error);
+    throw new Error(`Corrupt gzip: ${why}`, { cause: error });
   }
 }
 
@@ -165,7 +165,9 @@ async function attempt(
     touch();
     if (!res.ok) {
       // an error page's body is never read
-      void res.body?.cancel().catch(() => undefined);
+      void res.body?.cancel().catch(() => {
+        // a body that will not cancel is dropped with the response
+      });
       return {
         status: res.status,
         retryAfter: res.headers.get("retry-after"),
@@ -175,11 +177,11 @@ async function attempt(
     const raw = await readBody(res, touch);
     const bytes = opts.gunzip && isGzipped(raw) ? await inflate(raw) : raw;
     return { status: res.status, value: bytes };
-  } catch (err) {
+  } catch (error) {
     if (stall.signal.aborted && !opts.signal?.aborted) {
       throw new StalledError(url, STALL_MS);
     }
-    throw err;
+    throw error;
   } finally {
     clearTimeout(timer);
     release();
@@ -199,7 +201,7 @@ export async function fetchBytes(
   opts: FetchBytesOptions
 ): Promise<FetchedBytes> {
   const { signal, budgetMs } = opts;
-  const answer = await withRetry(() => attempt(url, opts), {
+  const answer = await withRetry(async () => await attempt(url, opts), {
     budgetMs,
     env: PAGE_RETRY_ENV,
     signal,
@@ -221,7 +223,12 @@ export function eitherSignal(
   b: AbortSignal
 ): { signal: AbortSignal; release: () => void } {
   if (!a) {
-    return { signal: b, release: () => undefined };
+    return {
+      signal: b,
+      release: () => {
+        // `a` is absent: no listener of ours to drop
+      },
+    };
   }
   const both = new AbortController();
   const abort = () => both.abort();
@@ -244,29 +251,32 @@ export function eitherSignal(
  * work behind `promise` goes on for whoever else waits for it — a shared
  * raster (shared-rasters.ts) is aborted only once its last holder lets go.
  */
-export function untilAborted<T>(
+export async function untilAborted<T>(
   promise: Promise<T>,
   signal?: AbortSignal
 ): Promise<T> {
   if (!signal) {
-    return promise;
+    return await promise;
   }
-  let abort = (): void => undefined;
-  const aborted = new Promise<never>((_, reject) => {
-    abort = () =>
+  const done = new AbortController();
+  const aborted = new Promise<never>((_resolve, reject) => {
+    const abort = () =>
       reject(
         signal.reason instanceof Error
           ? signal.reason
           : new DOMException("The operation was aborted.", "AbortError")
       );
+    if (signal.aborted) {
+      abort();
+    } else {
+      signal.addEventListener("abort", abort, {
+        once: true,
+        signal: done.signal,
+      });
+    }
   });
-  if (signal.aborted) {
-    abort();
-  } else {
-    signal.addEventListener("abort", abort, { once: true });
-  }
-  return Promise.race([promise, aborted]).finally(() => {
-    signal.removeEventListener("abort", abort);
+  return await Promise.race([promise, aborted]).finally(() => {
+    done.abort();
   });
 }
 
@@ -274,25 +284,25 @@ export function untilAborted<T>(
 async function optionalBytes(
   url: string,
   signal: AbortSignal | undefined,
-  inflate: boolean
+  unzip: boolean
 ): Promise<Uint8Array<ArrayBuffer> | null> {
   try {
     const got = await fetchBytes(url, {
       signal,
       budgetMs: OPTIONAL_FETCH_BUDGET_MS,
-      gunzip: inflate,
+      gunzip: unzip,
     });
     return got.ok ? got.bytes : null;
-  } catch (err) {
-    if (isAbortError(err)) {
-      throw err;
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
     }
     return null;
   }
 }
 
-function parseJson<T>(bytes: Uint8Array): T {
-  return JSON.parse(new TextDecoder().decode(bytes)) as T;
+function parseJson(bytes: Uint8Array): unknown {
+  return JSON.parse(new TextDecoder().decode(bytes));
 }
 
 /** Fetches an optional JSON artifact; null = feature off. Rethrows aborts. */
@@ -305,7 +315,7 @@ export async function fetchOptionalJson<T>(
     return null;
   }
   try {
-    return parseJson<T>(bytes);
+    return parseJson(bytes) as T;
   } catch {
     return null;
   }
@@ -342,7 +352,7 @@ export async function fetchFeaturesFrom<T>(
   signal?: AbortSignal
 ): Promise<T[]> {
   const lists = await Promise.all(
-    urls.map((url) => fetchFeatures<T>(url, signal))
+    urls.map(async (url) => await fetchFeatures<T>(url, signal))
   );
   return lists.flat();
 }
@@ -360,5 +370,5 @@ export async function fetchRequiredJson<T>(
   if (!got.ok) {
     throw new Error(`Failed to fetch ${url}: HTTP ${got.status}`);
   }
-  return parseJson<T>(got.bytes);
+  return parseJson(got.bytes) as T;
 }

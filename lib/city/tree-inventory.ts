@@ -1,9 +1,11 @@
 import { treeAge } from "./tree-age";
 import type { TreeFeature } from "./features";
-import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
+import { epsgToWorld } from "./ground-clamp";
+import type { RecenterOffset } from "./ground-clamp";
 import { clamp } from "./math";
 import type { RasterSampler } from "./raster-sampler";
-import { BASE_TREE_H, hash, type Placement } from "./tree-placement";
+import { BASE_TREE_H, hash } from "./tree-placement";
+import type { Placement } from "./tree-placement";
 import { seasonJitter } from "./tree-season";
 /**
  * Pure placement math for individually surveyed trees — a tree inventory such
@@ -195,7 +197,7 @@ export function trunkRadiusAt(t: number): number {
   const u = Math.min(Math.max(t, 0), 1);
   let i = 0;
   while (i < TRUNK_ROWS - 1 && TRUNK_RINGS[i + 1] < u) {
-    i++;
+    i += 1;
   }
   const a = TRUNK_RINGS[i];
   const b = TRUNK_RINGS[i + 1];
@@ -255,6 +257,8 @@ export function overtops(canopyH: number, treeH: number): boolean {
   return canopyH > treeH + Math.max(5, 0.3 * treeH);
 }
 
+const key = (cx: number, cy: number) => `${cx},${cy}`;
+
 /**
  * A spatial hash over inventory trees: `covers(x, y, h)` is true when (x, y)
  * (EPSG) lies inside a tree's footprint radius — and, when the caller knows
@@ -266,7 +270,6 @@ export function footprintIndex(
   trees: TreeFootprint[]
 ): (x: number, y: number, h?: number) => boolean {
   const cells = new Map<string, TreeFootprint[]>();
-  const key = (cx: number, cy: number) => `${cx},${cy}`;
   for (const t of trees) {
     const k = key(
       Math.floor(t.x / FOOTPRINT_CELL),
@@ -289,8 +292,8 @@ export function footprintIndex(
   return (x, y, h) => {
     const cx = Math.floor(x / FOOTPRINT_CELL);
     const cy = Math.floor(y / FOOTPRINT_CELL);
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
         for (const t of cells.get(key(cx + dx, cy + dy)) ?? []) {
           if (inside(t, x, y, h)) {
             return true;

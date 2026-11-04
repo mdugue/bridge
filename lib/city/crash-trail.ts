@@ -296,7 +296,7 @@ function emptyStats(): TrailStats {
 /** The bucket of FPS_BUCKETS a frame rate falls in. */
 export function fpsBucket(fps: number): number {
   const i = FPS_BUCKETS.findIndex((bound) => fps < bound);
-  return i < 0 ? FPS_BUCKETS.length : i;
+  return i === -1 ? FPS_BUCKETS.length : i;
 }
 
 /** Appends to a ring: the newest `limit` entries stay. */
@@ -389,7 +389,8 @@ export function resumedFor(trail: Trail, t: number): number | undefined {
 export function pushBeat(trail: Trail, beat: TrailBeat): void {
   const previous = trail.beats.at(-1);
   pushRing(trail.beats, beat, TRAIL_BEATS);
-  const stats = (trail.stats ??= emptyStats());
+  trail.stats ??= emptyStats();
+  const { stats } = trail;
   stats.maxGpuMB = Math.max(stats.maxGpuMB, beat.gpuMB);
   stats.maxHeldMB = Math.max(stats.maxHeldMB, beat.heldMB ?? 0);
   if (beat.heapMB !== undefined) {
@@ -412,7 +413,8 @@ export function pushBeat(trail: Trail, beat: TrailBeat): void {
   stats.fpsSum += fps;
   stats.fps[fpsBucket(fps)] += 1;
   if (beat.cpuMs !== undefined && beat.renderMs !== undefined) {
-    const sums = (stats.timing ??= emptyTiming());
+    stats.timing ??= emptyTiming();
+    const sums = stats.timing;
     const n = beat.timedFrames ?? 1;
     sums.frames += n;
     sums.cpuMs += beat.cpuMs * n;
@@ -428,6 +430,9 @@ export function emptyTiming(): TimingSums {
   return { frames: 0, cpuMs: 0, renderMs: 0, gpuBeats: 0, gpuMs: 0 };
 }
 
+/** A mean of `sum` over `n`, or none where `n` is none. */
+const per = (sum: number, n: number) => (n > 0 ? sum / n : undefined);
+
 /** The means of a stretch's frame times (ms), or none where it has none. */
 export function timingMeans(sums: TimingSums | undefined): {
   cpuMs?: number;
@@ -437,7 +442,6 @@ export function timingMeans(sums: TimingSums | undefined): {
   if (!sums) {
     return {};
   }
-  const per = (sum: number, n: number) => (n > 0 ? sum / n : undefined);
   return {
     cpuMs: per(sums.cpuMs, sums.frames),
     renderMs: per(sums.renderMs, sums.frames),
@@ -639,8 +643,9 @@ export function formatStats(stats: TrailStats): string {
   const timing =
     t.cpuMs === undefined
       ? ""
-      : `  frame cpu ${round(t.cpuMs, 1)}ms render ${round(t.renderMs ?? 0, 1)}ms` +
-        (t.gpuMs === undefined ? "" : ` gpu ${round(t.gpuMs, 1)}ms`);
+      : `  frame cpu ${round(t.cpuMs, 1)}ms render ${round(t.renderMs ?? 0, 1)}ms${
+          t.gpuMs === undefined ? "" : ` gpu ${round(t.gpuMs, 1)}ms`
+        }`;
   return (
     `${stats.beats} beats, mean ${round(stats.fpsSum / stats.beats)}fps (${buckets})` +
     `  max held ${round(stats.maxHeldMB)}MB gpu ${round(stats.maxGpuMB)}MB${heap}${cpu}${timing}`
@@ -654,12 +659,13 @@ export function formatTrail(trail: Trail): string {
     `start ${trail.startedAt}`,
     `url ${trail.url}`,
     `ua ${trail.userAgent}`,
-    `backend ${trail.backend} · screen ${trail.screen}` +
-      (trail.pixelRatio === undefined ? "" : ` · pr ${trail.pixelRatio}`) +
-      (trail.deviceMemoryGB === undefined
+    `backend ${trail.backend} · screen ${trail.screen}${
+      trail.pixelRatio === undefined ? "" : ` · pr ${trail.pixelRatio}`
+    }${
+      trail.deviceMemoryGB === undefined
         ? ""
-        : ` · mem ${trail.deviceMemoryGB}GB`) +
-      (trail.safety === undefined ? "" : ` · safety ${trail.safety}`),
+        : ` · mem ${trail.deviceMemoryGB}GB`
+    }${trail.safety === undefined ? "" : ` · safety ${trail.safety}`}`,
     ...(trail.stats ? [`page ${formatStats(trail.stats)}`] : []),
     "",
     "events:",

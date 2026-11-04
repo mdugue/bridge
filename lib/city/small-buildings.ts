@@ -7,7 +7,8 @@
  * bake appends them to a tile's buildings (scripts/bake-city-mesh.ts). No
  * THREE, no DOM.
  */
-import { type JoinPoint, joinsAlong, SINK } from "./ground-join";
+import { joinsAlong, SINK } from "./ground-join";
+import type { JoinPoint } from "./ground-join";
 import type { PointGeometry, SmallBuildingFeature } from "./features";
 
 /** Metres the box reaches below its lowest ground, so a slope shows no gap. */
@@ -37,10 +38,11 @@ export function structureCorners(
     y,
   }));
   let area = 0;
-  corners.forEach((a, i) => {
+  for (let i = 0; i < corners.length; i += 1) {
+    const a = corners[i];
     const b = corners[(i + 1) % 4];
     area += a.x * b.y - b.x * a.y;
-  });
+  }
   return area < 0 ? corners.reverse() : corners;
 }
 
@@ -67,7 +69,7 @@ export function structureMesh(
       out.isRoof.push(roof);
     }
   };
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 4; i += 1) {
     const j = (i + 1) % 4;
     // a → b along a CCW ring: its outside is on the right
     tri(0, low[i], low[j], high[j]);
@@ -142,15 +144,15 @@ function nearRing(
   let pos = 0;
   let neg = 0;
   let d2 = Number.POSITIVE_INFINITY;
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 4; i += 1) {
     const [ax, ay] = ring[i];
     const [bx, by] = ring[(i + 1) % 4];
     const cross = (bx - ax) * (y - ay) - (by - ay) * (x - ax);
     if (cross >= 0) {
-      pos++;
+      pos += 1;
     }
     if (cross <= 0) {
-      neg++;
+      neg += 1;
     }
     d2 = Math.min(d2, segmentDistance2(x, y, ax, ay, bx, by));
   }
@@ -178,8 +180,8 @@ export function treesOffStructures<F extends { geometry: PointGeometry }>(
     const c1 = Math.floor((Math.max(...xs) + clear) / CELL);
     const r0 = Math.floor((Math.min(...ys) - clear) / CELL);
     const r1 = Math.floor((Math.max(...ys) + clear) / CELL);
-    for (let cx = c0; cx <= c1; cx++) {
-      for (let cy = r0; cy <= r1; cy++) {
+    for (let cx = c0; cx <= c1; cx += 1) {
+      for (let cy = r0; cy <= r1; cy += 1) {
         const key = `${cx},${cy}`;
         const bucket = cells.get(key);
         if (bucket) {

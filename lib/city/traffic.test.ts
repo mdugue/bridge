@@ -31,9 +31,9 @@ const section = (
 test("the load steps a quarter per colour stop, log-spaced between them", () => {
   expect(trafficLoad(0)).toBe(0);
   expect(trafficLoad(TRAFFIC_SCALE[0].dtv)).toBe(0);
-  TRAFFIC_SCALE.forEach((stop, i) => {
+  for (const [i, stop] of TRAFFIC_SCALE.entries()) {
     expect(trafficLoad(stop.dtv)).toBeCloseTo(i / 4, 9);
-  });
+  }
   expect(trafficLoad(TRAFFIC_SCALE[4].dtv * 3)).toBe(1);
   const mid = Math.sqrt(TRAFFIC_SCALE[1].dtv * TRAFFIC_SCALE[2].dtv);
   expect(trafficLoad(mid)).toBeCloseTo(0.375, 6);
@@ -108,9 +108,15 @@ test("the profile runs from foot over the crown to foot", () => {
   expect(p[2][1]).toBeGreaterThan(0.8);
 });
 
+const DEFAULT_PROPS: NonNullable<TrafficFeature["properties"]> = {
+  t: 1000,
+  f: 500,
+  b: 500,
+};
+
 const line = (
   coords: [number, number][],
-  props: NonNullable<TrafficFeature["properties"]> = { t: 1000, f: 500, b: 500 }
+  props: NonNullable<TrafficFeature["properties"]> = DEFAULT_PROPS
 ): TrafficFeature => ({
   geometry: { type: "LineString", coordinates: coords },
   properties: props,

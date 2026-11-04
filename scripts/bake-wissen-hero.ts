@@ -9,7 +9,8 @@
  */
 import sharp from "sharp";
 import { landcoverSrgb } from "../lib/city/landcover";
-import { TILE_KM, type TileCell } from "../lib/city/site";
+import { TILE_KM } from "../lib/city/site";
+import type { TileCell } from "../lib/city/site";
 
 /** Where each cell sits in the block: easting grows east, northing north. */
 function gridOf(cells: readonly TileCell[]) {
@@ -37,7 +38,7 @@ async function paint(classRaster: string) {
   // Byte by byte, not `rgb.set(landcoverSrgb(id), …)` per pixel: same
   // bytes, and Dresden's map bakes in 1.1 s instead of 6.4 s.
   const rgb = new Uint8Array(info.width * info.height * 3);
-  for (let i = 0, o = 0; i < data.length; i++, o += 3) {
+  for (let i = 0, o = 0; i < data.length; i += 1, o += 3) {
     const c = data[i] * 3;
     rgb[o] = PALETTE[c];
     rgb[o + 1] = PALETTE[c + 1];
@@ -63,16 +64,15 @@ export async function bakeWissenHero(
   const cell = Math.round(size / cols);
   const layers = await Promise.all(
     grid.map(async ({ col, row }, i) => {
-      const input = await (
-        await paint(rasters[i])
-      )
+      const painted = await paint(rasters[i]);
+      const input = await painted
         .resize(cell, cell, { kernel: "lanczos3", fit: "fill" })
         .png()
         .toBuffer();
       return { input, left: col * cell, top: row * cell };
     })
   );
-  return sharp({
+  return await sharp({
     create: {
       width: cell * cols,
       height: cell * rows,

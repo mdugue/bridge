@@ -1,4 +1,5 @@
-import { PointLight, type Vector3 } from "three/webgpu";
+import { PointLight } from "three/webgpu";
+import type { Vector3 } from "three/webgpu";
 import { uniform } from "three/tsl";
 import type { DeviceTier } from "./scene-profile";
 import type { Live } from "./shader-chunks";

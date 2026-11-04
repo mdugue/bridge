@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import {
-  type ChunkLodState,
   createCrownPlanScratch,
   createLodSchedule,
   FAR_IN_M,
@@ -13,6 +12,7 @@ import {
   RICH_OUT_M,
   RICH_TREE_BUDGET,
 } from "./vegetation-lod";
+import type { ChunkLodState } from "./vegetation-lod";
 
 const chunk = (
   near: number,
@@ -120,9 +120,9 @@ test("a tie in the budget's queue goes to the earlier chunk", () => {
   expect(planCrownTiers(tied, 2000)).toEqual(["rich", "mid"]);
 });
 
-describe("when the tiers are picked", () => {
-  const at = (x: number, y = 0, z = 0) => ({ x, y, z });
+const at = (x: number, y = 0, z = 0) => ({ x, y, z });
 
+describe("when the tiers are picked", () => {
   test("the first frame picks them, the frames before the next tick do not", () => {
     const schedule = createLodSchedule();
     expect(schedule.due(false, at(0))).toBe(true);

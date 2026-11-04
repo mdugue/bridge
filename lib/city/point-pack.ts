@@ -80,15 +80,16 @@ export function packPoints(
 ): Uint8Array {
   const bytes = new Uint8Array(HEADER_BYTES + points.length * stride * 4);
   const view = new DataView(bytes.buffer);
-  for (let i = 0; i < MAGIC.length; i++) {
-    view.setUint8(i, MAGIC.charCodeAt(i));
+  for (let i = 0; i < MAGIC.length; i += 1) {
+    view.setUint8(i, MAGIC.codePointAt(i) ?? 0);
   }
   view.setUint32(4, points.length, true);
   view.setUint32(8, stride, true);
   view.setUint32(12, flags, true);
   view.setFloat64(16, origin[0], true);
   view.setFloat64(24, origin[1], true);
-  points.forEach((p, i) => {
+  for (let i = 0; i < points.length; i += 1) {
+    const p = points[i];
     const at = HEADER_BYTES + i * stride * 4;
     view.setFloat32(at, p.x - origin[0], true);
     view.setFloat32(at + 4, p.y - origin[1], true);
@@ -103,7 +104,7 @@ export function packPoints(
         true
       );
     }
-  });
+  }
   return bytes;
 }
 
@@ -113,8 +114,8 @@ export function unpackPoints(buffer: ArrayBuffer): UnpackedPoints | null {
     return null;
   }
   const view = new DataView(buffer);
-  for (let i = 0; i < MAGIC.length; i++) {
-    if (view.getUint8(i) !== MAGIC.charCodeAt(i)) {
+  for (let i = 0; i < MAGIC.length; i += 1) {
+    if (view.getUint8(i) !== (MAGIC.codePointAt(i) ?? 0)) {
       return null;
     }
   }
@@ -133,7 +134,7 @@ export function unpackPoints(buffer: ArrayBuffer): UnpackedPoints | null {
     data = new Float32Array(buffer, HEADER_BYTES, count * stride);
   } else {
     data = new Float32Array(count * stride);
-    for (let i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i += 1) {
       data[i] = view.getFloat32(HEADER_BYTES + i * 4, true);
     }
   }
@@ -160,8 +161,10 @@ export function pointOf(
     pine?: number;
     r?: number;
   } | null;
-  const leaf =
-    p?.l === "e" ? (p.ls === "dop" ? LEAF.evergreenPhoto : LEAF.evergreen) : 0;
+  let leaf = 0;
+  if (p?.l === "e") {
+    leaf = p.ls === "dop" ? LEAF.evergreenPhoto : LEAF.evergreen;
+  }
   return {
     x,
     y,
@@ -214,7 +217,7 @@ export function pointFeatures(
   const { count, data, origin, stride } = points;
   const [ox, oy] = origin;
   const out: (CanopyFeature | CanopyExtraFeature)[] = [];
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < count; i += 1) {
     const at = i * stride;
     const h = data[at + 2] ?? Number.NaN;
     const r = stride >= 4 ? (data[at + 3] ?? Number.NaN) : Number.NaN;
@@ -228,14 +231,14 @@ export function pointFeatures(
     };
     if (Number.isNaN(h)) {
       out.push({ geometry, properties: null });
-    } else if (!Number.isNaN(r)) {
+    } else if (Number.isNaN(r)) {
+      out.push({ geometry, properties: flaggedProperties(h, flags) });
+    } else {
       const extra: CanopyExtraFeature = {
         geometry,
         properties: { ...flaggedProperties(h, flags), r },
       };
       out.push(extra);
-    } else {
-      out.push({ geometry, properties: flaggedProperties(h, flags) });
     }
   }
   return out;

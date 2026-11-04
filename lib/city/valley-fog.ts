@@ -73,7 +73,7 @@ function tileDepth(rim: ValleyRim): number | undefined {
       : 0
   );
   let depth = 0;
-  for (let k = 0; k < n / 2; k++) {
+  for (let k = 0; k < n / 2; k += 1) {
     depth = Math.max(depth, Math.min(rise[k], rise[k + n / 2]));
   }
   return depth;

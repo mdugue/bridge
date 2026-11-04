@@ -9,10 +9,12 @@ import {
 import type { SafetyLevel } from "@/lib/city/gpu-safety";
 import { loadStageStates } from "@/lib/city/load-stages";
 import { siteDataBase } from "@/lib/city/site-index";
-import { type DataManifest, MANIFEST_FILE, manifestUrl } from "@/lib/city/tile";
+import { MANIFEST_FILE, manifestUrl } from "@/lib/city/tile";
+import type { DataManifest } from "@/lib/city/tile";
 import { TILESET_FILE, TILESET_SPAWN_FILE } from "@/lib/city/tileset";
 import { BootError } from "./boot-error";
-import { type FetchedBytes, fetchBytes, isAbortError } from "./fetch-optional";
+import { fetchBytes, isAbortError } from "./fetch-optional";
+import type { FetchedBytes } from "./fetch-optional";
 import { pageSafety } from "./gpu-safety";
 import { LoadScreen } from "./load-screen";
 import { currentSceneBudget } from "./scene-profile";
@@ -30,20 +32,18 @@ import { siteById } from "@/sites";
  * behind it (see handover.ts) — and there is no canvas yet, so it gets the
  * opaque scrim the viewer's own shell would otherwise provide.
  */
-function BootScreen() {
-  return (
-    <div className="relative h-full w-full bg-[image:var(--hud-scrim)]">
-      <LoadScreen handedOver={false} percent={0} stages={loadStageStates({})} />
-    </div>
-  );
-}
+const BootScreen = () => (
+  <div className="relative h-full w-full bg-[image:var(--hud-scrim)]">
+    <LoadScreen handedOver={false} percent={0} stages={loadStageStates({})} />
+  </div>
+);
 
 // three.js needs a real browser (WebGPU or WebGL2, pointer lock) — never
 // prerender it.
 // `ssr: false` is only allowed inside a Client Component, hence this wrapper.
 // (The import stays written out inside dynamic(): Next matches the call to
 // its chunk by it.)
-const CityWalk = dynamic(() => import("./city-walk"), {
+const CityWalk = dynamic(async () => await import("./city-walk"), {
   ssr: false,
   loading: () => <BootScreen />,
 });
@@ -56,8 +56,8 @@ const CityWalk = dynamic(() => import("./city-walk"), {
  * scope: this module renders on the server too, and three must not load
  * there.
  */
-const loadViewer = () =>
-  Promise.all([import("./city-walk"), import("./create-app")]);
+const loadViewer = async () =>
+  await Promise.all([import("./city-walk"), import("./create-app")]);
 
 /**
  * The artifact manifest (logical → content-hashed file names, see
@@ -81,16 +81,16 @@ async function loadManifest(
       budgetMs: MANIFEST_FETCH_BUDGET_MS,
       init: { cache: "no-cache" },
     });
-  } catch (err) {
-    if (!isNetworkFailure(err)) {
-      throw err;
+  } catch (error) {
+    if (!isNetworkFailure(error)) {
+      throw error;
     }
     got = await fetchBytes(url, {
       signal,
       budgetMs: 0,
       init: { cache: "force-cache" },
     }).catch(() => {
-      throw err;
+      throw error;
     });
   }
   if (!got.ok) {
@@ -115,29 +115,39 @@ function useDataManifest(base: string): {
     manifest?: DataManifest;
     failed?: string;
   }>({});
-  const [attempt, setAttempt] = useState(0);
+  // a new object per attempt: that is what runs the effect again on a retry
+  const [request, setRequest] = useState({ base });
+  if (request.base !== base) {
+    setRequest({ base });
+  }
   useEffect(() => {
     const aborter = new AbortController();
-    loadManifest(`${base}/${MANIFEST_FILE}`, aborter.signal).then(
-      (manifest) => {
-        if (!aborter.signal.aborted) {
-          setState({ manifest });
-        }
-      },
-      (err: unknown) => {
-        if (!(aborter.signal.aborted || isAbortError(err))) {
+    const load = async () => {
+      let manifest: DataManifest;
+      try {
+        manifest = await loadManifest(
+          `${request.base}/${MANIFEST_FILE}`,
+          aborter.signal
+        );
+      } catch (error: unknown) {
+        if (!(aborter.signal.aborted || isAbortError(error))) {
           setState({
-            failed: err instanceof Error ? err.message : String(err),
+            failed: error instanceof Error ? error.message : String(error),
           });
         }
+        return;
       }
-    );
+      if (!aborter.signal.aborted) {
+        setState({ manifest });
+      }
+    };
+    void load();
     return () => aborter.abort();
-  }, [base, attempt]);
+  }, [request]);
   const retry = useCallback(() => {
     setState({});
-    setAttempt((n) => n + 1);
-  }, []);
+    setRequest({ base });
+  }, [base]);
   return { ...state, retry };
 }
 
@@ -152,11 +162,13 @@ function usePageSafety(): SafetyLevel | null {
   const [safety, setSafety] = useState<SafetyLevel | null>(null);
   useEffect(() => {
     let live = true;
-    void pageSafety().then((level) => {
+    const settle = async () => {
+      const level = await pageSafety();
       if (live) {
         setSafety(level);
       }
-    });
+    };
+    void settle();
     return () => {
       live = false;
     };
@@ -164,19 +176,22 @@ function usePageSafety(): SafetyLevel | null {
   return safety;
 }
 
+/** No other sites: one stable array for the prop's default. */
+const NO_IDS: readonly string[] = [];
+
 /**
  * The viewer for one site (the route /<site>): its data folder, and the
  * site itself for every part of the HUD (site-context.tsx). Takes the id, not
  * the Site, since a Server Component renders it; the registry resolves it.
  */
-export function CityWalkClient({
-  builtIds = [],
+export const CityWalkClient = ({
+  builtIds = NO_IDS,
   siteId,
 }: {
   /** every site this deployment serves (the route's own included) */
   builtIds?: readonly string[];
   siteId: string;
-}) {
+}) => {
   const site = siteById(siteId);
   const others = builtIds
     .filter((id) => id !== siteId)
@@ -190,13 +205,15 @@ export function CityWalkClient({
       <SiteViewer base={siteDataBase(site.id)} />
     </SiteProvider>
   );
-}
+};
 
-function SiteViewer({ base }: { base: string }) {
+const SiteViewer = ({ base }: { base: string }) => {
   useEffect(() => {
     // A failed chunk load is next/dynamic's to report when it renders; this
     // early start must not add an unhandled rejection of its own.
-    loadViewer().catch(() => undefined);
+    loadViewer().catch(() => {
+      // reported by next/dynamic when it renders (see above)
+    });
   }, []);
   const { manifest, failed, retry } = useDataManifest(base);
   const safety = usePageSafety();
@@ -235,4 +252,4 @@ function SiteViewer({ base }: { base: string }) {
       tilesetUrl={tilesetUrl}
     />
   );
-}
+};

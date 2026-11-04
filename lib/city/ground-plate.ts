@@ -82,8 +82,8 @@ export function plateHeights(
   n = PLATE_N
 ): Int16Array {
   const out = new Int16Array(n * n);
-  for (let j = 0; j < n; j++) {
-    for (let i = 0; i < n; i++) {
+  for (let j = 0; j < n; j += 1) {
+    for (let i = 0; i < n; i += 1) {
       const [x, y] = plateVertex(bounds, n, i, j);
       out[j * n + i] = Math.round((heightAt(x, y) ?? fallback) * 10);
     }
@@ -114,8 +114,8 @@ export function plateClasses(
   const out = new Uint8Array(n * n);
   const counts = new Uint32Array(256);
   const half = (bounds[2] - bounds[0]) / (n - 1) / 2;
-  for (let j = 0; j < n; j++) {
-    for (let i = 0; i < n; i++) {
+  for (let j = 0; j < n; j += 1) {
+    for (let i = 0; i < n; i += 1) {
       const [x, y] = plateVertex(bounds, n, i, j);
       counts.fill(0);
       let best = 0;
@@ -146,6 +146,8 @@ function countWindow(
   best: number,
   bestCount: number
 ): [number, number] {
+  let top = best;
+  let topCount = bestCount;
   const [x0, y0, x1, y1] = r.bounds;
   const sx = r.width / (x1 - x0);
   const sy = r.height / (y1 - y0);
@@ -154,17 +156,18 @@ function countWindow(
   const ib = Math.min(r.width - 1, Math.floor((win[2] - x0) * sx - 0.5));
   const ja = Math.max(0, Math.ceil((y1 - win[3]) * sy - 0.5));
   const jb = Math.min(r.height - 1, Math.floor((y1 - win[1]) * sy - 0.5));
-  for (let y = ja; y <= jb; y++) {
-    for (let x = ia; x <= ib; x++) {
+  for (let y = ja; y <= jb; y += 1) {
+    for (let x = ia; x <= ib; x += 1) {
       const c = r.data[y * r.width + x];
-      const k = ++counts[c];
-      if (k > bestCount) {
-        bestCount = k;
-        best = c;
+      counts[c] += 1;
+      const k = counts[c];
+      if (k > topCount) {
+        topCount = k;
+        top = c;
       }
     }
   }
-  return [best, bestCount];
+  return [top, topCount];
 }
 
 /** A class raster cut down by an integer factor, nearest texel (no class
@@ -174,8 +177,8 @@ export function shrinkClassRaster(r: ClassRaster, factor: number): ClassRaster {
   const height = Math.floor(r.height / factor);
   const data = new Uint8Array(width * height);
   const o = Math.floor(factor / 2);
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
       data[y * width + x] = r.data[(y * factor + o) * r.width + x * factor + o];
     }
   }
@@ -190,15 +193,16 @@ export function encodePlate(
   const per = n * n;
   const out = new Uint8Array(tiles.length * per * 3);
   const view = new DataView(out.buffer);
-  tiles.forEach((t, k) => {
+  for (let k = 0; k < tiles.length; k += 1) {
+    const t = tiles[k];
     if (t.heights.length !== per || t.classes.length !== per) {
       throw new Error(`plate: tile ${k} is not ${n}²`);
     }
-    for (let v = 0; v < per; v++) {
+    for (let v = 0; v < per; v += 1) {
       view.setInt16((k * per + v) * 2, t.heights[v], true);
     }
     out.set(t.classes, tiles.length * per * 2 + k * per);
-  });
+  }
   return out;
 }
 
@@ -217,7 +221,7 @@ export function decodePlate(
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.length);
   return tiles.map(({ id, bounds }, k) => {
     const heights = new Float32Array(per);
-    for (let v = 0; v < per; v++) {
+    for (let v = 0; v < per; v += 1) {
       heights[v] = view.getInt16((k * per + v) * 2, true) / 10;
     }
     const at = tiles.length * per * 2 + k * per;
@@ -229,8 +233,8 @@ export function decodePlate(
 export function plateIndex(n: number): Uint16Array {
   const out = new Uint16Array((n - 1) * (n - 1) * 6);
   let k = 0;
-  for (let j = 0; j < n - 1; j++) {
-    for (let i = 0; i < n - 1; i++) {
+  for (let j = 0; j < n - 1; j += 1) {
+    for (let i = 0; i < n - 1; i += 1) {
       const a = j * n + i;
       const b = a + 1;
       const c = a + n;
@@ -259,8 +263,8 @@ export function platePositions(
   offset: { cx: number; cy: number }
 ): Float32Array {
   const out = new Float32Array(n * n * 3);
-  for (let j = 0; j < n; j++) {
-    for (let i = 0; i < n; i++) {
+  for (let j = 0; j < n; j += 1) {
+    for (let i = 0; i < n; i += 1) {
       const v = j * n + i;
       const [x, y] = plateVertex(tile.bounds, n, i, j);
       out[v * 3] = x - offset.cx;
@@ -284,8 +288,8 @@ export function plateNormals(
 ): Float32Array {
   const out = new Float32Array(n * n * 3);
   const step = (tile.bounds[2] - tile.bounds[0]) / (n - 1);
-  for (let j = 0; j < n; j++) {
-    for (let i = 0; i < n; i++) {
+  for (let j = 0; j < n; j += 1) {
+    for (let i = 0; i < n; i += 1) {
       const v = j * n + i;
       const [x, y] = plateVertex(tile.bounds, n, i, j);
       const h = tile.heights[v];
@@ -321,8 +325,8 @@ export function plateHeightIndex(
 ): (x: number, y: number) => number | undefined {
   const at = new Map<string, number>();
   for (const t of tiles) {
-    for (let j = 0; j < n; j++) {
-      for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j += 1) {
+      for (let i = 0; i < n; i += 1) {
         const [x, y] = plateVertex(t.bounds, n, i, j);
         at.set(
           `${Math.round(x * 10)},${Math.round(y * 10)}`,

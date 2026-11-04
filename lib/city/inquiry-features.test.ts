@@ -4,12 +4,13 @@ import {
   bridgeCard,
   monumentCard,
   structureLabel,
-  type TreeInquiry,
   treeCard,
   treeFactsAt,
 } from "./inquiry-features";
+import type { TreeInquiry } from "./inquiry-features";
 import type { SiteProvenance } from "./provenance";
-import { type CardCredits, cardCredits } from "./card-lines";
+import { cardCredits } from "./card-lines";
+import type { CardCredits } from "./card-lines";
 import type { Stated } from "./methods";
 
 const lines = (sources: readonly Stated[]) => sources.map((l) => l.text);
@@ -80,7 +81,7 @@ const linde: TreeInquiry = {
   kind: "tree",
   tile: "t",
   index: 0,
-  position: [412089.7, 5656000.4],
+  position: [412_089.7, 5_656_000.4],
   osm: false,
   conifer: false,
   genus: "Tilia",
@@ -140,7 +141,7 @@ test("an orchard tree says it is one, from OSM's orchard, with no register line"
   expect(lines(card.sources)).toEqual([
     "Obstwiese: OpenStreetMap · Stand 26.09.2026 · © OpenStreetMap-Mitwirkende, ODbL",
   ]);
-  expect(lines(card.sources).join()).not.toContain("Stadtbaumkataster");
+  expect(lines(card.sources).join(",")).not.toContain("Stadtbaumkataster");
 });
 
 test("an orchard tree DOM1 measured gives its height and crown, measured", () => {
@@ -202,10 +203,10 @@ test("without the manifest the register and the surveys are the site's own", () 
     "Fläche: OpenStreetMap · © OpenStreetMap-Mitwirkende, ODbL",
     "Deck im DOM1 gemessen: Digitales Oberflächenmodell DOM1 · Quelle: LGV Hamburg, dl-de/by-2-0",
   ]);
-  expect(lines(bridge.sources).join()).not.toContain("Basis-DLM");
-  expect([...lines(tree.sources), ...lines(bridge.sources)].join()).not.toMatch(
-    /GeoSN|Dresden/u
-  );
+  expect(lines(bridge.sources).join(",")).not.toContain("Basis-DLM");
+  expect(
+    [...lines(tree.sources), ...lines(bridge.sources)].join(",")
+  ).not.toMatch(/GeoSN|Dresden/u);
 });
 
 test("a named fountain with a figure, its basin from OSM, its name official", () => {
@@ -213,7 +214,7 @@ test("a named fountain with a figure, its basin from OSM, its name official", ()
     {
       kind: "monument",
       tile: "t",
-      position: [412015, 5656853.7],
+      position: [412_015, 5_656_853.7],
       properties: {
         kind: "fountain",
         name: "Gänsedieb-Brunnen",
@@ -246,7 +247,7 @@ test("a bridge: name and deck from the DLM, structure and span from Wikidata", (
       kind: "bridge",
       tile: "t",
       length: 263.4,
-      position: [412700, 5656900],
+      position: [412_700, 5_656_900],
       properties: {
         name: "Albertbrücke",
         kind: "road",
@@ -291,7 +292,7 @@ test("a statue typed by OSM: its form, maker and material, its name official", (
     {
       kind: "monument",
       tile: "t",
-      position: [411600, 5656500],
+      position: [411_600, 5_656_500],
       properties: {
         kind: "statue",
         name: "Martin-Luther-Denkmal",
@@ -322,7 +323,7 @@ test("a monument whose material only Wikidata names quotes it for that", () => {
     {
       kind: "monument",
       tile: "t",
-      position: [411791, 5657042],
+      position: [411_791, 5_657_042],
       properties: {
         kind: "statue",
         name: "Goldener Reiter",
@@ -352,7 +353,7 @@ test("a column measured in the laser scan, a stele measured in the open", () => 
     {
       kind: "monument",
       tile: "t",
-      position: [412000, 5656000],
+      position: [412_000, 5_656_000],
       properties: {
         kind: "column",
         name: "Nikolaisäule",
@@ -372,7 +373,7 @@ test("a column measured in the laser scan, a stele measured in the open", () => 
     {
       kind: "monument",
       tile: "t",
-      position: [412000, 5656000],
+      position: [412_000, 5_656_000],
       properties: { kind: "statue", source: "osm", form: "stele", hm: 2.4 },
     },
     provenance,
@@ -387,12 +388,12 @@ test("a column measured in the laser scan, a stele measured in the open", () => 
     {
       kind: "monument",
       tile: "t",
-      position: [412000, 5656000],
+      position: [412_000, 5_656_000],
       properties: { kind: "statue", source: "osm", height: 3, hm: 2.4 },
     },
     provenance,
     DRESDEN
   );
   expect(tagged.facts).toEqual([{ label: "Höhe", value: "3 m" }]);
-  expect(lines(tagged.sources).join()).not.toContain("gemessen");
+  expect(lines(tagged.sources).join(",")).not.toContain("gemessen");
 });

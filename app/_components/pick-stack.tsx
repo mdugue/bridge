@@ -1,10 +1,12 @@
 "use client";
 
 import { LayersIcon, ScanEyeIcon, XIcon } from "lucide-react";
-import { type ReactNode, useMemo } from "react";
+import { useMemo } from "react";
+import type { ReactNode } from "react";
 import { cn } from "cn";
 import { cardCredits } from "@/lib/city/card-lines";
-import { type Inquiry, inquiryCard } from "@/lib/city/inquiry";
+import { inquiryCard } from "@/lib/city/inquiry";
+import type { Inquiry } from "@/lib/city/inquiry";
 import { useSite } from "./site-context";
 
 /** The most cards that peek out behind the open one; more still count. */
@@ -25,7 +27,7 @@ const TILT_DEG = [-2.2, 1.8, -1.4, 2.6];
  * On a touch screen the sheet is the card; the others are small tilted
  * cards in a row above it.
  */
-export function PickStack({
+export const PickStack = ({
   active,
   adding,
   children,
@@ -50,7 +52,7 @@ export function PickStack({
   picks: readonly Inquiry[];
   /** a touch screen: a row of small cards above the bottom sheet */
   sheet?: boolean;
-}) {
+}) => {
   const site = useSite();
   const labels = useMemo(
     () => picks.map((p) => inquiryCard(p, null, cardCredits(site)).title),
@@ -201,4 +203,4 @@ export function PickStack({
       </div>
     </div>
   );
-}
+};

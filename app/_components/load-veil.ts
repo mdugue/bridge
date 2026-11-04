@@ -1,4 +1,5 @@
-import { type DepthTexture, Vector2 } from "three/webgpu";
+import { Vector2 } from "three/webgpu";
+import type { DepthTexture } from "three/webgpu";
 import {
   abs,
   clamp,
@@ -22,7 +23,8 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
-import { BOOT_VEIL, type VeilState } from "@/lib/city/load-frontier";
+import { BOOT_VEIL } from "@/lib/city/load-frontier";
+import type { VeilState } from "@/lib/city/load-frontier";
 import type { F, Live, V3 } from "./shader-chunks";
 import { styleNight } from "./sun-rig";
 import type { ViewLens } from "./view-lens";

@@ -1,4 +1,5 @@
-import { LoadingManager, type Object3D } from "three/webgpu";
+import { LoadingManager } from "three/webgpu";
+import type { Object3D } from "three/webgpu";
 import {
   rhinoFrame,
   rhinoPlacement,
@@ -16,11 +17,13 @@ import {
  */
 
 /** Thrown with a sentence for the panel. */
-export class FormatError extends Error {}
+export class FormatError extends Error {
+  override name = "FormatError";
+}
 
 /** A URL's last path part, as the picked files are named. */
 export function baseName(url: string): string {
-  const path = url.split(/[?#]/)[0];
+  const path = url.split(/[?#]/u)[0];
   return decodeURIComponent(path.slice(path.lastIndexOf("/") + 1));
 }
 
@@ -71,7 +74,11 @@ export function pickedFiles(
     manager,
     missing,
     // every load the manager started has ended, failed ones too
-    settled: () => (started && done ? done : Promise.resolve()),
+    settled: async () => {
+      if (started && done) {
+        await done;
+      }
+    },
     release: () => {
       for (const url of urls.values()) {
         URL.revokeObjectURL(url);
@@ -84,8 +91,8 @@ export function pickedFiles(
  *  lines). */
 function materialLibraries(text: string): string[] {
   const names: string[] = [];
-  for (const [, list] of text.matchAll(/^\s*mtllib\s+(.+?)\s*$/gm)) {
-    names.push(...list.split(/\s+/).map(baseName));
+  for (const match of text.matchAll(/^\s*mtllib\s+(?<list>.+?)\s*$/gmu)) {
+    names.push(...(match.groups?.list ?? "").split(/\s+/u).map(baseName));
   }
   return [...new Set(names)];
 }
@@ -111,7 +118,7 @@ export async function readObj(
     const mtls = files.filter((f) => libraries.includes(f.name));
     const unpicked = libraries.filter((n) => !mtls.some((f) => f.name === n));
     if (mtls.length > 0) {
-      const texts = await Promise.all(mtls.map((f) => f.text()));
+      const texts = await Promise.all(mtls.map(async (f) => await f.text()));
       const materials = new MTLLoader(picked.manager).parse(
         texts.join("\n"),
         ""

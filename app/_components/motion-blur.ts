@@ -1,9 +1,5 @@
-import {
-  type DepthTexture,
-  Matrix4,
-  type Texture,
-  Vector2,
-} from "three/webgpu";
+import { Matrix4, Vector2 } from "three/webgpu";
+import type { DepthTexture, Texture } from "three/webgpu";
 import {
   float,
   getScreenPosition,
@@ -98,7 +94,7 @@ export function createMotionBlur(
   return {
     over: (source, occlusion) => {
       let sum: V3 = vec3(0);
-      for (let i = 0; i < TAPS; i++) {
+      for (let i = 0; i < TAPS; i += 1) {
         const t = (i + 0.5) / TAPS - 0.5;
         sum = sum.add(texture(source, at.add(smear.mul(t)), float(0)).rgb);
       }

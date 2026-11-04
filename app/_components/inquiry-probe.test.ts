@@ -4,9 +4,9 @@ import {
   firstSolid,
   mergeCandidates,
   nextPicks,
-  type PickSample,
   ringOffsets,
 } from "./inquiry-probe";
+import type { PickSample } from "./inquiry-probe";
 
 const s = (
   key: string,
@@ -65,8 +65,10 @@ test("the candidates: each thing once at its nearest, front to back, the chosen 
   expect(kept.map((c) => c.key)).toEqual(["n0", "n1", "n2", "x"]);
 });
 
+/** A pick sample by its key. */
+const p = (key: string) => ({ key });
+
 test("a plain pick stands alone, Shift adds it, toggles it out and drops the oldest past the cap", () => {
-  const p = (key: string) => ({ key });
   const one = nextPicks([], p("a"), false);
   expect(one).toEqual({ active: 0, picks: [p("a")] });
   const two = nextPicks(one.picks, p("b"), true);

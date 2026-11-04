@@ -4,9 +4,8 @@ import {
   HalfFloatType,
   LinearMipmapLinearFilter,
   LinearSRGBColorSpace,
-  type Scene,
-  type WebGPURenderer,
 } from "three/webgpu";
+import type { Scene, WebGPURenderer } from "three/webgpu";
 import { cubeTexture, dot, float, reflect } from "three/tsl";
 import type { F, V3 } from "./shader-chunks";
 import { viewDirection } from "./view-direction";

@@ -76,9 +76,9 @@ function stubFetch(body: unknown): {
   const real = globalThis.fetch;
   let calls = 0;
   // reason: the stub takes the URL only; the helpers pass a string
-  globalThis.fetch = (() => {
-    calls++;
-    return Promise.resolve(new Response(JSON.stringify(body)));
+  globalThis.fetch = (async () => {
+    calls += 1;
+    return Response.json(body);
   }) as unknown as typeof fetch;
   return {
     calls: () => calls,
@@ -88,12 +88,17 @@ function stubFetch(body: unknown): {
   };
 }
 
-const settle = () => new Promise((r) => setTimeout(r, 5));
+const settle = async () =>
+  await new Promise((resolve) => {
+    setTimeout(resolve, 5);
+  });
 
 test("an answer the feed cannot parse is no crash: the last counts stay", async () => {
   const stub = stubFetch({ features: [] });
   const rejections: unknown[] = [];
-  const onRejection = (reason: unknown) => rejections.push(reason);
+  const onRejection = (reason: unknown) => {
+    rejections.push(reason);
+  };
   process.on("unhandledRejection", onRejection);
   const heard: BikeCounter[][] = [];
   let parsed = 0;
@@ -103,11 +108,13 @@ test("an answer the feed cannot parse is no crash: the last counts stay", async 
     feed: {
       url: () => "/bikes",
       parse: () => {
-        parsed++;
+        parsed += 1;
         throw new TypeError("Cannot read properties of null");
       },
     },
-    onCounts: (c) => heard.push(c),
+    onCounts: (c) => {
+      heard.push(c);
+    },
   });
   try {
     feed.start();
@@ -146,7 +153,9 @@ test("the counters are read only while the page is in view", async () => {
     bounds: [0, 0, 1, 1],
     epsg: 25_833,
     feed: { url: () => "/bikes", parse: () => [] },
-    onCounts: () => heard++,
+    onCounts: () => {
+      heard += 1;
+    },
   });
   try {
     feed.start();

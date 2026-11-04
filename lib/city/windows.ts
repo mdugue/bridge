@@ -1237,17 +1237,22 @@ function wallTriangles(
   return { planes, tris };
 }
 
+const toMm = (x: number): number => Math.round(x * 1000);
+
+/** No object has a known height. */
+const noHeight = (): undefined => undefined;
+
 /** The walls of the objects `drawn` says carry windows. */
 function wallsOf(mesh: FacadeMesh, drawn: (object: number) => boolean): Wall[] {
   const p = mesh.positions;
   const { planes, tris } = wallTriangles(mesh, drawn);
   const uf = unionFind(tris.length);
   const byVertex = new Map<string, number[]>();
-  const mm = (x: number) => Math.round(x * 1000);
-  tris.forEach((t, k) => {
-    for (let c = 0; c < 3; c++) {
+  for (let k = 0; k < tris.length; k += 1) {
+    const t = tris[k];
+    for (let c = 0; c < 3; c += 1) {
       const i = 3 * (t + c);
-      const key = `${mesh.objectIds[t]}:${mm(p[i])},${mm(p[i + 1])},${mm(p[i + 2])}`;
+      const key = `${mesh.objectIds[t]}:${toMm(p[i])},${toMm(p[i + 1])},${toMm(p[i + 2])}`;
       const list = byVertex.get(key);
       if (!list) {
         byVertex.set(key, [k]);
@@ -1265,9 +1270,10 @@ function wallsOf(mesh: FacadeMesh, drawn: (object: number) => boolean): Wall[] {
       }
       list.push(k);
     }
-  });
+  }
   const groups = new Map<number, Wall>();
-  tris.forEach((t, k) => {
+  for (let k = 0; k < tris.length; k += 1) {
+    const t = tris[k];
     const root = uf.find(k);
     let w = groups.get(root);
     if (!w) {
@@ -1289,7 +1295,7 @@ function wallsOf(mesh: FacadeMesh, drawn: (object: number) => boolean): Wall[] {
       groups.set(root, w);
     }
     w.tris.push(t);
-    for (let c = 0; c < 3; c++) {
+    for (let c = 0; c < 3; c += 1) {
       const i = 3 * (t + c);
       const s = p[i] * w.n[1] - p[i + 1] * w.n[0];
       w.s0 = Math.min(w.s0, s);
@@ -1297,7 +1303,7 @@ function wallsOf(mesh: FacadeMesh, drawn: (object: number) => boolean): Wall[] {
       w.z0 = Math.min(w.z0, p[i + 2]);
       w.z1 = Math.max(w.z1, p[i + 2]);
     }
-  });
+  }
   const walls = [...groups.values()];
   for (const w of walls) {
     w.top = wallTop(w, p);
@@ -1316,7 +1322,7 @@ function wallTop(w: Wall, p: ArrayLike<number>): number {
   let top0 = Number.NEGATIVE_INFINITY;
   let top1 = Number.NEGATIVE_INFINITY;
   for (const t of w.tris) {
-    for (let c = 0; c < 3; c++) {
+    for (let c = 0; c < 3; c += 1) {
       const i = 3 * (t + c);
       const s = p[i] * w.n[1] - p[i + 1] * w.n[0];
       if (s <= w.s0 + WALL_END_M) {
@@ -1341,7 +1347,7 @@ function cellsOf(w: Wall): Set<string> {
   const CELL = 8;
   const out = new Set<string>();
   const steps = Math.max(1, Math.ceil((w.s1 - w.s0) / (CELL / 2)));
-  for (let k = 0; k <= steps; k++) {
+  for (let k = 0; k <= steps; k += 1) {
     const [x, y] = onLine(w, w.s0 + ((w.s1 - w.s0) * k) / steps);
     out.add(`${Math.floor(x / CELL)},${Math.floor(y / CELL)}`);
   }
@@ -1367,7 +1373,8 @@ function coveredBy(w: Wall, o: Wall): number {
 function markParty(walls: readonly Wall[]): void {
   const cells = walls.map(cellsOf);
   const grid = new Map<string, number[]>();
-  cells.forEach((cs, i) => {
+  for (let i = 0; i < cells.length; i += 1) {
+    const cs = cells[i];
     for (const c of cs) {
       const list = grid.get(c);
       if (list) {
@@ -1376,8 +1383,9 @@ function markParty(walls: readonly Wall[]): void {
         grid.set(c, [i]);
       }
     }
-  });
-  walls.forEach((w, i) => {
+  }
+  for (let i = 0; i < walls.length; i += 1) {
+    const w = walls[i];
     const seen = new Set<number>([i]);
     let covered = 0;
     for (const c of cells[i]) {
@@ -1394,7 +1402,7 @@ function markParty(walls: readonly Wall[]): void {
     }
     const area = (w.s1 - w.s0) * (w.z1 - w.z0);
     w.party = area > 0 ? covered / area : 0;
-  });
+  }
 }
 
 /** The walls of one object facing `n` whose plane lies within
@@ -1461,7 +1469,7 @@ export function wallRises(
     const s1 = Math.max(...s);
     const steps = Math.max(1, Math.ceil((s1 - s0) / FOOT_STEP_M));
     let rise = Number.NaN;
-    for (let k = 0; k <= steps; k++) {
+    for (let k = 0; k <= steps; k += 1) {
       const at = s0 + ((s1 - s0) * k) / steps;
       const g = groundAt(
         n[0] * (d + FRONT_M) + n[1] * at,
@@ -1483,6 +1491,9 @@ const snorm = (m: number) =>
 const NO_DOOR_SNORM = Math.round(NO_DOOR * 32_767);
 const ROOF_SNORM = Math.round(FACADE_ROOF * 32_767);
 
+const unitSnorm = (c: number): number =>
+  Math.round(Math.min(Math.max(c, 0), 1) * 32_767);
+
 /** A roof vertex's wall slots (x, y and the second door, w) hold its
  *  face's own colour, linear RGB a unit each; (0, 0, ·, 0) where it takes
  *  its object's. No window reads a roof vertex's slots (the clay masks
@@ -1496,11 +1507,10 @@ function roofColourAt(
   if (rgb === undefined || r === undefined || Number.isNaN(r)) {
     return;
   }
-  const unit = (c: number) => Math.round(Math.min(Math.max(c, 0), 1) * 32_767);
   // never all zero: that reads as "the object's"
-  out[4 * v] = Math.max(1, unit(r));
-  out[4 * v + 1] = unit(rgb[3 * v + 1]);
-  out[4 * v + 3] = unit(rgb[3 * v + 2]);
+  out[4 * v] = Math.max(1, unitSnorm(r));
+  out[4 * v + 1] = unitSnorm(rgb[3 * v + 1]);
+  out[4 * v + 3] = unitSnorm(rgb[3 * v + 2]);
 }
 
 /** Lays the doors and shopfronts onto their objects' walls. */
@@ -1685,7 +1695,7 @@ export function facadeAttribute(
 ): Int16Array<ArrayBuffer> {
   const count = mesh.objectIds.length;
   const out = new Int16Array(4 * count);
-  for (let v = 0; v < count; v++) {
+  for (let v = 0; v < count; v += 1) {
     if (mesh.isRoof[v] === 1) {
       out[4 * v + 2] = ROOF_SNORM;
       roofColourAt(out, v, mesh.roofRgb);
@@ -1694,7 +1704,7 @@ export function facadeAttribute(
       out[4 * v + 3] = NO_DOOR_SNORM;
     }
   }
-  const heightOf = heights?.of ?? (() => undefined);
+  const heightOf = heights?.of ?? noHeight;
   const walls = wallsOf(mesh, (o) => drawn(o) || heightOf(o) !== undefined);
   // party walls, doors and shopfronts among the walls that carry windows
   const windowed = walls.filter((w) => drawn(w.object));
@@ -1719,7 +1729,7 @@ export function facadeAttribute(
       ? wallSlots(w, eave, h)
       : { c: Number.NaN, length: 0, door0: NO_DOOR_SNORM, door1: eave };
     for (const t of w.tris) {
-      for (let k = 0; k < 3; k++) {
+      for (let k = 0; k < 3; k += 1) {
         const i = t + k;
         const s = p[3 * i] * w.n[1] - p[3 * i + 1] * w.n[0];
         out[4 * i] = Number.isNaN(slots.c) ? 0 : snorm(s - slots.c);
@@ -1749,25 +1759,30 @@ function wallSlots(
   }
   const party = w.party > PARTY_SHARE && above === undefined;
   // a measured wall holds its axes in the length slot (`MEASURED_AXES`)
-  const length = party
-    ? 0
-    : measured
-      ? measuredSlot(measured.n, measured.axis)
-      : snorm(Math.min(w.s1 - w.s0, LENGTH_MAX_M));
+  let length: number;
+  if (party) {
+    length = 0;
+  } else if (measured) {
+    length = measuredSlot(measured.n, measured.axis);
+  } else {
+    length = snorm(Math.min(w.s1 - w.s0, LENGTH_MAX_M));
+  }
   const [d0, d1] = w.doors
     .map((d) => ({ at: d.s - c, w: d.w }))
     .sort((a, b) => Math.abs(a.at) - Math.abs(b.at));
   const noGround = w.shop || w.doors.length > 2;
+  let door0 = NO_DOOR_SNORM;
+  if (noGround) {
+    door0 = snorm(Math.max(w.ground, 0));
+  } else if (d0 !== undefined) {
+    door0 = doorSlot(d0.at, d0.w);
+  }
   return {
     c,
     length: noGround ? -length : length,
     // a wall without ground-floor windows has none to keep off its doors:
     // its first slot holds the height its windows clear
-    door0: noGround
-      ? snorm(Math.max(w.ground, 0))
-      : d0 === undefined
-        ? NO_DOOR_SNORM
-        : doorSlot(d0.at, d0.w),
+    door0,
     // … and its second, like a wall's with at most one door, its eave
     door1: noGround || d1 === undefined ? eave : doorSlot(d1.at, d1.w),
   };

@@ -237,7 +237,7 @@ export function nameplateBody(positions: Float32Array): NameplateBody | null {
   let base = Number.POSITIVE_INFINITY;
   let top = Number.NEGATIVE_INFINITY;
   let peak: Vec3 = [positions[0], positions[1], positions[2]];
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < n; i += 1) {
     const x = positions[i * 3];
     const y = positions[i * 3 + 1];
     const z = positions[i * 3 + 2];
@@ -550,19 +550,26 @@ export function nameplatePose(
       origin = add(face, add(scale(r, x), [0, centreY - h / 2, 0]));
       break;
     }
+    default: {
+      const unknown: never = spot;
+      throw new Error(`unknown nameplate spot: ${String(unknown)}`);
+    }
   }
   const camToPlane = Math.abs(dot(sub(camera.position, face), normal));
+  // a parallel view has no nearness: where its camera sits says nothing
+  let fade = 1;
+  if (!camera.ortho) {
+    fade =
+      layout.mode === "near"
+        ? smooth(NEAR_FADE_GONE_M, NEAR_FADE_FULL_M, camToPlane)
+        : smooth(FADE_GONE_M, FADE_FULL_M, camToPlane);
+  }
   return {
     origin,
     right: r,
     up,
     cap,
-    // a parallel view has no nearness: where its camera sits says nothing
-    fade: camera.ortho
-      ? 1
-      : layout.mode === "near"
-        ? smooth(NEAR_FADE_GONE_M, NEAR_FADE_FULL_M, camToPlane)
-        : smooth(FADE_GONE_M, FADE_FULL_M, camToPlane),
+    fade,
   };
 }
 
@@ -585,18 +592,27 @@ function groundPose(
   const gap = GAP_CAPS * cap;
   let centre: Vec3;
   switch (spot) {
-    case "back":
+    case "back": {
       centre = add(c, scale(up, across + gap + h / 2));
       break;
-    case "right":
+    }
+    case "right": {
       centre = add(c, scale(right, along + gap + w / 2));
       break;
-    case "left":
+    }
+    case "left": {
       centre = add(c, scale(right, -(along + gap + w / 2)));
       break;
+    }
     case "above":
-    case "front":
+    case "front": {
       centre = add(c, scale(up, -(across + gap + h / 2)));
+      break;
+    }
+    default: {
+      const unknown: never = spot;
+      throw new Error(`unknown nameplate spot: ${String(unknown)}`);
+    }
   }
   // over the highest ground under it, so no corner sinks into a slope
   // (a level sheet of lettering, not a part standing on the ground: it

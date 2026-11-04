@@ -14,12 +14,8 @@ import {
   timeTool,
   whereTool,
 } from "@/lib/city/ask-tools";
-import {
-  type AskTarget,
-  type FrameContext,
-  frameTargets,
-  streetView,
-} from "@/lib/city/ask-view";
+import { frameTargets, streetView } from "@/lib/city/ask-view";
+import type { AskTarget, FrameContext } from "@/lib/city/ask-view";
 import type { DataLayerKey } from "@/lib/city/data-layers";
 import type { RenderStyle } from "@/lib/city/render-style";
 import type { ViewpointGeometry } from "@/lib/city/site";
@@ -62,7 +58,7 @@ export interface AskScene {
 export function sceneTools(scene: AskScene) {
   return clientTools(
     whereTool.client(() => scene.where()),
-    lookTool.client(() => scene.look()),
+    lookTool.client(async () => await scene.look()),
     showTool.client((input) => showPlaces(scene, input)),
     timeTool.client(({ stunde, datum }) => ({
       ok: true,

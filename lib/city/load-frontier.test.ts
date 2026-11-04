@@ -10,8 +10,8 @@ import {
   stepVeil,
   VEIL_DELAY_S,
   VEIL_HORIZON_M,
-  type VeilState,
 } from "./load-frontier";
+import type { VeilState } from "./load-frontier";
 import type { TerrainBounds } from "./terrain-geometry";
 
 const SPAWN: TerrainBounds = [412_000, 5_656_000, 414_000, 5_658_000];

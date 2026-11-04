@@ -28,14 +28,14 @@ export const RETRY_AFTER_CAP_MS = 60_000;
 export const TILE_FETCH_BUDGET_MS = 20_000;
 /** …an optional side file (lamps, rails, …): it must not hold up the
  *  tile's serial dressing chain for long. */
-export const OPTIONAL_FETCH_BUDGET_MS = 8_000;
+export const OPTIONAL_FETCH_BUDGET_MS = 8000;
 /** …the site's manifest, before the copy the browser cached will do. */
 export const MANIFEST_FETCH_BUDGET_MS = 20_000;
 /** How long the boot waits for the network (the tileset, the spawn tile). */
 export const BOOT_NET_WAIT_MS = 60_000;
 /** When the tiles that gave up on the network are asked for again: the
  *  last step repeats while any are left. */
-export const HEAL_DELAYS_MS = [5_000, 15_000, 45_000, 120_000] as const;
+export const HEAL_DELAYS_MS = [5000, 15_000, 45_000, 120_000] as const;
 
 /** A fetch that gave up after its budget (or a load that gave up on one). */
 export class NetworkError extends Error {
@@ -105,7 +105,7 @@ function isTransient(err: unknown): boolean {
 /** The browsers' texts for a request the network failed (or cancelled):
  *  the whole message, so "Failed to fetch /x: HTTP 404" is not one. */
 const NETWORK_TEXT =
-  /^(?:load failed|failed to fetch|networkerror when attempting to fetch resource|the network connection was lost|the internet connection appears to be offline|network request failed|cancelled)\.?$/i;
+  /^(?:load failed|failed to fetch|networkerror when attempting to fetch resource|the network connection was lost|the internet connection appears to be offline|network request failed|cancelled)\.?$/iu;
 
 /**
  * Whether an error that reached us from elsewhere (a tile's load-error)
@@ -146,7 +146,7 @@ export function retryAfterMs(
   if (!value) {
     return undefined;
   }
-  const wait = /^\d+$/.test(value)
+  const wait = /^\d+$/u.test(value)
     ? Number(value) * 1000
     : Date.parse(value) - nowMs;
   return Number.isFinite(wait)
@@ -251,15 +251,15 @@ async function nextWait<T>(
       cause: new Error(`HTTP ${answer.status}`),
       delayMs: Math.max(backoff, after),
     };
-  } catch (err) {
+  } catch (error) {
     // an abort that surfaced as something else is still the caller's
     if (signal?.aborted) {
       throw abortError();
     }
-    if (errorVerdict(err) !== "transient") {
-      throw err;
+    if (errorVerdict(error) !== "transient") {
+      throw error;
     }
-    return { cause: err, delayMs: backoff };
+    return { cause: error, delayMs: backoff };
   }
 }
 
@@ -278,7 +278,7 @@ export async function withRetry<T>(
 ): Promise<FetchAnswer<T>> {
   const { budgetMs, env, signal, onRetry } = opts;
   const start = env.visibleMs();
-  for (let tries = 1; ; tries++) {
+  for (let tries = 1; ; tries += 1) {
     if (signal?.aborted) {
       throw abortError();
     }
@@ -318,7 +318,7 @@ export function createRetryTally(everyMs: number) {
   return {
     /** counts a retry; the note's detail when one is due */
     add(note: RetryNote, nowMs: number): string | null {
-      count++;
+      count += 1;
       last = note.cause;
       if (nowMs - notedAt < everyMs) {
         return null;

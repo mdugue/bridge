@@ -1,12 +1,6 @@
 import type { RasterSampler } from "@/lib/city/raster-sampler";
-import {
-  type BufferGeometry,
-  Color,
-  Group,
-  Matrix4,
-  Quaternion,
-  Vector3,
-} from "three/webgpu";
+import { Color, Group, Matrix4, Quaternion, Vector3 } from "three/webgpu";
+import type { BufferGeometry } from "three/webgpu";
 import type { TreeFeature } from "@/lib/city/features";
 import { familyLook, TRUNK_BASE } from "@/lib/city/tree-family";
 import { ageLook } from "@/lib/city/tree-age";
@@ -15,27 +9,30 @@ import { buildTreePlan } from "./tree-plan";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import {
   CROWN_SHAPES,
-  type CrownShape,
   inventoryCovers,
-  type InventoryTree,
   inventoryTrees,
-  type TreeExtents,
   trunkGirth,
 } from "@/lib/city/tree-inventory";
-import {
-  type CrownMaterials,
-  type CrownSeasonKey,
-  type SeasonalCrowns,
-  seasonCrowns,
+import type {
+  CrownShape,
+  InventoryTree,
+  TreeExtents,
+} from "@/lib/city/tree-inventory";
+import { seasonCrowns } from "./crown-season";
+import type {
+  CrownMaterials,
+  CrownSeasonKey,
+  SeasonalCrowns,
 } from "./crown-season";
 import {
   buildConeGeo,
   buildPineGeo,
   CONE_SEGMENTS,
   reshapeCrown,
-  type SilhouetteMap,
 } from "./conifer-crown";
-import { finished, inRuns, type Steps } from "@/lib/city/build-steps";
+import type { SilhouetteMap } from "./conifer-crown";
+import { finished, inRuns } from "@/lib/city/build-steps";
+import type { Steps } from "@/lib/city/build-steps";
 import { Instances } from "./instancing";
 import {
   applySeasons,
@@ -43,17 +40,19 @@ import {
   buildCrownGeoRich,
   padCrownSphere,
   bucketByCell,
-  type CellLod,
   crownColor,
   evergreenColor,
   hash,
   sceneCrowns,
   swapCrownLod,
   TRUNK_H,
-  type TreeInstance,
-  type TreeVeto,
-  type VegetationContext,
-  type VegetationControl,
+} from "./vegetation-layer";
+import type {
+  CellLod,
+  TreeInstance,
+  TreeVeto,
+  VegetationContext,
+  VegetationControl,
 } from "./vegetation-layer";
 
 /**
@@ -214,7 +213,10 @@ function writeCrowns(
   items: InventoryTree[],
   fit: FittedGeo
 ): void {
-  items.forEach((t, i) => mesh.setMatrixAt(i, crownMatrix(t, fit)));
+  for (let i = 0; i < items.length; i += 1) {
+    const t = items[i];
+    mesh.setMatrixAt(i, crownMatrix(t, fit));
+  }
   mesh.instanceMatrix.needsUpdate = true;
   // Without this the cull test uses the origin-centred geometry sphere and
   // culls the whole chunk whenever the world origin is off-screen.
@@ -357,10 +359,11 @@ function plainInventoryColor(
 
 function paint(mesh: Instances, items: InventoryTree[]): void {
   const col = new Color();
-  items.forEach((t, i) => {
+  for (let i = 0; i < items.length; i += 1) {
+    const t = items[i];
     inventoryColor(col, t, hash(t.x * 0.3 + t.z * 0.7) - 0.5);
     mesh.setColorAt(i, col);
-  });
+  }
   if (mesh.instanceTints) {
     mesh.instanceTints.needsUpdate = true;
   }
@@ -421,7 +424,8 @@ export function buildTreeInventory(
 }
 
 /** `buildTreeInventory` in steps: per run of register trees, per cell of
- *  silhouettes (build-steps.ts). */
+ *  silhouettes (build-steps.ts).
+ *  @yields {void} once per step of the build. */
 export function* treeInventorySteps(
   features: TreeFeature[],
   ctx: VegetationContext,
@@ -431,7 +435,7 @@ export function* treeInventorySteps(
   group.name = "tree-inventory";
   // The scene's crown materials and uniforms, as the canopy's (sceneCrowns).
   const crownMats = sceneCrowns(ctx.sunDirection);
-  let multiTuft = LOOK_DEFAULTS.multiTuft;
+  let { multiTuft } = LOOK_DEFAULTS;
   const counts = Object.fromEntries(CROWN_SHAPES.map((k) => [k, 0])) as Record<
     CrownShape,
     number
@@ -489,7 +493,7 @@ export function* treeInventorySteps(
       chunks: [],
       multiTuft: () => multiTuft,
       applyLook: (look) => {
-        multiTuft = look.multiTuft;
+        ({ multiTuft } = look);
       },
       setSeason: (day) => applySeasons(seasons, day),
       // Same rule as the canopy (vegetation-layer.ts swapCrownLod).

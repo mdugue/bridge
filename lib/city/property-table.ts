@@ -186,10 +186,11 @@ export function readStructuralMetadata(
           // no column (its default in every row), or not numbers (an ENUM,
           // a BOOLEAN): row by row
           const read = reader(name);
-          for (let row = 0, k = 0; row < table.count; row++) {
+          for (let k = 0, row = 0; row < table.count; row += 1) {
             const value = read(row);
             for (const v of Array.isArray(value) ? value : [value]) {
-              out[k++] = Number(v);
+              out[k] = Number(v);
+              k += 1;
             }
           }
           return true;
@@ -206,7 +207,12 @@ export function readStructuralMetadata(
       };
     }
   );
-  return { tableAccessors, dispose: () => undefined };
+  return {
+    tableAccessors,
+    dispose: () => {
+      // nothing is held: the readers work on the tile's own buffers
+    },
+  };
 }
 
 /** A property's default: its schema's, else the type's zero. */
@@ -217,14 +223,18 @@ function defaultOf(property: ClassProperty): unknown {
   }
   switch (property.type) {
     case "STRING":
-    case "ENUM":
+    case "ENUM": {
       return "";
-    case "BOOLEAN":
+    }
+    case "BOOLEAN": {
       return false;
-    case "SCALAR":
+    }
+    case "SCALAR": {
       return 0;
-    default:
+    }
+    default: {
       return Array.from({ length: COMPONENTS[property.type] ?? 0 }, () => 0);
+    }
   }
 }
 
@@ -282,10 +292,15 @@ function columnReader(
       const bits = new Uint8Array(view(column.values) ?? new ArrayBuffer(0));
       return (id) => noData(((bits[id >> 3] >> (id & 7)) & 1) === 1);
     }
-    default:
+    default: {
       return numberReader(property, column, view);
+    }
   }
 }
+
+/** Component `i` of a scale or offset: a scalar applies to all. */
+const component = (v: number | number[], i: number): number =>
+  Array.isArray(v) ? (v[i] ?? 0) : v;
 
 /** How a SCALAR or VECn column's stored numbers become its values: the
  *  numbers, how many a row has, and component i of a value from its stored
@@ -309,8 +324,6 @@ function numberDecoder(
   const values = typedArray(type, view(column.values));
   const max = property.normalized ? INT_MAX[type] : undefined;
   const transformed = property.normalized === true || type.startsWith("FLOAT");
-  const component = (v: number | number[], i: number): number =>
-    Array.isArray(v) ? (v[i] ?? 0) : v;
   const scale = column.scale ?? property.scale ?? 1;
   const offset = column.offset ?? property.offset ?? 0;
   const scales = Array.from({ length: n }, (_, i) => component(scale, i));
@@ -319,7 +332,7 @@ function numberDecoder(
     const v = max === undefined ? raw : Math.max(raw / max, -1);
     return transformed ? v * scales[i] + offsets[i] : v;
   };
-  const noData = property.noData;
+  const { noData } = property;
   const missing =
     n === 1
       ? (base: number) => values[base] === noData
@@ -360,10 +373,10 @@ function fillNumbers(
   const defaults = Array.isArray(fallback)
     ? (fallback as number[])
     : [Number(fallback)];
-  for (let row = 0; row < count; row++) {
+  for (let row = 0; row < count; row += 1) {
     const base = row * n;
     const gone = missing(base);
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < n; i += 1) {
       out[base + i] = gone ? (defaults[i] ?? 0) : decode(values[base + i], i);
     }
   }
