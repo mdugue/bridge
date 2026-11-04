@@ -8,6 +8,7 @@ import type {
   CanopyFeature,
   CultivatedFeature,
   DoorFeature,
+  DormerFeature,
   ShopfrontFile,
   PassageFeature,
   PlinthFeature,
@@ -342,6 +343,44 @@ test.each(tiles)(
       expect(p?.h ?? 0).toBeGreaterThanOrEqual(1.8);
       expect(p?.h ?? 99).toBeLessThanOrEqual(5);
       expect(Number.isFinite(p?.z)).toBe(true);
+    }
+  }
+);
+
+test.each(tiles)(
+  "%s: dormers and chimneys stand on a roof, square to its slope",
+  (tile, site) => {
+    const src = cityMeshSourceFiles(site, tile).dormers;
+    for (const f of loadSource<DormerFeature>(src)) {
+      expect(f.geometry.type).toBe("Point");
+      expect(isPoint2(f.geometry.coordinates)).toBe(true);
+      const p = f.properties;
+      expect(p?.of.length ?? 0).toBeGreaterThan(0);
+      expect(Math.hypot(p?.ax ?? 0, p?.ay ?? 0)).toBeCloseTo(1, 3);
+      expect(p?.slope ?? -1).toBeGreaterThanOrEqual(0);
+      expect(p?.slope ?? 90).toBeLessThan(90);
+      expect(Number.isFinite(p?.z)).toBe(true);
+      // it rises out of the roof (dormers.py MIN_TOP_M, CHIMNEY_MIN_LIFT_M)
+      expect((p?.top ?? 0) - (p?.z ?? 0)).toBeGreaterThan(0);
+      if (p?.k === "chimney") {
+        // a chimney's sides: dormers.py CHIMNEY_SIDE_M … CHIMNEY_MAX_SIDE_M
+        for (const side of [p.w, p.d]) {
+          expect(side).toBeGreaterThanOrEqual(0.6);
+          expect(side).toBeLessThanOrEqual(1.6);
+        }
+        expect(p.tf).toBeUndefined();
+      } else {
+        expect(p?.k).toBeUndefined();
+        expect(p?.w ?? 0).toBeGreaterThan(0);
+        // its depth along the slope: dormers.py MAX_SIDE_M
+        expect(p?.d ?? 0).toBeGreaterThan(0);
+        expect(p?.d ?? 99).toBeLessThanOrEqual(8);
+        // a shed dormer's roof falls (dormers.py SHED_MIN_FALL)
+        if (p?.tf !== undefined) {
+          expect(p.tf).toBeGreaterThanOrEqual(8);
+          expect(p.tf).toBeLessThan(90);
+        }
+      }
     }
   }
 );
