@@ -53,7 +53,7 @@ import numpy as np
 import shapely
 
 from .classes import BUILTUP, PATH, ROAD, WATER
-from .common import Tile, column, feature, label_line, value_at
+from .common import Tile, column, feature, label_line, mosaic, value_at
 from .osm import in_tunnel, osm_number, read_osm, tag
 
 RAILWAYS = ("rail", "light_rail", "subway", "narrow_gauge")
@@ -627,8 +627,6 @@ def dgm_ground(tile: Tile, bounds) -> Callable[[float, float], float | None]:
     """The site's DGM1 over `bounds` (every tile's, so a beam across a seam
     reads the same ground from either side), as a height lookup."""
     from rasterio.transform import rowcol
-
-    from .rail import mosaic
 
     dgm, transform = mosaic(sorted((tile.data / "dgm").glob("dgm1_*_tiff/dgm1_*.tif")), bounds)
 
