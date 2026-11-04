@@ -137,6 +137,13 @@ function treeInquiry(t: TreeTable, i: number, tile: string): FeatureInquiry {
   };
 }
 
+/** How a packed tree's crown is drawn: a cone where the tree says so (its
+ *  archetype's crown, not a pine or a yew), else an ellipsoid. */
+const crownOf = (t: FeatureInquiry): "cone" | "ellipsoid" =>
+  (t.kind === "tree" || t.kind === "canopy") && t.cone === true
+    ? "cone"
+    : "ellipsoid";
+
 /**
  * One cell's packed trees as a set. Its own function, so the closure holds
  * only what it reads — not the build's scope (the parsed features).
@@ -164,10 +171,11 @@ function packedTreeSet(
   };
   const hit = (k: number, t: number): AskHit<FeatureInquiry> => {
     const [trunk, crown] = cylinders(k);
+    const made = target(index[k]);
     return {
       distance: t,
-      target: target(index[k]),
-      solids: [{ cylinder: trunk }, { cylinder: crown }],
+      target: made,
+      solids: [{ cylinder: trunk }, { cylinder: crown, crown: crownOf(made) }],
     };
   };
   return {
@@ -199,12 +207,7 @@ function packedTreeSet(
       if (best < 0) {
         return null;
       }
-      const [trunk, crown] = cylinders(best);
-      return {
-        distance: reach,
-        target: target(index[best]),
-        solids: [{ cylinder: trunk }, { cylinder: crown }],
-      };
+      return hit(best, reach);
     },
   };
 }

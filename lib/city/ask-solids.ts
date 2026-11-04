@@ -42,7 +42,13 @@ export interface Slab extends Prism {
 }
 
 export type AskSolid =
-  | { cylinder: Cylinder }
+  | {
+      cylinder: Cylinder;
+      /** a tree's crown and how it is drawn (an ellipsoid, or a cone for a
+       *  conifer that is not a pine or a yew); set on the solids a hit
+       *  makes, never on stored ones (ADR 0047) */
+      crown?: "cone" | "ellipsoid";
+    }
   | { prism: Prism }
   | { slab: Slab };
 

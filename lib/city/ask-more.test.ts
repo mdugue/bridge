@@ -101,6 +101,20 @@ test("an evergreen crown is outlined as the cone, a pine's not, and the pine's c
   expect(
     asked.map((h) => h?.target.kind === "canopy" && h.target.cone === true)
   ).toEqual([false, true, false]);
+  // the crown solid the hit makes says so; the trunk says no crown
+  expect(
+    asked.map((h) => {
+      const [trunk, top] = h?.solids ?? [];
+      return [
+        trunk && "cylinder" in trunk ? trunk.crown : "none",
+        top && "cylinder" in top ? top.crown : "none",
+      ];
+    })
+  ).toEqual([
+    [undefined, "ellipsoid"],
+    [undefined, "cone"],
+    [undefined, "ellipsoid"],
+  ]);
   // a level ray 8.2 m up meets the broadleaf's crown (from 6.6 m) at its
   // rim, the pine (its crown from 0.55 H, 9.9 m) only at its stem
   const across = [0, 60].map((dx) => {
