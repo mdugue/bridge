@@ -51,6 +51,13 @@ function fakePart(
   return { freed, group, part, seen };
 }
 
+/** How a part has settled by now, or "pending". */
+async function settledNow(h: { settled: Promise<unknown> }) {
+  const now = Symbol("pending");
+  const outcome = await Promise.race([h.settled, flush().then(() => now)]);
+  return outcome === now ? "pending" : outcome;
+}
+
 test("a part builds, compiles, is ready, and hangs only once the content is recorded", async () => {
   const log: string[] = [];
   const { compiles, host, load } = fakeHost();
@@ -70,16 +77,20 @@ test("a part builds, compiles, is ready, and hangs only once the content is reco
   expect(log).toEqual(["a build", "a hang"]);
 });
 
-test("a tile left before the part's turn never builds it", async () => {
+test("a part disposed, or its tile left, before the lane's gate opens leaves at once and never builds", async () => {
   const log: string[] = [];
   const g = gate();
   const { compiles, host } = fakeHost(g.opened);
   const parts = createLateParts(host);
-  const handle = parts.add(fakePart("a", log).part);
+  const disposed = parts.add(fakePart("a", log).part);
+  disposed.dispose();
+  expect(await settledNow(disposed)).toBe("gone");
+  const handle = parts.add(fakePart("b", log).part);
   parts.leave();
   await handle.ready;
+  expect(await settledNow(handle)).toBe("gone");
   g.open();
-  expect(await handle.settled).toBe("gone");
+  await flush();
   expect(log).toEqual([]);
   expect(compiles).toHaveLength(0);
 });
@@ -462,13 +473,6 @@ test("a take-down that throws still frees the part, once, and says what threw", 
   expect(parts.release()).toEqual([]);
   expect(freed.count).toBe(1);
 });
-
-/** How a part has settled by now, or "pending". */
-async function settledNow(h: { settled: Promise<unknown> }) {
-  const now = Symbol("pending");
-  const outcome = await Promise.race([h.settled, flush().then(() => now)]);
-  return outcome === now ? "pending" : outcome;
-}
 
 test("a part gone while it waits in the lane, or on the compile before the last, leaves at once", async () => {
   const log: string[] = [];

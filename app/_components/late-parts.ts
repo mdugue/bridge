@@ -206,17 +206,19 @@ export function createLateParts(host: LateHost): LateParts {
   };
 
   /** `work` in the lane, after the gate; outside it for rank null. One
-   *  whose `signal` aborts while it waits leaves the line */
+   *  whose `signal` aborts while it waits — for the gate or in the line —
+   *  leaves at once (the lane rejects it with the abort) */
   const inLane = async <R>(
     rank: number | null,
     work: () => Promise<R>,
     signal: AbortSignal
-  ) =>
-    rank === null
-      ? await work()
-      : await lane.gate.then(
-          async () => await lane.tasks.run(work, signal, rank)
-        );
+  ) => {
+    if (rank === null) {
+      return await work();
+    }
+    await Promise.race([lane.gate, untilAborted(signal)]);
+    return await lane.tasks.run(work, signal, rank);
+  };
 
   const add = <T>(part: LatePart<T>, owner?: LateHandle): LateHandle => {
     const parent = owner ? byHandle.get(owner) : undefined;
