@@ -224,3 +224,35 @@ def test_stairs_run_writes_the_sides_material_and_width(tmp_path, monkeypatch):
     assert railed["rail"] == [True, True]
     assert plain["walled"] == [False, False] and "rail" not in plain
     assert plain["mat"] == "concrete"  # the site's majority: too few tagged
+
+
+def test_a_flight_across_a_seam_keeps_both_landings(tmp_path, monkeypatch):
+    # the tile's ground lies at 100 m, its eastern neighbour's at 103 m; the
+    # flight runs from 10 m inside the one to 10 m inside the other
+    import rasterio
+    import rasterio.transform
+
+    nodes = {1: (190.0, 100.0, ""), 2: (210.0, 100.0, "")}
+    ways = way(1, [1, 2], {"highway": "steps"})
+    tile = osm_tile(tmp_path, monkeypatch, nodes, ways)
+    east = tile.data / "dgm" / "dgm1_u_tiff" / "dgm1_u.tif"
+    east.parent.mkdir(parents=True)
+    with rasterio.open(
+        east,
+        "w",
+        driver="GTiff",
+        width=SIZE,
+        height=SIZE,
+        count=1,
+        dtype="float32",
+        crs="EPSG:25833",
+        transform=rasterio.transform.from_origin(X0 + SIZE, Y0 + SIZE, 1.0, 1.0),
+    ) as dst:
+        dst.write(np.full((1, SIZE, SIZE), 103.0, dtype="float32"))
+    stairs.run(tile)
+    [f] = read(tile, "stairs")["features"]
+    lo, hi = f["properties"]["z"]
+    assert abs(lo - 100) < 0.01 and abs(hi - 103) < 0.01
+    # bottom → top: from this tile up onto the neighbour's ground
+    (xa, _), (xb, _) = f["geometry"]["coordinates"]
+    assert xa < X0 + SIZE < xb

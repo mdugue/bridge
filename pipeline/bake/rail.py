@@ -29,15 +29,12 @@ from __future__ import annotations
 import math
 import re
 from collections import defaultdict
-from pathlib import Path
 from typing import NamedTuple
 
 import numpy as np
-import rasterio
 import shapely
 import shapely.geometry
 from rasterio.features import rasterize
-from rasterio.merge import merge
 
 from . import rail_osm
 from .bridge import (
@@ -71,6 +68,7 @@ from .common import (
     dlm_tunnels,
     feature,
     geometry_json,
+    mosaic,
     read_layer,
     write_geojson,
 )
@@ -265,31 +263,6 @@ def dlm_features(dlm: list[tuple[shapely.LineString, int, int]]) -> list[dict]:
 MARGIN = 700.0  # the ground a tile's decks see reaches this far past it (m)
 
 
-def mosaic(paths: list[Path], bounds: tuple[float, float, float, float]):
-    """The rasters that overlap `bounds`, merged on their 1 m grid (NaN where
-    none has data), with the mosaic's transform. None when none overlaps."""
-    xmin, ymin, xmax, ymax = bounds
-    sources = []
-    for path in paths:
-        src = rasterio.open(path)
-        b = src.bounds
-        if b.left < xmax and b.right > xmin and b.bottom < ymax and b.top > ymin:
-            sources.append(src)
-        else:
-            src.close()
-    if not sources:
-        return None, None
-    try:
-        arr, transform = merge(sources, bounds=bounds, nodata=NODATA)
-    finally:
-        for src in sources:
-            src.close()
-    out = arr[0].astype(np.float64)
-    out[out <= NODATA + 1] = np.nan
-    return out, transform
-
-
-NODATA = -9999.0
 # how far either side of a network's centreline a deck point counts as on it (m)
 NETWORK_REACH = {"rail": 8.0, "road": 8.0, "path": 5.0}
 # A network line runs on a deck when it follows the deck's axis within this
