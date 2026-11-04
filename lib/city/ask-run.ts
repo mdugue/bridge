@@ -1,17 +1,23 @@
 /**
- * One answer of *Frag die Stadt* (ADR 0056): the agent loop over the
- * fixed prompt and tools, on whichever adapter the route built from the
- * visitor's key. The Stadtwissen tools run here, the scene tools are
- * declared without a body, so the loop hands them to the browser and
- * resumes with the browser's result on the next request. Server-side but
- * free of the file system and the providers — the route loads both — so
- * a test drives it with a scripted adapter (`@tanstack/ai/testing`).
+ * One answer turn of *Frag die Stadt* (ADR 0056): `answerTurn` runs a
+ * request's checks in their order, then the agent loop over the fixed
+ * prompt and tools, on whichever adapter the route binds (the visitor's
+ * provider, or the scripted model). The route (`app/api/frag/route.ts`)
+ * only binds the turn's dependencies (`TurnDeps`): the adapters, the
+ * Stadtwissen, the secret, the clock and the log. The Stadtwissen tools
+ * run here, the scene tools are declared without a body, so the loop
+ * hands them to the browser and resumes with the browser's result on the
+ * next request. Free of the file system, the environment and the
+ * providers, so a test drives a whole turn with a scripted adapter
+ * (`@tanstack/ai/testing`).
  */
 import {
   chat,
+  chatParamsFromRequestBody,
   convertMessagesToModelMessages,
   EventType,
   maxIterations,
+  toServerSentEventsResponse,
 } from "@tanstack/ai";
 import type {
   AnyTextAdapter,
@@ -23,10 +29,14 @@ import { scrubSecrets } from "@tanstack/ai/byok";
 import {
   ASK_LIMITS,
   askSystemPrompt,
-  CUT_SHORT,
-  TOO_MANY_STEPS,
+  conversationProblem,
+  lastQuestion,
+  parseAskProps,
+  plausibleKey,
 } from "./ask-city";
-import type { AskPromptSite } from "./ask-city";
+import type { AskPromptSite, AskRequestProps } from "./ask-city";
+import { ASK_FAILURES, askRefusalStatus } from "./ask-failure";
+import type { AskFailureCode, AskRefusalCode } from "./ask-failure";
 import {
   factsOf,
   nearKnowledge,
@@ -34,6 +44,7 @@ import {
   sourcesOf,
 } from "./ask-knowledge";
 import type { Knowledge } from "./ask-knowledge";
+import { verifyAskToken } from "./ask-token";
 import {
   factsTool,
   nearTool,
@@ -268,7 +279,7 @@ export async function* ended(
   }
   const why = stopText(runEnd(last, before), signal.reason === DEADLINE);
   if (why) {
-    yield runError(why);
+    yield runError(ASK_FAILURES[why].text, why);
   }
 }
 
@@ -282,26 +293,26 @@ export async function* ended(
  */
 type RunEnd = "stop" | "waits" | "cut" | "length" | "refused" | "other";
 
-/** Why a run stopped, where the stream would not say it. */
-function stopText(end: RunEnd, late: boolean): string | null {
+/** Why a run stopped, where the stream would not say it: its code. */
+function stopText(end: RunEnd, late: boolean): AskFailureCode | null {
   switch (end) {
     case "stop":
     case "waits": {
       return null;
     }
     case "cut": {
-      return late ? "Die Antwort dauerte zu lange." : TOO_MANY_STEPS;
+      return late ? "too-late" : "too-many-steps";
     }
     case "length": {
-      return late ? "Die Antwort dauerte zu lange." : CUT_SHORT;
+      return late ? "too-late" : "cut-short";
     }
     case "refused": {
       // a refusal, or (OpenRouter) a provider's failure mid-answer
-      return "Das Modell brach die Antwort ab. Frag bitte noch einmal.";
+      return "broke-off";
     }
     case "other": {
       // an error already said why, or nothing came
-      return late ? "Die Antwort dauerte zu lange." : null;
+      return late ? "too-late" : null;
     }
     default: {
       const unknown: never = end;
@@ -369,4 +380,202 @@ export async function* scrubbed(
       key
     );
   }
+}
+
+// --- the turn -------------------------------------------------------------------
+// The parts above stay exported for ask-run.test.ts only (an internal
+// seam): every caller runs a turn through `answerTurn`.
+
+/** What a turn needs from its host; the route binds each one. */
+export interface TurnDeps {
+  /** the model for a request that passed every check */
+  adapterFor: (props: AskRequestProps, key: string) => AnyTextAdapter;
+  /** a site's prompt facts and Stadtwissen; null where none was built */
+  knowledgeFor: (
+    siteId: string
+  ) => Promise<{ site: AskPromptSite; knowledge: Knowledge } | null>;
+  /** FRAG_SECRET; undefined where unset */
+  secret: string | undefined;
+  /** a production server: without a secret, no relay */
+  production: boolean;
+  /** the scripted model answers: no key, no token check */
+  scripted: boolean;
+  /** ms since the epoch: the token's clock and today's date */
+  now: () => number;
+  /** when the run is aborted with DEADLINE, from the request's start */
+  deadlineMs: number;
+  /** one line per refusal: `[frag] <status> <code>` */
+  log: (line: string) => void;
+}
+
+/**
+ * A refused request: its status and words from the table, its code in
+ * the body and the log. A detail the code does not say (which prop, which
+ * cap) goes into the log line only, scrubbed of the key — never the key,
+ * the token or the conversation.
+ */
+function refuse(
+  deps: TurnDeps,
+  code: AskRefusalCode,
+  key: string,
+  detail = ""
+): Response {
+  const status = askRefusalStatus(code);
+  const why = detail ? ` ${key ? scrubSecrets(detail, [key]) : detail}` : "";
+  deps.log(`[frag] ${status} ${code}${why}`);
+  return Response.json(
+    { code, message: ASK_FAILURES[code].text },
+    { status, headers: { "Cache-Control": "no-store" } }
+  );
+}
+
+/**
+ * The history the run sends (a stand-in for every stopped call) and the
+ * model turns the answer has left; null for rows that do not read or
+ * convert (the request's shape is checked only loosely before).
+ */
+function answerHistory(rows: Parameters<typeof withStoppedCallsAnswered>[0]): {
+  messages: ReturnType<typeof withStoppedCallsAnswered>;
+  turns: number;
+} | null {
+  try {
+    const messages = withStoppedCallsAnswered(rows);
+    return {
+      messages,
+      turns: ASK_LIMITS.answerRounds - roundsSinceQuestion(messages),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** A conversation past the caps. */
+function conversationRefusal(
+  deps: TurnDeps,
+  key: string,
+  messages: readonly unknown[]
+): Response | null {
+  const problem = conversationProblem(messages, lastQuestion(messages));
+  return problem ? refuse(deps, "too-long", key, problem) : null;
+}
+
+/** A key the turn does not relay: none, no secret to check it with in
+ *  production, or a token the key check did not give for it. */
+async function keyRefusal(
+  deps: TurnDeps,
+  key: string,
+  props: AskRequestProps
+): Promise<Response | null> {
+  const fake = deps.scripted;
+  if (!fake && !plausibleKey(key)) {
+    return refuse(deps, "no-key", key);
+  }
+  const { secret } = deps;
+  // a production server holds the key check: without its secret, no relay
+  if (!(fake || secret) && deps.production) {
+    return refuse(deps, "no-secret", key);
+  }
+  if (
+    !fake &&
+    secret &&
+    !(await verifyAskToken(
+      secret,
+      props.token,
+      props.provider,
+      key,
+      deps.now()
+    ))
+  ) {
+    return refuse(deps, "bad-token", key);
+  }
+  return null;
+}
+
+/**
+ * One answer turn. The checks run in this order, and the first that
+ * fails answers alone (nothing after it runs, no adapter is built): the
+ * body, the props, the key, the caps on the rows as sent (the stand-ins
+ * mending adds must not count), the answer's turns on the mended rows,
+ * the site's Stadtwissen, a request already gone. Every refusal is JSON
+ * `{ code, message }` from `ASK_FAILURES`, `no-store`, with one log line. An answer is the
+ * run as server-sent events, scrubbed of the key and closed by an error
+ * where the stream would not say why it stopped; the run stops when the
+ * body is cancelled, the request aborts, or at `deadlineMs`. Rejects only
+ * if a dependency throws; a provider's failure arrives in the stream.
+ */
+export async function answerTurn(
+  request: { body: unknown; key: string; signal: AbortSignal },
+  deps: TurnDeps
+): Promise<Response> {
+  const { key } = request;
+  let params: Awaited<ReturnType<typeof chatParamsFromRequestBody>>;
+  try {
+    params = await chatParamsFromRequestBody(request.body);
+  } catch {
+    return refuse(deps, "bad-request", key);
+  }
+  const props = parseAskProps(params.forwardedProps);
+  if (typeof props === "string") {
+    return refuse(deps, "bad-props", key, props);
+  }
+  const keyProblem = await keyRefusal(deps, key, props);
+  if (keyProblem) {
+    return keyProblem;
+  }
+  const tooMuch = conversationRefusal(deps, key, params.messages);
+  if (tooMuch) {
+    return tooMuch;
+  }
+  // a stopped answer's unanswered call would make the provider refuse
+  const history = answerHistory(params.messages);
+  if (history === null) {
+    return refuse(deps, "bad-request", key);
+  }
+  if (history.turns <= 0) {
+    return refuse(deps, "too-many-steps", key);
+  }
+  const known = await deps.knowledgeFor(props.site);
+  if (!known) {
+    return refuse(deps, "no-knowledge", key);
+  }
+  // the model's run and the response's delivery stop apart: the deadline
+  // stops the run, and the response still carries the error that says so
+  const abortController = new AbortController();
+  const runController = new AbortController();
+  // a closed tab or a cancelled body stops the run too
+  const stop = () => runController.abort();
+  abortController.signal.addEventListener("abort", stop);
+  request.signal.addEventListener("abort", () => abortController.abort());
+  if (request.signal.aborted) {
+    return refuse(deps, "gone", key);
+  }
+  const stream = runAsk({
+    adapter: deps.adapterFor(props, key),
+    abortController: runController,
+    knowledge: known.knowledge,
+    messages: history.messages,
+    ...(params.resume ? { resume: params.resume } : {}),
+    ...(params.parentRunId ? { parentRunId: params.parentRunId } : {}),
+    site: known.site,
+    runId: params.runId,
+    threadId: params.threadId,
+    today: new Date(deps.now()),
+    turns: history.turns,
+    voice: props.voice,
+  });
+  // the host ends the function at its limit without a word: end the
+  // answer a little before, with an error the visitor sees
+  const deadline = setTimeout(
+    () => runController.abort(DEADLINE),
+    deps.deadlineMs
+  );
+  return toServerSentEventsResponse(
+    ended(scrubbed(stream, key), runController.signal, () =>
+      clearTimeout(deadline)
+    ),
+    {
+      abortController,
+      headers: { "Cache-Control": "no-store" },
+    }
+  );
 }

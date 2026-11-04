@@ -1,6 +1,6 @@
 # 084 — One session for an answer's lifetime: reading aloud, dictation and the scene's waits in one module
 
-**Status:** TODO
+**Status:** BUILT (2026-11-04; device checks open, see the row in README.md)
 
 Planned 2026-11-04 from an architecture review of *Frag die Stadt* and
 its Sprachführer (ADR 0056, 0057), verified against `04d8fad3`. Mostly a

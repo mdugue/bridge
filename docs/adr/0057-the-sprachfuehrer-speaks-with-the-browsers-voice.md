@@ -18,9 +18,13 @@ listens wastes its battery.
    voice of the device's own, never a network voice, so the answer stays
    on the device; a device without one shows no reading aloud; links,
    list marks and Markdown left out; a tap starts the engine, which iOS
-   needs) and
-   takes a spoken question with `SpeechRecognition` (push to talk, one
-   question per press). A browser without either shows neither. A spoken
+   needs). Switched on, reading aloud starts with the last finished
+   answer. An answer is never read into an open microphone — it waits
+   until the microphone closes — and is read at once even with the page
+   hidden, as long as the page still runs. A stopped or failed answer is
+   never read. The browser takes a spoken question with
+   `SpeechRecognition` (push to talk, one question per press). A
+   browser without either shows neither. A spoken
    question turns reading aloud on; while it is on, every request tells
    the server (`voice`), whose prompt then asks for short spoken
    sentences — the provider learns that much, never the audio.
@@ -33,6 +37,17 @@ listens wastes its battery.
    loop draws two frames a second while the scene stands still, 30 while
    a glide or live mode moves it (`FramePace.setListening`). Its banner,
    its switch, turning reading aloud off or closing the card ends it.
+   Ending it turns reading aloud off again when the Hörmodus turned it
+   on; reading the visitor chose stays.
+4. **One session owns an answer's lifetime.** `lib/city/ask-session.ts`
+   takes the answer's events (asked, started, ended, stopped, the
+   microphone, the switches, the card) and drives reading aloud, the
+   microphone, the scene's waits and the run through four ports. The
+   stop button halts the answer's run, its scene waits and its glide, in
+   that order (the camera stops where it is; a glide the visitor started
+   since goes on). A failed answer ends its run and its waits, so no
+   scene tool resumes it. Every command runs inside the tap's dispatch,
+   for iOS speaks only what a tap began.
 
 ## Consequences
 
@@ -43,3 +58,6 @@ listens wastes its battery.
   and typing stays the way in.
 - Nothing new loads before the card opens; the Hörmodus lowers a phone's
   GPU work.
+- The lifetime's rules are unit-tested against fakes of the four ports
+  (`ask-session.test.ts`); a new rule goes there, never into a handler
+  of the card.

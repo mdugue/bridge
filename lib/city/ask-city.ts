@@ -7,6 +7,7 @@
  * (`app/api/frag/route.ts`) and the card (`app/_components/ask-city.tsx`)
  * both read it.
  */
+import { TOO_LONG } from "./ask-failure";
 import { siteDataLayers } from "./data-layers";
 import { RENDER_STYLES } from "./render-style";
 import type { Site } from "./site";
@@ -169,16 +170,6 @@ export const ASK_LIMITS = {
   /** how long a checked key's token lasts (ms) */
   tokenMs: 12 * 3600 * 1000,
 } as const;
-
-/** Why an answer stopped at its turn cap, in the stream or as a 422. */
-export const TOO_MANY_STEPS = "Die Antwort brauchte zu viele Schritte.";
-
-/** A conversation past what the server or the model takes. */
-export const TOO_LONG = "Das Gespräch ist zu lang geworden.";
-
-/** Why an answer ended mid-text: the model's output ran out. */
-export const CUT_SHORT =
-  "Die Antwort wurde abgeschnitten: dem Modell gingen die Wörter aus.";
 
 /** What the server reads of a request beyond the messages. */
 export interface AskRequestProps {
