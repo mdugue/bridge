@@ -59,6 +59,24 @@ describe("the card's words for a failed answer", () => {
       text: "Der Server antwortet mit Status 504.",
     },
     {
+      name: "deployment protection's 401, without our code",
+      error: failed("HTTP error! status: 401", { status: 401 }),
+      text: "Der Schlüssel muss neu geprüft werden.",
+      key: true,
+    },
+    {
+      name: "the platform's payload limit (413), without our code",
+      error: failed("HTTP error! status: 413", { status: 413 }),
+      text: "Das Gespräch ist zu lang geworden.",
+      reset: true,
+    },
+    {
+      name: "a proxy's 422, without our code",
+      error: failed("HTTP error! status: 422", { status: 422 }),
+      text: "Die Antwort brauchte zu viele Schritte. Frag bitte anders.",
+      reset: true,
+    },
+    {
       name: "the turn cap in the stream",
       error: failed(
         "Die Antwort brauchte zu viele Schritte. Frag bitte anders.",

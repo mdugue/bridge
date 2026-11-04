@@ -119,6 +119,18 @@ export function askRefusalStatus(code: AskRefusalCode): number {
   return ROWS[code].status;
 }
 
+/**
+ * A refusal without our code (a host's or a platform's: deployment
+ * protection's 401, the payload limit's 413, a proxy's 422) read by its
+ * status, as the row of ours that answers with it would be: the key check
+ * again, or a fresh start. Other statuses say just the status.
+ */
+const BY_STATUS: Readonly<Record<number, AskFailureCode>> = {
+  401: "no-key",
+  413: "too-long",
+  422: "too-many-steps",
+};
+
 /** A provider's error that names the key or the account's credit. */
 const KEY_TROUBLE =
   /\b(?:401|402|403|unauthori[sz]ed|forbidden|authenticat\w*|api[ _-]?key|credits?|credentials?|quota|billing|insufficient)\b/iu;
@@ -147,8 +159,8 @@ function codeText(value: unknown): string {
 /**
  * What the card says and offers for a failed answer: check the key again
  * or start over. Our code reads its row; a provider's code, its status or
- * its words are read where no code of ours came (a host's 502 or 504
- * keeps its status).
+ * its words are read where no code of ours came (a 401, 413 or 422 reads
+ * as our row for it, `BY_STATUS`; a host's 502 or 504 keeps its status).
  */
 export function askFailure(error: Error): {
   key: boolean;
@@ -179,7 +191,12 @@ export function askFailure(error: Error): {
     return say(TOO_LONG, false, true);
   }
   if (typeof status === "number") {
-    return say(`Der Server antwortet mit Status ${status}.`);
+    const row = Object.hasOwn(BY_STATUS, status)
+      ? ASK_FAILURES[BY_STATUS[status]]
+      : null;
+    return row
+      ? say(row.text, row.key === true, row.reset === true)
+      : say(`Der Server antwortet mit Status ${status}.`);
   }
   return say(message, KEY_TROUBLE.test(message));
 }
