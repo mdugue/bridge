@@ -90,7 +90,8 @@ test("a surface texel unpacks into the road and the walk material", () => {
   expect(unpackSurface(byte)).toEqual({ road: 4, walk: 3, park: 3 });
   expect(surfaceHeading(0)).toBeNull();
   expect(surfaceHeading(1)).toBe(0);
-  expect(surfaceHeading(128)).toBeCloseTo(Math.PI / 2, 10);
+  expect(surfaceHeading(128)).toBeCloseTo(Math.PI, 10);
+  expect(surfaceHeading(64)).toBeCloseTo((63 / 254) * 2 * Math.PI, 10);
 });
 
 test("every committed legend names the same classes", () => {
