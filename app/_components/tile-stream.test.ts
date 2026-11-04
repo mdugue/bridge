@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, jest, test } from "bun:test";
 import {
   DEFAULT_DOWNLOAD_QUEUE,
   DEFAULT_PARSE_QUEUE,
@@ -45,7 +45,7 @@ import {
   takesOver,
   trafficSlot,
 } from "./tile-stream";
-import { createLateParts } from "./late-parts";
+import { COMPILE_WAIT_MS, createLateParts } from "./late-parts";
 import type { Compiled, LateHandle, LatePart } from "./late-parts";
 import { fakeHost, flush, gate } from "./late-parts.fixture";
 import type {
@@ -711,6 +711,51 @@ test("a dressing hangs on its tile, its traffic handed the tile; released, it co
   expect(furniture.parent).toBeNull();
   expect(freed).toBe(true);
   expect(parts.bytes()).toBe(0);
+});
+
+test("a dressing hung while its compile runs leaves the root at its release, freed once that compile ends", async () => {
+  jest.useFakeTimers();
+  try {
+    const furniture = new Group();
+    const box = new Mesh(new BoxGeometry(), new MeshBasicNodeMaterial());
+    furniture.add(box);
+    let freed = 0;
+    box.geometry.addEventListener("dispose", () => {
+      freed += 1;
+    });
+    const dressing: TileDressing = { tile: "t", furniture };
+    const fake = fakeHost();
+    const parts = createLateParts(fake.host);
+    const root = new Object3D();
+    const handle = parts.add(
+      dressingPart({
+        tile: "t",
+        level: "fine",
+        root,
+        slot: {},
+        dressings: new Set(),
+        parts,
+        look: createLookState(),
+        live: () => true,
+        failed: nothing,
+        build: async () => await Promise.resolve(dressing),
+      })
+    );
+    fake.load();
+    await flush();
+    jest.advanceTimersByTime(COMPILE_WAIT_MS);
+    expect(await handle.settled).toBe("hung");
+    expect(furniture.parent).toBe(root);
+    // the tile goes as that compile ends (the plugin's last compile): the
+    // root's release disposes what hangs on it, so the dressing is down
+    fake.compiles[0].end("done");
+    expect(parts.release()).toEqual([]);
+    expect(furniture.parent).toBeNull();
+    await flush();
+    expect(freed).toBe(1);
+  } finally {
+    jest.useRealTimers();
+  }
 });
 
 test("a coarse level's dressing builds ahead of a fine level's queued before it", async () => {

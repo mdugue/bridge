@@ -1466,12 +1466,17 @@ export function dressingPart(site: DressingSite): LatePart<TileDressing> {
         owner: self,
         root: site.root,
       });
-      // (its parts leave the root as it is freed: disposeDressing)
+      // taken down, its parts leave the root (or the coarse crowns'
+      // stand-in) at once: its free may wait for its compile, and the
+      // root's release would dispose whatever still hangs on it
       return () => {
         if (slot.dressing === d) {
           slot.dressing = undefined;
         }
         dressings.delete(d);
+        for (const part of dressingParts(d)) {
+          part.removeFromParent();
+        }
       };
     },
     free: (d) => disposeDressing(d),
@@ -2471,7 +2476,9 @@ export class DressingPlugin {
       this.holdRasters(scene, dressed.terrain.rasters, false);
       free(() => dressed.terrain?.dispose());
     }
-    // its dressing, hung or not (its compiles have ended by now)
+    // its dressing, hung or not: taken down now (off the root the content's
+    // dispose below walks), freed now or a few microtasks on — its part
+    // learns its compile has ended after the plugin's count does
     errors.push(...dressed.late.release());
     return errors;
   }
