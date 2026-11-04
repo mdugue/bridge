@@ -112,6 +112,8 @@ export function createAskSession(ports: AskSessionPorts): AskSession {
   let paused = false;
   /** a finished answer waits for the microphone to close */
   let owed: string | null = null;
+  /** the last answer that ended done, not failed or stopped, with text */
+  let lastFinished: string | null = null;
 
   let snapshot: AskSessionState = { reading, hearing };
   const listeners = new Set<() => void>();
@@ -156,6 +158,7 @@ export function createAskSession(ports: AskSessionPorts): AskSession {
       return "ignored";
     }
     // the last answer stops: the next one is on its way
+    lastFinished = null;
     speech.stop();
     if (voice) {
       speech.prime();
@@ -204,6 +207,7 @@ export function createAskSession(ports: AskSessionPorts): AskSession {
       if (text === "" || stopped) {
         return "done";
       }
+      lastFinished = text;
       if (reading) {
         read(text);
       }
@@ -252,6 +256,11 @@ export function createAskSession(ports: AskSessionPorts): AskSession {
       } else {
         speech.prime();
         reading = true;
+        // the last finished answer, read from this tap (iOS); into an
+        // open microphone it is owed until the microphone closes
+        if (!loading && lastFinished !== null) {
+          read(lastFinished);
+        }
       }
       return "done";
     },
@@ -284,6 +293,7 @@ export function createAskSession(ports: AskSessionPorts): AskSession {
       stopped = false;
       micOpen = false;
       owed = null;
+      lastFinished = null;
       return "done";
     },
     keyForgotten: () => {

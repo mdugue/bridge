@@ -252,8 +252,45 @@ describe("the switches", () => {
     expect(calls).toEqual(["speech.prime"]);
   });
 
-  test("reading on reads nothing past", () => {
+  test("reading on reads the last answer, from the tap", () => {
     answered("Da.");
+    since();
+    dispatch({ type: "readingPressed" });
+    // before dispatch returns: iOS speaks only what the tap began
+    expect(calls).toEqual(["speech.prime", "speech.speak:Da."]);
+  });
+
+  test("reading on with the microphone open owes the last answer", () => {
+    answered("Da.");
+    dispatch({ type: "micPressed" });
+    since();
+    dispatch({ type: "readingPressed" });
+    expect(calls).toEqual(["speech.prime"]);
+    dispatch({ type: "micClosed" });
+    expect(calls).toEqual(["speech.prime", "speech.speak:Da."]);
+  });
+
+  test("reading on leaves a stopped answer unread", () => {
+    dispatch({ type: "typed", text: "Wo?" });
+    dispatch({ type: "answerStarted" });
+    dispatch({ type: "stopPressed" });
+    dispatch({ type: "answerEnded", text: "Da halb", failed: false });
+    since();
+    dispatch({ type: "readingPressed" });
+    expect(calls).toEqual(["speech.prime"]);
+  });
+
+  test("reading on leaves a failed answer unread", () => {
+    answered("Da.");
+    answered("Kaputt", { failed: true });
+    since();
+    dispatch({ type: "readingPressed" });
+    expect(calls).toEqual(["speech.prime"]);
+  });
+
+  test("a new question clears the last answer", () => {
+    answered("Da.");
+    dispatch({ type: "typed", text: "Und?" });
     since();
     dispatch({ type: "readingPressed" });
     expect(calls).toEqual(["speech.prime"]);
