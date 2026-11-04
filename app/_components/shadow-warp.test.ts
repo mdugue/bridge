@@ -141,7 +141,7 @@ test("a tower beside the view still casts into it", () => {
   expect(t.z).toBeLessThan(r.z);
 });
 
-test("the bias is a few decimetres of depth near the camera", () => {
+test("the bias is a few centimetres of depth near the camera", () => {
   const v = view(150, 25);
   const fit = fitWarpedShadow(v, SUN);
   expect(fit).not.toBeNull();
@@ -154,8 +154,8 @@ test("the bias is a few decimetres of depth near the camera", () => {
   const b = clipOf(fit, p.clone().addScaledVector(SUN, 1));
   // three's map holds depth in 0…1, half the clip space's −1…1
   const perMetre = Math.abs(b.z - a.z) / 2;
-  expect(-fit.bias / perMetre).toBeGreaterThan(0.1);
-  expect(-fit.bias / perMetre).toBeLessThan(0.3);
+  expect(-fit.bias / perMetre).toBeGreaterThan(0.03);
+  expect(-fit.bias / perMetre).toBeLessThan(0.1);
 });
 
 test("the map stands while the view stays inside its margin", () => {
