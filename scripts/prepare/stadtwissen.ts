@@ -9,6 +9,7 @@
  */
 import { existsSync } from "node:fs";
 import { parseBakeFile } from "../../lib/city/bake-file";
+import { MONUMENTS_FILE } from "../../lib/city/monuments-file";
 import { OSM_BUILDINGS_FILE } from "../../lib/city/osm-buildings-file";
 import type { SourceInfo, SourceKey } from "../../lib/city/provenance";
 import {
@@ -58,7 +59,7 @@ async function tileFile(tile: string): Promise<string> {
             : {},
           landmarks: landmarkFile(tile),
           monuments: existsSync(monuments)
-            ? (readJson(monuments) as TileInput["monuments"])
+            ? parseBakeFile(MONUMENTS_FILE, readJson(monuments), monuments)
             : undefined,
         })
       )

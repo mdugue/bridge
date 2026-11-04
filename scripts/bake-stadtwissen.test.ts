@@ -163,8 +163,11 @@ test("the index lists each landmark once, most notable first, with its facts", (
 });
 
 const plaque = (name: string) => ({
-  geometry: { type: "Point", coordinates: [411_000.2, 5_656_000.4] },
-  properties: { name, kind: "stone" },
+  geometry: {
+    type: "Point" as const,
+    coordinates: [411_000.2, 5_656_000.4] as [number, number],
+  },
+  properties: { name, kind: "stone" as const },
 });
 
 const ids = (names: string[]) =>
@@ -173,7 +176,7 @@ const ids = (names: string[]) =>
 test("monuments in one metre keep their ids by name, whatever the order", () => {
   const square = {
     geometry: {
-      type: "Polygon",
+      type: "Polygon" as const,
       // closed on its first corner: the centre, not pulled towards it
       coordinates: [
         [
@@ -183,9 +186,9 @@ test("monuments in one metre keep their ids by name, whatever the order", () => 
           [0, 10],
           [0, 0],
         ],
-      ],
+      ] as [number, number][][],
     },
-    properties: { name: "Sockel", kind: "column" },
+    properties: { name: "Sockel", kind: "column" as const },
   };
   expect(ids(["Bach", "Arndt"])).toEqual([
     ["m411000_5656000", "Arndt"],

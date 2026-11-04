@@ -111,6 +111,7 @@ const monumentsFile = z.strictObject({
 });
 
 export type ReliefGrid = z.infer<typeof reliefGrid>;
+export type MonumentGeometry = z.infer<typeof monumentGeometry>;
 export type MonumentProps = z.infer<typeof monumentProps>;
 export type MonumentsFile = z.infer<typeof monumentsFile>;
 

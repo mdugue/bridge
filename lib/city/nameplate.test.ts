@@ -158,7 +158,7 @@ test("a thing of the street: its name and one small line", () => {
     kind: "monument",
     tile: "t",
     position: [0, 0],
-    properties: { kind: "fountain" },
+    properties: { kind: "fountain", source: "osm" },
   };
   expect(
     nameplateText(fountain, card({ title: "Brunnen", kicker: "Brunnen" }))

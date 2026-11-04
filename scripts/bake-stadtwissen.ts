@@ -8,6 +8,10 @@
  * sources, the tiles' files. Run by prepare-data.ts, which publishes it.
  */
 import { BUILDING_FUNCTION, ROOF_TYPE } from "../lib/city/adv-codes";
+import type {
+  MonumentGeometry,
+  MonumentProps,
+} from "../lib/city/monuments-file";
 import type { OsmBuildingRow } from "../lib/city/osm-buildings-file";
 import type { LandmarkFile } from "../lib/city/landmarks";
 import type { SourceInfo } from "../lib/city/provenance";
@@ -183,16 +187,12 @@ function directoryEntry(
   };
 }
 
-/** A tile's monuments file (pipeline/bake/monuments.py), as far as read. */
-export interface MonumentCollection {
-  features: {
-    geometry: { coordinates: unknown; type: string };
-    properties: {
-      kind?: string;
-      material?: string;
-      name?: string;
-      wikidata?: string;
-    };
+/** What `monumentsOf` reads of a tile's monuments file
+ *  (pipeline/bake/monuments.py; its schema lib/city/monuments-file.ts). */
+export interface MonumentsRead {
+  features: readonly {
+    geometry: MonumentGeometry;
+    properties: Pick<MonumentProps, "kind" | "material" | "name" | "wikidata">;
   }[];
 }
 
@@ -223,9 +223,7 @@ function anchorOf(geometry: {
 }
 
 /** The tile's named monuments. */
-export function monumentsOf(
-  file: MonumentCollection | undefined
-): WissenMonument[] {
+export function monumentsOf(file: MonumentsRead | undefined): WissenMonument[] {
   const found: (Omit<WissenMonument, "id"> & { base: string })[] = [];
   for (const f of file?.features ?? []) {
     const { name, kind, material, wikidata } = f.properties;
@@ -236,7 +234,7 @@ export function monumentsOf(
     found.push({
       base: `m${Math.round(at[0])}_${Math.round(at[1])}`,
       name,
-      kind: kind ?? "",
+      kind,
       x: round1(at[0]),
       y: round1(at[1]),
       ...(material ? { material } : {}),
@@ -281,7 +279,7 @@ export function monumentsOf(
 export function stadtwissenTile(input: {
   city: CityFile;
   landmarks?: Pick<LandmarkFile, "landmarks">;
-  monuments?: MonumentCollection;
+  monuments?: MonumentsRead;
   osm: Readonly<Record<string, OsmRow | undefined>>;
   tile: string;
 }): WissenTile {
