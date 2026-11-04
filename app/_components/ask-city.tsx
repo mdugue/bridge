@@ -30,6 +30,7 @@ import {
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -96,10 +97,12 @@ const AskCity = ({ coarse, onClose, scene, site }: Props) => {
   // the Hörmodus, reading aloud and iOS's primed engine
   const speech = useSpeech();
   const dictation = useDictation();
-  // the hooks' latest values, for the session's ports (first effect: the
-  // ones below may dispatch)
+  // the hooks' latest values, for the session's ports: set in a layout
+  // effect, which runs before every passive effect of the commit — the
+  // child Conversation's run first and dispatch (an answer's end reads
+  // it aloud), so a passive one here would hand them last render's
   const latest = useRef({ dictation, scene, speech });
-  useEffect(() => {
+  useLayoutEffect(() => {
     latest.current = { dictation, scene, speech };
   });
   // the conversation's handler for a question the microphone heard
