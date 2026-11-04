@@ -84,7 +84,6 @@ import {
   fetchFeatures,
   fetchOptionalBinary,
   fetchOptionalJson,
-  isAbortError,
 } from "./fetch-optional";
 import { furnitureSteps } from "./furniture-layer";
 import { buildLamps } from "./lamp-layer";
@@ -94,6 +93,7 @@ import { buildMonuments } from "./monument-layer";
 import type { MonumentLayer } from "./monument-layer";
 import { buildMurals } from "./mural-layer";
 import type { MuralLayer, MuralSource } from "./mural-layer";
+import type { Mural } from "@/lib/city/murals";
 import { railSteps } from "./rail-layer";
 import { bridgeAskSet } from "./bridge-ask";
 import { buildRiverside } from "./riverside-layer";
@@ -419,19 +419,16 @@ interface PluginTiles {
 
 /** Every dressed object of a tile, keyed by its content root. */
 interface Dressed {
-  /** aborts the murals' fetches when the tile leaves before they land */
-  aborter?: AbortController;
   city?: CityLayer;
   /** the dressing, while it hangs on the tile */
   dressing?: TileDressing;
-  /** what lands on the root after it (late-parts.ts): the dressing — its
-   *  bytes from its build on, freed with the root */
+  /** what lands on the root after it (late-parts.ts): a terrain level's
+   *  dressing, a city tile's murals — weighed from their build on, freed
+   *  with the root */
   late: LateParts;
   /** the traffic bodies' bytes, once built and compiled (until they are a
    *  late part of their own, plan 083 step 4) */
   trafficBytes?: number;
-  /** the city tile's murals, once they hang on it */
-  murals?: MuralLayer;
   /** the bytes of the site's shared buffers its content holds (the coarse
    *  grid's index and water index): the tile renderer counts them in the
    *  tile's glTF, but they stay when the tile goes */
@@ -1515,6 +1512,62 @@ export function dressingPart(site: DressingSite): LatePart<TileDressing> {
   };
 }
 
+/** Where a city tile's murals hang (`muralsPart`). */
+export interface MuralSite {
+  tile: string;
+  /** the content root they hang under */
+  root: Object3D;
+  /** the tile's buildings: each mural shows while its building does */
+  city: Pick<CityLayer, "hang">;
+  /** the tile's murals in the site's file (none: nothing to build) */
+  murals: () => Promise<readonly Mural[]>;
+  /** their drawings fetched and decoded, their strips made
+   *  (mural-layer.ts `buildMurals`) */
+  build: (
+    murals: readonly Mural[],
+    signal: AbortSignal
+  ) => Promise<MuralLayer | null>;
+}
+
+/**
+ * A city tile's murals as a late part of its content root (late-parts.ts):
+ * built outside the dressings' lane (a fetch and a decode a drawing, no long
+ * main-thread task), weighed from their build, compiled before they hang
+ * and hung once that compile has ended — nothing waits on them — each shown
+ * while its building is (`CityLayer.hang`), and freed with the tile.
+ */
+export function muralsPart(site: MuralSite): LatePart<MuralLayer> {
+  return {
+    kind: "murals",
+    tile: site.tile,
+    rank: null,
+    hangAt: "compile",
+    build: async (signal) => {
+      const murals = await site.murals();
+      return murals.length > 0 ? await site.build(murals, signal) : null;
+    },
+    objects: (layer) => compileRepresentatives([layer.group]),
+    bytes: (layer) => layer.bytes,
+    hang: (layer) => {
+      site.root.add(layer.group);
+      for (let i = 0; i < layer.meshes.length; i += 1) {
+        site.city.hang(layer.meshes[i], layer.murals[i].building);
+      }
+      return () => {
+        layer.group.removeFromParent();
+      };
+    },
+    free: (layer) => {
+      try {
+        layer.dispose();
+        return [];
+      } catch (error) {
+        return [error];
+      }
+    },
+  };
+}
+
 /** A promise's resolver until its executor has run. */
 const unresolved = (): void => undefined;
 
@@ -1769,8 +1822,7 @@ export class DressingPlugin {
     return (
       rasters +
       (dressed?.late.bytes() ?? 0) +
-      (dressed?.trafficBytes ?? 0) +
-      (dressed?.murals?.bytes ?? 0) -
+      (dressed?.trafficBytes ?? 0) -
       (dressed?.sharedBytes ?? 0)
     );
   }
@@ -1833,7 +1885,7 @@ export class DressingPlugin {
       // the murals hang on the full LoD2 only (the far level's walls are
       // simplified by half a metre: lib/city/tileset.ts FAR_CITY_ERROR)
       if ((tile as { geometricError?: number }).geometricError === 0) {
-        void this.hangMurals(scene, extras.tileId);
+        this.addMurals(scene, extras.tileId);
       }
     } else if (extras.kind === "terrain") {
       ({ dressed } = await streamTimings.timed(
@@ -1930,77 +1982,30 @@ export class DressingPlugin {
     }
   }
 
-  /**
-   * A city tile's murals land after its buildings show: their drawings
-   * fetched and decoded, compiled before they hang, weighed on the tile,
-   * each shown while its building is (CityLayer.hang). A tile that left
-   * meanwhile aborts their fetches; one that left while they compiled
-   * frees them.
-   */
-  private async hangMurals(scene: Object3D, tileId: string): Promise<void> {
+  /** A city tile's murals land after its buildings show, as a late part of
+   *  its content root (`muralsPart`). */
+  private addMurals(scene: Object3D, tileId: string): void {
     const source = this.ctx.murals;
     const entry = this.dressed.get(scene);
-    if (!(source && entry?.city)) {
+    const city = entry?.city;
+    if (!(source && city)) {
       return;
     }
-    const murals = await source.forTile(tileId);
-    if (murals.length === 0 || this.dressed.get(scene) !== entry) {
-      return;
-    }
-    const aborter = new AbortController();
-    const gone = () =>
-      this.disposed ||
-      this.released.has(scene) ||
-      this.dressed.get(scene) !== entry;
-    let layer: MuralLayer | null;
-    try {
-      // the tile's release aborts them (`releaseDressed`)
-      entry.aborter ??= aborter;
-      layer = await buildMurals(murals, {
-        fileUrl: source.fileUrl,
-        offset: this.ctx.offset,
-        phone: this.ctx.tier === "mobile",
-        signal: entry.aborter.signal,
-      });
-    } catch (error) {
-      if (!(isAbortError(error) || gone())) {
-        this.ctx.onDressingFailed?.(error, tileId);
-      }
-      return;
-    } finally {
-      if (entry.aborter === aborter) {
-        entry.aborter = undefined;
-      }
-    }
-    if (!layer) {
-      return;
-    }
-    const dressedMurals = layer;
-    if (gone()) {
-      dressedMurals.dispose();
-      return;
-    }
-    const compiled = await this.compileUnder(
-      scene,
-      [dressedMurals.group],
-      `murals ${tileId}`
+    entry.late.add(
+      muralsPart({
+        tile: tileId,
+        root: scene,
+        city,
+        murals: async () => await source.forTile(tileId),
+        build: async (murals, signal) =>
+          await buildMurals(murals, {
+            fileUrl: source.fileUrl,
+            offset: this.ctx.offset,
+            phone: this.ctx.tier === "mobile",
+            signal,
+          }),
+      })
     );
-    await this.loaded.get(scene);
-    if (gone() || compiled === "out of memory") {
-      dressedMurals.dispose();
-      return;
-    }
-    scene.add(dressedMurals.group);
-    entry.murals = dressedMurals;
-    for (let i = 0; i < dressedMurals.meshes.length; i += 1) {
-      const mesh = dressedMurals.meshes[i];
-      entry.city?.hang(mesh, dressedMurals.murals[i].building);
-    }
-    const tile = this.tileOf.get(scene);
-    if (tile) {
-      this.tiles?.recalculateBytesUsed(tile);
-    }
-    this.ctx.onChange();
   }
 
   /** The facades' sky view lands after the buildings show (the clay binds
@@ -2524,7 +2529,6 @@ export class DressingPlugin {
    *  (the rest is freed regardless). */
   private releaseDressed(scene: Object3D, dressed: Dressed): unknown[] {
     this.dressed.delete(scene);
-    dressed.aborter?.abort();
     const errors: unknown[] = [];
     const free = (dispose: () => void) => {
       try {
@@ -2539,9 +2543,6 @@ export class DressingPlugin {
     }
     if (dressed.svf) {
       this.skyView.release(dressed.svf);
-    }
-    if (dressed.murals) {
-      free(() => dressed.murals?.dispose());
     }
     if (dressed.terrain) {
       this.stream.terrains.delete(dressed.terrain);

@@ -18,7 +18,9 @@ import type { Steps } from "@/lib/city/build-steps";
 import type { AskSet } from "@/lib/city/ask-solids";
 import type { TrafficFeature } from "@/lib/city/features";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
+import type { Mural } from "@/lib/city/murals";
 import type { CityLayer } from "./city-layer";
+import type { MuralLayer } from "./mural-layer";
 import type { TrafficBuilder } from "./data-layers-feature";
 import type { TerrainLayer } from "./terrain-layer";
 import { createWatch } from "./feature-seam";
@@ -34,6 +36,7 @@ import {
   buildAsksWhenIdle,
   DressingPlugin,
   dressingPart,
+  muralsPart,
   dressingParts,
   followEnvironment,
   handOverWaitMs,
@@ -738,6 +741,81 @@ test("a coarse level's dressing builds ahead of a fine level's queued before it"
   }
   await flush();
   expect(built).toEqual(["first", "coarse", "fine"]);
+});
+
+test("a city tile's murals hang on their buildings once compiled, weigh on the tile, and leave with it", async () => {
+  const group = new Group();
+  const meshes = ["a", "b"].map(
+    () => new Mesh(new BoxGeometry(), new MeshBasicNodeMaterial())
+  );
+  group.add(...meshes);
+  let disposed = 0;
+  const layer: MuralLayer = {
+    bytes: 2_700_000,
+    dispose: () => {
+      disposed += 1;
+      group.removeFromParent();
+    },
+    group,
+    meshes,
+    murals: [{ building: "A" }, { building: "B" }] as unknown as Mural[],
+  };
+  const hung: [Object3D, string][] = [];
+  const root = new Object3D();
+  const fake = fakeHost();
+  const parts = createLateParts(fake.host);
+  const handle = parts.add(
+    muralsPart({
+      tile: "t",
+      root,
+      city: {
+        hang: (object, building) => {
+          hung.push([object, building]);
+        },
+      },
+      murals: async () =>
+        await Promise.resolve([{ building: "A" }] as unknown as Mural[]),
+      build: async () => await Promise.resolve(layer),
+    })
+  );
+  fake.load();
+  await flush();
+  // weighed from the build; not hung while its compile runs
+  expect(parts.bytes()).toBe(layer.bytes);
+  expect(fake.compiles.map((c) => c.where)).toEqual(["murals t"]);
+  expect(group.parent).toBeNull();
+  fake.compiles[0].end("done");
+  expect(await handle.settled).toBe("hung");
+  expect(group.parent).toBe(root);
+  expect(hung).toEqual([
+    [meshes[0], "A"],
+    [meshes[1], "B"],
+  ]);
+  expect(parts.release()).toEqual([]);
+  expect(disposed).toBe(1);
+  expect(group.parent).toBeNull();
+  expect(parts.bytes()).toBe(0);
+});
+
+test("a city tile with no murals builds none", async () => {
+  let built = 0;
+  const fake = fakeHost();
+  const parts = createLateParts(fake.host);
+  const handle = parts.add(
+    muralsPart({
+      tile: "t",
+      root: new Object3D(),
+      city: { hang: nothing },
+      murals: async () => await Promise.resolve([]),
+      build: async () => {
+        built += 1;
+        return await Promise.resolve(null);
+      },
+    })
+  );
+  expect(await handle.settled).toBe("nothing");
+  expect(built).toBe(0);
+  expect(fake.compiles).toHaveLength(0);
 });
 
 test("a dressing whose tile leaves before its idle time never builds its ask sets", async () => {
