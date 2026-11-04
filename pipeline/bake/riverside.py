@@ -54,6 +54,7 @@ import shapely
 from rasterio.features import rasterize, shapes
 from rasterio.windows import Window
 
+from .classes import WATER
 from .common import (
     OSM_ATTRIBUTION,
     Tile,
@@ -66,7 +67,6 @@ from .common import (
 )
 from .osm import has_extract, read_osm, tag
 
-WATER = 8  # landcover.py CLASSES
 PIER_WIDTH_M = 3.0
 PIER_WIDTH_MAX_M = 30.0
 DECK_ABOVE_BANK_M = 0.4

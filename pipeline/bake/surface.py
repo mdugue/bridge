@@ -74,6 +74,7 @@ import numpy as np
 import shapely
 from rasterio.features import rasterize
 
+from .classes import PATH
 from .common import OSM_ATTRIBUTION, Tile, column, dlm_complete, read_layer, save_grey_png
 from .osm import has_extract, read_osm, read_ways, tag
 
@@ -625,7 +626,7 @@ def classify_areas(
 # settlement is the DLM's built land (or OSM's built landuse), not its
 # parks, sports grounds, allotments or cemeteries. Read where the class
 # raster says path (class 6: the DLM's `ver02_l`, or OSM's paths).
-PATH_CLASS = 6
+PATH_CLASS = PATH
 BUILT_LAND = (
     "AX_Wohnbauflaeche",
     "AX_IndustrieUndGewerbeflaeche",

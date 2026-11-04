@@ -110,6 +110,7 @@ import shapely.ops
 from rasterio.features import rasterize
 from scipy import ndimage as ndi
 
+from .classes import ROAD
 from .common import OSM_ATTRIBUTION, Tile, column, overlaps, owns, save_grey_png
 from .osm import has_extract, read_osm, read_ways, tag
 
@@ -118,7 +119,6 @@ KINDS = {0: "none", 1: "zebra", 2: "furt", 3: "stop"}
 ZEBRA, FURT, STOP = 1, 2, 3
 HALF_WIDTH = {ZEBRA: 2.0, FURT: 1.5, STOP: 0.25}  # m along the road
 STOP_BEFORE_M = 3.0
-ROAD = 7
 MOTOR = (
     "motorway",
     "trunk",

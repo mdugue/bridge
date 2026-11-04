@@ -52,6 +52,7 @@ from collections.abc import Callable
 import numpy as np
 import shapely
 
+from .classes import BUILTUP, PATH, ROAD, WATER
 from .common import Tile, column, feature, label_line, value_at
 from .osm import in_tunnel, read_osm, tag
 
@@ -83,8 +84,8 @@ STANDARD_GAUGE = 1.435
 # shorter than BED_MIN_M. A main line runs on its bed whatever lies beside
 # it (a residential street, a station forecourt): only `embedded` says
 # otherwise there.
-PAVED_CLASSES = {4, 6, 7}
-WATER_CLASS = 8
+PAVED_CLASSES = {BUILTUP, PATH, ROAD}
+WATER_CLASS = WATER
 SIDE_M = 4.0
 BED_STEP_M = 4.0
 BED_WINDOW_M = 20.0

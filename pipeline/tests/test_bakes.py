@@ -44,6 +44,18 @@ def test_the_class_ids_are_the_client_palette_order():
     assert client == CLASSES
 
 
+def test_the_named_class_ids_are_the_numbers_the_bakes_used():
+    # the bakes name classes (classes.py); a renumbering is a deliberate
+    # change of this table, the client's and every committed raster
+    from bake import classes
+
+    named = (classes.BACKGROUND, classes.FARMLAND, classes.FOREST, classes.COPSE)
+    assert named == (0, 1, 2, 3)
+    named = (classes.BUILTUP, classes.RAILWAY, classes.PATH, classes.ROAD, classes.WATER)
+    assert named == (4, 5, 6, 7, 8)
+    assert (classes.ARABLE, classes.MEADOW) == (9, 1)
+
+
 def test_rail_without_a_dlm_leaves_committed_files_alone(tmp_path):
     from bake import rail
     from bake.common import Tile
