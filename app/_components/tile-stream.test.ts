@@ -143,6 +143,7 @@ async function hungDressing(d: TileDressing, site: Partial<DressingSite> = {}) {
       look,
       live: () => true,
       failed: nothing,
+      freeFailed: nothing,
       build: async () => await Promise.resolve(d),
       ...site,
     })
@@ -882,6 +883,7 @@ test("a dressing hung while its compile runs leaves the root at its release, fre
         look: createLookState(),
         live: () => true,
         failed: nothing,
+        freeFailed: nothing,
         build: async () => await Promise.resolve(dressing),
       })
     );
@@ -935,6 +937,7 @@ test("a dressing taken down while its compile runs hears the scene no more", asy
         look,
         live: () => true,
         failed: nothing,
+        freeFailed: nothing,
         build: async () => await Promise.resolve(dressing),
       })
     );
@@ -976,6 +979,28 @@ test("a dressing whose hang throws half-way is taken down whole and freed as a f
   expect(root.children).toHaveLength(0);
 });
 
+test("a dressing whose hang and take-down both throw fails with the hang's error, the take-down's reported as a free failure", async () => {
+  const attachError = new Error("attach threw");
+  const disposeErrors = [new Error("bodies"), new Error("slot")];
+  const traffic = {
+    attach: () => {
+      throw attachError;
+    },
+    dispose: () => disposeErrors,
+  } as unknown as TrafficSlot;
+  const dressing: TileDressing = { tile: "t", furniture: new Group(), traffic };
+  const freeFailed: unknown[][] = [];
+  const { calls, outcome, root } = await hungDressing(dressing, {
+    freeFailed: (errors) => {
+      freeFailed.push(errors);
+    },
+  });
+  expect(outcome).toBe("failed");
+  expect(calls.failed).toEqual([[attachError, "t"]]);
+  expect(freeFailed).toEqual([disposeErrors]);
+  expect(root.children).toHaveLength(0);
+});
+
 test("a coarse level's dressing builds ahead of a fine level's queued before it", async () => {
   const turn = gate();
   const { compiles, host } = fakeHost(turn.opened);
@@ -992,6 +1017,7 @@ test("a coarse level's dressing builds ahead of a fine level's queued before it"
       look: createLookState(),
       live: () => true,
       failed: nothing,
+      freeFailed: nothing,
       build: async () => {
         built.push(tile);
         return await Promise.resolve({ tile });
@@ -1387,6 +1413,7 @@ test("a coarse level's bodies build ahead of a fine level's dressing queued befo
       look: coarse.look,
       live: () => true,
       failed: nothing,
+      freeFailed: nothing,
       build: async () => {
         built.push(tile);
         return await Promise.resolve({ tile });

@@ -1430,6 +1430,9 @@ export interface DressingSite {
   live: () => boolean;
   /** an ask builder that threw in idle time */
   failed: (error: unknown, tile: string) => void;
+  /** what a take-down after a failed hang threw (the hang's own error
+   *  goes on as the failure) */
+  freeFailed: (errors: unknown[]) => void;
   build: (signal: AbortSignal) => Promise<TileDressing>;
 }
 
@@ -1459,7 +1462,7 @@ export function dressingPart(site: DressingSite): LatePart<TileDressing> {
       // taken down, its parts leave the root (or the coarse crowns'
       // stand-in) at once: its free may wait for its compile, and the
       // root's release would dispose whatever still hangs on it
-      const takeDown = () => {
+      const takeDown = (): unknown[] => {
         // it hears the scene no more — its season, its traffic's look —
         // though its free may wait: a look change would start the
         // traffic's builder for a tile gone. (Its bodies, a part it owns,
@@ -1474,9 +1477,7 @@ export function dressingPart(site: DressingSite): LatePart<TileDressing> {
         for (const part of dressingParts(d)) {
           part.removeFromParent();
         }
-        if (errors.length > 0) {
-          throw errors[0];
-        }
+        return errors;
       };
       try {
         // The content root is the viewer's Y-up scene frame (the
@@ -1496,11 +1497,17 @@ export function dressingPart(site: DressingSite): LatePart<TileDressing> {
           root: site.root,
         });
       } catch (error) {
-        // half hung: nothing of it stays where the stream would find it
-        takeDown();
+        // half hung: nothing of it stays where the stream would find it —
+        // what that throws is reported beside the hang's own failure
+        site.freeFailed(takeDown());
         throw error;
       }
-      return takeDown;
+      return () => {
+        const errors = takeDown();
+        if (errors.length > 0) {
+          throw errors[0];
+        }
+      };
     },
     free: (d) => disposeDressing(d),
   };
@@ -2267,6 +2274,7 @@ export class DressingPlugin {
         dressings: this.stream.dressings,
         live: () => !this.disposed,
         failed: (err, tile) => this.ctx.onDressingFailed?.(err, tile),
+        freeFailed: (errors) => this.disposeFailed(errors, scene),
         parts: entry.late,
         look: this.ctx.environment.look,
         build: async (signal) => {
