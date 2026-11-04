@@ -65,7 +65,7 @@ from .common import (
     pixel_of,
     write_geojson,
 )
-from .osm import has_extract, read_osm, tag
+from .osm import has_extract, osm_number, read_osm, tag
 
 PIER_WIDTH_M = 3.0
 PIER_WIDTH_MAX_M = 30.0
@@ -190,9 +190,8 @@ class River:
 
 
 def width_of(other: str | None) -> float:
-    try:
-        w = float((tag(other, "width") or "").split()[0])
-    except (ValueError, IndexError):
+    w = osm_number(tag(other, "width"))
+    if w is None:
         return PIER_WIDTH_M
     return min(max(w, 1.0), PIER_WIDTH_MAX_M)
 

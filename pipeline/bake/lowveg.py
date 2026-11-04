@@ -59,7 +59,7 @@ from . import ways
 from .classes import PATH, RAILWAY, WATER
 from .common import OSM_ATTRIBUTION, Tile, column, write_geojson
 from .lsc import rasterise
-from .osm import has_extract, read_osm, tag
+from .osm import has_extract, osm_number, read_osm, tag
 
 RES = 0.5  # the LSC raster grid (m)
 
@@ -212,11 +212,8 @@ def windowed_ratio(num, den, k=3):
 
 def osm_height(other_tags):
     """The tagged height (m) of a hedge or shrub, when plausible."""
-    try:
-        h = float(str(tag(other_tags, "height") or "").replace("m", "").strip())
-    except ValueError:
-        return None
-    return h if 0.3 <= h <= 4.0 else None
+    h = osm_number(tag(other_tags, "height"))
+    return h if h is not None and 0.3 <= h <= 4.0 else None
 
 
 # --- skeleton → polylines -------------------------------------------------

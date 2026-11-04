@@ -111,7 +111,7 @@ from rasterio.features import rasterize
 from scipy import ndimage as ndi
 
 from .classes import ROAD
-from .common import OSM_ATTRIBUTION, Tile, column, overlaps, owns, save_grey_png
+from .common import OSM_ATTRIBUTION, Tile, column, overlaps, owns, save_grey_png, table_json
 from .osm import has_extract, read_osm, read_ways, tag
 
 # id → key; keep in step with `MARKING_KINDS` in lib/city/markings.ts.
@@ -877,14 +877,6 @@ def table_row(tile: Tile, row: list[float]) -> list:
     return [round(cx - xmin, 2), round(cy - ymax, 2), round(angle, 4), round(hl, 2), hw, kind]
 
 
-def table_json(table: dict, rows: list[list]) -> str:
-    """One marking per line (diffable, still plain JSON)."""
-    head = json.dumps(table, indent=2)[:-2]
-    body = ",\n".join(f"    {json.dumps(r)}" for r in rows)
-    listed = f"[\n{body}\n  ]" if rows else "[]"
-    return f'{head},\n  "markings": {listed}\n}}\n'
-
-
 def build(
     tile: Tile,
     raster: ClassRaster,
@@ -1020,7 +1012,7 @@ def run(tile: Tile, px: int = 2048) -> None:
         "attribution": OSM_ATTRIBUTION,
     }
     listed = [table_row(tile, r) for r in rows]
-    tile.out("dlm", f"markings_{tile.id}.json").write_text(table_json(table, listed))
+    tile.out("dlm", f"markings_{tile.id}.json").write_text(table_json(table, "markings", listed))
     kinds = {KINDS[k]: sum(1 for r in rows if r[5] == k) for k in (ZEBRA, FURT, STOP)}
     print(
         f"{tile.id}: {len(rows)} markings {kinds} ({placed - len(rows)} merged), {counts}; "

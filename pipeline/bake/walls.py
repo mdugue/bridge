@@ -26,7 +26,6 @@ seam that stands nowhere."""
 from __future__ import annotations
 
 import dataclasses
-import re
 import warnings
 from collections import Counter
 
@@ -41,7 +40,7 @@ from rasterio.transform import from_origin
 from shapely.geometry.polygon import orient
 
 from .common import OSM_ATTRIBUTION, Tile, column, feature, geometry_json, owns, write_geojson
-from .osm import below_ground, has_extract, read_osm, tag
+from .osm import below_ground, has_extract, osm_number, read_osm, tag
 from .water import WATER, grid_classes
 
 CLIFF = 'other_tags LIKE \'%"natural"=>"cliff"%\''
@@ -193,14 +192,9 @@ def kind_of(barrier: str | None, man_made: str | None, other_tags: str | None) -
     return "cliff" if tag(other_tags, "natural") == "cliff" else "wall"
 
 
-def number(value: str | None) -> float | None:
-    num = re.search(r"[-+]?\d*\.?\d+", value or "")
-    return float(num.group()) if num else None
-
-
 def height(other_tags: str | None) -> float | None:
     for key in ("height", "est_height"):
-        value = number(tag(other_tags, key))
+        value = osm_number(tag(other_tags, key), signed=True)
         if value is not None:
             return max(0.5, min(value, 30.0))
     return None
@@ -282,7 +276,7 @@ def fence_type(barrier: str | None, other_tags: str | None) -> str:
 def fence_height(barrier: str | None, other_tags: str | None, tall: bool = False) -> float:
     """A fence's tagged height (when plausible), else its default: a
     handrail's, a guarding fence's (`tall`: TALL_FENCE_H) or a plain one's."""
-    tagged = number(tag(other_tags, "height"))
+    tagged = osm_number(tag(other_tags, "height"), signed=True)
     if tagged is not None and 0.3 <= tagged <= 4.0:
         return tagged
     if barrier == "handrail":
@@ -291,7 +285,7 @@ def fence_height(barrier: str | None, other_tags: str | None, tall: bool = False
 
 
 def gate_width(barrier: str | None, other_tags: str | None) -> float:
-    tagged = number(tag(other_tags, "width"))
+    tagged = osm_number(tag(other_tags, "width"), signed=True)
     if tagged is not None and 0.5 <= tagged <= 12.0:
         return tagged
     return GATE_W_LIFT if barrier == "lift_gate" else GATE_W
@@ -581,7 +575,7 @@ def _fences(tile: Tile, box: shapely.Geometry) -> tuple[list[dict], list, int]:
             strict=True,
         ):
             tall = False
-            if barrier == "fence" and number(tag(other, "height")) is None:
+            if barrier == "fence" and osm_number(tag(other, "height"), signed=True) is None:
                 guards = guards or tall_guards(tile)
                 tall = any(is_tall(line, guards) for line in lines_of(g))
                 tall_count += tall

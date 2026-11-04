@@ -292,6 +292,15 @@ def feature(geometry: dict, properties: dict | None = None) -> dict:
     return {"type": "Feature", "properties": properties or {}, "geometry": geometry}
 
 
+def table_json(table: dict, key: str, rows: list[list]) -> str:
+    """`table` with its `rows` under `key`, one row per line (diffable,
+    still plain JSON)."""
+    head = json.dumps(table, indent=2)[:-2]
+    body = ",\n".join(f"    {json.dumps(r)}" for r in rows)
+    listed = f"[\n{body}\n  ]" if rows else "[]"
+    return f'{head},\n  "{key}": {listed}\n}}\n'
+
+
 def write_geojson(
     path: Path, features: list[dict], epsg: int, attribution: str | None = None
 ) -> None:

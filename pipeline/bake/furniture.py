@@ -113,7 +113,7 @@ from .common import (
     write_geojson,
 )
 from .landcover_osm import DUAL, LANE_M, ROAD_HALF_WIDTH, lanes, one_way
-from .osm import has_extract, read_osm, read_ways, tag
+from .osm import has_extract, osm_number, read_osm, read_ways, tag
 
 BLOCKED = (RAILWAY, WATER)
 DECK_KINDS = ("road", "path")  # what stands on a bridge stands on these, never a rail deck
@@ -291,11 +291,9 @@ def bollard(other: str | None) -> dict:
     """A bollard's tagged height (m, clamped) and whether it is metal — the
     Stallhof's 1.46 m bronze columns are mapped as bollards."""
     props: dict = {}
-    try:
-        h = float((tag(other, "height") or "").split()[0])
+    h = osm_number(tag(other, "height"))
+    if h is not None:
         props["h"] = round(min(max(h, BOLLARD_M[0]), BOLLARD_M[1]), 2)
-    except (ValueError, IndexError):
-        pass
     if (tag(other, "material") or "") in METAL:
         props["metal"] = True
     return props

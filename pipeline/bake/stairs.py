@@ -29,7 +29,6 @@ level, and the build lifts the terrain inside it (lib/city/stairs.ts)."""
 from __future__ import annotations
 
 import dataclasses
-import re
 from collections import Counter
 
 import numpy as np
@@ -37,7 +36,7 @@ import rasterio
 import shapely
 
 from .common import OSM_ATTRIBUTION, Tile, column, feature, geometry_json, write_geojson
-from .osm import has_extract, read_osm, tag
+from .osm import has_extract, osm_number, read_osm, tag
 from .walls import FENCE_WHERE, MATERIALS, lines_of, majority, site_extent
 
 WHERE = "highway = 'steps'"
@@ -95,11 +94,6 @@ TAGGED_RISER = 0.15  # m, `step:height` when a lifted flight has none
 TERRACE_SNAP = 3.0  # m, how close a lifted flight's top must be to a raised area
 
 
-def number(value: str | None) -> float | None:
-    num = re.search(r"\d*\.?\d+", value or "")
-    return float(num.group()) if num else None
-
-
 def skipped(other_tags: str | None) -> bool:
     """Flights the terrain cannot seat: indoors, underground, on a bridge."""
     if tag(other_tags, "indoor") not in (None, "no"):
@@ -113,7 +107,7 @@ def skipped(other_tags: str | None) -> bool:
 
 
 def tagged_width(line: shapely.LineString, other_tags: str | None, areas: list) -> float | None:
-    tagged = number(tag(other_tags, "width"))
+    tagged = osm_number(tag(other_tags, "width"))
     if tagged is not None:
         return min(max(tagged, MIN_W), MAX_W)
     for area in areas:
@@ -196,7 +190,7 @@ def wall_to_wall(line: shapely.LineString, walls: list, dgm: Dgm, rise: float):
 
 
 def step_count(rise: float, other_tags: str | None) -> int:
-    tagged = number(tag(other_tags, "step_count"))
+    tagged = osm_number(tag(other_tags, "step_count"))
     if tagged is not None and tagged >= 1 and MIN_RISER <= rise / round(tagged) <= MAX_RISER:
         return int(round(tagged))
     return max(2, round(rise / RISER))
@@ -232,10 +226,10 @@ def landing(dgm: Dgm, end, inner) -> float | None:
 
 
 def tagged_rise(other_tags: str | None) -> float | None:
-    count = number(tag(other_tags, "step_count"))
+    count = osm_number(tag(other_tags, "step_count"))
     if count is None or count < 2:
         return None
-    return round(count) * (number(tag(other_tags, "step:height")) or TAGGED_RISER)
+    return round(count) * (osm_number(tag(other_tags, "step:height")) or TAGGED_RISER)
 
 
 def lifted(coords, z0: float, z1: float, other_tags: str | None, raised: list):
@@ -418,7 +412,7 @@ def is_raised(fields: dict[str, str | None]) -> bool:
     and tracks are the rail layer's)."""
     other = fields.get("other_tags")
     layer = tag(other, "layer") or ""
-    if layer.lstrip().startswith("-") or (number(layer) or 0) < 1:
+    if layer.lstrip().startswith("-") or (osm_number(layer) or 0) < 1:
         return False
     if any(fields.get(k) for k in ("building", "man_made", "landuse")):
         return False

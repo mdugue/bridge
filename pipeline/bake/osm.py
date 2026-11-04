@@ -101,6 +101,26 @@ def read_ways(
     return geoms, {k: v for k, v in kept.items() if k in columns}
 
 
+_NUMBER = re.compile(r"\d*[.,]?\d+")
+_SIGNED = re.compile(r"[-+]?\d*[.,]?\d+")
+
+
+def osm_number(value: str | None, *, signed: bool = False) -> float | None:
+    """A number from an OSM tag value: the first number in it, a decimal
+    comma read as a point ("1,5" → 1.5), units and text around it ignored
+    ("2.5 m" → 2.5); a sign only when `signed`. None when there is none."""
+    m = (_SIGNED if signed else _NUMBER).search(value or "")
+    return float(m.group().replace(",", ".")) if m else None
+
+
+def surface_id(value: str | None, ids: dict[str, int]) -> int:
+    """The id `ids` gives an OSM surface value (`;`-lists take the first),
+    else 0."""
+    if not value:
+        return 0
+    return ids.get(value.split(";")[0].strip().lower(), 0)
+
+
 def tag(other_tags: str | None, key: str) -> str | None:
     """A value from GDAL's `other_tags` hstore string."""
     if not other_tags:

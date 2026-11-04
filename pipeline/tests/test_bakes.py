@@ -249,14 +249,15 @@ def test_playground_equipment_is_only_what_is_mapped():
 
 
 def test_surface_values_map_to_the_paving_ids():
-    from bake.surface import surface_id
+    from bake.osm import surface_id
+    from bake.surface import SURFACE_OF
 
-    assert surface_id("asphalt") == 1
-    assert surface_id("sett;asphalt") == 4
-    assert surface_id("Paving_Stones") == 3
-    assert surface_id("grass_paver") == 6
-    assert surface_id("metal") == 0
-    assert surface_id(None) == 0
+    assert surface_id("asphalt", SURFACE_OF) == 1
+    assert surface_id("sett;asphalt", SURFACE_OF) == 4
+    assert surface_id("Paving_Stones", SURFACE_OF) == 3
+    assert surface_id("grass_paver", SURFACE_OF) == 6
+    assert surface_id("metal", SURFACE_OF) == 0
+    assert surface_id(None, SURFACE_OF) == 0
 
 
 def test_widths_parse_metres_and_reject_nonsense():
