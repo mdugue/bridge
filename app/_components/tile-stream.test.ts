@@ -46,13 +46,12 @@ import {
   trafficSlot,
 } from "./tile-stream";
 import { createLateParts } from "./late-parts";
-import type { Compiled, LatePart } from "./late-parts";
+import type { Compiled, LateHandle, LatePart } from "./late-parts";
 import { fakeHost, flush, gate } from "./late-parts.fixture";
 import type {
   DressingSite,
   TileDressing,
   TileStreamContext,
-  TrafficHost,
 } from "./tile-stream";
 import type { VegetationControl } from "./vegetation-layer";
 
@@ -123,7 +122,7 @@ async function hungDressing(d: TileDressing, site: Partial<DressingSite> = {}) {
   const root = new Object3D();
   const slot: DressingSite["slot"] = {};
   const dressings = new Set<TileDressing>();
-  const attached: TileDressing[] = [];
+  const look = createLookState();
   const handle = parts.add(
     dressingPart({
       tile: d.tile,
@@ -131,11 +130,10 @@ async function hungDressing(d: TileDressing, site: Partial<DressingSite> = {}) {
       root,
       slot,
       dressings,
+      parts,
+      look,
       live: () => true,
       failed: nothing,
-      attachTraffic: (x) => {
-        attached.push(x);
-      },
       build: async () => await Promise.resolve(d),
       ...site,
     })
@@ -144,7 +142,7 @@ async function hungDressing(d: TileDressing, site: Partial<DressingSite> = {}) {
   await flush();
   fake.compiles[0]?.end("done");
   const outcome = await handle.settled;
-  return { ...fake, attached, dressings, handle, outcome, parts, root, slot };
+  return { ...fake, dressings, handle, look, outcome, parts, root, slot };
 }
 
 test("the stream's dispose releases every dressed tile, quietly", async () => {
@@ -689,8 +687,9 @@ test("a dressing hangs on its tile, its traffic handed the tile; released, it co
   box.geometry.addEventListener("dispose", () => {
     freed = true;
   });
-  const dressing: TileDressing = { tile: "t", furniture };
-  const { attached, compiles, dressings, outcome, parts, root, slot } =
+  const { slot: traffic } = trafficTile();
+  const dressing: TileDressing = { tile: "t", furniture, traffic };
+  const { compiles, dressings, look, outcome, parts, root, slot } =
     await hungDressing(dressing);
   // compiled as one representative per build, under its kind and tile
   expect(compiles.map((c) => c.where)).toEqual(["dressing t"]);
@@ -699,9 +698,13 @@ test("a dressing hangs on its tile, its traffic handed the tile; released, it co
   expect(furniture.parent).toBe(root);
   expect(slot.dressing).toBe(dressing);
   expect(dressings.has(dressing)).toBe(true);
-  expect(attached).toEqual([dressing]);
   // the tile weighs its parts' geometry
   expect(parts.bytes()).toBe(estimateGeometryBytes(furniture));
+  // its traffic has the tile: the layer switched on builds its bodies
+  // there, a part of the same root
+  look.set({ trafficLayer: true });
+  await until(() => compiles.length > 1);
+  expect(compiles.map((c) => c.where)).toEqual(["dressing t", "traffic t"]);
   expect(parts.release()).toEqual([]);
   expect(slot.dressing).toBeUndefined();
   expect(dressings.size).toBe(0);
@@ -722,9 +725,10 @@ test("a coarse level's dressing builds ahead of a fine level's queued before it"
       root: new Object3D(),
       slot: {},
       dressings: new Set(),
+      parts,
+      look: createLookState(),
       live: () => true,
       failed: nothing,
-      attachTraffic: nothing,
       build: async () => {
         built.push(tile);
         return await Promise.resolve({ tile });
@@ -889,12 +893,14 @@ const builder: TrafficBuilder = { build: buildTraffic, askSet: trafficAskSet };
 const loaded = async () => builder;
 
 /** A tile's counted traffic as a slot: one two-way street, its dressing's
- *  ask list, and a host whose compiles the test holds and counts. */
+ *  ask list, and the tile's late parts over a host whose compiles the test
+ *  ends (shared between tiles: one lane). */
 function trafficTile(
   opts: {
-    gone?: () => boolean;
+    detail?: "coarse" | "fine";
+    fake?: ReturnType<typeof fakeHost>;
     load?: () => Promise<TrafficBuilder | null>;
-    turn?: TrafficHost["turn"];
+    tile?: string;
   } = {}
 ) {
   const street: TrafficFeature = {
@@ -907,71 +913,77 @@ function trafficTile(
     },
     properties: { t: 9000, f: 6000, b: 3000 },
   };
+  const tile = opts.tile ?? "t";
   const asks: AskSet<FeatureInquiry>[] = [];
   const slot = trafficSlot({
     load: opts.load ?? loaded,
     features: [street],
     bridges: [],
     ground: { offset: { cx: 0, cy: 0 }, heightAt: () => 110 },
-    detail: "fine",
-    tile: "t",
+    detail: opts.detail ?? "fine",
+    tile,
     asks,
   });
+  const fake = opts.fake ?? fakeHost();
+  fake.load();
+  const parts = createLateParts(fake.host);
   const root = new Object3D();
-  const compiled: Group[] = [];
-  let finish: (outcome?: Compiled) => void = nothing;
-  let built = 0;
-  const freeErrors: unknown[][] = [];
   // the look store: the layer off
   const look = createLookState();
-  const host: TrafficHost = {
-    look,
-    root,
-    compile: async (group) => {
-      compiled.push(group);
-      return await new Promise((resolve) => {
-        finish = (outcome: Compiled = "done") => resolve(outcome);
-      });
-    },
-    turn: opts.turn ?? (async (work) => await work()),
-    freeFailed: (errors) => {
-      freeErrors.push(errors);
-    },
-    gone: opts.gone ?? (() => false),
-    built: () => {
-      built += 1;
-    },
-    failed: (err) => {
-      throw err;
-    },
-  };
+  const compiled = () =>
+    fake.compiles.filter((c) => c.where === `traffic ${tile}`);
   return {
     asks,
-    built: () => built,
+    attach: (owner?: LateHandle) => {
+      slot.attach({
+        look,
+        parts,
+        owner: owner ?? parts.add(ownerPart()),
+        root,
+      });
+    },
+    calls: fake.calls,
     compiled,
-    finish: (outcome?: Compiled) => finish(outcome),
-    freeErrors,
-    host,
+    /** ends the bodies' compile */
+    finish: (outcome: Compiled = "done") => compiled()[0]?.end(outcome),
     look,
+    parts,
     root,
     slot,
   };
 }
 
+/** The dressing that owns the bodies: built, its compile never ending
+ *  here (it stays, neither hung nor given up). */
+function ownerPart(): LatePart<Group> {
+  return {
+    kind: "dressing",
+    tile: "owner",
+    rank: null,
+    hangAt: "compile",
+    build: async () => await Promise.resolve(new Group()),
+    objects: () => [],
+    bytes: () => 0,
+    hang: () => nothing,
+    free: () => [],
+  };
+}
+
 test("the counted traffic costs nothing while the layer is off", async () => {
-  const { asks, compiled, host, slot } = trafficTile();
+  const { asks, attach, compiled, parts, slot } = trafficTile();
   const d: TileDressing = { tile: "t", traffic: slot };
   // hung with the layer off
-  slot.attach(host);
+  attach();
   await nextTask();
   expect(slot.group).toBeNull();
   expect(dressingParts(d)).toEqual([]);
-  expect(compiled).toHaveLength(0);
+  expect(compiled()).toHaveLength(0);
   expect(asks).toHaveLength(0);
+  expect(parts.bytes()).toBe(0);
 });
 
-test("the first switch-on builds and compiles the bodies once; off keeps them, the release frees them", async () => {
-  const { asks, built, compiled, finish, host, look, root, slot } =
+test("the first switch-on builds and compiles the bodies once, hangs them once compiled; off keeps them, the release frees them", async () => {
+  const { asks, attach, compiled, finish, look, parts, root, slot } =
     trafficTile();
   const d: TileDressing = { tile: "t", traffic: slot };
   // switched on before the dressing hangs: nothing to hang it on yet
@@ -979,144 +991,182 @@ test("the first switch-on builds and compiles the bodies once; off keeps them, t
   await nextTask();
   expect(slot.group).toBeNull();
   // the hang builds them, as the look has the layer on
-  slot.attach(host);
+  attach();
   const first = slot.show();
   const second = slot.show();
   // the build is sliced into turns: on a loaded runner (coverage, parallel
   // files) it can outlast one short timer
-  await until(() => compiled.length > 0);
+  await until(() => compiled().length > 0);
   await nextTask();
-  // hung hidden while it compiles, once (plan 083 changes it in its step
-  // 4, D3: hung only once compiled)
-  expect(compiled).toHaveLength(1);
-  expect(slot.group?.parent).toBe(root);
-  expect(slot.group?.visible).toBe(false);
+  // compiled once, weighed from the build, hung only once compiled
+  expect(compiled()).toHaveLength(1);
+  expect(parts.bytes()).toBeGreaterThan(0);
+  expect(slot.group).toBeNull();
+  expect(root.children).toHaveLength(0);
   expect(asks).toHaveLength(0);
   finish();
   await Promise.all([first, second]);
-  expect(compiled).toHaveLength(1);
-  expect(built()).toBe(1);
+  expect(compiled()).toHaveLength(1);
   expect(slot.group?.visible).toBe(true);
   const hung = slot.group;
   if (!hung) {
     throw new Error("the traffic group was not built");
   }
+  expect(hung.parent).toBe(root);
+  expect(parts.bytes()).toBe(estimateGeometryBytes(hung));
   expect(dressingParts(d)).toEqual([hung]);
   // the probe asks its sections now
   expect(asks).toHaveLength(1);
   expect(slot.asks()).toBe(asks[0]);
   // off: hidden, kept; on again: no second build
   look.set({ trafficLayer: false });
-  const bodies = slot.group;
-  expect(bodies?.visible).toBe(false);
+  expect(hung.visible).toBe(false);
   look.set({ trafficLayer: true });
   await slot.show();
-  expect(slot.group).toBe(bodies);
-  expect(bodies?.visible).toBe(true);
-  expect(compiled).toHaveLength(1);
+  expect(slot.group).toBe(hung);
+  expect(hung.visible).toBe(true);
+  expect(compiled()).toHaveLength(1);
   // the tile's release frees them
   let freed = false;
-  const mesh = bodies?.children[0] as Mesh | undefined;
+  const mesh = hung.children[0] as Mesh | undefined;
   mesh?.geometry.addEventListener("dispose", () => {
     freed = true;
   });
   expect(slot.dispose()).toEqual([]);
   expect(freed).toBe(true);
   expect(slot.group).toBeNull();
-  expect(bodies?.parent).toBeNull();
+  expect(hung.parent).toBeNull();
+  expect(parts.bytes()).toBe(0);
   // ...and it hears the look no more: a switch-on builds nothing
   look.set({ trafficLayer: false });
   look.set({ trafficLayer: true });
   await nextTask();
-  expect(compiled).toHaveLength(1);
+  expect(compiled()).toHaveLength(1);
   expect(slot.group).toBeNull();
 });
 
 test("a tile released while its traffic compiles gets nothing shown, asked or weighed", async () => {
-  let gone = false;
-  const { asks, built, finish, host, slot } = trafficTile({
-    gone: () => gone,
-  });
-  slot.attach(host);
+  const { asks, attach, compiled, finish, parts, slot } = trafficTile();
+  attach();
   const showing = slot.show();
-  await nextTask();
-  const bodies = slot.group;
-  expect(bodies).not.toBeNull();
+  await until(() => compiled().length > 0);
   // the renderer unloads the tile while the compile runs
-  gone = true;
+  parts.leave();
   finish();
   await showing;
-  expect(bodies?.visible).toBe(false);
+  expect(slot.group).toBeNull();
   expect(asks).toHaveLength(0);
-  expect(built()).toBe(0);
-  // ...and its release (once the compile ended) frees them
-  slot.dispose();
-  expect(bodies?.parent).toBeNull();
+  expect(parts.bytes()).toBe(0);
 });
 
 test("bodies freed while their compile runs are freed once it ends", async () => {
-  const { finish, freeErrors, host, slot } = trafficTile();
-  slot.attach(host);
+  const { attach, calls, compiled, finish, parts, slot } = trafficTile();
+  attach();
   const showing = slot.show();
-  await nextTask();
-  const bodies = slot.group;
-  const mesh = bodies?.children[0] as Mesh | undefined;
+  await until(() => compiled().length > 0);
+  const [{ objects }] = compiled();
+  const mesh = objects[0] as Mesh;
   let freed = false;
-  mesh?.geometry.addEventListener("dispose", () => {
+  mesh.geometry.addEventListener("dispose", () => {
     freed = true;
   });
   // the dressing comes down (its own compile ran out of memory) while the
-  // traffic's compile still runs: taken down now, freed only after
+  // traffic's compile still runs: freed only after
   expect(slot.dispose()).toEqual([]);
-  expect(bodies?.parent).toBeNull();
   expect(slot.group).toBeNull();
+  expect(parts.bytes()).toBe(0);
   await nextTask();
   expect(freed).toBe(false);
   finish();
   await showing;
   await nextTask();
   expect(freed).toBe(true);
-  expect(freeErrors).toEqual([[]]);
+  expect(calls.freeFailed).toEqual([]);
 });
 
 test("a switch-on builds the tiles' bodies one after another", async () => {
-  // the dressings' chain, as the plugin hands it to every slot
-  let chain = Promise.resolve();
-  const turn: TrafficHost["turn"] = async (work) => {
-    const run = chain.then(work);
-    chain = run.then(nothing, nothing);
-    return await run;
-  };
-  const a = trafficTile({ turn });
-  const b = trafficTile({ turn });
-  a.slot.attach(a.host);
-  b.slot.attach(b.host);
+  // one lane for both tiles, as the plugin's
+  const fake = fakeHost();
+  const a = trafficTile({ fake, tile: "a" });
+  const b = trafficTile({ fake, tile: "b" });
+  a.attach();
+  b.attach();
   const showing = [a.slot.show(), b.slot.show()];
+  await until(() => a.compiled().length > 0);
   await nextTask();
   await nextTask();
-  // the first tile's turn holds the chain while its compile runs (kept by
+  // the first tile's turn holds the lane while its compile runs (kept by
   // plan 083, finding 4)
-  expect(a.compiled).toHaveLength(1);
-  expect(b.compiled).toHaveLength(0);
-  expect(b.slot.group).toBeNull();
+  expect(a.compiled()).toHaveLength(1);
+  expect(b.compiled()).toHaveLength(0);
   a.finish();
-  await nextTask();
-  await nextTask();
-  expect(b.compiled).toHaveLength(1);
+  await until(() => b.compiled().length > 0);
+  expect(b.compiled()).toHaveLength(1);
   b.finish();
   await Promise.all(showing);
-  expect(a.built()).toBe(1);
-  expect(b.built()).toBe(1);
+  expect(a.slot.group?.visible).toBe(true);
+  expect(b.slot.group?.visible).toBe(true);
+});
+
+test("a coarse level's bodies build ahead of a fine level's dressing queued before them", async () => {
+  const turn = gate();
+  const fake = fakeHost(turn.opened);
+  const coarse = trafficTile({ detail: "coarse", fake, tile: "c" });
+  const built: string[] = [];
+  const dressing = (tile: string) =>
+    dressingPart({
+      tile,
+      level: "fine",
+      root: new Object3D(),
+      slot: {},
+      dressings: new Set(),
+      parts: coarse.parts,
+      look: coarse.look,
+      live: () => true,
+      failed: nothing,
+      build: async () => {
+        built.push(tile);
+        return await Promise.resolve({ tile });
+      },
+    });
+  // the first fine dressing takes the lane as the gate opens; the second
+  // and the coarse bodies queue behind it
+  coarse.parts.add(dressing("first"));
+  coarse.parts.add(dressing("fine"));
+  coarse.attach();
+  const showing = coarse.slot.show();
+  await nextTask();
+  turn.open();
+  await until(() => coarse.compiled().length > 0);
+  expect(built).toEqual(["first"]);
+  coarse.finish();
+  await showing;
+  await until(() => built.length > 1);
+  expect(built).toEqual(["first", "fine"]);
 });
 
 test("a dressing freed before its traffic's turn builds nothing", async () => {
-  const { compiled, host, slot } = trafficTile();
-  slot.attach(host);
+  const { attach, compiled, slot } = trafficTile();
+  attach();
   const showing = slot.show();
   slot.dispose();
   await showing;
   expect(slot.group).toBeNull();
-  expect(compiled).toHaveLength(0);
+  expect(compiled()).toHaveLength(0);
+});
+
+test("the bodies go when the dressing that owns them goes", async () => {
+  const { attach, compiled, finish, parts, root, slot } = trafficTile();
+  const owner = parts.add(ownerPart());
+  attach(owner);
+  const showing = slot.show();
+  await until(() => compiled().length > 0);
+  finish();
+  await showing;
+  expect(slot.group?.parent).toBe(root);
+  owner.dispose();
+  expect(slot.group).toBeNull();
+  expect(root.children).toHaveLength(0);
 });
 
 /** The builder on its way (the data layers starting): it arrives when the
@@ -1132,24 +1182,22 @@ function builderOnItsWay() {
 test("tiles hung before the builder arrives get their bodies when it does, and later tiles too", async () => {
   const { arrive, load } = builderOnItsWay();
   const early = trafficTile({ load });
-  early.slot.attach(early.host);
+  early.attach();
   const showing = early.slot.show();
   await nextTask();
   // nothing built while the builder is on its way
-  expect(early.compiled).toHaveLength(0);
+  expect(early.compiled()).toHaveLength(0);
   expect(early.slot.group).toBeNull();
   arrive();
-  await nextTask();
-  expect(early.compiled).toHaveLength(1);
+  await until(() => early.compiled().length > 0);
   early.finish();
   await showing;
   expect(early.slot.group?.visible).toBe(true);
   // a tile that lands once it has come builds at once
   const late = trafficTile({ load });
-  late.slot.attach(late.host);
+  late.attach();
   const lateShowing = late.slot.show();
-  await nextTask();
-  expect(late.compiled).toHaveLength(1);
+  await until(() => late.compiled().length > 0);
   late.finish();
   await lateShowing;
   expect(late.slot.group?.visible).toBe(true);
@@ -1157,41 +1205,78 @@ test("tiles hung before the builder arrives get their bodies when it does, and l
 
 test("a builder that did not come builds nothing and is asked for on the next switch-on", async () => {
   let fails = true;
-  // (the host's `failed` throws: a builder that did not come is no failed
-  // build of this tile, and must not be reported as one)
-  const { compiled, finish, host, slot } = trafficTile({
+  // (a builder that did not come is no failed build of this tile, and
+  // must not be reported as one)
+  const { attach, calls, compiled, finish, slot } = trafficTile({
     load: async () =>
       fails ? await Promise.reject(new Error("start")) : await loaded(),
   });
-  slot.attach(host);
+  attach();
   await slot.show();
-  expect(compiled).toHaveLength(0);
+  expect(compiled()).toHaveLength(0);
   expect(slot.group).toBeNull();
   fails = false;
   const again = slot.show();
-  await nextTask();
-  expect(compiled).toHaveLength(1);
+  await until(() => compiled().length > 0);
+  finish();
+  await again;
+  expect(slot.group?.visible).toBe(true);
+  expect(calls.failed).toEqual([]);
+});
+
+test("a layer switched off while its builder comes builds nothing until it is on again", async () => {
+  const { arrive, load } = builderOnItsWay();
+  const { attach, compiled, finish, slot } = trafficTile({ load });
+  attach();
+  const showing = slot.show();
+  slot.hide();
+  arrive();
+  await showing;
+  expect(compiled()).toHaveLength(0);
+  expect(slot.group).toBeNull();
+  const again = slot.show();
+  await until(() => compiled().length > 0);
   finish();
   await again;
   expect(slot.group?.visible).toBe(true);
 });
 
-test("a layer switched off while its builder comes builds nothing until it is on again", async () => {
-  const { arrive, load } = builderOnItsWay();
-  const { compiled, finish, host, slot } = trafficTile({ load });
-  slot.attach(host);
+test("bodies whose compile ran out of memory are shown, asked and built never again", async () => {
+  const { asks, attach, compiled, finish, parts, slot } = trafficTile();
+  attach();
   const showing = slot.show();
-  slot.hide();
-  arrive();
+  await until(() => compiled().length > 0);
+  finish("out of memory");
   await showing;
-  expect(compiled).toHaveLength(0);
+  expect(asks).toHaveLength(0);
   expect(slot.group).toBeNull();
-  const again = slot.show();
+  expect(parts.bytes()).toBe(0);
+  // the layer stays off on this tile
+  await slot.show();
   await nextTask();
-  expect(compiled).toHaveLength(1);
-  finish();
-  await again;
-  expect(slot.group?.visible).toBe(true);
+  expect(compiled()).toHaveLength(1);
+});
+
+test("a traffic build that throws is reported once, and not once its tile has gone", async () => {
+  for (const leaves of [false, true]) {
+    const thrown = new TypeError("bad section");
+    const tile = trafficTile({
+      load: async () =>
+        await Promise.resolve({
+          ...builder,
+          build: () => {
+            // the renderer unloads the tile while it builds
+            if (leaves) {
+              tile.parts.leave();
+            }
+            throw thrown;
+          },
+        }),
+    });
+    tile.attach();
+    await tile.slot.show();
+    expect(tile.calls.failed).toEqual(leaves ? [] : [[thrown, "t"]]);
+  }
 });
 
 test("an ask builder that throws in idle time is reported and lets the tile go", async () => {
@@ -1216,62 +1301,4 @@ test("an ask builder that throws in idle time is reported and lets the tile go",
   expect(failures).toHaveLength(1);
   expect(d.buildAsks).toBeUndefined();
   expect(asksOf(d)).toEqual([]);
-});
-
-// Plan 083 step 0: how a tile's late parts hang today, pinned before they
-// go through one lifecycle. A pin marked with a step changes there.
-
-test("traffic: the tile weighs the bodies only once their compile has ended (plan 083 step 4 changes it, D5)", async () => {
-  const { built, compiled, finish, host, slot } = trafficTile();
-  slot.attach(host);
-  const showing = slot.show();
-  await until(() => compiled.length > 0);
-  expect(built()).toBe(0);
-  finish();
-  await showing;
-  expect(built()).toBe(1);
-});
-
-test("traffic: bodies whose compile ran out of memory are shown, asked and built never again", async () => {
-  const { asks, built, compiled, finish, host, slot } = trafficTile();
-  slot.attach(host);
-  const showing = slot.show();
-  await until(() => compiled.length > 0);
-  const bodies = slot.group;
-  finish("out of memory");
-  await showing;
-  expect(built()).toBe(0);
-  expect(asks).toHaveLength(0);
-  expect(slot.group).toBeNull();
-  expect(bodies?.parent).toBeNull();
-  // the layer stays off on this tile
-  await slot.show();
-  await nextTask();
-  expect(compiled).toHaveLength(1);
-});
-
-test("traffic: a build that throws is reported once, and not once its tile has gone", async () => {
-  for (const leaves of [false, true]) {
-    const thrown = new TypeError("bad section");
-    let gone = false;
-    const failures: unknown[] = [];
-    const { host, slot } = trafficTile({
-      gone: () => gone,
-      load: async () =>
-        await Promise.resolve({
-          ...builder,
-          build: () => {
-            // the renderer unloads the tile while it builds
-            gone = leaves;
-            throw thrown;
-          },
-        }),
-    });
-    host.failed = (err) => {
-      failures.push(err);
-    };
-    slot.attach(host);
-    await slot.show();
-    expect(failures).toEqual(leaves ? [] : [thrown]);
-  }
 });

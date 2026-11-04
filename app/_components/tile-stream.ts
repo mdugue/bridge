@@ -128,12 +128,12 @@ import { dressStairs } from "./stair-layer";
 import {
   createLateLane,
   createLateParts,
-  takeTurn,
   withinCompileWait,
   withinWait,
 } from "./late-parts";
 import type {
   Compiled,
+  LateHandle,
   LateHost,
   LateLane,
   LatePart,
@@ -226,29 +226,19 @@ export interface TileDressing {
 
 /**
  * Where a tile's traffic bodies go once its dressing hangs on the tile
- * (`DressingPlugin.attachTraffic`).
+ * (`dressingPart`): they are a late part of the same content root, owned
+ * by the dressing (they go when it goes).
  */
-export interface TrafficHost {
+export interface TrafficTile {
   /** the look store: the bodies show while the layer is on, from the
    *  hang on (`TrafficSlot.attach` follows it) */
   look: Watch<Pick<LookValues, "trafficLayer">>;
+  /** the content root's late parts (late-parts.ts) */
+  parts: LateParts;
+  /** the dressing's handle: the bodies go with it */
+  owner: LateHandle;
   /** the content root the bodies hang under (the Y-up scene frame) */
   root: Object3D;
-  /** compiles the bodies before they show, counted on the tile so its
-   *  release waits for it; never rejects */
-  compile: (group: Group) => Promise<Compiled>;
-  /** runs the build in its turn among the dressings' (one at a time: each
-   *  is a long task), and the next turn waits for it */
-  turn: <T>(work: () => Promise<T>) => Promise<T>;
-  /** what freeing the bodies threw, once a free that waited for their
-   *  compile has run */
-  freeFailed: (errors: unknown[]) => void;
-  /** whether the tile, its dressing or the stream has gone */
-  gone: () => boolean;
-  /** the bodies are built and compiled: the tile weighs them now */
-  built: () => void;
-  /** the build threw (a bug, or a heap that ran out) */
-  failed: (error: unknown) => void;
 }
 
 /**
@@ -269,14 +259,15 @@ export interface TrafficSlot {
   hide: () => void;
   /** the ask set for the probe, once the bodies are built */
   asks: () => AskSet<FeatureInquiry> | null;
-  /** the tile the bodies will hang on (the plugin, as the dressing hangs):
+  /** the tile the bodies will hang on (`dressingPart`, as it hangs):
    *  from now on they show and hide with the look's layer (its value of
    *  now first), until `dispose` */
-  attach: (host: TrafficHost) => void;
+  attach: (tile: TrafficTile) => void;
   /** frees the bodies — once their compile has ended, if one still runs
    *  (three cannot stop it, and one that resumes on freed buffers uploads
    *  them again); a show still running ends without hanging them. Returns
-   *  what the freeing threw now (a later free reports to the host). */
+   *  what the freeing threw now (a later free reports to the late parts'
+   *  host). */
   dispose: () => unknown[];
 }
 
@@ -423,12 +414,9 @@ interface Dressed {
   /** the dressing, while it hangs on the tile */
   dressing?: TileDressing;
   /** what lands on the root after it (late-parts.ts): a terrain level's
-   *  dressing, a city tile's murals — weighed from their build on, freed
-   *  with the root */
+   *  dressing and its traffic bodies, a city tile's murals — weighed
+   *  from their build on, freed with the root */
   late: LateParts;
-  /** the traffic bodies' bytes, once built and compiled (until they are a
-   *  late part of their own, plan 083 step 4) */
-  trafficBytes?: number;
   /** the bytes of the site's shared buffers its content holds (the coarse
    *  grid's index and water index): the tile renderer counts them in the
    *  tile's glTF, but they stay when the tile goes */
@@ -856,68 +844,44 @@ export interface TrafficSource {
   asks: AskSet<FeatureInquiry>[];
 }
 
+/** The dressings' turns in the site's lane (late-parts.ts): a coarse
+ *  level's — the bridges and a third of the trees, light to build — ahead
+ *  of any fine level's, so every tile in view has trees before the nearest
+ *  has all. */
+const COARSE_DRESSING_RANK = 0;
+const FINE_DRESSING_RANK = 1;
+
+/** A tile's traffic bodies, built (traffic-layer.ts) with their ask set. */
+interface TrafficBodies {
+  group: Group;
+  asks: AskSet<FeatureInquiry> | null;
+}
+
 /**
  * A tile's counted traffic, its bodies built on demand (`TrafficSlot`):
  * the first `show` once the dressing hangs waits for the builder (the
  * data layers' feature, started once for the scene — a tile that landed
  * before the first switch-on and one landing after wait on the same
- * start), then builds them in the host's turn (a switch-on builds every
- * loaded tile's bodies one after another, like the dressings), hangs them
- * hidden on the tile, compiles them, and only then shows them, weighs
- * them into the tile and adds their ask set. A tile that leaves
- * meanwhile gets nothing hung (its release frees what was).
+ * start, outside the dressings' lane), then adds the bodies as a late part
+ * of the tile (late-parts.ts), owned by the dressing: built in the site's
+ * lane at the level's rank (a switch-on builds every loaded tile's bodies
+ * one after another, like the dressings, a coarse level's first), weighed
+ * from their build, holding the lane through their compile wait (one body
+ * in flight at a time: a fine body is ≈ 20 MiB), hung once compiled, and
+ * only then shown and asked. A tile that leaves meanwhile gets nothing
+ * hung (its release frees what was built).
  */
 export function trafficSlot(src: TrafficSource): TrafficSlot {
-  let host: TrafficHost | null = null;
+  let tile: TrafficTile | null = null;
   let building: Promise<void> | null = null;
+  let handle: LateHandle | null = null;
   let set: AskSet<FeatureInquiry> | null = null;
-  /** the bodies' compile while it runs */
-  let compiling: Promise<Compiled> | null = null;
   let wanted = false;
-  let ready = false;
   let disposed = false;
   /** lets go of the look (attach follows it) */
   let unfollowLook: (() => void) | null = null;
-  const gone = (h: TrafficHost) => disposed || h.gone();
-  /** The bodies built, hung hidden and their compile started — in the
-   *  host's turn, which waits on the compile (a dressing's waits after
-   *  its turn: queueDressing). */
-  const start = async (h: TrafficHost, builder: TrafficBuilder) =>
-    await h.turn(async () => {
-      await nextTask();
-      if (gone(h)) {
-        return null;
-      }
-      const group = builder.build(
-        src.features,
-        src.bridges,
-        src.ground,
-        src.detail,
-        src.bounds
-      );
-      // asked as built, before it hangs (traffic-ask.ts)
-      const asks = builder.askSet(group, src.features, src.tile);
-      group.visible = false;
-      h.root.add(group);
-      slot.group = group;
-      const compiled = h.compile(group);
-      compiling = compiled;
-      compiled
-        .finally(() => {
-          if (compiling === compiled) {
-            compiling = null;
-          }
-        })
-        .catch(() => {
-          // `compiled`'s own rejection reaches the caller through the
-          // wait below; this branch only clears `compiling`
-        });
-      await withinCompileWait(compiled);
-      // (an object: a promise returned bare would be awaited whole)
-      return { asks, compiled, group };
-    });
-  /** The builder, before the turn: waiting for it must not hold the
-   *  dressings' chain. One that did not come is no failed build of this
+  /** The builder, before the lane: waiting for it must not hold the
+   *  dressings' lane. One that did not come is no failed build of this
    *  tile (the spine says so once): the next show asks again; nor is one
    *  that came after the layer went off again — built on the next show. */
   const builderNow = async (): Promise<TrafficBuilder | null> => {
@@ -928,57 +892,72 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
     building = null;
     return null;
   };
-  const build = async (h: TrafficHost): Promise<void> => {
+  const part = (
+    at: TrafficTile,
+    builder: TrafficBuilder
+  ): LatePart<TrafficBodies> => ({
+    kind: "traffic",
+    tile: src.tile,
+    rank: src.detail === "coarse" ? COARSE_DRESSING_RANK : FINE_DRESSING_RANK,
+    hangAt: "compile",
+    build: async (signal) => {
+      await nextTask(signal);
+      const group = builder.build(
+        src.features,
+        src.bridges,
+        src.ground,
+        src.detail,
+        src.bounds
+      );
+      // asked as built, before it hangs (traffic-ask.ts)
+      return { group, asks: builder.askSet(group, src.features, src.tile) };
+    },
+    objects: ({ group }) => compileRepresentatives([group]),
+    bytes: ({ group }) => estimateGeometryBytes(group),
+    hang: (bodies) => {
+      bodies.group.visible = wanted;
+      at.root.add(bodies.group);
+      slot.group = bodies.group;
+      set = bodies.asks;
+      if (set) {
+        src.asks.push(set);
+      }
+      return () => {
+        bodies.group.removeFromParent();
+        slot.group = null;
+        const index = bodies.asks ? src.asks.indexOf(bodies.asks) : -1;
+        if (index >= 0) {
+          src.asks.splice(index, 1);
+        }
+        set = null;
+      };
+    },
+    free: ({ group }) => disposeObject3D(group),
+  });
+  const build = async (at: TrafficTile): Promise<void> => {
     const builder = await builderNow();
-    if (!builder || gone(h)) {
+    if (!builder || disposed) {
       return;
     }
-    const started = await start(h, builder);
-    if (!started || gone(h)) {
-      return;
-    }
-    const { asks, compiled, group } = started;
-    const ended = await compiled;
-    if (gone(h)) {
-      return; // the tile's release frees it, once the compile has ended
-    }
-    if (ended === "out of memory") {
+    handle = at.parts.add(part(at, builder), at.owner);
+    if ((await handle.settled) === "out of memory") {
       // the GPU had no room (reported by the compile): the layer stays
       // off on this tile rather than the GPU further under
       slot.dispose();
-      return;
-    }
-    ready = true;
-    set = asks;
-    if (set) {
-      src.asks.push(set);
-    }
-    group.visible = wanted;
-    h.built();
-  };
-  /** `build`, a failure of it reported to the host unless it is gone */
-  const buildGuarded = async (h: TrafficHost): Promise<void> => {
-    try {
-      await build(h);
-    } catch (error) {
-      if (!gone(h)) {
-        h.failed(error);
-      }
     }
   };
   const slot: TrafficSlot = {
     group: null,
     show: async () => {
       wanted = true;
-      if (ready && slot.group) {
+      if (slot.group) {
         slot.group.visible = true;
         return;
       }
-      if (!host || disposed) {
+      if (!tile || disposed) {
         return; // built once the dressing hangs
       }
-      const h = host;
-      building ??= buildGuarded(h);
+      building ??= build(tile);
       await building;
     },
     hide: () => {
@@ -988,11 +967,11 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
       }
     },
     asks: () => set,
-    attach: (h) => {
-      host = h;
+    attach: (at) => {
+      tile = at;
       // a layer that is off draws nothing, and one never switched on has
       // built nothing
-      unfollowLook = follow(h.look, (look) => {
+      unfollowLook = follow(at.look, (look) => {
         if (look.trafficLayer) {
           void slot.show();
         } else {
@@ -1004,25 +983,8 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
       unfollowLook?.();
       unfollowLook = null;
       disposed = true;
-      ready = false;
-      const { group } = slot;
-      slot.group = null;
-      if (!group) {
-        return [];
-      }
-      group.removeFromParent();
-      const running = compiling;
-      if (running && host) {
-        const h = host;
-        running
-          .finally(() => h.freeFailed(disposeObject3D(group)))
-          .catch(() => {
-            // a failed compile was reported where it was awaited; only the
-            // free is ours
-          });
-        return [];
-      }
-      return disposeObject3D(group);
+      // taken down now, freed now or once its compile has ended
+      return handle?.dispose() ?? [];
     },
   };
   return slot;
@@ -1440,13 +1402,6 @@ async function buildDressing(
   }
 }
 
-/** The dressings' turns in the site's lane (late-parts.ts): a coarse
- *  level's — the bridges and a third of the trees, light to build — ahead
- *  of any fine level's, so every tile in view has trees before the nearest
- *  has all. */
-const COARSE_DRESSING_RANK = 0;
-const FINE_DRESSING_RANK = 1;
-
 /** Where a terrain level's dressing hangs (`dressingPart`). */
 export interface DressingSite {
   tile: string;
@@ -1454,15 +1409,17 @@ export interface DressingSite {
   /** the content root it hangs under (the viewer's Y-up scene frame) */
   root: Object3D;
   /** where the root keeps it while it hangs (its entry in the plugin) */
-  slot: { dressing?: TileDressing; trafficBytes?: number };
+  slot: { dressing?: TileDressing };
   /** the stream's hung dressings */
   dressings: Set<TileDressing>;
+  /** the root's late parts: its traffic bodies join them, owned by it */
+  parts: LateParts;
+  /** the look store: its traffic shows while the layer is on */
+  look: TrafficTile["look"];
   /** whether the stream is still there */
   live: () => boolean;
   /** an ask builder that threw in idle time */
   failed: (error: unknown, tile: string) => void;
-  /** hands its traffic the tile, once it hangs */
-  attachTraffic: (dressing: TileDressing) => void;
   build: (signal: AbortSignal) => Promise<TileDressing>;
 }
 
@@ -1488,7 +1445,7 @@ export function dressingPart(site: DressingSite): LatePart<TileDressing> {
         (sum, part) => sum + estimateGeometryBytes(part),
         0
       ),
-    hang: (d) => {
+    hang: (d, self) => {
       // The content root is the viewer's Y-up scene frame (the renderer's
       // up-axis turn cancels the world group's), so the Y-up dressing
       // hangs under it and leaves with its tile.
@@ -1498,12 +1455,17 @@ export function dressingPart(site: DressingSite): LatePart<TileDressing> {
       buildAsksWhenIdle(d, () => site.live() && slot.dressing === d, {
         failed: (err) => site.failed(err, d.tile),
       });
-      site.attachTraffic(d);
+      // its traffic's bodies hang on the tile once the layer is on
+      d.traffic?.attach({
+        look: site.look,
+        parts: site.parts,
+        owner: self,
+        root: site.root,
+      });
       // (its parts leave the root as it is freed: disposeDressing)
       return () => {
         if (slot.dressing === d) {
           slot.dressing = undefined;
-          slot.trafficBytes = undefined;
         }
         dressings.delete(d);
       };
@@ -1819,12 +1781,7 @@ export class DressingPlugin {
     // drops a new tile from a full cache only while it weighs 0)
     const dressed = scene ? this.dressed.get(scene) : undefined;
     const rasters = this.rasterShares.bytesOf(dressed?.terrain?.rasters ?? []);
-    return (
-      rasters +
-      (dressed?.late.bytes() ?? 0) +
-      (dressed?.trafficBytes ?? 0) -
-      (dressed?.sharedBytes ?? 0)
-    );
+    return rasters + (dressed?.late.bytes() ?? 0) - (dressed?.sharedBytes ?? 0);
   }
 
   /** `scene`'s terrain takes up (or lets go of) its rasters; the other
@@ -2263,7 +2220,8 @@ export class DressingPlugin {
         dressings: this.stream.dressings,
         live: () => !this.disposed,
         failed: (err, tile) => this.ctx.onDressingFailed?.(err, tile),
-        attachTraffic: (dressing) => this.attachTraffic(scene, entry, dressing),
+        parts: entry.late,
+        look: this.ctx.environment.look,
         build: async (signal) => {
           const dressing = await buildDressing(
             terrain,
@@ -2306,46 +2264,6 @@ export class DressingPlugin {
     };
     void finish();
     await handle.ready;
-  }
-
-  /** The traffic's bodies hang on a hung dressing's tile once its layer is
-   *  switched on. */
-  private attachTraffic(
-    scene: Object3D,
-    entry: Dressed,
-    dressing: TileDressing
-  ): void {
-    dressing.traffic?.attach({
-      look: this.ctx.environment.look,
-      root: scene,
-      compile: async (group) =>
-        await this.compileUnder(
-          scene,
-          compileRepresentatives([group]),
-          `traffic ${tileIdOf(scene)}`
-        ),
-      // the dressings' own lane: a switch-on builds the loaded tiles'
-      // bodies one after another, never all in one task
-      turn: async (work) => await takeTurn(this.lane, FINE_DRESSING_RANK, work),
-      freeFailed: (errors) => this.disposeFailed(errors, scene),
-      gone: () =>
-        this.disposed ||
-        this.released.has(scene) ||
-        entry.dressing !== dressing,
-      built: () => {
-        const bodies = dressing.traffic?.group;
-        entry.trafficBytes = bodies ? estimateGeometryBytes(bodies) : 0;
-        this.reweigh(scene);
-        this.ctx.onChange();
-      },
-      failed: (err) => {
-        if (isAllocationFailure(err)) {
-          this.ctx.onAllocationFailure?.(err, `traffic ${tileIdOf(scene)}`);
-        } else {
-          this.ctx.onDressingFailed?.(err, tileIdOf(scene));
-        }
-      },
-    });
   }
 
   /** The cache weighs `scene`'s tile again (the whole cache: none known). */

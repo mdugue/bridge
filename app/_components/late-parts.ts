@@ -148,18 +148,6 @@ export function createLateLane(gate: Promise<void>): LateLane {
   return lane;
 }
 
-/** `work` in the lane's turn at `rank` (after the gate, one at a time):
- *  for what builds in the lane without being a part yet — the traffic
- *  bodies until they are one (plan 083 step 4). */
-export async function takeTurn<T>(
-  lane: LateLane,
-  rank: number,
-  work: () => Promise<T>
-): Promise<T> {
-  const { gate, tasks } = lane as Lane;
-  return await gate.then(async () => await tasks.run(work, undefined, rank));
-}
-
 /** What the plugin gives one root's parts. */
 export interface LateHost {
   lane: LateLane;
