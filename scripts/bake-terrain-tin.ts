@@ -158,14 +158,16 @@ class ScaledDelatin extends Delatin {
  * so such a tile keeps the regular grid (bake-tiles.ts falls back).
  */
 export function tinFromGrid(
-  grid: ArrayLike<number>,
+  grid: ArrayLike<number> & Iterable<number>,
   n: number,
   bounds: TerrainBounds,
   maxError: number,
   scale?: ArrayLike<number>
 ): TerrainTin {
-  if (Array.from(grid).some((v) => !Number.isFinite(v))) {
-    throw new TypeError("terrain TIN: the source grid has NoData");
+  for (const v of grid) {
+    if (!Number.isFinite(v)) {
+      throw new TypeError("terrain TIN: the source grid has NoData");
+    }
   }
   const mesher = scale
     ? new ScaledDelatin(grid, n, scale)

@@ -58,6 +58,7 @@ import { sceneTools } from "./ask-scene-tools";
 import type { AskScene } from "./ask-scene-tools";
 import { useDictation, useSpeech } from "./ask-voice";
 import type { Dictation, Speech } from "./ask-voice";
+import { useOnce } from "./use-once";
 
 interface Props {
   coarse: boolean;
@@ -665,7 +666,7 @@ const Conversation = ({
     [secret]
   );
   // one conversation per card: the provider's prompt cache is keyed by it
-  const threadId = useMemo(() => crypto.randomUUID(), []);
+  const threadId = useOnce(() => crypto.randomUUID());
   const chat = useChat({
     threadId,
     connection,

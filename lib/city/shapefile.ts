@@ -169,7 +169,7 @@ export function readDbf(
       const text = decoder.decode(raw.subarray(at, at + f.length)).trim();
       at += f.length;
       if (f.type === "N" || f.type === "F") {
-        const n = text === "" ? Number.NaN : Number(text);
+        const n = Number.parseFloat(text);
         record[f.name] = Number.isFinite(n) ? n : null;
       } else {
         record[f.name] = text === "" ? null : text;

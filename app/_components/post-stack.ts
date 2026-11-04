@@ -898,7 +898,7 @@ export function createPostStack(
     const { geometry } = object as Drawable;
     return geometry !== undefined && gone.has(geometry);
   };
-  const onGone = (event: { target: BufferGeometry }) => {
+  const noteGone = (event: { target: BufferGeometry }) => {
     gone.add(event.target);
   };
   /**
@@ -914,6 +914,7 @@ export function createPostStack(
         geometries.add(o.geometry);
       }
     }
+    const onGone = noteGone.bind(undefined);
     for (const g of geometries) {
       g.addEventListener("dispose", onGone);
     }

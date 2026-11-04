@@ -109,7 +109,7 @@ export interface LazyFeature<F> {
  * it (the importer's promise resolves in a later microtask at the soonest).
  */
 export function lazyFeature<M, F extends { dispose: () => void }>(
-  importer: () => Promise<M>,
+  importer: () => M | Promise<M>,
   start: (module: M) => F
 ): LazyFeature<F> {
   let feature: F | null = null;
@@ -126,7 +126,7 @@ export function lazyFeature<M, F extends { dispose: () => void }>(
       if (disposed) {
         return null;
       }
-      pending ??= importer().then((module) => {
+      pending ??= Promise.resolve(importer()).then((module) => {
         if (disposed) {
           return null;
         }

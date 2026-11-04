@@ -234,7 +234,8 @@ export function packCrowns(crowns: readonly CoarseCrown[]): Uint8Array {
     view.setUint8(i, MAGIC.codePointAt(i) ?? 0);
   }
   view.setUint32(4, crowns.length, true);
-  for (const [k, c] of crowns.entries()) {
+  for (let k = 0; k < crowns.length; k += 1) {
+    const c = crowns[k];
     const at = HEADER_BYTES + k * RECORD_BYTES;
     view.setFloat32(at, c.x, true);
     view.setFloat32(at + 4, c.z, true);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { arrivalHref, placementOf, siteHolding } from "@/lib/city/geolocation";
 import { EYE_HEIGHT } from "@/lib/city/pose";
@@ -13,6 +13,7 @@ import {
   locateMe,
 } from "./locate-me";
 import type { Offsite } from "./locate-me";
+import { useOnce } from "./use-once";
 
 /** How long the result line stays up (ms). */
 const MESSAGE_MS = 5000;
@@ -59,7 +60,7 @@ export function useLocateMe(
   hud: { clear: () => void; say: Say }
 ) {
   const { clear, say } = hud;
-  const available = useMemo(() => canLocate(), []);
+  const available = useOnce(canLocate);
   const [locating, setLocating] = useState(false);
   const [offsite, setOffsite] = useState<Offsite | null>(null);
   const dismissOffsite = useCallback(() => setOffsite(null), []);

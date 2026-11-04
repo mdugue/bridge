@@ -213,7 +213,8 @@ function writeCrowns(
   items: InventoryTree[],
   fit: FittedGeo
 ): void {
-  for (const [i, t] of items.entries()) {
+  for (let i = 0; i < items.length; i += 1) {
+    const t = items[i];
     mesh.setMatrixAt(i, crownMatrix(t, fit));
   }
   mesh.instanceMatrix.needsUpdate = true;
@@ -358,7 +359,8 @@ function plainInventoryColor(
 
 function paint(mesh: Instances, items: InventoryTree[]): void {
   const col = new Color();
-  for (const [i, t] of items.entries()) {
+  for (let i = 0; i < items.length; i += 1) {
+    const t = items[i];
     inventoryColor(col, t, hash(t.x * 0.3 + t.z * 0.7) - 0.5);
     mesh.setColorAt(i, col);
   }

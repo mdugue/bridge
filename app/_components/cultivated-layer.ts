@@ -377,7 +377,8 @@ export function buildVineyards(rows: Point2[][], ctx: GroundContext): Group {
     mesh.name = "vine-rows";
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    for (const [i, p] of cell.entries()) {
+    for (let i = 0; i < cell.length; i += 1) {
+      const p = cell[i];
       dummy.position.set(p.x, p.y, p.z);
       dummy.rotation.set(0, p.rot, 0);
       dummy.scale.set(p.len, VINE_ROW.h + SINK_M, VINE_ROW.w);

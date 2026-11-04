@@ -291,7 +291,10 @@ interface SetLine {
 }
 
 /** A letter with its combining marks stays one glyph. */
-const LETTERS = new Intl.Segmenter("de-DE", { granularity: "grapheme" });
+const LETTERS =
+  typeof Intl.Segmenter === "function"
+    ? new Intl.Segmenter("de-DE", { granularity: "grapheme" })
+    : null;
 
 function setLine(
   ctx: Ctx,
@@ -306,7 +309,9 @@ function setLine(
   const font = fontOf(setting, px, from);
   ctx.font = font;
   const shown = setting.upper ? text.toLocaleUpperCase("de-DE") : text;
-  const chars = Array.from(LETTERS.segment(shown), (s) => s.segment);
+  const chars = LETTERS
+    ? Array.from(LETTERS.segment(shown), (s) => s.segment)
+    : Array.from(shown);
   const tracking = setting.tracking * px;
   // the coverage at about COVER_PX_PER_CAP px per capital
   const f = Math.max(1, Math.round((px * 0.72) / COVER_PX_PER_CAP));

@@ -418,7 +418,8 @@ function buildChunks(
     mesh.name = "lowveg-hedge";
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    for (const [i, p] of cell.entries()) {
+    for (let i = 0; i < cell.length; i += 1) {
+      const p = cell[i];
       dummy.position.set(p.x, p.y, p.z);
       dummy.rotation.set(0, p.rot, 0);
       dummy.scale.set(p.sx, p.sy, p.sz);

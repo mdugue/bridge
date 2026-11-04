@@ -32,11 +32,10 @@ interface Group {
 }
 
 /** A group value as a number; an empty one is NaN, not 0. */
-const numberOf = (value: string): number =>
-  value === "" ? Number.NaN : Number(value);
+const numberOf = (value: string): number => Number.parseFloat(value);
 
-/** A group value as a whole number (truncated); an empty one is NaN. */
-const intOf = (value: string): number => Math.trunc(numberOf(value));
+/** A group value as a whole number; an empty one is NaN. */
+const intOf = (value: string): number => Number.parseInt(value, 10);
 
 /** The DXF's groups, in order. */
 function groupsOf(text: string): Group[] {

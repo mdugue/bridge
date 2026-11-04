@@ -702,7 +702,8 @@ export function shapedGap(
   }));
   const mesh = measuredRoofMesh(parts, p.z + structureFoot(p), offset);
   let lowest = Number.POSITIVE_INFINITY;
-  for (const [i, roof] of mesh.isRoof.entries()) {
+  for (let i = 0; i < mesh.isRoof.length; i += 1) {
+    const roof = mesh.isRoof[i];
     if (roof === 1) {
       lowest = Math.min(lowest, mesh.positions[i * 3 + 2]);
     }

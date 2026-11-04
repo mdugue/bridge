@@ -62,14 +62,19 @@ export default defineConfig({
   ],
   overrides: [
     {
-      // "use cache" functions must be async, with or without an await.
-      files: ["app/wissen/**/page.tsx"],
+      // "use cache" functions and Next's config hooks must be async.
+      files: ["app/wissen/**/page.tsx", "next.config.ts"],
       rules: { "typescript/require-await": "off" },
     },
     {
-      // These read a number off text with more behind it ("123px", "12 m"),
-      // which Number() would make NaN.
-      files: ["app/_components/inquiry-card.tsx", "lib/city/plan-records.ts"],
+      // These read a number off text with more behind it ("123px", "12 m", a
+      // field padded with NUL), which Number() would make NaN.
+      files: [
+        "app/_components/inquiry-card.tsx",
+        "lib/city/dxf.ts",
+        "lib/city/plan-records.ts",
+        "lib/city/shapefile.ts",
+      ],
       rules: { "unicorn/prefer-number-coercion": "off" },
     },
     {

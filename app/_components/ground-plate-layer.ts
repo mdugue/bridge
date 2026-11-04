@@ -48,7 +48,8 @@ export interface GroundPlate {
  *  normalised bytes, four a vertex (WebGPU has no three-byte format). */
 export function plateColours(classes: Uint8Array): Uint8Array {
   const out = new Uint8Array(classes.length * 4);
-  for (const [v, id] of classes.entries()) {
+  for (let v = 0; v < classes.length; v += 1) {
+    const id = classes[v];
     const [r, g, b] = landcoverSrgb(id);
     out[v * 4] = Math.round(srgbToLinear(r) * 255);
     out[v * 4 + 1] = Math.round(srgbToLinear(g) * 255);

@@ -452,7 +452,8 @@ const TRUNK_DROP = "iDrop";
 function writeTrunkDrops(trunks: Instances, items: Placement[]): number {
   let reach = 0;
   const drops = new Float32Array(trunks.capacity);
-  for (const [i, p] of items.entries()) {
+  for (let i = 0; i < items.length; i += 1) {
+    const p = items[i];
     const { lift, scale } = crownFrame(p);
     drops[i] = lift / scale;
     reach = Math.max(reach, Math.abs(lift));

@@ -495,7 +495,8 @@ export function stairColors(
   const stone = linearTone(mat ? STAIR_TONES[mat] : STAIR_STONE);
   const bank = linearTone(BANK_GROUND);
   const out = new Float32Array(kinds.length * 3);
-  for (const [i, kind] of kinds.entries()) {
+  for (let i = 0; i < kinds.length; i += 1) {
+    const kind = kinds[i];
     const shade = STAIR_SHADE[kind] ?? 1;
     const base = kind === STAIR_BANK ? bank : stone;
     out[i * 3] = base[0] * (kind === STAIR_BANK ? 1 : shade);

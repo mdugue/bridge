@@ -427,7 +427,7 @@ export function convexHull(points: [number, number][]): [number, number][] {
     while (lower.length >= 2) {
       const o = lower.at(-2);
       const a = lower.at(-1);
-      if (!(o && a) || cross(o, a, p) > 0) {
+      if (!(o && a && cross(o, a, p) <= 0)) {
         break;
       }
       lower.pop();
@@ -439,7 +439,7 @@ export function convexHull(points: [number, number][]): [number, number][] {
     while (upper.length >= 2) {
       const o = upper.at(-2);
       const a = upper.at(-1);
-      if (!(o && a) || cross(o, a, p) > 0) {
+      if (!(o && a && cross(o, a, p) <= 0)) {
         break;
       }
       upper.pop();

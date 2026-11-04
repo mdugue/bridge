@@ -39,6 +39,7 @@ import {
 import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "cn";
 import { useSceneStatus } from "./scene-status";
+import { useOnce } from "./use-once";
 
 /**
  * Erzählte Spaziergänge in the viewer (lib/city/walks.ts, ADR 0055): the
@@ -671,7 +672,7 @@ export const WalkCard = ({
   // a phone's sheet starts low: the title and the way on, the scene above
   const [folded, setFolded] = useState(coarse);
   // the visitor's day: the notes for today and the season
-  const today = useMemo(() => visitDay(), []);
+  const today = useOnce(visitDay);
   const { isMobile, openMobile } = useSidebar();
   const walksUrl = useSceneStatus("site")?.walksUrl ?? null;
   const stop = walk.stops[index];

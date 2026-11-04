@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { formatTrail, offerAsCrash } from "@/lib/city/crash-trail";
@@ -12,6 +12,7 @@ import {
   previousTrail,
 } from "./crash-trail";
 import { recentlyRecovered } from "./gpu-recovery";
+import { useOnce } from "./use-once";
 
 /**
  * The previous page's crash trail (crash-trail.ts), offered as text to
@@ -44,7 +45,7 @@ function initialOffer(): Offer | null {
 
 export const CrashReport = () => {
   const [offer, setOffer] = useState(initialOffer);
-  const reported = useMemo(() => crashReportsOn(), []);
+  const reported = useOnce(crashReportsOn);
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     let mounted = true;

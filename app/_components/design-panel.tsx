@@ -379,13 +379,9 @@ const DesignControlsView = ({
           disabled={!status.hasLooks}
           id={`${ids}-colours`}
           onCheckedChange={(on) => {
-            controls()
-              ?.setFileColours(on)
-              .catch((error_: unknown) => {
-                // as before: a failed build stays an unhandled rejection,
-                // for the global handler (Sentry) to report
-                throw error_;
-              });
+            // a failed build stays an unhandled rejection, for the global
+            // handler (Sentry) to report
+            void controls()?.setFileColours(on);
           }}
           size="sm"
         />

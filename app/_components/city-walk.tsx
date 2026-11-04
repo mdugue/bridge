@@ -100,6 +100,7 @@ import { INITIAL_MINUTES, useSceneTime } from "./scene-time";
 import { useSite } from "./site-context";
 import { VirtualJoystick } from "./virtual-joystick";
 import { missingPrerequisite } from "./gpu-support";
+import { useOnce } from "./use-once";
 
 /**
  * *Frag die Stadt* (ADR 0056): the chat client, its tool schemas and the
@@ -417,12 +418,6 @@ const LiveModelInstruments = ({
     instruments
   );
 };
-
-/** A value made once per mount: lazy state that never changes. */
-function useOnce<T>(init: () => T): T {
-  const [value, ,] = useState(init);
-  return value;
-}
 
 /** The effect's cleanup when nothing was started. */
 const nothingToClean = (): void => {

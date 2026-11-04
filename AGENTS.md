@@ -171,8 +171,8 @@ uploaded; nothing it names is fetched (ADR 0054).
 - `FRAG_FAKE=1` is a scripted model for local tests, never set on a
   deployment (ADR 0056).
 - **oxlint + oxfmt, no ESLint, no biome.** `oxlint.config.ts` extends
-  ultracite's core, react and next presets, and each rule it changes says
-  why there. No `oxlint-disable` comment: change the code, or the config
+  ultracite's core, react and next presets (loading it takes Node ≥ 22.18),
+  and each rule it changes says why there. No `oxlint-disable` comment: change the code, or the config
   with its reason. `--type-check` stays off. typescript-eslint
   cannot run on TypeScript 7; check oxlint's full catalogue
   (`oxlint --print-config -D all`) before reaching for ESLint. Markdown and

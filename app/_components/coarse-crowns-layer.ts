@@ -203,7 +203,8 @@ export function* coarseCrownSteps(
     if (form === "broad") {
       set.userData.styleCrown = "far";
     }
-    for (const [i, c] of cell.entries()) {
+    for (let i = 0; i < cell.length; i += 1) {
+      const c = cell[i];
       set.setMatrixAt(i, crownMatrix(c, c.ground, m));
       paintCrown(c, c.ground, col);
       set.setColorAt(i, col);

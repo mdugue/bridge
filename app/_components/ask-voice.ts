@@ -7,6 +7,7 @@
  * neither, the card shows neither.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useOnce } from "./use-once";
 
 // reason: SpeechRecognition is not in TypeScript's DOM library yet; the
 // part used here, typed by hand.
@@ -209,7 +210,7 @@ export function dictationProblem(error: string): string | null {
 
 /** Push to talk: one question per press, in German. */
 export function useDictation(): Dictation {
-  const supported = useMemo(() => recognitionClass() !== null, []);
+  const supported = useOnce(() => recognitionClass() !== null);
   const [listening, setListening] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const current = useRef<Recognition | null>(null);
