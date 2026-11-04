@@ -11,6 +11,7 @@ export default defineConfig({
     complexity: ["error", { max: 20 }],
     eqeqeq: ["error", "always", { null: "ignore" }],
     "no-eq-null": "off",
+    "typescript/no-require-imports": "error",
     "typescript/prefer-optional-chain": "error",
     // `() => setKey(null)` hides nothing; a returned void expression can.
     "typescript/no-confusing-void-expression": [

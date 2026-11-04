@@ -216,7 +216,7 @@ export function forEachPoint(
     let h = Math.imul(key(3 * v) ^ 0x9e_37_79_b9, 0x85_eb_ca_6b);
     h = Math.imul(h ^ key(3 * v + 1) ^ (h >>> 15), 0xc2_b2_ae_35);
     h = Math.imul(h ^ key(3 * v + 2) ^ (h >>> 13), 0x27_d4_eb_2f);
-    h = Math.imul(h ^ Math.trunc(groups[v]) ^ (h >>> 16), 0x16_56_67_b1);
+    h = Math.imul(h ^ groups[v] ^ (h >>> 16), 0x16_56_67_b1);
     hash[k] = (h ^ (h >>> 15)) & (size - 1);
     start[hash[k] + 1] += 1;
   }

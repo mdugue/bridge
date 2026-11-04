@@ -97,7 +97,7 @@ function germanVoice(): SpeechSynthesisVoice | null {
   const local = speechSynthesis
     .getVoices()
     .filter((v) => v.localService && v.lang.toLowerCase().startsWith("de"));
-  return local.toSorted((a, b) => rank(a) - rank(b))[0] ?? null;
+  return local.sort((a, b) => rank(a) - rank(b))[0] ?? null;
 }
 
 export interface Speech {

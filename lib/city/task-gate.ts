@@ -96,14 +96,13 @@ export function createTaskGate(
           running += 1;
           // a task that throws synchronously is a failed task, not a stuck
           // place
-          Promise.resolve()
+          void Promise.resolve()
             .then(task)
             .then(resolve, reject)
             .finally(() => {
               running -= 1;
               next();
-            })
-            .catch(reject);
+            });
         },
       };
       const leave = () => {
