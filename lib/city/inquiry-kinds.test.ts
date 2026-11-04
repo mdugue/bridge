@@ -8,7 +8,7 @@ import { describe, expect, test } from "bun:test";
 import { cardCredits } from "./card-lines";
 import type { InquiryCard } from "./card-lines";
 import { OBJECT_SOURCE_LOD2 } from "./city-mesh";
-import { inquiryCard, kindLabel } from "./inquiry";
+import { inquiryCard, isPorous, kindLabel, thingKey } from "./inquiry";
 import type { Inquiry, InquiryObject, KindIcon } from "./inquiry";
 import { designCard } from "./inquiry-design";
 import {
@@ -359,6 +359,41 @@ describe("kindLabel gives the strip the card's heading without the card", () => 
       const label = kindLabel(fx, credits);
       expect([label.kicker, label.title]).toEqual(HEADINGS[name]);
       expect(label.icon).toBe(ICONS[name]);
+    });
+  }
+});
+
+/** The probe's view of each: whether only nothing solid behind it lets it
+ *  win, and the key it is voted by (none for a building). */
+const PICKS: Record<string, [boolean, string | null]> = {
+  building: [false, null],
+  tree: [true, "tree:t:0"],
+  monument: [false, "monument:t:411000,5656000"],
+  bridge: [false, "bridge:t:411000,5656000"],
+  traffic: [false, "traffic:t:0"],
+  bikes: [false, "bikes:100:411000,5656000"],
+  design: [false, "design:neubau.ifc:3"],
+  canopy: [true, "canopy:t:411000,5656000"],
+  hedge: [true, "hedge:t:411000,5656000"],
+  lamp: [false, "lamp:t:411000,5656000"],
+  furniture: [false, "furniture:t:411000,5656000"],
+  stop: [false, "stop:t:411000,5656000"],
+  landing: [false, "landing:t:411000,5656000"],
+  "osm conifer": [true, "tree:t:0"],
+  "orchard tree": [true, "tree:t:0"],
+  "row tree": [true, "canopy:t:411000,5656000"],
+  playground: [true, "furniture:t:411000,5656000"],
+  swing: [false, "furniture:t:411000,5656000"],
+  "wall lamp": [false, "lamp:t:411000,5656000"],
+  "hung lamp": [false, "lamp:t:411000,5656000"],
+};
+
+describe("what the probe weighs each by", () => {
+  for (const [name, fx] of ALL) {
+    test(name, () => {
+      const [porous, key] = PICKS[name];
+      expect(isPorous(fx)).toBe(porous);
+      expect(fx.kind === "building" ? null : thingKey(fx)).toBe(key);
     });
   }
 });
