@@ -8,6 +8,7 @@ import type { BakeFile } from "./bake-file";
 import type { FacadeMaterial } from "./building-tint";
 import type { WallMaterial } from "./city-mesh";
 import type { FountainStyle, MonumentForm, MonumentKind } from "./features";
+import { HORIZON_LEGEND_FILE } from "./horizon-legend-file";
 import { LANDMARK_FACTS_FILE_SPEC } from "./landmark-facts-file";
 import { landmarkFactsSource } from "./landmark-facts";
 import { LANDMARKS_FILE } from "./landmarks-file";
@@ -64,6 +65,10 @@ const SPECS: [BakeFile, string[]][] = [
   [MURALS_FILE_SPEC, perSite(muralsSource)],
   [TRAMS_FILE, perSite(tramTimetableSource)],
   [ROOF_COLOURS_FILE, perTile((s, t) => cityMeshSourceFiles(s, t).roofColor)],
+  [
+    HORIZON_LEGEND_FILE,
+    perTile((s, t) => sideFileSource(s, `horizon_${t}.json`)),
+  ],
 ];
 
 const cases = SPECS.flatMap(([spec, files]) =>

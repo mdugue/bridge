@@ -1063,6 +1063,7 @@ and `shopfronts_<t>.json`), cast in `scripts/prepare/city.ts` and
 | `murals/murals.json` | `murals.py` (`murals`) | `lib/city/murals-file.ts` | `prepare-data.ts`, every run |
 | `transit/trams.json` | `transit.py` (`transit`) | `lib/city/tram-timetable-file.ts` | `prepare-data.ts`, every run |
 | `dop/roofcolor_<t>.json` | `roof_colour.py` (`roof-colour`) | `lib/city/roof-colours-file.ts` | `scripts/prepare/city.ts` |
+| `dlm/horizon_<t>.json` (the legend; its `valley` from `glo30.py`) | `skyview.py` (`skyview`) | `lib/city/horizon-legend-file.ts` | `prepare-data.ts`, every run (the valley haze) |
 
 `parseBakeFile` (`lib/city/bake-file.ts`) returns the file as it read it
 (zod's copy would reorder the keys) or ends the build:
@@ -1077,8 +1078,9 @@ Re-bake it (bun run bake dresden --step landmarks) or change the schema with the
 A per-tile file is parsed inside its cached bake, so a cache hit means
 these bytes passed this schema before: the schema modules and zod's
 locked version are in the keys of `city`, `stadtwissen` and `siteStats`
-(zod is pinned exactly). The three site-wide files are parsed uncached,
-and their schema modules are in `NOT_A_BAKE` (`bake-entries.test.ts`).
+(zod is pinned exactly). The three site-wide files and the horizon
+legends are parsed uncached, and their schema modules are in
+`NOT_A_BAKE` (`bake-entries.test.ts`).
 The viewer imports the schema modules by type only and keeps its own
 guards (`isLandmarkFactsFile`, `parseMurals`, `isTramTimetable`), each
 pinned to its schema by a test.

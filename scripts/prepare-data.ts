@@ -83,6 +83,7 @@ import type { LandmarkFactsExtras } from "../lib/city/landmark-facts";
 import { LANDMARK_FACTS_FILE_SPEC } from "../lib/city/landmark-facts-file";
 import { MURALS_FILE_SPEC } from "../lib/city/murals-file";
 import { TRAMS_FILE } from "../lib/city/tram-timetable-file";
+import { HORIZON_LEGEND_FILE } from "../lib/city/horizon-legend-file";
 import { parseBakeFile } from "../lib/city/bake-file";
 import type { BakeFile } from "../lib/city/bake-file";
 import {
@@ -126,10 +127,12 @@ function valleyRims(): ValleyRim[] {
     if (!existsSync(legend)) {
       return [];
     }
-    const { valley } = readJson(legend) as { valley?: Partial<ValleyRim> };
-    return typeof valley?.floorM === "number" && Array.isArray(valley.rimM)
-      ? [{ floorM: valley.floorM, rimM: valley.rimM }]
-      : [];
+    const { valley } = parseBakeFile(
+      HORIZON_LEGEND_FILE,
+      readJson(legend),
+      legend
+    );
+    return valley ? [{ floorM: valley.floorM, rimM: valley.rimM }] : [];
   });
 }
 
