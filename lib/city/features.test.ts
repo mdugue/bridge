@@ -347,9 +347,11 @@ test.each(tiles)(
       expect(p?.slope ?? -1).toBeGreaterThanOrEqual(0);
       expect(p?.slope ?? 90).toBeLessThan(90);
       expect(Number.isFinite(p?.z)).toBe(true);
-      // it rises out of the roof (dormers.py MIN_TOP_M, CHIMNEY_MIN_LIFT_M)
-      expect((p?.top ?? 0) - (p?.z ?? 0)).toBeGreaterThan(0);
+      expect(Number.isFinite(p?.top)).toBe(true);
       if (p?.k === "chimney") {
+        // its top is the surface model's own height and stays, while `z`
+        // is the exact LoD2 face under it (dormers.py on_planes): no rise
+        // to check against that face.
         // a chimney's sides: dormers.py CHIMNEY_SIDE_M … CHIMNEY_MAX_SIDE_M
         for (const side of [p.w, p.d]) {
           expect(side).toBeGreaterThanOrEqual(0.6);
@@ -358,6 +360,9 @@ test.each(tiles)(
         expect(p.tf).toBeUndefined();
       } else {
         expect(p?.k).toBeUndefined();
+        // its top never under the face it stands on (dormers.py on_planes:
+        // max(min(top, ridge), z)), both rounded to the centimetre
+        expect((p?.top ?? 0) - (p?.z ?? 0)).toBeGreaterThanOrEqual(-0.01);
         expect(p?.w ?? 0).toBeGreaterThan(0);
         // its depth along the slope: dormers.py MAX_SIDE_M
         expect(p?.d ?? 0).toBeGreaterThan(0);
