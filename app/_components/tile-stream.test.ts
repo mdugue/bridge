@@ -327,6 +327,51 @@ test("a stream disposed while a shown tile's compile runs frees that tile once t
   }
 });
 
+test("a stream disposed while a content it never dressed still compiles frees that content once the compile ends", async () => {
+  jest.useFakeTimers();
+  try {
+    let finish = nothing;
+    const compiling = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const plugin = new DressingPlugin(
+      {
+        dressingGate: new Promise<void>(() => {}),
+        bootTile: () => null,
+        compile: async () => await compiling,
+        onChange: () => {},
+      } as unknown as TileStreamContext,
+      {
+        cities: new Set(),
+        terrains: new Set(),
+        dressings: new Set(),
+        demolished: new Map(),
+        demolishedGroups: new Set<number>(),
+      }
+    );
+    const scene = new Object3D();
+    const mesh = new Mesh(new BoxGeometry(), new MeshBasicNodeMaterial());
+    scene.add(mesh);
+    let freed = false;
+    mesh.geometry.addEventListener("dispose", () => {
+      freed = true;
+    });
+    const loading = plugin.processTileModel(scene, {});
+    await flush();
+    // the stream goes while the content waits on its compile: it has no
+    // dressing, so the stream's dispose does not know it
+    plugin.dispose();
+    jest.advanceTimersByTime(COMPILE_WAIT_MS);
+    await loading;
+    expect(freed).toBe(false);
+    finish();
+    await flush();
+    expect(freed).toBe(true);
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
 test("a tile that leaves lets go of the site's shared index at once, while its compile still runs", async () => {
   let finish = nothing;
   const plugin = new DressingPlugin(

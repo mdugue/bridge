@@ -1898,8 +1898,10 @@ export class DressingPlugin {
     }
     // Disposed while it was being dressed: the renderer drops an aborted
     // load without ever recording the scene, so nothing else frees it. The
-    // same once the stream is gone (its plugins are unregistered first).
+    // same once the stream is gone (its plugins are unregistered first) —
+    // left first: one whose compile still runs is released as it ends.
     if (this.disposed || this.released.has(scene)) {
+      this.leave(scene);
       this.release(scene);
       return;
     }
