@@ -1,9 +1,6 @@
-import { mayRecover, recentHistory } from "@/lib/city/gpu-safety";
-import type {
-  GpuLoss,
-  RecoveryHistory,
-  SafetyLevel,
-} from "@/lib/city/gpu-safety";
+import { mayRecover, recentHistory } from "@/lib/city/gpu-recovery";
+import type { RecoveryHistory } from "@/lib/city/gpu-recovery";
+import type { GpuLoss, SafetyLevel } from "@/lib/city/gpu-safety";
 import { SESSION_KEYS } from "./storage-keys";
 
 /**
