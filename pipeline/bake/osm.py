@@ -113,6 +113,29 @@ def osm_number(value: str | None, *, signed: bool = False) -> float | None:
     return float(m.group().replace(",", ".")) if m else None
 
 
+_METRES = re.compile(
+    r"\s*(?:(?:ca\.?|approx\.?|~)\s*)?([-+]?(?:\d+(?:[.,]\d+)?|[.,]\d+))\s*(?:m|meters?|metres?)?\s*",
+    re.IGNORECASE,
+)
+
+
+def osm_metres(value: str | None, *, signed: bool = False) -> float | None:
+    """A length tag (`width`) in metres: a bare number or one in metres
+    (`4`, `4,5`, `4.5 m`, `12 meters`), an approximate one too (`ca. 4 m`,
+    `approx 4`, `~3`). None for anything else — feet, inches or yards
+    (`12'`, `10 ft`), a range (`2-3`), a list (`3;4`), words around it —
+    where `osm_number` would take the first number as metres. A sign only
+    when `signed` (a negative value is then read as written, for the caller
+    to reject)."""
+    m = _METRES.fullmatch(value or "")
+    if m is None:
+        return None
+    number = m.group(1)
+    if number[0] == "-" and not signed:
+        return None
+    return float(number.replace(",", "."))
+
+
 def surface_id(value: str | None, ids: dict[str, int]) -> int:
     """The id `ids` gives an OSM surface value (`;`-lists take the first),
     else 0."""

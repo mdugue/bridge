@@ -408,10 +408,13 @@ absorbs each of the others, and applies the rule per read. With
 `BAKE_OSM_CHECK=1` every read is made from the extract too and must match.
 
 A tag's value is read by `osm.py`: `tag` from the `other_tags` string, and
-a height, width or count by `osm_number` — the first number in the value,
+a height or count by `osm_number` — the first number in the value,
 a decimal comma read as a point ("1,5" → 1.5), units and text around it
-ignored, a sign only where the caller asks for one (a wall's). Each caller
-keeps its own range and default.
+ignored, a sign only where the caller asks for one (a wall's). A `width`
+is read by `osm_metres`: only a bare number or one in metres ("4,5",
+"4.5 m", "12 meters", "ca. 4 m"), so feet ("12'", "10 ft"), yards, a
+range ("2-3") or a list ("3;4") are no width at all rather than that many
+metres. Each caller keeps its own range and default.
 
 ### What OSM maps that the twin draws
 

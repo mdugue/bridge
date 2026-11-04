@@ -46,7 +46,7 @@ from .common import (
     overlaps,
     write_geojson,
 )
-from .osm import has_extract, osm_number, read_osm, tag
+from .osm import has_extract, osm_metres, osm_number, read_osm, tag
 from .walls import FENCE_WHERE, MATERIALS, lines_of, majority, site_extent
 
 WHERE = "highway = 'steps'"
@@ -120,7 +120,7 @@ def skipped(other_tags: str | None) -> bool:
 
 
 def tagged_width(line: shapely.LineString, other_tags: str | None, areas: list) -> float | None:
-    tagged = osm_number(tag(other_tags, "width"))
+    tagged = osm_metres(tag(other_tags, "width"))
     if tagged is not None:
         return min(max(tagged, MIN_W), MAX_W)
     for area in areas:

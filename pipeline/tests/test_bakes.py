@@ -265,7 +265,8 @@ def test_widths_parse_metres_and_reject_nonsense():
 
     assert parse_width("5") == 5.0
     assert parse_width("5,5 m") == 5.5
-    assert parse_width("5.5m wide") == 5.5
+    assert parse_width("5.5m") == 5.5
+    assert parse_width("5.5m wide") is None  # text beyond the unit
     assert parse_width("ca. 4 m") == 4.0
     assert parse_width("1,5") == 1.5
     assert parse_width("narrow") is None

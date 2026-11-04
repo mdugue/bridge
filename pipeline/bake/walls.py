@@ -40,7 +40,7 @@ from rasterio.transform import from_origin
 from shapely.geometry.polygon import orient
 
 from .common import OSM_ATTRIBUTION, Tile, column, feature, geometry_json, owns, write_geojson
-from .osm import below_ground, has_extract, osm_number, read_osm, tag
+from .osm import below_ground, has_extract, osm_metres, osm_number, read_osm, tag
 from .water import WATER, grid_classes
 
 CLIFF = 'other_tags LIKE \'%"natural"=>"cliff"%\''
@@ -285,7 +285,7 @@ def fence_height(barrier: str | None, other_tags: str | None, tall: bool = False
 
 
 def gate_width(barrier: str | None, other_tags: str | None) -> float:
-    tagged = osm_number(tag(other_tags, "width"), signed=True)
+    tagged = osm_metres(tag(other_tags, "width"), signed=True)
     if tagged is not None and 0.5 <= tagged <= 12.0:
         return tagged
     return GATE_W_LIFT if barrier == "lift_gate" else GATE_W

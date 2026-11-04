@@ -75,7 +75,7 @@ from rasterio.features import rasterize
 
 from .classes import PATH
 from .common import OSM_ATTRIBUTION, Tile, column, dlm_complete, read_layer, save_grey_png
-from .osm import has_extract, osm_number, read_osm, read_ways, surface_id, tag
+from .osm import has_extract, osm_metres, read_osm, read_ways, surface_id, tag
 
 # id → key; 0 = unknown (the shader keeps the class default).
 SURFACES = {
@@ -185,8 +185,8 @@ WALK_AREAS = {"footway", "pedestrian", "traffic_island", "path", "cycleway"}
 
 def parse_width(value: str | None) -> float | None:
     """A `width` tag in metres (`5`, `5.5 m`, `5,5`, `ca. 4 m`: the OSM
-    number parser, `osm.osm_number`) within 0–60 m, else None."""
-    width = osm_number(value)
+    length parser, `osm.osm_metres`) within 0–60 m, else None."""
+    width = osm_metres(value)
     return width if width is not None and 0 < width < 60 else None
 
 

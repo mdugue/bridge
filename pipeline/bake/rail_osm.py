@@ -54,7 +54,7 @@ import shapely
 
 from .classes import BUILTUP, PATH, ROAD, WATER
 from .common import Tile, column, feature, label_line, mosaic, value_at
-from .osm import in_tunnel, osm_number, read_osm, tag
+from .osm import in_tunnel, osm_metres, read_osm, tag
 
 RAILWAYS = ("rail", "light_rail", "subway", "narrow_gauge")
 # A funicular (Standseilbahn, Schrägaufzug) is a track like a railway's,
@@ -380,7 +380,7 @@ def ballast(tile: Tile, features: list[dict]) -> list[dict]:
 
 def width_of(other: str | None, kind: str) -> float | None:
     """A way's mapped width: `width`, else `lanes` × 3.25 m + verges."""
-    width = osm_number(tag(other, "width"))
+    width = osm_metres(tag(other, "width"))
     if width is not None and 1.0 <= width <= 60.0:
         return width
     lanes = re.match(r"\d+", tag(other, "lanes") or "")
