@@ -1619,7 +1619,7 @@ test("a traffic build that throws is reported once, and not once its tile has go
   }
 });
 
-test("a traffic build that threw is tried again on the next switch-on, and never once its dressing is taken down", async () => {
+test("a traffic build that threw is tried again on the next switch-on, not on other look changes, and never once its dressing is taken down", async () => {
   let throws = true;
   let builds = 0;
   const tile = trafficTile({
@@ -1640,6 +1640,13 @@ test("a traffic build that threw is tried again on the next switch-on, and never
   await until(() => tile.calls.failed.length > 0);
   await nextTask();
   expect(tile.slot.group).toBeNull();
+  // a look change that leaves the layer on builds (and reports) nothing
+  tile.look.set({ fogAmount: 0.9 });
+  tile.look.set({ multiTuft: false });
+  await nextTask();
+  await nextTask();
+  expect(builds).toBe(1);
+  expect(tile.calls.failed).toHaveLength(1);
   // off and on again: built anew, and this time it hangs
   throws = false;
   tile.look.set({ trafficLayer: false });

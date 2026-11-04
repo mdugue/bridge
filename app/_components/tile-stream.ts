@@ -1007,9 +1007,17 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
     attach: (at) => {
       tile = at;
       // a layer that is off draws nothing, and one never switched on has
-      // built nothing
+      // built nothing. Only the layer's own switch counts: any other look
+      // change (the fog, the style) leaves the slot as it is — so a build
+      // that failed is tried again on the next switch-on, never on each
+      // look change (each one a ~20 MiB build and a report)
+      let on: boolean | null = null;
       unfollowLook = follow(at.look, (look) => {
-        if (look.trafficLayer) {
+        if (look.trafficLayer === on) {
+          return;
+        }
+        on = look.trafficLayer;
+        if (on) {
           void slot.show();
         } else {
           slot.hide();
