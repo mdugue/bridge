@@ -1,6 +1,7 @@
 import { uniform } from "three/tsl";
 import type { Material } from "three/webgpu";
 import type { LookValues } from "@/lib/city/look-controls";
+import { fountainsRun } from "@/lib/city/monuments";
 import { climateDay } from "@/lib/city/tree-season";
 import type { SeasonShift } from "@/lib/city/tree-season";
 import { createSeasonClock } from "./crown-season";
@@ -27,6 +28,21 @@ import type { SunState } from "./sun-rig";
 /** 0 by day → 1 at night (SunState.nightFactor): every scene material
  *  that dims, glows or ignites after dark reads this one node. */
 export const sceneNight: Live = uniform(0);
+
+/** 1 while the fountains run, 0 from November to mid-April
+ *  (lib/city/monuments.ts `fountainsRun`): the season turns without a
+ *  rebuild. */
+export const fountainsOn: Live = uniform(1);
+
+/** Minutes past 12 o'clock on the scene's clock (0–720), on the minute:
+ *  the clocks' hands (furniture-layer.ts). */
+export const clockMinutes: Live = uniform(0);
+
+/** Minutes past 12 o'clock of `date` on a dial, on the minute: 14:31 and
+ *  02:31 read the same. */
+export function clockMinutesAt(date: Date): number {
+  return (date.getHours() % 12) * 60 + date.getMinutes();
+}
 
 /** Night above which a material drawn only after dark is drawn. */
 export const NIGHT_DRAWN = 0.01;
@@ -73,7 +89,8 @@ export interface SceneEnvironment extends DressingEnvironment {
   /** the light of now (the style's instant, create-app.ts `relight`): the
    *  night node and the night-only materials */
   light: (sun: SunState) => void;
-  /** the date the HUD asked for: the season (throttled), the clock */
+  /** the date the HUD asked for: the fountains' season, the clocks'
+   *  hands, the trees' season (throttled), the scene clock */
   date: (date: Date) => void;
   dispose: () => void;
 }
@@ -109,6 +126,8 @@ export function createSceneEnvironment(opts: {
       }
     },
     date: (date) => {
+      fountainsOn.value = fountainsRun(date) ? 1 : 0;
+      clockMinutes.value = clockMinutesAt(date);
       seasonClock.set(date);
       clock.set({ date, atMs: performance.now() });
     },

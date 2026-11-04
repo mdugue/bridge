@@ -3,7 +3,12 @@ import { createLookState } from "@/lib/city/look-state";
 import { climateDay, dayOfYear } from "@/lib/city/tree-season";
 import { SEASON_THROTTLE_MS } from "./crown-season";
 import type { SceneClock } from "./feature-seam";
-import { createSceneEnvironment, sceneNight } from "./scene-environment";
+import {
+  clockMinutes,
+  createSceneEnvironment,
+  fountainsOn,
+  sceneNight,
+} from "./scene-environment";
 import type { SunState } from "./sun-rig";
 
 // Hamburg's spring comes three days later than Dresden's: the season the
@@ -92,6 +97,35 @@ test("the clock is heard on every date, the same one twice too", () => {
     env.date(OCT_20);
     expect(heard.map((c) => c.date)).toEqual([OCT_20, OCT_20]);
     expect(env.clock.get().date).toBe(OCT_20);
+  } finally {
+    env.dispose();
+  }
+});
+
+test("the clocks' hands move on the minute only, a dial's twelve hours", () => {
+  const env = environment();
+  try {
+    env.date(new Date(2026, 5, 15, 14, 30, 5));
+    const at = clockMinutes.value;
+    env.date(new Date(2026, 5, 15, 14, 30, 50));
+    expect(clockMinutes.value).toBe(at);
+    env.date(new Date(2026, 5, 15, 14, 31, 0));
+    expect(clockMinutes.value).toBe(at + 1);
+    // 2:31 and 14:31 read the same on a dial
+    env.date(new Date(2026, 5, 15, 2, 31, 0));
+    expect(clockMinutes.value).toBe(at + 1);
+  } finally {
+    env.dispose();
+  }
+});
+
+test("the fountains run from mid-April and are drained from November", () => {
+  const env = environment();
+  try {
+    env.date(new Date(2026, 6, 15, 12));
+    expect(fountainsOn.value).toBe(1);
+    env.date(new Date(2026, 0, 15, 12));
+    expect(fountainsOn.value).toBe(0);
   } finally {
     env.dispose();
   }

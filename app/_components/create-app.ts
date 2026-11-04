@@ -168,16 +168,8 @@ import { createSceneFog, installSceneFog, VALLEY_HAZE } from "./height-fog";
 import { attachKeyboardControls } from "./keyboard-controls";
 import { createLampLights, LAMP_LIGHTS } from "./lamp-layer";
 import { createLantern, invalidateLanternShadow } from "./lantern";
-import {
-  setFountainNight,
-  setFountainSeason,
-  setFountainTime,
-} from "./monument-layer";
-import {
-  setClockTime,
-  setFurnitureNight,
-  showFurnitureNear,
-} from "./furniture-layer";
+import { setFountainTime } from "./monument-layer";
+import { showFurnitureNear } from "./furniture-layer";
 import { setMapAltitude } from "./map-overlay";
 import type { TramCarsStatus } from "./tram-cars";
 import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
@@ -1883,8 +1875,6 @@ async function bootApp(
     sunToStyles?.(state.altitudeDeg);
     lampLights.setNightFactor(state.nightFactor);
     lantern.setNight(state.nightFactor);
-    setFountainNight(state.nightFactor);
-    setFurnitureNight(state.nightFactor);
     env.light(state);
     // The sun's move has asked for the map already; a drag's step leaves
     // it to the rig's pace.
@@ -1896,8 +1886,6 @@ async function bootApp(
   const setSun = (asked: Date, preview = false): SunState => {
     shownSun = asked;
     const state = relight(asked, preview);
-    setFountainSeason(asked);
-    setClockTime(asked);
     env.date(asked);
     // the HUD reads where the sun stands at the instant it asked for
     return RENDER_STYLE_BY_ID[opts.look.get().style].ownLight
