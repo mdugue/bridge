@@ -132,8 +132,7 @@ test("the runs a build bakes give the layer back every level off the ground", ()
   const levels = lineLevels(samples, RAIL);
   const runs = encodeRuns(levels);
   const d = samples.map((s) => s.d);
-  for (const [i, _] of samples.entries()) {
-    const level = levels[i];
+  for (const [i, level] of levels.entries()) {
     const back = runLevelAt(runs, d, i);
     if (level?.mode === "ground") {
       expect(back).toBeNull();
