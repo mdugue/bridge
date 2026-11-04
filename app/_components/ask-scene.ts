@@ -248,6 +248,9 @@ export function useAskScene(
         };
       },
       setListening: (on) => pace.setListening(on),
+      haltAnswerGlide: () => {
+        // the stop button leaves the answer's glide (plan 084 Step 5)
+      },
       abandon: () => {
         looks.stop.abort();
         looks.stop = new AbortController();

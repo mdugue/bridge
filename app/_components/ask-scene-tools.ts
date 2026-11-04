@@ -41,6 +41,9 @@ export interface AskScene {
   abandon: () => void;
   /** the Hörmodus: the scene barely draws while the visitor listens */
   setListening: (on: boolean) => void;
+  /** stops the glide an answer started, if it still flies (the stop
+   *  button); never one the visitor started since */
+  haltAnswerGlide: () => void;
 }
 
 /** The tools the browser runs, bound to the scene. */
