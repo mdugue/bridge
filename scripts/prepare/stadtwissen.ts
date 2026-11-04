@@ -8,6 +8,8 @@
  * (bake-entries.ts `stadtwissen`).
  */
 import { existsSync } from "node:fs";
+import { parseBakeFile } from "../../lib/city/bake-file";
+import { OSM_BUILDINGS_FILE } from "../../lib/city/osm-buildings-file";
 import type { SourceInfo, SourceKey } from "../../lib/city/provenance";
 import {
   STADTWISSEN_FILE,
@@ -48,8 +50,11 @@ async function tileFile(tile: string): Promise<string> {
           tile,
           city: readJson(at(src.city)) as TileInput["city"],
           osm: existsSync(at(src.osmBuild))
-            ? (readJson(at(src.osmBuild)) as { objects: Record<string, never> })
-                .objects
+            ? parseBakeFile(
+                OSM_BUILDINGS_FILE,
+                readJson(at(src.osmBuild)),
+                src.osmBuild
+              ).objects
             : {},
           landmarks: landmarkFile(tile),
           monuments: existsSync(monuments)

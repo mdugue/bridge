@@ -40,8 +40,9 @@ const osmBuildingRow = z.strictObject({
   /** the walls its neighbourhood is mapped as, where they differ from the
    *  tile's (osm_buildings.py `context`) */
   context: z.enum(FACADE_MATERIALS).optional(),
-  /** a listed building (OSM `heritage=*`) */
-  heritage: z.literal(1).optional(),
+  /** a listed building (OSM `heritage=*`): the bake writes 1, the
+   *  viewer reads any count (`inheritedFlags` adds a part's to its root's) */
+  heritage: z.int().nonnegative().optional(),
   /** `building:levels`, for the inquiry card and the storey bands */
   levels: z.int().optional(),
   material: z.enum(WALL_MATERIALS).optional(),
@@ -52,8 +53,8 @@ const osmBuildingRow = z.strictObject({
   outline: z.string().optional(),
   /** roof, `#rrggbb` (OSM `roof:colour`) */
   roof_colour: hexColour.optional(),
-  /** a shop or a place to eat on its ground floor */
-  shop: z.literal(1).optional(),
+  /** a shop or a place to eat on its ground floor (1, as `heritage`) */
+  shop: z.int().nonnegative().optional(),
   /** where OSM counts none of its own storeys: the storey (m) of the
    *  mapped buildings around it of its roof form and about its eave, else
    *  the tile's (osm_buildings.py `storey`) — its storeys are counted from

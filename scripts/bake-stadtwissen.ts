@@ -8,7 +8,7 @@
  * sources, the tiles' files. Run by prepare-data.ts, which publishes it.
  */
 import { BUILDING_FUNCTION, ROOF_TYPE } from "../lib/city/adv-codes";
-import type { OsmBuildingFacts } from "../lib/city/city-mesh";
+import type { OsmBuildingRow } from "../lib/city/osm-buildings-file";
 import type { LandmarkFile } from "../lib/city/landmarks";
 import type { SourceInfo } from "../lib/city/provenance";
 import type {
@@ -82,8 +82,8 @@ function extentOf(obj: CityObject, city: CityFile): number[] | undefined {
   return Number.isFinite(ext[0]) ? ext : undefined;
 }
 
-/** What OSM's per-object file says (osm_buildings.py; values as strings). */
-type OsmRow = Partial<Record<keyof OsmBuildingFacts, string | number>>;
+/** What OSM's per-object file says (osm_buildings.py). */
+type OsmRow = OsmBuildingRow;
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
@@ -104,7 +104,7 @@ function osmOf(
   const out: OsmRow = {};
   for (const row of rows) {
     for (const [k, v] of Object.entries(row)) {
-      out[k as keyof OsmRow] ??= v;
+      (out as Record<string, unknown>)[k] ??= v;
     }
   }
   return out;
@@ -152,8 +152,8 @@ function directoryEntry(
   wd: string | undefined
 ): WissenBuilding | undefined {
   const all = city.CityObjects;
-  const name = row.name ? String(row.name) : undefined;
-  const addr = row.addr ? String(row.addr) : undefined;
+  const name = row.name === "" ? undefined : row.name;
+  const addr = row.addr === "" ? undefined : row.addr;
   const heritage = Number(row.heritage) > 0;
   if (!(name || addr || heritage || wd)) {
     return undefined;

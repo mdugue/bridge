@@ -23,6 +23,7 @@ import type {
   ShopfrontFile,
 } from "../lib/city/features";
 import { parseBakeFile } from "../lib/city/bake-file";
+import { OSM_BUILDINGS_FILE } from "../lib/city/osm-buildings-file";
 import { LANDMARKS_FILE } from "../lib/city/landmarks-file";
 import { cityMeshSourceFiles, tileIds } from "../lib/city/tile";
 import type { CityJsonDocument } from "../lib/city/types";
@@ -93,9 +94,11 @@ for (const tile of tiles) {
   const file = read(src.windows) as WindowFile | undefined;
   const walls = Object.values(file?.buildings ?? {}).flat();
   // the OSM facts and the landmarks: the windows' gate reads them
+  const osmJson = read(src.osmBuild);
   const osm: OsmBuildingLut = {
-    ...(read(src.osmBuild) as { objects?: OsmBuildingLut } | undefined)
-      ?.objects,
+    ...(osmJson === undefined
+      ? {}
+      : parseBakeFile(OSM_BUILDINGS_FILE, osmJson, src.osmBuild).objects),
   };
   const landmarksJson = read(src.landmarks);
   const landmarks =
