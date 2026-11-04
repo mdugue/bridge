@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -15,6 +16,9 @@ import type { DataManifest } from "../lib/city/tile";
  * artifact under a content-hashed name, the manifest that maps the logical
  * names to them, and, at the end, nothing else — a file no publish named
  * this run is pruned. A warmer (warmers.ts) only names: it writes nothing.
+ * Every file is written whole or not at all (`writeWhole`): a run killed
+ * mid-write leaves a part file, which the next run prunes, never a
+ * truncated file under a name it would trust.
  */
 export interface Publisher {
   /** publishes `content` as `logical`; returns the name it is served
@@ -24,6 +28,13 @@ export interface Publisher {
   publishPlain: (name: string, content: Uint8Array) => void;
   /** writes the manifest and prunes what this run did not name */
   finish: () => { artifacts: number; written: number; pruned: number };
+}
+
+/** `content` at `dest`, through this process's part file renamed over it. */
+function writeWhole(dest: string, content: Uint8Array | string): void {
+  const part = `${dest}.${process.pid}.part`;
+  writeFileSync(part, content);
+  renameSync(part, dest);
 }
 
 /** `name.ext` → `name.<8 hex of sha1>.ext` (`.glb.gz`, `.pts.gz`, `.crw.gz`
@@ -51,7 +62,7 @@ export function createPublisher(
       keep.add(hashed);
       const dest = path.join(outDir, hashed);
       if (!opts.warming && !existsSync(dest)) {
-        writeFileSync(dest, content);
+        writeWhole(dest, content);
         written += 1;
       }
       return hashed;
@@ -59,7 +70,7 @@ export function createPublisher(
     publishPlain: (name, content) => {
       keep.add(name);
       if (!opts.warming) {
-        writeFileSync(path.join(outDir, name), content);
+        writeWhole(path.join(outDir, name), content);
       }
     },
     finish: () => {
@@ -67,7 +78,7 @@ export function createPublisher(
       if (opts.warming) {
         return { artifacts, written: 0, pruned: 0 };
       }
-      writeFileSync(
+      writeWhole(
         path.join(outDir, MANIFEST_FILE),
         `${JSON.stringify(manifest, null, 2)}\n`
       );

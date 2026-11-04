@@ -1013,7 +1013,10 @@ weld and quantisation, the gzip), then the fine grounds (≈ 140, the line
 levels' ≈ 20 among them: Delatin and the DGMs' LZW).
 
 **Publish.** Each file is written to `public/data/<site>/` as
-`<stem>.<8 hex of sha1>.<ext>` (`.glb.gz` keeps both suffixes);
+`<stem>.<8 hex of sha1>.<ext>` (`.glb.gz` keeps both suffixes), whole or
+not at all (`scripts/publisher.ts`: a part file renamed into place, so a
+killed run leaves a part file the next one prunes, never a truncated file
+under a name it trusts);
 `manifest.json` (`{ version: 1, files: {logical: hashed} }`) maps every
 name, but the viewer looks up only the tileset in it: the tileset names
 the hashed content, and the content's `extras` name the hashed side files
