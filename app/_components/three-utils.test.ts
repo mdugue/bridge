@@ -368,6 +368,25 @@ test("a compile sees a drawable's materials shown, and then each as it was", () 
     })
   ).toThrow("lost device");
   expect(hidden.visible).toBe(false);
-  // nothing to show on a group
+  // nothing to show on an empty group
   expect(withMaterialsShown(new Group(), () => 1)).toBe(1);
+});
+
+test("a compile of a group sees its descendants' night-only materials shown", () => {
+  const night = new MeshBasicNodeMaterial();
+  night.visible = false;
+  const day = new MeshBasicNodeMaterial();
+  const root = new Group();
+  const inner = new Group();
+  root.add(new Mesh(new BoxGeometry(), day), inner);
+  // shared by two drawables: still put back hidden
+  inner.add(
+    new Mesh(new BoxGeometry(), night),
+    new Mesh(new BoxGeometry(), [night, day])
+  );
+  expect(withMaterialsShown(root, () => [night.visible, day.visible])).toEqual([
+    true,
+    true,
+  ]);
+  expect([night.visible, day.visible]).toEqual([false, true]);
 });
