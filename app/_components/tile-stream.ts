@@ -122,6 +122,12 @@ import { createSharedRasters } from "./shared-rasters";
 import type { SharedRasters } from "./shared-rasters";
 import { loadHorizonTexture, loadSkyViewTexture } from "./sky-light";
 import { dressStairs } from "./stair-layer";
+import {
+  MAX_LATE_OVERTAKES,
+  withinCompileWait,
+  withinWait,
+} from "./late-parts";
+import type { Compiled } from "./late-parts";
 import { streamTimings } from "./stream-timing";
 import { whenIdle } from "./main-yield";
 import { bvhBytesUnder } from "./collision";
@@ -560,8 +566,6 @@ export function cpuBytesOf(
   return out;
 }
 
-/** How long a tile may wait on its compile before it shows regardless. */
-const COMPILE_WAIT_MS = 3000;
 /**
  * Meshopt decode workers per tier. Each worker's WebAssembly heap grows to
  * the largest buffer it has decoded (a dense building tile's 75 MB) and
@@ -586,19 +590,6 @@ export const MESHOPT_WORKERS: Readonly<Record<DeviceTier, number>> = {
  */
 export function handOverWaitMs(tier: DeviceTier): number {
   return tier === "mobile" ? 0 : 1500;
-}
-
-async function withinWait(done: Promise<unknown>, ms: number): Promise<void> {
-  await Promise.race([
-    done,
-    new Promise<void>((resolve) => {
-      setTimeout(resolve, ms);
-    }),
-  ]);
-}
-
-export async function withinCompileWait(done: Promise<unknown>): Promise<void> {
-  await withinWait(done, COMPILE_WAIT_MS);
 }
 
 /**
@@ -734,13 +725,6 @@ export function asksOf(dressing: TileDressing): AskSet<FeatureInquiry>[] {
 /** The site tile a content root is of (its extras), for the trail. */
 const tileIdOf = (scene: Object3D): string =>
   (scene.userData as Partial<ContentExtras>).tileId ?? "?";
-
-/**
- * How a compile ended (`DressingPlugin.compileUnder`): done, its buffers on
- * the GPU with it; not run, nothing could compile it yet; failed; or out
- * of memory — the GPU or the page could not make room.
- */
-export type Compiled = "done" | "failed" | "not run" | "out of memory";
 
 /** The goals, posts and nets of the grounds this tile owns (a ground on a
  *  seam is in both tiles' tables; its centre decides). */
@@ -1448,11 +1432,6 @@ async function buildDressing(
  *  level's, so every tile in view has trees before the nearest has all. */
 const COARSE_DRESSING_RANK = 0;
 const FINE_DRESSING_RANK = 1;
-/** How many coarse dressings may go ahead of a fine one queued before
- *  them: in a long flight the coarse levels keep landing, and the tile
- *  under the camera (the boot's spawn tile, which `ready` waits for)
- *  still gets its trees. */
-const MAX_DRESSING_OVERTAKES = 4;
 
 /** A built dressing's geometry bytes, as its parts stand now (the
  *  traffic's bodies count once built). */
@@ -2050,7 +2029,7 @@ export class DressingPlugin {
 
   /** Dressings build one at a time, after the gate: each is a long task.
    *  The crowns' seasonal programs warm up beside them (warmCrowns). */
-  private readonly lane = createTaskGate(1, MAX_DRESSING_OVERTAKES);
+  private readonly lane = createTaskGate(1, MAX_LATE_OVERTAKES);
   /** the compile waits of the last two dressings built: a build waits
    *  out the older one first (queueDressing: it overlaps the last one's
    *  compile, never two) */

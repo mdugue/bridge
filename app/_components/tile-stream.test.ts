@@ -37,8 +37,8 @@ import {
   takesOver,
   trafficSlot,
 } from "./tile-stream";
+import type { Compiled } from "./late-parts";
 import type {
-  Compiled,
   TileDressing,
   TileStreamContext,
   TrafficHost,

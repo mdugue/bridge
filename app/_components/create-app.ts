@@ -220,8 +220,8 @@ import {
   createTileStream,
   DRESSING_PART_NAMES,
   DRESSING_PARTS,
-  withinCompileWait,
 } from "./tile-stream";
+import { withinCompileWait } from "./late-parts";
 import type { CpuBytes, DressingPartName, TileDressing } from "./tile-stream";
 import { loadGroundPlate } from "./ground-plate-layer";
 import type { GroundPlate } from "./ground-plate-layer";
