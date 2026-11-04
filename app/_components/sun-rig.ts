@@ -215,6 +215,12 @@ const SQUARE_BIAS = -0.0003;
  */
 const SQUARE_PCF_RADIUS = 5;
 
+/** The warped map's softness is fitted anew once the eye moved this share
+ *  of its height over the ground … */
+const SOFT_STEP = 0.01;
+/** … or turned more than 0.6° (cos). */
+const SOFT_TURN_COS = Math.cos((0.6 * Math.PI) / 180);
+
 /**
  * Least time (ms) between two shadow-map redraws while the time of day is
  * dragged: the map is the heaviest pass (every caster), and a drag turns
@@ -538,6 +544,11 @@ export function createSunRig(
   let airborne = false;
   let warpFit: WarpFit | null = null;
   let warpView: WarpView | null = null;
+  // where the standing map's softness was last fitted to the view: it is
+  // fitted anew once the eye moved 1 % of its height or turned 0.6°
+  // (a fit is ~50 µs, too much for every frame of a flight on a phone)
+  const softEye = new Vector3(Number.NaN, Number.NaN, Number.NaN);
+  const softForward = new Vector3();
 
   /** The light, its target and the map's matrices after a move. The shadow
    *  camera is also a streaming camera (create-app.ts): three updates it
@@ -548,7 +559,7 @@ export function createSunRig(
     sun.target.updateMatrixWorld();
     sun.shadow.updateMatrices(sun);
     // the thin casters' width follows the map's texels (thin-casters.ts)
-    setThinCasterMap(sun.shadow.matrix, shadowMapSize, dir);
+    setThinCasterMap(sun.shadow.matrix, shadowMapSize, dir, warpFit !== null);
   };
 
   /** The map takes `fit`'s warp; `redraw` false while the sun is dragged
@@ -560,6 +571,7 @@ export function createSunRig(
     setBox(fit.box);
     sun.shadow.bias = fit.bias;
     sun.shadow.radius = WARP_PCF_RADIUS;
+    softEye.set(Number.NaN, Number.NaN, Number.NaN);
     sun.target.position.copy(fit.target);
     sun.position.copy(fit.target).add(dir);
     shadowReach.set(fit.target.x, -fit.target.z, fit.reachPlan);
@@ -653,6 +665,24 @@ export function createSunRig(
     reposition();
   };
 
+  /** The standing map's edges soften or sharpen with the view, as a map
+   *  fitted now would draw them (`warpSoftness`; a uniform, no depth
+   *  pass). */
+  const softenWithView = (fit: WarpFit, view: WarpView, height: number) => {
+    if (
+      softEye.distanceTo(view.eye) < SOFT_STEP * Math.max(height, 1) &&
+      softForward.dot(view.forward) > SOFT_TURN_COS
+    ) {
+      return;
+    }
+    softEye.copy(view.eye);
+    softForward.copy(view.forward);
+    const fresh = fitWarpedShadow(view, dir);
+    if (fresh) {
+      sun.shadow.radius = warpSoftness(fit, fresh, view, shadowMapSize);
+    }
+  };
+
   const follow = (
     camera: PerspectiveCamera,
     direction: Vector3,
@@ -700,17 +730,7 @@ export function createSunRig(
       up: new Vector3().setFromMatrixColumn(camera.matrixWorld, 1).normalize(),
     };
     if (warpFit && warpCovers(warpFit, warpView)) {
-      // the map stands; its edges soften or sharpen with the view, as a
-      // map fitted now would draw them (a uniform: no depth pass)
-      const fresh = fitWarpedShadow(warpView, dir);
-      if (fresh) {
-        sun.shadow.radius = warpSoftness(
-          warpFit,
-          fresh,
-          warpView,
-          shadowMapSize
-        );
-      }
+      softenWithView(warpFit, warpView, height);
       return;
     }
     // looking at the sky (no receiver in view) keeps what the map holds

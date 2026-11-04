@@ -14,7 +14,7 @@ import { uniform } from "three/tsl";
 import { SHADOW_BASE_RADIUS, SHADOW_MAX_RADIUS } from "@/lib/city/shadow-fit";
 import { shadowMapSizeFor } from "./scene-profile";
 import { createSunRig } from "./sun-rig";
-import { sunMapMatrix } from "./thin-casters";
+import { sunMapMatrix, thinCasterReach } from "./thin-casters";
 import type { AirView } from "./sun-rig";
 
 // Dresden — the primary tile's latitude/longitude.
@@ -482,6 +482,7 @@ test("diving inside the map's cover sharpens its edges without a redraw", () => 
   expect(sun.shadow.radius).toBe(3);
   // the thin casters read the map as drawn
   expect(sunMapMatrix.value.equals(sun.shadow.matrix)).toBe(true);
+  expect(thinCasterReach.value).toBeGreaterThan(0);
   sun.shadow.needsUpdate = false;
   // a little nearer along the view: the map stands, the edges sharpen
   followAt(sunRig, FLYING.clone().addScaledVector(LOOK, 25), LOOK, 100);
@@ -491,4 +492,6 @@ test("diving inside the map's cover sharpens its edges without a redraw", () => 
   // back on the ground the walker's square takes its own spread
   followAt(sunRig, new Vector3(0, 102, 0), LOOK, 100);
   expect(sun.shadow.radius).toBe(5);
+  // and draws its thin casters as they are
+  expect(thinCasterReach.value).toBe(0);
 });

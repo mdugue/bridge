@@ -244,8 +244,8 @@ is the codebook.
 | Contact shadows | GTAO at half resolution (normals from depth, 2 m radius, 0.15 m thickness), its 5×5 noise averaged out by a depth-aware box in its own half-resolution, one-byte pass; never motion-gated | — | `post-stack.ts` (*Kontaktschatten*) |
 | Ambient (sky) light | the sky-view factor (1 − mean sin² of the horizon within 150 m, 16 azimuths, over the ground and LoD2 with its rebuilt roofs, the drawn crowns at half transmission, GLO-30 beyond the site; `svf_<t>.png`, ≈2 m) scales the indirect diffuse only: the terrain directly, a facade by the ground's value 2.5 m outside it, doubled, faded to 1 toward the eaves | DGM1 + LoD2, the crowns, GLO-30 | `sky-light.ts`, `terrain-layer.ts`, `visual-style.ts` (*Himmelslicht*) |
 | Far shadow | the horizon (the skyline's angle in 16 azimuths, `horizon_<t>.png`, ≈8 m, two bands: 80 m–10 km — past 1 500 m the terrain alone, over GLO-30 beyond the site — and 8–80 m out): the sun's direct light on the ground fades across ±0.8° of it, joined to the shadow map by `min`; inside the shadow frustum only the far band, beyond it (faded in over its last 20 %) the higher of the two | DGM1 + LoD2, GLO-30 | `sky-light.ts`, `terrain-layer.ts`, `sun-rig.ts` (`shadowReach`) (*Ferne Schatten*) |
-| Shadows from the air | above 30 m over the ground (back below 20 m) the sun's one map is warped over the view (LiSPSM along the view's heading as the sun sees it): fine near the camera, coarse far off, out to 80 % of the fog's end; redrawn when the view leaves it or its nearest ground drifts 1.3 ×, not per frame; between redraws the edges' softness follows the view (`warpSoftness`), so a dive sharpens them smoothly | sun, camera | `shadow-warp.ts`, `sun-rig.ts`, `warped-shadow-camera.ts` |
-| Thin casters' shadows | lamp posts, poles, arms and masts, tram masts, furniture, tree stakes and the riverside's piles and posts are drawn at least one shadow-map texel wide across the sun in the shadow pass (at most 0.8 m; on foot the texels are finer than any of them): a faint line from afar that sharpens as the texels shrink, never a shadow that pops in when the map is renewed | sun, the map's texels | `thin-casters.ts` |
+| Shadows from the air | above 30 m over the ground (back below 20 m) the sun's one map is warped over the view (LiSPSM along the view's heading as the sun sees it): fine near the camera, coarse far off, out to 80 % of the fog's end; redrawn when the view leaves it or its nearest ground drifts 1.4 ×, not per frame; between redraws the edges' softness follows the view (`warpSoftness`), so a dive sharpens them smoothly | sun, camera | `shadow-warp.ts`, `sun-rig.ts`, `warped-shadow-camera.ts` |
+| Thin casters' shadows | lamp posts, poles, arms and masts, tram masts, furniture, tree stakes and the riverside's piles and posts are drawn at least one shadow-map texel wide across the sun in the shadow pass, from the air only (at most 0.8 m; on foot and in Modell as they are): a faint line from afar that sharpens as the texels shrink, never a shadow that pops in when the map is renewed | sun, the map's texels | `thin-casters.ts` |
 | Sky reflection | the sky dome alone, a second `SkyMesh` on the same sun and haze, rendered into a 64 px cube map whose mips are the blur (≈ 0.4 MB; not three's PMREM, which since r187 takes ≈ 10 MB) whenever the sun turns by 0.5° (while the time of day is dragged, at most four times a second, the last step after the wait) — never per frame, never `scene.environment` (that would light the matte clay with its irradiance too). Sampled only by glass and metal facades, gilding and patina and fountain water (the river is matte since 2026-10-25), weighted by a softened Schlick; mirrors the sky, never the city | the sky model | `sky-reflection.ts`, `sun-rig.ts` (*Spiegelung*) |
 | Depth of field | crosshair raycast distance; only what lies beyond the focus blurs (nearer is read as at the focus; blurring the foreground had laid a veil over the lower half — three's node still runs its near-field passes, over an empty field), focus range 1.6 × distance (≥ 45 m), bokeh scale 0.5 — a hint of lens, not a tilt-shift; off while moving; always on otherwise (no switch, no manual focus); desktop only — a phone does not build it (ADR 0047) | — | `post-stack.ts` |
 | Paper grain, vignette | screen-space; animated film grain and a heavier vignette under the monochrome picture styles | — | `post-stack.ts` (*Papierkorn*) |
@@ -337,16 +337,17 @@ change, not a re-bake
   at 300 m: shadows from the air began beside their casters), the PCF spread 3 texels
   (the square's 5). The map stands while the view, without the margin
   and to 85 % of its reach, lies on it and the nearest ground stays
-  within a factor 1.3 of the fit's, seen the same way (`warpCovers`); a
+  within a factor 1.4 of the fit's, seen the same way (`warpCovers`); a
   turn of the sun fits it anew. A simulated flight redraws it 9–14 times
   over 2 km straight (the square: 13–67 by altitude) and ~25 times over a
   full turn (the square: 1–14). **Diving** at a point from 260 m to 40 m
-  renews it about a dozen times, its texels there stepping 0.55 → 0.14 m
-  by ×0.86 each (until 2026-11-04: five steps of ×0.7, and the nearest
+  renews it ten times, its texels there stepping 0.55 → 0.14 m by ×0.83
+  each (until 2026-11-04: five steps of ×0.7, and the nearest
   ground was held against the fit's own taken with the margin, already
   up to 1.4 × nearer). What a renewal would still show is kept off it:
   the PCF spread follows the view between renewals (`warpSoftness`:
-  3 texels of a map fitted now, as texels of the map as drawn, 1.6–5;
+  3 texels of a map fitted now, as texels of the map as drawn, 1.6–5,
+  fitted anew per 1 % of the height moved or 0.6° turned;
   the edges' width at the dived-at point moves ≤ 1 % per 1 % of the
   dive, where it stepped by up to 46 %), and thin casters keep one texel
   of width (`thin-casters.ts`; a lamp post's shadow popped in when the

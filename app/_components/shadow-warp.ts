@@ -82,13 +82,14 @@ const MAX_EXTRUSION_M = 3000;
 const NEAR_BIAS_M = 0.08;
 
 /** A fit is renewed when the nearest receiver came this much nearer (or
- *  went this much further): its texels no longer suit the view. Each
- *  renewal steps the texels by about this factor, and what is finer than
- *  a texel (a chimney, a lamp's arm) comes or goes with the step: at 1.6
- *  a dive from 260 m to 40 m stepped them 0.55 → 0.37 → 0.26 → 0.19 →
- *  0.15 m, and each step showed. The softness follows the view between
- *  renewals (`warpSoftness`). */
-export const NEAREST_DRIFT = 1.3;
+ *  went this much further) than the fit's own view saw it: its texels no
+ *  longer suit the view. What is finer than a texel (a chimney, a dormer)
+ *  comes or goes with each renewal: a dive from 260 m to 40 m steps the
+ *  texels at the point dived at 0.55 → 0.14 m by ×0.83 ten times (until
+ *  2026-11-04 by ×0.7 five times, at 1.6 against the fit's nearest taken
+ *  with the margin). The softness follows the view between renewals
+ *  (`warpSoftness`), thin casters keep a texel's width (thin-casters.ts). */
+export const NEAREST_DRIFT = 1.4;
 
 /** The PCF spread in texels (three's `shadow.radius`) a fresh fit takes:
  *  the warped map's near texels are already as coarse as the walker's

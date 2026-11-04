@@ -60,7 +60,7 @@ number of lights into every lit material.
   coarser than the square's below ~200 m of altitude, and turning
   redraws the map about every 13° (the square: every 25–30°), while
   flying straight redraws it less often than the square did. A dive
-  renews it about every 1.3 × nearer; a thin caster's shadow from afar is
+  renews it about every 1.4 × nearer; a thin caster's shadow from afar is
   a faint line wider than the caster.
 - Cascaded shadow maps (`CSMShadowNode`) stay out: a map per cascade is
   memory a phone does not have.
