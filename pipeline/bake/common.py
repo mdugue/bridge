@@ -4,6 +4,7 @@ layers without geopandas, and the GeoJSON the viewer reads."""
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -163,6 +164,21 @@ class Tile:
 
     def osm_extract(self) -> Path | None:
         return self.osm if self.osm is not None and self.osm.exists() else None
+
+
+# a tile id as the downloads name it (lib/city/site.ts `tileIdOf`):
+# `<zone><easting km>_<northing km>_<edge km>_<land>`, e.g. 33412_5656_2_sn
+TILE_ID = re.compile(r"(\d{2})(\d+)_(\d+)_(\d+)_[a-z]+")
+
+
+def named_extent(tile_id: str) -> tuple[float, float, float, float] | None:
+    """The extent a tile id names, read from the name alone (nothing is
+    opened); None for an id of another scheme."""
+    m = TILE_ID.fullmatch(tile_id)
+    if m is None:
+        return None
+    e, n, km = (float(g) * 1000 for g in m.groups()[1:])
+    return e, n, e + km, n + km
 
 
 def owns(bounds: tuple[float, float, float, float], x: float, y: float) -> bool:

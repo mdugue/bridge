@@ -256,3 +256,45 @@ def test_a_flight_across_a_seam_keeps_both_landings(tmp_path, monkeypatch):
     # bottom → top: from this tile up onto the neighbour's ground
     (xa, _), (xb, _) = f["geometry"]["coordinates"]
     assert xa < X0 + SIZE < xb
+
+
+def test_the_dgm_opens_only_the_tile_and_its_grid_neighbours(tmp_path):
+    # a 2 km grid named as the downloads are: the tile, its eastern
+    # neighbour, and one two tiles away whose file is no raster at all
+    import rasterio
+    import rasterio.transform
+
+    from bake.common import Tile
+
+    tile = Tile(
+        "33410_5656_2_sn",
+        (410000.0, 5656000.0, 412000.0, 5658000.0),
+        25833,
+        tmp_path / "raw",
+        tmp_path / "data",
+    )
+
+    def dgm(tid: str, x0: float, z: float) -> None:
+        path = tile.data / "dgm" / f"dgm1_{tid}_tiff" / f"dgm1_{tid}.tif"
+        path.parent.mkdir(parents=True)
+        with rasterio.open(
+            path,
+            "w",
+            driver="GTiff",
+            width=SIZE,
+            height=SIZE,
+            count=1,
+            dtype="float32",
+            crs="EPSG:25833",
+            transform=rasterio.transform.from_origin(x0, 5656000.0 + SIZE, 1.0, 1.0),
+        ) as dst:
+            dst.write(np.full((1, SIZE, SIZE), z, dtype="float32"))
+
+    dgm("33410_5656_2_sn", 411800.0, 100.0)
+    dgm("33412_5656_2_sn", 412000.0, 103.0)
+    far = tile.data / "dgm" / "dgm1_33416_5656_2_sn_tiff" / "dgm1_33416_5656_2_sn.tif"
+    far.parent.mkdir(parents=True)
+    far.write_bytes(b"not a raster: opening it fails")
+    ground = stairs.Dgm(tile)
+    assert ground.at(411990.5, 5656100.5) == pytest.approx(100.0)
+    assert ground.at(412010.5, 5656100.5) == pytest.approx(103.0)

@@ -42,6 +42,8 @@ from .common import (
     feature,
     geometry_json,
     mosaic,
+    named_extent,
+    overlaps,
     write_geojson,
 )
 from .osm import has_extract, osm_number, read_osm, tag
@@ -210,12 +212,20 @@ def step_count(rise: float, other_tags: str | None) -> int:
 class Dgm:
     """The DGM1 on its 1 m grid around the tile — every committed tile's
     within `SEAM_M` of it, so a flight across a seam finds its landing on
-    the neighbour's ground — read as small-window medians."""
+    the neighbour's ground — read as small-window medians. Only the files
+    whose name places them there are opened (the tile and its grid
+    neighbours; one of another naming scheme is opened to see): the step
+    reads, and is re-baked for, those alone."""
 
     def __init__(self, tile: Tile):
         xmin, ymin, xmax, ymax = tile.bounds
         bounds = (xmin - SEAM_M, ymin - SEAM_M, xmax + SEAM_M, ymax + SEAM_M)
-        paths = sorted((tile.data / "dgm").glob("dgm1_*_tiff/dgm1_*.tif"))
+        paths = [
+            path
+            for path in sorted((tile.data / "dgm").glob("dgm1_*_tiff/dgm1_*.tif"))
+            if (named := named_extent(path.stem.removeprefix("dgm1_"))) is None
+            or overlaps(named, bounds)
+        ]
         self.z, self.transform = mosaic(paths, bounds)
 
     def at(self, x: float, y: float) -> float | None:
