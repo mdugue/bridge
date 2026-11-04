@@ -149,19 +149,6 @@ test.each(cases)("%s: a baked canopy has trees", (_, a) => {
   }
 });
 
-test.each(tiles)("%s: the roof colours are { meta, roofs }", (tile, site) => {
-  const path = nodePath.join(ROOT, cityMeshSourceFiles(site, tile).roofColor);
-  if (!existsSync(path)) {
-    return;
-  }
-  const doc = JSON.parse(readFileSync(path, "utf-8")) as Record<
-    string,
-    unknown
-  >;
-  expect(typeof doc.meta).toBe("object");
-  expect(doc.roofs !== null && typeof doc.roofs === "object").toBe(true);
-});
-
 test.each(cases)("%s: tree rows are hedge/treerow LineStrings", (_, a) => {
   for (const f of load<VegRowFeature>(a.vegrows)) {
     expect(f.geometry.type).toBe("LineString");

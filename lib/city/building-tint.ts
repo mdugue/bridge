@@ -499,15 +499,9 @@ export function roofColor(
  * buildings and roofs on posts beyond LoD2, `structures_<tile>`; each row
  * `[index, z, r, g, b]`, the feature's index in its file and its `z`, which
  * the build checks), all linear RGB read from the orthophoto's sunlit
- * texels.
+ * texels. Its schema: lib/city/roof-colours-file.ts (ADR 0059).
  */
-export interface RoofColours {
-  faces?: Record<string, readonly (readonly number[])[]>;
-  gaps?: readonly (readonly number[])[];
-  parts?: Record<string, readonly (readonly number[])[]>;
-  roofs?: RoofColorLut;
-  scan?: readonly (readonly number[])[];
-}
+export type { RoofColours } from "./roof-colours-file";
 
 /**
  * An object's attributes resolved through the root of its building tree: the
