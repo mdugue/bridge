@@ -150,13 +150,10 @@ describe("decodeGreyPng", () => {
         new Uint8Array(readFileSync(path.join(dir, file ?? "")))
       );
       expect(out.data.length).toBe(out.width * out.height);
-      let max = 0;
-      for (const value of out.data) {
-        if (value > max) {
-          max = value;
-        }
-      }
-      expect(max).toBeLessThanOrEqual(maxId);
+      // every, not for…of: over these 16 M texels that iterator is several
+      // times slower, and with every committed site it spends the whole
+      // timeout on CI.
+      expect(out.data.every((id) => id <= maxId)).toBe(true);
     }
   });
 
