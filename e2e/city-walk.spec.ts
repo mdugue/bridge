@@ -1793,6 +1793,10 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     // every step). Asserted through __poc.regressed rather than pixels — the
     // pass's visual delta is exactly what SwiftShader renders least like a
     // GPU.
+    // The previous test ends with a `setSun`, whose shadow redraw lands on
+    // the next frame or two; let it pass so the count below holds only what
+    // the walk itself redraws (the same 4 showed on main without this).
+    await waitForFrames(page, 3);
     const before = await page.evaluate(() => ({
       frames: window.__poc?.frames ?? 0,
       shadows: window.__poc?.shadowRenders ?? 0,
