@@ -1,12 +1,12 @@
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
-  type BufferGeometry,
   CylinderGeometry,
   Matrix4,
   MeshStandardNodeMaterial,
   Quaternion,
   Vector3,
 } from "three/webgpu";
+import type { BufferGeometry } from "three/webgpu";
 import type { InventoryTree } from "@/lib/city/tree-inventory";
 import { Instances, instancePosition } from "./instancing";
 import { sceneMaterial } from "./three-utils";
@@ -27,15 +27,17 @@ const STAKE_THICK = 0.05;
 const RAILS = [0.55, 1.75];
 const STAKE_COLOR = 0xdc_c4_9c;
 
+/** Post `k` of the three, on the circle round the stem. */
+const corner = (k: number) => {
+  const a = (k / 3) * Math.PI * 2;
+  return new Vector3(Math.cos(a) * STAKE_R, 0, Math.sin(a) * STAKE_R);
+};
+
 /** Three posts on a circle and a ring of rails between them, at the foot
  *  of a stem at the origin. A tile's own (its set's disposal frees it). */
 function stakeGeometry(): BufferGeometry {
   const parts: BufferGeometry[] = [];
-  const corner = (k: number) => {
-    const a = (k / 3) * Math.PI * 2;
-    return new Vector3(Math.cos(a) * STAKE_R, 0, Math.sin(a) * STAKE_R);
-  };
-  for (let k = 0; k < 3; k++) {
+  for (let k = 0; k < 3; k += 1) {
     const post = new CylinderGeometry(STAKE_THICK, STAKE_THICK, STAKE_H, 5);
     const at = corner(k);
     post.translate(at.x, STAKE_H / 2 - 0.15, at.z);
@@ -95,10 +97,11 @@ export function buildTreeStakes(
   const m = new Matrix4();
   const q = new Quaternion();
   const one = new Vector3(1, 1, 1);
-  trees.forEach((t, i) => {
+  for (let i = 0; i < trees.length; i += 1) {
+    const t = trees[i];
     q.setFromAxisAngle(Y_AXIS, t.rot);
     set.setMatrixAt(i, m.compose(new Vector3(t.x, t.ground, t.z), q, one));
-  });
+  }
   set.instanceMatrix.needsUpdate = true;
   set.computeBoundingSphere();
   set.castShadow = true;

@@ -1,4 +1,5 @@
-import { type Camera, type UniformNode, Vector3 } from "three/webgpu";
+import { Vector3 } from "three/webgpu";
+import type { Camera, UniformNode } from "three/webgpu";
 import {
   cameraPosition,
   cameraViewMatrix,

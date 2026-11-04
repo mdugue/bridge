@@ -4,15 +4,19 @@ import {
   LinearFilter,
   LinearMipmapLinearFilter,
   MeshStandardNodeMaterial,
-  type MeshStandardNodeMaterialParameters,
   NoColorSpace,
   RedFormat,
   RGBAFormat,
-  type Texture,
   UnsignedByteType,
   Vector2,
-  type Vector3,
-  type WebGPURenderer,
+} from "three/webgpu";
+import type {
+  MeshStandardNodeMaterialParameters,
+  Texture,
+  Vector3,
+  WebGPURenderer,
+  Node,
+  UniformNode,
 } from "three/webgpu";
 import {
   asin,
@@ -37,8 +41,8 @@ import {
   texture,
   vec2,
 } from "three/tsl";
-import type { Node, UniformNode } from "three/webgpu";
-import { decodeGreyPng, type GreyRaster } from "@/lib/city/png-raster";
+import { decodeGreyPng } from "@/lib/city/png-raster";
+import type { GreyRaster } from "@/lib/city/png-raster";
 import {
   FACADE_SVF_GAIN,
   FACADE_SVF_OFFSET_M,
@@ -53,21 +57,10 @@ import {
 import { groundUnderDesign } from "./design-site";
 import { isAbortError } from "./fetch-optional";
 import { nightShadowFree } from "./lantern";
-import {
-  type Slots,
-  setGraph,
-  setSlots,
-  slotTexture,
-  slotUniform,
-} from "./material-slots";
-import {
-  dataXY,
-  type F,
-  rasterUv,
-  type Tex,
-  type V2,
-  type V3,
-} from "./shader-chunks";
+import { setGraph, setSlots, slotTexture, slotUniform } from "./material-slots";
+import type { Slots } from "./material-slots";
+import { dataXY, rasterUv } from "./shader-chunks";
+import type { F, Tex, V2, V3 } from "./shader-chunks";
 import {
   dropDataOnUpload,
   fetchRasterBytes,
@@ -481,9 +474,9 @@ async function loadLightRaster<T extends Texture>(
       }
       return tex;
     }, signal);
-  } catch (err) {
-    if (isAbortError(err)) {
-      throw err;
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
     }
     return null;
   }
@@ -493,12 +486,12 @@ async function loadLightRaster<T extends Texture>(
  * The sky-view raster as a RED texture, LINEAR + mipmapped (a soft field).
  * See `loadLightRaster`.
  */
-export function loadSkyViewTexture(
+export async function loadSkyViewTexture(
   url: string,
   signal?: AbortSignal,
   renderer?: WebGPURenderer
 ): Promise<Texture | null> {
-  return loadLightRaster(
+  return await loadLightRaster(
     url,
     (raster) => {
       const tex = new DataTexture(
@@ -526,12 +519,12 @@ export function loadSkyViewTexture(
  * exactly a DataArrayTexture's layer-major layout. LINEAR (the angles
  * interpolate), no mipmaps. Absent, or an older one-band raster → null.
  */
-export function loadHorizonTexture(
+export async function loadHorizonTexture(
   url: string,
   signal?: AbortSignal,
   renderer?: WebGPURenderer
 ): Promise<DataArrayTexture | null> {
-  return loadLightRaster(
+  return await loadLightRaster(
     url,
     (raster) => {
       const n = raster.width / 4;

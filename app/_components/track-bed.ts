@@ -99,7 +99,7 @@ export function addSleepers(
     const o = lateral + sign * half;
     return [pts[i].x + nx * o, pts[i].y, pts[i].z + nz * o];
   };
-  for (let i = 0; i < pts.length - 1; i++) {
+  for (let i = 0; i < pts.length - 1; i += 1) {
     const l0 = edge(i, 1);
     const r0 = edge(i, -1);
     const l1 = edge(i + 1, 1);

@@ -14,7 +14,6 @@ import {
 import {
   ASK_KEY_HEADER,
   ASK_LIMITS,
-  type AskRequestProps,
   TOO_MANY_STEPS,
   conversationProblem,
   askPromptSite,
@@ -22,6 +21,7 @@ import {
   parseAskProps,
   plausibleKey,
 } from "@/lib/city/ask-city";
+import type { AskRequestProps } from "@/lib/city/ask-city";
 import {
   DEADLINE,
   ended,

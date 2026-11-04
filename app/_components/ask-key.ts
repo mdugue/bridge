@@ -5,11 +5,11 @@
  * token the key check gave. The site's server never stores it.
  */
 import {
-  type AskProviderId,
   ASK_PROVIDER_BY_ID,
   isAskModel,
   isAskProvider,
 } from "@/lib/city/ask-city";
+import type { AskProviderId } from "@/lib/city/ask-city";
 import { SESSION_KEYS, STORAGE_KEYS } from "./storage-keys";
 
 export interface AskKey {
@@ -38,9 +38,10 @@ function parse(text: string | null, remember: boolean): AskKey | null {
       return {
         provider: v.provider,
         // a model the picker no longer offers: the provider's first
-        model: isAskModel(v.provider, v.model)
-          ? (v.model as string)
-          : ASK_PROVIDER_BY_ID[v.provider].models[0].id,
+        model:
+          typeof v.model === "string" && isAskModel(v.provider, v.model)
+            ? v.model
+            : ASK_PROVIDER_BY_ID[v.provider].models[0].id,
         key: v.key,
         token: v.token,
         expires: v.expires,

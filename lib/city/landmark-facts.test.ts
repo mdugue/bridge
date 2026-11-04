@@ -4,9 +4,9 @@ import {
   factsFor,
   indexLandmarkFacts,
   isLandmarkFactsFile,
-  type LandmarkFactsEntry,
   landmarkFactsUrl,
 } from "./landmark-facts";
+import type { LandmarkFactsEntry } from "./landmark-facts";
 
 const FRAUENKIRCHE: LandmarkFactsEntry = {
   id: "Q157229",

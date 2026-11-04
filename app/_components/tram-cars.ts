@@ -20,29 +20,33 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import { RAIL_TOP_M, RAIL_TOP_ON_DECK_M } from "@/lib/city/tram";
 import {
   carLength,
   dayKindOf,
-  type MeasuredPattern,
   measurePattern,
   pointAlong,
   previousDayKind,
   routeOperator,
   runningTrams,
   secondsOfDay,
-  type TramDayKind,
   TRAM_LIVERIES,
   TRAM_TINTS,
-  type TramLivery,
-  type TramOperator,
-  type TramTimetable,
+} from "@/lib/city/tram-timetable";
+import type {
+  MeasuredPattern,
+  TramDayKind,
+  TramLivery,
+  TramOperator,
+  TramTimetable,
 } from "@/lib/city/tram-timetable";
 import { dataMarkAlpha, dataMarkColour } from "./glass";
 import { Instances, instancePosition, instanceTint } from "./instancing";
 import { mapWidenNode } from "./map-overlay";
-import { type DeckPoly, deckLift } from "@/lib/city/decks";
+import { deckLift } from "@/lib/city/decks";
+import type { DeckPoly } from "@/lib/city/decks";
 import type { F, V3 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 
@@ -108,14 +112,14 @@ const xyOf = (p: { x: number; y: number }): [number, number] => [p.x, p.y];
 
 /** A part's material: of one colour, or (`null`) the instance's tint —
  *  the livery's parts, coloured per car. */
-function partMaterial(color: number | null): MeshStandardNodeMaterial {
-  const key = color === null ? "livery" : color.toString(16);
+function partMaterial(paint: number | null): MeshStandardNodeMaterial {
+  const key = paint === null ? "livery" : paint.toString(16);
   return sceneMaterial(`tram-car:${key}`, () => {
     const m = new MeshStandardNodeMaterial({
-      color: new Color(color ?? 0xff_ff_ff),
+      color: new Color(paint ?? 0xff_ff_ff),
       roughness: 0.55,
     });
-    if (color === null) {
+    if (paint === null) {
       m.colorNode = instanceTint();
     }
     m.positionNode = instancePosition(
@@ -191,8 +195,8 @@ function createTrails() {
     a.setUsage(DynamicDrawUsage);
   }
   const index: number[] = [];
-  for (let t = 0; t < TRAIL_CAPACITY; t++) {
-    for (let k = 0; k < TRAIL_POINTS - 1; k++) {
+  for (let t = 0; t < TRAIL_CAPACITY; t += 1) {
+    for (let k = 0; k < TRAIL_POINTS - 1; k += 1) {
       const a = (t * TRAIL_POINTS + k) * 2;
       // left, right of each cross-section, running back along the path:
       // wound to face up
@@ -229,7 +233,7 @@ function createTrails() {
       }
       const base = count * TRAIL_POINTS * 2;
       let lastY: number | null = null;
-      for (let k = 0; k < TRAIL_POINTS; k++) {
+      for (let k = 0; k < TRAIL_POINTS; k += 1) {
         const t = k / (TRAIL_POINTS - 1);
         const at = pointAlong(p, Math.max(from - t * TRAIL_M, 0));
         const y: number | null = railTop(at.x, at.y, at.onBridge) ?? lastY;
@@ -252,7 +256,7 @@ function createTrails() {
           fade.setX(v, y === null ? 0 : left);
         }
       }
-      count++;
+      count += 1;
     },
     end: () => {
       geo.setDrawRange(0, count * (TRAIL_POINTS - 1) * 6);
@@ -335,10 +339,10 @@ export function createTramCars(
   ];
   // One matrix per section, shared by every part: the body owns it.
   const sets: Instances[] = [];
-  parts.forEach(({ geo, color, name, tint: tinted }) => {
+  for (const { geo, color: paint, name, tint: tinted } of parts) {
     const set = new Instances(
       geo,
-      partMaterial(color),
+      partMaterial(paint),
       CAPACITY,
       sets[0]?.instanceMatrix
     );
@@ -355,7 +359,7 @@ export function createTramCars(
     }
     group.add(set);
     sets.push(set);
-  });
+  }
   const [body] = sets;
   // which operator's colours each slot holds (-1: none yet)
   const slotOperator = new Int8Array(CAPACITY).fill(-1);
@@ -367,11 +371,12 @@ export function createTramCars(
     }
     slotOperator[slot] = k;
     const livery = TRAM_LIVERIES[operator];
-    parts.forEach((p, i) => {
+    for (let i = 0; i < parts.length; i += 1) {
+      const p = parts[i];
       if (p.tint) {
         sets[i].setColorAt(slot, tint.setHex(livery[p.tint]));
       }
-    });
+    }
     return true;
   };
   const trails = createTrails();
@@ -416,7 +421,7 @@ export function createTramCars(
       if (ctx.heightAt(...xyOf(pointAlong(p, head))) !== null) {
         trails.add(p, head - carM, railTop, ctx.offset);
       }
-      for (let k = 0; k < sections && n < CAPACITY; k++) {
+      for (let k = 0; k < sections && n < CAPACITY; k += 1) {
         const front = head - k * (sectionM + SECTION_GAP_M);
         const a = pointAlong(p, front);
         const b = pointAlong(p, front - sectionM);
@@ -441,7 +446,7 @@ export function createTramCars(
         );
         body.setMatrixAt(n, m);
         repainted = paint(n, operator) || repainted;
-        n++;
+        n += 1;
       }
     }
     for (const set of sets) {

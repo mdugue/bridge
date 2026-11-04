@@ -9,11 +9,10 @@ import {
   InterleavedBufferAttribute,
   Line,
   LineSegments,
-  type Material,
   Mesh,
-  type Object3D,
   Points,
 } from "three/webgpu";
+import type { Material, Object3D } from "three/webgpu";
 import { graphOf } from "./material-slots";
 import { releaseRenderState } from "./three-utils";
 
@@ -60,10 +59,9 @@ function sameKind(array: ArrayLike<number>, length: number) {
 
 /** Three vertices (one instance) in the layout of `geometry`. */
 export function layoutStub(geometry: BufferGeometry): BufferGeometry {
-  const stub =
-    (geometry as InstancedBufferGeometry).isInstancedBufferGeometry === true
-      ? new InstancedBufferGeometry()
-      : new BufferGeometry();
+  const stub = (geometry as InstancedBufferGeometry).isInstancedBufferGeometry
+    ? new InstancedBufferGeometry()
+    : new BufferGeometry();
   if ((stub as InstancedBufferGeometry).isInstancedBufferGeometry) {
     (stub as InstancedBufferGeometry).instanceCount = 1;
   }
@@ -149,7 +147,10 @@ function slotless(material: Material): Material {
  *  (its array's element type, per instance or per vertex), and a line
  *  strip's by its index format: all of which `layoutStub` keeps. */
 function anchorKey(drawable: Drawable, material: Material): string {
-  const geometry = drawable.geometry as BufferGeometry;
+  const { geometry } = drawable;
+  if (!geometry) {
+    throw new Error("pipeline anchor: the drawable has no geometry");
+  }
   const layout = Object.entries(geometry.attributes)
     .map(([name, a]) => {
       const i = a as InterleavedBufferAttribute;
@@ -164,7 +165,7 @@ function anchorKey(drawable: Drawable, material: Material): string {
       const instanced = i.isInterleavedBufferAttribute
         ? (i.data as { isInstancedInterleavedBuffer?: boolean })
             .isInstancedInterleavedBuffer === true
-        : (a as InstancedBufferAttribute).isInstancedBufferAttribute === true;
+        : (a as InstancedBufferAttribute).isInstancedBufferAttribute;
       return `${name}:${a.itemSize}:${a.normalized ? "n" : ""}:${data}:${array.constructor.name}:${instanced ? "s" : ""}`;
     })
     .sort()
@@ -251,12 +252,15 @@ export function createPipelineAnchors(
   // each anchor's compile, settled or in flight: a second ask for a build
   // resolves once it is held, not as soon as its stand-in is made
   const ready = new Map<string, Promise<void>>();
-  const track = (keys: readonly string[], compiling: Promise<void>) => {
-    const settled = compiling.catch(() => undefined);
+  const track = async (keys: readonly string[], compiling: Promise<void>) => {
+    const settled = compiling.catch(() => {
+      // a failed compile reaches the caller through `compiling` below; the
+      // copy kept in `ready` only has to settle
+    });
     for (const key of keys) {
       ready.set(key, settled);
     }
-    return compiling;
+    await compiling;
   };
   // A per-tile material anchored as itself (`every`): its anchors go when
   // the tile disposes it — out of a set still waiting for its turn too, so
@@ -353,12 +357,13 @@ export function createPipelineAnchors(
           // builds them over several frames, so one built after it was
           // freed holds a render object and its stub's buffers again —
           // freed once more, now that nothing builds it.
-          made.forEach((anchor, i) => {
+          for (let i = 0; i < made.length; i += 1) {
+            const anchor = made[i];
             if (anchors.get(keys[i]) !== anchor) {
               (anchor as Drawable).geometry?.dispose();
               releaseRenderState(anchor);
             }
-          });
+          }
         }
       }
       await Promise.all(others);

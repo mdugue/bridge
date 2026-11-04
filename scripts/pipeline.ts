@@ -53,12 +53,8 @@
  * data/<site>/ into its tileset (prepare-sites.ts → prepare-data.ts).
  */
 import { spawnSync } from "node:child_process";
-import {
-  osmExtractUrl,
-  type Site,
-  tileExtentOf,
-  tileIdOf,
-} from "../lib/city/site";
+import { osmExtractUrl, tileExtentOf, tileIdOf } from "../lib/city/site";
+import type { Site } from "../lib/city/site";
 import { providerRawDir, siteDataDir } from "../lib/city/tile";
 import { siteFromArgs } from "../sites";
 
@@ -141,8 +137,8 @@ if (import.meta.main) {
       command,
       "--spec",
       JSON.stringify(siteSpec(site)),
-      ...(step >= 0 ? ["--step", args[step + 1] ?? ""] : []),
-      ...(jobs >= 0 ? ["--jobs", args[jobs + 1] ?? ""] : []),
+      ...(step === -1 ? [] : ["--step", args[step + 1] ?? ""]),
+      ...(jobs === -1 ? [] : ["--jobs", args[jobs + 1] ?? ""]),
       ...(tiles.length > 0 ? ["--tile", ...tiles] : []),
       ...args.filter(
         (a) => a === "--lsc" || a === "--research" || a === "--force"

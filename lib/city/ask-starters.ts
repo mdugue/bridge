@@ -39,7 +39,7 @@ type Gender = "f" | "m" | "n";
 /** The gender a landmark's name most likely has, by its last word's
  *  ending; null where it cannot be told (then no article is used). */
 export function genderOf(name: string): Gender | null {
-  const word = (name.split(/[\s-]/).at(-1) ?? "").toLowerCase();
+  const word = (name.split(/[\s-]/u).at(-1) ?? "").toLowerCase();
   const ends = (list: readonly string[]) => list.some((e) => word.endsWith(e));
   if (
     ends([
@@ -271,7 +271,7 @@ export function placesAround(ctx: Pick<StarterContext, "at" | "landmarks">): {
   ahead: StarterLandmark | null;
   near: StarterLandmark | null;
 } {
-  const at = ctx.at;
+  const { at } = ctx;
   if (!at) {
     return { ahead: null, near: null };
   }
@@ -312,11 +312,12 @@ export function starterQuestions(
   random: () => number = Math.random
 ): string[] {
   const { ahead, near } = placesAround(ctx);
-  const place = ahead
-    ? one(AHEAD, random)?.(ahead.name)
-    : near
-      ? one(NEAR, random)?.(near.name)
-      : one(NO_PLACE, random);
+  let place = one(NO_PLACE, random);
+  if (ahead) {
+    place = one(AHEAD, random)?.(ahead.name);
+  } else if (near) {
+    place = one(NEAR, random)?.(near.name);
+  }
   const time =
     random() < 0.5
       ? one(HOURS[hourKind(ctx.now)], random)

@@ -9,34 +9,26 @@
  */
 import { BUILDING_FUNCTION, ROOF_TYPE } from "./adv-codes";
 import {
-  type CityObjectTable,
   OBJECT_FLAG_HERITAGE,
   OBJECT_FLAG_SHOP,
   OBJECT_SOURCE_GAP,
   OBJECT_SOURCE_SCAN,
   hasObjectFlag,
-  type Rgb,
 } from "./city-mesh";
+import type { CityObjectTable, Rgb } from "./city-mesh";
 import { decodeDrawn } from "./drawn-facts";
 import {
-  type CardCredits,
-  type CardFact,
   factLines,
   germanDates,
-  type InquiryCard,
   metres,
   osmSource,
   squareMetres,
   stated,
   whole,
 } from "./card-lines";
-import {
-  bridgeCard,
-  type FeatureInquiry,
-  monumentCard,
-  type TreeFacts,
-  treeCard,
-} from "./inquiry-features";
+import type { CardCredits, CardFact, InquiryCard } from "./card-lines";
+import { bridgeCard, monumentCard, treeCard } from "./inquiry-features";
+import type { FeatureInquiry, TreeFacts } from "./inquiry-features";
 import { moreCard } from "./inquiry-more";
 import type { Stated } from "./methods";
 import { bikeCard, trafficCard } from "./inquiry-traffic";
@@ -46,17 +38,18 @@ import {
   MEASURED_ROOF,
   MEASURED_SHAPE,
   NO_FACT,
-  type ObjectFacts,
 } from "./object-facts";
-import { parseLod2Stand, type SiteProvenance } from "./provenance";
+import type { ObjectFacts } from "./object-facts";
+import { parseLod2Stand } from "./provenance";
+import type { SiteProvenance } from "./provenance";
 import type { WindowSpec } from "./windows";
 import {
   factBuildings,
   factsFor,
   landmarkCardFacts,
-  type LandmarkFactsIndex,
   wikidataSource,
 } from "./landmark-facts";
+import type { LandmarkFactsIndex } from "./landmark-facts";
 
 export type { CardFact, InquiryCard } from "./card-lines";
 export { germanDates, metres, squareMetres } from "./card-lines";
@@ -318,7 +311,10 @@ function mergedFacts(inquiry: BuildingInquiry) {
   const mine = all.find(
     (o) => o.building && o.facts.buildingId === pick.buildingId
   )?.facts;
-  const building = leads.length > 0 ? leads : mine ? [mine] : [];
+  let building = leads;
+  if (leads.length === 0) {
+    building = mine ? [mine] : [];
+  }
   const names = distinct([pick.name, ...facts.map((f) => f.name)]);
   const heights = known(facts.map((f) => f.height));
   const areas = known(facts.map((f) => f.area));
@@ -330,7 +326,6 @@ function mergedFacts(inquiry: BuildingInquiry) {
     (s, a) => s + a,
     0
   );
-  const flags = all.reduce((sum, o) => sum | o.flags, 0);
   return {
     address: addressLine(distinct([pick.addr, ...facts.map((f) => f.addr)])),
     created: pick.created || distinct(facts.map((f) => f.created))[0] || "",
@@ -342,11 +337,14 @@ function mergedFacts(inquiry: BuildingInquiry) {
     name: names[0] ?? "",
     parts: all.filter((o) => !o.building).length,
     buildings: once(all.filter((o) => o.building)).length,
-    heritage: hasObjectFlag(flags, OBJECT_FLAG_HERITAGE),
+    heritage: all.some((o) => hasObjectFlag(o.flags, OBJECT_FLAG_HERITAGE)),
     rebuilt: facts.some((f) => isMeasuredRoof(f.roofType)),
-    shop: hasObjectFlag(flags, OBJECT_FLAG_SHOP),
+    shop: all.some((o) => hasObjectFlag(o.flags, OBJECT_FLAG_SHOP)),
   };
 }
+
+/** Whether a merged fact is known. */
+const isKnown = (v: number) => v !== NO_FACT && v > 0;
 
 /**
  * The fact lines in reading order; a line whose value is unknown is left
@@ -359,10 +357,9 @@ function cardFacts(
   scan: boolean,
   use: string
 ): CardFact[] {
-  const known = (v: number) => v !== NO_FACT && v > 0;
   return factLines([
     ["Nutzung", scan || use ? "" : "nicht angegeben"],
-    ["Höhe", known(t.height) ? metres(t.height) : ""],
+    ["Höhe", isKnown(t.height) ? metres(t.height) : ""],
     ["Traufe", !scan && pick.eaveH > 0 ? metres(pick.eaveH) : ""],
     [
       "Dach",
@@ -371,7 +368,7 @@ function cardFacts(
       isMeasuredRoof(pick.facts.roofType) ? "detected" : undefined,
     ],
     ["Grundfläche", t.area > 0 ? squareMetres(t.area) : ""],
-    ["Geschosse", known(t.levels) ? whole.format(t.levels) : ""],
+    ["Geschosse", isKnown(t.levels) ? whole.format(t.levels) : ""],
     [
       "Gebäude",
       t.buildings > 1 ? `${whole.format(t.buildings)} im Stadtmodell` : "",
@@ -397,31 +394,43 @@ export function inquiryCard(
   landmarks: LandmarkFactsIndex | null = null
 ): InquiryCard {
   switch (inquiry.kind) {
-    case "building":
+    case "building": {
       return withLandmarkFacts(
         buildingCard(inquiry, provenance, credits),
         inquiry,
         landmarks
       );
-    case "tree":
+    }
+    case "tree": {
       return treeCard(inquiry, treeFacts, provenance, credits);
-    case "monument":
+    }
+    case "monument": {
       return monumentCard(inquiry, provenance, credits);
-    case "bridge":
+    }
+    case "bridge": {
       return bridgeCard(inquiry, provenance, credits);
-    case "traffic":
+    }
+    case "traffic": {
       return trafficCard(inquiry);
-    case "bikes":
+    }
+    case "bikes": {
       return bikeCard(inquiry);
-    case "design":
+    }
+    case "design": {
       return designCard(inquiry);
+    }
     case "canopy":
     case "furniture":
     case "hedge":
     case "lamp":
     case "landing":
-    case "stop":
+    case "stop": {
       return moreCard(inquiry, provenance, credits);
+    }
+    default: {
+      const unknown: never = inquiry;
+      throw new Error(`unknown inquiry kind: ${String(unknown)}`);
+    }
   }
 }
 
@@ -510,7 +519,7 @@ function buildingCard(
     osmHeight ? "Höhe" : "",
     t.name ? "Name" : "",
     t.address ? "Adresse" : "",
-    t.levels !== NO_FACT ? "Geschosse" : "",
+    t.levels === NO_FACT ? "" : "Geschosse",
     t.heritage ? "Denkmal" : "",
   ].filter(Boolean);
   const sources: Stated[] = buildingSources(inquiry, provenance, credits, {

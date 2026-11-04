@@ -6,7 +6,7 @@
  */
 
 import { copyFileSync, mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import nodePath from "node:path";
 
 /** The served name of each module and the package file it is copied from. */
 export const WASM_FILES: Readonly<Record<string, string>> = {
@@ -18,14 +18,14 @@ export const WASM_FILES: Readonly<Record<string, string>> = {
   "sql-wasm-browser.wasm": "sql.js/dist/sql-wasm-browser.wasm",
 };
 
-const root = join(import.meta.dir, "..");
-const out = join(root, "public", "wasm");
+const root = nodePath.join(import.meta.dir, "..");
+const out = nodePath.join(root, "public", "wasm");
 
 if (import.meta.main) {
   mkdirSync(out, { recursive: true });
   for (const [name, from] of Object.entries(WASM_FILES)) {
     const source = Bun.resolveSync(from, root);
-    mkdirSync(dirname(join(out, name)), { recursive: true });
-    copyFileSync(source, join(out, name));
+    mkdirSync(nodePath.dirname(nodePath.join(out, name)), { recursive: true });
+    copyFileSync(source, nodePath.join(out, name));
   }
 }

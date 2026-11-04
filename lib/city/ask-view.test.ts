@@ -1,12 +1,12 @@
 import { expect, test } from "bun:test";
-import {
-  ASK_FOV,
-  type AskTarget,
-  boundsTarget,
-  type Framed,
-  frameTargets,
-  streetView,
-} from "./ask-view";
+import { ASK_FOV, boundsTarget, frameTargets, streetView } from "./ask-view";
+import type { AskTarget, Framed } from "./ask-view";
+
+/** A block south of the church hides it from every eye south of it. */
+const sightHit = (
+  eye: { x: number; y: number; z: number },
+  p: { x: number; y: number; z: number }
+) => (eye.y < -50 && p.y > eye.y ? { x: 0, y: -60, z: 140 } : null);
 
 test("on foot the walker stands in front, on the side they come from, looking at it", () => {
   const v = streetView({ x: 1000, y: 2000, h: 20 }, { x: 1000, y: 1500 });
@@ -148,11 +148,6 @@ test("places in a row are seen side by side, not behind each other", () => {
 });
 
 test("a heading whose sight lines a building cuts loses", () => {
-  // a block south of the church hides it from every eye south of it
-  const sightHit = (
-    eye: { x: number; y: number; z: number },
-    p: { x: number; y: number; z: number }
-  ) => (eye.y < -50 && p.y > eye.y ? { x: 0, y: -60, z: 140 } : null);
   const framed = frameTargets([church], {
     aspect: 1.5,
     from: { x: 0, y: -3000 },
@@ -211,9 +206,14 @@ test("on a slope the eye's height is over the ground beneath the eye", () => {
   }
 });
 
+/** A ridge 145 m over the house, 60 m south of it. */
+const ridge = (_x: number, y: number) => (y < -60 && y > -400 ? 265 : 100);
+
+/** Terrain loaded round the place only, not under the eye. */
+const aroundPlace = (x: number, y: number) =>
+  Math.hypot(x, y) < 15 ? 100 : null;
+
 test("an eye a hill would bury backs off until it stands clear", () => {
-  // a ridge 145 m over the house, 60 m south of it
-  const ridge = (_x: number, y: number) => (y < -60 && y > -400 ? 265 : 100);
   const framed = frameTargets([{ x: 0, y: 0, z: 100, h: 20, r: 10 }], {
     aspect: 1.5,
     from: { x: 0, y: -3000 },
@@ -223,7 +223,7 @@ test("an eye a hill would bury backs off until it stands clear", () => {
   const { epsg, aboveGround } = framed.view;
   const eyeZ = ridge(epsg.x, epsg.y) + aboveGround;
   expect(aboveGround).toBeGreaterThanOrEqual(25);
-  for (let k = 1; k < 20; k++) {
+  for (let k = 1; k < 20; k += 1) {
     const t = k / 20;
     const y = epsg.y * (1 - t);
     expect(ridge(epsg.x * (1 - t), y)).toBeLessThan(eyeZ + (120 - eyeZ) * t);
@@ -241,13 +241,10 @@ test("on foot below a house on a slope, the walker looks up to it", () => {
 });
 
 test("a foot the terrain knew is the glide's ground where none is under the eye", () => {
-  // the terrain is loaded round the place only, not under the eye
-  const groundAt = (x: number, y: number) =>
-    Math.hypot(x, y) < 15 ? 100 : null;
   const framed = frameTargets([{ x: 0, y: 0, h: 30, r: 10 }], {
     aspect: 1.5,
     from: null,
-    groundAt,
+    groundAt: aroundPlace,
   });
   expect(framed.ground).toBe(100);
   expect(framed.view.aboveGround).toBeGreaterThan(0);

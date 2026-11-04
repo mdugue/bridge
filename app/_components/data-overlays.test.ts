@@ -14,17 +14,19 @@ afterEach(() => {
 function stubFetch(answer: (url: string) => Response): Map<string, number> {
   const calls = new Map<string, number>();
   // reason: the stub takes the URL only; the helpers pass a string
-  globalThis.fetch = ((url: string) => {
+  globalThis.fetch = (async (url: string) => {
     calls.set(url, (calls.get(url) ?? 0) + 1);
-    return Promise.resolve(answer(url));
+    return answer(url);
   }) as unknown as typeof fetch;
   return calls;
 }
 
 /** Waits (a few event-loop turns at a time) until `ok()` holds. */
 async function until(ok: () => boolean): Promise<void> {
-  for (let i = 0; i < 200 && !ok(); i++) {
-    await new Promise((r) => setTimeout(r, 1));
+  for (let i = 0; i < 200 && !ok(); i += 1) {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 1);
+    });
   }
   expect(ok()).toBe(true);
 }
@@ -52,8 +54,10 @@ test("a timetable that failed to load says so and is tried again on the next swi
   const statuses: (TramCarsStatus | null)[] = [];
   const overlays = createDataOverlays({
     ...base,
-    compile: () => Promise.resolve(),
-    onTramStatus: (s) => statuses.push(s),
+    compile: async () => {},
+    onTramStatus: (s) => {
+      statuses.push(s);
+    },
     tramTimetableUrl: "/data/trams.json",
   });
   overlays.apply(layers({ tramLayer: true }));
@@ -66,11 +70,8 @@ test("a timetable that failed to load says so and is tried again on the next swi
 });
 
 test("trams whose compile failed leave the scene, and the next switch-on adds one set", async () => {
-  stubFetch(
-    () =>
-      new Response(
-        JSON.stringify({ days: {}, patterns: [], profiles: [], routes: [] })
-      )
+  stubFetch(() =>
+    Response.json({ days: {}, patterns: [], profiles: [], routes: [] })
   );
   const parent = new Object3D();
   const trams = () => parent.children.filter((c) => c.name === "tram-cars");
@@ -79,13 +80,15 @@ test("trams whose compile failed leave the scene, and the next switch-on adds on
   const overlays = createDataOverlays({
     ...base,
     parent,
-    compile: () => {
-      compiles++;
-      return compiles === 1
-        ? Promise.reject(new Error("pipeline"))
-        : Promise.resolve();
+    compile: async () => {
+      compiles += 1;
+      if (compiles === 1) {
+        throw new Error("pipeline");
+      }
     },
-    onTramStatus: (s) => statuses.push(s),
+    onTramStatus: (s) => {
+      statuses.push(s);
+    },
     tramTimetableUrl: "/data/trams.json",
   });
   overlays.apply(layers({ tramLayer: true }));
@@ -108,39 +111,38 @@ test("a malformed timetable is a failed load", () => {
 });
 
 test("a counter layer whose compile failed compiles again with the next counts", async () => {
-  stubFetch(
-    () =>
-      new Response(
-        JSON.stringify({
-          features: [
-            {
-              geometry: { coordinates: [412_610, 5_657_020], type: "Point" },
-              properties: {
-                messzeit: "01.10.2026 07:00:00",
-                r1: "Richtung Nord",
-                w1: 10,
-              },
-              type: "Feature",
-            },
-          ],
-        })
-      )
+  stubFetch(() =>
+    Response.json({
+      features: [
+        {
+          geometry: { coordinates: [412_610, 5_657_020], type: "Point" },
+          properties: {
+            messzeit: "01.10.2026 07:00:00",
+            r1: "Richtung Nord",
+            w1: 10,
+          },
+          type: "Feature",
+        },
+      ],
+    })
   );
   let compiles = 0;
   const overlays = createDataOverlays({
     ...base,
     bikeFeed: "dresden",
-    compile: () => {
-      compiles++;
-      return compiles === 1
-        ? Promise.reject(new Error("pipeline"))
-        : Promise.resolve();
+    compile: async () => {
+      compiles += 1;
+      if (compiles === 1) {
+        throw new Error("pipeline");
+      }
     },
   });
   overlays.apply(layers({ bikeLayer: true }));
   await until(() => compiles === 1);
   // a turn for the rejection to land
-  await new Promise((r) => setTimeout(r, 1));
+  await new Promise((resolve) => {
+    setTimeout(resolve, 1);
+  });
   overlays.apply(layers({ bikeLayer: false }));
   overlays.apply(layers({ bikeLayer: true }));
   await until(() => compiles === 2);

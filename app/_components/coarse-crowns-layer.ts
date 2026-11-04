@@ -1,17 +1,7 @@
-import {
-  type BufferGeometry,
-  Color,
-  Group,
-  Matrix4,
-  Quaternion,
-  Vector3,
-} from "three/webgpu";
-import {
-  type CoarseCrown,
-  type CoarseForm,
-  coarseForm,
-  COARSE_TREE_WIDEN,
-} from "@/lib/city/coarse-crowns";
+import { Color, Group, Matrix4, Quaternion, Vector3 } from "three/webgpu";
+import type { BufferGeometry } from "three/webgpu";
+import { coarseForm, COARSE_TREE_WIDEN } from "@/lib/city/coarse-crowns";
+import type { CoarseCrown, CoarseForm } from "@/lib/city/coarse-crowns";
 import type { RecenterOffset } from "@/lib/city/ground-clamp";
 import { pineBase } from "@/lib/city/tree-inventory";
 import { bucketByCell, hash } from "@/lib/city/tree-placement";
@@ -21,12 +11,13 @@ import {
   buildPineGeo,
   COARSE_CONE_PROFILE,
   CONE_SEGMENTS,
-  type CrownBox,
 } from "./conifer-crown";
+import type { CrownBox } from "./conifer-crown";
 import type { CrownSeasonKey, SeasonalCrowns } from "./crown-season";
 import { seasonCrowns } from "./crown-season";
 import { Instances } from "./instancing";
-import { finished, inRuns, type Steps } from "@/lib/city/build-steps";
+import { finished, inRuns } from "@/lib/city/build-steps";
+import type { Steps } from "@/lib/city/build-steps";
 import { inventoryColor, registerCrownMatrix } from "./tree-inventory-layer";
 import {
   applySeasons,
@@ -36,8 +27,8 @@ import {
   genericSeasonKey,
   padCrownSphere,
   sceneCrowns,
-  type VegetationControl,
 } from "./vegetation-layer";
+import type { VegetationControl } from "./vegetation-layer";
 
 /**
  * The coarse terrain level's trees (lib/city/coarse-crowns.ts): a third of
@@ -104,7 +95,7 @@ function paintCrown(c: CoarseCrown, ground: number, col: Color): void {
   inventoryColor(
     col,
     {
-      colour: c.colour === "copper" ? 1 : c.colour === "golden" ? 2 : 0,
+      colour: colourCode(c.colour),
       genus: c.genus,
       ground,
       leaf: c.colour === "evergreen" ? "e" : "d",
@@ -156,11 +147,20 @@ export function buildCoarseCrowns(
   return finished(coarseCrownSteps(crowns, ctx));
 }
 
+/** An autumn colour's inventory code: copper 1, golden 2, else 0. */
+function colourCode(colour: string | undefined): number {
+  if (colour === "copper") {
+    return 1;
+  }
+  return colour === "golden" ? 2 : 0;
+}
+
 /** Crowns stood per step (build-steps.ts). */
 const STAND_RUN = 512;
 
 /** `buildCoarseCrowns` in steps: per run of crowns, per cell
- *  (build-steps.ts). */
+ *  (build-steps.ts).
+ *  @yields {void} after each run of crowns and each cell */
 export function* coarseCrownSteps(
   crowns: readonly CoarseCrown[],
   ctx: CoarseCrownContext
@@ -203,11 +203,12 @@ export function* coarseCrownSteps(
     if (form === "broad") {
       set.userData.styleCrown = "far";
     }
-    cell.forEach((c, i) => {
+    for (let i = 0; i < cell.length; i += 1) {
+      const c = cell[i];
       set.setMatrixAt(i, crownMatrix(c, c.ground, m));
       paintCrown(c, c.ground, col);
       set.setColorAt(i, col);
-    });
+    }
     set.instanceMatrix.needsUpdate = true;
     set.computeBoundingSphere();
     group.add(set);
@@ -219,9 +220,10 @@ export function* coarseCrownSteps(
   return {
     group,
     chunks: [],
-    // the crown uniforms are the scene's: the look reaches these through
-    // whichever control writes it
-    applyLook: () => undefined,
+    applyLook: () => {
+      // the crown uniforms are the scene's: the look reaches these through
+      // whichever control writes it
+    },
     multiTuft: () => false,
     setSeason: (day) => applySeasons(seasons, day),
     updateLod: () => false,

@@ -22,7 +22,7 @@ updates:
         patterns: [shadcn, "@base-ui/*"]
       lint-and-format:
         # oxlint declares a `>=` peer on oxlint-tsgolint: bump them together.
-        patterns: [oxlint, oxfmt, oxlint-tsgolint]
+        patterns: [oxlint, oxfmt, oxlint-tsgolint, ultracite]
       # The three.js stack moves as one: three-mesh-bvh, the CityJSON loader
       # and 3d-tiles-renderer all peer on `three`, so a solo bump is a silent
       # version skew.

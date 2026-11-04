@@ -17,21 +17,21 @@ import {
 } from "@/components/ui/card";
 import { descriptionOf } from "@/lib/docs/content";
 import {
-  type Lang,
   langOf,
   routeOf,
   segmentsOf,
   sourceUrl,
   twinOf,
 } from "@/lib/docs/routes";
+import type { Lang } from "@/lib/docs/routes";
 import { cn } from "cn";
 import { docIcon } from "../_components/doc-icon";
 import { DocNav, SECTION_LABEL } from "../_components/doc-nav";
-import { Landing, type LandingEntry } from "../_components/landing";
+import { Landing } from "../_components/landing";
+import type { LandingEntry } from "../_components/landing";
 import {
   descriptionFor,
   fileAt,
-  type HeroImage,
   heroImage,
   nav,
   neighbours,
@@ -39,6 +39,7 @@ import {
   readDoc,
   titleFor,
 } from "../_lib/docs";
+import type { HeroImage } from "../_lib/docs";
 import { renderDoc } from "../_lib/markdown";
 
 interface Props {
@@ -110,24 +111,24 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 // the whole knowledge base (partialPrefetching) instead of every page it
 // shows; the page itself, prerendered, comes on the click. The fallback
 // keeps the footer below the fold meanwhile.
-export default function WissenPage({ params }: Props) {
-  return (
-    <Suspense fallback={<div className="min-h-dvh" />}>
-      <WissenBody params={params} />
-    </Suspense>
-  );
-}
+const WissenPage = ({ params }: Props) => (
+  <Suspense fallback={<div className="min-h-dvh" />}>
+    <WissenBody params={params} />
+  </Suspense>
+);
 
-async function WissenBody({ params }: Props) {
+export default WissenPage;
+
+const WissenBody = async ({ params }: Props) => {
   const file = await fileOf(params);
   if (!file) {
     notFound();
   }
   return routeOf(file) === "/wissen" ? <Entry /> : <DocPage file={file} />;
-}
+};
 
 /** /wissen: the landing, built from the menu so it lists what the site has. */
-async function Entry() {
+const Entry = async () => {
   "use cache";
   const groups = nav();
   const pages = new Set(pageFiles());
@@ -154,7 +155,7 @@ async function Entry() {
       hero={heroImage()}
     />
   );
-}
+};
 
 /**
  * Spots of the map worth a strip (x% y% of the block), picked by eye on the
@@ -171,7 +172,7 @@ const FOCUS = [
 ];
 
 /** A narrow strip of the city map above a page, a different place per page. */
-function Cover({
+const Cover = ({
   file,
   hero,
   kicker,
@@ -179,10 +180,10 @@ function Cover({
   file: string;
   hero: HeroImage | null;
   kicker: string;
-}) {
+}) => {
   let hash = 0;
   for (const c of file) {
-    hash = (hash * 31 + c.charCodeAt(0)) >>> 0;
+    hash = (hash * 31 + (c.codePointAt(0) ?? 0)) >>> 0;
   }
   const position = FOCUS[hash % FOCUS.length];
   return (
@@ -208,10 +209,10 @@ function Cover({
       </div>
     </div>
   );
-}
+};
 
 /** One end of the pager: the neighbouring page as a card, whole card the link. */
-function PagerCard({
+const PagerCard = ({
   direction,
   href,
   label,
@@ -221,7 +222,7 @@ function PagerCard({
   href: string;
   label: string;
   title: string;
-}) {
+}) => {
   const next = direction === "next";
   return (
     <Card
@@ -250,14 +251,14 @@ function PagerCard({
       </CardHeader>
     </Card>
   );
-}
+};
 
 /**
  * One page, rendered once at build time. Cached because the Markdown pipeline
  * reads the clock on its way (Cache Components refuses that in a prerender
  * otherwise), and its output only changes with the file.
  */
-async function DocPage({ file }: { file: string }) {
+const DocPage = async ({ file }: { file: string }) => {
   "use cache";
   const pages = new Set(pageFiles());
   const lang: Lang = langOf(file) ?? "de";
@@ -268,11 +269,13 @@ async function DocPage({ file }: { file: string }) {
   const groups = nav();
   const { content, toc } = await renderDoc(file, readDoc(file), pages, lang);
   const place = neighbours(file);
-  const kicker = place
-    ? place.group.id === "dev"
-      ? place.group.label
-      : `${place.group.label} · ${place.index + 1} / ${place.count}`
-    : "Wissen";
+  let kicker = "Wissen";
+  if (place) {
+    kicker =
+      place.group.id === "dev"
+        ? place.group.label
+        : `${place.group.label} · ${place.index + 1} / ${place.count}`;
+  }
 
   return (
     <div
@@ -376,4 +379,4 @@ async function DocPage({ file }: { file: string }) {
       ) : null}
     </div>
   );
-}
+};

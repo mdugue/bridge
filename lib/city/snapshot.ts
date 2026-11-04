@@ -8,9 +8,12 @@
  * wrong instead of yielding NaN camera matrices. No THREE, no DOM.
  */
 import { DATA_LAYERS } from "./data-layers";
-import { LOOK_CONTROLS, type LookValues } from "./look-controls";
-import { isModelPreset, type ModelPresetId } from "./model-view";
-import { isRenderStyle, RENDER_STYLES, type RenderStyle } from "./render-style";
+import { LOOK_CONTROLS } from "./look-controls";
+import type { LookValues } from "./look-controls";
+import { isModelPreset } from "./model-view";
+import type { ModelPresetId } from "./model-view";
+import { isRenderStyle, RENDER_STYLES } from "./render-style";
+import type { RenderStyle } from "./render-style";
 
 export type MovementModeJson = "fly" | "walk";
 
@@ -71,7 +74,12 @@ export type SnapshotParse =
   | { ok: true; snapshot: Snapshot }
   | { ok: false; reason: string };
 
-class SnapshotError extends Error {}
+class SnapshotError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SnapshotError";
+  }
+}
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -283,10 +291,10 @@ export function parseSnapshot(text: string): SnapshotParse {
       snapshot.look = checkLook(root.look);
     }
     return { ok: true, snapshot };
-  } catch (err) {
-    if (err instanceof SnapshotError) {
-      return { ok: false, reason: err.message };
+  } catch (error) {
+    if (error instanceof SnapshotError) {
+      return { ok: false, reason: error.message };
     }
-    throw err;
+    throw error;
   }
 }

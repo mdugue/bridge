@@ -13,7 +13,8 @@ import {
   MeshBasicNodeMaterial,
   Object3D,
 } from "three/webgpu";
-import { finished, type Steps } from "@/lib/city/build-steps";
+import { finished } from "@/lib/city/build-steps";
+import type { Steps } from "@/lib/city/build-steps";
 import type { AskSet } from "@/lib/city/ask-solids";
 import type { TrafficFeature } from "@/lib/city/features";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
@@ -34,13 +35,32 @@ import {
   PHONE_STREAM,
   orderStreaming,
   showDataLayers,
-  type TileDressing,
-  type TileStreamContext,
-  type TrafficHost,
   takesOver,
   trafficSlot,
 } from "./tile-stream";
+import type {
+  TileDressing,
+  TileStreamContext,
+  TrafficHost,
+} from "./tile-stream";
 import type { VegetationControl } from "./vegetation-layer";
+
+const nothing = (): void => undefined;
+const emptyGroup = () => new Object3D();
+
+/** A tile the way the renderer's queue sees it, by its content uri. */
+const tileAt = (uri: string) => ({
+  content: { uri },
+  traversal: { distanceFromCamera: 0, error: 0, inFrustum: true, used: true },
+});
+
+/** The slices run at once. */
+const runNow = async (steps: Steps<unknown>) => finished(steps);
+
+function* broken(): Steps<void> {
+  yield;
+  throw new Error("bad furniture");
+}
 
 test("a dressing that joins the stream late takes the season, night and look of now", () => {
   const calls: string[] = [];
@@ -75,10 +95,10 @@ test("the stream's dispose releases every dressed tile, quietly", () => {
   const plugin = new DressingPlugin(
     {
       // the gate never opens: nothing is built here
-      dressingGate: new Promise<void>(() => undefined),
+      dressingGate: new Promise<void>(() => {}),
       bootTile: () => null,
       onChange: () => {
-        changes++;
+        changes += 1;
       },
     } as unknown as TileStreamContext,
     stream
@@ -108,20 +128,19 @@ test("the stream's dispose releases every dressed tile, quietly", () => {
 test("every part of a dressing is in the part table, so disposal and the census reach it", () => {
   // (a TileDressing field left out of DRESSING_PARTS does not compile: the
   // table `satisfies` a record of every field)
-  const group = () => new Object3D();
-  const control = () => ({ group: group() });
+  const control = () => ({ group: emptyGroup() });
   const parts = {
     vegetation: control(),
-    lowVegetation: group(),
+    lowVegetation: emptyGroup(),
     lamps: control(),
     monuments: control(),
-    furniture: group(),
-    rail: group(),
-    tram: group(),
-    riverside: group(),
+    furniture: emptyGroup(),
+    rail: emptyGroup(),
+    tram: emptyGroup(),
+    riverside: emptyGroup(),
     traffic: control(),
     sport: control(),
-    vineyards: group(),
+    vineyards: emptyGroup(),
   };
   const full = { tile: "t", ...parts } as unknown as TileDressing;
   // each name's accessor hands over that field's own scene part
@@ -137,16 +156,16 @@ test("every part of a dressing is in the part table, so disposal and the census 
 });
 
 test("a tile that leaves while its compile runs is freed once the compile ends", async () => {
-  let finish = (): void => undefined;
+  let finish = nothing;
   const compiling = new Promise<void>((resolve) => {
     finish = resolve;
   });
   const plugin = new DressingPlugin(
     {
-      dressingGate: new Promise<void>(() => undefined),
+      dressingGate: new Promise<void>(() => {}),
       bootTile: () => null,
-      compile: () => compiling,
-      onChange: () => undefined,
+      compile: async () => await compiling,
+      onChange: () => {},
     } as unknown as TileStreamContext,
     {
       cities: new Set(),
@@ -175,16 +194,16 @@ test("a tile that leaves while its compile runs is freed once the compile ends",
 });
 
 test("a tile that leaves lets go of the site's shared index at once, while its compile still runs", async () => {
-  let finish = (): void => undefined;
+  let finish = nothing;
   const plugin = new DressingPlugin(
     {
-      dressingGate: new Promise<void>(() => undefined),
+      dressingGate: new Promise<void>(() => {}),
       bootTile: () => null,
-      compile: () =>
-        new Promise<void>((resolve) => {
+      compile: async () =>
+        await new Promise<void>((resolve) => {
           finish = resolve;
         }),
-      onChange: () => undefined,
+      onChange: () => {},
     } as unknown as TileStreamContext,
     {
       cities: new Set(),
@@ -214,10 +233,10 @@ test("a city drops its normals' and places on the wall's CPU copies once its com
   for (const compiled of [true, false]) {
     const plugin = new DressingPlugin(
       {
-        dressingGate: new Promise<void>(() => undefined),
+        dressingGate: new Promise<void>(() => {}),
         bootTile: () => null,
-        compile: () => Promise.resolve(compiled),
-        onChange: () => undefined,
+        compile: async () => compiled,
+        onChange: () => {},
       } as unknown as TileStreamContext,
       {
         cities: new Set(),
@@ -240,7 +259,7 @@ test("a city drops its normals' and places on the wall's CPU copies once its com
     const scene = new Object3D();
     scene.add(mesh);
     plugin.dressed.set(scene, {
-      city: { mesh, dispose: () => undefined } as unknown as CityLayer,
+      city: { mesh, dispose: () => {} } as unknown as CityLayer,
     });
     // the renderer keeps the load (its scene recorded on the tile)
     await plugin.processTileModel(scene, { engineData: { scene } });
@@ -265,12 +284,14 @@ test("a compile the GPU had no room for is reported once, and drops nothing", as
     const failures: string[] = [];
     const plugin = new DressingPlugin(
       {
-        dressingGate: new Promise<void>(() => undefined),
+        dressingGate: new Promise<void>(() => {}),
         bootTile: () => null,
-        compile: () => Promise.reject(error),
+        compile: async () => {
+          throw error;
+        },
         onAllocationFailure: (_: unknown, where: string) =>
           failures.push(where),
-        onChange: () => undefined,
+        onChange: () => {},
       } as unknown as TileStreamContext,
       {
         cities: new Set(),
@@ -285,7 +306,7 @@ test("a compile the GPU had no room for is reported once, and drops nothing", as
     scene.userData = { tileId: "33412_5656_2_sn" };
     scene.add(mesh);
     plugin.dressed.set(scene, {
-      city: { mesh, dispose: () => undefined } as unknown as CityLayer,
+      city: { mesh, dispose: () => {} } as unknown as CityLayer,
     });
     // the tile still loads: the frames retry what the compile could not
     await plugin.processTileModel(scene, { engineData: { scene } });
@@ -306,12 +327,12 @@ test("a dressing whose build throws is reported, an allocation failure as one, a
     const ctx = {
       dressingGate: Promise.resolve(),
       bootTile: () => null,
-      compile: () => Promise.resolve(true),
+      compile: async () => true,
       onAllocationFailure: (err: unknown, where: string) =>
         allocations.push([err, where]),
       onDressingFailed: (err: unknown, tile: string) =>
         failed.push([err, tile]),
-      onChange: () => undefined,
+      onChange: () => {},
       // the build's first file URL reads it: the earliest throw a test
       // can inject without a renderer
       get tilesetUrl(): string {
@@ -373,22 +394,22 @@ test("a tile released while a compile still runs is never dressed after the wait
     {
       dressingGate: Promise.resolve(),
       bootTile: () => null,
-      compile: (o: Object3D) =>
+      compile: async (o: Object3D) =>
         o === blocker
-          ? new Promise<boolean>(() => undefined)
-          : Promise.resolve(true),
+          ? await new Promise<boolean>(() => {})
+          : await Promise.resolve(true),
       look: createLookState(),
       night: () => 0,
       season: () => 180,
       onDressingFailed: (error: unknown) => failures.push(error),
-      onChange: () => undefined,
+      onChange: () => {},
     } as unknown as TileStreamContext,
     stream
   );
   const scene = new Object3D();
   const terrain = {
     rasters: [],
-    dispose: () => undefined,
+    dispose: () => {},
   } as unknown as TerrainLayer;
   plugin.dressed.set(scene, { terrain });
   // reason: the queue and the compile count are private; the test drives
@@ -425,10 +446,10 @@ test("a tile released while a compile still runs is never dressed after the wait
 function abortableLoad() {
   const plugin = new DressingPlugin(
     {
-      dressingGate: new Promise<void>(() => undefined),
+      dressingGate: new Promise<void>(() => {}),
       bootTile: () => null,
-      compile: () => Promise.resolve(),
-      onChange: () => undefined,
+      compile: async () => {},
+      onChange: () => {},
     } as unknown as TileStreamContext,
     {
       cities: new Set(),
@@ -451,11 +472,14 @@ function abortableLoad() {
 /** A task, long enough for the code under test's own next task: a traffic
  *  slot sets its timer only after its builder's load has resolved, past
  *  the microtasks of the call that showed it. */
-const nextTask = () => new Promise((resolve) => setTimeout(resolve, 5));
+const nextTask = async () =>
+  await new Promise((resolve) => {
+    setTimeout(resolve, 5);
+  });
 
 /** Waits until `ready` holds, a timer at a time (at most ~2 s). */
 async function until(ready: () => boolean): Promise<void> {
-  for (let i = 0; i < 400 && !ready(); i++) {
+  for (let i = 0; i < 400 && !ready(); i += 1) {
     await nextTask();
   }
 }
@@ -497,15 +521,11 @@ test("a phone streams fewer contents at once, on queues of their own in our orde
   );
   // not the renderer's error order: a tile's coarse ground before its
   // buildings
-  const at = (uri: string) => ({
-    content: { uri },
-    traversal: { distanceFromCamera: 0, error: 0, inFrustum: true, used: true },
-  });
   for (const queue of [phone.parseQueue, desktop.downloadQueue]) {
     expect(
       queue.priorityCallback?.(
-        at("terrain_a_l1.0.glb.gz"),
-        at("city_a.0.glb.gz")
+        tileAt("terrain_a_l1.0.glb.gz"),
+        tileAt("city_a.0.glb.gz")
       )
     ).toBe(1);
   }
@@ -519,7 +539,7 @@ test("a hung dressing's ask sets come in idle time, into the same array; none fo
   const idle: (() => void)[] = [];
   const later = (work: () => void) => {
     idle.push(work);
-    return () => undefined;
+    return () => {};
   };
   const set = {
     box: {},
@@ -534,10 +554,9 @@ test("a hung dressing's ask sets come in idle time, into the same array; none fo
     return { tile: "t", asks, buildAsks: build() };
   };
   // the slices run at once here
-  const now = (steps: Steps<unknown>) => Promise.resolve(finished(steps));
   const hung = dressing();
-  const asks = hung.asks;
-  buildAsksWhenIdle(hung, () => true, { idle: later, run: now });
+  const { asks } = hung;
+  buildAsksWhenIdle(hung, () => true, { idle: later, run: runNow });
   expect(hung.asks).toEqual([]);
   idle.shift()?.();
   expect(hung.asks).toBe(asks);
@@ -545,15 +564,15 @@ test("a hung dressing's ask sets come in idle time, into the same array; none fo
   // run once, and its features let go of
   expect(hung.buildAsks).toBeUndefined();
   const gone = dressing();
-  buildAsksWhenIdle(gone, () => false, { idle: later, run: now });
+  buildAsksWhenIdle(gone, () => false, { idle: later, run: runNow });
   idle.shift()?.();
   expect(gone.asks).toEqual([]);
   // a dressing with nothing to build waits for nothing
-  buildAsksWhenIdle({ tile: "t" }, () => true, { idle: later, run: now });
+  buildAsksWhenIdle({ tile: "t" }, () => true, { idle: later, run: runNow });
   expect(idle).toHaveLength(0);
   // a question before the idle time builds them at once, and only once
   const early = dressing();
-  buildAsksWhenIdle(early, () => true, { idle: later, run: now });
+  buildAsksWhenIdle(early, () => true, { idle: later, run: runNow });
   expect(asksOf(early)).toEqual([set]);
   expect(asksOf(early)).toEqual([set]);
   idle.shift()?.();
@@ -564,7 +583,7 @@ test("a question while the ask sets build in slices finishes them, once", async 
   const idle: (() => void)[] = [];
   const later = (work: () => void) => {
     idle.push(work);
-    return () => undefined;
+    return () => {};
   };
   const set = {
     box: {},
@@ -573,20 +592,23 @@ test("a question while the ask sets build in slices finishes them, once", async 
   const asks: AskSet<FeatureInquiry>[] = [];
   let steps = 0;
   function* build() {
-    for (let i = 0; i < 3; i++) {
-      steps++;
+    for (let i = 0; i < 3; i += 1) {
+      steps += 1;
       yield;
     }
     asks.push(set);
   }
   const d: TileDressing = { tile: "t", asks, buildAsks: build() };
   // a slice is one step, and the next waits for `go`
-  let go: () => void = () => undefined;
+  let go = nothing;
+  const waitForGo = async () => {
+    await new Promise<void>((resolve) => {
+      go = resolve;
+    });
+  };
   const sliced = async (s: Steps<unknown>) => {
     for (let r = s.next(); !r.done; r = s.next()) {
-      await new Promise<void>((resolve) => {
-        go = resolve;
-      });
+      await waitForGo();
     }
   };
   buildAsksWhenIdle(d, () => true, { idle: later, run: sliced });
@@ -620,19 +642,19 @@ test("a dressing whose tile leaves before its idle time never builds its ask set
     };
     const plugin = new DressingPlugin(
       {
-        dressingGate: new Promise<void>(() => undefined),
+        dressingGate: new Promise<void>(() => {}),
         bootTile: () => null,
         look: createLookState(),
         night: () => 0,
         season: () => 180,
-        onChange: () => undefined,
+        onChange: () => {},
       } as unknown as TileStreamContext,
       stream
     );
     const scene = new Object3D();
     const terrain = {
       rasters: [],
-      dispose: () => undefined,
+      dispose: () => {},
     } as unknown as TerrainLayer;
     const entry = { terrain };
     plugin.dressed.set(scene, entry);
@@ -640,8 +662,8 @@ test("a dressing whose tile leaves before its idle time never builds its ask set
     const dressing: TileDressing = {
       tile: "t",
       asks: [],
-      buildAsks: (function* () {
-        built++;
+      buildAsks: (function* builtOnce() {
+        built += 1;
         yield;
       })(),
       furniture: new Group(),
@@ -701,7 +723,7 @@ test("a level waits for its dressing only where it takes over from its tile's ot
 /** The data layers' traffic builder as the slot waits for it, there at
  *  once. */
 const builder: TrafficBuilder = { build: buildTraffic, askSet: trafficAskSet };
-const loaded = () => Promise.resolve(builder);
+const loaded = async () => builder;
 
 /** A tile's counted traffic as a slot: one two-way street, its dressing's
  *  ask list, and a host whose compiles the test holds and counts. */
@@ -734,24 +756,24 @@ function trafficTile(
   });
   const root = new Object3D();
   const compiled: Group[] = [];
-  let finish = (): void => undefined;
+  let finish = nothing;
   let built = 0;
   const freeErrors: unknown[][] = [];
   const host: TrafficHost = {
     root,
-    compile: (group) => {
+    compile: async (group) => {
       compiled.push(group);
-      return new Promise((resolve) => {
+      return await new Promise((resolve) => {
         finish = () => resolve("done");
       });
     },
-    turn: opts.turn ?? ((work) => work()),
+    turn: opts.turn ?? (async (work) => await work()),
     freeFailed: (errors) => {
       freeErrors.push(errors);
     },
     gone: opts.gone ?? (() => false),
     built: () => {
-      built++;
+      built += 1;
     },
     failed: (err) => {
       throw err;
@@ -810,7 +832,11 @@ test("the first switch-on builds and compiles the bodies once; off keeps them, t
   expect(compiled).toHaveLength(1);
   expect(built()).toBe(1);
   expect(slot.group?.visible).toBe(true);
-  expect(dressingParts(d)).toEqual([slot.group as Group]);
+  const hung = slot.group;
+  if (!hung) {
+    throw new Error("the traffic group was not built");
+  }
+  expect(dressingParts(d)).toEqual([hung]);
   // the probe asks its sections now
   expect(asks).toHaveLength(1);
   expect(slot.asks()).toBe(asks[0]);
@@ -884,13 +910,10 @@ test("bodies freed while their compile runs are freed once it ends", async () =>
 test("a switch-on builds the tiles' bodies one after another", async () => {
   // the dressings' chain, as the plugin hands it to every slot
   let chain = Promise.resolve();
-  const turn: TrafficHost["turn"] = (work) => {
+  const turn: TrafficHost["turn"] = async (work) => {
     const run = chain.then(work);
-    chain = run.then(
-      () => undefined,
-      () => undefined
-    );
-    return run;
+    chain = run.then(nothing, nothing);
+    return await run;
   };
   const a = trafficTile({ turn });
   const b = trafficTile({ turn });
@@ -926,11 +949,11 @@ test("a dressing freed before its traffic's turn builds nothing", async () => {
 /** The builder on its way (the data layers starting): it arrives when the
  *  test says. */
 function builderOnItsWay() {
-  let arrive = (): void => undefined;
+  let arrive = nothing;
   const coming = new Promise<TrafficBuilder>((resolve) => {
     arrive = () => resolve(builder);
   });
-  return { arrive: () => arrive(), load: () => coming };
+  return { arrive: () => arrive(), load: async () => await coming };
 }
 
 test("tiles hung before the builder arrives get their bodies when it does, and later tiles too", async () => {
@@ -964,7 +987,8 @@ test("a builder that did not come builds nothing and is asked for on the next sw
   // (the host's `failed` throws: a builder that did not come is no failed
   // build of this tile, and must not be reported as one)
   const { compiled, finish, host, slot } = trafficTile({
-    load: () => (fails ? Promise.reject(new Error("start")) : loaded()),
+    load: async () =>
+      fails ? await Promise.reject(new Error("start")) : await loaded(),
   });
   slot.attach(host);
   await slot.show();
@@ -1001,18 +1025,16 @@ test("an ask builder that throws in idle time is reported and lets the tile go",
   const idle: (() => void)[] = [];
   const later = (work: () => void) => {
     idle.push(work);
-    return () => undefined;
+    return () => {};
   };
-  function* broken(): Steps<void> {
-    yield;
-    throw new Error("bad furniture");
-  }
   const d: TileDressing = { tile: "t", asks: [], buildAsks: broken() };
   const failures: unknown[] = [];
   buildAsksWhenIdle(d, () => true, {
     idle: later,
-    run: (steps) => Promise.resolve().then(() => finished(steps)),
-    failed: (err) => failures.push(err),
+    run: async (steps) => await Promise.resolve().then(() => finished(steps)),
+    failed: (err) => {
+      failures.push(err);
+    },
   });
   idle.shift()?.();
   await new Promise((resolve) => {

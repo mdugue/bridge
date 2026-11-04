@@ -10,7 +10,8 @@
  * by Claude wherever it shows; the facts carry their sources (ADR 0042,
  * ADR 0055). No THREE, no DOM.
  */
-import { isRenderStyle, type RenderStyle } from "./render-style";
+import { isRenderStyle } from "./render-style";
+import type { RenderStyle } from "./render-style";
 import type { MovementMode, ViewpointGeometry } from "./site";
 import type { CameraStateJson } from "./snapshot";
 
@@ -246,8 +247,8 @@ export const CLOSER_LABEL = "Genauer hingesehen";
 
 // --- checks ----------------------------------------------------------------------
 
-const MD = /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
-const SOURCE = /^(https:\/\/\S+|stadtwissen:\S+)$/;
+const MD = /^(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/u;
+const SOURCE = /^(?:https:\/\/\S+|stadtwissen:\S+)$/u;
 /** The longest narration a stop shows: a phone screen, not an essay. */
 export const STOP_TEXT_MAX = 560;
 
@@ -310,7 +311,7 @@ function textProblems(stop: WalkStop): string[] {
 }
 
 /** "Schau …", "Sieh …": a sentence that sends the eye somewhere. */
-const LOOK = /(?:^|[.!?:;]\s+)(?:Schau|Sieh|Achte|Zoom|Zähl|Such)(?:e|t)?\b/;
+const LOOK = /(?:^|[.!?:;]\s+)(?:Schau|Sieh|Achte|Zoom|Zähl|Such)(?:e|t)?\b/u;
 
 /**
  * The model draws masses, not details: a statue is a generic figure, a
@@ -319,10 +320,12 @@ const LOOK = /(?:^|[.!?:;]\s+)(?:Schau|Sieh|Achte|Zoom|Zähl|Such)(?:e|t)?\b/;
  */
 function lookProblems(stop: WalkStop): string[] {
   const told = [stop.text ?? "", stop.closer ?? ""].flatMap((t) =>
-    t.split(/(?<=[.!?])\s+/)
+    t.split(/(?<=[.!?])\s+/u)
   );
   return told
-    .filter((s) => LOOK.test(s) && !(stop.photo && /\b(?:Foto|Bild)\b/.test(s)))
+    .filter(
+      (s) => LOOK.test(s) && !(stop.photo && /\b(?:Foto|Bild)\b/u.test(s))
+    )
     .map((s) => `"${s.slice(0, 40)}…" points at what the model may not show`);
 }
 
@@ -404,7 +407,7 @@ function stopProblems(stop: WalkStop, where: string): string[] {
 /** Everything wrong with a walk (empty when it is fine). */
 export function walkProblems(walk: Walk): string[] {
   const out: string[] = [];
-  if (!/^[a-z0-9-]+$/.test(walk.id)) {
+  if (!/^[a-z0-9-]+$/u.test(walk.id)) {
     out.push(`${walk.id}: id must be kebab-case`);
   }
   if (!walk.title || !walk.teaser || !walk.by) {
@@ -415,13 +418,14 @@ export function walkProblems(walk: Walk): string[] {
     out.push(`${walk.id}: a walk has at least two stops`);
   }
   const ids = new Set<string>();
-  stops.forEach((stop, i) => {
+  for (let i = 0; i < stops.length; i += 1) {
+    const stop = stops[i];
     if (ids.has(stop.id)) {
       out.push(`${walk.id}: stop id ${stop.id} twice`);
     }
     ids.add(stop.id);
     out.push(...stopProblems(stop, `${walk.id} #${i + 1} ${stop.id}`));
-  });
+  }
   return out;
 }
 

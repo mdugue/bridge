@@ -28,11 +28,11 @@ test("points come back where they were, to the tenth of a millimetre", () => {
   expect(unpacked?.stride).toBe(3);
   const data = unpacked?.data ?? new Float32Array();
   const [ox, oy] = unpacked?.origin ?? [0, 0];
-  points.forEach((p, i) => {
+  for (const [i, p] of points.entries()) {
     expect(Math.abs(ox + (data[i * 3] ?? 0) - p.x)).toBeLessThan(1e-3);
     expect(Math.abs(oy + (data[i * 3 + 1] ?? 0) - p.y)).toBeLessThan(1e-3);
     expect(data[i * 3 + 2]).toBeCloseTo(p.h, 4);
-  });
+  }
 });
 
 test("stride 4 keeps the crown radius; a missing one is NaN", () => {
@@ -61,10 +61,10 @@ test("no points is a header and nothing else", () => {
 
 test("anything that is not a whole pack is refused", () => {
   const bytes = packPoints([{ x: 412_001, y: 5_656_001, h: 5 }], ORIGIN, 3);
-  expect(unpackPoints(toBuffer(bytes.slice(0, bytes.length - 2)))).toBeNull();
+  expect(unpackPoints(toBuffer(bytes.slice(0, -2)))).toBeNull();
   expect(unpackPoints(toBuffer(bytes.slice(0, 20)))).toBeNull();
   const wrong = bytes.slice();
-  wrong[0] = "X".charCodeAt(0);
+  wrong[0] = "X".codePointAt(0) ?? 0;
   expect(unpackPoints(toBuffer(wrong))).toBeNull();
   // a GeoJSON document (what the old artifact was) is not one either
   expect(
@@ -86,7 +86,7 @@ test("a committed canopy comes back as the features it was, within a millimetre"
   const back = unpacked ? pointFeatures(unpacked) : [];
   expect(back).toHaveLength(doc.features.length);
   let worst = 0;
-  doc.features.forEach((f, i) => {
+  for (const [i, f] of doc.features.entries()) {
     const [x, y] = back[i]?.geometry.coordinates ?? [0, 0];
     worst = Math.max(
       worst,
@@ -99,7 +99,7 @@ test("a committed canopy comes back as the features it was, within a millimetre"
       f.properties?.r ?? 0,
       4
     );
-  });
+  }
   expect(worst).toBeLessThan(1e-3);
 });
 
@@ -135,6 +135,9 @@ test("a canopy without an evergreen packs as before", () => {
   expect(canopyStride(points, true)).toBe(4);
 });
 
+const evergreen = (fs: readonly CanopyFeature[]) =>
+  fs.filter((f) => f.properties?.l === "e").length;
+
 test("the Heide's committed evergreens reach the browser", async () => {
   const path = `${import.meta.dir}/../../data/dresden/dlm/canopy_33416_5658_2_sn.geojson`;
   const doc = (await Bun.file(path).json()) as { features: CanopyFeature[] };
@@ -145,8 +148,6 @@ test("the Heide's committed evergreens reach the browser", async () => {
     )
   );
   const back = unpacked ? pointFeatures(unpacked) : [];
-  const evergreen = (fs: readonly CanopyFeature[]) =>
-    fs.filter((f) => f.properties?.l === "e").length;
   expect(evergreen(doc.features)).toBeGreaterThan(1000);
   expect(evergreen(back)).toBe(evergreen(doc.features));
 });
@@ -199,24 +200,26 @@ test("a scan crown with a radius keeps its evergreen leaves through the pack", (
   ]);
 });
 
+const unpack = (bytes: Uint8Array) =>
+  unpackPoints(bytes.buffer.slice(0) as ArrayBuffer);
+
 test("the header tells whether the canopy holds the tree rows' trees", () => {
   const points = [{ x: ORIGIN[0] + 1, y: ORIGIN[1] + 2, h: 12 }];
-  const unpack = (bytes: Uint8Array) =>
-    unpackPoints(bytes.buffer.slice(0) as ArrayBuffer);
   expect(unpack(packPoints(points, ORIGIN, 3))?.flags).toBe(0);
   expect(unpack(packPoints(points, ORIGIN, 3, ROWS_MEASURED))?.flags).toBe(
     ROWS_MEASURED
   );
 });
 
+const at = (x: number, properties: CanopyFeature["properties"]) => ({
+  geometry: {
+    type: "Point" as const,
+    coordinates: [412_000 + x, 5_656_000] as [number, number],
+  },
+  properties,
+});
+
 test("an evergreen pine keeps its form through the pack; a broadleaf never is one", () => {
-  const at = (x: number, properties: CanopyFeature["properties"]) => ({
-    geometry: {
-      type: "Point" as const,
-      coordinates: [412_000 + x, 5_656_000] as [number, number],
-    },
-    properties,
-  });
   const features: CanopyFeature[] = [
     at(1, { h: 22, l: "e", pine: 1 }),
     at(2, { h: 21, l: "e", ls: "dop", pine: 1, c: 1 }),

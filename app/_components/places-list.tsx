@@ -11,7 +11,8 @@ import {
 } from "lucide-react";
 import { useId, useState } from "react";
 import { Input } from "@/components/ui/input";
-import { filterPlaces, type Place, PLACES_FIRST } from "@/lib/city/places";
+import { filterPlaces, PLACES_FIRST } from "@/lib/city/places";
+import type { Place } from "@/lib/city/places";
 import { cn } from "cn";
 
 const SECTION_LABEL =
@@ -21,24 +22,24 @@ const ROW =
   "flex h-8 w-full min-w-0 items-center gap-2.5 rounded-md px-2 text-left text-xs hover:bg-accent disabled:pointer-events-none disabled:opacity-50";
 
 /** What a row's icon says: on foot, from the air, or a landmark. */
-function PlaceIcon({ place }: { place: Place }) {
-  const Icon =
-    place.kind === "landmark"
-      ? LandmarkIcon
-      : place.mode === "fly"
-        ? PlaneIcon
-        : FootprintsIcon;
+const PlaceIcon = ({ place }: { place: Place }) => {
+  let Icon = FootprintsIcon;
+  if (place.kind === "landmark") {
+    Icon = LandmarkIcon;
+  } else if (place.mode === "fly") {
+    Icon = PlaneIcon;
+  }
   return <Icon aria-hidden className="size-3.5 shrink-0 opacity-60" />;
-}
+};
 
 /** A row's tooltip: its line and the landmarks it shows too. */
 function titleOf(place: Place): string {
-  const how =
-    place.kind === "landmark"
-      ? "Wahrzeichen · aus der Luft"
-      : place.mode === "fly"
-        ? "Aus der Luft"
-        : "Auf Augenhöhe";
+  let how = "Auf Augenhöhe";
+  if (place.kind === "landmark") {
+    how = "Wahrzeichen · aus der Luft";
+  } else if (place.mode === "fly") {
+    how = "Aus der Luft";
+  }
   return [
     place.description ?? how,
     place.also.length > 0 ? `Mit ${place.also.join(", ")}` : "",
@@ -47,7 +48,7 @@ function titleOf(place: Place): string {
     .join(" — ");
 }
 
-function PlaceRow({
+const PlaceRow = ({
   disabled,
   onTravel,
   place,
@@ -57,30 +58,26 @@ function PlaceRow({
   onTravel: (place: Place) => void;
   place: Place;
   showKey: boolean;
-}) {
-  return (
-    <li>
-      <button
-        className={ROW}
-        data-place={place.id}
-        disabled={disabled}
-        onClick={() => onTravel(place)}
-        title={titleOf(place)}
-        type="button"
-      >
-        <PlaceIcon place={place} />
-        <span className="min-w-0 flex-1 truncate font-medium">
-          {place.label}
-        </span>
-        {showKey && place.key !== undefined && (
-          <kbd className="rounded-sm bg-muted px-1 font-sans text-[10px] text-muted-foreground leading-4">
-            {place.key}
-          </kbd>
-        )}
-      </button>
-    </li>
-  );
-}
+}) => (
+  <li>
+    <button
+      className={ROW}
+      data-place={place.id}
+      disabled={disabled}
+      onClick={() => onTravel(place)}
+      title={titleOf(place)}
+      type="button"
+    >
+      <PlaceIcon place={place} />
+      <span className="min-w-0 flex-1 truncate font-medium">{place.label}</span>
+      {showKey && place.key !== undefined && (
+        <kbd className="rounded-sm bg-muted px-1 font-sans text-[10px] text-muted-foreground leading-4">
+          {place.key}
+        </kbd>
+      )}
+    </button>
+  </li>
+);
 
 /**
  * The saved view: the first row while it is set, its ✕ beside it — clear,
@@ -88,38 +85,36 @@ function PlaceRow({
  * siblings, not nested (a button in a button is neither valid HTML nor
  * reachable by keyboard).
  */
-function RememberedRow({
+const RememberedRow = ({
   onForget,
   onRestore,
 }: {
   onForget: () => void;
   onRestore: () => void;
-}) {
-  return (
-    <li className="flex items-center gap-1">
-      <button
-        className={cn(ROW, "flex-1")}
-        onClick={onRestore}
-        title="Zur gemerkten Sicht zurückspringen"
-        type="button"
-      >
-        <StarIcon aria-hidden className="size-3.5 shrink-0 fill-current" />
-        <span className="flex-1 truncate font-medium">Gemerkte Sicht</span>
-      </button>
-      <button
-        aria-label="Gemerkte Sicht entfernen"
-        // 20px reads right beside the row; the ::after pad makes it a real
-        // touch target without the bulk (as the sidebar primitives do).
-        className="relative inline-flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground after:absolute after:-inset-2 hover:bg-accent hover:text-foreground"
-        onClick={onForget}
-        title="Gemerkte Sicht entfernen"
-        type="button"
-      >
-        <XIcon className="size-3" />
-      </button>
-    </li>
-  );
-}
+}) => (
+  <li className="flex items-center gap-1">
+    <button
+      className={cn(ROW, "flex-1")}
+      onClick={onRestore}
+      title="Zur gemerkten Sicht zurückspringen"
+      type="button"
+    >
+      <StarIcon aria-hidden className="size-3.5 shrink-0 fill-current" />
+      <span className="flex-1 truncate font-medium">Gemerkte Sicht</span>
+    </button>
+    <button
+      aria-label="Gemerkte Sicht entfernen"
+      // 20px reads right beside the row; the ::after pad makes it a real
+      // touch target without the bulk (as the sidebar primitives do).
+      className="relative inline-flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground after:absolute after:-inset-2 hover:bg-accent hover:text-foreground"
+      onClick={onForget}
+      title="Gemerkte Sicht entfernen"
+      type="button"
+    >
+      <XIcon className="size-3" />
+    </button>
+  </li>
+);
 
 /**
  * *Orte* (lib/city/places.ts): the authored vantages and the city's
@@ -128,7 +123,7 @@ function RememberedRow({
  * with a search over every name, the folded landmarks' included. A row
  * travels there (in Modell: centres the picture on it).
  */
-export function PlacesList({
+export const PlacesList = ({
   canRemember,
   canTravel,
   onForget,
@@ -151,7 +146,7 @@ export function PlacesList({
   remembered: boolean;
   /** show the 1–9 keys (keyboard devices) */
   showKeys: boolean;
-}) {
+}) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const listId = useId();
@@ -237,4 +232,4 @@ export function PlacesList({
       )}
     </section>
   );
-}
+};

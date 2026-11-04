@@ -21,7 +21,7 @@ import {
   vec3,
   viewportTexture,
 } from "three/tsl";
-import { type DataMarks } from "@/lib/city/render-style";
+import type { DataMarks } from "@/lib/city/render-style";
 import { mapFadeNode } from "./map-overlay";
 import type { F, Live, V3 } from "./shader-chunks";
 import { styleNight } from "./sun-rig";

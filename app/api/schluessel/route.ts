@@ -10,10 +10,10 @@ import {
   ASK_KEY_HEADER,
   ASK_LIMITS,
   ASK_PROVIDER_BY_ID,
-  type AskProviderDef,
   isAskProvider,
   plausibleKey,
 } from "@/lib/city/ask-city";
+import type { AskProviderDef } from "@/lib/city/ask-city";
 import { issueAskToken } from "@/lib/city/ask-token";
 import { fakeModel } from "../frag/env";
 
@@ -21,12 +21,18 @@ export const maxDuration = 15;
 
 function authHeaders(def: AskProviderDef, key: string): Record<string, string> {
   switch (def.check.auth) {
-    case "anthropic":
+    case "anthropic": {
       return { "x-api-key": key, "anthropic-version": "2023-06-01" };
-    case "google":
+    }
+    case "google": {
       return { "x-goog-api-key": key };
-    case "bearer":
+    }
+    case "bearer": {
       return { Authorization: `Bearer ${key}` };
+    }
+    default: {
+      throw new Error(`unknown auth: ${String(def.check.auth)}`);
+    }
   }
 }
 
@@ -75,7 +81,7 @@ export async function POST(request: Request): Promise<Response> {
       cache: "no-store",
       signal: AbortSignal.timeout(10_000),
     });
-    status = res.status;
+    ({ status } = res);
     await res.body?.cancel();
   } catch {
     return refuse(

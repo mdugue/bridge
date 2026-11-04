@@ -15,11 +15,11 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 
 /** Where the entry for `name` under `key` lies. */
 export function entryPath(dir: string, name: string, key: string): string {
-  return join(dir, `${key}.${name}`);
+  return nodePath.join(dir, `${key}.${name}`);
 }
 
 /** The entry's path, when it is there. */
@@ -50,10 +50,10 @@ export function writeEntry(
   for (const entry of readdirSync(dir)) {
     if (entry !== own && entry.endsWith(`.${name}`)) {
       // another process may drop the same stale entry
-      rmSync(join(dir, entry), { force: true });
+      rmSync(nodePath.join(dir, entry), { force: true });
     }
   }
-  const path = join(dir, own);
+  const path = nodePath.join(dir, own);
   const part = `${path}.${process.pid}.part`;
   writeFileSync(part, bytes);
   renameSync(part, path);

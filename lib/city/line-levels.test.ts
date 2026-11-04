@@ -2,7 +2,8 @@ import { expect, test } from "bun:test";
 import { bridgeDecks } from "./decks";
 import type { BridgeFeature } from "./features";
 import { runLevelAt } from "./levels";
-import { type LinePiece, pieceSamples, solvePieces } from "./line-levels";
+import { pieceSamples, solvePieces } from "./line-levels";
+import type { LinePiece } from "./line-levels";
 
 const offset = { cx: 0, cy: 0 };
 /** An embankment at 117.5 along y = 0 with a 120 m gap (the street the
@@ -12,15 +13,51 @@ const heightAt = (x: number) => (x >= 180 && x <= 300 ? 111.5 : 117.5);
 /** The levels of `pieces[k]` at its samples, decoded as the layer reads
  *  them. */
 function levelsOf(pieces: LinePiece[], k: number, decks: BridgeFeature[]) {
-  const runs = solvePieces(pieces, {
+  const { runs } = solvePieces(pieces, {
     decks: bridgeDecks(decks, offset),
     heightAt,
     offset,
-  })[k].runs;
+  })[k];
   const pts = pieceSamples(pieces[k]);
   const d = pts.map((p) => p[0] - pts[0][0]);
   return pts.map((p, i) => ({ x: p[0], level: runLevelAt(runs, d, i) }));
 }
+
+/** An embankment that crosses a rail at x = 250, as Hamburg's DGM keeps its
+ *  bridges. */
+const embankmentOverRail = (x: number, y: number) => {
+  if (Math.abs(x - 250) > 4) {
+    return 110;
+  }
+  return Math.max(110, 116 - Math.max(Math.abs(y) - 60, 0) * 0.04);
+};
+
+/** A 25 % slope, as Dresden's Standseilbahn climbs between its tunnels. */
+const funicularSlope = (x: number) => 120 + 0.25 * x;
+const funicularPiece = (steep: boolean): LinePiece => ({
+  coords: [
+    [0, 0],
+    [200, 0],
+  ],
+  line: "rail",
+  steep,
+});
+const funicularOffBy = (steep: boolean) => {
+  const [solved] = solvePieces([funicularPiece(steep)], {
+    decks: [],
+    heightAt: funicularSlope,
+    offset,
+  });
+  const pts = pieceSamples(funicularPiece(steep));
+  return Math.max(
+    ...solved.profile.map((z, i) =>
+      z === null ? Infinity : Math.abs(z - funicularSlope(pts[i][0]))
+    )
+  );
+};
+
+/** A flat railway up to x = 200, a slope from there on. */
+const slopeFrom200 = (x: number) => (x <= 200 ? 120 : 120 + 0.25 * (x - 200));
 
 test("a piece cut at a seam inside a gap sees the gap whole", () => {
   // the bake cut the line at the tile edge x = 240, in the middle of the
@@ -80,12 +117,6 @@ test("a track along a deck's edge rides it where it strays past the outline", ()
 test("a line the DGM carries over another on its bridge crosses on a span", () => {
   // a tram on an embankment that crosses a rail at x = 250: the DGM keeps
   // the embankment over the rail, as Hamburg's keeps its bridges
-  const crossing = (x: number, y: number) => {
-    if (Math.abs(x - 250) > 4) {
-      return 110;
-    }
-    return Math.max(110, 116 - Math.max(Math.abs(y) - 60, 0) * 0.04);
-  };
   const rail: LinePiece = {
     coords: [
       [0, 0],
@@ -102,7 +133,7 @@ test("a line the DGM carries over another on its bridge crosses on a span", () =
   };
   const solved = solvePieces([rail, tram], {
     decks: [],
-    heightAt: crossing,
+    heightAt: embankmentOverRail,
     offset,
   });
   const pts = pieceSamples(tram);
@@ -198,36 +229,13 @@ test("a ramp the DGM does not hold beside a lower line is a viaduct", () => {
 
 test("a funicular's track lies on its slope; a railway's could not climb it", () => {
   // a 25 % slope, as Dresden's Standseilbahn climbs between its tunnels
-  const slope = (x: number) => 120 + 0.25 * x;
-  const piece = (steep: boolean): LinePiece => ({
-    coords: [
-      [0, 0],
-      [200, 0],
-    ],
-    line: "rail",
-    steep,
-  });
-  const offBy = (steep: boolean) => {
-    const [solved] = solvePieces([piece(steep)], {
-      decks: [],
-      heightAt: slope,
-      offset,
-    });
-    const pts = pieceSamples(piece(steep));
-    return Math.max(
-      ...solved.profile.map((z, i) =>
-        z === null ? Infinity : Math.abs(z - slope(pts[i][0]))
-      )
-    );
-  };
-  expect(offBy(true)).toBeLessThan(0.3);
-  expect(offBy(false)).toBeGreaterThan(5);
+  expect(funicularOffBy(true)).toBeLessThan(0.3);
+  expect(funicularOffBy(false)).toBeGreaterThan(5);
 });
 
 test("a steep piece runs on into steep pieces only", () => {
   // a railway ending where a funicular starts, in its very direction:
   // the funicular's context is not the railway's flat line
-  const slope = (x: number) => (x <= 200 ? 120 : 120 + 0.25 * (x - 200));
   const flat: LinePiece = {
     coords: [
       [0, 0],
@@ -245,11 +253,13 @@ test("a steep piece runs on into steep pieces only", () => {
   };
   const [, solved] = solvePieces([flat, steep], {
     decks: [],
-    heightAt: slope,
+    heightAt: slopeFrom200,
     offset,
   });
   const pts = pieceSamples(steep);
-  solved.profile.forEach((z, i) => {
-    expect(Math.abs((z ?? Infinity) - slope(pts[i][0]))).toBeLessThan(0.3);
-  });
+  for (const [i, z] of solved.profile.entries()) {
+    expect(Math.abs((z ?? Infinity) - slopeFrom200(pts[i][0]))).toBeLessThan(
+      0.3
+    );
+  }
 });

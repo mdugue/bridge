@@ -129,7 +129,7 @@ function hoops(x: number, y: number, deg: number, n: number): FurniturePiece[] {
   const ay = -Math.sin(rad);
   const yaw = yawOfBearing(deg);
   const pieces: FurniturePiece[] = [];
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < n; i += 1) {
     const t = (i - (n - 1) / 2) * HOOP_SPACING;
     pieces.push({
       model: "hoop",
@@ -281,7 +281,7 @@ export function furnitureAreas(features: FurnitureFeature[]): FurnitureArea[] {
 /** Whether (x, y) lies inside the ring (even-odd). */
 export function inRing(ring: readonly Point2[], x: number, y: number): boolean {
   let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
     const [xi, yi] = ring[i];
     const [xj, yj] = ring[j];
     if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {

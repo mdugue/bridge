@@ -1,8 +1,8 @@
-import {
-  type GroundIndex,
-  type GroundPrep,
-  type GroundPrepInput,
-  prepareGround,
+import { prepareGround } from "@/lib/city/ground-prep";
+import type {
+  GroundIndex,
+  GroundPrep,
+  GroundPrepInput,
 } from "@/lib/city/ground-prep";
 
 /**
@@ -39,7 +39,8 @@ let nextKey = 0;
 const keyOf = (shared: object): number => {
   let key = sharedKeys.get(shared);
   if (key === undefined) {
-    key = nextKey++;
+    key = nextKey;
+    nextKey += 1;
     sharedKeys.set(shared, key);
   }
   return key;
@@ -53,8 +54,8 @@ export function groundWorkerUp(): boolean {
 function runHere(job: Job): void {
   try {
     job.resolve(prepareGround(job.input));
-  } catch (err) {
-    job.reject(err);
+  } catch (error) {
+    job.reject(error);
   }
 }
 
@@ -104,7 +105,7 @@ function startWorker(): Worker | null {
   }
   worker = w;
   // a stopped worker's last word is not about the jobs now running
-  w.onmessage = ({ data }: MessageEvent<Reply>) => {
+  w.addEventListener("message", ({ data }: MessageEvent<Reply>) => {
     if (worker !== w) {
       return;
     }
@@ -118,9 +119,9 @@ function startWorker(): Worker | null {
       }
     }
     next();
-  };
+  });
   // a reply that cannot be read: that job here, the rest as before
-  w.onmessageerror = () => {
+  w.addEventListener("messageerror", () => {
     if (worker !== w) {
       return;
     }
@@ -130,13 +131,13 @@ function startWorker(): Worker | null {
       runHere(job);
     }
     next();
-  };
-  w.onerror = (event) => {
+  });
+  w.addEventListener("error", (event) => {
     event.preventDefault();
     if (worker === w) {
       giveUp();
     }
-  };
+  });
   return w;
 }
 
@@ -225,11 +226,11 @@ export function stopGroundWorker(): void {
  * array), sent to the worker once. Rejects with the abort when `signal`
  * fires before the job's turn.
  */
-export function prepareGroundOffThread(
+export async function prepareGroundOffThread(
   input: GroundPrepInput,
   opts: { shared?: object; signal?: AbortSignal } = {}
 ): Promise<GroundPrep> {
-  return new Promise<GroundPrep>((resolve, reject) => {
+  return await new Promise<GroundPrep>((resolve, reject) => {
     queue.push({ input, ...opts, resolve, reject });
     next();
   });

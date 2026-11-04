@@ -187,24 +187,32 @@ export function foldedThing(
   switch (target.kind) {
     case "bridge":
     case "design":
-    case "traffic":
+    case "traffic": {
       return false;
+    }
     // a fountain's basin, a relief, a pontoon are plain meshes: they stay
     case "landing":
-    case "monument":
+    case "monument": {
       return false;
-    case "hedge":
+    }
+    case "hedge": {
       return inDesignSiteAt(at.x, at.z);
+    }
     case "bikes":
     case "canopy":
     case "furniture":
     case "lamp":
     case "stop":
-    case "tree":
+    case "tree": {
       return inDesignSiteAt(
         target.position[0] - offset.cx,
         offset.cy - target.position[1]
       );
+    }
+    default: {
+      const unknown: never = target;
+      throw new Error(`unknown target: ${String(unknown)}`);
+    }
   }
 }
 
@@ -256,12 +264,12 @@ export function setDesignSite(
     c >= 0 && r >= 0 && c < mask.cols && r < mask.rows
       ? mask.cells[r * mask.cols + c]
       : 0;
-  for (let r = 0; r < mask.rows; r++) {
-    for (let c = 0; c < mask.cols; c++) {
+  for (let r = 0; r < mask.rows; r += 1) {
+    for (let c = 0; c < mask.cols; c += 1) {
       if (at(c, r) === 1) {
         let core = true;
-        for (let dr = -1; dr <= 1 && core; dr++) {
-          for (let dc = -1; dc <= 1 && core; dc++) {
+        for (let dr = -1; dr <= 1 && core; dr += 1) {
+          for (let dc = -1; dc <= 1 && core; dc += 1) {
             core = at(c + dc, r + dr) === 1;
           }
         }

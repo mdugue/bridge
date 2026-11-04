@@ -5,11 +5,10 @@ import {
   cutWallGates,
   FENCE_CODE,
   FENCE_UV_CODES,
-  type FenceGeometryData,
   fenceGeometry,
   fenceU,
-  type GatePoint,
 } from "./fences";
+import type { FenceGeometryData, GatePoint } from "./fences";
 import type { Point2 } from "./polyline";
 
 const offset = { cx: 0, cy: 0 };
@@ -159,6 +158,11 @@ test("every triangle winds counter-clockwise about its vertex normals", () => {
   }
 });
 
+const codes = (d: FenceGeometryData) =>
+  new Set(
+    Array.from({ length: d.positions.length / 3 }, (_, v) => codeOf(d, v))
+  );
+
 test("gates: a leaf in the gap, a boom for a lift gate", () => {
   const fence = { coords: line, h: 1.2, type: "mesh" as const };
   const leaf = fenceGeometry([fence], [gate(5)], flat, offset);
@@ -171,10 +175,6 @@ test("gates: a leaf in the gap, a boom for a lift gate", () => {
   if (!(leaf && boom)) {
     throw new Error("no fence");
   }
-  const codes = (d: FenceGeometryData) =>
-    new Set(
-      Array.from({ length: d.positions.length / 3 }, (_, v) => codeOf(d, v))
-    );
   expect(codes(leaf).has(FENCE_CODE.gate)).toBe(true);
   expect(codes(leaf).has(FENCE_CODE.frame)).toBe(false);
   expect(codes(boom).has(FENCE_CODE.gate)).toBe(false);
@@ -210,7 +210,7 @@ test("gates on a wall cut only freestanding walls, with a leaf as tall as the wa
 /** Metres along a closed ring (from its first vertex) of a point on it. */
 function alongRing(ring: Point2[], p: Point2): number {
   let acc = 0;
-  for (let i = 1; i < ring.length; i++) {
+  for (let i = 1; i < ring.length; i += 1) {
     const [x0, y0] = ring[i - 1];
     const [x1, y1] = ring[i];
     const len = Math.hypot(x1 - x0, y1 - y0);
@@ -227,12 +227,16 @@ function alongRing(ring: Point2[], p: Point2): number {
   throw new Error("not on the ring");
 }
 
-const lengthOf = (piece: Point2[]) =>
-  piece.reduce(
-    (sum, [x, y], i) =>
-      i === 0 ? 0 : sum + Math.hypot(x - piece[i - 1][0], y - piece[i - 1][1]),
-    0
-  );
+const lengthOf = (piece: Point2[]) => {
+  let sum = 0;
+  for (let i = 1; i < piece.length; i += 1) {
+    sum += Math.hypot(
+      piece[i][0] - piece[i - 1][0],
+      piece[i][1] - piece[i - 1][1]
+    );
+  }
+  return sum;
+};
 
 test("a gate at a closed ring's closing vertex cuts its whole gap", () => {
   // A 10 m square yard, closing at its corner (0, 0), a 4 m gate there.
@@ -317,12 +321,12 @@ test("a swing gate is a boom at the band's top", () => {
   if (!swing) {
     throw new Error("no fence");
   }
-  const codes = new Set(
+  const swingCodes = new Set(
     Array.from({ length: swing.positions.length / 3 }, (_, v) =>
       codeOf(swing, v)
     )
   );
-  expect([...codes].toSorted((x, y) => x - y)).toEqual([
+  expect([...swingCodes].toSorted((x, y) => x - y)).toEqual([
     FENCE_CODE.mesh,
     FENCE_CODE.frame,
   ]);

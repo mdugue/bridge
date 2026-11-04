@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
   createResolutionScale,
-  type ResolutionScale,
   resolutionTargetsFor,
   SCALE_STEPS,
   WINDOW_MS,
 } from "./resolution-scale";
+import type { ResolutionScale } from "./resolution-scale";
 
 const DESKTOP = resolutionTargetsFor("desktop");
 
@@ -95,7 +95,7 @@ describe("resolution scale", () => {
   test("ignores a lone long frame (medians)", () => {
     const rs = createResolutionScale(DESKTOP);
     let now = 0;
-    for (let i = 0; i < 200; i++) {
+    for (let i = 0; i < 200; i += 1) {
       const dt = i % 50 === 0 ? 400 : 16.7;
       now += dt;
       rs.frame(dt, 5);
@@ -149,7 +149,7 @@ describe("resolution scale", () => {
   test("decides nothing from an export's frames", () => {
     const rs = createResolutionScale(DESKTOP);
     let now = 0;
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < 100; i += 1) {
       now += 100;
       rs.frame(100, 5);
       rs.reset();
@@ -158,28 +158,29 @@ describe("resolution scale", () => {
   });
 });
 
+function still(
+  rs: ResolutionScale,
+  start: number,
+  windows: number,
+  gpu?: number
+) {
+  const changes: number[] = [];
+  let now = start;
+  while (now < start + windows * WINDOW_MS) {
+    now += 33.3;
+    if (gpu !== undefined) {
+      rs.gpu(gpu * rs.scale() ** 2);
+    }
+    const scale = rs.update(now, true);
+    if (scale !== undefined) {
+      changes.push(scale);
+    }
+  }
+  return changes;
+}
+
 describe("resolution scale, still", () => {
   /** windows of still-paced frames: only GPU times, no intervals */
-  function still(
-    rs: ResolutionScale,
-    start: number,
-    windows: number,
-    gpu?: number
-  ) {
-    const changes: number[] = [];
-    let now = start;
-    while (now < start + windows * WINDOW_MS) {
-      now += 33.3;
-      if (gpu !== undefined) {
-        rs.gpu(gpu * rs.scale() ** 2);
-      }
-      const scale = rs.update(now, true);
-      if (scale !== undefined) {
-        changes.push(scale);
-      }
-    }
-    return changes;
-  }
 
   test("steps up where the GPU's time says it fits", () => {
     const rs = createResolutionScale(DESKTOP);

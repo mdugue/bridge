@@ -6,8 +6,8 @@ import { colonyCrop, cropColonyRaster, cropRg, halveRg } from "./crop-raster";
 /** A 16² RG raster with one colony: R = 200 inside x 5–8, y 3–5. */
 function raster(): Uint8Array {
   const rg = new Uint8Array(16 * 16 * 2);
-  for (let y = 3; y <= 5; y++) {
-    for (let x = 5; x <= 8; x++) {
+  for (let y = 3; y <= 5; y += 1) {
+    for (let x = 5; x <= 8; x += 1) {
       rg.set([200, 7], (y * 16 + x) * 2);
     }
   }

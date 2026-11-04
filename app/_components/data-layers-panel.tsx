@@ -5,10 +5,10 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Switch } from "@/components/ui/switch";
 import {
   BIKE_DIRECTION_TINTS,
-  type BikeCounter,
   countClock,
   tintCss,
 } from "@/lib/city/bike-counts";
+import type { BikeCounter } from "@/lib/city/bike-counts";
 import type { DataLayerDef, DataLayerKey } from "@/lib/city/data-layers";
 import type { LookValues } from "@/lib/city/look-controls";
 import { DataLayerSwatch } from "./data-layer-swatch";
@@ -21,7 +21,7 @@ import type { TramCarsStatus } from "./tram-cars";
  * of explanation, and — while it is on — its credit and whatever the
  * layer has to say in words (`detail`; the scene itself carries no text).
  */
-export function DataLayersPanel({
+export const DataLayersPanel = ({
   detail,
   look,
   onLook,
@@ -32,46 +32,43 @@ export function DataLayersPanel({
   onLook: (patch: Partial<LookValues>) => void;
   /** the site's layers (lib/city/data-layers.ts `siteDataLayers`) */
   rows: readonly DataLayerDef[];
-}) {
-  return (
-    <div className="flex flex-col gap-3">
-      {rows.map((def) => (
-        <div className="flex flex-col gap-1" key={def.key}>
-          <Field orientation="horizontal">
-            <FieldLabel
-              className="flex items-center gap-2 font-medium text-xs"
-              htmlFor={def.id}
-            >
-              <DataLayerSwatch layer={def.key} on={look[def.key]} />
-              {def.label}
-            </FieldLabel>
-            <Switch
-              checked={look[def.key]}
-              id={def.id}
-              onCheckedChange={(checked) => {
-                const patch: Partial<LookValues> = {};
-                patch[def.key] = checked;
-                onLook(patch);
-              }}
-              size="sm"
-            />
-          </Field>
-          <FieldDescription className="text-[11px] leading-snug">
-            {def.description}
-          </FieldDescription>
-          {look[def.key] && (
-            <>
-              {detail?.[def.key]}
-              <span className="text-[10px] text-muted-foreground">
-                {def.source}
-              </span>
-            </>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
+}) => (
+  <div className="flex flex-col gap-3">
+    {rows.map((def) => (
+      <div className="flex flex-col gap-1" key={def.key}>
+        <Field orientation="horizontal">
+          <FieldLabel
+            className="flex items-center gap-2 font-medium text-xs"
+            htmlFor={def.id}
+          >
+            <DataLayerSwatch layer={def.key} on={look[def.key]} />
+            {def.label}
+          </FieldLabel>
+          <Switch
+            checked={look[def.key]}
+            id={def.id}
+            onCheckedChange={(checked) => {
+              const patch: Partial<LookValues> = { [def.key]: checked };
+              onLook(patch);
+            }}
+            size="sm"
+          />
+        </Field>
+        <FieldDescription className="text-[11px] leading-snug">
+          {def.description}
+        </FieldDescription>
+        {look[def.key] && (
+          <>
+            {detail?.[def.key]}
+            <span className="text-[10px] text-muted-foreground">
+              {def.source}
+            </span>
+          </>
+        )}
+      </div>
+    ))}
+  </div>
+);
 
 /** "07:00 Uhr" for the newest hour any counter reported. */
 function countHour(counters: BikeCounter[]): string | null {
@@ -84,17 +81,20 @@ function countHour(counters: BikeCounter[]): string | null {
   return `${countClock(new Date(Math.max(...times)))} Uhr`;
 }
 
+const counterTotal = (c: BikeCounter): number =>
+  c.directions.reduce((sum, d) => sum + d.count, 0);
+
 /**
  * The live bicycle counts in words (the scene shows them as columns): one
  * row per counter, busiest first, a count per direction in its column's
  * colour; a click flies there. Read from the scene's status
  * (scene-status.ts), as the two lines below are.
  */
-export function BikeCountList({
+export const BikeCountList = ({
   onFly,
 }: {
   onFly: (counter: BikeCounter) => void;
-}) {
+}) => {
   const counters = useSceneStatus("bikeCounters");
   if (counters.length === 0) {
     return (
@@ -103,9 +103,7 @@ export function BikeCountList({
       </span>
     );
   }
-  const total = (c: BikeCounter) =>
-    c.directions.reduce((sum, d) => sum + d.count, 0);
-  const rows = [...counters].sort((a, b) => total(b) - total(a));
+  const rows = [...counters].sort((a, b) => counterTotal(b) - counterTotal(a));
   const hour = countHour(counters);
   return (
     <div className="flex flex-col gap-1">
@@ -148,7 +146,7 @@ export function BikeCountList({
       </ul>
     </div>
   );
-}
+};
 
 const DAY_KIND_LABEL: Record<TramCarsStatus["kind"], string> = {
   weekday: "Werktag",
@@ -176,7 +174,7 @@ function busyWord(factor: number): string {
  * scene's hour on a typical daily curve — said here, so the picture is
  * not read as a live measurement.
  */
-export function TrafficHourLine() {
+export const TrafficHourLine = () => {
   const status = useSceneStatus("trafficHour");
   if (!status) {
     return null;
@@ -190,7 +188,7 @@ export function TrafficHourLine() {
       typischen Tagesgang
     </span>
   );
-}
+};
 
 /** "2026-10-01" → "1.10.2026". */
 function germanDate(iso: string): string {
@@ -200,7 +198,7 @@ function germanDate(iso: string): string {
 
 /** The timetable trams in words: how many run now, from which day's
  *  timetable. */
-export function TramStatusLine() {
+export const TramStatusLine = () => {
   const status = useSceneStatus("tramStatus");
   if (!status || status.failed) {
     return (
@@ -220,4 +218,4 @@ export function TramStatusLine() {
         : ` · kein Fahrplan für ${day}`}
     </span>
   );
-}
+};

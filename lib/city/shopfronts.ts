@@ -29,9 +29,11 @@
  * and own colour, with an absolute roughness in its `rough` column.
  * Pure, no THREE.
  */
-import { rayHit, trianglesOnRays, type V3 } from "./doors";
+import { rayHit, trianglesOnRays } from "./doors";
+import type { V3 } from "./doors";
 import type { DoorFeature, ShopfrontWall } from "./features";
-import { type JoinPoint, joinsAlong, SINK } from "./ground-join";
+import { joinsAlong, SINK } from "./ground-join";
+import type { JoinPoint } from "./ground-join";
 
 /** The building glTF's position step (m): 16-bit positions over a 2 km
  *  tile's buildings (scripts/tile-glb.ts). Anything along the wall stands
@@ -315,7 +317,7 @@ interface EdgePoint {
  *  into the front. */
 function shoulder(back: number, proud: number, r: number): EdgePoint[] {
   const out: EdgePoint[] = [{ e: 0, o: -back, nu: 1, no: 0 }];
-  for (let k = 0; k <= ROUND_STEPS; k++) {
+  for (let k = 0; k <= ROUND_STEPS; k += 1) {
     const a = ((Math.PI / 2) * k) / ROUND_STEPS;
     const c = Math.cos(a);
     const s = Math.sin(a);
@@ -328,7 +330,7 @@ function shoulder(back: number, proud: number, r: number): EdgePoint[] {
  *  quarter round of radius `r` that turns it into the front at `proud`. */
 function reveal(inner: number, proud: number, r: number): EdgePoint[] {
   const out: EdgePoint[] = [{ e: 0, o: inner, nu: -1, no: 0 }];
-  for (let k = 0; k <= ROUND_STEPS; k++) {
+  for (let k = 0; k <= ROUND_STEPS; k += 1) {
     const a = ((Math.PI / 2) * k) / ROUND_STEPS;
     const c = Math.cos(a);
     const s = Math.sin(a);
@@ -348,12 +350,13 @@ function dir3(f: Frame, ds: number, dout: number, dz: number): V3 {
  *  given. */
 function newell(p: readonly V3[]): V3 {
   const n: V3 = [0, 0, 0];
-  p.forEach((a, i) => {
+  for (let i = 0; i < p.length; i += 1) {
+    const a = p[i];
     const b = p[(i + 1) % p.length];
     n[0] += (a[1] - b[1]) * (a[2] + b[2]);
     n[1] += (a[2] - b[2]) * (a[0] + b[0]);
     n[2] += (a[0] - b[0]) * (a[1] + b[1]);
-  });
+  }
   return n;
 }
 
@@ -377,7 +380,7 @@ function polygon(
     return;
   }
   const flip = n[0] * facing[0] + n[1] * facing[1] + n[2] * facing[2] < 0;
-  for (let i = 1; i + 1 < keep.length; i++) {
+  for (let i = 1; i + 1 < keep.length; i += 1) {
     const tri = flip ? [0, i + 1, i] : [0, i, i + 1];
     for (const j of tri) {
       out.positions.push(...p[keep[j]]);
@@ -431,7 +434,7 @@ function softEdge(
     ]);
   }
   for (const [points, us, uz] of sides) {
-    for (let k = 0; k + 1 < profile.length; k++) {
+    for (let k = 0; k + 1 < profile.length; k += 1) {
       const [p, q] = [profile[k], profile[k + 1]];
       const lp = points(rect(p.e));
       const lq = points(rect(q.e));
@@ -443,7 +446,7 @@ function softEdge(
         p.no + q.no,
         (p.nu + q.nu) * uz
       );
-      for (let j = 0; j + 1 < lp.length; j++) {
+      for (let j = 0; j + 1 < lp.length; j += 1) {
         polygon(
           out,
           [
@@ -459,6 +462,11 @@ function softEdge(
     }
   }
 }
+
+const grid = (lo: number, hi: number, xs: number[]) =>
+  [...new Set([lo, hi, ...xs.filter((x) => x > lo && x < hi)])].toSorted(
+    (a, b) => a - b
+  );
 
 /**
  * A band standing `proud` out of the wall over `outer`, its outer edge
@@ -489,10 +497,6 @@ function softBand(
     z0: h.z0 - ri,
     z1: h.z1 + ri,
   }));
-  const grid = (lo: number, hi: number, xs: number[]) =>
-    [...new Set([lo, hi, ...xs.filter((x) => x > lo && x < hi)])].toSorted(
-      (a, b) => a - b
-    );
   const s = grid(
     face.s0,
     face.s1,
@@ -504,8 +508,8 @@ function softBand(
     cut.flatMap((h) => [h.z0, h.z1])
   );
   const n = dir3(f, 0, 1, 0);
-  for (let i = 0; i + 1 < s.length; i++) {
-    for (let j = 0; j + 1 < z.length; j++) {
+  for (let i = 0; i + 1 < s.length; i += 1) {
+    for (let j = 0; j + 1 < z.length; j += 1) {
       const sc = (s[i] + s[i + 1]) / 2;
       const zc = (z[j] + z[j + 1]) / 2;
       if (cut.some((h) => sc > h.s0 && sc < h.s1 && zc > h.z0 && zc < h.z1)) {
@@ -697,7 +701,7 @@ type Section = [o: number, z: number, no: number, nz: number];
 /** A quarter round about (co, cz) from angle a0 to a1 (degrees). */
 function arc(co: number, cz: number, r: number, a0: number, a1: number) {
   const out: Section[] = [];
-  for (let k = 0; k <= ROUND_STEPS; k++) {
+  for (let k = 0; k <= ROUND_STEPS; k += 1) {
     const a = ((a0 + ((a1 - a0) * k) / ROUND_STEPS) * Math.PI) / 180;
     const c = Math.cos(a);
     const s = Math.sin(a);
@@ -788,7 +792,7 @@ export function canopyMesh(
   const g = Math.max(groundAt(w, span[0]), groundAt(w, span[1]));
   const { caps, runs } = canopySection(c, top);
   for (const run of runs) {
-    for (let k = 0; k + 1 < run.length; k++) {
+    for (let k = 0; k + 1 < run.length; k += 1) {
       const [p, q] = [run[k], run[k + 1]];
       const np = dir3(f, 0, p[2], p[3]);
       const nq = dir3(f, 0, q[2], q[3]);

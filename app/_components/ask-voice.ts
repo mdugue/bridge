@@ -8,6 +8,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { STORAGE_KEYS } from "./storage-keys";
+import { useOnce } from "./use-once";
 
 // reason: SpeechRecognition is not in TypeScript's DOM library yet; the
 // part used here, typed by hand.
@@ -16,7 +17,10 @@ interface Recognition {
   interimResults: boolean;
   lang: string;
   onend: (() => void) | null;
-  onerror: ((event: { error: string }) => void) | null;
+  addEventListener: (
+    type: "error",
+    listener: (event: { error: string }) => void
+  ) => void;
   onresult:
     | ((event: {
         results: ArrayLike<ArrayLike<{ transcript: string }>>;
@@ -43,14 +47,17 @@ function recognitionClass(): RecognitionClass | null {
 // (a sentence's full stop after it is not the link's)
 const LINK = String.raw`https?:\/\/(?:[^\s()]|\([^\s()]*\))*(?:[^\s().,;:!?]|\([^\s()]*\))`;
 /** [words](link): the words stay */
-const MARKDOWN_LINK = new RegExp(String.raw`\[([^\]]+)\]\(${LINK}\)`, "g");
+const MARKDOWN_LINK = new RegExp(
+  String.raw`\[(?<words>[^\]]+)\]\(${LINK}\)`,
+  "gu"
+);
 /** (link) or (Quelle: link): gone with its brackets */
 const BRACKETED_LINK = new RegExp(
   String.raw`\s?\((?:Quelle:\s*)?${LINK}\)`,
-  "g"
+  "gu"
 );
 /** a bare link */
-const BARE_LINK = new RegExp(String.raw`\s?${LINK}`, "g");
+const BARE_LINK = new RegExp(String.raw`\s?${LINK}`, "gu");
 
 const UNITS = [
   "",
@@ -118,23 +125,23 @@ export function yearWords(year: number): string {
 
 /** Shortenings a voice reads letter by letter or stumbles on. */
 const SPOKEN: [RegExp, string][] = [
-  [/\bz\. ?B\./g, "zum Beispiel"],
-  [/\bca\./g, "circa"],
-  [/\bNr\./g, "Nummer"],
-  [/\bSt\. (?=[A-ZÄÖÜ])/g, "Sankt "],
-  [/\bu\. ?a\./g, "unter anderem"],
-  [/\bv\. Chr\./g, "vor Christus"],
-  [/\bn\. Chr\./g, "nach Christus"],
-  [/(\d)\s?km\b/g, "$1 Kilometer"],
-  [/(\d)\s?%/g, "$1 Prozent"],
+  [/\bz\. ?B\./gu, "zum Beispiel"],
+  [/\bca\./gu, "circa"],
+  [/\bNr\./gu, "Nummer"],
+  [/\bSt\. (?=[A-ZÄÖÜ])/gu, "Sankt "],
+  [/\bu\. ?a\./gu, "unter anderem"],
+  [/\bv\. Chr\./gu, "vor Christus"],
+  [/\bn\. Chr\./gu, "nach Christus"],
+  [/(?<n>\d)\s?km\b/gu, "$<n> Kilometer"],
+  [/(?<n>\d)\s?%/gu, "$<n> Prozent"],
 ];
 
 /** Words a year follows ("im Juni 1813", "seit 1990"). */
 const BEFORE_YEAR =
-  /(?:^|[\s(])(?:im|seit|bis|von|um|ab|nach|vor|anno|Jahre?|zwischen|und|oder|Ende|Anfang|Mitte|Sommer|Herbst|Winter|Frühjahr|Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\s$/i;
+  /(?:^|[\s(])(?:im|seit|bis|von|um|ab|nach|vor|anno|Jahre?|zwischen|und|oder|Ende|Anfang|Mitte|Sommer|Herbst|Winter|Frühjahr|Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\s$/iu;
 
 /** A measure after a number: it counts, whatever stands before it. */
-const UNIT_AFTER = /^\s(?:Meter|Kilometer|Quadratmeter|Kubikmeter|Prozent)\b/;
+const UNIT_AFTER = /^\s(?:Meter|Kilometer|Quadratmeter|Kubikmeter|Prozent)\b/u;
 
 /** "1800 Leute", "1200 Meter": a number before a noun counts something,
  *  unless the words before it make it a year ("im Mai 1945 Truppen");
@@ -143,7 +150,7 @@ function isCount(text: string, at: number): boolean {
   if (UNIT_AFTER.test(text.slice(at + 4, at + 20))) {
     return true;
   }
-  const noun = /^\s[A-ZÄÖÜ]/.test(text.slice(at + 4, at + 6));
+  const noun = /^\s[A-ZÄÖÜ]/u.test(text.slice(at + 4, at + 6));
   return noun && !BEFORE_YEAR.test(text.slice(Math.max(0, at - 16), at));
 }
 
@@ -155,33 +162,33 @@ function isCount(text: string, at: number): boolean {
  */
 export function speakable(text: string): string {
   let out = text
-    .replace(MARKDOWN_LINK, "$1")
-    .replace(BRACKETED_LINK, "")
-    .replace(BARE_LINK, "")
-    .replace(/^[ \t]*[-*•][ \t]+/gm, "")
+    .replaceAll(MARKDOWN_LINK, "$<words>")
+    .replaceAll(BRACKETED_LINK, "")
+    .replaceAll(BARE_LINK, "")
+    .replaceAll(/^[ \t]*[-*•][ \t]+/gmu, "")
     // Markdown's marks, but not an underscore inside a word (DESN_0815)
-    .replace(/[*#`]|(?<!\w)_|_(?!\w)/g, "")
+    .replaceAll(/[*#`]|(?<!\w)_|_(?!\w)/gu, "")
     // a line without its own end is a sentence still: a list item, a heading
-    // (after a number a comma: "1726." reads as an ordinal)
-    .replace(/(\d)[ \t]*\n+/g, "$1; ")
-    .replace(/([^\s.!?:;,])[ \t]*\n+/g, "$1. ")
-    .replace(/(\d)\s?m²/g, "$1 Quadratmeter")
-    .replace(/(\d)\s?m³/g, "$1 Kubikmeter")
-    .replace(/(\d)\s?m(?![\p{L}\d])/gu, "$1 Meter");
+    // (after a number a pause: "1726." reads as an ordinal)
+    .replaceAll(/(?<n>\d)[ \t]*\n+/gu, "$<n>; ")
+    .replaceAll(/(?<c>[^\s.!?:;,])[ \t]*\n+/gu, "$<c>. ")
+    .replaceAll(/(?<n>\d)\s?m²/gu, "$<n> Quadratmeter")
+    .replaceAll(/(?<n>\d)\s?m³/gu, "$<n> Kubikmeter")
+    .replaceAll(/(?<n>\d)\s?m(?![\p{L}\d])/gu, "$<n> Meter");
   for (const [pattern, words] of SPOKEN) {
-    out = out.replace(pattern, words);
+    out = out.replaceAll(pattern, words);
   }
   return (
     out
       // a year alone (not 35.798, not a span's 1,5): as German says it
-      .replace(
-        /(?<![\w.,])(1[1-9]\d\d|20\d\d)(?![\d.,]\d)/g,
+      .replaceAll(
+        /(?<![\w.,])(?<year>1[1-9]\d\d|20\d\d)(?![\d.,]\d)/gu,
         (y: string, _: string, at: number, all: string) =>
           isCount(all, at) ? y : yearWords(Number(y))
       )
-      .replace(/\s[–—]\s/g, ", ")
-      .replace(/[„“”"»«]/g, "")
-      .replace(/\s+/g, " ")
+      .replaceAll(/\s[–—]\s/gu, ", ")
+      .replaceAll(/[„“”"»«]/gu, "")
+      .replaceAll(/\s+/gu, " ")
       .trim()
   );
 }
@@ -195,15 +202,15 @@ export interface VoiceChoice {
 
 /** How natural a voice's name says it sounds: the better, the higher. */
 function voiceRank(v: SpeechSynthesisVoice): number {
-  const name = v.name;
+  const { name } = v;
   let rank = 0;
-  if (/natural|neural|premium|enhanced|erweitert|siri/i.test(name)) {
+  if (/natural|neural|premium|enhanced|erweitert|siri/iu.test(name)) {
     rank += 4;
   }
-  if (/google/i.test(name)) {
+  if (/google/iu.test(name)) {
     rank += 3;
   }
-  if (/compact|espeak|kompakt/i.test(name)) {
+  if (/compact|espeak|kompakt/iu.test(name)) {
     rank -= 4;
   }
   return rank + (v.lang.toLowerCase() === "de-de" ? 1 : 0);
@@ -248,7 +255,8 @@ function storedVoice(): string | null {
 const SENTENCE_END = new RegExp(
   String.raw`(?<=(?:[^\d\s]|\d{3})[.!?:;]|\d[!?:;])\s+(?=[A-ZÄÖÜ„"0-9])` +
     // a year in words starts one after a full stop, not after a label's colon
-    String.raw`|(?<=[.!?;])\s+(?=(?:${TEENS.slice(1).join("|")})hundert|zweitausend)`
+    String.raw`|(?<=[.!?;])\s+(?=(?:${TEENS.slice(1).join("|")})hundert|zweitausend)`,
+  "u"
 );
 
 /** Sentences, each its own utterance: a long one is cut off by some
@@ -288,7 +296,7 @@ export interface Speech {
  * picked) — the voices load late, so `supported` follows them.
  */
 export function useSpeech(): Speech {
-  const [supportedApi] = useState(
+  const supportedApi = useOnce(
     () => typeof window !== "undefined" && "speechSynthesis" in window
   );
   const [chosen, setChosen] = useState<string | null>(() =>
@@ -297,22 +305,27 @@ export function useSpeech(): Speech {
   // the voices arrive late in Chrome: listed once they are there
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   useEffect(() => {
-    if (!supportedApi) {
-      return;
-    }
     // a list the same as before keeps its identity: a stop being read is
     // not cut off and started again; a reload that briefly lists none
     // keeps the voices it had, and the switch does not vanish
-    const list = () =>
+    const list = () => {
       setVoices((was) => {
         const now = germanVoices();
         const same =
           now.length === was.length && now.every((v, i) => v === was[i]);
         return same || now.length === 0 ? was : now;
       });
-    list();
-    speechSynthesis.addEventListener("voiceschanged", list);
-    return () => speechSynthesis.removeEventListener("voiceschanged", list);
+    };
+    if (supportedApi) {
+      list();
+      // (older Safari: speechSynthesis is no EventTarget, the one list stands)
+      speechSynthesis.addEventListener?.("voiceschanged", list);
+    }
+    return () => {
+      if (supportedApi) {
+        speechSynthesis.removeEventListener?.("voiceschanged", list);
+      }
+    };
   }, [supportedApi]);
   // reading aloud where the device has a German voice to read with
   const supported = voices.length > 0;
@@ -397,26 +410,32 @@ export interface Dictation {
 export function dictationProblem(error: string): string | null {
   switch (error) {
     case "aborted":
-    case "no-speech":
+    case "no-speech": {
       // they stopped, or said nothing: nothing to explain
       return null;
+    }
     case "not-allowed":
-    case "service-not-allowed":
+    case "service-not-allowed": {
       return "Das Mikrofon ist für diese Seite nicht freigegeben.";
-    case "audio-capture":
+    }
+    case "audio-capture": {
       return "Kein Mikrofon gefunden.";
-    case "network":
+    }
+    case "network": {
       return "Die Spracherkennung des Browsers ist nicht erreichbar.";
-    case "language-not-supported":
+    }
+    case "language-not-supported": {
       return "Der Browser erkennt kein Deutsch.";
-    default:
+    }
+    default: {
       return "Die Spracherkennung hat nicht geklappt.";
+    }
   }
 }
 
 /** Push to talk: one question per press, in German. */
 export function useDictation(): Dictation {
-  const [supported] = useState(() => recognitionClass() !== null);
+  const supported = useOnce(() => recognitionClass() !== null);
   const [listening, setListening] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const current = useRef<Recognition | null>(null);
@@ -441,7 +460,9 @@ export function useDictation(): Dictation {
         onText(text);
       }
     };
-    r.onerror = (event) => setProblem(dictationProblem(event.error));
+    r.addEventListener("error", (event) =>
+      setProblem(dictationProblem(event.error))
+    );
     r.onend = () => {
       current.current = null;
       setListening(false);

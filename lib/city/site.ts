@@ -110,7 +110,7 @@ export interface Provider {
   /** the credit line its licence requires, in the HUD footer */
   credit: string;
   /** ETRS89 / UTM: 25832 (zone 32) or 25833 (zone 33) — one per Land */
-  epsg: 25832 | 25833;
+  epsg: 25_832 | 25_833;
   id: ProviderId;
   /** the Land it surveys, as the start page names it */
   land: string;
@@ -300,11 +300,13 @@ export function landcoverCredit(site: Site): string {
  *  name before its parenthesis when that is short, else what the
  *  parenthesis holds. */
 function shortName(provider: Provider): string {
-  const m = provider.name.match(/^(.*?) \((.*)\)$/);
-  if (!m) {
+  const groups = /^(?<short>.*?) \((?<inner>.*)\)$/u.exec(
+    provider.name
+  )?.groups;
+  if (groups?.short === undefined || groups.inner === undefined) {
     return provider.name;
   }
-  return m[1].length <= 20 ? m[1] : m[2];
+  return groups.short.length <= 20 ? groups.short : groups.inner;
 }
 
 /**

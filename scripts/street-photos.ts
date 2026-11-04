@@ -17,14 +17,14 @@
  * poses were off by ~0.6 m in 2026-10).
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 import { gridConvergenceDeg, latLngToUtm, utmToLatLng } from "../lib/city/crs";
 import { siteExtentOf } from "../lib/city/site-extent";
 import { siteFromArgs } from "../sites";
 import { readDgmFile } from "./dgm-cache";
 import { siteDgm } from "./line-levels";
 
-const ROOT = join(import.meta.dir, "..");
+const ROOT = path.join(import.meta.dir, "..");
 const API = "https://api.panoramax.xyz/api";
 /** Eye height of a phone held up (m). */
 const EYE_M = 1.6;
@@ -100,11 +100,11 @@ export function isoWeek(day: Date): string {
 export function shuffled<T>(items: readonly T[], seed: string): T[] {
   let h = 1_779_033_703;
   for (const c of seed) {
-    h = Math.imul(h ^ c.charCodeAt(0), 3_432_918_353);
+    h = Math.imul(h ^ (c.codePointAt(0) ?? 0), 3_432_918_353);
     h = (h << 13) | (h >>> 19);
   }
   let state = h >>> 0;
-  const next = () => {
+  const random = () => {
     state = (state + 0x6d_2b_79_f5) >>> 0;
     let t = state;
     t = Math.imul(t ^ (t >>> 15), t | 1);
@@ -112,8 +112,8 @@ export function shuffled<T>(items: readonly T[], seed: string): T[] {
     return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
   };
   const out = [...items];
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(next() * (i + 1));
+  for (let i = out.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
     [out[i], out[j]] = [out[j], out[i]];
   }
   return out;
@@ -150,11 +150,15 @@ export function lonLatBox(epsg: number, cell: Cell): number[] | null {
     utmToLatLng(epsg, cell[2], cell[1]),
     utmToLatLng(epsg, cell[2], cell[3]),
   ];
-  if (corners.some((c) => c === null)) {
-    return null;
+  const lons: number[] = [];
+  const lats: number[] = [];
+  for (const corner of corners) {
+    if (corner === null) {
+      return null;
+    }
+    lons.push(corner.lng);
+    lats.push(corner.lat);
   }
-  const lons = corners.map((c) => c!.lng);
-  const lats = corners.map((c) => c!.lat);
   return [
     Math.min(...lons),
     Math.min(...lats),
@@ -241,7 +245,7 @@ async function pickPhotos(
     if (!bbox) {
       continue;
     }
-    looked++;
+    looked += 1;
     const found = await searchCell(bbox);
     failed = found ? 0 : failed + 1;
     const items = (found ?? []).flatMap((item) => {
@@ -261,39 +265,40 @@ async function main() {
   const { site, rest } = siteFromArgs(process.argv.slice(2));
   const flag = (name: string) => {
     const at = rest.indexOf(name);
-    return at >= 0 ? rest[at + 1] : undefined;
+    return at === -1 ? undefined : rest[at + 1];
   };
   const n = Number(flag("--n") ?? 8);
   const seed = flag("--seed") ?? isoWeek(new Date());
-  const manifestPath = join(ROOT, "public/data", site.id, "manifest.json");
+  const manifestPath = path.join(ROOT, "public/data", site.id, "manifest.json");
   if (!existsSync(manifestPath)) {
     throw new Error(
       `${site.id} is not prepared (no public/data/${site.id}): run \`bun scripts/prepare-sites.ts ${site.id}\` first`
     );
   }
-  const epsg = site.provider.epsg;
+  const { epsg } = site.provider;
   // twice as many as asked: a pair without ground or photo is replaced
   const { picked, looked } = await pickPhotos(
     epsg,
     cellsInOrder(siteExtentOf(site), seed),
     2 * n
   );
-  const heightAt = await siteDgm(site, (tif, tfw) =>
-    readDgmFile(tif, tfw, "native")
+  const heightAt = await siteDgm(
+    site,
+    async (tif, tfw) => await readDgmFile(tif, tfw, "native")
   );
-  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as {
     files: Record<string, string>;
   };
   const tileset = JSON.parse(
     readFileSync(
-      join(ROOT, "public/data", site.id, manifest.files["tileset.json"]),
-      "utf8"
+      path.join(ROOT, "public/data", site.id, manifest.files["tileset.json"]),
+      "utf-8"
     )
   ) as { extras: { offset: { cx: number; cy: number } } };
   const { cx, cy } = tileset.extras.offset;
-  const photos = join(ROOT, "street-photos", site.id);
+  const photos = path.join(ROOT, "street-photos", site.id);
   mkdirSync(photos, { recursive: true });
-  mkdirSync(join(ROOT, "shots"), { recursive: true });
+  mkdirSync(path.join(ROOT, "shots"), { recursive: true });
   const pairs: Record<string, string | boolean>[] = [];
   for (const item of picked) {
     if (pairs.length >= n) {
@@ -327,13 +332,14 @@ async function main() {
       look: { style: "pastel" },
     };
     // a pair needs its photo: without one, no snapshot and no render
-    const bytes = await photoBytes(item.assets.sd!.href);
+    const { sd } = item.assets;
+    const bytes = sd ? await photoBytes(sd.href) : null;
     if (!bytes) {
       continue;
     }
-    writeFileSync(join(photos, `${name}.jpg`), bytes);
+    writeFileSync(path.join(photos, `${name}.jpg`), bytes);
     writeFileSync(
-      join(ROOT, "shots", `${name}.json`),
+      path.join(ROOT, "shots", `${name}.json`),
       JSON.stringify(snapshot)
     );
     pairs.push({
@@ -351,7 +357,7 @@ async function main() {
     });
   }
   writeFileSync(
-    join(photos, "pairs.json"),
+    path.join(photos, "pairs.json"),
     `${JSON.stringify({ seed, pairs }, null, 2)}\n`
   );
   process.stdout.write(

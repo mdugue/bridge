@@ -14,7 +14,7 @@ export type MentionRun = { text: string } | { text: string; place: number };
 function aliasesOf(name: string, city: string): string[] {
   const out = [name.trim()];
   const c = city.trim().toLowerCase();
-  const words = name.trim().split(/\s+/);
+  const words = name.trim().split(/\s+/u);
   if (c !== "" && words.length > 1 && words.at(-1)?.toLowerCase() === c) {
     out.push(words.slice(0, -1).join(" "));
   }
@@ -53,21 +53,21 @@ export function mentionRuns(
   text: string,
   places: readonly { name: string }[],
   city: string,
-  linked: Set<number> = new Set()
+  linked = new Set<number>()
 ): MentionRun[] {
   const hits: { at: number; end: number; place: number }[] = [];
-  places.forEach((p, place) => {
+  for (const [place, p] of places.entries()) {
     if (linked.has(place)) {
-      return;
+      continue;
     }
     for (const alias of aliasesOf(p.name, city)) {
       const hit = findWord(text, alias);
       if (hit) {
         hits.push({ ...hit, place });
-        return;
+        break;
       }
     }
-  });
+  }
   hits.sort((a, b) => a.at - b.at || b.end - a.end);
   const runs: MentionRun[] = [];
   let pos = 0;

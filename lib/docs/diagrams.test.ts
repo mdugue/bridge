@@ -67,7 +67,7 @@ describe("theming", () => {
 // `bun run docs:diagrams` fails here, before the build does.
 describe("committed diagrams", () => {
   const blocks = docFiles(path.join(ROOT, "docs")).flatMap((file) =>
-    mermaidBlocks(readFileSync(path.join(ROOT, file), "utf8")).map(
+    mermaidBlocks(readFileSync(path.join(ROOT, file), "utf-8")).map(
       (source) => ({
         file,
         key: diagramKey(source),
@@ -90,7 +90,7 @@ describe("committed diagrams", () => {
 
   test("no committed SVG carries a sentinel or the measured font", () => {
     for (const f of readdirSync(dir).filter((x) => x.endsWith(".svg"))) {
-      const svg = readFileSync(path.join(dir, f), "utf8");
+      const svg = readFileSync(path.join(dir, f), "utf-8");
       for (const hex of Object.values(DIAGRAM_COLORS)) {
         expect(svg.toLowerCase()).not.toContain(hex);
       }

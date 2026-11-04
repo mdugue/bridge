@@ -189,7 +189,8 @@ export function waves(xy: V2, t: F, scale: WaveScale): WaveField {
   // c + warp, so its slope carries ∂warp too
   let warpSlope: V2 = vec2(0, 0);
   let near: F = float(1);
-  for (const [i, layer] of LAYERS.entries()) {
+  for (let i = 0; i < LAYERS.length; i += 1) {
+    const layer = LAYERS[i];
     const size = wavelength * layer.size;
     const heading = WIND + layer.turn;
     const along = vec2(Math.cos(heading), Math.sin(heading));

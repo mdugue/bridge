@@ -25,7 +25,7 @@ export function wholeTrees(
   if (trees.size === 0) {
     return whole;
   }
-  for (let i = 0; i < root.length; i++) {
+  for (let i = 0; i < root.length; i += 1) {
     if (trees.has(root[i])) {
       whole.add(i);
     }
@@ -56,9 +56,12 @@ export function takeTriangles(
       }
       list.push(index[t], index[t + 1], index[t + 2]);
     } else {
-      kept[n++] = index[t];
-      kept[n++] = index[t + 1];
-      kept[n++] = index[t + 2];
+      kept[n] = index[t];
+      n += 1;
+      kept[n] = index[t + 1];
+      n += 1;
+      kept[n] = index[t + 2];
+      n += 1;
     }
   }
   const taken = new Map<number, Uint32Array>();
@@ -73,7 +76,7 @@ export function appendTriangles(
   index: ArrayLike<number>,
   extra: readonly Uint32Array[]
 ): Uint32Array {
-  let length = index.length;
+  let { length } = index;
   for (const list of extra) {
     length += list.length;
   }

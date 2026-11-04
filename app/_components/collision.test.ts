@@ -152,7 +152,9 @@ test("the walls of the tile the player stands in block: its box holds the eye", 
   tile.updateMatrixWorld(true);
   const collider = createCityCollider(
     () => [tile],
-    (mesh) => mesh.geometry.computeBoundsTree()
+    (mesh) => {
+      mesh.geometry.computeBoundsTree();
+    }
   );
   const step = collider.resolveStep(
     new Vector3(94.5, 1.7, 100),
@@ -194,7 +196,7 @@ test("a step towards a building whose BVH the worker builds waits: never through
   await buildBvhOffThread(new BoxGeometry(1, 1, 1));
   const done = buildBvhOffThread(cube.geometry);
   // (its turn within a few microtasks of a worker that runs)
-  for (let i = 0; i < 20 && !bvhBuilding(cube.geometry); i++) {
+  for (let i = 0; i < 20 && !bvhBuilding(cube.geometry); i += 1) {
     await Promise.resolve();
   }
   expect(bvhBuilding(cube.geometry)).toBe(true);

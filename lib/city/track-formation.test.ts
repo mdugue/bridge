@@ -53,10 +53,14 @@ function bed(x0: number, x1: number, z: number): Bed {
   return { coords, z: coords.map(() => z), half: 2.25, drop: 0.1 };
 }
 
+/** CityJSON boundaries nest solids, shells, faces and rings: 3 levels
+ *  down to the vertex indices. */
+const BOUNDARY_DEPTH = 3;
+
 /** The heights a document's object draws its vertices at. */
 function heights(doc: CityJsonDocument): number[] {
   const g = doc.CityObjects.b.geometry?.[0] as { boundaries: number[][][][] };
-  const ids = new Set(g.boundaries.flat(3));
+  const ids = new Set(g.boundaries.flat(BOUNDARY_DEPTH));
   return [...ids].map((i) => doc.vertices[i][2] / 100).sort((a, b) => a - b);
 }
 
@@ -85,7 +89,7 @@ describe("onFormations", () => {
   });
 
   test("keeps a low box a track runs on (no top pressed to its foot)", () => {
-    const src = boxDoc(119.0, 120.13);
+    const src = boxDoc(119, 120.13);
     expect(onFormations(src, [bed(-10, 50, 119.33)]).doc).toBe(src);
   });
 

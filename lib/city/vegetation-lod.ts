@@ -86,7 +86,7 @@ export function planCrownTiers(
   tiers.length = chunks.length;
   keys.length = chunks.length;
   order.length = 0;
-  for (let i = 0; i < chunks.length; i++) {
+  for (let i = 0; i < chunks.length; i += 1) {
     const c = chunks[i];
     tiers[i] = distanceTier(c);
     const wasRich = c.current === "rich";

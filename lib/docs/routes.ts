@@ -39,7 +39,7 @@ export function routeOf(file: string): string | null {
       ? `${WISSEN}/${lang}/${rest[0]}`
       : null;
   }
-  const inner = file.slice("docs/".length, -3).replace(/(^|\/)README$/u, "");
+  const inner = file.slice("docs/".length, -3).replace(/(?:^|\/)README$/u, "");
   return inner ? `${WISSEN}/dev/${inner}` : `${WISSEN}/dev`;
 }
 

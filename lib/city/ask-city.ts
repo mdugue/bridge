@@ -70,7 +70,7 @@ const GEMINI = [
 const ROUTED: readonly AskModel[] = [
   ...CLAUDE.map((m) => ({
     ...m,
-    id: `anthropic/${m.id.replace(/-(\d+)-(\d+)$/, "-$1.$2")}`,
+    id: `anthropic/${m.id.replace(/-(?<major>\d+)-(?<minor>\d+)$/u, "-$<major>.$<minor>")}`,
   })),
   ...GPT.map((m) => ({ ...m, id: `openai/${m.id}` })),
   ...GEMINI.map((m) => ({ ...m, id: `google/${m.id}` })),
@@ -164,7 +164,7 @@ export function maskedKey(key: string): string {
  * (a newline) from ever reaching a provider.
  */
 export function plausibleKey(key: string): boolean {
-  return /^[\x21-\x7e]{20,300}$/.test(key);
+  return /^[\u0021-\u007E]{20,300}$/u.test(key);
 }
 
 /**
@@ -238,7 +238,7 @@ export function parseAskProps(
   if (typeof model !== "string" || !isAskModel(provider, model)) {
     return "unbekanntes Modell";
   }
-  if (typeof site !== "string" || !/^[a-z]{2,24}$/.test(site)) {
+  if (typeof site !== "string" || !/^[a-z]{2,24}$/u.test(site)) {
     return "unbekannte Stadt";
   }
   return {
@@ -277,7 +277,7 @@ function contentText(content: unknown): string {
 
 /** The last question the visitor asked: the last user message's text. */
 export function lastQuestion(messages: readonly unknown[]): string {
-  for (let i = messages.length - 1; i >= 0; i--) {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
     const m = messages[i] as {
       content?: unknown;
       parts?: unknown;
@@ -301,7 +301,7 @@ function messageChars(message: unknown): number {
  */
 export function conversationProblem(
   messages: readonly unknown[],
-  lastQuestion: string
+  question: string
 ): string | null {
   if (messages.length === 0) {
     return "keine Frage";
@@ -313,7 +313,7 @@ export function conversationProblem(
   if (chars > ASK_LIMITS.conversationChars) {
     return `${TOO_LONG} Bitte neu beginnen.`;
   }
-  if (lastQuestion.length > ASK_LIMITS.questionChars) {
+  if (question.length > ASK_LIMITS.questionChars) {
     return `Die Frage ist zu lang (höchstens ${ASK_LIMITS.questionChars} Zeichen).`;
   }
   return null;

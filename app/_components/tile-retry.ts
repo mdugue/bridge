@@ -239,7 +239,11 @@ function createHealer(tiles: HealableTiles, onClear?: () => void) {
       } else {
         rootFailed = true;
       }
-      timer ??= setTimeout(heal, healDelayMs(step++));
+      if (timer === undefined) {
+        const delay = healDelayMs(step);
+        step += 1;
+        timer = setTimeout(heal, delay);
+      }
     },
     landed: (tile: object): boolean => {
       const healed = retried.delete(tile);

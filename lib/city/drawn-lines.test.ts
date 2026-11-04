@@ -10,10 +10,13 @@ import {
   OBJECT_SOURCE_PLINTH,
   OBJECT_SOURCE_SCAN,
 } from "./city-mesh";
-import { type DrawnFacts, encodeDrawn } from "./drawn-facts";
-import { cssColour, type DrawnRow, drawnGroups } from "./drawn-lines";
+import { encodeDrawn } from "./drawn-facts";
+import type { DrawnFacts } from "./drawn-facts";
+import { cssColour, drawnGroups } from "./drawn-lines";
+import type { DrawnRow } from "./drawn-lines";
 import type { BuildingInquiry, InquiryObject, ObjectLook } from "./inquiry";
-import { NO_FACT, type ObjectFacts } from "./object-facts";
+import { NO_FACT } from "./object-facts";
+import type { ObjectFacts } from "./object-facts";
 import { packStyle } from "./windows";
 
 const facts = (over: Partial<ObjectFacts> = {}): ObjectFacts => ({
@@ -214,23 +217,24 @@ test("a palace's windows are said to be its type's", () => {
   expect(r.Fenster.detail).toContain("5,5");
 });
 
-test("a palace's window storeys name OSM's count where they take it", () => {
-  const palace = (levels: number) =>
-    rows(
-      ask(
-        object(
-          { own: "use", windows: "type" },
-          {
-            eaveH: 18,
-            flags:
-              OBJECT_FLAG_GROUNDED +
-              OBJECT_FLAG_LANDMARK +
-              OBJECT_FLAG_OWN_FACADE,
-          },
-          { function: "31001_3031", levels }
-        )
+const palace = (levels: number) =>
+  rows(
+    ask(
+      object(
+        { own: "use", windows: "type" },
+        {
+          eaveH: 18,
+          flags:
+            OBJECT_FLAG_GROUNDED +
+            OBJECT_FLAG_LANDMARK +
+            OBJECT_FLAG_OWN_FACADE,
+        },
+        { function: "31001_3031", levels }
       )
-    ).Fenster;
+    )
+  ).Fenster;
+
+test("a palace's window storeys name OSM's count where they take it", () => {
   expect(palace(4).detail).toContain("building:levels = 4");
   // 18 m over 2 storeys is 9 m, past a palace's: the eave is split instead
   expect(palace(2).detail).toContain("5,5");
