@@ -68,7 +68,6 @@ with `SURFACE_KINDS` in lib/city/landcover.ts.
 from __future__ import annotations
 
 import json
-import re
 
 import numpy as np
 import shapely
@@ -76,7 +75,7 @@ from rasterio.features import rasterize
 
 from .classes import PATH
 from .common import OSM_ATTRIBUTION, Tile, column, dlm_complete, read_layer, save_grey_png
-from .osm import has_extract, read_osm, read_ways, surface_id, tag
+from .osm import has_extract, osm_number, read_osm, read_ways, surface_id, tag
 
 # id → key; 0 = unknown (the shader keeps the class default).
 SURFACES = {
@@ -185,14 +184,10 @@ WALK_AREAS = {"footway", "pedestrian", "traffic_island", "path", "cycleway"}
 
 
 def parse_width(value: str | None) -> float | None:
-    """A `width` tag in metres (`5`, `5.5 m`, `5,5`), else None."""
-    if not value:
-        return None
-    m = re.match(r"\s*(\d+(?:[.,]\d+)?)\s*(m|meter|metres?)?\s*$", value)
-    if not m:
-        return None
-    width = float(m.group(1).replace(",", "."))
-    return width if 0 < width < 60 else None
+    """A `width` tag in metres (`5`, `5.5 m`, `5,5`, `ca. 4 m`: the OSM
+    number parser, `osm.osm_number`) within 0–60 m, else None."""
+    width = osm_number(value)
+    return width if width is not None and 0 < width < 60 else None
 
 
 def _highway_kind(highway: str | None) -> str | None:

@@ -265,8 +265,12 @@ def test_widths_parse_metres_and_reject_nonsense():
 
     assert parse_width("5") == 5.0
     assert parse_width("5,5 m") == 5.5
+    assert parse_width("5.5m wide") == 5.5
+    assert parse_width("ca. 4 m") == 4.0
+    assert parse_width("1,5") == 1.5
     assert parse_width("narrow") is None
     assert parse_width("0") is None
+    assert parse_width("75") is None
 
 
 def test_a_sidewalk_band_lies_on_the_tagged_side_only():
