@@ -318,6 +318,19 @@ def table_json(table: dict, key: str, rows: list[list]) -> str:
     return f'{head},\n  "{key}": {listed}\n}}\n'
 
 
+def dgm_paths(tile: Tile, bounds: tuple[float, float, float, float]) -> list[Path]:
+    """The site's committed DGM1 files that may cover `bounds`: those whose
+    name places them there (one of another naming scheme is kept, for
+    `mosaic` to open and see). A step reads, and is re-baked for, those
+    alone — not every DGM of the site."""
+    return [
+        path
+        for path in sorted((tile.data / "dgm").glob("dgm1_*_tiff/dgm1_*.tif"))
+        if (named := named_extent(path.stem.removeprefix("dgm1_"))) is None
+        or overlaps(named, bounds)
+    ]
+
+
 NODATA = -9999.0  # a mosaic's cells no raster covers, before they read NaN
 
 

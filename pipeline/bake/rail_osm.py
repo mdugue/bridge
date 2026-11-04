@@ -53,7 +53,7 @@ import numpy as np
 import shapely
 
 from .classes import BUILTUP, PATH, ROAD, WATER
-from .common import Tile, column, feature, label_line, mosaic, value_at
+from .common import Tile, column, dgm_paths, feature, label_line, mosaic, value_at
 from .osm import in_tunnel, osm_metres, read_osm, tag
 
 RAILWAYS = ("rail", "light_rail", "subway", "narrow_gauge")
@@ -624,11 +624,11 @@ def _clipped_beam(
 
 
 def dgm_ground(tile: Tile, bounds) -> Callable[[float, float], float | None]:
-    """The site's DGM1 over `bounds` (every tile's, so a beam across a seam
-    reads the same ground from either side), as a height lookup."""
+    """The site's DGM1 over `bounds` (every tile's there, so a beam across a
+    seam reads the same ground from either side), as a height lookup."""
     from rasterio.transform import rowcol
 
-    dgm, transform = mosaic(sorted((tile.data / "dgm").glob("dgm1_*_tiff/dgm1_*.tif")), bounds)
+    dgm, transform = mosaic(dgm_paths(tile, bounds), bounds)
 
     def at(x: float, y: float) -> float | None:
         if dgm is None:

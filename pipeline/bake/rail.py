@@ -65,6 +65,7 @@ from .common import (
     Tile,
     above_ground,
     column,
+    dgm_paths,
     dlm_tunnels,
     feature,
     geometry_json,
@@ -338,8 +339,7 @@ class Ground:
     def __init__(self, tile: Tile, networks: dict[str, list] | None = None):
         xmin, ymin, xmax, ymax = tile.bounds
         self.bounds = (xmin - MARGIN, ymin - MARGIN, xmax + MARGIN, ymax + MARGIN)
-        dgms = sorted((tile.data / "dgm").glob("dgm1_*_tiff/dgm1_*.tif"))
-        self.dgm, self.transform = mosaic(dgms, self.bounds)
+        self.dgm, self.transform = mosaic(dgm_paths(tile, self.bounds), self.bounds)
         if self.dgm is None:
             raise SystemExit(f"{tile.id}: no DGM1 under {tile.data / 'dgm'}")
         self.dom = None  # decks fall back to the DGM ramp

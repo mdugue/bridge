@@ -258,9 +258,22 @@ def test_a_flight_across_a_seam_keeps_both_landings(tmp_path, monkeypatch):
     assert xa < X0 + SIZE < xb
 
 
-def test_the_dgm_opens_only_the_tile_and_its_grid_neighbours(tmp_path):
+def _stairs_ground(tile):
+    return stairs.Dgm(tile).at
+
+
+def _rail_osm_ground(tile):
+    from bake.rail_osm import dgm_ground
+
+    xmin, ymin, xmax, ymax = tile.bounds
+    return dgm_ground(tile, (xmin - 50, ymin - 50, xmax + 50, ymax + 50))
+
+
+@pytest.mark.parametrize("reader", [_stairs_ground, _rail_osm_ground])
+def test_the_dgm_opens_only_the_tile_and_its_grid_neighbours(tmp_path, reader):
     # a 2 km grid named as the downloads are: the tile, its eastern
-    # neighbour, and one two tiles away whose file is no raster at all
+    # neighbour, and one two tiles away whose file is no raster at all —
+    # every step that reads the DGM across a seam (common.dgm_paths)
     import rasterio
     import rasterio.transform
 
@@ -295,6 +308,6 @@ def test_the_dgm_opens_only_the_tile_and_its_grid_neighbours(tmp_path):
     far = tile.data / "dgm" / "dgm1_33416_5656_2_sn_tiff" / "dgm1_33416_5656_2_sn.tif"
     far.parent.mkdir(parents=True)
     far.write_bytes(b"not a raster: opening it fails")
-    ground = stairs.Dgm(tile)
-    assert ground.at(411990.5, 5656100.5) == pytest.approx(100.0)
-    assert ground.at(412010.5, 5656100.5) == pytest.approx(103.0)
+    at = reader(tile)
+    assert at(411990.5, 5656100.5) == pytest.approx(100.0)
+    assert at(412010.5, 5656100.5) == pytest.approx(103.0)
