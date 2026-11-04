@@ -6,6 +6,7 @@
  * and hands them in.
  */
 import { ASK_LIMITS } from "./ask-city";
+import { SHOW_RADIUS } from "./ask-tools";
 import {
   matchesQuery,
   nearby,
@@ -25,6 +26,9 @@ import type {
 export interface Knowledge {
   buildings: readonly WissenBuilding[];
   index: StadtwissenIndex;
+  /** each landmark's footprint radius round its point, from the buildings
+   *  that draw it (m) */
+  landmarkRadius: ReadonlyMap<string, number>;
   monuments: readonly WissenMonument[];
 }
 
@@ -32,9 +36,28 @@ export function knowledgeOf(
   index: StadtwissenIndex,
   tiles: readonly WissenTile[]
 ): Knowledge {
+  const buildings = tiles.flatMap((t) => t.buildings);
+  const at = new Map(index.landmarks.map((lm) => [lm.id, lm]));
+  const landmarkRadius = new Map<string, number>();
+  for (const b of buildings) {
+    const lm = b.wd === undefined ? undefined : at.get(b.wd);
+    if (lm && b.r !== undefined) {
+      // a landmark spread over a park or a whole quarter stays one place
+      // `zeige` can take
+      const reach = Math.min(
+        Math.hypot(b.x - lm.x, b.y - lm.y) + b.r,
+        SHOW_RADIUS
+      );
+      landmarkRadius.set(
+        lm.id,
+        Math.max(landmarkRadius.get(lm.id) ?? 0, reach)
+      );
+    }
+  }
   return {
     index,
-    buildings: tiles.flatMap((t) => t.buildings),
+    buildings,
+    landmarkRadius,
     monuments: tiles.flatMap((t) => t.monuments),
   };
 }
@@ -53,6 +76,8 @@ export interface KnowledgeHit {
   name: string;
   nutzung?: string;
   quelle: string;
+  /** the radius of its footprint (m), where the model knows it */
+  r?: number;
   wikidata?: string;
   x: number;
   y: number;
@@ -62,7 +87,8 @@ export interface KnowledgeHit {
 
 const round = (v: number) => Math.round(v);
 
-function landmarkHit(lm: WissenLandmark): KnowledgeHit {
+function landmarkHit(k: Knowledge, lm: WissenLandmark): KnowledgeHit {
+  const r = k.landmarkRadius.get(lm.id);
   return {
     art: "Wahrzeichen",
     id: lm.id,
@@ -71,6 +97,7 @@ function landmarkHit(lm: WissenLandmark): KnowledgeHit {
     y: round(lm.y),
     ...(lm.z === undefined ? {} : { z: round(lm.z) }),
     h: round(lm.h),
+    ...(r === undefined ? {} : { r: round(r) }),
     wikidata: lm.id,
     quelle: "Wikidata, LoD2",
   };
@@ -100,6 +127,7 @@ function buildingHit(b: WissenBuilding): KnowledgeHit {
     y: round(b.y),
     z: round(b.z),
     ...(b.h === undefined ? {} : { h: round(b.h) }),
+    ...(b.r === undefined ? {} : { r: round(b.r) }),
     ...(b.addr ? { adresse: b.addr } : {}),
     ...(b.use && !NO_USE.test(b.use) ? { nutzung: b.use } : {}),
     ...(b.wd ? { wikidata: b.wd } : {}),
@@ -118,7 +146,7 @@ export function searchKnowledge(k: Knowledge, query: string): KnowledgeHit[] {
     .sort((a, b) => b.links - a.links);
   const covered = new Set(landmarks.map((lm) => lm.id));
   const hits = [
-    ...landmarks.map(landmarkHit),
+    ...landmarks.map((lm) => landmarkHit(k, lm)),
     ...k.monuments.filter((m) => matchesQuery(m, query)).map(monumentHit),
     ...k.buildings
       .filter(
@@ -128,6 +156,16 @@ export function searchKnowledge(k: Knowledge, query: string): KnowledgeHit[] {
       .map(buildingHit),
   ];
   return hits.slice(0, ASK_LIMITS.results);
+}
+
+/** How far the neighbourhood reaches for an asked radius (m): the
+ *  buildings and monuments, and the landmarks (seen from further). */
+export function nearReach(radius: number): {
+  buildings: number;
+  landmarks: number;
+} {
+  const r = Math.min(Math.max(radius, 10), ASK_LIMITS.radius);
+  return { buildings: r, landmarks: r * 3 };
 }
 
 /**
@@ -141,11 +179,14 @@ export function nearKnowledge(
   y: number,
   radius: number
 ): KnowledgeHit[] {
-  const r = Math.min(Math.max(radius, 10), ASK_LIMITS.radius);
-  const landmarks = nearby(k.index.landmarks, x, y, r * 3);
+  const { buildings: r, landmarks: far } = nearReach(radius);
+  const landmarks = nearby(k.index.landmarks, x, y, far);
   const covered = new Set(landmarks.map((lm) => lm.id));
   const hits: KnowledgeHit[] = [
-    ...landmarks.map((lm) => ({ ...landmarkHit(lm), abstand: round(lm.d) })),
+    ...landmarks.map((lm) => ({
+      ...landmarkHit(k, lm),
+      abstand: round(lm.d),
+    })),
     ...nearby(k.monuments, x, y, r).map((m) => ({
       ...monumentHit(m),
       abstand: round(m.d),
@@ -167,7 +208,10 @@ export function nearKnowledge(
 }
 
 /** Wikidata's statements of a landmark in words, each with its label. */
-function landmarkFacts(lm: WissenLandmark): Record<string, unknown> {
+function landmarkFacts(
+  k: Knowledge,
+  lm: WissenLandmark
+): Record<string, unknown> {
   const f = lm.facts;
   const aussagen: Record<string, string> = {};
   for (const [p, values] of Object.entries(f?.claims ?? {})) {
@@ -177,7 +221,7 @@ function landmarkFacts(lm: WissenLandmark): Record<string, unknown> {
     }
   }
   return {
-    ...landmarkHit(lm),
+    ...landmarkHit(k, lm),
     ...(f?.description ? { beschreibung: f.description } : {}),
     aussagen,
     quellen: [
@@ -199,7 +243,7 @@ export function factsOf(
 ): Record<string, unknown> | null {
   const lm = k.index.landmarks.find((l) => l.id === id);
   if (lm) {
-    return landmarkFacts(lm);
+    return landmarkFacts(k, lm);
   }
   const m = k.monuments.find((e) => e.id === id);
   if (m) {

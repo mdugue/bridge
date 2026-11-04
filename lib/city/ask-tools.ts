@@ -1,8 +1,10 @@
 /**
  * *Frag die Stadt*'s tools (ADR 0056), defined once for both sides: the
  * server binds the Stadtwissen ones (`suche_stadt`, `in_der_naehe`,
- * `fakten`, `quellen`), the card the scene ones (`wo_bin_ich`,
- * `was_ist_da`, `zeige`, `setze_zeit`, `setze_stil`, `datenschicht`). The server passes all of
+ * `fakten`, `quellen`) and takes in the follow-up questions
+ * (`vorschlaege`, which the card shows as chips), the card the scene ones
+ * (`wo_bin_ich`, `was_ist_da`, `zeige`, `setze_zeit`, `setze_stil`,
+ * `datenschicht`). The server passes all of
  * them to the model and never takes a tool list from the request: what
  * the model can do is fixed here.
  */
@@ -31,10 +33,13 @@ export const searchTool = toolDefinition({
   }),
 });
 
+/** The neighbourhood's radius where the model names none (m). */
+export const NEAR_RADIUS = 120;
+
 export const nearTool = toolDefinition({
   name: "in_der_naehe",
   description:
-    "Was in der Nähe eines Punkts steht, das Nächste zuerst: Wahrzeichen, Denkmale, benannte und adressierte Gebäude, mit Abstand in Metern.",
+    "Was in der Nähe eines Punkts steht, das Nächste zuerst: Wahrzeichen (bis zum Dreifachen des Umkreises), Denkmale, benannte und adressierte Gebäude, mit Abstand in Metern. Sagt, welchen Umkreis es genommen hat.",
   inputSchema: z.object({
     x: coordinate.describe("Rechtswert (m, nach Osten)"),
     y: coordinate.describe("Hochwert (m, nach Norden)"),
@@ -42,7 +47,7 @@ export const nearTool = toolDefinition({
       .number()
       .min(10)
       .max(ASK_LIMITS.radius)
-      .default(120)
+      .default(NEAR_RADIUS)
       .describe("Umkreis in Metern"),
   }),
 });
@@ -81,20 +86,50 @@ export const lookTool = toolDefinition({
   inputSchema: z.object({}),
 });
 
+/** The most places one `zeige` shows. */
+export const SHOW_TARGETS = 8;
+/** The widest footprint radius a place may name (m): what
+ *  `knowledgeOf` caps a landmark's at. */
+export const SHOW_RADIUS = 1000;
+
 export const showTool = toolDefinition({
   name: "zeige",
   description:
-    "Fliegt die Ansicht zu einem Ort und richtet den Blick darauf. Ohne aus_der_luft steht der Besucher auf der Straße davor, mit aus_der_luft sieht er von schräg oben darauf.",
+    "Fliegt die Ansicht zu einem oder mehreren Orten, so dass sie ganz und gut sichtbar im Bild stehen: die Kamera rechnet Abstand, Richtung und Neigung aus Grundriss und Höhe selbst. Unter der Antwort erscheint jeder Ort als Knopf, ein Klick fliegt hin. Gib alle Orte an, um die es geht, auch verworfene Kandidaten — den wichtigsten zuerst. Ohne aus_der_luft=false sieht der Besucher von schräg oben darauf; mit aus_der_luft=false steht er auf der Straße vor dem ersten.",
   inputSchema: z.object({
-    x: coordinate.describe("Rechtswert des Ziels"),
-    y: coordinate.describe("Hochwert des Ziels"),
-    h: z
-      .number()
-      .min(0)
-      .max(400)
-      .optional()
-      .describe("Höhe des Ziels über Grund (m)"),
-    aus_der_luft: z.boolean().default(false),
+    ziele: z
+      .array(
+        z.object({
+          name: z.string().min(1).max(200).describe("wie der Ort heißt"),
+          x: coordinate.describe("Rechtswert"),
+          y: coordinate.describe("Hochwert"),
+          z: z
+            .number()
+            .optional()
+            .describe("Grund in m über NN (aus den Werkzeugen)"),
+          h: z
+            .number()
+            .min(0)
+            .max(400)
+            .optional()
+            .describe("Höhe über Grund (m)"),
+          r: z
+            .number()
+            .min(0)
+            .max(SHOW_RADIUS)
+            .optional()
+            .describe("Radius des Grundrisses (m)"),
+        })
+      )
+      .min(1)
+      .max(ASK_LIMITS.results), // a search's whole list; the first eight are shown
+    alle: z
+      .boolean()
+      .default(true)
+      .describe(
+        "bei mehreren Orten: alle in einer Ansicht (true) oder nur den ersten (false, wenn er die Antwort ist und die anderen Vergleiche sind)"
+      ),
+    aus_der_luft: z.boolean().default(true),
   }),
 });
 
@@ -134,6 +169,24 @@ export const layerTool = toolDefinition({
   inputSchema: z.object({ schicht: z.enum(LAYER_KEYS), an: z.boolean() }),
 });
 
+/** The longest follow-up question a chip carries. */
+export const SUGGESTION_CHARS = 70;
+
+export const suggestTool = toolDefinition({
+  name: "vorschlaege",
+  description:
+    "Zeigt unter deiner Antwort bis zu drei kurze Folgefragen als Knöpfe, die der Besucher antippen kann. Rufe es am Ende jeder Antwort einmal auf, statt Folgefragen in den Text zu schreiben.",
+  inputSchema: z.object({
+    fragen: z
+      .array(z.string().min(3).max(SUGGESTION_CHARS))
+      .min(1)
+      .max(3)
+      .describe(
+        "Folgefragen aus Sicht des Besuchers, z. B. „Wer hat sie gebaut?“"
+      ),
+  }),
+});
+
 /** The tools the browser runs, by name: the card binds each. */
 export const SCENE_TOOLS = [
   whereTool,
@@ -150,4 +203,5 @@ export const KNOWLEDGE_TOOLS = [
   nearTool,
   factsTool,
   sourcesTool,
+  suggestTool,
 ] as const;

@@ -15,6 +15,7 @@ import type { LookState } from "@/lib/city/look-state";
 import { siteHoldsPoint } from "@/lib/city/geolocation";
 import type { LandmarkFactsIndex } from "@/lib/city/landmark-facts";
 import { METHODS } from "@/lib/city/methods";
+import { sunDirectionEnu } from "@/lib/city/sun";
 import type { Site } from "@/lib/city/site";
 import type { AskScene } from "./ask-scene-tools";
 import type { CityWalkHandle } from "./create-app";
@@ -252,15 +253,28 @@ export function useAskScene(
         looks.stop.abort();
         looks.stop = new AbortController();
       },
-      show: (view) => {
+      show: (view, ground) => {
         const h = handleRef.current;
         if (!h) {
           return false;
         }
-        h.flyToViewpoint(view);
+        h.flyToViewpoint(view, ground === undefined ? undefined : { ground });
         return true;
       },
       within: (x, y) => siteHoldsPoint(site, x, y),
+      frame: () => {
+        const h = handleRef.current;
+        const sun = h
+          ? sunDirectionEnu(current(), h.latLng.lat, h.latLng.lng)
+          : null;
+        return {
+          aspect: h
+            ? h.viewAspect()
+            : window.innerWidth / Math.max(window.innerHeight, 1),
+          sun: sun && sun.up > 0 ? { east: sun.east, north: sun.north } : null,
+          ...(h ? { sightHit: h.sightHit } : {}),
+        };
+      },
       setTime: (hour, date) => {
         const at = instantAt(hour, current(), date);
         setInstant(at);

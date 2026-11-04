@@ -94,7 +94,11 @@ describe("runAsk", () => {
           toolCalls: [
             {
               name: "zeige",
-              input: { x: 411_803, y: 5_656_355, h: 94 },
+              input: {
+                ziele: [
+                  { name: "Frauenkirche", x: 411_803, y: 5_656_355, h: 94 },
+                ],
+              },
             },
           ],
         };
@@ -120,6 +124,37 @@ describe("runAsk", () => {
     expect(names).toEqual(["suche_stadt", "zeige"]);
   });
 
+  test("an answer ends at its follow-ups, without a turn to acknowledge them", async () => {
+    const adapter = fakeText();
+    adapter.setResponses([
+      {
+        text: "Die Frauenkirche.",
+        toolCalls: [
+          { name: "vorschlaege", input: { fragen: ["Wer baute sie?"] } },
+        ],
+      },
+      { text: "nie gefragt" },
+    ]);
+    const chunks = await collect(
+      runAsk({
+        adapter,
+        knowledge: knowledgeOf(INDEX, [TILE]),
+        messages: [{ role: "user", content: "Was ist das?" }],
+        site: SITE,
+        threadId: "t3",
+        today: new Date(2026, 9, 29),
+      })
+    );
+    expect(adapter.state.callCount).toBe(1);
+    expect(chunks.map((c) => c.type)).toContain("TOOL_CALL_RESULT");
+    // and the end is no turn cap: the visitor sees no error
+    async function* again() {
+      yield* chunks as unknown as StreamChunk[];
+    }
+    const closed = await collect(ended(again(), new AbortController().signal));
+    expect(closed.map((c) => c.type)).not.toContain("RUN_ERROR");
+  });
+
   test("the fixed prompt and tools reach the model, whatever the request", async () => {
     const adapter = fakeText();
     adapter.setResponses([
@@ -136,6 +171,7 @@ describe("runAsk", () => {
             "setze_stil",
             "setze_zeit",
             "suche_stadt",
+            "vorschlaege",
             "was_ist_da",
             "wo_bin_ich",
             "zeige",

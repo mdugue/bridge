@@ -44,6 +44,8 @@ export interface WissenBuilding {
   name?: string;
   /** the roof form, AdV Dachform in words, LoD2 */
   roof?: string;
+  /** the radius of its footprint: half its LoD2 extent's diagonal (m) */
+  r?: number;
   /** a shop or place to eat on its ground floor, OSM */
   shop?: true;
   /** its official use, AdV Gebäudefunktion in words, LoD2 */

@@ -72,18 +72,23 @@ const fakeStep: FakeResponseStep = ({ request }) => {
     typeof last.content === "string"
       ? last.content
       : JSON.stringify(last.content);
-  const hit =
-    /"name":"(?<name>[^"]+)","x":(?<x>\d+),"y":(?<y>\d+)(?:,"z":(?<z>\d+))?/u.exec(
-      result
-    );
-  if (result.includes("treffer") && hit) {
+  const hits = [
+    ...result.matchAll(
+      /"name":"(?<name>[^"]+)","x":(?<x>\d+),"y":(?<y>\d+)(?:,"z":(?<z>\d+))?/gu
+    ),
+  ].slice(0, 3);
+  if (result.includes("treffer") && hits.length > 0) {
     return {
       toolCalls: [
         {
           name: "zeige",
           input: {
-            x: Number(hit.groups?.x),
-            y: Number(hit.groups?.y),
+            ziele: hits.map((h) => ({
+              name: h.groups?.name,
+              x: Number(h.groups?.x),
+              y: Number(h.groups?.y),
+            })),
+            alle: false,
           },
         },
       ],
@@ -93,13 +98,20 @@ const fakeStep: FakeResponseStep = ({ request }) => {
   const found = result.includes('"gefunden":true');
   return {
     text: `Testantwort: Hier ist es${seen && found ? `, ${seen}` : ""} (Quelle: Wikidata).`,
+    toolCalls: [
+      {
+        name: "vorschlaege",
+        input: { fragen: ["Wer hat es gebaut?", "Was steht daneben?"] },
+      },
+    ],
   };
 };
 
 /**
  * A scripted model for local tests only (`FRAG_FAKE=1`, never set on a
- * deployment): it searches for the question, shows the first hit and
- * says so; asked "was ist das", it asks the view's centre — the whole
+ * deployment): it searches for the question, shows the hits (the first
+ * alone, the others as chips), says so and offers two follow-ups; asked
+ * "was ist das", it asks the view's centre — the whole
  * round trip through both kinds of tools, with no
  * key and no provider.
  */
