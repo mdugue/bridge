@@ -9,6 +9,7 @@ import type { RefObject } from "react";
 import { cardCredits } from "@/lib/city/card-lines";
 import { activeDataLayers, siteDataLayers } from "@/lib/city/data-layers";
 import type { FramePace } from "@/lib/city/frame-pace";
+import { clockMinutes } from "@/lib/city/ask-shown";
 import { inquiryCard } from "@/lib/city/inquiry";
 import type { Inquiry } from "@/lib/city/inquiry";
 import type { LookState } from "@/lib/city/look-state";
@@ -34,8 +35,7 @@ export function instantAt(hour: number, day: Date, date?: string): Date {
   const [y, m, d] = date
     ? date.split("-").map(Number)
     : [day.getFullYear(), day.getMonth() + 1, day.getDate()];
-  const minutes = Math.round(Math.min(Math.max(hour, 0), 24) * 60);
-  return new Date(y, m - 1, d, 0, Math.min(minutes, 24 * 60 - 1));
+  return new Date(y, m - 1, d, 0, clockMinutes(hour));
 }
 
 /** How long `was_ist_da` waits for a glide to land at most (visible ms):

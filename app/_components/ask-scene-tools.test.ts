@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
-import { SCENE_TOOLS } from "@/lib/city/ask-tools";
-import { AERIAL_REACH, sceneTools, showPlaces } from "./ask-scene-tools";
+import { BROWSER_TOOLS } from "@/lib/city/ask-tools";
+import { AERIAL_REACH } from "@/lib/city/ask-view";
+import { sceneTools, showPlaces } from "./ask-scene-tools";
 import type { AskScene } from "./ask-scene-tools";
 import type { ViewpointGeometry } from "@/lib/city/site";
 
@@ -25,11 +26,11 @@ const STUB: AskScene = {
   where: () => ({}),
 };
 
-test("the card runs every scene tool the server hands the browser", () => {
+test("the card runs every tool the server hands the browser", () => {
   // one it does not bind leaves the run waiting for ever
   const bound = sceneTools(STUB).map((t) => t.name);
   expect(bound.sort((a, b) => a.localeCompare(b))).toEqual(
-    SCENE_TOOLS.map((t) => t.name).sort((a, b) => a.localeCompare(b))
+    BROWSER_TOOLS.map((t) => t.name).sort((a, b) => a.localeCompare(b))
   );
 });
 

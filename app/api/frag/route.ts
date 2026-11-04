@@ -1,11 +1,14 @@
 /**
  * POST /api/frag — one answer of *Frag die Stadt* (ADR 0056), streamed as
  * server-sent events. Stateless: the browser sends the conversation, its
- * key in the `x-frag-key` header and the token the key check gave it;
- * this relays the turn to the visitor's provider with the fixed prompt
- * and tools (lib/city/ask-run.ts), runs the Stadtwissen tools itself and
- * leaves the scene's to the browser. The key goes to the provider and
- * nowhere else; an error the provider sends back is scrubbed of it.
+ * key in the `x-frag-key` header, where the visitor stands in the model
+ * in `x-frag-ort` and the token the key check gave it; this relays the
+ * turn to the visitor's provider with the fixed prompt and tools
+ * (lib/city/ask-run.ts), runs the Stadtwissen tools and `wo_bin_ich`
+ * itself, acknowledges the view's and leaves only `was_ist_da` to the
+ * browser. The key goes to the provider and nowhere else; an error the
+ * provider sends back is scrubbed of it. Neither the pose nor anything
+ * else of the request is kept or logged.
  */
 import {
   chatParamsFromRequestBody,
@@ -14,14 +17,15 @@ import {
 import {
   ASK_KEY_HEADER,
   ASK_LIMITS,
+  ASK_VISITOR_HEADER,
   TOO_MANY_STEPS,
-  conversationProblem,
   askPromptSite,
+  askReasoning,
+  conversationProblem,
   lastQuestion,
   parseAskProps,
-  plausibleKey,
+  parseAskVisitor,
 } from "@/lib/city/ask-city";
-import type { AskRequestProps } from "@/lib/city/ask-city";
 import {
   DEADLINE,
   ended,
@@ -30,28 +34,16 @@ import {
   runAsk,
   scrubbed,
 } from "@/lib/city/ask-run";
-import { verifyAskToken } from "@/lib/city/ask-token";
 import { siteById } from "@/sites";
 import { askAdapter, fakeAskAdapter } from "./adapters";
 import { fakeModel } from "./env";
+import { keyRefusal, refuse } from "./guard";
 import { siteKnowledge } from "./knowledge";
 
 /** Up to eight model calls with tool rounds between them: a careful
  *  model's answer can outlast a minute (Vercel's ceiling with fluid
  *  compute). */
 export const maxDuration = 300;
-
-/**
- * A refused request: its reason as a code in the log (never the key, the
- * token or the conversation) and as words for the visitor.
- */
-function refuse(status: number, code: string, message: string): Response {
-  console.warn(`[frag] ${status} ${code}`);
-  return Response.json(
-    { code, message },
-    { status, headers: { "Cache-Control": "no-store" } }
-  );
-}
 
 /**
  * The history the run sends (a stand-in for every stopped call) and the
@@ -79,42 +71,6 @@ function conversationRefusal(messages: readonly unknown[]): Response | null {
   return problem ? refuse(413, "too-long", problem) : null;
 }
 
-/** A key the route does not relay: none, no secret to check it with in
- *  production, or a token the key check did not give for it. */
-async function keyRefusal(
-  fake: boolean,
-  key: string,
-  props: AskRequestProps
-): Promise<Response | null> {
-  if (!fake && !plausibleKey(key)) {
-    return refuse(401, "no-key", "Ohne Schlüssel geht es nicht.");
-  }
-  const secret = process.env.FRAG_SECRET;
-  // a production server holds the key check: without its secret, no relay
-  if (!(fake || secret) && process.env.NODE_ENV === "production") {
-    // 501, not 503: the client retries a 503 as a passing outage
-    return refuse(
-      501,
-      "no-secret",
-      "Frag die Stadt ist auf diesem Server nicht eingerichtet."
-    );
-  }
-  if (
-    !fake &&
-    secret &&
-    !(await verifyAskToken(
-      secret,
-      props.token,
-      props.provider,
-      key,
-      Date.now()
-    ))
-  ) {
-    return refuse(401, "bad-token", "Der Schlüssel muss neu geprüft werden.");
-  }
-  return null;
-}
-
 export async function POST(request: Request): Promise<Response> {
   const fake = fakeModel();
   const key = request.headers.get(ASK_KEY_HEADER)?.trim() ?? "";
@@ -128,7 +84,7 @@ export async function POST(request: Request): Promise<Response> {
   if (typeof props === "string") {
     return refuse(400, "bad-props", props);
   }
-  const keyProblem = await keyRefusal(fake, key, props);
+  const keyProblem = await keyRefusal(props, key, fake);
   if (keyProblem) {
     return keyProblem;
   }
@@ -171,6 +127,7 @@ export async function POST(request: Request): Promise<Response> {
     abortController: runController,
     knowledge,
     messages: history.messages,
+    reasoning: askReasoning(props.provider, props.model),
     ...(params.resume ? { resume: params.resume } : {}),
     ...(params.parentRunId ? { parentRunId: params.parentRunId } : {}),
     site: askPromptSite(site),
@@ -178,6 +135,7 @@ export async function POST(request: Request): Promise<Response> {
     threadId: params.threadId,
     today: new Date(),
     turns: history.turns,
+    visitor: parseAskVisitor(request.headers.get(ASK_VISITOR_HEADER)),
     voice: props.voice,
   });
   // the host ends the function at maxDuration without a word: end the

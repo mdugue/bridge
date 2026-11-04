@@ -15,6 +15,7 @@
 import { fetchServerSentEvents, useChat } from "@tanstack/ai-react";
 import type { UIMessage } from "@tanstack/ai-react";
 import {
+  ClipboardCheckIcon,
   EarIcon,
   KeyRoundIcon,
   LoaderIcon,
@@ -31,10 +32,20 @@ import {
   WrenchIcon,
   XIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ASK_KEY_HEADER,
   ASK_LIMITS,
+  ASK_VISITOR_HEADER,
+  askVisitorHeader,
   ASK_PROVIDER_BY_ID,
   ASK_PROVIDERS,
   isAskProvider,
@@ -84,6 +95,7 @@ import {
 } from "@/components/ui/trace";
 import { cn } from "cn";
 import { AnswerChipRows, answerChips, shownPlaces } from "./ask-chips";
+import { lastAnswer, useShownEffects } from "./ask-effects";
 import { clearAskKey, readAskKey, writeAskKey } from "./ask-key";
 import type { AskKey } from "./ask-key";
 import { sceneTools, showPlaces } from "./ask-scene-tools";
@@ -93,6 +105,17 @@ import { VoicePicker } from "./voice-picker";
 import { useOnce } from "./use-once";
 import { useDictation, useSpeech } from "./ask-voice";
 import type { Dictation, Speech } from "./ask-voice";
+
+// the Prüfstand (`?pruefstand=1`): its own chunk, only with the knob
+const AskQa = lazy(async () => await import("./ask-qa"));
+
+/** Whether the page was opened with the Prüfstand's knob. */
+function wantsQa(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("pruefstand") === "1"
+  );
+}
 
 interface Props {
   coarse: boolean;
@@ -115,6 +138,10 @@ const AskCity = ({ coarse, onClose, scene, site }: Props) => {
   const [reading, setReading] = useState(false);
   // a new conversation is a new card body: a new thread, new first questions
   const [round, setRound] = useState(0);
+  const qa = useOnce(wantsQa);
+  const [checking, setChecking] = useState(false);
+  const [qaOpened, setQaOpened] = useState(false);
+  const city = useSite().name;
   useEffect(() => {
     scene.setListening(hearing);
     return () => scene.setListening(false);
@@ -162,6 +189,25 @@ const AskCity = ({ coarse, onClose, scene, site }: Props) => {
                 : "Mit deinem eigenen Schlüssel"}
             </h2>
           </div>
+          {key && qa && (
+            <button
+              aria-label="Prüfstand"
+              aria-pressed={checking}
+              className={cn(
+                "rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground",
+                checking && "bg-muted text-foreground"
+              )}
+              data-testid="ask-qa-open"
+              onClick={() => {
+                setQaOpened(true);
+                setChecking((on) => !on);
+              }}
+              title="Prüfstand: alle Startfragen prüfen"
+              type="button"
+            >
+              <ClipboardCheckIcon className="size-4" />
+            </button>
+          )}
           {key && (
             <button
               aria-label="Neues Gespräch"
@@ -195,10 +241,26 @@ const AskCity = ({ coarse, onClose, scene, site }: Props) => {
             <XIcon className="size-4" />
           </button>
         </header>
+        {/* once opened, the Prüfstand stays while the card is open (a run
+            goes on behind the conversation); the conversation stays behind
+            it, its answer still streaming */}
+        {key && qaOpened && (
+          <div
+            className={cn(
+              "flex min-h-0 flex-1 flex-col",
+              !checking && "hidden"
+            )}
+          >
+            <Suspense fallback={null}>
+              <AskQa askKey={key} city={city} site={site} />
+            </Suspense>
+          </div>
+        )}
         {held && (
           // a renewed token keeps the conversation: it stays mounted, hidden,
-          // while the key is checked again, and remounts only for another key
-          <div className={key ? "contents" : "hidden"}>
+          // while the key is checked again (or the Prüfstand is open), and
+          // remounts only for another key
+          <div className={key && !checking ? "contents" : "hidden"}>
             <Conversation
               askKey={key ?? held}
               hearing={hearing}
@@ -560,31 +622,6 @@ function errorText(error: Error): {
 }
 
 /**
- * The text of a finished answer: its assistant messages since the last
- * question — empty while the last of them still waits on a tool (a scene
- * tool's run ends at the interrupt, and the answer comes after it).
- */
-function lastAnswer(messages: readonly UIMessage[]): string {
-  const last = messages.at(-1);
-  if (last?.role !== "assistant" || last.parts.at(-1)?.type !== "text") {
-    return "";
-  }
-  const texts: string[] = [];
-  for (
-    let i = messages.length - 1;
-    i >= 0 && messages[i].role !== "user";
-    i -= 1
-  ) {
-    texts.unshift(
-      messages[i].parts
-        .map((p) => (p.type === "text" ? p.content : ""))
-        .join(" ")
-    );
-  }
-  return texts.join(" ").trim();
-}
-
-/**
  * Reads each finished answer aloud while `on` — not one that broke off,
  * failed or was stopped (the returned call, for the stop button).
  */
@@ -761,12 +798,23 @@ const Conversation = ({
   const secret = askKey.key;
   const connection = useMemo(
     () =>
-      fetchServerSentEvents("/api/frag", {
-        headers: { [ASK_KEY_HEADER]: secret },
-        // the route keeps no run to rejoin: a drop is the answer's end
-        reconnect: { maxAttempts: 0 },
+      // per request: where the visitor stands now goes with each question
+      // (and each resume), so the server answers `wo_bin_ich` itself
+      fetchServerSentEvents("/api/frag", () => {
+        const at = askVisitorHeader({
+          ...scene.where(),
+          seitenverhaeltnis: scene.frame().aspect,
+        });
+        return {
+          headers: {
+            [ASK_KEY_HEADER]: secret,
+            ...(at ? { [ASK_VISITOR_HEADER]: at } : {}),
+          },
+          // the route keeps no run to rejoin: a drop is the answer's end
+          reconnect: { maxAttempts: 0 },
+        };
       }),
-    [secret]
+    [secret, scene]
   );
   // one conversation per card: the provider's prompt cache is keyed by it
   const threadId = useOnce(() => crypto.randomUUID());
@@ -799,6 +847,7 @@ const Conversation = ({
     },
     [scene]
   );
+  useShownEffects(chat.messages, scene);
   const stopReading = useReadAloud(
     chat.messages,
     chat.isLoading,

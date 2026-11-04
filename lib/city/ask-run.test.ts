@@ -64,6 +64,7 @@ const SITE: AskPromptSite = {
   epsg: 25_833,
   label: "Dresden",
   layers: [],
+  layerKeys: ["tramLayer"],
   styles: ["pastel: Pastell"],
 };
 
@@ -78,7 +79,7 @@ async function collect(stream: AsyncIterable<unknown>): Promise<Chunk[]> {
 }
 
 describe("runAsk", () => {
-  test("runs the Stadtwissen tools itself and hands the scene's to the browser", async () => {
+  test("runs the Stadtwissen tools and acknowledges the view's: one request, no browser round trip", async () => {
     const adapter = fakeText();
     adapter.setResponses([
       {
@@ -91,6 +92,7 @@ describe("runAsk", () => {
         const seen = JSON.stringify(request.messages);
         expect(seen).toContain("Q157229");
         return {
+          text: "Die Frauenkirche steht am Neumarkt.",
           toolCalls: [
             {
               name: "zeige",
@@ -100,9 +102,11 @@ describe("runAsk", () => {
                 ],
               },
             },
+            { name: "vorschlaege", input: { fragen: ["Wer baute sie?"] } },
           ],
         };
       },
+      { text: "nie gefragt" },
     ]);
     const chunks = await collect(
       runAsk({
@@ -114,14 +118,145 @@ describe("runAsk", () => {
         today: new Date(2026, 9, 29),
       })
     );
-    const types = chunks.map((c) => c.type);
-    expect(types).toContain("TOOL_CALL_START");
-    // the loop stops at the browser's tool: no third model call
+    // the flight and the chips need no third turn
     expect(adapter.state.callCount).toBe(2);
-    const names = chunks
-      .filter((c) => c.type === "TOOL_CALL_START")
-      .map((c) => c.toolCallName ?? c.toolName);
-    expect(names).toEqual(["suche_stadt", "zeige"]);
+    const results = chunks.filter((c) => c.type === "TOOL_CALL_RESULT");
+    // every call answered on the server: none waits on the browser
+    expect(results).toHaveLength(3);
+    expect(JSON.stringify(results)).toContain("gezeigt");
+  });
+
+  test("an answer of chips and a flight without words goes on until it has its text", async () => {
+    const adapter = fakeText();
+    adapter.setResponses([
+      {
+        toolCalls: [
+          {
+            name: "zeige",
+            input: { ziele: [{ name: "Frauenkirche", x: 1, y: 2 }] },
+          },
+          { name: "vorschlaege", input: { fragen: ["Wer baute sie?"] } },
+        ],
+      },
+      { text: "Das ist die Frauenkirche." },
+      { text: "nie gefragt" },
+    ]);
+    await collect(
+      runAsk({
+        adapter,
+        knowledge: knowledgeOf(INDEX, [TILE]),
+        messages: [{ role: "user", content: "Zeig mir die Frauenkirche" }],
+        site: SITE,
+        threadId: "t4",
+        today: new Date(2026, 9, 29),
+      })
+    );
+    expect(adapter.state.callCount).toBe(2);
+  });
+
+  test("words before a lookup are not the answer: a later turn of chips alone goes on", async () => {
+    const adapter = fakeText();
+    adapter.setResponses([
+      {
+        text: "Ich schaue nach.",
+        toolCalls: [
+          { name: "suche_stadt", input: { anfrage: "Frauenkirche" } },
+        ],
+      },
+      {
+        toolCalls: [
+          { name: "vorschlaege", input: { fragen: ["Wer baute sie?"] } },
+        ],
+      },
+      { text: "George Bähr baute sie." },
+    ]);
+    await collect(
+      runAsk({
+        adapter,
+        knowledge: knowledgeOf(INDEX, [TILE]),
+        messages: [{ role: "user", content: "Wer baute die Frauenkirche?" }],
+        site: SITE,
+        threadId: "t5",
+        today: new Date(2026, 9, 29),
+      })
+    );
+    expect(adapter.state.callCount).toBe(3);
+  });
+
+  test("where the visitor stands comes with the request: here needs no question to the browser", async () => {
+    const adapter = fakeText();
+    adapter.setResponses([
+      {
+        toolCalls: [
+          { name: "wo_bin_ich", input: {} },
+          { name: "in_der_naehe", input: { radius: 50 } },
+        ],
+      },
+      ({ request }) => {
+        const seen = JSON.stringify(request.messages);
+        // the pose, and the neighbourhood round it
+        expect(seen).toContain("blick_grad");
+        expect(seen).toContain("um_den_besucher");
+        expect(seen).toContain("Frauenkirche");
+        return { text: "Vor dir steht die Frauenkirche." };
+      },
+    ]);
+    const chunks = await collect(
+      runAsk({
+        adapter,
+        knowledge: knowledgeOf(INDEX, [TILE]),
+        messages: [{ role: "user", content: "Was steht hier?" }],
+        site: SITE,
+        threadId: "t6",
+        today: new Date(2026, 9, 29),
+        visitor: { x: 411_790, y: 5_656_340, blick_grad: 45 },
+      })
+    );
+    expect(adapter.state.callCount).toBe(2);
+    expect(chunks.map((c) => c.type)).not.toContain("RUN_ERROR");
+  });
+
+  test("only was_ist_da waits on the browser", async () => {
+    const adapter = fakeText();
+    adapter.setResponses([
+      { toolCalls: [{ name: "was_ist_da", input: {} }] },
+      { text: "nie gefragt" },
+    ]);
+    const chunks = await collect(
+      runAsk({
+        adapter,
+        knowledge: knowledgeOf(INDEX, [TILE]),
+        messages: [{ role: "user", content: "Was ist das da vorne?" }],
+        site: SITE,
+        threadId: "t7",
+        today: new Date(2026, 9, 29),
+      })
+    );
+    expect(adapter.state.callCount).toBe(1);
+    expect(chunks.map((c) => c.type)).not.toContain("TOOL_CALL_RESULT");
+  });
+
+  test("a fast model is asked not to think", async () => {
+    const adapter = fakeText();
+    adapter.setResponses([
+      ({ request }) => {
+        expect(request.reasoning?.level).toBe("off");
+        expect(request.reasoning?.summary).toBe(false);
+        return { text: "Hallo." };
+      },
+    ]);
+    await collect(
+      runAsk({
+        adapter,
+        knowledge: knowledgeOf(INDEX, [TILE]),
+        messages: [{ role: "user", content: "Hallo" }],
+        reasoning: "off",
+        site: SITE,
+        threadId: "t8",
+        today: new Date(2026, 9, 29),
+      })
+    );
+    expect(adapter.state.callCount).toBe(1);
   });
 
   test("an answer ends at its follow-ups, without a turn to acknowledge them", async () => {
@@ -372,6 +507,19 @@ describe("an answer that stops says why", () => {
     expect(out.at(-1)).toContain("zu viele Schritte");
   });
 
+  test("a cut round that only shows ends an answer with words, not one without", async () => {
+    const show = { ...chunk("TOOL_CALL_START"), toolCallName: "zeige" };
+    const words = { ...chunk("TEXT_MESSAGE_CONTENT"), delta: "Dort." };
+    const said = await endedTypes(
+      words as StreamChunk,
+      show,
+      chunk("TOOL_CALL_RESULT")
+    );
+    expect(said.join(" ")).not.toContain("RUN_ERROR");
+    const mute = await endedTypes(show, chunk("TOOL_CALL_RESULT"));
+    expect(mute.at(-1)).toContain("zu viele Schritte");
+  });
+
   test("a turn that spends its output before a word is cut, not capped", async () => {
     const out = await types(
       ended(
@@ -459,6 +607,10 @@ describe("an answer that stops says why", () => {
     ]);
   });
 });
+
+/** The chunk types `ended` passes on from `chunks`. */
+const endedTypes = async (...chunks: StreamChunk[]) =>
+  await types(ended(list(...chunks), new AbortController().signal));
 
 const stoppedCall = (id: string, output?: unknown) => ({
   type: "tool-call" as const,
