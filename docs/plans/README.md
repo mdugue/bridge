@@ -112,6 +112,10 @@ history. Decisions that came out of plans are written up as
 | 078 | One scene environment the dressings bind at birth: one night node, one season watch, one clock; `catchUp` goes | **TODO** (2026-10-30) — from the architecture review (PR #201); notes a latent bug (mist, wakes and fences keep their day look where no lamps are dressed) | [078-one-scene-environment.md](./078-one-scene-environment.md) |
 | 079 | A page that lost its GPU comes back where it stood, through one recovery session | **TODO** (2026-10-30) — from the architecture review (PR #201) | [079-gpu-recovery-session.md](./079-gpu-recovery-session.md) |
 | 080 | One row per inquiry kind: the twin's per-kind dispatch in one place | **TODO** (2026-10-30) — from the architecture review (PR #201) | [080-one-row-per-inquiry-kind.md](./080-one-row-per-inquiry-kind.md) |
+| 081 | One schema per file a bake hands over: zod schemas checked in the build for the files Python writes and TypeScript reads; the monuments carry their own OSM Wikidata link | **TODO** (2026-11-04) — from the architecture review (PR #265); step 9 is the maintainer's re-bake of `monuments` | [081-one-schema-per-file-a-bake-hands-over.md](./081-one-schema-per-file-a-bake-hands-over.md) |
+| 082 | One answer turn and end codes for *Frag die Stadt*: the route a thin binding, every refusal and end a code from one table | **TODO** (2026-11-04) — from the architecture review (PR #265) | [082-one-answer-turn-and-end-codes.md](./082-one-answer-turn-and-end-codes.md) |
+| 083 | One lifecycle for a tile's late parts: dressings, murals and traffic bodies behind one per-tile registry | **TODO** (2026-11-04) — after 078; from the architecture review (PR #265); fixes two latent bugs (murals' out-of-memory, uncounted bytes while compiling) | [083-one-lifecycle-for-a-tiles-late-parts.md](./083-one-lifecycle-for-a-tiles-late-parts.md) |
+| 084 | One session for an answer's lifetime: reading aloud, Hörmodus and the scene's waits behind one pure session, with the maintainer's product decisions | **TODO** (2026-11-04) — from the architecture review (PR #265); either order with 082 | [084-one-session-for-an-answers-lifetime.md](./084-one-session-for-an-answers-lifetime.md) |
 | — | Aesthetic and visual fine-tuning roadmap (ten items) | DONE except atmospheric motes | [completed.md](./completed.md#aesthetic-and-visual-fine-tuning-roadmap--done-except-motes) |
 
 ## Open work
@@ -227,6 +231,11 @@ S/M/L.
     Telemetry and picking: [plan 046](./046-split-the-god-modules-and-sweep.md)
     step 2. Left after it: lamps and the scene-wide state the dressings
     bind — see item 20.
+    The 2026-11-04 review (PR #265) found that the rest fails the deletion
+    test as section-sized modules: each section reads 10–20 of `bootApp`'s
+    locals. Move pure functions only (`outlineShape` to
+    `selection-shape.ts`, `answered` to `lib/city/inquiry.ts`, perhaps
+    capture/export); demolitions are item 26's own candidate.
 15. **One `densify` (S–M) — mostly done.** `lib/city/polyline.ts` holds
     `subdividePolyline` and `samplePolyline`; what is left is the two
     arc-length tables (`lib/city/stairs.ts`, `lib/city/fences.ts`), which
@@ -321,6 +330,19 @@ S/M/L.
     [data-streams survey](../data-streams.md)) instead of the OSM heritage
     join; tram tracks have no ground-join test (ADR 0030: a runtime part is
     tested with `checkJoins`).
+26. **Leftovers of the 2026-11-04 architecture review (PR #265).**
+    *Nameplate placement in one module* (M): the eave rule spans
+    `nameplate.ts`, `create-app.ts`, `nameplate-ask.ts` and the pose and
+    was rewritten in nine review rounds; decide first how the property
+    table encodes a missing `baseZ` (noData, ADR 0042), then
+    `createPlacement({now})` and one `plateSubject`, un-exporting the
+    test-only helpers. *Card and plate from one answer* (M, after 080):
+    two caches and two retry rules hold "the plate says nothing the card
+    does not". *The view's rest owned by the viewer* (S–M, after 084):
+    `ask-scene.ts` guesses the loop (250 ms, 100 ms polling). *Demolitions
+    as one module* (S): half in `create-app.ts`, half replayed at load,
+    sharing a public mutable set. *`facades_<tile>.json`* is read by the
+    viewer unchecked (plan 081 left it out).
 
 ### 2026-10-10 audit (performance and stability, against `85a41b7`)
 
@@ -1084,6 +1106,22 @@ the port (2026-09-26) made of it:
     ≈ 110 files for orientation AGENTS.md already gives.
   - *Version lag* — none: three, 3d-tiles-renderer, three-mesh-bvh,
     TypeScript 7, oxlint, mermaid at npm latest; `next` one patch behind.
+- **From the 2026-11-04 review (PR #265):**
+  - *graphify as a standing tool* (its CLAUDE.md section and PreToolUse
+    hook) — ran once, code-only: it sees no edge between the Python bakes
+    and their TypeScript readers, the seam this repo most needs checked;
+    the container is rebuilt each session; AGENTS.md, head comments, ADRs
+    and skills already route an agent. A one-off `graphify extract
+    --code-only` into a scratch dir stays fine for a review.
+  - *A registry per dressing kind in `buildDressing`* — the cross-kind
+    joins (monuments, Mapillary, bridges feeding tram and traffic) belong
+    in one orchestrator.
+  - *More hooks through `feature-seam.ts`* — one adapter, a hypothetical
+    seam.
+  - *Splitting `lib/city/features.ts`* — shared type vocabulary, checked
+    on committed data by `features.test.ts`.
+  - *`city-walk.tsx` ⟷ `bake-stadtwissen.ts`, `ask-scene` ⟷ `ask-voice`
+    co-change* — batched review commits, no data path.
 
 ## What the audits did not cover
 
