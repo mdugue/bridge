@@ -15,7 +15,7 @@ test("the committed spawn-tile DGM resamples to a grid on the Elbe", async () =>
   const src = dgmSourceFiles(DRESDEN, PRIMARY_TILE);
   const dgm = await readDgm(
     arrayBufferOf(readFileSync(src.tif)),
-    readFileSync(src.tfw, "utf8"),
+    readFileSync(src.tfw, "utf-8"),
     64
   );
   expect(dgm.bounds[2] - dgm.bounds[0]).toBe(2000);
@@ -49,10 +49,7 @@ test("a raster without georeferencing is placed by its .tfw, or refused", async 
       ProjectedCSTypeGeoKey: 25_833,
     }
   );
-  // bun-types declare the `rejects` matchers as void, but bun resolves them
-  // asynchronously — dropping the await would end the test before it runs.
-  // oxlint-disable-next-line typescript/await-thenable
-  await expect(readDgm(bare, null, 4)).rejects.toThrow(/\.tfw/);
+  await expect(readDgm(bare, null, 4)).rejects.toThrow(/\.tfw/u);
   // The world file references the CENTRE of the top-left pixel; the bounds
   // are the pixel edges.
   const dgm = await readDgm(bare, "1\n0\n0\n-1\n412000.5\n5657999.5\n", 4);

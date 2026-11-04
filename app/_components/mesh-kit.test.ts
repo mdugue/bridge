@@ -5,11 +5,11 @@ import {
   addFootprint,
   addRibbon,
   addStrut,
-  type Mesh3,
   mesh3,
   meshFrom,
   quad,
 } from "./mesh-kit";
+import type { Mesh3 } from "./mesh-kit";
 
 /** Every triangle's geometric normal points the way its stored normal
  *  does: the kit's one guarantee (every material is FrontSide). */
@@ -92,13 +92,13 @@ test("ribbons, columns and struts face their normals", () => {
 });
 
 test("an empty soup makes no mesh, a deck frame of the wrong length is left off", () => {
-  expect(meshFrom(mesh3(), 0xffffff, { cast: false })).toBeNull();
+  expect(meshFrom(mesh3(), 0xff_ff_ff, { cast: false })).toBeNull();
   const acc = mesh3();
   quad(acc, [0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1], [0, 1, 0]);
   acc.deck = [0, 0, 0, 0];
-  const mesh = meshFrom(acc, 0xffffff, { cast: false });
+  const mesh = meshFrom(acc, 0xff_ff_ff, { cast: false });
   expect(mesh?.geometry.getAttribute("aDeck")).toBeUndefined();
   acc.deck = Array.from({ length: 6 * 4 }, () => 1);
-  const framed = meshFrom(acc, 0xffffff, { cast: false });
+  const framed = meshFrom(acc, 0xff_ff_ff, { cast: false });
   expect(framed?.geometry.getAttribute("aDeck")?.count).toBe(6);
 });

@@ -13,6 +13,13 @@ export interface DrawnPlateTile {
   positions: ArrayLike<number>;
 }
 
+/** Whether a plate tile holds an EPSG position (its edges included). */
+function holds(d: DrawnPlateTile, x: number, y: number): boolean {
+  return (
+    x >= d.bounds[0] && x <= d.bounds[2] && y >= d.bounds[1] && y <= d.bounds[3]
+  );
+}
+
 /**
  * The plate's ground at an EPSG position, bilinear between the four
  * vertices around it; undefined off every tile. Reads the meshes' own
@@ -25,6 +32,19 @@ export function plateHeightAt(
   const heightOf = (t: DrawnPlateTile, i: number, j: number): number => {
     const edge = i === 0 || j === 0 || i === n - 1 || j === n - 1;
     return t.positions[(j * n + i) * 3 + 1] + (edge ? 0 : PLATE_SINK_M);
+  };
+  const bilinear = (t: DrawnPlateTile, x: number, y: number): number => {
+    const [x0, y0, x1, y1] = t.bounds;
+    const fi = ((x - x0) / (x1 - x0)) * (n - 1);
+    const fj = ((y1 - y) / (y1 - y0)) * (n - 1);
+    const i = Math.min(Math.floor(fi), n - 2);
+    const j = Math.min(Math.floor(fj), n - 2);
+    const u = fi - i;
+    const v = fj - j;
+    return (
+      (heightOf(t, i, j) * (1 - u) + heightOf(t, i + 1, j) * u) * (1 - v) +
+      (heightOf(t, i, j + 1) * (1 - u) + heightOf(t, i + 1, j + 1) * u) * v
+    );
   };
   // the tiles are one grid: a point finds its tile by its cell, not by
   // asking every tile (the framing of an answer asks thousands of times)
@@ -39,29 +59,11 @@ export function plateHeightAt(
       t,
     ])
   );
-  const holds = (d: DrawnPlateTile, x: number, y: number) =>
-    x >= d.bounds[0] &&
-    x <= d.bounds[2] &&
-    y >= d.bounds[1] &&
-    y <= d.bounds[3];
   return (x, y) => {
     const near = byCell.get(cell(x, y));
     // on a cell's north or east edge the cell beyond may hold nothing
     const t =
       near && holds(near, x, y) ? near : tiles.find((d) => holds(d, x, y));
-    if (!t) {
-      return undefined;
-    }
-    const [x0, y0, x1, y1] = t.bounds;
-    const fi = ((x - x0) / (x1 - x0)) * (n - 1);
-    const fj = ((y1 - y) / (y1 - y0)) * (n - 1);
-    const i = Math.min(Math.floor(fi), n - 2);
-    const j = Math.min(Math.floor(fj), n - 2);
-    const u = fi - i;
-    const v = fj - j;
-    return (
-      (heightOf(t, i, j) * (1 - u) + heightOf(t, i + 1, j) * u) * (1 - v) +
-      (heightOf(t, i, j + 1) * (1 - u) + heightOf(t, i + 1, j + 1) * u) * v
-    );
+    return t ? bilinear(t, x, y) : undefined;
   };
 }

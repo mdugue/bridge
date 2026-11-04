@@ -1,21 +1,17 @@
-import { Euler, type PerspectiveCamera, Vector3 } from "three/webgpu";
+import { Euler, Vector3 } from "three/webgpu";
+import type { PerspectiveCamera } from "three/webgpu";
+import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
+import type { RecenterOffset } from "@/lib/city/ground-clamp";
 import {
-  epsgToWorld,
-  type RecenterOffset,
-  worldToEpsg,
-} from "@/lib/city/ground-clamp";
-import {
-  type CameraState,
   clampPitch,
   DEG2RAD,
   directionOf,
   EYE_HEIGHT,
   headingPitchOf,
   nextFov,
-  type PlayerPose,
   RAD2DEG,
-  type Xyz,
 } from "@/lib/city/pose";
+import type { CameraState, PlayerPose, Xyz } from "@/lib/city/pose";
 import { easeAngleDeg } from "@/lib/city/geolocation";
 import { groundRayDistance } from "@/lib/city/ground-ray";
 import {
@@ -24,17 +20,10 @@ import {
   nearestFree,
   ROOF_CLEARANCE,
 } from "@/lib/city/clearance";
-import {
-  createCameraFlight,
-  type FlightTarget,
-  type GlideOptions,
-} from "./camera-flight";
-import {
-  createFpsMovement,
-  type FpsMovementOptions,
-  MOVEMENT_KEYS,
-  type MovementMode,
-} from "./fps-movement";
+import { createCameraFlight } from "./camera-flight";
+import type { FlightTarget, GlideOptions } from "./camera-flight";
+import { createFpsMovement, MOVEMENT_KEYS } from "./fps-movement";
+import type { FpsMovementOptions, MovementMode } from "./fps-movement";
 import type { ViewpointGeometry } from "@/lib/city/site";
 
 /**

@@ -7,11 +7,11 @@ import {
   Group,
   InterleavedBuffer,
   InterleavedBufferAttribute,
-  type Material,
   Mesh,
   MeshBasicNodeMaterial,
   Object3D,
 } from "three/webgpu";
+import type { Material } from "three/webgpu";
 import {
   aloneUnder,
   cpuArrayBytes,
@@ -85,10 +85,10 @@ test("a geometry left half made by a failed allocation is disposed past it, and 
   let through = 0;
   poisoned.addEventListener("dispose", () => {
     if (throws > 0) {
-      throws--;
+      throws -= 1;
       throw new TypeError("undefined is not an object (data.buffer.destroy)");
     }
-    through++;
+    through += 1;
   });
   const healthy = new BoxGeometry();
   const healthyCalls = countDisposals(healthy);
@@ -309,7 +309,9 @@ test("a released drawable dispatches dispose, even on a scene-wide material", ()
   const listen = (o: Object3D, name: string) =>
     (
       o as unknown as { addEventListener: (t: string, f: () => void) => void }
-    ).addEventListener("dispose", () => seen.push(name));
+    ).addEventListener("dispose", () => {
+      seen.push(name);
+    });
   listen(drawable, "drawable");
   listen(group, "group");
   releaseRenderState(root);

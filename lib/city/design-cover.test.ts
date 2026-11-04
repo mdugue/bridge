@@ -91,7 +91,7 @@ describe("design cover", () => {
     expect(site.cell).toBe(4);
     expect(Math.max(site.cols, site.rows)).toBeLessThanOrEqual(16);
     // the plate's own height under it, not its lowest corner's
-    expect(siteFloor(site, 2, 10)).toBeCloseTo(100.0, 1);
+    expect(siteFloor(site, 2, 10)).toBeCloseTo(100, 1);
     expect(siteFloor(site, 46, 10)).toBeCloseTo(100.38, 1);
     expect(siteFloor(site, 80, 10)).toBeNull();
   });
@@ -179,6 +179,8 @@ describe("a placed plan", () => {
   });
 });
 
+const count = (cells: Uint8Array) => cells.reduce((s, c) => s + c, 0);
+
 describe("designMasks with ground triangles", () => {
   test("a triangle marked ground is in the site but not the plan", () => {
     // a 10 m wall standing up: in the plan unless marked
@@ -188,7 +190,6 @@ describe("designMasks with ground triangles", () => {
       cell: 1,
       ground: [1, 1],
     });
-    const count = (cells: Uint8Array) => cells.reduce((s, c) => s + c, 0);
     expect(count(plain?.plan.cells ?? new Uint8Array())).toBeGreaterThan(0);
     expect(count(marked?.plan.cells ?? new Uint8Array())).toBe(0);
     expect(count(marked?.site.cells ?? new Uint8Array())).toBeGreaterThan(0);

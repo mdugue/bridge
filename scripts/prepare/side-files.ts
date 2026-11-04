@@ -6,12 +6,8 @@
  * walks it.
  */
 import { existsSync, readFileSync } from "node:fs";
-import {
-  type TileArtifact,
-  type TileArtifactKind,
-  sideFileSource,
-  tileArtifacts,
-} from "../../lib/city/tile";
+import { sideFileSource, tileArtifacts } from "../../lib/city/tile";
+import type { TileArtifact, TileArtifactKind } from "../../lib/city/tile";
 import type { ColonyCrop } from "../crop-raster";
 import {
   HINT,

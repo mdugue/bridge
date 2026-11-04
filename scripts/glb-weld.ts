@@ -15,7 +15,11 @@
  * `weld` itself. Build-time only.
  */
 import { Primitive } from "@gltf-transform/core";
-import type { Document, Transform } from "@gltf-transform/core";
+import type {
+  Document,
+  Transform,
+  TransformContext,
+} from "@gltf-transform/core";
 import {
   compactPrimitive,
   createTransform,
@@ -75,10 +79,11 @@ export function weldRemap(
   // never carry into the bucket
   const hash = (v: number) => {
     let h = 0;
-    for (let a = 0; a < n; a++) {
+    for (let a = 0; a < n; a += 1) {
       const words = lists[a];
       const stride = strides[a];
-      for (let k = v * stride, end = k + stride; k < end; k++) {
+      const end = v * stride + stride;
+      for (let k = v * stride; k < end; k += 1) {
         let w = Math.imul(words[k], 0xcc_9e_2d_51);
         w = Math.imul((w << 15) | (w >>> 17), 0x1b_87_35_93);
         h ^= w;
@@ -90,10 +95,10 @@ export function weldRemap(
     return (h ^ (h >>> 16)) >>> 0;
   };
   const equal = (x: number, y: number) => {
-    for (let a = 0; a < n; a++) {
+    for (let a = 0; a < n; a += 1) {
       const words = lists[a];
       const stride = strides[a];
-      for (let k = 0; k < stride; k++) {
+      for (let k = 0; k < stride; k += 1) {
         if (words[x * stride + k] !== words[y * stride + k]) {
           return false;
         }
@@ -103,7 +108,7 @@ export function weldRemap(
   };
   const total = indices ? indices.length : vertexCount;
   let count = 0;
-  for (let i = 0; i < total; i++) {
+  for (let i = 0; i < total; i += 1) {
     const v = indices ? indices[i] : i;
     if (remap[v] !== EMPTY) {
       continue;
@@ -111,11 +116,12 @@ export function weldRemap(
     // triangular probes visit every bucket of a power-of-two table, and it
     // holds at most vertexCount < size items: an empty one is always found
     let bucket = hash(v) & mask;
-    for (let probe = 0; ; probe++) {
+    for (let probe = 0; ; probe += 1) {
       const item = table[bucket];
       if (item === EMPTY) {
         table[bucket] = v;
-        remap[v] = count++;
+        remap[v] = count;
+        count += 1;
         break;
       }
       if (equal(item, v)) {
@@ -128,41 +134,53 @@ export function weldRemap(
   return { remap, count };
 }
 
+async function weldExactTransform(
+  doc: Document,
+  context?: TransformContext
+): Promise<void> {
+  const meshes = doc.getRoot().listMeshes();
+  const prims = meshes.flatMap((mesh) => mesh.listPrimitives());
+  if (
+    doc.hasExtension("KHR_mesh_primitive_restart") ||
+    meshes.some((mesh) => mesh.listPrimitives().length === 0) ||
+    prims.some(
+      (prim) => getPrimitiveVertexCount(prim, VertexCountMethod.RENDER) === 0
+    )
+  ) {
+    await (weld() as unknown as AsyncTransform)(doc, context);
+    return;
+  }
+  for (const prim of prims) {
+    const position = prim.getAttribute("POSITION");
+    const plan =
+      position &&
+      prim.getMode() !== Primitive.Mode.POINTS &&
+      prim.listTargets().length === 0
+        ? wordsOf(prim)
+        : undefined;
+    if (!(position && plan)) {
+      weldPrimitive(prim);
+      continue;
+    }
+    const { remap, count } = weldRemap(
+      plan,
+      position.getCount(),
+      prim.getIndices()?.getArray() ?? null
+    );
+    compactPrimitive(prim, remap, count);
+  }
+}
+
 /** `weld()`, faster where it can be (see the module's comment). */
 export function weldExact(): Transform {
-  return createTransform("weldExact", (doc: Document, context) => {
-    const meshes = doc.getRoot().listMeshes();
-    const prims = meshes.flatMap((mesh) => mesh.listPrimitives());
-    if (
-      doc.hasExtension("KHR_mesh_primitive_restart") ||
-      meshes.some((mesh) => mesh.listPrimitives().length === 0) ||
-      prims.some(
-        (prim) => getPrimitiveVertexCount(prim, VertexCountMethod.RENDER) === 0
-      )
-    ) {
-      // weld's transform is async under Transform's void type; returned,
-      // doc.transform awaits it
-      return weld()(doc, context);
-    }
-    for (const prim of prims) {
-      const position = prim.getAttribute("POSITION");
-      const plan =
-        position &&
-        prim.getMode() !== Primitive.Mode.POINTS &&
-        prim.listTargets().length === 0
-          ? wordsOf(prim)
-          : undefined;
-      if (!(position && plan)) {
-        weldPrimitive(prim);
-        continue;
-      }
-      const { remap, count } = weldRemap(
-        plan,
-        position.getCount(),
-        prim.getIndices()?.getArray() ?? null
-      );
-      compactPrimitive(prim, remap, count);
-    }
-    return undefined;
-  });
+  // gltf-transform types a Transform as void but awaits what it returns
+  const transform: unknown = weldExactTransform;
+  return createTransform("weldExact", transform as Transform);
 }
+
+/** What `weld()` and `doc.transform` do under gltf-transform's void
+ *  `Transform` type: the transform is async, and is awaited. */
+type AsyncTransform = (
+  doc: Document,
+  context?: TransformContext
+) => Promise<void>;

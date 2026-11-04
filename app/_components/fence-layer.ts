@@ -1,4 +1,5 @@
-import { Color, DoubleSide, type Mesh } from "three/webgpu";
+import { Color, DoubleSide } from "three/webgpu";
+import type { Mesh } from "three/webgpu";
 import {
   cameraViewMatrix,
   float,
@@ -14,7 +15,8 @@ import {
 import { FENCE_CODE, FENCE_UV_CODES } from "@/lib/city/fences";
 import type { F, V3 } from "./shader-chunks";
 import { lampNight } from "./lamp-layer";
-import { type GroundLight, groundLitMaterial } from "./sky-light";
+import { groundLitMaterial } from "./sky-light";
+import type { GroundLight } from "./sky-light";
 
 /*
  * A fence is one calm band (lib/city/fences.ts), in a single muted tone close

@@ -11,6 +11,16 @@ import {
 import { cn } from "cn";
 import type { Speech } from "./ask-voice";
 
+/** What the picker says of the voice reading now. */
+function pickerTitle(voice: string | null, online: boolean): string {
+  if (voice === null) {
+    return "Dieses Gerät hat keine eigene deutsche Stimme: eine Online-Stimme wählen, um vorzulesen";
+  }
+  return online
+    ? "Online-Stimme: der vorgelesene Text geht an ihren Anbieter"
+    : "Stimme dieses Geräts: nichts verlässt das Gerät";
+}
+
 /**
  * Which voice reads aloud (ADR 0057): the device's German voices, the
  * best-sounding first. An online one (Google's, Microsoft's) is marked:
@@ -18,13 +28,13 @@ import type { Speech } from "./ask-voice";
  * a single voice of the device's own; a device with only online voices
  * reads nothing until one is picked.
  */
-export function VoicePicker({
+export const VoicePicker = ({
   className,
   speech,
 }: {
   className?: string;
   speech: Speech;
-}) {
+}) => {
   const { voice, voices } = speech;
   if (voices.length === 0 || (voices.length === 1 && voice)) {
     return null;
@@ -45,13 +55,7 @@ export function VoicePicker({
         className={cn("max-w-56 font-sans", className)}
         data-testid="voice-picker"
         size="sm"
-        title={
-          voice === null
-            ? "Dieses Gerät hat keine eigene deutsche Stimme: eine Online-Stimme wählen, um vorzulesen"
-            : online
-              ? "Online-Stimme: der vorgelesene Text geht an ihren Anbieter"
-              : "Stimme dieses Geräts: nichts verlässt das Gerät"
-        }
+        title={pickerTitle(voice, online === true)}
       >
         <SelectValue placeholder="Online-Stimme wählen" />
       </SelectTrigger>
@@ -72,4 +76,4 @@ export function VoicePicker({
       </SelectContent>
     </Select>
   );
-}
+};

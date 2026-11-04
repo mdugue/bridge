@@ -4,15 +4,15 @@
  */
 import sharp from "sharp";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 import {
   buildingHeights,
   footprintArea,
   landcoverShares,
   quantile,
   SITE_STATS_FILE,
-  type SiteStats,
 } from "../../lib/city/site-stats";
+import type { SiteStats } from "../../lib/city/site-stats";
 import {
   cityMeshSourceFiles,
   sideFileSource,
@@ -72,6 +72,8 @@ export async function publishStats(
   publisher.publishPlain(SITE_STATS_FILE, stats);
 }
 
+const round = (n: number, d = 3) => Math.round(n * 10 ** d) / 10 ** d;
+
 async function siteStats(
   footprintFiles: ReadonlyMap<string, string>,
   ground: readonly number[] | undefined
@@ -98,25 +100,24 @@ async function siteStats(
     for (const kind of ["canopy", "canopyx"] as const) {
       const src = at(sideFileSource(SITE, kinds[kind].file));
       if (existsSync(src)) {
-        crowns += readJson<{ features: unknown[] }>(src).features.length;
+        crowns += (readJson(src) as { features: unknown[] }).features.length;
       }
     }
     heights.push(
       ...buildingHeights(
-        readJson<CityJsonDocument>(at(cityMeshSourceFiles(SITE, tile).city))
+        readJson(at(cityMeshSourceFiles(SITE, tile).city)) as CityJsonDocument
       )
     );
     const prints = footprintFiles.get(tile);
     if (prints) {
       footprint += footprintArea(
-        readJson<[number, number][][][]>(join(OUT_DIR, prints))
+        readJson(path.join(OUT_DIR, prints)) as [number, number][][][]
       );
     }
     landmarks += landmarkFile(tile)?.landmarks.length ?? 0;
   }
   const areaKm2 = TILES.length * 4;
   const relief = ground ? ground[1] - ground[0] : 0;
-  const round = (n: number, d = 3) => Math.round(n * 10 ** d) / 10 ** d;
   return {
     areaKm2,
     buildingsPerKm2: round(heights.length / areaKm2, 1),

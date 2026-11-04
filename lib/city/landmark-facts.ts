@@ -128,7 +128,7 @@ const nameKey = (name: string) =>
   name
     .normalize("NFC")
     .toLocaleLowerCase("de-DE")
-    .replaceAll(/\s+/g, " ")
+    .replaceAll(/\s+/gu, " ")
     .trim();
 
 /**

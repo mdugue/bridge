@@ -1,12 +1,12 @@
-import { join } from "node:path";
+import path from "node:path";
 import {
   contentKey,
   createContentHasher,
-  type LockedPackages,
   lockedVersions,
   moduleGraph,
   packageImports,
 } from "./bake-sources";
+import type { LockedPackages } from "./bake-sources";
 
 /**
  * The bake cache's keys (scripts/prepare-data.ts, ADR 0003): a key covers
@@ -44,7 +44,7 @@ export function createKeyMaker(opts: {
     let graph = graphs.get(entry);
     if (!graph) {
       graph = moduleGraph(entry, opts.root, opts.stop).map((p) =>
-        join(opts.root, p)
+        path.join(opts.root, p)
       );
       graphs.set(entry, graph);
     }

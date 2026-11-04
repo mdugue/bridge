@@ -22,12 +22,10 @@ import {
   scaleBarFor,
   scaleLabel,
 } from "@/lib/city/model-view";
-import {
-  RENDER_STYLE_BY_ID,
-  type RenderStyle,
-  styleInstant,
-} from "@/lib/city/render-style";
-import { type Site, siteAttribution } from "@/lib/city/site";
+import { RENDER_STYLE_BY_ID, styleInstant } from "@/lib/city/render-style";
+import type { RenderStyle } from "@/lib/city/render-style";
+import { siteAttribution } from "@/lib/city/site";
+import type { Site } from "@/lib/city/site";
 import type { CapturedImage, CityWalkHandle } from "./create-app";
 import type { ModelHud } from "./model-rig";
 
@@ -216,7 +214,8 @@ function legend(
   const lines = legendLines(info, metresPerImagePx, heading);
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  lines.forEach((line, i) => {
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
     ctx.fillStyle = i === 0 ? INK : MUTED;
     ctx.font = `${i === 0 ? 600 : 400} ${(i === 0 ? 12 : 10) * unit}px ${FONT}`;
     ctx.fillText(
@@ -225,13 +224,14 @@ function legend(
       y + pad + i * 15 * unit,
       width - x - creditW - 2 * pad
     );
-  });
+  }
   ctx.fillStyle = MUTED;
   ctx.font = `${9 * unit}px ${FONT}`;
   ctx.textAlign = "right";
-  credits.forEach((line, i) => {
+  for (let i = 0; i < credits.length; i += 1) {
+    const line = credits[i];
     ctx.fillText(line, width - pad, y + pad + i * 12 * unit);
-  });
+  }
   return height;
 }
 
@@ -263,8 +263,11 @@ function withLegend(
 }
 
 /** Hands the canvas to the browser as a PNG download. */
-function download(canvas: HTMLCanvasElement, name: string): Promise<void> {
-  return new Promise((resolve, reject) => {
+async function download(
+  canvas: HTMLCanvasElement,
+  name: string
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (!blob) {
         reject(new Error("Das Bild ließ sich nicht kodieren"));
@@ -336,7 +339,8 @@ export async function saveShadowStudy(
   let labelH = 0;
   let first: CapturedImage | null = null;
   try {
-    for (const [i, panel] of panels.entries()) {
+    for (let i = 0; i < panels.length; i += 1) {
+      const panel = panels[i];
       h.setSun(panel.date);
       const image = await h.captureImage();
       if (!sheet) {
@@ -378,23 +382,25 @@ export async function saveShadowStudy(
   ctx.font = `600 ${11 * unit}px ${FONT}`;
   ctx.textBaseline = "middle";
   ctx.textAlign = "center";
-  STUDY_HOURS.forEach((hour, col) => {
+  for (let col = 0; col < STUDY_HOURS.length; col += 1) {
+    const hour = STUDY_HOURS[col];
     ctx.fillText(`${hour}:00 Uhr`, labelW + (col + 0.5) * w, labelH / 2);
-  });
+  }
   ctx.textAlign = "left";
-  STUDY_DATES.forEach((d, row) => {
+  for (let row = 0; row < STUDY_DATES.length; row += 1) {
+    const d = STUDY_DATES[row];
     ctx.fillText(d.label, 8 * unit, labelH + (row + 0.5) * hgt);
-  });
+  }
   // the panels' hairlines
   ctx.strokeStyle = PAPER;
   ctx.lineWidth = 2 * unit;
-  for (let c = 1; c < cols; c++) {
+  for (let c = 1; c < cols; c += 1) {
     ctx.beginPath();
     ctx.moveTo(labelW + c * w, labelH);
     ctx.lineTo(labelW + c * w, sheet.height);
     ctx.stroke();
   }
-  for (let r = 1; r < rows; r++) {
+  for (let r = 1; r < rows; r += 1) {
     ctx.beginPath();
     ctx.moveTo(labelW, labelH + r * hgt);
     ctx.lineTo(sheet.width, labelH + r * hgt);

@@ -42,7 +42,7 @@ export function bufferBytes(
 function geometriesUnder(root: Object3D): Set<BufferGeometry> {
   const geometries = new Set<BufferGeometry>();
   root.traverse((obj) => {
-    const geometry = (obj as Object3D & { geometry?: BufferGeometry }).geometry;
+    const { geometry } = obj as Object3D & { geometry?: BufferGeometry };
     if (geometry) {
       geometries.add(geometry);
     }
@@ -152,12 +152,12 @@ export function disposeMaterial(
  */
 function untilThrough(dispose: () => void, attempts: number): unknown[] {
   const errors: unknown[] = [];
-  for (let i = 0; i < attempts; i++) {
+  for (let i = 0; i < attempts; i += 1) {
     try {
       dispose();
       return errors;
-    } catch (err) {
-      errors.push(err);
+    } catch (error) {
+      errors.push(error);
     }
   }
   return errors;
@@ -272,7 +272,7 @@ export function estimateGeometryBytes(root: Object3D): number {
  */
 export function cpuArrayBytes(
   root: Object3D,
-  seen: Set<ArrayBufferLike> = new Set()
+  seen = new Set<ArrayBufferLike>()
 ): number {
   let bytes = 0;
   for (const geometry of geometriesUnder(root)) {
@@ -380,14 +380,14 @@ export function sceneShared<T extends { dispose: () => void }>(
       return value;
     },
     retain: () => {
-      refs++;
+      refs += 1;
       let released = false;
       return () => {
         if (released) {
           return;
         }
         released = true;
-        refs--;
+        refs -= 1;
         if (refs === 0) {
           value?.dispose();
           value = null;
@@ -531,7 +531,7 @@ export function aloneUnder<T>(
   object: Object3D,
   during: () => T
 ): T {
-  const enabled = group.enabled;
+  const { enabled } = group;
   const shown = group.children.filter((c) => c.visible);
   for (const c of shown) {
     c.visible = false;

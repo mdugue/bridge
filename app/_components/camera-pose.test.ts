@@ -1,11 +1,8 @@
 import { expect, test } from "bun:test";
 import { PerspectiveCamera, Vector3 } from "three/webgpu";
 import { EYE_HEIGHT, PITCH_LIMIT, RAD2DEG } from "@/lib/city/pose";
-import {
-  type CameraPoseOptions,
-  type CameraSolids,
-  createCameraPose,
-} from "./camera-pose";
+import { createCameraPose } from "./camera-pose";
+import type { CameraPoseOptions, CameraSolids } from "./camera-pose";
 import type { MovementMode } from "./fps-movement";
 import type { Viewpoint } from "@/lib/city/site";
 
@@ -32,8 +29,12 @@ function rig(overrides: Partial<CameraPoseOptions> = {}) {
     groundFloor: () => GROUND - 20,
     heightAt: () => GROUND,
     offset: OFFSET,
-    onModeChange: (m) => modes.push(m),
-    onPose: (p) => poses.push(p.epsgX),
+    onModeChange: (m) => {
+      modes.push(m);
+    },
+    onPose: (p) => {
+      poses.push(p.epsgX);
+    },
     ...overrides,
   });
   pose.teleportTo(OFFSET.cx, OFFSET.cy);
@@ -336,8 +337,8 @@ test("a wheel or a pinch heads for the spot under the pointer, not the centre", 
 
   // In the air the camera runs along the ray under the pointer, so that
   // spot stays where it is on screen while it comes nearer.
-  const flyer = rig();
-  flyer.pose.applyCameraState({
+  const airborne = rig();
+  airborne.pose.applyCameraState({
     mode: "fly",
     pos: { x: 0, y: GROUND + 200, z: 0 },
     epsg: { x: 0, y: 0 },
@@ -345,7 +346,7 @@ test("a wheel or a pinch heads for the spot under the pointer, not the centre", 
     pitchDeg: -30,
     fov: 55,
   });
-  const { camera } = flyer;
+  const { camera } = airborne;
   camera.updateMatrixWorld();
   const at = { x: -0.5, y: -0.4 };
   const spot = new Vector3(at.x, at.y, 0.5).unproject(camera);
@@ -354,8 +355,8 @@ test("a wheel or a pinch heads for the spot under the pointer, not the centre", 
   const ground = camera.position
     .clone()
     .addScaledVector(ray, (camera.position.y - GROUND) / -ray.y);
-  flyer.pose.dolly(0.5, at);
-  settle(flyer.pose);
+  airborne.pose.dolly(0.5, at);
+  settle(airborne.pose);
   camera.updateMatrixWorld();
   const seen = ground.clone().project(camera);
   expect(seen.x).toBeCloseTo(at.x, 4);
@@ -671,7 +672,11 @@ test("the climb input lifts the camera in fly mode and cancels a glide", () => {
 
 test("live mode eases the view to the phone's aim; a drag ends it", () => {
   let ended = 0;
-  const { pose } = rig({ onFollowEnd: () => (ended += 1) });
+  const { pose } = rig({
+    onFollowEnd: () => {
+      ended += 1;
+    },
+  });
   pose.setFollowAim({ headingDeg: 350, pitchDeg: -20 });
   pose.step(1 / 60);
   // One frame in: part of the way, turned the short way (through north).
@@ -695,7 +700,11 @@ test("live mode eases the view to the phone's aim; a drag ends it", () => {
 
 test("live mode walks the camera to each GPS fix, gliding near ones and jumping far ones", () => {
   let ended = 0;
-  const { camera, pose, poses } = rig({ onFollowEnd: () => (ended += 1) });
+  const { camera, pose, poses } = rig({
+    onFollowEnd: () => {
+      ended += 1;
+    },
+  });
   // 12 m east: a step — eased, not jumped.
   pose.setFollowPosition({ x: OFFSET.cx + 12, y: OFFSET.cy });
   expect(camera.position.x).toBeCloseTo(0, 10);
@@ -715,7 +724,7 @@ test("live mode walks the camera to each GPS fix, gliding near ones and jumping 
   pose.setMoveInput(0, 1);
   expect(ended).toBe(1);
   pose.setMoveInput(0, 0);
-  const z = camera.position.z;
+  const { z } = camera.position;
   settle(pose);
   expect(camera.position.z).toBeCloseTo(z, 1);
 });
@@ -723,7 +732,11 @@ test("live mode walks the camera to each GPS fix, gliding near ones and jumping 
 test("a jump or a glide ends live mode: the GPS does not pull the camera back", () => {
   for (const jump of ["teleport", "viewpoint"] as const) {
     let ended = 0;
-    const { camera, pose } = rig({ onFollowEnd: () => (ended += 1) });
+    const { camera, pose } = rig({
+      onFollowEnd: () => {
+        ended += 1;
+      },
+    });
     pose.setFollowPosition({ x: OFFSET.cx + 5, y: OFFSET.cy });
     pose.setFollowAim({ headingDeg: 0, pitchDeg: 0 });
     if (jump === "teleport") {
@@ -740,7 +753,11 @@ test("a jump or a glide ends live mode: the GPS does not pull the camera back", 
 
 test("live mode and flying combine: the GPS moves the camera at its altitude, climbing keeps it live", () => {
   let ended = 0;
-  const { camera, pose } = rig({ onFollowEnd: () => (ended += 1) });
+  const { camera, pose } = rig({
+    onFollowEnd: () => {
+      ended += 1;
+    },
+  });
   pose.setMovementMode("fly");
   pose.setClimbInput(1);
   settle(pose);

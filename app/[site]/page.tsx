@@ -17,7 +17,8 @@ export function generateStaticParams(): { site: string }[] {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const built = builtSite((await params).site);
+  const { site: siteId } = await params;
+  const built = builtSite(siteId);
   if (!built) {
     return {};
   }
@@ -41,20 +42,21 @@ export const viewport: Viewport = {
 
 // The site is read inside the boundary: a link prefetches one shell for
 // every city (partialPrefetching), the viewer itself comes on the click.
-export default function SitePage({ params }: Props) {
-  return (
-    <main className={cn("h-dvh w-full", ...NAMEPLATE_FONT_VARIABLES)}>
-      <Suspense fallback={null}>
-        <Viewer params={params} />
-      </Suspense>
-    </main>
-  );
-}
+const SitePage = ({ params }: Props) => (
+  <main className={cn("h-dvh w-full", ...NAMEPLATE_FONT_VARIABLES)}>
+    <Suspense fallback={null}>
+      <Viewer params={params} />
+    </Suspense>
+  </main>
+);
 
-async function Viewer({ params }: Props) {
+export default SitePage;
+
+const Viewer = async ({ params }: Props) => {
   // A site this build did not prepare has no data to stream: 404 rather
   // than a viewer that fails to load.
-  const built = builtSite((await params).site);
+  const { site: siteId } = await params;
+  const built = builtSite(siteId);
   if (!built) {
     notFound();
   }
@@ -64,4 +66,4 @@ async function Viewer({ params }: Props) {
       siteId={built.site.id}
     />
   );
-}
+};

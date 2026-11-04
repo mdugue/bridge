@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import {
   carLength,
   dayKindOf,
@@ -13,9 +13,8 @@ import {
   runningTrams,
   secondsOfDay,
   TRAM_LIVERIES,
-  type TramOperator,
-  type TramTimetable,
 } from "./tram-timetable";
+import type { TramOperator, TramTimetable } from "./tram-timetable";
 
 /** One line, one pattern: three stops 0, 400 and 1000 m along a path
  *  that turns north at 600 m; a bridge from 600 m on. */
@@ -96,10 +95,10 @@ test("the trams on their way, the night's from the day before included", () => {
 });
 
 // The committed timetables read as this module expects them.
-const DATA = join(import.meta.dir, "..", "..", "data");
+const DATA = nodePath.join(import.meta.dir, "..", "..", "data");
 const SITES = existsSync(DATA)
   ? readdirSync(DATA).filter((site) =>
-      existsSync(join(DATA, site, "transit", "trams.json"))
+      existsSync(nodePath.join(DATA, site, "transit", "trams.json"))
     )
   : [];
 /** Who runs each site's trams, once its timetable names the agencies. */
@@ -111,7 +110,7 @@ const OPERATOR: Record<string, TramOperator> = {
 
 test.each(SITES)("%s: the committed timetable is whole", (site) => {
   const tt = JSON.parse(
-    readFileSync(join(DATA, site, "transit", "trams.json"), "utf8")
+    readFileSync(nodePath.join(DATA, site, "transit", "trams.json"), "utf-8")
   ) as TramTimetable;
   if (tt.agencies) {
     expect(tt.routeAgency).toHaveLength(tt.routes.length);
@@ -125,7 +124,7 @@ test.each(SITES)("%s: the committed timetable is whole", (site) => {
     expect(p.at.length).toBeGreaterThanOrEqual(2);
     const m = measurePattern(p);
     const total = m.dist.at(-1) ?? 0;
-    for (let i = 1; i < p.at.length; i++) {
+    for (let i = 1; i < p.at.length; i += 1) {
       expect(p.at[i]).toBeGreaterThanOrEqual(p.at[i - 1]);
     }
     expect(p.at.at(-1) ?? 0).toBeLessThanOrEqual(total + 0.5);
@@ -133,14 +132,14 @@ test.each(SITES)("%s: the committed timetable is whole", (site) => {
   for (const prof of tt.profiles) {
     const stops = tt.patterns[prof.pattern].at.length;
     expect(prof.t).toHaveLength(2 * stops);
-    for (let i = 1; i < prof.t.length; i++) {
+    for (let i = 1; i < prof.t.length; i += 1) {
       expect(prof.t[i]).toBeGreaterThanOrEqual(prof.t[i - 1]);
     }
   }
   for (const kind of ["weekday", "saturday", "sunday"] as const) {
     const trips = tt.days[kind]?.trips ?? [];
     expect(trips.length).toBeGreaterThan(0);
-    for (let i = 1; i < trips.length; i++) {
+    for (let i = 1; i < trips.length; i += 1) {
       expect(trips[i][1]).toBeGreaterThanOrEqual(trips[i - 1][1]);
     }
   }
@@ -169,9 +168,9 @@ test("the GTFS agencies stand for their operators' liveries", () => {
 });
 
 test("a trip's car length follows its fleet's mix, the same all day", () => {
-  const dvb = TRAM_LIVERIES.dvb;
+  const { dvb } = TRAM_LIVERIES;
   const counts = new Map<number, number>();
-  for (let seed = 0; seed < 4000; seed++) {
+  for (let seed = 0; seed < 4000; seed += 1) {
     const l = carLength(dvb, seed * 977 + 3600);
     counts.set(l, (counts.get(l) ?? 0) + 1);
   }

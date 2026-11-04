@@ -10,13 +10,13 @@
  * output files.
  */
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import {
   hasObjectFlag,
   OBJECT_FLAG_FLAT_ROOF,
-  type OsmBuildingLut,
   withoutTrafficStructures,
 } from "../lib/city/city-mesh";
+import type { OsmBuildingLut } from "../lib/city/city-mesh";
 import type {
   DoorFeature,
   FeatureCollection,
@@ -25,21 +25,15 @@ import type {
 import type { LandmarkFile } from "../lib/city/landmarks";
 import { cityMeshSourceFiles, tileIds } from "../lib/city/tile";
 import type { CityJsonDocument } from "../lib/city/types";
-import {
-  FACADE_SCALE_M,
-  type FacadeModel,
-  type WindowFile,
-  type WindowType,
-  unpackStyle,
-  windowType,
-} from "../lib/city/windows";
+import { FACADE_SCALE_M, unpackStyle, windowType } from "../lib/city/windows";
+import type { FacadeModel, WindowFile, WindowType } from "../lib/city/windows";
 import { siteFromArgs } from "../sites";
 import { bakeCityMesh } from "./bake-city-mesh";
 
-const ROOT = join(import.meta.dir, "..");
-const read = <T>(path: string): T | undefined =>
-  existsSync(join(ROOT, path))
-    ? (JSON.parse(readFileSync(join(ROOT, path), "utf8")) as T)
+const ROOT = nodePath.join(import.meta.dir, "..");
+const read = (path: string): unknown =>
+  existsSync(nodePath.join(ROOT, path))
+    ? JSON.parse(readFileSync(nodePath.join(ROOT, path), "utf-8"))
     : undefined;
 
 const median = (xs: number[]) => {
@@ -91,17 +85,19 @@ const tiles = rest.length > 0 ? rest : tileIds(site);
 const byType = new Map<WindowType, FacadeModel[]>();
 for (const tile of tiles) {
   const src = cityMeshSourceFiles(site, tile);
-  const doc = read<CityJsonDocument>(src.city);
+  const doc = read(src.city) as CityJsonDocument | undefined;
   if (!doc) {
     continue;
   }
-  const file = read<WindowFile>(src.windows);
+  const file = read(src.windows) as WindowFile | undefined;
   const walls = Object.values(file?.buildings ?? {}).flat();
   // the OSM facts and the landmarks: the windows' gate reads them
   const osm: OsmBuildingLut = {
-    ...read<{ objects?: OsmBuildingLut }>(src.osmBuild)?.objects,
+    ...(read(src.osmBuild) as { objects?: OsmBuildingLut } | undefined)
+      ?.objects,
   };
-  for (const lm of read<LandmarkFile>(src.landmarks)?.landmarks ?? []) {
+  const landmarks = read(src.landmarks) as LandmarkFile | undefined;
+  for (const lm of landmarks?.landmarks ?? []) {
     for (const id of lm.objects) {
       osm[id] = { ...osm[id], landmark: 1 };
     }
@@ -118,9 +114,10 @@ for (const tile of tiles) {
     undefined,
     undefined,
     {
-      doors: read<FeatureCollection<DoorFeature>>(src.doors)?.features,
+      doors: (read(src.doors) as FeatureCollection<DoorFeature> | undefined)
+        ?.features,
       shopfronts: Object.values(
-        read<ShopfrontFile>(src.shopfronts)?.buildings ?? {}
+        (read(src.shopfronts) as ShopfrontFile | undefined)?.buildings ?? {}
       ).flat(),
       windows: walls,
     }
@@ -133,13 +130,13 @@ for (const tile of tiles) {
     }
     const style = o.windows ? unpackStyle(o.windows.style) : undefined;
     if (!style) {
-      counts.none++;
+      counts.none += 1;
     } else if (style.measured) {
-      counts.measured++;
+      counts.measured += 1;
     } else if (style.near) {
-      counts.near++;
+      counts.near += 1;
     } else {
-      counts.type++;
+      counts.type += 1;
     }
   }
   const area = wallAreas(baked);

@@ -3,11 +3,13 @@ import {
   DataTexture,
   FloatType,
   HalfFloatType,
-  type Material,
-  type Object3D,
-  type Texture,
-  type TextureNode,
-  type UniformNode,
+} from "three/webgpu";
+import type {
+  Material,
+  Object3D,
+  Texture,
+  TextureNode,
+  UniformNode,
 } from "three/webgpu";
 import { NodeUpdateType, texture, uniform } from "three/tsl";
 
@@ -130,7 +132,7 @@ const shrinking = new WeakSet<Texture>();
  * it dispatches no dispose of its own.
  */
 function shrinkOnDispose(tex: Texture): void {
-  if (shrinking.has(tex) || (tex as Layered).isRenderTargetTexture === true) {
+  if (shrinking.has(tex) || (tex as Layered).isRenderTargetTexture) {
     return;
   }
   shrinking.add(tex);
@@ -156,14 +158,12 @@ export function slotTexture(name: string, like: Texture): TextureNode {
   node.updateBeforeType = NodeUpdateType.OBJECT;
   node.updateBefore = ({ material }) => {
     node.value = (slotsOf(material)[name] as Texture | undefined) ?? stub;
-    return undefined;
   };
   // Back to the stub once the object is drawn: a build made before the
   // next object's update copies the stub (see `Slots`).
   node.updateAfterType = NodeUpdateType.OBJECT;
   node.updateAfter = () => {
     node.value = stub;
-    return undefined;
   };
   return node;
 }
@@ -183,12 +183,10 @@ export function ownSlotTexture(name: string, like: Texture): TextureNode {
   node.updateBeforeType = NodeUpdateType.OBJECT;
   node.updateBefore = ({ object }) => {
     node.value = (ownSlots(object)[name] as Texture | undefined) ?? stub;
-    return undefined;
   };
   node.updateAfterType = NodeUpdateType.OBJECT;
   node.updateAfter = () => {
     node.value = stub;
-    return undefined;
   };
   return node;
 }

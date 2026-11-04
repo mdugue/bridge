@@ -9,8 +9,10 @@ import { encodeDrawn } from "./drawn-facts";
 import type { InquiryObject } from "./inquiry";
 import type { TreeInquiry } from "./inquiry-features";
 import type { LampInquiry } from "./inquiry-more";
-import { type LineageEntry, type LineageSite, lineage } from "./lineage";
-import { MEASURED_ROOF, NO_FACT, type ObjectFacts } from "./object-facts";
+import { lineage } from "./lineage";
+import type { LineageEntry, LineageSite } from "./lineage";
+import { MEASURED_ROOF, NO_FACT } from "./object-facts";
+import type { ObjectFacts } from "./object-facts";
 import type { SiteProvenance } from "./provenance";
 
 const geosn = {
@@ -108,7 +110,7 @@ test("a LoD2 building whose roof was rebuilt: the model, the surface model for t
   expect(model.stand).toBe("Modell 2024");
   expect(model.url).toBe("https://www.geodaten.sachsen.de/");
   // the rebuilt roof is the surface model's, not the model's
-  expect(said(model).join()).not.toContain("Dachform");
+  expect(said(model).join(",")).not.toContain("Dachform");
   expect(surface.stand).toBe("01.03.2024");
   // a roof put in where the model misses the surface is detected, the
   // model's own lines are taken as published
@@ -333,9 +335,10 @@ test("without a Basis-DLM a bridge's deck and a tree row are OSM's, with its lic
   expect(deck.stand).toBe("01.08.2026");
 });
 
+const used = (entries: LineageEntry[], source: string) =>
+  entries.find((e) => e.source === source)?.used.map((u) => u.text) ?? [];
+
 test("a lamp says the wall it hangs on and the carriageway its arm reaches over", () => {
-  const used = (entries: LineageEntry[], source: string) =>
-    entries.find((e) => e.source === source)?.used.map((u) => u.text) ?? [];
   const lamp: LampInquiry = { kind: "lamp", tile: "t", position: [0, 0] };
   const onWall = lineage({ ...lamp, wall: "wall" }, provenance, saxony);
   expect(used(onWall, "OpenStreetMap")).toEqual([
@@ -364,16 +367,17 @@ test("a lamp says the wall it hangs on and the carriageway its arm reaches over"
   ]);
 });
 
+const entry = (drawn: string, source: string) => {
+  const b = object({ source: OBJECT_SOURCE_GAP, facts: facts({ drawn }) });
+  const found = lineage(
+    { kind: "building", tile: "t", picked: b, tree: [b] },
+    provenance,
+    saxony
+  ).find((e) => e.source === source);
+  return found?.used ?? [];
+};
+
 test("a building LoD2 lacks: OSM's outline, and its height the surface model's or OSM's", () => {
-  const entry = (drawn: string, source: string) => {
-    const b = object({ source: OBJECT_SOURCE_GAP, facts: facts({ drawn }) });
-    const found = lineage(
-      { kind: "building", tile: "t", picked: b, tree: [b] },
-      provenance,
-      saxony
-    ).find((e) => e.source === source);
-    return found?.used ?? [];
-  };
   // measured: the surface model computes its height
   expect(entry("", "Digitales Oberflächenmodell DOM1")).toEqual([
     { text: "seine Höhe über Gelände und Stadtmodell", method: "computed" },

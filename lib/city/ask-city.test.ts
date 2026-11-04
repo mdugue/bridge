@@ -33,7 +33,7 @@ describe("providers", () => {
   });
 
   test("a gateway offers every maker's models under its maker's name", () => {
-    const direct = ASK_PROVIDERS.filter((p) => !p.id.match(/gateway|router/));
+    const direct = ASK_PROVIDERS.filter((p) => !/gateway|router/u.test(p.id));
     for (const p of ASK_PROVIDERS.filter((q) => !direct.includes(q))) {
       expect(p.models.map((m) => m.label)).toEqual(
         direct.flatMap((d) => d.models.map((m) => m.label))

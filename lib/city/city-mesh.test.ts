@@ -4,7 +4,6 @@ import {
   markGrounded,
   OBJECT_FLAG_FLAT_ROOF,
   OBJECT_FLAG_GROUNDED,
-  type CityObjectRow,
   countBuildings,
   doomedObjects,
   footprintPolys,
@@ -26,6 +25,7 @@ import {
   packObjectTexels,
   withoutTrafficStructures,
 } from "./city-mesh";
+import type { CityObjectRow } from "./city-mesh";
 import type { CityJsonDocument } from "./types";
 
 function row(partial: Partial<CityObjectRow>): CityObjectRow {
@@ -107,7 +107,7 @@ test("a city floodlights some of its landmarks, each building whole", () => {
     group: new Uint32Array(n),
     rough: new Float32Array(n),
   };
-  for (let i = 0; i < 400; i++) {
+  for (let i = 0; i < 400; i += 1) {
     t.group[i] = 1_000_003 + Math.floor(i / 2) * 7919;
   }
   t.flags[400] = OBJECT_FLAG_SHOP;
@@ -120,7 +120,8 @@ test("a city floodlights some of its landmarks, each building whole", () => {
   expect(lit / 200).toBeLessThan(0.75);
   expect(isFloodlit(t, 400)).toBe(false);
   // the runtime bits ride beside the column, above the readings' bits
-  const one = [...Array(400).keys()].find((i) => isFloodlit(t, i)) ?? 0;
+  const one =
+    Array.from({ length: 400 }, (_, i) => i).find((i) => isFloodlit(t, i)) ?? 0;
   expect(shaderFlags(t, one, true)).toBe(
     OBJECT_FLAG_LANDMARK + OBJECT_FLAG_FLOODLIT + OBJECT_FLAG_ASKED
   );

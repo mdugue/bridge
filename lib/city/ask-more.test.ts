@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 import { moreSets } from "./ask-more";
 import { hitsInSets } from "./ask-solids";
 import type {
@@ -15,7 +15,7 @@ import type {
 } from "./features";
 import { epsgToWorld } from "./ground-clamp";
 import { samplePolyline } from "./polyline";
-import { type CardCredits } from "./card-lines";
+import type { CardCredits } from "./card-lines";
 import { inquiryCard } from "./inquiry";
 import type { FeatureInquiry } from "./inquiry-features";
 
@@ -30,7 +30,7 @@ const read = <F>(kind: string) =>
   (
     JSON.parse(
       readFileSync(
-        join(
+        path.join(
           import.meta.dir,
           "..",
           "..",
@@ -39,12 +39,12 @@ const read = <F>(kind: string) =>
           "dlm",
           `${kind}_${TILE}.geojson`
         ),
-        "utf8"
+        "utf-8"
       )
     ) as FeatureCollection<F>
   ).features ?? [];
 
-const offset = { cx: 412000, cy: 5656000 };
+const offset = { cx: 412_000, cy: 5_656_000 };
 const ctx = { offset, tile: TILE, heightAt: () => 110 };
 const down = { x: 0, y: -1, z: 0 };
 
@@ -78,12 +78,13 @@ test("a surface-model crown answers with its measured height", () => {
   }
 });
 
+const crown = (x: number, extra: Partial<CanopyFeature["properties"]>) =>
+  ({
+    geometry: { type: "Point", coordinates: [412_500 + x, 5_656_500] },
+    properties: { h: 18, ...extra },
+  }) as CanopyFeature;
+
 test("an evergreen crown is outlined as the cone, a pine's not, and the pine's crown starts high", () => {
-  const crown = (x: number, extra: Partial<CanopyFeature["properties"]>) =>
-    ({
-      geometry: { type: "Point", coordinates: [412_500 + x, 5_656_500] },
-      properties: { h: 18, ...extra },
-    }) as CanopyFeature;
   const canopy = [
     crown(0, {}),
     crown(30, { l: "e" }),
@@ -154,15 +155,16 @@ test("lamps, furniture and tram stops are each askable at their point", () => {
   );
 });
 
+// a crown may stand over the hedge: the hedge is among the hits
+const hedgeAt = ([x, y]: [number, number]) =>
+  hitsInSets({ ...epsgToWorld(x, y, offset), y: 200 }, down, sets, 1000).find(
+    (h) => h.target.kind === "hedge"
+  )?.target;
+
 test("a hedge is one thing along its whole line", () => {
   const hedge = features.hedges.find((f) => f.geometry.coordinates.length > 3);
   const along = samplePolyline(hedge?.geometry.coordinates ?? [], 2);
   const [a, b] = [along[0], along.at(-1)] as [number, number][];
-  // a crown may stand over the hedge: the hedge is among the hits
-  const hedgeAt = ([x, y]: [number, number]) =>
-    hitsInSets({ ...epsgToWorld(x, y, offset), y: 200 }, down, sets, 1000).find(
-      (h) => h.target.kind === "hedge"
-    )?.target;
   const first = hedgeAt(a);
   const last = hedgeAt(b);
   expect(first?.kind).toBe("hedge");
@@ -192,11 +194,12 @@ test("a landing stage on the river answers with its kind", () => {
   expect(hits.some((h) => h.target.kind === "landing")).toBe(true);
 });
 
+const pt = (x: number, y: number) => ({
+  type: "Point" as const,
+  coordinates: [x, y] as [number, number],
+});
+
 test("a lamp or a bench on a bridge is asked on its deck, a wall lantern at its head", () => {
-  const pt = (x: number, y: number) => ({
-    type: "Point" as const,
-    coordinates: [x, y] as [number, number],
-  });
   const own = moreSets(
     {
       canopy: [],
@@ -206,15 +209,15 @@ test("a lamp or a bench on a bridge is asked on its deck, a wall lantern at its 
       river: [],
       trams: [],
       lamps: [
-        { geometry: pt(412010, 5656020), properties: { h: 5, deck: 125 } },
+        { geometry: pt(412_010, 5_656_020), properties: { h: 5, deck: 125 } },
         {
-          geometry: pt(412030, 5656020),
-          properties: { h: 3.5, wall: [412030, 5656020.5] },
+          geometry: pt(412_030, 5_656_020),
+          properties: { h: 3.5, wall: [412_030, 5_656_020.5] },
         },
       ],
       furniture: [
         {
-          geometry: pt(412050, 5656020),
+          geometry: pt(412_050, 5_656_020),
           properties: { k: "bench", deck: 125 },
         },
       ],
@@ -223,16 +226,16 @@ test("a lamp or a bench on a bridge is asked on its deck, a wall lantern at its 
   );
   // a ray along the street at height y (m), from the west
   const along = (y: number, x: number) => {
-    const w = epsgToWorld(x - 5, 5656020, offset);
+    const w = epsgToWorld(x - 5, 5_656_020, offset);
     return hitsInSets({ x: w.x, y, z: w.z }, { x: 1, y: 0, z: 0 }, own, 10)[0]
       ?.target.kind;
   };
-  expect(along(127, 412010)).toBe("lamp"); // the post on the deck
-  expect(along(112, 412010)).toBeUndefined(); // nothing on the ground below
-  expect(along(113.4, 412030)).toBe("lamp"); // the lantern's head
-  expect(along(111, 412030)).toBeUndefined(); // no post under it
-  expect(along(125.5, 412050)).toBe("furniture");
-  expect(along(110.5, 412050)).toBeUndefined();
+  expect(along(127, 412_010)).toBe("lamp"); // the post on the deck
+  expect(along(112, 412_010)).toBeUndefined(); // nothing on the ground below
+  expect(along(113.4, 412_030)).toBe("lamp"); // the lantern's head
+  expect(along(111, 412_030)).toBeUndefined(); // no post under it
+  expect(along(125.5, 412_050)).toBe("furniture");
+  expect(along(110.5, 412_050)).toBeUndefined();
 });
 
 test("a tall mast is asked at its post and at the head on its arm", () => {
@@ -246,7 +249,7 @@ test("a tall mast is asked at its post and at the head on its arm", () => {
       trams: [],
       lamps: [
         {
-          geometry: { type: "Point", coordinates: [412070, 5656020] },
+          geometry: { type: "Point", coordinates: [412_070, 5_656_020] },
           // 9 m, its arm reaching east (1.8 m)
           properties: { h: 9, hs: "street", arm: 90 },
         },
@@ -257,7 +260,7 @@ test("a tall mast is asked at its post and at the head on its arm", () => {
   );
   // a ray north at height y (m), x m east of the post
   const north = (y: number, dx: number) => {
-    const w = epsgToWorld(412070 + dx, 5655990, offset);
+    const w = epsgToWorld(412_070 + dx, 5_655_990, offset);
     return hitsInSets({ x: w.x, y, z: w.z }, { x: 0, y: 0, z: -1 }, own, 60)[0]
       ?.target;
   };

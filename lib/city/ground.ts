@@ -5,7 +5,8 @@
  * terrain seen so far as the floor off every tile, and rays against both.
  * No THREE, no DOM.
  */
-import { type RecenterOffset, worldToEpsg } from "./ground-clamp";
+import { worldToEpsg } from "./ground-clamp";
+import type { RecenterOffset } from "./ground-clamp";
 import { groundRayDistance } from "./ground-ray";
 import type { Xyz } from "./pose";
 
@@ -42,9 +43,8 @@ export interface Ground {
 export function createGround(offset: RecenterOffset): Ground {
   let sources: readonly HeightSource[] = [];
   let floor = Number.POSITIVE_INFINITY;
-  const over =
-    (from: () => readonly HeightSource[]) =>
-    (x: number, y: number): number | null => {
+  const over = (from: () => readonly HeightSource[]) =>
+    function lookup(x: number, y: number): number | null {
       for (const s of from()) {
         const h = s.heightAt(x, y);
         if (h !== null) {

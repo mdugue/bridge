@@ -69,9 +69,10 @@ export interface IfcPlacement {
 const MAP_SCALE_MIN = 0.9;
 const MAP_SCALE_MAX = 1.1;
 
-const EPSG_NUMBER = /EPSG\s*(?::{1,2}|\/\d+\/|\s)\s*(\d{4,5})/i;
+const EPSG_NUMBER = /EPSG\s*(?::{1,2}|\/\d+\/|\s)\s*(?<code>\d{4,5})/iu;
 /** ETRS89/UTM by words: `ETRS89 / UTM zone 32N`, `ETRS_1989_UTM_Zone_33N` */
-const ETRS_UTM = /ETRS.?(?:19)?89[\W_]*UTM[\W_]*(?:zone[\W_]*)?(3[23])/i;
+const ETRS_UTM =
+  /ETRS.?(?:19)?89[\W_]*UTM[\W_]*(?:zone[\W_]*)?(?<zone>3[23])/iu;
 
 /** The EPSG code a CRS name gives (`EPSG:25833`,
  *  `urn:ogc:def:crs:EPSG::25833`, `…/def/crs/EPSG/0/25833`, `ETRS89 /
@@ -79,10 +80,10 @@ const ETRS_UTM = /ETRS.?(?:19)?89[\W_]*UTM[\W_]*(?:zone[\W_]*)?(3[23])/i;
 export function epsgOfName(name: string | null): number | null {
   const m = name?.match(EPSG_NUMBER);
   if (m) {
-    return Number(m[1]);
+    return Number(m.groups?.code);
   }
   const utm = name?.match(ETRS_UTM);
-  return utm ? 25_800 + Number(utm[1]) : null;
+  return utm ? 25_800 + Number(utm.groups?.zone) : null;
 }
 
 /** IfcCompoundPlaneAngleMeasure (deg, min, sec, millionths) in degrees;
@@ -108,7 +109,7 @@ export function siPrefixFactor(prefix: string | null | undefined): number {
     MILLI: 0.001,
     MICRO: 1e-6,
   };
-  return prefix ? (table[prefix.replace(/\./g, "").toUpperCase()] ?? 1) : 1;
+  return prefix ? (table[prefix.replaceAll(".", "").toUpperCase()] ?? 1) : 1;
 }
 
 /**
@@ -158,6 +159,10 @@ function carryOver(
   return { east: there.x, north: there.y, turn: (to - from) * DEG2RAD };
 }
 
+/** The UTM zone (28..38) of an ETRS89/UTM EPSG code, or null. */
+const utmZoneOf = (code: number) =>
+  code >= 25_828 && code <= 25_838 ? code - 25_800 : null;
+
 /**
  * The model's place from IfcMapConversion in the site's `epsg`, or why
  * not (a sentence for the panel).
@@ -174,10 +179,8 @@ export function mapConversionPlacement(
     };
   }
   const source = named;
-  const zone = (code: number) =>
-    code >= 25_828 && code <= 25_838 ? code - 25_800 : null;
-  const sourceZone = zone(source);
-  if (sourceZone === null || zone(epsg) === null) {
+  const sourceZone = utmZoneOf(source);
+  if (sourceZone === null || utmZoneOf(epsg) === null) {
     return {
       why: `Die IFC ist in ${map.crs ?? "einem unbekannten System"} verortet; city walk liest ETRS89/UTM. Bitte von Hand platzieren.`,
     };
@@ -196,8 +199,7 @@ export function mapConversionPlacement(
     if (!there) {
       return { why: `EPSG:${source} lässt sich nicht umrechnen.` };
     }
-    east = there.east;
-    north = there.north;
+    ({ east, north } = there);
     turn += there.turn;
   }
   return {

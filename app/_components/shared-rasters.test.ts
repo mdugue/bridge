@@ -1,17 +1,22 @@
 import { expect, test } from "bun:test";
 import { createSharedRasters } from "./shared-rasters";
 
-const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+const tick = async () =>
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
 
 test("a shared raster loads once and is freed with its last reader", async () => {
   const loads: string[] = [];
   const freed: string[] = [];
   const share = createSharedRasters(
-    (key) => {
+    async (key) => {
       loads.push(key);
-      return Promise.resolve(`tex:${key}`);
+      return `tex:${key}`;
     },
-    (value) => freed.push(value)
+    (value) => {
+      freed.push(value);
+    }
   );
   const [a, b] = await Promise.all([
     share.acquire("svf"),
@@ -33,18 +38,20 @@ test("a shared raster loads once and is freed with its last reader", async () =>
 });
 
 test("a raster released before it lands is freed when it lands", async () => {
-  let land: (value: string) => void = () => undefined;
+  let land: ((value: string) => void) | undefined;
   const freed: string[] = [];
   const share = createSharedRasters(
-    () =>
-      new Promise<string>((resolve) => {
+    async () =>
+      await new Promise<string>((resolve) => {
         land = resolve;
       }),
-    (value) => freed.push(value)
+    (value) => {
+      freed.push(value);
+    }
   );
   const pending = share.acquire("svf");
   share.release("svf");
-  land("tex");
+  land?.("tex");
   await pending;
   await tick();
   expect(freed).toEqual(["tex"]);
@@ -52,23 +59,27 @@ test("a raster released before it lands is freed when it lands", async () => {
 
 test("a failed load is null, never a rejection", async () => {
   const share = createSharedRasters<string>(
-    () => Promise.reject(new Error("404")),
-    () => undefined
+    async () => {
+      throw new Error("404");
+    },
+    () => {}
   );
   expect(await share.acquire("x")).toBeNull();
 });
 
 test("a clear frees every held raster, pending ones when they land", async () => {
-  let land: (value: string) => void = () => undefined;
+  let land: ((value: string) => void) | undefined;
   const freed: string[] = [];
   const share = createSharedRasters(
-    (key) =>
+    async (key) =>
       key === "late"
-        ? new Promise<string>((resolve) => {
+        ? await new Promise<string>((resolve) => {
             land = resolve;
           })
-        : Promise.resolve(`tex:${key}`),
-    (value) => freed.push(value)
+        : await Promise.resolve(`tex:${key}`),
+    (value) => {
+      freed.push(value);
+    }
   );
   await share.acquire("a");
   await share.acquire("a");
@@ -77,7 +88,7 @@ test("a clear frees every held raster, pending ones when they land", async () =>
   expect(share.held()).toBe(0);
   await tick();
   expect(freed).toEqual(["tex:a"]);
-  land("tex:late");
+  land?.("tex:late");
   await pending;
   await tick();
   expect(freed).toEqual(["tex:a", "tex:late"]);
@@ -91,13 +102,13 @@ test("a clear frees every held raster, pending ones when they land", async () =>
 test("a load every reader left before it landed is aborted", async () => {
   let seen: AbortSignal | null = null;
   const share = createSharedRasters(
-    (_key, signal) => {
+    async (_key, signal) => {
       seen = signal;
-      return new Promise<string>((_resolve, reject) => {
+      return await new Promise<string>((_resolve, reject) => {
         signal.addEventListener("abort", () => reject(new Error("aborted")));
       });
     },
-    () => undefined
+    () => {}
   );
   const pending = share.acquire("class");
   const second = share.acquire("class");
@@ -113,17 +124,17 @@ test("a load every reader left before it landed is aborted", async () => {
 test("the stream's teardown stops the loads still on their way", async () => {
   const signals: AbortSignal[] = [];
   const share = createSharedRasters(
-    (key, signal) => {
+    async (key, signal) => {
       signals.push(signal);
       return key === "landed"
-        ? Promise.resolve("tex")
-        : new Promise<string>((_resolve, reject) => {
+        ? await Promise.resolve("tex")
+        : await new Promise<string>((_resolve, reject) => {
             signal.addEventListener("abort", () =>
               reject(new Error("aborted"))
             );
           });
     },
-    () => undefined
+    () => {}
   );
   await share.acquire("landed");
   const pending = share.acquire("on its way");

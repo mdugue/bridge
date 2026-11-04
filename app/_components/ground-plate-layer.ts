@@ -22,15 +22,15 @@ import {
 } from "three/webgpu";
 import {
   decodePlate,
-  type PlateRef,
-  type PlateTile,
   plateHeightIndex,
   plateIndex,
   plateNormals,
   platePositions,
 } from "@/lib/city/ground-plate";
+import type { PlateRef, PlateTile } from "@/lib/city/ground-plate";
 import { landcoverSrgb, srgbToLinear } from "@/lib/city/landcover";
-import { type DrawnPlateTile, plateHeightAt } from "@/lib/city/plate-height";
+import { plateHeightAt } from "@/lib/city/plate-height";
+import type { DrawnPlateTile } from "@/lib/city/plate-height";
 import { fetchOptionalBinary } from "./fetch-optional";
 import { disposeObject3D, sceneMaterial } from "./three-utils";
 
@@ -48,13 +48,14 @@ export interface GroundPlate {
  *  normalised bytes, four a vertex (WebGPU has no three-byte format). */
 export function plateColours(classes: Uint8Array): Uint8Array {
   const out = new Uint8Array(classes.length * 4);
-  classes.forEach((id, v) => {
+  for (let v = 0; v < classes.length; v += 1) {
+    const id = classes[v];
     const [r, g, b] = landcoverSrgb(id);
     out[v * 4] = Math.round(srgbToLinear(r) * 255);
     out[v * 4 + 1] = Math.round(srgbToLinear(g) * 255);
     out[v * 4 + 2] = Math.round(srgbToLinear(b) * 255);
     out[v * 4 + 3] = 255;
-  });
+  }
   return out;
 }
 
@@ -106,7 +107,9 @@ export function buildGroundPlate(
     mesh.receiveShadow = true;
     mesh.castShadow = false;
     // nothing to pick or stand on: rays go to the terrain
-    mesh.raycast = () => undefined;
+    mesh.raycast = () => {
+      // never picked
+    };
     meshes.set(tile.id, mesh);
     group.add(mesh);
   }

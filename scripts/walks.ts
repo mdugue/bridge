@@ -20,34 +20,34 @@ import {
   readFileSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 import { siteDataDir } from "../lib/city/tile";
 import {
   stopCamera,
   stopDate,
-  type Walk,
-  type WalkStop,
   WALKS_DIR,
   walkPhotoFile,
   walkProblems,
 } from "../lib/city/walks";
+import type { Walk, WalkStop } from "../lib/city/walks";
 import { siteFromArgs } from "../sites";
 import { readDgmFile } from "./dgm-cache";
 import { siteDgm } from "./line-levels";
 
-const ROOT = join(import.meta.dir, "..");
+const ROOT = path.join(import.meta.dir, "..");
 const { site, rest } = siteFromArgs(process.argv.slice(2));
-const dir = join(ROOT, siteDataDir(site), WALKS_DIR);
+const dir = path.join(ROOT, siteDataDir(site), WALKS_DIR);
 const files = readdirSync(dir).filter((f) => f.endsWith(".json"));
 const walks = files.map((f) => ({
-  file: join(dir, f),
-  walk: JSON.parse(readFileSync(join(dir, f), "utf8")) as Walk,
+  file: path.join(dir, f),
+  walk: JSON.parse(readFileSync(path.join(dir, f), "utf-8")) as Walk,
 }));
 const out = (line: string) => process.stdout.write(`${line}\n`);
 
 async function fillGround(): Promise<void> {
-  const heightAt = await siteDgm(site, (tif, tfw) =>
-    readDgmFile(tif, tfw, "native")
+  const heightAt = await siteDgm(
+    site,
+    async (tif, tfw) => await readDgmFile(tif, tfw, "native")
   );
   for (const { file, walk } of walks) {
     for (const stop of walk.stops) {
@@ -65,19 +65,23 @@ async function fillGround(): Promise<void> {
 
 function writeShots(only?: string): void {
   const manifest = JSON.parse(
-    readFileSync(join(ROOT, "public/data", site.id, "manifest.json"), "utf8")
+    readFileSync(
+      path.join(ROOT, "public/data", site.id, "manifest.json"),
+      "utf-8"
+    )
   ) as { files: Record<string, string> };
   const tileset = JSON.parse(
     readFileSync(
-      join(ROOT, "public/data", site.id, manifest.files["tileset.json"]),
-      "utf8"
+      path.join(ROOT, "public/data", site.id, manifest.files["tileset.json"]),
+      "utf-8"
     )
   ) as { extras: { offset: { cx: number; cy: number } } };
-  const offset = tileset.extras.offset;
-  mkdirSync(join(ROOT, "shots"), { recursive: true });
+  const { offset } = tileset.extras;
+  mkdirSync(path.join(ROOT, "shots"), { recursive: true });
   const today = new Date();
   for (const { walk } of walks.filter((w) => !only || w.walk.id === only)) {
-    walk.stops.forEach((stop, i) => {
+    for (let i = 0; i < walk.stops.length; i += 1) {
+      const stop = walk.stops[i];
       const camera = stopCamera(stop, offset);
       const date = stopDate(stop, today);
       const snapshot = {
@@ -87,9 +91,9 @@ function writeShots(only?: string): void {
         look: { style: stop.style ?? "pastel" },
       };
       const name = `walk-${walk.id}-${String(i + 1).padStart(2, "0")}-${stop.id}.json`;
-      writeFileSync(join(ROOT, "shots", name), JSON.stringify(snapshot));
+      writeFileSync(path.join(ROOT, "shots", name), JSON.stringify(snapshot));
       out(name);
-    });
+    }
   }
 }
 
@@ -105,7 +109,7 @@ const USER_AGENT = "city-walk walk photos (https://mit.manuel.fyi)";
 
 /** A Wikimedia request, waiting out its rate limit (429) a few times. */
 async function wikimedia(url: string): Promise<Response> {
-  for (let attempt = 0; ; attempt++) {
+  for (let attempt = 0; ; attempt += 1) {
     // politely spaced: Wikimedia limits bursts
     await Bun.sleep(1500);
     const res = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
@@ -122,17 +126,18 @@ async function wikimedia(url: string): Promise<Response> {
 }
 
 async function json<T>(url: string): Promise<T> {
-  return (await (await wikimedia(url)).json()) as T;
+  const res = await wikimedia(url);
+  return (await res.json()) as T;
 }
 
 /** Up to 50 names per Wikimedia API call: one call for many stops, since
  *  Wikimedia's rate limit counts calls, not names. */
 function chunks<T>(list: T[]): T[][] {
-  const out: T[][] = [];
+  const groups: T[][] = [];
   for (let i = 0; i < list.length; i += 50) {
-    out.push(list.slice(i, i + 50));
+    groups.push(list.slice(i, i + 50));
   }
-  return out;
+  return groups;
 }
 
 /** The Wikidata image (P18) of each item that has one. */
@@ -164,11 +169,11 @@ async function refImages(ids: string[]): Promise<Map<string, string>> {
 /** Text from Commons' HTML credit fields. */
 const plain = (html: string | undefined) =>
   (html ?? "")
-    .replace(/<[^>]*>/g, "")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#0?39;/g, "'")
-    .replace(/\s+/g, " ")
+    .replaceAll(/<[^>]*>/gu, "")
+    .replaceAll("&amp;", "&")
+    .replaceAll("&quot;", '"')
+    .replaceAll(/&#0?39;/gu, "'")
+    .replaceAll(/\s+/gu, " ")
     .trim();
 
 interface CommonsInfo {
@@ -180,9 +185,9 @@ interface CommonsInfo {
 }
 
 /** Each file's thumbnail and credit, by the name the stop gave. */
-async function commonsInfo(files: string[]): Promise<Map<string, CommonsInfo>> {
+async function commonsInfo(names: string[]): Promise<Map<string, CommonsInfo>> {
   const infos = new Map<string, CommonsInfo>();
-  for (const part of chunks(files)) {
+  for (const part of chunks(names)) {
     const got = await json<{
       query: {
         normalized?: { from: string; to: string }[];
@@ -206,7 +211,7 @@ async function commonsInfo(files: string[]): Promise<Map<string, CommonsInfo>> {
     for (const page of Object.values(got.query.pages)) {
       const info = page.imageinfo?.[0];
       if (info) {
-        infos.set(asked(page.title).replace(/^File:/, ""), info);
+        infos.set(asked(page.title).replace(/^File:/u, ""), info);
       }
     }
   }
@@ -215,7 +220,8 @@ async function commonsInfo(files: string[]): Promise<Map<string, CommonsInfo>> {
 
 /** The thumbnail as WebP (ImageMagick), where ImageMagick is there. */
 async function webp(url: string, to: string): Promise<void> {
-  const bytes = new Uint8Array(await (await wikimedia(url)).arrayBuffer());
+  const res = await wikimedia(url);
+  const bytes = new Uint8Array(await res.arrayBuffer());
   const magick = Bun.spawnSync(
     [
       "convert",
@@ -247,8 +253,8 @@ function fetchedAs(photo: WalkStop["photo"], name: string): boolean {
   if (!photo?.author) {
     return false;
   }
-  const page = decodeURIComponent(photo.page).replace(/_/g, " ");
-  return page.endsWith(`File:${name.replace(/_/g, " ")}`);
+  const page = decodeURIComponent(photo.page).replaceAll("_", " ");
+  return page.endsWith(`File:${name.replaceAll("_", " ")}`);
 }
 
 interface PhotoJob {
@@ -258,13 +264,15 @@ interface PhotoJob {
   where: string;
 }
 
+/** A stop's first Wikidata ref. */
+const firstRef = (stop: WalkStop) => stop.refs?.find((r) => /^Q\d+$/u.test(r));
+
 /** The stops whose photo is to be fetched: named, or (with `--refs`) the
  *  first ref's Wikidata image for a stop that names none. */
 async function photoJobs(force: boolean, refs: boolean): Promise<PhotoJob[]> {
   const stops = walks.flatMap(({ walk }) =>
     walk.stops.map((stop) => ({ stop, walk }))
   );
-  const firstRef = (stop: WalkStop) => stop.refs?.find((r) => /^Q\d+$/.test(r));
   const unnamed = refs
     ? stops.flatMap(({ stop }) =>
         stop.photo?.file ? [] : [firstRef(stop) ?? []].flat()
@@ -282,7 +290,7 @@ async function photoJobs(force: boolean, refs: boolean): Promise<PhotoJob[]> {
       }
       continue;
     }
-    const copy = join(dir, walkPhotoFile(walk.id, stop.id));
+    const copy = path.join(dir, walkPhotoFile(walk.id, stop.id));
     if (force || !(fetchedAs(stop.photo, name) && existsSync(copy))) {
       jobs.push({ copy, name, stop, where });
     }
@@ -291,7 +299,7 @@ async function photoJobs(force: boolean, refs: boolean): Promise<PhotoJob[]> {
 }
 
 async function fetchPhotos(force: boolean, refs: boolean): Promise<void> {
-  mkdirSync(join(dir, "photos"), { recursive: true });
+  mkdirSync(path.join(dir, "photos"), { recursive: true });
   const jobs = await photoJobs(force, refs);
   const infos = await commonsInfo([...new Set(jobs.map((j) => j.name))]);
   for (const { copy, name, stop, where } of jobs) {
@@ -322,20 +330,27 @@ async function fetchPhotos(force: boolean, refs: boolean): Promise<void> {
 }
 
 switch (rest[0]) {
-  case "photos":
+  case "photos": {
     await fetchPhotos(rest.includes("--force"), rest.includes("--refs"));
     break;
-  case "ground":
+  }
+  case "ground": {
     await fillGround();
     break;
-  case "shots":
+  }
+  case "shots": {
     writeShots(rest[1]);
     break;
-  case "check":
+  }
+  case "check": {
     for (const { walk } of walks) {
-      walkProblems(walk).forEach(out);
+      for (const problem of walkProblems(walk)) {
+        out(problem);
+      }
     }
     break;
-  default:
+  }
+  default: {
     out("ground | shots [walk] | photos [--force] [--refs] | check");
+  }
 }

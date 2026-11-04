@@ -84,7 +84,7 @@ export function chimneyMesh(
     [a, b],
     [-a, b],
   ];
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 4; i += 1) {
     const [a0, b0] = ring[i];
     const [a1, b1] = ring[(i + 1) % 4];
     quad(at(a0, b0, low), at(a1, b1, low), at(a1, b1, top), at(a0, b0, top));

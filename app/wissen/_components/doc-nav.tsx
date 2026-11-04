@@ -6,7 +6,7 @@ import { cn } from "cn";
 export const SECTION_LABEL =
   "font-semibold text-[11px] uppercase leading-none tracking-widest text-muted-foreground";
 
-function Entry({ current, item }: { current: string; item: NavItem }) {
+const Entry = ({ current, item }: { current: string; item: NavItem }) => {
   const here = item.href === current;
   const open = here || item.children.some((c) => c.href === current);
   return (
@@ -32,28 +32,26 @@ function Entry({ current, item }: { current: string; item: NavItem }) {
       ) : null}
     </li>
   );
-}
+};
 
 /** The knowledge base's menu: guide (de, en) and developer docs, in index order. */
-export function DocNav({
+export const DocNav = ({
   current,
   groups,
 }: {
   current: string;
   groups: NavGroup[];
-}) {
-  return (
-    <nav aria-label="Wissen" className="flex flex-col gap-7">
-      {groups.map((group) => (
-        <div className="flex flex-col gap-2.5" key={group.id}>
-          <span className={cn(SECTION_LABEL, "px-2")}>{group.label}</span>
-          <ul className="flex flex-col gap-px">
-            {group.items.map((item) => (
-              <Entry current={current} item={item} key={item.file} />
-            ))}
-          </ul>
-        </div>
-      ))}
-    </nav>
-  );
-}
+}) => (
+  <nav aria-label="Wissen" className="flex flex-col gap-7">
+    {groups.map((group) => (
+      <div className="flex flex-col gap-2.5" key={group.id}>
+        <span className={cn(SECTION_LABEL, "px-2")}>{group.label}</span>
+        <ul className="flex flex-col gap-px">
+          {group.items.map((item) => (
+            <Entry current={current} item={item} key={item.file} />
+          ))}
+        </ul>
+      </div>
+    ))}
+  </nav>
+);

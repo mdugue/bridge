@@ -138,9 +138,9 @@ export function fxaa(source: Texture, texel: UniformNode<"vec2", Vector2>): V4 {
           const end = onEdge.add(along.mul(EDGE_STEPS[0] * sign)).toVar();
           const delta = luma(end).sub(edgeLuma).toVar();
           const found = abs(delta).greaterThanEqual(threshold).toVar();
-          for (const step of EDGE_STEPS.slice(1)) {
+          for (const stride of EDGE_STEPS.slice(1)) {
             If(found.not(), () => {
-              end.addAssign(along.mul(step * sign));
+              end.addAssign(along.mul(stride * sign));
               delta.assign(luma(end).sub(edgeLuma));
               found.assign(abs(delta).greaterThanEqual(threshold));
             });

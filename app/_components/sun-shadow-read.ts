@@ -14,9 +14,8 @@ import {
   DepthTexture,
   GreaterEqualCompare,
   LessEqualCompare,
-  type Matrix4,
-  type UniformNode,
 } from "three/webgpu";
+import type { Matrix4, UniformNode } from "three/webgpu";
 import { float, min, smoothstep, step, texture, vec2, vec4 } from "three/tsl";
 import type { F, V3 } from "./shader-chunks";
 

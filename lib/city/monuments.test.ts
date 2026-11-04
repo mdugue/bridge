@@ -234,10 +234,10 @@ describe("pedestals and finishes", () => {
   });
 });
 
-describe("the QA's monument corrections", () => {
-  const topOf = (pieces: { lift: number; height: number }[]) =>
-    Math.max(...pieces.map((p) => p.lift + p.height));
+const topOf = (pieces: { lift: number; height: number }[]) =>
+  Math.max(...pieces.map((p) => p.lift + p.height));
 
+describe("the QA's monument corrections", () => {
   test("a column is a round shaft on its pedestal under a capital, at its height", () => {
     const column = markerPieces("column", "column", 15.4);
     expect(column.map((p) => p.solid)).toEqual(["block", "shaft", "block"]);

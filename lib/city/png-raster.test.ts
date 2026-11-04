@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 import { deflateSync } from "node:zlib";
 import { SITES } from "../../sites";
 import { DRESDEN } from "../../sites/dresden";
@@ -10,9 +10,9 @@ import { siteDataDir } from "./tile";
 
 function crcTable(): Uint32Array {
   const t = new Uint32Array(256);
-  for (let n = 0; n < 256; n++) {
+  for (let n = 0; n < 256; n += 1) {
     let c = n;
-    for (let k = 0; k < 8; k++) {
+    for (let k = 0; k < 8; k += 1) {
       c = c & 1 ? 0xed_b8_83_20 ^ (c >>> 1) : c >>> 1;
     }
     t[n] = c >>> 0;
@@ -25,8 +25,8 @@ function chunk(type: string, body: Uint8Array): Uint8Array {
   const out = new Uint8Array(12 + body.length);
   const view = new DataView(out.buffer);
   view.setUint32(0, body.length);
-  for (let i = 0; i < 4; i++) {
-    out[4 + i] = type.charCodeAt(i);
+  for (let i = 0; i < 4; i += 1) {
+    out[4 + i] = type.codePointAt(i) ?? 0;
   }
   out.set(body, 8);
   let c = 0xff_ff_ff_ff;
@@ -56,10 +56,10 @@ function encode(
   filterOf: (y: number) => number
 ): Uint8Array {
   const raw = new Uint8Array((width + 1) * height);
-  for (let y = 0; y < height; y++) {
+  for (let y = 0; y < height; y += 1) {
     const f = filterOf(y);
     raw[y * (width + 1)] = f;
-    for (let x = 0; x < width; x++) {
+    for (let x = 0; x < width; x += 1) {
       const v = px[y * width + x];
       const left = x > 0 ? px[y * width + x - 1] : 0;
       const up = y > 0 ? px[(y - 1) * width + x] : 0;
@@ -98,7 +98,7 @@ describe("decodeGreyPng", () => {
     const height = 23;
     const px = new Uint8Array(width * height);
     let s = 12_345;
-    for (let i = 0; i < px.length; i++) {
+    for (let i = 0; i < px.length; i += 1) {
       s = (s * 1_103_515_245 + 12_345) & 0x7f_ff_ff_ff;
       // class-id-like runs with the odd random byte
       px[i] = s % 7 === 0 ? s & 255 : Math.floor(i / 17) % 9;
@@ -117,7 +117,7 @@ describe("decodeGreyPng", () => {
     view.setUint32(8 + 8 + 4, 9);
     const err = await decodeGreyPng(png).then(
       () => null,
-      (e: unknown) => e
+      (error: unknown) => error
     );
     expect(String(err)).toContain("truncated");
   });
@@ -127,7 +127,7 @@ describe("decodeGreyPng", () => {
     png[8 + 8 + 9] = 2; // IHDR colour type → RGB
     const err = await decodeGreyPng(png).then(
       () => null,
-      (e: unknown) => e
+      (error: unknown) => error
     );
     expect(String(err)).toContain("unsupported PNG");
   });
@@ -137,38 +137,42 @@ describe("decodeGreyPng", () => {
   test("decodes one class raster per baked site to valid class ids", async () => {
     // Dresden's is committed; another site's is there once it is baked.
     const dirs = Object.values(SITES)
-      .map((site) => join(import.meta.dir, "../..", siteDataDir(site), "dlm"))
+      .map((site) =>
+        path.join(import.meta.dir, "../..", siteDataDir(site), "dlm")
+      )
       .filter((dir) => existsSync(dir));
     expect(dirs.length).toBeGreaterThan(0);
     const maxId = Math.max(...LANDCOVER_CLASSES.map((c) => c.id));
     for (const dir of dirs) {
-      const file = readdirSync(dir).find((f) => /^landcover_.*\.png$/.test(f));
+      const file = readdirSync(dir).find((f) => /^landcover_.*\.png$/u.test(f));
       expect(file).toBeDefined();
       const out = await decodeGreyPng(
-        new Uint8Array(readFileSync(join(dir, file ?? "")))
+        new Uint8Array(readFileSync(path.join(dir, file ?? "")))
       );
       expect(out.data.length).toBe(out.width * out.height);
-      let max = 0;
-      for (let i = 0; i < out.data.length; i++) {
-        if (out.data[i] > max) {
-          max = out.data[i];
-        }
-      }
-      expect(max).toBeLessThanOrEqual(maxId);
+      // every, not for…of: over these 16 M texels that iterator is several
+      // times slower, and with every committed site it spends the whole
+      // timeout on CI.
+      expect(out.data.every((id) => id <= maxId)).toBe(true);
     }
   });
 
   test("decodes the committed paving rasters as four bytes per texel", async () => {
-    const dir = join(import.meta.dir, "../..", siteDataDir(DRESDEN), "dlm");
-    const file = readdirSync(dir).find((f) => /^surface_.*\.png$/.test(f));
+    const dir = path.join(
+      import.meta.dir,
+      "../..",
+      siteDataDir(DRESDEN),
+      "dlm"
+    );
+    const file = readdirSync(dir).find((f) => /^surface_.*\.png$/u.test(f));
     if (!file) {
       throw new Error(`no committed surface raster in ${dir}`);
     }
     const { size } = JSON.parse(
-      readFileSync(join(dir, file.replace(/\.png$/, ".json")), "utf8")
+      readFileSync(path.join(dir, file.replace(/\.png$/u, ".json")), "utf-8")
     ) as { size: number };
     const out = await decodeGreyPng(
-      new Uint8Array(readFileSync(join(dir, file)))
+      new Uint8Array(readFileSync(path.join(dir, file)))
     );
     // Interleaved R0 G0 B0 A0 R1 …: four times as wide as the raster.
     expect(out.width).toBe(4 * size);

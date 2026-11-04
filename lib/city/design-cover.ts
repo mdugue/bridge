@@ -13,6 +13,7 @@
 
 import type { DesignPlacement } from "./design-placement";
 import { DEG2RAD } from "./pose";
+import { extendHull } from "./open-roofs";
 
 /** A design's plan: cells of `cell` m from (x0, y0), EPSG; 1 where it
  *  stands. */
@@ -56,7 +57,7 @@ function placedVertices(
   const c = Math.cos(turn);
   const s = Math.sin(turn);
   const xy = new Float64Array(vertices * 3);
-  for (let v = 0; v < vertices; v++) {
+  for (let v = 0; v < vertices; v += 1) {
     const px = positions[v * 3];
     const py = positions[v * 3 + 1];
     const pz = positions[v * 3 + 2];
@@ -124,8 +125,8 @@ function eachTriangle(
   const triangles = Math.floor((index ? index.length : vertices) / 3);
   const at = (t: number, k: number) => (index ? index[t * 3 + k] : t * 3 + k);
   const p = [0, 0, 0, 0, 0, 0, 0, 0, 0];
-  for (let t = 0; t < triangles; t++) {
-    for (let k = 0; k < 3; k++) {
+  for (let t = 0; t < triangles; t += 1) {
+    for (let k = 0; k < 3; k += 1) {
       const v = at(t, k);
       p[k * 3] = xy[v * 3];
       p[k * 3 + 1] = xy[v * 3 + 1];
@@ -247,7 +248,7 @@ function markTriangle(
     z2: number
   ) => {
     const steps = Math.ceil(Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) * 2);
-    for (let i = 0; i <= steps; i++) {
+    for (let i = 0; i <= steps; i += 1) {
       const f = steps === 0 ? 0 : i / steps;
       set(
         Math.floor(x1 + (x2 - x1) * f),
@@ -267,9 +268,9 @@ function markTriangle(
   const c1 = Math.min(cols - 1, Math.ceil(Math.max(ax, bx, qx)));
   const r0 = Math.max(0, Math.floor(Math.min(ay, by, qy)));
   const r1 = Math.min(rows - 1, Math.ceil(Math.max(ay, by, qy)));
-  for (let r = r0; r <= r1; r++) {
+  for (let r = r0; r <= r1; r += 1) {
     const y = r + 0.5;
-    for (let c = c0; c <= c1; c++) {
+    for (let c = c0; c <= c1; c += 1) {
       const x = c + 0.5;
       const w0 = (bx - x) * (qy - y) - (qx - x) * (by - y);
       const w1 = (qx - x) * (ay - y) - (ax - x) * (qy - y);
@@ -310,12 +311,14 @@ export function inPlan(mask: PlanMask, x: number, y: number): boolean {
 /** Even-odd test of a point against one ring. */
 function inRing(ring: readonly [number, number][], x: number, y: number) {
   let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+  let j = ring.length - 1;
+  for (let i = 0; i < ring.length; i += 1) {
     const [xi, yi] = ring[i];
     const [xj, yj] = ring[j];
     if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
       inside = !inside;
     }
+    j = i;
   }
   return inside;
 }
@@ -352,9 +355,9 @@ export function coveredShare(
     for (let y = minY + step / 2; y < maxY; y += step) {
       for (let x = minX + step / 2; x < maxX; x += step) {
         if (inRing(ring, x, y)) {
-          samples++;
+          samples += 1;
           if (inPlan(mask, x, y)) {
-            covered++;
+            covered += 1;
           }
         }
       }
@@ -362,7 +365,7 @@ export function coveredShare(
     if (samples === 0 && ring.length > 0) {
       samples = 1;
       if (inPlan(mask, ring[0][0], ring[0][1])) {
-        covered++;
+        covered += 1;
       }
     }
     inside += samples;
@@ -378,11 +381,12 @@ export function coveredObjects(
   share = COVER_SHARE
 ): Set<number> {
   const out = new Set<number>();
-  footprints.forEach((polys, i) => {
+  for (let i = 0; i < footprints.length; i += 1) {
+    const polys = footprints[i];
     if (polys.length > 0 && coveredShare(mask, polys) >= share) {
       out.add(i);
     }
-  });
+  }
   return out;
 }
 
@@ -392,11 +396,11 @@ export function coveredObjects(
  */
 export function planHull(mask: PlanMask): [number, number][] | null {
   const points: [number, number][] = [];
-  for (let r = 0; r < mask.rows; r++) {
+  for (let r = 0; r < mask.rows; r += 1) {
     // a row's first and last marked cell carry its hull corners
     let first = -1;
     let last = -1;
-    for (let c = 0; c < mask.cols; c++) {
+    for (let c = 0; c < mask.cols; c += 1) {
       if (mask.cells[r * mask.cols + c] === 1) {
         if (first < 0) {
           first = c;
@@ -417,27 +421,13 @@ export function planHull(mask: PlanMask): [number, number][] | null {
 /** Andrew's monotone chain, anticlockwise. */
 export function convexHull(points: [number, number][]): [number, number][] {
   const sorted = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  const cross = (o: number[], a: number[], b: number[]) =>
-    (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
   const lower: [number, number][] = [];
   for (const p of sorted) {
-    while (
-      lower.length >= 2 &&
-      cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0
-    ) {
-      lower.pop();
-    }
-    lower.push(p);
+    extendHull(lower, p);
   }
   const upper: [number, number][] = [];
   for (const p of sorted.toReversed()) {
-    while (
-      upper.length >= 2 &&
-      cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0
-    ) {
-      upper.pop();
-    }
-    upper.push(p);
+    extendHull(upper, p);
   }
   return [...lower.slice(0, -1), ...upper.slice(0, -1)];
 }

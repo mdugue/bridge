@@ -5,9 +5,9 @@ import {
   decodeLook,
   encodeSnapshot,
   parseSnapshot,
-  type Snapshot,
   snapshotInstant,
 } from "./snapshot";
+import type { Snapshot } from "./snapshot";
 
 const valid: Snapshot = {
   v: 1,
@@ -51,14 +51,14 @@ test("malformed JSON", () => {
 });
 
 test("non-object root and missing camera", () => {
-  expect(reason("42")).toMatch(/snapshot must be an object/);
+  expect(reason("42")).toMatch(/snapshot must be an object/u);
   expect(reason(JSON.stringify({ v: 1, date: valid.date }))).toMatch(
-    /camera must be an object/
+    /camera must be an object/u
   );
 });
 
 test("non-numeric version", () => {
-  expect(reason(JSON.stringify({ ...valid, v: "1" }))).toMatch(/^v must be/);
+  expect(reason(JSON.stringify({ ...valid, v: "1" }))).toMatch(/^v must be/u);
 });
 
 test("camera fields must be finite numbers", () => {
@@ -74,17 +74,17 @@ test("camera fields must be finite numbers", () => {
 });
 
 test("camera mode and fov are range-checked", () => {
-  expect(reason(withCamera({ mode: "hover" }))).toMatch(/camera.mode/);
-  expect(reason(withCamera({ fov: 0 }))).toMatch(/camera.fov/);
-  expect(reason(withCamera({ fov: 180 }))).toMatch(/camera.fov/);
+  expect(reason(withCamera({ mode: "hover" }))).toMatch(/camera.mode/u);
+  expect(reason(withCamera({ fov: 0 }))).toMatch(/camera.fov/u);
+  expect(reason(withCamera({ fov: 180 }))).toMatch(/camera.fov/u);
 });
 
 test("date must parse", () => {
   expect(reason(JSON.stringify({ ...valid, date: "yesterday" }))).toMatch(
-    /^date must be/
+    /^date must be/u
   );
   expect(reason(JSON.stringify({ ...valid, date: 5 }))).toMatch(
-    /^date must be/
+    /^date must be/u
   );
 });
 
@@ -95,10 +95,10 @@ test("look percentages must be numbers", () => {
 });
 
 test("look flags are type- and enum-checked", () => {
-  expect(reason(withLook({ multiTuft: 1 }))).toMatch(/look.multiTuft/);
-  expect(reason(withLook({ bikeLayer: "on" }))).toMatch(/look.bikeLayer/);
-  expect(reason(withLook({ style: "ghost" }))).toMatch(/look.style/);
-  expect(reason(withLook({ style: 2 }))).toMatch(/look.style/);
+  expect(reason(withLook({ multiTuft: 1 }))).toMatch(/look.multiTuft/u);
+  expect(reason(withLook({ bikeLayer: "on" }))).toMatch(/look.bikeLayer/u);
+  expect(reason(withLook({ style: "ghost" }))).toMatch(/look.style/u);
+  expect(reason(withLook({ style: 2 }))).toMatch(/look.style/u);
 });
 
 // The controls the maintainer removed (2026-10-10): on the performance PR
@@ -273,16 +273,16 @@ test("a Modell view round-trips with the camera, and is checked", () => {
   }
   expect(
     reason(withCamera({ model: { ...model, preset: "fisheye" } }))
-  ).toMatch(/camera\.model\.preset/);
+  ).toMatch(/camera\.model\.preset/u);
   expect(reason(withCamera({ model: { ...model, scale: 0 } }))).toMatch(
-    /camera\.model\.scale/
+    /camera\.model\.scale/u
   );
   expect(reason(withCamera({ model: { ...model, tiltDeg: 120 } }))).toMatch(
-    /camera\.model\.tiltDeg/
+    /camera\.model\.tiltDeg/u
   );
   expect(
     reason(withCamera({ model: { ...model, pivot: { x: 1, y: "2", z: 3 } } }))
-  ).toMatch(/camera\.model\.pivot\.y/);
+  ).toMatch(/camera\.model\.pivot\.y/u);
 });
 
 test("a snapshot without a Modell view is the perspective one, as before", () => {

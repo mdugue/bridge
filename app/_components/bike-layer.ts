@@ -25,14 +25,15 @@ import {
 } from "three/tsl";
 import {
   acrossStreet,
-  type BikeCounter,
   BIKE_DIRECTION_TINTS,
   BIKE_STALE_TINT,
   BIKE_POLL_MS,
   bikeColumnHeight,
   isStale,
 } from "@/lib/city/bike-counts";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import type { BikeCounter } from "@/lib/city/bike-counts";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import { fetchOptionalJson } from "./fetch-optional";
 import {
   dataMarkAlpha,
@@ -94,11 +95,18 @@ const RING_SPEED = 0.18;
 /** At most this many columns (the city runs 35 counters). */
 const CAPACITY = 128;
 
+/** No document (a test, a worker): never hidden. */
+const hidden = (): boolean =>
+  typeof document === "undefined" ? false : document.hidden;
+
 /** A unit column standing on its foot (y 0..1), the top a soft dome. */
 function columnGeometry(): LatheGeometry {
-  const points = [new Vector2(0, 0), new Vector2(COLUMN_RADIUS, 0)];
-  points.push(new Vector2(COLUMN_RADIUS, 1 - CAP_SHARE));
-  for (let i = 1; i <= 6; i++) {
+  const points = [
+    new Vector2(0, 0),
+    new Vector2(COLUMN_RADIUS, 0),
+    new Vector2(COLUMN_RADIUS, 1 - CAP_SHARE),
+  ];
+  for (let i = 1; i <= 6; i += 1) {
     const a = (i / 6) * (Math.PI / 2);
     points.push(
       new Vector2(
@@ -323,7 +331,7 @@ export function createBikeLayer(ctx: GroundContext): BikeLayer {
         pools.setColorAt(n, tint);
         rates.setX(n, stale ? 0 : RING_SPEED * Math.sqrt(d.count));
         key.push(`${n}:${w.x.toFixed(1)}:${ground.toFixed(2)}:${h}:${stale}`);
-        n++;
+        n += 1;
       }
     }
     const next = key.join("|");
@@ -388,9 +396,6 @@ export function createBikeFeed(opts: {
   let aborter: AbortController | null = null;
   /** performance.now() of the last counts heard */
   let lastRead = Number.NEGATIVE_INFINITY;
-  // no document (a test, a worker): never hidden
-  const hidden = () =>
-    typeof document === "undefined" ? false : document.hidden;
   const read = async () => {
     if (hidden()) {
       return;
@@ -433,7 +438,9 @@ export function createBikeFeed(opts: {
         return;
       }
       void read();
-      timer = setInterval(() => void read(), BIKE_POLL_MS);
+      timer = setInterval(() => {
+        void read();
+      }, BIKE_POLL_MS);
       if (typeof document !== "undefined") {
         document.addEventListener("visibilitychange", onVisibility);
       }

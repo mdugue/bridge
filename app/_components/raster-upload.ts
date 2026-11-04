@@ -68,11 +68,11 @@ export async function fetchRasterBytes(
 
 /** Runs a raster's decode and upload in its turn (see `rasterGate`);
  *  rejects with the abort when `signal` fires while it waits. */
-export function inRasterTurn<T>(
+export async function inRasterTurn<T>(
   task: () => Promise<T>,
   signal?: AbortSignal
 ): Promise<T> {
-  return rasterGate.run(task, signal);
+  return await rasterGate.run(task, signal);
 }
 
 /** Drops a data texture's CPU copy once the GPU has it: dead weight after
@@ -102,8 +102,8 @@ export function uploadNow(
   }
   try {
     renderer.initTexture(texture);
-  } catch (err) {
+  } catch (error) {
     texture.dispose();
-    throw err;
+    throw error;
   }
 }

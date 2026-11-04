@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { nestRings, type PlanFeature, planMesh } from "./plan-geometry";
+import { nestRings, planMesh } from "./plan-geometry";
+import type { PlanFeature } from "./plan-geometry";
 import { PLAN_LOOKS, planClass } from "./plan-classes";
 
 const square = (x0: number, y0: number, a: number) =>
@@ -25,6 +26,8 @@ function normalsY(p: Float32Array): number[] {
 
 const flatGround = () => 100;
 
+const byValue = (a: number, b: number) => a - b;
+
 describe("planMesh", () => {
   test("an area lies on the ground, lifted by its class, facing up", () => {
     const mesh = planMesh(
@@ -48,7 +51,7 @@ describe("planMesh", () => {
     // a park outline: 3,000 vertices on a wobbly 400 m circle, whose
     // triangulation is slivers the cut would split along their length
     const ring: [number, number][] = [];
-    for (let i = 0; i < 3000; i++) {
+    for (let i = 0; i < 3000; i += 1) {
       const a = (i / 3000) * Math.PI * 2;
       const r = 400 + 3 * Math.sin(i * 1.7);
       ring.push([r * Math.cos(a), r * Math.sin(a)]);
@@ -224,7 +227,6 @@ describe("planMesh", () => {
       flatGround
     );
     const p = mesh.groups[0].positions;
-    const byValue = (a: number, b: number) => a - b;
     expect([p[1], p[4], p[7]].sort(byValue)).toEqual(
       [110, 110.5, 111].map((v) => Math.fround(v))
     );

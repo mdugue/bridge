@@ -1,18 +1,14 @@
 import { expect, test } from "bun:test";
 import { SCENE_TOOLS } from "@/lib/city/ask-tools";
-import {
-  AERIAL_REACH,
-  type AskScene,
-  sceneTools,
-  showPlaces,
-} from "./ask-scene-tools";
+import { AERIAL_REACH, sceneTools, showPlaces } from "./ask-scene-tools";
+import type { AskScene } from "./ask-scene-tools";
 import type { ViewpointGeometry } from "@/lib/city/site";
 
 const STUB: AskScene = {
-  abandon: () => undefined,
+  abandon: () => {},
   from: () => null,
   frame: () => ({ aspect: 1.5 }),
-  look: () => Promise.resolve({}),
+  look: async () => ({}),
   moment: () => ({
     at: null,
     now: new Date(),
@@ -20,10 +16,10 @@ const STUB: AskScene = {
     layers: [],
   }),
   setLayer: () => true,
-  setListening: () => undefined,
-  setStyle: () => undefined,
+  setListening: () => {},
+  setStyle: () => {},
   setTime: () => "",
-  select: () => undefined,
+  select: () => {},
   show: () => true,
   within: () => true,
   where: () => ({}),

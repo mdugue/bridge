@@ -3,16 +3,18 @@ import {
   BufferAttribute,
   BufferGeometry,
   InterpolationSamplingType,
-  type Material,
-  type Node,
-  type NodeBuilder,
   MeshLambertNodeMaterial,
   MeshStandardNodeMaterial,
   MultiplyBlending,
-  type Texture,
-  type UniformNode,
+} from "three/webgpu";
+import type {
+  Material,
+  Node,
+  NodeBuilder,
+  Texture,
+  UniformNode,
+  Vector3,
   Vector2,
-  type Vector3,
 } from "three/webgpu";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
@@ -75,26 +77,17 @@ import {
 } from "./ground-detail";
 import { instanceFloat, Instances } from "./instancing";
 import {
-  type Slots,
   setGraph,
   setSlots,
   slotsOf,
   ownSlotTexture,
   ownSlotValue,
 } from "./material-slots";
-import {
-  type F,
-  rasterUv,
-  type Tex,
-  type V2,
-  type V3,
-  type V4,
-} from "./shader-chunks";
-import {
-  applyGroundLight,
-  type GroundLight,
-  groundLightKey,
-} from "./sky-light";
+import type { Slots } from "./material-slots";
+import { rasterUv } from "./shader-chunks";
+import type { F, Tex, V2, V3, V4 } from "./shader-chunks";
+import { applyGroundLight, groundLightKey } from "./sky-light";
+import type { GroundLight } from "./sky-light";
 
 /**
  * Where a tree meets the ground. A trunk alone stabbed into a flat ground
@@ -284,8 +277,8 @@ export function buildFootGeos(): FootGeos {
   const n = QUAD_CELLS;
   const position = new Float32Array((n + 1) * (n + 1) * 3);
   const normal = new Float32Array(position.length);
-  for (let j = 0; j <= n; j++) {
-    for (let i = 0; i <= n; i++) {
+  for (let j = 0; j <= n; j += 1) {
+    for (let i = 0; i <= n; i += 1) {
       const k = (j * (n + 1) + i) * 3;
       position[k] = -1 + (2 * i) / n;
       position[k + 2] = -1 + (2 * j) / n;
@@ -297,8 +290,8 @@ export function buildFootGeos(): FootGeos {
   quad.setAttribute("normal", new BufferAttribute(normal, 3));
   const index: number[] = [];
   const at = (i: number, j: number) => j * (n + 1) + i;
-  for (let j = 0; j < n; j++) {
-    for (let i = 0; i < n; i++) {
+  for (let j = 0; j < n; j += 1) {
+    for (let i = 0; i < n; i += 1) {
       // wound counter-clockwise seen from above (+y)
       const [p, q, r, t] = [
         at(i, j),
@@ -353,7 +346,7 @@ function buildTuft(): BufferGeometry {
     const x = Math.sin(seed * 12.9898 + 4.1) * 43_758.545;
     return x - Math.floor(x);
   };
-  for (let b = 0; b < TUFT_BLADES; b++) {
+  for (let b = 0; b < TUFT_BLADES; b += 1) {
     const angle = ((b + rnd() * 0.8) / TUFT_BLADES) * Math.PI * 2;
     // more blades close in, where the mower never reaches
     const t = rnd() ** 1.6;
@@ -369,7 +362,7 @@ function buildTuft(): BufferGeometry {
     const right = [ox * d + wx, 0, oz * d + wz];
     const tip = [ox * (d + lean * h), h, oz * (d + lean * h)];
     position.set([...left, ...right, ...tip, ...right, ...left, ...tip], k);
-    for (let v = 0; v < 6; v++) {
+    for (let v = 0; v < 6; v += 1) {
       normal[k + v * 3 + 1] = 1;
     }
   }
@@ -432,8 +425,14 @@ export function treeFeet(
     if ((part === "litter" && needle) || !material) {
       continue;
     }
+    let geo = geos.quad;
+    if (part === "guard") {
+      geo = geos.hoop;
+    } else if (part === "tuft") {
+      geo = geos.tuft;
+    }
     const feet = new Instances(
-      part === "guard" ? geos.hoop : part === "tuft" ? geos.tuft : geos.quad,
+      geo,
       material,
       trunks.capacity,
       trunks.instanceMatrix
@@ -560,8 +559,10 @@ function footSlots(r: FootRasters): FootSlots {
   };
 }
 
+/** Column `i` of the tree's instance matrix. */
+const col = (i: number) => attribute(`iMat${i}`, "vec4");
+
 function footFrame(s: FootSlots, size: [number, number]): FootFrame {
-  const col = (i: number) => attribute(`iMat${i}`, "vec4");
   // the trunk's foot in the content's frame (its matrix, lowered by its
   // drop) and its drawn foot radius
   const foot = col(3).xyz.sub(col(1).xyz.mul(instanceFloat(DROP)));
@@ -1142,7 +1143,7 @@ function shadeGraph(
   const gapHeight = sky.y;
   const xy = tree.xy.add(offset);
   const sunLit = property("float", "footSunLit");
-  const output = Fn(() => {
+  const factor = Fn(() => {
     const d = length(offset);
     const ragged = gdNoise(xy.mul(0.7)).sub(0.5).mul(crown.mul(0.35));
     const cover = float(1)
@@ -1215,7 +1216,8 @@ function shadeGraph(
       // the gaps come in clusters (where the crown is thin)
       const gaps = smoothstep(0.38, 0.78, gdNoise(xy.mul(0.55).add(phase)));
       const radius = clamp(gapHeight.mul(SUN_DIAMETER * 0.5), 0.035, 0.1);
-      for (const [n, cellM] of DAPPLE_CELLS.entries()) {
+      for (let n = 0; n < DAPPLE_CELLS.length; n += 1) {
+        const cellM = DAPPLE_CELLS[n];
         const turn = n * 0.83;
         const ct = Math.cos(turn);
         const st = Math.sin(turn);
@@ -1244,10 +1246,12 @@ function shadeGraph(
           .mul(room.mul(2))
           .add(vec2(sway, sway.mul(0.4)))
           .add(vec2(flutter.mul(0.012 / cellM), 0));
-        const r = radius.div(cellM).mul(h2.mul(0.35).add(0.8));
+        const spotR = radius.div(cellM).mul(h2.mul(0.35).add(0.8));
         const dist = length(at.sub(cell).sub(0.5).sub(centre));
         // the penumbra: a sun image's rim is soft
-        const spot = float(1).sub(smoothstep(r.mul(0.55), r.mul(1.15), dist));
+        const spot = float(1).sub(
+          smoothstep(spotR.mul(0.55), spotR.mul(1.15), dist)
+        );
         // some leaves blink a fleck right out, most only dim it
         const blink = mix(
           float(1),
@@ -1256,7 +1260,9 @@ function shadeGraph(
         ).mul(flutter.mul(0.15).add(0.85));
         const lit = step(h2, gaps.mul(0.75));
         fleck.assign(max(fleck, spot.mul(blink).mul(lit)));
-        coverMean.addAssign(gaps.mul(0.75 * 0.5).mul(r.mul(r).mul(3.1)));
+        coverMean.addAssign(
+          gaps.mul(0.75 * 0.5).mul(spotR.mul(spotR).mul(3.1))
+        );
       }
     });
     // past a few pixels a fleck would shimmer: their mean
@@ -1265,7 +1271,7 @@ function shadeGraph(
     k.mulAssign(dapple.mul(DAPPLE).add(1));
     return mix(vec3(1), k, fade);
   })();
-  return { output, position, sunLit };
+  return { output: factor, position, sunLit };
 }
 
 /**
@@ -1383,7 +1389,7 @@ function tuftGraph(r: FootRasters): PitGraph {
   const dir = normalize(p.xz.add(vec2(1e-4, 0)));
   // out to the trunk's own foot, its roots' bulge (the trunk's lobes, in
   // the trunk's turned frame as `rootAt` reads them)
-  const lobe = rootAt(dir, f.lobes, f.phase, f.axisX, f.axisZ).lobe;
+  const { lobe } = rootAt(dir, f.lobes, f.phase, f.axisX, f.axisZ);
   const out = f.rt.mul(lobe.mul(lobe).mul(0.55).add(1)).sub(TUFT_FOOT);
   const tall = p.y.mul(mix(0.8, 1.3, seed)).mul(smoothstep(0, 0.6, f.fade));
   const sway = sin(footClock.mul(1.3).add(seed.mul(40)).add(p.x.mul(9)))
@@ -1491,7 +1497,7 @@ function shadeMaterial(
     const glaze = vec4(graph.output, 1);
     // reason: three's NodeBuilder reads the scene's `fogNode` (what its
     // own setupFog uses) but its types do not declare it.
-    const fogNode = (builder as NodeBuilder & { fogNode?: V4 | null }).fogNode;
+    const { fogNode } = builder as NodeBuilder & { fogNode?: V4 | null };
     if (!fogNode) {
       return glaze;
     }

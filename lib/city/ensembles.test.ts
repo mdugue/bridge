@@ -100,6 +100,6 @@ test("an ensemble's group is its outline's, never 0 for one", () => {
   expect(ensembleGroup("r5764")).not.toBe(ensembleGroup("w5764"));
   expect(ensembleGroup("r5764")).toBeGreaterThan(0);
   // the ids themselves: two outlines never share a key
-  expect(ensembleGroup("w888364452")).toBe(888364452);
+  expect(ensembleGroup("w888364452")).toBe(888_364_452);
   expect(ensembleGroup("r5764")).toBe(2 ** 31 + 5764);
 });

@@ -38,7 +38,7 @@ function readParts(view: DataView, at: number, type: number): PlanPoint[][] {
   return starts.map((start, p) => {
     const end = starts[p + 1] ?? numPoints;
     const part: PlanPoint[] = [];
-    for (let i = start; i < end; i++) {
+    for (let i = start; i < end; i += 1) {
       const x = view.getFloat64(pointsAt + i * 16, true);
       const y = view.getFloat64(pointsAt + i * 16 + 8, true);
       const zi = z(i);
@@ -103,16 +103,16 @@ export function readShp(
  *  none we know. */
 export function cpgDecoder(cpg: string | null): TextDecoder | null {
   const name = (cpg ?? "").trim().toLowerCase();
-  if (/8859-15/.test(name)) {
+  if (name.includes("8859-15")) {
     return new TextDecoder("iso-8859-15");
   }
-  if (/1252|latin|8859-1|ansi/.test(name)) {
+  if (/1252|latin|8859-1|ansi/u.test(name)) {
     return new TextDecoder("windows-1252");
   }
-  if (/1250/.test(name)) {
+  if (name.includes("1250")) {
     return new TextDecoder("windows-1250");
   }
-  if (/utf-?8/.test(name)) {
+  if (/utf-?8/u.test(name)) {
     return new TextDecoder("utf-8");
   }
   return null;
@@ -156,13 +156,13 @@ export function readDbf(
     const nameBytes = raw.subarray(at, at + 11);
     const end = nameBytes.indexOf(0);
     fields.push({
-      name: decoder.decode(nameBytes.subarray(0, end < 0 ? 11 : end)),
-      type: String.fromCharCode(raw[at + 11]),
+      name: decoder.decode(nameBytes.subarray(0, end === -1 ? 11 : end)),
+      type: String.fromCodePoint(raw[at + 11] ?? 0),
       length: raw[at + 16],
     });
   }
   const out: Record<string, string | number | null>[] = [];
-  for (let r = 0; r < count; r++) {
+  for (let r = 0; r < count; r += 1) {
     let at = headerLength + r * recordLength + 1;
     const record: Record<string, string | number | null> = {};
     for (const f of fields) {
@@ -189,10 +189,11 @@ export function readShapefile(
   const shapes = readShp(shp);
   const rows = dbf ? readDbf(dbf, cpgDecoder(cpg)) : [];
   const out: GeoRecord[] = [];
-  shapes.forEach((shape, i) => {
+  for (let i = 0; i < shapes.length; i += 1) {
+    const shape = shapes[i];
     if (shape) {
       out.push({ ...shape, attributes: rows[i] ?? {} });
     }
-  });
+  }
   return out;
 }

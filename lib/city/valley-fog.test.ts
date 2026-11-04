@@ -3,10 +3,10 @@ import {
   groundRelief,
   VALLEY_FALLOFF_MAX,
   VALLEY_FALLOFF_MIN,
-  type ValleyRim,
   valleyDepth,
   valleyFalloff,
 } from "./valley-fog";
+import type { ValleyRim } from "./valley-fog";
 
 test("the relief is the river and the typical high ground, not the extremes", () => {
   const heights = [
