@@ -350,7 +350,8 @@ function dir3(f: Frame, ds: number, dout: number, dz: number): V3 {
  *  given. */
 function newell(p: readonly V3[]): V3 {
   const n: V3 = [0, 0, 0];
-  for (const [i, a] of p.entries()) {
+  for (let i = 0; i < p.length; i += 1) {
+    const a = p[i];
     const b = p[(i + 1) % p.length];
     n[0] += (a[1] - b[1]) * (a[2] + b[2]);
     n[1] += (a[2] - b[2]) * (a[0] + b[0]);

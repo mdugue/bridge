@@ -266,7 +266,8 @@ function groupGeometry(
     }
     const size = from.itemSize;
     const array = new Float32Array(sources.length * size);
-    for (const [i, v] of sources.entries()) {
+    for (let i = 0; i < sources.length; i += 1) {
+      const v = sources[i];
       for (let c = 0; c < size; c += 1) {
         array[i * size + c] = from.getComponent(v, c);
       }
@@ -523,7 +524,8 @@ function mergePieces(
   const parts = partsRecorder();
   let vertex = 0;
   let triangle = 0;
-  for (const [group, material] of materials.entries()) {
+  for (let group = 0; group < materials.length; group += 1) {
+    const material = materials[group];
     const start = triangle;
     for (const piece of pieces) {
       if (piece.material !== material) {

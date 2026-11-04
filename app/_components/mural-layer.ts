@@ -328,7 +328,8 @@ export async function buildMurals(
   const meshes: Mesh[] = [];
   const shown: Mural[] = [];
   let bytes = 0;
-  for (const [i, mural] of murals.entries()) {
+  for (let i = 0; i < murals.length; i += 1) {
+    const mural = murals[i];
     const drawing = drawings[i];
     if (!drawing) {
       continue;

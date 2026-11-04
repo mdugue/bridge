@@ -310,7 +310,8 @@ export function lineProfile(
         idx.map((j) => d[j]),
         opts
       );
-      for (const [k, j] of idx.entries()) {
+      for (let k = 0; k < idx.length; k += 1) {
+        const j = idx[k];
         out[j] = fit[k];
       }
       first = -1;

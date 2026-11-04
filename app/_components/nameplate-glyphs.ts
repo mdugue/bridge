@@ -318,7 +318,8 @@ function setLine(
   const pens: number[] = [];
   const glyphs: Glyph[] = [];
   let prefix = "";
-  for (const [i, ch] of chars.entries()) {
+  for (let i = 0; i < chars.length; i += 1) {
+    const ch = chars[i];
     // the pen where the letter starts with its kern to the one before:
     // the run through it, less its own advance
     prefix += ch;
@@ -527,7 +528,8 @@ export function layPlate(
   const place = (l: SetLine, baseline: number) => {
     const w = widthOf(l);
     const start = alignedStart(align, width, w);
-    for (const [i, g] of l.glyphs.entries()) {
+    for (let i = 0; i < l.glyphs.length; i += 1) {
+      const g = l.glyphs[i];
       const x0 = start + (l.pens[i] + g.left) * l.scale;
       const y1 = baseline + g.top * l.scale;
       b.quad(
@@ -547,10 +549,12 @@ export function layPlate(
       );
     }
   };
-  for (const [i, t] of titles.entries()) {
+  for (let i = 0; i < titles.length; i += 1) {
+    const t = titles[i];
     place(t, titleBase + (titles.length - 1 - i) * TITLE_LEADING);
   }
-  for (const [i, l] of lines.entries()) {
+  for (let i = 0; i < lines.length; i += 1) {
+    const l = lines[i];
     place(l, baselines[i]);
   }
   const positions = new Float32Array(b.positions);
@@ -659,7 +663,8 @@ export function shadowMask(
   const sx = width / block.width;
   const sy = height / block.height;
   const raw = new Uint8Array(width * height);
-  for (const [q, cast] of casts.entries()) {
+  for (let q = 0; q < casts.length; q += 1) {
+    const cast = casts[q];
     const at = (corner: number) => {
       const i = (q * 4 + corner) * 3;
       return [

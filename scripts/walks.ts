@@ -80,7 +80,8 @@ function writeShots(only?: string): void {
   mkdirSync(path.join(ROOT, "shots"), { recursive: true });
   const today = new Date();
   for (const { walk } of walks.filter((w) => !only || w.walk.id === only)) {
-    for (const [i, stop] of walk.stops.entries()) {
+    for (let i = 0; i < walk.stops.length; i += 1) {
+      const stop = walk.stops[i];
       const camera = stopCamera(stop, offset);
       const date = stopDate(stop, today);
       const snapshot = {

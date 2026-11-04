@@ -408,7 +408,8 @@ export function withFaceRoofColours(
     return v;
   }
   const byObject = new Map<number, Map<string, readonly number[]>>();
-  for (const [index, id] of keys.entries()) {
+  for (let index = 0; index < keys.length; index += 1) {
+    const id = keys[index];
     const list = faces[id];
     if (list?.length) {
       byObject.set(
@@ -480,7 +481,8 @@ export function appendScanStructures(
   const positions: number[] = [];
   const objectIds: number[] = [];
   const isRoof: number[] = [];
-  for (const [i, f] of features.entries()) {
+  for (let i = 0; i < features.length; i += 1) {
+    const f = features[i];
     const box = structureMesh(f, baked.offset);
     const outline = structureCorners(f);
     const z = f.properties?.z;
@@ -549,7 +551,8 @@ export function appendGapStructures(
   const objectIds: number[] = [];
   const isRoof: number[] = [];
   const normals: number[] = [];
-  for (const [i, f] of features.entries()) {
+  for (let i = 0; i < features.length; i += 1) {
+    const f = features[i];
     const p = f.properties;
     const shaped = shapedGap(f, baked.offset);
     const mesh = shaped ?? structureShape(f, baked.offset, triangulateXY);
@@ -795,7 +798,8 @@ function replacedObjects(
   byId: ReadonlyMap<string, MeasuredRoofFeature[]>
 ): Map<number, MeasuredRoofFeature[]> {
   const replaced = new Map<number, MeasuredRoofFeature[]>();
-  for (const [index, id] of keys.entries()) {
+  for (let index = 0; index < keys.length; index += 1) {
+    const id = keys[index];
     const parts = byId.get(id);
     if (parts) {
       replaced.set(index, parts);
@@ -827,7 +831,8 @@ function meshRoofRgb(
   own: ReadonlyMap<number, number[]>
 ): number[] {
   const out: number[] = [];
-  for (const [k, part] of mesh.parts.entries()) {
+  for (let k = 0; k < mesh.parts.length; k += 1) {
+    const part = mesh.parts[k];
     const c = mesh.isRoof[k] === 1 ? own.get(part) : undefined;
     out.push(...(c?.length === 3 ? c : FLAT_RGB));
   }
@@ -934,7 +939,8 @@ export function openRoofObjects(
   keys: string[]
 ): Set<number> {
   const out = new Set<number>();
-  for (const [index, id] of keys.entries()) {
+  for (let index = 0; index < keys.length; index += 1) {
+    const id = keys[index];
     const root = doc.CityObjects[keys[rootOf(doc, keys, index)]];
     const attrs = inheritedAttributes(
       doc.CityObjects[id].attributes ?? {},
@@ -1192,7 +1198,8 @@ function shareBuildingFacades(
   objects: CityObjectRow[],
   hosts: WindowExtra[]
 ): void {
-  for (const [i, o] of objects.entries()) {
+  for (let i = 0; i < objects.length; i += 1) {
+    const o = objects[i];
     const own = partFacade(
       hosts[i].monumental ?? false,
       i !== o.root && (hosts[o.root].monumental ?? false),
@@ -1354,7 +1361,8 @@ export function bakeCityMesh(
   // A Building with parts answers for its whole tree (the inquiry card
   // reads it): the union of the footprints, the tree's height.
   const trees = new Map<number, number[]>();
-  for (const [i, o] of objects.entries()) {
+  for (let i = 0; i < objects.length; i += 1) {
+    const o = objects[i];
     trees.set(o.root, [...(trees.get(o.root) ?? []), i]);
   }
   for (const [root, members] of trees) {
@@ -2645,7 +2653,8 @@ export function markTownHouses(
   objects: CityObjectRow[],
   hosts: WindowExtra[]
 ): void {
-  for (const [i, o] of objects.entries()) {
+  for (let i = 0; i < objects.length; i += 1) {
+    const o = objects[i];
     if (
       hasObjectFlag(o.flags, OBJECT_FLAG_FLAT_ROOF) &&
       (o.source ?? OBJECT_SOURCE_LOD2) === OBJECT_SOURCE_LOD2 &&
@@ -2718,7 +2727,8 @@ export function liftToStreet(
     }
   }
   const asBuilt = new Map<number, { baseZ: number; eaveH: number }>();
-  for (const [i, o] of objects.entries()) {
+  for (let i = 0; i < objects.length; i += 1) {
+    const o = objects[i];
     const g = ground.get(o.root);
     if (!g || (o.source ?? OBJECT_SOURCE_LOD2) !== OBJECT_SOURCE_LOD2) {
       continue;
@@ -2759,7 +2769,8 @@ function groundOf(ground: WallGround | undefined): Map<number, number[]> {
   if (!ground) {
     return out;
   }
-  for (const [k, rise] of ground.rises.entries()) {
+  for (let k = 0; k < ground.rises.length; k += 1) {
+    const rise = ground.rises[k];
     if (Number.isNaN(rise)) {
       continue;
     }

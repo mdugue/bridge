@@ -189,7 +189,8 @@ export function readShapefile(
   const shapes = readShp(shp);
   const rows = dbf ? readDbf(dbf, cpgDecoder(cpg)) : [];
   const out: GeoRecord[] = [];
-  for (const [i, shape] of shapes.entries()) {
+  for (let i = 0; i < shapes.length; i += 1) {
+    const shape = shapes[i];
     if (shape) {
       out.push({ ...shape, attributes: rows[i] ?? {} });
     }

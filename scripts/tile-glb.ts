@@ -349,11 +349,13 @@ export function stringColumn(values: readonly string[]): {
   const encoder = new TextEncoder();
   const encoded = values.map((v) => encoder.encode(v));
   const offsets = new Uint32Array(values.length + 1);
-  for (const [i, e] of encoded.entries()) {
+  for (let i = 0; i < encoded.length; i += 1) {
+    const e = encoded[i];
     offsets[i + 1] = offsets[i] + e.length;
   }
   const bytes = new Uint8Array(offsets[values.length]);
-  for (const [i, e] of encoded.entries()) {
+  for (let i = 0; i < encoded.length; i += 1) {
+    const e = encoded[i];
     bytes.set(e, offsets[i]);
   }
   return { bytes, offsets };

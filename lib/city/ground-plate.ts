@@ -193,7 +193,8 @@ export function encodePlate(
   const per = n * n;
   const out = new Uint8Array(tiles.length * per * 3);
   const view = new DataView(out.buffer);
-  for (const [k, t] of tiles.entries()) {
+  for (let k = 0; k < tiles.length; k += 1) {
+    const t = tiles[k];
     if (t.heights.length !== per || t.classes.length !== per) {
       throw new Error(`plate: tile ${k} is not ${n}²`);
     }

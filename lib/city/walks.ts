@@ -418,7 +418,8 @@ export function walkProblems(walk: Walk): string[] {
     out.push(`${walk.id}: a walk has at least two stops`);
   }
   const ids = new Set<string>();
-  for (const [i, stop] of stops.entries()) {
+  for (let i = 0; i < stops.length; i += 1) {
+    const stop = stops[i];
     if (ids.has(stop.id)) {
       out.push(`${walk.id}: stop id ${stop.id} twice`);
     }

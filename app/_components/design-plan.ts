@@ -150,7 +150,8 @@ function gpkgRecords(
       continue;
     }
     const attributes: GeoRecord["attributes"] = {};
-    for (const [i, name] of result.columns.entries()) {
+    for (let i = 0; i < result.columns.length; i += 1) {
+      const name = result.columns[i];
       const v = values[i];
       if (i !== g && (typeof v === "string" || typeof v === "number")) {
         attributes[name] = v;

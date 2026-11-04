@@ -95,7 +95,8 @@ export function wallColors(
 ): Float32Array<ArrayBuffer> {
   const linear = MASONRY.map((m) => linearTone(WALL_TONES[m]));
   const out = new Float32Array(tones.length * 3);
-  for (const [i, t] of tones.entries()) {
+  for (let i = 0; i < tones.length; i += 1) {
+    const t = tones[i];
     out.set(linear[t] ?? linear[MASONRY.indexOf("stone")], i * 3);
   }
   return out;
@@ -308,7 +309,8 @@ const SAME_LEVEL_M = 1;
  */
 function stepRuns(steps: readonly (StepSnap | null)[]): number[] {
   const runs: number[] = [];
-  for (const [i, s] of steps.entries()) {
+  for (let i = 0; i < steps.length; i += 1) {
+    const s = steps[i];
     const prev = steps[i - 1];
     const same =
       s && prev && s.up === prev.up && Math.abs(s.hi - prev.hi) <= SAME_LEVEL_M;

@@ -134,7 +134,8 @@ export function withStoppedCallsAnswered<T extends UIMessage | ModelMessage>(
   const out: (T | ModelMessage)[] = [];
   // the open calls of the answer since the last question row
   let open = new Set<string>();
-  for (const [i, m] of messages.entries()) {
+  for (let i = 0; i < messages.length; i += 1) {
+    const m = messages[i];
     if (m.role === "user") {
       out.push(...[...open].map(stoppedResult));
       open = new Set();
@@ -354,10 +355,13 @@ export async function* scrubbed(
 ): AsyncIterable<StreamChunk> {
   try {
     for await (const chunk of stream) {
-      yield chunk.type === EventType.RUN_ERROR
-        ? // (the type only promises a text: an adapter may send anything)
-          errorChunk(String(chunk.message as unknown), key, chunk.code)
-        : chunk;
+      if (chunk.type === EventType.RUN_ERROR) {
+        // a text only by its type: an adapter may send anything
+        const message: unknown = chunk.message;
+        yield errorChunk(String(message), key, chunk.code);
+      } else {
+        yield chunk;
+      }
     }
   } catch (error) {
     yield errorChunk(

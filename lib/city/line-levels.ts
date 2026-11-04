@@ -162,8 +162,10 @@ class SampleIndex {
   readonly pieces: readonly Sampled[];
   constructor(pieces: readonly Sampled[]) {
     this.pieces = pieces;
-    for (const [piece, p] of pieces.entries()) {
-      for (const [i, pt] of p.pts.entries()) {
+    for (let piece = 0; piece < pieces.length; piece += 1) {
+      const p = pieces[piece];
+      for (let i = 0; i < p.pts.length; i += 1) {
+        const pt = p.pts[i];
         const k = cellKey(pt[0], pt[1]);
         let cell = this.cells.get(k);
         if (!cell) {

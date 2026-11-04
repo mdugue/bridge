@@ -123,9 +123,7 @@ export async function readDgm(
         }
   );
   if (!ArrayBuffer.isView(raster)) {
-    throw new TypeError(
-      "unexpected raster shape (expected one interleaved band)"
-    );
+    throw new Error("unexpected raster shape (expected one interleaved band)");
   }
   const noData = image.getGDALNoData();
   const elevations = new Float32Array(n * n);

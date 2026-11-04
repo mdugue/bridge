@@ -149,7 +149,8 @@ if (MODE.kind === "ground") {
 const baked: BakedTile[] = [];
 const footprintFiles = new Map<string, string>();
 const groundHeights: number[] = [];
-for (const [i, tile] of TILES.entries()) {
+for (let i = 0; i < TILES.length; i += 1) {
+  const tile = TILES[i];
   if (!OWN.has(tile)) {
     continue;
   }

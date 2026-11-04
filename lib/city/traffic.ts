@@ -206,7 +206,8 @@ export function openEnds(
   bounds?: readonly [number, number, number, number]
 ): [boolean, boolean][] {
   const ends: { f: number; p: Point2 }[] = [];
-  for (const [i, f] of features.entries()) {
+  for (let i = 0; i < features.length; i += 1) {
+    const f = features[i];
     const c = f.geometry.coordinates;
     const last = c.at(-1);
     if (c.length >= 2 && last) {

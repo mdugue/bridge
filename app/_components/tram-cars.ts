@@ -371,7 +371,8 @@ export function createTramCars(
     }
     slotOperator[slot] = k;
     const livery = TRAM_LIVERIES[operator];
-    for (const [i, p] of parts.entries()) {
+    for (let i = 0; i < parts.length; i += 1) {
+      const p = parts[i];
       if (p.tint) {
         sets[i].setColorAt(slot, tint.setHex(livery[p.tint]));
       }

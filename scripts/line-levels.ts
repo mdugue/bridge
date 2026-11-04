@@ -390,7 +390,8 @@ export function sitePassages(site: Site, levels: SiteLevels): Passage[] {
   const decks = bridgeDecks(bridges, OFFSET);
   const { pieces, of } = sitePieces(site);
   const out: Passage[] = [];
-  for (const [k, piece] of pieces.entries()) {
+  for (let k = 0; k < pieces.length; k += 1) {
+    const piece = pieces[k];
     const { tile, line, index, tracks } = of[k];
     const solved = levels[tile]?.[line]?.[index];
     const runs = solved?.lv ?? [];
@@ -400,7 +401,8 @@ export function sitePassages(site: Site, levels: SiteLevels): Passage[] {
     const pts = pieceSamples(piece);
     const z = solved?.lz ? decodeProfile(solved.lz) : [];
     const d: number[] = [];
-    for (const [i, p] of pts.entries()) {
+    for (let i = 0; i < pts.length; i += 1) {
+      const p = pts[i];
       d.push(
         i === 0
           ? 0
@@ -450,7 +452,8 @@ export function sitePassages(site: Site, levels: SiteLevels): Passage[] {
 export function siteBeds(site: Site, levels: SiteLevels): Bed[] {
   const { pieces, of } = sitePieces(site);
   const out: Bed[] = [];
-  for (const [k, piece] of pieces.entries()) {
+  for (let k = 0; k < pieces.length; k += 1) {
+    const piece = pieces[k];
     const { tile, line, index, bed } = of[k];
     const solved = levels[tile]?.[line]?.[index];
     if (!solved) {
@@ -460,7 +463,8 @@ export function siteBeds(site: Site, levels: SiteLevels): Bed[] {
     const z = decodeProfile(solved.lz);
     const pts = pieceSamples(piece);
     const d: number[] = [];
-    for (const [i, p] of pts.entries()) {
+    for (let i = 0; i < pts.length; i += 1) {
+      const p = pts[i];
       d.push(
         i === 0
           ? 0
@@ -485,7 +489,8 @@ export function siteBeds(site: Site, levels: SiteLevels): Bed[] {
       }
       run = { coords: [], z: [], kind };
     };
-    for (const [i, p] of pts.entries()) {
+    for (let i = 0; i < pts.length; i += 1) {
+      const p = pts[i];
       const zi = z[i];
       if (zi === null || zi === undefined) {
         flush("lay");
@@ -645,7 +650,8 @@ export async function measureJumps(
   const decks = siteDecks(site);
   const { pieces, of } = sitePieces(site);
   const report: JumpReport = { before: 0, after: 0, samples: 0, worst: [] };
-  for (const [k, piece] of pieces.entries()) {
+  for (let k = 0; k < pieces.length; k += 1) {
+    const piece = pieces[k];
     const { tile, line, index } = of[k];
     const baked = solved[tile]?.[line]?.[index];
     const runs = baked?.lv ?? [];
@@ -655,7 +661,8 @@ export async function measureJumps(
     let run = 0;
     const old: (number | null)[] = [];
     const now: (number | null)[] = [];
-    for (const [i, p] of pts.entries()) {
+    for (let i = 0; i < pts.length; i += 1) {
+      const p = pts[i];
       if (i > 0) {
         run += Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]);
       }

@@ -148,9 +148,11 @@ function groundPolysFromGeometry(
     geom.type === "Solid"
       ? (sem.values as (number | null)[][])
       : [sem.values as (number | null)[]];
-  for (const [shellIdx, faces] of shells.entries()) {
+  for (let shellIdx = 0; shellIdx < shells.length; shellIdx += 1) {
+    const faces = shells[shellIdx];
     const shellValues = values[shellIdx] ?? [];
-    for (const [faceIdx, face] of faces.entries()) {
+    for (let faceIdx = 0; faceIdx < faces.length; faceIdx += 1) {
+      const face = faces[faceIdx];
       const surfaceId = shellValues[faceIdx];
       if (surfaceId == null || !isGround(surfaceId)) {
         continue;

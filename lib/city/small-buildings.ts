@@ -38,7 +38,8 @@ export function structureCorners(
     y,
   }));
   let area = 0;
-  for (const [i, a] of corners.entries()) {
+  for (let i = 0; i < corners.length; i += 1) {
+    const a = corners[i];
     const b = corners[(i + 1) % 4];
     area += a.x * b.y - b.x * a.y;
   }

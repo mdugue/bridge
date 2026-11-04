@@ -401,7 +401,8 @@ function hangWire(
     return;
   }
   const top = { x: head.x, y: head.y + 0.15, z: head.z };
-  for (const [i, end] of wire.entries()) {
+  for (let i = 0; i < wire.length; i += 1) {
+    const end = wire[i];
     const at = liftedPt(end, HUNG_H + WIRE_END_LIFT, ctx);
     if (!at) {
       continue;

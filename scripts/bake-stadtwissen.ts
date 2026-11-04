@@ -266,7 +266,8 @@ export function monumentsOf(
   });
   const out: WissenMonument[] = [];
   let nth = 0;
-  for (const [k, { base, ...m }] of found.entries()) {
+  for (let k = 0; k < found.length; k += 1) {
+    const { base, ...m } = found[k];
     nth = found[k - 1]?.base === base ? nth + 1 : 1;
     out.push({ id: nth === 1 ? base : `${base}_${nth}`, ...m });
   }

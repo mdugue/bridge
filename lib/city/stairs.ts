@@ -879,7 +879,8 @@ export function stairGeometry(
       out.span("foot", [ar, feet[0]], [br, feet[1]]);
     }
   };
-  for (const [j, sections] of segments.entries()) {
+  for (let j = 0; j < segments.length; j += 1) {
+    const sections = segments[j];
     for (let i = 0; i < sections.length - 1; i += 1) {
       block(sections[i], sections[i + 1]);
     }

@@ -256,7 +256,8 @@ const cellKey = (x: number, z: number) =>
 
 function segmentGrid(runs: TrackRun[]): SegmentGrid {
   const grid: SegmentGrid = new Map();
-  for (const [r, run] of runs.entries()) {
+  for (let r = 0; r < runs.length; r += 1) {
+    const run = runs[r];
     for (let i = 1; i < run.pts.length; i += 1) {
       const a = run.pts[i - 1];
       const b = run.pts[i];

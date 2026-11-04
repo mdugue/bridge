@@ -308,7 +308,8 @@ function writePrism(
 ): void {
   const pos = g.getAttribute("position") as Float32BufferAttribute;
   const a = pos.array as Float32Array;
-  for (const [i, c] of corners.entries()) {
+  for (let i = 0; i < corners.length; i += 1) {
+    const c = corners[i];
     for (let k = 0; k < 3; k += 1) {
       a[i * 3 + k] = c[k];
       a[(i + 4) * 3 + k] = c[k] + d[k];
@@ -646,7 +647,8 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       return;
     }
     orderedBehind = behind;
-    for (const [k, side] of sides.entries()) {
+    for (let k = 0; k < sides.length; k += 1) {
+      const side = sides[k];
       // sides[k] is layer (layers − k), deepest first
       side.renderOrder = behind ? 3 + layers - 1 - k : 3 + k;
     }

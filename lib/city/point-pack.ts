@@ -88,7 +88,8 @@ export function packPoints(
   view.setUint32(12, flags, true);
   view.setFloat64(16, origin[0], true);
   view.setFloat64(24, origin[1], true);
-  for (const [i, p] of points.entries()) {
+  for (let i = 0; i < points.length; i += 1) {
+    const p = points[i];
     const at = HEADER_BYTES + i * stride * 4;
     view.setFloat32(at, p.x - origin[0], true);
     view.setFloat32(at + 4, p.y - origin[1], true);

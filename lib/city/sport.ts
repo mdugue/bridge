@@ -111,7 +111,8 @@ export function packSportTable(table: SportTable): {
   const rows = table.grounds;
   const width = rows.length;
   const data = new Float32Array(width * SPORT_ROW_FLOATS);
-  for (const [i, row] of rows.entries()) {
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i];
     const [cx, cy, angle, p1, p2, p3, surface, marking, shape] = row;
     const known =
       surface < SPORT_SURFACES.length &&

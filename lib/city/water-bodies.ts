@@ -324,13 +324,16 @@ function joinedBodies(tiles: TileWater[]): {
     }
     return r;
   };
-  for (const [i, a] of tiles.entries()) {
-    for (const [j, b] of tiles.entries()) {
+  for (let i = 0; i < tiles.length; i += 1) {
+    const a = tiles[i];
+    for (let j = 0; j < tiles.length; j += 1) {
+      const b = tiles[j];
       if (j <= i || !a.member || !b.member) {
         continue;
       }
       for (const [sa, sb] of sharedSides(a.bounds, b.bounds)) {
-        for (const [ka, ra] of a.member.bodies.entries()) {
+        for (let ka = 0; ka < a.member.bodies.length; ka += 1) {
+          const ra = a.member.bodies[ka];
           for (const [kb, rb] of b.member?.bodies.entries() ?? []) {
             if (overlaps(ra.edges?.[sa], rb.edges?.[sb])) {
               parent[root(base[i] + ka)] = root(base[j] + kb);
@@ -352,7 +355,8 @@ function joinedBodies(tiles: TileWater[]): {
 export function siteWaterTints(tiles: TileWater[]): Map<string, number[]> {
   const { base, root } = joinedBodies(tiles);
   const pools = new Map<number, { lab: Lab; seen: number }>();
-  for (const [i, t] of tiles.entries()) {
+  for (let i = 0; i < tiles.length; i += 1) {
+    const t = tiles[i];
     for (const [k, row] of t.member?.bodies.entries() ?? []) {
       if (!row.lab || !row.core) {
         continue;
@@ -367,7 +371,8 @@ export function siteWaterTints(tiles: TileWater[]): Map<string, number[]> {
     }
   }
   const out = new Map<string, number[]>();
-  for (const [i, t] of tiles.entries()) {
+  for (let i = 0; i < tiles.length; i += 1) {
+    const t = tiles[i];
     out.set(
       t.id,
       (t.member?.bodies ?? []).map((_, k) => {

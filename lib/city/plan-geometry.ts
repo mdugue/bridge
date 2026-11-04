@@ -344,7 +344,8 @@ function writeBuilding(
   for (const [a, b, c] of triangulate(rings)) {
     w.triangle(a, b, c, [top, top, top]);
   }
-  for (const [k, raw] of rings.entries()) {
+  for (let k = 0; k < rings.length; k += 1) {
+    const raw = rings[k];
     const ring = openRing(raw);
     // walls face out: the outer ring anticlockwise, holes clockwise — then
     // the outside lies right of each edge, and (a, b, b′) faces it
@@ -536,7 +537,8 @@ function writeAreas(
     sorted.map((f) => triangulate(f.rings)),
     drapeEdge(areas)
   );
-  for (const [rank, f] of sorted.entries()) {
+  for (let rank = 0; rank < sorted.length; rank += 1) {
+    const f = sorted[rank];
     const cls = f.cls ?? "other";
     const lift =
       PLAN_LOOKS[cls].lift + nestingDepth(outers, boxes, rank) * NEST_LIFT_M;

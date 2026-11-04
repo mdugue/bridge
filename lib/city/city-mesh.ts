@@ -161,7 +161,8 @@ export function markFlatRoofs(
       }
     }
   }
-  for (const [i, o] of objects.entries()) {
+  for (let i = 0; i < objects.length; i += 1) {
+    const o = objects[i];
     if (
       all[i] > 0 &&
       flat[i] >= FLAT_ROOF_SHARE * all[i] &&
@@ -419,7 +420,8 @@ export function objectTable(rows: readonly CityObjectRow[]): CityObjectTable {
     winStyle: new Uint32Array(count),
     winW: new Float32Array(count),
   };
-  for (const [i, r] of rows.entries()) {
+  for (let i = 0; i < rows.length; i += 1) {
+    const r = rows[i];
     table.baseZ[i] = r.baseZ;
     table.building[i] = r.building ? 1 : 0;
     table.eaveH[i] = r.eaveH;
@@ -547,7 +549,8 @@ export function footprintPolys(
   alive: (objectIndex: number) => boolean
 ): FootprintPoly[] {
   const out: FootprintPoly[] = [];
-  for (const [i, polys] of footprints.entries()) {
+  for (let i = 0; i < footprints.length; i += 1) {
+    const polys = footprints[i];
     if (alive(i)) {
       for (const pts of polys) {
         out.push({ pts });

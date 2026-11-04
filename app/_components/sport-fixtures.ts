@@ -192,7 +192,8 @@ export function buildSportFixtures(
     mesh.receiveShadow = true;
     meshes.push(mesh);
   }
-  for (const [i, mesh] of meshes.entries()) {
+  for (let i = 0; i < meshes.length; i += 1) {
+    const mesh = meshes[i];
     mesh.name = i === 0 && frames.length > 0 ? "sport-frames" : "sport-nets";
     group.add(mesh);
   }

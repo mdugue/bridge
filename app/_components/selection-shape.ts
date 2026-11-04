@@ -144,7 +144,8 @@ export function solidShape(
   crown: CrownForm = null
 ): Float32Array {
   const out: number[] = [];
-  for (const [k, s] of solids.entries()) {
+  for (let k = 0; k < solids.length; k += 1) {
+    const s = solids[k];
     if ("cylinder" in s) {
       const c = s.cylinder;
       const h = Math.max(c.y1 - c.y0, 0.1);

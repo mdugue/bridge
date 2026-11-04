@@ -1933,7 +1933,8 @@ export class DressingPlugin {
     }
     scene.add(dressedMurals.group);
     entry.murals = dressedMurals;
-    for (const [i, mesh] of dressedMurals.meshes.entries()) {
+    for (let i = 0; i < dressedMurals.meshes.length; i += 1) {
+      const mesh = dressedMurals.meshes[i];
       entry.city?.hang(mesh, dressedMurals.murals[i].building);
     }
     const tile = this.tileOf.get(scene);

@@ -396,7 +396,8 @@ function conformingRoof(rings: Point2[][], inner: readonly Point2[]): FaceRoof {
     let start = 0;
     const next = current.map((ring) => {
       const out: Point2[] = [];
-      for (const [i, p] of ring.entries()) {
+      for (let i = 0; i < ring.length; i += 1) {
+        const p = ring[i];
         const q = ring[(i + 1) % ring.length];
         const a = ids[start + i];
         const b = ids[start + ((i + 1) % ring.length)];
@@ -594,7 +595,8 @@ export function measuredRoofMesh(
     out.isRoof.push(roof);
     out.normals.push(...(normal ?? FLAT));
   };
-  for (const [index, f] of parts.entries()) {
+  for (let index = 0; index < parts.length; index += 1) {
+    const f = parts[index];
     const before = out.isRoof.length;
     addPrism(f, base, push);
     out.parts.push(...out.isRoof.slice(before).map(() => index));

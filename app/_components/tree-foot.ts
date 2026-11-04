@@ -1216,7 +1216,8 @@ function shadeGraph(
       // the gaps come in clusters (where the crown is thin)
       const gaps = smoothstep(0.38, 0.78, gdNoise(xy.mul(0.55).add(phase)));
       const radius = clamp(gapHeight.mul(SUN_DIAMETER * 0.5), 0.035, 0.1);
-      for (const [n, cellM] of DAPPLE_CELLS.entries()) {
+      for (let n = 0; n < DAPPLE_CELLS.length; n += 1) {
+        const cellM = DAPPLE_CELLS[n];
         const turn = n * 0.83;
         const ct = Math.cos(turn);
         const st = Math.sin(turn);

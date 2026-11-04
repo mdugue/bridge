@@ -28,6 +28,11 @@ export default defineConfig({
     // Reads every postMessage as window's: here they are channels' and workers'.
     "unicorn/require-post-message-target-origin": "off",
 
+    // A TypeError is a network failure to fetch-retry.ts: a data fault is not.
+    "unicorn/prefer-type-error": "off",
+    // A worker's URL stays explicit for the bundler: new URL("./x.ts", …).
+    "unicorn/relative-url-style": "off",
+
     // Takes `typedArray.slice()` for an array: its fix makes a plain one.
     "unicorn/prefer-spread": "off",
 
@@ -76,6 +81,12 @@ export default defineConfig({
         "lib/city/shapefile.ts",
       ],
       rules: { "unicorn/prefer-number-coercion": "off" },
+    },
+    {
+      // watchGone's listener is one per walk on purpose: three adds one
+      // function once per geometry, and the first walk's stop would take it.
+      files: ["app/_components/post-stack.ts"],
+      rules: { "unicorn/consistent-function-scoping": "off" },
     },
     {
       files: ["lib/city/terrain-geometry.ts"],

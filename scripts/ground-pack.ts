@@ -53,7 +53,8 @@ function arraysOf(ground: FineGround): {
 export function packGround(ground: FineGround): Uint8Array {
   const { arrays, bounds, n } = arraysOf(ground);
   const lengths = [0, 0, 0, 0];
-  for (const [i, a] of arrays.entries()) {
+  for (let i = 0; i < arrays.length; i += 1) {
+    const a = arrays[i];
     lengths[i] = a.length;
   }
   const size = arrays.reduce((sum, a) => sum + align(a.byteLength), 0);

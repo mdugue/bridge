@@ -1373,7 +1373,8 @@ function coveredBy(w: Wall, o: Wall): number {
 function markParty(walls: readonly Wall[]): void {
   const cells = walls.map(cellsOf);
   const grid = new Map<string, number[]>();
-  for (const [i, cs] of cells.entries()) {
+  for (let i = 0; i < cells.length; i += 1) {
+    const cs = cells[i];
     for (const c of cs) {
       const list = grid.get(c);
       if (list) {
@@ -1383,7 +1384,8 @@ function markParty(walls: readonly Wall[]): void {
       }
     }
   }
-  for (const [i, w] of walls.entries()) {
+  for (let i = 0; i < walls.length; i += 1) {
+    const w = walls[i];
     const seen = new Set<number>([i]);
     let covered = 0;
     for (const c of cells[i]) {

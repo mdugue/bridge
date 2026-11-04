@@ -149,7 +149,8 @@ function drawPictureFrame(
     return;
   }
   ctx.beginPath();
-  for (const [i, [x, y]] of corners.entries()) {
+  for (let i = 0; i < corners.length; i += 1) {
+    const [x, y] = corners[i];
     const { px, py } = epsgToMapPx(x, y, bounds, size);
     if (i === 0) {
       ctx.moveTo(px, py);

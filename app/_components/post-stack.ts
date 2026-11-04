@@ -898,9 +898,6 @@ export function createPostStack(
     const { geometry } = object as Drawable;
     return geometry !== undefined && gone.has(geometry);
   };
-  const noteGone = (event: { target: BufferGeometry }) => {
-    gone.add(event.target);
-  };
   /**
    * Notes in `gone` each of `list`'s geometries disposed until the returned
    * stop. A listener of each walk's own: three adds one function once per
@@ -914,9 +911,9 @@ export function createPostStack(
         geometries.add(o.geometry);
       }
     }
-    // (bind: a function of this walk's own, see above; `noteGone` itself
-    // would be the shared listener)
-    const onGone = noteGone.bind(undefined);
+    const onGone = (event: { target: BufferGeometry }) => {
+      gone.add(event.target);
+    };
     for (const g of geometries) {
       g.addEventListener("dispose", onGone);
     }

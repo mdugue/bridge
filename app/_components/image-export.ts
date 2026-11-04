@@ -214,7 +214,8 @@ function legend(
   const lines = legendLines(info, metresPerImagePx, heading);
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  for (const [i, line] of lines.entries()) {
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
     ctx.fillStyle = i === 0 ? INK : MUTED;
     ctx.font = `${i === 0 ? 600 : 400} ${(i === 0 ? 12 : 10) * unit}px ${FONT}`;
     ctx.fillText(
@@ -227,7 +228,8 @@ function legend(
   ctx.fillStyle = MUTED;
   ctx.font = `${9 * unit}px ${FONT}`;
   ctx.textAlign = "right";
-  for (const [i, line] of credits.entries()) {
+  for (let i = 0; i < credits.length; i += 1) {
+    const line = credits[i];
     ctx.fillText(line, width - pad, y + pad + i * 12 * unit);
   }
   return height;
@@ -337,7 +339,8 @@ export async function saveShadowStudy(
   let labelH = 0;
   let first: CapturedImage | null = null;
   try {
-    for (const [i, panel] of panels.entries()) {
+    for (let i = 0; i < panels.length; i += 1) {
+      const panel = panels[i];
       h.setSun(panel.date);
       const image = await h.captureImage();
       if (!sheet) {
@@ -379,11 +382,13 @@ export async function saveShadowStudy(
   ctx.font = `600 ${11 * unit}px ${FONT}`;
   ctx.textBaseline = "middle";
   ctx.textAlign = "center";
-  for (const [col, hour] of STUDY_HOURS.entries()) {
+  for (let col = 0; col < STUDY_HOURS.length; col += 1) {
+    const hour = STUDY_HOURS[col];
     ctx.fillText(`${hour}:00 Uhr`, labelW + (col + 0.5) * w, labelH / 2);
   }
   ctx.textAlign = "left";
-  for (const [row, d] of STUDY_DATES.entries()) {
+  for (let row = 0; row < STUDY_DATES.length; row += 1) {
+    const d = STUDY_DATES[row];
     ctx.fillText(d.label, 8 * unit, labelH + (row + 0.5) * hgt);
   }
   // the panels' hairlines

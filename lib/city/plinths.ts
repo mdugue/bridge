@@ -138,7 +138,8 @@ function extrude(
       out.normals.push(nn[0], nn[1], nn[2]);
     }
   };
-  for (const [k, p] of profile.entries()) {
+  for (let k = 0; k < profile.length; k += 1) {
+    const p = profile[k];
     if (hidden.includes(k)) {
       continue;
     }
@@ -206,7 +207,8 @@ export function plinthPieces(
     });
   const root = cornerGroups(pieces);
   const level = new Map<number, { foot: number; top: number }>();
-  for (const [i, q] of pieces.entries()) {
+  for (let i = 0; i < pieces.length; i += 1) {
+    const q = pieces[i];
     const r = root[i];
     const l = level.get(r);
     level.set(r, {
@@ -248,8 +250,10 @@ function corners(
 ): [number, number][] {
   const out: [number, number][] = [];
   const minCos = Math.cos((MITRE_MAX_DEG * Math.PI) / 180);
-  for (const [i, r] of runs.entries()) {
-    for (const [j, s] of runs.entries()) {
+  for (let i = 0; i < runs.length; i += 1) {
+    const r = runs[i];
+    for (let j = 0; j < runs.length; j += 1) {
+      const s = runs[j];
       if (i === j || Math.hypot(r.b[0] - s.a[0], r.b[1] - s.a[1]) > MEET_M) {
         continue;
       }
@@ -454,7 +458,8 @@ const bridgeCell = (x: number, y: number) =>
  *  nearest. */
 function links(st: readonly Stretch[]): Link[] {
   const starts = new Map<string, number[]>();
-  for (const [j, s] of st.entries()) {
+  for (let j = 0; j < st.length; j += 1) {
+    const s = st[j];
     const k = bridgeCell(s.a[0], s.a[1]);
     starts.set(k, [...(starts.get(k) ?? []), j]);
   }
@@ -464,7 +469,8 @@ function links(st: readonly Stretch[]): Link[] {
   };
   const minCos = Math.cos((MITRE_MAX_DEG * Math.PI) / 180);
   const found: Link[] = [];
-  for (const [i, s] of st.entries()) {
+  for (let i = 0; i < st.length; i += 1) {
+    const s = st[i];
     const [cx, cy] = [
       Math.floor(s.b[0] / BRIDGE_M),
       Math.floor(s.b[1] / BRIDGE_M),
@@ -555,7 +561,8 @@ export function joinStretches(
     }
   }
   const level = new Map<number, { lo: number; hi: number; w: number }>();
-  for (const [i, s] of st.entries()) {
+  for (let i = 0; i < st.length; i += 1) {
+    const s = st[i];
     const r = root(i);
     const w = Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]);
     const l = level.get(r) ?? {
@@ -570,7 +577,8 @@ export function joinStretches(
         : { lo: 0, hi: l.hi + s.hi * w, w: l.w + w }
     );
   }
-  for (const [i, s] of st.entries()) {
+  for (let i = 0; i < st.length; i += 1) {
+    const s = st[i];
     const l = level.get(root(i));
     if (l) {
       const z = l.w > 0 ? l.hi / l.w : l.hi;
@@ -668,7 +676,8 @@ export function bandMeshes(
     joined.corners
   );
   const out = new Map<number, Shaded>();
-  for (const [i, s] of st.entries()) {
+  for (let i = 0; i < st.length; i += 1) {
+    const s = st[i];
     if (kind === "plinth" && !(s.hi - PLINTH.round > s.lo)) {
       continue;
     }

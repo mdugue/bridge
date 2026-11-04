@@ -1537,7 +1537,8 @@ function addPylons(
   if (peaks.every((p) => p.length === 0)) {
     return false;
   }
-  for (const [r, rib] of ribs.entries()) {
+  for (let r = 0; r < ribs.length; r += 1) {
+    const rib = ribs[r];
     for (const i of peaks[r]) {
       addPierAt(
         out.stone,
@@ -2497,7 +2498,8 @@ function ballastBeds(lines: readonly DrawnLine[]): BedIndex | undefined {
       }
       run = { coords: [], z: [] };
     };
-    for (const [i, level] of l.levels.entries()) {
+    for (let i = 0; i < l.levels.length; i += 1) {
+      const level = l.levels[i];
       if (level?.mode !== "ground") {
         flush();
         continue;
@@ -2635,7 +2637,8 @@ function addLine(
       out.catenary.push(...catenaryRuns(line, [a, b], run, offsets, decks.all));
     }
   }
-  for (const [i, level] of line.levels.entries()) {
+  for (let i = 0; i < line.levels.length; i += 1) {
+    const level = line.levels[i];
     if (level) {
       out.tracks.push({
         raised: level.mode === "deck" || level.mode === "span",

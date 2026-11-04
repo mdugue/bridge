@@ -353,7 +353,8 @@ export function fitWarpedShadow(view: WarpView, sun: Vector3): WarpFit | null {
   let reachPlan = 0;
   const local: Vector3[] = [];
   const rise: number[] = [];
-  for (const [i, p] of body.entries()) {
+  for (let i = 0; i < body.length; i += 1) {
+    const p = body[i];
     const depth = d.subVectors(p, view.eye).dot(view.forward);
     farthest = Math.max(farthest, depth);
     if (p.y <= view.groundY + NEAR_BAND_M && depth < nearDepth) {

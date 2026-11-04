@@ -227,7 +227,8 @@ function addPortal(
   if (typeof foot0 !== "number" || typeof foot1 !== "number") {
     return;
   }
-  for (const [k, m] of masts.entries()) {
+  for (let k = 0; k < masts.length; k += 1) {
+    const m = masts[k];
     const foot = k === 0 ? foot0 : foot1;
     addBeam(
       out.steel,
@@ -332,7 +333,8 @@ export function addCatenary(
     const found = supportStations(run.pts, run.d, mapped).filter(
       (sp) => sp.key === null || !nearOverpass(run, sp.d)
     );
-    for (const [support, sp] of found.entries()) {
+    for (let support = 0; support < found.length; support += 1) {
+      const sp = found[support];
       const p = pointAt(run, sp.d);
       const member = {
         deck: p.deck,
@@ -391,7 +393,8 @@ export function addCatenary(
       }
     }
   }
-  for (const [k, run] of runs.entries()) {
+  for (let k = 0; k < runs.length; k += 1) {
+    const run = runs[k];
     addRunWires(out, ctx, run, supports[k]);
   }
 }

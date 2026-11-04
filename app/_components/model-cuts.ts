@@ -198,7 +198,8 @@ export function createModelCuts(): ModelCuts {
       if (group.clippingPlanes.length !== planes.length) {
         group.clippingPlanes = planes.map(() => new Plane());
       }
-      for (const [i, p] of planes.entries()) {
+      for (let i = 0; i < planes.length; i += 1) {
+        const p = planes[i];
         group.clippingPlanes[i].set(
           new Vector3(p.normal.x, p.normal.y, p.normal.z),
           p.constant

@@ -339,7 +339,8 @@ export function buildTraffic(
   const needsDecks = features.some((f) => f.properties?.br === 1);
   const decks = needsDecks ? buildDeckTable(bridges, ctx) : [];
   const open = openEnds(features, bounds);
-  for (const [i, f] of features.entries()) {
+  for (let i = 0; i < features.length; i += 1) {
+    const f = features[i];
     const onBridge = f.properties?.br === 1;
     for (const lane of trafficLanes(f, open[i])) {
       addLane(body, i, lane, onBridge, decks, ctx, detail);

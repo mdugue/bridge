@@ -303,7 +303,7 @@ function grow(a: Aabb, b: Aabb): Aabb {
 function solidsBox(solids: readonly AskSolid[]): Aabb {
   const [first, ...rest] = solids.map(solidBox);
   if (!first) {
-    throw new TypeError("an item has no solids");
+    throw new Error("an item has no solids");
   }
   let box = first;
   for (const next of rest) {
