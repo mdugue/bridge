@@ -35,7 +35,6 @@ import type {
 } from "@/lib/city/features";
 import { orchardTrees, vineRows } from "@/lib/city/cultivated";
 import type { LookValues } from "@/lib/city/look-controls";
-import type { LookState } from "@/lib/city/look-state";
 import {
   pointFeatures,
   ROWS_MEASURED,
@@ -159,6 +158,8 @@ import type {
   VegetationFeatures,
 } from "./vegetation-layer";
 import { footMaterialFor } from "./tree-foot";
+import { sceneNight } from "./scene-environment";
+import type { DressingEnvironment } from "./scene-environment";
 import { setClaySkyView } from "./visual-style";
 import type { StyleResources } from "./visual-style";
 import { dressWalls } from "./wall-layer";
@@ -267,8 +268,6 @@ export interface TileStreamContext {
   /** the site tile the boot waits on, streamed first; null once the first
    *  frame is up (`orderStreaming`) */
   bootTile: () => string | null;
-  /** the look store: dressing lands with the current look */
-  look: LookState;
   /** phones sample the ≤ 2048² class rasters */
   lowRasters: boolean;
   /** bytes of out-of-view tile content kept cached (scene-profile.ts) */
@@ -285,11 +284,9 @@ export interface TileStreamContext {
   pinnedGround?: () => (x: number, y: number) => number | null;
   /** the ground's look strengths (by reference) */
   ground: GroundUniforms;
-  /** the current night factor, for lamps that land later */
-  night: () => number;
-  /** the current day of the year, for trees that land later
-   *  (lib/city/tree-season.ts) */
-  season: () => number;
+  /** the scene's season and look (scene-environment.ts): a dressing
+   *  lands with them as they are now */
+  environment: DressingEnvironment;
   offset: { cx: number; cy: number };
   /** content landed, left, or changed visibility */
   onChange: () => void;
@@ -605,12 +602,12 @@ export async function withinCompileWait(done: Promise<unknown>): Promise<void> {
  */
 export function catchUp(
   d: Pick<TileDressing, "lamps" | "traffic" | "vegetation">,
-  ctx: Pick<TileStreamContext, "look" | "night" | "season">
+  ctx: Pick<TileStreamContext, "environment">
 ): void {
-  const look = ctx.look.get();
+  const look = ctx.environment.look.get();
   d.vegetation?.applyLook(look);
-  d.vegetation?.setSeason(ctx.season());
-  d.lamps?.setNightFactor(ctx.night());
+  d.vegetation?.setSeason(ctx.environment.season.get());
+  d.lamps?.setNightFactor(sceneNight.value);
   showDataLayers(d, look);
 }
 
@@ -1268,8 +1265,8 @@ async function buildDressing(
     );
     // Born with the current look and season, not the defaults.
     made.vegetation = vegetation;
-    vegetation.applyLook(ctx.look.get());
-    vegetation.setSeason(ctx.season());
+    vegetation.applyLook(ctx.environment.look.get());
+    vegetation.setSeason(ctx.environment.season.get());
     await nextTask(signal);
     // the OSM hedges and the DLM's hedge rows, drawn as one kind of hedge
     const lowVegetation =
@@ -1298,7 +1295,7 @@ async function buildDressing(
       heightAt: terrain.heightAt,
     });
     made.lamps = lampControl;
-    lampControl.setNightFactor(ctx.night());
+    lampControl.setNightFactor(sceneNight.value);
     await nextTask(signal);
     const rail = await inSlices(
       railSteps(

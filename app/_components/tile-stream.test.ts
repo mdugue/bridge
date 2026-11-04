@@ -22,6 +22,8 @@ import type { CityLayer } from "./city-layer";
 import type { TrafficBuilder } from "./data-layers-feature";
 import type { LampControl } from "./lamp-layer";
 import type { TerrainLayer } from "./terrain-layer";
+import { createWatch } from "./feature-seam";
+import { sceneNight } from "./scene-environment";
 import { markSceneShared } from "./three-utils";
 import { trafficAskSet } from "./traffic-ask";
 import { buildTraffic } from "./traffic-layer";
@@ -57,6 +59,15 @@ const tileAt = (uri: string) => ({
 /** The slices run at once. */
 const runNow = async (steps: Steps<unknown>) => finished(steps);
 
+/** A scene environment of its own: the season `day`, a fresh look store. */
+function fakeEnvironment(day = 180) {
+  return {
+    season: createWatch(day),
+    look: createLookState(),
+    castersChanged: () => {},
+  };
+}
+
 function* broken(): Steps<void> {
   yield;
   throw new Error("bad furniture");
@@ -75,11 +86,16 @@ test("a dressing that joins the stream late takes the season, night and look of 
   const lamps = {
     setNightFactor: (night: number) => calls.push(`night ${night}`),
   } as unknown as LampControl;
-  const look = createLookState();
-  look.set({ multiTuft: false });
+  const environment = fakeEnvironment(9);
+  environment.look.set({ multiTuft: false });
   // Built on 10 July by day; the scene moved on to a January night while
   // its compile was pending.
-  catchUp({ vegetation, lamps }, { look, night: () => 1, season: () => 9 });
+  sceneNight.value = 1;
+  try {
+    catchUp({ vegetation, lamps }, { environment });
+  } finally {
+    sceneNight.value = 0;
+  }
   expect(calls).toEqual(["look false", "season 9", "night 1"]);
 });
 
@@ -398,9 +414,7 @@ test("a tile released while a compile still runs is never dressed after the wait
         o === blocker
           ? await new Promise<boolean>(() => {})
           : await Promise.resolve(true),
-      look: createLookState(),
-      night: () => 0,
-      season: () => 180,
+      environment: fakeEnvironment(),
       onDressingFailed: (error: unknown) => failures.push(error),
       onChange: () => {},
     } as unknown as TileStreamContext,
@@ -644,9 +658,7 @@ test("a dressing whose tile leaves before its idle time never builds its ask set
       {
         dressingGate: new Promise<void>(() => {}),
         bootTile: () => null,
-        look: createLookState(),
-        night: () => 0,
-        season: () => 180,
+        environment: fakeEnvironment(),
         onChange: () => {},
       } as unknown as TileStreamContext,
       stream
@@ -795,11 +807,7 @@ test("the counted traffic costs nothing while the layer is off", async () => {
   const { asks, compiled, host, slot } = trafficTile();
   const d: TileDressing = { tile: "t", traffic: slot };
   slot.attach(host);
-  catchUp(d, {
-    look: createLookState(),
-    night: () => 0,
-    season: () => 180,
-  });
+  catchUp(d, { environment: fakeEnvironment() });
   showDataLayers(d, { trafficLayer: false });
   await nextTask();
   expect(slot.group).toBeNull();

@@ -58,7 +58,7 @@ import type { WarpFit, WarpView } from "./shadow-warp";
 import { sunDirectionWorld } from "@/lib/city/sun";
 import { shadowMapBytesFor } from "./scene-profile";
 import { createSkyReflection } from "./sky-reflection";
-import type { Live, V3, V4 } from "./shader-chunks";
+import type { V3, V4 } from "./shader-chunks";
 
 export interface SunState {
   aboveHorizon: boolean;
@@ -79,13 +79,6 @@ function smoothstepDown(edge0: number, edge1: number, x: number): number {
 export function nightFactorAt(altitudeDeg: number): number {
   return smoothstepDown(2, -6, altitudeDeg);
 }
-
-/**
- * The night factor as the picture styles read it in their graphs — the
- * stylize pass, Papier's and Strich's card: one shared uniform, written
- * with the sun (create-app.ts `relight`, from the rig's `nightFactor`).
- */
-export const styleNight: Live = uniform(0);
 
 /** The sun's altitude (°) from its world direction's height. */
 function altitudeOf(y: number): number {
