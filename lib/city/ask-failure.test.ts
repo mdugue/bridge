@@ -33,6 +33,11 @@ describe("the card's words for a failed answer", () => {
       reset: true,
     },
     {
+      name: "a question past its cap: the conversation goes on",
+      error: failed("…", { code: "question-too-long" }),
+      text: "Die Frage ist zu lang (höchstens 1200 Zeichen).",
+    },
+    {
       name: "an answer whose turns are spent",
       error: failed("…", { code: "too-many-steps" }),
       text: "Die Antwort brauchte zu viele Schritte. Frag bitte anders.",

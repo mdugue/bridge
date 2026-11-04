@@ -7,7 +7,8 @@
  * (`app/api/frag/route.ts`) and the card (`app/_components/ask-city.tsx`)
  * both read it.
  */
-import { TOO_LONG } from "./ask-failure";
+import { QUESTION_CHARS } from "./ask-failure";
+import type { AskRefusalCode } from "./ask-failure";
 import { siteDataLayers } from "./data-layers";
 import { RENDER_STYLES } from "./render-style";
 import type { Site } from "./site";
@@ -154,7 +155,7 @@ export const ASK_KEY_HEADER = "x-frag-key";
  */
 export const ASK_LIMITS = {
   /** characters of one question */
-  questionChars: 1200,
+  questionChars: QUESTION_CHARS,
   /** messages the server takes (questions, answers, tool results) */
   messages: 40,
   /** characters of the whole conversation the server takes */
@@ -256,24 +257,28 @@ function messageChars(message: unknown): number {
 
 /**
  * Whether a conversation stays within the caps: a message count, the
- * whole conversation's characters and the last question's.
+ * whole conversation's characters and the last question's. Null when it
+ * does, else the refusal's code (its words are `ASK_FAILURES`').
  */
 export function conversationProblem(
   messages: readonly unknown[],
   question: string
-): string | null {
+): Extract<
+  AskRefusalCode,
+  "no-question" | "too-long" | "question-too-long"
+> | null {
   if (messages.length === 0) {
-    return "keine Frage";
+    return "no-question";
   }
   if (messages.length > ASK_LIMITS.messages) {
-    return `${TOO_LONG} Bitte neu beginnen.`;
+    return "too-long";
   }
   const chars = messages.reduce<number>((n, m) => n + messageChars(m), 0);
   if (chars > ASK_LIMITS.conversationChars) {
-    return `${TOO_LONG} Bitte neu beginnen.`;
+    return "too-long";
   }
   if (question.length > ASK_LIMITS.questionChars) {
-    return `Die Frage ist zu lang (höchstens ${ASK_LIMITS.questionChars} Zeichen).`;
+    return "question-too-long";
   }
   return null;
 }

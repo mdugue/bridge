@@ -221,7 +221,22 @@ describe("a refused request", () => {
       status: 413,
       code: "too-long",
       message: "Das Gespräch ist zu lang geworden.",
-      detail: "Das Gespräch ist zu lang geworden. Bitte neu beginnen.",
+    },
+    {
+      name: "a question past its cap",
+      sent: body({
+        messages: uiMessagesToWire([question("1", "x".repeat(1201))]),
+      }),
+      status: 413,
+      code: "question-too-long",
+      message: "Die Frage ist zu lang (höchstens 1200 Zeichen).",
+    },
+    {
+      name: "no question",
+      sent: body({ messages: [] }),
+      status: 400,
+      code: "no-question",
+      message: "Es kam keine Frage an.",
     },
     {
       name: "twelve tool rounds since the question",

@@ -16,6 +16,9 @@ const TOO_MANY_STEPS = "Die Antwort brauchte zu viele Schritte.";
 /** A conversation past what the server or the model takes. */
 export const TOO_LONG = "Das Gespräch ist zu lang geworden.";
 
+/** The characters one question may have (`ASK_LIMITS.questionChars`). */
+export const QUESTION_CHARS = 1200;
+
 /** Why an answer ended mid-text: the model's output ran out. */
 export const CUT_SHORT =
   "Die Antwort wurde abgeschnitten: dem Modell gingen die Wörter aus.";
@@ -27,7 +30,9 @@ export type AskFailureCode =
   | "no-key"
   | "bad-token"
   | "no-secret"
+  | "no-question"
   | "too-long"
+  | "question-too-long"
   | "too-many-steps"
   | "no-knowledge"
   | "gone"
@@ -72,7 +77,14 @@ const ROWS = {
     status: 501,
     text: "Frag die Stadt ist auf diesem Server nicht eingerichtet.",
   },
+  // a request without a question: an older page, or not the card's
+  "no-question": { status: 400, text: "Es kam keine Frage an." },
   "too-long": { status: 413, text: TOO_LONG, reset: true },
+  // the conversation is fine: a shorter question goes on with it
+  "question-too-long": {
+    status: 413,
+    text: `Die Frage ist zu lang (höchstens ${QUESTION_CHARS} Zeichen).`,
+  },
   "too-many-steps": {
     status: 422,
     text: `${TOO_MANY_STEPS} Frag bitte anders.`,

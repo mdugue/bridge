@@ -456,7 +456,7 @@ function conversationRefusal(
   messages: readonly unknown[]
 ): Response | null {
   const problem = conversationProblem(messages, lastQuestion(messages));
-  return problem ? refuse(deps, "too-long", key, problem) : null;
+  return problem ? refuse(deps, problem, key) : null;
 }
 
 /** A key the turn does not relay: none, no secret to check it with in
