@@ -84,15 +84,15 @@ export function speakable(text: string): string {
   );
 }
 
+// the device's default first, then Germany's German (dictation's too)
+const rank = (v: SpeechSynthesisVoice) =>
+  (v.default ? 0 : 2) + (v.lang.toLowerCase() === "de-de" ? 0 : 1);
+
 /**
  * The device's own German voice, or null. Only a local one: a network
  * voice (Chrome's "Google Deutsch") would send the answer to its maker,
  * and the privacy page promises that reading aloud stays on the device.
  */
-// the device's default first, then Germany's German (dictation's too)
-const rank = (v: SpeechSynthesisVoice) =>
-  (v.default ? 0 : 2) + (v.lang.toLowerCase() === "de-de" ? 0 : 1);
-
 function germanVoice(): SpeechSynthesisVoice | null {
   const local = speechSynthesis
     .getVoices()

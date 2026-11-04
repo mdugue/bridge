@@ -160,7 +160,8 @@ function trackRuns(
   let run: TrackRun = { d: [], pts: [] };
   let d = 0;
   const drawn: (Pt | null)[] = [];
-  for (const [i, p] of dense.entries()) {
+  for (let i = 0; i < dense.length; i += 1) {
+    const p = dense[i];
     if (i > 0) {
       d += Math.hypot(p[0] - dense[i - 1][0], p[1] - dense[i - 1][1]);
     }
@@ -323,7 +324,8 @@ export function lawnHalves(runs: TrackRun[]): LawnHalves[] {
       sharedLeft: [],
       sharedRight: [],
     };
-    for (const [i, p] of run.pts.entries()) {
+    for (let i = 0; i < run.pts.length; i += 1) {
+      const p = run.pts[i];
       out.left.push(BED_HALF.grass);
       out.right.push(BED_HALF.grass);
       out.sharedLeft.push(false);

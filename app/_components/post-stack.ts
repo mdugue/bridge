@@ -794,10 +794,10 @@ export function createPostStack(
   // the camera moved enough this frame to draw the pastel frame blurred
   // (motion-blur.ts), where this tier has a way to draw it
   let blurred = false;
+  // ...and how: before SMAA on a desktop, in place of the FXAA on a phone
   const motionFrame = pastel.motion
     ? { pre: pastel.motion, finished: finished.afterPre }
     : null;
-  // ...and how: before SMAA on a desktop, in place of the FXAA on a phone
   const moving =
     motionFrame ??
     (finished.moving ? { pre: null, finished: finished.moving } : null);

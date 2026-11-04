@@ -128,8 +128,6 @@ export interface SceneTime {
   current: () => Date;
 }
 
-/** `apply` hands an instant to the scene, which answers with its sun (or
- *  nothing while there is no scene); `preview` marks a drag's step. */
 /**
  * A glide's steps between two minutes: previews each new minute (none while
  * the camera is held, an export, or the minute has not moved), telling the
@@ -157,6 +155,8 @@ function glideSteps(
   };
 }
 
+/** `apply` hands an instant to the scene, which answers with its sun (or
+ *  nothing while there is no scene); `preview` marks a drag's step. */
 export function useSceneTime(
   apply: (date: Date, preview?: boolean) => SunState | undefined,
   initialDay: Date

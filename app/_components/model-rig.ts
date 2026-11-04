@@ -581,8 +581,8 @@ export function createModelRig(opts: ModelRigOptions): ModelRig {
           return phase.t;
         }
         default: {
-          // unreachable: every phase is named above
-          return 0;
+          const unknown: never = phase;
+          throw new Error(`unknown phase: ${String(unknown)}`);
         }
       }
     },

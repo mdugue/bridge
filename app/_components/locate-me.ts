@@ -219,8 +219,8 @@ export function describePlacement(
       return UNMAPPABLE;
     }
     default: {
-      // unreachable: every kind is named above
-      return UNMAPPABLE;
+      const unknown: never = placement;
+      throw new Error(`unknown placement: ${String(unknown)}`);
     }
   }
 }

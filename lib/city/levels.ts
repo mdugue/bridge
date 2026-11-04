@@ -170,7 +170,8 @@ function levelHeights(
 /** The cost of driving from height a to height b over `run` metres. */
 function climbCost(a: number, b: number, run: number, grade: number): number {
   const excess = Math.abs(b - a) - grade * run - SLACK_M;
-  return Math.max(excess, 0);
+  // (a height that is NaN costs nothing, rather than ending the path)
+  return Math.max(excess || 0, 0);
 }
 
 /**
@@ -226,7 +227,9 @@ function viterbi(
     for (const k of cands[i]) {
       let best = Number.POSITIVE_INFINITY;
       let arg = 0;
-      for (const [j, p] of cands[i - 1].entries()) {
+      const before = cands[i - 1];
+      for (let j = 0; j < before.length; j += 1) {
+        const p = before[j];
         const c =
           cost[i - 1][j] +
           climbCost(p.c.y, k.c.y, run, opts.grade) +

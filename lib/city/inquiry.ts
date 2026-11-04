@@ -428,7 +428,8 @@ export function inquiryCard(
       return moreCard(inquiry, provenance, credits);
     }
     default: {
-      throw new Error("unknown inquiry kind");
+      const unknown: never = inquiry;
+      throw new Error(`unknown inquiry kind: ${String(unknown)}`);
     }
   }
 }

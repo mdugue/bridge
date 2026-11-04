@@ -551,7 +551,8 @@ export function nameplatePose(
       break;
     }
     default: {
-      throw new Error("unknown nameplate spot");
+      const unknown: never = spot;
+      throw new Error(`unknown nameplate spot: ${String(unknown)}`);
     }
   }
   const camToPlane = Math.abs(dot(sub(camera.position, face), normal));
@@ -609,7 +610,8 @@ function groundPose(
       break;
     }
     default: {
-      throw new Error("unknown nameplate spot");
+      const unknown: never = spot;
+      throw new Error(`unknown nameplate spot: ${String(unknown)}`);
     }
   }
   // over the highest ground under it, so no corner sinks into a slope

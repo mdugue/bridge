@@ -52,7 +52,6 @@ import {
 } from "./bake-city-mesh";
 
 /** A box as a CityJSON LoD2 solid over the eight vertices from `first`. */
-// the box's flat roof stands where it has no parts, or is raised
 function box(first: number) {
   const [a, b, c, d] = [first, first + 1, first + 2, first + 3];
   const [e, f, g, k] = [first + 4, first + 5, first + 6, first + 7];
@@ -1532,6 +1531,7 @@ test("a missing building the surface model shapes stands its measured parts, its
   const shaped = shapedGap(f, offset);
   expect(shaped?.eave).toBeCloseTo(6, 6);
   expect(shaped?.pitched).toBe(true);
+  // the box's flat roof stands where it has no parts, or is raised
   const flatBox = { ...f, properties: { h: 9, kind: "building", z: 100 } };
   expect(shapedGap(flatBox as StructureFeature, offset)).toBeNull();
   const raised = { ...f, properties: { ...f.properties, base: 4 } };

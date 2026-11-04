@@ -2372,7 +2372,6 @@ async function bootApp(
   // shows) moves the plate with it. Only the body is kept, not the
   // triangles (the outline holds its own copy).
   let askedBody: NameplateBody | null = null;
-  // the design's plan, drawn as a building
   const outline = (
     subject: OutlineSubject | null,
     flash = true,
@@ -2722,6 +2721,7 @@ async function bootApp(
           (i) => gone?.has(i) !== true && replaced?.has(i) !== true
         );
       });
+      // the design's plan, drawn as a building
       const planOutline = design?.outline();
       if (planOutline) {
         flattened.push({ pts: planOutline });
@@ -4318,12 +4318,15 @@ async function bootApp(
     design: {
       applyPlacementFile: (text) =>
         design?.applyPlacementFile(text) ?? "Keine Szene.",
-      load: async (files) => await (design?.load(files) ?? Promise.resolve()),
+      load: async (files) => {
+        await design?.load(files);
+      },
       placeHere: () => design?.placeHere(),
       placementText: () => design?.placementText() ?? null,
       remove: () => design?.remove(),
-      setFileColours: async (on) =>
-        await (design?.setFileColours(on) ?? Promise.resolve()),
+      setFileColours: async (on) => {
+        await design?.setFileColours(on);
+      },
       setOnGround: () => design?.setOnGround(),
       setPlacement: (patch) => design?.setPlacement(patch),
       setReplaceExisting: (on) => design?.setReplaceExisting(on),

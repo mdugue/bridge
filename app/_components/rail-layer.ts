@@ -2191,7 +2191,8 @@ export function lineLevelsAt(
   const ground: (number | null)[] = [];
   const under: number[][] = [];
   const ramps: number[][] = [];
-  for (const [i, [ex, ey]] of pts.entries()) {
+  for (let i = 0; i < pts.length; i += 1) {
+    const [ex, ey] = pts[i];
     d.push(
       i === 0
         ? 0
@@ -2240,7 +2241,8 @@ function profiledLevels(
   profile: readonly (number | null)[]
 ): (Level | null)[] {
   const d: number[] = [];
-  for (const [i, [ex, ey]] of pts.entries()) {
+  for (let i = 0; i < pts.length; i += 1) {
+    const [ex, ey] = pts[i];
     d.push(
       i === 0
         ? 0
@@ -2429,7 +2431,8 @@ function* drawnLines(
     const world: XZ[] = [];
     const buried: XZ[] = [];
     const opened = openedCuts(levels, dense, ctx, decks);
-    for (const [i, [ex, ey]] of dense.entries()) {
+    for (let i = 0; i < dense.length; i += 1) {
+      const [ex, ey] = dense[i];
       d.push(
         i === 0
           ? 0

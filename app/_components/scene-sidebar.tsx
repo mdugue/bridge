@@ -280,11 +280,6 @@ const StylePicker = ({
   </div>
 );
 
-/**
- * The minimap card: click to teleport, the blue dot is you. The footprints
- * and the pose come from the scene's status (scene-status.ts); the pose
- * moves the dot on the map's canvas without a render.
- */
 /** Reports an element's width (px, rounded) now and as it resizes; the
  *  returned function stops. */
 const observeWidth = (
@@ -298,6 +293,11 @@ const observeWidth = (
   return () => ro.disconnect();
 };
 
+/**
+ * The minimap card: click to teleport, the blue dot is you. The footprints
+ * and the pose come from the scene's status (scene-status.ts); the pose
+ * moves the dot on the map's canvas without a render.
+ */
 const MinimapCard = ({
   bounds,
   landcoverTiles,

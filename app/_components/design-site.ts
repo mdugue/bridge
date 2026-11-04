@@ -210,8 +210,8 @@ export function foldedThing(
       );
     }
     default: {
-      // unreachable: every kind is named above; an unknown one stays unfolded
-      return false;
+      const unknown: never = target;
+      throw new Error(`unknown target: ${String(unknown)}`);
     }
   }
 }

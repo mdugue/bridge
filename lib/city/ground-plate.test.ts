@@ -90,7 +90,6 @@ test("a shrunk class raster keeps ids, never a blend", () => {
   expect([...r.data]).toEqual([5, 7, 13, 15]);
 });
 
-// the ground rises 1 m per 100 m eastwards
 const tile = (seed: number) => ({
   heights: Int16Array.from({ length: PLATE_N ** 2 }, (_, v) => seed + v),
   classes: Uint8Array.from({ length: PLATE_N ** 2 }, (_, v) => (seed + v) % 12),
@@ -148,6 +147,7 @@ test("the triangles face up in the Y-up frame", () => {
 
 test("the normals agree along a shared edge and tilt down the slope", () => {
   const n = 3;
+  // the ground rises 1 m per 100 m eastwards
   const gradedPlate = (id: string, bounds: typeof WEST) => {
     const heights = new Float32Array(n * n);
     for (let j = 0; j < n; j += 1) {

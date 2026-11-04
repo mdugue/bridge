@@ -435,7 +435,6 @@ function disc(
 }
 
 /** A flat circle facing +Z (or −Z, `back`). */
-// (p, pd, q) faces n when (pd − p) × (q − p) points along it.
 function face(
   radius: number,
   at: [number, number, number],
@@ -888,6 +887,7 @@ function addSlab(
     }
     const pd = p.clone().setY(p.y - PATCH_SKIRT);
     const qd = q.clone().setY(q.y - PATCH_SKIRT);
+    // (p, pd, q) faces n when (pd − p) × (q − p) points along it.
     const winding = pd.clone().sub(p).cross(q.clone().sub(p));
     const quad =
       winding.dot(n) > 0 ? [p, pd, q, q, pd, qd] : [p, q, pd, q, qd, pd];
