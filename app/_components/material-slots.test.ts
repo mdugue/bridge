@@ -4,11 +4,11 @@ import {
   DataTexture,
   FloatType,
   MeshStandardNodeMaterial,
-  type NodeFrame,
   RedFormat,
   RenderTarget,
   Vector2,
 } from "three/webgpu";
+import type { NodeFrame } from "three/webgpu";
 import { texture, uv } from "three/tsl";
 import {
   ownSlotValue,

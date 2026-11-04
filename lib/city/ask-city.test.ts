@@ -58,6 +58,7 @@ describe("requests", () => {
       model: "claude-haiku-5-5",
       site: "dresden",
       token: "v1.1.x",
+      voice: false,
     });
     expect(
       typeof parseAskProps({ provider: "anthropic", model: "claude-opus-9" })

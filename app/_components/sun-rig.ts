@@ -1,21 +1,26 @@
+import { WarpedShadowCamera } from "./warped-shadow-camera";
 import {
-  type Box3,
-  type Camera,
   Color,
-  type DepthTexture,
   DirectionalLight,
   HemisphereLight,
-  type Light,
-  type LightShadow,
-  type Matrix4,
-  type Node,
-  type NodeBuilder,
   OrthographicCamera,
-  type PerspectiveCamera,
   RenderTarget,
   Scene,
   ShadowNode,
   Vector3,
+} from "three/webgpu";
+import type {
+  Box3,
+  Camera,
+  DepthTexture,
+  Light,
+  LightShadow,
+  Matrix4,
+  Node,
+  NodeBuilder,
+  PerspectiveCamera,
+  UniformNode,
+  WebGPURenderer,
 } from "three/webgpu";
 import { SkyMesh } from "three/addons/objects/SkyMesh.js";
 import {
@@ -33,7 +38,6 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
-import type { UniformNode, WebGPURenderer } from "three/webgpu";
 import { atmosphereAt } from "@/lib/city/atmosphere";
 import { fitModelShadow } from "@/lib/city/model-view";
 import {
@@ -48,10 +52,9 @@ import {
   WARP_MAX_REACH_M,
   WARP_REACH_OF_FOG,
   WARP_UNTIL_M,
-  type WarpFit,
-  type WarpView,
   warpCovers,
 } from "./shadow-warp";
+import type { WarpFit, WarpView } from "./shadow-warp";
 import { sunDirectionWorld } from "@/lib/city/sun";
 import { shadowMapBytesFor } from "./scene-profile";
 import { createSkyReflection } from "./sky-reflection";
@@ -210,25 +213,6 @@ const SQUARE_PCF_RADIUS = 5;
 const WARP_PCF_RADIUS = 3;
 
 /**
- * The sun's shadow camera: three's orthographic one, with an optional warp
- * after its box (shadow-warp.ts). `updateProjectionMatrix` — which
- * three calls when the backend's coordinate system or depth direction is
- * set — rebuilds the box for them and applies the warp again, so the
- * projection is never left without it. Without a warp it is three's camera.
- */
-class WarpedShadowCamera extends OrthographicCamera {
-  /** light view → warped coordinates (shadow-warp.ts `WarpFit.warp`) */
-  warp: Matrix4 | null = null;
-  override updateProjectionMatrix(): void {
-    super.updateProjectionMatrix();
-    if (this.warp) {
-      this.projectionMatrix.multiply(this.warp);
-      this.projectionMatrixInverse.copy(this.projectionMatrix).invert();
-    }
-  }
-}
-
-/**
  * Least time (ms) between two shadow-map redraws while the time of day is
  * dragged: the map is the heaviest pass (every caster), and a drag turns
  * the sun at every frame. Ten a second keep the shadows moving with it; the
@@ -265,7 +249,10 @@ const ShadowNodeWithTarget = ShadowNode as unknown as new (
 class DepthOnlyShadowNode extends ShadowNodeWithTarget {
   /** the map's depth, once the first lit material made it */
   depth: DepthTexture | null = null;
-  setupRenderTarget(shadow: LightShadow, builder: NodeBuilder): ShadowTargets {
+  override setupRenderTarget(
+    shadow: LightShadow,
+    builder: NodeBuilder
+  ): ShadowTargets {
     // three's depth texture (its name, its compare function), in a target
     // of its own without the colour — the one made with it is never
     // allocated, and goes
@@ -382,7 +369,9 @@ function createSkyDome(scene: Scene): SkyDome & { mesh: SkyMesh } {
     setHaze: (colour) => {
       haze.value.set(colour);
     },
-    setSun: (d) => sky.sunPosition.value.copy(d),
+    setSun: (d) => {
+      sky.sunPosition.value.copy(d);
+    },
   };
 }
 
@@ -665,7 +654,7 @@ export function createSunRig(
     groundY: number,
     air: AirView
   ) => {
-    const position = camera.position;
+    const { position } = camera;
     const height = position.y - groundY;
     // hysteresis: a switch is a depth pass
     if (airborne ? height < WARP_UNTIL_M : height > WARP_FROM_M) {
@@ -720,13 +709,13 @@ export function createSunRig(
     groundY: number,
     z: number,
     footRadius: number,
-    max: number
+    maxRadius: number
   ) => {
     airborne = false;
     if (warpFit) {
       dropWarp();
     }
-    const nextRadius = fitModelShadow(footRadius, radius, max);
+    const nextRadius = fitModelShadow(footRadius, radius, maxRadius);
     if (
       nextRadius === radius &&
       Number.isFinite(lastCentre.x) &&

@@ -52,10 +52,9 @@ function rename(json: MeshoptGltf, from: string, to: string): void {
   json.extensionsUsed = swap(json.extensionsUsed);
   json.extensionsRequired = swap(json.extensionsRequired);
   for (const holder of [...(json.bufferViews ?? []), ...(json.buffers ?? [])]) {
-    const ext = holder.extensions?.[from];
-    if (ext !== undefined && holder.extensions) {
-      delete holder.extensions[from];
-      holder.extensions[to] = ext;
+    if (holder.extensions?.[from] !== undefined) {
+      const { [from]: ext, ...rest } = holder.extensions;
+      holder.extensions = { ...rest, [to]: ext };
     }
   }
 }

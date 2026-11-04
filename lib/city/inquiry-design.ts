@@ -8,15 +8,14 @@
  */
 
 import {
-  type CardFact,
   factLines,
   firstText,
-  type InquiryCard,
   metres,
   positionKey,
   stated,
   whole,
 } from "./card-lines";
+import type { CardFact, InquiryCard } from "./card-lines";
 import type { DesignPlacement, PlacementSource } from "./design-placement";
 import type { Method } from "./methods";
 

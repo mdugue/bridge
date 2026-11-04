@@ -14,7 +14,10 @@ import { MeshBVH } from "three-mesh-bvh";
 import type { BvhJob, BvhReply } from "./bvh-client";
 
 const scope = self as unknown as {
-  onmessage: ((event: MessageEvent<BvhJob>) => void) | null;
+  addEventListener: (
+    type: "message",
+    listener: (event: MessageEvent<BvhJob>) => void
+  ) => void;
   postMessage: (message: BvhReply, transfer: Transferable[]) => void;
 };
 
@@ -40,7 +43,7 @@ function geometryOf(job: BvhJob): BufferGeometry {
   return geometry;
 }
 
-scope.onmessage = ({ data: job }) => {
+scope.addEventListener("message", ({ data: job }) => {
   try {
     const bvh = new MeshBVH(geometryOf(job));
     const { roots } = MeshBVH.serialize(bvh, { cloneBuffers: false });
@@ -48,19 +51,19 @@ scope.onmessage = ({ data: job }) => {
       { id: job.id, roots, index: job.index, position: job.position.array },
       [...roots, job.index.buffer, job.position.array.buffer]
     );
-  } catch (err) {
+  } catch (error) {
     // the arrays go back whatever happened: the tile still needs them
     scope.postMessage(
       {
         id: job.id,
-        error: err instanceof Error ? err.message : String(err),
+        error: error instanceof Error ? error.message : String(error),
         index: job.index,
         position: job.position.array,
       },
       [job.index.buffer, job.position.array.buffer]
     );
   }
-};
+});
 
 // the script runs: from here the page may hand over a tile's arrays
 scope.postMessage({ ready: true, id: -1 } as BvhReply, []);

@@ -1,16 +1,18 @@
 /**
  * *Frag die Stadt*'s tools (ADR 0056), defined once for both sides: the
  * server binds the Stadtwissen ones (`suche_stadt`, `in_der_naehe`,
- * `fakten`, `quellen`), the card the scene ones (`wo_bin_ich`, `zeige`,
- * `setze_zeit`, `setze_stil`, `datenschicht`). The server passes all of
+ * `fakten`, `quellen`), the card the scene ones (`wo_bin_ich`,
+ * `was_ist_da`, `zeige`, `setze_zeit`, `setze_stil`, `datenschicht`). The server passes all of
  * them to the model and never takes a tool list from the request: what
  * the model can do is fixed here.
  */
 import { toolDefinition } from "@tanstack/ai";
 import { z } from "zod";
 import { ASK_LIMITS } from "./ask-city";
-import { DATA_LAYERS, type DataLayerKey } from "./data-layers";
-import { RENDER_STYLES, type RenderStyle } from "./render-style";
+import { DATA_LAYERS } from "./data-layers";
+import type { DataLayerKey } from "./data-layers";
+import { RENDER_STYLES } from "./render-style";
+import type { RenderStyle } from "./render-style";
 
 const coordinate = z.number();
 
@@ -72,6 +74,13 @@ export const whereTool = toolDefinition({
   inputSchema: z.object({}),
 });
 
+export const lookTool = toolDefinition({
+  name: "was_ist_da",
+  description:
+    "Fragt das Stadtmodell, was dort steht, wohin die Ansicht zeigt (die Bildmitte; im Modell der Ort, auf den es ausgerichtet ist) — das Gebäude, den Baum, das Denkmal oder die Brücke — und öffnet dessen Karte im Viewer. Liefert Art, Name, Adresse, gemessene Fakten und Quellen. Für „Was ist das da vorne?“.",
+  inputSchema: z.object({}),
+});
+
 export const showTool = toolDefinition({
   name: "zeige",
   description:
@@ -97,7 +106,7 @@ export const timeTool = toolDefinition({
     stunde: z.number().min(0).max(24).describe("Uhrzeit, z. B. 18.5 für 18:30"),
     datum: z
       .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .regex(/^\d{4}-\d{2}-\d{2}$/u)
       .optional()
       .describe("JJJJ-MM-TT"),
   }),
@@ -128,6 +137,7 @@ export const layerTool = toolDefinition({
 /** The tools the browser runs, by name: the card binds each. */
 export const SCENE_TOOLS = [
   whereTool,
+  lookTool,
   showTool,
   timeTool,
   styleTool,

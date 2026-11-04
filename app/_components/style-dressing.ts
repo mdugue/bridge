@@ -1,14 +1,16 @@
 import {
   AdditiveBlending,
-  type BufferAttribute,
-  type BufferGeometry,
   Color,
   ConeGeometry,
   DoubleSide,
-  type InterleavedBufferAttribute,
   MeshBasicNodeMaterial,
-  type Object3D,
-  type Scene,
+} from "three/webgpu";
+import type {
+  BufferAttribute,
+  BufferGeometry,
+  InterleavedBufferAttribute,
+  Object3D,
+  Scene,
 } from "three/webgpu";
 import {
   abs,

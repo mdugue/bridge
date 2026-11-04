@@ -5,11 +5,9 @@ import {
   LinearFilter,
   Mesh,
   MeshStandardNodeMaterial,
-  type Node,
-  TextureNode,
-  type Vector2,
   Vector3,
 } from "three/webgpu";
+import type { Node, Vector2, TextureNode } from "three/webgpu";
 import { float, uniform } from "three/tsl";
 import { dressFences } from "./fence-layer";
 import { slotsOf } from "./material-slots";
@@ -18,13 +16,13 @@ import {
   applyGroundLight,
   claySkySlots,
   createClaySky,
-  type GroundLight,
   groundLitMaterial,
   HORIZON_SHADE,
   openSkySlots,
   openSkyTexture,
   SKY_VIEW,
 } from "./sky-light";
+import type { GroundLight } from "./sky-light";
 import { dressStairs } from "./stair-layer";
 import { dressWalls } from "./wall-layer";
 
@@ -50,7 +48,7 @@ function reachable(root: Node): Set<Node> {
 
 function texturesOf(root: Node): unknown[] {
   return [...reachable(root)]
-    .filter((n): n is TextureNode => (n as TextureNode).isTextureNode === true)
+    .filter((n): n is TextureNode => (n as TextureNode).isTextureNode)
     .map((n) => n.value);
 }
 
@@ -67,12 +65,15 @@ test("the sky view scales the ambient through aoNode, at its fixed strength", ()
   const light = groundLight({ horizon: false, svf: true });
   const material = groundLitMaterial("test", { roughness: 1 }, light, true);
   expect(material).toBeInstanceOf(MeshStandardNodeMaterial);
-  expect(material.aoNode).not.toBeNull();
-  const ao = reachable(material.aoNode as Node);
+  const { aoNode } = material;
+  if (!aoNode) {
+    throw new Error("the material has no aoNode");
+  }
+  const ao = reachable(aoNode);
   // Himmelslicht's strength, one constant for every tile
   expect(ao.has(SKY_VIEW)).toBe(true);
   // the tile's raster goes in by slot, not into the shared graph
-  expect(texturesOf(material.aoNode as Node)).not.toContain(light.svf);
+  expect(texturesOf(aoNode)).not.toContain(light.svf);
   expect(slotsOf(material).lightSvf).toBe(light.svf);
   // no horizon, no change to the sun's shadow
   expect(material.receivedShadowNode).toBeNull();

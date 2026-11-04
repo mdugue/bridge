@@ -30,7 +30,7 @@ function ladder() {
   let raises = 0;
   return {
     raise: (from: SafetyLevel) => {
-      raises++;
+      raises += 1;
       return raiseSafety(from, { store: local, now: 0 });
     },
     next: () => settleSafety("", local, null, 0),

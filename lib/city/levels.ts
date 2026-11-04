@@ -153,10 +153,25 @@ function candidatesOf(s: LevelSample, fallback: LevelOptions["prefer"]) {
   return out;
 }
 
+/** The heights of the levels at `idx`, which all hold one. */
+function levelHeights(
+  out: readonly (Level | null)[],
+  idx: readonly number[]
+): number[] {
+  return idx.map((i) => {
+    const level = out[i];
+    if (!level) {
+      throw new Error("a run of levels holds a gap");
+    }
+    return level.y;
+  });
+}
+
 /** The cost of driving from height a to height b over `run` metres. */
 function climbCost(a: number, b: number, run: number, grade: number): number {
   const excess = Math.abs(b - a) - grade * run - SLACK_M;
-  return excess > 0 ? excess : 0;
+  // (a height that is NaN costs nothing, rather than ending the path)
+  return Math.max(excess || 0, 0);
 }
 
 /**
@@ -175,14 +190,14 @@ export function chooseLevels(
       start < samples.length &&
       candidatesOf(samples[start], opts.prefer).length === 0
     ) {
-      start++;
+      start += 1;
     }
     let end = start;
     while (
       end < samples.length &&
       candidatesOf(samples[end], opts.prefer).length > 0
     ) {
-      end++;
+      end += 1;
     }
     if (end > start) {
       viterbi(samples, start, end, opts, out);
@@ -200,19 +215,21 @@ function viterbi(
   out: (Level | null)[]
 ): void {
   const cands = [];
-  for (let i = start; i < end; i++) {
+  for (let i = start; i < end; i += 1) {
     cands.push(candidatesOf(samples[i], opts.prefer));
   }
   const cost: number[][] = [cands[0].map((k) => k.cost)];
   const back: number[][] = [cands[0].map(() => -1)];
-  for (let i = 1; i < cands.length; i++) {
+  for (let i = 1; i < cands.length; i += 1) {
     const run = samples[start + i].d - samples[start + i - 1].d;
     const row: number[] = [];
     const from: number[] = [];
     for (const k of cands[i]) {
       let best = Number.POSITIVE_INFINITY;
       let arg = 0;
-      cands[i - 1].forEach((p, j) => {
+      const before = cands[i - 1];
+      for (let j = 0; j < before.length; j += 1) {
+        const p = before[j];
         const c =
           cost[i - 1][j] +
           climbCost(p.c.y, k.c.y, run, opts.grade) +
@@ -221,7 +238,7 @@ function viterbi(
           best = c;
           arg = j;
         }
-      });
+      }
       row.push(best + k.cost);
       from.push(arg);
     }
@@ -230,7 +247,7 @@ function viterbi(
   }
   const last = cost.at(-1) ?? [];
   let j = last.indexOf(Math.min(...last));
-  for (let i = cands.length - 1; i >= 0; i--) {
+  for (let i = cands.length - 1; i >= 0; i -= 1) {
     const { c } = cands[i][j];
     out[start + i] = { mode: c.deck ? "deck" : "ground", y: c.y };
     j = back[i][j];
@@ -253,7 +270,7 @@ function coneExcess(
 ): number[] {
   const n = y.length;
   const out = Array.from({ length: n }, () => 0);
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < n; i += 1) {
     let most = 0;
     for (let j = i - dir; j >= 0 && j < n; j -= dir) {
       const run = Math.abs(d[i] - d[j]);
@@ -283,7 +300,7 @@ function trappedRuns(
   const trapped = y.map((_, i) => Math.min(left[i], right[i]) >= LEVEL_JUMP_M);
   const runs: [number, number][] = [];
   let first = -1;
-  for (let i = 0; i <= y.length; i++) {
+  for (let i = 0; i <= y.length; i += 1) {
     if (i < y.length && trapped[i]) {
       if (first < 0) {
         first = i;
@@ -320,7 +337,7 @@ export function bridgeJumps(
       ["span", 1, LEVEL_SPAN_M],
       ["cut", -1, LEVEL_CUT_M],
     ] as const) {
-      const y = idx.map((i) => (out[i] as Level).y);
+      const y = levelHeights(out, idx);
       for (const [a, b] of trappedRuns(y, d, opts.grade, reach, sign)) {
         const [ra, rb] = rims(y, d, [a, b], opts.grade, sign, reach);
         if (ra < 0 || rb >= y.length) {
@@ -351,10 +368,10 @@ function coverCuts(
   if (!idx.some((i) => samples[i].below)) {
     return;
   }
-  const y = idx.map((i) => (out[i] as Level).y);
+  const y = levelHeights(out, idx);
   for (const [a, b] of trappedRuns(y, d, COVER_GRADE, LEVEL_COVER_M, -1)) {
     let below = 0;
-    for (let k = a; k <= b; k++) {
+    for (let k = a; k <= b; k += 1) {
       below += samples[idx[k]].below ? 1 : 0;
     }
     if (below < COVER_SHARE * (b - a + 1)) {
@@ -371,7 +388,7 @@ function coverCuts(
 function knownRuns(levels: readonly (Level | null)[]): [number, number][] {
   const runs: [number, number][] = [];
   let first = -1;
-  for (let i = 0; i <= levels.length; i++) {
+  for (let i = 0; i <= levels.length; i += 1) {
     if (i < levels.length && levels[i]) {
       if (first < 0) {
         first = i;
@@ -409,14 +426,14 @@ function rims(
     ra = d[a] - d[ra] > reach ? -1 : ra - 1;
   }
   while (ra > 0 && steep(ra, ra - 1)) {
-    ra--;
+    ra -= 1;
   }
   let rb = b + 1;
   while (rb < y.length && !out(rb, b)) {
     rb = d[rb] - d[b] > reach ? y.length : rb + 1;
   }
   while (rb >= 0 && rb < y.length - 1 && steep(rb, rb + 1)) {
-    rb++;
+    rb += 1;
   }
   return [ra, rb];
 }
@@ -439,7 +456,7 @@ function joinRims(
   if (!(a && b) || run <= 0) {
     return;
   }
-  for (let i = from + 1; i < to; i++) {
+  for (let i = from + 1; i < to; i += 1) {
     const y = a.y + ((b.y - a.y) * (samples[i].d - samples[from].d)) / run;
     const deck =
       mode === "span"
@@ -465,7 +482,7 @@ export function modeRuns(
 ): [number, number][] {
   const runs: [number, number][] = [];
   let first = -1;
-  for (let i = 0; i <= levels.length; i++) {
+  for (let i = 0; i <= levels.length; i += 1) {
     const on = i < levels.length && levels[i]?.mode === mode;
     if (on && first < 0) {
       first = i;

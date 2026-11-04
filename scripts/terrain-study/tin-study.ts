@@ -37,12 +37,13 @@
  * docs were measured on the earlier custom TIN payload, not the glTF.
  */
 import { readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import { gzipSync } from "node:zlib";
 import Delatin from "delatin";
 import { BufferAttribute, BufferGeometry } from "three";
 import type { WallFeature } from "../../lib/city/features";
-import { conflateWalls, type WallLine } from "../../lib/city/terrain-conflate";
+import { conflateWalls } from "../../lib/city/terrain-conflate";
+import type { WallLine } from "../../lib/city/terrain-conflate";
 import type { TerrainBounds } from "../../lib/city/terrain-geometry";
 import {
   buildTinGeometryData,
@@ -71,16 +72,16 @@ function readF32(path: string): Float32Array {
 }
 
 function gridN(name: string): number {
-  const m = /_(\d+)$/.exec(name);
+  const m = /_(?<n>\d+)$/u.exec(name);
   if (!m) {
     throw new Error(`grid name must end in _<n>: ${name}`);
   }
-  return Number(m[1]);
+  return Number(m.groups?.n);
 }
 
 function wallLines(): WallLine[] {
   const doc = JSON.parse(
-    readFileSync(wallSourceFile(DRESDEN, SPAWN_TILE), "utf8")
+    readFileSync(wallSourceFile(DRESDEN, SPAWN_TILE), "utf-8")
   ) as {
     features: WallFeature[];
   };
@@ -99,20 +100,20 @@ async function grids(dir: string): Promise<void> {
   const tif = readFileSync(src.tif);
   const { elevations: v0 } = await readDgm(
     tif.buffer.slice(tif.byteOffset, tif.byteOffset + tif.byteLength),
-    readFileSync(src.tfw, "utf8"),
+    readFileSync(src.tfw, "utf-8"),
     1024
   );
-  writeFileSync(join(dir, "v0_1024.f32"), v0);
+  writeFileSync(nodePath.join(dir, "v0_1024.f32"), v0);
   const walls = wallLines();
   const conflate = (name: string, grid: ArrayLike<number>, n: number) => {
     const t = performance.now();
     const c = conflateWalls({ elevations: grid, n, bounds: BOUNDS, walls });
-    writeFileSync(join(dir, `${name}_${n}.f32`), c);
+    writeFileSync(nodePath.join(dir, `${name}_${n}.f32`), c);
     out(`${name}_${n}: conflated in ${(performance.now() - t).toFixed(0)} ms`);
   };
   conflate("v0c", v0, 1024);
-  conflate("v1c", readF32(join(dir, "v1_2000.f32")), 2000);
-  conflate("v2c", readF32(join(dir, "v2_4000.f32")), 4000);
+  conflate("v1c", readF32(nodePath.join(dir, "v1_2000.f32")), 2000);
+  conflate("v2c", readF32(nodePath.join(dir, "v2_4000.f32")), 4000);
 }
 
 async function tin(
@@ -121,7 +122,7 @@ async function tin(
   tolerances: number[]
 ): Promise<void> {
   const n = gridN(grid);
-  const data = readF32(join(dir, `${grid}.f32`));
+  const data = readF32(nodePath.join(dir, `${grid}.f32`));
   const t0 = performance.now();
   const mesher = new Delatin(data, n, n);
   for (const tol of [...tolerances].sort((a, b) => b - a)) {
@@ -130,8 +131,8 @@ async function tin(
     const coords = Uint32Array.from(mesher.coords);
     const tris = Uint32Array.from(mesher.triangles);
     const cm = Math.round(tol * 100);
-    writeFileSync(join(dir, `${grid}_tin${cm}.coords.u32`), coords);
-    writeFileSync(join(dir, `${grid}_tin${cm}.tris.u32`), tris);
+    writeFileSync(nodePath.join(dir, `${grid}_tin${cm}.coords.u32`), coords);
+    writeFileSync(nodePath.join(dir, `${grid}_tin${cm}.tris.u32`), tris);
     const gz = gzipSync(await tinGlb(data, n, coords, tris)).byteLength;
     const naive = gzipSync(
       Buffer.concat([Buffer.from(coords.buffer), Buffer.from(tris.buffer)])
@@ -165,7 +166,7 @@ async function tinGlb(
   g.setAttribute("position", new BufferAttribute(positions, 3));
   g.setIndex(new BufferAttribute(indices, 1));
   g.computeVertexNormals();
-  return writeMeshGlb({
+  return await writeMeshGlb({
     name: "terrain",
     extras: {},
     positions,
@@ -191,19 +192,19 @@ function tinOf(
 
 function client(dir: string, grid: string, cm: number): void {
   const n = gridN(grid);
-  const data = readF32(join(dir, `${grid}.f32`));
+  const data = readF32(nodePath.join(dir, `${grid}.f32`));
   const coords = new Uint32Array(
-    readFileSync(join(dir, `${grid}_tin${cm}.coords.u32`)).buffer
+    readFileSync(nodePath.join(dir, `${grid}_tin${cm}.coords.u32`)).buffer
   );
   const tris = new Uint32Array(
-    readFileSync(join(dir, `${grid}_tin${cm}.tris.u32`)).buffer
+    readFileSync(nodePath.join(dir, `${grid}_tin${cm}.tris.u32`)).buffer
   );
   const surface = tinSurface(tinOf(data, n, coords, tris));
   const t = performance.now();
   const index = new TinIndex(surface);
   const built = performance.now() - t;
   const q = performance.now();
-  for (let i = 0; i < 100_000; i++) {
+  for (let i = 0; i < 100_000; i += 1) {
     index.heightAt(
       BOUNDS[0] + ((i * 7919) % 2000),
       BOUNDS[1] + ((i * 104_729) % 2000)

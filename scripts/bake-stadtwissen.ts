@@ -73,7 +73,7 @@ function extentOf(obj: CityObject, city: CityFile): number[] | undefined {
     if (!v) {
       continue;
     }
-    for (let k = 0; k < 3; k++) {
+    for (let k = 0; k < 3; k += 1) {
       const c = v[k] * scale[k] + shift[k];
       ext[k] = Math.min(ext[k], c);
       ext[k + 3] = Math.max(ext[k + 3], c);
@@ -256,13 +256,21 @@ export function monumentsOf(
       String(m.x),
       String(m.y),
     ].join("\u0000");
-  found.sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
+  found.sort((a, b) => {
+    const ka = key(a);
+    const kb = key(b);
+    if (ka < kb) {
+      return -1;
+    }
+    return ka > kb ? 1 : 0;
+  });
   const out: WissenMonument[] = [];
   let nth = 0;
-  found.forEach(({ base, ...m }, k) => {
+  for (let k = 0; k < found.length; k += 1) {
+    const { base, ...m } = found[k];
     nth = found[k - 1]?.base === base ? nth + 1 : 1;
     out.push({ id: nth === 1 ? base : `${base}_${nth}`, ...m });
-  });
+  }
   return out.sort((a, b) => a.id.localeCompare(b.id));
 }
 

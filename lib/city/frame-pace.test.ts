@@ -3,6 +3,8 @@ import {
   COVERED_FPS,
   createFramePace,
   createStillness,
+  LISTENING_FPS,
+  LISTENING_MOVING_FPS,
   SCROLL_QUIET_MS,
   STILL_FPS,
 } from "./frame-pace";
@@ -16,9 +18,9 @@ function drawn(
   n = 60
 ) {
   let count = 0;
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < n; i += 1) {
     if (pace.draws(start + i * FRAME)) {
-      count++;
+      count += 1;
     }
   }
   return count;
@@ -87,9 +89,9 @@ describe("still pace", () => {
     const pace = createFramePace();
     pace.setStill(true);
     let count = 0;
-    for (let i = 0; i < 120; i++) {
+    for (let i = 0; i < 120; i += 1) {
       if (pace.draws(i * (1000 / 120))) {
-        count++;
+        count += 1;
       }
     }
     expect(count).toBe(STILL_FPS);
@@ -112,6 +114,41 @@ describe("still pace", () => {
     pace.setStill(true);
     pace.setCovered(true);
     expect(drawn(pace, 0)).toBe(COVERED_FPS);
+  });
+});
+
+describe("listening pace", () => {
+  test("a still scene the visitor only listens to draws at its rate, and every frame again after", () => {
+    const pace = createFramePace();
+    pace.setStill(true);
+    pace.setListening(true);
+    expect(drawn(pace, 0, 120)).toBe(2 * LISTENING_FPS);
+    pace.setListening(false);
+    expect(drawn(pace, 2000)).toBe(30);
+  });
+
+  test("a moving one draws at its rate", () => {
+    const pace = createFramePace();
+    pace.setListening(true);
+    expect(drawn(pace, 0)).toBe(LISTENING_MOVING_FPS);
+  });
+
+  test("a moving one keeps no two frames further apart than the loop's time step, at any display rate", () => {
+    // the loop clamps a frame's time step to 0.05 s: a wider gap slows a glide
+    for (const hz of [24, 30, 36, 38, 50, 60, 75, 90, 120, 144]) {
+      const pace = createFramePace();
+      pace.setListening(true);
+      let last = Number.NaN;
+      let widest = 0;
+      for (let i = 0; i < hz * 2; i += 1) {
+        const now = (i * 1000) / hz;
+        if (pace.draws(now)) {
+          widest = Math.max(widest, now - last || 0);
+          last = now;
+        }
+      }
+      expect(widest).toBeLessThanOrEqual(50);
+    }
   });
 });
 

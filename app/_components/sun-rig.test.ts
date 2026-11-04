@@ -2,19 +2,19 @@ import { expect, jest, test } from "bun:test";
 import {
   Box3,
   Color,
-  type DepthTexture,
   DirectionalLight,
   PerspectiveCamera,
   RenderTarget,
   Scene,
-  type ShadowNode,
   Vector3,
   Vector4,
 } from "three/webgpu";
+import type { DepthTexture, ShadowNode } from "three/webgpu";
 import { uniform } from "three/tsl";
 import { SHADOW_BASE_RADIUS, SHADOW_MAX_RADIUS } from "@/lib/city/shadow-fit";
 import { shadowMapSizeFor } from "./scene-profile";
-import { type AirView, createSunRig } from "./sun-rig";
+import { createSunRig } from "./sun-rig";
+import type { AirView } from "./sun-rig";
 
 // Dresden — the primary tile's latitude/longitude.
 const DRESDEN = { lat: 51.05, lng: 13.74 };
@@ -35,8 +35,11 @@ function rig(shadowMapSize = shadowMapSizeFor("full")) {
     fogColor
   );
   const sun = scene.children.find(
-    (o) => o instanceof DirectionalLight
-  ) as DirectionalLight;
+    (o): o is DirectionalLight => o instanceof DirectionalLight
+  );
+  if (!sun) {
+    throw new Error("the rig adds no sun");
+  }
   return { sunRig, sun, fogColor };
 }
 
@@ -136,7 +139,7 @@ test("walking 500 m straight redraws the map once every 30 m", () => {
     sun.shadow.needsUpdate = false;
     walkTo(sunRig, x, 0);
     if (sun.shadow.needsUpdate) {
-      redraws++;
+      redraws += 1;
     }
   }
   // the first re-centre and one per 30 m (26 with the old 19.8 m zone)

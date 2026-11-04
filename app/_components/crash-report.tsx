@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { formatTrail, offerAsCrash, type Trail } from "@/lib/city/crash-trail";
+import { formatTrail, offerAsCrash } from "@/lib/city/crash-trail";
+import type { Trail } from "@/lib/city/crash-trail";
 import { crashReportsOn } from "./crash-reports";
 import {
   dismissPreviousTrail,
@@ -11,6 +12,7 @@ import {
   previousTrail,
 } from "./crash-trail";
 import { recentlyRecovered } from "./gpu-recovery";
+import { useOnce } from "./use-once";
 
 /**
  * The previous page's crash trail (crash-trail.ts), offered as text to
@@ -41,20 +43,21 @@ function initialOffer(): Offer | null {
   return always || crashed ? { trail: previous, crashed, always } : null;
 }
 
-export function CrashReport() {
+export const CrashReport = () => {
   const [offer, setOffer] = useState(initialOffer);
-  const [reported] = useState(crashReportsOn);
+  const reported = useOnce(crashReportsOn);
   const [copied, setCopied] = useState(false);
   useEffect(() => {
-    if (!offer?.crashed) {
-      return;
-    }
     let mounted = true;
-    void pageStillOpen(offer.trail).then((open) => {
-      if (open && mounted) {
-        setOffer(offer.always ? { ...offer, crashed: false } : null);
-      }
-    });
+    if (offer?.crashed) {
+      const check = async () => {
+        const open = await pageStillOpen(offer.trail);
+        if (open && mounted) {
+          setOffer(offer.always ? { ...offer, crashed: false } : null);
+        }
+      };
+      void check();
+    }
     return () => {
       mounted = false;
     };
@@ -68,11 +71,13 @@ export function CrashReport() {
     dismissPreviousTrail();
     setOffer(null);
   };
-  const copy = () => {
-    navigator.clipboard.writeText(text).then(
-      () => setCopied(true),
-      () => setCopied(false)
-    );
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
   };
   return (
     <section
@@ -112,10 +117,15 @@ export function CrashReport() {
         <Button onClick={close} size="sm" variant="ghost">
           Schließen
         </Button>
-        <Button onClick={copy} size="sm">
+        <Button
+          onClick={() => {
+            void copy();
+          }}
+          size="sm"
+        >
           {copied ? "Kopiert" : "Kopieren"}
         </Button>
       </div>
     </section>
   );
-}
+};

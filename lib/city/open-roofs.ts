@@ -70,7 +70,7 @@ export function minimumRectangle(points: readonly Point2[]): {
   }
   let best: ReturnType<typeof minimumRectangle> = null;
   let bestArea = Number.POSITIVE_INFINITY;
-  for (let i = 0; i < hull.length; i++) {
+  for (let i = 0; i < hull.length; i += 1) {
     const a = hull[i];
     const b = hull[(i + 1) % hull.length];
     const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -98,33 +98,36 @@ export function minimumRectangle(points: readonly Point2[]): {
   return best;
 }
 
+/** The cross product of the turn o to a to b. */
+const cross = (o: Point2, a: Point2, b: Point2) =>
+  (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+
+/** `q` on a hull chain, after the points that no longer turn left. */
+export function extendHull(chain: Point2[], q: Point2): void {
+  while (chain.length >= 2) {
+    const a = chain.at(-2);
+    const b = chain.at(-1);
+    if (!(a && b && cross(a, b, q) <= 0)) {
+      break;
+    }
+    chain.pop();
+  }
+  chain.push(q);
+}
+
 /** The convex hull, counter-clockwise (Andrew's monotone chain). */
 function convexHull(points: readonly Point2[]): Point2[] {
   const p = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   if (p.length < 3) {
     return p;
   }
-  const cross = (o: Point2, a: Point2, b: Point2) =>
-    (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
   const lower: Point2[] = [];
   for (const q of p) {
-    while (
-      lower.length >= 2 &&
-      cross(lower[lower.length - 2], lower[lower.length - 1], q) <= 0
-    ) {
-      lower.pop();
-    }
-    lower.push(q);
+    extendHull(lower, q);
   }
   const upper: Point2[] = [];
   for (const q of [...p].reverse()) {
-    while (
-      upper.length >= 2 &&
-      cross(upper[upper.length - 2], upper[upper.length - 1], q) <= 0
-    ) {
-      upper.pop();
-    }
-    upper.push(q);
+    extendHull(upper, q);
   }
   return [...lower.slice(0, -1), ...upper.slice(0, -1)];
 }
@@ -138,7 +141,8 @@ export function insideBy(
 ): boolean {
   let inside = false;
   for (const ring of rings) {
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    for (let i = 0; i < ring.length; i += 1) {
+      const j = i === 0 ? ring.length - 1 : i - 1;
       const [xi, yi] = ring[i];
       const [xj, yj] = ring[j];
       if (yi > p[1] !== yj > p[1]) {
@@ -238,8 +242,9 @@ export function postsMesh(
   posts: readonly Point2[],
   z0: number,
   z1: number,
-  out: StructureMesh = { isRoof: [], positions: [] }
+  into?: StructureMesh
 ): StructureMesh {
+  const out = into ?? { isRoof: [], positions: [] };
   if (!(z1 > z0)) {
     return out;
   }
@@ -252,7 +257,7 @@ export function postsMesh(
       [x + r, y + r],
       [x - r, y + r],
     ];
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 4; i += 1) {
       const [ax, ay] = ring[i];
       const [bx, by] = ring[(i + 1) % 4];
       push(out, 0, [ax, ay, z0], [bx, by, z0], [bx, by, z1]);
@@ -270,7 +275,7 @@ export function postsMesh(
 export function clipAbove(tri: readonly number[], z: number): number[] {
   const pts = [0, 1, 2].map((k) => tri.slice(3 * k, 3 * k + 3));
   const kept: number[][] = [];
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 3; i += 1) {
     const a = pts[i];
     const b = pts[(i + 1) % 3];
     const aIn = a[2] >= z;
@@ -284,7 +289,7 @@ export function clipAbove(tri: readonly number[], z: number): number[] {
     }
   }
   const out: number[] = [];
-  for (let k = 1; k + 1 < kept.length; k++) {
+  for (let k = 1; k + 1 < kept.length; k += 1) {
     out.push(...kept[0], ...kept[k], ...kept[k + 1]);
   }
   return out;

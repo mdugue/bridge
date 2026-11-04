@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import { DRESDEN } from "../../sites/dresden";
 import { LOOK_CONTROLS } from "../city/look-controls";
 
@@ -11,7 +11,12 @@ import { LOOK_CONTROLS } from "../city/look-controls";
  * Großer Garten had none).
  */
 const GUIDES = ["en", "de"].map((lang) =>
-  join(import.meta.dir, "../../docs/guide", lang, "using-the-viewer.md")
+  nodePath.join(
+    import.meta.dir,
+    "../../docs/guide",
+    lang,
+    "using-the-viewer.md"
+  )
 );
 
 const LABELS = [
@@ -23,7 +28,7 @@ describe("the guide names what the HUD shows", () => {
   for (const path of GUIDES) {
     test(path.split("docs/")[1] ?? path, () => {
       // Labels wrap across lines ("*Brühlsche\n    Terrasse*").
-      const text = readFileSync(path, "utf8").replace(/\s+/g, " ");
+      const text = readFileSync(path, "utf-8").replaceAll(/\s+/gu, " ");
       const missing = LABELS.filter((label) => !text.includes(label));
       expect(missing).toEqual([]);
     });

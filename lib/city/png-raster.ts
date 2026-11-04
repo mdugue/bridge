@@ -28,7 +28,7 @@ function readU32(b: Uint8Array, at: number): number {
 }
 
 function chunkType(b: Uint8Array, at: number): string {
-  return String.fromCharCode(b[at], b[at + 1], b[at + 2], b[at + 3]);
+  return String.fromCodePoint(b[at], b[at + 1], b[at + 2], b[at + 3]);
 }
 
 interface PngParts {
@@ -53,7 +53,10 @@ function readParts(png: Uint8Array): PngParts {
     if (type === "IHDR") {
       width = readU32(body, 0);
       height = readU32(body, 4);
-      const [depth, colour, , , interlace] = body.subarray(8, 13);
+      const header = body.subarray(8, 13);
+      const depth = header[0];
+      const colour = header[1];
+      const interlace = header[4];
       if (depth !== 8 || colour !== 0 || interlace !== 0) {
         throw new Error(
           `unsupported PNG (depth ${depth}, colour ${colour}, interlace ${interlace})`
@@ -103,25 +106,27 @@ function unfilterRow(
 ): void {
   const n = line.length;
   switch (filter) {
-    case 0:
+    case 0: {
       out.set(line);
       return;
+    }
     case 1: {
       let left = 0;
-      for (let i = 0; i < n; i++) {
+      for (let i = 0; i < n; i += 1) {
         left = (line[i] + left) & 255;
         out[i] = left;
       }
       return;
     }
-    case 2:
-      for (let i = 0; i < n; i++) {
+    case 2: {
+      for (let i = 0; i < n; i += 1) {
         out[i] = (line[i] + prev[i]) & 255;
       }
       return;
+    }
     case 3: {
       let left = 0;
-      for (let i = 0; i < n; i++) {
+      for (let i = 0; i < n; i += 1) {
         left = (line[i] + ((left + prev[i]) >> 1)) & 255;
         out[i] = left;
       }
@@ -130,29 +135,35 @@ function unfilterRow(
     case 4: {
       let left = 0;
       let upLeft = 0;
-      for (let i = 0; i < n; i++) {
+      for (let i = 0; i < n; i += 1) {
         const up = prev[i];
         const p = left + up - upLeft;
         const pa = p > left ? p - left : left - p;
         const pb = p > up ? p - up : up - p;
         const pc = p > upLeft ? p - upLeft : upLeft - p;
-        const pred = pa <= pb && pa <= pc ? left : pb <= pc ? up : upLeft;
+        let pred = upLeft;
+        if (pa <= pb && pa <= pc) {
+          pred = left;
+        } else if (pb <= pc) {
+          pred = up;
+        }
         left = (line[i] + pred) & 255;
         out[i] = left;
         upLeft = up;
       }
       return;
     }
-    default:
+    default: {
       throw new Error(`bad PNG filter ${filter}`);
+    }
   }
 }
 
 /** Rows unfiltered between yields: ~5 ms of work for a 4096-wide raster. */
 const ROWS_PER_SLICE = 256;
 
-const yieldToFrame = () =>
-  new Promise<void>((resolve) => {
+const yieldToFrame = async () =>
+  await new Promise<void>((resolve) => {
     setTimeout(resolve, 0);
   });
 
@@ -191,7 +202,7 @@ export async function decodeGreyPng(png: Uint8Array): Promise<GreyRaster> {
       const above = y > 0 ? data.subarray((y - 1) * width, y * width) : zeroRow;
       unfilterRow(row[0], row.subarray(1), above, out);
       filled = 0;
-      y++;
+      y += 1;
       if (y % ROWS_PER_SLICE === 0) {
         await yieldToFrame();
       }

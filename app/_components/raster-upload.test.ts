@@ -1,12 +1,21 @@
 import { afterEach, expect, jest, test } from "bun:test";
 import { deflateSync } from "node:zlib";
-import {
-  LinearMipmapLinearFilter,
-  type Texture,
-  type WebGPURenderer,
-} from "three/webgpu";
+import { LinearMipmapLinearFilter } from "three/webgpu";
+import type { Texture, WebGPURenderer } from "three/webgpu";
 import { loadNdviTexture } from "./terrain-layer";
 import { trackedBytesOf } from "./three-utils";
+
+/** One PNG chunk: length, type, body (the CRC left at 0). */
+const chunk = (type: string, body: Uint8Array) => {
+  const out = new Uint8Array(12 + body.length);
+  new DataView(out.buffer).setUint32(0, body.length);
+  out.set(
+    Array.from(type, (c) => c.codePointAt(0) ?? 0),
+    4
+  );
+  out.set(body, 8);
+  return out;
+};
 
 /** A greyscale PNG of `px` (filter 0 rows, one IDAT; CRCs left at 0: the
  *  viewer's decoder does not check them). */
@@ -16,19 +25,9 @@ function greyPng(
   px: Uint8Array
 ): Uint8Array<ArrayBuffer> {
   const raw = new Uint8Array((width + 1) * height);
-  for (let y = 0; y < height; y++) {
+  for (let y = 0; y < height; y += 1) {
     raw.set(px.subarray(y * width, (y + 1) * width), y * (width + 1) + 1);
   }
-  const chunk = (type: string, body: Uint8Array) => {
-    const out = new Uint8Array(12 + body.length);
-    new DataView(out.buffer).setUint32(0, body.length);
-    out.set(
-      Array.from(type, (c) => c.charCodeAt(0)),
-      4
-    );
-    out.set(body, 8);
-    return out;
-  };
   const ihdr = new Uint8Array(13);
   new DataView(ihdr.buffer).setUint32(0, width);
   new DataView(ihdr.buffer).setUint32(4, height);
@@ -58,23 +57,22 @@ afterEach(() => {
  *  time, the microtasks between the steps drained, so a retry's backoff
  *  waits on no real time. */
 async function settled<T>(promise: Promise<T>): Promise<T> {
-  let done = false;
+  const state = { done: false };
   const watched = promise.finally(() => {
-    done = true;
+    state.done = true;
   });
-  for (let waited = 0; !done && waited < 60_000; waited += 50) {
-    for (let i = 0; i < 20; i++) {
+  for (let waited = 0; !state.done && waited < 60_000; waited += 50) {
+    for (let i = 0; i < 20; i += 1) {
       await Promise.resolve();
     }
     jest.advanceTimersByTime(50);
   }
-  return watched;
+  return await watched;
 }
 
 function serve(png: Uint8Array<ArrayBuffer>): void {
   // reason: the loader reads only `ok` and the body of a Response
-  globalThis.fetch = (() =>
-    Promise.resolve(new Response(png))) as unknown as typeof fetch;
+  globalThis.fetch = (async () => new Response(png)) as unknown as typeof fetch;
 }
 
 /** What three's `initTexture` does that the loader relies on: the upload
@@ -107,10 +105,12 @@ test("a raster whose download hit a blip is asked for again, not taken for absen
   const png = greyPng(2, 2, new Uint8Array(4).fill(90));
   let calls = 0;
   // reason: the loader reads only `ok` and the body of a Response
-  globalThis.fetch = (() =>
-    ++calls === 1
-      ? Promise.reject(new TypeError("Load failed"))
-      : Promise.resolve(new Response(png))) as unknown as typeof fetch;
+  globalThis.fetch = (async () => {
+    calls += 1;
+    return calls === 1
+      ? await Promise.reject(new TypeError("Load failed"))
+      : await Promise.resolve(new Response(png));
+  }) as unknown as typeof fetch;
   const seen: { mips: boolean; min: number }[] = [];
   expect(
     await settled(loadNdviTexture("ndvi.png", fakeRenderer(seen)))

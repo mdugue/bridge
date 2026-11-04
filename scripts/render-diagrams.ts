@@ -122,8 +122,12 @@ function serve() {
         return new Response(HOST, { headers: { "content-type": "text/html" } });
       }
       const [, root, ...rest] = pathname.split("/");
-      const base =
-        root === "mermaid" ? mermaidDir : root === "font" ? fontDir : null;
+      let base: string | null = null;
+      if (root === "mermaid") {
+        base = mermaidDir;
+      } else if (root === "font") {
+        base = fontDir;
+      }
       const file = base ? Bun.file(path.join(base, ...rest)) : null;
       return file ? new Response(file) : new Response(null, { status: 404 });
     },
@@ -139,7 +143,7 @@ interface Job {
 function collect(): Job[] {
   const jobs = new Map<string, Job>();
   for (const rel of docFiles(path.join(ROOT, "docs"))) {
-    const text = readFileSync(path.join(ROOT, rel), "utf8");
+    const text = readFileSync(path.join(ROOT, rel), "utf-8");
     for (const source of mermaidBlocks(text)) {
       const key = diagramKey(source);
       if (!jobs.has(key)) {
@@ -187,7 +191,7 @@ async function main() {
     for (
       let i = 0;
       i < 100 && !(await view.evaluate<boolean>("window.ready === true"));
-      i++
+      i += 1
     ) {
       await Bun.sleep(100);
     }
@@ -203,7 +207,7 @@ async function main() {
       }
       const stray = strayPaint(painted, authoredColors(job.source));
       if (stray.length > 0) {
-        failed++;
+        failed += 1;
         console.error(
           `FAILED  ${job.from}: colours outside the theme: ${stray.join(" ")}`
         );

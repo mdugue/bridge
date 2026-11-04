@@ -7,12 +7,10 @@ import {
   RedFormat,
   RenderTarget,
   SRGBColorSpace,
-  type Texture,
-  type TextureNode,
   UnsignedByteType,
   Vector3,
-  type WebGPURenderer,
 } from "three/webgpu";
+import type { Texture, TextureNode, WebGPURenderer } from "three/webgpu";
 import {
   float,
   int,
@@ -155,7 +153,7 @@ function tapSum<T extends F | V3>(
  * offset is read once, for the colour and the water alike.
  */
 function splatFragment(
-  classNode: TextureNode<"vec4">,
+  classNode: TextureNode,
   width: number,
   height: number,
   scale: SplatScale

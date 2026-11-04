@@ -111,7 +111,8 @@ export function packSportTable(table: SportTable): {
   const rows = table.grounds;
   const width = rows.length;
   const data = new Float32Array(width * SPORT_ROW_FLOATS);
-  for (const [i, row] of rows.entries()) {
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i];
     const [cx, cy, angle, p1, p2, p3, surface, marking, shape] = row;
     const known =
       surface < SPORT_SURFACES.length &&
@@ -234,30 +235,42 @@ function volleyballNet(row: SportRow): SportFixture[] {
 export function sportFixtures(table: SportTable): SportFixture[] {
   const out: SportFixture[] = [];
   for (const row of table.grounds) {
-    const [, , , p1, p2, , , marking, shape] = row;
+    const p1 = row[3];
+    const p2 = row[4];
+    const marking = row[7];
+    const shape = row[8];
     if (shape !== sportShapeId("rect") || p1 <= 0 || p2 <= 0) {
       continue;
     }
     switch (SPORT_MARKINGS[marking]) {
-      case "football":
+      case "football": {
         out.push(...footballGoals(row));
         break;
-      case "court":
+      }
+      case "court": {
         out.push(...goals(row, 3, 2));
         break;
-      case "basketball":
+      }
+      case "basketball": {
         out.push(...hoops(row));
         break;
-      case "tennis":
+      }
+      case "tennis": {
         out.push(...tennisNet(row));
         break;
-      case "volleyball":
+      }
+      case "volleyball": {
         out.push(...volleyballNet(row));
         break;
+      }
       case "lanes":
       case "board":
-      case "none":
+      case "none": {
         break;
+      }
+      default: {
+        break; // a marking id the table does not know: no fixtures
+      }
     }
   }
   return out;

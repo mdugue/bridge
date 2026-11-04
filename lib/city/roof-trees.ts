@@ -48,8 +48,8 @@ function vertexIds(nested: unknown, out: number[]): void {
  * not a bridge's or another traffic structure's, which a tree may well
  * stand beside or under. */
 export function lod2Roofs(doc: CityJsonDocument): RoofFootprint[] {
-  const [, , sz] = doc.transform?.scale ?? [1, 1, 1];
-  const [, , tz] = doc.transform?.translate ?? [0, 0, 0];
+  const sz = (doc.transform?.scale ?? [1, 1, 1])[2];
+  const tz = (doc.transform?.translate ?? [0, 0, 0])[2];
   const out: RoofFootprint[] = [];
   for (const [id, obj] of Object.entries(
     withoutTrafficStructures(doc).CityObjects
@@ -112,7 +112,7 @@ export function gapRoofs(
 
 function inside(ring: readonly [number, number][], x: number, y: number) {
   let hit = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
     const [xi, yi] = ring[i];
     const [xj, yj] = ring[j];
     if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
@@ -128,7 +128,7 @@ function nearEdge(
   y: number,
   inset: number
 ): boolean {
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
     const [ax, ay] = ring[j];
     const [bx, by] = ring[i];
     if (segmentDistance2(x, y, ax, ay, bx, by) < inset * inset) {
@@ -161,12 +161,12 @@ export function treesOffRoofs<
     for (
       let cx = Math.floor(Math.min(...xs) / CELL);
       cx <= Math.floor(Math.max(...xs) / CELL);
-      cx++
+      cx += 1
     ) {
       for (
         let cy = Math.floor(Math.min(...ys) / CELL);
         cy <= Math.floor(Math.max(...ys) / CELL);
-        cy++
+        cy += 1
       ) {
         const key = `${cx},${cy}`;
         const bucket = cells.get(key);

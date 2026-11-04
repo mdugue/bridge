@@ -1,16 +1,13 @@
 import {
   Color,
-  type DataTexture,
   DoubleSide,
   FrontSide,
   InterpolationSamplingType,
   MeshStandardNodeMaterial,
-  type Node,
-  type Texture,
   SRGBColorSpace,
-  type UniformNode,
   Vector3,
 } from "three/webgpu";
+import type { DataTexture, Node, Texture, UniformNode } from "three/webgpu";
 import {
   abs,
   attribute,
@@ -53,14 +50,8 @@ import {
 import { FACADE_UNIT } from "@/lib/city/facade-reading";
 import { SELECTION_ACCENT } from "@/lib/city/outline";
 import { FACADE_ROOF, NO_DOOR, WALL_EAVE } from "@/lib/city/windows";
-import {
-  dataPosition,
-  type F,
-  type Live,
-  type V3,
-  type V2,
-  type V4,
-} from "./shader-chunks";
+import { dataPosition } from "./shader-chunks";
+import type { F, Live, V3, V2, V4 } from "./shader-chunks";
 import {
   setGraph,
   setSlots,
@@ -224,14 +215,16 @@ const ASKED_INK = askedInk as unknown as Node<"vec3">;
  *  HUD's own ink). */
 const ASKED_INK_SHARE = 0.7;
 
+/** A colour's luminance (sRGB 0…1, Rec. 709 weights). */
+const lum = (c: readonly [number, number, number]) =>
+  0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+
 /** The asked building's colours from a style's outline (sRGB 0…1): lifted
  *  towards the lighter of the two, hatched in the darker. */
 export function setAskedColours(
   line: readonly [number, number, number],
   halo: readonly [number, number, number]
 ): void {
-  const lum = (c: readonly [number, number, number]) =>
-    0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
   const [pale, dark] = lum(line) > lum(halo) ? [line, halo] : [halo, line];
   askedPale.value.setRGB(pale[0], pale[1], pale[2], SRGBColorSpace);
   askedInk.value
@@ -1107,7 +1100,9 @@ export function createClayMaterial(
   clay.userData.figure = true;
   applySides(clay, resources.section);
   resources.materials.add(clay);
-  clay.addEventListener("dispose", () => resources.materials.delete(clay));
+  clay.addEventListener("dispose", () => {
+    resources.materials.delete(clay);
+  });
   return clay;
 }
 

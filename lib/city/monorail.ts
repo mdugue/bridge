@@ -14,12 +14,8 @@
  * ground (`monorailJoins`, ADR 0030).
  */
 import type { RailFeature } from "./features";
-import {
-  type HeightAt,
-  type JoinPoint,
-  lowestGround,
-  SINK,
-} from "./ground-join";
+import { lowestGround, SINK } from "./ground-join";
+import type { HeightAt, JoinPoint } from "./ground-join";
 import type { Point2 } from "./polyline";
 
 export type MonorailKind = "hanging" | "top";
@@ -89,7 +85,7 @@ export function monorailSupports(
   }
   let next = every / 2;
   let start = 0;
-  for (let i = 1; i < coords.length; i++) {
+  for (let i = 1; i < coords.length; i += 1) {
     const a = coords[i - 1];
     const b = coords[i];
     const len = Math.hypot(b[0] - a[0], b[1] - a[1]);

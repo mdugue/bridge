@@ -7,15 +7,10 @@
  * hour's estimate is labelled as one (the typical day's curve, not a
  * count). No THREE, no DOM.
  */
-import { type BikeDirection, SITE_ZONE } from "./bike-counts";
-import {
-  factLines,
-  firstText,
-  type InquiryCard,
-  positionKey,
-  stated,
-  whole,
-} from "./card-lines";
+import { SITE_ZONE } from "./bike-counts";
+import type { BikeDirection } from "./bike-counts";
+import { factLines, firstText, positionKey, stated, whole } from "./card-lines";
+import type { InquiryCard } from "./card-lines";
 import type { TrafficFeature, TrafficMethod } from "./features";
 import type { TrafficDayKind, TrafficHourStatus } from "./traffic-hours";
 

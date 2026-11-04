@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
+import type * as ReportChoice from "./report-choice";
 
 // A module of its own (the query): the DSN is read once, at load, and
 // crash-reports.test.ts loads the shared one with a DSN set — under Bun
@@ -11,7 +12,7 @@ const { reportsDeclined, reportsState, setReportsDeclined } =
     try {
       return (await import(
         `${import.meta.dir}/report-choice.ts?no-dsn`
-      )) as typeof import("./report-choice");
+      )) as typeof ReportChoice;
     } finally {
       if (savedDsn !== undefined) {
         process.env.CRASH_REPORTS_DSN = savedDsn;
@@ -27,7 +28,9 @@ function fakeStorage(): Map<string, string> {
   globals.localStorage = {
     getItem: (key: string) => map.get(key) ?? null,
     setItem: (key: string, value: string) => map.set(key, value),
-    removeItem: (key: string) => void map.delete(key),
+    removeItem: (key: string) => {
+      map.delete(key);
+    },
   };
   return map;
 }

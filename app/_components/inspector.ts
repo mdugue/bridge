@@ -1,4 +1,5 @@
-import { InspectorBase, type WebGPURenderer } from "three/webgpu";
+import { InspectorBase } from "three/webgpu";
+import type { WebGPURenderer } from "three/webgpu";
 
 /**
  * three's own Inspector on `?inspect=1` (three/addons/inspector): a panel

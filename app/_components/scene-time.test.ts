@@ -22,9 +22,11 @@ function fakeFrames() {
   let next = 1;
   const waiting = new Map<number, () => void>();
   return {
-    schedule: (callback: () => void) => {
-      waiting.set(next, callback);
-      return next++;
+    schedule: (job: () => void) => {
+      const handle = next;
+      waiting.set(handle, job);
+      next += 1;
+      return handle;
     },
     unschedule: (handle: number) => {
       waiting.delete(handle);
@@ -32,8 +34,8 @@ function fakeFrames() {
     frame: () => {
       const due = [...waiting.values()];
       waiting.clear();
-      for (const callback of due) {
-        callback();
+      for (const job of due) {
+        job();
       }
     },
   };
@@ -44,7 +46,7 @@ test("a drag's steps reach the scene once a frame, the first at once and the las
   let runs = 0;
   const gate = frameGate(
     () => {
-      runs++;
+      runs += 1;
     },
     frames.schedule,
     frames.unschedule
@@ -69,7 +71,7 @@ test("a cancelled gate drops the step still waiting for its frame", () => {
   let runs = 0;
   const gate = frameGate(
     () => {
-      runs++;
+      runs += 1;
     },
     frames.schedule,
     frames.unschedule

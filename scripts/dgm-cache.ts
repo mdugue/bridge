@@ -16,9 +16,10 @@
  */
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import path from "node:path";
 import { cachedEntry, writeEntry } from "./bake-cache";
-import { type Dgm, readDgm } from "./bake-tiles";
+import { readDgm } from "./bake-tiles";
+import type { Dgm } from "./bake-tiles";
 
 /** Bump when readDgm's decode changes what it returns for the same bytes
  *  (NoData handling, resampling, bounds): every entry is keyed by it. */
@@ -29,7 +30,7 @@ const GEOTIFF_VERSION = (
   JSON.parse(
     readFileSync(
       Bun.resolveSync("geotiff/package.json", import.meta.dir),
-      "utf8"
+      "utf-8"
     )
   ) as { version: string }
 ).version;
@@ -39,7 +40,7 @@ export function dgmCacheDir(
   env: { DGM_CACHE?: string; NODE_ENV?: string } = process.env
 ): string | null {
   return env.NODE_ENV === "test" || env.DGM_CACHE === "1"
-    ? join(process.cwd(), ".cache", "dgm")
+    ? path.join(process.cwd(), ".cache", "dgm")
     : null;
 }
 
@@ -109,9 +110,9 @@ export async function readDgmFile(
 ): Promise<Dgm> {
   const bytes = readFileSync(tif);
   const sidecar =
-    tfw !== null && existsSync(tfw) ? readFileSync(tfw, "utf8") : null;
+    tfw !== null && existsSync(tfw) ? readFileSync(tfw, "utf-8") : null;
   const key = dir === null ? "" : dgmKey(bytes, sidecar, size);
-  const name = `${basename(tif)}.${size}.dgm`;
+  const name = `${path.basename(tif)}.${size}.dgm`;
   const hit = dir === null ? null : cachedEntry(dir, name, key);
   const kept = hit === null ? null : unpackDgm(readFileSync(hit));
   if (kept !== null) {

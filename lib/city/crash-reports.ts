@@ -5,13 +5,15 @@ import {
   formatBeat,
   resumedFor,
   round,
-  type SummaryMark,
-  type TimingSums,
   timingMeans,
-  type Trail,
-  type TrailBeat,
-  type TrailEvent,
   trailPhase,
+} from "./crash-trail";
+import type {
+  SummaryMark,
+  TimingSums,
+  Trail,
+  TrailBeat,
+  TrailEvent,
 } from "./crash-trail";
 import { RESUME_WINDOW_MS } from "./gpu-safety";
 
@@ -116,14 +118,18 @@ type ReportLevel = "fatal" | "error" | "warning";
 function problemLevel(event: TrailEvent): ReportLevel {
   switch (event.kind) {
     case "device-lost":
-    case "gpu failed":
+    case "gpu failed": {
       return "fatal";
-    case "boot failed":
+    }
+    case "boot failed": {
       return event.detail?.startsWith("network:") ? "error" : "fatal";
-    case "alloc-failed":
+    }
+    case "alloc-failed": {
       return "warning";
-    default:
+    }
+    default: {
       return "error";
+    }
   }
 }
 
@@ -304,12 +310,12 @@ export function envelopeUrl(dsn: string): string | null {
   } catch {
     return null;
   }
-  const path = url.pathname.split("/").filter(Boolean);
-  const project = path.pop();
-  if (!(url.username && project && /^\d+$/.test(project))) {
+  const segments = url.pathname.split("/").filter(Boolean);
+  const project = segments.pop();
+  if (!(url.username && project && /^\d+$/u.test(project))) {
     return null;
   }
-  const prefix = path.map((part) => `/${part}`).join("");
+  const prefix = segments.map((part) => `/${part}`).join("");
   return (
     `${url.protocol}//${url.host}${prefix}/api/${project}/envelope/` +
     `?sentry_key=${url.username}&sentry_version=7`
@@ -344,7 +350,9 @@ export function sessionEnvelope(
 }
 
 /** A URL in an event's text (a tile's file, a chunk in a stack). */
-const URL_PATTERN = /\b[a-z]+:\/\/\S+/gi;
+const URL_PATTERN = /\b[a-z]+:\/\/\S+/giu;
+
+const blank = (s: string) => s.replaceAll(/\d/gu, "#");
 
 /**
  * An event's text as it may leave the device, with no place in it: the
@@ -355,11 +363,10 @@ const URL_PATTERN = /\b[a-z]+:\/\/\S+/gi;
  * decimals and more).
  */
 export function scrub(text: string): string {
-  const blank = (s: string) => s.replace(/\d/g, "#");
   return text
-    .replace(URL_PATTERN, blank)
-    .replace(/\d+(?:_\d+)+/g, blank)
-    .replace(/\d+\.\d{3,}|\d{5,}(?:\.\d+)?/g, blank);
+    .replaceAll(URL_PATTERN, blank)
+    .replaceAll(/\d+(?:_\d+)+/gu, blank)
+    .replaceAll(/\d+\.\d{3,}|\d{5,}(?:\.\d+)?/gu, blank);
 }
 
 /** One event as a breadcrumb's line (the crumb has the time), scrubbed. */
@@ -374,8 +381,8 @@ const eventLine = (e: TrailEvent) =>
 export function problemKey(event: TrailEvent): string {
   return (event.detail ?? "")
     .split(" | ")[0]
-    .replace(URL_PATTERN, "<url>")
-    .replace(/\d+/g, "#")
+    .replaceAll(URL_PATTERN, "<url>")
+    .replaceAll(/\d+/gu, "#")
     .slice(0, 80)
     .trim();
 }
@@ -426,7 +433,7 @@ function lastT(trail: Trail): number {
 }
 
 function path(trail: Trail): string {
-  return trail.url.split(/[?#]/)[0] ?? "/";
+  return trail.url.split(/[?#]/u)[0] ?? "/";
 }
 
 const asTag = (value: number | undefined) =>
@@ -503,7 +510,7 @@ const lastTiming = (last: TrailBeat | undefined) =>
 
 /** The page's numbers, shown with every report. */
 function pageContext(trail: Trail) {
-  const stats = trail.stats;
+  const { stats } = trail;
   const beats = stats?.beats ?? 0;
   const last = trail.beats.at(-1);
   return {
@@ -626,7 +633,7 @@ export function problemReport(
 
 /** The page's stats since its last summary (the whole page for the first). */
 function stretch(trail: Trail) {
-  const stats = trail.stats;
+  const { stats } = trail;
   const sent = trail.report?.sent;
   return {
     from: sent?.t ?? 0,
@@ -662,7 +669,7 @@ export function summaryDue(trail: Trail): boolean {
 
 /** Where a summary sent now leaves the page (`TrailReport.sent`). */
 export function summaryMark(trail: Trail): SummaryMark {
-  const stats = trail.stats;
+  const { stats } = trail;
   return {
     t: lastT(trail),
     beats: stats?.beats ?? 0,
@@ -703,10 +710,10 @@ export function summaryReport(
     measure("fps_mean", part.fpsSum / part.beats, "none");
     // The share of the stretch in view below 10, 20 and 30 fps.
     let below = 0;
-    FPS_BUCKETS.slice(0, 3).forEach((bound, i) => {
+    for (const [i, bound] of FPS_BUCKETS.slice(0, 3).entries()) {
       below += part.fps[i] ?? 0;
       measure(`fps_below_${bound}`, below / part.beats, "ratio");
-    });
+    }
     // Where the frames' time went (lib/city/frame-timing.ts): the main
     // thread's frame and the render call in it, and the GPU where the
     // browser has timestamp queries.
@@ -751,7 +758,7 @@ export function sessionUpdate(
   status: SessionStatus,
   ctx: ReportContext
 ): SessionPayload | null {
-  const report = trail.report;
+  const { report } = trail;
   const { release, environment } = buildOf(trail, ctx);
   if (!(report && release)) {
     return null;

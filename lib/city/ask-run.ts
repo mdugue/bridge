@@ -8,29 +8,32 @@
  * a test drives it with a scripted adapter (`@tanstack/ai/testing`).
  */
 import {
-  type AnyTextAdapter,
   chat,
   convertMessagesToModelMessages,
-  type ModelMessage,
+  EventType,
   maxIterations,
-  type StreamChunk,
-  type UIMessage,
+} from "@tanstack/ai";
+import type {
+  AnyTextAdapter,
+  ModelMessage,
+  StreamChunk,
+  UIMessage,
 } from "@tanstack/ai";
 import { scrubSecrets } from "@tanstack/ai/byok";
 import {
   ASK_LIMITS,
-  type AskPromptSite,
   askSystemPrompt,
   CUT_SHORT,
   TOO_MANY_STEPS,
 } from "./ask-city";
+import type { AskPromptSite } from "./ask-city";
 import {
   factsOf,
-  type Knowledge,
   nearKnowledge,
   searchKnowledge,
   sourcesOf,
 } from "./ask-knowledge";
+import type { Knowledge } from "./ask-knowledge";
 import {
   factsTool,
   nearTool,
@@ -73,6 +76,8 @@ export interface AskRun {
   site: AskPromptSite;
   threadId: string;
   today: Date;
+  /** the answers are read aloud */
+  voice?: boolean;
 }
 
 /**
@@ -82,7 +87,7 @@ export interface AskRun {
  * UI messages fold several turns into one, the conversion splits them.
  */
 export function roundsSinceQuestion(
-  messages: ReadonlyArray<UIMessage | ModelMessage>
+  messages: readonly (UIMessage | ModelMessage)[]
 ): number {
   // the whole conversation converts, as the run will convert it: one that
   // does not is refused here, not halfway through the answer
@@ -94,6 +99,94 @@ export function roundsSinceQuestion(
     .length;
 }
 
+/**
+ * A stopped call's stand-in result. It names no cause (a stop, the
+ * deadline or a dropped line end a run alike) and says `ok: false`, which
+ * the trace shows as not done when a later snapshot brings it back to the
+ * browser.
+ */
+const STOPPED_RESULT = JSON.stringify({
+  abgebrochen: true,
+  ok: false,
+  hinweis: "Abgebrochen, bevor ein Ergebnis kam.",
+});
+
+/**
+ * The conversation with an answer for every tool call an earlier answer
+ * ended before its result came (the visitor stopped it while a scene
+ * tool waited): a call with no result makes the providers refuse every
+ * later request. The stand-in `tool` row goes right before the next
+ * question, after every row of the ended answer, so nothing it carried
+ * (its thinking, a segment that continues it) loses its place; a result
+ * counts only within its own answer, as some providers number calls
+ * afresh in each. Calls after the last question are the answer's own,
+ * which a resume completes. Arguments cut off mid-stream (a stop, or the
+ * output cap) become `{}` in every row, for no resume finishes them and
+ * the OpenAI-shaped adapters pass them on unparsed. The route hands this
+ * the AG-UI wire rows (an assistant row's `toolCalls`, a `tool` row per
+ * result); a UI message passes as it came. Throws on a row too malformed
+ * to read.
+ */
+export function withStoppedCallsAnswered<T extends UIMessage | ModelMessage>(
+  messages: readonly T[]
+): (T | ModelMessage)[] {
+  const question = messages.findLastIndex((m) => m.role === "user");
+  const out: (T | ModelMessage)[] = [];
+  // the open calls of the answer since the last question row
+  let open = new Set<string>();
+  for (let i = 0; i < messages.length; i += 1) {
+    const m = messages[i];
+    if (m.role === "user") {
+      out.push(...[...open].map(stoppedResult));
+      open = new Set();
+    } else if (m.role === "tool" && "toolCallId" in m) {
+      open.delete(String(m.toolCallId));
+    }
+    if (m.role === "assistant" && "toolCalls" in m) {
+      // the running answer's calls are the resume's to answer; a call
+      // without an id can be answered by none
+      if (i < question) {
+        for (const c of m.toolCalls ?? []) {
+          if (typeof c.id === "string" && c.id !== "") {
+            open.add(c.id);
+          }
+        }
+      }
+      out.push(withWholeArguments(m));
+    } else {
+      out.push(m);
+    }
+  }
+  return out;
+}
+
+function stoppedResult(toolCallId: string): ModelMessage {
+  return { role: "tool", toolCallId, content: STOPPED_RESULT };
+}
+
+/** The row with `{}` for arguments cut off before they were a JSON
+ *  object; the same row when none were. */
+function withWholeArguments<T extends ModelMessage>(m: T): T {
+  let mended = false;
+  const toolCalls = m.toolCalls?.map((c) => {
+    if (isArgumentObject(c.function.arguments)) {
+      return c;
+    }
+    mended = true;
+    return { ...c, function: { ...c.function, arguments: "{}" } };
+  });
+  return mended ? { ...m, toolCalls } : m;
+}
+
+function isArgumentObject(text: string): boolean {
+  try {
+    const args: unknown = JSON.parse(text);
+    return typeof args === "object" && args !== null && !Array.isArray(args);
+  } catch {
+    return false;
+  }
+}
+
 /** The answer as a stream of AG-UI events, for an SSE response. */
 export function runAsk(run: AskRun) {
   return chat({
@@ -103,7 +196,7 @@ export function runAsk(run: AskRun) {
     ...(run.runId ? { runId: run.runId } : {}),
     ...(run.resume ? { resume: run.resume } : {}),
     ...(run.parentRunId ? { parentRunId: run.parentRunId } : {}),
-    systemPrompts: [askSystemPrompt(run.site, run.today)],
+    systemPrompts: [askSystemPrompt(run.site, run.today, run.voice)],
     tools: [...knowledgeTools(run.knowledge), ...SCENE_TOOLS],
     agentLoopStrategy: maxIterations(
       Math.min(ASK_LIMITS.iterations, run.turns ?? ASK_LIMITS.iterations)
@@ -130,11 +223,11 @@ function errorChunk(message: string, key: string, code?: unknown): StreamChunk {
 
 function runError(message: string, code?: string): StreamChunk {
   return {
-    type: "RUN_ERROR",
+    type: EventType.RUN_ERROR,
     timestamp: Date.now(),
     message,
     ...(code ? { code } : {}),
-  } as StreamChunk;
+  };
 }
 
 /** The reason the route aborts a run that nears the host's limit. */
@@ -148,18 +241,22 @@ export const DEADLINE = "deadline";
  * its own, waits for a scene tool, or already sent an error is left as
  * it is: an answer without words is not told from one that said enough
  * before its last tool.
+ *
+ * @yields {StreamChunk} every chunk of `stream`, then the closing error if any
  */
 export async function* ended(
   stream: AsyncIterable<StreamChunk>,
   signal: AbortSignal,
-  onEnd: () => void = () => {}
+  onEnd: () => void = () => {
+    // no hook given: nothing to tell when the stream is done
+  }
 ): AsyncIterable<StreamChunk> {
   let last: StreamChunk | undefined;
   let before: StreamChunk | undefined;
   try {
     for await (const chunk of stream) {
       // the abort's own error would say less than the deadline's
-      if (signal.reason === DEADLINE && chunk.type === "RUN_ERROR") {
+      if (signal.reason === DEADLINE && chunk.type === EventType.RUN_ERROR) {
         continue;
       }
       before = last;
@@ -189,17 +286,27 @@ type RunEnd = "stop" | "waits" | "cut" | "length" | "refused" | "other";
 function stopText(end: RunEnd, late: boolean): string | null {
   switch (end) {
     case "stop":
-    case "waits":
+    case "waits": {
       return null;
-    case "cut":
+    }
+    case "cut": {
       return late ? "Die Antwort dauerte zu lange." : TOO_MANY_STEPS;
-    case "length":
+    }
+    case "length": {
       return late ? "Die Antwort dauerte zu lange." : CUT_SHORT;
-    case "refused":
+    }
+    case "refused": {
       // a refusal, or (OpenRouter) a provider's failure mid-answer
       return "Das Modell brach die Antwort ab. Frag bitte noch einmal.";
-    case "other":
+    }
+    case "other": {
+      // an error already said why, or nothing came
       return late ? "Die Antwort dauerte zu lange." : null;
+    }
+    default: {
+      const unknown: never = end;
+      throw new Error(`unknown run end: ${String(unknown)}`);
+    }
   }
 }
 
@@ -207,10 +314,10 @@ function runEnd(
   last: StreamChunk | undefined,
   before: StreamChunk | undefined
 ): RunEnd {
-  if (last?.type === "TOOL_CALL_RESULT") {
+  if (last?.type === EventType.TOOL_CALL_RESULT) {
     return "cut";
   }
-  if (last?.type !== "RUN_FINISHED") {
+  if (last?.type !== EventType.RUN_FINISHED) {
     return "other";
   }
   const c = last as {
@@ -229,23 +336,32 @@ function runEnd(
     // `length` right after that call's failed result
     const state = (before as { metadata?: { tanstack?: { state?: unknown } } })
       ?.metadata?.tanstack?.state;
-    return before?.type === "TOOL_CALL_RESULT" && state === "output-error"
+    return before?.type === EventType.TOOL_CALL_RESULT &&
+      state === "output-error"
       ? "cut"
       : "length";
   }
   return reason === "content_filter" ? "refused" : "stop";
 }
 
-/** The stream with the key taken out of any error, thrown or sent. */
+/**
+ * The stream with the key taken out of any error, thrown or sent.
+ *
+ * @yields {StreamChunk} every chunk of `stream`, errors scrubbed
+ */
 export async function* scrubbed(
   stream: AsyncIterable<StreamChunk>,
   key: string
 ): AsyncIterable<StreamChunk> {
   try {
     for await (const chunk of stream) {
-      yield chunk.type === "RUN_ERROR"
-        ? errorChunk(String(chunk.message), key, chunk.code)
-        : chunk;
+      if (chunk.type === EventType.RUN_ERROR) {
+        // a text only by its type: an adapter may send anything
+        const message: unknown = chunk.message;
+        yield errorChunk(String(message), key, chunk.code);
+      } else {
+        yield chunk;
+      }
     }
   } catch (error) {
     yield errorChunk(

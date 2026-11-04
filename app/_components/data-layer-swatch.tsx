@@ -13,29 +13,27 @@ import { cn } from "cn";
  * and for anyone who asks for reduced motion (globals.css,
  * `.data-swatch`).
  */
-export function DataLayerSwatch({
+export const DataLayerSwatch = ({
   layer,
   on,
 }: {
   layer: DataLayerKey;
   on: boolean;
-}) {
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        "data-swatch relative inline-flex h-3.5 w-8 shrink-0 items-center overflow-hidden rounded-full transition-[opacity,filter]",
-        on ? "" : "data-swatch-off opacity-55 saturate-50"
-      )}
-    >
-      {layer === "trafficLayer" && <TrafficSample />}
-      {layer === "bikeLayer" && <BikeSample />}
-      {layer === "tramLayer" && <TramSample />}
-    </span>
-  );
-}
+}) => (
+  <span
+    aria-hidden
+    className={cn(
+      "data-swatch relative inline-flex h-3.5 w-8 shrink-0 items-center overflow-hidden rounded-full transition-[opacity,filter]",
+      on ? "" : "data-swatch-off opacity-55 saturate-50"
+    )}
+  >
+    {layer === "trafficLayer" && <TrafficSample />}
+    {layer === "bikeLayer" && <BikeSample />}
+    {layer === "tramLayer" && <TramSample />}
+  </span>
+);
 
-function TrafficSample() {
+const TrafficSample = () => {
   const style: CSSProperties = {
     background: `linear-gradient(90deg, ${TRAFFIC_SCALE.map((s) => tintCss(s.tint)).join(", ")})`,
   };
@@ -47,26 +45,24 @@ function TrafficSample() {
       <span className="data-swatch-comet absolute inset-y-0 w-2.5 rounded-full" />
     </span>
   );
-}
+};
 
-function BikeSample() {
-  return (
-    <span className="absolute inset-0 flex items-end justify-center gap-1 pb-px">
-      {BIKE_DIRECTION_TINTS.map((tint, i) => (
-        <span
-          className="data-swatch-glass data-swatch-rings h-3 w-1.5 rounded-t-full rounded-b-sm"
-          key={tint}
-          style={{
-            backgroundColor: tintCss(tint),
-            animationDelay: `${i * -0.6}s`,
-          }}
-        />
-      ))}
-    </span>
-  );
-}
+const BikeSample = () => (
+  <span className="absolute inset-0 flex items-end justify-center gap-1 pb-px">
+    {BIKE_DIRECTION_TINTS.map((tint, i) => (
+      <span
+        className="data-swatch-glass data-swatch-rings h-3 w-1.5 rounded-t-full rounded-b-sm"
+        key={tint}
+        style={{
+          backgroundColor: tintCss(tint),
+          animationDelay: `${i * -0.6}s`,
+        }}
+      />
+    ))}
+  </span>
+);
 
-function TramSample() {
+const TramSample = () => {
   const style: CSSProperties = {
     background: `linear-gradient(90deg, transparent, ${tintCss(TRAM_TINTS.trail)})`,
   };
@@ -79,4 +75,4 @@ function TramSample() {
       />
     </span>
   );
-}
+};

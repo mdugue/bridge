@@ -10,10 +10,10 @@ import {
   ASK_KEY_HEADER,
   ASK_LIMITS,
   ASK_PROVIDER_BY_ID,
-  type AskProviderDef,
   isAskProvider,
   plausibleKey,
 } from "@/lib/city/ask-city";
+import type { AskProviderDef } from "@/lib/city/ask-city";
 import { issueAskToken } from "@/lib/city/ask-token";
 import { fakeModel } from "../frag/env";
 
@@ -70,7 +70,7 @@ export async function POST(request: Request): Promise<Response> {
       cache: "no-store",
       signal: AbortSignal.timeout(10_000),
     });
-    status = res.status;
+    ({ status } = res);
     await res.body?.cancel();
   } catch {
     return refuse(

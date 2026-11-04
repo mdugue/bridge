@@ -28,10 +28,10 @@ test("a landmark in each zone lands where PROJ puts it", () => {
   // series), printed to 0.1 mm. PROJ's meridian convergence is grid north
   // from true north, ours the other way round.
   const landmarks = [
-    [25_833, 51.051_893, 13.741_522, 411_793.1247, 5_656_349.0498, -0.978_8],
-    [25_833, 52.516_275, 13.377_704, 389_918.0415, 5_819_699.1323, -1.287_5],
-    [25_832, 53.550_556, 9.992_222, 565_737.2899, 5_933_976.0674, 0.798_2],
-    [25_832, 48.138_611, 11.573_611, 691_458.0057, 5_334_909.9112, 1.917_3],
+    [25_833, 51.051893, 13.741522, 411_793.1247, 5_656_349.0498, -0.9788],
+    [25_833, 52.516275, 13.377704, 389_918.0415, 5_819_699.1323, -1.2875],
+    [25_832, 53.550556, 9.992222, 565_737.2899, 5_933_976.0674, 0.7982],
+    [25_832, 48.138611, 11.573611, 691_458.0057, 5_334_909.9112, 1.9173],
   ] as const;
   for (const [epsg, lat, lng, x, y, projConvergence] of landmarks) {
     const there = latLngToUtm(epsg, lat, lng);
@@ -45,15 +45,16 @@ test("a landmark in each zone lands where PROJ puts it", () => {
 });
 
 test("unsupported codes project nothing", () => {
-  expect(utmToLatLng(4326, 13.7, 51.0)).toBeNull();
-  expect(latLngToUtm(4326, 51.0, 13.7)).toBeNull();
-  expect(gridConvergenceDeg(4326, 51.0, 13.7)).toBeNull();
+  expect(utmToLatLng(4326, 13.7, 51)).toBeNull();
+  expect(latLngToUtm(4326, 51, 13.7)).toBeNull();
+  expect(gridConvergenceDeg(4326, 51, 13.7)).toBeNull();
 });
+
+const def = (epsg: number) =>
+  `+proj=utm +zone=${epsg - 25_800} +ellps=GRS80 +units=m +no_defs +type=crs`;
 
 test("the projection is proj4's over every configured site's tiles", () => {
   // what crs.ts used to hand proj4 (ETRS89 taken as WGS84: no datum shift)
-  const def = (epsg: number) =>
-    `+proj=utm +zone=${epsg - 25_800} +ellps=GRS80 +units=m +no_defs +type=crs`;
   // proj4's convergence: the grid bearing of a short step north along the
   // meridian, centred on the point (the true tangent, to ~1e-8°)
   const STEP = 1e-5;
@@ -69,8 +70,8 @@ test("the projection is proj4's over every configured site's tiles", () => {
     expect(utmZoneOf(epsg)).toBeOneOf([32, 33]);
     for (const cell of site.tiles) {
       const [minX, minY, maxX, maxY] = tileExtentOf(cell);
-      for (let i = 0; i <= 4; i++) {
-        for (let j = 0; j <= 4; j++) {
+      for (let i = 0; i <= 4; i += 1) {
+        for (let j = 0; j <= 4; j += 1) {
           const x = minX + ((maxX - minX) * i) / 4;
           const y = minY + ((maxY - minY) * j) / 4;
           const [lng, lat] = proj4(def(epsg), "WGS84", [x, y]);
@@ -95,7 +96,7 @@ test("the projection is proj4's over every configured site's tiles", () => {
                 convergence(epsg, lat, lng)
             )
           );
-          points++;
+          points += 1;
         }
       }
     }

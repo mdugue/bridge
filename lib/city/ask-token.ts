@@ -16,12 +16,12 @@ const encoder = new TextEncoder();
 function base64url(bytes: ArrayBuffer): string {
   let text = "";
   for (const b of new Uint8Array(bytes)) {
-    text += String.fromCharCode(b);
+    text += String.fromCodePoint(b);
   }
   return btoa(text)
     .replaceAll("+", "-")
     .replaceAll("/", "_")
-    .replace(/=+$/, "");
+    .replace(/[=]+$/u, "");
 }
 
 async function sha256(text: string): Promise<string> {
@@ -47,8 +47,8 @@ function sameText(a: string, b: string): boolean {
     return false;
   }
   let diff = 0;
-  for (let i = 0; i < a.length; i++) {
-    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  for (let i = 0; i < a.length; i += 1) {
+    diff |= (a.codePointAt(i) ?? 0) ^ (b.codePointAt(i) ?? 0);
   }
   return diff === 0;
 }
@@ -74,7 +74,7 @@ export async function verifyAskToken(
   now: number
 ): Promise<boolean> {
   const [version, exp, sig] = token.split(".");
-  if (version !== "v1" || !exp || !sig || !/^\d+$/.test(exp)) {
+  if (version !== "v1" || !exp || !sig || !/^\d+$/u.test(exp)) {
     return false;
   }
   if (Number(exp) < now) {

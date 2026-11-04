@@ -20,7 +20,7 @@ interface AltitudeStickProps {
  * hover. Proportional, like the stick, so a small push is a slow drift.
  * Pointer capture keeps the gesture alive when the finger leaves the track.
  */
-export function AltitudeStick({ onChange }: AltitudeStickProps) {
+export const AltitudeStick = ({ onChange }: AltitudeStickProps) => {
   const trackRef = useRef<HTMLDivElement>(null);
   const pointerId = useRef<number | null>(null);
   const [offset, setOffset] = useState(0);
@@ -85,4 +85,4 @@ export function AltitudeStick({ onChange }: AltitudeStickProps) {
       />
     </div>
   );
-}
+};

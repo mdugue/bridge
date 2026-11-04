@@ -6,7 +6,8 @@
  * of it are baked by scripts/prepare-data.ts (lib/city/tileset.ts). No
  * THREE, no DOM.
  */
-import { type Site, tileIdOf } from "./site";
+import { tileIdOf } from "./site";
+import type { Site } from "./site";
 
 /**
  * A site's committed (or fetched) data: `data/<site>/` with `dgm/`,

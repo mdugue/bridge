@@ -14,8 +14,8 @@ import {
   safetyOverride,
   safetyStanding,
   shadowTilesStream,
-  type StoredSafety,
 } from "./gpu-safety";
+import type { StoredSafety } from "./gpu-safety";
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -48,7 +48,7 @@ test("a previous page that died in use raises the level once per record", () => 
   // another page that died raises it again, up to the lightest page
   let { stored } = again;
   for (const [i, start] of ["a", "b", "c", "d"].entries()) {
-    stored = boot(stored, 3000 + i, start).stored;
+    ({ stored } = boot(stored, 3000 + i, start));
   }
   expect(decayedSafety(stored, 4000)).toBe(3);
 });

@@ -4,12 +4,14 @@
  * per request and dropped with it; nothing keeps the key.
  */
 import type { AnyTextAdapter } from "@tanstack/ai";
-import { type FakeResponseStep, fakeText } from "@tanstack/ai/testing";
+import { fakeText } from "@tanstack/ai/testing";
+import type { FakeResponseStep } from "@tanstack/ai/testing";
 import { createAnthropicChat } from "@tanstack/ai-anthropic";
 import { createOpenaiChat } from "@tanstack/ai-openai";
 import { openaiCompatibleText } from "@tanstack/ai-openai/compatible";
 import { createOpenRouterText } from "@tanstack/ai-openrouter";
-import { type AskProviderId, lastQuestion } from "@/lib/city/ask-city";
+import { lastQuestion } from "@/lib/city/ask-city";
+import type { AskProviderId } from "@/lib/city/ask-city";
 
 /** One retry of a failed call, and no answer waits longer than this. */
 const CLIENT = { maxRetries: 1, timeout: 60_000 } as const;
@@ -27,64 +29,82 @@ export function askAdapter(
   key: string
 ): AnyTextAdapter {
   switch (provider) {
-    case "anthropic":
+    case "anthropic": {
       return createAnthropicChat(model as ModelId, key, CLIENT);
-    case "openai":
+    }
+    case "openai": {
       return createOpenaiChat(model as OpenAiModel, key, CLIENT);
-    case "openrouter":
+    }
+    case "openrouter": {
       return createOpenRouterText(model as OpenRouterModel, key, {
         timeoutMs: CLIENT.timeout,
         retryConfig: { strategy: "none" },
       });
-    case "gateway":
+    }
+    case "gateway": {
       return openaiCompatibleText(model, {
         name: "vercel-ai-gateway",
         baseURL: "https://ai-gateway.vercel.sh/v1",
         apiKey: key,
         ...CLIENT,
       });
+    }
+    default: {
+      throw new Error(`unknown provider: ${String(provider)}`);
+    }
   }
 }
+
+/** One scripted turn of the fake model. */
+const fakeStep: FakeResponseStep = ({ request }) => {
+  const { messages } = request;
+  const last = messages.at(-1);
+  if (last?.role !== "tool") {
+    const question = lastQuestion(messages);
+    if (/was ist (?:das|da)|vor mir/iu.test(question)) {
+      return { toolCalls: [{ name: "was_ist_da", input: {} }] };
+    }
+    return {
+      toolCalls: [{ name: "suche_stadt", input: { anfrage: question } }],
+    };
+  }
+  const result =
+    typeof last.content === "string"
+      ? last.content
+      : JSON.stringify(last.content);
+  const hit =
+    /"name":"(?<name>[^"]+)","x":(?<x>\d+),"y":(?<y>\d+)(?:,"z":(?<z>\d+))?/u.exec(
+      result
+    );
+  if (result.includes("treffer") && hit) {
+    return {
+      toolCalls: [
+        {
+          name: "zeige",
+          input: {
+            x: Number(hit.groups?.x),
+            y: Number(hit.groups?.y),
+          },
+        },
+      ],
+    };
+  }
+  const seen = /"name":"(?<seen>[^"]+)"/u.exec(result)?.groups?.seen;
+  const found = result.includes('"gefunden":true');
+  return {
+    text: `Testantwort: Hier ist es${seen && found ? `, ${seen}` : ""} (Quelle: Wikidata).`,
+  };
+};
 
 /**
  * A scripted model for local tests only (`FRAG_FAKE=1`, never set on a
  * deployment): it searches for the question, shows the first hit and
- * says so — the whole round trip through both kinds of tools, with no
+ * says so; asked "was ist das", it asks the view's centre — the whole
+ * round trip through both kinds of tools, with no
  * key and no provider.
  */
 export function fakeAskAdapter(): AnyTextAdapter {
   const adapter = fakeText({ model: "fake" });
-  const step: FakeResponseStep = ({ request }) => {
-    const messages = request.messages;
-    const last = messages.at(-1);
-    if (last?.role !== "tool") {
-      const question = lastQuestion(messages);
-      return {
-        toolCalls: [{ name: "suche_stadt", input: { anfrage: question } }],
-      };
-    }
-    const result =
-      typeof last.content === "string"
-        ? last.content
-        : JSON.stringify(last.content);
-    const hit = /"name":"([^"]+)","x":(\d+),"y":(\d+)(?:,"z":(\d+))?/.exec(
-      result
-    );
-    if (result.includes("treffer") && hit) {
-      return {
-        toolCalls: [
-          {
-            name: "zeige",
-            input: {
-              x: Number(hit[2]),
-              y: Number(hit[3]),
-            },
-          },
-        ],
-      };
-    }
-    return { text: "Testantwort: Hier ist es (Quelle: Wikidata)." };
-  };
-  adapter.setResponses([step, step, step]);
+  adapter.setResponses([fakeStep, fakeStep, fakeStep]);
   return adapter;
 }

@@ -1,4 +1,5 @@
-import { type Camera, Euler, type PerspectiveCamera } from "three/webgpu";
+import { Euler } from "three/webgpu";
+import type { Camera, PerspectiveCamera } from "three/webgpu";
 import {
   dollyFrame,
   enteringView,
@@ -8,13 +9,10 @@ import {
   MODEL_PRESET_BY_ID,
   MODEL_SCALE_MAX,
   MODEL_STANDOFF,
-  type ModelPresetId,
-  type ModelView,
   metresPerPixelOf,
   modelCameraGeometry,
   modelFootprint,
   panned,
-  type PerspectivePose,
   RETURN_RADIUS_M,
   scaleOf,
   snapTilt,
@@ -25,14 +23,13 @@ import {
   wrapDeg,
   zoomedAbout,
 } from "@/lib/city/model-view";
-import {
-  type CameraState,
-  DEG2RAD,
-  directionOf,
-  headingPitchOf,
-  RAD2DEG,
-  type Xyz,
-} from "@/lib/city/pose";
+import type {
+  ModelPresetId,
+  ModelView,
+  PerspectivePose,
+} from "@/lib/city/model-view";
+import { DEG2RAD, directionOf, headingPitchOf, RAD2DEG } from "@/lib/city/pose";
+import type { CameraState, Xyz } from "@/lib/city/pose";
 import type { ModelStateJson } from "@/lib/city/snapshot";
 import { clamp } from "@/lib/city/math";
 import { ModelCamera } from "./model-camera";
@@ -67,7 +64,7 @@ export interface ModelHud {
 
 /** s the dolly zoom in and out takes. */
 const ENTER_S = 1.1;
-const LEAVE_S = 1.0;
+const LEAVE_S = 1;
 /** s a preset switch, a turn or a re-centring glides. */
 const SWITCH_S = 0.7;
 const TURN_S = 0.35;
@@ -157,6 +154,11 @@ interface Glide {
   duration: number;
 }
 
+/** Where a view's subject stands on screen (NDC): its preset's pivot. */
+function pivotNdc(view: ModelView): { x: number; y: number } {
+  return { x: 0, y: MODEL_PRESET_BY_ID[view.preset].pivotNdcY };
+}
+
 export interface ModelRig {
   readonly camera: ModelCamera;
   /** Modell owns the frame: the dolly zooms and the parallel view. */
@@ -175,6 +177,11 @@ export interface ModelRig {
   settledView: () => ModelView | null;
   /** the dolly zoom's progress towards the parallel view (0 = perspective) */
   blend: () => number;
+  /** a glide or a dolly zoom is under way */
+  moving: () => boolean;
+  /** where the picture's subject stands (NDC: the preset's pivot), or
+   *  undefined outside Modell */
+  focusNdc: () => { x: number; y: number } | undefined;
   /** Enters Modell from the walk/fly view, in `preset` (the last one by default). */
   enter: (preset?: ModelPresetId) => void;
   /** Leaves Modell for walk or fly (the pose it was entered from, if near). */
@@ -557,15 +564,26 @@ export function createModelRig(opts: ModelRigOptions): ModelRig {
     view: () => (phase.kind === "model" ? view : null),
     targetView: () => view,
     settledView: () => (phase.kind === "model" ? (glide?.to ?? view) : null),
+    moving: () =>
+      glide !== null || phase.kind === "entering" || phase.kind === "leaving",
+    focusNdc: () =>
+      phase.kind === "model" && view ? pivotNdc(view) : undefined,
     blend: () => {
       switch (phase.kind) {
-        case "off":
+        case "off": {
           return 0;
-        case "model":
+        }
+        case "model": {
           return 1;
+        }
         case "entering":
-        case "leaving":
+        case "leaving": {
           return phase.t;
+        }
+        default: {
+          const unknown: never = phase;
+          throw new Error(`unknown phase: ${String(unknown)}`);
+        }
       }
     },
     enter,
@@ -599,7 +617,7 @@ export function createModelRig(opts: ModelRigOptions): ModelRig {
       const z = zoomedAbout(
         view,
         viewport(),
-        { x: 0, y: MODEL_PRESET_BY_ID[view.preset].pivotNdcY },
+        pivotNdc(view),
         view.metresPerPixel / metresPerPixelOf(denominator),
         maxScale
       );
@@ -716,7 +734,7 @@ export function createModelRig(opts: ModelRigOptions): ModelRig {
         keys.add(code);
         return;
       }
-      const centre = { x: 0, y: MODEL_PRESET_BY_ID[view.preset].pivotNdcY };
+      const centre = pivotNdc(view);
       if (code === "KeyQ" || code === "KeyE") {
         cancelGlide();
         glideTo(
@@ -750,8 +768,9 @@ export function createModelRig(opts: ModelRigOptions): ModelRig {
     },
     step: (dt) => {
       switch (phase.kind) {
-        case "off":
+        case "off": {
           return;
+        }
         case "entering": {
           phase.t = Math.min(phase.t + dt / ENTER_S, 1);
           if (view) {
@@ -774,12 +793,17 @@ export function createModelRig(opts: ModelRigOptions): ModelRig {
           }
           return;
         }
-        case "model":
+        case "model": {
           stepGlide(dt);
           stepKeys(dt);
           if (dirty) {
             placeCamera();
           }
+          break;
+        }
+        default: {
+          break;
+        }
       }
     },
     hud,

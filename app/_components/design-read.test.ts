@@ -64,7 +64,7 @@ describe("reading a design", () => {
     let minX = Infinity;
     let maxX = -Infinity;
     let minY = Infinity;
-    for (let i = 0; i < position.count; i++) {
+    for (let i = 0; i < position.count; i += 1) {
       minX = Math.min(minX, position.getX(i));
       maxX = Math.max(maxX, position.getX(i));
       minY = Math.min(minY, position.getY(i));

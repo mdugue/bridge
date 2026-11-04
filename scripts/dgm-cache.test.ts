@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 import { writeArrayBuffer } from "geotiff";
 import { readDgm } from "./bake-tiles";
 import { dgmCacheDir, packDgm, readDgmFile, unpackDgm } from "./dgm-cache";
@@ -25,12 +25,12 @@ function tiff(base: number): Uint8Array {
 }
 
 test("a cached decode reads back as readDgm decodes the bytes", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "dgm-cache-"));
-  const tif = join(dir, "dgm1_t.tif");
-  const tfw = join(dir, "dgm1_t.tfw");
+  const dir = mkdtempSync(path.join(tmpdir(), "dgm-cache-"));
+  const tif = path.join(dir, "dgm1_t.tif");
+  const tfw = path.join(dir, "dgm1_t.tfw");
   writeFileSync(tif, tiff(100));
   writeFileSync(tfw, TFW);
-  const cache = join(dir, "cache");
+  const cache = path.join(dir, "cache");
   const bytes = tiff(100);
   const direct = await readDgm(bytes.slice().buffer, TFW, "native");
   const cold = await readDgmFile(tif, tfw, "native", cache);
@@ -44,10 +44,11 @@ test("a cached decode reads back as readDgm decodes the bytes", async () => {
   // The warm read is the entry's, not a second decode.
   const [kept] = readdirSync(cache);
   writeFileSync(
-    join(cache, kept),
+    path.join(cache, kept),
     packDgm({ ...direct, elevations: new Float32Array(16).fill(7) })
   );
-  expect((await readDgmFile(tif, tfw, "native", cache)).elevations[0]).toBe(7);
+  const rewritten = await readDgmFile(tif, tfw, "native", cache);
+  expect(rewritten.elevations[0]).toBe(7);
   // New bytes are a new key: the stale entry goes, the new decode is read.
   writeFileSync(tif, tiff(200));
   const changed = await readDgmFile(tif, tfw, "native", cache);
@@ -55,10 +56,9 @@ test("a cached decode reads back as readDgm decodes the bytes", async () => {
   expect(readdirSync(cache)).toHaveLength(1);
   // A truncated entry is no entry: the TIFF is decoded again.
   const [entry] = readdirSync(cache);
-  writeFileSync(join(cache, entry), new Uint8Array(12));
-  expect((await readDgmFile(tif, tfw, "native", cache)).elevations[0]).toBe(
-    200
-  );
+  writeFileSync(path.join(cache, entry), new Uint8Array(12));
+  const redecoded = await readDgmFile(tif, tfw, "native", cache);
+  expect(redecoded.elevations[0]).toBe(200);
 });
 
 test("an entry's bytes hold the whole DGM, and nothing short of one", () => {
@@ -83,7 +83,9 @@ test("an entry's bytes hold the whole DGM, and nothing short of one", () => {
 });
 
 test("the cache is on under bun test or DGM_CACHE=1, never in the build", () => {
-  expect(dgmCacheDir({ NODE_ENV: "test" })).toEndWith(join(".cache", "dgm"));
+  expect(dgmCacheDir({ NODE_ENV: "test" })).toEndWith(
+    path.join(".cache", "dgm")
+  );
   expect(dgmCacheDir({ DGM_CACHE: "1" })).not.toBeNull();
   expect(dgmCacheDir({ NODE_ENV: "production" })).toBeNull();
 });

@@ -1,6 +1,5 @@
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
-  type BufferGeometry,
   CircleGeometry,
   Matrix4,
   MeshBasicNodeMaterial,
@@ -8,6 +7,7 @@ import {
   RingGeometry,
   Vector3,
 } from "three/webgpu";
+import type { BufferGeometry } from "three/webgpu";
 import type { InventoryTree } from "@/lib/city/tree-inventory";
 import { Instances, instancePosition } from "./instancing";
 import { sceneMaterial } from "./three-utils";
@@ -62,13 +62,14 @@ export function buildTreePlan(
   const set = new Instances(planGeometry(), planMaterial(), trees.length);
   const m = new Matrix4();
   const q = new Quaternion();
-  trees.forEach((t, i) => {
+  for (let i = 0; i < trees.length; i += 1) {
+    const t = trees[i];
     const r = t.ext.crownWidth / 2;
     set.setMatrixAt(
       i,
       m.compose(new Vector3(t.x, t.ground + LIFT, t.z), q, new Vector3(r, 1, r))
     );
-  });
+  }
   set.instanceMatrix.needsUpdate = true;
   set.computeBoundingSphere();
   set.visible = false;

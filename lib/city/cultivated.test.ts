@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 import {
   COLONY_AXIS_STEPS,
   COLONY_EDGE_SCALE,
@@ -17,15 +17,17 @@ test("the colony bytes' scales are the bake's", () => {
   // the shader decodes the bytes with these constants
   // (cultivated-layer.ts); the bake writes them (cultivated.py)
   const python = readFileSync(
-    join(import.meta.dir, "../../pipeline/bake/cultivated.py"),
-    "utf8"
+    path.join(import.meta.dir, "../../pipeline/bake/cultivated.py"),
+    "utf-8"
   );
-  expect(Number(python.match(/^EDGE_SCALE = ([\d.]+)$/mu)?.[1])).toBe(
-    COLONY_EDGE_SCALE
+  expect(
+    Number(/^EDGE_SCALE = (?<scale>[\d.]+)$/mu.exec(python)?.groups?.scale)
+  ).toBe(COLONY_EDGE_SCALE);
+  const axis = /def axis_code[^]*?\* (?<steps>\d+)\)\) % (?<modulus>\d+)/u.exec(
+    python
   );
-  const axis = python.match(/def axis_code[^]*?\* (\d+)\)\) % (\d+)/u);
-  expect(Number(axis?.[1])).toBe(COLONY_AXIS_STEPS);
-  expect(Number(axis?.[2])).toBe(COLONY_AXIS_STEPS + 1);
+  expect(Number(axis?.groups?.steps)).toBe(COLONY_AXIS_STEPS);
+  expect(Number(axis?.groups?.modulus)).toBe(COLONY_AXIS_STEPS + 1);
 });
 
 test("a cropped colony raster maps to its part of the tile", () => {
@@ -80,14 +82,15 @@ test("orchard trees become small deciduous cadastre trees, marked as orchard tre
   });
 });
 
+const at = (properties: NonNullable<CultivatedFeature["properties"]>) => ({
+  geometry: {
+    type: "Point" as const,
+    coordinates: [1, 2] as [number, number],
+  },
+  properties,
+});
+
 test("an orchard tree takes its orchard's genus; a Christmas tree is a cone", () => {
-  const at = (properties: NonNullable<CultivatedFeature["properties"]>) => ({
-    geometry: {
-      type: "Point" as const,
-      coordinates: [1, 2] as [number, number],
-    },
-    properties,
-  });
   const [apple, fir, unknown] = orchardTrees([
     at({ k: "tree", h: 6.2, d: 5.3, src: "dom", g: "Malus" }),
     at({ k: "tree", h: 3.1, d: 2.6, src: "dom", l: "e" }),

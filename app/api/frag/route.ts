@@ -14,7 +14,6 @@ import {
 import {
   ASK_KEY_HEADER,
   ASK_LIMITS,
-  type AskRequestProps,
   TOO_MANY_STEPS,
   conversationProblem,
   askPromptSite,
@@ -22,10 +21,12 @@ import {
   parseAskProps,
   plausibleKey,
 } from "@/lib/city/ask-city";
+import type { AskRequestProps } from "@/lib/city/ask-city";
 import {
   DEADLINE,
   ended,
   roundsSinceQuestion,
+  withStoppedCallsAnswered,
   runAsk,
   scrubbed,
 } from "@/lib/city/ask-run";
@@ -52,13 +53,21 @@ function refuse(status: number, code: string, message: string): Response {
   );
 }
 
-/** The model turns the answer has left; null for messages that do not
- *  convert (the request's shape is checked only loosely before). */
-function turnsLeft(
-  messages: Parameters<typeof roundsSinceQuestion>[0]
-): number | null {
+/**
+ * The history the run sends (a stand-in for every stopped call) and the
+ * model turns the answer has left; null for rows that do not read or
+ * convert (the request's shape is checked only loosely before).
+ */
+function answerHistory(rows: Parameters<typeof withStoppedCallsAnswered>[0]): {
+  messages: ReturnType<typeof withStoppedCallsAnswered>;
+  turns: number;
+} | null {
   try {
-    return ASK_LIMITS.answerRounds - roundsSinceQuestion(messages);
+    const messages = withStoppedCallsAnswered(rows);
+    return {
+      messages,
+      turns: ASK_LIMITS.answerRounds - roundsSinceQuestion(messages),
+    };
   } catch {
     return null;
   }
@@ -127,11 +136,12 @@ export async function POST(request: Request): Promise<Response> {
   if (tooMuch) {
     return tooMuch;
   }
-  const turns = turnsLeft(params.messages);
-  if (turns === null) {
+  // a stopped answer's unanswered call would make the provider refuse
+  const history = answerHistory(params.messages);
+  if (history === null) {
     return refuse(400, "bad-request", "Die Anfrage ist unvollständig.");
   }
-  if (turns <= 0) {
+  if (history.turns <= 0) {
     return refuse(422, "too-many-steps", TOO_MANY_STEPS);
   }
   const site = siteById(props.site);
@@ -160,14 +170,15 @@ export async function POST(request: Request): Promise<Response> {
       : askAdapter(props.provider, props.model, key),
     abortController: runController,
     knowledge,
-    messages: params.messages,
+    messages: history.messages,
     ...(params.resume ? { resume: params.resume } : {}),
     ...(params.parentRunId ? { parentRunId: params.parentRunId } : {}),
     site: askPromptSite(site),
     runId: params.runId,
     threadId: params.threadId,
     today: new Date(),
-    turns,
+    turns: history.turns,
+    voice: props.voice,
   });
   // the host ends the function at maxDuration without a word: end the
   // answer a little before, with an error the visitor sees

@@ -21,7 +21,8 @@
  */
 
 import earcut from "earcut";
-import { PLAN_LOOKS, type PlanClass, type PlanLook } from "./plan-classes";
+import { PLAN_LOOKS } from "./plan-classes";
+import type { PlanClass, PlanLook } from "./plan-classes";
 
 /** A point of the plan: x east, y north, z up where it has one. */
 export type PlanPoint = readonly [number, number, number?];
@@ -87,8 +88,10 @@ type Height = (x: number, y: number) => number | null;
 /** A ring's signed area (anticlockwise positive). */
 function ringArea(ring: readonly PlanPoint[]): number {
   let a = 0;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+  let j = ring.length - 1;
+  for (let i = 0; i < ring.length; i += 1) {
     a += (ring[j][0] - ring[i][0]) * (ring[j][1] + ring[i][1]);
+    j = i;
   }
   return a / 2;
 }
@@ -120,12 +123,14 @@ function ownHeight(p: PlanPoint): number | null {
 /** Whether (x, y) lies inside a ring (even-odd). */
 function inside(ring: readonly PlanPoint[], x: number, y: number): boolean {
   let hit = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+  let j = ring.length - 1;
+  for (let i = 0; i < ring.length; i += 1) {
     const [xi, yi] = ring[i];
     const [xj, yj] = ring[j];
     if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
       hit = !hit;
     }
+    j = i;
   }
   return hit;
 }
@@ -150,7 +155,7 @@ export function nestRings(
     const [x, y] = ring[0];
     // the smallest ring placed so far that holds this one
     let container: (typeof placed)[number] | null = null;
-    for (let i = placed.length - 1; i >= 0; i--) {
+    for (let i = placed.length - 1; i >= 0; i -= 1) {
       if (inside(placed[i].ring, x, y)) {
         container = placed[i];
         break;
@@ -189,8 +194,8 @@ const len2 = (a: PlanPoint, b: PlanPoint) =>
 function cut(tri: Tri, edge: number, out: Tri[]): void {
   const stack: Tri[] = [tri];
   const max = edge * edge;
-  while (stack.length > 0) {
-    const [a, b, c] = stack.pop() as Tri;
+  for (let next = stack.pop(); next; next = stack.pop()) {
+    const [a, b, c] = next;
     const ab = len2(a, b);
     const bc = len2(b, c);
     const ca = len2(c, a);
@@ -238,20 +243,34 @@ function triangulate(rings: readonly (readonly PlanPoint[])[]): Tri[] {
 }
 
 /** Collects one class's vertices as the design frame wants them. */
-class GroupWriter {
-  readonly values: number[] = [];
-  constructor(private readonly origin: [number, number]) {}
-  /** a plan point at height `y` (m) */
-  vertex(p: PlanPoint, y: number): void {
-    this.values.push(p[0] - this.origin[0], y, -(p[1] - this.origin[1]));
-  }
+interface GroupWriter {
   /** a triangle anticlockwise from above (in plan): its front face up —
    *  plan (x, y) to (x, −z) keeps the turn as seen from +y */
-  triangle(a: PlanPoint, b: PlanPoint, c: PlanPoint, y: readonly number[]) {
-    this.vertex(a, y[0]);
-    this.vertex(b, y[1]);
-    this.vertex(c, y[2]);
-  }
+  triangle: (
+    a: PlanPoint,
+    b: PlanPoint,
+    c: PlanPoint,
+    y: readonly number[]
+  ) => void;
+  readonly values: number[];
+  /** a plan point at height `y` (m) */
+  vertex: (p: PlanPoint, y: number) => void;
+}
+
+function createGroupWriter(origin: [number, number]): GroupWriter {
+  const values: number[] = [];
+  const vertex = (p: PlanPoint, y: number): void => {
+    values.push(p[0] - origin[0], y, -(p[1] - origin[1]));
+  };
+  return {
+    values,
+    vertex,
+    triangle: (a, b, c, y) => {
+      vertex(a, y[0]);
+      vertex(b, y[1]);
+      vertex(c, y[2]);
+    },
+  };
 }
 
 /** A low-poly tree: an eight-sided trunk to half its height, a crown of
@@ -279,7 +298,7 @@ function writeTree(
     low: ReturnType<typeof ring>,
     high: ReturnType<typeof ring>
   ) => {
-    for (let i = 0; i < sides; i++) {
+    for (let i = 0; i < sides; i += 1) {
       const j = (i + 1) % sides;
       out.triangle(low[i].p, low[j].p, high[j].p, [
         low[i].y,
@@ -304,7 +323,7 @@ function writeTree(
   band(w, rings[1], rings[2]);
   const top: PlanPoint = [at[0], at[1]];
   const bottom: PlanPoint = [at[0], at[1]];
-  for (let i = 0; i < sides; i++) {
+  for (let i = 0; i < sides; i += 1) {
     const j = (i + 1) % sides;
     const [hi, hj] = [rings[2][i], rings[2][j]];
     w.triangle(hi.p, hj.p, top, [hi.y, hj.y, ground + height]);
@@ -325,13 +344,14 @@ function writeBuilding(
   for (const [a, b, c] of triangulate(rings)) {
     w.triangle(a, b, c, [top, top, top]);
   }
-  for (const [k, raw] of rings.entries()) {
+  for (let k = 0; k < rings.length; k += 1) {
+    const raw = rings[k];
     const ring = openRing(raw);
     // walls face out: the outer ring anticlockwise, holes clockwise — then
     // the outside lies right of each edge, and (a, b, b′) faces it
-    const anticlockwise = ringArea(ring) >= 0;
-    const r = anticlockwise === (k === 0) ? ring : [...ring].reverse();
-    for (let i = 0; i < r.length; i++) {
+    const turnsLeft = ringArea(ring) >= 0;
+    const r = turnsLeft === (k === 0) ? ring : [...ring].reverse();
+    for (let i = 0; i < r.length; i += 1) {
       const a = r[i];
       const b = r[(i + 1) % r.length];
       w.vertex(a, ground);
@@ -373,12 +393,15 @@ class PlanGround {
   /** vertices that kept the plan's own height */
   owned = 0;
   private lowest = Number.POSITIVE_INFINITY;
-  constructor(private readonly heightAt: Height) {}
+  private readonly heightAt: Height;
+  constructor(heightAt: Height) {
+    this.heightAt = heightAt;
+  }
   /** the plan's own height at a point, counted */
   own(p: PlanPoint): number | null {
     const h = ownHeight(p);
     if (h !== null) {
-      this.owned++;
+      this.owned += 1;
     }
     return h;
   }
@@ -386,9 +409,9 @@ class PlanGround {
   at(p: PlanPoint): number | null {
     const h = this.heightAt(p[0], p[1]);
     if (h === null) {
-      this.undraped++;
+      this.undraped += 1;
     } else {
-      this.draped++;
+      this.draped += 1;
       this.lowest = Math.min(this.lowest, h);
     }
     return h;
@@ -434,7 +457,7 @@ function nestingDepth(
   const px = x + (x1 - x) * 0.01;
   const py = y + (y1 - y) * 0.01;
   let depth = 0;
-  for (let i = 0; i < k; i++) {
+  for (let i = 0; i < k; i += 1) {
     const b = boxes[i];
     // the box first: a plan of thousands of hatches asks few rings
     if (
@@ -444,7 +467,7 @@ function nestingDepth(
       py <= b[3] &&
       inside(outers[i], px, py)
     ) {
-      depth++;
+      depth += 1;
     }
   }
   return depth;
@@ -456,11 +479,12 @@ function cutCount(tris: readonly Tri[], edge: number, limit: number): number {
   const max = edge * edge;
   const stack: Tri[] = [...tris];
   let count = 0;
-  while (stack.length > 0) {
-    const [a, b, c] = stack.pop() as Tri;
+  for (let tri = stack.pop(); tri; tri = stack.pop()) {
+    const [a, b, c] = tri;
     const longest = Math.max(len2(a, b), len2(b, c), len2(c, a));
     if (longest <= max) {
-      if (++count > limit) {
+      count += 1;
+      if (count > limit) {
         return count;
       }
     } else {
@@ -483,7 +507,7 @@ function cutCount(tris: readonly Tri[], edge: number, limit: number): number {
 function cutWithin(areas: readonly Tri[][], edge: number): Tri[][] {
   const all = areas.flat();
   let length = edge;
-  for (let round = 0; round < CUT_ROUNDS; round++) {
+  for (let round = 0; round < CUT_ROUNDS; round += 1) {
     if (cutCount(all, length, DRAPE_TRIANGLES) <= DRAPE_TRIANGLES) {
       break;
     }
@@ -513,7 +537,8 @@ function writeAreas(
     sorted.map((f) => triangulate(f.rings)),
     drapeEdge(areas)
   );
-  sorted.forEach((f, rank) => {
+  for (let rank = 0; rank < sorted.length; rank += 1) {
+    const f = sorted[rank];
     const cls = f.cls ?? "other";
     const lift =
       PLAN_LOOKS[cls].lift + nestingDepth(outers, boxes, rank) * NEST_LIFT_M;
@@ -521,9 +546,9 @@ function writeAreas(
       const y = tri.map((p) => ground.own(p) ?? ground.at(p) ?? Number.NaN);
       laid.push({ w: writer(cls), tri, y, lift });
     }
-  });
+  }
   // (the fallback is known only once every vertex has asked)
-  const fallback = ground.fallback;
+  const { fallback } = ground;
   for (const { w, tri, y, lift } of laid) {
     w.triangle(
       tri[0],
@@ -533,6 +558,8 @@ function writeAreas(
     );
   }
 }
+
+const isBlock = (f: Area) => f.cls === "building" && Boolean(f.height);
 
 /**
  * The plan's features as triangles about `origin`, a group per class.
@@ -548,13 +575,12 @@ export function planMesh(
   const writer = (cls: PlanLook) => {
     let w = writers.get(cls);
     if (!w) {
-      w = new GroupWriter(origin);
+      w = createGroupWriter(origin);
       writers.set(cls, w);
     }
     return w;
   };
   const ground = new PlanGround(heightAt);
-  const isBlock = (f: Area) => f.cls === "building" && Boolean(f.height);
   const areas = features.filter((f): f is Area => f.kind === "area");
   writeAreas(
     areas.filter((f) => !isBlock(f)),
