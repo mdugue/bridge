@@ -1,6 +1,6 @@
 # 080 — One row per inquiry kind: the twin's per-kind dispatch in one place
 
-**Status:** TODO
+**Status:** BUILT (2026-11-04) — steps 0–4 and 6; see the README row
 
 Planned 2026-10-30 from an architecture review of the twin ("Befragen",
 ADR 0042) and three verifiers' reading of it. A refactor: no card's text
@@ -19,6 +19,21 @@ changes, no new kind, no new fetch.
 > Planned against `9bd5ee49` (2026-10-30). If a commit since added a
 > kind (a 13th member of `Inquiry`), redo the counts in Findings before
 > you start. Line numbers below are approximate; find code by its name.
+
+## Drift found 2026-11-04 (the executor's redone Findings)
+
+- A 13th kind, `design` (`DesignInquiry`, `lib/city/inquiry-design.ts`,
+  d54ecce1), joined `FeatureInquiry` after this plan was written. It has
+  its own arm in every dispatch below (`inquiryCard`, `kindIcon` with
+  `PencilRulerIcon`, `lineage` with `designLineage`, `thingKey`:
+  `design:${file}:${partIndex}`), is not porous and has no `tile`. So:
+  `inquiryCard` 13 labels / 8 bodies, `kindIcon` 13 / 13, `lineage`
+  13 / 8, `thingKey` 12 / 4, and `KindIcon` has fourteen names.
+- `inquiryCard` takes a fifth argument, `landmarks` (a landmark's
+  Wikidata facts, `withLandmarkFacts`); the table's `CardInput` carries it.
+- The crown form left `create-app.ts`'s `outlineShape` for
+  `selection-shape.ts` `crownFormOf`; Step 6 removes that function.
+- No module changed shape otherwise; line numbers moved.
 
 ## Context
 
