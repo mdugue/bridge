@@ -29,7 +29,14 @@ import {
 import type { CardCredits, CardFact, InquiryCard } from "./card-lines";
 import { bridgeCard, monumentCard, treeCard } from "./inquiry-features";
 import type { FeatureInquiry, TreeFacts } from "./inquiry-features";
-import { moreCard } from "./inquiry-more";
+import {
+  canopyCard,
+  furnitureCard,
+  hedgeCard,
+  lampCard,
+  landingCard,
+  stopCard,
+} from "./inquiry-more";
 import type { Stated } from "./methods";
 import { bikeCard, trafficCard } from "./inquiry-traffic";
 import { designCard } from "./inquiry-design";
@@ -419,13 +426,23 @@ export function inquiryCard(
     case "design": {
       return designCard(inquiry);
     }
-    case "canopy":
-    case "furniture":
-    case "hedge":
-    case "lamp":
-    case "landing":
+    case "canopy": {
+      return canopyCard(inquiry, provenance, credits);
+    }
+    case "hedge": {
+      return hedgeCard(inquiry, provenance, credits);
+    }
+    case "lamp": {
+      return lampCard(inquiry, provenance, credits);
+    }
+    case "furniture": {
+      return furnitureCard(inquiry, provenance);
+    }
     case "stop": {
-      return moreCard(inquiry, provenance, credits);
+      return stopCard(inquiry, provenance);
+    }
+    case "landing": {
+      return landingCard(inquiry, provenance);
     }
     default: {
       const unknown: never = inquiry;

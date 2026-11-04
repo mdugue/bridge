@@ -478,35 +478,3 @@ export function landingCard(
     sources: stated("taken", osmSource(provenance, [title], "trees")),
   };
 }
-
-/** The card of any of these. */
-export function moreCard(
-  inquiry: MoreInquiry,
-  provenance: SiteProvenance | null,
-  credits: CardCredits
-): InquiryCard {
-  switch (inquiry.kind) {
-    case "canopy": {
-      return canopyCard(inquiry, provenance, credits);
-    }
-    case "hedge": {
-      return hedgeCard(inquiry, provenance, credits);
-    }
-    case "lamp": {
-      return lampCard(inquiry, provenance, credits);
-    }
-    case "furniture": {
-      return furnitureCard(inquiry, provenance);
-    }
-    case "stop": {
-      return stopCard(inquiry, provenance);
-    }
-    case "landing": {
-      return landingCard(inquiry, provenance);
-    }
-    default: {
-      const unknown: never = inquiry;
-      throw new Error(`unknown inquiry kind: ${String(unknown)}`);
-    }
-  }
-}
