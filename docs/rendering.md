@@ -1298,7 +1298,11 @@ page reloads where the player stood, **a safety level lighter**
 decisions — what a lost device, a failed frame, an allocation failure, a
 hidden or shown page lead to — are one pure machine,
 `lib/city/page-lifecycle.ts`, tested by the incident sequences in its
-test; `create-app.ts` binds its signals and effects. The
+test; `create-app.ts` binds its signals and effects. The record and
+its protocol are one recovery session (`app/_components/gpu-recovery.ts`):
+the page peeks before the boot and commits once the scene is up or the
+boot failed, so a boot StrictMode aborts leaves the place for the next;
+the caps and the arrival rule are pure (`lib/city/gpu-recovery.ts`). The
 snapshot waits in session storage, the raised level in local storage
 (`gpu-safety`). One automatic reload per level (0 → 1 → 2 → 3); none from
 level 3, and none where the raise cannot be stored — the next page would
