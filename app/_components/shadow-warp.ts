@@ -82,8 +82,23 @@ const MAX_EXTRUSION_M = 3000;
 const NEAR_BIAS_M = 0.08;
 
 /** A fit is renewed when the nearest receiver came this much nearer (or
- *  went this much further): its texels no longer suit the view. */
-const NEAREST_DRIFT = 1.6;
+ *  went this much further): its texels no longer suit the view. Each
+ *  renewal steps the texels by about this factor, and what is finer than
+ *  a texel (a chimney, a lamp's arm) comes or goes with the step: at 1.6
+ *  a dive from 260 m to 40 m stepped them 0.55 → 0.37 → 0.26 → 0.19 →
+ *  0.15 m, and each step showed. The softness follows the view between
+ *  renewals (`warpSoftness`). */
+export const NEAREST_DRIFT = 1.3;
+
+/** The PCF spread in texels (three's `shadow.radius`) a fresh fit takes:
+ *  the warped map's near texels are already as coarse as the walker's
+ *  wider spread (sun-rig.ts) was wide. */
+export const WARP_PCF_RADIUS = 3;
+
+/** The spread `warpSoftness` keeps to (texels): narrower shows the texels'
+ *  staircase, wider blurs a dormer's shadow away. */
+const MIN_PCF_RADIUS = 1.6;
+const MAX_PCF_RADIUS = 5;
 
 /** The far end of the view a fit must still cover, as a share of its
  *  reach: flying on, the last of it (deep in the fog) may run off the map
@@ -132,6 +147,9 @@ export interface WarpFit {
   clip: Matrix4;
   /** the nearest receiver's depth along the view (m) */
   nearest: number;
+  /** the same of the view as `warpCovers` sees it (no margin, m): what a
+   *  later view's nearest receiver is held against */
+  nearestSeen: number;
   /** the farthest the map reaches from the eye (m, in plan): where the
    *  horizon's near band takes over */
   reachPlan: number;
@@ -418,11 +436,20 @@ export function fitWarpedShadow(view: WarpView, sun: Vector3): WarpFit | null {
     box,
     clip,
     nearest,
+    nearestSeen: coverBody(view)?.nearest ?? nearest,
     reachPlan,
     target,
     up: basis.y,
     warp,
   };
+}
+
+/** What a view must find on the map: its receivers without the margin, out
+ *  to `COVER_REACH` of its reach. */
+function coverBody(
+  view: WarpView
+): { body: Vector3[]; nearest: number } | null {
+  return viewBody({ ...view, reach: view.reach * COVER_REACH }, 0);
 }
 
 /**
@@ -433,12 +460,14 @@ export function fitWarpedShadow(view: WarpView, sun: Vector3): WarpFit | null {
  * one depth pass.
  */
 export function warpCovers(fit: WarpFit, view: WarpView): boolean {
-  const seen = viewBody({ ...view, reach: view.reach * COVER_REACH }, 0);
+  const seen = coverBody(view);
   if (!seen) {
     // nothing to shadow in view: whatever the map holds will do
     return true;
   }
-  const ratio = seen.nearest / fit.nearest;
+  // held against the fit's own view seen the same way: the fit's
+  // `nearest`, taken with the margin, lies nearer by up to 1.4 already
+  const ratio = seen.nearest / fit.nearestSeen;
   if (ratio > NEAREST_DRIFT || ratio < 1 / NEAREST_DRIFT) {
     return false;
   }
@@ -453,4 +482,61 @@ export function warpCovers(fit: WarpFit, view: WarpView): boolean {
       Math.abs(q.z) <= edge
     );
   });
+}
+
+/** World → `fit`'s map in texels (x, y) at `p`. */
+function texelsOf(fit: WarpFit, p: Vector3, mapSize: number): Vector3 {
+  const q = new Vector4(p.x, p.y, p.z, 1).applyMatrix4(fit.clip);
+  return new Vector3(
+    (q.x / q.w) * (mapSize / 2),
+    (q.y / q.w) * (mapSize / 2),
+    0
+  );
+}
+
+/** The coarser side (m) of a texel of `fit`'s map on the level ground at
+ *  `p`, for a map `mapSize` texels wide. */
+export function texelAt(fit: WarpFit, p: Vector3, mapSize: number): number {
+  const a = texelsOf(fit, p, mapSize);
+  const span = (dx: number, dz: number) => {
+    const b = texelsOf(fit, new Vector3(p.x + dx, p.y, p.z + dz), mapSize);
+    return Math.hypot(b.x - a.x, b.y - a.y);
+  };
+  return 1 / Math.max(Math.min(span(1, 0), span(0, 1)), 1e-9);
+}
+
+/** Where the view's centre meets its ground (world): the point the eye
+ *  dives toward; looking up, the ground `nearest` m ahead. */
+export function viewGround(view: WarpView, nearest: number): Vector3 {
+  const { eye, forward, groundY, reach } = view;
+  const t =
+    forward.y < -1e-3
+      ? Math.min((groundY - eye.y) / forward.y, reach)
+      : Math.min(nearest, reach);
+  const p = eye.clone().addScaledVector(forward, Math.max(t, 0));
+  p.y = groundY;
+  return p;
+}
+
+/**
+ * The PCF spread (texels of `standing`, the map as drawn) that gives the
+ * shadows at the view's ground the softness a map fitted now (`fresh`)
+ * would give them at `WARP_PCF_RADIUS`: flying nearer, the edges sharpen
+ * with the view rather than all at once when the map is renewed. Its
+ * metres are continuous across a renewal (there fresh and standing are
+ * one map, and the spread is `WARP_PCF_RADIUS`).
+ */
+export function warpSoftness(
+  standing: WarpFit,
+  fresh: WarpFit,
+  view: WarpView,
+  mapSize: number
+): number {
+  const p = viewGround(view, fresh.nearest);
+  const ratio = texelAt(fresh, p, mapSize) / texelAt(standing, p, mapSize);
+  const radius = WARP_PCF_RADIUS * ratio;
+  if (!Number.isFinite(radius)) {
+    return WARP_PCF_RADIUS;
+  }
+  return Math.min(Math.max(radius, MIN_PCF_RADIUS), MAX_PCF_RADIUS);
 }

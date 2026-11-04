@@ -9,6 +9,7 @@ import {
 import type { BufferGeometry } from "three/webgpu";
 import type { InventoryTree } from "@/lib/city/tree-inventory";
 import { Instances, instancePosition } from "./instancing";
+import { thinCasterPosition } from "./thin-casters";
 import { sceneMaterial } from "./three-utils";
 
 /**
@@ -80,6 +81,7 @@ function stakeMaterial(): MeshStandardNodeMaterial {
     });
     m.name = "tree-stake";
     m.positionNode = instancePosition();
+    m.castShadowPositionNode = thinCasterPosition();
     return m;
   });
 }

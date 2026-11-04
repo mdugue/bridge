@@ -463,7 +463,7 @@ Current working setup (`sun-rig.ts` / `create-app.ts`):
 | Setting | Value | Why |
 |---|---|---|
 | `renderer.shadowMap.type` | `PCFShadowMap` | only soft option that doesn't ring (VSM "corduroy"-rings on grazing ground) |
-| `shadow.radius` | ~5 (3 for the warped map from the air) | the actual softness knob; hides the texel staircase / fraying |
+| `shadow.radius` | ~5 (from the air 3 at a fit, 1.6–5 between fits, `warpSoftness`) | the actual softness knob; hides the texel staircase / fraying |
 | `shadow.normalBias` | **0** | a positive normalBias offsets the flat ground sample → bright peter-panning contact strip. Safe at 0 because terrain doesn't cast and solids cast via back faces (lit faces never self-acne) |
 | casters' depth | the material itself | no custom depth materials: the shadow pass draws `castShadowPositionNode ?? positionNode` and honours `maskNode` |
 | `shadow.bias` | ~−0.0003 (warped: 0.08 m at the nearest ground, per fit) | small constant bias, residual cleanup |
@@ -513,9 +513,22 @@ side: 2–3 × the texels), and returns a warp matrix that
 `updateProjectionMatrix` (three calls it when the backend sets the
 coordinate system). Three's lookup divides by w, the style pass
 (`stylize-effect.ts`) too, so nothing else changes. `warpCovers` keeps the
-map until the view leaves it; the sun turning fits it anew. Never read
-`sun.shadow.camera.left/right` as metres from the air: they are warped
-coordinates.
+map until the view leaves it or its nearest ground drifts 1.3 × (held
+against the fit's own view seen the same way, `nearestSeen`); the sun
+turning fits it anew. Between fits `warpSoftness` sets `shadow.radius`
+per moving frame so the edges are as wide in metres as a fit made now
+would draw them: diving, they sharpen with the view instead of in steps.
+Never read `sun.shadow.camera.left/right` as metres from the air: they
+are warped coordinates.
+
+**Thin casters** (`thin-casters.ts`): an instanced pole, mast, stake,
+bollard or bench is drawn at least one map texel wide across the sun in
+the shadow pass (`castShadowPositionNode = thinCasterPosition()`, at most
+0.8 m): narrower than a texel it lands on the map only in some rows, and
+its shadow popped in whole when a dive renewed the map. `sun-rig.ts`
+keeps the uniforms on the map as drawn (`setThinCasterMap` in
+`placeLight`). A new thin instanced caster takes it too; a merged,
+non-instanced one cannot (it widens about its instance's axis).
 
 ### The far field: baked horizon + sky view (plan 033)
 

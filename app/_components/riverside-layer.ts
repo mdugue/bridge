@@ -27,6 +27,7 @@ import type { GroundContext } from "@/lib/city/ground-clamp";
 import { subdividePolyline } from "@/lib/city/polyline";
 import type { Point2 } from "@/lib/city/polyline";
 import { Instances, instancePosition } from "./instancing";
+import { thinCasterPosition } from "./thin-casters";
 import { lampNight } from "./lamp-layer";
 import { mapFadeNode } from "./map-overlay";
 import { addFootprint, addRibbon, meshFrom, mesh3, quad } from "./mesh-kit";
@@ -519,6 +520,7 @@ function instancedColumns(
         roughness: 0.9,
       });
       m.positionNode = instancePosition();
+      m.castShadowPositionNode = thinCasterPosition();
       return m;
     }
   );

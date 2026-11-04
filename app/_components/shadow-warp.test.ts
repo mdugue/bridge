@@ -3,8 +3,12 @@ import { Matrix4, Vector3, Vector4 } from "three/webgpu";
 import {
   cutToBand,
   fitWarpedShadow,
+  NEAREST_DRIFT,
+  texelAt as mapTexelAt,
+  WARP_PCF_RADIUS,
   warpCovers,
   warpDistance,
+  warpSoftness,
 } from "./shadow-warp";
 import type { WarpFit, WarpView } from "./shadow-warp";
 
@@ -49,14 +53,7 @@ const onMap = (c: Vector3) =>
   Math.abs(c.x) <= 1 && Math.abs(c.y) <= 1 && Math.abs(c.z) <= 1;
 
 /** The coarser side (m) of a map texel on the ground at `p`. */
-function texelAt(fit: WarpFit, p: Vector3): number {
-  const a = clipOf(fit, p);
-  const span = (d: Vector3) => {
-    const b = clipOf(fit, p.clone().add(d));
-    return Math.hypot(b.x - a.x, b.y - a.y) * (MAP / 2);
-  };
-  return 1 / Math.min(span(new Vector3(1, 0, 0)), span(new Vector3(0, 0, 1)));
-}
+const texelAt = (fit: WarpFit, p: Vector3) => mapTexelAt(fit, p, MAP);
 
 /** The ground `distance` m ahead of the eye along the view's heading. */
 function ahead(v: WarpView, distance: number): Vector3 {
@@ -202,4 +199,59 @@ test("a view over lower ground than the fit's is fitted anew", () => {
   // map's depth, though across it they are on it
   const deeper = { ...view(150, 25), floorY: v.floorY - 150 };
   expect(warpCovers(fit, deeper)).toBe(false);
+});
+
+test("diving at a point, its shadows sharpen with the view, never in a step", () => {
+  // 40° down at a point on the ground, from 400 m to 30 m away in 1 % steps
+  const target = new Vector3(0, 110, 0);
+  const at = (distance: number): WarpView => {
+    const v = view(0, 40);
+    v.eye.copy(target).addScaledVector(v.forward, -distance);
+    return v;
+  };
+  let fit: WarpFit | null = null;
+  let fits = 0;
+  let softness = 0;
+  let texel = 0;
+  for (let distance = 400; distance >= 30; distance *= 0.99) {
+    const v = at(distance);
+    let radius = WARP_PCF_RADIUS;
+    if (fit && warpCovers(fit, v)) {
+      const fresh = fitWarpedShadow(v, SUN);
+      if (fresh) {
+        radius = warpSoftness(fit, fresh, v, MAP);
+      }
+    } else {
+      const next = fitWarpedShadow(v, SUN);
+      if (!next) {
+        throw new Error("the ground is in view");
+      }
+      const nextTexel = texelAt(next, target);
+      if (texel > 0) {
+        // a renewal steps the texels by about the drift, no more
+        expect(texel / nextTexel).toBeLessThan(NEAREST_DRIFT * 1.1);
+      }
+      texel = nextTexel;
+      fit = next;
+      fits += 1;
+    }
+    // the edges' width on the ground (m) moves as the step does, ~1 %
+    const metres = radius * texelAt(fit, target);
+    if (softness > 0) {
+      expect(Math.abs(metres / softness - 1)).toBeLessThan(0.03);
+    }
+    softness = metres;
+  }
+  // 0.55 m texels at the start, 0.14 m at the end, in about a dozen steps
+  expect(fits).toBeGreaterThan(5);
+  expect(fits).toBeLessThan(16);
+});
+
+test("a fit's own view keeps the spread it was fitted with", () => {
+  const v = view(150, 25);
+  const fit = fitWarpedShadow(v, SUN);
+  if (!fit) {
+    throw new Error("the ground is in view");
+  }
+  expect(warpSoftness(fit, fit, v, MAP)).toBeCloseTo(WARP_PCF_RADIUS, 6);
 });

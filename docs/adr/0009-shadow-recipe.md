@@ -28,7 +28,11 @@ number of lights into every lit material.
    view widened by a margin, out to most of the fog's reach — texels fine
    near the camera and coarse far off, as the pixels are. One map, one
    depth pass, no byte more; the map stands until the view leaves what it
-   covers. The tile stream keeps streaming for the square.
+   covers. The tile stream keeps streaming for the square. What a
+   renewal changes is kept small: the PCF spread follows the view
+   between renewals, and thin instanced casters are drawn one texel wide
+   in the shadow pass, so a shadow sharpens as the view nears it and never
+   pops in.
 4. **Past the map the ground's shadows come from a baked horizon map**
    (`pipeline/bake/skyview.py`): the skyline's elevation per azimuth in a
    near and a far band, combined with the shadow map by `min`. The same
@@ -55,7 +59,9 @@ number of lights into every lit material.
   the air shapes reach to the fog, but the near ground's texels are
   coarser than the square's below ~200 m of altitude, and turning
   redraws the map about every 13° (the square: every 25–30°), while
-  flying straight redraws it less often than the square did.
+  flying straight redraws it less often than the square did. A dive
+  renews it about every 1.3 × nearer; a thin caster's shadow from afar is
+  a faint line wider than the caster.
 - Cascaded shadow maps (`CSMShadowNode`) stay out: a map per cascade is
   memory a phone does not have.
 - A new lit feature fits into the pool or is faked.
@@ -63,6 +69,9 @@ number of lights into every lit material.
   by motion is a rebuild hitch.
 
 ## Alternatives
+
+- **Cross-fading the old map into a new one:** a second map, memory a
+  phone does not have.
 
 - **VSM:** corduroy rings on large ground at grazing angles, at any blur.
 - **A large `normalBias`:** a bright peter-panning strip at every contact.

@@ -14,6 +14,7 @@ import { uniform } from "three/tsl";
 import { SHADOW_BASE_RADIUS, SHADOW_MAX_RADIUS } from "@/lib/city/shadow-fit";
 import { shadowMapSizeFor } from "./scene-profile";
 import { createSunRig } from "./sun-rig";
+import { sunMapMatrix } from "./thin-casters";
 import type { AirView } from "./sun-rig";
 
 // Dresden — the primary tile's latitude/longitude.
@@ -472,4 +473,22 @@ test("landing, and Modell, give the map back to the square", () => {
   sunRig.followFootprint(0, 100, -300, 200, 880);
   expect(sun.shadow.camera.right).toBe(sun.shadow.camera.top);
   expect(inside(onMap(sun, new Vector3(0, 100, -300)))).toBe(true);
+});
+
+test("diving inside the map's cover sharpens its edges without a redraw", () => {
+  const { sunRig, sun } = rig();
+  sunRig.update(new Date("2026-06-21T10:00:00+02:00"));
+  followAt(sunRig, FLYING, LOOK, 100);
+  expect(sun.shadow.radius).toBe(3);
+  // the thin casters read the map as drawn
+  expect(sunMapMatrix.value.equals(sun.shadow.matrix)).toBe(true);
+  sun.shadow.needsUpdate = false;
+  // a little nearer along the view: the map stands, the edges sharpen
+  followAt(sunRig, FLYING.clone().addScaledVector(LOOK, 25), LOOK, 100);
+  expect(sun.shadow.needsUpdate).toBe(false);
+  expect(sun.shadow.radius).toBeLessThan(3);
+  expect(sun.shadow.radius).toBeGreaterThan(2);
+  // back on the ground the walker's square takes its own spread
+  followAt(sunRig, new Vector3(0, 102, 0), LOOK, 100);
+  expect(sun.shadow.radius).toBe(5);
 });

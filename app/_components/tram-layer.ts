@@ -35,6 +35,7 @@ import { buildFurniture } from "./furniture-layer";
 import { finished } from "@/lib/city/build-steps";
 import type { Steps } from "@/lib/city/build-steps";
 import { Instances, instancePosition } from "./instancing";
+import { thinCasterPosition } from "./thin-casters";
 import { addRibbon, meshSteps, mesh3, quad } from "./mesh-kit";
 import type { Mesh3, Pt } from "./mesh-kit";
 import {
@@ -599,6 +600,7 @@ function buildMasts(masts: Point2[], ctx: GroundContext): Instances | null {
       metalness: 0.2,
     });
     m.positionNode = instancePosition();
+    m.castShadowPositionNode = thinCasterPosition();
     return m;
   });
   const mesh = new Instances(geo, material, stood.length);

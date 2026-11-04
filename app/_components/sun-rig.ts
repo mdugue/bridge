@@ -50,14 +50,17 @@ import {
   fitWarpedShadow,
   WARP_FROM_M,
   WARP_MAX_REACH_M,
+  WARP_PCF_RADIUS,
   WARP_REACH_OF_FOG,
   WARP_UNTIL_M,
   warpCovers,
+  warpSoftness,
 } from "./shadow-warp";
 import type { WarpFit, WarpView } from "./shadow-warp";
 import { sunDirectionWorld } from "@/lib/city/sun";
 import { shadowMapBytesFor } from "./scene-profile";
 import { createSkyReflection } from "./sky-reflection";
+import { setThinCasterMap } from "./thin-casters";
 import type { Live, V3, V4 } from "./shader-chunks";
 
 export interface SunState {
@@ -207,10 +210,10 @@ const SQUARE_BIAS = -0.0003;
  * The PCF spread in texels (three's `shadow.radius`). The walker's square
  * has fine, even texels and a wide spread hides their staircase; the warped
  * map's texels near the camera are already as coarse as that spread was
- * wide, so its spread is narrower and the edges stay about as soft.
+ * wide, so its spread is narrower (`WARP_PCF_RADIUS`, shadow-warp.ts) and
+ * the edges stay about as soft.
  */
 const SQUARE_PCF_RADIUS = 5;
-const WARP_PCF_RADIUS = 3;
 
 /**
  * Least time (ms) between two shadow-map redraws while the time of day is
@@ -544,6 +547,8 @@ export function createSunRig(
     sun.updateMatrixWorld();
     sun.target.updateMatrixWorld();
     sun.shadow.updateMatrices(sun);
+    // the thin casters' width follows the map's texels (thin-casters.ts)
+    setThinCasterMap(sun.shadow.matrix, shadowMapSize, dir);
   };
 
   /** The map takes `fit`'s warp; `redraw` false while the sun is dragged
@@ -695,6 +700,17 @@ export function createSunRig(
       up: new Vector3().setFromMatrixColumn(camera.matrixWorld, 1).normalize(),
     };
     if (warpFit && warpCovers(warpFit, warpView)) {
+      // the map stands; its edges soften or sharpen with the view, as a
+      // map fitted now would draw them (a uniform: no depth pass)
+      const fresh = fitWarpedShadow(warpView, dir);
+      if (fresh) {
+        sun.shadow.radius = warpSoftness(
+          warpFit,
+          fresh,
+          warpView,
+          shadowMapSize
+        );
+      }
       return;
     }
     // looking at the sky (no receiver in view) keeps what the map holds

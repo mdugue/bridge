@@ -27,6 +27,7 @@ import {
 import { epsgToWorld } from "@/lib/city/ground-clamp";
 import type { GroundContext } from "@/lib/city/ground-clamp";
 import { Instances, instancePosition } from "./instancing";
+import { thinCasterPosition } from "./thin-casters";
 import type { Pt } from "./mesh-kit";
 import type { DeviceTier } from "./scene-profile";
 import type { F, Live } from "./shader-chunks";
@@ -188,6 +189,7 @@ const postMaterial = (): Material =>
       metalness: 0.2,
     });
     m.positionNode = instancePosition();
+    m.castShadowPositionNode = thinCasterPosition();
     return m;
   });
 

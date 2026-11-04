@@ -58,6 +58,7 @@ import { subdividePolyline } from "@/lib/city/polyline";
 import { finished } from "@/lib/city/build-steps";
 import type { Steps } from "@/lib/city/build-steps";
 import { Instances, instancePosition } from "./instancing";
+import { thinCasterPosition } from "./thin-casters";
 import type { Live } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 
@@ -952,6 +953,7 @@ function matteMaterial(): MeshStandardNodeMaterial {
     metalness: 0,
   });
   material.positionNode = instancePosition();
+  material.castShadowPositionNode = thinCasterPosition();
   return material;
 }
 
