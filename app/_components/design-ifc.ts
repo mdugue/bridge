@@ -1,4 +1,5 @@
 import type { IfcAPI } from "web-ifc";
+import type * as WebIfc from "web-ifc";
 import {
   Box3,
   BufferAttribute,
@@ -7,18 +8,17 @@ import {
   Group,
   Mesh,
   MeshStandardMaterial,
-  type Object3D,
   SRGBColorSpace,
 } from "three/webgpu";
+import type { Object3D } from "three/webgpu";
 import { detectGeoreference } from "@/lib/city/design-placement";
 import type { DesignPartInfo } from "@/lib/city/inquiry-design";
 import {
-  type IfcPlacement,
-  type MapConversion,
   mapConversionPlacement,
   siPrefixFactor,
   siteReferencePlacement,
 } from "@/lib/city/ifc-georef";
+import type { IfcPlacement, MapConversion } from "@/lib/city/ifc-georef";
 
 /**
  * Reads an IFC model into the design reader's frame (design-read.ts,
@@ -40,7 +40,7 @@ export const IFC_WASM_PATH = "/wasm/";
 
 /** IFC types that carry geometry but are not drawn (a room's volume, an
  *  opening's void), by their codes. */
-function undrawnTypes(types: typeof import("web-ifc")): Set<number> {
+function undrawnTypes(types: typeof WebIfc): Set<number> {
   return new Set([
     types.IFCSPACE,
     types.IFCOPENINGELEMENT,
@@ -87,7 +87,7 @@ function numbers(v: unknown): number[] {
 function linesOf(api: IfcAPI, model: number, type: number): number[] {
   const ids = api.GetLineIDsWithType(model, type, true);
   const out: number[] = [];
-  for (let i = 0; i < ids.size(); i++) {
+  for (let i = 0; i < ids.size(); i += 1) {
     out.push(ids.get(i));
   }
   return out;
@@ -136,12 +136,14 @@ function siteOrigin(
 function placementOf(
   api: IfcAPI,
   model: number,
-  types: typeof import("web-ifc"),
+  types: typeof WebIfc,
   epsg: number
 ): IfcPlacement | { why: string } | null {
   const unit = lengthUnit(api, model, types.IFCSIUNIT);
-  for (const id of linesOf(api, model, types.IFCMAPCONVERSION)) {
-    const line = api.GetLine(model, id, true) as Record<string, unknown>;
+  // only the model's first map conversion counts
+  const mapId = linesOf(api, model, types.IFCMAPCONVERSION).at(0);
+  if (mapId !== undefined) {
+    const line = api.GetLine(model, mapId, true) as Record<string, unknown>;
     const crs = line.TargetCRS as { Name?: unknown; MapUnit?: unknown } | null;
     const map: MapConversion = {
       crs: text(crs?.Name),
@@ -219,7 +221,7 @@ function geometryOf(
   const count = vertices.length / 6;
   const position = new Float32Array(count * 3);
   const normal = new Float32Array(count * 3);
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < count; i += 1) {
     position[i * 3] = vertices[i * 6];
     position[i * 3 + 1] = vertices[i * 6 + 1];
     position[i * 3 + 2] = vertices[i * 6 + 2];
@@ -235,7 +237,12 @@ function geometryOf(
 }
 
 /** Thrown with a sentence for the panel. */
-export class IfcError extends Error {}
+export class IfcError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "IfcError";
+  }
+}
 
 /**
  * Reads `file` as IFC for the site's `epsg`: the model as one group in the
@@ -281,7 +288,7 @@ export async function readIfc(
         id: text(line.GlobalId),
         material: null,
       };
-      for (let i = 0; i < flat.geometries.size(); i++) {
+      for (let i = 0; i < flat.geometries.size(); i += 1) {
         const placed = flat.geometries.get(i);
         let geometry = geometries.get(placed.geometryExpressID);
         if (!geometry) {
@@ -321,7 +328,7 @@ export async function readIfc(
       root.matrixAutoUpdate = false;
       // (row-major: fromArray reads column-major)
       root.matrix.fromArray(place.matrix).transpose();
-      note = place.note;
+      ({ note } = place);
     } else if (place) {
       note = place.why;
     }

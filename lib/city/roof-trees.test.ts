@@ -110,19 +110,20 @@ test("treesOffRoofs: a roof's own height goes, a tree over it or beside it stays
   expect(kept.map((t) => t.properties?.h)).toEqual([24, 12, 12]);
 });
 
-test("gapRoofs: a building LoD2 lacks is a roof; one newer than the flight keeps no crown", () => {
-  const square = (x0: number): StructureFeature["geometry"] => ({
-    type: "Polygon",
-    coordinates: [
-      [
-        [x0, 0],
-        [x0 + 20, 0],
-        [x0 + 20, 20],
-        [x0, 20],
-        [x0, 0],
-      ],
+const square = (x0: number): StructureFeature["geometry"] => ({
+  type: "Polygon",
+  coordinates: [
+    [
+      [x0, 0],
+      [x0 + 20, 0],
+      [x0 + 20, 20],
+      [x0, 20],
+      [x0, 0],
     ],
-  });
+  ],
+});
+
+test("gapRoofs: a building LoD2 lacks is a roof; one newer than the flight keeps no crown", () => {
   const gaps: StructureFeature[] = [
     { geometry: square(0), properties: { h: 12, kind: "building", z: 100 } },
     // built since the flight: its lot's old crowns

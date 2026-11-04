@@ -6,7 +6,6 @@ import {
   MAX_SAG_M,
   messengerDrop,
   MIN_SPAN_M,
-  type SectionMember,
   sectionPlan,
   STAGGER_M,
   staggerAt,
@@ -16,6 +15,7 @@ import {
   underBridge,
   wireStations,
 } from "./catenary";
+import type { SectionMember } from "./catenary";
 
 /** A straight track along x from x0 to x1 at z, stations from x0. */
 function track(x0: number, x1: number, z = 0) {
@@ -41,7 +41,7 @@ test("a mapped mast stands in place of the grid's supports near it", () => {
   const s = supportStations(t.pts, t.d, [118]);
   expect(s.map((p) => p.d)).toEqual([50, 118, 150, 200, 250, 300]);
   expect(s.find((p) => p.d === 118)?.key).toBeNull();
-  for (let i = 1; i < s.length; i++) {
+  for (let i = 1; i < s.length; i += 1) {
     expect(s[i].d - s[i - 1].d).toBeGreaterThanOrEqual(MIN_SPAN_M);
   }
 });
@@ -66,14 +66,15 @@ test("the messenger sags between supports, the contact wire zig-zags", () => {
   expect(staggerAt(stations, sides, 25)).toBeCloseTo(0);
 });
 
+const zigzag = (x0: number, x1: number, at: number) => {
+  const t = track(x0, x1);
+  const supports = supportStations(t.pts, t.d);
+  return staggerAt(wireStations(supports), staggerSides(supports), at - x0);
+};
+
 test("two tiles drawing one line agree on the contact wire at their seam", () => {
   // the line along x, cut at x 280: one tile has supports to x 250 and a
   // virtual one at 300, the other its supports from x 300
-  const zigzag = (x0: number, x1: number, at: number) => {
-    const t = track(x0, x1);
-    const supports = supportStations(t.pts, t.d);
-    return staggerAt(wireStations(supports), staggerSides(supports), at - x0);
-  };
   for (const x of [255, 270, 280, 290, 300]) {
     expect(zigzag(0, 280, x)).toBeCloseTo(zigzag(280, 400, x), 6);
   }
@@ -88,9 +89,9 @@ test("two tiles drawing one line agree on the contact wire at their seam", () =>
 });
 
 /** A member on grid line x:2 (x 100) at z, along x. */
-const member = (track: number, z: number, h = 5.5): SectionMember => ({
+const member = (trackNo: number, z: number, h = 5.5): SectionMember => ({
   h,
-  track,
+  track: trackNo,
   support: 0,
   tx: 1,
   tz: 0,

@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
-import {
-  ASK_FOV,
-  type AskTarget,
-  type Framed,
-  frameTargets,
-  streetView,
-} from "./ask-view";
+import { ASK_FOV, frameTargets, streetView } from "./ask-view";
+import type { AskTarget, Framed } from "./ask-view";
+
+/** A block south of the church hides it from every eye south of it. */
+const sightHit = (
+  eye: { x: number; y: number; z: number },
+  p: { x: number; y: number; z: number }
+) => (eye.y < -50 && p.y > eye.y ? { x: 0, y: -60, z: 140 } : null);
 
 test("on foot the walker stands in front, on the side they come from, looking at it", () => {
   const v = streetView({ x: 1000, y: 2000, h: 20 }, { x: 1000, y: 1500 });
@@ -147,11 +148,6 @@ test("places in a row are seen side by side, not behind each other", () => {
 });
 
 test("a heading whose sight lines a building cuts loses", () => {
-  // a block south of the church hides it from every eye south of it
-  const sightHit = (
-    eye: { x: number; y: number; z: number },
-    p: { x: number; y: number; z: number }
-  ) => (eye.y < -50 && p.y > eye.y ? { x: 0, y: -60, z: 140 } : null);
   const framed = frameTargets([church], {
     aspect: 1.5,
     from: { x: 0, y: -3000 },

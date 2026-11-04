@@ -204,7 +204,7 @@ function middle(points: readonly Sample[]): SitePoint {
   const hi = [-Infinity, -Infinity, -Infinity];
   for (const p of points) {
     const v = [p.x, p.y, p.z];
-    for (let k = 0; k < 3; k++) {
+    for (let k = 0; k < 3; k += 1) {
       lo[k] = Math.min(lo[k], v[k]);
       hi[k] = Math.max(hi[k], v[k]);
     }
@@ -298,13 +298,13 @@ function seenShare(
     if (!p.sight) {
       continue;
     }
-    lines++;
+    lines += 1;
     const hit = sightHit(c.eye, p);
     const t = targets[p.i];
     // a hit on the place itself (its own roof before its top) is a sight
     const own = Math.max(t.r ?? DEFAULT_RADIUS, 2) * 1.2 + 3;
     if (!hit || Math.hypot(hit.x - t.x, hit.y - t.y) <= own) {
-      seen++;
+      seen += 1;
     }
   }
   return lines === 0 ? 1 : seen / lines;
@@ -353,14 +353,20 @@ export function frameTargets(
     .sort((a, b) => b.score - a.score);
   // the sight lines weigh most and cost most: drawn for the best few
   // headings only, which then compete on them
-  const sightHit = context.sightHit;
+  const { sightHit } = context;
   const finalists = scored.slice(0, sightHit ? SIGHT_CANDIDATES : 1);
   if (sightHit) {
     for (const s of finalists) {
       s.score += WEIGHTS.seen * seenShare(s.c, points, targets, sightHit);
     }
   }
-  const best = finalists.reduce((a, b) => (b.score > a.score ? b : a)).c;
+  let [top] = finalists;
+  for (const s of finalists) {
+    if (s.score > top.score) {
+      top = s;
+    }
+  }
+  const best = top.c;
   const ground = Math.min(...points.map((p) => p.z));
   return {
     distance: Math.round(best.distance),

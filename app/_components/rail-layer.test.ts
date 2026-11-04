@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { Box3, type Mesh, MeshStandardNodeMaterial } from "three/webgpu";
+import { Box3, MeshStandardNodeMaterial } from "three/webgpu";
+import type { Mesh } from "three/webgpu";
 import type {
   AreaFeature,
   BridgeFeature,
@@ -12,8 +13,8 @@ import {
   buildDeckTable,
   buildRail,
   COLORS,
-  type RailContext,
 } from "./rail-layer";
+import type { RailContext } from "./rail-layer";
 import { axisFrame } from "@/lib/city/bridge";
 import { deckLift, ringToWorld } from "@/lib/city/decks";
 
@@ -88,12 +89,14 @@ test("a yard across an underpass follows the ground, not its corners", () => {
   const pos = mesh?.geometry.getAttribute("position");
   expect(pos?.count ?? 0).toBeGreaterThan(0);
   let overStreet = 0;
-  for (let i = 0; pos && i < pos.count; i += 3) {
-    const xs = [0, 1, 2].map((k) => pos.getX(i + k));
-    const mx = (xs[0] + xs[1] + xs[2]) / 3;
-    const top = Math.max(...[0, 1, 2].map((k) => pos.getY(i + k)));
-    if (mx > 44 && mx < 56 && top > 113) {
-      overStreet++;
+  if (pos) {
+    for (let i = 0; i < pos.count; i += 3) {
+      const xs = [0, 1, 2].map((k) => pos.getX(i + k));
+      const mx = (xs[0] + xs[1] + xs[2]) / 3;
+      const top = Math.max(...[0, 1, 2].map((k) => pos.getY(i + k)));
+      if (mx > 44 && mx < 56 && top > 113) {
+        overStreet += 1;
+      }
     }
   }
   // no sheet stands over the street, closing the passage
@@ -172,14 +175,14 @@ test("a track over the gap the DGM leaves beside a bridge spans it on a deck of 
   // and a deck stands under them, at their level, on piers down to the
   // street
   expect(built.children.length).toBeGreaterThan(1);
-  const deck = new Box3();
+  const deckBox = new Box3();
   for (const c of built.children.slice(1)) {
-    deck.union(new Box3().setFromObject(c));
+    deckBox.union(new Box3().setFromObject(c));
   }
-  expect(deck.min.x).toBeLessThan(85);
-  expect(deck.max.x).toBeGreaterThan(115);
-  expect(deck.max.y).toBeGreaterThan(117.5);
-  expect(deck.min.y).toBeLessThan(111.5);
+  expect(deckBox.min.x).toBeLessThan(85);
+  expect(deckBox.max.x).toBeGreaterThan(115);
+  expect(deckBox.max.y).toBeGreaterThan(117.5);
+  expect(deckBox.min.y).toBeLessThan(111.5);
 });
 
 test("a null geometry is skipped, not thrown", () => {
@@ -284,9 +287,10 @@ test("a measured truss becomes an open frame with towers", () => {
   expect(plain).toBeGreaterThan(0);
 });
 
+// 120 m arch, crown 128 m, springing at the ground (100 m)
+const arch = (s: number) => 128 - 28 * ((s - 100) / 60) ** 2;
+
 test("an arch rib reaches down to its springing", () => {
-  // 120 m arch, crown 128 m, springing at the ground (100 m)
-  const arch = (s: number) => 128 - 28 * ((s - 100) / 60) ** 2;
   const rise = Array.from({ length: 101 }, (_, i) =>
     Math.max(0, arch(i * 2) - 120)
   );
@@ -310,8 +314,9 @@ test("a deck across a seam is drawn by its owner only", () => {
   expect(trianglesOf(bridge, { ...ctx, owns: () => true })).toBeGreaterThan(0);
 });
 
+const pierCount = (b: BridgeFeature) => triangleCount(stoneOf(b));
+
 test("the fairway stays free of piers", () => {
-  const pierCount = (b: BridgeFeature) => triangleCount(stoneOf(b));
   expect(pierCount(deck({ fairway: 0.5, span: 120 }))).toBeLessThan(
     pierCount(deck({}))
   );
@@ -330,7 +335,10 @@ function acrossEnds(b: BridgeFeature): number {
   for (const name of ["bridge-stone", "bridge-steel"]) {
     const mesh = built.getObjectByName(name) as Mesh | undefined;
     const pos = mesh?.geometry.getAttribute("position");
-    for (let i = 0; pos && i < pos.count; i++) {
+    if (!pos) {
+      continue;
+    }
+    for (let i = 0; i < pos.count; i += 1) {
       // the deck runs along x from 0 to 200, 12 m wide: an end wall would
       // stand at x = 0 or 200 across the middle of the road
       const x = pos.getX(i);
@@ -340,7 +348,7 @@ function acrossEnds(b: BridgeFeature): number {
         Math.abs(z) < 4 &&
         pos.getY(i) > 120
       ) {
-        across++;
+        across += 1;
       }
     }
   }
@@ -354,13 +362,13 @@ test("a masonry bridge's walls hang from the deck's own edges", () => {
   const pos = stone.geometry.getAttribute("position");
   let below = 0;
   const outside: number[] = [];
-  for (let i = 0; i < pos.count; i++) {
+  for (let i = 0; i < pos.count; i += 1) {
     // nothing stands outside the deck's width...
     if (Math.abs(pos.getZ(i)) > 6.01) {
       outside.push(pos.getZ(i));
     }
     if (pos.getY(i) < 110) {
-      below++;
+      below += 1;
     }
   }
   expect(outside).toEqual([]);
@@ -368,14 +376,15 @@ test("a masonry bridge's walls hang from the deck's own edges", () => {
   expect(below).toBeGreaterThan(0);
 });
 
+// a quarter ring, radius 94–106 m around the origin: its centroid lies
+// off the deck, in the hollow of the curve
+const arc = (r: number) =>
+  Array.from({ length: 13 }, (_, k): [number, number] => {
+    const a = (k / 12) * (Math.PI / 2);
+    return [r * Math.cos(a), r * Math.sin(a)];
+  });
+
 test("a curved deck's sides all face out, the inner edge too", () => {
-  // a quarter ring, radius 94–106 m around the origin: its centroid lies
-  // off the deck, in the hollow of the curve
-  const arc = (r: number) =>
-    Array.from({ length: 13 }, (_, k): [number, number] => {
-      const a = (k / 12) * (Math.PI / 2);
-      return [r * Math.cos(a), r * Math.sin(a)];
-    });
   const ring = [...arc(106), ...arc(94).reverse()];
   ring.push(ring[0]);
   const bridge: BridgeFeature = {
@@ -395,7 +404,7 @@ test("a curved deck's sides all face out, the inner edge too", () => {
     const geo = (child as Mesh).geometry;
     const pos = geo.getAttribute("position");
     const nrm = geo.getAttribute("normal");
-    for (let i = 0; i < pos.count; i++) {
+    for (let i = 0; i < pos.count; i += 1) {
       // the deck's sides and parapets (the piers below are square columns)
       if (Math.abs(nrm.getY(i)) > 0.1 || pos.getY(i) < 119.5) {
         continue;
@@ -407,7 +416,7 @@ test("a curved deck's sides all face out, the inner edge too", () => {
       if (Math.abs(radial) < 0.5) {
         continue; // an end face: along the curve, not across it
       }
-      sides++;
+      sides += 1;
       // outer edge faces away from the centre, inner edge towards it
       if (Math.sign(radial) !== (r > 100 ? 1 : -1)) {
         inward.push({ x, z });
@@ -425,7 +434,7 @@ function vertices(b: BridgeFeature) {
     const geo = (child as Mesh).geometry;
     const pos = geo.getAttribute("position");
     const nrm = geo.getAttribute("normal");
-    for (let i = 0; i < pos.count; i++) {
+    for (let i = 0; i < pos.count; i += 1) {
       out.push({
         x: pos.getX(i),
         y: pos.getY(i),
@@ -484,7 +493,7 @@ test("a masonry bridge's piers stand where DOM1 saw them, a seventh of their spa
   const stone = stoneOf(deck({ structure: "arch", piers }));
   const pos = stone.geometry.getAttribute("position");
   const xs = new Set<number>();
-  for (let i = 0; i < pos.count; i++) {
+  for (let i = 0; i < pos.count; i += 1) {
     if (pos.getY(i) < 100.01) {
       xs.add(Math.round(pos.getX(i) * 100) / 100);
     }
@@ -508,11 +517,11 @@ test("a frame on the deck's edge stands in for the parapet", () => {
   const parapet = (vs: Vertex[], top = 121.1) =>
     vs.filter((v) => Math.abs(v.y - top) < 0.01).length;
   const beam = vertices(deck({}));
-  const arch = vertices(deck({ structure: "arch" }));
+  const archVertices = vertices(deck({ structure: "arch" }));
   expect(parapet(beam)).toBeGreaterThan(0);
   expect(parapet(beam, 120.85)).toBe(0);
-  expect(parapet(arch, 120.85)).toBeGreaterThan(0);
-  expect(parapet(arch)).toBe(0);
+  expect(parapet(archVertices, 120.85)).toBeGreaterThan(0);
+  expect(parapet(archVertices)).toBe(0);
   const truss = deck({
     structure: "truss",
     ribs: [
@@ -540,7 +549,7 @@ test("no face of a bridge is left without a normal (it would shade black)", () =
   for (const child of buildRail({ ...empty, bridges: [b] }, ctx).children) {
     const nrm = (child as Mesh).geometry.getAttribute("normal");
     seen += nrm.count;
-    for (let i = 0; i < nrm.count; i++) {
+    for (let i = 0; i < nrm.count; i += 1) {
       if (Math.hypot(nrm.getX(i), nrm.getY(i), nrm.getZ(i)) <= 0.5) {
         unlit.push(`${child.name}#${i}`);
       }
@@ -607,6 +616,8 @@ test("the lift table carries the approaches for what rides up to a deck", () => 
   expect(buildDeckTable([bridge], { offset: ctx.offset }).length).toBe(1);
 });
 
+const near = (a: number, b: number) => Math.abs(a - b) < 5e-7;
+
 test("a deck's top is laid out by its frame; its stone is dressed", () => {
   const built = buildRail({ ...empty, bridges: [deck({})] }, ctx);
   const [top, stone] = built.children as Mesh[];
@@ -616,9 +627,8 @@ test("a deck's top is laid out by its frame; its stone is dressed", () => {
   const frame = top.geometry.getAttribute("aDeck");
   expect(frame.itemSize).toBe(4);
   expect(frame.count).toBe(pos.count);
-  const near = (a: number, b: number) => Math.abs(a - b) < 5e-7;
   const misplaced: number[] = [];
-  for (let i = 0; i < frame.count; i++) {
+  for (let i = 0; i < frame.count; i += 1) {
     // the station runs along the axis (x here), the offset across it
     // (left of the axis is north: −z), the edges are the outline's
     if (
@@ -639,13 +649,15 @@ test("a deck's top is laid out by its frame; its stone is dressed", () => {
   const zeros = plain.geometry.getAttribute("aDeck");
   expect(zeros.count).toBeGreaterThan(0);
   const framed: number[] = [];
-  for (let i = 0; i < zeros.count; i++) {
+  for (let i = 0; i < zeros.count; i += 1) {
     if (zeros.getZ(i) - zeros.getW(i) !== 0) {
       framed.push(i);
     }
   }
   expect(framed).toEqual([]);
 });
+
+const lineAt = (x: number) => 120 + 3 * Math.sin((Math.PI * x) / 200);
 
 test("a deck's slab and parapets follow its measured line, not chords between its corners", () => {
   // a 200 m deck cambered 3 m over its span, with only its four corners:
@@ -655,7 +667,6 @@ test("a deck's slab and parapets follow its measured line, not chords between it
     { length: 101 },
     (_, i) => 120 + 3 * Math.sin((Math.PI * i) / 100)
   );
-  const lineAt = (x: number) => 120 + 3 * Math.sin((Math.PI * x) / 200);
   const [top, , steel] = buildRail({ ...empty, bridges: [deck({ line })] }, ctx)
     .children as Mesh[];
   const pos = top.geometry.getAttribute("position");
@@ -663,7 +674,7 @@ test("a deck's slab and parapets follow its measured line, not chords between it
   let tops = 0;
   let soffits = 0;
   const offLine: { x: number; y: number }[] = [];
-  for (let i = 0; i < pos.count; i++) {
+  for (let i = 0; i < pos.count; i += 1) {
     const x = pos.getX(i);
     if (x < 0.01 || x > 199.99 || Math.abs(nrm.getY(i)) < 0.99) {
       continue; // an approach beyond the ends, or the fascia
@@ -674,9 +685,9 @@ test("a deck's slab and parapets follow its measured line, not chords between it
       offLine.push({ x, y: pos.getY(i) });
     }
     if (up) {
-      tops++;
+      tops += 1;
     } else {
-      soffits++;
+      soffits += 1;
     }
   }
   expect(offLine).toEqual([]);
@@ -685,7 +696,7 @@ test("a deck's slab and parapets follow its measured line, not chords between it
   // the railing's top along the side, mid-span too
   const sp = steel.geometry.getAttribute("position");
   let railing = 0;
-  for (let i = 0; i < sp.count; i++) {
+  for (let i = 0; i < sp.count; i += 1) {
     const x = sp.getX(i);
     if (Math.abs(x - 100) < 3 && Math.abs(Math.abs(sp.getZ(i)) - 5.85) < 0.05) {
       railing = Math.max(railing, sp.getY(i));
@@ -704,11 +715,11 @@ test("a deck's corners stand on its measured line, not at their own baked height
   const pos = top.geometry.getAttribute("position");
   let worst = 0;
   let seen = 0;
-  for (let i = 0; i < pos.count; i++) {
+  for (let i = 0; i < pos.count; i += 1) {
     const x = pos.getX(i);
     if (x > -0.01 && x < 200.01 && pos.getY(i) > 119.5) {
       worst = Math.max(worst, Math.abs(pos.getY(i) - 120));
-      seen++;
+      seen += 1;
     }
   }
   expect(seen).toBeGreaterThan(0);
@@ -747,10 +758,10 @@ test("a curved deck's frame holds inside every triangle, not only at its corners
     if (nrm.getY(t) < 0.9) {
       continue;
     }
-    const at = (k: number) => [pos.getX(t + k), pos.getZ(t + k)];
-    for (let k = 0; k < 3; k++) {
-      const [ax, az] = at(k);
-      const [bx, bz] = at((k + 1) % 3);
+    const cornerAt = (k: number) => [pos.getX(t + k), pos.getZ(t + k)];
+    for (let k = 0; k < 3; k += 1) {
+      const [ax, az] = cornerAt(k);
+      const [bx, bz] = cornerAt((k + 1) % 3);
       longest = Math.max(longest, Math.hypot(bx - ax, bz - az));
     }
     const x = (pos.getX(t) + pos.getX(t + 1) + pos.getX(t + 2)) / 3;
@@ -767,22 +778,24 @@ test("a curved deck's frame holds inside every triangle, not only at its corners
   expect(worst).toBeLessThan(0.3);
 });
 
+const along = (electrified: number): RailFeature => ({
+  geometry: {
+    type: "LineString",
+    coordinates: [
+      [0, 0],
+      [400, 0],
+    ],
+  },
+  properties: { electrified, tracks: 1 },
+});
+
+const names = (f: RailFeature) =>
+  buildRail(
+    { rails: [f], bridges: [], ballast: [], platforms: [] },
+    ctx
+  ).children.map((c) => c.name);
+
 test("a track with a contact line carries a catenary, one on a third rail none", () => {
-  const along = (electrified: number): RailFeature => ({
-    geometry: {
-      type: "LineString",
-      coordinates: [
-        [0, 0],
-        [400, 0],
-      ],
-    },
-    properties: { electrified, tracks: 1 },
-  });
-  const names = (f: RailFeature) =>
-    buildRail(
-      { rails: [f], bridges: [], ballast: [], platforms: [] },
-      ctx
-    ).children.map((c) => c.name);
   expect(names(along(1))).toContain("rail-catenary");
   expect(names(along(1))).toContain("rail-catenary-masts");
   expect(names(along(2))).not.toContain("rail-catenary");
@@ -850,18 +863,18 @@ test("a mapped catenary mast stands on the side of the track it is mapped on", (
   );
   const masts = built.children.find((c) => c.name === "rail-catenary-masts");
   const pos = (masts as Mesh).geometry.getAttribute("position");
-  let near = 0;
+  let nearCount = 0;
   const south: number[] = [];
-  for (let i = 0; i < pos.count; i++) {
+  for (let i = 0; i < pos.count; i += 1) {
     if (Math.abs(pos.getX(i) - 200) < 1 && pos.getY(i) < 102) {
       // north is −z in the scene
       if (pos.getZ(i) >= -2) {
         south.push(pos.getZ(i));
       }
-      near++;
+      nearCount += 1;
     }
   }
-  expect(near).toBeGreaterThan(0);
+  expect(nearCount).toBeGreaterThan(0);
   expect(south).toEqual([]);
 });
 

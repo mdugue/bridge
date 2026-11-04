@@ -18,15 +18,16 @@ test("the average over a day is the average hour", () => {
   for (const kind of ["weekday", "saturday", "sunday"] as const) {
     let sum = 0;
     const steps = 24 * 60;
-    for (let i = 0; i < steps; i++) {
+    for (let i = 0; i < steps; i += 1) {
       sum += trafficFactorAt(kind, (i * 86_400) / steps);
     }
     expect(sum / steps).toBeCloseTo(1, 6);
   }
 });
 
+const at = (h: number) => trafficFactorAt("weekday", h * 3600);
+
 test("a working day is busy at the rush hours and quiet at night", () => {
-  const at = (h: number) => trafficFactorAt("weekday", h * 3600);
   expect(at(7.5)).toBeGreaterThan(1.5);
   expect(at(16.5)).toBeGreaterThan(1.5);
   expect(at(3.5)).toBeLessThan(0.15);

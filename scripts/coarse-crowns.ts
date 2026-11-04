@@ -22,23 +22,17 @@ import type {
 import type { RecenterOffset } from "../lib/city/ground-clamp";
 import { decodeGreyPng } from "../lib/city/png-raster";
 import {
-  type PackedPoint,
   canopyStride,
   packPoints,
   pointFeatures,
   pointOf,
   unpackPoints,
 } from "../lib/city/point-pack";
-import {
-  maxWindowSampler,
-  type RasterSampler,
-} from "../lib/city/raster-sampler";
-import {
-  gapRoofs,
-  lod2Roofs,
-  type RoofFootprint,
-  treesOffRoofs,
-} from "../lib/city/roof-trees";
+import type { PackedPoint } from "../lib/city/point-pack";
+import { maxWindowSampler } from "../lib/city/raster-sampler";
+import type { RasterSampler } from "../lib/city/raster-sampler";
+import { gapRoofs, lod2Roofs, treesOffRoofs } from "../lib/city/roof-trees";
+import type { RoofFootprint } from "../lib/city/roof-trees";
 import { treesOffStructures } from "../lib/city/small-buildings";
 import type { TerrainBounds } from "../lib/city/terrain-geometry";
 import type { CityJsonDocument } from "../lib/city/types";
@@ -74,7 +68,7 @@ function rowsMeasured(path: string | undefined): boolean {
   if (!(path && existsSync(path))) {
     return false;
   }
-  const doc = JSON.parse(readFileSync(path, "utf8")) as { rows?: unknown };
+  const doc = JSON.parse(readFileSync(path, "utf-8")) as { rows?: unknown };
   return doc.rows !== undefined;
 }
 
@@ -83,8 +77,8 @@ function features<T>(path: string | undefined): T[] {
     return [];
   }
   return (
-    (JSON.parse(readFileSync(path, "utf8")) as FeatureCollection<T>).features ??
-    []
+    (JSON.parse(readFileSync(path, "utf-8")) as FeatureCollection<T>)
+      .features ?? []
   );
 }
 
@@ -142,7 +136,7 @@ export async function bakeCoarseCrowns(
   const roofs = [
     ...(sources.city && existsSync(sources.city)
       ? lod2Roofs(
-          JSON.parse(readFileSync(sources.city, "utf8")) as CityJsonDocument
+          JSON.parse(readFileSync(sources.city, "utf-8")) as CityJsonDocument
         )
       : []),
     ...gapRoofs(features<StructureFeature>(sources.structures)),

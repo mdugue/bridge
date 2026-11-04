@@ -10,7 +10,8 @@ import { MapPinIcon } from "lucide-react";
 import { nearReach } from "@/lib/city/ask-knowledge";
 import { ASK_LIMITS } from "@/lib/city/ask-city";
 import { NEAR_RADIUS, SHOW_TARGETS } from "@/lib/city/ask-tools";
-import { type AskPlace, type AskScene, showPlaces } from "./ask-scene-tools";
+import { showPlaces } from "./ask-scene-tools";
+import type { AskPlace, AskScene } from "./ask-scene-tools";
 
 /** What an answer's chips offer. */
 export interface AnswerChips {
@@ -30,6 +31,11 @@ interface ToolCallPart {
   type: "tool-call";
 }
 
+/** A number, or undefined for anything else. */
+function num(n: unknown): number | undefined {
+  return typeof n === "number" ? n : undefined;
+}
+
 /** A place as a tool call's input holds it, checked. */
 function placeOf(value: unknown): AskPlace | null {
   const v = value as Partial<AskPlace> | null;
@@ -40,7 +46,6 @@ function placeOf(value: unknown): AskPlace | null {
   ) {
     return null;
   }
-  const num = (n: unknown) => (typeof n === "number" ? n : undefined);
   return {
     name: v.name,
     x: v.x,
@@ -55,7 +60,7 @@ function placeOf(value: unknown): AskPlace | null {
  *  messages back to the question. */
 function callsOf(messages: readonly UIMessage[], end: number): ToolCallPart[] {
   const calls: ToolCallPart[] = [];
-  for (let i = end; i >= 0 && messages[i].role !== "user"; i--) {
+  for (let i = end; i >= 0 && messages[i].role !== "user"; i -= 1) {
     for (const p of messages[i].parts) {
       if (p.type === "tool-call") {
         calls.unshift(p);
@@ -130,20 +135,21 @@ export function reachQuestion(
 const CHIP =
   "rounded-full border px-2.5 py-0.5 text-left text-[11px] hover:bg-accent disabled:opacity-50";
 
-function PlaceRow({
+const PlaceRow = ({
   busy,
-  onFoot,
+  street,
   places,
   scene,
 }: {
   busy: boolean;
-  onFoot: boolean;
+  /** the answer stood on the street: so do the chips */
+  street: boolean;
   places: readonly AskPlace[];
   scene: AskScene;
-}) {
+}) => {
   // on foot when the answer stood on the street; not while an answer's
   // own glide may still be on its way
-  const air = !onFoot;
+  const air = !street;
   return (
     <fieldset aria-label="Orte" className="flex flex-wrap gap-1">
       {places.map((p, i) => (
@@ -152,7 +158,9 @@ function PlaceRow({
           disabled={busy}
           // reason: the places never reorder within an answer
           key={`${i}:${p.name}`}
-          onClick={() => showPlaces(scene, { ziele: [p], aus_der_luft: air })}
+          onClick={() => {
+            showPlaces(scene, { ziele: [p], aus_der_luft: air });
+          }}
           title={`Zu ${p.name}`}
           type="button"
         >
@@ -164,7 +172,9 @@ function PlaceRow({
         <button
           className={CHIP}
           disabled={busy}
-          onClick={() => showPlaces(scene, { ziele: places, alle: true })}
+          onClick={() => {
+            showPlaces(scene, { ziele: places, alle: true });
+          }}
           title="Alle Orte in einer Ansicht (zu weit verstreut: den ersten)"
           type="button"
         >
@@ -173,9 +183,9 @@ function PlaceRow({
       )}
     </fieldset>
   );
-}
+};
 
-function ReachRow({
+const ReachRow = ({
   ask,
   busy,
   near,
@@ -183,7 +193,7 @@ function ReachRow({
   ask: (question: string) => void;
   busy: boolean;
   near: NonNullable<AnswerChips["near"]>;
-}) {
+}) => {
   const steps = reachSteps(near.reach);
   const step = (reach: number | null, label: string) =>
     reach === null ? null : (
@@ -208,9 +218,9 @@ function ReachRow({
       {step(steps.wider, "weiter")}
     </fieldset>
   );
-}
+};
 
-export function AnswerChipRows({
+export const AnswerChipRows = ({
   ask,
   busy,
   chips,
@@ -221,7 +231,7 @@ export function AnswerChipRows({
   busy: boolean;
   chips: AnswerChips;
   scene: AskScene;
-}) {
+}) => {
   const { near, questions } = chips;
   // what `zeige` showed of them: the places on the city, the first eight
   const places = chips.places
@@ -235,7 +245,7 @@ export function AnswerChipRows({
       {places.length > 0 && (
         <PlaceRow
           busy={busy}
-          onFoot={chips.onFoot}
+          street={chips.onFoot}
           places={places}
           scene={scene}
         />
@@ -258,4 +268,4 @@ export function AnswerChipRows({
       )}
     </div>
   );
-}
+};

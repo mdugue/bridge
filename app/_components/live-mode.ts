@@ -1,11 +1,5 @@
-import {
-  type RefObject,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { RefObject } from "react";
 import { gridConvergenceDeg } from "@/lib/city/crs";
 import { normalizeDeg, placementOf } from "@/lib/city/geolocation";
 import { useSite } from "./site-context";
@@ -163,27 +157,29 @@ export function useLiveMode(
       return;
     }
     // iOS: asked from inside the click, the only place it may be asked.
-    requestOrientationPermission()
-      .then((granted) => {
-        if (!mounted.current) {
-          return;
-        }
-        if (!granted) {
+    const askPermission = async () => {
+      const granted = await requestOrientationPermission();
+      if (!mounted.current) {
+        return;
+      }
+      if (!granted) {
+        setRefused(true);
+        say("Kompass-Zugriff verweigert");
+        return;
+      }
+      start();
+      firstReading.current = setTimeout(() => {
+        firstReading.current = null;
+        if (lastReadingAt.current === 0) {
+          stop();
           setRefused(true);
-          say("Kompass-Zugriff verweigert");
-          return;
+          say("Kein Kompass verfügbar");
         }
-        start();
-        firstReading.current = setTimeout(() => {
-          firstReading.current = null;
-          if (lastReadingAt.current === 0) {
-            stop();
-            setRefused(true);
-            say("Kein Kompass verfügbar");
-          }
-        }, FIRST_READING_MS);
-      })
-      .catch(() => undefined);
+      }, FIRST_READING_MS);
+    };
+    askPermission().catch(() => {
+      // a failed permission request leaves live mode off: nothing to undo
+    });
   }, [live, say, start, stop]);
 
   /** The scene ended it: the player looked around or walked by hand. */

@@ -9,19 +9,14 @@ import { encodeDrawn } from "./drawn-facts";
 import {
   functionLabel,
   germanDates,
-  type Inquiry,
-  type InquiryObject,
   inquiryCard,
   metres,
   roofLabel,
   squareMetres,
 } from "./inquiry";
-import {
-  MEASURED_ROOF,
-  MEASURED_SHAPE,
-  NO_FACT,
-  type ObjectFacts,
-} from "./object-facts";
+import type { Inquiry, InquiryObject } from "./inquiry";
+import { MEASURED_ROOF, MEASURED_SHAPE, NO_FACT } from "./object-facts";
+import type { ObjectFacts } from "./object-facts";
 import type { SiteProvenance } from "./provenance";
 import type { CardCredits } from "./card-lines";
 import type { Stated } from "./methods";
@@ -245,13 +240,14 @@ test("a building a tile edge cuts in two: its tiles' leads, the highest top and 
   expect(fact("Gebäude")).toBe("2 im Stadtmodell");
 });
 
+const twin = () =>
+  object({
+    building: true,
+    lead: true,
+    facts: facts({ buildingId: "DEBY_1", height: 30, area: 900 }),
+  });
+
 test("a Building both tiles carry whole counts once", () => {
-  const twin = () =>
-    object({
-      building: true,
-      lead: true,
-      facts: facts({ buildingId: "DEBY_1", height: 30, area: 900 }),
-    });
   const picked = twin();
   const card = inquiryCard(
     { kind: "building", tile: "t", picked, tree: [picked, twin()] },
@@ -264,8 +260,9 @@ test("a Building both tiles carry whole counts once", () => {
   expect(fact("Gebäude")).toBeUndefined();
 });
 
+const at = (addr: string) => object({ facts: facts({ addr }) });
+
 test("an ensemble names its first three addresses and counts the rest", () => {
-  const at = (addr: string) => object({ facts: facts({ addr }) });
   const card = inquiryCard(
     {
       kind: "building",
@@ -433,9 +430,9 @@ test("without the manifest a card on another Land's site credits that Land, not 
     "3D-Stadtmodell LoD2 · Quelle: LGV Hamburg, dl-de/by-2-0"
   );
   expect(scan.sources[0]?.text).toContain("Quelle: LGV Hamburg, dl-de/by-2-0");
-  expect([...lines(lod2.sources), ...lines(scan.sources)].join()).not.toContain(
-    "GeoSN"
-  );
+  expect(
+    [...lines(lod2.sources), ...lines(scan.sources)].join(",")
+  ).not.toContain("GeoSN");
 });
 
 test("a shed from the laser scan is marked as not in the official model", () => {
@@ -460,25 +457,27 @@ test("a shed from the laser scan is marked as not in the official model", () => 
   );
 });
 
+const gap = (drawn: string) =>
+  object({
+    building: true,
+    source: OBJECT_SOURCE_GAP,
+    facts: facts({
+      buildingId: "gap:t:1:2",
+      drawn,
+      function: "",
+      height: 51.2,
+      area: 900,
+    }),
+  });
+
+const card = (o: InquiryObject) =>
+  inquiryCard(
+    { kind: "building", tile: "t", picked: o, tree: [o] },
+    provenance,
+    DRESDEN
+  );
+
 test("a building LoD2 lacks says where its outline and height come from", () => {
-  const gap = (drawn: string) =>
-    object({
-      building: true,
-      source: OBJECT_SOURCE_GAP,
-      facts: facts({
-        buildingId: "gap:t:1:2",
-        drawn,
-        function: "",
-        height: 51.2,
-        area: 900,
-      }),
-    });
-  const card = (o: InquiryObject) =>
-    inquiryCard(
-      { kind: "building", tile: "t", picked: o, tree: [o] },
-      provenance,
-      DRESDEN
-    );
   // measured: the surface model's height, OSM's outline
   const measured = lines(card(gap("")).sources);
   expect(measured).toHaveLength(2);
@@ -505,12 +504,12 @@ test("a roof on posts LoD2 lacks is named by ALKIS's word for one", () => {
       area: 640,
     }),
   });
-  const card = inquiryCard(
+  const shown = inquiryCard(
     { kind: "building", tile: "t", picked: roof, tree: [roof] },
     provenance,
     DRESDEN
   );
-  expect(card.title).toBe("Überdachung");
+  expect(shown.title).toBe("Überdachung");
 });
 
 test("a landmark's card lists the nameplate's Wikidata facts and credits Wikidata", () => {
@@ -537,13 +536,13 @@ test("a landmark's card lists the nameplate's Wikidata facts and credits Wikidat
       },
     ],
   });
-  const card = inquiryCard(ask, null, DRESDEN, null, landmarks);
+  const shown = inquiryCard(ask, null, DRESDEN, null, landmarks);
   const fact = (label: string) =>
-    card.facts.find((f) => f.label === label)?.value;
+    shown.facts.find((f) => f.label === label)?.value;
   expect(fact("Bauzeit")).toBe("1726–1743");
   expect(fact("Architekt")).toBe("George Bähr");
   expect(fact("Wiederaufbau")).toBe("1994–2005");
-  expect(lines(card.sources)).toContain(
+  expect(lines(shown.sources)).toContain(
     "Bauzeit, Architekt, Wiederaufbau: Wikidata Q157229 · CC0"
   );
   // without the file: the card as it always was

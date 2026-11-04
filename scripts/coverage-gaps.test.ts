@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import nodePath from "node:path";
 import { coverageGaps, gapTable, sources } from "./coverage-gaps";
 
 const LCOV = [
@@ -37,7 +37,7 @@ describe("coverage gaps", () => {
   });
 
   test("the routes' helpers, the site configs and our hooks are sources too, shadcn's not", () => {
-    const root = mkdtempSync(join(tmpdir(), "coverage-gaps-"));
+    const root = mkdtempSync(nodePath.join(tmpdir(), "coverage-gaps-"));
     for (const path of [
       "app/_lib/built-sites.ts",
       "app/wissen/_lib/markdown.tsx",
@@ -47,8 +47,10 @@ describe("coverage gaps", () => {
       "hooks/use-coarse-pointer.ts",
       "components/ui/button.tsx",
     ]) {
-      mkdirSync(dirname(join(root, path)), { recursive: true });
-      writeFileSync(join(root, path), "a\nb\n");
+      mkdirSync(nodePath.dirname(nodePath.join(root, path)), {
+        recursive: true,
+      });
+      writeFileSync(nodePath.join(root, path), "a\nb\n");
     }
     expect(
       sources(root)

@@ -1,4 +1,5 @@
-import { Group, Mesh, ShapeUtils, Vector2 } from "three/webgpu";
+import type { Mesh } from "three/webgpu";
+import { Group, ShapeUtils, Vector2 } from "three/webgpu";
 import type {
   AreaFeature,
   BridgeFeature,
@@ -11,17 +12,12 @@ import {
   archSpringing,
   axisFrame,
   BRIDGE_STEP,
-  type BridgeRib,
   beamSpan,
   beamSupports,
-  type DeckSupport,
   deckCarrier,
   deckDepth,
   intradosAt,
   masonryArches,
-  type MasonryPier,
-  type MasonrySpan,
-  type Parabola,
   PIER_SPACING,
   parapetStyle,
   placeRibs,
@@ -29,29 +25,34 @@ import {
   ribProfile,
   ribRuns,
 } from "@/lib/city/bridge";
+import type {
+  BridgeRib,
+  DeckSupport,
+  MasonryPier,
+  MasonrySpan,
+  Parabola,
+} from "@/lib/city/bridge";
 import {
   bridgeDecks,
-  type DeckPoly,
   deckPoly,
   decksAt,
   deckRing,
   longAxis,
   pointInRing,
-  type Ring2,
   ringToWorld,
 } from "@/lib/city/decks";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import type { DeckPoly, Ring2 } from "@/lib/city/decks";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import { SINK } from "@/lib/city/ground-join";
 import {
-  type Level,
   LEVEL_STEP,
-  type LevelLine,
-  type LevelRun,
   lineGrade,
   lineLevels,
   modeRuns,
   runLevelAt,
 } from "@/lib/city/levels";
+import type { Level, LevelLine, LevelRun } from "@/lib/city/levels";
 import { OVERPASS_DEPTH_M, OVERPASS_M } from "@/lib/city/catenary";
 import {
   DECK_REACH_M,
@@ -60,56 +61,50 @@ import {
   railPrefer,
   railSteep,
 } from "@/lib/city/line-levels";
-import {
-  platformTops,
-  TrackIndex,
-  type TrackSample,
-} from "@/lib/city/platform-level";
+import { platformTops, TrackIndex } from "@/lib/city/platform-level";
+import type { TrackSample } from "@/lib/city/platform-level";
 import { decodeProfile } from "@/lib/city/line-profile";
 import { PASSAGE_UNDER_DECK } from "@/lib/city/passages";
-import { type Point2, subdividePolyline } from "@/lib/city/polyline";
+import { subdividePolyline } from "@/lib/city/polyline";
+import type { Point2 } from "@/lib/city/polyline";
 import {
   BURIED_M,
-  type Bed,
   BedIndex,
   RAIL_BED_HALF_M,
   TRACK_PITCH_M,
 } from "@/lib/city/track-beds";
-import { finished, type Steps } from "@/lib/city/build-steps";
-import { type DeckKind, deckMaterial, stoneMaterial } from "./bridge-surface";
-import {
-  addCatenary,
-  type CatenaryRun,
-  catenaryParts,
-  catenaryWires,
-} from "./catenary-layer";
+import type { Bed } from "@/lib/city/track-beds";
+import { finished } from "@/lib/city/build-steps";
+import type { Steps } from "@/lib/city/build-steps";
+import { deckMaterial, stoneMaterial } from "./bridge-surface";
+import type { DeckKind } from "./bridge-surface";
+import { addCatenary, catenaryParts, catenaryWires } from "./catenary-layer";
+import type { CatenaryRun } from "./catenary-layer";
 import {
   addColumn,
   addFootprint,
   addRibbon,
   addStrut,
   cross,
-  type Mesh3,
   mesh3,
   meshFrom,
   meshSteps,
   outward,
-  type P3,
-  type Pt,
   pushTri,
   quad,
   ringWinding,
   tangentsXZ,
   unit,
 } from "./mesh-kit";
+import type { Mesh3, P3, Pt } from "./mesh-kit";
 import { addMonorail } from "./monorail-beam";
 import {
   addSleepers,
   SLEEPER_TOP,
-  type SleeperRibbons,
   sleeperMesh,
   sleeperRibbons,
 } from "./track-bed";
+import type { SleeperRibbons } from "./track-bed";
 
 /**
  * Railway + bridge layer. The railway corridor and bridges used to exist only as
@@ -259,7 +254,7 @@ function addParapetWalls(
   const { pts } = ring;
   const across = endEdges(ring, ringS);
   const winding = ringWinding(pts);
-  for (let i = 0; i < pts.length; i++) {
+  for (let i = 0; i < pts.length; i += 1) {
     const j = (i + 1) % pts.length;
     // No wall across the roadway at the abutments: an edge running across
     // the axis is where the deck meets the road, not its side.
@@ -310,7 +305,7 @@ function addRailing(
   const winding = ringWinding(pts);
   const bar = RAILING_BAR_HALF;
   let since = RAILING_POST_EVERY; // metres since the last post
-  for (let i = 0; i < pts.length; i++) {
+  for (let i = 0; i < pts.length; i += 1) {
     const j = (i + 1) % pts.length;
     if (across[i]) {
       since = RAILING_POST_EVERY; // a post where the next side begins
@@ -412,7 +407,7 @@ export function buildDeckTable(
   for (const { ring, topY, props, line } of parsed) {
     decks.push(deckPoly(ring.pts, topY, props.kind, line));
   }
-  const heightAt = ctx.heightAt;
+  const { heightAt } = ctx;
   if (!heightAt) {
     return decks;
   }
@@ -478,12 +473,12 @@ function bridgeRingStations(f: BridgeFeature): number[] | undefined {
 function endRuns(across: boolean[]): number[][] {
   const n = across.length;
   const start = across.findIndex((a, i) => !a && across[(i + 1) % n]);
-  if (start < 0) {
+  if (start === -1) {
     return [];
   }
   const runs: number[][] = [];
   let run: number[] = [];
-  for (let k = 1; k <= n; k++) {
+  for (let k = 1; k <= n; k += 1) {
     const i = (start + k) % n;
     if (across[i]) {
       if (run.length === 0) {
@@ -532,12 +527,12 @@ function endColumns(
   run: number[]
 ): { x: number; y: number; z: number }[] {
   const out: { x: number; y: number; z: number }[] = [];
-  for (let k = 0; k < run.length - 1; k++) {
+  for (let k = 0; k < run.length - 1; k += 1) {
     const a = run[k];
     const b = run[k + 1];
     const len = Math.hypot(pts[b].x - pts[a].x, pts[b].z - pts[a].z);
     const m = Math.max(1, Math.ceil(len / APPROACH_COLUMN_M));
-    for (let j = 0; j < m; j++) {
+    for (let j = 0; j < m; j += 1) {
       const t = j / m;
       out.push({
         x: pts[a].x + (pts[b].x - pts[a].x) * t,
@@ -573,7 +568,7 @@ export function approaches(
   for (const run of endRuns(endEdges(ring, ringS))) {
     let dx = 0;
     let dz = 0;
-    for (let k = 0; k < run.length - 1; k++) {
+    for (let k = 0; k < run.length - 1; k += 1) {
       const [ox, oz] = outward(pts, run[k], winding);
       dx += ox;
       dz += oz;
@@ -681,7 +676,7 @@ function addApproach(
   depth: number
 ): void {
   const cols = a.columns;
-  for (let i = 0; i < cols.length - 1; i++) {
+  for (let i = 0; i < cols.length - 1; i += 1) {
     const p = cols[i];
     const q = cols[i + 1];
     const p0: P3 = [p.x, p.y, p.z];
@@ -852,6 +847,21 @@ function* splitDeckTop(
   }
 }
 
+/** The value nearest `target` (the first of equals); null for none. */
+function closestTo(values: readonly number[], target: number): number | null {
+  let best: number | null = null;
+  for (const v of values) {
+    if (best === null || Math.abs(v - target) < Math.abs(best - target)) {
+      best = v;
+    }
+  }
+  return best;
+}
+
+/** The squared distance between two points. */
+const d2 = (a: number[], b: number[]) =>
+  (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+
 /** One face into `acc`, split at its longest edge while that is longer
  *  than `step` (0: as it is), each new corner moved by `lift`. */
 function splitFace(
@@ -862,11 +872,8 @@ function splitFace(
   lift: ((m: number[]) => void) | null
 ): void {
   const limit = step * step;
-  const d2 = (a: number[], b: number[]) =>
-    (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
   const stack = [corners];
-  while (stack.length > 0) {
-    const tri = stack.pop() as number[][];
+  for (let tri = stack.pop(); tri; tri = stack.pop()) {
     const lens = [d2(tri[0], tri[1]), d2(tri[1], tri[2]), d2(tri[2], tri[0])];
     const longest = lens.indexOf(Math.max(...lens));
     if (step === 0 || lens[longest] <= limit) {
@@ -912,7 +919,7 @@ function onLine(
   const ys: number[] = [];
   const ringS: number[] = [];
   const n = ring.pts.length;
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < n; i += 1) {
     const a = ring.pts[i];
     const b = ring.pts[(i + 1) % n];
     const pieces = Math.max(
@@ -922,7 +929,7 @@ function onLine(
     pts.push(a);
     ys.push(frame.deckAt(frame.ringS[i]));
     ringS.push(frame.ringS[i]);
-    for (let k = 1; k < pieces; k++) {
+    for (let k = 1; k < pieces; k += 1) {
       const x = a.x + ((b.x - a.x) * k) / pieces;
       const z = a.z + ((b.z - a.z) * k) / pieces;
       const { s } = frame.project(x, z);
@@ -955,7 +962,7 @@ function* addDeckFrame(
     ? [Math.min(...frame.ringS), Math.max(...frame.ringS)]
     : [];
   const inset = Math.min(DECK_END_INSET, (ends[1] - ends[0]) / 2);
-  for (let v = first; v < top.pos.length / 3; v++) {
+  for (let v = first; v < top.pos.length / 3; v += 1) {
     if (!frame) {
       top.deck.push(0, 0, 0, 0);
       continue;
@@ -972,7 +979,9 @@ function* addDeckFrame(
 
 /** A bridge's deck: its slab `depth` deep on the measured line
  *  (`onLine`), the approaches and the frame attributes. Returns where it
- *  was laid, the frame null on an older file without an axis. */
+ *  was laid, the frame null on an older file without an axis.
+ * @yields {void} once per slice boundary, so the build can be spread over frames (build-steps.ts)
+ */
 function* drawDeck(
   f: BridgeFeature,
   baked: Ring2,
@@ -1053,7 +1062,10 @@ function addParapet(
   }
 }
 
-/** Draws one bridge: deck, parapets, whatever carries it and stands on it. */
+/**
+ * Draws one bridge: deck, parapets, whatever carries it and stands on it.
+ * @yields {void} once per slice boundary, so the build can be spread over frames (build-steps.ts)
+ */
 function* drawBridge(
   f: BridgeFeature,
   baked: Ring2,
@@ -1105,7 +1117,9 @@ function* drawBridge(
 }
 
 /** Builds the bridges this tile draws (deck, parapets, what carries them
- *  and what stands on them). The rails' deck table is buildDeckTable's. */
+ *  and what stands on them). The rails' deck table is buildDeckTable's.
+ * @yields {void} once per slice boundary, so the build can be spread over frames (build-steps.ts)
+ */
 function* buildBridges(
   features: BridgeFeature[],
   ctx: RailContext,
@@ -1174,23 +1188,23 @@ function* buildBridges(
 /** A bridge's axis frame: stations along it, lateral offsets across it. */
 interface BridgeFrame {
   /** world point at station `s` (m from the first abutment), `offset` to the left */
-  at(s: number, offset: number): { x: number; z: number };
+  at: (s: number, offset: number) => { x: number; z: number };
   /** the terrain there (the DGM's water surface over the river) */
-  groundAt(s: number, offset: number): number | null;
+  groundAt: (s: number, offset: number) => number | null;
   length: number;
   /** deck height per BRIDGE_STEP */
   line: number[];
   /** the deck height at station `s` */
-  deckAt(s: number): number;
+  deckAt: (s: number) => number;
   /** the deck ring's extreme offsets from the axis (left > 0 > right) */
   edges: { left: number; right: number };
   /** each ring vertex's station (the open ring, as `ringToWorld`) */
   ringS: number[];
   /** the deck's edges at station `s`: its outline's offsets there (a
    *  curved deck around a straight axis is narrower locally than `edges`) */
-  edgesAt(s: number): { left: number; right: number };
+  edgesAt: (s: number) => { left: number; right: number };
   /** a world (Y-up) point's station and offset (left > 0) */
-  project(x: number, z: number): { offset: number; s: number };
+  project: (x: number, z: number) => { offset: number; s: number };
 }
 
 function bridgeFrame(f: BridgeFeature, ctx: RailContext): BridgeFrame | null {
@@ -1249,7 +1263,7 @@ function ringEdgesAt(
 ): { left: number; right: number } | null {
   let left = Number.NEGATIVE_INFINITY;
   let right = Number.POSITIVE_INFINITY;
-  for (let i = 0; i < ring.length; i++) {
+  for (let i = 0; i < ring.length; i += 1) {
     const a = ring[i];
     const b = ring[(i + 1) % ring.length];
     if ((a.s - s) * (b.s - s) <= 0 && a.s !== b.s) {
@@ -1280,16 +1294,16 @@ function addSuperstructure(
   const structure = p.structure ?? "";
   if (structure.includes("arch")) {
     const arches: [number, number][] = [];
-    archFits(ribs, frame.line).forEach((fit, r) => {
+    for (const [r, fit] of archFits(ribs, frame.line).entries()) {
       if (fit) {
-        const offset = ribs[r].offset;
+        const { offset } = ribs[r];
         const span = archSpringing(fit, frame.length, (s) =>
           frame.groundAt(s, offset)
         );
         addArchRib(out.steel, frame, offset, { fit, ...span }, depth);
         arches.push([span.from, span.to]);
       }
-    });
+    }
     return { arches, pylons: false };
   }
   if (structure.includes("cable-stayed")) {
@@ -1416,7 +1430,7 @@ function addBand(
     const p1 = frame.at(i * BRIDGE_STEP, 1);
     return [p1.x - p0.x, 0, p1.z - p0.z];
   };
-  for (let i = from; i < to; i++) {
+  for (let i = from; i < to; i += 1) {
     const n = lateral(i);
     for (const side of [1, -1]) {
       quad(
@@ -1477,7 +1491,7 @@ function addArchRib(
   const y = (s: number) => fit.a * s * s + fit.b * s + fit.c;
   const n = Math.max(2, Math.ceil((to - from) / BRIDGE_STEP));
   const s = (k: number) => from + ((to - from) * k) / n;
-  for (let k = 0; k < n; k++) {
+  for (let k = 0; k < n; k += 1) {
     addStrut(
       acc,
       point(frame, s(k), offset, y(s(k))),
@@ -1523,7 +1537,8 @@ function addPylons(
   if (peaks.every((p) => p.length === 0)) {
     return false;
   }
-  ribs.forEach((rib, r) => {
+  for (let r = 0; r < ribs.length; r += 1) {
+    const rib = ribs[r];
     for (const i of peaks[r]) {
       addPierAt(
         out.stone,
@@ -1534,7 +1549,7 @@ function addPylons(
         PYLON_PIER_HALF
       );
     }
-  });
+  }
   // portals between the first two ribs' matching pylons
   if (ribs.length >= 2) {
     for (const i of peaks[0]) {
@@ -1597,7 +1612,7 @@ function addColumnPair(
     if (ground !== null && under - ground >= PIER_MIN_GAP) {
       const w = frame.at(s, offset);
       addColumn(acc, w.x, w.z, ground, under, VIADUCT_COLUMN_HALF);
-      standing++;
+      standing += 1;
     }
   }
   if (standing === 2) {
@@ -1621,8 +1636,8 @@ function addPiers(
   let ai = 0;
   let bi = 1;
   let bd = -1;
-  for (let i = 0; i < ring.pts.length; i++) {
-    for (let j = i + 1; j < ring.pts.length; j++) {
+  for (let i = 0; i < ring.pts.length; i += 1) {
+    for (let j = i + 1; j < ring.pts.length; j += 1) {
       const d =
         (ring.pts[i].x - ring.pts[j].x) ** 2 +
         (ring.pts[i].z - ring.pts[j].z) ** 2;
@@ -1643,7 +1658,7 @@ function addPiers(
   const gb = groundEnd(b) ?? Math.min(...topY) - depth - 4;
   const span = Math.hypot(b.x - a.x, b.z - a.z);
   const n = Math.floor(span / PIER_SPACING);
-  for (let k = 1; k < n; k++) {
+  for (let k = 1; k < n; k += 1) {
     const t = k / n;
     const px = a.x + (b.x - a.x) * t;
     const pz = a.z + (b.z - a.z) * t;
@@ -1701,7 +1716,7 @@ function addMasonry(
     const pier = piers.find((p) => Math.abs(s - p.s) <= p.half);
     return pier ? pier.top : null;
   };
-  for (let i = 0; i < ring.pts.length; i++) {
+  for (let i = 0; i < ring.pts.length; i += 1) {
     if (!across[i]) {
       addSpandrel(acc, ring, i, {
         s0: frame.ringS[i],
@@ -1754,7 +1769,7 @@ function addSpandrel(
       bottom: edge.under(s),
     };
   };
-  for (let k = 0; k < n; k++) {
+  for (let k = 0; k < n; k += 1) {
     const p = at(k);
     const q = at(k + 1);
     if (p.bottom === null || q.bottom === null) {
@@ -1784,7 +1799,7 @@ function addVault(acc: Mesh3, frame: BridgeFrame, span: MasonrySpan): void {
     return { l: [l.x, y, l.z] as P3, r: [r.x, y, r.z] as P3 };
   };
   let prev = row(0);
-  for (let k = 1; k <= n; k++) {
+  for (let k = 1; k <= n; k += 1) {
     const next = row(k);
     const across: P3 = [
       prev.l[0] - prev.r[0],
@@ -1827,7 +1842,7 @@ function addMasonryPier(
   ];
   const cx = (c[0].x + c[2].x) / 2;
   const cz = (c[0].z + c[2].z) / 2;
-  for (let k = 0; k < 4; k++) {
+  for (let k = 0; k < 4; k += 1) {
     const p = c[k];
     const q = c[(k + 1) % 4];
     const mx = (p.x + q.x) / 2 - cx;
@@ -1871,16 +1886,19 @@ const DRAPE_PROBE_M = 48;
 /** Draped triangles per step (build-steps.ts). */
 const DRAPE_RUN = 512;
 
-type XZ = { x: number; z: number };
+interface XZ {
+  x: number;
+  z: number;
+}
 
 /** A ring's points, its edges split to at most `step` apart. */
 function densified(pts: readonly XZ[], step: number): XZ[] {
   const out: XZ[] = [];
-  for (let i = 0; i < pts.length; i++) {
+  for (let i = 0; i < pts.length; i += 1) {
     const a = pts[i];
     const b = pts[(i + 1) % pts.length];
     const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / step));
-    for (let k = 0; k < n; k++) {
+    for (let k = 0; k < n; k += 1) {
       out.push({
         x: a.x + ((b.x - a.x) * k) / n,
         z: a.z + ((b.z - a.z) * k) / n,
@@ -1901,6 +1919,7 @@ function densified(pts: readonly XZ[], step: number): XZ[] {
  * alone, a yard across an underpass spanned the passage with sloped
  * sheets from the embankment down to the street — the passage read as
  * closed.)
+ * @yields {void} once per slice boundary, so the build can be spread over frames (build-steps.ts)
  */
 function* addDrapedArea(
   acc: Mesh3,
@@ -1980,10 +1999,14 @@ function* addDrapedArea(
     stack.push(a0, b0, c0);
     let n = 0;
     while (stack.length > 0) {
-      const c = stack.pop() as XZ;
-      const b = stack.pop() as XZ;
-      const a = stack.pop() as XZ;
-      if (++n % DRAPE_RUN === 0) {
+      const c = stack.pop();
+      const b = stack.pop();
+      const a = stack.pop();
+      if (!(a && b && c)) {
+        break;
+      }
+      n += 1;
+      if (n % DRAPE_RUN === 0) {
         yield;
       }
       const longest = Math.max(
@@ -2019,7 +2042,7 @@ function* addDrapedArea(
   for (const [k, raw] of [outer, ...holes].entries()) {
     const ring = densified(raw, Math.min((how.fine ?? how).step * 4, DRAPE_M));
     const winding = (ringWinding(ring) * (k === 0 ? 1 : -1)) as 1 | -1;
-    for (let i = 0; i < ring.length; i++) {
+    for (let i = 0; i < ring.length; i += 1) {
       const p = ring[i];
       const q = ring[(i + 1) % ring.length];
       const yp = yAt(p.x, p.z);
@@ -2169,7 +2192,8 @@ export function lineLevelsAt(
   const ground: (number | null)[] = [];
   const under: number[][] = [];
   const ramps: number[][] = [];
-  pts.forEach(([ex, ey], i) => {
+  for (let i = 0; i < pts.length; i += 1) {
+    const [ex, ey] = pts[i];
     d.push(
       i === 0
         ? 0
@@ -2179,7 +2203,7 @@ export function lineLevelsAt(
     const w = epsgToWorld(ex, ey, ctx.offset);
     under.push(decksAt(decks, w.x, w.z, RIDES[line], "decks", DECK_REACH_M));
     ramps.push(decksAt(decks, w.x, w.z, RIDES[line], "ramps"));
-  });
+  }
   const solved = runs
     ? pts.map((_, i) => runLevelAt(runs, d, i))
     : lineLevels(
@@ -2193,13 +2217,7 @@ export function lineLevelsAt(
       ).map((l) => (l?.mode === "ground" ? null : l));
   return solved.map((level, i) => {
     if (level?.mode === "deck") {
-      const near = under[i].reduce<number | null>(
-        (best, y) =>
-          best === null || Math.abs(y - level.y) < Math.abs(best - level.y)
-            ? y
-            : best,
-        null
-      );
+      const near = closestTo(under[i], level.y);
       return { mode: "deck", y: near ?? level.y };
     }
     if (level) {
@@ -2224,13 +2242,14 @@ function profiledLevels(
   profile: readonly (number | null)[]
 ): (Level | null)[] {
   const d: number[] = [];
-  pts.forEach(([ex, ey], i) => {
+  for (let i = 0; i < pts.length; i += 1) {
+    const [ex, ey] = pts[i];
     d.push(
       i === 0
         ? 0
         : d[i - 1] + Math.hypot(ex - pts[i - 1][0], ey - pts[i - 1][1])
     );
-  });
+  }
   return profile.map((y, i) =>
     y === null ? null : { mode: runLevelAt(runs, d, i)?.mode ?? "ground", y }
   );
@@ -2276,7 +2295,7 @@ export function addSpanDeck(
   addFootprint(stone, ring, topY, DECK_DEPTH, true);
   let run = 0;
   let next = PIER_SPACING / 2;
-  for (let i = 1; i < pts.length; i++) {
+  for (let i = 1; i < pts.length; i += 1) {
     run += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z);
     if (run < next || i === pts.length - 1) {
       continue;
@@ -2372,10 +2391,10 @@ function openedCuts(
   const opened = levels.map(() => false);
   for (const [a, b] of modeRuns(levels, "cut")) {
     let covered = 0;
-    for (let i = a; i <= b; i++) {
+    for (let i = a; i <= b; i += 1) {
       const w = epsgToWorld(dense[i][0], dense[i][1], ctx.offset);
       if (decksAt(decks, w.x, w.z, undefined, "all", DECK_REACH_M).length) {
-        covered++;
+        covered += 1;
       }
     }
     if (covered >= PASSAGE_UNDER_DECK * (b - a + 1)) {
@@ -2413,7 +2432,8 @@ function* drawnLines(
     const world: XZ[] = [];
     const buried: XZ[] = [];
     const opened = openedCuts(levels, dense, ctx, decks);
-    dense.forEach(([ex, ey], i) => {
+    for (let i = 0; i < dense.length; i += 1) {
+      const [ex, ey] = dense[i];
       d.push(
         i === 0
           ? 0
@@ -2432,7 +2452,7 @@ function* drawnLines(
         buried.push(world[i]);
         levels[i] = null;
       }
-    });
+    }
     out.push({
       d,
       dense,
@@ -2478,14 +2498,15 @@ function ballastBeds(lines: readonly DrawnLine[]): BedIndex | undefined {
       }
       run = { coords: [], z: [] };
     };
-    l.levels.forEach((level, i) => {
+    for (let i = 0; i < l.levels.length; i += 1) {
+      const level = l.levels[i];
       if (level?.mode !== "ground") {
         flush();
-        return;
+        continue;
       }
       run.coords.push(l.dense[i]);
       run.z.push(level.y);
-    });
+    }
     flush();
   }
   if (beds.length === 0) {
@@ -2523,8 +2544,8 @@ function buriedTest(
   return (x, z) => {
     const cx = Math.floor(x / cell);
     const cz = Math.floor(z / cell);
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dz = -1; dz <= 1; dz++) {
+    for (let dx = -1; dx <= 1; dx += 1) {
+      for (let dz = -1; dz <= 1; dz += 1) {
         for (const p of grid.get(`${cx + dx}:${cz + dz}`) ?? []) {
           // a sample every 4 m: within its half-step along, the bed across
           if (
@@ -2543,7 +2564,7 @@ function buriedTest(
 function runsWhere(n: number, has: (i: number) => boolean): [number, number][] {
   const out: [number, number][] = [];
   let first = -1;
-  for (let i = 0; i <= n; i++) {
+  for (let i = 0; i <= n; i += 1) {
     if (i < n && has(i)) {
       if (first < 0) {
         first = i;
@@ -2616,7 +2637,8 @@ function addLine(
       out.catenary.push(...catenaryRuns(line, [a, b], run, offsets, decks.all));
     }
   }
-  line.levels.forEach((level, i) => {
+  for (let i = 0; i < line.levels.length; i += 1) {
+    const level = line.levels[i];
     if (level) {
       out.tracks.push({
         raised: level.mode === "deck" || level.mode === "span",
@@ -2625,7 +2647,7 @@ function addLine(
         z: line.world[i].z,
       });
     }
-  });
+  }
   const half =
     ((line.tracks - 1) / 2) * TRACK_PITCH + line.gauge / 2 + SPAN_SHOULDER_M;
   for (const span of spanRuns(line.levels, head)) {
@@ -2675,12 +2697,7 @@ function catenaryRuns(
     deck,
     over,
     mapped: line.masts
-      .filter(
-        ([, o]) =>
-          offsets.reduce((best, x) =>
-            Math.abs(o - x) < Math.abs(o - best) ? x : best
-          ) === lateral
-      )
+      .filter(([, o]) => closestTo(offsets, o) === lateral)
       .map(([s, o]) => [s, o - lateral] as const),
     pts: run.map((p, i) => ({
       x: p.x - tan[i].y * lateral,
@@ -2692,7 +2709,9 @@ function catenaryRuns(
 
 /** Steel rails: one pair per track, on the level their line runs on
  *  (`lineLevelsAt`): the ground, a rail deck, a span (with its deck);
- *  the sleepers under them; the catenary over the contact lines. */
+ *  the sleepers under them; the catenary over the contact lines.
+ * @yields {void} once per slice boundary, so the build can be spread over frames (build-steps.ts)
+ */
 function* buildRails(
   lines: readonly DrawnLine[],
   ctx: RailContext,
@@ -2821,7 +2840,9 @@ function buildPlatforms(
 }
 
 /** The monorails' beams and supports (monorail-beam.ts), in painted
- *  steel; null where the tile has none. */
+ *  steel; null where the tile has none.
+ * @yields {void} once per slice boundary, so the build can be spread over frames (build-steps.ts)
+ */
 function* monorailsMesh(
   features: readonly RailFeature[],
   ctx: RailContext
@@ -2856,7 +2877,9 @@ export function buildRail(features: RailFeatures, ctx: RailContext): Group {
 }
 
 /** `buildRail` in steps: per bridge, line and draped triangle run
- *  (build-steps.ts). */
+ *  (build-steps.ts).
+ * @yields {void} once per slice boundary, so the build can be spread over frames (build-steps.ts)
+ */
 export function* railSteps(
   features: RailFeatures,
   ctx: RailContext

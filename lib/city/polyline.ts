@@ -21,7 +21,7 @@ function checkSpacing(spacing: number): void {
 export function subdividePolyline(coords: Point2[], spacing: number): Point2[] {
   checkSpacing(spacing);
   const out: Point2[] = [];
-  for (let i = 0; i < coords.length - 1; i++) {
+  for (let i = 0; i < coords.length - 1; i += 1) {
     const [x0, y0] = coords[i];
     const [x1, y1] = coords[i + 1];
     const len = Math.hypot(x1 - x0, y1 - y0);
@@ -29,7 +29,7 @@ export function subdividePolyline(coords: Point2[], spacing: number): Point2[] {
       continue; // a repeated vertex would otherwise become a duplicate point
     }
     const steps = Math.ceil(len / spacing);
-    for (let s = 0; s < steps; s++) {
+    for (let s = 0; s < steps; s += 1) {
       const t = s / steps;
       out.push([x0 + (x1 - x0) * t, y0 + (y1 - y0) * t]);
     }
@@ -51,7 +51,7 @@ export function samplePolyline(coords: Point2[], spacing: number): Point2[] {
   const out: Point2[] = [];
   // Distance from the current segment's start to the next sample to emit.
   let dist = 0;
-  for (let i = 0; i < coords.length - 1; i++) {
+  for (let i = 0; i < coords.length - 1; i += 1) {
     const [x0, y0] = coords[i];
     const [x1, y1] = coords[i + 1];
     const dx = x1 - x0;

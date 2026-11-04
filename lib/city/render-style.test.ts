@@ -52,7 +52,7 @@ test("the planner styles draw a clean sheet: no grade, no vignette, no blur", ()
 
 test("V cycles through every style in picker order and wraps", () => {
   const seen = [DEFAULT_RENDER_STYLE];
-  for (let i = 1; i < RENDER_STYLES.length; i++) {
+  for (let i = 1; i < RENDER_STYLES.length; i += 1) {
     seen.push(nextRenderStyle(seen[i - 1] ?? DEFAULT_RENDER_STYLE));
   }
   expect(seen).toEqual(RENDER_STYLES.map((def) => def.id));

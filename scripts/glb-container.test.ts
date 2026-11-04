@@ -13,7 +13,7 @@ test("a glb comes apart and back together, padded to four bytes", () => {
 test("a glb without a BIN chunk is refused in the reader's words", () => {
   const glb = writeGlb({ asset: { version: "2.0" } }, []);
   // cut the (empty) BIN chunk's header off
-  const cut = glb.slice(0, glb.length - 8);
+  const cut = glb.slice(0, -8);
   new DataView(cut.buffer).setUint32(8, cut.length, true);
   expect(() => readGlb(cut)).toThrow("glb: no BIN chunk");
 });

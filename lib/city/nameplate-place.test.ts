@@ -1,9 +1,5 @@
 import { expect, test } from "bun:test";
 import {
-  type NameplateBody,
-  type NameplateCamera,
-  type NameplateScene,
-  type Vec3,
   capHeight,
   chooseNameplate,
   nameplateBody,
@@ -12,6 +8,21 @@ import {
   nameplateSide,
   sameLayout,
 } from "./nameplate-place";
+import type {
+  NameplateBody,
+  NameplateCamera,
+  NameplateScene,
+  Vec3,
+} from "./nameplate-place";
+
+/** The body of some triangles; these tests give it ones that have one. */
+function bodyOf(positions: Float32Array): NameplateBody {
+  const body = nameplateBody(positions);
+  if (!body) {
+    throw new Error("nameplate test: the positions make no body");
+  }
+  return body;
+}
 
 /** A box's triangles' positions (only its corners matter here). */
 function box(x0: number, x1: number, z0: number, z1: number, h: number) {
@@ -25,7 +36,7 @@ function box(x0: number, x1: number, z0: number, z1: number, h: number) {
 }
 
 /** A 40 × 20 m block, 30 m high, its long side along x. */
-const BODY = nameplateBody(box(-20, 20, -10, 10, 30)) as NameplateBody;
+const BODY = bodyOf(box(-20, 20, -10, 10, 30));
 
 /** A perspective camera at `position` looking at `target`. */
 function look(position: Vec3, target: Vec3, ortho = false): NameplateCamera {
@@ -62,7 +73,7 @@ test("a turned footprint keeps its own axes", () => {
   ]) {
     pts.push(a * c - b * c, 0, a * c + b * c, a * c - b * c, 10, a * c + b * c);
   }
-  const body = nameplateBody(new Float32Array(pts)) as NameplateBody;
+  const body = bodyOf(new Float32Array(pts));
   expect(body.half[0]).toBeCloseTo(20, 1);
   expect(body.half[1]).toBeCloseTo(5, 1);
   expect(Math.abs(body.u[0])).toBeCloseTo(c, 2);
@@ -84,7 +95,7 @@ test("the laying follows the camera, with hysteresis", () => {
   // high above but far off, the ground seen flat: upright, not lying
   expect(nameplateMode(BODY, look([0, 120, 400], [0, 0, 0]), null)).toBe("far");
   // standing under a tree, its foot steeply below: upright
-  const tree = nameplateBody(box(-2, 2, -2, 2, 10)) as NameplateBody;
+  const tree = bodyOf(box(-2, 2, -2, 2, 10));
   expect(nameplateMode(tree, look([0.5, 1.7, 1], [0, 6, 0]), null)).not.toBe(
     "air"
   );
@@ -236,7 +247,7 @@ test("up close the letters stand on the ground before the facade", () => {
 });
 
 test("a small thing's plate stands close before it", () => {
-  const bench = nameplateBody(box(-1, 1, -0.3, 0.3, 0.9)) as NameplateBody;
+  const bench = bodyOf(box(-1, 1, -0.3, 0.3, 0.9));
   const camera = look([0, 1.7, 12], [0, 0.5, 0]);
   const pose = nameplatePose(
     bench,
@@ -370,11 +381,12 @@ test("a ground place seen too flat is none: the plate stands up", () => {
   expect(kept).toBe(true);
 });
 
+const yawed = (deg: number) => {
+  const a = (deg * Math.PI) / 180;
+  return look([60 * Math.sin(a), 300, 60 * Math.cos(a)], [0, 0, 0]);
+};
+
 test("from above, the ground plate's side follows the screen's foot, with hysteresis", () => {
-  const yawed = (deg: number) => {
-    const a = (deg * Math.PI) / 180;
-    return look([60 * Math.sin(a), 300, 60 * Math.cos(a)], [0, 0, 0]);
-  };
   const side = nameplateSide(BODY, yawed(0), null, "air");
   expect(side % 2).toBe(1); // the screen's foot towards +z
   // the view turned 50°: the side stays (no quarter turn of the text)
@@ -385,7 +397,7 @@ test("from above, the ground plate's side follows the screen's foot, with hyster
 
 test("a kept facade turns once the camera is behind its plate", () => {
   // 80 × 60 m: the plate on +u stands 41.5 m out
-  const deep = nameplateBody(box(-40, 40, -30, 30, 20)) as NameplateBody;
+  const deep = bodyOf(box(-40, 40, -30, 30, 20));
   const side = nameplateSide(deep, look([150, 1.7, 0], [0, 10, 0]), null);
   expect(side).toBe(0);
   // at (25, 45): +u still faces it within the turn angle, but the camera
@@ -397,7 +409,7 @@ test("a kept facade turns once the camera is behind its plate", () => {
 test("a fresh facade is one the camera stands before", () => {
   // 100 × 10 m: from (45, 40) +u faces best, but its plate (at u = 51.5)
   // would stand behind the camera
-  const hall = nameplateBody(box(-50, 50, -5, 5, 15)) as NameplateBody;
+  const hall = bodyOf(box(-50, 50, -5, 5, 15));
   const side = nameplateSide(hall, look([45, 1.7, 40], [0, 7, 0]), null);
   expect(side % 2).toBe(1);
 });

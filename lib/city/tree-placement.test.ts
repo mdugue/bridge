@@ -82,18 +82,18 @@ describe("the crown's base", () => {
   });
 });
 
-describe("the rows the layer plants", () => {
-  const line = (kind: "hedge" | "treerow"): VegRowFeature => ({
-    geometry: {
-      type: "LineString",
-      coordinates: [
-        [0, 0],
-        [30, 0],
-      ],
-    },
-    properties: { kind },
-  });
+const line = (kind: "hedge" | "treerow"): VegRowFeature => ({
+  geometry: {
+    type: "LineString",
+    coordinates: [
+      [0, 0],
+      [30, 0],
+    ],
+  },
+  properties: { kind },
+});
 
+describe("the rows the layer plants", () => {
   test("a tile with a canopy plants its hedges only (its rows' trees are the canopy's)", () => {
     const rows = [line("hedge"), line("treerow")];
     expect(plantedRows(rows, true)).toEqual([rows[0]]);

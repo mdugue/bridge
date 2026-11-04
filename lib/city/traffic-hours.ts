@@ -7,7 +7,8 @@
  * Public holidays count as working days (the calendar is not known here).
  * No THREE, no DOM.
  */
-import { dayKindOf, secondsOfDay, type TramDayKind } from "./tram-timetable";
+import { dayKindOf, secondsOfDay } from "./tram-timetable";
+import type { TramDayKind } from "./tram-timetable";
 
 export type TrafficDayKind = TramDayKind;
 

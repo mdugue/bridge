@@ -20,8 +20,10 @@
  * Binary DXF is not read. No THREE, no DOM.
  */
 
-import { nestRings, type PlanFeature, type PlanPoint } from "./plan-geometry";
-import { type PlanClass, planClassOf } from "./plan-classes";
+import { nestRings } from "./plan-geometry";
+import type { PlanFeature, PlanPoint } from "./plan-geometry";
+import { planClassOf } from "./plan-classes";
+import type { PlanClass } from "./plan-classes";
 
 /** One group: its code and its value as written. */
 interface Group {
@@ -29,12 +31,18 @@ interface Group {
   value: string;
 }
 
+/** A group value as a number; an empty one is NaN, not 0. */
+const numberOf = (value: string): number => Number.parseFloat(value);
+
+/** A group value as a whole number; an empty one is NaN. */
+const intOf = (value: string): number => Number.parseInt(value, 10);
+
 /** The DXF's groups, in order. */
 function groupsOf(text: string): Group[] {
-  const lines = text.split(/\r?\n/);
+  const lines = text.split(/\r?\n/u);
   const out: Group[] = [];
   for (let i = 0; i + 1 < lines.length; i += 2) {
-    const code = Number.parseInt(lines[i].trim(), 10);
+    const code = intOf(lines[i].trim());
     if (Number.isNaN(code)) {
       break;
     }
@@ -57,7 +65,7 @@ const UNITS: Readonly<Record<number, number>> = {
 
 /** Layers that are drawing furniture, not the plan. */
 const NOT_PLAN =
-  /rahmen|frame|schriftfeld|titel|title|text|beschrift|bema(ß|ss)ung|dim|legende|legend|nordpfeil|north|viewport|defpoints|raster|grid|plot/i;
+  /rahmen|frame|schriftfeld|titel|title|text|beschrift|bema(?:ß|ss)ung|dim|legende|legend|nordpfeil|north|viewport|defpoints|raster|grid|plot/iu;
 
 /** An entity: its type and its groups up to the next entity. */
 interface Entity {
@@ -71,7 +79,7 @@ function sectionEntities(groups: readonly Group[], name: string): Entity[] {
   const out: Entity[] = [];
   let inside = false;
   let current: Entity | null = null;
-  for (let i = 0; i < groups.length; i++) {
+  for (let i = 0; i < groups.length; i += 1) {
     const g = groups[i];
     if (g.code === 0 && g.value === "SECTION") {
       inside = groups[i + 1]?.code === 2 && groups[i + 1].value === name;
@@ -95,7 +103,7 @@ function sectionEntities(groups: readonly Group[], name: string): Entity[] {
   return out;
 }
 
-const num = (g: Group | undefined) => (g ? Number.parseFloat(g.value) : 0);
+const num = (g: Group | undefined) => (g ? numberOf(g.value) : 0);
 const first = (e: Entity, code: number) =>
   e.groups.find((g) => g.code === code);
 
@@ -142,7 +150,7 @@ function bulgePoints(
   const steps = Math.max(2, Math.ceil(Math.abs(angle) / (Math.PI / 12)));
   const r = Math.abs(radius);
   const out: [number, number][] = [];
-  for (let i = 1; i < steps; i++) {
+  for (let i = 1; i < steps; i += 1) {
     const t = start + (angle * i) / steps;
     out.push([cx + r * Math.cos(t), cy + r * Math.sin(t)]);
   }
@@ -176,7 +184,7 @@ function arcPoints(
   }
   const steps = Math.max(2, Math.ceil(Math.abs(a1 - a0) / (Math.PI / 12)));
   const out: [number, number][] = [];
-  for (let i = 0; i <= steps; i++) {
+  for (let i = 0; i <= steps; i += 1) {
     const t = a0 + ((a1 - a0) * i) / steps;
     out.push([cx + r * Math.cos(t), cy + r * Math.sin(t)]);
   }
@@ -189,7 +197,7 @@ function withBulges(
   closed: boolean
 ): PlanPoint[] {
   const out: PlanPoint[] = [];
-  for (let i = 0; i < vertices.length; i++) {
+  for (let i = 0; i < vertices.length; i += 1) {
     const v = vertices[i];
     out.push(v.z === undefined ? [v.x, v.y] : [v.x, v.y, v.z]);
     const next = vertices[i + 1] ?? (closed ? vertices[0] : null);
@@ -208,17 +216,18 @@ function lwpolyline(e: Entity): PlanPoint[] | null {
   const elevation = num(first(e, 38));
   const vertices: { x: number; y: number; z?: number; bulge: number }[] = [];
   for (const g of e.groups) {
+    const latest = vertices.at(-1);
     if (g.code === 10) {
       vertices.push({
-        x: Number.parseFloat(g.value),
+        x: numberOf(g.value),
         y: 0,
         z: elevation || undefined,
         bulge: 0,
       });
-    } else if (g.code === 20 && vertices.length > 0) {
-      vertices[vertices.length - 1].y = Number.parseFloat(g.value);
-    } else if (g.code === 42 && vertices.length > 0) {
-      vertices[vertices.length - 1].bulge = Number.parseFloat(g.value);
+    } else if (g.code === 20 && latest) {
+      latest.y = numberOf(g.value);
+    } else if (g.code === 42 && latest) {
+      latest.bulge = numberOf(g.value);
     }
   }
   const ring = closed ? withBulges(vertices, true) : [];
@@ -275,6 +284,9 @@ function polyline(
   return ring.length >= 3 ? { ring } : null;
 }
 
+const samePoint = (p: PlanPoint, q: PlanPoint): boolean =>
+  p[0] === q[0] && p[1] === q[1] && p[2] === q[2];
+
 /** A 3DFACE's one or two triangles. */
 function face3d(e: Entity): [PlanPoint, PlanPoint, PlanPoint][] {
   const corner = (k: number): PlanPoint => [
@@ -283,9 +295,7 @@ function face3d(e: Entity): [PlanPoint, PlanPoint, PlanPoint][] {
     num(first(e, 30 + k)),
   ];
   const [a, b, c, d] = [corner(0), corner(1), corner(2), corner(3)];
-  const same = (p: PlanPoint, q: PlanPoint) =>
-    p[0] === q[0] && p[1] === q[1] && p[2] === q[2];
-  return same(c, d)
+  return samePoint(c, d)
     ? [[a, b, c]]
     : [
         [a, b, c],
@@ -303,15 +313,20 @@ function hatchRings(e: Entity): PlanPoint[][] {
   if (i < 0) {
     return rings;
   }
-  const paths = Number.parseInt(g[i].value, 10);
-  i++;
+  const paths = intOf(g[i].value);
+  i += 1;
   const at = (code: number) => {
     while (i < g.length && g[i].code !== code) {
-      i++;
+      i += 1;
     }
-    return i < g.length ? Number.parseFloat(g[i++].value) : 0;
+    if (i >= g.length) {
+      return 0;
+    }
+    const value = numberOf(g[i].value);
+    i += 1;
+    return value;
   };
-  for (let p = 0; p < paths && i < g.length; p++) {
+  for (let p = 0; p < paths && i < g.length; p += 1) {
     const type = at(92);
     const ring: PlanPoint[] = [];
     if (type & 2) {
@@ -320,7 +335,7 @@ function hatchRings(e: Entity): PlanPoint[][] {
       const n = at(93);
       const vertices: { x: number; y: number; z?: number; bulge: number }[] =
         [];
-      for (let k = 0; k < n; k++) {
+      for (let k = 0; k < n; k += 1) {
         const x = at(10);
         const y = at(20);
         const bulge = hasBulge ? at(42) : 0;
@@ -329,7 +344,7 @@ function hatchRings(e: Entity): PlanPoint[][] {
       ring.push(...withBulges(vertices, true));
     } else {
       const edges = at(93);
-      for (let k = 0; k < edges; k++) {
+      for (let k = 0; k < edges; k += 1) {
         ring.push(...hatchEdge(at, z));
       }
     }
@@ -391,11 +406,11 @@ function hatchEdge(
   at(74);
   const knots = at(95);
   const controls = at(96);
-  for (let k = 0; k < knots; k++) {
+  for (let k = 0; k < knots; k += 1) {
     at(40);
   }
   const out: PlanPoint[] = [];
-  for (let k = 0; k < controls; k++) {
+  for (let k = 0; k < controls; k += 1) {
     out.push(pt([at(10), at(20)]));
   }
   return out;
@@ -510,7 +525,8 @@ function readEntity(
     const vertices: Entity[] = [];
     let last = k;
     while (entities[last + 1]?.type === "VERTEX") {
-      vertices.push(entities[++last]);
+      last += 1;
+      vertices.push(entities[last]);
     }
     const read = polyline(e, vertices);
     const cls = classOf(r, e);
@@ -538,14 +554,11 @@ export function readDxf(text: string): DxfPlan {
     features: [],
     classified: new Set(),
     unclassified: new Set(),
-    unit:
-      units >= 0
-        ? (UNITS[Number.parseInt(groups[units + 1].value, 10)] ?? 1)
-        : 1,
+    unit: units === -1 ? 1 : (UNITS[intOf(groups[units + 1].value)] ?? 1),
     crowns: blockCrowns(groups),
   };
   const entities = sectionEntities(groups, "ENTITIES");
-  for (let k = 0; k < entities.length; k++) {
+  for (let k = 0; k < entities.length; k += 1) {
     const e = entities[k];
     const layer = first(e, 8)?.value ?? "0";
     // paper space and drawing furniture are not the plan

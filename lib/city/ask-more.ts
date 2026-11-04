@@ -7,14 +7,12 @@
  * layer draws it (lib/city/ask-solids.ts), with the inquiry it answers.
  * No THREE, no DOM.
  */
-import {
-  type AskItem,
-  type AskSet,
-  type AskSolid,
-  askSets,
-} from "./ask-solids";
-import { finished, inRuns, type Steps } from "./build-steps";
-import { type PackedTree, packedCylinderSets } from "./ask-items";
+import { askSets } from "./ask-solids";
+import type { AskItem, AskSet, AskSolid } from "./ask-solids";
+import { finished, inRuns } from "./build-steps";
+import type { Steps } from "./build-steps";
+import { packedCylinderSets } from "./ask-items";
+import type { PackedTree } from "./ask-items";
 import type {
   CanopyFeature,
   FurnitureFeature,
@@ -25,20 +23,16 @@ import type {
   TramFeature,
   VegRowFeature,
 } from "./features";
-import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
+import { epsgToWorld } from "./ground-clamp";
+import type { RecenterOffset } from "./ground-clamp";
 import { armOffset, postHeight } from "./lamps";
 import type { FeatureInquiry } from "./inquiry-features";
 import type { CanopyInquiry } from "./inquiry-more";
 import { ringCentre } from "./monuments";
 import { samplePolyline } from "./polyline";
 import { pineBase } from "./tree-inventory";
-import {
-  BASE_TREE_H,
-  canopyPlacements,
-  type Placement,
-  rowPlacements,
-  type TreeVeto,
-} from "./tree-placement";
+import { BASE_TREE_H, canopyPlacements, rowPlacements } from "./tree-placement";
+import type { Placement, TreeVeto } from "./tree-placement";
 
 type HeightAt = (x: number, y: number) => number | null;
 
@@ -244,7 +238,11 @@ interface AskedTree {
   source: CanopyInquiry["source"];
 }
 
-/** `canopySets` in steps: per run of trees placed (build-steps.ts). */
+/**
+ * `canopySets` in steps: per run of trees placed (build-steps.ts).
+ *
+ * @yields {void} once per run of trees placed
+ */
 function* canopySetsSteps(
   features: {
     canopy: CanopyFeature[];
@@ -292,14 +290,15 @@ function* canopySetsSteps(
   // 0 a broadleaf (or not known), else 1 + its index in LEAVES; + CONE
   // for one drawn as the cone
   const leaf = new Uint8Array(trees.length);
-  trees.forEach((t, i) => {
+  for (let i = 0; i < trees.length; i += 1) {
+    const t = trees[i];
     position.set(epsgOf(t.p, ctx.offset), i * 2);
     height[i] = t.height && Number.isFinite(t.height) ? t.height : 0;
     source[i] = sources.indexOf(t.source);
     leaf[i] =
       (t.leaf ? LEAVES.indexOf(t.leaf) + 1 : 0) |
       (canopyCone(t.p) ? LEAF_CONE : 0);
-  });
+  }
   return packedCylinderSets(
     trees.length,
     (i) => packedCanopy(trees[i].p),
@@ -314,12 +313,12 @@ const LEAF_CONE = 0x80;
 
 /** What told a crown is an evergreen (canopy.py): the forest's kind, or
  *  the leaf-off orthophoto. */
-const leafOf = (f: CanopyFeature): CanopyInquiry["evergreen"] =>
-  f.properties?.l === "e"
-    ? f.properties.ls === "dop"
-      ? "photo"
-      : "forest"
-    : undefined;
+const leafOf = (f: CanopyFeature): CanopyInquiry["evergreen"] => {
+  if (f.properties?.l !== "e") {
+    return undefined;
+  }
+  return f.properties.ls === "dop" ? "photo" : "forest";
+};
 
 /** The canopy tree at index `i` as an inquiry (`leaf`: its leaf byte). */
 function canopyInquiry(
@@ -345,7 +344,7 @@ function canopyInquiry(
 /** A line's length (m). */
 function lineLength(coords: readonly (readonly [number, number])[]): number {
   let sum = 0;
-  for (let i = 1; i < coords.length; i++) {
+  for (let i = 1; i < coords.length; i += 1) {
     sum += Math.hypot(
       coords[i][0] - coords[i - 1][0],
       coords[i][1] - coords[i - 1][1]
@@ -574,7 +573,11 @@ export interface MoreFeatures {
   trams: TramFeature[];
 }
 
-/** `moreSets` in steps (build-steps.ts). */
+/**
+ * `moreSets` in steps (build-steps.ts).
+ *
+ * @yields {void} between the sets, so the build can be spread over frames
+ */
 export function* moreSetsSteps(
   features: MoreFeatures,
   ctx: MoreContext,

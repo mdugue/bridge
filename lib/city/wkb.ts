@@ -32,10 +32,10 @@ function readWkb(
   const little = view.getUint8(at) === 1;
   const raw = view.getUint32(at + 1, little);
   // EWKB flags, or ISO's thousands
-  const ewkbZ = (raw & 0x8000_0000) !== 0;
-  const ewkbM = (raw & 0x4000_0000) !== 0;
-  const ewkbSrid = (raw & 0x2000_0000) !== 0;
-  const code = raw & 0x0fff_ffff;
+  const ewkbZ = (raw & 0x80_00_00_00) !== 0;
+  const ewkbM = (raw & 0x40_00_00_00) !== 0;
+  const ewkbSrid = (raw & 0x20_00_00_00) !== 0;
+  const code = raw & 0x0f_ff_ff_ff;
   const base = code % 1000;
   const iso = Math.floor(code / 1000);
   const hasZ = ewkbZ || iso === 1 || iso === 3;
@@ -68,7 +68,7 @@ function readWkb(
   } else if (base >= 4 && base <= 7) {
     const n = view.getUint32(p, little);
     p += 4;
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < n; i += 1) {
       p = readWkb(view, p, out);
     }
   } else {

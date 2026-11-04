@@ -108,8 +108,8 @@ function gablePart(z: number, roof = gable) {
   const cols = 24;
   const rows = 24;
   const dz: number[] = [];
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
+  for (let r = 0; r < rows; r += 1) {
+    for (let c = 0; c < cols; c += 1) {
       dz.push(Math.round(roof(-2 + c + 0.5) * 100));
     }
   }
@@ -140,7 +140,7 @@ test("a face stands on the measured surface, walls up to its edge", () => {
   }
   expect(area).toBeCloseTo(300, 6);
   // the roof and the walls' tops on the measured gable
-  for (let i = 0; i < mesh.isRoof.length; i++) {
+  for (let i = 0; i < mesh.isRoof.length; i += 1) {
     const [x, , z] = mesh.positions.slice(i * 3, i * 3 + 3);
     if (mesh.isRoof[i] === 1 || z > 100) {
       expect(Math.abs(z - 110 - gable(x))).toBeLessThan(0.11);
@@ -168,7 +168,7 @@ test("a face shades smoothly over itself, a ridge stays sharp, walls and flat pa
   });
   expect(mesh.normals).toHaveLength(mesh.positions.length);
   const byPoint = new Map<string, Set<string>>();
-  for (let i = 0; i < mesh.isRoof.length; i++) {
+  for (let i = 0; i < mesh.isRoof.length; i += 1) {
     const n = mesh.normals.slice(i * 3, i * 3 + 3);
     const [x, y, z] = mesh.positions.slice(i * 3, i * 3 + 3);
     if (mesh.isRoof[i] !== 1 || z === 120) {

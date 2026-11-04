@@ -8,11 +8,11 @@
  */
 import sharp from "sharp";
 
-export function downsampleClassRaster(
+export async function downsampleClassRaster(
   source: string | Buffer,
   px: number
 ): Promise<Buffer> {
-  return sharp(source)
+  return await sharp(source)
     .removeAlpha()
     .resize(px, px, { kernel: "nearest", fit: "fill" })
     .toColourspace("b-w")

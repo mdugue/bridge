@@ -45,7 +45,7 @@ test("a lime is bare in January, in full summer leaf in July, gone by December",
 });
 
 test("leaf is monotone through leaf-out and leaf fall, autumn through colouring", () => {
-  for (let g = 0; g < TREE_GENERA.length; g++) {
+  for (let g = 0; g < TREE_GENERA.length; g += 1) {
     const p = phenologyOf(g);
     let prev = -1;
     for (let d = p.leafOut[0]; d <= p.leafOut[1]; d += 0.5) {
@@ -162,7 +162,7 @@ test("a city's day is Dresden's shifted by its spring and its autumn", () => {
     expect(climateDay(d, none)).toBeCloseTo(d, 9);
   }
   // Unna's spring comes six days early: its 10 April is Dresden's 16 April
-  const unna = SITE_SEASON.unna;
+  const { unna } = SITE_SEASON;
   expect(climateDay(99, unna)).toBe(105);
   // Hamburg colours five days late: its 15 October is Dresden's 10 October
   expect(climateDay(287, SITE_SEASON.hamburg)).toBe(282);

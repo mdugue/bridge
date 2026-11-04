@@ -24,22 +24,21 @@ import {
   writeFileSync,
 } from "node:fs";
 import { availableParallelism, totalmem } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 import { createInterface } from "node:readline";
 import {
   SITE_INDEX_FILE,
   SITE_MAP_FILE,
-  type SiteIndex,
   siteDataBase,
 } from "../lib/city/site-index";
+import type { SiteIndex } from "../lib/city/site-index";
 import { siteReport } from "../lib/city/site-report";
-import {
-  SERVER_WISSEN_DIR,
-  STADTWISSEN_FILE,
-  type StadtwissenIndex,
-} from "../lib/city/stadtwissen";
-import { type DataManifest, MANIFEST_FILE, tileIds } from "../lib/city/tile";
-import { type SiteId, SITES, siteById } from "../sites";
+import { SERVER_WISSEN_DIR, STADTWISSEN_FILE } from "../lib/city/stadtwissen";
+import type { StadtwissenIndex } from "../lib/city/stadtwissen";
+import { MANIFEST_FILE, tileIds } from "../lib/city/tile";
+import type { DataManifest } from "../lib/city/tile";
+import { SITES, siteById } from "../sites";
+import type { SiteId } from "../sites";
 import {
   bakeLimits,
   createSlots,
@@ -50,7 +49,7 @@ import {
   warmSteps,
 } from "./warmers";
 
-const OUT_DIR = join(process.cwd(), "public/data");
+const OUT_DIR = path.join(process.cwd(), "public/data");
 
 function log(message: string): void {
   process.stdout.write(`prepare-sites: ${message}\n`);
@@ -70,7 +69,7 @@ function isReady(id: SiteId): boolean {
  *  line it prints under the site's id (the bakes run side by side);
  *  resolves with its exit code. It runs on this process's own Bun, not
  *  whichever `bun` comes first on the PATH. */
-function prepare(id: SiteId, args: string[]): Promise<number | null> {
+async function prepare(id: SiteId, args: string[]): Promise<number | null> {
   const child = spawn(
     process.execPath,
     ["scripts/prepare-data.ts", id, ...args],
@@ -86,7 +85,7 @@ function prepare(id: SiteId, args: string[]): Promise<number | null> {
       to.write(`[${id}] ${line}\n`);
     });
   }
-  return new Promise((resolve) => {
+  return await new Promise((resolve) => {
     child.on("close", resolve);
   });
 }
@@ -122,13 +121,17 @@ async function prepareAll(
     if (!warm || tiles.length === 0) {
       // a cached site publishes at a small peak; only a cold one is
       // counted at a whole site's (warmers.ts SITE_PEAK)
-      const probe = await slots.run(0, IF_CACHED_RUN.peak, () =>
-        prepare(id, IF_CACHED_RUN.args)
+      const probe = await slots.run(
+        0,
+        IF_CACHED_RUN.peak,
+        async () => await prepare(id, IF_CACHED_RUN.args)
       );
       if (probe !== NOT_CACHED) {
         return probe === 0;
       }
-      return (await slots.run(0, SITE_PEAK, () => prepare(id, []))) === 0;
+      return (
+        (await slots.run(0, SITE_PEAK, async () => await prepare(id, []))) === 0
+      );
     }
     const [[first], ...later] = warmSteps(tiles);
     // Step 0, then step 1 in its slot: the first warmer starts at once,
@@ -144,8 +147,9 @@ async function prepareAll(
     }
     for (const step of later) {
       const codes = await Promise.all(
-        step.map(({ args, peak }) =>
-          slots.run(1, peak, () => prepare(id, args))
+        step.map(
+          async ({ args, peak }) =>
+            await slots.run(1, peak, async () => await prepare(id, args))
         )
       );
       if (codes.some((code) => code !== 0)) {
@@ -200,7 +204,7 @@ const { limits, warm } = (() => {
       }),
     };
   } catch (error) {
-    fail((error as Error).message);
+    return fail((error as Error).message);
   }
 })();
 // a slow deploy shows why
@@ -222,12 +226,12 @@ if (failed.length > 0) {
 const index: SiteIndex = { version: 1, sites: [] };
 for (const id of ids) {
   const manifest = JSON.parse(
-    readFileSync(join(OUT_DIR, id, MANIFEST_FILE), "utf8")
+    readFileSync(path.join(OUT_DIR, id, MANIFEST_FILE), "utf-8")
   ) as DataManifest;
   const map = manifest.files[SITE_MAP_FILE];
-  const statsPath = join(OUT_DIR, id, SITE_STATS_FILE);
+  const statsPath = path.join(OUT_DIR, id, SITE_STATS_FILE);
   const stats = existsSync(statsPath)
-    ? parseSiteStats(JSON.parse(readFileSync(statsPath, "utf8")))
+    ? parseSiteStats(JSON.parse(readFileSync(statsPath, "utf-8")))
     : undefined;
   index.sites.push({
     id,
@@ -237,7 +241,7 @@ for (const id of ids) {
 }
 
 writeFileSync(
-  join(OUT_DIR, SITE_INDEX_FILE),
+  path.join(OUT_DIR, SITE_INDEX_FILE),
   `${JSON.stringify(index, null, 2)}\n`
 );
 publishServerWissen(ids);
@@ -246,8 +250,8 @@ publishServerWissen(ids);
 let pruned = 0;
 for (const entry of readdirSync(OUT_DIR)) {
   if (entry !== SITE_INDEX_FILE && !ids.includes(entry as SiteId)) {
-    rmSync(join(OUT_DIR, entry), { recursive: true });
-    pruned++;
+    rmSync(path.join(OUT_DIR, entry), { recursive: true });
+    pruned += 1;
   }
 }
 log(
@@ -261,25 +265,25 @@ log(
  * name. Rewritten whole, so a site no longer built leaves nothing.
  */
 function publishServerWissen(siteIds: readonly SiteId[]): void {
-  const root = join(process.cwd(), SERVER_WISSEN_DIR);
+  const root = path.join(process.cwd(), SERVER_WISSEN_DIR);
   rmSync(root, { recursive: true, force: true });
   for (const id of siteIds) {
-    const from = join(OUT_DIR, id);
+    const from = path.join(OUT_DIR, id);
     const manifest = JSON.parse(
-      readFileSync(join(from, MANIFEST_FILE), "utf8")
+      readFileSync(path.join(from, MANIFEST_FILE), "utf-8")
     ) as DataManifest;
     const indexFile = manifest.files[STADTWISSEN_FILE];
     if (!indexFile) {
       continue;
     }
-    const to = join(root, id);
+    const to = path.join(root, id);
     mkdirSync(to, { recursive: true });
-    copyFileSync(join(from, indexFile), join(to, STADTWISSEN_FILE));
-    const index = JSON.parse(
-      readFileSync(join(from, indexFile), "utf8")
+    copyFileSync(path.join(from, indexFile), path.join(to, STADTWISSEN_FILE));
+    const wissen = JSON.parse(
+      readFileSync(path.join(from, indexFile), "utf-8")
     ) as StadtwissenIndex;
-    for (const tile of index.tiles) {
-      copyFileSync(join(from, tile.file), join(to, tile.file));
+    for (const tile of wissen.tiles) {
+      copyFileSync(path.join(from, tile.file), path.join(to, tile.file));
     }
   }
 }

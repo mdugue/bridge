@@ -44,12 +44,11 @@ import {
   RedFormat,
   RGBAFormat,
   SRGBColorSpace,
-  type Texture,
   Vector3,
 } from "three/webgpu";
+import type { Texture } from "three/webgpu";
 import { min, mix, texture, uniform, uv, vec3, vec4 } from "three/tsl";
 import {
-  type Mural,
   muralBytes,
   muralStrip,
   muralTexels,
@@ -57,6 +56,7 @@ import {
   parseMurals,
   textureBytes,
 } from "@/lib/city/murals";
+import type { Mural } from "@/lib/city/murals";
 import { fetchOptionalBinary, fetchOptionalJson } from "./fetch-optional";
 import { dropDataOnUpload } from "./raster-upload";
 import { estimateGeometryBytes, trackTexture } from "./three-utils";
@@ -98,15 +98,18 @@ export function createMuralSource(url: string | null): MuralSource | null {
     return null;
   }
   let all: Promise<readonly Mural[]> | null = null;
-  const load = (): Promise<readonly Mural[]> => {
+  const load = async (): Promise<readonly Mural[]> => {
     all ??= fetchOptionalJson<unknown>(url)
       .then((json) => parseMurals(json) ?? [])
       .catch(() => []);
-    return all;
+    return await all;
   };
   return {
     fileUrl: (file) => new URL(file, url).href,
-    forTile: async (tile) => (await load()).filter((m) => m.tile === tile),
+    forTile: async (tile) => {
+      const murals = await load();
+      return murals.filter((m) => m.tile === tile);
+    },
   };
 }
 
@@ -158,7 +161,7 @@ async function decodeImage(
 /** The red of RGBA texels: the pen lines' one channel. */
 function redOf(rgba: Uint8ClampedArray): Uint8Array {
   const red = new Uint8Array(rgba.length / 4);
-  for (let i = 0; i < red.length; i++) {
+  for (let i = 0; i < red.length; i += 1) {
     red[i] = rgba[i * 4];
   }
   return red;
@@ -284,9 +287,9 @@ async function loadDrawing(
       "wash",
       signal
     );
-  } catch (err) {
+  } catch (error) {
     lines.dispose();
-    throw err;
+    throw error;
   }
   if (!wash) {
     lines.dispose();
@@ -314,28 +317,29 @@ export async function buildMurals(
     for (const mural of murals) {
       drawings.push(await loadDrawing(mural, opts, opts.signal));
     }
-  } catch (err) {
+  } catch (error) {
     for (const t of drawings.flat()) {
       t?.dispose();
     }
-    throw err;
+    throw error;
   }
   const group = new Group();
   group.name = "murals";
   const meshes: Mesh[] = [];
   const shown: Mural[] = [];
   let bytes = 0;
-  murals.forEach((mural, i) => {
+  for (let i = 0; i < murals.length; i += 1) {
+    const mural = murals[i];
     const drawing = drawings[i];
     if (!drawing) {
-      return;
+      continue;
     }
     const mesh = muralMesh(mural, drawing[0], drawing[1], opts.offset);
     group.add(mesh);
     meshes.push(mesh);
     shown.push(mural);
     bytes += muralBytes(mural, opts.phone) + estimateGeometryBytes(mesh);
-  });
+  }
   if (meshes.length === 0) {
     return null;
   }

@@ -2,9 +2,9 @@ import {
   AdditiveBlending,
   Color,
   MultiplyBlending,
-  type Scene,
   Vector4,
 } from "three/webgpu";
+import type { Scene, Node, NodeBuilder, UniformNode } from "three/webgpu";
 import { VALLEY_FALLOFF_MAX, VALLEY_NEAR_M } from "@/lib/city/valley-fog";
 import {
   clamp,
@@ -20,7 +20,6 @@ import {
   uniform,
   vec3,
 } from "three/tsl";
-import type { Node, NodeBuilder, UniformNode } from "three/webgpu";
 import type { F, V3 } from "./shader-chunks";
 
 /**
@@ -123,7 +122,7 @@ export function fogFactorAt(f: SceneFog, world: V3, view: V3): F {
     0,
     1
   );
-  const xz = world.xz;
+  const { xz } = world;
   const edgeD = min(xz.sub(f.siteRect.xy), f.siteRect.zw.sub(xz));
   const edge = float(1)
     .sub(smoothstep(0, SITE_EDGE_FADE_M, min(edgeD.x, edgeD.y)))

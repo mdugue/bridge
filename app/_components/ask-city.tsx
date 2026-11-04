@@ -10,11 +10,8 @@
  * as a line under the answer, so the visitor sees what it looked up and
  * what it did to the view.
  */
-import {
-  fetchServerSentEvents,
-  type UIMessage,
-  useChat,
-} from "@tanstack/ai-react";
+import { fetchServerSentEvents, useChat } from "@tanstack/ai-react";
+import type { UIMessage } from "@tanstack/ai-react";
 import {
   EarIcon,
   KeyRoundIcon,
@@ -36,7 +33,6 @@ import {
   ASK_LIMITS,
   ASK_PROVIDER_BY_ID,
   ASK_PROVIDERS,
-  type AskProviderId,
   maskedKey,
   plausibleKey,
   CUT_SHORT,
@@ -44,6 +40,7 @@ import {
   TOO_LONG,
   TOO_MANY_STEPS,
 } from "@/lib/city/ask-city";
+import type { AskProviderId } from "@/lib/city/ask-city";
 import { nearReach } from "@/lib/city/ask-knowledge";
 import { NEAR_RADIUS } from "@/lib/city/ask-tools";
 import { Button } from "@/components/ui/button";
@@ -58,14 +55,13 @@ import {
 import { Trace, TraceIcon, TraceLine, TraceTitle } from "@/components/ui/trace";
 import { cn } from "cn";
 import { AnswerChipRows, answerChips } from "./ask-chips";
-import { type AskKey, clearAskKey, readAskKey, writeAskKey } from "./ask-key";
-import { type AskScene, sceneTools } from "./ask-scene-tools";
-import {
-  type Dictation,
-  type Speech,
-  useDictation,
-  useSpeech,
-} from "./ask-voice";
+import { clearAskKey, readAskKey, writeAskKey } from "./ask-key";
+import type { AskKey } from "./ask-key";
+import { sceneTools } from "./ask-scene-tools";
+import type { AskScene } from "./ask-scene-tools";
+import { useDictation, useSpeech } from "./ask-voice";
+import type { Dictation, Speech } from "./ask-voice";
+import { useOnce } from "./use-once";
 
 interface Props {
   coarse: boolean;
@@ -74,7 +70,7 @@ interface Props {
   site: string;
 }
 
-export default function AskCity({ coarse, onClose, scene, site }: Props) {
+const AskCity = ({ coarse, onClose, scene, site }: Props) => {
   const [key, setKey] = useState<AskKey | null>(() => {
     const stored = readAskKey();
     // a key checked without a token (a server not yet set up, or a local
@@ -190,17 +186,19 @@ export default function AskCity({ coarse, onClose, scene, site }: Props) {
       </section>
     </>
   );
-}
+};
+
+export default AskCity;
 
 // --- the key ------------------------------------------------------------------
 
-function KeyForm({
+const KeyForm = ({
   onForget,
   onKey,
 }: {
   onForget: () => void;
   onKey: (key: AskKey) => void;
-}) {
+}) => {
   const [stored, setStored] = useState(readAskKey);
   const [provider, setProvider] = useState<AskProviderId>(
     stored?.provider ?? "anthropic"
@@ -239,29 +237,30 @@ function KeyForm({
         message?: string;
         token?: string;
       };
-      if (!res.ok) {
+      if (res.ok) {
+        onKey({
+          provider,
+          model,
+          key,
+          remember,
+          token: body.token ?? "",
+          expires: body.expires ?? Date.now() + ASK_LIMITS.tokenMs,
+        });
+      } else {
         setProblem(body.message ?? `Die Prüfung schlug fehl (${res.status}).`);
-        return;
       }
-      onKey({
-        provider,
-        model,
-        key,
-        remember,
-        token: body.token ?? "",
-        expires: body.expires ?? Date.now() + ASK_LIMITS.tokenMs,
-      });
     } catch {
       setProblem("Keine Verbindung zum Server.");
-    } finally {
-      setBusy(false);
     }
+    setBusy(false);
   };
 
   return (
     <form
       className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-4 text-[13px]"
-      onSubmit={(e) => void submit(e)}
+      onSubmit={(e) => {
+        void submit(e);
+      }}
     >
       <p className="leading-relaxed text-foreground/90">
         Frag nach Gebäuden, Plätzen und Geschichte — die Antwort zeigt dir den
@@ -382,7 +381,7 @@ function KeyForm({
       </p>
     </form>
   );
-}
+};
 
 // --- the conversation -------------------------------------------------------------
 
@@ -394,9 +393,16 @@ const SUGGESTIONS = [
 
 /** A provider's error that names the key or the account's credit. */
 const KEY_TROUBLE =
-  /\b(401|402|403|unauthori[sz]ed|forbidden|authenticat\w*|api[ _-]?key|credits?|credentials?|quota|billing|insufficient)\b/i;
+  /\b(?:401|402|403|unauthori[sz]ed|forbidden|authenticat\w*|api[ _-]?key|credits?|credentials?|quota|billing|insufficient)\b/iu;
 /** The same, as the code a provider's error carries. */
 const KEY_CODES = new Set(["401", "402", "403"]);
+
+/** One failed answer's words and what the visitor can do about it. */
+const say = (text: string, key = false, reset = false) => ({
+  key,
+  reset,
+  text,
+});
 
 /** A failed answer in words, by the status the server sent, and what
  *  the visitor can do about it: check the key again or start over. */
@@ -405,12 +411,7 @@ function errorText(error: Error): {
   reset: boolean;
   text: string;
 } {
-  const status = (error as { status?: unknown }).status;
-  const say = (text: string, key = false, reset = false) => ({
-    key,
-    reset,
-    text,
-  });
+  const { status } = error as { status?: unknown };
   if (status === 401) {
     return say("Der Schlüssel muss neu geprüft werden.", true);
   }
@@ -473,7 +474,7 @@ function lastAnswer(messages: readonly UIMessage[]): string {
   for (
     let i = messages.length - 1;
     i >= 0 && messages[i].role !== "user";
-    i--
+    i -= 1
   ) {
     texts.unshift(
       messages[i].parts
@@ -526,7 +527,7 @@ function useReadAloud(
 }
 
 /** Read aloud, speak a question, the Hörmodus: where the browser can. */
-function VoiceBar({
+const VoiceBar = ({
   busy,
   dictation,
   hearing,
@@ -545,7 +546,7 @@ function VoiceBar({
   reading: boolean;
   setReading: (on: boolean) => void;
   speech: Speech;
-}) {
+}) => {
   // the question goes to the conversation as it is when it is heard
   const spoken = useRef(onSpoken);
   useEffect(() => {
@@ -629,9 +630,9 @@ function VoiceBar({
       )}
     </div>
   );
-}
+};
 
-function Conversation({
+const Conversation = ({
   askKey,
   paused,
   hearing,
@@ -652,7 +653,7 @@ function Conversation({
   scene: AskScene;
   setReading: (on: boolean) => void;
   site: string;
-}) {
+}) => {
   const speech = useSpeech();
   const dictation = useDictation();
   const tools = useMemo(() => sceneTools(scene), [scene]);
@@ -668,7 +669,7 @@ function Conversation({
     [secret]
   );
   // one conversation per card: the provider's prompt cache is keyed by it
-  const [threadId] = useState(() => crypto.randomUUID());
+  const threadId = useOnce(() => crypto.randomUUID());
   const chat = useChat({
     threadId,
     connection,
@@ -681,6 +682,7 @@ function Conversation({
       voice: reading,
     },
   });
+  const handleClear = chat.clear;
   // a closed conversation leaves no tool waiting on the scene
   // (the answer stops first: a tool that returns at the abort would
   // otherwise resume the run with one more request on the visitor's key)
@@ -820,7 +822,7 @@ function Conversation({
                   {failure.reset && (
                     <button
                       className="underline underline-offset-2"
-                      onClick={chat.clear}
+                      onClick={handleClear}
                       type="button"
                     >
                       Neu beginnen
@@ -899,7 +901,7 @@ function Conversation({
       </p>
     </>
   );
-}
+};
 
 /** A tool argument as text: strings and numbers as written, else nothing. */
 function argText(value: unknown): string {
@@ -947,28 +949,39 @@ function toolLine(name: string, input: unknown, output?: unknown): string {
     return refused;
   }
   switch (name) {
-    case "suche_stadt":
+    case "suche_stadt": {
       return `Sucht „${argText(args.anfrage)}“`;
-    case "in_der_naehe":
+    }
+    case "in_der_naehe": {
       return `Sieht sich im Umkreis von ${nearReach(typeof args.radius === "number" ? args.radius : NEAR_RADIUS).buildings} m um`;
-    case "fakten":
+    }
+    case "fakten": {
       return `Liest die Fakten zu ${argText(args.id)}`;
-    case "quellen":
+    }
+    case "quellen": {
       return "Liest die Quellen";
-    case "wo_bin_ich":
+    }
+    case "wo_bin_ich": {
       return "Schaut, wo du stehst";
-    case "was_ist_da":
+    }
+    case "was_ist_da": {
       return "Fragt, was dort steht, wohin die Ansicht zeigt";
-    case "zeige":
+    }
+    case "zeige": {
       return showLine(args, output);
-    case "setze_zeit":
+    }
+    case "setze_zeit": {
       return `Stellt die Uhr auf ${argText(args.stunde)} Uhr`;
-    case "setze_stil":
+    }
+    case "setze_stil": {
       return `Wechselt den Bildstil (${argText(args.stil)})`;
-    case "datenschicht":
+    }
+    case "datenschicht": {
       return `${args.an ? "Zeigt" : "Verbirgt"} eine Datenebene`;
-    default:
+    }
+    default: {
       return name;
+    }
   }
 }
 
@@ -984,11 +997,11 @@ function toolIcon(name: string) {
 }
 
 /** Text with its web links clickable; nothing else is interpreted. */
-function Linked({ text }: { text: string }) {
+const Linked = ({ text }: { text: string }) => {
   // a sentence's closing punctuation after a link is not part of it
   // and a bracketed part, as in Wikipedia's „Zwinger_(Dresden)“, is
   const parts = text.split(
-    /(https:\/\/(?:[^\s()[\]]|\([^\s()]*\))*(?:[^\s()[\].,;:!?»“”"']|\([^\s()]*\)))/g
+    /(?<link>https:\/\/(?:[^\s()[\]]|\([^\s()]*\))*(?:[^\s()[\].,;:!?»“”"']|\([^\s()]*\)))/gu
   );
   return (
     <>
@@ -1011,9 +1024,9 @@ function Linked({ text }: { text: string }) {
       )}
     </>
   );
-}
+};
 
-function ChatMessage({
+const ChatMessage = ({
   labelled,
   live,
   message,
@@ -1021,7 +1034,7 @@ function ChatMessage({
   labelled: boolean;
   live: boolean;
   message: UIMessage;
-}) {
+}) => {
   if (message.role === "user") {
     return (
       <Message align="end">
@@ -1084,4 +1097,4 @@ function ChatMessage({
       </MessageContent>
     </Message>
   );
-}
+};

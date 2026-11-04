@@ -12,18 +12,15 @@ import type { DesignTier } from "@/lib/city/design-budget";
 import {
   coveredObjects,
   designMasks,
-  type PlanMask,
   planHull,
   siteFloor,
 } from "@/lib/city/design-cover";
+import type { PlanMask } from "@/lib/city/design-cover";
 import {
-  type DesignPlacement,
-  type DesignScale,
   designSize,
   elsewhereNote,
   groundBase,
   normalizeRotation,
-  type PlacementSource,
   parsePlacementFile,
   placeAhead,
   METRES,
@@ -37,8 +34,14 @@ import {
   standingBase,
   trustedBase,
 } from "@/lib/city/design-placement";
+import type {
+  DesignPlacement,
+  DesignScale,
+  PlacementSource,
+} from "@/lib/city/design-placement";
 import type { RecenterOffset } from "@/lib/city/ground-clamp";
-import { DEG2RAD, type PlayerPose } from "@/lib/city/pose";
+import { DEG2RAD } from "@/lib/city/pose";
+import type { PlayerPose } from "@/lib/city/pose";
 import {
   releaseDesignSite,
   SITE_BYTES,
@@ -46,12 +49,8 @@ import {
   SITE_UNDER_M,
   setDesignSite,
 } from "./design-site";
-import {
-  type DesignModel,
-  type DesignParts,
-  partOfVertex,
-  readDesign,
-} from "./design-read";
+import { partOfVertex, readDesign } from "./design-read";
+import type { DesignModel, DesignParts } from "./design-read";
 import type { DesignInquiry } from "@/lib/city/inquiry-design";
 import { releaseRenderState, sceneMaterial } from "./three-utils";
 
@@ -257,13 +256,16 @@ function partTriangles(loaded: Loaded, part: number): Float32Array {
   const v = new Vector3();
   let at = 0;
   for (const t of mine) {
-    for (let k = 0; k < 3; k++) {
+    for (let k = 0; k < 3; k += 1) {
       v.fromBufferAttribute(position, index.getX(t + k)).applyMatrix4(
         loaded.mesh.matrixWorld
       );
-      out[at++] = v.x;
-      out[at++] = v.y;
-      out[at++] = v.z;
+      out[at] = v.x;
+      at += 1;
+      out[at] = v.y;
+      at += 1;
+      out[at] = v.z;
+      at += 1;
     }
   }
   return out;
@@ -348,6 +350,29 @@ function askSet(loaded: Loaded, offset: RecenterOffset): AskSet<DesignInquiry> {
   };
 }
 
+/** a landscape plan is not scaled: its readers take its CRS's unit,
+ *  and its ground lies at the terrain's measured heights */
+const scalable = (model: DesignModel) => !model.prefersColours;
+
+/** frees a design's drawable, geometry, textures and own materials: the
+ *  white is the site's and stays (three keeps a drawable's render state
+ *  until its `dispose` event, three-utils.ts) */
+const discard = (
+  model: DesignModel,
+  mesh: Mesh,
+  files: MeshStandardNodeMaterial[] | null
+) => {
+  releaseRenderState(mesh);
+  model.geometry.disposeBoundsTree();
+  model.geometry.dispose();
+  for (const m of files ?? []) {
+    m.dispose();
+  }
+  for (const look of model.looks) {
+    look.map?.dispose();
+  }
+};
+
 export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
   let current: Loaded | null = null;
   let replaceExisting = true;
@@ -425,7 +450,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
         : null
     );
     loaded.hidden = new Map();
-    const mask = loaded.mask;
+    const { mask } = loaded;
     if (mask && replaceExisting) {
       for (const [tile, polys] of deps.footprints()) {
         const covered = coveredObjects(mask, polys);
@@ -454,10 +479,6 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
       report();
     }
   };
-
-  /** a landscape plan is not scaled: its readers take its CRS's unit,
-   *  and its ground lies at the terrain's measured heights */
-  const scalable = (model: DesignModel) => !model.prefersColours;
 
   /** its geometry and box in `scale`, about its foot (the geometry is
    *  about its anchor, design-read.ts): one uniform scale of the CPU copy
@@ -519,42 +540,25 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
     }
     const at = placeAhead(deps.pose(), model.box);
     const ground = groundBase(at, model.box, deps.heightAt);
+    // a place the file gives that no one would see it at
+    let placeNote: string | null = null;
+    if (geo) {
+      placeNote = elsewhereNote(beyond);
+    } else if (model.elsewhere) {
+      placeNote = elsewhereNote(null);
+    }
     return {
       placement: {
         ...at,
         base: standingBase(model.box, ground ?? playerGround()),
       },
       source: "here",
-      // a place the file gives that no one would see it at
-      placeNote: geo
-        ? elsewhereNote(beyond)
-        : model.elsewhere
-          ? elsewhereNote(null)
-          : null,
+      placeNote,
     };
   };
 
-  /** frees a design's drawable, geometry, textures and own materials: the
-   *  white is the site's and stays (three keeps a drawable's render state
-   *  until its `dispose` event, three-utils.ts) */
-  const discard = (
-    model: DesignModel,
-    mesh: Mesh,
-    files: MeshStandardNodeMaterial[] | null
-  ) => {
-    releaseRenderState(mesh);
-    model.geometry.disposeBoundsTree();
-    model.geometry.dispose();
-    for (const m of files ?? []) {
-      m.dispose();
-    }
-    for (const look of model.looks) {
-      look.map?.dispose();
-    }
-  };
-
   const remove = () => {
-    loads++;
+    loads += 1;
     if (planTimer !== null) {
       clearTimeout(planTimer);
       planTimer = null;
@@ -613,7 +617,8 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
 
   return {
     load: async (files) => {
-      const load = ++loads;
+      loads += 1;
+      const load = loads;
       const model = await readDesign(
         files,
         deps.epsg,
@@ -653,7 +658,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
       await deps.compile(mesh);
       // a placement file picked with it: read before the design shows, so
       // a refused one still leaves the design placed, planned and reported
-      const placementPicked = files.find((f) => /\.json$/i.test(f.name));
+      const placementPicked = files.find((f) => /\.json$/iu.test(f.name));
       const parsed = placementPicked
         ? parsePlacementFile(await placementPicked.text(), deps.epsg)
         : null;
@@ -705,7 +710,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
       if (!current) {
         return;
       }
-      const box = current.model.box;
+      const { box } = current.model;
       const at = placeAhead(deps.pose(), box);
       const ground = groundBase(at, box, deps.heightAt);
       current.placement = {
@@ -721,7 +726,7 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
       if (!current) {
         return;
       }
-      const box = current.model.box;
+      const { box } = current.model;
       const ground = groundBase(current.placement, box, deps.heightAt);
       if (ground !== null) {
         current.placement = {

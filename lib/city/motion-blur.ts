@@ -41,7 +41,7 @@ const prev = new Float64Array(4);
 const clip = new Float64Array(4);
 
 function into(m: Mat4, v: Float64Array, out: Float64Array): void {
-  for (let r = 0; r < 4; r++) {
+  for (let r = 0; r < 4; r += 1) {
     out[r] = m[r] * v[0] + m[4 + r] * v[1] + m[8 + r] * v[2] + m[12 + r] * v[3];
   }
 }
@@ -77,7 +77,8 @@ export function motionPixels(
         }
         const dx = ((clip[0] / clip[3] - x) * width) / 2;
         const dy = ((clip[1] / clip[3] - y) * height) / 2;
-        moved[n++] = Math.hypot(dx, dy);
+        moved[n] = Math.hypot(dx, dy);
+        n += 1;
       }
     }
   }

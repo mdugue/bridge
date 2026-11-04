@@ -1,9 +1,5 @@
-import {
-  type BufferGeometry,
-  LatheGeometry,
-  Vector2,
-  Vector3,
-} from "three/webgpu";
+import { LatheGeometry, Vector2, Vector3 } from "three/webgpu";
+import type { BufferGeometry } from "three/webgpu";
 
 /**
  * The needle trees' crowns, the two forms a scale cannot make of the lobed
@@ -101,7 +97,7 @@ export function buildConeGeo(
   const v = new Vector3();
   const centre = new Vector3(0, box.minY + NORMAL_CENTRE * box.height, 0);
   const rich = segments > 16;
-  for (let i = 0; i < pos.count; i++) {
+  for (let i = 0; i < pos.count; i += 1) {
     const x = pos.getX(i);
     const y = pos.getY(i);
     const z = pos.getZ(i);
@@ -112,7 +108,7 @@ export function buildConeGeo(
     }
     pos.setXYZ(i, x * k * halfW, box.minY + y * box.height, z * k * halfW);
   }
-  for (let i = 0; i < pos.count; i++) {
+  for (let i = 0; i < pos.count; i += 1) {
     v.set(pos.getX(i), pos.getY(i), pos.getZ(i)).sub(centre).normalize();
     nrm.setXYZ(i, v.x, v.y, v.z);
   }
@@ -178,7 +174,7 @@ export function reshapeCrown(
   const nrm = g.attributes.normal;
   const v = new Vector3();
   const centre = new Vector3(0, minY + normalCentre * height, 0);
-  for (let i = 0; i < pos.count; i++) {
+  for (let i = 0; i < pos.count; i += 1) {
     v.set(pos.getX(i) / halfW, (pos.getY(i) - cy) / halfH, pos.getZ(i) / halfW);
     const len = Math.max(v.length(), 1e-6);
     const dy = v.y / len;
@@ -192,7 +188,7 @@ export function reshapeCrown(
       Math.sin(phi) * r * k * halfW
     );
   }
-  for (let i = 0; i < pos.count; i++) {
+  for (let i = 0; i < pos.count; i += 1) {
     v.set(pos.getX(i), pos.getY(i), pos.getZ(i)).sub(centre).normalize();
     nrm.setXYZ(i, v.x, v.y, v.z);
   }
