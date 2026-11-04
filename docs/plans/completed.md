@@ -2007,7 +2007,17 @@ Its cost headless (full profile, desktop): the eight bodies of the start
 view's switch-on hold the lane ≈ 110–130 s of the ≈ 135–185 s to the last
 body under SwiftShader (timers starve there); judge it on a desktop GPU
 before letting `"compile"` parts overlap on the desktop tier (the plan's
-gate: more than 1 s spent in the hold).
+gate: more than 1 s spent in the hold). The hold reaches the fine
+dressings too: a coarse level's bodies take the coarse rank (D10), so
+after a switch-on up to `MAX_LATE_OVERTAKES` (4) of them may go ahead of
+a fine dressing queued before them, each holding the lane through its
+build and compile — at most ≈ 4 × (build + 3 s) on a GPU whose compiles
+outlast the wait, the same bound the coarse dressings already have, and
+only while a switch-on's bodies queue (the layer is off at the boot,
+ADR 0040). Not changed: it is the same open measure — the hold's length
+on a desktop GPU — and a part that holds without overtaking, or
+overtakes counted by hold time, would be new lane machinery for a delay
+nobody has seen there yet.
 
 **Deviations from the plan.** `hang` returns the part's take-down (no
 tenth field); a `"wait"` part's `settled` says `"hung"` as it hangs (the
