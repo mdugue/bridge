@@ -395,3 +395,46 @@ test("a root's parts weigh together, and its release frees every one", async () 
   expect(parts.bytes()).toBe(0);
   expect([a.freed.count, b.freed.count]).toEqual([1, 1]);
 });
+
+/** Whether what `ref` names is gone after a full collection. */
+async function collected(ref: WeakRef<object>): Promise<boolean> {
+  // (a WeakRef holds its target until the job that made it ends)
+  await flush();
+  Bun.gc(true);
+  await flush();
+  return ref.deref() === undefined;
+}
+
+test("a freed part's build is let go though its handle and its owner's are still held", async () => {
+  const { compiles, host, load } = fakeHost();
+  load();
+  const parts = createLateParts(host);
+  const owner = parts.add(fakePart("dressing", [], { rank: null }).part);
+  await flush();
+  compiles[0].end("done");
+  await owner.settled;
+  const refs: WeakRef<Group>[] = [];
+  const child = parts.add(
+    fakePart("traffic", [], {
+      rank: null,
+      hangAt: "compile",
+      build: async () => {
+        // made here: nothing of the test's holds it
+        const group = new Group();
+        refs.push(new WeakRef(group));
+        return await Promise.resolve(group);
+      },
+    }).part,
+    owner
+  );
+  await flush();
+  compiles[1].end("done");
+  expect(await child.settled).toBe("hung");
+  // (the fake host keeps what it compiled)
+  compiles.length = 0;
+  // the traffic's slot keeps its handle after its dispose
+  expect(child.dispose()).toEqual([]);
+  expect(refs).toHaveLength(1);
+  expect(await collected(refs[0])).toBe(true);
+  expect(owner).toBeDefined();
+});

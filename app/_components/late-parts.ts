@@ -243,6 +243,8 @@ export function createLateParts(host: LateHost): LateParts {
         return [];
       }
       freed = true;
+      // its handle outlives it (a traffic slot's): it keeps nothing now
+      made.value = null;
       takeDown?.();
       takeDown = null;
       weigh(0);
@@ -259,6 +261,8 @@ export function createLateParts(host: LateHost): LateParts {
     };
     /** it and what it owns go */
     const goAway = (): unknown[] => {
+      // (its owner may be iterating its children: a Set allows it)
+      parent?.children.delete(state);
       const errors: unknown[] = [];
       for (const child of state.children) {
         errors.push(...child.dispose());
