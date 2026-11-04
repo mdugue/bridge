@@ -77,7 +77,7 @@ reach). "078" marks rows plan 078 removes.
 | # | Step | Dressing | Murals | Traffic | Verdict |
 |---|---|---|---|---|---|
 | 1 | Wait before the turn | `dressingGate` (in `turn`) | `source.forTile(tile)` (the site's mural file) | `builderNow()`: the data layers' feature, **outside** the lane ("must not hold the dressings' chain") | deliberate: each part's own input; stays in the adapter |
-| 2 | Turn | the lane, rank coarse 0 / fine 1 (`4eafaf42`), then `await olderCompile` (`a36e7c32`, `e66aaa47`) | **none** | the lane at `FINE_DRESSING_RANK` always, coarse slots too (`4eafaf42` hard-coded it); no `olderCompile` | murals: deliberate (fetch and decode, no long main-thread task; two murals in Dresden, none elsewhere). Traffic's fixed rank: kept (question 1) |
+| 2 | Turn | the lane, rank coarse 0 / fine 1 (`4eafaf42`), then `await olderCompile` (`a36e7c32`, `e66aaa47`) | **none** | the lane at `FINE_DRESSING_RANK` always, coarse slots too (`4eafaf42` hard-coded it); no `olderCompile` | murals: deliberate (fetch and decode, no long main-thread task; two murals in Dresden, none elsewhere). Traffic's fixed rank: **drift, not intended** (maintainer, 2026-11-04): a coarse level's bodies take the coarse rank (step 4, D10) |
 | 3 | Gone before the build | `!entry ‖ disposed ‖ released.has(scene)` (`71d1fa29`) | `dressed.get(scene) !== entry` only | `gone(h)`: slot disposed ‖ plugin disposed ‖ released ‖ `entry.dressing !== dressing` | **drift → waste** (D1): murals miss `released`. A city tile that leaves while its own content compile runs keeps its entry (`release` waits on `compiles`), so its murals are fetched, decoded and built, then thrown away. `71d1fa29` fixed exactly this for the dressing only |
 | 4 | Abort | a fresh `entry.aborter` per build | `entry.aborter ??= aborter` (shares the dressing's slot; city entries have no dressing) | none (the build is synchronous) | **drift → waste** (D2), dressing and murals alike: the aborter fires in `releaseDressed`, i.e. only once the root's compiles have ended. A tile that leaves while its content compiles keeps building until then |
 | 5 | Build | `buildDressing(terrain, extras, ctx, url, signal)`, hard-wired | `buildMurals(murals, {fileUrl, offset, phone, signal})` | `builder.build(…)` + `builder.askSet(…)` | part-specific: the adapter's `build` |
@@ -86,7 +86,7 @@ reach). "078" marks rows plan 078 removes.
 | 8 | Hung before the compile | no | no | **yes**: `h.root.add(group)`, hidden, before its compile (`4adff283`) | drift, harmless (D3): a compile starts at the drawable, where it hangs does not change it (the dressing's own comment). Nothing reads `slot.group` before the bodies are asked (`create-app.ts` ≈ 2445 reads it for an asked section) |
 | 9 | Compile | `compileUnder(scene, compileRepresentatives(parts), "dressing t")` | `compileUnder(scene, [group], "murals t")` | `compileUnder(scene, compileRepresentatives([group]), "traffic t")` | drift, harmless (D4): murals compile every mesh (each has its own textures, so the representatives would be all of them anyway) |
 | 10 | Weighed while it waits | **from the build** (`80e8212b`, `3db636a4`) | only once hung (`entry.murals`) | only at `built()`, after its compile has ended | **latent bug** (D5, ADR 0047's class): between build and hang the tile cache does not count the murals' drawings (2.7 MB on Dresden's tile, 2.0 MB on a phone, `docs/rendering.md`) nor the traffic bodies hung hidden on the root. `80e8212b`'s reason ("a built dressing waiting its turn to hang must count against the cache's budget") holds for both; neither copy got it |
-| 11 | Compile wait | `withinCompileWait` **after** the lane (`e01997c8`), then hang | `await compiled`, unbounded | `withinCompileWait` **inside** the turn, then `await compiled` before showing | two deliberate policies, see 12. Traffic holding the lane through its wait is **drift → stall** (D6): `e01997c8` (2026-11-02, "veil to loaded 289 s → 229 s") moved the dressing's wait out of the lane and did not touch the slot; a switch-on holds the dressings' lane up to 3 s per tile with traffic, both levels |
+| 11 | Compile wait | `withinCompileWait` **after** the lane (`e01997c8`), then hang | `await compiled`, unbounded | `withinCompileWait` **inside** the turn, then `await compiled` before showing | two deliberate policies, see 12. Traffic holding the lane through its wait (D6): `e01997c8` moved the dressing's wait out of the lane and did not touch the slot — drift by origin, but **kept on evidence** (finding 4): a traffic compile is one large upload, the hold lasts as long as that upload (not 3 s unless it is slow), and letting the next body build beside it would put a second 20 MiB body in flight on a phone |
 | 12 | Hang policy | **at the wait**: hangs after ≤ 3 s even if its compile runs on; comes down again if that compile then runs out of memory (`17ca6cce`, `dropAfterCompile` → `dropDressing`) | at the compile's end | at the compile's end | deliberate: a level that hands over keeps one of the renderer's parse slots waiting on the dressing (`handsOver`, `8227605c`); nothing waits on murals or traffic |
 | 13 | Ready signal | `built()` after the wait, **before** `await loaded` | — | — | deliberate and load-bearing: `processTileModel` awaits it (`waitHandOver`) and `loaded` settles only after `processTileModel` returns; awaiting `loaded` first would deadlock until `handOverWaitMs` |
 | 14 | Wait for `loaded` | yes | yes | implicit: `attach` runs in `hangDressing`, after `loaded` | consistent; the module always awaits it (settled already for traffic) |
@@ -94,7 +94,7 @@ reach). "078" marks rows plan 078 removes.
 | 16 | Hang | `scene.add(parts)`, `entry.dressing`, `stream.dressings`, `buildAsksWhenIdle`, `traffic.attach`, second `catchUp` in try/finally around the weigh (`346f873e`) | `scene.add`, `entry.murals`, `city.hang(mesh, building)` per mural | `group.visible = wanted`, `src.asks.push(set)`, `ready` | part-specific: the adapter's `hang`. The second catch-up is 078 |
 | 17 | Weigh at the hang | `weighDressing` + `reweigh` | `recalculateBytesUsed(tile)` only if `tileOf` knows the tile (no whole-cache fallback) | `built()`: `weighDressing` (the whole dressing, traffic in it) + `reweigh` (`a3348a56` normalised it) | drift, harmless (D7): murals came on 2026-11-01, `a3348a56` on 11-03 normalised traffic only |
 | 18 | `onChange` | in `finishDressing`'s `finally`, always (the frontier, `settled`) | on the hang only | on `built()` | deliberate for the dressing (ready and the loading frontier count it); the module calls `changed` on hang and drop |
-| 19 | Failure | abort / disposed / released: silent; allocation → `onAllocationFailure("dressing t")`; else `onDressingFailed` | abort / gone: silent; **everything else** → `onDressingFailed` | gone: silent; allocation → `onAllocationFailure("traffic t")`; else `onDressingFailed` | **latent bug** (D8): a mural build that runs out of memory (decodeImage reads every drawing back into a `Uint8ClampedArray`: `RangeError: Array buffer allocation failed` on a phone, which `isAllocationFailure` recognises) is shown as a layer's hole and never reaches `memoryEmergency` (`create-app.ts` ≈ 1710) |
+| 19 | Failure | abort / disposed / released: silent; allocation → `onAllocationFailure("dressing t")`; else `onDressingFailed` | abort / gone: silent; **everything else** → `onDressingFailed` | gone: silent; allocation → `onAllocationFailure("traffic t")`; else `onDressingFailed` | **drift, narrow** (D8, finding 5): the decode itself never reports (`decodeImage` swallows every throw: the mural is left out), and a mural *compile* that runs out already reaches `onAllocationFailure("murals t")` through `compileUnder`. Only a throw between the two — `redOf`'s ≈ 0.9 MiB `Uint8Array`, the `DataTexture` — is shown as a layer's hole instead of an allocation failure |
 | 20 | Free while its compile runs | held by `compiles`, freed in the gone path after `await compiled` | held by `compiles`, freed by `hangMurals` after the compile | `slot.dispose()` takes it down now, frees after via `host.freeFailed` (`5876b641`) | consistent rule, three mechanisms |
 | 21 | Rejections | `finishDressing` catches all | `void this.hangMurals(…)`: a throw after the build (e.g. in `city.hang`) is an **unhandled rejection** | `buildGuarded` catches all | drift (D9), minor |
 | 22 | Tests | three, through private members (`queueDressing` ×2, `compileUnder`, `hangDressing`) and a `tilesetUrl` getter that throws (the earliest throw a test can inject: `buildDressing` is hard-wired) | **none** (`buildMurals` needs `createImageBitmap`, imported directly) | ten, through an exported fake `TrafficHost` | the dressing is tested past its interface; the murals not at all |
@@ -133,8 +133,100 @@ plan 074 part C's (the context's width).
 
 The traffic tests (≈ 794–1023) drive `trafficSlot` through a fake
 `TrafficHost` and pin, among others, that "the first tile's turn holds
-the chain while its compile runs" (≈ 910): today's drift D6, pinned as
-intent.
+the chain while its compile runs" (≈ 910): D6, which this plan keeps
+(finding 4).
+
+### 4. Should the traffic bodies overlap the lane like the dressings? No.
+
+What the lane's rules guard against, from their commits:
+
+- `e01997c8` (2026-11-02): the lane held each dressing through its
+  compile wait (up to 3 s) and its hang; holding the build only took veil
+  to loaded from 289 s to 229 s (headless, full profile). The gain is
+  throughput on the boot and the hand-over, where dozens of dressings
+  queue and each compile builds new programs.
+- `e66aaa47`: unbounded overlap let built dressings and the compile queue
+  pile up behind a slow GPU — built dressings were then unweighed, and a
+  queue past the wait hung them before their compile. A build now waited
+  out the last compile.
+- `a36e7c32`: that put the lane back to idling (288 s); a build waits
+  out the compile *before* the last one: at most one compile wait ahead
+  of a build.
+
+The traffic bodies, measured on `04d8fad3` (`buildTraffic` over four of
+Dresden's tiles in bun, `estimateGeometryBytes`; desktop CPU):
+
+| Tile | fine | build | coarse | build |
+|---|---|---|---|---|
+| 33412_5656 (24.8 km counted) | 22.0 MiB | 1.2 s | 3.3 MiB | 0.17 s |
+| 33414_5654 (24.5 km) | 22.3 MiB | 0.44 s | 3.4 MiB | 0.06 s |
+| 33410_5654 (23.5 km) | 20.3 MiB | 0.50 s | 3.1 MiB | 0.08 s |
+| 33416_5656 (14.2 km) | 12.8 MiB | 0.19 s | 2.0 MiB | 0.03 s |
+
+One mesh per body, one scene-wide material (`traffic-glass`): after the
+first tile the program exists, and a body's compile is the upload of its
+buffers. `withinCompileWait` ends when the compile does, so the hold
+costs a tile its upload time, not 3 s, except on a GPU that is already
+behind. The build is the long part (unsliced, a whole long task), and it
+is in the lane either way.
+
+The cost of overlapping: the one-ahead bound counts parts, not bytes. On
+a phone a fine body is ≈ 20 MiB against a tile cache of 285 MiB at level
+0 (196 at level 3, `docs/rendering.md`): building the next one while the
+last still uploads puts ≈ 7–10 % of the cache in flight a second time,
+on top of the dressing lane's own one ahead. Weighing from the build
+(D5) only lets the cache evict tiles it does not draw; with the view's
+tiles in use the cache runs over (`docs/rendering.md`: "the cache can
+run a tile over `max` before it unloads"). ADR 0047 does not allow that
+for a small gain. The switch-on timing also argues for the hold: a
+switch-on queues every loaded tile's bodies at once, both levels, behind
+or between the dressings; with the hold, the dressings landing meanwhile
+wait one body's upload at most, not a pile of built bodies.
+
+**Decision: no overlap for the traffic.** No part field is needed: the
+lane derives it from `hangAt`. A `"wait"` part (the dressing: something
+waits on it) frees the lane after its build; a `"compile"` part in the
+lane (the traffic: nothing waits on it) holds it through its compile
+wait. **Gate to revisit** (step 4, Verification): on a desktop, a
+switch-on with the spawn view loaded — the time from `trafficLayer: true`
+to the last body shown, and the `dressing:queue-wait` maximum meanwhile.
+If the hold costs more than 1 s over the switch-on on the desktop and the
+phone-emulated peak of `renderer.info.memory.total` does not grow with
+overlap, open a follow-up to let `"compile"` parts overlap on the desktop
+tier only.
+
+### 5. Should a mural that runs out of memory be a memory emergency? Yes, narrowly.
+
+What the emergency does (`create-app.ts` ≈ 3526 `memoryEmergency` →
+`lib/city/page-lifecycle.ts` `allocationFailed`): at most once per
+`emergencyGapMs`, it notes it on the trail, forces the memory governor to
+its last step (`lib/city/memory-governor.ts`: screen-space error × 8, the
+cache's floor × ⅛), sheds every tile not in use (`shedUnusedTiles`),
+holds the shadow camera's streaming, and — once per page, if visible and
+not just resumed — raises the device's safety level, which persists and
+falls by one every three days (ADR 0047). It drops no tile in use, so it
+does not drop the city for one texture, but it does lower the page's
+detail and, once, the next visits'. It must fire only on a real failure
+to allocate.
+
+The murals today: two in Dresden, none elsewhere; drawings of
+3840 × 237 (lines, one channel) + 1223 × 75 (wash) for the Fürstenzug and
+1280 × 448 + 360 × 126 for the other, 2.7 MB with mipmaps on their tile
+(2.0 MB on a phone, 32 px a metre). Where they can fail:
+
+| Where | Today | After step 3 |
+|---|---|---|
+| fetch or decode (`decodeImage`: `createImageBitmap`, `getImageData`) | every throw swallowed: the mural is left out, silently | unchanged: an oversized or undecodable drawing still only leaves its mural out |
+| `redOf` (≈ 0.9 MiB) or `new DataTexture` | `onDressingFailed`: a layer's hole in the HUD | `isAllocationFailure` → `onAllocationFailure("murals t")` → emergency; anything else stays `failed` |
+| the compile (the upload) | `compileUnder` → `onAllocationFailure("murals t")` → emergency, **already** | unchanged |
+
+So the emergency already fires for the murals' largest allocation (the
+GPU upload), as for the dressing's and the traffic's. The one path that
+does not is an ArrayBuffer of under a megabyte failing, which happens
+only when the page's process is truly out — the case the emergency is
+for; `isAllocationFailure` needs an out-of-room message or a GPU call in
+the stack, so a bug in the mural code is not taken for one. **Decision:
+classify it like the other parts (step 3); keep the decode's swallow.**
 
 ### Interplay
 
@@ -151,14 +243,17 @@ intent.
   unsubscribe inside `free`; the traffic's look follow moves into the
   slot's `attach`. **K2 waits for 078.** Step 0 of this plan reuses 078's
   step-0 script and baselines.
-- **Plan 076 steps 3–4** are built (`4eafaf42` 2026-10-25:
-  `COARSE_DRESSING_RANK`, `standInCrowns`; far city levels:
-  `FAR_CITY_ERROR`, murals on `geometricError === 0` only). The plans
-  README row still says "1 and 2 built; 3 and 4 open" and the plan's own
-  header "1–3 built; 4 open" (question 3). What 076 put into
-  `DressingPlugin` is this plan's baseline: the rank by level, the
-  overtakes cap, `standInCrowns` reading `entry.dressing` (the dressing
-  adapter keeps setting it), murals on the full LoD2 only.
+- **Plan 076** has all four steps in the code: step 1 `c6758a3d` and
+  before (`lib/city/stream-order.ts`), step 2 `aefc090b`
+  (`ground-plate.ts`, `scripts/prepare/plate.ts`), step 3 `a08c6813`
+  (`city_<t>_far`, `FAR_CITY_ERROR` 4), step 4 `4eafaf42`
+  (`COARSE_DRESSING_RANK`, `standInCrowns`), all 2026-10-25. Only its
+  status lines are stale (the README row and the plan's header). What 076
+  put into `DressingPlugin` is this plan's baseline: the rank by level,
+  the overtakes cap, `standInCrowns` reading `entry.dressing` (the
+  dressing adapter keeps setting it). Murals on the full LoD2 only
+  (`geometricError === 0`) came with the murals (`bfab0b6f`) on top of
+  076's far level.
 - **Plan 077** (TODO) rewrites `calculateBytesUsed`'s raster term and
   `releaseDressed`'s sky view. This plan rewrites the dressing and murals
   terms of the same two methods. Independent; whichever lands second
@@ -269,7 +364,8 @@ export interface LateParts {
 
 /** The site's lane: after the gate, one build at a time, lower rank
  *  first (at most MAX_DRESSING_OVERTAKES overtakes), a build waiting
- *  out the compile wait before the last one. Opaque. */
+ *  out the compile wait before the last one; a "wait" part frees it
+ *  after its build, a "compile" part after its compile wait. Opaque. */
 export interface LateLane {}
 export function createLateLane(gate: Promise<void>): LateLane;
 
@@ -366,7 +462,12 @@ On the drift-checked HEAD (078 done), before any refactor:
    the traffic layer on (`__poc.look.set({ trafficLayer: true })`), 60
    frames, record again; off, 10 frames, record. And three headless runs
    of the full-profile Dresden start with `?trace=1`: veil-to-loaded and
-   the `dressing:*` timings (`a36e7c32`'s method).
+   the `dressing:*` timings (`a36e7c32`'s method). And the traffic
+   switch-on with the spawn view loaded (finding 4's gate): the time
+   from `trafficLayer: true` to the last body shown, the spawn tile's
+   fine bodies' time, the `dressing:queue-wait` maximum meanwhile, and
+   on the phone-emulated boot the peak `renderer.info.memory.total` over
+   the switch-on (sampled each frame).
 2. **Traffic** (`tile-stream.test.ts`, the existing fake `TrafficHost`):
    add pins for (a) `built()` not called until the compile ends —
    *changes in step 4 (D5)*; (b) the bodies hung hidden on `root` while
@@ -374,7 +475,9 @@ On the drift-checked HEAD (078 done), before any refactor:
    "out of memory": nothing shown, asked or built, a later `show()`
    builds nothing; (d) a build that throws: `failed` once; while gone:
    silent. Mark the existing "one after another" test's
-   held-through-the-compile assertion *changes in step 4 (D6)*.
+   held-through-the-compile assertion as kept (finding 4); add a pin
+   that a coarse slot's turn is taken at the fine rank today — *changes
+   in step 4 (D10)*.
 3. **Dressing** (private reaches allowed in this step only, each with a
    `// reason:` naming step 5): (a) a tile released before its turn
    never starts its build — a counting `tilesetUrl` getter (today's
@@ -436,7 +539,9 @@ On the drift-checked HEAD (078 done), before any refactor:
       `failed(error, tile)`; after `leave()` → neither;
    9. the lane: rank 0 overtakes rank 1 (at most the cap); a third
       build waits for the first's compile wait, not the second's
-      (`a36e7c32`); rank null runs outside it;
+      (`a36e7c32`); a `"wait"` part frees the lane after its build, a
+      `"compile"` part holds it through its compile wait (finding 4);
+      rank null runs outside it;
    10. an owner: a part added with an owner is gone when the owner is
        disposed or given up, and is freed with it;
    11. `bytes()` sums every live part; `release()` frees every one and
@@ -494,21 +599,36 @@ On the drift-checked HEAD (078 done), before any refactor:
    look })` (`look` from 078). `show()` waits for the builder outside
    the lane as today (`builderNow`), then `parts.add(trafficPart(…),
    owner)` once; `hide()` as today; `dispose()` disposes the handle.
-   `trafficPart`: `kind: "traffic"`, `rank: FINE_DRESSING_RANK` (as
-   today, question 1), `hangAt: "compile"`, `build` = `builder.build` +
-   `askSet`, `bytes` = `estimateGeometryBytes(group)`, `hang` =
+   `trafficPart`: `kind: "traffic"`, `rank` by the slot's level
+   (`src.detail`: `"coarse"` → `COARSE_DRESSING_RANK`, `"fine"` →
+   `FINE_DRESSING_RANK`; D10, decided 2026-11-04), `hangAt: "compile"`,
+   `build` = `builder.build` + `askSet`, `bytes` = `estimateGeometryBytes(group)`, `hang` =
    `scene.add(group)`, `group.visible = wanted`, the ask set pushed,
    `free` = take the set out of `src.asks`, `disposeObject3D(group)`.
 2. The dressing part's `bytes` leaves `traffic.group` out (it is a part
    of its own now): the tile's total is unchanged once both are built.
 3. Behaviour changes: D3 (hung after its compile), D5 (weighed from the
-   build), D6 (the lane is no longer held through a traffic compile; a
-   build still waits out the compile before the last one). Update step
-   0's marked pins in this commit, nothing else.
-4. Rewrite the traffic tests (≈ 794–1023) on a real `createLateParts`
+   build), D10 (a coarse level's bodies at the coarse rank). D6 stays: a
+   `"compile"` part holds the lane through its compile wait (finding 4).
+   Update step 0's marked pins in this commit, nothing else.
+4. **What D10 changes.** On a switch-on the coarse levels' bodies (2–3.4
+   MiB, 30–170 ms to build each on a desktop) go ahead of the fine
+   levels' bodies and of fine dressings still queued, at most
+   `MAX_DRESSING_OVERTAKES` (4) ahead of any one of them: from the air
+   and far off the flows appear everywhere first, as the coarse crowns
+   do (plan 076 step 4); near the camera the fine bodies come a few
+   coarse builds later. The tile's total weight is unchanged. Verify:
+   a `late-parts.test.ts` case — a coarse traffic part queued after a
+   fine dressing builds first, and a fifth coarse part does not
+   overtake it; in step 4's switch-on measurement (Verification) the
+   spawn tile's fine bodies are shown within the baseline's time plus
+   four coarse builds, and `dressing:queue-wait`'s maximum is no
+   higher than the baseline's.
+5. Rewrite the traffic tests (≈ 794–1023) on a real `createLateParts`
    with step 1's fake host; keep every case's expectation except the
-   three marked ones.
-5. Verification adds `--grep @desktop-hud` (the data layers' switch-on).
+   marked ones.
+6. Verification adds `--grep @desktop-hud` (the data layers' switch-on)
+   and finding 4's gate (Verification).
    Commit: `refactor(stream): the traffic bodies hang through the late
    parts`.
 
@@ -572,6 +692,13 @@ After steps 2, 3 and 4 (one production build each):
   `getGpuDebug()`'s gap at the second return equals the first's.
 - After step 3: step 0's murals record (meshes present, the tile's
   share) holds.
+- After step 4: the switch-on numbers of step 0 — the phone-emulated
+  peak `renderer.info.memory.total` no higher, the time to the last body
+  and the `dressing:queue-wait` maximum within run-to-run spread, the
+  spawn tile's fine bodies no later than the baseline plus four coarse
+  builds (D10). Record the desktop switch-on time against finding 4's
+  gate (more than 1 s spent in the hold → note a follow-up in the status
+  row; do not change the lane in this plan).
 
 No picture change is intended: no plates are needed unless a check above
 moves; then a real-GPU plate pair of the moved view (`pr-snapshots`).
@@ -624,17 +751,3 @@ reason in the status row if:
   only after `processTileModel`, which may be waiting on `ready`.
 - Once DONE, condense this plan into `completed.md` per the README's
   Lifecycle.
-
-## Questions for the maintainer
-
-1. A coarse level's traffic bodies are built at the fine rank
-   (`4eafaf42` hard-coded it). Kept as is; was it meant, or should they
-   take their level's rank like the dressing?
-2. Step 4 lets the traffic bodies overlap the lane like the dressings do
-   since `e01997c8` (D6). On a switch-on the next tile's bodies build
-   while the last ones compile. Agreed?
-3. Plan 076's README row and header still say steps 3–4 (or 4) are
-   open; the code has them since `4eafaf42`. Close the row?
-4. D8 makes a mural that runs out of memory a memory emergency
-   (`memoryEmergency`, ADR 0047), as the dressing and the traffic
-   already are. Agreed?
