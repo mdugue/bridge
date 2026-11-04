@@ -54,6 +54,8 @@
 
 ## Status
 
+- **State**: DONE (2026-11-04) — code and tests; the stairs' re-bake is the
+  maintainer's (row in `README.md`)
 - **Priority**: P1 (steps 1–2: wrong committed data), P2 (steps 3–5)
 - **Effort**: S–M overall (each step S)
 - **Risk**: LOW

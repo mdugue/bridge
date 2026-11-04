@@ -71,7 +71,7 @@ history. Decisions that came out of plans are written up as
 | 037 | The commands agents run work (`bun run build`/`test`, E2E_DEV over HTTPS), the skill's phone cache numbers, "1024²" → TIN, guide viewpoints and sizes, codebook pointers, Dependabot/CI paths, lockfile header; a test pins the guide to the HUD | DONE (2026-10-03) — `bunfig.toml` keeps a bare `bun test` out of e2e; coverage gaps listed in CI; a docs link test besides the guide test | [completed.md](./completed.md#037--the-commands-agents-run-and-docs-that-say-what-the-code-does--done-2026-10-03) |
 | 038 | Runtime spine: the shadow camera follows by night (no pinned tile), "loaded" without a spawn dressing nobody builds, no GPU-recovery loop and the crash it hid, no stuck key after a ⌘ chord, a jump ends live mode | DONE (2026-10-03) — step 2's decision moved into the pure boot machine; the GPU failure has its own HUD path | [completed.md](./completed.md#038--five-runtime-fixes-in-the-viewers-spine--done-2026-10-03) |
 | 039 | Bridge approach ramps without zero normals, rails passing under a rail deck stay down, Papier keeps double-sided ribbons and bare crowns, Sin City rain that lasts | **TODO** — P1/P2; step 4 needs a GPU look; **step 3 moot since ADR 0041** (2026-10-06 audit: `buildRails` goes through `lineLevelsAt`, commit 677fe7c) and the line refs of steps 1/4 moved — see the plan's amendment | [039-geometry-and-style-fixes.md](./039-geometry-and-style-fixes.md) |
-| 040 | Bakes: step-major `bun run bake`, seam stair flights kept, atomic ingest + timeouts + https check, atomic `prepare-data` writes, the `/wissen` hero as tall as the site | **TODO** — P1/P2; the stairs then need a re-bake (maintainer); **drifted** (2026-10-06 audit): its step bodies cite `scripts/bake.ts`, `ingest_sn.py`, `test_ingest.py` (gone — `scripts/pipeline.ts`, `fetch.py` + `providers/`, `test_fetch.py`), the runner takes one JSON spec, step 3 is partly done (`net.py` timeouts, `.part` writes), step 5 appears done (`bake-wissen-hero.ts` `cell * rows`); refresh before executing and fold in the bake runner's order test — see the plan's amendment | [040-bake-pipeline-fixes.md](./040-bake-pipeline-fixes.md) |
+| 040 | Bakes: step-major `bun run bake`, seam stair flights kept, atomic ingest + timeouts + https check, atomic `prepare-data` writes, the `/wissen` hero as tall as the site | **DONE (2026-11-04)** — code and tests; the stairs need the maintainer's re-bake (`bun run bake <site> --step stairs` on every tile, then `bun scripts/prepare-data.ts`). Refreshed against `8b8ec332` first (the note at the plan's head): steps 3 (the fetch's timeouts, `.part` writes, complete-DLM check; no service-given link followed any more) and 5 (the hero `cell * rows`) were already built and are struck; step 1's runner was step-major already, its test additions built (every `run` in `STEPS` once, a failing step names site, tile and step, the stairs/walls/rail-from-OSM fixtures on EPSG 25832 too); step 2 built (`stairs.Dgm` on a mosaic of the committed DGMs within 50 m, `mosaic` moved to `common.py`); step 4 built for the publisher (the cache already wrote through a part file). Nothing needed network or raw data | [040-bake-pipeline-fixes.md](./040-bake-pipeline-fixes.md) |
 | 041 | Test net: raster shares and the aborted-load free, the collider through a real BVH, census for stairs/sport/kerbs, eye height vs the DGM, pens per style, three's real geometry key | DONE (2026-10-03) — raster shares in their own module; tree rows left allowed empty (Grimma, Munich) | [completed.md](./completed.md#041--tests-where-the-regressions-are--done-2026-10-03) |
 | 042 | Main thread while streaming: stats coalesced, footprints only when they change (no minimap repaint per tile event), footprints after the handover, the viewer chunk fetched with the manifest | DONE (2026-10-03) — the first frame and "loaded" flush the coalesced stats | [completed.md](./completed.md#042--less-main-thread-churn-while-tiles-stream--done-2026-10-03) |
 | 043 | The city BVH in a worker (≈ 80 ms per tile on desktop today) | **BUILT in another shape** (2026-10-26, 038d55a: the near tiles' BVH in `bvh-client.ts`'s worker, the rest when a ray first needs one; its chunk cost not re-measured since). Earlier: **BLOCKED** (2026-10-03, re-tried 2026-10-11) — gate passed (BVH median 75 ms a tile), the worker built and tested; the first attempt read Turbopack's leftover `media/*.worker.ts` asset as the worker, but Next 16.3.7's Turbopack **does** bundle it (re-tried for the spawn tile alone, branch `claude/spawn-bvh-worker`). Stopped at the chunk instead: three's core and three-mesh-bvh shared with the worker leave the scene's scope (ADR 0040), +20.8 KB gz on the first load (904 985 → 925 796), and mobile-emulated the first frame came later, not earlier (the lite boot has nothing to overlap once its ground has landed; the worker's build ran 3× slower beside SwiftShader's frames). Five options for the maintainer in the plan's findings | [043-city-bvh-off-the-main-thread.md](./043-city-bvh-off-the-main-thread.md) |
@@ -134,20 +134,21 @@ S/M/L.
    2026-10-03 (picked for the phones: crashes and slowness): 037, 038,
    041, 042, 044; 043 is BLOCKED — not on bundling a worker, as first
    thought, but on what the worker's three costs the scene's chunk (its
-   2026-10-11 findings name the options). Left, in order: 040 → 039 → 045 → 046 (moves only, after
-   039, which edits the same files). The spikes 047 and
+   2026-10-11 findings name the options). 040 and 045 are done
+   (2026-11-04); left, in order: 039 → 046 (moves only, after 039, which
+   edits the same files). The spikes 047 and
    048 can go any time after 038. Plan 019 (item 1) stays the one that
    needs a GPU; 039 step 4 and 048 part B add to its checklist. Plan 022
-   (the four tiles' re-bake) waits for 040 step 1. Plan 017 phase C was
-   built by plan 049 without 045's named class ids; 045 then covers
-   `landcover_osm.py` too.
+   (the four tiles' re-bake) may run: 040 step 1 is built. Plan 017
+   phase C was built by plan 049 without 045's named class ids; 045
+   covered `landcover_osm.py` too.
    **Plans 056–067 (2026-10-06 audit) — order:** 056 (a skipped test,
    minutes) → 057 (seam buildings) → 058 → 059 (privacy) → 060 (the
    spine's failure paths) → 061 (the bake cache) → 062 (traffic on
    demand, phones) → 067 (data layers, the twin) → 063 (build and fetch)
    → 064 (CI, needs a PR run) → 065 (docs) → 066 (the lifecycle machine,
-   after 060). 040 and 046 are **drifted** and must be refreshed before
-   they run (their rows and amendments say what moved); 039's step 3 is
+   after 060). 046 is **drifted** and must be refreshed before it runs
+   (its row and amendment say what moved; 040 was refreshed and built); 039's step 3 is
    moot. The non-interactive run picked these twelve by leverage from the
    vetted findings below; the rest is the 2026-10-06 backlog.
    **Plans 068–074 (2026-10-10 performance audit) — order:** 069 steps
