@@ -1,6 +1,10 @@
 # Plan 077: One rasters module — a tile's rasters loaded, shared and weighed behind one interface, their files named by the artifact table
 
-**Status:** TODO
+**Status:** PARTIAL (2026-11-04) — step 1 built (the terrain's raster
+extras written from the artifact table; Dresden's build byte-identical);
+steps 2–5 open. Step 0's real-GPU plates and the probe were not taken
+(no GPU in the session; the probe serves steps 2–3): take both before
+step 2. The README row has the rest.
 
 > **Executor instructions**: Follow this plan step by step. Each step
 > ships on its own; run its verification before the next. If anything in
