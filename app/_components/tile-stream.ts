@@ -51,7 +51,6 @@ import {
   streamOrder,
 } from "@/lib/city/stream-order";
 import type { OrderedTile } from "@/lib/city/stream-order";
-import { createTaskGate } from "@/lib/city/task-gate";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { ownsPoint } from "@/lib/city/tileset";
 import type {
@@ -127,11 +126,19 @@ import type { SharedRasters } from "./shared-rasters";
 import { loadHorizonTexture, loadSkyViewTexture } from "./sky-light";
 import { dressStairs } from "./stair-layer";
 import {
-  MAX_LATE_OVERTAKES,
+  createLateLane,
+  createLateParts,
+  takeTurn,
   withinCompileWait,
   withinWait,
 } from "./late-parts";
-import type { Compiled } from "./late-parts";
+import type {
+  Compiled,
+  LateHost,
+  LateLane,
+  LatePart,
+  LateParts,
+} from "./late-parts";
 import { streamTimings } from "./stream-timing";
 import { whenIdle } from "./main-yield";
 import { bvhBytesUnder } from "./collision";
@@ -189,7 +196,7 @@ export interface TileDressing {
    *  (lib/city/ask-items.ts; plan 052 phase 4): data, nothing drawn */
   asks?: AskSet<FeatureInquiry>[];
   /** fills `asks` (the same array) — in idle time once the dressing hangs
-   *  (`DressingPlugin.hangDressing`), not on its critical path: a card
+   *  (`dressingPart`), not on its critical path: a card
    *  nobody may open placed every canopy tree a second time inside the
    *  dressing's build. Gone once it has run. */
   buildAsks?: Steps<void>;
@@ -219,7 +226,7 @@ export interface TileDressing {
 
 /**
  * Where a tile's traffic bodies go once its dressing hangs on the tile
- * (`DressingPlugin.hangDressing`).
+ * (`DressingPlugin.attachTraffic`).
  */
 export interface TrafficHost {
   /** the look store: the bodies show while the layer is on, from the
@@ -412,12 +419,17 @@ interface PluginTiles {
 
 /** Every dressed object of a tile, keyed by its content root. */
 interface Dressed {
-  /** aborts the dressing's fetches when the tile leaves before it lands */
+  /** aborts the murals' fetches when the tile leaves before they land */
   aborter?: AbortController;
   city?: CityLayer;
+  /** the dressing, while it hangs on the tile */
   dressing?: TileDressing;
-  /** the dressing's geometry bytes, from its build (it waits to hang) */
-  dressingBytes?: number;
+  /** what lands on the root after it (late-parts.ts): the dressing — its
+   *  bytes from its build on, freed with the root */
+  late: LateParts;
+  /** the traffic bodies' bytes, once built and compiled (until they are a
+   *  late part of their own, plan 083 step 4) */
+  trafficBytes?: number;
   /** the city tile's murals, once they hang on it */
   murals?: MuralLayer;
   /** the bytes of the site's shared buffers its content holds (the coarse
@@ -1347,7 +1359,7 @@ async function buildDressing(
     // What the probe can ask, sized as drawn: the trees on the tile's own
     // ground (as the inventory stands them), decks only where this tile
     // draws them — built once the dressing hangs, in idle time (`buildAsks`,
-    // hangDressing), into the array the traffic's sets join too. Until then
+    // dressingPart), into the array the traffic's sets join too. Until then
     // a click on the tile's trees finds nothing to ask.
     const askCtx = {
       ...ground,
@@ -1431,19 +1443,76 @@ async function buildDressing(
   }
 }
 
-/** The dressings' turns (DressingPlugin.turn): a coarse level's — the
- *  bridges and a third of the trees, light to build — ahead of any fine
- *  level's, so every tile in view has trees before the nearest has all. */
+/** The dressings' turns in the site's lane (late-parts.ts): a coarse
+ *  level's — the bridges and a third of the trees, light to build — ahead
+ *  of any fine level's, so every tile in view has trees before the nearest
+ *  has all. */
 const COARSE_DRESSING_RANK = 0;
 const FINE_DRESSING_RANK = 1;
 
-/** A built dressing's geometry bytes, as its parts stand now (the
- *  traffic's bodies count once built). */
-function weighDressing(entry: Dressed, dressing: TileDressing): void {
-  entry.dressingBytes = dressingParts(dressing).reduce(
-    (sum, part) => sum + estimateGeometryBytes(part),
-    0
-  );
+/** Where a terrain level's dressing hangs (`dressingPart`). */
+export interface DressingSite {
+  tile: string;
+  level: "coarse" | "fine";
+  /** the content root it hangs under (the viewer's Y-up scene frame) */
+  root: Object3D;
+  /** where the root keeps it while it hangs (its entry in the plugin) */
+  slot: { dressing?: TileDressing; trafficBytes?: number };
+  /** the stream's hung dressings */
+  dressings: Set<TileDressing>;
+  /** whether the stream is still there */
+  live: () => boolean;
+  /** an ask builder that threw in idle time */
+  failed: (error: unknown, tile: string) => void;
+  /** hands its traffic the tile, once it hangs */
+  attachTraffic: (dressing: TileDressing) => void;
+  build: (signal: AbortSignal) => Promise<TileDressing>;
+}
+
+/**
+ * A terrain level's dressing as a late part of its content root
+ * (late-parts.ts): built in the site's lane (a coarse level's first),
+ * compiled one representative per build, weighed from its build by its
+ * parts' geometry, hung once its compile wait is over — a level that hands
+ * over waits on it (`DressingPlugin.handsOver`) — its ask sets built in
+ * idle time once it hangs, and freed whole.
+ */
+export function dressingPart(site: DressingSite): LatePart<TileDressing> {
+  const { slot, dressings } = site;
+  return {
+    kind: "dressing",
+    tile: site.tile,
+    rank: site.level === "coarse" ? COARSE_DRESSING_RANK : FINE_DRESSING_RANK,
+    hangAt: "wait",
+    build: site.build,
+    objects: (d) => compileRepresentatives(dressingParts(d)),
+    bytes: (d) =>
+      dressingParts(d).reduce(
+        (sum, part) => sum + estimateGeometryBytes(part),
+        0
+      ),
+    hang: (d) => {
+      // The content root is the viewer's Y-up scene frame (the renderer's
+      // up-axis turn cancels the world group's), so the Y-up dressing
+      // hangs under it and leaves with its tile.
+      site.root.add(...dressingParts(d));
+      slot.dressing = d;
+      dressings.add(d);
+      buildAsksWhenIdle(d, () => site.live() && slot.dressing === d, {
+        failed: (err) => site.failed(err, d.tile),
+      });
+      site.attachTraffic(d);
+      // (its parts leave the root as it is freed: disposeDressing)
+      return () => {
+        if (slot.dressing === d) {
+          slot.dressing = undefined;
+          slot.trafficBytes = undefined;
+        }
+        dressings.delete(d);
+      };
+    },
+    free: (d) => disposeDressing(d),
+  };
 }
 
 /** A promise's resolver until its executor has run. */
@@ -1493,8 +1562,6 @@ export class DressingPlugin {
   /** what settles `loaded`: the renderer's load-model (`landed`), the
    *  moment it records the content and before any frame shows it */
   private readonly settles = new WeakMap<Object3D, () => void>();
-  /** what ends a content root's wait for its queued dressing (handsOver) */
-  private readonly builtOf = new WeakMap<Object3D, () => void>();
   /** the boot's spawn tile is shown bare, its dressing after the gate */
   private gateOpen = false;
   /** tiles whose dressing was tried (see TileStream.dressingSettled) */
@@ -1567,6 +1634,7 @@ export class DressingPlugin {
   ) {
     this.ctx = ctx;
     this.stream = stream;
+    this.lane = createLateLane(ctx.dressingGate);
     // The warm-up runs beside the dressings, not ahead of them: its compile
     // may take up to COMPILE_WAIT_MS, and the spawn tile's trees need none
     // of its programs (they compile their own).
@@ -1700,7 +1768,8 @@ export class DressingPlugin {
     const rasters = this.rasterShares.bytesOf(dressed?.terrain?.rasters ?? []);
     return (
       rasters +
-      (dressed?.dressingBytes ?? 0) +
+      (dressed?.late.bytes() ?? 0) +
+      (dressed?.trafficBytes ?? 0) +
       (dressed?.murals?.bytes ?? 0) -
       (dressed?.sharedBytes ?? 0)
     );
@@ -1807,7 +1876,7 @@ export class DressingPlugin {
       if (this.sceneOf.get(tile) === scene) {
         this.sceneOf.delete(tile);
       }
-      this.released.add(scene);
+      this.leave(scene);
       this.release(scene);
     }, 0);
   }
@@ -1841,7 +1910,7 @@ export class DressingPlugin {
       this.stream.demolishedGroups
     );
     this.stream.cities.add(city);
-    const entry: Dressed = { city };
+    const entry: Dressed = { city, late: this.lateParts(scene) };
     this.dressed.set(scene, entry);
     if (extras.svf) {
       entry.svf = this.url(extras.svf);
@@ -2023,7 +2092,11 @@ export class DressingPlugin {
       terrain.fences = fences;
     }
     this.stream.terrains.add(terrain);
-    this.dressed.set(scene, { terrain, sharedBytes: sceneSharedBytes(scene) });
+    this.dressed.set(scene, {
+      terrain,
+      late: this.lateParts(scene),
+      sharedBytes: sceneSharedBytes(scene),
+    });
     this.holdRasters(scene, terrain.rasters, true);
     const coarse = COARSE_DRESSING_KINDS.some((kind) => extras.coarse?.[kind]);
     return extras.dressing || coarse
@@ -2031,20 +2104,40 @@ export class DressingPlugin {
       : {};
   }
 
-  /** Dressings build one at a time, after the gate: each is a long task.
-   *  The crowns' seasonal programs warm up beside them (warmCrowns). */
-  private readonly lane = createTaskGate(1, MAX_LATE_OVERTAKES);
-  /** the compile waits of the last two dressings built: a build waits
-   *  out the older one first (queueDressing: it overlaps the last one's
-   *  compile, never two) */
-  private lastCompile: Promise<void> = Promise.resolve();
-  private olderCompile: Promise<void> = Promise.resolve();
-  /** `work` in the dressings' turn: after the gate, one at a time, the
-   *  lower rank first */
-  private async turn<T>(work: () => Promise<T>, rank: number): Promise<T> {
-    return await this.ctx.dressingGate.then(
-      async () => await this.lane.run(work, undefined, rank)
-    );
+  /** The site's lane for what lands late (late-parts.ts): the dressings
+   *  build one at a time after the gate, each a long task. The crowns'
+   *  seasonal programs warm up beside them (warmCrowns). */
+  private readonly lane: LateLane;
+
+  /** What one content root's late parts are given: its compiles counted
+   *  on it (its release waits), its record by the renderer, its weight. */
+  private lateParts(scene: Object3D): LateParts {
+    const host: LateHost = {
+      lane: this.lane,
+      compile: async (objects, where) =>
+        await this.compileUnder(scene, objects, where),
+      loaded: this.loaded.get(scene) ?? Promise.resolve(),
+      disposed: () => this.disposed,
+      reweigh: () => this.reweigh(scene),
+      changed: () => {
+        if (!this.disposed) {
+          this.ctx.onChange();
+        }
+      },
+      allocationFailure: (error, where) =>
+        this.ctx.onAllocationFailure?.(error, where),
+      failed: (error, tile) => this.ctx.onDressingFailed?.(error, tile),
+      freeFailed: (errors) => this.disposeFailed(errors, scene),
+    };
+    return createLateParts(host);
+  }
+
+  /** `scene`'s tile has left: what is still to land on it never does (its
+   *  builds abort, its hand-over stops waiting) — even while its release
+   *  waits for a compile. */
+  private leave(scene: Object3D): void {
+    this.released.add(scene);
+    this.dressed.get(scene)?.late.leave();
   }
   pending = 0;
   /** the dressings queued or building: their scene's site tile */
@@ -2138,213 +2231,85 @@ export class DressingPlugin {
   }
 
   /**
-   * Builds the tile's dressing in its turn and hangs it on the tile. The
-   * promise settles once the dressing is built and compiled (or given up),
-   * before it hangs: it hangs as soon as the renderer has recorded the
-   * tile's own content (`loaded`), before any frame — so a tile that waits
-   * for it (handsOver) is shown with it.
+   * Builds the tile's dressing in its turn and hangs it on the tile, as a
+   * late part of its content root (late-parts.ts, `dressingPart`). The
+   * promise settles once the dressing is built and its compile wait is over
+   * (or it is given up), before it hangs: it hangs as soon as the renderer
+   * has recorded the tile's own content (`loaded`), before any frame — so a
+   * tile that waits for it (handsOver) is shown with it.
    */
   private async queueDressing(
     scene: Object3D,
     terrain: TerrainLayer,
     extras: TerrainExtras
   ): Promise<void> {
+    const entry = this.dressed.get(scene);
+    if (!entry) {
+      return;
+    }
     this.pending += 1;
     this.pendingScenes.set(scene, extras.tileId);
-    let built = unresolved;
-    const ready = new Promise<void>((resolve) => {
-      built = resolve;
-    });
-    // a tile that leaves stops waiting for it at once (disposeTile)
-    this.builtOf.set(scene, built);
-    const queuedAt = streamTimings.now();
-    // the coarse levels' first: a third of the trees on every tile in view
-    // before the full set on the nearest
-    const rank = extras.dressing ? FINE_DRESSING_RANK : COARSE_DRESSING_RANK;
-    // The lane holds the build only; the compile wait and the hanging run
-    // after it, so the next tile's build overlaps this one's compile
-    // (the compiles still take their turns, `compileInTurn`). Waiting on
-    // the compile inside the lane left it idle for up to COMPILE_WAIT_MS
-    // a tile. One compile ahead at most: a build overlaps the last one's
-    // compile but waits out the one before it, so built dressings (each
-    // weighed from its build) and the compile queue never pile up behind
-    // a slow GPU — a queue past the wait would hang them before their
-    // compile.
-    const turned = this.turn(
-      async (): Promise<(() => Promise<void>) | undefined> => {
-        await this.olderCompile;
-        const entry = this.dressed.get(scene);
-        // (a tile that left with its own compile still running keeps its
-        // entry until that compile ends: it is gone all the same)
-        if (!entry || this.disposed || this.released.has(scene)) {
-          return undefined; // the tile (or the stream) left before its turn
-        }
-        streamTimings.since("dressing:queue-wait", queuedAt, extras.tileId);
-        entry.aborter = new AbortController();
-        const { signal } = entry.aborter;
-        const dressing = await streamTimings.timed(
-          "dressing:build",
-          async () =>
-            await buildDressing(terrain, extras, this.ctx, this.url, signal),
-          extras.tileId
-        );
-        entry.aborter = undefined;
-        const parts = dressingParts(dressing);
-        // It follows the scene's season from here on, so it compiles as the
-        // frames will draw it — in its season (which swaps crown materials)
-        // — before it hangs anywhere: a build three keys differently from
-        // what a frame asks for compiles inside that frame. (A compile
-        // starts at the drawable: where it will hang does not change its
-        // build.) One that throws here never hangs: it is freed, not left
-        // to nothing.
-        try {
-          dressing.unfollow = followEnvironment(dressing, this.ctx.environment);
-        } catch (error) {
-          this.disposeFailed(disposeDressing(dressing), scene);
-          throw error;
-        }
-        // (a tile that left, its release held by its own compile, gets none:
-        // nor any weight, nor a place in the compile line the lane waits on)
-        const current =
-          this.dressed.get(scene) === entry && !this.released.has(scene);
-        const compiled = current
-          ? this.compileUnder(
-              scene,
-              compileRepresentatives(parts),
-              `dressing ${extras.tileId}`
-            )
-          : Promise.resolve<Compiled>("not run");
-        let outcome: Compiled | undefined;
-        const trackOutcome = async () => {
+    const handle = entry.late.add(
+      dressingPart({
+        tile: extras.tileId,
+        level: extras.dressing ? "fine" : "coarse",
+        root: scene,
+        slot: entry,
+        dressings: this.stream.dressings,
+        live: () => !this.disposed,
+        failed: (err, tile) => this.ctx.onDressingFailed?.(err, tile),
+        attachTraffic: (dressing) => this.attachTraffic(scene, entry, dressing),
+        build: async (signal) => {
+          const dressing = await buildDressing(
+            terrain,
+            extras,
+            this.ctx,
+            this.url,
+            signal
+          );
+          // It follows the scene's season from here on, so it compiles as
+          // the frames will draw it — in its season (which swaps crown
+          // materials) — before it hangs anywhere: a build three keys
+          // differently from what a frame asks for compiles inside that
+          // frame. One that throws here never hangs: it is freed, not left
+          // to nothing.
           try {
-            outcome = await compiled;
-          } catch {
-            // a failed compile is reported where `waited` awaits it; there
-            // is no outcome to note
+            dressing.unfollow = followEnvironment(
+              dressing,
+              this.ctx.environment
+            );
+          } catch (error) {
+            this.disposeFailed(disposeDressing(dressing), scene);
+            throw error;
           }
-        };
-        void trackOutcome();
-        const waited = streamTimings.timed(
-          "dressing:compile",
-          async () => await withinCompileWait(compiled),
-          extras.tileId
-        );
-        this.olderCompile = this.lastCompile;
-        this.lastCompile = waited.catch(() => {
-          // a failed wait is reported where `waited` is awaited; the lane
-          // only needs it settled
-        });
-        // Weighed from the build on, not from the hang: the lane runs ahead
-        // of the compile waits, and a built dressing waiting its turn to
-        // hang must count against the cache's budget.
-        if (current) {
-          weighDressing(entry, dressing);
-          this.reweigh(scene);
-        }
-        return async () => {
-          await waited;
-          built();
-          // Not before the renderer has recorded the tile's own content (see
-          // `loaded`): the dressing's materials are the scene's.
-          await this.loaded.get(scene);
-          // A dressing whose compile ran out of GPU memory stays off: the
-          // tile goes bare rather than the GPU further under. Nor does one
-          // whose tile left while a compile ran: its release waits for the
-          // compile (`compiles`), so its entry is still there.
-          if (
-            this.disposed ||
-            this.released.has(scene) ||
-            this.dressed.get(scene) !== entry ||
-            outcome === "out of memory"
-          ) {
-            if (this.dressed.get(scene) === entry) {
-              entry.dressingBytes = undefined;
-              this.reweigh(scene);
-            }
-            // freed once its compile has ended (see `compiles`)
-            const freeAfterCompile = async () => {
-              try {
-                await compiled;
-                this.disposeFailed(disposeDressing(dressing), scene);
-              } catch {
-                // nothing to free for a compile that failed, and a free
-                // that threw is reported by `disposeFailed`
-              }
-            };
-            void freeAfterCompile();
-            return;
-          }
-          this.hangDressing(scene, entry, dressing);
-          // ...and one whose compile outlasted the wait and then ran out of
-          // memory comes down again
-          const dropAfterCompile = async () => {
-            try {
-              if ((await compiled) === "out of memory") {
-                this.dropDressing(scene, entry, dressing);
-              }
-            } catch {
-              // a failed compile has nothing to drop
-            }
-          };
-          void dropAfterCompile();
-        };
-      },
-      rank
+          return dressing;
+        },
+      })
     );
-    const finishDressing = async () => {
-      try {
-        const after = await turned;
-        await after?.();
-      } catch (error) {
-        // A dressing that fails leaves its tile bare, never the stream
-        // stuck — but never silently: a builder's throw is a bug or a
-        // heap that ran out. (A tile that left mid-build has no failure
-        // of its own.)
-        const left =
-          isAbortError(error) || this.disposed || this.released.has(scene);
-        if (!left && isAllocationFailure(error)) {
-          this.ctx.onAllocationFailure?.(error, `dressing ${extras.tileId}`);
-        } else if (!left) {
-          this.ctx.onDressingFailed?.(error, extras.tileId);
-        }
-      } finally {
-        built();
-        this.builtOf.delete(scene);
-        this.pending -= 1;
-        this.pendingScenes.delete(scene);
-        // A tile is dressed when its fine level is (the coarse one only
-        // stands in for it).
-        if (extras.level === 0) {
-          this.settled.add(extras.tileId);
-        }
-        if (!this.disposed) {
-          this.ctx.onChange();
-        }
+    const finish = async () => {
+      await handle.settled;
+      this.pending -= 1;
+      this.pendingScenes.delete(scene);
+      // A tile is dressed when its fine level is (the coarse one only
+      // stands in for it).
+      if (extras.level === 0) {
+        this.settled.add(extras.tileId);
+      }
+      if (!this.disposed) {
+        this.ctx.onChange();
       }
     };
-    void finishDressing();
-    await ready;
+    void finish();
+    await handle.ready;
   }
 
-  /** Hangs a built dressing on its tile's content root. */
-  private hangDressing(
+  /** The traffic's bodies hang on a hung dressing's tile once its layer is
+   *  switched on. */
+  private attachTraffic(
     scene: Object3D,
     entry: Dressed,
     dressing: TileDressing
   ): void {
-    const parts = dressingParts(dressing);
-    // The content root is the viewer's Y-up scene frame (the renderer's
-    // up-axis turn cancels the world group's), so the Y-up dressing
-    // hangs under it and leaves with its tile.
-    scene.add(...parts);
-    entry.dressing = dressing;
-    this.stream.dressings.add(dressing);
-    buildAsksWhenIdle(
-      dressing,
-      () => !this.disposed && entry.dressing === dressing,
-      { failed: (err) => this.ctx.onDressingFailed?.(err, dressing.tile) }
-    );
-    // The traffic's bodies hang here once its layer is switched on.
     dressing.traffic?.attach({
       look: this.ctx.environment.look,
       root: scene,
@@ -2354,16 +2319,17 @@ export class DressingPlugin {
           compileRepresentatives([group]),
           `traffic ${tileIdOf(scene)}`
         ),
-      // the dressings' own chain: a switch-on builds the loaded tiles'
+      // the dressings' own lane: a switch-on builds the loaded tiles'
       // bodies one after another, never all in one task
-      turn: async (work) => await this.turn(work, FINE_DRESSING_RANK),
+      turn: async (work) => await takeTurn(this.lane, FINE_DRESSING_RANK, work),
       freeFailed: (errors) => this.disposeFailed(errors, scene),
       gone: () =>
         this.disposed ||
         this.released.has(scene) ||
         entry.dressing !== dressing,
       built: () => {
-        weighDressing(entry, dressing);
+        const bodies = dressing.traffic?.group;
+        entry.trafficBytes = bodies ? estimateGeometryBytes(bodies) : 0;
         this.reweigh(scene);
         this.ctx.onChange();
       },
@@ -2375,9 +2341,6 @@ export class DressingPlugin {
         }
       },
     });
-    // weighed again as it hangs, as its parts stand now
-    weighDressing(entry, dressing);
-    this.reweigh(scene);
   }
 
   /** The cache weighs `scene`'s tile again (the whole cache: none known). */
@@ -2390,24 +2353,6 @@ export class DressingPlugin {
     }
   }
 
-  /** Takes a hung dressing down again and frees it (its compile ran out of
-   *  memory after it hung); the tile stays, bare. */
-  private dropDressing(
-    scene: Object3D,
-    entry: Dressed,
-    dressing: TileDressing
-  ): void {
-    if (this.disposed || entry.dressing !== dressing) {
-      return; // gone with its tile already
-    }
-    entry.dressing = undefined;
-    entry.dressingBytes = undefined;
-    this.stream.dressings.delete(dressing);
-    this.disposeFailed(disposeDressing(dressing), scene);
-    this.reweigh(scene);
-    this.ctx.onChange();
-  }
-
   disposeTile(tile: { engineData?: { scene?: Object3D | null } }): void {
     const scene = tile.engineData?.scene ?? this.sceneOf.get(tile);
     this.sceneOf.delete(tile);
@@ -2415,8 +2360,7 @@ export class DressingPlugin {
       // its rasters stop where they are (the load this rejects is the
       // renderer's to drop: its own signal is aborted by now)
       this.loadAborts.get(scene)?.abort();
-      this.builtOf.get(scene)?.();
-      this.released.add(scene);
+      this.leave(scene);
       this.release(scene);
       this.disposeContentNow(scene);
     }
@@ -2604,10 +2548,8 @@ export class DressingPlugin {
       this.holdRasters(scene, dressed.terrain.rasters, false);
       free(() => dressed.terrain?.dispose());
     }
-    if (dressed.dressing) {
-      this.stream.dressings.delete(dressed.dressing);
-      errors.push(...disposeDressing(dressed.dressing));
-    }
+    // its dressing, hung or not (its compiles have ended by now)
+    errors.push(...dressed.late.release());
     return errors;
   }
 }

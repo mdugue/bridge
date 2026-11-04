@@ -1,71 +1,13 @@
 import { expect, jest, test } from "bun:test";
 import { BoxGeometry, Group, Mesh, MeshBasicNodeMaterial } from "three/webgpu";
-import type { Object3D } from "three/webgpu";
 import {
   COMPILE_WAIT_MS,
-  createLateLane,
   createLateParts,
   MAX_LATE_OVERTAKES,
 } from "./late-parts";
-import type { Compiled, LateHost, LatePart } from "./late-parts";
+import type { Compiled, LatePart } from "./late-parts";
+import { fakeHost, flush, gate } from "./late-parts.fixture";
 import { disposeObject3D } from "./three-utils";
-
-const noop = (): void => undefined;
-
-/** Lets every pending promise chain run (no timers). */
-async function flush(): Promise<void> {
-  for (let i = 0; i < 30; i += 1) {
-    await Promise.resolve();
-  }
-}
-
-/** A gate the test opens. */
-function gate() {
-  let open = noop;
-  const opened = new Promise<void>((resolve) => {
-    open = resolve;
-  });
-  return { open: () => open(), opened };
-}
-
-/** A host whose compiles and content record the test ends, its calls
- *  recorded, over a real lane. */
-function fakeHost(laneGate: Promise<void> = Promise.resolve()) {
-  const compiles: { where: string; end: (c: Compiled) => void }[] = [];
-  const loaded = gate();
-  const calls = {
-    allocation: [] as [unknown, string][],
-    changed: 0,
-    failed: [] as [unknown, string][],
-    freeFailed: [] as unknown[][],
-    reweigh: 0,
-  };
-  const host: LateHost = {
-    lane: createLateLane(laneGate),
-    compile: async (_objects: Object3D[], where: string) =>
-      await new Promise<Compiled>((resolve) => {
-        compiles.push({ where, end: resolve });
-      }),
-    loaded: loaded.opened,
-    disposed: () => false,
-    reweigh: () => {
-      calls.reweigh += 1;
-    },
-    changed: () => {
-      calls.changed += 1;
-    },
-    allocationFailure: (error, where) => {
-      calls.allocation.push([error, where]);
-    },
-    failed: (error, tile) => {
-      calls.failed.push([error, tile]);
-    },
-    freeFailed: (errors) => {
-      calls.freeFailed.push(errors);
-    },
-  };
-  return { calls, compiles, host, load: loaded.open };
-}
 
 /** A part: a group with one box, its geometry's dispose counted, what it
  *  does logged under `name`. */
@@ -211,11 +153,11 @@ test("a part that hangs at the wait comes down again when its compile then runs 
     jest.advanceTimersByTime(COMPILE_WAIT_MS);
     await handle.ready;
     await flush();
-    // hung while its compile runs on
+    // hung while its compile runs on: settled as hung
     expect(log).toEqual(["a build", "a hang"]);
+    expect(await handle.settled).toBe("hung");
     const { changed } = calls;
     compiles[0].end("out of memory");
-    expect(await handle.settled).toBe("out of memory");
     await flush();
     expect(log).toEqual(["a build", "a hang", "a down", "a free"]);
     expect(freed.count).toBe(1);
@@ -224,6 +166,24 @@ test("a part that hangs at the wait comes down again when its compile then runs 
   } finally {
     jest.useRealTimers();
   }
+});
+
+test("a part that hangs at the wait and ran out of memory within it never hangs", async () => {
+  const log: string[] = [];
+  const { calls, compiles, host, load } = fakeHost();
+  const parts = createLateParts(host);
+  const { freed, part } = fakePart("a", log);
+  const handle = parts.add(part);
+  await flush();
+  compiles[0].end("out of memory");
+  await handle.ready;
+  load();
+  expect(await handle.settled).toBe("out of memory");
+  await flush();
+  expect(log).toEqual(["a build", "a free"]);
+  expect(freed.count).toBe(1);
+  expect(parts.bytes()).toBe(0);
+  expect(calls.changed).toBe(0);
 });
 
 test("a part disposed while its compile runs comes down now and is freed once the compile ends, once", async () => {

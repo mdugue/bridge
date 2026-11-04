@@ -101,7 +101,9 @@ export interface LateHandle {
   /** built and its compile wait over, or given up; settles without
    *  waiting for the content to be recorded (the hand-over awaits it) */
   ready: Promise<void>;
-  /** how it ended; never rejects */
+  /** how it ended: hung (a "wait" part as it hangs, though a compile that
+   *  then runs out of memory takes it down again), or given up; never
+   *  rejects */
   settled: Promise<LateOutcome>;
   /** takes it down now and frees it, now or once its compile ends; a
    *  build still running ends without hanging. Returns what threw now */
@@ -144,6 +146,18 @@ export function createLateLane(gate: Promise<void>): LateLane {
     older: Promise.resolve(),
   };
   return lane;
+}
+
+/** `work` in the lane's turn at `rank` (after the gate, one at a time):
+ *  for what builds in the lane without being a part yet — the traffic
+ *  bodies until they are one (plan 083 step 4). */
+export async function takeTurn<T>(
+  lane: LateLane,
+  rank: number,
+  work: () => Promise<T>
+): Promise<T> {
+  const { gate, tasks } = lane as Lane;
+  return await gate.then(async () => await tasks.run(work, undefined, rank));
 }
 
 /** What the plugin gives one root's parts. */
@@ -335,25 +349,38 @@ export function createLateParts(host: LateHost): LateParts {
         return made.value === null && !gone() ? "nothing" : "gone";
       }
       const { built, compiled, waited } = started;
+      // how the compile ended, once it has (a "wait" part may hang first;
+      // a holder: the callback sets it across awaits)
+      const ended: { value?: Compiled } = {};
+      const noteEnd = async () => {
+        ended.value = await compiled;
+      };
+      void noteEnd();
       await waited;
       readyNow();
       // not before the renderer has recorded the content: what hangs may
       // be the scene's, which it would dispose with the tile
       await host.loaded;
-      const now = part.hangAt === "compile" ? await compiled : undefined;
-      if (gone() || now === "out of memory") {
+      if (part.hangAt === "compile") {
+        ended.value = await compiled;
+      }
+      const outOfMemory = ended.value === "out of memory";
+      if (gone() || outOfMemory) {
         report(goAway());
-        return now === "out of memory" ? "out of memory" : "gone";
+        return outOfMemory ? "out of memory" : "gone";
       }
       takeDown = part.hang(built, handle);
       host.changed();
-      if (part.hangAt === "wait" && (await compiled) === "out of memory") {
-        if (!freed) {
-          // hung at the wait, its compile then out of memory: down again
-          report(goAway());
-          host.changed();
-        }
-        return "out of memory";
+      if (ended.value === undefined) {
+        // a "wait" part hung while its compile runs on: down again if
+        // that compile then runs out of memory (settled says "hung")
+        const dropIfOut = async () => {
+          if ((await compiled) === "out of memory" && !freed) {
+            report(goAway());
+            host.changed();
+          }
+        };
+        void dropIfOut();
       }
       return "hung";
     };
