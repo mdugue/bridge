@@ -43,7 +43,7 @@ how it is built.
 
 Numbers missing from the index belonged to records merged into others;
 they are never reused. A new record takes the next number after the
-highest ever used (0054), checked against main and the open PRs' branches.
+highest ever used (0058), checked against main and the open PRs' branches.
 
 ## Format
 

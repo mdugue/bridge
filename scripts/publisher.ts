@@ -11,7 +11,7 @@ import { MANIFEST_FILE } from "../lib/city/tile";
 import type { DataManifest } from "../lib/city/tile";
 
 /**
- * Where scripts/prepare-data.ts puts a site's served files (ADR 0007): each
+ * Where scripts/prepare-data.ts puts a site's served files (ADR 0024): each
  * artifact under a content-hashed name, the manifest that maps the logical
  * names to them, and, at the end, nothing else — a file no publish named
  * this run is pruned. A warmer (warmers.ts) only names: it writes nothing.
