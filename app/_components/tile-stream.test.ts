@@ -38,6 +38,7 @@ import {
   dressingPart,
   muralsPart,
   dressingParts,
+  castersBatch,
   followEnvironment,
   handOverWaitMs,
   PHONE_STREAM,
@@ -87,7 +88,7 @@ function* broken(): Steps<void> {
   throw new Error("bad furniture");
 }
 
-test("a dressing's trees follow the scene's season from birth to release", () => {
+test("a dressing's trees follow the scene's season from birth to release", async () => {
   const days: number[] = [];
   const vegetation = {
     // a crown changes on a day in winter only
@@ -97,30 +98,61 @@ test("a dressing's trees follow the scene's season from birth to release", () =>
     },
   } as unknown as VegetationControl;
   const env = fakeEnvironment(190);
+  const casters = { hung: () => true, changed: castersBatch(env) };
   // born in July: the season of now, nothing cast differently
-  const unfollow = followEnvironment({ vegetation }, env);
+  const unfollow = followEnvironment({ vegetation }, env, casters);
   expect(days).toEqual([190]);
-  expect(env.casters).toBe(0);
   // a change while it compiles, and one after it hangs: heard alike
   env.season.set(9);
   expect(days).toEqual([190, 9]);
+  await flush();
   expect(env.casters).toBe(1);
   env.season.set(200);
   expect(days).toEqual([190, 9, 200]);
+  await flush();
   expect(env.casters).toBe(1);
   // released: nothing more
   unfollow();
   env.season.set(10);
   expect(days).toEqual([190, 9, 200]);
+  await flush();
   expect(env.casters).toBe(1);
-  // born in winter: its crowns change at once, but it hangs in no scene
-  // yet (its hang redraws the shadow map)
-  const winter = fakeEnvironment(9);
-  followEnvironment({ vegetation }, winter);
-  expect(days).toEqual([190, 9, 200, 9]);
-  expect(winter.casters).toBe(0);
-  winter.season.set(10);
-  expect(winter.casters).toBe(1);
+});
+
+test("a season change redraws the shadow map once, and only for the dressings that hang", async () => {
+  const vegetation = {
+    setSeason: (day: number) => day < 60,
+  } as unknown as VegetationControl;
+  const env = fakeEnvironment(190);
+  const changed = castersBatch(env);
+  const hung = { hung: () => true, changed };
+  // three hung, one built but in no scene yet
+  for (let i = 0; i < 3; i += 1) {
+    followEnvironment({ vegetation }, env, hung);
+  }
+  let built = false;
+  followEnvironment({ vegetation }, env, { hung: () => built, changed });
+  env.season.set(9);
+  await flush();
+  expect(env.casters).toBe(1);
+  // the next change is drawn again
+  env.season.set(10);
+  await flush();
+  expect(env.casters).toBe(2);
+  // only the unhung one's crowns change: nothing is drawn again
+  const lone = fakeEnvironment(190);
+  followEnvironment({ vegetation }, lone, {
+    hung: () => built,
+    changed: castersBatch(lone),
+  });
+  lone.season.set(9);
+  await flush();
+  expect(lone.casters).toBe(0);
+  // once it hangs, it does
+  built = true;
+  lone.season.set(10);
+  await flush();
+  expect(lone.casters).toBe(1);
 });
 
 /** A dressing hung on a root of its own through its late part, over the

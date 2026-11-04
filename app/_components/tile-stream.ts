@@ -598,18 +598,41 @@ export function handOverWaitMs(tier: DeviceTier): number {
 }
 
 /**
+ * The stream's one call for "a hung dressing's crowns changed": every
+ * dressing hears a season change in the same emit, and the shadow map is
+ * drawn again once for all of them (`castersChanged` once, after the emit
+ * ends: a microtask).
+ */
+export function castersBatch(env: Pick<DressingEnvironment, "castersChanged">) {
+  let pending = false;
+  return (): void => {
+    if (pending) {
+      return;
+    }
+    pending = true;
+    queueMicrotask(() => {
+      pending = false;
+      env.castersChanged();
+    });
+  };
+}
+
+/**
  * Binds a dressing's trees to the scene environment (scene-environment.ts)
  * from its birth: they take the season of now at once and every change
  * after — while the dressing compiles, hangs and shows — and a crown that
- * changed after its birth redraws the shadow map (its hang does the
- * first). Returns the call that lets go (`TileDressing.unfollow`, called
- * by `disposeDressing`). The look needs no following here: the crown
- * switch is read by the LOD pass, and the traffic follows the layer once
- * it hangs (`TrafficSlot.attach`).
+ * changed while the dressing hangs (`hung`) redraws the shadow map through
+ * the stream's batch (`changed`, `castersBatch`); one in no scene yet casts
+ * nothing, and its hang redraws the map (the stream's change). Returns the
+ * call that lets go (`TileDressing.unfollow`, called by `disposeDressing`).
+ * The look needs no following here: the crown switch is read by the LOD
+ * pass, and the traffic follows the layer once it hangs
+ * (`TrafficSlot.attach`).
  */
 export function followEnvironment(
   d: Pick<TileDressing, "vegetation">,
-  env: DressingEnvironment
+  env: Pick<DressingEnvironment, "season">,
+  casters: { hung: () => boolean; changed: () => void }
 ): () => void {
   const { vegetation } = d;
   if (!vegetation) {
@@ -617,16 +640,11 @@ export function followEnvironment(
       // nothing follows
     };
   }
-  // the season of its birth casts nothing anew: the dressing is in no
-  // scene yet, and its hang redraws the shadow map (the stream's change)
-  let born = false;
-  const unfollow = follow(env.season, (day) => {
-    if (vegetation.setSeason(day) && born) {
-      env.castersChanged();
+  return follow(env.season, (day) => {
+    if (vegetation.setSeason(day) && casters.hung()) {
+      casters.changed();
     }
   });
-  born = true;
-  return unfollow;
 }
 
 /** Frees a dressing; a part that throws does not keep the others (what
@@ -1674,6 +1692,8 @@ export class DressingPlugin {
   private readonly loadAborts = new WeakMap<Object3D, AbortController>();
 
   private readonly ctx: TileStreamContext;
+  /** a hung dressing's crowns changed: once per season change for all */
+  private readonly castersChanged: () => void;
   private readonly stream: Pick<
     TileStream,
     "cities" | "demolished" | "demolishedGroups" | "dressings" | "terrains"
@@ -1688,6 +1708,13 @@ export class DressingPlugin {
   ) {
     this.ctx = ctx;
     this.stream = stream;
+    this.castersChanged = castersBatch({
+      castersChanged: () => {
+        if (!this.disposed) {
+          ctx.environment.castersChanged();
+        }
+      },
+    });
     this.lane = createLateLane(ctx.dressingGate);
     // The warm-up runs beside the dressings, not ahead of them: its compile
     // may take up to COMPILE_WAIT_MS, and the spawn tile's trees need none
@@ -2294,7 +2321,11 @@ export class DressingPlugin {
           try {
             dressing.unfollow = followEnvironment(
               dressing,
-              this.ctx.environment
+              this.ctx.environment,
+              {
+                hung: () => this.stream.dressings.has(dressing),
+                changed: this.castersChanged,
+              }
             );
           } catch (error) {
             this.disposeFailed(disposeDressing(dressing), scene);
