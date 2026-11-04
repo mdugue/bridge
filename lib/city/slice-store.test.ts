@@ -197,7 +197,10 @@ test("dataEqual counts a date, a map, a set or an instance equal only to itself"
   const at = new Date(1);
   expect(dataEqual({ at }, { at })).toBe(true);
   class Point {
-    constructor(readonly x: number) {}
+    readonly x: number;
+    constructor(x: number) {
+      this.x = x;
+    }
   }
   expect(dataEqual(new Point(1), new Point(1))).toBe(false);
   // an object without a prototype is still plain data

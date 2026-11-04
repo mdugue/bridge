@@ -21,8 +21,8 @@ function fakePage() {
       navigator.onLine = onLine;
       window.dispatchEvent(new Event(onLine ? "online" : "offline"));
     },
-    visible: (shown: boolean) => {
-      document.visibilityState = shown ? "visible" : "hidden";
+    visible: (isShown: boolean) => {
+      document.visibilityState = isShown ? "visible" : "hidden";
       document.dispatchEvent(new Event("visibilitychange"));
     },
     hide: () => window.dispatchEvent(new Event("pagehide")),

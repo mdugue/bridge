@@ -18,6 +18,13 @@ function apply(m: number[], [x, y, z]: [number, number, number]) {
   ];
 }
 
+const present = <T>(v: T | null | undefined): T => {
+  if (v === null || v === undefined) {
+    throw new Error("expected a value");
+  }
+  return v;
+};
+
 const placed = (p: IfcPlacement | { why: string } | null): IfcPlacement => {
   if (!p || "why" in p) {
     throw new Error("not placed");
@@ -87,7 +94,8 @@ describe("mapConversionPlacement", () => {
 
   test("the other German UTM zone is carried over through lat/lng", () => {
     const ll = utmToLatLng(25_833, 412_300, 5_657_420);
-    const in32 = latLngToUtm(25_832, ll!.lat, ll!.lng)!;
+    const known = present(ll);
+    const in32 = present(latLngToUtm(25_832, known.lat, known.lng));
     const p = placed(
       mapConversionPlacement(
         { ...map, crs: "EPSG:25832", eastings: in32.x, northings: in32.y },
@@ -153,7 +161,7 @@ describe("siteReferencePlacement", () => {
         25_833
       )
     );
-    const at = latLngToUtm(25_833, 51 + 3 / 60 + 22 / 3600, 13.75)!;
+    const at = present(latLngToUtm(25_833, 51 + 3 / 60 + 22 / 3600, 13.75));
     const [e, h, z] = apply(p.matrix, [0, 0, 0]);
     expect(e).toBeCloseTo(at.x, 3);
     expect(-z).toBeCloseTo(at.y, 3);
@@ -196,7 +204,7 @@ describe("siteReferencePlacement", () => {
         25_833
       )
     );
-    const at = latLngToUtm(25_833, 51 + 3 / 60 + 22 / 3600, 13.75)!;
+    const at = present(latLngToUtm(25_833, 51 + 3 / 60 + 22 / 3600, 13.75));
     const [e, , z] = apply(p.matrix, [40, 0, -25]);
     expect(e).toBeCloseTo(at.x, 3);
     expect(-z).toBeCloseTo(at.y, 3);

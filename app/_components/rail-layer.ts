@@ -847,6 +847,21 @@ function* splitDeckTop(
   }
 }
 
+/** The value nearest `target` (the first of equals); null for none. */
+function closestTo(values: readonly number[], target: number): number | null {
+  let best: number | null = null;
+  for (const v of values) {
+    if (best === null || Math.abs(v - target) < Math.abs(best - target)) {
+      best = v;
+    }
+  }
+  return best;
+}
+
+/** The squared distance between two points. */
+const d2 = (a: number[], b: number[]) =>
+  (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+
 /** One face into `acc`, split at its longest edge while that is longer
  *  than `step` (0: as it is), each new corner moved by `lift`. */
 function splitFace(
@@ -857,11 +872,8 @@ function splitFace(
   lift: ((m: number[]) => void) | null
 ): void {
   const limit = step * step;
-  const d2 = (a: number[], b: number[]) =>
-    (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
   const stack = [corners];
-  while (stack.length > 0) {
-    const tri = stack.pop() as number[][];
+  for (let tri = stack.pop(); tri; tri = stack.pop()) {
     const lens = [d2(tri[0], tri[1]), d2(tri[1], tri[2]), d2(tri[2], tri[0])];
     const longest = lens.indexOf(Math.max(...lens));
     if (step === 0 || lens[longest] <= limit) {
@@ -967,7 +979,9 @@ function* addDeckFrame(
 
 /** A bridge's deck: its slab `depth` deep on the measured line
  *  (`onLine`), the approaches and the frame attributes. Returns where it
- *  was laid, the frame null on an older file without an axis. */
+ *  was laid, the frame null on an older file without an axis.
+ * @yields {void} once per slice boundary, so the build can be spread over frames (build-steps.ts)
+ */
 function* drawDeck(
   f: BridgeFeature,
   baked: Ring2,
@@ -1048,7 +1062,10 @@ function addParapet(
   }
 }
 
-/** Draws one bridge: deck, parapets, whatever carries it and stands on it. */
+/**
+ * Draws one bridge: deck, parapets, whatever carries it and stands on it.
+ * @yields {void} once per slice boundary, so the build can be spread over frames (build-steps.ts)
+ */
 function* drawBridge(
   f: BridgeFeature,
   baked: Ring2,
@@ -1100,7 +1117,9 @@ function* drawBridge(
 }
 
 /** Builds the bridges this tile draws (deck, parapets, what carries them
- *  and what stands on them). The rails' deck table is buildDeckTable's. */
+ *  and what stands on them). The rails' deck table is buildDeckTable's.
+ * @yields {void} once per slice boundary, so the build can be spread over frames (build-steps.ts)
+ */
 function* buildBridges(
   features: BridgeFeature[],
   ctx: RailContext,
@@ -1169,23 +1188,23 @@ function* buildBridges(
 /** A bridge's axis frame: stations along it, lateral offsets across it. */
 interface BridgeFrame {
   /** world point at station `s` (m from the first abutment), `offset` to the left */
-  at(s: number, offset: number): { x: number; z: number };
+  at: (s: number, offset: number) => { x: number; z: number };
   /** the terrain there (the DGM's water surface over the river) */
-  groundAt(s: number, offset: number): number | null;
+  groundAt: (s: number, offset: number) => number | null;
   length: number;
   /** deck height per BRIDGE_STEP */
   line: number[];
   /** the deck height at station `s` */
-  deckAt(s: number): number;
+  deckAt: (s: number) => number;
   /** the deck ring's extreme offsets from the axis (left > 0 > right) */
   edges: { left: number; right: number };
   /** each ring vertex's station (the open ring, as `ringToWorld`) */
   ringS: number[];
   /** the deck's edges at station `s`: its outline's offsets there (a
    *  curved deck around a straight axis is narrower locally than `edges`) */
-  edgesAt(s: number): { left: number; right: number };
+  edgesAt: (s: number) => { left: number; right: number };
   /** a world (Y-up) point's station and offset (left > 0) */
-  project(x: number, z: number): { offset: number; s: number };
+  project: (x: number, z: number) => { offset: number; s: number };
 }
 
 function bridgeFrame(f: BridgeFeature, ctx: RailContext): BridgeFrame | null {
@@ -1899,6 +1918,7 @@ function densified(pts: readonly XZ[], step: number): XZ[] {
  * alone, a yard across an underpass spanned the passage with sloped
  * sheets from the embankment down to the street — the passage read as
  * closed.)
+ * @yields {void} once per slice boundary, so the build can be spread over frames (build-steps.ts)
  */
 function* addDrapedArea(
   acc: Mesh3,
@@ -1978,10 +1998,14 @@ function* addDrapedArea(
     stack.push(a0, b0, c0);
     let n = 0;
     while (stack.length > 0) {
-      const c = stack.pop() as XZ;
-      const b = stack.pop() as XZ;
-      const a = stack.pop() as XZ;
-      if (++n % DRAPE_RUN === 0) {
+      const c = stack.pop();
+      const b = stack.pop();
+      const a = stack.pop();
+      if (!(a && b && c)) {
+        break;
+      }
+      n += 1;
+      if (n % DRAPE_RUN === 0) {
         yield;
       }
       const longest = Math.max(
@@ -2191,13 +2215,7 @@ export function lineLevelsAt(
       ).map((l) => (l?.mode === "ground" ? null : l));
   return solved.map((level, i) => {
     if (level?.mode === "deck") {
-      const near = under[i].reduce<number | null>(
-        (best, y) =>
-          best === null || Math.abs(y - level.y) < Math.abs(best - level.y)
-            ? y
-            : best,
-        null
-      );
+      const near = closestTo(under[i], level.y);
       return { mode: "deck", y: near ?? level.y };
     }
     if (level) {
@@ -2673,12 +2691,7 @@ function catenaryRuns(
     deck,
     over,
     mapped: line.masts
-      .filter(
-        ([, o]) =>
-          offsets.reduce((best, x) =>
-            Math.abs(o - x) < Math.abs(o - best) ? x : best
-          ) === lateral
-      )
+      .filter(([, o]) => closestTo(offsets, o) === lateral)
       .map(([s, o]) => [s, o - lateral] as const),
     pts: run.map((p, i) => ({
       x: p.x - tan[i].y * lateral,
@@ -2690,7 +2703,9 @@ function catenaryRuns(
 
 /** Steel rails: one pair per track, on the level their line runs on
  *  (`lineLevelsAt`): the ground, a rail deck, a span (with its deck);
- *  the sleepers under them; the catenary over the contact lines. */
+ *  the sleepers under them; the catenary over the contact lines.
+ * @yields {void} once per slice boundary, so the build can be spread over frames (build-steps.ts)
+ */
 function* buildRails(
   lines: readonly DrawnLine[],
   ctx: RailContext,
@@ -2819,7 +2834,9 @@ function buildPlatforms(
 }
 
 /** The monorails' beams and supports (monorail-beam.ts), in painted
- *  steel; null where the tile has none. */
+ *  steel; null where the tile has none.
+ * @yields {void} once per slice boundary, so the build can be spread over frames (build-steps.ts)
+ */
 function* monorailsMesh(
   features: readonly RailFeature[],
   ctx: RailContext
@@ -2854,7 +2871,9 @@ export function buildRail(features: RailFeatures, ctx: RailContext): Group {
 }
 
 /** `buildRail` in steps: per bridge, line and draped triangle run
- *  (build-steps.ts). */
+ *  (build-steps.ts).
+ * @yields {void} once per slice boundary, so the build can be spread over frames (build-steps.ts)
+ */
 export function* railSteps(
   features: RailFeatures,
   ctx: RailContext

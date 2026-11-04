@@ -48,7 +48,7 @@ const DOCUMENT: Glyph = (p) => <FileTextIcon {...p} />;
 /** The page's glyph, as an element. */
 export function docIcon(file: string, props: LucideProps): ReactNode {
   const inner = file
-    .replace(/^docs\/(guide\/(de|en)\/)?/u, "")
+    .replace(/^docs\/(?:guide\/(?:de|en)\/)?/u, "")
     .replace(/\.md$/u, "");
   return (ICONS[inner] ?? DOCUMENT)({ "aria-hidden": true, ...props });
 }

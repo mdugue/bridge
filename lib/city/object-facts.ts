@@ -223,14 +223,16 @@ export function lod2Facts(input: {
   const { own, resolved, osm } = input;
   const measured = input.rebuilt ? NO_FACT : number(own.measuredHeight);
   const area = input.footprints.length > 0 ? ringsArea(input.footprints) : 0;
+  let roofType: string;
+  if (input.rebuilt) {
+    roofType = input.shaped ? MEASURED_SHAPE : MEASURED_ROOF;
+  } else {
+    roofType = text(own.roofType);
+  }
   return {
     buildingId: input.buildingId,
     function: text(resolved.function),
-    roofType: input.rebuilt
-      ? input.shaped
-        ? MEASURED_SHAPE
-        : MEASURED_ROOF
-      : text(own.roofType),
+    roofType,
     created: isoDate(own.creationDate ?? resolved.creationDate),
     name: text(osm?.name),
     addr: text(osm?.addr),
@@ -314,9 +316,12 @@ export function factColumns(facts: readonly (ObjectFacts | undefined)[]): {
     Object.fromEntries(
       names.map((name) => [
         name,
-        facts.map((f, i) =>
-          f ? String(f[name]) : name === "buildingId" ? `#${i}` : ""
-        ),
+        facts.map((f, i) => {
+          if (f) {
+            return String(f[name]);
+          }
+          return name === "buildingId" ? `#${i}` : "";
+        }),
       ])
     ) as Columns<K, string[]>;
   const numbers = Object.fromEntries(

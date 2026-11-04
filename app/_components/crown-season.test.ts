@@ -114,6 +114,12 @@ test("the clock re-seasons on a new calendar day only, throttled, the last day w
   }
 });
 
+const countDisposals = (material: Material, counter: { count: number }) => {
+  material.addEventListener("dispose", () => {
+    counter.count += 1;
+  });
+};
+
 test("the warm-up stands in for both crown variants, laid out as a crown", () => {
   const geo = new IcosahedronGeometry(1, 1);
   const leafy = new MeshBasicNodeMaterial();
@@ -127,11 +133,9 @@ test("the warm-up stands in for both crown variants, laid out as a crown", () =>
     expect(mesh.geometry.getAttribute("aBare")).toBeDefined();
     expect(mesh.castShadow).toBe(true);
   }
-  let freed = 0;
+  const freed = { count: 0 };
   for (const m of [leafy, bare]) {
-    m.addEventListener("dispose", () => {
-      freed += 1;
-    });
+    countDisposals(m, freed);
   }
   let geoFreed = false;
   geo.addEventListener("dispose", () => {
@@ -139,7 +143,7 @@ test("the warm-up stands in for both crown variants, laid out as a crown", () =>
   });
   warm.dispose();
   expect(geoFreed).toBe(true);
-  expect(freed).toBe(0); // the materials are the scene's, not the warm-up's
+  expect(freed.count).toBe(0); // the materials are the scene's, not the warm-up's
 });
 
 test("only the seasonal crown masks (the shadow pass honours it), and twigs lose the glow", () => {

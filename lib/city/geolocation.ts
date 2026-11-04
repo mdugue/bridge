@@ -204,11 +204,11 @@ export function arrivalOf(hash: string): Pick<GeoFix, "lat" | "lng"> | null {
   const value = hash.startsWith("#")
     ? new URLSearchParams(hash.slice(1)).get(ARRIVAL_PARAM)
     : null;
-  const m = value?.match(/^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/u);
+  const m = value?.match(/^(?<lat>-?\d+(?:\.\d+)?),(?<lng>-?\d+(?:\.\d+)?)$/u);
   if (!m) {
     return null;
   }
-  const lat = Number(m[1]);
-  const lng = Number(m[2]);
+  const lat = Number(m.groups?.lat);
+  const lng = Number(m.groups?.lng);
   return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : null;
 }

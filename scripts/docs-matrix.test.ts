@@ -32,7 +32,7 @@ test("every footnote a page marks is listed once, in order", () => {
   const page = sourceMatrixPage(sites, "en", built);
   const notes = page.split("## Why not the best source")[1];
   const listed = (notes.match(/^\d+\. /gmu) ?? []).map((s) =>
-    Number.parseInt(s, 10)
+    Math.trunc(Number(s))
   );
   // the marks in the order the table first shows them, as numbers
   const marks = [...new Set((page.match(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+/gu) ?? []).map(digit))];

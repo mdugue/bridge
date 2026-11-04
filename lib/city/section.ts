@@ -216,6 +216,8 @@ export function cutOutCorners(cut: CutOut): GroundPoint[] {
   return [at(-1, -1), at(1, -1), at(1, 1), at(-1, 1)];
 }
 
+const neg = (p: GroundPoint): GroundPoint => ({ x: -p.x, z: -p.z });
+
 /**
  * The four vertical planes that keep the inside (three's convention: a
  * point is kept where normal · p + constant ≥ 0).
@@ -228,7 +230,6 @@ export function cutOutPlanes(
     normal: { x: n.x, y: 0, z: n.z },
     constant: half - (n.x * cut.centre.x + n.z * cut.centre.z),
   });
-  const neg = (p: GroundPoint): GroundPoint => ({ x: -p.x, z: -p.z });
   return [
     plane(right, cut.halfRight),
     plane(neg(right), cut.halfRight),

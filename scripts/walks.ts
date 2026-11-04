@@ -125,17 +125,18 @@ async function wikimedia(url: string): Promise<Response> {
 }
 
 async function json<T>(url: string): Promise<T> {
-  return (await (await wikimedia(url)).json()) as T;
+  const res = await wikimedia(url);
+  return (await res.json()) as T;
 }
 
 /** Up to 50 names per Wikimedia API call: one call for many stops, since
  *  Wikimedia's rate limit counts calls, not names. */
 function chunks<T>(list: T[]): T[][] {
-  const out: T[][] = [];
+  const groups: T[][] = [];
   for (let i = 0; i < list.length; i += 50) {
-    out.push(list.slice(i, i + 50));
+    groups.push(list.slice(i, i + 50));
   }
-  return out;
+  return groups;
 }
 
 /** The Wikidata image (P18) of each item that has one. */
@@ -183,9 +184,9 @@ interface CommonsInfo {
 }
 
 /** Each file's thumbnail and credit, by the name the stop gave. */
-async function commonsInfo(files: string[]): Promise<Map<string, CommonsInfo>> {
+async function commonsInfo(names: string[]): Promise<Map<string, CommonsInfo>> {
   const infos = new Map<string, CommonsInfo>();
-  for (const part of chunks(files)) {
+  for (const part of chunks(names)) {
     const got = await json<{
       query: {
         normalized?: { from: string; to: string }[];
@@ -218,7 +219,8 @@ async function commonsInfo(files: string[]): Promise<Map<string, CommonsInfo>> {
 
 /** The thumbnail as WebP (ImageMagick), where ImageMagick is there. */
 async function webp(url: string, to: string): Promise<void> {
-  const bytes = new Uint8Array(await (await wikimedia(url)).arrayBuffer());
+  const res = await wikimedia(url);
+  const bytes = new Uint8Array(await res.arrayBuffer());
   const magick = Bun.spawnSync(
     [
       "convert",
@@ -261,14 +263,15 @@ interface PhotoJob {
   where: string;
 }
 
+/** A stop's first Wikidata ref. */
+const firstRef = (stop: WalkStop) => stop.refs?.find((r) => /^Q\d+$/u.test(r));
+
 /** The stops whose photo is to be fetched: named, or (with `--refs`) the
  *  first ref's Wikidata image for a stop that names none. */
 async function photoJobs(force: boolean, refs: boolean): Promise<PhotoJob[]> {
   const stops = walks.flatMap(({ walk }) =>
     walk.stops.map((stop) => ({ stop, walk }))
   );
-  const firstRef = (stop: WalkStop) =>
-    stop.refs?.find((r) => /^Q\d+$/u.test(r));
   const unnamed = refs
     ? stops.flatMap(({ stop }) =>
         stop.photo?.file ? [] : [firstRef(stop) ?? []].flat()
@@ -340,7 +343,9 @@ switch (rest[0]) {
   }
   case "check": {
     for (const { walk } of walks) {
-      walkProblems(walk).forEach(out);
+      for (const problem of walkProblems(walk)) {
+        out(problem);
+      }
     }
     break;
   }

@@ -157,7 +157,7 @@ export function readDbf(
     const end = nameBytes.indexOf(0);
     fields.push({
       name: decoder.decode(nameBytes.subarray(0, end === -1 ? 11 : end)),
-      type: String.fromCharCode(raw[at + 11]),
+      type: String.fromCodePoint(raw[at + 11] ?? 0),
       length: raw[at + 16],
     });
   }
@@ -169,7 +169,7 @@ export function readDbf(
       const text = decoder.decode(raw.subarray(at, at + f.length)).trim();
       at += f.length;
       if (f.type === "N" || f.type === "F") {
-        const n = Number.parseFloat(text);
+        const n = text === "" ? Number.NaN : Number(text);
         record[f.name] = Number.isFinite(n) ? n : null;
       } else {
         record[f.name] = text === "" ? null : text;

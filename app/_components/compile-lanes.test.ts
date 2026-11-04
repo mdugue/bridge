@@ -32,15 +32,18 @@ const settle = async () =>
 /** Whether `promise` has settled by now, and how. */
 function watch(promise: Promise<unknown>) {
   const state = { settled: false, error: undefined as unknown };
-  promise.then(
-    () => {
+  const record = async () => {
+    try {
+      await promise;
       state.settled = true;
-    },
-    (error: unknown) => {
+    } catch (error) {
       state.settled = true;
       state.error = error;
     }
-  );
+  };
+  record().catch(() => {
+    // `record` handles the rejection itself
+  });
   return state;
 }
 
@@ -106,7 +109,6 @@ test("a drawable left out (its tile left) gets no step", async () => {
     ],
     async (item) => {
       ran.push(item.id);
-      return;
     },
     done,
     { lanes: 4, skip: (item) => item.id === "gone" }

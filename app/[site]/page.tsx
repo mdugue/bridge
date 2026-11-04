@@ -17,7 +17,8 @@ export function generateStaticParams(): { site: string }[] {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const built = builtSite((await params).site);
+  const { site: siteId } = await params;
+  const built = builtSite(siteId);
   if (!built) {
     return {};
   }
@@ -54,7 +55,8 @@ export default SitePage;
 const Viewer = async ({ params }: Props) => {
   // A site this build did not prepare has no data to stream: 404 rather
   // than a viewer that fails to load.
-  const built = builtSite((await params).site);
+  const { site: siteId } = await params;
+  const built = builtSite(siteId);
   if (!built) {
     notFound();
   }

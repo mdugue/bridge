@@ -134,7 +134,9 @@ export const ControlHintBar = ({
   // Unmount once the fade has played, not before.
   useEffect(() => {
     if (phase !== "leaving") {
-      return;
+      return () => {
+        // nothing to clean up: no fade is running
+      };
     }
     const timer = setTimeout(() => setPhase("gone"), FADE_MS);
     return () => clearTimeout(timer);

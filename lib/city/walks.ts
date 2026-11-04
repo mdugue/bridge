@@ -247,8 +247,8 @@ export const CLOSER_LABEL = "Genauer hingesehen";
 
 // --- checks ----------------------------------------------------------------------
 
-const MD = /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/u;
-const SOURCE = /^(https:\/\/\S+|stadtwissen:\S+)$/u;
+const MD = /^(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/u;
+const SOURCE = /^(?:https:\/\/\S+|stadtwissen:\S+)$/u;
 /** The longest narration a stop shows: a phone screen, not an essay. */
 export const STOP_TEXT_MAX = 560;
 

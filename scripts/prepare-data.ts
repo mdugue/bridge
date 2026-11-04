@@ -120,7 +120,7 @@ function valleyRims(): ValleyRim[] {
     if (!existsSync(legend)) {
       return [];
     }
-    const { valley } = readJson<{ valley?: Partial<ValleyRim> }>(legend);
+    const { valley } = readJson(legend) as { valley?: Partial<ValleyRim> };
     return typeof valley?.floorM === "number" && Array.isArray(valley.rimM)
       ? [{ floorM: valley.floorM, rimM: valley.rimM }]
       : [];
@@ -208,7 +208,7 @@ function readProvenance(): ProvenanceRecord {
     );
     return {};
   }
-  return readJson<ProvenanceRecord>(path);
+  return readJson(path) as ProvenanceRecord;
 }
 const provenance = siteProvenance(
   readProvenance(),
@@ -233,7 +233,7 @@ const trams = existsSync(tramSource)
 const muralsDir = siteDataDir(SITE);
 const muralsPath = at(muralsSource(muralsDir));
 const muralFile = existsSync(muralsPath)
-  ? readJson<Partial<MuralFile>>(muralsPath)
+  ? (readJson(muralsPath) as Partial<MuralFile>)
   : null;
 const muralPath = (name: string) => at(muralFileSource(muralsDir, name));
 const murals = (parseMurals(muralFile) ?? [])
@@ -306,8 +306,8 @@ const walks =
           publishedWalks(
             walkBundle(
               SITE.id,
-              walkFiles.map((name) =>
-                readJson<Walk>(nodePath.join(walksDir, name))
+              walkFiles.map(
+                (name) => readJson(nodePath.join(walksDir, name)) as Walk
               )
             )
           )

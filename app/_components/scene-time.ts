@@ -264,8 +264,8 @@ export function useSceneTime(
       glide.current = mine;
       const to = splitDate(instant);
       const from = splitDate(now.current);
-      const step = glideSteps(from.minutes, to.minutes, (minutes, hud) =>
-        previewNow(to.day, minutes, hud)
+      const step = glideSteps(from.minutes, to.minutes, (shownMinutes, hud) =>
+        previewNow(to.day, shownMinutes, hud)
       );
       return (t: number) => {
         if (glide.current !== mine) {

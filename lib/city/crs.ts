@@ -18,7 +18,7 @@ const UTM_ZONES: Partial<Record<number, number>> = { 25_832: 32, 25_833: 33 };
 
 export const SUPPORTED_EPSG_CODES = Object.keys(UTM_ZONES).map(Number);
 
-const TRAILING_NUMBER = /(\d+)\s*$/u;
+const TRAILING_NUMBER = /(?<code>\d+)\s*$/u;
 
 const DEG = Math.PI / 180;
 
@@ -130,7 +130,7 @@ export function epsgCodeFromReferenceSystem(
     return null;
   }
   const match = TRAILING_NUMBER.exec(referenceSystem);
-  return match ? Number(match[1]) : null;
+  return match ? Number(match.groups?.code) : null;
 }
 
 /**

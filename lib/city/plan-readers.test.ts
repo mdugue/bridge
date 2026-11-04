@@ -29,8 +29,8 @@ function shp(
       b.setFloat64(at + i * 16 + 8, y, true);
     }
     if (z) {
-      for (const [i, [, , h]] of pts.entries()) {
-        b.setFloat64(at + n * 16 + 16 + i * 8, h ?? 0, true);
+      for (const [i, pt] of pts.entries()) {
+        b.setFloat64(at + n * 16 + 16 + i * 8, pt[2] ?? 0, true);
       }
     }
     return new Uint8Array(b.buffer);
@@ -64,7 +64,7 @@ function dbf(fields: string[], rows: string[][], encoder = new TextEncoder()) {
   v.setUint16(10, recordLength, true);
   for (const [i, f] of fields.entries()) {
     bytes.set(encoder.encode(f), 32 + i * 32);
-    bytes[32 + i * 32 + 11] = "C".charCodeAt(0);
+    bytes[32 + i * 32 + 11] = "C".codePointAt(0) ?? 0;
     bytes[32 + i * 32 + 16] = width;
   }
   bytes[header - 1] = 0x0d;
@@ -121,7 +121,7 @@ describe("shapefile", () => {
   test("a .dbf without a .cpg: by its language driver, else by its bytes", () => {
     const latin = {
       encode: (t: string) =>
-        Uint8Array.from({ length: t.length }, (_, i) => t.charCodeAt(i)),
+        Uint8Array.from({ length: t.length }, (_, i) => t.codePointAt(i) ?? 0),
     } as unknown as TextEncoder;
     const ansi = dbf(["ART"], [["Bäume"]], latin);
     new DataView(ansi).setUint8(29, 0x57);
@@ -136,7 +136,7 @@ describe("shapefile", () => {
     // "Gehölz" in windows-1252: ö = 0xf6
     const latin = {
       encode: (s: string) =>
-        Uint8Array.from({ length: s.length }, (_, i) => s.charCodeAt(i)),
+        Uint8Array.from({ length: s.length }, (_, i) => s.codePointAt(i) ?? 0),
     } as unknown as TextEncoder;
     const rows = readDbf(
       dbf(["ART"], [["Gehölz"]], latin),

@@ -50,7 +50,7 @@ test("every committed row is a known, finite ground on its tile", () => {
     for (const row of grounds) {
       expect(row).toHaveLength(9);
       expect(row.every(Number.isFinite)).toBe(true);
-      const [, , , p1, p2, p3, surface, marking, shape] = row;
+      const [p1, p2, p3, surface, marking, shape] = row.slice(3);
       expect(surface).toBeLessThan(SPORT_SURFACES.length);
       expect(marking).toBeLessThan(SPORT_MARKINGS.length);
       expect(shape).toBeLessThan(SPORT_SHAPES.length);

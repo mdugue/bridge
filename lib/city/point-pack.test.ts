@@ -64,7 +64,7 @@ test("anything that is not a whole pack is refused", () => {
   expect(unpackPoints(toBuffer(bytes.slice(0, -2)))).toBeNull();
   expect(unpackPoints(toBuffer(bytes.slice(0, 20)))).toBeNull();
   const wrong = bytes.slice();
-  wrong[0] = "X".charCodeAt(0);
+  wrong[0] = "X".codePointAt(0) ?? 0;
   expect(unpackPoints(toBuffer(wrong))).toBeNull();
   // a GeoJSON document (what the old artifact was) is not one either
   expect(

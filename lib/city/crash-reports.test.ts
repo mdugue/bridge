@@ -626,5 +626,5 @@ test("a session update is its own kind of envelope item", () => {
     .map((line) => JSON.parse(line) as unknown);
   expect(header).toEqual({ dsn: DSN, sent_at: sent.toISOString() });
   expect(item).toEqual({ type: "session" });
-  expect(payload).toEqual(JSON.parse(JSON.stringify(session)));
+  expect(payload).toEqual(structuredClone(session));
 });

@@ -30,7 +30,7 @@ export const { MODE, SITE } = (() => {
     return { MODE: bakeMode(rest, tileIds(site)), SITE: site };
   } catch (error) {
     process.stderr.write(`prepare-data: ${(error as Error).message}\n`);
-    process.exit(2);
+    return process.exit(2);
   }
 })();
 export const OUT_DIR = nodePath.join(process.cwd(), "public/data", SITE.id);
@@ -62,10 +62,10 @@ export const started = performance.now();
 export const at = (path: string) => nodePath.join(process.cwd(), path);
 export const utf8 = (value: unknown) =>
   new TextEncoder().encode(`${JSON.stringify(value)}\n`);
-export const parse = <T>(bytes: Uint8Array): T =>
-  JSON.parse(new TextDecoder().decode(bytes)) as T;
-export const readJson = <T>(path: string): T =>
-  JSON.parse(readFileSync(path, "utf-8")) as T;
+export const parse = (bytes: Uint8Array): unknown =>
+  JSON.parse(new TextDecoder().decode(bytes));
+export const readJson = (path: string): unknown =>
+  JSON.parse(readFileSync(path, "utf-8"));
 
 // --- publish ------------------------------------------------------------------
 
@@ -182,8 +182,11 @@ export async function cachedFile(
   key: string,
   bake: () => Promise<Uint8Array> | Uint8Array
 ): Promise<string> {
-  const path =
-    cachedEntry(CACHE_DIR, name, key) ?? (await fromShared(name, key))?.path;
+  let path = cachedEntry(CACHE_DIR, name, key);
+  if (!path) {
+    const shared = await fromShared(name, key);
+    path = shared?.path ?? null;
+  }
   if (path) {
     return path;
   }

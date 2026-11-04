@@ -425,8 +425,14 @@ export function treeFeet(
     if ((part === "litter" && needle) || !material) {
       continue;
     }
+    let geo = geos.quad;
+    if (part === "guard") {
+      geo = geos.hoop;
+    } else if (part === "tuft") {
+      geo = geos.tuft;
+    }
     const feet = new Instances(
-      part === "guard" ? geos.hoop : part === "tuft" ? geos.tuft : geos.quad,
+      geo,
       material,
       trunks.capacity,
       trunks.instanceMatrix
@@ -553,8 +559,10 @@ function footSlots(r: FootRasters): FootSlots {
   };
 }
 
+/** Column `i` of the tree's instance matrix. */
+const col = (i: number) => attribute(`iMat${i}`, "vec4");
+
 function footFrame(s: FootSlots, size: [number, number]): FootFrame {
-  const col = (i: number) => attribute(`iMat${i}`, "vec4");
   // the trunk's foot in the content's frame (its matrix, lowered by its
   // drop) and its drawn foot radius
   const foot = col(3).xyz.sub(col(1).xyz.mul(instanceFloat(DROP)));
@@ -1135,7 +1143,7 @@ function shadeGraph(
   const gapHeight = sky.y;
   const xy = tree.xy.add(offset);
   const sunLit = property("float", "footSunLit");
-  const output = Fn(() => {
+  const factor = Fn(() => {
     const d = length(offset);
     const ragged = gdNoise(xy.mul(0.7)).sub(0.5).mul(crown.mul(0.35));
     const cover = float(1)
@@ -1237,10 +1245,12 @@ function shadeGraph(
           .mul(room.mul(2))
           .add(vec2(sway, sway.mul(0.4)))
           .add(vec2(flutter.mul(0.012 / cellM), 0));
-        const r = radius.div(cellM).mul(h2.mul(0.35).add(0.8));
+        const spotR = radius.div(cellM).mul(h2.mul(0.35).add(0.8));
         const dist = length(at.sub(cell).sub(0.5).sub(centre));
         // the penumbra: a sun image's rim is soft
-        const spot = float(1).sub(smoothstep(r.mul(0.55), r.mul(1.15), dist));
+        const spot = float(1).sub(
+          smoothstep(spotR.mul(0.55), spotR.mul(1.15), dist)
+        );
         // some leaves blink a fleck right out, most only dim it
         const blink = mix(
           float(1),
@@ -1249,7 +1259,9 @@ function shadeGraph(
         ).mul(flutter.mul(0.15).add(0.85));
         const lit = step(h2, gaps.mul(0.75));
         fleck.assign(max(fleck, spot.mul(blink).mul(lit)));
-        coverMean.addAssign(gaps.mul(0.75 * 0.5).mul(r.mul(r).mul(3.1)));
+        coverMean.addAssign(
+          gaps.mul(0.75 * 0.5).mul(spotR.mul(spotR).mul(3.1))
+        );
       }
     });
     // past a few pixels a fleck would shimmer: their mean
@@ -1258,7 +1270,7 @@ function shadeGraph(
     k.mulAssign(dapple.mul(DAPPLE).add(1));
     return mix(vec3(1), k, fade);
   })();
-  return { output, position, sunLit };
+  return { output: factor, position, sunLit };
 }
 
 /**

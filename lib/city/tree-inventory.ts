@@ -257,6 +257,8 @@ export function overtops(canopyH: number, treeH: number): boolean {
   return canopyH > treeH + Math.max(5, 0.3 * treeH);
 }
 
+const key = (cx: number, cy: number) => `${cx},${cy}`;
+
 /**
  * A spatial hash over inventory trees: `covers(x, y, h)` is true when (x, y)
  * (EPSG) lies inside a tree's footprint radius — and, when the caller knows
@@ -268,7 +270,6 @@ export function footprintIndex(
   trees: TreeFootprint[]
 ): (x: number, y: number, h?: number) => boolean {
   const cells = new Map<string, TreeFootprint[]>();
-  const key = (cx: number, cy: number) => `${cx},${cy}`;
   for (const t of trees) {
     const k = key(
       Math.floor(t.x / FOOTPRINT_CELL),

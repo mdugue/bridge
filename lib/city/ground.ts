@@ -43,9 +43,8 @@ export interface Ground {
 export function createGround(offset: RecenterOffset): Ground {
   let sources: readonly HeightSource[] = [];
   let floor = Number.POSITIVE_INFINITY;
-  const over =
-    (from: () => readonly HeightSource[]) =>
-    (x: number, y: number): number | null => {
+  const over = (from: () => readonly HeightSource[]) =>
+    function lookup(x: number, y: number): number | null {
       for (const s of from()) {
         const h = s.heightAt(x, y);
         if (h !== null) {

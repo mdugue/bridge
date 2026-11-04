@@ -422,7 +422,8 @@ export function buildTreeInventory(
 }
 
 /** `buildTreeInventory` in steps: per run of register trees, per cell of
- *  silhouettes (build-steps.ts). */
+ *  silhouettes (build-steps.ts).
+ *  @yields {void} once per step of the build. */
 export function* treeInventorySteps(
   features: TreeFeature[],
   ctx: VegetationContext,
@@ -490,7 +491,7 @@ export function* treeInventorySteps(
       chunks: [],
       multiTuft: () => multiTuft,
       applyLook: (look) => {
-        multiTuft = look.multiTuft;
+        ({ multiTuft } = look);
       },
       setSeason: (day) => applySeasons(seasons, day),
       // Same rule as the canopy (vegetation-layer.ts swapCrownLod).

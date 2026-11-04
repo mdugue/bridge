@@ -7,6 +7,12 @@ import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 /** A pier just outside its deck's outline still belongs to it (m). */
 const PIER_REACH = 12;
 
+/** The slab a deck's first solid is, if it is one. */
+const slabOf = (item: AskItem<FeatureInquiry>): Slab | null => {
+  const s = item.solids[0];
+  return s && "slab" in s ? s.slab : null;
+};
+
 /**
  * A tile's bridges as one askable set (plan 052 phase 4): rays meet the
  * drawn bridge itself — deck, arches, piers, the measured steel above
@@ -41,10 +47,6 @@ export function bridgeAskSet(
   raycaster.firstHitOnly = true;
   const origin = new Vector3();
   const direction = new Vector3();
-  const slabOf = (item: AskItem<FeatureInquiry>): Slab | null => {
-    const s = item.solids[0];
-    return s && "slab" in s ? s.slab : null;
-  };
   return {
     box: {
       min: { x: bounds.min.x, y: bounds.min.y, z: bounds.min.z },

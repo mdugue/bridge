@@ -29,7 +29,7 @@ function stubFetch(
   return { calls: () => calls };
 }
 
-const json = (doc: unknown) => new Response(JSON.stringify(doc));
+const json = (doc: unknown) => Response.json(doc);
 
 afterEach(() => {
   globalThis.fetch = realFetch;
@@ -43,11 +43,11 @@ afterEach(() => {
  * settled — the retries' backoff and the stall guard wait on no real time.
  */
 async function settled<T>(promise: Promise<T>, stepMs = 50): Promise<T> {
-  let done = false;
+  const state = { done: false };
   const watched = promise.finally(() => {
-    done = true;
+    state.done = true;
   });
-  for (let waited = 0; !done && waited < 120_000; waited += stepMs) {
+  for (let waited = 0; !state.done && waited < 120_000; waited += stepMs) {
     for (let i = 0; i < 20; i += 1) {
       await Promise.resolve();
     }
@@ -74,9 +74,12 @@ test("a body that is not JSON means feature off", async () => {
 
 test("a network failure is not the answer: the file is asked for again", async () => {
   jest.useFakeTimers();
-  const stub = stubFetch((_, call) =>
-    call === 1 ? Promise.reject(new TypeError("Load failed")) : json({ a: 2 })
-  );
+  const stub = stubFetch(async (_, call) => {
+    if (call === 1) {
+      throw new TypeError("Load failed");
+    }
+    return json({ a: 2 });
+  });
   expect(await settled(fetchOptionalJson<{ a: number }>("/x"))).toEqual({
     a: 2,
   });
@@ -222,7 +225,7 @@ test("an attempt that goes silent is cut and asked for again", async () => {
     if (calls > 1) {
       return new Response(new Uint8Array([7, 8]));
     }
-    return await new Promise<Response>((_, reject) => {
+    return await new Promise<Response>((_resolve, reject) => {
       init?.signal?.addEventListener("abort", () =>
         reject(new DOMException("The operation was aborted.", "AbortError"))
       );
@@ -236,7 +239,7 @@ test("an attempt that goes silent is cut and asked for again", async () => {
 
 test("the caller's abort is an abort, not a stall", async () => {
   globalThis.fetch = (async (_url: string, init?: RequestInit) =>
-    await new Promise<Response>((_, reject) => {
+    await new Promise<Response>((_resolve, reject) => {
       init?.signal?.addEventListener("abort", () =>
         reject(new DOMException("The operation was aborted.", "AbortError"))
       );

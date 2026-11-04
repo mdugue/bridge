@@ -44,9 +44,9 @@ export function coveredPaths(lcov: string): Set<string> {
 }
 
 /** The sources the report never mentions, the longest first. */
-export function coverageGaps(lcov: string, sources: Source[]): Source[] {
+export function coverageGaps(lcov: string, known: Source[]): Source[] {
   const covered = coveredPaths(lcov);
-  return sources
+  return known
     .filter((s) => !covered.has(s.path))
     .sort((a, b) => b.lines - a.lines || a.path.localeCompare(b.path));
 }

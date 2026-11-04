@@ -47,7 +47,8 @@ test("a cached decode reads back as readDgm decodes the bytes", async () => {
     path.join(cache, kept),
     packDgm({ ...direct, elevations: new Float32Array(16).fill(7) })
   );
-  expect((await readDgmFile(tif, tfw, "native", cache)).elevations[0]).toBe(7);
+  const rewritten = await readDgmFile(tif, tfw, "native", cache);
+  expect(rewritten.elevations[0]).toBe(7);
   // New bytes are a new key: the stale entry goes, the new decode is read.
   writeFileSync(tif, tiff(200));
   const changed = await readDgmFile(tif, tfw, "native", cache);
@@ -56,9 +57,8 @@ test("a cached decode reads back as readDgm decodes the bytes", async () => {
   // A truncated entry is no entry: the TIFF is decoded again.
   const [entry] = readdirSync(cache);
   writeFileSync(path.join(cache, entry), new Uint8Array(12));
-  expect((await readDgmFile(tif, tfw, "native", cache)).elevations[0]).toBe(
-    200
-  );
+  const redecoded = await readDgmFile(tif, tfw, "native", cache);
+  expect(redecoded.elevations[0]).toBe(200);
 });
 
 test("an entry's bytes hold the whole DGM, and nothing short of one", () => {

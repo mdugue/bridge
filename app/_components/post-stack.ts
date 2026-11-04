@@ -406,13 +406,17 @@ function lensBlurOf(lit: V4, viewZ: F, focusDistance: Live, focusRange: Live) {
   // reason: getTextureNode is DepthOfFieldNode's documented output (its
   // composite target's texture) but missing from the @types.
   const output = node as unknown as { getTextureNode: () => TextureNode };
+  const inputTarget = input.renderTarget;
+  if (!inputTarget) {
+    throw new Error("lens blur: the frame copy has no render target");
+  }
   return {
     // reason: the effect nodes' types don't carry their vec4 output.
     focused: nodeObject(node) as unknown as V4,
     /** the target the blur composites the frame into, each frame it runs */
     composite: output.getTextureNode().value,
     /** the frame copy it blurs, idle while it does not run */
-    input: input.renderTarget as RenderTarget,
+    input: inputTarget,
     dispose: () => {
       node.dispose();
       input.dispose();
@@ -476,22 +480,37 @@ function antialiasingOf(
         input.value = from;
         raw.value = isRaw ? 1 : 0;
       },
-      setSize: () => {},
+      setSize: () => {
+        // SMAA follows the renderer's size by itself
+      },
       dispose: () => node.dispose(),
     };
   }
   const texel = uniform(new Vector2());
-  const setSize = (size: Vector2) => texel.value.set(1 / size.x, 1 / size.y);
+  const setSize = (size: Vector2) => {
+    texel.value.set(1 / size.x, 1 / size.y);
+  };
   setSize(new Vector2(scene.width, scene.height));
   const sceneAa = fxaa(scene.texture, texel);
   return {
     afterPre: fxaa(beforeAa.texture, texel),
     direct: vec4(sceneAa.rgb.mul(occlusion), sceneAa.a),
-    read: () => {},
+    read: () => {
+      // FXAA reads the targets it was built on
+    },
     setSize,
-    dispose: () => {},
+    dispose: () => {
+      // no nodes of its own to free
+    },
   };
 }
+
+// The swaps' own materials: Strich wears Papier's card, so its programs
+// are Papier's.
+const SWAP_KINDS = ["paper", "figure", "ink"] as const;
+type SwapKind = (typeof SWAP_KINDS)[number];
+const swapOf = (kind: PaperKind): SwapKind =>
+  kind === "line" ? "paper" : kind;
 
 /** What draws before the antialiasing, where, and what that then reads. */
 interface Pre {
@@ -776,11 +795,12 @@ export function createPostStack(
   // (motion-blur.ts), where this tier has a way to draw it
   let blurred = false;
   // ...and how: before SMAA on a desktop, in place of the FXAA on a phone
-  const moving = pastel.motion
+  const motionFrame = pastel.motion
     ? { pre: pastel.motion, finished: finished.afterPre }
-    : finished.moving
-      ? { pre: null, finished: finished.moving }
-      : null;
+    : null;
+  const moving =
+    motionFrame ??
+    (finished.moving ? { pre: null, finished: finished.moving } : null);
   /** What draws before the antialiasing this frame (null: nothing), and
    *  the last pass. */
   const frame = () => {
@@ -878,6 +898,9 @@ export function createPostStack(
     const { geometry } = object as Drawable;
     return geometry !== undefined && gone.has(geometry);
   };
+  const onGone = (event: { target: BufferGeometry }) => {
+    gone.add(event.target);
+  };
   /**
    * Notes in `gone` each of `list`'s geometries disposed until the returned
    * stop. A listener of each walk's own: three adds one function once per
@@ -885,9 +908,12 @@ export function createPostStack(
    * no longer hear a geometry another walk still compiles.
    */
   const watchGone = (list: readonly Drawable[]) => {
-    const geometries = new Set(list.map((o) => o.geometry as BufferGeometry));
-    const onGone = (event: { target: BufferGeometry }) =>
-      gone.add(event.target);
+    const geometries = new Set<BufferGeometry>();
+    for (const o of list) {
+      if (o.geometry) {
+        geometries.add(o.geometry);
+      }
+    }
     for (const g of geometries) {
       g.addEventListener("dispose", onGone);
     }
@@ -930,13 +956,16 @@ export function createPostStack(
     object.visible = true;
     object.frustumCulled = false;
     renderer.setRenderTarget(target);
+    // not awaited inside the try: the target goes back as the call returns
+    let compiling: Promise<void>;
     try {
-      return renderer.compileAsync(object, view, scene);
+      compiling = renderer.compileAsync(object, view, scene);
     } finally {
       renderer.setRenderTarget(previous);
       object.visible = visible;
       object.frustumCulled = frustumCulled;
     }
+    await compiling;
   };
   /** Queues a compile made by `now` behind the ones in flight. */
   const inTurn =
@@ -984,12 +1013,6 @@ export function createPostStack(
         ? await swap(object)
         : await Promise.resolve();
   };
-  // The swaps' own materials: Strich wears Papier's card, so its programs
-  // are Papier's.
-  const SWAP_KINDS = ["paper", "figure", "ink"] as const;
-  type SwapKind = (typeof SWAP_KINDS)[number];
-  const swapOf = (kind: PaperKind): SwapKind =>
-    kind === "line" ? "paper" : kind;
   // The Ausschnitt (model-cuts.ts) is a ClippingGroup around the city.
   // three keeps ONE render object per drawable on both sides of it and
   // keys the drawable's build by the clipping: switching the group swaps
@@ -1023,9 +1046,11 @@ export function createPostStack(
     held: PipelineAnchors[],
     release: () => boolean = () => true
   ) => {
-    void compileInTurn(renderer, async () => {}).then(() => {
+    void compileInTurn(renderer, async () => {
+      // an empty turn: it comes once the compiles queued before it are done
+    }).then(() => {
       if (!release()) {
-        return;
+        return null;
       }
       if (stackDisposed) {
         for (const a of held) {
@@ -1034,6 +1059,7 @@ export function createPostStack(
       } else {
         releaseAfterFrame.push(...held);
       }
+      return null;
     });
   };
   /**
@@ -1051,8 +1077,10 @@ export function createPostStack(
     }
     const previous = renderer.getRenderTarget();
     renderer.setRenderTarget(target);
+    // not awaited inside the try: the target goes back as the call returns
+    let compiling: Promise<void>;
     try {
-      return aloneUnder(
+      compiling = aloneUnder(
         group,
         object,
         async () => await renderer.compileAsync(group, view, scene)
@@ -1060,6 +1088,7 @@ export function createPostStack(
     } finally {
       renderer.setRenderTarget(previous);
     }
+    await compiling;
   };
   const newHold = (
     group: ClippingGroup,
@@ -1068,12 +1097,12 @@ export function createPostStack(
   ): CutHold => {
     const under = async (o: Object3D) => await compileUnder(group, o, view);
     const plain = async (o: Object3D) => await compileNow(o, view);
-    const anchors = [
+    const holds = [
       { a: createPipelineAnchors(inTurn(under), true), paper: false },
       { a: createPipelineAnchors(inTurn(plain), true), paper: false },
     ];
     if (kind) {
-      anchors.push(
+      holds.push(
         {
           a: createPipelineAnchors(inTurn(swappedIn(kind, under)), true),
           paper: true,
@@ -1084,7 +1113,7 @@ export function createPostStack(
         }
       );
     }
-    return { group, view, kind, anchors, done: new WeakMap() };
+    return { group, view, kind, anchors: holds, done: new WeakMap() };
   };
   /** Holds both sides of the cut for `roots`' drawables, one per build. */
   const holdAll = async (held: CutHold, roots: Object3D[]) => {
@@ -1188,7 +1217,7 @@ export function createPostStack(
     let representatives: Drawable[] | null = null;
     // the representatives outlive one walk (every kind, every view): a
     // tile that leaves between two walks is heard too, not only during one
-    let unwatch = () => {};
+    let unwatch: (() => void) | null = null;
     try {
       // a copy: a view asked for or let go meanwhile does not shift the walk
       for (const view of only ? [only] : [...views]) {
@@ -1219,7 +1248,7 @@ export function createPostStack(
         }
       }
     } finally {
-      unwatch();
+      unwatch?.();
     }
   };
 
@@ -1243,6 +1272,19 @@ export function createPostStack(
   };
 
   let stylesWarm: Promise<void> | null = null;
+  const warmOnce = async () => {
+    try {
+      await outline.compile(renderer, camera);
+      try {
+        await overlay?.compile(renderer, camera);
+      } catch {
+        // the plate's programs build in its first frame instead
+      }
+      await warmStyles();
+    } catch {
+      // a failed warm-up costs the styles their first frames, no more
+    }
+  };
   const warmStyles = async () => {
     // A phone keeps the styles to their first frame: their pipelines, and
     // the sibling crown sets and lamp cones each would make and compile
@@ -1307,7 +1349,11 @@ export function createPostStack(
       await outline.compile(renderer, view);
       // the plate's programs: a failed build costs the plate its first
       // frame, never the scene's warm-up after it
-      await overlay?.compile(renderer, view).catch(() => {});
+      try {
+        await overlay?.compile(renderer, view);
+      } catch {
+        // the plate's programs build in its first frame instead
+      }
       await compileBuilds([scene], view);
     },
     dropView: (view) => {
@@ -1342,12 +1388,8 @@ export function createPostStack(
     warmStyles: async () => {
       // the outline's mask and blur programs too, on every tier: the first
       // question builds nothing
-      stylesWarm ??= outline
-        .compile(renderer, camera)
-        .then(() => overlay?.compile(renderer, camera).catch(() => {}))
-        .then(warmStyles)
-        .catch(() => {});
-      return await stylesWarm;
+      stylesWarm ??= warmOnce();
+      await stylesWarm;
     },
     sceneChanged: () => {
       paperScene.sceneChanged();

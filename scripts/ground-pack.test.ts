@@ -18,12 +18,19 @@ const N = 65;
 const BOUNDS: TerrainBounds = [411_000, 5_655_000, 411_000 + N, 5_655_000 + N];
 const OFFSET = { cx: 411_030, cy: 5_655_020 };
 
+/** The cliff in the fixture's columns: flat, a 3 m ramp, then 6 m up. */
+function stepAt(col: number): number {
+  if (col < 30) {
+    return 0;
+  }
+  return col > 31 ? 6 : (col - 30) * 3;
+}
+
 function dgm(hole = false) {
   const elevations = new Float32Array(N * N);
   for (let row = 0; row < N; row += 1) {
     for (let col = 0; col < N; col += 1) {
-      elevations[row * N + col] =
-        100 + row * 0.03 + (col < 30 ? 0 : col > 31 ? 6 : (col - 30) * 3);
+      elevations[row * N + col] = 100 + row * 0.03 + stepAt(col);
     }
   }
   if (hole) {
@@ -47,16 +54,17 @@ test("a TIN rebuilt from its cache entry meshes and stands as the bake's", () =>
     throw new Error("the fixture has no hole");
   }
   const baked = tinTerrainMesh(dgm(), [], OFFSET, {}, 0.1);
+  if (!baked) {
+    throw new Error("the fixture's TIN has no mesh");
+  }
   const back = unpackGround(packGround({ kind: "tin", tin }));
   if (back.kind !== "tin") {
     throw new Error(`a TIN came back as a ${back.kind}`);
   }
   const rebuilt = tinMesh(back.tin, OFFSET, 0.1);
-  expect(rebuilt.input).toEqual(baked?.input as typeof rebuilt.input);
-  expect(rebuilt.tin).toEqual(baked?.tin);
-  expect(heights(rebuilt.heightAt)).toEqual(
-    heights(baked?.heightAt ?? (() => null))
-  );
+  expect(rebuilt.input).toEqual(baked.input);
+  expect(rebuilt.tin).toEqual(baked.tin);
+  expect(heights(rebuilt.heightAt)).toEqual(heights(baked.heightAt));
 });
 
 test("the shaped grid of a DGM with NoData comes back as the grid mesh", () => {
@@ -88,14 +96,14 @@ test("an entry read as a Buffer at an offset comes back whole", () => {
 
 test("the header alone names the kind and the bounds", () => {
   const tin = fineTin(dgm(), [], {}, 0.1);
+  if (!tin) {
+    throw new Error("the fixture has no hole");
+  }
   const path = nodePath.join(
     mkdtempSync(nodePath.join(tmpdir(), "ground-pack-")),
     "g.bin"
   );
-  writeFileSync(
-    path,
-    packGround({ kind: "tin", tin: tin as NonNullable<typeof tin> })
-  );
+  writeFileSync(path, packGround({ kind: "tin", tin }));
   expect(readGroundHeader(path)).toEqual({ bounds: BOUNDS, kind: "tin" });
   writeFileSync(path, new Uint8Array(16));
   expect(() => readGroundHeader(path)).toThrow("ground entry");

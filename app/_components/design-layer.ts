@@ -350,6 +350,29 @@ function askSet(loaded: Loaded, offset: RecenterOffset): AskSet<DesignInquiry> {
   };
 }
 
+/** a landscape plan is not scaled: its readers take its CRS's unit,
+ *  and its ground lies at the terrain's measured heights */
+const scalable = (model: DesignModel) => !model.prefersColours;
+
+/** frees a design's drawable, geometry, textures and own materials: the
+ *  white is the site's and stays (three keeps a drawable's render state
+ *  until its `dispose` event, three-utils.ts) */
+const discard = (
+  model: DesignModel,
+  mesh: Mesh,
+  files: MeshStandardNodeMaterial[] | null
+) => {
+  releaseRenderState(mesh);
+  model.geometry.disposeBoundsTree();
+  model.geometry.dispose();
+  for (const m of files ?? []) {
+    m.dispose();
+  }
+  for (const look of model.looks) {
+    look.map?.dispose();
+  }
+};
+
 export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
   let current: Loaded | null = null;
   let replaceExisting = true;
@@ -457,10 +480,6 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
     }
   };
 
-  /** a landscape plan is not scaled: its readers take its CRS's unit,
-   *  and its ground lies at the terrain's measured heights */
-  const scalable = (model: DesignModel) => !model.prefersColours;
-
   /** its geometry and box in `scale`, about its foot (the geometry is
    *  about its anchor, design-read.ts): one uniform scale of the CPU copy
    *  the plan and the collider read, its BVH refitted, not rebuilt */
@@ -521,38 +540,21 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
     }
     const at = placeAhead(deps.pose(), model.box);
     const ground = groundBase(at, model.box, deps.heightAt);
+    // a place the file gives that no one would see it at
+    let placeNote: string | null = null;
+    if (geo) {
+      placeNote = elsewhereNote(beyond);
+    } else if (model.elsewhere) {
+      placeNote = elsewhereNote(null);
+    }
     return {
       placement: {
         ...at,
         base: standingBase(model.box, ground ?? playerGround()),
       },
       source: "here",
-      // a place the file gives that no one would see it at
-      placeNote: geo
-        ? elsewhereNote(beyond)
-        : model.elsewhere
-          ? elsewhereNote(null)
-          : null,
+      placeNote,
     };
-  };
-
-  /** frees a design's drawable, geometry, textures and own materials: the
-   *  white is the site's and stays (three keeps a drawable's render state
-   *  until its `dispose` event, three-utils.ts) */
-  const discard = (
-    model: DesignModel,
-    mesh: Mesh,
-    files: MeshStandardNodeMaterial[] | null
-  ) => {
-    releaseRenderState(mesh);
-    model.geometry.disposeBoundsTree();
-    model.geometry.dispose();
-    for (const m of files ?? []) {
-      m.dispose();
-    }
-    for (const look of model.looks) {
-      look.map?.dispose();
-    }
   };
 
   const remove = () => {
@@ -615,7 +617,8 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
 
   return {
     load: async (files) => {
-      const load = ++loads;
+      loads += 1;
+      const load = loads;
       const model = await readDesign(
         files,
         deps.epsg,

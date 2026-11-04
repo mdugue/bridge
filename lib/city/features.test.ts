@@ -595,7 +595,12 @@ test.each(tiles)("%s: kerbs are LineStrings", (tile, site) => {
   }
 });
 
-const rank = (k: string) => (k === "gate" ? 2 : k === "fence" ? 1 : 0);
+const rank = (k: string) => {
+  if (k === "gate") {
+    return 2;
+  }
+  return k === "fence" ? 1 : 0;
+};
 
 test.each(tiles)(
   "%s: walls and fences are LineStrings with a kind and a height, gates points with a width",

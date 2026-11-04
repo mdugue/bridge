@@ -17,7 +17,12 @@ function wallGrid(): Float32Array {
   const g = new Float32Array(N * N);
   for (let row = 0; row < N; row += 1) {
     for (let col = 0; col < N; col += 1) {
-      const wall = col < 30 ? 0 : col > 31 ? 8 : (col - 30) * 4;
+      let wall = (col - 30) * 4;
+      if (col < 30) {
+        wall = 0;
+      } else if (col > 31) {
+        wall = 8;
+      }
       g[row * N + col] = 100 + row * 0.02 + wall;
     }
   }
@@ -35,8 +40,10 @@ test("every grid point lies within the tolerance of the TIN", () => {
   for (let row = 1; row < N - 1; row += 1) {
     for (let col = 1; col < N - 1; col += 1) {
       const h = index.heightAt(col + 0.5, N - row - 0.5);
-      expect(h).not.toBeNull();
-      worst = Math.max(worst, Math.abs((h as number) - grid[row * N + col]));
+      if (h === null) {
+        throw new Error(`no TIN height at row ${row}, col ${col}`);
+      }
+      worst = Math.max(worst, Math.abs(h - grid[row * N + col]));
     }
   }
   expect(worst).toBeLessThanOrEqual(0.1 + 1e-6);

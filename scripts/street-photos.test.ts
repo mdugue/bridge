@@ -79,7 +79,10 @@ test("the newest usable photo inside a cell, the cells in an order the seed fixe
 });
 
 test("a cell's lat/lon box holds all four of its corners", () => {
-  const box = lonLatBox(25_833, [408_000, 5_654_000, 418_000, 5_660_000])!;
+  const box = lonLatBox(25_833, [408_000, 5_654_000, 418_000, 5_660_000]);
+  if (!box) {
+    throw new Error("the cell has no lat/lon box");
+  }
   // the grid is turned against the meridians: the west edge's north end
   // lies further west than its south end
   expect(box[0]).toBeLessThan(13.688);

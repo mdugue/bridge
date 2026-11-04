@@ -146,6 +146,8 @@ function countWindow(
   best: number,
   bestCount: number
 ): [number, number] {
+  let top = best;
+  let topCount = bestCount;
   const [x0, y0, x1, y1] = r.bounds;
   const sx = r.width / (x1 - x0);
   const sy = r.height / (y1 - y0);
@@ -157,14 +159,15 @@ function countWindow(
   for (let y = ja; y <= jb; y += 1) {
     for (let x = ia; x <= ib; x += 1) {
       const c = r.data[y * r.width + x];
-      const k = ++counts[c];
-      if (k > bestCount) {
-        bestCount = k;
-        best = c;
+      counts[c] += 1;
+      const k = counts[c];
+      if (k > topCount) {
+        topCount = k;
+        top = c;
       }
     }
   }
-  return [best, bestCount];
+  return [top, topCount];
 }
 
 /** A class raster cut down by an integer factor, nearest texel (no class

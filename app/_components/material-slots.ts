@@ -158,14 +158,12 @@ export function slotTexture(name: string, like: Texture): TextureNode {
   node.updateBeforeType = NodeUpdateType.OBJECT;
   node.updateBefore = ({ material }) => {
     node.value = (slotsOf(material)[name] as Texture | undefined) ?? stub;
-    return;
   };
   // Back to the stub once the object is drawn: a build made before the
   // next object's update copies the stub (see `Slots`).
   node.updateAfterType = NodeUpdateType.OBJECT;
   node.updateAfter = () => {
     node.value = stub;
-    return;
   };
   return node;
 }
@@ -185,12 +183,10 @@ export function ownSlotTexture(name: string, like: Texture): TextureNode {
   node.updateBeforeType = NodeUpdateType.OBJECT;
   node.updateBefore = ({ object }) => {
     node.value = (ownSlots(object)[name] as Texture | undefined) ?? stub;
-    return;
   };
   node.updateAfterType = NodeUpdateType.OBJECT;
   node.updateAfter = () => {
     node.value = stub;
-    return;
   };
   return node;
 }

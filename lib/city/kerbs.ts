@@ -56,7 +56,12 @@ export interface KerbLine {
 export function kerbHeightAt(s: number, low: readonly KerbDrop[]): number {
   let h = KERB_HEIGHT;
   for (const [s0, s1, dh] of low) {
-    const out = s < s0 ? s0 - s : s > s1 ? s - s1 : 0;
+    let out = 0;
+    if (s < s0) {
+      out = s0 - s;
+    } else if (s > s1) {
+      out = s - s1;
+    }
     if (out < RAMP_M) {
       h = Math.min(h, dh + ((KERB_HEIGHT - dh) * out) / RAMP_M);
     }

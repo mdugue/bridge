@@ -153,10 +153,24 @@ function candidatesOf(s: LevelSample, fallback: LevelOptions["prefer"]) {
   return out;
 }
 
+/** The heights of the levels at `idx`, which all hold one. */
+function levelHeights(
+  out: readonly (Level | null)[],
+  idx: readonly number[]
+): number[] {
+  return idx.map((i) => {
+    const level = out[i];
+    if (!level) {
+      throw new Error("a run of levels holds a gap");
+    }
+    return level.y;
+  });
+}
+
 /** The cost of driving from height a to height b over `run` metres. */
 function climbCost(a: number, b: number, run: number, grade: number): number {
   const excess = Math.abs(b - a) - grade * run - SLACK_M;
-  return excess > 0 ? excess : 0;
+  return Math.max(excess, 0);
 }
 
 /**
@@ -320,7 +334,7 @@ export function bridgeJumps(
       ["span", 1, LEVEL_SPAN_M],
       ["cut", -1, LEVEL_CUT_M],
     ] as const) {
-      const y = idx.map((i) => (out[i] as Level).y);
+      const y = levelHeights(out, idx);
       for (const [a, b] of trappedRuns(y, d, opts.grade, reach, sign)) {
         const [ra, rb] = rims(y, d, [a, b], opts.grade, sign, reach);
         if (ra < 0 || rb >= y.length) {
@@ -351,7 +365,7 @@ function coverCuts(
   if (!idx.some((i) => samples[i].below)) {
     return;
   }
-  const y = idx.map((i) => (out[i] as Level).y);
+  const y = levelHeights(out, idx);
   for (const [a, b] of trappedRuns(y, d, COVER_GRADE, LEVEL_COVER_M, -1)) {
     let below = 0;
     for (let k = a; k <= b; k += 1) {

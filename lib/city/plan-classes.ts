@@ -51,7 +51,7 @@ const KEYWORDS: readonly [PlanClass, RegExp][] = [
     /beet|pflanz|staude|strauch|sträucher|hecke|gebüsch|gebuesch|shrub|planting|bodendecker|gräser|graeser/u,
   ],
   ["lawn", /rasen|wiese|grün|gruen|lawn|grass|meadow|green|vegetation/u],
-  ["building", /gebäude|gebaeude|haus|building|bau(körper|koerper)|hochbau/u],
+  ["building", /gebäude|gebaeude|haus|building|bau(?:körper|koerper)|hochbau/u],
   ["terrain", /gelände|gelaende|dgm|terrain|surface|tin|höhen|hoehen/u],
 ];
 

@@ -100,11 +100,11 @@ export function isoWeek(day: Date): string {
 export function shuffled<T>(items: readonly T[], seed: string): T[] {
   let h = 1_779_033_703;
   for (const c of seed) {
-    h = Math.imul(h ^ c.charCodeAt(0), 3_432_918_353);
+    h = Math.imul(h ^ (c.codePointAt(0) ?? 0), 3_432_918_353);
     h = (h << 13) | (h >>> 19);
   }
   let state = h >>> 0;
-  const next = () => {
+  const random = () => {
     state = (state + 0x6d_2b_79_f5) >>> 0;
     let t = state;
     t = Math.imul(t ^ (t >>> 15), t | 1);
@@ -113,7 +113,7 @@ export function shuffled<T>(items: readonly T[], seed: string): T[] {
   };
   const out = [...items];
   for (let i = out.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(next() * (i + 1));
+    const j = Math.floor(random() * (i + 1));
     [out[i], out[j]] = [out[j], out[i]];
   }
   return out;
@@ -150,11 +150,15 @@ export function lonLatBox(epsg: number, cell: Cell): number[] | null {
     utmToLatLng(epsg, cell[2], cell[1]),
     utmToLatLng(epsg, cell[2], cell[3]),
   ];
-  if (corners.some((c) => c === null)) {
-    return null;
+  const lons: number[] = [];
+  const lats: number[] = [];
+  for (const corner of corners) {
+    if (corner === null) {
+      return null;
+    }
+    lons.push(corner.lng);
+    lats.push(corner.lat);
   }
-  const lons = corners.map((c) => c!.lng);
-  const lats = corners.map((c) => c!.lat);
   return [
     Math.min(...lons),
     Math.min(...lats),
@@ -328,7 +332,8 @@ async function main() {
       look: { style: "pastel" },
     };
     // a pair needs its photo: without one, no snapshot and no render
-    const bytes = await photoBytes(item.assets.sd!.href);
+    const { sd } = item.assets;
+    const bytes = sd ? await photoBytes(sd.href) : null;
     if (!bytes) {
       continue;
     }

@@ -462,6 +462,11 @@ function softEdge(
   }
 }
 
+const grid = (lo: number, hi: number, xs: number[]) =>
+  [...new Set([lo, hi, ...xs.filter((x) => x > lo && x < hi)])].toSorted(
+    (a, b) => a - b
+  );
+
 /**
  * A band standing `proud` out of the wall over `outer`, its outer edge
  * rolling over a quarter round of `round` into its flat front, with a
@@ -491,10 +496,6 @@ function softBand(
     z0: h.z0 - ri,
     z1: h.z1 + ri,
   }));
-  const grid = (lo: number, hi: number, xs: number[]) =>
-    [...new Set([lo, hi, ...xs.filter((x) => x > lo && x < hi)])].toSorted(
-      (a, b) => a - b
-    );
   const s = grid(
     face.s0,
     face.s1,

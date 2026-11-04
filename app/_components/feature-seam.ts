@@ -115,6 +115,10 @@ export function lazyFeature<M, F extends { dispose: () => void }>(
   let feature: F | null = null;
   let pending: Promise<F | null> | null = null;
   let disposed = false;
+  const dropPending = (cause: unknown): never => {
+    pending = null;
+    throw cause;
+  };
   return {
     want: async () => {
       // (a start that resolved before the spine went would hand out the
@@ -122,19 +126,13 @@ export function lazyFeature<M, F extends { dispose: () => void }>(
       if (disposed) {
         return null;
       }
-      pending ??= importer().then(
-        (module) => {
-          if (disposed) {
-            return null;
-          }
-          feature ??= start(module);
-          return feature;
-        },
-        (error: unknown) => {
-          pending = null;
-          throw error;
+      pending ??= importer().then((module) => {
+        if (disposed) {
+          return null;
         }
-      );
+        feature ??= start(module);
+        return feature;
+      }, dropPending);
       return await pending;
     },
     current: () => feature,

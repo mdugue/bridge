@@ -97,8 +97,8 @@ test("the spine asks again on the next switch-on after a load that failed, not o
       : await Promise.resolve({});
   }, feature.start);
   const failures: unknown[] = [];
-  const want = wantOnSwitchOn(lazy, (error) => {
-    failures.push(error);
+  const want = wantOnSwitchOn(lazy, (reason) => {
+    failures.push(reason);
   });
   want(false);
   want(true);

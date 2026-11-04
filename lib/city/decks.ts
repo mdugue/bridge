@@ -73,7 +73,8 @@ export function pointInRing(
   z: number
 ): boolean {
   let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+  for (let i = 0; i < ring.length; i += 1) {
+    const j = i === 0 ? ring.length - 1 : i - 1;
     const xi = ring[i].x;
     const zi = ring[i].z;
     const xj = ring[j].x;
@@ -155,7 +156,8 @@ function ringDistance(
   z: number
 ): number {
   let best = Number.POSITIVE_INFINITY;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+  for (let i = 0; i < ring.length; i += 1) {
+    const j = i === 0 ? ring.length - 1 : i - 1;
     const a = ring[j];
     const b = ring[i];
     const ex = b.x - a.x;

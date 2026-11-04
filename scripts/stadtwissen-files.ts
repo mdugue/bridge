@@ -16,15 +16,15 @@ export function loadStadtwissen(siteId: string): {
   const manifest = JSON.parse(
     readFileSync(path.join(dir, "manifest.json"), "utf-8")
   ) as { files: Record<string, string> };
-  const read = <T>(file: string): T =>
-    JSON.parse(readFileSync(path.join(dir, file), "utf-8")) as T;
+  const read = (file: string): unknown =>
+    JSON.parse(readFileSync(path.join(dir, file), "utf-8"));
   const indexFile = manifest.files[STADTWISSEN_FILE];
   if (!indexFile) {
     throw new Error(`no ${STADTWISSEN_FILE} for ${siteId}: run bun dev first`);
   }
-  const index = read<StadtwissenIndex>(indexFile);
+  const index = read(indexFile) as StadtwissenIndex;
   return {
     index,
-    tiles: () => index.tiles.map((t) => read<WissenTile>(t.file)),
+    tiles: () => index.tiles.map((t) => read(t.file) as WissenTile),
   };
 }

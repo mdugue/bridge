@@ -100,7 +100,10 @@ class ScaledDelatin extends Delatin {
     const z2 = this.heightAt(p2x, p2y) / a;
     const { width } = this;
     // during Delatin's constructor `this.scale` is not set yet
-    const scale = this.scale ?? (ScaledDelatin.pending as ArrayLike<number>);
+    const scale = this.scale ?? ScaledDelatin.pending;
+    if (!scale) {
+      throw new Error("ScaledDelatin: no scale");
+    }
     let maxError = 0;
     let mx = 0;
     let my = 0;
@@ -161,10 +164,8 @@ export function tinFromGrid(
   maxError: number,
   scale?: ArrayLike<number>
 ): TerrainTin {
-  for (let i = 0; i < grid.length; i += 1) {
-    if (!Number.isFinite(grid[i])) {
-      throw new TypeError("terrain TIN: the source grid has NoData");
-    }
+  if (Array.from(grid).some((v) => !Number.isFinite(v))) {
+    throw new TypeError("terrain TIN: the source grid has NoData");
   }
   const mesher = scale
     ? new ScaledDelatin(grid, n, scale)

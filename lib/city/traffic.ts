@@ -189,6 +189,9 @@ export const JOIN_M = 3;
 /** An end this close (m) to the tile's edge was cut there by the bake. */
 const SEAM_M = 0.05;
 
+/** The join grid's cell of one coordinate. */
+const cell = (v: number): number => Math.floor(v / JOIN_M);
+
 /**
  * Which ends of each section are open — where the flow really ends and its
  * body tapers to a point — and which run on: into another counted section
@@ -205,11 +208,11 @@ export function openEnds(
   const ends: { f: number; p: Point2 }[] = [];
   for (const [i, f] of features.entries()) {
     const c = f.geometry.coordinates;
-    if (c.length >= 2) {
-      ends.push({ f: i, p: c[0] }, { f: i, p: c[c.length - 1] });
+    const last = c.at(-1);
+    if (c.length >= 2 && last) {
+      ends.push({ f: i, p: c[0] }, { f: i, p: last });
     }
   }
-  const cell = (v: number) => Math.floor(v / JOIN_M);
   const grid = new Map<string, { f: number; p: Point2 }[]>();
   for (const e of ends) {
     const key = `${cell(e.p[0])},${cell(e.p[1])}`;
@@ -240,9 +243,10 @@ export function openEnds(
   };
   return features.map((f, i) => {
     const c = f.geometry.coordinates;
-    if (c.length < 2) {
+    const last = c.at(-1);
+    if (c.length < 2 || !last) {
       return [true, true];
     }
-    return [!joined(i, c[0]), !joined(i, c[c.length - 1])];
+    return [!joined(i, c[0]), !joined(i, last)];
   });
 }

@@ -231,7 +231,7 @@ export function packCrowns(crowns: readonly CoarseCrown[]): Uint8Array {
   const bytes = new Uint8Array(HEADER_BYTES + crowns.length * RECORD_BYTES);
   const view = new DataView(bytes.buffer);
   for (let i = 0; i < MAGIC.length; i += 1) {
-    view.setUint8(i, MAGIC.charCodeAt(i));
+    view.setUint8(i, MAGIC.codePointAt(i) ?? 0);
   }
   view.setUint32(4, crowns.length, true);
   for (const [k, c] of crowns.entries()) {
@@ -279,7 +279,7 @@ export function unpackCrowns(buffer: ArrayBuffer): CoarseCrown[] | null {
   }
   const view = new DataView(buffer);
   for (let i = 0; i < MAGIC.length; i += 1) {
-    if (view.getUint8(i) !== MAGIC.charCodeAt(i)) {
+    if (view.getUint8(i) !== (MAGIC.codePointAt(i) ?? 0)) {
       return null;
     }
   }

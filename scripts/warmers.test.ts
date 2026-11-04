@@ -138,16 +138,16 @@ function harness(limits: { jobs: number; memory: number }) {
     runs.push(
       slots.run(priority, peak, async () => {
         started.push(name);
-        await new Promise<void>((done) => {
-          releases.set(name, done);
+        await new Promise<void>((resolve) => {
+          releases.set(name, resolve);
         });
       })
     );
   };
   const finish = async (name: string) => {
     releases.get(name)?.();
-    await new Promise((settle) => {
-      setTimeout(settle, 0);
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
     });
   };
   return { finish, runs, started, task };

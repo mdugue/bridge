@@ -1,4 +1,5 @@
 import type { IfcAPI } from "web-ifc";
+import type * as WebIfc from "web-ifc";
 import {
   Box3,
   BufferAttribute,
@@ -39,7 +40,7 @@ export const IFC_WASM_PATH = "/wasm/";
 
 /** IFC types that carry geometry but are not drawn (a room's volume, an
  *  opening's void), by their codes. */
-function undrawnTypes(types: typeof import("web-ifc")): Set<number> {
+function undrawnTypes(types: typeof WebIfc): Set<number> {
   return new Set([
     types.IFCSPACE,
     types.IFCOPENINGELEMENT,
@@ -135,12 +136,14 @@ function siteOrigin(
 function placementOf(
   api: IfcAPI,
   model: number,
-  types: typeof import("web-ifc"),
+  types: typeof WebIfc,
   epsg: number
 ): IfcPlacement | { why: string } | null {
   const unit = lengthUnit(api, model, types.IFCSIUNIT);
-  for (const id of linesOf(api, model, types.IFCMAPCONVERSION)) {
-    const line = api.GetLine(model, id, true) as Record<string, unknown>;
+  // only the model's first map conversion counts
+  const mapId = linesOf(api, model, types.IFCMAPCONVERSION).at(0);
+  if (mapId !== undefined) {
+    const line = api.GetLine(model, mapId, true) as Record<string, unknown>;
     const crs = line.TargetCRS as { Name?: unknown; MapUnit?: unknown } | null;
     const map: MapConversion = {
       crs: text(crs?.Name),
@@ -234,7 +237,12 @@ function geometryOf(
 }
 
 /** Thrown with a sentence for the panel. */
-export class IfcError extends Error {}
+export class IfcError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "IfcError";
+  }
+}
 
 /**
  * Reads `file` as IFC for the site's `epsg`: the model as one group in the
@@ -320,7 +328,7 @@ export async function readIfc(
       root.matrixAutoUpdate = false;
       // (row-major: fromArray reads column-major)
       root.matrix.fromArray(place.matrix).transpose();
-      note = place.note;
+      ({ note } = place);
     } else if (place) {
       note = place.why;
     }

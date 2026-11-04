@@ -88,6 +88,7 @@ export const HudToolbar = ({ tools }: { tools: HudTool[] }) => {
     >
       {tools.map((tool) => {
         const Icon = tool.busy ? LoaderCircleIcon : tool.icon;
+        const handleClick = tool.onClick;
         return (
           <button
             aria-busy={tool.busy}
@@ -97,7 +98,7 @@ export const HudToolbar = ({ tools }: { tools: HudTool[] }) => {
               tool.pressed ? "bg-white/70 text-black" : "hover:bg-white/10"
             )}
             key={tool.id}
-            onClick={tool.onClick}
+            onClick={handleClick}
             title={tool.title}
             type="button"
           >

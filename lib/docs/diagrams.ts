@@ -15,11 +15,11 @@ export const DIAGRAM_DIR = "docs/diagrams";
  */
 export const RENDER_VERSION = 3;
 
-const FENCE = /^```mermaid[^\S\n]*\n([\s\S]*?)\n```[^\S\n]*$/gmu;
+const FENCE = /^```mermaid[^\S\n]*\n(?<body>[\s\S]*?)\n```[^\S\n]*$/gmu;
 
 /** Every Mermaid block of a Markdown file, in order, as written. */
 export function mermaidBlocks(markdown: string): string[] {
-  return [...markdown.matchAll(FENCE)].map((m) => m[1] ?? "");
+  return [...markdown.matchAll(FENCE)].map((m) => m.groups?.body ?? "");
 }
 
 /** The file a diagram's SVG is stored under: its source, hashed. */
@@ -153,6 +153,12 @@ export function themeSvg(svg: string, measuredFont: string): string {
   return out.replaceAll(spelled, "var(--font-sans)");
 }
 
+const opaque = (c: string) =>
+  c.replace(
+    /^rgba\((?<r>\d+), (?<g>\d+), (?<b>\d+), [\d.]+\)$/u,
+    "rgb($<r>, $<g>, $<b>)"
+  );
+
 /**
  * The colours a rendered diagram actually paints (Chrome's computed fill,
  * stroke, text and background of every element) that come from neither the
@@ -168,8 +174,6 @@ export function strayPaint(
     ...authored.map(rgbOf),
     INHERITED,
   ]);
-  const opaque = (c: string) =>
-    c.replace(/^rgba\((\d+), (\d+), (\d+), [\d.]+\)$/u, "rgb($1, $2, $3)");
   return [...new Set(painted)].filter(
     (c) =>
       !(ok.has(opaque(c)) || c === "none" || /^rgba\([^)]*,\s*0\)$/u.test(c))

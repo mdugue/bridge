@@ -74,7 +74,12 @@ export type SnapshotParse =
   | { ok: true; snapshot: Snapshot }
   | { ok: false; reason: string };
 
-class SnapshotError extends Error {}
+class SnapshotError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SnapshotError";
+  }
+}
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);

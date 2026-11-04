@@ -331,11 +331,12 @@ export async function siteDgm(
       return { bounds: dgm.bounds, field: dgm };
     })
   );
-  return (x, y) => {
+  const heightAt = (x: number, y: number) => {
     const g = grounds.find((t) => ownsPoint(t.bounds, x, y));
     const h = g ? sampleHeightfield(g.field, x, y) : null;
     return h === null || Number.isNaN(h) ? null : h;
   };
+  return heightAt;
 }
 
 /** What a line's feature publishes: its runs off the ground (`lv`, only
@@ -365,8 +366,11 @@ export async function siteLineLevels(
   const out: SiteLevels = {};
   for (const [k, { runs, profile }] of solvePieces(pieces, ground).entries()) {
     const { tile, line, index } = of[k];
-    const byLine = (out[tile] ??= {});
-    (byLine[line] ??= {})[index] = {
+    const byLine = out[tile] ?? {};
+    out[tile] = byLine;
+    const ofLine = byLine[line] ?? {};
+    byLine[line] = ofLine;
+    ofLine[index] = {
       ...(runs.length > 0 ? { lv: runs } : {}),
       lz: encodeProfile(profile),
     };
@@ -488,8 +492,12 @@ export function siteBeds(site: Site, levels: SiteLevels): Bed[] {
         continue;
       }
       const mode = runLevelAt(runs, d, i)?.mode ?? "ground";
-      const kind: Kind =
-        mode === "ground" ? "lay" : mode === "cut" ? "cut" : "lower";
+      let kind: Kind = "lower";
+      if (mode === "ground") {
+        kind = "lay";
+      } else if (mode === "cut") {
+        kind = "cut";
+      }
       if (kind !== run.kind) {
         // the two runs share the sample where they meet
         const last = run.coords.at(-1);
@@ -606,9 +614,13 @@ function drawnAt(
   if (run.mode !== "deck" || decks.length === 0) {
     return run.y;
   }
-  return decks.reduce((p, q) =>
-    Math.abs(q - run.y) < Math.abs(p - run.y) ? q : p
-  );
+  let nearest = decks[0];
+  for (let i = 1; i < decks.length; i += 1) {
+    if (Math.abs(decks[i] - run.y) < Math.abs(nearest - run.y)) {
+      nearest = decks[i];
+    }
+  }
+  return nearest;
 }
 
 /** Where drawn lines jump: steps between two samples beyond the line's

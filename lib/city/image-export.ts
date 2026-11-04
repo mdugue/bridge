@@ -115,13 +115,15 @@ export function printScaleOf(
   return metresPerImagePx / (0.0254 / dpi);
 }
 
+/** A number as two digits. */
+const two = (n: number) => String(n).padStart(2, "0");
+
 /** "dresden-isometrie-2026-06-21-1500.png" */
 export function exportFileName(
   siteId: string,
   what: string,
   date: Date
 ): string {
-  const two = (n: number) => String(n).padStart(2, "0");
   const slug = what
     .toLowerCase()
     .replaceAll("ä", "ae")

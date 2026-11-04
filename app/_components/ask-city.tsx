@@ -233,29 +233,30 @@ const KeyForm = ({
         message?: string;
         token?: string;
       };
-      if (!res.ok) {
+      if (res.ok) {
+        onKey({
+          provider,
+          model,
+          key,
+          remember,
+          token: body.token ?? "",
+          expires: body.expires ?? Date.now() + ASK_LIMITS.tokenMs,
+        });
+      } else {
         setProblem(body.message ?? `Die Prüfung schlug fehl (${res.status}).`);
-        return;
       }
-      onKey({
-        provider,
-        model,
-        key,
-        remember,
-        token: body.token ?? "",
-        expires: body.expires ?? Date.now() + ASK_LIMITS.tokenMs,
-      });
     } catch {
       setProblem("Keine Verbindung zum Server.");
-    } finally {
-      setBusy(false);
     }
+    setBusy(false);
   };
 
   return (
     <form
       className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-4 text-[13px]"
-      onSubmit={(e) => void submit(e)}
+      onSubmit={(e) => {
+        void submit(e);
+      }}
     >
       <p className="leading-relaxed text-foreground/90">
         Frag nach Gebäuden, Plätzen und Geschichte — die Antwort zeigt dir den
@@ -388,9 +389,16 @@ const SUGGESTIONS = [
 
 /** A provider's error that names the key or the account's credit. */
 const KEY_TROUBLE =
-  /\b(401|402|403|unauthori[sz]ed|forbidden|authenticat\w*|api[ _-]?key|credits?|credentials?|quota|billing|insufficient)\b/iu;
+  /\b(?:401|402|403|unauthori[sz]ed|forbidden|authenticat\w*|api[ _-]?key|credits?|credentials?|quota|billing|insufficient)\b/iu;
 /** The same, as the code a provider's error carries. */
 const KEY_CODES = new Set(["401", "402", "403"]);
+
+/** One failed answer's words and what the visitor can do about it. */
+const say = (text: string, key = false, reset = false) => ({
+  key,
+  reset,
+  text,
+});
 
 /** A failed answer in words, by the status the server sent, and what
  *  the visitor can do about it: check the key again or start over. */
@@ -400,11 +408,6 @@ function errorText(error: Error): {
   text: string;
 } {
   const { status } = error as { status?: unknown };
-  const say = (text: string, key = false, reset = false) => ({
-    key,
-    reset,
-    text,
-  });
   if (status === 401) {
     return say("Der Schlüssel muss neu geprüft werden.", true);
   }
@@ -662,7 +665,7 @@ const Conversation = ({
     [secret]
   );
   // one conversation per card: the provider's prompt cache is keyed by it
-  const [threadId] = useState(() => crypto.randomUUID());
+  const threadId = useMemo(() => crypto.randomUUID(), []);
   const chat = useChat({
     threadId,
     connection,
@@ -675,6 +678,7 @@ const Conversation = ({
       voice: reading,
     },
   });
+  const handleClear = chat.clear;
   // a closed conversation leaves no tool waiting on the scene
   // (the answer stops first: a tool that returns at the abort would
   // otherwise resume the run with one more request on the visitor's key)
@@ -798,7 +802,7 @@ const Conversation = ({
                   {failure.reset && (
                     <button
                       className="underline underline-offset-2"
-                      onClick={chat.clear}
+                      onClick={handleClear}
                       type="button"
                     >
                       Neu beginnen
@@ -957,7 +961,7 @@ const Linked = ({ text }: { text: string }) => {
   // a sentence's closing punctuation after a link is not part of it
   // and a bracketed part, as in Wikipedia's „Zwinger_(Dresden)“, is
   const parts = text.split(
-    /(https:\/\/(?:[^\s()[\]]|\([^\s()]*\))*(?:[^\s()[\].,;:!?»“”"']|\([^\s()]*\)))/gu
+    /(?<link>https:\/\/(?:[^\s()[\]]|\([^\s()]*\))*(?:[^\s()[\].,;:!?»“”"']|\([^\s()]*\)))/gu
   );
   return (
     <>

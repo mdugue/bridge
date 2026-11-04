@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, use } from "react";
+import { createContext, use, useMemo } from "react";
 import type { ReactNode } from "react";
 import type { Site } from "@/lib/city/site";
 
@@ -10,19 +10,24 @@ interface SiteValue {
   site: Site;
 }
 
+const NO_SITES: readonly Site[] = [];
+
 const SiteContext = createContext<SiteValue | null>(null);
 
 /** The site the route renders (/dresden), for every HUD part under it, and
  *  the other sites the deployment serves. */
 export const SiteProvider = ({
   children,
-  others = [],
+  others = NO_SITES,
   site,
 }: {
   children: ReactNode;
   others?: readonly Site[];
   site: Site;
-}) => <SiteContext value={{ others, site }}>{children}</SiteContext>;
+}) => {
+  const value = useMemo(() => ({ others, site }), [others, site]);
+  return <SiteContext value={value}>{children}</SiteContext>;
+};
 
 function useSiteValue(): SiteValue {
   const value = use(SiteContext);

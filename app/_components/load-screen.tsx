@@ -49,7 +49,7 @@ const CONTOURS: string[] = (() => {
     const base = 40 + level * 34;
     // the terrain leans differently at each level, as a real slope does
     const twist = level * 0.11;
-    const points = Array.from({ length: steps }, (_, i) => {
+    const points = Array.from({ length: steps }, (_step, i) => {
       const t = (i / steps) * Math.PI * 2;
       const wobble = harmonics.reduce(
         (sum, h) => sum + h.a * Math.sin(h.k * t + h.p + twist * h.k * 0.5),

@@ -84,8 +84,8 @@ export function moduleGraph(
   const start = nodePath.resolve(root, entry);
   const queue = [start];
   while (queue.length > 0) {
-    const file = queue.pop() as string;
-    if (seen.has(file)) {
+    const file = queue.pop();
+    if (file === undefined || seen.has(file)) {
       continue;
     }
     if (file !== start && stopped.has(file)) {
@@ -141,9 +141,13 @@ function namesOf(key: string): string[] {
   const parts = key.split("/");
   const names: string[] = [];
   for (let i = 0; i < parts.length; i += 1) {
-    names.push(
-      parts[i].startsWith("@") ? `${parts[i]}/${parts[++i]}` : parts[i]
-    );
+    if (parts[i].startsWith("@")) {
+      const scope = parts[i];
+      i += 1;
+      names.push(`${scope}/${parts[i]}`);
+    } else {
+      names.push(parts[i]);
+    }
   }
   return names;
 }
@@ -202,8 +206,8 @@ export function lockedVersions(
   }
   const seen = new Set<string>();
   while (queue.length > 0) {
-    const key = queue.pop() as string;
-    if (seen.has(key)) {
+    const key = queue.pop();
+    if (key === undefined || seen.has(key)) {
       continue;
     }
     seen.add(key);

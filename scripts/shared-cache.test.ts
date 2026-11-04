@@ -106,7 +106,12 @@ test("bytes that do not match their digest are a miss", async () => {
 
 test("an entry refused for its size is skipped alone", async () => {
   let n = 0;
-  const api = fakeApi({ putStatus: () => (n++ === 0 ? 413 : 202) });
+  const api = fakeApi({
+    putStatus: () => {
+      n += 1;
+      return n === 1 ? 413 : 202;
+    },
+  });
   const { cache } = sharedCache(ENV, () => {}, RUNTIME, api.fetcher);
   cache?.put("big", "k", () => bytes("x".repeat(100)));
   cache?.put("small", "k", () => bytes("y"));

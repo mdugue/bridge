@@ -44,9 +44,11 @@ const poc = async (page: Page) =>
   });
 
 async function fps(page: Page, ms: number): Promise<number> {
-  const a = (await poc(page))?.frames ?? 0;
+  const before = await poc(page);
+  const a = before?.frames ?? 0;
   await page.waitForTimeout(ms);
-  const b = (await poc(page))?.frames ?? 0;
+  const after = await poc(page);
+  const b = after?.frames ?? 0;
   return Math.round(((b - a) * 1000) / ms);
 }
 

@@ -186,26 +186,32 @@ function useBridges(tiles: MapTile[] | undefined): MapBridge[] {
   const [bridges, setBridges] = useState<MapBridge[]>([]);
   useEffect(() => {
     const urls = (tiles ?? []).flatMap((t) => (t.bridges ? [t.bridges] : []));
-    if (urls.length === 0) {
-      return;
-    }
-    const controller = new AbortController();
-    Promise.all(
-      urls.map(
-        async (url) =>
-          await fetch(url, { signal: controller.signal })
-            .then((res) => (res.ok ? res.json() : null))
-            .then(mapBridges)
-            .catch((): MapBridge[] => [])
+    const load = () => {
+      const controller = new AbortController();
+      Promise.all(
+        urls.map(
+          async (url) =>
+            await fetch(url, { signal: controller.signal })
+              .then(async (res): Promise<unknown> =>
+                res.ok ? ((await res.json()) as unknown) : null
+              )
+              .then(mapBridges)
+              .catch((): MapBridge[] => [])
+        )
       )
-    )
-      .then((perTile) => {
-        if (!controller.signal.aborted) {
-          setBridges(perTile.flat());
-        }
-      })
-      .catch(() => {});
-    return () => controller.abort();
+        .then((perTile) => {
+          if (!controller.signal.aborted) {
+            setBridges(perTile.flat());
+          }
+          return null;
+        })
+        .catch(() => {
+          // Each load already falls back to no bridges; nothing else can
+          // fail, and the map is fine without them.
+        });
+      return () => controller.abort();
+    };
+    return urls.length === 0 ? undefined : load();
   }, [tiles]);
   return bridges;
 }
@@ -277,6 +283,7 @@ export const Minimap = ({
             const cv = colorizeLandcover(raster, 256);
             setDecoded((prev) => new Map(prev).set(tile.src, cv));
           }
+          return null;
         })
         .catch(() => {
           // The minimap just stays without this tile's land cover.
@@ -320,32 +327,32 @@ export const Minimap = ({
   // Dynamic layer: player dot + heading wedge.
   useEffect(() => {
     const canvas = overlayRef.current;
-    if (!canvas) {
-      return;
-    }
-    const ctx = setupCanvas(canvas, size, height);
-    return subscribePose((pose) => {
-      ctx.clearRect(0, 0, size, height);
-      if (pose.footprint) {
-        drawPictureFrame(ctx, pose.footprint, bounds, size);
-      }
-      const { px, py } = epsgToMapPx(pose.epsgX, pose.epsgY, bounds, size);
-      ctx.save();
-      ctx.translate(px, py);
-      // Heading: 0 = north = canvas "up", clockwise positive.
-      ctx.rotate(pose.heading);
-      ctx.fillStyle = "rgba(37, 99, 235, 0.25)";
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.arc(0, 0, 14, -Math.PI / 2 - 0.5, -Math.PI / 2 + 0.5);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = PLAYER;
-      ctx.beginPath();
-      ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    });
+    const watch = (target: HTMLCanvasElement) => {
+      const ctx = setupCanvas(target, size, height);
+      return subscribePose((pose) => {
+        ctx.clearRect(0, 0, size, height);
+        if (pose.footprint) {
+          drawPictureFrame(ctx, pose.footprint, bounds, size);
+        }
+        const { px, py } = epsgToMapPx(pose.epsgX, pose.epsgY, bounds, size);
+        ctx.save();
+        ctx.translate(px, py);
+        // Heading: 0 = north = canvas "up", clockwise positive.
+        ctx.rotate(pose.heading);
+        ctx.fillStyle = "rgba(37, 99, 235, 0.25)";
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, 14, -Math.PI / 2 - 0.5, -Math.PI / 2 + 0.5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = PLAYER;
+        ctx.beginPath();
+        ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      });
+    };
+    return canvas ? watch(canvas) : undefined;
   }, [subscribePose, bounds, size, height]);
 
   return (

@@ -71,7 +71,10 @@ export function createTaskGate(
   let running = 0;
   const line: Waiter[] = [];
   const next = () => {
-    while (running < limit && line.length > 0) {
+    while (line.length > 0) {
+      if (running >= limit) {
+        break;
+      }
       line.shift()?.start();
     }
   };
@@ -99,7 +102,8 @@ export function createTaskGate(
             .finally(() => {
               running -= 1;
               next();
-            });
+            })
+            .catch(reject);
         },
       };
       const leave = () => {

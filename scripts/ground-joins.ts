@@ -242,7 +242,7 @@ export async function measureJoins(
   tiles?: string[],
   site: Site = SITES[REFERENCE_SITE]
 ): Promise<Record<JoinPart, JoinReport>> {
-  tiles ??= tileIds(site);
+  const measured = tiles ?? tileIds(site);
   // the measured tiles and the ones touching them: a wall or a fence near
   // a seam stands on its neighbour's ground
   const extent = new Map(
@@ -254,7 +254,7 @@ export async function measureJoins(
     return ax0 <= bx1 && bx0 <= ax1 && ay0 <= by1 && by0 <= ay1;
   };
   const all = [...extent.keys()].filter((t) =>
-    tiles.some((m) => touches(t, m))
+    measured.some((m) => touches(t, m))
   );
   const grounds = await Promise.all(
     all.map(async (t) => await tileGround(site, t))
@@ -264,7 +264,7 @@ export async function measureJoins(
   const joins = Object.fromEntries(
     JOIN_PARTS.map((part) => [part, [] as JoinPoint[]])
   ) as Record<JoinPart, JoinPoint[]>;
-  for (const tile of tiles) {
+  for (const tile of measured) {
     const { bounds } = grounds[all.indexOf(tile)];
     const found = tileJoins(site, tile, bounds, heightAt);
     for (const part of JOIN_PARTS) {

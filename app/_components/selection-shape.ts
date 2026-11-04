@@ -126,6 +126,17 @@ export function crownFormOf(target: {
   return target.cone === true ? "cone" : "ellipsoid";
 }
 
+/** The unit geometry a cylinder solid is placed with, by crown form. */
+function cylinderGeometry(form: CrownForm) {
+  if (form === "cone") {
+    return new ConeGeometry(1, 1, 24, 1);
+  }
+  if (form === "ellipsoid") {
+    return new SphereGeometry(1, 24, 16);
+  }
+  return new CylinderGeometry(1, 1, 1, 24, 1);
+}
+
 /** A shape after a thing's solids: a tree's crown (its second solid) as
  *  `crown` says, any other cylinder as it is, a prism. */
 export function solidShape(
@@ -138,12 +149,7 @@ export function solidShape(
       const c = s.cylinder;
       const h = Math.max(c.y1 - c.y0, 0.1);
       const form = k === 1 ? crown : null;
-      const geometry =
-        form === "cone"
-          ? new ConeGeometry(1, 1, 24, 1)
-          : form === "ellipsoid"
-            ? new SphereGeometry(1, 24, 16)
-            : new CylinderGeometry(1, 1, 1, 24, 1);
+      const geometry = cylinderGeometry(form);
       // a sphere spans twice its radius; a cone or a cylinder one unit
       placed.compose(
         new Vector3(c.x, (c.y0 + c.y1) / 2, c.z),

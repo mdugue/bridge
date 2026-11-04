@@ -74,10 +74,12 @@ function remarkDiagrams() {
           `No rendered diagram docs/diagrams/${key}.svg – run \`bun run docs:diagrams\``
         );
       }
-      const box = /viewBox="[\d.-]+ [\d.-]+ ([\d.]+) ([\d.]+)"/u.exec(svg);
+      const box = /viewBox="[\d.-]+ [\d.-]+ (?<w>[\d.]+) (?<h>[\d.]+)"/u.exec(
+        svg
+      );
       const attrs = [
-        `data-width="${Math.round(Number(box?.[1] ?? 0))}"`,
-        `data-height="${Math.round(Number(box?.[2] ?? 0))}"`,
+        `data-width="${Math.round(Number(box?.groups?.w ?? 0))}"`,
+        `data-height="${Math.round(Number(box?.groups?.h ?? 0))}"`,
         heading ? `data-title="${heading.replaceAll('"', "&quot;")}"` : "",
       ].join(" ");
       parent.children[index] = {
@@ -178,7 +180,7 @@ function tocOf(tree: HastRoot): TocEntry[] {
       node.properties.id
     ) {
       toc.push({
-        id: String(node.properties.id),
+        id: node.properties.id,
         text: hastText(node),
         depth: node.tagName === "h2" ? 2 : 3,
       });

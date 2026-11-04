@@ -66,6 +66,10 @@ function kindIcon(inquiry: Inquiry): LucideIcon {
     case "design": {
       return PencilRulerIcon;
     }
+    default: {
+      const unknown: never = inquiry;
+      throw new Error(`unknown inquiry kind: ${String(unknown)}`);
+    }
   }
 }
 
@@ -153,7 +157,7 @@ export const InquiryStrip = ({
   useEffect(() => {
     const nav = chips.current;
     const chosen = nav?.querySelector<HTMLElement>("[aria-current]");
-    if (nav && chosen) {
+    if (along.candidates.length > 0 && nav && chosen) {
       nav.scrollLeft =
         chosen.offsetLeft - (nav.clientWidth - chosen.offsetWidth) / 2;
     }

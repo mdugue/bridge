@@ -67,8 +67,11 @@ test("an orchard tree appended to the file's is askable past its end, as an orch
     orchard: true,
   });
   expect(hit?.target).not.toHaveProperty("measured");
+  if (!orchard.properties) {
+    throw new Error("the orchard tree has no properties");
+  }
   const measured = treeSets(
-    [...trees, { ...orchard, properties: { ...orchard.properties!, m: 1 } }],
+    [...trees, { ...orchard, properties: { ...orchard.properties, m: 1 } }],
     ctx
   );
   const again = hitsInSets({ x: w.x, y: 200, z: w.z }, down, measured, 500)[0];

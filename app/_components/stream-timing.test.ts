@@ -19,7 +19,6 @@ test("measures add up by category: count, total and the longest", async () => {
   timings.timedSync("tile:bvh", () => clock.advance(75), "33414_5656_2_sn");
   await timings.timed("tile:rasters", async () => {
     clock.advance(12);
-    return;
   });
   const start = clock.now();
   clock.advance(5);

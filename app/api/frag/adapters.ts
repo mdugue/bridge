@@ -49,8 +49,52 @@ export function askAdapter(
         ...CLIENT,
       });
     }
+    default: {
+      throw new Error(`unknown provider: ${String(provider)}`);
+    }
   }
 }
+
+/** One scripted turn of the fake model. */
+const fakeStep: FakeResponseStep = ({ request }) => {
+  const { messages } = request;
+  const last = messages.at(-1);
+  if (last?.role !== "tool") {
+    const question = lastQuestion(messages);
+    if (/was ist (?:das|da)|vor mir/iu.test(question)) {
+      return { toolCalls: [{ name: "was_ist_da", input: {} }] };
+    }
+    return {
+      toolCalls: [{ name: "suche_stadt", input: { anfrage: question } }],
+    };
+  }
+  const result =
+    typeof last.content === "string"
+      ? last.content
+      : JSON.stringify(last.content);
+  const hit =
+    /"name":"(?<name>[^"]+)","x":(?<x>\d+),"y":(?<y>\d+)(?:,"z":(?<z>\d+))?/u.exec(
+      result
+    );
+  if (result.includes("treffer") && hit) {
+    return {
+      toolCalls: [
+        {
+          name: "zeige",
+          input: {
+            x: Number(hit.groups?.x),
+            y: Number(hit.groups?.y),
+          },
+        },
+      ],
+    };
+  }
+  const seen = /"name":"(?<seen>[^"]+)"/u.exec(result)?.groups?.seen;
+  const found = result.includes('"gefunden":true');
+  return {
+    text: `Testantwort: Hier ist es${seen && found ? `, ${seen}` : ""} (Quelle: Wikidata).`,
+  };
+};
 
 /**
  * A scripted model for local tests only (`FRAG_FAKE=1`, never set on a
@@ -61,44 +105,6 @@ export function askAdapter(
  */
 export function fakeAskAdapter(): AnyTextAdapter {
   const adapter = fakeText({ model: "fake" });
-  const step: FakeResponseStep = ({ request }) => {
-    const { messages } = request;
-    const last = messages.at(-1);
-    if (last?.role !== "tool") {
-      const question = lastQuestion(messages);
-      if (/was ist (das|da)|vor mir/iu.test(question)) {
-        return { toolCalls: [{ name: "was_ist_da", input: {} }] };
-      }
-      return {
-        toolCalls: [{ name: "suche_stadt", input: { anfrage: question } }],
-      };
-    }
-    const result =
-      typeof last.content === "string"
-        ? last.content
-        : JSON.stringify(last.content);
-    const hit = /"name":"([^"]+)","x":(\d+),"y":(\d+)(?:,"z":(\d+))?/u.exec(
-      result
-    );
-    if (result.includes("treffer") && hit) {
-      return {
-        toolCalls: [
-          {
-            name: "zeige",
-            input: {
-              x: Number(hit[2]),
-              y: Number(hit[3]),
-            },
-          },
-        ],
-      };
-    }
-    const seen = /"name":"([^"]+)"/u.exec(result)?.[1];
-    const found = result.includes('"gefunden":true');
-    return {
-      text: `Testantwort: Hier ist es${seen && found ? `, ${seen}` : ""} (Quelle: Wikidata).`,
-    };
-  };
-  adapter.setResponses([step, step, step]);
+  adapter.setResponses([fakeStep, fakeStep, fakeStep]);
   return adapter;
 }

@@ -22,8 +22,12 @@ export function matrixInputs(root = ROOT) {
       .map((s) => s.id)
   );
   // the reference site first, then the built ones, then the configured ones
-  const rank = (s: Site) =>
-    s.id === REFERENCE_SITE ? 0 : built.has(s.id) ? 1 : 2;
+  const rank = (s: Site) => {
+    if (s.id === REFERENCE_SITE) {
+      return 0;
+    }
+    return built.has(s.id) ? 1 : 2;
+  };
   const sites = [...all].sort(
     (a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name, "de")
   );

@@ -122,8 +122,12 @@ function serve() {
         return new Response(HOST, { headers: { "content-type": "text/html" } });
       }
       const [, root, ...rest] = pathname.split("/");
-      const base =
-        root === "mermaid" ? mermaidDir : root === "font" ? fontDir : null;
+      let base: string | null = null;
+      if (root === "mermaid") {
+        base = mermaidDir;
+      } else if (root === "font") {
+        base = fontDir;
+      }
       const file = base ? Bun.file(path.join(base, ...rest)) : null;
       return file ? new Response(file) : new Response(null, { status: 404 });
     },

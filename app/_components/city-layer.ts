@@ -88,7 +88,7 @@ export interface CityLayer {
   indexUploaded: (index: BufferAttribute | null) => void;
   /** a demolish the worker's build holds back, settling once it has
    *  reached the index (null: none waits) — the shadows are drawn again then */
-  held: () => Promise<void> | null;
+  readonly held: Promise<void> | null;
   /** marks the objects someone asks about (the clay's pencil hatch); an
    *  empty set clears the mark */
   mark: (objects: ReadonlySet<number>) => void;
@@ -507,7 +507,9 @@ export function dressCity(
     facts: (objectIndex) => readObjectFacts(metadata, objectIndex),
     hasBvh: () => Boolean(geometry.boundsTree),
     ensureBvh: () => ensureCityBvh(mesh),
-    held: () => held,
+    get held() {
+      return held;
+    },
     indexUploaded: (uploaded) => {
       if (uploaded !== null && uploaded === geometry.getIndex()) {
         fresh = false;
@@ -526,7 +528,7 @@ export function dressCity(
         .finally(() => {
           prepared = null;
         });
-      return await prepared;
+      await prepared;
     },
     hang: (object, buildingId) => {
       const ids = metadata.tableAccessors[0];

@@ -39,7 +39,9 @@ beforeEach(() => {
   g.localStorage = {
     getItem: (key: string) => map.get(key) ?? null,
     setItem: (key: string, value: string) => map.set(key, value),
-    removeItem: (key: string) => void map.delete(key),
+    removeItem: (key: string) => {
+      map.delete(key);
+    },
   };
   g.navigator = {
     sendBeacon: (url: string, body: string) => {

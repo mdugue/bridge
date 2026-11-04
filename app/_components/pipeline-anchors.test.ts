@@ -46,7 +46,6 @@ test("only scene-wide materials are anchored, once per layout and receipt", asyn
   const compiled: Object3D[] = [];
   const anchors = createPipelineAnchors(async (o) => {
     compiled.push(o);
-    return;
   });
   const a = new Mesh(new BoxGeometry(), shared);
   const b = new Mesh(new BoxGeometry(), shared);
@@ -67,21 +66,21 @@ test("only scene-wide materials are anchored, once per layout and receipt", asyn
   release();
 });
 
+const tileMesh = (raster: object) => {
+  const material = new MeshBasicNodeMaterial();
+  setSlots(material, { class: raster });
+  setGraph(material, "terrain|fine");
+  return new Mesh(new BoxGeometry(), material);
+};
+
 test("a shared build is anchored once, through a stand-in without the tile's slots", async () => {
   const compiled: Object3D[] = [];
   const anchors = createPipelineAnchors(async (o) => {
     compiled.push(o);
-    return;
   });
-  const tile = (raster: object) => {
-    const material = new MeshBasicNodeMaterial();
-    setSlots(material, { class: raster });
-    setGraph(material, "terrain|fine");
-    return new Mesh(new BoxGeometry(), material);
-  };
   const raster = {};
-  await anchors.anchor(tile(raster));
-  await anchors.anchor(tile({}));
+  await anchors.anchor(tileMesh(raster));
+  await anchors.anchor(tileMesh({}));
   expect(anchors.count()).toBe(1);
   const standIn = (compiled[0] as Mesh).material as MeshBasicNodeMaterial;
   // it builds as the tiles do and holds none of their rasters
@@ -94,7 +93,6 @@ test("a hold of every build anchors a tile's own material too, as itself", async
   const compiled: Object3D[] = [];
   const anchors = createPipelineAnchors(async (o) => {
     compiled.push(o);
-    return;
   }, true);
   const material = new MeshBasicNodeMaterial();
   await anchors.anchor(new Mesh(new BoxGeometry(), material));
@@ -113,7 +111,6 @@ test("anchorAll compiles the new stand-ins in one call and takes them out of its
   const compiled: { object: Object3D; children: Object3D[] }[] = [];
   const anchors = createPipelineAnchors(async (object) => {
     compiled.push({ object, children: [...object.children] });
-    return;
   });
   const a = new Mesh(new BoxGeometry(), shared);
   const b = new Mesh(new BoxGeometry(), shared);
@@ -144,12 +141,12 @@ test("a second ask for a build in flight resolves once its compile has", async (
     "anchor-in-flight-test",
     () => new MeshBasicNodeMaterial()
   );
-  let finish = () => {};
+  const gate: { finish?: () => void } = {};
   let calls = 0;
   const anchors = createPipelineAnchors(async () => {
     calls += 1;
-    return await new Promise<void>((resolve) => {
-      finish = resolve;
+    await new Promise<void>((resolve) => {
+      gate.finish = resolve;
     });
   });
   const a = new Mesh(new BoxGeometry(), shared);
@@ -163,7 +160,7 @@ test("a second ask for a build in flight resolves once its compile has", async (
   await Promise.resolve();
   expect(calls).toBe(1);
   expect([first, second, single]).toEqual([false, false, false]);
-  finish();
+  gate.finish?.();
   await new Promise((resolve) => {
     setTimeout(resolve, 0);
   });
@@ -178,12 +175,12 @@ test("a tile's own material freed before its set's turn leaves the set and the h
     "anchor-freed-test",
     () => new MeshBasicNodeMaterial()
   );
-  let finish = () => {};
+  const gate: { finish?: () => void } = {};
   let drawn: Object3D[] = [];
   const anchors = createPipelineAnchors(
     async (set) =>
       await new Promise<void>((resolve) => {
-        finish = () => {
+        gate.finish = () => {
           // what the set holds once its turn comes
           drawn = [...set.children];
           resolve();
@@ -199,7 +196,7 @@ test("a tile's own material freed before its set's turn leaves the set and the h
   expect(anchors.count()).toBe(2);
   material.dispose();
   expect(anchors.count()).toBe(1);
-  finish();
+  gate.finish?.();
   await done;
   expect(drawn.map((o) => (o as Mesh).material)).toEqual([shared]);
   // its listener went with it: a second dispose lets nothing else go
@@ -210,13 +207,13 @@ test("a tile's own material freed before its set's turn leaves the set and the h
 });
 
 test("a stand-in freed while its set compiles is released again once the compile has settled", async () => {
-  let finish = () => {};
+  const gate: { finish?: () => void } = {};
   let standIns: Object3D[] = [];
   const anchors = createPipelineAnchors(async (set) => {
     // three takes the set's items as the call begins
     standIns = [...set.children];
-    return await new Promise<void>((resolve) => {
-      finish = resolve;
+    await new Promise<void>((resolve) => {
+      gate.finish = resolve;
     });
   }, true);
   const material = new MeshBasicNodeMaterial();
@@ -229,7 +226,7 @@ test("a stand-in freed while its set compiles is released again once the compile
   material.dispose();
   expect(released).toBe(1);
   // what the compile built of it after that goes too
-  finish();
+  gate.finish?.();
   await done;
   expect(released).toBe(2);
   anchors.dispose();

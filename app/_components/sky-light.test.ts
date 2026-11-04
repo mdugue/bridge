@@ -65,12 +65,15 @@ test("the sky view scales the ambient through aoNode, at its fixed strength", ()
   const light = groundLight({ horizon: false, svf: true });
   const material = groundLitMaterial("test", { roughness: 1 }, light, true);
   expect(material).toBeInstanceOf(MeshStandardNodeMaterial);
-  expect(material.aoNode).not.toBeNull();
-  const ao = reachable(material.aoNode as Node);
+  const { aoNode } = material;
+  if (!aoNode) {
+    throw new Error("the material has no aoNode");
+  }
+  const ao = reachable(aoNode);
   // Himmelslicht's strength, one constant for every tile
   expect(ao.has(SKY_VIEW)).toBe(true);
   // the tile's raster goes in by slot, not into the shared graph
-  expect(texturesOf(material.aoNode as Node)).not.toContain(light.svf);
+  expect(texturesOf(aoNode)).not.toContain(light.svf);
   expect(slotsOf(material).lightSvf).toBe(light.svf);
   // no horizon, no change to the sun's shadow
   expect(material.receivedShadowNode).toBeNull();

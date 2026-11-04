@@ -68,8 +68,11 @@ test("the DLM layer list is the pipeline's", () => {
     nodePath.join(import.meta.dir, "../../pipeline/bake/common.py"),
     "utf-8"
   );
-  const block = /DLM_LAYERS = \(([^)]*)\)/u.exec(python)?.[1] ?? "";
-  const layers = [...block.matchAll(/"(\w+)"/gu)].map((m) => m[1]);
+  const block =
+    /DLM_LAYERS = \((?<block>[^)]*)\)/u.exec(python)?.groups?.block ?? "";
+  const layers = [...block.matchAll(/"(?<name>\w+)"/gu)].map(
+    (m) => m.groups?.name
+  );
   expect(layers).toEqual([...DLM_LAYERS]);
 });
 

@@ -154,8 +154,10 @@ describe("the views", () => {
         { x: -0.9, y: 0.8 },
       ]) {
         const ground = rayAtLevel(modelRay(view, VIEWPORT, ndc), 95);
-        expect(ground).not.toBeNull();
-        const back = screenOfPoint(view, VIEWPORT, ground!);
+        if (!ground) {
+          throw new Error("the ray misses the level");
+        }
+        const back = screenOfPoint(view, VIEWPORT, ground);
         expect(back.x).toBeCloseTo(ndc.x, 6);
         expect(back.y).toBeCloseTo(ndc.y, 6);
       }
@@ -182,7 +184,10 @@ describe("pan, zoom, turn and tilt", () => {
     const spot = rayAtLevel(
       modelRay(view, VIEWPORT, { x: 0.3, y: -0.2 }),
       view.pivot.y
-    )!;
+    );
+    if (!spot) {
+      throw new Error("the ray misses the level");
+    }
     const before = pxOf(view, spot);
     const moved = { ...view, pivot: panned(view, 40, -25) };
     const after = pxOf(moved, spot);
@@ -193,7 +198,10 @@ describe("pan, zoom, turn and tilt", () => {
   test("zooming keeps the point under the pointer and clamps the scale", () => {
     const view = viewOf("iso", 45);
     const ndc = { x: -0.5, y: 0.35 };
-    const spot = rayAtLevel(modelRay(view, VIEWPORT, ndc), view.pivot.y)!;
+    const spot = rayAtLevel(modelRay(view, VIEWPORT, ndc), view.pivot.y);
+    if (!spot) {
+      throw new Error("the ray misses the level");
+    }
     const z = zoomedAbout(view, VIEWPORT, ndc, 2);
     expect(z.metresPerPixel).toBeCloseTo(view.metresPerPixel / 2, 9);
     const after = screenOfPoint({ ...view, ...z }, VIEWPORT, spot);

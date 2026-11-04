@@ -1,3 +1,4 @@
+import { ContentFetchPlugin } from "./tile-content-fetch";
 import { DownloadPriorityQueue, PriorityQueue } from "3d-tiles-renderer/core";
 import { TilesRenderer } from "3d-tiles-renderer/three";
 import { Group, Matrix4 } from "three/webgpu";
@@ -76,10 +77,8 @@ import type { FacadeReadings } from "@/lib/city/facade-reading";
 import { coarseCrownSteps } from "./coarse-crowns-layer";
 import type { CrownWarmup } from "./crown-season";
 import { buildVineyards } from "./cultivated-layer";
-import { TILE_FETCH_BUDGET_MS } from "@/lib/city/fetch-retry";
 import {
   eitherSignal,
-  fetchBytes,
   fetchFeatures,
   fetchOptionalBinary,
   fetchOptionalJson,
@@ -414,52 +413,6 @@ interface Dressed {
   terrain?: TerrainLayer;
 }
 
-/**
- * Every request the renderer makes — the tileset and each tile's content —
- * through the viewer's one fetch (fetch-optional.ts `fetchBytes`): a
- * network failure is retried while the page is visible, so a tile that hit
- * a blip stays loading (its coarse level shown, the boot waiting) instead
- * of failing; one that gives up is brought back later (tile-retry.ts). The
- * `.glb.gz` content is pre-gzipped (static hosts do not compress binary
- * types) and inflated natively inside the retries — unless the host already
- * did (isGzipped). Content comes back as its bytes, which the renderer
- * parses as they are (no Response to copy them through again); JSON as a
- * Response, which the renderer reads itself; a status no retry fixes as an
- * empty Response with that status, which the renderer reports.
- */
-class ContentFetchPlugin {
-  name = "BRIDGE_CONTENT_FETCH";
-  /** aborts every request in flight when the stream goes (dispose) */
-  private readonly aborter = new AbortController();
-  async fetchData(
-    url: string,
-    options: RequestInit
-  ): Promise<Response | ArrayBuffer> {
-    const { signal, ...init } = options;
-    const either = eitherSignal(signal, this.aborter.signal);
-    try {
-      const got = await fetchBytes(url, {
-        signal: either.signal,
-        budgetMs: TILE_FETCH_BUDGET_MS,
-        gunzip: url.endsWith(".gz"),
-        init,
-      });
-      if (!got.ok) {
-        return new Response(null, { status: got.status });
-      }
-      return new URL(url, window.location.href).pathname.endsWith(".json")
-        ? new Response(got.bytes, { status: got.status })
-        : got.bytes.buffer;
-    } finally {
-      either.release();
-    }
-  }
-
-  dispose(): void {
-    this.aborter.abort();
-  }
-}
-
 type Features<T> = Promise<T[]>;
 
 /**
@@ -630,8 +583,8 @@ export function handOverWaitMs(tier: DeviceTier): number {
 }
 
 async function withinWait(done: Promise<unknown>, ms: number): Promise<void> {
-  return await Promise.race([
-    done.then(() => {}),
+  await Promise.race([
+    done,
     new Promise<void>((resolve) => {
       setTimeout(resolve, ms);
     }),
@@ -639,7 +592,7 @@ async function withinWait(done: Promise<unknown>, ms: number): Promise<void> {
 }
 
 export async function withinCompileWait(done: Promise<unknown>): Promise<void> {
-  return await withinWait(done, COMPILE_WAIT_MS);
+  await withinWait(done, COMPILE_WAIT_MS);
 }
 
 /**
@@ -741,26 +694,31 @@ export function buildAsksWhenIdle(
   }
   // neither a question (which finishes them) nor a release took them
   const pending = () => dressing.buildAsks === steps && stillHung();
-  const done = () => {
+  const release = () => {
     if (dressing.buildAsks === steps) {
       dressing.buildAsks = undefined;
     }
   };
   idle(() => {
     if (!pending()) {
-      done();
+      release();
       return;
     }
     // in slices: a dense tile's took 0.4–0.7 s on the phone profile
-    run(
-      (function* () {
-        yield* onlyWhile(steps, pending);
-        done();
-      })()
-    ).catch((error: unknown) => {
-      done();
-      failed?.(error);
-    });
+    const runAsks = async () => {
+      try {
+        await run(
+          (function* askSteps() {
+            yield* onlyWhile(steps, pending);
+            release();
+          })()
+        );
+      } catch (error) {
+        release();
+        failed?.(error);
+      }
+    };
+    void runAsks();
   }, ASKS_IDLE_MS);
 }
 
@@ -792,7 +750,8 @@ function buildSport(
   if (!table?.grounds?.length) {
     return undefined;
   }
-  const [minX, , , maxY] = terrain.bounds;
+  const minX = terrain.bounds[0];
+  const maxY = terrain.bounds[3];
   const extent = ctx.tileBounds(terrain.tile);
   const own = extent
     ? table.grounds.filter(([cx, cy]) =>
@@ -813,6 +772,7 @@ function buildSport(
  * stands on (`keepTree`), and its trunk and broadleaf crown ride in the
  * canopy's chunk meshes (instances, not draw calls); only its reshaped
  * silhouettes (flame, cone, weeping) are meshes of its own.
+ * @yields {void} once per finished run, to hand the thread back.
  */
 function* tileVegetationSteps(
   features: Omit<VegetationFeatures, "extraTrees" | "keepTree">,
@@ -952,7 +912,10 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
             compiling = null;
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          // `compiled`'s own rejection reaches the caller through the
+          // wait below; this branch only clears `compiling`
+        });
       await withinCompileWait(compiled);
       // (an object: a promise returned bare would be awaited whole)
       return { asks, compiled, group };
@@ -997,6 +960,16 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
     group.visible = wanted;
     h.built();
   };
+  /** `build`, a failure of it reported to the host unless it is gone */
+  const buildGuarded = async (h: TrafficHost): Promise<void> => {
+    try {
+      await build(h);
+    } catch (error) {
+      if (!gone(h)) {
+        h.failed(error);
+      }
+    }
+  };
   const slot: TrafficSlot = {
     group: null,
     show: async () => {
@@ -1009,12 +982,8 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
         return; // built once the dressing hangs
       }
       const h = host;
-      building ??= build(h).catch((error: unknown) => {
-        if (!gone(h)) {
-          h.failed(error);
-        }
-      });
-      return await building;
+      building ??= buildGuarded(h);
+      await building;
     },
     hide: () => {
       wanted = false;
@@ -1040,7 +1009,10 @@ export function trafficSlot(src: TrafficSource): TrafficSlot {
         const h = host;
         running
           .finally(() => h.freeFailed(disposeObject3D(group)))
-          .catch(() => {});
+          .catch(() => {
+            // a failed compile was reported where it was awaited; only the
+            // free is ours
+          });
         return [];
       }
       return disposeObject3D(group);
@@ -1396,7 +1368,7 @@ async function buildDressing(
     };
     const asks: AskSet<FeatureInquiry>[] = [];
     // (lazy: nothing runs before its first step)
-    function* askSteps(): Steps<void> {
+    const askSteps = function* askSteps(): Steps<void> {
       // its span from the first step to the last, the pauses included
       const start = streamTimings.now();
       const own = [
@@ -1426,7 +1398,7 @@ async function buildDressing(
         asks.push(set);
       }
       streamTimings.since("dressing:asks", start, tile);
-    }
+    };
     const buildAsks = askSteps();
     // Sections are cut at the tile edge by the bake; a bridge street rides
     // the decks of this tile's bridge file (which names a seam deck in both).
@@ -1478,6 +1450,15 @@ const FINE_DRESSING_RANK = 1;
  *  under the camera (the boot's spawn tile, which `ready` waits for)
  *  still gets its trees. */
 const MAX_DRESSING_OVERTAKES = 4;
+
+/** A built dressing's geometry bytes, as its parts stand now (the
+ *  traffic's bodies count once built). */
+function weighDressing(entry: Dressed, dressing: TileDressing): void {
+  entry.dressingBytes = dressingParts(dressing).reduce(
+    (sum, part) => sum + estimateGeometryBytes(part),
+    0
+  );
+}
 
 /**
  * The 3DTilesRendererJS plugin that dresses content as it loads. Runs inside
@@ -1586,25 +1567,35 @@ export class DressingPlugin {
    */
   private readonly loadAborts = new WeakMap<Object3D, AbortController>();
 
+  private readonly ctx: TileStreamContext;
+  private readonly stream: Pick<
+    TileStream,
+    "cities" | "demolished" | "demolishedGroups" | "dressings" | "terrains"
+  >;
+
   constructor(
-    private readonly ctx: TileStreamContext,
-    private readonly stream: Pick<
+    ctx: TileStreamContext,
+    stream: Pick<
       TileStream,
       "cities" | "demolished" | "demolishedGroups" | "dressings" | "terrains"
     >
   ) {
+    this.ctx = ctx;
+    this.stream = stream;
     // The warm-up runs beside the dressings, not ahead of them: its compile
     // may take up to COMPILE_WAIT_MS, and the spawn tile's trees need none
     // of its programs (they compile their own).
-    ctx.dressingGate
-      .then(async () => {
-        this.gateOpen = true;
-        return await this.warmCrowns();
-      })
-      .catch(() => {
-        // Without the warm-up a date change compiles in a frame; the
-        // stream goes on.
-      });
+    this.warmWhenOpen().catch(() => {
+      // Without the warm-up a date change compiles in a frame; the
+      // stream goes on.
+    });
+  }
+
+  /** Warms the crowns' programs once the dressing gate opens. */
+  private async warmWhenOpen(): Promise<void> {
+    await this.ctx.dressingGate;
+    this.gateOpen = true;
+    await this.warmCrowns();
   }
 
   init(tiles: PluginTiles): void {
@@ -1878,6 +1869,7 @@ export class DressingPlugin {
           if (readings && this.dressed.get(scene) === entry) {
             city.facadeReadings(readings);
           }
+          return null;
         }
       );
     }
@@ -1928,25 +1920,25 @@ export class DressingPlugin {
     if (!layer) {
       return;
     }
-    const built = layer;
+    const dressedMurals = layer;
     if (gone()) {
-      built.dispose();
+      dressedMurals.dispose();
       return;
     }
     const compiled = await this.compileUnder(
       scene,
-      [built.group],
+      [dressedMurals.group],
       `murals ${tileId}`
     );
     await this.loaded.get(scene);
     if (gone() || compiled === "out of memory") {
-      built.dispose();
+      dressedMurals.dispose();
       return;
     }
-    scene.add(built.group);
-    entry.murals = built;
-    for (const [i, mesh] of built.meshes.entries()) {
-      entry.city?.hang(mesh, built.murals[i].building);
+    scene.add(dressedMurals.group);
+    entry.murals = dressedMurals;
+    for (const [i, mesh] of dressedMurals.meshes.entries()) {
+      entry.city?.hang(mesh, dressedMurals.murals[i].building);
     }
     const tile = this.tileOf.get(scene);
     if (tile) {
@@ -1966,17 +1958,17 @@ export class DressingPlugin {
     const bounds = this.ctx.tileBounds(tileId);
     void this.skyView.acquire(url).then((texture) => {
       const { city } = entry;
-      if (!(texture && bounds && city) || this.dressed.get(scene) !== entry) {
-        return;
+      if (texture && bounds && city && this.dressed.get(scene) === entry) {
+        const [minX, minY, maxX, maxY] = bounds;
+        const { cx, cy } = this.ctx.offset;
+        setClaySkyView(
+          city.mesh.material as MeshStandardNodeMaterial,
+          texture,
+          [minX - cx, maxY - cy],
+          [maxX - minX, maxY - minY]
+        );
       }
-      const [minX, minY, maxX, maxY] = bounds;
-      const { cx, cy } = this.ctx.offset;
-      setClaySkyView(
-        city.mesh.material as MeshStandardNodeMaterial,
-        texture,
-        [minX - cx, maxY - cy],
-        [maxX - minX, maxY - minY]
-      );
+      return null;
     });
   }
 
@@ -2104,16 +2096,16 @@ export class DressingPlugin {
     }
     const warmup = buildCrownWarmup();
     this.warmup = warmup;
-    await withinCompileWait(
-      Promise.all(
-        warmup.main.map(async (mesh) => await this.ctx.compile(mesh))
-      ).then(
-        () => {},
-        (error: unknown) => {
-          this.compileFailed(error, "crowns");
-        }
-      )
-    );
+    const compileAll = async () => {
+      try {
+        await Promise.all(
+          warmup.main.map(async (mesh) => await this.ctx.compile(mesh))
+        );
+      } catch (error) {
+        this.compileFailed(error, "crowns");
+      }
+    };
+    await withinCompileWait(compileAll());
   }
 
   /** What a compile that threw comes to: out of memory (reported) or a
@@ -2190,121 +2182,143 @@ export class DressingPlugin {
     // weighed from its build) and the compile queue never pile up behind
     // a slow GPU — a queue past the wait would hang them before their
     // compile.
-    void this.turn(async (): Promise<(() => Promise<void>) | undefined> => {
-      await this.olderCompile;
-      const entry = this.dressed.get(scene);
-      // (a tile that left with its own compile still running keeps its
-      // entry until that compile ends: it is gone all the same)
-      if (!entry || this.disposed || this.released.has(scene)) {
-        return undefined; // the tile (or the stream) left before its turn
-      }
-      streamTimings.since("dressing:queue-wait", queuedAt, extras.tileId);
-      entry.aborter = new AbortController();
-      const { signal } = entry.aborter;
-      const dressing = await streamTimings.timed(
-        "dressing:build",
-        async () =>
-          await buildDressing(terrain, extras, this.ctx, this.url, signal),
-        extras.tileId
-      );
-      entry.aborter = undefined;
-      const parts = dressingParts(dressing);
-      // Compiled as the frames will draw it — in its season and at the
-      // hour (which swap crown materials) — before it hangs anywhere: a
-      // build three keys differently from what a frame asks for compiles
-      // inside that frame. (A compile starts at the drawable: where it
-      // will hang does not change its build.) One that throws here never
-      // hangs: it is freed, not left to nothing.
-      try {
-        catchUp(dressing, this.ctx);
-      } catch (error) {
-        this.disposeFailed(disposeDressing(dressing), scene);
-        throw error;
-      }
-      // (a tile that left, its release held by its own compile, gets none:
-      // nor any weight, nor a place in the compile line the lane waits on)
-      const current =
-        this.dressed.get(scene) === entry && !this.released.has(scene);
-      const compiled = current
-        ? this.compileUnder(
-            scene,
-            compileRepresentatives(parts),
-            `dressing ${extras.tileId}`
-          )
-        : Promise.resolve<Compiled>("not run");
-      let outcome: Compiled | undefined;
-      compiled
-        .then((ended) => {
-          outcome = ended;
-        })
-        .catch(() => {});
-      const waited = streamTimings.timed(
-        "dressing:compile",
-        async () => await withinCompileWait(compiled),
-        extras.tileId
-      );
-      this.olderCompile = this.lastCompile;
-      this.lastCompile = waited.catch(() => {});
-      // Weighed from the build on, not from the hang: the lane runs ahead
-      // of the compile waits, and a built dressing waiting its turn to
-      // hang must count against the cache's budget.
-      if (current) {
-        this.weighDressing(entry, dressing);
-        this.reweigh(scene);
-      }
-      return async () => {
-        await waited;
-        built();
-        // Not before the renderer has recorded the tile's own content (see
-        // `loaded`): the dressing's materials are the scene's.
-        await this.loaded.get(scene);
-        // A dressing whose compile ran out of GPU memory stays off: the
-        // tile goes bare rather than the GPU further under. Nor does one
-        // whose tile left while a compile ran: its release waits for the
-        // compile (`compiles`), so its entry is still there.
-        if (
-          this.disposed ||
-          this.released.has(scene) ||
-          this.dressed.get(scene) !== entry ||
-          outcome === "out of memory"
-        ) {
-          if (this.dressed.get(scene) === entry) {
-            entry.dressingBytes = undefined;
-            this.reweigh(scene);
-          }
-          // freed once its compile has ended (see `compiles`)
-          compiled
-            .then(() => this.disposeFailed(disposeDressing(dressing), scene))
-            .catch(() => {});
-          return;
+    const turned = this.turn(
+      async (): Promise<(() => Promise<void>) | undefined> => {
+        await this.olderCompile;
+        const entry = this.dressed.get(scene);
+        // (a tile that left with its own compile still running keeps its
+        // entry until that compile ends: it is gone all the same)
+        if (!entry || this.disposed || this.released.has(scene)) {
+          return undefined; // the tile (or the stream) left before its turn
         }
-        this.hangDressing(scene, entry, dressing);
-        // ...and one whose compile outlasted the wait and then ran out of
-        // memory comes down again
-        compiled
-          .then((ended) => {
-            if (ended === "out of memory") {
-              this.dropDressing(scene, entry, dressing);
+        streamTimings.since("dressing:queue-wait", queuedAt, extras.tileId);
+        entry.aborter = new AbortController();
+        const { signal } = entry.aborter;
+        const dressing = await streamTimings.timed(
+          "dressing:build",
+          async () =>
+            await buildDressing(terrain, extras, this.ctx, this.url, signal),
+          extras.tileId
+        );
+        entry.aborter = undefined;
+        const parts = dressingParts(dressing);
+        // Compiled as the frames will draw it — in its season and at the
+        // hour (which swap crown materials) — before it hangs anywhere: a
+        // build three keys differently from what a frame asks for compiles
+        // inside that frame. (A compile starts at the drawable: where it
+        // will hang does not change its build.) One that throws here never
+        // hangs: it is freed, not left to nothing.
+        try {
+          catchUp(dressing, this.ctx);
+        } catch (error) {
+          this.disposeFailed(disposeDressing(dressing), scene);
+          throw error;
+        }
+        // (a tile that left, its release held by its own compile, gets none:
+        // nor any weight, nor a place in the compile line the lane waits on)
+        const current =
+          this.dressed.get(scene) === entry && !this.released.has(scene);
+        const compiled = current
+          ? this.compileUnder(
+              scene,
+              compileRepresentatives(parts),
+              `dressing ${extras.tileId}`
+            )
+          : Promise.resolve<Compiled>("not run");
+        let outcome: Compiled | undefined;
+        const trackOutcome = async () => {
+          try {
+            outcome = await compiled;
+          } catch {
+            // a failed compile is reported where `waited` awaits it; there
+            // is no outcome to note
+          }
+        };
+        void trackOutcome();
+        const waited = streamTimings.timed(
+          "dressing:compile",
+          async () => await withinCompileWait(compiled),
+          extras.tileId
+        );
+        this.olderCompile = this.lastCompile;
+        this.lastCompile = waited.catch(() => {
+          // a failed wait is reported where `waited` is awaited; the lane
+          // only needs it settled
+        });
+        // Weighed from the build on, not from the hang: the lane runs ahead
+        // of the compile waits, and a built dressing waiting its turn to
+        // hang must count against the cache's budget.
+        if (current) {
+          weighDressing(entry, dressing);
+          this.reweigh(scene);
+        }
+        return async () => {
+          await waited;
+          built();
+          // Not before the renderer has recorded the tile's own content (see
+          // `loaded`): the dressing's materials are the scene's.
+          await this.loaded.get(scene);
+          // A dressing whose compile ran out of GPU memory stays off: the
+          // tile goes bare rather than the GPU further under. Nor does one
+          // whose tile left while a compile ran: its release waits for the
+          // compile (`compiles`), so its entry is still there.
+          if (
+            this.disposed ||
+            this.released.has(scene) ||
+            this.dressed.get(scene) !== entry ||
+            outcome === "out of memory"
+          ) {
+            if (this.dressed.get(scene) === entry) {
+              entry.dressingBytes = undefined;
+              this.reweigh(scene);
             }
-          })
-          .catch(() => {});
-      };
-    }, rank)
-      .then((after) => after?.())
-      .catch((error: unknown) => {
+            // freed once its compile has ended (see `compiles`)
+            const freeAfterCompile = async () => {
+              try {
+                await compiled;
+                this.disposeFailed(disposeDressing(dressing), scene);
+              } catch {
+                // nothing to free for a compile that failed, and a free
+                // that threw is reported by `disposeFailed`
+              }
+            };
+            void freeAfterCompile();
+            return;
+          }
+          this.hangDressing(scene, entry, dressing);
+          // ...and one whose compile outlasted the wait and then ran out of
+          // memory comes down again
+          const dropAfterCompile = async () => {
+            try {
+              if ((await compiled) === "out of memory") {
+                this.dropDressing(scene, entry, dressing);
+              }
+            } catch {
+              // a failed compile has nothing to drop
+            }
+          };
+          void dropAfterCompile();
+        };
+      },
+      rank
+    );
+    const finishDressing = async () => {
+      try {
+        const after = await turned;
+        await after?.();
+      } catch (error) {
         // A dressing that fails leaves its tile bare, never the stream
         // stuck — but never silently: a builder's throw is a bug or a
-        // heap that ran out.
-        if (isAbortError(error) || this.disposed || this.released.has(scene)) {
-          return; // a tile that left mid-build: no failure of its own
-        }
-        if (isAllocationFailure(error)) {
+        // heap that ran out. (A tile that left mid-build has no failure
+        // of its own.)
+        const left =
+          isAbortError(error) || this.disposed || this.released.has(scene);
+        if (!left && isAllocationFailure(error)) {
           this.ctx.onAllocationFailure?.(error, `dressing ${extras.tileId}`);
-        } else {
+        } else if (!left) {
           this.ctx.onDressingFailed?.(error, extras.tileId);
         }
-      })
-      .finally(() => {
+      } finally {
         built();
         this.builtOf.delete(scene);
         this.pending -= 1;
@@ -2317,8 +2331,10 @@ export class DressingPlugin {
         if (!this.disposed) {
           this.ctx.onChange();
         }
-      });
-    return await ready;
+      }
+    };
+    void finishDressing();
+    await ready;
   }
 
   /** Hangs a built dressing on its tile's content root. */
@@ -2357,7 +2373,7 @@ export class DressingPlugin {
         this.released.has(scene) ||
         entry.dressing !== dressing,
       built: () => {
-        this.weighDressing(entry, dressing);
+        weighDressing(entry, dressing);
         this.reweigh(scene);
         this.ctx.onChange();
       },
@@ -2374,7 +2390,7 @@ export class DressingPlugin {
     try {
       catchUp(dressing, this.ctx);
     } finally {
-      this.weighDressing(entry, dressing);
+      weighDressing(entry, dressing);
       this.reweigh(scene);
     }
   }
@@ -2387,15 +2403,6 @@ export class DressingPlugin {
     } else {
       this.tiles?.recalculateBytesUsed();
     }
-  }
-
-  /** A built dressing's geometry bytes, as its parts stand now (the
-   *  traffic's bodies count once built). */
-  private weighDressing(entry: Dressed, dressing: TileDressing): void {
-    entry.dressingBytes = dressingParts(dressing).reduce(
-      (sum, part) => sum + estimateGeometryBytes(part),
-      0
-    );
   }
 
   /** Takes a hung dressing down again and frees it (its compile ran out of
@@ -2441,13 +2448,18 @@ export class DressingPlugin {
     where: string
   ): Promise<Compiled> {
     this.compiles.set(scene, (this.compiles.get(scene) ?? 0) + 1);
-    const done = Promise.all(
-      objects.map(async (o) => await this.ctx.compile(o))
-    ).then(
-      (compiled): Compiled => (compiled.every(Boolean) ? "done" : "not run"),
-      (error: unknown) => this.compileFailed(error, where)
-    );
-    const settle = () => {
+    const compile = async (): Promise<Compiled> => {
+      try {
+        const compiled = await Promise.all(
+          objects.map(async (o) => await this.ctx.compile(o))
+        );
+        return compiled.every(Boolean) ? "done" : "not run";
+      } catch (error) {
+        return this.compileFailed(error, where);
+      }
+    };
+    const done = compile();
+    const uncount = () => {
       const left = (this.compiles.get(scene) ?? 1) - 1;
       if (left > 0) {
         this.compiles.set(scene, left);
@@ -2459,7 +2471,15 @@ export class DressingPlugin {
       }
     };
     // a release that throws must not surface as an unhandled rejection
-    done.then(settle).catch(() => {});
+    const settleAfter = async () => {
+      try {
+        await done;
+        uncount();
+      } catch {
+        // swallowed on purpose, see above
+      }
+    };
+    void settleAfter();
     return await done;
   }
 
@@ -2484,14 +2504,18 @@ export class DressingPlugin {
       [scene],
       `content ${tileIdOf(scene)}`
     );
-    compiled
-      .then((ended) => {
+    const afterCompile = async () => {
+      try {
+        const ended = await compiled;
         this.contentCompiling.delete(scene);
         if (ended === "done") {
           this.dropContentCopies(scene);
         }
-      })
-      .catch(() => {});
+      } catch {
+        // a drop that throws must not surface as an unhandled rejection
+      }
+    };
+    void afterCompile();
     return await compiled;
   }
 
@@ -2507,11 +2531,12 @@ export class DressingPlugin {
     if (this.disposed || this.released.has(scene) || !entry) {
       return;
     }
-    const drop = entry.terrain
-      ? cpuDroppable(entry.terrain)
-      : entry.city
-        ? cityCpuDroppable(entry.city)
-        : [];
+    let drop: Parameters<typeof dropCpuCopies>[1] = [];
+    if (entry.terrain) {
+      drop = cpuDroppable(entry.terrain);
+    } else if (entry.city) {
+      drop = cityCpuDroppable(entry.city);
+    }
     dropCpuCopies(scene, drop);
     this.ctx.onCopiesDropped?.();
   }

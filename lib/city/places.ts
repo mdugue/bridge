@@ -69,7 +69,7 @@ export function placeWords(name: string, city = ""): string[] {
     .toLowerCase()
     .split(/[^\p{L}\p{N}]+/u)
     .filter((w) => w.length > 0 && !FILLER.has(w))
-    .map((w) => (w.length > 4 ? w.replace(/(en|es|er|em|e|s|n)$/u, "") : w))
+    .map((w) => (w.length > 4 ? w.replace(/(?:en|es|er|em|e|s|n)$/u, "") : w))
     .filter((w) => !own.has(w));
 }
 

@@ -550,19 +550,25 @@ export function nameplatePose(
       origin = add(face, add(scale(r, x), [0, centreY - h / 2, 0]));
       break;
     }
+    default: {
+      throw new Error("unknown nameplate spot");
+    }
   }
   const camToPlane = Math.abs(dot(sub(camera.position, face), normal));
+  // a parallel view has no nearness: where its camera sits says nothing
+  let fade = 1;
+  if (!camera.ortho) {
+    fade =
+      layout.mode === "near"
+        ? smooth(NEAR_FADE_GONE_M, NEAR_FADE_FULL_M, camToPlane)
+        : smooth(FADE_GONE_M, FADE_FULL_M, camToPlane);
+  }
   return {
     origin,
     right: r,
     up,
     cap,
-    // a parallel view has no nearness: where its camera sits says nothing
-    fade: camera.ortho
-      ? 1
-      : layout.mode === "near"
-        ? smooth(NEAR_FADE_GONE_M, NEAR_FADE_FULL_M, camToPlane)
-        : smooth(FADE_GONE_M, FADE_FULL_M, camToPlane),
+    fade,
   };
 }
 
@@ -600,6 +606,10 @@ function groundPose(
     case "above":
     case "front": {
       centre = add(c, scale(up, -(across + gap + h / 2)));
+      break;
+    }
+    default: {
+      throw new Error("unknown nameplate spot");
     }
   }
   // over the highest ground under it, so no corner sinks into a slope

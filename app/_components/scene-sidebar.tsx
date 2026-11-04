@@ -131,8 +131,9 @@ const Calendar = dynamic(
   { ssr: false, loading: () => <div className="h-60 w-48" /> }
 );
 const preloadCalendar = () => {
-  // a failed load is next/dynamic's to report when the popover renders
-  import("@/components/ui/calendar").catch(() => {});
+  import("@/components/ui/calendar").catch(() => {
+    // a failed load is next/dynamic's to report when the popover renders
+  });
 };
 
 /** The day on the date button, "5. März 2026" (what date-fns' `d. MMMM
@@ -284,6 +285,19 @@ const StylePicker = ({
  * and the pose come from the scene's status (scene-status.ts); the pose
  * moves the dot on the map's canvas without a render.
  */
+/** Reports an element's width (px, rounded) now and as it resizes; the
+ *  returned function stops. */
+const observeWidth = (
+  el: HTMLElement,
+  report: (px: number) => void
+): (() => void) => {
+  const measure = () => report(Math.round(el.clientWidth));
+  measure();
+  const ro = new ResizeObserver(measure);
+  ro.observe(el);
+  return () => ro.disconnect();
+};
+
 const MinimapCard = ({
   bounds,
   landcoverTiles,
@@ -296,10 +310,10 @@ const MinimapCard = ({
   const footprints = useSceneStatus("footprints");
   const status = useSceneStatusStore();
   const subscribePose = useCallback(
-    (cb: (pose: PlayerPose) => void) =>
+    (onPose: (pose: PlayerPose) => void) =>
       status.subscribe("pose", (pose) => {
         if (pose) {
-          cb(pose);
+          onPose(pose);
         }
       }),
     [status]
@@ -308,17 +322,10 @@ const MinimapCard = ({
   // rather than a CSS width: measure the card and hand it the result.
   const ref = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState(0);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) {
-      return;
-    }
-    const measure = () => setSize(Math.round(el.clientWidth));
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+  useEffect(
+    () => (ref.current ? observeWidth(ref.current, setSize) : undefined),
+    []
+  );
   return (
     <div className="px-3 pb-3">
       <div
@@ -433,6 +440,8 @@ const MODE_ITEM =
 const STUDY_CHIP =
   "h-6 rounded-full px-2 font-mono text-[10px] tabular-nums text-muted-foreground data-pressed:border-ring data-pressed:bg-background data-pressed:text-foreground data-pressed:ring-1 data-pressed:ring-ring";
 
+const dateKey = (d: { month: number; day: number }) => `${d.month}-${d.day}`;
+
 /**
  * The shadow study's instants (plan 055): the equinox and the solstices
  * of the shown year, and four hours — one click each, and the whole grid
@@ -455,7 +464,6 @@ const ShadowStudy = ({
   ready: boolean;
   updateSun: (day: Date, minutes: number) => void;
 }) => {
-  const dateKey = (d: { month: number; day: number }) => `${d.month}-${d.day}`;
   const today = STUDY_DATES.find(
     (d) => d.month === day.getMonth() && d.day === day.getDate()
   );
@@ -530,6 +538,10 @@ const ShadowStudy = ({
   );
 };
 
+/** A date's minute of the day as a share of the day, else `fallback`. */
+const dayShare = (date: Date | null | undefined, fallback: number) =>
+  isRealDate(date) ? minutesOfDay(date) / (24 * 60) : fallback;
+
 /** Sun and time: the date, the minute, and where the sun stands because of it. */
 const SunControls = ({
   day,
@@ -566,9 +578,6 @@ const SunControls = ({
   const dragging = moving !== null;
   const reached = useRef<number | null>(null);
   useEffect(() => {
-    if (!dragging) {
-      return;
-    }
     const cancel = () => {
       const last = reached.current;
       setMoving(null);
@@ -576,12 +585,15 @@ const SunControls = ({
         updateSun(day, last);
       }
     };
-    window.addEventListener("pointercancel", cancel);
-    window.addEventListener("touchcancel", cancel);
-    return () => {
-      window.removeEventListener("pointercancel", cancel);
-      window.removeEventListener("touchcancel", cancel);
+    const listen = () => {
+      window.addEventListener("pointercancel", cancel);
+      window.addEventListener("touchcancel", cancel);
+      return () => {
+        window.removeEventListener("pointercancel", cancel);
+        window.removeEventListener("touchcancel", cancel);
+      };
     };
+    return dragging ? listen() : undefined;
   }, [dragging, day, updateSun]);
   const resting = ownLight !== null;
   const times = latLng ? sunTimesOn(day, latLng.lat, latLng.lng) : null;
@@ -589,10 +601,8 @@ const SunControls = ({
   const sunset = times?.sunset;
   // The track is the day itself: night at both ends, the warm band anchored to
   // this date's real sunrise and sunset rather than to fixed hours.
-  const at = (date: Date | null | undefined, fallback: number) =>
-    isRealDate(date) ? minutesOfDay(date) / (24 * 60) : fallback;
-  const rise = at(sunrise, 0.29);
-  const set = at(sunset, 0.8);
+  const rise = dayShare(sunrise, 0.29);
+  const set = dayShare(sunset, 0.8);
   const gradient =
     "linear-gradient(90deg,#2a3050 0%," +
     `#4a4a78 ${(rise - 0.03) * 100}%,#f0c79a ${(rise + 0.02) * 100}%,` +
@@ -875,6 +885,11 @@ export interface SceneSidebarProps {
 export const SceneSidebar = (props: SceneSidebarProps) => {
   const { toggleSidebar } = useSidebar();
   const { handleRef, look, onLook } = props;
+  const {
+    applySnapshot: handleApplySnapshot,
+    copySnapshot: handleCopySnapshot,
+    resetLook: handleResetLook,
+  } = props;
   const site = useSite();
   // the site as the tileset describes it: set once per boot
   const info = useSceneStatus("site");
@@ -983,7 +998,7 @@ export const SceneSidebar = (props: SceneSidebarProps) => {
                 <span className={SECTION_LABEL}>Darstellung</span>
                 <button
                   className="text-[11px] text-primary hover:underline"
-                  onClick={props.resetLook}
+                  onClick={handleResetLook}
                   title="Nebel und Kronen zurück auf ihren Startwert — der Bildstil bleibt"
                   type="button"
                 >
@@ -1062,7 +1077,7 @@ export const SceneSidebar = (props: SceneSidebarProps) => {
               <div className="grid grid-cols-2 gap-1.5">
                 <Button
                   disabled={!props.ready}
-                  onClick={props.copySnapshot}
+                  onClick={handleCopySnapshot}
                   size="sm"
                   type="button"
                 >
@@ -1071,7 +1086,7 @@ export const SceneSidebar = (props: SceneSidebarProps) => {
                 </Button>
                 <Button
                   disabled={!props.canTravel}
-                  onClick={props.applySnapshot}
+                  onClick={handleApplySnapshot}
                   size="sm"
                   type="button"
                   variant="outline"

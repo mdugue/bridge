@@ -32,7 +32,7 @@ type Ring2 = readonly (readonly [number, number])[];
 /** Whether (x, y) lies inside a ring. */
 function inside(x: number, y: number, ring: Ring2): boolean {
   let c = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
     const [xi, yi] = ring[i];
     const [xj, yj] = ring[j];
     if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
@@ -86,7 +86,10 @@ class SampleGrid {
       }
     }
   }
-  /** Every sample in the box. */
+  /**
+   * Every sample in the box.
+   * @yields {Sample} each sample of the cells the box touches
+   */
   *within(x0: number, y0: number, x1: number, y1: number): Generator<Sample> {
     for (
       let cx = Math.floor(x0 / CELL_M);
@@ -147,7 +150,7 @@ function onOrInside(x: number, y: number, ring: Ring2): boolean {
   if (inside(x, y, ring)) {
     return true;
   }
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
     const [ax, ay] = ring[j];
     const [bx, by] = ring[i];
     const dx = bx - ax;

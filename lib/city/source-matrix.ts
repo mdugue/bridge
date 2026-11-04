@@ -482,7 +482,7 @@ export function sourceMatrixPage(
   );
   // how many of everything drawn come from the best source, per city
   const score = sites.map((_, j) => {
-    const n = ROWS.filter((_, i) => matrix[i][j].quality === "best").length;
+    const n = ROWS.filter((_row, i) => matrix[i][j].quality === "best").length;
     return `**${n}** / ${ROWS.length}`;
   });
   const lines = [

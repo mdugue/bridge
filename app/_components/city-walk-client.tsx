@@ -116,24 +116,32 @@ function useDataManifest(base: string): {
     failed?: string;
   }>({});
   const [attempt, setAttempt] = useState(0);
+  // a new object per attempt: that is what runs the effect again on a retry
+  const request = useMemo(() => ({ attempt, base }), [attempt, base]);
   useEffect(() => {
     const aborter = new AbortController();
-    loadManifest(`${base}/${MANIFEST_FILE}`, aborter.signal).then(
-      (manifest) => {
-        if (!aborter.signal.aborted) {
-          setState({ manifest });
-        }
-      },
-      (error: unknown) => {
+    const load = async () => {
+      let manifest: DataManifest;
+      try {
+        manifest = await loadManifest(
+          `${request.base}/${MANIFEST_FILE}`,
+          aborter.signal
+        );
+      } catch (error: unknown) {
         if (!(aborter.signal.aborted || isAbortError(error))) {
           setState({
             failed: error instanceof Error ? error.message : String(error),
           });
         }
+        return;
       }
-    );
+      if (!aborter.signal.aborted) {
+        setState({ manifest });
+      }
+    };
+    void load();
     return () => aborter.abort();
-  }, [base, attempt]);
+  }, [request]);
   const retry = useCallback(() => {
     setState({});
     setAttempt((n) => n + 1);
@@ -152,11 +160,13 @@ function usePageSafety(): SafetyLevel | null {
   const [safety, setSafety] = useState<SafetyLevel | null>(null);
   useEffect(() => {
     let live = true;
-    void pageSafety().then((level) => {
+    const settle = async () => {
+      const level = await pageSafety();
       if (live) {
         setSafety(level);
       }
-    });
+    };
+    void settle();
     return () => {
       live = false;
     };
@@ -164,13 +174,16 @@ function usePageSafety(): SafetyLevel | null {
   return safety;
 }
 
+/** No other sites: one stable array for the prop's default. */
+const NO_IDS: readonly string[] = [];
+
 /**
  * The viewer for one site (the route /<site>): its data folder, and the
  * site itself for every part of the HUD (site-context.tsx). Takes the id, not
  * the Site, since a Server Component renders it; the registry resolves it.
  */
 export const CityWalkClient = ({
-  builtIds = [],
+  builtIds = NO_IDS,
   siteId,
 }: {
   /** every site this deployment serves (the route's own included) */
@@ -196,7 +209,9 @@ const SiteViewer = ({ base }: { base: string }) => {
   useEffect(() => {
     // A failed chunk load is next/dynamic's to report when it renders; this
     // early start must not add an unhandled rejection of its own.
-    loadViewer().catch(() => {});
+    loadViewer().catch(() => {
+      // reported by next/dynamic when it renders (see above)
+    });
   }, []);
   const { manifest, failed, retry } = useDataManifest(base);
   const safety = usePageSafety();

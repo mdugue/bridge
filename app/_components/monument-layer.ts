@@ -427,7 +427,10 @@ function reliefTint(
 ): BufferAttribute {
   const figure = linear(tones.figure);
   const base = linear(tones.base);
-  const top = heights.reduce((a, b) => Math.max(a, b), 0);
+  let top = 0;
+  for (const h of heights) {
+    top = Math.max(top, h);
+  }
   const tint = new Float32Array(heights.length * 3);
   const c = new Color();
   for (let i = 0; i < heights.length; i += 1) {

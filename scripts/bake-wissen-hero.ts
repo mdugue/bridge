@@ -64,9 +64,8 @@ export async function bakeWissenHero(
   const cell = Math.round(size / cols);
   const layers = await Promise.all(
     grid.map(async ({ col, row }, i) => {
-      const input = await (
-        await paint(rasters[i])
-      )
+      const painted = await paint(rasters[i]);
+      const input = await painted
         .resize(cell, cell, { kernel: "lanczos3", fit: "fill" })
         .png()
         .toBuffer();

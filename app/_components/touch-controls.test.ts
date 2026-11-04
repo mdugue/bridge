@@ -17,6 +17,10 @@ interface FiredPointer {
   timeStamp?: number;
 }
 
+// The long press waits on the page's clock, Bun's fake one here:
+// `elapse(ms)` moves it on (by default by a whole long press).
+const elapse = (ms = LONG_PRESS_MS) => jest.advanceTimersByTime(ms);
+
 /**
  * DOM-free harness: a fake element that records the listeners
  * attachTouchControls registers, so a test can replay pointer events against
@@ -84,9 +88,6 @@ function harness() {
       calls.longPress.push([x, y]);
     },
   };
-  // The long press waits on the page's clock, Bun's fake one here:
-  // `elapse(ms)` moves it on (by default by a whole long press).
-  const elapse = (ms = LONG_PRESS_MS) => jest.advanceTimersByTime(ms);
   const { detach } = attachTouchControls(element, callbacks);
   const fire = (type: string, e: FiredPointer) =>
     handlers.get(type)?.({
@@ -150,7 +151,6 @@ function harness() {
     detach,
     element,
     gesture,
-    elapse,
     fire,
     lock,
     mouseMove,
@@ -394,7 +394,7 @@ test("detach removes every listener and releases the pointer lock", () => {
 });
 
 test("a finger held still is a long press, and its release is no tap", () => {
-  const { fire, calls, elapse, contextMenu } = harness();
+  const { fire, calls, contextMenu } = harness();
   fire("pointerdown", { pointerId: 1, clientX: 100, clientY: 200 });
   // the browser's own long-press menu belongs to the gesture now
   expect(contextMenu()).toBe(true);
@@ -427,7 +427,7 @@ test("a finger held still is a long press, and its release is no tap", () => {
 });
 
 test("a mouse held still is no long press: the desktop asks by a click", () => {
-  const { fire, calls, elapse } = harness();
+  const { fire, calls } = harness();
   fire("pointerdown", {
     pointerId: 1,
     clientX: 100,
@@ -446,7 +446,7 @@ test("a mouse held still is no long press: the desktop asks by a click", () => {
 });
 
 test("moving or a second finger cancels a long press", () => {
-  const { fire, calls, elapse } = harness();
+  const { fire, calls } = harness();
   fire("pointerdown", { pointerId: 1, clientX: 100, clientY: 200 });
   fire("pointermove", { pointerId: 1, clientX: 140, clientY: 200 });
   elapse();

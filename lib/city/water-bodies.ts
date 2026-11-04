@@ -79,7 +79,7 @@ export interface WaterLook {
 
 /** Base64 → its bytes (the lifts' PNG, the tint grid's cells). */
 export const fromBase64 = (s: string): Uint8Array =>
-  Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+  Uint8Array.from(atob(s), (c) => c.codePointAt(0) ?? 0);
 
 /** Foam lines a tile carries at most (water.py FOAM_MAX; the sheet's
  *  uniform array). */
@@ -331,11 +331,11 @@ function joinedBodies(tiles: TileWater[]): {
       }
       for (const [sa, sb] of sharedSides(a.bounds, b.bounds)) {
         for (const [ka, ra] of a.member.bodies.entries()) {
-          b.member?.bodies.forEach((rb, kb) => {
+          for (const [kb, rb] of b.member?.bodies.entries() ?? []) {
             if (overlaps(ra.edges?.[sa], rb.edges?.[sb])) {
               parent[root(base[i] + ka)] = root(base[j] + kb);
             }
-          });
+          }
         }
       }
     }
@@ -353,9 +353,9 @@ export function siteWaterTints(tiles: TileWater[]): Map<string, number[]> {
   const { base, root } = joinedBodies(tiles);
   const pools = new Map<number, { lab: Lab; seen: number }>();
   for (const [i, t] of tiles.entries()) {
-    t.member?.bodies.forEach((row, k) => {
+    for (const [k, row] of t.member?.bodies.entries() ?? []) {
       if (!row.lab || !row.core) {
-        return;
+        continue;
       }
       const r = root(base[i] + k);
       const pool = pools.get(r) ?? { lab: [0, 0, 0], seen: 0 };
@@ -364,7 +364,7 @@ export function siteWaterTints(tiles: TileWater[]): Map<string, number[]> {
       ) as Lab;
       pool.seen += row.core;
       pools.set(r, pool);
-    });
+    }
   }
   const out = new Map<string, number[]>();
   for (const [i, t] of tiles.entries()) {

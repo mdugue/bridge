@@ -281,7 +281,7 @@ export function furnitureAreas(features: FurnitureFeature[]): FurnitureArea[] {
 /** Whether (x, y) lies inside the ring (even-odd). */
 export function inRing(ring: readonly Point2[], x: number, y: number): boolean {
   let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
     const [xi, yi] = ring[i];
     const [xj, yj] = ring[j];
     if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {

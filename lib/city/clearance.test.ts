@@ -35,7 +35,12 @@ test("clearHeight lifts a camera out of a building over its roof", () => {
   );
 });
 
-const stacked = (y: number) => (y < ROOF ? ROOF : y < 40 ? 40 : null);
+const stacked = (y: number) => {
+  if (y < ROOF) {
+    return ROOF;
+  }
+  return y < 40 ? 40 : null;
+};
 
 test("clearHeight climbs through stacked parts", () => {
   // A tower on the block: its roof at 40, entered once over the block's.

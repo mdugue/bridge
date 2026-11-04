@@ -3,13 +3,13 @@ import { createTaskGate } from "./task-gate";
 
 /** A task that runs until `finish` is called, noting when it starts. */
 function held(log: string[], name: string) {
-  let finish = (): void => undefined;
+  let finish: (() => void) | undefined;
   const task = async () =>
     await new Promise<string>((resolve) => {
       log.push(`start ${name}`);
       finish = () => resolve(name);
     });
-  return { task, finish: () => finish() };
+  return { task, finish: () => finish?.() };
 }
 
 const settle = async () =>
@@ -18,11 +18,15 @@ const settle = async () =>
   });
 
 /** What `promise` rejects with (undefined when it resolves). */
-const failure = async (promise: Promise<unknown>): Promise<unknown> =>
-  await promise.then(
-    () => {},
-    (error: unknown) => error
-  );
+const failure = async (promise: Promise<unknown>): Promise<unknown> => {
+  let reason: unknown;
+  try {
+    await promise;
+  } catch (error) {
+    reason = error;
+  }
+  return reason;
+};
 
 test("one place runs the tasks one after another, in the order they came", async () => {
   const gate = createTaskGate(1);

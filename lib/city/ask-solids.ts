@@ -102,7 +102,8 @@ export function insideRingXz(
   z: number
 ): boolean {
   let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+  for (let i = 0; i < ring.length; i += 1) {
+    const j = i === 0 ? ring.length - 1 : i - 1;
     const [xi, zi] = ring[i];
     const [xj, zj] = ring[j];
     if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) {
@@ -119,7 +120,8 @@ export function rayPrism(o: Xyz, d: Xyz, p: Prism): number | null {
   }
   let best = Number.POSITIVE_INFINITY;
   // the walls: the ray against each edge in plan, then the height
-  for (let i = 0, j = p.ring.length - 1; i < p.ring.length; j = i++) {
+  for (let i = 0; i < p.ring.length; i += 1) {
+    const j = i === 0 ? p.ring.length - 1 : i - 1;
     const [ax, az] = p.ring[j];
     const ex = p.ring[i][0] - ax;
     const ez = p.ring[i][1] - az;
@@ -197,12 +199,14 @@ export function raySolids(
 ): number | null {
   let best: number | null = null;
   for (const s of solids) {
-    const t =
-      "cylinder" in s
-        ? rayCylinder(o, d, s.cylinder)
-        : "prism" in s
-          ? rayPrism(o, d, s.prism)
-          : raySlab(o, d, s.slab);
+    let t: number | null;
+    if ("cylinder" in s) {
+      t = rayCylinder(o, d, s.cylinder);
+    } else if ("prism" in s) {
+      t = rayPrism(o, d, s.prism);
+    } else {
+      t = raySlab(o, d, s.slab);
+    }
     if (t !== null && (best === null || t < best)) {
       best = t;
     }
@@ -295,6 +299,19 @@ function grow(a: Aabb, b: Aabb): Aabb {
   };
 }
 
+/** The box all of `solids` fill together; an empty list has none. */
+function solidsBox(solids: readonly AskSolid[]): Aabb {
+  const [first, ...rest] = solids.map(solidBox);
+  if (!first) {
+    throw new TypeError("an item has no solids");
+  }
+  let box = first;
+  for (const next of rest) {
+    box = grow(box, next);
+  }
+  return box;
+}
+
 /** Items grouped by the `cell` (m) their first solid stands in. */
 export function askSets<T>(
   items: readonly AskItem<T>[],
@@ -302,7 +319,7 @@ export function askSets<T>(
 ): AskSet<T>[] {
   const cells = new Map<string, { box: Aabb; items: AskItem<T>[] }>();
   for (const item of items) {
-    const box = item.solids.map(solidBox).reduce(grow);
+    const box = solidsBox(item.solids);
     const key = `${Math.floor(box.min.x / cell)},${Math.floor(box.min.z / cell)}`;
     const group = cells.get(key);
     if (group) {
@@ -395,7 +412,8 @@ export function ringDistanceXz(
     return 0;
   }
   let best = Number.POSITIVE_INFINITY;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+  for (let i = 0; i < ring.length; i += 1) {
+    const j = i === 0 ? ring.length - 1 : i - 1;
     const [ax, az] = ring[j];
     const ex = ring[i][0] - ax;
     const ez = ring[i][1] - az;

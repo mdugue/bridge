@@ -652,9 +652,9 @@ describe("facadeAttribute", () => {
       [{ object: 0, a: [14, 0], b: [14, 10], n: [1, 0] }]
     );
     // the door 3 m from the south wall's middle, the way s runs there
-    const door = slotDoor(f[2]);
-    expect(Math.abs(door?.at ?? 0)).toBeCloseTo(3, 9);
-    expect(door?.w).toBeCloseTo(1.8, 9);
+    const placed = slotDoor(f[2]);
+    expect(Math.abs(placed?.at ?? 0)).toBeCloseTo(3, 9);
+    expect(placed?.w).toBeCloseTo(1.8, 9);
     expect(f[3]).toBe(Math.round(32_767 * NO_DOOR));
     expect(slotDoor(f[3])).toBeUndefined();
     // the south wall keeps its ground floor, the east one stands over a
@@ -778,14 +778,14 @@ describe("the door slots", () => {
   test("hold a door's place to a decimetre and its width rounded up", () => {
     for (const at of [-12.34, -0.05, 0, 3, 7.96, 120.5]) {
       for (const w of [0.6, 1.2, 1.25, 1.8, 2, 2.24, 2.6, 4, 5.5, 6]) {
-        const door = slotDoor(doorSlot(at, w));
-        expect(Math.abs((door?.at ?? Number.NaN) - at)).toBeLessThanOrEqual(
+        const decoded = slotDoor(doorSlot(at, w));
+        expect(Math.abs((decoded?.at ?? Number.NaN) - at)).toBeLessThanOrEqual(
           DOOR_SLOT.step / 2 + 1e-9
         );
-        expect(door?.w ?? 0).toBeGreaterThanOrEqual(w - 1e-9);
+        expect(decoded?.w ?? 0).toBeGreaterThanOrEqual(w - 1e-9);
         // 0.2 m classes to 2 m, whole metres from there
         const grain = w <= 2 + 1e-9 ? DOOR_SLOT.wStep : DOOR_SLOT.wideStep;
-        expect(door?.w ?? 0).toBeLessThan(w + grain);
+        expect(decoded?.w ?? 0).toBeLessThan(w + grain);
       }
     }
     expect(slotDoor(doorSlot(0, 2.6))?.w).toBeCloseTo(3, 9);
@@ -821,13 +821,13 @@ describe("the door slots", () => {
   });
 
   test("a ground-floor window keeps the gap from a door's opening", () => {
-    const door = { at: 0, w: 1.2 };
+    const opening = { at: 0, w: 1.2 };
     const w = 1.1;
-    // the gap, and half a place step for the door's rounded place
-    const edge = door.w / 2 + DOOR_GAP_M + DOOR_SLOT.step / 2 + w / 2;
-    expect(clearOfDoor(edge, w, door)).toBe(true);
-    expect(clearOfDoor(-edge, w, door)).toBe(true);
-    expect(clearOfDoor(edge - 0.01, w, door)).toBe(false);
+    // the gap, and half a place step for the opening's rounded place
+    const edge = opening.w / 2 + DOOR_GAP_M + DOOR_SLOT.step / 2 + w / 2;
+    expect(clearOfDoor(edge, w, opening)).toBe(true);
+    expect(clearOfDoor(-edge, w, opening)).toBe(true);
+    expect(clearOfDoor(edge - 0.01, w, opening)).toBe(false);
     // a wide gate keeps its windows further off
     expect(clearOfDoor(edge, w, { at: 0, w: 2.6 })).toBe(false);
   });

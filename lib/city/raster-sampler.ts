@@ -20,11 +20,11 @@ export function maxWindowSampler(
 ): RasterSampler {
   const { data, width: w, height: h } = raster;
   const [minX, minY, maxX, maxY] = bounds;
-  return (x, y) => {
+  return (x, y): number | undefined => {
     const u = (x - minX) / (maxX - minX);
     const v = (maxY - y) / (maxY - minY); // raster row 0 = north
     if (u < 0 || u > 1 || v < 0 || v > 1) {
-      return;
+      return undefined;
     }
     const cx = Math.min(w - 1, Math.floor(u * w));
     const cy = Math.min(h - 1, Math.floor(v * h));

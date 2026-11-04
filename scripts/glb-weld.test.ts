@@ -209,10 +209,12 @@ describe("weldExact", () => {
         doc.createAccessor().setType("VEC3").setArray(new Float32Array(9))
       );
     doc.createMesh().addPrimitive(prim);
-    const failure = await doc.transform(weldExact()).then(
-      () => {},
-      (error: unknown) => error
-    );
+    let failure: unknown;
+    try {
+      await doc.transform(weldExact());
+    } catch (error) {
+      failure = error;
+    }
     expect(failure).toBeInstanceOf(Error);
   });
 

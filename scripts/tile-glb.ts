@@ -115,8 +115,10 @@ const PUT_BACK = new Set(["EXT_mesh_features", "EXT_structural_metadata"]);
  *  warning that it drops the extensions `simplifyGlb` puts back. */
 class BakeLogger extends Logger {
   override warn(text: string): void {
-    const missing = /^Missing optional extension, "(.+)"\.$/u.exec(text);
-    if (!missing || !PUT_BACK.has(missing[1])) {
+    const missing = /^Missing optional extension, "(?<extension>.+)"\.$/u.exec(
+      text
+    );
+    if (!missing || !PUT_BACK.has(missing.groups?.extension ?? "")) {
       super.warn(text);
     }
   }
@@ -191,7 +193,7 @@ function addPrimitive(
  *  the custom attributes are ids and flags that must stay exact (quantize
  *  would squeeze them to 12 bits), the vectors are quantised already. */
 const QUANTIZE = {
-  pattern: /^(POSITION|NORMAL|COLOR_0|TEXCOORD_0)$/u,
+  pattern: /^(?:POSITION|NORMAL|COLOR_0|TEXCOORD_0)$/u,
   quantizePosition: 16,
   quantizeNormal: 8,
   quantizeColor: 8,
@@ -233,7 +235,8 @@ export async function writeMeshGlb(input: MeshInput): Promise<Uint8Array> {
     transforms.unshift(weldExact());
   }
   await doc.transform(...transforms);
-  const glb = await (await io()).writeBinary(doc);
+  const writer = await io();
+  const glb = await writer.writeBinary(doc);
   return toKhrMeshopt(input.table ? addPropertyTable(glb, input.table) : glb);
 }
 
@@ -252,7 +255,8 @@ export async function simplifyGlb(
 ): Promise<Uint8Array> {
   const nodeIO = await io();
   await MeshoptSimplifier.ready;
-  const doc = (await nodeIO.readBinary(toExtMeshopt(glb))).setLogger(logger);
+  const read = await nodeIO.readBinary(toExtMeshopt(glb));
+  const doc = read.setLogger(logger);
   doc
     .createExtension(EXTMeshoptCompression)
     .setRequired(true)

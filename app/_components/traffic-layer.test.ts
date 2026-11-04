@@ -96,9 +96,10 @@ test("a body tapers to a point at both ends of its section", () => {
 test("the material is one for the whole site", () => {
   const a = bodies(buildTraffic([street({ t: 500, f: 500 })], [], ctx));
   const b = bodies(buildTraffic([street({ t: 900, b: 900 })], [], ctx));
-  expect(a).not.toBeNull();
-  expect(b).not.toBeNull();
-  expect(b?.material).toBe(a?.material as MeshBasicNodeMaterial);
+  if (!a || !b) {
+    throw new Error("a street body is missing");
+  }
+  expect(b.material).toBe(a.material);
 });
 
 test("off the loaded ground the body breaks rather than drops to zero", () => {

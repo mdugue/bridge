@@ -1,6 +1,9 @@
 import type { PerspectiveCamera } from "three/webgpu";
 import { Vector3 } from "three/webgpu";
 import { approachHeight } from "@/lib/city/ground-clamp";
+import type { MovementMode } from "@/lib/city/site";
+
+export type { MovementMode } from "@/lib/city/site";
 
 /** m/s. Walk is pedestrian-ish (Shift sprints). */
 const WALK_SPEED = 9;
@@ -30,10 +33,6 @@ const DOLLY_EPSILON = 0.01;
 const MIN_DOLLY_LINE_SQ = 1e-12;
 /** seconds — eye-height smoothing over the ~4 m DGM grid */
 const GROUND_TAU = 0.12;
-
-import type { MovementMode } from "@/lib/city/site";
-
-export type { MovementMode };
 
 /** The key codes movement reads — pressing one is the player taking the wheel. */
 export const MOVEMENT_KEYS: ReadonlySet<string> = new Set([

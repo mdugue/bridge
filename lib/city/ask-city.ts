@@ -134,7 +134,7 @@ export function maskedKey(key: string): string {
  * (a newline) from ever reaching a provider.
  */
 export function plausibleKey(key: string): boolean {
-  return /^[\x21-\x7E]{20,300}$/u.test(key);
+  return /^[\u0021-\u007E]{20,300}$/u.test(key);
 }
 
 /**
@@ -269,7 +269,7 @@ function messageChars(message: unknown): number {
  */
 export function conversationProblem(
   messages: readonly unknown[],
-  lastQuestion: string
+  question: string
 ): string | null {
   if (messages.length === 0) {
     return "keine Frage";
@@ -281,7 +281,7 @@ export function conversationProblem(
   if (chars > ASK_LIMITS.conversationChars) {
     return `${TOO_LONG} Bitte neu beginnen.`;
   }
-  if (lastQuestion.length > ASK_LIMITS.questionChars) {
+  if (question.length > ASK_LIMITS.questionChars) {
     return `Die Frage ist zu lang (höchstens ${ASK_LIMITS.questionChars} Zeichen).`;
   }
   return null;

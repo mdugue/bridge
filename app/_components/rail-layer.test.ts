@@ -89,12 +89,14 @@ test("a yard across an underpass follows the ground, not its corners", () => {
   const pos = mesh?.geometry.getAttribute("position");
   expect(pos?.count ?? 0).toBeGreaterThan(0);
   let overStreet = 0;
-  for (let i = 0; pos && i < pos.count; i += 3) {
-    const xs = [0, 1, 2].map((k) => pos.getX(i + k));
-    const mx = (xs[0] + xs[1] + xs[2]) / 3;
-    const top = Math.max(...[0, 1, 2].map((k) => pos.getY(i + k)));
-    if (mx > 44 && mx < 56 && top > 113) {
-      overStreet += 1;
+  if (pos) {
+    for (let i = 0; i < pos.count; i += 3) {
+      const xs = [0, 1, 2].map((k) => pos.getX(i + k));
+      const mx = (xs[0] + xs[1] + xs[2]) / 3;
+      const top = Math.max(...[0, 1, 2].map((k) => pos.getY(i + k)));
+      if (mx > 44 && mx < 56 && top > 113) {
+        overStreet += 1;
+      }
     }
   }
   // no sheet stands over the street, closing the passage
@@ -173,14 +175,14 @@ test("a track over the gap the DGM leaves beside a bridge spans it on a deck of 
   // and a deck stands under them, at their level, on piers down to the
   // street
   expect(built.children.length).toBeGreaterThan(1);
-  const deck = new Box3();
+  const deckBox = new Box3();
   for (const c of built.children.slice(1)) {
-    deck.union(new Box3().setFromObject(c));
+    deckBox.union(new Box3().setFromObject(c));
   }
-  expect(deck.min.x).toBeLessThan(85);
-  expect(deck.max.x).toBeGreaterThan(115);
-  expect(deck.max.y).toBeGreaterThan(117.5);
-  expect(deck.min.y).toBeLessThan(111.5);
+  expect(deckBox.min.x).toBeLessThan(85);
+  expect(deckBox.max.x).toBeGreaterThan(115);
+  expect(deckBox.max.y).toBeGreaterThan(117.5);
+  expect(deckBox.min.y).toBeLessThan(111.5);
 });
 
 test("a null geometry is skipped, not thrown", () => {
@@ -333,7 +335,10 @@ function acrossEnds(b: BridgeFeature): number {
   for (const name of ["bridge-stone", "bridge-steel"]) {
     const mesh = built.getObjectByName(name) as Mesh | undefined;
     const pos = mesh?.geometry.getAttribute("position");
-    for (let i = 0; pos && i < pos.count; i += 1) {
+    if (!pos) {
+      continue;
+    }
+    for (let i = 0; i < pos.count; i += 1) {
       // the deck runs along x from 0 to 200, 12 m wide: an end wall would
       // stand at x = 0 or 200 across the middle of the road
       const x = pos.getX(i);
@@ -512,11 +517,11 @@ test("a frame on the deck's edge stands in for the parapet", () => {
   const parapet = (vs: Vertex[], top = 121.1) =>
     vs.filter((v) => Math.abs(v.y - top) < 0.01).length;
   const beam = vertices(deck({}));
-  const arch = vertices(deck({ structure: "arch" }));
+  const archVertices = vertices(deck({ structure: "arch" }));
   expect(parapet(beam)).toBeGreaterThan(0);
   expect(parapet(beam, 120.85)).toBe(0);
-  expect(parapet(arch, 120.85)).toBeGreaterThan(0);
-  expect(parapet(arch)).toBe(0);
+  expect(parapet(archVertices, 120.85)).toBeGreaterThan(0);
+  expect(parapet(archVertices)).toBe(0);
   const truss = deck({
     structure: "truss",
     ribs: [
@@ -753,10 +758,10 @@ test("a curved deck's frame holds inside every triangle, not only at its corners
     if (nrm.getY(t) < 0.9) {
       continue;
     }
-    const at = (k: number) => [pos.getX(t + k), pos.getZ(t + k)];
+    const cornerAt = (k: number) => [pos.getX(t + k), pos.getZ(t + k)];
     for (let k = 0; k < 3; k += 1) {
-      const [ax, az] = at(k);
-      const [bx, bz] = at((k + 1) % 3);
+      const [ax, az] = cornerAt(k);
+      const [bx, bz] = cornerAt((k + 1) % 3);
       longest = Math.max(longest, Math.hypot(bx - ax, bz - az));
     }
     const x = (pos.getX(t) + pos.getX(t + 1) + pos.getX(t + 2)) / 3;
@@ -858,7 +863,7 @@ test("a mapped catenary mast stands on the side of the track it is mapped on", (
   );
   const masts = built.children.find((c) => c.name === "rail-catenary-masts");
   const pos = (masts as Mesh).geometry.getAttribute("position");
-  let near = 0;
+  let nearCount = 0;
   const south: number[] = [];
   for (let i = 0; i < pos.count; i += 1) {
     if (Math.abs(pos.getX(i) - 200) < 1 && pos.getY(i) < 102) {
@@ -866,10 +871,10 @@ test("a mapped catenary mast stands on the side of the track it is mapped on", (
       if (pos.getZ(i) >= -2) {
         south.push(pos.getZ(i));
       }
-      near += 1;
+      nearCount += 1;
     }
   }
-  expect(near).toBeGreaterThan(0);
+  expect(nearCount).toBeGreaterThan(0);
   expect(south).toEqual([]);
 });
 

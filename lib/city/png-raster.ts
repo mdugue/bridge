@@ -28,7 +28,7 @@ function readU32(b: Uint8Array, at: number): number {
 }
 
 function chunkType(b: Uint8Array, at: number): string {
-  return String.fromCharCode(b[at], b[at + 1], b[at + 2], b[at + 3]);
+  return String.fromCodePoint(b[at], b[at + 1], b[at + 2], b[at + 3]);
 }
 
 interface PngParts {
@@ -53,7 +53,10 @@ function readParts(png: Uint8Array): PngParts {
     if (type === "IHDR") {
       width = readU32(body, 0);
       height = readU32(body, 4);
-      const [depth, colour, , , interlace] = body.subarray(8, 13);
+      const header = body.subarray(8, 13);
+      const depth = header[0];
+      const colour = header[1];
+      const interlace = header[4];
       if (depth !== 8 || colour !== 0 || interlace !== 0) {
         throw new Error(
           `unsupported PNG (depth ${depth}, colour ${colour}, interlace ${interlace})`
@@ -138,7 +141,12 @@ function unfilterRow(
         const pa = p > left ? p - left : left - p;
         const pb = p > up ? p - up : up - p;
         const pc = p > upLeft ? p - upLeft : upLeft - p;
-        const pred = pa <= pb && pa <= pc ? left : pb <= pc ? up : upLeft;
+        let pred = upLeft;
+        if (pa <= pb && pa <= pc) {
+          pred = left;
+        } else if (pb <= pc) {
+          pred = up;
+        }
         left = (line[i] + pred) & 255;
         out[i] = left;
         upLeft = up;

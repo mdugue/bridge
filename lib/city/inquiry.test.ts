@@ -504,12 +504,12 @@ test("a roof on posts LoD2 lacks is named by ALKIS's word for one", () => {
       area: 640,
     }),
   });
-  const card = inquiryCard(
+  const shown = inquiryCard(
     { kind: "building", tile: "t", picked: roof, tree: [roof] },
     provenance,
     DRESDEN
   );
-  expect(card.title).toBe("Überdachung");
+  expect(shown.title).toBe("Überdachung");
 });
 
 test("a landmark's card lists the nameplate's Wikidata facts and credits Wikidata", () => {
@@ -536,13 +536,13 @@ test("a landmark's card lists the nameplate's Wikidata facts and credits Wikidat
       },
     ],
   });
-  const card = inquiryCard(ask, null, DRESDEN, null, landmarks);
+  const shown = inquiryCard(ask, null, DRESDEN, null, landmarks);
   const fact = (label: string) =>
-    card.facts.find((f) => f.label === label)?.value;
+    shown.facts.find((f) => f.label === label)?.value;
   expect(fact("Bauzeit")).toBe("1726–1743");
   expect(fact("Architekt")).toBe("George Bähr");
   expect(fact("Wiederaufbau")).toBe("1994–2005");
-  expect(lines(card.sources)).toContain(
+  expect(lines(shown.sources)).toContain(
     "Bauzeit, Architekt, Wiederaufbau: Wikidata Q157229 · CC0"
   );
   // without the file: the card as it always was

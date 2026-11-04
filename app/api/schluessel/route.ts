@@ -70,7 +70,7 @@ export async function POST(request: Request): Promise<Response> {
       cache: "no-store",
       signal: AbortSignal.timeout(10_000),
     });
-    status = res.status;
+    ({ status } = res);
     await res.body?.cancel();
   } catch {
     return refuse(

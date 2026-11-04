@@ -20,12 +20,14 @@ test("the colony bytes' scales are the bake's", () => {
     path.join(import.meta.dir, "../../pipeline/bake/cultivated.py"),
     "utf-8"
   );
-  expect(Number(/^EDGE_SCALE = ([\d.]+)$/mu.exec(python)?.[1])).toBe(
-    COLONY_EDGE_SCALE
+  expect(
+    Number(/^EDGE_SCALE = (?<scale>[\d.]+)$/mu.exec(python)?.groups?.scale)
+  ).toBe(COLONY_EDGE_SCALE);
+  const axis = /def axis_code[^]*?\* (?<steps>\d+)\)\) % (?<modulus>\d+)/u.exec(
+    python
   );
-  const axis = /def axis_code[^]*?\* (\d+)\)\) % (\d+)/u.exec(python);
-  expect(Number(axis?.[1])).toBe(COLONY_AXIS_STEPS);
-  expect(Number(axis?.[2])).toBe(COLONY_AXIS_STEPS + 1);
+  expect(Number(axis?.groups?.steps)).toBe(COLONY_AXIS_STEPS);
+  expect(Number(axis?.groups?.modulus)).toBe(COLONY_AXIS_STEPS + 1);
 });
 
 test("a cropped colony raster maps to its part of the tile", () => {

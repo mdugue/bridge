@@ -11,9 +11,9 @@ test("the spec carries exactly the keys pipeline/bake/spec.py reads", () => {
   // missing; one it no longer reads would ride along unused
   const python = readFileSync(path.join(PYTHON, "spec.py"), "utf-8");
   const read = new Set(
-    [...python.matchAll(/doc(?:\["(\w+)"\]|\.get\("(\w+)")/gu)].map(
-      (m) => m[1] ?? m[2]
-    )
+    [
+      ...python.matchAll(/doc(?:\["(?<index>\w+)"\]|\.get\("(?<call>\w+)")/gu),
+    ].map((m) => m.groups?.index ?? m.groups?.call ?? "")
   );
   for (const site of Object.values(SITES)) {
     expect(new Set(Object.keys(siteSpec(site)))).toEqual(read);
@@ -23,14 +23,18 @@ test("the spec carries exactly the keys pipeline/bake/spec.py reads", () => {
 test("every provider's products are fields pipeline/bake/common.py takes", () => {
   const python = readFileSync(path.join(PYTHON, "common.py"), "utf-8");
   const block = (
-    /class Products:\n([\s\S]*?)\n\n\n/u.exec(python)?.[1] ?? ""
+    /class Products:\n(?<body>[\s\S]*?)\n\n\n/u.exec(python)?.groups?.body ?? ""
   ).replaceAll(/"""[\s\S]*?"""/gu, "");
   // `name: type`, `name: type = default` (spaced or not), a comment after
   const fields = [
-    ...block.matchAll(/^ {4}(\w+): [^=#\n]+?(\s*=|\s*(?:#.*)?$)/gmu),
+    ...block.matchAll(
+      /^ {4}(?<name>\w+): [^=#\n]+?(?<tail>\s*=|\s*(?:#.*)?$)/gmu
+    ),
   ];
-  const required = fields.filter((m) => !m[2].includes("=")).map((m) => m[1]);
-  const all = new Set(fields.map((m) => m[1]));
+  const required = fields
+    .filter((m) => !(m.groups?.tail ?? "").includes("="))
+    .map((m) => m.groups?.name ?? "");
+  const all = new Set(fields.map((m) => m.groups?.name ?? ""));
   expect(required.length).toBeGreaterThan(0);
   for (const site of Object.values(SITES)) {
     const keys = Object.keys(siteSpec(site).products);

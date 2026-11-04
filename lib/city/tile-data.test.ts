@@ -37,7 +37,7 @@ const MAY_LACK: Record<string, string> = {};
 /** `<kind><suffix>` → the tiles that carry it, over the per-tile folders. */
 function kindsOnDisk(site: Site): Map<string, Set<string>> {
   const suffix = site.provider.tileSuffix;
-  const tileInName = new RegExp(`_(\\d{5}_\\d{4}_2${suffix})(.*)$`);
+  const tileInName = new RegExp(`_(\\d{5}_\\d{4}_2${suffix})(.*)$`, "u");
   const kinds = new Map<string, Set<string>>();
   for (const sub of ["dlm", "dop"]) {
     const dir = `${siteDataDir(site)}/${sub}`;

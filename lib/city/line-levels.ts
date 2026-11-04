@@ -151,24 +151,28 @@ interface Sampled {
   steep: boolean;
 }
 
+/** A grid cell's key. */
+function cellKey(x: number, y: number): string {
+  return `${Math.floor(x / CELL_M)}:${Math.floor(y / CELL_M)}`;
+}
+
 /** Every sample of every piece by grid cell. */
 class SampleIndex {
   private readonly cells = new Map<string, { piece: number; i: number }[]>();
-  constructor(readonly pieces: readonly Sampled[]) {
+  readonly pieces: readonly Sampled[];
+  constructor(pieces: readonly Sampled[]) {
+    this.pieces = pieces;
     for (const [piece, p] of pieces.entries()) {
-      p.pts.forEach((pt, i) => {
-        const k = this.key(pt[0], pt[1]);
+      for (const [i, pt] of p.pts.entries()) {
+        const k = cellKey(pt[0], pt[1]);
         let cell = this.cells.get(k);
         if (!cell) {
           cell = [];
           this.cells.set(k, cell);
         }
         cell.push({ piece, i });
-      });
+      }
     }
-  }
-  private key(x: number, y: number): string {
-    return `${Math.floor(x / CELL_M)}:${Math.floor(y / CELL_M)}`;
   }
   /** Samples of `line` (any line: null; steep or not as `steep` says,
    *  either: undefined) within `r` of (x, y) on pieces other than `not`. */

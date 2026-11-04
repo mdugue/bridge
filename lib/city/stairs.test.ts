@@ -217,8 +217,10 @@ test("a flight's axis middle", () => {
 
 test("the flight's treads climb one riser per step to the top landing", () => {
   const geo = stairGeometry(FLIGHT, { cx: 0, cy: 0 });
-  expect(geo).not.toBeNull();
-  const g = geo as NonNullable<typeof geo>;
+  if (!geo) {
+    throw new Error("the flight has no geometry");
+  }
+  const g = geo;
   const treadY = new Set<number>();
   for (let v = 0; v < g.kinds.length; v += 1) {
     if (g.kinds[v] === STAIR_TREAD) {
@@ -263,6 +265,18 @@ test("every triangle is wound to face its normal", () => {
   }
 });
 
+/** The ground beside the flight stands 1 m above its treads, level along it. */
+const cut = (x: number, y: number) =>
+  Math.abs(x - 50) > 2 ? bank(y) + 1 : bank(y);
+
+/** The Wange triangles a flight gets, by the sides it is walled on. */
+const banksOf = (walled: [boolean, boolean]) =>
+  stairGeometry(
+    { ...FLIGHT, walled },
+    { cx: 0, cy: 0 },
+    { groundAt: cut }
+  )?.kinds.filter((k) => k === STAIR_BANK).length ?? 0;
+
 function windsToItsNormals(g: { normals: number[]; positions: number[] }) {
   const p = g.positions;
   const nrm = g.normals;
@@ -278,11 +292,11 @@ function windsToItsNormals(g: { normals: number[]; positions: number[] }) {
 
 test("a flight cut into a bank gets Wangen at the bank's level", () => {
   // The bank beside the flight stands 1 m above its treads, level along it.
-  const cut = (x: number, y: number) =>
-    Math.abs(x - 50) > 2 ? bank(y) + 1 : bank(y);
   const g = stairGeometry(FLIGHT, { cx: 0, cy: 0 }, { groundAt: cut });
-  expect(g).not.toBeNull();
-  const geo = g as NonNullable<typeof g>;
+  if (!g) {
+    throw new Error("the flight has no geometry");
+  }
+  const geo = g;
   const banks = geo.kinds.filter((k) => k === STAIR_BANK).length;
   // both sides, every section: two triangles of the ground-toned top
   expect(banks).toBe(2 * 25 * 6);
@@ -337,14 +351,6 @@ test("a malformed feature is not a flight", () => {
 
 test("only a side with a wall or building along it becomes a Wange", () => {
   // the bank beside the flight 1 m above its treads, as above
-  const cut = (x: number, y: number) =>
-    Math.abs(x - 50) > 2 ? bank(y) + 1 : bank(y);
-  const banksOf = (walled: [boolean, boolean]) =>
-    stairGeometry(
-      { ...FLIGHT, walled },
-      { cx: 0, cy: 0 },
-      { groundAt: cut }
-    )?.kinds.filter((k) => k === STAIR_BANK).length ?? 0;
   // open on both sides (Meißen's grass banks): plain cheeks, the bank
   // stays ground
   expect(banksOf([false, false])).toBe(0);

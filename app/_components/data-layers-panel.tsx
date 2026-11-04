@@ -48,8 +48,7 @@ export const DataLayersPanel = ({
             checked={look[def.key]}
             id={def.id}
             onCheckedChange={(checked) => {
-              const patch: Partial<LookValues> = {};
-              patch[def.key] = checked;
+              const patch: Partial<LookValues> = { [def.key]: checked };
               onLook(patch);
             }}
             size="sm"
@@ -82,6 +81,9 @@ function countHour(counters: BikeCounter[]): string | null {
   return `${countClock(new Date(Math.max(...times)))} Uhr`;
 }
 
+const counterTotal = (c: BikeCounter): number =>
+  c.directions.reduce((sum, d) => sum + d.count, 0);
+
 /**
  * The live bicycle counts in words (the scene shows them as columns): one
  * row per counter, busiest first, a count per direction in its column's
@@ -101,9 +103,7 @@ export const BikeCountList = ({
       </span>
     );
   }
-  const total = (c: BikeCounter) =>
-    c.directions.reduce((sum, d) => sum + d.count, 0);
-  const rows = [...counters].sort((a, b) => total(b) - total(a));
+  const rows = [...counters].sort((a, b) => counterTotal(b) - counterTotal(a));
   const hour = countHour(counters);
   return (
     <div className="flex flex-col gap-1">

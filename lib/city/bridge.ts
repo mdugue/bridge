@@ -146,18 +146,22 @@ export function fitParabola(
   return { a, b, c, rms: Math.sqrt(sq / points.length) };
 }
 
-function solve3(A: number[][], y: number[]): [number, number, number] | null {
-  const det = (M: number[][]) =>
+function det3(M: number[][]): number {
+  return (
     M[0][0] * (M[1][1] * M[2][2] - M[1][2] * M[2][1]) -
     M[0][1] * (M[1][0] * M[2][2] - M[1][2] * M[2][0]) +
-    M[0][2] * (M[1][0] * M[2][1] - M[1][1] * M[2][0]);
-  const d = det(A);
+    M[0][2] * (M[1][0] * M[2][1] - M[1][1] * M[2][0])
+  );
+}
+
+function solve3(A: number[][], y: number[]): [number, number, number] | null {
+  const d = det3(A);
   if (Math.abs(d) < 1e-9) {
     return null;
   }
   const col = (k: number) =>
     A.map((row, i) => row.map((v, j) => (j === k ? y[i] : v)));
-  return [det(col(0)) / d, det(col(1)) / d, det(col(2)) / d];
+  return [det3(col(0)) / d, det3(col(1)) / d, det3(col(2)) / d];
 }
 
 /** The best rib of an arch fits its parabola at least this tightly (m). */
@@ -191,8 +195,8 @@ function ribArch(points: { s: number; y: number }[]): Parabola | null {
   const first = points[0].s;
   const last = points.at(-1)?.s ?? first;
   const crown = -fit.b / (2 * fit.a);
-  const sag = -fit.a * ((last - first) / 2) ** 2;
-  return crown >= first && crown <= last && sag >= ARCH_MIN_SAG ? fit : null;
+  const drop = -fit.a * ((last - first) / 2) ** 2;
+  return crown >= first && crown <= last && drop >= ARCH_MIN_SAG ? fit : null;
 }
 
 /**
@@ -317,11 +321,12 @@ export type DeckCarrier = "arch" | "beam" | "frame";
 /** The carrier an OSM `bridge:structure` value names (an unknown one is a
  *  beam: most bridges are). */
 export function deckCarrier(structure: string | null | undefined): DeckCarrier {
-  const s = structure ?? "";
-  if (s.includes("arch") || s.includes("humpback")) {
+  if (structure?.includes("arch") || structure?.includes("humpback")) {
     return "arch";
   }
-  return /truss|suspension|cable-stayed|cantilever/u.test(s) ? "frame" : "beam";
+  return /truss|suspension|cable-stayed|cantilever/u.test(structure ?? "")
+    ? "frame"
+    : "beam";
 }
 
 /** A beam is about a twentieth of its span deep... */
@@ -349,12 +354,12 @@ export function deckDepth(
   bound?: number | null
 ): number {
   const [low, high] = BEAM_DEPTH_M;
-  const depth =
-    carrier === "arch"
-      ? ARCH_DECK_M
-      : carrier === "frame"
-        ? FRAME_DECK_M
-        : Math.min(Math.max(span / BEAM_SLENDERNESS, low), high);
+  let depth = Math.min(Math.max(span / BEAM_SLENDERNESS, low), high);
+  if (carrier === "arch") {
+    depth = ARCH_DECK_M;
+  } else if (carrier === "frame") {
+    depth = FRAME_DECK_M;
+  }
   return bound !== null && bound !== undefined && bound > 0
     ? Math.min(depth, bound)
     : depth;
@@ -545,11 +550,11 @@ export function smoothRise(rise: readonly number[], window = 5): number[] {
  *  and offset, and where a point lies in those terms. */
 export interface AxisFrame {
   /** the point at station `s` (m along the axis), `offset` to its left */
-  at(s: number, offset: number): [number, number];
+  at: (s: number, offset: number) => [number, number];
   length: number;
   /** station and offset of the nearest axis point (beyond an end the
    *  station runs on along the end segment) */
-  project(x: number, y: number): { offset: number; s: number };
+  project: (x: number, y: number) => { offset: number; s: number };
 }
 
 /** The frame of a baked `axis` polyline; null for fewer than two distinct
@@ -756,8 +761,10 @@ function aroundMain(
       ? Math.max(1, Math.round(part / ARCH_SPAN))
       : Math.round((others * part) / Math.max(a + length - b, 1e-6));
   const left = a > 1 ? side(a) : 0;
-  const right =
-    others === null ? (length - b > 1 ? side(length - b) : 0) : others - left;
+  let right = others === null ? 0 : others - left;
+  if (others === null && length - b > 1) {
+    right = side(length - b);
+  }
   // a side without arches of its own is the abutment: still a bay, which
   // opens only if it clears the ground
   return [

@@ -112,14 +112,14 @@ const xyOf = (p: { x: number; y: number }): [number, number] => [p.x, p.y];
 
 /** A part's material: of one colour, or (`null`) the instance's tint —
  *  the livery's parts, coloured per car. */
-function partMaterial(color: number | null): MeshStandardNodeMaterial {
-  const key = color === null ? "livery" : color.toString(16);
+function partMaterial(paint: number | null): MeshStandardNodeMaterial {
+  const key = paint === null ? "livery" : paint.toString(16);
   return sceneMaterial(`tram-car:${key}`, () => {
     const m = new MeshStandardNodeMaterial({
-      color: new Color(color ?? 0xff_ff_ff),
+      color: new Color(paint ?? 0xff_ff_ff),
       roughness: 0.55,
     });
-    if (color === null) {
+    if (paint === null) {
       m.colorNode = instanceTint();
     }
     m.positionNode = instancePosition(
@@ -339,10 +339,10 @@ export function createTramCars(
   ];
   // One matrix per section, shared by every part: the body owns it.
   const sets: Instances[] = [];
-  for (const { geo, color, name, tint: tinted } of parts) {
+  for (const { geo, color: paint, name, tint: tinted } of parts) {
     const set = new Instances(
       geo,
-      partMaterial(color),
+      partMaterial(paint),
       CAPACITY,
       sets[0]?.instanceMatrix
     );

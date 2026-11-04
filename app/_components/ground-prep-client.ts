@@ -39,7 +39,8 @@ let nextKey = 0;
 const keyOf = (shared: object): number => {
   let key = sharedKeys.get(shared);
   if (key === undefined) {
-    key = nextKey++;
+    key = nextKey;
+    nextKey += 1;
     sharedKeys.set(shared, key);
   }
   return key;
@@ -104,7 +105,7 @@ function startWorker(): Worker | null {
   }
   worker = w;
   // a stopped worker's last word is not about the jobs now running
-  w.onmessage = ({ data }: MessageEvent<Reply>) => {
+  w.addEventListener("message", ({ data }: MessageEvent<Reply>) => {
     if (worker !== w) {
       return;
     }
@@ -118,9 +119,9 @@ function startWorker(): Worker | null {
       }
     }
     next();
-  };
+  });
   // a reply that cannot be read: that job here, the rest as before
-  w.onmessageerror = () => {
+  w.addEventListener("messageerror", () => {
     if (worker !== w) {
       return;
     }
@@ -130,13 +131,13 @@ function startWorker(): Worker | null {
       runHere(job);
     }
     next();
-  };
-  w.onerror = (event) => {
+  });
+  w.addEventListener("error", (event) => {
     event.preventDefault();
     if (worker === w) {
       giveUp();
     }
-  };
+  });
   return w;
 }
 

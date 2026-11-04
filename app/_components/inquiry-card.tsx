@@ -40,15 +40,15 @@ function useFetched<T>(
     null
   );
   useEffect(() => {
-    if (!url) {
-      return;
-    }
     let live = true;
-    void cachedFetch(cache, url, accept).then((value) => {
-      if (live) {
-        setLoaded({ url, value });
-      }
-    });
+    if (url) {
+      void cachedFetch(cache, url, accept).then((value) => {
+        if (live) {
+          setLoaded({ url, value });
+        }
+        return null;
+      });
+    }
     return () => {
       live = false;
     };
@@ -68,15 +68,16 @@ function useLandmarkFacts(inquiry: Inquiry): LandmarkFactsIndex | null {
     url: string;
   } | null>(null);
   useEffect(() => {
-    if (!url) {
-      return;
-    }
     let live = true;
-    void loadLandmarkFacts(url).then((index) => {
-      if (live) {
-        setLoaded({ url, index });
-      }
-    });
+    // `inquiry` is read so that each question reruns this
+    if (url && inquiry) {
+      void loadLandmarkFacts(url).then((index) => {
+        if (live) {
+          setLoaded({ url, index });
+        }
+        return null;
+      });
+    }
     return () => {
       live = false;
     };
@@ -188,7 +189,8 @@ let nextInquiryKey = 0;
 function inquiryKey(inquiry: Inquiry): number {
   let key = inquiryKeys.get(inquiry);
   if (key === undefined) {
-    key = nextInquiryKey++;
+    key = nextInquiryKey;
+    nextInquiryKey += 1;
     inquiryKeys.set(inquiry, key);
   }
   return key;
@@ -386,11 +388,16 @@ const CardDetails = ({
   // Which id was copied: a new building's card starts uncopied.
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const copied = copiedId === card.id;
-  const copy = () => {
-    navigator.clipboard?.writeText(card.id).then(
-      () => setCopiedId(card.id),
-      () => {}
-    );
+  const copy = async () => {
+    if (!navigator.clipboard) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(card.id);
+      setCopiedId(card.id);
+    } catch {
+      // a refused clipboard leaves the id uncopied
+    }
   };
   return (
     <>
@@ -416,7 +423,9 @@ const CardDetails = ({
         <button
           aria-label={`${card.idLabel} kopieren`}
           className="rounded p-1 hover:bg-muted hover:text-foreground"
-          onClick={copy}
+          onClick={() => {
+            void copy();
+          }}
           title={`${card.idLabel} kopieren`}
           type="button"
         >

@@ -23,23 +23,23 @@ const ROW =
 
 /** What a row's icon says: on foot, from the air, or a landmark. */
 const PlaceIcon = ({ place }: { place: Place }) => {
-  const Icon =
-    place.kind === "landmark"
-      ? LandmarkIcon
-      : place.mode === "fly"
-        ? PlaneIcon
-        : FootprintsIcon;
+  let Icon = FootprintsIcon;
+  if (place.kind === "landmark") {
+    Icon = LandmarkIcon;
+  } else if (place.mode === "fly") {
+    Icon = PlaneIcon;
+  }
   return <Icon aria-hidden className="size-3.5 shrink-0 opacity-60" />;
 };
 
 /** A row's tooltip: its line and the landmarks it shows too. */
 function titleOf(place: Place): string {
-  const how =
-    place.kind === "landmark"
-      ? "Wahrzeichen · aus der Luft"
-      : place.mode === "fly"
-        ? "Aus der Luft"
-        : "Auf Augenhöhe";
+  let how = "Auf Augenhöhe";
+  if (place.kind === "landmark") {
+    how = "Wahrzeichen · aus der Luft";
+  } else if (place.mode === "fly") {
+    how = "Aus der Luft";
+  }
   return [
     place.description ?? how,
     place.also.length > 0 ? `Mit ${place.also.join(", ")}` : "",

@@ -107,24 +107,25 @@ export const TRAM_LIVERIES: Record<TramOperator, TramLivery> = {
  *  the transport association for some (Dresden's trams come as the
  *  Verkehrsverbund Oberelbe's: within the VVO only the DVB runs city
  *  trams; Munich's as Stadtwerke München's, the MVG's parent). */
-export function operatorOf(agency: string | undefined): TramOperator {
-  const a = agency ?? "";
+export function operatorOf(agency = ""): TramOperator {
   if (
     /Dresdner Verkehrsbetriebe|\bDVB\b|Verkehrsverbund Oberelbe|\bVVO\b/iu.test(
-      a
+      agency
     )
   ) {
     return "dvb";
   }
-  if (/Leipziger Verkehrsbetriebe|\bLVB\b/iu.test(a)) {
+  if (/Leipziger Verkehrsbetriebe|\bLVB\b/iu.test(agency)) {
     return "lvb";
   }
   if (
-    /Stadtwerke München|Münchner Verkehrsgesellschaft|\bMVG\b|\bSWM\b/iu.test(a)
+    /Stadtwerke München|Münchner Verkehrsgesellschaft|\bMVG\b|\bSWM\b/iu.test(
+      agency
+    )
   ) {
     return "mvg";
   }
-  if (/Berliner Verkehrsbetriebe|\bBVG\b/iu.test(a)) {
+  if (/Berliner Verkehrsbetriebe|\bBVG\b/iu.test(agency)) {
     return "bvg";
   }
   return "neutral";
@@ -150,7 +151,7 @@ export function carLength(livery: TramLivery, seed: number): number {
     }
     at -= w;
   }
-  return livery.lengths[livery.lengths.length - 1]?.[0] ?? 30;
+  return livery.lengths.at(-1)?.[0] ?? 30;
 }
 
 export type TramDayKind = "saturday" | "sunday" | "weekday";

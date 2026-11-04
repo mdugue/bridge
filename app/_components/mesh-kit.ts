@@ -462,7 +462,9 @@ export function meshFrom(
   return finished(meshSteps(acc, color, opts));
 }
 
-/** `meshFrom` in steps: its floats copied a run at a time. */
+/** `meshFrom` in steps: its floats copied a run at a time.
+ * @yields {void} after each run of floats, to hand the thread back
+ */
 export function* meshSteps(
   acc: Mesh3,
   color: number,

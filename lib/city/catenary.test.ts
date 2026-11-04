@@ -89,9 +89,9 @@ test("two tiles drawing one line agree on the contact wire at their seam", () =>
 });
 
 /** A member on grid line x:2 (x 100) at z, along x. */
-const member = (track: number, z: number, h = 5.5): SectionMember => ({
+const member = (trackNo: number, z: number, h = 5.5): SectionMember => ({
   h,
-  track,
+  track: trackNo,
   support: 0,
   tx: 1,
   tz: 0,

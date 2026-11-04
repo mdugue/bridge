@@ -72,44 +72,48 @@ const [command, ...args] = rest;
 switch (command) {
   case "such": {
     const q = args.join(" ");
-    index.landmarks
+    for (const line of index.landmarks
       .filter((lm) => matchesQuery(lm, q))
-      .flatMap(landmark)
-      .forEach(out);
-    for (const m of monuments().filter((m) => matchesQuery(m, q))) {
-      out(monument(m));
+      .flatMap(landmark)) {
+      out(line);
     }
-    for (const b of buildings()
+    for (const mon of monuments().filter((m) => matchesQuery(m, q))) {
+      out(monument(mon));
+    }
+    for (const bld of buildings()
       .filter((b) => matchesQuery(b, q))
       .slice(0, 40)) {
-      out(building(b));
+      out(building(bld));
     }
     break;
   }
   case "nah": {
     const [x, y, r = "80"] = args.map(Number);
-    nearby(index.landmarks, x, y, Number(r) * 3)
-      .flatMap(landmark)
-      .forEach(out);
-    for (const m of nearby(monuments(), x, y, Number(r))) {
-      out(monument(m));
+    for (const line of nearby(index.landmarks, x, y, Number(r) * 3).flatMap(
+      landmark
+    )) {
+      out(line);
     }
-    for (const b of nearby(
+    for (const mon of nearby(monuments(), x, y, Number(r))) {
+      out(monument(mon));
+    }
+    for (const bld of nearby(
       buildings().filter((b) => b.name !== undefined || b.wd !== undefined),
       x,
       y,
       Number(r)
     )) {
-      out(building(b));
+      out(building(bld));
     }
     break;
   }
   case "wahrzeichen": {
     const q = args.join(" ");
-    index.landmarks
+    for (const line of index.landmarks
       .filter((lm) => !q || matchesQuery(lm, q))
-      .flatMap(landmark)
-      .forEach(out);
+      .flatMap(landmark)) {
+      out(line);
+    }
     break;
   }
   case "quellen": {

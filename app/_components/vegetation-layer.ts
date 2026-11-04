@@ -565,7 +565,10 @@ export function buildCrownGeoRich(): BufferGeometry {
   const mtx = new Matrix4();
   const parts: BufferGeometry[] = [];
   let k = 0;
-  const rnd = () => hash((k++ + 1) * 1.37 + 0.19);
+  const rnd = () => {
+    k += 1;
+    return hash(k * 1.37 + 0.19);
+  };
 
   const core = new IcosahedronGeometry(R * 0.72, 1);
   core.scale(1.1, 0.82, 1.1);
@@ -1044,6 +1047,10 @@ function printedCrown(shown: V3, kept: V3, twig: F): V3 {
  *  bulges out to read as lobes. */
 const TRUNK_SIDES = 9;
 
+/** The trunk's radius at `u` (0 foot, 1 top) on the straight taper. */
+const trunkTaper = (u: number) =>
+  TRUNK_FOOT_R + (TRUNK_TOP_R - TRUNK_FOOT_R) * u;
+
 /**
  * De-sterilised trunk — a tapered cylinder with (1) a root flare at the base,
  * (2) low-amplitude radial "bark" bumps and (3) a gentle fixed lean. One shared
@@ -1065,12 +1072,11 @@ export function buildTrunkGeo(fork = true): BufferGeometry {
   // the cylinder's evenly spaced rows moved onto the profile's rings (two
   // of them low in the flared foot)
   // with the taper's radius there
-  const taper = (u: number) => TRUNK_FOOT_R + (TRUNK_TOP_R - TRUNK_FOOT_R) * u;
   const rows = t.attributes.position;
   for (let i = 0; i < rows.count; i += 1) {
     const from = rows.getY(i) / TRUNK_H;
     const to = TRUNK_RINGS[Math.round(from * TRUNK_ROWS)] ?? 1;
-    const k = taper(to) / taper(from);
+    const k = trunkTaper(to) / trunkTaper(from);
     rows.setXYZ(i, rows.getX(i) * k, to * TRUNK_H, rows.getZ(i) * k);
   }
   const bend = 0.05 * TRUNK_H;
@@ -1966,7 +1972,8 @@ const PLACEMENT_RUN = 256;
 const ROW_RUN = 16;
 
 /** `buildVegetation` in steps: per run of rows and canopy points, per
- *  250 m cell of trees (build-steps.ts). */
+ *  250 m cell of trees (build-steps.ts).
+ *  @yields {void} once per finished run, to hand the thread back. */
 export function* vegetationSteps(
   features: VegetationFeatures,
   ctx: VegetationContext
@@ -2008,15 +2015,13 @@ export function* vegetationSteps(
       crownMats.uniforms.sunDirection
     );
     group.add(...built.meshes);
-    chunks = built.chunks;
-    loose = built.loose;
-    seasons = built.seasons;
+    ({ chunks, loose, seasons } = built);
   }
   return {
     group,
     chunks,
     applyLook: (look) => {
-      multiTuft = look.multiTuft;
+      ({ multiTuft } = look);
     },
     multiTuft: () => multiTuft,
     setSeason: (day) => applySeasons(seasons, day),
@@ -2090,12 +2095,11 @@ export function createVegetationLod(): (
       const allowRich = control.multiTuft();
       for (const chunk of control.chunks) {
         all[n] = chunk;
-        const state = (states[n] ??= {
-          allowRich,
-          current: chunk.tier,
-          near: 0,
-          trees: 0,
-        });
+        let state = states[n];
+        if (!state) {
+          state = { allowRich, current: chunk.tier, near: 0, trees: 0 };
+          states[n] = state;
+        }
         state.allowRich = allowRich;
         state.current = chunk.tier;
         state.near = nearestTree(chunk, cameraPos);

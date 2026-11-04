@@ -204,7 +204,7 @@ const { limits, warm } = (() => {
       }),
     };
   } catch (error) {
-    fail((error as Error).message);
+    return fail((error as Error).message);
   }
 })();
 // a slow deploy shows why
@@ -279,10 +279,10 @@ function publishServerWissen(siteIds: readonly SiteId[]): void {
     const to = path.join(root, id);
     mkdirSync(to, { recursive: true });
     copyFileSync(path.join(from, indexFile), path.join(to, STADTWISSEN_FILE));
-    const index = JSON.parse(
+    const wissen = JSON.parse(
       readFileSync(path.join(from, indexFile), "utf-8")
     ) as StadtwissenIndex;
-    for (const tile of index.tiles) {
+    for (const tile of wissen.tiles) {
       copyFileSync(path.join(from, tile.file), path.join(to, tile.file));
     }
   }

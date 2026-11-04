@@ -76,10 +76,12 @@ export const WALL_TONES: Readonly<Record<Masonry, number>> = {
   wood: 0xa8_90_74,
 };
 
+/** One sRGB channel (0–1) as linear. */
+const lin = (c: number) =>
+  c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+
 /** sRGB hex → linear RGB, as the mesh's COLOR_0 carries it. */
 export function linearTone(hex: number): [number, number, number] {
-  const lin = (c: number) =>
-    c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
   return [16, 8, 0].map((shift) => lin(((hex >> shift) & 0xff) / 255)) as [
     number,
     number,

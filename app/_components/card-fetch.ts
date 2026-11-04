@@ -16,7 +16,7 @@ export async function cachedFetch<T>(
   let pending = cache.get(url);
   if (!pending) {
     pending = fetch(url)
-      .then((res) => (res.ok ? (res.json() as Promise<unknown>) : null))
+      .then(async (res) => (res.ok ? ((await res.json()) as unknown) : null))
       .then((json) => (accept(json) ? json : null))
       .catch(() => null)
       .then((value) => {

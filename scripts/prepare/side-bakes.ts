@@ -64,23 +64,24 @@ export async function publishColonies(
     cropping ??= cropColonyRaster(src);
     return await cropping;
   };
-  const crop = parse<ColonyCrop | null>(
-    await cached(cropFile, key, async () => utf8((await cut())?.crop ?? null))
-  );
+  const crop = parse(
+    await cached(cropFile, key, async () => {
+      const cropped = await cut();
+      return utf8(cropped?.crop ?? null);
+    })
+  ) as ColonyCrop | null;
   if (!crop) {
     log(`no colony on ${tile}, skipping ${file}`);
     return null;
   }
-  const full = await cached(
-    file,
-    key,
-    async () => (await cut())?.full ?? new Uint8Array()
-  );
-  const low = await cached(
-    lowFile,
-    key,
-    async () => (await cut())?.low ?? new Uint8Array()
-  );
+  const full = await cached(file, key, async () => {
+    const cropped = await cut();
+    return cropped?.full ?? new Uint8Array();
+  });
+  const low = await cached(lowFile, key, async () => {
+    const cropped = await cut();
+    return cropped?.low ?? new Uint8Array();
+  });
   // the full raster first: the manifest lists the files in publish order
   const cultivatedRaster = publish(file, full);
   return { crop, cultivatedLow: publish(lowFile, low), cultivatedRaster };
@@ -95,10 +96,13 @@ function roofsOf(tile: string): RoofFootprint[] {
     const city = at(cityMeshSourceFiles(SITE, tile).city);
     const gaps = at(cityMeshSourceFiles(SITE, tile).structures);
     roofs = [
-      ...(existsSync(city) ? lod2Roofs(readJson<CityJsonDocument>(city)) : []),
+      ...(existsSync(city)
+        ? lod2Roofs(readJson(city) as CityJsonDocument)
+        : []),
       ...(existsSync(gaps)
         ? gapRoofs(
-            readJson<FeatureCollection<StructureFeature>>(gaps).features ?? []
+            (readJson(gaps) as FeatureCollection<StructureFeature>).features ??
+              []
           )
         : []),
     ];
@@ -132,14 +136,15 @@ export async function publishCanopy(
     BAKE_ENTRIES.canopy
   );
   const bytes = await cached(packed, key, () => {
-    const doc = readJson<FeatureCollection<CanopyFeature> & { rows?: unknown }>(
-      src
-    );
+    const doc = readJson(src) as FeatureCollection<CanopyFeature> & {
+      rows?: unknown;
+    };
     const trees = doc.features ?? [];
     let features = trees;
     if (existsSync(sheds)) {
       const structures =
-        readJson<FeatureCollection<SmallBuildingFeature>>(sheds).features ?? [];
+        (readJson(sheds) as FeatureCollection<SmallBuildingFeature>).features ??
+        [];
       features = treesOffStructures(trees, structures);
       log(
         `${file}: ${trees.length - features.length} points in a scan structure dropped`

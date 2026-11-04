@@ -207,7 +207,12 @@ export function readStructuralMetadata(
       };
     }
   );
-  return { tableAccessors, dispose: () => {} };
+  return {
+    tableAccessors,
+    dispose: () => {
+      // nothing is held: the readers work on the tile's own buffers
+    },
+  };
 }
 
 /** A property's default: its schema's, else the type's zero. */
@@ -293,6 +298,10 @@ function columnReader(
   }
 }
 
+/** Component `i` of a scale or offset: a scalar applies to all. */
+const component = (v: number | number[], i: number): number =>
+  Array.isArray(v) ? (v[i] ?? 0) : v;
+
 /** How a SCALAR or VECn column's stored numbers become its values: the
  *  numbers, how many a row has, and component i of a value from its stored
  *  number — normalised, scaled and offset as the schema says. */
@@ -315,8 +324,6 @@ function numberDecoder(
   const values = typedArray(type, view(column.values));
   const max = property.normalized ? INT_MAX[type] : undefined;
   const transformed = property.normalized === true || type.startsWith("FLOAT");
-  const component = (v: number | number[], i: number): number =>
-    Array.isArray(v) ? (v[i] ?? 0) : v;
   const scale = column.scale ?? property.scale ?? 1;
   const offset = column.offset ?? property.offset ?? 0;
   const scales = Array.from({ length: n }, (_, i) => component(scale, i));

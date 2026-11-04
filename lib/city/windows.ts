@@ -1237,17 +1237,21 @@ function wallTriangles(
   return { planes, tris };
 }
 
+const toMm = (x: number): number => Math.round(x * 1000);
+
+/** No object has a known height. */
+const noHeight = (): undefined => undefined;
+
 /** The walls of the objects `drawn` says carry windows. */
 function wallsOf(mesh: FacadeMesh, drawn: (object: number) => boolean): Wall[] {
   const p = mesh.positions;
   const { planes, tris } = wallTriangles(mesh, drawn);
   const uf = unionFind(tris.length);
   const byVertex = new Map<string, number[]>();
-  const mm = (x: number) => Math.round(x * 1000);
   for (const [k, t] of tris.entries()) {
     for (let c = 0; c < 3; c += 1) {
       const i = 3 * (t + c);
-      const key = `${mesh.objectIds[t]}:${mm(p[i])},${mm(p[i + 1])},${mm(p[i + 2])}`;
+      const key = `${mesh.objectIds[t]}:${toMm(p[i])},${toMm(p[i + 1])},${toMm(p[i + 2])}`;
       const list = byVertex.get(key);
       if (!list) {
         byVertex.set(key, [k]);
@@ -1483,6 +1487,9 @@ const snorm = (m: number) =>
 const NO_DOOR_SNORM = Math.round(NO_DOOR * 32_767);
 const ROOF_SNORM = Math.round(FACADE_ROOF * 32_767);
 
+const unitSnorm = (c: number): number =>
+  Math.round(Math.min(Math.max(c, 0), 1) * 32_767);
+
 /** A roof vertex's wall slots (x, y and the second door, w) hold its
  *  face's own colour, linear RGB a unit each; (0, 0, ·, 0) where it takes
  *  its object's. No window reads a roof vertex's slots (the clay masks
@@ -1496,11 +1503,10 @@ function roofColourAt(
   if (rgb === undefined || r === undefined || Number.isNaN(r)) {
     return;
   }
-  const unit = (c: number) => Math.round(Math.min(Math.max(c, 0), 1) * 32_767);
   // never all zero: that reads as "the object's"
-  out[4 * v] = Math.max(1, unit(r));
-  out[4 * v + 1] = unit(rgb[3 * v + 1]);
-  out[4 * v + 3] = unit(rgb[3 * v + 2]);
+  out[4 * v] = Math.max(1, unitSnorm(r));
+  out[4 * v + 1] = unitSnorm(rgb[3 * v + 1]);
+  out[4 * v + 3] = unitSnorm(rgb[3 * v + 2]);
 }
 
 /** Lays the doors and shopfronts onto their objects' walls. */
@@ -1694,7 +1700,7 @@ export function facadeAttribute(
       out[4 * v + 3] = NO_DOOR_SNORM;
     }
   }
-  const heightOf = heights?.of ?? (() => {});
+  const heightOf = heights?.of ?? noHeight;
   const walls = wallsOf(mesh, (o) => drawn(o) || heightOf(o) !== undefined);
   // party walls, doors and shopfronts among the walls that carry windows
   const windowed = walls.filter((w) => drawn(w.object));
@@ -1749,25 +1755,30 @@ function wallSlots(
   }
   const party = w.party > PARTY_SHARE && above === undefined;
   // a measured wall holds its axes in the length slot (`MEASURED_AXES`)
-  const length = party
-    ? 0
-    : measured
-      ? measuredSlot(measured.n, measured.axis)
-      : snorm(Math.min(w.s1 - w.s0, LENGTH_MAX_M));
+  let length: number;
+  if (party) {
+    length = 0;
+  } else if (measured) {
+    length = measuredSlot(measured.n, measured.axis);
+  } else {
+    length = snorm(Math.min(w.s1 - w.s0, LENGTH_MAX_M));
+  }
   const [d0, d1] = w.doors
     .map((d) => ({ at: d.s - c, w: d.w }))
     .sort((a, b) => Math.abs(a.at) - Math.abs(b.at));
   const noGround = w.shop || w.doors.length > 2;
+  let door0 = NO_DOOR_SNORM;
+  if (noGround) {
+    door0 = snorm(Math.max(w.ground, 0));
+  } else if (d0 !== undefined) {
+    door0 = doorSlot(d0.at, d0.w);
+  }
   return {
     c,
     length: noGround ? -length : length,
     // a wall without ground-floor windows has none to keep off its doors:
     // its first slot holds the height its windows clear
-    door0: noGround
-      ? snorm(Math.max(w.ground, 0))
-      : d0 === undefined
-        ? NO_DOOR_SNORM
-        : doorSlot(d0.at, d0.w),
+    door0,
     // … and its second, like a wall's with at most one door, its eave
     door1: noGround || d1 === undefined ? eave : doorSlot(d1.at, d1.w),
   };

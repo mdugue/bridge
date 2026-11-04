@@ -235,9 +235,9 @@ const PROFILES: Record<TrafficDetail, [number, number][]> = {
  *  there (0 at the ends, 1 inside, a quarter circle between). */
 function samples(
   lane: TrafficLane,
-  step: number
+  spacing: number
 ): { at: number; p: Point2; size: number }[] {
-  const dense = subdividePolyline(lane.coords, step);
+  const dense = subdividePolyline(lane.coords, spacing);
   const dist = [0];
   for (let i = 1; i < dense.length; i += 1) {
     dist.push(

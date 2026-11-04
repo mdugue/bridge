@@ -15,13 +15,21 @@ function ramp(x0: number, x1: number, lo = 100, hi = 108) {
   };
 }
 
+/** The value, or a failure when a step was not found. */
+function present<T>(value: T | null | undefined): T {
+  if (value === null || value === undefined) {
+    throw new Error("expected a value");
+  }
+  return value;
+}
+
 test("snaps to a ramp that sits off the OSM line", () => {
   // The line runs north–south through x = 0 (perp = +x); the measured ramp
   // is 0.7 m east of it and 1 m wide.
   const z = ramp(0.2, 1.2);
   const s = snapToStep((x) => z(x), 0, 0, 1, 0);
   expect(s).not.toBeNull();
-  const snap = s as StepSnap;
+  const snap = present(s);
   expect(snap.up).toBe(1);
   expect(snap.hi).toBeCloseTo(108, 5);
   expect(snap.lo).toBeCloseTo(100, 5);
@@ -31,7 +39,7 @@ test("snaps to a ramp that sits off the OSM line", () => {
 
 test("the high side may lie on either side of the line", () => {
   const z = ramp(-3, -2, 108, 100); // high to the west (−perp)
-  const snap = snapToStep((x) => z(x), 0, 0, 1, 0) as StepSnap;
+  const snap = present(snapToStep((x) => z(x), 0, 0, 1, 0));
   expect(snap.up).toBe(-1);
   expect(snap.hi).toBeCloseTo(108, 5);
   expect(snap.foot).toBeGreaterThan(snap.crest);
@@ -66,10 +74,10 @@ test("smoothing fills a gap and ignores a stray scan", () => {
   const out = smoothSnaps(raw);
   for (const s of out) {
     expect(s).not.toBeNull();
-    expect((s as StepSnap).up).toBe(1);
+    expect(present(s).up).toBe(1);
     // the face goes in front of most of the ramp, never out to the stray
-    expect((s as StepSnap).foot).toBeGreaterThanOrEqual(0.4);
-    expect((s as StepSnap).foot).toBeLessThanOrEqual(0.6);
+    expect(present(s).foot).toBeGreaterThanOrEqual(0.4);
+    expect(present(s).foot).toBeLessThanOrEqual(0.6);
   }
 });
 
@@ -102,8 +110,8 @@ test("smoothing keeps each vertex at the step it found, never between two", () =
   const out = smoothSnaps(raw);
   for (const [i, s] of out.entries()) {
     expect(s).not.toBeNull();
-    expect((s as StepSnap).crest).toBe(raw[i].crest);
-    expect((s as StepSnap).hi).toBe(raw[i].hi);
+    expect(present(s).crest).toBe(raw[i].crest);
+    expect(present(s).hi).toBe(raw[i].hi);
   }
   // a gap takes the step most of its neighbours found
   const gap = smoothSnaps([
@@ -115,5 +123,5 @@ test("smoothing keeps each vertex at the step it found, never between two", () =
     lower(),
     upper(),
   ]);
-  expect((gap[3] as StepSnap).crest).toBe(5);
+  expect(present(gap[3]).crest).toBe(5);
 });

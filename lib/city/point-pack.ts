@@ -81,7 +81,7 @@ export function packPoints(
   const bytes = new Uint8Array(HEADER_BYTES + points.length * stride * 4);
   const view = new DataView(bytes.buffer);
   for (let i = 0; i < MAGIC.length; i += 1) {
-    view.setUint8(i, MAGIC.charCodeAt(i));
+    view.setUint8(i, MAGIC.codePointAt(i) ?? 0);
   }
   view.setUint32(4, points.length, true);
   view.setUint32(8, stride, true);
@@ -114,7 +114,7 @@ export function unpackPoints(buffer: ArrayBuffer): UnpackedPoints | null {
   }
   const view = new DataView(buffer);
   for (let i = 0; i < MAGIC.length; i += 1) {
-    if (view.getUint8(i) !== MAGIC.charCodeAt(i)) {
+    if (view.getUint8(i) !== (MAGIC.codePointAt(i) ?? 0)) {
       return null;
     }
   }
@@ -160,8 +160,10 @@ export function pointOf(
     pine?: number;
     r?: number;
   } | null;
-  const leaf =
-    p?.l === "e" ? (p.ls === "dop" ? LEAF.evergreenPhoto : LEAF.evergreen) : 0;
+  let leaf = 0;
+  if (p?.l === "e") {
+    leaf = p.ls === "dop" ? LEAF.evergreenPhoto : LEAF.evergreen;
+  }
   return {
     x,
     y,

@@ -159,14 +159,14 @@ export function createResolutionScale(
     return change(step + 1);
   };
 
-  const stepUp = (now: number, gpu: number | undefined) => {
+  const stepUp = (now: number, gpu: number | undefined): number | undefined => {
     if (probedAt !== undefined && now - probedAt >= 4 * WINDOW_MS) {
       // the last probe held: the next may come sooner again
       probedAt = undefined;
       probeWait = PROBE_WAIT_MS;
     }
     if (step === 0 || now - downAt < HOLD_MS) {
-      return;
+      return undefined;
     }
     // the finer step's pixels, against this one's
     const growth = (SCALE_STEPS[step - 1] / SCALE_STEPS[step]) ** 2;
@@ -176,7 +176,7 @@ export function createResolutionScale(
     }
     calmSince ??= now;
     if (now - calmSince < probeWait) {
-      return;
+      return undefined;
     }
     probedAt = now;
     return change(step - 1);
@@ -241,10 +241,10 @@ export function createResolutionScale(
         gpus.push(ms);
       }
     },
-    update: (now, still = false) => {
+    update: (now, still = false): number | undefined => {
       windowStart ??= now;
       if (now - windowStart < WINDOW_MS) {
-        return;
+        return undefined;
       }
       windowStart = now;
       const changed = still ? decideStill(now) : decide(now);

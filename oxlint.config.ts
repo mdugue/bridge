@@ -25,6 +25,9 @@ export default defineConfig({
     // Objects only: `const [x] = typedArray` walks an iterator, in hot loops.
     "prefer-destructuring": ["error", { array: false, object: true }],
 
+    // Reads every postMessage as window's: here they are channels' and workers'.
+    "unicorn/require-post-message-target-origin": "off",
+
     // Takes `typedArray.slice()` for an array: its fix makes a plain one.
     "unicorn/prefer-spread": "off",
 
@@ -58,6 +61,17 @@ export default defineConfig({
     "aesthetic-sandbox.html",
   ],
   overrides: [
+    {
+      // "use cache" functions must be async, with or without an await.
+      files: ["app/wissen/**/page.tsx"],
+      rules: { "typescript/require-await": "off" },
+    },
+    {
+      // These read a number off text with more behind it ("123px", "12 m"),
+      // which Number() would make NaN.
+      files: ["app/_components/inquiry-card.tsx", "lib/city/plan-records.ts"],
+      rules: { "unicorn/prefer-number-coercion": "off" },
+    },
     {
       files: ["lib/city/terrain-geometry.ts"],
       rules: { "oxc/erasing-op": "off" },

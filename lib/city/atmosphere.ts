@@ -75,7 +75,10 @@ export function atmosphereAt(altitudeDeg: number): AtmospherePalette {
       };
     }
   }
-  const last = STOPS.at(-1) as Stop;
+  const last = STOPS.at(-1);
+  if (!last) {
+    throw new Error("no atmosphere stops");
+  }
   return { fog: last.fog, hemiSky: last.hemiSky, hemiGround: last.hemiGround };
 }
 

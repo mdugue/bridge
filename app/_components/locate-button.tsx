@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { arrivalHref, placementOf, siteHolding } from "@/lib/city/geolocation";
 import { EYE_HEIGHT } from "@/lib/city/pose";
@@ -59,7 +59,7 @@ export function useLocateMe(
   hud: { clear: () => void; say: Say }
 ) {
   const { clear, say } = hud;
-  const [available] = useState(canLocate);
+  const available = useMemo(() => canLocate(), []);
   const [locating, setLocating] = useState(false);
   const [offsite, setOffsite] = useState<Offsite | null>(null);
   const dismissOffsite = useCallback(() => setOffsite(null), []);
@@ -75,40 +75,46 @@ export function useLocateMe(
     say("Standort wird bestimmt …", true);
     // Called synchronously from the click: locateMe asks for the compass
     // before its first await, while the gesture still counts (iOS).
-    locateMe()
-      .then((fix) => {
-        const h = handleRef.current;
-        if (!h) {
-          return;
-        }
-        const placement = placementOf(fix, epsg, h.terrainBounds);
-        if (placement.kind !== "inside") {
-          clear();
-          // in another city this deployment serves: offer to go there
-          const there = siteHolding(fix, others);
-          setOffsite(
-            there
-              ? {
-                  ...placement,
-                  elsewhere: { href: arrivalHref(there.id, fix), site: there },
-                }
-              : placement
-          );
-          return;
-        }
-        const now = h.getCameraState();
-        h.placeAt({
-          epsg: { x: placement.epsgX, y: placement.epsgY },
-          aboveGround: EYE_HEIGHT,
-          headingDeg: placement.headingDeg ?? now.headingDeg,
-          pitchDeg: 0,
-          fov: now.fov,
-          mode: "walk",
-        });
-        say(describePlacement(placement, site.label));
-      })
-      .catch((error: unknown) => say(describeFailure(error)))
-      .finally(() => setLocating(false));
+    const place = (fix: Awaited<ReturnType<typeof locateMe>>) => {
+      const h = handleRef.current;
+      if (!h) {
+        return;
+      }
+      const placement = placementOf(fix, epsg, h.terrainBounds);
+      if (placement.kind !== "inside") {
+        clear();
+        // in another city this deployment serves: offer to go there
+        const there = siteHolding(fix, others);
+        setOffsite(
+          there
+            ? {
+                ...placement,
+                elsewhere: { href: arrivalHref(there.id, fix), site: there },
+              }
+            : placement
+        );
+        return;
+      }
+      const now = h.getCameraState();
+      h.placeAt({
+        epsg: { x: placement.epsgX, y: placement.epsgY },
+        aboveGround: EYE_HEIGHT,
+        headingDeg: placement.headingDeg ?? now.headingDeg,
+        pitchDeg: 0,
+        fov: now.fov,
+        mode: "walk",
+      });
+      say(describePlacement(placement, site.label));
+    };
+    const run = async () => {
+      try {
+        place(await locateMe());
+      } catch (error) {
+        say(describeFailure(error));
+      }
+      setLocating(false);
+    };
+    void run();
   }, [clear, epsg, handleRef, locating, others, say, site.label]);
 
   return { available, dismissOffsite, locate, locating, offsite };

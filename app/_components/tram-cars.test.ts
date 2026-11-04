@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { Color, Matrix4, Vector3 } from "three/webgpu";
+import type { BufferGeometry } from "three/webgpu";
 import type { GroundContext } from "@/lib/city/ground-clamp";
 import { TRAM_LIVERIES } from "@/lib/city/tram-timetable";
 import type { TramTimetable } from "@/lib/city/tram-timetable";
@@ -84,7 +85,7 @@ test("a running tram trails light along its track, fading behind it", () => {
   expect(trail.geometry.drawRange.count).toBe(23 * 6);
   // its faces look up (the light lies on the track, seen from above)
   const g = cars.group.getObjectByName("tram-trails") as unknown as {
-    geometry: import("three/webgpu").BufferGeometry;
+    geometry: BufferGeometry;
   };
   const pos = g.geometry.getAttribute("position");
   const idx = g.geometry.getIndex();
@@ -111,8 +112,13 @@ test("a car takes its operator's livery and a length its fleet runs", () => {
   };
   const cars = createTramCars(leipzig, [], ctx);
   cars.update(new Date(2026, 9, 1, 8, 1));
-  const byName = (name: string) =>
-    sets(cars).find((s) => s.name === `tram-car-${name}`) as Instances;
+  const byName = (name: string) => {
+    const found = sets(cars).find((s) => s.name === `tram-car-${name}`);
+    if (!found) {
+      throw new Error(`no tram-car-${name} instances`);
+    }
+    return found;
+  };
   const body = byName("body");
   // LVB's cars are 37.6 or 45 m: five or six sections
   expect([5, 6]).toContain(body.drawCount);

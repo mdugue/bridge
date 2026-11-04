@@ -215,15 +215,17 @@ export function siteProvenance(
  * (the laser scan the roofs were measured in, the footprints' Basis-DLM).
  */
 export function parseLod2Stand(stand: string): Lod2Stand {
-  const match = /^\s*([^()]+?)\s*(?:\((.*)\))?\s*$/u.exec(stand);
+  const match = /^\s*(?<model>[^()]+?)\s*(?:\((?<inputs>.*)\))?\s*$/u.exec(
+    stand
+  );
   const inputs: Record<string, string> = {};
-  for (const part of (match?.[2] ?? "").split(",")) {
+  for (const part of (match?.groups?.inputs ?? "").split(",")) {
     const [key, value] = part.split(":").map((s) => s.trim());
     if (key && value) {
       inputs[key] = value;
     }
   }
-  return { model: match?.[1] ?? stand, inputs };
+  return { model: match?.groups?.model ?? stand, inputs };
 }
 
 /** Whether a fetched manifest is one this viewer reads. */

@@ -310,12 +310,14 @@ export function inPlan(mask: PlanMask, x: number, y: number): boolean {
 /** Even-odd test of a point against one ring. */
 function inRing(ring: readonly [number, number][], x: number, y: number) {
   let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+  let j = ring.length - 1;
+  for (let i = 0; i < ring.length; i += 1) {
     const [xi, yi] = ring[i];
     const [xj, yj] = ring[j];
     if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
       inside = !inside;
     }
+    j = i;
   }
   return inside;
 }
@@ -414,27 +416,32 @@ export function planHull(mask: PlanMask): [number, number][] | null {
   return points.length < 3 ? null : convexHull(points);
 }
 
+const cross = (o: number[], a: number[], b: number[]) =>
+  (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+
 /** Andrew's monotone chain, anticlockwise. */
 export function convexHull(points: [number, number][]): [number, number][] {
   const sorted = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  const cross = (o: number[], a: number[], b: number[]) =>
-    (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
   const lower: [number, number][] = [];
   for (const p of sorted) {
-    while (
-      lower.length >= 2 &&
-      cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0
-    ) {
+    while (lower.length >= 2) {
+      const o = lower.at(-2);
+      const a = lower.at(-1);
+      if (!(o && a) || cross(o, a, p) > 0) {
+        break;
+      }
       lower.pop();
     }
     lower.push(p);
   }
   const upper: [number, number][] = [];
   for (const p of sorted.toReversed()) {
-    while (
-      upper.length >= 2 &&
-      cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0
-    ) {
+    while (upper.length >= 2) {
+      const o = upper.at(-2);
+      const a = upper.at(-1);
+      if (!(o && a) || cross(o, a, p) > 0) {
+        break;
+      }
       upper.pop();
     }
     upper.push(p);

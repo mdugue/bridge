@@ -82,7 +82,8 @@ export function weldRemap(
     for (let a = 0; a < n; a += 1) {
       const words = lists[a];
       const stride = strides[a];
-      for (let k = v * stride, end = k + stride; k < end; k += 1) {
+      const end = v * stride + stride;
+      for (let k = v * stride; k < end; k += 1) {
         let w = Math.imul(words[k], 0xcc_9e_2d_51);
         w = Math.imul((w << 15) | (w >>> 17), 0x1b_87_35_93);
         h ^= w;
@@ -119,7 +120,8 @@ export function weldRemap(
       const item = table[bucket];
       if (item === EMPTY) {
         table[bucket] = v;
-        remap[v] = count++;
+        remap[v] = count;
+        count += 1;
         break;
       }
       if (equal(item, v)) {
@@ -132,45 +134,48 @@ export function weldRemap(
   return { remap, count };
 }
 
+async function weldExactTransform(
+  doc: Document,
+  context?: TransformContext
+): Promise<void> {
+  const meshes = doc.getRoot().listMeshes();
+  const prims = meshes.flatMap((mesh) => mesh.listPrimitives());
+  if (
+    doc.hasExtension("KHR_mesh_primitive_restart") ||
+    meshes.some((mesh) => mesh.listPrimitives().length === 0) ||
+    prims.some(
+      (prim) => getPrimitiveVertexCount(prim, VertexCountMethod.RENDER) === 0
+    )
+  ) {
+    await (weld() as unknown as AsyncTransform)(doc, context);
+    return;
+  }
+  for (const prim of prims) {
+    const position = prim.getAttribute("POSITION");
+    const plan =
+      position &&
+      prim.getMode() !== Primitive.Mode.POINTS &&
+      prim.listTargets().length === 0
+        ? wordsOf(prim)
+        : undefined;
+    if (!(position && plan)) {
+      weldPrimitive(prim);
+      continue;
+    }
+    const { remap, count } = weldRemap(
+      plan,
+      position.getCount(),
+      prim.getIndices()?.getArray() ?? null
+    );
+    compactPrimitive(prim, remap, count);
+  }
+}
+
 /** `weld()`, faster where it can be (see the module's comment). */
 export function weldExact(): Transform {
-  const transform = async (
-    doc: Document,
-    context?: TransformContext
-  ): Promise<void> => {
-    const meshes = doc.getRoot().listMeshes();
-    const prims = meshes.flatMap((mesh) => mesh.listPrimitives());
-    if (
-      doc.hasExtension("KHR_mesh_primitive_restart") ||
-      meshes.some((mesh) => mesh.listPrimitives().length === 0) ||
-      prims.some(
-        (prim) => getPrimitiveVertexCount(prim, VertexCountMethod.RENDER) === 0
-      )
-    ) {
-      await (weld() as unknown as AsyncTransform)(doc, context);
-      return;
-    }
-    for (const prim of prims) {
-      const position = prim.getAttribute("POSITION");
-      const plan =
-        position &&
-        prim.getMode() !== Primitive.Mode.POINTS &&
-        prim.listTargets().length === 0
-          ? wordsOf(prim)
-          : undefined;
-      if (!(position && plan)) {
-        weldPrimitive(prim);
-        continue;
-      }
-      const { remap, count } = weldRemap(
-        plan,
-        position.getCount(),
-        prim.getIndices()?.getArray() ?? null
-      );
-      compactPrimitive(prim, remap, count);
-    }
-  };
-  return createTransform("weldExact", transform as unknown as Transform);
+  // gltf-transform types a Transform as void but awaits what it returns
+  const transform: unknown = weldExactTransform;
+  return createTransform("weldExact", transform as Transform);
 }
 
 /** What `weld()` and `doc.transform` do under gltf-transform's void

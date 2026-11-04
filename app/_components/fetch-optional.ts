@@ -165,7 +165,9 @@ async function attempt(
     touch();
     if (!res.ok) {
       // an error page's body is never read
-      void res.body?.cancel().catch(() => {});
+      void res.body?.cancel().catch(() => {
+        // a body that will not cancel is dropped with the response
+      });
       return {
         status: res.status,
         retryAfter: res.headers.get("retry-after"),
@@ -221,7 +223,12 @@ export function eitherSignal(
   b: AbortSignal
 ): { signal: AbortSignal; release: () => void } {
   if (!a) {
-    return { signal: b, release: () => {} };
+    return {
+      signal: b,
+      release: () => {
+        // `a` is absent: no listener of ours to drop
+      },
+    };
   }
   const both = new AbortController();
   const abort = () => both.abort();
@@ -251,22 +258,25 @@ export async function untilAborted<T>(
   if (!signal) {
     return await promise;
   }
-  let abort = (): void => undefined;
-  const aborted = new Promise<never>((_, reject) => {
-    abort = () =>
+  const done = new AbortController();
+  const aborted = new Promise<never>((_resolve, reject) => {
+    const abort = () =>
       reject(
         signal.reason instanceof Error
           ? signal.reason
           : new DOMException("The operation was aborted.", "AbortError")
       );
+    if (signal.aborted) {
+      abort();
+    } else {
+      signal.addEventListener("abort", abort, {
+        once: true,
+        signal: done.signal,
+      });
+    }
   });
-  if (signal.aborted) {
-    abort();
-  } else {
-    signal.addEventListener("abort", abort, { once: true });
-  }
   return await Promise.race([promise, aborted]).finally(() => {
-    signal.removeEventListener("abort", abort);
+    done.abort();
   });
 }
 
@@ -274,13 +284,13 @@ export async function untilAborted<T>(
 async function optionalBytes(
   url: string,
   signal: AbortSignal | undefined,
-  inflate: boolean
+  unzip: boolean
 ): Promise<Uint8Array<ArrayBuffer> | null> {
   try {
     const got = await fetchBytes(url, {
       signal,
       budgetMs: OPTIONAL_FETCH_BUDGET_MS,
-      gunzip: inflate,
+      gunzip: unzip,
     });
     return got.ok ? got.bytes : null;
   } catch (error) {
@@ -291,8 +301,8 @@ async function optionalBytes(
   }
 }
 
-function parseJson<T>(bytes: Uint8Array): T {
-  return JSON.parse(new TextDecoder().decode(bytes)) as T;
+function parseJson(bytes: Uint8Array): unknown {
+  return JSON.parse(new TextDecoder().decode(bytes));
 }
 
 /** Fetches an optional JSON artifact; null = feature off. Rethrows aborts. */
@@ -305,7 +315,7 @@ export async function fetchOptionalJson<T>(
     return null;
   }
   try {
-    return parseJson<T>(bytes);
+    return parseJson(bytes) as T;
   } catch {
     return null;
   }
@@ -360,5 +370,5 @@ export async function fetchRequiredJson<T>(
   if (!got.ok) {
     throw new Error(`Failed to fetch ${url}: HTTP ${got.status}`);
   }
-  return parseJson<T>(got.bytes);
+  return parseJson(got.bytes) as T;
 }

@@ -79,14 +79,14 @@ export function createNetGate(page: GatePage): NetGate {
     }
     changed();
   });
-  const whenUsable = async (signal?: AbortSignal): Promise<void> => {
+  const waitUsable = async (signal?: AbortSignal): Promise<void> => {
     if (signal?.aborted) {
       throw abortError();
     }
     if (usable()) {
       return;
     }
-    return await new Promise<void>((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       let probe: ReturnType<typeof setTimeout> | undefined;
       const done = () => {
         wakers.delete(wake);
@@ -112,7 +112,7 @@ export function createNetGate(page: GatePage): NetGate {
       arm();
     });
   };
-  const onUsableAgain = (listener: () => void) => {
+  const listenUsable = (listener: () => void) => {
     const wake = () => {
       if (visible()) {
         listener();
@@ -132,8 +132,8 @@ export function createNetGate(page: GatePage): NetGate {
     usable,
     leaving: () => leaving,
     visibleMs: () => clock.visibleMs(page.now()),
-    whenUsable,
-    onUsableAgain,
+    whenUsable: waitUsable,
+    onUsableAgain: listenUsable,
   };
 }
 
@@ -184,11 +184,12 @@ export function visibleMs(): number {
 export async function whenUsable(signal?: AbortSignal): Promise<void> {
   const page = pageGate();
   if (page) {
-    return await page.whenUsable(signal);
+    await page.whenUsable(signal);
+    return;
   }
-  return signal?.aborted
-    ? await Promise.reject(abortError())
-    : await Promise.resolve();
+  if (signal?.aborted) {
+    throw abortError();
+  }
 }
 
 /** Waits `ms`; rejects with an AbortError when `signal` aborts. */
@@ -196,7 +197,7 @@ export async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   if (signal?.aborted) {
     throw abortError();
   }
-  return await new Promise<void>((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     const abort = () => {
       clearTimeout(timer);
       reject(abortError());
@@ -247,5 +248,10 @@ export function reportRetry(note: RetryNote): void {
  * navigator.onLine says, which is a hint; returns its removal.
  */
 export function onUsableAgain(listener: () => void): () => void {
-  return pageGate()?.onUsableAgain(listener) ?? (() => {});
+  return (
+    pageGate()?.onUsableAgain(listener) ??
+    (() => {
+      // No page gate (server render): nothing was subscribed, nothing to remove.
+    })
+  );
 }

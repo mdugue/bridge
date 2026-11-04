@@ -54,7 +54,7 @@ import { groundUnderDesign, inDesignSite } from "./design-site";
 import { lampNight } from "./lamp-layer";
 import { dataXY } from "./shader-chunks";
 import type { F, V2, V3 } from "./shader-chunks";
-import { splatUv } from "./terrain-layer";
+import { splatUv } from "./splat-uv";
 import type { SplatLayer } from "./terrain-layer";
 import { viewDirection } from "./view-direction";
 import { RIVER_WAVES, waveNormal, waves } from "./water-waves";
@@ -237,16 +237,16 @@ export function tintTexture(look: WaterLook | undefined): DataTexture {
     const rgb = k > 0 ? (tint?.colours[k - 1] ?? WATER_SHEET) : WATER_SHEET;
     data.set([(rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255, 255], i * 4);
   }
-  const texture = new DataTexture(data, n, n, RGBAFormat, UnsignedByteType);
-  texture.colorSpace = SRGBColorSpace;
-  texture.flipY = false;
-  texture.magFilter = LinearFilter;
-  texture.minFilter = LinearFilter;
-  texture.generateMipmaps = false;
-  texture.wrapS = ClampToEdgeWrapping;
-  texture.wrapT = ClampToEdgeWrapping;
-  texture.needsUpdate = true;
-  return texture;
+  const tintMap = new DataTexture(data, n, n, RGBAFormat, UnsignedByteType);
+  tintMap.colorSpace = SRGBColorSpace;
+  tintMap.flipY = false;
+  tintMap.magFilter = LinearFilter;
+  tintMap.minFilter = LinearFilter;
+  tintMap.generateMipmaps = false;
+  tintMap.wrapS = ClampToEdgeWrapping;
+  tintMap.wrapT = ClampToEdgeWrapping;
+  tintMap.needsUpdate = true;
+  return tintMap;
 }
 
 /** A tile's foam lines as uniforms: the segments (data frame x0, y0, x1,

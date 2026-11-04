@@ -97,7 +97,7 @@ const HASH_MOD = 2_147_483_647; // 2^31 − 1 (Mersenne prime)
 function hash01(s: string): number {
   let h = 0;
   for (let i = 0; i < s.length; i += 1) {
-    h = (h * 31 + s.charCodeAt(i)) % HASH_MOD;
+    h = (h * 31 + (s.codePointAt(i) ?? 0)) % HASH_MOD;
   }
   const x = Math.sin((h / HASH_MOD) * 127.1 + 311.7) * 43_758.5453;
   return x - Math.floor(x);
@@ -209,14 +209,18 @@ export function osmColourTint(
   hex: string,
   range: [number, number] = WALL_LIGHTNESS
 ): TintRgb | null {
-  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/iu.exec(hex);
-  if (!m) {
+  const m =
+    /^#(?<red>[0-9a-f]{2})(?<green>[0-9a-f]{2})(?<blue>[0-9a-f]{2})$/iu.exec(
+      hex
+    );
+  const channels = m?.groups;
+  if (!channels) {
     return null;
   }
   const [h, sat, l] = hslOf(
-    Number.parseInt(m[1], 16) / 255,
-    Number.parseInt(m[2], 16) / 255,
-    Number.parseInt(m[3], 16) / 255
+    Number.parseInt(channels.red, 16) / 255,
+    Number.parseInt(channels.green, 16) / 255,
+    Number.parseInt(channels.blue, 16) / 255
   );
   const jitter = (hash01(`${objectId}#L`) - 0.5) * 2 * LIGHT_JITTER;
   const held = Math.min(Math.max(l, range[0]), range[1]) + jitter;
@@ -457,7 +461,8 @@ export function roofColor(
   look: OsmLook = {}
 ): TintRgb {
   const sampled = lut?.[objectId];
-  switch (roofColourSource(objectId, lut, look)) {
+  const source = roofColourSource(objectId, lut, look);
+  switch (source) {
     case "dop": {
       return sampled
         ? [sampled[0], sampled[1], sampled[2]]
@@ -475,6 +480,10 @@ export function roofColor(
     }
     case "palette": {
       return roofTint(objectId, attrs);
+    }
+    default: {
+      const unknown: never = source;
+      throw new Error(`unknown roof colour source: ${String(unknown)}`);
     }
   }
 }

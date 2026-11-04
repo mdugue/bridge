@@ -92,11 +92,13 @@ export interface DesignModel {
 }
 
 /** A design that could not be read, in words for the panel. */
-export class DesignError extends Error {}
+export class DesignError extends Error {
+  override name = "DesignError";
+}
 
 /** The formats a design can come in, by the main file's extension. */
 const FORMATS = {
-  gltf: /\.(glb|gltf)$/iu,
+  gltf: /\.(?:glb|gltf)$/iu,
   plan: PLAN_FORMATS,
   ifc: /\.ifc$/iu,
   obj: /\.obj$/iu,

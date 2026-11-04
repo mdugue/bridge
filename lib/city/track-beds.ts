@@ -90,19 +90,14 @@ export function railBed(f: RailFeature): BedShape {
 /** The bed a tram track lies on: the road, its lawn or its ballast
  *  (app/_components/tram-layer.ts BED_HALF). */
 export function tramBed(bed: TramBed): BedShape {
-  switch (bed) {
-    case "grass": {
-      return { half: 1.3, drop: BALLAST_DROP_M };
-    }
-    case "ballast": {
-      return { half: 1.4, drop: BALLAST_DROP_M };
-    }
-    case "street":
-    default: {
-      // an unknown bed (a newer bake): the street's, the shallowest
-      return { half: PAVED_HALF_M, drop: PAVED_DROP_M };
-    }
+  if (bed === "grass") {
+    return { half: 1.3, drop: BALLAST_DROP_M };
   }
+  if (bed === "ballast") {
+    return { half: 1.4, drop: BALLAST_DROP_M };
+  }
+  // the street's, and an unknown bed's (a newer bake): the shallowest
+  return { half: PAVED_HALF_M, drop: PAVED_DROP_M };
 }
 
 /** The slope beside a bed (rise over run): 1 : 1.5. */
@@ -172,7 +167,7 @@ export function burnBeds(input: {
   if (beds.length === 0) {
     return out;
   }
-  const asks = new CellAsks(n * n);
+  const asks = createCellAsks(n * n);
   const [minX, minY, maxX, maxY] = bounds;
   const dx = (maxX - minX) / n;
   const dy = (maxY - minY) / n;
@@ -261,90 +256,78 @@ function opens(bed: Bed, hit: Hit, ground: number): boolean {
 }
 
 /** What the beds ask of each cell they reach (`burnBeds`). */
-class CellAsks {
-  readonly touched: number[] = [];
-  private readonly seen: Uint8Array;
+function createCellAsks(cells: number) {
+  const inf = Number.POSITIVE_INFINITY;
+  const touched: number[] = [];
+  const seen = new Uint8Array(cells);
   // under a bed that lays the ground: the nearest one's distance and level
-  private readonly inD: Float32Array;
-  private readonly inLevel: Float32Array;
+  const inD = new Float32Array(cells).fill(inf);
+  const inLevel = new Float32Array(cells);
   /** under a bed that only lowers it: the lowest */
-  readonly lowers: Float32Array;
+  const lowers = new Float32Array(cells).fill(inf);
   // beside: the slopes' lower and upper bounds, and the nearest slope's
-  private readonly lo: Float32Array;
-  private readonly hi: Float32Array;
-  private readonly sideD: Float32Array;
-  private readonly sideLevel: Float32Array;
-  private readonly sideS: Float32Array;
-
-  constructor(cells: number) {
-    const inf = Number.POSITIVE_INFINITY;
-    this.seen = new Uint8Array(cells);
-    this.inD = new Float32Array(cells).fill(inf);
-    this.inLevel = new Float32Array(cells);
-    this.lowers = new Float32Array(cells).fill(inf);
-    this.lo = new Float32Array(cells).fill(-inf);
-    this.hi = new Float32Array(cells).fill(inf);
-    this.sideD = new Float32Array(cells).fill(inf);
-    this.sideLevel = new Float32Array(cells);
-    this.sideS = new Float32Array(cells);
-  }
+  const lo = new Float32Array(cells).fill(-inf);
+  const hi = new Float32Array(cells).fill(inf);
+  const sideD = new Float32Array(cells).fill(inf);
+  const sideLevel = new Float32Array(cells);
+  const sideS = new Float32Array(cells);
 
   /** A bed's ask of cell `idx`, `hit` from its centreline. */
-  add(idx: number, bed: Bed, hit: Hit): void {
-    if (!this.seen[idx]) {
-      this.seen[idx] = 1;
-      this.touched.push(idx);
+  const add = (idx: number, bed: Bed, hit: Hit): void => {
+    if (!seen[idx]) {
+      seen[idx] = 1;
+      touched.push(idx);
     }
     const lowerOnly = bed.lowerOnly === true || bed.shallow !== undefined;
     if (hit.d <= bed.half) {
       if (lowerOnly) {
-        this.lowers[idx] = Math.min(this.lowers[idx], hit.level);
+        lowers[idx] = Math.min(lowers[idx], hit.level);
         return;
       }
-      if (hit.d < this.inD[idx]) {
-        this.inD[idx] = hit.d;
-        this.inLevel[idx] = hit.level;
+      if (hit.d < inD[idx]) {
+        inD[idx] = hit.d;
+        inLevel[idx] = hit.level;
       }
       return;
     }
     const s = (hit.d - bed.half) * BED_SLOPE;
-    this.hi[idx] = Math.min(this.hi[idx], hit.level + s);
+    hi[idx] = Math.min(hi[idx], hit.level + s);
     if (lowerOnly) {
       return;
     }
-    this.lo[idx] = Math.max(this.lo[idx], hit.level - s);
-    if (hit.d < this.sideD[idx]) {
-      this.sideD[idx] = hit.d;
-      this.sideLevel[idx] = hit.level;
-      this.sideS[idx] = s;
+    lo[idx] = Math.max(lo[idx], hit.level - s);
+    if (hit.d < sideD[idx]) {
+      sideD[idx] = hit.d;
+      sideLevel[idx] = hit.level;
+      sideS[idx] = s;
     }
-  }
+  };
 
   /** Whether a bed that lays the ground covers cell `idx`. */
-  lays(idx: number): boolean {
-    return Number.isFinite(this.inD[idx]);
-  }
+  const lays = (idx: number): boolean => Number.isFinite(inD[idx]);
 
   /** The level the asks give cell `idx`, its ground `ground` (before the
    *  lowering beds' cap). */
-  level(idx: number, ground: number): number {
-    if (this.lays(idx)) {
+  const level = (idx: number, ground: number): number => {
+    if (lays(idx)) {
       // the nearest bed's: two lines crossing a storey apart are a span
       // over the lower one (lib/city/line-levels.ts `spansOver`), whose
       // bed only lowers
-      return this.inLevel[idx];
+      return inLevel[idx];
     }
-    if (Number.isFinite(this.lowers[idx])) {
+    if (Number.isFinite(lowers[idx])) {
       return ground;
     }
-    if (this.lo[idx] <= this.hi[idx]) {
-      return Math.min(this.hi[idx], Math.max(this.lo[idx], ground));
+    if (lo[idx] <= hi[idx]) {
+      return Math.min(hi[idx], Math.max(lo[idx], ground));
     }
     // two slopes that disagree: the nearest bed's
-    const l = this.sideLevel[idx];
-    const s = this.sideS[idx];
+    const l = sideLevel[idx];
+    const s = sideS[idx];
     return Math.min(l + s, Math.max(l - s, ground));
-  }
+  };
+
+  return { add, lays, level, lowers, touched };
 }
 
 /** The beds' grid cell (m) for point queries. */
@@ -357,10 +340,11 @@ const CELL_M = 8;
  */
 export class BedIndex {
   private readonly cells = new Map<string, { bed: Bed; i: number }[]>();
-  constructor(
-    private readonly beds: readonly Bed[],
-    private readonly margin: number
-  ) {
+  private readonly beds: readonly Bed[];
+  private readonly margin: number;
+  constructor(beds: readonly Bed[], margin: number) {
+    this.beds = beds;
+    this.margin = margin;
     for (const bed of beds) {
       const reach = bed.half + margin;
       for (let i = 0; i + 1 < bed.coords.length; i += 1) {
@@ -395,7 +379,7 @@ export class BedIndex {
       const hit = onSegment(bed, i, x, y);
       if (hit && hit.d <= bed.half + this.margin && (!best || hit.d < best.d)) {
         best = hit;
-        drop = bed.drop;
+        ({ drop } = bed);
       }
     }
     return best ? best.level + drop : null;

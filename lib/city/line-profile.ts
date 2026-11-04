@@ -192,7 +192,7 @@ function normalBands(n: number, rows: Rows, w: Float64Array) {
   return { diag, off1, off2 };
 }
 
-const clamp = (v: number, b: number) => (v > b ? b : v < -b ? -b : v);
+const clamp = (v: number, b: number) => Math.min(Math.max(v, -b), b);
 
 /**
  * The profile of one run of known levels: the closest heights to `t`
@@ -294,12 +294,19 @@ export function lineProfile(
       continue;
     }
     if (first >= 0) {
-      const idx = Array.from({ length: i - first }, (_, k) => first + k);
+      const idx: number[] = [];
+      const run: Level[] = [];
+      for (let j = first; j < i; j += 1) {
+        const level = levels[j];
+        if (!level) {
+          throw new Error("a run of levels holds a gap");
+        }
+        idx.push(j);
+        run.push(level);
+      }
       const fit = fitRun(
-        idx.map((j) => (levels[j] as Level).y),
-        idx.map((j) =>
-          (levels[j] as Level).mode === "deck" ? DECK_WEIGHT : 1
-        ),
+        run.map((level) => level.y),
+        run.map((level) => (level.mode === "deck" ? DECK_WEIGHT : 1)),
         idx.map((j) => d[j]),
         opts
       );

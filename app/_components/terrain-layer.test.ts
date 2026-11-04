@@ -48,6 +48,16 @@ const splat = (extra: Partial<SplatLayer> = {}): SplatLayer => ({
   ...extra,
 });
 
+/** What a dressing came to: "dressed", or the name of the error it ended in. */
+async function outcomeOf(work: Promise<unknown>): Promise<string> {
+  try {
+    await work;
+    return "dressed";
+  } catch (error) {
+    return (error as Error).name;
+  }
+}
+
 test("the terrain is one standard node material with colour and normal nodes", () => {
   for (const material of [
     createTerrainMaterial(),
@@ -172,34 +182,33 @@ test("a level whose tile leaves while it waits for a shared raster lets go at on
     released
   );
   const aborter = new AbortController();
-  const outcome = dressTerrain(
-    new Mesh(new BoxGeometry(), new MeshStandardNodeMaterial()),
-    {
-      kind: "terrain",
-      bounds: [0, 0, 100, 100],
-      n: 2,
-      level: 1,
-      landcover: "landcover.png",
-      landcoverLow: "landcover-low.png",
-      minElevation: 0,
-      tileId: "t",
-    } as unknown as TerrainExtras,
-    new Matrix4(),
-    {
-      fileUrl: (file) => file,
-      fogColor: uniform(new Color()),
-      lowRasters: false,
-      ground: ground(),
-      offset: { cx: 0, cy: 0 },
-      renderer: {} as WebGPURenderer,
-      splats,
-      ndvis: share<Texture>(none),
-      sports: share<SportRasters>(none),
-      signal: aborter.signal,
-    }
-  ).then(
-    () => "dressed",
-    (error: unknown) => (error as Error).name
+  const outcome = outcomeOf(
+    dressTerrain(
+      new Mesh(new BoxGeometry(), new MeshStandardNodeMaterial()),
+      {
+        kind: "terrain",
+        bounds: [0, 0, 100, 100],
+        n: 2,
+        level: 1,
+        landcover: "landcover.png",
+        landcoverLow: "landcover-low.png",
+        minElevation: 0,
+        tileId: "t",
+      } as unknown as TerrainExtras,
+      new Matrix4(),
+      {
+        fileUrl: (file) => file,
+        fogColor: uniform(new Color()),
+        lowRasters: false,
+        ground: ground(),
+        offset: { cx: 0, cy: 0 },
+        renderer: {} as WebGPURenderer,
+        splats,
+        ndvis: share<Texture>(none),
+        sports: share<SportRasters>(none),
+        signal: aborter.signal,
+      }
+    )
   );
   await new Promise((resolve) => {
     setTimeout(resolve, 0);

@@ -75,14 +75,19 @@ export const Diagram = ({
 
   useEffect(() => {
     const el = figure.current;
-    if (!el) {
-      return;
-    }
-    const measure = () => setShrunk(width > el.clientWidth - 32);
+    const measure = () => {
+      if (el) {
+        setShrunk(width > el.clientWidth - 32);
+      }
+    };
     measure();
     const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
+    if (el) {
+      observer.observe(el);
+    }
+    return () => {
+      observer.disconnect();
+    };
   }, [width]);
 
   return (

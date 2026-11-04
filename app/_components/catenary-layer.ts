@@ -223,13 +223,15 @@ function addPortal(
   const feet = masts.map((m, k) =>
     footAt(ctx, group[k === 0 ? 0 : group.length - 1].deck, m.x, m.z)
   );
-  if (feet[0] === null || feet[1] === null) {
+  const [foot0, foot1] = feet;
+  if (typeof foot0 !== "number" || typeof foot1 !== "number") {
     return;
   }
   for (const [k, m] of masts.entries()) {
+    const foot = k === 0 ? foot0 : foot1;
     addBeam(
       out.steel,
-      [m.x, (feet[k] as number) - MAST_SINK, m.z],
+      [m.x, foot - MAST_SINK, m.z],
       [m.x, beam + BEAM_HALF, m.z],
       MAST_HALF
     );

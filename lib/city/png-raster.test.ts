@@ -26,7 +26,7 @@ function chunk(type: string, body: Uint8Array): Uint8Array {
   const view = new DataView(out.buffer);
   view.setUint32(0, body.length);
   for (let i = 0; i < 4; i += 1) {
-    out[4 + i] = type.charCodeAt(i);
+    out[4 + i] = type.codePointAt(i) ?? 0;
   }
   out.set(body, 8);
   let c = 0xff_ff_ff_ff;
@@ -151,9 +151,9 @@ describe("decodeGreyPng", () => {
       );
       expect(out.data.length).toBe(out.width * out.height);
       let max = 0;
-      for (let i = 0; i < out.data.length; i += 1) {
-        if (out.data[i] > max) {
-          max = out.data[i];
+      for (const value of out.data) {
+        if (value > max) {
+          max = value;
         }
       }
       expect(max).toBeLessThanOrEqual(maxId);

@@ -106,7 +106,9 @@ export function buildGroundPlate(
     mesh.receiveShadow = true;
     mesh.castShadow = false;
     // nothing to pick or stand on: rays go to the terrain
-    mesh.raycast = () => {};
+    mesh.raycast = () => {
+      // never picked
+    };
     meshes.set(tile.id, mesh);
     group.add(mesh);
   }

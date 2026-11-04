@@ -288,9 +288,9 @@ test("the Traufgesims rolls out of the wall under the eave, per host", () => {
   );
   expect([...meshes.keys()]).toEqual([1, 2]);
   const mesh = meshes.get(1);
-  const xs = mesh?.positions.filter((_, i) => i % 3 === 0) ?? [];
+  const eaveXs = mesh?.positions.filter((_, i) => i % 3 === 0) ?? [];
   const zs = mesh?.positions.filter((_, i) => i % 3 === 2) ?? [];
-  expect(Math.max(...xs)).toBeCloseTo(100 + EAVE_CORNICE.proud, 6);
+  expect(Math.max(...eaveXs)).toBeCloseTo(100 + EAVE_CORNICE.proud, 6);
   expect(Math.min(...zs)).toBeCloseTo(19.68, 6);
   expect(Math.max(...zs)).toBeCloseTo(19.68 + EAVE_CORNICE.height, 6);
   // smooth over the round, flat on the ends

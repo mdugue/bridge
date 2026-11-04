@@ -236,7 +236,7 @@ function fillGaps(f: readonly number[], read: readonly number[]): number[] {
     if (Number.isFinite(s)) {
       return s;
     }
-    const before = known.filter(([i]) => i < k).at(-1);
+    const before = known.findLast(([i]) => i < k);
     const after = known.find(([i]) => i > k);
     if (!(before && after)) {
       return (before ?? after ?? [k, 0])[1];
@@ -476,19 +476,30 @@ function trianglesInBox(
   triangles: readonly number[]
 ): number[] {
   const out: number[] = [];
-  outer: for (const t of triangles) {
-    const i = 3 * t;
-    for (let c = 0; c < 3; c += 1) {
-      const p = positions[i + c];
-      const q = positions[i + 3 + c];
-      const r = positions[i + 6 + c];
-      if (Math.max(p, q, r) < lo[c] || Math.min(p, q, r) > hi[c]) {
-        continue outer;
-      }
+  for (const t of triangles) {
+    if (triangleReachesBox(lo, hi, positions, 3 * t)) {
+      out.push(t);
     }
-    out.push(t);
   }
   return out;
+}
+
+/** Whether the triangle at vertex offset `i` reaches the box on every axis. */
+function triangleReachesBox(
+  lo: readonly number[],
+  hi: readonly number[],
+  positions: ArrayLike<number>,
+  i: number
+): boolean {
+  for (let c = 0; c < 3; c += 1) {
+    const p = positions[i + c];
+    const q = positions[i + 3 + c];
+    const r = positions[i + 6 + c];
+    if (Math.max(p, q, r) < lo[c] || Math.min(p, q, r) > hi[c]) {
+      return false;
+    }
+  }
+  return true;
 }
 
 const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];

@@ -155,7 +155,7 @@ function capsule(s: Segment): ClipPolygon {
 /** A ring's area (m², unsigned). */
 function ringArea(ring: readonly Point2[]): number {
   let a = 0;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
     a += (ring[j][0] + ring[i][0]) * (ring[j][1] - ring[i][1]);
   }
   return Math.abs(a) / 2;
@@ -316,7 +316,7 @@ function insidePolygon(
 ): boolean {
   let inside = false;
   for (const ring of rings) {
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
       const [xi, yi] = ring[i];
       const [xj, yj] = ring[j];
       if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {

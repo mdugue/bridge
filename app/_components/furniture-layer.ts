@@ -385,13 +385,13 @@ function seesaw(): BufferGeometry[] {
 
 /** A flat disc with a rounded rim. */
 function roundabout(): BufferGeometry[] {
-  const disc = new CylinderGeometry(1, 1, 0.12, 24);
-  disc.translate(0, 0.28, 0);
+  const slab = new CylinderGeometry(1, 1, 0.12, 24);
+  slab.translate(0, 0.28, 0);
   const rim = new TorusGeometry(1, 0.06, 6, 24);
   rim.rotateX(Math.PI / 2);
   rim.translate(0, 0.34, 0);
   return [
-    tinted(disc, DUSK_BLUE),
+    tinted(slab, DUSK_BLUE),
     tinted(rim, DUSK_BLUE),
     pillar(0.12, 0.28, [0, 0], DUSK_BLUE),
   ];
@@ -872,9 +872,11 @@ function addSlab(
       pushVertex(t, p, up, color);
     }
   }
-  const centre = top
-    .reduce((sum, p) => sum.add(p), new Vector3())
-    .divideScalar(top.length);
+  const sum = new Vector3();
+  for (const p of top) {
+    sum.add(p);
+  }
+  const centre = sum.divideScalar(top.length);
   for (let i = 0; i < top.length; i += 1) {
     const p = top[i];
     const q = top[(i + 1) % top.length];
@@ -886,9 +888,9 @@ function addSlab(
     const pd = p.clone().setY(p.y - PATCH_SKIRT);
     const qd = q.clone().setY(q.y - PATCH_SKIRT);
     // (p, pd, q) faces n when (pd − p) × (q − p) points along it.
-    const face = pd.clone().sub(p).cross(q.clone().sub(p));
+    const winding = pd.clone().sub(p).cross(q.clone().sub(p));
     const quad =
-      face.dot(n) > 0 ? [p, pd, q, q, pd, qd] : [p, q, pd, q, qd, pd];
+      winding.dot(n) > 0 ? [p, pd, q, q, pd, qd] : [p, q, pd, q, qd, pd];
     for (const v of quad) {
       pushVertex(t, v, n, color);
     }
@@ -1079,7 +1081,8 @@ export function* furnitureSteps(
   const byModel = new Map<FurnitureModel, Stood[]>();
   let n = 0;
   for (const piece of furniturePieces(features)) {
-    if (++n % PIECE_RUN === 0) {
+    n += 1;
+    if (n % PIECE_RUN === 0) {
       yield;
     }
     // on a bridge, its deck's top: the ground there is the river or the road
@@ -1100,16 +1103,18 @@ export function* furnitureSteps(
   for (const model of FURNITURE_MODELS) {
     const stood = byModel.get(model);
     const geo = stood ? modelGeometry(model) : null;
-    for (const cell of stood && geo ? byCell(stood) : []) {
-      const mesh = instanced(
-        model,
-        geo as BufferGeometry,
-        cell,
-        model === "columnLit" ? materials.glow() : materials.matte()
-      );
-      group.add(asCell(mesh, cell));
-      if (model === "clock" || model === "wallClock") {
-        group.add(asCell(clockHands(model, cell), cell));
+    if (stood && geo) {
+      for (const cell of byCell(stood)) {
+        const mesh = instanced(
+          model,
+          geo,
+          cell,
+          model === "columnLit" ? materials.glow() : materials.matte()
+        );
+        group.add(asCell(mesh, cell));
+        if (model === "clock" || model === "wallClock") {
+          group.add(asCell(clockHands(model, cell), cell));
+        }
       }
     }
     yield;

@@ -78,7 +78,7 @@ function stubFetch(body: unknown): {
   // reason: the stub takes the URL only; the helpers pass a string
   globalThis.fetch = (async () => {
     calls += 1;
-    return new Response(JSON.stringify(body));
+    return Response.json(body);
   }) as unknown as typeof fetch;
   return {
     calls: () => calls,
@@ -89,14 +89,16 @@ function stubFetch(body: unknown): {
 }
 
 const settle = async () =>
-  await new Promise((r) => {
-    setTimeout(r, 5);
+  await new Promise((resolve) => {
+    setTimeout(resolve, 5);
   });
 
 test("an answer the feed cannot parse is no crash: the last counts stay", async () => {
   const stub = stubFetch({ features: [] });
   const rejections: unknown[] = [];
-  const onRejection = (reason: unknown) => rejections.push(reason);
+  const onRejection = (reason: unknown) => {
+    rejections.push(reason);
+  };
   process.on("unhandledRejection", onRejection);
   const heard: BikeCounter[][] = [];
   let parsed = 0;

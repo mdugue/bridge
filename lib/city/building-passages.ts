@@ -85,11 +85,12 @@ export function passageHeight(
     return null;
   }
   const storey = Math.min(...hosts.map((h) => h.storeyH));
-  const own = DRIVES.has(kind)
-    ? DRIVE_H
-    : kind === "railway"
-      ? TRACK_H
-      : WALK_H;
+  let own = WALK_H;
+  if (DRIVES.has(kind)) {
+    own = DRIVE_H;
+  } else if (kind === "railway") {
+    own = TRACK_H;
+  }
   const wanted = tagged ?? Math.max(own, storey - LINTEL_M);
   const room = Math.min(...hosts.map((h) => h.eaveZ)) - groundTop - KEEP_M;
   const h = Math.min(wanted, room);
@@ -347,10 +348,12 @@ export function passageLining(
     }
   }
   for (const ring of part.roof) {
+    const last = ring.at(-1);
     const open =
       ring.length > 1 &&
-      ring[0][0] === ring[ring.length - 1][0] &&
-      ring[0][1] === ring[ring.length - 1][1]
+      last !== undefined &&
+      ring[0][0] === last[0] &&
+      ring[0][1] === last[1]
         ? ring.slice(0, -1)
         : ring;
     const tris = triangulate(

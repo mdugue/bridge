@@ -149,12 +149,14 @@ export function openRing(ring: readonly Point2[]): Point2[] {
 export function insideRing(p: Point2, ring: readonly Point2[]): boolean {
   let inside = false;
   const [x, y] = p;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+  let j = ring.length - 1;
+  for (let i = 0; i < ring.length; i += 1) {
     const [xi, yi] = ring[i];
     const [xj, yj] = ring[j];
     if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
       inside = !inside;
     }
+    j = i;
   }
   return inside;
 }

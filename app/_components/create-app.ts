@@ -368,6 +368,10 @@ export interface GpuDebug {
   };
 }
 
+/** The bytes of a map of buffers, summed. */
+const bytesSum = (m: Map<object, number>) =>
+  [...m.values()].reduce((a, b) => a + b, 0);
+
 /** Counts the distinct buffers under a scene (shared ones once). */
 function sceneBuffers(
   scene: Object3D
@@ -395,14 +399,12 @@ function sceneBuffers(
       buffers.set(owner, bufferBytes(owner));
     }
   });
-  const sum = (m: Map<object, number>) =>
-    [...m.values()].reduce((a, b) => a + b, 0);
   return {
     drawables,
     sceneIndices: indices.size,
-    sceneIndexBytes: sum(indices),
+    sceneIndexBytes: bytesSum(indices),
     sceneBuffers: buffers.size,
-    sceneBufferBytes: sum(buffers),
+    sceneBufferBytes: bytesSum(buffers),
   };
 }
 
@@ -837,7 +839,10 @@ async function createRenderer(
     // No adapter and no WebGL2 either (the preflight only sees that
     // `navigator.gpu` exists): free what init made, and say why in the
     // HUD's words rather than three's raw backend error (kept as `cause`).
-    renderer.dispose().catch(() => {});
+    renderer.dispose().catch(() => {
+      // the backend is already unusable: its dispose has nothing to add to
+      // the error below
+    });
     throw new Error(NO_GPU_MESSAGE, { cause: error });
   }
   // Fallen back to WebGL2 (no adapter): its timer queries would wrap every
@@ -1023,7 +1028,9 @@ async function deviceGone(renderer: WebGPURenderer): Promise<void> {
     device?: { lost: Promise<unknown> } | null;
   };
   const device = backend.isWebGPUBackend ? backend.device : null;
-  return device ? await device.lost.then(() => {}) : await Promise.resolve();
+  if (device) {
+    await device.lost;
+  }
 }
 
 /**
@@ -1063,11 +1070,13 @@ function probeGpu(renderer: WebGPURenderer): string | null {
 async function releaseGpu(renderer: WebGPURenderer): Promise<void> {
   let released: Promise<void>;
   try {
-    released = renderer.dispose().catch(() => {});
+    released = renderer.dispose().catch(() => {
+      // a dispose that fails still lets the reload go on
+    });
   } catch {
     released = Promise.resolve();
   }
-  return await Promise.race([
+  await Promise.race([
     released,
     new Promise<void>((resolve) => {
       setTimeout(resolve, RELEASE_WAIT_MS);
@@ -1117,13 +1126,15 @@ function shedUnusedTiles(cache: {
   }
 }
 
+/** Bytes as whole megabytes. */
+const mb = (bytes: number) => Math.round(bytes / 1_048_576);
+
 /**
  * What the renderer holds, by kind, for the crash trail's heartbeat: the
  * counts, and the MB of the two kinds that weigh — so a report says
  * whether geometry or rasters ran a phone out of GPU memory.
  */
 function heldByKind(m: WebGPURenderer["info"]["memory"]): string {
-  const mb = (bytes: number) => Math.round(bytes / 1_048_576);
   return (
     `${m.attributes}a ${mb(m.attributesSize + m.indexAttributesSize)}MB ` +
     `${m.textures}t ${mb(m.texturesSize)}MB ${m.renderTargets}rt ` +
@@ -1210,7 +1221,11 @@ export async function createCityWalkApp(
   // `?inspect=1`: three's Inspector over the canvas (inspector.ts)
   if (inspectRequested(window.location.search)) {
     // a QA aid: a chunk that fails to load leaves the boot as it was
-    cleanups.push(await attachInspector(renderer).catch(() => () => {}));
+    cleanups.push(
+      await attachInspector(renderer).catch(() => () => {
+        // nothing to undo: the inspector never attached
+      })
+    );
   }
   try {
     return await bootApp(opts, renderer, scene, cleanups);
@@ -1236,7 +1251,7 @@ async function teardown(
 ): Promise<void> {
   runCleanups(cleanups);
   disposeObject3D(scene);
-  return await releaseRenderer(renderer);
+  await releaseRenderer(renderer);
 }
 
 /**
@@ -1288,9 +1303,11 @@ function stopWorkers(): void {
 /** The renderer and its device (or its context), and its canvas. */
 async function releaseRenderer(renderer: WebGPURenderer): Promise<void> {
   // Async: it destroys the device (or loses the context) at the end.
-  const released = renderer.dispose().catch(() => {});
+  const released = renderer.dispose().catch(() => {
+    // a dispose that fails leaves nothing more to free
+  });
   renderer.domElement.remove();
-  return await released;
+  await released;
 }
 
 /** Unwinds registered teardowns in reverse creation order. */
@@ -1302,21 +1319,44 @@ function runCleanups(cleanups: (() => void)[]): void {
 
 /** The whole site's extent in EPSG coordinates (the minimap frame). */
 function unionBounds(extras: TilesetExtras): TerrainBounds {
-  return extras.tiles.reduce<TerrainBounds>(
-    (acc, { bounds: b }) => [
+  let acc: TerrainBounds = [
+    Number.POSITIVE_INFINITY,
+    Number.POSITIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+  ];
+  for (const { bounds: b } of extras.tiles) {
+    acc = [
       Math.min(acc[0], b[0]),
       Math.min(acc[1], b[1]),
       Math.max(acc[2], b[2]),
       Math.max(acc[3], b[3]),
-    ],
-    [
-      Number.POSITIVE_INFINITY,
-      Number.POSITIVE_INFINITY,
-      Number.NEGATIVE_INFINITY,
-      Number.NEGATIVE_INFINITY,
-    ]
-  );
+    ];
+  }
+  return acc;
 }
+
+/** The stream's change handler until the scene has one: nothing is built. */
+const noChange = (): void => {
+  // a change before the first build has nothing to update
+};
+
+/** The trees' leaves and litter and the trunks' shade follow the scene's
+ *  calendar day (the climate's, already shifted). */
+const groundSeason = (day: number): void => {
+  footLitter.value = leafLitterAt(day);
+  crownLeaf.value = seasonAt(day, 0).leaf;
+};
+
+/** The roots' census, over the ones that exist. */
+const sceneCensusOf = (roots: (Object3D | undefined)[]): SceneCensus =>
+  sceneCensus(roots.filter((r): r is Object3D => r !== undefined));
+
+/** Now, as the lifecycle machine's signals carry it. */
+const signalTime = () => ({
+  now: performance.now(),
+  hidden: document.hidden,
+});
 
 async function bootApp(
   opts: CityWalkOptions,
@@ -1555,7 +1595,7 @@ async function bootApp(
   const styleResources = createStyleResources(styleNight, ground.sunDirection);
 
   // The HUD lets the heavy dressing start after the handover (startStreaming).
-  let openGate: () => void = () => {};
+  let openGate: (() => void) | undefined;
   const dressingGate = new Promise<void>((resolve) => {
     openGate = resolve;
   });
@@ -1570,7 +1610,7 @@ async function bootApp(
     siteGround.along(ray.ray.origin, ray.ray.direction, far);
 
   // The stream: what lands and leaves, and everything that follows from it.
-  let onChange: () => void = () => {};
+  let onChange: () => void = noChange;
   // One pass for every change of a task: an update of the tile renderer
   // reports each tile that came into or left view on its own, and each
   // report walked the lamps, the ground's sources and the styles' gathering
@@ -1591,10 +1631,6 @@ async function bootApp(
   const climate = seasonShiftFor(opts.site.id);
   // the leaves under the trees (tree-foot.ts) and the trunks' shade under
   // their crowns (vegetation-layer.ts) follow the same day
-  const groundSeason = (day: number): void => {
-    footLitter.value = leafLitterAt(day);
-    crownLeaf.value = seasonAt(day, 0).leaf;
-  };
   groundSeason(climateDay(Math.floor(dayOfYear(opts.initialDate)), climate));
   const seasonClock = createSeasonClock(opts.initialDate, (calendar) => {
     const day = climateDay(calendar, climate);
@@ -1985,12 +2021,15 @@ async function bootApp(
   });
   // The plate joins once its programs are built (a few tens of kB: it is
   // there long before the boot's tiles).
-  void plateLoad.then(async (plate) => {
+  const joinPlate = async () => {
+    const plate = await plateLoad;
     if (!plate || disposed) {
       plate?.dispose();
       return;
     }
-    await withinCompileWait(postStack.compile(plate.group)).catch(() => {});
+    await withinCompileWait(postStack.compile(plate.group)).catch(() => {
+      // a plate whose compile failed still joins: it builds when first drawn
+    });
     if (disposed) {
       plate.dispose();
       return;
@@ -2000,7 +2039,8 @@ async function bootApp(
     // beside `world`, under Modell's Ausschnitt like the tiles' ground
     cuts.group.add(plate.group);
     queueChange();
-  });
+  };
+  void joinPlate();
   sunToStyles = postStack.setSunAltitude;
   // The data layers (lib/city/data-layers.ts, data-layers-feature.ts):
   // started with the first switch-on of any of them — the tiles' traffic
@@ -2010,7 +2050,7 @@ async function bootApp(
   // is all there. (Their code ships with the scene: as a chunk of its own
   // it cost more first-load JS than it moved — feature-seam.ts.)
   const dataLayers = lazyFeature(
-    async () => dataLayersModule,
+    async () => await Promise.resolve(dataLayersModule),
     ({ startDataLayers }) =>
       startDataLayers(hooks, {
         bikeFeed: opts.site.dataLayers?.bikes?.feed,
@@ -2019,7 +2059,9 @@ async function bootApp(
           t.bridges ? [new URL(t.bridges, tilesetUrl).href] : []
         ),
         compile: async (object) =>
-          await postStack.compile(object).catch(() => {}),
+          await postStack.compile(object).catch(() => {
+            // a layer whose compile failed builds when first drawn
+          }),
         epsg: extras.epsg,
         ground: { offset, heightAt },
         onBikeCounts: opts.onBikeCounts,
@@ -2040,8 +2082,9 @@ async function bootApp(
   // said once like a layer's hole, and the next switch-on asks again (a
   // module that did not load is loaded again; a start that threw, a bug,
   // stays failed).
-  const wantDataLayers = wantOnSwitchOn(dataLayers, (error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
+  const wantDataLayers = wantOnSwitchOn(dataLayers, (failure: unknown) => {
+    const message =
+      failure instanceof Error ? failure.message : String(failure);
     opts.trail?.note("feature failed", `data layers ${message}`);
     missing.layerFailed(`Datenebenen: ${message}`);
   });
@@ -2152,15 +2195,19 @@ async function bootApp(
     // the dolly zoom in runs, and for the tiles that land while it shows.
     if (rig && mode === "model") {
       const asked = performance.now();
-      void postStack
-        .warmView(rig.camera)
-        .then(() =>
+      const view = rig.camera;
+      const warmModel = async () => {
+        try {
+          await postStack.warmView(view);
           opts.trail?.note(
             "model warm",
             `${Math.round(performance.now() - asked)} ms`
-          )
-        )
-        .catch(() => {});
+          );
+        } catch {
+          // a view that did not warm builds on its first draw
+        }
+      };
+      void warmModel();
     } else if (rig) {
       postStack.dropView(rig.camera);
     }
@@ -2195,7 +2242,10 @@ async function bootApp(
   /** Which camera the tile renderer streams for, and what the frame looks like. */
   const swapCamera = (parallel: boolean) => {
     const { width, height } = viewportCss();
-    const model = (rig as ModelRig).camera;
+    if (!rig) {
+      throw new Error("Modell's rig is not up");
+    }
+    const model = rig.camera;
     if (parallel) {
       stream.tiles.setCamera(model);
       stream.tiles.setResolution(model, width, height);
@@ -2286,9 +2336,9 @@ async function bootApp(
     streamFarFor(fogRangeFor(fogAmount).far, camera.far, budget.tier)
   );
   const placeStart = (boot = false) => {
-    const camera = boot ? "camera" in booting && booting.camera : restored;
-    if (camera) {
-      pose.applyCameraState(camera);
+    const state = boot ? "camera" in booting && booting.camera : restored;
+    if (state) {
+      pose.applyCameraState(state);
       return;
     }
     pose.placeAt(spawnView);
@@ -2569,18 +2619,19 @@ async function bootApp(
       tapRaycaster.setFromCamera(new Vector2(ndcX, ndcY), camera);
       // The ground first: no building tile past it needs its BVH for this
       // (`nearestCityHit` builds the ones the ray reaches before).
-      const ground = groundAlong(tapRaycaster, 6000);
-      tapRaycaster.far = ground ?? 6000;
+      const groundDist = groundAlong(tapRaycaster, 6000);
+      tapRaycaster.far = groundDist ?? 6000;
       const building = nearestCityHit(
         tapRaycaster,
         stream.visibleCities(),
         true
       )?.hit;
-      const hit = building
-        ? building.point.clone().add(towardsCamera(building.point))
-        : ground === null
-          ? null
-          : tapRaycaster.ray.at(ground, new Vector3());
+      let hit: Vector3 | null = null;
+      if (building) {
+        hit = building.point.clone().add(towardsCamera(building.point));
+      } else if (groundDist !== null) {
+        hit = tapRaycaster.ray.at(groundDist, new Vector3());
+      }
       if (hit) {
         pose.travelTo(hit);
       }
@@ -2596,8 +2647,6 @@ async function bootApp(
   const gpuBytesWith = (geometryBytes: number) =>
     geometryBytes + trackedTextureBytes() + sunRig.shadowMapBytes;
   const gpuBytes = () => gpuBytesWith(geometryCount.get());
-  const census = (roots: (Object3D | undefined)[]): SceneCensus =>
-    sceneCensus(roots.filter((r): r is Object3D => r !== undefined));
   const emitStats = () => {
     const cities = stream.visibleCities();
     const dressings = stream.visibleDressings();
@@ -2607,18 +2656,18 @@ async function bootApp(
       shadowsEnabled: renderer.shadowMap.enabled,
       gpuMegabytes: Math.round(gpuBytes() / 1_048_576),
       layerStats: {
-        city: census(cities.map((c) => c.mesh)),
-        terrain: census(terrains.map((t) => t.mesh)),
-        water: census(
+        city: sceneCensusOf(cities.map((c) => c.mesh)),
+        terrain: sceneCensusOf(terrains.map((t) => t.mesh)),
+        water: sceneCensusOf(
           terrains.flatMap((t) => [t.water?.mesh, t.water?.mistMesh])
         ),
-        ...dressingCensus(dressings, census),
-        walls: census(terrains.map((t) => t.walls)),
-        stairs: census(terrains.map((t) => t.stairs)),
-        kerbs: census(terrains.map((t) => t.kerbs)),
-        fences: census(terrains.map((t) => t.fences)),
-        bikes: census([dataLayers.current()?.parts().bikes]),
-        trams: census([dataLayers.current()?.parts().trams]),
+        ...dressingCensus(dressings, sceneCensusOf),
+        walls: sceneCensusOf(terrains.map((t) => t.walls)),
+        stairs: sceneCensusOf(terrains.map((t) => t.stairs)),
+        kerbs: sceneCensusOf(terrains.map((t) => t.kerbs)),
+        fences: sceneCensusOf(terrains.map((t) => t.fences)),
+        bikes: sceneCensusOf([dataLayers.current()?.parts().bikes]),
+        trams: sceneCensusOf([dataLayers.current()?.parts().trams]),
       },
     });
   };
@@ -2675,29 +2724,33 @@ async function bootApp(
         );
       });
       // the design's plan, drawn as a building
-      const outline = design?.outline();
-      if (outline) {
-        flattened.push({ pts: outline });
+      const planOutline = design?.outline();
+      if (planOutline) {
+        flattened.push({ pts: planOutline });
       }
     }
     return flattened;
   };
-  function loadFootprints(): void {
-    for (const tile of extras.tiles) {
-      fetchOptionalJson<[number, number][][][]>(
+  const loadTileFootprints = async (tile: (typeof extras.tiles)[number]) => {
+    try {
+      const polys = await fetchOptionalJson<[number, number][][][]>(
         new URL(tile.footprints, tilesetUrl).href,
         opts.signal
-      )
-        .then((polys) => {
-          if (polys && !disposed) {
-            footprints.set(tile.id, polys);
-            flattened = null;
-            // a design loaded before the tile's footprints came
-            design?.refresh();
-            scheduleStats();
-          }
-        })
-        .catch(() => {});
+      );
+      if (polys && !disposed) {
+        footprints.set(tile.id, polys);
+        flattened = null;
+        // a design loaded before the tile's footprints came
+        design?.refresh();
+        scheduleStats();
+      }
+    } catch {
+      // a footprint file that fails leaves the minimap without that tile
+    }
+  };
+  function loadFootprints(): void {
+    for (const tile of extras.tiles) {
+      void loadTileFootprints(tile);
     }
   }
 
@@ -2710,21 +2763,23 @@ async function bootApp(
   // worker may take it (city-layer.ts `indexUploaded`): handed over first,
   // its buffer was gone when the frame came to copy it.
   const uploadIndex = (layer: CityLayer) => {
-    const upload = () => {
+    const upload = async () => {
       if (disposed || !stream.cities.has(layer)) {
         return;
       }
       const index = layer.mesh.geometry.getIndex();
-      void postStack
-        .compile(layer.mesh)
-        .then(() => layer.indexUploaded(index))
-        .catch(() => {});
+      try {
+        await postStack.compile(layer.mesh);
+        layer.indexUploaded(index);
+      } catch {
+        // a compile that failed leaves the index with the main thread
+      }
     };
-    const held = layer.held();
+    const { held } = layer;
     if (held) {
       void held.then(upload, upload);
     } else {
-      upload();
+      void upload();
     }
   };
   // The ground under a design's site is cut where a triangle reaching out
@@ -2747,7 +2802,9 @@ async function bootApp(
         }
         material.needsUpdate = true;
         // built off the frame where it can be
-        void postStack.compile(t.mesh).catch(() => {});
+        void postStack.compile(t.mesh).catch(() => {
+          // a ground that did not compile builds on its first draw
+        });
       }
     }
   };
@@ -2793,13 +2850,20 @@ async function bootApp(
       invalidateShadows();
       scheduleStats();
       // a tile whose index the BVH worker had hides once it is back
-      const held = [...stream.cities].flatMap((l) => l.held() ?? []);
+      const held: Promise<unknown>[] = [];
+      for (const l of stream.cities) {
+        const pending = l.held;
+        if (pending) {
+          held.push(pending);
+        }
+      }
       if (held.length > 0) {
         void Promise.all(held).then(() => {
           if (!disposed) {
             invalidateShadows();
             scheduleStats();
           }
+          return null;
         });
       }
     },
@@ -2854,8 +2918,8 @@ async function bootApp(
 
   /** Demolishes the building at a screen point (NDC; the centre without). */
   const demolishAt = (ndc?: { x: number; y: number }) => {
-    const picked = pickCityObject(activeCamera(), stream.visibleCities(), ndc);
-    if (!picked?.layer.demolish(picked.objectIndex)) {
+    const chosen = pickCityObject(activeCamera(), stream.visibleCities(), ndc);
+    if (!chosen?.layer.demolish(chosen.objectIndex)) {
       return;
     }
     const keep = (layer: CityLayer) => {
@@ -2867,26 +2931,26 @@ async function bootApp(
       }
       stream.demolished.set(layer.tile, kept);
     };
-    keep(picked.layer);
+    keep(chosen.layer);
     // the tile's other level (its far or its baked buildings: the same
     // table), loaded but not shown now: the same objects go
     const sameTile = (layer: CityLayer) =>
-      layer !== picked.layer && layer.tile === picked.layer.tile;
+      layer !== chosen.layer && layer.tile === chosen.layer.tile;
     for (const layer of stream.cities) {
       if (sameTile(layer)) {
-        layer.demolish(picked.objectIndex);
+        layer.demolish(chosen.objectIndex);
       }
     }
     // the rest of its ensemble in the tiles across an edge: those loaded
     // now, and (the group kept) those that load later
-    const group = picked.layer.table.group[picked.objectIndex];
+    const group = chosen.layer.table.group[chosen.objectIndex];
     if (group) {
       stream.demolishedGroups.add(group);
     }
     for (const layer of group ? stream.cities : []) {
       const first = layer.table.group.indexOf(group);
       if (
-        layer.tile !== picked.layer.tile &&
+        layer.tile !== chosen.layer.tile &&
         first !== -1 &&
         layer.demolish(first)
       ) {
@@ -2898,13 +2962,20 @@ async function bootApp(
     scheduleStats();
     // a tile whose index the BVH worker had takes the demolish once it is
     // back: its shadows are drawn again then
-    const held = [...stream.cities].flatMap((l) => l.held() ?? []);
+    const held: Promise<void>[] = [];
+    for (const l of stream.cities) {
+      const pending = l.held;
+      if (pending) {
+        held.push(pending);
+      }
+    }
     if (held.length > 0) {
       void Promise.all(held).then(() => {
         if (!disposed) {
           flattened = null;
           invalidateShadows();
         }
+        return null;
       });
     }
   };
@@ -2937,12 +3008,11 @@ async function bootApp(
   };
   canvas.addEventListener("pointermove", onHover);
   canvas.addEventListener("pointerleave", onLeave);
-  cleanups.push(() => {
-    canvas.removeEventListener("pointermove", onHover);
-    canvas.removeEventListener("pointerleave", onLeave);
-  });
-
   cleanups.push(
+    () => {
+      canvas.removeEventListener("pointermove", onHover);
+      canvas.removeEventListener("pointerleave", onLeave);
+    },
     attachKeyboardControls(
       { document, window },
       {
@@ -3025,12 +3095,12 @@ async function bootApp(
       stream.visibleCities(),
       false
     )?.hit;
-    const ground = groundAlong(
+    const groundAt = groundAlong(
       focusRaycaster,
       hit?.distance ?? focusRaycaster.far
     );
-    if (ground !== null && (!hit || ground < hit.distance)) {
-      const point = focusRaycaster.ray.at(ground, new Vector3());
+    if (groundAt !== null && (!hit || groundAt < hit.distance)) {
+      const point = focusRaycaster.ray.at(groundAt, new Vector3());
       lastFocusHit = {
         dist: camera.position.distanceTo(point),
         name: "terrain",
@@ -3070,10 +3140,11 @@ async function bootApp(
       return;
     }
     bvhPending = true;
-    next
+    void next
       .prepareBvh()
-      // a failed build leaves the tile to the rays, which build it here
-      .catch(() => {})
+      .catch(() => {
+        // a failed build leaves the tile to the rays, which build it here
+      })
       .finally(() => {
         bvhPending = false;
         // an outline whose part the worker had is drawn now
@@ -3230,17 +3301,17 @@ async function bootApp(
     if (!target) {
       // Re-fit the shadow frustum to the camera (lib/city/shadow-fit.ts).
       camera.getWorldDirection(shadowViewDir);
-      const ground = groundUnderCamera();
+      const groundY = groundUnderCamera();
       airView.fogEnd = sceneFog.far.value;
-      sunRig.follow(camera, shadowViewDir, ground, airView);
+      sunRig.follow(camera, shadowViewDir, groundY, airView);
       // The map's own marks (the ferry lines) show from the air.
-      setMapAltitude(camera.position.y - ground);
+      setMapAltitude(camera.position.y - groundY);
       // Repoint the shared real lamp lights at the nearest heads.
       lampLights.updateNearest(camera.position);
       lantern.follow(
         camera.position,
         shadowViewDir,
-        camera.position.y - ground
+        camera.position.y - groundY
       );
       stepVegetation(elapsed, camera.position, tick);
       return null;
@@ -3299,7 +3370,8 @@ async function bootApp(
     // near level shows no ground to fit a square into
     const v = modelRig.settledView();
     const cut = on && v ? cutOutFromView(v, viewportCss()) : null;
-    const request = ++cutRequest;
+    cutRequest += 1;
+    const request = cutRequest;
     cutOutFailed = false;
     cuts.setCutOut(cut, siteGround.atWorld, groundVersion);
     invalidateShadows();
@@ -3318,19 +3390,21 @@ async function bootApp(
           invalidateShadows();
           opts.trail?.note("cut-out", "shown");
         }
+        return null;
       })
-      .catch((error: unknown) => {
+      .catch((cutError: unknown) => {
         // A program that failed to build: the Ausschnitt is lifted (its
         // switch no longer "building…" for ever) and said in Modell's
         // panel, beside its switch.
         if (request !== cutRequest || disposed) {
           return;
         }
-        const message = error instanceof Error ? error.message : String(error);
+        const message =
+          cutError instanceof Error ? cutError.message : String(cutError);
         opts.trail?.note("cut-out failed", message);
         setCutOut(false);
         cutOutFailed = true;
-        if (isAllocationFailure(error)) {
+        if (isAllocationFailure(cutError)) {
           memoryEmergency("allocation cut-out");
         }
       });
@@ -3405,7 +3479,9 @@ async function bootApp(
   };
   const effects: Effects = {
     note: (e) => opts.trail?.note(e.event, e.detail),
-    stopRender: () => void renderer.setAnimationLoop(null),
+    stopRender: () => {
+      void renderer.setAnimationLoop(null);
+    },
     reload: () => {
       const reload = reloadNow;
       if (reload) {
@@ -3447,18 +3523,20 @@ async function bootApp(
       (effects[effect.kind] as (e: LifecycleEffect) => void)(effect);
     }
   };
-  /** Now, as the machine's signals carry it. */
-  const at = () => ({ now: performance.now(), hidden: document.hidden });
   // The GPU ran out of memory (an uncaptured GPUOutOfMemoryError, a failed
   // upload or compile the stream reports): the one entry for them all.
   const memoryEmergency = (reason: string): void =>
-    runLifecycle({ kind: "allocationFailed", reason, ...at() });
+    runLifecycle({ kind: "allocationFailed", reason, ...signalTime() });
   // A device the browser reports lost: three only stops drawing (silently,
   // every frame after it returns early), so the loop stops here too.
   const onDeviceLost = renderer.onDeviceLost.bind(renderer);
   renderer.onDeviceLost = (info) => {
     onDeviceLost(info);
-    runLifecycle({ kind: "deviceLost", message: info.message, ...at() });
+    runLifecycle({
+      kind: "deviceLost",
+      message: info.message,
+      ...signalTime(),
+    });
   };
   // WebKit's failed allocation also arrives, after the fact, as an
   // uncaptured GPUOutOfMemoryError (three passes its class name as the
@@ -3486,7 +3564,7 @@ async function bootApp(
           : "",
       allocation: isAllocationFailure(error),
       gpuAnswers: () => probeGpu(renderer) === null,
-      ...at(),
+      ...signalTime(),
     });
   };
   // Bild speichern: one tile per frame, read in the frame's own task right
@@ -3557,9 +3635,10 @@ async function bootApp(
   };
   /** Before the render: the frustum slides over the larger picture. */
   const aimCaptureTile = () => {
-    if (!capture && captureQueue.length > 0) {
+    const nextCapture = capture ? undefined : captureQueue.shift();
+    if (nextCapture) {
       fullResolution();
-      beginCapture(captureQueue.shift() as CaptureRequest);
+      beginCapture(nextCapture);
     }
     const c = capture;
     if (!c || c.tiles.length < 2) {
@@ -3648,7 +3727,7 @@ async function bootApp(
     }
     gpuReading = true;
     gpuReadDue = now + GPU_TIME_READ_MS;
-    renderer
+    void renderer
       .resolveTimestampsAsync("render")
       .then((ms) => {
         if (typeof ms === "number" && ms !== lastGpuMs) {
@@ -3656,8 +3735,11 @@ async function bootApp(
           frameTiming.gpu(ms);
           resolution?.gpu(ms);
         }
+        return null;
       })
-      .catch(() => {})
+      .catch(() => {
+        // a read that failed: the next one is due soon
+      })
       .finally(() => {
         gpuReading = false;
       });
@@ -3887,7 +3969,9 @@ async function bootApp(
       onFrameFailed(error);
     }
   });
-  cleanups.push(() => void renderer.setAnimationLoop(null));
+  cleanups.push(() => {
+    void renderer.setAnimationLoop(null);
+  });
   // The crash trail's heartbeat: what a killed page was doing last.
   const { trail } = opts;
   if (trail) {
@@ -4058,7 +4142,11 @@ async function bootApp(
   await streamTimings.timed(
     "boot:scene-compile",
     async () =>
-      await withinCompileWait(postStack.compile(scene).catch(() => {}))
+      await withinCompileWait(
+        postStack.compile(scene).catch(() => {
+          // a frame skips what is not ready rather than stall
+        })
+      )
   );
   // On the spawn vantage (or where a recovered page stood) now that its
   // ground exists (the pose was placed before any terrain had landed,
@@ -4093,17 +4181,17 @@ async function bootApp(
   // browser is idle, so the first switch to a style does not hitch — at no
   // cost to the boot, which never draws a style the viewer did not pick.
   let stylesWarming = false;
+  const warm = () => {
+    if (!disposed) {
+      opts.trail?.note("styles warming");
+      void postStack.warmStyles().then(() => opts.trail?.note("styles warm"));
+    }
+  };
   function warmStylesWhenIdle(): void {
     if (stylesWarming) {
       return;
     }
     stylesWarming = true;
-    const warm = () => {
-      if (!disposed) {
-        opts.trail?.note("styles warming");
-        void postStack.warmStyles().then(() => opts.trail?.note("styles warm"));
-      }
-    };
     if (typeof requestIdleCallback === "function") {
       requestIdleCallback(warm, { timeout: 4000 });
     } else {
@@ -4188,7 +4276,7 @@ async function bootApp(
     // Marks the trail: a page that dies from here on dies building the
     // dressing, not in the frames before it.
     opts.trail?.note("dressing gate");
-    openGate();
+    openGate?.();
     loadFootprints();
     checkLoaded();
   };
@@ -4397,9 +4485,9 @@ async function bootApp(
     setModelTilt: modelRig.setTilt,
     setModelShear: modelRig.setShear,
     getModelHud: modelHud,
-    setFollowAim: (aim) => {
+    setFollowAim: (followAim) => {
       wakeStill();
-      pose.setFollowAim(aim);
+      pose.setFollowAim(followAim);
     },
     setFollowPosition: (epsg) => {
       wakeStill();
@@ -4427,6 +4515,7 @@ async function bootApp(
       let gone = false;
       const lost = deviceGone(renderer).then(() => {
         gone = true;
+        return null;
       });
       const released = teardownWhole(cleanups, scene, renderer, (left) =>
         opts.trail?.note(
@@ -4434,17 +4523,16 @@ async function bootApp(
           `${left.geometries} geometries, ${left.textures} textures left, ${Math.round(left.total / 1_048_576)} MB`
         )
       );
-      return await Promise.race([
+      await Promise.race([
         Promise.all([released, lost]),
         new Promise<void>((resolve) => {
           setTimeout(resolve, TEARDOWN_WAIT_MS);
         }),
-      ]).then(() => {
-        opts.trail?.note(
-          "teardown done",
-          `${Math.round(performance.now() - started)} ms, device ${gone ? "gone" : "not confirmed"}`
-        );
-      });
+      ]);
+      opts.trail?.note(
+        "teardown done",
+        `${Math.round(performance.now() - started)} ms, device ${gone ? "gone" : "not confirmed"}`
+      );
     },
   };
 }

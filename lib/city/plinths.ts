@@ -235,23 +235,25 @@ function cornerGroups(
   return runs.map((_, i) => root(i));
 }
 
+/** A run's unit direction. */
+const runDirection = (r: { a: readonly number[]; b: readonly number[] }) => {
+  const l = Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]);
+  return [(r.b[0] - r.a[0]) / l, (r.b[1] - r.a[1]) / l];
+};
+
 /** The pairs [i, j] where run i's end meets run j's start round a corner
  *  (turning, but by no more than `MITRE_MAX_DEG`). */
 function corners(
   runs: readonly { a: readonly number[]; b: readonly number[] }[]
 ): [number, number][] {
   const out: [number, number][] = [];
-  const dir = (r: { a: readonly number[]; b: readonly number[] }) => {
-    const l = Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]);
-    return [(r.b[0] - r.a[0]) / l, (r.b[1] - r.a[1]) / l];
-  };
   const minCos = Math.cos((MITRE_MAX_DEG * Math.PI) / 180);
   for (const [i, r] of runs.entries()) {
     for (const [j, s] of runs.entries()) {
       if (i === j || Math.hypot(r.b[0] - s.a[0], r.b[1] - s.a[1]) > MEET_M) {
         continue;
       }
-      const [u, v] = [dir(r), dir(s)];
+      const [u, v] = [runDirection(r), runDirection(s)];
       const cos = u[0] * v[0] + u[1] * v[1];
       if (cos < 0.9998 && cos > minCos) {
         out.push([i, j]);
@@ -264,6 +266,12 @@ function corners(
 /** Below this sine of their turn two runs meeting at a corner share one
  *  shift there: nearly in line, their shifted walls would meet far off. */
 const SHARED_SHIFT_SIN = 0.4;
+
+/** A run's unit normal. */
+const runNormal = (r: { a: readonly number[]; b: readonly number[] }) => {
+  const l = Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]);
+  return [(r.b[1] - r.a[1]) / l, -(r.b[0] - r.a[0]) / l];
+};
 
 /** The runs with their mitres: where run i meets run j round a corner at
  *  P, both end on the point where their shifted walls meet (n₁·X = s₁,
@@ -280,16 +288,13 @@ function mitred(
   pairs: readonly (readonly [number, number])[] = corners(runs)
 ): Run[] {
   const out: Run[] = runs.map((r) => ({ ...r }));
-  const normal = (r: { a: readonly number[]; b: readonly number[] }) => {
-    const l = Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]);
-    return [(r.b[1] - r.a[1]) / l, -(r.b[0] - r.a[0]) / l];
-  };
   for (const [i, j] of pairs) {
-    const [n1, n2] = [normal(runs[i]), normal(runs[j])];
+    const [n1, n2] = [runNormal(runs[i]), runNormal(runs[j])];
     const det = n1[0] * n2[1] - n1[1] * n2[0];
     let [s1, s2] = [out[i].sb, out[j].sa];
     if (Math.abs(det) < SHARED_SHIFT_SIN) {
-      s1 = s2 = (s1 + s2) / 2;
+      s1 = (s1 + s2) / 2;
+      s2 = s1;
       out[i].sb = s1;
       out[j].sa = s2;
     }
@@ -439,16 +444,18 @@ interface Link {
   corner: boolean;
 }
 
+/** The grid cell a point stands in, as a key. */
+const bridgeCell = (x: number, y: number) =>
+  `${Math.floor(x / BRIDGE_M)},${Math.floor(y / BRIDGE_M)}`;
+
 /** Where stretch i's end meets stretch j's start: at a corner (within
  *  `MEET_M`, turning by no more than `MITRE_MAX_DEG`), in line, or across
  *  a gap of up to `BRIDGE_M`. An end and a start take one link each, the
  *  nearest. */
 function links(st: readonly Stretch[]): Link[] {
-  const cell = (x: number, y: number) =>
-    `${Math.floor(x / BRIDGE_M)},${Math.floor(y / BRIDGE_M)}`;
   const starts = new Map<string, number[]>();
   for (const [j, s] of st.entries()) {
-    const k = cell(s.a[0], s.a[1]);
+    const k = bridgeCell(s.a[0], s.a[1]);
     starts.set(k, [...(starts.get(k) ?? []), j]);
   }
   const dir = (s: Stretch) => {
@@ -498,12 +505,12 @@ function linkOf(
   if (d <= MEET_M) {
     return cos > minCos ? { d, corner: cos < 0.9998 } : undefined;
   }
-  const along = u[0] * g[0] + u[1] * g[1];
+  const ahead = u[0] * g[0] + u[1] * g[1];
   const aside = Math.abs(u[0] * g[1] - u[1] * g[0]);
   return d <= BRIDGE_M &&
     cos >= BRIDGE_COS &&
     aside <= BRIDGE_ASIDE_M &&
-    along > -BRIDGE_ASIDE_M
+    ahead > -BRIDGE_ASIDE_M
     ? { d, corner: false }
     : undefined;
 }
@@ -579,12 +586,12 @@ export function joinStretches(
       t.a = onLine(t.b, t.a, mid);
     }
   }
-  const corners = ls
+  const cornerPairs = ls
     .filter(
       (l) => l.corner && st[l.i].lo === st[l.j].lo && st[l.i].hi === st[l.j].hi
     )
     .map((l): [number, number] => [l.i, l.j]);
-  return { stretches: st, corners };
+  return { stretches: st, corners: cornerPairs };
 }
 
 /** The point on the line from `from` through `to` nearest `p`. */

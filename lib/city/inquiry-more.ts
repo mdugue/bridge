@@ -504,5 +504,8 @@ export function moreCard(
     case "landing": {
       return landingCard(inquiry, provenance);
     }
+    default: {
+      throw new Error("unknown inquiry kind");
+    }
   }
 }

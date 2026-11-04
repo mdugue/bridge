@@ -234,7 +234,10 @@ function volleyballNet(row: SportRow): SportFixture[] {
 export function sportFixtures(table: SportTable): SportFixture[] {
   const out: SportFixture[] = [];
   for (const row of table.grounds) {
-    const [, , , p1, p2, , , marking, shape] = row;
+    const p1 = row[3];
+    const p2 = row[4];
+    const marking = row[7];
+    const shape = row[8];
     if (shape !== sportShapeId("rect") || p1 <= 0 || p2 <= 0) {
       continue;
     }
@@ -263,6 +266,9 @@ export function sportFixtures(table: SportTable): SportFixture[] {
       case "board":
       case "none": {
         break;
+      }
+      default: {
+        break; // a marking id the table does not know: no fixtures
       }
     }
   }

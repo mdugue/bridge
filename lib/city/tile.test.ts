@@ -140,9 +140,12 @@ function bakeNames(): Map<string, string> {
         continue;
       }
       for (const m of line.matchAll(
-        /f"([a-z0-9_]+)_\{tile\.id\}\.([a-z.]+)"/gu
+        /f"(?<kind>[a-z0-9_]+)_\{tile\.id\}\.(?<ext>[a-z.]+)"/gu
       )) {
-        names.set(`${m[1]}_${PRIMARY_TILE}.${m[2]}`, `${file}:${i + 1}`);
+        names.set(
+          `${m.groups?.kind}_${PRIMARY_TILE}.${m.groups?.ext}`,
+          `${file}:${i + 1}`
+        );
       }
     }
   }

@@ -11,6 +11,6 @@ const sources = readdirSync(DIR).filter(
 
 test.each(sources)("%s imports no three.js and touches no DOM", (file) => {
   const text = readFileSync(path.join(DIR, file), "utf-8");
-  expect(text).not.toMatch(/from ["']three(\/|["'])/u);
-  expect(text).not.toMatch(/\b(document|window|navigator)\./u);
+  expect(text).not.toMatch(/from ["']three(?:\/|["'])/u);
+  expect(text).not.toMatch(/\b(?:document|window|navigator)\./u);
 });

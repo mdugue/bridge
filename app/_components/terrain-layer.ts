@@ -53,7 +53,6 @@ import {
   smoothstep,
   step,
   texture,
-  uniform,
   vec2,
   vec3,
   vec4,
@@ -121,7 +120,8 @@ import {
 } from "./raster-upload";
 import { roadMarkings } from "./road-markings";
 import { dataXY, rasterUv } from "./shader-chunks";
-import type { F, Tex, V2, V3 } from "./shader-chunks";
+import { splatSize } from "./splat-uv";
+import type { F, Tex, V3 } from "./shader-chunks";
 import type { SharedRasters } from "./shared-rasters";
 import { setGraph, setSlots, slotTexture, slotUniform } from "./material-slots";
 import type { Slots } from "./material-slots";
@@ -279,17 +279,17 @@ const NDVI_LOOK: RasterLook = {
 
 /** Applies `look` and records the texture's GPU bytes (trackTexture). */
 function lookAs(raster: LoadedRaster, look: RasterLook): void {
-  const { texture } = raster;
+  const { texture: map } = raster;
   const filter = look.filter === "nearest" ? NearestFilter : LinearFilter;
-  texture.magFilter = filter;
-  texture.minFilter = look.mipmaps ? LinearMipmapLinearFilter : filter;
-  texture.generateMipmaps = look.mipmaps === true;
+  map.magFilter = filter;
+  map.minFilter = look.mipmaps ? LinearMipmapLinearFilter : filter;
+  map.generateMipmaps = look.mipmaps === true;
   if (look.anisotropy) {
-    texture.anisotropy = look.anisotropy;
+    map.anisotropy = look.anisotropy;
   }
-  texture.colorSpace = NoColorSpace;
+  map.colorSpace = NoColorSpace;
   trackTexture(
-    texture,
+    map,
     textureBytes(
       raster.width,
       raster.height,
@@ -336,6 +336,14 @@ async function loadRasterTexture(
   }, signal);
 }
 
+/** The texture format of an interleaved raster with this many channels. */
+function rasterFormat(channels: 1 | 2 | 4) {
+  if (channels === 4) {
+    return RGBAFormat;
+  }
+  return channels === 2 ? RGFormat : RedFormat;
+}
+
 /** The raster's texture from its PNG bytes (see `loadRasterTexture`). */
 async function decodeRaster(
   bytes: Uint8Array<ArrayBuffer>,
@@ -358,23 +366,23 @@ async function decodeRaster(
   // RG8 / RGBA8 layout.
   const width = raster.width / channels;
   const { height } = raster;
-  const texture = new DataTexture(
+  const dataTexture = new DataTexture(
     raster.data,
     width,
     height,
-    channels === 4 ? RGBAFormat : channels === 2 ? RGFormat : RedFormat,
+    rasterFormat(channels),
     UnsignedByteType
   );
   // Row 0 is the PNG's first (northern) row, as with the bitmap upload
   // (flipY = false; v grows southward).
-  texture.flipY = false;
-  texture.unpackAlignment = 1;
-  texture.needsUpdate = true;
+  dataTexture.flipY = false;
+  dataTexture.unpackAlignment = 1;
+  dataTexture.needsUpdate = true;
   // 16 MB of CPU bytes for a 4096² raster: dead weight once the GPU has
   // them. Twelve resident copies took mobile Safari past its per-tab
   // memory limit when these were bitmaps.
-  dropDataOnUpload(texture);
-  return { texture, width, height, data: raster.data };
+  dropDataOnUpload(dataTexture);
+  return { texture: dataTexture, width, height, data: raster.data };
 }
 
 /**
@@ -411,19 +419,19 @@ async function loadBitmapTexture(
     premultiplyAlpha: "none",
     colorSpaceConversion: "none",
   });
-  const texture = new Texture(bitmap);
-  texture.flipY = false;
-  texture.format = RedFormat;
-  texture.needsUpdate = true;
+  const bitmapTexture = new Texture(bitmap);
+  bitmapTexture.flipY = false;
+  bitmapTexture.format = RedFormat;
+  bitmapTexture.needsUpdate = true;
   // Not closed after the upload, unlike the data rasters' bytes: three may
   // upload the image again (a re-created GPU texture reads `image`), and a
   // closed bitmap uploads empty — the ground would turn to class 0. Freed
   // with the texture instead. Rare: only a PNG our decoder rejects lands
   // here.
-  texture.addEventListener("dispose", () => {
+  bitmapTexture.addEventListener("dispose", () => {
     bitmap.close();
   });
-  return { texture, width: bitmap.width, height: bitmap.height };
+  return { texture: bitmapTexture, width: bitmap.width, height: bitmap.height };
 }
 
 /**
@@ -472,11 +480,11 @@ export async function loadSplatRasters(
   if (!raster) {
     return null;
   }
-  const { texture, width, height } = raster;
+  const { texture: classes, width, height } = raster;
   // every level that wanted it gone while it decoded: no splat painted (a
   // mipmapped RGBA target, half the raster's size at 4096²) for nobody
   if (signal?.aborted) {
-    texture.dispose();
+    classes.dispose();
     signal.throwIfAborted();
   }
   return {
@@ -484,7 +492,7 @@ export async function loadSplatRasters(
     water,
     painted: paintLandcoverSplat(
       renderer,
-      texture,
+      classes,
       width,
       height,
       splatScaleFor(width)
@@ -718,26 +726,6 @@ export interface SplatLayer {
   texture: Texture;
 }
 
-/** The tile's size (m) in the data frame. */
-const splatSize = (splat: SplatLayer): [number, number] => {
-  const [minX, minY, maxX, maxY] = splat.bounds;
-  return [maxX - minX, maxY - minY];
-};
-
-/**
- * The splat uv at the fragment: from the data-frame XY and the tile bounds
- * (v grows southward) — the terrain geometry carries no uv attribute. The
- * tile's north-west corner is a uniform, so every tile builds the same
- * node code (water-layer.ts reads the splat the same way).
- */
-export function splatUv(splat: SplatLayer): V2 {
-  const [minX, , , maxY] = splat.bounds;
-  const origin = uniform(
-    new Vector2(minX - splat.offset.cx, maxY - splat.offset.cy)
-  );
-  return rasterUv(dataXY(), origin, splatSize(splat));
-}
-
 /**
  * What a terrain variant's shared graph reads (material-slots.ts): the
  * tile's rasters and corner as slots, the shared uniforms as they are
@@ -759,7 +747,8 @@ interface SplatNodes {
 
 /** The tile's corner (recentered, data frame): the uv's origin. */
 const splatOrigin = (splat: SplatLayer): Vector2 => {
-  const [minX, , , maxY] = splat.bounds;
+  const minX = splat.bounds[0];
+  const maxY = splat.bounds[3];
   return new Vector2(minX - splat.offset.cx, maxY - splat.offset.cy);
 };
 
@@ -988,8 +977,8 @@ function arableGround(
  * river surface) it read as dirty blotches across the whole middle distance.
  */
 function contourInk(elevation: F): F {
-  const set = (step: number, fade: [number, number]): F => {
-    const d = elevation.div(step);
+  const set = (spacing: number, fade: [number, number]): F => {
+    const d = elevation.div(spacing);
     const w = fwidth(d);
     // A flat quad lying exactly on a contour has fwidth 0: 0/0 there
     // striped it with NaN ink (and NaN survives the slope gate's
@@ -1592,8 +1581,8 @@ async function loadTerrainRasters(
     return await untilAborted(share.acquire(key), opts.signal);
   };
   const free = () => {
-    for (const texture of owned.splice(0)) {
-      texture.dispose();
+    for (const held of owned.splice(0)) {
+      held.dispose();
     }
     for (const release of holds.splice(0)) {
       release();
@@ -1656,11 +1645,11 @@ async function owning<T extends Texture>(
   owned: Texture[],
   load: Promise<T | null> | null
 ): Promise<T | null> {
-  return await (load ?? Promise.resolve(null)).then((texture) => {
-    if (texture) {
-      owned.push(texture);
+  return await (load ?? Promise.resolve(null)).then((landed) => {
+    if (landed) {
+      owned.push(landed);
     }
-    return texture;
+    return landed;
   });
 }
 
@@ -1779,7 +1768,8 @@ function groundLightOf(splat: SplatLayer): GroundLight | undefined {
   if (!(splat.svfTexture || splat.horizonTexture)) {
     return undefined;
   }
-  const [minX, , , maxY] = splat.bounds;
+  const minX = splat.bounds[0];
+  const maxY = splat.bounds[3];
   return {
     svf: splat.svfTexture,
     horizon: splat.horizonTexture,
@@ -1844,6 +1834,15 @@ function waterSheetsOf(
   return { water, mist };
 }
 
+/** A mesh's named attributes and its index (none: nothing). */
+const attributesOf = (mesh: Mesh | undefined, names: string[]) =>
+  mesh
+    ? [
+        ...names.map((name) => mesh.geometry.getAttribute(name)),
+        mesh.geometry.getIndex(),
+      ]
+    : [];
+
 /**
  * A dressed level's buffers that nothing reads on the CPU once its compile
  * has uploaded them (tile-stream.ts drops their CPU copies then: three.js
@@ -1863,13 +1862,6 @@ function waterSheetsOf(
  */
 export function cpuDroppable(layer: TerrainLayer): AnyAttribute[] {
   const ground = layer.mesh.geometry;
-  const of = (mesh: Mesh | undefined, names: string[]) =>
-    mesh
-      ? [
-          ...names.map((name) => mesh.geometry.getAttribute(name)),
-          mesh.geometry.getIndex(),
-        ]
-      : [];
   return [
     ground.getAttribute("position"),
     ground.getAttribute("normal"),
@@ -1878,10 +1870,10 @@ export function cpuDroppable(layer: TerrainLayer): AnyAttribute[] {
     layer.water && layer.water.mistMesh.geometry !== layer.water.mesh.geometry
       ? layer.water.mistMesh.geometry.getIndex()
       : null,
-    ...of(layer.stairs, ["position", "normal", "color"]),
-    ...of(layer.walls, ["position", "normal", "color"]),
-    ...of(layer.kerbs, ["position", "normal"]),
-    ...of(layer.fences, ["position", "uv"]),
+    ...attributesOf(layer.stairs, ["position", "normal", "color"]),
+    ...attributesOf(layer.walls, ["position", "normal", "color"]),
+    ...attributesOf(layer.kerbs, ["position", "normal"]),
+    ...attributesOf(layer.fences, ["position", "uv"]),
   ].filter((a): a is AnyAttribute => a !== null && a !== undefined);
 }
 

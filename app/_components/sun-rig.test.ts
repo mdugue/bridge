@@ -35,8 +35,11 @@ function rig(shadowMapSize = shadowMapSizeFor("full")) {
     fogColor
   );
   const sun = scene.children.find(
-    (o) => o instanceof DirectionalLight
-  ) as DirectionalLight;
+    (o): o is DirectionalLight => o instanceof DirectionalLight
+  );
+  if (!sun) {
+    throw new Error("the rig adds no sun");
+  }
   return { sunRig, sun, fogColor };
 }
 

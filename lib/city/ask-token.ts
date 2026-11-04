@@ -16,7 +16,7 @@ const encoder = new TextEncoder();
 function base64url(bytes: ArrayBuffer): string {
   let text = "";
   for (const b of new Uint8Array(bytes)) {
-    text += String.fromCharCode(b);
+    text += String.fromCodePoint(b);
   }
   return btoa(text)
     .replaceAll("+", "-")
@@ -48,7 +48,7 @@ function sameText(a: string, b: string): boolean {
   }
   let diff = 0;
   for (let i = 0; i < a.length; i += 1) {
-    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    diff |= (a.codePointAt(i) ?? 0) ^ (b.codePointAt(i) ?? 0);
   }
   return diff === 0;
 }

@@ -72,11 +72,11 @@ function readF32(path: string): Float32Array {
 }
 
 function gridN(name: string): number {
-  const m = /_(\d+)$/u.exec(name);
+  const m = /_(?<n>\d+)$/u.exec(name);
   if (!m) {
     throw new Error(`grid name must end in _<n>: ${name}`);
   }
-  return Number(m[1]);
+  return Number(m.groups?.n);
 }
 
 function wallLines(): WallLine[] {

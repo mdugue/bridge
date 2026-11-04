@@ -238,7 +238,11 @@ interface AskedTree {
   source: CanopyInquiry["source"];
 }
 
-/** `canopySets` in steps: per run of trees placed (build-steps.ts). */
+/**
+ * `canopySets` in steps: per run of trees placed (build-steps.ts).
+ *
+ * @yields {void} once per run of trees placed
+ */
 function* canopySetsSteps(
   features: {
     canopy: CanopyFeature[];
@@ -308,12 +312,12 @@ const LEAF_CONE = 0x80;
 
 /** What told a crown is an evergreen (canopy.py): the forest's kind, or
  *  the leaf-off orthophoto. */
-const leafOf = (f: CanopyFeature): CanopyInquiry["evergreen"] =>
-  f.properties?.l === "e"
-    ? f.properties.ls === "dop"
-      ? "photo"
-      : "forest"
-    : undefined;
+const leafOf = (f: CanopyFeature): CanopyInquiry["evergreen"] => {
+  if (f.properties?.l !== "e") {
+    return undefined;
+  }
+  return f.properties.ls === "dop" ? "photo" : "forest";
+};
 
 /** The canopy tree at index `i` as an inquiry (`leaf`: its leaf byte). */
 function canopyInquiry(
@@ -568,7 +572,11 @@ export interface MoreFeatures {
   trams: TramFeature[];
 }
 
-/** `moreSets` in steps (build-steps.ts). */
+/**
+ * `moreSets` in steps (build-steps.ts).
+ *
+ * @yields {void} between the sets, so the build can be spread over frames
+ */
 export function* moreSetsSteps(
   features: MoreFeatures,
   ctx: MoreContext,

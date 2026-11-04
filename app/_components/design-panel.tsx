@@ -132,7 +132,7 @@ function savePlacement(text: string, design: string): void {
   );
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${design.replace(/\.(glb|gltf)$/iu, "")}.lage.json`;
+  a.download = `${design.replace(/\.(?:glb|gltf)$/iu, "")}.lage.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -174,12 +174,17 @@ export const DesignPanel = ({
       await c.load(files);
     } catch (error_) {
       setError(error_ instanceof Error ? error_.message : String(error_));
-    } finally {
-      setBusy(false);
     }
+    setBusy(false);
   };
   const place = (patch: Partial<DesignPlacement>) =>
     controls()?.setPlacement(patch);
+  let pickLabel = "Datei wählen";
+  if (busy) {
+    pickLabel = "Lädt …";
+  } else if (status) {
+    pickLabel = "Andere Datei laden";
+  }
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
     setOver(false);
@@ -223,7 +228,7 @@ export const DesignPanel = ({
         variant={status ? "outline" : "default"}
       >
         <FileUpIcon data-icon="inline-start" />
-        {busy ? "Lädt …" : status ? "Andere Datei laden" : "Datei wählen"}
+        {pickLabel}
       </Button>
       {error && (
         <p className="text-[11px] text-destructive leading-snug" role="alert">
@@ -373,7 +378,15 @@ const DesignControlsView = ({
           checked={status.fileColours}
           disabled={!status.hasLooks}
           id={`${ids}-colours`}
-          onCheckedChange={(on) => void controls()?.setFileColours(on)}
+          onCheckedChange={(on) => {
+            controls()
+              ?.setFileColours(on)
+              .catch((error_: unknown) => {
+                // as before: a failed build stays an unhandled rejection,
+                // for the global handler (Sentry) to report
+                throw error_;
+              });
+          }}
           size="sm"
         />
       </Field>

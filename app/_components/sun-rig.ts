@@ -1,3 +1,4 @@
+import { WarpedShadowCamera } from "./warped-shadow-camera";
 import {
   Color,
   DirectionalLight,
@@ -12,7 +13,6 @@ import type {
   Box3,
   Camera,
   DepthTexture,
-  Light,
   LightShadow,
   Matrix4,
   Node,
@@ -212,25 +212,6 @@ const SQUARE_PCF_RADIUS = 5;
 const WARP_PCF_RADIUS = 3;
 
 /**
- * The sun's shadow camera: three's orthographic one, with an optional warp
- * after its box (shadow-warp.ts). `updateProjectionMatrix` — which
- * three calls when the backend's coordinate system or depth direction is
- * set — rebuilds the box for them and applies the warp again, so the
- * projection is never left without it. Without a warp it is three's camera.
- */
-class WarpedShadowCamera extends OrthographicCamera {
-  /** light view → warped coordinates (shadow-warp.ts `WarpFit.warp`) */
-  warp: Matrix4 | null = null;
-  override updateProjectionMatrix(): void {
-    super.updateProjectionMatrix();
-    if (this.warp) {
-      this.projectionMatrix.multiply(this.warp);
-      this.projectionMatrixInverse.copy(this.projectionMatrix).invert();
-    }
-  }
-}
-
-/**
  * Least time (ms) between two shadow-map redraws while the time of day is
  * dragged: the map is the heaviest pass (every caster), and a drag turns
  * the sun at every frame. Ten a second keep the shadows moving with it; the
@@ -245,11 +226,12 @@ interface ShadowTargets {
 }
 // reason: setupRenderTarget is part of ShadowNode (ShadowNode.js documents
 // overriding it, TileShadowNode does) but missing from the @types.
-const ShadowNodeWithTarget = ShadowNode as unknown as new (
-  light: Light,
-  shadow: LightShadow | null
-) => ShadowNode & {
-  setupRenderTarget(shadow: LightShadow, builder: NodeBuilder): ShadowTargets;
+const shadowNodeWithTarget = ShadowNode.prototype as unknown as {
+  setupRenderTarget: (
+    this: ShadowNode,
+    shadow: LightShadow,
+    builder: NodeBuilder
+  ) => ShadowTargets;
 };
 
 /**
@@ -264,14 +246,18 @@ const ShadowNodeWithTarget = ShadowNode as unknown as new (
  * three's own CSM and tiled shadows plug in through — so nothing of three
  * is patched (ADR 0027).
  */
-class DepthOnlyShadowNode extends ShadowNodeWithTarget {
+class DepthOnlyShadowNode extends ShadowNode {
   /** the map's depth, once the first lit material made it */
   depth: DepthTexture | null = null;
   setupRenderTarget(shadow: LightShadow, builder: NodeBuilder): ShadowTargets {
     // three's depth texture (its name, its compare function), in a target
     // of its own without the colour — the one made with it is never
     // allocated, and goes
-    const made = super.setupRenderTarget(shadow, builder);
+    const made = shadowNodeWithTarget.setupRenderTarget.call(
+      this,
+      shadow,
+      builder
+    );
     const { depthTexture } = made;
     // handed over: the depth belongs to the target that draws it, which
     // frees it with itself (a texture keeps the first target it was given)
@@ -724,13 +710,13 @@ export function createSunRig(
     groundY: number,
     z: number,
     footRadius: number,
-    max: number
+    maxRadius: number
   ) => {
     airborne = false;
     if (warpFit) {
       dropWarp();
     }
-    const nextRadius = fitModelShadow(footRadius, radius, max);
+    const nextRadius = fitModelShadow(footRadius, radius, maxRadius);
     if (
       nextRadius === radius &&
       Number.isFinite(lastCentre.x) &&

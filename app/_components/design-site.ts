@@ -209,6 +209,10 @@ export function foldedThing(
         offset.cy - target.position[1]
       );
     }
+    default: {
+      // unreachable: every kind is named above; an unknown one stays unfolded
+      return false;
+    }
   }
 }
 

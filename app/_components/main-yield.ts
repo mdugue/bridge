@@ -28,9 +28,11 @@ export function installMainYield(): void {
   }
   const waiting: (() => void)[] = [];
   const channel = new MessageChannel();
-  channel.port1.onmessage = () => {
+  channel.port1.addEventListener("message", () => {
     waiting.shift()?.();
-  };
+  });
+  // addEventListener does not open the port the way `onmessage` did
+  channel.port1.start();
   const yieldNow = async () =>
     await new Promise<void>((resolve) => {
       waiting.push(resolve);

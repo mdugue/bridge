@@ -25,7 +25,7 @@ test("a token holds for its key and provider until it expires", async () => {
 
 test("a forged or malformed token fails", async () => {
   const token = await issueAskToken(SECRET, "anthropic", KEY, 2000);
-  const [, , sig] = token.split(".");
+  const sig = token.split(".")[2];
   // a later expiry with the old signature
   expect(
     await verifyAskToken(SECRET, `v1.9999999.${sig}`, "anthropic", KEY, 1000)

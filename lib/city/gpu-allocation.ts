@@ -47,7 +47,7 @@ export function isAllocationFailure(error: unknown): boolean {
 
 /** A RangeError's words for memory that could not be had. */
 const OUT_OF_ROOM =
-  /out of bounds|out of memory|allocation fail|array buffer allocation|invalid (typed )?array (buffer )?length/iu;
+  /out of bounds|out of memory|allocation fail|array buffer allocation|invalid (?:typed )?array (?:buffer )?length/iu;
 
 /** The three.js and WebGPU calls that allocate, in a RangeError's stack. */
 const GPU_CALLS =

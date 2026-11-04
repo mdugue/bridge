@@ -48,9 +48,12 @@ export async function compileInTurn(
   const compiling = before.then(start);
   turns.set(
     renderer,
-    compiling.catch(() => {})
+    compiling.catch(() => {
+      // the failure reaches the caller through `compiling`; the next turn
+      // runs whether or not this one failed
+    })
   );
-  return await compiling;
+  await compiling;
 }
 
 /** A drawable's step as the record holds it: the material it compiled
@@ -83,7 +86,8 @@ export async function compileInLanes<T extends { material?: unknown }>(
   const others: Promise<void>[] = [];
   const lane = async () => {
     while (next < list.length) {
-      const drawable = list[next++];
+      const drawable = list[next];
+      next += 1;
       const prior = done.get(drawable);
       if (prior && prior.material === drawable.material) {
         others.push(prior.settled);

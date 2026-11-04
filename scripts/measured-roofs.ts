@@ -257,7 +257,7 @@ type Push = (
 function insideRings(rings: Point2[][], [x, y]: Point2): boolean {
   let inside = false;
   for (const ring of rings) {
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
       const [xi, yi] = ring[i];
       const [xj, yj] = ring[j];
       if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
@@ -459,6 +459,12 @@ function innerVertices(rings: Point2[][], tin: FaceTin): Point2[] {
   return out;
 }
 
+/** A vector scaled to length one (the zero vector kept). */
+function unit(n: readonly number[]): number[] {
+  const len = Math.hypot(n[0], n[1], n[2]) || 1;
+  return n.map((x) => x / len);
+}
+
 /** A face: its surface as one triangulation of the TIN's vertices and the
  *  outline's points (`conformingRoof`), each on the TIN, and walls along
  *  the outline from `base` up to those same points. */
@@ -511,10 +517,6 @@ function facePrism(
       around[t[k + j]].push(k / 3);
     }
   }
-  const unit = (n: readonly number[]) => {
-    const len = Math.hypot(n[0], n[1], n[2]) || 1;
-    return n.map((x) => x / len);
-  };
   const cosCrease = Math.cos((CREASE_DEG * Math.PI) / 180);
   for (let k = 0; k < t.length; k += 1) {
     const own = unit(facets[Math.floor(k / 3)]);

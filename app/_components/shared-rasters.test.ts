@@ -38,7 +38,7 @@ test("a shared raster loads once and is freed with its last reader", async () =>
 });
 
 test("a raster released before it lands is freed when it lands", async () => {
-  let land: (value: string) => void = () => {};
+  let land: ((value: string) => void) | undefined;
   const freed: string[] = [];
   const share = createSharedRasters(
     async () =>
@@ -51,7 +51,7 @@ test("a raster released before it lands is freed when it lands", async () => {
   );
   const pending = share.acquire("svf");
   share.release("svf");
-  land("tex");
+  land?.("tex");
   await pending;
   await tick();
   expect(freed).toEqual(["tex"]);
@@ -68,7 +68,7 @@ test("a failed load is null, never a rejection", async () => {
 });
 
 test("a clear frees every held raster, pending ones when they land", async () => {
-  let land: (value: string) => void = () => {};
+  let land: ((value: string) => void) | undefined;
   const freed: string[] = [];
   const share = createSharedRasters(
     async (key) =>
@@ -88,7 +88,7 @@ test("a clear frees every held raster, pending ones when they land", async () =>
   expect(share.held()).toBe(0);
   await tick();
   expect(freed).toEqual(["tex:a"]);
-  land("tex:late");
+  land?.("tex:late");
   await pending;
   await tick();
   expect(freed).toEqual(["tex:a", "tex:late"]);

@@ -83,11 +83,11 @@ export interface LifecycleOptions {
 }
 
 export interface PageLifecycle {
-  dispatch(signal: LifecycleSignal): LifecycleEffect[];
+  dispatch: (signal: LifecycleSignal) => LifecycleEffect[];
   /** the render stopped (once, for good) */
   readonly stopped: boolean;
   /** how a GPU that fails now went: in the background, or in use */
-  lossNow(now: number, hidden: boolean): GpuLoss;
+  lossNow: (now: number, hidden: boolean) => GpuLoss;
   /** the page had a memory emergency (frameLoss's sign) */
   readonly emergencyBefore: boolean;
 }

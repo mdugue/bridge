@@ -21,6 +21,34 @@ const at = (x: number, z: number, i = 0): Placement => ({
   s: 1 + i * 0.01,
 });
 
+/** The crowns' positions, sorted: what the tile's listing order must not change. */
+const crownKeys = (list: Placement[]) =>
+  coarseCrowns(list, [])
+    .map((c) => `${c.x},${c.z}`)
+    .sort();
+
+/** A register tree of a cone-shaped genus at `x`. */
+const registerTree = (x: number): InventoryTree => ({
+  colour: 2,
+  ext: { crownBase: 3, crownTop: 12, crownWidth: 8, trunkTop: 6 },
+  genus: 4,
+  ground: 0,
+  jitter: -2.5,
+  leaf: "d",
+  ndvi: 0.4,
+  rot: 1,
+  shape: "cone",
+  x: Math.fround(x),
+  z: 5,
+});
+
+/** The `i`-th canopy pine of a row. */
+const placedPine = (i: number): Placement => ({
+  ...at(i * 3.1, i * 1.7, i),
+  evergreen: true,
+  pine: true,
+});
+
 describe("which trees the coarse level draws", () => {
   test("a third of them, the crowns as much wider as covers what all covered", () => {
     let kept = 0;
@@ -49,28 +77,13 @@ describe("which trees the coarse level draws", () => {
     const trees = Array.from({ length: 200 }, (_, i) =>
       at(10 + i * 3.7, 20 - i * 1.3, i)
     );
-    const keys = (list: Placement[]) =>
-      coarseCrowns(list, [])
-        .map((c) => `${c.x},${c.z}`)
-        .sort();
-    expect(keys([...trees].reverse())).toEqual(keys(trees));
+    expect(crownKeys([...trees].reverse())).toEqual(crownKeys(trees));
   });
 
   test("register trees join with their crown, colour and season", () => {
-    const tree = (x: number): InventoryTree => ({
-      colour: 2,
-      ext: { crownBase: 3, crownTop: 12, crownWidth: 8, trunkTop: 6 },
-      genus: 4,
-      ground: 0,
-      jitter: -2.5,
-      leaf: "d",
-      ndvi: 0.4,
-      rot: 1,
-      shape: "cone",
-      x: Math.fround(x),
-      z: 5,
-    });
-    const register = Array.from({ length: 300 }, (_, i) => tree(i * 3.7));
+    const register = Array.from({ length: 300 }, (_, i) =>
+      registerTree(i * 3.7)
+    );
     const crowns = coarseCrowns([], register);
     expect(crowns).toHaveLength(
       register.filter((t) => drawnCoarse(t.x, t.z)).length
@@ -120,17 +133,12 @@ describe("which trees the coarse level draws", () => {
       x: 0,
       z: 0,
     };
-    const placed = (i: number): Placement => ({
-      ...at(i * 3.1, i * 1.7, i),
-      evergreen: true,
-      pine: true,
-    });
     const many = Array.from({ length: 60 }, (_, i) => ({
       ...pine,
       x: Math.fround(i * 3.7),
     }));
     const crowns = coarseCrowns(
-      Array.from({ length: 60 }, (_, i) => placed(i)),
+      Array.from({ length: 60 }, (_, i) => placedPine(i)),
       many
     );
     expect(crowns.length).toBeGreaterThan(0);
@@ -236,16 +244,17 @@ describe("the file", () => {
   });
 });
 
+const standIn = (coarse: boolean, fine: boolean, fineDressed: boolean) =>
+  coarseCrownsStandIn({ coarse, fine, fineDressed });
+
 test("the coarse crowns stand in on a fine level until its own trees hang", () => {
-  const at = (coarse: boolean, fine: boolean, fineDressed: boolean) =>
-    coarseCrownsStandIn({ coarse, fine, fineDressed });
   // the fine level shown bare: the coarse crowns stand in
-  expect(at(false, true, false)).toBe(true);
+  expect(standIn(false, true, false)).toBe(true);
   // its dressing hung: its own trees
-  expect(at(false, true, true)).toBe(false);
+  expect(standIn(false, true, true)).toBe(false);
   // the coarse level shown: its crowns are on screen with it already
-  expect(at(true, false, false)).toBe(false);
-  expect(at(true, true, false)).toBe(false);
+  expect(standIn(true, false, false)).toBe(false);
+  expect(standIn(true, true, false)).toBe(false);
   // neither level shown: nothing to stand in for
-  expect(at(false, false, false)).toBe(false);
+  expect(standIn(false, false, false)).toBe(false);
 });

@@ -80,7 +80,7 @@ test("every along-street pattern divides the paving raster's period", () => {
 test("a cycle line sits at its kind's distance, past a parking lane", () => {
   const advisory = LANE_BITS.cycle;
   const exclusive = LANE_BITS.cycle | LANE_BITS.cycleSolid;
-  const wide = exclusive | LANE_BITS.cycleWide;
+  const wide = LANE_BITS.cycle | LANE_BITS.cycleSolid | LANE_BITS.cycleWide;
   expect(cycleLineFromKerb(advisory, null)).toBe(1.5);
   expect(cycleLineFromKerb(exclusive, null)).toBe(
     MARKING_PATTERN.cycleFromKerb
@@ -111,16 +111,18 @@ test("the bake writes the bits and the offset scale the shader reads", () => {
     nodePath.join(ROOT, "pipeline/bake/markings.py"),
     "utf-8"
   );
-  const scale = /^EDGE_SCALE = ([\d.]+)/mu.exec(python)?.[1];
+  const scale = /^EDGE_SCALE = (?<scale>[\d.]+)/mu.exec(python)?.groups?.scale;
   expect(Number(scale)).toBe(MARKING_OFFSET_SCALE);
   const bits = new Map<string, number>();
   for (const line of python.split("\n")) {
-    const m = /^([A-Z_, ]+) = ([\d, ]+?)\s*(?:#.*)?$/u.exec(line);
-    if (!m) {
+    const m = /^(?<names>[A-Z_, ]+) = (?<values>[\d, ]+?)\s*(?:#.*)?$/u.exec(
+      line
+    );
+    if (m?.groups?.names === undefined || m.groups.values === undefined) {
       continue;
     }
-    const names = m[1].split(",").map((n) => n.trim());
-    const values = m[2].split(",").map((v) => Number(v.trim()));
+    const names = m.groups.names.split(",").map((n) => n.trim());
+    const values = m.groups.values.split(",").map((v) => Number(v.trim()));
     if (names.length === values.length) {
       for (const [i, n] of names.entries()) {
         bits.set(n, values[i]);

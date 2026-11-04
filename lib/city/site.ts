@@ -300,11 +300,13 @@ export function landcoverCredit(site: Site): string {
  *  name before its parenthesis when that is short, else what the
  *  parenthesis holds. */
 function shortName(provider: Provider): string {
-  const m = /^(.*?) \((.*)\)$/u.exec(provider.name);
-  if (!m) {
+  const groups = /^(?<short>.*?) \((?<inner>.*)\)$/u.exec(
+    provider.name
+  )?.groups;
+  if (groups?.short === undefined || groups.inner === undefined) {
     return provider.name;
   }
-  return m[1].length <= 20 ? m[1] : m[2];
+  return groups.short.length <= 20 ? groups.short : groups.inner;
 }
 
 /**

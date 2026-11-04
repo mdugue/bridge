@@ -588,6 +588,19 @@ function plateCamera(
   };
 }
 
+/** Which way the plate's text is set: away from the spot it hangs off. */
+function alignFor(l: NameplateLayout | null): Align {
+  if (l?.mode === "street" || l?.mode === "far") {
+    if (l.spot === "left") {
+      return "right";
+    }
+    if (l.spot === "right") {
+      return "left";
+    }
+  }
+  return "center";
+}
+
 export function createNameplate(deps: NameplateDeps): Nameplate {
   const scene = new Scene();
   const uniforms: PlateUniforms = {
@@ -709,14 +722,6 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   const type = () => NAMEPLATE_TYPES[style];
   /** the plate hides what is behind it (the comic's box) */
   const opaque = () => type().box !== undefined;
-  const alignFor = (l: NameplateLayout | null): Align =>
-    l?.mode === "street" || l?.mode === "far"
-      ? l.spot === "left"
-        ? "right"
-        : l.spot === "right"
-          ? "left"
-          : "center"
-      : "center";
 
   const block = (): NameplateBlock => ({
     foot: geometry?.block.foot,
@@ -828,7 +833,8 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
    *  in a style waits for them (not set twice, no swap on the plate). */
   const withFaces = () => {
     const from = deps.fonts();
-    const asked = ++generation;
+    generation += 1;
+    const asked = generation;
     // the letters as drawn (a style may set them in capitals, whose
     // part of a face can differ)
     const raw = subject
@@ -845,11 +851,11 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     letters.visible = false;
     shadow.visible = false;
     void loadFaces(type(), from, text).then(() => {
-      if (disposed || asked !== generation) {
-        return;
+      if (!disposed && asked === generation) {
+        rasterFor = null;
+        rebuild();
       }
-      rasterFor = null;
-      rebuild();
+      return null;
     });
   };
 
@@ -1265,14 +1271,16 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
         renderer.setRenderTarget(null);
         renderer.toneMapping = NoToneMapping;
         renderer.outputColorSpace = LinearSRGBColorSpace;
+        let compiling: Promise<void>;
         try {
-          return renderer.compileAsync(scene, camera);
+          compiling = renderer.compileAsync(scene, camera);
         } finally {
           [letters.visible, shadow.visible] = shown;
           renderer.outputColorSpace = colorSpace;
           renderer.toneMapping = toneMapping;
           renderer.setRenderTarget(previous);
         }
+        await compiling;
       }),
     shown: () =>
       letters.visible && subject && layout

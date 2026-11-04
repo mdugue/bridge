@@ -80,12 +80,14 @@ function segmentDistance2(
 
 function inside([px, py]: readonly [number, number], ring: Ring): boolean {
   let odd = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+  let j = ring.length - 1;
+  for (let i = 0; i < ring.length; i += 1) {
     const [xi, yi] = ring[i];
     const [xj, yj] = ring[j];
     if (yi > py !== yj > py && px < xi + ((py - yi) * (xj - xi)) / (yj - yi)) {
       odd = !odd;
     }
+    j = i;
   }
   return odd;
 }
@@ -251,17 +253,17 @@ const RELATION_BASE = 2 ** 31;
  * `RELATION_BASE`; an id out of that range is hashed (FNV-1a).
  */
 export function ensembleGroup(outline: string): number {
-  const match = /^([wr])(\d+)$/u.exec(outline);
-  const id = match ? Number(match[2]) : Number.NaN;
+  const match = /^(?<kind>[wr])(?<num>\d+)$/u.exec(outline);
+  const id = match ? Number(match.groups?.num) : Number.NaN;
   if (match && id > 0 && id < RELATION_BASE) {
-    return match[1] === "w" ? id : RELATION_BASE + id;
+    return match.groups?.kind === "w" ? id : RELATION_BASE + id;
   }
   if (!outline) {
     return 0;
   }
   let h = 0x81_1c_9d_c5;
   for (let i = 0; i < outline.length; i += 1) {
-    h ^= outline.charCodeAt(i);
+    h ^= outline.codePointAt(i) ?? 0;
     h = Math.imul(h, 0x01_00_01_93) >>> 0;
   }
   return h === 0 ? 1 : h;

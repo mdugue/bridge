@@ -30,7 +30,7 @@ export interface Publisher {
  *  keep both). */
 export function hashedName(file: string, content: Uint8Array): string {
   const hash = createHash("sha1").update(content).digest("hex").slice(0, 8);
-  const ext = /(\.(?:glb|pts|crw)\.gz|\.[^.]+)$/u.exec(file)?.[0] ?? "";
+  const ext = /(?:\.(?:glb|pts|crw)\.gz|\.[^.]+)$/u.exec(file)?.[0] ?? "";
   return `${path.basename(file, ext)}.${hash}${ext}`;
 }
 

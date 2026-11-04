@@ -16,6 +16,9 @@ export type ColonyCrop = [number, number, number, number, number];
 /** Texels of margin kept around the colonies (the LINEAR edge's reach). */
 const MARGIN = 2;
 
+/** An even lower bound `MARGIN` below `v`, not under 0. */
+const cropLow = (v: number) => Math.max(0, Math.floor((v - MARGIN) / 2) * 2);
+
 /**
  * The texels that carry a colony (R > 0) with a margin, on even bounds so
  * the half-resolution twin covers exactly the same ground; null when none.
@@ -38,9 +41,8 @@ export function colonyCrop(rg: Uint8Array, size: number): ColonyCrop | null {
   if (x1 < 0) {
     return null;
   }
-  const lo = (v: number) => Math.max(0, Math.floor((v - MARGIN) / 2) * 2);
   const hi = (v: number) => Math.min(size, Math.ceil((v + 1 + MARGIN) / 2) * 2);
-  const [cx, cy] = [lo(x0), lo(y0)];
+  const [cx, cy] = [cropLow(x0), cropLow(y0)];
   return [cx, cy, hi(x1) - cx, hi(y1) - cy, size];
 }
 
@@ -112,7 +114,8 @@ export async function cropColonyRaster(
   if (!crop) {
     return null;
   }
-  const [, , w, h] = crop;
+  const w = crop[2];
+  const h = crop[3];
   const cut = cropRg(rg, crop);
   return {
     crop,

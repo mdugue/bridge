@@ -70,18 +70,20 @@ export async function requestOrientationPermission(): Promise<boolean> {
 }
 
 /**
- * Calls `cb` with every compass-bearing orientation reading. Events that
+ * Calls `onAim` with every compass-bearing orientation reading. Events that
  * carry no compass are dropped; on iOS nothing arrives until the permission
  * was granted. Returns the unsubscribe.
  */
-export function subscribeAim(cb: (aim: DeviceAim) => void): () => void {
+export function subscribeAim(onAim: (aim: DeviceAim) => void): () => void {
   if (!ctor()) {
-    return () => {};
+    return () => {
+      // no orientation events on this platform: nothing was subscribed
+    };
   }
   const onEvent = (event: Event) => {
     const aim = aimOf(event as CompassEvent);
     if (aim) {
-      cb(aim);
+      onAim(aim);
     }
   };
   for (const type of EVENT_TYPES) {

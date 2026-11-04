@@ -31,12 +31,19 @@ interface Group {
   value: string;
 }
 
+/** A group value as a number; an empty one is NaN, not 0. */
+const numberOf = (value: string): number =>
+  value === "" ? Number.NaN : Number(value);
+
+/** A group value as a whole number (truncated); an empty one is NaN. */
+const intOf = (value: string): number => Math.trunc(numberOf(value));
+
 /** The DXF's groups, in order. */
 function groupsOf(text: string): Group[] {
   const lines = text.split(/\r?\n/u);
   const out: Group[] = [];
   for (let i = 0; i + 1 < lines.length; i += 2) {
-    const code = Number.parseInt(lines[i].trim(), 10);
+    const code = intOf(lines[i].trim());
     if (Number.isNaN(code)) {
       break;
     }
@@ -59,7 +66,7 @@ const UNITS: Readonly<Record<number, number>> = {
 
 /** Layers that are drawing furniture, not the plan. */
 const NOT_PLAN =
-  /rahmen|frame|schriftfeld|titel|title|text|beschrift|bema(ß|ss)ung|dim|legende|legend|nordpfeil|north|viewport|defpoints|raster|grid|plot/iu;
+  /rahmen|frame|schriftfeld|titel|title|text|beschrift|bema(?:ß|ss)ung|dim|legende|legend|nordpfeil|north|viewport|defpoints|raster|grid|plot/iu;
 
 /** An entity: its type and its groups up to the next entity. */
 interface Entity {
@@ -97,7 +104,7 @@ function sectionEntities(groups: readonly Group[], name: string): Entity[] {
   return out;
 }
 
-const num = (g: Group | undefined) => (g ? Number.parseFloat(g.value) : 0);
+const num = (g: Group | undefined) => (g ? numberOf(g.value) : 0);
 const first = (e: Entity, code: number) =>
   e.groups.find((g) => g.code === code);
 
@@ -210,17 +217,18 @@ function lwpolyline(e: Entity): PlanPoint[] | null {
   const elevation = num(first(e, 38));
   const vertices: { x: number; y: number; z?: number; bulge: number }[] = [];
   for (const g of e.groups) {
+    const latest = vertices.at(-1);
     if (g.code === 10) {
       vertices.push({
-        x: Number.parseFloat(g.value),
+        x: numberOf(g.value),
         y: 0,
         z: elevation || undefined,
         bulge: 0,
       });
-    } else if (g.code === 20 && vertices.length > 0) {
-      vertices[vertices.length - 1].y = Number.parseFloat(g.value);
-    } else if (g.code === 42 && vertices.length > 0) {
-      vertices[vertices.length - 1].bulge = Number.parseFloat(g.value);
+    } else if (g.code === 20 && latest) {
+      latest.y = numberOf(g.value);
+    } else if (g.code === 42 && latest) {
+      latest.bulge = numberOf(g.value);
     }
   }
   const ring = closed ? withBulges(vertices, true) : [];
@@ -277,6 +285,9 @@ function polyline(
   return ring.length >= 3 ? { ring } : null;
 }
 
+const samePoint = (p: PlanPoint, q: PlanPoint): boolean =>
+  p[0] === q[0] && p[1] === q[1] && p[2] === q[2];
+
 /** A 3DFACE's one or two triangles. */
 function face3d(e: Entity): [PlanPoint, PlanPoint, PlanPoint][] {
   const corner = (k: number): PlanPoint => [
@@ -285,9 +296,7 @@ function face3d(e: Entity): [PlanPoint, PlanPoint, PlanPoint][] {
     num(first(e, 30 + k)),
   ];
   const [a, b, c, d] = [corner(0), corner(1), corner(2), corner(3)];
-  const same = (p: PlanPoint, q: PlanPoint) =>
-    p[0] === q[0] && p[1] === q[1] && p[2] === q[2];
-  return same(c, d)
+  return samePoint(c, d)
     ? [[a, b, c]]
     : [
         [a, b, c],
@@ -305,13 +314,18 @@ function hatchRings(e: Entity): PlanPoint[][] {
   if (i < 0) {
     return rings;
   }
-  const paths = Number.parseInt(g[i].value, 10);
+  const paths = intOf(g[i].value);
   i += 1;
   const at = (code: number) => {
     while (i < g.length && g[i].code !== code) {
       i += 1;
     }
-    return i < g.length ? Number.parseFloat(g[i++].value) : 0;
+    if (i >= g.length) {
+      return 0;
+    }
+    const value = numberOf(g[i].value);
+    i += 1;
+    return value;
   };
   for (let p = 0; p < paths && i < g.length; p += 1) {
     const type = at(92);
@@ -512,7 +526,8 @@ function readEntity(
     const vertices: Entity[] = [];
     let last = k;
     while (entities[last + 1]?.type === "VERTEX") {
-      vertices.push(entities[++last]);
+      last += 1;
+      vertices.push(entities[last]);
     }
     const read = polyline(e, vertices);
     const cls = classOf(r, e);
@@ -540,10 +555,7 @@ export function readDxf(text: string): DxfPlan {
     features: [],
     classified: new Set(),
     unclassified: new Set(),
-    unit:
-      units === -1
-        ? 1
-        : (UNITS[Number.parseInt(groups[units + 1].value, 10)] ?? 1),
+    unit: units === -1 ? 1 : (UNITS[intOf(groups[units + 1].value)] ?? 1),
     crowns: blockCrowns(groups),
   };
   const entities = sectionEntities(groups, "ENTITIES");

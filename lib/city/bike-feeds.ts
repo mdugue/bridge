@@ -82,8 +82,11 @@ const COMPASS: Record<string, number> = {
 /** "Nord nach Süd" → "Süd" (where the direction goes); "" for "Keine
  *  Richtung" or anything else. */
 export function compassToward(label: unknown): string {
-  const m = /\bnach\s+(\S+)\s*$/iu.exec(typeof label === "string" ? label : "");
-  return m && m[1].toLowerCase() in COMPASS ? m[1] : "";
+  const m = /\bnach\s+(?<toward>\S+)\s*$/iu.exec(
+    typeof label === "string" ? label : ""
+  );
+  const toward = m?.groups?.toward;
+  return toward && toward.toLowerCase() in COMPASS ? toward : "";
 }
 
 /** A street's angle (degrees counter-clockwise from north) from the

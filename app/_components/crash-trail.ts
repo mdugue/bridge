@@ -165,16 +165,18 @@ interface LivenessMessage {
  */
 function answerFor(startedAt: string): () => void {
   if (typeof BroadcastChannel === "undefined") {
-    return () => {};
+    return () => {
+      // no channel in this browser: nothing was opened, nothing to stop
+    };
   }
   let channel: BroadcastChannel | null = null;
   const open = () => {
     channel = new BroadcastChannel(CHANNEL);
-    channel.onmessage = (event: MessageEvent) => {
+    channel.addEventListener("message", (event: MessageEvent) => {
       if ((event.data as LivenessMessage | null)?.ask === startedAt) {
         channel?.postMessage({ open: startedAt } satisfies LivenessMessage);
       }
-    };
+    });
   };
   const close = () => {
     channel?.close();
@@ -214,11 +216,11 @@ export async function pageStillOpen(
       resolve(open);
     };
     const timer = setTimeout(() => done(false), waitMs);
-    channel.onmessage = (event: MessageEvent) => {
+    channel.addEventListener("message", (event: MessageEvent) => {
       if ((event.data as LivenessMessage | null)?.open === trail.startedAt) {
         done(true);
       }
-    };
+    });
     channel.postMessage({ ask: trail.startedAt } satisfies LivenessMessage);
   });
 }

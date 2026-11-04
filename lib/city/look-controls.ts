@@ -123,7 +123,5 @@ export const LOOK_DEFAULTS: Readonly<LookValues> = Object.freeze<LookValues>({
 
 /** A one-row patch for the look store (`{ [key]: value01 }`, typed). */
 export function lookPatch(key: LookKey, value01: number): Partial<LookValues> {
-  const patch: Partial<LookValues> = {};
-  patch[key] = value01;
-  return patch;
+  return { [key]: value01 };
 }

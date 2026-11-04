@@ -39,12 +39,16 @@ const PLATFORM_SINK_M = 0.1;
 /** The spatial index's cell (m). */
 const CELL_M = 8;
 
+/** The grid cell's key of a point. */
+const cellKey = (x: number, z: number): string =>
+  `${Math.floor(x / CELL_M)}:${Math.floor(z / CELL_M)}`;
+
 /** The drawn tracks' samples by grid cell. */
 export class TrackIndex {
   private readonly cells = new Map<string, TrackSample[]>();
   constructor(samples: Iterable<TrackSample>) {
     for (const s of samples) {
-      const k = this.key(s.x, s.z);
+      const k = cellKey(s.x, s.z);
       const cell = this.cells.get(k);
       if (cell) {
         cell.push(s);
@@ -52,9 +56,6 @@ export class TrackIndex {
         this.cells.set(k, [s]);
       }
     }
-  }
-  private key(x: number, z: number): string {
-    return `${Math.floor(x / CELL_M)}:${Math.floor(z / CELL_M)}`;
   }
   /** The sample nearest (x, z) within `reach` (≤ 2 cells), or null. */
   nearest(x: number, z: number, reach = PLATFORM_REACH_M): TrackSample | null {

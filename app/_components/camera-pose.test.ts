@@ -337,8 +337,8 @@ test("a wheel or a pinch heads for the spot under the pointer, not the centre", 
 
   // In the air the camera runs along the ray under the pointer, so that
   // spot stays where it is on screen while it comes nearer.
-  const flyer = rig();
-  flyer.pose.applyCameraState({
+  const airborne = rig();
+  airborne.pose.applyCameraState({
     mode: "fly",
     pos: { x: 0, y: GROUND + 200, z: 0 },
     epsg: { x: 0, y: 0 },
@@ -346,7 +346,7 @@ test("a wheel or a pinch heads for the spot under the pointer, not the centre", 
     pitchDeg: -30,
     fov: 55,
   });
-  const { camera } = flyer;
+  const { camera } = airborne;
   camera.updateMatrixWorld();
   const at = { x: -0.5, y: -0.4 };
   const spot = new Vector3(at.x, at.y, 0.5).unproject(camera);
@@ -355,8 +355,8 @@ test("a wheel or a pinch heads for the spot under the pointer, not the centre", 
   const ground = camera.position
     .clone()
     .addScaledVector(ray, (camera.position.y - GROUND) / -ray.y);
-  flyer.pose.dolly(0.5, at);
-  settle(flyer.pose);
+  airborne.pose.dolly(0.5, at);
+  settle(airborne.pose);
   camera.updateMatrixWorld();
   const seen = ground.clone().project(camera);
   expect(seen.x).toBeCloseTo(at.x, 4);

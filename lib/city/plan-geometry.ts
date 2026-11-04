@@ -88,8 +88,10 @@ type Height = (x: number, y: number) => number | null;
 /** A ring's signed area (anticlockwise positive). */
 function ringArea(ring: readonly PlanPoint[]): number {
   let a = 0;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+  let j = ring.length - 1;
+  for (let i = 0; i < ring.length; i += 1) {
     a += (ring[j][0] - ring[i][0]) * (ring[j][1] + ring[i][1]);
+    j = i;
   }
   return a / 2;
 }
@@ -121,12 +123,14 @@ function ownHeight(p: PlanPoint): number | null {
 /** Whether (x, y) lies inside a ring (even-odd). */
 function inside(ring: readonly PlanPoint[], x: number, y: number): boolean {
   let hit = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+  let j = ring.length - 1;
+  for (let i = 0; i < ring.length; i += 1) {
     const [xi, yi] = ring[i];
     const [xj, yj] = ring[j];
     if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
       hit = !hit;
     }
+    j = i;
   }
   return hit;
 }
@@ -190,8 +194,8 @@ const len2 = (a: PlanPoint, b: PlanPoint) =>
 function cut(tri: Tri, edge: number, out: Tri[]): void {
   const stack: Tri[] = [tri];
   const max = edge * edge;
-  while (stack.length > 0) {
-    const [a, b, c] = stack.pop() as Tri;
+  for (let next = stack.pop(); next; next = stack.pop()) {
+    const [a, b, c] = next;
     const ab = len2(a, b);
     const bc = len2(b, c);
     const ca = len2(c, a);
@@ -239,20 +243,34 @@ function triangulate(rings: readonly (readonly PlanPoint[])[]): Tri[] {
 }
 
 /** Collects one class's vertices as the design frame wants them. */
-class GroupWriter {
-  readonly values: number[] = [];
-  constructor(private readonly origin: [number, number]) {}
-  /** a plan point at height `y` (m) */
-  vertex(p: PlanPoint, y: number): void {
-    this.values.push(p[0] - this.origin[0], y, -(p[1] - this.origin[1]));
-  }
+interface GroupWriter {
   /** a triangle anticlockwise from above (in plan): its front face up —
    *  plan (x, y) to (x, −z) keeps the turn as seen from +y */
-  triangle(a: PlanPoint, b: PlanPoint, c: PlanPoint, y: readonly number[]) {
-    this.vertex(a, y[0]);
-    this.vertex(b, y[1]);
-    this.vertex(c, y[2]);
-  }
+  triangle: (
+    a: PlanPoint,
+    b: PlanPoint,
+    c: PlanPoint,
+    y: readonly number[]
+  ) => void;
+  readonly values: number[];
+  /** a plan point at height `y` (m) */
+  vertex: (p: PlanPoint, y: number) => void;
+}
+
+function createGroupWriter(origin: [number, number]): GroupWriter {
+  const values: number[] = [];
+  const vertex = (p: PlanPoint, y: number): void => {
+    values.push(p[0] - origin[0], y, -(p[1] - origin[1]));
+  };
+  return {
+    values,
+    vertex,
+    triangle: (a, b, c, y) => {
+      vertex(a, y[0]);
+      vertex(b, y[1]);
+      vertex(c, y[2]);
+    },
+  };
 }
 
 /** A low-poly tree: an eight-sided trunk to half its height, a crown of
@@ -330,8 +348,8 @@ function writeBuilding(
     const ring = openRing(raw);
     // walls face out: the outer ring anticlockwise, holes clockwise — then
     // the outside lies right of each edge, and (a, b, b′) faces it
-    const anticlockwise = ringArea(ring) >= 0;
-    const r = anticlockwise === (k === 0) ? ring : [...ring].reverse();
+    const turnsLeft = ringArea(ring) >= 0;
+    const r = turnsLeft === (k === 0) ? ring : [...ring].reverse();
     for (let i = 0; i < r.length; i += 1) {
       const a = r[i];
       const b = r[(i + 1) % r.length];
@@ -374,7 +392,10 @@ class PlanGround {
   /** vertices that kept the plan's own height */
   owned = 0;
   private lowest = Number.POSITIVE_INFINITY;
-  constructor(private readonly heightAt: Height) {}
+  private readonly heightAt: Height;
+  constructor(heightAt: Height) {
+    this.heightAt = heightAt;
+  }
   /** the plan's own height at a point, counted */
   own(p: PlanPoint): number | null {
     const h = ownHeight(p);
@@ -457,11 +478,12 @@ function cutCount(tris: readonly Tri[], edge: number, limit: number): number {
   const max = edge * edge;
   const stack: Tri[] = [...tris];
   let count = 0;
-  while (stack.length > 0) {
-    const [a, b, c] = stack.pop() as Tri;
+  for (let tri = stack.pop(); tri; tri = stack.pop()) {
+    const [a, b, c] = tri;
     const longest = Math.max(len2(a, b), len2(b, c), len2(c, a));
     if (longest <= max) {
-      if (++count > limit) {
+      count += 1;
+      if (count > limit) {
         return count;
       }
     } else {
@@ -535,6 +557,8 @@ function writeAreas(
   }
 }
 
+const isBlock = (f: Area) => f.cls === "building" && Boolean(f.height);
+
 /**
  * The plan's features as triangles about `origin`, a group per class.
  * `heightAt` is the ground's height at a plan point (null: unknown, or
@@ -549,13 +573,12 @@ export function planMesh(
   const writer = (cls: PlanLook) => {
     let w = writers.get(cls);
     if (!w) {
-      w = new GroupWriter(origin);
+      w = createGroupWriter(origin);
       writers.set(cls, w);
     }
     return w;
   };
   const ground = new PlanGround(heightAt);
-  const isBlock = (f: Area) => f.cls === "building" && Boolean(f.height);
   const areas = features.filter((f): f is Area => f.kind === "area");
   writeAreas(
     areas.filter((f) => !isBlock(f)),

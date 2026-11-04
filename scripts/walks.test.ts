@@ -137,13 +137,15 @@ for (const { site, walks } of sitesWithWalks) {
           }
           return cityText.get(tile)?.includes(`"${id}"`) ?? false;
         });
-      const missing = [...named].filter((id) =>
-        /^Q\d+$/u.test(id)
-          ? !(id in wikidata.entities)
-          : /^m\d+_\d+(?:_\d+)?$/u.test(id)
-            ? !monuments.has(id)
-            : !inCity(id)
-      );
+      const missing = [...named].filter((id) => {
+        if (/^Q\d+$/u.test(id)) {
+          return !(id in wikidata.entities);
+        }
+        if (/^m\d+_\d+(?:_\d+)?$/u.test(id)) {
+          return !monuments.has(id);
+        }
+        return !inCity(id);
+      });
       expect(missing).toEqual([]);
     }, 60_000);
   });

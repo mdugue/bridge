@@ -23,16 +23,20 @@ describe("water mask", () => {
   test("marks the cells a river runs through, row 0 north", () => {
     // 64 texels on 16 cells: columns 20–27 are cells 5 and 6
     const mask = waterMaskOf(river(64, 20, 28), 64, 64, WATER, 16);
-    expect(mask).not.toBeNull();
-    const row = [...(mask?.water.slice(0, 16) ?? [])];
+    if (!mask) {
+      throw new Error("expected a water mask");
+    }
+    const row = Array.from(mask.water.slice(0, 16));
     expect(row).toEqual([0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
-    expect(setCells(mask as WaterMask)).toBe(32);
+    expect(setCells(mask)).toBe(32);
   });
 
   test("sees a ditch one texel wide on a large raster", () => {
     const mask = waterMaskOf(river(4096, 2002, 2003), 4096, 4096, WATER);
-    expect(mask).not.toBeNull();
-    expect(setCells(mask as WaterMask)).toBe(256);
+    if (!mask) {
+      throw new Error("expected a water mask");
+    }
+    expect(setCells(mask)).toBe(256);
   });
 
   test("widens every way by its reach", () => {

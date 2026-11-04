@@ -78,7 +78,8 @@ export function contentRank(uri: string | undefined): number {
 export function siteTileOf(uri: string | undefined): string | null {
   const name = uri?.slice(uri.lastIndexOf("/") + 1) ?? "";
   return (
-    /^(?:city|terrain)_(.+?)(?:_far|_l\d)?\.[^.]+\.glb/u.exec(name)?.[1] ?? null
+    /^(?:city|terrain)_(?<id>.+?)(?:_far|_l\d)?\.[^.]+\.glb/u.exec(name)?.groups
+      ?.id ?? null
   );
 }
 

@@ -157,15 +157,20 @@ test("fact columns round-trip through a table reader", () => {
   expect(strings.buildingId).toEqual(["scan:t:1:2", "#1"]);
   expect(enums.function).toEqual(["", ""]);
   expect([...numbers.height]).toEqual([3, NO_FACT]);
-  const row = (i: number) => (column: string) =>
-    column in numbers
-      ? numbers[column as keyof typeof numbers][i]
-      : column in strings
-        ? strings[column as keyof typeof strings][i]
-        : enums[column as keyof typeof enums][i];
-  expect(readFacts(row(0), "#0")).toEqual(
-    facts[0] as NonNullable<(typeof facts)[0]>
-  );
+  const row = (i: number) => (column: string) => {
+    if (column in numbers) {
+      return numbers[column as keyof typeof numbers][i];
+    }
+    if (column in strings) {
+      return strings[column as keyof typeof strings][i];
+    }
+    return enums[column as keyof typeof enums][i];
+  };
+  const [first] = facts;
+  if (!first) {
+    throw new Error("the first fixture fact is missing");
+  }
+  expect(readFacts(row(0), "#0")).toEqual(first);
 });
 
 test("reading a tile that predates the fact columns yields unknowns", () => {

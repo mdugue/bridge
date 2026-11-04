@@ -451,8 +451,7 @@ function addContactWire(
     z: p.z,
   }));
   addWire(w, wire, WIRE_HALF.contact);
-  for (let i = 0; i < wire.length; i += 1) {
-    const q = wire[i];
+  for (const q of wire) {
     held.push({
       x: q.x + ctx.offset.cx,
       y: ctx.offset.cy - q.z,
@@ -728,7 +727,11 @@ export function buildTram(
   return finished(tramSteps(features, bridges, ctx));
 }
 
-/** `buildTram` in steps: per track (build-steps.ts). */
+/**
+ * `buildTram` in steps: per track (build-steps.ts).
+ *
+ * @yields {void} between tracks, so the caller can spread the build over frames
+ */
 export function* tramSteps(
   features: TramFeature[],
   bridges: BridgeFeature[],

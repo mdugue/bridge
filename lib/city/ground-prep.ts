@@ -140,8 +140,8 @@ export function indexBox(index: GroundIndex, read: VertexReader): Float64Array {
     Number.NEGATIVE_INFINITY,
   ]);
   const v = new Float64Array(3);
-  for (let i = 0; i < index.length; i += 1) {
-    read(index[i], v);
+  for (const vertex of index) {
+    read(vertex, v);
     for (let k = 0; k < 3; k += 1) {
       if (v[k] < box[k]) {
         box[k] = v[k];

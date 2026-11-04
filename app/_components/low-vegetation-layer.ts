@@ -183,6 +183,8 @@ interface Instance {
   z: number;
 }
 
+const flank = (y: number): number => 0.5 * (1 - HEDGE_TAPER * y);
+
 /**
  * The hedge's cross-section (z across, y up; base at y = 0, top at 1),
  * from the bottom-left corner over the top to the bottom-right: straight,
@@ -190,9 +192,10 @@ interface Instance {
  * trimmed hedge. The base is open (it is sunk into the lawn).
  */
 function hedgeProfile(): [number, number][] {
-  const left: [number, number][] = [];
-  const flank = (y: number): number => 0.5 * (1 - HEDGE_TAPER * y);
-  left.push([-flank(0), 0], [-flank(0.3), 0.3]);
+  const left: [number, number][] = [
+    [-flank(0), 0],
+    [-flank(0.3), 0.3],
+  ];
   const steps = 4;
   for (let k = 0; k < steps; k += 1) {
     const phi = (k / steps) * (Math.PI / 2);

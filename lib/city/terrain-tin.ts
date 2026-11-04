@@ -165,10 +165,20 @@ export function tinVertexXY(tin: TerrainTin): Float64Array {
   for (let i = 0; i < gx.length; i += 1) {
     const col = gx[i];
     const row = gy[i];
-    xy[2 * i] =
-      col === 0 ? minX : col === n - 1 ? maxX : minX + (col + 0.5) * dx;
-    xy[2 * i + 1] =
-      row === 0 ? maxY : row === n - 1 ? minY : maxY - (row + 0.5) * dy;
+    let x = minX + (col + 0.5) * dx;
+    if (col === 0) {
+      x = minX;
+    } else if (col === n - 1) {
+      x = maxX;
+    }
+    let y = maxY - (row + 0.5) * dy;
+    if (row === 0) {
+      y = maxY;
+    } else if (row === n - 1) {
+      y = minY;
+    }
+    xy[2 * i] = x;
+    xy[2 * i + 1] = y;
   }
   return xy;
 }
@@ -438,7 +448,7 @@ export class TinIndex {
     const fits =
       built.triangles === Math.floor(surface.triangles.length / 3) &&
       built.start.length === built.cols * built.rows + 1 &&
-      built.start[built.start.length - 1] === built.items.length;
+      built.start.at(-1) === built.items.length;
     if (!fits) {
       throw new Error("TinIndex: the buckets are not this surface's");
     }
@@ -474,11 +484,12 @@ export class TinIndex {
       counts[b] += counts[b - 1];
     }
     this.start = counts;
-    this.items = new Uint32Array(counts[counts.length - 1]);
+    this.items = new Uint32Array(counts.at(-1) ?? 0);
     const fill = counts.slice(0, -1);
     const { items } = this;
     this.eachBucket(ranges, (b, t) => {
-      items[fill[b]++] = t;
+      items[fill[b]] = t;
+      fill[b] += 1;
     });
   }
 

@@ -115,11 +115,19 @@ const spoken = (used: Said, method: Method): Stated[] =>
 class Lineage {
   readonly entries: LineageEntry[] = [];
 
+  readonly provenance: SiteProvenance | null;
+  private readonly site: LineageSite;
+  private readonly tile: string;
+
   constructor(
-    readonly provenance: SiteProvenance | null,
-    private readonly site: LineageSite,
-    private readonly tile: string
-  ) {}
+    provenance: SiteProvenance | null,
+    site: LineageSite,
+    tile: string
+  ) {
+    this.provenance = provenance;
+    this.site = site;
+    this.tile = tile;
+  }
 
   /** A source of the site's provider or the manifest's, with its edition
    *  for the tile (or `stand` when given). A "dlm" source on a site whose
@@ -247,6 +255,10 @@ export function lineage(
     case "landing":
     case "stop": {
       moreLineage(l, inquiry, site);
+      break;
+    }
+    default: {
+      break;
     }
   }
   return l.entries;
@@ -265,8 +277,8 @@ function buildingLineage(
 ): void {
   const all = b.tree.length > 0 ? b.tree : [b.picked];
   const facts = all.map((o) => o.facts);
-  const flags = all.reduce((sum, o) => sum | o.flags, 0);
-  const has = (bit: number) => hasObjectFlag(flags, bit);
+  // (a flag any object of the tree carries)
+  const has = (bit: number) => all.some((o) => hasObjectFlag(o.flags, bit));
   const { source } = b.picked;
   const lod2 = source !== OBJECT_SOURCE_SCAN && source !== OBJECT_SOURCE_GAP;
   if (source === OBJECT_SOURCE_SCAN) {
@@ -646,6 +658,10 @@ function moreLineage(l: Lineage, m: MoreInquiry, site: LineageSite): void {
     case "landing":
     case "stop": {
       osmThingLineage(l, m);
+      break;
+    }
+    default: {
+      break;
     }
   }
 }

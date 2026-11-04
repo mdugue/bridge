@@ -84,7 +84,8 @@ export async function readDgm(
   tfw: string | null,
   size: number | "native"
 ): Promise<Dgm> {
-  const image = await (await fromArrayBuffer(tif)).getImage();
+  const geotiff = await fromArrayBuffer(tif);
+  const image = await geotiff.getImage();
   const width = image.getWidth();
   const height = image.getHeight();
   if (size === "native" && width !== height) {
@@ -129,7 +130,7 @@ export async function readDgm(
   const noData = image.getGDALNoData();
   const elevations = new Float32Array(n * n);
   for (let i = 0; i < elevations.length; i += 1) {
-    const z = Number((raster as unknown as ArrayLike<number>)[i]);
+    const z = (raster as unknown as ArrayLike<number>)[i];
     elevations[i] = noData !== null && z === noData ? Number.NaN : z;
   }
   return { bounds, elevations, n };

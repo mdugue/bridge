@@ -45,6 +45,23 @@ import type {
 } from "./tile-stream";
 import type { VegetationControl } from "./vegetation-layer";
 
+const nothing = (): void => undefined;
+const emptyGroup = () => new Object3D();
+
+/** A tile the way the renderer's queue sees it, by its content uri. */
+const tileAt = (uri: string) => ({
+  content: { uri },
+  traversal: { distanceFromCamera: 0, error: 0, inFrustum: true, used: true },
+});
+
+/** The slices run at once. */
+const runNow = async (steps: Steps<unknown>) => finished(steps);
+
+function* broken(): Steps<void> {
+  yield;
+  throw new Error("bad furniture");
+}
+
 test("a dressing that joins the stream late takes the season, night and look of now", () => {
   const calls: string[] = [];
   const vegetation = {
@@ -111,20 +128,19 @@ test("the stream's dispose releases every dressed tile, quietly", () => {
 test("every part of a dressing is in the part table, so disposal and the census reach it", () => {
   // (a TileDressing field left out of DRESSING_PARTS does not compile: the
   // table `satisfies` a record of every field)
-  const group = () => new Object3D();
-  const control = () => ({ group: group() });
+  const control = () => ({ group: emptyGroup() });
   const parts = {
     vegetation: control(),
-    lowVegetation: group(),
+    lowVegetation: emptyGroup(),
     lamps: control(),
     monuments: control(),
-    furniture: group(),
-    rail: group(),
-    tram: group(),
-    riverside: group(),
+    furniture: emptyGroup(),
+    rail: emptyGroup(),
+    tram: emptyGroup(),
+    riverside: emptyGroup(),
     traffic: control(),
     sport: control(),
-    vineyards: group(),
+    vineyards: emptyGroup(),
   };
   const full = { tile: "t", ...parts } as unknown as TileDressing;
   // each name's accessor hands over that field's own scene part
@@ -140,7 +156,7 @@ test("every part of a dressing is in the part table, so disposal and the census 
 });
 
 test("a tile that leaves while its compile runs is freed once the compile ends", async () => {
-  let finish = (): void => undefined;
+  let finish = nothing;
   const compiling = new Promise<void>((resolve) => {
     finish = resolve;
   });
@@ -178,7 +194,7 @@ test("a tile that leaves while its compile runs is freed once the compile ends",
 });
 
 test("a tile that leaves lets go of the site's shared index at once, while its compile still runs", async () => {
-  let finish = (): void => undefined;
+  let finish = nothing;
   const plugin = new DressingPlugin(
     {
       dressingGate: new Promise<void>(() => {}),
@@ -505,15 +521,11 @@ test("a phone streams fewer contents at once, on queues of their own in our orde
   );
   // not the renderer's error order: a tile's coarse ground before its
   // buildings
-  const at = (uri: string) => ({
-    content: { uri },
-    traversal: { distanceFromCamera: 0, error: 0, inFrustum: true, used: true },
-  });
   for (const queue of [phone.parseQueue, desktop.downloadQueue]) {
     expect(
       queue.priorityCallback?.(
-        at("terrain_a_l1.0.glb.gz"),
-        at("city_a.0.glb.gz")
+        tileAt("terrain_a_l1.0.glb.gz"),
+        tileAt("city_a.0.glb.gz")
       )
     ).toBe(1);
   }
@@ -542,10 +554,9 @@ test("a hung dressing's ask sets come in idle time, into the same array; none fo
     return { tile: "t", asks, buildAsks: build() };
   };
   // the slices run at once here
-  const now = async (steps: Steps<unknown>) => finished(steps);
   const hung = dressing();
   const { asks } = hung;
-  buildAsksWhenIdle(hung, () => true, { idle: later, run: now });
+  buildAsksWhenIdle(hung, () => true, { idle: later, run: runNow });
   expect(hung.asks).toEqual([]);
   idle.shift()?.();
   expect(hung.asks).toBe(asks);
@@ -553,15 +564,15 @@ test("a hung dressing's ask sets come in idle time, into the same array; none fo
   // run once, and its features let go of
   expect(hung.buildAsks).toBeUndefined();
   const gone = dressing();
-  buildAsksWhenIdle(gone, () => false, { idle: later, run: now });
+  buildAsksWhenIdle(gone, () => false, { idle: later, run: runNow });
   idle.shift()?.();
   expect(gone.asks).toEqual([]);
   // a dressing with nothing to build waits for nothing
-  buildAsksWhenIdle({ tile: "t" }, () => true, { idle: later, run: now });
+  buildAsksWhenIdle({ tile: "t" }, () => true, { idle: later, run: runNow });
   expect(idle).toHaveLength(0);
   // a question before the idle time builds them at once, and only once
   const early = dressing();
-  buildAsksWhenIdle(early, () => true, { idle: later, run: now });
+  buildAsksWhenIdle(early, () => true, { idle: later, run: runNow });
   expect(asksOf(early)).toEqual([set]);
   expect(asksOf(early)).toEqual([set]);
   idle.shift()?.();
@@ -589,12 +600,15 @@ test("a question while the ask sets build in slices finishes them, once", async 
   }
   const d: TileDressing = { tile: "t", asks, buildAsks: build() };
   // a slice is one step, and the next waits for `go`
-  let go: () => void = () => {};
+  let go = nothing;
+  const waitForGo = async () => {
+    await new Promise<void>((resolve) => {
+      go = resolve;
+    });
+  };
   const sliced = async (s: Steps<unknown>) => {
     for (let r = s.next(); !r.done; r = s.next()) {
-      await new Promise<void>((resolve) => {
-        go = resolve;
-      });
+      await waitForGo();
     }
   };
   buildAsksWhenIdle(d, () => true, { idle: later, run: sliced });
@@ -648,7 +662,7 @@ test("a dressing whose tile leaves before its idle time never builds its ask set
     const dressing: TileDressing = {
       tile: "t",
       asks: [],
-      buildAsks: (function* () {
+      buildAsks: (function* builtOnce() {
         built += 1;
         yield;
       })(),
@@ -742,7 +756,7 @@ function trafficTile(
   });
   const root = new Object3D();
   const compiled: Group[] = [];
-  let finish = (): void => undefined;
+  let finish = nothing;
   let built = 0;
   const freeErrors: unknown[][] = [];
   const host: TrafficHost = {
@@ -818,7 +832,11 @@ test("the first switch-on builds and compiles the bodies once; off keeps them, t
   expect(compiled).toHaveLength(1);
   expect(built()).toBe(1);
   expect(slot.group?.visible).toBe(true);
-  expect(dressingParts(d)).toEqual([slot.group as Group]);
+  const hung = slot.group;
+  if (!hung) {
+    throw new Error("the traffic group was not built");
+  }
+  expect(dressingParts(d)).toEqual([hung]);
   // the probe asks its sections now
   expect(asks).toHaveLength(1);
   expect(slot.asks()).toBe(asks[0]);
@@ -894,10 +912,7 @@ test("a switch-on builds the tiles' bodies one after another", async () => {
   let chain = Promise.resolve();
   const turn: TrafficHost["turn"] = async (work) => {
     const run = chain.then(work);
-    chain = run.then(
-      () => {},
-      () => {}
-    );
+    chain = run.then(nothing, nothing);
     return await run;
   };
   const a = trafficTile({ turn });
@@ -934,7 +949,7 @@ test("a dressing freed before its traffic's turn builds nothing", async () => {
 /** The builder on its way (the data layers starting): it arrives when the
  *  test says. */
 function builderOnItsWay() {
-  let arrive = (): void => undefined;
+  let arrive = nothing;
   const coming = new Promise<TrafficBuilder>((resolve) => {
     arrive = () => resolve(builder);
   });
@@ -1012,10 +1027,6 @@ test("an ask builder that throws in idle time is reported and lets the tile go",
     idle.push(work);
     return () => {};
   };
-  function* broken(): Steps<void> {
-    yield;
-    throw new Error("bad furniture");
-  }
   const d: TileDressing = { tile: "t", asks: [], buildAsks: broken() };
   const failures: unknown[] = [];
   buildAsksWhenIdle(d, () => true, {

@@ -95,10 +95,17 @@ const RING_SPEED = 0.18;
 /** At most this many columns (the city runs 35 counters). */
 const CAPACITY = 128;
 
+/** No document (a test, a worker): never hidden. */
+const hidden = (): boolean =>
+  typeof document === "undefined" ? false : document.hidden;
+
 /** A unit column standing on its foot (y 0..1), the top a soft dome. */
 function columnGeometry(): LatheGeometry {
-  const points = [new Vector2(0, 0), new Vector2(COLUMN_RADIUS, 0)];
-  points.push(new Vector2(COLUMN_RADIUS, 1 - CAP_SHARE));
+  const points = [
+    new Vector2(0, 0),
+    new Vector2(COLUMN_RADIUS, 0),
+    new Vector2(COLUMN_RADIUS, 1 - CAP_SHARE),
+  ];
   for (let i = 1; i <= 6; i += 1) {
     const a = (i / 6) * (Math.PI / 2);
     points.push(
@@ -389,9 +396,6 @@ export function createBikeFeed(opts: {
   let aborter: AbortController | null = null;
   /** performance.now() of the last counts heard */
   let lastRead = Number.NEGATIVE_INFINITY;
-  // no document (a test, a worker): never hidden
-  const hidden = () =>
-    typeof document === "undefined" ? false : document.hidden;
   const read = async () => {
     if (hidden()) {
       return;
@@ -434,7 +438,9 @@ export function createBikeFeed(opts: {
         return;
       }
       void read();
-      timer = setInterval(() => void read(), BIKE_POLL_MS);
+      timer = setInterval(() => {
+        void read();
+      }, BIKE_POLL_MS);
       if (typeof document !== "undefined") {
         document.addEventListener("visibilitychange", onVisibility);
       }

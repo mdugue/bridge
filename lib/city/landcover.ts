@@ -140,12 +140,12 @@ export function parkingBand(
     kind === parkingId("street-parallel")
       ? PARKING_DEPTH.parallel
       : PARKING_DEPTH.angled;
-  const from =
-    place === parkingPlaceId("on-kerb")
-      ? -depth
-      : place === parkingPlaceId("half-on-kerb")
-        ? -1
-        : 0;
+  let from = 0;
+  if (place === parkingPlaceId("on-kerb")) {
+    from = -depth;
+  } else if (place === parkingPlaceId("half-on-kerb")) {
+    from = -1;
+  }
   return [from, from + depth];
 }
 

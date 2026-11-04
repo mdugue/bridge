@@ -256,7 +256,14 @@ export function monumentsOf(
       String(m.x),
       String(m.y),
     ].join("\u0000");
-  found.sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
+  found.sort((a, b) => {
+    const ka = key(a);
+    const kb = key(b);
+    if (ka < kb) {
+      return -1;
+    }
+    return ka > kb ? 1 : 0;
+  });
   const out: WissenMonument[] = [];
   let nth = 0;
   for (const [k, { base, ...m }] of found.entries()) {

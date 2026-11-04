@@ -121,7 +121,8 @@ export function osmDataDays(
   };
   walk(record, "");
   days.sort((a, b) => a.localeCompare(b));
-  return days.length > 0 ? { oldest: days[0], newest: days.at(-1)! } : null;
+  const newest = days.at(-1);
+  return newest === undefined ? null : { oldest: days[0], newest };
 }
 
 /** Whole days from `from` (YYYY-MM-DD) to `now`. */
@@ -139,9 +140,9 @@ export function daysSince(from: string, now: Date): number {
 export function standEdition(stand: string): string {
   if (/^\s*\d{4}-\d\d-\d\d/u.test(stand)) {
     const days = stand.match(/\b\d{4}-\d\d-\d\d\b/gu) ?? [];
-    return days.sort((a, b) => a.localeCompare(b)).at(-1)!;
+    return days.sort((a, b) => a.localeCompare(b)).at(-1) ?? stand.trim();
   }
-  return /^\s*(\d{4})/u.exec(stand)?.[1] ?? stand.trim();
+  return /^\s*(?<year>\d{4})/u.exec(stand)?.groups?.year ?? stand.trim();
 }
 
 /** A recorded `Stand` is older than the current one. */
@@ -198,7 +199,9 @@ async function probe(url: string): Promise<Response | Error> {
     headers: { Range: "bytes=0-0", "Accept-Encoding": "identity" },
   });
   if (!(r instanceof Error)) {
-    await r.body?.cancel().catch(() => {});
+    await r.body?.cancel().catch(() => {
+      // only the status line mattered; a body that will not cancel is closed with the response
+    });
   }
   return r;
 }
@@ -428,9 +431,12 @@ async function recordStands(site: SiteId): Promise<number> {
     if (stands instanceof Error) {
       throw stands;
     }
-    const geosn = (provenance.geosn ??= {});
-    const entry = (geosn[product] ??= {});
-    const tiles = (entry.tiles ??= {});
+    provenance.geosn ??= {};
+    const { geosn } = provenance;
+    geosn[product] ??= {};
+    const entry = geosn[product];
+    entry.tiles ??= {};
+    const { tiles } = entry;
     for (const cell of config.tiles) {
       const tile = tileIdOf(config, cell);
       const current = stands.get(snKachel(cell));

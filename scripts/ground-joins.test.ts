@@ -146,7 +146,8 @@ test("the parts the spawn tile lacks meet the ground where they stand", async ()
     JoinPart,
     string,
   ][]) {
-    const r = (await measureJoins([tile]))[part];
+    const joins = await measureJoins([tile]);
+    const r = joins[part];
     expect(r.edges + r.feet).toBeGreaterThan(0);
     expect({
       part,

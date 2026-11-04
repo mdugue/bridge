@@ -87,7 +87,7 @@ if (process.argv.includes("--all")) {
 } else {
   let site: Site;
   try {
-    site = siteFromArgs(process.argv.slice(2)).site;
+    ({ site } = siteFromArgs(process.argv.slice(2)));
   } catch (error) {
     process.stderr.write(`site: ${(error as Error).message} (or --all)\n`);
     process.exit(2);

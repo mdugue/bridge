@@ -42,11 +42,13 @@ import { readGpkgGeometry } from "@/lib/city/wkb";
 export const SQL_WASM_PATH = "/wasm/sql-wasm-browser.wasm";
 
 /** Thrown with a sentence for the panel. */
-export class PlanError extends Error {}
+export class PlanError extends Error {
+  override name = "PlanError";
+}
 
 /** The plan formats by the main file's extension. */
 export const PLAN_FORMATS =
-  /\.(dxf|shp|gpkg|landxml)$|(?<!\.(shp|aux))\.xml$/iu;
+  /\.(?:dxf|shp|gpkg|landxml)$|(?<!\.(?:shp|aux))\.xml$/iu;
 
 /** The words the panel uses for a class. */
 const CLASS_WORDS: Record<PlanClass, string> = {
@@ -83,15 +85,15 @@ function sibling(main: File, files: readonly File[], ext: string) {
 
 /** The EPSG code a .prj's WKT names, where it says one. */
 function prjEpsg(wkt: string): number | null {
-  const code = /AUTHORITY\["EPSG",\s*"?(\d{4,5})"?\]\s*\]\s*$/u.exec(
+  const code = /AUTHORITY\["EPSG",\s*"?(?<epsg>\d{4,5})"?\]\s*\]\s*$/u.exec(
     wkt.trim()
   );
   if (code) {
-    return Number(code[1]);
+    return Number(code.groups?.epsg);
   }
-  const zone = /UTM[_ ]?zone[_ ]?(\d{2})N/iu.exec(wkt);
+  const zone = /UTM[_ ]?zone[_ ]?(?<zone>\d{2})N/iu.exec(wkt);
   if (zone && /ETRS|GRS[_ ]?1980|ETRF/iu.test(wkt)) {
-    return 25_800 + Number(zone[1]);
+    return 25_800 + Number(zone.groups?.zone);
   }
   if (/DHDN|Gauss|Gauß|Kruger|Krüger/iu.test(wkt)) {
     return 31_468;
@@ -243,7 +245,10 @@ async function readFeatures(
   };
 }
 
-/** Every point of the plan's features. */
+/**
+ * Every point of the plan's features.
+ * @yields {PlanPoint} each point of each feature
+ */
 function* pointsOf(features: readonly PlanFeature[]): Generator<PlanPoint> {
   for (const f of features) {
     if (f.kind === "tree") {
@@ -415,15 +420,15 @@ export async function readPlan(
     material.name = group.cls;
     // ground: it does not stand in for a house (design-cover.ts)
     material.userData.planGround = group.cls !== "building";
-    const mesh = new Mesh(geometry, material);
+    const part = new Mesh(geometry, material);
     // what a question's card calls it (lib/city/inquiry-design.ts)
-    mesh.userData.designPart = {
+    part.userData.designPart = {
       name: null,
       type: lookWord(group.cls),
       id: null,
       material: null,
     } satisfies DesignPartInfo;
-    root.add(mesh);
+    root.add(part);
   }
   // the plan's origin in the design frame (x east, z south); doubles
   root.matrixAutoUpdate = false;

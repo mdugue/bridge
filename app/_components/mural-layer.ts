@@ -106,7 +106,10 @@ export function createMuralSource(url: string | null): MuralSource | null {
   };
   return {
     fileUrl: (file) => new URL(file, url).href,
-    forTile: async (tile) => (await load()).filter((m) => m.tile === tile),
+    forTile: async (tile) => {
+      const murals = await load();
+      return murals.filter((m) => m.tile === tile);
+    },
   };
 }
 

@@ -183,7 +183,7 @@ const Cover = ({
 }) => {
   let hash = 0;
   for (const c of file) {
-    hash = (hash * 31 + c.charCodeAt(0)) >>> 0;
+    hash = (hash * 31 + (c.codePointAt(0) ?? 0)) >>> 0;
   }
   const position = FOCUS[hash % FOCUS.length];
   return (
@@ -269,11 +269,13 @@ const DocPage = async ({ file }: { file: string }) => {
   const groups = nav();
   const { content, toc } = await renderDoc(file, readDoc(file), pages, lang);
   const place = neighbours(file);
-  const kicker = place
-    ? place.group.id === "dev"
-      ? place.group.label
-      : `${place.group.label} · ${place.index + 1} / ${place.count}`
-    : "Wissen";
+  let kicker = "Wissen";
+  if (place) {
+    kicker =
+      place.group.id === "dev"
+        ? place.group.label
+        : `${place.group.label} · ${place.index + 1} / ${place.count}`;
+  }
 
   return (
     <div

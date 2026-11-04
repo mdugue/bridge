@@ -10,6 +10,7 @@
 import {
   chat,
   convertMessagesToModelMessages,
+  EventType,
   maxIterations,
 } from "@tanstack/ai";
 import type {
@@ -221,11 +222,11 @@ function errorChunk(message: string, key: string, code?: unknown): StreamChunk {
 
 function runError(message: string, code?: string): StreamChunk {
   return {
-    type: "RUN_ERROR",
+    type: EventType.RUN_ERROR,
     timestamp: Date.now(),
     message,
     ...(code ? { code } : {}),
-  } as StreamChunk;
+  };
 }
 
 /** The reason the route aborts a run that nears the host's limit. */
@@ -239,18 +240,22 @@ export const DEADLINE = "deadline";
  * its own, waits for a scene tool, or already sent an error is left as
  * it is: an answer without words is not told from one that said enough
  * before its last tool.
+ *
+ * @yields {StreamChunk} every chunk of `stream`, then the closing error if any
  */
 export async function* ended(
   stream: AsyncIterable<StreamChunk>,
   signal: AbortSignal,
-  onEnd: () => void = () => {}
+  onEnd: () => void = () => {
+    // no hook given: nothing to tell when the stream is done
+  }
 ): AsyncIterable<StreamChunk> {
   let last: StreamChunk | undefined;
   let before: StreamChunk | undefined;
   try {
     for await (const chunk of stream) {
       // the abort's own error would say less than the deadline's
-      if (signal.reason === DEADLINE && chunk.type === "RUN_ERROR") {
+      if (signal.reason === DEADLINE && chunk.type === EventType.RUN_ERROR) {
         continue;
       }
       before = last;
@@ -278,6 +283,10 @@ type RunEnd = "stop" | "waits" | "cut" | "length" | "refused" | "other";
 
 /** Why a run stopped, where the stream would not say it. */
 function stopText(end: RunEnd, late: boolean): string | null {
+  if (end === "other") {
+    // an error already said why, or nothing came
+    return late ? "Die Antwort dauerte zu lange." : null;
+  }
   switch (end) {
     case "stop":
     case "waits": {
@@ -293,8 +302,9 @@ function stopText(end: RunEnd, late: boolean): string | null {
       // a refusal, or (OpenRouter) a provider's failure mid-answer
       return "Das Modell brach die Antwort ab. Frag bitte noch einmal.";
     }
-    case "other": {
-      return late ? "Die Antwort dauerte zu lange." : null;
+    default: {
+      // unreachable: "other" is answered above
+      return null;
     }
   }
 }
@@ -303,10 +313,10 @@ function runEnd(
   last: StreamChunk | undefined,
   before: StreamChunk | undefined
 ): RunEnd {
-  if (last?.type === "TOOL_CALL_RESULT") {
+  if (last?.type === EventType.TOOL_CALL_RESULT) {
     return "cut";
   }
-  if (last?.type !== "RUN_FINISHED") {
+  if (last?.type !== EventType.RUN_FINISHED) {
     return "other";
   }
   const c = last as {
@@ -325,22 +335,27 @@ function runEnd(
     // `length` right after that call's failed result
     const state = (before as { metadata?: { tanstack?: { state?: unknown } } })
       ?.metadata?.tanstack?.state;
-    return before?.type === "TOOL_CALL_RESULT" && state === "output-error"
+    return before?.type === EventType.TOOL_CALL_RESULT &&
+      state === "output-error"
       ? "cut"
       : "length";
   }
   return reason === "content_filter" ? "refused" : "stop";
 }
 
-/** The stream with the key taken out of any error, thrown or sent. */
+/**
+ * The stream with the key taken out of any error, thrown or sent.
+ *
+ * @yields {StreamChunk} every chunk of `stream`, errors scrubbed
+ */
 export async function* scrubbed(
   stream: AsyncIterable<StreamChunk>,
   key: string
 ): AsyncIterable<StreamChunk> {
   try {
     for await (const chunk of stream) {
-      yield chunk.type === "RUN_ERROR"
-        ? errorChunk(String(chunk.message), key, chunk.code)
+      yield chunk.type === EventType.RUN_ERROR
+        ? errorChunk(chunk.message, key, chunk.code)
         : chunk;
     }
   } catch (error) {

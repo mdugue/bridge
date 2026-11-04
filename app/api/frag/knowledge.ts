@@ -40,6 +40,7 @@ export async function siteKnowledge(site: string): Promise<Knowledge | null> {
       if (!k) {
         loaded.delete(site);
       }
+      return null;
     });
   }
   return await pending;

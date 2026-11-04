@@ -75,7 +75,8 @@ test("the selection's colours are the HUD's accent", () => {
   const css = readFileSync(`${import.meta.dir}/../../app/globals.css`, "utf-8");
   const token = (name: string) => {
     const m = new RegExp(
-      `\\n\\s*--${name}: oklch\\(([\\d.]+) ([\\d.]+) ([\\d.]+)\\)`
+      `\\n\\s*--${name}: oklch\\(([\\d.]+) ([\\d.]+) ([\\d.]+)\\)`,
+      "u"
     ).exec(css);
     if (!m) {
       throw new Error(`--${name} not found`);
@@ -88,6 +89,8 @@ test("the selection's colours are the HUD's accent", () => {
     [SELECTION_ACCENT.halo, token("primary-foreground")],
   ] as const;
   for (const [ours, theirs] of pairs) {
-    ours.forEach((v, i) => expect(v).toBeCloseTo(theirs[i], 2));
+    for (const [i, v] of ours.entries()) {
+      expect(v).toBeCloseTo(theirs[i], 2);
+    }
   }
 });

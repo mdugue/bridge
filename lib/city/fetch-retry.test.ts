@@ -38,14 +38,12 @@ function fakePage(hidden: [number, number][] = []) {
         throw new DOMException("aborted", "AbortError");
       }
       now += ms;
-      return;
     },
     whenUsable: async () => {
       const span = hidden.find(([a, b]) => now >= a && now < b);
       if (span) {
         now = span[1];
       }
-      return;
     },
     visibleMs: () => visibleBetween(now),
     describe: () => "online visible",

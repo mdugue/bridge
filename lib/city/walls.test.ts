@@ -12,6 +12,35 @@ import type { WallRibbon } from "./walls";
 const offset = { cx: 0, cy: 0 };
 const flat = () => 100;
 
+/** Ground 100 m south of y = 0, 108 m north of it: a wall along y = 0. */
+const stepNorth = (_x: number, y: number) => (y > 0 ? 108 : 100);
+
+/** A retaining wall along y = 0, the high shelf north: a ramp from 100 m
+ *  to 108 m between y = −0.5 and y = 1.5 (the DGM's blur), except around
+ *  x = 5, where it runs on to y = 3.5 (wider there than the median). */
+const wideNearFive = (x: number) => (Math.abs(x - 5) < 1.5 ? 3.5 : 1.5);
+const capRamp = (x: number, y: number) => {
+  const top = wideNearFive(x);
+  const t = Math.min(Math.max((y + 0.5) / (top + 0.5), 0), 1);
+  return 100 + 8 * t;
+};
+
+/** A 2 m (or 8 m) step under the first half of a wall, level ground after. */
+const groundStep2 = (x: number, y: number) =>
+  x < 10 ? 100 + 2 * Math.min(Math.max((y + 0.5) / 2, 0), 1) : 100;
+const groundStep8 = (x: number, y: number) =>
+  x < 10 ? 100 + 8 * Math.min(Math.max((y + 0.5) / 2, 0), 1) : 100;
+
+/** The quay's 4 m rounded into a 1.5 m ramp north of y = 0. */
+const groundQuay = (_x: number, y: number) =>
+  100 + 4 * Math.min(Math.max(y / 1.5, 0), 1);
+
+/** Two terrace steps the DGM blurs into 1 m ramps (y = −4 and y = +4). */
+const terraceRise = (y: number, at: number, rise: number) =>
+  Math.min(Math.max(y - at + 0.5, 0), 1) * rise;
+const groundTerraces = (x: number, y: number) =>
+  100 + terraceRise(y, -4, x < 7 ? 6 : 4) + terraceRise(y, 4, x < 7 ? 4 : 6);
+
 const line = (h: number): WallRibbon => ({
   coords: [
     [0, 0],
@@ -39,9 +68,7 @@ test("a wall off the ground is skipped, not thrown", () => {
 });
 
 test("a wall on a step stands from the low shelf to the high one", () => {
-  // Ground 100 m south of y = 0, 108 m north of it: a wall along y = 0.
-  const step = (_x: number, y: number) => (y > 0 ? 108 : 100);
-  const g = wallGeometry([line(3)], step, offset);
+  const g = wallGeometry([line(3)], stepNorth, offset);
   const ys = (g?.positions ?? []).filter((_, i) => i % 3 === 1);
   expect(Math.max(...ys)).toBe(108);
   expect(Math.min(...ys)).toBeCloseTo(99.6, 5); // the low shelf, 0.4 m dip
@@ -61,24 +88,15 @@ test("a freestanding wall on level ground rises its height above it, on its line
 });
 
 test("a freestanding wall on a step taller than itself ends at the high shelf", () => {
-  const step = (_x: number, y: number) => (y > 0 ? 108 : 100);
   const wall: WallRibbon = { ...line(1.5), kind: "wall" };
-  const ys = (wallGeometry([wall], step, offset)?.positions ?? []).filter(
+  const ys = (wallGeometry([wall], stepNorth, offset)?.positions ?? []).filter(
     (_, i) => i % 3 === 1
   );
   expect(Math.max(...ys)).toBe(108);
 });
 
 test("a snapped wall's cap runs back to where the ground reaches its level", () => {
-  // A retaining wall along y = 0, the high shelf north: a ramp from 100 m
-  // to 108 m between y = −0.5 and y = 1.5 (the DGM's blur), except around
-  // x = 5, where it runs on to y = 3.5 (wider there than the median).
-  const wide = (x: number) => (Math.abs(x - 5) < 1.5 ? 3.5 : 1.5);
-  const ramp = (x: number, y: number) => {
-    const top = wide(x);
-    const t = Math.min(Math.max((y + 0.5) / (top + 0.5), 0), 1);
-    return 100 + 8 * t;
-  };
+  // (the ground: `capRamp`)
   const wall: WallRibbon = {
     coords: [
       [-20, 0],
@@ -87,7 +105,7 @@ test("a snapped wall's cap runs back to where the ground reaches its level", () 
     h: 8,
     kind: "retaining_wall",
   };
-  const g = wallGeometry([wall], ramp, offset, { snapToStep: true });
+  const g = wallGeometry([wall], capRamp, offset, { snapToStep: true });
   const pos = g?.positions ?? [];
   // the cap's back edge (world z = −north) at the columns near x = 5 and far
   // from it
@@ -156,8 +174,6 @@ test("a city wall standing well above its step stands its height on every column
   // A 9 m city wall along y = 0 with a 2 m step under its first half and
   // level ground under the rest: snapped, the first half ended at its 2 m
   // shelf while the rest stood 9 m — a sawtooth along the wall.
-  const ground = (x: number, y: number) =>
-    x < 10 ? 100 + 2 * Math.min(Math.max((y + 0.5) / 2, 0), 1) : 100;
   const wall: WallRibbon = {
     coords: [
       [0, 0],
@@ -166,7 +182,7 @@ test("a city wall standing well above its step stands its height on every column
     h: 9,
     kind: "city_wall",
   };
-  const g = wallGeometry([wall], ground, offset, { snapToStep: true });
+  const g = wallGeometry([wall], groundStep2, offset, { snapToStep: true });
   expect(g).not.toBeNull();
   const tops = columnTops(g?.positions ?? []);
   expect(tops.length).toBeGreaterThan(1);
@@ -179,8 +195,6 @@ test("a city wall that holds the earth ends at its shelf and stands where the gr
   // The same wall 8 m high in front of an 8 m step under its first half:
   // it holds that earth, so it ends at its shelf there, and on the level
   // ground beyond it still stands its 8 m — not buried at the ground.
-  const ground = (x: number, y: number) =>
-    x < 10 ? 100 + 8 * Math.min(Math.max((y + 0.5) / 2, 0), 1) : 100;
   const wall: WallRibbon = {
     coords: [
       [0, 0],
@@ -189,7 +203,7 @@ test("a city wall that holds the earth ends at its shelf and stands where the gr
     h: 8,
     kind: "city_wall",
   };
-  const g = wallGeometry([wall], ground, offset, { snapToStep: true });
+  const g = wallGeometry([wall], groundStep8, offset, { snapToStep: true });
   expect(g).not.toBeNull();
   const tops = columnTops(g?.positions ?? []);
   expect(tops.length).toBeGreaterThan(1);
@@ -213,31 +227,30 @@ test("a city wall that holds the earth ends at its shelf and stands where the gr
   expect(capBack(12.5, 20)).toBeLessThan(1);
 });
 
+const quayAt = (kind: string) =>
+  wallGeometry(
+    [
+      {
+        coords: [
+          [0, 0],
+          [20, 0],
+        ],
+        h: 4,
+        kind,
+      },
+    ],
+    groundQuay,
+    offset,
+    { snapToStep: true }
+  )?.positions;
+
 test("a measured quay snaps to its step like a retaining wall", () => {
   // The water's edge along y = 0, the quay's 4 m rounded into a 1.5 m ramp
   // north of it: the bake's `quay` stands its face at the ramp's foot and
   // its coping on the quay, as a retaining wall does.
-  const ground = (_x: number, y: number) =>
-    100 + 4 * Math.min(Math.max(y / 1.5, 0), 1);
-  const at = (kind: string) =>
-    wallGeometry(
-      [
-        {
-          coords: [
-            [0, 0],
-            [20, 0],
-          ],
-          h: 4,
-          kind,
-        },
-      ],
-      ground,
-      offset,
-      { snapToStep: true }
-    )?.positions;
-  const quay = at("quay");
+  const quay = quayAt("quay");
   expect(quay?.length ?? 0).toBeGreaterThan(0);
-  expect(quay).toEqual(at("retaining_wall"));
+  expect(quay).toEqual(quayAt("retaining_wall"));
   // its top is the quay's, its foot in the water
   const ys = (quay ?? []).filter((_, i) => i % 3 === 1);
   expect(Math.max(...ys)).toBeCloseTo(104, 1);
@@ -249,10 +262,6 @@ test("a wall whose scan finds two terraces stands at each, not across them", () 
   // into 1 m ramps: at y = −4 (the taller for x < 7) and at y = +4 (the
   // taller beyond). Its columns snap to one step or the other; joined, they
   // stood a block 10 m deep over the terrace between (Meißen's Burgberg).
-  const ramp = (y: number, at: number, rise: number) =>
-    Math.min(Math.max(y - at + 0.5, 0), 1) * rise;
-  const ground = (x: number, y: number) =>
-    100 + ramp(y, -4, x < 7 ? 6 : 4) + ramp(y, 4, x < 7 ? 4 : 6);
   const wall: WallRibbon = {
     coords: [
       [0, 0],
@@ -261,7 +270,9 @@ test("a wall whose scan finds two terraces stands at each, not across them", () 
     h: 3,
     kind: "retaining_wall",
   };
-  const g = wallGeometry([wall], ground, offset, { snapToStep: true });
+  const g = wallGeometry([wall], groundTerraces, offset, {
+    snapToStep: true,
+  });
   const pos = g?.positions ?? [];
   expect(pos.length).toBeGreaterThan(0);
   for (let t = 0; t < pos.length; t += 9) {

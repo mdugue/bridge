@@ -95,7 +95,7 @@ function paintCrown(c: CoarseCrown, ground: number, col: Color): void {
   inventoryColor(
     col,
     {
-      colour: c.colour === "copper" ? 1 : c.colour === "golden" ? 2 : 0,
+      colour: colourCode(c.colour),
       genus: c.genus,
       ground,
       leaf: c.colour === "evergreen" ? "e" : "d",
@@ -147,11 +147,20 @@ export function buildCoarseCrowns(
   return finished(coarseCrownSteps(crowns, ctx));
 }
 
+/** An autumn colour's inventory code: copper 1, golden 2, else 0. */
+function colourCode(colour: string | undefined): number {
+  if (colour === "copper") {
+    return 1;
+  }
+  return colour === "golden" ? 2 : 0;
+}
+
 /** Crowns stood per step (build-steps.ts). */
 const STAND_RUN = 512;
 
 /** `buildCoarseCrowns` in steps: per run of crowns, per cell
- *  (build-steps.ts). */
+ *  (build-steps.ts).
+ *  @yields {void} after each run of crowns and each cell */
 export function* coarseCrownSteps(
   crowns: readonly CoarseCrown[],
   ctx: CoarseCrownContext
@@ -210,9 +219,10 @@ export function* coarseCrownSteps(
   return {
     group,
     chunks: [],
-    // the crown uniforms are the scene's: the look reaches these through
-    // whichever control writes it
-    applyLook: () => {},
+    applyLook: () => {
+      // the crown uniforms are the scene's: the look reaches these through
+      // whichever control writes it
+    },
     multiTuft: () => false,
     setSeason: (day) => applySeasons(seasons, day),
     updateLod: () => false,

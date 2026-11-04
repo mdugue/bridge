@@ -354,15 +354,12 @@ export function mayRecover(
   now: number
 ): boolean {
   const recent = recentHistory(history, now);
-  switch (how) {
-    case "reclaimed": {
-      return recent.reclaims.length < RECLAIM_TRIES;
-    }
-    case "failed": {
-      return recent.failures.length < FAILURE_TRIES;
-    }
-    case "lost": {
-      return level < MAX_SAFETY && recent.losses.length < MAX_SAFETY;
-    }
+  if (how === "reclaimed") {
+    return recent.reclaims.length < RECLAIM_TRIES;
   }
+  if (how === "failed") {
+    return recent.failures.length < FAILURE_TRIES;
+  }
+  // "lost"
+  return level < MAX_SAFETY && recent.losses.length < MAX_SAFETY;
 }

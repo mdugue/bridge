@@ -188,17 +188,19 @@ export function wikidataTime(value: {
   precision: number;
   time: string;
 }): string {
-  const m = /^([+-])(\d+)-(\d\d)-(\d\d)/u.exec(value.time);
+  const m = /^(?<sign>[+-])(?<year>\d+)-(?<month>\d\d)-(?<day>\d\d)/u.exec(
+    value.time
+  );
   if (!m) {
     return value.time;
   }
-  const year = Number(m[2]);
-  const bc = m[1] === "-" ? " v. Chr." : "";
+  const year = Number(m.groups?.year);
+  const bc = m.groups?.sign === "-" ? " v. Chr." : "";
   if (value.precision >= 11) {
-    return `${Number(m[4])}.${Number(m[3])}.${year}${bc}`;
+    return `${Number(m.groups?.day)}.${Number(m.groups?.month)}.${year}${bc}`;
   }
   if (value.precision === 10) {
-    return `${Number(m[3])}/${year}${bc}`;
+    return `${Number(m.groups?.month)}/${year}${bc}`;
   }
   if (value.precision === 8) {
     return `${Math.floor(year / 10) * 10}er${bc}`;

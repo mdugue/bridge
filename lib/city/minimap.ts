@@ -75,7 +75,7 @@ export function epsgToMapPx(
   bounds: TerrainBounds,
   widthPx: number
 ): { px: number; py: number } {
-  const [minX, , , maxY] = bounds;
+  const { 0: minX, 3: maxY } = bounds;
   const k = pxPerMetre(bounds, widthPx);
   return { px: (x - minX) * k, py: (maxY - y) * k };
 }
@@ -87,7 +87,7 @@ export function mapPxToEpsg(
   bounds: TerrainBounds,
   widthPx: number
 ): { x: number; y: number } {
-  const [minX, , , maxY] = bounds;
+  const { 0: minX, 3: maxY } = bounds;
   const k = pxPerMetre(bounds, widthPx);
   return { x: minX + px / k, y: maxY - py / k };
 }

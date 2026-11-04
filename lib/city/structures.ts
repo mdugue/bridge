@@ -133,8 +133,11 @@ export function columnMesh(
       push(out, roof, a0, b1, b0);
     }
   }
-  const top = rings[rings.length - 1];
+  const top = rings.at(-1);
   const bottom = rings[0];
+  if (!top) {
+    return out;
+  }
   for (let k = 0; k < sides; k += 1) {
     push(
       out,
@@ -172,10 +175,12 @@ function signedArea(ring: Point2[]): number {
 
 /** A ring without its closing repeat, turned to `ccw`. */
 function openRing(ring: Point2[], ccw: boolean): Point2[] {
+  const last = ring.at(-1);
   const open =
     ring.length > 1 &&
-    ring[0][0] === ring[ring.length - 1][0] &&
-    ring[0][1] === ring[ring.length - 1][1]
+    last !== undefined &&
+    ring[0][0] === last[0] &&
+    ring[0][1] === last[1]
       ? ring.slice(0, -1)
       : ring.slice();
   return signedArea(open) > 0 === ccw ? open : open.reverse();
@@ -207,8 +212,9 @@ function prismMesh(
   top: number,
   offset: { cx: number; cy: number },
   triangulate: Triangulate,
-  out: StructureMesh = { isRoof: [], positions: [] }
+  into?: StructureMesh
 ): StructureMesh {
+  const out = into ?? { isRoof: [], positions: [] };
   const { contour, holes } = outline;
   const at = ([x, y]: Point2, z: number) => [x - offset.cx, y - offset.cy, z];
   // walls: along a CCW outline (and a CW hole) the outside is on the right

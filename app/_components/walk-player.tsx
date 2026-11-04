@@ -84,6 +84,25 @@ async function loadWalks(url: string): Promise<Walk[]> {
   return await pending;
 }
 
+/** The visitor's day, read once per player. */
+const visitDay = (): Date => new Date();
+
+/** A story photo's size classes: tall beside the text, else by the pointer. */
+function photoSize(tall: boolean, coarse: boolean): string {
+  if (tall) {
+    return "max-h-[20rem] rounded-lg";
+  }
+  return coarse ? "max-h-32" : "max-h-[17rem]";
+}
+
+/** A progress dot's look: the current stop, a passed one, one to come. */
+function dotWidth(i: number, index: number): string {
+  if (i === index) {
+    return "w-3.5 bg-primary";
+  }
+  return i < index ? "w-1 bg-primary/60" : "w-1 bg-foreground/15";
+}
+
 /** The site's walks, once the tileset has named them; [] until then. */
 export function useWalks(): Walk[] {
   const url = useSceneStatus("site")?.walksUrl ?? null;
@@ -91,15 +110,17 @@ export function useWalks(): Walk[] {
     null
   );
   useEffect(() => {
-    if (!url) {
-      return;
-    }
     let live = true;
-    void loadWalks(url).then((got) => {
+    const load = async () => {
+      if (!url) {
+        return;
+      }
+      const got = await loadWalks(url);
       if (live) {
         setWalks({ url, walks: got });
       }
-    });
+    };
+    void load();
     return () => {
       live = false;
     };
@@ -444,11 +465,7 @@ const StopPhoto = ({
       alt={photo.caption ?? `Foto: ${title}`}
       className={cn(
         "block h-auto w-full bg-muted object-cover",
-        tall
-          ? "max-h-[20rem] rounded-lg"
-          : coarse
-            ? "max-h-32"
-            : "max-h-[17rem]"
+        photoSize(tall, coarse)
       )}
       height={photo.h}
       loading="lazy"
@@ -526,11 +543,7 @@ const StopHeading = ({ index, walk }: { index: number; walk: Walk }) => {
             <span
               className={cn(
                 "block h-1 rounded-full transition-all",
-                i === index
-                  ? "w-3.5 bg-primary"
-                  : i < index
-                    ? "w-1 bg-primary/60"
-                    : "w-1 bg-foreground/15"
+                dotWidth(i, index)
               )}
               key={s.id}
             />
@@ -658,7 +671,7 @@ export const WalkCard = ({
   // a phone's sheet starts low: the title and the way on, the scene above
   const [folded, setFolded] = useState(coarse);
   // the visitor's day: the notes for today and the season
-  const [today] = useState(() => new Date());
+  const today = useMemo(() => visitDay(), []);
   const { isMobile, openMobile } = useSidebar();
   const walksUrl = useSceneStatus("site")?.walksUrl ?? null;
   const stop = walk.stops[index];

@@ -147,7 +147,10 @@ function slotless(material: Material): Material {
  *  (its array's element type, per instance or per vertex), and a line
  *  strip's by its index format: all of which `layoutStub` keeps. */
 function anchorKey(drawable: Drawable, material: Material): string {
-  const geometry = drawable.geometry as BufferGeometry;
+  const { geometry } = drawable;
+  if (!geometry) {
+    throw new Error("pipeline anchor: the drawable has no geometry");
+  }
   const layout = Object.entries(geometry.attributes)
     .map(([name, a]) => {
       const i = a as InterleavedBufferAttribute;
@@ -250,11 +253,14 @@ export function createPipelineAnchors(
   // resolves once it is held, not as soon as its stand-in is made
   const ready = new Map<string, Promise<void>>();
   const track = async (keys: readonly string[], compiling: Promise<void>) => {
-    const settled = compiling.catch(() => {});
+    const settled = compiling.catch(() => {
+      // a failed compile reaches the caller through `compiling` below; the
+      // copy kept in `ready` only has to settle
+    });
     for (const key of keys) {
       ready.set(key, settled);
     }
-    return await compiling;
+    await compiling;
   };
   // A per-tile material anchored as itself (`every`): its anchors go when
   // the tile disposes it — out of a set still waiting for its turn too, so

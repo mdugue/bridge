@@ -418,6 +418,36 @@ const LiveModelInstruments = ({
   );
 };
 
+/** A value made once per mount: lazy state that never changes. */
+function useOnce<T>(init: () => T): T {
+  const [value, ,] = useState(init);
+  return value;
+}
+
+/** The effect's cleanup when nothing was started. */
+const nothingToClean = (): void => {
+  // the boot has not begun: no scene, no listeners, no timers
+};
+
+/** (image-export.ts is the scene's: loaded with it, not with the HUD) */
+const saveImageLazily = async (
+  h: CityWalkHandle,
+  info: ExportContext
+): Promise<void> => {
+  const { saveImage } = await import("./image-export");
+  await saveImage(h, info);
+};
+
+/** The shadow study's images, saved the same way. */
+const saveStudyLazily = async (
+  h: CityWalkHandle,
+  info: ExportContext,
+  progress: (n: number, total: number) => void
+): Promise<void> => {
+  const { saveShadowStudy } = await import("./image-export");
+  await saveShadowStudy(h, info, progress);
+};
+
 /**
  * The off-site dialog, wired to the scene and the sidebar: a vantage flies
  * there, "Auf der Karte wählen" opens the sidebar on the minimap.
@@ -432,10 +462,11 @@ const OffsiteDialog = ({
   onTab: (tab: SceneTabId) => void;
 }) => {
   const { isMobile, setOpen, setOpenMobile } = useSidebar();
+  const handleDismiss = locate.dismissOffsite;
   return (
     <LocateOffsiteDialog
       offsite={locate.offsite}
-      onClose={locate.dismissOffsite}
+      onClose={handleDismiss}
       onShowMap={() => {
         onTab("erkunden");
         if (isMobile) {
@@ -571,7 +602,7 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
   const handleRef = useRef<CityWalkHandle | null>(null);
   // the render loop's pace behind the phone's sidebar (sidebar-pace.tsx):
   // one for the page, every boot's loop asks it
-  const [pace] = useState(createFramePace);
+  const pace = useOnce(createFramePace);
   const applySceneTime = useCallback(
     (date: Date, preview?: boolean) => handleRef.current?.setSun(date, preview),
     []
@@ -586,7 +617,7 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
   // Probed once, before the renderer is created: three's raw backend error
   // (or a tile's bare ReferenceError) is replaced by a sentence naming the
   // missing prerequisite.
-  const [missing] = useState(missingPrerequisite);
+  const missing = useOnce(missingPrerequisite);
   const supported = missing === null;
   const [status, setStatus] = useState<Status>(() =>
     missing === null
@@ -597,7 +628,7 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
   // view, the data layers, the inquiry: scene-status.ts), each widget
   // reading its own slice — a report re-renders what shows it, not this
   // component. It outlives the boots, as these states did.
-  const [sceneStatus] = useState(() => createSceneStatus(afterTask));
+  const sceneStatus = useOnce(() => createSceneStatus(afterTask));
   // Kept past the handover: the city arrives behind the frosted screen, which
   // is only then removed (handover.ts).
   const [veilUp, setVeilUp] = useState(true);
@@ -607,7 +638,7 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
   // boots the new instance from it, so sliders and scene never disagree.
   // The picture style starts as the viewer last left it (style-memory.ts) —
   // from safety level 2 in the default one (lib/city/gpu-safety.ts).
-  const [look] = useState(() =>
+  const look = useOnce(() =>
     createLookState({
       ...LOOK_DEFAULTS,
       style:
@@ -819,8 +850,13 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
   // error tracker hears of one session (ADR 0043), not one per pick.
   const trailRef = useRef<CrashTrail | null>(null);
   const pageTrail = useCallback(() => {
-    trailRef.current ??= startCrashTrail(startCrashReports() ?? undefined);
-    return trailRef.current;
+    const existing = trailRef.current;
+    if (existing) {
+      return existing;
+    }
+    const created = startCrashTrail(startCrashReports() ?? undefined);
+    trailRef.current = created;
+    return created;
   }, []);
   useEffect(
     () => () => {
@@ -838,13 +874,13 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
   useEffect(() => {
     const container = mountRef.current;
     if (!container) {
-      return;
+      return nothingToClean;
     }
     // The GPU preflight already failed (see the status initializer): no
     // renderer, no handle, nothing to clean up. Without the tileset's name
     // (the manifest is still on its way) the HUD is up and the scene waits.
     if (!supported || tilesetUrl === null) {
-      return;
+      return nothingToClean;
     }
     let handle: CityWalkHandle | null = null;
     let veilTimer: ReturnType<typeof setTimeout> | undefined;
@@ -870,12 +906,14 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
       recovery.current?.prepare(restored);
     }
 
-    let settled = () => {};
+    let settled = () => {
+      // replaced by the resolver of this boot's promise just below
+    };
     const previous = lastBoot.current;
     lastBoot.current = new Promise((resolve) => {
       settled = resolve;
     });
-    previous
+    void previous
       .then(loadScene)
       .then(async ({ createCityWalkApp }) => {
         if (aborter.signal.aborted) {
@@ -923,7 +961,7 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
       .then((h) => {
         if (aborter.signal.aborted) {
           h.dispose();
-          return;
+          return null;
         }
         handle = h;
         handleRef.current = h;
@@ -987,22 +1025,26 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
           beginStreaming,
           VEIL_HOLD_MS + STREAM_SETTLE_MS
         );
+        return null;
       })
-      .catch((error: unknown) => {
+      .catch((bootError: unknown) => {
         // Aborted = StrictMode remount / navigation away, not a failure.
         const aborted =
-          error instanceof DOMException && error.name === "AbortError";
+          bootError instanceof DOMException && bootError.name === "AbortError";
         if (!(aborter.signal.aborted || aborted)) {
           // A place that failed the boot is not tried again on the next
           // load: the recovery's snapshot goes with this boot.
           takeRecoverySnapshot();
           trail.note(
             "boot failed",
-            error instanceof Error ? error.message : String(error)
+            bootError instanceof Error ? bootError.message : String(bootError)
           );
           setStatus({
             phase: "error",
-            message: error instanceof Error ? error.message : String(error),
+            message:
+              bootError instanceof Error
+                ? bootError.message
+                : String(bootError),
           });
         }
       })
@@ -1086,7 +1128,7 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
   const runExport = (
     what: (h: CityWalkHandle, info: ExportContext) => Promise<void>,
     busy: string,
-    done: string
+    saved: string
   ) => {
     const h = handleRef.current;
     if (!h || exporting.current) {
@@ -1102,35 +1144,29 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
       style: look.get().style,
     })
       .then(
-        () => hud.say(done),
-        (error: unknown) =>
+        () => hud.say(saved),
+        (saveError: unknown) =>
           hud.say(
-            `Speichern fehlgeschlagen: ${error instanceof Error ? error.message : String(error)}`
+            `Speichern fehlgeschlagen: ${saveError instanceof Error ? saveError.message : String(saveError)}`
           )
       )
       .finally(() => {
         exporting.current = false;
         setExportVeil(false);
+      })
+      .catch(() => {
+        // The HUD line is best effort: a message that cannot be said must
+        // not surface as an unhandled rejection.
       });
   };
   // (image-export.ts is the scene's: loaded with it, not with the HUD)
   const exportImage = () =>
-    runExport(
-      async (h, info) =>
-        await import("./image-export").then(
-          async ({ saveImage }) => await saveImage(h, info)
-        ),
-      "Bild wird gerendert …",
-      "Bild gespeichert"
-    );
+    runExport(saveImageLazily, "Bild wird gerendert …", "Bild gespeichert");
   const exportStudy = () =>
     runExport(
       async (h, info) =>
-        await import("./image-export").then(
-          async ({ saveShadowStudy }) =>
-            await saveShadowStudy(h, info, (n, total) =>
-              hud.say(`Verschattungsstudie: Bild ${n} von ${total} …`, true)
-            )
+        await saveStudyLazily(h, info, (n, total) =>
+          hud.say(`Verschattungsstudie: Bild ${n} von ${total} …`, true)
         ),
       "Verschattungsstudie wird gerendert …",
       "Verschattungsstudie gespeichert"
@@ -1138,6 +1174,8 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
 
   const booted = status.phase === "running";
   const failure = bootFailureOf(status, supported, manifestError);
+  const handleRetry = failure?.onRetry;
+  const handleLook = look.set;
 
   return (
     <SceneStatusContext value={sceneStatus}>
@@ -1250,7 +1288,7 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
         />
 
         {failure && (
-          <BootError message={failure.message} onRetry={failure.onRetry} />
+          <BootError message={failure.message} onRetry={handleRetry} />
         )}
 
         <SceneSidebar
@@ -1285,7 +1323,7 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
           handleRef={handleRef}
           look={lookValues}
           minutes={time.minutes}
-          onLook={look.set}
+          onLook={handleLook}
           onResetQuality={resetQuality}
           onStartWalk={(walk) => showStop(walk, 0)}
           onAsk={() => {

@@ -14,7 +14,10 @@ import { MeshBVH } from "three-mesh-bvh";
 import type { BvhJob, BvhReply } from "./bvh-client";
 
 const scope = self as unknown as {
-  onmessage: ((event: MessageEvent<BvhJob>) => void) | null;
+  addEventListener: (
+    type: "message",
+    listener: (event: MessageEvent<BvhJob>) => void
+  ) => void;
   postMessage: (message: BvhReply, transfer: Transferable[]) => void;
 };
 
@@ -40,7 +43,7 @@ function geometryOf(job: BvhJob): BufferGeometry {
   return geometry;
 }
 
-scope.onmessage = ({ data: job }) => {
+scope.addEventListener("message", ({ data: job }) => {
   try {
     const bvh = new MeshBVH(geometryOf(job));
     const { roots } = MeshBVH.serialize(bvh, { cloneBuffers: false });
@@ -60,7 +63,7 @@ scope.onmessage = ({ data: job }) => {
       [job.index.buffer, job.position.array.buffer]
     );
   }
-};
+});
 
 // the script runs: from here the page may hand over a tile's arrays
 scope.postMessage({ ready: true, id: -1 } as BvhReply, []);

@@ -11,7 +11,7 @@ import {
 import type { Steps } from "./build-steps";
 
 function* counted(n: number, log: number[]): Steps<number> {
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < n; i += 1) {
     log.push(i);
     yield;
   }
@@ -75,7 +75,11 @@ test("inSlices stops at the first pause after its signal fires", async () => {
   let t = 0;
   const run = inSlices(counted(100, log), {
     sliceMs: 2,
-    now: () => t++,
+    now: () => {
+      const now = t;
+      t += 1;
+      return now;
+    },
     signal: aborter.signal,
   });
   aborter.abort();
@@ -93,7 +97,13 @@ const firstSlice = async (ms: number, holdsMs?: number) => {
   setSliceBudget(ms, holdsMs);
   const log: number[] = [];
   let t = 0;
-  const run = inSlices(counted(100, log), { now: () => t++ });
+  const run = inSlices(counted(100, log), {
+    now: () => {
+      const now = t;
+      t += 1;
+      return now;
+    },
+  });
   const steps = log.length;
   await run;
   return steps;

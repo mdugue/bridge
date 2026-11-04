@@ -127,10 +127,12 @@ function bikeOverlay(
           () => {
             compiled = true;
             built.group.visible = on && alive();
+            return null;
           },
           () => {
             // the next counts try again
             compiling = false;
+            return null;
           }
         );
       }

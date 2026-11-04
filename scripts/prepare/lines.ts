@@ -51,13 +51,13 @@ import {
  *  every tile's DGM (scripts/line-levels.ts): each tile's file publishes
  *  with them. */
 const levelsStarted = performance.now();
-const lineLevels = parse<SiteLevels>(
+const lineLevels = parse(
   await cached(
     `line-levels-${SITE.id}.json`,
     cacheKey(levelInputs(SITE), BAKE_ENTRIES.lineLevels),
     async () => utf8(await siteLineLevels(SITE))
   )
-);
+) as SiteLevels;
 log(`line levels: ${since(levelsStarted)} ms`);
 
 /** The passages the lines open through the fill under the decks
@@ -166,7 +166,7 @@ export function publishLevels(
   if (line === "tram" && Object.keys(solved).length === 0) {
     return publish(file, readFileSync(src));
   }
-  const doc = readJson<FeatureCollection<RailFeature | TramFeature>>(src);
+  const doc = readJson(src) as FeatureCollection<RailFeature | TramFeature>;
   // the rail lines as the levels were solved on (a DLM line's stretches
   // over a platform dropped, line-levels.ts `railFeatures`)
   const lines =
@@ -189,14 +189,15 @@ let trackAxes: AxisIndex | undefined;
 export function publishPlatforms(file: string): string {
   const src = at(sideFileSource(SITE, file));
   trackAxes ??= new AxisIndex(siteTrackAxes(SITE, lineLevels));
-  const doc = readJson<FeatureCollection<AreaFeature>>(src);
+  const axes = trackAxes;
+  const doc = readJson(src) as FeatureCollection<AreaFeature>;
   let cut = 0;
   const features = (doc.features ?? []).flatMap((f): AreaFeature[] => {
     const g = f.geometry;
     if (g?.type !== "Polygon" && g?.type !== "MultiPolygon") {
       return [f];
     }
-    const clear = clearOfTracks(g, trackAxes as AxisIndex);
+    const clear = clearOfTracks(g, axes);
     if (clear === g) {
       return [f];
     }

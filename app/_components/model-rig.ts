@@ -580,6 +580,10 @@ export function createModelRig(opts: ModelRigOptions): ModelRig {
         case "leaving": {
           return phase.t;
         }
+        default: {
+          // unreachable: every phase is named above
+          return 0;
+        }
       }
     },
     enter,
@@ -795,6 +799,10 @@ export function createModelRig(opts: ModelRigOptions): ModelRig {
           if (dirty) {
             placeCamera();
           }
+          break;
+        }
+        default: {
+          break;
         }
       }
     },

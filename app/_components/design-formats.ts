@@ -17,7 +17,9 @@ import {
  */
 
 /** Thrown with a sentence for the panel. */
-export class FormatError extends Error {}
+export class FormatError extends Error {
+  override name = "FormatError";
+}
 
 /** A URL's last path part, as the picked files are named. */
 export function baseName(url: string): string {
@@ -86,8 +88,8 @@ export function pickedFiles(
  *  lines). */
 function materialLibraries(text: string): string[] {
   const names: string[] = [];
-  for (const [, list] of text.matchAll(/^\s*mtllib\s+(.+?)\s*$/gmu)) {
-    names.push(...list.split(/\s+/u).map(baseName));
+  for (const match of text.matchAll(/^\s*mtllib\s+(?<list>.+?)\s*$/gmu)) {
+    names.push(...(match.groups?.list ?? "").split(/\s+/u).map(baseName));
   }
   return [...new Set(names)];
 }

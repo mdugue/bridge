@@ -310,12 +310,12 @@ export function envelopeUrl(dsn: string): string | null {
   } catch {
     return null;
   }
-  const path = url.pathname.split("/").filter(Boolean);
-  const project = path.pop();
+  const segments = url.pathname.split("/").filter(Boolean);
+  const project = segments.pop();
   if (!(url.username && project && /^\d+$/u.test(project))) {
     return null;
   }
-  const prefix = path.map((part) => `/${part}`).join("");
+  const prefix = segments.map((part) => `/${part}`).join("");
   return (
     `${url.protocol}//${url.host}${prefix}/api/${project}/envelope/` +
     `?sentry_key=${url.username}&sentry_version=7`
@@ -352,6 +352,8 @@ export function sessionEnvelope(
 /** A URL in an event's text (a tile's file, a chunk in a stack). */
 const URL_PATTERN = /\b[a-z]+:\/\/\S+/giu;
 
+const blank = (s: string) => s.replaceAll(/\d/gu, "#");
+
 /**
  * An event's text as it may leave the device, with no place in it: the
  * numbers in a URL go (a tile's file names the 2 km cell the camera was
@@ -361,7 +363,6 @@ const URL_PATTERN = /\b[a-z]+:\/\/\S+/giu;
  * decimals and more).
  */
 export function scrub(text: string): string {
-  const blank = (s: string) => s.replaceAll(/\d/gu, "#");
   return text
     .replaceAll(URL_PATTERN, blank)
     .replaceAll(/\d+(?:_\d+)+/gu, blank)

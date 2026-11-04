@@ -37,6 +37,7 @@ export function createSharedRasters<T>(
       if (value !== null) {
         free(value);
       }
+      return null;
     });
   };
   return {

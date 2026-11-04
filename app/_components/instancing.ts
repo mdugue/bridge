@@ -150,16 +150,15 @@ export class Instances<M extends Material = Material> extends Mesh<
   }
 
   setColorAt(index: number, colour: Color): void {
-    if (!this.#colours) {
-      this.instanceTints = new InstancedBufferAttribute(
+    let colours = this.#colours;
+    if (!colours) {
+      colours = new InstancedBufferAttribute(
         new Float32Array(this.capacity * 3).fill(1),
         3
       );
+      this.instanceTints = colours;
     }
-    colour.toArray(
-      (this.#colours as InstancedBufferAttribute).array,
-      index * 3
-    );
+    colour.toArray(colours.array, index * 3);
   }
 
   /**

@@ -108,9 +108,15 @@ test("the profile runs from foot over the crown to foot", () => {
   expect(p[2][1]).toBeGreaterThan(0.8);
 });
 
+const DEFAULT_PROPS: NonNullable<TrafficFeature["properties"]> = {
+  t: 1000,
+  f: 500,
+  b: 500,
+};
+
 const line = (
   coords: [number, number][],
-  props: NonNullable<TrafficFeature["properties"]> = { t: 1000, f: 500, b: 500 }
+  props: NonNullable<TrafficFeature["properties"]> = DEFAULT_PROPS
 ): TrafficFeature => ({
   geometry: { type: "LineString", coordinates: coords },
   properties: props,

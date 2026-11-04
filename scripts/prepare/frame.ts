@@ -38,13 +38,13 @@ export function spawnFrame(): CityFrame {
     if (!existsSync(at(src.city))) {
       fail(`missing source file ${src.city}${HINT}`);
     }
-    spawn = cityFrame(TILES[0], readJson<CityJsonDocument>(at(src.city)));
+    spawn = cityFrame(TILES[0], readJson(at(src.city)) as CityJsonDocument);
   }
   return spawn;
 }
 
 /** The shared offset and CRS, cached with the spawn tile's CityJSON. */
-export const frame = parse<{ cx: number; cy: number; epsg: number }>(
+export const frame = parse(
   await cached(
     siteWide("frame.json"),
     cacheKey(
@@ -56,5 +56,5 @@ export const frame = parse<{ cx: number; cy: number; epsg: number }>(
       return utf8({ ...offset, epsg });
     }
   )
-);
+) as { cx: number; cy: number; epsg: number };
 export const offset = { cx: frame.cx, cy: frame.cy };

@@ -120,7 +120,8 @@ test("a city floodlights some of its landmarks, each building whole", () => {
   expect(lit / 200).toBeLessThan(0.75);
   expect(isFloodlit(t, 400)).toBe(false);
   // the runtime bits ride beside the column, above the readings' bits
-  const one = [...Array(400).keys()].find((i) => isFloodlit(t, i)) ?? 0;
+  const one =
+    Array.from({ length: 400 }, (_, i) => i).find((i) => isFloodlit(t, i)) ?? 0;
   expect(shaderFlags(t, one, true)).toBe(
     OBJECT_FLAG_LANDMARK + OBJECT_FLAG_FLOODLIT + OBJECT_FLAG_ASKED
   );

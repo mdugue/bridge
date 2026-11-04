@@ -117,13 +117,13 @@ test("the file reads back as it was written", () => {
 
 test("the triangles face up in the Y-up frame", () => {
   const n = 3;
-  const tile = {
+  const plate = {
     id: "w",
     bounds: WEST,
     classes: new Uint8Array(n * n),
     heights: new Float32Array(n * n).fill(120),
   };
-  const pos = platePositions(tile, n, { cx: 411_000, cy: 5_657_000 });
+  const pos = platePositions(plate, n, { cx: 411_000, cy: 5_657_000 });
   // the edge rows keep their heights, the inner vertices sink
   expect(pos[1]).toBe(120);
   expect(pos[4 * 3 + 1]).toBe(120 - PLATE_SINK_M);
@@ -148,7 +148,7 @@ test("the triangles face up in the Y-up frame", () => {
 test("the normals agree along a shared edge and tilt down the slope", () => {
   const n = 3;
   // the ground rises 1 m per 100 m eastwards
-  const tile = (id: string, bounds: typeof WEST) => {
+  const gradedPlate = (id: string, bounds: typeof WEST) => {
     const heights = new Float32Array(n * n);
     for (let j = 0; j < n; j += 1) {
       for (let i = 0; i < n; i += 1) {
@@ -157,7 +157,7 @@ test("the normals agree along a shared edge and tilt down the slope", () => {
     }
     return { id, bounds, classes: new Uint8Array(n * n), heights };
   };
-  const tiles = [tile("w", WEST), tile("e", EAST)];
+  const tiles = [gradedPlate("w", WEST), gradedPlate("e", EAST)];
   const at = plateHeightIndex(tiles, n);
   const w = plateNormals(tiles[0], n, at);
   const e = plateNormals(tiles[1], n, at);

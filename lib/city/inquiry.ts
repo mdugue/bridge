@@ -311,7 +311,10 @@ function mergedFacts(inquiry: BuildingInquiry) {
   const mine = all.find(
     (o) => o.building && o.facts.buildingId === pick.buildingId
   )?.facts;
-  const building = leads.length > 0 ? leads : mine ? [mine] : [];
+  let building = leads;
+  if (leads.length === 0) {
+    building = mine ? [mine] : [];
+  }
   const names = distinct([pick.name, ...facts.map((f) => f.name)]);
   const heights = known(facts.map((f) => f.height));
   const areas = known(facts.map((f) => f.area));
@@ -323,7 +326,6 @@ function mergedFacts(inquiry: BuildingInquiry) {
     (s, a) => s + a,
     0
   );
-  const flags = all.reduce((sum, o) => sum | o.flags, 0);
   return {
     address: addressLine(distinct([pick.addr, ...facts.map((f) => f.addr)])),
     created: pick.created || distinct(facts.map((f) => f.created))[0] || "",
@@ -335,11 +337,14 @@ function mergedFacts(inquiry: BuildingInquiry) {
     name: names[0] ?? "",
     parts: all.filter((o) => !o.building).length,
     buildings: once(all.filter((o) => o.building)).length,
-    heritage: hasObjectFlag(flags, OBJECT_FLAG_HERITAGE),
+    heritage: all.some((o) => hasObjectFlag(o.flags, OBJECT_FLAG_HERITAGE)),
     rebuilt: facts.some((f) => isMeasuredRoof(f.roofType)),
-    shop: hasObjectFlag(flags, OBJECT_FLAG_SHOP),
+    shop: all.some((o) => hasObjectFlag(o.flags, OBJECT_FLAG_SHOP)),
   };
 }
+
+/** Whether a merged fact is known. */
+const isKnown = (v: number) => v !== NO_FACT && v > 0;
 
 /**
  * The fact lines in reading order; a line whose value is unknown is left
@@ -352,10 +357,9 @@ function cardFacts(
   scan: boolean,
   use: string
 ): CardFact[] {
-  const known = (v: number) => v !== NO_FACT && v > 0;
   return factLines([
     ["Nutzung", scan || use ? "" : "nicht angegeben"],
-    ["Höhe", known(t.height) ? metres(t.height) : ""],
+    ["Höhe", isKnown(t.height) ? metres(t.height) : ""],
     ["Traufe", !scan && pick.eaveH > 0 ? metres(pick.eaveH) : ""],
     [
       "Dach",
@@ -364,7 +368,7 @@ function cardFacts(
       isMeasuredRoof(pick.facts.roofType) ? "detected" : undefined,
     ],
     ["Grundfläche", t.area > 0 ? squareMetres(t.area) : ""],
-    ["Geschosse", known(t.levels) ? whole.format(t.levels) : ""],
+    ["Geschosse", isKnown(t.levels) ? whole.format(t.levels) : ""],
     [
       "Gebäude",
       t.buildings > 1 ? `${whole.format(t.buildings)} im Stadtmodell` : "",
@@ -422,6 +426,9 @@ export function inquiryCard(
     case "landing":
     case "stop": {
       return moreCard(inquiry, provenance, credits);
+    }
+    default: {
+      throw new Error("unknown inquiry kind");
     }
   }
 }

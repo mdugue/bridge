@@ -27,6 +27,7 @@ function parse(text: string | null, remember: boolean): AskKey | null {
     const v = JSON.parse(text) as Partial<AskKey>;
     if (
       isAskProvider(v.provider) &&
+      typeof v.model === "string" &&
       isAskModel(v.provider, v.model) &&
       typeof v.key === "string" &&
       typeof v.token === "string" &&
@@ -34,7 +35,7 @@ function parse(text: string | null, remember: boolean): AskKey | null {
     ) {
       return {
         provider: v.provider,
-        model: v.model as string,
+        model: v.model,
         key: v.key,
         token: v.token,
         expires: v.expires,

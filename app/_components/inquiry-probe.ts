@@ -207,6 +207,10 @@ function thingKey(t: FeatureInquiry): string {
     case "stop": {
       return `${t.kind}:${t.tile}:${t.position.join(",")}`;
     }
+    default: {
+      const unknown: never = t;
+      throw new Error(`unknown inquiry kind: ${String(unknown)}`);
+    }
   }
 }
 
@@ -225,6 +229,19 @@ function porous(t: FeatureInquiry): boolean {
 /** How far a ray looks for a thing when no building stops it (m). */
 const FAR = 6000;
 const CENTRE = new Vector2(0, 0);
+
+/** One object of a city layer as the inquiry carries it. */
+const inquiryObject = (from: CityLayer, i: number): InquiryObject => ({
+  objectIndex: i,
+  baseZ: from.table.baseZ[i],
+  building: from.table.building[i] === 1,
+  eaveH: from.table.eaveH[i],
+  flags: from.table.flags[i],
+  lead: from.table.ensemble[i] === i,
+  source: from.table.source[i],
+  facts: from.facts(i),
+  look: objectLook(from.table, i),
+});
 
 export function createInquiryProbe(deps: {
   /** the camera the frame is drawn with (Modell's parallel one, or walk/fly's) */
@@ -358,22 +375,13 @@ export function createInquiryProbe(deps: {
         parts.push({ layer: other, objects });
       }
     }
-    const object = (from: CityLayer, i: number): InquiryObject => ({
-      objectIndex: i,
-      baseZ: from.table.baseZ[i],
-      building: from.table.building[i] === 1,
-      eaveH: from.table.eaveH[i],
-      flags: from.table.flags[i],
-      lead: from.table.ensemble[i] === i,
-      source: from.table.source[i],
-      facts: from.facts(i),
-      look: objectLook(from.table, i),
-    });
     const inquiry: Inquiry = {
       kind: "building",
       tile: layer.tile,
-      picked: object(layer, objectIndex),
-      tree: parts.flatMap((p) => [...p.objects].map((i) => object(p.layer, i))),
+      picked: inquiryObject(layer, objectIndex),
+      tree: parts.flatMap((p) =>
+        [...p.objects].map((i) => inquiryObject(p.layer, i))
+      ),
       ...(at ? { at: deps.toSite(at) } : {}),
     };
     return { inquiry, parts };

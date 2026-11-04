@@ -97,7 +97,7 @@ test("prepare-data.ts orders the steps and bakes nothing itself", () => {
     nodePath.join(ROOT, "scripts/prepare-data.ts"),
     "utf-8"
   );
-  expect(source).not.toMatch(/\b(cached|cachedFile|cacheKey)\(/u);
+  expect(source).not.toMatch(/\b(?:cached|cachedFile|cacheKey)\(/u);
   for (const step of directImports("scripts/prepare-data.ts", ROOT).filter(
     (p) => p.startsWith("scripts/prepare/") && !p.endsWith("/context.ts")
   )) {
@@ -140,8 +140,8 @@ test("a value module exports only what reaches keys as values", () => {
     const source = readFileSync(nodePath.join(ROOT, path), "utf-8");
     const { exports } = new Bun.Transpiler({ loader: "ts" }).scan(source);
     const types = [
-      ...source.matchAll(/^export (?:type|interface) ([\w$]+)/gmu),
-    ].map((m) => m[1]);
+      ...source.matchAll(/^export (?:type|interface) (?<name>[\w$]+)/gmu),
+    ].map((m) => m.groups?.name ?? "");
     expect([...exports, ...types].toSorted()).toEqual(
       Object.keys(VALUE_EXPORTS[path] ?? {}).toSorted()
     );

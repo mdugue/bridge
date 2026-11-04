@@ -52,6 +52,18 @@ const features = <F>(file: string): F[] => {
   }
 };
 
+/** The seasonal crowns a group draws at build: the cheap LOD (the rich one
+ *  shares its buffers). */
+const crownsIn = (group: VegetationControl["group"]): number => {
+  let drawn = 0;
+  group.traverse((o) => {
+    if (isInstances(o) && o.visible && o.geometry.getAttribute("aBare")) {
+      drawn += o.drawCount;
+    }
+  });
+  return drawn;
+};
+
 const ctx = { offset: { cx: 412_000, cy: 5_657_000 }, heightAt: () => 100 };
 const controls: VegetationControl[] = [];
 let crowns = 0;
@@ -72,13 +84,8 @@ for (const tile of tileIds(site)) {
   );
   controls.push(veg, inv.control);
   for (const group of [veg.group, inv.control.group]) {
-    // A seasonal crown carries `aBare`; count the cheap LOD (visible at
-    // build), the rich one shares its buffers.
-    group.traverse((o) => {
-      if (isInstances(o) && o.visible && o.geometry.getAttribute("aBare")) {
-        crowns += o.drawCount;
-      }
-    });
+    // A seasonal crown carries `aBare`.
+    crowns += crownsIn(group);
   }
 }
 

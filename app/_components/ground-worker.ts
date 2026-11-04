@@ -17,13 +17,16 @@ interface Job {
 }
 
 const scope = self as unknown as {
-  onmessage: ((event: MessageEvent<Job>) => void) | null;
+  addEventListener: (
+    type: "message",
+    listener: (event: MessageEvent<Job>) => void
+  ) => void;
   postMessage: (message: unknown, transfer: Transferable[]) => void;
 };
 
 const sharedIndices = new Map<number, GroundIndex>();
 
-scope.onmessage = ({ data }) => {
+scope.addEventListener("message", ({ data }) => {
   try {
     const { input, shared, drop } = data;
     for (const key of drop) {
@@ -42,4 +45,4 @@ scope.onmessage = ({ data }) => {
       []
     );
   }
-};
+});

@@ -463,6 +463,16 @@ export function rasterPlate(
   };
 }
 
+const widthOf = (l: SetLine) => l.width * l.scale;
+
+/** Where a line of width `w` starts in a block `width` wide. */
+function alignedStart(align: Align, width: number, w: number): number {
+  if (align === "left") {
+    return 0;
+  }
+  return align === "right" ? width - w : (width - w) / 2;
+}
+
 /**
  * The plate's geometry, aligned within its block: with its small lines,
  * or the title alone (from far).
@@ -486,7 +496,6 @@ export function layPlate(
   const titleBase =
     lines.length > 0 ? y - LINE_LEADING * lineCap + lineCap + TITLE_GAP : y;
   const height = titleBase + (titles.length - 1) * TITLE_LEADING + 1 + HEAD;
-  const widthOf = (l: SetLine) => l.width * l.scale;
   const width = Math.max(...titles.map(widthOf), ...lines.map(widthOf));
   const b = new Builder();
   const { box } = type;
@@ -512,8 +521,7 @@ export function layPlate(
   }
   const place = (l: SetLine, baseline: number) => {
     const w = widthOf(l);
-    const start =
-      align === "left" ? 0 : align === "right" ? width - w : (width - w) / 2;
+    const start = alignedStart(align, width, w);
     for (const [i, g] of l.glyphs.entries()) {
       const x0 = start + (l.pens[i] + g.left) * l.scale;
       const y1 = baseline + g.top * l.scale;

@@ -107,6 +107,12 @@ export interface Terrace {
   z: number;
 }
 
+/** A two-element array as a pair of flags (true only for `true`). */
+const flagPair = (v: unknown): [boolean, boolean] | undefined =>
+  Array.isArray(v) && v.length === 2
+    ? [v[0] === true, v[1] === true]
+    : undefined;
+
 /** The bake's feature as a flight, or null when it is not one. */
 export function stairLineOf(f: StairFeature): StairLine | null {
   const p = f.properties;
@@ -122,13 +128,9 @@ export function stairLineOf(f: StairFeature): StairLine | null {
   ) {
     return null;
   }
-  const pair = (v: unknown): [boolean, boolean] | undefined =>
-    Array.isArray(v) && v.length === 2
-      ? [v[0] === true, v[1] === true]
-      : undefined;
   const mat = masonryOf(p.mat);
-  const rail = pair(p.rail);
-  const walled = pair(p.walled);
+  const rail = flagPair(p.rail);
+  const walled = flagPair(p.walled);
   return {
     coords,
     n: Math.round(p.n),
@@ -144,11 +146,11 @@ export function stairLineOf(f: StairFeature): StairLine | null {
 export function terraceOf(f: TerraceFeature): Terrace | null {
   const z = f.properties?.z;
   const g = f.geometry;
-  if (!(g && Number.isFinite(z))) {
+  if (!(g && typeof z === "number" && Number.isFinite(z))) {
     return null;
   }
   const polygons = g.type === "Polygon" ? [g.coordinates] : g.coordinates;
-  return polygons.length > 0 ? { polygons, z: z as number } : null;
+  return polygons.length > 0 ? { polygons, z } : null;
 }
 
 /** Cumulative arc length at each vertex. */
@@ -222,14 +224,16 @@ function nearestOnAxis(
   return best;
 }
 
+/** Which side of the line pq the point r lies on (the cross product's sign). */
+const orientation = (p: Point2, q: Point2, r: Point2) =>
+  (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+
 /** Whether segments ab and cd cross. */
 function crosses(a: Point2, b: Point2, c: Point2, d: Point2): boolean {
-  const side = (p: Point2, q: Point2, r: Point2) =>
-    (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
-  const d1 = side(c, d, a);
-  const d2 = side(c, d, b);
-  const d3 = side(a, b, c);
-  const d4 = side(a, b, d);
+  const d1 = orientation(c, d, a);
+  const d2 = orientation(c, d, b);
+  const d3 = orientation(a, b, c);
+  const d4 = orientation(a, b, d);
   return d1 * d2 < 0 && d3 * d4 < 0;
 }
 
@@ -245,6 +249,18 @@ function behindWall(walls: Point2[][], from: Point2, to: Point2): boolean {
   return false;
 }
 
+/** The extent of some points, grown by `pad`: [minX, minY, maxX, maxY]. */
+const boxOf = (pts: Point2[], pad: number) => {
+  const xs = pts.map((p) => p[0]);
+  const ys = pts.map((p) => p[1]);
+  return [
+    Math.min(...xs) - pad,
+    Math.min(...ys) - pad,
+    Math.max(...xs) + pad,
+    Math.max(...ys) + pad,
+  ];
+};
+
 /** The walls whose extent overlaps the axis's, grown by `reach` (a cheap
  *  prefilter). */
 function wallsNear(
@@ -252,19 +268,9 @@ function wallsNear(
   coords: Point2[],
   reach: number
 ): Point2[][] {
-  const box = (pts: Point2[], pad: number) => {
-    const xs = pts.map((p) => p[0]);
-    const ys = pts.map((p) => p[1]);
-    return [
-      Math.min(...xs) - pad,
-      Math.min(...ys) - pad,
-      Math.max(...xs) + pad,
-      Math.max(...ys) + pad,
-    ];
-  };
-  const [ax0, ay0, ax1, ay1] = box(coords, reach);
+  const [ax0, ay0, ax1, ay1] = boxOf(coords, reach);
   return walls.filter((w) => {
-    const [wx0, wy0, wx1, wy1] = box(w, 0);
+    const [wx0, wy0, wx1, wy1] = boxOf(w, 0);
     return wx0 <= ax1 && wx1 >= ax0 && wy0 <= ay1 && wy1 >= ay0;
   });
 }
@@ -392,7 +398,7 @@ function surroundAt(
 function insidePolygon(rings: Point2[][], x: number, y: number): boolean {
   let inside = false;
   for (const ring of rings) {
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
       const [xi, yi] = ring[i];
       const [xj, yj] = ring[j];
       if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
@@ -572,7 +578,11 @@ class StairWriter {
     kinds: [],
     joins: [],
   };
-  constructor(private readonly offset: RecenterOffset) {}
+  private readonly offset: RecenterOffset;
+
+  constructor(offset: RecenterOffset) {
+    this.offset = offset;
+  }
 
   /** A point where the flight meets the ground (ADR 0030). */
   join(kind: JoinPoint["kind"], p: Point2, z: number): void {
@@ -614,7 +624,7 @@ class StairWriter {
 
 /** A vertical quad from `p` to `q` (in that order, seen from the side
  *  `normal` faces), from the bases up to the tops. */
-function side(
+function sideFace(
   out: StairWriter,
   p: Point2,
   q: Point2,
@@ -743,11 +753,11 @@ function wange(
   out.span("edge", [ao, outer[0]], [bo, outer[1]]);
   // seen from the steps (normal −n) the left side runs a → b, the right b → a
   if (sd === 1) {
-    side(out, ai, bi, bases, tops, [-n[0], -n[1]]);
-    side(out, bo, ao, bases, [outer[1], outer[0]], n);
+    sideFace(out, ai, bi, bases, tops, [-n[0], -n[1]]);
+    sideFace(out, bo, ao, bases, [outer[1], outer[0]], n);
   } else {
-    side(out, bi, ai, bases, [tops[1], tops[0]], [-n[0], -n[1]]);
-    side(out, ao, bo, bases, outer, n);
+    sideFace(out, bi, ai, bases, [tops[1], tops[0]], [-n[0], -n[1]]);
+    sideFace(out, ao, bo, bases, outer, n);
   }
   // A top strip from its inner (p at a, q at b) to its outer edge (r at b,
   // s at a), counter-clockwise seen from above: the steps' tread order
@@ -778,13 +788,13 @@ function wange(
     const [p, q] = sd === 1 ? [ao, ai] : [ai, ao];
     const t: [number, number] =
       sd === 1 ? [outer[0], tops[0]] : [tops[0], outer[0]];
-    side(out, p, q, bases, t, down);
+    sideFace(out, p, q, bases, t, down);
   }
   if (ends.last) {
     const [p, q] = sd === 1 ? [bi, bo] : [bo, bi];
     const t: [number, number] =
       sd === 1 ? [tops[1], outer[1]] : [outer[1], tops[1]];
-    side(out, p, q, bases, t, [-down[0], -down[1]]);
+    sideFace(out, p, q, bases, t, [-down[0], -down[1]]);
   }
 }
 
@@ -894,7 +904,7 @@ export function stairGeometry(
     if (g !== null && g < top - EDGE_TOLERANCE_M) {
       const [l, r] = [edge(last, 1), edge(last, -1)];
       const feet: [number, number] = [footAt(r), footAt(l)];
-      side(out, r, l, feet, [top, top], [last.py, -last.px]);
+      sideFace(out, r, l, feet, [top, top], [last.py, -last.px]);
       out.span("foot", [r, feet[0]], [l, feet[1]]);
     } else {
       out.join("edge", beyond, top);

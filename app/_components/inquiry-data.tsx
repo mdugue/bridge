@@ -8,23 +8,29 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import type { Inquiry } from "@/lib/city/inquiry";
+import type * as LineageNs from "@/lib/city/lineage";
 import type { DrawnGroup, DrawnRow, LineageEntry } from "@/lib/city/lineage";
 import type { Stated } from "@/lib/city/methods";
 import type { SiteProvenance } from "@/lib/city/provenance";
 import { MethodBadge, MethodLegend } from "./method-badge";
 import { useSite } from "./site-context";
 
-type LineageModule = typeof import("@/lib/city/lineage");
+type LineageModule = typeof LineageNs;
 
 /** The module, loaded once for the page when a card's section is first
  *  wanted (its own chunk: the boot carries none of it). */
 let lineageModule: Promise<LineageModule> | null = null;
-async function loadLineage(): Promise<LineageModule> {
-  lineageModule ??= import("@/lib/city/lineage").catch((error: unknown) => {
+async function importLineage(): Promise<LineageModule> {
+  try {
+    return await import("@/lib/city/lineage");
+  } catch (error) {
     // a failed chunk is not kept: the next opening tries again
     lineageModule = null;
     throw error;
-  });
+  }
+}
+async function loadLineage(): Promise<LineageModule> {
+  lineageModule ??= importLineage();
   return await lineageModule;
 }
 
@@ -32,18 +38,21 @@ async function loadLineage(): Promise<LineageModule> {
 function useLineage(wanted: boolean): LineageModule | null {
   const [mod, setMod] = useState<LineageModule | null>(null);
   useEffect(() => {
-    if (!wanted || mod) {
-      return;
-    }
     let live = true;
-    loadLineage().then(
-      (m) => {
+    const load = async () => {
+      try {
+        const loaded = await loadLineage();
         if (live) {
-          setMod(m);
+          setMod(loaded);
         }
-      },
-      () => {}
-    );
+      } catch {
+        // a failed chunk stays unloaded: the section shows "lädt …" and the
+        // next opening tries again
+      }
+    };
+    if (wanted && !mod) {
+      void load();
+    }
     return () => {
       live = false;
     };
@@ -82,16 +91,18 @@ export const InquiryData = ({
   useEffect(() => {
     const el = root.current;
     const scroller = el?.closest<HTMLElement>("[data-inquiry-scroll]");
-    if (!(open && el && scroller)) {
-      return;
+    let id: number | undefined;
+    if (open && el && scroller) {
+      // once the panel has grown: before, there is nothing to scroll to
+      id = window.setTimeout(() => {
+        const top =
+          el.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+        scroller.scrollBy({ top: Math.max(top - 8, 0), behavior: "smooth" });
+      }, 250);
     }
-    // once the panel has grown: before, there is nothing to scroll to
-    const id = window.setTimeout(() => {
-      const top =
-        el.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
-      scroller.scrollBy({ top: Math.max(top - 8, 0), behavior: "smooth" });
-    }, 250);
-    return () => window.clearTimeout(id);
+    return () => {
+      window.clearTimeout(id);
+    };
   }, [open]);
   const entries = useMemo(
     () => mod?.lineage(inquiry, provenance, site) ?? null,

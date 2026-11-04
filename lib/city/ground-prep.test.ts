@@ -27,6 +27,8 @@ const BOUNDS = [1000, 5000, 1200, 5200] as const;
 const ORIGIN = { cx: 1100, cy: 5100 };
 const N = 21;
 
+const q = (v: number) => Math.round(v * 32_767);
+
 /**
  * An N×N grid over BOUNDS as a quantised glTF level stores it: normalized
  * int16, four per vertex (x, y, z, pad), Y-up, a skirt quad along the west
@@ -36,7 +38,6 @@ const N = 21;
 function level() {
   const count = N * N + 2;
   const raw = new Int16Array(count * 4);
-  const q = (v: number) => Math.round(v * 32_767);
   for (let r = 0; r < N; r += 1) {
     for (let c = 0; c < N; c += 1) {
       const i = r * N + c;
@@ -171,17 +172,17 @@ describe("ground prep", () => {
   });
 
   test("a TIN's height index from its buckets answers as one built here", () => {
-    const level = input(null, null);
-    const prep = prepareGround(level);
+    const tinInput = input(null, null);
+    const prep = prepareGround(tinInput);
     const { xy, z, tin } = prep;
-    if (!(xy && z && tin && level.index)) {
+    if (!(xy && z && tin && tinInput.index)) {
       throw new Error("no TIN index");
     }
     const surface = {
       bounds: [...BOUNDS] as [number, number, number, number],
       xy,
       z,
-      triangles: level.index,
+      triangles: tinInput.index,
     };
     const here = new TinIndex(surface);
     const there = TinIndex.fromBuckets(surface, tin);
@@ -193,7 +194,7 @@ describe("ground prep", () => {
     }
     expect(there.bytes).toBe(here.bytes);
     // buckets of another surface are refused
-    const fewer = { ...surface, triangles: level.index.subarray(3) };
+    const fewer = { ...surface, triangles: tinInput.index.subarray(3) };
     expect(() => TinIndex.fromBuckets(fewer, tin)).toThrow();
     // a grid level has none
     expect(prepareGround(input(null, N)).tin).toBeUndefined();

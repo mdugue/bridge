@@ -455,7 +455,10 @@ function farTier(
   copy: (from: { bare: Float32Array; colour: Float32Array }) => void;
   mesh: Instances;
 } {
-  const colourAttr = mesh.instanceTints as InstancedBufferAttribute;
+  const colourAttr = mesh.instanceTints;
+  if (!colourAttr) {
+    throw new Error("far tier needs instanceTints");
+  }
   const bareAttr = new InstancedBufferAttribute(
     new Float32Array(slots.length),
     1

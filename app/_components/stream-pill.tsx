@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "cn";
 import { stagesDoneLabel, streamingTitle } from "@/lib/city/load-stages";
 import type { LoadStageState } from "@/lib/city/load-stages";
@@ -52,6 +52,16 @@ const StackGlyph = ({ plates }: { plates: LoadStageState[] }) => {
   );
 };
 
+function segmentBackground(stage: LoadStageState, pct: number): string {
+  if (stage.done) {
+    return FILLED;
+  }
+  if (stage.active) {
+    return `linear-gradient(90deg,${LOADING} ${pct}%,${EMPTY} ${pct}%)`;
+  }
+  return EMPTY;
+}
+
 /** One stage as a segment: filled when done, part-filled while it streams. */
 const Segment = ({ stage }: { stage: LoadStageState }) => {
   const pct = Math.round(stage.fraction * 100);
@@ -59,11 +69,7 @@ const Segment = ({ stage }: { stage: LoadStageState }) => {
     <span
       className="h-1 w-5.5 rounded-full"
       style={{
-        background: stage.done
-          ? FILLED
-          : stage.active
-            ? `linear-gradient(90deg,${LOADING} ${pct}%,${EMPTY} ${pct}%)`
-            : EMPTY,
+        background: segmentBackground(stage, pct),
       }}
     />
   );
@@ -82,10 +88,9 @@ const StreamingHint = ({ busy }: { busy: boolean }) => {
   // it ends, so the next one waits again.
   const [late, setLate] = useState(false);
   useEffect(() => {
-    if (!busy) {
-      return;
-    }
-    const timer = setTimeout(() => setLate(true), HINT_DELAY_MS);
+    const timer = busy
+      ? setTimeout(() => setLate(true), HINT_DELAY_MS)
+      : undefined;
     return () => {
       clearTimeout(timer);
       setLate(false);
@@ -115,29 +120,36 @@ export const StreamPill = ({
   stages: LoadStageState[];
 }) => {
   const allDone = stages.every((stage) => stage.done);
-  const [mountedAt] = useState(() => Date.now());
+  // set by the first effect (mount), not in render: the floor counts from there
+  const mountedAt = useRef<number | null>(null);
   const [phase, setPhase] = useState<"gone" | "leaving" | "shown">("shown");
 
   // Nothing to report any more: hold the finished state briefly, and never
   // for less than the floor, then leave.
   useEffect(() => {
-    if (!allDone || phase !== "shown") {
-      return;
+    const since = mountedAt.current ?? Date.now();
+    mountedAt.current = since;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    if (allDone && phase === "shown") {
+      const wait = Math.max(
+        DONE_LINGER_MS,
+        MIN_VISIBLE_MS - (Date.now() - since)
+      );
+      timer = setTimeout(() => setPhase("leaving"), wait);
     }
-    const wait = Math.max(
-      DONE_LINGER_MS,
-      MIN_VISIBLE_MS - (Date.now() - mountedAt)
-    );
-    const timer = setTimeout(() => setPhase("leaving"), wait);
-    return () => clearTimeout(timer);
-  }, [allDone, phase, mountedAt]);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [allDone, phase]);
 
   useEffect(() => {
-    if (phase !== "leaving") {
-      return;
-    }
-    const timer = setTimeout(() => setPhase("gone"), FADE_MS);
-    return () => clearTimeout(timer);
+    const timer =
+      phase === "leaving"
+        ? setTimeout(() => setPhase("gone"), FADE_MS)
+        : undefined;
+    return () => {
+      clearTimeout(timer);
+    };
   }, [phase]);
 
   if (phase === "gone") {

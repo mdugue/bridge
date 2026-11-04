@@ -28,6 +28,8 @@ import { stadtwissenIndex, stadtwissenTile } from "../bake-stadtwissen";
 import { SITE, at, cacheKey, cached, publish, readJson, utf8 } from "./context";
 import { landmarkFile } from "./landmarks";
 
+type TileInput = Parameters<typeof stadtwissenTile>[0];
+
 /** One tile's directory, cached on the buildings, their OSM facts, the
  *  landmarks and the monuments it is read from. */
 async function tileFile(tile: string): Promise<string> {
@@ -44,13 +46,15 @@ async function tileFile(tile: string): Promise<string> {
       utf8(
         stadtwissenTile({
           tile,
-          city: readJson(at(src.city)),
+          city: readJson(at(src.city)) as TileInput["city"],
           osm: existsSync(at(src.osmBuild))
-            ? readJson<{ objects: Record<string, never> }>(at(src.osmBuild))
+            ? (readJson(at(src.osmBuild)) as { objects: Record<string, never> })
                 .objects
             : {},
           landmarks: landmarkFile(tile),
-          monuments: existsSync(monuments) ? readJson(monuments) : undefined,
+          monuments: existsSync(monuments)
+            ? (readJson(monuments) as TileInput["monuments"])
+            : undefined,
         })
       )
   );
@@ -86,7 +90,7 @@ export async function publishStadtwissen(
           return file ? [{ tile, file }] : [];
         }),
         wikidata: existsSync(wikidata)
-          ? readJson<WikidataFile>(wikidata)
+          ? (readJson(wikidata) as WikidataFile)
           : undefined,
       })
     )

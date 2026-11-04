@@ -487,10 +487,10 @@ export function footprintCircle(points: readonly Xyz[]): {
   const n = Math.max(points.length, 1);
   const x = points.reduce((s, p) => s + p.x, 0) / n;
   const z = points.reduce((s, p) => s + p.z, 0) / n;
-  const radius = points.reduce(
-    (r, p) => Math.max(r, Math.hypot(p.x - x, p.z - z)),
-    0
-  );
+  let radius = 0;
+  for (const p of points) {
+    radius = Math.max(radius, Math.hypot(p.x - x, p.z - z));
+  }
   return { x, z, radius };
 }
 

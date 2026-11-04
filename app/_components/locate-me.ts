@@ -23,6 +23,7 @@ export class LocateError extends Error {
   readonly reason: LocateFailure;
   constructor(reason: LocateFailure) {
     super(reason);
+    this.name = "LocateError";
     this.reason = reason;
   }
 }
@@ -59,7 +60,9 @@ function startCompass() {
   // `requestPermission` too, and grants it without a prompt).
   const stop = subscribeAim(onAim);
   if (orientationNeedsPermission()) {
-    requestOrientationPermission().catch(() => {});
+    requestOrientationPermission().catch(() => {
+      // a refused or missing permission just leaves the compass off
+    });
   }
   return {
     /** The averaged heading, waiting up to `ms` for a first reading. */
@@ -107,7 +110,9 @@ export function watchFix(
 ): () => void {
   if (!canLocate()) {
     onError(new LocateError("unsupported"));
-    return () => {};
+    return () => {
+      // nothing was subscribed
+    };
   }
   const id = navigator.geolocation.watchPosition(
     (pos) =>
@@ -193,6 +198,8 @@ export function describeFailure(err: unknown): string {
     : "Standort konnte nicht bestimmt werden";
 }
 
+const UNMAPPABLE = "Dein Standort lässt sich nicht auf diese Karte übertragen";
+
 /** The HUD line for a placement (lib/city/geolocation.ts). */
 export function describePlacement(
   placement: Placement,
@@ -209,7 +216,11 @@ export function describePlacement(
       return `Du bist ${formatDistance(placement.distanceM)} außerhalb von ${siteLabel} — dort gibt es noch keine Stadt`;
     }
     case "unsupported": {
-      return "Dein Standort lässt sich nicht auf diese Karte übertragen";
+      return UNMAPPABLE;
+    }
+    default: {
+      // unreachable: every kind is named above
+      return UNMAPPABLE;
     }
   }
 }

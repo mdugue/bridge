@@ -313,13 +313,7 @@ export async function bakeTerrain(
   const opened = level === 0 ? siteShapes : shapedBy(tile);
   const bake = BAKE_ENTRIES.terrain;
   const key = cacheKey(inputs, bake, offset, described, opened);
-  const meta = parse<{
-    bounds: TerrainExtras["bounds"];
-    ground?: number[];
-    maxZ: number;
-    minZ: number;
-    tin?: TerrainExtras["tin"];
-  }>(
+  const meta = parse(
     await cached(
       `${stem}.json`,
       cacheKey(inputs, bake, offset, described, opened, "ground"),
@@ -334,7 +328,13 @@ export async function bakeTerrain(
         });
       }
     )
-  );
+  ) as {
+    bounds: TerrainExtras["bounds"];
+    ground?: number[];
+    maxZ: number;
+    minZ: number;
+    tin?: TerrainExtras["tin"];
+  };
   const extras: TerrainExtras = {
     ...described,
     bounds: meta.bounds,
@@ -342,18 +342,19 @@ export async function bakeTerrain(
     ...(meta.tin ? { tin: meta.tin } : {}),
   };
   const name = `${stem}.glb.gz`;
-  const glb = await cached(name, key, async () =>
-    gz(
+  const glb = await cached(name, key, async () => {
+    const { input } = await shapedTerrain(tile, level);
+    return gz(
       await writeMeshGlb({
-        ...(await shapedTerrain(tile, level)).input,
+        ...input,
         name: "terrain",
         extras: { ...extras },
         // The fine level carries the tile's stairs and walls, baked from the
         // same files the ground was shaped with.
         children: level === 0 ? await fineChildren(tile, meta.bounds) : [],
       })
-    )
-  );
+    );
+  });
   return {
     file: publish(name, glb),
     ground: meta.ground,

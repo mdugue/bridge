@@ -28,10 +28,16 @@ function edt1d(
   for (let k = 0, q = 1, s = 0; q < length; q += 1) {
     f[q] = grid[offset + q * stride];
     const q2 = q * q;
-    do {
+    let again = true;
+    while (again) {
       const r = v[k];
       s = (f[q] - f[r] + q2 - r * r) / (q - r) / 2;
-    } while (s <= z[k] && --k > -1);
+      again = s <= z[k];
+      if (again) {
+        k -= 1;
+        again = k > -1;
+      }
+    }
     k += 1;
     v[k] = q;
     z[k] = s;

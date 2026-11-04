@@ -15,7 +15,7 @@ import type { StructuralMetadataJson } from "@/lib/city/property-table";
 const METADATA = "EXT_structural_metadata";
 
 /** What the renderer looks a glTF content's loader up by (`path.glb`). */
-const GLTF_CONTENT = /\.(gltf|glb)$/u;
+const GLTF_CONTENT = /\.(?:gltf|glb)$/u;
 
 /**
  * Reads a glTF's EXT_structural_metadata property tables
@@ -70,7 +70,11 @@ export class GltfContentPlugin {
   readonly name = "GLTF_CONTENT";
   private tiles: TilesRenderer | null = null;
 
-  constructor(private readonly meshopt: typeof MeshoptDecoder) {}
+  private readonly meshopt: typeof MeshoptDecoder;
+
+  constructor(meshopt: typeof MeshoptDecoder) {
+    this.meshopt = meshopt;
+  }
 
   init(tiles: TilesRenderer): void {
     const loader = new GLTFLoader(tiles.manager);
