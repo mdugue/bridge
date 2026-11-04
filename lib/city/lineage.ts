@@ -28,10 +28,12 @@ import { germanDates } from "./card-lines";
 import type { BuildingInquiry, Inquiry } from "./inquiry";
 import type {
   BridgeInquiry,
+  CanopyInquiry,
+  HedgeInquiry,
   MonumentInquiry,
+  MoreInquiry,
   TreeInquiry,
 } from "./inquiry-features";
-import type { CanopyInquiry, HedgeInquiry, MoreInquiry } from "./inquiry-more";
 import type { BikeInquiry, TrafficInquiry } from "./inquiry-traffic";
 import { PLACED } from "./inquiry-design";
 import type { DesignInquiry } from "./inquiry-design";

@@ -2170,7 +2170,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   616 of 15 302, Meißen 454 of 14 506. The trunk drops to the crown's
   base (`vegetation-layer.ts` `crownFrame`, `fitTrunks`); the coarse
   level's crowns carry the same base (*The coarse level's trees* below),
-  and an asked canopy tree's solid starts there too (`ask-more.ts`).
+  and an asked canopy tree's solid starts there too (`ask-items.ts`).
   **Gated off paths and water** via the DLM
   class raster, **off the carriageways and track beds** (`ways.traffic`, below), and off everything within 10 m of a DLM bridge (a bridge's
   steel on a park bank is as tall as a crown: the Blaues Wunder's pylons came

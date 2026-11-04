@@ -1,11 +1,15 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { bridgeItems, monumentItems, treeSets } from "./ask-items";
+import { bridgeItems, monumentItems, moreSets, treeSets } from "./ask-items";
 import { hitsInSets, nearestItem } from "./ask-solids";
+import type { AskSolid } from "./ask-solids";
 import type {
   BridgeFeature,
+  CanopyFeature,
   FeatureCollection,
+  FurnitureFeature,
+  LampFeature,
   MonumentFeature,
   TreeFeature,
 } from "./features";
@@ -154,4 +158,70 @@ test("a bridge is met on its deck, not in the air over its ends", () => {
     500
   );
   expect(ray === null || (ray.distance ?? 0) > 5).toBe(true);
+});
+
+/** The lowest a solid reaches. */
+function solidBottom(s: AskSolid): number {
+  if ("cylinder" in s) {
+    return s.cylinder.y0;
+  }
+  return "prism" in s ? s.prism.y0 : s.slab.y0;
+}
+const bottom = (solids: readonly AskSolid[]) =>
+  Math.min(...solids.map(solidBottom));
+
+const point = (dx: number): [number, number] => [412_500 + dx, 5_656_500];
+const geometry = (dx: number) => ({
+  type: "Point" as const,
+  coordinates: point(dx),
+});
+
+test("a lamp, a bench and a canopy tree stand on the tile's own ground, a monument on every terrain's", () => {
+  // near a seam the two grounds differ: the tile's own terrain (50) and
+  // every loaded terrain's (110)
+  const grounds = { ...ctx, treeHeightAt: () => 50 };
+  const canopy: CanopyFeature = {
+    geometry: geometry(0),
+    properties: { h: 18 },
+  };
+  const lamp: LampFeature = { geometry: geometry(20), properties: {} };
+  const bench: FurnitureFeature = {
+    geometry: geometry(40),
+    properties: { k: "bench" },
+  };
+  const monument: MonumentFeature = {
+    geometry: geometry(60),
+    properties: { kind: "statue" },
+  };
+  const sets = moreSets(
+    {
+      canopy: [canopy],
+      scan: [],
+      rows: [],
+      hedges: [],
+      lamps: [lamp],
+      furniture: [bench],
+      trams: [],
+      river: [],
+    },
+    grounds
+  );
+  const at = (dx: number) => {
+    const [x, y] = point(dx);
+    const w = epsgToWorld(x, y, offset);
+    return hitsInSets({ x: w.x, y: 300, z: w.z }, down, sets, 1000)[0];
+  };
+  for (const [dx, kind] of [
+    [0, "canopy"],
+    [20, "lamp"],
+    [40, "furniture"],
+  ] as const) {
+    const hit = at(dx);
+    expect(hit?.target.kind).toBe(kind);
+    expect(bottom(hit?.solids ?? [])).toBeGreaterThan(49);
+    expect(bottom(hit?.solids ?? [])).toBeLessThan(51);
+  }
+  const [item] = monumentItems([monument], grounds);
+  expect(bottom(item.solids)).toBeGreaterThan(109);
+  expect(bottom(item.solids)).toBeLessThan(111);
 });

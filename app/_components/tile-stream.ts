@@ -62,8 +62,12 @@ import type {
 } from "@/lib/city/tileset";
 import { COARSE_DRESSING_KINDS } from "@/lib/city/tile";
 import type { DressingKind } from "@/lib/city/tile";
-import { bridgeItems, monumentItems, treeSets } from "@/lib/city/ask-items";
-import { moreSetsSteps } from "@/lib/city/ask-more";
+import {
+  bridgeItems,
+  monumentItems,
+  moreSetsSteps,
+  treeSets,
+} from "@/lib/city/ask-items";
 import { askSets } from "@/lib/city/ask-solids";
 import type { AskSet } from "@/lib/city/ask-solids";
 import { isAllocationFailure } from "@/lib/city/gpu-allocation";
@@ -1386,7 +1390,7 @@ async function buildDressing(
           trams,
           river,
         },
-        { offset: ctx.offset, heightAt: terrain.heightAt, tile },
+        askCtx,
         keepTree
       );
       // all at once, in their order: a question finds the tile's sets whole

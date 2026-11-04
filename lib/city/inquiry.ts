@@ -27,16 +27,18 @@ import {
   whole,
 } from "./card-lines";
 import type { CardCredits, CardFact, InquiryCard } from "./card-lines";
-import { bridgeCard, monumentCard, treeCard } from "./inquiry-features";
-import type { FeatureInquiry, TreeFacts } from "./inquiry-features";
 import {
+  bridgeCard,
   canopyCard,
   furnitureCard,
   hedgeCard,
   lampCard,
   landingCard,
+  monumentCard,
   stopCard,
-} from "./inquiry-more";
+  treeCard,
+} from "./inquiry-features";
+import type { FeatureInquiry, TreeFacts } from "./inquiry-features";
 import type { Stated } from "./methods";
 import { bikeCard, trafficCard } from "./inquiry-traffic";
 import { designCard } from "./inquiry-design";

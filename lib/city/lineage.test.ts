@@ -7,8 +7,7 @@ import {
 } from "./city-mesh";
 import { encodeDrawn } from "./drawn-facts";
 import type { Inquiry, InquiryObject } from "./inquiry";
-import type { TreeInquiry } from "./inquiry-features";
-import type { LampInquiry } from "./inquiry-more";
+import type { LampInquiry, TreeInquiry } from "./inquiry-features";
 import { lineage } from "./lineage";
 import type { LineageEntry, LineageSite } from "./lineage";
 import { MEASURED_ROOF, NO_FACT } from "./object-facts";

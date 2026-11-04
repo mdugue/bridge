@@ -11,16 +11,18 @@ import { OBJECT_SOURCE_LOD2 } from "./city-mesh";
 import { inquiryCard } from "./inquiry";
 import type { Inquiry, InquiryObject } from "./inquiry";
 import { designCard } from "./inquiry-design";
-import { bridgeCard, monumentCard, treeCard } from "./inquiry-features";
-import type { TreeFacts } from "./inquiry-features";
 import {
+  bridgeCard,
   canopyCard,
   furnitureCard,
   hedgeCard,
   lampCard,
   landingCard,
+  monumentCard,
   stopCard,
-} from "./inquiry-more";
+  treeCard,
+} from "./inquiry-features";
+import type { TreeFacts } from "./inquiry-features";
 import { bikeCard, trafficCard } from "./inquiry-traffic";
 import { NO_FACT } from "./object-facts";
 import type { SiteProvenance } from "./provenance";

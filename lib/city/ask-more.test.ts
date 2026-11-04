@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { moreSets } from "./ask-more";
+import { moreSets } from "./ask-items";
 import { hitsInSets } from "./ask-solids";
 import type {
   CanopyFeature,
@@ -45,7 +45,7 @@ const read = <F>(kind: string) =>
   ).features ?? [];
 
 const offset = { cx: 412_000, cy: 5_656_000 };
-const ctx = { offset, tile: TILE, heightAt: () => 110 };
+const ctx = { offset, tile: TILE, treeHeightAt: () => 110 };
 const down = { x: 0, y: -1, z: 0 };
 
 const features = {

@@ -453,7 +453,7 @@ parsed once, typed-array plinths, cache keys on the bakes' own packages.
   under one key (nothing to append to), bounded by its rings, 8 KB in
   0.05 ms.
 - ~~**The inquiry's ask sets are built eagerly**~~ — built (plan 069
-  step 6): in idle time once the dressing hangs; `canopySets` still places
+  step 6): in idle time once the dressing hangs; `canopySetsSteps` still places
   every canopy tree a second time there.
 - ~~**A desktop at DPR 2 runs SMAA's three full-resolution passes** plus a
   copy of the frame; skipping the copy (SMAA on the scene target, the AO

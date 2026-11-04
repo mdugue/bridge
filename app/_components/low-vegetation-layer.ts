@@ -32,7 +32,7 @@ import { Instances, instanceMatrix, instancePosition } from "./instancing";
 import type { F, V3 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 import { bucketByCell, leafNoise, printedLeaf } from "./vegetation-layer";
-import { DEFAULT_HEDGE_H, DEFAULT_HEDGE_W } from "@/lib/city/ask-more";
+import { DEFAULT_HEDGE_H, DEFAULT_HEDGE_W } from "@/lib/city/ask-items";
 import { clamp } from "@/lib/city/math";
 
 /**
