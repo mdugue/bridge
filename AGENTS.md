@@ -170,11 +170,10 @@ uploaded; nothing it names is fetched (ADR 0054).
 - Each file's head comment says what it does.
 - `FRAG_FAKE=1` is a scripted model for local tests, never set on a
   deployment (ADR 0056).
-- **oxlint + oxfmt, no ESLint, no biome.** `.oxlintrc.json` names its rules
-  explicitly; do not replace them with categories, and leave
-  `strict-boolean-expressions`, `no-unnecessary-condition` and
-  `no-confusing-void-expression` off (they flag idioms used on purpose);
-  `--type-check` stays off. typescript-eslint
+- **oxlint + oxfmt, no ESLint, no biome.** `oxlint.config.ts` extends
+  ultracite's core, react and next presets, and each rule it changes says
+  why there. No `oxlint-disable` comment: change the code, or the config
+  with its reason. `--type-check` stays off. typescript-eslint
   cannot run on TypeScript 7; check oxlint's full catalogue
   (`oxlint --print-config -D all`) before reaching for ESLint. Markdown and
   MDX are excluded from oxfmt; prose stays hand-wrapped.
@@ -182,8 +181,8 @@ uploaded; nothing it names is fetched (ADR 0054).
   `next build` and CI) is the reference. Delete `tsconfig.tsbuildinfo` when
   they disagree. `allowJs: true` stays (`next build` puts it back).
 - Exact pins for the three.js stack, the glTF build tools, `delatin`, the
-  framework trio, the lint tools (bump `oxlint` and `oxlint-tsgolint`
-  together) and `suncalc`; caret for the rest; the npm MCP servers in
+  framework trio, the lint tools and `ultracite` (bump `oxlint` and
+  `oxlint-tsgolint` together) and `suncalc`; caret for the rest; the npm MCP servers in
   `.mcp.json` exactly. Bun comes from `packageManager` (≥ 1.4 for
   `Bun.WebView`; the web session's start hook upgrades it).
 - No type shim for `three-mesh-bvh` (it augments `three` itself).
