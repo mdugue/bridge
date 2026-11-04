@@ -30,12 +30,16 @@ import {
 
 // --- 1. side files --------------------------------------------------------------
 
-/** Artifact kind → published name (absent optional files: missing), plus
- *  the phones' colony raster publishColonies derives beside
- *  `cultivatedRaster`. */
-export type Published = Partial<
-  Record<TileArtifactKind | "cultivatedLow", string>
->;
+/** Artifact kind → published name (absent optional files: missing). */
+export type Published = Partial<Record<TileArtifactKind, string>>;
+
+/** The rows this loop does not publish: the coarse crowns, baked from the
+ *  tree files on the fine ground (`publishCrowns`), and the phones' colony
+ *  raster, cropped with the colony raster (`publishColonies`). */
+const PUBLISHED_ELSEWHERE: ReadonlySet<TileArtifactKind> = new Set([
+  "crowns",
+  "cultivatedLow",
+]);
 
 /** tile → artifact kind → published name */
 export const sideFiles = new Map<string, Published>();
@@ -55,8 +59,7 @@ export async function publishSideFiles(): Promise<void> {
       TileArtifact,
     ][];
     for (const [kind, artifact] of artifacts) {
-      if (kind === "crowns") {
-        // baked from the tree files on the fine ground (publishCrowns)
+      if (PUBLISHED_ELSEWHERE.has(kind)) {
         continue;
       }
       if (

@@ -17,7 +17,7 @@ import {
   tileArtifacts,
 } from "../../lib/city/tile";
 import type { TileArtifactKind } from "../../lib/city/tile";
-import { TERRAIN_LEVELS } from "../../lib/city/tileset";
+import { TERRAIN_LEVELS, terrainRasterExtras } from "../../lib/city/tileset";
 import type { TerrainExtras } from "../../lib/city/tileset";
 import { bakeCoarseCrowns } from "../coarse-crowns";
 import { BAKE_ENTRIES } from "../bake-entries";
@@ -33,7 +33,6 @@ import {
 } from "../bake-tiles";
 import type { TerrainMesh } from "../bake-tiles";
 import { FINE_TIN_MAX_ERROR } from "../bake-terrain-tin";
-import type { ColonyCrop } from "../crop-raster";
 import { unpackGround } from "../ground-pack";
 import { writeMeshGlb } from "../tile-glb";
 import {
@@ -59,7 +58,6 @@ import {
 } from "./context";
 import { shapedBy, siteShapes } from "./lines";
 import { colonyCrops, sideFiles } from "./side-files";
-import type { Published } from "./side-files";
 import { offset } from "./frame";
 import {
   groundFeatures,
@@ -170,36 +168,6 @@ async function fineChildren(
   return [stairs, walls, kerbs, fences].filter((m) => m !== null);
 }
 
-/** The fine level's allotment colonies (plan 028) and road markings (plan
- *  026) and both levels' baked light (plan 033): only the rasters the tile
- *  has. */
-function paintAndLight(
-  names: Published,
-  level: 0 | 1,
-  crop: ColonyCrop | undefined
-): Partial<TerrainExtras> {
-  return {
-    ...(level === 0 && names.cultivatedRaster && crop
-      ? {
-          cultivated: names.cultivatedRaster,
-          cultivatedCrop: crop,
-          ...(names.cultivatedLow
-            ? { cultivatedLow: names.cultivatedLow }
-            : {}),
-        }
-      : {}),
-    ...(level === 0 && names.markings && names.markingsTable
-      ? {
-          markings: names.markings,
-          markingsTable: names.markingsTable,
-          ...(names.markingsLow ? { markingsLow: names.markingsLow } : {}),
-        }
-      : {}),
-    ...(names.svf ? { svf: names.svf } : {}),
-    ...(names.horizon ? { horizon: names.horizon } : {}),
-  };
-}
-
 /**
  * The trees the tile's coarse level draws (lib/city/coarse-crowns.ts,
  * scripts/coarse-crowns.ts): the fine level's own placement of the tile's
@@ -290,18 +258,10 @@ export async function bakeTerrain(
     tileId: tile,
     level,
     n,
-    // the coarse level reads its 1024² raster on every tier
-    // (lib/city/tile.ts COARSE_RASTER_PX)
-    landcover: (level === 0 ? names.landcover : names.landcoverCoarse) ?? "",
-    landcoverLow:
-      (level === 0 ? names.landcoverLow : names.landcoverCoarse) ?? "",
-    ...(names.ndvi ? { ndvi: names.ndvi } : {}),
-    ...(level === 0 && names.surface ? { surface: names.surface } : {}),
-    ...(level === 0 && names.edges ? { edges: names.edges } : {}),
-    ...(names.sport && names.sportTable
-      ? { sport: names.sport, sportTable: names.sportTable }
-      : {}),
-    ...paintAndLight(names, level, colonyCrops.get(tile)),
+    // the rasters the tile has, by the artifact table's `terrain` column
+    // (the coarse level reads its 1024² class raster on every tier,
+    // lib/city/tile.ts COARSE_RASTER_PX)
+    ...terrainRasterExtras(names, level, colonyCrops.get(tile)),
     ...waterExtras(tile, level),
     ...(level === 0
       ? { dressing: pickFiles(names, DRESSING_KINDS) }
