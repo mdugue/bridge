@@ -189,7 +189,11 @@ import { dressWalls } from "./wall-layer";
  * lands — the terrain material, water, buildings, vegetation (canopy,
  * street-tree cadastre, laser-scan trees, hedges), lamps, monuments, street
  * furniture, rails, walls — and undresses what leaves, so every tile is one
- * handle whose content comes and goes with it.
+ * handle whose content comes and goes with it. What lands on a content
+ * root after the root itself — a terrain level's dressing, a city tile's
+ * murals, a data layer's traffic bodies — it hands to late-parts.ts as
+ * late parts (`dressingPart`, `muralsPart`, `trafficSlot`): one lifecycle
+ * that builds, compiles, weighs, hangs and frees each.
  */
 export interface TileDressing {
   /** the trees, monuments and bridge decks the inquiry probe can ask
