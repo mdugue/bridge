@@ -1101,7 +1101,10 @@ the port (2026-09-26) made of it:
     NaN* — checked, correct.
   - *Seam handling of bridges, determinism and overflow in the bakes, the
     `prepare-data` cache key, zip-slip in the ingest, the TS ↔ Python
-    feature contract* — checked, sound.
+    feature contract* — checked, sound. (The feature contract holds for
+    the GeoJSON in `tileArtifacts`, which `features.test.ts` reads on
+    committed data; the JSON files and `dormers_<tile>.geojson` outside
+    it were unchecked — plan 081, 2026-11-04.)
   - *Regrouping `app/_components` into folders* — import churn across
     ≈ 110 files for orientation AGENTS.md already gives.
   - *Version lag* — none: three, 3d-tiles-renderer, three-mesh-bvh,

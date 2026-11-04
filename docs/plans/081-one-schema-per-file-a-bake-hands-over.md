@@ -215,6 +215,11 @@ committed file of each spec (per tile via `cityMeshSourceFiles` /
 
 ### Step 0 — The schemas and the committed-data test (no reader moves)
 
+0. **Pin zod exactly** (maintainer, 2026-11-04): in `package.json`
+   replace `"zod": "^4.6.7"` with the version `bun.lock` resolves
+   today, run `bun install`, and add zod to the exact pins listed in
+   AGENTS.md › Conventions in Step 7 ("… the lint tools, `suncalc` and
+   `zod`, whose version is in three bake keys").
 1. Re-run the census (a scratch script, not committed): for each file in
    scope, every key and value type over `data/*/`. Compare with the
    Python writer's dict literals and the TypeScript types above.
@@ -337,7 +342,8 @@ committed file of each spec (per tile via `cityMeshSourceFiles` /
    for now as a new Python dependency (`jsonschema`); the export keeps
    it a small step later.
 2. `docs/adr/README.md`: its row in the index.
-3. `AGENTS.md`, Hard rules, **Data**, after the bake-entries bullet:
+3. `AGENTS.md`, Conventions, the exact-pins bullet: add `zod` (Step 0).
+   Then Hard rules, **Data**, after the bake-entries bullet:
 
    ```markdown
    - A file a bake writes and TypeScript reads has one zod schema in
@@ -366,12 +372,30 @@ committed file of each spec (per tile via `cityMeshSourceFiles` /
      fountain's.
    - `wikidata_materials` writes `m["materialWikidata"]`, never
      `m["wikidata"]`.
+   - **The monument's own item first** (maintainer, 2026-11-04): before
+     the name and nearest rules, a monument whose OSM `wikidata` is one
+     of the cached items (`load_wikidata`) takes that item's material
+     and claims it, whatever the distance; only a monument without such
+     a link, or whose linked item the cache lacks, falls back to
+     `WIKIDATA_NAME_M` / `WIKIDATA_NEAR_M`. The claim order is: own
+     links first over all monuments, then the existing pass, so a
+     linked item is never handed to a neighbour (the unnamed Hamburg
+     sculpture no longer takes St. Nikolai's Q425622).
+   - The cache holds only items the box query finds (the five classes,
+     with a `P186`); a linked item outside them is not fetched. Leave
+     the fetch as it is in this plan and count, in the step's PR, how
+     many OSM-linked monuments miss the cache; if it is more than a
+     handful, a follow-up adds their ids to the fetch (`VALUES ?i`, a
+     re-fetch at fetch time, ADR 0012) — write it in the backlog.
    - `properties` writes both keys; the module docstring ≈ 30–35 and the
      run's count line name both ("… with OSM's Wikidata link, … with
      Wikidata's material").
 2. `pipeline/tests/test_monuments.py` (with `read_osm` monkeypatched as
    in `test_an_outline_memorial_is_read_at_its_point…`): a memorial
-   tagged `wikidata=Q1;Q2` writes `wikidata: Q1`; a DLM monument takes
+   tagged `wikidata=Q1;Q2` writes `wikidata: Q1`; a monument linked to a
+   cached item 30 m away takes that item's material although another
+   item lies within 10 m, and the nearer monument then cannot claim the
+   linked item; a DLM monument takes
    its OSM partner's link; a monument without a material that takes one
    from a cached item writes `materialWikidata` and no `wikidata` unless
    OSM links it; a malformed tag writes nothing.
@@ -466,8 +490,8 @@ the `@desktop-render` inquiry spec, a monument with a Wikidata material
 still credits Wikidata (CC0) for its material. **Phone bytes (ADR
 0047):** sum Dresden's `monuments_*.geojson` sizes before and after; the
 OSM links are the only growth the re-bake may bring (a few dozen bytes a
-linked monument). Put the number in the PR; if it is more than 1 % of
-those files, ask the maintainer before merging.
+linked monument). The maintainer accepted this growth (2026-11-04); put
+the number in the PR.
 
 ## STOP conditions
 
@@ -495,9 +519,8 @@ reason in the status row if:
   dependency (ADR 0059's alternatives).
 - Schemas for what `features.test.ts` checks, `facades_<tile>.json`
   (backlog), the raster legends (plan 045).
-- How `wikidata_materials` matches an item to a monument (the nearest
-  within 10 m gave a sculpture St. Nikolai's brick): a maintainer
-  question, not this plan.
+- Fetching linked Wikidata items the box query misses (Step 8 counts
+  them; a follow-up if they matter).
 - A Wikidata link on the monument card; any new card text; any change to
   what a bake writes beyond Step 8.
 
@@ -510,8 +533,9 @@ reason in the status row if:
   `bake-files.test.ts`, `parseBakeFile` where it is read (its step
   module, or prepare-data when it is published uncached, then an entry
   in `NOT_A_BAKE`), and its writer named in the module's head comment.
-- A zod bump re-bakes `city`, `stadtwissen` and `siteStats` for every
-  site once (their keys hold zod's locked version); the output must be
+- zod is pinned exactly (Step 0): a bump re-bakes `city`,
+  `stadtwissen` and `siteStats` for every site once (their keys hold
+  zod's locked version); bump it on purpose, and the output must be
   byte-identical.
 - A viewer guard is pinned to its schema by its agreement test; widen
   both together.
