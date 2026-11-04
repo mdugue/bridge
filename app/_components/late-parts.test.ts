@@ -77,7 +77,7 @@ test("a part builds, compiles, is ready, and hangs only once the content is reco
   expect(log).toEqual(["a build", "a hang"]);
 });
 
-test("a part disposed, or its tile left, before the lane's gate opens leaves at once and never builds", async () => {
+test("a part disposed, or its tile left, before the lane's gate opens leaves at once and never builds; one added after is gone at once", async () => {
   const log: string[] = [];
   const g = gate();
   const { compiles, host } = fakeHost(g.opened);
@@ -89,6 +89,11 @@ test("a part disposed, or its tile left, before the lane's gate opens leaves at 
   parts.leave();
   await handle.ready;
   expect(await settledNow(handle)).toBe("gone");
+  // one added once the tile has left is gone as it is added
+  const late = parts.add(fakePart("c", log).part);
+  expect(await settledNow(late)).toBe("gone");
+  await late.ready;
+  expect(parts.bytes()).toBe(0);
   g.open();
   await flush();
   expect(log).toEqual([]);

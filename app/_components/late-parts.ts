@@ -114,7 +114,8 @@ export interface LateHandle {
 /** The parts of one content root. */
 export interface LateParts {
   /** starts a part; `owner`: it goes when that part goes (the traffic
-   *  with its dressing) */
+   *  with its dressing). One added once the root has left (or the stream
+   *  or its owner has gone) is settled "gone" at once */
   add: <T>(part: LatePart<T>, owner?: LateHandle) => LateHandle;
   /** what its parts weigh, from their build until freed or given up */
   bytes: () => number;
@@ -220,8 +221,30 @@ export function createLateParts(host: LateHost): LateParts {
     return await lane.tasks.run(work, signal, rank);
   };
 
+  /** a part added once its root has left, the stream gone or its owner
+   *  gone: nothing to wait for, build or free */
+  const goneAtOnce = (): LateHandle => {
+    const handle: LateHandle = {
+      ready: Promise.resolve(),
+      settled: Promise.resolve("gone"),
+      dispose: () => [],
+    };
+    // (one owned by it is gone as it is added, too)
+    byHandle.set(handle, {
+      handle,
+      bytes: 0,
+      gone: () => true,
+      dispose: () => [],
+      children: new Set(),
+    });
+    return handle;
+  };
+
   const add = <T>(part: LatePart<T>, owner?: LateHandle): LateHandle => {
     const parent = owner ? byHandle.get(owner) : undefined;
+    if (left || host.disposed() || (parent?.gone() ?? false)) {
+      return goneAtOnce();
+    }
     const where = `${part.kind} ${part.tile}`;
     const abort = new AbortController();
     aborts.add(abort);
