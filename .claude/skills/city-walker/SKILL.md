@@ -859,7 +859,10 @@ to the same place is a leak; a steady one is the tile cache). What a
 tile adds beyond its glTF must reach the cache's weighing
 (`DressingPlugin.calculateBytesUsed`), and a phone's memory is watched
 by `lib/city/memory-governor.ts` — see docs/rendering.md, "GPU memory on
-a phone". A content's CPU copies go once its compile has uploaded them
+a phone". A part that lands after its tile is a `LatePart`
+(`late-parts.ts`: the dressing, the murals, the traffic bodies), which
+weighs it from its build, frees it after its compile and reports for it.
+A content's CPU copies go once its compile has uploaded them
 (`dropCpuCopies` over `cpuDroppable` / `cityCpuDroppable`, ADR 0047; a
 compile resolves only once every drawable under it is uploaded, those
 another compile had started too — `compile-lanes.ts`): **an

@@ -103,7 +103,8 @@ space (`shader-chunks.ts`). The glTF extras key is `tileId`, never `tile`
   kind of camera: Modell's parallel camera has its own
   (`PostStack.warmView`).
 - Everything a tile brings is built in the dressing plugin's
-  `processTileModel`, compiled before it shows, and freed in `disposeTile`
+  `processTileModel` (what lands later: a late part, `late-parts.ts`),
+  compiled before it shows, and freed in `disposeTile`
   — never in `bootApp`. Freeing is on us; what a tile adds beyond its glTF
   reaches `calculateBytesUsed`; the rules for shared buffers and dropped
   CPU copies are in the `city-walker` skill, "Tiles".

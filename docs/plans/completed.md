@@ -1969,3 +1969,75 @@ convergence (~1° in Dresden) had been missing from every pose.
 **Keep in mind.** The drawing is the clay's recess per window, not the
 planned pencil lines, and no panes or glass. Mapillary needs a client
 token in the environment at fetch time, never committed.
+
+## 083 — One lifecycle for a tile's late parts · DONE (2026-11-04)
+
+**Problem.** Three things land on a tile's content root after the root
+itself — a terrain level's dressing, a city tile's murals, a data layer's
+traffic bodies — and `DressingPlugin` built, compiled, weighed, hung and
+freed each by a hand-written copy of one guard sequence. Of the six
+`fix(load)` commits that changed that sequence (2026-11-02/03), four were
+weight or gone checks landed in the dressing's copy only: the murals were
+built for a tile that had left (D1), every part aborted only once the
+root's compiles ended (D2), the murals and traffic bodies weighed nothing
+between build and hang (D5, ADR 0047's class), the murals' failures were
+never classed as allocation failures (D8), and a throw after their build
+was an unhandled rejection (D9). The traffic bodies took the fine rank on
+the coarse level too (D10).
+
+**Decision.** One module, `app/_components/late-parts.ts` (Design B of
+the plan): a per-root registry the plugin owns (`createLateParts`, four
+members: `add`, `bytes`, `leave`, `release`) over the site's lane
+(`createLateLane`), and a `LatePart` per kind of part with two policy
+fields — `rank` (its place in the lane; null outside it) and `hangAt`
+(`"wait"`: hangs once its compile wait is over, a hand-over waits on it,
+comes down again if the compile then runs out of memory; `"compile"`:
+hangs once its compile has ended). Three adapters: `dressingPart`,
+`muralsPart` and the traffic slot's part (owned by the dressing's handle).
+The module hides the order (turn → gone → build → gone → compile → weigh
+→ wait → ready → `loaded` → hang), every gone check, the abort, the
+one-ahead compile throttle, the weight from build to free, free after the
+compile, the failure classification and the timings
+(`<kind>:queue-wait`, `:build`, `:compile`).
+
+**Kept on evidence.** A `"compile"` part holds the lane through its compile
+wait (finding 4): a traffic body's compile is one large upload (≈ 20 MiB
+fine), and overlapping them would put a second one in flight on a phone.
+Its cost headless (full profile, desktop): the eight bodies of the start
+view's switch-on hold the lane ≈ 110–130 s of the ≈ 135–185 s to the last
+body under SwiftShader (timers starve there); judge it on a desktop GPU
+before letting `"compile"` parts overlap on the desktop tier (the plan's
+gate: more than 1 s spent in the hold).
+
+**Deviations from the plan.** `hang` returns the part's take-down (no
+tenth field); a `"wait"` part's `settled` says `"hung"` as it hangs (the
+loading frontier counts the dressing done there, as before) and a late
+out-of-memory drop happens after; a `"wait"` part whose compile ran out
+of memory within the wait never hangs (the dressing did not). The lane's
+rank orders only the builds queued while it is busy. The murals' adapter
+takes the drawings' builder (`build`) from the plugin, so its test needs
+no `createImageBitmap`. The tests' fake host is `late-parts.fixture.ts`,
+shared by the module's and the adapters' tests; the stream's tests reach
+no private member (17 casts, from 26).
+
+**Measured** (SwiftShader, `NEXT_PUBLIC_POC_DEBUG` builds per step, the
+plan's step-0 script and a `?trace=1` start; 1-min load 2–4.6, this
+container shared with other sessions): every `framedBuilds` delta 0 and
+`anchors` 62/63 at every step; the phone-emulated lite boot's
+`gpuBytes`, `memory.total` and `cpuBytesOf().total` within the base's
+own two-run range (the BVH's 17.4/20.7 MB is bimodal on the base too) and
+its traffic switch-on peak no higher (239.35 MB); veil to loaded, pooled
+over every run of the evening, base median 224 s (183–314, seven runs),
+step 4 median 233 s (194–299, seven runs) — within the noise, which an
+order effect dominated (a base/branch pair run in the opposite order
+flipped by 119 s); the switch-on's last body at 135–185 s (base 158–202
+s), the coarse bodies first (D10), the start tile's fine bodies at 77–90 s.
+The murals' record (Fürstenzug start): the same four drawings fetched and
+the same texture count and bytes as the base.
+
+**Keep in mind.** A new thing that lands on a tile after the tile is a
+`LatePart` adapter, never a new hand-written sequence; `hangAt: "wait"`
+only for what a level's hand-over waits on. A rule about late parts is
+fixed in `late-parts.ts` and tested through the fake host. `ready` must
+never wait on `loaded`. Open: the hold's cost on a desktop GPU (above);
+real-GPU plates were not needed (no check moved).

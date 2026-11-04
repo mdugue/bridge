@@ -33,7 +33,11 @@ Deep reference: the `city-walker` skill, "Node materials" and "Tiles".
 5. **Lifecycle:** build in `processTileModel`, compile before it shows
    (`PostStack.compile`), free in `disposeTile`. Add its bytes to
    `calculateBytesUsed`; add CPU arrays nothing reads later to the
-   CPU-drop lists.
+   CPU-drop lists. A part built after its tile (on demand, or from a file
+   of its own) is a `LatePart` adapter (`late-parts.ts`, beside
+   `dressingPart` and `muralsPart`): the module builds, weighs, compiles,
+   hangs and frees it; choose `hangAt` — `"wait"` only for what a level's
+   hand-over waits on (the dressing), `"compile"` for everything else.
 6. **Shadows:** casts only if static; call `invalidateShadows()` when it
    lands; sway casts through a rigid `castShadowPositionNode`.
 7. **Ground:** feet and edges from `ground-join.ts`, joins tested

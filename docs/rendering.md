@@ -1096,11 +1096,13 @@ stays their measure; the tile cache counts true bytes.
   across the city and from the air.
 - **The tile cache** weighs a tile as the GPU holds it: the glTF (by
   count, so a buffer whose CPU copy is gone weighs what it did), the
-  terrain's rasters, the dressing's geometry and a city tile's murals
-  (their drawings with mipmaps — the pen lines one channel, the wash
-  small — the texels dropped once uploaded: 2.7 MB for Dresden's two on
-  their tile, 2.0 MB on a phone, which decodes the lines at 32 px a
-  metre), less the buffers the site shares
+  terrain's rasters, and what its late parts weigh from their build on
+  (`late-parts.ts`): the dressing's geometry, the traffic bodies'
+  geometry and a city tile's murals (their drawings with mipmaps — the
+  pen lines one channel, the wash small — the texels dropped once
+  uploaded: 2.7 MB for Dresden's two on their tile, 2.0 MB on a phone,
+  which decodes the lines at 32 px a metre), less the buffers the site
+  shares
   (`DressingPlugin.calculateBytesUsed`). A phone's bounds are
   derived (`tileCacheBytesFor`): `max` = the governor's soft line − the
   fixed costs (24 bytes per drawn pixel and the shadow map: 38 MiB at
@@ -1217,16 +1219,20 @@ stays their measure; the tile cache counts true bytes.
 - **Trees before all trees.** The dressings build one at a time after
   the boot's gate, a coarse level's (its third of the trees, its bridges)
   ahead of any fine level's (`COARSE_DRESSING_RANK`; at most four of
-  them ahead of one fine level's, `MAX_DRESSING_OVERTAKES`, so a long
+  them ahead of one fine level's, `MAX_LATE_OVERTAKES`, so a long
   flight's stream of coarse levels cannot hold back the tile underfoot),
   so every tile in view has trees before the nearest has all of them.
-  The lane holds a dressing's build only; its compile wait and its
-  hanging run after the lane, so the next build overlaps the last one's
-  compile but waits out the one before it (`olderCompile`): at most one
-  compile ahead, so built dressings and the compile queue never pile up;
-  a dressing counts against the cache's budget from its build, not from
-  its hanging (headless full profile, Dresden start: first frame
-  to *Alles geladen* 289 s → 243 s under SwiftShader). A fine level that
+  The lane (`createLateLane`, late-parts.ts) holds a dressing's build
+  only; its compile wait and its hanging run after the lane, so the next
+  build overlaps the last one's compile but waits out the one before it:
+  at most one compile ahead, so built dressings and the compile queue
+  never pile up; a dressing counts against the cache's budget from its
+  build, not from its hanging (headless full profile, Dresden start:
+  first frame to *Alles geladen* 289 s → 243 s under SwiftShader). A
+  tile's traffic bodies take the same lane at their level's rank but
+  hold it through their compile wait: a body's compile is one large
+  upload (≈ 20 MiB for a fine tile), and a second one in flight beside
+  it would raise a phone's peak. A fine level that
   shows before its own trees hang — a phone shows it the moment it loads
   — borrows its coarse level's crowns until they do
   (`DressingPlugin.standInCrowns`, `coarseCrownsStandIn`): they are
@@ -1508,8 +1514,8 @@ The data layers build nothing at boot: they start as one feature
 from then on hear the spine through its hooks (`feature-seam.ts`: the
 frame, the stream's changes, the look store, the scene's clock — read
 first, since they may start long after it was set); a tile's traffic
-slot waits for the same start before it builds its bodies, outside the
-dressings' turn. Their code ships in the scene's chunk: loaded by
+slot waits for the same start, outside the dressings' turn, before its
+bodies join the tile's late parts. Their code ships in the scene's chunk: loaded by
 `import()` as a chunk of its own, it made the first-load JS 22.7 KB gz
 larger while moving 10.1 KB out, three.js shared by both chunks losing
 its scope hoisting with the scene's code ([ADR 0040](./adr/0040-data-layers-and-live-city-data.md)) — and the
@@ -1524,10 +1530,21 @@ target the scene renders into (`PostStack.compile`, one drawable per
 material and attribute layout, shown and unculled for the call), so a
 landing tile never builds inside a frame. The shadow pass's pipelines for
 new casters are the exception: they compile in the frame that first draws
-them. The heavy dressing — vegetation,
+them. What lands on a tile after the tile itself is a **late part**
+of its content root (`late-parts.ts`): a terrain level's dressing, a
+city tile's murals, a data layer's traffic bodies (owned by the
+dressing that carries their slot). One lifecycle builds each in its
+turn, weighs it from its build, compiles it before it hangs and frees
+it once its compile has ended; two hang policies differ only in when
+it hangs — a dressing once its compile wait is over (a level's
+hand-over waits on it, below; a compile that then runs out of memory
+takes it down again), the murals and the traffic bodies once their
+compile has ended (nothing waits on them). The heavy dressing — vegetation,
 lamps, monuments, rails — waits behind a gate the HUD opens after the handover
 (`startStreaming`, [ADR 0024](./adr/0024-site-streams-as-3d-tiles.md)'s
-second phase) and is built one tile at a time. A tile with nothing on
+second phase) and is built one tile at a time in the site's lane, with
+the traffic bodies (a coarse level's first); the murals build beside it
+(a fetch and a decode a drawing, no long task). A tile with nothing on
 screen shows at once, bare, and is dressed after; a terrain level that
 takes over from its tile's other level on screen — the fine one replacing
 the coarse one as the view comes closer, or back — is loaded only once
