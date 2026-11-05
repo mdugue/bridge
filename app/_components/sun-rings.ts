@@ -56,6 +56,7 @@ import {
   ringDepth,
   ringFade,
   ringFocus,
+  ringForNearBand,
   ringTouches,
   SHADOW_RING_HALVES,
   SHADOW_RINGS,
@@ -64,7 +65,7 @@ import {
 import type { RingArea, RingPoint, RingView } from "@/lib/city/shadow-rings";
 import type { F, I, V3 } from "./shader-chunks";
 import { ShadowNodeBase } from "./shadow-node-api";
-import type { FrameLike, ShadowTargets } from "./shadow-node-api";
+import type { FrameLike, ShadowTargets, StackBuilder } from "./shadow-node-api";
 import { castsInRing } from "./three-utils";
 
 /** What a shadow lookup reads of the rings: one set for every material and
@@ -136,7 +137,9 @@ export function ringLookup(
       )
     );
   }
-  // from the widest in: a ring that reaches this point takes it over
+  // from the widest in: a ring that reaches this point takes it over, and what
+  // gives the rest is the strongest of those further out. In Modell two tiles'
+  // bands meet where a third holds at full strength: not always ring i + 1.
   const last = SHADOW_RINGS - 1;
   let layer: F = float(last);
   let chosen = at[last];
@@ -144,16 +147,21 @@ export function ringLookup(
   let nextLayer: F = float(last);
   let nextAt = at[last];
   let nextW: F = float(0);
+  let bestLayer: F = float(last);
+  let bestAt = at[last];
+  let bestW = weight[last];
   for (let i = last - 1; i >= 0; i -= 1) {
     const here = step(1e-3, weight[i]);
-    // what reached this point so far is the next out: not always ring i + 1,
-    // Modell's tiles lie side by side
-    nextLayer = mix(nextLayer, layer, here);
-    nextAt = mix(nextAt, chosen, here);
-    nextW = mix(nextW, w, here);
+    nextLayer = mix(nextLayer, bestLayer, here);
+    nextAt = mix(nextAt, bestAt, here);
+    nextW = mix(nextW, bestW, here);
     layer = mix(layer, float(i), here);
     chosen = mix(chosen, at[i], here);
     w = mix(w, weight[i], here);
+    const stronger = step(bestW, weight[i]);
+    bestLayer = mix(bestLayer, float(i), stronger);
+    bestAt = mix(bestAt, at[i], stronger);
+    bestW = mix(bestW, weight[i], stronger);
   }
   return {
     at: keep(chosen),
@@ -180,8 +188,6 @@ interface Ring {
   half: number;
   /** drawn since it last showed: else it holds nothing worth showing */
   fresh: boolean;
-  /** does it draw every caster, however thin (Modell's tiles) */
-  every: boolean;
 }
 
 /** The rings as the rig drives them. */
@@ -192,8 +198,9 @@ export interface SunRings {
   dispose: () => void;
   /** Whether a ring may be drawn in the next frame. */
   due: () => boolean;
-  /** Asks every ring to redraw, or those `area` can fall on. */
-  invalidate: (area?: RingArea) => void;
+  /** Asks every ring to redraw, or those `area` can fall on, or the `finest`
+   *  few: a change only they can show. */
+  invalidate: (area?: RingArea, finest?: number) => void;
   /** The nodes a shadow lookup reads. */
   nodes: ShadowRingNodes;
   /** The map's depth, null until the first lit material made it. */
@@ -295,9 +302,9 @@ class RingShadowNode extends ShadowNodeBase {
   override setupShadow(builder: NodeBuilder): Node {
     // in a stack of its own, dropped: `toVar` writes its lookup into the stack
     // it runs in, which would put a second filter in the first lit material
-    builder.addStack();
+    (builder as StackBuilder).addStack();
     super.setupShadow(builder);
-    builder.removeStack();
+    (builder as StackBuilder).removeStack();
     const { renderer } = builder;
     const { shadow } = this;
     const nodes = this.#nodes;
@@ -398,11 +405,13 @@ export function createSunRings(
     fresh: false,
     half,
     depthHalf: half,
-    every: false,
   }));
   let wanted: readonly number[] = rings.map(() => 1);
   // kept between frames: this runs in every one of them
   const viewWant: number[] = rings.map(() => 1);
+  // the baked horizon's near band stays off inside this ring and comes on past
+  // it: the widest whose texels can still draw what that band knows
+  const reachRing = ringForNearBand(mapEdge);
   // Modell's rings tile one square, and it says what they reach
   let tiled = false;
   // what they were last fitted to: a still picture asks nothing new
@@ -446,7 +455,6 @@ export function createSunRings(
   const fitFootprint = (centre: RingPoint, radius: number, now: number) => {
     const { depthHalf, half, focus } = modelQuadrants(centre, radius, sun);
     for (let i = 0; i < SHADOW_RINGS; i += 1) {
-      rings[i].every = true;
       rings[i].depthHalf = depthHalf;
       rings[i].focus = focus[i];
       wantRing(rings[i], half, now);
@@ -455,10 +463,10 @@ export function createSunRings(
   };
 
   /** Asks every ring that shows, and that `which` picks, to redraw. */
-  const askShown = (which?: (ring: Ring) => boolean) => {
+  const askShown = (which?: (ring: Ring, i: number) => boolean) => {
     const now = performance.now();
     for (let i = 0; i < SHADOW_RINGS; i += 1) {
-      if (wanted[i] > 0 && (!which || which(rings[i]))) {
+      if (wanted[i] > 0 && (!which || which(rings[i], i))) {
         ask(rings[i], now);
       }
     }
@@ -493,7 +501,7 @@ export function createSunRings(
     ring.anchorHalf = half;
     ring.fresh = true;
     nodes.fade[index].value = wanted[index];
-    if (index === SHADOW_RINGS - 1 && !tiled) {
+    if (index === reachRing && !tiled) {
       reach.set(centre.x, -centre.z, half);
     }
   };
@@ -508,7 +516,7 @@ export function createSunRings(
     placeRing(index);
     ring.dirtySince = null;
     ring.drawnAt = now;
-    return { every: ring.every, index };
+    return { every: tiled, index };
   };
 
   shadow.mapSize.set(mapEdge, mapEdge);
@@ -526,10 +534,11 @@ export function createSunRings(
     dispose: () => {
       node.dispose();
     },
-    invalidate: (area) => {
+    invalidate: (area, finest = SHADOW_RINGS) => {
       askShown(
-        area &&
-          ((ring) =>
+        (ring, i) =>
+          (tiled || i < finest) &&
+          (!area ||
             !ring.anchor ||
             ringTouches(ring.anchor, ring.anchorHalf, area, sun))
       );
@@ -570,7 +579,6 @@ export function createSunRings(
         const half = SHADOW_RING_HALVES[i];
         const fade = ringFade(i, view.height);
         viewWant[i] = fade;
-        rings[i].every = false;
         rings[i].depthHalf = half;
         if (fade > 0) {
           ringFocus(half, view, rings[i].focus);

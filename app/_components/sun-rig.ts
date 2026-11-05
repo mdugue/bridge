@@ -121,11 +121,11 @@ export interface SunRig {
    * palette's background come back.
    */
   setParallel: (on: boolean, paper?: Color) => void;
-  /** Asks every ring to redraw, or those `area` can fall on. A ring is
-   * otherwise only redrawn when the sun or the ring moves (autoUpdate is off),
-   * so scene-topology edits (demolish, a tile landing or leaving) must call
-   * this or stale shadows linger. */
-  invalidateShadow: (area?: RingArea) => void;
+  /** Asks every ring to redraw, or those `area` can fall on, or the `finest`
+   * few. A ring is otherwise only redrawn when the sun or the ring moves
+   * (autoUpdate is off), so scene-topology edits (demolish, a tile landing or
+   * leaving) must call this or stale shadows linger. */
+  invalidateShadow: (area?: RingArea, finest?: number) => void;
   /** The square round the view's ground the sun's camera streams for: the
    *  tile stream loads what it sees too, so a building behind the player
    *  still casts into the view. It draws nothing: the rings have a camera
@@ -335,8 +335,8 @@ export function createSunRig(
   const askRings = () => {
     sun.shadow.needsUpdate = sunUp && rings.due();
   };
-  const invalidateShadow = (area?: RingArea) => {
-    rings.invalidate(area);
+  const invalidateShadow = (area?: RingArea, finest?: number) => {
+    rings.invalidate(area, finest);
     askRings();
   };
   let shadowAskedAt = Number.NEGATIVE_INFINITY;

@@ -499,7 +499,8 @@ Traps of the rings:
   redraw one a frame.
 - **Ask only what a change touches.** `invalidateShadows()` redraws all four
   rings; a tile's change goes through `invalidateShownTiles` (only the rings it
-  can fall on, only if what shows changed).
+  can fall on, only if what shows changed), a change near the eye through
+  `sunRig.invalidateShadow(undefined, finest)`.
 - **`renderer.clear()` on a depth array throws on the WebGL2 backend**; the
   render's own clear is what draws a layer clean.
 - The stream's square (`lib/city/shadow-fit.ts`, `sunRig.shadowCamera`) only
@@ -517,9 +518,10 @@ shadow by `min(shadow, lit)` (`sky-light.ts` `applyGroundLight`;
 `groundLitMaterial` for what is baked into the fine terrain: kerbs, fences,
 stairs, walls) — `min`, never a product, so an occluder both see never
 darkens twice. **The near band only counts outside the shadow rings**:
-the sun rig keeps the widest ring's ground centre and half-size in
+the sun rig keeps the ground centre and half-size of the widest ring with
+texels of 4 m at most in
 `shadowReach` (a shared `uniform(Vector3)`, live by reference); the near
-band fades in over the widest ring's last 20 % and beyond it the horizon is
+band fades in over that ring's last 20 % and beyond it the horizon is
 max(near, far) — without it a street past the map lost the shadow of
 the block beside it. Change the rings and this follows by itself;
 never feed the near band inside them (its 8 m / 22.5° smear would

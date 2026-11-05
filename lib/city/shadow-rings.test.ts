@@ -11,6 +11,7 @@ import {
   ringDepth,
   ringFade,
   ringFocus,
+  ringForNearBand,
   ringTouches,
   SHADOW_RING_HALVES,
   SHADOW_RINGS,
@@ -205,6 +206,13 @@ test("a quadrant's depth reaches the picture's far edge", () => {
     LOW_SUN
   );
   expect(depthHalf).toBeCloseTo(240 + half, 5);
+});
+
+test("the near band waits for the widest ring that can draw what it knows", () => {
+  expect(ringForNearBand(2048)).toBe(3);
+  expect(ringForNearBand(900)).toBe(2);
+  expect(ringForNearBand(360)).toBe(2);
+  expect(ringForNearBand(256)).toBe(1);
 });
 
 describe("what falls on a ring", () => {

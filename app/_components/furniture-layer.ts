@@ -801,11 +801,24 @@ function instanced(
   // Spread-out cloud: recompute the sphere or it culls when the origin is off-screen.
   mesh.computeBoundingSphere();
   mesh.castShadow = true;
-  markThinCaster(mesh);
+  markThinCaster(mesh, TALL_FURNITURE.has(model) ? "slender" : "tiny");
   mesh.receiveShadow = true;
   mesh.name = `furniture-${model}`;
   return mesh;
 }
+
+/** What stands tall or wide enough for its shadow to read past the finest
+ *  shadow ring (lib/city/shadow-rings.ts). */
+const TALL_FURNITURE: ReadonlySet<FurnitureModel> = new Set<FurnitureModel>([
+  "climb",
+  "clock",
+  "column",
+  "columnLit",
+  "pedSignal",
+  "playhouse",
+  "post",
+  "shelter",
+]);
 
 /** Non-indexed triangles with per-vertex normal and colour. */
 interface Tris {

@@ -91,7 +91,11 @@ import {
   SHADOW_MAX_RADIUS,
   shadowStreamResolution,
 } from "@/lib/city/shadow-fit";
-import { changedTiles, tileArea } from "@/lib/city/shadow-rings";
+import {
+  changedTiles,
+  THIN_CASTER_RINGS,
+  tileArea,
+} from "@/lib/city/shadow-rings";
 import { cutOutFromView } from "@/lib/city/section";
 import { exportScale, exportTiles } from "@/lib/city/image-export";
 import type { ExportTile } from "@/lib/city/image-export";
@@ -3254,23 +3258,21 @@ async function bootApp(
     if (vegetationLod(vegetationControls, eye, multiTuft, richTrees)) {
       lodChanged = true;
     }
-    if (lodChanged) {
-      invalidateShadows();
-    }
     // the street furniture's cells near the eye (furniture-layer.ts)
     // (none hidden in Modell: its views and exports draw one scale)
     const furnitureEye = modelRig.owns() ? null : eye;
-    let cellChanged = false;
     for (const d of shown) {
       for (const part of [d.furniture, d.tram]) {
         if (part && showFurnitureNear(part, furnitureEye)) {
-          cellChanged = true;
+          lodChanged = true;
         }
       }
     }
-    // on foot a cell flips beyond the finest ring, the only one that draws it
-    if (cellChanged && !furnitureEye) {
-      invalidateShadows();
+    // Both flip within a few hundred metres of the eye (the far crowns at 650
+    // m): the widest ring, which draws every caster, is read only beyond that.
+    if (lodChanged) {
+      invalidateLanternShadow(lantern);
+      sunRig.invalidateShadow(undefined, THIN_CASTER_RINGS.slender);
     }
   };
 

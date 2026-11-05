@@ -154,6 +154,21 @@ export function ringFade(index: number, height: number): number {
   return 1 - t * t * (3 - 2 * t);
 }
 
+/** The coarsest texel (m) that still draws what the baked horizon's near band
+ *  knows, occluders 8–80 m off. */
+const NEAR_BAND_TEXEL_M = 4;
+
+/** The widest ring whose texels on a map of `mapEdge` still draw that. */
+export function ringForNearBand(mapEdge: number): number {
+  let ring = 0;
+  for (let i = 0; i < SHADOW_RINGS; i += 1) {
+    if ((SHADOW_RING_HALVES[i] * 2) / mapEdge <= NEAR_BAND_TEXEL_M) {
+      ring = i;
+    }
+  }
+  return ring;
+}
+
 /** The drift (m) a square of `half` allows before it is redrawn. */
 export function ringDeadZone(half: number, tiled = false): number {
   return half * (tiled ? MODEL_DEAD_ZONE : RING_DEAD_ZONE);

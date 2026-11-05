@@ -35,6 +35,12 @@ export interface ShadowTargets {
   shadowMap: RenderTarget;
 }
 
+/** NodeBuilder's stacks, missing from its @types. */
+export type StackBuilder = NodeBuilder & {
+  addStack: () => void;
+  removeStack: () => void;
+};
+
 declare class ShadowNodeApi extends ShadowNode {
   shadow: LightShadow;
   shadowMap: RenderTarget | null;

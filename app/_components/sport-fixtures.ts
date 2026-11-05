@@ -184,7 +184,7 @@ export function buildSportFixtures(
   if (frames.length > 0) {
     const mesh = new Mesh(mergeGeometries(frames.map(plain)), frameMaterial());
     mesh.castShadow = true;
-    markThinCaster(mesh);
+    markThinCaster(mesh, "slender");
     mesh.receiveShadow = true;
     meshes.push(mesh);
   }

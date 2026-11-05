@@ -13,12 +13,7 @@ import {
 import type { DepthTexture, Matrix4, ShadowNode } from "three/webgpu";
 import { uniform } from "three/tsl";
 import { SHADOW_BASE_RADIUS, SHADOW_MAX_RADIUS } from "@/lib/city/shadow-fit";
-import {
-  SHADOW_RING_HALVES,
-  SHADOW_RINGS,
-  THIN_CASTER_RINGS,
-} from "@/lib/city/shadow-rings";
-import { FURNITURE_IN_M } from "./furniture-layer";
+import { SHADOW_RINGS, THIN_CASTER_RINGS } from "@/lib/city/shadow-rings";
 import { shadowMapSizeFor } from "./scene-profile";
 import { createSunRig } from "./sun-rig";
 import { castsInRing, markThinCaster } from "./three-utils";
@@ -316,10 +311,12 @@ test("the rings take the size they are given", () => {
   );
 });
 
-test("a furniture cell flips beyond the finest ring, the only one to draw it", () => {
-  // create-app.ts asks no redraw for it on foot; furniture is marked `tiny`
-  expect(THIN_CASTER_RINGS.tiny).toBe(1);
-  expect(FURNITURE_IN_M).toBeGreaterThan(SHADOW_RING_HALVES[0] * 3);
+test("a change near the eye leaves the widest ring alone", () => {
+  const { sunRig, sun } = rig();
+  walkTo(sunRig, 0, 0);
+  drawAll(sun);
+  sunRig.invalidateShadow(undefined, THIN_CASTER_RINGS.slender);
+  expect(drawAll(sun).toSorted((a, b) => a - b)).toEqual([0, 1, 2]);
 });
 
 test("a change far off asks only the rings it can fall on", () => {

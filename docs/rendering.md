@@ -314,8 +314,9 @@ change, not a re-bake
   - **The lookup.** A fragment reads the finest ring it lies on, cross-faded
     with the next across that ring's outer 7 % (`ringLookup`, `mix` and
     `step` only; the second read is behind a branch and costs only there).
-    Past the widest ring it reads none and the horizon takes over
-    (`shadowReach`). The picture styles and the nameplate read through the
+    Past the widest ring it reads none and the horizon takes over; its near band
+    comes on past the widest ring with texels of 4 m at most (`shadowReach`,
+    the third ring on a phone). The picture styles and the nameplate read through the
     same lookup (`sun-shadow-read.ts`). A ring's matrix changes only as it
     is drawn, so a ring waiting for its redraw shows what it held, where it
     held it, and no shadow slides off its caster.
@@ -328,9 +329,9 @@ change, not a re-bake
     the rings it can fall on.
   - **When they draw.** A ring asks to redraw when its wanted centre has
     drifted a fifth of its half-size, the sun moves or a caster changes
-    (`invalidateShadows()`: a crown tier's swap, a season change that thins or
-    fills crowns, a demolish). A furniture cell's flip on foot asks nothing: it
-    lies beyond the finest ring, the only one that draws it. A capture and the
+    (`invalidateShadows()`: a season change that thins or fills crowns, a
+    demolish). A crown tier's swap and a furniture cell's flip happen within
+    650 m of the eye and leave the widest ring alone. A capture and the
     boot's light stage wait for all four rings (`shadowBusy`). A tile's parts that land, leave or take over ask only the rings
     the tile can fall on (`ringTouches`, seen along the light), and only if
     what shows did change: the stream reports every tile that comes into or
@@ -343,10 +344,10 @@ change, not a re-bake
   - **What they draw.** The depth range reaches half-size / tan + 450 m /
     sin of the sun's elevation toward the sun, so a tower standing beyond
     the square's far edge under a low sun still casts into it. Casters
-    marked `markThinCaster` stop short of the coarse rings: kerbs, furniture,
-    tree stakes and sports fixtures go into the finest ring only, their shadow
-    fading across its edge instead of dissolving into the filter's samples;
-    lamps and tram masts, thin but long, into the first three, so a low sun's
+    marked `markThinCaster` stop short of the coarse rings: kerbs, benches, bins
+    and tree stakes go into the finest ring only, their shadow fading across
+    its edge instead of dissolving into the filter's samples; lamps, tram
+    masts, goals, shelters and other tall furniture into the first three, so a low sun's
     line of shadow stays on the ground as the camera climbs, ever softer. The depth bias is 1.1 of the ring's texels (0.09 m on the finest).
     Terrain **receives only**, `normalBias = 0`.
   - **As the camera climbs** a ring fades out between 1.5 and 2.5 half-sizes
@@ -915,7 +916,7 @@ the safety levels 1, 2 and 3:
 |---|---|---|---|
 | Tiles | the whole site streams (`tileset.json`), out to the fog's end × 1.1 (`streamFarFor`) | same, but to 2.2 km at most | spawn tile only (`tileset-spawn.json`; `&block=1` streams the site) |
 | Terrain | L0 TIN (±0.15 m) near, L1 512² grid beyond (the switch at ≈ 2.6 km from a tile for a viewport 1080 CSS px high; ≈ 2.1 km on an iPhone in portrait) | same | same |
-| Shadow rings, four of | 2048² (1024², 1024², 512²) | 900² (900², 450², 450²) | 256² |
+| Shadow rings, four of | 2048² (1024², 1024², 512²) | 900² (900², 360², 360²) | 256² |
 | Shadow camera streams at | 128 px, by day; from level 2 never | never | as the tier |
 | Rasters decoding at once (`RASTER_TURNS`) | 5 | 1 | as the tier |
 | Pixel ratio | ≤ 1.5 (1.25, 1.0, 1.0; ≤ 2 until 2026-10-10: a retina laptop's 5.2 MP of post stack, 1.5 is 56 % of it), × 0.85 / 0.72 / 0.6 while the GPU misses 50 fps (`lib/city/resolution-scale.ts`) | ≤ 1.5 (1.25, 1.0, 0.85), × 0.85 / 0.72 while it misses 40 fps | 0.5, never scaled |
