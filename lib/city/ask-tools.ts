@@ -133,8 +133,9 @@ export interface TimeChange {
 
 /** What the model hears for a change that sets nothing, or a time no clock
  *  or calendar has (25:00, 2026-02-31); null for a good one. 24:00 is good:
- *  the day's last minute. The first century is refused: `Date` reads its
- *  years as 19xx. */
+ *  the day's last minute. The first century is refused, and the year 100
+ *  with it, which an offset can tip back into it: `Date` reads those years
+ *  as 19xx. */
 export function timeProblem({ datum, uhrzeit }: TimeChange): string | null {
   if (!(uhrzeit || datum)) {
     return "Gib eine Uhrzeit oder ein Datum an.";
@@ -152,9 +153,7 @@ export function timeProblem({ datum, uhrzeit }: TimeChange): string | null {
   if (!CALENDAR_DAY.safeParse(datum).success) {
     return "Dieses Datum gibt es nicht.";
   }
-  return datum.startsWith("00")
-    ? "So weit reicht die Szenenzeit nicht zurück."
-    : null;
+  return datum < "0101" ? "So weit reicht die Szenenzeit nicht zurück." : null;
 }
 
 const STYLE_IDS = RENDER_STYLES.map((s) => s.id) as [

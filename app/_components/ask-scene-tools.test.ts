@@ -45,6 +45,7 @@ test("setze_zeit refuses a time no clock or calendar has, and sets none", async 
   expect(await ok({ datum: "2026-02-31" })).toBe(false);
   // `Date` would read the first century as 19xx
   expect(await ok({ datum: "0050-06-21" })).toBe(false);
+  expect(await ok({ datum: "0100-01-01" })).toBe(false);
   expect(await ok({})).toBe(false);
   expect(set).toEqual([]);
   expect(await ok({ uhrzeit: "24:00" })).toBe(true);
