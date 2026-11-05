@@ -2,6 +2,7 @@ import {
   AdditiveBlending,
   MeshBasicNodeMaterial,
   PlaneGeometry,
+  Vector2,
   Vector4,
 } from "three/webgpu";
 import type {
@@ -41,6 +42,7 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
+import { outOfDesignSite } from "./design-site";
 import { Instances } from "./instancing";
 import { viewDirection } from "./view-direction";
 import type { DeviceTier } from "./scene-profile";
@@ -129,8 +131,14 @@ function mirrorSet(
 const TRACKS = mirrorSet({ desktop: 24, mobile: 8 }, [250, 400]);
 
 /** How far off (m) a lamp's column on the water still shows, fading from
- *  the first. */
-const WATER_REACH: [number, number] = [1200, 1600];
+ *  the first, by tier: a phone draws the near river's columns only, each
+ *  one more quad of overdraw. */
+const WATER_REACH: Readonly<Record<DeviceTier, [number, number]>> = {
+  desktop: [1200, 1600],
+  mobile: [500, 700],
+};
+/** The tier's reach, set by `createLampReflections`. */
+const waterReach = uniform(new Vector2(...WATER_REACH.desktop));
 /** The share of the last lamp's distance over which a lamp leaving the
  *  set fades out (a hand-over band, not a pop). */
 const HAND_OVER = 0.2;
@@ -326,14 +334,16 @@ const mirrorQuad = Fn(() => {
   const u = mix(near, far, step(0, corner.y));
   // the eye over the water and the lamp within reach: else a point
   const shown = step(0.2, eye.y.sub(level)).mul(
-    step(length(eye.sub(head)), WATER_REACH[1])
+    step(length(eye.sub(head)), waterReach.y)
   );
   const xz = head.xz
     .add(along.mul(u))
     .add(across.mul(half.mul(corner.x)))
     .mul(shown)
     .add(head.xz.mul(shown.oneMinus()));
-  return vec3(xz.x, level, xz.y);
+  // a planner's design over the site folds it into the lamp's foot, as
+  // the halo (instancing.ts `instancePosition`)
+  return outOfDesignSite(vec3(xz.x, level, xz.y), vec3(head.x, level, head.z));
 });
 
 /**
@@ -365,8 +375,8 @@ function mirrorLight(): V3 {
     smoothstep(1, 0.7, abs(rim.y))
   );
   const far = smoothstep(
-    WATER_REACH[0],
-    WATER_REACH[1],
+    waterReach.x,
+    waterReach.y,
     length(cameraPosition.sub(head))
   ).oneMinus();
   return color(LAMP_LIGHT).mul(
@@ -380,8 +390,9 @@ function mirrorLight(): V3 {
  * `buildGlow`, the mirrored heads first): its own are the first
  * `mirrors.length`, each water level written into its matrix's
  * `LEVEL_ENTRY` here, so a column costs no memory of its own. Drawn by
- * night only, after the water (additive, no depth write); never culled
- * as a set, since a column lies where the eye is, not where the lamps are.
+ * night only, after the water (additive, no depth write); not culled by
+ * its own bounds, since a column lies toward the eye, not where the lamps
+ * are (it goes with its tile's dressing, as the halos do).
  */
 export function buildLampMirrors(
   matrices: InstancedInterleavedBuffer,
@@ -563,6 +574,7 @@ export function createLampReflections(tier: DeviceTier): LampReflections {
   let heads: readonly Vector3[] = [];
   let night = 0;
   const tracks = chooser(TRACKS, tier);
+  waterReach.value.set(...WATER_REACH[tier]);
   const none: readonly Vector3[] = [];
   return {
     setHeads: (next) => {

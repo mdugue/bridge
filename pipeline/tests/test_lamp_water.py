@@ -33,7 +33,7 @@ def _scene(house: bool):
 
 def test_a_quay_lamp_sees_the_river_past_the_bank():
     head, ground, surface, water, field = _scene(house=False)
-    seen, level = lamp_water.seen_rays(
+    seen, level, _ = lamp_water.seen_rays(
         head, ground, surface, water, field, lamp_water.ray_steps(RES)
     )
     assert lamp_water.opening(seen)
@@ -45,7 +45,9 @@ def test_a_quay_lamp_sees_the_river_past_the_bank():
 
 def test_a_house_keeps_a_lamp_from_the_river():
     head, ground, surface, water, field = _scene(house=True)
-    seen, _ = lamp_water.seen_rays(head, ground, surface, water, field, lamp_water.ray_steps(RES))
+    seen, _, _ = lamp_water.seen_rays(
+        head, ground, surface, water, field, lamp_water.ray_steps(RES)
+    )
     assert not lamp_water.opening(seen)
 
 
@@ -55,3 +57,14 @@ def test_one_ray_through_a_gap_is_no_view():
     assert not lamp_water.opening(seen)
     seen[[0, 1, lamp_water.AZIMUTHS - 1]] = True  # three round the wrap
     assert lamp_water.opening(seen)
+
+
+def test_a_pond_and_the_river_beside_it_are_not_averaged():
+    level = np.full(lamp_water.AZIMUTHS, np.nan, np.float32)
+    reach = np.full(lamp_water.AZIMUTHS, np.nan, np.float32)
+    rays = np.zeros(lamp_water.AZIMUTHS, bool)
+    # three rays to a pond 20 m off (110 m), three to the river 90 m off
+    level[0:3], reach[0:3] = 110.0, 20.0
+    level[10:13], reach[10:13] = 104.0, 90.0
+    rays[0:3] = rays[10:13] = True
+    assert lamp_water.water_level(level, reach, rays) == 110.0

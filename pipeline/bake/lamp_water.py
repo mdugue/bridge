@@ -16,9 +16,11 @@ lane behind the first row of houses, whose light the houses keep from the
 river (one ray through a gap between two houses is no view of it). Before,
 the viewer mirrored every lamp within 80 m of the water, and none farther.
 
-The level: the lowest DGM1 over the first WATER_RUN_M of each seeing ray's
-water (its bank cell climbs the bank), the median over the rays — the
-viewer's water sheet lies on the same ground.
+The level: the median DGM1 over WATER_RUN_M of each seeing ray's water past
+its first cells (they climb the bank); the lamp's, its nearest water's —
+the median of the rays within SAME_WATER_M of the nearest ray's level, so a
+pond and the river beside it are not averaged. The viewer's water sheet
+lies on the same ground.
 
 The lamps' own files are rewritten (OSM's `lamps_`, Mapillary's lamps in
 `mly_`), so this runs after lamp_heights.py, whose heights it reads."""
@@ -31,8 +33,8 @@ from pathlib import Path
 
 import numpy as np
 
-from .classes import WATER
-from .common import Tile, overlaps
+from .bridge import Wet
+from .common import Tile
 from .lamp_heights import LAMP_H
 from .skyview import Field, Roofs, fields
 
@@ -40,36 +42,21 @@ REACH_M = 300.0  # how far a lamp's light is followed to the water
 FIELD_PX = 1024  # the height field's cells over the tile (≈ 2 m)
 AZIMUTHS = 64  # rays round a lamp, 5.6° apart
 OPENING = 3  # neighbouring rays (11°) that must see the water
+SAME_WATER_M = 1.0  # rays' levels this close are one water
 NEAR_M = 3.0  # the field this close to the head is the lamp's own facade
 CLEAR_M = 0.3  # an occluder must stand this far over the line
-WATER_RUN_M = 12.0  # a ray's water read for the level, from its first cell
+WATER_RUN_M = 12.0  # a ray's water read for the level, past its first cells
+BANK_CELLS = 2  # a ray's first water cells, on the bank's slope
 WATER_OUT_M = 40.0  # how far past its first water cell a ray's light may land
 
 
-def water_field(tile: Tile, field: Field, sources) -> np.ndarray:
+def water_field(tile: Tile, field: Field) -> np.ndarray:
     """Whether each cell of the field is water, by every committed class
-    raster it touches (False where none reaches)."""
-    out = np.zeros(field.shape, bool)
-    bounds = (field.xmin, field.ymin, field.xmax, field.ymax)
+    raster it touches (bridge.py `Wet`; False where none reaches)."""
     xs = field.xmin + (np.arange(field.cols) + 0.5) * field.res
     ys = field.ymax - (np.arange(field.rows) + 0.5) * field.res
-    for tid, b in sources:
-        if not overlaps(b, bounds):
-            continue
-        classes = tile.classes(tid)
-        if classes is None:
-            continue
-        h, w = classes.shape
-        cols = np.floor((xs - b[0]) / (b[2] - b[0]) * w).astype(int)
-        rows = np.floor((b[3] - ys) / (b[3] - b[1]) * h).astype(int)
-        cin = (cols >= 0) & (cols < w)
-        rin = (rows >= 0) & (rows < h)
-        if not cin.any() or not rin.any():
-            continue
-        r_idx, c_idx = np.nonzero(rin)[0], np.nonzero(cin)[0]
-        block = classes[np.ix_(rows[r_idx], cols[c_idx])] == WATER
-        out[np.ix_(r_idx, c_idx)] |= block
-    return out
+    gx, gy = np.meshgrid(xs, ys)
+    return Wet(tile)(gx, gy)
 
 
 def ray_steps(res: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -89,9 +76,10 @@ def seen_rays(
     water: np.ndarray,
     field: Field,
     steps: tuple[np.ndarray, np.ndarray, np.ndarray],
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """For each ray from the lamp's `head` (x, y, z): whether its light
-    reaches water unblocked, and that water's level (NaN where not)."""
+    reaches water unblocked, that water's level and how far its first
+    water cell is (m; NaN where not)."""
     x, y, z = head
     dx, dy, dist = steps
     col0 = (x - field.xmin) / field.res
@@ -106,15 +94,19 @@ def seen_rays(
     first = np.argmax(wet, axis=1)
     level = np.full(AZIMUTHS, np.nan, np.float32)
     seen = np.zeros(AZIMUTHS, bool)
+    reach = np.full(AZIMUTHS, np.nan, np.float32)
     run = max(1, int(round(WATER_RUN_M / field.res)))
     out = max(1, int(round(WATER_OUT_M / field.res)))
     for k in np.nonzero(hits)[0]:
         f = int(first[k])
         r, c = rows[k], cols[k]
-        # the water's level: its lowest ground over the first stretch (the
-        # bank's wet cells climb the bank)
-        wet_run = wet[k, f : f + run]
-        w = float(np.min(ground[r[f : f + run], c[f : f + run]][wet_run]))
+        # the water's level: the median ground over its first stretch
+        # past the bank's cells, which climb it; all of the stretch where
+        # the water is narrower
+        stretch = slice(f + BANK_CELLS, f + BANK_CELLS + run)
+        if not wet[k, stretch].any():
+            stretch = slice(f, f + run)
+        w = float(np.median(ground[r[stretch], c[stretch]][wet[k, stretch]]))
         # the light lands on the water past the bank's edge: seen when the
         # line from the head to any water cell of the next stretch clears
         # everything dry before it
@@ -127,18 +119,35 @@ def seen_rays(
             if not np.any(dry[:j] & (top[:j] > line + CLEAR_M)):
                 seen[k] = True
                 level[k] = w
+                reach[k] = float(dist[f])
                 break
-    return seen, level
+    return seen, level, reach
+
+
+def in_openings(seen: np.ndarray) -> np.ndarray:
+    """The rays that belong to a run of OPENING neighbouring rays (round
+    the circle) seeing water: a lone ray through a gap belongs to none."""
+    start = np.ones(len(seen), bool)
+    for i in range(OPENING):
+        start &= np.roll(seen, -i)
+    out = np.zeros(len(seen), bool)
+    for i in range(OPENING):
+        out |= np.roll(start, i)
+    return out
 
 
 def opening(seen: np.ndarray) -> bool:
-    """Whether OPENING neighbouring rays (round the circle) see water."""
-    if OPENING <= 1:
-        return bool(seen.any())
-    run = np.ones(len(seen), bool)
-    for i in range(OPENING):
-        run &= np.roll(seen, -i)
-    return bool(run.any())
+    """Whether OPENING neighbouring rays see water."""
+    return bool(in_openings(seen).any())
+
+
+def water_level(level: np.ndarray, reach: np.ndarray, rays: np.ndarray) -> float:
+    """A lamp's water level from its seeing `rays`: the nearest water's —
+    the median of the rays whose level lies within SAME_WATER_M of the
+    nearest ray's, so a pond and the river beside it are not averaged."""
+    near = level[rays][np.argmin(reach[rays])]
+    same = rays & (np.abs(level - near) <= SAME_WATER_M)
+    return float(np.median(level[same]))
 
 
 def lamp_head(f: dict, ground: np.ndarray, field: Field) -> tuple[float, float, float] | None:
@@ -185,17 +194,18 @@ def run(tile: Tile) -> None:
         (xmin - margin * res, ymin - margin * res, xmax + margin * res, ymax + margin * res),
         res,
     )
-    water = water_field(tile, field, sources)
+    water = water_field(tile, field)
     steps = ray_steps(res)
     mirrored = 0
     for f in lamps:
         head = lamp_head(f, ground, field)
         if head is None:
             continue
-        seen, level = seen_rays(head, ground, surface, water, field, steps)
-        if not opening(seen):
+        seen, level, reach = seen_rays(head, ground, surface, water, field, steps)
+        rays = in_openings(seen)
+        if not rays.any():
             continue
-        w = float(np.median(level[seen]))
+        w = water_level(level, reach, rays)
         if not math.isfinite(w) or w >= head[2]:
             continue
         f["properties"]["w"] = round(w, 2)
