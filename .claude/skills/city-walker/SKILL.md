@@ -134,7 +134,10 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   `V3`, `V4`, `Live`), `dataXY()` / `dataPosition()` (glTF positions are
   quantised, so the data frame comes from world space: world (x, y, z) =
   data (x, −z, y)), `rasterUv(xy, origin, size)` (the corner a
-  `uniform(Vector2)`, so every tile builds the same shader), `texSize`.
+  `uniform(Vector2)`, so every tile builds the same shader), and what the
+  chunks compute with: a raster's texels (`texelSize`, `texelAt`,
+  `loadTexel`, `byteOf`), `floorMod`, the hashes and the noise (`gdHash`,
+  `gdNoise`, `gdNoiseSlope`, `gdBand`, `hash21`).
 - `instancing.ts` — `Instances`, the instanced set every layer uses instead
   of `InstancedMesh`, and its nodes (`instancePosition`, `instanceTint`,
   `instanceMatrix`, `instanceFloat`).
@@ -739,9 +742,11 @@ were ported from; the layer file, not the sandbox, is the source of truth.
 ## Bridges (ADR 0041)
 
 Decks come from the Basis-DLM (`ver06_l` centrelines, `ver06_f` outlines),
-built per fine terrain tile by `rail-layer.ts`; **only the tile owning a
-deck's centre draws it** (`RailContext.owns`), every copy still lifts that
-tile's rails. The bake (`rail.py` + `bridge.py`) reads a DGM/DOM mosaic
+built per fine terrain tile by `bridge-layer.ts` (called from
+`rail-layer.ts`; the lift table and the approaches' plan are
+`bridge-deck.ts`, which a layer that only rides the decks imports alone);
+**only the tile owning a deck's centre draws it** (`BridgeContext.owns`),
+every copy still lifts that tile's rails. The bake (`rail.py` + `bridge.py`) reads a DGM/DOM mosaic
 700 m around the tile, so a seam bridge is the same in both files. What it
 measures in DOM1: the **roadway** (lower third across the deck, held
 −6/+4 m around the abutment ramp) and, on bridges whose class stands above

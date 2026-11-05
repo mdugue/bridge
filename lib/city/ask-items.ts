@@ -86,7 +86,7 @@ const MIN_CROWN_R = 0.8;
 /** The tallest a pick reaches above a monument with no measured form. */
 const BASIN_RIM = 1;
 /** How far the deck's pick reaches over and under the measured top (m):
- *  the railing; the slab (rail-layer.ts DECK_DEPTH) and a little. */
+ *  the railing; the slab (bridge-layer.ts DECK_DEPTH) and a little. */
 const DECK_ABOVE = 1.3;
 const DECK_BELOW = 1.3;
 
