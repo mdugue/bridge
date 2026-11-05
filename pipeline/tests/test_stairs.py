@@ -319,6 +319,8 @@ def test_the_dgm_opens_only_the_tile_and_its_grid_neighbours(tmp_path, reader):
         ("0.16", 0.16),
         ("16 cm", 0.16),
         ("16", 0.16),  # a bare number of centimetres
+        ("ca. 16", 0.16),  # approximate, still bare
+        ("~16", 0.16),
         ("16 m", stairs.TAGGED_RISER),  # metres as written: no riser
         ("2", stairs.TAGGED_RISER),  # neither 2 m nor 2 cm
         ("40", stairs.TAGGED_RISER),

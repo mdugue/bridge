@@ -130,13 +130,22 @@ def osm_metres(value: str | None, *, signed: bool = False) -> float | None:
     (`3;4`), words around it — where `osm_number` would take the first number as metres. A sign only
     when `signed` (a negative value is then read as written, for the caller
     to reject)."""
+    length = osm_length(value, signed=signed)
+    return None if length is None else length[0]
+
+
+def osm_length(value: str | None, *, signed: bool = False) -> tuple[float, bool] | None:
+    """`osm_metres`'s length and whether the value named its unit (`16 cm`,
+    `16 m`: True; `16`, `ca. 16`, `~16`: False), for a reader that takes a
+    bare number in another unit."""
     m = _METRES.fullmatch(value or "")
     if m is None:
         return None
     number = m.group(1)
     if number[0] == "-" and not signed:
         return None
-    return float(number.replace(",", ".")) * _PER_METRE.get((m.group(2) or "").lower(), 1.0)
+    unit = m.group(2)
+    return float(number.replace(",", ".")) * _PER_METRE.get((unit or "").lower(), 1.0), bool(unit)
 
 
 # The widest a mapped `width` is believed (m): wider is a mistagged area.

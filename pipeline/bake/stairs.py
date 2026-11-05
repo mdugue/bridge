@@ -29,7 +29,6 @@ level, and the build lifts the terrain inside it (lib/city/stairs.ts)."""
 from __future__ import annotations
 
 import dataclasses
-import re
 from collections import Counter
 
 import numpy as np
@@ -46,7 +45,7 @@ from .common import (
     mosaic,
     write_geojson,
 )
-from .osm import has_extract, osm_metres, osm_number, read_osm, tag
+from .osm import has_extract, osm_length, osm_metres, osm_number, read_osm, tag
 from .walls import FENCE_WHERE, MATERIALS, lines_of, majority, site_extent
 
 WHERE = "highway = 'steps'"
@@ -246,17 +245,16 @@ def landing(dgm: Dgm, end, inner) -> float | None:
 
 def tagged_riser(other_tags: str | None) -> float | None:
     """A flight's `step:height` (m) within MIN_RISER–MAX_RISER: a bare
-    number past it but within that range in centimetres (`16`) read as cm,
-    anything else (`16 m`, `2`) no riser — times a step count it was a
-    flight 160 m high."""
-    value = tag(other_tags, "step:height")
-    riser = osm_metres(value)
-    if riser is None:
+    number past it but within that range in centimetres (`16`, `ca. 16`)
+    read as cm, anything else (`16 m`, `2`) no riser — times a step count
+    it was a flight 160 m high."""
+    length = osm_length(tag(other_tags, "step:height"))
+    if length is None:
         return None
+    riser, unit = length
     if MIN_RISER <= riser <= MAX_RISER:
         return riser
-    bare = re.fullmatch(r"\s*\d+(?:[.,]\d+)?\s*", value or "")
-    return riser / 100 if bare and MIN_RISER <= riser / 100 <= MAX_RISER else None
+    return riser / 100 if not unit and MIN_RISER <= riser / 100 <= MAX_RISER else None
 
 
 def tagged_rise(other_tags: str | None) -> float | None:
