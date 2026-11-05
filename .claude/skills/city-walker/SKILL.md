@@ -287,7 +287,7 @@ sun and the date move (`sceneNight`, `fountainsOn`, `clockMinutes`) lives
 in `scene-environment.ts`, written by `setSun` through the environment —
 a layer reads it and adds no setter. A scene-wide material drawn only
 after dark wears `drawnAtNight` (its `visible`, no rebuild); a new compile
-path shows the materials under what it compiles for its call (`withMaterialsShown`), or
+path shows the night-only materials under what it compiles for its call (`withNightMaterialsShown`), or
 such a material builds in the first dusk frame. Inside `If`/branches read textures with an explicit `.level(0)` or
 `textureLoad` (no implicit derivatives in non-uniform control flow).
 

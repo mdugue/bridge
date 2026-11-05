@@ -1,4 +1,5 @@
 import { expect, jest, test } from "bun:test";
+import { BoxGeometry, Mesh, MeshBasicNodeMaterial } from "three/webgpu";
 import { createLookState } from "@/lib/city/look-state";
 import { climateDay, dayOfYear } from "@/lib/city/tree-season";
 import { SEASON_THROTTLE_MS } from "./crown-season";
@@ -6,8 +7,10 @@ import type { SceneClock } from "./feature-seam";
 import {
   clockMinutes,
   createSceneEnvironment,
+  drawnAtNight,
   fountainsOn,
   sceneNight,
+  withNightMaterialsShown,
 } from "./scene-environment";
 import type { SunState } from "./sun-rig";
 
@@ -129,4 +132,19 @@ test("the fountains run from mid-April and are drained from November", () => {
   } finally {
     env.dispose();
   }
+});
+
+test("a compile by day sees the night-only materials shown, and no other hidden one", () => {
+  sceneNight.value = 0;
+  const halo = drawnAtNight(new MeshBasicNodeMaterial());
+  const off = new MeshBasicNodeMaterial();
+  off.visible = false;
+  const mesh = new Mesh(new BoxGeometry(), [halo, off]);
+  expect(
+    withNightMaterialsShown(mesh, () => [halo.visible, off.visible])
+  ).toEqual([true, false]);
+  expect(halo.visible).toBe(false);
+  // let go of on dispose: no longer shown for a compile
+  halo.dispose();
+  expect(withNightMaterialsShown(mesh, () => halo.visible)).toBe(false);
 });

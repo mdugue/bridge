@@ -355,21 +355,29 @@ test("a compile sees a drawable's materials shown, and then each as it was", () 
   const hidden = new MeshBasicNodeMaterial();
   hidden.visible = false;
   const shown = new MeshBasicNodeMaterial();
-  const mesh = new Mesh(new BoxGeometry(), [hidden, shown]);
-  const seen = withMaterialsShown(mesh, () => [hidden.visible, shown.visible]);
-  expect(seen).toEqual([true, true]);
+  // hidden for good: not among those shown for a compile
+  const off = new MeshBasicNodeMaterial();
+  off.visible = false;
+  const among = new Set([hidden, shown]);
+  const mesh = new Mesh(new BoxGeometry(), [hidden, shown, off]);
+  const seen = withMaterialsShown(mesh, among, () => [
+    hidden.visible,
+    shown.visible,
+    off.visible,
+  ]);
+  expect(seen).toEqual([true, true, false]);
   expect([hidden.visible, shown.visible]).toEqual([false, true]);
   // a single material, put back even when the compile throws
   const single = new Mesh(new BoxGeometry(), hidden);
   expect(() =>
-    withMaterialsShown(single, () => {
+    withMaterialsShown(single, among, () => {
       expect(hidden.visible).toBe(true);
       throw new Error("lost device");
     })
   ).toThrow("lost device");
   expect(hidden.visible).toBe(false);
   // nothing to show on an empty group
-  expect(withMaterialsShown(new Group(), () => 1)).toBe(1);
+  expect(withMaterialsShown(new Group(), among, () => 1)).toBe(1);
 });
 
 test("a compile of a group sees its descendants' night-only materials shown", () => {
@@ -384,9 +392,11 @@ test("a compile of a group sees its descendants' night-only materials shown", ()
     new Mesh(new BoxGeometry(), night),
     new Mesh(new BoxGeometry(), [night, day])
   );
-  expect(withMaterialsShown(root, () => [night.visible, day.visible])).toEqual([
-    true,
-    true,
-  ]);
+  expect(
+    withMaterialsShown(root, new Set([night]), () => [
+      night.visible,
+      day.visible,
+    ])
+  ).toEqual([true, true]);
   expect([night.visible, day.visible]).toEqual([false, true]);
 });

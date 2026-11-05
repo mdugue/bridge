@@ -1,5 +1,5 @@
 import { uniform } from "three/tsl";
-import type { Material } from "three/webgpu";
+import type { Material, Object3D } from "three/webgpu";
 import type { LookValues } from "@/lib/city/look-controls";
 import { fountainsRun } from "@/lib/city/monuments";
 import { climateDay } from "@/lib/city/tree-season";
@@ -9,6 +9,7 @@ import { createHook, createWatch } from "./feature-seam";
 import type { SceneClock, Watch } from "./feature-seam";
 import type { Live } from "./shader-chunks";
 import type { SunState } from "./sun-rig";
+import { withMaterialsShown } from "./three-utils";
 
 /**
  * The scene environment: the values the sun and the scene's date move
@@ -56,8 +57,8 @@ const nightOnly = new Set<Material>();
  * three skips their additive passes outright. A material's `visible` is
  * in no build's key and bumps no version: the switch costs no rebuild.
  * A compile walks past a hidden material too, so every compile path
- * shows a drawable's materials for its call (three-utils.ts
- * `withMaterialsShown`). Let go of on the material's `dispose`.
+ * shows these for its call (`withNightMaterialsShown`). Let go of on the
+ * material's `dispose`.
  */
 export function drawnAtNight<T extends Material>(material: T): T {
   if (!nightOnly.has(material)) {
@@ -68,6 +69,15 @@ export function drawnAtNight<T extends Material>(material: T): T {
   }
   material.visible = sceneNight.value > NIGHT_DRAWN;
   return material;
+}
+
+/** Runs `during` (a compile) with the night-only materials under `object`
+ *  shown, each put back after (three-utils.ts `withMaterialsShown`). */
+export function withNightMaterialsShown<T>(
+  object: Object3D,
+  during: () => T
+): T {
+  return withMaterialsShown(object, nightOnly, during);
 }
 
 /** What a dressing binds at birth and lets go at its release. */

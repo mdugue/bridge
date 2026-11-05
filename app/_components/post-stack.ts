@@ -72,12 +72,12 @@ import { createSelectionOutline } from "./selection-outline";
 import type { OutlineSelection } from "./selection-outline";
 import { createPipelineAnchors } from "./pipeline-anchors";
 import type { PipelineAnchors } from "./pipeline-anchors";
+import { withNightMaterialsShown } from "./scene-environment";
 import type { PostProfile } from "./scene-profile";
 import type { F, Live, V2, V3, V4 } from "./shader-chunks";
 import {
   aloneUnder,
   compileRepresentatives,
-  withMaterialsShown,
 } from "./three-utils";
 import { createStyleDressing } from "./style-dressing";
 import { createStylize } from "./stylize-effect";
@@ -965,7 +965,7 @@ export function createPostStack(
     try {
       // its materials shown too: one hidden for now (drawn only after
       // dark) would compile nothing
-      compiling = withMaterialsShown(
+      compiling = withNightMaterialsShown(
         object,
         async () => await renderer.compileAsync(object, view, scene)
       );
@@ -1094,7 +1094,7 @@ export function createPostStack(
         group,
         object,
         async () =>
-          await withMaterialsShown(
+          await withNightMaterialsShown(
             object,
             async () => await renderer.compileAsync(group, view, scene)
           )
