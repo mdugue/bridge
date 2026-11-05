@@ -361,7 +361,7 @@ Schattenkarte, halbe Auflösung; nur für automatische Tests.
 
 **Snapshot** — der JSON-Text, der Kamera, Datum/Uhrzeit, den Bildstil,
 den Nebel, den Kronen-Schalter und die Datenebenen festhält, um eine
-Ansicht zu reproduzieren; ein Ansichts-Link (`#snap=`) trägt ihn in
+Ansicht zu reproduzieren; ein Ansichts-Link (`?snap=`) trägt ihn in
 seiner Adresse.
 
 **Aussichtspunkt** — einer der gestalteten Standpunkte, zu denen die

@@ -63,9 +63,9 @@ bun dev        # bakes public/data, then serves https://localhost:3000 (self-sig
 - **Reference views** are committed (plan 048): `qa/views/<name>.json`,
   written by `bun scripts/qa-views.ts` from the data. Their index,
   [`qa/views/README.md`](../../qa/views/README.md), says what each
-  checks and gives its link (`/dresden#snap=…`: put the preview's or
-  production's origin in front — on a phone too; a new link in a tab
-  that shows the city applies at once). `bun run shots` renders them as
+  checks and gives its link (`/dresden?snap=…`: put the preview's or
+  production's origin in front — on a phone too). `bun run shots`
+  renders them as
   `shots/qa-<name>.png` (`-- --grep qa-<name>` for one). The poses were
   computed, not looked at: a view framed badly is fixed in the
   generator's table, under its name.

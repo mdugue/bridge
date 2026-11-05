@@ -53,7 +53,7 @@ const SHOTS_QUERY = (process.env.SHOTS_QUERY ?? "").replace(/^\?/u, "");
 const SHOTS_SITE = process.env.SHOTS_SITE ?? "dresden";
 const SHOTS_TAG = process.env.SHOTS_TAG ?? "";
 /**
- * `SHOTS_AT=1`: boot the page at the snapshot's own place (`#at=lat,lng`
+ * `SHOTS_AT=1`: boot the page at the snapshot's own place (`?at=lat,lng`
  * from its `camera.epsg`) instead of the site's spawn. The `lite` scene
  * streams only around where it booted, so a pose a kilometre from the
  * spawn would otherwise show the wrong part of the city — the street
@@ -72,8 +72,7 @@ function shotUrl(snap: Snapshot): string {
   if (!at) {
     return `/${SHOTS_SITE}${query}`;
   }
-  const [path, hash] = arrivalHref(SHOTS_SITE, at).split("#");
-  return `${path}${query}#${hash}`;
+  return `${arrivalHref(SHOTS_SITE, at)}${SHOTS_QUERY ? `&${SHOTS_QUERY}` : ""}`;
 }
 
 /** Hide every HUD/control overlay so the shot is a clean render plate:

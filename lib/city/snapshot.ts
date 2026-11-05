@@ -300,12 +300,12 @@ export function parseSnapshot(text: string): SnapshotParse {
 }
 
 /**
- * A view link (plan 048): the snapshot in the address's fragment,
- * `/<site>#snap=<base64url of its JSON>`. The fragment, as the arrival's
- * `#at=` (lib/city/geolocation.ts): a browser never sends it — not in the
- * request, not in a Referer — and the crash trail keeps the query alone,
- * so the camera's place a link carries stays with whoever holds the link.
- * The link carries the snapshot exactly as *Kopieren* writes it and means
+ * A view link (plan 048): the snapshot in the address's query,
+ * `/<site>?snap=<base64url of its JSON>` — a query, not a fragment, so a
+ * link shows in the host's request log and sits beside other parameters.
+ * It reaches the host when opened (the privacy page says so); the crash
+ * trail keeps only the QA knobs of a query (crash-trail.ts `trailUrl`),
+ * so no report carries it. The link carries the snapshot exactly as *Kopieren* writes it and means
  * what pasting that does: no second format, the same `parseSnapshot`.
  */
 export const SNAPSHOT_PARAM = "snap";
@@ -358,19 +358,23 @@ export function snapshotFromParam(param: string): SnapshotParse {
     : parseSnapshot(text);
 }
 
-/** `<path>#snap=…`: the page at `path`, opened at the snapshot's view. */
+/**
+ * `<path>?snap=…`: the page at `path`, opened at the snapshot's view. A
+ * query `path` already has (a QA knob, `/dresden?safety=3`) is kept, and
+ * `snap` set after it.
+ */
 export function snapshotHref(path: string, snapshot: Snapshot): string {
-  return `${path}#${SNAPSHOT_PARAM}=${snapshotToParam(snapshot)}`;
+  const at = path.indexOf("?");
+  const params = new URLSearchParams(at === -1 ? "" : path.slice(at));
+  params.set(SNAPSHOT_PARAM, snapshotToParam(snapshot));
+  return `${at === -1 ? path : path.slice(0, at)}?${params.toString()}`;
 }
 
 /**
- * The view a page was opened with (its `#snap=…`), or null when the
- * fragment names none. Only a fragment: URLSearchParams would read a
- * `?snap=` query just the same, which a browser sends to the host.
+ * The view a page was opened with (its `?snap=…`, given `location.search`),
+ * or null when the query names none.
  */
-export function snapshotFromHash(hash: string): SnapshotParse | null {
-  const param = hash.startsWith("#")
-    ? new URLSearchParams(hash.slice(1)).get(SNAPSHOT_PARAM)
-    : null;
+export function snapshotFromSearch(search: string): SnapshotParse | null {
+  const param = new URLSearchParams(search).get(SNAPSHOT_PARAM);
   return param === null ? null : snapshotFromParam(param);
 }

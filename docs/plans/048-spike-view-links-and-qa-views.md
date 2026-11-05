@@ -12,9 +12,10 @@
 
 ## Status
 
-- **Status**: BUILT (2026-11-05) — A and B; the link is a **fragment**,
-  `#snap=`, not `?snap=` (Findings, decision 1); the ADR 0018 line and
-  the GPU plates wait for the maintainer.
+- **Status**: BUILT (2026-11-05) — A and B; the link is a **query**,
+  `?snap=` (Findings, decision 1: built first as a fragment, the
+  maintainer chose the query the same day); the ADR 0018 line and the
+  GPU plates wait for the maintainer.
 - **Priority**: P3 (direction option, chosen by the maintainer on 2026-10-01)
 - **Effort**: S–M (A: S–M, B: S)
 - **Risk**: LOW
@@ -159,7 +160,9 @@ paths and `docs/adr/`). What moved, and what the build follows:
   that function (`linked`), not a second restore path.
 - Plan 058 moved the arrival hand-off from `?at=` to the fragment
   (`#at=`) because a query reaches the host's request log, the crash
-  trail and the crash card; `arrivalOf(hash)` reads only a fragment.
+  trail and the crash card; `arrivalOf(hash)` read only a fragment.
+  (Reversed 2026-11-05 with decision 1: `?at=` again, the trail keeping
+  only the QA knobs.)
 - `e2e/snapshot-shot.spec.ts` gained `SHOTS_QUERY`, `SHOTS_TAG`,
   `SHOTS_SITE`, `SHOTS_AT`, `SHOTS_SMALL` and a frame-counted settle.
 - Plan 019 has sections M (the phone crash fixes) and N (left by the
@@ -181,16 +184,18 @@ with unrounded floats; `bun` on the codec):
 0043, 0054 kept — the page stays static, nothing new leaves the
 browser, a link carries only view state):
 
-1. **A fragment, not a query: `/<site>#snap=<base64url(JSON)>`.** A
-   `?snap=` query is sent with the request (the host's log) and in the
-   Referer, and the camera's place after *Standort*/*Live* is the
-   visitor's own — exactly why plan 058 moved `?at=` to `#at=`.
-   `snapshotFromHash` reads only a fragment (a `?snap=` query is not
-   read at all); the crash trail keeps the query alone and the reports
-   only the path (`crash-reports.ts`), so nothing of a link reaches a
-   report. Nothing is stored. The privacy page says what *Link
-   kopieren* puts in the clipboard and that an opened link is read only
-   in the browser.
+1. **A query: `/<site>?snap=<base64url(JSON)>`.** Built first as a
+   fragment (`#snap=`, so the camera's place — after *Standort*/*Live*
+   the visitor's own — never reached the host, as plan 058 had done for
+   `#at=`); the maintainer reversed that on 2026-11-05: **URL parameters
+   go in the query**, so a link shows in the host's request log for
+   diagnosis and several parameters sit side by side. `?at=` moved back
+   with it. `snapshotFromSearch` reads `location.search`; the crash
+   trail keeps only the QA knobs of a query (`TRAIL_QUERY`) and the
+   reports only the path (`crash-reports.ts`), so nothing of a link
+   reaches a report. Nothing is stored. The privacy page says that the
+   link carries the camera's place and that opening it puts that in
+   Vercel's request log.
 2. **The whole snapshot, as *Kopieren* writes it**, not a compact form:
    470–650 characters is short enough, and a link then means exactly
    what pasting its JSON means (missing look keys keep the current
@@ -206,14 +211,15 @@ browser, a link carries only view state):
    does not open Modell in Comic. The trail notes `view link` (no
    position). A broken link boots at the spawn and says *Der Link
    enthält keine gültige Ansicht*.
-5. **The link is the site's page without this page's query**
-   (`origin + pathname + #snap=…`): `?scene=lite`, a pinned `?safety=`
-   or `?trail=1` are the page's knobs, not the view's; a QA view that
-   needs one says so in the index.
-   **The address keeps the fragment** (no `replaceState`): a reload
-   opens the view again. A new `#snap=` on a page that is already up
-   (`hashchange`) is applied as *Anwenden* applies a snapshot, gated the
-   same way — so the QA views can be clicked through in one tab.
+5. **The link is the site's page with `snap` alone**
+   (`origin + pathname + ?snap=…`): `?scene=lite`, a pinned `?safety=`
+   or `?trail=1` are this device's knobs, not the view's; a QA view that
+   needs one carries it in its index link, before `snap`
+   (`snapshotHref` keeps a path's query).
+   **The address keeps `snap`** (no `replaceState`): a reload opens the
+   view again. Another link is another page load (a new query is a
+   navigation, and nothing in the app routes to one), so the boot is the
+   one reader; the fragment version's `hashchange` handler is gone.
 6. **The QA views live in `qa/views/`** as the plan said, written by
    `scripts/qa-views.ts` from the data (no GPU here to capture them):
    places from `sites/dresden.ts` and the baked monuments, furniture,
@@ -231,23 +237,23 @@ browser, a link carries only view state):
 **Open questions for the maintainer:**
 
 - **ADR 0018, point 5 — proposed text** (not merged): "A Snapshot also
-  travels as a view link, `/<site>#snap=<base64url of its JSON>`: in the
-  fragment, never a query, so a camera's place never reaches the host;
-  read through the same `parseSnapshot`, refused over 4 KB; its `v`
+  travels as a view link, `/<site>?snap=<base64url of its JSON>`: in the
+  query, like every URL parameter, so the host's request log shows it
+  and the privacy page names it; read through the same `parseSnapshot`, refused over 4 KB; its `v`
   handled as a pasted one's (unknown versions accepted, non-numbers
   refused). A waiting recovery wins over a link, and a link is gated by
   the safety level as a recovery is." ADR 0001 needs no change: a link
   persists nothing.
 - **`?style=noir` as a short form?** Not built: it would be a second
-  meaning for a link and a query the host logs. A whole snapshot in
-  Film noir is ≈ 470 characters; if a short form is wanted, it should be
-  `#style=` beside `#snap=`, read by the same reader.
+  meaning for a link. A whole snapshot in Film noir is ≈ 470
+  characters; if a short form is wanted, it is `?style=` beside
+  `?snap=`, read by the same reader.
 - The QA views' poses were computed, not looked at: the first GPU
   session should fix any badly framed one in the table of
   `scripts/qa-views.ts` and write the files again.
 
 **Verified:** `bun run verify`; the codec's units (round trip, malformed,
-oversized, query not read); `arrivalOf`'s link cases; the QA view test
+oversized, read beside other parameters); `arrivalOf`'s link cases; the QA view test
 (and its negative control: an `epsg` moved 10 m fails two tests); e2e
 *a view link* (`@desktop-render`, headless lite against a production
 build). `bun run shots` on a GPU: not run (no GPU in the container).

@@ -6,7 +6,7 @@ import {
   encodeSnapshot,
   parseSnapshot,
   SNAPSHOT_PARAM_MAX,
-  snapshotFromHash,
+  snapshotFromSearch,
   snapshotFromParam,
   snapshotHref,
   snapshotInstant,
@@ -316,11 +316,19 @@ test("a view link carries the snapshot whole, and reads back through the parser"
   expect(param).toMatch(/^[\w-]+$/u);
   expect(snapshotFromParam(param)).toEqual({ ok: true, snapshot: snap });
   const href = snapshotHref("/dresden", snap);
-  expect(href.startsWith("/dresden#snap=")).toBe(true);
-  expect(snapshotFromHash(new URL(href, "https://x.test").hash)).toEqual({
+  expect(href.startsWith("/dresden?snap=")).toBe(true);
+  expect(snapshotFromSearch(new URL(href, "https://x.test").search)).toEqual({
     ok: true,
     snapshot: snap,
   });
+});
+
+test("a view link keeps the query its path has, and sets snap after it", () => {
+  const href = snapshotHref("/dresden?safety=3", valid);
+  const url = new URL(href, "https://x.test");
+  expect(url.pathname).toBe("/dresden");
+  expect(url.searchParams.get("safety")).toBe("3");
+  expect(snapshotFromSearch(url.search)?.ok).toBe(true);
 });
 
 test("a view link that is not one is refused with a reason, never thrown", () => {
@@ -346,10 +354,9 @@ test("an oversized view link is refused unread", () => {
   expect(linkReason(snapshotFromParam(long))).toBe("View link too long");
 });
 
-test("only the fragment opens a view: a query, or a fragment without one, does not", () => {
+test("only a query's snap opens a view, beside other parameters", () => {
   const param = snapshotToParam(valid);
-  expect(snapshotFromHash(`?snap=${param}`)).toBe(null);
-  expect(snapshotFromHash("#at=51.05,13.74")).toBe(null);
-  expect(snapshotFromHash("")).toBe(null);
-  expect(snapshotFromHash(`#at=51.05,13.74&snap=${param}`)?.ok).toBe(true);
+  expect(snapshotFromSearch("?scene=lite")).toBe(null);
+  expect(snapshotFromSearch("")).toBe(null);
+  expect(snapshotFromSearch(`?scene=lite&snap=${param}`)?.ok).toBe(true);
 });

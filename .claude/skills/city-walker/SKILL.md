@@ -953,10 +953,12 @@ bun run shots   # = SHOTS=1 playwright test e2e/snapshot-shot.spec.ts --headed
 ```
 
 A view also travels as a link: *Link kopieren* writes
-`/<site>#snap=<base64url of the snapshot>` (lib/city/snapshot.ts) — a
-fragment, never a query, so the camera's place never reaches the host;
+`/<site>?snap=<base64url of the snapshot>` (lib/city/snapshot.ts) — in
+the query, like every URL parameter, so the host's request log shows it
+(the privacy page says so; the crash trail keeps only the QA knobs);
 the boot reads it through `parseSnapshot` (a waiting GPU recovery wins,
-`lib/city/gpu-recovery.ts` `arrivalOf`), a running page on `hashchange`.
+`lib/city/gpu-recovery.ts` `arrivalOf`). Another link is another page
+load.
 
 Headless e2e uses SwiftShader through the renderer's WebGL2 backend (headless
 Chromium has no WebGPU adapter) — shadows/AA look nothing like a real GPU, so

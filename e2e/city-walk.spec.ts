@@ -10,7 +10,7 @@ import { utmToLatLng } from "../lib/city/crs";
 import { EYE_HEIGHT } from "../lib/city/pose";
 import {
   parseSnapshot,
-  snapshotFromHash,
+  snapshotFromSearch,
   snapshotHref,
 } from "../lib/city/snapshot";
 import { tfwToBounds } from "../lib/city/tfw";
@@ -1840,7 +1840,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
 });
 
 /**
- * A view link (`#snap=`, plan 048): the page boots at the snapshot's view,
+ * A view link (`?snap=`, plan 048): the page boots at the snapshot's view,
  * and *Link kopieren* writes a link to where the camera is. Its own page:
  * the link is read at the boot. A committed QA view on the spawn tile
  * (the lite profile streams that one) is the link.
@@ -1897,10 +1897,12 @@ test.describe("a view link", { tag: "@desktop-render" }, () => {
       async () => await navigator.clipboard.readText()
     );
     const url = new URL(copied);
-    // the site's page without this page's QA knobs (`?scene=lite`); the
-    // view only in the fragment
-    expect(`${url.pathname}${url.search}`).toBe(SITE);
-    const back = snapshotFromHash(url.hash);
+    // the site's page with the view in its query and without this page's
+    // QA knobs (`?scene=lite`)
+    expect(url.pathname).toBe(SITE);
+    expect([...url.searchParams.keys()]).toEqual(["snap"]);
+    expect(url.hash).toBe("");
+    const back = snapshotFromSearch(url.search);
     expect(back?.ok).toBe(true);
     if (back?.ok) {
       expect(back.snapshot.camera.epsg.x).toBeCloseTo(linked.camera.epsg.x, 0);

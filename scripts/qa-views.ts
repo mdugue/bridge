@@ -3,7 +3,7 @@
  * view the GPU checklist (docs/plans/019-gpu-verification.md) and the open
  * device checks of the plans name, written to `qa/views/<name>.json`, and
  * `qa/views/README.md` — each view with what it checks and its link
- * (`/dresden#snap=…`, lib/city/snapshot.ts), to open on a GPU or a phone.
+ * (`/dresden?snap=…`, lib/city/snapshot.ts), to open on a GPU or a phone.
  * The shot harness (e2e/snapshot-shot.spec.ts) renders them as
  * `shots/qa-<name>.png`.
  *
@@ -677,8 +677,8 @@ export function qaViewsIndex(
     "never these files. Each view is a Snapshot (`<name>.json`, ADR 0018);",
     "`bun run shots` renders them as `shots/qa-<name>.png` (one view:",
     "`bun run shots -- --grep qa-<name>`). The link opens the view: put the",
-    "origin of the preview or production in front (`https://…/dresden#snap=…`),",
-    "and the query a check asks for between the path and the `#`. The",
+    "origin of the preview or production in front (`https://…/dresden?snap=…`);",
+    "a check's own knobs are already in its link, before `snap`. The",
     "sidebar's *Erweitert › Snapshot › Anwenden* takes the JSON instead.",
     "",
   ];

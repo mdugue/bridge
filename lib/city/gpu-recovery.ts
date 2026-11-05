@@ -119,7 +119,7 @@ function gated(snapshot: Snapshot, level: SafetyLevel): Snapshot {
  * picked meanwhile (the player's choice wins); else the snapshot as the
  * level gates it, the trail's note — a reset to full detail, or a
  * recovery — and, for a recovery onto a lighter page, the HUD's word.
- * With nothing waiting, the view the page's link names (`#snap=`,
+ * With nothing waiting, the view the page's link names (`?snap=`,
  * lib/city/snapshot.ts), gated the same way: a recovery wins over the
  * link, which a reload keeps in the address.
  */

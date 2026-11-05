@@ -1600,9 +1600,17 @@ AGENTS.md's knobs say so. Deviations: `arrivalOf` requires the leading
 `#` (`URLSearchParams` strips a `?` too), and `crash-trail.test.ts` is
 new (`trailUrl` is pure).
 
-**Keep in mind.** A position in a URL goes in the fragment and is named
-on the privacy page (ADR 0043) — this is the precedent. A new query knob
-worth seeing in a crash record joins `TRAIL_QUERY`.
+**Reversed (2026-11-05).** The maintainer moved the hand-off back to the
+query, `?at=lat,lng` (with plan 048's `?snap=`): URL parameters go in the
+query, for diagnosis in the host's request log and so several parameters
+sit side by side. What stays: the trail keeps only `TRAIL_QUERY`, the
+reports send the path alone, `arriveAt` drops `at` with `replaceState`,
+and the privacy page now says plainly that the link carries the real
+position into Vercel's request log.
+
+**Keep in mind.** A position in a URL goes in the query and is named on
+the privacy page (ADR 0043). A new query knob worth seeing in a crash
+record joins `TRAIL_QUERY`; one that carries a place never does.
 
 ## 059 — Storage keys pinned to the privacy page · DONE (2026-10-07)
 

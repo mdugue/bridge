@@ -1,7 +1,7 @@
 "use client";
 
 import { createFramePace } from "@/lib/city/frame-pace";
-import { arrivalOf, placementOf } from "@/lib/city/geolocation";
+import { ARRIVAL_PARAM, arrivalOf, placementOf } from "@/lib/city/geolocation";
 import { EYE_HEIGHT } from "@/lib/city/pose";
 import type { Site, ViewpointGeometry } from "@/lib/city/site";
 import {
@@ -36,7 +36,7 @@ import {
   decodeLook,
   encodeSnapshot,
   parseSnapshot,
-  snapshotFromHash,
+  snapshotFromSearch,
   snapshotHref,
   snapshotInstant,
 } from "@/lib/city/snapshot";
@@ -475,18 +475,17 @@ const OffsiteDialog = ({
 
 /**
  * The page was opened from another city's off-site dialog with where the
- * player stands (`#at=lat,lng`, lib/city/geolocation.ts `arrivalHref` — the
- * fragment: never sent to the server, not kept by the trail): put them
- * there, on foot, and drop the fragment so a reload starts at the site's
- * spawn again.
+ * player stands (`?at=lat,lng`, lib/city/geolocation.ts `arrivalHref`; not
+ * kept by the trail): put them there, on foot, and drop the parameter so a
+ * reload starts at the site's spawn again.
  */
 function arriveAt(h: CityWalkHandle, site: Site, say: Say): void {
-  const at = arrivalOf(location.hash);
+  const at = arrivalOf(location.search);
   if (!at) {
     return;
   }
   const url = new URL(location.href);
-  url.hash = "";
+  url.searchParams.delete(ARRIVAL_PARAM);
   history.replaceState(history.state, "", url);
   const placement = placementOf(
     { ...at, accuracy: 0, headingDeg: null },
@@ -888,12 +887,14 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
     // is up — a boot that StrictMode aborts leaves it for the next
     // (`RecoverySession.peek`). A place picked in the panel meanwhile wins,
     // and the time and look the player set are theirs. With nothing
-    // waiting, the view the page's link names (`#snap=`, snapshot.ts),
+    // waiting, the view the page's link names (`?snap=`, snapshot.ts),
     // the same way; the address keeps it, so a reload opens it again.
+    // Another link is another page load (a new query is a navigation, and
+    // nothing in the app routes to one), so the boot is its one reader.
     const recoveries = pageRecovery();
     const waiting = recoveries.peek();
     const parsed = waiting ? parseSnapshot(waiting.snapshot) : null;
-    const linked = snapshotFromHash(location.hash);
+    const linked = snapshotFromSearch(location.search);
     const arrival = recoveryArrival({
       snapshot: parsed?.ok ? parsed.snapshot : null,
       reset: waiting?.reset ?? false,
@@ -1075,8 +1076,9 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
   ]);
 
   /** *Kopieren* (the JSON) or *Link kopieren* (the site's page opened at
-   *  the view, `#snap=`, without this page's query — its QA knobs, a
-   *  pinned `?safety=`, are not the view's): the JSON shows either way. */
+   *  the view, `?snap=` and no other parameter — this page's QA knobs, a
+   *  pinned `?safety=`, are this device's, not the view's): the JSON
+   *  shows either way. */
   const copySnapshot = (as: "json" | "link") => {
     const h = handleRef.current;
     if (!h) {
@@ -1122,42 +1124,6 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
         : "Snapshot angewendet"
     );
   };
-
-  // A view link opened on the page that is already up (a new `#snap=` in
-  // the address: no reload) is applied as *Anwenden* applies a snapshot,
-  // gated by the safety level as at the boot (gpu-recovery.ts `arrivalOf`).
-  const openLinked = useRef<(snapshot: Snapshot) => void>(() => {
-    // replaced once rendered, below
-  });
-  useEffect(() => {
-    openLinked.current = (snapshot) => {
-      const gated = recoveryArrival({
-        snapshot: null,
-        reset: false,
-        picked: false,
-        level: budget.safety,
-        linked: snapshot,
-      }).snapshot;
-      if (!gated) {
-        return;
-      }
-      goTo({ camera: gated.camera, label: "Link" });
-      time.setInstant(snapshotInstant(gated));
-      look.set(decodeLook(gated.look));
-    };
-  });
-  useEffect(() => {
-    const onHash = () => {
-      const linked = snapshotFromHash(location.hash);
-      if (linked?.ok) {
-        openLinked.current(linked.snapshot);
-      } else if (linked) {
-        sayHud("Der Link enthält keine gültige Ansicht");
-      }
-    };
-    addEventListener("hashchange", onHash);
-    return () => removeEventListener("hashchange", onHash);
-  }, [sayHud]);
 
   // Bild speichern and the Verschattungsstudie (plan 055): one at a time.
   // While one renders (a tile a frame) a veil covers the canvas, which
