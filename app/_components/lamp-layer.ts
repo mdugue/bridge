@@ -14,7 +14,7 @@ import {
 } from "three/webgpu";
 import type { BufferGeometry, Material } from "three/webgpu";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { color, float, mix, select, uv, vec3, vec4 } from "three/tsl";
+import { color, float, uv, vec3, vec4 } from "three/tsl";
 import type { LampFeature } from "@/lib/city/features";
 import { yawOfBearing } from "@/lib/city/furniture";
 import {
@@ -132,17 +132,14 @@ const LAMP_LIGHT = 0xff_d0_89;
 
 /**
  * The soft radial alpha of the halos and pools, from the quad's (or disc's)
- * uv: 1 at the centre, 0.4 halfway out, 0 at the rim and past it — the
- * stops of the 64² canvas gradient this used to be, interpolated linearly
- * as the canvas did. Radially symmetric, so no uv flip can turn it.
+ * uv: (1 − r²)³, 1 at the centre, about 0.4 halfway out and flat into 0 at
+ * the rim, so a near lamp's halo has no edge against a dark sky (the linear
+ * ramp to the rim before it drew one). Radially symmetric, so no uv flip can
+ * turn it.
  */
 function glowAlpha(): F {
-  const r = uv().sub(0.5).length().mul(2);
-  return select(
-    r.lessThan(0.5),
-    mix(float(1), float(0.4), r.mul(2)),
-    mix(float(0.4), float(0), r.sub(0.5).mul(2).clamp(0, 1))
-  );
+  const r = uv().sub(0.5).length().mul(2).clamp(0, 1);
+  return float(1).sub(r.mul(r)).pow(3);
 }
 
 function placeInstances(
