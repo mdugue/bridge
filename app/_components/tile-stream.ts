@@ -2068,29 +2068,36 @@ export class DressingPlugin {
       either.release();
       this.loadAborts.delete(scene);
     }
-    // The fine level's baked stairs, walls, kerbs and fences: only their
-    // materials here, lit by the tile's baked light as the ground is.
-    const stairs = meshNamed(scene, "stairs");
-    if (stairs) {
-      dressStairs(stairs, terrain.light);
-      terrain.stairs = stairs;
+    try {
+      // The fine level's baked stairs, walls, kerbs and fences: only their
+      // materials here, lit by the tile's baked light as the ground is.
+      const stairs = meshNamed(scene, "stairs");
+      if (stairs) {
+        dressStairs(stairs, terrain.light);
+        terrain.stairs = stairs;
+      }
+      const walls = meshNamed(scene, "walls");
+      if (walls) {
+        dressWalls(walls, terrain.light);
+        terrain.walls = walls;
+      }
+      const kerbs = meshNamed(scene, "kerbs");
+      if (kerbs) {
+        dressKerbs(kerbs, terrain.light);
+        terrain.kerbs = kerbs;
+      }
+      const fences = meshNamed(scene, "fences");
+      if (fences) {
+        dressFences(fences, terrain.light);
+        terrain.fences = fences;
+      }
+      this.stream.terrains.add(terrain);
+    } catch (error) {
+      // not in `dressed` yet, so no release will free it: its rasters
+      // would stay held for the session
+      terrain.dispose();
+      throw error;
     }
-    const walls = meshNamed(scene, "walls");
-    if (walls) {
-      dressWalls(walls, terrain.light);
-      terrain.walls = walls;
-    }
-    const kerbs = meshNamed(scene, "kerbs");
-    if (kerbs) {
-      dressKerbs(kerbs, terrain.light);
-      terrain.kerbs = kerbs;
-    }
-    const fences = meshNamed(scene, "fences");
-    if (fences) {
-      dressFences(fences, terrain.light);
-      terrain.fences = fences;
-    }
-    this.stream.terrains.add(terrain);
     this.dressed.set(scene, {
       terrain,
       late: this.lateParts(scene),

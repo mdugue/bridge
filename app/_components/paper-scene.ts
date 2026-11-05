@@ -527,7 +527,12 @@ export function createPaperScene(
     if (!compiledAhead.has(source)) {
       compiledAhead.add(source);
       source.addEventListener("dispose", () => {
+        // its stand-in goes now, not at a gather that may never come (out of
+        // Papier none does): it holds the tile's own nodes and maps
         compiledAhead.delete(source);
+        standInSources = standInSources.filter((m) => m !== source);
+        worn = {};
+        dropStaleStandIns();
       });
     }
   };

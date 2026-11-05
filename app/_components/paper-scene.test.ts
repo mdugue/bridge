@@ -351,11 +351,10 @@ test("a landing tile's ribbon compiles its stand-in, and keeps it till it hangs"
   drawThrough(w.renderer, landing);
   restore();
   expect(w.renderer.drawn.at(-1)).toBe(compiled);
-  // the tile leaves and frees its material: the stand-in goes at the next gather
+  // the tile leaves and frees its material: its stand-in goes with it, even
+  // with no Papier frame after
   w.scene.remove(landing);
   own.dispose();
-  w.paper.sceneChanged();
-  w.paper.begin()();
   expect(freed).toBe(1);
 });
 
