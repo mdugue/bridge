@@ -1776,13 +1776,20 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       handle.setSun(new Date("2026-07-15T23:00:00.000Z"));
       return before;
     });
-    await waitForFrames(page, 2);
-    const builtAfter = await page.evaluate(() => {
-      const handle = window.__poc?.handle;
-      const after = handle?.getRenderInfo().framedBuilds.other ?? -1;
-      handle?.setSun(new Date("2026-07-15T10:00:00.000Z"));
-      return after;
-    });
+    let builtAfter: number;
+    try {
+      await waitForFrames(page, 2);
+      builtAfter = await page.evaluate(
+        () => window.__poc?.handle?.getRenderInfo().framedBuilds.other ?? -1
+      );
+    } finally {
+      // back to day for the tests after, whether or not the night held;
+      // its shadow redraw lands here, not in theirs
+      await page.evaluate(() => {
+        window.__poc?.handle?.setSun(new Date("2026-07-15T10:00:00.000Z"));
+      });
+      await waitForFrames(page, 3);
+    }
     expect(builtAfter).toBe(builtBefore);
     expectNoErrors(errors);
   });
@@ -1793,9 +1800,10 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     // every step). Asserted through __poc.regressed rather than pixels — the
     // pass's visual delta is exactly what SwiftShader renders least like a
     // GPU.
-    // The previous test ends with a `setSun`, whose shadow redraw lands on
-    // the next frame or two; let it pass so the count below holds only what
-    // the walk itself redraws (the same 4 showed on main without this).
+    // The previous test ends with a `setSun` and waits for its shadow
+    // redraw; a few frames more here keep the count below to what the walk
+    // itself redraws, whatever ran before (the same 4 showed on main
+    // without this).
     await waitForFrames(page, 3);
     const before = await page.evaluate(() => ({
       frames: window.__poc?.frames ?? 0,
