@@ -1,7 +1,8 @@
 /**
  * Whether a point lies within a reach of any of a set of polylines (the
  * tracks a lamp stands by): the segments hashed into square cells the
- * reach wide, so a query reads at most nine cells' segments. No THREE, no
+ * reach wide (each segment in the cells it passes), so a query reads
+ * the 5 × 5 cells round its own. No THREE, no
  * DOM.
  */
 
@@ -39,24 +40,32 @@ export function nearLines(
   reach: number
 ): (x: number, y: number) => boolean {
   const cells = new Map<string, [Point2, Point2][]>();
+  const add = (cx: number, cy: number, seg: [Point2, Point2]) => {
+    const k = key(cx, cy);
+    const list = cells.get(k);
+    if (!list) {
+      cells.set(k, [seg]);
+    } else if (list.at(-1) !== seg) {
+      list.push(seg);
+    }
+  };
+  // each segment in the cells it passes, sampled every half cell (a query
+  // reads two cells round its own, so the corner a sample cuts is read)
   for (const line of lines) {
     for (let i = 1; i < line.length; i += 1) {
-      const a = line[i - 1];
-      const b = line[i];
-      const x0 = Math.floor(Math.min(a[0], b[0]) / reach);
-      const x1 = Math.floor(Math.max(a[0], b[0]) / reach);
-      const y0 = Math.floor(Math.min(a[1], b[1]) / reach);
-      const y1 = Math.floor(Math.max(a[1], b[1]) / reach);
-      for (let cx = x0; cx <= x1; cx += 1) {
-        for (let cy = y0; cy <= y1; cy += 1) {
-          const k = key(cx, cy);
-          const list = cells.get(k);
-          if (list) {
-            list.push([a, b]);
-          } else {
-            cells.set(k, [[a, b]]);
-          }
-        }
+      const seg: [Point2, Point2] = [line[i - 1], line[i]];
+      const [a, b] = seg;
+      const steps = Math.max(
+        1,
+        Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / (reach / 2))
+      );
+      for (let k = 0; k <= steps; k += 1) {
+        const t = k / steps;
+        add(
+          Math.floor((a[0] + (b[0] - a[0]) * t) / reach),
+          Math.floor((a[1] + (b[1] - a[1]) * t) / reach),
+          seg
+        );
       }
     }
   }
@@ -64,8 +73,8 @@ export function nearLines(
   return (x, y) => {
     const cx = Math.floor(x / reach);
     const cy = Math.floor(y / reach);
-    for (let dx = -1; dx <= 1; dx += 1) {
-      for (let dy = -1; dy <= 1; dy += 1) {
+    for (let dx = -2; dx <= 2; dx += 1) {
+      for (let dy = -2; dy <= 2; dy += 1) {
         for (const [a, b] of cells.get(key(cx + dx, cy + dy)) ?? []) {
           if (segmentDistanceSq(x, y, a, b) <= r2) {
             return true;

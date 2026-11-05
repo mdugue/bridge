@@ -89,6 +89,7 @@ import { furnitureSteps } from "./furniture-layer";
 import { buildLamps } from "./lamp-layer";
 import { LAMP_TRACK_REACH_M, LAMP_WATER_REACH_M } from "./lamp-reflections";
 import { nearLines } from "@/lib/city/near-lines";
+import { isMonorail } from "@/lib/city/line-levels";
 import { waterNear } from "@/lib/city/water-mask";
 import type { LampControl } from "./lamp-layer";
 import { buildLowVegetation } from "./low-vegetation-layer";
@@ -762,18 +763,27 @@ const tileIdOf = (scene: Object3D): string =>
  * Whether a lamp at projected (x, y) stands by the tile's water, close
  * enough for the river to mirror it, or by one of its tracks, close enough
  * for the rails to catch its light (lamp-reflections.ts): no water test
- * where the tile has no water, every lamp where its water is not known.
+ * where the tile's water is none or not known. Only the tile's own water
+ * mask is read: a lamp whose water lies past the seam is not mirrored.
  */
 function lampsBy(
   terrain: TerrainLayer,
   rails: readonly RailFeature[],
-  trams: readonly TramFeature[]
+  trams: readonly TramFeature[],
+  lampCount: number
 ): {
   tracks?: (x: number, y: number) => boolean;
   water?: (x: number, y: number) => boolean;
 } {
   const lines = [
-    ...rails.map((f) => f.geometry.coordinates),
+    // a drawn track: no monorail's beam, none below ground
+    ...rails.flatMap((f) =>
+      f.geometry?.type === "LineString" &&
+      !isMonorail(f) &&
+      (f.properties?.layer ?? 0) >= 0
+        ? [f.geometry.coordinates]
+        : []
+    ),
     // a track, not a span or an arm between its anchors
     ...trams.flatMap((f) =>
       f.properties?.k === "track" && f.geometry.type === "LineString"
@@ -783,7 +793,11 @@ function lampsBy(
   ];
   return {
     water: byWater(terrain),
-    tracks: lines.length > 0 ? nearLines(lines, LAMP_TRACK_REACH_M) : undefined,
+    // hashed only for a tile that has lamps to test
+    tracks:
+      lines.length > 0 && lampCount > 0
+        ? nearLines(lines, LAMP_TRACK_REACH_M)
+        : undefined,
   };
 }
 
@@ -795,8 +809,10 @@ function byWater(
   if (mask === null) {
     return undefined;
   }
+  // unknown (no class raster, or one the browser decoded): every lamp
+  // would take a slot from the quays', so none
   if (mask === undefined) {
-    return () => true;
+    return undefined;
   }
   return (x, y) => waterNear(mask, terrain.bounds, x, y, LAMP_WATER_REACH_M);
 }
@@ -1353,7 +1369,7 @@ async function buildDressing(
     const lampControl = buildLamps(
       ownLamps,
       { ...ground, heightAt: terrain.heightAt },
-      lampsBy(terrain, rails, trams)
+      lampsBy(terrain, rails, trams, ownLamps.length)
     );
     made.lamps = lampControl;
     await nextTask(signal);

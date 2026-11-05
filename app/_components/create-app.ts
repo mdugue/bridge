@@ -123,7 +123,7 @@ import { canvasSizeFor } from "./canvas-size";
 import { createModelRig } from "./model-rig";
 import type { ModelHud, ModelRig, ViewMode } from "./model-rig";
 import type { ModelCamera } from "./model-camera";
-import { setViewDirection } from "./view-direction";
+import { setViewDirection, viewRay } from "./view-direction";
 import { siteMurals } from "./mural-layer";
 import { createViewLens } from "./view-lens";
 import { setPickRay } from "./view-ray";
@@ -1578,7 +1578,7 @@ async function bootApp(
   // The lamps by the water the river mirrors after dark, chosen per frame
   // (lamp-reflections.ts).
   const lampReflections = createLampReflections(budget.tier);
-  const lookDir = new Vector3();
+  cleanups.push(() => lampReflections.dispose());
 
   // The facades share the ground's sun (the same node).
   const styleResources = createStyleResources(sceneNight, ground.sunDirection);
@@ -3303,7 +3303,9 @@ async function bootApp(
     eye.set(pivot.x, pivot.y + equivalent, pivot.z);
     setMapAltitude(equivalent);
     lampLights.updateNearest(eye);
-    lampReflections.update(eye, activeCamera().getWorldDirection(lookDir));
+    // Modell's parallel camera looks straight down: the picture's own
+    // direction is the lens's (view-direction.ts `viewRay`)
+    lampReflections.update(eye, viewRay.value);
     lantern.off();
     stepVegetation(elapsed, eye, tick);
     return equivalent;

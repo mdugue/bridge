@@ -93,6 +93,9 @@ const TRACKS = mirrorSet({ desktop: 24, mobile: 8 }, [250, 400]);
 /** The share of the last lamp's distance over which a lamp leaving the
  *  set fades out (a hand-over band, not a pop). */
 const HAND_OVER = 0.2;
+/** …at most this many metres, so a row of lamps at one distance keeps
+ *  all but its last few at full strength. */
+const HAND_OVER_M = 40;
 /** A lamp this near (m) is mirrored whichever way the eye looks. */
 const NEAR_ANY_WAY = 40;
 /** How far to the side a lamp may stand (cos of its angle off the
@@ -148,9 +151,13 @@ function lobes(
       const c = clamp(dot(half, n), 1e-3, 1);
       // tan² of the half-vector's tilt off the normal
       const t2 = float(1).sub(c.mul(c)).div(c.mul(c)).mul(inv);
-      const lobe = exp(t2.negate()).add(
-        exp(t2.div(look.halo * look.halo).negate()).mul(look.haloShare)
-      );
+      // the halo only where a set has one: none costs nothing per lamp
+      const lobe =
+        look.haloShare > 0
+          ? exp(t2.negate()).add(
+              exp(t2.div(look.halo * look.halo).negate()).mul(look.haloShare)
+            )
+          : exp(t2.negate());
       const fresnel = pow(float(1).sub(clamp(dot(eye, half), 0, 1)), 5)
         .mul(1 - look.f0)
         .add(look.f0);
@@ -206,6 +213,8 @@ export interface LampReflections {
   setNightFactor: (t: number) => void;
   /** chooses the lamps for the eye at `eye` looking along `look` (world) */
   update: (eye: Vector3, look: Vector3) => void;
+  /** empties the shared arrays: the next page's scene starts with none */
+  dispose: () => void;
 }
 
 /**
@@ -265,7 +274,9 @@ export function rankReflected(
     const fade =
       (1 - smooth(reach[0], reach[1], d)) *
       smooth(FRONT[0], FRONT[1], front[s]) *
-      (Number.isFinite(cut) ? smooth(cut, cut * (1 - HAND_OVER), d) : 1);
+      (Number.isFinite(cut)
+        ? smooth(cut, cut - Math.min(cut * HAND_OVER, HAND_OVER_M), d)
+        : 1);
     const h = heads[idx[s]];
     out[n].set(h.x, h.y, h.z, fade);
     n += 1;
@@ -320,6 +331,11 @@ export function createLampReflections(tier: DeviceTier): LampReflections {
       const view = { eye, look };
       water(lit ? heads.water : none, view);
       tracks(lit ? heads.tracks : none, view);
+    },
+    dispose: () => {
+      WATER.count.value = 0;
+      TRACKS.count.value = 0;
+      heads = { tracks: [], water: [] };
     },
   };
 }

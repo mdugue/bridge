@@ -24,6 +24,23 @@ describe("nearLines", () => {
     expect(near(-20, -20)).toBe(false);
   });
 
+  test("finds a point by a long diagonal segment, anywhere along it", () => {
+    const diagonal = nearLines(
+      [
+        [
+          [0, 0],
+          [600, 600],
+        ],
+      ],
+      15
+    );
+    for (let t = 0; t <= 600; t += 7) {
+      // 10 m off the line, square to it
+      expect(diagonal(t + 7.07, t - 7.07)).toBe(true);
+    }
+    expect(diagonal(300, 270)).toBe(false);
+  });
+
   test("finds nothing without lines", () => {
     expect(nearLines([], 20)(0, 0)).toBe(false);
   });
