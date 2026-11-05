@@ -26,10 +26,10 @@ export const HORIZON_MAX_DEG = 45;
 export const HORIZON_NEAR_M = 80;
 export const HORIZON_FAR_M = 1500;
 /** The near band: occluders 8–80 m away, 0–90° (beside a wall the skyline
- *  is steep). Inside the shadow frustum they are the shadow map's. */
+ *  is steep). Inside the shadow rings' reach they are the shadow map's. */
 export const NEAR_BAND_M = 8;
 export const NEAR_MAX_DEG = 90;
-/** The near band fades in from this fraction of the shadow frustum's
+/** The near band fades in from this fraction of the shadow rings' reach's
  *  half-size to its edge, so the hand-over shows no seam. */
 export const NEAR_BAND_FADE_FROM = 0.8;
 /** Soft band (°) either side of the horizon angle the sun fades across —

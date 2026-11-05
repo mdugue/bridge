@@ -4823,7 +4823,7 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   buildings and coarse ground, tiles in use the memory governor cannot
   free): at a seam with the sun behind the player, the neighbour's
   buildings cast no shadow until the view loads that tile;
-  the map has no colour target (`DepthOnlyShadowNode`, three r187's
+  the map has no colour target (`RingShadowNode`, three r187's
   depth-only render target). Full recipe and dead-ends in the
   [city-walker skill](../.claude/skills/city-walker/SKILL.md).
 - **Sky-view factor** `= computed` (*Himmelslicht*, plan 033) — the committed DGM1 with
@@ -5304,22 +5304,11 @@ research that produced them):
    disc of the same area; before, it was the distance to the mass's edge at
    the peak, which read a lone crown from a peak off its centre and a
    group's at its narrowest.)*
-7. **Cascaded Shadow Maps** — the one shadow limit the skill calls unsolved (long
-   low-sun shadows clip the 110 m frustum). *Amended 2026-09-25:* the baked
-   horizon (✅ above, [ADR 0009](./adr/0009-shadow-recipe.md))
-   now casts the long shadows past the frustum onto the ground — the far
-   field's and, beyond the frustum, the next building's — for a few texture
-   fetches; what CSM would still add is the middle distance's *shape* (a
-   tree's or a facade's shadow past the frustum, at 8 m and 22.5° the
-   horizon only has its angle, on facades too). Since the move to
-   WebGPURenderer + TSL ([ADR 0027](./adr/0027-webgpu-renderer-and-tsl.md),
-   plan 020 in [completed.md](./plans/completed.md)) three's
-   `CSMShadowNode` is available without shader patching — still a depth
-   pass per cascade on every sun or camera move, and its own decision.
-   *Amended 2026-10-31:* from the air the one map is warped over the view
-   (LiSPSM, [ADR 0009](./adr/0009-shadow-recipe.md)) and casts shapes
-   out to most of the fog's reach, facades included, without a second
-   map; on foot the limit stands.
+7. **Cascaded Shadow Maps** — *shipped as four concentric rings*
+   ([ADR 0009](./adr/0009-shadow-recipe.md)): shapes out to 2.2 km on foot and
+   from the air, on a phone in the bytes of its one map. Past the widest ring
+   the baked horizon (✅ above) casts the long shadows onto the ground. What is
+   left of this idea is virtual shadow maps, once three has multiview.
 8. **Adaptive resolution while moving** — *partly shipped*: DoF is skipped
    while the camera moves (`lib/city/regression.ts`, plan 007; a phone
    builds no DoF at all, ADR 0047). AO is **not**
@@ -5443,7 +5432,7 @@ research that produced them):
 | **Plain foliage translucency** | Reads as "noise" at instance distance. | Only OK if **shadow-gated** (kept as the shimmer transform). Since plan 020 the gate is the sun's daylight ramp plus the near/large-crown limit (a node material cannot sample the sun's shadow map) — judge on a GPU whether the noise returns. |
 | **VSM shadows** | "Corduroy"/grid rings on large ground at grazing sun. | Use `PCFShadowMap` + radius instead. |
 | **Large `normalBias`** | Bright peter-panning contact strip. | Keep `normalBias=0`, small negative `bias`. |
-| **Bigger shadow frustum / 4096 map** | Coarser texels → fraying / cost without gain once radius softens. | Tight ~110 m frustum at 3072 + radius (121 m on foot since 2026-10-11, paired with a 30 m dead zone: the same reach, a third fewer redraws, texels 10 % coarser — [ADR 0009](./adr/0009-shadow-recipe.md)'s update). |
+| **Bigger shadow frustum / 4096 map** | Coarser texels → fraying / cost without gain once radius softens. | Concentric rings of 2048 + radius ([ADR 0009](./adr/0009-shadow-recipe.md)); until 2026-11 a tight frustum at 3072 (121 m on foot since 2026-10-11, paired with a 30 m dead zone: the same reach, a third fewer redraws, texels 10 % coarser — [ADR 0009](./adr/0009-shadow-recipe.md)'s update). |
 | **Sobel / deferred outlines** | Hard edges clash with the watercolor look. | The asked element's outline (✅ *The outline*) is not one: a single soft silhouette of one element, on demand, never the scene's edges. |
 | **The pencil loop** (plan 052 phase 4's first mark: a wavering graphite stroke on a band of paper, once round and a little past, on the ground around an asked tree or monument and along a deck's parapets; `lib/city/pencil.ts`, `pencil-mark.ts`) | Maintainer review (2026-10-01): which element is selected should read more strongly. A ring on the ground says "here", not "this" — beside a crown among crowns, or along a deck seen from below, it did not name the element; and a building, hatched only, had no line at all. | Replaced by one screen-space outline for every kind (✅ *The outline*), in the same graphite and paper. |
 | **Selective bloom, quad leaf billboards** | No payoff yet for the cost. | Revisit only with a concrete need. |
@@ -5459,7 +5448,7 @@ research that produced them):
 | **Per-tile ground for bridge decks** | The rasters stopped at the tile edge (sampling clamped there), so a deck across a seam got two different profiles — and both tiles drew it: two decks metres apart (Schlachthofbrücke). | A DGM/DOM mosaic around the tile; the owner draws, every copy lifts rails. |
 | **`ver06_f`-only bridge decks** (rail v2 first cut) | `ver06_f` has area polygons only for (mostly rail) major spans → road/path bridges (Augustusbrücke etc.) vanished + everything mis-classified rail. | Drive from the **complete `ver06_l`** set, footprint from `ver06_f` where matched. |
 | **Motion-gated SSAO** (plan 007 as first shipped) | The contact shadows blinked on every footstep — reads as a bug, not a saving. | The AO pass runs permanently at half resolution (N8AO's `halfRes` then, GTAO since plan 020); only DoF is dropped while moving ([ADR 0009](./adr/0009-shadow-recipe.md)). |
-| **Cloud shadows / per-frame shadow updates for wind sway** | Would force the 3072² depth pass every frame over tens of thousands of trees, undoing the on-demand shadow map. | Sway and cloud drift run in the main pass only; the cast shadow stays static ([ADR 0009](./adr/0009-shadow-recipe.md)). |
+| **Cloud shadows / per-frame shadow updates for wind sway** | Would force the rings' depth passes every frame over tens of thousands of trees, undoing the on-demand shadow map. | Sway and cloud drift run in the main pass only; the cast shadow stays static ([ADR 0009](./adr/0009-shadow-recipe.md)). |
 | **Multi-echo ratio as the low-vegetation cue** (LSC, low vegetation) | Measured: only 26 % of OSM-hedge pixels reach echo ≥ 0.5, fences 56 % (AUC hedge-vs-fence 0.28); recall 25 % of observable hedge length vs 58 % for the NDVI + intensity rule. | Keep it as the *tall*-vegetation cue (100 % of > 5 m forest vs 3 % of roofs) and as a qualifier of intensity. |
 | **Blob-wide "multi-echo ≈ 0" for small structures** (plan 034 as planned) | A shed's roof edge splits the pulse (part roof, part ground), so no blob's multi-echo share is ≈ 0: 4 blobs on the spawn tile at ≤ 0.05, 43 at ≤ 0.10 (median over all band blobs 0.93); the interior share admits 377, 112 of them against tree crowns. | The rule works per cell: no multi-echo return in a cell's 3 × 3 window, the rim grown back after (the ✅ "Small structures from the laser scan"). |
 | **OSM scrub polygons filled with shrubs** (OSM-only tiles) | A jittered 3–4 m grid gave 4–9 k shrubs per neighbour tile — more than the laser scan finds on the primary — mostly under existing crowns. | OSM-only tiles get the OSM hedges only. |
