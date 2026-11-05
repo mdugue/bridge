@@ -1,3 +1,4 @@
+import { SHADOW_RINGS } from "../lib/city/shadow-rings";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { Document, WebIO } from "@gltf-transform/core";
@@ -1819,7 +1820,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     }));
     await page.keyboard.down("KeyW");
     // 8 walking frames move at most 8 × 0.45 m = 3.6 m — inside the finest
-    // ring's 16 m dead zone, so no ring must be redrawn on the way.
+    // ring's 16 m dead zone, so walking itself redraws no ring.
     await waitForFrames(page, 8);
     expect(await page.evaluate(() => window.__poc?.regressed)).toBe(true);
     const after = await page.evaluate(() => ({
@@ -1830,7 +1831,8 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     const shadowRenders = after.shadows - before.shadows;
     expect(frames).toBeGreaterThanOrEqual(8);
     // Before the dead zone this equalled `frames` (one depth pass per frame).
-    expect(shadowRenders).toBeLessThan(frames / 2);
+    // A crown tier's flip on the way asks every ring once, one a frame.
+    expect(shadowRenders).toBeLessThanOrEqual(SHADOW_RINGS);
 
     await page.keyboard.up("KeyW");
     // Recovery is frame-driven (RECOVER_MS of accumulated dt with the camera
