@@ -429,7 +429,21 @@ function needsStandIn(m: Material): boolean {
 /** What makes a stand-in of a source material, shared by all that match. */
 function standInKey(base: Material, source: Material): string {
   const { positionNode } = source as { positionNode?: Node | null };
-  return [base.id, source.side, positionNode?.id].join(":");
+  return [
+    base.id,
+    source.side,
+    positionNode?.id,
+    source.alphaTest,
+    (source as MeshStandardNodeMaterial).alphaMap?.id,
+    ...displacementOf(source),
+  ].join(":");
+}
+
+/** What three hands the override from the drawn material besides its
+ *  position (Renderer `renderObject`): a cutout and a displacement. */
+function displacementOf(source: Material): unknown[] {
+  const m = source as MeshStandardNodeMaterial;
+  return [m.displacementMap?.id, m.displacementScale, m.displacementBias];
 }
 
 export interface PaperScene {
@@ -526,8 +540,18 @@ export function createPaperScene(
       return known;
     }
     const made = base.clone() as MeshStandardNodeMaterial;
+    // from the source what the override would have carried over; nothing
+    // a frame's draws left on the live override (three does not put back
+    // its `transparent`, `alphaTest` and `alphaMap`)
+    const from = source as MeshStandardNodeMaterial;
     made.side = source.side;
-    made.positionNode = (source as MeshStandardNodeMaterial).positionNode;
+    made.positionNode = from.positionNode;
+    made.transparent = false;
+    made.alphaTest = from.alphaTest;
+    made.alphaMap = from.alphaMap;
+    made.displacementMap = from.displacementMap;
+    made.displacementScale = from.displacementScale;
+    made.displacementBias = from.displacementBias;
     made.allowOverride = false;
     standIns.set(key, made);
     return made;

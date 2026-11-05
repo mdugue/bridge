@@ -148,8 +148,9 @@ ADR 0041).
   viewer imports a schema module by type only. Excused until a later
   schema pass, still cast: the crown and canopy layers
   (`scripts/coarse-crowns.ts`, `scripts/prepare/side-bakes.ts`), the lines
-  and areas (`scripts/prepare/lines.ts`) and the land-cover legend's
-  `water`. A new file takes a schema.
+  and areas (`scripts/prepare/lines.ts`), the land-cover legend's
+  `water`, and the sports and markings tables the viewer packs
+  (`tile-rasters.ts`). A new file takes a schema.
 - Nothing whose alpha or values carry data goes through an image resize or
   the browser's image decoder; class rasters are NEAREST and decoded by
   `lib/city/png-raster.ts`.

@@ -358,3 +358,26 @@ test("a landing tile's ribbon compiles its stand-in, and keeps it till it hangs"
   w.paper.begin()();
   expect(freed).toBe(1);
 });
+
+test("a stand-in takes its source's cutout, not what a draw left on the card", () => {
+  const w = ribbonWorld();
+  // three leaves a drawn material's transparency on the override
+  const card = w.paper.swapped(
+    w.solid,
+    () => w.scene.overrideMaterial as MeshStandardNodeMaterial
+  );
+  card.transparent = true;
+  card.alphaTest = 0.7;
+  const cut = new MeshStandardNodeMaterial({ side: DoubleSide });
+  cut.alphaTest = 0.4;
+  const panel = new Mesh(new BoxGeometry(), cut);
+  const worn = w.paper.swapped(panel, () => panel.material);
+  expect(worn.transparent).toBe(false);
+  expect(worn.alphaTest).toBe(0.4);
+  // and a cutout is its own stand-in, not the plain fence's
+  const plain = w.paper.swapped(w.fenceMesh, () => w.fenceMesh.material);
+  expect(plain).not.toBe(worn);
+  expect(plain.alphaTest).toBe(0);
+  card.transparent = false;
+  card.alphaTest = 0;
+});
