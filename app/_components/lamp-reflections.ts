@@ -20,7 +20,6 @@ import {
   color,
   dot,
   exp,
-  exp2,
   float,
   floor,
   Fn,
@@ -91,11 +90,12 @@ import { waterTime } from "./water-layer";
  * polished steel, a wider lobe, a glint on the rail heads between the eye
  * and each lamp, stretched along the track at a grazing look. Those are a
  * fixed array, scene-wide, of the lamps by a track (tile-stream.ts
- * `lampsBy`) nearest the eye in each compass sector round it, chosen per
- * frame on the CPU (`createLampReflections`) — by the eye's place alone,
- * so a turn of the view never swaps a lamp. Its length is fixed, a tier
- * loops over its own share (`MirrorSet.slots`), and a lamp leaving the
- * share fades out over a band before it goes. By day the count is 0.
+ * `lampsBy`) nearest the eye, chosen per frame on the CPU
+ * (`createLampReflections`) — by the eye's place alone, so a turn of the
+ * view never swaps a lamp. Its length is fixed, a tier loops over its own
+ * share (`MirrorSet.slots`), and each kept lamp fades to nothing toward
+ * the first one left out, so walking hands lamps over without a jump. By
+ * day the count is 0.
  */
 
 /** How far (m) from a track a lamp stands whose light its rails catch: a
@@ -294,11 +294,22 @@ const mirrorLevel = (): F => attribute("iMat0", "vec4").w.add(MIRROR_LIFT);
 const LEVEL_ENTRY = 3;
 const REACH_ENTRIES = [7, 11] as const;
 
-/** One sector's reach (m) out of the packed words (`packedReach`). */
+/** One sector's reach (m) out of the packed words (`packedReach`): the
+ *  word shifted by powers of two, multiplied (exact in a float, where a
+ *  division or `exp2` may land a hair under the integer and floor a step
+ *  short), its digit taken off without `mod`. */
 function sectorReach(i: F, lo: F, hi: F): F {
   const word = mix(lo, hi, step(4, i));
-  const scale = exp2(i.mod(4).mul(6));
-  return floor(word.div(scale)).mod(STEP_BITS).mul(END_STEP_M);
+  const k = i.mod(4);
+  // 64^-k, one of four exact constants
+  const shift = mix(
+    mix(float(1), float(STEP_BITS ** -1), step(1, k)),
+    mix(float(STEP_BITS ** -2), float(STEP_BITS ** -3), step(3, k)),
+    step(2, k)
+  );
+  const shifted = floor(word.mul(shift));
+  const digit = shifted.sub(floor(shifted.mul(1 / STEP_BITS)).mul(STEP_BITS));
+  return digit.mul(END_STEP_M);
 }
 
 /** How far the lamp's water reaches toward a bearing (`flat`: the eye's
@@ -583,7 +594,7 @@ interface Glint {
 }
 
 /** A lamp by its place (a tile that lands again brings new vectors). */
-const keyOf = (v: Vector4) =>
+const keyOf = (v: { x: number; y: number; z: number }) =>
   `${Math.round(v.x * 10)} ${Math.round(v.y * 10)} ${Math.round(v.z * 10)}`;
 
 /** `heads` without the same lamp twice (two loaded levels of a tile). */
@@ -591,7 +602,7 @@ export function uniqueHeads(heads: readonly Vector3[]): Vector3[] {
   const seen = new Set<string>();
   const out: Vector3[] = [];
   for (const h of heads) {
-    const key = `${Math.round(h.x * 10)} ${Math.round(h.y * 10)} ${Math.round(h.z * 10)}`;
+    const key = keyOf(h);
     if (!seen.has(key)) {
       seen.add(key);
       out.push(h);
