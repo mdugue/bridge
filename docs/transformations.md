@@ -4848,7 +4848,7 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   the wall too) and faded to 1 toward the eaves — a courtyard's ground floor
   dims, its eaves and every roof do not. The raster is shared by a tile's
   terrain (both levels) and its buildings, refcounted
-  (`shared-rasters.ts`); the clay binds a white texel until it lands.
+  (`tile-rasters.ts`); the clay binds a white texel until it lands.
   Where a LoD2 roof was rebuilt from DOM1 (ADR 0036) the rebuilt parts are
   burned instead, as the city mesh draws them. **The crowns count half**
   (2026-10-21, `CROWN_TRANSMISSION` 0.5): the crowns the viewer draws
