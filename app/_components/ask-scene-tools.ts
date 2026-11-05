@@ -14,19 +14,12 @@ import {
   timeTool,
   whereTool,
 } from "@/lib/city/ask-tools";
+import type { TimeChange } from "@/lib/city/ask-tools";
 import { askView } from "@/lib/city/ask-view";
 import type { AskTarget } from "@/lib/city/ask-view";
 import type { DataLayerKey } from "@/lib/city/data-layers";
 import type { RenderStyle } from "@/lib/city/render-style";
 import type { ViewpointGeometry } from "@/lib/city/site";
-
-/** A change of the scene's time, as `setze_zeit` takes it. */
-export interface TimeChange {
-  /** YYYY-MM-DD */
-  datum?: string;
-  /** HH:MM */
-  uhrzeit?: string;
-}
 
 /** What the card may do to the scene: the scene tools' other half. */
 export interface AskScene {
@@ -34,7 +27,9 @@ export interface AskScene {
   from: () => { x: number; y: number } | null;
   /** switches a data layer; false where the site has none of that kind */
   setLayer: (key: DataLayerKey, on: boolean) => boolean;
-  setStyle: (style: RenderStyle) => void;
+  /** the picture style; why it will not follow the time, where it keeps
+   *  its own light */
+  setStyle: (style: RenderStyle) => { hinweis?: string };
   /** the scene's time to a time of day and a date, in the city's clock;
    *  what is left out stays. The instant it set, as text, and why the
    *  picture does not follow where the style keeps its own light. */
@@ -75,18 +70,12 @@ export function sceneTools(scene: AskScene) {
         : { ok: false, hinweis: "Die Szene lädt noch." };
     }),
     timeTool.client(({ uhrzeit, datum }) => {
-      if (!(uhrzeit || datum)) {
-        return { ok: false, hinweis: "Gib eine Uhrzeit oder ein Datum an." };
-      }
       const problem = timeProblem({ uhrzeit, datum });
       return problem
         ? { ok: false, hinweis: problem }
         : { ok: true, ...scene.setTime({ uhrzeit, datum }) };
     }),
-    styleTool.client(({ stil }) => {
-      scene.setStyle(stil);
-      return { ok: true };
-    }),
+    styleTool.client(({ stil }) => ({ ok: true, ...scene.setStyle(stil) })),
     layerTool.client(({ schicht, an }) =>
       scene.setLayer(schicht, an)
         ? { ok: true }

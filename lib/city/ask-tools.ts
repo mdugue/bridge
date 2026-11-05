@@ -104,9 +104,9 @@ export const timeTool = toolDefinition({
   description:
     "Stellt die Szenenzeit: die Sonne, die Schatten, Tag oder Nacht. Gib uhrzeit, datum oder beides an; was fehlt, bleibt, wie es ist.",
   inputSchema: z.object({
-    // plain patterns: this tool goes to every provider in strict mode, and
-    // no provider has been asked about zod's long ISO ones (`timeProblem`
-    // checks the values)
+    // plain patterns: the OpenAI-shaped adapters send this tool in strict
+    // mode, and no provider has been tried with zod's long ISO ones
+    // (`timeProblem` checks the values)
     uhrzeit: z
       .string()
       .regex(/^\d{2}:\d{2}$/u)
@@ -123,24 +123,38 @@ export const timeTool = toolDefinition({
 const CLOCK_TIME = z.iso.time({ precision: -1 });
 const CALENDAR_DAY = z.iso.date();
 
-/** What the model hears for a time that the pattern let by but no clock or
- *  calendar has (25:00, 2026-02-31); null for a good one. 24:00 is good:
- *  the day's last minute. */
-export function timeProblem(change: {
+/** A change of the scene's time, as `setze_zeit` takes it. */
+export interface TimeChange {
+  /** YYYY-MM-DD */
   datum?: string;
+  /** HH:MM */
   uhrzeit?: string;
-}): string | null {
-  const { datum, uhrzeit } = change;
+}
+
+/** What the model hears for a change that sets nothing, or a time no clock
+ *  or calendar has (25:00, 2026-02-31); null for a good one. 24:00 is good:
+ *  the day's last minute. The first century is refused: `Date` reads its
+ *  years as 19xx. */
+export function timeProblem({ datum, uhrzeit }: TimeChange): string | null {
+  if (!(uhrzeit || datum)) {
+    return "Gib eine Uhrzeit oder ein Datum an.";
+  }
   if (
-    uhrzeit !== undefined &&
+    uhrzeit &&
     uhrzeit !== "24:00" &&
     !CLOCK_TIME.safeParse(uhrzeit).success
   ) {
     return "Diese Uhrzeit gibt es nicht.";
   }
-  return datum === undefined || CALENDAR_DAY.safeParse(datum).success
-    ? null
-    : "Dieses Datum gibt es nicht.";
+  if (!datum) {
+    return null;
+  }
+  if (!CALENDAR_DAY.safeParse(datum).success) {
+    return "Dieses Datum gibt es nicht.";
+  }
+  return datum.startsWith("00")
+    ? "So weit reicht die Szenenzeit nicht zurück."
+    : null;
 }
 
 const STYLE_IDS = RENDER_STYLES.map((s) => s.id) as [
@@ -204,11 +218,7 @@ export const SCENE_TOOLS = [
  */
 export function sceneToolsFor(layers: readonly AskLayer[]) {
   return [
-    whereTool,
-    lookTool,
-    showTool,
-    timeTool,
-    styleTool,
+    ...SCENE_TOOLS.filter((t) => t !== layerTool),
     ...(layers.length > 0 ? [layerToolOf(layers)] : []),
   ];
 }
