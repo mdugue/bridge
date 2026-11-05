@@ -2,7 +2,7 @@ import type { Object3D } from "three/webgpu";
 import { isAllocationFailure } from "@/lib/city/gpu-allocation";
 import { createTaskGate } from "@/lib/city/task-gate";
 import type { TaskGate } from "@/lib/city/task-gate";
-import { isAbortError } from "./fetch-optional";
+import { isAbortError, untilAborted } from "./fetch-optional";
 import { streamTimings } from "./stream-timing";
 
 /**
@@ -184,14 +184,20 @@ interface Live {
 
 const noop = (): void => undefined;
 
-/** Settles once `signal` aborts. */
-async function untilAborted(signal: AbortSignal): Promise<void> {
-  if (signal.aborted) {
-    return;
+/** Settles once `wait` does or `signal` aborts, whichever comes first;
+ *  the abort listener goes with it (`untilAborted`), so a long-lived
+ *  signal gathers none per wait. */
+async function waitOrAbort(
+  wait: Promise<void>,
+  signal: AbortSignal
+): Promise<void> {
+  try {
+    await untilAborted(wait, signal);
+  } catch (error) {
+    if (!signal.aborted) {
+      throw error;
+    }
   }
-  await new Promise<void>((resolve) => {
-    signal.addEventListener("abort", () => resolve(), { once: true });
-  });
 }
 
 export function createLateParts(host: LateHost): LateParts {
@@ -220,7 +226,7 @@ export function createLateParts(host: LateHost): LateParts {
     if (rank === null) {
       return await work();
     }
-    await Promise.race([lane.gate, untilAborted(signal)]);
+    await waitOrAbort(lane.gate, signal);
     return await lane.tasks.run(work, signal, rank);
   };
 
@@ -364,7 +370,7 @@ export function createLateParts(host: LateHost): LateParts {
     const buildAndCompile = async () => {
       if (part.rank !== null && part.hangAt === "wait" && !gone()) {
         // (one gone meanwhile builds nothing: it waits no longer)
-        await Promise.race([lane.older, untilAborted(abort.signal)]);
+        await waitOrAbort(lane.older, abort.signal);
       }
       if (gone()) {
         return null;
