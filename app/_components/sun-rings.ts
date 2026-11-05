@@ -381,6 +381,8 @@ export function createSunRings(
     every: false,
   }));
   let wanted: readonly number[] = rings.map(() => 1);
+  // kept between frames: this runs in every one of them
+  const viewWant: number[] = rings.map(() => 1);
   // Modell's rings tile one square, and it says what they reach
   let tiled = false;
 
@@ -389,20 +391,15 @@ export function createSunRings(
   };
 
   /** Asks `ring` to redraw if what it wants left what it holds. */
-  const wantRing = (
-    ring: Ring,
-    focus: RingPoint,
-    half: number,
-    now: number
-  ) => {
-    ring.focus = focus;
+  const wantRing = (ring: Ring, half: number, now: number) => {
+    const { focus } = ring;
     ring.half = half;
     const { anchor } = ring;
     if (
       !anchor ||
       half !== ring.anchorHalf ||
       Math.hypot(focus.x - anchor.x, focus.y - anchor.y, focus.z - anchor.z) >=
-        ringDeadZone(half)
+        ringDeadZone(half, tiled)
     ) {
       ask(ring, now);
     }
@@ -455,7 +452,10 @@ export function createSunRings(
     shadow.updateMatrices(light);
     nodes.matrix[index].value.copy(shadow.matrix);
     nodes.bias[index].value = ringBias(half, mapEdge, camera.far - camera.near);
-    ring.anchor = ring.focus;
+    ring.anchor ??= { x: 0, y: 0, z: 0 };
+    ring.anchor.x = ring.focus.x;
+    ring.anchor.y = ring.focus.y;
+    ring.anchor.z = ring.focus.z;
     ring.anchorHalf = half;
     ring.fresh = true;
     nodes.fade[index].value = wanted[index];
@@ -466,7 +466,7 @@ export function createSunRings(
 
   const drawNext = () => {
     const now = performance.now();
-    const index = nextRingDue(rings, now);
+    const index = nextRingDue(rings, now, !tiled);
     if (index < 0) {
       return null;
     }
@@ -488,7 +488,7 @@ export function createSunRings(
   return {
     anyDirty: () => rings.some((ring) => ring.dirtySince !== null),
     depth: () => node.depth,
-    due: () => nextRingDue(rings, performance.now()) >= 0,
+    due: () => nextRingDue(rings, performance.now(), !tiled) >= 0,
     dispose: () => {
       node.dispose();
     },
@@ -509,7 +509,8 @@ export function createSunRings(
       for (let i = 0; i < SHADOW_RINGS; i += 1) {
         rings[i].every = true;
         rings[i].depthHalf = depthHalf;
-        wantRing(rings[i], focus[i], half, now);
+        rings[i].focus = focus[i];
+        wantRing(rings[i], half, now);
       }
       showRings([1, 1, 1, 1], now);
       reach.set(centre.x, -centre.z, radius);
@@ -524,18 +525,18 @@ export function createSunRings(
     setView: (view) => {
       const now = performance.now();
       tiled = false;
-      const want: number[] = [];
       for (let i = 0; i < SHADOW_RINGS; i += 1) {
         const half = SHADOW_RING_HALVES[i];
         const fade = ringFade(i, view.height);
-        want.push(fade);
+        viewWant[i] = fade;
         rings[i].every = false;
         rings[i].depthHalf = half;
         if (fade > 0) {
-          wantRing(rings[i], ringFocus(half, view), half, now);
+          ringFocus(half, view, rings[i].focus);
+          wantRing(rings[i], half, now);
         }
       }
-      showRings(want, now);
+      showRings(viewWant, now);
     },
   };
 }

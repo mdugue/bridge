@@ -49,7 +49,7 @@ test("shadowMapSizeFor keeps the product map and shrinks the lite one", () => {
 });
 
 test("the mobile tier shrinks the shadow map unless lite already did", () => {
-  expect(shadowMapSizeFor("full", "mobile")).toBe(1024);
+  expect(shadowMapSizeFor("full", "mobile")).toBe(900);
   expect(shadowMapSizeFor("full", "desktop")).toBe(2048);
   expect(shadowMapSizeFor("lite", "mobile")).toBe(256);
 });
@@ -152,7 +152,7 @@ test("postProfileFor leaves the costly post work to the desktop", () => {
 
 test("shadowMapBytesFor counts the depth map alone", () => {
   expect(shadowMapBytesFor(shadowMapSizeFor("full", "mobile"))).toBe(
-    16 * 1024 ** 2
+    900 * 900 * 4 * 4
   );
   expect(shadowMapBytesFor(512)).toBe(512 * 512 * 4 * 4);
 });

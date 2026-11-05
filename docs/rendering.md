@@ -288,7 +288,7 @@ change, not a re-bake
   `ShadowFilterNode` spreads a 5-tap Vogel disk by radius × texel; 2.5
   texels here, wider and five samples leave gaps a thin shadow shows as a
   stipple). The rings are squares of half-size 80, 240, 720 and 2160 m, each
-  of 2048² on desktop, 1024² on phones, 256² in the lite profile (smaller at
+  of 2048² on desktop, 900² on phones, 256² in the lite profile (smaller at
   a raised safety level,
   [ADR 0047](./adr/0047-phone-memory-budget-in-true-bytes.md)). Across the
   light that is 0.08, 0.23, 0.7 and 2.1 m a texel at 2048²; along it wider
@@ -297,8 +297,10 @@ change, not a re-bake
   - **One depth array, no colour target.** The rings are the layers of one
     depth texture, one binding in every lit material, in a render target of
     no colour attachment (`count: 0`, both backends since three r187):
-    64 MiB at four of 2048², 16 at four of 1024² (`shadowMapBytesFor`), a
-    phone's bytes and fill of the one 2048² map it had. Keep
+    64 MiB at four of 2048², 12.4 at four of 900² (`shadowMapBytesFor`). A
+    phone had one 2048² map, 16 MiB: the 3.6 saved pay for what the wide rings'
+    casters hold beyond it, measured in emulation at 2.5 MiB on foot and 0.8 in
+    flight. Keep
     `renderer.shadowMap.transmitted` off: coloured shadows would read a
     colour target there is none of. `RingShadowNode`, installed as the
     light's `shadow.shadowNode` (the hook three's own CSM and tiled shadows
@@ -352,8 +354,9 @@ change, not a re-bake
     goes.
   - **Modell** has one scale across its picture, where the fine middle would
     show as a patch: the four layers tile the picture's square 2 × 2, with a
-    fifth of overlap so that each cross-fade lies inside its neighbour (`modelQuadrants`), so its map is about 3400² in
-    all on a desktop and 1700² on a phone. Everything casts there.
+    fifth of overlap so that each cross-fade lies inside its neighbour (`modelQuadrants`), so its map is about 2800² in
+    all on a desktop and 1250² on a phone. The tiles are alike, so none is
+    held back in time. Everything casts there.
 - **The shadow camera streams on a desktop, at a resolution of its
   own.** The sun's shadow camera is registered with the tiles renderer
   as a second camera, so a tile that casts into the view stays loaded
@@ -911,7 +914,7 @@ the safety levels 1, 2 and 3:
 |---|---|---|---|
 | Tiles | the whole site streams (`tileset.json`), out to the fog's end × 1.1 (`streamFarFor`) | same, but to 2.2 km at most | spawn tile only (`tileset-spawn.json`; `&block=1` streams the site) |
 | Terrain | L0 TIN (±0.15 m) near, L1 512² grid beyond (the switch at ≈ 2.6 km from a tile for a viewport 1080 CSS px high; ≈ 2.1 km on an iPhone in portrait) | same | same |
-| Shadow rings, four of | 2048² (1024², 1024², 512²) | 1024² (1024², 512², 512²) | 256² |
+| Shadow rings, four of | 2048² (1024², 1024², 512²) | 900² (900², 450², 450²) | 256² |
 | Shadow camera streams at | 128 px, by day; from level 2 never | never | as the tier |
 | Rasters decoding at once (`RASTER_TURNS`) | 5 | 1 | as the tier |
 | Pixel ratio | ≤ 1.5 (1.25, 1.0, 1.0; ≤ 2 until 2026-10-10: a retina laptop's 5.2 MP of post stack, 1.5 is 56 % of it), × 0.85 / 0.72 / 0.6 while the GPU misses 50 fps (`lib/city/resolution-scale.ts`) | ≤ 1.5 (1.25, 1.0, 0.85), × 0.85 / 0.72 while it misses 40 fps | 0.5, never scaled |

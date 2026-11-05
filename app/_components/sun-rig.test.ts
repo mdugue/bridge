@@ -13,7 +13,12 @@ import {
 import type { DepthTexture, Matrix4, ShadowNode } from "three/webgpu";
 import { uniform } from "three/tsl";
 import { SHADOW_BASE_RADIUS, SHADOW_MAX_RADIUS } from "@/lib/city/shadow-fit";
-import { SHADOW_RINGS } from "@/lib/city/shadow-rings";
+import {
+  SHADOW_RING_HALVES,
+  SHADOW_RINGS,
+  THIN_CASTER_RINGS,
+} from "@/lib/city/shadow-rings";
+import { FURNITURE_IN_M } from "./furniture-layer";
 import { shadowMapSizeFor } from "./scene-profile";
 import { createSunRig } from "./sun-rig";
 import { castsInRing, markThinCaster } from "./three-utils";
@@ -311,6 +316,12 @@ test("the rings take the size they are given", () => {
   );
 });
 
+test("a furniture cell flips beyond the finest ring, the only one to draw it", () => {
+  // create-app.ts asks no redraw for it on foot; furniture is marked `tiny`
+  expect(THIN_CASTER_RINGS.tiny).toBe(1);
+  expect(FURNITURE_IN_M).toBeGreaterThan(SHADOW_RING_HALVES[0] * 3);
+});
+
 test("a change far off asks only the rings it can fall on", () => {
   const { sunRig, sun } = rig();
   sunRig.update(new Date("2026-06-21T12:00:00+02:00"));
@@ -576,6 +587,14 @@ for (const [where, at] of [
 test("Modell tiles its picture's square with the four rings", () => {
   const { sunRig, sun } = rig();
   sunRig.update(new Date("2026-06-21T10:00:00+02:00"));
+  sunRig.followFootprint(0, 100, -300, 200, 880);
+  drawAll(sun);
+  // and they follow the picture itself, not the stream's coarser square
+  sunRig.followFootprint(0, 100, -300, 200, 880);
+  expect(sunRig.shadowBusy()).toBe(false);
+  sunRig.followFootprint(40, 100, -300, 200, 880);
+  expect(sunRig.shadowBusy()).toBe(true);
+  drawAll(sun);
   sunRig.followFootprint(0, 100, -300, 200, 880);
   drawAll(sun);
   expect(rings(sunRig).fade.map((f) => f.value)).toEqual([1, 1, 1, 1]);

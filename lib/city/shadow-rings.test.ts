@@ -64,7 +64,11 @@ describe("where a ring stands", () => {
       groundY: 100,
       height: 200,
     };
-    expect(ringFocus(240, view)).toEqual({ x: 10, y: 100, z: -5 });
+    expect(ringFocus(240, view, { x: 0, y: 0, z: 0 })).toEqual({
+      x: 10,
+      y: 100,
+      z: -5,
+    });
   });
 
   test("the focus lies on the ground, never at the camera's height", () => {
@@ -76,7 +80,7 @@ describe("where a ring stands", () => {
       groundY: 112,
       height: 300,
     };
-    expect(ringFocus(80, view).y).toBe(112);
+    expect(ringFocus(80, view, { x: 0, y: 0, z: 0 }).y).toBe(112);
   });
 
   test("a ring allows a fifth of its half-size of drift", () => {
@@ -169,12 +173,12 @@ describe("Modell's quadrants", () => {
       LOW_SUN
     );
     expect(focus).toHaveLength(SHADOW_RINGS);
-    expect(half).toBeGreaterThan(200);
+    expect(half).toBeGreaterThan(240);
     for (const f of focus) {
       const { x, y } = inLight(f);
       const c = inLight({ x: 0, y: 100, z: 0 });
-      expect(Math.abs(Math.abs(x - c.x) - 200)).toBeLessThan(1e-6);
-      expect(Math.abs(Math.abs(y - c.y) - 200)).toBeLessThan(1e-6);
+      expect(Math.abs(Math.abs(x - c.x) - 240)).toBeLessThan(1e-6);
+      expect(Math.abs(Math.abs(y - c.y) - 240)).toBeLessThan(1e-6);
     }
   });
 });
@@ -190,7 +194,7 @@ const tile = (x: number, z: number) => ({
 test("a quadrant's cross-fade lies inside its neighbour's full strength", () => {
   const { half } = modelQuadrants({ x: 0, y: 100, z: 0 }, 400, LOW_SUN);
   // the overlap on the map (0…1), from one quadrant's edge to the other's
-  const overlap = (half - 200) / half;
+  const overlap = (half - 240) / half;
   expect(overlap).toBeGreaterThan(RING_EDGE_TO * 2 + RING_EDGE_FROM * 2);
 });
 
@@ -200,7 +204,7 @@ test("a quadrant's depth reaches the picture's far edge", () => {
     400,
     LOW_SUN
   );
-  expect(depthHalf).toBeCloseTo(200 + half, 5);
+  expect(depthHalf).toBeCloseTo(240 + half, 5);
 });
 
 describe("what falls on a ring", () => {
@@ -235,13 +239,13 @@ describe("what falls on a ring", () => {
   });
 });
 
-test("a tile's bounds come into the scene frame", () => {
+test("a tile's bounds come into the scene frame, with their overhang", () => {
   expect(
     tileArea([412_000, 5_656_000, 414_000, 5_658_000], {
       cx: 413_114,
       cy: 5_657_017,
     })
-  ).toEqual({ maxX: 886, maxZ: 1017, minX: -1114, minZ: -983 });
+  ).toEqual({ maxX: 1186, maxZ: 1317, minX: -1414, minZ: -1283 });
 });
 
 describe("which tiles changed", () => {
@@ -290,6 +294,11 @@ describe("which ring draws next", () => {
       rest,
     ];
     expect(nextRingDue(rings, 1000)).toBe(2);
+  });
+
+  test("Modell's tiles keep none: they are all alike", () => {
+    const wide = [rest, rest, rest, { dirtySince: 950, drawnAt: 900 }];
+    expect(nextRingDue(wide, 1000, false)).toBe(3);
   });
 
   test("a wide ring keeps its distance between two redraws", () => {

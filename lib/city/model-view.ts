@@ -496,7 +496,7 @@ export function footprintCircle(points: readonly Xyz[]): {
 
 /** The square the map's rings tile in Modell never goes below 110 m. */
 export const MODEL_SHADOW_MIN = 110;
-/** …and stops here on a desktop: 1 600 m over 2 × 2048² ≈ 0.94 m texels. */
+/** …and stops here on a desktop: 1 600 m over 2 × 2048² ≈ 1.1 m texels. */
 export const MODEL_SHADOW_MAX = 1600;
 /** Half-octave steps, and how far past a boundary a change waits. */
 const SHADOW_STEPS_PER_OCTAVE = 2;

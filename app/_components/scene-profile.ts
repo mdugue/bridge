@@ -134,11 +134,13 @@ export function currentSceneBudget(safety: SafetyLevel = 0): SceneBudget {
 }
 
 /** A shadow ring's edge per safety level (0–3), per tier: four of these are
- *  the map (lib/city/shadow-rings.ts), so a phone's four of 1024² are the
- *  bytes and the fill of the one 2048² it had (ADR 0047). */
+ *  the map (lib/city/shadow-rings.ts). A phone's are smaller than a power of
+ *  two, to pay for what the wide rings' casters hold beside the one 2048² it
+ *  had: 2.5 MiB more on foot, 0.8 in flight, against 3.6 saved here (ADR 0047).
+ */
 const SHADOW_MAP_SIZE: Record<DeviceTier, readonly number[]> = {
   desktop: [2048, 1024, 1024, 512],
-  mobile: [1024, 1024, 512, 512],
+  mobile: [900, 900, 450, 450],
 };
 
 /**
@@ -264,7 +266,7 @@ const TILE_CACHE_BYTES: Record<
  * depth, the one-byte AO and outline targets and a picture style's own
  * target while one is on: on the 402×874 iPhone 18, 12.5, 8 and 6 MiB at
  * the pixel ratios 1.5, 1.25, 1.0, 0.85 of the four levels) and the
- * shadow map (`shadowMapBytesFor`: 16 MiB at four of 1024², 4 at four of 512²): 34,
+ * shadow map (`shadowMapBytesFor`: 12.4 MiB at four of 900², 3.1 at four of 450²): 34,
  * 28.5, 12 and 10 MiB. The 100 MiB are ~40 for the scene-wide sets (sky,
  * lamp pool, data layers, uniform buffers and shader text) and ~60 of
  * headroom: tiles in flight weigh nothing in the cache, it unloads only

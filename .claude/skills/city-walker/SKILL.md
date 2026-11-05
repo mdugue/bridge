@@ -476,7 +476,7 @@ The map is **four concentric rings** (`sun-rings.ts`,
 |---|---|---|
 | `renderer.shadowMap.type` | `PCFShadowMap` | only soft option that doesn't ring (VSM "corduroy"-rings on grazing ground) |
 | rings (`SHADOW_RING_HALVES`) | half-sizes 80, 240, 720, 2160 m | texels fine near, coarse far, whatever the view's or the sun's direction: a map warped over the view failed at a low sun looking along its light |
-| ring edge (`shadowMapSizeFor`) | 2048 (phones 1024; smaller at a raised safety level, ADR 0047) | four of 1024² are a phone's old 2048²: bytes and fill alike |
+| ring edge (`shadowMapSizeFor`) | 2048 (phones 900; smaller at a raised safety level, ADR 0047) | four of 900² are less than a phone's old 2048²: they pay for what the wide rings' casters hold |
 | `shadow.radius` | 2.5 (`RING_PCF_RADIUS`) | five samples over 5 texels leave gaps: a thin shadow shows them as a stipple |
 | `shadow.normalBias` | **0** | a positive normalBias offsets the flat ground sample → bright peter-panning contact strip. Safe at 0 because terrain doesn't cast and solids cast via back faces (lit faces never self-acne) |
 | casters' depth | the material itself | no custom depth materials: the shadow pass draws `castShadowPositionNode ?? positionNode` and honours `maskNode` |

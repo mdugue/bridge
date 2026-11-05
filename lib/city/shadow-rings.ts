@@ -1,3 +1,4 @@
+import { epsgToWorld } from "./ground-clamp";
 import { clamp } from "./math";
 /**
  * The sun's shadow rings: where each of the four squares of the shadow map
@@ -88,6 +89,12 @@ export const RING_EDGE_TO = 0.07;
  *  one's cross-fade band lies wholly inside its neighbour's full strength, or
  *  light would leak through the seam. */
 const QUADRANT_OVERLAP = 0.2;
+/** Modell's square is this much wider than its fit: the picture may outgrow
+ *  the fit by its hysteresis and drift by a tile's dead zone before they
+ *  follow (`MODEL_DEAD_ZONE`). */
+const MODEL_MARGIN = 1.2;
+/** The share of its half-size a tile of Modell's square may drift. */
+const MODEL_DEAD_ZONE = 0.1;
 
 /** A point (world, Y-up). */
 export interface RingPoint {
@@ -117,14 +124,18 @@ export function ringAhead(half: number, height: number): number {
   return half * RING_AHEAD * ramp;
 }
 
-/** Where a square of `half` wants its centre for `view`. */
-export function ringFocus(half: number, view: RingView): RingPoint {
+/** Where a square of `half` wants its centre for `view`, written to `out`
+ *  (this runs per ring in every frame). */
+export function ringFocus(
+  half: number,
+  view: RingView,
+  out: RingPoint
+): RingPoint {
   const ahead = ringAhead(half, view.height);
-  return {
-    x: view.eyeX + view.dirX * ahead,
-    y: view.groundY,
-    z: view.eyeZ + view.dirZ * ahead,
-  };
+  out.x = view.eyeX + view.dirX * ahead;
+  out.y = view.groundY;
+  out.z = view.eyeZ + view.dirZ * ahead;
+  return out;
 }
 
 /** How much of ring `index` shows from `height`: 1, then down to 0 where its
@@ -144,8 +155,8 @@ export function ringFade(index: number, height: number): number {
 }
 
 /** The drift (m) a square of `half` allows before it is redrawn. */
-export function ringDeadZone(half: number): number {
-  return half * RING_DEAD_ZONE;
+export function ringDeadZone(half: number, tiled = false): number {
+  return half * (tiled ? MODEL_DEAD_ZONE : RING_DEAD_ZONE);
 }
 
 /** A square's depth range along the light, from its centre (m): what stands
@@ -226,7 +237,7 @@ export function modelQuadrants(
   sun: RingPoint
 ): { depthHalf: number; half: number; focus: RingPoint[] } {
   const { x, y } = lightAxes(sun);
-  const q = radius / 2;
+  const q = (radius * MODEL_MARGIN) / 2;
   const at = (sx: number, sy: number): RingPoint => ({
     x: centre.x + (x.x * sx + y.x * sy) * q,
     y: centre.y + (x.y * sx + y.y * sy) * q,
@@ -282,17 +293,23 @@ export function ringTouches(
   );
 }
 
-/** A tile's area in world coordinates, from its bounds in the data's CRS
- *  (E, N, E, N) and the site's offset (`x = E − cx`, `z = −(N − cy)`). */
+/** What stands on a tile may reach this far past its bounds (m): a bridge, a
+ *  building owned by the tile its centre lies on. */
+const TILE_OVERHANG_M = 300;
+
+/** A tile's area in world coordinates, with its overhang, from its bounds in
+ *  the data's CRS (E, N, E, N). */
 export function tileArea(
   bounds: readonly [number, number, number, number],
   offset: { cx: number; cy: number }
 ): RingArea {
+  const min = epsgToWorld(bounds[0], bounds[3], offset);
+  const max = epsgToWorld(bounds[2], bounds[1], offset);
   return {
-    maxX: bounds[2] - offset.cx,
-    maxZ: offset.cy - bounds[1],
-    minX: bounds[0] - offset.cx,
-    minZ: offset.cy - bounds[3],
+    maxX: max.x + TILE_OVERHANG_M,
+    maxZ: max.z + TILE_OVERHANG_M,
+    minX: min.x - TILE_OVERHANG_M,
+    minZ: min.z - TILE_OVERHANG_M,
   };
 }
 
@@ -334,7 +351,9 @@ export interface RingQueueEntry {
  */
 export function nextRingDue(
   rings: readonly RingQueueEntry[],
-  now: number
+  now: number,
+  /** Modell's tiles are all alike: none of them draws everything */
+  paced = true
 ): number {
   let best = -1;
   let since = Number.POSITIVE_INFINITY;
@@ -343,7 +362,7 @@ export function nextRingDue(
     if (
       dirtySince !== null &&
       dirtySince < since &&
-      now - drawnAt >= (RING_MIN_GAP_MS[i] ?? 0)
+      (!paced || now - drawnAt >= (RING_MIN_GAP_MS[i] ?? 0))
     ) {
       best = i;
       since = dirtySince;

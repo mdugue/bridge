@@ -20,8 +20,9 @@ phone has no memory to spare (ADR 0047).
 2. **The map is four concentric rings:** squares of one resolution, each
    three times as wide as the one inside it, the layers of one depth array
    drawn by one camera. A fragment reads the finest it lies on, cross-faded
-   into the next at the edge. A phone's four of 1024² hold the bytes of the
-   one 2048² it had, so the rings are the one path on every device. Modell,
+   into the next at the edge. A phone's four of 900² hold fewer bytes than the
+   one 2048² it had and pay for what the wide rings' casters hold beside them,
+   so the rings are the one path on every device. Modell,
    of one scale across its picture, tiles its square with the same layers.
 3. **A ring is redrawn only on demand, one a frame:** when it has drifted a
    share of its size, the sun moves or a caster changes
@@ -58,10 +59,9 @@ phone has no memory to spare (ADR 0047).
   redrawing on every turn: far off, its texels are wider than a map fitted to
   the view would have at its best.
 - A desktop holds 64 MiB of shadow map (36 with the one 3072² before).
-- Depth passes are more frequent and each smaller, and the widest ring holds
-  about 1 MiB more of the casters' vertex state on a phone on foot (emulated,
-  inside the budget's headroom). Whether that holds on a real phone is judged
-  there, not on a desktop.
+- Depth passes are more frequent and each smaller. Whether that holds on a
+  real phone, where the memory was measured only in emulation, is judged there,
+  not on a desktop.
 - A new lit feature fits into the pool or is faked.
 - A pass's sample counts are construction-time settings; switching them
   by motion is a rebuild hitch.

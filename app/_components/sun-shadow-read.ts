@@ -58,9 +58,9 @@ export function readSunShadow(
   reversed: boolean
 ): { inside: F; shadowed: F; read: ReturnType<typeof texture> } {
   const hit = ringLookup(world, rings, reversed);
-  // a ring's edge band and a fading ring are on the map all the same: past
-  // half strength the next ring out answers
-  const onNext = step(hit.weight, 0.5);
+  // a ring's edge band and a fading ring are on the map all the same: below
+  // half strength the next ring out answers, if one reaches this far
+  const onNext = step(hit.weight, 0.5).mul(step(1e-3, hit.nextWeight));
   const at = mix(hit.at, hit.nextAt, onNext) as V3;
   const layer = int(
     mix(float(hit.layer), float(hit.nextLayer), onNext).add(0.5)

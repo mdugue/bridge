@@ -42,7 +42,7 @@ import {
 import { sunDirectionWorld } from "@/lib/city/sun";
 import { shadowMapBytesFor } from "./scene-profile";
 import { createSkyReflection } from "./sky-reflection";
-import type { RingArea } from "@/lib/city/shadow-rings";
+import type { RingArea, RingView } from "@/lib/city/shadow-rings";
 import { createSunRings } from "./sun-rings";
 import type { ShadowRingNodes } from "./sun-rings";
 import type { V3, V4 } from "./shader-chunks";
@@ -430,6 +430,15 @@ export function createSunRig(
     reposition();
   };
 
+  // kept between frames: this runs in every one of them
+  const ringView: RingView = {
+    dirX: 0,
+    dirZ: 0,
+    eyeX: 0,
+    eyeZ: 0,
+    groundY: 0,
+    height: 0,
+  };
   const follow = (
     camera: PerspectiveCamera,
     direction: Vector3,
@@ -437,14 +446,13 @@ export function createSunRig(
   ) => {
     const { position } = camera;
     followSquare(position, direction, groundY);
-    rings.setView({
-      dirX: direction.x,
-      dirZ: direction.z,
-      eyeX: position.x,
-      eyeZ: position.z,
-      groundY,
-      height: position.y - groundY,
-    });
+    ringView.dirX = direction.x;
+    ringView.dirZ = direction.z;
+    ringView.eyeX = position.x;
+    ringView.eyeZ = position.z;
+    ringView.groundY = groundY;
+    ringView.height = position.y - groundY;
+    rings.setView(ringView);
     askRings();
   };
 
@@ -468,7 +476,7 @@ export function createSunRig(
       focus.set(x, groundY, z);
       reposition();
     }
-    rings.setFootprint({ x: focus.x, y: focus.y, z: focus.z }, radius);
+    rings.setFootprint({ x, y: groundY, z }, radius);
     askRings();
   };
 
