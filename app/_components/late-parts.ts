@@ -157,8 +157,10 @@ export interface LateHost {
   lane: LateLane;
   /** compiles, counted on the root (its release waits); never rejects */
   compile: (objects: Object3D[], where: string) => Promise<Compiled>;
-  /** settles once the renderer has recorded the content */
-  loaded: Promise<void>;
+  /** settles once the renderer has recorded the content; asked when a
+   *  part would hang, so the record it waits for is the one there then
+   *  (throws where there is none: the part fails, reported) */
+  loaded: () => Promise<void>;
   /** the stream has gone */
   disposed: () => boolean;
   /** the cache weighs the tile again (never once it left: see `weigh`) */
@@ -432,7 +434,7 @@ export function createLateParts(host: LateHost): LateParts {
       readyNow();
       // not before the renderer has recorded the content: what hangs may
       // be the scene's, which it would dispose with the tile
-      await host.loaded;
+      await host.loaded();
       if (part.hangAt === "compile") {
         ended.value = await compiled;
       }

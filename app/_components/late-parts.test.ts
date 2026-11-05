@@ -77,6 +77,39 @@ test("a part builds, compiles, is ready, and hangs only once the content is reco
   expect(log).toEqual(["a build", "a hang"]);
 });
 
+test("a part asks for the content's record when it would hang: one made after it was added holds it, none fails it loudly", async () => {
+  const log: string[] = [];
+  const { calls, compiles, host } = fakeHost();
+  const record: { loaded?: Promise<void> } = {};
+  const parts = createLateParts({
+    ...host,
+    loaded: async () => {
+      if (record.loaded === undefined) {
+        throw new Error("no record");
+      }
+      await record.loaded;
+    },
+  });
+  const held = parts.add(fakePart("a", log).part);
+  const lone = parts.add(fakePart("b", log).part);
+  await flush();
+  const recorded = gate();
+  record.loaded = recorded.opened;
+  compiles[0].end("done");
+  await flush();
+  expect(await settledNow(held)).toBe("pending");
+  recorded.open();
+  expect(await held.settled).toBe("hung");
+  record.loaded = undefined;
+  await flush();
+  compiles[1].end("done");
+  expect(await lone.settled).toBe("failed");
+  expect(
+    calls.failed.map(([error, tile]) => [(error as Error).message, tile])
+  ).toEqual([["no record", "b"]]);
+  expect(log).toEqual(["a build", "b build", "a hang", "b free"]);
+});
+
 test("a part disposed, or its tile left, before the lane's gate opens leaves at once and never builds; one added after is gone at once", async () => {
   const log: string[] = [];
   const g = gate();

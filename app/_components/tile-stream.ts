@@ -2158,7 +2158,13 @@ export class DressingPlugin {
       lane: this.lane,
       compile: async (objects, where) =>
         await this.compileUnder(scene, objects, where),
-      loaded: this.loaded.get(scene) ?? Promise.resolve(),
+      loaded: async () => {
+        const loaded = this.loaded.get(scene);
+        if (loaded === undefined) {
+          throw new Error("a late part on a content the renderer never loaded");
+        }
+        await loaded;
+      },
       disposed: () => this.disposed,
       reweigh: () => this.reweigh(scene),
       changed: () => {

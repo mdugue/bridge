@@ -49,7 +49,7 @@ export function fakeHost(laneGate: Promise<void> = Promise.resolve()) {
       await new Promise<Compiled>((resolve) => {
         compiles.push({ objects, where, end: resolve });
       }),
-    loaded: loaded.opened,
+    loaded: async () => await loaded.opened,
     disposed: () => false,
     reweigh: () => {
       calls.reweigh += 1;
