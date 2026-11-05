@@ -29,6 +29,7 @@ level, and the build lifts the terrain inside it (lib/city/stairs.ts)."""
 from __future__ import annotations
 
 import dataclasses
+import re
 from collections import Counter
 
 import numpy as np
@@ -243,11 +244,26 @@ def landing(dgm: Dgm, end, inner) -> float | None:
     return beyond if beyond is not None else dgm.at(end[0], end[1])
 
 
+def tagged_riser(other_tags: str | None) -> float | None:
+    """A flight's `step:height` (m) within MIN_RISER–MAX_RISER: a bare
+    number past it but within that range in centimetres (`16`) read as cm,
+    anything else (`16 m`, `2`) no riser — times a step count it was a
+    flight 160 m high."""
+    value = tag(other_tags, "step:height")
+    riser = osm_metres(value)
+    if riser is None:
+        return None
+    if MIN_RISER <= riser <= MAX_RISER:
+        return riser
+    bare = re.fullmatch(r"\s*\d+(?:[.,]\d+)?\s*", value or "")
+    return riser / 100 if bare and MIN_RISER <= riser / 100 <= MAX_RISER else None
+
+
 def tagged_rise(other_tags: str | None) -> float | None:
     count = osm_number(tag(other_tags, "step_count"))
     if count is None or count < 2:
         return None
-    return round(count) * (osm_metres(tag(other_tags, "step:height")) or TAGGED_RISER)
+    return round(count) * (tagged_riser(other_tags) or TAGGED_RISER)
 
 
 def lifted(coords, z0: float, z1: float, other_tags: str | None, raised: list):

@@ -311,3 +311,19 @@ def test_the_dgm_opens_only_the_tile_and_its_grid_neighbours(tmp_path, reader):
     at = reader(tile)
     assert at(411990.5, 5656100.5) == pytest.approx(100.0)
     assert at(412010.5, 5656100.5) == pytest.approx(103.0)
+
+
+@pytest.mark.parametrize(
+    ("riser", "metres"),
+    [
+        ("0.16", 0.16),
+        ("16 cm", 0.16),
+        ("16", 0.16),  # a bare number of centimetres
+        ("16 m", stairs.TAGGED_RISER),  # metres as written: no riser
+        ("2", stairs.TAGGED_RISER),  # neither 2 m nor 2 cm
+        ("40", stairs.TAGGED_RISER),
+    ],
+)
+def test_a_tagged_rise_believes_only_a_plausible_riser(riser, metres):
+    tags = f'"step_count"=>"10","step:height"=>"{riser}"'
+    assert stairs.tagged_rise(tags) == pytest.approx(10 * metres)
