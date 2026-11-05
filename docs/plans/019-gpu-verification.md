@@ -202,6 +202,15 @@ checks have theirs in the index (069, 070, 071, 076, 077, 078, 080,
   fly-over on each backend.
 - [ ] The water and mist sheets: count their triangles per frame
   (`renderer.info`) — the backlog's item 8 is ranked on a pre-TIN count.
+- Measured 2026-11-05 on an M1 Max (WebGPU, Chromium, 1600 × 1000 at 2×;
+  the rings, plan 083): frames at vsync, 16.7 ms median at `oblique-400`,
+  `ask-frauenkirche`, `seam-eye` and `night-street`; `seam-eye` and the
+  traffic layer on drop frames (p95 33 ms). Boot: ready in 6.8–8.0 s,
+  `boot:veil-to-loaded` 3.9–4.1 s. Memory over three rounds of jumps across
+  the site: 951 MB held at the start, 1 349 MB after the first, the same
+  after the second and the third (cache 1.29 of 1.72 GB, CPU 449 MB): it
+  settles. Jumps, not flights: hitches on the way, the other GPU and the
+  rest of this section stay open.
 - Knobs: the tile cache (`tileCacheBytesFor`, `scene-profile.ts`),
   `errorTarget`.
 
