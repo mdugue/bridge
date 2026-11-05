@@ -41,7 +41,8 @@ import nodePath from "node:path";
 import { gzipSync } from "node:zlib";
 import Delatin from "delatin";
 import { BufferAttribute, BufferGeometry } from "three";
-import type { WallFeature } from "../../lib/city/features";
+import { parseBakeFile } from "../../lib/city/bake-file";
+import { WALLS_FILE } from "../../lib/city/walls-file";
 import { conflateWalls } from "../../lib/city/terrain-conflate";
 import type { WallLine } from "../../lib/city/terrain-conflate";
 import type { TerrainBounds } from "../../lib/city/terrain-geometry";
@@ -80,19 +81,16 @@ function gridN(name: string): number {
 }
 
 function wallLines(): WallLine[] {
-  const doc = JSON.parse(
-    readFileSync(wallSourceFile(DRESDEN, SPAWN_TILE), "utf-8")
-  ) as {
-    features: WallFeature[];
-  };
-  return doc.features
-    .filter(
-      (f) => f.geometry?.type === "LineString" && f.properties?.kind !== "fence"
-    )
-    .map((f) => ({
-      coords: f.geometry.coordinates,
-      kind: f.properties?.kind ?? "wall",
-    }));
+  const file = wallSourceFile(DRESDEN, SPAWN_TILE);
+  return parseBakeFile(
+    WALLS_FILE,
+    JSON.parse(readFileSync(file, "utf-8")),
+    file
+  ).features.flatMap((f) =>
+    f.geometry.type === "LineString" && f.properties.kind !== "fence"
+      ? [{ coords: f.geometry.coordinates, kind: f.properties.kind }]
+      : []
+  );
 }
 
 async function grids(dir: string): Promise<void> {

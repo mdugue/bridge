@@ -15,9 +15,10 @@ Stadtwissen was silently poorer. One such drift was live: the monuments'
 `wikidata` names the item their material came from, while the Stadtwissen
 republished it as the item OSM links the monument to.
 
-The GeoJSON layers and the city mesh's other tile sources were already
-held by `features.test.ts`, which checks every committed file; the JSON
-files the build and the Stadtwissen cast were held by nothing.
+The GeoJSON layers and the city mesh's other tile sources were held by
+`features.test.ts`, which checks every committed file but not the build's
+reads; the JSON files the build and the Stadtwissen cast were held by
+nothing.
 
 ## Decision
 
@@ -27,13 +28,11 @@ files the build and the Stadtwissen cast were held by nothing.
    `.transform`, `.default`, `.catch` or `.pipe`; readers take its
    `z.infer`, and the hand-written interfaces go. A union the viewer has
    (`WallMaterial`, `MonumentKind` …) is the schema's enum, held equal by
-   a test. Excused for now: the city mesh's and the terrain's tile
-   sources — the GeoJSON doors, dormers, passages, plinths, small
-   buildings, structures, measured roofs, kerbs, walls, stairs and
-   terraces, and the JSON `windows` and `shopfronts` — which
-   `scripts/prepare/city.ts` and `scripts/tile-sources.ts` still cast;
-   `features.test.ts` holds their committed data, and a later schema pass
-   takes them (plans backlog, item 26). A new file takes a schema.
+   a test. The city mesh's and the terrain's tile sources came under this
+   in a later pass (doors, dormers, passages, plinths, small buildings,
+   structures, measured roofs, shopfronts, windows, kerbs, walls, stairs,
+   terraces); `features.test.ts` keeps the value rules a shape does not
+   say (a door's range, a normal's length). A new file takes a schema.
 2. **The build parses before it reads.** `parseBakeFile`
    (`lib/city/bake-file.ts`) replaces the cast: per tile in the step
    module that reads the file, site-wide in `prepare-data.ts` before it
@@ -56,8 +55,10 @@ files the build and the Stadtwissen cast were held by nothing.
 - A drift fails `bun run verify` or the build, never a layer at runtime;
   between a schema change and its re-bake, `bake-files.test.ts` fails.
 - The schema modules and zod's locked version are in the keys of the
-  `city`, `stadtwissen` and `siteStats` bakes: zod is pinned exactly, and
-  a bump re-bakes those artifacts once, byte for byte the same.
+  `city`, `stadtwissen` and `siteStats` bakes and, through
+  `scripts/tile-sources.ts` and the canopy's and the crowns' readers, of
+  the ground's family and the side bakes: zod is pinned exactly, and a bump
+  re-bakes those artifacts once, byte for byte the same.
 - A new handed-over file gets a schema module, a row in
   `bake-files.test.ts` and `parseBakeFile` where it is read (uncached and
   site-wide: a `NOT_A_BAKE` entry too).

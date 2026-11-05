@@ -1238,7 +1238,7 @@ stays their measure; the tile cache counts true bytes.
   level lacks is small roof detail and per-vertex facade detail (the
   ground samples every 2 m along the walls the windows clear, the
   doors), so the switch shows next to no jump. Both are `kind: "city"` with the same object table: picking,
-  demolish (on both levels at once), the inquiry and the BVH work on
+  demolish (on both levels at once, `demolitions.ts`), the inquiry and the BVH work on
   whichever is shown. The phone's memory is what pays for it: only the
   tiles within reach carry the baked LoD2, the rest a third of its
   vertices.

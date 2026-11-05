@@ -18,6 +18,7 @@ import type {
 } from "three/webgpu";
 import { buildBvhOffThread, bvhBuilding, bvhLost } from "./bvh-client";
 import { rayEntry } from "./collision";
+import { replayDemolitions } from "./demolitions";
 import { streamTimings } from "./stream-timing";
 import { setPickRay } from "./view-ray";
 import {
@@ -40,8 +41,10 @@ import {
 import { readFacts } from "@/lib/city/object-facts";
 import type { ObjectFacts } from "@/lib/city/object-facts";
 import type { StructuralMetadata } from "@/lib/city/property-table";
-import { applyFacadeReadings } from "@/lib/city/facade-reading";
-import type { FacadeReadings } from "@/lib/city/facade-reading";
+import {
+  applyFacadeReadings,
+  isFacadeReadings,
+} from "@/lib/city/facade-reading";
 import { textureBytes, trackTexture } from "./three-utils";
 import { createClayMaterial } from "./visual-style";
 import type { StyleResources } from "./visual-style";
@@ -66,8 +69,9 @@ export interface CityLayer {
   setHidden: (objects: ReadonlySet<number>) => boolean;
   dispose: () => void;
   /** what street photos say about the tile's facades, once they land
-   *  (lib/city/facade-reading.ts) */
-  facadeReadings: (readings: FacadeReadings) => void;
+   *  (lib/city/facade-reading.ts): a fetched file, guarded here; one that
+   *  is not what the build checked leaves them as they are drawn */
+  facadeReadings: (readings: unknown) => void;
   /** what the twin knows about one object (read from the table on demand) */
   facts: (objectIndex: number) => ObjectFacts;
   /** whether the tile's BVH is built (`ensureCityBvh`) — not while the
@@ -283,9 +287,8 @@ export function hangsShown(
  * Dresses a streamed city mesh: the glTF feature id and place on the wall
  * (the windows', a roof vertex flagged in it) under the names the clay
  * shader reads, the tile's clay material; its BVH comes when a ray needs
- * it (`ensureCityBvh`). `demolished` replays this session's demolitions of
- * the tile, `demolishedGroups` those of ensembles across a tile edge (a
- * part demolished while this tile was not loaded).
+ * it (`ensureCityBvh`). `demolished` and `demolishedGroups` are this
+ * session's demolitions it takes back (demolitions.ts).
  */
 export function dressCity(
   mesh: Mesh,
@@ -385,19 +388,7 @@ export function dressCity(
       geometry.computeBoundsTree();
     }
   };
-  let dead = demolished.size;
-  for (const i of demolished) {
-    alive[i] = 0;
-  }
-  if (demolishedGroups.size > 0) {
-    for (let i = 0; i < count; i += 1) {
-      if (alive[i] === 1 && demolishedGroups.has(table.group[i])) {
-        alive[i] = 0;
-        dead += 1;
-      }
-    }
-  }
-  if (dead > 0) {
+  if (replayDemolitions(alive, table.group, demolished, demolishedGroups) > 0) {
     rebuild();
   }
 
@@ -492,6 +483,7 @@ export function dressCity(
       const ids = metadata.tableAccessors[0];
       if (
         ids &&
+        isFacadeReadings(readings) &&
         "buildingId" in ids.properties &&
         applyFacadeReadings(
           table.flags,

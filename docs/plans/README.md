@@ -349,22 +349,34 @@ S/M/L.
 26. **Leftovers of the 2026-11-04 architecture review (PR #265).**
     *Nameplate placement in one module* (M): the eave rule spans
     `nameplate.ts`, `create-app.ts`, `nameplate-ask.ts` and the pose and
-    was rewritten in nine review rounds; decide first how the property
-    table encodes a missing `baseZ` (noData, ADR 0042), then
-    `createPlacement({now})` and one `plateSubject`, un-exporting the
-    test-only helpers. *Card and plate from one answer* (M, after 080):
-    two caches and two retry rules hold "the plate says nothing the card
-    does not". *The view's rest owned by the viewer* (S–M, after 084):
-    `ask-scene.ts` guesses the loop (250 ms, 100 ms polling). *Demolitions
-    as one module* (S): half in `create-app.ts`, half replayed at load,
-    sharing a public mutable set. *`facades_<tile>.json`* is read by the
-    viewer unchecked (plan 081 left it out). *The tile sources' schema
-    pass* (M): ADR 0059 excuses the city mesh's and the terrain's tile
-    sources, still cast — `scripts/prepare/city.ts` (small buildings,
-    structures, measured roofs, plinths, doors, dormers, passages,
-    shopfronts, windows) and `scripts/tile-sources.ts` (kerbs, walls,
-    stairs, terraces); give each a schema
-    and `parseBakeFile`, with `features.test.ts`'s value rules kept.
+    was rewritten in nine review rounds; **the maintainer decides first**
+    how the property table encodes a missing `baseZ` (noData, ADR 0042:
+    never 0, yet `nameplate.ts` `ownMass` reads 0 as missing today; a
+    marker changes the baked table),
+    then `createPlacement({now})` and one `plateSubject`, un-exporting the
+    test-only helpers. *Card and plate from one answer* (M, after 080,
+    **the maintainer's decision first**): two caches and two retry rules
+    hold "the plate says nothing the card does not". *The view's rest
+    owned by the viewer* (S–M, after 084): `ask-scene.ts` guesses the loop
+    (250 ms, 100 ms polling). Looked at and left: it needs a decision, for
+    a wait counted in the loop's updates changes the timing beyond the
+    guess. The loop is paced (`frame-pace.ts`: covered, still, listening)
+    and a hidden page draws nothing, so two frames are about 30 ms on a
+    desktop and a second under the Hörmodus (2 fps), none at all while a
+    sheet scrolls, where 250 ms is 250 ms today; the visible-clock and wall-clock bounds stay either way (a
+    locked phone). Options: (a) an update counter beside
+    `stream.tiles.update()` and a `viewAtRest(signal)` promise, with the
+    pace woken while an answer waits; (b) (a) without waking, accepting
+    the slower answer under the Hörmodus; (c) events for the 100 ms polling
+    only (`onBusy`), the 250 ms stays. *Demolitions as one module*:
+    built (`app/_components/demolitions.ts`, with its tests), but for its
+    last step: the memory still lies in `TileStream.demolished` and
+    `demolishedGroups`, which only the module writes now. Moving them into
+    it touches `tile-stream.ts` (a few lines and its test's fixtures), left
+    until plan 077 lands there. ~~*`facades_<tile>.json`*~~ and ~~*the tile sources' schema
+    pass*~~: built, ADR 0059's excuse gone. What stays cast is what the
+    item did not name: the land-cover legend's `water`
+    (`scripts/tile-sources.ts` `waterMember`).
 27. ~~**The moves plan 046 left (S each; moves only, no pixel change).**~~
     Done 2026-11-05 (plan 046's [record](./completed.md#046--moves-only-split-the-god-modules-and-sweep--closed-2026-11-04-drifted-the-rest-in-the-backlog)).
     *The rail split:* `rail-layer.ts` (2 982 → 1 215 lines) keeps rail
