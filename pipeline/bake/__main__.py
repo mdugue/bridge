@@ -27,6 +27,7 @@ from . import (
     fetch,
     furniture,
     lamp_heights,
+    lamp_water,
     lamps,
     landcover,
     landmark_facts,
@@ -115,6 +116,10 @@ STEPS = {
     # After NDVI (a crown over a roof is not the roof): the LoD2 roofs that
     # miss DOM1, rebuilt in its form (scripts/bake-city-mesh.ts).
     "roofs": roofs.run,
+    # After the lamp heights and the roofs (the rebuilt ones occlude): which
+    # lamps see the water past the buildings, and its level there, for the
+    # river's mirror of them.
+    "lamp-water": lamp_water.run,
     # Last: thinned against the canopy and the cadastre, masked by the walls
     # and the bridges.
     "lowveg": lowveg.run,

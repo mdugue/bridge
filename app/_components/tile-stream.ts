@@ -86,6 +86,9 @@ import {
 } from "./fetch-optional";
 import { furnitureSteps } from "./furniture-layer";
 import { buildLamps } from "./lamp-layer";
+import { LAMP_TRACK_REACH_M } from "./lamp-reflections";
+import { nearLines } from "@/lib/city/near-lines";
+import { isMonorail } from "@/lib/city/line-levels";
 import type { LampControl } from "./lamp-layer";
 import { buildLowVegetation } from "./low-vegetation-layer";
 import { buildMonuments } from "./monument-layer";
@@ -738,6 +741,44 @@ export function asksOf(dressing: TileDressing): AskSet<FeatureInquiry>[] {
 const tileIdOf = (scene: Object3D): string =>
   (scene.userData as Partial<ContentExtras>).tileId ?? "?";
 
+/**
+ * Whether a lamp at projected (x, y) stands by one of the tile's tracks,
+ * close enough for the rails to catch its light (lamp-reflections.ts).
+ * (The lamps the river mirrors the bake names: `w`, pipeline/bake/
+ * lamp_water.py.)
+ */
+function lampsBy(
+  rails: readonly RailFeature[],
+  trams: readonly TramFeature[],
+  lampCount: number
+): {
+  tracks?: (x: number, y: number) => boolean;
+} {
+  const lines = [
+    // a drawn track: no monorail's beam, none below ground
+    ...rails.flatMap((f) =>
+      f.geometry?.type === "LineString" &&
+      !isMonorail(f) &&
+      (f.properties?.layer ?? 0) >= 0
+        ? [f.geometry.coordinates]
+        : []
+    ),
+    // a track, not a span or an arm between its anchors
+    ...trams.flatMap((f) =>
+      f.properties?.k === "track" && f.geometry.type === "LineString"
+        ? [f.geometry.coordinates]
+        : []
+    ),
+  ];
+  return {
+    // hashed only for a tile that has lamps to test
+    tracks:
+      lines.length > 0 && lampCount > 0
+        ? nearLines(lines, LAMP_TRACK_REACH_M)
+        : undefined,
+  };
+}
+
 /** The goals, posts and nets of the grounds this tile owns (a ground on a
  *  seam is in both tiles' tables; its centre decides). */
 function buildSport(
@@ -1287,10 +1328,11 @@ async function buildDressing(
           )
         )
       : lamps;
-    const lampControl = buildLamps(ownLamps, {
-      ...ground,
-      heightAt: terrain.heightAt,
-    });
+    const lampControl = buildLamps(
+      ownLamps,
+      { ...ground, heightAt: terrain.heightAt },
+      lampsBy(rails, trams, ownLamps.length)
+    );
     made.lamps = lampControl;
     await nextTask(signal);
     const rail = await inSlices(

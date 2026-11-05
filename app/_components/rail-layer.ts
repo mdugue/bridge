@@ -972,6 +972,7 @@ function* buildRails(
   const meshes: Mesh[] = [];
   const rails = yield* meshSteps(out.rail, COLORS.rail, {
     cast: false,
+    glint: true,
     offsetUnits: -1,
     roughness: 0.5,
   });

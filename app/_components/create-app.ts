@@ -172,6 +172,7 @@ import { pageLeaving } from "./net-gate";
 import { createSceneFog, installSceneFog, VALLEY_HAZE } from "./height-fog";
 import { attachKeyboardControls } from "./keyboard-controls";
 import { createLampLights, LAMP_LIGHTS } from "./lamp-layer";
+import { createLampReflections, uniqueHeads } from "./lamp-reflections";
 import { createLantern, invalidateLanternShadow } from "./lantern";
 import { setFountainTime } from "./monument-layer";
 import { showFurnitureNear } from "./furniture-layer";
@@ -1585,6 +1586,10 @@ async function bootApp(
     scene.add(light);
   }
   cleanups.push(() => lampLights.dispose());
+  // The lamps by the water the river mirrors after dark, chosen per frame
+  // (lamp-reflections.ts).
+  const lampReflections = createLampReflections(budget.tier);
+  cleanups.push(() => lampReflections.dispose());
 
   // The facades share the ground's sun (the same node).
   const styleResources = createStyleResources(sceneNight, ground.sunDirection);
@@ -1878,6 +1883,7 @@ async function bootApp(
     sunAltitude = state.altitudeDeg;
     sunToStyles?.(state.altitudeDeg);
     lampLights.setNightFactor(state.nightFactor);
+    lampReflections.setNightFactor(state.nightFactor);
     lantern.setNight(state.nightFactor);
     env.light(state);
     // The sun's move has asked for the map already; a drag's step leaves
@@ -2906,6 +2912,12 @@ async function bootApp(
     lampLights.setHeads(
       stream.visibleDressings().flatMap((d) => d.lamps?.headPositions ?? [])
     );
+    // every loaded tile's, not the shown ones': a turn changes no lamp
+    lampReflections.setHeads(
+      uniqueHeads(
+        [...stream.dressings].flatMap((d) => d.lamps?.trackHeads ?? [])
+      )
+    );
     // a tile that lands is born on its mid crowns: its tiers in this frame
     crownTiers.force();
     streamHook.emit();
@@ -3265,6 +3277,7 @@ async function bootApp(
       setMapAltitude(camera.position.y - groundY);
       // Repoint the shared real lamp lights at the nearest heads.
       lampLights.updateNearest(camera.position);
+      lampReflections.update(camera.position, elapsed);
       lantern.follow(
         camera.position,
         shadowViewDir,
@@ -3286,6 +3299,7 @@ async function bootApp(
     eye.set(pivot.x, pivot.y + equivalent, pivot.z);
     setMapAltitude(equivalent);
     lampLights.updateNearest(eye);
+    lampReflections.update(eye, elapsed);
     lantern.off();
     stepVegetation(elapsed, eye, tick);
     return equivalent;

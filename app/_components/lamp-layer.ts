@@ -24,9 +24,11 @@ import {
   LAMP_POST_H,
   postHeight,
 } from "@/lib/city/lamps";
-import { epsgToWorld } from "@/lib/city/ground-clamp";
+import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
 import type { GroundContext } from "@/lib/city/ground-clamp";
 import { Instances, instancePosition } from "./instancing";
+import { buildLampMirrors } from "./lamp-reflections";
+import type { LampMirror } from "./lamp-reflections";
 import type { Pt } from "./mesh-kit";
 import type { DeviceTier } from "./scene-profile";
 import { drawnAtNight, sceneNight } from "./scene-environment";
@@ -106,6 +108,44 @@ interface ArmPlace extends Place {
   yaw: number;
 }
 
+/** Whether a place (projected x, y) is somewhere: by a track. */
+type ByPlace = (x: number, y: number) => boolean;
+
+/** The heads whose projected place passes `test`. */
+function headsWhere(
+  heads: readonly Vector3[],
+  ctx: GroundContext,
+  test: ByPlace
+): Vector3[] {
+  return heads.filter((h) => {
+    const p = worldToEpsg(h.x, h.z, ctx.offset);
+    return test(p.x, p.y);
+  });
+}
+
+/** The heads the river mirrors, each with its water: those the bake
+ *  found seeing the water, over it. */
+function mirroredHeads(places: LampPlaces): LampMirror[] {
+  const out: LampMirror[] = [];
+  for (let i = 0; i < places.heads.length; i += 1) {
+    const head = places.heads[i];
+    const water = places.waters[i];
+    if (water !== null && head.y > water.level) {
+      out.push({ head, ...water });
+    }
+  }
+  return out;
+}
+
+/** A lamp's water, as the bake left it (`w`, `wr`), or null. */
+function waterOf(f: LampFeature): Omit<LampMirror, "head"> | null {
+  const level = f.properties?.w;
+  if (level === undefined) {
+    return null;
+  }
+  return { level, reach: f.properties?.wr ?? null };
+}
+
 /** Per-tile lamp visuals (posts + heads + glow + ground pools) on the Y-up scene. */
 export interface LampControl {
   /** Nothing of the tile's own to free: the meshes go with the scene and
@@ -114,6 +154,9 @@ export interface LampControl {
   group: Group;
   /** world-space (Y-up) lantern-head positions, fed to the shared light pool */
   headPositions: Vector3[];
+  /** the heads by a track, whose light the rails catch (the same
+   *  vectors; lamp-reflections.ts) */
+  trackHeads: Vector3[];
 }
 
 /** A small fixed pool of real point lights shared across ALL tiles' lamps. */
@@ -338,6 +381,9 @@ interface LampPlaces {
   arms: Map<number, ArmPlace[]>;
   /** every head, posts' and hung lamps', for the halos and the real lights */
   heads: Vector3[];
+  /** each head's water, where the river mirrors it (the bake's `w` and
+   *  `wr`), else null */
+  waters: (Omit<LampMirror, "head"> | null)[];
   hung: Place[];
   masts: Place[];
   /** the tall masts' poles by their height (m): their heads are on arms */
@@ -457,6 +503,7 @@ function placeMast(
   const end = { x: foot.x + dx, y: foot.y, z: foot.z - dy };
   byHeight(out.walls, h, end);
   out.heads.push(new Vector3(end.x, end.y + h, end.z));
+  out.waters.push(waterOf(f));
   // on a bridge, its deck; else the ground under the head
   const [ex, ey] = f.geometry.coordinates;
   const below = f.properties?.deck ?? ctx.heightAt(ex + dx, ey + dy) ?? foot.y;
@@ -485,6 +532,7 @@ function placeLamp(f: LampFeature, ctx: GroundContext, out: LampPlaces): void {
   const s = hung ? 1 : poolScale(h);
   out.pools.push({ ...ground, s });
   out.heads.push(new Vector3(ground.x, ground.y + h, ground.z));
+  out.waters.push(waterOf(f));
   const head = { x: ground.x, y: ground.y + h, z: ground.z };
   if (hung) {
     hangWire(f, head, ctx, out);
@@ -497,6 +545,7 @@ function lampPlaces(features: LampFeature[], ctx: GroundContext): LampPlaces {
   const out: LampPlaces = {
     arms: new Map(),
     heads: [],
+    waters: [],
     hung: [],
     masts: [],
     poles: new Map(),
@@ -535,17 +584,21 @@ function taggedHeads(places: Place[], height: number): Instances {
  */
 export function buildLamps(
   features: LampFeature[],
-  ctx: GroundContext
+  ctx: GroundContext,
+  /** whether projected (x, y) is by a track (no test: no head is) */
+  by: { tracks?: ByPlace } = {}
 ): LampControl {
   const group = new Group();
   group.name = "lamps";
   const places = lampPlaces(features, ctx);
   const headPositions = places.heads;
+  const trackHeads = by.tracks ? headsWhere(headPositions, ctx, by.tracks) : [];
 
   if (places.pools.length === 0) {
     return {
       group,
       headPositions,
+      trackHeads,
       dispose: () => {
         // empty
       },
@@ -574,13 +627,24 @@ export function buildLamps(
   if (wireSet) {
     group.add(wireSet);
   }
-  const glow = buildGlow(headPositions);
+  // the heads the river mirrors first: their columns share the halos'
+  // matrices (lamp-reflections.ts `buildLampMirrors`)
+  const mirrored = mirroredHeads(places);
+  const mirroredSet = new Set(mirrored.map((m) => m.head));
+  const glow = buildGlow([
+    ...mirrored.map((m) => m.head),
+    ...headPositions.filter((h) => !mirroredSet.has(h)),
+  ]);
   const decals = buildDecals(places.pools);
   group.add(glow, decals);
+  if (mirrored.length > 0) {
+    group.add(buildLampMirrors(glow.instanceMatrix, mirrored));
+  }
 
   return {
     group,
     headPositions,
+    trackHeads,
     // disposeObject3D frees the meshes with the scene; nothing else is the
     // tile's.
     dispose: () => {

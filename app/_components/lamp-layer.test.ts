@@ -208,3 +208,34 @@ test("the halos and pools are drawn after dark only, by their shared materials",
     env.dispose();
   }
 });
+
+test("the lamps that see the water lead the halos and carry its level and reach", () => {
+  const ctx = { heightAt: () => 100, offset: { cx: 0, cy: 0 } };
+  const lamps = buildLamps(
+    [
+      {
+        geometry: { type: "Point", coordinates: [10, 20] },
+        properties: { h: 5 },
+      },
+      // the bake found this one's light on water 2 m under the ground
+      {
+        geometry: { type: "Point", coordinates: [30, 20] },
+        properties: { h: 5, w: 98, wr: [60, 0, 0, 0, 0, 0, 0, 5] },
+      },
+    ],
+    ctx
+  );
+  const glow = lamps.group.getObjectByName("lamp-glow") as Instances;
+  const mirrors = lamps.group.getObjectByName("lamp-mirrors") as Instances;
+  expect(mirrors.capacity).toBe(1);
+  // one buffer for both: the mirrored head first, its water in its matrix
+  expect(mirrors.instanceMatrix).toBe(glow.instanceMatrix);
+  const { array } = glow.instanceMatrix;
+  expect([array[12], array[3], array[7], array[11]]).toEqual([
+    30,
+    98,
+    12,
+    64 ** 3,
+  ]);
+  expect([array[16 + 12], array[16 + 3], array[16 + 7]]).toEqual([10, 0, 0]);
+});

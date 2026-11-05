@@ -72,7 +72,7 @@ export interface WaterLayer {
 }
 
 /** The animation clock, shared by every tile's water and mist. */
-const waterTime = uniform(0);
+export const waterTime = uniform(0);
 
 /** Advances every tile's ripple, glitter and mist (elapsed seconds; once
  *  per frame). The sky tint is the fog's colour node itself: nothing to
@@ -375,7 +375,8 @@ function waterColour(base: V3, splat: SplatLayer, uv: V2): V3 {
  * Matte, as a drawn map's water: no sky mirrored in it, only the scene's
  * light on the moving normal (its specular a soft path toward the sun)
  * and, additive, the sun's glints and the crests' strokes lit as dashes —
- * fading out at night — and a feathered shoreline. The reflection needs world (Y-up)
+ * fading out at night, when the lamps by the water mirror in it instead
+ * (lamp-reflections.ts) — and a feathered shoreline. The reflection needs world (Y-up)
  * vectors, so it comes from `positionWorld` and the camera, NOT the
  * shading normal.
  *
@@ -415,10 +416,14 @@ export function createWaterLayer(
     metalness: 0,
     transparent: true,
     opacity: 0.9,
-    // Pull slightly towards camera so it never z-fights the shared terrain.
+    // Pull slightly towards camera so it never z-fights the shared terrain:
+    // a constant pull, enough for the terrain's own vertices. A pull by the
+    // slope grows metres deep at a grazing look, and the lamps' columns
+    // (lamp-reflections.ts), which must sit over the sheet, would have to
+    // match it and so show through a bank as high.
     polygonOffset: true,
-    polygonOffsetFactor: -1,
-    polygonOffsetUnits: -1,
+    polygonOffsetFactor: 0,
+    polygonOffsetUnits: -2,
   });
   // under a planner's design, with the ground (design-site.ts)
   material.positionNode = groundUnderDesign;
@@ -461,6 +466,8 @@ export function createWaterLayer(
       .mul(field.stroke)
       .mul(mix(float(1), float(0.25), fromAbove))
   );
+  // (after dark the lamps by the water are mirrored on these waves by
+  // their own quads: lamp-reflections.ts)
   material.emissiveNode = SUN_COLOUR.mul(
     spec.mul(GLITTER).mul(clamp(sun.y, 0, 1))
   );

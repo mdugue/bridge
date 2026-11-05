@@ -203,6 +203,12 @@ export interface LampFeature {
     masts?: [boolean, boolean];
     on?: "wall";
     src?: "mly";
+    /** the level (m) of the water its light falls on, past the
+     *  buildings: the river mirrors it (pipeline/bake/lamp_water.py) */
+    w?: number;
+    /** how far (m) from the lamp that water reaches, in eight compass
+     *  sectors from north: its mirror's end */
+    wr?: number[];
     wall?: Point2;
     wire?: [Point2, Point2];
   } | null;
@@ -220,6 +226,10 @@ export interface MapillaryFeature {
     hs?: LampHeightSource;
     k: "bin" | "lamp";
     masts?: [boolean, boolean];
+    /** as a `LampFeature`'s */
+    w?: number;
+    /** as a `LampFeature`'s */
+    wr?: number[];
     wire?: [Point2, Point2];
   } | null;
 }
