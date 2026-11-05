@@ -79,6 +79,10 @@ export interface ShadowRingNodes {
   bias: UniformNode<"float", number>[];
 }
 
+/** After this long without a draw (ms) a ring's request no longer counts as
+ *  work in hand. */
+const RING_STALL_MS = 5000;
+
 /** Every ring shows (Modell). */
 const ALL_RINGS: readonly number[] = SHADOW_RING_HALVES.map(() => 1);
 
@@ -192,7 +196,8 @@ interface Ring {
 
 /** The rings as the rig drives them. */
 export interface SunRings {
-  /** Whether a ring still waits for its redraw. */
+  /** Whether a ring still waits for a redraw that is coming: with nothing lit
+   *  in the frame three draws none, and a ring asked long ago waits for good. */
   anyDirty: () => boolean;
   /** Frees the map. */
   dispose: () => void;
@@ -414,6 +419,7 @@ export function createSunRings(
   const reachRing = ringForNearBand(mapEdge);
   // Modell's rings tile one square, and it says what they reach
   let tiled = false;
+  let lastDraw = Number.NEGATIVE_INFINITY;
   // what they were last fitted to: a still picture asks nothing new
   const fitted = { radius: 0, x: 0, y: 0, z: 0 };
 
@@ -449,17 +455,26 @@ export function createSunRings(
       }
       nodes.fade[i].value = ring.fresh ? want[i] : 0;
     }
+    // a faded ring reaches nothing: the near band comes on everywhere
+    if (!tiled && want[reachRing] <= 0) {
+      reach.z = 0;
+    }
   };
 
   /** The rings as Modell's tiles of the square round `centre`. */
   const fitFootprint = (centre: RingPoint, radius: number, now: number) => {
-    const { depthHalf, half, focus } = modelQuadrants(centre, radius, sun);
+    const {
+      depthHalf,
+      focus,
+      half,
+      reach: holds,
+    } = modelQuadrants(centre, radius, sun);
     for (let i = 0; i < SHADOW_RINGS; i += 1) {
       rings[i].depthHalf = depthHalf;
       rings[i].focus = focus[i];
       wantRing(rings[i], half, now);
     }
-    reach.set(centre.x, -centre.z, radius);
+    reach.set(centre.x, -centre.z, holds);
   };
 
   /** Asks every ring that shows, and that `which` picks, to redraw. */
@@ -516,6 +531,7 @@ export function createSunRings(
     placeRing(index);
     ring.dirtySince = null;
     ring.drawnAt = now;
+    lastDraw = now;
     return { every: tiled, index };
   };
 
@@ -528,7 +544,14 @@ export function createSunRings(
   (shadow as LightShadow & { shadowNode?: Node }).shadowNode = node;
 
   return {
-    anyDirty: () => rings.some((ring) => ring.dirtySince !== null),
+    anyDirty: () => {
+      const now = performance.now();
+      return rings.some(
+        (ring) =>
+          ring.dirtySince !== null &&
+          now - Math.max(ring.dirtySince, lastDraw) < RING_STALL_MS
+      );
+    },
     depth: () => node.depth,
     due: () => nextRingDue(rings, performance.now(), !tiled) >= 0,
     dispose: () => {

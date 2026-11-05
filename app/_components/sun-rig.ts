@@ -282,7 +282,7 @@ export function createSunRig(
   latLng: { lat: number; lng: number },
   /** A ring's edge in texels (scene-profile.ts `shadowMapSizeFor`): 2048
    * over the finest ring's 160 m ≈ 0.08 m/texel. The `lite` e2e profile
-   * passes 256 and phones 1024: under SwiftShader the depth pass is one of the
+   * passes 256 and phones 900: under SwiftShader the depth pass is one of the
    * few costs that does not shrink with the canvas, and no headless assertion
    * depends on edge quality. A ring is redrawn when it has drifted, when the
    * sun moves, and on explicit invalidation; not per frame. */

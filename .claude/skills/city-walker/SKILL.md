@@ -480,7 +480,7 @@ The map is **four concentric rings** (`sun-rings.ts`,
 | `shadow.radius` | 2.5 (`RING_PCF_RADIUS`) | five samples over 5 texels leave gaps: a thin shadow shows them as a stipple |
 | `shadow.normalBias` | **0** | a positive normalBias offsets the flat ground sample → bright peter-panning contact strip. Safe at 0 because terrain doesn't cast and solids cast via back faces (lit faces never self-acne) |
 | casters' depth | the material itself | no custom depth materials: the shadow pass draws `castShadowPositionNode ?? positionNode` and honours `maskNode` |
-| bias | 1.1 of a ring's texels, per ring | residual cleanup |
+| bias | 1.1 of a ring's texels, per ring, 2.5 m at most | residual cleanup |
 | terrain `castShadow` | **false** | a casting terrain self-shadows into triangle/staircase acne at grazing sun; ground only receives |
 | the map's colour target | none (`RingShadowNode`, set as `sun.shadow.shadowNode`: a depth array in a `count: 0` target, r187) | three's shadow map carries a colour texture of the shadow's `mapType` beside the depth, as large again, though only coloured shadows read it; keep `renderer.shadowMap.transmitted` off |
 | `shadow.autoUpdate` | false | a ring redraws when it has drifted a fifth of its half-size, the sun moves or a caster changes (`invalidateShadows()`), one a frame, the longest waiting first, the wide two at a distance in time |
@@ -519,7 +519,7 @@ shadow by `min(shadow, lit)` (`sky-light.ts` `applyGroundLight`;
 stairs, walls) — `min`, never a product, so an occluder both see never
 darkens twice. **The near band only counts outside the shadow rings**:
 the sun rig keeps the ground centre and half-size of the widest ring with
-texels of 4 m at most in
+texels of 2 m at most in
 `shadowReach` (a shared `uniform(Vector3)`, live by reference); the near
 band fades in over that ring's last 20 % and beyond it the horizon is
 max(near, far) — without it a street past the map lost the shadow of

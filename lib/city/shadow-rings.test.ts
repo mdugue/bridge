@@ -138,6 +138,10 @@ describe("a ring's depth", () => {
     expect(ringDepth(2160, -0.5).down).toBeLessThanOrEqual(12_000);
   });
 
+  test("a coarse ring's bias stops at what low buildings can spare", () => {
+    expect(-ringBias(2160, 360, 1000) * 1000).toBeCloseTo(2.5, 5);
+  });
+
   test("the bias is about a texel, in depth units", () => {
     const texel = 160 / 2048;
     const bias = ringBias(80, 2048, 1000);
@@ -209,9 +213,9 @@ test("a quadrant's depth reaches the picture's far edge", () => {
 });
 
 test("the near band waits for the widest ring that can draw what it knows", () => {
-  expect(ringForNearBand(2048)).toBe(3);
+  expect(ringForNearBand(2048)).toBe(2);
   expect(ringForNearBand(900)).toBe(2);
-  expect(ringForNearBand(360)).toBe(2);
+  expect(ringForNearBand(360)).toBe(1);
   expect(ringForNearBand(256)).toBe(1);
 });
 

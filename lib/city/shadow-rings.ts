@@ -36,11 +36,9 @@ export const SHADOW_RINGS = SHADOW_RING_HALVES.length;
  */
 export const THIN_CASTER_RINGS = { slender: 3, tiny: 1 } as const;
 
-/** How many of the finest rings a change near the eye asks to redraw (a crown's
- *  tier, a furniture cell, all within 650 m). The widest ring, which draws every
- *  caster, starts to be read past about 475 m, but the third ring answers for
- *  most of that, and what is left of such a change is finer than its 2 m texel.
- */
+/** How many of the finest rings a furniture cell's flip asks to redraw: it
+ *  flips within 400 m of the eye, and the widest ring, which draws every caster,
+ *  is the only one that does not draw what stands there. */
 export const NEAR_CHANGE_RINGS = 3;
 
 /** The PCF spread in texels (three's `shadow.radius`). Five samples spread
@@ -50,6 +48,9 @@ export const RING_PCF_RADIUS = 2.5;
 /** The depth bias per ring, in texels of it: what a caster nearer its
  *  receiver loses. 0.09 m on the finest. */
 const RING_BIAS_TEXELS = 1.1;
+/** … and never more than this (m): on a low safety level's coarse rings a bias
+ *  of a texel would cost low buildings their whole shadow. */
+const RING_MAX_BIAS_M = 2.5;
 
 /** The share of its half-size a square's wanted centre may drift before it
  *  is redrawn. */
@@ -89,7 +90,7 @@ const RING_MIN_GAP_MS = [0, 0, 250, 500];
 
 /** A ring cross-fades over this band inside its edge (in the map's 0…1). The
  *  band starts a little in: the filter's samples must stay on the ring. */
-export const RING_EDGE_FROM = 0.006;
+export const RING_EDGE_FROM = 0.01;
 export const RING_EDGE_TO = 0.07;
 
 /** Modell's quadrants overlap this share of their half-size: enough that each
@@ -162,8 +163,9 @@ export function ringFade(index: number, height: number): number {
 }
 
 /** The coarsest texel (m) that still draws what the baked horizon's near band
- *  knows, occluders 8–80 m off. */
-const NEAR_BAND_TEXEL_M = 4;
+ *  knows, occluders 8–80 m off. It also keeps the band on where only the widest
+ *  ring reads: casters that far off are often not loaded, and it knows them. */
+const NEAR_BAND_TEXEL_M = 2;
 
 /** The widest ring whose texels on a map of `mapEdge` still draw that. */
 export function ringForNearBand(mapEdge: number): number {
@@ -198,7 +200,8 @@ export function ringDepth(
 
 /** A square's depth bias in depth units over a `range` (m) of depth. */
 export function ringBias(half: number, mapEdge: number, range: number): number {
-  return (-RING_BIAS_TEXELS * (half * 2)) / mapEdge / range;
+  const metres = (RING_BIAS_TEXELS * (half * 2)) / mapEdge;
+  return -Math.min(metres, RING_MAX_BIAS_M) / range;
 }
 
 /** The light's axes as the shadow camera takes them (three's `lookAt` with
@@ -257,7 +260,7 @@ export function modelQuadrants(
   centre: RingPoint,
   radius: number,
   sun: RingPoint
-): { depthHalf: number; half: number; focus: RingPoint[] } {
+): { depthHalf: number; focus: RingPoint[]; half: number; reach: number } {
   const { x, y } = lightAxes(sun);
   const q = (radius * MODEL_MARGIN) / 2;
   const at = (sx: number, sy: number): RingPoint => ({
@@ -270,6 +273,8 @@ export function modelQuadrants(
     // a quadrant's depth is measured from the picture's centre, not its own
     depthHalf: q + half,
     half,
+    // where the outermost tiles still hold at full strength
+    reach: q + half * (1 - 2 * RING_EDGE_TO),
     focus: [at(-1, -1), at(1, -1), at(-1, 1), at(1, 1)],
   };
 }

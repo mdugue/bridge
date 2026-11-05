@@ -84,11 +84,10 @@ import { sceneShared, textureBytes, trackTexture } from "./three-utils";
  * - **Ferne Schatten** (horizon): per texel the skyline's elevation angle
  *   in 16 azimuths, in two bands — occluders 80–1 500 m out, and 8–80 m
  *   out. Where the sun stands below it, the sun's direct light is cut: the
- *   long low-sun shadows the shadow map's frustum ends, and beyond the
- *   frustum the shadows of the buildings next door. Inside the frustum the
- *   shadow map has the near occluders (with their shapes), so the near band
- *   only fades in over the frustum's last 20 % (`shadowReach`, kept by the
- *   sun rig) and counts whole beyond it. It is the material's
+ *   long low-sun shadows the shadow map's rings end, and beyond their reach
+ *   the shadows of the buildings next door. Inside it the shadow map has the
+ *   near occluders (with their shapes), so the near band only fades in over
+ *   the reach's last 20 % (`shadowReach`, kept by the sun rig) and counts whole beyond it. It is the material's
  *   `receivedShadowNode`, combined with the shadow map by `min`, never a
  *   product: where both see the same occluder it must not darken twice.
  *   The ground only, with what is baked into it (kerbs, fences, stairs,
@@ -115,7 +114,7 @@ export const HORIZON_SHADE: F = float(0.8);
 /**
  * A tile's baked light as the ground and the things baked into its fine
  * terrain read it (kerbs, fences, stairs, walls): the terrain's own
- * rasters, where they lie, and the frustum and the sun it binds (uniform
+ * rasters, where they lie, and the rings' reach and the sun it binds (uniform
  * nodes, shared by every tile). Without it a kerb on a
  * far-shadowed street stayed sunlit on a shadowed carriageway.
  */
@@ -162,7 +161,7 @@ function hzAngle(horizon: Tex, uv: V2, k: F, base: number, maxDeg: number): F {
 /**
  * How much of the sun clears the skyline (1 = all), before its strength:
  * the far band always; the near band by its weight, 0 inside the shadow
- * frustum and 1 beyond it — skipped where it is 0, which is most of what
+ * rings' reach and 1 beyond it — skipped where it is 0, which is most of what
  * is on screen.
  */
 function hzSunVisible(light: GroundLight, horizon: Tex, uv: V2): F {
@@ -281,7 +280,7 @@ function lightGraph(
       nightShadowFree
     );
     // three's ShadowNode calls this with the light's shadow term (the
-    // filtered shadow map, 1 outside its frustum) and multiplies the light
+    // filtered shadow map, 1 outside its rings) and multiplies the light
     // colour by what it returns. The @types declare it without the
     // argument, hence the optional parameter; the term is a float (a vec3
     // only with coloured, transmitted shadows, which the scene does not use).

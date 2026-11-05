@@ -3258,17 +3258,21 @@ async function bootApp(
     if (vegetationLod(vegetationControls, eye, multiTuft, richTrees)) {
       lodChanged = true;
     }
+    if (lodChanged) {
+      invalidateShadows();
+    }
     // the street furniture's cells near the eye (furniture-layer.ts)
     // (none hidden in Modell: its views and exports draw one scale)
     const furnitureEye = modelRig.owns() ? null : eye;
+    let cellChanged = false;
     for (const d of shown) {
       for (const part of [d.furniture, d.tram]) {
         if (part && showFurnitureNear(part, furnitureEye)) {
-          lodChanged = true;
+          cellChanged = true;
         }
       }
     }
-    if (lodChanged) {
+    if (cellChanged) {
       invalidateLanternShadow(lantern);
       sunRig.invalidateShadow(undefined, NEAR_CHANGE_RINGS);
     }

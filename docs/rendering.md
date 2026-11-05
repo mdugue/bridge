@@ -315,8 +315,8 @@ change, not a re-bake
     with the next across that ring's outer 7 % (`ringLookup`, `mix` and
     `step` only; the second read is behind a branch and costs only there).
     Past the widest ring it reads none and the horizon takes over; its near band
-    comes on past the widest ring with texels of 4 m at most (`shadowReach`,
-    the third ring on a phone). The picture styles and the nameplate read through the
+    comes on past the widest ring with texels of 2 m at most (`shadowReach`,
+    the third ring). The picture styles and the nameplate read through the
     same lookup (`sun-shadow-read.ts`). A ring's matrix changes only as it
     is drawn, so a ring waiting for its redraw shows what it held, where it
     held it, and no shadow slides off its caster.
@@ -329,9 +329,9 @@ change, not a re-bake
     the rings it can fall on.
   - **When they draw.** A ring asks to redraw when its wanted centre has
     drifted a fifth of its half-size, the sun moves or a caster changes
-    (`invalidateShadows()`: a season change that thins or fills crowns, a
-    demolish). A crown tier's swap and a furniture cell's flip happen within
-    650 m of the eye and leave the widest ring alone (`NEAR_CHANGE_RINGS`). A capture and the
+    (`invalidateShadows()`: a crown tier's swap, a season change that thins or
+    fills crowns, a demolish). A furniture cell's flip within 400 m of the eye
+    leaves the widest ring alone (`NEAR_CHANGE_RINGS`). A capture and the
     boot's light stage wait for all four rings (`shadowBusy`). A tile's parts that land, leave or take over ask only the rings
     the tile can fall on (`ringTouches`, seen along the light), and only if
     what shows did change: the stream reports every tile that comes into or
@@ -348,7 +348,8 @@ change, not a re-bake
     and tree stakes go into the finest ring only, their shadow fading across
     its edge instead of dissolving into the filter's samples; lamps, tram
     masts, goals, shelters and other tall furniture into the first three, so a low sun's
-    line of shadow stays on the ground as the camera climbs, ever softer. The depth bias is 1.1 of the ring's texels (0.09 m on the finest).
+    line of shadow stays on the ground as the camera climbs, ever softer. The depth bias is 1.1 of the ring's texels (0.09 m on the finest), 2.5 m at
+    most.
     Terrain **receives only**, `normalBias = 0`.
   - **As the camera climbs** a ring fades out between 1.5 and 2.5 half-sizes
     up, where its texels are finer than the pixels it covers, and is drawn no

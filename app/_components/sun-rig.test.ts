@@ -354,6 +354,16 @@ test("the sun moving redraws every ring", () => {
   expect(drawAll(sun).toSorted((a, b) => a - b)).toEqual([0, 1, 2, 3]);
 });
 
+test("a ring nothing draws stops counting as work in hand", () => {
+  const { sunRig, sun } = rig();
+  walkTo(sunRig, 0, 0);
+  drawAll(sun);
+  sunRig.invalidateShadow();
+  expect(sunRig.shadowBusy()).toBe(true);
+  jest.advanceTimersByTime(6000);
+  expect(sunRig.shadowBusy()).toBe(false);
+});
+
 test("invalidateShadow redraws every ring, one a frame", () => {
   const { sunRig, sun } = rig();
   walkTo(sunRig, 0, 0);
@@ -497,7 +507,7 @@ test("from the air the rings reach the ground out to the fog", () => {
   // the stream's square is the one it was
   expect((sunRig.shadowCamera as unknown as { right: number }).right).toBe(440);
   // the horizon's near band takes over where the map ends
-  expect(sunRig.shadowReach.z).toBe(2160);
+  expect(sunRig.shadowReach.z).toBe(720);
 });
 
 // A map warped over the view lost its near texels at a low sun, looking
@@ -626,7 +636,7 @@ test("Modell tiles its picture's square with the four rings", () => {
   expect(
     rings(sunRig).matrix.every((m) => inside(onRing(m.value, middle)))
   ).toBe(true);
-  expect(sunRig.shadowReach.z).toBe(half);
+  expect(sunRig.shadowReach.z).toBeGreaterThan(half);
   // the thin casters too: there is no finer ring to leave them to
   sunRig.invalidateShadow();
   const widest = { thin: false };
