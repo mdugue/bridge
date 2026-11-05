@@ -1012,8 +1012,9 @@ stays their measure; the tile cache counts true bytes.
   2026-10-10: the coarse level is a 40 m-error mesh 2.1–2.6 km out, where
   2 m texels are about a pixel). A phone's tile showing its fine level
   holds its 2048² class raster and splat (25.3), the NDVI, sky view and
-  horizon shared by file with the coarse level (`shared-rasters.ts`; the
-  cache weighs a shared raster half by each level) and its own surface
+  horizon shared by file with the coarse level (a content root takes its
+  rasters by kind from `tile-rasters.ts`, shared by file and weighed a
+  share per level: half by each) and its own surface
   (16), edges (8), markings (4) and allotments (≤ 2) rasters: ~60 MiB.
   The sports raster (2048² RGBA, 16 MiB for a PNG of a few dozen kB) is
   read by a desktop's fine level only (`readsSportGrounds`): a phone draws
@@ -1179,9 +1180,11 @@ stays their measure; the tile cache counts true bytes.
   tile's own compile waits for that step at its end
   (`compile-lanes.ts`). The glTF loader's result (its parser, the binary
   chunk, the decoded buffers) goes at `load-model` (`dropLoaderResult`).
-  Rasters decode **in a site-wide turn** (`raster-upload.ts`,
-  `lib/city/task-gate.ts`, `setRasterTier`). A phone decodes **one at a
-  time** and puts each on the GPU at once (`renderer.initTexture`), its
+  Rasters decode **in a site-wide turn** (`tile-rasters.ts` hands a
+  content root its rasters by kind; `raster-upload.ts` `loadDataRaster`
+  decodes and uploads them in the turn, `lib/city/task-gate.ts`,
+  `setRasterTier`; the crowns' NDVI sampler decodes in it too). A phone
+  decodes **one at a time** and puts each on the GPU at once (`renderer.initTexture`), its
   bytes dropped at the upload — at most one decoded raster (16 MiB)
   waits, where a fine level held ~48 MiB of them until its compile, times
   five parses. A desktop keeps what it always did: five decodes at once,
@@ -1684,7 +1687,8 @@ compile, as before): a raster is on the GPU, its bytes gone, before the
 next one decodes. The ground fills in a little
 later for it. A level whose tile leaves meanwhile takes no more turns.
 The *downloads* do not take turns: a terrain level asks for all of its
-rasters at once (`loadTerrainRasters` in `terrain-layer.ts` — a fine
+rasters at once from `tile-rasters.ts` (`loadTerrainRasters` in
+`terrain-layer.ts` — a fine
 level names up to ten, which used to be ten round trips one after
 another on the spawn tile's critical path); only their decodes and
 uploads queue. A tile's meshopt buffers decode in the decoder's two

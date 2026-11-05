@@ -197,7 +197,9 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   (`lib/city/markings.ts`), `cultivated-layer.ts` (colony gardens, vine
   rows; `lib/city/cultivated.ts`); and `sky-light.ts` (sky view → `aoNode`,
   far horizon → `receivedShadowNode`; `lib/city/skyview.ts`, the raster
-  shared with the buildings through `shared-rasters.ts`).
+  shared with the buildings through `tile-rasters.ts`, which hands every
+  content root its rasters by kind: the kinds table holds a raster's look,
+  tier twin and gate).
 - Buildings: `lib/city/building-tint.ts` (tint, storey height, roofs, at
   bake time), `lib/city/small-buildings.ts` (the scan's sheds as boxes, and
   the canopy points they veto at build time), `scripts/measured-roofs.ts`
@@ -550,7 +552,8 @@ At runtime `landcover-splat.ts` paints it with the one palette
 full-screen `QuadMesh` pass per tile (a scene-wide node material per raster
 size, `textureLoad` of the class ids; the class texture is on the GPU
 before the paint — decoded in its turn (on a phone one raster at a time
-for the site, uploaded at once, its bytes dropped; `raster-upload.ts`); a
+for the site, uploaded at once, its bytes dropped; `tile-rasters.ts`,
+`raster-upload.ts`); a
 bitmap the decoder fell back to is never closed — a closed `ImageBitmap`
 uploads empty on node pages): RGB = the pastel class colour,
 **A = water coverage** (a 3×3 tent over the water class — the soft
