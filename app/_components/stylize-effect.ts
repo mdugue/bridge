@@ -453,14 +453,17 @@ const rainLayer = (
 ): F => {
   const az = atan(dir.z, dir.x);
   const el = asin(clamp(dir.y, -1, 1));
-  const qy = el.mul(cellsPerRad * 0.22).add(time.mul(speed));
+  // The clock wraps at 2560 cells: 10 × 256 along y and 0.9 × 2560 = 9 × 256
+  // along x, so the wrap moves the cell by whole keys and keeps `fract(q)`
+  // — no seam, and the streak's place in its cell stays precise all session.
+  const qy = el.mul(cellsPerRad * 0.22).add(mod(time.mul(speed), 2560));
   const q = vec2(az.mul(cellsPerRad).add(qy.mul(0.9)), qy);
   const cell = floor(q).toVar();
   const f = fract(q).toVar();
-  // The cell index grows with the clock; wrapped, the hash keeps its
-  // precision all session (unwrapped: columns after ≈ 51 min, a constant
-  // after ≈ 3.4 h). 256 cells are more than a screen shows, and small enough
-  // that `hash21` stays even: over 512–1024 its columns are twice as strong.
+  // The cell index, wrapped: the hash keeps its precision (unwrapped:
+  // columns after ≈ 51 min, a constant after ≈ 3.4 h). 256 cells are more
+  // than a screen shows, and small enough that `hash21` stays even: over
+  // 512–1024 its columns are twice as strong.
   const key = mod(cell, 256);
   const present = step(0.84, hash21(key.add(seed)));
   const x0 = hash21(key.add(seed + 7.1))
