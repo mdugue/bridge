@@ -33,7 +33,7 @@ import type { Pt } from "./mesh-kit";
 import type { DeviceTier } from "./scene-profile";
 import { drawnAtNight, sceneNight } from "./scene-environment";
 import type { F } from "./shader-chunks";
-import { sceneMaterial } from "./three-utils";
+import { markThinCaster, sceneMaterial } from "./three-utils";
 import { addWire, wireMesh, wires } from "./wire-ribbons";
 import type { Wires } from "./wire-ribbons";
 
@@ -226,6 +226,7 @@ function buildPosts(places: Place[], height: number): Instances {
   const mesh = placeInstances(geo, postMaterial(), places);
   mesh.name = "lamp-posts";
   mesh.castShadow = true;
+  markThinCaster(mesh, "slender");
   mesh.receiveShadow = true;
   return mesh;
 }
@@ -239,6 +240,7 @@ function buildPoles(places: Place[], height: number): Instances {
   const mesh = placeInstances(pole, postMaterial(), places);
   mesh.name = "lamp-poles";
   mesh.castShadow = true;
+  markThinCaster(mesh, "slender");
   mesh.receiveShadow = true;
   return mesh;
 }
@@ -262,6 +264,7 @@ function buildArms(places: ArmPlace[], height: number): Instances {
   const mesh = placeInstances(geo, postMaterial(), places);
   mesh.name = "lamp-arms";
   mesh.castShadow = true;
+  markThinCaster(mesh, "slender");
   mesh.receiveShadow = true;
   return mesh;
 }
@@ -274,6 +277,7 @@ function buildMasts(places: Place[]): Instances {
   const mesh = placeInstances(geo, postMaterial(), places);
   mesh.name = "lamp-masts";
   mesh.castShadow = true;
+  markThinCaster(mesh, "slender");
   mesh.receiveShadow = true;
   return mesh;
 }

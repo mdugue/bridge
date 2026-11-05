@@ -130,6 +130,7 @@ import type { Align, PlateGeometry, PlateRaster } from "./nameplate-glyphs";
 import type { F, Live, V3 } from "./shader-chunks";
 import type { SunShadowMap } from "./stylize-effect";
 import { readSunShadow, shadowStandIn } from "./sun-shadow-read";
+import type { ShadowRingNodes } from "./sun-rings";
 import type { ViewLens } from "./view-lens";
 
 /** How often the place is chosen again (ms). */
@@ -445,8 +446,7 @@ interface ShadowUniforms {
   /** the way to the sun in the world */
   sunWorld: UniformNode<"vec3", Vector3>;
   /** world → the sun's shadow map ([0, 1]³), its bias, whether it exists */
-  sunMatrix: UniformNode<"mat4", Matrix4>;
-  sunBias: Live;
+  sunRings: ShadowRingNodes;
   sunReady: Live;
 }
 
@@ -495,12 +495,7 @@ function shadowMaterial(
     inside: onMap,
     shadowed,
     read,
-  } = readSunShadow(
-    lifted,
-    { matrix: u.sunMatrix, bias: u.sunBias, ready: u.sunReady },
-    sunStandIn,
-    reversed
-  );
+  } = readSunShadow(lifted, u.sunRings, u.sunReady, sunStandIn, reversed);
   const lit = mix(float(1), shadowed, onMap);
   const a = mask.sample(hit).r.mul(inside).mul(reach).mul(lit).mul(u.strength);
   const m = new MeshBasicNodeMaterial();
@@ -677,8 +672,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     strength: uniform(0),
     colour: uniform(new Vector3()),
     sunWorld: uniform(deps.sunDirection),
-    sunMatrix: uniform(deps.sunShadow.matrix),
-    sunBias: uniform(0).onRenderUpdate(() => deps.sunShadow.bias()),
+    sunRings: deps.sunShadow.rings,
     sunReady: uniform(0),
   };
   const { material: shadowMat, read: sunRead } = shadowMaterial(

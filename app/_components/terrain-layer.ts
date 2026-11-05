@@ -194,7 +194,7 @@ export interface TerrainOptions {
   fogColor: UniformNode<"color", Color>;
   /** phones sample the ≤ 2048² class raster */
   lowRasters: boolean;
-  /** the ground's light: the shadow frustum and the sun (uniform nodes,
+  /** the ground's light: the shadow rings' reach and the sun (uniform nodes,
    *  shared by every tile) */
   ground: GroundUniforms;
   /** recenter offset shared with the city layer */
@@ -227,7 +227,7 @@ export interface TerrainOptions {
  * in sky-light.ts).
  */
 export interface GroundUniforms {
-  /** the shadow frustum's centre (data frame x, y) and half-size (z), kept
+  /** the shadow rings' reach: its centre (data frame x, y) and half-size (z), kept
    *  by the sun rig: where the horizon's near band takes over (sky-light.ts) */
   shadowReach: UniformNode<"vec3", Vector3>;
   /** world (Y-up) sun direction, surface → sun, kept by the sun rig: the

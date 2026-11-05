@@ -169,6 +169,8 @@ for (const file of snapshotFiles()) {
           drawn >= settle &&
           // the move regressed the post stack: DoF is back once it is still
           !poc?.regressed &&
+          // the rings redraw one a frame, the wide ones at a distance
+          !poc?.handle?.shadowBusy() &&
           ((poc?.shadowRenders ?? 0) > shadows || drawn >= shadowless)
         );
       },

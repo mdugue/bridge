@@ -67,7 +67,7 @@ of its own (`SHADOW_STREAM_PX`, `lib/city/shadow-fit.ts`), not the map's:
 the renderer's error for an orthographic camera ignores distance, so at
 2048 px it refined the terrain under the whole frustum; at a desktop's
 128 px it refines the fine level under the eye-level frustum only (ADR
-0047), and on a phone it streams nothing (`shadowTilesStream`, plan 071:
+0047). This camera is a square of its own: it draws no shadow, the rings do, and on a phone it streams nothing (`shadowTilesStream`, plan 071:
 the tiles it kept were tiles in use the memory governor cannot free).
 On a phone the view's own stream also ends at 2.2 km (`streamFarFor`;
 not through Modell's dolly zooms, which back the camera kilometres away). A dressing plugin builds
@@ -468,64 +468,44 @@ spreads a 5-tap Vogel disk, rotated per pixel, by `shadow.radius * texel`
 (`node_modules/three/src/nodes/lighting/ShadowFilterNode.js`). Default
 `radius` is 1 ≈ hard. (`PCFSoftShadowMap` has been deprecated since r182.)
 
-Current working setup (`sun-rig.ts` / `create-app.ts`):
+The map is **four concentric rings** (`sun-rings.ts`,
+`lib/city/shadow-rings.ts`, ADR 0009; the numbers are in
+`docs/rendering.md`):
 
 | Setting | Value | Why |
 |---|---|---|
 | `renderer.shadowMap.type` | `PCFShadowMap` | only soft option that doesn't ring (VSM "corduroy"-rings on grazing ground) |
-| `shadow.radius` | ~5 (3 for the warped map from the air) | the actual softness knob; hides the texel staircase / fraying |
+| rings (`SHADOW_RING_HALVES`) | half-sizes 80, 240, 720, 2160 m | texels fine near, coarse far, whatever the view's or the sun's direction: a map warped over the view failed at a low sun looking along its light |
+| ring edge (`shadowMapSizeFor`) | 2048 (phones 900; smaller at a raised safety level, ADR 0047) | four of 900² are less than a phone's old 2048²: they pay for what the wide rings' casters hold |
+| `shadow.radius` | 2.5 (`RING_PCF_RADIUS`) | five samples over 5 texels leave gaps: a thin shadow shows them as a stipple |
 | `shadow.normalBias` | **0** | a positive normalBias offsets the flat ground sample → bright peter-panning contact strip. Safe at 0 because terrain doesn't cast and solids cast via back faces (lit faces never self-acne) |
 | casters' depth | the material itself | no custom depth materials: the shadow pass draws `castShadowPositionNode ?? positionNode` and honours `maskNode` |
-| `shadow.bias` | ~−0.0003 (warped: 0.08 m at the nearest ground, per fit) | small constant bias, residual cleanup |
+| bias | 1.1 of a ring's texels, per ring, 2.5 m at most | residual cleanup |
 | terrain `castShadow` | **false** | a casting terrain self-shadows into triangle/staircase acne at grazing sun; ground only receives |
-| shadow map size (`shadowMapSizeFor` in scene-profile.ts) | 3072 (phones 2048; smaller at a raised safety level, ADR 0047) | soft radius lets 3072 look like 4096 at ~44% less fill |
-| the map's colour target | none (`DepthOnlyShadowNode`, set as `sun.shadow.shadowNode`: three's depth texture in a `count: 0` target, r187) | three's shadow map carries a colour texture of the shadow's `mapType` beside the depth — RGBA, as large again as the depth (16 MB at 2048²) — though only coloured shadows read it; keep `renderer.shadowMap.transmitted` off |
-| frustum half-size (`lib/city/shadow-fit.ts`) | 121 m at eye level, growing in octaves of 110 m to 880 m with altitude | camera-following, texel-snapped; small = fine texels, but a fixed 110 m leaves a fly-over entirely unshadowed |
-| `shadow.autoUpdate` | false | re-render only when the frustum centre leaves a dead zone (30 m on foot — 110 m and 19.8 m until 2026-10-11, the walker as far from every edge now, 91 m; 18% of the half-size above eye level and in Modell), when the half-size re-fits, when the sun moves, or when a caster changes (`invalidateShadows()`, incl. the crown LOD swap) |
+| the map's colour target | none (`RingShadowNode`, set as `sun.shadow.shadowNode`: a depth array in a `count: 0` target, r187) | three's shadow map carries a colour texture of the shadow's `mapType` beside the depth, as large again, though only coloured shadows read it; keep `renderer.shadowMap.transmitted` off |
+| `shadow.autoUpdate` | false | a ring redraws when it has drifted a fifth of its half-size, the sun moves or a caster changes (`invalidateShadows()`), one a frame, the longest waiting first, the wide two at a distance in time |
 
-### The frustum fit (`lib/city/shadow-fit.ts`)
+Traps of the rings:
 
-A fixed 110 m half-size centred on the camera is exactly right at eye level and
-useless in fly mode: from 200 m up it covers ground directly below the camera
-that is barely on screen, so everything the player looks at falls outside the
-shadow camera and renders flat. (That was the reported "no sun shadows when
-flying" bug; `shots/` before/after at that snapshot show it plainly.) The rig
-therefore re-fits per frame, from two pure functions:
-
-- `fitShadowRadius(heightAboveGround, current)` — half-size = 2.5 × altitude,
-  clamped to [121, 880] m and **quantized with hysteresis** (0.6 in log2) to
-  the walker's 121 m or an octave of 110 m (220, 440, 880), so hovering on a
-  step boundary cannot flap the frustum. A flap is a full depth-pass
-  re-render, which is the whole cost here.
-- `shadowFocusAhead(radius)` — how far along the camera's world direction to
-  push the centre: above eye level half of the radius above 110 m, and **zero
-  at eye level** (turning on the spot never moves the frustum). Feed it
-  the raw `dir.x`/`dir.z`, not a renormalized horizontal: the cos(pitch) factor
-  collapses the offset when looking straight down, which is what you want.
-
-The centre is anchored to the **ground** under the camera, not to the camera —
-airborne, a camera-centred frustum puts its tight depth range hundreds of metres
-above the terrain that should be shadowed. Cost per re-render is unchanged (same
-map size, same 5-tap PCF); only the caster set inside the frustum grows. This is
-the cheap 90% of CSM: texels coarsen exactly where a far cascade would coarsen
-them anyway.
-
-### From the air: the warped map (`shadow-warp.ts`, ADR 0009)
-
-Above 30 m over the ground (back below 20 m) the square keeps only the
-tile stream (`sunRig.shadowCamera`); the map itself is a light-space
-perspective shadow map fitted to the view: `fitWarpedShadow` cuts the
-view (widened 12°, out to 80 % of the fog) to the receivers' height band,
-puts the shadow camera's `up` along the view's *heading* as the sun sees
-it (the look direction put the axis askew with the sun behind and to the
-side: 2–3 × the texels), and returns a warp matrix that
-`WarpedShadowCamera` applies after its ortho box in every
-`updateProjectionMatrix` (three calls it when the backend sets the
-coordinate system). Three's lookup divides by w, the style pass
-(`stylize-effect.ts`) too, so nothing else changes. `warpCovers` keeps the
-map until the view leaves it; the sun turning fits it anew. Never read
-`sun.shadow.camera.left/right` as metres from the air: they are warped
-coordinates.
+- **One camera for all rings**, moved per ring (`placeRing`): three keeps its
+  state per drawable and camera. Never a camera per ring.
+- **A ring's matrix changes only as it is drawn.** Read a ring's map through
+  `ringLookup` (`sunRig.shadowMap.rings`); `sun.shadow.matrix` and
+  `sun.shadow.camera` hold whichever ring was drawn last.
+- **Coarse rings do not draw thin casters.** A new thin caster calls
+  `markThinCaster`: `tiny` (the finest ring alone: a coarser filter turns it
+  into a smear) or `slender` (the first three: thin but long, a lamp post).
+- **Plates and captures wait for the rings**: `handle.shadowBusy()`. They
+  redraw one a frame.
+- **Ask only what a change touches.** `invalidateShadows()` redraws all four
+  rings; a tile's change goes through `invalidateShownTiles` (only the rings it
+  can fall on, only if what shows changed), a change near the eye through
+  `sunRig.invalidateShadow(undefined, finest)`.
+- **`renderer.clear()` on a depth array throws on the WebGL2 backend**; the
+  render's own clear is what draws a layer clean.
+- The stream's square (`lib/city/shadow-fit.ts`, `sunRig.shadowCamera`) only
+  loads tiles: `fitShadowRadius` and `shadowFocusAhead` have no say over what
+  is shadowed.
 
 ### The far field: baked horizon + sky view (plan 033)
 
@@ -537,13 +517,14 @@ horizon as its material's **`receivedShadowNode`**, folded into the sun's
 shadow by `min(shadow, lit)` (`sky-light.ts` `applyGroundLight`;
 `groundLitMaterial` for what is baked into the fine terrain: kerbs, fences,
 stairs, walls) — `min`, never a product, so an occluder both see never
-darkens twice. **The near band only counts outside the shadow frustum**:
-the sun rig keeps the frustum's ground centre and half-size in
+darkens twice. **The near band only counts outside the shadow rings**:
+the sun rig keeps the ground centre and half-size of the widest ring with
+texels of 2 m at most in
 `shadowReach` (a shared `uniform(Vector3)`, live by reference); the near
-band fades in over the frustum's last 20 % and beyond it the horizon is
-max(near, far) — without it a street past the frustum lost the shadow of
-the block beside it. Change the frustum fit and this follows by itself;
-never feed the near band inside the frustum (its 8 m / 22.5° smear would
+band fades in over that ring's last 20 % and beyond it the horizon is
+max(near, far) — without it a street past the map lost the shadow of
+the block beside it. Change the rings and this follows by itself;
+never feed the near band inside them (its 8 m / 22.5° smear would
 fight the map's crisp edges). The sky view is the **`aoNode`**, which three
 multiplies into the indirect light only (after the lights; the sun is
 untouched), on the terrain and the clay facades (`createClaySky`: sampled
@@ -555,14 +536,10 @@ the frustum's edge.
 [ADR 0009](../../../docs/adr/0009-shadow-recipe.md).
 
 Dead ends (don't repeat): large `normalBias` (peter-panning), VSM at any blur
-(rings/grid on lit faces), a bigger frustum *at eye level* (coarser texels →
-fraying — the fit is careful to keep the base radius while walking), 4096 map
-(cost without visible gain once radius softens). **Open limit:** past the frustum
-the ground's shadows are the horizon's (an angle at 8 m and 22.5°, no shape,
-not on facades or trees) — only Cascaded Shadow Maps give the middle distance
-its shapes. `CSMShadowNode` is available on this renderer without patching
-materials, still a depth pass per cascade on every sun/camera move: its own
-decision (ledger 📋 #7).
+(rings/grid on lit faces), one map warped over the view (LiSPSM: gone at a low
+sun looking along its light, ADR 0009), a radius of 5 on five samples (a
+stipple). **Open limit:** past the widest ring the ground's shadows are the
+horizon's (an angle at 8 m and 22.5°, no shape, not on facades or trees).
 
 ## Surfaces (the land-cover splat)
 
@@ -991,7 +968,7 @@ render scale, AO samples), all resolved once in `city-walk-client.tsx`
 | Knob | full | lite | Why it is the right knob |
 |---|---|---|---|
 | tileset streamed | `tileset.json` (every site tile) | **`tileset-spawn.json`** (spawn tile only) | 3/4 of the geometry AND 3/4 of the boot (measured on the old block loader: 14 s → 4.4 s, 74 MB → 18 MB) |
-| shadow map size (`shadowMapSizeFor`) | 3072 | **512** | the depth pass is per-frame fill that does *not* shrink with the canvas |
+| shadow ring edge (`shadowMapSizeFor`) | 2048 | **256** | the depth pass is fill that does *not* shrink with the canvas |
 | `pixelRatio` | dpr≤1.5 | **0.5** | the canvas fills the viewport and the HUD needs ≥768 px to lay out, so render scale is the only honest way to cut fill-rate |
 | GTAO samples (`aoSamplesFor`) | 16 | **8** | half the AO samples; keyed on the profile, not `navigator.webdriver` (Playwright sets that in the `--headed` shot harness too, which must show the product's AO) |
 
