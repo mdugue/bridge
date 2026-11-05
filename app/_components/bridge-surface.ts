@@ -35,7 +35,7 @@ import { sceneMaterial } from "./three-utils";
  * - **The deck's surface** (`deckMaterial`, per deck kind). The deck's top
  *   carries its frame as an attribute, `aDeck` = (station along the axis,
  *   offset across it, the outline's left and right offsets there;
- *   rail-layer.ts `deckFrame`), so the road bridge's top is laid out as
+ *   bridge-layer.ts `addDeckFrame`), so the road bridge's top is laid out as
  *   the street it carries: footways along both parapets in the pavement's
  *   colour with their slabs, a kerb stone and a gutter at their edge, the
  *   carriageway in the road's colour with its grain and, on a wide one,
@@ -78,7 +78,7 @@ const classColour = (key: string): V3 => {
 const PAVEMENT = classColour("builtup");
 /** Road paint (road-markings.ts). */
 const PAINT: V3 = linear([226, 223, 214]);
-/** The ballast a rail deck's track bed is (rail-layer.ts COLORS.ballast). */
+/** The ballast a rail deck's track bed is (mesh-kit.ts COLORS.ballast). */
 const BALLAST: V3 = linear([154, 143, 133]);
 
 /** The pixel's footprint in metres. */

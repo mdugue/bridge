@@ -38,7 +38,7 @@ import type { TrafficLane } from "@/lib/city/traffic";
 import { dataMarkColour, glassColour, glassGrazing } from "./glass";
 import { deckLift } from "@/lib/city/decks";
 import type { DeckPoly } from "@/lib/city/decks";
-import { buildDeckTable } from "./rail-layer";
+import { buildDeckTable } from "./bridge-deck";
 import type { F, V3, V4 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 import { trafficNow, trafficPositionNode, trafficTravel } from "./traffic-flow";
