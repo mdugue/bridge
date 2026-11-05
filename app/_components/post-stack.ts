@@ -75,10 +75,7 @@ import type { PipelineAnchors } from "./pipeline-anchors";
 import { withNightMaterialsShown } from "./scene-environment";
 import type { PostProfile } from "./scene-profile";
 import type { F, Live, V2, V3, V4 } from "./shader-chunks";
-import {
-  aloneUnder,
-  compileRepresentatives,
-} from "./three-utils";
+import { aloneUnder, compileRepresentatives } from "./three-utils";
 import { createStyleDressing } from "./style-dressing";
 import { createStylize } from "./stylize-effect";
 import type { SunShadowMap } from "./stylize-effect";
