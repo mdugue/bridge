@@ -160,11 +160,6 @@ export function pageVisible(): boolean {
   return pageGate()?.visible() ?? true;
 }
 
-/** Visible and not offline: a request now can succeed. */
-export function pageUsable(): boolean {
-  return pageGate()?.usable() ?? true;
-}
-
 /** The page is on its way out (pagehide, not yet back from the bfcache). */
 export function pageLeaving(): boolean {
   return pageGate()?.leaving() ?? false;

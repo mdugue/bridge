@@ -35,16 +35,11 @@ import { buildFurniture } from "./furniture-layer";
 import { finished } from "@/lib/city/build-steps";
 import type { Steps } from "@/lib/city/build-steps";
 import { Instances, instancePosition } from "./instancing";
-import { addRibbon, meshSteps, mesh3, quad } from "./mesh-kit";
+import { addRibbon, COLORS, meshSteps, mesh3, quad } from "./mesh-kit";
 import type { Mesh3, Pt } from "./mesh-kit";
-import {
-  addRail,
-  buildDeckTable,
-  addSpanDeck,
-  COLORS,
-  lineLevelsAt,
-  spanRuns,
-} from "./rail-layer";
+import { buildDeckTable } from "./bridge-deck";
+import { addSpanDeck, spanRuns } from "./bridge-layer";
+import { addRail, lineLevelsAt } from "./rail-layer";
 import { markThinCaster, sceneMaterial } from "./three-utils";
 import { addWire, wireMesh, wires } from "./wire-ribbons";
 import type { Wires } from "./wire-ribbons";

@@ -38,7 +38,7 @@ import type { TrafficLane } from "@/lib/city/traffic";
 import { dataMarkColour, glassColour, glassGrazing } from "./glass";
 import { deckLift } from "@/lib/city/decks";
 import type { DeckPoly } from "@/lib/city/decks";
-import { buildDeckTable } from "./rail-layer";
+import { buildDeckTable } from "./bridge-deck";
 import type { F, V3, V4 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 import { trafficNow, trafficPositionNode, trafficTravel } from "./traffic-flow";
@@ -77,7 +77,7 @@ import { trafficNow, trafficPositionNode, trafficTravel } from "./traffic-flow";
  *   higher, a bank buries that flank; where it is lower, the flank stands
  *   free of it — a data body follows its line, not the kerb. A section on
  *   a street named a bridge (`br`) rides the deck and its approach ramps
- *   (rail-layer.ts's lift table) where it crosses them; any other street
+ *   (bridge-deck.ts's lift table) where it crosses them; any other street
  *   stays on the ground.
  *
  * Unlit (the glass carries the light of what is behind it), no shadow,

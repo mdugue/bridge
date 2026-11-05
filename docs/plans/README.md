@@ -365,27 +365,29 @@ S/M/L.
     shopfronts, windows) and `scripts/tile-sources.ts` (kerbs, walls,
     stairs, terraces); give each a schema
     and `parseBakeFile`, with `features.test.ts`'s value rules kept.
-27. **The moves plan 046 left (S each; moves only, no pixel change).**
-    Closed 2026-11-04 ([record](./completed.md#046--moves-only-split-the-god-modules-and-sweep--closed-2026-11-04-drifted-the-rest-in-the-backlog)).
-    *The rail split:* `rail-layer.ts` (2 968 lines) still holds the deck
-    table (`deckOf`, `buildDeckTable`, which `tram-layer.ts`,
-    `traffic-layer.ts` and `data-overlays.ts` import from it), the
-    approaches and the measured bridge with its span decks (ADR 0041) —
-    into `bridge-deck.ts` and `bridge-layer.ts`, rail proper stays
-    (`bridge-deck.ts` must not import `bridge-layer.ts`); `quadXYZ` and
-    `pushTri` in `mesh-kit.ts` take point structs. *A home for the TSL
-    helpers:* eight layers import `floorMod`, `texelAt`, `byteOf`,
-    `gdHash`, `gdNoise` from `ground-detail.ts`; with them the
-    byte-identical `hash21` of `post-stack.ts` and `stylize-effect.ts`.
-    *The sweep:* `components/ui/{dropdown-menu,input-group,kbd,spinner}.tsx`
-    have no importer (`shadcn remove`); `texSize` (`shader-chunks.ts`) and
-    `pageUsable` (`net-gate.ts`) are used nowhere, `SUPPORTED_EPSG_CODES`
-    (`crs.ts`), `SVF_PX`, `HORIZON_BANDS` (`skyview.ts`) and `LANGS`
-    (`lib/docs/routes.ts`) only in their module; `hooks/use-coarse-pointer.ts`
-    imports from `app/_components/` for its one user, `city-walk.tsx`.
-    Not in it: what plans 078–080 and 083 take out of `create-app.ts`
-    and `tile-stream.ts`; the rail split touches `traffic-layer.ts`,
-    which 083 rewrites — land it before 083 or after.
+27. ~~**The moves plan 046 left (S each; moves only, no pixel change).**~~
+    Done 2026-11-05 (plan 046's [record](./completed.md#046--moves-only-split-the-god-modules-and-sweep--closed-2026-11-04-drifted-the-rest-in-the-backlog)).
+    *The rail split:* `rail-layer.ts` (2 982 → 1 215 lines) keeps rail
+    proper, `bridge-layer.ts` the drawn bridges and the span decks,
+    `bridge-deck.ts` the deck table and the approaches' plan (the table
+    reads them; `addApproach`, their drawing, is `bridge-layer.ts`'s).
+    `COLORS` went to `mesh-kit.ts`. Every vertex rail and tram build from
+    Dresden's and Hamburg's committed data hashed the same before and
+    after. *The TSL helpers* live in `shader-chunks.ts`, `hash21` one export
+    of the two byte-identical copies. *The sweep:* `texSize`, `pageUsable`
+    and `SVF_PX` gone, `HORIZON_BANDS` and `LANGS` private,
+    `use-coarse-pointer.ts` beside its one user. **Left out:**
+    `quadXYZ` and `pushTri` keep plain numbers: point structs would allocate
+    per quad, which those two exist not to do. `lineLevelsAt` and `addRail`
+    stay in `rail-layer.ts`, so `tram-layer.ts` still imports it.
+    `components/ui/{dropdown-menu,input-group,kbd,spinner}.tsx` still have
+    no importer and are still here: shadcn 4.23 has no `remove` command, and
+    `components/ui/` is not edited by hand — the maintainer's call.
+    `SUPPORTED_EPSG_CODES` (`crs.ts`, used nowhere) and the comment in
+    `lib/city/decks.ts` that still names `rail-layer.ts` wait for the next
+    real change to those files: both are in bake keys (`crs.ts`: frame,
+    city; `decks.ts`: most of them), so an edit re-bakes every site for no
+    byte of difference.
 28. ~~**The monuments' linked Wikidata items the fetch misses (S).**~~
     Closed 2026-11-05 by a measurement, nothing built: of the 156 items
     OSM's monuments link to and that still have no material (every
@@ -597,7 +599,7 @@ noted), then what was refuted or judged not worth doing.
   the season's wall-clock fields stay in the site's zone; tests under a
   foreign `TZ`. Plan 067 step 2 fixes the bike counts' half of it.
 - **A seam deck drawn by one tile, askable in the other (S, MED).**
-  `rail-layer.ts` `drawsDeck` averages the ring *with* its closing vertex;
+  `bridge-layer.ts` `drawsDeck` averages the ring *with* its closing vertex;
   `ask-items.ts` `bridgeItems` owns by `ringCentre` (open ring): the two
   centroids differ by `(p0 − mean)/(n+1)`, metres on a long deck with
   few vertices, so a deck across a seam can be drawn by A and asked in B

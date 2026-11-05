@@ -44,6 +44,7 @@ import type { RenderStyleDef } from "@/lib/city/render-style";
 import { DATA_HUE } from "./glass";
 import { fogFactorAt } from "./height-fog";
 import type { SceneFog } from "./height-fog";
+import { hash21 } from "./shader-chunks";
 import type { F, V2, V3, V4 } from "./shader-chunks";
 import { sceneNight } from "./scene-environment";
 import { readSunShadow, shadowStandIn } from "./sun-shadow-read";
@@ -220,12 +221,6 @@ const PENS: Record<number, Pen> = {
 };
 
 // --- small helpers --------------------------------------------------------
-
-function hash21(p: V2): F {
-  const q = fract(p.mul(vec2(123.34, 456.21)));
-  const r = q.add(dot(q, q.add(45.32)));
-  return fract(r.x.mul(r.y));
-}
 
 function valueNoise(p: V2): F {
   const i = floor(p);

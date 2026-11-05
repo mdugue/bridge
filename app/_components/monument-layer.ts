@@ -83,9 +83,8 @@ import type {
 } from "@/lib/city/monuments";
 import type { Point2 } from "@/lib/city/polyline";
 import { ashlar, footprint } from "./bridge-surface";
-import { gdNoise } from "./ground-detail";
 import { Instances, instanceFloat, instancePosition } from "./instancing";
-import { dataXY } from "./shader-chunks";
+import { dataXY, gdNoise } from "./shader-chunks";
 import type { F, Live } from "./shader-chunks";
 import { mirrorWeight, REFLECTIONS, skyReflection } from "./sky-reflection";
 import { fountainsOn, sceneNight } from "./scene-environment";

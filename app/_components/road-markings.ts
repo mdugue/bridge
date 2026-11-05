@@ -27,15 +27,14 @@ import {
   markingKindId,
 } from "@/lib/city/markings";
 import type { F, I, Tex, V2, V3 } from "./shader-chunks";
+import { GROUND_DETAIL, parkingBandOf } from "./ground-detail";
 import {
   gdBand,
   gdNoise,
-  GROUND_DETAIL,
   loadTexel,
-  parkingBandOf,
   texelAt,
   texelSize,
-} from "./ground-detail";
+} from "./shader-chunks";
 import type { GroundColour, GroundFields, GroundInputs } from "./ground-detail";
 import { spLine } from "./sport-ground";
 

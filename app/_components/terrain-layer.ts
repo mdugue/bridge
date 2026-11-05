@@ -75,19 +75,22 @@ import { colonyGarden } from "./cultivated-layer";
 import { prepareGroundOffThread } from "./ground-prep-client";
 import {
   bsplineSample,
-  gdNoise,
-  gdNoiseSlope,
   groundDetail,
   groundFields,
   groundNormal,
   smoothPaths,
-  texelSize,
   urbanGreen,
 } from "./ground-detail";
 import type { GroundColour, GroundFields, GroundInputs } from "./ground-detail";
 import { PAPER_HEX, paperGroundOn } from "./paper-scene";
 import { roadMarkings } from "./road-markings";
-import { dataXY, rasterUv } from "./shader-chunks";
+import {
+  dataXY,
+  gdNoise,
+  gdNoiseSlope,
+  rasterUv,
+  texelSize,
+} from "./shader-chunks";
 import { splatSize } from "./splat-uv";
 import type { F, Tex, V3 } from "./shader-chunks";
 import type { IndexedRaster, RasterHold, SplatRasters } from "./tile-rasters";
