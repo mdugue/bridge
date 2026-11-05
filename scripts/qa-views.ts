@@ -166,7 +166,7 @@ const OBLIQUE_400: Pose = flyAt(
   FRAUENKIRCHE
 );
 const STREET_CROSSINGS: Pose = flyAt(
-  behind(ALBERTPLATZ_JUNCTION, 220, 55),
+  behind(ALBERTPLATZ_JUNCTION, 30, 55),
   25,
   ALBERTPLATZ_JUNCTION
 );
@@ -176,7 +176,7 @@ const LAMP_STREET: Pose = walkAt(
   2.5
 );
 const FOUNTAIN_SQUARE: Pose = flyAt(
-  behind(ARTESIAN_FOUNTAIN, 200, 45),
+  behind(ARTESIAN_FOUNTAIN, 30, 45),
   30,
   ARTESIAN_FOUNTAIN
 );
@@ -206,7 +206,7 @@ export const QA_VIEWS: readonly QaView[] = [
     plans: ["019 B", "019 K (025)"],
     checks:
       "The Großer Garten's lawn towards the Palais at eye level, early evening: the meadow's tint and mottle, crowns and their shadows.",
-    pose: walkAt({ x: 413_180, y: 5_654_560 }, PALAIS, 10),
+    pose: walkAt({ x: 413_340, y: 5_654_620 }, PALAIS, 3),
     date: "2026-06-20T17:30:00+02:00",
   },
   {
@@ -439,7 +439,7 @@ export const QA_VIEWS: readonly QaView[] = [
     plans: ["076"],
     checks:
       "250 m over the site's east edge looking out: the ground plate beyond the last tile, no hole; on a phone, `heldMB` and frame time on the way out.",
-    pose: fly({ x: 417_700, y: 5_656_800 }, 250, 80, -12),
+    pose: fly({ x: 417_700, y: 5_656_800 }, 250, 80, -30),
     date: "2026-06-20T15:00:00+02:00",
   },
   {
