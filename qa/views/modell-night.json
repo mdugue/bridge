@@ -1,0 +1,38 @@
+{
+  "v": 1,
+  "camera": {
+    "pos": {
+      "x": -114.22,
+      "y": 408.03,
+      "z": 17.5
+    },
+    "epsg": {
+      "x": 413000,
+      "y": 5657000
+    },
+    "fov": 55,
+    "headingDeg": 45,
+    "pitchDeg": -40,
+    "mode": "fly",
+    "model": {
+      "pivot": {
+        "x": -114.22,
+        "y": 108.03,
+        "z": 17.5
+      },
+      "preset": "iso",
+      "scale": 20000,
+      "tiltDeg": 35.264389682754654,
+      "turnDeg": 45
+    }
+  },
+  "date": "2026-07-15T21:30:00.000Z",
+  "look": {
+    "multiTuft": true,
+    "style": "pastel",
+    "fogPct": 20,
+    "trafficLayer": false,
+    "bikeLayer": false,
+    "tramLayer": false
+  }
+}

@@ -73,8 +73,12 @@ const monumentProps = z.strictObject({
   hs: z.literal("lsc").optional(),
   kind: z.enum(MONUMENT_KINDS),
   /** what it is made of, in German ("Bronze, Granit"; OSM `material`,
-   *  else Wikidata's — then `wikidata` is set) */
+   *  else Wikidata's — then `materialWikidata` is set) */
   material: z.string().optional(),
+  /** the Wikidata item its `material` comes from, where OSM names none
+   *  (the monument's own item where OSM links one the fetch cached, else
+   *  the item of its name or the nearest) */
+  materialWikidata: wikidataId.optional(),
   name: z.string().optional(),
   /** a point fountain's basin radius (m) where it is small: a drinking
    *  fountain, a stone block (absent: lib/city/monuments.ts
@@ -84,7 +88,8 @@ const monumentProps = z.strictObject({
   relief: reliefGrid.optional(),
   source: z.enum(["dlm", "dlm+osm", "osm"]),
   style: z.enum(FOUNTAIN_STYLES).optional(),
-  /** the Wikidata item its `material` comes from */
+  /** the Wikidata item OSM links it to (OSM `wikidata`, the first of a
+   *  list; on a DLM monument its OSM partner's) */
   wikidata: wikidataId.optional(),
 });
 

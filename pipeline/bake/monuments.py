@@ -29,10 +29,13 @@ facade, and is left out.
 Where OSM names no material, Wikidata may (`P186`, "made from material"):
 the Goldener Reiter is copper under gold leaf, the Bismarck-Denkmal bronze
 on granite. The fetch caches the monuments, sculptures and memorials it
-knows on the tile (`fetch_wikidata`, never a Stolperstein); a monument
-without a material takes the item of its name within `WIKIDATA_NAME_M`,
-else the nearest within `WIKIDATA_NEAR_M`, and keeps its id (`wikidata`)
-as the material's source.
+knows on the tile (`fetch_wikidata`, never a Stolperstein). A monument
+OSM links to its item (`wikidata`, `osm_wikidata`) takes that item's
+material at any distance, and the item is its own; a monument without
+such a link (or whose item the cache lacks) takes the item of its name
+within `WIKIDATA_NAME_M`, else the nearest within `WIKIDATA_NEAR_M`.
+`wikidata` is always OSM's link, the item the material came from is
+`materialWikidata`.
 
 OSM maps a memorial or an artwork as a node or as its outline: an outline
 up to `AREA_MAX_M2` stands at its representative point (Hamburg's
@@ -313,6 +316,15 @@ def osm_material(other_tags: str | None) -> str | None:
     return ", ".join(dict.fromkeys(names)) or None
 
 
+QID = re.compile(r"^Q\d+$")
+
+
+def osm_wikidata(other_tags: str | None) -> str | None:
+    """OSM's `wikidata` link (the first of a `;` list), a Q-id or None."""
+    first = (tag(other_tags, "wikidata") or "").split(";")[0].strip()
+    return first if QID.match(first) else None
+
+
 def largest_part(geom: shapely.Geometry) -> shapely.Geometry:
     """A MultiPolygon's largest polygon (GDAL's OSM driver writes every area
     as one); anything else as it is."""
@@ -384,6 +396,7 @@ def _osm_fountains(tile: Tile) -> list[dict]:
                     "name": name or None,
                     "style": classify_fountain(tag(other, "fountain"), tag(other, "water")),
                     "small": small_fountain(other),
+                    "wikidata": osm_wikidata(other),
                 }
             )
     return found
@@ -477,6 +490,7 @@ def _osm_monuments(tile: Tile, surface: Surface | None = None) -> list[dict]:
                 "height": osm_height(other),
                 "material": osm_material(other),
                 "artist": tag(other, "artist_name") or None,
+                "wikidata": osm_wikidata(other),
             }
         )
     return found
@@ -524,6 +538,10 @@ def _partner(m: dict, osm: list[dict], claimed: set[int]) -> int | None:
     return min(near)[2] if near else None
 
 
+# What a DLM monument takes from its OSM partner.
+PARTNER_KEYS = ("form", "height", "material", "artist", "wikidata")
+
+
 def type_monuments(
     items: list[dict], osm: list[dict], buildings: shapely.STRtree | None
 ) -> list[dict]:
@@ -538,7 +556,7 @@ def type_monuments(
         if i is not None:
             claimed.add(i)
             o = osm[i]
-            m.update({k: o[k] for k in ("form", "height", "material", "artist")})
+            m.update({k: o.get(k) for k in PARTNER_KEYS})
             m["name"] = m["name"] or o["name"]
             m["source"] = "dlm+osm"
         m["form"] = name_form(m["name"]) or m.get("form")
@@ -559,7 +577,7 @@ def type_monuments(
                 "style": None,
                 "figure": False,
                 "source": "osm",
-                **{k: o[k] for k in ("form", "height", "material", "artist")},
+                **{k: o.get(k) for k in PARTNER_KEYS},
             }
         )
     return items
@@ -662,13 +680,37 @@ def load_wikidata(tile: Tile) -> list[dict]:
     return out
 
 
+def _wants_material(m: dict) -> bool:
+    return m["kind"] != "fountain" and not m.get("material")
+
+
+def _take_material(m: dict, item: dict) -> None:
+    m["material"] = item["material"]
+    m["materialWikidata"] = item["id"]
+
+
 def wikidata_materials(items: list[dict], wikidata: list[dict]) -> None:
-    """A monument OSM names no material of takes Wikidata's: the item of
-    its name within `WIKIDATA_NAME_M`, else the nearest within
-    `WIKIDATA_NEAR_M` — each item for one monument only."""
+    """A monument OSM names no material of takes Wikidata's. First every
+    monument OSM links to a cached item (`wikidata`) takes that item's
+    material, whatever the distance — every one linked to it (a fountain
+    and the figure in it share their item; the fountain takes none) —
+    and the item is claimed; then the others take the item of their name
+    within `WIKIDATA_NAME_M`, else the nearest within `WIKIDATA_NEAR_M`,
+    each unclaimed item for one monument only, so a linked item is never
+    handed to a neighbour."""
+    by_id = {w["id"]: i for i, w in enumerate(wikidata)}
     claimed: set[int] = set()
-    for m in items:
-        if m["kind"] == "fountain" or m.get("material"):
+    linked: set[int] = set()
+    for n, m in enumerate(items):
+        i = by_id.get(m.get("wikidata") or "")
+        if i is None:
+            continue
+        claimed.add(i)
+        linked.add(n)
+        if _wants_material(m):
+            _take_material(m, wikidata[i])
+    for n, m in enumerate(items):
+        if n in linked or not _wants_material(m):
             continue
         near = []
         for i, w in enumerate(wikidata):
@@ -681,8 +723,7 @@ def wikidata_materials(items: list[dict], wikidata: list[dict]) -> None:
         if near:
             i = min(near)[2]
             claimed.add(i)
-            m["material"] = wikidata[i]["material"]
-            m["wikidata"] = wikidata[i]["id"]
+            _take_material(m, wikidata[i])
 
 
 def conflate(dlm: list[dict], osm: list[dict]) -> list[dict]:
@@ -718,6 +759,7 @@ def conflate(dlm: list[dict], osm: list[dict]) -> list[dict]:
                 "figure": m is not None,
                 "source": "dlm+osm" if m else "osm",
                 "small": bool(o.get("small")),
+                "wikidata": o.get("wikidata"),
             }
         )
     return out
@@ -732,7 +774,7 @@ def properties(item: dict) -> dict:
         props["figure"] = bool(item["figure"])
         if item.get("small") and item["geom"].geom_type == "Point":
             props["r"] = SMALL_FOUNTAIN_R
-    for key in ("form", "height", "material", "artist", "wikidata"):
+    for key in ("form", "height", "material", "artist", "wikidata", "materialWikidata"):
         if item.get(key):
             props[key] = item[key]
     return props
@@ -1228,7 +1270,8 @@ def run(tile: Tile) -> None:
         + ", ".join(f"{n} {k}" for k, n in kinds.items())
         + f"; {count('relief')} with a measured relief, {count('form')} with a form,"
         + f" {count('hm')} measured in the open, {count('cover')} under a winter housing,"
-        + f" {count('wikidata')} with Wikidata's material; {moved} point fountains"
+        + f" {count('wikidata')} with OSM's Wikidata link,"
+        + f" {count('materialWikidata')} with Wikidata's material; {moved} point fountains"
         + f" moved off a facade, {dropped} indoors dropped"
         + (" (laser scan)" if surface is not None and surface.scan is not None else "")
         + (" (leaf-off flight)" if surface is not None and surface.winter else "")

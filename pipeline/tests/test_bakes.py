@@ -1041,7 +1041,7 @@ def test_a_monument_without_an_osm_material_takes_wikidatas():
         item(300, "Q4", "Stilles Wasser", "Sandstein"),
     ]
     wikidata_materials(items, wikidata)
-    assert [(m.get("material"), m.get("wikidata")) for m in items] == [
+    assert [(m.get("material"), m.get("materialWikidata")) for m in items] == [
         ("Kupfer, Blattgold", "Q558537"),
         ("Bronze", None),
         (None, None),

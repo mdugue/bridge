@@ -53,7 +53,7 @@ const SHOTS_QUERY = (process.env.SHOTS_QUERY ?? "").replace(/^\?/u, "");
 const SHOTS_SITE = process.env.SHOTS_SITE ?? "dresden";
 const SHOTS_TAG = process.env.SHOTS_TAG ?? "";
 /**
- * `SHOTS_AT=1`: boot the page at the snapshot's own place (`#at=lat,lng`
+ * `SHOTS_AT=1`: boot the page at the snapshot's own place (`?at=lat,lng`
  * from its `camera.epsg`) instead of the site's spawn. The `lite` scene
  * streams only around where it booted, so a pose a kilometre from the
  * spawn would otherwise show the wrong part of the city — the street
@@ -72,8 +72,7 @@ function shotUrl(snap: Snapshot): string {
   if (!at) {
     return `/${SHOTS_SITE}${query}`;
   }
-  const [path, hash] = arrivalHref(SHOTS_SITE, at).split("#");
-  return `${path}${query}#${hash}`;
+  return `${arrivalHref(SHOTS_SITE, at)}${SHOTS_QUERY ? `&${SHOTS_QUERY}` : ""}`;
 }
 
 /** Hide every HUD/control overlay so the shot is a clean render plate:
@@ -100,23 +99,42 @@ function hideOverlays(): void {
   }
 }
 
-function snapshotFiles(): string[] {
+/**
+ * The committed QA views (plan 048, `bun scripts/qa-views.ts`): rendered
+ * beside the dropped snapshots as `shots/qa-<name>.png`, so `shots/`
+ * stays the one output (and gitignored). One of them:
+ * `bun run shots -- --grep qa-<name>`.
+ */
+const QA_VIEWS_DIR = nodePath.join(process.cwd(), "qa", "views");
+
+/** The snapshots in `dir`, their plates named `<prefix><name>`. */
+function jsonsIn(
+  dir: string,
+  prefix: string
+): { path: string; name: string }[] {
   try {
-    return readdirSync(SHOTS_DIR).filter((f) => f.endsWith(".json"));
+    return readdirSync(dir)
+      .filter((f) => f.endsWith(".json"))
+      .map((f) => ({
+        path: nodePath.join(dir, f),
+        name: `${prefix}${f.replace(/\.json$/u, "")}`,
+      }));
   } catch {
     return [];
   }
 }
 
-for (const file of snapshotFiles()) {
-  const name = file.replace(/\.json$/u, "");
+/** Each snapshot to render: the dropped ones, then the QA views. */
+function snapshotFiles(): { path: string; name: string }[] {
+  return [...jsonsIn(SHOTS_DIR, ""), ...jsonsIn(QA_VIEWS_DIR, "qa-")];
+}
+
+for (const { path: file, name } of snapshotFiles()) {
   test(`snapshot: ${name}`, async ({ page }) => {
     test.setTimeout(READY_MS + 150_000);
     // Validate before rendering: a broken shot fails loudly instead of
     // silently rendering the defaults.
-    const parsed = parseSnapshot(
-      readFileSync(nodePath.join(SHOTS_DIR, file), "utf-8")
-    );
+    const parsed = parseSnapshot(readFileSync(file, "utf-8"));
     if (!parsed.ok) {
       throw new Error(`${file}: ${parsed.reason}`);
     }
@@ -171,11 +189,14 @@ for (const file of snapshotFiles()) {
           !poc?.regressed &&
           // the rings redraw one a frame, the wide ones at a distance
           !poc?.handle?.shadowBusy() &&
+          // a plate far from the spawn waits for its own tiles to land
+          !poc?.handle?.streamBusy() &&
           ((poc?.shadowRenders ?? 0) > shadows || drawn >= shadowless)
         );
       },
-      { ...before, settle: 3, shadowless: 30 },
-      { timeout: 120_000 }
+      // settle: frames for the stream to see the new view at all
+      { ...before, settle: 10, shadowless: 30 },
+      { timeout: READY_MS + 60_000 }
     );
 
     // Again: a notice raised after the move ("Umgebung lädt") was not

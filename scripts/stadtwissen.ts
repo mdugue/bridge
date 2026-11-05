@@ -29,7 +29,7 @@ const { index, tiles } = loadStadtwissen(site.id);
 const buildings = (): WissenBuilding[] => tiles().flatMap((t) => t.buildings);
 const monuments = (): WissenMonument[] => tiles().flatMap((t) => t.monuments);
 const monument = (m: WissenMonument & { d?: number }) =>
-  `${m.d === undefined ? "" : `${Math.round(m.d)} m  `}${m.name} · ${m.kind}${m.material ? `, ${m.material}` : ""} · (${m.x}, ${m.y})${m.wd ? ` · ${m.wd}` : ""} · ${m.id}`;
+  `${m.d === undefined ? "" : `${Math.round(m.d)} m  `}${m.name} · ${m.kind}${m.material ? `, ${m.material}` : ""} · (${m.x}, ${m.y})${m.wd ? ` · ${m.wd}` : ""}${m.materialWd ? ` · Material ${m.materialWd}` : ""} · ${m.id}`;
 
 const out = (line: string) => process.stdout.write(`${line}\n`);
 

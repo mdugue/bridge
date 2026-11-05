@@ -335,7 +335,7 @@ test("a monument whose material only Wikidata names quotes it for that", () => {
         name: "Goldener Reiter",
         source: "dlm",
         material: "Kupfer, Blattgold",
-        wikidata: "Q558537",
+        materialWikidata: "Q558537",
         relief: { west: 0, north: 0, cols: 2, rows: 1, dm: [46, 70] },
       },
     },

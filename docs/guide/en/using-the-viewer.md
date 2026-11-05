@@ -129,10 +129,10 @@ says how far and offers where to go instead: one of the vantage points, a
 spot you pick on the map, or staying where you are. If you stand in
 another city this site also shows, the window says so first and offers to
 jump there: its viewer opens with you standing where you are (the
-position travels in the link's fragment, which never reaches the server).
-Browsers ask for permission first
-(iPhones for the compass too); the location never leaves the device — not
-even in a crash report (see *When it crashes*).
+position travels in the link's query, `?at=`, so the host's request log
+records it when you follow the link). Browsers ask for permission first
+(iPhones for the compass too); otherwise the location never leaves the
+device — not even in a crash report (see *When it crashes*).
 
 *Live* appears as soon as your phone reports compass readings (an iPhone
 asks for permission on the first tap; a computer without a compass never
@@ -598,8 +598,13 @@ The other picture styles and Modell keep their sharp lines.
 - **Snapshot** — *Kopieren* copies your exact position, the date and time,
   the picture style, *Nebel*, the crown switch and the data layers as a
   small JSON text; paste such a text into the box and press *Anwenden* to
-  restore it. This is how a specific view is shared or reproduced for a
-  screenshot. A snapshot from before the look was fixed still loads; the
+  restore it. *Link kopieren* copies a link to this page that opens at the
+  same view (the snapshot rides in the address's query, `?snap=`, so the
+  host's request log records it whenever the link is opened; crash reports
+  leave it out); it carries the camera's place, after *Standort* or *Live*
+  your own. This is how a
+  specific view is shared or reproduced for a screenshot. A snapshot from
+  before the look was fixed still loads; the
   sliders it names are ignored. A malformed snapshot is rejected with a
   message instead of breaking the scene.
 - **Qualität** ("quality") — the step the viewer draws at on your device

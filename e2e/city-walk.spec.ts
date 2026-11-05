@@ -9,6 +9,11 @@ import proj4 from "proj4";
 import type { LookValues } from "../lib/city/look-controls";
 import { utmToLatLng } from "../lib/city/crs";
 import { EYE_HEIGHT } from "../lib/city/pose";
+import {
+  parseSnapshot,
+  snapshotFromSearch,
+  snapshotHref,
+} from "../lib/city/snapshot";
 import { tfwToBounds } from "../lib/city/tfw";
 
 /**
@@ -1058,7 +1063,10 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       const view = page.getByTestId("walk-photo-view");
       await expect(view.locator("img")).toBeVisible();
       await page.keyboard.press("Escape");
-      await expect(view).toHaveCount(0);
+      // Escape closes it at once; it leaves the DOM after its exit
+      // animation, a frame or three, and a slow runner's SwiftShader
+      // frames take seconds each (the default 5 s ran out mid-animation)
+      await expect(view).toHaveCount(0, { timeout: slow(10_000) });
       const first = await card.getByRole("heading").textContent();
       await card.getByTestId("walk-next").click();
       await expect(card).toContainText("Station 2 von 9");
@@ -1841,6 +1849,80 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       timeout: slow(60_000),
     });
     expectNoErrors(errors);
+  });
+});
+
+/**
+ * A view link (`?snap=`, plan 048): the page boots at the snapshot's view,
+ * and *Link kopieren* writes a link to where the camera is. Its own page:
+ * the link is read at the boot. A committed QA view on the spawn tile
+ * (the lite profile streams that one) is the link.
+ */
+test.describe("a view link", { tag: "@desktop-render" }, () => {
+  test("opens the page at the linked view, and Link kopieren writes one", async ({
+    browser,
+  }) => {
+    const parsed = parseSnapshot(
+      readFileSync(
+        path.join(process.cwd(), "qa", "views", "fountain-july-day.json"),
+        "utf-8"
+      )
+    );
+    if (!parsed.ok) {
+      throw new Error(parsed.reason);
+    }
+    const linked = parsed.snapshot;
+    const context = await browser.newContext({ viewport: DESKTOP_VIEWPORT });
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    const linkPage = await context.newPage();
+    const linkErrors = watchErrors(linkPage);
+    await linkPage.goto(snapshotHref(LITE, linked));
+    const gl = await hasWebGl(linkPage);
+    if (process.env.CI) {
+      expect(gl).toBe(true);
+    }
+    test.skip(!gl, "WebGL is genuinely unavailable in this environment");
+    await linkPage.waitForFunction(
+      () => window.__poc?.ready === true,
+      undefined,
+      { timeout: slow(120_000) }
+    );
+    const camera = await linkPage.evaluate(() =>
+      window.__poc?.handle?.getCameraState()
+    );
+    expect(camera?.mode).toBe(linked.camera.mode);
+    expect(camera?.epsg.x).toBeCloseTo(linked.camera.epsg.x, 0);
+    expect(camera?.epsg.y).toBeCloseTo(linked.camera.epsg.y, 0);
+    // the same direction (getCameraState gives it in (−180°, 180°])
+    const turned =
+      (camera?.headingDeg ?? Number.NaN) - linked.camera.headingDeg;
+    expect((((turned % 360) + 540) % 360) - 180).toBeCloseTo(0, 0);
+
+    await withFramesHeld(linkPage, async () => {
+      await openSidebar(linkPage);
+      await linkPage.getByRole("tab", { name: "Erweitert" }).click();
+      await linkPage.getByRole("button", { name: "Link kopieren" }).click();
+      await expect(
+        linkPage.getByText("Link in die Zwischenablage kopiert")
+      ).toBeVisible();
+    });
+    const copied = await linkPage.evaluate(
+      async () => await navigator.clipboard.readText()
+    );
+    const url = new URL(copied);
+    // the site's page with the view in its query and without this page's
+    // QA knobs (`?scene=lite`)
+    expect(url.pathname).toBe(SITE);
+    expect([...url.searchParams.keys()]).toEqual(["snap"]);
+    expect(url.hash).toBe("");
+    const back = snapshotFromSearch(url.search);
+    expect(back?.ok).toBe(true);
+    if (back?.ok) {
+      expect(back.snapshot.camera.epsg.x).toBeCloseTo(linked.camera.epsg.x, 0);
+      expect(back.snapshot.date).toBe(linked.date);
+    }
+    expectNoErrors(linkErrors);
+    await context.close();
   });
 });
 
