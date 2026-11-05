@@ -40,6 +40,50 @@ export const crsMember = z.strictObject({
 /** A projected point `[x, y]`. */
 export const point2 = z.tuple([z.number(), z.number()]);
 
+/** The GeoJSON geometries the bakes write, in the site's CRS. */
+export const pointGeometry = z.strictObject({
+  coordinates: point2,
+  type: z.literal("Point"),
+});
+export const lineGeometry = z.strictObject({
+  coordinates: z.array(point2),
+  type: z.literal("LineString"),
+});
+export const multiLineGeometry = z.strictObject({
+  coordinates: z.array(z.array(point2)),
+  type: z.literal("MultiLineString"),
+});
+export const polygonGeometry = z.strictObject({
+  coordinates: z.array(z.array(point2)),
+  type: z.literal("Polygon"),
+});
+export const multiPolygonGeometry = z.strictObject({
+  coordinates: z.array(z.array(z.array(point2))),
+  type: z.literal("MultiPolygon"),
+});
+
+/** A GeoJSON feature (pipeline/bake/common.py `feature`). */
+export function featureOf<G extends z.ZodType, P extends z.ZodType>(
+  geometry: G,
+  properties: P
+) {
+  return z.strictObject({
+    geometry,
+    properties,
+    type: z.literal("Feature"),
+  });
+}
+
+/** A projected, credited GeoJSON file of `feature`s. */
+export function featureCollection<F extends z.ZodType>(feature: F) {
+  return z.strictObject({
+    attribution: z.string(),
+    crs: crsMember,
+    features: z.array(feature),
+    type: z.literal("FeatureCollection"),
+  });
+}
+
 /** What is wrong with `json` as the file `spec` describes, one entry per
  *  problem (a message and its key path); none when it matches. */
 export function bakeFileProblems(spec: BakeFile, json: unknown): string[] {

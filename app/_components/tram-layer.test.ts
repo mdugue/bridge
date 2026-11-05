@@ -10,7 +10,7 @@ import type { GroundContext } from "@/lib/city/ground-clamp";
 import { CONTACT_WIRE_M, RAIL_TOP_M } from "@/lib/city/tram";
 import type { Instances } from "./instancing";
 import { deckLift } from "@/lib/city/decks";
-import { buildDeckTable } from "./rail-layer";
+import { buildDeckTable } from "./bridge-deck";
 import { buildTram, lawnHalves } from "./tram-layer";
 
 const ctx: GroundContext = { offset: { cx: 0, cy: 0 }, heightAt: () => 100 };

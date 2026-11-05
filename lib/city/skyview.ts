@@ -9,15 +9,14 @@
  * No THREE, no DOM.
  */
 
-/** Raster edges (px) over a tile: ≈ 2 m sky view, ≈ 8 m horizon. */
-export const SVF_PX = 1024;
+/** The horizon raster's edge (px) over a tile: ≈ 8 m. */
 export const HORIZON_PX = 256;
 /** Horizon azimuths, clockwise from north, evenly spaced. */
 export const HORIZON_AZIMUTHS = 16;
 /** Four azimuths per RGBA texel: one band's layers (planes). */
 export const HORIZON_LAYERS = HORIZON_AZIMUTHS / 4;
 /** The far band's planes, then the near band's: the texture's layers. */
-export const HORIZON_BANDS = 2;
+const HORIZON_BANDS = 2;
 export const HORIZON_TEXTURE_LAYERS = HORIZON_LAYERS * HORIZON_BANDS;
 /** The far band's horizon angle (°) of the byte 255. */
 export const HORIZON_MAX_DEG = 45;

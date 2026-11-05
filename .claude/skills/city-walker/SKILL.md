@@ -134,7 +134,10 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   `V3`, `V4`, `Live`), `dataXY()` / `dataPosition()` (glTF positions are
   quantised, so the data frame comes from world space: world (x, y, z) =
   data (x, −z, y)), `rasterUv(xy, origin, size)` (the corner a
-  `uniform(Vector2)`, so every tile builds the same shader), `texSize`.
+  `uniform(Vector2)`, so every tile builds the same shader), and what the
+  chunks compute with: a raster's texels (`texelSize`, `texelAt`,
+  `loadTexel`, `byteOf`), `floorMod`, the hashes and the noise (`gdHash`,
+  `gdNoise`, `gdNoiseSlope`, `gdBand`, `hash21`).
 - `instancing.ts` — `Instances`, the instanced set every layer uses instead
   of `InstancedMesh`, and its nodes (`instancePosition`, `instanceTint`,
   `instanceMatrix`, `instanceFloat`).
@@ -197,7 +200,9 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   (`lib/city/markings.ts`), `cultivated-layer.ts` (colony gardens, vine
   rows; `lib/city/cultivated.ts`); and `sky-light.ts` (sky view → `aoNode`,
   far horizon → `receivedShadowNode`; `lib/city/skyview.ts`, the raster
-  shared with the buildings through `shared-rasters.ts`).
+  shared with the buildings through `tile-rasters.ts`, which hands every
+  content root its rasters by kind: the kinds table holds a raster's look,
+  tier twin and gate).
 - Buildings: `lib/city/building-tint.ts` (tint, storey height, roofs, at
   bake time), `lib/city/small-buildings.ts` (the scan's sheds as boxes, and
   the canopy points they veto at build time), `scripts/measured-roofs.ts`
@@ -550,7 +555,8 @@ At runtime `landcover-splat.ts` paints it with the one palette
 full-screen `QuadMesh` pass per tile (a scene-wide node material per raster
 size, `textureLoad` of the class ids; the class texture is on the GPU
 before the paint — decoded in its turn (on a phone one raster at a time
-for the site, uploaded at once, its bytes dropped; `raster-upload.ts`); a
+for the site, uploaded at once, its bytes dropped; `tile-rasters.ts`,
+`raster-upload.ts`); a
 bitmap the decoder fell back to is never closed — a closed `ImageBitmap`
 uploads empty on node pages): RGB = the pastel class colour,
 **A = water coverage** (a 3×3 tent over the water class — the soft
@@ -739,9 +745,11 @@ were ported from; the layer file, not the sandbox, is the source of truth.
 ## Bridges (ADR 0041)
 
 Decks come from the Basis-DLM (`ver06_l` centrelines, `ver06_f` outlines),
-built per fine terrain tile by `rail-layer.ts`; **only the tile owning a
-deck's centre draws it** (`RailContext.owns`), every copy still lifts that
-tile's rails. The bake (`rail.py` + `bridge.py`) reads a DGM/DOM mosaic
+built per fine terrain tile by `bridge-layer.ts` (called from
+`rail-layer.ts`; the lift table and the approaches' plan are
+`bridge-deck.ts`, which a layer that only rides the decks imports alone);
+**only the tile owning a deck's centre draws it** (`BridgeContext.owns`),
+every copy still lifts that tile's rails. The bake (`rail.py` + `bridge.py`) reads a DGM/DOM mosaic
 700 m around the tile, so a seam bridge is the same in both files. What it
 measures in DOM1: the **roadway** (lower third across the deck, held
 −6/+4 m around the abutment ramp) and, on bridges whose class stands above

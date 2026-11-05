@@ -104,7 +104,8 @@ import {
 } from "./conifer-crown";
 import { finished, inRuns } from "@/lib/city/build-steps";
 import type { Steps } from "@/lib/city/build-steps";
-import { fetchOptionalBinary } from "./fetch-optional";
+import { isAbortError } from "./fetch-optional";
+import { fetchRasterBytes, inRasterTurn } from "./raster-upload";
 import {
   instanceFloat,
   Instances,
@@ -114,7 +115,7 @@ import {
 } from "./instancing";
 import type { F, Live, V2, V3, V4 } from "./shader-chunks";
 import { setGraph, setSlots } from "./material-slots";
-import { gdHash } from "./ground-detail";
+import { gdHash } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 import { viewDirection } from "./view-direction";
 import { TRUNK_BASE } from "@/lib/city/tree-family";
@@ -1939,14 +1940,18 @@ export async function loadNdviSampler(
   bounds: TerrainBounds,
   signal?: AbortSignal
 ): Promise<RasterSampler | null> {
-  // retried like any optional file, an abort rethrown (fetch-optional.ts)
-  const png = await fetchOptionalBinary(url, signal);
-  if (!png) {
-    return null;
-  }
+  // retried like any raster; decoded in the site's raster turn, so on a
+  // phone it never overlaps another raster's decode (raster-upload.ts)
   try {
-    return maxWindowSampler(await decodeGreyPng(new Uint8Array(png)), bounds);
-  } catch {
+    const png = await fetchRasterBytes(url, signal);
+    return await inRasterTurn(
+      async () => maxWindowSampler(await decodeGreyPng(png), bounds),
+      signal
+    );
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
     return null;
   }
 }

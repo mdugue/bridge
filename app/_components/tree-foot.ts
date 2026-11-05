@@ -66,15 +66,7 @@ import {
 import { SINK } from "@/lib/city/ground-join";
 import { TRUNK_UNIT_H, trunkRadiusAt } from "@/lib/city/tree-inventory";
 import { outOfDesignSite } from "./design-site";
-import {
-  byteOf,
-  edgeAt,
-  gdHash,
-  gdNoise,
-  paletteOf,
-  texelAt,
-  texelSize,
-} from "./ground-detail";
+import { edgeAt, paletteOf } from "./ground-detail";
 import { instanceFloat, Instances } from "./instancing";
 import {
   setGraph,
@@ -84,7 +76,14 @@ import {
   ownSlotValue,
 } from "./material-slots";
 import type { Slots } from "./material-slots";
-import { rasterUv } from "./shader-chunks";
+import {
+  byteOf,
+  gdHash,
+  gdNoise,
+  rasterUv,
+  texelAt,
+  texelSize,
+} from "./shader-chunks";
 import type { F, Tex, V2, V3, V4 } from "./shader-chunks";
 import { applyGroundLight, groundLightKey } from "./sky-light";
 import type { GroundLight } from "./sky-light";

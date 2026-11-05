@@ -46,58 +46,9 @@
 import { isStructure } from "./building-tint";
 import { DORMER_SINK } from "./dormers";
 import { OPEN_ROOF_FUNCTIONS } from "./open-roofs";
+import type { FacadeModel, WindowWall } from "./windows-file";
 
-/** What windows.py models on a wall (metres). */
-export interface FacadeModel {
-  /** the axes' spacing along the wall */
-  axis: number;
-  /** a band of horizontal joints recurring at the storey under the
-   *  windows (not drawn: it did not agree between two drives) */
-  sill?: boolean;
-  /** a set-off surround round each window */
-  frame?: boolean;
-  /** a regular grid, or a loose one (the axes a little off) */
-  grid: "loose" | "regular";
-  /** the window's height */
-  h: number;
-  /** where an axis stands: metres from the wall's start `a`, in [0, axis)
-   *  — where the drives that saw the wall registered onto each other
-   *  (pipeline/bake/window_axes.py); else the axes are centred */
-  phase?: number;
-  /** flat lisenes between the axes (not drawn: no agreement) */
-  lisene?: boolean;
-  /** much fine texture in the plaster: ornament */
-  orn?: boolean;
-  /** the storey's height, where it was measured */
-  storey?: number;
-  /** the window's width */
-  w: number;
-}
-
-/** A measured wall (`windows_<tile>.json`): its frame as in
- *  shopfronts_<tile>.json, the traits, and the model where one is drawn. */
-export interface WindowWall {
-  a: [number, number];
-  b: [number, number];
-  eave: number;
-  imgs: number;
-  L: number;
-  model?: FacadeModel;
-  n: [number, number];
-  oid: string;
-  seqs: number;
-  traits: Record<string, number>;
-  wi: number;
-  z?: [number, number];
-}
-
-/** A tile's facade traits, per Building gml:id. */
-export interface WindowFile {
-  attribution: string;
-  buildings: Record<string, WindowWall[]>;
-  /** per feature [Spearman ρ between two sequences, walls] on this tile */
-  reliability: Record<string, [number | null, number]>;
-}
+export type { FacadeModel, WindowFile, WindowWall } from "./windows-file";
 
 /**
  * A building's windows as the clay draws them (the object table's fourth

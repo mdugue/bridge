@@ -70,7 +70,7 @@ history. Decisions that came out of plans are written up as
 | 036 | What the data streams carry that we do not use (OSM, LoD2, the city's WFS, Wikidata, GeoSN, DLM): a measured survey and a ranking | **REFERENCE** — moved to [docs/data-streams.md](../data-streams.md) on 2026-10-01 (a survey, not a plan); pick an item into its own plan | [data-streams.md](../data-streams.md) |
 | 037 | The commands agents run work (`bun run build`/`test`, E2E_DEV over HTTPS), the skill's phone cache numbers, "1024²" → TIN, guide viewpoints and sizes, codebook pointers, Dependabot/CI paths, lockfile header; a test pins the guide to the HUD | DONE (2026-10-03) — `bunfig.toml` keeps a bare `bun test` out of e2e; coverage gaps listed in CI; a docs link test besides the guide test | [completed.md](./completed.md#037--the-commands-agents-run-and-docs-that-say-what-the-code-does--done-2026-10-03) |
 | 038 | Runtime spine: the shadow camera follows by night (no pinned tile), "loaded" without a spawn dressing nobody builds, no GPU-recovery loop and the crash it hid, no stuck key after a ⌘ chord, a jump ends live mode | DONE (2026-10-03) — step 2's decision moved into the pure boot machine; the GPU failure has its own HUD path | [completed.md](./completed.md#038--five-runtime-fixes-in-the-viewers-spine--done-2026-10-03) |
-| 039 | Bridge approach ramps without zero normals, rails passing under a rail deck stay down, Papier keeps double-sided ribbons and bare crowns, Sin City rain that lasts | **TODO** — P1/P2; step 4 needs a GPU look; **step 3 moot since ADR 0041** (2026-10-06 audit: `buildRails` goes through `lineLevelsAt`, commit 677fe7c) and the line refs of steps 1/4 moved — see the plan's amendment | [039-geometry-and-style-fixes.md](./039-geometry-and-style-fixes.md) |
+| 039 | Bridge approach ramps without zero normals, Sin City rain that lasts, Papier keeps double-sided ribbons | DONE (2026-11-05) — steps 1, 2, 4; step 3 moot since ADR 0041. Deviations in step 4: the stand-ins go through the renderer's object function, main pass only (in the shadow pass they would read the map they draw into); bare crowns stay whole, masked they turned into grey clots on a GPU. Rain not watched for an hour (plan 019) | [completed.md](./completed.md#039--bridge-ramps-rain-that-lasts-papiers-ribbons--done-2026-11-05) |
 | 040 | Bakes: step-major `bun run bake`, seam stair flights kept, atomic ingest + timeouts + https check, atomic `prepare-data` writes, the `/wissen` hero as tall as the site | DONE (2026-11-05) — code and tests 2026-11-04 (refreshed against `8b8ec332`: steps 3 and 5 already built, step 1's tests, step 2's DGM mosaic, step 4 for the publisher); the stairs re-baked on every tile of every site 2026-11-05 (Dresden +6 flights, München +4, Leipzig +1) | [completed.md](./completed.md#040--bakes-that-read-finished-neighbours-keep-their-seam-stairs-never-trust-a-half-written-file--done-2026-11-05) |
 | 041 | Test net: raster shares and the aborted-load free, the collider through a real BVH, census for stairs/sport/kerbs, eye height vs the DGM, pens per style, three's real geometry key | DONE (2026-10-03) — raster shares in their own module; tree rows left allowed empty (Grimma, Munich) | [completed.md](./completed.md#041--tests-where-the-regressions-are--done-2026-10-03) |
 | 042 | Main thread while streaming: stats coalesced, footprints only when they change (no minimap repaint per tile event), footprints after the handover, the viewer chunk fetched with the manifest | DONE (2026-10-03) — the first frame and "loaded" flush the coalesced stats | [completed.md](./completed.md#042--less-main-thread-churn-while-tiles-stream--done-2026-10-03) |
@@ -108,11 +108,11 @@ history. Decisions that came out of plans are written up as
 | 074 | Architecture: bake the static dressing into the fine level, the optional features (Modell, picture styles, data layers) behind one lazy seam, the spine with a test surface, one store for the HUD | **PARTIAL** (2026-10-10) — part D built: the HUD's scene-status store (`lib/city/slice-store.ts`, `app/_components/scene-status.ts`), each widget reading its own slice, `create-app.ts` unchanged; over a lite boot, 30 frames standing and 30 in Modell `CityWalk` committed 4 times instead of 75 and `SceneSidebar` 4 instead of 75; part B: the seam built (`feature-seam.ts`: the spine's hooks, `lazyFeature`; the data layers start on their first switch-on, the traffic slot waits for its builder), the `import()` measured and **stopped** — the data layers as a chunk of their own made the first-load JS 22.7 KB gz larger for 10.1 KB moved (three.js lost its scope hoisting with the scene), so their code ships with the scene, and the styles and Modell were not started (the Findings); parts A and C open (each opens with a spike) | [074-architecture-deepening.md](./074-architecture-deepening.md) |
 | 075 | Window axes measured in open street photos (Panoramax, Mapillary) as fine vertical lines — the one case the window-grid veto allows | **DONE (2026-11-01)**: the photos' rhythm draws windows on every house (ADR 0010, PR #143); the axes stand where the drives, registered onto each other, saw them (`window_axes.py`) | [completed.md](./completed.md#075--window-axes-from-street-photos--done-2026-11-01) |
 | 076 | Streaming without holes: the ground before the buildings, a ground plate under every tile without terrain, LoD1 as the buildings' far level, the coarse crowns from the start — no cost in phone memory or bytes before the first picture | **BUILT** (2026-11-04, checked against the code in PR #265) — all four steps built (`stream-order.ts`; `aefc090b`; `a08c6813`; `4eafaf42`); open: phone memory and frame time measured on a device, then condense | [076-streaming-without-holes.md](./076-streaming-without-holes.md) |
-| 077 | One rasters module: a tile's rasters loaded, shared and weighed behind one interface, their files named by the artifact table | **PARTIAL** (2026-11-04) — step 1 built: `lib/city/tile.ts` has a `terrain` column and a `cultivatedLow` row (`built`; the publish loop leaves it to `publishColonies`, which takes its name from the row), `lib/city/tileset.ts` `terrainRasterExtras` writes the raster extras in `TERRAIN_RASTER_KEYS`' order, `paintAndLight` and prepare's hand-written fields are gone; the hand-written outputs over seven fixtures are pinned as strings in `tileset.test.ts`. Verified: the base prepared twice gave identical output, and a cold `bun scripts/prepare-data.ts dresden` on step 1 (all 667 artifacts re-baked, 375 s on 4 cores) is byte-identical to the base (`diff -r` empty). Deviations: the drift check's targets live in `scripts/prepare/terrain.ts`, `side-files.ts`, `side-bakes.ts` (not `prepare-data.ts`); the row's `with` lists kinds as strings (a typed list would be circular), held to the table by `tile.test.ts`; `publishSideFiles` skips the rows published elsewhere through a set (its complexity cap); step 1 also wrote the raster keys into `docs/data-pipeline.md` (step 5's item). **Not done:** step 0's real-GPU plates (open for the maintainer's device session, plan 019) and the probe (`e2e/zz-raster-probe.spec.ts`, needed by steps 2–3); steps 2–5 (the session's budget went to plan 083's measurements). 083 changed `calculateBytesUsed` (rasters + `late.bytes()` − shared) and `releaseDressed` (the late parts' release): step 3's edits to them still apply. | [077-one-rasters-module.md](./077-one-rasters-module.md) |
+| 077 | One rasters module: a tile's rasters loaded, shared and weighed behind one interface, their files named by the artifact table | **BUILT** (2026-11-05) — steps 0–6, step 4 option (a) only. Step 1 (2026-11-04): `lib/city/tile.ts` has a `terrain` column and a `cultivatedLow` row, `terrainRasterExtras` writes the raster extras in `TERRAIN_RASTER_KEYS`' order; a cold bake byte-identical to the base (`diff -r` empty; 667 artifacts, 375 s on 4 cores). Step 2: `raster-upload.ts` `loadDataRaster`, one decode-with-look path. Step 3: `app/_components/tile-rasters.ts` (`createTileRasters`, `RASTER_KINDS`, `rasterFiles`), 11 tests; the shares, `holdRasters` and the loaders gone from `tile-stream.ts`, `terrain-layer.ts`, `sky-light.ts`. Step 4 (a): `loadNdviSampler` fetches through `fetchRasterBytes` and decodes in `inRasterTurn`. Measured on a Mac's real GPU (headed Chromium, WebGPU, production builds; two runs a profile, three of the base's lite; the probe waits past the plan's 120 frames for the stream to idle and `held` to rest 8 s, on either side): after each of steps 2–4 the requests and their counts and the sorted graph keys equal the base's per tier and scene (lite desktop 19 requests, phone 16; full 83, 46; graphs 2, 2, 8, 5). `tileCache.bytes` and `gpuBytes` equal it: phone lite 204 777 917 and 177 324 236, phone full 403 439 483 and 370 529 357, desktop lite 247 053 645 and 219 599 964, desktop full 808 662 700 / 808 712 092 (the base shows both) and 806 015 495. `held` moves within the base's own noise: `textures` ±1 (a 1-byte target; phone lite 60–61 on base and after step 4, phone full 81 on base and 82 after steps 3–4, `texturesSize` +1 B); step 2's runs reached phone lite `texturesSize` 71 615 280 and desktop lite `geometries` 452, against 71 409 344 and 445 settled (an unsettled base run had shown 71 615 281; step 3 and 4 are back at the base's values, in code that step 2's loaders did not change: read as noise, not proven). Plates (`qa/views`: street-crossings, sports-ground, colony, elbwiesen, meadow-eye, across-400, oblique-400), before against after each step, pixel-diffed and read: the ground, the sports lines, the colony beds, the shoreline, the crown tints and the far shadows the same; what moves is crown sway, water and sub-pixel edges. `bun run verify` 3 934 pass; e2e 35 of 35 on the last commit (`--workers=2`, headless). Deviations: `createTileRasters` is made in the plugin's constructor, not as a field (`this.ctx` is unset when fields initialise); `calculateBytesUsed` counts a level's share only once its terrain is dressed, so a tile still in `processTileModel` weighs 0 as before; `onShareChange` skips a root that left (`released`), since rasters now weigh from their landing, a level still dressing is a holder, and reweighing a tile inside its eviction adds its bytes back for good; `acquire` answers null after the hold's release or the rasters' `clear`; the terrain test keeps its name's meaning over a real holder, and `tile-stream.test.ts`'s clear test watches `rasters.clear` instead of `held()`; a test of the sampler's turn added in `vegetation-layer.test.ts`; one comment in `lib/city/tileset.ts` still says `terrain-layer.ts readsSportGrounds` (now `tile-rasters.ts`): an edit there re-bakes every site's terrain, left for its next change. **Open:** a phone's memory on a device (the phone profile here is Chromium's emulation); the `pr-snapshots` section when this goes up as a PR. | [077-one-rasters-module.md](./077-one-rasters-module.md) |
 | 078 | One scene environment the dressings bind at birth: one night node, one season watch, one clock; `catchUp` goes | **BUILT** (2026-11-04) — steps 1–5 (`scene-environment.ts`: `sceneNight`, `fountainsOn`, `clockMinutes`, `drawnAtNight`, the season and clock watches; `withMaterialsShown` in `compileNow`/`compileUnder`; `followEnvironment`; `follow`; later (review) a season change redraws the shadow map once for every hung dressing — `castersBatch`, a microtask — and never for one built but not hung); the latent bug fixed (mist, wakes, fences follow the night with no lamp tile dressed). Deviations: drift since `6c2a70ba` large but every name found; the environment writes in two calls, `light(sun)` (from `relight`, which a style change runs alone) and `date(date)` (from `setSun`), not one `set(sun, date)` — one call would re-emit the data layers' clock on a style change; `groundSeason` (new since the plan) follows the season watch in `create-app.ts`, and the nameplate's per-frame night reads `sceneNight.value`; three is r187, whose `material.visible` check sits in `StandardDrawingPipeline` (same semantics as the plan's r186 reading); the material lift is in `compileNow` (so `compileOne`, the plain cut holds and the paper swaps) and `compileUnder`; the catch-up test became a `followEnvironment` test plus the stream's dispose letting a dressing's follow go (no plugin-level compile test); AGENTS.md has no *Where things live* section on this branch, so it was not touched; probe frames were taken by the step-0 script itself (pastel, 800×600, lite, a held fixed-step loop) instead of `probe.mjs`. Measured (lite, SwiftShader, `NEXT_PUBLIC_POC_DEBUG` builds per step; two base runs for the spread): `framedBuilds` deltas over night → dusk → January day → July day → January night → July day and traffic on/off 0/0 on base and after every step; `anchors` 62 (63 with traffic) throughout; the boot's own count varies run to run (desktop `other` 58–60, phone 42–46, base included); memory deltas over the instants identical; phone after step 4: `gpuBytes` 168.69 MB (base 168.69–168.70), `memory.total` not higher, traffic on/off deltas not higher; frames per instant against the base ≤ 0.06 % changed (base against base the same). Unit tests green but `lib/city/png-raster.test.ts`'s whole-site decode, which times out at 5 s under the shared container's load (passes alone; not touched here). e2e (CI timings, `CI=1`): `@desktop-render` 10 passed with the new night step in *post and shader controls*; *Modell: M enters …* times out on this container on base and branch alike (the glide back, line 1495); `@desktop-hud` and `@phone` 12 passed. Plates judged 2026-11-05 on a Mac GPU, against the base 5f6c049b (`qa/views`: lamps, fountain, river, Modell at night): the same picture; the lamps' hard-edged halos and the brown Elbe of Modell's low sun were there before it | [078-one-scene-environment.md](./078-one-scene-environment.md) |
 | 079 | A page that lost its GPU comes back where it stood, through one recovery session | **BUILT** (2026-11-04) — steps 1–6: the caps and `arrivalOf` in `lib/city/gpu-recovery.ts` (snapshot.ts as a type only), `createRecoverySession`/`pageRecovery` in `app/_components/gpu-recovery.ts` (15 sequence tests), the three crash readers and `city-walk.tsx` call it; nothing stored changes (privacy page, `storage-keys.ts`, `create-app.ts`, `page-lifecycle.ts` untouched). Deviations: steps 3 and 4 are one commit (the old exports go in 3, their callers follow in 4); `city-walk.tsx` imports `arrivalOf` as `recoveryArrival` (`lib/city/geolocation.ts` exports an `arrivalOf` of its own); the session's members are property signatures (lint `method-signature-style`); the boot's "cancelled" is `aborter.signal.aborted` since the plan. Verified: `bun run verify`, `typecheck:tsc`, e2e `@phone|@desktop-hud` headless (12 passed; the container's Chromium 1243 under a 1248 alias). **Open:** the manual preview checks 1–5 (a forced `loseContext`, the caps, the reset, StrictMode, `?safety=2`) and the automatic recovery on a real iPhone (plan 019 §M) — not run here | [079-gpu-recovery-session.md](./079-gpu-recovery-session.md) |
 | 080 | One row per inquiry kind: the twin's per-kind dispatch in one place | **BUILT** (2026-11-04) — steps 0–4 and 6; step 5 skipped by its own rule (no tram kind planned: no plan, no `tram-ask.ts`). Drift: a 13th kind, `design` (d54ecce1, 2026-10-30, `lib/city/inquiry-design.ts`), already had an arm in every switch, so the Findings' counts are 13 kinds, `KindIcon` has 14 names (`pencil-ruler`), the design row's key is `design:${file}:${partIndex}`; `inquiryCard` takes `landmarks` too (the `CardInput` carries it); the crown form had moved from `outlineShape` into `selection-shape.ts` `crownFormOf` (deleted with `CrownForm`). The table's generic lookup needs no cast (`bun check` and tsc); the vote key is on the rows through a conditional `KeyRow` and a `KeyTable` view (`keyOf(kind, t)`), so `thingKey` and `porous` left the probe (`thingKey`, `isPorous` in `lib/city/inquiry.ts`). Step 6's one `PIER_REACH` lives in `lib/city/ask-solids.ts` beside `ringDistanceXz` (review: the outline no longer imports the pick for a constant). Card texts unchanged (every card test as before). Lineage chunk lazy: its string in one file, not fetched by `/dresden?scene=lite` before `__poc.ready`; first-load JS 1 035 454 B gz against 1 034 999 at 8b8ec332 (+0.44 KiB, with plan 079 on the same build). e2e headless: the inquiry card and tree specs passed; long-press ask timed out once under a load of 15 and passed in the `@phone` run. **Open:** step 6's real-GPU plate of an asked cone tree, a round crown and a bridge (`bun run shots`) | [080-one-row-per-inquiry-kind.md](./080-one-row-per-inquiry-kind.md) |
-| 081 | One schema per file a bake hands over: zod schemas checked in the build for the files Python writes and TypeScript reads; the monuments carry their own OSM Wikidata link | DONE (2026-11-05) — steps 0–7 2026-11-04 (ADR 0059, seven schemas, `bake-files.test.ts`); step 8: `wikidata` is OSM's link, `materialWikidata` the material's item, a linked item first and shared by every monument linked to it; step 9 re-baked all seven sites (457 OSM links, 67 Wikidata materials, +12.3 kB; Dresden's four more Bronze the only change beyond the keys). 254 linked items the cache lacks: backlog item 28 | [completed.md](./completed.md#081--one-schema-per-file-a-bake-hands-over--done-2026-11-05) |
+| 081 | One schema per file a bake hands over: zod schemas checked in the build for the files Python writes and TypeScript reads; the monuments carry their own OSM Wikidata link | DONE (2026-11-05) — steps 0–7 2026-11-04 (ADR 0059, seven schemas, `bake-files.test.ts`); step 8: `wikidata` is OSM's link, `materialWikidata` the material's item, a linked item first and shared by every monument linked to it; step 9 re-baked all seven sites (457 OSM links, 67 Wikidata materials, +12.3 kB; Dresden's four more Bronze the only change beyond the keys). 254 linked items the cache lacks: backlog item 28, closed by a measurement (2026-11-05: one has a `P186`) | [completed.md](./completed.md#081--one-schema-per-file-a-bake-hands-over--done-2026-11-05) |
 | 082 | One answer turn and end codes for *Frag die Stadt*: the route a thin binding, every refusal and end a code from one table | **BUILT** (2026-11-04) — Steps 0–4 built: `answerTurn` in `ask-run.ts` with `TurnDeps`, the route a binding (`route.test.ts`, `ask-turn.test.ts`); `lib/city/ask-failure.ts` (the table, `askFailure`, `codedRefusals` as the connection's `fetchClient`); every refusal and stream end carries its code; ADR 0056 rewritten. Verified: `bun run verify`, `typecheck:tsc`, the Frag e2e headless against a production build, `curl` (400 `bad-request`, 501 `no-secret` coded, the log line). Deviations: Step 0's question is „Frauenkirche“ and the fixture stands on whole metres (the scripted model matches every word and reads integers); a non-JSON body reaches the turn as `null`; `ask-city.ts` imports from `ask-failure.ts` (as Step 2.1 says; still outside the main bundle); `gone`'s row keeps the route's words; refusal bodies now carry the card's words, the `bad-props` detail only the log line; `conversationProblem` returns a code, so its three reasons are three rows (`no-question` 400, `too-long` 413 with a reset, `question-too-long` 413 without) and the card says which (a review's find: one `too-long` had hidden the question's cap), `QUESTION_CHARS` moving into `ask-failure.ts` for its words and `ASK_LIMITS`; the e2e reads the answer's *KI* label as the last (a refused answer leaves an empty labelled row, as an uncoded one did). Finding: an *uncoded* non-2xx reaches `chat.error` as the run-less `RUN_ERROR` without `status` (`HTTP error! status: 401 …`), so `askFailure`'s status fallback does not fire for a host's 502/504 — pre-existing, unchanged. Not done: the by-hand `FRAG_FAKE=1 bun dev` walk (the e2e and the scripted turn tests cover its parts) | [082-one-answer-turn-and-end-codes.md](./082-one-answer-turn-and-end-codes.md) |
 | 083 | One lifecycle for a tile's late parts: dressings, murals and traffic bodies behind one per-tile registry | **DONE** (2026-11-04) — `late-parts.ts` (Design B) with three adapters (`dressingPart`, `muralsPart`, the traffic slot's part owned by the dressing); `hangDressing`, `dropDressing`, `weighDressing`, `hangMurals`, `TrafficHost`, the plugin's lane and the private test reaches gone; behaviour changes D1–D5, D7–D10 as planned, D6 kept (finding 4). Deviations: `hang` returns the take-down; a `"wait"` part settles `"hung"` as it hangs and one out of memory within its wait never hangs; the murals' adapter takes its drawings' builder; the fake host is `late-parts.fixture.ts`. Measured (SwiftShader, load 2–4.6, shared container): `framedBuilds` deltas 0, `anchors` 62/63, phone `gpuBytes`/`memory`/`cpuBytesOf` within the base's own range, switch-on peak no higher; veil to loaded within noise (base median 224 s over seven runs, step 4 233 s over seven; run order alone moved a pair by 119 s); switch-on last body 135–185 s (base 158–202), coarse bodies first. e2e (headless, local): `@phone` green at steps 2–4; `@desktop-render` 10/11 at every step and on the base — *quality regresses while moving* fails on the base too (shadow renders 4–15 of 8 frames); `@desktop-hud` *live mode* failed 3 of 6 runs at step 4 and passed at the base, steps 2 and 3 (one run each) — flaky on this container, watch it on CI. **Open:** finding 4's gate — the bodies hold the lane ≈ 110–130 s of a headless switch-on (more than 1 s): measure on a desktop GPU before letting `"compile"` parts overlap there (follow-up). No real-GPU plates needed (no check moved). | [completed.md](./completed.md#083--one-lifecycle-for-a-tiles-late-parts--done-2026-11-04) |
 | 084 | One session for an answer's lifetime: reading aloud, Hörmodus and the scene's waits behind one pure session, with the maintainer's product decisions | **BUILT** (2026-11-04, after 082) — Steps 0–6 built: `lib/city/ask-session.ts` with its tests, the card wired to it (`useSpeech`/`useDictation` moved up into `AskCity`), decisions 4–6 and the failed-answer fix, ADR 0057 rewritten, the guide (de/en) one clause. Drift check: only 082's commits touched `ask-city.tsx` (not the rule table's parts); ai-client 1.0.1. Verified: `bun run verify` per step, `typecheck:tsc` and the Frag e2e headless (production build) after Steps 1 and 5; `chat.stop()` calls no `setError` (Step 2, read in ai-client 1.0.1). Deviations: `run.stop` comes before `waits.abandon` from Step 0 (the stop button's today order reversed, as the plan's Ordering allows); `lastFinished` joins the state in Step 4 (unused before, the linter refuses it); the dictation port's `start` returns whether the microphone opened and `useDictation` gained `abort`; a failed answer ends its run even when its text is empty (a failure during `was_ist_da`, the case Findings names); Hörmodus off with its own reading also stops the voice, as Vorlesen off does; Step 0's stop test pinned the whole call list and was narrowed in Step 5 (besides the four named tests); Modell's centring glide is left alone (5.5: it reports 1 at once). Open, not done here: every manual device check (Verification 1–11: iPhone Safari, Android Chrome, desktop Chrome/Safari/Firefox — iOS priming, locked phone, the network panel); the headless e2e has no voice bar | [084-one-session-for-an-answers-lifetime.md](./084-one-session-for-an-answers-lifetime.md) |
@@ -141,10 +141,9 @@ S/M/L.
    2026-10-03 (picked for the phones: crashes and slowness): 037, 038,
    041, 042, 044; 043 was closed 2026-11-04, built in another shape
    (the near tiles' BVH in a worker), and 046 closed drifted — its rest
-   is item 27. 040 and 045 are done (2026-11-04, re-baked 2026-11-05);
-   left: 039. The spikes 047 and
+   is item 27. 039, 040 and 045 are done (2026-11-05). The spikes 047 and
    048 can go any time after 038. Plan 019 (item 1) stays the one that
-   needs a GPU; 039 step 4 and 048 part B add to its checklist. Plan 022
+   needs a GPU; 048 part B adds to its checklist. Plan 022
    (the re-bake from the current editions) is done (2026-11-05). Plan 017
    phase C was built by plan 049 without 045's named class ids; 045
    covered `landcover_osm.py` too.
@@ -316,7 +315,12 @@ S/M/L.
     channels, filter, mipmaps) would let one loader serve them all.
     Deferred on 2026-09-26 until the port had rewritten the loaders; it
     kept them as `DataTexture` loaders bound to node textures, so this is
-    unblocked. Planned in [plan 077](./077-one-rasters-module.md).
+    unblocked. **Built** ([plan 077](./077-one-rasters-module.md)): the
+    build writes the raster extras from the table's `terrain` column, and
+    `tile-rasters.ts` hands a content root its rasters by kind. What
+    remains: the ground graph's slot lists (`SplatLayer` … `splatSlots`)
+    and `TerrainExtras`, still hand-typed, keep a new raster at about
+    seven edits.
 23. **A dressing's layers declare the ground they stand on (S–M).**
     `DRESSING_PARTS` (`tile-stream.ts`) names each part once, but which
     ground a layer samples — its own tile's terrain or the height over
@@ -345,53 +349,65 @@ S/M/L.
 26. **Leftovers of the 2026-11-04 architecture review (PR #265).**
     *Nameplate placement in one module* (M): the eave rule spans
     `nameplate.ts`, `create-app.ts`, `nameplate-ask.ts` and the pose and
-    was rewritten in nine review rounds; decide first how the property
-    table encodes a missing `baseZ` (noData, ADR 0042), then
-    `createPlacement({now})` and one `plateSubject`, un-exporting the
-    test-only helpers. *Card and plate from one answer* (M, after 080):
-    two caches and two retry rules hold "the plate says nothing the card
-    does not". *The view's rest owned by the viewer* (S–M, after 084):
-    `ask-scene.ts` guesses the loop (250 ms, 100 ms polling). *Demolitions
-    as one module* (S): half in `create-app.ts`, half replayed at load,
-    sharing a public mutable set. *`facades_<tile>.json`* is read by the
-    viewer unchecked (plan 081 left it out). *The tile sources' schema
-    pass* (M): ADR 0059 excuses the city mesh's and the terrain's tile
-    sources, still cast — `scripts/prepare/city.ts` (small buildings,
-    structures, measured roofs, plinths, doors, dormers, passages,
-    shopfronts, windows) and `scripts/tile-sources.ts` (kerbs, walls,
-    stairs, terraces); give each a schema
-    and `parseBakeFile`, with `features.test.ts`'s value rules kept.
-27. **The moves plan 046 left (S each; moves only, no pixel change).**
-    Closed 2026-11-04 ([record](./completed.md#046--moves-only-split-the-god-modules-and-sweep--closed-2026-11-04-drifted-the-rest-in-the-backlog)).
-    *The rail split:* `rail-layer.ts` (2 968 lines) still holds the deck
-    table (`deckOf`, `buildDeckTable`, which `tram-layer.ts`,
-    `traffic-layer.ts` and `data-overlays.ts` import from it), the
-    approaches and the measured bridge with its span decks (ADR 0041) —
-    into `bridge-deck.ts` and `bridge-layer.ts`, rail proper stays
-    (`bridge-deck.ts` must not import `bridge-layer.ts`); `quadXYZ` and
-    `pushTri` in `mesh-kit.ts` take point structs. *A home for the TSL
-    helpers:* eight layers import `floorMod`, `texelAt`, `byteOf`,
-    `gdHash`, `gdNoise` from `ground-detail.ts`; with them the
-    byte-identical `hash21` of `post-stack.ts` and `stylize-effect.ts`.
-    *The sweep:* `components/ui/{dropdown-menu,input-group,kbd,spinner}.tsx`
-    have no importer (`shadcn remove`); `texSize` (`shader-chunks.ts`) and
-    `pageUsable` (`net-gate.ts`) are used nowhere, `SUPPORTED_EPSG_CODES`
-    (`crs.ts`), `SVF_PX`, `HORIZON_BANDS` (`skyview.ts`) and `LANGS`
-    (`lib/docs/routes.ts`) only in their module; `hooks/use-coarse-pointer.ts`
-    imports from `app/_components/` for its one user, `city-walk.tsx`.
-    Not in it: what plans 078–080 and 083 take out of `create-app.ts`
-    and `tile-stream.ts`; the rail split touches `traffic-layer.ts`,
-    which 083 rewrites — land it before 083 or after.
-28. **The monuments' linked Wikidata items the fetch misses (S; plan
-    081 step 8's count, 2026-11-05).** The monuments' Wikidata cache
-    holds only the items its box query finds (five classes, with a
-    `P186`); of the monuments OSM links to an item (no fountains), 254
-    link one the cache lacks — Dresden 159, Hamburg 50, München 26,
-    Leipzig 17, Meißen and Grimma 1 — and 159 of those have no material
-    at all. Add the tile's OSM `wikidata` ids to the query (`VALUES ?i`,
-    `monuments.fetch_wikidata`, at fetch time, ADR 0012) so an item with a
-    `P186` outside the five classes is found, then re-fetch and re-bake
-    `monuments` (and `bun run docs:matrix` if a count it shows moves).
+    was rewritten in nine review rounds; **the maintainer decides first**
+    how the property table encodes a missing `baseZ` (noData, ADR 0042:
+    never 0, yet `nameplate.ts` `ownMass` reads 0 as missing today; a
+    marker changes the baked table),
+    then `createPlacement({now})` and one `plateSubject`, un-exporting the
+    test-only helpers. *Card and plate from one answer* (M, after 080,
+    **the maintainer's decision first**): two caches and two retry rules
+    hold "the plate says nothing the card does not". *The view's rest
+    owned by the viewer* (S–M, after 084): `ask-scene.ts` guesses the loop
+    (250 ms, 100 ms polling). Looked at and left: it needs a decision, for
+    a wait counted in the loop's updates changes the timing beyond the
+    guess. The loop is paced (`frame-pace.ts`: covered, still, listening)
+    and a hidden page draws nothing, so two frames are about 30 ms on a
+    desktop and a second under the Hörmodus (2 fps), none at all while a
+    sheet scrolls, where 250 ms is 250 ms today; the visible-clock and wall-clock bounds stay either way (a
+    locked phone). Options: (a) an update counter beside
+    `stream.tiles.update()` and a `viewAtRest(signal)` promise, with the
+    pace woken while an answer waits; (b) (a) without waking, accepting
+    the slower answer under the Hörmodus; (c) events for the 100 ms polling
+    only (`onBusy`), the 250 ms stays. *Demolitions as one module*:
+    built (`app/_components/demolitions.ts`, with its tests), but for its
+    last step: the memory still lies in `TileStream.demolished` and
+    `demolishedGroups`, which only the module writes now. Moving them into
+    it touches `tile-stream.ts` (a few lines and its test's fixtures), left
+    until plan 077 lands there. ~~*`facades_<tile>.json`*~~ and ~~*the tile sources' schema
+    pass*~~: built, ADR 0059's excuse gone. What stays cast is what the
+    item did not name: the land-cover legend's `water`
+    (`scripts/tile-sources.ts` `waterMember`).
+27. ~~**The moves plan 046 left (S each; moves only, no pixel change).**~~
+    Done 2026-11-05 (plan 046's [record](./completed.md#046--moves-only-split-the-god-modules-and-sweep--closed-2026-11-04-drifted-the-rest-in-the-backlog)).
+    *The rail split:* `rail-layer.ts` (2 982 → 1 215 lines) keeps rail
+    proper, `bridge-layer.ts` the drawn bridges and the span decks,
+    `bridge-deck.ts` the deck table and the approaches' plan (the table
+    reads them; `addApproach`, their drawing, is `bridge-layer.ts`'s).
+    `COLORS` went to `mesh-kit.ts`. Every vertex rail and tram build from
+    Dresden's and Hamburg's committed data hashed the same before and
+    after. *The TSL helpers* live in `shader-chunks.ts`, `hash21` one export
+    of the two byte-identical copies. *The sweep:* `texSize`, `pageUsable`
+    and `SVF_PX` gone, `HORIZON_BANDS` and `LANGS` private,
+    `use-coarse-pointer.ts` beside its one user. **Left out:**
+    `quadXYZ` and `pushTri` keep plain numbers: point structs would allocate
+    per quad, which those two exist not to do. `lineLevelsAt` and `addRail`
+    stay in `rail-layer.ts`, so `tram-layer.ts` still imports it.
+    `components/ui/{dropdown-menu,input-group,kbd,spinner}.tsx` still have
+    no importer and are still here: shadcn 4.23 has no `remove` command, and
+    `components/ui/` is not edited by hand — the maintainer's call.
+    `SUPPORTED_EPSG_CODES` (`crs.ts`, used nowhere) and the comment in
+    `lib/city/decks.ts` that still names `rail-layer.ts` wait for the next
+    real change to those files: both are in bake keys (`crs.ts`: frame,
+    city; `decks.ts`: most of them), so an edit re-bakes every site for no
+    byte of difference.
+28. ~~**The monuments' linked Wikidata items the fetch misses (S).**~~
+    Closed 2026-11-05 by a measurement, nothing built: of the 156 items
+    OSM's monuments link to and that still have no material (every
+    committed site), Wikidata gives one a `P186` (Q113997592, aluminium,
+    which the material table does not read); a control query confirms the
+    question answers. A `VALUES ?i` query and a re-fetch and re-bake of
+    all seven sites would add no material. Ask again if Wikidata's
+    coverage grows.
 
 ### 2026-10-10 audit (performance and stability, against `85a41b7`)
 
@@ -595,7 +611,7 @@ noted), then what was refuted or judged not worth doing.
   the season's wall-clock fields stay in the site's zone; tests under a
   foreign `TZ`. Plan 067 step 2 fixes the bike counts' half of it.
 - **A seam deck drawn by one tile, askable in the other (S, MED).**
-  `rail-layer.ts` `drawsDeck` averages the ring *with* its closing vertex;
+  `bridge-layer.ts` `drawsDeck` averages the ring *with* its closing vertex;
   `ask-items.ts` `bridgeItems` owns by `ringCentre` (open ring): the two
   centroids differ by `(p0 − mean)/(n+1)`, metres on a long deck with
   few vertices, so a deck across a seam can be drawn by A and asked in B
@@ -912,8 +928,10 @@ the port (2026-09-26) made of it:
   `shared-rasters.ts` like the sky view; one decode per tile could serve
   both levels and the crown sampler. *Mostly done (44c4111, found by the
   2026-10-01 audit):* the texture is shared by both levels
-  (`DressingPlugin.ndvis`); the crown sampler (`loadNdviSampler`) still
-  decodes the PNG a second time per tile (S).
+  (`tile-rasters.ts`); the crown sampler (`loadNdviSampler`) still
+  decodes the PNG a second time per tile (S), since plan 077 in the raster
+  turn: one decode would keep CPU bytes past the upload or change the
+  crowns' colours (its own plan).
 - The tile cache's byte budget (`tileCacheBytesFor`) is filled from
   3DTilesRendererJS's estimate, taken once per tile when it loads: its
   geometry and the textures on standard material slots. The dressing,

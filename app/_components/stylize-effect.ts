@@ -24,6 +24,7 @@ import {
   max,
   min,
   mix,
+  mod,
   normalize,
   pow,
   select,
@@ -43,6 +44,7 @@ import type { RenderStyleDef } from "@/lib/city/render-style";
 import { DATA_HUE } from "./glass";
 import { fogFactorAt } from "./height-fog";
 import type { SceneFog } from "./height-fog";
+import { hash21 } from "./shader-chunks";
 import type { F, V2, V3, V4 } from "./shader-chunks";
 import { sceneNight } from "./scene-environment";
 import { readSunShadow, shadowStandIn } from "./sun-shadow-read";
@@ -219,12 +221,6 @@ const PENS: Record<number, Pen> = {
 };
 
 // --- small helpers --------------------------------------------------------
-
-function hash21(p: V2): F {
-  const q = fract(p.mul(vec2(123.34, 456.21)));
-  const r = q.add(dot(q, q.add(45.32)));
-  return fract(r.x.mul(r.y));
-}
 
 function valueNoise(p: V2): F {
   const i = floor(p);
@@ -457,19 +453,27 @@ const rainLayer = (
 ): F => {
   const az = atan(dir.z, dir.x);
   const el = asin(clamp(dir.y, -1, 1));
-  const qy = el.mul(cellsPerRad * 0.22).add(time.mul(speed));
+  // The clock wraps at 2560 cells: 10 × 256 along y and 0.9 × 2560 = 9 × 256
+  // along x, so the wrap moves the cell by whole keys and keeps `fract(q)`
+  // — no seam, and the streak's place in its cell stays precise all session.
+  const qy = el.mul(cellsPerRad * 0.22).add(mod(time.mul(speed), 2560));
   const q = vec2(az.mul(cellsPerRad).add(qy.mul(0.9)), qy);
   const cell = floor(q).toVar();
   const f = fract(q).toVar();
-  const present = step(0.84, hash21(cell.add(seed)));
-  const x0 = hash21(cell.add(seed + 7.1))
+  // The cell index, wrapped: the hash keeps its precision (unwrapped:
+  // columns after ≈ 51 min, a constant after ≈ 3.4 h). 256 cells are more
+  // than a screen shows, and small enough that `hash21` stays even: over
+  // 512–1024 its columns are twice as strong.
+  const key = mod(cell, 256);
+  const present = step(0.84, hash21(key.add(seed)));
+  const x0 = hash21(key.add(seed + 7.1))
     .mul(0.6)
     .add(0.2);
-  const y0 = hash21(cell.add(seed + 3.3))
+  const y0 = hash21(key.add(seed + 3.3))
     .mul(0.4)
     .add(0.1)
     .toVar();
-  const len = hash21(cell.add(seed + 9.9))
+  const len = hash21(key.add(seed + 9.9))
     .mul(0.22)
     .add(0.28);
   // At least a pixel wide, whatever the layer's scale.

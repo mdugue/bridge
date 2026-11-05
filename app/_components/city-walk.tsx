@@ -23,7 +23,7 @@ import type { CSSProperties, RefObject } from "react";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
-import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
+import { useCoarsePointer } from "./use-coarse-pointer";
 import { loadPercent, loadStageStates } from "@/lib/city/load-stages";
 import { dataLayersOf } from "@/lib/city/data-layers";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";

@@ -7,6 +7,7 @@
  * `crowns`.
  */
 import { existsSync, readFileSync } from "node:fs";
+import { parseBakeFile } from "../lib/city/bake-file";
 import { coarseCrowns, packCrowns } from "../lib/city/coarse-crowns";
 import { orchardTrees } from "../lib/city/cultivated";
 import type {
@@ -15,7 +16,6 @@ import type {
   FeatureCollection,
   MonumentFeature,
   SmallBuildingFeature,
-  StructureFeature,
   TreeFeature,
   VegRowFeature,
 } from "../lib/city/features";
@@ -32,6 +32,8 @@ import type { PackedPoint } from "../lib/city/point-pack";
 import { maxWindowSampler } from "../lib/city/raster-sampler";
 import type { RasterSampler } from "../lib/city/raster-sampler";
 import { gapRoofs, lod2Roofs, treesOffRoofs } from "../lib/city/roof-trees";
+import { SMALL_BUILDINGS_FILE } from "../lib/city/small-buildings-file";
+import { STRUCTURES_FILE } from "../lib/city/structures-file";
 import type { RoofFootprint } from "../lib/city/roof-trees";
 import { treesOffStructures } from "../lib/city/small-buildings";
 import type { TerrainBounds } from "../lib/city/terrain-geometry";
@@ -71,6 +73,9 @@ function rowsMeasured(path: string | undefined): boolean {
   const doc = JSON.parse(readFileSync(path, "utf-8")) as { rows?: unknown };
   return doc.rows !== undefined;
 }
+
+const readJsonFile = (path: string): unknown =>
+  JSON.parse(readFileSync(path, "utf-8"));
 
 function features<T>(path: string | undefined): T[] {
   if (!(path && existsSync(path))) {
@@ -132,14 +137,29 @@ export async function bakeCoarseCrowns(
     origin: [number, number];
   }
 ): Promise<Uint8Array> {
-  const sheds = features<SmallBuildingFeature>(sources.sheds);
+  const sheds =
+    sources.sheds && existsSync(sources.sheds)
+      ? parseBakeFile(
+          SMALL_BUILDINGS_FILE,
+          readJsonFile(sources.sheds),
+          sources.sheds
+        ).features
+      : [];
   const roofs = [
     ...(sources.city && existsSync(sources.city)
       ? lod2Roofs(
           JSON.parse(readFileSync(sources.city, "utf-8")) as CityJsonDocument
         )
       : []),
-    ...gapRoofs(features<StructureFeature>(sources.structures)),
+    ...gapRoofs(
+      sources.structures && existsSync(sources.structures)
+        ? parseBakeFile(
+            STRUCTURES_FILE,
+            readJsonFile(sources.structures),
+            sources.structures
+          ).features
+        : []
+    ),
   ];
   const register = [
     ...features<TreeFeature>(sources.trees),

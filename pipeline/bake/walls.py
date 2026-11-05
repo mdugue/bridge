@@ -44,7 +44,8 @@ from .osm import below_ground, has_extract, osm_metres, read_osm, tag
 from .water import WATER, grid_classes
 
 CLIFF = 'other_tags LIKE \'%"natural"=>"cliff"%\''
-WHERE = f"barrier IN ('retaining_wall','city_wall','wall') OR man_made = 'embankment' OR {CLIFF}"
+WALL_BARRIERS = ("retaining_wall", "city_wall", "wall")
+WHERE = f"barrier IN {WALL_BARRIERS!r} OR man_made = 'embankment' OR {CLIFF}"
 # The tag-less height per kind (m): what a wall's kind says when nothing is
 # measured (lamps.py reads it for a lamp on a wall, too).
 DEFAULT_H = {
@@ -187,8 +188,12 @@ DEFAULT_MATERIAL = "concrete"
 
 
 def kind_of(barrier: str | None, man_made: str | None, other_tags: str | None) -> str:
-    if barrier or man_made:
-        return barrier or man_made
+    """The kind `WHERE` matched the way by: another `barrier` or `man_made`
+    on it (a fence along a cliff's edge) names no wall."""
+    if barrier in WALL_BARRIERS:
+        return barrier
+    if man_made == "embankment":
+        return man_made
     return "cliff" if tag(other_tags, "natural") == "cliff" else "wall"
 
 

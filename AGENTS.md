@@ -143,12 +143,14 @@ ADR 0041).
 - A JSON file a bake writes and TypeScript reads has one zod schema in
   `lib/city/<name>-file.ts` (ADR 0059): readers take its types and
   `parseBakeFile`, never `readJson(…) as T`; the build fails on a
-  mismatch; `bake-files.test.ts` parses every committed file. The
+  mismatch; `bake-files.test.ts` parses every committed file, and
+  `features.test.ts` keeps the value rules a shape does not say. The
   viewer imports a schema module by type only. Excused until a later
-  schema pass: the city mesh's and the terrain's tile sources (the
-  GeoJSON layers, `windows`, `shopfronts`), which `features.test.ts`
-  checks on the committed data — their casts in `scripts/prepare/city.ts`
-  and `scripts/tile-sources.ts` stay. A new file takes a schema.
+  schema pass, still cast: the crown and canopy layers
+  (`scripts/coarse-crowns.ts`, `scripts/prepare/side-bakes.ts`), the lines
+  and areas (`scripts/prepare/lines.ts`), the land-cover legend's
+  `water`, and the sports and markings tables the viewer packs
+  (`tile-rasters.ts`). A new file takes a schema.
 - Nothing whose alpha or values carry data goes through an image resize or
   the browser's image decoder; class rasters are NEAREST and decoded by
   `lib/city/png-raster.ts`.
@@ -198,7 +200,8 @@ uploaded; nothing it names is fetched (ADR 0054).
 - Exact pins for the three.js stack, the glTF build tools, `delatin`, the
   framework trio, the lint tools and `ultracite` (bump `oxlint` and
   `oxlint-tsgolint` together), `suncalc` and `zod`, whose version is in
-  three bake keys; caret for the rest; the npm MCP servers in
+  the key of every bake that reads a schema (the ground's family too);
+  caret for the rest; the npm MCP servers in
   `.mcp.json` exactly. Bun comes from `packageManager` (≥ 1.4 for
   `Bun.WebView`; the web session's start hook upgrades it).
 - No type shim for `three-mesh-bvh` (it augments `three` itself).
