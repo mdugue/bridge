@@ -9,7 +9,20 @@ import type { FacadeMaterial } from "./building-tint";
 import { FACADES_FILE } from "./facades-file";
 import type { WallMaterial } from "./city-mesh";
 import type { FountainStyle, MonumentForm, MonumentKind } from "./features";
+import { DOORS_FILE } from "./doors-file";
+import { DORMERS_FILE } from "./dormers-file";
 import { HORIZON_LEGEND_FILE } from "./horizon-legend-file";
+import { KERBS_FILE } from "./kerbs-file";
+import { MEASURED_ROOFS_FILE } from "./measured-roofs-file";
+import { PASSAGES_FILE } from "./passages-file";
+import { PLINTHS_FILE } from "./plinths-file";
+import { SHOPFRONTS_FILE } from "./shopfronts-file";
+import { SMALL_BUILDINGS_FILE } from "./small-buildings-file";
+import { STAIRS_FILE } from "./stairs-file";
+import { STRUCTURES_FILE } from "./structures-file";
+import { TERRACES_FILE } from "./terraces-file";
+import { WALLS_FILE } from "./walls-file";
+import { WINDOWS_FILE } from "./windows-file";
 import { LANDMARK_FACTS_FILE_SPEC } from "./landmark-facts-file";
 import { landmarkFactsSource } from "./landmark-facts";
 import { LANDMARKS_FILE } from "./landmarks-file";
@@ -27,10 +40,14 @@ import { ROOF_COLOURS_FILE } from "./roof-colours-file";
 import type { Site } from "./site";
 import {
   cityMeshSourceFiles,
+  kerbSourceFile,
   siteDataDir,
   sideFileSource,
+  stairSourceFile,
+  terraceSourceFile,
   tileArtifacts,
   tileIds,
+  wallSourceFile,
 } from "./tile";
 import { tramTimetableSource } from "./tram-timetable";
 import type { TramDayKind } from "./tram-timetable";
@@ -75,6 +92,27 @@ const SPECS: [BakeFile, string[]][] = [
     perTile((s, t) => sideFileSource(s, tileArtifacts(t).facades.file)),
   ],
 ];
+
+/** The city mesh's and the terrain's tile sources, by their path in `src`. */
+const citySource = (
+  member: keyof ReturnType<typeof cityMeshSourceFiles>
+): string[] => perTile((s, t) => cityMeshSourceFiles(s, t)[member]);
+
+SPECS.push(
+  [DOORS_FILE, citySource("doors")],
+  [DORMERS_FILE, citySource("dormers")],
+  [MEASURED_ROOFS_FILE, citySource("measuredRoofs")],
+  [PASSAGES_FILE, citySource("passages")],
+  [PLINTHS_FILE, citySource("plinths")],
+  [SHOPFRONTS_FILE, citySource("shopfronts")],
+  [SMALL_BUILDINGS_FILE, citySource("smallBuild")],
+  [STRUCTURES_FILE, citySource("structures")],
+  [WINDOWS_FILE, citySource("windows")],
+  [KERBS_FILE, perTile(kerbSourceFile)],
+  [STAIRS_FILE, perTile(stairSourceFile)],
+  [TERRACES_FILE, perTile(terraceSourceFile)],
+  [WALLS_FILE, perTile(wallSourceFile)]
+);
 
 const cases = SPECS.flatMap(([spec, files]) =>
   files.map((file) => [file, spec] as const)

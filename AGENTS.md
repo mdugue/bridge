@@ -143,12 +143,9 @@ ADR 0041).
 - A JSON file a bake writes and TypeScript reads has one zod schema in
   `lib/city/<name>-file.ts` (ADR 0059): readers take its types and
   `parseBakeFile`, never `readJson(…) as T`; the build fails on a
-  mismatch; `bake-files.test.ts` parses every committed file. The
-  viewer imports a schema module by type only. Excused until a later
-  schema pass: the city mesh's and the terrain's tile sources (the
-  GeoJSON layers, `windows`, `shopfronts`), which `features.test.ts`
-  checks on the committed data — their casts in `scripts/prepare/city.ts`
-  and `scripts/tile-sources.ts` stay. A new file takes a schema.
+  mismatch; `bake-files.test.ts` parses every committed file, and
+  `features.test.ts` keeps the value rules a shape does not say. The
+  viewer imports a schema module by type only. A new file takes a schema.
 - Nothing whose alpha or values carry data goes through an image resize or
   the browser's image decoder; class rasters are NEAREST and decoded by
   `lib/city/png-raster.ts`.

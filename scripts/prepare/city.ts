@@ -4,29 +4,28 @@
  * footprints, the glTF and its far twin (bake-entries.ts `city`).
  */
 import { existsSync } from "node:fs";
+import type { z } from "zod";
+import { parseBakeFile } from "../../lib/city/bake-file";
+import type { BakeFile } from "../../lib/city/bake-file";
 import { withoutTrafficStructures } from "../../lib/city/city-mesh";
 import type { OsmBuildingLut } from "../../lib/city/city-mesh";
-import { parseBakeFile } from "../../lib/city/bake-file";
-import { OSM_BUILDINGS_FILE } from "../../lib/city/osm-buildings-file";
-import { ROOF_COLOURS_FILE } from "../../lib/city/roof-colours-file";
+import { DOORS_FILE } from "../../lib/city/doors-file";
+import { DORMERS_FILE } from "../../lib/city/dormers-file";
 import type { LandmarkFile } from "../../lib/city/landmarks";
-import type {
-  DoorFeature,
-  ShopfrontFile,
-  PlinthFeature,
-  DormerFeature,
-  PassageFeature,
-  FeatureCollection,
-  MeasuredRoofFeature,
-  SmallBuildingFeature,
-  StructureFeature,
-} from "../../lib/city/features";
+import { MEASURED_ROOFS_FILE } from "../../lib/city/measured-roofs-file";
+import { OSM_BUILDINGS_FILE } from "../../lib/city/osm-buildings-file";
+import { PASSAGES_FILE } from "../../lib/city/passages-file";
+import { PLINTHS_FILE } from "../../lib/city/plinths-file";
+import { ROOF_COLOURS_FILE } from "../../lib/city/roof-colours-file";
+import { SHOPFRONTS_FILE } from "../../lib/city/shopfronts-file";
+import { SMALL_BUILDINGS_FILE } from "../../lib/city/small-buildings-file";
+import { STRUCTURES_FILE } from "../../lib/city/structures-file";
 import { onFormations } from "../../lib/city/track-formation";
+import { WINDOWS_FILE } from "../../lib/city/windows-file";
 import { cityMeshSourceFiles } from "../../lib/city/tile";
 import { FAR_CITY_SIMPLIFY } from "../../lib/city/tileset";
 import type { CityExtras } from "../../lib/city/tileset";
 import type { CityJsonDocument } from "../../lib/city/types";
-import type { WindowFile } from "../../lib/city/windows";
 import { bakeCityMesh, cityMesh } from "../bake-city-mesh";
 import type { BakedCityMesh } from "../bake-city-mesh";
 import { BAKE_ENTRIES } from "../bake-entries";
@@ -84,6 +83,16 @@ function withLandmarks(
   return out;
 }
 
+/** A tile's source file as its schema describes it, or none (ADR 0059). */
+function tileSource<S extends z.ZodType>(
+  spec: BakeFile<S>,
+  file: string
+): z.infer<S> | undefined {
+  return existsSync(at(file))
+    ? parseBakeFile(spec, readJson(at(file)), file)
+    : undefined;
+}
+
 function parseCity(
   tile: string,
   groundAt?: (x: number, y: number) => number | null
@@ -105,58 +114,27 @@ function parseCity(
   }
   const { doc } = formed;
   const lowered = new Set(formed.lowered);
-  const roofColours = existsSync(at(src.roofColor))
-    ? parseBakeFile(
-        ROOF_COLOURS_FILE,
-        readJson(at(src.roofColor)),
-        src.roofColor
-      )
-    : undefined;
-  const osmDoc = existsSync(at(src.osmBuild))
-    ? parseBakeFile(
-        OSM_BUILDINGS_FILE,
-        readJson(at(src.osmBuild)),
-        src.osmBuild
-      )
-    : undefined;
+  const roofColours = tileSource(ROOF_COLOURS_FILE, src.roofColor);
+  const osmDoc = tileSource(OSM_BUILDINGS_FILE, src.osmBuild);
   const osmLut = withLandmarks(osmDoc?.objects, landmarkFile(tile));
-  const scan = existsSync(at(src.smallBuild))
-    ? (readJson(at(src.smallBuild)) as FeatureCollection<SmallBuildingFeature>)
-        .features
+  const scan = tileSource(SMALL_BUILDINGS_FILE, src.smallBuild)?.features;
+  const gaps = tileSource(STRUCTURES_FILE, src.structures)?.features;
+  // a lowered top keeps its new height, not the scan's over it
+  const measured = tileSource(
+    MEASURED_ROOFS_FILE,
+    src.measuredRoofs
+  )?.features.filter((f) => !lowered.has(f.properties.id));
+  const plinths = tileSource(PLINTHS_FILE, src.plinths)?.features;
+  const doors = tileSource(DOORS_FILE, src.doors)?.features;
+  const dormers = tileSource(DORMERS_FILE, src.dormers)?.features;
+  const passages = tileSource(PASSAGES_FILE, src.passages)?.features;
+  const shopfrontFile = tileSource(SHOPFRONTS_FILE, src.shopfronts);
+  const shopfronts = shopfrontFile
+    ? Object.values(shopfrontFile.buildings).flat()
     : undefined;
-  const gaps = existsSync(at(src.structures))
-    ? (readJson(at(src.structures)) as FeatureCollection<StructureFeature>)
-        .features
-    : undefined;
-  const measured = existsSync(at(src.measuredRoofs))
-    ? (
-        readJson(
-          at(src.measuredRoofs)
-        ) as FeatureCollection<MeasuredRoofFeature>
-      ).features?.filter(
-        // a lowered top keeps its new height, not the scan's over it
-        (f) => !f.properties || !lowered.has(f.properties.id)
-      )
-    : undefined;
-  const plinths = existsSync(at(src.plinths))
-    ? (readJson(at(src.plinths)) as FeatureCollection<PlinthFeature>).features
-    : undefined;
-  const doors = existsSync(at(src.doors))
-    ? (readJson(at(src.doors)) as FeatureCollection<DoorFeature>).features
-    : undefined;
-  const dormers = existsSync(at(src.dormers))
-    ? (readJson(at(src.dormers)) as FeatureCollection<DormerFeature>).features
-    : undefined;
-  const passages = existsSync(at(src.passages))
-    ? (readJson(at(src.passages)) as FeatureCollection<PassageFeature>).features
-    : undefined;
-  const shopfronts = existsSync(at(src.shopfronts))
-    ? Object.values(
-        (readJson(at(src.shopfronts)) as ShopfrontFile).buildings
-      ).flat()
-    : undefined;
-  const windows = existsSync(at(src.windows))
-    ? Object.values((readJson(at(src.windows)) as WindowFile).buildings).flat()
+  const windowFile = tileSource(WINDOWS_FILE, src.windows);
+  const windows = windowFile
+    ? Object.values(windowFile.buildings).flat()
     : undefined;
   return bakeCityMesh(
     tile,

@@ -6,13 +6,11 @@
  * other step: a change to the lines re-bakes none of them.
  */
 import { existsSync } from "node:fs";
-import type {
-  CanopyFeature,
-  FeatureCollection,
-  SmallBuildingFeature,
-  StructureFeature,
-} from "../../lib/city/features";
+import { parseBakeFile } from "../../lib/city/bake-file";
+import type { CanopyFeature, FeatureCollection } from "../../lib/city/features";
 import { tileExtentOf } from "../../lib/city/site";
+import { SMALL_BUILDINGS_FILE } from "../../lib/city/small-buildings-file";
+import { STRUCTURES_FILE } from "../../lib/city/structures-file";
 import {
   canopyStride,
   packPoints,
@@ -105,8 +103,7 @@ function roofsOf(tile: string): RoofFootprint[] {
         : []),
       ...(existsSync(gaps)
         ? gapRoofs(
-            (readJson(gaps) as FeatureCollection<StructureFeature>).features ??
-              []
+            parseBakeFile(STRUCTURES_FILE, readJson(gaps), gaps).features
           )
         : []),
     ];
@@ -146,9 +143,11 @@ export async function publishCanopy(
     const trees = doc.features ?? [];
     let features = trees;
     if (existsSync(sheds)) {
-      const structures =
-        (readJson(sheds) as FeatureCollection<SmallBuildingFeature>).features ??
-        [];
+      const structures = parseBakeFile(
+        SMALL_BUILDINGS_FILE,
+        readJson(sheds),
+        sheds
+      ).features;
       features = treesOffStructures(trees, structures);
       log(
         `${file}: ${trees.length - features.length} points in a scan structure dropped`
