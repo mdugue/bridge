@@ -144,15 +144,15 @@ checks have theirs in the index (069, 070, 071, 076, 077, 078, 080,
 - [ ] `low-sun`: long shadows of buildings behind the camera stay (the sun's
   shadow camera is a streaming camera); turning on the spot at `seam-eye`
   never blinks a shadow (`displayActiveTiles`).
-- [ ] Fly up from eye level to 600 m: the shadow frustum grows in octaves
-  (`lib/city/shadow-fit.ts`, 110 → 880 m) without visible jumps; the
-  shadowed patch sits where the camera looks.
-- [ ] Past the frustum, the baked horizon (ADR 0009) takes over without a
-  seam: the near band fades in over the frustum's last 20 %
-  (`hzSunVisible`, sky-light.ts); look at the hand-over ring at a low sun.
-- [ ] Eye-level shadows clip ahead at a low sun? If long shadows visibly
-  end a few tens of metres ahead, note it — the backlog's "shadow centre
-  biased ahead at eye level" (README, Open work 11) is the fix to try.
+- [ ] Fly up from eye level to 600 m: no visible seam or jump where one of
+  the four rings (`lib/city/shadow-rings.ts`, half-sizes 80 … 2160 m)
+  cross-fades into the next, and none when a ring redraws after drifting
+  (`seam-fly`, `oblique-400`).
+- [ ] Past the widest ring, the baked horizon (ADR 0009) takes over without
+  a seam (`hzSunVisible`, sky-light.ts); look at the hand-over at a low
+  sun.
+- [ ] Eye-level shadows at a low sun, looking along the light (`low-sun`):
+  long shadows do not end a few tens of metres ahead.
 - [ ] Night: after dusk no tile stays pinned where the last daytime shadow
   was (plan 038 step 1 — check `getGpuDebug()` after a night flight).
 - Knobs: `shadow.radius`, `bias` in `app/_components/sun-rig.ts` (keep

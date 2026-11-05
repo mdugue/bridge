@@ -40,7 +40,7 @@ For: 019 D, 019 K, 019 M, 071.
 
 ## seam-fly
 
-200 m above the four-tile corner (E 412 000 / N 5 658 000) at −35°: the far crown tier's switch, the coarse/fine hand-over at the corner, the warped shadow map from the air (124–249 m).
+200 m above the four-tile corner (E 412 000 / N 5 658 000) at −35°: the far crown tier's switch, the coarse/fine hand-over at the corner, the shadow rings from the air, no seam between them.
 
 For: 019 D, 019 E, 019 M.
 

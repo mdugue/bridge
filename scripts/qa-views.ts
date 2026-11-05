@@ -221,7 +221,7 @@ export const QA_VIEWS: readonly QaView[] = [
     name: "seam-fly",
     plans: ["019 D", "019 E", "019 M"],
     checks:
-      "200 m above the four-tile corner (E 412 000 / N 5 658 000) at −35°: the far crown tier's switch, the coarse/fine hand-over at the corner, the warped shadow map from the air (124–249 m).",
+      "200 m above the four-tile corner (E 412 000 / N 5 658 000) at −35°: the far crown tier's switch, the coarse/fine hand-over at the corner, the shadow rings from the air, no seam between them.",
     pose: flyAt(behind(CORNER, 45, 286), 200, CORNER),
     date: `${JULY}T15:00:00+02:00`,
   },
