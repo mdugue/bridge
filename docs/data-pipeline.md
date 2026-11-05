@@ -416,7 +416,9 @@ ignored. A length — a `width`, a `height`, a `step:height` — is read by
 ("15 cm" → 0.15), so feet ("12'", "10 ft"), yards, a range ("2-3") or a
 list ("3;4") are no length at all rather than that many metres; a sign
 only where the caller asks for one (a wall's). Each caller keeps its own
-range and default.
+range and default, except a way's `width`: every way reader (the class
+and surface rasters, a deck's passage and way, the carriageway) takes it
+through `osm.osm_width`, over 0 and up to 60 m; wider is a mistagged area.
 
 ### What OSM maps that the twin draws
 
