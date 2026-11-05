@@ -1209,8 +1209,8 @@ is what `providers/sn.py` reads. The
 Basis-DLM is one statewide package replaced quarterly under the same URL
 (`basisdlm_sn_shape.zip`, 1.26 GB; `BASIS_DLM` in `providers/sn.py`), so
 its edition must be noted at download time: the ZIP carries
-`basisdlm_akt.csv`, dated with the release (2026-10-20 for the package
-every committed site is baked from since 2026-11-01), recorded as
+`basisdlm_akt.csv`, dated with the release (2026-11-04 for the package
+every committed Saxon site is baked from since 2026-11-05), recorded as
 `geosn["Basis-DLM"].lastModified` in each Saxon site's `provenance.json`.
 
 **Where the OSM values come from.** The pipeline reads the Geofabrik
@@ -1221,7 +1221,8 @@ placed by hand under the Geofabrik name the spec expects (`spec.osm`):
 BBBike's city extracts (Dresden for Dresden and Meißen, Leipzig for
 Leipzig and Grimma, Hamburg, München) and openstreetmap.fr's Arnsberg
 region for Unna — every committed site was re-baked from them on
-2026-11-01, except the two steps that need the laser scan GeoSN did not
+2026-11-01 (and again on 2026-11-05, from the same BBBike extracts and a
+newer Arnsberg one), except the two steps that need the laser scan GeoSN did not
 serve that day (`lowveg`, `small-buildings` on the Saxon sites). The
 extract's date is its `Last-Modified` (BBBike) or `state.txt`
 (openstreetmap.fr), recorded as each product's `dataAsOf` in the site's

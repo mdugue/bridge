@@ -580,6 +580,40 @@ PRs the plan staged became one port; plan 008 step 7 is moot.
 - CSM (`CSMShadowNode`) and clustered lamp lights are in reach now, each
   its own decision.
 
+## 022 — Re-bake from the current editions, the whole chain · DONE (2026-11-05)
+
+**Problem.** Planned 2026-09-24 for the four original Dresden tiles,
+which then still carried the old bash bake's land cover, canopy, NDVI and
+roof colours from the June 2026 Basis-DLM; about thirteen later steps
+read the class raster, so a re-bake had to be the whole chain, step by
+step (plan 040 step 1), not the land cover alone.
+
+**Outcome.** Overtaken in part: every site was re-baked by the Python
+pipeline on 2026-10-20/21 and 2026-11-01 (the 2026-10-20 package). On
+2026-11-05 GeoSN served a new package (`basisdlm_akt.csv` and the inner
+ZIP dated 2026-11-04), and the collected re-bake (with plans 040, 045
+and 081) ran every tile step of the four Saxon sites on it. Land cover
+against the committed bake: Dresden's three western tiles (33408_*)
+99.986–99.995 % of texels the same, no class lost (class 1 −1 % on
+33408_5654), the other twelve identical; Leipzig, Grimma and Meißen
+identical. Downstream on those three tiles: canopy ±1–4 points, edges,
+kerbs, markings, surface and sky view. NDVI and roof colours unchanged
+(same flight). The OSM input was the committed bake's (BBBike city
+extracts of 2026-10-31; Geofabrik reset every connection from the
+container), so the diff isolates the edition and the code. No plates
+were taken (no GPU); nothing in the diff called for one.
+
+**Keep in mind.**
+- The package is replaced under the same URL: record
+  `basisdlm_akt.csv`'s date at every download (each Saxon site's
+  `provenance.json`, the guide's editions table).
+- GeoSN's laser scan answered 404 (2026-11-05), so the Saxon `lowveg`
+  and `small-buildings` files are still the September bake's
+  (maintainer actions).
+- Hamburg's OSM land cover moved by up to 2.1 % on 2026-11-05, but that
+  was plan 045's parser (steps `width=100 cm` had burned 100 m wide
+  paths), not an edition.
+
 ## 023 — The ground up close: kerbs, paving, lawn edges, urban green · CLOSED (2026-09-25; phases 1–3 and 5 built; rest rejected or moved)
 
 **Problem.** At eye level the ground fills half the frame and was the
@@ -1295,6 +1329,31 @@ of an `update()` that requested nothing new (3DTilesRendererJS 0.5.3) —
 re-check that on an upgrade. Releasing ⌘ releases every held key, a key
 still held included (re-press it): macOS gives no keyup to tell them apart.
 
+## 040 — Bakes that read finished neighbours, keep their seam stairs, never trust a half-written file · DONE (2026-11-05)
+
+**Problem.** (2026-10-01) `bun run bake` ran tile-major while several
+steps read their neighbours' outputs; the stairs bake read only its own
+tile's DGM, so a flight crossing a seam had no landing and was dropped by
+both tiles (0 of 1 197 flights crossed one); the ingest extracted
+non-atomically with no timeouts; `prepare-data` trusted a half-written
+file by name; the `/wissen` hero was baked square on a 5 × 3 site.
+
+**Outcome.** Refreshed against `8b8ec332` (2026-11-04): the runner was
+step-major already (`Bake.step`, `--jobs`), the fetch's timeouts, `.part`
+writes and complete-DLM check and the hero's `cell * rows` were built.
+Built then: step 1's tests (every `run` in `STEPS` once; a failing step
+names site, tile and step; the stairs/walls/rail-from-OSM fixtures on EPSG
+25832 too), step 2 (`stairs.Dgm` on a mosaic of the committed DGMs within
+50 m, `mosaic` in `common.py`), step 4 for the publisher (the cache already
+wrote through a part file). The stairs re-bake ran 2026-11-05 on every
+tile of every site: Dresden 6 flights more, Leipzig 1, München 4, a few
+redrawn; Meißen, Grimma, Hamburg, Unna none more.
+
+**Keep in mind.** A step that reads a neighbour's file runs for every tile
+before the next step (never `--tile` alone for such a step). A flight's
+landing comes from the mosaic, so a missing neighbour DGM drops the flight
+again.
+
 ## 041 — Tests where the regressions are · DONE (2026-10-03)
 
 **Outcome.** The tile cache's raster weighing moved into `RasterShares`
@@ -1399,6 +1458,37 @@ a millimetre.
 **Keep in mind.** If the dressing still shows a long task here, hand the
 `Float32Array` to the vegetation instead of feature objects (phase 2), and
 pack the street-tree cadastre (`trees`) with a small column set.
+
+## 045 — One source for the raster decoders and the class ids · DONE (2026-11-05)
+
+**Problem.** (2026-10-01) A decoder copied instead of shared let a test
+pin a copy the shipped code did not use (`surfaceHeading` decoded
+0–180° while bake and shader used 0–360°); the land-cover class ids were
+integer literals in eleven bake modules; OSM numbers were parsed by
+helpers with different rules (`"1,5"` was 1.0 in one, 1.5 in another).
+
+**Outcome.** Refreshed against `8b8ec332`, steps 1–4 (2026-11-04).
+`surfaceHeading` deleted (no caller; ground-detail.ts's `div(254)` is
+the one live decode, the bake's `heading_code` pinned by `test_bakes.py`).
+The class ids in `pipeline/bake/classes.py`, named in every bake, values
+pinned by a pytest (a module of their own: landcover.py imports the
+modules that name classes). One parser family in `osm.py`: `osm_number`
+(decimal comma, units), `osm_metres` (metres; `cm`/`mm` converted; feet,
+ranges and lists none), `osm_width` (within 0–60 m) — for every width,
+height and length reader (stairs, walls, hedges, bollards, piers, gates,
+platforms, decks, carriageways, driveways, the class raster's ways, the
+monuments' `height`); `step_count` stays on `osm_number`. The byte scales
+(`EDGE_SCALE`, cultivated, markings) pinned by text across languages.
+Re-baked 2026-11-05 on every site: the visible change is Hamburg's OSM
+land cover, where 36 flights of steps tagged `width=100 cm` had burned
+100 m wide paths round the Hauptbahnhof (32566_5934 97.9 % of texels the
+same, 32564_5934 99.45 %; the paths went back to railway, background and
+settlement, and the furniture standing on them went too); elsewhere one
+wall height each in Leipzig and Hamburg.
+
+**Keep in mind.** A new reader of a tagged length goes through
+`osm_metres`/`osm_width` with its own bounds, never a regex of its own.
+The Saxon `lowveg` (hedge heights) waits for GeoSN's laser scan.
 
 ## 046 — Moves only: split the god modules and sweep · CLOSED (2026-11-04; drifted, the rest in the backlog)
 
@@ -1977,6 +2067,61 @@ convergence (~1° in Dresden) had been missing from every pose.
 **Keep in mind.** The drawing is the clay's recess per window, not the
 planned pencil lines, and no panes or glass. Mapillary needs a client
 token in the environment at fetch time, never committed.
+
+## 081 — One schema per file a bake hands over · DONE (2026-11-05)
+
+**Problem.** The files the Python bakes write and TypeScript reads had
+their shape written three or four times (the dict literal, pytest
+asserts, a TypeScript interface, sometimes a hand guard) and nothing
+compared the copies: a renamed key or a number turned string passed every
+check and a layer, card or directory went silently poorer. One drift was
+live: a monument's `wikidata` named the item its *material* came from,
+while the Stadtwissen and the card read it as the item OSM links it to.
+
+**Decision.** ADR 0059: one zod schema per hand-over file in
+`lib/city/<name>-file.ts` (`bake-file.ts`: `BakeFile`, `parseBakeFile`,
+which returns its input typed and throws file, key path, writer and the
+`--step` to re-bake); records are `z.strictObject`; a union the viewer
+has is a `z.enum` held equal to it by a type-level test. The build parses
+every such file (per tile in the step modules of `scripts/prepare/`,
+site-wide files in `prepare-data.ts`, uncached) and fails on a mismatch;
+`bake-files.test.ts` parses every committed file; the viewer imports a
+schema module by type only and keeps its hand guards, pinned to the
+schemas by agreement tests. zod is pinned exactly (its version is in
+three bake keys).
+
+**Outcome.** Steps 0–7 (2026-11-04): seven schemas (landmark facts,
+landmarks, osmbuild, monuments, murals, trams, roof colours); Dresden's
+and Hamburg's manifests byte-identical through the reader moves; zod only
+in the *Frag die Stadt* chunk. Deviations: `heritage`/`shop`
+non-negative ints, not the literal 1; members the writer always writes
+required. Step 8 (2026-11-05): `wikidata` is OSM's link (the first Q-id
+of the tag; a DLM monument takes its OSM partner's, an OSM fountain
+carries its own), `materialWikidata` the item a material came from; a
+monument linked to a cached item takes that item's material whatever the
+distance, every monument linked to it does (a fountain and its figure, a
+group of sculptures share one item), and no neighbour can claim it; then
+the name (40 m) and nearest (10 m) rules as before. The Stadtwissen
+carries `wd` and `materialWd`, the card credits Wikidata for a material
+by `materialWikidata`. Step 9 re-baked every site (inputs: the committed
+bake's BBBike extracts, Unna's openstreetmap.fr extract of 2026-11-05):
+OSM links Dresden 237, Hamburg 92, München 87, Leipzig 38, Meißen 2,
+Grimma 1, Unna 0; Wikidata materials 67 (Dresden 18 — the three other
+Tageszeiten on the Brühlsche Terrasse and the second Schildlöwe gained
+their group's Bronze —, Leipzig 23, München 13, Hamburg 12, Meißen 1);
+nothing else changed in the files. Phone bytes (ADR 0047, accepted
+2026-11-04): Dresden's monuments 199 491 → 205 926 B (+3.2 %), all
+sites +12.3 kB. Every walk's monument ids resolve.
+
+**Keep in mind.**
+- A bake that renames a key changes its schema in the same commit; the
+  committed data is re-baked before that commit merges.
+- The fetch caches only the items its box query finds (five classes,
+  with a `P186`): of the OSM-linked monuments (no fountains), 254 link
+  an item the cache lacks, 159 of them without any material — the
+  follow-up is backlog item 28.
+- Not in scope and still open: `facades_<tile>.json` and the tile
+  sources' schema pass (backlog item 26).
 
 ## 083 — One lifecycle for a tile's late parts · DONE (2026-11-04)
 
