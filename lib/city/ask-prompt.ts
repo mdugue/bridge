@@ -4,7 +4,7 @@
  * a renamed one cannot leave the prompt behind, and `ask-city.ts`, which
  * the key route and the card share, stays free of the tool schemas.
  */
-import { CITY_TIME_ZONE } from "./ask-city";
+import { SITE_ZONE } from "./bike-counts";
 import {
   factsTool,
   layerTool,
@@ -41,7 +41,7 @@ const DATE_DE = new Intl.DateTimeFormat("de-DE", {
   day: "numeric",
   month: "long",
   year: "numeric",
-  timeZone: CITY_TIME_ZONE,
+  timeZone: SITE_ZONE,
 });
 
 /** A tool's name as the prompt writes it: set off from the running text,

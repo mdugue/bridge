@@ -40,3 +40,16 @@ test("the times on either side of a clock change land right", () => {
     new Date(Date.UTC(2026, 2, 29, 1, 30))
   );
 });
+
+test("24:00 is the day's last minute, not the next day", () => {
+  expect(instantAt(NOW, { uhrzeit: "24:00" })).toEqual(
+    new Date(Date.UTC(2026, 9, 29, 22, 59))
+  );
+});
+
+test("a date before the year 1000 is a date like any other", () => {
+  const at = instantAt(NOW, { datum: "0929-06-21", uhrzeit: "12:00" });
+  expect(at.getUTCFullYear()).toBe(929);
+  // and a later change reads that year back
+  expect(instantAt(at, { uhrzeit: "13:00" }).getUTCFullYear()).toBe(929);
+});

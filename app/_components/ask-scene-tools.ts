@@ -10,6 +10,7 @@ import {
   lookTool,
   showTool,
   styleTool,
+  timeProblem,
   timeTool,
   whereTool,
 } from "@/lib/city/ask-tools";
@@ -73,11 +74,15 @@ export function sceneTools(scene: AskScene) {
         ? { ok: true }
         : { ok: false, hinweis: "Die Szene lädt noch." };
     }),
-    timeTool.client(({ uhrzeit, datum }) =>
-      uhrzeit || datum
-        ? { ok: true, ...scene.setTime({ uhrzeit, datum }) }
-        : { ok: false, hinweis: "Gib eine Uhrzeit oder ein Datum an." }
-    ),
+    timeTool.client(({ uhrzeit, datum }) => {
+      if (!(uhrzeit || datum)) {
+        return { ok: false, hinweis: "Gib eine Uhrzeit oder ein Datum an." };
+      }
+      const problem = timeProblem({ uhrzeit, datum });
+      return problem
+        ? { ok: false, hinweis: problem }
+        : { ok: true, ...scene.setTime({ uhrzeit, datum }) };
+    }),
     styleTool.client(({ stil }) => {
       scene.setStyle(stil);
       return { ok: true };

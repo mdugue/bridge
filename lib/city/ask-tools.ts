@@ -104,13 +104,44 @@ export const timeTool = toolDefinition({
   description:
     "Stellt die Szenenzeit: die Sonne, die Schatten, Tag oder Nacht. Gib uhrzeit, datum oder beides an; was fehlt, bleibt, wie es ist.",
   inputSchema: z.object({
-    uhrzeit: z.iso
-      .time({ precision: -1 })
+    // plain patterns: this tool goes to every provider in strict mode, and
+    // no provider has been asked about zod's long ISO ones (`timeProblem`
+    // checks the values)
+    uhrzeit: z
+      .string()
+      .regex(/^\d{2}:\d{2}$/u)
       .optional()
       .describe("HH:MM, Ortszeit der Stadt, z. B. 18:30"),
-    datum: z.iso.date().optional().describe("JJJJ-MM-TT"),
+    datum: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/u)
+      .optional()
+      .describe("JJJJ-MM-TT"),
   }),
 });
+
+const CLOCK_TIME = z.iso.time({ precision: -1 });
+const CALENDAR_DAY = z.iso.date();
+
+/** What the model hears for a time that the pattern let by but no clock or
+ *  calendar has (25:00, 2026-02-31); null for a good one. 24:00 is good:
+ *  the day's last minute. */
+export function timeProblem(change: {
+  datum?: string;
+  uhrzeit?: string;
+}): string | null {
+  const { datum, uhrzeit } = change;
+  if (
+    uhrzeit !== undefined &&
+    uhrzeit !== "24:00" &&
+    !CLOCK_TIME.safeParse(uhrzeit).success
+  ) {
+    return "Diese Uhrzeit gibt es nicht.";
+  }
+  return datum === undefined || CALENDAR_DAY.safeParse(datum).success
+    ? null
+    : "Dieses Datum gibt es nicht.";
+}
 
 const STYLE_IDS = RENDER_STYLES.map((s) => s.id) as [
   RenderStyle,

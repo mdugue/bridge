@@ -27,6 +27,28 @@ test("the card runs every scene tool the server hands the browser", () => {
   );
 });
 
+test("setze_zeit refuses a time no clock or calendar has, and sets none", async () => {
+  const set: unknown[] = [];
+  const scene = {
+    ...STUB,
+    setTime: (change: unknown) => {
+      set.push(change);
+      return { zeit: "" };
+    },
+  };
+  const tool = sceneTools(scene).find((t) => t.name === "setze_zeit");
+  const ok = async (input: { datum?: string; uhrzeit?: string }) => {
+    const result = await tool?.execute?.(input, {} as never);
+    return (result as { ok: boolean }).ok;
+  };
+  expect(await ok({ uhrzeit: "25:00" })).toBe(false);
+  expect(await ok({ datum: "2026-02-31" })).toBe(false);
+  expect(set).toEqual([]);
+  expect(await ok({ uhrzeit: "24:00" })).toBe(true);
+  expect(await ok({ datum: "0929-06-21" })).toBe(true);
+  expect(set).toHaveLength(2);
+});
+
 /** A real chat client against a real `chat()` whose model asks `was_ist_da`
  *  and answers once it has the result; counts the requests it sends. */
 function conversation(look: AskScene["look"]) {

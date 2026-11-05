@@ -10,10 +10,6 @@
 import { QUESTION_CHARS } from "./ask-failure";
 import type { AskRefusalCode } from "./ask-failure";
 
-/** The clock the chat's times read in: every site is in Germany, whichever
- *  clock the visitor's device keeps. */
-export const CITY_TIME_ZONE = "Europe/Berlin";
-
 /** A provider the chat can run on, with the visitor's key. */
 export type AskProviderId = "anthropic" | "gateway" | "openai" | "openrouter";
 

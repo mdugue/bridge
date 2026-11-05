@@ -6,7 +6,7 @@
  */
 import { useMemo } from "react";
 import type { RefObject } from "react";
-import { CITY_TIME_ZONE } from "@/lib/city/ask-city";
+import { SITE_ZONE, zonedTime } from "@/lib/city/bike-counts";
 import { cardCredits } from "@/lib/city/card-lines";
 import { activeDataLayers, siteDataLayers } from "@/lib/city/data-layers";
 import type { FramePace } from "@/lib/city/frame-pace";
@@ -28,7 +28,7 @@ import type { SceneTime } from "./scene-time";
 const WHEN = new Intl.DateTimeFormat("de-DE", {
   dateStyle: "full",
   timeStyle: "short",
-  timeZone: CITY_TIME_ZONE,
+  timeZone: SITE_ZONE,
 });
 
 const CITY_CLOCK = new Intl.DateTimeFormat("en-CA", {
@@ -38,7 +38,7 @@ const CITY_CLOCK = new Intl.DateTimeFormat("en-CA", {
   hour: "2-digit",
   minute: "2-digit",
   hourCycle: "h23",
-  timeZone: CITY_TIME_ZONE,
+  timeZone: SITE_ZONE,
 });
 
 /** The calendar date (YYYY-MM-DD) and time of day (HH:MM) an instant reads
@@ -53,29 +53,18 @@ function cityClock(at: Date): { datum: string; uhrzeit: string } {
   };
 }
 
-/** A date and time of day as if they were UTC (ms). */
-function asUtc(datum: string, uhrzeit: string): number {
-  return Date.parse(`${datum}T${uhrzeit}:00Z`);
-}
-
 /**
  * The instant `now` becomes under a change, in the city's clock, whichever
  * clock the visitor's device keeps: the sun stands over the city. What the
- * change leaves out stays as the city's clock reads it now.
+ * change leaves out stays as the city's clock reads it now; 24:00 is the
+ * day's last minute, not the next day.
  */
 export function instantAt(now: Date, change: TimeChange): Date {
   const clock = cityClock(now);
-  const asked = asUtc(
-    change.datum ?? clock.datum,
-    change.uhrzeit ?? clock.uhrzeit
-  );
-  // the city's offset at that moment: looked up twice, for a first guess
-  // may fall on the other side of a clock change
-  const offsetAt = (ms: number) => {
-    const c = cityClock(new Date(ms));
-    return asUtc(c.datum, c.uhrzeit) - ms;
-  };
-  return new Date(asked - offsetAt(asked - offsetAt(asked)));
+  const [y, mo, d] = (change.datum ?? clock.datum).split("-").map(Number);
+  const asked = change.uhrzeit === "24:00" ? "23:59" : change.uhrzeit;
+  const [h, mi] = (asked ?? clock.uhrzeit).split(":").map(Number);
+  return zonedTime([y, mo, d, h, mi, 0], SITE_ZONE);
 }
 
 /** How long `was_ist_da` waits for a glide to land at most (visible ms):
