@@ -472,9 +472,9 @@ def passage_half(highway: str | None, other: str | None) -> float:
     """The half-width a passage under a deck opens for a way (m)."""
     from .landcover_osm import ROAD_HALF_WIDTH
 
-    m = re.match(r"\d+(\.\d+)?", (tag(other, "width") or "").strip())
-    if m and 1.0 <= float(m.group()) <= 60.0:
-        return float(m.group()) / 2 + PASSAGE_MARGIN
+    width = osm_metres(tag(other, "width"))
+    if width is not None and 1.0 <= width <= 60.0:
+        return width / 2 + PASSAGE_MARGIN
     lanes = re.match(r"\d+", tag(other, "lanes") or "")
     if lanes and 1 <= int(lanes.group()) <= 10:
         return int(lanes.group()) * PASSAGE_LANE_HALF + PASSAGE_MARGIN

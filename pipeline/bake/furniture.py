@@ -491,15 +491,19 @@ class Decks:
         return top if cls in BLOCKED or self.on_bridge_way(p) else None
 
 
+# The widest a street's `width` is believed (m), as surface.parse_width.
+MAX_CARRIAGEWAY_W = 60.0
+
+
 def carriageway_half(highway: str | None, other: str | None) -> float:
     """A street's carriageway half-width (m): its `width`, else its `lanes`
     where it counts two or more (landcover_osm.LANE_M each), else its
     class's (the OSM class raster's road, landcover_osm.ROAD_HALF_WIDTH;
     halved, not under 2 m, for one carriageway of a dual main road, as
     the class raster paints it)."""
-    width = re.search(r"\d*\.?\d+", tag(other, "width") or "")
-    if width and float(width.group()) > 0:
-        return float(width.group()) / 2
+    width = osm_metres(tag(other, "width"))
+    if width is not None and 0 < width <= MAX_CARRIAGEWAY_W:
+        return width / 2
     n = lanes(other)
     if n is not None and n >= 2:
         return n * LANE_M / 2

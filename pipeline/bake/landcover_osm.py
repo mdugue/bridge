@@ -32,7 +32,7 @@ from .classes import (
     WATER,
 )
 from .common import Tile, column, feature, geometry_json
-from .osm import read_osm, read_ways, tag
+from .osm import osm_metres, read_osm, read_ways, tag
 
 AREAS = {
     MEADOW: {
@@ -102,9 +102,16 @@ def hidden_water(other_tags: str | None) -> bool:
     return tag(other_tags, "location") in ("underground", "indoor")
 
 
+# The widest a way's `width` is believed (m): a river's line (the Elbe's
+# ~150 m in Dresden) with room; past it a value is a typo.
+MAX_WAY_WIDTH = 300.0
+
+
 def _width(other_tags: str | None) -> float | None:
-    num = re.search(r"\d*\.?\d+", tag(other_tags, "width") or "")
-    return float(num.group()) if num else None
+    """A way's mapped `width` (m, `osm.osm_metres`: `150 cm` is 1.5 m, feet
+    or a range none) within (0, MAX_WAY_WIDTH], else None."""
+    width = osm_metres(tag(other_tags, "width"))
+    return width if width is not None and 0 < width <= MAX_WAY_WIDTH else None
 
 
 # A lane's width (m): a road whose `lanes` counts two or more and that has

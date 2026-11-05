@@ -87,6 +87,39 @@ def test_every_width_reader_takes_metres_only():
     assert gate_width("gate", feet) == GATE_W
 
 
+@pytest.mark.parametrize(("value", "metres"), [("150 cm", 1.5), ("4,5", 4.5), ("10 ft", None)])
+def test_the_way_and_platform_readers_take_metres_only(value, metres):
+    """The way widths of the class raster, a deck's passage, a street's
+    carriageway and a driveway, a monument's and a platform's height read
+    through `osm_metres`: their own parsers took `150 cm` as 150 m, `4,5`
+    as 4 and `10 ft` as 10 m."""
+    from bake.furniture import carriageway_half
+    from bake.kerb_drops import CROSSING_HALF_M, DRIVEWAY_W
+    from bake.kerb_drops import half_width as driveway_half
+    from bake.landcover_osm import ROAD_HALF_WIDTH, _width
+    from bake.monuments import osm_height as monument_height
+    from bake.rail import mapped_height
+    from bake.rail_osm import PASSAGE_MARGIN, passage_half
+
+    width = f'"width"=>"{value}"'
+    road = ROAD_HALF_WIDTH["residential"]
+    assert _width(width) == metres
+    assert passage_half("residential", width) == pytest.approx(
+        road + PASSAGE_MARGIN if metres is None else metres / 2 + PASSAGE_MARGIN
+    )
+    assert carriageway_half("residential", width) == pytest.approx(
+        road if metres is None else metres / 2
+    )
+    assert driveway_half(width) == pytest.approx(
+        max(CROSSING_HALF_M, (DRIVEWAY_W if metres is None else metres) / 2)
+    )
+    assert monument_height(f'"height"=>"{value}"') == metres
+    # A platform: `0,76` and `76 cm` are its 0.76 m, `1 ft` none (was 1 m:
+    # its first number read as metres; `0,76` was 0).
+    platform = {"150 cm": "76 cm", "4,5": "0,76", "10 ft": "1 ft"}[value]
+    assert mapped_height(f'"height"=>"{platform}"') == (None if metres is None else 0.76)
+
+
 @pytest.mark.parametrize(
     ("value", "metres"),
     [("15 cm", 0.15), ("0.15", 0.15), ("4 ft", None), ("3'", None), ("2-3", None)],

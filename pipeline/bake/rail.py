@@ -73,7 +73,7 @@ from .common import (
     read_layer,
     write_geojson,
 )
-from .osm import below_ground, has_extract, read_osm, tag
+from .osm import below_ground, has_extract, osm_metres, read_osm, tag
 
 WIDTH = {"rail": 9.0, "road": 11.0, "path": 3.5, "other": 8.0}
 PAVEMENT_M = 2.0  # a road bridge's pavement either side of the carriageway (m)
@@ -1174,12 +1174,11 @@ TRACK_KINDS = (*rail_osm.RAILWAYS, "tram")
 
 
 def mapped_height(other: str | None) -> float | None:
-    """A platform's mapped `height` (m; a value over 3 read as cm), when
-    plausible."""
-    m = re.match(r"\d+(\.\d+)?", (tag(other, "height") or "").strip())
-    if not m:
+    """A platform's mapped `height` (m, `osm.osm_metres`; a value over 3
+    read as cm), when plausible."""
+    h = osm_metres(tag(other, "height"))
+    if h is None:
         return None
-    h = float(m.group())
     h = h / 100 if h > 3 else h
     return h if 0.1 <= h <= 1.4 else None
 
