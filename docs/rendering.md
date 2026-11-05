@@ -673,7 +673,14 @@ sub-pixel steps on a held, fixed-step loop, diffed.
   whisper, a slow world-space drift keeps the sheets from being one white.
   Glows, sprites and every see-through sheet (the river's too) are hidden for
   the frame (the list, too, is gathered per stream change); the sky box's
-  inside is culled, so a paper background shows. The ground is the
+  inside is culled, so a paper background shows. three takes the override's
+  `side`, so what is opaque and double-sided (walls, fences, stairs) draws a
+  stand-in, the same card with that side and position, shared per side and
+  position and handed over through the renderer's object function: the
+  shadow pass sets its own, as a stand-in there would read the map it draws
+  into. A bare crown's `maskNode` is left out on purpose: the card draws the
+  crown whole, because masked the pen outlines every gap and it turns into
+  a dark grey clot (its shadow stays thin). The ground is the
   exception: the terrain material sets `userData.paperOwn`, opts out of the
   override for these frames (`allowOverride`) and, under one shared
   uniform, draws itself as paper — its road markings, parking bays and

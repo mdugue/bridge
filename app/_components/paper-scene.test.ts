@@ -3,7 +3,6 @@ import {
   BoxGeometry,
   Color,
   DoubleSide,
-  FrontSide,
   Mesh,
   MeshBasicNodeMaterial,
   MeshStandardNodeMaterial,
@@ -221,8 +220,7 @@ function ribbonWorld() {
   const fence = new MeshStandardNodeMaterial({ side: DoubleSide });
   const wall = new MeshStandardNodeMaterial({ side: DoubleSide });
   const crown = new MeshStandardNodeMaterial();
-  const keep = uniform(1);
-  crown.maskNode = keep.greaterThan(0.5);
+  crown.maskNode = uniform(1).greaterThan(0.5);
   const fenceMesh = new Mesh(new BoxGeometry(), fence);
   const wallMesh = new Mesh(new BoxGeometry(), wall);
   const crownMesh = new Mesh(new BoxGeometry(), crown);
@@ -241,7 +239,7 @@ function ribbonWorld() {
   };
 }
 
-test("a double-sided or masked mesh draws a stand-in with its side and mask", () => {
+test("a double-sided mesh draws a stand-in with its side", () => {
   const w = ribbonWorld();
   const restore = w.paper.begin();
   drawThrough(w.renderer, w.fenceMesh);
@@ -255,12 +253,10 @@ test("a double-sided or masked mesh draws a stand-in with its side and mask", ()
   expect(fence.colorNode).toBe(
     (w.scene.overrideMaterial as MeshStandardNodeMaterial).colorNode
   );
-  // one per side, position and mask, not one per mesh
+  // one per side and position, not one per mesh
   expect(wall).toBe(fence);
-  expect(crown.side).toBe(FrontSide);
-  expect(crown.maskNode).toBe(w.crown.maskNode);
-  expect(crown.allowOverride).toBe(false);
-  // what the override draws faithfully keeps wearing it
+  // the card draws a bare crown whole: the pen would outline every gap
+  expect(crown).toBe(w.crown);
   expect(solid).toBe(w.solid.material);
   restore();
   expect(w.renderer.getRenderObjectFunction()).toBeNull();
@@ -299,14 +295,14 @@ test("a stand-in leaves with the last mesh that wore it", () => {
   const w = ribbonWorld();
   w.paper.begin()();
   const restore = w.paper.begin();
-  drawThrough(w.renderer, w.crownMesh);
+  drawThrough(w.renderer, w.fenceMesh);
   restore();
   const standIn = w.renderer.drawn[0] as MeshStandardNodeMaterial;
   let freed = 0;
   standIn.addEventListener("dispose", () => {
     freed += 1;
   });
-  w.scene.remove(w.crownMesh);
+  w.scene.remove(w.fenceMesh, w.wallMesh);
   w.paper.sceneChanged();
   w.paper.begin()();
   expect(freed).toBe(1);

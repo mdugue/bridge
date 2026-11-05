@@ -176,11 +176,12 @@ checks have theirs in the index (069, 070, 071, 076, 077, 078, 080,
 - [ ] Each style (key `V`: Comic, Film noir, Sin City, Papier) at
   `oblique-400`, `night-street` and eye level: ink lines calm (no crawling
   on grazing streets), tone as intended, no NaN-black pixels.
-- [ ] Papier: fences, walls and stairs show from both sides; winter crowns
-  are bare, not solid (plan 039 step 4); the style switch does not hitch
-  once the scene is idle (`PostStack.warmStyles`).
+- [x] Papier: a wall shows from both sides (judged 2026-11-05 on a Mac GPU,
+  plan 039 step 4; winter crowns are whole on purpose).
+- [ ] Papier: the style switch does not hitch once the scene is idle
+  (`PostStack.warmStyles`), with the double-sided stand-ins' programs.
 - [ ] Sin City rain after an hour in the style still falls in streaks, not
-  columns (plan 039 step 2).
+  columns (plan 039 step 2; an arithmetic fix, not watched for an hour).
 - [ ] Film noir's lamp cones at night under every lamp.
 
 ### H. Frame time and memory (desktop)

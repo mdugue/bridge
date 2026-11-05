@@ -77,13 +77,16 @@ import { shopOf, wallEaveUp } from "./visual-style";
  * dome's inside is culled by the front-sided material, so the paper-toned
  * background shows there.
  *
- * three takes the override's `side` and copies no `maskNode`, so a fence
- * would vanish from one side and a bare crown draw solid. What is opaque
- * and double-sided or masked is drawn with a stand-in: the same card with
- * that side, position and mask. Only in the main pass, through the
- * renderer's object function, which the shadow pass replaces with its own:
- * a stand-in reaching the shadow map would read the map it draws into, and
- * the shadow pass honours side and mask from the mesh's own material anyway.
+ * three takes the override's `side`, so a fence would vanish from one side.
+ * What is opaque and double-sided is drawn with a stand-in: the same card
+ * with that side and position. Only in the main pass, through the renderer's
+ * object function, which the shadow pass replaces with its own: a stand-in
+ * reaching the shadow map would read the map it draws into, and the shadow
+ * pass takes the side from the mesh's own material anyway.
+ *
+ * A bare crown's `maskNode` stays behind on purpose: the card draws it whole.
+ * Masked, the pen outlines every gap and a winter crown turns into a dark
+ * grey clot (judged on a GPU, 2026-11-05).
  */
 
 /** Warm off-white: the sheet the model is cut from. */
@@ -412,25 +415,21 @@ function paperOwnMaterials(object: Object3D): Material[] {
   return materials.filter((m) => m.userData.paperOwn === true);
 }
 
-/** Whether the override would lose what `m` draws by: its back or its mask.
- *  (The clay papers its slots through the override, its section stays so.) */
+/** Whether the override would lose `m`'s back. (The clay and a design stay
+ *  with the override, as their section and their plate always have.) */
 function needsStandIn(m: Material): boolean {
   return (
     !m.transparent &&
     m.userData.paperOwn !== true &&
     m.userData.figure !== true &&
-    (m.side === DoubleSide ||
-      (m as { maskNode?: Node | null }).maskNode?.isNode === true)
+    m.side === DoubleSide
   );
 }
 
-/** A stand-in's slots of a source material, shared by all that match. */
+/** What makes a stand-in of a source material, shared by all that match. */
 function standInKey(base: Material, source: Material): string {
-  const { maskNode, positionNode } = source as {
-    maskNode?: Node | null;
-    positionNode?: Node | null;
-  };
-  return [base.id, source.side, positionNode?.id, maskNode?.id].join(":");
+  const { positionNode } = source as { positionNode?: Node | null };
+  return [base.id, source.side, positionNode?.id].join(":");
 }
 
 export interface PaperScene {
@@ -463,7 +462,7 @@ export function createPaperScene(
   scene: Scene,
   /** the scene fog's colour (height-fog.ts), papered for the frame */
   fogColor: UniformNode<"color", Color>,
-  /** draws the stand-ins of a swap's frames (`needsStandIn`) */
+  /** draws a swap's frames' stand-ins (`needsStandIn`) */
   renderer: Pick<
     Renderer,
     "getRenderObjectFunction" | "renderObject" | "setRenderObjectFunction"
@@ -503,7 +502,7 @@ export function createPaperScene(
   // hidden object is left alone, and so restored as it was.
   let candidates: Record<"figure" | "paper" | "plan", Object3D[]> | null = null;
   let ownPaper: Material[] = [];
-  // One stand-in per side, position and mask, not per mesh. A tile's
+  // One stand-in per side and position, not per mesh. A tile's
   // leaving frees its own at the next gather.
   const standIns = new Map<string, Material>();
   let standInSources: Material[] = [];
@@ -516,16 +515,14 @@ export function createPaperScene(
       return known;
     }
     const made = base.clone() as MeshStandardNodeMaterial;
-    const { maskNode, positionNode } = source as MeshStandardNodeMaterial;
     made.side = source.side;
-    made.maskNode = maskNode;
-    made.positionNode = positionNode;
+    made.positionNode = (source as MeshStandardNodeMaterial).positionNode;
     made.allowOverride = false;
     standIns.set(key, made);
     return made;
   };
   /** The stand-ins `kind` draws, by the material they stand in for. The
-   *  Schwarzplan's flat black shows neither a back nor a mask. */
+   *  Schwarzplan's buildings stay with the override. */
   const wornBy = (kind: PaperKind): Map<Material, Material> => {
     if (kind === "figure") {
       return new Map();
