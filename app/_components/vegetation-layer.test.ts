@@ -19,6 +19,7 @@ import {
   GENERIC_CROWN_W,
 } from "@/lib/city/tree-placement";
 import { isInstances } from "./instancing";
+import { inRasterTurn, setRasterTier } from "./raster-upload";
 import {
   buildConeTiers,
   buildCrownGeo,
@@ -28,6 +29,7 @@ import {
   buildVegetation,
   sceneCrowns,
   createVegetationLod,
+  loadNdviSampler,
   setCrownTime,
   TRUNK_H,
 } from "./vegetation-layer";
@@ -428,4 +430,70 @@ test("the cone stands in the lobed crown's box, as tall and as wide", () => {
     expect(w / lw).toBeGreaterThan(0.9);
     expect(w / lw).toBeLessThan(1.15);
   }
+});
+
+/** Answers every fetch with `response`, or with what its signal says. */
+async function withFetch<T>(
+  response: Response | null,
+  run: () => Promise<T>
+): Promise<T> {
+  const realFetch = globalThis.fetch;
+  // reason: the loader reads only `ok` and the body of a Response
+  globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+    if (response) {
+      return response;
+    }
+    return await new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => {
+        reject(new DOMException("gone", "AbortError"));
+      });
+    });
+  }) as unknown as typeof fetch;
+  try {
+    return await run();
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
+describe("the crowns' NDVI sampler", () => {
+  const BOUNDS: [number, number, number, number] = [0, 0, 100, 100];
+
+  test("an absent file is no sampler", async () => {
+    expect(
+      await withFetch(
+        new Response("", { status: 404 }),
+        async () => await loadNdviSampler("ndvi.png", BOUNDS)
+      )
+    ).toBeNull();
+  });
+
+  test("an abort is rethrown", async () => {
+    const aborter = new AbortController();
+    await withFetch(null, async () => {
+      const load = loadNdviSampler("ndvi.png", BOUNDS, aborter.signal);
+      aborter.abort();
+      await expect(load).rejects.toThrow();
+    });
+  });
+
+  test("on a phone it decodes in the raster turn, never over another raster's decode", async () => {
+    setRasterTier("mobile");
+    const { promise: decoded, resolve: finish } = Promise.withResolvers<null>();
+    const other = inRasterTurn(async () => await decoded);
+    let settled = false;
+    await withFetch(new Response(new Uint8Array([1, 2, 3])), async () => {
+      const load = loadNdviSampler("ndvi.png", BOUNDS).finally(() => {
+        settled = true;
+      });
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10);
+      });
+      expect(settled).toBe(false);
+      finish(null);
+      await other;
+      // not a PNG: no sampler, once it had its turn
+      expect(await load).toBeNull();
+    });
+  });
 });
