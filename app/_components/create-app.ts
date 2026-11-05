@@ -2875,14 +2875,9 @@ async function bootApp(
     lampLights.setHeads(
       stream.visibleDressings().flatMap((d) => d.lamps?.headPositions ?? [])
     );
-    lampReflections.setHeads({
-      water: stream
-        .visibleDressings()
-        .flatMap((d) => d.lamps?.waterHeads ?? []),
-      tracks: stream
-        .visibleDressings()
-        .flatMap((d) => d.lamps?.trackHeads ?? []),
-    });
+    lampReflections.setHeads(
+      stream.visibleDressings().flatMap((d) => d.lamps?.trackHeads ?? [])
+    );
     // a tile that lands is born on its mid crowns: its tiers in this frame
     crownTiers.force();
     streamHook.emit();

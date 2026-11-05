@@ -165,17 +165,18 @@ export function trianglesOver<T extends Uint8Array | Uint16Array | Uint32Array>(
 }
 
 /**
- * Whether the mask (over `bounds`, [minX, minY, maxX, maxY] in the
- * projected CRS, row 0 north) has a water cell within `metres` (a square
- * reach) of projected (x, y). Off the mask nothing is water.
+ * The centre of the mask's water cell nearest projected (x, y) within
+ * `metres` (a square reach), or null where none is: the mask over
+ * `bounds`, [minX, minY, maxX, maxY] in the projected CRS, row 0 north.
+ * Off the mask nothing is water.
  */
-export function waterNear(
+export function nearestWater(
   mask: WaterMask,
   bounds: readonly [number, number, number, number],
   x: number,
   y: number,
   metres: number
-): boolean {
+): { x: number; y: number } | null {
   const { cells } = mask;
   const [minX, minY, maxX, maxY] = bounds;
   const cw = (maxX - minX) / cells;
@@ -186,12 +187,42 @@ export function waterNear(
   const x1 = Math.min(cells - 1, col(x + metres));
   const y0 = Math.max(0, row(y + metres));
   const y1 = Math.min(cells - 1, row(y - metres));
+  let best: { x: number; y: number } | null = null;
+  let bestD = Number.POSITIVE_INFINITY;
   for (let r = y0; r <= y1; r += 1) {
     for (let c = x0; c <= x1; c += 1) {
-      if (mask.water[r * cells + c]) {
-        return true;
+      if (!mask.water[r * cells + c]) {
+        continue;
+      }
+      const cx = minX + (c + 0.5) * cw;
+      const cy = maxY - (r + 0.5) * ch;
+      const d = (cx - x) ** 2 + (cy - y) ** 2;
+      if (d < bestD) {
+        bestD = d;
+        best = { x: cx, y: cy };
       }
     }
   }
-  return false;
+  return best;
+}
+
+/** Whether projected (x, y) lies on a water cell of the mask (as
+ *  `nearestWater`). */
+export function waterAt(
+  mask: WaterMask,
+  bounds: readonly [number, number, number, number],
+  x: number,
+  y: number
+): boolean {
+  const { cells } = mask;
+  const [minX, minY, maxX, maxY] = bounds;
+  const c = Math.floor(((x - minX) / (maxX - minX)) * cells);
+  const r = Math.floor(((maxY - y) / (maxY - minY)) * cells);
+  return (
+    c >= 0 &&
+    c < cells &&
+    r >= 0 &&
+    r < cells &&
+    mask.water[r * cells + c] === 1
+  );
 }

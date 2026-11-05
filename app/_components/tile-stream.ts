@@ -90,7 +90,8 @@ import { buildLamps } from "./lamp-layer";
 import { LAMP_TRACK_REACH_M, LAMP_WATER_REACH_M } from "./lamp-reflections";
 import { nearLines } from "@/lib/city/near-lines";
 import { isMonorail } from "@/lib/city/line-levels";
-import { waterNear } from "@/lib/city/water-mask";
+import { nearestWater, waterAt } from "@/lib/city/water-mask";
+import type { WaterMask } from "@/lib/city/water-mask";
 import type { LampControl } from "./lamp-layer";
 import { buildLowVegetation } from "./low-vegetation-layer";
 import { buildMonuments } from "./monument-layer";
@@ -760,8 +761,9 @@ const tileIdOf = (scene: Object3D): string =>
   (scene.userData as Partial<ContentExtras>).tileId ?? "?";
 
 /**
- * Whether a lamp at projected (x, y) stands by the tile's water, close
- * enough for the river to mirror it, or by one of its tracks, close enough
+ * The level of the tile's water a lamp at projected (x, y) stands close
+ * enough to for the river to mirror it, or whether it stands by one of
+ * its tracks, close enough
  * for the rails to catch its light (lamp-reflections.ts): no water test
  * where the tile's water is none or not known. Only the tile's own water
  * mask is read: a lamp whose water lies past the seam is not mirrored.
@@ -773,7 +775,7 @@ function lampsBy(
   lampCount: number
 ): {
   tracks?: (x: number, y: number) => boolean;
-  water?: (x: number, y: number) => boolean;
+  water?: (x: number, y: number) => number | null;
 } {
   const lines = [
     // a drawn track: no monorail's beam, none below ground
@@ -801,20 +803,55 @@ function lampsBy(
   };
 }
 
-/** `lampsBy`'s water test: none where the tile has no water. */
+/** How far into the water (m, in steps) a lamp's water level is sought
+ *  past the bank: the sheet's edge climbs the bank with the terrain. */
+const LEVEL_STEPS = [0, 6, 12, 18] as const;
+
+/**
+ * `lampsBy`'s water test: the level (world Y) of the water a lamp at
+ * projected (x, y) mirrors in, or null where none is near — the lowest of
+ * the terrain (which the water sheet shares) at the nearest water cell and
+ * a few steps on into the water, so the bank's slope does not lift it.
+ * None where the tile has no water.
+ */
 function byWater(
   terrain: TerrainLayer
-): ((x: number, y: number) => boolean) | undefined {
+): ((x: number, y: number) => number | null) | undefined {
   const mask = terrain.waterMask;
-  if (mask === null) {
+  // none, or unknown (no class raster, or one the browser decoded)
+  if (mask === null || mask === undefined) {
     return undefined;
   }
-  // unknown (no class raster, or one the browser decoded): every lamp
-  // would take a slot from the quays', so none
-  if (mask === undefined) {
-    return undefined;
+  return (x, y) => waterLevelNear(terrain, mask, x, y);
+}
+
+/** `byWater`'s level at projected (x, y) on the tile's `mask`. */
+function waterLevelNear(
+  terrain: TerrainLayer,
+  mask: WaterMask,
+  x: number,
+  y: number
+): number | null {
+  const { bounds, heightAt } = terrain;
+  const cell = nearestWater(mask, bounds, x, y, LAMP_WATER_REACH_M);
+  if (!cell) {
+    return null;
   }
-  return (x, y) => waterNear(mask, terrain.bounds, x, y, LAMP_WATER_REACH_M);
+  const d = Math.hypot(cell.x - x, cell.y - y);
+  const [ux, uy] = d > 0 ? [(cell.x - x) / d, (cell.y - y) / d] : [0, 0];
+  let level: number | null = null;
+  for (const step of LEVEL_STEPS) {
+    const px = cell.x + ux * step;
+    const py = cell.y + uy * step;
+    if (step > 0 && !waterAt(mask, bounds, px, py)) {
+      break;
+    }
+    const h = heightAt(px, py);
+    if (h !== null && (level === null || h < level)) {
+      level = h;
+    }
+  }
+  return level;
 }
 
 /** The goals, posts and nets of the grounds this tile owns (a ground on a

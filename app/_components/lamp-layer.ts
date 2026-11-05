@@ -27,6 +27,8 @@ import {
 import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
 import type { GroundContext } from "@/lib/city/ground-clamp";
 import { Instances, instancePosition } from "./instancing";
+import { buildLampMirrors } from "./lamp-reflections";
+import type { LampMirror } from "./lamp-reflections";
 import type { Pt } from "./mesh-kit";
 import type { DeviceTier } from "./scene-profile";
 import { drawnAtNight, sceneNight } from "./scene-environment";
@@ -108,6 +110,36 @@ interface ArmPlace extends Place {
 
 /** Whether a place (projected x, y) is somewhere: by the water, by a track. */
 type ByPlace = (x: number, y: number) => boolean;
+type WaterLevel = (x: number, y: number) => number | null;
+
+/** The heads whose projected place passes `test`. */
+function headsWhere(
+  heads: readonly Vector3[],
+  ctx: GroundContext,
+  test: ByPlace
+): Vector3[] {
+  return heads.filter((h) => {
+    const p = worldToEpsg(h.x, h.z, ctx.offset);
+    return test(p.x, p.y);
+  });
+}
+
+/** The heads above water near them, each with that water's level. */
+function mirroredHeads(
+  heads: readonly Vector3[],
+  ctx: GroundContext,
+  levelAt: WaterLevel
+): LampMirror[] {
+  const out: LampMirror[] = [];
+  for (const head of heads) {
+    const p = worldToEpsg(head.x, head.z, ctx.offset);
+    const level = levelAt(p.x, p.y);
+    if (level !== null && head.y > level) {
+      out.push({ head, level });
+    }
+  }
+  return out;
+}
 
 /** Per-tile lamp visuals (posts + heads + glow + ground pools) on the Y-up scene. */
 export interface LampControl {
@@ -117,10 +149,8 @@ export interface LampControl {
   group: Group;
   /** world-space (Y-up) lantern-head positions, fed to the shared light pool */
   headPositions: Vector3[];
-  /** the heads by the water, whose light the river mirrors, and by a
-   *  track, whose light the rails catch (the same vectors;
-   *  lamp-reflections.ts) */
-  waterHeads: Vector3[];
+  /** the heads by a track, whose light the rails catch (the same
+   *  vectors; lamp-reflections.ts) */
   trackHeads: Vector3[];
 }
 
@@ -543,29 +573,20 @@ function taggedHeads(places: Place[], height: number): Instances {
 export function buildLamps(
   features: LampFeature[],
   ctx: GroundContext,
-  /** whether projected (x, y) is by the water, by a track (none: no
-   *  head is) */
-  by: { tracks?: ByPlace; water?: ByPlace } = {}
+  /** whether projected (x, y) is by a track, and the level (world Y) of
+   *  the water it is near, null where none is (no test: no head is) */
+  by: { tracks?: ByPlace; water?: WaterLevel } = {}
 ): LampControl {
   const group = new Group();
   group.name = "lamps";
   const places = lampPlaces(features, ctx);
   const headPositions = places.heads;
-  const headsBy = (test: ByPlace | undefined) =>
-    test
-      ? headPositions.filter((h) => {
-          const p = worldToEpsg(h.x, h.z, ctx.offset);
-          return test(p.x, p.y);
-        })
-      : [];
-  const waterHeads = headsBy(by.water);
-  const trackHeads = headsBy(by.tracks);
+  const trackHeads = by.tracks ? headsWhere(headPositions, ctx, by.tracks) : [];
 
   if (places.pools.length === 0) {
     return {
       group,
       headPositions,
-      waterHeads,
       trackHeads,
       dispose: () => {
         // empty
@@ -595,14 +616,23 @@ export function buildLamps(
   if (wireSet) {
     group.add(wireSet);
   }
-  const glow = buildGlow(headPositions);
+  // the heads the river mirrors first: their columns share the halos'
+  // matrices (lamp-reflections.ts `buildLampMirrors`)
+  const mirrored = by.water ? mirroredHeads(headPositions, ctx, by.water) : [];
+  const mirroredSet = new Set(mirrored.map((m) => m.head));
+  const glow = buildGlow([
+    ...mirrored.map((m) => m.head),
+    ...headPositions.filter((h) => !mirroredSet.has(h)),
+  ]);
   const decals = buildDecals(places.pools);
   group.add(glow, decals);
+  if (mirrored.length > 0) {
+    group.add(buildLampMirrors(glow.instanceMatrix, mirrored));
+  }
 
   return {
     group,
     headPositions,
-    waterHeads,
     trackHeads,
     // disposeObject3D frees the meshes with the scene; nothing else is the
     // tile's.

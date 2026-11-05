@@ -4,7 +4,8 @@ import {
   reach,
   trianglesOver,
   waterMaskOf,
-  waterNear,
+  nearestWater,
+  waterAt,
 } from "./water-mask";
 import type { WaterMask } from "./water-mask";
 
@@ -107,23 +108,36 @@ describe("triangles over water", () => {
   });
 });
 
-describe("waterNear", () => {
-  // a 4×4 mask over a 400 m tile: one water cell, row 1 (100–200 m south of
-  // the north edge), column 2 (200–300 m east)
+describe("nearestWater", () => {
+  // a 4×4 mask over a 400 m tile: two water cells in row 1 (100–200 m
+  // south of the north edge), columns 2 and 3 (200–400 m east)
   const water = new Uint8Array(16);
   water[1 * 4 + 2] = 1;
+  water[1 * 4 + 3] = 1;
   const mask = { cells: 4, water };
   const bounds = [0, 0, 400, 400] as const;
 
-  test("finds the cell under a point and within reach", () => {
-    expect(waterNear(mask, bounds, 250, 250, 0)).toBe(true);
-    expect(waterNear(mask, bounds, 150, 250, 60)).toBe(true);
-    expect(waterNear(mask, bounds, 250, 150, 60)).toBe(true);
+  test("finds the nearest cell's centre under a point and within reach", () => {
+    expect(nearestWater(mask, bounds, 260, 240, 0)).toEqual({ x: 250, y: 250 });
+    expect(nearestWater(mask, bounds, 150, 250, 60)).toEqual({
+      x: 250,
+      y: 250,
+    });
+    expect(nearestWater(mask, bounds, 390, 150, 60)).toEqual({
+      x: 350,
+      y: 250,
+    });
   });
 
   test("misses a point out of reach, and off the mask", () => {
-    expect(waterNear(mask, bounds, 50, 50, 60)).toBe(false);
-    expect(waterNear(mask, bounds, 150, 250, 40)).toBe(false);
-    expect(waterNear(mask, bounds, -500, 250, 60)).toBe(false);
+    expect(nearestWater(mask, bounds, 50, 50, 60)).toBeNull();
+    expect(nearestWater(mask, bounds, 150, 250, 40)).toBeNull();
+    expect(nearestWater(mask, bounds, -500, 250, 60)).toBeNull();
+  });
+
+  test("tells a water cell from land and from off the mask", () => {
+    expect(waterAt(mask, bounds, 210, 299)).toBe(true);
+    expect(waterAt(mask, bounds, 150, 250)).toBe(false);
+    expect(waterAt(mask, bounds, 450, 250)).toBe(false);
   });
 });
