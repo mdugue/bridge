@@ -189,7 +189,7 @@ const geometry = (dx: number) => ({
   coordinates: point(dx),
 });
 
-test("a lamp, a bench and a canopy tree stand on the tile's own ground, a monument on every terrain's", () => {
+test("a lamp, a bench, a canopy and an inventory tree stand on the tile's own ground, a monument on every terrain's", () => {
   // near a seam the two grounds differ: the tile's own terrain (50) and
   // every loaded terrain's (110)
   const grounds = { ...ctx, treeHeightAt: () => 50 };
@@ -218,6 +218,11 @@ test("a lamp, a bench and a canopy tree stand on the tile's own ground, a monume
       river: [],
     },
     grounds
+  ).concat(
+    treeSets(
+      [{ geometry: geometry(80), properties: { a: 0, h: 12, d: 6, l: "d" } }],
+      grounds
+    )
   );
   const at = (dx: number) => {
     const [x, y] = point(dx);
@@ -228,6 +233,7 @@ test("a lamp, a bench and a canopy tree stand on the tile's own ground, a monume
     [0, "canopy"],
     [20, "lamp"],
     [40, "furniture"],
+    [80, "tree"],
   ] as const) {
     const hit = at(dx);
     expect(hit?.target.kind).toBe(kind);

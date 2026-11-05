@@ -1093,7 +1093,6 @@ async function buildCoarseDressing(
         bridgeItems(bridges, {
           ...ground,
           tile,
-          treeHeightAt: terrain.heightAt,
           owns,
         })
       )

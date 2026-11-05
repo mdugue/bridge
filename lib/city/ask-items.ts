@@ -66,8 +66,6 @@ export interface AskContext {
   /** whether the tile draws a deck that crosses its seam (its centroid) */
   owns?: (x: number, y: number) => boolean;
   tile: string;
-  /** ground of the tile's own terrain, which the trees stand on */
-  treeHeightAt?: HeightAt;
 }
 
 /**
@@ -77,6 +75,7 @@ export interface AskContext {
  * two differ.
  */
 export type OwnGroundContext = Pick<AskContext, "offset" | "tile"> & {
+  /** ground of the tile's own terrain */
   treeHeightAt: HeightAt;
 };
 
@@ -221,9 +220,9 @@ function packedTreeSet(
  */
 export function treeSets(
   features: readonly TreeFeature[],
-  ctx: AskContext
+  ctx: OwnGroundContext
 ): AskSet<FeatureInquiry>[] {
-  const ground = ctx.treeHeightAt ?? ctx.heightAt;
+  const ground = ctx.treeHeightAt;
   const n = features.length;
   const table: TreeTable = {
     position: new Float64Array(n * 2),
