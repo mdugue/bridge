@@ -323,22 +323,6 @@ test("a change far off asks only the rings it can fall on", () => {
   expect(drawAll(sun).toSorted((a, b) => a - b)).toEqual([0, 1, 2, 3]);
 });
 
-test("a change of the crowns' tiers leaves the finest ring alone", () => {
-  const { sunRig, sun } = rig();
-  walkTo(sunRig, 0, 0);
-  drawAll(sun);
-  sunRig.invalidateCrowns();
-  expect(drawAll(sun).toSorted((a, b) => a - b)).toEqual([1, 2, 3]);
-});
-
-test("a thin caster showing or hiding leaves the widest ring alone", () => {
-  const { sunRig, sun } = rig();
-  walkTo(sunRig, 0, 0);
-  drawAll(sun);
-  sunRig.invalidateThin();
-  expect(drawAll(sun).toSorted((a, b) => a - b)).toEqual([0, 1, 2]);
-});
-
 test("the sun moving redraws every ring", () => {
   const { sunRig, sun } = rig();
   walkTo(sunRig, 0, 0);

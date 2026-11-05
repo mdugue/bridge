@@ -3,6 +3,8 @@ import {
   changedTiles,
   modelQuadrants,
   nextRingDue,
+  RING_EDGE_FROM,
+  RING_EDGE_TO,
   ringAhead,
   ringBias,
   ringDeadZone,
@@ -183,6 +185,22 @@ const tile = (x: number, z: number) => ({
   maxZ: z + 1000,
   minX: x - 1000,
   minZ: z - 1000,
+});
+
+test("a quadrant's cross-fade lies inside its neighbour's full strength", () => {
+  const { half } = modelQuadrants({ x: 0, y: 100, z: 0 }, 400, LOW_SUN);
+  // the overlap on the map (0…1), from one quadrant's edge to the other's
+  const overlap = (half - 200) / half;
+  expect(overlap).toBeGreaterThan(RING_EDGE_TO * 2 + RING_EDGE_FROM * 2);
+});
+
+test("a quadrant's depth reaches the picture's far edge", () => {
+  const { depthHalf, half } = modelQuadrants(
+    { x: 0, y: 100, z: 0 },
+    400,
+    LOW_SUN
+  );
+  expect(depthHalf).toBeCloseTo(200 + half, 5);
 });
 
 describe("what falls on a ring", () => {

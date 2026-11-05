@@ -325,14 +325,14 @@ change, not a re-bake
     on the spot on foot draws nothing.
   - **When they draw.** A ring asks to redraw when its wanted centre has
     drifted a fifth of its half-size, the sun moves or a caster changes
-    (`invalidateShadows()`: a season change that thins or fills crowns, a
-    demolish). A tile's parts that land, leave or take over ask only the rings
+    (`invalidateShadows()`: a crown tier's swap, a season change that thins or
+    fills crowns, a demolish). A furniture cell's flip on foot asks nothing: it
+    lies beyond the finest ring, the only one that draws it. A capture and the
+    boot's light stage wait for all four rings (`shadowBusy`). A tile's parts that land, leave or take over ask only the rings
     the tile can fall on (`ringTouches`, seen along the light), and only if
     what shows did change: the stream reports every tile that comes into or
     leaves view, up to nine times a second while turning, and most of those
-    reports change nothing that casts. A crown tier's swap skips the finest
-    ring (the near tier holds within its reach), a furniture cell's only the
-    rings that draw thin casters. One ring a frame, the one waiting
+    reports change nothing that casts. One ring a frame, the one waiting
     longest, so a stream of requests starves none and the depth passes never
     pile into a frame; the two wide rings at least 250 and 500 ms apart.
     Animated geometry (sway, clouds) deliberately does **not** update them. By
@@ -352,8 +352,8 @@ change, not a re-bake
     goes.
   - **Modell** has one scale across its picture, where the fine middle would
     show as a patch: the four layers tile the picture's square 2 × 2, with a
-    tenth of overlap to cross-fade (`modelQuadrants`), so its map is 4096² in
-    all on a desktop and 2048² on a phone. Everything casts there.
+    fifth of overlap so that each cross-fade lies inside its neighbour (`modelQuadrants`), so its map is about 3400² in
+    all on a desktop and 1700² on a phone. Everything casts there.
 - **The shadow camera streams on a desktop, at a resolution of its
   own.** The sun's shadow camera is registered with the tiles renderer
   as a second camera, so a tile that casts into the view stays loaded

@@ -265,6 +265,8 @@ const TRAIL_BEAT_MS = 2000;
 const GPU_TIME_READ_MS = 250;
 /** How long a memory emergency keeps the shadow camera from streaming. */
 const EMERGENCY_SHADOW_HOLD_MS = 120_000;
+/** How many frames a capture waits for the shadow rings at most. */
+const CAPTURE_HOLD_FRAMES = 120;
 /** Allocation failures closer together than this are one emergency. */
 const EMERGENCY_GAP_MS = 5000;
 /** How long a reload waits for the old device to be destroyed. */
@@ -3252,21 +3254,22 @@ async function bootApp(
       lodChanged = true;
     }
     if (lodChanged) {
-      sunRig.invalidateCrowns();
+      invalidateShadows();
     }
     // the street furniture's cells near the eye (furniture-layer.ts)
     // (none hidden in Modell: its views and exports draw one scale)
     const furnitureEye = modelRig.owns() ? null : eye;
-    let thinChanged = false;
+    let cellChanged = false;
     for (const d of shown) {
       for (const part of [d.furniture, d.tram]) {
         if (part && showFurnitureNear(part, furnitureEye)) {
-          thinChanged = true;
+          cellChanged = true;
         }
       }
     }
-    if (thinChanged) {
-      sunRig.invalidateThin();
+    // on foot a cell flips beyond the finest ring, the only one that draws it
+    if (cellChanged && !furnitureEye) {
+      invalidateShadows();
     }
   };
 
@@ -3583,6 +3586,7 @@ async function bootApp(
       postStack.setSize();
     }
   };
+  let captureHeld = 0;
   const beginCapture = (request: CaptureRequest) => {
     const view = activeCamera() as ModelCamera | PerspectiveCamera;
     const { width: w, height: h } = renderer.domElement;
@@ -3616,8 +3620,20 @@ async function bootApp(
       imagePxPerCssPx: renderer.getPixelRatio() * scale,
     };
   };
-  /** Before the render: the frustum slides over the larger picture. */
+  /** Before the render: the frustum slides over the larger picture. A capture
+   *  starts once the rings have drawn what they were asked (a study's new sun:
+   *  one a frame), or after a bounded wait: a stream of landing tiles never
+   *  holds it for good. */
   const aimCaptureTile = () => {
+    const held =
+      !capture &&
+      captureQueue.length > 0 &&
+      sunRig.shadowBusy() &&
+      captureHeld < CAPTURE_HOLD_FRAMES;
+    captureHeld = held ? captureHeld + 1 : 0;
+    if (held) {
+      return;
+    }
     const nextCapture = capture ? undefined : captureQueue.shift();
     if (nextCapture) {
       fullResolution();
@@ -3675,7 +3691,8 @@ async function bootApp(
       let quiet = 0;
       shadowFrameSeen = (drawn) => {
         quiet = drawn || sunRig.shadowPending() ? 0 : quiet + 1;
-        if (drawn || quiet >= 2) {
+        // all the rings: each one's first draw builds its casters' pipelines
+        if ((drawn && !sunRig.shadowBusy()) || quiet >= 2) {
           shadowFrameSeen = null;
           resolve();
         }

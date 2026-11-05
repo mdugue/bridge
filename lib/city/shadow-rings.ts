@@ -79,9 +79,15 @@ const MAX_DEPTH_M = 12_000;
  *  caster in sight. */
 const RING_MIN_GAP_MS = [0, 0, 250, 500];
 
-/** Modell's quadrants overlap this share of their half-size, for the
- *  cross-fade between them. */
-const QUADRANT_OVERLAP = 0.1;
+/** A ring cross-fades over this band inside its edge (in the map's 0…1). The
+ *  band starts a little in: the filter's samples must stay on the ring. */
+export const RING_EDGE_FROM = 0.006;
+export const RING_EDGE_TO = 0.07;
+
+/** Modell's quadrants overlap this share of their half-size: enough that each
+ *  one's cross-fade band lies wholly inside its neighbour's full strength, or
+ *  light would leak through the seam. */
+const QUADRANT_OVERLAP = 0.2;
 
 /** A point (world, Y-up). */
 export interface RingPoint {
@@ -218,7 +224,7 @@ export function modelQuadrants(
   centre: RingPoint,
   radius: number,
   sun: RingPoint
-): { half: number; focus: RingPoint[] } {
+): { depthHalf: number; half: number; focus: RingPoint[] } {
   const { x, y } = lightAxes(sun);
   const q = radius / 2;
   const at = (sx: number, sy: number): RingPoint => ({
@@ -226,8 +232,11 @@ export function modelQuadrants(
     y: centre.y + (x.y * sx + y.y * sy) * q,
     z: centre.z + (x.z * sx + y.z * sy) * q,
   });
+  const half = q * (1 + QUADRANT_OVERLAP);
   return {
-    half: q * (1 + QUADRANT_OVERLAP),
+    // a quadrant's depth is measured from the picture's centre, not its own
+    depthHalf: q + half,
+    half,
     focus: [at(-1, -1), at(1, -1), at(-1, 1), at(1, 1)],
   };
 }

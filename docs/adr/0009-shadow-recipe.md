@@ -58,8 +58,10 @@ phone has no memory to spare (ADR 0047).
   redrawing on every turn: far off, its texels are wider than a map fitted to
   the view would have at its best.
 - A desktop holds 64 MiB of shadow map (36 with the one 3072² before).
-- Depth passes are more frequent and each smaller; whether that holds on a
-  real phone is judged there, not on a desktop.
+- Depth passes are more frequent and each smaller, and the widest ring holds
+  about 1 MiB more of the casters' vertex state on a phone on foot (emulated,
+  inside the budget's headroom). Whether that holds on a real phone is judged
+  there, not on a desktop.
 - A new lit feature fits into the pool or is faked.
 - A pass's sample counts are construction-time settings; switching them
   by motion is a rebuild hitch.

@@ -495,11 +495,11 @@ Traps of the rings:
 - **Coarse rings do not draw thin casters.** A new thin caster calls
   `markThinCaster`: `tiny` (the finest ring alone: a coarser filter turns it
   into a smear) or `slender` (the first three: thin but long, a lamp post).
-- **Plates wait for the rings**: `handle.shadowBusy()`. They redraw one a frame.
+- **Plates and captures wait for the rings**: `handle.shadowBusy()`. They
+  redraw one a frame.
 - **Ask only what a change touches.** `invalidateShadows()` redraws all four
   rings; a tile's change goes through `invalidateShownTiles` (only the rings it
-  can fall on, only if what shows changed), a crown tier's and a furniture
-  cell's through `sunRig.invalidateCrowns` and `invalidateThin`.
+  can fall on, only if what shows changed).
 - **`renderer.clear()` on a depth array throws on the WebGL2 backend**; the
   render's own clear is what draws a layer clean.
 - The stream's square (`lib/city/shadow-fit.ts`, `sunRig.shadowCamera`) only

@@ -17,7 +17,7 @@ import {
   LessEqualCompare,
 } from "three/webgpu";
 import type { UniformNode } from "three/webgpu";
-import { texture } from "three/tsl";
+import { float, int, max, mix, step, texture } from "three/tsl";
 import { SHADOW_RINGS } from "@/lib/city/shadow-rings";
 import type { F, V3 } from "./shader-chunks";
 import { ringLookup } from "./sun-rings";
@@ -46,7 +46,7 @@ export function shadowStandIn(reversed: boolean): DepthTexture {
 /**
  * The map at `world` (lifted off its surface by the caller): `shadowed`
  * 0 in a cast shadow, 1 in the sun (the map's own 2×2 filter at an edge);
- * `inside` how far the point is on a ring, faded in over that ring's edge so
+ * `inside` how far the point is on any ring, faded in over the widest's edge so
  * a caller's stand-in beyond it draws no line; `read` the texture node to
  * bind the map to.
  */
@@ -58,7 +58,14 @@ export function readSunShadow(
   reversed: boolean
 ): { inside: F; shadowed: F; read: ReturnType<typeof texture> } {
   const hit = ringLookup(world, rings, reversed);
-  const read = texture(standIn, hit.at.xy);
-  const shadowed = read.depth(hit.layer).compare(hit.at.z).x;
-  return { inside: hit.weight.mul(ready), shadowed, read };
+  // a ring's edge band and a fading ring are on the map all the same: past
+  // half strength the next ring out answers
+  const onNext = step(hit.weight, 0.5);
+  const at = mix(hit.at, hit.nextAt, onNext) as V3;
+  const layer = int(
+    mix(float(hit.layer), float(hit.nextLayer), onNext).add(0.5)
+  );
+  const read = texture(standIn, at.xy);
+  const shadowed = read.depth(layer).compare(at.z).x;
+  return { inside: max(hit.weight, hit.nextWeight).mul(ready), shadowed, read };
 }

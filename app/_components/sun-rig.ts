@@ -126,10 +126,6 @@ export interface SunRig {
    * so scene-topology edits (demolish, a tile landing or leaving) must call
    * this or stale shadows linger. */
   invalidateShadow: (area?: RingArea) => void;
-  /** The crowns' tiers changed (a depth pass per ring that shows them). */
-  invalidateCrowns: () => void;
-  /** A thin caster showed or hid (lamps, furniture: the rings that draw them). */
-  invalidateThin: () => void;
   /** The square round the view's ground the sun's camera streams for: the
    *  tile stream loads what it sees too, so a building behind the player
    *  still casts into the view. It draws nothing: the rings have a camera
@@ -308,8 +304,6 @@ export function createSunRig(
   let radius = SHADOW_BASE_RADIUS;
   // Its camera sits twice its radius out, for a depth range round the ground.
   let shadowDistance = radius * 2;
-  // World size of one of its texels: it snaps its centre to these.
-  let texelSize = (radius * 2) / shadowMapSize;
   // Metres its centre may drift before it follows.
   let deadZone = shadowDeadZone(radius);
 
@@ -366,7 +360,6 @@ export function createSunRig(
   const resizeFrustum = (next: number) => {
     radius = next;
     shadowDistance = radius * 2;
-    texelSize = (radius * 2) / shadowMapSize;
     deadZone = shadowDeadZone(radius);
     square.left = -radius;
     square.right = radius;
@@ -393,21 +386,14 @@ export function createSunRig(
   rings.setSun(dir);
   const lastCentre = new Vector3(Number.NaN, Number.NaN, Number.NaN);
 
-  /** The square to the focus, snapped to its texel grid. The shadow camera of
-   *  the stream: three updates a camera only while drawing with it, and this
-   *  one it never draws with, so a stale frustum would keep its tiles loaded. */
+  /** The square to the focus. The shadow camera of the stream: three updates
+   *  a camera only while drawing with it, and this one it never draws with, so
+   *  a stale frustum would keep its tiles loaded. */
   const reposition = () => {
-    const fx = Math.round(focus.x / texelSize) * texelSize;
-    const fy = Math.round(focus.y / texelSize) * texelSize;
-    const fz = Math.round(focus.z / texelSize) * texelSize;
-    square.position.set(
-      fx + dir.x * shadowDistance,
-      fy + dir.y * shadowDistance,
-      fz + dir.z * shadowDistance
-    );
-    square.lookAt(fx, fy, fz);
+    square.position.copy(focus).addScaledVector(dir, shadowDistance);
+    square.lookAt(focus);
     square.updateMatrixWorld();
-    lastCentre.set(fx, fy, fz);
+    lastCentre.copy(focus);
   };
 
   /** Re-fits the square the sun's camera streams for. */
@@ -520,10 +506,9 @@ export function createSunRig(
     sunUp = aboveHorizon;
     // The sun moved: redraw by day (a drag's or a glide's step at most every
     // PREVIEW_SHADOW_MS, the last after the wait); by night drop a request
-    // still open. The light and its map move only together: a light moved
-    // between two redraws reads the map it drew from where it was, and every
-    // shadow slides off its caster and snaps back at the next redraw; the
-    // whole picture wobbles while a walk's flight glides the hour.
+    // still open. The light turns at once and each ring follows when it is
+    // drawn, keeping the matrix it was drawn with until then: its shadows stay
+    // on their casters, the wide rings a little behind the fine ones.
     if (!aboveHorizon || !preview) {
       cancelShadowWait();
       moveLight();
@@ -573,23 +558,12 @@ export function createSunRig(
   };
 
   const invalidateShadow = redrawShadow;
-  const invalidateCrowns = () => {
-    rings.invalidateCrowns();
-    askRings();
-  };
-  const invalidateThin = () => {
-    rings.invalidateThin();
-    askRings();
-  };
-
   return {
     update,
     follow,
     followFootprint,
     setParallel,
     invalidateShadow,
-    invalidateCrowns,
-    invalidateThin,
     // Below the horizon nothing asks for a redraw; sunrise asks anew.
     shadowPending: () => sun.shadow.needsUpdate,
     shadowBusy: () => sunUp && rings.anyDirty(),

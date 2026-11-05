@@ -48,6 +48,8 @@ import {
 import {
   modelQuadrants,
   nextRingDue,
+  RING_EDGE_FROM,
+  RING_EDGE_TO,
   RING_PCF_RADIUS,
   ringBias,
   ringDeadZone,
@@ -58,18 +60,12 @@ import {
   SHADOW_RING_HALVES,
   SHADOW_RINGS,
   snapToTexels,
-  THIN_CASTER_RINGS,
 } from "@/lib/city/shadow-rings";
 import type { RingArea, RingPoint, RingView } from "@/lib/city/shadow-rings";
 import type { F, I, V3 } from "./shader-chunks";
 import { ShadowNodeBase } from "./shadow-node-api";
 import type { FrameLike, ShadowTargets } from "./shadow-node-api";
 import { castsInRing } from "./three-utils";
-
-/** The band a ring cross-fades over, inside its edge (in the map's 0…1). The
- *  band starts a little in: the filter's samples must stay on the ring. */
-const EDGE_FROM = 0.006;
-const EDGE_TO = 0.07;
 
 /** What a shadow lookup reads of the rings: one set for every material and
  *  post pass, in the render group, so that no drawable holds a copy. */
@@ -123,7 +119,7 @@ export function ringLookup(
     const inDepth = reversed ? step(0, s.z) : step(s.z, 1);
     weight.push(
       keep(
-        smoothstep(EDGE_FROM, EDGE_TO, edge)
+        smoothstep(RING_EDGE_FROM, RING_EDGE_TO, edge)
           .mul(inDepth)
           .mul(rings.fade[i]) as F
       )
@@ -147,9 +143,11 @@ export function ringLookup(
   let nextW: F = float(0);
   for (let i = last - 1; i >= 0; i -= 1) {
     const here = step(1e-3, weight[i]);
-    nextLayer = mix(nextLayer, float(i + 1), here);
-    nextAt = mix(nextAt, at[i + 1], here);
-    nextW = mix(nextW, weight[i + 1], here);
+    // what reached this point so far is the next out: not always ring i + 1,
+    // Modell's tiles lie side by side
+    nextLayer = mix(nextLayer, layer, here);
+    nextAt = mix(nextAt, chosen, here);
+    nextW = mix(nextW, w, here);
     layer = mix(layer, float(i), here);
     chosen = mix(chosen, at[i], here);
     w = mix(w, weight[i], here);
@@ -166,6 +164,8 @@ export function ringLookup(
 
 /** A ring's state between its redraws. */
 interface Ring {
+  /** how far its depth must reach, as a half-size */
+  depthHalf: number;
   /** the centre and half-size it was last drawn with */
   anchor: RingPoint | null;
   anchorHalf: number;
@@ -191,11 +191,6 @@ export interface SunRings {
   due: () => boolean;
   /** Asks every ring to redraw, or those `area` can fall on. */
   invalidate: (area?: RingArea) => void;
-  /** Asks the rings to redraw that show the crowns' tiers changing: not the
-   *  finest, within whose reach the near tier holds. */
-  invalidateCrowns: () => void;
-  /** Asks the rings to redraw that draw the thin casters. */
-  invalidateThin: () => void;
   /** The nodes a shadow lookup reads. */
   nodes: ShadowRingNodes;
   /** The map's depth, null until the first lit material made it. */
@@ -382,6 +377,7 @@ export function createSunRings(
     focus: { x: 0, y: 0, z: 0 },
     fresh: false,
     half,
+    depthHalf: half,
     every: false,
   }));
   let wanted: readonly number[] = rings.map(() => 1);
@@ -428,10 +424,10 @@ export function createSunRings(
   };
 
   /** Asks every ring that shows, and that `which` picks, to redraw. */
-  const askShown = (which?: (ring: Ring, i: number) => boolean) => {
+  const askShown = (which?: (ring: Ring) => boolean) => {
     const now = performance.now();
     for (let i = 0; i < SHADOW_RINGS; i += 1) {
-      if (wanted[i] > 0 && (!which || which(rings[i], i))) {
+      if (wanted[i] > 0 && (!which || which(rings[i]))) {
         ask(rings[i], now);
       }
     }
@@ -443,7 +439,7 @@ export function createSunRings(
     const ring = rings[index];
     const { half } = ring;
     const centre = snapToTexels(ring.focus, sun, (half * 2) / mapEdge);
-    const { down, up } = ringDepth(half, sun.y);
+    const { down, up } = ringDepth(ring.depthHalf, sun.y);
     const distance = up + 1;
     camera.left = -half;
     camera.right = half;
@@ -504,20 +500,15 @@ export function createSunRings(
             ringTouches(ring.anchor, ring.anchorHalf, area, sun))
       );
     },
-    invalidateCrowns: () => {
-      askShown((_ring, i) => tiled || i > 0);
-    },
-    invalidateThin: () => {
-      askShown((_ring, i) => tiled || i < THIN_CASTER_RINGS.slender);
-    },
     nodes,
     reach,
     setFootprint: (centre, radius) => {
       const now = performance.now();
       tiled = true;
-      const { half, focus } = modelQuadrants(centre, radius, sun);
+      const { depthHalf, half, focus } = modelQuadrants(centre, radius, sun);
       for (let i = 0; i < SHADOW_RINGS; i += 1) {
         rings[i].every = true;
+        rings[i].depthHalf = depthHalf;
         wantRing(rings[i], focus[i], half, now);
       }
       showRings([1, 1, 1, 1], now);
@@ -539,6 +530,7 @@ export function createSunRings(
         const fade = ringFade(i, view.height);
         want.push(fade);
         rings[i].every = false;
+        rings[i].depthHalf = half;
         if (fade > 0) {
           wantRing(rings[i], ringFocus(half, view), half, now);
         }
