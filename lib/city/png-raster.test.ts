@@ -155,7 +155,9 @@ describe("decodeGreyPng", () => {
       // timeout on CI.
       expect(out.data.every((id) => id <= maxId)).toBe(true);
     }
-  });
+    // sixteen million texels per committed site: under CI's coverage it took
+    // 5.35 s of bun's default 5, next to the suite's other workers
+  }, 30_000);
 
   test("decodes the committed paving rasters as four bytes per texel", async () => {
     const dir = path.join(

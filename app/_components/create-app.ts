@@ -91,6 +91,11 @@ import {
   SHADOW_MAX_RADIUS,
   shadowStreamResolution,
 } from "@/lib/city/shadow-fit";
+import {
+  changedTiles,
+  NEAR_CHANGE_RINGS,
+  tileArea,
+} from "@/lib/city/shadow-rings";
 import { cutOutFromView } from "@/lib/city/section";
 import { exportScale, exportTiles } from "@/lib/city/image-export";
 import type { ExportTile } from "@/lib/city/image-export";
@@ -202,7 +207,7 @@ import {
 import type { SceneBudget } from "./scene-profile";
 import { createSunRig, sunStateAt } from "./sun-rig";
 import { createSceneEnvironment, sceneNight } from "./scene-environment";
-import type { AirView, SunState } from "./sun-rig";
+import type { SunState } from "./sun-rig";
 import type { GroundUniforms, TerrainLayer } from "./terrain-layer";
 import {
   bufferBytes,
@@ -264,6 +269,9 @@ const TRAIL_BEAT_MS = 2000;
 const GPU_TIME_READ_MS = 250;
 /** How long a memory emergency keeps the shadow camera from streaming. */
 const EMERGENCY_SHADOW_HOLD_MS = 120_000;
+/** How long a capture waits for the shadow rings at most (ms): the view stands
+ *  still meanwhile. */
+const CAPTURE_HOLD_MS = 1500;
 /** Allocation failures closer together than this are one emergency. */
 const EMERGENCY_GAP_MS = 5000;
 /** How long a reload waits for the old device to be destroyed. */
@@ -619,6 +627,8 @@ export interface CityWalkHandle {
   viewMoving: () => boolean;
   /** Tiles or their dressing are still streaming in for the view. */
   streamBusy: () => boolean;
+  /** A ring of the sun's shadow map still waits for its redraw. */
+  shadowBusy: () => boolean;
   /** What the nameplate sets in the city and where (nameplate-layer.ts),
    *  null while nothing is named; tests and QA read it. */
   nameplateShown: () => { title: string; mode: string; spot: string } | null;
@@ -1539,7 +1549,7 @@ async function bootApp(
     renderer
   );
   cleanups.push(sunRig.dispose);
-  // The horizon's near band hands over to the shadow map inside the frustum.
+  // The horizon's near band hands over to the shadow map inside the rings' reach.
   ground.shadowReach.value = sunRig.shadowReach;
 
   // The walker's lantern (lantern.ts): one more light, built before the
@@ -1549,8 +1559,8 @@ async function bootApp(
   scene.add(lantern.light);
   cleanups.push(() => lantern.dispose());
   /**
-   * Forces one shadow-map re-render. The map is otherwise only redrawn when the
-   * sun or the frustum moves, so **every new scene object and every material
+   * Asks every shadow ring to redraw. A ring is otherwise only redrawn when the
+   * sun or the ring moves, so **every new scene object and every material
    * change that alters the depth pass has to call this** — a missing call shows
    * up as a stale shadow (a demolished building still casting, a new one not),
    * never as a crash. Tiles landing, leaving or changing level call it through
@@ -2837,6 +2847,31 @@ async function bootApp(
   // Everything that follows from the tile set changing: the ground, the
   // lamp heads, the fog floor, the shadows, the stats.
   let dressingsNoted = 0;
+  // What casts, by the tile it stands on: the stream reports every tile that
+  // comes into or leaves view, and most of those reports change nothing here.
+  let tilesCasting = new Map<object, string>();
+  /** Asks the rings a change of what the tiles show can fall on to redraw. */
+  const invalidateShownTiles = () => {
+    const now = new Map<object, string>();
+    for (const part of [
+      ...stream.visibleTerrains(),
+      ...stream.visibleCities(),
+      ...stream.visibleDressings(),
+    ]) {
+      now.set(part, part.tile);
+    }
+    const changed = changedTiles(tilesCasting, now);
+    tilesCasting = now;
+    if (changed.size === 0) {
+      return;
+    }
+    invalidateLanternShadow(lantern);
+    for (const id of changed) {
+      const bounds = siteTileBounds.get(id);
+      sunRig.invalidateShadow(bounds && tileArea(bounds, offset));
+    }
+  };
+
   onChange = () => {
     if (disposed) {
       return;
@@ -2873,7 +2908,7 @@ async function bootApp(
     crownTiers.force();
     streamHook.emit();
     postStack.sceneChanged();
-    invalidateShadows();
+    invalidateShownTiles();
     scheduleStats();
     checkLoaded();
   };
@@ -3173,7 +3208,7 @@ async function bootApp(
     }
   };
 
-  // Ground elevation under the camera, for the shadow frustum (sun-rig.ts):
+  // Ground elevation under the camera, for the shadow rings (sun-rig.ts):
   // both the plane it is anchored to and the altitude its half-size derives
   // from. Off every tile the ground floor stands in, as for the walk clamp.
   const shadowViewDir = new Vector3();
@@ -3223,23 +3258,28 @@ async function bootApp(
     if (vegetationLod(vegetationControls, eye, multiTuft, richTrees)) {
       lodChanged = true;
     }
+    if (lodChanged) {
+      invalidateShadows();
+    }
     // the street furniture's cells near the eye (furniture-layer.ts)
     // (none hidden in Modell: its views and exports draw one scale)
     const furnitureEye = modelRig.owns() ? null : eye;
+    let cellChanged = false;
     for (const d of shown) {
       for (const part of [d.furniture, d.tram]) {
         if (part && showFurnitureNear(part, furnitureEye)) {
-          lodChanged = true;
+          cellChanged = true;
         }
       }
     }
-    if (lodChanged) {
-      invalidateShadows();
+    if (cellChanged) {
+      invalidateLanternShadow(lantern);
+      sunRig.invalidateShadow(undefined, NEAR_CHANGE_RINGS);
     }
   };
 
   /**
-   * Everything that follows where the frame looks: the shadow frustum, the
+   * Everything that follows where the frame looks: the shadow rings, the
    * map's marks, the lamp lights and the tree tiers — from the camera on
    * foot and in the air; in Modell from the ground the picture shows and
    * from above its pivot, as far up as the picture is equivalent to (so a
@@ -3248,21 +3288,13 @@ async function bootApp(
    * pose tick is due (the tree tiers').
    */
   const eye = new Vector3();
-  // what the warped shadow map reads of the site (sun-rig.ts `AirView`):
-  // its ground's 2nd and 90th height percentile, the fog's end per frame
-  const airView: AirView = {
-    fogEnd: sceneFog.far.value,
-    groundLow: extras.ground?.[0] ?? Number.POSITIVE_INFINITY,
-    groundHigh: extras.ground?.[1] ?? Number.NEGATIVE_INFINITY,
-  };
   const followView = (elapsed: number, tick: boolean): number | null => {
     const target = modelRig.owns() ? modelRig.targetView() : null;
     if (!target) {
-      // Re-fit the shadow frustum to the camera (lib/city/shadow-fit.ts).
+      // Re-fit the shadow rings to the camera (lib/city/shadow-rings.ts).
       camera.getWorldDirection(shadowViewDir);
       const groundY = groundUnderCamera();
-      airView.fogEnd = sceneFog.far.value;
-      sunRig.follow(camera, shadowViewDir, groundY, airView);
+      sunRig.follow(camera, shadowViewDir, groundY);
       // The map's own marks (the ferry lines) show from the air.
       setMapAltitude(camera.position.y - groundY);
       // Repoint the shared real lamp lights at the nearest heads.
@@ -3559,6 +3591,8 @@ async function bootApp(
       postStack.setSize();
     }
   };
+  // since when a capture waits for the rings
+  let captureHeldFrom: number | null = null;
   const beginCapture = (request: CaptureRequest) => {
     const view = activeCamera() as ModelCamera | PerspectiveCamera;
     const { width: w, height: h } = renderer.domElement;
@@ -3592,8 +3626,20 @@ async function bootApp(
       imagePxPerCssPx: renderer.getPixelRatio() * scale,
     };
   };
-  /** Before the render: the frustum slides over the larger picture. */
+  /** Before the render: the frustum slides over the larger picture. A capture
+   *  starts once the rings have drawn what they were asked (a study's new sun:
+   *  one a frame), or after a bounded wait: a stream of landing tiles never
+   *  holds it for good. */
   const aimCaptureTile = () => {
+    const waiting = !capture && captureQueue.length > 0 && sunRig.shadowBusy();
+    captureHeldFrom = waiting ? (captureHeldFrom ?? performance.now()) : null;
+    if (
+      captureHeldFrom !== null &&
+      performance.now() - captureHeldFrom < CAPTURE_HOLD_MS
+    ) {
+      return;
+    }
+    captureHeldFrom = null;
     const nextCapture = capture ? undefined : captureQueue.shift();
     if (nextCapture) {
       fullResolution();
@@ -3651,7 +3697,8 @@ async function bootApp(
       let quiet = 0;
       shadowFrameSeen = (drawn) => {
         quiet = drawn || sunRig.shadowPending() ? 0 : quiet + 1;
-        if (drawn || quiet >= 2) {
+        // all the rings: each one's first draw builds its casters' pipelines
+        if ((drawn && !sunRig.shadowBusy()) || quiet >= 2) {
           shadowFrameSeen = null;
           resolve();
         }
@@ -3798,7 +3845,12 @@ async function bootApp(
     }
     // (the loading veil breathes, sweeps and lifts at the full rate)
     const busy =
-      moved || exporting || !sceneSettled || dataLayersMove || veilShown;
+      moved ||
+      exporting ||
+      !sceneSettled ||
+      dataLayersMove ||
+      veilShown ||
+      sunRig.shadowBusy();
     sceneStill = stillness.frame(time, busy);
     opts.pace.setStill(sceneStill);
   };
@@ -4332,6 +4384,7 @@ async function bootApp(
     focusNdc: modelRig.focusNdc,
     viewMoving: () => pose.getGlideTarget() !== null || modelRig.moving(),
     streamBusy: () => !sceneSettled,
+    shadowBusy: sunRig.shadowBusy,
     stopGlide: pose.cancelGlide,
     getPose: () => {
       const hud = modelRig.hud();

@@ -1,3 +1,4 @@
+import { THIN_CASTER_RINGS } from "@/lib/city/shadow-rings";
 import type {
   BufferAttribute,
   BufferGeometry,
@@ -454,6 +455,24 @@ const materialsShared = sceneShared(() => ({
     sceneMaterials.clear();
   },
 }));
+
+/**
+ * Marks a caster thinner than a coarse shadow ring's texel: only the finest
+ * rings draw it, as many as its kind says (lib/city/shadow-rings.ts), and its
+ * shadow fades out across their edge (sun-rings.ts).
+ */
+export function markThinCaster(
+  object: Object3D,
+  kind: keyof typeof THIN_CASTER_RINGS = "tiny"
+): void {
+  object.userData.casterRings = THIN_CASTER_RINGS[kind];
+}
+
+/** Whether shadow ring `ring` draws `object` (`markThinCaster`). */
+export function castsInRing(object: Object3D, ring: number): boolean {
+  const rings: unknown = object.userData.casterRings;
+  return typeof rings !== "number" || ring < rings;
+}
 
 /**
  * A node material every tile wears, made on first use and marked
