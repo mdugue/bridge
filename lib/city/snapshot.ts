@@ -298,3 +298,79 @@ export function parseSnapshot(text: string): SnapshotParse {
     throw error;
   }
 }
+
+/**
+ * A view link (plan 048): the snapshot in the address's fragment,
+ * `/<site>#snap=<base64url of its JSON>`. The fragment, as the arrival's
+ * `#at=` (lib/city/geolocation.ts): a browser never sends it — not in the
+ * request, not in a Referer — and the crash trail keeps the query alone,
+ * so the camera's place a link carries stays with whoever holds the link.
+ * The link carries the snapshot exactly as *Kopieren* writes it and means
+ * what pasting that does: no second format, the same `parseSnapshot`.
+ */
+export const SNAPSHOT_PARAM = "snap";
+
+/** A param longer than this is refused unread (a whole snapshot is ≈ 0.4 KB). */
+export const SNAPSHOT_PARAM_MAX = 4096;
+
+const BASE64URL = /^[\w-]*$/u;
+
+function toBase64Url(text: string): string {
+  let binary = "";
+  for (const byte of new TextEncoder().encode(text)) {
+    binary += String.fromCodePoint(byte);
+  }
+  return btoa(binary)
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/[=]+$/u, "");
+}
+
+/** The UTF-8 text a base64url param holds, or null. */
+function fromBase64Url(param: string): string | null {
+  if (!BASE64URL.test(param)) {
+    return null;
+  }
+  try {
+    const padded =
+      param.replaceAll("-", "+").replaceAll("_", "/") +
+      "=".repeat((4 - (param.length % 4)) % 4);
+    const bytes = Uint8Array.from(atob(padded), (c) => c.codePointAt(0) ?? 0);
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
+/** The `snap` value of a view link: the snapshot's JSON, base64url. */
+export function snapshotToParam(snapshot: Snapshot): string {
+  return toBase64Url(JSON.stringify(snapshot));
+}
+
+/** A view link's `snap` value, read back through `parseSnapshot`; never throws. */
+export function snapshotFromParam(param: string): SnapshotParse {
+  if (param.length > SNAPSHOT_PARAM_MAX) {
+    return { ok: false, reason: "View link too long" };
+  }
+  const text = fromBase64Url(param);
+  return text === null
+    ? { ok: false, reason: "View link is not base64url" }
+    : parseSnapshot(text);
+}
+
+/** `<path>#snap=…`: the page at `path`, opened at the snapshot's view. */
+export function snapshotHref(path: string, snapshot: Snapshot): string {
+  return `${path}#${SNAPSHOT_PARAM}=${snapshotToParam(snapshot)}`;
+}
+
+/**
+ * The view a page was opened with (its `#snap=…`), or null when the
+ * fragment names none. Only a fragment: URLSearchParams would read a
+ * `?snap=` query just the same, which a browser sends to the host.
+ */
+export function snapshotFromHash(hash: string): SnapshotParse | null {
+  const param = hash.startsWith("#")
+    ? new URLSearchParams(hash.slice(1)).get(SNAPSHOT_PARAM)
+    : null;
+  return param === null ? null : snapshotFromParam(param);
+}

@@ -91,6 +91,7 @@ export interface Arrival {
   note:
     | { event: "recovered"; detail: "after a lost GPU" }
     | { event: "quality reset"; detail: "back where the player stood" }
+    | { event: "view link"; detail: "opened at a linked view" }
     | null;
   /** the HUD says "Mit weniger Details neu geladen" (a recovery, level ≥ 1) */
   sayLighter: boolean;
@@ -118,6 +119,9 @@ function gated(snapshot: Snapshot, level: SafetyLevel): Snapshot {
  * picked meanwhile (the player's choice wins); else the snapshot as the
  * level gates it, the trail's note — a reset to full detail, or a
  * recovery — and, for a recovery onto a lighter page, the HUD's word.
+ * With nothing waiting, the view the page's link names (`#snap=`,
+ * lib/city/snapshot.ts), gated the same way: a recovery wins over the
+ * link, which a reload keeps in the address.
  */
 export function arrivalOf(inputs: {
   /** the waiting one, parsed by the HUD */
@@ -128,10 +132,21 @@ export function arrivalOf(inputs: {
   picked: boolean;
   /** this page's safety level */
   level: SafetyLevel;
+  /** the view link's snapshot, parsed by the HUD */
+  linked?: Snapshot | null;
 }): Arrival {
-  const { snapshot, reset, picked, level } = inputs;
-  if (!snapshot || picked) {
+  const { snapshot, reset, picked, level, linked } = inputs;
+  if (picked) {
     return { snapshot: null, note: null, sayLighter: false };
+  }
+  if (!snapshot) {
+    return linked
+      ? {
+          snapshot: gated(linked, level),
+          note: { event: "view link", detail: "opened at a linked view" },
+          sayLighter: false,
+        }
+      : { snapshot: null, note: null, sayLighter: false };
   }
   return reset
     ? {

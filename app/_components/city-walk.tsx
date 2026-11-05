@@ -36,6 +36,8 @@ import {
   decodeLook,
   encodeSnapshot,
   parseSnapshot,
+  snapshotFromHash,
+  snapshotHref,
   snapshotInstant,
 } from "@/lib/city/snapshot";
 import type { Snapshot } from "@/lib/city/snapshot";
@@ -885,15 +887,19 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
     // full detail (gpu-recovery.ts): peeked now, committed once the scene
     // is up — a boot that StrictMode aborts leaves it for the next
     // (`RecoverySession.peek`). A place picked in the panel meanwhile wins,
-    // and the time and look the player set are theirs.
+    // and the time and look the player set are theirs. With nothing
+    // waiting, the view the page's link names (`#snap=`, snapshot.ts),
+    // the same way; the address keeps it, so a reload opens it again.
     const recoveries = pageRecovery();
     const waiting = recoveries.peek();
     const parsed = waiting ? parseSnapshot(waiting.snapshot) : null;
+    const linked = snapshotFromHash(location.hash);
     const arrival = recoveryArrival({
       snapshot: parsed?.ok ? parsed.snapshot : null,
       reset: waiting?.reset ?? false,
       picked: start !== null,
       level: budget.safety,
+      linked: linked?.ok ? linked.snapshot : null,
     });
     if (arrival.snapshot) {
       recovery.current?.prepare(arrival.snapshot);
@@ -979,6 +985,9 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
             sayHud("Mit weniger Details neu geladen – Erweitert › Qualität");
           }
         } else {
+          if (linked && !linked.ok) {
+            sayHud("Der Link enthält keine gültige Ansicht");
+          }
           arriveAt(h, site, sayHud);
         }
         syncTime();
@@ -1065,7 +1074,10 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
     pace,
   ]);
 
-  const copySnapshot = () => {
+  /** *Kopieren* (the JSON) or *Link kopieren* (the site's page opened at
+   *  the view, `#snap=`, without this page's query — its QA knobs, a
+   *  pinned `?safety=`, are not the view's): the JSON shows either way. */
+  const copySnapshot = (as: "json" | "link") => {
     const h = handleRef.current;
     if (!h) {
       return;
@@ -1073,8 +1085,17 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
     const snap = encodeSnapshot(look.get(), h.getCameraState(), time.current());
     const text = JSON.stringify(snap, null, 2);
     setSnapshotText(text);
-    navigator.clipboard?.writeText(text).then(
-      () => setSnapshotMsg("In die Zwischenablage kopiert"),
+    const copied =
+      as === "link"
+        ? `${location.origin}${snapshotHref(location.pathname, snap)}`
+        : text;
+    navigator.clipboard?.writeText(copied).then(
+      () =>
+        setSnapshotMsg(
+          as === "link"
+            ? "Link in die Zwischenablage kopiert"
+            : "In die Zwischenablage kopiert"
+        ),
       () => setSnapshotMsg("Kopieren fehlgeschlagen — Text manuell auswählen")
     );
   };
@@ -1101,6 +1122,42 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
         : "Snapshot angewendet"
     );
   };
+
+  // A view link opened on the page that is already up (a new `#snap=` in
+  // the address: no reload) is applied as *Anwenden* applies a snapshot,
+  // gated by the safety level as at the boot (gpu-recovery.ts `arrivalOf`).
+  const openLinked = useRef<(snapshot: Snapshot) => void>(() => {
+    // replaced once rendered, below
+  });
+  useEffect(() => {
+    openLinked.current = (snapshot) => {
+      const gated = recoveryArrival({
+        snapshot: null,
+        reset: false,
+        picked: false,
+        level: budget.safety,
+        linked: snapshot,
+      }).snapshot;
+      if (!gated) {
+        return;
+      }
+      goTo({ camera: gated.camera, label: "Link" });
+      time.setInstant(snapshotInstant(gated));
+      look.set(decodeLook(gated.look));
+    };
+  });
+  useEffect(() => {
+    const onHash = () => {
+      const linked = snapshotFromHash(location.hash);
+      if (linked?.ok) {
+        openLinked.current(linked.snapshot);
+      } else if (linked) {
+        sayHud("Der Link enthält keine gültige Ansicht");
+      }
+    };
+    addEventListener("hashchange", onHash);
+    return () => removeEventListener("hashchange", onHash);
+  }, [sayHud]);
 
   // Bild speichern and the Verschattungsstudie (plan 055): one at a time.
   // While one renders (a tile a frame) a veil covers the canvas, which

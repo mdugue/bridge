@@ -638,7 +638,12 @@ und das Modell behalten ihre scharfen Linien.
 - **Snapshot** — *Kopieren* kopiert deine genaue Position, Datum und
   Uhrzeit, den Bildstil, den *Nebel*, den Kronen-Schalter und die
   Datenebenen als kleinen JSON-Text; einen solchen Text in das Feld
-  einfügen und *Anwenden* drücken stellt ihn wieder her. So wird eine
+  einfügen und *Anwenden* drücken stellt ihn wieder her. *Link kopieren*
+  kopiert einen Link auf diese Seite, der mit derselben Ansicht öffnet
+  (der Snapshot steht im Teil der Adresse hinter dem `#`, den der Browser
+  nie an den Server schickt); er enthält den Ort der Kamera, nach
+  *Standort* oder *Live* also deinen. Ein solcher Link in einem Tab, der
+  die Stadt schon zeigt, bringt dich sofort hin. So wird eine
   bestimmte Ansicht geteilt oder für einen Screenshot reproduziert. Ein
   Snapshot von vor dem festen Look lädt weiter; die Regler, die er nennt,
   werden übergangen. Ein fehlerhafter Snapshot wird mit einer Meldung

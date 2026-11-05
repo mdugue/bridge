@@ -11,6 +11,7 @@ import {
   FullscreenIcon,
   HammerIcon,
   ImageDownIcon,
+  LinkIcon,
   PlaneIcon,
   XIcon,
 } from "lucide-react";
@@ -824,7 +825,8 @@ export interface SceneSidebarProps {
   /** the page's budget: its safety level and what that level sets */
   budget: SceneBudget;
   coarse: boolean;
-  copySnapshot: () => void;
+  /** the snapshot to the clipboard: its JSON, or a link to this view */
+  copySnapshot: (as: "json" | "link") => void;
   /**
    * The centre-aimed tool is pointed at or focused: the HUD marks the
    * middle it will act on, which no dot marks otherwise.
@@ -1077,7 +1079,7 @@ export const SceneSidebar = (props: SceneSidebarProps) => {
               <div className="grid grid-cols-2 gap-1.5">
                 <Button
                   disabled={!props.ready}
-                  onClick={handleCopySnapshot}
+                  onClick={() => handleCopySnapshot("json")}
                   size="sm"
                   type="button"
                 >
@@ -1094,7 +1096,21 @@ export const SceneSidebar = (props: SceneSidebarProps) => {
                   <ClipboardPasteIcon data-icon="inline-start" />
                   Anwenden
                 </Button>
+                <Button
+                  className="col-span-2"
+                  disabled={!props.ready}
+                  onClick={() => handleCopySnapshot("link")}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  <LinkIcon data-icon="inline-start" />
+                  Link kopieren
+                </Button>
               </div>
+              <span className="text-[11px] text-muted-foreground">
+                Der Link enthält den Ort der Kamera.
+              </span>
               <Textarea
                 className="font-mono text-[10px] leading-snug"
                 id="snapshot"

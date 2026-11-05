@@ -946,8 +946,17 @@ bun run shots   # = SHOTS=1 playwright test e2e/snapshot-shot.spec.ts --headed
 # appends the query to the page URL and writes shots/<name>.x.png.
 # The shots are taken at /dresden; SHOTS_SITE=leipzig takes them in another
 # built city.
+# The committed QA views (qa/views/*.json, plan 019's reference views,
+# written by `bun scripts/qa-views.ts`) render too, as shots/qa-<name>.png;
+# one of them: bun run shots -- --grep qa-<name>.
 # Plain `bun run test:e2e` ignores the harness (testIgnore in playwright.config.ts).
 ```
+
+A view also travels as a link: *Link kopieren* writes
+`/<site>#snap=<base64url of the snapshot>` (lib/city/snapshot.ts) — a
+fragment, never a query, so the camera's place never reaches the host;
+the boot reads it through `parseSnapshot` (a waiting GPU recovery wins,
+`lib/city/gpu-recovery.ts` `arrivalOf`), a running page on `hashchange`.
 
 Headless e2e uses SwiftShader through the renderer's WebGL2 backend (headless
 Chromium has no WebGPU adapter) — shadows/AA look nothing like a real GPU, so
