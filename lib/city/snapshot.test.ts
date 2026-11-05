@@ -5,9 +5,14 @@ import {
   decodeLook,
   encodeSnapshot,
   parseSnapshot,
+  SNAPSHOT_PARAM_MAX,
+  snapshotFromHash,
+  snapshotFromParam,
+  snapshotHref,
   snapshotInstant,
+  snapshotToParam,
 } from "./snapshot";
-import type { Snapshot } from "./snapshot";
+import type { Snapshot, SnapshotParse } from "./snapshot";
 
 const valid: Snapshot = {
   v: 1,
@@ -288,4 +293,63 @@ test("a Modell view round-trips with the camera, and is checked", () => {
 test("a snapshot without a Modell view is the perspective one, as before", () => {
   const r = parseSnapshot(JSON.stringify(valid));
   expect(r.ok && r.snapshot.camera.model).toBe(undefined);
+});
+
+const linkReason = (r: SnapshotParse): string => (r.ok ? "" : r.reason);
+
+test("a view link carries the snapshot whole, and reads back through the parser", () => {
+  const snap = encodeSnapshot(
+    { ...LOOK_DEFAULTS, style: "noir", trafficLayer: true },
+    {
+      ...valid.camera,
+      model: {
+        pivot: { x: 1, y: 2, z: 3 },
+        preset: "plan",
+        scale: 5000,
+        tiltDeg: 90,
+        turnDeg: 0,
+      },
+    },
+    new Date(valid.date)
+  );
+  const param = snapshotToParam(snap);
+  expect(param).toMatch(/^[\w-]+$/u);
+  expect(snapshotFromParam(param)).toEqual({ ok: true, snapshot: snap });
+  const href = snapshotHref("/dresden", snap);
+  expect(href.startsWith("/dresden#snap=")).toBe(true);
+  expect(snapshotFromHash(new URL(href, "https://x.test").hash)).toEqual({
+    ok: true,
+    snapshot: snap,
+  });
+});
+
+test("a view link that is not one is refused with a reason, never thrown", () => {
+  expect(linkReason(snapshotFromParam("not base64!"))).toBe(
+    "View link is not base64url"
+  );
+  // base64url of "{": JSON the parser refuses
+  expect(linkReason(snapshotFromParam("ew"))).toBe("Invalid snapshot JSON");
+  // a snapshot with a broken camera: the parser's own reason
+  const broken = snapshotToParam({
+    ...valid,
+    camera: { ...valid.camera, fov: 0 },
+  });
+  expect(linkReason(snapshotFromParam(broken))).toMatch(/camera\.fov/u);
+  // a byte that is no UTF-8 (0xff)
+  expect(linkReason(snapshotFromParam("_w"))).toBe(
+    "View link is not base64url"
+  );
+});
+
+test("an oversized view link is refused unread", () => {
+  const long = "A".repeat(SNAPSHOT_PARAM_MAX + 1);
+  expect(linkReason(snapshotFromParam(long))).toBe("View link too long");
+});
+
+test("only the fragment opens a view: a query, or a fragment without one, does not", () => {
+  const param = snapshotToParam(valid);
+  expect(snapshotFromHash(`?snap=${param}`)).toBe(null);
+  expect(snapshotFromHash("#at=51.05,13.74")).toBe(null);
+  expect(snapshotFromHash("")).toBe(null);
+  expect(snapshotFromHash(`#at=51.05,13.74&snap=${param}`)?.ok).toBe(true);
 });
