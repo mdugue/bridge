@@ -33,7 +33,7 @@ load into the browser.
    the card shows; the card turns a coded refusal into a stream error, so
    both reach it alike.
 2. **The prompt and the tools are fixed on the server**
-   (`lib/city/ask-run.ts`, `ask-city.ts`, `ask-tools.ts`): one job (this
+   (`lib/city/ask-run.ts`, `ask-prompt.ts`, `ask-tools.ts`): one job (this
    city, this viewer; facts from the tools with their source; legends as
    legends; today's date). The Stadtwissen's tools run on the server
    (`ask-knowledge.ts`, over a copy the build keeps in `.stadtwissen/`),

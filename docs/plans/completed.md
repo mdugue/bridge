@@ -1329,6 +1329,43 @@ of an `update()` that requested nothing new (3DTilesRendererJS 0.5.3) —
 re-check that on an upgrade. Releasing ⌘ releases every held key, a key
 still held included (re-press it): macOS gives no keyup to tell them apart.
 
+## 039 — Bridge ramps, rain that lasts, Papier's ribbons · DONE (2026-11-05)
+
+**Problem.** A ramp quad whose first column is flush with the ground had a
+zero normal (`normalize(0)` is NaN on the GPU: a black face). Sin City's
+rain hashed a cell index that grows with the clock and lost its pattern
+after about an hour. Papier's override drew double-sided things from one
+side.
+
+**Decision.** `rampNormal` sums both triangles' normals; a pair of flush
+columns draws nothing. The rain's cell is `mod(cell, 1024)` before the
+hash. Opaque double-sided materials draw a stand-in, the card with their
+side and position, shared per side and position, freed at the gather after
+its last mesh left (`paper-scene.ts`). Step 3 (rails under a deck) was moot
+since ADR 0041.
+
+**Deviations from the plan, both found by reading three or a plate.** The
+plan swapped `mesh.material` for the frame. A stand-in has `allowOverride =
+false`, so the shadow pass would draw it too, reading the shadow map it
+draws into. So a frame hands stand-ins over through the renderer's object
+function, which the shadow pass replaces with its own; only `swapped`
+(a compile takes no object function) wears one on the mesh. The plan also
+carried `maskNode` over so that winter crowns stay bare: on a Mac GPU the
+pen outlined every gap and the crowns turned into dark grey clots, so the
+card draws them whole, as before. The clay and a design (`userData.figure`)
+stay with the override.
+
+**Verified.** The ramp test fails without the fix (the flush column has to
+be the *first*: as the last, the old normal had area). Plates on a Mac GPU
+of a retaining wall from both sides, against the stand-ins switched off:
+without them trunk feet and grass show through its missing back, with them
+it covers. An eye-level colony view with no ribbon: unchanged. Not done:
+the rain watched for an hour, a ribbon judged in Sin City (plan 019).
+
+**Keep in mind.** A new opaque double-sided material gets its stand-in by
+itself; a new see-through one stays hidden in Papier. Masks stay out unless
+the pen learns to ignore them.
+
 ## 040 — Bakes that read finished neighbours, keep their seam stairs, never trust a half-written file · DONE (2026-11-05)
 
 **Problem.** (2026-10-01) `bun run bake` ran tile-major while several

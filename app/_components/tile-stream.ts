@@ -9,7 +9,6 @@ import type {
   Mesh,
   MeshStandardNodeMaterial,
   Object3D,
-  Texture,
   UniformNode,
   Vector3,
   WebGPURenderer,
@@ -102,31 +101,14 @@ import { bridgeAskSet } from "./bridge-ask";
 import { buildRiverside } from "./riverside-layer";
 import { buildSportFixtures } from "./sport-fixtures";
 import type { SportFixtureLayer } from "./sport-fixtures";
-import {
-  cpuDroppable,
-  createGridShare,
-  dressTerrain,
-  freeSplatRasters,
-  freeSport,
-  loadNdviTexture,
-  loadSplatRasters,
-  loadSportKey,
-} from "./terrain-layer";
-import type {
-  GridShare,
-  GroundUniforms,
-  SplatRasters,
-  SportRasters,
-  TerrainLayer,
-} from "./terrain-layer";
+import { cpuDroppable, createGridShare, dressTerrain } from "./terrain-layer";
+import type { GridShare, GroundUniforms, TerrainLayer } from "./terrain-layer";
 import { dressFences } from "./fence-layer";
 import { dressKerbs } from "./kerb-layer";
-import { RasterShares } from "./raster-shares";
 import { setRasterTier } from "./raster-upload";
 import type { DeviceTier } from "./scene-profile";
-import { createSharedRasters } from "./shared-rasters";
-import type { SharedRasters } from "./shared-rasters";
-import { loadHorizonTexture, loadSkyViewTexture } from "./sky-light";
+import { createTileRasters } from "./tile-rasters";
+import type { RasterHold, TileRasters } from "./tile-rasters";
 import { dressStairs } from "./stair-layer";
 import {
   createLateLane,
@@ -161,6 +143,7 @@ import {
   dropCpuCopies,
   estimateGeometryBytes,
   sceneSharedBytes,
+  trackedBytesOf,
 } from "./three-utils";
 import type { AnyAttribute } from "./three-utils";
 import type { TrafficBuilder } from "./data-layers-feature";
@@ -428,8 +411,8 @@ interface Dressed {
    *  grid's index and water index): the tile renderer counts them in the
    *  tile's glTF, but they stay when the tile goes */
   sharedBytes?: number;
-  /** the shared sky-view raster the city holds (its URL) */
-  svf?: string;
+  /** the city's hold on its shared sky-view raster (not weighed) */
+  svf?: RasterHold;
   terrain?: TerrainLayer;
 }
 
@@ -1693,47 +1676,16 @@ export class DressingPlugin {
   /** tiles whose dressing was tried (see TileStream.dressingSettled) */
   readonly settled = new Set<string>();
   private tiles: PluginTiles | null = null;
-  /** the content roots whose terrain reads each raster (raster-shares.ts) */
-  private readonly rasterShares = new RasterShares<Object3D>();
   /** the tile a content root was loaded for (to reweigh it) */
   private readonly tileOf = new WeakMap<Object3D, object>();
-  /** the sky-view rasters a tile's terrain and buildings share */
-  readonly skyView: SharedRasters<Texture> = createSharedRasters(
-    async (url, signal) =>
-      await loadSkyViewTexture(url, signal, this.ctx.renderer),
-    (texture) => texture.dispose()
-  );
-  /** the horizon rasters a tile's two terrain levels share */
-  readonly horizon: SharedRasters<Texture> = createSharedRasters(
-    async (url, signal) =>
-      await loadHorizonTexture(url, signal, this.ctx.renderer),
-    (texture) => texture.dispose()
-  );
-  /** the class rasters (and their painted splats), NDVI and sports grounds,
-   *  held by file: what a tile's two terrain levels name alike is loaded
-   *  once — the NDVI on every tier; the class raster no longer, since the
-   *  coarse level reads its own 1024² one (lib/city/tile.ts
-   *  COARSE_RASTER_PX); the sports grounds only a desktop's fine level
-   *  reads */
-  readonly splats: SharedRasters<SplatRasters> = createSharedRasters(
-    async (url, signal) =>
-      await loadSplatRasters(url, this.ctx.renderer, signal),
-    freeSplatRasters
-  );
-  readonly ndvis: SharedRasters<Texture> = createSharedRasters(
-    async (url, signal) =>
-      await loadNdviTexture(url, this.ctx.renderer, signal),
-    (texture) => texture.dispose()
-  );
-  readonly sports: SharedRasters<SportRasters> = createSharedRasters(
-    async (key, signal) => await loadSportKey(key, this.ctx.renderer, signal),
-    freeSport
-  );
+  /** the site's rasters: what the content roots read, by kind, shared by
+   *  file and weighed a share per terrain level (tile-rasters.ts) */
+  readonly rasters: TileRasters;
   /** the coarse level's grid index and water index, one copy for the
    *  site (terrain-layer.ts `GridShare`) */
   private readonly grids: GridShare = createGridShare();
-  /** aborts the levels' own raster loads when the stream goes: they would
-   *  hold their turn to decode (raster-upload.ts) from the next app's */
+  /** ends the levels' waits on their rasters when the stream goes (the
+   *  loads themselves are the rasters module's, `clearShared`) */
   private readonly lifetime = new AbortController();
   /**
    * Each terrain level's raster loads while it dresses, aborted when its
@@ -1762,6 +1714,19 @@ export class DressingPlugin {
   ) {
     this.ctx = ctx;
     this.stream = stream;
+    this.rasters = createTileRasters({
+      renderer: ctx.renderer,
+      url: this.url,
+      lowRasters: ctx.lowRasters,
+      // (a root that left is not reweighed: the renderer may be evicting its
+      // tile, and weighing it there adds its bytes back for good)
+      onShareChange: (root) => {
+        const tile = this.tileOf.get(root as Object3D);
+        if (tile && !this.released.has(root as Object3D)) {
+          this.tiles?.recalculateBytesUsed(tile);
+        }
+      },
+    });
     this.castersChanged = castersBatch({
       castersChanged: () => {
         if (!this.disposed) {
@@ -1900,22 +1865,15 @@ export class DressingPlugin {
     // (a tile still in processTileModel weighs nothing yet: the renderer
     // drops a new tile from a full cache only while it weighs 0)
     const dressed = scene ? this.dressed.get(scene) : undefined;
-    const rasters = this.rasterShares.bytesOf(dressed?.terrain?.rasters ?? []);
-    return rasters + (dressed?.late.bytes() ?? 0) - (dressed?.sharedBytes ?? 0);
-  }
-
-  /** `scene`'s terrain takes up (or lets go of) its rasters; the other
-   *  levels reading one of them now weigh a different share of it. */
-  private holdRasters(scene: Object3D, rasters: Texture[], hold: boolean) {
-    const others = hold
-      ? this.rasterShares.hold(scene, rasters)
-      : this.rasterShares.release(scene, rasters);
-    for (const other of others) {
-      const tile = this.tileOf.get(other);
-      if (tile) {
-        this.tiles?.recalculateBytesUsed(tile);
-      }
+    if (!(scene && dressed)) {
+      return 0;
     }
+    const held = dressed.terrain ? this.rasters.bytesOf(scene) : 0;
+    const own = (dressed.terrain?.rasters ?? []).reduce(
+      (bytes, texture) => bytes + trackedBytesOf(texture),
+      0
+    );
+    return held + own + dressed.late.bytes() - (dressed.sharedBytes ?? 0);
   }
 
   private readonly url = (file: string): string =>
@@ -2044,8 +2002,7 @@ export class DressingPlugin {
     const entry: Dressed = { city, late: this.lateParts(scene) };
     this.dressed.set(scene, entry);
     if (extras.svf) {
-      entry.svf = this.url(extras.svf);
-      this.shareSkyView(scene, entry, extras.tileId, entry.svf);
+      this.shareSkyView(scene, entry, extras);
     }
     // What street photos say about the facades lands after the buildings
     // show; until then (and without it) they are drawn as before.
@@ -2092,11 +2049,12 @@ export class DressingPlugin {
   private shareSkyView(
     scene: Object3D,
     entry: Dressed,
-    tileId: string,
-    url: string
+    extras: CityExtras
   ): void {
-    const bounds = this.ctx.tileBounds(tileId);
-    void this.skyView.acquire(url).then((texture) => {
+    const bounds = this.ctx.tileBounds(extras.tileId);
+    // not weighed: a building tile weighs no raster
+    entry.svf = this.rasters.holder(scene, { weighed: false });
+    void entry.svf.acquire("svf", extras).then((texture) => {
       const { city } = entry;
       if (texture && bounds && city && this.dressed.get(scene) === entry) {
         const [minX, minY, maxX, maxY] = bounds;
@@ -2133,55 +2091,61 @@ export class DressingPlugin {
     this.loadAborts.set(scene, own);
     const either = eitherSignal(own.signal, this.lifetime.signal);
     let terrain: TerrainLayer;
+    const rasters = this.rasters.holder(scene);
     try {
       terrain = await dressTerrain(mesh, extras, toData, {
-        fileUrl: this.url,
         fogColor: this.ctx.fogColor,
-        lowRasters: this.ctx.lowRasters,
         ground: this.ctx.ground,
         offset: this.ctx.offset,
-        renderer: this.ctx.renderer,
-        skyView: this.skyView,
-        horizon: this.horizon,
-        splats: this.splats,
-        ndvis: this.ndvis,
-        sports: this.sports,
+        rasters,
         grids: this.grids,
         signal: either.signal,
       });
+    } catch (error) {
+      // no terrain to dispose them: its hold goes here, or its rasters stay
+      // on the GPU for the session
+      rasters.release();
+      throw error;
     } finally {
       either.release();
       this.loadAborts.delete(scene);
     }
-    // The fine level's baked stairs, walls, kerbs and fences: only their
-    // materials here, lit by the tile's baked light as the ground is.
-    const stairs = meshNamed(scene, "stairs");
-    if (stairs) {
-      dressStairs(stairs, terrain.light);
-      terrain.stairs = stairs;
+    try {
+      // The fine level's baked stairs, walls, kerbs and fences: only their
+      // materials here, lit by the tile's baked light as the ground is.
+      const stairs = meshNamed(scene, "stairs");
+      if (stairs) {
+        dressStairs(stairs, terrain.light);
+        terrain.stairs = stairs;
+      }
+      const walls = meshNamed(scene, "walls");
+      if (walls) {
+        dressWalls(walls, terrain.light);
+        terrain.walls = walls;
+      }
+      const kerbs = meshNamed(scene, "kerbs");
+      if (kerbs) {
+        dressKerbs(kerbs, terrain.light);
+        terrain.kerbs = kerbs;
+      }
+      const fences = meshNamed(scene, "fences");
+      if (fences) {
+        dressFences(fences, terrain.light);
+        terrain.fences = fences;
+      }
+      this.stream.terrains.add(terrain);
+    } catch (error) {
+      // not in `dressed` yet, so no release will free it: its rasters
+      // would stay held for the session
+      terrain.dispose();
+      throw error;
     }
-    const walls = meshNamed(scene, "walls");
-    if (walls) {
-      dressWalls(walls, terrain.light);
-      terrain.walls = walls;
-    }
-    const kerbs = meshNamed(scene, "kerbs");
-    if (kerbs) {
-      dressKerbs(kerbs, terrain.light);
-      terrain.kerbs = kerbs;
-    }
-    const fences = meshNamed(scene, "fences");
-    if (fences) {
-      dressFences(fences, terrain.light);
-      terrain.fences = fences;
-    }
-    this.stream.terrains.add(terrain);
     this.dressed.set(scene, {
       terrain,
       late: this.lateParts(scene),
       sharedBytes: sceneSharedBytes(scene),
     });
-    this.holdRasters(scene, terrain.rasters, true);
+    rasters.settle();
     const coarse = COARSE_DRESSING_KINDS.some((kind) => extras.coarse?.[kind]);
     return extras.dressing || coarse
       ? { dressed: this.queueDressing(scene, terrain, extras) }
@@ -2326,11 +2290,7 @@ export class DressingPlugin {
     if (this.compiles.size > 0) {
       return;
     }
-    this.skyView.clear();
-    this.horizon.clear();
-    this.splats.clear();
-    this.ndvis.clear();
-    this.sports.clear();
+    this.rasters.clear();
   }
 
   /**
@@ -2608,12 +2568,9 @@ export class DressingPlugin {
       this.stream.cities.delete(dressed.city);
       free(() => dressed.city?.dispose());
     }
-    if (dressed.svf) {
-      this.skyView.release(dressed.svf);
-    }
+    dressed.svf?.release();
     if (dressed.terrain) {
       this.stream.terrains.delete(dressed.terrain);
-      this.holdRasters(scene, dressed.terrain.rasters, false);
       free(() => dressed.terrain?.dispose());
     }
     // its dressing, hung or not: taken down now (off the root the content's

@@ -3910,7 +3910,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
 
 ### Railway & bridges
 All baked by `pipeline/bake/rail.py`, built **per fine terrain tile** in
-`app/_components/rail-layer.ts` (Y-up, part of the tile's dressing) on the
+`app/_components/rail-layer.ts` and, the bridges, `bridge-layer.ts` (Y-up, part of the tile's dressing) on the
 cross-tile `heightAt` over every loaded terrain, so tracks don't truncate at
 seams (until [ADR 0024](./adr/0024-site-streams-as-3d-tiles.md) it was built
 once for the fixed block). Replaces the old "brown smear". All geometry is
@@ -4243,7 +4243,7 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   Waldschlößchenbrücke 3 m low and rail decks up to 6 m high; per-tile
   ground — seam bridges drawn twice at two heights; see 🗃️.)*
   **The deck on its measured line** `= computed` (2026-10-20,
-  `rail-layer.ts` `onLine`, `splitDeckTop`; `lib/city/decks.ts`
+  `bridge-layer.ts` `onLine`, `splitDeckTop`; `lib/city/decks.ts`
   `deckLine`): the bake writes the deck's top every 2 m along its axis
   (`line`), but the viewer drew it from the ring's few corners — a long
   outline has four to a dozen — as flat triangles between them, which cut
@@ -4275,7 +4275,7 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   ground, a ramp runs out at the kind's grade (road 8 %, path 10 %, rail
   3 %) to where it meets the ground, column by column across the end (≤ 2 m
   apart), within 40 m (`lib/city/bridge.ts` `approachLanding`,
-  `rail-layer.ts` `approaches`): the deck's own top colour, the fascia's
+  `bridge-deck.ts` `approaches`): the deck's own top colour, the fascia's
   sides and soffit as deep as the deck (*Deck depth* below; 1.1 m until
   2026-10-21). None where the deck runs on onto another
   deck, where most of the end finds no ground in reach (a deck over a
@@ -4321,7 +4321,7 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   two within 3 m merge). Only a bridge whose class stands above its deck
   (arch, truss, suspension, cantilever, cable-stayed — Wikidata over OSM)
   keeps its ribs: over a beam bridge DOM1 sees catenary, trains and trees.
-  At runtime (`rail-layer.ts`, `lib/city/bridge.ts`): on an **arch** bridge
+  At runtime (`bridge-layer.ts`, `lib/city/bridge.ts`): on an **arch** bridge
   the tightest rib that fits a parabola (rms ≤ 1.5 m, sag ≥ 2 m, crown
   inside the run) gives its curve to every rib that follows it (the raster
   sees one side of the Waldschlößchenbrücke patchily), drawn as a steel arch
@@ -4426,7 +4426,7 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
 - **Viaduct columns** `≈ assumed` (2026-10-21, V17) — a railway beam deck
   longer than 100 m stands on paired 0.6 m columns under its edges every
   ≤ 13 m with a crossbeam under the girder (`lib/city/bridge.ts`
-  `beamSupports`, `rail-layer.ts` `addColumnPair`; Hamburg's U3 runs on
+  `beamSupports`, `bridge-layer.ts` `addColumnPair`; Hamburg's U3 runs on
   them every 10–15 m); over the stretches the class raster calls water
   (`water`, baked) a pier on the axis at every other station (≤ 26 m), and
   a fairway it crosses kept open between two piers (`fairwayOpening`).
@@ -4437,7 +4437,7 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   bridges (no measured steel arch) keep the 0.85 m ashlar wall; every other
   gets an open steel railing: a 0.2 × 0.3 m kerb flush with the fascia,
   posts every 2.5 m and a top rail 1.1 m over the deck (`lib/city/bridge.ts`
-  `parapetStyle`, `rail-layer.ts` `addRailing`); none where a frame stands
+  `parapetStyle`, `bridge-layer.ts` `addRailing`); none where a frame stands
   on the edge. Railing against ashlar: Dresden 117 / 19, Hamburg 305 / 43,
   München 44 / 16, Leipzig 38 / 3, Meißen 13 / 4, Unna 10 / 1, Grimma
   4 / 2.
@@ -4848,7 +4848,7 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   the wall too) and faded to 1 toward the eaves — a courtyard's ground floor
   dims, its eaves and every roof do not. The raster is shared by a tile's
   terrain (both levels) and its buildings, refcounted
-  (`shared-rasters.ts`); the clay binds a white texel until it lands.
+  (`tile-rasters.ts`); the clay binds a white texel until it lands.
   Where a LoD2 roof was rebuilt from DOM1 (ADR 0036) the rebuilt parts are
   burned instead, as the city mesh draws them. **The crowns count half**
   (2026-10-21, `CROWN_TRANSMISSION` 0.5): the crowns the viewer draws
@@ -5178,7 +5178,7 @@ GPU**.
 - **The bridges' surfaces** `≈ assumed` — a bridge was one flat colour per part (a
   pale slab over the river). The deck's top now carries its frame — the
   station and offset on the axis and the outline's edges there, a vertex
-  attribute (`aDeck`, `rail-layer.ts` `addDeckFrame`; the top split to
+  attribute (`aDeck`, `bridge-layer.ts` `addDeckFrame`; the top split to
   triangles of ≤ 6 m, `splitDeckTop`, since a curved deck's triangulation
   joins vertices up to 190 m apart and the frame is exact only at them)
   — and its material

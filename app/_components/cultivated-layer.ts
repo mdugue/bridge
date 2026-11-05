@@ -41,14 +41,8 @@ import { epsgToWorld } from "@/lib/city/ground-clamp";
 import type { GroundContext } from "@/lib/city/ground-clamp";
 import { srgbToLinear } from "@/lib/city/landcover";
 import type { Point2 } from "@/lib/city/polyline";
-import {
-  byteOf,
-  gdHash,
-  gdNoise,
-  GROUND_DETAIL,
-  texelAt,
-  texelSize,
-} from "./ground-detail";
+import { GROUND_DETAIL } from "./ground-detail";
+import { byteOf, gdHash, gdNoise, texelAt, texelSize } from "./shader-chunks";
 import type { GroundColour, GroundFields, GroundInputs } from "./ground-detail";
 import { instancePosition, Instances, instanceTint } from "./instancing";
 import { hedgePieces } from "./low-vegetation-layer";

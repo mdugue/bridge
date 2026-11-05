@@ -152,6 +152,7 @@ import {
 import type { OutlineSelection } from "./selection-outline";
 import { trafficMesh } from "./traffic-flow";
 import { createCityCollider } from "./collision";
+import { createDemolitions } from "./demolitions";
 import { createDesignLayer } from "./design-layer";
 import type { DesignLayer, DesignStatus } from "./design-layer";
 import { cutsGround, foldedThing, groundKeptUnderDesign } from "./design-site";
@@ -2690,7 +2691,8 @@ async function bootApp(
   // Every tile's building footprints for the minimap, independent of what
   // has streamed in (a few hundred KB for the site): the map shows the whole
   // city once the player has it (they load after the handover, not against
-  // the spawn tile's glTF), and demolished buildings via `stream.demolished`.
+  // the spawn tile's glTF), and demolished buildings via `demolitions`.
+  const demolitions = createDemolitions(stream);
   const footprints = new Map<string, [number, number][][][]>();
   // The flattened list the minimap draws, rebuilt only when a file lands or
   // a building goes (either drops it): the same array otherwise, so React
@@ -2700,7 +2702,7 @@ async function bootApp(
   const currentFootprints = (): FootprintPoly[] => {
     if (!flattened) {
       flattened = [...footprints].flatMap(([tile, polys]) => {
-        const gone = stream.demolished.get(tile);
+        const gone = demolitions.goneOn(tile);
         const replaced = design?.hiddenFor(tile);
         return footprintPolys(
           polys,
@@ -2928,44 +2930,8 @@ async function bootApp(
   /** Demolishes the building at a screen point (NDC; the centre without). */
   const demolishAt = (ndc?: { x: number; y: number }) => {
     const chosen = pickCityObject(activeCamera(), stream.visibleCities(), ndc);
-    if (!chosen?.layer.demolish(chosen.objectIndex)) {
+    if (!(chosen && demolitions.demolish(chosen.layer, chosen.objectIndex))) {
       return;
-    }
-    const keep = (layer: CityLayer) => {
-      const kept = stream.demolished.get(layer.tile) ?? new Set();
-      for (let i = 0; i < layer.alive.length; i += 1) {
-        const alive = layer.alive[i];
-        if (!alive) {
-          kept.add(i);
-        }
-      }
-      stream.demolished.set(layer.tile, kept);
-    };
-    keep(chosen.layer);
-    // the tile's other level (its far or its baked buildings: the same
-    // table), loaded but not shown now: the same objects go
-    const sameTile = (layer: CityLayer) =>
-      layer !== chosen.layer && layer.tile === chosen.layer.tile;
-    for (const layer of stream.cities) {
-      if (sameTile(layer)) {
-        layer.demolish(chosen.objectIndex);
-      }
-    }
-    // the rest of its ensemble in the tiles across an edge: those loaded
-    // now, and (the group kept) those that load later
-    const group = chosen.layer.table.group[chosen.objectIndex];
-    if (group) {
-      stream.demolishedGroups.add(group);
-    }
-    for (const layer of group ? stream.cities : []) {
-      const first = layer.table.group.indexOf(group);
-      if (
-        layer.tile !== chosen.layer.tile &&
-        first !== -1 &&
-        layer.demolish(first)
-      ) {
-        keep(layer);
-      }
     }
     flattened = null;
     invalidateShadows();

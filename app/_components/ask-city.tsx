@@ -126,8 +126,7 @@ const AskCity = ({ coarse, onClose, scene, site }: Props) => {
         stop: () => latest.current.dictation.stop(),
         abort: () => latest.current.dictation.abort(),
       },
-      waits: {
-        abandon: () => latest.current.scene.abandon(),
+      scene: {
         setListening: (on) => latest.current.scene.setListening(on),
         haltAnswerGlide: () => latest.current.scene.haltAnswerGlide(),
       },
@@ -819,23 +818,50 @@ function argText(value: unknown): string {
     : "";
 }
 
-/** What a tool call says it did, in the trace under an answer. */
-function toolLine(name: string, input: unknown, output?: unknown): string {
-  const args = (input ?? {}) as Record<string, unknown>;
-  // a refused call says why, in the card's words (the model's are longer)
-  const refused = output as
+/** `setze_zeit` in the trace: its time of day, or only a new date; neither
+ *  while the arguments still stream in. */
+function timeLine(uhrzeit: unknown, datum: unknown): string {
+  if (uhrzeit) {
+    return datum
+      ? `Stellt das Datum um, die Uhr auf ${argText(uhrzeit)} Uhr`
+      : `Stellt die Uhr auf ${argText(uhrzeit)} Uhr`;
+  }
+  return datum ? "Stellt das Datum um" : "Stellt die Zeit";
+}
+
+/**
+ * A refused call says why, in the card's words (the model's are longer):
+ * `was_ist_da` says `gefunden: false` where the others say `ok: false`, and
+ * a call its schema refused comes back with an `error`, and never ran.
+ */
+function refusalLine(output: unknown): string | null {
+  const said = output as
     | {
         ausserhalb?: unknown;
+        error?: unknown;
         gefunden?: unknown;
         hinweis?: unknown;
         ok?: unknown;
       }
     | undefined;
-  // (was_ist_da says `gefunden: false` where the others say `ok: false`)
-  if (refused?.ok === false || refused?.gefunden === false) {
-    return refused.ausserhalb === true
-      ? "Findet den Ort nicht in der Stadt"
-      : argText(refused.hinweis) || "Abgelehnt";
+  if (
+    said?.ok !== false &&
+    said?.gefunden !== false &&
+    said?.error === undefined
+  ) {
+    return null;
+  }
+  return said.ausserhalb === true
+    ? "Findet den Ort nicht in der Stadt"
+    : argText(said.hinweis) || "Abgelehnt";
+}
+
+/** What a tool call says it did, in the trace under an answer. */
+function toolLine(name: string, input: unknown, output?: unknown): string {
+  const args = (input ?? {}) as Record<string, unknown>;
+  const refused = refusalLine(output);
+  if (refused) {
+    return refused;
   }
   switch (name) {
     case "suche_stadt": {
@@ -860,7 +886,7 @@ function toolLine(name: string, input: unknown, output?: unknown): string {
       return args.aus_der_luft ? "Fliegt hin" : "Geht hin";
     }
     case "setze_zeit": {
-      return `Stellt die Uhr auf ${argText(args.stunde)} Uhr`;
+      return timeLine(args.uhrzeit, args.datum);
     }
     case "setze_stil": {
       return `Wechselt den Bildstil (${argText(args.stil)})`;

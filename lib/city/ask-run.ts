@@ -28,13 +28,12 @@ import type {
 import { scrubSecrets } from "@tanstack/ai/byok";
 import {
   ASK_LIMITS,
-  askSystemPrompt,
   conversationProblem,
   lastQuestion,
   parseAskProps,
   plausibleKey,
 } from "./ask-city";
-import type { AskPromptSite, AskRequestProps } from "./ask-city";
+import type { AskRequestProps } from "./ask-city";
 import { ASK_FAILURES, askRefusalStatus } from "./ask-failure";
 import type { AskFailureCode, AskRefusalCode } from "./ask-failure";
 import {
@@ -44,11 +43,13 @@ import {
   sourcesOf,
 } from "./ask-knowledge";
 import type { Knowledge } from "./ask-knowledge";
+import { askSystemPrompt } from "./ask-prompt";
+import type { AskPromptSite } from "./ask-prompt";
 import { verifyAskToken } from "./ask-token";
 import {
   factsTool,
   nearTool,
-  SCENE_TOOLS,
+  sceneToolsFor,
   searchTool,
   sourcesTool,
 } from "./ask-tools";
@@ -257,7 +258,10 @@ export function runAsk(run: AskRun) {
     ...(run.resume ? { resume: run.resume } : {}),
     ...(run.parentRunId ? { parentRunId: run.parentRunId } : {}),
     systemPrompts: [askSystemPrompt(run.site, run.today, run.voice)],
-    tools: [...knowledgeTools(run.knowledge), ...SCENE_TOOLS],
+    tools: [
+      ...knowledgeTools(run.knowledge),
+      ...sceneToolsFor(run.site.layers),
+    ],
     agentLoopStrategy: maxIterations(
       Math.min(ASK_LIMITS.iterations, run.turns ?? ASK_LIMITS.iterations)
     ),

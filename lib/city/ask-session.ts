@@ -2,7 +2,7 @@
  * An answer's lifetime in *Frag die Stadt* (ADR 0056, 0057): asked (typed
  * or spoken), streaming, waiting on a scene tool, done, failed or
  * stopped — and what reading aloud, the microphone, the Hörmodus and the
- * scene's waits do at each turn of it. One session per card
+ * scene do at each turn of it. One session per card
  * (`app/_components/ask-city.tsx` creates it and turns the chat's and the
  * microphone's edges into events); it takes events and calls four ports.
  * Pure: no DOM, no React, no timer.
@@ -33,9 +33,7 @@ export interface DictationPort {
 }
 
 /** The scene's half (`useAskScene`). */
-export interface SceneWaitsPort {
-  /** ends the scene tools' waits (`was_ist_da`) */
-  abandon: () => void;
+export interface ScenePort {
   /** the Hörmodus's frame pace */
   setListening: (on: boolean) => void;
   /** stops the glide an answer started, if it still flies */
@@ -45,13 +43,15 @@ export interface SceneWaitsPort {
 /** The conversation's chat (`useChat`), attached while it is mounted. */
 export interface RunPort {
   send: (text: string, voice: boolean) => void;
+  /** ends the answer, and with it a scene tool's wait: what the tool ends
+   *  with is dropped, so it resumes no run on the visitor's key */
   stop: () => void;
 }
 
 export interface AskSessionPorts {
   speech: SpeechPort;
   dictation: DictationPort;
-  waits: SceneWaitsPort;
+  scene: ScenePort;
 }
 
 export type AskSessionEvent =
@@ -100,7 +100,7 @@ export interface AskSession {
 
 /** One card's session, over its ports. */
 export function createAskSession(ports: AskSessionPorts): AskSession {
-  const { speech, dictation, waits } = ports;
+  const { speech, dictation, scene } = ports;
   let run: RunPort | null = null;
   let reading = false;
   let hearing = false;
@@ -140,17 +140,7 @@ export function createAskSession(ports: AskSessionPorts): AskSession {
 
   const setHearing = (on: boolean) => {
     hearing = on;
-    waits.setListening(on);
-  };
-
-  /**
-   * Ends the running answer: the run first, then the scene's waits — a
-   * scene tool that returns at the abort would otherwise resume the run
-   * with one more request on the visitor's key.
-   */
-  const endRun = () => {
-    run?.stop();
-    waits.abandon();
+    scene.setListening(on);
   };
 
   const ask = (text: string, voice: boolean): AskSessionResult => {
@@ -199,12 +189,12 @@ export function createAskSession(ports: AskSessionPorts): AskSession {
     },
     answerEnded: ({ text, failed }) => {
       loading = false;
-      // a failed answer ends its run and its waits, as a stop does: a
-      // scene tool still waiting (its text is empty then) would resume the
-      // run once it returned, after the visitor saw the error
+      // a failed answer ends its run, as a stop does: a scene tool still
+      // waiting (its text is empty then) would resume the run once it
+      // returned, after the visitor saw the error
       if (failed) {
         if (!stopped) {
-          endRun();
+          run?.stop();
         }
         return "done";
       }
@@ -222,9 +212,9 @@ export function createAskSession(ports: AskSessionPorts): AskSession {
       // a stopped answer is owed no more, and not read
       stopped = true;
       owed = null;
-      endRun();
+      run?.stop();
       // the camera stops where it is (never on closing the card)
-      waits.haltAnswerGlide();
+      scene.haltAnswerGlide();
       return "done";
     },
     micPressed: () => {
@@ -293,7 +283,7 @@ export function createAskSession(ports: AskSessionPorts): AskSession {
       return "done";
     },
     conversationEnded: () => {
-      endRun();
+      run?.stop();
       speech.stop();
       dictation.abort();
       loading = false;
@@ -312,7 +302,7 @@ export function createAskSession(ports: AskSessionPorts): AskSession {
       return "done";
     },
     closed: () => {
-      endRun();
+      run?.stop();
       speech.stop();
       dictation.abort();
       setHearing(false);

@@ -6,7 +6,8 @@
  * log. The key comes in the `x-frag-key` header and goes to the provider
  * and nowhere else.
  */
-import { ASK_KEY_HEADER, askPromptSite } from "@/lib/city/ask-city";
+import { ASK_KEY_HEADER } from "@/lib/city/ask-city";
+import { askPromptSite } from "@/lib/city/ask-prompt";
 import { answerTurn } from "@/lib/city/ask-run";
 import { siteById } from "@/sites";
 import { askAdapter, fakeAskAdapter } from "./adapters";

@@ -21,6 +21,7 @@ const NOT_A_BAKE: Record<string, string> = {
   "lib/city/tram-timetable.ts": "published uncached every run",
   "lib/city/landmark-facts.ts": "published uncached every run",
   "lib/city/landmark-facts-file.ts": "checked uncached every run",
+  "lib/city/facades-file.ts": "checked uncached every run",
   "lib/city/murals-file.ts": "checked uncached every run",
   "lib/city/horizon-legend-file.ts":
     "the tileset's extras, read uncached every run",

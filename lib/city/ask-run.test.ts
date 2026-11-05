@@ -7,8 +7,8 @@ import {
 import type { UIMessage, ModelMessage, StreamChunk } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 import { fakeText } from "@tanstack/ai/testing";
-import type { AskPromptSite } from "./ask-city";
 import { knowledgeOf } from "./ask-knowledge";
+import type { AskPromptSite } from "./ask-prompt";
 import {
   DEADLINE,
   ended,
@@ -63,8 +63,9 @@ const TILE: WissenTile = {
 const SITE: AskPromptSite = {
   epsg: 25_833,
   label: "Dresden",
-  layers: [],
-  styles: ["pastel: Pastell"],
+  layers: [
+    { key: "tramLayer", label: "Bahnen", description: "Nach dem Fahrplan" },
+  ],
 };
 
 type Chunk = { type: string } & Record<string, unknown>;
@@ -75,6 +76,29 @@ async function collect(stream: AsyncIterable<unknown>): Promise<Chunk[]> {
     chunks.push(c as Chunk);
   }
   return chunks;
+}
+
+/** The layer tool the model is offered in a city, if any. */
+async function offeredLayerTool(site: AskPromptSite) {
+  const adapter = fakeText();
+  let tools: { name: string }[] = [];
+  adapter.setResponses([
+    ({ request }) => {
+      tools = request.tools ?? [];
+      return { text: "Hallo." };
+    },
+  ]);
+  await collect(
+    runAsk({
+      adapter,
+      knowledge: knowledgeOf(INDEX, [TILE]),
+      messages: [{ role: "user", content: "Hallo" }],
+      site,
+      threadId: "t3",
+      today: new Date(2026, 9, 29),
+    })
+  );
+  return tools.find((t) => t.name === "datenschicht");
 }
 
 describe("runAsk", () => {
@@ -158,6 +182,14 @@ describe("runAsk", () => {
       })
     );
     expect(adapter.state.callCount).toBe(1);
+  });
+
+  test("the model is offered its city's layers and no layer tool without any", async () => {
+    const schema = JSON.stringify(await offeredLayerTool(SITE));
+    expect(schema).toContain("tramLayer");
+    expect(schema).toContain("Nach dem Fahrplan");
+    expect(schema).not.toContain("bikeLayer");
+    expect(await offeredLayerTool({ ...SITE, layers: [] })).toBeUndefined();
   });
 });
 

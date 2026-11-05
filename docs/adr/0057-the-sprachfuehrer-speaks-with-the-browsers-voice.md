@@ -42,12 +42,14 @@ listens wastes its battery.
 4. **One session owns an answer's lifetime.** `lib/city/ask-session.ts`
    takes the answer's events (asked, started, ended, stopped, the
    microphone, the switches, the card) and drives reading aloud, the
-   microphone, the scene's waits and the run through four ports. The
-   stop button halts the answer's run, its scene waits and its glide, in
-   that order (the camera stops where it is; a glide the visitor started
-   since goes on). A failed answer ends its run and its waits, so no
-   scene tool resumes it. Every command runs inside the tap's dispatch,
-   for iOS speaks only what a tap began.
+   microphone, the scene and the run through four ports. The stop button
+   halts the answer's run, then its glide (the camera stops where it is;
+   a glide the visitor started since goes on). Stopping the run ends a
+   scene tool's wait too: the tool holds the chat client's own abort
+   signal, and the client drops what a stopped tool ends with. A failed
+   answer ends its run the same way, so no scene tool resumes it. Every
+   command runs inside the tap's dispatch, for iOS speaks only what a
+   tap began.
 
 ## Consequences
 

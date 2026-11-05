@@ -98,7 +98,8 @@ const ROWS = {
   gone: { status: 499, text: "Die Anfrage wurde abgebrochen." },
   "cut-short": { text: CUT_SHORT },
   "too-late": { text: "Die Antwort dauerte zu lange." },
-  // a content filter, or (OpenRouter) a provider's failure mid-answer
+  // a content filter, a stream cut off, or (OpenRouter) a provider's
+  // failure mid-answer
   "broke-off": {
     text: "Das Modell brach die Antwort ab. Frag bitte noch einmal.",
   },
@@ -136,6 +137,13 @@ const KEY_TROUBLE =
   /\b(?:401|402|403|unauthori[sz]ed|forbidden|authenticat\w*|api[ _-]?key|credits?|credentials?|quota|billing|insufficient)\b/iu;
 /** The same, as the code a provider's error carries. */
 const KEY_CODES = new Set(["401", "402", "403"]);
+/** The adapters' codes for a model that broke off: a refusal, a stream that
+ *  ended before its stop reason, a tool call never finished. */
+const BROKE_OFF_CODES = new Set([
+  "refusal",
+  "incomplete-stream",
+  "incomplete-tool-call",
+]);
 
 /** One failed answer's words and what the visitor can do about it. */
 const say = (text: string, key = false, reset = false) => ({
@@ -189,6 +197,9 @@ export function askFailure(error: Error): {
   }
   if (code === "context_overflow") {
     return say(TOO_LONG, false, true);
+  }
+  if (BROKE_OFF_CODES.has(code)) {
+    return say(ASK_FAILURES["broke-off"].text);
   }
   if (typeof status === "number") {
     const row = Object.hasOwn(BY_STATUS, status)

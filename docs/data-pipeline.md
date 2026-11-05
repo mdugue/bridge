@@ -1053,11 +1053,9 @@ optional one is logged and the feature is off.
 
 A JSON file a Python bake writes and TypeScript reads has one strict zod
 schema ([ADR 0059](./adr/0059-one-schema-per-file-a-bake-hands-over.md)),
-its type the readers' type. Excused until a later schema pass: the city
-mesh's and the terrain's tile sources (the GeoJSON layers, `windows_<t>`
-and `shopfronts_<t>.json`), cast in `scripts/prepare/city.ts` and
-`scripts/tile-sources.ts` and held on the committed data by
-`features.test.ts`.
+its type the readers' type. The served GeoJSON layers have no schema: the
+viewer guards what it fetches, and `features.test.ts` holds their committed
+data.
 
 | File | Writer (step) | Schema | Parsed in |
 |---|---|---|---|
@@ -1069,6 +1067,9 @@ and `shopfronts_<t>.json`), cast in `scripts/prepare/city.ts` and
 | `transit/trams.json` | `transit.py` (`transit`) | `lib/city/tram-timetable-file.ts` | `prepare-data.ts`, every run |
 | `dop/roofcolor_<t>.json` | `roof_colour.py` (`roof-colour`) | `lib/city/roof-colours-file.ts` | `scripts/prepare/city.ts` |
 | `dlm/horizon_<t>.json` (the legend; its `valley` from `glo30.py`) | `skyview.py` (`skyview`) | `lib/city/horizon-legend-file.ts` | `prepare-data.ts`, every run (the valley haze) |
+| `dlm/{doors,dormers,passages,plinths,smallbuild,structures,roofs}_<t>.geojson`, `dlm/{shopfronts,windows}_<t>.json` (the city mesh's tile sources) | `doors.py`, `dormers.py`, `passages.py`, `plinths.py`, `small_buildings.py`, `structures.py`, `roofs.py`, `shopfronts.py`, `windows.py` (their steps) | `lib/city/{doors,dormers,passages,plinths,small-buildings,structures,measured-roofs,shopfronts,windows}-file.ts` | `scripts/prepare/city.ts`; the structures and small buildings also in `side-bakes.ts`, `coarse-crowns.ts` |
+| `dlm/{kerbs,walls,stairs,terraces}_<t>.geojson` (the terrain's tile sources) | `edges.py` (`edges`), `walls.py` (`walls`), `stairs.py` (`stairs`, both files) | `lib/city/{kerbs,walls,stairs,terraces}-file.ts` | `scripts/tile-sources.ts` |
+| `dlm/facades_<t>.json` | `facades.py` (`facades`) | `lib/city/facades-file.ts` | `scripts/prepare/side-files.ts`, every run; the viewer keeps its guard (`isFacadeReadings`, pinned to the schema) |
 
 `parseBakeFile` (`lib/city/bake-file.ts`) returns the file as it read it
 (zod's copy would reorder the keys) or ends the build:
