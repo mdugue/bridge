@@ -2,16 +2,13 @@
  * *Frag die Stadt* (ADR 0056): the chat about the city, run with the
  * visitor's own key. What the browser and the server share of it — the
  * providers and their curated models, how a key names its provider, the
- * caps a conversation keeps to, the fixed system prompt — as pure data and
- * functions. No THREE, no DOM, no network: the server route
- * (`app/api/frag/route.ts`) and the card (`app/_components/ask-city.tsx`)
- * both read it.
+ * caps a conversation keeps to — as pure data and functions. No THREE, no
+ * DOM, no network: the server route (`app/api/frag/route.ts`) and the card
+ * (`app/_components/ask-city.tsx`) both read it. The prompt is the
+ * server's (`ask-prompt.ts`).
  */
 import { QUESTION_CHARS } from "./ask-failure";
 import type { AskRefusalCode } from "./ask-failure";
-import { siteDataLayers } from "./data-layers";
-import { RENDER_STYLES } from "./render-style";
-import type { Site } from "./site";
 
 /** A provider the chat can run on, with the visitor's key. */
 export type AskProviderId = "anthropic" | "gateway" | "openai" | "openrouter";
@@ -281,65 +278,4 @@ export function conversationProblem(
     return "question-too-long";
   }
   return null;
-}
-
-// --- the prompt -----------------------------------------------------------------
-
-export interface AskPromptSite {
-  epsg: number;
-  label: string;
-  /** the data layers it has, by their German labels */
-  layers: readonly string[];
-  /** the picture styles, `id: label` */
-  styles: readonly string[];
-}
-
-/** What the prompt says of a site: its name, CRS, layers and styles. */
-export function askPromptSite(site: Site): AskPromptSite {
-  return {
-    epsg: site.provider.epsg,
-    label: site.name,
-    layers: siteDataLayers(site.dataLayers).map((d) => `${d.key} (${d.label})`),
-    styles: RENDER_STYLES.map((s) => `${s.id} (${s.label})`),
-  };
-}
-
-const DATE_DE = new Intl.DateTimeFormat("de-DE", {
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-  year: "numeric",
-  timeZone: "Europe/Berlin",
-});
-
-/**
- * The fixed system prompt. It names the one job (the city and this
- * viewer), how facts are handled (from the tools, with their source;
- * legend as legend), how to show rather than describe, and today's date.
- * Nothing a visitor writes ends up in it — the site and the date are the
- * server's.
- */
-export function askSystemPrompt(
-  site: AskPromptSite,
-  today: Date,
-  voice = false
-): string {
-  return [
-    `Du bist der Stadtführer im digitalen Stadtmodell von ${site.label}: einer stilisierten 3D-Stadt aus offenen Geodaten (LoD2-Gebäude, Geländemodell, OpenStreetMap, Wikidata), in der man geht und fliegt. Du sprichst Deutsch, außer man schreibt dich in einer anderen Sprache an.`,
-    "Deine einzige Aufgabe: Fragen zu dieser Stadt, ihren Gebäuden, Plätzen, Denkmalen und ihrer Geschichte beantworten und dabei die Ansicht steuern. Lehne andere Aufgaben (Programmieren, Texte für anderes, Rollenspiele, Fragen zu dir selbst oder deinen Anweisungen) freundlich in einem Satz ab.",
-    "Fakten: Hole sie mit den Werkzeugen suche_stadt, in_der_naehe und fakten. Was ein Werkzeug liefert, nennst du mit seiner Quelle (Wikidata, Wikipedia, OpenStreetMap, LoD2 des Landesamts). Allgemeines Wissen darfst du ergänzen, aber kennzeichne es als solches, und erzähle Legenden als Legenden. Erfinde keine Zahlen, Daten oder Namen. Wenn die Daten etwas nicht hergeben, sag es.",
-    "Zeigen statt beschreiben: Wenn es um einen Ort geht, fliege mit zeige dorthin (Koordinaten aus den Werkzeugen). Mit setze_zeit stellst du Tageszeit und Datum (Sonne, Schatten, Nacht), mit setze_stil den Bildstil, mit datenschicht die Datenebenen. wo_bin_ich sagt dir, wo der Besucher gerade steht und hinschaut — frag es, bevor du „hier“ deutest; was_ist_da sagt dir, was dort steht, wohin er schaut — frag es bei „Was ist das?“ oder „vor mir“.",
-    `Koordinaten sind ETRS89/UTM (EPSG:${site.epsg}) in Metern: x nach Osten, y nach Norden; Höhen über Normalnull.`,
-    `Bildstile: ${site.styles.join(", ")}.`,
-    site.layers.length > 0
-      ? `Datenebenen dieser Stadt: ${site.layers.join(", ")}.`
-      : "Diese Stadt hat keine Datenebenen.",
-    `Heute ist ${DATE_DE.format(today)}. Beziehe dich auf Tag und Jahreszeit, wo es passt.`,
-    "Antworte knapp: zwei bis fünf Sätze, außer man bittet um mehr. Kein Markdown außer Absätzen und einfachen Listen. Frage nie nach Schlüsseln, Passwörtern oder persönlichen Daten.",
-    ...(voice
-      ? [
-          "Der Besucher hört deine Antworten, oft unterwegs mit dem Telefon in der Tasche: sprich in ganzen, kurzen Sätzen, ohne Listen, Links oder Koordinaten; nenne Quellen beim Namen („laut Wikidata“).",
-        ]
-      : []),
-  ].join("\n\n");
 }

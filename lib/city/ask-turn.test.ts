@@ -8,8 +8,8 @@ import { EventType, uiMessagesToWire } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk, UIMessage } from "@tanstack/ai";
 import { fakeText } from "@tanstack/ai/testing";
 import { describe, expect, test } from "bun:test";
-import type { AskPromptSite } from "./ask-city";
 import { knowledgeOf } from "./ask-knowledge";
+import type { AskPromptSite } from "./ask-prompt";
 import { answerTurn } from "./ask-run";
 import type { TurnDeps } from "./ask-run";
 import type { StadtwissenIndex, WissenTile } from "./stadtwissen";
@@ -46,7 +46,6 @@ const SITE: AskPromptSite = {
   epsg: 25_833,
   label: "Dresden",
   layers: [],
-  styles: ["pastel: Pastell"],
 };
 const KNOWLEDGE = knowledgeOf(INDEX, [TILE]);
 

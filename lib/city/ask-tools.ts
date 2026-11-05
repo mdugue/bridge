@@ -2,15 +2,16 @@
  * *Frag die Stadt*'s tools (ADR 0056), defined once for both sides: the
  * server binds the Stadtwissen ones (`suche_stadt`, `in_der_naehe`,
  * `fakten`, `quellen`), the card the scene ones (`wo_bin_ich`,
- * `was_ist_da`, `zeige`, `setze_zeit`, `setze_stil`, `datenschicht`). The server passes all of
- * them to the model and never takes a tool list from the request: what
- * the model can do is fixed here.
+ * `was_ist_da`, `zeige`, `setze_zeit`, `setze_stil`, `datenschicht`). The
+ * server passes them to the model (`datenschicht` only where the city has
+ * a layer) and never takes a tool list from the request: what the model
+ * can do is fixed here.
  */
 import { toolDefinition } from "@tanstack/ai";
 import { z } from "zod";
 import { ASK_LIMITS } from "./ask-city";
 import { DATA_LAYERS } from "./data-layers";
-import type { DataLayerKey } from "./data-layers";
+import type { DataLayerDef, DataLayerKey } from "./data-layers";
 import { RENDER_STYLES } from "./render-style";
 import type { RenderStyle } from "./render-style";
 
@@ -101,9 +102,16 @@ export const showTool = toolDefinition({
 export const timeTool = toolDefinition({
   name: "setze_zeit",
   description:
-    "Stellt die Szenenzeit: die Sonne, die Schatten, Tag oder Nacht. Ohne datum bleibt der Tag.",
+    "Stellt die Szenenzeit: die Sonne, die Schatten, Tag oder Nacht. Gib uhrzeit, datum oder beides an; was fehlt, bleibt, wie es ist.",
   inputSchema: z.object({
-    stunde: z.number().min(0).max(24).describe("Uhrzeit, z. B. 18.5 für 18:30"),
+    // plain patterns: the OpenAI-shaped adapters send this tool in strict
+    // mode, and no provider has been tried with zod's long ISO ones
+    // (`timeProblem` checks the values)
+    uhrzeit: z
+      .string()
+      .regex(/^\d{2}:\d{2}$/u)
+      .optional()
+      .describe("HH:MM, Ortszeit der Stadt, z. B. 18:30"),
     datum: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/u)
@@ -112,6 +120,42 @@ export const timeTool = toolDefinition({
   }),
 });
 
+const CLOCK_TIME = z.iso.time({ precision: -1 });
+const CALENDAR_DAY = z.iso.date();
+
+/** A change of the scene's time, as `setze_zeit` takes it. */
+export interface TimeChange {
+  /** YYYY-MM-DD */
+  datum?: string;
+  /** HH:MM */
+  uhrzeit?: string;
+}
+
+/** What the model hears for a change that sets nothing, or a time no clock
+ *  or calendar has (25:00, 2026-02-31); null for a good one. 24:00 is good:
+ *  the day's last minute. The first century is refused, and the year 100
+ *  with it, which an offset can tip back into it: `Date` reads those years
+ *  as 19xx. */
+export function timeProblem({ datum, uhrzeit }: TimeChange): string | null {
+  if (!(uhrzeit || datum)) {
+    return "Gib eine Uhrzeit oder ein Datum an.";
+  }
+  if (
+    uhrzeit &&
+    uhrzeit !== "24:00" &&
+    !CLOCK_TIME.safeParse(uhrzeit).success
+  ) {
+    return "Diese Uhrzeit gibt es nicht.";
+  }
+  if (!datum) {
+    return null;
+  }
+  if (!CALENDAR_DAY.safeParse(datum).success) {
+    return "Dieses Datum gibt es nicht.";
+  }
+  return datum < "0101" ? "So weit reicht die Szenenzeit nicht zurück." : null;
+}
+
 const STYLE_IDS = RENDER_STYLES.map((s) => s.id) as [
   RenderStyle,
   ...RenderStyle[],
@@ -119,20 +163,41 @@ const STYLE_IDS = RENDER_STYLES.map((s) => s.id) as [
 
 export const styleTool = toolDefinition({
   name: "setze_stil",
-  description: `Wählt den Bildstil: ${RENDER_STYLES.map((s) => `${s.id} (${s.label})`).join(", ")}.`,
-  inputSchema: z.object({ stil: z.enum(STYLE_IDS) }),
+  description: "Wählt den Bildstil.",
+  inputSchema: z.object({
+    stil: z
+      .enum(STYLE_IDS)
+      .describe(
+        RENDER_STYLES.map((s) => `${s.id}: ${s.label}. ${s.description}`).join(
+          "\n"
+        )
+      ),
+  }),
 });
 
-const LAYER_KEYS = DATA_LAYERS.map((d) => d.key) as [
-  DataLayerKey,
-  ...DataLayerKey[],
-];
+/** What the model is told of a data layer. */
+export type AskLayer = Pick<DataLayerDef, "description" | "key" | "label">;
 
-export const layerTool = toolDefinition({
-  name: "datenschicht",
-  description: `Schaltet eine Datenebene ein oder aus: ${DATA_LAYERS.map((d) => `${d.key} (${d.label})`).join(", ")}. Nicht jede Stadt hat jede.`,
-  inputSchema: z.object({ schicht: z.enum(LAYER_KEYS), an: z.boolean() }),
-});
+/** The layer tool, with these layers to choose from. */
+function layerToolOf(layers: readonly AskLayer[]) {
+  const keys = layers.map((d) => d.key) as [DataLayerKey, ...DataLayerKey[]];
+  return toolDefinition({
+    name: "datenschicht",
+    description: "Schaltet eine Datenebene ein oder aus.",
+    inputSchema: z.object({
+      schicht: z
+        .enum(keys)
+        .describe(
+          layers.map((d) => `${d.key}: ${d.label}. ${d.description}`).join("\n")
+        ),
+      an: z.boolean(),
+    }),
+  });
+}
+
+/** Every layer of any city: what the card binds. The model is offered its
+ *  own city's (`sceneToolsFor`), a subset the card's schema also takes. */
+export const layerTool = layerToolOf(DATA_LAYERS);
 
 /** The tools the browser runs, by name: the card binds each. */
 export const SCENE_TOOLS = [
@@ -143,6 +208,19 @@ export const SCENE_TOOLS = [
   styleTool,
   layerTool,
 ] as const;
+
+/**
+ * The scene tools as the model is offered them in a city with these
+ * layers: the layer tool with that city's layers and words, none where it
+ * has no layer. The same for every request of a site, so the provider's
+ * prompt cache holds.
+ */
+export function sceneToolsFor(layers: readonly AskLayer[]) {
+  return [
+    ...SCENE_TOOLS.filter((t) => t !== layerTool),
+    ...(layers.length > 0 ? [layerToolOf(layers)] : []),
+  ];
+}
 
 /** The tools the server runs on the Stadtwissen. */
 export const KNOWLEDGE_TOOLS = [

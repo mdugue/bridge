@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import {
   ASK_LIMITS,
   ASK_PROVIDERS,
-  askSystemPrompt,
   conversationProblem,
   isAskModel,
   lastQuestion,
@@ -99,21 +98,4 @@ describe("requests", () => {
     ];
     expect(conversationProblem(huge, "kurz")).toBe("too-long");
   });
-});
-
-test("the prompt names the site, the date and the rules", () => {
-  const prompt = askSystemPrompt(
-    {
-      epsg: 25_833,
-      label: "Dresden",
-      layers: [],
-      styles: ["pastel (Pastell)"],
-    },
-    new Date(2026, 9, 31, 12)
-  );
-  expect(prompt).toContain("Dresden");
-  expect(prompt).toContain("EPSG:25833");
-  expect(prompt).toContain("31. Oktober 2026");
-  expect(prompt).toContain("keine Datenebenen");
-  expect(prompt).toContain("Legenden als Legenden");
 });

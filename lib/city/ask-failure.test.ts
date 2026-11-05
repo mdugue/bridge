@@ -103,6 +103,25 @@ describe("the card's words for a failed answer", () => {
       text: "Das Modell brach die Antwort ab. Frag bitte noch einmal.",
     },
     {
+      name: "a refusal in the provider's words, naming no key",
+      error: failed("Model refused: credentials are private", {
+        code: "refusal",
+      }),
+      text: "Das Modell brach die Antwort ab. Frag bitte noch einmal.",
+    },
+    {
+      name: "a stream that ended before its stop reason",
+      error: failed("Anthropic stream ended before a stop reason", {
+        code: "incomplete-stream",
+      }),
+      text: "Das Modell brach die Antwort ab. Frag bitte noch einmal.",
+    },
+    {
+      name: "a tool call never finished",
+      error: failed("Tool call incomplete", { code: "incomplete-tool-call" }),
+      text: "Das Modell brach die Antwort ab. Frag bitte noch einmal.",
+    },
+    {
       name: "a provider's 401",
       error: failed("invalid x-api-key", { code: "401" }),
       text: "invalid x-api-key",
