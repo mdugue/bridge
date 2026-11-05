@@ -73,13 +73,17 @@ def test_every_steps_run_is_in_the_table_once():
     assert unlisted == []
 
 
-def test_a_failing_step_names_its_site_tile_and_step(tmp_path, monkeypatch, capsys):
+@pytest.mark.parametrize("error", [ValueError, SystemExit])
+def test_a_failing_step_names_its_site_tile_and_step(tmp_path, monkeypatch, capsys, error):
+    """An error or a step's exit (osm.read_osm's `SystemExit`), which goes
+    on as it was raised."""
+
     def broken(step, tile, site_tiles, research=False):
-        raise ValueError("no DOM1")
+        raise error("no DOM1")
 
     monkeypatch.setattr(runner, "run_tile", broken)
     spec = SimpleNamespace(site="dresden", raw=tmp_path, data=tmp_path, tiles=[])
     tile = SimpleNamespace(id="33412_5656_2_sn")
-    with pytest.raises(ValueError, match="no DOM1"):
+    with pytest.raises(error, match="no DOM1"):
         runner.recorded_tile(spec, "dormers", tile, False, {}, save=False)
     assert "dresden 33412_5656_2_sn dormers: no DOM1" in capsys.readouterr().err

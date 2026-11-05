@@ -223,7 +223,7 @@ def recorded_tile(spec, step: str, tile, research: bool, key: dict, save: bool) 
         with step_cache.recording([os.getcwd(), str(spec.data), str(spec.raw)]) as rec:
             run_tile(step, tile, spec.tiles, research)
         step_cache.save(manifest, key, rec)
-    except Exception as exc:
+    except (Exception, SystemExit) as exc:  # a step's `SystemExit("no OSM extract")` too
         print(f"{spec.site} {tile.id} {step}: {exc}", file=sys.stderr)
         raise
 
