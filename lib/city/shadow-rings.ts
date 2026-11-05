@@ -24,11 +24,16 @@ export const SHADOW_RING_HALVES = [80, 240, 720, 2160] as const;
 /** How many squares there are: the layers of the map's depth array. */
 export const SHADOW_RINGS = SHADOW_RING_HALVES.length;
 
-/** The first rings only draw the casters thinner than a coarser ring's
- *  texel: lamp posts, kerbs, benches. Past these their shadow fades out
- *  across the ring's edge, where it would otherwise dissolve into a smear of
- *  the filter's samples. */
-export const THIN_CASTER_RINGS = 1;
+/**
+ * How many of the finest rings draw a thin caster, by how thin it is. `tiny`
+ * is what a coarser ring's texel is wider than in every direction (kerbs,
+ * benches, tree stakes): there its shadow would only be a smear of the
+ * filter's samples, so it fades out across the finest ring's edge. `slender`
+ * is thin but long (lamp posts, masts): under a low sun its shadow is a line
+ * that still reads, soft and faint, across the third ring's 0.7 m texels. The
+ * widest ring draws neither.
+ */
+export const THIN_CASTER_RINGS = { slender: 3, tiny: 1 } as const;
 
 /** The PCF spread in texels (three's `shadow.radius`). Five samples spread
  *  wider than this leave gaps a thin shadow shows as a stipple. */

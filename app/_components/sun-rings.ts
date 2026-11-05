@@ -64,7 +64,7 @@ import type { RingArea, RingPoint, RingView } from "@/lib/city/shadow-rings";
 import type { F, I, V3 } from "./shader-chunks";
 import { ShadowNodeBase } from "./shadow-node-api";
 import type { FrameLike, ShadowTargets } from "./shadow-node-api";
-import { isThinCaster } from "./three-utils";
+import { castsInRing } from "./three-utils";
 
 /** The band a ring cross-fades over, inside its edge (in the map's 0…1). The
  *  band starts a little in: the filter's samples must stay on the ring. */
@@ -177,8 +177,8 @@ interface Ring {
   half: number;
   /** drawn since it last showed: else it holds nothing worth showing */
   fresh: boolean;
-  /** does it draw the thin casters */
-  thin: boolean;
+  /** does it draw every caster, however thin (Modell's tiles) */
+  every: boolean;
 }
 
 /** The rings as the rig drives them. */
@@ -234,13 +234,13 @@ class RingShadowNode extends ShadowNodeBase {
   /** the map's depth, once the first lit material made it */
   depth: DepthTexture | null = null;
   readonly #nodes: ShadowRingNodes;
-  readonly #drawNext: () => { index: number; thin: boolean } | null;
+  readonly #drawNext: () => { every: boolean; index: number } | null;
 
   constructor(
     light: Light,
     shadow: LightShadow,
     nodes: ShadowRingNodes,
-    drawNext: () => { index: number; thin: boolean } | null
+    drawNext: () => { every: boolean; index: number } | null
   ) {
     super(light, shadow);
     this.#nodes = nodes;
@@ -351,9 +351,9 @@ class RingShadowNode extends ShadowNodeBase {
     map.setSize(shadow.mapSize.width, shadow.mapSize.height, SHADOW_RINGS);
     renderer.setRenderTarget(map, ring.index);
     const drawn = renderer.getRenderObjectFunction();
-    if (!ring.thin && drawn) {
+    if (!ring.every && drawn) {
       renderer.setRenderObjectFunction((object: Object3D, ...rest) => {
-        if (!isThinCaster(object)) {
+        if (castsInRing(object, ring.index)) {
           drawn(object, ...rest);
         }
       });
@@ -373,7 +373,7 @@ export function createSunRings(
   const nodes = ringUniforms();
   const sun = new Vector3(0, 1, 0);
   const reach = new Vector3();
-  const rings: Ring[] = SHADOW_RING_HALVES.map((half, i) => ({
+  const rings: Ring[] = SHADOW_RING_HALVES.map((half) => ({
     anchor: null,
     anchorHalf: half,
     // the map holds nothing yet
@@ -382,7 +382,7 @@ export function createSunRings(
     focus: { x: 0, y: 0, z: 0 },
     fresh: false,
     half,
-    thin: i < THIN_CASTER_RINGS,
+    every: false,
   }));
   let wanted: readonly number[] = rings.map(() => 1);
   // Modell's rings tile one square, and it says what they reach
@@ -478,7 +478,7 @@ export function createSunRings(
     placeRing(index);
     ring.dirtySince = null;
     ring.drawnAt = now;
-    return { index, thin: ring.thin };
+    return { every: ring.every, index };
   };
 
   shadow.mapSize.set(mapEdge, mapEdge);
@@ -505,10 +505,10 @@ export function createSunRings(
       );
     },
     invalidateCrowns: () => {
-      askShown((_ring, i) => tiled || i >= THIN_CASTER_RINGS);
+      askShown((_ring, i) => tiled || i > 0);
     },
     invalidateThin: () => {
-      askShown((ring) => ring.thin);
+      askShown((_ring, i) => tiled || i < THIN_CASTER_RINGS.slender);
     },
     nodes,
     reach,
@@ -517,7 +517,7 @@ export function createSunRings(
       tiled = true;
       const { half, focus } = modelQuadrants(centre, radius, sun);
       for (let i = 0; i < SHADOW_RINGS; i += 1) {
-        rings[i].thin = true;
+        rings[i].every = true;
         wantRing(rings[i], focus[i], half, now);
       }
       showRings([1, 1, 1, 1], now);
@@ -538,7 +538,7 @@ export function createSunRings(
         const half = SHADOW_RING_HALVES[i];
         const fade = ringFade(i, view.height);
         want.push(fade);
-        rings[i].thin = i < THIN_CASTER_RINGS;
+        rings[i].every = false;
         if (fade > 0) {
           wantRing(rings[i], ringFocus(half, view), half, now);
         }

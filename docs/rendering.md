@@ -331,8 +331,8 @@ change, not a re-bake
     what shows did change: the stream reports every tile that comes into or
     leaves view, up to nine times a second while turning, and most of those
     reports change nothing that casts. A crown tier's swap skips the finest
-    ring (the near tier holds within its reach), a furniture cell's asks only
-    the rings that draw thin casters. One ring a frame, the one waiting
+    ring (the near tier holds within its reach), a furniture cell's only the
+    rings that draw thin casters. One ring a frame, the one waiting
     longest, so a stream of requests starves none and the depth passes never
     pile into a frame; the two wide rings at least 250 and 500 ms apart.
     Animated geometry (sway, clouds) deliberately does **not** update them. By
@@ -340,10 +340,11 @@ change, not a re-bake
   - **What they draw.** The depth range reaches half-size / tan + 450 m /
     sin of the sun's elevation toward the sun, so a tower standing beyond
     the square's far edge under a low sun still casts into it. Casters
-    marked `markThinCaster` (lamps, kerbs, furniture, tram masts, tree stakes,
-    sports fixtures) go into the finest ring only: their shadow fades across
-    its edge instead of dissolving into the filter's samples on a coarser
-    one. The depth bias is 1.1 of the ring's texels (0.09 m on the finest).
+    marked `markThinCaster` stop short of the coarse rings: kerbs, furniture,
+    tree stakes and sports fixtures go into the finest ring only, their shadow
+    fading across its edge instead of dissolving into the filter's samples;
+    lamps and tram masts, thin but long, into the first three, so a low sun's
+    line of shadow stays on the ground as the camera climbs, ever softer. The depth bias is 1.1 of the ring's texels (0.09 m on the finest).
     Terrain **receives only**, `normalBias = 0`.
   - **As the camera climbs** a ring fades out between 1.5 and 2.5 half-sizes
     up, where its texels are finer than the pixels it covers, and is drawn no

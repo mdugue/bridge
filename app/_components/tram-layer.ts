@@ -608,7 +608,7 @@ function buildMasts(masts: Point2[], ctx: GroundContext): Instances | null {
   mesh.instanceMatrix.needsUpdate = true;
   mesh.computeBoundingSphere();
   mesh.castShadow = true;
-  markThinCaster(mesh);
+  markThinCaster(mesh, "slender");
   mesh.receiveShadow = true;
   mesh.name = "tram-masts";
   return mesh;

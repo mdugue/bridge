@@ -3,6 +3,7 @@ import {
   Box3,
   Color,
   DirectionalLight,
+  Object3D,
   PerspectiveCamera,
   RenderTarget,
   Scene,
@@ -15,6 +16,7 @@ import { SHADOW_BASE_RADIUS, SHADOW_MAX_RADIUS } from "@/lib/city/shadow-fit";
 import { SHADOW_RINGS } from "@/lib/city/shadow-rings";
 import { shadowMapSizeFor } from "./scene-profile";
 import { createSunRig } from "./sun-rig";
+import { castsInRing, markThinCaster } from "./three-utils";
 
 // A ring's redraws are paced by the clock, and these tests step through time.
 beforeEach(() => {
@@ -139,7 +141,7 @@ function drawOne(
     renderer: {
       getRenderObjectFunction: () => drawObject,
       render: () => {
-        drawObject({ userData: { thinCaster: true } });
+        drawObject({ userData: { casterRings: 1 } });
       },
       setRenderObjectFunction: (f: (object: unknown) => void) => {
         drawObject = f;
@@ -329,12 +331,12 @@ test("a change of the crowns' tiers leaves the finest ring alone", () => {
   expect(drawAll(sun).toSorted((a, b) => a - b)).toEqual([1, 2, 3]);
 });
 
-test("a thin caster showing or hiding asks the finest ring alone", () => {
+test("a thin caster showing or hiding leaves the widest ring alone", () => {
   const { sunRig, sun } = rig();
   walkTo(sunRig, 0, 0);
   drawAll(sun);
   sunRig.invalidateThin();
-  expect(drawAll(sun)).toEqual([0]);
+  expect(drawAll(sun).toSorted((a, b) => a - b)).toEqual([0, 1, 2]);
 });
 
 test("the sun moving redraws every ring", () => {
@@ -542,10 +544,21 @@ test("a ring back in view shows nothing until it is drawn anew", () => {
   expect(rings(sunRig).fade[0].value).toBeGreaterThan(0);
 });
 
-test("only the finest ring draws what is thinner than a coarse texel", () => {
+/** Which rings draw a caster of `kind`. */
+const ringsDrawing = (kind: "slender" | "tiny") => {
+  const object = new Object3D();
+  markThinCaster(object, kind);
+  return [0, 1, 2, 3].map((ring) => castsInRing(object, ring));
+};
+
+test("the rings draw a thin caster as far as its kind reaches", () => {
   const { sunRig, sun } = rig();
   sunRig.update(new Date("2026-06-21T10:00:00+02:00"));
   walkTo(sunRig, 0, 0);
+  expect(ringsDrawing("tiny")).toEqual([true, false, false, false]);
+  expect(ringsDrawing("slender")).toEqual([true, true, true, false]);
+  expect(castsInRing(new Object3D(), 3)).toBe(true);
+  // the ring's draw goes by it: the widest passes over a marked caster
   const finest = { thin: false };
   expect(drawOne(sun, finest)).toBe(0);
   expect(finest.thin).toBe(true);

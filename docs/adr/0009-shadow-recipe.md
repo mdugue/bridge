@@ -26,7 +26,7 @@ phone has no memory to spare (ADR 0047).
 3. **A ring is redrawn only on demand, one a frame:** when it has drifted a
    share of its size, the sun moves or a caster changes
    (`invalidateShadows()`). A small ring redraws often with few casters, a
-   wide one rarely with many. Thin casters go into the finest ring only. The
+   wide one rarely with many. Thin casters stop short of the coarse rings. The
    tile stream keeps its own square (`lib/city/shadow-fit.ts`), so what loads
    does not change with the rings.
 4. **Past the map the ground's shadows come from a baked horizon map**

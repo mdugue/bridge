@@ -482,8 +482,9 @@ Traps of the rings:
 - **A ring's matrix changes only as it is drawn.** Read a ring's map through
   `ringLookup` (`sunRig.shadowMap.rings`); `sun.shadow.matrix` and
   `sun.shadow.camera` hold whichever ring was drawn last.
-- **The widest rings do not draw thin casters.** A new thin caster calls
-  `markThinCaster`; a coarse ring's filter turns it into a smear.
+- **Coarse rings do not draw thin casters.** A new thin caster calls
+  `markThinCaster`: `tiny` (the finest ring alone: a coarser filter turns it
+  into a smear) or `slender` (the first three: thin but long, a lamp post).
 - **Plates wait for the rings**: `handle.shadowBusy()`. They redraw one a frame.
 - **Ask only what a change touches.** `invalidateShadows()` redraws all four
   rings; a tile's change goes through `invalidateShownTiles` (only the rings it
