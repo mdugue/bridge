@@ -36,6 +36,13 @@ export const SHADOW_RINGS = SHADOW_RING_HALVES.length;
  */
 export const THIN_CASTER_RINGS = { slender: 3, tiny: 1 } as const;
 
+/** How many of the finest rings a change near the eye asks to redraw (a crown's
+ *  tier, a furniture cell, all within 650 m). The widest ring, which draws every
+ *  caster, starts to be read past about 475 m, but the third ring answers for
+ *  most of that, and what is left of such a change is finer than its 2 m texel.
+ */
+export const NEAR_CHANGE_RINGS = 3;
+
 /** The PCF spread in texels (three's `shadow.radius`). Five samples spread
  *  wider than this leave gaps a thin shadow shows as a stipple. */
 export const RING_PCF_RADIUS = 2.5;

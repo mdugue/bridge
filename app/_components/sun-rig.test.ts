@@ -13,7 +13,7 @@ import {
 import type { DepthTexture, Matrix4, ShadowNode } from "three/webgpu";
 import { uniform } from "three/tsl";
 import { SHADOW_BASE_RADIUS, SHADOW_MAX_RADIUS } from "@/lib/city/shadow-fit";
-import { SHADOW_RINGS, THIN_CASTER_RINGS } from "@/lib/city/shadow-rings";
+import { NEAR_CHANGE_RINGS, SHADOW_RINGS } from "@/lib/city/shadow-rings";
 import { shadowMapSizeFor } from "./scene-profile";
 import { createSunRig } from "./sun-rig";
 import { castsInRing, markThinCaster } from "./three-utils";
@@ -315,7 +315,7 @@ test("a change near the eye leaves the widest ring alone", () => {
   const { sunRig, sun } = rig();
   walkTo(sunRig, 0, 0);
   drawAll(sun);
-  sunRig.invalidateShadow(undefined, THIN_CASTER_RINGS.slender);
+  sunRig.invalidateShadow(undefined, NEAR_CHANGE_RINGS);
   expect(drawAll(sun).toSorted((a, b) => a - b)).toEqual([0, 1, 2]);
 });
 
@@ -329,6 +329,20 @@ test("a change far off asks only the rings it can fall on", () => {
   // and under the camera, all of them
   sunRig.invalidateShadow({ maxX: 10, maxZ: 10, minX: -10, minZ: -10 });
   expect(drawAll(sun).toSorted((a, b) => a - b)).toEqual([0, 1, 2, 3]);
+});
+
+test("no ring draws from under the ground on a drag out of the night", () => {
+  const { sunRig, sun } = rig();
+  sunRig.update(new Date("2026-06-21T02:00:00+02:00"));
+  walkTo(sunRig, 0, 0);
+  // the first day step of a drag waits for its pace, the light with it
+  sunRig.update(new Date("2026-06-21T10:00:00+02:00"), true);
+  walkTo(sunRig, 0, 0);
+  expect(sunRig.shadowPending()).toBe(false);
+  expect(sun.position.y).toBeLessThan(sun.target.position.y);
+  jest.advanceTimersByTime(100);
+  expect(sunRig.shadowPending()).toBe(true);
+  expect(sun.position.y).toBeGreaterThan(sun.target.position.y);
 });
 
 test("the sun moving redraws every ring", () => {

@@ -93,7 +93,7 @@ import {
 } from "@/lib/city/shadow-fit";
 import {
   changedTiles,
-  THIN_CASTER_RINGS,
+  NEAR_CHANGE_RINGS,
   tileArea,
 } from "@/lib/city/shadow-rings";
 import { cutOutFromView } from "@/lib/city/section";
@@ -1559,8 +1559,8 @@ async function bootApp(
   scene.add(lantern.light);
   cleanups.push(() => lantern.dispose());
   /**
-   * Forces one shadow-map re-render. The map is otherwise only redrawn when the
-   * sun or the frustum moves, so **every new scene object and every material
+   * Asks every shadow ring to redraw. A ring is otherwise only redrawn when the
+   * sun or the ring moves, so **every new scene object and every material
    * change that alters the depth pass has to call this** — a missing call shows
    * up as a stale shadow (a demolished building still casting, a new one not),
    * never as a crash. Tiles landing, leaving or changing level call it through
@@ -3208,7 +3208,7 @@ async function bootApp(
     }
   };
 
-  // Ground elevation under the camera, for the shadow frustum (sun-rig.ts):
+  // Ground elevation under the camera, for the shadow rings (sun-rig.ts):
   // both the plane it is anchored to and the altitude its half-size derives
   // from. Off every tile the ground floor stands in, as for the walk clamp.
   const shadowViewDir = new Vector3();
@@ -3268,16 +3268,14 @@ async function bootApp(
         }
       }
     }
-    // Both flip within a few hundred metres of the eye (the far crowns at 650
-    // m): the widest ring, which draws every caster, is read only beyond that.
     if (lodChanged) {
       invalidateLanternShadow(lantern);
-      sunRig.invalidateShadow(undefined, THIN_CASTER_RINGS.slender);
+      sunRig.invalidateShadow(undefined, NEAR_CHANGE_RINGS);
     }
   };
 
   /**
-   * Everything that follows where the frame looks: the shadow frustum, the
+   * Everything that follows where the frame looks: the shadow rings, the
    * map's marks, the lamp lights and the tree tiers — from the camera on
    * foot and in the air; in Modell from the ground the picture shows and
    * from above its pivot, as far up as the picture is equivalent to (so a
@@ -3843,7 +3841,12 @@ async function bootApp(
     }
     // (the loading veil breathes, sweeps and lifts at the full rate)
     const busy =
-      moved || exporting || !sceneSettled || dataLayersMove || veilShown;
+      moved ||
+      exporting ||
+      !sceneSettled ||
+      dataLayersMove ||
+      veilShown ||
+      sunRig.shadowBusy();
     sceneStill = stillness.frame(time, busy);
     opts.pace.setStill(sceneStill);
   };

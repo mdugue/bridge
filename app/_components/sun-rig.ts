@@ -394,6 +394,25 @@ export function createSunRig(
     lastCentre.copy(focus);
   };
 
+  /** The square to a new size and centre, unless that lies inside its dead
+   *  zone at an unchanged size. Its centre is anchored to the GROUND, not the
+   *  camera. */
+  const moveSquare = (next: number, x: number, y: number, z: number) => {
+    if (
+      next === radius &&
+      Number.isFinite(lastCentre.x) &&
+      Math.hypot(x - lastCentre.x, y - lastCentre.y, z - lastCentre.z) <
+        deadZone
+    ) {
+      return;
+    }
+    if (next !== radius) {
+      resizeFrustum(next);
+    }
+    focus.set(x, y, z);
+    reposition();
+  };
+
   /** Re-fits the square the sun's camera streams for. */
   const followSquare = (
     position: Vector3,
@@ -408,27 +427,11 @@ export function createSunRig(
     const ahead = shadowFocusAhead(nextRadius);
     const wantX = position.x + direction.x * ahead;
     const wantZ = position.z + direction.z * ahead;
-    // Inside the dead zone, at an unchanged radius, the square stays put. Its
-    // centre is anchored to the GROUND, not the camera.
-    if (
-      nextRadius === radius &&
-      Number.isFinite(lastCentre.x) &&
-      Math.hypot(
-        wantX - lastCentre.x,
-        groundY - lastCentre.y,
-        wantZ - lastCentre.z
-      ) < deadZone
-    ) {
-      return;
-    }
-    if (nextRadius !== radius) {
-      resizeFrustum(nextRadius);
-    }
-    focus.set(wantX, groundY, wantZ);
-    reposition();
+    moveSquare(nextRadius, wantX, groundY, wantZ);
   };
 
-  // kept between frames: this runs in every one of them
+  // kept between frames: these run in every one of them
+  const footprint = { x: 0, y: 0, z: 0 };
   const ringView: RingView = {
     dirX: 0,
     dirZ: 0,
@@ -462,19 +465,11 @@ export function createSunRig(
     maxRadius: number
   ) => {
     const nextRadius = fitModelShadow(footRadius, radius, maxRadius);
-    if (
-      nextRadius !== radius ||
-      !Number.isFinite(lastCentre.x) ||
-      Math.hypot(x - lastCentre.x, groundY - lastCentre.y, z - lastCentre.z) >=
-        deadZone
-    ) {
-      if (nextRadius !== radius) {
-        resizeFrustum(nextRadius);
-      }
-      focus.set(x, groundY, z);
-      reposition();
-    }
-    rings.setFootprint({ x, y: groundY, z }, radius);
+    moveSquare(nextRadius, x, groundY, z);
+    footprint.x = x;
+    footprint.y = groundY;
+    footprint.z = z;
+    rings.setFootprint(footprint, radius);
     askRings();
   };
 
@@ -496,10 +491,15 @@ export function createSunRig(
     }
   };
 
-  /** The stream's square and the rings to the sun as it stands (`dir`). */
+  /** The stream's square and the rings to the sun as it stands (`dir`), and
+   *  a redraw asked. Only here does the sun come up for the rings: a ring drawn
+   *  before the light has turned would be drawn from under the ground. */
   const moveLight = () => {
+    sunUp = dir.y > 0;
     reposition();
     rings.setSun(dir);
+    askRings();
+    shadowAskedAt = performance.now();
   };
 
   const update = (date: Date, preview = false): SunState => {
@@ -509,7 +509,6 @@ export function createSunRig(
     // smoothly, and nothing drawn from it is held to the shadow map
     sunDirectionOut?.copy(dir);
     const aboveHorizon = dir.y > 0;
-    sunUp = aboveHorizon;
     // The sun moved: redraw by day (a drag's or a glide's step at most every
     // PREVIEW_SHADOW_MS, the last after the wait); by night drop a request
     // still open. The light turns at once and each ring follows when it is
@@ -518,20 +517,14 @@ export function createSunRig(
     if (!aboveHorizon || !preview) {
       cancelShadowWait();
       moveLight();
-      askRings();
-      shadowAskedAt = performance.now();
     } else if (shadowWait === null) {
       const wait = shadowAskedAt + PREVIEW_SHADOW_MS - performance.now();
       if (wait <= 0) {
         moveLight();
-        askRings();
-        shadowAskedAt = performance.now();
       } else {
         shadowWait = setTimeout(() => {
           shadowWait = null;
-          shadowAskedAt = performance.now();
           moveLight();
-          askRings();
         }, wait);
       }
     }
