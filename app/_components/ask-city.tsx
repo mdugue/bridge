@@ -819,6 +819,13 @@ function argText(value: unknown): string {
     : "";
 }
 
+/** `setze_zeit` in the trace: its time of day, or only a new date. */
+function timeLine(uhrzeit: unknown): string {
+  return uhrzeit
+    ? `Stellt die Uhr auf ${argText(uhrzeit)} Uhr`
+    : "Stellt das Datum um";
+}
+
 /** What a tool call says it did, in the trace under an answer. */
 function toolLine(name: string, input: unknown, output?: unknown): string {
   const args = (input ?? {}) as Record<string, unknown>;
@@ -860,7 +867,7 @@ function toolLine(name: string, input: unknown, output?: unknown): string {
       return args.aus_der_luft ? "Fliegt hin" : "Geht hin";
     }
     case "setze_zeit": {
-      return `Stellt die Uhr auf ${argText(args.stunde)} Uhr`;
+      return timeLine(args.uhrzeit);
     }
     case "setze_stil": {
       return `Wechselt den Bildstil (${argText(args.stil)})`;

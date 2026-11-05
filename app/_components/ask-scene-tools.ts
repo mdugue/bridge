@@ -19,6 +19,14 @@ import type { DataLayerKey } from "@/lib/city/data-layers";
 import type { RenderStyle } from "@/lib/city/render-style";
 import type { ViewpointGeometry } from "@/lib/city/site";
 
+/** A change of the scene's time, as `setze_zeit` takes it. */
+export interface TimeChange {
+  /** YYYY-MM-DD */
+  datum?: string;
+  /** HH:MM */
+  uhrzeit?: string;
+}
+
 /** What the card may do to the scene: the scene tools' other half. */
 export interface AskScene {
   /** where the camera stands now (site CRS), or null before the scene */
@@ -26,9 +34,10 @@ export interface AskScene {
   /** switches a data layer; false where the site has none of that kind */
   setLayer: (key: DataLayerKey, on: boolean) => boolean;
   setStyle: (style: RenderStyle) => void;
-  /** the scene's time to `hour` (of `date`, YYYY-MM-DD, or today's day);
-   *  the instant it set, as text */
-  setTime: (hour: number, date?: string) => string;
+  /** the scene's time to a time of day and a date, in the city's clock;
+   *  what is left out stays. The instant it set, as text, and why the
+   *  picture does not follow where the style keeps its own light. */
+  setTime: (change: TimeChange) => { hinweis?: string; zeit: string };
   /** glides to a view; false while there is no scene to move */
   show: (view: ViewpointGeometry) => boolean;
   /** whether a point (site CRS) lies on one of the site's tiles */
@@ -62,10 +71,11 @@ export function sceneTools(scene: AskScene) {
         ? { ok: true }
         : { ok: false, hinweis: "Die Szene lädt noch." };
     }),
-    timeTool.client(({ stunde, datum }) => ({
-      ok: true,
-      zeit: scene.setTime(stunde, datum),
-    })),
+    timeTool.client(({ uhrzeit, datum }) =>
+      uhrzeit || datum
+        ? { ok: true, ...scene.setTime({ uhrzeit, datum }) }
+        : { ok: false, hinweis: "Gib eine Uhrzeit oder ein Datum an." }
+    ),
     styleTool.client(({ stil }) => {
       scene.setStyle(stil);
       return { ok: true };

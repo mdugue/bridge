@@ -6,6 +6,7 @@
  */
 import { useMemo } from "react";
 import type { RefObject } from "react";
+import { CITY_TIME_ZONE } from "@/lib/city/ask-city";
 import { cardCredits } from "@/lib/city/card-lines";
 import { activeDataLayers, siteDataLayers } from "@/lib/city/data-layers";
 import type { FramePace } from "@/lib/city/frame-pace";
@@ -15,8 +16,9 @@ import type { LookState } from "@/lib/city/look-state";
 import { siteHoldsPoint } from "@/lib/city/geolocation";
 import type { LandmarkFactsIndex } from "@/lib/city/landmark-facts";
 import { METHODS } from "@/lib/city/methods";
+import { RENDER_STYLE_BY_ID } from "@/lib/city/render-style";
 import type { Site } from "@/lib/city/site";
-import type { AskScene } from "./ask-scene-tools";
+import type { AskScene, TimeChange } from "./ask-scene-tools";
 import type { CityWalkHandle } from "./create-app";
 import { isAbortError, untilAborted } from "./fetch-optional";
 import { loadLandmarkFacts } from "./landmark-facts-load";
@@ -26,15 +28,54 @@ import type { SceneTime } from "./scene-time";
 const WHEN = new Intl.DateTimeFormat("de-DE", {
   dateStyle: "full",
   timeStyle: "short",
+  timeZone: CITY_TIME_ZONE,
 });
 
-/** `hour` of `date` (YYYY-MM-DD) or of `day`, in the visitor's clock. */
-export function instantAt(hour: number, day: Date, date?: string): Date {
-  const [y, m, d] = date
-    ? date.split("-").map(Number)
-    : [day.getFullYear(), day.getMonth() + 1, day.getDate()];
-  const minutes = Math.round(Math.min(Math.max(hour, 0), 24) * 60);
-  return new Date(y, m - 1, d, 0, Math.min(minutes, 24 * 60 - 1));
+const CITY_CLOCK = new Intl.DateTimeFormat("en-CA", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+  timeZone: CITY_TIME_ZONE,
+});
+
+/** The calendar date (YYYY-MM-DD) and time of day (HH:MM) an instant reads
+ *  on the city's clock. */
+function cityClock(at: Date): { datum: string; uhrzeit: string } {
+  const part = Object.fromEntries(
+    CITY_CLOCK.formatToParts(at).map((p) => [p.type, p.value])
+  );
+  return {
+    datum: `${part.year}-${part.month}-${part.day}`,
+    uhrzeit: `${part.hour}:${part.minute}`,
+  };
+}
+
+/** A date and time of day as if they were UTC (ms). */
+function asUtc(datum: string, uhrzeit: string): number {
+  return Date.parse(`${datum}T${uhrzeit}:00Z`);
+}
+
+/**
+ * The instant `now` becomes under a change, in the city's clock, whichever
+ * clock the visitor's device keeps: the sun stands over the city. What the
+ * change leaves out stays as the city's clock reads it now.
+ */
+export function instantAt(now: Date, change: TimeChange): Date {
+  const clock = cityClock(now);
+  const asked = asUtc(
+    change.datum ?? clock.datum,
+    change.uhrzeit ?? clock.uhrzeit
+  );
+  // the city's offset at that moment: looked up twice, for a first guess
+  // may fall on the other side of a clock change
+  const offsetAt = (ms: number) => {
+    const c = cityClock(new Date(ms));
+    return asUtc(c.datum, c.uhrzeit) - ms;
+  };
+  return new Date(asked - offsetAt(asked - offsetAt(asked)));
 }
 
 /** How long `was_ist_da` waits for a glide to land at most (visible ms):
@@ -279,10 +320,14 @@ export function useAskScene(
         return true;
       },
       within: (x, y) => siteHoldsPoint(site, x, y),
-      setTime: (hour, date) => {
-        const at = instantAt(hour, current(), date);
+      setTime: (change) => {
+        const at = instantAt(current(), change);
         setInstant(at);
-        return WHEN.format(at);
+        const own = RENDER_STYLE_BY_ID[look.get().style].ownLight;
+        return {
+          zeit: WHEN.format(at),
+          ...(own ? { hinweis: own.note } : {}),
+        };
       },
       setStyle: (style) => look.set({ style }),
       setLayer: (key, on) => {
