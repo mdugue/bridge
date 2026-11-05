@@ -338,7 +338,7 @@ half resolution; for automated tests only.
 
 **Snapshot** — the JSON text that captures camera, date/time, the
 picture style, the fog, the crown switch and the data layers, used to
-reproduce a view.
+reproduce a view; a view link (`#snap=`) carries one in its address.
 
 **Scenic view / Aussichtspunkt** — one of the authored vantages the
 camera can glide to; one of them is the start view.

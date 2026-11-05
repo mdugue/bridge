@@ -598,8 +598,13 @@ The other picture styles and Modell keep their sharp lines.
 - **Snapshot** — *Kopieren* copies your exact position, the date and time,
   the picture style, *Nebel*, the crown switch and the data layers as a
   small JSON text; paste such a text into the box and press *Anwenden* to
-  restore it. This is how a specific view is shared or reproduced for a
-  screenshot. A snapshot from before the look was fixed still loads; the
+  restore it. *Link kopieren* copies a link to this page that opens at the
+  same view (the snapshot rides in the part of the address after the `#`,
+  which the browser never sends to the server); it carries the camera's
+  place, after *Standort* or *Live* your own. A link to a view opened in
+  a tab that already shows the city takes you there at once. This is how a
+  specific view is shared or reproduced for a screenshot. A snapshot from
+  before the look was fixed still loads; the
   sliders it names are ignored. A malformed snapshot is rejected with a
   message instead of breaking the scene.
 - **Qualität** ("quality") — the step the viewer draws at on your device

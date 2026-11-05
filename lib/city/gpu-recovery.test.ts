@@ -135,3 +135,28 @@ test("the parsed snapshot is not changed: a gated arrival is a new one", () => {
   expect(s?.camera).not.toBe(waiting.camera);
   expect(waiting).toEqual(before);
 });
+
+const linked: Snapshot = {
+  ...waiting,
+  camera: { ...waiting.camera, epsg: { x: 411_730, y: 5_656_240 } },
+};
+
+test("a view link opens where it says when nothing waits, gated as a recovery is", () => {
+  const a = arrive({ snapshot: null, linked });
+  expect(a.snapshot?.camera.epsg).toEqual(linked.camera.epsg);
+  expect(a.note).toEqual({
+    event: "view link",
+    detail: "opened at a linked view",
+  });
+  expect(a.sayLighter).toBe(false);
+  // a device that lost its GPU twice is not sent into Modell in Comic
+  const at2 = arrive({ snapshot: null, linked, level: 2 }).snapshot;
+  expect(at2?.camera.model).toBe(undefined);
+  expect(at2?.look?.style).toBe(undefined);
+});
+
+test("a recovery wins over the link a reload kept, and a place picked over both", () => {
+  expect(arrive({ linked }).snapshot?.camera.epsg).toEqual(waiting.camera.epsg);
+  expect(arrive({ linked, reset: true }).note?.event).toBe("quality reset");
+  expect(arrive({ snapshot: null, linked, picked: true }).snapshot).toBe(null);
+});
