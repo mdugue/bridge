@@ -1,4 +1,8 @@
 import { expect, test } from "bun:test";
+import { existsSync, readFileSync } from "node:fs";
+import nodePath from "node:path";
+import { SITES } from "../../sites";
+import { bakeFileProblems } from "./bake-file";
 import {
   OBJECT_FLAG_FLAT_ROOF,
   OBJECT_FLAG_HERITAGE,
@@ -7,8 +11,11 @@ import {
 import {
   applyFacadeReadings,
   FACADE_UNIT,
+  isFacadeReadings,
   withFacadeReading,
 } from "./facade-reading";
+import { FACADES_FILE } from "./facades-file";
+import { sideFileSource, tileArtifacts, tileIds } from "./tile";
 
 test("a reading rides above the OSM flags and keeps them", () => {
   const osm = OBJECT_FLAG_HERITAGE + OBJECT_FLAG_FLAT_ROOF;
@@ -51,4 +58,40 @@ test("a row high on its building takes the reading without the shop", () => {
   );
   expect(flags[0]).toBe(FACADE_UNIT * (1 + 4 * 2 + 16));
   expect(flags[1]).toBe(FACADE_UNIT * (1 + 4 * 2));
+});
+
+// The viewer's guard and the build's schema (ADR 0059) agree: what the
+// build lets through, the viewer reads; what the schema refuses, the guard
+// refuses too.
+const ROOT = nodePath.join(import.meta.dir, "..", "..");
+const committed = Object.values(SITES)
+  .flatMap((site) =>
+    tileIds(site).map((tile) =>
+      nodePath.join(
+        ROOT,
+        sideFileSource(site, tileArtifacts(tile).facades.file)
+      )
+    )
+  )
+  .filter((path) => existsSync(path));
+
+test.each(committed)("the guard accepts %s, as its schema does", (path) => {
+  const json: unknown = JSON.parse(readFileSync(path, "utf-8"));
+  expect(bakeFileProblems(FACADES_FILE, json)).toEqual([]);
+  expect(isFacadeReadings(json)).toBe(true);
+});
+
+test.each([
+  ["no file", null],
+  ["no attribution", { buildings: {} }],
+  ["no buildings", { attribution: "a" }],
+  ["buildings as a list", { attribution: "a", buildings: [] }],
+  ["two readings", { attribution: "a", buildings: { b: [1, 1] } }],
+  ["a reading as text", { attribution: "a", buildings: { b: ["1", 1, 0] } }],
+  ["a grade past 3", { attribution: "a", buildings: { b: [4, 1, 0] } }],
+  ["a grade not whole", { attribution: "a", buildings: { b: [1.5, 1, 0] } }],
+  ["a shop past 1", { attribution: "a", buildings: { b: [1, 1, 2] } }],
+] as const)("the guard and the schema both refuse %s", (_, file) => {
+  expect(bakeFileProblems(FACADES_FILE, file)).not.toEqual([]);
+  expect(isFacadeReadings(file)).toBe(false);
 });

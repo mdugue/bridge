@@ -6,6 +6,8 @@
  * walks it.
  */
 import { existsSync, readFileSync } from "node:fs";
+import { parseBakeFile } from "../../lib/city/bake-file";
+import { FACADES_FILE } from "../../lib/city/facades-file";
 import { sideFileSource, tileArtifacts } from "../../lib/city/tile";
 import type { TileArtifact, TileArtifactKind } from "../../lib/city/tile";
 import type { ColonyCrop } from "../crop-raster";
@@ -37,6 +39,20 @@ export type Published = Partial<Record<TileArtifactKind, string>>;
 export const sideFiles = new Map<string, Published>();
 /** tile → where its published colony raster lies in the tile */
 export const colonyCrops = new Map<string, ColonyCrop>();
+
+/** A side file's bytes as published; the viewer reads the facades' file, so
+ *  the build answers for it (ADR 0059). */
+function checkedBytes(
+  kind: TileArtifactKind,
+  source: string,
+  src: string
+): Buffer {
+  const bytes = readFileSync(src);
+  if (kind === "facades") {
+    parseBakeFile(FACADES_FILE, JSON.parse(bytes.toString()), source);
+  }
+  return bytes;
+}
 
 /** Publishes every side file of the tiles this run bakes, into `sideFiles`.
  *  A ground warmer needs none; a tile warmer its own tiles'. */
@@ -107,7 +123,7 @@ export async function publishSideFiles(): Promise<void> {
       const source = sideFileSource(SITE, artifact.file);
       const src = at(source);
       if (existsSync(src)) {
-        names[kind] = publish(artifact.file, readFileSync(src));
+        names[kind] = publish(artifact.file, checkedBytes(kind, source, src));
       } else if (artifact.required) {
         fail(`missing source file ${source}${HINT}`);
       } else {

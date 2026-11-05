@@ -40,8 +40,10 @@ import {
 import { readFacts } from "@/lib/city/object-facts";
 import type { ObjectFacts } from "@/lib/city/object-facts";
 import type { StructuralMetadata } from "@/lib/city/property-table";
-import { applyFacadeReadings } from "@/lib/city/facade-reading";
-import type { FacadeReadings } from "@/lib/city/facade-reading";
+import {
+  applyFacadeReadings,
+  isFacadeReadings,
+} from "@/lib/city/facade-reading";
 import { textureBytes, trackTexture } from "./three-utils";
 import { createClayMaterial } from "./visual-style";
 import type { StyleResources } from "./visual-style";
@@ -66,8 +68,9 @@ export interface CityLayer {
   setHidden: (objects: ReadonlySet<number>) => boolean;
   dispose: () => void;
   /** what street photos say about the tile's facades, once they land
-   *  (lib/city/facade-reading.ts) */
-  facadeReadings: (readings: FacadeReadings) => void;
+   *  (lib/city/facade-reading.ts): a fetched file, guarded here; one that
+   *  is not what the build checked leaves them as they are drawn */
+  facadeReadings: (readings: unknown) => void;
   /** what the twin knows about one object (read from the table on demand) */
   facts: (objectIndex: number) => ObjectFacts;
   /** whether the tile's BVH is built (`ensureCityBvh`) — not while the
@@ -492,6 +495,7 @@ export function dressCity(
       const ids = metadata.tableAccessors[0];
       if (
         ids &&
+        isFacadeReadings(readings) &&
         "buildingId" in ids.properties &&
         applyFacadeReadings(
           table.flags,

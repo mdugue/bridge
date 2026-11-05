@@ -6,6 +6,7 @@ import { directImports } from "../../scripts/bake-sources";
 import { bakeFileProblems, parseBakeFile } from "./bake-file";
 import type { BakeFile } from "./bake-file";
 import type { FacadeMaterial } from "./building-tint";
+import { FACADES_FILE } from "./facades-file";
 import type { WallMaterial } from "./city-mesh";
 import type { FountainStyle, MonumentForm, MonumentKind } from "./features";
 import { HORIZON_LEGEND_FILE } from "./horizon-legend-file";
@@ -68,6 +69,10 @@ const SPECS: [BakeFile, string[]][] = [
   [
     HORIZON_LEGEND_FILE,
     perTile((s, t) => sideFileSource(s, `horizon_${t}.json`)),
+  ],
+  [
+    FACADES_FILE,
+    perTile((s, t) => sideFileSource(s, tileArtifacts(t).facades.file)),
   ],
 ];
 

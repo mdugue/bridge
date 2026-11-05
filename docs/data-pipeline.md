@@ -1066,6 +1066,7 @@ and `shopfronts_<t>.json`), cast in `scripts/prepare/city.ts` and
 | `transit/trams.json` | `transit.py` (`transit`) | `lib/city/tram-timetable-file.ts` | `prepare-data.ts`, every run |
 | `dop/roofcolor_<t>.json` | `roof_colour.py` (`roof-colour`) | `lib/city/roof-colours-file.ts` | `scripts/prepare/city.ts` |
 | `dlm/horizon_<t>.json` (the legend; its `valley` from `glo30.py`) | `skyview.py` (`skyview`) | `lib/city/horizon-legend-file.ts` | `prepare-data.ts`, every run (the valley haze) |
+| `dlm/facades_<t>.json` | `facades.py` (`facades`) | `lib/city/facades-file.ts` | `scripts/prepare/side-files.ts`, every run; the viewer keeps its guard (`isFacadeReadings`, pinned to the schema) |
 
 `parseBakeFile` (`lib/city/bake-file.ts`) returns the file as it read it
 (zod's copy would reorder the keys) or ends the build:
