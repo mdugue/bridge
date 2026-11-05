@@ -54,7 +54,7 @@ import shapely
 
 from .classes import BUILTUP, PATH, ROAD, WATER
 from .common import Tile, column, dgm_paths, feature, label_line, mosaic, value_at
-from .osm import in_tunnel, osm_metres, read_osm, tag
+from .osm import in_tunnel, osm_width, read_osm, tag
 
 RAILWAYS = ("rail", "light_rail", "subway", "narrow_gauge")
 # A funicular (Standseilbahn, Schrägaufzug) is a track like a railway's,
@@ -379,8 +379,8 @@ def ballast(tile: Tile, features: list[dict]) -> list[dict]:
 
 def width_of(other: str | None, kind: str) -> float | None:
     """A way's mapped width: `width`, else `lanes` × 3.25 m + verges."""
-    width = osm_metres(tag(other, "width"))
-    if width is not None and 1.0 <= width <= 60.0:
+    width = osm_width(tag(other, "width"))
+    if width is not None and width >= 1.0:
         return width
     lanes = re.match(r"\d+", tag(other, "lanes") or "")
     if lanes and kind == "road":
@@ -472,8 +472,8 @@ def passage_half(highway: str | None, other: str | None) -> float:
     """The half-width a passage under a deck opens for a way (m)."""
     from .landcover_osm import ROAD_HALF_WIDTH
 
-    width = osm_metres(tag(other, "width"))
-    if width is not None and 1.0 <= width <= 60.0:
+    width = osm_width(tag(other, "width"))
+    if width is not None and width >= 1.0:
         return width / 2 + PASSAGE_MARGIN
     lanes = re.match(r"\d+", tag(other, "lanes") or "")
     if lanes and 1 <= int(lanes.group()) <= 10:

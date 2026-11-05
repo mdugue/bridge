@@ -120,6 +120,26 @@ def test_the_way_and_platform_readers_take_metres_only(value, metres):
     assert mapped_height(f'"height"=>"{platform}"') == (None if metres is None else 0.76)
 
 
+@pytest.mark.parametrize(("value", "metres"), [("59.5", 59.5), ("60", None), ("61", None)])
+def test_every_way_width_reader_believes_under_60_m(value, metres):
+    """A street's carriageway, a deck's passage and way and the surface
+    raster read `width` with one bound (`osm.osm_width`): 60 m is a
+    mistagged area for all of them, not 30 m of half-carriageway for one."""
+    from bake.furniture import carriageway_half
+    from bake.landcover_osm import ROAD_HALF_WIDTH
+    from bake.rail_osm import PASSAGE_MARGIN, passage_half, width_of
+    from bake.surface import parse_width
+
+    width = f'"width"=>"{value}"'
+    road = ROAD_HALF_WIDTH["residential"]
+    assert parse_width(value) == metres
+    assert width_of(width, "path") == metres
+    assert carriageway_half("residential", width) == (road if metres is None else metres / 2)
+    assert passage_half("residential", width) == (
+        road + PASSAGE_MARGIN if metres is None else metres / 2 + PASSAGE_MARGIN
+    )
+
+
 @pytest.mark.parametrize(
     ("value", "metres"),
     [("15 cm", 0.15), ("0.15", 0.15), ("4 ft", None), ("3'", None), ("2-3", None)],

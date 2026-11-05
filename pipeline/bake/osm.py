@@ -139,6 +139,17 @@ def osm_metres(value: str | None, *, signed: bool = False) -> float | None:
     return float(number.replace(",", ".")) * _PER_METRE.get((m.group(2) or "").lower(), 1.0)
 
 
+# The widest a mapped `width` is believed (m): wider is a mistagged area.
+MAX_WIDTH_M = 60.0
+
+
+def osm_width(value: str | None) -> float | None:
+    """A `width` tag in metres (`osm_metres`) over 0 and under
+    MAX_WIDTH_M, else None — the one bound every way's width is read with."""
+    width = osm_metres(value)
+    return width if width is not None and 0 < width < MAX_WIDTH_M else None
+
+
 def surface_id(value: str | None, ids: dict[str, int]) -> int:
     """The id `ids` gives an OSM surface value (`;`-lists take the first),
     else 0."""

@@ -113,7 +113,7 @@ from .common import (
     write_geojson,
 )
 from .landcover_osm import DUAL, LANE_M, ROAD_HALF_WIDTH, lanes, one_way
-from .osm import has_extract, osm_metres, read_osm, read_ways, tag
+from .osm import has_extract, osm_metres, osm_width, read_osm, read_ways, tag
 
 BLOCKED = (RAILWAY, WATER)
 DECK_KINDS = ("road", "path")  # what stands on a bridge stands on these, never a rail deck
@@ -491,18 +491,14 @@ class Decks:
         return top if cls in BLOCKED or self.on_bridge_way(p) else None
 
 
-# The widest a street's `width` is believed (m), as surface.parse_width.
-MAX_CARRIAGEWAY_W = 60.0
-
-
 def carriageway_half(highway: str | None, other: str | None) -> float:
     """A street's carriageway half-width (m): its `width`, else its `lanes`
     where it counts two or more (landcover_osm.LANE_M each), else its
     class's (the OSM class raster's road, landcover_osm.ROAD_HALF_WIDTH;
     halved, not under 2 m, for one carriageway of a dual main road, as
     the class raster paints it)."""
-    width = osm_metres(tag(other, "width"))
-    if width is not None and 0 < width <= MAX_CARRIAGEWAY_W:
+    width = osm_width(tag(other, "width"))
+    if width is not None:
         return width / 2
     n = lanes(other)
     if n is not None and n >= 2:
