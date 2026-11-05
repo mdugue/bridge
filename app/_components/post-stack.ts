@@ -662,7 +662,7 @@ export function createPostStack(
     sunShadow,
     reversedDepth: renderer.reversedDepthBuffer,
   });
-  const paperScene = createPaperScene(scene, fog.color);
+  const paperScene = createPaperScene(scene, fog.color, renderer);
   const styleDressing = createStyleDressing(scene);
 
   const finishing: Finish = {
