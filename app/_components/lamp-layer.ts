@@ -108,9 +108,8 @@ interface ArmPlace extends Place {
   yaw: number;
 }
 
-/** Whether a place (projected x, y) is somewhere: by the water, by a track. */
+/** Whether a place (projected x, y) is somewhere: by a track. */
 type ByPlace = (x: number, y: number) => boolean;
-type WaterLevel = (x: number, y: number) => number | null;
 
 /** The heads whose projected place passes `test`. */
 function headsWhere(
@@ -124,16 +123,13 @@ function headsWhere(
   });
 }
 
-/** The heads above water near them, each with that water's level. */
-function mirroredHeads(
-  heads: readonly Vector3[],
-  ctx: GroundContext,
-  levelAt: WaterLevel
-): LampMirror[] {
+/** The heads the river mirrors, each with its water's level: those the
+ *  bake found seeing the water, over it. */
+function mirroredHeads(places: LampPlaces): LampMirror[] {
   const out: LampMirror[] = [];
-  for (const head of heads) {
-    const p = worldToEpsg(head.x, head.z, ctx.offset);
-    const level = levelAt(p.x, p.y);
+  for (let i = 0; i < places.heads.length; i += 1) {
+    const head = places.heads[i];
+    const level = places.levels[i];
     if (level !== null && head.y > level) {
       out.push({ head, level });
     }
@@ -375,6 +371,9 @@ interface LampPlaces {
   arms: Map<number, ArmPlace[]>;
   /** every head, posts' and hung lamps', for the halos and the real lights */
   heads: Vector3[];
+  /** each head's water level, where the river mirrors it (the bake's
+   *  `w`), else null */
+  levels: (number | null)[];
   hung: Place[];
   masts: Place[];
   /** the tall masts' poles by their height (m): their heads are on arms */
@@ -494,6 +493,7 @@ function placeMast(
   const end = { x: foot.x + dx, y: foot.y, z: foot.z - dy };
   byHeight(out.walls, h, end);
   out.heads.push(new Vector3(end.x, end.y + h, end.z));
+  out.levels.push(f.properties?.w ?? null);
   // on a bridge, its deck; else the ground under the head
   const [ex, ey] = f.geometry.coordinates;
   const below = f.properties?.deck ?? ctx.heightAt(ex + dx, ey + dy) ?? foot.y;
@@ -522,6 +522,7 @@ function placeLamp(f: LampFeature, ctx: GroundContext, out: LampPlaces): void {
   const s = hung ? 1 : poolScale(h);
   out.pools.push({ ...ground, s });
   out.heads.push(new Vector3(ground.x, ground.y + h, ground.z));
+  out.levels.push(f.properties?.w ?? null);
   const head = { x: ground.x, y: ground.y + h, z: ground.z };
   if (hung) {
     hangWire(f, head, ctx, out);
@@ -534,6 +535,7 @@ function lampPlaces(features: LampFeature[], ctx: GroundContext): LampPlaces {
   const out: LampPlaces = {
     arms: new Map(),
     heads: [],
+    levels: [],
     hung: [],
     masts: [],
     poles: new Map(),
@@ -573,9 +575,8 @@ function taggedHeads(places: Place[], height: number): Instances {
 export function buildLamps(
   features: LampFeature[],
   ctx: GroundContext,
-  /** whether projected (x, y) is by a track, and the level (world Y) of
-   *  the water it is near, null where none is (no test: no head is) */
-  by: { tracks?: ByPlace; water?: WaterLevel } = {}
+  /** whether projected (x, y) is by a track (no test: no head is) */
+  by: { tracks?: ByPlace } = {}
 ): LampControl {
   const group = new Group();
   group.name = "lamps";
@@ -618,7 +619,7 @@ export function buildLamps(
   }
   // the heads the river mirrors first: their columns share the halos'
   // matrices (lamp-reflections.ts `buildLampMirrors`)
-  const mirrored = by.water ? mirroredHeads(headPositions, ctx, by.water) : [];
+  const mirrored = mirroredHeads(places);
   const mirroredSet = new Set(mirrored.map((m) => m.head));
   const glow = buildGlow([
     ...mirrored.map((m) => m.head),

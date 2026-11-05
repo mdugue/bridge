@@ -186,6 +186,9 @@ export interface LampFeature {
     masts?: [boolean, boolean];
     on?: "wall";
     src?: "mly";
+    /** the level (m) of the water its light falls on, past the
+     *  buildings: the river mirrors it (pipeline/bake/lamp_water.py) */
+    w?: number;
     wall?: Point2;
     wire?: [Point2, Point2];
   } | null;
@@ -203,6 +206,8 @@ export interface MapillaryFeature {
     hs?: LampHeightSource;
     k: "bin" | "lamp";
     masts?: [boolean, boolean];
+    /** as a `LampFeature`'s */
+    w?: number;
     wire?: [Point2, Point2];
   } | null;
 }

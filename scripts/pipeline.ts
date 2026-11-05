@@ -20,7 +20,8 @@
  *                                     facades, shopfronts, windows, walls,
  *                                     stairs, surface, edges, markings,
  *                                     sport, tram, riverside, traffic,
- *                                     roofs, lowveg, cultivated, skyview,
+ *                                     roofs, lamp-water, lowveg,
+ *                                     cultivated, skyview,
  *                                     small-buildings, landmarks,
  *                                     structures, roof-colour, dormers;
  *                                     then, once for the site, transit

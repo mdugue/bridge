@@ -26,6 +26,7 @@ AFTER = {
     "sport": ["ndvi"],
     "tram": ["landcover", "ndvi", "furniture", "rail"],
     "roofs": ["ndvi"],
+    "lamp-water": ["lamps", "mapillary", "lamp-heights", "roofs"],
     "lowveg": ["canopy", "trees", "walls", "rail"],
     "cultivated": ["lowveg", "canopy", "trees"],
     "skyview": ["canopy", "trees", "lowveg", "roofs"],

@@ -68,7 +68,13 @@ import { waterTime } from "./water-layer";
  * toward the eye and the Fresnel term lights it most there: the column is
  * long and bright across the river, short and faint from the air.
  *
- * Every lamp by the water has its own column (`buildLampMirrors`): a quad
+ * Which lamps: those whose light reaches water within 300 m past the
+ * buildings, as the bake found them (`w`, their water's level:
+ * pipeline/bake/lamp_water.py) — the quay's and the bridges', the
+ * Brühlsche Terrasse's over the quay, not a lane's behind the first row
+ * of houses.
+ *
+ * Every such lamp has its own column (`buildLampMirrors`): a quad
  * on the water, one instance a lamp, laid in the vertex stage from the
  * lamp toward the eye over the stretch where the waves can tilt its light
  * there (`MIRROR_TILT`), and the lobe drawn on it per fragment, additive.
@@ -87,9 +93,6 @@ import { waterTime } from "./water-layer";
  * share fades out over a band before it goes. By day the count is 0.
  */
 
-/** How far (m) from the water a lamp stands whose light the river
- *  mirrors: the Terrassenufer's quay, the Elbwiesen's paths. */
-export const LAMP_WATER_REACH_M = 80;
 /** How far (m) from a track a lamp stands whose light its rails catch: a
  *  pavement's lamps over a street's tram tracks, a platform's. */
 export const LAMP_TRACK_REACH_M = 15;

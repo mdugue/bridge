@@ -209,7 +209,7 @@ test("the halos and pools are drawn after dark only, by their shared materials",
   }
 });
 
-test("the lamps by the water lead the halos and carry their water's level", () => {
+test("the lamps that see the water lead the halos and carry its level", () => {
   const ctx = { heightAt: () => 100, offset: { cx: 0, cy: 0 } };
   const lamps = buildLamps(
     [
@@ -217,14 +217,13 @@ test("the lamps by the water lead the halos and carry their water's level", () =
         geometry: { type: "Point", coordinates: [10, 20] },
         properties: { h: 5 },
       },
+      // the bake found this one's light on water 2 m under the ground
       {
         geometry: { type: "Point", coordinates: [30, 20] },
-        properties: { h: 5 },
+        properties: { h: 5, w: 98 },
       },
     ],
-    ctx,
-    // only the second stands by water, 2 m under the ground
-    { water: (x) => (x > 20 ? 98 : null) }
+    ctx
   );
   const glow = lamps.group.getObjectByName("lamp-glow") as Instances;
   const mirrors = lamps.group.getObjectByName("lamp-mirrors") as Instances;

@@ -1,12 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  dilate,
-  reach,
-  trianglesOver,
-  waterMaskOf,
-  nearestWater,
-  waterAt,
-} from "./water-mask";
+import { dilate, reach, trianglesOver, waterMaskOf } from "./water-mask";
 import type { WaterMask } from "./water-mask";
 
 const WATER = 8;
@@ -105,39 +98,5 @@ describe("triangles over water", () => {
     expect(
       trianglesOver(new Uint16Array(index), cellX, cellY, mask).length
     ).toBe(0);
-  });
-});
-
-describe("nearestWater", () => {
-  // a 4×4 mask over a 400 m tile: two water cells in row 1 (100–200 m
-  // south of the north edge), columns 2 and 3 (200–400 m east)
-  const water = new Uint8Array(16);
-  water[1 * 4 + 2] = 1;
-  water[1 * 4 + 3] = 1;
-  const mask = { cells: 4, water };
-  const bounds = [0, 0, 400, 400] as const;
-
-  test("finds the nearest cell's centre under a point and within reach", () => {
-    expect(nearestWater(mask, bounds, 260, 240, 0)).toEqual({ x: 250, y: 250 });
-    expect(nearestWater(mask, bounds, 150, 250, 60)).toEqual({
-      x: 250,
-      y: 250,
-    });
-    expect(nearestWater(mask, bounds, 390, 150, 60)).toEqual({
-      x: 350,
-      y: 250,
-    });
-  });
-
-  test("misses a point out of reach, and off the mask", () => {
-    expect(nearestWater(mask, bounds, 50, 50, 60)).toBeNull();
-    expect(nearestWater(mask, bounds, 150, 250, 40)).toBeNull();
-    expect(nearestWater(mask, bounds, -500, 250, 60)).toBeNull();
-  });
-
-  test("tells a water cell from land and from off the mask", () => {
-    expect(waterAt(mask, bounds, 210, 299)).toBe(true);
-    expect(waterAt(mask, bounds, 150, 250)).toBe(false);
-    expect(waterAt(mask, bounds, 450, 250)).toBe(false);
   });
 });
