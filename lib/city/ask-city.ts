@@ -7,6 +7,8 @@
  * (`app/api/frag/route.ts`) and the card (`app/_components/ask-city.tsx`)
  * both read it.
  */
+import { QUESTION_CHARS } from "./ask-failure";
+import type { AskRefusalCode } from "./ask-failure";
 import { siteDataLayers } from "./data-layers";
 import { RENDER_STYLES } from "./render-style";
 import type { Site } from "./site";
@@ -153,7 +155,7 @@ export const ASK_KEY_HEADER = "x-frag-key";
  */
 export const ASK_LIMITS = {
   /** characters of one question */
-  questionChars: 1200,
+  questionChars: QUESTION_CHARS,
   /** messages the server takes (questions, answers, tool results) */
   messages: 40,
   /** characters of the whole conversation the server takes */
@@ -169,16 +171,6 @@ export const ASK_LIMITS = {
   /** how long a checked key's token lasts (ms) */
   tokenMs: 12 * 3600 * 1000,
 } as const;
-
-/** Why an answer stopped at its turn cap, in the stream or as a 422. */
-export const TOO_MANY_STEPS = "Die Antwort brauchte zu viele Schritte.";
-
-/** A conversation past what the server or the model takes. */
-export const TOO_LONG = "Das Gespräch ist zu lang geworden.";
-
-/** Why an answer ended mid-text: the model's output ran out. */
-export const CUT_SHORT =
-  "Die Antwort wurde abgeschnitten: dem Modell gingen die Wörter aus.";
 
 /** What the server reads of a request beyond the messages. */
 export interface AskRequestProps {
@@ -265,24 +257,28 @@ function messageChars(message: unknown): number {
 
 /**
  * Whether a conversation stays within the caps: a message count, the
- * whole conversation's characters and the last question's.
+ * whole conversation's characters and the last question's. Null when it
+ * does, else the refusal's code (its words are `ASK_FAILURES`').
  */
 export function conversationProblem(
   messages: readonly unknown[],
   question: string
-): string | null {
+): Extract<
+  AskRefusalCode,
+  "no-question" | "too-long" | "question-too-long"
+> | null {
   if (messages.length === 0) {
-    return "keine Frage";
+    return "no-question";
   }
   if (messages.length > ASK_LIMITS.messages) {
-    return `${TOO_LONG} Bitte neu beginnen.`;
+    return "too-long";
   }
   const chars = messages.reduce<number>((n, m) => n + messageChars(m), 0);
   if (chars > ASK_LIMITS.conversationChars) {
-    return `${TOO_LONG} Bitte neu beginnen.`;
+    return "too-long";
   }
   if (question.length > ASK_LIMITS.questionChars) {
-    return `Die Frage ist zu lang (höchstens ${ASK_LIMITS.questionChars} Zeichen).`;
+    return "question-too-long";
   }
   return null;
 }

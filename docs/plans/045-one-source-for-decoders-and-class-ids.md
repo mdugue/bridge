@@ -26,6 +26,9 @@
 
 ## Status
 
+- **State**: DONE (2026-11-04) — steps 1–4 built after a drift refresh
+  against `8b8ec332`; step 3's parsing takes effect on the maintainer's
+  next re-bake (row in `README.md`)
 - **Priority**: P3 (latent, but the next class or scale change hits it)
 - **Effort**: S
 - **Risk**: LOW (steps 1, 2, 4), MED (step 3 changes tag parsing)

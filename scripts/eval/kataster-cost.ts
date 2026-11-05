@@ -20,6 +20,7 @@
  * tileset's offset, and
  * scripts/eval/kataster-shots.py; no GPU, no browser)
  */
+import { LOOK_DEFAULTS } from "../../lib/city/look-controls";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { Frustum, Matrix4, PerspectiveCamera, Vector3 } from "three/webgpu";
@@ -254,7 +255,7 @@ for (const file of shots) {
   const entry = {} as Record<Mode, { main: PassCost; shadow: PassCost }>;
   for (const mode of MODES) {
     for (const c of controls[mode]) {
-      c.updateLod?.(cam.position);
+      c.updateLod?.(cam.position, LOOK_DEFAULTS.multiTuft);
     }
     const meshes = meshesOf(controls[mode].map((c) => c.group));
     entry[mode] = {

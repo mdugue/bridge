@@ -65,13 +65,11 @@ from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import connected_components
 
 from . import dop_balance
+from .classes import BUILTUP, MEADOW, PATH, RAILWAY, ROAD, WATER
 from .common import Tile, column
 from .osm import has_extract, read_osm, tag
 
-WATER = 8  # landcover.py CLASSES
-MEADOW = 1
-SANDY = 6  # the path class: drawn unpaved
-BANK_CLASSES = (4, 5, 7)  # built-up, railway, road: a quay, a pier, a landing
+BANK_CLASSES = (BUILTUP, RAILWAY, ROAD)  # a quay, a pier, a landing
 BANK_REACH_M = 3.0
 
 STEP_M = 0.5  # a fill this far under the fill it meets is lifted to it
@@ -769,7 +767,7 @@ def reclass(raster: np.ndarray, dry: np.ndarray, green: np.ndarray) -> dict:
     sand = target & ~green_hi & ~built
     raster[meadow] = MEADOW
     raster[bank] = nearest[bank]
-    raster[sand] = SANDY
+    raster[sand] = PATH  # drawn unpaved
     a = texel * texel
     return {
         "meadowM2": round(float(meadow.sum() * a)),

@@ -50,7 +50,7 @@ import { instanceTint } from "./instancing";
 import { ownSlotTexture, ownSlotUniform } from "./material-slots";
 import { dataPosition } from "./shader-chunks";
 import type { Live, V3, V4 } from "./shader-chunks";
-import { styleNight } from "./sun-rig";
+import { sceneNight } from "./scene-environment";
 import { viewDirection } from "./view-direction";
 import { shopOf, wallEaveUp } from "./visual-style";
 
@@ -137,7 +137,7 @@ const ownColour = Fn((builder: NodeBuilder) => {
 });
 
 /**
- * The clay's lit windows on the card, for the night (`styleNight`): the
+ * The clay's lit windows on the card, for the night (`sceneNight`): the
  * windows' rhythm read from the drawn building tile's own object table
  * (its slots), as the clay reads it (visual-style.ts `clayGraph`) — only
  * the light in them, none of the clay's other terms. A paper model lit
@@ -219,7 +219,7 @@ function paperMaterial(): MeshStandardNodeMaterial {
     .mul(ownColour())
     .mul(vec3(0.012, 0.004, -0.014).mul(sheet).add(float(1)));
   // at night the windows glow through the card
-  material.emissiveNode = windowGlow().mul(styleNight.mul(WINDOW_LIGHT));
+  material.emissiveNode = windowGlow().mul(sceneNight.mul(WINDOW_LIGHT));
   return material;
 }
 /** A lit window's light on the card at night (the clay's is 0.5 of its
@@ -500,7 +500,7 @@ export function createPaperScene(
       // Papier's night is drawn on dark card: its sky and its haze
       // (through a mauve dusk: halfway, day paper and night card met in
       // a dull grey)
-      const night = styleNight.value;
+      const night = sceneNight.value;
       skies.paper
         .copy(PAPER_SKY)
         .lerp(PAPER_DUSK_SKY, MathUtils.smoothstep(night, 0, 0.5))

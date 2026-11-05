@@ -1,7 +1,7 @@
-import type { FacadeMaterial } from "./building-tint";
 import type { DrawnFacts } from "./drawn-facts";
 import type { FootprintPoly } from "./minimap";
 import type { ObjectFacts } from "./object-facts";
+import type { OsmBuildingRow } from "./osm-buildings-file";
 import type { CityJsonDocument } from "./types";
 import type { WindowSpec } from "./windows";
 
@@ -29,39 +29,18 @@ export type WallMaterial =
   | "stone"
   | "wood";
 
-/** What OSM knows about one CityObject. */
-export interface OsmBuildingFacts {
-  /** its address line, for the inquiry card (ADR 0042) */
-  addr?: string;
-  /** walls, `#rrggbb` (OSM `building:colour`) */
-  colour?: string;
-  /** the walls its neighbourhood is mapped as, where they differ from the
-   *  tile's (osm_buildings.py `context`) */
-  context?: FacadeMaterial;
-  heritage?: number;
+/** What OSM knows about one CityObject: the bake's row
+ *  (`osmbuild_<tile>.json`, its schema lib/city/osm-buildings-file.ts,
+ *  ADR 0059) and what the build adds to it (scripts/prepare/city.ts
+ *  `withLandmarks`). */
+export type OsmBuildingFacts = OsmBuildingRow & {
   /** one of the city's landmarks (landmarks.py, Wikidata) */
   landmark?: number;
-  /** `building:levels`, for the inquiry card and the storey bands */
-  levels?: number;
-  material?: WallMaterial;
   /** the material is Wikidata's (a landmark's), where OSM names none */
   materialFrom?: "wikidata";
-  /** the outline's `name`, for the inquiry card */
-  name?: string;
-  /** on a root: the key of the named outline covering its tree, which the
-   *  trees one building is split into share (lib/city/ensembles.ts) */
-  outline?: string;
-  /** roof, `#rrggbb` (OSM `roof:colour`) */
-  roof_colour?: string;
-  shop?: number;
-  /** where OSM counts none of its own storeys: the storey (m) of the
-   *  mapped buildings around it of its roof form and about its eave, else
-   *  the tile's (osm_buildings.py `storey`) — its storeys are counted from
-   *  its eave with it (lib/city/building-tint.ts `neighbourStorey`) */
-  storey?: number;
   /** the Wikidata item of the landmark it belongs to (landmarks.py) */
   wikidata?: string;
-}
+};
 
 /**
  * What OSM knows about a CityObject, keyed by its id

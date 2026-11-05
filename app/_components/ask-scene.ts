@@ -143,6 +143,9 @@ export function useAskScene(
     const credits = cardCredits(site);
     // was_ist_da's waits: a stopped or closed conversation ends them
     const looks = { stop: new AbortController() };
+    // the glide an answer started, while it flies: a flight that lands, is
+    // cancelled or is replaced by another reports 1 (camera-flight.ts)
+    const glides: { answer: object | null } = { answer: null };
     return {
       from: () => {
         const c = handleRef.current?.getCameraState();
@@ -248,6 +251,13 @@ export function useAskScene(
         };
       },
       setListening: (on) => pace.setListening(on),
+      haltAnswerGlide: () => {
+        // only the answer's own glide: one the visitor started since goes on
+        if (glides.answer) {
+          glides.answer = null;
+          handleRef.current?.stopGlide();
+        }
+      },
       abandon: () => {
         looks.stop.abort();
         looks.stop = new AbortController();
@@ -257,7 +267,15 @@ export function useAskScene(
         if (!h) {
           return false;
         }
-        h.flyToViewpoint(view);
+        const mine = {};
+        glides.answer = mine;
+        h.flyToViewpoint(view, {
+          onProgress: (t) => {
+            if (t >= 1 && glides.answer === mine) {
+              glides.answer = null;
+            }
+          },
+        });
         return true;
       },
       within: (x, y) => siteHoldsPoint(site, x, y),

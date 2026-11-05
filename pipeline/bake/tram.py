@@ -67,6 +67,7 @@ import numpy as np
 import shapely
 from PIL import Image
 
+from .classes import BUILTUP, MEADOW, PATH, ROAD
 from .common import (
     OSM_ATTRIBUTION,
     Tile,
@@ -84,8 +85,7 @@ from .rail import merge_lines
 MARGIN_M = 30.0  # tracks and masts around the tile the supports are decided on
 SAMPLE_M = 2.0
 GRASS_NDVI = 0.3
-ROAD, MEADOW = 7, 1  # class ids (landcover.py CLASSES)
-PAVED = (4, 6)  # built-up (squares, yards) and path: a track there is set in paving
+PAVED = (BUILTUP, PATH)  # squares, yards and paths: a track there is set in paving
 BED_WINDOW_M = 20.0  # the bed is the majority of the samples this long around a point
 BED_MIN_M = 20.0  # a stretch of another bed shorter than this takes its neighbours'
 BED_ORDER = ("street", "grass", "ballast")

@@ -7,7 +7,6 @@ import {
 } from "three/webgpu";
 import type { Object3D } from "three/webgpu";
 import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
-import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import {
   PINE_CROWN_BASE,
   TRUNK_RINGS,
@@ -93,14 +92,16 @@ test("canopy points become trees; off-terrain points are skipped", () => {
   expect(off.group.children).toHaveLength(0);
 });
 
-test("the control accepts the look and reports a crown tier change", () => {
+test("the pass reports a crown tier change, the rich crown only while the look allows it", () => {
   const built = buildVegetation({ rows: [], canopy: [canopy(5, 12)] }, ctx);
-  expect(() => built.applyLook(LOOK_DEFAULTS)).not.toThrow();
-  // Born on the mid crown; the camera standing next to it switches to rich.
   const lod = createVegetationLod();
-  expect(lod([built], new Vector3(5, 100, 0))).toBe(true);
+  // Born on the mid crown; with the crown switch off it stays there...
+  expect(lod([built], new Vector3(5, 100, 0), false)).toBe(false);
+  expect(built.chunks[0].tier).toBe("mid");
+  // ...on, the camera standing next to it switches it to rich.
+  expect(lod([built], new Vector3(5, 100, 0), true)).toBe(true);
   expect(built.chunks[0].tier).toBe("rich");
-  expect(lod([built], new Vector3(5, 100, 0))).toBe(false);
+  expect(lod([built], new Vector3(5, 100, 0), true)).toBe(false);
 });
 
 test("a pass after a tile left plans the tiles still there, from their own tiers", () => {
@@ -109,21 +110,23 @@ test("a pass after a tile left plans the tiles still there, from their own tiers
   const near = buildVegetation({ rows: [], canopy: [canopy(5, 12)] }, ctx);
   const far = buildVegetation({ rows: [], canopy: [canopy(2005, 12)] }, ctx);
   const lod = createVegetationLod();
-  expect(lod([near, far], new Vector3(5, 100, 0))).toBe(true);
+  expect(lod([near, far], new Vector3(5, 100, 0), true)).toBe(true);
   expect([near.chunks[0].tier, far.chunks[0].tier]).toEqual(["rich", "far"]);
   // The first tile leaves; between the far tier's in and out distances of
   // the second, it keeps the far tier it has (the state reused for it is
   // its own, not the rich one the first chunk left in that slot).
-  expect(lod([far], new Vector3(2005 + 600, 100, 0))).toBe(false);
+  expect(lod([far], new Vector3(2005 + 600, 100, 0), true)).toBe(false);
   expect(far.chunks[0].tier).toBe("far");
   // Walking up to it, it goes rich.
-  expect(lod([far], new Vector3(2005, 100, 0))).toBe(true);
+  expect(lod([far], new Vector3(2005, 100, 0), true)).toBe(true);
   expect(far.chunks[0].tier).toBe("rich");
 });
 
 test("far away a chunk draws the far crown and no trunks", () => {
   const built = buildVegetation({ rows: [], canopy: [canopy(5, 12)] }, ctx);
-  expect(createVegetationLod()([built], new Vector3(5000, 100, 0))).toBe(true);
+  expect(createVegetationLod()([built], new Vector3(5000, 100, 0), true)).toBe(
+    true
+  );
   const [chunk] = built.chunks;
   expect(chunk.tier).toBe("far");
   expect([chunk.far.visible, chunk.mid.visible, chunk.rich.visible]).toEqual([

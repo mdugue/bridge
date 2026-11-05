@@ -10,7 +10,10 @@
  * No THREE, no DOM.
  */
 import type { LevelRun } from "./levels";
+import type { MonumentProps } from "./monuments-file";
 import type { Point2 } from "./polyline";
+
+export type { ReliefGrid } from "./monuments-file";
 
 export interface LineGeometry {
   coordinates: Point2[];
@@ -313,57 +316,12 @@ export type MonumentForm =
  *  paving (a splash pad), or a still pool without any. */
 export type FountainStyle = "basin" | "pool" | "splash";
 
-/**
- * A monument's measured bulk: DOM1 − DGM1 on the 1 m grid, the patch that
- * stands clear of trees and facades, padded by one empty cell. Heights in
- * decimetres, row-major from the north-west corner (`west`, `north`).
- */
-export interface ReliefGrid {
-  cols: number;
-  dm: number[];
-  north: number;
-  rows: number;
-  west: number;
-}
-
+/** A monument as the bake writes it (its schema: lib/city/monuments-file.ts,
+ *  ADR 0059, which documents each property); `null` properties, as GeoJSON
+ *  allows, are guarded by the loaders. */
 export interface MonumentFeature {
   geometry: PointGeometry | PolygonGeometry;
-  properties: {
-    /** the bearing a monument without a relief faces (degrees clockwise
-     *  from north): the centre of its square, else its nearest way */
-    a?: number;
-    /** who made it (OSM `artist_name`) */
-    artist?: string;
-    /** a winter housing stood over it when the surface was flown: no
-     *  relief, its form's default (a fountain's figure as a sculpture) */
-    cover?: boolean;
-    /** a fountain with a DLM monument in it (its sculpture is measured) */
-    figure?: boolean;
-    /** what it is, from OSM (absent: nothing says) */
-    form?: MonumentForm;
-    /** its tagged height (m, OSM `height`) */
-    height?: number;
-    /** its height measured in the open where no relief is (m, clamped to
-     *  its form's range) */
-    hm?: number;
-    /** "lsc": the laser scan measured its relief or `hm`, not DOM1 */
-    hs?: "lsc";
-    kind: MonumentKind;
-    /** what it is made of, in German ("Bronze, Granit"; OSM `material`,
-     *  else Wikidata's — then `wikidata` is set) */
-    material?: string;
-    name?: string;
-    /** a point fountain's basin radius (m) where it is small: a drinking
-     *  fountain, a stone block (absent: lib/city/monuments.ts
-     *  POINT_BASIN_R) */
-    r?: number;
-    /** the measured sculpture or monument (pipeline/bake/monuments.py) */
-    relief?: ReliefGrid;
-    source?: "dlm" | "dlm+osm" | "osm";
-    style?: FountainStyle;
-    /** the Wikidata item its `material` comes from */
-    wikidata?: string;
-  } | null;
+  properties: MonumentProps | null;
 }
 
 /**

@@ -126,7 +126,7 @@ from .furniture import bearing, facing
 from .landmarks import query_box
 from .lowveg import lsc_rasters
 from .lsc import NODATA as LSC_NODATA
-from .osm import below_ground, has_extract, read_osm, read_ways, tag
+from .osm import below_ground, has_extract, osm_metres, read_osm, read_ways, tag
 from .osm_buildings import footprints
 
 # Bauwerksfunktion of AX_SonstigesBauwerkOderSonstigeEinrichtung (51009).
@@ -299,11 +299,8 @@ def osm_form(other_tags: str | None) -> str | None:
 
 def osm_height(other_tags: str | None) -> float | None:
     """A tagged `height` (m) within what a monument can be, or None."""
-    m = re.match(r"\s*(\d+(?:[.,]\d+)?)\s*m?\s*$", tag(other_tags, "height") or "")
-    if not m:
-        return None
-    h = float(m.group(1).replace(",", "."))
-    return h if 0.3 <= h <= 40 else None
+    h = osm_metres(tag(other_tags, "height"))
+    return h if h is not None and 0.3 <= h <= 40 else None
 
 
 def osm_material(other_tags: str | None) -> str | None:

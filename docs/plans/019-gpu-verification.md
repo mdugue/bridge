@@ -625,8 +625,8 @@ so there is nothing to listen to.
 
 Not checks of something built — judgements the backlog waits for:
 the pixel-ratio drop while moving (README Open work 6, needs a ~1 s hold),
-atmospheric motes (7), the geometry kit's winding unification (21, plan
-046's maintenance note: needs a headed before/after comparison), and a
+atmospheric motes (7), the geometry kit's winding unification (21:
+needs a headed before/after comparison), and a
 user-facing quality tier (Direction 5).
 
 ### M. The phone crash fixes (2026-10-06, ADRs 0047–0048)
@@ -706,6 +706,28 @@ desktop use Chrome with WebGPU and repeat with `?gpu=webgl2`.
   that stays without network for a minute of a visible page shows *Keine
   Verbindung zum Server* with *Erneut versuchen*. A reload while tiles
   load sends no `load-error` or `boot failed` report.
+
+### N. Left by plans closed on 2026-11-04
+
+Each line comes from a record in [completed.md](./completed.md); the
+record says what was built.
+
+- [ ] **Modell (plan 055).** In Isometrie and Lageplan at a low and a
+  high sun: the specular and halo terms (their branches are built for
+  the perspective camera; the parallel one stands 20 km back), the water's
+  glitter, and *Strich*'s washes — no flat, blown or missing term
+  against the same view in Fliegen.
+- [ ] **Black squares (plan 049).** Small black squares showed in some
+  headless SwiftShader shots of the non-Dresden sites (one dressing
+  layer): look once with `bun run shots` on Leipzig and Hamburg.
+- [ ] **The frozen look (plan 073).** Plates of the fixed look table
+  against production at the PR's three snapshots (the start view, the
+  Neumarkt at dusk, the Neustädter Elbufer in the June evening sun);
+  then measure what the fixed terms cost on a phone (the clay's windows
+  and facade reading, the ground detail) and, with a plate pair each,
+  delete the terms that compute nothing visible under the full
+  *Spiegelung* (the glass sheen in `clayGlow`, the gilding's and the
+  water's stand-ins).
 
 ## STOP conditions
 

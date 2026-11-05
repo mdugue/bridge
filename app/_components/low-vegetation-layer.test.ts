@@ -8,7 +8,7 @@ import {
   hedgeLines,
   hedgePieces,
 } from "./low-vegetation-layer";
-import { DEFAULT_HEDGE_H } from "@/lib/city/ask-more";
+import { DEFAULT_HEDGE_H } from "@/lib/city/ask-items";
 import { isInstances } from "./instancing";
 import { sceneCensus } from "./scene-census";
 

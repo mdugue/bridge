@@ -1,6 +1,13 @@
 import { afterEach, expect, test } from "bun:test";
 import { Object3D } from "three/webgpu";
+import { existsSync, readFileSync } from "node:fs";
+import nodePath from "node:path";
+import { bakeFileProblems } from "@/lib/city/bake-file";
 import type { DataLayerKey } from "@/lib/city/data-layers";
+import { siteDataDir } from "@/lib/city/tile";
+import { tramTimetableSource } from "@/lib/city/tram-timetable";
+import { TRAMS_FILE } from "@/lib/city/tram-timetable-file";
+import { SITES } from "@/sites";
 import { createDataOverlays, isTramTimetable } from "./data-overlays";
 import type { TramCarsStatus } from "./tram-cars";
 
@@ -102,12 +109,33 @@ test("trams whose compile failed leave the scene, and the next switch-on adds on
   expect(trams()).toHaveLength(0);
 });
 
+// The viewer's guard and the build's schema (ADR 0059) agree: every
+// committed timetable passes both; what the guard refuses, the schema does.
+const ROOT = nodePath.join(import.meta.dir, "..", "..");
+const timetables = Object.values(SITES)
+  .map((site) => nodePath.join(ROOT, tramTimetableSource(siteDataDir(site))))
+  .filter((path) => existsSync(path));
+
+test.each(timetables)("the guard accepts %s, as its schema does", (path) => {
+  const json: unknown = JSON.parse(readFileSync(path, "utf-8"));
+  expect(bakeFileProblems(TRAMS_FILE, json)).toEqual([]);
+  expect(isTramTimetable(json)).toBe(true);
+});
+
 test("a malformed timetable is a failed load", () => {
-  expect(isTramTimetable(null)).toBe(false);
-  expect(isTramTimetable({ patterns: [] })).toBe(false);
-  expect(
-    isTramTimetable({ days: {}, patterns: [], profiles: [], routes: [] })
-  ).toBe(true);
+  const whole = { days: {}, patterns: [], profiles: [], routes: [] };
+  for (const broken of [
+    null,
+    { patterns: [] },
+    { ...whole, days: [] },
+    { ...whole, profiles: undefined },
+    { ...whole, routes: "11" },
+  ]) {
+    expect(isTramTimetable(broken)).toBe(false);
+    expect(bakeFileProblems(TRAMS_FILE, broken)).not.toEqual([]);
+  }
+  // a timetable from before the agencies and the CRS were written still runs
+  expect(isTramTimetable(whole)).toBe(true);
 });
 
 test("a counter layer whose compile failed compiles again with the next counts", async () => {

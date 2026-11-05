@@ -14,7 +14,7 @@ import type {
 import { offerAsCrash } from "@/lib/city/crash-trail";
 import type { Trail } from "@/lib/city/crash-trail";
 import { pageStillOpen, previousTrail } from "./crash-trail";
-import { recentlyRecovered } from "./gpu-recovery";
+import { pageRecovery } from "./gpu-recovery";
 import { STORAGE_KEYS } from "./storage-keys";
 
 /**
@@ -145,7 +145,7 @@ export function resetSafety({
 function crashedBefore(): Trail | null {
   const previous = previousTrail();
   return previous?.backend === "WebGPU" &&
-    offerAsCrash(previous, recentlyRecovered())
+    offerAsCrash(previous, pageRecovery().followsRecovery())
     ? previous
     : null;
 }

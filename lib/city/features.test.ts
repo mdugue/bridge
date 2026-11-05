@@ -8,6 +8,7 @@ import type {
   CanopyFeature,
   CultivatedFeature,
   DoorFeature,
+  DormerFeature,
   ShopfrontFile,
   PassageFeature,
   PlinthFeature,
@@ -146,19 +147,6 @@ test.each(cases)("%s: a baked canopy has trees", (_, a) => {
   if (existsSync(a.canopy.path)) {
     expect(load<CanopyFeature>(a.canopy).length).toBeGreaterThan(0);
   }
-});
-
-test.each(tiles)("%s: the roof colours are { meta, roofs }", (tile, site) => {
-  const path = nodePath.join(ROOT, cityMeshSourceFiles(site, tile).roofColor);
-  if (!existsSync(path)) {
-    return;
-  }
-  const doc = JSON.parse(readFileSync(path, "utf-8")) as Record<
-    string,
-    unknown
-  >;
-  expect(typeof doc.meta).toBe("object");
-  expect(doc.roofs !== null && typeof doc.roofs === "object").toBe(true);
 });
 
 test.each(cases)("%s: tree rows are hedge/treerow LineStrings", (_, a) => {
@@ -342,6 +330,49 @@ test.each(tiles)(
       expect(p?.h ?? 0).toBeGreaterThanOrEqual(1.8);
       expect(p?.h ?? 99).toBeLessThanOrEqual(5);
       expect(Number.isFinite(p?.z)).toBe(true);
+    }
+  }
+);
+
+test.each(tiles)(
+  "%s: dormers and chimneys stand on a roof, square to its slope",
+  (tile, site) => {
+    const src = cityMeshSourceFiles(site, tile).dormers;
+    for (const f of loadSource<DormerFeature>(src)) {
+      expect(f.geometry.type).toBe("Point");
+      expect(isPoint2(f.geometry.coordinates)).toBe(true);
+      const p = f.properties;
+      expect(p?.of.length ?? 0).toBeGreaterThan(0);
+      expect(Math.hypot(p?.ax ?? 0, p?.ay ?? 0)).toBeCloseTo(1, 3);
+      expect(p?.slope ?? -1).toBeGreaterThanOrEqual(0);
+      expect(p?.slope ?? 90).toBeLessThan(90);
+      expect(Number.isFinite(p?.z)).toBe(true);
+      expect(Number.isFinite(p?.top)).toBe(true);
+      if (p?.k === "chimney") {
+        // its top is the surface model's own height and stays, while `z`
+        // is the exact LoD2 face under it (dormers.py on_planes): no rise
+        // to check against that face.
+        // a chimney's sides: dormers.py CHIMNEY_SIDE_M … CHIMNEY_MAX_SIDE_M
+        for (const side of [p.w, p.d]) {
+          expect(side).toBeGreaterThanOrEqual(0.6);
+          expect(side).toBeLessThanOrEqual(1.6);
+        }
+        expect(p.tf).toBeUndefined();
+      } else {
+        expect(p?.k).toBeUndefined();
+        // its top never under the face it stands on (dormers.py on_planes:
+        // max(min(top, ridge), z)), both rounded to the centimetre
+        expect((p?.top ?? 0) - (p?.z ?? 0)).toBeGreaterThanOrEqual(-0.01);
+        expect(p?.w ?? 0).toBeGreaterThan(0);
+        // its depth along the slope: dormers.py MAX_SIDE_M
+        expect(p?.d ?? 0).toBeGreaterThan(0);
+        expect(p?.d ?? 99).toBeLessThanOrEqual(8);
+        // a shed dormer's roof falls (dormers.py SHED_MIN_FALL)
+        if (p?.tf !== undefined) {
+          expect(p.tf).toBeGreaterThanOrEqual(8);
+          expect(p.tf).toBeLessThan(90);
+        }
+      }
     }
   }
 );

@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import { lazyFeature, wantOnSwitchOn } from "./feature-seam";
+import {
+  createWatch,
+  follow,
+  lazyFeature,
+  wantOnSwitchOn,
+} from "./feature-seam";
 
 /** Every promise the calls before started has settled. */
 const settled = async () =>
@@ -112,4 +117,19 @@ test("the spine asks again on the next switch-on after a load that failed, not o
   expect(imports).toBe(2);
   expect(feature.starts()).toBe(1);
   expect(failures).toHaveLength(1);
+});
+
+test("a follower hears the value of now first, then every change, until it lets go", () => {
+  const day = createWatch(180);
+  const heard: number[] = [];
+  const unfollow = follow(day, (d) => {
+    heard.push(d);
+  });
+  expect(heard).toEqual([180]);
+  day.set(9);
+  day.set(9);
+  expect(heard).toEqual([180, 9, 9]);
+  unfollow();
+  day.set(200);
+  expect(heard).toEqual([180, 9, 9]);
 });

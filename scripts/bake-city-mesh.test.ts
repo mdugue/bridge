@@ -33,6 +33,7 @@ import {
 } from "../lib/city/windows";
 import type { WindowWall } from "../lib/city/windows";
 import { storeyHeight } from "../lib/city/building-tint";
+import type { RoofColours } from "../lib/city/building-tint";
 import {
   appendedRoofColour,
   assignWindows,
@@ -1574,7 +1575,7 @@ test("a shed's and a gap building's roof take the orthophoto's colour the roof c
       properties: { h: 9, kind: "building", z: 101 },
     },
   ];
-  const roofColours = {
+  const roofColours: Partial<RoofColours> = {
     // the second shed's row was read when it stood 1 m lower: not its own
     scan: [
       [0, 100, 0.3, 0.1, 0.05],

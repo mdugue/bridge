@@ -68,14 +68,14 @@ with `SURFACE_KINDS` in lib/city/landcover.ts.
 from __future__ import annotations
 
 import json
-import re
 
 import numpy as np
 import shapely
 from rasterio.features import rasterize
 
+from .classes import PATH
 from .common import OSM_ATTRIBUTION, Tile, column, dlm_complete, read_layer, save_grey_png
-from .osm import has_extract, read_osm, read_ways, tag
+from .osm import has_extract, osm_width, read_osm, read_ways, surface_id, tag
 
 # id → key; 0 = unknown (the shader keeps the class default).
 SURFACES = {
@@ -183,22 +183,11 @@ SIDEWALK_BAND = 3.0  # how far a `sidewalk:*:surface` band reaches past the kerb
 WALK_AREAS = {"footway", "pedestrian", "traffic_island", "path", "cycleway"}
 
 
-def surface_id(value: str | None) -> int:
-    """The id of an OSM surface value (`;`-lists take the first), else 0."""
-    if not value:
-        return 0
-    return SURFACE_OF.get(value.split(";")[0].strip().lower(), 0)
-
-
 def parse_width(value: str | None) -> float | None:
-    """A `width` tag in metres (`5`, `5.5 m`, `5,5`), else None."""
-    if not value:
-        return None
-    m = re.match(r"\s*(\d+(?:[.,]\d+)?)\s*(m|meter|metres?)?\s*$", value)
-    if not m:
-        return None
-    width = float(m.group(1).replace(",", "."))
-    return width if 0 < width < 60 else None
+    """A `width` tag in metres (`5`, `5.5 m`, `5,5`, `ca. 4 m`: the OSM
+    length parser, `osm.osm_metres`) within 0–60 m, else None
+    (`osm.osm_width`)."""
+    return osm_width(value)
 
 
 def _highway_kind(highway: str | None) -> str | None:
@@ -265,11 +254,11 @@ def sidewalk_bands(
     (`half`) to the nearest building (`band_depths`, given the buildings),
     else to `half + SIDEWALK_BAND`."""
     both = surface_id(
-        tag(other_tags, "sidewalk:both:surface") or tag(other_tags, "sidewalk:surface")
+        tag(other_tags, "sidewalk:both:surface") or tag(other_tags, "sidewalk:surface"), SURFACE_OF
     )
     sides = {
-        1.0: surface_id(tag(other_tags, "sidewalk:left:surface")) or both,
-        -1.0: surface_id(tag(other_tags, "sidewalk:right:surface")) or both,
+        1.0: surface_id(tag(other_tags, "sidewalk:left:surface"), SURFACE_OF) or both,
+        -1.0: surface_id(tag(other_tags, "sidewalk:right:surface"), SURFACE_OF) or both,
     }
     out = []
     for sign, sid in sides.items():
@@ -314,7 +303,7 @@ def line_shapes(
     for g, hw, tags in zip(geoms, highways, other_tags, strict=True):
         kind = _highway_kind(hw)
         width = parse_width(tag(tags, "width"))
-        sid = surface_id(tag(tags, "surface"))
+        sid = surface_id(tag(tags, "surface"), SURFACE_OF)
         if kind in ROAD_HALF_WIDTH:
             half = width / 2 if width else ROAD_HALF_WIDTH[kind]
             if sid:
@@ -324,7 +313,7 @@ def line_shapes(
             sidewalk = kind == "footway" and tag(tags, "footway") == "sidewalk"
             default = SIDEWALK_HALF_WIDTH if sidewalk else WALK_HALF_WIDTH[kind]
             half = width / 2 if width else default
-            wid = sid or surface_id(tag(tags, "footway:surface"))
+            wid = sid or surface_id(tag(tags, "footway:surface"), SURFACE_OF)
             if wid:
                 walks.append((shapely.buffer(g, half), wid))
                 if not sidewalk:
@@ -524,7 +513,7 @@ def lot_code(amenity: str | None, other_tags: str | None) -> int:
     markings = tag(other_tags, "markings") or tag(other_tags, "parking:markings")
     if tag(other_tags, "parking") in STREET_LOTS:
         return parking_code(3, 0, markings not in (None, "no"))
-    unpaved = surface_id(tag(other_tags, "surface")) in UNPAVED_LOT
+    unpaved = surface_id(tag(other_tags, "surface"), SURFACE_OF) in UNPAVED_LOT
     return parking_code(3, 0, markings != "no" and not unpaved)
 
 
@@ -604,7 +593,7 @@ def classify_areas(
     as nearly all of them are)."""
     roads, walks = [], []
     for g, amenity, tags in zip(geoms, amenities, other_tags, strict=True):
-        sid = surface_id(tag(tags, "surface"))
+        sid = surface_id(tag(tags, "surface"), SURFACE_OF)
         if not sid and is_car_park(amenity, tags):
             sid = SURFACE_OF["asphalt"]
         if not sid:
@@ -625,7 +614,6 @@ def classify_areas(
 # settlement is the DLM's built land (or OSM's built landuse), not its
 # parks, sports grounds, allotments or cemeteries. Read where the class
 # raster says path (class 6: the DLM's `ver02_l`, or OSM's paths).
-PATH_CLASS = 6
 BUILT_LAND = (
     "AX_Wohnbauflaeche",
     "AX_IndustrieUndGewerbeflaeche",
@@ -681,7 +669,7 @@ def path_defaults(
     if cls is None or cls.shape[0] % px:
         return None
     k = cls.shape[0] // px
-    path = (cls == PATH_CLASS).reshape(px, k, px, k).mean(axis=(1, 3)) >= 0.5
+    path = (cls == PATH).reshape(px, k, px, k).mean(axis=(1, 3)) >= 0.5
     if not path.any():
         return np.zeros((px, px), np.uint8)
     town = burn([(g, 1) for g in settlement(tile)], tile, px) > 0

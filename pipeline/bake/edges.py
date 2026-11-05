@@ -49,16 +49,13 @@ from rasterio.features import rasterize
 from scipy import ndimage as ndi
 
 from . import surface, ways
+from .classes import ARABLE, BACKGROUND, BUILTUP, MEADOW, RAILWAY, ROAD, WATER
 from .common import Tile, column, feature, geometry_json, save_grey_png, write_geojson
 from .kerb_drops import kerb_drops
 from .osm import has_extract, read_osm, read_ways, tag
 
-ROAD = 7
-MEADOW = 1
-ARABLE = 9  # a lawn's edge as when it was meadow (landcover.py ARABLE_VEG)
-BUILTUP = 4
-RAILWAY = 5
-NO_KERB = (5, 8)  # railway, water: a carriageway edge there is no kerb
+# ARABLE: a lawn's edge as when it was meadow (landcover.py ARABLE_VEG)
+NO_KERB = (RAILWAY, WATER)  # a carriageway edge there is no kerb
 # Urban green: built-up or unclassified ground whose DOP NDVI says green —
 # courtyards, front gardens, parks inside the settlement — and railway land
 # off the tracks (`ways.track_beds`: the DLM's parcel reaches the fences and
@@ -216,7 +213,7 @@ def urban_green(tile: Tile, cls: np.ndarray, green: np.ndarray | None = None) ->
         green = green_ground(tile, cls.shape[0])
     if green is None:
         return np.zeros(cls.shape, dtype=bool)
-    ground = np.isin(cls, (0, BUILTUP)) | off_tracks(tile, cls)
+    ground = np.isin(cls, (BACKGROUND, BUILTUP)) | off_tracks(tile, cls)
     return green & ground
 
 

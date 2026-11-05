@@ -159,7 +159,7 @@ is the codebook.
 | Landmark | a Wikidata landmark's objects (column `flags`, bit 16): no look of its own — the roof relief is measured on these objects only, and the HUD's *Wahrzeichen* list glides to the landmark | Wikidata, OSM `wikidata=` | `scripts/prepare/city.ts` `withLandmarks`, `lib/city/landmarks.ts` |
 | Roughness jitter | `hash(objectid)` (column `rough`) → [0.55, 1.0] | — | (*Materialstreuung*) |
 | The asked building | the probe's pick on a click, a long press or `I` — the first solid thing on the ray, a tree's crown only with nothing solid behind it; the rest of the ray's things a strip of candidates (`inquiry-strip.tsx`) — (the whole building tree, or its ensemble's trees — `lib/city/ensembles.ts`) → flag 32 in the packed texture at runtime: lifted 40 % towards paper white with a faint paper light of its own; a pencil hatch every 0.9 m on the building near (up the facade at 45°, across the roof), 45° strokes every 7 px in screen space where those would crowd; and the outline (below); no slider, the hatch not in *Papier* | the viewer's question | `inquiry-probe.ts`, `city-layer.ts` `mark`, `visual-style.ts` `askedColour` |
-| The asked tree, monument, bridge, hedge, lamp, street furniture, tram stop, landing stage or a loaded design's part | the probe's pick among the tile's askable things (ray vs. data solids; bridges vs. their drawn meshes; a design vs. its mesh, by part — `design-layer.ts` `asks`; an instance a design folded away is not found) → the outline (next row) alone | the viewer's question | `inquiry-probe.ts`, `lib/city/ask-items.ts`, `lib/city/ask-more.ts`, `bridge-ask.ts` |
+| The asked tree, monument, bridge, hedge, lamp, street furniture, tram stop, landing stage or a loaded design's part | the probe's pick among the tile's askable things (ray vs. data solids; bridges vs. their drawn meshes; a design vs. its mesh, by part — `design-layer.ts` `asks`; an instance a design folded away is not found) → the outline (next row) alone | the viewer's question | `inquiry-probe.ts`, `lib/city/ask-items.ts`, `bridge-ask.ts` |
 | The asked traffic flow or bicycle counter | while its layer shows: a ray on the flow's drawn bodies (the vertex names its section) or on the counter's columns as tall as they stand → the outline alone, a flow's with the layer's own grown and widened positions, tested only against what stands in front of the glass | the viewer's question | `traffic-ask.ts`, `bike-ask.ts`, `lib/city/inquiry-traffic.ts` |
 | The outline of the asked element | its triangles (a building's or bridge's own; a tree's crown and trunk, a monument's cylinder, a basin's prism as stand-ins) → a two-byte mask, red the whole element, green where the scene's depth shows it (MAX blending), blurred at half resolution by its own two-byte blur (GaussianBlurNode's kernel, `outlineKernel`) → the band 0.07–0.66 of red's blur: one rounded line round the element's whole silhouette, never along what stands in front, 4.5 CSS px of the HUD's accent pink (`SELECTION_ACCENT`, the hatch's too) on a hair of its pale, flashing wider and in the accent for 650 ms on a new question (`OUTLINE_PULSE`), fwidth-smoothed, at 42 % of its ink where green says the element is hidden (`OUTLINE_HIDDEN`, the hidden edge); over the finished frame and everything in it, in every picture style; mask and blur drawn only while something is asked | the viewer's question | `selection-outline.ts`, `selection-shape.ts`, `lib/city/outline.ts`, `post-stack.ts` |
 | The inquiry card (HUD, not the scene; a bottom sheet on touch) | the fact columns (`buildingId`, ALKIS use, roof form and pitch, height, area, OSM name, address, storeys, and `drawn`: where each drawn value came from — its *Daten* section lists them with the object's style row, `lib/city/drawn-lines.ts`), a tree's register facts (`treefacts_<tile>.json`), a monument's or bridge's feature, and the provenance manifest (each source's edition and licence), on demand only | LoD2, OSM, `data/<site>/provenance.json` | `lib/city/object-facts.ts`, `lib/city/inquiry.ts`, `lib/city/provenance.ts`, `inquiry-card.tsx` (ADR 0042) |
@@ -191,7 +191,7 @@ is the codebook.
 | Signs and fixtures | OSM point → advertising column (paper drum Ø 1.2 m, 2.7 m, a darker ring and dome, three pastel poster fields; `lit` ones emissive × `nightFactor`), traffic signal (3.2 m pole, a three-lamp head a shade deeper than the metal, facing `a`, unlit; with `arm` a 5.95 m mast, a 5 m arm over the lanes with a second head), pedestrian signal (`pedsignal`: a 2.5 m post, a two-lamp head looking across `a`, a push button) at each kerb end of a signalled crossing, pillar hydrant (0.8 m, red ochre), underground-hydrant sign plate on a post (one soft rose field, at 70 %), clock on a 3.5 m post (double face) or on a facade (one face, bracket to the wall), drinking fountain (1 m bronze column + basin), bus-stop "H" sign (2.6 m pole, a soft green disc in a yellow one — no letter —, timetable box); clock hands (soft slate) turned by the scene's time (`clockMinutes`, on the minute), never casting; on a bridge deck a signal stands at its carriageway's kerb (or the deck's edge, if nearer), a hydrant sign at the deck's nearer edge | OSM | `furniture-layer.ts` (`column`, `signal`, `signalArm`, `pedSignal`, `hydrant`, `hydrantSign`, `poleClock`, `wallClock`, `drinkingWater`, `stopSign`, `clockHands`), `pipeline/bake/furniture.py` |
 | Playground | OSM outline → a pale sand floor 4 cm over the ground, skirted 0.2 m; the mapped equipment stands on it (on one mapped empty, the surface model's blobs, `src: "dom"`, as a swing or a climbing frame), each piece one soft single-coloured sculpture in a pastel from the scene at the buildings' brightness (swing = an arch with a pill seat, dusk blue; slide = an extruded wave, peach; climbing frame = a faceted dome, sage; springy = an egg on a stem, butter; seesaw = a plank on a half-round, lilac; roundabout = a rimmed disc; playhouse = an extruded house silhouette; sandpit = sand in a rounded sage frame); a sandpit area a sand slab 6 cm above | OSM; DOM1 − DGM1 (empty ones) | `furniture-layer.ts` (`addSlab`), `lib/city/furniture.ts` |
 | Fountain basin | OSM outline → clay rim (+0.35 m over the highest ground; 0.2 m for `water=reflecting_pool`, none for `fountain=splash_pad`), water = the 0.35 m inset; a point → 2.2 m round basin, a drinking fountain or stone block (`r`) ~1 m | OSM, Basis-DLM | `monument-layer.ts`, `pipeline/bake/monuments.py` |
-| Fountain jets | a translucent water bell (lathe, alpha fading along the falling curtain; breathes ±7 % on a per-jet phase, streaks run down the curtain; unlit, so after dark its colour dims to a faint warm white, `NIGHT_JET`, × `nightFactor`), `0.3·√area` tall, clamped 1.2–4.5 m; one centred, or four round a measured sculpture (only those on the water); running mid-April to October, off from November to mid-April (`fountainSeason`, one shared uniform) | OSM | `jetHeight`, `jetPlaces` (`lib/city/monuments.ts`), `unitBell` |
+| Fountain jets | a translucent water bell (lathe, alpha fading along the falling curtain; breathes ±7 % on a per-jet phase, streaks run down the curtain; unlit, so after dark its colour dims to a faint warm white, `NIGHT_JET`, × `nightFactor`), `0.3·√area` tall, clamped 1.2–4.5 m; one centred, or four round a measured sculpture (only those on the water); running mid-April to October, off from November to mid-April (`fountainsOn`, one shared uniform) | OSM | `jetHeight`, `jetPlaces` (`lib/city/monuments.ts`), `unitBell` |
 | Monument / fountain sculpture | `relief` (nDOM patch, 1 m) → ×4 bilinear, one [1 2 1] pass, fringe below 0.08 m sunk; heights over the terrain per sample; the buildings' clay; a fountain's sculpture uplit softly warm (`NIGHT_UPLIGHT`) × `nightFactor`, fading over its lowest 2.5 m above the water | DOM1 − DGM1, Basis-DLM | `reliefSurface`, `reliefMesh`, `uplight` |
 | Monument marker (nothing measured) | its OSM form's parts in clay: statue = pillar on a 1.6 m pedestal, bust = small pillar on a 1.35 m plinth, sculpture = broad pillar, stele = upright slab, stone = low rounded block, obelisk = four-sided needle on a 0.7 m base, column = a round shaft on a pedestal under a capital; scaled whole to a tagged `height`, else the height measured in the open (`hm`) (×0.4–3; a column or obelisk up to 40 / 35 m in height alone, its girth ≤ ×3); facing `a` (its square's centre, else the nearest way); no form → the DLM kind's one pillar, slab or shaft; a fountain's figure under a winter housing (`cover`) → the free sculpture's marker | OSM `memorial`/`artwork_type`/`height`, Basis-DLM, DOM1 (`hm`) | `markerPieces`, `addMonument` |
 | Monument tone | a monument's named material as one muted tone per part, in the clay's palette: sandstone warm beige, granite grey, bronze dark green-brown patina, copper verdigris, gold soft gold, steel cool grey; the figure the most striking metal, the pedestal the stone named (else clay); a marker's two pieces apart, a fountain's measured sculpture ≥ 3 m tall split at 55 % of its height (0.4 m blend); unnamed, glass, plastic, ceramic → clay | OSM `material`, else Wikidata `P186` | `markerTones`, `figureShare`, `clayTint` |
@@ -376,7 +376,13 @@ change, not a re-bake
   (turning on the spot never blinks one); three's own frustum culling keeps
   the off-screen ones out of the main pass.
 - **Lamps at night:** a `nightFactor = smoothstep(2°, −6°)` of sun altitude
-  fans out to lamp heads, sprites and the building dusk glow. Real point
+  is one node, `sceneNight` (`scene-environment.ts`), which the lamp heads,
+  halos and pools, the building dusk glow, the fountains, the lit columns,
+  the river mist, the ferry wakes and the fences read — written once with
+  the light, never per tile. The halos and pools are hidden by their
+  scene-wide materials by day (`drawnAtNight`: a material's `visible` is in
+  no build key, so the switch rebuilds nothing; every compile path shows a
+  drawable's materials for its call, so they are compiled by day too). Real point
   lights are a fixed pool of three, allocated before the first frame and
   retargeted to the nearest heads of the visible tiles' dressings (re-fed on
   every stream change), because the light count is part of every lit node
@@ -1090,11 +1096,14 @@ stays their measure; the tile cache counts true bytes.
   across the city and from the air.
 - **The tile cache** weighs a tile as the GPU holds it: the glTF (by
   count, so a buffer whose CPU copy is gone weighs what it did), the
-  terrain's rasters, the dressing's geometry and a city tile's murals
-  (their drawings with mipmaps — the pen lines one channel, the wash
-  small — the texels dropped once uploaded: 2.7 MB for Dresden's two on
-  their tile, 2.0 MB on a phone, which decodes the lines at 32 px a
-  metre), less the buffers the site shares
+  terrain's rasters, and what its late parts weigh from their build on
+  until their GPU free has run — one disposed mid-compile is freed, and
+  leaves the weight, once that compile ends (`late-parts.ts`): the dressing's geometry, the traffic bodies'
+  geometry and a city tile's murals (their drawings with mipmaps — the
+  pen lines one channel, the wash small — the texels dropped once
+  uploaded: 2.7 MB for Dresden's two on their tile, 2.0 MB on a phone,
+  which decodes the lines at 32 px a metre), less the buffers the site
+  shares
   (`DressingPlugin.calculateBytesUsed`). A phone's bounds are
   derived (`tileCacheBytesFor`): `max` = the governor's soft line − the
   fixed costs (24 bytes per drawn pixel and the shadow map: 38 MiB at
@@ -1211,16 +1220,20 @@ stays their measure; the tile cache counts true bytes.
 - **Trees before all trees.** The dressings build one at a time after
   the boot's gate, a coarse level's (its third of the trees, its bridges)
   ahead of any fine level's (`COARSE_DRESSING_RANK`; at most four of
-  them ahead of one fine level's, `MAX_DRESSING_OVERTAKES`, so a long
+  them ahead of one fine level's, `MAX_LATE_OVERTAKES`, so a long
   flight's stream of coarse levels cannot hold back the tile underfoot),
   so every tile in view has trees before the nearest has all of them.
-  The lane holds a dressing's build only; its compile wait and its
-  hanging run after the lane, so the next build overlaps the last one's
-  compile but waits out the one before it (`olderCompile`): at most one
-  compile ahead, so built dressings and the compile queue never pile up;
-  a dressing counts against the cache's budget from its build, not from
-  its hanging (headless full profile, Dresden start: first frame
-  to *Alles geladen* 289 s → 243 s under SwiftShader). A fine level that
+  The lane (`createLateLane`, late-parts.ts) holds a dressing's build
+  only; its compile wait and its hanging run after the lane, so the next
+  build overlaps the last one's compile but waits out the one before it:
+  at most one compile ahead, so built dressings and the compile queue
+  never pile up; a dressing counts against the cache's budget from its
+  build, not from its hanging (headless full profile, Dresden start:
+  first frame to *Alles geladen* 289 s → 243 s under SwiftShader). A
+  tile's traffic bodies take the same lane at their level's rank but
+  hold it through their compile wait: a body's compile is one large
+  upload (≈ 20 MiB for a fine tile), and a second one in flight beside
+  it would raise a phone's peak. A fine level that
   shows before its own trees hang — a phone shows it the moment it loads
   — borrows its coarse level's crowns until they do
   (`DressingPlugin.standInCrowns`, `coarseCrownsStandIn`): they are
@@ -1300,7 +1313,11 @@ page reloads where the player stood, **a safety level lighter**
 decisions — what a lost device, a failed frame, an allocation failure, a
 hidden or shown page lead to — are one pure machine,
 `lib/city/page-lifecycle.ts`, tested by the incident sequences in its
-test; `create-app.ts` binds its signals and effects. The
+test; `create-app.ts` binds its signals and effects. The record and
+its protocol are one recovery session (`app/_components/gpu-recovery.ts`):
+the page peeks before the boot and commits once the scene is up or the
+boot failed, so a boot StrictMode aborts leaves the place for the next;
+the caps and the arrival rule are pure (`lib/city/gpu-recovery.ts`). The
 snapshot waits in session storage, the raised level in local storage
 (`gpu-safety`). One automatic reload per level (0 → 1 → 2 → 3); none from
 level 3, and none where the raise cannot be stored — the next page would
@@ -1498,8 +1515,8 @@ The data layers build nothing at boot: they start as one feature
 from then on hear the spine through its hooks (`feature-seam.ts`: the
 frame, the stream's changes, the look store, the scene's clock — read
 first, since they may start long after it was set); a tile's traffic
-slot waits for the same start before it builds its bodies, outside the
-dressings' turn. Their code ships in the scene's chunk: loaded by
+slot waits for the same start, outside the dressings' turn, before its
+bodies join the tile's late parts. Their code ships in the scene's chunk: loaded by
 `import()` as a chunk of its own, it made the first-load JS 22.7 KB gz
 larger while moving 10.1 KB out, three.js shared by both chunks losing
 its scope hoisting with the scene's code ([ADR 0040](./adr/0040-data-layers-and-live-city-data.md)) — and the
@@ -1514,10 +1531,21 @@ target the scene renders into (`PostStack.compile`, one drawable per
 material and attribute layout, shown and unculled for the call), so a
 landing tile never builds inside a frame. The shadow pass's pipelines for
 new casters are the exception: they compile in the frame that first draws
-them. The heavy dressing — vegetation,
+them. What lands on a tile after the tile itself is a **late part**
+of its content root (`late-parts.ts`): a terrain level's dressing, a
+city tile's murals, a data layer's traffic bodies (owned by the
+dressing that carries their slot). One lifecycle builds each in its
+turn, weighs it from its build, compiles it before it hangs and frees
+it once its compile has ended; two hang policies differ only in when
+it hangs — a dressing once its compile wait is over (a level's
+hand-over waits on it, below; a compile that then runs out of memory
+takes it down again), the murals and the traffic bodies once their
+compile has ended (nothing waits on them). The heavy dressing — vegetation,
 lamps, monuments, rails — waits behind a gate the HUD opens after the handover
 (`startStreaming`, [ADR 0024](./adr/0024-site-streams-as-3d-tiles.md)'s
-second phase) and is built one tile at a time. A tile with nothing on
+second phase) and is built one tile at a time in the site's lane, with
+the traffic bodies (a coarse level's first); the murals build beside it
+(a fetch and a decode a drawing, no long task). A tile with nothing on
 screen shows at once, bare, and is dressed after; a terrain level that
 takes over from its tile's other level on screen — the fine one replacing
 the coarse one as the view comes closer, or back — is loaded only once

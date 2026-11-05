@@ -15,49 +15,53 @@
 > Saxony's adapter is `pipeline/bake/providers/sn.py`). Read the paths and
 > commands below in that layout; this is drift, not a STOP condition.
 >
-> **Amendment (2026-10-06 audit, against `4b0310a`) — refresh before
-> executing.** The step bodies and the done criteria still cite
-> `scripts/bake.ts`, `pipeline/bake/ingest_sn.py` and
-> `pipeline/tests/test_ingest.py` (`--bounds` per tile, "`grep -n
-> timeout ingest_sn.py`"): the runner is now `scripts/pipeline.ts` handing
-> Python one JSON spec (`pipeline/bake/spec.py`; `__main__.py` `main()`
-> takes `--spec` and repeatable `--tile`), the fetch is `pipeline/bake/fetch.py`
-> + `providers/{sn,nw,by,hh,be}.py`, the tests `pipeline/tests/test_fetch.py`
-> and `test_net.py`. What that changes per step: **step 1** (step-major)
-> still applies — the loop at `__main__.py:152-157` is tile-major
-> (`for tile in tiles: for step in steps`) — but the test's `sys.argv`
-> must build a spec file, not `--bounds`; add to its `test_main.py`: (a)
-> the step **order** pinned by index relations (`landcover < canopy`,
-> `rail < canopy`, `surface < markings`, `edges < markings`, `lowveg <
-> cultivated`, `lowveg < small-buildings`, `landmarks < structures` — the
-> constraints the comments in `STEPS` state) and that every `*.run` in the
-> package is listed once; (b) a `try/except` around the loop that prints
-> `f"{spec.site} {tile.id} {step}: {exc}"` and re-raises, so a step that
-> fails on tile 11 of 15 names itself; (c) two or three bakes' synthetic
-> fixtures parametrised on EPSG 25832 as well (three of the seven
-> committed sites; `synthetic.py` is 25833 only). **Step 3** (ingest
-> hardening) is partly done: `net.py:27` `urlopen(req, timeout=120)`,
-> `net.py:101-115` and `fetch.py:90,117-121` write through `.part` — re-read
-> `fetch.py`/`net.py` and keep only what is still missing (plan 063 adds
-> the fetch's exit code and the Wikidata/GTFS caches' `.part`; do not
-> duplicate it). **Step 5** (the hero's height) appears done:
-> `scripts/bake-wissen-hero.ts:78` sizes the map `cell * rows` — verify
-> and strike. Re-point every path above, re-derive the drift-check line,
-> and re-stamp "Planned at" before handing the plan to an executor.
+> **Refreshed 2026-11-04 against `8b8ec332` — read this first; the step
+> bodies below keep their original text for the reasons, and this note
+> says what of each still applies.** The runner is `scripts/pipeline.ts`
+> handing Python one JSON spec (`pipeline/bake/spec.py`; `__main__.py`
+> `main()` takes `--spec`, `--step`, `--tile`…); the fetch is
+> `pipeline/bake/fetch.py` + `net.py` + `providers/{sn,nw,by,hh,be}.py`,
+> tested by `test_fetch.py` and `test_net.py`; the publisher is
+> `scripts/publisher.ts`, the bake cache `scripts/bake-cache.ts`.
 >
-> **Drift check (run first)**:
-> `git diff --stat dd470e9..HEAD -- scripts/bake.ts pipeline/bake/__main__.py pipeline/bake/stairs.py pipeline/bake/rail.py pipeline/bake/ingest_sn.py pipeline/bake/common.py scripts/prepare-data.ts scripts/bake-wissen-hero.ts app/wissen/_components/landing.tsx`
-> On a change in the lines a step edits, compare with the excerpts below;
-> a mismatch is a STOP condition for that step.
+> - **Step 1 — done but for its test additions.** `Bake.step` runs a step
+>   over every tile before the next (`__main__.py` `main`), with
+>   `--jobs` side by side; `test_step_order.py` pins the order by index
+>   relations. Left: (a) every module's `run` is a step, listed once (the
+>   commands `fetch` and `coverage` excepted); (b) a step that fails on a
+>   tile names the site, the tile and the step (`recorded_tile`), then
+>   re-raises; (c) two or three bakes' synthetic fixtures run on EPSG
+>   25832 as well (`synthetic.py` `osm_tile`/`slope_tile` take `epsg`).
+> - **Step 2 — still open, as written.** `stairs.py` `Dgm` reads only its
+>   own tile's DGM (`Tile.dgm`); `rail.py` `mosaic(paths, bounds)` merges
+>   the committed DGMs on their 1 m grid. The DGMs live at
+>   `data/<site>/dgm/dgm1_*_tiff/dgm1_*.tif` (`Tile.dgm`). The stairs then
+>   need a re-bake on every tile: the maintainer's.
+> - **Step 3 — done; struck.** Every request goes through `net.urlopen`
+>   (`timeout=120`); downloads, extractions (`net._extract`, `sn.py`'s
+>   DLM) and the flight days write through `.part` files; `has_dlm` asks
+>   `dlm_complete` (every layer the bakes read, `.shp` and `.dbf`); the
+>   Saxon URLs are built from the fixed `https` hosts (`CLOUD`,
+>   `BATCH_PAGE`), no service-given `Download` link is followed any more.
+> - **Step 4 — half done.** The cache writes through a part file renamed
+>   over its entry (`bake-cache.ts` `writeEntry`); `publisher.ts`
+>   `publish`, `publishPlain` and the manifest still write in place. Left:
+>   those three through a temporary file and a rename.
+> - **Step 5 — done; struck.** `bake-wissen-hero.ts` sizes the canvas
+>   `cell * rows`; the landing's crop stays `object-[50%_68%]`.
+>
+> **Drift check (run first)**: `git diff --stat 8b8ec332..HEAD -- pipeline/bake/__main__.py pipeline/bake/stairs.py pipeline/bake/rail.py pipeline/tests/synthetic.py scripts/publisher.ts`
 
 ## Status
 
+- **State**: DONE (2026-11-04) — code and tests; the stairs' re-bake is the
+  maintainer's (row in `README.md`)
 - **Priority**: P1 (steps 1–2: wrong committed data), P2 (steps 3–5)
 - **Effort**: S–M overall (each step S)
 - **Risk**: LOW
 - **Depends on**: 037 (correct test commands)
 - **Category**: bug
-- **Planned at**: commit `a28de75`, 2026-10-01; refreshed against `dd470e9` (main with ADR 0030)
+- **Planned at**: commit `a28de75`, 2026-10-01; refreshed against `dd470e9` (main with ADR 0030) and against `8b8ec332` (2026-11-04, the note above)
 
 ## Why this matters
 

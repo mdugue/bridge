@@ -62,7 +62,6 @@ import {
   coveredFigure,
   FINISH,
   figureShare,
-  fountainsRun,
   jetHeight,
   jetPlaces,
   markerTones,
@@ -89,6 +88,7 @@ import { Instances, instanceFloat, instancePosition } from "./instancing";
 import { dataXY } from "./shader-chunks";
 import type { F, Live } from "./shader-chunks";
 import { mirrorWeight, REFLECTIONS, skyReflection } from "./sky-reflection";
+import { fountainsOn, sceneNight } from "./scene-environment";
 import { sceneMaterial } from "./three-utils";
 import { viewDirection } from "./view-direction";
 import { BASIN_WAVES, waveNormal, waves, waveTilt } from "./water-waves";
@@ -118,9 +118,9 @@ import { BASIN_WAVES, waveNormal, waves, waveTilt } from "./water-waves";
  * The fountains move, gently: every bell breathes on its own phase and
  * droplets run down its curtain, light shimmers across the water; by
  * night the water glows and a fountain's sculpture is lit from its basin;
- * from November to mid-April the jets are off (one shared clock, night
- * factor and season, `setFountainTime`/`setFountainNight`/
- * `setFountainSeason`).
+ * from November to mid-April the jets are off (one shared clock,
+ * `setFountainTime`; the night and the season are the scene
+ * environment's, `sceneNight` and `fountainsOn`).
  *
  * Built per fine terrain tile by the dressing plugin (tile-stream.ts), in
  * the Y-up frame; rims, water and reliefs are merged, markers and jets
@@ -675,15 +675,12 @@ function merged(
 }
 
 /**
- * The one clock and night factor every tile's fountains share (uniform
- * nodes every material reads): `create-app.ts` advances them each frame
- * and at dusk, tiles that stream in later pick them up as they are.
+ * The one clock every tile's fountains share (a uniform node every
+ * material reads): `create-app.ts` advances it each frame, tiles that
+ * stream in later pick it up as it is. Their night and season are the
+ * scene environment's (`sceneNight`, `fountainsOn`).
  */
 const fountainTime: Live = uniform(0);
-const fountainNight: Live = uniform(0);
-/** 1 while the fountains run, 0 in the months they are drained
- *  (`fountainsRun`): a uniform, so the season turns without a rebuild. */
-const fountainSeason: Live = uniform(1);
 /** What a fountain keeps of its light after dark, beside walls only the
  *  street lamps reach: the jets' warm white (they are unlit, so their
  *  colour is their whole brightness), the water's glow from below and
@@ -696,16 +693,6 @@ const NIGHT_UPLIGHT = float(0.2);
 /** The frame clock (s) the jets and the water shimmer run on. */
 export function setFountainTime(elapsed: number): void {
   fountainTime.value = elapsed;
-}
-
-/** 0 by day → 1 at night: the basins light up softly with the lamps. */
-export function setFountainNight(t: number): void {
-  fountainNight.value = Math.min(Math.max(t, 0), 1);
-}
-
-/** The scene's date: from November to mid-April the jets are off. */
-export function setFountainSeason(date: Date): void {
-  fountainSeason.value = fountainsRun(date) ? 1 : 0;
 }
 
 /** A jet's own phase (0..2π), hashed from its instance's position (the
@@ -726,7 +713,7 @@ const jetPhase = Fn((builder) => {
  * transform) and droplets run down the curtain as soft streaks in its
  * alpha (a swirl round the lathe's u, streaks down its v). By night the
  * spray dims to a faint warm white, the little light it catches
- * (`NIGHT_JET`). Out of season (`fountainSeason` 0) a bell collapses to
+ * (`NIGHT_JET`). Out of season (`fountainsOn` 0) a bell collapses to
  * its nozzle and is fully transparent.
  */
 function sprayMaterial(): MeshBasicNodeMaterial {
@@ -744,7 +731,7 @@ function sprayMaterial(): MeshBasicNodeMaterial {
   m.positionNode = instancePosition(
     vec3(
       positionLocal.x,
-      positionLocal.y.mul(breath).mul(fountainSeason),
+      positionLocal.y.mul(breath).mul(fountainsOn),
       positionLocal.z
     )
   );
@@ -757,9 +744,9 @@ function sprayMaterial(): MeshBasicNodeMaterial {
   m.opacityNode = materialOpacity
     .mul(bellAlpha(bell.y))
     .mul(streaks)
-    .mul(fountainSeason);
+    .mul(fountainsOn);
   m.colorNode = vec4(
-    mix(materialColor.rgb, vec3(1, 0.93, 0.8).mul(NIGHT_JET), fountainNight),
+    mix(materialColor.rgb, vec3(1, 0.93, 0.8).mul(NIGHT_JET), sceneNight),
     1
   );
   return m;
@@ -783,7 +770,7 @@ function waterMaterial(): MeshStandardNodeMaterial {
   const n = waveNormal(field.slope).toVar();
   m.normalNode = cameraViewMatrix.mul(vec4(n, 0)).xyz.normalize();
   const tilt = waveTilt(field.slope).toVar();
-  const shimmer = mix(float(1), NIGHT_SHIMMER, fountainNight);
+  const shimmer = mix(float(1), NIGHT_SHIMMER, sceneNight);
   m.emissiveNode = materialEmissive
     .add(vec3(0.03, 0.04, 0.045).mul(tilt).mul(shimmer))
     .add(
@@ -793,7 +780,7 @@ function waterMaterial(): MeshStandardNodeMaterial {
     )
     .add(
       vec3(0.6, 0.8, 1)
-        .mul(fountainNight.mul(NIGHT_WATER))
+        .mul(sceneNight.mul(NIGHT_WATER))
         .mul(tilt.mul(0.4).add(0.6))
     );
   return m;
@@ -943,7 +930,7 @@ function litClayMaterial(): MeshStandardNodeMaterial {
   m.emissiveNode = materialEmissive.add(
     vec3(1, 0.82, 0.6)
       .mul(NIGHT_UPLIGHT)
-      .mul(fountainNight)
+      .mul(sceneNight)
       .mul(float(1).sub(smoothstep(0, 2.5, lift)))
   );
   return m;

@@ -14,7 +14,7 @@ import {
 } from "three/webgpu";
 import type { BufferGeometry, Material } from "three/webgpu";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { color, float, mix, select, uniform, uv, vec3, vec4 } from "three/tsl";
+import { color, float, mix, select, uv, vec3, vec4 } from "three/tsl";
 import type { LampFeature } from "@/lib/city/features";
 import { yawOfBearing } from "@/lib/city/furniture";
 import {
@@ -29,7 +29,8 @@ import type { GroundContext } from "@/lib/city/ground-clamp";
 import { Instances, instancePosition } from "./instancing";
 import type { Pt } from "./mesh-kit";
 import type { DeviceTier } from "./scene-profile";
-import type { F, Live } from "./shader-chunks";
+import { drawnAtNight, sceneNight } from "./scene-environment";
+import type { F } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 import { addWire, wireMesh, wires } from "./wire-ribbons";
 import type { Wires } from "./wire-ribbons";
@@ -113,8 +114,6 @@ export interface LampControl {
   group: Group;
   /** world-space (Y-up) lantern-head positions, fed to the shared light pool */
   headPositions: Vector3[];
-  /** 0 (day, inert grey) → 1 (night, ignited): emissive + glow + pool opacity */
-  setNightFactor: (t: number) => void;
 }
 
 /** A small fixed pool of real point lights shared across ALL tiles' lamps. */
@@ -130,15 +129,6 @@ export interface LampLights {
 
 /** The lamps' warm light (the heads' emissive, halos, pools, real lights). */
 const LAMP_LIGHT = 0xff_d0_89;
-
-/**
- * The one night factor every tile's lamps read (0 by day → 1 at night): a
- * uniform node, so a tile's `setNightFactor` is a uniform write — every
- * tile is driven with the same value, and one that streams in later is
- * born with it. The materials are then the scene's (`sceneMaterial`), one
- * node build for every tile.
- */
-export const lampNight: Live = uniform(0);
 
 /**
  * The soft radial alpha of the halos and pools, from the quad's (or disc's)
@@ -265,7 +255,7 @@ function buildHeads(places: Place[], height = LAMP_H): Instances {
       roughness: 0.6,
     });
     m.positionNode = instancePosition();
-    m.emissiveNode = color(LAMP_LIGHT).mul(lampNight.mul(HEAD_EMISSIVE));
+    m.emissiveNode = color(LAMP_LIGHT).mul(sceneNight.mul(HEAD_EMISSIVE));
     return m;
   });
   const mesh = placeInstances(geo, mat, places);
@@ -301,14 +291,14 @@ function buildGlow(heads: Vector3[]): Instances {
     });
     m.positionNode = instancePosition(vec3(0));
     m.colorNode = vec4(color(LAMP_LIGHT), glowAlpha());
-    m.opacityNode = lampNight.mul(GLOW_OPACITY);
-    return m;
+    m.opacityNode = sceneNight.mul(GLOW_OPACITY);
+    // by day the additive halos are skipped outright
+    return drawnAtNight(m);
   });
   const mesh = placeInstances(geo, mat, heads, GLOW_SIZE);
   mesh.name = "lamp-glow";
   mesh.castShadow = false;
   mesh.receiveShadow = false;
-  mesh.visible = false;
   return mesh;
 }
 
@@ -330,15 +320,14 @@ function buildDecals(places: Pool[]): Instances {
       polygonOffsetUnits: -2,
     });
     m.positionNode = instancePosition();
-    m.opacityNode = lampNight.mul(POOL_OPACITY).mul(glowAlpha());
-    return m;
+    m.opacityNode = sceneNight.mul(POOL_OPACITY).mul(glowAlpha());
+    return drawnAtNight(m);
   });
   const decals = places.map((p) => ({ ...p, y: p.y + 0.05 }));
   const mesh = placeInstances(geo, mat, decals);
   mesh.name = "lamp-pools";
   mesh.castShadow = false;
   mesh.receiveShadow = false;
-  mesh.visible = false;
   return mesh;
 }
 
@@ -537,8 +526,10 @@ function taggedHeads(places: Place[], height: number): Instances {
  * carriageway, a lantern on its bracket out of a facade or a wall, or — a
  * lamp hung across the street — a head on a wire between the facades (or
  * masts at the kerb). Mostly fake — emissive
- * heads, additive glow sprites and ground light-pool decals — driven by a
- * single `nightFactor`; the real lighting comes from a small shared
+ * heads, additive glow sprites and ground light-pool decals — driven by the
+ * scene's one night node (scene-environment.ts `sceneNight`; the halos and
+ * pools drawn only after dark, `drawnAtNight`); the real lighting comes from
+ * a small shared
  * {@link createLampLights} pool. An empty feature list yields an empty group.
  */
 export function buildLamps(
@@ -554,9 +545,6 @@ export function buildLamps(
     return {
       group,
       headPositions,
-      setNightFactor: () => {
-        // nothing to drive
-      },
       dispose: () => {
         // empty
       },
@@ -592,15 +580,6 @@ export function buildLamps(
   return {
     group,
     headPositions,
-    setNightFactor: (t) => {
-      const nf = Math.min(Math.max(t, 0), 1);
-      // One value for every tile: the heads' emissive, the halos' and the
-      // pools' opacity all read it. Visibility stays per tile, so by day
-      // the additive passes are skipped outright.
-      lampNight.value = nf;
-      glow.visible = nf > 0.01;
-      decals.visible = nf > 0.01;
-    },
     // disposeObject3D frees the meshes with the scene; nothing else is the
     // tile's.
     dispose: () => {
