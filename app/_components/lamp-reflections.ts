@@ -6,6 +6,7 @@ import {
   dot,
   exp,
   float,
+  Fn,
   int,
   Loop,
   normalize,
@@ -86,7 +87,7 @@ function mirrorSet(
 }
 
 /** The lamps by the water: seen across the river, so far off too. */
-const WATER = mirrorSet({ desktop: 32, mobile: 12 }, [1200, 1600]);
+const WATER = mirrorSet({ desktop: 48, mobile: 16 }, [1200, 1600]);
 /** The lamps by the tracks: a rail's glint is a few pixels from 300 m. */
 const TRACKS = mirrorSet({ desktop: 24, mobile: 8 }, [250, 400]);
 
@@ -106,13 +107,13 @@ const FRONT: [number, number] = [-0.05, 0.25];
 
 /** The slope spread (rad, tan) of the ripples finer than a pixel: near
  *  (at a pixel's few centimetres) and far (metres a pixel). */
-const SPREAD: [number, number] = [0.05, 0.13];
+const SPREAD: [number, number] = [0.035, 0.08];
 /** Metres a pixel over which the spread grows from near to far. */
 const SPREAD_PX: [number, number] = [0.05, 2];
 /** A column's brightness at its peak (emissive, × the lamps' colour). */
 const REFLECTION = 2.4;
 /** The faint wide lobe round the column: the lamps' halo on the water. */
-const HALO = 0.12;
+const HALO = 0.08;
 const HALO_SPREAD = 3;
 /** Water's reflectance looking straight down (Schlick's F0). */
 const WATER_F0 = 0.02;
@@ -137,36 +138,40 @@ function lobes(
   spread: F,
   look: { f0: number; halo: number; haloShare: number }
 ): F {
-  const at = positionWorld.toVar();
-  const n = normal.toVar();
-  const eye = toEye.toVar();
-  const inv = float(1).div(spread.mul(spread)).toVar();
-  const sum = float(0).toVar();
-  Loop(
-    { start: int(0), end: set.count, type: "int", condition: "<" },
-    ({ i }) => {
-      const head = set.heads.element(i);
-      const toLamp = normalize(head.xyz.sub(at));
-      const half = normalize(toLamp.add(eye));
-      const c = clamp(dot(half, n), 1e-3, 1);
-      // tan² of the half-vector's tilt off the normal
-      const t2 = float(1).sub(c.mul(c)).div(c.mul(c)).mul(inv);
-      // the halo only where a set has one: none costs nothing per lamp
-      const lobe =
-        look.haloShare > 0
-          ? exp(t2.negate()).add(
-              exp(t2.div(look.halo * look.halo).negate()).mul(look.haloShare)
-            )
-          : exp(t2.negate());
-      const fresnel = pow(float(1).sub(clamp(dot(eye, half), 0, 1)), 5)
-        .mul(1 - look.f0)
-        .add(look.f0);
-      // a lamp below the surface lights nothing on it
-      const above = smoothstep(0, 0.5, head.y.sub(at.y));
-      sum.addAssign(lobe.mul(fresnel).mul(above).mul(head.w));
-    }
-  );
-  return sum;
+  // A Loop builds into the stack of the Fn it is called in: outside one
+  // it never reaches the graph, and the sum stays 0.
+  return Fn(() => {
+    const at = positionWorld.toVar();
+    const n = normal.toVar();
+    const eye = toEye.toVar();
+    const inv = float(1).div(spread.mul(spread)).toVar();
+    const sum = float(0).toVar();
+    Loop(
+      { start: int(0), end: set.count, type: "int", condition: "<" },
+      ({ i }) => {
+        const head = set.heads.element(i);
+        const toLamp = normalize(head.xyz.sub(at));
+        const half = normalize(toLamp.add(eye));
+        const c = clamp(dot(half, n), 1e-3, 1);
+        // tan² of the half-vector's tilt off the normal
+        const t2 = float(1).sub(c.mul(c)).div(c.mul(c)).mul(inv);
+        // the halo only where a set has one: none costs nothing per lamp
+        const lobe =
+          look.haloShare > 0
+            ? exp(t2.negate()).add(
+                exp(t2.div(look.halo * look.halo).negate()).mul(look.haloShare)
+              )
+            : exp(t2.negate());
+        const fresnel = pow(float(1).sub(clamp(dot(eye, half), 0, 1)), 5)
+          .mul(1 - look.f0)
+          .add(look.f0);
+        // a lamp below the surface lights nothing on it
+        const above = smoothstep(0, 0.5, head.y.sub(at.y));
+        sum.addAssign(lobe.mul(fresnel).mul(above).mul(head.w));
+      }
+    );
+    return sum;
+  })();
 }
 
 /**
@@ -217,26 +222,66 @@ export interface LampReflections {
   dispose: () => void;
 }
 
+/** The look's sectors (by the lamps' angle off it), each keeping its own
+ *  share of the slots: a row of quay lamps across the view is mirrored
+ *  all along, not only its nearest stretch. Beyond the outer angle (rad)
+ *  a lamp counts to the outer sector. */
+const SECTORS = 8;
+const SECTOR_SPAN = 0.9;
+
+/** Scratch for `rankReflected`: one entry per head that is a candidate. */
+export interface RankScratch {
+  /** candidates' head indices, distances, sides and sectors */
+  idx: number[];
+  dist: number[];
+  front: number[];
+  sector: number[];
+  /** the sectors' kept counts and cut distances */
+  kept: number[];
+  cut: number[];
+  /** the candidates nearest first, and those kept */
+  order: number[];
+  chosen: number[];
+}
+
+export function rankScratch(): RankScratch {
+  return {
+    idx: [],
+    dist: [],
+    front: [],
+    sector: [],
+    kept: Array.from({ length: SECTORS }, () => 0),
+    cut: Array.from({ length: SECTORS }, () => Number.POSITIVE_INFINITY),
+    order: [],
+    chosen: [],
+  };
+}
+
 /**
- * Ranks `heads` for the eye at `eye` looking along `look`: the nearest
- * `most` within `reach` (m; fading from its first) in front of the eye (or
- * near it), into `out` as (x, y, z, fade); returns how many. The fade is
- * the reach's, the side's, and the hand-over's where more lamps were in
- * reach than `most`. Pure: the scratch arrays are at least `most + 1` long.
+ * Ranks `heads` for the eye at `eye` looking along `look`: per sector of
+ * the look (`SECTORS`) its nearest `most / SECTORS` within `reach` (m;
+ * fading from its first) in front of the eye (or near it), into `out` as
+ * (x, y, z, fade); returns how many. The fade is the reach's, the side's,
+ * and the hand-over's toward the sector's first lamp left out.
  */
 export function rankReflected(
   heads: readonly Vector3[],
   view: { eye: Vector3; look: Vector3 },
   pick: { most: number; reach: readonly [number, number] },
   out: Vector4[],
-  scratch: { idx: number[]; dist: number[]; front: number[] }
+  scratch: RankScratch
 ): number {
   const { eye, look } = view;
   const { most, reach } = pick;
-  const { idx, dist, front } = scratch;
-  const slots = most + 1;
-  idx.fill(-1, 0, slots);
-  dist.fill(Number.POSITIVE_INFINITY, 0, slots);
+  const { idx, dist, front, sector, kept, cut, order, chosen } = scratch;
+  idx.length = 0;
+  order.length = 0;
+  chosen.length = 0;
+  dist.length = 0;
+  front.length = 0;
+  sector.length = 0;
+  kept.fill(0);
+  cut.fill(Number.POSITIVE_INFINITY);
   const lx = look.x;
   const lz = look.z;
   const ll = Math.hypot(lx, lz);
@@ -247,37 +292,56 @@ export function rankReflected(
     const dx = h.x - eye.x;
     const dz = h.z - eye.z;
     const d = Math.hypot(dx, dz);
-    if (!(d < reach[1]) || !(d < dist[slots - 1])) {
+    if (!(d < reach[1])) {
       continue;
     }
-    const side =
-      anyWay || d < NEAR_ANY_WAY ? 1 : (dx * lx + dz * lz) / (d * ll);
+    const ahead = anyWay ? 1 : (dx * lx + dz * lz) / (ll * Math.max(d, 1e-6));
+    const side = anyWay || d < NEAR_ANY_WAY ? 1 : ahead;
     if (side < FRONT[0]) {
       continue;
     }
-    let s = slots - 1;
-    while (s > 0 && d < dist[s - 1]) {
-      idx[s] = idx[s - 1];
-      dist[s] = dist[s - 1];
-      front[s] = front[s - 1];
-      s -= 1;
-    }
-    idx[s] = i;
-    dist[s] = d;
-    front[s] = side;
+    // the angle off the look, right of it positive (the sector)
+    const angle = anyWay ? 0 : Math.atan2(dx * lz - dz * lx, dx * lx + dz * lz);
+    const s = Math.min(
+      SECTORS - 1,
+      Math.max(
+        0,
+        Math.floor(((angle + SECTOR_SPAN) / (2 * SECTOR_SPAN)) * SECTORS)
+      )
+    );
+    order.push(idx.length);
+    idx.push(i);
+    dist.push(d);
+    front.push(side);
+    sector.push(s);
   }
-  // the first lamp past the set: the ones as near as it fade out
-  const cut = dist[most];
+  // nearest first; each sector keeps its share, the first it leaves out
+  // its cut
+  order.sort((a, b) => dist[a] - dist[b]);
+  const share = Math.max(1, Math.floor(most / SECTORS));
+  for (const k of order) {
+    const s = sector[k];
+    if (kept[s] < share) {
+      kept[s] += 1;
+      chosen.push(k);
+    } else if (!Number.isFinite(cut[s])) {
+      cut[s] = dist[k];
+    }
+  }
   let n = 0;
-  for (let s = 0; s < most && idx[s] >= 0; s += 1) {
-    const d = dist[s];
+  for (const k of chosen) {
+    const d = dist[k];
+    const c = cut[sector[k]];
     const fade =
       (1 - smooth(reach[0], reach[1], d)) *
-      smooth(FRONT[0], FRONT[1], front[s]) *
-      (Number.isFinite(cut)
-        ? smooth(cut, cut - Math.min(cut * HAND_OVER, HAND_OVER_M), d)
+      smooth(FRONT[0], FRONT[1], front[k]) *
+      (Number.isFinite(c)
+        ? smooth(c, c - Math.min(c * HAND_OVER, HAND_OVER_M), d)
         : 1);
-    const h = heads[idx[s]];
+    if (fade <= 0) {
+      continue;
+    }
+    const h = heads[idx[k]];
     out[n].set(h.x, h.y, h.z, fade);
     n += 1;
   }
@@ -293,11 +357,7 @@ function smooth(a: number, b: number, x: number): number {
 /** A set's per-frame choice for a tier: what it keeps between frames. */
 function chooser(set: MirrorSet, tier: DeviceTier) {
   const most = set.slots[tier];
-  const scratch = {
-    idx: Array.from({ length: most + 1 }, () => -1),
-    dist: Array.from({ length: most + 1 }, () => Number.POSITIVE_INFINITY),
-    front: Array.from({ length: most + 1 }, () => 0),
-  };
+  const scratch = rankScratch();
   const out = set.heads.array as Vector4[];
   const pick = { most, reach: set.reach };
   return (heads: readonly Vector3[], view: { eye: Vector3; look: Vector3 }) => {
