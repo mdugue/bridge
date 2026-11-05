@@ -5,17 +5,10 @@ import {
   Color,
   DataTexture,
   FloatType,
-  LinearFilter,
-  LinearMipmapLinearFilter,
   MeshStandardNodeMaterial,
   NearestFilter,
-  NoColorSpace,
-  RedFormat,
   RGBAFormat,
-  RGFormat,
   Sphere,
-  Texture,
-  UnsignedByteType,
   Vector2,
   Vector3,
   Vector4,
@@ -26,6 +19,7 @@ import type {
   UniformNode,
   WebGPURenderer,
   Matrix4,
+  Texture,
 } from "three/webgpu";
 import {
   abs,
@@ -75,8 +69,6 @@ import type {
   GroundPrepInput,
   SheetPrep,
 } from "@/lib/city/ground-prep";
-import { decodeGreyPng } from "@/lib/city/png-raster";
-import type { GreyRaster } from "@/lib/city/png-raster";
 import { colonyCropUv } from "@/lib/city/cultivated";
 import { packMarkingTable } from "@/lib/city/markings";
 import type { MarkingTable } from "@/lib/city/markings";
@@ -92,11 +84,7 @@ import type { TerrainExtras } from "@/lib/city/tileset";
 import { groundUnderDesign } from "./design-site";
 import { colonyGarden } from "./cultivated-layer";
 import { prepareGroundOffThread } from "./ground-prep-client";
-import {
-  fetchOptionalJson,
-  isAbortError,
-  untilAborted,
-} from "./fetch-optional";
+import { fetchOptionalJson, untilAborted } from "./fetch-optional";
 import {
   bsplineSample,
   gdNoise,
@@ -112,12 +100,8 @@ import type { GroundColour, GroundFields, GroundInputs } from "./ground-detail";
 import { paintLandcoverSplat, splatScaleFor } from "./landcover-splat";
 import type { LandcoverSplat } from "./landcover-splat";
 import { PAPER_HEX, paperGroundOn } from "./paper-scene";
-import {
-  dropDataOnUpload,
-  fetchRasterBytes,
-  inRasterTurn,
-  uploadNow,
-} from "./raster-upload";
+import { loadDataRaster } from "./raster-upload";
+import type { LoadedRaster, RasterInspect, RasterLook } from "./raster-upload";
 import { roadMarkings } from "./road-markings";
 import { dataXY, rasterUv } from "./shader-chunks";
 import { splatSize } from "./splat-uv";
@@ -133,8 +117,6 @@ import {
   disposeGeometry,
   isSceneShared,
   markSceneShared,
-  textureBytes,
-  trackTexture,
 } from "./three-utils";
 import type { AnyAttribute } from "./three-utils";
 import { createWaterLayer } from "./water-layer";
@@ -235,31 +217,6 @@ export interface GroundUniforms {
   sunDirection: UniformNode<"vec3", Vector3>;
 }
 
-/** A loaded raster and its size in texels. */
-interface LoadedRaster {
-  height: number;
-  texture: Texture;
-  width: number;
-  /** the decoded bytes, until the upload drops them (not a bitmap's) */
-  data?: Uint8Array;
-}
-
-/** Reads a raster's decoded bytes before its upload may drop them. */
-type RasterInspect = (data: Uint8Array, width: number, height: number) => void;
-
-/**
- * How a data raster is sampled: its channels (the bake interleaves them in
- * a greyscale PNG), NEAREST for ids and LINEAR for fields, a mip chain
- * where it is read from afar. Set before the upload: the format and the
- * mip chain are fixed by it.
- */
-interface RasterLook {
-  anisotropy?: number;
-  channels: 1 | 2 | 4;
-  filter: "linear" | "nearest";
-  mipmaps?: boolean;
-}
-
 /** Ids (class, paving, sports grounds, markings): exact texels. */
 const idLook = (channels: 1 | 4): RasterLook => ({
   channels,
@@ -275,164 +232,8 @@ const NDVI_LOOK: RasterLook = {
   filter: "linear",
   mipmaps: true,
   anisotropy: 16,
+  browserFallback: true,
 };
-
-/** Applies `look` and records the texture's GPU bytes (trackTexture). */
-function lookAs(raster: LoadedRaster, look: RasterLook): void {
-  const { texture: map } = raster;
-  const filter = look.filter === "nearest" ? NearestFilter : LinearFilter;
-  map.magFilter = filter;
-  map.minFilter = look.mipmaps ? LinearMipmapLinearFilter : filter;
-  map.generateMipmaps = look.mipmaps === true;
-  if (look.anisotropy) {
-    map.anisotropy = look.anisotropy;
-  }
-  map.colorSpace = NoColorSpace;
-  trackTexture(
-    map,
-    textureBytes(
-      raster.width,
-      raster.height,
-      look.channels,
-      look.mipmaps === true
-    )
-  );
-}
-
-/**
- * Loads a DATA raster as a texture holding exactly the baked bytes, set up
- * as `look` says and on the GPU when it resolves (raster-upload.ts: decoded
- * and uploaded in its turn, one raster at a time site-wide, its CPU bytes
- * dropped at the upload). The PNG is inflated and unfiltered here
- * (lib/city/png-raster.ts), not by the browser's image decoder: WebKit
- * colour-manages (and dithers) untagged greyscale even with
- * `colorSpaceConversion: "none"`, which on iPhones rewrote class ids into
- * speckles of the neighbouring classes' colours. The inflate is async and
- * the unfiltering yields every few hundred rows, so a 4096² raster does not
- * stall the frame it streams in with. A single-channel PNG the decoder does
- * not handle falls back to the browser (`loadBitmapTexture`). Rejects on a
- * network failure, a failed upload and an abort.
- */
-async function loadRasterTexture(
-  url: string,
-  look: RasterLook,
-  renderer?: WebGPURenderer,
-  signal?: AbortSignal,
-  inspect?: RasterInspect
-): Promise<LoadedRaster> {
-  const bytes = await fetchRasterBytes(url, signal);
-  return await inRasterTurn(async () => {
-    const raster = await decodeRaster(bytes, look.channels, signal);
-    if (inspect && raster.data) {
-      inspect(raster.data, raster.width, raster.height);
-    }
-    lookAs(raster, look);
-    uploadNow(raster.texture, renderer);
-    return {
-      texture: raster.texture,
-      width: raster.width,
-      height: raster.height,
-    };
-  }, signal);
-}
-
-/** The texture format of an interleaved raster with this many channels. */
-function rasterFormat(channels: 1 | 2 | 4) {
-  if (channels === 4) {
-    return RGBAFormat;
-  }
-  return channels === 2 ? RGFormat : RedFormat;
-}
-
-/** The raster's texture from its PNG bytes (see `loadRasterTexture`). */
-async function decodeRaster(
-  bytes: Uint8Array<ArrayBuffer>,
-  channels: 1 | 2 | 4,
-  signal?: AbortSignal
-): Promise<LoadedRaster> {
-  let raster: GreyRaster;
-  try {
-    raster = await decodeGreyPng(bytes);
-  } catch (error) {
-    // The browser's decoder cannot de-interleave a multi-channel raster.
-    if (channels > 1) {
-      throw error;
-    }
-    return await loadBitmapTexture(new Blob([bytes]));
-  }
-  signal?.throwIfAborted();
-  // A two- or four-channel raster is baked as a greyscale PNG two or four
-  // times as wide, its bytes interleaved (R0 G0 B0 A0 R1 …) — exactly the
-  // RG8 / RGBA8 layout.
-  const width = raster.width / channels;
-  const { height } = raster;
-  const dataTexture = new DataTexture(
-    raster.data,
-    width,
-    height,
-    rasterFormat(channels),
-    UnsignedByteType
-  );
-  // Row 0 is the PNG's first (northern) row, as with the bitmap upload
-  // (flipY = false; v grows southward).
-  dataTexture.flipY = false;
-  dataTexture.unpackAlignment = 1;
-  dataTexture.needsUpdate = true;
-  // 16 MB of CPU bytes for a 4096² raster: dead weight once the GPU has
-  // them. Twelve resident copies took mobile Safari past its per-tab
-  // memory limit when these were bitmaps.
-  dropDataOnUpload(dataTexture);
-  return { texture: dataTexture, width, height, data: raster.data };
-}
-
-/**
- * A raster that is a feature, not a requirement: absent, undecodable or
- * failed to upload → null (the ground goes without it). Rethrows an abort.
- */
-async function loadOptionalRaster(
-  url: string,
-  look: RasterLook,
-  renderer?: WebGPURenderer,
-  signal?: AbortSignal,
-  inspect?: RasterInspect
-): Promise<LoadedRaster | null> {
-  try {
-    return await loadRasterTexture(url, look, renderer, signal, inspect);
-  } catch (error) {
-    if (isAbortError(error)) {
-      throw error;
-    }
-    return null;
-  }
-}
-
-/**
- * The browser-decoded fallback for a raster the PNG decoder rejects:
- * `createImageBitmap` decodes in the browser's image workers, already in the
- * orientation three needs (`imageOrientation: "none"` = flipY false).
- */
-async function loadBitmapTexture(
-  blob: Blob
-): Promise<{ height: number; texture: Texture; width: number }> {
-  const bitmap = await createImageBitmap(blob, {
-    imageOrientation: "none",
-    premultiplyAlpha: "none",
-    colorSpaceConversion: "none",
-  });
-  const bitmapTexture = new Texture(bitmap);
-  bitmapTexture.flipY = false;
-  bitmapTexture.format = RedFormat;
-  bitmapTexture.needsUpdate = true;
-  // Not closed after the upload, unlike the data rasters' bytes: three may
-  // upload the image again (a re-created GPU texture reads `image`), and a
-  // closed bitmap uploads empty — the ground would turn to class 0. Freed
-  // with the texture instead. Rare: only a PNG our decoder rejects lands
-  // here.
-  bitmapTexture.addEventListener("dispose", () => {
-    bitmap.close();
-  });
-  return { texture: bitmapTexture, width: bitmap.width, height: bitmap.height };
-}
 
 /**
  * The land-cover splatmap as a NEAREST-filtered data texture (class ids must
@@ -445,7 +246,11 @@ async function loadSplatTexture(
   signal?: AbortSignal,
   inspect?: RasterInspect
 ): Promise<LoadedRaster | null> {
-  return await loadOptionalRaster(url, idLook(1), renderer, signal, inspect);
+  return await loadDataRaster(
+    url,
+    { ...idLook(1), browserFallback: true },
+    { renderer, signal, inspect }
+  );
 }
 
 /** A class raster and the colour splat painted from it. */
@@ -541,7 +346,7 @@ export async function loadNdviTexture(
   renderer?: WebGPURenderer,
   signal?: AbortSignal
 ): Promise<Texture | null> {
-  const raster = await loadOptionalRaster(url, NDVI_LOOK, renderer, signal);
+  const raster = await loadDataRaster(url, NDVI_LOOK, { renderer, signal });
   return raster?.texture ?? null;
 }
 
@@ -557,7 +362,7 @@ async function loadSurfaceTexture(
   renderer?: WebGPURenderer,
   signal?: AbortSignal
 ): Promise<Texture | null> {
-  const raster = await loadOptionalRaster(url, idLook(4), renderer, signal);
+  const raster = await loadDataRaster(url, idLook(4), { renderer, signal });
   return raster?.texture ?? null;
 }
 
@@ -572,7 +377,7 @@ async function loadEdgesTexture(
   renderer?: WebGPURenderer,
   signal?: AbortSignal
 ): Promise<Texture | null> {
-  const raster = await loadOptionalRaster(url, FIELD_LOOK, renderer, signal);
+  const raster = await loadDataRaster(url, FIELD_LOOK, { renderer, signal });
   return raster?.texture ?? null;
 }
 
@@ -614,12 +419,10 @@ async function loadIndexedRaster(
   } catch {
     return null;
   }
-  const raster = await loadOptionalRaster(
-    rasterUrl,
-    idLook(4),
+  const raster = await loadDataRaster(rasterUrl, idLook(4), {
     renderer,
-    signal
-  ).catch((error: unknown) => {
+    signal,
+  }).catch((error: unknown) => {
     table.dispose();
     throw error;
   });
@@ -666,7 +469,7 @@ async function loadColonyTexture(
   renderer?: WebGPURenderer,
   signal?: AbortSignal
 ): Promise<Texture | null> {
-  const raster = await loadOptionalRaster(url, FIELD_LOOK, renderer, signal);
+  const raster = await loadDataRaster(url, FIELD_LOOK, { renderer, signal });
   return raster?.texture ?? null;
 }
 

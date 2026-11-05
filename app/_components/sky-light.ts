@@ -1,12 +1,9 @@
 import {
-  DataArrayTexture,
   DataTexture,
   LinearFilter,
-  LinearMipmapLinearFilter,
   MeshStandardNodeMaterial,
   NoColorSpace,
   RedFormat,
-  RGBAFormat,
   UnsignedByteType,
   Vector2,
 } from "three/webgpu";
@@ -41,8 +38,6 @@ import {
   texture,
   vec2,
 } from "three/tsl";
-import { decodeGreyPng } from "@/lib/city/png-raster";
-import type { GreyRaster } from "@/lib/city/png-raster";
 import {
   FACADE_SVF_GAIN,
   FACADE_SVF_OFFSET_M,
@@ -55,19 +50,13 @@ import {
   NEAR_MAX_DEG,
 } from "@/lib/city/skyview";
 import { groundUnderDesign } from "./design-site";
-import { isAbortError } from "./fetch-optional";
 import { nightShadowFree } from "./lantern";
 import { setGraph, setSlots, slotTexture, slotUniform } from "./material-slots";
 import type { Slots } from "./material-slots";
 import { dataXY, rasterUv } from "./shader-chunks";
 import type { F, Tex, V2, V3 } from "./shader-chunks";
-import {
-  dropDataOnUpload,
-  fetchRasterBytes,
-  inRasterTurn,
-  uploadNow,
-} from "./raster-upload";
-import { sceneShared, textureBytes, trackTexture } from "./three-utils";
+import { loadDataRaster } from "./raster-upload";
+import { sceneShared } from "./three-utils";
 
 /**
  * The city's large-scale light (plan 033), from two baked rasters
@@ -445,70 +434,21 @@ export const retainOpenSkyTexture = white.retain;
 // --- loading -------------------------------------------------------------------------
 
 /**
- * A baked light raster: fetched, then decoded by the viewer's own PNG
- * decoder (never the browser's), made a texture by `make` and on the GPU in
- * its turn (raster-upload.ts: one raster at a time site-wide, its CPU bytes
- * dropped at the upload). Absent, undecodable, refused by `make` or failed
- * to upload → null (the light stays as it was); rethrows an abort.
- */
-async function loadLightRaster<T extends Texture>(
-  url: string,
-  make: (raster: GreyRaster) => T | null,
-  renderer?: WebGPURenderer,
-  signal?: AbortSignal
-): Promise<T | null> {
-  try {
-    const bytes = await fetchRasterBytes(url, signal);
-    return await inRasterTurn(async () => {
-      const raster = await decodeGreyPng(bytes);
-      signal?.throwIfAborted();
-      const tex = make(raster);
-      if (tex) {
-        tex.flipY = false;
-        tex.unpackAlignment = 1;
-        tex.colorSpace = NoColorSpace;
-        tex.needsUpdate = true;
-        dropDataOnUpload(tex);
-        uploadNow(tex, renderer);
-      }
-      return tex;
-    }, signal);
-  } catch (error) {
-    if (isAbortError(error)) {
-      throw error;
-    }
-    return null;
-  }
-}
-
-/**
  * The sky-view raster as a RED texture, LINEAR + mipmapped (a soft field).
- * See `loadLightRaster`.
+ * Absent, undecodable or failed to upload → null (the light stays as it
+ * was); rethrows an abort.
  */
 export async function loadSkyViewTexture(
   url: string,
   signal?: AbortSignal,
   renderer?: WebGPURenderer
 ): Promise<Texture | null> {
-  return await loadLightRaster(
+  const raster = await loadDataRaster(
     url,
-    (raster) => {
-      const tex = new DataTexture(
-        raster.data,
-        raster.width,
-        raster.height,
-        RedFormat,
-        UnsignedByteType
-      );
-      tex.magFilter = LinearFilter;
-      tex.minFilter = LinearMipmapLinearFilter;
-      tex.generateMipmaps = true;
-      trackTexture(tex, textureBytes(raster.width, raster.height, 1, true));
-      return tex;
-    },
-    renderer,
-    signal
+    { channels: 1, filter: "linear", mipmaps: true },
+    { renderer, signal }
   );
+  return raster?.texture ?? null;
 }
 
 /**
@@ -522,29 +462,11 @@ export async function loadHorizonTexture(
   url: string,
   signal?: AbortSignal,
   renderer?: WebGPURenderer
-): Promise<DataArrayTexture | null> {
-  return await loadLightRaster(
+): Promise<Texture | null> {
+  const raster = await loadDataRaster(
     url,
-    (raster) => {
-      const n = raster.width / 4;
-      if (raster.height !== n * HORIZON_TEXTURE_LAYERS) {
-        return null;
-      }
-      const tex = new DataArrayTexture(
-        raster.data,
-        n,
-        n,
-        HORIZON_TEXTURE_LAYERS
-      );
-      tex.format = RGBAFormat;
-      tex.type = UnsignedByteType;
-      tex.magFilter = LinearFilter;
-      tex.minFilter = LinearFilter;
-      tex.generateMipmaps = false;
-      trackTexture(tex, textureBytes(n, n * HORIZON_TEXTURE_LAYERS, 4, false));
-      return tex;
-    },
-    renderer,
-    signal
+    { channels: 4, filter: "linear", layers: HORIZON_TEXTURE_LAYERS },
+    { renderer, signal }
   );
+  return raster?.texture ?? null;
 }
