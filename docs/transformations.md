@@ -4945,7 +4945,7 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   depth, 8–28 m; without GLO-30 the site's p90 − p2 as before. Unna
   28 → 12.4 m (a one-sided slope below the Haar is no valley, 🗃️ below),
   Munich 15.1 → 10.9 m, the rest unchanged. Not yet judged on a real GPU.
-- **River mist** `❝ taken` `≈ assumed` — DLM water mask (the painted splat's alpha) → a drifting,
+- **River mist** `❝ taken` `≈ assumed` — seen along the water only, gone as the eye looks down on it; DLM water mask (the painted splat's alpha) → a drifting,
   sun-lit mist sheet over the Elbe, always on. None within 120 m of
   the eye, full from 1.2 km, at most 24 % opaque and only 30 % of the way
   from the sky's tint to white (it was full from 90 m at up to 62 % and
