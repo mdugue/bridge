@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { Vector3, Vector4 } from "three/webgpu";
-import { packedReach, rankReflected, rankScratch } from "./lamp-reflections";
+import {
+  GLINT_EASE_S,
+  glintEaser,
+  packedReach,
+  rankReflected,
+  rankScratch,
+} from "./lamp-reflections";
 
 const slots = (n: number) => Array.from({ length: n }, () => new Vector4());
 const eye = new Vector3(0, 10, 0);
@@ -67,5 +73,34 @@ describe("packedReach", () => {
   test("a lamp without the bake's reach reaches as far as it looks", () => {
     const steps = 63 * (1 + 64 + 64 ** 2 + 64 ** 3);
     expect(packedReach(null)).toEqual([steps, steps]);
+  });
+});
+
+const lamp = (x: number, w = 1) => new Vector4(x, 5, 0, w);
+
+describe("glintEaser", () => {
+  test("a lamp the choice takes up fades in, one it lets go fades out", () => {
+    const ease = glintEaser(4);
+    const out = slots(4);
+    // the first frame shows the choice as it is
+    expect(ease([lamp(0)], 1, 0, out)).toBe(1);
+    expect(out[0].w).toBeCloseTo(1, 5);
+    // a frame later the choice swaps lamp 0 for lamp 10: both show, eased
+    expect(ease([lamp(10)], 1, 1 / 60, out)).toBe(2);
+    const shown = new Map(out.slice(0, 2).map((v) => [v.x, v.w]));
+    expect(shown.get(0)).toBeGreaterThan(0.9);
+    expect(shown.get(10)).toBeLessThan(0.1);
+    // after six of the ease's times only the new one is left
+    expect(ease([lamp(10)], 1, 6 * GLINT_EASE_S, out)).toBe(1);
+    expect(out[0].x).toBe(10);
+    expect(out[0].w).toBeGreaterThan(0.95);
+  });
+
+  test("never more than its slots, the brightest first", () => {
+    const ease = glintEaser(2);
+    const out = slots(2);
+    ease([lamp(0), lamp(1)], 2, 0, out);
+    expect(ease([lamp(2), lamp(3)], 2, 0.1, out)).toBe(2);
+    expect(out.map((v) => v.x).toSorted((a, b) => a - b)).toEqual([0, 1]);
   });
 });

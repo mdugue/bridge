@@ -3308,7 +3308,7 @@ async function bootApp(
       setMapAltitude(camera.position.y - groundY);
       // Repoint the shared real lamp lights at the nearest heads.
       lampLights.updateNearest(camera.position);
-      lampReflections.update(camera.position);
+      lampReflections.update(camera.position, elapsed);
       lantern.follow(
         camera.position,
         shadowViewDir,
@@ -3330,7 +3330,7 @@ async function bootApp(
     eye.set(pivot.x, pivot.y + equivalent, pivot.z);
     setMapAltitude(equivalent);
     lampLights.updateNearest(eye);
-    lampReflections.update(eye);
+    lampReflections.update(eye, elapsed);
     lantern.off();
     stepVegetation(elapsed, eye, tick);
     return equivalent;

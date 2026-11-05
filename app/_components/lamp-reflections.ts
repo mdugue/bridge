@@ -3,13 +3,13 @@ import {
   MeshBasicNodeMaterial,
   PlaneGeometry,
   Vector2,
+  Vector3,
   Vector4,
 } from "three/webgpu";
 import type {
   InstancedInterleavedBuffer,
   UniformArrayNode,
   UniformNode,
-  Vector3,
 } from "three/webgpu";
 import {
   abs,
@@ -497,8 +497,8 @@ export interface LampReflections {
   /** the heads by the tracks (tiles stream in and out) */
   setHeads: (tracks: readonly Vector3[]) => void;
   setNightFactor: (t: number) => void;
-  /** chooses the lamps for the eye at `eye` (world) */
-  update: (eye: Vector3) => void;
+  /** chooses the lamps for the eye at `eye` (world) at `now` (s) */
+  update: (eye: Vector3, now: number) => void;
   /** empties the shared arrays: the next page's scene starts with none */
   dispose: () => void;
 }
@@ -619,15 +619,87 @@ function smooth(a: number, b: number, x: number): number {
   return t * t * (3 - 2 * t);
 }
 
+/** How long (s) a lamp's glint takes to come or go (to 1/e): a lamp the
+ *  choice takes up or lets go of as the eye walks on — a sector's
+ *  nearest handed to the next, a lamp crossing into another sector, a
+ *  tile streaming in or out — fades rather than switching. */
+export const GLINT_EASE_S = 0.5;
+
+/** A lamp that glints or is fading: its head, its shown fade and the
+ *  fade the choice wants of it now. */
+interface Glint {
+  head: Vector3;
+  shown: number;
+  wanted: number;
+}
+
+/** A lamp by its place (a tile that lands again brings new vectors). */
+const keyOf = (v: Vector4) =>
+  `${Math.round(v.x * 10)} ${Math.round(v.y * 10)} ${Math.round(v.z * 10)}`;
+
+/** The glints that ease toward each frame's choice (`rankReflected`):
+ *  writes the `most` brightest into `out`, returns how many. */
+export function glintEaser(most: number) {
+  const glints = new Map<string, Glint>();
+  const order: Glint[] = [];
+  let last: number | null = null;
+  return (
+    wanted: readonly Vector4[],
+    n: number,
+    now: number,
+    out: Vector4[]
+  ) => {
+    const dt =
+      last === null ? Number.POSITIVE_INFINITY : Math.max(0, now - last);
+    last = now;
+    const ease = 1 - Math.exp(-dt / GLINT_EASE_S);
+    for (const g of glints.values()) {
+      g.wanted = 0;
+    }
+    for (let i = 0; i < n; i += 1) {
+      const w = wanted[i];
+      const key = keyOf(w);
+      const g = glints.get(key) ?? {
+        head: new Vector3(w.x, w.y, w.z),
+        shown: 0,
+        wanted: 0,
+      };
+      g.wanted = w.w;
+      glints.set(key, g);
+    }
+    order.length = 0;
+    for (const [key, g] of glints) {
+      g.shown += (g.wanted - g.shown) * ease;
+      if (g.wanted === 0 && g.shown < 0.01) {
+        glints.delete(key);
+      } else {
+        order.push(g);
+      }
+    }
+    // the brightest keep the slots: one coming in takes a slot as one
+    // going out has faded under it
+    order.sort((a, b) => b.shown - a.shown);
+    const count = Math.min(order.length, most);
+    for (let i = 0; i < count; i += 1) {
+      const { head, shown } = order[i];
+      out[i].set(head.x, head.y, head.z, shown);
+    }
+    return count;
+  };
+}
+
 /** A set's per-frame choice for a tier: what it keeps between frames. */
 function chooser(set: MirrorSet, tier: DeviceTier) {
   const most = set.slots[tier];
   const scratch = rankScratch();
+  const wanted = Array.from({ length: most }, () => new Vector4());
   const out = set.heads.array as Vector4[];
   const pick = { most, reach: set.reach };
-  return (heads: readonly Vector3[], eye: Vector3) => {
-    set.count.value =
-      heads.length > 0 ? rankReflected(heads, eye, pick, out, scratch) : 0;
+  const ease = glintEaser(most);
+  return (heads: readonly Vector3[], eye: Vector3, now: number) => {
+    const n =
+      heads.length > 0 ? rankReflected(heads, eye, pick, wanted, scratch) : 0;
+    set.count.value = ease(wanted, n, now, out);
   };
 }
 
@@ -648,9 +720,9 @@ export function createLampReflections(tier: DeviceTier): LampReflections {
     setNightFactor: (t) => {
       night = t;
     },
-    update: (eye) => {
+    update: (eye, now) => {
       const lit = night > 0.001;
-      tracks(lit ? heads : none, eye);
+      tracks(lit ? heads : none, eye, now);
     },
     dispose: () => {
       TRACKS.count.value = 0;
