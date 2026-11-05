@@ -408,6 +408,11 @@ export function hitsInSets<T>(
   return out.sort((a, b) => a.distance - b.distance);
 }
 
+/** A pier just outside its deck's outline still belongs to it (m): a
+ *  bridge's ask (bridge-ask.ts) and its outline (selection-shape.ts) reach
+ *  as far. */
+export const PIER_REACH = 12;
+
 /** How far (x, z) lies from the ring's edge in plan; 0 inside it. */
 export function ringDistanceXz(
   ring: readonly (readonly [number, number])[],

@@ -10,10 +10,9 @@ import {
   Vector3,
 } from "three/webgpu";
 import type { BufferGeometry, Mesh, Object3D } from "three/webgpu";
-import { ringDistanceXz } from "@/lib/city/ask-solids";
+import { PIER_REACH, ringDistanceXz } from "@/lib/city/ask-solids";
 import type { AskSolid, Slab } from "@/lib/city/ask-solids";
 import { liveTriangles } from "@/lib/city/city-mesh";
-import { PIER_REACH } from "./bridge-ask";
 import { bvhBuilding } from "./bvh-client";
 import type { CityLayer } from "./city-layer";
 
