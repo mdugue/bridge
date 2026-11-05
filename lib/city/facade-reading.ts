@@ -41,6 +41,7 @@ export function isFacadeReadings(v: unknown): v is FacadeReadings {
   }
   const { attribution, buildings } = v as Record<string, unknown>;
   return (
+    Object.keys(v).length === 2 &&
     typeof attribution === "string" &&
     typeof buildings === "object" &&
     buildings !== null &&

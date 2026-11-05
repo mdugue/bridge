@@ -3,6 +3,7 @@ import {
   BoxGeometry,
   Color,
   DoubleSide,
+  FrontSide,
   Mesh,
   MeshBasicNodeMaterial,
   MeshStandardNodeMaterial,
@@ -319,4 +320,41 @@ test("swapped compiles a ribbon's stand-in, and puts its material back", () => {
   expect(w.paper.swapped(w.solid, () => w.solid.material)).toBe(
     w.solid.material
   );
+});
+
+test("a landing tile's ribbon compiles its stand-in, and keeps it till it hangs", () => {
+  const w = ribbonWorld();
+  // not in the scene yet: its root hangs once it has compiled
+  const landing = new Mesh(
+    new BoxGeometry(),
+    new MeshStandardNodeMaterial({ side: FrontSide })
+  );
+  const own = new MeshStandardNodeMaterial({ side: DoubleSide });
+  own.positionNode = positionLocal.add(vec3(1, 0, 0));
+  landing.material = own;
+  const compiled = w.paper.swapped(landing, () => landing.material);
+  expect(compiled).not.toBe(own);
+  expect(compiled.side).toBe(DoubleSide);
+  expect(compiled.positionNode).toBe(own.positionNode);
+  // another tile changes the scene before it hangs: the stand-in stays
+  let freed = 0;
+  compiled.addEventListener("dispose", () => {
+    freed += 1;
+  });
+  w.paper.sceneChanged();
+  w.paper.begin()();
+  expect(freed).toBe(0);
+  // it hangs: the frame draws the very stand-in it compiled
+  w.scene.add(landing);
+  w.paper.sceneChanged();
+  const restore = w.paper.begin();
+  drawThrough(w.renderer, landing);
+  restore();
+  expect(w.renderer.drawn.at(-1)).toBe(compiled);
+  // the tile leaves and frees its material: the stand-in goes at the next gather
+  w.scene.remove(landing);
+  own.dispose();
+  w.paper.sceneChanged();
+  w.paper.begin()();
+  expect(freed).toBe(1);
 });

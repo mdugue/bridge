@@ -1341,17 +1341,22 @@ export async function dressTerrain(
     heightAt,
     heightBytes,
     dispose: () => {
-      // Shares the tile's positions; only its own index (and normals) go —
-      // not the site's (GridShare), which other tiles draw with.
-      detachShared(mesh.geometry);
-      if (sheets) {
-        disposeGeometry(sheets.water);
-        if (sheets.mist !== sheets.water) {
-          disposeGeometry(sheets.mist);
+      try {
+        // Shares the tile's positions; only its own index (and normals) go —
+        // not the site's (GridShare), which other tiles draw with.
+        detachShared(mesh.geometry);
+        if (sheets) {
+          disposeGeometry(sheets.water);
+          if (sheets.mist !== sheets.water) {
+            disposeGeometry(sheets.mist);
+          }
         }
+        water?.dispose();
+      } finally {
+        // (the rasters and their shares whatever else failed: left held, they
+        // stay on the GPU and the tile's other level weighs half for good)
+        free();
       }
-      water?.dispose();
-      free();
     },
   };
 }

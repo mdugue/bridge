@@ -85,6 +85,7 @@ test.each([
   ["no file", null],
   ["no attribution", { buildings: {} }],
   ["no buildings", { attribution: "a" }],
+  ["a member it does not know", { attribution: "a", buildings: {}, extra: 1 }],
   ["buildings as a list", { attribution: "a", buildings: [] }],
   ["two readings", { attribution: "a", buildings: { b: [1, 1] } }],
   ["a reading as text", { attribution: "a", buildings: { b: ["1", 1, 0] } }],

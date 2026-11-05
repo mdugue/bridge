@@ -1,8 +1,8 @@
 /**
  * The triangle-soup kit the runtime's line and bridge layers build their
  * meshes with (rail-layer.ts, bridge-layer.ts, tram-layer.ts,
- * riverside-layer.ts, catenary-layer.ts), and their palette (`COLORS`): an accumulator of positions and per-vertex normals
- * in the Y-up scene frame, the primitives that push into it — a triangle
+ * riverside-layer.ts, catenary-layer.ts), and their palette (`COLORS`): an
+ * accumulator of positions and per-vertex normals in the Y-up scene frame, the primitives that push into it — a triangle
  * or quad wound to face its normal (the one guarantee: every material is
  * FrontSide), a ribbon along a run of points, a footprint's slab, a box
  * column, a strut — and the finish into a mesh of the scene-wide material

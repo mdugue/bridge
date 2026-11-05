@@ -145,7 +145,11 @@ ADR 0041).
   `parseBakeFile`, never `readJson(…) as T`; the build fails on a
   mismatch; `bake-files.test.ts` parses every committed file, and
   `features.test.ts` keeps the value rules a shape does not say. The
-  viewer imports a schema module by type only. A new file takes a schema.
+  viewer imports a schema module by type only. Excused until a later
+  schema pass, still cast: the crown and canopy layers
+  (`scripts/coarse-crowns.ts`, `scripts/prepare/side-bakes.ts`), the lines
+  and areas (`scripts/prepare/lines.ts`) and the land-cover legend's
+  `water`. A new file takes a schema.
 - Nothing whose alpha or values carry data goes through an image resize or
   the browser's image decoder; class rasters are NEAREST and decoded by
   `lib/city/png-raster.ts`.
@@ -195,7 +199,8 @@ uploaded; nothing it names is fetched (ADR 0054).
 - Exact pins for the three.js stack, the glTF build tools, `delatin`, the
   framework trio, the lint tools and `ultracite` (bump `oxlint` and
   `oxlint-tsgolint` together), `suncalc` and `zod`, whose version is in
-  the key of every bake that reads a schema (the ground's family too); caret for the rest; the npm MCP servers in
+  the key of every bake that reads a schema (the ground's family too);
+  caret for the rest; the npm MCP servers in
   `.mcp.json` exactly. Bun comes from `packageManager` (≥ 1.4 for
   `Bun.WebView`; the web session's start hook upgrades it).
 - No type shim for `three-mesh-bvh` (it augments `three` itself).

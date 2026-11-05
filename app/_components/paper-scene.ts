@@ -506,6 +506,17 @@ export function createPaperScene(
   // leaving frees its own at the next gather.
   const standIns = new Map<string, Material>();
   let standInSources: Material[] = [];
+  // Compiled ahead of the scene (a landing tile's root hangs later): their
+  // stand-ins stay until their material goes, whatever a gather sees.
+  const compiledAhead = new Set<Material>();
+  const compileAhead = (source: Material) => {
+    if (!compiledAhead.has(source)) {
+      compiledAhead.add(source);
+      source.addEventListener("dispose", () => {
+        compiledAhead.delete(source);
+      });
+    }
+  };
   let worn: Partial<Record<PaperKind, Map<Material, Material>>> = {};
   const standInFor = (kind: PaperKind, source: Material): Material => {
     const base = materials[kind];
@@ -537,7 +548,7 @@ export function createPaperScene(
   const dropStaleStandIns = () => {
     const live = new Set<string>();
     for (const base of [materials.paper, materials.ink]) {
-      for (const source of standInSources) {
+      for (const source of [...standInSources, ...compiledAhead]) {
         live.add(standInKey(base, source));
       }
     }
@@ -672,10 +683,16 @@ export function createPaperScene(
       }
       // A compile takes no object function: it finds the stand-in on the
       // mesh, for its synchronous half (where the render object is made).
+      // (not from the gathered list: a landing tile is not in the scene yet)
       const mesh = object as Object3D & { material?: Material | Material[] };
-      const wearing = wornBy(kind);
       const wornBefore = mesh.material;
-      const wear = (m: Material) => wearing.get(m) ?? m;
+      const wear = (m: Material) => {
+        if (kind === "figure" || !needsStandIn(m)) {
+          return m;
+        }
+        compileAhead(m);
+        return standInFor(kind, m);
+      };
       if (wornBefore) {
         mesh.material = Array.isArray(wornBefore)
           ? wornBefore.map(wear)
