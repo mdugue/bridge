@@ -35,10 +35,10 @@
       "download": "https://download.openstreetmap.fr/extracts/europe/germany/nordrhein_westfalen/arnsberg.osm.pbf",
       "products": {
         "osmBuildings": {
-          "dataAsOf": "2026-11-01 (state.txt timestamp 2026-11-01T01:17:45Z; re-baked 2026-11-01 with every step)"
+          "dataAsOf": "2026-11-05 (state.txt timestamp 2026-11-05T01:06:41Z; re-baked 2026-11-05 with every step but facades, windows, transit, landmark-facts and murals)"
         },
         "all": {
-          "dataAsOf": "2026-11-01 (state.txt timestamp 2026-11-01T01:17:45Z; re-baked 2026-11-01 with every step)"
+          "dataAsOf": "2026-11-05 (state.txt timestamp 2026-11-05T01:06:41Z; re-baked 2026-11-05 with every step but facades, windows, transit, landmark-facts and murals)"
         }
       }
     }
