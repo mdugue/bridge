@@ -614,7 +614,6 @@ def classify_areas(
 # settlement is the DLM's built land (or OSM's built landuse), not its
 # parks, sports grounds, allotments or cemeteries. Read where the class
 # raster says path (class 6: the DLM's `ver02_l`, or OSM's paths).
-PATH_CLASS = PATH
 BUILT_LAND = (
     "AX_Wohnbauflaeche",
     "AX_IndustrieUndGewerbeflaeche",
@@ -670,7 +669,7 @@ def path_defaults(
     if cls is None or cls.shape[0] % px:
         return None
     k = cls.shape[0] // px
-    path = (cls == PATH_CLASS).reshape(px, k, px, k).mean(axis=(1, 3)) >= 0.5
+    path = (cls == PATH).reshape(px, k, px, k).mean(axis=(1, 3)) >= 0.5
     if not path.any():
         return np.zeros((px, px), np.uint8)
     town = burn([(g, 1) for g in settlement(tile)], tile, px) > 0

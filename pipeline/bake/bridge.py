@@ -476,7 +476,6 @@ def bastion_piers(ground, axis: Axis, deck_at, stop=None) -> list[float]:
 
 # --- what lies under a deck -----------------------------------------------------------
 
-WATER_CLASS = WATER  # lib/city/landcover.ts WATER_CLASS
 WATER_RUN_M = 4.0  # a stretch over water is at least this long (m)
 
 
@@ -499,9 +498,7 @@ class Wet:
                 continue
             if wet is None:
                 classes = self.tile.classes(tid)
-                wet = part[2] = (
-                    classes == WATER_CLASS if classes is not None else np.zeros((1, 1), bool)
-                )
+                wet = part[2] = classes == WATER if classes is not None else np.zeros((1, 1), bool)
             h, w = wet.shape
             c = np.minimum(((xs[inside] - x0) / (x1 - x0) * w).astype(int), w - 1)
             r = np.minimum(((y1 - ys[inside]) / (y1 - y0) * h).astype(int), h - 1)

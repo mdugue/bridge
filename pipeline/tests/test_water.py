@@ -9,6 +9,7 @@ import shapely
 from PIL import Image
 
 from bake import water
+from bake.classes import PATH
 from bake.water import Grid
 
 BOUNDS = (0.0, 0.0, 200.0, 200.0)
@@ -74,7 +75,7 @@ def test_a_bar_standing_out_of_the_water_is_shore():
     green = np.zeros_like(dry)
     shore = water.reclass(raster, dry, green)
     assert shore["sandM2"] == 20 * 40 and shore["meadowM2"] == 0
-    assert raster[200, 200] == water.SANDY and raster[120, 20] == water.WATER
+    assert raster[200, 200] == PATH and raster[120, 20] == water.WATER
 
 
 def test_a_body_says_where_it_meets_the_tiles_edges_and_at_what_height():

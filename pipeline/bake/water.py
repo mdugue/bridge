@@ -69,7 +69,6 @@ from .classes import BUILTUP, MEADOW, PATH, RAILWAY, ROAD, WATER
 from .common import Tile, column
 from .osm import has_extract, read_osm, tag
 
-SANDY = PATH  # drawn unpaved
 BANK_CLASSES = (BUILTUP, RAILWAY, ROAD)  # a quay, a pier, a landing
 BANK_REACH_M = 3.0
 
@@ -768,7 +767,7 @@ def reclass(raster: np.ndarray, dry: np.ndarray, green: np.ndarray) -> dict:
     sand = target & ~green_hi & ~built
     raster[meadow] = MEADOW
     raster[bank] = nearest[bank]
-    raster[sand] = SANDY
+    raster[sand] = PATH  # drawn unpaved
     a = texel * texel
     return {
         "meadowM2": round(float(meadow.sum() * a)),

@@ -85,7 +85,6 @@ STANDARD_GAUGE = 1.435
 # it (a residential street, a station forecourt): only `embedded` says
 # otherwise there.
 PAVED_CLASSES = {BUILTUP, PATH, ROAD}
-WATER_CLASS = WATER
 SIDE_M = 4.0
 BED_STEP_M = 4.0
 BED_WINDOW_M = 20.0
@@ -191,7 +190,7 @@ class Paving:
         sides = [value_at(self.cls, self.bounds, x + k * nx, y + k * ny) for k in (1, -1)]
         if any(c is None for c in sides):
             return None
-        if all(c in PAVED_CLASSES | {WATER_CLASS} for c in sides) and any(
+        if all(c in PAVED_CLASSES | {WATER} for c in sides) and any(
             c in PAVED_CLASSES for c in sides
         ):
             return "paved"

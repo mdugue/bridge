@@ -86,9 +86,6 @@ function extentOf(obj: CityObject, city: CityFile): number[] | undefined {
   return Number.isFinite(ext[0]) ? ext : undefined;
 }
 
-/** What OSM's per-object file says (osm_buildings.py). */
-type OsmRow = OsmBuildingRow;
-
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
 function positive(v: unknown): number | undefined {
@@ -100,12 +97,12 @@ function positive(v: unknown): number | undefined {
 function osmOf(
   id: string,
   obj: CityObject,
-  osm: Readonly<Record<string, OsmRow | undefined>>
-): OsmRow {
+  osm: Readonly<Record<string, OsmBuildingRow | undefined>>
+): OsmBuildingRow {
   const rows = [osm[id], ...(obj.children ?? []).map((c) => osm[c])].filter(
-    (r): r is OsmRow => r !== undefined
+    (r): r is OsmBuildingRow => r !== undefined
   );
-  const out: OsmRow = {};
+  const out: OsmBuildingRow = {};
   for (const row of rows) {
     for (const [k, v] of Object.entries(row)) {
       (out as Record<string, unknown>)[k] ??= v;
@@ -152,7 +149,7 @@ function directoryEntry(
   id: string,
   obj: CityObject,
   city: CityFile,
-  row: OsmRow,
+  row: OsmBuildingRow,
   wd: string | undefined
 ): WissenBuilding | undefined {
   const all = city.CityObjects;
@@ -280,7 +277,7 @@ export function stadtwissenTile(input: {
   city: CityFile;
   landmarks?: Pick<LandmarkFile, "landmarks">;
   monuments?: MonumentsRead;
-  osm: Readonly<Record<string, OsmRow | undefined>>;
+  osm: Readonly<Record<string, OsmBuildingRow | undefined>>;
   tile: string;
 }): WissenTile {
   const all = input.city.CityObjects;
