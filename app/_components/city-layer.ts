@@ -18,6 +18,7 @@ import type {
 } from "three/webgpu";
 import { buildBvhOffThread, bvhBuilding, bvhLost } from "./bvh-client";
 import { rayEntry } from "./collision";
+import { replayDemolitions } from "./demolitions";
 import { streamTimings } from "./stream-timing";
 import { setPickRay } from "./view-ray";
 import {
@@ -286,9 +287,8 @@ export function hangsShown(
  * Dresses a streamed city mesh: the glTF feature id and place on the wall
  * (the windows', a roof vertex flagged in it) under the names the clay
  * shader reads, the tile's clay material; its BVH comes when a ray needs
- * it (`ensureCityBvh`). `demolished` replays this session's demolitions of
- * the tile, `demolishedGroups` those of ensembles across a tile edge (a
- * part demolished while this tile was not loaded).
+ * it (`ensureCityBvh`). `demolished` and `demolishedGroups` are this
+ * session's demolitions it takes back (demolitions.ts).
  */
 export function dressCity(
   mesh: Mesh,
@@ -388,19 +388,7 @@ export function dressCity(
       geometry.computeBoundsTree();
     }
   };
-  let dead = demolished.size;
-  for (const i of demolished) {
-    alive[i] = 0;
-  }
-  if (demolishedGroups.size > 0) {
-    for (let i = 0; i < count; i += 1) {
-      if (alive[i] === 1 && demolishedGroups.has(table.group[i])) {
-        alive[i] = 0;
-        dead += 1;
-      }
-    }
-  }
-  if (dead > 0) {
+  if (replayDemolitions(alive, table.group, demolished, demolishedGroups) > 0) {
     rebuild();
   }
 
