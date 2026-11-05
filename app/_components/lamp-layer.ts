@@ -123,18 +123,27 @@ function headsWhere(
   });
 }
 
-/** The heads the river mirrors, each with its water's level: those the
- *  bake found seeing the water, over it. */
+/** The heads the river mirrors, each with its water: those the bake
+ *  found seeing the water, over it. */
 function mirroredHeads(places: LampPlaces): LampMirror[] {
   const out: LampMirror[] = [];
   for (let i = 0; i < places.heads.length; i += 1) {
     const head = places.heads[i];
-    const level = places.levels[i];
-    if (level !== null && head.y > level) {
-      out.push({ head, level });
+    const water = places.waters[i];
+    if (water !== null && head.y > water.level) {
+      out.push({ head, ...water });
     }
   }
   return out;
+}
+
+/** A lamp's water, as the bake left it (`w`, `wr`), or null. */
+function waterOf(f: LampFeature): Omit<LampMirror, "head"> | null {
+  const level = f.properties?.w;
+  if (level === undefined) {
+    return null;
+  }
+  return { level, reach: f.properties?.wr ?? null };
 }
 
 /** Per-tile lamp visuals (posts + heads + glow + ground pools) on the Y-up scene. */
@@ -375,9 +384,9 @@ interface LampPlaces {
   arms: Map<number, ArmPlace[]>;
   /** every head, posts' and hung lamps', for the halos and the real lights */
   heads: Vector3[];
-  /** each head's water level, where the river mirrors it (the bake's
-   *  `w`), else null */
-  levels: (number | null)[];
+  /** each head's water, where the river mirrors it (the bake's `w` and
+   *  `wr`), else null */
+  waters: (Omit<LampMirror, "head"> | null)[];
   hung: Place[];
   masts: Place[];
   /** the tall masts' poles by their height (m): their heads are on arms */
@@ -497,7 +506,7 @@ function placeMast(
   const end = { x: foot.x + dx, y: foot.y, z: foot.z - dy };
   byHeight(out.walls, h, end);
   out.heads.push(new Vector3(end.x, end.y + h, end.z));
-  out.levels.push(f.properties?.w ?? null);
+  out.waters.push(waterOf(f));
   // on a bridge, its deck; else the ground under the head
   const [ex, ey] = f.geometry.coordinates;
   const below = f.properties?.deck ?? ctx.heightAt(ex + dx, ey + dy) ?? foot.y;
@@ -526,7 +535,7 @@ function placeLamp(f: LampFeature, ctx: GroundContext, out: LampPlaces): void {
   const s = hung ? 1 : poolScale(h);
   out.pools.push({ ...ground, s });
   out.heads.push(new Vector3(ground.x, ground.y + h, ground.z));
-  out.levels.push(f.properties?.w ?? null);
+  out.waters.push(waterOf(f));
   const head = { x: ground.x, y: ground.y + h, z: ground.z };
   if (hung) {
     hangWire(f, head, ctx, out);
@@ -539,7 +548,7 @@ function lampPlaces(features: LampFeature[], ctx: GroundContext): LampPlaces {
   const out: LampPlaces = {
     arms: new Map(),
     heads: [],
-    levels: [],
+    waters: [],
     hung: [],
     masts: [],
     poles: new Map(),

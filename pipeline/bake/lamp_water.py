@@ -22,6 +22,15 @@ the median of the rays within SAME_WATER_M of the nearest ray's level, so a
 pond and the river beside it are not averaged. The viewer's water sheet
 lies on the same ground.
 
+The column's ends, `wr`: in each of SECTORS compass sectors (from north,
+clockwise, each centred on its bearing), how far from the lamp (m, a
+multiple of END_STEP_M) that water reaches along the sector's seeing rays —
+to its far bank; a dry gap of up to GAP_M, a pier or a groyne, does not
+end it; 0 where the lamp sees none of it. The viewer lays a lamp's column
+toward the eye at the water's level only that far out, so the mirror of a
+pond above the town does not float over the lower ground past its banks,
+and an eye on the side where the lamp sees no water gets none.
+
 The lamps' own files are rewritten (OSM's `lamps_`, Mapillary's lamps in
 `mly_`), so this runs after lamp_heights.py, whose heights it reads."""
 
@@ -48,6 +57,10 @@ CLEAR_M = 0.3  # an occluder must stand this far over the line
 WATER_RUN_M = 12.0  # a ray's water read for the level, past its first cells
 BANK_CELLS = 2  # a ray's first water cells, on the bank's slope
 WATER_OUT_M = 40.0  # how far past its first water cell a ray's light may land
+GAP_M = 6.0  # a dry stretch this short along a ray does not end its water
+SECTORS = 8  # the compass sectors a lamp's water reach is kept for
+END_STEP_M = 5.0  # a sector's reach is kept in these steps (the viewer
+# packs SECTORS of them, 6 bits each, into two floats: at most 63 steps)
 
 
 def water_field(tile: Tile, field: Field) -> np.ndarray:
@@ -76,10 +89,10 @@ def seen_rays(
     water: np.ndarray,
     field: Field,
     steps: tuple[np.ndarray, np.ndarray, np.ndarray],
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """For each ray from the lamp's `head` (x, y, z): whether its light
-    reaches water unblocked, that water's level and how far its first
-    water cell is (m; NaN where not)."""
+    reaches water unblocked, that water's level, how far its first water
+    cell is and how far its water runs (m; NaN where not)."""
     x, y, z = head
     dx, dy, dist = steps
     col0 = (x - field.xmin) / field.res
@@ -95,6 +108,8 @@ def seen_rays(
     level = np.full(AZIMUTHS, np.nan, np.float32)
     seen = np.zeros(AZIMUTHS, bool)
     reach = np.full(AZIMUTHS, np.nan, np.float32)
+    end = np.full(AZIMUTHS, np.nan, np.float32)
+    gap = max(1, int(round(GAP_M / field.res)))
     run = max(1, int(round(WATER_RUN_M / field.res)))
     out = max(1, int(round(WATER_OUT_M / field.res)))
     for k in np.nonzero(hits)[0]:
@@ -120,8 +135,23 @@ def seen_rays(
                 seen[k] = True
                 level[k] = w
                 reach[k] = float(dist[f])
+                end[k] = float(dist[water_end(wet[k], f, gap)])
                 break
-    return seen, level, reach
+    return seen, level, reach, end
+
+
+def water_end(wet: np.ndarray, first: int, gap: int) -> int:
+    """A ray's last water sample of the water that starts at `first`: up
+    to where `gap` samples in a row are dry, or the ray ends."""
+    last, dry = first, 0
+    for j in range(first + 1, len(wet)):
+        if wet[j]:
+            last, dry = j, 0
+        else:
+            dry += 1
+            if dry >= gap:
+                break
+    return last
 
 
 def in_openings(seen: np.ndarray) -> np.ndarray:
@@ -141,13 +171,29 @@ def opening(seen: np.ndarray) -> bool:
     return bool(in_openings(seen).any())
 
 
-def water_level(level: np.ndarray, reach: np.ndarray, rays: np.ndarray) -> float:
-    """A lamp's water level from its seeing `rays`: the nearest water's —
-    the median of the rays whose level lies within SAME_WATER_M of the
-    nearest ray's, so a pond and the river beside it are not averaged."""
+def nearest_water(level: np.ndarray, reach: np.ndarray, rays: np.ndarray) -> np.ndarray:
+    """Of a lamp's seeing `rays`, those on its nearest water: whose level
+    lies within SAME_WATER_M of the nearest ray's, so a pond and the river
+    beside it are not taken for one."""
     near = level[rays][np.argmin(reach[rays])]
-    same = rays & (np.abs(level - near) <= SAME_WATER_M)
-    return float(np.median(level[same]))
+    return rays & (np.abs(level - near) <= SAME_WATER_M)
+
+
+def sector_ends(end: np.ndarray, rays: np.ndarray) -> list[int]:
+    """Each sector's reach (m) of a lamp's water: the farthest end of its
+    `rays` there, rounded up to END_STEP_M (0: none)."""
+    per = AZIMUTHS // SECTORS
+    reach = np.where(rays, np.nan_to_num(end), 0.0)
+    # sector s is centred on ray s * per
+    reach = np.roll(reach, per // 2).reshape(SECTORS, per).max(axis=1)
+    steps = np.minimum(np.ceil(reach / END_STEP_M), 63)
+    return [int(n * END_STEP_M) for n in steps]
+
+
+def water_level(level: np.ndarray, reach: np.ndarray, rays: np.ndarray) -> float:
+    """A lamp's water level from its seeing `rays`: the median of its
+    nearest water's."""
+    return float(np.median(level[nearest_water(level, reach, rays)]))
 
 
 def lamp_head(f: dict, ground: np.ndarray, field: Field) -> tuple[float, float, float] | None:
@@ -180,6 +226,7 @@ def run(tile: Tile) -> None:
     for f in lamps:
         f["properties"] = dict(f["properties"] or {})
         f["properties"].pop("w", None)
+        f["properties"].pop("wr", None)
     if not lamps or not tile.dgm.exists():
         for path, doc, _ in docs:
             _write(path, doc)
@@ -201,7 +248,7 @@ def run(tile: Tile) -> None:
         head = lamp_head(f, ground, field)
         if head is None:
             continue
-        seen, level, reach = seen_rays(head, ground, surface, water, field, steps)
+        seen, level, reach, end = seen_rays(head, ground, surface, water, field, steps)
         rays = in_openings(seen)
         if not rays.any():
             continue
@@ -209,6 +256,7 @@ def run(tile: Tile) -> None:
         if not math.isfinite(w) or w >= head[2]:
             continue
         f["properties"]["w"] = round(w, 2)
+        f["properties"]["wr"] = sector_ends(end, nearest_water(level, reach, rays))
         mirrored += 1
     for path, doc, _ in docs:
         _write(path, doc)

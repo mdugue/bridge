@@ -20,13 +20,16 @@ import {
   color,
   dot,
   exp,
+  exp2,
   float,
+  floor,
   Fn,
   fwidth,
   int,
   length,
   Loop,
   max,
+  min,
   mix,
   normalize,
   positionLocal,
@@ -253,11 +256,34 @@ export function railGlints(n: V3, toEye: V3): V3 {
   return color(LAMP_LIGHT).mul(sum.mul(sceneNight).mul(RAIL_GLINT));
 }
 
-/** A lamp the river mirrors: its head (world, Y-up) and the level (world
- *  Y) of the water under its light. */
+/** A lamp the river mirrors: its head (world, Y-up), the level (world
+ *  Y) of the water under its light and how far from the lamp that water
+ *  reaches in each compass sector (m; the bake's `wr`, null: as far as
+ *  the bake looks). */
 export interface LampMirror {
   head: Vector3;
   level: number;
+  reach: readonly number[] | null;
+}
+
+/** The compass sectors a lamp's reach is kept for (lamp_water.py
+ *  `SECTORS`), from north clockwise, each centred on its bearing; and
+ *  the steps (m) a reach comes in (`END_STEP_M`), 6 bits a sector. */
+const SECTORS = 8;
+const END_STEP_M = 5;
+const STEP_BITS = 64;
+const MAX_STEPS = STEP_BITS - 1;
+
+/** A lamp's sector reaches packed into two floats (four 6-bit steps
+ *  each, exact in a float's 24 bits). */
+export function packedReach(reach: readonly number[] | null): [number, number] {
+  const words: [number, number] = [0, 0];
+  for (let k = 0; k < SECTORS; k += 1) {
+    const m = reach === null ? Number.POSITIVE_INFINITY : (reach[k] ?? 0);
+    const steps = Math.min(Math.ceil(m / END_STEP_M), MAX_STEPS);
+    words[k >> 2] += steps * STEP_BITS ** (k & 3);
+  }
+  return words;
 }
 
 /** The mirrored lamp's head (world) and its water's level, as the
@@ -266,8 +292,36 @@ export interface LampMirror {
  *  affine matrix leaves 0 and the halo, a point, never reads. */
 const mirrorHead = (): V3 => attribute("iMat3", "vec4").xyz;
 const mirrorLevel = (): F => attribute("iMat0", "vec4").w.add(MIRROR_LIFT);
-/** The level's entry in a matrix (column-major: column 0, row 3). */
+/** The level's and the packed reaches' entries in a matrix (column-major:
+ *  row 3 of columns 0, 1 and 2). */
 const LEVEL_ENTRY = 3;
+const REACH_ENTRIES = [7, 11] as const;
+
+/** One sector's reach (m) out of the packed words (`packedReach`). */
+function sectorReach(i: F, lo: F, hi: F): F {
+  const word = mix(lo, hi, step(4, i));
+  const scale = exp2(i.mod(4).mul(6));
+  return floor(word.div(scale)).mod(STEP_BITS).mul(END_STEP_M);
+}
+
+/** How far the lamp's water reaches toward a bearing (`flat`: the eye's
+ *  foot from the lamp's, world XZ), between the sectors' centres. */
+function mirrorReach(flat: V2): F {
+  const lo = attribute("iMat1", "vec4").w;
+  const hi = attribute("iMat2", "vec4").w;
+  // compass bearing, clockwise from north (world -Z)
+  const bearing = atan(flat.x, flat.y.negate());
+  const t = bearing
+    .div((2 * Math.PI) / SECTORS)
+    .add(SECTORS)
+    .mod(SECTORS);
+  const i = floor(t);
+  return mix(
+    sectorReach(i, lo, hi),
+    sectorReach(i.add(1).mod(SECTORS), lo, hi),
+    t.sub(i)
+  );
+}
 
 /**
  * A column's place on the water, in the vertical plane through the lamp
@@ -326,12 +380,19 @@ const mirrorQuad = Fn(() => {
   const near = tiltAt(Math.atan(MIRROR_TILT) * 2, d, hl, he).toVar();
   const far = tiltAt(-Math.atan(MIRROR_TILT) * 2, d, hl, he).toVar();
   const mid = tiltAt(0, d, hl, he);
-  const half = max(
-    max(halfWidth(near, d, hl, he), halfWidth(far, d, hl, he)),
-    halfWidth(mid, d, hl, he)
+  // no farther out than the lamp's water reaches: past its far bank the
+  // ground may lie below the level (a pond above the town), and a column
+  // there would float over it
+  const reach = mirrorReach(flat).toVar();
+  const half = min(
+    max(
+      max(halfWidth(near, d, hl, he), halfWidth(far, d, hl, he)),
+      halfWidth(mid, d, hl, he)
+    ),
+    reach
   );
   const corner = positionLocal.xy.mul(2);
-  const u = mix(near, far, step(0, corner.y));
+  const u = min(mix(near, far, step(0, corner.y)), reach);
   // the eye over the water and the lamp within reach: else a point
   const shown = step(0.2, eye.y.sub(level)).mul(
     step(length(eye.sub(head)), waterReach.y)
@@ -405,9 +466,10 @@ export function buildLampMirrors(
       transparent: true,
       blending: AdditiveBlending,
       depthWrite: false,
-      polygonOffset: true,
-      polygonOffsetFactor: -4,
-      polygonOffsetUnits: -4,
+      // no pull of its own: the lift keeps it over the water sheet, whose
+      // pull is constant (water-layer.ts), and a bank only a lift higher
+      // hides it. A pull by the slope grows metres deep at a grazing look
+      // and drew the column through the banks.
     });
     m.positionNode = mirrorQuad();
     m.colorNode = vec4(mirrorLight(), 1);
@@ -415,6 +477,9 @@ export function buildLampMirrors(
   });
   for (let i = 0; i < mirrors.length; i += 1) {
     matrices.array[i * matrices.stride + LEVEL_ENTRY] = mirrors[i].level;
+    const [lo, hi] = packedReach(mirrors[i].reach);
+    matrices.array[i * matrices.stride + REACH_ENTRIES[0]] = lo;
+    matrices.array[i * matrices.stride + REACH_ENTRIES[1]] = hi;
   }
   matrices.needsUpdate = true;
   const mesh = new Instances(geo, mat, mirrors.length, matrices);

@@ -407,10 +407,14 @@ export function createWaterLayer(
     metalness: 0,
     transparent: true,
     opacity: 0.9,
-    // Pull slightly towards camera so it never z-fights the shared terrain.
+    // Pull slightly towards camera so it never z-fights the shared terrain:
+    // a constant pull, enough for the terrain's own vertices. A pull by the
+    // slope grows metres deep at a grazing look, and the lamps' columns
+    // (lamp-reflections.ts), which must sit over the sheet, would have to
+    // match it and so show through a bank as high.
     polygonOffset: true,
-    polygonOffsetFactor: -1,
-    polygonOffsetUnits: -1,
+    polygonOffsetFactor: 0,
+    polygonOffsetUnits: -2,
   });
   // under a planner's design, with the ground (design-site.ts)
   material.positionNode = groundUnderDesign;

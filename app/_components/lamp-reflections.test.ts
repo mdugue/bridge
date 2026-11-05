@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Vector3, Vector4 } from "three/webgpu";
-import { rankReflected, rankScratch } from "./lamp-reflections";
+import { packedReach, rankReflected, rankScratch } from "./lamp-reflections";
 
 const slots = (n: number) => Array.from({ length: n }, () => new Vector4());
 const eye = new Vector3(0, 10, 0);
@@ -52,5 +52,20 @@ describe("rankReflected", () => {
     const far = slots(48);
     rankReflected([new Vector3(0, 8, -1500)], eye, pick, far, rankScratch());
     expect(far[0].w).toBeLessThan(0.5);
+  });
+});
+
+describe("packedReach", () => {
+  test("packs eight sectors' reaches, four 6-bit steps a float", () => {
+    const [lo, hi] = packedReach([5, 10, 0, 300, 0, 0, 7, 1000]);
+    expect(lo).toBe(1 + 2 * 64 + 60 * 64 ** 3);
+    // 7 m rounds up to two steps; past 63 steps the most
+    expect(hi).toBe(2 * 64 ** 2 + 63 * 64 ** 3);
+    expect(hi).toBeLessThan(2 ** 24);
+  });
+
+  test("a lamp without the bake's reach reaches as far as it looks", () => {
+    const steps = 63 * (1 + 64 + 64 ** 2 + 64 ** 3);
+    expect(packedReach(null)).toEqual([steps, steps]);
   });
 });

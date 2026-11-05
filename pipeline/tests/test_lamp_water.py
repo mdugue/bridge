@@ -33,7 +33,7 @@ def _scene(house: bool):
 
 def test_a_quay_lamp_sees_the_river_past_the_bank():
     head, ground, surface, water, field = _scene(house=False)
-    seen, level, _ = lamp_water.seen_rays(
+    seen, level, _, end = lamp_water.seen_rays(
         head, ground, surface, water, field, lamp_water.ray_steps(RES)
     )
     assert lamp_water.opening(seen)
@@ -41,11 +41,13 @@ def test_a_quay_lamp_sees_the_river_past_the_bank():
     assert seen.sum() >= lamp_water.AZIMUTHS // 4
     assert not seen[lamp_water.AZIMUTHS // 2]
     assert np.nanmedian(level[seen]) == 104.0
+    # the river runs on to the field's edge, past the reach
+    assert np.nanmax(end[seen]) > 250.0
 
 
 def test_a_house_keeps_a_lamp_from_the_river():
     head, ground, surface, water, field = _scene(house=True)
-    seen, _, _ = lamp_water.seen_rays(
+    seen, _, _, _ = lamp_water.seen_rays(
         head, ground, surface, water, field, lamp_water.ray_steps(RES)
     )
     assert not lamp_water.opening(seen)
@@ -68,3 +70,24 @@ def test_a_pond_and_the_river_beside_it_are_not_averaged():
     level[10:13], reach[10:13] = 104.0, 90.0
     rays[0:3] = rays[10:13] = True
     assert lamp_water.water_level(level, reach, rays) == 110.0
+
+
+def test_a_ponds_column_ends_at_its_far_bank():
+    wet = np.zeros(40, bool)
+    wet[10:20] = True
+    wet[22:25] = True  # past a pier two samples wide
+    wet[30:35] = True  # another water, past a wider stretch of land
+    assert lamp_water.water_end(wet, 10, 3) == 24
+
+
+def test_a_lamps_water_reach_by_compass_sector():
+    per = lamp_water.AZIMUTHS // lamp_water.SECTORS
+    end = np.full(lamp_water.AZIMUTHS, np.nan, np.float32)
+    rays = np.zeros(lamp_water.AZIMUTHS, bool)
+    # a pond to the north, the rays either side of north
+    end[[lamp_water.AZIMUTHS - 1, 0, 1]] = [40.0, 52.0, 41.0]
+    rays[[lamp_water.AZIMUTHS - 1, 0, 1]] = True
+    # the river to the east, but on other water: not this column's
+    end[2 * per] = 200.0
+    ends = lamp_water.sector_ends(end, rays)
+    assert ends == [55, 0, 0, 0, 0, 0, 0, 0]

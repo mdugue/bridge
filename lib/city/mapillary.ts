@@ -21,8 +21,9 @@ export function mapillaryParts(features: readonly MapillaryFeature[]): {
   for (const f of features) {
     const kind = f.properties?.k;
     if (kind === "lamp") {
-      const { arm, h, hs, masts, w, wire } = f.properties ?? {};
-      const water = w === undefined ? {} : { w };
+      const { arm, h, hs, masts, w, wr, wire } = f.properties ?? {};
+      const water =
+        w === undefined ? {} : { w, ...(wr === undefined ? {} : { wr }) };
       lamps.push({
         geometry: f.geometry,
         properties: wire
