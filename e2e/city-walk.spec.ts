@@ -1062,7 +1062,10 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       const view = page.getByTestId("walk-photo-view");
       await expect(view.locator("img")).toBeVisible();
       await page.keyboard.press("Escape");
-      await expect(view).toHaveCount(0);
+      // Escape closes it at once; it leaves the DOM after its exit
+      // animation, a frame or three, and a slow runner's SwiftShader
+      // frames take seconds each (the default 5 s ran out mid-animation)
+      await expect(view).toHaveCount(0, { timeout: slow(10_000) });
       const first = await card.getByRole("heading").textContent();
       await card.getByTestId("walk-next").click();
       await expect(card).toContainText("Station 2 von 9");
