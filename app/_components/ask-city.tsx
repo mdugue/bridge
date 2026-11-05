@@ -126,8 +126,7 @@ const AskCity = ({ coarse, onClose, scene, site }: Props) => {
         stop: () => latest.current.dictation.stop(),
         abort: () => latest.current.dictation.abort(),
       },
-      waits: {
-        abandon: () => latest.current.scene.abandon(),
+      scene: {
         setListening: (on) => latest.current.scene.setListening(on),
         haltAnswerGlide: () => latest.current.scene.haltAnswerGlide(),
       },

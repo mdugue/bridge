@@ -20,7 +20,7 @@ import { RENDER_STYLE_BY_ID } from "@/lib/city/render-style";
 import type { Site } from "@/lib/city/site";
 import type { AskScene, TimeChange } from "./ask-scene-tools";
 import type { CityWalkHandle } from "./create-app";
-import { isAbortError, untilAborted } from "./fetch-optional";
+import { untilAborted } from "./fetch-optional";
 import { loadLandmarkFacts } from "./landmark-facts-load";
 import { sleep, visibleMs } from "./net-gate";
 import type { SceneTime } from "./scene-time";
@@ -104,7 +104,7 @@ async function waitWhile(
   holds: () => boolean,
   gone: () => boolean,
   maxMs: number,
-  signal: AbortSignal
+  signal?: AbortSignal
 ): Promise<boolean> {
   // the visible clock: a hidden page draws no frames, so no glide moves;
   // and a wall clock past it, so a locked phone does not hold the answer
@@ -129,7 +129,7 @@ async function waitWhile(
 async function landed(
   h: CityWalkHandle,
   gone: () => boolean,
-  signal: AbortSignal
+  signal?: AbortSignal
 ): Promise<boolean> {
   if (!(await waitWhile(h.viewMoving, gone, LAND_MAX_MS, signal))) {
     return false;
@@ -146,7 +146,7 @@ async function landed(
 async function standing(
   h: CityWalkHandle,
   gone: () => boolean,
-  signal: AbortSignal
+  signal?: AbortSignal
 ): Promise<boolean> {
   for (let round = 0; round < LAND_ROUNDS; round += 1) {
     if (!(await landed(h, gone, signal))) {
@@ -166,11 +166,6 @@ const MOVING = {
 
 const LOADING = { gefunden: false, hinweis: "Die Szene lädt noch." };
 
-const CANCELLED = {
-  gefunden: false,
-  hinweis: "Die Frage wurde abgebrochen.",
-};
-
 export function useAskScene(
   handleRef: RefObject<CityWalkHandle | null>,
   look: LookState,
@@ -182,8 +177,6 @@ export function useAskScene(
   return useMemo(() => {
     const offered = new Set(siteDataLayers(site.dataLayers).map((d) => d.key));
     const credits = cardCredits(site);
-    // was_ist_da's waits: a stopped or closed conversation ends them
-    const looks = { stop: new AbortController() };
     // the glide an answer started, while it flies: a flight that lands, is
     // cancelled or is replaced by another reports 1 (camera-flight.ts)
     const glides: { answer: object | null } = { answer: null };
@@ -211,7 +204,7 @@ export function useAskScene(
           ebenen: activeDataLayers(values).map((d) => d.key),
         };
       },
-      look: async () => {
+      look: async (signal) => {
         const h = handleRef.current;
         if (!h) {
           return LOADING;
@@ -219,36 +212,27 @@ export function useAskScene(
         // a scene remounted while this waited (a GPU loss) is not asked
         // through the old one's handle
         const gone = () => handleRef.current !== h;
-        const { signal } = looks.stop;
-        let asked: Inquiry | null = null;
-        try {
-          // where a glide lands, not on its way
-          const there = await standing(h, gone, signal);
+        // where a glide lands, not on its way
+        const there = await standing(h, gone, signal);
+        if (gone()) {
+          return LOADING;
+        }
+        if (!there) {
+          return MOVING;
+        }
+        // at the view's subject (Modell's pivot), and once the tiles
+        // there have come: a miss is asked again — never mid-glide
+        let asked: Inquiry | null = h.inquireAt(h.focusNdc());
+        for (let i = 0; !asked && i < MISS_RETRIES; i += 1) {
+          await sleep(MISS_RETRY_MS, signal);
+          const still = !h.viewMoving() || (await standing(h, gone, signal));
           if (gone()) {
             return LOADING;
           }
-          if (!there) {
+          if (!still) {
             return MOVING;
           }
-          // at the view's subject (Modell's pivot), and once the tiles
-          // there have come: a miss is asked again — never mid-glide
           asked = h.inquireAt(h.focusNdc());
-          for (let i = 0; !asked && i < MISS_RETRIES; i += 1) {
-            await sleep(MISS_RETRY_MS, signal);
-            const still = !h.viewMoving() || (await standing(h, gone, signal));
-            if (gone()) {
-              return LOADING;
-            }
-            if (!still) {
-              return MOVING;
-            }
-            asked = h.inquireAt(h.focusNdc());
-          }
-        } catch (error) {
-          if (isAbortError(error)) {
-            return CANCELLED;
-          }
-          throw error;
         }
         if (!asked) {
           return {
@@ -264,17 +248,9 @@ export function useAskScene(
         // a landmark's facts, as the card beside it shows them
         const url =
           asked.kind === "building" ? asked.landmarkFactsUrl : undefined;
-        let landmarks: LandmarkFactsIndex | null = null;
-        if (url) {
-          try {
-            landmarks = await untilAborted(loadLandmarkFacts(url), signal);
-          } catch (error) {
-            if (isAbortError(error)) {
-              return CANCELLED;
-            }
-            throw error;
-          }
-        }
+        const landmarks: LandmarkFactsIndex | null = url
+          ? await untilAborted(loadLandmarkFacts(url), signal)
+          : null;
         const card = inquiryCard(asked, null, credits, null, landmarks);
         return {
           gefunden: true,
@@ -298,10 +274,6 @@ export function useAskScene(
           glides.answer = null;
           handleRef.current?.stopGlide();
         }
-      },
-      abandon: () => {
-        looks.stop.abort();
-        looks.stop = new AbortController();
       },
       show: (view) => {
         const h = handleRef.current;

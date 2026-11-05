@@ -26,11 +26,10 @@ function fakeDictation() {
     abort: () => calls.push("dictation.abort"),
   };
 }
-function fakeWaits() {
+function fakeScene() {
   return {
-    abandon: () => calls.push("waits.abandon"),
-    setListening: (on: boolean) => calls.push(`waits.setListening:${on}`),
-    haltAnswerGlide: () => calls.push("waits.haltAnswerGlide"),
+    setListening: (on: boolean) => calls.push(`scene.setListening:${on}`),
+    haltAnswerGlide: () => calls.push("scene.haltAnswerGlide"),
   };
 }
 function fakeRun() {
@@ -51,7 +50,7 @@ beforeEach(() => {
   session = createAskSession({
     speech: fakeSpeech(),
     dictation: fakeDictation(),
-    waits: fakeWaits(),
+    scene: fakeScene(),
   });
   session.attachRun(fakeRun());
 });
@@ -185,23 +184,23 @@ describe("an answer's end", () => {
     expect(calls.filter((c) => c.startsWith("speech.speak"))).toEqual([]);
   });
 
-  test("a failed answer ends its run, then its waits", () => {
+  test("a failed answer ends its run", () => {
     dispatch({ type: "readingPressed" });
     dispatch({ type: "typed", text: "Wo?" });
     dispatch({ type: "answerStarted" });
     since();
     dispatch({ type: "answerEnded", text: "Da.", failed: true });
     // and is not read
-    expect(calls).toEqual(["run.stop", "waits.abandon"]);
+    expect(calls).toEqual(["run.stop"]);
   });
 
-  test("an answer that fails while a scene tool waits ends its waits", () => {
+  test("an answer that fails while a scene tool waits ends its run", () => {
     dispatch({ type: "typed", text: "Was ist das?" });
     dispatch({ type: "answerStarted" });
     since();
     // the last part is the waiting tool call: no text
     dispatch({ type: "answerEnded", text: "", failed: true });
-    expect(calls).toEqual(["run.stop", "waits.abandon"]);
+    expect(calls).toEqual(["run.stop"]);
   });
 
   test("an answer that ends while the page is hidden is read at once", () => {
@@ -214,7 +213,7 @@ describe("an answer's end", () => {
 });
 
 describe("the stop button", () => {
-  test("ends the run, then its waits; the answer is not read", () => {
+  test("ends the run; the answer is not read", () => {
     dispatch({ type: "readingPressed" });
     dispatch({ type: "typed", text: "Wo?" });
     dispatch({ type: "answerStarted" });
@@ -224,16 +223,12 @@ describe("the stop button", () => {
     expect(calls.filter((c) => c.startsWith("speech.speak"))).toEqual([]);
   });
 
-  test("stop halts the answer's glide, after its run and its waits", () => {
+  test("stop halts the answer's glide, after its run", () => {
     dispatch({ type: "typed", text: "Zeig!" });
     dispatch({ type: "answerStarted" });
     since();
     dispatch({ type: "stopPressed" });
-    expect(calls).toEqual([
-      "run.stop",
-      "waits.abandon",
-      "waits.haltAnswerGlide",
-    ]);
+    expect(calls).toEqual(["run.stop", "scene.haltAnswerGlide"]);
   });
 
   test("an answer after a stopped one is read again", () => {
@@ -308,7 +303,7 @@ describe("the switches", () => {
     since();
     dispatch({ type: "readingPressed" });
     expect(session.state()).toEqual({ reading: false, hearing: false });
-    expect(calls).toEqual(["speech.stop", "waits.setListening:false"]);
+    expect(calls).toEqual(["speech.stop", "scene.setListening:false"]);
     since();
     dispatch({ type: "micClosed" });
     expect(calls).toEqual([]);
@@ -317,7 +312,7 @@ describe("the switches", () => {
   test("Hörmodus on primes the voice, turns reading on and rests the scene", () => {
     dispatch({ type: "hearingPressed" });
     expect(session.state()).toEqual({ reading: true, hearing: true });
-    expect(calls).toEqual(["speech.prime", "waits.setListening:true"]);
+    expect(calls).toEqual(["speech.prime", "scene.setListening:true"]);
   });
 
   test("hearing off ends the reading it began", () => {
@@ -325,7 +320,7 @@ describe("the switches", () => {
     since();
     dispatch({ type: "hearingPressed" });
     expect(session.state()).toEqual({ reading: false, hearing: false });
-    expect(calls).toEqual(["waits.setListening:false", "speech.stop"]);
+    expect(calls).toEqual(["scene.setListening:false", "speech.stop"]);
   });
 
   test("hearing off keeps a reading the visitor chose", () => {
@@ -335,14 +330,14 @@ describe("the switches", () => {
     since();
     dispatch({ type: "hearingPressed" });
     expect(session.state()).toEqual({ reading: true, hearing: false });
-    expect(calls).toEqual(["waits.setListening:false"]);
+    expect(calls).toEqual(["scene.setListening:false"]);
   });
 
   test("a spoken question with no conversation to ask waits in the field, the Hörmodus's reading kept", () => {
     const detached = createAskSession({
       speech: fakeSpeech(),
       dictation: fakeDictation(),
-      waits: fakeWaits(),
+      scene: fakeScene(),
     });
     detached.dispatch({ type: "hearingPressed" });
     expect(detached.dispatch({ type: "spoken", text: "Was ist das?" })).toBe(
@@ -387,16 +382,11 @@ describe("the card", () => {
     expect(calls).toEqual(["speech.speak:Da."]);
   });
 
-  test("a new key ends the conversation's run, waits, voice and microphone; the switches stay", () => {
+  test("a new key ends the conversation's run, voice and microphone; the switches stay", () => {
     dispatch({ type: "hearingPressed" });
     since();
     dispatch({ type: "conversationEnded" });
-    expect(calls).toEqual([
-      "run.stop",
-      "waits.abandon",
-      "speech.stop",
-      "dictation.abort",
-    ]);
+    expect(calls).toEqual(["run.stop", "speech.stop", "dictation.abort"]);
     expect(session.state()).toEqual({ reading: true, hearing: true });
   });
 
@@ -405,10 +395,10 @@ describe("the card", () => {
     since();
     dispatch({ type: "keyForgotten" });
     expect(session.state()).toEqual({ reading: false, hearing: false });
-    expect(calls).toEqual(["waits.setListening:false"]);
+    expect(calls).toEqual(["scene.setListening:false"]);
   });
 
-  test("closing ends the run, its waits, the voice, the microphone and the Hörmodus", () => {
+  test("closing ends the run, the voice, the microphone and the Hörmodus", () => {
     dispatch({ type: "hearingPressed" });
     dispatch({ type: "typed", text: "Wo?" });
     dispatch({ type: "answerStarted" });
@@ -416,12 +406,11 @@ describe("the card", () => {
     dispatch({ type: "closed" });
     expect(calls).toEqual([
       "run.stop",
-      "waits.abandon",
       "speech.stop",
       "dictation.abort",
-      "waits.setListening:false",
+      "scene.setListening:false",
     ]);
-    expect(calls).not.toContain("waits.haltAnswerGlide");
+    expect(calls).not.toContain("scene.haltAnswerGlide");
   });
 
   test("a detached run is not asked", () => {
@@ -441,20 +430,6 @@ describe("invariants", () => {
     since();
     answered("Da.");
     expect(calls.at(-1)).toBe("speech.speak:Da.");
-  });
-
-  test("the run stops before the waits are abandoned, everywhere", () => {
-    for (const end of ["stopPressed", "conversationEnded", "closed"] as const) {
-      since();
-      dispatch({ type: "typed", text: "Wo?" });
-      dispatch({ type: "answerStarted" });
-      dispatch({ type: end });
-      const stop = calls.indexOf("run.stop");
-      expect(stop).toBeGreaterThanOrEqual(0);
-      expect(calls.indexOf("waits.abandon")).toBeGreaterThan(stop);
-      session.attachRun(fakeRun());
-      dispatch({ type: "answerEnded", text: "", failed: false });
-    }
   });
 
   test("nothing is spoken while the microphone is open", () => {

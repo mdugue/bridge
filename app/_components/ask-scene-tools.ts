@@ -44,10 +44,10 @@ export interface AskScene {
   within: (x: number, y: number) => boolean;
   /** the player's pose, mode, time, style and layers, for the model */
   where: () => Record<string, unknown>;
-  /** asks what stands at the centre of the view (and opens its card) */
-  look: () => Promise<Record<string, unknown>>;
-  /** ends the scene tools' waits (a stopped answer, a closed card) */
-  abandon: () => void;
+  /** asks what stands at the centre of the view (and opens its card);
+   *  rejects when `signal` aborts: the chat's `stop()` ends the wait and
+   *  drops what the tool ends with, so no stopped answer resumes */
+  look: (signal?: AbortSignal) => Promise<Record<string, unknown>>;
   /** the Hörmodus: the scene barely draws while the visitor listens */
   setListening: (on: boolean) => void;
   /** stops the glide an answer started, if it still flies (the stop
@@ -59,7 +59,9 @@ export interface AskScene {
 export function sceneTools(scene: AskScene) {
   return clientTools(
     whereTool.client(() => scene.where()),
-    lookTool.client(async () => await scene.look()),
+    lookTool.client(
+      async (_input, context) => await scene.look(context?.abortSignal)
+    ),
     showTool.client((input) => {
       const target: AskTarget = input;
       if (!scene.within(target.x, target.y)) {
