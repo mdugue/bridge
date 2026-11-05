@@ -559,6 +559,32 @@ test("no face of a bridge is left without a normal (it would shade black)", () =
   expect(unlit).toEqual([]);
 });
 
+test("a ramp with a column flush with the ground keeps a real normal", () => {
+  // the west end, first column on the ground: its landing is itself
+  const tops = [101, 120, 120, 100.02, 101];
+  const b = deck({ axis: undefined, deck: tops, line: undefined });
+  const outline = b.geometry.coordinates[0] as [number, number][];
+  const ring = ringToWorld(outline, ctx.offset);
+  const flush = approaches(ring, tops.slice(0, -1), "road", undefined, ctx, [])
+    .flatMap((a) => a.columns)
+    .filter((c) => c.land.x === c.x && c.land.z === c.z);
+  expect(flush.length).toBeGreaterThan(0);
+  const built = buildRail({ ...empty, bridges: [b] }, ctx);
+  const unlit: string[] = [];
+  let seen = 0;
+  for (const child of built.children) {
+    const nrm = (child as Mesh).geometry.getAttribute("normal");
+    seen += nrm.count;
+    for (let i = 0; i < nrm.count; i += 1) {
+      if (!(Math.hypot(nrm.getX(i), nrm.getY(i), nrm.getZ(i)) > 0.5)) {
+        unlit.push(`${child.name}#${i}`);
+      }
+    }
+  }
+  expect(seen).toBeGreaterThan(0);
+  expect(unlit).toEqual([]);
+});
+
 test("a deck end above the ground gets an approach down to it", () => {
   // 40 m along x, 10 m wide, its top 101 m over flat ground at 100 m
   const ring = ringToWorld(

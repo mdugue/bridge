@@ -683,7 +683,11 @@ function addApproach(
     const q0: P3 = [q.x, q.y, q.z];
     const q1: P3 = [q.land.x, q.land.y, q.land.z];
     const p1: P3 = [p.land.x, p.land.y, p.land.z];
-    quad(top, p0, q0, q1, p1, surfaceNormal(p0, q0, p1, true));
+    // both columns flush with the ground: nothing to draw between them
+    if (same(p0, p1) && same(q0, q1)) {
+      continue;
+    }
+    quad(top, p0, q0, q1, p1, rampNormal(p0, q0, q1, p1));
     const under = (v: P3): P3 => [v[0], v[1] - depth, v[2]];
     quad(stone, under(p0), under(q0), under(q1), under(p1), [0, -1, 0]);
   }
@@ -704,14 +708,24 @@ function addApproach(
   }
 }
 
-/** The unit normal of the plane through a, b, c, turned up when `up`. */
-function surfaceNormal(a: P3, b: P3, c: P3, up: boolean): P3 {
-  const n = cross(
-    [b[0] - a[0], b[1] - a[1], b[2] - a[2]],
-    [c[0] - a[0], c[1] - a[1], c[2] - a[2]]
-  );
-  const u = unit(n);
-  return up && u[1] < 0 ? [-u[0], -u[1], -u[2]] : u;
+const same = (a: P3, b: P3): boolean =>
+  a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+
+const edgeOf = (a: P3, b: P3): P3 => [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+
+/** A ramp quad's upward unit normal: both its triangles' normals summed, so
+ *  a column already flush with the ground (its landing is itself, one
+ *  triangle has no area) still gets the other's. Never zero: that is NaN
+ *  on the GPU, a black face. */
+function rampNormal(p0: P3, q0: P3, q1: P3, p1: P3): P3 {
+  const a = cross(edgeOf(p0, q0), edgeOf(p0, q1));
+  const b = cross(edgeOf(p0, q1), edgeOf(p0, p1));
+  const sum: P3 = [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+  if (sum[0] === 0 && sum[1] === 0 && sum[2] === 0) {
+    return [0, 1, 0];
+  }
+  const u = unit(sum);
+  return u[1] < 0 ? [-u[0], -u[1], -u[2]] : u;
 }
 
 /** The outward normal of an approach's first (sign −1) or last (+1) side:
