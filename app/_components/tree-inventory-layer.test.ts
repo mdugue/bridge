@@ -2,7 +2,6 @@ import { expect, test } from "bun:test";
 import { Matrix4, Vector3 } from "three/webgpu";
 import type { Object3D } from "three/webgpu";
 import type { CanopyFeature, TreeFeature } from "@/lib/city/features";
-import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { PINE_CROWN_BASE } from "@/lib/city/tree-inventory";
 import { pineSilhouette } from "./conifer-crown";
 import { isInstances } from "./instancing";
@@ -182,9 +181,10 @@ test("empty input builds nothing and vetoes nothing; the control still works", (
   expect(inv.instances).toHaveLength(0);
   expect(inv.keepTree(0, 0)).toBe(true);
   const built = buildTreeInventory([tree(5, 2)], ctx);
-  expect(() => built.control.applyLook(LOOK_DEFAULTS)).not.toThrow();
-  expect(built.control.updateLod(new Vector3(5, 100, 0))).toBe(true);
-  expect(built.control.updateLod(new Vector3(5, 100, 0))).toBe(false);
+  // the crown switch off keeps the cheap silhouette near the camera too
+  expect(built.control.updateLod(new Vector3(5, 100, 0), false)).toBe(false);
+  expect(built.control.updateLod(new Vector3(5, 100, 0), true)).toBe(true);
+  expect(built.control.updateLod(new Vector3(5, 100, 0), true)).toBe(false);
 });
 
 test("a deciduous silhouette bares in winter, a conifer never", () => {

@@ -27,7 +27,11 @@ they do.
   `<stem>.<hash>.<ext>` and served `immutable`; `manifest.json` (no-cache)
   names the hashed tileset, which names everything else.
 - **Everything a tile brings is built and freed with it** in the dressing
-  plugin (`processTileModel` / `disposeTile`), compiled before it shows.
+  plugin (`processTileModel` / `disposeTile`), compiled before it shows;
+  what lands after the tile itself — its dressing, a city tile's murals,
+  a data layer's bodies — goes through one lifecycle (`late-parts.ts`):
+  built in its turn, compiled before it hangs, weighed from its build,
+  freed once its compile has ended.
 - **Two phases.** The first frame waits on the spawn tile's buildings and
   any of its terrain levels; the dressing (trees, lamps, rails, furniture)
   then streams tile by tile, and the HUD flips to *ready* when the spawn
@@ -44,7 +48,9 @@ they do.
   inspectable metadata.
 - Anything that builds a `/data` URL goes through the manifest.
 - Anything added after the first frame redraws the shadow map and respects
-  disposal, or it shows as a missing shadow or a leak.
+  disposal, or it shows as a missing shadow or a leak; what a tile gains
+  after it landed is a late part (`late-parts.ts`), which weighs, frees
+  after the compile and reports for it.
 - A new streaming need registers against the twin camera, not the camera.
 
 ## Alternatives

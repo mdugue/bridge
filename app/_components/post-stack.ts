@@ -72,6 +72,7 @@ import { createSelectionOutline } from "./selection-outline";
 import type { OutlineSelection } from "./selection-outline";
 import { createPipelineAnchors } from "./pipeline-anchors";
 import type { PipelineAnchors } from "./pipeline-anchors";
+import { withNightMaterialsShown } from "./scene-environment";
 import type { PostProfile } from "./scene-profile";
 import type { F, Live, V2, V3, V4 } from "./shader-chunks";
 import { aloneUnder, compileRepresentatives } from "./three-utils";
@@ -959,7 +960,12 @@ export function createPostStack(
     // not awaited inside the try: the target goes back as the call returns
     let compiling: Promise<void>;
     try {
-      compiling = renderer.compileAsync(object, view, scene);
+      // its materials shown too: one hidden for now (drawn only after
+      // dark) would compile nothing
+      compiling = withNightMaterialsShown(
+        object,
+        async () => await renderer.compileAsync(object, view, scene)
+      );
     } finally {
       renderer.setRenderTarget(previous);
       object.visible = visible;
@@ -1084,7 +1090,11 @@ export function createPostStack(
       compiling = aloneUnder(
         group,
         object,
-        async () => await renderer.compileAsync(group, view, scene)
+        async () =>
+          await withNightMaterialsShown(
+            object,
+            async () => await renderer.compileAsync(group, view, scene)
+          )
       );
     } finally {
       renderer.setRenderTarget(previous);

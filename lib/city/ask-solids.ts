@@ -42,7 +42,13 @@ export interface Slab extends Prism {
 }
 
 export type AskSolid =
-  | { cylinder: Cylinder }
+  | {
+      cylinder: Cylinder;
+      /** a tree's crown and how it is drawn (an ellipsoid, or a cone for a
+       *  conifer that is not a pine or a yew); set on the solids a hit
+       *  makes, never on stored ones (ADR 0047) */
+      crown?: "cone" | "ellipsoid";
+    }
   | { prism: Prism }
   | { slab: Slab };
 
@@ -401,6 +407,11 @@ export function hitsInSets<T>(
   }
   return out.sort((a, b) => a.distance - b.distance);
 }
+
+/** A pier just outside its deck's outline still belongs to it (m): a
+ *  bridge's ask (bridge-ask.ts) and its outline (selection-shape.ts) reach
+ *  as far. */
+export const PIER_REACH = 12;
 
 /** How far (x, z) lies from the ring's edge in plan; 0 inside it. */
 export function ringDistanceXz(

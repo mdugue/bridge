@@ -1079,7 +1079,9 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     // ADR 0056: the key check and the answer are the server's and the
     // provider's; the spec answers for both, so CI needs no key and no
     // provider. A key the provider refuses says so; a checked one opens
-    // the conversation, whose answer is labelled KI.
+    // the conversation. A refusal of the chat route reaches the card by its
+    // code (ADR 0056: the card looks the words up), and the answer is
+    // labelled KI.
     let checks = 0;
     await page.route("**/api/schluessel", async (route) => {
       checks += 1;
@@ -1106,14 +1108,23 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       { type: "TEXT_MESSAGE_END", messageId: "m1" },
       { type: "RUN_FINISHED", runId: "r1", threadId: "t" },
     ];
-    await page.route(
-      "**/api/frag",
-      async (route) =>
-        await route.fulfill({
-          contentType: "text/event-stream",
-          body: events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join(""),
-        })
-    );
+    let asked = 0;
+    await page.route("**/api/frag", async (route) => {
+      asked += 1;
+      await route.fulfill(
+        asked === 1
+          ? {
+              status: 401,
+              json: { code: "bad-token", message: "Token abgelaufen." },
+            }
+          : {
+              contentType: "text/event-stream",
+              body: events
+                .map((e) => `data: ${JSON.stringify(e)}\n\n`)
+                .join(""),
+            }
+      );
+    });
     await withFramesHeld(page, async () => {
       await openSidebar(page);
       await page.getByRole("tab", { name: "Erkunden" }).click();
@@ -1130,8 +1141,21 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       await card.getByRole("button", { name: "Prüfen und loslegen" }).click();
       await card.getByTestId("ask-input").fill("Wer baute die Frauenkirche?");
       await card.getByTestId("ask-input").press("Enter");
+      // the route refuses the token: the card words it by its code
+      await expect(card.getByRole("alert")).toContainText(
+        "Der Schlüssel muss neu geprüft werden."
+      );
+      await expect(
+        card.getByRole("button", { name: "Schlüssel prüfen" })
+      ).toBeVisible();
+      // the refused answer is the browser's logged 401, asked for above
+      errors.console.length = 0;
+      await card.getByTestId("ask-input").fill("Wer baute die Frauenkirche?");
+      await card.getByTestId("ask-input").press("Enter");
       await expect(card).toContainText("George Bähr");
-      await expect(card.getByText("KI", { exact: true })).toBeVisible();
+      // (the refused answer keeps its empty, labelled row, as an
+      // uncoded refusal did before: the answer's label is the last)
+      await expect(card.getByText("KI", { exact: true }).last()).toBeVisible();
       await card
         .getByRole("button", { name: "Frag die Stadt schließen" })
         .click();
@@ -1740,6 +1764,34 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       await waitForFrames(page, 2);
       expectNoErrors(errors);
     }
+    // Night (scene-environment.ts): the lamps' halos and pools are drawn
+    // by their shared materials after dark only, and compiled ahead by day
+    // all the same — a first night builds nothing inside a frame.
+    const builtBefore = await page.evaluate(() => {
+      const handle = window.__poc?.handle;
+      if (!handle) {
+        throw new Error("handle not published");
+      }
+      const before = handle.getRenderInfo().framedBuilds.other;
+      handle.setSun(new Date("2026-07-15T23:00:00.000Z"));
+      return before;
+    });
+    let builtAfter: number;
+    try {
+      await waitForFrames(page, 2);
+      builtAfter = await page.evaluate(
+        () => window.__poc?.handle?.getRenderInfo().framedBuilds.other ?? -1
+      );
+    } finally {
+      // back to day for the tests after, whether or not the night held;
+      // its shadow redraw lands here, not in theirs
+      await page.evaluate(() => {
+        window.__poc?.handle?.setSun(new Date("2026-07-15T10:00:00.000Z"));
+      });
+      await waitForFrames(page, 3);
+    }
+    expect(builtAfter).toBe(builtBefore);
+    expectNoErrors(errors);
   });
 
   test("quality regresses while moving and recovers when still", async () => {
@@ -1750,7 +1802,8 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     // GPU.
     // On foot: the specs before leave the camera flying, 50 m over these
     // frames, where the finest ring rightly redraws. What they asked of the
-    // rings is drawn first, one a frame.
+    // rings is drawn first, one a frame (the last of them ends with a
+    // `setSun`, which asks all four).
     await page.evaluate(() => {
       const handle = window.__poc?.handle;
       const state = handle?.getCameraState();

@@ -6,7 +6,6 @@ import { familyLook, TRUNK_BASE } from "@/lib/city/tree-family";
 import { ageLook } from "@/lib/city/tree-age";
 import { buildTreeStakes } from "./tree-stakes";
 import { buildTreePlan } from "./tree-plan";
-import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import {
   CROWN_SHAPES,
   inventoryCovers,
@@ -435,7 +434,6 @@ export function* treeInventorySteps(
   group.name = "tree-inventory";
   // The scene's crown materials and uniforms, as the canopy's (sceneCrowns).
   const crownMats = sceneCrowns(ctx.sunDirection);
-  let { multiTuft } = LOOK_DEFAULTS;
   const counts = Object.fromEntries(CROWN_SHAPES.map((k) => [k, 0])) as Record<
     CrownShape,
     number
@@ -491,13 +489,10 @@ export function* treeInventorySteps(
       // Its trunks and broadleaf crowns ride in the canopy's chunks
       // (`instances`); only its own silhouettes are here.
       chunks: [],
-      multiTuft: () => multiTuft,
-      applyLook: (look) => {
-        ({ multiTuft } = look);
-      },
       setSeason: (day) => applySeasons(seasons, day),
       // Same rule as the canopy (vegetation-layer.ts swapCrownLod).
-      updateLod: (cameraPos) => swapCrownLod(cells, cameraPos, multiTuft),
+      updateLod: (cameraPos, multiTuft) =>
+        swapCrownLod(cells, cameraPos, multiTuft),
     },
   };
 }

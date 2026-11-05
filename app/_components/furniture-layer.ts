@@ -36,7 +36,6 @@ import {
   positionLocal,
   select,
   sin,
-  uniform,
   vec2,
   vec3,
 } from "three/tsl";
@@ -58,7 +57,7 @@ import { subdividePolyline } from "@/lib/city/polyline";
 import { finished } from "@/lib/city/build-steps";
 import type { Steps } from "@/lib/city/build-steps";
 import { Instances, instancePosition } from "./instancing";
-import type { Live } from "./shader-chunks";
+import { clockMinutes, sceneNight } from "./scene-environment";
 import { markThinCaster, sceneMaterial } from "./three-utils";
 
 /**
@@ -661,31 +660,11 @@ const MODEL_PARTS: Record<FurnitureModel, () => BufferGeometry[]> = {
 };
 
 /*
- * The shared clock and dusk: uniform nodes every tile's furniture reads
- * (set from create-app's setSun), like the fountains'.
+ * The clocks' hands show the scene's time and the lit advertising columns
+ * glow with the lamps: both read the scene environment's shared nodes
+ * (`clockMinutes`, on the minute only — the hands cast no shadow, so the
+ * shadow map is untouched — and `sceneNight`).
  */
-const furnitureNight: Live = uniform(0);
-/** minutes past 12 o'clock, 0–720 */
-const clockMinutes: Live = uniform(0);
-
-/** 0 by day → 1 at night: the lit advertising columns glow with the lamps. */
-export function setFurnitureNight(t: number): void {
-  furnitureNight.value = Math.min(Math.max(t, 0), 1);
-}
-
-/**
- * The clocks' hands show the scene's time — on the minute only (a uniform,
- * no re-upload; the hands cast no shadow, so the shadow map is untouched).
- * Returns whether the hands moved.
- */
-export function setClockTime(date: Date): boolean {
-  const minutes = (date.getHours() % 12) * 60 + date.getMinutes();
-  if (clockMinutes.value === minutes) {
-    return false;
-  }
-  clockMinutes.value = minutes;
-  return true;
-}
 
 /** Hands per face: (pivot z, side ±1) — a pole clock has two faces. */
 const CLOCK_FACES: Record<"clock" | "wallClock", [number, number][]> = {
@@ -961,7 +940,7 @@ function matteMaterial(): MeshStandardNodeMaterial {
 function glowMaterial(): MeshStandardNodeMaterial {
   const material = matteMaterial();
   material.emissiveNode = materialEmissive.add(
-    diffuseColor.rgb.mul(furnitureNight).mul(0.55)
+    diffuseColor.rgb.mul(sceneNight).mul(0.55)
   );
   return material;
 }

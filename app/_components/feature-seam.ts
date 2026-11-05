@@ -72,6 +72,19 @@ export function createWatch<T>(initial: T): Watched<T> {
   };
 }
 
+/**
+ * Follows a watched value: `listener` hears the current value at once and
+ * every change after, until the returned call — the read-then-subscribe a
+ * late starter does, in one synchronous step.
+ */
+export function follow<T>(
+  watch: Pick<Watch<T>, "get" | "subscribe">,
+  listener: (value: T) => void
+): () => void {
+  listener(watch.get());
+  return watch.subscribe(listener);
+}
+
 /** The scene's instant as the HUD set it last (its sun and time). */
 export interface SceneClock {
   date: Date;

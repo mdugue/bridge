@@ -39,7 +39,8 @@ server.
 ## Consequences
 
 - A new kind of askable thing adds a ray target from its data and lines in
-  `lib/city/inquiry*.ts`; the card stays the only place facts become text
+  `lib/city/inquiry*.ts`, a row in the kind table (`lib/city/inquiry.ts`)
+  and an arm in `lineage.ts`; the card stays the only place facts become text
   at length; the nameplate (`lib/city/nameplate.ts`) only repeats its
   title and a line or two.
 - Generated or estimated text, if ever shown, must be marked as such and

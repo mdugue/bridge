@@ -27,7 +27,7 @@ import type { GroundContext } from "@/lib/city/ground-clamp";
 import { subdividePolyline } from "@/lib/city/polyline";
 import type { Point2 } from "@/lib/city/polyline";
 import { Instances, instancePosition } from "./instancing";
-import { lampNight } from "./lamp-layer";
+import { sceneNight } from "./scene-environment";
 import { mapFadeNode } from "./map-overlay";
 import { addFootprint, addRibbon, meshFrom, mesh3, quad } from "./mesh-kit";
 import type { Mesh3, Pt } from "./mesh-kit";
@@ -433,7 +433,7 @@ function wakeMaterial(): MeshBasicNodeMaterial {
       smoothstep(0.5, 0.56, fract(along.div(FERRY_DASH_M)))
     );
     m.opacityNode = materialOpacity.mul(0.55).mul(dash).mul(mapFadeNode());
-    m.colorNode = materialColor.mul(mix(float(1), WAKE_NIGHT, lampNight));
+    m.colorNode = materialColor.mul(mix(float(1), WAKE_NIGHT, sceneNight));
     return m;
   });
 }

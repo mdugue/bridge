@@ -29,15 +29,12 @@ from __future__ import annotations
 import math
 import re
 from collections import defaultdict
-from pathlib import Path
 from typing import NamedTuple
 
 import numpy as np
-import rasterio
 import shapely
 import shapely.geometry
 from rasterio.features import rasterize
-from rasterio.merge import merge
 
 from . import rail_osm
 from .bridge import (
@@ -68,13 +65,15 @@ from .common import (
     Tile,
     above_ground,
     column,
+    dgm_paths,
     dlm_tunnels,
     feature,
     geometry_json,
+    mosaic,
     read_layer,
     write_geojson,
 )
-from .osm import below_ground, has_extract, read_osm, tag
+from .osm import below_ground, has_extract, osm_metres, read_osm, tag
 
 WIDTH = {"rail": 9.0, "road": 11.0, "path": 3.5, "other": 8.0}
 PAVEMENT_M = 2.0  # a road bridge's pavement either side of the carriageway (m)
@@ -265,31 +264,6 @@ def dlm_features(dlm: list[tuple[shapely.LineString, int, int]]) -> list[dict]:
 MARGIN = 700.0  # the ground a tile's decks see reaches this far past it (m)
 
 
-def mosaic(paths: list[Path], bounds: tuple[float, float, float, float]):
-    """The rasters that overlap `bounds`, merged on their 1 m grid (NaN where
-    none has data), with the mosaic's transform. None when none overlaps."""
-    xmin, ymin, xmax, ymax = bounds
-    sources = []
-    for path in paths:
-        src = rasterio.open(path)
-        b = src.bounds
-        if b.left < xmax and b.right > xmin and b.bottom < ymax and b.top > ymin:
-            sources.append(src)
-        else:
-            src.close()
-    if not sources:
-        return None, None
-    try:
-        arr, transform = merge(sources, bounds=bounds, nodata=NODATA)
-    finally:
-        for src in sources:
-            src.close()
-    out = arr[0].astype(np.float64)
-    out[out <= NODATA + 1] = np.nan
-    return out, transform
-
-
-NODATA = -9999.0
 # how far either side of a network's centreline a deck point counts as on it (m)
 NETWORK_REACH = {"rail": 8.0, "road": 8.0, "path": 5.0}
 # A network line runs on a deck when it follows the deck's axis within this
@@ -365,8 +339,7 @@ class Ground:
     def __init__(self, tile: Tile, networks: dict[str, list] | None = None):
         xmin, ymin, xmax, ymax = tile.bounds
         self.bounds = (xmin - MARGIN, ymin - MARGIN, xmax + MARGIN, ymax + MARGIN)
-        dgms = sorted((tile.data / "dgm").glob("dgm1_*_tiff/dgm1_*.tif"))
-        self.dgm, self.transform = mosaic(dgms, self.bounds)
+        self.dgm, self.transform = mosaic(dgm_paths(tile, self.bounds), self.bounds)
         if self.dgm is None:
             raise SystemExit(f"{tile.id}: no DGM1 under {tile.data / 'dgm'}")
         self.dom = None  # decks fall back to the DGM ramp
@@ -1201,12 +1174,11 @@ TRACK_KINDS = (*rail_osm.RAILWAYS, "tram")
 
 
 def mapped_height(other: str | None) -> float | None:
-    """A platform's mapped `height` (m; a value over 3 read as cm), when
-    plausible."""
-    m = re.match(r"\d+(\.\d+)?", (tag(other, "height") or "").strip())
-    if not m:
+    """A platform's mapped `height` (m, `osm.osm_metres`; a value over 3
+    read as cm), when plausible."""
+    h = osm_metres(tag(other, "height"))
+    if h is None:
         return None
-    h = float(m.group())
     h = h / 100 if h > 3 else h
     return h if 0.1 <= h <= 1.4 else None
 

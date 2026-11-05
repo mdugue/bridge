@@ -22,7 +22,11 @@ import {
 import { gapRoofs, lod2Roofs, treesOffRoofs } from "../../lib/city/roof-trees";
 import type { RoofFootprint } from "../../lib/city/roof-trees";
 import { treesOffStructures } from "../../lib/city/small-buildings";
-import { cityMeshSourceFiles, sideFileSource } from "../../lib/city/tile";
+import {
+  cityMeshSourceFiles,
+  sideFileSource,
+  tileArtifacts,
+} from "../../lib/city/tile";
 import type { CityJsonDocument } from "../../lib/city/types";
 import { BAKE_ENTRIES } from "../bake-entries";
 import { cropColonyRaster } from "../crop-raster";
@@ -57,7 +61,7 @@ export async function publishColonies(
 } | null> {
   const src = at(sideFileSource(SITE, file));
   const key = cacheKey([src], BAKE_ENTRIES.colonies);
-  const lowFile = file.replace(/\.png$/u, ".r1024.png");
+  const lowFile = tileArtifacts(tile).cultivatedLow.file;
   const cropFile = file.replace(/\.png$/u, ".crop.json");
   let cropping: ReturnType<typeof cropColonyRaster> | null = null;
   const cut = async () => {

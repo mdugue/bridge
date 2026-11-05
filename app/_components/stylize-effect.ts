@@ -44,7 +44,7 @@ import { DATA_HUE } from "./glass";
 import { fogFactorAt } from "./height-fog";
 import type { SceneFog } from "./height-fog";
 import type { F, V2, V3, V4 } from "./shader-chunks";
-import { styleNight } from "./sun-rig";
+import { sceneNight } from "./scene-environment";
 import { readSunShadow, shadowStandIn } from "./sun-shadow-read";
 import type { ShadowRingNodes } from "./sun-rings";
 import type { ViewLens } from "./view-lens";
@@ -514,9 +514,9 @@ export function createStylize(inputs: StylizeInputs): Stylize {
   const mode = uniform(1);
   const ink = uniform(0.7);
   const dusk = uniform(0);
-  // the sun rig's night factor (sun-rig.ts `styleNight`): the nights of
+  // the sun rig's night factor (scene-environment.ts `sceneNight`): the nights of
   // Papier and Strich follow the lamps, not the fading sun
-  const night = styleNight;
+  const night = sceneNight;
   const pixelScale = uniform(1);
   const resolution = uniform(new Vector2(1, 1));
   const upView = uniform(new Vector3(0, 1, 0));

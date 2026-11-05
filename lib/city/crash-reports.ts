@@ -564,7 +564,7 @@ function breadcrumbs(trail: Trail) {
 
 /** What the page that reports a crash knows about it. */
 export interface CrashContext {
-  /** it follows a GPU recovery (gpu-recovery.ts `recentlyRecovered`) */
+  /** it follows a GPU recovery (gpu-recovery.ts `followsRecovery`) */
   recovered?: boolean;
   /** when it started (Unix s): how soon after the death */
   nextStart?: number;

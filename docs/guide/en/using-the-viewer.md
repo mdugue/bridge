@@ -441,9 +441,11 @@ The button in the corner opens a panel with three tabs.
   ([privacy](/datenschutz#frag-die-stadt)). Also from *Fragen* in the
   toolbar. As a **voice guide**: *Sprechen* takes a question by
   microphone (where the browser recognises speech), *Vorlesen* reads the
-  answers aloud, and the *Hörmodus* softly darkens the edges and lets
-  the scene rest — for walking with the phone in your pocket, together with
-  *Live* in the toolbar. "What is that up ahead?" asks the city model
+  answers aloud (switched on, the last one at once), and the *Hörmodus*
+  softly darkens the edges and lets the scene rest — for walking with
+  the phone in your pocket, together with *Live* in the toolbar; ending
+  it ends the reading it switched on. Stopping an answer halts it, and
+  the view stays where it is. "What is that up ahead?" asks the city model
   what stands at the centre of the view (in Modell: where it is aligned)
   and opens its card.
 - **Steuerung** ("controls") — the full controls table, folded until you

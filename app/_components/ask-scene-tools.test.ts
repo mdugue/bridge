@@ -6,6 +6,7 @@ import type { AskScene } from "./ask-scene-tools";
 const STUB: AskScene = {
   abandon: () => {},
   from: () => null,
+  haltAnswerGlide: () => {},
   look: async () => ({}),
   setLayer: () => true,
   setListening: () => {},

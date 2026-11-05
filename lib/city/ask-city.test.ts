@@ -84,20 +84,20 @@ describe("requests", () => {
     expect(lastQuestion([{ role: "assistant", content: "a" }])).toBe("");
   });
 
-  test("a conversation keeps to the caps", () => {
+  test("a conversation keeps to the caps, and says which it broke", () => {
     const one = [{ role: "user", content: "Hallo" }];
     expect(conversationProblem(one, "Hallo")).toBeNull();
-    expect(conversationProblem([], "")).not.toBeNull();
+    expect(conversationProblem([], "")).toBe("no-question");
     const many = Array.from({ length: ASK_LIMITS.messages + 1 }, () => one[0]);
-    expect(conversationProblem(many, "Hallo")).not.toBeNull();
+    expect(conversationProblem(many, "Hallo")).toBe("too-long");
     const long = "x".repeat(ASK_LIMITS.questionChars + 1);
-    expect(
-      conversationProblem([{ role: "user", content: long }], long)
-    ).toContain("zu lang");
+    expect(conversationProblem([{ role: "user", content: long }], long)).toBe(
+      "question-too-long"
+    );
     const huge = [
       { role: "user", content: "y".repeat(ASK_LIMITS.conversationChars) },
     ];
-    expect(conversationProblem(huge, "kurz")).not.toBeNull();
+    expect(conversationProblem(huge, "kurz")).toBe("too-long");
   });
 });
 

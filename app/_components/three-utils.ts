@@ -539,6 +539,45 @@ export function layoutOf(geometry: BufferGeometry | undefined): string {
 }
 
 /**
+ * Runs `during` with each of `among` under `object` (itself and its
+ * descendants: a drawable, or a group or root a compile walks) shown, each
+ * put back after — what a compile walking it sees for its synchronous half.
+ * three skips a drawable whose material is hidden as it skips a hidden
+ * object, in a compile as in a frame, so a material hidden for now
+ * (scene-environment.ts `drawnAtNight`, by day: `withNightMaterialsShown`)
+ * would compile nothing and build in the first frame that shows it. One
+ * not in `among`, hidden for good, stays hidden.
+ */
+export function withMaterialsShown<T>(
+  object: Object3D,
+  among: ReadonlySet<Material>,
+  during: () => T
+): T {
+  const shown = new Map<Material, boolean>();
+  if (among.size === 0) {
+    return during();
+  }
+  object.traverse((o) => {
+    const { material } = o as Object3D & {
+      material?: Material | Material[];
+    };
+    for (const m of material ? [material].flat() : []) {
+      if (among.has(m) && !shown.has(m)) {
+        shown.set(m, m.visible);
+        m.visible = true;
+      }
+    }
+  });
+  try {
+    return during();
+  } finally {
+    for (const [m, visible] of shown) {
+      m.visible = visible;
+    }
+  }
+}
+
+/**
  * Runs `during` with `object` the only visible child of `group`, and the
  * group enabled: what a compile walking `group` sees for its synchronous
  * half — `object` under the group's clipping and nothing else of it

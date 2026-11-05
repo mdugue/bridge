@@ -33,7 +33,12 @@ retargeted/lowered as tiles land. The data layers are not wired into
 `data-layers-feature.ts`) and hear the spine through its hooks
 (`feature-seam.ts`: frame, stream change, the look store, the scene's
 clock — a watched value a late starter reads first); a tile's traffic
-slot waits for their builder. The picture styles and Modell are still
+slot waits for their builder. The scene environment
+(`scene-environment.ts`, not three's `scene.environment`) holds what the
+sun and the date move — the night node, the season watch, the clock —
+and a dressing's trees follow its season from birth to release
+(`followEnvironment`); the crown switch is read by the LOD pass, the
+traffic slot follows the look's layer from its hang. The picture styles and Modell are still
 wired by hand. The data layers' code stays in the scene chunk: the first `import()` chunk that imports three.js costs the first
 load ≈ 33 KB gz (three leaves the scene's hoisted scope), more than the
 data layers moved (ADR 0040) — measure before splitting one off.
@@ -277,8 +282,13 @@ plan 073); a slider (only *Nebel* is left) or anything else that moves
 is a `uniform()` node every tile's materials share; writing its
 `.value` retunes live, no rebuild. A shared `Vector3`
 passed to `uniform(v)` stays a live reference. Module-level uniform nodes
-that a setter writes (`fountainTime`, `lampNight`, `mapAltitude`) are
-fine. Inside `If`/branches read textures with an explicit `.level(0)` or
+that a setter writes (`fountainTime`, `mapAltitude`) are fine; what the
+sun and the date move (`sceneNight`, `fountainsOn`, `clockMinutes`) lives
+in `scene-environment.ts`, written by `setSun` through the environment —
+a layer reads it and adds no setter. A scene-wide material drawn only
+after dark wears `drawnAtNight` (its `visible`, no rebuild); a new compile
+path shows the night-only materials under what it compiles for its call (`withNightMaterialsShown`), or
+such a material builds in the first dusk frame. Inside `If`/branches read textures with an explicit `.level(0)` or
 `textureLoad` (no implicit derivatives in non-uniform control flow).
 
 What three keys a node build (TSL → WGSL/GLSL, **on the main thread**) by,
@@ -531,7 +541,8 @@ horizon's (an angle at 8 m and 22.5°, no shape, not on facades or trees).
 
 ## Surfaces (the land-cover splat)
 
-The bake writes only a **4096² class raster** (ids 0–8, `pipeline/bake/landcover.py`).
+The bake writes only a **4096² class raster** (ids 0–9, `pipeline/bake/landcover.py`;
+the ids and their names in `pipeline/bake/classes.py`).
 At runtime `landcover-splat.ts` paints it with the one palette
 (`lib/city/landcover.ts`, a `uniformArray`) into an RGBA target, one
 full-screen `QuadMesh` pass per tile (a scene-wide node material per raster
@@ -668,7 +679,9 @@ not sky.
   136–272, 96–232 at levels 1–3; `tileCacheBytesFor` in
   `app/_components/scene-profile.ts`, `lruCache.min/maxBytesSize`),
   weighed as the GPU holds it (the dressing plugin's `calculateBytesUsed`,
-  less the site-shared buffers). `max` is derived: the governor's soft
+  less the site-shared buffers; a tile that left is never re-weighed —
+  the cache frees it inside its eviction, and `recalculateBytesUsed`
+  there adds its bytes back to the total for good). `max` is derived: the governor's soft
   line − the fixed costs (24 B per drawn pixel + the shadow map) −
   100 MiB; `max − min` must exceed the largest tile (128 MiB on a phone).
   The 320–600 MB before had `max` above the governor's own hard line, so
@@ -823,7 +836,10 @@ to the same place is a leak; a steady one is the tile cache). What a
 tile adds beyond its glTF must reach the cache's weighing
 (`DressingPlugin.calculateBytesUsed`), and a phone's memory is watched
 by `lib/city/memory-governor.ts` — see docs/rendering.md, "GPU memory on
-a phone". A content's CPU copies go once its compile has uploaded them
+a phone". A part that lands after its tile is a `LatePart`
+(`late-parts.ts`: the dressing, the murals, the traffic bodies), which
+weighs it from its build, frees it after its compile and reports for it.
+A content's CPU copies go once its compile has uploaded them
 (`dropCpuCopies` over `cpuDroppable` / `cityCpuDroppable`, ADR 0047; a
 compile resolves only once every drawable under it is uploaded, those
 another compile had started too — `compile-lanes.ts`): **an

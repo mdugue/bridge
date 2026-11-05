@@ -30,7 +30,13 @@
  */
 import type { Landmark } from "./landmarks";
 import type { TerrainBounds } from "./terrain-geometry";
-import type { AskKind, CoarseDressingKind, DressingKind } from "./tile";
+import { TERRAIN_RASTER_KINDS } from "./tile";
+import type {
+  AskKind,
+  CoarseDressingKind,
+  DressingKind,
+  TileArtifactKind,
+} from "./tile";
 import type { WaterLook } from "./water-bodies";
 
 /**
@@ -97,6 +103,81 @@ export const FAR_CITY_ERROR = 4;
  *  the files the tile has). Which kinds these are is the artifact table's
  *  `dressing` column (lib/city/tile.ts). */
 export type DressingFiles = Partial<Record<DressingKind, string>>;
+
+/**
+ * The terrain extras' raster keys in the order they are written — part of
+ * every terrain glb's bytes and its cache key, so a new key goes at the
+ * end. Which file each names, on which level and beside what, is the
+ * artifact table's `terrain` column (lib/city/tile.ts).
+ */
+export const TERRAIN_RASTER_KEYS = [
+  "landcover",
+  "landcoverLow",
+  "ndvi",
+  "surface",
+  "edges",
+  "sport",
+  "sportTable",
+  "cultivated",
+  "cultivatedCrop",
+  "cultivatedLow",
+  "markings",
+  "markingsTable",
+  "markingsLow",
+  "svf",
+  "horizon",
+] as const satisfies readonly (keyof TerrainExtras)[];
+
+/** An extras key that names a raster (or its table) file. */
+export type TerrainRasterKey = Exclude<
+  (typeof TERRAIN_RASTER_KEYS)[number],
+  "cultivatedCrop"
+>;
+
+/** The keys every level writes, an empty name where the file is missing. */
+const ALWAYS_WRITTEN: ReadonlySet<string> = new Set([
+  "landcover",
+  "landcoverLow",
+]);
+
+/**
+ * The raster part of a terrain level's extras from the published names
+ * (artifact kind → name) and the colony crop: each key the table's
+ * `terrain` column names for `level`, written where its file is published
+ * and every file it goes beside is too (the colony raster only with its
+ * crop, which follows it). The class rasters' keys are always written.
+ */
+export function terrainRasterExtras(
+  names: Partial<Record<TileArtifactKind, string>>,
+  level: 0 | 1,
+  crop: TerrainExtras["cultivatedCrop"] | undefined
+): Pick<TerrainExtras, "landcover" | "landcoverLow"> &
+  Partial<Pick<TerrainExtras, (typeof TERRAIN_RASTER_KEYS)[number]>> {
+  const has = (kind: TileArtifactKind) =>
+    Boolean(names[kind]) && (kind !== "cultivatedRaster" || crop !== undefined);
+  const out: Record<string, unknown> = {};
+  for (const key of TERRAIN_RASTER_KEYS) {
+    if (key === "cultivatedCrop") {
+      if (out.cultivated !== undefined) {
+        out.cultivatedCrop = crop;
+      }
+      continue;
+    }
+    const row = TERRAIN_RASTER_KINDS.find((r) =>
+      r.levels[level]?.includes(key)
+    );
+    const written =
+      row !== undefined &&
+      has(row.kind) &&
+      (row.with ?? []).every((kind) => has(kind as TileArtifactKind));
+    if (written) {
+      out[key] = names[row.kind];
+    } else if (ALWAYS_WRITTEN.has(key)) {
+      out[key] = "";
+    }
+  }
+  return out as Pick<TerrainExtras, "landcover" | "landcoverLow">;
+}
 
 export interface TerrainExtras {
   bounds: TerrainBounds;

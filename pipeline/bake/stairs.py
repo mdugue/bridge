@@ -29,15 +29,23 @@ level, and the build lifts the terrain inside it (lib/city/stairs.ts)."""
 from __future__ import annotations
 
 import dataclasses
-import re
 from collections import Counter
 
 import numpy as np
-import rasterio
 import shapely
+from rasterio.transform import rowcol
 
-from .common import OSM_ATTRIBUTION, Tile, column, feature, geometry_json, write_geojson
-from .osm import has_extract, read_osm, tag
+from .common import (
+    OSM_ATTRIBUTION,
+    Tile,
+    column,
+    dgm_paths,
+    feature,
+    geometry_json,
+    mosaic,
+    write_geojson,
+)
+from .osm import has_extract, osm_length, osm_metres, osm_number, read_osm, tag
 from .walls import FENCE_WHERE, MATERIALS, lines_of, majority, site_extent
 
 WHERE = "highway = 'steps'"
@@ -89,15 +97,13 @@ MIN_RISER, MAX_RISER = 0.08, 0.25  # a tagged count outside this is a typo
 MIN_RISE = 0.3  # m; a flatter "flight" is not something the DGM can place
 MIN_LEN = 0.8  # m
 LANDING_PROBE = 1.0  # m beyond each end of the way
+# m of the neighbours' DGM the flights read past the tile: a landing's probe
+# and any flight that straddles the seam
+SEAM_M = 50.0
 WALL_REACH = 15.0  # m, how far either side a flight looks for its walls
 WALL_CLEARANCE = 0.3  # m, half a wall's thickness on each side
 TAGGED_RISER = 0.15  # m, `step:height` when a lifted flight has none
 TERRACE_SNAP = 3.0  # m, how close a lifted flight's top must be to a raised area
-
-
-def number(value: str | None) -> float | None:
-    num = re.search(r"\d*\.?\d+", value or "")
-    return float(num.group()) if num else None
 
 
 def skipped(other_tags: str | None) -> bool:
@@ -113,7 +119,7 @@ def skipped(other_tags: str | None) -> bool:
 
 
 def tagged_width(line: shapely.LineString, other_tags: str | None, areas: list) -> float | None:
-    tagged = number(tag(other_tags, "width"))
+    tagged = osm_metres(tag(other_tags, "width"))
     if tagged is not None:
         return min(max(tagged, MIN_W), MAX_W)
     for area in areas:
@@ -196,46 +202,68 @@ def wall_to_wall(line: shapely.LineString, walls: list, dgm: Dgm, rise: float):
 
 
 def step_count(rise: float, other_tags: str | None) -> int:
-    tagged = number(tag(other_tags, "step_count"))
+    tagged = osm_number(tag(other_tags, "step_count"))
     if tagged is not None and tagged >= 1 and MIN_RISER <= rise / round(tagged) <= MAX_RISER:
         return int(round(tagged))
     return max(2, round(rise / RISER))
 
 
 class Dgm:
-    """The tile's DGM1 on its 1 m grid, read as small-window medians."""
+    """The DGM1 on its 1 m grid around the tile — every committed tile's
+    within `SEAM_M` of it, so a flight across a seam finds its landing on
+    the neighbour's ground — read as small-window medians. Only the files
+    whose name places them there are opened (the tile and its grid
+    neighbours; one of another naming scheme is opened to see): the step
+    reads, and is re-baked for, those alone (`dgm_paths`)."""
 
     def __init__(self, tile: Tile):
-        self.xmin, self.ymin, self.xmax, self.ymax = tile.bounds
-        with rasterio.open(tile.dgm) as src:
-            self.z = src.read(1).astype(np.float64)
-            self.res = src.res[0]
+        xmin, ymin, xmax, ymax = tile.bounds
+        bounds = (xmin - SEAM_M, ymin - SEAM_M, xmax + SEAM_M, ymax + SEAM_M)
+        self.z, self.transform = mosaic(dgm_paths(tile, bounds), bounds)
+        if self.z is None:
+            raise SystemExit(f"no DGM1 for {tile.id}")
 
     def at(self, x: float, y: float) -> float | None:
-        if not (self.xmin <= x < self.xmax and self.ymin <= y < self.ymax):
+        if self.z is None:
             return None
-        n = self.z.shape[0]
-        c = min(int((x - self.xmin) / self.res), n - 1)
-        r = min(int((self.ymax - y) / self.res), n - 1)
+        r, c = rowcol(self.transform, x, y)
+        rows, cols = self.z.shape
+        if not (0 <= r < rows and 0 <= c < cols):
+            return None
         block = self.z[max(r - 1, 0) : r + 2, max(c - 1, 0) : c + 2]
-        vals = block[block > -1000]
+        vals = block[np.isfinite(block) & (block > -1000)]
         return float(np.median(vals)) if len(vals) else None
 
 
 def landing(dgm: Dgm, end, inner) -> float | None:
-    """The ground a probe's length beyond one end of the way (the end itself
-    when that lies off the tile)."""
+    """The ground a probe's length beyond one end of the way, on whichever
+    tile it lies (the end itself where no DGM lies beyond: the site's
+    edge)."""
     dx, dy = end[0] - inner[0], end[1] - inner[1]
     d = float(np.hypot(dx, dy)) or 1.0
     beyond = dgm.at(end[0] + dx / d * LANDING_PROBE, end[1] + dy / d * LANDING_PROBE)
     return beyond if beyond is not None else dgm.at(end[0], end[1])
 
 
+def tagged_riser(other_tags: str | None) -> float | None:
+    """A flight's `step:height` (m) within MIN_RISER–MAX_RISER: a bare
+    number past it but within that range in centimetres (`16`, `ca. 16`)
+    read as cm, anything else (`16 m`, `2`) no riser — times a step count
+    it was a flight 160 m high."""
+    length = osm_length(tag(other_tags, "step:height"))
+    if length is None:
+        return None
+    riser, unit = length
+    if MIN_RISER <= riser <= MAX_RISER:
+        return riser
+    return riser / 100 if not unit and MIN_RISER <= riser / 100 <= MAX_RISER else None
+
+
 def tagged_rise(other_tags: str | None) -> float | None:
-    count = number(tag(other_tags, "step_count"))
+    count = osm_number(tag(other_tags, "step_count"))
     if count is None or count < 2:
         return None
-    return round(count) * (number(tag(other_tags, "step:height")) or TAGGED_RISER)
+    return round(count) * (tagged_riser(other_tags) or TAGGED_RISER)
 
 
 def lifted(coords, z0: float, z1: float, other_tags: str | None, raised: list):
@@ -418,7 +446,7 @@ def is_raised(fields: dict[str, str | None]) -> bool:
     and tracks are the rail layer's)."""
     other = fields.get("other_tags")
     layer = tag(other, "layer") or ""
-    if layer.lstrip().startswith("-") or (number(layer) or 0) < 1:
+    if layer.lstrip().startswith("-") or (osm_number(layer) or 0) < 1:
         return False
     if any(fields.get(k) for k in ("building", "man_made", "landuse")):
         return False

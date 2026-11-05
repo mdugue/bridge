@@ -2247,7 +2247,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   616 of 15 302, Meißen 454 of 14 506. The trunk drops to the crown's
   base (`vegetation-layer.ts` `crownFrame`, `fitTrunks`); the coarse
   level's crowns carry the same base (*The coarse level's trees* below),
-  and an asked canopy tree's solid starts there too (`ask-more.ts`).
+  and an asked canopy tree's solid starts there too (`ask-items.ts`).
   **Gated off paths and water** via the DLM
   class raster, **off the carriageways and track beds** (`ways.traffic`, below), and off everything within 10 m of a DLM bridge (a bridge's
   steel on a park bank is as tall as a crown: the Blaues Wunder's pylons came
@@ -3719,7 +3719,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   shared with the tram stops of plan 024). The clocks' hands show the
   **scene time**: two hand quads per face, turned in the vertex shader from
   one shared uniform that `setSun` updates on the minute only
-  (`setClockTime`); the hands (a soft slate, not black) never cast, so
+  (`clockMinutes`, `scene-environment.ts`); the hands (a soft slate, not black) never cast, so
   the shadow map is not redrawn for them. All in the furniture's soft
   pastels: nothing near-black, no fine detail. The re-bake leaves every earlier object byte-identical (checked
   per tile); the new kinds are appended. Look unverified on a GPU.
@@ -3788,8 +3788,8 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   a faint glow from below and the jets a faint warm white, and a
   fountain's sculpture is lit softly from its basin (until 2026-10-20 a
   glow and jets bright enough to outshine the lit streets, "viel zu hell",
-  the maintainer) (`setFountainTime`,
-  `setFountainNight`, one shared clock and night factor). Merged/instanced,
+  the maintainer) (`setFountainTime` and the scene's `sceneNight`, one
+  shared clock and night factor). Merged/instanced,
   nine draw calls per tile at most (eight until 2026-10-21). Not walk-blocking (collision is
   buildings only).
   **What a monument is, from OSM** (2026-10-08): the DLM's Denkmal,
@@ -3899,7 +3899,8 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   block node is ~1 m across (`r`), not the 2.2 m basin; a point fountain
   inside a LoD2 footprint moves out within 3 m or is dropped (Dresden
   3 / 2, München 6 / 6). The jets run mid-April to October
-  (`fountainsRun`, one shared uniform, `setFountainSeason`). Scratch
+  (`fountainsRun`, one shared uniform, `fountainsOn` in
+  `scene-environment.ts`). Scratch
   bakes, HEAD code → this: forms Dresden 275 → 321, Hamburg 172 → 184,
   München 197 → 222; reliefs München 34 → 54, Dresden 82 → 88; `hm`
   Dresden 25, Hamburg 17, München 11.
@@ -4762,7 +4763,9 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   1.5 m — 2.5 m in a pedestrian area: `highway=pedestrian` or an
   `area:highway` outline within 1 m of its middle; 2026-10-21, it was
   2.5 m everywhere), `z` = the two
-  landing heights from the DGM 1 m beyond each end (3×3 m median), `n` from
+  landing heights from the DGM 1 m beyond each end (3×3 m median; the
+  committed DGMs around the tile mosaicked, so a flight across a seam keeps
+  both landings — 2026-11-04, before that both tiles dropped it), `n` from
   `step_count` when its riser is 8–25 cm, else rise ÷ 16 cm. Indoor,
   underground, tunnel and bridge flights and anything flatter than 30 cm are
   left out. Where the DGM lacks the structure a flight climbs (less than

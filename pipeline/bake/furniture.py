@@ -101,6 +101,7 @@ from scipy import ndimage as ndi
 
 from . import step_cache
 from .bridge import STEP, Axis
+from .classes import RAILWAY, ROAD, WATER
 from .common import (
     OSM_ATTRIBUTION,
     Tile,
@@ -112,9 +113,9 @@ from .common import (
     write_geojson,
 )
 from .landcover_osm import DUAL, LANE_M, ROAD_HALF_WIDTH, lanes, one_way
-from .osm import has_extract, read_osm, read_ways, tag
+from .osm import has_extract, osm_metres, osm_width, read_osm, read_ways, tag
 
-BLOCKED = (5, 8)  # railway, water
+BLOCKED = (RAILWAY, WATER)
 DECK_KINDS = ("road", "path")  # what stands on a bridge stands on these, never a rail deck
 ON_BRIDGE_M = 15.0  # a piece's way: the nearest highway within this
 LANES_M = 2.0  # on a deck, a lamp or kerbside piece this near a street's line is in its lanes
@@ -129,7 +130,6 @@ MAX_HOOPS = 12
 BOLLARD_M = (0.3, 3.0)  # a tagged bollard height, clamped
 METAL = {"metal", "steel", "iron", "bronze", "cast_iron", "stainless_steel", "aluminium"}
 SHELTER_DEDUP_M = 8.0  # a stop's bus_stop and platform nodes share one shelter
-ROAD = 7  # the class raster's road (landcover.py CLASSES)
 KERB_MAX_M = 15.0  # how far a signal or sign is moved to reach the kerb
 # ... and, where the road reaches farther all round (a square the class
 # raster counts as road), how far it is searched before the way's
@@ -191,7 +191,6 @@ EQUIPMENT = {
 EQUIPMENT_WHERE = 'other_tags LIKE \'%"playground"=>"%\''
 MIN_PLAYGROUND_M2 = 20.0
 BENCH_WAY_WHERE = 'other_tags LIKE \'%"amenity"=>"bench"%\''
-WATER = 8  # the class raster's water
 WATER_FACE_M = 12.0  # water this near a bench, on its far side, is what it looks at
 WATER_SIDE_DEG = 60.0  # ... within this of straight away from its way
 # The pieces of a playground that have a front (the rest are round).
@@ -292,11 +291,9 @@ def bollard(other: str | None) -> dict:
     """A bollard's tagged height (m, clamped) and whether it is metal — the
     Stallhof's 1.46 m bronze columns are mapped as bollards."""
     props: dict = {}
-    try:
-        h = float((tag(other, "height") or "").split()[0])
+    h = osm_metres(tag(other, "height"))
+    if h is not None:
         props["h"] = round(min(max(h, BOLLARD_M[0]), BOLLARD_M[1]), 2)
-    except (ValueError, IndexError):
-        pass
     if (tag(other, "material") or "") in METAL:
         props["metal"] = True
     return props
@@ -500,9 +497,9 @@ def carriageway_half(highway: str | None, other: str | None) -> float:
     class's (the OSM class raster's road, landcover_osm.ROAD_HALF_WIDTH;
     halved, not under 2 m, for one carriageway of a dual main road, as
     the class raster paints it)."""
-    width = re.search(r"\d*\.?\d+", tag(other, "width") or "")
-    if width and float(width.group()) > 0:
-        return float(width.group()) / 2
+    width = osm_width(tag(other, "width"))
+    if width is not None:
+        return width / 2
     n = lanes(other)
     if n is not None and n >= 2:
         return n * LANE_M / 2
