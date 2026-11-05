@@ -174,9 +174,10 @@ export function createAskSession(ports: AskSessionPorts): AskSession {
   } = {
     typed: ({ text }) => ask(text, reading),
     spoken: ({ text }) => {
-      // one heard while an answer loads, or while the key is checked
-      // again (its token would be refused), waits in the field
-      if (loading || paused) {
+      // one heard while an answer loads, while the key is checked again
+      // (its token would be refused) or with no conversation attached to
+      // ask, waits in the field
+      if (loading || paused || !run) {
         return "draft";
       }
       // read aloud only where the device can: a voice-style answer

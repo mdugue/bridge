@@ -338,7 +338,7 @@ describe("the switches", () => {
     expect(calls).toEqual(["waits.setListening:false"]);
   });
 
-  test("a spoken question with no conversation to ask leaves the reading the Hörmodus began", () => {
+  test("a spoken question with no conversation to ask waits in the field, the Hörmodus's reading kept", () => {
     const detached = createAskSession({
       speech: fakeSpeech(),
       dictation: fakeDictation(),
@@ -346,7 +346,7 @@ describe("the switches", () => {
     });
     detached.dispatch({ type: "hearingPressed" });
     expect(detached.dispatch({ type: "spoken", text: "Was ist das?" })).toBe(
-      "ignored"
+      "draft"
     );
     // still the Hörmodus's reading: ending it ends that too
     detached.dispatch({ type: "hearingPressed" });

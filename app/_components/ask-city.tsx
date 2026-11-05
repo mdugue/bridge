@@ -656,7 +656,8 @@ const Conversation = ({
     }
   };
   // a spoken question gets a spoken answer; one heard while an answer
-  // still loads (or while the key is checked again) waits in the field,
+  // still loads (or while the key is checked again, or before a run is
+  // attached) waits in the field,
   // empty or not: never over what was typed; a spoken question that is
   // asked leaves a typed draft where it is
   const askSpoken = (question: string) => {
