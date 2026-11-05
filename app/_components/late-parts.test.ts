@@ -202,7 +202,7 @@ test("a part that hangs at the wait and ran out of memory within it never hangs"
   expect(calls.changed).toBe(0);
 });
 
-test("a part disposed while its compile runs comes down now and is freed once the compile ends, once", async () => {
+test("a part disposed while its compile runs comes down now and is freed, and leaves the tile's weight, once the compile ends, once", async () => {
   jest.useFakeTimers();
   try {
     const log: string[] = [];
@@ -221,12 +221,18 @@ test("a part disposed while its compile runs comes down now and is freed once th
     jest.advanceTimersByTime(COMPILE_WAIT_MS);
     await flush();
     expect(log).toEqual(["a build", "a hang"]);
+    const weighed = calls.reweigh;
     expect(handle.dispose()).toEqual([]);
     expect(log).toEqual(["a build", "a hang", "a down"]);
     expect(freed.count).toBe(0);
+    // still on the GPU: still weighed (ADR 0047)
+    expect(parts.bytes()).toBe(100);
+    expect(calls.reweigh).toBe(weighed);
     compiles[0].end("done");
     await flush();
     expect(freed.count).toBe(1);
+    expect(parts.bytes()).toBe(0);
+    expect(calls.reweigh).toBe(weighed + 1);
     expect(calls.freeFailed).toEqual([["free threw"]]);
     // a second dispose or the release frees nothing more
     expect(handle.dispose()).toEqual([]);

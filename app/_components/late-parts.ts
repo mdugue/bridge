@@ -284,11 +284,20 @@ export function createLateParts(host: LateHost): LateParts {
         host.reweigh();
       }
     };
+    /** it leaves the tile's weight once its GPU free has run (ADR 0047:
+     *  a part freed later is still on the GPU until then) */
+    const unweigh = () => {
+      live.delete(state);
+      weigh(0);
+    };
     /** frees it once, now or once its compile ends; what threw now */
     const free = (): unknown[] => {
-      live.delete(state);
+      if (freed) {
+        return [];
+      }
       const built = made.value;
-      if (freed || built === null) {
+      if (built === null) {
+        live.delete(state);
         return [];
       }
       freed = true;
@@ -305,17 +314,22 @@ export function createLateParts(host: LateHost): LateParts {
         errors.push(error);
       }
       takeDown = null;
-      weigh(0);
       const running = compiling;
       if (running) {
+        // weighed on until then: the cache must not admit tiles into
+        // memory this part still holds
         const freeAfter = async () => {
           await running.catch(noop);
-          report(part.free(built));
+          const threw = part.free(built);
+          unweigh();
+          report(threw);
         };
         void freeAfter();
         return errors;
       }
-      return [...errors, ...part.free(built)];
+      const threw = part.free(built);
+      unweigh();
+      return [...errors, ...threw];
     };
     /** it and what it owns go */
     const goAway = (): unknown[] => {

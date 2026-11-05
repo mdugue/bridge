@@ -1097,7 +1097,8 @@ stays their measure; the tile cache counts true bytes.
 - **The tile cache** weighs a tile as the GPU holds it: the glTF (by
   count, so a buffer whose CPU copy is gone weighs what it did), the
   terrain's rasters, and what its late parts weigh from their build on
-  (`late-parts.ts`): the dressing's geometry, the traffic bodies'
+  until their GPU free has run — one disposed mid-compile is freed, and
+  leaves the weight, once that compile ends (`late-parts.ts`): the dressing's geometry, the traffic bodies'
   geometry and a city tile's murals (their drawings with mipmaps — the
   pen lines one channel, the wash small — the texels dropped once
   uploaded: 2.7 MB for Dresden's two on their tile, 2.0 MB on a phone,

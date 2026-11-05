@@ -887,6 +887,9 @@ test("a dressing hangs on its tile, its traffic handed the tile; released, it co
   expect(dressings.size).toBe(0);
   expect(furniture.parent).toBeNull();
   expect(freed).toBe(true);
+  // the traffic's compile still runs: its bodies weigh until it ends
+  compiles[1].end("done");
+  await flush();
   expect(parts.bytes()).toBe(0);
 });
 
@@ -1398,7 +1401,7 @@ test("a tile released while its traffic compiles gets nothing shown, asked or we
   expect(parts.bytes()).toBe(0);
 });
 
-test("bodies freed while their compile runs are freed once it ends", async () => {
+test("bodies freed while their compile runs are freed, and weighed until then, once it ends", async () => {
   const { attach, calls, compiled, finish, parts, slot } = trafficTile();
   attach();
   const showing = slot.show();
@@ -1413,13 +1416,14 @@ test("bodies freed while their compile runs are freed once it ends", async () =>
   // traffic's compile still runs: freed only after
   expect(slot.dispose()).toEqual([]);
   expect(slot.group).toBeNull();
-  expect(parts.bytes()).toBe(0);
+  expect(parts.bytes()).toBeGreaterThan(0);
   await nextTask();
   expect(freed).toBe(false);
   finish();
   await showing;
   await nextTask();
   expect(freed).toBe(true);
+  expect(parts.bytes()).toBe(0);
   expect(calls.freeFailed).toEqual([]);
 });
 
