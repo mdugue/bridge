@@ -44,8 +44,9 @@ import type { F, V3 } from "./shader-chunks";
  *
  * Which lamps: per set a fixed array, scene-wide like the water's clock,
  * of the lamps by the water or by a track (tile-stream.ts `lampsBy`)
- * nearest the eye in front of it, chosen per frame on the CPU
- * (`createLampReflections`). Its length is fixed, a tier loops over its
+ * nearest the eye in each compass sector round it, chosen per frame on
+ * the CPU (`createLampReflections`) — by the eye's place alone, so a turn
+ * of the view never swaps a lamp. Its length is fixed, a tier loops over its
  * own share (`MirrorSet.slots`), and a lamp leaving the share fades out
  * over a band before it goes, as the real lights hand over
  * (lamp-layer.ts). By day the counts are 0.
@@ -97,14 +98,6 @@ const HAND_OVER = 0.2;
 /** …at most this many metres, so a row of lamps at one distance keeps
  *  all but its last few at full strength. */
 const HAND_OVER_M = 40;
-/** A lamp this near (m) is mirrored whichever way the eye looks. */
-const NEAR_ANY_WAY = 40;
-/** How far to the side a lamp may stand (cos of its angle off the
- *  horizontal look) and still be mirrored, fading in from the first: a
- *  reflection lies between the eye and its lamp, so a lamp off screen
- *  leaves one off screen. */
-const FRONT: [number, number] = [-0.05, 0.25];
-
 /** The slope spread (rad, tan) of the ripples finer than a pixel: near
  *  (at a pixel's few centimetres) and far (metres a pixel). */
 const SPREAD: [number, number] = [0.035, 0.08];
@@ -216,25 +209,28 @@ export interface LampReflections {
     water: readonly Vector3[];
   }) => void;
   setNightFactor: (t: number) => void;
-  /** chooses the lamps for the eye at `eye` looking along `look` (world) */
-  update: (eye: Vector3, look: Vector3) => void;
+  /** chooses the lamps for the eye at `eye` (world) */
+  update: (eye: Vector3) => void;
   /** empties the shared arrays: the next page's scene starts with none */
   dispose: () => void;
 }
 
-/** The look's sectors (by the lamps' angle off it), each keeping its own
- *  share of the slots: a row of quay lamps across the view is mirrored
- *  all along, not only its nearest stretch. Beyond the outer angle (rad)
- *  a lamp counts to the outer sector. */
-const SECTORS = 8;
-const SECTOR_SPAN = 0.9;
+/** The compass sectors round the eye (by the lamps' bearing from it),
+ *  each keeping its own share of the slots: a row of quay lamps across
+ *  the river is mirrored all along, not only its nearest stretch. Fixed
+ *  to the world, not to the look: turning the eye changes no lamp, only
+ *  walking does, and then through the hand-over's fade. As many sectors
+ *  as slots, at most this many (15° each), two lamps a sector then. */
+const MAX_SECTORS = 24;
+
+/** A tier's sectors for `most` slots. */
+const sectorsFor = (most: number) => Math.max(1, Math.min(most, MAX_SECTORS));
 
 /** Scratch for `rankReflected`: one entry per head that is a candidate. */
 export interface RankScratch {
-  /** candidates' head indices, distances, sides and sectors */
+  /** candidates' head indices, distances and sectors */
   idx: number[];
   dist: number[];
-  front: number[];
   sector: number[];
   /** the sectors' kept counts and cut distances */
   kept: number[];
@@ -248,45 +244,38 @@ export function rankScratch(): RankScratch {
   return {
     idx: [],
     dist: [],
-    front: [],
     sector: [],
-    kept: Array.from({ length: SECTORS }, () => 0),
-    cut: Array.from({ length: SECTORS }, () => Number.POSITIVE_INFINITY),
+    kept: Array.from({ length: MAX_SECTORS }, () => 0),
+    cut: Array.from({ length: MAX_SECTORS }, () => Number.POSITIVE_INFINITY),
     order: [],
     chosen: [],
   };
 }
 
 /**
- * Ranks `heads` for the eye at `eye` looking along `look`: per sector of
- * the look (`SECTORS`) its nearest `most / SECTORS` within `reach` (m;
- * fading from its first) in front of the eye (or near it), into `out` as
- * (x, y, z, fade); returns how many. The fade is the reach's, the side's,
- * and the hand-over's toward the sector's first lamp left out.
+ * Ranks `heads` for the eye at `eye`: per compass sector round it
+ * (`sectorsFor`) its nearest share of `most` within `reach` (m; fading from
+ * its first), into `out` as (x, y, z, fade); returns how many. The fade is
+ * the reach's and the hand-over's toward the sector's first lamp left out.
+ * The look plays no part, so a turn of the eye swaps no lamp.
  */
 export function rankReflected(
   heads: readonly Vector3[],
-  view: { eye: Vector3; look: Vector3 },
+  eye: Vector3,
   pick: { most: number; reach: readonly [number, number] },
   out: Vector4[],
   scratch: RankScratch
 ): number {
-  const { eye, look } = view;
   const { most, reach } = pick;
-  const { idx, dist, front, sector, kept, cut, order, chosen } = scratch;
+  const { idx, dist, sector, kept, cut, order, chosen } = scratch;
+  const sectors = sectorsFor(most);
   idx.length = 0;
   order.length = 0;
   chosen.length = 0;
   dist.length = 0;
-  front.length = 0;
   sector.length = 0;
   kept.fill(0);
   cut.fill(Number.POSITIVE_INFINITY);
-  const lx = look.x;
-  const lz = look.z;
-  const ll = Math.hypot(lx, lz);
-  // looking (nearly) straight down, every side is in front
-  const anyWay = ll < 0.2;
   for (let i = 0; i < heads.length; i += 1) {
     const h = heads[i];
     const dx = h.x - eye.x;
@@ -295,30 +284,19 @@ export function rankReflected(
     if (!(d < reach[1])) {
       continue;
     }
-    const ahead = anyWay ? 1 : (dx * lx + dz * lz) / (ll * Math.max(d, 1e-6));
-    const side = anyWay || d < NEAR_ANY_WAY ? 1 : ahead;
-    if (side < FRONT[0]) {
-      continue;
-    }
-    // the angle off the look, right of it positive (the sector)
-    const angle = anyWay ? 0 : Math.atan2(dx * lz - dz * lx, dx * lx + dz * lz);
-    const s = Math.min(
-      SECTORS - 1,
-      Math.max(
-        0,
-        Math.floor(((angle + SECTOR_SPAN) / (2 * SECTOR_SPAN)) * SECTORS)
-      )
-    );
+    // the bearing round the eye, 0 … 2π (the sector)
+    const bearing = Math.atan2(dx, -dz) + Math.PI;
     order.push(idx.length);
     idx.push(i);
     dist.push(d);
-    front.push(side);
-    sector.push(s);
+    sector.push(
+      Math.min(sectors - 1, Math.floor((bearing / (2 * Math.PI)) * sectors))
+    );
   }
   // nearest first; each sector keeps its share, the first it leaves out
   // its cut
   order.sort((a, b) => dist[a] - dist[b]);
-  const share = Math.max(1, Math.floor(most / SECTORS));
+  const share = Math.max(1, Math.floor(most / sectors));
   for (const k of order) {
     const s = sector[k];
     if (kept[s] < share) {
@@ -334,7 +312,6 @@ export function rankReflected(
     const c = cut[sector[k]];
     const fade =
       (1 - smooth(reach[0], reach[1], d)) *
-      smooth(FRONT[0], FRONT[1], front[k]) *
       (Number.isFinite(c)
         ? smooth(c, c - Math.min(c * HAND_OVER, HAND_OVER_M), d)
         : 1);
@@ -360,9 +337,9 @@ function chooser(set: MirrorSet, tier: DeviceTier) {
   const scratch = rankScratch();
   const out = set.heads.array as Vector4[];
   const pick = { most, reach: set.reach };
-  return (heads: readonly Vector3[], view: { eye: Vector3; look: Vector3 }) => {
+  return (heads: readonly Vector3[], eye: Vector3) => {
     set.count.value =
-      heads.length > 0 ? rankReflected(heads, view, pick, out, scratch) : 0;
+      heads.length > 0 ? rankReflected(heads, eye, pick, out, scratch) : 0;
   };
 }
 
@@ -386,11 +363,10 @@ export function createLampReflections(tier: DeviceTier): LampReflections {
     setNightFactor: (t) => {
       night = t;
     },
-    update: (eye, look) => {
+    update: (eye) => {
       const lit = night > 0.001;
-      const view = { eye, look };
-      water(lit ? heads.water : none, view);
-      tracks(lit ? heads.tracks : none, view);
+      water(lit ? heads.water : none, eye);
+      tracks(lit ? heads.tracks : none, eye);
     },
     dispose: () => {
       WATER.count.value = 0;

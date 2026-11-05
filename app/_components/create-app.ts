@@ -123,7 +123,7 @@ import { canvasSizeFor } from "./canvas-size";
 import { createModelRig } from "./model-rig";
 import type { ModelHud, ModelRig, ViewMode } from "./model-rig";
 import type { ModelCamera } from "./model-camera";
-import { setViewDirection, viewRay } from "./view-direction";
+import { setViewDirection } from "./view-direction";
 import { siteMurals } from "./mural-layer";
 import { createViewLens } from "./view-lens";
 import { setPickRay } from "./view-ray";
@@ -3281,7 +3281,7 @@ async function bootApp(
       setMapAltitude(camera.position.y - groundY);
       // Repoint the shared real lamp lights at the nearest heads.
       lampLights.updateNearest(camera.position);
-      lampReflections.update(camera.position, shadowViewDir);
+      lampReflections.update(camera.position);
       lantern.follow(
         camera.position,
         shadowViewDir,
@@ -3303,9 +3303,7 @@ async function bootApp(
     eye.set(pivot.x, pivot.y + equivalent, pivot.z);
     setMapAltitude(equivalent);
     lampLights.updateNearest(eye);
-    // Modell's parallel camera looks straight down: the picture's own
-    // direction is the lens's (view-direction.ts `viewRay`)
-    lampReflections.update(eye, viewRay.value);
+    lampReflections.update(eye);
     lantern.off();
     stepVegetation(elapsed, eye, tick);
     return equivalent;
