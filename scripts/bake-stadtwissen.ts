@@ -189,7 +189,10 @@ function directoryEntry(
 export interface MonumentsRead {
   features: readonly {
     geometry: MonumentGeometry;
-    properties: Pick<MonumentProps, "kind" | "material" | "name" | "wikidata">;
+    properties: Pick<
+      MonumentProps,
+      "kind" | "material" | "materialWikidata" | "name" | "wikidata"
+    >;
   }[];
 }
 
@@ -223,7 +226,7 @@ function anchorOf(geometry: {
 export function monumentsOf(file: MonumentsRead | undefined): WissenMonument[] {
   const found: (Omit<WissenMonument, "id"> & { base: string })[] = [];
   for (const f of file?.features ?? []) {
-    const { name, kind, material, wikidata } = f.properties;
+    const { name, kind, material, materialWikidata, wikidata } = f.properties;
     const at = anchorOf(f.geometry);
     if (!(name && at)) {
       continue;
@@ -236,6 +239,7 @@ export function monumentsOf(file: MonumentsRead | undefined): WissenMonument[] {
       y: round1(at[1]),
       ...(material ? { material } : {}),
       ...(wikidata ? { wd: wikidata } : {}),
+      ...(materialWikidata ? { materialWd: materialWikidata } : {}),
     });
   }
   // by the metre; monuments in the same metre (a pair of plaques) take a
@@ -248,6 +252,7 @@ export function monumentsOf(file: MonumentsRead | undefined): WissenMonument[] {
       m.kind,
       m.material ?? "",
       m.wd ?? "",
+      m.materialWd ?? "",
       String(m.x),
       String(m.y),
     ].join("\u0000");

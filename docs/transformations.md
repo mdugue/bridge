@@ -3821,7 +3821,10 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   `data/_raw/<provider>/wikidata/monuments_<t>.json`, Stolpersteine left
   out; the item of the monument's name within 40 m, else the nearest
   within 10 m): 15 on Dresden, the Goldener Reiter's copper and gold leaf
-  among them, `wikidata` naming the item on the card. The viewer turns
+  among them, `materialWikidata` naming the item on the card. Since
+  2026-11-05 (plan 081) a monument OSM links to its item (`wikidata`,
+  which now always means OSM's link) takes that item first, whatever
+  the distance, and no neighbour can claim it. The viewer turns
   the material into a muted tone in the clay's palette (`MATERIAL_TONE`,
   `markerTones`: warm sandstone, grey granite, bronze's dark green-brown
   patina, copper's verdigris, a soft gold): the figure takes the most

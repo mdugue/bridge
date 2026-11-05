@@ -64,8 +64,10 @@ export interface WissenMonument {
   id: string;
   /** statue, fountain, column, stone (monuments.py) */
   kind: string;
-  /** its material, where the DLM names one */
+  /** its material: OSM `material`, else Wikidata's */
   material?: string;
+  /** the Wikidata item its material comes from, where OSM names none */
+  materialWd?: string;
   name: string;
   /** the Wikidata item OSM links it to */
   wd?: string;
