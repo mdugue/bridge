@@ -21,7 +21,7 @@ const slow = (ms: number) => (process.env.CI ? ms * 3 : ms);
 
 /**
  * The viewer specs run the `lite` scene profile (see scene-profile.ts): the
- * primary tile alone and a 512² shadow map. Under SwiftShader the full 2x2
+ * primary tile alone and a 256² shadow rings. Under SwiftShader the full 2x2
  * block costs ~14 s to boot and ~4 s per clay frame; lite trades away the
  * scenic context — which nothing here asserts on — for a suite that finishes
  * in a couple of minutes instead of twenty.

@@ -478,6 +478,14 @@ export function createSunRings(
     reach.set(centre.x, -centre.z, holds);
   };
 
+  /** The frames begin: the wait for a first draw counts from here, however long
+   *  the boot took to get here. */
+  const startFrames = (now: number) => {
+    if (lastDraw === Number.NEGATIVE_INFINITY) {
+      lastDraw = now;
+    }
+  };
+
   /** Asks every ring that shows, and that `which` picks, to redraw. */
   const askShown = (which?: (ring: Ring, i: number) => boolean) => {
     const now = performance.now();
@@ -551,9 +559,7 @@ export function createSunRings(
       return rings.some(
         (ring) =>
           ring.dirtySince !== null &&
-          // nothing drawn yet: the boot, however long it took to get here
-          (lastDraw === Number.NEGATIVE_INFINITY ||
-            now - Math.max(ring.dirtySince, lastDraw) < RING_STALL_MS)
+          now - Math.max(ring.dirtySince, lastDraw) < RING_STALL_MS
       );
     },
     depth: () => node.depth,
@@ -574,6 +580,7 @@ export function createSunRings(
     reach,
     setFootprint: (centre, radius) => {
       const now = performance.now();
+      startFrames(now);
       if (
         !tiled ||
         fitted.radius !== radius ||
@@ -601,6 +608,7 @@ export function createSunRings(
     },
     setView: (view) => {
       const now = performance.now();
+      startFrames(now);
       tiled = false;
       for (let i = 0; i < SHADOW_RINGS; i += 1) {
         const half = SHADOW_RING_HALVES[i];

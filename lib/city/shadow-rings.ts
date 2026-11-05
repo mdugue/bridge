@@ -39,7 +39,7 @@ export const THIN_CASTER_RINGS = { slender: 3, tiny: 1 } as const;
 /** How many of the finest rings a furniture cell's flip asks to redraw: the
  *  ones that draw any furniture (`THIN_CASTER_RINGS.slender`), not the widest
  *  with its buildings and crowns. */
-export const NEAR_CHANGE_RINGS = 3;
+export const NEAR_CHANGE_RINGS = THIN_CASTER_RINGS.slender;
 
 /** The PCF spread in texels (three's `shadow.radius`). Five samples spread
  *  wider than this leave gaps a thin shadow shows as a stipple. */

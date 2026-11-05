@@ -418,7 +418,7 @@ change, not a re-bake
   band (occluders 80 m–10 km away; past 1.5 km the terrain alone) holds
   the long low-sun shadows and the hills on the far horizon the
   frustum above cuts off; its near band (8–80 m) the neighbours' shadows on
-  ground past the frustum, faded in over the frustum's last 20 % and whole
+  ground past the rings' reach, faded in over its last 20 % and whole
   beyond it (inside, the shadow map has them with their shapes)
   ([ADR 0009](./adr/0009-shadow-recipe.md)). Both
   rows at 0 are the picture without them; the defaults (0.5, 0.8) are
