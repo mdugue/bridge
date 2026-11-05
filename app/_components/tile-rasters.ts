@@ -323,17 +323,21 @@ const classHooks: KindHooks<SplatRasters> = {
       classes.dispose();
       signal.throwIfAborted();
     }
-    return {
-      ...raster,
-      water,
-      painted: paintLandcoverSplat(
+    let painted: SplatRasters["painted"];
+    try {
+      painted = paintLandcoverSplat(
         renderer,
         classes,
         width,
         height,
         splatScaleFor(width)
-      ),
-    };
+      );
+    } catch (error) {
+      // a share that fails frees nothing itself: the classes are on the GPU
+      classes.dispose();
+      throw error;
+    }
+    return { ...raster, water, painted };
   },
   textures: ({ texture, painted }) => [texture, painted.texture],
   free: ({ texture, painted }) => {

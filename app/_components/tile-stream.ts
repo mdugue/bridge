@@ -2059,6 +2059,11 @@ export class DressingPlugin {
         grids: this.grids,
         signal: either.signal,
       });
+    } catch (error) {
+      // no terrain to dispose them: its hold goes here, or its rasters stay
+      // on the GPU for the session
+      rasters.release();
+      throw error;
     } finally {
       either.release();
       this.loadAborts.delete(scene);
