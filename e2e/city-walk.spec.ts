@@ -1748,13 +1748,25 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     // every step). Asserted through __poc.regressed rather than pixels — the
     // pass's visual delta is exactly what SwiftShader renders least like a
     // GPU.
+    // On foot: the specs before leave the camera flying, 50 m over these
+    // frames, where the finest ring rightly redraws. What they asked of the
+    // rings is drawn first, one a frame.
+    await page.evaluate(() => {
+      const handle = window.__poc?.handle;
+      const state = handle?.getCameraState();
+      if (handle && state) {
+        handle.applyCameraState({ ...state, mode: "walk", pitchDeg: 0 });
+      }
+    });
+    await waitForFrames(page, 2);
+    await page.waitForFunction(() => !window.__poc?.handle?.shadowBusy());
     const before = await page.evaluate(() => ({
       frames: window.__poc?.frames ?? 0,
       shadows: window.__poc?.shadowRenders ?? 0,
     }));
     await page.keyboard.down("KeyW");
-    // 8 walking frames move at most 8 × 0.45 m = 3.6 m — inside the 30 m
-    // follow dead zone, so the shadow map must not be redrawn on the way.
+    // 8 walking frames move at most 8 × 0.45 m = 3.6 m — inside the finest
+    // ring's 16 m dead zone, so no ring must be redrawn on the way.
     await waitForFrames(page, 8);
     expect(await page.evaluate(() => window.__poc?.regressed)).toBe(true);
     const after = await page.evaluate(() => ({

@@ -59,7 +59,7 @@ import { finished } from "@/lib/city/build-steps";
 import type { Steps } from "@/lib/city/build-steps";
 import { Instances, instancePosition } from "./instancing";
 import type { Live } from "./shader-chunks";
-import { sceneMaterial } from "./three-utils";
+import { markThinCaster, sceneMaterial } from "./three-utils";
 
 /**
  * Street furniture (`pipeline/bake/furniture.py`: OSM benches, picnic
@@ -822,6 +822,7 @@ function instanced(
   // Spread-out cloud: recompute the sphere or it culls when the origin is off-screen.
   mesh.computeBoundingSphere();
   mesh.castShadow = true;
+  markThinCaster(mesh);
   mesh.receiveShadow = true;
   mesh.name = `furniture-${model}`;
   return mesh;

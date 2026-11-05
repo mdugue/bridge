@@ -45,7 +45,7 @@ import {
   lineLevelsAt,
   spanRuns,
 } from "./rail-layer";
-import { sceneMaterial } from "./three-utils";
+import { markThinCaster, sceneMaterial } from "./three-utils";
 import { addWire, wireMesh, wires } from "./wire-ribbons";
 import type { Wires } from "./wire-ribbons";
 
@@ -608,6 +608,7 @@ function buildMasts(masts: Point2[], ctx: GroundContext): Instances | null {
   mesh.instanceMatrix.needsUpdate = true;
   mesh.computeBoundingSphere();
   mesh.castShadow = true;
+  markThinCaster(mesh);
   mesh.receiveShadow = true;
   mesh.name = "tram-masts";
   return mesh;

@@ -91,6 +91,7 @@ import {
   SHADOW_MAX_RADIUS,
   shadowStreamResolution,
 } from "@/lib/city/shadow-fit";
+import { changedTiles, tileArea } from "@/lib/city/shadow-rings";
 import { cutOutFromView } from "@/lib/city/section";
 import { exportScale, exportTiles } from "@/lib/city/image-export";
 import type { ExportTile } from "@/lib/city/image-export";
@@ -217,7 +218,7 @@ import {
 } from "./scene-profile";
 import type { SceneBudget } from "./scene-profile";
 import { createSunRig, styleNight, sunStateAt } from "./sun-rig";
-import type { AirView, SunState } from "./sun-rig";
+import type { SunState } from "./sun-rig";
 import type { GroundUniforms, TerrainLayer } from "./terrain-layer";
 import {
   bufferBytes,
@@ -635,6 +636,8 @@ export interface CityWalkHandle {
   viewMoving: () => boolean;
   /** Tiles or their dressing are still streaming in for the view. */
   streamBusy: () => boolean;
+  /** A ring of the sun's shadow map still waits for its redraw. */
+  shadowBusy: () => boolean;
   /** What the nameplate sets in the city and where (nameplate-layer.ts),
    *  null while nothing is named; tests and QA read it. */
   nameplateShown: () => { title: string; mode: string; spot: string } | null;
@@ -2878,6 +2881,31 @@ async function bootApp(
   // Everything that follows from the tile set changing: the ground, the
   // lamp heads, the fog floor, the shadows, the stats.
   let dressingsNoted = 0;
+  // What casts, by the tile it stands on: the stream reports every tile that
+  // comes into or leaves view, and most of those reports change nothing here.
+  let tilesCasting = new Map<object, string>();
+  /** Asks the rings a change of what the tiles show can fall on to redraw. */
+  const invalidateShownTiles = () => {
+    const now = new Map<object, string>();
+    for (const part of [
+      ...stream.visibleTerrains(),
+      ...stream.visibleCities(),
+      ...stream.visibleDressings(),
+    ]) {
+      now.set(part, part.tile);
+    }
+    const changed = changedTiles(tilesCasting, now);
+    tilesCasting = now;
+    if (changed.size === 0) {
+      return;
+    }
+    invalidateLanternShadow(lantern);
+    for (const id of changed) {
+      const bounds = siteTileBounds.get(id);
+      sunRig.invalidateShadow(bounds && tileArea(bounds, offset));
+    }
+  };
+
   onChange = () => {
     if (disposed) {
       return;
@@ -2914,7 +2942,7 @@ async function bootApp(
     crownTiers.force();
     streamHook.emit();
     postStack.sceneChanged();
-    invalidateShadows();
+    invalidateShownTiles();
     scheduleStats();
     checkLoaded();
   };
@@ -3262,18 +3290,22 @@ async function bootApp(
     if (vegetationLod(vegetationControls, eye, richTrees)) {
       lodChanged = true;
     }
+    if (lodChanged) {
+      sunRig.invalidateCrowns();
+    }
     // the street furniture's cells near the eye (furniture-layer.ts)
     // (none hidden in Modell: its views and exports draw one scale)
     const furnitureEye = modelRig.owns() ? null : eye;
+    let thinChanged = false;
     for (const d of shown) {
       for (const part of [d.furniture, d.tram]) {
         if (part && showFurnitureNear(part, furnitureEye)) {
-          lodChanged = true;
+          thinChanged = true;
         }
       }
     }
-    if (lodChanged) {
-      invalidateShadows();
+    if (thinChanged) {
+      sunRig.invalidateThin();
     }
   };
 
@@ -3287,21 +3319,13 @@ async function bootApp(
    * pose tick is due (the tree tiers').
    */
   const eye = new Vector3();
-  // what the warped shadow map reads of the site (sun-rig.ts `AirView`):
-  // its ground's 2nd and 90th height percentile, the fog's end per frame
-  const airView: AirView = {
-    fogEnd: sceneFog.far.value,
-    groundLow: extras.ground?.[0] ?? Number.POSITIVE_INFINITY,
-    groundHigh: extras.ground?.[1] ?? Number.NEGATIVE_INFINITY,
-  };
   const followView = (elapsed: number, tick: boolean): number | null => {
     const target = modelRig.owns() ? modelRig.targetView() : null;
     if (!target) {
-      // Re-fit the shadow frustum to the camera (lib/city/shadow-fit.ts).
+      // Re-fit the shadow rings to the camera (lib/city/shadow-rings.ts).
       camera.getWorldDirection(shadowViewDir);
       const groundY = groundUnderCamera();
-      airView.fogEnd = sceneFog.far.value;
-      sunRig.follow(camera, shadowViewDir, groundY, airView);
+      sunRig.follow(camera, shadowViewDir, groundY);
       // The map's own marks (the ferry lines) show from the air.
       setMapAltitude(camera.position.y - groundY);
       // Repoint the shared real lamp lights at the nearest heads.
@@ -4371,6 +4395,7 @@ async function bootApp(
     focusNdc: modelRig.focusNdc,
     viewMoving: () => pose.getGlideTarget() !== null || modelRig.moving(),
     streamBusy: () => !sceneSettled,
+    shadowBusy: sunRig.shadowBusy,
     stopGlide: pose.cancelGlide,
     getPose: () => {
       const hud = modelRig.hud();

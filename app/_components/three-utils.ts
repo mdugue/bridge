@@ -456,6 +456,21 @@ const materialsShared = sceneShared(() => ({
 }));
 
 /**
+ * Marks a caster thinner than a coarse shadow ring's texel (a lamp post, a
+ * kerb, a bench): only the finest rings draw it, and its shadow fades out
+ * across their edge instead of dissolving into the filter's samples
+ * (sun-rings.ts).
+ */
+export function markThinCaster(object: Object3D): void {
+  object.userData.thinCaster = true;
+}
+
+/** Whether `object` was marked by `markThinCaster`. */
+export function isThinCaster(object: Object3D): boolean {
+  return object.userData.thinCaster === true;
+}
+
+/**
  * A node material every tile wears, made on first use and marked
  * `userData.shared` (no tile's disposal frees it; the last app does,
  * `retainSceneMaterials`). For materials that carry no per-tile data —

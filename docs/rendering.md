@@ -244,7 +244,7 @@ is the codebook.
 | Contact shadows | GTAO at half resolution (normals from depth, 2 m radius, 0.15 m thickness), its 5×5 noise averaged out by a depth-aware box in its own half-resolution, one-byte pass; never motion-gated | — | `post-stack.ts` (*Kontaktschatten*) |
 | Ambient (sky) light | the sky-view factor (1 − mean sin² of the horizon within 150 m, 16 azimuths, over the ground and LoD2 with its rebuilt roofs, the drawn crowns at half transmission, GLO-30 beyond the site; `svf_<t>.png`, ≈2 m) scales the indirect diffuse only: the terrain directly, a facade by the ground's value 2.5 m outside it, doubled, faded to 1 toward the eaves | DGM1 + LoD2, the crowns, GLO-30 | `sky-light.ts`, `terrain-layer.ts`, `visual-style.ts` (*Himmelslicht*) |
 | Far shadow | the horizon (the skyline's angle in 16 azimuths, `horizon_<t>.png`, ≈8 m, two bands: 80 m–10 km — past 1 500 m the terrain alone, over GLO-30 beyond the site — and 8–80 m out): the sun's direct light on the ground fades across ±0.8° of it, joined to the shadow map by `min`; inside the shadow frustum only the far band, beyond it (faded in over its last 20 %) the higher of the two | DGM1 + LoD2, GLO-30 | `sky-light.ts`, `terrain-layer.ts`, `sun-rig.ts` (`shadowReach`) (*Ferne Schatten*) |
-| Shadows from the air | above 30 m over the ground (back below 20 m) the sun's one map is warped over the view (LiSPSM along the view's heading as the sun sees it): fine near the camera, coarse far off, out to 80 % of the fog's end; redrawn when the view leaves it, not per frame | sun, camera | `shadow-warp.ts`, `sun-rig.ts`, `warped-shadow-camera.ts` |
+| Sun shadows | four concentric squares of one resolution, each three times as wide as the one inside it, centred on the ground round the camera and pushed along the view in the air: fine near the camera, coarse far off, whatever the view's direction or the sun's; each redrawn when it has drifted a fifth of its size, one a frame, not per frame | sun, camera | `sun-rings.ts`, `sun-rig.ts`, `lib/city/shadow-rings.ts` |
 | Sky reflection | the sky dome alone, a second `SkyMesh` on the same sun and haze, rendered into a 64 px cube map whose mips are the blur (≈ 0.4 MB; not three's PMREM, which since r187 takes ≈ 10 MB) whenever the sun turns by 0.5° (while the time of day is dragged, at most four times a second, the last step after the wait) — never per frame, never `scene.environment` (that would light the matte clay with its irradiance too). Sampled only by glass and metal facades, gilding and patina and fountain water (the river is matte since 2026-10-25), weighted by a softened Schlick; mirrors the sky, never the city | the sky model | `sky-reflection.ts`, `sun-rig.ts` (*Spiegelung*) |
 | Depth of field | crosshair raycast distance; only what lies beyond the focus blurs (nearer is read as at the focus; blurring the foreground had laid a veil over the lower half — three's node still runs its near-field passes, over an empty field), focus range 1.6 × distance (≥ 45 m), bokeh scale 0.5 — a hint of lens, not a tilt-shift; off while moving; always on otherwise (no switch, no manual focus); desktop only — a phone does not build it (ADR 0047) | — | `post-stack.ts` |
 | Paper grain, vignette | screen-space; animated film grain and a heavier vignette under the monochrome picture styles | — | `post-stack.ts` (*Papierkorn*) |
@@ -283,68 +283,76 @@ change, not a re-bake
   band also covers the low sky, where the cloud plane's projection crowds
   the clouds into one sunlit sheet (SkyMesh's own cloud fade sits inside its
   colour node, out of reach).
-- **Shadow map:** `PCFShadowMap` with a raised `shadow.radius` (three's
-  `ShadowFilterNode` spreads a 5-tap Vogel disk by radius × texel), 3072² on
-  desktop, 2048² on phones, 512² in the lite profile (smaller at a raised
-  safety level, [ADR 0047](./adr/0047-phone-memory-budget-in-true-bytes.md)).
-  It has **no colour target**: three's shadow map draws into a colour
-  texture beside the depth the filter reads, of the shadow's `mapType` —
-  RGBA, as large again as the depth — though only coloured shadows sample
-  it. `DepthOnlyShadowNode` (`sun-rig.ts`), installed as the light's
-  `shadow.shadowNode` (the hook three's own CSM and tiled shadows use: no
-  patch, ADR 0027), keeps three's depth texture in a render target of no
-  colour attachment (`count: 0`, both backends since three r187; up to
-  r186 the smallest it could draw into was one red byte): 16 MiB at
-  2048², 36 at 3072² (`shadowMapBytesFor`), where three's default holds
-  32 and 72. Keep `renderer.shadowMap.transmitted` off — coloured shadows
-  would read a colour target there is none of. Terrain **receives
-  only**. `normalBias = 0`, a small negative `bias`. The frustum follows the
-  camera, half-size 121 m at eye level growing in octaves of 110 m to 880 m
-  with altitude, centred on the ground and pushed ahead along the view
-  (`lib/city/shadow-fit.ts`). It re-renders only when the centre leaves a
-  dead zone (30 m on foot, 18 % of the half-size above eye level and in
-  Modell), the size re-fits, the sun moves or a
-  caster changes (`invalidateShadows()` — the crown LOD swap included, a
-  season change that thins or fills crowns, and every tile that lands, leaves or changes visibility through the stream's
-  change hook). Animated geometry (sway, clouds) deliberately does **not**
-  update it. On foot the frustum was 110 m with a 19.8 m dead zone until
-  2026-10-11: a redraw every ~20 m walked. Between two redraws the camera
-  is never nearer an edge than the half-size less the dead zone (across
-  the sun's azimuth; along it the footprint is longer by 1 / sin of the
-  sun's elevation): 121 − 30 = 91 m against 90.2 before, so the shadows end
-  no nearer in front of the walker, for texels 10 % coarser (0.079 m at
-  3072², 0.118 at 2048²) and 17 redraws over a straight 500 m instead of
-  26. The horizon's near band starts to fade in at 80 % of the half-size,
-  at worst 66.8 m ahead (68.2 before).
-- **From the air the map is warped over the view** (`shadow-warp.ts`,
-  ADR 0009). The square above reached 275 m ahead from 100 m up and
-  1265 m from 400 m; past it only the horizon cast, on the ground alone.
-  Above 30 m over the ground (back below 20 m) the same map takes a
-  light-space perspective (LiSPSM): the shadow camera's `up` is the view's
-  heading as the sun sees it, and a warp matrix after its ortho box
-  (`warped-shadow-camera.ts`, which three's `updateProjectionMatrix` keeps)
-  puts a perspective along it, half LiSPSM's n_opt behind the nearest
-  ground. Its box holds the view widened by 12° on every side, out to
-  80 % of the fog's end (at most 2.5 km), cut to the site's receivers
-  (its ground's 2nd percentile − 20 m to the 90th + 250 m), its depth
-  stretched toward the sun to casters 120 m over that. Texels at 3072²
-  from 100 m up: ~0.2–0.45 m at 100 m ahead, ~0.8–1.3 m at 800 m (the
-  square: 0.14 m to 275 m, then none); from 200 m up the near texels are
-  the square's, from 400 m up finer. The depth bias is 0.08 m at the
-  nearest ground and grows with the distance (0.15 m until 2026-11-03
-  set a dormer's shadow 0.2 m clear of it 40 m off, a tree's 0.7–0.85 m
-  at 300 m: shadows from the air began beside their casters), the PCF spread 3 texels
-  (the square's 5). The map stands while the view, without the margin
-  and to 85 % of its reach, lies on it and the nearest ground stays
-  within a factor 1.6 (`warpCovers`); a turn of the sun fits it anew. A
-  simulated flight redraws it 8 times over 2 km straight (the square:
-  13–67 by altitude) and ~27 times over a full turn (the square: 1–14).
-  The picture styles' own sun test reads the map's current bias
-  (`shadowMap.bias`). The tile stream keeps streaming for the square
-  (`shadowCamera`), so what loads and a phone's memory are unchanged; a
-  caster outside both the view and the square casts nothing until a
-  view loads its tile. The horizon's near band
-  takes over at the warp's reach (`shadowReach`).
+- **Shadow map, four rings** (`sun-rings.ts`, `lib/city/shadow-rings.ts`,
+  ADR 0009): `PCFShadowMap` with a raised `shadow.radius` (three's
+  `ShadowFilterNode` spreads a 5-tap Vogel disk by radius × texel; 2.5
+  texels here, wider and five samples leave gaps a thin shadow shows as a
+  stipple). The rings are squares of half-size 80, 240, 720 and 2160 m, each
+  of 2048² on desktop, 1024² on phones, 256² in the lite profile (smaller at
+  a raised safety level,
+  [ADR 0047](./adr/0047-phone-memory-budget-in-true-bytes.md)). Across the
+  light that is 0.08, 0.23, 0.7 and 2.1 m a texel at 2048²; along it wider
+  by 1 / sin of the sun's elevation. A ring's texels depend on neither the
+  view's direction nor the sun's azimuth.
+  - **One depth array, no colour target.** The rings are the layers of one
+    depth texture, one binding in every lit material, in a render target of
+    no colour attachment (`count: 0`, both backends since three r187):
+    64 MiB at four of 2048², 16 at four of 1024² (`shadowMapBytesFor`), a
+    phone's bytes and fill of the one 2048² map it had. Keep
+    `renderer.shadowMap.transmitted` off: coloured shadows would read a
+    colour target there is none of. `RingShadowNode`, installed as the
+    light's `shadow.shadowNode` (the hook three's own CSM and tiled shadows
+    use: no patch, ADR 0027), draws a layer with
+    `setRenderTarget(map, layer)`. Rely on the render's own clear: an
+    explicit `renderer.clear()` on a depth array throws on the WebGL2
+    backend.
+  - **One camera.** All rings draw with the shadow's one camera, moved for
+    each: three keeps its state per drawable and camera, so a camera per
+    ring would cost a phone memory per object of every tile.
+  - **The lookup.** A fragment reads the finest ring it lies on, cross-faded
+    with the next across that ring's outer 7 % (`ringLookup`, `mix` and
+    `step` only; the second read is behind a branch and costs only there).
+    Past the widest ring it reads none and the horizon takes over
+    (`shadowReach`). The picture styles and the nameplate read through the
+    same lookup (`sun-shadow-read.ts`). A ring's matrix changes only as it
+    is drawn, so a ring waiting for its redraw shows what it held, where it
+    held it, and no shadow slides off its caster.
+  - **Where they stand.** On the ground round the camera; from 8 m up pushed
+    along the view's heading (half a half-size at most, by the cos(pitch)
+    of the look direction, so looking straight down pushes nothing). A
+    centre lands on its ring's texel grid in light space, so a ring redrawn
+    further on puts its texels on the same ground and no edge crawls. Turning
+    on the spot on foot draws nothing.
+  - **When they draw.** A ring asks to redraw when its wanted centre has
+    drifted a fifth of its half-size, the sun moves or a caster changes
+    (`invalidateShadows()`: a season change that thins or fills crowns, a
+    demolish). A tile's parts that land, leave or take over ask only the rings
+    the tile can fall on (`ringTouches`, seen along the light), and only if
+    what shows did change: the stream reports every tile that comes into or
+    leaves view, up to nine times a second while turning, and most of those
+    reports change nothing that casts. A crown tier's swap skips the finest
+    ring (the near tier holds within its reach), a furniture cell's asks only
+    the rings that draw thin casters. One ring a frame, the one waiting
+    longest, so a stream of requests starves none and the depth passes never
+    pile into a frame; the two wide rings at least 250 and 500 ms apart.
+    Animated geometry (sway, clouds) deliberately does **not** update them. By
+    night none is asked for.
+  - **What they draw.** The depth range reaches half-size / tan + 450 m /
+    sin of the sun's elevation toward the sun, so a tower standing beyond
+    the square's far edge under a low sun still casts into it. Casters
+    marked `markThinCaster` (lamps, kerbs, furniture, tram masts, tree stakes,
+    sports fixtures) go into the finest ring only: their shadow fades across
+    its edge instead of dissolving into the filter's samples on a coarser
+    one. The depth bias is 1.1 of the ring's texels (0.09 m on the finest).
+    Terrain **receives only**, `normalBias = 0`.
+  - **As the camera climbs** a ring fades out between 1.5 and 2.5 half-sizes
+    up, where its texels are finer than the pixels it covers, and is drawn no
+    more; back in view it shows nothing until drawn anew. The widest never
+    goes.
+  - **Modell** has one scale across its picture, where the fine middle would
+    show as a patch: the four layers tile the picture's square 2 × 2, with a
+    tenth of overlap to cross-fade (`modelQuadrants`), so its map is 4096² in
+    all on a desktop and 2048² on a phone. Everything casts there.
 - **The shadow camera streams on a desktop, at a resolution of its
   own.** The sun's shadow camera is registered with the tiles renderer
   as a second camera, so a tile that casts into the view stays loaded
@@ -896,7 +904,7 @@ the safety levels 1, 2 and 3:
 |---|---|---|---|
 | Tiles | the whole site streams (`tileset.json`), out to the fog's end × 1.1 (`streamFarFor`) | same, but to 2.2 km at most | spawn tile only (`tileset-spawn.json`; `&block=1` streams the site) |
 | Terrain | L0 TIN (±0.15 m) near, L1 512² grid beyond (the switch at ≈ 2.6 km from a tile for a viewport 1080 CSS px high; ≈ 2.1 km on an iPhone in portrait) | same | same |
-| Shadow map | 3072² (2048², 2048², 1024²) | 2048² (2048², 1024², 1024²) | 512² |
+| Shadow rings, four of | 2048² (1024², 1024², 512²) | 1024² (1024², 512², 512²) | 256² |
 | Shadow camera streams at | 128 px, by day; from level 2 never | never | as the tier |
 | Rasters decoding at once (`RASTER_TURNS`) | 5 | 1 | as the tier |
 | Pixel ratio | ≤ 1.5 (1.25, 1.0, 1.0; ≤ 2 until 2026-10-10: a retina laptop's 5.2 MP of post stack, 1.5 is 56 % of it), × 0.85 / 0.72 / 0.6 while the GPU misses 50 fps (`lib/city/resolution-scale.ts`) | ≤ 1.5 (1.25, 1.0, 0.85), × 0.85 / 0.72 while it misses 40 fps | 0.5, never scaled |

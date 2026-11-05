@@ -1,5 +1,5 @@
 import { Color, Matrix3, Vector2, Vector3 } from "three/webgpu";
-import type { DepthTexture, Matrix4 } from "three/webgpu";
+import type { DepthTexture } from "three/webgpu";
 import {
   abs,
   asin,
@@ -46,6 +46,7 @@ import type { SceneFog } from "./height-fog";
 import type { F, V2, V3, V4 } from "./shader-chunks";
 import { styleNight } from "./sun-rig";
 import { readSunShadow, shadowStandIn } from "./sun-shadow-read";
+import type { ShadowRingNodes } from "./sun-rings";
 import type { ViewLens } from "./view-lens";
 
 /**
@@ -398,13 +399,10 @@ export interface StylizeInputs {
 
 /** What the styles read of the sun's shadow map (sun-rig.ts `shadowMap`). */
 export interface SunShadowMap {
-  /** its depth, null until the first lit material made it */
+  /** its depth array, null until the first lit material made it */
   depth: () => DepthTexture | null;
-  /** world → map ([0, 1]³), kept current by three */
-  matrix: Matrix4;
-  /** the depth bias the scene's own lookup adds (three's `shadow.bias`):
-   *  a fixed one on foot, one per fit of the warped map from the air */
-  bias: () => number;
+  /** the rings' uniforms, as the scene's own lookup reads them */
+  rings: ShadowRingNodes;
 }
 
 export interface Stylize {
@@ -533,8 +531,6 @@ export function createStylize(inputs: StylizeInputs): Stylize {
   const standIn = shadowStandIn(inputs.reversedDepth);
   // every read of it, so `update` can bind the map to each
   const shadowReads: ReturnType<typeof texture>[] = [];
-  const shadowMatrix = uniform(inputs.sunShadow.matrix);
-  const shadowBias = uniform(0).onRenderUpdate(() => inputs.sunShadow.bias());
   const shadowReady = uniform(0);
   const pen = {
     sil: uniform(new Vector2(0.012, 0.045)),
@@ -596,7 +592,8 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     const lifted = world.add(n.mul(z.mul(0.0015).add(0.12)));
     const { inside, shadowed, read } = readSunShadow(
       lifted,
-      { matrix: shadowMatrix, bias: shadowBias, ready: shadowReady },
+      inputs.sunShadow.rings,
+      shadowReady,
       standIn,
       inputs.reversedDepth
     );

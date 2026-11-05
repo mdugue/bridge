@@ -1,22 +1,15 @@
-import { WarpedShadowCamera } from "./warped-shadow-camera";
 import {
   Color,
   DirectionalLight,
   HemisphereLight,
   OrthographicCamera,
-  RenderTarget,
   Scene,
-  ShadowNode,
   Vector3,
 } from "three/webgpu";
 import type {
   Box3,
   Camera,
   DepthTexture,
-  Light,
-  LightShadow,
-  Matrix4,
-  Node,
   NodeBuilder,
   PerspectiveCamera,
   UniformNode,
@@ -46,18 +39,12 @@ import {
   shadowDeadZone,
   shadowFocusAhead,
 } from "@/lib/city/shadow-fit";
-import {
-  fitWarpedShadow,
-  WARP_FROM_M,
-  WARP_MAX_REACH_M,
-  WARP_REACH_OF_FOG,
-  WARP_UNTIL_M,
-  warpCovers,
-} from "./shadow-warp";
-import type { WarpFit, WarpView } from "./shadow-warp";
 import { sunDirectionWorld } from "@/lib/city/sun";
 import { shadowMapBytesFor } from "./scene-profile";
 import { createSkyReflection } from "./sky-reflection";
+import type { RingArea } from "@/lib/city/shadow-rings";
+import { createSunRings } from "./sun-rings";
+import type { ShadowRingNodes } from "./sun-rings";
 import type { Live, V3, V4 } from "./shader-chunks";
 
 export interface SunState {
@@ -111,25 +98,22 @@ export interface SunRig {
   /** Frees the shadow map — a render target disposeObject3D never reaches. */
   dispose: () => void;
   /**
-   * Re-fits the shadow frustum to the camera (call per frame). `direction` is
-   * the camera's world direction (NOT normalized in the horizontal plane — its
-   * cos(pitch) factor is what aims the frustum) and `groundY` the terrain
-   * elevation under the camera, which is both the frustum's vertical anchor
-   * and the altitude the half-size is derived from (lib/city/shadow-fit.ts).
-   * From the air the map is warped over the view instead, out to a share
-   * of the fog (shadow-warp.ts; `air`); the square still follows,
-   * for the tiles the sun's camera streams.
+   * Re-fits the shadow rings to the camera (call per frame; sun-rings.ts,
+   * lib/city/shadow-rings.ts), and the square the sun's camera streams for
+   * (lib/city/shadow-fit.ts). `direction` is the camera's world direction
+   * (NOT normalized in the horizontal plane: its cos(pitch) factor is what
+   * aims them) and `groundY` the terrain elevation under the camera.
    */
   follow: (
     camera: PerspectiveCamera,
     direction: Vector3,
-    groundY: number,
-    air: AirView
+    groundY: number
   ) => void;
   /**
-   * Re-fits the shadow frustum to the ground a parallel view shows (Modell,
-   * plan 055): centred on the footprint's circle at its ground height, its
-   * half-size in half-octave steps up to `max` (lib/city/model-view.ts).
+   * Re-fits the map to the ground a parallel view shows (Modell, plan 055):
+   * the rings tile a square on the footprint's circle at its ground height,
+   * its half-size in half-octave steps up to `max`
+   * (lib/city/model-view.ts).
    */
   followFootprint: (
     x: number,
@@ -144,73 +128,46 @@ export interface SunRig {
    * palette's background come back.
    */
   setParallel: (on: boolean, paper?: Color) => void;
-  /** Forces a one-off shadow-map re-render. The map is otherwise only redrawn
-   * when the sun or frustum moves (autoUpdate is off), so scene-topology edits
-   * (demolish, a tile landing or leaving) must call this or stale shadows linger. */
-  invalidateShadow: () => void;
-  /** The square around the view's ground the sun's camera streams for: the
+  /** Asks every ring to redraw, or those `area` can fall on. A ring is
+   * otherwise only redrawn when the sun or the ring moves (autoUpdate is off),
+   * so scene-topology edits (demolish, a tile landing or leaving) must call
+   * this or stale shadows linger. */
+  invalidateShadow: (area?: RingArea) => void;
+  /** The crowns' tiers changed (a depth pass per ring that shows them). */
+  invalidateCrowns: () => void;
+  /** A thin caster showed or hid (lamps, furniture: the rings that draw them). */
+  invalidateThin: () => void;
+  /** The square round the view's ground the sun's camera streams for: the
    *  tile stream loads what it sees too, so a building behind the player
-   *  still casts into the view. On foot and in Modell it is the shadow
-   *  camera's own frustum; from the air the map is warped over the view
-   *  (shadow-warp.ts), and the stream keeps the square. */
+   *  still casts into the view. It draws nothing: the rings have a camera
+   *  of their own. */
   shadowCamera: Camera;
-  /** GPU bytes of the shadow map: a 32-bit depth texture, no colour
-   *  target, no mipmaps (scene-profile.ts `shadowMapBytesFor`). */
+  /** A ring still waits for its redraw (QA: a plate waits for all of them). */
+  shadowBusy: () => boolean;
+  /** GPU bytes of the shadow map: four layers of a 32-bit depth texture, no
+   *  colour target, no mipmaps (scene-profile.ts `shadowMapBytesFor`). */
   shadowMapBytes: number;
-  /** The shadow frustum on the ground, kept current: its centre in the data
-   *  frame (x east, y north: world x, −z) and its half-size (z, m) — from
-   *  the air the eye's ground and how far the warped map reaches. The
+  /** How far the map reaches on the ground, kept current: its centre in the
+   *  data frame (x east, y north: world x, −z) and its half-size (z, m). The
    *  terrain reads it by reference (the horizon's near band, sky-light.ts). */
   shadowReach: Vector3;
-  /** True when the next render will redraw the shadow map. */
+  /** True when the next render will redraw a ring. */
   shadowPending: () => boolean;
   /**
-   * The sun's shadow map as a post pass may read it: its depth (null until
-   * the first lit material made it) and the world → map matrix three keeps
-   * current (`LightShadow.matrix`). The picture styles test a pixel's
-   * world point against it (stylize-effect.ts): in the sun or not.
+   * The sun's shadow map as a post pass may read it: its depth array (null
+   * until the first lit material made it) and the rings' uniforms. The
+   * picture styles test a pixel's world point against it
+   * (stylize-effect.ts): in the sun or not.
    */
   shadowMap: {
-    bias: () => number;
     depth: () => DepthTexture | null;
-    matrix: Matrix4;
+    rings: ShadowRingNodes;
   };
   /** Re-aims sun, sky dome, fog and fill light for the given instant. */
   update: (date: Date, preview?: boolean) => SunState;
 }
 
 const SUN_INTENSITY = 2.4;
-
-/** Receivers lie this far under the site's low ground (m: a river bed, a
- *  cutting) … */
-const RECEIVER_DIP_M = 20;
-/** … and this far over its high ground (m: the hills above it, and the
- *  roofs on them — the band is the site's 90th height percentile, and a
- *  slope above the band would be neither on the map nor, within its
- *  reach, under the horizon's near band). */
-const RECEIVER_RISE_M = 250;
-
-/** What the warped map needs to know of the view beyond the camera. */
-export interface AirView {
-  /** where the fog ends (m) */
-  fogEnd: number;
-  /** the site's high ground (m, world y: its 90th height percentile) */
-  groundHigh: number;
-  /** the site's low ground (m, world y: its 2nd height percentile) */
-  groundLow: number;
-}
-
-/** The walker's depth bias (depth units of the square frustum). */
-const SQUARE_BIAS = -0.0003;
-
-/**
- * The PCF spread in texels (three's `shadow.radius`). The walker's square
- * has fine, even texels and a wide spread hides their staircase; the warped
- * map's texels near the camera are already as coarse as that spread was
- * wide, so its spread is narrower and the edges stay about as soft.
- */
-const SQUARE_PCF_RADIUS = 5;
-const WARP_PCF_RADIUS = 3;
 
 /**
  * Least time (ms) between two shadow-map redraws while the time of day is
@@ -219,58 +176,6 @@ const WARP_PCF_RADIUS = 3;
  * drag's end redraws at once.
  */
 const PREVIEW_SHADOW_MS = 100;
-
-/** What three's ShadowNode makes the map in: its documented override. */
-interface ShadowTargets {
-  depthTexture: DepthTexture;
-  shadowMap: RenderTarget;
-}
-// reason: setupRenderTarget is part of ShadowNode (ShadowNode.js documents
-// overriding it, TileShadowNode does) but missing from the @types.
-const ShadowNodeWithTarget = ShadowNode as unknown as new (
-  light: Light,
-  shadow: LightShadow | null
-) => ShadowNode & {
-  setupRenderTarget(shadow: LightShadow, builder: NodeBuilder): ShadowTargets;
-};
-
-/**
- * three's shadow node, its map the depth alone. three's own map is a render
- * target with a colour texture of the shadow's `mapType` (RGBA, four bytes)
- * beside the depth the PCF filter reads — as large again as the depth (16
- * MB at a phone's 2048²) for a colour only coloured shadows sample
- * (`renderer.shadowMap.transmitted`, never on here). Since r187 a render
- * target may have no colour attachment (`count: 0`, both backends), as
- * three's tiled shadows draw theirs: this one keeps three's depth texture
- * and drops the colour. Installed as the light's `shadow.shadowNode` — what
- * three's own CSM and tiled shadows plug in through — so nothing of three
- * is patched (ADR 0027).
- */
-class DepthOnlyShadowNode extends ShadowNodeWithTarget {
-  /** the map's depth, once the first lit material made it */
-  depth: DepthTexture | null = null;
-  override setupRenderTarget(
-    shadow: LightShadow,
-    builder: NodeBuilder
-  ): ShadowTargets {
-    // three's depth texture (its name, its compare function), in a target
-    // of its own without the colour — the one made with it is never
-    // allocated, and goes
-    const made = super.setupRenderTarget(shadow, builder);
-    const { depthTexture } = made;
-    // handed over: the depth belongs to the target that draws it, which
-    // frees it with itself (a texture keeps the first target it was given)
-    made.shadowMap.depthTexture = null;
-    const shadowMap = new RenderTarget(
-      shadow.mapSize.width,
-      shadow.mapSize.height,
-      { count: 0 }
-    );
-    shadowMap.depthTexture = depthTexture;
-    this.depth = depthTexture;
-    return { shadowMap, depthTexture };
-  }
-}
 
 /** What the rig drives on the sky dome. */
 interface SkyDome {
@@ -386,15 +291,12 @@ export function createSunRig(
   scene: Scene,
   worldBounds: Box3,
   latLng: { lat: number; lng: number },
-  /** Shadow-map edge in texels (scene-profile.ts `shadowMapSizeFor`). 3072
-   * over the 121 m base frustum ≈ 0.08 m/texel: the soft Vogel-disk PCF (see
-   * shadow.radius) hides residual stepping, so 3072 looks like 4096 here
-   * while costing ~44% less shadow fill. The `lite` e2e profile passes 512
-   * and phones 2048 — under SwiftShader the depth pass is one of the few
-   * per-frame costs that does not shrink with the canvas, and no headless
-   * assertion depends on edge quality. The map is redrawn when the frustum
-   * re-centres or re-fits (follow), when the sun moves, and on explicit
-   * invalidation — not per frame. */
+  /** A ring's edge in texels (scene-profile.ts `shadowMapSizeFor`): 2048
+   * over the finest ring's 160 m ≈ 0.08 m/texel. The `lite` e2e profile
+   * passes 256 and phones 1024: under SwiftShader the depth pass is one of the
+   * few costs that does not shrink with the canvas, and no headless assertion
+   * depends on edge quality. A ring is redrawn when it has drifted, when the
+   * sun moves, and on explicit invalidation; not per frame. */
   shadowMapSize: number,
   /** Optional shared vector the rig keeps in sync with the world sun direction
    * (surface→sun) so other materials (e.g. the crown shimmer) can read it. */
@@ -406,17 +308,16 @@ export function createSunRig(
   renderer?: WebGPURenderer
 ): SunRig {
   const center = worldBounds.getCenter(new Vector3());
-  // The frustum half-size is not fixed: it starts at the base radius (eye
-  // level) and grows with altitude so a fly-over still gets sun shadows —
-  // lib/city/shadow-fit.ts owns the policy, resizeFrustum below applies it.
-  // These three derive from it and are recomputed on every change.
+  // The square the sun's camera streams for is not fixed: it starts at the
+  // base radius (eye level) and grows with altitude, so a fly-over still
+  // loads what casts into the view (lib/city/shadow-fit.ts owns the policy,
+  // resizeFrustum below applies it). These derive from it.
   let radius = SHADOW_BASE_RADIUS;
-  // Light sits twice the frustum radius out; tight depth range = good precision.
+  // Its camera sits twice its radius out, for a depth range round the ground.
   let shadowDistance = radius * 2;
-  // World size of one shadow texel — snap the frustum centre to this grid so
-  // shadow edges don't crawl/shimmer as the camera moves.
+  // World size of one of its texels: it snaps its centre to these.
   let texelSize = (radius * 2) / shadowMapSize;
-  // Metres the frustum centre may drift before the map is re-rendered.
+  // Metres its centre may drift before it follows.
   let deadZone = shadowDeadZone(radius);
 
   const hemisphere = new HemisphereLight(0xbf_d4_e6, 0x4a_5a_3a, 0.7);
@@ -433,9 +334,8 @@ export function createSunRig(
 
   const sun = new DirectionalLight(0xff_f4_e0, SUN_INTENSITY);
   sun.castShadow = true;
-  // Re-render the shadow map only when the frustum actually moves or the sun
-  // changes (see reposition/update) — not every frame. Huge win with tens of
-  // thousands of shadow-casting trees.
+  // Re-render a ring only when it actually moves or the sun changes, not
+  // every frame. Huge win with tens of thousands of shadow-casting trees.
   sun.shadow.autoUpdate = false;
   sun.shadow.needsUpdate = true;
   // The sun stays in the scene by night, at intensity 0: three keys every
@@ -443,10 +343,16 @@ export function createSunRig(
   // scene at dusk rebuilt every material in view, inside the frame, at every
   // dusk and dawn. Below the horizon the map is simply never asked for.
   let sunUp = true;
-  const redrawShadow = () => {
-    if (sunUp) {
-      sun.shadow.needsUpdate = true;
-    }
+  // The map's one camera, set before the shadow node reads it.
+  sun.shadow.camera = new OrthographicCamera();
+  const rings = createSunRings(sun, shadowMapSize);
+  /** Three draws a ring in the next render if one is due. */
+  const askRings = () => {
+    sun.shadow.needsUpdate = sunUp && rings.due();
+  };
+  const redrawShadow = (area?: RingArea) => {
+    rings.invalidate(area);
+    askRings();
   };
   let shadowAskedAt = Number.NEGATIVE_INFINITY;
   let shadowWait: ReturnType<typeof setTimeout> | null = null;
@@ -456,22 +362,13 @@ export function createSunRig(
       shadowWait = null;
     }
   };
-  sun.shadow.mapSize.set(shadowMapSize, shadowMapSize);
-  // The map's camera: three's orthographic one, warped over the view from
-  // the air (`WarpedShadowCamera`), set before the shadow node reads it.
-  const cam = new WarpedShadowCamera();
-  sun.shadow.camera = cam;
-  // The square around the view's ground (shadow-fit.ts): on foot and in
-  // Modell the map's own frustum, always the one the sun's camera streams
-  // for (`shadowCamera`) — from the air too, where the map is warped and
-  // the stream keeps loading what it loaded.
+  // The square round the view's ground (shadow-fit.ts), the one the sun's
+  // camera streams for (`shadowCamera`).
   const square = new OrthographicCamera();
   /**
    * Rebuilds the square for a new half-size. Everything that scales with
    * the radius lives here, so the rest of the rig only ever reads the four
-   * `let`s above. Cheap — a projection matrix, no reallocation: the shadow
-   * map itself keeps its size, only the world area it covers changes. The
-   * caller forces the re-render (the frustum always moved too).
+   * `let`s above. Cheap: a projection matrix, no reallocation.
    */
   const resizeFrustum = (next: number) => {
     radius = next;
@@ -487,40 +384,11 @@ export function createSunRig(
     square.far = shadowDistance + radius * 1.2;
     square.updateProjectionMatrix();
   };
-  /** The map's ortho box (with the warp, if any, applied after it). */
-  const setBox = (box: WarpFit["box"]) => {
-    cam.left = box.left;
-    cam.right = box.right;
-    cam.top = box.top;
-    cam.bottom = box.bottom;
-    cam.near = box.near;
-    cam.far = box.far;
-    cam.updateProjectionMatrix();
-  };
-  /** The map's frustum is the square's (on foot, in Modell). */
-  const squareToMap = () => setBox(square);
   resizeFrustum(radius);
-  squareToMap();
-  // normalBias = 0 kills the peter-panning contact strip (it would offset the
-  // flat ground's shadow sample toward the light at wall bases). Safe at 0
-  // because nothing that needs it self-shadows: terrain doesn't cast, and
-  // buildings/trees cast via their BACK faces (three's default shadowSide), so
-  // their lit front faces never self-acne.
-  sun.shadow.bias = SQUARE_BIAS;
-  sun.shadow.normalBias = 0;
-  // PCFShadowMap is soft: three's ShadowFilterNode (PCFShadowFilter) spreads
-  // a 5-tap Vogel disk by radius*texel. Default radius 1 ≈ hard; bump it so
-  // edges are a soft penumbra that hides the texel staircase — without VSM's
-  // grid.
-  sun.shadow.radius = SQUARE_PCF_RADIUS;
-  const shadowNode = new DepthOnlyShadowNode(sun, sun.shadow);
-  // reason: `shadowNode` is read by three's AnalyticLightNode but missing
-  // from LightShadow's @types.
-  (sun.shadow as LightShadow & { shadowNode?: Node }).shadowNode = shadowNode;
   scene.add(sun, sun.target);
 
-  // Current sun direction and frustum focus; reposition() places the light and
-  // its target from these so update() (time) and follow() (camera) share logic.
+  // Current sun direction and the square's focus; reposition() places the
+  // square from these so update() (time) and follow() (camera) share logic.
   const dir = new Vector3();
   {
     const d = sunDirectionWorld(new Date(0), latLng.lat, latLng.lng);
@@ -528,56 +396,14 @@ export function createSunRig(
     sunDirectionOut?.copy(dir);
   }
   const focus = center.clone();
-  const shadowReach = new Vector3(center.x, -center.z, radius);
+  rings.reach.set(center.x, -center.z, radius);
+  rings.setSun(dir);
   const lastCentre = new Vector3(Number.NaN, Number.NaN, Number.NaN);
-  // From the air: the warp the map holds (null: the map is the square) and
-  // the view it was last fitted for, which a turn of the sun fits anew.
-  let airborne = false;
-  let warpFit: WarpFit | null = null;
-  let warpView: WarpView | null = null;
 
-  /** The light, its target and the map's matrices after a move. The shadow
-   *  camera is also a streaming camera (create-app.ts): three updates it
-   *  only while drawing the shadow, which by night it never does — a stale
-   *  frustum would keep its tiles loaded. */
-  const placeLight = () => {
-    sun.updateMatrixWorld();
-    sun.target.updateMatrixWorld();
-    sun.shadow.updateMatrices(sun);
-  };
-
-  /** The map takes `fit`'s warp; `redraw` false while the sun is dragged
-   *  (update() paces those redraws itself). */
-  const applyWarp = (fit: WarpFit, redraw: boolean) => {
-    warpFit = fit;
-    cam.up.copy(fit.up);
-    cam.warp = fit.warp;
-    setBox(fit.box);
-    sun.shadow.bias = fit.bias;
-    sun.shadow.radius = WARP_PCF_RADIUS;
-    sun.target.position.copy(fit.target);
-    sun.position.copy(fit.target).add(dir);
-    shadowReach.set(fit.target.x, -fit.target.z, fit.reachPlan);
-    placeLight();
-    if (redraw) {
-      redrawShadow();
-    }
-  };
-
-  /** The map is the square again (on the ground, in Modell). */
-  const dropWarp = () => {
-    warpFit = null;
-    warpView = null;
-    cam.warp = null;
-    cam.up.set(0, 1, 0);
-    sun.shadow.bias = SQUARE_BIAS;
-    sun.shadow.radius = SQUARE_PCF_RADIUS;
-    // reposition() places the light anew and redraws
-    lastCentre.set(Number.NaN, Number.NaN, Number.NaN);
-  };
-
+  /** The square to the focus, snapped to its texel grid. The shadow camera of
+   *  the stream: three updates a camera only while drawing with it, and this
+   *  one it never draws with, so a stale frustum would keep its tiles loaded. */
   const reposition = () => {
-    // Snap the focus to the texel grid to keep shadow edges stable.
     const fx = Math.round(focus.x / texelSize) * texelSize;
     const fy = Math.round(focus.y / texelSize) * texelSize;
     const fz = Math.round(focus.z / texelSize) * texelSize;
@@ -588,43 +414,25 @@ export function createSunRig(
     );
     square.lookAt(fx, fy, fz);
     square.updateMatrixWorld();
-    if (warpFit) {
-      // the map stands where the warp put it; only the stream follows
-      lastCentre.set(fx, fy, fz);
-      return;
-    }
-    squareToMap();
-    sun.target.position.set(fx, fy, fz);
-    sun.position.copy(square.position);
-    shadowReach.set(fx, -fz, radius);
-    // Manual shadow update only when the snapped frustum centre changed.
-    // fy matters too: ascending straight up in fly mode keeps fx/fz fixed
-    // while the frustum's vertical slice shifts.
-    if (fx !== lastCentre.x || fy !== lastCentre.y || fz !== lastCentre.z) {
-      redrawShadow();
-      lastCentre.set(fx, fy, fz);
-    }
-    placeLight();
+    lastCentre.set(fx, fy, fz);
   };
 
-  /** Re-fits the square (the stream's, and on foot the map's). */
+  /** Re-fits the square the sun's camera streams for. */
   const followSquare = (
     position: Vector3,
     direction: Vector3,
     groundY: number
   ) => {
     const nextRadius = fitShadowRadius(position.y - groundY, radius);
-    // Push the centre along the view so the shadowed patch sits where the
-    // camera is looking. `direction` is deliberately NOT re-normalized in the
-    // horizontal plane: its cos(pitch) factor collapses the offset to zero
-    // when looking straight down, which is exactly what we want there.
+    // Push the centre along the view so the square sits where the camera is
+    // looking. `direction` is deliberately NOT re-normalized in the horizontal
+    // plane: its cos(pitch) factor collapses the offset to zero when looking
+    // straight down, which is exactly what we want there.
     const ahead = shadowFocusAhead(nextRadius);
     const wantX = position.x + direction.x * ahead;
     const wantZ = position.z + direction.z * ahead;
-    // Inside the dead zone, at an unchanged radius, the frustum stays put —
-    // nothing to re-render. The centre is anchored to the GROUND, not the
-    // camera: airborne, a frustum centred on the camera puts its tight depth
-    // range hundreds of metres above the terrain that should be shadowed.
+    // Inside the dead zone, at an unchanged radius, the square stays put. Its
+    // centre is anchored to the GROUND, not the camera.
     if (
       nextRadius === radius &&
       Number.isFinite(lastCentre.x) &&
@@ -638,11 +446,6 @@ export function createSunRig(
     }
     if (nextRadius !== radius) {
       resizeFrustum(nextRadius);
-      // A resized frustum covers different world even from the same centre,
-      // and the texel grid it snaps to has changed — always redraw.
-      if (!warpFit) {
-        redrawShadow();
-      }
     }
     focus.set(wantX, groundY, wantZ);
     reposition();
@@ -651,57 +454,19 @@ export function createSunRig(
   const follow = (
     camera: PerspectiveCamera,
     direction: Vector3,
-    groundY: number,
-    air: AirView
+    groundY: number
   ) => {
     const { position } = camera;
-    const height = position.y - groundY;
-    // hysteresis: a switch is a depth pass
-    if (airborne ? height < WARP_UNTIL_M : height > WARP_FROM_M) {
-      airborne = !airborne;
-      if (!airborne && warpFit) {
-        dropWarp();
-      }
-    }
     followSquare(position, direction, groundY);
-    if (!airborne) {
-      return;
-    }
-    const reach = Math.min(air.fogEnd * WARP_REACH_OF_FOG, WARP_MAX_REACH_M);
-    const fov = camera.getEffectiveFOV();
-    // a camera standing still (most frames) asks nothing new of the map
-    if (
-      warpFit &&
-      warpView &&
-      warpView.eye.equals(position) &&
-      warpView.forward.distanceToSquared(direction) < 1e-12 &&
-      warpView.groundY === groundY &&
-      warpView.reach === reach &&
-      warpView.fovDeg === fov &&
-      warpView.aspect === camera.aspect
-    ) {
-      return;
-    }
-    // the view as it is now: a turn of the sun fits the map to it (update)
-    warpView = {
-      aspect: camera.aspect,
-      ceilingY: Math.max(groundY, air.groundHigh) + RECEIVER_RISE_M,
-      eye: position.clone(),
-      floorY: Math.min(groundY, air.groundLow) - RECEIVER_DIP_M,
-      forward: direction.clone().normalize(),
-      fovDeg: fov,
+    rings.setView({
+      dirX: direction.x,
+      dirZ: direction.z,
+      eyeX: position.x,
+      eyeZ: position.z,
       groundY,
-      reach,
-      up: new Vector3().setFromMatrixColumn(camera.matrixWorld, 1).normalize(),
-    };
-    if (warpFit && warpCovers(warpFit, warpView)) {
-      return;
-    }
-    // looking at the sky (no receiver in view) keeps what the map holds
-    const fit = fitWarpedShadow(warpView, dir);
-    if (fit) {
-      applyWarp(fit, true);
-    }
+      height: position.y - groundY,
+    });
+    askRings();
   };
 
   const followFootprint = (
@@ -711,25 +476,21 @@ export function createSunRig(
     footRadius: number,
     maxRadius: number
   ) => {
-    airborne = false;
-    if (warpFit) {
-      dropWarp();
-    }
     const nextRadius = fitModelShadow(footRadius, radius, maxRadius);
     if (
-      nextRadius === radius &&
-      Number.isFinite(lastCentre.x) &&
-      Math.hypot(x - lastCentre.x, groundY - lastCentre.y, z - lastCentre.z) <
+      nextRadius !== radius ||
+      !Number.isFinite(lastCentre.x) ||
+      Math.hypot(x - lastCentre.x, groundY - lastCentre.y, z - lastCentre.z) >=
         deadZone
     ) {
-      return;
+      if (nextRadius !== radius) {
+        resizeFrustum(nextRadius);
+      }
+      focus.set(x, groundY, z);
+      reposition();
     }
-    if (nextRadius !== radius) {
-      resizeFrustum(nextRadius);
-      redrawShadow();
-    }
-    focus.set(x, groundY, z);
-    reposition();
+    rings.setFootprint({ x: focus.x, y: focus.y, z: focus.z }, radius);
+    askRings();
   };
 
   let parallel = false;
@@ -750,16 +511,10 @@ export function createSunRig(
     }
   };
 
-  /** The light and its map to the sun as it stands (`dir`). */
+  /** The stream's square and the rings to the sun as it stands (`dir`). */
   const moveLight = () => {
     reposition();
-    // the warp is fitted to the sun as well as to the view
-    if (warpView) {
-      const fit = fitWarpedShadow(warpView, dir);
-      if (fit) {
-        applyWarp(fit, false);
-      }
-    }
+    rings.setSun(dir);
   };
 
   const update = (date: Date, preview = false): SunState => {
@@ -774,25 +529,25 @@ export function createSunRig(
     // PREVIEW_SHADOW_MS, the last after the wait); by night drop a request
     // still open. The light and its map move only together: a light moved
     // between two redraws reads the map it drew from where it was, and every
-    // shadow slides off its caster and snaps back at the next redraw — the
+    // shadow slides off its caster and snaps back at the next redraw; the
     // whole picture wobbles while a walk's flight glides the hour.
     if (!aboveHorizon || !preview) {
       cancelShadowWait();
       moveLight();
-      sun.shadow.needsUpdate = aboveHorizon;
+      askRings();
       shadowAskedAt = performance.now();
     } else if (shadowWait === null) {
       const wait = shadowAskedAt + PREVIEW_SHADOW_MS - performance.now();
       if (wait <= 0) {
         moveLight();
-        sun.shadow.needsUpdate = true;
+        askRings();
         shadowAskedAt = performance.now();
       } else {
         shadowWait = setTimeout(() => {
           shadowWait = null;
           shadowAskedAt = performance.now();
           moveLight();
-          redrawShadow();
+          askRings();
         }, wait);
       }
     }
@@ -825,6 +580,14 @@ export function createSunRig(
   };
 
   const invalidateShadow = redrawShadow;
+  const invalidateCrowns = () => {
+    rings.invalidateCrowns();
+    askRings();
+  };
+  const invalidateThin = () => {
+    rings.invalidateThin();
+    askRings();
+  };
 
   return {
     update,
@@ -832,15 +595,17 @@ export function createSunRig(
     followFootprint,
     setParallel,
     invalidateShadow,
+    invalidateCrowns,
+    invalidateThin,
     // Below the horizon nothing asks for a redraw; sunrise asks anew.
     shadowPending: () => sun.shadow.needsUpdate,
+    shadowBusy: () => sunUp && rings.anyDirty(),
     shadowMapBytes: shadowMapBytesFor(shadowMapSize),
-    shadowReach,
+    shadowReach: rings.reach,
     shadowCamera: square,
     shadowMap: {
-      bias: () => sun.shadow.bias,
-      depth: () => shadowNode.depth,
-      matrix: sun.shadow.matrix,
+      depth: rings.depth,
+      rings: rings.nodes,
     },
     dispose: () => {
       cancelShadowWait();
@@ -848,7 +613,7 @@ export function createSunRig(
       mirrored.mesh.geometry.dispose();
       mirrored.mesh.material.dispose();
       sun.dispose();
-      shadowNode.dispose();
+      rings.dispose();
     },
   };
 }

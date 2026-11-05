@@ -125,7 +125,7 @@ export interface GroundLight {
   /** the tile's recentered north-west corner and size (data frame, m) */
   origin: [number, number];
   size: [number, number];
-  /** the shadow frustum's centre (data frame x, y) and half-size (z) */
+  /** the widest shadow ring's centre (data frame x, y) and half-size (z) */
   shadowReach: UniformNode<"vec3", Vector3>;
   /** world (Y-up), surface → sun */
   sunDirection: UniformNode<"vec3", Vector3>;
