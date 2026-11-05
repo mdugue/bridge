@@ -189,11 +189,14 @@ for (const { path: file, name } of snapshotFiles()) {
           !poc?.regressed &&
           // the rings redraw one a frame, the wide ones at a distance
           !poc?.handle?.shadowBusy() &&
+          // a plate far from the spawn waits for its own tiles to land
+          !poc?.handle?.streamBusy() &&
           ((poc?.shadowRenders ?? 0) > shadows || drawn >= shadowless)
         );
       },
-      { ...before, settle: 3, shadowless: 30 },
-      { timeout: 120_000 }
+      // settle: frames for the stream to see the new view at all
+      { ...before, settle: 10, shadowless: 30 },
+      { timeout: READY_MS + 60_000 }
     );
 
     // Again: a notice raised after the move ("Umgebung lädt") was not
