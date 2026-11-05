@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { dilate, reach, trianglesOver, waterMaskOf } from "./water-mask";
+import {
+  dilate,
+  reach,
+  trianglesOver,
+  waterMaskOf,
+  waterNear,
+} from "./water-mask";
 import type { WaterMask } from "./water-mask";
 
 const WATER = 8;
@@ -98,5 +104,26 @@ describe("triangles over water", () => {
     expect(
       trianglesOver(new Uint16Array(index), cellX, cellY, mask).length
     ).toBe(0);
+  });
+});
+
+describe("waterNear", () => {
+  // a 4×4 mask over a 400 m tile: one water cell, row 1 (100–200 m south of
+  // the north edge), column 2 (200–300 m east)
+  const water = new Uint8Array(16);
+  water[1 * 4 + 2] = 1;
+  const mask = { cells: 4, water };
+  const bounds = [0, 0, 400, 400] as const;
+
+  test("finds the cell under a point and within reach", () => {
+    expect(waterNear(mask, bounds, 250, 250, 0)).toBe(true);
+    expect(waterNear(mask, bounds, 150, 250, 60)).toBe(true);
+    expect(waterNear(mask, bounds, 250, 150, 60)).toBe(true);
+  });
+
+  test("misses a point out of reach, and off the mask", () => {
+    expect(waterNear(mask, bounds, 50, 50, 60)).toBe(false);
+    expect(waterNear(mask, bounds, 150, 250, 40)).toBe(false);
+    expect(waterNear(mask, bounds, -500, 250, 60)).toBe(false);
   });
 });

@@ -182,6 +182,10 @@ export interface TerrainLayer {
   vertexCount: number;
   /** animated water surface, present only when the class raster loaded */
   water?: WaterLayer;
+  /** the class raster's water cells over `bounds` (the shared raster's,
+   *  nothing of its own): null where the tile has none, undefined where
+   *  it is not known (no raster, or one the browser decoded) */
+  waterMask?: WaterMask | null;
   /** the tile's baked light for what stands on this level (kerbs, fences,
    *  stairs, walls; sky-light.ts `applyGroundLight`), when it has any */
   light?: GroundLight;
@@ -1993,6 +1997,7 @@ export async function dressTerrain(
     bounds,
     minElevation: extras.minElevation,
     water,
+    waterMask: mask,
     heightAt,
     heightBytes,
     dispose: () => {

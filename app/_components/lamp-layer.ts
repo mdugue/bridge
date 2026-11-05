@@ -24,7 +24,7 @@ import {
   LAMP_POST_H,
   postHeight,
 } from "@/lib/city/lamps";
-import { epsgToWorld } from "@/lib/city/ground-clamp";
+import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
 import type { GroundContext } from "@/lib/city/ground-clamp";
 import { Instances, instancePosition } from "./instancing";
 import type { Pt } from "./mesh-kit";
@@ -114,6 +114,9 @@ export interface LampControl {
   group: Group;
   /** world-space (Y-up) lantern-head positions, fed to the shared light pool */
   headPositions: Vector3[];
+  /** the heads by the water, whose light the river mirrors (the same
+   *  vectors; lamp-reflections.ts) */
+  waterHeads: Vector3[];
 }
 
 /** A small fixed pool of real point lights shared across ALL tiles' lamps. */
@@ -534,17 +537,26 @@ function taggedHeads(places: Place[], height: number): Instances {
  */
 export function buildLamps(
   features: LampFeature[],
-  ctx: GroundContext
+  ctx: GroundContext,
+  /** whether projected (x, y) is by the water (none: no head is) */
+  byWater?: (x: number, y: number) => boolean
 ): LampControl {
   const group = new Group();
   group.name = "lamps";
   const places = lampPlaces(features, ctx);
   const headPositions = places.heads;
+  const waterHeads = byWater
+    ? headPositions.filter((h) => {
+        const p = worldToEpsg(h.x, h.z, ctx.offset);
+        return byWater(p.x, p.y);
+      })
+    : [];
 
   if (places.pools.length === 0) {
     return {
       group,
       headPositions,
+      waterHeads,
       dispose: () => {
         // empty
       },
@@ -580,6 +592,7 @@ export function buildLamps(
   return {
     group,
     headPositions,
+    waterHeads,
     // disposeObject3D frees the meshes with the scene; nothing else is the
     // tile's.
     dispose: () => {

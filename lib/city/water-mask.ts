@@ -163,3 +163,35 @@ export function trianglesOver<T extends Uint8Array | Uint16Array | Uint32Array>(
   }
   return kept.slice(0, n) as T;
 }
+
+/**
+ * Whether the mask (over `bounds`, [minX, minY, maxX, maxY] in the
+ * projected CRS, row 0 north) has a water cell within `metres` (a square
+ * reach) of projected (x, y). Off the mask nothing is water.
+ */
+export function waterNear(
+  mask: WaterMask,
+  bounds: readonly [number, number, number, number],
+  x: number,
+  y: number,
+  metres: number
+): boolean {
+  const { cells } = mask;
+  const [minX, minY, maxX, maxY] = bounds;
+  const cw = (maxX - minX) / cells;
+  const ch = (maxY - minY) / cells;
+  const col = (v: number) => Math.floor((v - minX) / cw);
+  const row = (v: number) => Math.floor((maxY - v) / ch);
+  const x0 = Math.max(0, col(x - metres));
+  const x1 = Math.min(cells - 1, col(x + metres));
+  const y0 = Math.max(0, row(y + metres));
+  const y1 = Math.min(cells - 1, row(y - metres));
+  for (let r = y0; r <= y1; r += 1) {
+    for (let c = x0; c <= x1; c += 1) {
+      if (mask.water[r * cells + c]) {
+        return true;
+      }
+    }
+  }
+  return false;
+}

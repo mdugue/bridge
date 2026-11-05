@@ -87,6 +87,8 @@ import {
 } from "./fetch-optional";
 import { furnitureSteps } from "./furniture-layer";
 import { buildLamps } from "./lamp-layer";
+import { LAMP_WATER_REACH_M } from "./lamp-reflections";
+import { waterNear } from "@/lib/city/water-mask";
 import type { LampControl } from "./lamp-layer";
 import { buildLowVegetation } from "./low-vegetation-layer";
 import { buildMonuments } from "./monument-layer";
@@ -755,6 +757,24 @@ export function asksOf(dressing: TileDressing): AskSet<FeatureInquiry>[] {
 const tileIdOf = (scene: Object3D): string =>
   (scene.userData as Partial<ContentExtras>).tileId ?? "?";
 
+/**
+ * Whether a lamp at projected (x, y) stands by the tile's water, close
+ * enough for the river to mirror it (lamp-reflections.ts): none where the
+ * tile has no water; every lamp where its water is not known.
+ */
+function lampsByWater(
+  terrain: TerrainLayer
+): ((x: number, y: number) => boolean) | undefined {
+  const mask = terrain.waterMask;
+  if (mask === null) {
+    return undefined;
+  }
+  if (mask === undefined) {
+    return () => true;
+  }
+  return (x, y) => waterNear(mask, terrain.bounds, x, y, LAMP_WATER_REACH_M);
+}
+
 /** The goals, posts and nets of the grounds this tile owns (a ground on a
  *  seam is in both tiles' tables; its centre decides). */
 function buildSport(
@@ -1304,10 +1324,11 @@ async function buildDressing(
           )
         )
       : lamps;
-    const lampControl = buildLamps(ownLamps, {
-      ...ground,
-      heightAt: terrain.heightAt,
-    });
+    const lampControl = buildLamps(
+      ownLamps,
+      { ...ground, heightAt: terrain.heightAt },
+      lampsByWater(terrain)
+    );
     made.lamps = lampControl;
     await nextTask(signal);
     const rail = await inSlices(

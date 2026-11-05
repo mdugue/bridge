@@ -26,6 +26,7 @@ import {
   float,
   floor,
   fract,
+  fwidth,
   int,
   length,
   Loop,
@@ -51,6 +52,7 @@ import {
 import { FOAM_LINES, fromBase64, WATER_SHEET } from "@/lib/city/water-bodies";
 import type { WaterLook } from "@/lib/city/water-bodies";
 import { groundUnderDesign, inDesignSite } from "./design-site";
+import { lampReflections } from "./lamp-reflections";
 import { sceneNight } from "./scene-environment";
 import { dataXY } from "./shader-chunks";
 import type { F, V2, V3 } from "./shader-chunks";
@@ -366,7 +368,8 @@ function waterColour(base: V3, splat: SplatLayer, uv: V2): V3 {
  * Matte, as a drawn map's water: no sky mirrored in it, only the scene's
  * light on the moving normal (its specular a soft path toward the sun)
  * and, additive, the sun's glints and the crests' strokes lit as dashes —
- * fading out at night — and a feathered shoreline. The reflection needs world (Y-up)
+ * fading out at night, when the lamps by the water mirror in it instead
+ * (lamp-reflections.ts) — and a feathered shoreline. The reflection needs world (Y-up)
  * vectors, so it comes from `positionWorld` and the camera, NOT the
  * shading normal.
  *
@@ -445,9 +448,14 @@ export function createWaterLayer(
   // the glints on the sun's path, and the crests' strokes lit up there as
   // dashes of light
   const spec = pow(facing, 120).add(pow(facing, 24).mul(field.stroke));
+  // After dark, the lamps by the water mirrored as broken columns
+  // (lamp-reflections.ts), off the same waves; the pixel's footprint
+  // taken here, outside the lamps' loop
+  const fw = fwidth(xy);
+  const px = max(fw.x, fw.y);
   material.emissiveNode = SUN_COLOUR.mul(
     spec.mul(GLITTER).mul(clamp(sun.y, 0, 1))
-  );
+  ).add(lampReflections(n, view, px));
 
   const mesh = new Mesh(geometry, material);
   mesh.name = "water";
