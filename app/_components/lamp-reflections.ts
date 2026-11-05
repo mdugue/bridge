@@ -20,7 +20,8 @@ import { sceneNight } from "./scene-environment";
 import type { F, V3 } from "./shader-chunks";
 
 /**
- * The street lamps mirrored in the river after dark: the light of the
+ * The street lamps mirrored in the river and caught by the rails after
+ * dark: the light of the
  * lamps by the water as a broken column on the waves, from the water's
  * edge under the lamp toward the eye — what one sees across the Elbe from
  * the Neustadt at night. Not a mirror of the scene: the river stays matte
@@ -36,27 +37,59 @@ import type { F, V3 } from "./shader-chunks";
  * toward the eye and the Fresnel term lights it most there: the column is
  * long and bright across the river, short and faint from the air.
  *
- * Which lamps: a fixed array, scene-wide like the water's clock, of the
- * lamps by the water (tile-stream.ts `lampsByWater`) nearest the eye in
- * front of it, chosen per frame on the CPU (`createLampReflections`). Its
- * length is fixed, a tier loops over its own share (`REFLECTED`), and a
- * lamp leaving the share fades out over a band before it goes, as the
- * real lights hand over (lamp-layer.ts). By day the count is 0.
+ * The rails catch the lamps by the tracks the same way (`railGlints`):
+ * polished steel, a wider lobe, a glint on the rail heads between the eye
+ * and each lamp, stretched along the track at a grazing look.
+ *
+ * Which lamps: per set a fixed array, scene-wide like the water's clock,
+ * of the lamps by the water or by a track (tile-stream.ts `lampsBy`)
+ * nearest the eye in front of it, chosen per frame on the CPU
+ * (`createLampReflections`). Its length is fixed, a tier loops over its
+ * own share (`MirrorSet.slots`), and a lamp leaving the share fades out
+ * over a band before it goes, as the real lights hand over
+ * (lamp-layer.ts). By day the counts are 0.
  */
 
 /** How far (m) from the water a lamp stands whose light the river
  *  mirrors: the Terrassenufer's quay, the Elbwiesen's paths. */
 export const LAMP_WATER_REACH_M = 80;
+/** How far (m) from a track a lamp stands whose light its rails catch: a
+ *  pavement's lamps over a street's tram tracks, a platform's. */
+export const LAMP_TRACK_REACH_M = 15;
 
-/** How many lamps a tier mirrors at once, and the array's length. */
-export const REFLECTED: Readonly<Record<DeviceTier, number>> = {
-  desktop: 32,
-  mobile: 12,
-};
-const MAX_REFLECTED = Math.max(REFLECTED.desktop, REFLECTED.mobile);
+/** One set of mirrored lamps: its slots per tier, how far off (m) a
+ *  lamp still shows (fading from the first), and the shared array. */
+interface MirrorSet {
+  count: UniformNode<"int", number>;
+  heads: UniformArrayNode<"vec4">;
+  reach: readonly [number, number];
+  slots: Readonly<Record<DeviceTier, number>>;
+}
 
-/** How far off (m) a lamp's reflection still shows, fading from the first. */
-const REACH: [number, number] = [1200, 1600];
+function mirrorSet(
+  slots: Record<DeviceTier, number>,
+  reach: [number, number]
+): MirrorSet {
+  return {
+    slots,
+    reach,
+    count: uniform(0, "int"),
+    // the heads (world, Y-up; w: their fade 0…1)
+    heads: uniformArray(
+      Array.from(
+        { length: Math.max(slots.desktop, slots.mobile) },
+        () => new Vector4()
+      ),
+      "vec4"
+    ),
+  };
+}
+
+/** The lamps by the water: seen across the river, so far off too. */
+const WATER = mirrorSet({ desktop: 32, mobile: 12 }, [1200, 1600]);
+/** The lamps by the tracks: a rail's glint is a few pixels from 300 m. */
+const TRACKS = mirrorSet({ desktop: 24, mobile: 8 }, [250, 400]);
+
 /** The share of the last lamp's distance over which a lamp leaving the
  *  set fades out (a hand-over band, not a pop). */
 const HAND_OVER = 0.2;
@@ -79,16 +112,55 @@ const REFLECTION = 2.4;
 const HALO = 0.12;
 const HALO_SPREAD = 3;
 /** Water's reflectance looking straight down (Schlick's F0). */
-const F0 = 0.02;
+const WATER_F0 = 0.02;
+/** A rail head's spread of normals (tan): worn steel, crowned across. */
+const RAIL_SPREAD = 0.18;
+/** A rail's glint at its peak (emissive), and steel's reflectance. */
+const RAIL_GLINT = 1.2;
+const STEEL_F0 = 0.5;
 /** The lamps' warm light (lamp-layer.ts `LAMP_LIGHT`). */
 const LAMP_LIGHT = 0xff_d0_89;
 
-/** The mirrored lamps' heads (world, Y-up; w: their fade 0…1). */
-const reflectedHeads: UniformArrayNode<"vec4"> = uniformArray(
-  Array.from({ length: MAX_REFLECTED }, () => new Vector4()),
-  "vec4"
-);
-const reflectedCount: UniformNode<"int", number> = uniform(0, "int");
+/**
+ * The summed lobes of a set's lamps at this fragment: each lamp's
+ * half-vector with the eye against `normal`, a spread `spread` (tan), a
+ * halo `halo` times as wide at `haloShare`, Schlick's Fresnel from `f0`.
+ * Everything the loop reads is taken into a variable before it.
+ */
+function lobes(
+  set: MirrorSet,
+  normal: V3,
+  toEye: V3,
+  spread: F,
+  look: { f0: number; halo: number; haloShare: number }
+): F {
+  const at = positionWorld.toVar();
+  const n = normal.toVar();
+  const eye = toEye.toVar();
+  const inv = float(1).div(spread.mul(spread)).toVar();
+  const sum = float(0).toVar();
+  Loop(
+    { start: int(0), end: set.count, type: "int", condition: "<" },
+    ({ i }) => {
+      const head = set.heads.element(i);
+      const toLamp = normalize(head.xyz.sub(at));
+      const half = normalize(toLamp.add(eye));
+      const c = clamp(dot(half, n), 1e-3, 1);
+      // tan² of the half-vector's tilt off the normal
+      const t2 = float(1).sub(c.mul(c)).div(c.mul(c)).mul(inv);
+      const lobe = exp(t2.negate()).add(
+        exp(t2.div(look.halo * look.halo).negate()).mul(look.haloShare)
+      );
+      const fresnel = pow(float(1).sub(clamp(dot(eye, half), 0, 1)), 5)
+        .mul(1 - look.f0)
+        .add(look.f0);
+      // a lamp below the surface lights nothing on it
+      const above = smoothstep(0, 0.5, head.y.sub(at.y));
+      sum.addAssign(lobe.mul(fresnel).mul(above).mul(head.w));
+    }
+  );
+  return sum;
+}
 
 /**
  * The lamps' light the water at this fragment mirrors toward the eye
@@ -97,47 +169,40 @@ const reflectedCount: UniformNode<"int", number> = uniform(0, "int");
  * (taken before: `fwidth` needs uniform control flow).
  */
 export function lampReflections(n: V3, toEye: V3, px: F): V3 {
-  const at = positionWorld.toVar();
-  const normal = n.toVar();
-  const eye = toEye.toVar();
   const spread = smoothstep(SPREAD_PX[0], SPREAD_PX[1], px)
     .mul(SPREAD[1] - SPREAD[0])
-    .add(SPREAD[0])
-    .toVar();
-  const inv = float(1).div(spread.mul(spread)).toVar();
-  const sum = float(0).toVar();
-  Loop(
-    { start: int(0), end: reflectedCount, type: "int", condition: "<" },
-    ({ i }) => {
-      const head = reflectedHeads.element(i);
-      const toLamp = normalize(head.xyz.sub(at));
-      const half = normalize(toLamp.add(eye));
-      const c = clamp(dot(half, normal), 1e-3, 1);
-      // tan² of the half-vector's tilt off the normal
-      const t2 = float(1).sub(c.mul(c)).div(c.mul(c));
-      const lobe = exp(t2.mul(inv).negate()).add(
-        exp(
-          t2
-            .mul(inv)
-            .div(HALO_SPREAD * HALO_SPREAD)
-            .negate()
-        ).mul(HALO)
-      );
-      const fresnel = pow(float(1).sub(clamp(dot(eye, half), 0, 1)), 5)
-        .mul(1 - F0)
-        .add(F0);
-      // a lamp under the surface lights nothing on it
-      const above = smoothstep(0, 0.5, head.y.sub(at.y));
-      sum.addAssign(lobe.mul(fresnel).mul(above).mul(head.w));
-    }
-  );
+    .add(SPREAD[0]);
+  const sum = lobes(WATER, n, toEye, spread, {
+    f0: WATER_F0,
+    halo: HALO_SPREAD,
+    haloShare: HALO,
+  });
   return color(LAMP_LIGHT).mul(sum.mul(sceneNight).mul(REFLECTION));
+}
+
+/**
+ * The lamps' light a rail head at this fragment catches toward the eye
+ * (emissive, linear): a glint on the steel between the eye and each lamp
+ * by the track, stretched along the rails at a grazing look — the shine a
+ * track takes on under the street lamps at night. `n` the surface's
+ * normal (world), `toEye` as for the water.
+ */
+export function railGlints(n: V3, toEye: V3): V3 {
+  const sum = lobes(TRACKS, n, toEye, float(RAIL_SPREAD), {
+    f0: STEEL_F0,
+    halo: 1,
+    haloShare: 0,
+  });
+  return color(LAMP_LIGHT).mul(sum.mul(sceneNight).mul(RAIL_GLINT));
 }
 
 /** The CPU half: picks the mirrored lamps each frame. */
 export interface LampReflections {
-  /** the heads by the water (tiles stream in and out) */
-  setHeads: (heads: readonly Vector3[]) => void;
+  /** the heads by the water and by the tracks (tiles stream in and out) */
+  setHeads: (heads: {
+    tracks: readonly Vector3[];
+    water: readonly Vector3[];
+  }) => void;
   setNightFactor: (t: number) => void;
   /** chooses the lamps for the eye at `eye` looking along `look` (world) */
   update: (eye: Vector3, look: Vector3) => void;
@@ -145,19 +210,20 @@ export interface LampReflections {
 
 /**
  * Ranks `heads` for the eye at `eye` looking along `look`: the nearest
- * `most` within REACH in front of it (or near it), into `out` as
- * (x, y, z, fade); returns how many. The fade is the reach's, the side's,
- * and the hand-over's where more lamps were in reach than `most`. Pure:
- * the scratch arrays are at least `most + 1` long.
+ * `most` within `reach` (m; fading from its first) in front of the eye (or
+ * near it), into `out` as (x, y, z, fade); returns how many. The fade is
+ * the reach's, the side's, and the hand-over's where more lamps were in
+ * reach than `most`. Pure: the scratch arrays are at least `most + 1` long.
  */
 export function rankReflected(
   heads: readonly Vector3[],
-  eye: Vector3,
-  look: Vector3,
-  most: number,
+  view: { eye: Vector3; look: Vector3 },
+  pick: { most: number; reach: readonly [number, number] },
   out: Vector4[],
   scratch: { idx: number[]; dist: number[]; front: number[] }
 ): number {
+  const { eye, look } = view;
+  const { most, reach } = pick;
   const { idx, dist, front } = scratch;
   const slots = most + 1;
   idx.fill(-1, 0, slots);
@@ -172,7 +238,7 @@ export function rankReflected(
     const dx = h.x - eye.x;
     const dz = h.z - eye.z;
     const d = Math.hypot(dx, dz);
-    if (!(d < REACH[1]) || !(d < dist[slots - 1])) {
+    if (!(d < reach[1]) || !(d < dist[slots - 1])) {
       continue;
     }
     const side =
@@ -197,7 +263,7 @@ export function rankReflected(
   for (let s = 0; s < most && idx[s] >= 0; s += 1) {
     const d = dist[s];
     const fade =
-      (1 - smooth(REACH[0], REACH[1], d)) *
+      (1 - smooth(reach[0], reach[1], d)) *
       smooth(FRONT[0], FRONT[1], front[s]) *
       (Number.isFinite(cut) ? smooth(cut, cut * (1 - HAND_OVER), d) : 1);
     const h = heads[idx[s]];
@@ -213,20 +279,35 @@ function smooth(a: number, b: number, x: number): number {
   return t * t * (3 - 2 * t);
 }
 
-/**
- * The per-frame choice of the mirrored lamps for a tier (`REFLECTED`):
- * writes the shared array the water reads. Nothing by day.
- */
-export function createLampReflections(tier: DeviceTier): LampReflections {
-  const most = REFLECTED[tier];
-  let heads: readonly Vector3[] = [];
-  let night = 0;
+/** A set's per-frame choice for a tier: what it keeps between frames. */
+function chooser(set: MirrorSet, tier: DeviceTier) {
+  const most = set.slots[tier];
   const scratch = {
     idx: Array.from({ length: most + 1 }, () => -1),
     dist: Array.from({ length: most + 1 }, () => Number.POSITIVE_INFINITY),
     front: Array.from({ length: most + 1 }, () => 0),
   };
-  const out = reflectedHeads.array as Vector4[];
+  const out = set.heads.array as Vector4[];
+  const pick = { most, reach: set.reach };
+  return (heads: readonly Vector3[], view: { eye: Vector3; look: Vector3 }) => {
+    set.count.value =
+      heads.length > 0 ? rankReflected(heads, view, pick, out, scratch) : 0;
+  };
+}
+
+/**
+ * The per-frame choice of the mirrored lamps for a tier: writes the shared
+ * arrays the water and the rails read. Nothing by day.
+ */
+export function createLampReflections(tier: DeviceTier): LampReflections {
+  let heads: { tracks: readonly Vector3[]; water: readonly Vector3[] } = {
+    tracks: [],
+    water: [],
+  };
+  let night = 0;
+  const water = chooser(WATER, tier);
+  const tracks = chooser(TRACKS, tier);
+  const none: readonly Vector3[] = [];
   return {
     setHeads: (next) => {
       heads = next;
@@ -235,10 +316,10 @@ export function createLampReflections(tier: DeviceTier): LampReflections {
       night = t;
     },
     update: (eye, look) => {
-      reflectedCount.value =
-        night > 0.001 && heads.length > 0
-          ? rankReflected(heads, eye, look, most, out, scratch)
-          : 0;
+      const lit = night > 0.001;
+      const view = { eye, look };
+      water(lit ? heads.water : none, view);
+      tracks(lit ? heads.tracks : none, view);
     },
   };
 }

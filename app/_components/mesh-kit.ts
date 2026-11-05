@@ -23,8 +23,11 @@ import type { Material } from "three/webgpu";
 import { finished } from "@/lib/city/build-steps";
 import type { Steps } from "@/lib/city/build-steps";
 import type { Ring2 } from "@/lib/city/decks";
+import { normalWorld } from "three/tsl";
 import { lineUnderDesign } from "./design-site";
+import { railGlints } from "./lamp-reflections";
 import { sceneMaterial } from "./three-utils";
+import { viewDirection } from "./view-direction";
 
 /** Accumulates a non-indexed triangle soup (positions + per-vertex normals). */
 export interface Mesh3 {
@@ -160,6 +163,9 @@ function* finishGeo(acc: Mesh3): Steps<BufferGeometry | null> {
 }
 
 export interface MatOpts {
+  /** a rail's steel: it catches the lamps by the track after dark
+   *  (lamp-reflections.ts `railGlints`) */
+  glint?: boolean;
   offsetUnits?: number;
   roughness?: number;
 }
@@ -176,7 +182,8 @@ export function material(
 ): MeshStandardNodeMaterial {
   const roughness = opts.roughness ?? 0.95;
   const offsetUnits = opts.offsetUnits ?? 0;
-  const key = `rail:${color.toString(16)}:${roughness}:${offsetUnits}`;
+  const glint = opts.glint === true;
+  const key = `rail:${color.toString(16)}:${roughness}:${offsetUnits}:${glint}`;
   return sceneMaterial(key, () => {
     const m = new MeshStandardNodeMaterial({
       color: new Color(color),
@@ -184,6 +191,9 @@ export function material(
     });
     // under a planner's design (design-site.ts)
     m.positionNode = lineUnderDesign;
+    if (glint) {
+      m.emissiveNode = railGlints(normalWorld, viewDirection().negate());
+    }
     if (offsetUnits) {
       m.polygonOffset = true;
       m.polygonOffsetFactor = -1;
@@ -448,6 +458,8 @@ export function addRibbon(
 
 export interface MeshOpts {
   cast: boolean;
+  /** a rail's steel (`MatOpts.glint`) */
+  glint?: boolean;
   /** a material of its own (the bridges' surfaces) instead of the plain one */
   material?: Material;
   offsetUnits?: number;
@@ -478,6 +490,7 @@ export function* meshSteps(
     geo,
     opts.material ??
       material(color, {
+        glint: opts.glint,
         offsetUnits: opts.offsetUnits,
         roughness: opts.roughness,
       })

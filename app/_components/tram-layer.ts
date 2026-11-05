@@ -668,16 +668,18 @@ function* buildTracks(
     }
     yield;
   }
-  const parts: [Mesh3, number, number][] = [
-    [acc.rail, TRAM_RAIL, -1],
-    [acc.streetRail, TRAM_RAIL, -2],
-    [acc.grass, MEADOW, -1],
-    [acc.ballast, COLORS.ballast, -1],
+  // the rails' steel catches the lamps by the track after dark
+  const parts: [Mesh3, number, number, boolean][] = [
+    [acc.rail, TRAM_RAIL, -1, true],
+    [acc.streetRail, TRAM_RAIL, -2, true],
+    [acc.grass, MEADOW, -1, false],
+    [acc.ballast, COLORS.ballast, -1, false],
   ];
   const meshes: Mesh[] = [];
-  for (const [part, color, offsetUnits] of parts) {
+  for (const [part, color, offsetUnits, glint] of parts) {
     const m = yield* meshSteps(part, color, {
       cast: false,
+      glint,
       offsetUnits,
       roughness: 0.9,
     });

@@ -87,7 +87,8 @@ import {
 } from "./fetch-optional";
 import { furnitureSteps } from "./furniture-layer";
 import { buildLamps } from "./lamp-layer";
-import { LAMP_WATER_REACH_M } from "./lamp-reflections";
+import { LAMP_TRACK_REACH_M, LAMP_WATER_REACH_M } from "./lamp-reflections";
+import { nearLines } from "@/lib/city/near-lines";
 import { waterNear } from "@/lib/city/water-mask";
 import type { LampControl } from "./lamp-layer";
 import { buildLowVegetation } from "./low-vegetation-layer";
@@ -759,10 +760,35 @@ const tileIdOf = (scene: Object3D): string =>
 
 /**
  * Whether a lamp at projected (x, y) stands by the tile's water, close
- * enough for the river to mirror it (lamp-reflections.ts): none where the
- * tile has no water; every lamp where its water is not known.
+ * enough for the river to mirror it, or by one of its tracks, close enough
+ * for the rails to catch its light (lamp-reflections.ts): no water test
+ * where the tile has no water, every lamp where its water is not known.
  */
-function lampsByWater(
+function lampsBy(
+  terrain: TerrainLayer,
+  rails: readonly RailFeature[],
+  trams: readonly TramFeature[]
+): {
+  tracks?: (x: number, y: number) => boolean;
+  water?: (x: number, y: number) => boolean;
+} {
+  const lines = [
+    ...rails.map((f) => f.geometry.coordinates),
+    // a track, not a span or an arm between its anchors
+    ...trams.flatMap((f) =>
+      f.properties?.k === "track" && f.geometry.type === "LineString"
+        ? [f.geometry.coordinates]
+        : []
+    ),
+  ];
+  return {
+    water: byWater(terrain),
+    tracks: lines.length > 0 ? nearLines(lines, LAMP_TRACK_REACH_M) : undefined,
+  };
+}
+
+/** `lampsBy`'s water test: none where the tile has no water. */
+function byWater(
   terrain: TerrainLayer
 ): ((x: number, y: number) => boolean) | undefined {
   const mask = terrain.waterMask;
@@ -1327,7 +1353,7 @@ async function buildDressing(
     const lampControl = buildLamps(
       ownLamps,
       { ...ground, heightAt: terrain.heightAt },
-      lampsByWater(terrain)
+      lampsBy(terrain, rails, trams)
     );
     made.lamps = lampControl;
     await nextTask(signal);

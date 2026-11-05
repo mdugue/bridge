@@ -106,6 +106,9 @@ interface ArmPlace extends Place {
   yaw: number;
 }
 
+/** Whether a place (projected x, y) is somewhere: by the water, by a track. */
+type ByPlace = (x: number, y: number) => boolean;
+
 /** Per-tile lamp visuals (posts + heads + glow + ground pools) on the Y-up scene. */
 export interface LampControl {
   /** Nothing of the tile's own to free: the meshes go with the scene and
@@ -114,9 +117,11 @@ export interface LampControl {
   group: Group;
   /** world-space (Y-up) lantern-head positions, fed to the shared light pool */
   headPositions: Vector3[];
-  /** the heads by the water, whose light the river mirrors (the same
-   *  vectors; lamp-reflections.ts) */
+  /** the heads by the water, whose light the river mirrors, and by a
+   *  track, whose light the rails catch (the same vectors;
+   *  lamp-reflections.ts) */
   waterHeads: Vector3[];
+  trackHeads: Vector3[];
 }
 
 /** A small fixed pool of real point lights shared across ALL tiles' lamps. */
@@ -538,25 +543,30 @@ function taggedHeads(places: Place[], height: number): Instances {
 export function buildLamps(
   features: LampFeature[],
   ctx: GroundContext,
-  /** whether projected (x, y) is by the water (none: no head is) */
-  byWater?: (x: number, y: number) => boolean
+  /** whether projected (x, y) is by the water, by a track (none: no
+   *  head is) */
+  by: { tracks?: ByPlace; water?: ByPlace } = {}
 ): LampControl {
   const group = new Group();
   group.name = "lamps";
   const places = lampPlaces(features, ctx);
   const headPositions = places.heads;
-  const waterHeads = byWater
-    ? headPositions.filter((h) => {
-        const p = worldToEpsg(h.x, h.z, ctx.offset);
-        return byWater(p.x, p.y);
-      })
-    : [];
+  const headsBy = (test: ByPlace | undefined) =>
+    test
+      ? headPositions.filter((h) => {
+          const p = worldToEpsg(h.x, h.z, ctx.offset);
+          return test(p.x, p.y);
+        })
+      : [];
+  const waterHeads = headsBy(by.water);
+  const trackHeads = headsBy(by.tracks);
 
   if (places.pools.length === 0) {
     return {
       group,
       headPositions,
       waterHeads,
+      trackHeads,
       dispose: () => {
         // empty
       },
@@ -593,6 +603,7 @@ export function buildLamps(
     group,
     headPositions,
     waterHeads,
+    trackHeads,
     // disposeObject3D frees the meshes with the scene; nothing else is the
     // tile's.
     dispose: () => {
