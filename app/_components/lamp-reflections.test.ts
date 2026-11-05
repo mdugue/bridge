@@ -6,58 +6,83 @@ import {
   packedReach,
   rankReflected,
   rankScratch,
+  uniqueHeads,
 } from "./lamp-reflections";
 
 const slots = (n: number) => Array.from({ length: n }, () => new Vector4());
 const eye = new Vector3(0, 10, 0);
-/** 48 slots: two per compass sector of 15° */
-const pick = { most: 48, reach: [1200, 1600] as const };
+const pick = { most: 4, reach: [250, 400] as const };
+const along = (ds: number[]) => ds.map((d) => new Vector3(0, 8, -d));
 
 describe("rankReflected", () => {
-  test("keeps each sector's nearest, whichever way they lie", () => {
+  test("keeps the nearest, whichever way they lie", () => {
     const heads = [
       new Vector3(0, 8, -300),
-      new Vector3(0, 8, 300), // behind the usual look: kept too
-      new Vector3(5, 8, -100),
+      new Vector3(0, 8, 30), // behind the usual look: kept too
+      new Vector3(5, 8, -10),
     ];
-    const out = slots(48);
+    const out = slots(4);
     const n = rankReflected(heads, eye, pick, out, rankScratch());
     expect(n).toBe(3);
-    expect(out[0].z).toBe(-100);
+    expect(out[0].z).toBe(-10);
     expect(out[0].w).toBeCloseTo(1, 5);
   });
 
-  test("keeps a share per sector, so a row across the view is kept all along", () => {
-    // a quay 400 m ahead, a lamp every 10 m from 300 m left to 300 m right
-    const row = Array.from(
-      { length: 61 },
-      (_, i) => new Vector3(-300 + i * 10, 8, -400)
-    );
-    const out = slots(48);
+  test("fades the kept ones to nothing toward the first left out", () => {
+    const out = slots(4);
     const n = rankReflected(
-      row,
+      along([10, 20, 30, 95, 100]),
       eye,
-      { most: 48, reach: [1200, 1600] },
+      pick,
       out,
       rankScratch()
     );
-    expect(n).toBeGreaterThan(8);
-    const xs = out.slice(0, n).map((v) => v.x);
-    expect(Math.min(...xs)).toBeLessThan(-200);
-    expect(Math.max(...xs)).toBeGreaterThan(200);
+    expect(n).toBe(4);
+    expect(out[0].w).toBeCloseTo(1, 5);
+    // 95 m against a cut at 100 m: nearly gone
+    expect(out[3].w).toBeLessThan(0.1);
   });
 
-  test("fades the last lamp of a sector toward the first one left out, and far ones", () => {
-    const heads = [100, 200, 210].map((d) => new Vector3(0, 8, -d));
-    const out = slots(48);
-    const n = rankReflected(heads, eye, pick, out, rankScratch());
-    expect(n).toBe(2);
-    expect(out[0].w).toBeCloseTo(1, 5);
-    // 200 m, against a cut at 210 m: well inside the hand-over band
-    expect(out[1].w).toBeLessThan(0.2);
-    const far = slots(48);
-    rankReflected([new Vector3(0, 8, -1500)], eye, pick, far, rankScratch());
-    expect(far[0].w).toBeLessThan(0.5);
+  test("walking on hands a lamp over without a jump", () => {
+    // a row along a track, every 25 m; the eye walks along it
+    const row = along(Array.from({ length: 40 }, (_, i) => i * 25 - 300));
+    const fadeOf = (z: number) => {
+      const out = slots(4);
+      const n = rankReflected(
+        row,
+        new Vector3(0, 10, z),
+        pick,
+        out,
+        rankScratch()
+      );
+      return new Map(out.slice(0, n).map((v) => [v.z, v.w]));
+    };
+    let last = fadeOf(0);
+    for (let z = -0.5; z > -100; z -= 0.5) {
+      const now = fadeOf(z);
+      for (const lamp of new Set([...last.keys(), ...now.keys()])) {
+        const step = Math.abs((now.get(lamp) ?? 0) - (last.get(lamp) ?? 0));
+        expect(step).toBeLessThan(0.1);
+      }
+      last = now;
+    }
+  });
+
+  test("fades far lamps with the reach", () => {
+    const out = slots(4);
+    rankReflected(along([380]), eye, pick, out, rankScratch());
+    expect(out[0].w).toBeLessThan(0.1);
+  });
+});
+
+describe("uniqueHeads", () => {
+  test("drops a lamp two loaded levels both bring", () => {
+    const heads = [
+      new Vector3(1, 2, 3),
+      new Vector3(1.01, 2, 3),
+      new Vector3(4, 2, 3),
+    ];
+    expect(uniqueHeads(heads)).toHaveLength(2);
   });
 });
 

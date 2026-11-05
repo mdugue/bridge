@@ -131,7 +131,7 @@ function mirrorSet(
 }
 
 /** The lamps by the tracks: a rail's glint is a few pixels from 300 m. */
-const TRACKS = mirrorSet({ desktop: 24, mobile: 8 }, [250, 400]);
+const TRACKS = mirrorSet({ desktop: 64, mobile: 16 }, [250, 400]);
 
 /** How far off (m) a lamp's column on the water still shows, fading from
  *  the first, by tier: a phone draws the near river's columns only, each
@@ -142,12 +142,9 @@ const WATER_REACH: Readonly<Record<DeviceTier, [number, number]>> = {
 };
 /** The tier's reach, set by `createLampReflections`. */
 const waterReach = uniform(new Vector2(...WATER_REACH.desktop));
-/** The share of the last lamp's distance over which a lamp leaving the
- *  set fades out (a hand-over band, not a pop). */
-const HAND_OVER = 0.2;
-/** …at most this many metres, so a row of lamps at one distance keeps
- *  all but its last few at full strength. */
-const HAND_OVER_M = 40;
+/** The share of the cut's distance (the first lamp left out) over
+ *  which the kept lamps fade to nothing toward it. */
+const HAND_OVER = 0.35;
 /** The slope spread (rad, tan) of the ripples finer than a pixel: near
  *  (at a pixel's few centimetres) and far (metres a pixel). */
 const SPREAD: [number, number] = [0.035, 0.08];
@@ -494,7 +491,8 @@ export function buildLampMirrors(
 
 /** The rails' CPU half: picks their glinting lamps each frame. */
 export interface LampReflections {
-  /** the heads by the tracks (tiles stream in and out) */
+  /** the heads by the tracks of every loaded tile, shown or not, so a
+   *  turn of the eye changes none (tiles stream in and out) */
   setHeads: (tracks: readonly Vector3[]) => void;
   setNightFactor: (t: number) => void;
   /** chooses the lamps for the eye at `eye` (world) at `now` (s) */
@@ -503,49 +501,27 @@ export interface LampReflections {
   dispose: () => void;
 }
 
-/** The compass sectors round the eye (by the lamps' bearing from it),
- *  each keeping its own share of the slots: the lamps along a street's
- *  tracks glint all round, not only on its nearest stretch. Fixed to the
- *  world, not to the look: turning the eye changes no lamp, only walking
- *  does, and then through the hand-over's fade. As many sectors as slots,
- *  at most this many (15° each): one lamp a sector. */
-const MAX_SECTORS = 24;
-
-/** A tier's sectors for `most` slots. */
-const sectorsFor = (most: number) => Math.max(1, Math.min(most, MAX_SECTORS));
-
-/** Scratch for `rankReflected`: one entry per head that is a candidate. */
+/** Scratch for `rankReflected`: one entry per head within reach. */
 export interface RankScratch {
-  /** candidates' head indices, distances and sectors */
+  /** candidates' head indices and distances */
   idx: number[];
   dist: number[];
-  sector: number[];
-  /** the sectors' kept counts and cut distances */
-  kept: number[];
-  cut: number[];
-  /** the candidates nearest first, and those kept */
+  /** the candidates nearest first */
   order: number[];
-  chosen: number[];
 }
 
 export function rankScratch(): RankScratch {
-  return {
-    idx: [],
-    dist: [],
-    sector: [],
-    kept: Array.from({ length: MAX_SECTORS }, () => 0),
-    cut: Array.from({ length: MAX_SECTORS }, () => Number.POSITIVE_INFINITY),
-    order: [],
-    chosen: [],
-  };
+  return { idx: [], dist: [], order: [] };
 }
 
 /**
- * Ranks `heads` for the eye at `eye`: per compass sector round it
- * (`sectorsFor`) its nearest share of `most` within `reach` (m; fading from
- * its first), into `out` as (x, y, z, fade); returns how many. The fade is
- * the reach's and the hand-over's toward the sector's first lamp left out.
- * The look plays no part, so a turn of the eye swaps no lamp.
+ * Ranks `heads` for the eye at `eye`: its nearest `most` within `reach`
+ * (m; fading from its first), into `out` as (x, y, z, fade); returns how
+ * many. Each fades toward the first lamp left out (the cut) as well as
+ * with the reach, to nothing there: the cut, the next lamp's distance,
+ * moves with the eye continuously, so a lamp enters and leaves the set
+ * at a fade of 0 and walking never switches one. The look plays no part,
+ * so a turn of the eye changes no lamp.
  */
 export function rankReflected(
   heads: readonly Vector3[],
@@ -555,54 +531,28 @@ export function rankReflected(
   scratch: RankScratch
 ): number {
   const { most, reach } = pick;
-  const { idx, dist, sector, kept, cut, order, chosen } = scratch;
-  const sectors = sectorsFor(most);
+  const { idx, dist, order } = scratch;
   idx.length = 0;
-  order.length = 0;
-  chosen.length = 0;
   dist.length = 0;
-  sector.length = 0;
-  kept.fill(0);
-  cut.fill(Number.POSITIVE_INFINITY);
+  order.length = 0;
   for (let i = 0; i < heads.length; i += 1) {
     const h = heads[i];
-    const dx = h.x - eye.x;
-    const dz = h.z - eye.z;
-    const d = Math.hypot(dx, dz);
-    if (!(d < reach[1])) {
-      continue;
+    const d = Math.hypot(h.x - eye.x, h.z - eye.z);
+    if (d < reach[1]) {
+      order.push(idx.length);
+      idx.push(i);
+      dist.push(d);
     }
-    // the bearing round the eye, 0 … 2π (the sector)
-    const bearing = Math.atan2(dx, -dz) + Math.PI;
-    order.push(idx.length);
-    idx.push(i);
-    dist.push(d);
-    sector.push(
-      Math.min(sectors - 1, Math.floor((bearing / (2 * Math.PI)) * sectors))
-    );
   }
-  // nearest first; each sector keeps its share, the first it leaves out
-  // its cut
   order.sort((a, b) => dist[a] - dist[b]);
-  const share = Math.max(1, Math.floor(most / sectors));
-  for (const k of order) {
-    const s = sector[k];
-    if (kept[s] < share) {
-      kept[s] += 1;
-      chosen.push(k);
-    } else if (!Number.isFinite(cut[s])) {
-      cut[s] = dist[k];
-    }
-  }
+  const cut = order.length > most ? dist[order[most]] : reach[1];
   let n = 0;
-  for (const k of chosen) {
+  for (let r = 0; r < Math.min(most, order.length); r += 1) {
+    const k = order[r];
     const d = dist[k];
-    const c = cut[sector[k]];
     const fade =
       (1 - smooth(reach[0], reach[1], d)) *
-      (Number.isFinite(c)
-        ? smooth(c, c - Math.min(c * HAND_OVER, HAND_OVER_M), d)
-        : 1);
+      (1 - smooth(cut * (1 - HAND_OVER), cut, d));
     if (fade <= 0) {
       continue;
     }
@@ -619,11 +569,10 @@ function smooth(a: number, b: number, x: number): number {
   return t * t * (3 - 2 * t);
 }
 
-/** How long (s) a lamp's glint takes to come or go (to 1/e): a lamp the
- *  choice takes up or lets go of as the eye walks on — a sector's
- *  nearest handed to the next, a lamp crossing into another sector, a
- *  tile streaming in or out — fades rather than switching. */
-export const GLINT_EASE_S = 0.5;
+/** How long (s) a lamp's glint takes to come or go (to 1/e) where the
+ *  choice jumps: a tile's lamps streaming in or out. Walking moves the
+ *  choice continuously (`rankReflected`), so it lags no lamp there. */
+export const GLINT_EASE_S = 0.2;
 
 /** A lamp that glints or is fading: its head, its shown fade and the
  *  fade the choice wants of it now. */
@@ -636,6 +585,20 @@ interface Glint {
 /** A lamp by its place (a tile that lands again brings new vectors). */
 const keyOf = (v: Vector4) =>
   `${Math.round(v.x * 10)} ${Math.round(v.y * 10)} ${Math.round(v.z * 10)}`;
+
+/** `heads` without the same lamp twice (two loaded levels of a tile). */
+export function uniqueHeads(heads: readonly Vector3[]): Vector3[] {
+  const seen = new Set<string>();
+  const out: Vector3[] = [];
+  for (const h of heads) {
+    const key = `${Math.round(h.x * 10)} ${Math.round(h.y * 10)} ${Math.round(h.z * 10)}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      out.push(h);
+    }
+  }
+  return out;
+}
 
 /** The glints that ease toward each frame's choice (`rankReflected`):
  *  writes the `most` brightest into `out`, returns how many. */

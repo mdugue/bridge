@@ -171,7 +171,7 @@ import { pageLeaving } from "./net-gate";
 import { createSceneFog, installSceneFog, VALLEY_HAZE } from "./height-fog";
 import { attachKeyboardControls } from "./keyboard-controls";
 import { createLampLights, LAMP_LIGHTS } from "./lamp-layer";
-import { createLampReflections } from "./lamp-reflections";
+import { createLampReflections, uniqueHeads } from "./lamp-reflections";
 import { createLantern, invalidateLanternShadow } from "./lantern";
 import { setFountainTime } from "./monument-layer";
 import { showFurnitureNear } from "./furniture-layer";
@@ -2910,8 +2910,11 @@ async function bootApp(
     lampLights.setHeads(
       stream.visibleDressings().flatMap((d) => d.lamps?.headPositions ?? [])
     );
+    // every loaded tile's, not the shown ones': a turn changes no lamp
     lampReflections.setHeads(
-      stream.visibleDressings().flatMap((d) => d.lamps?.trackHeads ?? [])
+      uniqueHeads(
+        [...stream.dressings].flatMap((d) => d.lamps?.trackHeads ?? [])
+      )
     );
     // a tile that lands is born on its mid crowns: its tiers in this frame
     crownTiers.force();
