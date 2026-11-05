@@ -60,7 +60,11 @@ checked by `parseSnapshot`; `camera` needs `pos` in the Y-up scene frame
 
 - In a running viewer: sidebar **Erweitert → Snapshot → Kopieren**, or
   `__poc.handle.getCameraState()` (the page needs a build with
-  `NEXT_PUBLIC_POC_DEBUG=1` or the dev server).
+  `NEXT_PUBLIC_POC_DEBUG=1` or the dev server). *Link kopieren* gives the
+  same view as a link (`#snap=…`): put it next to the JSON, with the
+  preview's origin, and the reviewer opens it in one click.
+- A committed QA view (`qa/views/`, its index has the links) may already
+  show the place: reuse it.
 - Headless, at a place given in EPSG: place the camera with
   `__poc.handle.flyToViewpoint` or `applyCameraState`, wait for
   `__poc.firstFrame`, then read `getCameraState()`. The camera needs the

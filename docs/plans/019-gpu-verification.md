@@ -22,9 +22,9 @@
 - **Effort**: M (one to two days of looking, plus the tuning it finds);
   sections can be done in separate sittings
 - **Risk**: LOW — observation and constants
-- **Depends on**: none; plan 048 part B (committed QA views) makes it
-  repeatable — if 048 has landed, use `qa/views/*.json` instead of
-  hand-made snapshots
+- **Depends on**: none; plan 048 part B (committed QA views) has landed:
+  use [`qa/views/`](../../qa/views/README.md) instead of hand-made
+  snapshots
 - **Planned at**: commit `2c2f228`, 2026-09-24; rewritten 2026-10-01 as
   the single GPU checklist (the old before/after-branch method is gone:
   the branch it compared is long merged)
@@ -54,24 +54,47 @@ bun dev        # bakes public/data, then serves https://localhost:3000 (self-sig
   `?gpu=webgl2` forces the WebGL2 backend (`app/_components/scene-profile.ts`).
   Check sections A–G on **both**.
 - **Snapshots**: the in-app Snapshot panel ("Kopieren") copies the camera,
-  the time and the look as JSON. Save it as `shots/<name>.json`, then
+  the time and the look as JSON ("Link kopieren": a link that opens
+  there). Save it as `shots/<name>.json`, then
   `bun run shots` (headed, full profile) writes `shots/<name>.png`. Never
   judge from `?scene=lite` (AGENTS.md: lite is for CI only).
 - **Oblique angles**, never only head-on (AGENTS.md: a tree through a
   bridge is invisible from straight above).
-- **Reference views** (make each once, keep the JSON; plan 048 commits
-  them as `qa/views/`):
+- **Reference views** are committed (plan 048): `qa/views/<name>.json`,
+  written by `bun scripts/qa-views.ts` from the data. Their index,
+  [`qa/views/README.md`](../../qa/views/README.md), says what each
+  checks and gives its link (`/dresden#snap=…`: put the preview's or
+  production's origin in front — on a phone too; a new link in a tab
+  that shows the city applies at once). `bun run shots` renders them as
+  `shots/qa-<name>.png` (`-- --grep qa-<name>` for one). The poses were
+  computed, not looked at: a view framed badly is fixed in the
+  generator's table, under its name.
 
 | View | Where / when | Used by |
 |---|---|---|
-| `shore-eye` | Elbe bank below the Brühlsche Terrasse at eye level, 11:00 | B, K (riverside) |
-| `meadow-eye` | Großer Garten edge at eye level, 17:30 | B, K (trees, NDVI) |
-| `seam-eye` | on a tile border at eye level, looking across (e.g. E 412 000 in the Neustadt) | D, K (rails, walls, fences across a seam) |
-| `seam-fly` | 200 m above a four-tile corner (E 412 000 / N 5 658 000), pitched −35° | D, E |
+| `shore-eye` | Elbe bank below the Brühlsche Terrasse (the landing stage) at eye level, 11:00 | B, K (riverside) |
+| `meadow-eye` | Großer Garten's lawn towards the Palais at eye level, 17:30 | B, K (trees, NDVI) |
+| `seam-eye` | Antonstraße across the seam at E 412 000 at eye level, sun behind | D, K, M (shadow camera) |
+| `seam-fly` | 200 m above the four-tile corner (E 412 000 / N 5 658 000), pitched −35° | D, E, M |
 | `oblique-400` | 400 m up, oblique over the Altstadt | D, H |
-| `low-sun` | Neumarkt, 07:30 on 21 December | E |
-| `roof-close` | a roof at 30 m, 13:00 | C |
-| `night-street` | Hauptstraße (Neustadt) at eye level, 21:00 | K (lamps, shop glow), G (noir) |
+| `low-sun` | Neumarkt, **09:00** on 21 December (07:30 is before sunrise) | E |
+| `roof-close` | Neustadt roofs from ≈ 30 m above them, 13:00 | C |
+| `night-street`, `night-street-noir` | Hauptstraße (Neustadt) at eye level, 21:00 in September | K (lamps, shop glow), G (noir) |
+
+Section M's views: `street-crossings` and `street-crossings-comic`
+(FXAA), `ao-wall-foot` (AO in one byte), `pitches-200` (the coarse
+level without sports grounds), `seam-eye` and `seam-fly` (the shadow
+camera's stream), `oblique-400-paper`, `-line`, `-figure` (dropped CPU
+copies), `ask-cone-tree`, `ask-round-crown`, `ask-bridge` and
+`traffic-albertstrasse` (the outline); `modell-comic` opened with
+`?gpu=webgl2&trail=1` for the recovery checks. Section N's:
+`modell-iso-low`, `modell-iso-high`, `modell-plan-low`,
+`modell-plan-high`, `modell-iso-line` against `modell-fly-low`
+(Modell); `frozen-start`, `neumarkt-dusk`, `elbufer-evening` (plan
+073). The black squares (plan 049) need no view: the start of
+`/leipzig` and `/hamburg` (`SHOTS_SITE`). The other plans' device
+checks have theirs in the index (069, 070, 071, 076, 077, 078, 080,
+083, 084).
 
 ## Checks
 
