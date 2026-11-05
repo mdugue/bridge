@@ -580,10 +580,10 @@ export function createStylize(inputs: StylizeInputs): Stylize {
    * cast shadow: the pixel's world point tested against the sun's own
    * shadow map — the shadow the scene drew, exactly, whatever the colour
    * of the surface (a post pass cannot tell a dark roof in the sun from a
-   * pale one in shade by its colour). Off the map's frustum (it follows
-   * the camera, a few hundred metres round) the caller's `beyond` stands
-   * in — the style's guess from lightness —, faded in over the frustum's
-   * last 4 % so its edge draws no line; below the horizon nothing is in
+   * pale one in shade by its colour). Off the map's rings (they follow
+   * the camera, about two kilometres round) the caller's `beyond` stands
+   * in — the style's guess from lightness —, faded in over the widest's
+   * edge band so its edge draws no line; below the horizon nothing is in
    * the sun. 0..1, the map's own 2×2 filter at a shadow's edge.
    */
   const inSun = (world: V3, n: V3, z: F, beyond: F): F => {

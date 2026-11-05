@@ -36,9 +36,9 @@ export const SHADOW_RINGS = SHADOW_RING_HALVES.length;
  */
 export const THIN_CASTER_RINGS = { slender: 3, tiny: 1 } as const;
 
-/** How many of the finest rings a furniture cell's flip asks to redraw: it
- *  flips within 400 m of the eye, and the widest ring, which draws every caster,
- *  is the only one that does not draw what stands there. */
+/** How many of the finest rings a furniture cell's flip asks to redraw: the
+ *  ones that draw any furniture (`THIN_CASTER_RINGS.slender`), not the widest
+ *  with its buildings and crowns. */
 export const NEAR_CHANGE_RINGS = 3;
 
 /** The PCF spread in texels (three's `shadow.radius`). Five samples spread

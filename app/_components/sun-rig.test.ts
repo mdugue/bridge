@@ -50,6 +50,8 @@ function rig(shadowMapSize = shadowMapSizeFor("full")) {
   if (!sun) {
     throw new Error("the rig adds no sun");
   }
+  // by day, unless a test says otherwise: by night no ring draws
+  sunRig.update(new Date("2026-06-21T12:00:00+02:00"));
   return { sunRig, sun, fogColor };
 }
 
@@ -352,6 +354,13 @@ test("the sun moving redraws every ring", () => {
   sunRig.update(new Date("2026-06-21T10:00:00Z"));
   expect(sun.shadow.needsUpdate).toBe(true);
   expect(drawAll(sun).toSorted((a, b) => a - b)).toEqual([0, 1, 2, 3]);
+});
+
+test("by night three's own first ask of the map draws no ring", () => {
+  const { sunRig, sun } = rig();
+  sunRig.update(new Date("2026-06-21T02:00:00+02:00"));
+  walkTo(sunRig, 0, 0);
+  expect(drawOne(sun)).toBeNull();
 });
 
 test("a ring nothing draws stops counting as work in hand", () => {

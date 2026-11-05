@@ -363,7 +363,7 @@ export function createSunRig(
     square.right = radius;
     square.top = radius;
     square.bottom = -radius;
-    // Tight depth range around the frustum for good precision.
+    // Its depth range only bounds which tiles it streams.
     square.near = shadowDistance - radius * 1.2;
     square.far = shadowDistance + radius * 1.2;
     square.updateProjectionMatrix();

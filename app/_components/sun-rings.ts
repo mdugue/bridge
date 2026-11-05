@@ -210,8 +210,9 @@ export interface SunRings {
   nodes: ShadowRingNodes;
   /** The map's depth, null until the first lit material made it. */
   depth: () => DepthTexture | null;
-  /** The widest ring on the ground: its centre in the data frame (x east,
-   *  y north: world x, −z) and its half-size (z, m). */
+  /** How far the rings answer for the near band's occluders (`ringForNearBand`
+   *  picks the ring): its centre in the data frame (x east, y north: world x,
+   *  −z) and its half-size (z, m). */
   reach: Vector3;
   /** The rings for a parallel view of the ground round `centre`. */
   setFootprint: (centre: RingPoint, radius: number) => void;
@@ -524,7 +525,8 @@ export function createSunRings(
   const drawNext = () => {
     const now = performance.now();
     const index = nextRingDue(rings, now, !tiled);
-    if (index < 0) {
+    // three asks one draw of a new map itself, by night too
+    if (index < 0 || sun.y <= 0) {
       return null;
     }
     const ring = rings[index];
@@ -549,7 +551,9 @@ export function createSunRings(
       return rings.some(
         (ring) =>
           ring.dirtySince !== null &&
-          now - Math.max(ring.dirtySince, lastDraw) < RING_STALL_MS
+          // nothing drawn yet: the boot, however long it took to get here
+          (lastDraw === Number.NEGATIVE_INFINITY ||
+            now - Math.max(ring.dirtySince, lastDraw) < RING_STALL_MS)
       );
     },
     depth: () => node.depth,

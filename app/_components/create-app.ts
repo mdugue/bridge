@@ -1549,7 +1549,7 @@ async function bootApp(
     renderer
   );
   cleanups.push(sunRig.dispose);
-  // The horizon's near band hands over to the shadow map inside the frustum.
+  // The horizon's near band hands over to the shadow map inside the rings' reach.
   ground.shadowReach.value = sunRig.shadowReach;
 
   // The walker's lantern (lantern.ts): one more light, built before the
