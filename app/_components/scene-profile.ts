@@ -2,8 +2,8 @@
  * Scene profile and render budget — how much world the viewer builds and how
  * expensive each frame is allowed to be.
  *
- * `full` is the product: the whole site streams (lib/city/tileset.ts), a
- * 3072² shadow map and 16-sample contact shadows (GTAO). `lite` exists for
+ * `full` is the product: the whole site streams (lib/city/tileset.ts), four
+ * shadow rings of 2048² and 16-sample contact shadows (GTAO). `lite` exists for
  * the headless e2e suite, where every frame is rasterized on the CPU by
  * SwiftShader: it streams the spawn tile only, shrinks the shadow map, halves
  * the render scale and halves the GTAO samples — the four knobs that
@@ -159,8 +159,8 @@ export function shadowMapSizeFor(
   if (profile === "lite") {
     return 256;
   }
-  // A phone's rings have a quarter of the desktop's texels and a quarter of
-  // its depth fill. The map is a depth array alone (`shadowMapBytesFor`):
+  // A phone's rings have a fifth of the desktop's texels and of its depth
+  // fill. The map is a depth array alone (`shadowMapBytesFor`):
   // 16 MiB at four of 1024², 4 MiB at four of 512².
   return SHADOW_MAP_SIZE[tier][safety];
 }
@@ -266,8 +266,10 @@ const TILE_CACHE_BYTES: Record<
  * depth, the one-byte AO and outline targets and a picture style's own
  * target while one is on: on the 402×874 iPhone 18, 12.5, 8 and 6 MiB at
  * the pixel ratios 1.5, 1.25, 1.0, 0.85 of the four levels) and the
- * shadow map (`shadowMapBytesFor`: 12.4 MiB at four of 900², 3.1 at four of 450²): 34,
- * 28.5, 12 and 10 MiB. The 100 MiB are ~40 for the scene-wide sets (sky,
+ * shadow map at what it held as one map (16 MiB, 4 at the lower levels): 34,
+ * 28.5, 12 and 10 MiB. The rings hold less (`shadowMapBytesFor`: 12.4 MiB at
+ * four of 900², 3.1 at four of 450²), and the rest pays for what their casters
+ * hold beside them, not for tiles. The 100 MiB are ~40 for the scene-wide sets (sky,
  * lamp pool, data layers, uniform buffers and shader text) and ~60 of
  * headroom: tiles in flight weigh nothing in the cache, it unloads only
  * past `max` and one tile over, and three counts a tree set's instance

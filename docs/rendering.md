@@ -324,7 +324,8 @@ change, not a re-bake
     of the look direction, so looking straight down pushes nothing). A
     centre lands on its ring's texel grid in light space, so a ring redrawn
     further on puts its texels on the same ground and no edge crawls. Turning
-    on the spot on foot draws nothing.
+    on the spot on foot moves no ring; a tile a turn shows or hides still asks
+    the rings it can fall on.
   - **When they draw.** A ring asks to redraw when its wanted centre has
     drifted a fifth of its half-size, the sun moves or a caster changes
     (`invalidateShadows()`: a crown tier's swap, a season change that thins or

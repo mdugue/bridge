@@ -78,6 +78,9 @@ export interface ShadowRingNodes {
   bias: UniformNode<"float", number>[];
 }
 
+/** Every ring shows (Modell). */
+const ALL_RINGS: readonly number[] = SHADOW_RING_HALVES.map(() => 1);
+
 /** The finest ring at a point, and the next one out. */
 export interface RingLookup {
   /** the ring's map coordinates, its depth with the bias */
@@ -206,6 +209,31 @@ export interface SunRings {
   setView: (view: RingView) => void;
 }
 
+/** A depth array of one layer a ring, comparing as the map does; a stand-in
+ *  for the map must match it to be swapped for it without a build. */
+export function ringDepthTexture(
+  width: number,
+  height: number,
+  reversed: boolean
+): DepthTexture {
+  const texture = new DepthTexture(
+    width,
+    height,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    SHADOW_RINGS
+  );
+  texture.name = "ShadowRingsDepth";
+  texture.compareFunction = reversed ? GreaterEqualCompare : LessEqualCompare;
+  return texture;
+}
+
 /** The rings' uniforms, in the render group. */
 function ringUniforms(): ShadowRingNodes {
   const nodes: ShadowRingNodes = { matrix: [], fade: [], bias: [] };
@@ -247,23 +275,11 @@ class RingShadowNode extends ShadowNodeBase {
     builder: NodeBuilder
   ): ShadowTargets {
     const { width, height } = shadow.mapSize;
-    const depthTexture = new DepthTexture(
+    const depthTexture = ringDepthTexture(
       width,
       height,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      SHADOW_RINGS
+      builder.renderer.reversedDepthBuffer
     );
-    depthTexture.name = "ShadowRingsDepth";
-    depthTexture.compareFunction = builder.renderer.reversedDepthBuffer
-      ? GreaterEqualCompare
-      : LessEqualCompare;
     const shadowMap = new RenderTarget(width, height, {
       count: 0,
       depth: SHADOW_RINGS,
@@ -277,7 +293,11 @@ class RingShadowNode extends ShadowNodeBase {
   /** three's setup makes the target and readies its camera for the backend's
    *  depth (what it builds of a lookup is left unused); the lookup is ours. */
   override setupShadow(builder: NodeBuilder): Node {
+    // in a stack of its own, dropped: `toVar` writes its lookup into the stack
+    // it runs in, which would put a second filter in the first lit material
+    builder.addStack();
     super.setupShadow(builder);
+    builder.removeStack();
     const { renderer } = builder;
     const { shadow } = this;
     const nodes = this.#nodes;
@@ -385,6 +405,8 @@ export function createSunRings(
   const viewWant: number[] = rings.map(() => 1);
   // Modell's rings tile one square, and it says what they reach
   let tiled = false;
+  // what they were last fitted to: a still picture asks nothing new
+  const fitted = { radius: 0, x: 0, y: 0, z: 0 };
 
   const ask = (ring: Ring, now: number) => {
     ring.dirtySince ??= now;
@@ -418,6 +440,18 @@ export function createSunRings(
       }
       nodes.fade[i].value = ring.fresh ? want[i] : 0;
     }
+  };
+
+  /** The rings as Modell's tiles of the square round `centre`. */
+  const fitFootprint = (centre: RingPoint, radius: number, now: number) => {
+    const { depthHalf, half, focus } = modelQuadrants(centre, radius, sun);
+    for (let i = 0; i < SHADOW_RINGS; i += 1) {
+      rings[i].every = true;
+      rings[i].depthHalf = depthHalf;
+      rings[i].focus = focus[i];
+      wantRing(rings[i], half, now);
+    }
+    reach.set(centre.x, -centre.z, radius);
   };
 
   /** Asks every ring that shows, and that `which` picks, to redraw. */
@@ -504,19 +538,26 @@ export function createSunRings(
     reach,
     setFootprint: (centre, radius) => {
       const now = performance.now();
-      tiled = true;
-      const { depthHalf, half, focus } = modelQuadrants(centre, radius, sun);
-      for (let i = 0; i < SHADOW_RINGS; i += 1) {
-        rings[i].every = true;
-        rings[i].depthHalf = depthHalf;
-        rings[i].focus = focus[i];
-        wantRing(rings[i], half, now);
+      if (
+        !tiled ||
+        fitted.radius !== radius ||
+        fitted.x !== centre.x ||
+        fitted.y !== centre.y ||
+        fitted.z !== centre.z
+      ) {
+        tiled = true;
+        fitted.radius = radius;
+        fitted.x = centre.x;
+        fitted.y = centre.y;
+        fitted.z = centre.z;
+        fitFootprint(centre, radius, now);
       }
-      showRings([1, 1, 1, 1], now);
-      reach.set(centre.x, -centre.z, radius);
+      showRings(ALL_RINGS, now);
     },
     setSun: (next) => {
       sun.copy(next);
+      // a parallel view's tiles lie along the light's axes
+      fitted.radius = 0;
       // the light turns at once; each ring keeps the matrix it was drawn with
       light.position.copy(light.target.position).addScaledVector(sun, 1);
       light.updateMatrixWorld();

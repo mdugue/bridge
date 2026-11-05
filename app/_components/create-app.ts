@@ -265,8 +265,9 @@ const TRAIL_BEAT_MS = 2000;
 const GPU_TIME_READ_MS = 250;
 /** How long a memory emergency keeps the shadow camera from streaming. */
 const EMERGENCY_SHADOW_HOLD_MS = 120_000;
-/** How many frames a capture waits for the shadow rings at most. */
-const CAPTURE_HOLD_FRAMES = 120;
+/** How long a capture waits for the shadow rings at most (ms): the view stands
+ *  still meanwhile. */
+const CAPTURE_HOLD_MS = 1500;
 /** Allocation failures closer together than this are one emergency. */
 const EMERGENCY_GAP_MS = 5000;
 /** How long a reload waits for the old device to be destroyed. */
@@ -3586,7 +3587,8 @@ async function bootApp(
       postStack.setSize();
     }
   };
-  let captureHeld = 0;
+  // since when a capture waits for the rings
+  let captureHeldFrom: number | null = null;
   const beginCapture = (request: CaptureRequest) => {
     const view = activeCamera() as ModelCamera | PerspectiveCamera;
     const { width: w, height: h } = renderer.domElement;
@@ -3625,15 +3627,15 @@ async function bootApp(
    *  one a frame), or after a bounded wait: a stream of landing tiles never
    *  holds it for good. */
   const aimCaptureTile = () => {
-    const held =
-      !capture &&
-      captureQueue.length > 0 &&
-      sunRig.shadowBusy() &&
-      captureHeld < CAPTURE_HOLD_FRAMES;
-    captureHeld = held ? captureHeld + 1 : 0;
-    if (held) {
+    const waiting = !capture && captureQueue.length > 0 && sunRig.shadowBusy();
+    captureHeldFrom = waiting ? (captureHeldFrom ?? performance.now()) : null;
+    if (
+      captureHeldFrom !== null &&
+      performance.now() - captureHeldFrom < CAPTURE_HOLD_MS
+    ) {
       return;
     }
+    captureHeldFrom = null;
     const nextCapture = capture ? undefined : captureQueue.shift();
     if (nextCapture) {
       fullResolution();

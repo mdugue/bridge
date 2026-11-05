@@ -11,36 +11,16 @@
  * reads it: the read binds a stand-in that compares like it, swapped for
  * the map (a binding, not a build) once it exists (`ready` 1).
  */
-import {
-  DepthTexture,
-  GreaterEqualCompare,
-  LessEqualCompare,
-} from "three/webgpu";
-import type { UniformNode } from "three/webgpu";
+import type { DepthTexture, UniformNode } from "three/webgpu";
 import { float, int, max, mix, step, texture } from "three/tsl";
-import { SHADOW_RINGS } from "@/lib/city/shadow-rings";
 import type { F, V3 } from "./shader-chunks";
-import { ringLookup } from "./sun-rings";
+import { ringDepthTexture, ringLookup } from "./sun-rings";
 import type { ShadowRingNodes } from "./sun-rings";
 
 /** A stand-in for the map until it exists: an array like it, compares like
  *  it. */
 export function shadowStandIn(reversed: boolean): DepthTexture {
-  const t = new DepthTexture(
-    1,
-    1,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    SHADOW_RINGS
-  );
-  t.compareFunction = reversed ? GreaterEqualCompare : LessEqualCompare;
-  return t;
+  return ringDepthTexture(1, 1, reversed);
 }
 
 /**

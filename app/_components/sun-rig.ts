@@ -330,14 +330,12 @@ export function createSunRig(
   // scene at dusk rebuilt every material in view, inside the frame, at every
   // dusk and dawn. Below the horizon the map is simply never asked for.
   let sunUp = true;
-  // The map's one camera, set before the shadow node reads it.
-  sun.shadow.camera = new OrthographicCamera();
   const rings = createSunRings(sun, shadowMapSize);
   /** Three draws a ring in the next render if one is due. */
   const askRings = () => {
     sun.shadow.needsUpdate = sunUp && rings.due();
   };
-  const redrawShadow = (area?: RingArea) => {
+  const invalidateShadow = (area?: RingArea) => {
     rings.invalidate(area);
     askRings();
   };
@@ -565,7 +563,6 @@ export function createSunRig(
     return { altitudeDeg, aboveHorizon, nightFactor };
   };
 
-  const invalidateShadow = redrawShadow;
   return {
     update,
     follow,
