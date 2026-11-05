@@ -88,7 +88,7 @@ function mirrorSet(
 }
 
 /** The lamps by the water: seen across the river, so far off too. */
-const WATER = mirrorSet({ desktop: 48, mobile: 16 }, [1200, 1600]);
+const WATER = mirrorSet({ desktop: 96, mobile: 24 }, [1200, 1600]);
 /** The lamps by the tracks: a rail's glint is a few pixels from 300 m. */
 const TRACKS = mirrorSet({ desktop: 24, mobile: 8 }, [250, 400]);
 
@@ -220,7 +220,8 @@ export interface LampReflections {
  *  the river is mirrored all along, not only its nearest stretch. Fixed
  *  to the world, not to the look: turning the eye changes no lamp, only
  *  walking does, and then through the hand-over's fade. As many sectors
- *  as slots, at most this many (15° each), two lamps a sector then. */
+ *  as slots, at most this many (15° each): four lamps a sector on a
+ *  desktop, one on a phone. */
 const MAX_SECTORS = 24;
 
 /** A tier's sectors for `most` slots. */
