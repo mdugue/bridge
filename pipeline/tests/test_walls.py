@@ -31,6 +31,8 @@ def test_wall_heights_come_from_the_tags_clamped():
     assert height('"height"=>"4 m"') == 4.0
     assert height('"est_height"=>"99"') == 30.0
     assert height(None) is None
+    assert height('"height"=>"-2"') is None  # a sign is no height, not 0.5 m
+    assert height('"height"=>"-2","est_height"=>"3"') == 3.0
     assert tag('"bridge:structure"=>"arch","x"=>"1"', "bridge:structure") == "arch"
 
 

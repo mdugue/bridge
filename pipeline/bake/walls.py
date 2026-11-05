@@ -193,9 +193,12 @@ def kind_of(barrier: str | None, man_made: str | None, other_tags: str | None) -
 
 
 def height(other_tags: str | None) -> float | None:
+    """A wall's tagged `height`, else its `est_height`, within 0.5–30 m; a
+    value of 0 m or below is no height (the next key, else the wall's
+    measured or class height), never a 0.5 m wall."""
     for key in ("height", "est_height"):
         value = osm_metres(tag(other_tags, key), signed=True)
-        if value is not None:
+        if value is not None and value > 0:
             return max(0.5, min(value, 30.0))
     return None
 
