@@ -63,6 +63,16 @@ test("a tile's directory: named, addressed, listed and landmark Buildings", () =
           properties: { name: "Brunnen", kind: "fountain" },
         },
         {
+          geometry: { type: "Point", coordinates: [30, 40] },
+          properties: {
+            name: "Reiter",
+            kind: "statue",
+            material: "Bronze",
+            materialWikidata: "Q2",
+            wikidata: "Q3",
+          },
+        },
+        {
           geometry: { type: "Point", coordinates: [11, 21] },
           properties: { kind: "stone" },
         },
@@ -96,6 +106,16 @@ test("a tile's directory: named, addressed, listed and landmark Buildings", () =
   ]);
   expect(tile.monuments).toEqual([
     { id: "m10_21", name: "Brunnen", kind: "fountain", x: 10.4, y: 20.6 },
+    {
+      id: "m30_40",
+      name: "Reiter",
+      kind: "statue",
+      material: "Bronze",
+      materialWd: "Q2",
+      wd: "Q3",
+      x: 30,
+      y: 40,
+    },
   ]);
 });
 

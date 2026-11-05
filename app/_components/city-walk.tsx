@@ -1,7 +1,7 @@
 "use client";
 
 import { createFramePace } from "@/lib/city/frame-pace";
-import { arrivalOf, placementOf } from "@/lib/city/geolocation";
+import { ARRIVAL_PARAM, arrivalOf, placementOf } from "@/lib/city/geolocation";
 import { EYE_HEIGHT } from "@/lib/city/pose";
 import type { Site, ViewpointGeometry } from "@/lib/city/site";
 import {
@@ -36,6 +36,8 @@ import {
   decodeLook,
   encodeSnapshot,
   parseSnapshot,
+  snapshotFromSearch,
+  snapshotHref,
   snapshotInstant,
 } from "@/lib/city/snapshot";
 import type { Snapshot } from "@/lib/city/snapshot";
@@ -473,18 +475,17 @@ const OffsiteDialog = ({
 
 /**
  * The page was opened from another city's off-site dialog with where the
- * player stands (`#at=lat,lng`, lib/city/geolocation.ts `arrivalHref` — the
- * fragment: never sent to the server, not kept by the trail): put them
- * there, on foot, and drop the fragment so a reload starts at the site's
- * spawn again.
+ * player stands (`?at=lat,lng`, lib/city/geolocation.ts `arrivalHref`; not
+ * kept by the trail): put them there, on foot, and drop the parameter so a
+ * reload starts at the site's spawn again.
  */
 function arriveAt(h: CityWalkHandle, site: Site, say: Say): void {
-  const at = arrivalOf(location.hash);
+  const at = arrivalOf(location.search);
   if (!at) {
     return;
   }
   const url = new URL(location.href);
-  url.hash = "";
+  url.searchParams.delete(ARRIVAL_PARAM);
   history.replaceState(history.state, "", url);
   const placement = placementOf(
     { ...at, accuracy: 0, headingDeg: null },
@@ -885,15 +886,21 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
     // full detail (gpu-recovery.ts): peeked now, committed once the scene
     // is up — a boot that StrictMode aborts leaves it for the next
     // (`RecoverySession.peek`). A place picked in the panel meanwhile wins,
-    // and the time and look the player set are theirs.
+    // and the time and look the player set are theirs. With nothing
+    // waiting, the view the page's link names (`?snap=`, snapshot.ts),
+    // the same way; the address keeps it, so a reload opens it again.
+    // Another link is another page load (a new query is a navigation, and
+    // nothing in the app routes to one), so the boot is its one reader.
     const recoveries = pageRecovery();
     const waiting = recoveries.peek();
     const parsed = waiting ? parseSnapshot(waiting.snapshot) : null;
+    const linked = snapshotFromSearch(location.search);
     const arrival = recoveryArrival({
       snapshot: parsed?.ok ? parsed.snapshot : null,
       reset: waiting?.reset ?? false,
       picked: start !== null,
       level: budget.safety,
+      linked: linked?.ok ? linked.snapshot : null,
     });
     if (arrival.snapshot) {
       recovery.current?.prepare(arrival.snapshot);
@@ -979,6 +986,9 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
             sayHud("Mit weniger Details neu geladen – Erweitert › Qualität");
           }
         } else {
+          if (linked && !linked.ok) {
+            sayHud("Der Link enthält keine gültige Ansicht");
+          }
           arriveAt(h, site, sayHud);
         }
         syncTime();
@@ -1065,7 +1075,11 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
     pace,
   ]);
 
-  const copySnapshot = () => {
+  /** *Kopieren* (the JSON) or *Link kopieren* (the site's page opened at
+   *  the view, `?snap=` and no other parameter — this page's QA knobs, a
+   *  pinned `?safety=`, are this device's, not the view's): the JSON
+   *  shows either way. */
+  const copySnapshot = (as: "json" | "link") => {
     const h = handleRef.current;
     if (!h) {
       return;
@@ -1073,8 +1087,17 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
     const snap = encodeSnapshot(look.get(), h.getCameraState(), time.current());
     const text = JSON.stringify(snap, null, 2);
     setSnapshotText(text);
-    navigator.clipboard?.writeText(text).then(
-      () => setSnapshotMsg("In die Zwischenablage kopiert"),
+    const copied =
+      as === "link"
+        ? `${location.origin}${snapshotHref(location.pathname, snap)}`
+        : text;
+    navigator.clipboard?.writeText(copied).then(
+      () =>
+        setSnapshotMsg(
+          as === "link"
+            ? "Link in die Zwischenablage kopiert"
+            : "In die Zwischenablage kopiert"
+        ),
       () => setSnapshotMsg("Kopieren fehlgeschlagen — Text manuell auswählen")
     );
   };

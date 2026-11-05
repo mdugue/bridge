@@ -342,7 +342,7 @@ function monumentOsmWhat(
     p.name && !fromDlm ? "Name" : "",
     p.form ? "Art" : "",
     p.artist ? "Werk" : "",
-    p.material && !p.wikidata ? "Material" : "",
+    p.material && !p.materialWikidata ? "Material" : "",
     tagged ? "Höhe" : "",
   ].filter(Boolean);
   return what.length > 0 ? what : ["Lage"];
@@ -410,7 +410,7 @@ export function monumentCard(
           })
         : "",
       fromOsm ? osmSource(provenance, osmWhat, "fountains") : "",
-      p.wikidata
+      p.materialWikidata
         ? sourceLine(provenance, "wikidata", ["Material"], {
             label: "Wikidata",
             credit: "CC0",

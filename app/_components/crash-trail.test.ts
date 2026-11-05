@@ -15,6 +15,10 @@ test("the trail keeps the path and the QA knobs of the URL, nothing else", () =>
   expect(trailUrl("/leipzig", "?at=51.339300,12.372600&gpu=webgl2")).toBe(
     "/leipzig?gpu=webgl2"
   );
+  // a view link's snapshot carries the camera's place too
+  expect(trailUrl("/dresden", "?safety=3&snap=eyJ2IjoxfQ")).toBe(
+    "/dresden?safety=3"
+  );
   // in the knobs' own order, whatever the given one
   expect(trailUrl("/dresden", "?trail=1&scene=lite")).toBe(
     "/dresden?scene=lite&trail=1"

@@ -170,8 +170,13 @@ uploaded; nothing it names is fetched (ADR 0054).
 - Visual work is judged on a real GPU: drop a snapshot JSON into `shots/`
   and run `bun run shots`; read the plate and iterate. Verify from oblique
   angles, not head-on.
+- QA views: the reference views of the GPU checklist (plan 019) are
+  committed in `qa/views/` (`bun scripts/qa-views.ts` writes them; the
+  index has each one's link); `bun run shots` renders them too.
 - URL knobs: `?scene=lite`, `?gpu=webgl2`, `?safety=0…3`, `?trail=1`,
-  `?trace=1`, `?inspect=1`, `?depth=standard`, `#at=lat,lng`.
+  `?trace=1`, `?inspect=1`, `?depth=standard`, `?at=lat,lng`,
+  `?snap=…` (a view link). URL parameters go in the query, never the
+  fragment; one that carries a place is named on the privacy page.
 
 ## Conventions
 

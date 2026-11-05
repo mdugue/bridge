@@ -839,9 +839,14 @@ test.each(cases)(
         expect(facing).toBeGreaterThanOrEqual(0);
         expect(facing).toBeLessThanOrEqual(360);
       }
+      // OSM's link to its item; the item its material came from
       const wikidata = f.properties?.wikidata;
       if (wikidata !== undefined) {
         expect(wikidata).toMatch(/^Q\d+$/u);
+      }
+      const materialWikidata = f.properties?.materialWikidata;
+      if (materialWikidata !== undefined) {
+        expect(materialWikidata).toMatch(/^Q\d+$/u);
         expect(f.properties?.material).toBeTruthy();
       }
     }

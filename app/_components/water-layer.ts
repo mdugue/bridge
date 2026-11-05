@@ -201,7 +201,16 @@ function createWaterMist(
   );
   // none over a planner's design: its water lies under it (design-site.ts)
   const clear = Fn(() => float(1).sub(inDesignSite(positionWorld.xz)))();
-  const alpha = wcov.mul(steam).mul(nearFade).mul(MIST_OPACITY).mul(clear);
+  // Mist is air seen along the water. Looked down on, the same banks read as
+  // a brown cloud lying on the river (the low sun's tint, in Modell and
+  // flying), so the sheet goes as the eye rises above it.
+  const along = smoothstep(0.5, 0.15, viewDirection().negate().y);
+  const alpha = wcov
+    .mul(steam)
+    .mul(nearFade)
+    .mul(along)
+    .mul(MIST_OPACITY)
+    .mul(clear);
   material.maskNode = cov.greaterThan(0.01).and(alpha.greaterThan(0.002));
   // A haze a little brighter than the sky's tint, so it reads as mist over
   // the water; near-white, it turned the far river into a white band.
@@ -429,6 +438,9 @@ export function createWaterLayer(
   const n = waveNormal(field.slope).toVar();
   material.normalNode = cameraViewMatrix.mul(vec4(n, 0)).xyz.normalize();
   const view = viewDirection().negate();
+  // From above the crests' strokes would fill the river with white: they
+  // thin out as the eye rises, at eye level they stay.
+  const fromAbove = smoothstep(0.25, 0.7, view.y);
   material.colorNode = mix(
     waterColour(texture(tint, uv).rgb, splat, uv),
     FOAM_COLOUR,
@@ -444,7 +456,11 @@ export function createWaterLayer(
   const facing = clamp(dot(glitterN, half), 0, 1).toVar();
   // the glints on the sun's path, and the crests' strokes lit up there as
   // dashes of light
-  const spec = pow(facing, 120).add(pow(facing, 24).mul(field.stroke));
+  const spec = pow(facing, 120).add(
+    pow(facing, 24)
+      .mul(field.stroke)
+      .mul(mix(float(1), float(0.25), fromAbove))
+  );
   material.emissiveNode = SUN_COLOUR.mul(
     spec.mul(GLITTER).mul(clamp(sun.y, 0, 1))
   );

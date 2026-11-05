@@ -1,0 +1,27 @@
+{
+  "v": 1,
+  "camera": {
+    "pos": {
+      "x": -921.27,
+      "y": 143.04,
+      "z": -618.18
+    },
+    "epsg": {
+      "x": 412192.95,
+      "y": 5657635.68
+    },
+    "fov": 55,
+    "headingDeg": 30,
+    "pitchDeg": -33.35,
+    "mode": "fly"
+  },
+  "date": "2026-07-15T21:30:00.000Z",
+  "look": {
+    "multiTuft": true,
+    "style": "pastel",
+    "fogPct": 20,
+    "trafficLayer": false,
+    "bikeLayer": false,
+    "tramLayer": false
+  }
+}
