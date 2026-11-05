@@ -67,12 +67,6 @@ export function rasterUv(
   return vec2(xy.x.sub(origin.x).div(size[0]), origin.y.sub(xy.y).div(size[1]));
 }
 
-/** A texture's pixel size. */
-export const texSize = (t: Texture): [number, number] => {
-  const img = t.image as { height: number; width: number };
-  return [img.width, img.height];
-};
-
 /**
  * A texture a chunk samples: the texture itself, or a node standing for it
  * (a slot of a graph shared by every tile, material-slots.ts) — TSL's
