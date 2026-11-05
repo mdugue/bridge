@@ -114,7 +114,7 @@ import {
 } from "./instancing";
 import type { F, Live, V2, V3, V4 } from "./shader-chunks";
 import { setGraph, setSlots } from "./material-slots";
-import { gdHash } from "./ground-detail";
+import { gdHash } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 import { viewDirection } from "./view-direction";
 import { TRUNK_BASE } from "@/lib/city/tree-family";

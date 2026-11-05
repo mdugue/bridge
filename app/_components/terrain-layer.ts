@@ -99,13 +99,10 @@ import {
 } from "./fetch-optional";
 import {
   bsplineSample,
-  gdNoise,
-  gdNoiseSlope,
   groundDetail,
   groundFields,
   groundNormal,
   smoothPaths,
-  texelSize,
   urbanGreen,
 } from "./ground-detail";
 import type { GroundColour, GroundFields, GroundInputs } from "./ground-detail";
@@ -119,7 +116,13 @@ import {
   uploadNow,
 } from "./raster-upload";
 import { roadMarkings } from "./road-markings";
-import { dataXY, rasterUv } from "./shader-chunks";
+import {
+  dataXY,
+  gdNoise,
+  gdNoiseSlope,
+  rasterUv,
+  texelSize,
+} from "./shader-chunks";
 import { splatSize } from "./splat-uv";
 import type { F, Tex, V3 } from "./shader-chunks";
 import type { SharedRasters } from "./shared-rasters";

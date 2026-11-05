@@ -24,7 +24,7 @@ import {
 } from "three/tsl";
 import { LANDCOVER_CLASSES } from "@/lib/city/landcover";
 import { MARKING_PATTERN } from "@/lib/city/markings";
-import { gdBand, gdHash, gdNoise } from "./ground-detail";
+import { gdBand, gdHash, gdNoise } from "./shader-chunks";
 import type { F, V3, V4 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 

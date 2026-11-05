@@ -32,7 +32,6 @@ import {
   dot,
   float,
   floor,
-  fract,
   int,
   max,
   min,
@@ -74,6 +73,7 @@ import { createPipelineAnchors } from "./pipeline-anchors";
 import type { PipelineAnchors } from "./pipeline-anchors";
 import { withNightMaterialsShown } from "./scene-environment";
 import type { PostProfile } from "./scene-profile";
+import { hash21 } from "./shader-chunks";
 import type { F, Live, V2, V3, V4 } from "./shader-chunks";
 import { aloneUnder, compileRepresentatives } from "./three-utils";
 import { createStyleDressing } from "./style-dressing";
@@ -308,13 +308,6 @@ export interface PostStack {
 export interface Overlay {
   render: (renderer: WebGPURenderer, camera: Camera) => void;
   compile: (renderer: WebGPURenderer, camera: Camera) => Promise<void>;
-}
-
-/** A cheap 2D hash for the paper grain. */
-function hash21(p: V2): F {
-  const q = fract(p.mul(vec2(123.34, 456.21)));
-  const r = q.add(dot(q, q.add(45.32)));
-  return fract(r.x.mul(r.y));
 }
 
 /** The finish's live settings (the fixed strengths times the style's

@@ -17,7 +17,7 @@ import {
   vec3,
 } from "three/tsl";
 import { footprint } from "./bridge-surface";
-import { gdNoise } from "./ground-detail";
+import { gdNoise } from "./shader-chunks";
 import type { Pt } from "./mesh-kit";
 import type { F, V2, V3 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
