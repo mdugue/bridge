@@ -110,6 +110,11 @@ export interface RasterHold {
     extras: ContentExtras,
     signal?: AbortSignal
   ) => Promise<RasterOf[K] | null>;
+  /** The holder is dressed: what it took, and takes from here on, counts in
+   *  the shares. Until then it weighs nothing and moves nobody's share: the
+   *  cache must not see a raster's other holders at half while this one
+   *  still weighs 0 (ADR 0047). */
+  settle: () => void;
   /** lets go of everything this holder took; idempotent */
   release: () => void;
 }
@@ -495,6 +500,8 @@ export function createTileRasters(opts: {
       const counted = holderOpts?.weighed !== false;
       const lets: (() => void)[] = [];
       let released = false;
+      let settled = false;
+      const landed: Texture[] = [];
       return {
         acquire: async <K extends RasterKind>(
           kind: K,
@@ -520,9 +527,22 @@ export function createTileRasters(opts: {
           }
           if (counted) {
             const hooks: KindHooks<RasterOf[K]> = HOOKS[kind];
-            weigh(root, hooks.textures(value));
+            if (settled) {
+              weigh(root, hooks.textures(value));
+            } else {
+              landed.push(...hooks.textures(value));
+            }
           }
           return value;
+        },
+        settle: () => {
+          if (settled || released) {
+            return;
+          }
+          settled = true;
+          if (landed.length > 0) {
+            weigh(root, landed.splice(0));
+          }
         },
         release: () => {
           if (released) {

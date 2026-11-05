@@ -459,8 +459,9 @@ const rainLayer = (
   const f = fract(q).toVar();
   // The cell index grows with the clock; wrapped, the hash keeps its
   // precision all session (unwrapped: columns after ≈ 51 min, a constant
-  // after ≈ 3.4 h). 1024 cells are far more than a screen shows.
-  const key = mod(cell, 1024);
+  // after ≈ 3.4 h). 256 cells are more than a screen shows, and small enough
+  // that `hash21` stays even: over 512–1024 its columns are twice as strong.
+  const key = mod(cell, 256);
   const present = step(0.84, hash21(key.add(seed)));
   const x0 = hash21(key.add(seed + 7.1))
     .mul(0.6)

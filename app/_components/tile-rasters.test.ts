@@ -240,6 +240,9 @@ test("weighing: one holder whole, two half each, one leaving hands the other the
   const fineHold = rasters.holder(fine);
   const whole = trackedBytesOf(landed(await fineHold.acquire("svf", extras)));
   expect(whole).toBeGreaterThan(0);
+  // still dressing: it weighs nothing yet
+  expect(rasters.bytesOf(fine)).toBe(0);
+  fineHold.settle();
   expect(rasters.bytesOf(fine)).toBe(whole);
   expect(changed).toEqual([]);
 
@@ -252,6 +255,12 @@ test("weighing: one holder whole, two half each, one leaving hands the other the
 
   const coarseHold = rasters.holder(coarse);
   await coarseHold.acquire("svf", extras);
+  // landed but not dressed: the cache must not see the fine level at half
+  // while this one weighs 0
+  expect(rasters.bytesOf(fine)).toBe(whole);
+  expect(rasters.bytesOf(coarse)).toBe(0);
+  expect(changed).toEqual([]);
+  coarseHold.settle();
   expect(rasters.bytesOf(fine)).toBe(whole / 2);
   expect(rasters.bytesOf(coarse)).toBe(whole / 2);
   expect(changed).toEqual([fine]);
@@ -267,6 +276,33 @@ test("weighing: one holder whole, two half each, one leaving hands the other the
   expect(changed).toEqual([]);
   fineHold.release();
   expect(rasters.bytesOf(fine)).toBe(0);
+});
+
+test("a raster taken after settling counts at once; one left before settling never did", async () => {
+  serve();
+  const changed: object[] = [];
+  const rasters = rastersWith({
+    onShareChange: (root) => {
+      changed.push(root);
+    },
+  });
+  const extras = extrasOf({ svf: "svf-4x4.png" });
+  const stays = {};
+  const staysHold = rasters.holder(stays);
+  const whole = trackedBytesOf(landed(await staysHold.acquire("svf", extras)));
+  staysHold.settle();
+  const leaves = rasters.holder({});
+  await leaves.acquire("svf", extras);
+  leaves.release();
+  leaves.settle();
+  expect(rasters.bytesOf(stays)).toBe(whole);
+  expect(changed).toEqual([]);
+  const late = {};
+  const lateHold = rasters.holder(late);
+  lateHold.settle();
+  await lateHold.acquire("svf", extras);
+  expect(rasters.bytesOf(late)).toBe(whole / 2);
+  expect(changed).toEqual([stays]);
 });
 
 test("clear frees what landed and aborts what is on its way", async () => {

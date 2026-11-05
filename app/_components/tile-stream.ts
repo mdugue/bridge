@@ -2049,12 +2049,13 @@ export class DressingPlugin {
     this.loadAborts.set(scene, own);
     const either = eitherSignal(own.signal, this.lifetime.signal);
     let terrain: TerrainLayer;
+    const rasters = this.rasters.holder(scene);
     try {
       terrain = await dressTerrain(mesh, extras, toData, {
         fogColor: this.ctx.fogColor,
         ground: this.ctx.ground,
         offset: this.ctx.offset,
-        rasters: this.rasters.holder(scene),
+        rasters,
         grids: this.grids,
         signal: either.signal,
       });
@@ -2090,6 +2091,7 @@ export class DressingPlugin {
       late: this.lateParts(scene),
       sharedBytes: sceneSharedBytes(scene),
     });
+    rasters.settle();
     const coarse = COARSE_DRESSING_KINDS.some((kind) => extras.coarse?.[kind]);
     return extras.dressing || coarse
       ? { dressed: this.queueDressing(scene, terrain, extras) }

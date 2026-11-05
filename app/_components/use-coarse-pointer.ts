@@ -1,3 +1,4 @@
+/** Whether the viewer's mobile media query matches, kept live for React. */
 import { useSyncExternalStore } from "react";
 import { MOBILE_MEDIA_QUERY as QUERY } from "./scene-profile";
 

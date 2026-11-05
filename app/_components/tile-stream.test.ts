@@ -232,6 +232,9 @@ test("the stream's dispose releases every dressed tile, quietly", async () => {
     late: createLateParts(fakeHost().host),
     svf: {
       acquire: async () => await Promise.resolve(null),
+      settle: () => {
+        // an unweighed hold settles nothing
+      },
       release: () => {
         freed.push("sky view");
       },

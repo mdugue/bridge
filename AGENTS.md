@@ -195,7 +195,7 @@ uploaded; nothing it names is fetched (ADR 0054).
 - Exact pins for the three.js stack, the glTF build tools, `delatin`, the
   framework trio, the lint tools and `ultracite` (bump `oxlint` and
   `oxlint-tsgolint` together), `suncalc` and `zod`, whose version is in
-  three bake keys; caret for the rest; the npm MCP servers in
+  the key of every bake that reads a schema (the ground's family too); caret for the rest; the npm MCP servers in
   `.mcp.json` exactly. Bun comes from `packageManager` (≥ 1.4 for
   `Bun.WebView`; the web session's start hook upgrades it).
 - No type shim for `three-mesh-bvh` (it augments `three` itself).

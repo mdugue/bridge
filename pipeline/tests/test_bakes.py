@@ -1087,3 +1087,15 @@ def test_a_piece_in_a_bridge_s_lanes_stands_at_its_deck_s_edge():
     # beside a footway's line (no street) too
     path = Decks([(deck, Axis([[0, 0], [40, 0]]), [10.0] * 21)], [(street, True)])
     assert path.kerbside(shapely.Point(10, 1)).equals(shapely.Point(10, 1))
+
+
+def test_a_walls_kind_is_what_selected_it_not_another_tag_on_the_way():
+    from bake.walls import WHERE, kind_of
+
+    assert "barrier IN ('retaining_wall', 'city_wall', 'wall')" in WHERE
+    assert kind_of("retaining_wall", None, None) == "retaining_wall"
+    assert kind_of(None, "embankment", None) == "embankment"
+    assert kind_of(None, None, '"natural"=>"cliff"') == "cliff"
+    # the viewer's walls schema has no such kinds: a fence here has no `type`
+    assert kind_of("fence", None, '"natural"=>"cliff"') == "cliff"
+    assert kind_of("hedge", "embankment", None) == "embankment"
