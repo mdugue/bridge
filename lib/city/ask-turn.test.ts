@@ -337,6 +337,38 @@ describe("a refused request", () => {
   });
 });
 
+/** The assistant message the client keeps for a refusal's RUN_ERROR. */
+const refused = (id: string): UIMessage => ({
+  id,
+  role: "assistant",
+  parts: [],
+  metadata: { tanstack: { stopReason: "error" } },
+});
+
+test("an answer a refusal left empty is neither counted nor sent to the provider", async () => {
+  // 20 questions refused (the client keeps an empty assistant message for
+  // each refusal's RUN_ERROR) and a 21st: 41 rows as the client sends them
+  const ui = Array.from({ length: 20 }, (_, i) => [
+    question(`q${i}`, "Frauenkirche"),
+    refused(`a${i}`),
+  ]).flat();
+  ui.push(question("q20", "Und jetzt?"));
+  const seen: string[][] = [];
+  const model = fakeText();
+  model.setResponses([
+    ({ request }) => {
+      seen.push(request.messages.map((m) => m.role));
+      return { text: "Gut." };
+    },
+  ]);
+  const { deps, logged } = host([model]);
+  const res = await turn(deps, body({ messages: uiMessagesToWire(ui) }));
+  expect(res.status).toBe(200);
+  await res.text();
+  expect(logged).toEqual([]);
+  expect(seen).toEqual([Array.from({ length: 21 }, () => "user")]);
+});
+
 test("a scripted answer shows the place, then says so on the resume", async () => {
   const first = fakeText();
   first.setResponses([

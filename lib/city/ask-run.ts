@@ -171,6 +171,55 @@ export function withStoppedCallsAnswered<T extends UIMessage | ModelMessage>(
   return out;
 }
 
+/**
+ * The conversation without the answers that carry nothing: a refusal
+ * reaches the chat as a stream with only its `RUN_ERROR`
+ * (`codedRefusals`), and so does a run that failed before its first
+ * word; the client keeps an assistant message with no parts for it and
+ * sends it back as a row with no content, no calls and no thinking.
+ * Providers refuse an empty assistant turn, and it would hold one of the
+ * conversation's `ASK_LIMITS.messages`. A row right after a `reasoning`
+ * row carries that thinking (the wire puts it before its anchor) and
+ * stays.
+ */
+function withoutEmptyAnswers<T>(rows: readonly T[]): T[] {
+  return rows.filter(
+    (row, i) =>
+      !isEmptyAnswer(row) || isReasoningRow(i > 0 ? rows[i - 1] : undefined)
+  );
+}
+
+/** Nothing: absent, null, an empty string or list. */
+function isNothing(v: unknown): boolean {
+  return (
+    v === undefined ||
+    v === null ||
+    v === "" ||
+    (Array.isArray(v) && v.length === 0)
+  );
+}
+
+function isEmptyAnswer(row: unknown): boolean {
+  if (typeof row !== "object" || row === null) {
+    return false;
+  }
+  const { role, content, toolCalls, parts } = row as Record<string, unknown>;
+  return (
+    role === "assistant" &&
+    isNothing(content) &&
+    isNothing(toolCalls) &&
+    isNothing(parts)
+  );
+}
+
+function isReasoningRow(row: unknown): boolean {
+  return (
+    typeof row === "object" &&
+    row !== null &&
+    (row as { role?: unknown }).role === "reasoning"
+  );
+}
+
 function stoppedResult(toolCallId: string): ModelMessage {
   return { role: "tool", toolCallId, content: STOPPED_RESULT };
 }
@@ -494,7 +543,8 @@ async function keyRefusal(
 /**
  * One answer turn. The checks run in this order, and the first that
  * fails answers alone (nothing after it runs, no adapter is built): the
- * body, the props, the key, the caps on the rows as sent (the stand-ins
+ * body, the props, the key, the caps on the rows as sent less the
+ * answers that carry nothing (`withoutEmptyAnswers`; the stand-ins
  * mending adds must not count), the answer's turns on the mended rows,
  * the site's Stadtwissen, a request already gone. Every refusal is JSON
  * `{ code, message }` from `ASK_FAILURES`, `no-store`, with one log line. An answer is the
@@ -522,12 +572,14 @@ export async function answerTurn(
   if (keyProblem) {
     return keyProblem;
   }
-  const tooMuch = conversationRefusal(deps, key, params.messages);
+  // an answer that came to nothing (a refusal) is neither sent nor counted
+  const rows = withoutEmptyAnswers(params.messages);
+  const tooMuch = conversationRefusal(deps, key, rows);
   if (tooMuch) {
     return tooMuch;
   }
   // a stopped answer's unanswered call would make the provider refuse
-  const history = answerHistory(params.messages);
+  const history = answerHistory(rows);
   if (history === null) {
     return refuse(deps, "bad-request", key);
   }
