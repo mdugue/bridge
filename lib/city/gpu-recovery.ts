@@ -96,16 +96,12 @@ export interface Arrival {
   sayLighter: boolean;
 }
 
-/** A snapshot as this level puts it back: from level 2 (`restoresLook`)
- *  without the picture style and without Modell — a new object either way,
- *  the parsed one untouched. */
+/** A snapshot as this level puts it back: below level 2 (`restoresLook`)
+ *  the parsed one itself, from it a new one without the picture style and
+ *  without Modell — the parsed one untouched. */
 function gated(snapshot: Snapshot, level: SafetyLevel): Snapshot {
   if (restoresLook(level)) {
-    return {
-      ...snapshot,
-      camera: { ...snapshot.camera },
-      ...(snapshot.look ? { look: { ...snapshot.look } } : {}),
-    };
+    return snapshot;
   }
   const { model: _model, ...camera } = snapshot.camera;
   const out: Snapshot = { ...snapshot, camera };

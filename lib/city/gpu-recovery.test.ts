@@ -125,12 +125,13 @@ test("from level 2 the place and the time come back without the picture style an
   }
 });
 
-test("the parsed snapshot is not changed: the arrival is a new one", () => {
+test("the parsed snapshot is not changed: a gated arrival is a new one", () => {
   const before = structuredClone(waiting);
   for (const level of [0, 2] as SafetyLevel[]) {
-    const s = arrive({ level }).snapshot;
-    expect(s).not.toBe(waiting);
-    expect(s?.camera).not.toBe(waiting.camera);
+    arrive({ level });
   }
+  const s = arrive({ level: 2 }).snapshot;
+  expect(s).not.toBe(waiting);
+  expect(s?.camera).not.toBe(waiting.camera);
   expect(waiting).toEqual(before);
 });
