@@ -230,17 +230,21 @@ test("the stream's dispose releases every dressed tile, quietly", async () => {
   plugin.dressed.set(new Object3D(), {
     city,
     late: createLateParts(fakeHost().host),
-    svf: "svf.png",
+    svf: {
+      acquire: async () => await Promise.resolve(null),
+      release: () => {
+        freed.push("sky view");
+      },
+    },
   });
   // 3DTilesRendererJS unregisters (and disposes) its plugins before it
   // disposes its tiles: disposeTile never comes for these.
   plugin.dispose();
-  expect(freed).toEqual(["terrain", "unfollow", "city"]);
+  expect(freed).toEqual(["terrain", "unfollow", "city", "sky view"]);
   expect(stream.dressings.size).toBe(0);
   expect(plugin.dressed.size).toBe(0);
   expect(stream.terrains.size).toBe(0);
   expect(stream.cities.size).toBe(0);
-  expect(plugin.skyView.held()).toBe(0);
   // the app is going: no change reaches it
   expect(changes).toBe(0);
 });
@@ -430,8 +434,13 @@ test("a stream disposed while a compile runs keeps the site's shared rasters unt
     const scene = new Object3D();
     scene.add(new Mesh(new BoxGeometry(), new MeshBasicNodeMaterial()));
     plugin.dressed.set(scene, { late: createLateParts(fakeHost().host) });
-    // a sky view the site shares, held past this tile
-    void plugin.skyView.acquire("data:,");
+    // the site's rasters: cleared with the stream, once no compile runs
+    let cleared = 0;
+    const { clear } = plugin.rasters;
+    plugin.rasters.clear = () => {
+      cleared += 1;
+      clear();
+    };
     const loading = plugin.processTileModel(scene, {});
     await flush();
     // a remount: the stream goes while that compile still runs, which
@@ -439,10 +448,10 @@ test("a stream disposed while a compile runs keeps the site's shared rasters unt
     plugin.dispose();
     jest.advanceTimersByTime(COMPILE_WAIT_MS);
     await loading;
-    expect(plugin.skyView.held()).toBe(1);
+    expect(cleared).toBe(0);
     finish();
     await flush();
-    expect(plugin.skyView.held()).toBe(0);
+    expect(cleared).toBe(1);
   } finally {
     jest.useRealTimers();
   }

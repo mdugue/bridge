@@ -11,7 +11,6 @@ import type {
   MeshStandardNodeMaterialParameters,
   Texture,
   Vector3,
-  WebGPURenderer,
   Node,
   UniformNode,
 } from "three/webgpu";
@@ -45,7 +44,6 @@ import {
   HORIZON_LAYERS,
   HORIZON_MAX_DEG,
   HORIZON_SOFT_DEG,
-  HORIZON_TEXTURE_LAYERS,
   NEAR_BAND_FADE_FROM,
   NEAR_MAX_DEG,
 } from "@/lib/city/skyview";
@@ -55,7 +53,6 @@ import { setGraph, setSlots, slotTexture, slotUniform } from "./material-slots";
 import type { Slots } from "./material-slots";
 import { dataXY, rasterUv } from "./shader-chunks";
 import type { F, Tex, V2, V3 } from "./shader-chunks";
-import { loadDataRaster } from "./raster-upload";
 import { sceneShared } from "./three-utils";
 
 /**
@@ -430,43 +427,3 @@ export function openSkyTexture(): DataTexture {
 
 /** An app's hold on the open-sky texel; call the result on dispose. */
 export const retainOpenSkyTexture = white.retain;
-
-// --- loading -------------------------------------------------------------------------
-
-/**
- * The sky-view raster as a RED texture, LINEAR + mipmapped (a soft field).
- * Absent, undecodable or failed to upload → null (the light stays as it
- * was); rethrows an abort.
- */
-export async function loadSkyViewTexture(
-  url: string,
-  signal?: AbortSignal,
-  renderer?: WebGPURenderer
-): Promise<Texture | null> {
-  const raster = await loadDataRaster(
-    url,
-    { channels: 1, filter: "linear", mipmaps: true },
-    { renderer, signal }
-  );
-  return raster?.texture ?? null;
-}
-
-/**
- * The horizon raster as an 8-layer RGBA array texture (the far band's four
- * planes, then the near band's): the PNG is the planes stacked
- * north-to-south, each n rows of n RGBA texels with the bytes interleaved —
- * exactly a DataArrayTexture's layer-major layout. LINEAR (the angles
- * interpolate), no mipmaps. Absent, or an older one-band raster → null.
- */
-export async function loadHorizonTexture(
-  url: string,
-  signal?: AbortSignal,
-  renderer?: WebGPURenderer
-): Promise<Texture | null> {
-  const raster = await loadDataRaster(
-    url,
-    { channels: 4, filter: "linear", layers: HORIZON_TEXTURE_LAYERS },
-    { renderer, signal }
-  );
-  return raster?.texture ?? null;
-}
