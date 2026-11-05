@@ -258,6 +258,17 @@ def test_a_flight_across_a_seam_keeps_both_landings(tmp_path, monkeypatch):
     assert xa < X0 + SIZE < xb
 
 
+def test_stairs_without_a_dgm_fail_rather_than_write_none(tmp_path, monkeypatch):
+    # a tile whose DGM1 is missing stops the bake: an empty stairs file
+    # would pass for a tile without flights
+    nodes = {1: (100, 70, ""), 2: (100, 90, "")}
+    tile = osm_tile(tmp_path, monkeypatch, nodes, way(1, [1, 2], {"highway": "steps"}))
+    tile.dgm.unlink()
+    with pytest.raises(SystemExit, match=f"no DGM1 for {tile.id}"):
+        stairs.run(tile)
+    assert not (tile.data / "dlm" / f"stairs_{tile.id}.geojson").exists()
+
+
 def _stairs_ground(tile):
     return stairs.Dgm(tile).at
 

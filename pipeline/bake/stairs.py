@@ -220,6 +220,8 @@ class Dgm:
         xmin, ymin, xmax, ymax = tile.bounds
         bounds = (xmin - SEAM_M, ymin - SEAM_M, xmax + SEAM_M, ymax + SEAM_M)
         self.z, self.transform = mosaic(dgm_paths(tile, bounds), bounds)
+        if self.z is None:
+            raise SystemExit(f"no DGM1 for {tile.id}")
 
     def at(self, x: float, y: float) -> float | None:
         if self.z is None:
