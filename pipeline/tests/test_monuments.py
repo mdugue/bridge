@@ -324,6 +324,7 @@ def test_a_monuments_own_item_comes_first_whatever_the_distance():
     def item(x, qid, material):
         return {"geom": shapely.Point(x, 0), "id": qid, "name": "Skulptur", "material": material}
 
+    fountain = {**monument(-50, wikidata="Q9"), "kind": "fountain"}  # its figure's item too
     linked = monument(0, wikidata="Q9")
     nearer = monument(28)  # 2 m from the linked item, but it is not its own
     loose = monument(200, wikidata="Q404")  # its item is not cached: the near rule
@@ -334,7 +335,8 @@ def test_a_monuments_own_item_comes_first_whatever_the_distance():
         item(205, "Q7", "Granit"),
         item(404, "Q6", "Marmor"),
     ]
-    wikidata_materials([linked, nearer, loose, plain], wikidata)
+    wikidata_materials([fountain, linked, nearer, loose, plain], wikidata)
+    assert "material" not in fountain
     assert (linked["material"], linked["materialWikidata"]) == ("Bronze", "Q9")
     assert "material" not in nearer  # Q9 is claimed, Q8 is 23 m away
     assert (loose["material"], loose["materialWikidata"]) == ("Granit", "Q7")

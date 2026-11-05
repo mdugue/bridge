@@ -691,17 +691,19 @@ def _take_material(m: dict, item: dict) -> None:
 
 def wikidata_materials(items: list[dict], wikidata: list[dict]) -> None:
     """A monument OSM names no material of takes Wikidata's. First every
-    monument OSM links to a cached item (`wikidata`) claims that item,
-    whatever the distance, and takes its material; then the others take
-    the item of their name within `WIKIDATA_NAME_M`, else the nearest
-    within `WIKIDATA_NEAR_M` — each item for one monument only, so a linked
-    item is never handed to a neighbour."""
+    monument OSM links to a cached item (`wikidata`) takes that item's
+    material, whatever the distance — every one linked to it (a fountain
+    and the figure in it share their item; the fountain takes none) —
+    and the item is claimed; then the others take the item of their name
+    within `WIKIDATA_NAME_M`, else the nearest within `WIKIDATA_NEAR_M`,
+    each unclaimed item for one monument only, so a linked item is never
+    handed to a neighbour."""
     by_id = {w["id"]: i for i, w in enumerate(wikidata)}
     claimed: set[int] = set()
     linked: set[int] = set()
     for n, m in enumerate(items):
         i = by_id.get(m.get("wikidata") or "")
-        if i is None or i in claimed:
+        if i is None:
             continue
         claimed.add(i)
         linked.add(n)
