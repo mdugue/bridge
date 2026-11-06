@@ -975,9 +975,8 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       await page.getByRole("tab", { name: "Szene" }).click();
       await expect(page.getByText("Sonne & Zeit")).toBeVisible();
       // The look is fixed: under the picture style only the fog's slider
-      // and the crowns' switch are left, in plain view.
+      // is left, in plain view.
       await expect(page.locator("#atmosphere")).toBeVisible();
-      await expect(page.locator("#tree-multituft")).toBeVisible();
       // A style that draws in its own light rests the date and time, and
       // says why; leaving it brings them back.
       await page.evaluate(() => window.__poc?.look?.set({ style: "figure" }));
@@ -1734,12 +1733,10 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     // so a dropped write cannot pass as a frame that drew without errors.
     const steps: { set: Partial<LookValues>; style: string }[] = [
       // What is left of the look: the fog (a uniform, it compiles nothing)
-      // at full strength and back down, and the crowns' switch (off swaps
-      // the near multi-tuft crowns for the cheap ones, on brings them
-      // back). The look's other strengths are constants, compiled with the
-      // boot.
-      { set: { fogAmount: 1, multiTuft: false }, style: "pastel" },
-      { set: { fogAmount: 0.35, multiTuft: true }, style: "pastel" },
+      // at full strength and back down. The look's other strengths are
+      // constants, compiled with the boot.
+      { set: { fogAmount: 1 }, style: "pastel" },
+      { set: { fogAmount: 0.35 }, style: "pastel" },
       // The picture styles: the first non-default style compiles the
       // stylize pass (one program for all of them), the next only moves its
       // uniforms and the grain's film switch; pastel switches the pass off
@@ -1763,12 +1760,11 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
         }
         look.set(values);
         const now = look.get();
-        return { style: now.style, fog: now.fogAmount, tufts: now.multiTuft };
+        return { style: now.style, fog: now.fogAmount };
       }, step.set);
       expect(applied.style).toBe(step.style);
       if ("fogAmount" in step.set) {
         expect(applied.fog).toBe(step.set.fogAmount);
-        expect(applied.tufts).toBe(step.set.multiTuft);
       }
       await waitForFrames(page, 2);
       expectNoErrors(errors);

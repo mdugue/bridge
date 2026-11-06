@@ -6,7 +6,11 @@ import { PINE_CROWN_BASE } from "@/lib/city/tree-inventory";
 import { pineSilhouette } from "./conifer-crown";
 import { isInstances } from "./instancing";
 import { buildTreeInventory } from "./tree-inventory-layer";
-import { buildVegetation, sceneCrowns } from "./vegetation-layer";
+import {
+  buildVegetation,
+  createVegetationLod,
+  sceneCrowns,
+} from "./vegetation-layer";
 import type { VegetationContext } from "./vegetation-layer";
 
 /** The sets under a root and the instances they draw (`drawCount`). */
@@ -181,10 +185,21 @@ test("empty input builds nothing and vetoes nothing; the control still works", (
   expect(inv.instances).toHaveLength(0);
   expect(inv.keepTree(0, 0)).toBe(true);
   const built = buildTreeInventory([tree(5, 2)], ctx);
-  // the crown switch off keeps the cheap silhouette near the camera too
-  expect(built.control.updateLod(new Vector3(5, 100, 0), false)).toBe(false);
-  expect(built.control.updateLod(new Vector3(5, 100, 0), true)).toBe(true);
-  expect(built.control.updateLod(new Vector3(5, 100, 0), true)).toBe(false);
+  // its silhouettes are planned with the canopy's chunks: rich near the
+  // camera, the next pass changes nothing, and with no rich budget left
+  // the cheap one again
+  const [cell] = built.control.cells ?? [];
+  const lod = createVegetationLod();
+  expect(cell.tier).toBe("mid");
+  expect(lod([built.control], new Vector3(5, 100, 0))).toBe(true);
+  expect([cell.tier, cell.rich.visible, cell.cheap.visible]).toEqual([
+    "rich",
+    true,
+    false,
+  ]);
+  expect(lod([built.control], new Vector3(5, 100, 0))).toBe(false);
+  expect(lod([built.control], new Vector3(5, 100, 0), 0)).toBe(true);
+  expect([cell.rich.visible, cell.cheap.visible]).toEqual([false, true]);
 });
 
 test("a deciduous silhouette bares in winter, a conifer never", () => {

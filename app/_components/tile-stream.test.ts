@@ -1658,7 +1658,7 @@ test("a traffic build that threw is tried again on the next switch-on, not on ot
   expect(tile.slot.group).toBeNull();
   // a look change that leaves the layer on builds (and reports) nothing
   tile.look.set({ fogAmount: 0.9 });
-  tile.look.set({ multiTuft: false });
+  tile.look.set({ style: "comic" });
   await nextTask();
   await nextTask();
   expect(builds).toBe(1);

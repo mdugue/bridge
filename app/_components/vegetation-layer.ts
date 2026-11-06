@@ -91,8 +91,6 @@ import {
   createCrownPlanScratch,
   keepInFarTier,
   planCrownTiers,
-  RICH_IN_M,
-  RICH_OUT_M,
 } from "@/lib/city/vegetation-lod";
 import type { ChunkLodState, CrownTier } from "@/lib/city/vegetation-lod";
 import {
@@ -191,32 +189,25 @@ export interface VegetationContext extends GroundContext {
   ) => FootMaterials | undefined;
 }
 
-/**
- * Crown LOD hysteresis, measured to the NEAREST tree in a chunk (camera distance
- * minus the chunk's instance-sphere radius), not the centroid — otherwise a tree
- * a few metres away could stay cheap because its 250 m chunk's centre is far. A
- * cheap chunk switches to rich within NEAR_IN; a rich chunk only drops past
- * NEAR_OUT, so chunks straddling the line don't flicker. These drive
- * swapCrownLod (the cadastre's own silhouettes); the canopy chunks take the
- * same distances through createVegetationLod, which adds the far tier and
- * the site-wide rich budget.
- */
-export const LOD_NEAR_IN_M = RICH_IN_M;
-export const LOD_NEAR_OUT_M = RICH_OUT_M;
 /** Far-tier crowns of a thinned (dense) chunk are drawn this much wider. */
 const FAR_THIN_WIDEN = 1.35;
 
 /**
- * Runtime handle for a loaded vegetation group: the LOD swap (on the pose
- * tick, create-app.ts) and the season. The look's one say in the crowns,
- * the multi-tuft toggle, is read by the pass (create-app.ts
- * `stepVegetation`), not kept per tile. (The gust's brightening is fixed:
- * `GUST_BRIGHTEN`.)
+ * Runtime handle for a loaded vegetation group: what the crown pass plans
+ * (`createVegetationLod`, on the pose tick, create-app.ts — the canopy's
+ * chunks, the cadastre's own silhouettes and the trunk-only cells' feet,
+ * over every loaded tile at once) and the season. The look has no say in
+ * the crowns: the rich one shows wherever the plan puts it. (The gust's
+ * brightening is fixed: `GUST_BRIGHTEN`.)
  */
 export interface VegetationControl {
-  /** the tile's canopy chunks; `createVegetationLod` sets their crown tier
-   *  over every loaded tile at once */
+  /** the tile's canopy chunks: their crown tier, trunks and feet */
   chunks: VegetationChunk[];
+  /** the cadastre's own silhouettes (tree-inventory-layer.ts), planned
+   *  with the chunks against the same rich budget */
+  cells?: CrownCell[];
+  /** the trunk-only cells' feet (no crowns of their own to plan) */
+  looseFeet?: LooseFeet[];
   group: Group;
   /**
    * Moves the crowns to `day` (days since 1 January; lib/city/tree-season.ts):
@@ -224,11 +215,21 @@ export interface VegetationControl {
    * returns true when any crown changed (the shadow map must then be redrawn).
    */
   setSeason: (day: number) => boolean;
-  /** swaps the crowns a layer keeps outside the chunks (the cadastre's own
-   *  silhouettes, swapCrownLod; the rich one only while `multiTuft`, the
-   *  look's toggle); true when any changed (the shadow map must then be
-   *  redrawn). The canopy's chunks are `createVegetationLod`'s. */
-  updateLod: (cameraPos: Vector3, multiTuft: boolean) => boolean;
+}
+
+/**
+ * One chunk's reshaped silhouettes of the cadastre (a flame, a cone, a
+ * pine, a dome; tree-inventory-layer.ts): the cheap crown and the rich
+ * one, exactly one visible. Planned as a chunk is (`createVegetationLod`):
+ * the rich one where the plan says rich, the cheap one at mid and far
+ * (it has no coarser crown; its trunks ride in the canopy's chunks).
+ */
+export interface CrownCell {
+  cheap: Instances;
+  rich: Instances;
+  tier: CrownTier;
+  /** its trees (what the rich-crown budget counts) */
+  trees: number;
 }
 
 /**
@@ -269,40 +270,6 @@ export function applySeasons(cells: SeasonalCrowns[], day: number): boolean {
   let changed = false;
   for (const cell of cells) {
     changed = cell.apply(day) || changed;
-  }
-  return changed;
-}
-
-/** A chunk's two crown sets; exactly one is visible (swapCrownLod). */
-export interface CellLod {
-  cheap: Instances;
-  rich: Instances;
-}
-
-/**
- * Rich crown only near the camera (and only when multi-tuft is enabled);
- * far chunks fall back to the cheap crown. Distance is to the NEAREST tree
- * in the chunk (sphere centre minus radius) with enter/exit hysteresis.
- * Returns true when any chunk swapped (the shadow map must then be redrawn).
- */
-export function swapCrownLod(
-  cells: CellLod[],
-  cameraPos: Vector3,
-  multiTuft: boolean
-): boolean {
-  let changed = false;
-  for (const c of cells) {
-    const sphere = c.cheap.geometry.boundingSphere;
-    const near = sphere
-      ? cameraPos.distanceTo(sphere.center) - sphere.radius
-      : Number.POSITIVE_INFINITY;
-    const wantRich =
-      multiTuft && near < (c.rich.visible ? LOD_NEAR_OUT_M : LOD_NEAR_IN_M);
-    if (wantRich !== c.rich.visible) {
-      changed = true;
-    }
-    c.rich.visible = wantRich;
-    c.cheap.visible = !wantRich;
   }
   return changed;
 }
@@ -545,7 +512,8 @@ export function buildCrownGeo(detail = 2): BufferGeometry {
 /**
  * Rich multi-tuft crown for NEAR trees (LOD): a squashed core plus heavily
  * overlapping, elongated lobes merged into one mass, then RADIAL normals. ~18×
- * the cheap crown's triangles, so it is only ever shown within LOD_NEAR_M. ONE
+ * the cheap crown's triangles, so it is only ever shown near the eye, within
+ * the site's rich budget (lib/city/vegetation-lod.ts). ONE
  * shared geometry (fixed seed) — instance rotation hides the repetition.
  */
 export function buildCrownGeoRich(): BufferGeometry {
@@ -1849,21 +1817,11 @@ function* buildTrees(
 }
 
 /** A cell of trunks alone (the register's, their crowns elsewhere) and
- *  their feet: no chunk, so `showLooseFeet` switches the feet. */
-interface LooseFeet {
+ *  their feet: no chunk, so the crown pass shows the feet by the trunks'
+ *  own distance (`createVegetationLod`). */
+export interface LooseFeet {
   feet: Instances[];
   trunks: Instances;
-}
-
-/** The feet of the trunk-only cells only where one of their trunks is
- *  near enough to show them (as `createVegetationLod` does a chunk's). */
-function showLooseFeet(all: readonly LooseFeet[], cameraPos: Vector3): void {
-  for (const { feet, trunks } of all) {
-    const on = nearestOf(trunks, cameraPos) < FOOT_SHOWN_M;
-    for (const f of feet) {
-      f.visible = on && seasonalFoot(f);
-    }
-  }
 }
 
 /**
@@ -1963,13 +1921,8 @@ export function* vegetationSteps(
   return {
     group,
     chunks,
+    looseFeet: loose,
     setSeason: (day) => applySeasons(seasons, day),
-    // The chunks' tiers are createVegetationLod's; the canopy keeps no other
-    // crowns, only the trunk-only cells' feet (no shadow casters).
-    updateLod: (cameraPos) => {
-      showLooseFeet(loose, cameraPos);
-      return false;
-    },
   };
 }
 
@@ -2011,40 +1964,85 @@ function showTier(chunk: VegetationChunk, tier: CrownTier): void {
   // (the feet: `createVegetationLod`, by the nearest tree's distance)
 }
 
+function showCellTier(cell: CrownCell, tier: CrownTier): void {
+  cell.tier = tier;
+  cell.rich.visible = tier === "rich";
+  cell.cheap.visible = tier !== "rich";
+}
+
+/** Metres from `cameraPos` to a planned set's nearest crown. */
+function nearestCrown(
+  item: VegetationChunk | CrownCell,
+  cameraPos: Vector3
+): number {
+  return "mid" in item
+    ? nearestTree(item, cameraPos)
+    : nearestOf(item.cheap, cameraPos);
+}
+
+/** Shows a chunk's feet only where one of its trees is near enough
+ *  (tree-foot.ts fades them out by FOOT_SHOWN_M): a far chunk draws none
+ *  of their sets. */
+function showChunkFeet(chunk: VegetationChunk, cameraPos: Vector3): void {
+  const feet = chunk.feet ?? [];
+  const on =
+    feet.length > 0 &&
+    chunk.tier !== "far" &&
+    nearestTrunk(chunk, cameraPos) < FOOT_SHOWN_M;
+  for (const set of feet) {
+    set.visible = on && seasonalFoot(set);
+  }
+}
+
+/** The trunk-only cells' feet, by their own trunks' distance. */
+function showLooseFeet(all: readonly LooseFeet[], cameraPos: Vector3): void {
+  for (const { feet, trunks } of all) {
+    const on = nearestOf(trunks, cameraPos) < FOOT_SHOWN_M;
+    for (const f of feet) {
+      f.visible = on && seasonalFoot(f);
+    }
+  }
+}
+
 /**
- * Picks every loaded chunk's crown tier at once (lib/city/vegetation-lod.ts):
- * the rich-crown budget is shared by the whole site, not granted per tile.
- * The returned pass answers true when any chunk changed — what casts
+ * Picks every loaded crown set's tier at once (lib/city/vegetation-lod.ts):
+ * the canopy's chunks and the cadastre's silhouettes, under one rich-crown
+ * budget for the whole site, not one per tile or per layer. Then the
+ * feet. The returned pass answers true when any tier changed — what casts
  * shadows changed, so the shadow map must be redrawn. It keeps its arrays
- * and the chunks' plan states between passes (one each per chunk, ~1 000
- * over a site, were allocated on every pass): only what a pass met stays
+ * and the plan states between passes (one each per set, ~1 000 over a
+ * site, were allocated on every pass): only what a pass met stays
  * referenced, so a tile that left is let go at the next.
  */
 export function createVegetationLod(): (
   controls: readonly VegetationControl[],
   cameraPos: Vector3,
-  /** the look's multi-tuft toggle: whether the rich crown may show */
-  allowRich: boolean,
   richBudget?: number
 ) => boolean {
-  const all: VegetationChunk[] = [];
+  const all: (VegetationChunk | CrownCell)[] = [];
   const states: ChunkLodState[] = [];
   const scratch = createCrownPlanScratch();
-  return (controls, cameraPos, allowRich, richBudget) => {
-    let n = 0;
+  let n = 0;
+  const plan = (item: VegetationChunk | CrownCell, cameraPos: Vector3) => {
+    all[n] = item;
+    let state = states[n];
+    if (!state) {
+      state = { current: item.tier, near: 0, trees: 0 };
+      states[n] = state;
+    }
+    state.current = item.tier;
+    state.near = nearestCrown(item, cameraPos);
+    state.trees = item.trees;
+    n += 1;
+  };
+  return (controls, cameraPos, richBudget) => {
+    n = 0;
     for (const control of controls) {
       for (const chunk of control.chunks) {
-        all[n] = chunk;
-        let state = states[n];
-        if (!state) {
-          state = { allowRich, current: chunk.tier, near: 0, trees: 0 };
-          states[n] = state;
-        }
-        state.allowRich = allowRich;
-        state.current = chunk.tier;
-        state.near = nearestTree(chunk, cameraPos);
-        state.trees = chunk.trees;
-        n += 1;
+        plan(chunk, cameraPos);
+      }
+      for (const cell of control.cells ?? []) {
+        plan(cell, cameraPos);
       }
     }
     all.length = n;
@@ -2052,21 +2050,21 @@ export function createVegetationLod(): (
     const tiers = planCrownTiers(states, richBudget, scratch);
     let changed = false;
     for (let i = 0; i < n; i += 1) {
-      if (tiers[i] !== all[i].tier) {
-        showTier(all[i], tiers[i]);
+      const item = all[i];
+      if (tiers[i] !== item.tier) {
+        if ("mid" in item) {
+          showTier(item, tiers[i]);
+        } else {
+          showCellTier(item, tiers[i]);
+        }
         changed = true;
       }
-      // the feet only where one of their trees is near enough to show them
-      // (tree-foot.ts fades them out by FOOT_SHOWN_M): a far chunk draws
-      // none of their sets
-      const feet = all[i].feet ?? [];
-      const feetOn =
-        feet.length > 0 &&
-        tiers[i] !== "far" &&
-        nearestTrunk(all[i], cameraPos) < FOOT_SHOWN_M;
-      for (const set of feet) {
-        set.visible = feetOn && seasonalFoot(set);
+      if ("mid" in item) {
+        showChunkFeet(item, cameraPos);
       }
+    }
+    for (const control of controls) {
+      showLooseFeet(control.looseFeet ?? [], cameraPos);
     }
     return changed;
   };

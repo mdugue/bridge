@@ -20,7 +20,6 @@
  * tileset's offset, and
  * scripts/eval/kataster-shots.py; no GPU, no browser)
  */
-import { LOOK_DEFAULTS } from "../../lib/city/look-controls";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { Frustum, Matrix4, PerspectiveCamera, Vector3 } from "three/webgpu";
@@ -30,7 +29,10 @@ import type { Instances } from "../../app/_components/instancing";
 import { sceneCensus } from "../../app/_components/scene-census";
 import { buildLowVegetation } from "../../app/_components/low-vegetation-layer";
 import { buildTreeInventory } from "../../app/_components/tree-inventory-layer";
-import { buildVegetation } from "../../app/_components/vegetation-layer";
+import {
+  buildVegetation,
+  createVegetationLod,
+} from "../../app/_components/vegetation-layer";
 import type { VegetationControl } from "../../app/_components/vegetation-layer";
 import type {
   CanopyExtraFeature,
@@ -100,7 +102,7 @@ type Mode = (typeof MODES)[number];
 /** What a mode built: its vegetation controls plus any static groups. */
 const controls: Record<
   Mode,
-  { group: Object3D; updateLod?: VegetationControl["updateLod"] }[]
+  (VegetationControl | { group: Object3D; chunks?: undefined })[]
 > = {
   canopy: [],
   kataster: [],
@@ -254,9 +256,13 @@ for (const file of shots) {
   const focus = new Vector3(pos.x + d.x * ahead, ground, pos.z + d.z * ahead);
   const entry = {} as Record<Mode, { main: PassCost; shadow: PassCost }>;
   for (const mode of MODES) {
-    for (const c of controls[mode]) {
-      c.updateLod?.(cam.position, LOOK_DEFAULTS.multiTuft);
-    }
+    // the viewer's crown plan (rich budget, mid, far) over the mode's sets
+    createVegetationLod()(
+      controls[mode].filter(
+        (c): c is VegetationControl => c.chunks !== undefined
+      ),
+      cam.position
+    );
     const meshes = meshesOf(controls[mode].map((c) => c.group));
     entry[mode] = {
       main: passCost(meshes, (m) =>

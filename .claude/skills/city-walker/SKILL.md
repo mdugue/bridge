@@ -37,8 +37,7 @@ slot waits for their builder. The scene environment
 (`scene-environment.ts`, not three's `scene.environment`) holds what the
 sun and the date move — the night node, the season watch, the clock —
 and a dressing's trees follow its season from birth to release
-(`followEnvironment`); the crown switch is read by the LOD pass, the
-traffic slot follows the look's layer from its hang. The picture styles and Modell are still
+(`followEnvironment`); the traffic slot follows the look's layer from its hang. The picture styles and Modell are still
 wired by hand. The data layers' code stays in the scene chunk: the first `import()` chunk that imports three.js costs the first
 load ≈ 33 KB gz (three leaves the scene's hoisted scope), more than the
 data layers moved (ADR 0040) — measure before splitting one off.
@@ -665,7 +664,9 @@ not sky.
   tiers per 250 m chunk, planned over the whole site on the 10 Hz pose
   tick (`lib/city/vegetation-lod.ts`, applied by `createVegetationLod`,
   whose arrays are kept between passes; `createLodSchedule` runs it in the
-  frame the tiles in view or the crown switch change, or the eye jumps): the
+  frame the tiles in view change, or the eye jumps; the cadastre's own
+  silhouettes are planned with the chunks, their cheap crown standing for
+  mid and far): the
   **rich multi-tuft crown** (~1 440 tris) near the camera (in 220 m / out
   300 m) but only within a **site-wide budget of 2 500 trees**, nearest
   chunks first — forest tiles (one tree per 7 m, up to ~1 300 per chunk)
@@ -917,7 +918,7 @@ the WebGL2 backend on par in steady state but stalling while it compiles
 ## QA: self-verify on a real GPU
 
 The in-app **Snapshot** panel serializes camera + sun time + the look's
-controls (*Nebel*, the crown switch, the style, the data layers) to JSON; `__poc.handle.getCameraState()` / `applyCameraState()` replay it. To eyeball a
+controls (*Nebel*, the style, the data layers) to JSON; `__poc.handle.getCameraState()` / `applyCameraState()` replay it. To eyeball a
 change yourself:
 
 ```bash
@@ -955,7 +956,7 @@ a bridge is invisible looking straight down). Snapshot JSON shape:
   "camera": { "mode": "fly", "pos": {"x":0,"y":0,"z":0}, "epsg": {"x":0,"y":0},
               "headingDeg": 0, "pitchDeg": 0, "fov": 55 },
   "date": "2026-06-15T08:30:00.000Z",
-  "look": { "fogPct":35,"multiTuft":true,"style":"pastel" } }
+  "look": { "fogPct":35,"style":"pastel" } }
 ```
 
 **Budget the e2e specs in frames, not seconds.** Under SwiftShader every pixel

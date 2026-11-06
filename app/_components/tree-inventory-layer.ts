@@ -43,11 +43,10 @@ import {
   evergreenColor,
   hash,
   sceneCrowns,
-  swapCrownLod,
   TRUNK_H,
 } from "./vegetation-layer";
 import type {
-  CellLod,
+  CrownCell,
   TreeInstance,
   TreeVeto,
   VegetationContext,
@@ -63,7 +62,7 @@ import type {
  * It reuses everything the canopy trees are made of — the lobed crown and the
  * multi-tuft rich crown, the scene's crown materials (sway, occlusion,
  * gust brightening; the same builds as the canopy's), the
- * trunk, the 250 m chunks and the distance LOD swap — and adds
+ * trunk, the 250 m chunks and their crown plan — and adds
  * only what a per-instance scale cannot express: two reshaped variants of
  * the SAME two crown geometries (a flame for fastigiate cultivars, a
  * curtained dome for weeping trees) and the needle trees' two forms
@@ -372,7 +371,7 @@ function crownPair(
   items: InventoryTree[],
   geos: ShapeGeos[CrownShape],
   materials: CrownMaterials
-): { lod: CellLod; season: SeasonalCrowns } {
+): { lod: CrownCell; season: SeasonalCrowns } {
   const cheap = new Instances(geos.cheap.geo, materials.leafy, items.length);
   const rich = new Instances(geos.rich.geo, materials.leafy, items.length);
   for (const [mesh, fit] of [
@@ -391,7 +390,7 @@ function crownPair(
     items.map(seasonKeyOf),
     materials
   );
-  return { lod: { cheap, rich }, season };
+  return { lod: { cheap, rich, tier: "mid", trees: items.length }, season };
 }
 
 export interface TreeInventory {
@@ -445,7 +444,7 @@ export function* treeInventorySteps(
   const trees = yield* inRuns(features, INVENTORY_RUN, (run) =>
     inventoryTrees(run, ctx, ndviAt)
   );
-  const cells: CellLod[] = [];
+  const cells: CrownCell[] = [];
   const seasons: SeasonalCrowns[] = [];
   let instances: TreeInstance[] = [];
   if (trees.length > 0) {
@@ -489,10 +488,10 @@ export function* treeInventorySteps(
       // Its trunks and broadleaf crowns ride in the canopy's chunks
       // (`instances`); only its own silhouettes are here.
       chunks: [],
+      // planned with the canopy's chunks (vegetation-layer.ts
+      // createVegetationLod), under the same rich budget
+      cells,
       setSeason: (day) => applySeasons(seasons, day),
-      // Same rule as the canopy (vegetation-layer.ts swapCrownLod).
-      updateLod: (cameraPos, multiTuft) =>
-        swapCrownLod(cells, cameraPos, multiTuft),
     },
   };
 }
