@@ -32,8 +32,6 @@ const facadeModel = z.strictObject({
   /** a band of horizontal joints recurring at the storey under the
    *  windows (not drawn: it did not agree between two drives) */
   sill: z.boolean().optional(),
-  /** the storey's height, where it was measured */
-  storey: z.number().optional(),
   /** the window's width */
   w: z.number(),
 });
