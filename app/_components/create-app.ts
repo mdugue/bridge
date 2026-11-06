@@ -1577,7 +1577,7 @@ async function bootApp(
   // post stack is built after the first setSun, so it catches up there.
   let sunAltitude = 90;
   let sunToStyles: ((altitudeDeg: number) => void) | null = null;
-  // Single fixed pool of real point lights for the nearest lamps across ALL
+  // Single fixed pool of real spot lights for the nearest lamps across ALL
   // tiles, built before the first render so the light count is part of
   // every lit node build once (ADR 0009): three on a desktop, one on a
   // phone (`LAMP_LIGHTS`); each tile's lamps retarget it.
@@ -2915,6 +2915,11 @@ async function bootApp(
         [...stream.dressings].flatMap((d) => d.lamps?.trackHeads ?? [])
       )
     );
+    lampReflections.setStreetHeads(
+      uniqueHeads(
+        [...stream.dressings].flatMap((d) => d.lamps?.headPositions ?? [])
+      )
+    );
     // a tile that lands is born on its mid crowns: its tiers in this frame
     crownTiers.force();
     streamHook.emit();
@@ -3265,7 +3270,7 @@ async function bootApp(
       setMapAltitude(camera.position.y - groundY);
       // Repoint the shared real lamp lights at the nearest heads.
       lampLights.updateNearest(camera.position);
-      lampReflections.update(camera.position, elapsed);
+      lampReflections.update(camera.position, elapsed, lampLights.heldShare);
       lantern.follow(
         camera.position,
         shadowViewDir,
@@ -3287,7 +3292,7 @@ async function bootApp(
     eye.set(pivot.x, pivot.y + equivalent, pivot.z);
     setMapAltitude(equivalent);
     lampLights.updateNearest(eye);
-    lampReflections.update(eye, elapsed);
+    lampReflections.update(eye, elapsed, lampLights.heldShare);
     lantern.off();
     stepVegetation(elapsed, eye, tick);
     return equivalent;

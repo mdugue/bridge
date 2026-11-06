@@ -133,6 +133,31 @@ function mirrorSet(
 /** The lamps by the tracks: a rail's glint is a few pixels from 300 m. */
 const TRACKS = mirrorSet({ desktop: 64, mobile: 16 }, [250, 400]);
 
+/** Every lamp nearest the eye, whose light the house fronts and a
+ *  fountain's water take (`streetLight`, `streetGlints`): about the
+ *  streets within 150 m on a desktop, the next few on a phone, each one
+ *  more step of a loop over every lit wall pixel. */
+const STREET = mirrorSet({ desktop: 48, mobile: 12 }, [150, 260]);
+
+/** A street lamp's light (cd at full night) and its reach (m): the real
+ *  lights' (lamp-layer.ts `createLampLights`), which `streetLight`
+ *  draws on as three draws a point light. */
+export const LAMP_CD = 14;
+export const LAMP_RANGE_M = 40;
+/** A street lamp's cone round the plumb line (three's SpotLight `angle`,
+ *  rad, and `penumbra`): its shade throws the light onto the street, full
+ *  within about 42° of straight down and gone by 85°, so a house front is
+ *  lit at its foot near the lamp and dark from about the lamp's height up
+ *  — not to its eaves, as a bare bulb would light it. */
+export const LAMP_CONE = {
+  angle: (85 * Math.PI) / 180,
+  penumbra: 0.5,
+} as const;
+/** The cone's cosines as three's spot falloff reads them: its edge's and
+ *  its full light's. */
+const CONE_COS = Math.cos(LAMP_CONE.angle);
+const FULL_COS = Math.cos(LAMP_CONE.angle * (1 - LAMP_CONE.penumbra));
+
 /** How far off (m) a lamp's column on the water still shows, fading from
  *  the first, by tier: a phone draws the near river's columns only, each
  *  one more quad of overdraw. */
@@ -169,6 +194,10 @@ const MIRROR_HALF_MAX = 40;
 const MIRROR_LIFT = 0.25;
 /** The bisection's steps for a column's ends (each halves the span). */
 const ENDS_STEPS = 12;
+/** A basin's ripples' spread of normals (tan) and a lamp's glint on
+ *  them at its peak (emissive). */
+const BASIN_SPREAD = 0.12;
+const BASIN_GLINT = 1.2;
 /** A rail head's spread of normals (tan): worn steel, crowned across. */
 const RAIL_SPREAD = 0.18;
 /** A rail's glint at its peak (emissive), and steel's reflectance. */
@@ -251,6 +280,62 @@ export function railGlints(n: V3, toEye: V3): V3 {
     haloShare: 0,
   });
   return color(LAMP_LIGHT).mul(sum.mul(sceneNight).mul(RAIL_GLINT));
+}
+
+/**
+ * The street lamps' light on a surface at this fragment (linear, × its
+ * albedo; a Lambertian surface's light as three draws the real lamps'
+ * spot lights — `LAMP_CD` over the distance squared, cut off at
+ * `LAMP_RANGE_M`, in the cone `LAMP_CONE` — so it hands over to the real
+ * lights near the eye unseen): what lights a house
+ * front after dark, from every lamp near the eye (`STREET`), each less the
+ * share a real light already gives it (`createLampReflections`). Facing
+ * the lamp, lit; turned away, not; nothing blocks it, as nothing blocks
+ * a real light without its shadow. `n` the surface's normal (world).
+ */
+export function streetLight(n: V3): V3 {
+  const sum = Fn(() => {
+    const at = positionWorld.toVar();
+    const normal = n.toVar();
+    const total = float(0).toVar();
+    Loop(
+      { start: int(0), end: STREET.count, type: "int", condition: "<" },
+      ({ i }) => {
+        const head = STREET.heads.element(i);
+        const to = head.xyz.sub(at);
+        const d2 = max(dot(to, to), 0.01);
+        const l = to.mul(d2.inverseSqrt());
+        const facing = max(dot(normal, l), 0);
+        // three's range window: (1 − (d/range)⁴)², over d²
+        const r2 = d2.div(LAMP_RANGE_M * LAMP_RANGE_M);
+        const window = max(float(1).sub(r2.mul(r2)), 0);
+        // the cone: the lamp's plumb line against the way to the surface
+        const down = smoothstep(CONE_COS, FULL_COS, l.y);
+        total.addAssign(
+          facing.mul(window.mul(window)).div(d2).mul(down).mul(head.w)
+        );
+      }
+    );
+    return total;
+  })();
+  return color(LAMP_LIGHT).mul(sum.mul(sceneNight).mul(LAMP_CD / Math.PI));
+}
+
+/**
+ * The street lamps caught by a fountain's water at this fragment
+ * (emissive, linear): each lamp near the eye (`STREET`) a glint on the
+ * ripples between the eye and the lamp, as the river takes its quay's
+ * lamps (`buildLampMirrors`) and the rails theirs (`railGlints`). `n` the
+ * water's normal (world), `toEye` the unit vector to the eye.
+ */
+export function streetGlints(n: V3, toEye: V3): V3 {
+  // no halo: from many lamps round a square it summed to a silver sheen
+  const sum = lobes(STREET, n, toEye, float(BASIN_SPREAD), {
+    f0: WATER_F0,
+    halo: 1,
+    haloShare: 0,
+  });
+  return color(LAMP_LIGHT).mul(sum.mul(sceneNight).mul(BASIN_GLINT));
 }
 
 /** A lamp the river mirrors: its head (world, Y-up), the level (world
@@ -505,9 +590,13 @@ export interface LampReflections {
   /** the heads by the tracks of every loaded tile, shown or not, so a
    *  turn of the eye changes none (tiles stream in and out) */
   setHeads: (tracks: readonly Vector3[]) => void;
+  /** every loaded tile's lamp heads, whose light the walls take */
+  setStreetHeads: (heads: readonly Vector3[]) => void;
   setNightFactor: (t: number) => void;
-  /** chooses the lamps for the eye at `eye` (world) at `now` (s) */
-  update: (eye: Vector3, now: number) => void;
+  /** chooses the lamps for the eye at `eye` (world) at `now` (s); `held`
+   *  is the share of a head a real light lights this frame
+   *  (lamp-layer.ts `heldShare`), which the walls' light leaves out */
+  update: (eye: Vector3, now: number, held?: (head: Vector3) => number) => void;
   /** empties the shared arrays: the next page's scene starts with none */
   dispose: () => void;
 }
@@ -683,8 +772,12 @@ function chooser(set: MirrorSet, tier: DeviceTier) {
  */
 export function createLampReflections(tier: DeviceTier): LampReflections {
   let heads: readonly Vector3[] = [];
+  let streetHeads: readonly Vector3[] = [];
   let night = 0;
   const tracks = chooser(TRACKS, tier);
+  const street = chooser(STREET, tier);
+  const streetOut = STREET.heads.array as Vector4[];
+  const at = new Vector3();
   waterReach.value.set(...WATER_REACH[tier]);
   const none: readonly Vector3[] = [];
   return {
@@ -694,13 +787,26 @@ export function createLampReflections(tier: DeviceTier): LampReflections {
     setNightFactor: (t) => {
       night = t;
     },
-    update: (eye, now) => {
+    setStreetHeads: (next) => {
+      streetHeads = next;
+    },
+    update: (eye, now, held) => {
       const lit = night > 0.001;
       tracks(lit ? heads : none, eye, now);
+      street(lit ? streetHeads : none, eye, now);
+      if (!held) {
+        return;
+      }
+      for (let i = 0; i < STREET.count.value; i += 1) {
+        const h = streetOut[i];
+        h.w *= 1 - held(at.set(h.x, h.y, h.z));
+      }
     },
     dispose: () => {
       TRACKS.count.value = 0;
+      STREET.count.value = 0;
       heads = [];
+      streetHeads = [];
     },
   };
 }

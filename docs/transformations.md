@@ -1684,8 +1684,12 @@ visual-variable codebook is in
   6 865 → 5 794 (1 004 canopies), Unna 6 156 → 5 587 (549 canopies). A shop's band (*Ladenlicht*)
   lights two cells in three and none on a landmark: on the Zwinger and the
   terrace parts of the Kunstakademie it lit the low walls all round.
-  *Streiflicht* drops to a tenth at night (`NIGHT_RIM`). `visual-style.ts`
-  `nightLight`.
+  *Streiflicht* is off at night (it kept a tenth until 2026-11-06: every
+  wall seen along a street and every roof from the air stood pale against
+  the night). Every wall facing a lamp near the eye takes its light
+  (`streetLight`, lamp-reflections.ts), in the cone a street lamp's shade
+  throws down, so a house front is lit at its foot and dark above the
+  lamps. `visual-style.ts` `nightLight`.
 - **Dusk glow (whole walls)** 🗃️ discontinued 2026-10-19 — a warm emissive
   wash over every wall of a commerce/public/special building (0.25 at full
   night) plus the full-strength rim: the centre glowed beige from afar and
