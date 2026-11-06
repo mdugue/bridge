@@ -59,7 +59,7 @@ import {
   slotTexture,
   slotUniform,
 } from "./material-slots";
-import { clayWindows } from "./clay-windows";
+import { WINDOW_PANE_ROUGHNESS, clayWindows } from "./clay-windows";
 import { nightShadowFree } from "./lantern";
 import {
   claySkySlots,
@@ -373,11 +373,16 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     },
     // Materialstreuung: nudge roughness per building so the matte sheen
     // varies house-to-house (clamped to stay matte, no shiny clay).
-    roughness: facadeRoughness(
-      clamp(float(1).add(ROUGHNESS.mul(rough)), 0.55, 1),
-      facadeMaterial(flags, wall),
-      shopPane(flags),
-      rough
+    // a window's back is a pane: smooth, the sun glints in it
+    roughness: mix(
+      facadeRoughness(
+        clamp(float(1).add(ROUGHNESS.mul(rough)), 0.55, 1),
+        facadeMaterial(flags, wall),
+        shopPane(flags),
+        rough
+      ),
+      WINDOW_PANE_ROUGHNESS,
+      windows.pane
     ),
     // A mix, not a select: three emits a select as if/else, and the facade
     // drawn inside its arm — the windows first among it — would be built

@@ -62,7 +62,7 @@ export const WINDOW_PARTS = {
  */
 export const WINDOW_TONE = {
   back: [0.4, 0.43, 0.5] as [number, number, number],
-  backSun: 0.25,
+  backSun: 0.5,
   far: 0.6,
   reveal: 0.93,
   revealSky: 0.55,
@@ -75,12 +75,14 @@ export const WINDOW_TONE = {
  * view — where a real pane turns from dark to bright and so tells its
  * depth behind the reveals. No pane, no mullion is drawn: only its light.
  */
+export const WINDOW_PANE_ROUGHNESS = 0.25;
+
 export const WINDOW_SKY = { up: 0.06, fresnel: 0.5 } as const;
 
 /** The wall rolls into the opening at its sides and head over a quarter
  *  round this wide (m): soft plaster, a line of light where the sun
  *  catches it — drawn only where it spans a pixel or more. */
-export const WINDOW_ARRIS_M = 0.03;
+export const WINDOW_ARRIS_M = 0.06;
 
 /** What the windows read per fragment (the clay's own nodes). */
 export interface WindowInputs {
@@ -125,6 +127,10 @@ export interface ClayWindows {
   normalMix: F;
   /** 1 in an opening (anti-aliased), near enough to be drawn */
   opening: F;
+  /** 1 on the opening's back that the view sees: a pane, smooth (the
+   *  clay's roughness drawn to `WINDOW_PANE_ROUGHNESS`, so the sun glints
+   *  in it as in a shop window) */
+  pane: F;
   /** the sky the opening's back mirrors, as much as a shop window's pane
    *  (`WINDOW_SKY`; × the sky's colour, dimmed at night by the clay) */
   sky: F;
@@ -441,7 +447,7 @@ function recess(g: Grid, view: V3, wn: V3, sun: V3, px: Px) {
   // under the head, which hides the sky from it (a band three reveals
   // deep)
   const edge = min(g.half.sub(abs(uh)), min(vh, g.tall.sub(vh)));
-  const underHead = smoothstep(0, g.depth.mul(3), g.tall.sub(vh));
+  const underHead = smoothstep(0, max(g.depth.mul(3), 0.4), g.tall.sub(vh));
   // a reveal sees the sky only past the wall it turns from (the
   // quarter of it a wall sees, not half), so it starts `revealSky` as
   // light as the wall — at 1 a shaded front's reveals read as plain wall
@@ -452,7 +458,7 @@ function recess(g: Grid, view: V3, wn: V3, sun: V3, px: Px) {
   ).mul(
     mix(
       1,
-      mix(0.8, 1, smoothstep(0, 0.12, edge)).mul(mix(0.75, 1, underHead)),
+      mix(0.6, 1, smoothstep(0, 0.2, edge)).mul(mix(0.55, 1, underHead)),
       back
     )
   );
@@ -733,6 +739,7 @@ export function clayWindows(i: WindowInputs): ClayWindows {
   const head = clamp(g.v.div(max(g.tall, 0.1)), 0, 1).mul(px.du);
   return {
     opening,
+    pane: opening.mul(r.back),
     sky: opening
       .mul(r.back)
       .mul(r.ao)
