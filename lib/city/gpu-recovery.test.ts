@@ -66,7 +66,7 @@ const waiting: Snapshot = {
     },
   },
   date: "2026-06-21T12:00:00.000Z",
-  look: { fogPct: 30, multiTuft: false, style: "comic" },
+  look: { fogPct: 30, style: "comic" },
 };
 
 const arrive = (over: Partial<Parameters<typeof arrivalOf>[0]> = {}) =>
@@ -121,7 +121,6 @@ test("from level 2 the place and the time come back without the picture style an
     expect(s?.camera.headingDeg).toBe(waiting.camera.headingDeg);
     expect(s?.date).toBe(waiting.date);
     expect(s?.look?.fogPct).toBe(30);
-    expect(s?.look?.multiTuft).toBe(false);
   }
 });
 

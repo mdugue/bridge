@@ -59,7 +59,6 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { LOOK_CONTROLS, lookPatch } from "@/lib/city/look-controls";
@@ -1013,22 +1012,6 @@ export const SceneSidebar = (props: SceneSidebarProps) => {
               />
               <FieldGroup className="gap-3 pt-1">
                 <LookSliders look={look} onLook={onLook} />
-                <Field orientation="horizontal">
-                  <FieldLabel
-                    className="font-medium text-xs"
-                    htmlFor="tree-multituft"
-                  >
-                    Multi-Tuft-Kronen (nah)
-                  </FieldLabel>
-                  <Switch
-                    checked={look.multiTuft}
-                    id="tree-multituft"
-                    onCheckedChange={(checked) =>
-                      onLook({ multiTuft: checked })
-                    }
-                    size="sm"
-                  />
-                </Field>
               </FieldGroup>
             </div>
           </SceneTabPanel>
