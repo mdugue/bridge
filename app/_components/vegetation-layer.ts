@@ -225,6 +225,7 @@ export interface VegetationControl {
  * (it has no coarser crown; its trunks ride in the canopy's chunks).
  */
 export interface CrownCell {
+  kind: "cell";
   cheap: Instances;
   rich: Instances;
   tier: CrownTier;
@@ -1964,20 +1965,28 @@ function showTier(chunk: VegetationChunk, tier: CrownTier): void {
   // (the feet: `createVegetationLod`, by the nearest tree's distance)
 }
 
-function showCellTier(cell: CrownCell, tier: CrownTier): void {
+/** Shows a cell's tier; true when its crown changed (mid and far both
+ *  show the cheap one, so a flip between them changes no caster). */
+function showCellTier(cell: CrownCell, tier: CrownTier): boolean {
+  const swapped = (cell.tier === "rich") !== (tier === "rich");
   cell.tier = tier;
   cell.rich.visible = tier === "rich";
   cell.cheap.visible = tier !== "rich";
+  return swapped;
 }
+
+/** A planned set: a canopy chunk or a cadastre cell. */
+const isCell = (item: VegetationChunk | CrownCell): item is CrownCell =>
+  "kind" in item && item.kind === "cell";
 
 /** Metres from `cameraPos` to a planned set's nearest crown. */
 function nearestCrown(
   item: VegetationChunk | CrownCell,
   cameraPos: Vector3
 ): number {
-  return "mid" in item
-    ? nearestTree(item, cameraPos)
-    : nearestOf(item.cheap, cameraPos);
+  return isCell(item)
+    ? nearestOf(item.cheap, cameraPos)
+    : nearestTree(item, cameraPos);
 }
 
 /** Shows a chunk's feet only where one of its trees is near enough
@@ -2051,17 +2060,17 @@ export function createVegetationLod(): (
     let changed = false;
     for (let i = 0; i < n; i += 1) {
       const item = all[i];
-      if (tiers[i] !== item.tier) {
-        if ("mid" in item) {
-          showTier(item, tiers[i]);
-        } else {
-          showCellTier(item, tiers[i]);
+      if (isCell(item)) {
+        if (tiers[i] !== item.tier && showCellTier(item, tiers[i])) {
+          changed = true;
         }
+        continue;
+      }
+      if (tiers[i] !== item.tier) {
+        showTier(item, tiers[i]);
         changed = true;
       }
-      if ("mid" in item) {
-        showChunkFeet(item, cameraPos);
-      }
+      showChunkFeet(item, cameraPos);
     }
     for (const control of controls) {
       showLooseFeet(control.looseFeet ?? [], cameraPos);

@@ -108,6 +108,10 @@ const controls: Record<
   kataster: [],
   shipped: [],
 };
+/** One crown planner per mode, kept across the shots (its arrays too). */
+const planners = Object.fromEntries(
+  MODES.map((m) => [m, createVegetationLod()])
+) as Record<Mode, ReturnType<typeof createVegetationLod>>;
 const buildMs: Record<Mode, number> = { canopy: 0, kataster: 0, shipped: 0 };
 const heights: ((x: number, y: number) => number | null)[] = [];
 
@@ -257,7 +261,9 @@ for (const file of shots) {
   const entry = {} as Record<Mode, { main: PassCost; shadow: PassCost }>;
   for (const mode of MODES) {
     // the viewer's crown plan (rich budget, mid, far) over the mode's sets
-    createVegetationLod()(
+    // (since 2026-11-06; before, the canopy's chunks stayed on their mid
+    // crown here, so older figures are not comparable)
+    planners[mode](
       controls[mode].filter(
         (c): c is VegetationControl => c.chunks !== undefined
       ),

@@ -200,6 +200,9 @@ test("empty input builds nothing and vetoes nothing; the control still works", (
   expect(lod([built.control], new Vector3(5, 100, 0))).toBe(false);
   expect(lod([built.control], new Vector3(5, 100, 0), 0)).toBe(true);
   expect([cell.rich.visible, cell.cheap.visible]).toEqual([false, true]);
+  // mid to far shows the same cheap crown: no shadow redraw
+  expect(lod([built.control], new Vector3(5000, 100, 0))).toBe(false);
+  expect(cell.tier).toBe("far");
 });
 
 test("a deciduous silhouette bares in winter, a conifer never", () => {

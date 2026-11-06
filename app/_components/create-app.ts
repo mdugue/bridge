@@ -1475,7 +1475,7 @@ async function bootApp(
   const siteBounds = unionBounds(extras);
 
   // Shared world sun direction (surface→sun), kept in sync by the sun rig and
-  // read by the water glitter, the kerb shadow and the crown shimmer (by
+  // read by the water glitter, the kerb shadow and the tree feet (by
   // reference: the uniform nodes hold this very vector).
   const sunDirection = new Vector3(0, 1, 0);
   // The scene's fog, one node for every material (height-fog.ts): the range

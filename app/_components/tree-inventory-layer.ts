@@ -390,7 +390,10 @@ function crownPair(
     items.map(seasonKeyOf),
     materials
   );
-  return { lod: { cheap, rich, tier: "mid", trees: items.length }, season };
+  return {
+    lod: { kind: "cell", cheap, rich, tier: "mid", trees: items.length },
+    season,
+  };
 }
 
 export interface TreeInventory {
