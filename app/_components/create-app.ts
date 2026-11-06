@@ -101,7 +101,11 @@ import { exportScale, exportTiles } from "@/lib/city/image-export";
 import type { ExportTile } from "@/lib/city/image-export";
 import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
 import type { CameraState, PlayerPose, Xyz } from "@/lib/city/pose";
-import { createRegressionState, stepRegression } from "@/lib/city/regression";
+import {
+  createRegressionState,
+  lensFade,
+  stepRegression,
+} from "@/lib/city/regression";
 import { spawnViewpoint, tileExtentOf } from "@/lib/city/site";
 import type { Site, ViewpointGeometry } from "@/lib/city/site";
 import { beyondExtents } from "@/lib/city/design-placement";
@@ -698,8 +702,9 @@ export interface CityWalkHandle {
   /** Live DoF focus state + last crosshair raycast hit (QA/diagnostics). */
   getFocusDebug: () => {
     bokehScale: number;
+    fade: number;
     focusDistance: number;
-    focusRange: number;
+    horizonBlurPx: number;
     hitDist: number | null;
     hitName: string | null;
   };
@@ -3179,7 +3184,7 @@ async function bootApp(
   let regressedNow = false;
   const updateRegression = (dt: number) => {
     const regressed = stepRegression(regression, walkMoved(camera), dt * 1000);
-    postStack.setRegressed(regressed);
+    postStack.setRegressed(regressed, lensFade(regression));
     if (regressed !== regressedNow) {
       regressedNow = regressed;
       updatePocDebug({ regressed });

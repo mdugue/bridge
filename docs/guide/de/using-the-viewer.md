@@ -564,9 +564,13 @@ treibt erst ab etwa 120 m vor dir über dem Wasser, dichter erst in der
 Ferne.
 Die fotografische Tiefenschärfe macht nur unscharf, was hinter dem Fokus
 liegt (der Vordergrund bleibt scharf), und scharf ist immer, was in der
-Bildmitte liegt. Solange sich die Kamera bewegt, ist die Unschärfe
-abgeschaltet (das Auge kann sie in Bewegung nicht auflösen) und kommt
-zurück, sobald du stehst. Telefone zeichnen ohne sie: Die Unschärfe
+Bildmitte liegt. Sie ist so stark wie bei einer echten Kamera mit diesem
+Bildwinkel bei Blende 2,8: Liegt der Fokus auf einer Fassade die Straße
+hinunter, bleibt die Stadt dahinter fast scharf; liegt er auf einer
+Laterne gleich vor dir, wird der Hintergrund weich. Solange sich die
+Kamera bewegt, ist die Unschärfe abgeschaltet (das Auge kann sie in
+Bewegung nicht auflösen); wenn du stehst, wächst sie in knapp einer
+Sekunde wieder herein, wie wenn ein Objektiv scharfstellt. Telefone zeichnen ohne sie: Die Unschärfe
 braucht mehr Grafikspeicher, als ein Telefon für einen Hauch erübrigen
 kann, den ein kleiner Bildschirm kaum zeigt. Und solange du im
 Pastell-Look gehst, dich drehst oder fliegst, verwischt das Bild leicht

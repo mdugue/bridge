@@ -43,8 +43,8 @@ phone has no memory to spare (ADR 0047).
    by the night factor.
 7. **Post:** the scene renders into its own target; GTAO at half
    resolution, smoothed, never gated by motion; depth of field on a
-   desktop only, dropped while the camera moves by switching between two
-   prebuilt pipelines; SMAA on a desktop, FXAA on a phone; grading,
+   desktop only, as wide as a real lens's, dropped while the camera moves
+   by switching between two prebuilt pipelines and grown back in after; SMAA on a desktop, FXAA on a phone; grading,
    grain and vignette in the output node. No tone mapping.
 
 ## Consequences

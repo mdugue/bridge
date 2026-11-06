@@ -529,9 +529,13 @@ knowledge base use for them:
 Three more effects belong to the fixed look. The mist over the river
 drifts over the water from about 120 m ahead, denser only far off. The photographic
 depth of field blurs only what lies behind the focus (the foreground stays
-sharp), and the focus is always what lies at the centre of the view. While
+sharp), and the focus is always what lies at the centre of the view. It
+blurs as much as a real camera with this view's angle would at f/2.8:
+focused on a facade down the street, the city behind it stays all but
+sharp; focused on a lamp post close by, the background goes soft. While
 the camera moves, the blur is switched off (the eye cannot resolve it in
-motion) and comes back when you stop. Phones draw without it: the blur
+motion); when you stop, it grows back in over most of a second, as a lens
+pulls focus. Phones draw without it: the blur
 needs more graphics memory than a phone can spare for a hint a small
 screen barely shows. And while you walk, turn or fly in the pastel look,
 the picture is smeared slightly along the camera's movement, as a camera
