@@ -1040,17 +1040,36 @@ visual-variable codebook is in
   where the faces then still miss more, the flat model the decision was
   taken on is drawn (13 objects over five cities, one in München whose
   LoD2 missed on 88 %).
-  A face's surface is the scan on its face cells (pieces it took in filled
-  from them), smoothed twice by an edge-preserving Gaussian (σ 1 cell, 1 m
-  height σ); written as a 1 m grid in cm from the part's `z` (its median),
+  **A face's plausibility** (since 2026-11-06, `pipeline/bake/roof_planes.py`):
+  the faces also take every plane of the roof rising > 0.15 m/m that holds a
+  disk 4 m across (`planar_faces`: a gable ring's 8 m flanks at 18°, too
+  narrow and too gentle for the rules above, had been a flight of 1 m
+  levels with a wavy step along the ring — An der Frauenkirche 5). Each face
+  is then drawn in a form roofs are built in, or not at all: **planes**
+  grown from the smoothest cells (every cell within 0.3 m of its facet's
+  plane, refitted as it grows; facets ≥ 15 m² holding a 4 m disk; the
+  border between two moved to where their planes cross, a ridge or a
+  valley), taken when they explain 75 % of the face and 70 % of their
+  inclined area faces within 15° of one axis or its right angle (`orderly`:
+  a blanket cut into planes turns every way); else **one profile extruded
+  along an axis** (a barrel, a shed's curve: the best of 90 axes, the
+  scan within 0.35 m of its 1 m-binned median profile on 75 % of the face,
+  ≥ 200 m², standing ≥ 1 m off its plane); else, on a **landmark**
+  (`landmarks_<tile>.json`'s objects — the step runs before `roofs` now),
+  the scan's own surface, smoothed twice by an edge-preserving Gaussian
+  (σ 1 cell, 1 m height σ; the Hauptbahnhof's ribbed vaults); else the
+  face's cells go back to the levels and the model is cut again (at most
+  three rounds). Until 2026-11-06 every face was the smoothed scan
+  (🗃️ below). The surface is written as a 1 m grid in cm from the part's `z` (its median),
   two cells past the outline and carried on there on the face's own local
   plane. Polygonised from the labels smoothed by a 2 m majority (twice:
   a border diagonal to the grid no longer a staircase of 1 m teeth),
   `coverage_simplify` 2 m, clipped to the footprint,
   parts under 2 m dropped → `data/<site>/dlm/roofs_<tile>.geojson` (Polygons
   with the object `id`, the roof `z` and, for a face, its `surface`; the
-  provider's credit). **1 081 objects on Dresden's fifteen tiles, 2 755
-  parts, 222 of them faces** (2026-10-21; 886 objects, 2 227 parts before
+  provider's credit). **1 080 objects on Dresden's fifteen tiles, 2 814
+  parts, 367 of them faces** (2026-11-06; 1 081, 2 755 and 222 before the
+  plausibility rule; 886 objects, 2 227 parts before
   the band below 40 %; 2 956 parts before the strips merged; the
   Altstadt most); the step runs on every site — Hamburg 587 objects (365
   before the band), Leipzig 357 (269), Unna 61 (43), Meißen 56 (46),
@@ -5418,6 +5437,7 @@ research that produced them):
 | **Invented or imported landmark geometry** (hand-modelled landmarks per city, glTF models from 3D warehouses, a stock spire or dome by type) | Not repeatable for the next city, a licence per model, and a detailed model breaks the clay style next to LoD2 boxes. | Geometry beyond LoD2 comes only from a measurement confirmed by a name ([ADR 0036](./adr/0036-lod2-roofs-that-miss-the-scan-are-rebuilt.md)). |
 | **Landmark roof relief as stacked slabs** (plan 050 as first built: the excess over the highest LoD2 roof cut into ≥ 2 m bands, at most 8, each band's smoothed outline extruded as a flat slab — a contour model) | A spire LoD2 cuts short became a stepped pyramid (Unna's Stadtkirche: LoD2 stops at 137 m, the surface model at ≈ 178 m) and the Elbphilharmonie's crests a flight of terraces — the plan's own STOP ("reads as a stack of plates"); 508 slabs on 74 objects in the first bake. | Replaced by the measured height field on the 1 m grid, lightly smoothed, built as one surface with corner heights averaged (✅ *Landmark roof relief*). Still no invented smooth roof: every height is a surface-model cell. |
 | **Rebuilt roofs as stepped flat blocks only** (ADR 0036 as first built, 2026-10-01 → 2026-10-03: every region of 1 m height bands at its median, a prism each) | Right for the flat complexes the gate was made for, wrong for every roof it caught that is not flat: the Frauenkirche's dome (its LoD2 part ~5 m under the scan, so rebuilt) became four stacked drums, the Hauptbahnhof's arched train shed a staircase of 52 ledges, the Schauspielhaus's hipped roofs contour lines — the relief's lesson again ("a stack of plates"). | Replaced by the measured faces (✅ *Roofs rebuilt from DOM1*): the same objects, flat levels where the scan is flat, its surface where it slopes or curves. |
+| **Rebuilt roofs' faces as the smoothed scan** (ADR 0036, 2026-10-03 → 2026-11-06: every face the scan's surface, two edge-preserving Gaussian passes) | Tiles, dormers, skylights and the metre of blur at every edge read as a crumpled blanket over ordinary pitched roofs, and gable flanks too narrow for a face as a flight of terraces with a wavy step: An der Frauenkirche 5's ring of roofs looked like a dune. | Replaced by the plausibility rule (✅ *Roofs rebuilt from DOM1*): planes, an extruded profile, or the scan only on a landmark. |
 | **Rebuilt roofs with strips and grid-edged outlines** (ADR 0036, 2026-10-03 → 2026-10-19: any part ≥ 20 m² wider than a cell or two drawn on its own, borders on the 1 m grid simplified at 1 m) | The strips a few metres wide (a parapet run, the ledges along a vault's eaves, a mansard's terraces, plant rooms) stood as boxes of their own height, and every border diagonal to the grid as a staircase of 1 m walls: the Hauptbahnhof, the Prager Spitze and An der Frauenkirche 5 read as heaps of blocks. | Replaced by the 2026-10-19 update (✅ *Roofs rebuilt from DOM1*): a part holds a disk 7 m across or joins a neighbour within 3 m; outlines from a 2 m majority, simplified at 2 m. |
 | **A lathed column for every mapped tower** (plan 050 as first baked: `man_made=tower`, `lighthouse` and `water_tower` measured like masts and chimneys) | Where LoD2 has a roof over the mapped foot it draws the tower already; the column stood inside it and doubled it — Meißen's cathedral towers (81/83 m), Grimma's churches, 13 of 14 towers in Munich. | `BUILT_TOWERS` under a LoD2 roof are skipped; a mast or chimney on a roof is not in LoD2 and stays. |
 | **Every Basis-DLM rail at street level** (the rail layer before 2026-09-30) | The DLM files subways and S-Bahn trunk lines as ordinary railway lines: Munich's U-Bahn (23 km) and the S-Bahn trunk line (4.2 km) ran across the Marienplatz and the Odeonsplatz as broken track, and OSM's U-Bahn platforms lay on the squares above them. | A stretch within 2 m of a DLM tunnel (`BWF=1870`) for > 15 m is cut; OSM platforms and tram ways below ground are skipped. |
