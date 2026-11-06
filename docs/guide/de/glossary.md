@@ -263,8 +263,8 @@ und die Stellen, wo Objekte den Boden berühren, aus dem Tiefenpuffer
 abdunkeln. Der Viewer nutzt eines davon, *GTAO* (Ground-Truth Ambient
 Occlusion), in halber Auflösung.
 
-**Tiefenschärfe (DoF)** — die fotografische Unschärfe hinter der
-Fokusentfernung (der Vordergrund bleibt scharf); hier immer auf die Bildmitte fokussiert. Nicht
+**Tiefenschärfe (DoF)** — die fotografische Unschärfe vor und hinter der
+Fokusentfernung (der Boden davor bleibt scharf); hier immer auf die Bildmitte fokussiert. Nicht
 auf Telefonen.
 
 **Nachbearbeitung (Post-Processing)** — Effekte auf dem fertigen Bild:

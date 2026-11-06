@@ -562,9 +562,10 @@ Code und Wissensbasis für sie verwenden:
 Drei weitere Effekte gehören zum festen Look. Der Nebel über dem Fluss
 treibt erst ab etwa 120 m vor dir über dem Wasser, dichter erst in der
 Ferne.
-Die fotografische Tiefenschärfe macht nur unscharf, was hinter dem Fokus
-liegt (der Vordergrund bleibt scharf), und scharf ist immer, was in der
-Bildmitte liegt. Sie ist so stark wie bei einer echten Kamera mit diesem
+Die fotografische Tiefenschärfe macht unscharf, was hinter dem Fokus liegt
+und was davor steht (ein Baum am Bildrand, eine Laterne gleich vor dir;
+der Boden zu deinen Füßen bleibt scharf), und scharf ist immer, was in der
+Bildmitte liegt, ein Baum ebenso wie eine Fassade. Sie ist so stark wie bei einer echten Kamera mit diesem
 Bildwinkel bei Blende 1,8: Liegt der Fokus auf einer Fassade die Straße
 hinunter, bleibt die Stadt dahinter fast scharf; liegt er auf einer
 Laterne gleich vor dir, wird der Hintergrund weich. Solange sich die
