@@ -77,11 +77,11 @@ describe("window niches", () => {
   test("niches sorted by cell keep every niche, each cell one run", () => {
     const xs = [5, 70, 6, -40, 71];
     const raw = new Float32Array(xs.length * NICHE_STRIDE);
-    xs.forEach((x, i) => {
+    for (const [i, x] of xs.entries()) {
       raw[i * NICHE_STRIDE] = x;
       raw[i * NICHE_STRIDE + 2] = 3;
       raw[i * NICHE_STRIDE + 8] = i;
-    });
+    }
     const { niches, cells } = cellNiches(raw);
     expect(niches.length).toBe(raw.length);
     expect(cells.length / 3).toBe(3);
@@ -91,9 +91,7 @@ describe("window niches", () => {
         expect(nicheCellKey(Math.floor(x / NICHE_CELL_M), 0)).toBe(cells[c]);
       }
     }
-    const objects = [...Array(xs.length).keys()].map(
-      (i) => niches[i * NICHE_STRIDE + 8]
-    );
-    expect(objects.toSorted()).toEqual([0, 1, 2, 3, 4]);
+    const objects = [...xs.keys()].map((i) => niches[i * NICHE_STRIDE + 8]);
+    expect(objects.toSorted((a, b) => a - b)).toEqual([0, 1, 2, 3, 4]);
   });
 });

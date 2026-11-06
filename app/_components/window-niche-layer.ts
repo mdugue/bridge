@@ -78,6 +78,11 @@ export const NICHE_CAPACITY = 8192;
 /** A window's reach from its middle (m): an opening cut within the filled
  *  radius less this has its niche. */
 const NICHE_REACH_M = 3;
+/** How far the box reaches past its opening each way (m): the clay's
+ *  cut edge is anti-aliased and its corners round, and what lies past the
+ *  box behind a cut would be a hole into the building; past the opening
+ *  the box stays unseen behind the wall. */
+const NICHE_OVERLAP_M = 0.04;
 /** How far the eye moves before the set is filled again (m), and how
  *  often it is anyway (a demolish, a design, a tile landing). */
 const REFILL_MOVE_M = 4;
@@ -363,6 +368,47 @@ function wallColour(table: CityObjectTable, i: number, out: Color): Color {
   );
 }
 
+/**
+ * A niche's instance matrix (column-major, at `at`) from its record in a
+ * `tileNiches` list (at `o`): along the wall × half width, up × half
+ * height, out of it × depth — a right-handed frame, or every face's
+ * winding turns and the box is culled — and the opening's middle; their
+ * fourth rows its column, storey and the jitter seed.
+ */
+export function writeNicheMatrix(
+  m: Float32Array,
+  at: number,
+  f: Float32Array,
+  o: number,
+  seed: number
+): void {
+  const nx = f[o + 3];
+  const nz = f[o + 4];
+  const half = f[o + 5] + NICHE_OVERLAP_M;
+  const depth = f[o + 7];
+  m.set(
+    [
+      nz * half,
+      0,
+      -nx * half,
+      f[o + 9],
+      0,
+      f[o + 6] + NICHE_OVERLAP_M,
+      0,
+      f[o + 10],
+      nx * depth,
+      0,
+      nz * depth,
+      seed,
+      f[o],
+      f[o + 1],
+      f[o + 2],
+      1,
+    ],
+    at
+  );
+}
+
 interface Candidate {
   tile: NicheTile;
   i: number;
@@ -468,30 +514,8 @@ export function createNicheField(
       const { tile, i } = picked[k];
       const f = tile.niches;
       const o = i * NICHE_STRIDE;
-      const nx = f[o + 3];
-      const nz = f[o + 4];
-      const half = f[o + 5];
-      const halfH = f[o + 6];
-      const depth = f[o + 7];
       const object = f[o + 8];
-      const at = k * 16;
-      // along the wall (n.z, −n.x)… as lib/city/window-niches.ts lays it
-      m[at] = -nz * half;
-      m[at + 1] = 0;
-      m[at + 2] = nx * half;
-      m[at + 3] = f[o + 9];
-      m[at + 4] = 0;
-      m[at + 5] = halfH;
-      m[at + 6] = 0;
-      m[at + 7] = f[o + 10];
-      m[at + 8] = nx * depth;
-      m[at + 9] = 0;
-      m[at + 10] = nz * depth;
-      m[at + 11] = tile.city.table.rough[object];
-      m[at + 12] = f[o];
-      m[at + 13] = f[o + 1];
-      m[at + 14] = f[o + 2];
-      m[at + 15] = 1;
+      writeNicheMatrix(m, k * 16, f, o, tile.city.table.rough[object]);
       wallColour(tile.city.table, object, colour).toArray(tints, k * 3);
     }
     mesh.drawCount = picked.length;
