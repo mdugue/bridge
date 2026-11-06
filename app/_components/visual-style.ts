@@ -408,9 +408,15 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     // Himmelslicht: the courtyard's ground floor gets less of the sky;
     // a window's recess and the wall under its sill less still.
     ao: createClaySky().ao(h, build.z, SKY_VIEW).mul(windows.ao),
-    emissive: clayGlow(d, build, h, wall, flags, wn, sn).add(
-      windows.glow.mul(DUSK_GLOW).mul(d.uNight)
-    ),
+    emissive: clayGlow(d, build, h, wall, flags, wn, sn)
+      .add(windows.glow.mul(DUSK_GLOW).mul(d.uNight))
+      // a window's back mirrors the sky as a shop window's pane does
+      // (`paneSky`), dimmed after dark
+      .add(
+        vec3(0.55, 0.66, 0.8).mul(
+          windows.sky.mul(float(1).sub(d.uNight.mul(0.85)))
+        )
+      ),
   };
 }
 
@@ -751,8 +757,7 @@ function facadeRoughness(
 }
 
 /** 1 on a shop window's pane: glass (4) that wears its own colour (64) —
- *  the shopfronts' panes (lib/city/shopfronts.ts), the one exception to
- *  the glass veto. Its `rough` column is then a roughness, not a jitter. */
+ *  the shopfronts' panes (lib/city/shopfronts.ts). Its `rough` column is then a roughness, not a jitter. */
 function shopPane(flags: F): F {
   const f = floor(flags.add(0.5));
   return mod(floor(f.div(64)), 2).mul(mod(floor(f.div(4)), 2));

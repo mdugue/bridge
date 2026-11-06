@@ -1,7 +1,7 @@
 # ADR 0010: The look — opaque clay on a painted ground, colours within one palette, detail drawn softly
 
 - **Status:** accepted
-- **Date:** 2026-06, rewritten 2026-10
+- **Date:** 2026-06, rewritten 2026-10; the glass veto lifted 2026-11
 
 ## Context
 
@@ -27,7 +27,8 @@ from data, read the same on every house, and stay calm.
    (`lib/city/landcover.ts`): the bake writes class ids only, so a colour
    change is a code change, not a re-bake.
 4. **Windows are drawn by the clay's fragment shader on every house** —
-   a recess with a sill, never glass, panes or mullions. Their rhythm per
+   a recess with a sill, its back a muted pane that mirrors a little sky
+   at a grazing view. Their rhythm per
    building is measured where open street photos saw it (Panoramax,
    Mapillary — never Google Street View), else a neighbour's, else its
    type's. None on party walls, over doors or shopfronts; a monumental
@@ -37,8 +38,9 @@ from data, read the same on every house, and stay calm.
    from OSM entrances, dormers, shopfronts — rounded profiles, never hard
    bevels, relief lit from above and never darker than the wall.
    Landmarks get none of the generic parts.
-6. **One named exception to "no glass":** a shop's ground floor shows
-   muted glass at the back of a soft niche, without mullions.
+6. **Glass where it helps the facade read**, calm and muted, never a
+   mirror of the scene: a shop's ground floor shows glass at the back of a
+   soft niche, a window's back mirrors a little sky as its pane would.
 7. **Night:** walls do not glow; every unlit or additive layer is dimmed by
    the one night factor.
 8. **Water is matte** (a sun path, glints, gentle waves); fountains keep
@@ -57,7 +59,10 @@ from data, read the same on every house, and stay calm.
 
 - **Ghost (transmission) or raw LoD styles:** a style that halves the frame
   rate is a trap.
-- **A window grid, a window texture, glass panes:** the veto's core.
+- **A uniform window grid or a window texture over every facade:** read
+  as an office block over historic silhouettes.
+- **No glass at all** (until 2026-11): windows seen obliquely read as
+  flat paint; a pane's grazing sky is what tells their depth.
 - **Geometry niches for windows:** plump at the mesh's precision and only
   on measured walls; a street with every thirtieth house windowed was
   rejected.

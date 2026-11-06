@@ -52,7 +52,7 @@ export const WINDOW_PARTS = {
 
 /**
  * How the opening reads: its back (where the glass would be) the wall's
- * colour × this — darker and cooler, never black, never glass —, lit by
+ * colour × this — darker and cooler, never black —, lit by
  * the sun only `backSun` as much as plaster (a pane takes little of it:
  * a window on a sunny front reads dark, its sunlit reveal bright); the
  * reveals the wall's plaster a shade darker; far off, where the windows
@@ -67,6 +67,15 @@ export const WINDOW_TONE = {
   reveal: 0.93,
   revealSky: 0.75,
 } as const;
+
+/**
+ * The sky an opening's back mirrors, as a shop window's pane does
+ * (visual-style.ts `paneSky`): a little brighter towards its head (`up`),
+ * and a Schlick Fresnel lift (`fresnel` of the sky at most) at a grazing
+ * view — where a real pane turns from dark to bright and so tells its
+ * depth behind the reveals. No pane, no mullion is drawn: only its light.
+ */
+export const WINDOW_SKY = { up: 0.04, fresnel: 0.15 } as const;
 
 /** The wall rolls into the opening at its sides and head over a quarter
  *  round this wide (m): soft plaster, a line of light where the sun
@@ -116,6 +125,9 @@ export interface ClayWindows {
   normalMix: F;
   /** 1 in an opening (anti-aliased), near enough to be drawn */
   opening: F;
+  /** the sky the opening's back mirrors, as much as a shop window's pane
+   *  (`WINDOW_SKY`; × the sky's colour, dimmed at night by the clay) */
+  sky: F;
   /** a factor on the sun's light (the sills', the reveals' shadows) */
   sun: F;
 }
@@ -646,7 +658,8 @@ const NIGHT_WINDOWS = { lit: 0.25, light: 0.6 } as const;
  * the sun only where it reaches in through the opening — with a slim sill
  * under each, and where the style says a Fasche round it or a Verdachung
  * over it, each standing a few centimetres out of the wall and throwing
- * the sun's shadow down it. No glass, no mullions, no frames.
+ * the sun's shadow down it; the back mirrors a little sky as its pane
+ * would (`WINDOW_SKY`). No panes, no mullions, no frames.
  *
  * Every edge is anti-aliased by its pixel footprint; once a window is a few
  * pixels wide the drawing hands over to the facade's mean tone (the
@@ -714,8 +727,16 @@ export function clayWindows(i: WindowInputs): ClayWindows {
     )
   );
   const world = normalize(mix(wallSide, r.normal, opening));
+  const fres = float(1).sub(clamp(abs(dot(i.view, i.wn)), 0, 1));
+  const f2 = fres.mul(fres);
+  const schlick = float(0.04).add(float(0.96).mul(f2.mul(f2).mul(fres)));
+  const head = clamp(g.v.div(max(g.tall, 0.1)), 0, 1).mul(px.du);
   return {
     opening,
+    sky: opening
+      .mul(r.back)
+      .mul(r.ao)
+      .mul(head.mul(WINDOW_SKY.up).add(schlick.mul(WINDOW_SKY.fresnel))),
     normal: normalize(cameraViewMatrix.mul(vec4(world, 0)).xyz),
     normalMix: max(opening, max(rounded, ledgeFace)),
     ao: mix(1, r.ao, opening).mul(float(1).sub(p.contact.mul(near))),
