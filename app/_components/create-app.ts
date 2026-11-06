@@ -130,6 +130,7 @@ import type { ModelHud, ModelRig, ViewMode } from "./model-rig";
 import type { ModelCamera } from "./model-camera";
 import { setViewDirection } from "./view-direction";
 import { siteMurals } from "./mural-layer";
+import { createNicheField } from "./window-niche-layer";
 import { createViewLens } from "./view-lens";
 import { setPickRay } from "./view-ray";
 import {
@@ -1591,8 +1592,15 @@ async function bootApp(
   const lampReflections = createLampReflections(budget.tier);
   cleanups.push(() => lampReflections.dispose());
 
-  // The facades share the ground's sun (the same node).
-  const styleResources = createStyleResources(sceneNight, ground.sunDirection);
+  // The facades share the ground's sun (the same node). On a desktop at
+  // full safety the near windows are real niches (window-niche-layer.ts):
+  // the clay cuts their openings — a discard a phone's clay never builds.
+  const niching = budget.tier === "desktop" && budget.safety === 0;
+  const styleResources = createStyleResources(
+    sceneNight,
+    ground.sunDirection,
+    niching
+  );
 
   // The HUD lets the heavy dressing start after the handover (startStreaming).
   let openGate: (() => void) | undefined;
@@ -1623,6 +1631,15 @@ async function bootApp(
   // scene renders into). It is created a few lines below, before the render
   // loop runs the stream's first update, so no tile lands without it.
   let compileWith: PostStack["compile"] | null = null;
+  const niches = niching
+    ? createNicheField(styleResources.clayDetail, async (object) =>
+        compileWith ? await compileWith(object) : undefined
+      )
+    : null;
+  if (niches) {
+    scene.add(niches.mesh);
+    cleanups.push(() => niches.dispose());
+  }
   // The scene's night, season and clock (scene-environment.ts): the
   // night node every material reads, the season the trees follow (their
   // colour and leaf cover rewritten on a change of calendar day, never per
@@ -1724,6 +1741,7 @@ async function bootApp(
       environment: env,
       offset,
       murals: murals.source,
+      niches,
       onChange: queueChange,
       renderer,
       styleResources,
@@ -3235,6 +3253,9 @@ async function bootApp(
     // the street furniture's cells near the eye (furniture-layer.ts)
     // (none hidden in Modell: its views and exports draw one scale)
     const furnitureEye = modelRig.owns() ? null : eye;
+    // the real window niches around it (window-niche-layer.ts), not in
+    // Modell either
+    niches?.update(furnitureEye);
     let cellChanged = false;
     for (const d of shown) {
       for (const part of [d.furniture, d.tram]) {

@@ -167,6 +167,10 @@ import type { DressingEnvironment } from "./scene-environment";
 import { setClaySkyView } from "./visual-style";
 import type { StyleResources } from "./visual-style";
 import { dressWalls } from "./wall-layer";
+import { tileNichesOffThread } from "./window-niche-client";
+import type { NicheResult } from "./window-niche-client";
+import { nicheInput } from "./window-niche-layer";
+import type { NicheField } from "./window-niche-layer";
 
 /**
  * The world as it streams in: OGC 3D Tiles (lib/city/tileset.ts) through
@@ -282,6 +286,9 @@ export interface TileStreamContext {
   /** the site's murals (mural-layer.ts), hung on a city tile's full LoD2;
    *  null where it has none */
   murals?: MuralSource | null;
+  /** the real niches behind the near windows (window-niche-layer.ts), from
+   *  a city tile's full LoD2; null where none are drawn (a phone) */
+  niches?: NicheField | null;
   /** the scene fog's colour (height-fog.ts): the water's sky tint */
   fogColor: UniformNode<"color", Color>;
   /** ground height over every loaded terrain (projected coordinates) */
@@ -1618,6 +1625,33 @@ export function muralsPart(site: MuralSite): LatePart<MuralLayer> {
   };
 }
 
+/**
+ * A city tile's window niches as a late part of its content root
+ * (late-parts.ts): worked out off the thread, weighed from then, handed to
+ * the site's set (window-niche-layer.ts) — nothing of the tile's to
+ * compile — and taken off it when the tile goes.
+ */
+export function nichesPart(site: {
+  tile: string;
+  build: (signal: AbortSignal) => Promise<NicheResult>;
+  hang: (built: NicheResult) => () => void;
+}): LatePart<NicheResult> {
+  return {
+    kind: "niches",
+    tile: site.tile,
+    rank: null,
+    hangAt: "compile",
+    build: async (signal) => {
+      const built = await site.build(signal);
+      return built.niches.length > 0 ? built : null;
+    },
+    objects: () => [],
+    bytes: (built) => built.niches.byteLength + built.cells.byteLength,
+    hang: (built) => site.hang(built),
+    free: () => [],
+  };
+}
+
 /** A promise's resolver until its executor has run. */
 const unresolved = (): void => undefined;
 
@@ -1915,6 +1949,7 @@ export class DressingPlugin {
       // simplified by half a metre: lib/city/tileset.ts FAR_CITY_ERROR)
       if ((tile as { geometricError?: number }).geometricError === 0) {
         this.addMurals(scene, extras.tileId);
+        this.addNiches(scene, extras.tileId, mesh);
       }
     } else if (extras.kind === "terrain") {
       ({ dressed } = await streamTimings.timed(
@@ -2034,6 +2069,30 @@ export class DressingPlugin {
             phone: this.ctx.tier === "mobile",
             signal,
           }),
+      })
+    );
+  }
+
+  /** A city tile's window niches: its mesh copied now (before its compile
+   *  drops the places on the wall, before the BVH worker takes its
+   *  positions), worked out in the niche worker, handed to the site's set
+   *  (`nichesPart`). */
+  private addNiches(scene: Object3D, tileId: string, mesh: Mesh): void {
+    const field = this.ctx.niches;
+    const entry = this.dressed.get(scene);
+    const city = entry?.city;
+    if (!(field && city)) {
+      return;
+    }
+    const input = nicheInput(scene, mesh, city.table);
+    if (!input) {
+      return;
+    }
+    entry.late.add(
+      nichesPart({
+        tile: tileId,
+        build: async (signal) => await tileNichesOffThread(input, signal),
+        hang: (built) => field.add(city, built.niches, built.cells),
       })
     );
   }

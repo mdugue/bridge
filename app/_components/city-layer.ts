@@ -104,6 +104,9 @@ export interface CityLayer {
    * every part's alike); one the tile does not hold is shown always.
    */
   hang: (object: Object3D, buildingId: string) => void;
+  /** whether an object is drawn: not demolished, no design standing in
+   *  for it (what stands on its walls goes with it, window-niche-layer.ts) */
+  stands: (objectIndex: number) => boolean;
   mesh: Mesh;
   table: CityObjectTable;
   /** what the table's columns and the texture packed from them keep on the
@@ -535,6 +538,7 @@ export function dressCity(
       hangers.push({ at, object });
       showHangers();
     },
+    stands: (i) => alive[i] === 1 && !hidden.has(i),
     mark: (next) => {
       marked = next;
       if (markObjects(objects.texture, table, marked)) {

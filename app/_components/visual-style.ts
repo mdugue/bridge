@@ -6,11 +6,13 @@ import {
   MeshStandardNodeMaterial,
   SRGBColorSpace,
   Vector3,
+  Vector4,
 } from "three/webgpu";
 import type { DataTexture, Node, Texture, UniformNode } from "three/webgpu";
 import {
   abs,
   attribute,
+  bool,
   cameraWorldMatrix,
   clamp,
   dot,
@@ -59,7 +61,7 @@ import {
   slotTexture,
   slotUniform,
 } from "./material-slots";
-import { clayWindows } from "./clay-windows";
+import { WINDOW_PANE_ROUGHNESS, clayWindows } from "./clay-windows";
 import type { ClayWindows } from "./clay-windows";
 import { streetLight } from "./lamp-reflections";
 import { nightShadowFree } from "./lantern";
@@ -87,6 +89,9 @@ interface ClayGraph {
   /** the sun's light where a window's sill or reveal shades it */
   receivedShadow: (shadow?: Node) => Node;
   roughness: F;
+  /** false where a window opening is cut for the niche behind it
+   *  (window-niche-layer.ts); only where the app draws niches */
+  mask?: Node;
 }
 
 /**
@@ -107,6 +112,9 @@ export interface ClayDetailUniforms {
   /** world, surface → sun (the sun rig's vector, shared by reference):
    *  the windows' own shadows */
   uSun: UniformNode<"vec3", Vector3>;
+  /** the app draws real niches behind the near windows
+   *  (window-niche-layer.ts): the clay cuts their openings */
+  niches?: boolean;
 }
 
 // --- the fixed look ----------------------------------------------------------
@@ -151,7 +159,7 @@ const WINDOWS = float(1);
 const FACADE_READING = float(1);
 /** Abendlicht: the lit windows' strength after dark (clay-windows.ts),
  *  and the shops' (`SHOP_LIGHT`). */
-const DUSK_GLOW = float(0.5);
+export const DUSK_GLOW = float(0.5);
 /** Streiflicht's share on a face turned from the sun, by day: the rim
  *  is the sky's light on a grazing wall, and lit as fully there a wall in
  *  its own shade read as bright as a sunlit one beside the dark shadow it
@@ -367,6 +375,7 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     wn,
   });
   return {
+    mask: d.niches ? nicheMask(windows.opening) : undefined,
     normal: normalize(mix(viewNormal, windows.normal, windows.normalMix)),
     // A facet turned from the sun is in its own shadow, whatever its
     // rounded normal says: buildings cast with their back faces (sun-rig.ts),
@@ -382,11 +391,16 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     },
     // Materialstreuung: nudge roughness per building so the matte sheen
     // varies house-to-house (clamped to stay matte, no shiny clay).
-    roughness: facadeRoughness(
-      clamp(float(1).add(ROUGHNESS.mul(rough)), 0.55, 1),
-      facadeMaterial(flags, wall),
-      shopPane(flags),
-      rough
+    // a window's back is a pane: smooth, the sun glints in it
+    roughness: mix(
+      facadeRoughness(
+        clamp(float(1).add(ROUGHNESS.mul(rough)), 0.55, 1),
+        facadeMaterial(flags, wall),
+        shopPane(flags),
+        rough
+      ),
+      WINDOW_PANE_ROUGHNESS,
+      windows.pane
     ),
     colour,
     // Himmelslicht: the courtyard's ground floor gets less of the sky;
@@ -396,8 +410,34 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     // as its colour takes their light (lamp-reflections.ts `streetLight`)
     emissive: clayGlow(d, build, h, wall, flags, wn, sn)
       .add(windows.glow.mul(DUSK_GLOW).mul(d.uNight))
-      .add(colour.mul(streetLight(wn))),
+      .add(colour.mul(streetLight(wn)))
+      // a window's back mirrors the sky as a shop window's pane does
+      // (`paneSky`), dimmed after dark
+      .add(
+        vec3(0.55, 0.66, 0.8).mul(
+          windows.sky.mul(float(1).sub(d.uNight.mul(0.85)))
+        )
+      ),
   };
+}
+
+/** The tile's niches as its clay reads them: the centre (scene x, z) and
+ *  radius (m) within which every window has its niche behind it
+ *  (window-niche-layer.ts `NicheField`); a zero radius cuts nothing. */
+export const NICHES_SLOT = "clayNiches";
+
+/**
+ * Where the clay cuts a window's opening for the real niche behind it:
+ * on a front face, in an opening (its middle half and more), within the
+ * tile's niche radius (`NICHES_SLOT`). Behind it the niche's reveals and
+ * pane are drawn; past the radius the opening is drawn on the wall.
+ */
+function nicheMask(opening: F): Node {
+  // reason: a Vector4 slot is a vec4 uniform; slotUniform types it loosely.
+  const at = slotUniform(NICHES_SLOT, new Vector4(0, 0, 0, 0)) as unknown as V4;
+  const near = step(length(positionWorld.xz.sub(at.xy)), at.z);
+  const cut = step(0.5, opening).mul(float(frontFacing)).mul(near);
+  return cut.lessThan(0.5);
 }
 
 /** The clay's colour (clayGraph): the facade's looks over the tint, the
@@ -781,8 +821,7 @@ function facadeRoughness(
 }
 
 /** 1 on a shop window's pane: glass (4) that wears its own colour (64) —
- *  the shopfronts' panes (lib/city/shopfronts.ts), the one exception to
- *  the glass veto. Its `rough` column is then a roughness, not a jitter. */
+ *  the shopfronts' panes (lib/city/shopfronts.ts). Its `rough` column is then a roughness, not a jitter. */
 function shopPane(flags: F): F {
   const f = floor(flags.add(0.5));
   return mod(floor(f.div(64)), 2).mul(mod(floor(f.div(4)), 2));
@@ -1073,10 +1112,11 @@ function askedColour(col: V3, h: F, wall: F, flags: F, wn: V3): V3 {
  */
 export function createStyleResources(
   night: Live,
-  sun: UniformNode<"vec3", Vector3> = uniform(new Vector3(0, 1, 0))
+  sun: UniformNode<"vec3", Vector3> = uniform(new Vector3(0, 1, 0)),
+  niches = false
 ): StyleResources {
   return {
-    clayDetail: { uNight: night, uSun: sun },
+    clayDetail: { uNight: night, uSun: sun, niches },
     materials: new Set(),
     section: false,
   };
@@ -1116,6 +1156,12 @@ export function createClayMaterial(
   clay.emissiveNode = graph.emissive;
   // three's ShadowNode hands this the sun's filtered shadow term
   clay.receivedShadowNode = graph.receivedShadow;
+  if (graph.mask) {
+    // the openings cut for their niches; the shadow pass draws the back
+    // faces and keeps every wall whole
+    clay.maskNode = graph.mask;
+    clay.maskShadowNode = bool(true);
+  }
   setSlots(clay, {
     clayObjects: objects.texture,
     clayRows: objects.rows,
