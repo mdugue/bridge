@@ -45,9 +45,9 @@ import type { F, V3, V4 } from "./shader-chunks";
  * it and the opening (or the Fasche), how far it stands out and past.
  */
 export const WINDOW_PARTS = {
-  sill: { h: 0.06, proud: 0.045, past: 0.06 },
+  sill: { h: 0.07, proud: 0.07, past: 0.06 },
   frame: { w: 0.11, proud: 0.015 },
-  lintel: { h: 0.09, gap: 0.07, proud: 0.05, past: 0.1 },
+  lintel: { h: 0.09, gap: 0.07, proud: 0.1, past: 0.1 },
 } as const;
 
 /**
@@ -65,7 +65,7 @@ export const WINDOW_TONE = {
   backSun: 0.25,
   far: 0.6,
   reveal: 0.93,
-  revealSky: 0.75,
+  revealSky: 0.55,
 } as const;
 
 /**
@@ -75,7 +75,7 @@ export const WINDOW_TONE = {
  * view — where a real pane turns from dark to bright and so tells its
  * depth behind the reveals. No pane, no mullion is drawn: only its light.
  */
-export const WINDOW_SKY = { up: 0.04, fresnel: 0.15 } as const;
+export const WINDOW_SKY = { up: 0.06, fresnel: 0.5 } as const;
 
 /** The wall rolls into the opening at its sides and head over a quarter
  *  round this wide (m): soft plaster, a line of light where the sun
@@ -490,7 +490,7 @@ function ledgeShadow(
 /** How far a ledge's front may seem to move off its place on the wall
  *  (m): seen almost along the wall a few centimetres of ledge would cover
  *  a metre of it, where its ends — not drawn — would show instead. */
-const LEDGE_REACH_M = 0.15;
+const LEDGE_REACH_M = 0.3;
 
 /**
  * A ledge `proud` out of the wall, its front from `vb` to `vt` over the
