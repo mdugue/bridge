@@ -101,6 +101,7 @@ import { exportScale, exportTiles } from "@/lib/city/image-export";
 import type { ExportTile } from "@/lib/city/image-export";
 import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
 import type { CameraState, PlayerPose, Xyz } from "@/lib/city/pose";
+import { nearestInSets } from "@/lib/city/ask-solids";
 import {
   createRegressionState,
   lensFade,
@@ -3052,8 +3053,9 @@ async function bootApp(
   cleanups.push(() => resizeObserver.disconnect());
 
   // Crosshair autofocus for the photographic DoF (throttled like the pose):
-  // every visible tile's buildings (their BVHs), and the ground by marching
-  // its height grid — the nearer hit wins.
+  // every visible tile's buildings (their BVHs), the ground by marching its
+  // height grid, and the things the probe can ask (trees, lamps, …) — the
+  // nearest hit wins.
   const focusRaycaster = new Raycaster();
   focusRaycaster.firstHitOnly = true;
   focusRaycaster.far = 6000;
@@ -3074,6 +3076,23 @@ async function bootApp(
       focusRaycaster,
       hit?.distance ?? focusRaycaster.far
     );
+    // the trees, lamps, furniture and monuments the probe can ask (their
+    // sets come in idle time; the focus never builds them): a tree in the
+    // middle of the view is what the lens focuses on, not the facade
+    // behind it
+    const { origin, direction } = focusRaycaster.ray;
+    const thing = nearestInSets(
+      origin,
+      direction,
+      stream.visibleDressings().flatMap((d) => d.asks ?? []),
+      groundAt ?? hit?.distance ?? focusRaycaster.far
+    );
+    if (thing) {
+      const point = focusRaycaster.ray.at(thing.distance, new Vector3());
+      lastFocusHit = { dist: thing.distance, name: thing.target.kind };
+      postStack.setFocusTarget(point);
+      return;
+    }
     if (groundAt !== null && (!hit || groundAt < hit.distance)) {
       const point = focusRaycaster.ray.at(groundAt, new Vector3());
       lastFocusHit = {

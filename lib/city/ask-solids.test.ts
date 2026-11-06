@@ -3,6 +3,7 @@ import {
   askSets,
   hitsInSets,
   insideRingXz,
+  nearestInSets,
   nearestItem,
   rayCylinder,
   rayPrism,
@@ -84,6 +85,37 @@ test("sets of things: across many sets the nearest hit within reach answers", ()
     Array.from({ length: 20 }, (_, i) => 60 + i)
   );
   expect(hitsInSets({ x: -10, y: 2, z: 30 }, east, sets, 5)[0]).toBeUndefined();
+});
+
+test("the nearest in sets: the first thing the ray meets, within reach", () => {
+  const items: AskItem<number>[] = Array.from({ length: 200 }, (_, i) => ({
+    target: i,
+    solids: [
+      {
+        cylinder: {
+          x: (i % 20) * 10,
+          z: Math.floor(i / 20) * 10,
+          y0: 0,
+          y1: 5,
+          r: 1,
+        },
+      },
+    ],
+  }));
+  const sets = askSets(items, 64);
+  const hit = nearestInSets({ x: -10, y: 2, z: 30 }, east, sets, 1000);
+  expect(hit?.target).toBe(60);
+  expect(hit?.distance).toBeCloseTo(9, 9);
+  // from the far end, westwards: the row's last post first
+  const back = nearestInSets(
+    { x: 300, y: 2, z: 30 },
+    { x: -1, y: 0, z: 0 },
+    sets,
+    1000
+  );
+  expect(back?.target).toBe(79);
+  expect(nearestInSets({ x: -10, y: 2, z: 30 }, east, sets, 5)).toBeNull();
+  expect(nearestInSets({ x: -10, y: 9, z: 30 }, east, sets, 1000)).toBeNull();
 });
 
 test("sets of things: a box the ray misses is never opened", () => {
