@@ -3440,14 +3440,25 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   | rustication | 0.528 (143) | 0.517 (70) | **no** |
   | panel joints | 0.466 (334) | 0.505 (154) | **no** |
 
+  **Each opening on its own** (2026-11-06): the fetch also keeps every
+  window-sized opening an image saw whole (`op`, `facade_traits.openings`:
+  its place, width, height and how full its head's corners are). Their
+  median width and height and the median of each one's width over its
+  height (`ow`, `oh`, `oprop`) agree between two drives far better than
+  the profiles' duty on the height and the proportion: ρ 0.69, 0.71 and
+  0.76 against 0.70, 0.59 and 0.65 (Dresden's tiles pooled, 141 walls),
+  and the model takes them first. The head (straight, a segmental or a round arch) agrees at
+  ρ 0.67 but is not drawn: of five Dresden walls it read as round, two had
+  round arches and three straight windows behind half-drawn blinds.
+
   A wall gets a **model** where at least two images found an axis period
   and 60 % of them lie within 15 % of their median, the period is a window
   rhythm (1.8–4.8 m: not a stucco band, not its double) and the grid is
   regular or loose — no window on a wall without that measurement: the
   axis spacing; the window's width measured (0.7–2.2 m, a 0.6 m pier
-  kept) and its height from the measured proportion (0.8–2.4 m), else
-  Dresden's medians (width 0.44 of the axis, width over height 0.77); the
-  storey where measured (2.8–4.6 m); ornament where the texture is in
+  kept: the openings' own, else the profiles') and its height from the
+  measured proportion (0.8–2.4 m), else Dresden's medians (width 0.44 of
+  the axis, width over height 0.77); ornament where the texture is in
   the upper third. `dlm/windows_<t>.json` (per Building, per wall: the
   wall's base points, its eave, images and sequences, every trait, the
   model; the tile's ρ table; credited to Mapillary, CC BY-SA 4.0); a tile
@@ -3475,16 +3486,31 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   in a walk-up, 0.5 m in a house, 0.45 m in a block (at most 2.4 / 1.8 /
   1.45 / 1.6 m), the sill 0.85–0.9 m over the floor; a measured height
   scales that by its share of the type's median (the photos read
-  openings short — the reveal's shade, curtains —, a town house's 1.63 m
-  median against the 2 m its storeys give). A measured rhythm is drawn
+  openings short — the reveal's shade, curtains —, a town house's 1.79 m
+  median against the 2 m its storeys give; 1.63 m from the profiles
+  until 2026-11-06). A measured rhythm is drawn
   towards its type's (`TOWARD_TYPE`: the ratio to the type's value to a
-  power, bounded — the axis ^0.75 within 0.75–1.35, the width ^0.5
-  within 0.8–1.25, the height's share ^0.5 within 0.85–1.2): one wall's
-  reading is noisy (ρ 0.64–0.67 between two drives), and a row of houses
-  whose windows differ by half reads restless (Königsbrücker Straße's
-  measured widths ran from 0.78 to 1.97 m side by side). The storey
+  power, bounded — the axis ^0.75 within 0.75–1.35, the width and the
+  height's share ^0.8 within 0.65–1.5): the axis is noisy (ρ 0.67 between
+  two drives) and a row of houses whose axes differ by half reads
+  restless, but the window read off each opening keeps most of its own
+  size and shape — until 2026-11-06 it was held within a fifth of its
+  type's (width ^0.5 within 0.8–1.25), and every house's windows came out
+  alike. The Detailansicht names the form: *hochkant* (width under 0.8 of
+  the height), *quadratisch*, *liegend* (from 1.25) or *Band* (lying and
+  three quarters of its axis wide; `windowForm`). The storey
   snaps so that a whole number of floors reaches the eave (OSM's levels
-  first, else the photos', else the height's estimate), and is written
+  first, else the neighbours' storey, else the height's estimate) — never
+  the photos' storey: the row profile's period reads short (the reveal's
+  shade, a sill band, a Kniestock's row), and on Dresden's measured walls
+  of buildings OSM counts it gave the right number of rows on 47 % and
+  one too many on 42 %, the neighbours' storey 74 % and 9 % (2026-11-06;
+  until then it decided wherever OSM counts none). Where OSM's count
+  itself seems to hold the attic (a storey far lower than the
+  neighbours'), it stands: of the Dresden houses checked in street
+  photos most counts were right (new houses of 2.75 m storeys among
+  Gründerzeit ones), and where the attic was counted it was a mansard
+  that LoD2 draws as upright wall up to its break. The storey is written
   into the object's row before the plinths and shopfronts read it. A
   town house gets a Fasche round each window and a raised ground floor
   (its windows 0.45 m higher, their heads where the upper floors' are),

@@ -402,9 +402,10 @@ export const TYPES: Record<
     hMax: number;
     loose?: boolean;
     /** the median height the photos measured on Dresden's walls of this
-     *  type (scripts/windows-report.ts, 2026-10-09): they read the
-     *  openings short (the reveal's shade and the curtains), so a
-     *  measured height scales the type's by its share of this */
+     *  type (scripts/windows-report.ts, 2026-11-06, each opening read on
+     *  its own): they read the openings short (the reveal's shade and the
+     *  curtains), so a measured height scales the type's by its share of
+     *  this */
     seen?: number;
     sill: number;
     w: number;
@@ -417,7 +418,7 @@ export const TYPES: Record<
     w: 1.15,
     head: 0.75,
     hMax: 2.4,
-    seen: 1.63,
+    seen: 1.79,
     depth: 0.18,
     sill: 0.85,
     frame: true,
@@ -429,7 +430,7 @@ export const TYPES: Record<
     w: 1.1,
     head: 0.55,
     hMax: 1.8,
-    seen: 1.49,
+    seen: 1.71,
     depth: 0.15,
     sill: 0.9,
   },
@@ -439,7 +440,7 @@ export const TYPES: Record<
     w: 0.95,
     head: 0.5,
     hMax: 1.45,
-    seen: 1.22,
+    seen: 1.25,
     depth: 0.12,
     sill: 0.9,
     loose: true,
@@ -450,7 +451,7 @@ export const TYPES: Record<
     w: 1.2,
     head: 0.45,
     hMax: 1.6,
-    seen: 1.46,
+    seen: 1.87,
     depth: 0.09,
     sill: 0.85,
   },
@@ -723,11 +724,10 @@ export function typeHeight(type: WindowType, storey: number): number {
  * is noisy — two drives agree on the axis at ρ 0.67 — and a row of houses
  * whose axes differ by half reads restless. The window itself is read off
  * each opening the photos saw whole (pipeline/bake/windows.py
- * `opening_sizes`: two drives agree on its width at ρ 0.77, on its
- * proportion at 0.81), so it keeps most of its own size and shape — a
- * square window stays square, a tall one tall (`windowForm`); with the
- * profiles' reading (ρ 0.64 and 0.58) it was held within a fifth of its
- * type's, and every house's windows came out alike. The height's ratio is
+ * `opening_sizes`: two drives agree on its height at ρ 0.71, on its
+ * proportion at 0.76), so it keeps most of its own size and shape — a
+ * square window stays square, a tall one tall (`windowForm`); held within
+ * a fifth of its type's, every house's windows came out alike. The height's ratio is
  * to what the photos read on its type (`seen`): they read openings short
  * (a curtain, the reveal's shade over the head).
  */

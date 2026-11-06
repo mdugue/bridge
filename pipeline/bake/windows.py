@@ -115,8 +115,25 @@ FEATURES = (
 # 2026-10-09; docs/transformations.md has every feature's ρ). `sill` passed
 # on the spawn tile alone (0.65 over 48 walls) and failed pooled (0.53
 # over 85): it is out.
+# The openings' own size joined on 2026-11-06 (Dresden pooled again, 141
+# walls: ow 0.69, oh 0.71, oprop 0.76); `storey` no longer sets the rows
+# (lib/city/windows.ts `windowStorey`) and fell to 0.59 there.
 RELIABLE: frozenset[str] = frozenset(
-    {"axis", "grid", "storey", "share", "dark", "wduty", "width", "height", "prop", "orn"}
+    {
+        "axis",
+        "grid",
+        "storey",
+        "share",
+        "dark",
+        "wduty",
+        "width",
+        "height",
+        "prop",
+        "orn",
+        "ow",
+        "oh",
+        "oprop",
+    }
 )
 AXIS_DRAWN = (1.8, 4.8)  # a window axis drawn: no stucco band, no double period
 WINDOW_W_M = (0.7, 2.2)
@@ -295,9 +312,10 @@ def opening_sizes(op: list[list[int]] | None) -> dict:
     """The size of the openings an image saw whole (facade_traits.py
     `openings`), where it saw at least `MIN_OPENINGS`: their median width
     and height (`ow`, `oh`, m) and the median of each one's width over its
-    height (`oprop`). Read off each opening, not off a profile's duty, so
-    two drives agree on them better (ρ 0.77, 0.72 and 0.81 against the
-    profiles' 0.70, 0.52 and 0.58; Dresden, 2026-11-06)."""
+    height (`oprop`). Read off each opening, not off a profile's duty: two
+    drives agree on the height and the proportion better (ρ 0.71 and 0.76
+    against the profiles' 0.59 and 0.65, the width alike at 0.69; Dresden's
+    tiles pooled, 2026-11-06)."""
     ops = op or []
     if len(ops) < MIN_OPENINGS:
         return {}
