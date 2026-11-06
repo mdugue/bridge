@@ -57,13 +57,15 @@ export const WINDOW_PARTS = {
  * a window on a sunny front reads dark, its sunlit reveal bright); the
  * reveals the wall's plaster a shade darker; far off, where the windows
  * are a few pixels wide, the wall darker by `far` of the openings' share
- * (their mean tone).
+ * (their mean tone); a reveal's sky light at the opening's edge `revealSky`
+ * of the wall's (`recess`).
  */
 export const WINDOW_TONE = {
   back: [0.4, 0.43, 0.5] as [number, number, number],
   backSun: 0.25,
   far: 0.6,
   reveal: 0.93,
+  revealSky: 0.75,
 } as const;
 
 /** The wall rolls into the opening at its sides and head over a quarter
@@ -125,6 +127,24 @@ const hash = (a: F, b: F): F =>
 /** 1 where `x` > 0, its edge anti-aliased over `px` (m a pixel). */
 const cover = (x: F, px: F): F => clamp(x.div(px).add(0.5), 0, 1);
 
+/** 1 within `span` either side of `u` = 0 along the wall (m), its edges
+ *  anti-aliased; where the footprint along the wall spans the axes
+ *  (`Px.du` 0) the span's share of them, between the outer windows. */
+const along = (g: Grid, span: F, u: F, px: Px): F =>
+  mix(
+    clamp(span.mul(2).div(max(g.spacing, 0.1)), 0, 1).mul(g.inside),
+    cover(span.sub(abs(u)), px.u),
+    px.du
+  );
+
+/** The view in the wall's frame: how far it runs along the wall (`ku`)
+ *  and up it (`kv`) per metre into it. */
+function wallView(view: V3, wn: V3) {
+  const f = wallFrame(wn);
+  const vd = max(dot(view, f.out).negate(), 0.05);
+  return { f, ku: dot(view, f.t).div(vd), kv: view.y.div(vd) };
+}
+
 /** A pixel's footprint on the wall (m): along it and up. A grazing view
  *  stretches it along the wall only, so each edge is smoothed over its own
  *  axis — one isotropic footprint blurred the rows of a street seen along
@@ -132,6 +152,13 @@ const cover = (x: F, px: F): F => clamp(x.div(px).add(0.5), 0, 1);
 interface Px {
   u: F;
   v: F;
+  /** 1 where a window's width spans enough pixels for its sides to be
+   *  drawn, 0 where the footprint along the wall spans a window or more:
+   *  there each row is drawn as its mean across the axes (`along`), its
+   *  heights still drawn — a street seen along its length kept its rows
+   *  when a frontal footprint alone decided, and lost them all to one
+   *  flat tone. */
+  du: F;
 }
 
 /** A style bit (WINDOW_STYLE). */
@@ -141,6 +168,10 @@ const bit = (style: F, b: number): F => mod(floor(style.div(b)), 2);
 interface Grid {
   /** the window's axis along the wall, from the wall's middle (m) */
   axis: F;
+  /** the axes' spacing (m) */
+  spacing: F;
+  /** 1 between the outer windows' outer sides (anti-aliased) */
+  inside: F;
   /** the depth of its reveal (m) */
   depth: F;
   /** the window's half width and height (m) */
@@ -301,6 +332,8 @@ function grid(i: WindowInputs): Grid {
   const here = rows;
   return {
     axis: c.centre,
+    spacing: c.axis,
+    inside: cover(c.extent.sub(abs(s)), max(fwidth(s), 1e-4)),
     band: here.mul(step(abs(s), c.extent)),
     coverage: c.w.mul(tall).div(max(c.axis.mul(storey), 0.1)),
     depth,
@@ -318,9 +351,9 @@ function grid(i: WindowInputs): Grid {
 /** The wall's frame in world space: along it (the way `s` runs), out of
  *  it (horizontal), up. */
 function wallFrame(wn: V3) {
-  const along = normalize(vec2(wn.z.negate(), wn.x).add(1e-5));
+  const t = normalize(vec2(wn.z.negate(), wn.x).add(1e-5));
   return {
-    t: vec3(along.x, 0, along.y),
+    t: vec3(t.x, 0, t.y),
     out: normalize(vec3(wn.x, 0, wn.z).add(vec3(1e-5, 0, 0))),
     up: vec3(0, 1, 0),
   };
@@ -339,23 +372,27 @@ function wallFrame(wn: V3) {
  * plane, is noise there.
  */
 function recess(g: Grid, view: V3, wn: V3, sun: V3, px: Px) {
-  const f = wallFrame(wn);
-  const vd = max(dot(view, f.out).negate(), 0.05);
-  const ku = dot(view, f.t).div(vd);
-  const kv = view.y.div(vd);
+  const { f, ku, kv } = wallView(view, wn);
+  // where the axes are averaged (px.du 0) the ray from the window's axis:
+  // the side reveal then by its share of the opening's width
+  const u = g.u.mul(px.du);
   // how deep the ray leaves the opening's side, and its head or sill (far
   // where it runs along them)
   const far = 1e4;
   const up = step(0, kv);
-  const zu = min(g.half.sub(sign(ku).mul(g.u)).div(max(abs(ku), 1e-4)), far);
+  const zu = min(g.half.sub(sign(ku).mul(u)).div(max(abs(ku), 1e-4)), far);
   const zv = min(mix(g.v, g.tall.sub(g.v), up).div(max(abs(kv), 1e-4)), far);
   // a side reveal is seen where the ray leaves the opening's side before
   // the back; the head's or the sill's likewise
-  const sideSeen = cover(
-    sign(ku)
-      .mul(g.u)
-      .sub(g.half.sub(g.depth.mul(abs(ku)))),
-    px.u
+  const sideSeen = mix(
+    clamp(g.depth.mul(abs(ku)).div(max(g.half.mul(2), 0.1)), 0, 1),
+    cover(
+      sign(ku)
+        .mul(g.u)
+        .sub(g.half.sub(g.depth.mul(abs(ku)))),
+      px.u
+    ),
+    px.du
   );
   const rowSeen = mix(
     cover(g.depth.mul(kv.negate()).sub(g.v), px.v),
@@ -376,7 +413,7 @@ function recess(g: Grid, view: V3, wn: V3, sun: V3, px: Px) {
       .add(f.t.mul(sign(ku).negate()).mul(side))
       .add(f.up.mul(sign(kv).negate()).mul(row))
   );
-  const uh = g.u.add(ku.mul(z));
+  const uh = u.add(ku.mul(z));
   const vh = g.v.add(kv.mul(z));
   // the sun's way out of the recess, from the point the view meets
   const sd = dot(sun, f.out);
@@ -393,7 +430,14 @@ function recess(g: Grid, view: V3, wn: V3, sun: V3, px: Px) {
   // deep)
   const edge = min(g.half.sub(abs(uh)), min(vh, g.tall.sub(vh)));
   const underHead = smoothstep(0, g.depth.mul(3), g.tall.sub(vh));
-  const ao = mix(1, 0.6, z.div(g.depth)).mul(
+  // a reveal sees the sky only past the wall it turns from (the
+  // quarter of it a wall sees, not half), so it starts `revealSky` as
+  // light as the wall — at 1 a shaded front's reveals read as plain wall
+  const ao = mix(
+    mix(1, WINDOW_TONE.revealSky, float(1).sub(back)),
+    0.6,
+    z.div(g.depth)
+  ).mul(
     mix(
       1,
       mix(0.8, 1, smoothstep(0, 0.12, edge)).mul(mix(0.75, 1, underHead)),
@@ -408,84 +452,153 @@ function recess(g: Grid, view: V3, wn: V3, sun: V3, px: Px) {
  *  wall (`span`: its half length along the wall, centred on `u`), and its
  *  soft contact shade under it. */
 function ledgeShadow(
+  g: Grid,
   u: F,
   under: F,
   span: F,
   proud: number,
-  wn: V3,
-  sun: V3,
+  i: WindowInputs,
   px: Px
 ) {
-  const f = wallFrame(wn);
-  const sd = dot(sun, f.out);
+  const f = wallFrame(i.wn);
+  const sd = dot(i.sun, f.out);
   const sdx = max(sd, 1e-3);
-  const drop = float(proud).mul(max(sun.y, 0)).div(sdx);
-  const shift = float(proud).mul(dot(sun, f.t)).div(sdx);
-  const shadow = cover(span.sub(abs(u.add(shift))), px.u)
+  const drop = float(proud).mul(max(i.sun.y, 0)).div(sdx);
+  const shift = float(proud).mul(dot(i.sun, f.t)).div(sdx).mul(px.du);
+  const shadow = along(g, span, u.add(shift), px)
     .mul(cover(under, px.v))
     .mul(cover(drop.sub(under), px.v))
     .mul(step(0, sd));
-  const contact = cover(span.sub(abs(u)), px.u)
+  const contact = along(g, span, u, px)
     .mul(cover(under, px.v))
     .mul(float(1).sub(smoothstep(0, 0.09, under)));
   return { contact, shadow };
 }
 
+/** How far a ledge's front may seem to move off its place on the wall
+ *  (m): seen almost along the wall a few centimetres of ledge would cover
+ *  a metre of it, where its ends — not drawn — would show instead. */
+const LEDGE_REACH_M = 0.15;
+
+/**
+ * A ledge `proud` out of the wall, its front from `vb` to `vt` over the
+ * sill line and `span` either side of the window's axis, as the view sees
+ * it: its front where the ray meets it (`proud` nearer the eye than the
+ * wall, so moved up the wall when the eye is under it, down when over it,
+ * and along it), and between the front and the wall its underside or its
+ * top (`face`: its normal down when the eye is under it — `under` 1 —,
+ * else up). Seen from under it a sill covers the bottom of its window;
+ * from over it its top is lit by the sky. `cover` 1 where either is (in
+ * height only: the window's own width lies within the ledge's).
+ */
+function ledge(
+  g: Grid,
+  k: { ku: F; kv: F },
+  part: { vb: F; vt: F; span: F; proud: number },
+  px: Px
+) {
+  const lift = clamp(k.kv.mul(part.proud), -LEDGE_REACH_M, LEDGE_REACH_M);
+  const slide = clamp(k.ku.mul(part.proud), -LEDGE_REACH_M, LEDGE_REACH_M).mul(
+    px.du
+  );
+  const under = step(0, lift);
+  const fb = part.vb.add(lift);
+  const ft = part.vt.add(lift);
+  const frontV = cover(g.v.sub(fb), px.v).mul(cover(ft.sub(g.v), px.v));
+  // the face between: [vb, vb + lift] seen from under, [vt + lift, vt]
+  // from over
+  const lo = mix(ft, part.vb, under);
+  const hi = mix(part.vt, fb, under);
+  const faceV = cover(g.v.sub(lo), px.v)
+    .mul(cover(hi.sub(g.v), px.v))
+    .mul(float(1).sub(frontV));
+  return {
+    front: along(g, part.span, g.u.sub(slide), px).mul(frontV),
+    face: along(
+      g,
+      part.span.add(abs(slide).mul(0.5)),
+      g.u.sub(slide.mul(0.5)),
+      px
+    ).mul(faceV),
+    cover: max(frontV, faceV),
+    under,
+  };
+}
+
 /** The parts round the opening (`WINDOW_PARTS`): where each is (1 on its
- *  face), the sun's shadows they throw and their contact shade. */
+ *  front; `face` 1 on a sill's or Verdachung's top or underside the view
+ *  sees, `faceUp` its normal's sign), the sun's shadows they throw, their
+ *  contact shade, and how much of the opening the sill hides (`hides`). */
 function parts(g: Grid, i: WindowInputs, px: Px) {
   const P = WINDOW_PARTS;
   const au = abs(g.u);
+  const k = wallView(i.view, i.wn);
   const frameOn = bit(g.style, WINDOW_STYLE.frame);
   const lintelOn = bit(g.style, WINDOW_STYLE.lintel);
   const sillSpan = g.half.add(P.sill.past);
-  const sill = cover(sillSpan.sub(au), px.u)
-    .mul(cover(g.v.add(P.sill.h), px.v))
-    .mul(cover(g.v.negate(), px.v));
+  const sill = ledge(
+    g,
+    k,
+    { vb: float(-P.sill.h), vt: float(0), span: sillSpan, proud: P.sill.proud },
+    px
+  );
   const underSill = ledgeShadow(
+    g,
     g.u,
     g.v.add(P.sill.h).negate(),
     sillSpan,
     P.sill.proud,
-    i.wn,
-    i.sun,
+    i,
     px
   );
   const fw = P.frame.w;
   const inOpening = cover(g.half.sub(au), px.u).mul(
     cover(g.tall.sub(g.v), px.v)
   );
+  // the Fasche stands 1.5 cm out: drawn only where its sides are
   const frame = cover(g.half.add(fw).sub(au), px.u)
     .mul(cover(g.v, px.v))
     .mul(cover(g.tall.add(fw).sub(g.v), px.v))
     .mul(float(1).sub(inOpening))
-    .mul(frameOn);
+    .mul(frameOn)
+    .mul(px.du);
   // the Fasche's outer edge: a hairline of contact shade on the wall
   const frameEdge = cover(g.half.add(fw + 0.02).sub(au), px.u)
     .mul(cover(g.v.add(0.02), px.v))
     .mul(cover(g.tall.add(fw + 0.02).sub(g.v), px.v))
     .mul(float(1).sub(frame))
     .mul(float(1).sub(cover(g.half.sub(au), px.u).mul(cover(g.v, px.v))))
-    .mul(frameOn);
+    .mul(frameOn)
+    .mul(px.du);
   const lintelBase = g.tall.add(P.lintel.gap).add(frameOn.mul(fw));
   const lintelSpan = g.half.add(P.lintel.past).add(frameOn.mul(fw));
-  const lintel = cover(lintelSpan.sub(au), px.u)
-    .mul(cover(g.v.sub(lintelBase), px.v))
-    .mul(cover(lintelBase.add(P.lintel.h).sub(g.v), px.v))
-    .mul(lintelOn);
+  const lintel = ledge(
+    g,
+    k,
+    {
+      vb: lintelBase,
+      vt: lintelBase.add(P.lintel.h),
+      span: lintelSpan,
+      proud: P.lintel.proud,
+    },
+    px
+  );
   const underLintel = ledgeShadow(
+    g,
     g.u,
     lintelBase.sub(g.v),
     lintelSpan,
     P.lintel.proud,
-    i.wn,
-    i.sun,
+    i,
     px
   );
   return {
-    sill,
+    sill: sill.front,
     frame,
-    lintel,
+    lintel: lintel.front.mul(lintelOn),
+    face: max(sill.face, lintel.face.mul(lintelOn)),
+    faceUp: float(1).sub(sill.under.mul(2)),
+    hides: sill.cover,
     shadow: max(underSill.shadow, underLintel.shadow.mul(lintelOn)),
     contact: max(
       underSill.contact.mul(0.3),
@@ -543,26 +656,38 @@ const NIGHT_WINDOWS = { lit: 0.25, light: 0.6 } as const;
  * Branch-free: fwidth needs uniform control flow.
  */
 export function clayWindows(i: WindowInputs): ClayWindows {
+  const pu = max(fwidth(i.facade.x.mul(FACADE_SCALE_M)), 1e-4);
   const g = grid(i);
   const px: Px = {
-    u: max(fwidth(i.facade.x.mul(FACADE_SCALE_M)), 1e-4),
+    u: pu,
     v: max(fwidth(i.h), 1e-4),
+    // the window's width in pixels along the wall: its sides drawn from
+    // 6, under 2.5 its row's mean across the axes
+    du: smoothstep(2.5, 6, i.spec.y.div(pu)),
   };
-  // the window's width in pixels: drawn from 6, the mean tone under 2.5
-  const detail = smoothstep(2.5, 6, i.spec.y.div(px.u));
+  // … and its height up the wall: drawn from 6, the storey's mean tone
+  // under 2.5 — a grazing view stretches the footprint along the wall
+  // only, so the rows stay where the columns can no longer be told apart
+  const detail = smoothstep(2.5, 6, max(g.tall, 0.01).div(px.v));
   const on = i.strength.mul(i.wall).mul(g.here);
   const near = on.mul(detail);
-  const opening = cover(g.half.sub(abs(g.u)), px.u)
+  const p = parts(g, i, px);
+  const opening = along(g, g.half, g.u, px)
     .mul(cover(g.v, px.v))
     .mul(cover(g.tall.sub(g.v), px.v))
+    .mul(float(1).sub(p.hides))
     .mul(near);
   const r = recess(g, i.view, i.wn, i.sun, px);
-  const p = parts(g, i, px);
   const round = arris(g, i.wn, px);
-  const rounded = round.weight.mul(near).mul(float(1).sub(opening));
-  const lit = step(
-    1 - NIGHT_WINDOWS.lit,
-    hash(g.j.add(g.k.mul(17.31)), i.seed.add(3.7))
+  const rounded = round.weight.mul(near).mul(px.du).mul(float(1).sub(opening));
+  const ledgeFace = p.face.mul(near).mul(float(1).sub(opening));
+  // which windows are lit: by their own hash where they are told apart,
+  // their mean where the row is averaged (a column's hash per pixel
+  // speckled a street seen along its length)
+  const lit = mix(
+    float(NIGHT_WINDOWS.lit),
+    step(1 - NIGHT_WINDOWS.lit, hash(g.j.add(g.k.mul(17.31)), i.seed.add(3.7))),
+    px.du
   );
   const glowNear = opening.mul(r.back).mul(lit);
   const glowFar = float(1)
@@ -580,11 +705,19 @@ export function clayWindows(i: WindowInputs): ClayWindows {
       .mul(i.wall)
       .mul(g.band)
   );
-  const world = normalize(mix(round.normal, r.normal, opening));
+  const up = vec3(0, 1, 0);
+  const wallSide = normalize(
+    mix(
+      round.normal,
+      up.mul(p.faceUp),
+      ledgeFace.div(max(ledgeFace.add(rounded), 1e-3))
+    )
+  );
+  const world = normalize(mix(wallSide, r.normal, opening));
   return {
     opening,
     normal: normalize(cameraViewMatrix.mul(vec4(world, 0)).xyz),
-    normalMix: max(opening, rounded),
+    normalMix: max(opening, max(rounded, ledgeFace)),
     ao: mix(1, r.ao, opening).mul(float(1).sub(p.contact.mul(near))),
     sun: mix(1, r.lit.mul(mix(1, WINDOW_TONE.backSun, r.back)), opening).mul(
       float(1).sub(p.shadow.mul(near))
