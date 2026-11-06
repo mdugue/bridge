@@ -869,7 +869,7 @@ test("windows: a rhythm per house in its row, every wall vertex placed on its wa
     imgs: 6,
     seqs: 2,
     traits: {},
-    model: { axis: 3, grid: "regular", w: 1.2, h: 1.6, storey: 3.2 },
+    model: { axis: 3, grid: "regular", w: 1.2, h: 1.6 },
   };
   const bake = (osm?: OsmBuildingLut, doc = fixture()) =>
     bakeCityMesh(

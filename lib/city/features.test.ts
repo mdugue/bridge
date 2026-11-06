@@ -494,10 +494,6 @@ test.each(tiles)(
         expect(m.w).toBeGreaterThanOrEqual(0.7);
         expect(m.h).toBeGreaterThanOrEqual(0.8);
         expect(m.h).toBeLessThanOrEqual(2.4);
-        if (m.storey !== undefined) {
-          expect(m.storey).toBeGreaterThanOrEqual(2.8);
-          expect(m.storey).toBeLessThanOrEqual(4.6);
-        }
       }
     }
   }

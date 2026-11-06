@@ -185,20 +185,22 @@ def openings(holes: np.ndarray, valid: np.ndarray, a: int, b: int) -> list[list[
         radius = (half * half + rise * rise) / (2 * rise)
         seg = (rows < rise) & (np.hypot(cols - half, rows - radius) > radius)
 
-        def filled(m: np.ndarray) -> int:
-            return round(1000 * float(mine[m].mean())) if m.any() else -1
-
         out.append(
             [
                 round(100 * c0 / PX),
                 round(100 * r0 / PX),
                 round(100 * w),
                 round(100 * h),
-                filled(arch),
-                filled(seg),
+                _filled(mine, arch),
+                _filled(mine, seg),
             ]
         )
     return out
+
+
+def _filled(mine: np.ndarray, m: np.ndarray) -> int:
+    """The opening's share (‰) of the mask `m`, or −1 for an empty mask."""
+    return round(1000 * float(mine[m].mean())) if m.any() else -1
 
 
 def _surround(lum: np.ndarray, holes: np.ndarray, valid: np.ndarray, plaster: np.ndarray):

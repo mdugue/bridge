@@ -284,13 +284,11 @@ describe("windowSpecs", () => {
   });
 
   test("the photos' storey never sets the rows: they read it short", () => {
-    const wall = measured("a", model({ storey: 3.2 }));
+    // the traits still carry it (facade_traits.py), the model does not
+    const wall = measured("a", model());
+    wall.traits = { ...wall.traits, storey: 3.2 };
     // 16 m at the neighbours' 4 m: four rows, not the photos' five
-    const [own] = windowSpecs(
-      [host({ eaveH: 16, storeyH: 4 })],
-      [wall],
-      index
-    );
+    const [own] = windowSpecs([host({ eaveH: 16, storeyH: 4 })], [wall], index);
     expect(own.storey).toBeCloseTo(4, 9);
   });
 
@@ -1024,8 +1022,15 @@ describe("measured axes", () => {
   });
 });
 
+const formSpec = (w: number, h: number, axis = 3) => ({
+  axis,
+  h,
+  style: 0,
+  w,
+});
+
 test("a window's form: tall, square, lying or a band", () => {
-  const spec = (w: number, h: number, axis = 3) => ({ axis, h, style: 0, w });
+  const spec = formSpec;
   expect(windowForm(spec(1.1, 1.9))).toBe("hochkant");
   expect(windowForm(spec(1.2, 1.2))).toBe("quadratisch");
   expect(windowForm(spec(1.8, 1.1))).toBe("liegend");
