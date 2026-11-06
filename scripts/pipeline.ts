@@ -20,10 +20,10 @@
  *                                     facades, shopfronts, windows, walls,
  *                                     stairs, surface, edges, markings,
  *                                     sport, tram, riverside, traffic,
- *                                     roofs, lamp-water, lowveg,
- *                                     cultivated, skyview,
- *                                     small-buildings, landmarks,
- *                                     structures, roof-colour, dormers;
+ *                                     landmarks, roofs, lamp-water,
+ *                                     lowveg, cultivated, skyview,
+ *                                     small-buildings, structures,
+ *                                     roof-colour, dormers;
  *                                     then, once for the site, transit
  *                                     and landmark-facts)
  *   bun run bake <site> --step lowveg --research   also every hedge/shrub
@@ -45,8 +45,9 @@
  * tree cadastre, lamps and street furniture are gated on it); the bridges
  * (rail) before the canopy, the furniture and the trams; the hedges and
  * scan trees late (thinned against the canopy and the cadastre), then the
- * orchards and the sky view (it reads every tree file); the small
- * buildings, landmarks and structures, then the roof colours (they read
+ * orchards and the sky view (it reads every tree file); the landmarks
+ * before the roofs (a measured roof's own surface is a landmark's alone);
+ * the small buildings and structures, then the roof colours (they read
  * every roof those steps add) and the dormers. Several steps read the
  * neighbours' files across a seam, so run a step for every tile. The site config (sites/) becomes one JSON
  * spec (pipeline/bake/spec.py), so Python never re-derives tiles, extents

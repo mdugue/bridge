@@ -113,8 +113,14 @@ STEPS = {
     "riverside": riverside.run,
     # The site's counted motor traffic (its source, cached by the fetch).
     "traffic": traffic.run,
-    # After NDVI (a crown over a roof is not the roof): the LoD2 roofs that
-    # miss DOM1, rebuilt in its form (scripts/bake-city-mesh.ts).
+    # Wikidata's notable buildings (fetched by `bun run fetch`), matched to
+    # the LoD2 objects that draw them: marked, named, listed in the HUD.
+    # After osm-buildings (its names), before roofs (a landmark's roof may
+    # curve as the scan shows).
+    "landmarks": landmarks.run,
+    # After NDVI (a crown over a roof is not the roof) and the landmarks:
+    # the LoD2 roofs that miss DOM1, rebuilt in its form
+    # (scripts/bake-city-mesh.ts).
     "roofs": roofs.run,
     # After the lamp heights and the roofs (the rebuilt ones occlude): which
     # lamps see the water past the buildings, and its level there, for the
@@ -135,9 +141,6 @@ STEPS = {
     # rail (bridges), monuments and furniture (stop shelters): the small
     # structures LoD2 lacks, appended to the city mesh at build time.
     "small-buildings": small_buildings.run,
-    # Wikidata's notable buildings (fetched by `bun run fetch`), matched to
-    # the LoD2 objects that draw them: marked, named, listed in the HUD.
-    "landmarks": landmarks.run,
     # After landmarks (their roofs' relief): DOM1 against LoD2, confirmed by
     # OSM — the chimneys, towers and masts LoD2 leaves out, the buildings it
     # does not carry yet, and a landmark's roof form it flattens (plan 050).
