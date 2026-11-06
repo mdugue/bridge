@@ -90,6 +90,7 @@ import { mirrorWeight, REFLECTIONS, skyReflection } from "./sky-reflection";
 import { fountainsOn, sceneNight } from "./scene-environment";
 import { sceneMaterial } from "./three-utils";
 import { viewDirection } from "./view-direction";
+import { streetGlints } from "./lamp-reflections";
 import { BASIN_WAVES, waveNormal, waves, waveTilt } from "./water-waves";
 
 /**
@@ -684,10 +685,14 @@ const fountainTime: Live = uniform(0);
  *  street lamps reach: the jets' warm white (they are unlit, so their
  *  colour is their whole brightness), the water's glow from below and
  *  its shimmer's share, and the sculpture's uplight at the water. */
-const NIGHT_JET = float(0.2);
-const NIGHT_WATER = float(0.025);
+const NIGHT_JET = float(0.12);
+const NIGHT_WATER = float(0.008);
 const NIGHT_SHIMMER = float(0.2);
 const NIGHT_UPLIGHT = float(0.2);
+/** The water's own colour after dark, of its day's: a pale basin under
+ *  a street lamp lit up as a pale disc, where water at night is dark and
+ *  shows the lights it catches (lamp-reflections.ts `streetGlints`). */
+const NIGHT_WATER_TONE = float(0.15);
 
 /** The frame clock (s) the jets and the water shimmer run on. */
 export function setFountainTime(elapsed: number): void {
@@ -755,8 +760,9 @@ function sprayMaterial(): MeshBasicNodeMaterial {
  * The water: the wind's wave field at a basin's size (water-waves.ts
  * `BASIN_WAVES`, the river's ripples smaller) tilting its normal, the sky
  * mirrored off them and a slow shimmer of light where they tilt most; by
- * night a faint glow from below in place of most of the shimmer
- * (`NIGHT_WATER`, `NIGHT_SHIMMER`).
+ * night dark (`NIGHT_WATER_TONE`), a fainter glow from below in place of
+ * most of the shimmer (`NIGHT_WATER`, `NIGHT_SHIMMER`), and the street
+ * lamps near the eye glinting on the ripples (`streetGlints`).
  */
 function waterMaterial(): MeshStandardNodeMaterial {
   const m = new MeshStandardNodeMaterial({
@@ -770,7 +776,11 @@ function waterMaterial(): MeshStandardNodeMaterial {
   m.normalNode = cameraViewMatrix.mul(vec4(n, 0)).xyz.normalize();
   const tilt = waveTilt(field.slope).toVar();
   const shimmer = mix(float(1), NIGHT_SHIMMER, sceneNight);
+  m.colorNode = materialColor.mul(mix(float(1), NIGHT_WATER_TONE, sceneNight));
+  // the glow that lifts the water out of the rim's shade by day: at night
+  // it and the glow from below alone drew a basin a pale blue-grey disc
   m.emissiveNode = materialEmissive
+    .mul(float(1).sub(sceneNight))
     .add(vec3(0.03, 0.04, 0.045).mul(tilt).mul(shimmer))
     .add(
       skyReflection(n, 0.15).mul(
@@ -781,7 +791,8 @@ function waterMaterial(): MeshStandardNodeMaterial {
       vec3(0.6, 0.8, 1)
         .mul(sceneNight.mul(NIGHT_WATER))
         .mul(tilt.mul(0.4).add(0.6))
-    );
+    )
+    .add(streetGlints(n, viewDirection().negate()));
   return m;
 }
 

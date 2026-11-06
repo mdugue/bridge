@@ -239,3 +239,23 @@ test("the lamps that see the water lead the halos and carry its level and reach"
   ]);
   expect([array[16 + 12], array[16 + 3], array[16 + 7]]).toEqual([10, 0, 0]);
 });
+
+test("a head a real light holds is that light's share, any other none", () => {
+  const pool = createLampLights(LAMP_LIGHTS.desktop);
+  const heads = [head(2), head(-4), head(30), head(200)];
+  pool.setHeads(heads);
+  pool.setNightFactor(1);
+  pool.updateNearest(eye(0));
+  // near the eye a real light gives the head its whole light
+  expect(pool.heldShare(heads[0])).toBeCloseTo(1, 5);
+  // the third light, 30 m off, is fading with its distance from the eye
+  const third = pool.heldShare(heads[2]);
+  expect(third).toBeGreaterThan(0);
+  expect(third).toBeLessThan(1);
+  // a head no light holds is left to the walls' street light
+  expect(pool.heldShare(heads[3])).toBe(0);
+  // by day no light holds any
+  pool.setNightFactor(0);
+  pool.updateNearest(eye(0));
+  expect(pool.heldShare(heads[0])).toBe(0);
+});
