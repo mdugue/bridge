@@ -575,15 +575,17 @@ def measured_model(
     face = np.zeros_like(own)
     if with_faces:
         face = inclined_cells(h, own) | roof_planes.planar_faces(h, own, step_cells(h), SLOPE, RES)
-    for _ in range(PLAUSIBLE_ROUNDS):
+    for rounds in range(PLAUSIBLE_ROUNDS + 1):
         lab, faces = _regions(h, own, face, small_cells, with_faces, narrow)
         surface, implausible = _plausible_faces(h, lab, faces, face, landmark)
         if not implausible:
             break
+        if rounds == PLAUSIBLE_ROUNDS:
+            # still none after the last re-cut: drawn flat at its median
+            faces[implausible] = False
+            break
         # a face the scan shows no roof's shape on goes back to the levels
         face &= ~np.isin(lab, implausible)
-    else:
-        faces[implausible] = False
     level = _region_medians(lab, h, int(lab.max()))
     return Model(lab, level, faces, surface)
 
@@ -698,11 +700,19 @@ class Rebuilt:
 
 
 def landmark_objects(tile: Tile) -> set[str]:
-    """The LoD2 objects of the site's landmarks (landmarks.py, every tile's:
-    a landmark is listed by the tile under its point, its objects may be
-    a neighbour's)."""
+    """The LoD2 objects of the landmarks of this tile and the tiles it
+    touches within MARGIN_M (landmarks.py: a landmark is listed by the tile
+    under its point, its objects may be a neighbour's)."""
+    xmin, ymin, xmax, ymax = tile.bounds
     out: set[str] = set()
-    for tid, _ in tile.neighbours():
+    for tid, (left, bottom, right, top) in tile.neighbours():
+        if (
+            left > xmax + MARGIN_M
+            or right < xmin - MARGIN_M
+            or bottom > ymax + MARGIN_M
+            or top < ymin - MARGIN_M
+        ):
+            continue
         path = tile.data / "dlm" / f"landmarks_{tid}.json"
         if path.exists():
             for lm in json.loads(path.read_text()).get("landmarks", []):

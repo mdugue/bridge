@@ -504,8 +504,9 @@ kerb bit); `lowveg` runs after the rest, thinned against the
 canopy and the cadastre, then `cultivated` (an orchard tree gives way to a
 measured one, canopyx included) and `small-buildings` (the same scan
 rasters; walls, bridges, monuments and stop shelters mask it), `skyview`
-after the tree bakes (its crowns are theirs), then `landmarks` and
-`structures` (the relief is measured on the landmarks' objects only), and
+after the tree bakes (its crowns are theirs), `landmarks` before `roofs`
+(a measured roof's own surface is a landmark's alone) and `structures`
+(the relief is measured on the landmarks' objects only), and
 `roof-colour` and `dormers` after them (the buildings LoD2 lacks are read
 too; a crown over a roof is no dormer; `windows` before it gives the
 axes its rows stand over). Steps that

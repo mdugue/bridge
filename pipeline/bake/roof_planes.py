@@ -237,12 +237,18 @@ def measured_surface(h: np.ndarray, mine: np.ndarray, reach: int) -> np.ndarray:
 
 def _profile(u: np.ndarray, z: np.ndarray, bins: int) -> np.ndarray:
     """The median height per 1 m bin of `u` (NaN where a bin is empty)."""
-    order = np.argsort(u, kind="stable")
-    bounds = np.searchsorted(u[order], np.arange(bins + 1))
+    k = np.floor(u).astype(np.int64)
+    keep = (k >= 0) & (k < bins)
+    k, zs = k[keep], z[keep]
+    order = np.lexsort((zs, k))
+    k, zs = k[order], zs[order]
+    n = np.bincount(k, minlength=bins)
+    start = np.concatenate(([0], np.cumsum(n)[:-1]))
     out = np.full(bins, np.nan)
-    for i in range(bins):
-        if bounds[i + 1] > bounds[i]:
-            out[i] = np.median(z[order[bounds[i] : bounds[i + 1]]])
+    has = n > 0
+    lo = start[has] + (n[has] - 1) // 2
+    hi = start[has] + n[has] // 2
+    out[has] = (zs[lo] + zs[hi]) / 2
     return out
 
 
