@@ -17,9 +17,8 @@ import type { ChunkLodState } from "./vegetation-lod";
 const chunk = (
   near: number,
   trees = 100,
-  current: ChunkLodState["current"] = "mid",
-  allowRich = true
-): ChunkLodState => ({ allowRich, current, near, trees });
+  current: ChunkLodState["current"] = "mid"
+): ChunkLodState => ({ current, near, trees });
 
 test("distance picks mid or far, with hysteresis", () => {
   expect(planCrownTiers([chunk(FAR_IN_M - 1)])).toEqual(["mid"]);
@@ -35,10 +34,6 @@ test("near chunks go rich, with hysteresis", () => {
   const between = (RICH_IN_M + RICH_OUT_M) / 2;
   expect(planCrownTiers([chunk(between, 100, "mid")])).toEqual(["mid"]);
   expect(planCrownTiers([chunk(between, 100, "rich")])).toEqual(["rich"]);
-});
-
-test("the rich crown stays off where the look disables it", () => {
-  expect(planCrownTiers([chunk(0, 100, "mid", false)])).toEqual(["mid"]);
 });
 
 test("rich crowns stay within the budget, nearest chunks first", () => {
@@ -81,7 +76,6 @@ test("the far tier thins dense chunks only", () => {
 
 test("planCrownTiers spends a phone's smaller budget on the nearest chunks", () => {
   const chunks = [100, 50, 150].map((near) => ({
-    allowRich: true,
     current: "mid" as const,
     near,
     trees: 500,

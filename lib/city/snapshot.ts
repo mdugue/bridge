@@ -48,7 +48,6 @@ export interface CameraStateJson {
 }
 
 export interface SnapshotLook {
-  multiTuft?: boolean;
   /** the picture style; absent in older snapshots (they keep the current one) */
   style?: RenderStyle;
   /**
@@ -171,10 +170,7 @@ function checkDate(v: unknown): string {
 }
 
 function checkLookFlags(look: Record<string, unknown>): void {
-  for (const key of [
-    "multiTuft",
-    ...DATA_LAYERS.map((def) => def.snapshotKey),
-  ]) {
+  for (const key of DATA_LAYERS.map((def) => def.snapshotKey)) {
     if (look[key] !== undefined && typeof look[key] !== "boolean") {
       throw new SnapshotError(`look.${key} must be a boolean`);
     }
@@ -200,17 +196,14 @@ function checkLook(v: unknown): SnapshotLook {
 
 /**
  * The persisted document for the live values: one `<snapshotKey>` percent per
- * table row, the two flags, the data layers and the sun instant. What Copy writes.
+ * table row, the style, the data layers and the sun instant. What Copy writes.
  */
 export function encodeSnapshot(
   look: LookValues,
   camera: CameraStateJson,
   date: Date
 ): Snapshot {
-  const lookJson: SnapshotLook = {
-    multiTuft: look.multiTuft,
-    style: look.style,
-  };
+  const lookJson: SnapshotLook = { style: look.style };
   for (const def of LOOK_CONTROLS) {
     lookJson[def.snapshotKey] = Math.round(look[def.key] * 100);
   }
@@ -228,7 +221,7 @@ export function encodeSnapshot(
 /**
  * The look values a parsed snapshot carries, as a store patch: every percent
  * key that is present (older snapshots omit newer controls, which keep their
- * current value) and each of the two flags and the data layers when present;
+ * current value) and the style and the data layers when present;
  * a removed control's key is left out. Ranges are clamped by the store on
  * apply. What Apply reads.
  */
@@ -244,9 +237,6 @@ export function decodeLook(
     if (typeof raw === "number") {
       patch[def.key] = raw / 100;
     }
-  }
-  if (look.multiTuft !== undefined) {
-    patch.multiTuft = look.multiTuft;
   }
   if (look.style !== undefined) {
     patch.style = look.style;

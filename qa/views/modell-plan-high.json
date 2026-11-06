@@ -28,7 +28,6 @@
   },
   "date": "2026-06-21T11:30:00.000Z",
   "look": {
-    "multiTuft": true,
     "style": "pastel",
     "fogPct": 20,
     "trafficLayer": false,
