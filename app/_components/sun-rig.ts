@@ -288,7 +288,7 @@ export function createSunRig(
    * sun moves, and on explicit invalidation; not per frame. */
   shadowMapSize: number,
   /** Optional shared vector the rig keeps in sync with the world sun direction
-   * (surface→sun) so other materials (e.g. the crown shimmer) can read it. */
+   * (surface→sun) so other materials (e.g. the tree feet) can read it. */
   sunDirectionOut: Vector3 | undefined,
   /** The scene fog's colour (height-fog.ts): it follows the palette. */
   fogColor: UniformNode<"color", Color>,

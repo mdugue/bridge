@@ -43,6 +43,7 @@ import {
 } from "./clay-windows";
 import type { CityLayer } from "./city-layer";
 import { Instances, instanceTint } from "./instancing";
+import { streetLight } from "./lamp-reflections";
 import { nightShadowFree } from "./lantern";
 import { setSlots, slotsOf } from "./material-slots";
 import type { F, V3, V4 } from "./shader-chunks";
@@ -295,11 +296,12 @@ export function nicheMaterial(d: ClayDetailUniforms): MeshStandardNodeMaterial {
   const sky = mix(mix(1, WINDOW_TONE.revealSky, deep), 0.7, back);
   m.aoNode = corner.mul(sky);
   const plaster = instanceTint();
-  m.colorNode = mix(
+  const albedo = mix(
     plaster.mul(WINDOW_TONE.reveal),
     plaster.mul(vec3(...WINDOW_TONE.back)),
     back
   );
+  m.colorNode = albedo;
   m.roughnessNode = mix(float(1), float(WINDOW_PANE_ROUGHNESS), back);
   // the pane: the sky at a grazing view, brighter toward its head; after
   // dark one in four lit (the clay's hash, its column, storey and seed)
@@ -322,7 +324,9 @@ export function nicheMaterial(d: ClayDetailUniforms): MeshStandardNodeMaterial {
         .mul(back.mul(on).mul(NIGHT_WINDOWS.light))
         .mul(DUSK_GLOW)
         .mul(d.uNight)
-    );
+    )
+    // the street lamps light its reveals as they do the wall
+    .add(albedo.mul(streetLight(worldNormal)));
   m.name = "window-niche";
   return m;
 }

@@ -2862,7 +2862,6 @@ export function assignWindows(
         ...o.drawn,
         windows: choice.from,
         ...(choice.why ? { noWindows: choice.why } : {}),
-        ...(choice.storeyFromPhotos ? { storey: "photos" as const } : {}),
       };
     }
   }

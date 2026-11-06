@@ -7,7 +7,7 @@ test("a building's decisions survive the column", () => {
     colour: "#c8b89a",
     material: "glass",
     roof: "dop",
-    storey: "photos",
+    storey: "neighbours",
     windows: "near",
     wikidata: "Q2516",
   } as const;

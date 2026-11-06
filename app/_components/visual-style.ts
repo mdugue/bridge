@@ -62,6 +62,8 @@ import {
   slotUniform,
 } from "./material-slots";
 import { WINDOW_PANE_ROUGHNESS, clayWindows } from "./clay-windows";
+import type { ClayWindows } from "./clay-windows";
+import { streetLight } from "./lamp-reflections";
 import { nightShadowFree } from "./lantern";
 import {
   claySkySlots,
@@ -164,9 +166,6 @@ export const DUSK_GLOW = float(0.5);
  *  casts — seen from above, where every wall grazes, each shadow looked
  *  cut loose from its caster (a dormer's cheek, a house's back). */
 const SHADE_RIM = float(0.25);
-/** Streiflicht's share left at night: a rim is the sky's light on a
- *  grazing wall, and the night sky has none to give. */
-const NIGHT_RIM = float(0.1);
 /** Lichtkegel: the light at a commercial or public wall's foot after dark
  *  (`nightLight`) — light on the wall from in front, never the wall
  *  glowing. */
@@ -365,6 +364,16 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
   });
   // the wall's own looks (relief, tone, ledges) stay off the openings
   const plaster = wall.mul(float(1).sub(windows.opening));
+  const colour = clayAlbedo(windows, {
+    build,
+    flags,
+    h,
+    plaster,
+    sn,
+    tint,
+    wall,
+    wn,
+  });
   return {
     mask: d.niches ? nicheMask(windows.opening) : undefined,
     normal: normalize(mix(viewNormal, windows.normal, windows.normalMix)),
@@ -393,37 +402,15 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
       WINDOW_PANE_ROUGHNESS,
       windows.pane
     ),
-    // A mix, not a select: three emits a select as if/else, and the facade
-    // drawn inside its arm — the windows first among it — would be built
-    // twice (the normal, light and glow read it outside), its derivatives in
-    // a branch.
-    colour: mix(
-      askedColour(
-        windows
-          .colour(
-            facadeReading(
-              clayColour(tint, build, h, wall, flags),
-              build,
-              h,
-              plaster,
-              flags,
-              wn
-            )
-          )
-          .mul(float(1).sub(facadeMirror(flags, wall, sn).mul(0.6))),
-        h,
-        wall,
-        flags,
-        wn
-      ),
-      POCHE,
-      step(0.5, clayPoche).mul(float(1).sub(float(frontFacing)))
-    ),
+    colour,
     // Himmelslicht: the courtyard's ground floor gets less of the sky;
     // a window's recess and the wall under its sill less still.
     ao: createClaySky().ao(h, build.z, SKY_VIEW).mul(windows.ao),
+    // after dark the street lamps light the walls that face them, each
+    // as its colour takes their light (lamp-reflections.ts `streetLight`)
     emissive: clayGlow(d, build, h, wall, flags, wn, sn)
       .add(windows.glow.mul(DUSK_GLOW).mul(d.uNight))
+      .add(colour.mul(streetLight(wn)))
       // a window's back mirrors the sky as a shop window's pane does
       // (`paneSky`), dimmed after dark
       .add(
@@ -451,6 +438,50 @@ function nicheMask(opening: F): Node {
   const near = step(length(positionWorld.xz.sub(at.xy)), at.z);
   const cut = step(0.5, opening).mul(float(frontFacing)).mul(near);
   return cut.lessThan(0.5);
+}
+
+/** The clay's colour (clayGraph): the facade's looks over the tint, the
+ *  Schnitt's poché on a cut's inside. */
+function clayAlbedo(
+  windows: ClayWindows,
+  parts: {
+    build: V4;
+    flags: F;
+    h: F;
+    plaster: F;
+    tint: V3;
+    wall: F;
+    wn: V3;
+    sn: V3;
+  }
+): V3 {
+  const { build, flags, h, plaster, tint, wall, wn, sn } = parts;
+  // A mix, not a select: three emits a select as if/else, and the facade
+  // drawn inside its arm — the windows first among it — would be built
+  // twice (the normal, light and glow read it outside), its derivatives in
+  // a branch.
+  return mix(
+    askedColour(
+      windows
+        .colour(
+          facadeReading(
+            clayColour(tint, build, h, wall, flags),
+            build,
+            h,
+            plaster,
+            flags,
+            wn
+          )
+        )
+        .mul(float(1).sub(facadeMirror(flags, wall, sn).mul(0.6))),
+      h,
+      wall,
+      flags,
+      wn
+    ),
+    POCHE,
+    step(0.5, clayPoche).mul(float(1).sub(float(frontFacing)))
+  );
 }
 
 /** How far a wall vertex's own eave lies over its object's (m), from the
@@ -838,7 +869,7 @@ function osmColour(col: V3, build: V4, h: F, wall: F, flags: F): V3 {
 }
 
 /**
- * What the clay emits: Streiflicht (a squared Fresnel rim, warm, a tenth
+ * What the clay emits: Streiflicht (a squared Fresnel rim, warm, none
  * of it at night; on glass a pale sky sheen as well) and the night's light
  * on the walls (`nightLight`). A shop window's pane takes its own sky
  * (`paneSky`) in place of the rim and the glass sheen. The rim and the
@@ -864,19 +895,15 @@ function clayGlow(
   // there) lit them into a dotted white line along every frame
   const own = mod(floor(floor(flags.add(0.5)).div(64)), 2);
   const rimOn = clayOnly.mul(float(1).sub(own.mul(float(1).sub(wall))));
-  // Streiflicht stands in for the sky's light on a grazing wall: at night
-  // there is none, and a full rim lit every grazing roof and wall pale
-  // … and a face turned from the sun keeps a share of it (SHADE_RIM);
-  // after dark the night's own share rules
+  // Streiflicht stands in for the sky's light on a grazing wall, so a
+  // face turned from the sun keeps a share of it (SHADE_RIM) and after
+  // dark none: the night sky has none to give, and even a tenth of it
+  // lit every wall seen along a street and every roof from the air pale
+  // against the night (the street lamps and the windows light them now)
   const sunward = smoothstep(-0.02, 0.06, dot(wn, d.uSun));
-  const shade = mix(mix(SHADE_RIM, float(1), sunward), float(1), d.uNight);
+  const shade = mix(SHADE_RIM, float(1), sunward);
   const rim = vec3(1, 0.95, 0.8).mul(
-    fres
-      .mul(fres)
-      .mul(RIM)
-      .mul(rimOn)
-      .mul(shade)
-      .mul(float(1).sub(d.uNight.mul(float(1).sub(NIGHT_RIM))))
+    fres.mul(fres).mul(RIM).mul(rimOn).mul(shade).mul(float(1).sub(d.uNight))
   );
   // Glas: the grazing angle catches a pale sky sheen, dimmed at night —
   // the stand-in for the reflection below full Spiegelung (REFLECTIONS is

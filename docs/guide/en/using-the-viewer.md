@@ -468,11 +468,11 @@ The button in the corner opens a panel with three tabs.
   rest (they draw in their own light); a note says so, and switching the
   style back brings the time set back.
 - **Darstellung** ("look") — the **Bildstil** (picture style) on top,
-  then the one slider left, *Nebel* (the distance haze, a percentage),
-  and the *Multi-Tuft-Kronen (nah)* switch (rich multi-tuft crowns near
-  the camera; off = the cheap crown everywhere). *Zurücksetzen* ("reset")
-  returns both to their start values and leaves the picture style as it
-  is. The rest of the look is fixed (below).
+  then the one slider left, *Nebel* (the distance haze, a percentage).
+  *Zurücksetzen* ("reset") returns it to its start value and leaves the
+  picture style as it is. The rest of the look is fixed (below), the
+  trees too: near the camera they always wear their rich multi-tuft
+  crown, as far as the city's budget goes.
 
 A picture style draws the same city another way; switch it at any time,
 with a click or with `V`. The browser remembers the last style for your
@@ -517,8 +517,6 @@ knowledge base use for them:
 | Vegetation | *Bodendetail* | kerbs, lawn edges, parking bays, road markings (crossings, stop, cycle and centre lines), the gardens of allotment colonies and the paving underfoot (asphalt, slabs, cobbles from OpenStreetMap), the mown stripes and grain of sports grounds, visible up close |
 | | *Stadtgrün* | paints green courtyards, front gardens and parks inside built-up areas, and the railway's green embankments, like meadow, from the infrared aerial photo |
 | | *Wiesenfärbung* | tints meadows lush-to-dry from the infrared aerial photo |
-| | *Gegenlicht-Schimmer* | backlight shimmer on crowns between you and the sun |
-| | *Blattdurchscheinen* | translucency of nearby, large crowns (shadow-dependent) |
 | Rendering | *Kontaktschatten* | ambient-occlusion contact shadows in corners and under eaves |
 | | *Himmelslicht* | narrow courtyards and street canyons get less skylight than open meadows — precomputed from the terrain and the building model |
 | | *Ferne Schatten* | shadows beyond the ordinary shadow range: the long shadows of distant buildings and slopes at a low sun, and in the distance the shadows of the buildings next door too |
@@ -596,7 +594,7 @@ The other picture styles and Modell keep their sharp lines.
   element with its type and GlobalId, a plan's surface by its class, a
   glTF's or OBJ's object by its name — and where the design stands.
 - **Snapshot** — *Kopieren* copies your exact position, the date and time,
-  the picture style, *Nebel*, the crown switch and the data layers as a
+  the picture style, *Nebel* and the data layers as a
   small JSON text; paste such a text into the box and press *Anwenden* to
   restore it. *Link kopieren* copies a link to this page that opens at the
   same view (the snapshot rides in the address's query, `?snap=`, so the

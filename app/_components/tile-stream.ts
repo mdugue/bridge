@@ -618,8 +618,7 @@ export function castersBatch(env: Pick<DressingEnvironment, "castersChanged">) {
  * the stream's batch (`changed`, `castersBatch`); one in no scene yet casts
  * nothing, and its hang redraws the map (the stream's change). Returns the
  * call that lets go (`TileDressing.unfollow`, called by `disposeDressing`).
- * The look needs no following here: the crown switch is read by the LOD
- * pass, and the traffic follows the layer once it hangs
+ * The look needs no following here: the traffic follows the layer once it hangs
  * (`TrafficSlot.attach`).
  */
 export function followEnvironment(
@@ -847,16 +846,11 @@ function* tileVegetationSteps(
   const vegetation: VegetationControl = {
     group,
     chunks: canopy.chunks,
+    cells: own.cells,
+    looseFeet: canopy.looseFeet,
     setSeason: (day) => {
       const a = canopy.setSeason(day);
       const b = own.setSeason(day);
-      return a || b;
-    },
-    // Both run: `||` would skip the cadastre's swap whenever the canopy's
-    // changed.
-    updateLod: (cameraPos, multiTuft) => {
-      const a = canopy.updateLod(cameraPos, multiTuft);
-      const b = own.updateLod(cameraPos, multiTuft);
       return a || b;
     },
   };
