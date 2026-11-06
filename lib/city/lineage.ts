@@ -402,9 +402,6 @@ function photoUses(
       method: "assumed",
     });
   }
-  if (drawn.some((d) => d.storey === "photos")) {
-    uses.push({ text: "Geschosshöhe", method: "detected" });
-  }
   if (all.some((o) => o.source === OBJECT_SOURCE_SHOPFRONT)) {
     uses.push({ text: "Schaufenster", method: "detected" });
   }
