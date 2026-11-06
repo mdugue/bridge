@@ -172,11 +172,13 @@ const INK = 0.7;
 
 /**
  * The lens blur's kernel scale: `DepthOfFieldNode` reads a circle of
- * confusion of 0…1 and blurs by a 64-tap disc of this radius (px) times it,
- * then widens by a 16-tap disc of the same — so a full circle is about
- * four times this across, `MAX_BLUR_PX` (lens.ts).
+ * confusion of 0…1 and averages a 64-tap disc of this radius (px) times
+ * it — so a full circle is twice this across, `MAX_BLUR_PX` (lens.ts).
+ * (The 16-tap pass after it takes the brightest of its taps: it spreads
+ * highlights into bokeh discs, it does not widen the blur. Counting it as
+ * a second blur had drawn every circle half as wide as the lens's.)
  */
-const BOKEH_SCALE = MAX_BLUR_PX / 4;
+const BOKEH_SCALE = MAX_BLUR_PX / 2;
 
 /** Depth grading reaches full strength at this view distance (m). */
 const GRADE_DISTANCE_M = 800;
