@@ -37,7 +37,6 @@ import {
   normalize,
   positionGeometry,
   positionWorld,
-  pow,
   sin,
   smoothstep,
   step,
@@ -117,7 +116,6 @@ import type { F, Live, V2, V3, V4 } from "./shader-chunks";
 import { setGraph, setSlots } from "./material-slots";
 import { gdHash } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
-import { viewDirection } from "./view-direction";
 import { TRUNK_BASE } from "@/lib/city/tree-family";
 import {
   buildFootGeos,
@@ -175,9 +173,10 @@ export interface VegetationFeatures {
 export interface VegetationContext extends GroundContext {
   /**
    * Shared world-space sun direction (surface→sun), updated by the sun rig.
-   * The crown materials' `sunDirection` uniform node holds it by reference
-   * for the backlit shimmer. May be absent (the shimmer then keeps the
-   * direction it has — straight up until a tile hands one in).
+   * The crown uniforms' `sunDirection` node holds it by reference for the
+   * tree feet (tree-foot.ts, a tile without baked light). May be absent
+   * (the node then keeps the direction it has — straight up until a tile
+   * hands one in).
    */
   sunDirection?: Vector3;
   /**
@@ -211,9 +210,8 @@ const FAR_THIN_WIDEN = 1.35;
  * Runtime handle for a loaded vegetation group: the LOD swap (on the pose
  * tick, create-app.ts) and the season. The look's one say in the crowns,
  * the multi-tuft toggle, is read by the pass (create-app.ts
- * `stepVegetation`), not kept per tile. (The backlit shimmer, the
- * translucency and the gust's brightening are fixed: `SHIMMER`,
- * `TRANSLUCENCY`, `GUST_BRIGHTEN`.)
+ * `stepVegetation`), not kept per tile. (The gust's brightening is fixed:
+ * `GUST_BRIGHTEN`.)
  */
 export interface VegetationControl {
   /** the tile's canopy chunks; `createVegetationLod` sets their crown tier
@@ -687,7 +685,8 @@ export function leafNoise(p: V2): F {
 }
 
 /** The crown's live uniform nodes, shared by every crown material of the
- *  scene (the sun rig writes the sun, the loop the clock). */
+ *  scene (the sun rig writes the sun, the loop the clock). The crowns read
+ *  only the clock; the sun is the tree feet's (`buildVegetation`). */
 export interface CrownUniforms {
   /** world-space surface → sun; its value is the sun rig's vector, by
    *  reference (sceneCrowns) */
@@ -845,65 +844,20 @@ function crownForm(): V3 {
  */
 const GUST_BRIGHTEN = 0.09;
 
-/** Gegenlicht-Schimmer: the warm glow of a crown between the eye and the
- *  sun — fixed at what its slider stood at (plan 073). */
-const SHIMMER = float(0.45);
-/** Blattdurchscheinen: the broader backlit glow of near and large crowns
- *  — fixed at what its slider stood at (plan 073). */
-const TRANSLUCENCY = float(0.5);
-
 /**
- * The crown's light terms (all in world space, off the swayed fragment's
- * `positionWorld`): the backlit shimmer, the translucency and the
- * sway-coupled brightness. `base` is the crown's own colour (tint,
- * twigs); returns the lit colour and the emissive glow. All are lit-pass
- * terms only (the shadow pass draws the crown rigid,
- * `castShadowPositionNode`, and keeps nothing of its colour but the
- * alpha), and they need no extra attribute or buffer upload.
- *
- * The shimmer and translucency glow where the sun is behind the canopy.
- * The GLSL crown gated both on the sun's shadow map sampled 2 m toward the
- * sun (so a building behind the tree killed the glow while the crown's own
- * self-shadow did not). Node lights keep their
- * shadow map to themselves: three's public TSL offers only `shadow(light)`,
- * which builds a second shadow node that renders its own map, and the
- * scene's shadow node is the light node's, reachable only from inside the
- * lighting pass. So the gate is the daylight ramp alone — the sun's own
- * intensity ramp (sun-rig.ts, `clamp(sun.y · 5)`), so the glow fades out
- * with the sun instead of lingering into the night; a crown behind a
- * building now glows too.
+ * The crown's lit colour: its own (`base`: tint, twigs) brightened leaning
+ * into a gust and dimmed rocking back — the SAME centred gust signal that
+ * bends the geometry (`crownSway`), so the average colour is unchanged. A
+ * lit-pass term only (the shadow pass draws the crown rigid,
+ * `castShadowPositionNode`, and keeps nothing of its colour but the alpha).
+ * The crown has no glow of its own: the backlit shimmer and the leaves'
+ * translucency (plan 073's fixed sliders) brightened a crown seen against
+ * the sun evenly over its whole face, which flattened it (removed
+ * 2026-11-06); against the light it now reads as the sun and sky light
+ * it, its sunlit rim bright, its face in its own shade.
  */
-function crownLight(
-  u: CrownUniforms,
-  base: V3,
-  gust: F,
-  crownScale: F
-): { colour: V3; emissive: V3 } {
-  const sun = u.sunDirection;
-  const shimVis = clamp(sun.y.mul(5), 0, 1);
-  const daylight = clamp(sun.y, 0, 1);
-  const view = viewDirection().negate();
-  const back = clamp(dot(view, sun.negate()), 0, 1);
-  const far = distance(cameraPosition, positionWorld);
-  const shimmer = SHIMMER.mul(pow(back, 3.6))
-    .mul(shimVis)
-    .mul(vec3(0.95, 0.85, 0.45));
-  // Backlit translucency: a BROADER subsurface glow (low exponent) with the
-  // same gate, limited to near OR large crowns and to daytime so it never
-  // reads as far-field "noise".
-  const trLarge = smoothstep(1.2, 3, crownScale);
-  const trNear = float(1).sub(smoothstep(120, 260, far));
-  const translucency = TRANSLUCENCY.mul(pow(back, 1.6))
-    .mul(shimVis)
-    .mul(max(trLarge, trNear).mul(daylight))
-    .mul(vec3(0.45, 0.62, 0.3));
-  // Sway-coupled brightness — the SAME centred gust signal that bends the
-  // geometry, so the whole crown brightens leaning in and dims rocking
-  // back; centred so the average colour is unchanged.
-  return {
-    colour: base.mul(gust.mul(GUST_BRIGHTEN).add(1)),
-    emissive: shimmer.add(translucency),
-  };
+function gustLit(base: V3, gust: F): V3 {
+  return base.mul(gust.mul(GUST_BRIGHTEN).add(1));
 }
 
 /** The crown's underside at the most (its colour × this, cool): the sky
@@ -936,10 +890,10 @@ function crownOcclusion(shape: V3): V3 {
 }
 
 /**
- * Sage crown material with a backlit shimmer: when the sun is behind the
- * canopy the camera-facing leaves glow warm (crownLight). Shared by every
- * crown set of the scene, every tier (sceneCrowns). The uniforms are live:
- * the sun and the clock move without a rebuild. `bare` builds the
+ * Sage crown material: the crown's own occlusion and the gust's brightness
+ * pulse on its tint (`gustLit`), no glow of its own. Shared by every
+ * crown set of the scene, every tier (sceneCrowns). The clock is live:
+ * the wind moves without a rebuild. `bare` builds the
  * seasonal variant: the per-instance leaf cover thins the crown to twigs
  * (crown-season.ts) through `maskNode`, which the shadow pass honours, so
  * the thinned crown thins its shadow too; a chunk wears it only while any
@@ -963,7 +917,6 @@ export function buildCrownMaterial(
   const sway = crownSway(u.time, shape);
   m.positionNode = instancePosition(sway.local);
   m.castShadowPositionNode = instancePosition(shape);
-  const crownScale = varying(length(instanceColumn(1).xyz));
   // (a printed crown has no brightness pulse: its light is cut in two
   // steps, and the pulse would flip it between them); one varying for
   // the occlusion and the pulse (WebGPU's sixteen are scarce)
@@ -975,31 +928,17 @@ export function buildCrownMaterial(
   const gust = shading.w;
   const tinted = materialColor.mul(instanceTint()).mul(occluded);
   if (!bare) {
-    const lit = crownLight(
-      u,
-      printedCrown(tinted, tinted, float(0)),
-      gust,
-      crownScale
-    );
-    m.colorNode = lit.colour;
-    m.emissiveNode = lit.emissive.mul(float(1).sub(crownsPrinted));
+    m.colorNode = gustLit(printedCrown(tinted, tinted, float(0)), gust);
     return m;
   }
   const season = crownSeasonNodes();
   m.maskNode = season.keep;
   m.maskShadowNode = season.keepShadow;
   const kept = mix(tinted, season.twigColour, season.twig);
-  const lit = crownLight(
-    u,
+  m.colorNode = gustLit(
     printedCrown(mix(kept, season.veilColour, season.veil), kept, season.twig),
-    gust,
-    crownScale
+    gust
   );
-  m.colorNode = lit.colour;
-  // Twigs of a bare crown neither shimmer nor glow.
-  m.emissiveNode = lit.emissive
-    .mul(float(1).sub(season.twig))
-    .mul(float(1).sub(crownsPrinted));
   return m;
 }
 

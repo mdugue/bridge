@@ -61,8 +61,8 @@ import type {
  * (lib/city/tree-inventory.ts).
  *
  * It reuses everything the canopy trees are made of — the lobed crown and the
- * multi-tuft rich crown, the scene's crown materials (sway, shimmer,
- * translucency, gust brightening; the same builds as the canopy's), the
+ * multi-tuft rich crown, the scene's crown materials (sway, occlusion,
+ * gust brightening; the same builds as the canopy's), the
  * trunk, the 250 m chunks and the distance LOD swap — and adds
  * only what a per-instance scale cannot express: two reshaped variants of
  * the SAME two crown geometries (a flame for fastigiate cultivars, a
