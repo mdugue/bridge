@@ -49,6 +49,9 @@ export interface WallOpening {
   v0: number;
   v1: number;
   depth: number;
+  /** its column and storey, as the shader counts them (its hashes) */
+  j: number;
+  k: number;
 }
 
 const bit = (style: number, b: number) => Math.floor(style / b) % 2;
@@ -57,7 +60,7 @@ const f32 = Math.fround;
 /** The jitter's hash, as the shader takes it: no sine (a GPU's differs
  *  from the CPU's), a golden-ratio step over the column and the seed. */
 export function jitterHash(j: number, seed: number): number {
-  const x = f32(f32(j * f32(0.618_034)) + f32(seed * f32(0.754_877_7)));
+  const x = f32(f32(j * f32(0.618034)) + f32(seed * f32(0.7548777)));
   return x - Math.floor(x);
 }
 
@@ -112,7 +115,7 @@ export function wallRows(
   o: NicheObject,
   eaveCode: number,
   topH: number
-): { v0: number; v1: number }[] {
+): { v0: number; v1: number; k: number }[] {
   const style = Math.floor(o.style + 0.5);
   const dormer = bit(style, WINDOW_STYLE.dormer) === 1;
   const sill = dormer
@@ -124,12 +127,11 @@ export function wallRows(
   const first = Math.max(storey, WINDOW_ROWS.firstLine);
   const tall = Math.min(o.h, storey - sill - WINDOW_ROWS.lintel);
   const eave = o.eave + slotWallEave(eaveCode);
-  const top =
-    eave - (dormer ? DORMER_WINDOW.eaveClear : WINDOW_ROWS.eaveClear);
+  const top = eave - (dormer ? DORMER_WINDOW.eaveClear : WINDOW_ROWS.eaveClear);
   const lift =
     (Math.floor(style / WINDOW_STYLE.lift) % WINDOW_LIFT.classes) *
     WINDOW_LIFT.step;
-  const rows: { v0: number; v1: number }[] = [];
+  const rows: { v0: number; v1: number; k: number }[] = [];
   for (let k = 0; ; k += 1) {
     const line = k === 0 ? 0 : first + (k - 1) * storey;
     if (line > topH) {
@@ -139,7 +141,7 @@ export function wallRows(
     const height = Math.min(line + sill + tall, top) - line - sill - up;
     const fits = k > 0 || sill + tall <= first - WINDOW_ROWS.lintel;
     if (height >= WINDOW_ROWS.min && fits) {
-      rows.push({ v0: line + sill + up, v1: line + sill + up + height });
+      rows.push({ v0: line + sill + up, v1: line + sill + up + height, k });
     }
   }
   return rows;
@@ -169,8 +171,16 @@ export function wallOpenings(
   }
   const depth = revealDepth(o.style);
   const rows = wallRows(o, eaveCode, topH);
-  return centres.flatMap((s) =>
-    rows.map((r) => ({ s, half: w / 2, v0: r.v0, v1: r.v1, depth }))
+  return centres.flatMap((s, j) =>
+    rows.map((r) => ({
+      s,
+      half: w / 2,
+      v0: r.v0,
+      v1: r.v1,
+      depth,
+      j,
+      k: r.k,
+    }))
   );
 }
 
@@ -186,8 +196,10 @@ export interface NicheMesh {
 
 /** Floats per niche in `tileNiches`' output: centre x, y, z (scene, the
  *  opening's middle on the wall's plane), the wall's outward normal x and
- *  z, half width, half height, depth, object. */
-export const NICHE_STRIDE = 9;
+ *  z, half width, half height, depth, object, and its column and storey
+ *  as the shader counts them (its night hash, which the niche's pane
+ *  reads again on the GPU). */
+export const NICHE_STRIDE = 11;
 
 /** A wall gathered from its triangles: its object, codes, plane and the
  *  (s, h) corners of its triangles. */
@@ -214,8 +226,16 @@ function uprightNormal(
   b: number,
   c: number
 ): [number, number] | undefined {
-  const e1 = [p[3 * b] - p[3 * a], p[3 * b + 1] - p[3 * a + 1], p[3 * b + 2] - p[3 * a + 2]];
-  const e2 = [p[3 * c] - p[3 * a], p[3 * c + 1] - p[3 * a + 1], p[3 * c + 2] - p[3 * a + 2]];
+  const e1 = [
+    p[3 * b] - p[3 * a],
+    p[3 * b + 1] - p[3 * a + 1],
+    p[3 * b + 2] - p[3 * a + 2],
+  ];
+  const e2 = [
+    p[3 * c] - p[3 * a],
+    p[3 * c + 1] - p[3 * a + 1],
+    p[3 * c + 2] - p[3 * a + 2],
+  ];
   const nx = e1[1] * e2[2] - e1[2] * e2[1];
   const ny = e1[2] * e2[0] - e1[0] * e2[2];
   const nz = e1[0] * e2[1] - e1[1] * e2[0];
@@ -303,8 +323,8 @@ function gatherWalls(
  * The niches of a city tile: per window the shader may cut into a wall,
  * where it stands (`NICHE_STRIDE` floats each). `objects` gives a
  * window-carrying object's row (undefined: none), `base` its base (scene
- * y). An opening whose middle lies on none of its wall's triangles is
- * left out (the shader cuts nothing there).
+ * y). An opening none of whose middle and corners lies on its wall's
+ * triangles is left out (the shader cuts nothing there).
  */
 export function tileNiches(
   mesh: NicheMesh,
@@ -323,7 +343,18 @@ export function tileNiches(
     const tz = w.nx;
     for (const op of wallOpenings(o, w.length, w.eave, w.top)) {
       const mid = (op.v0 + op.v1) / 2;
-      if (!onWall(w.tris, op.s, mid)) {
+      // any of its middle and corners (a hair in) on the wall: a niche
+      // too many stays unseen behind it, one too few is a hole
+      const ins = Math.max(op.half - 0.05, 0);
+      const inv = Math.max((op.v1 - op.v0) / 2 - 0.05, 0);
+      const probes = [
+        [0, 0],
+        [-ins, -inv],
+        [ins, -inv],
+        [-ins, inv],
+        [ins, inv],
+      ];
+      if (!probes.some(([ds, dv]) => onWall(w.tris, op.s + ds, mid + dv))) {
         continue;
       }
       const ds = op.s - w.s0;
@@ -336,9 +367,93 @@ export function tileNiches(
         op.half,
         (op.v1 - op.v0) / 2,
         op.depth,
-        w.object
+        w.object,
+        op.j,
+        op.k
       );
     }
   }
   return Float32Array.from(out);
+}
+
+/** The side of a niche cell (m): what the niches near the eye are found by. */
+export const NICHE_CELL_M = 32;
+
+/** A cell's key from its column and row (each within ±2¹⁵ cells). */
+export const nicheCellKey = (cx: number, cz: number): number =>
+  (cx + 32_768) * 65_536 + (cz + 32_768);
+
+/**
+ * A tile's niches sorted by their cell (`NICHE_CELL_M`, scene x and z):
+ * the sorted list, and per cell its key, first niche and end (triples).
+ */
+export function cellNiches(niches: Float32Array): {
+  niches: Float32Array;
+  cells: Float64Array;
+} {
+  const n = niches.length / NICHE_STRIDE;
+  const keys = new Float64Array(n);
+  const order = new Uint32Array(n);
+  for (let i = 0; i < n; i += 1) {
+    const o = i * NICHE_STRIDE;
+    keys[i] = nicheCellKey(
+      Math.floor(niches[o] / NICHE_CELL_M),
+      Math.floor(niches[o + 2] / NICHE_CELL_M)
+    );
+    order[i] = i;
+  }
+  order.sort((a, b) => keys[a] - keys[b]);
+  const sorted = new Float32Array(niches.length);
+  const cells: number[] = [];
+  for (let r = 0; r < n; r += 1) {
+    const i = order[r];
+    sorted.set(
+      niches.subarray(i * NICHE_STRIDE, (i + 1) * NICHE_STRIDE),
+      r * NICHE_STRIDE
+    );
+    if (r === 0 || keys[i] !== keys[order[r - 1]]) {
+      if (r > 0) {
+        cells.push(r);
+      }
+      cells.push(keys[i], r);
+    }
+  }
+  if (n > 0) {
+    cells.push(n);
+  }
+  return { niches: sorted, cells: Float64Array.from(cells) };
+}
+
+/** The object table's columns a tile's niches read (city-mesh.ts
+ *  `CityObjectTable`, the floats the clay reads of it). */
+export interface NicheTable {
+  baseZ: Float32Array;
+  eaveH: Float32Array;
+  rough: Float32Array;
+  storeyH: Float32Array;
+  winAxis: Float32Array;
+  winH: Float32Array;
+  winStyle: Uint32Array;
+  winW: Float32Array;
+}
+
+/** A tile's niches from its mesh and table, sorted by cell (`cellNiches`). */
+export function nichesOf(
+  mesh: NicheMesh,
+  t: NicheTable
+): { niches: Float32Array; cells: Float64Array } {
+  const objects = (i: number): NicheObject | undefined =>
+    i < t.winAxis.length && t.winAxis[i] >= 0.05
+      ? {
+          axis: t.winAxis[i],
+          w: t.winW[i],
+          h: t.winH[i],
+          // the texture holds it as a float, as the shader reads it
+          style: f32(t.winStyle[i]),
+          storey: t.storeyH[i],
+          eave: t.eaveH[i],
+          seed: t.rough[i],
+        }
+      : undefined;
+  return cellNiches(tileNiches(mesh, objects, (i) => t.baseZ[i]));
 }

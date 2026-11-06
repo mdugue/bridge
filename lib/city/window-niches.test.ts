@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
+  NICHE_CELL_M,
   NICHE_STRIDE,
+  cellNiches,
   jitterHash,
+  nicheCellKey,
   tileNiches,
   wallColumns,
   wallRows,
@@ -50,8 +53,7 @@ describe("window niches", () => {
   test("a rectangular wall gets a niche per opening on its plane", () => {
     // a 12 m wall 12.5 m tall facing +z (scene), base at y = 100
     const positions = [
-      -6, 100, 0, 6, 100, 0, 6, 112.5, 0,
-      -6, 100, 0, 6, 112.5, 0, -6, 112.5, 0,
+      -6, 100, 0, 6, 100, 0, 6, 112.5, 0, -6, 100, 0, 6, 112.5, 0, -6, 112.5, 0,
     ];
     const facade: number[] = [];
     for (let v = 0; v < 6; v += 1) {
@@ -70,5 +72,28 @@ describe("window niches", () => {
       expect(niches[i + 4]).toBeCloseTo(1);
       expect(Math.abs(niches[i])).toBeLessThan(6);
     }
+  });
+
+  test("niches sorted by cell keep every niche, each cell one run", () => {
+    const xs = [5, 70, 6, -40, 71];
+    const raw = new Float32Array(xs.length * NICHE_STRIDE);
+    xs.forEach((x, i) => {
+      raw[i * NICHE_STRIDE] = x;
+      raw[i * NICHE_STRIDE + 2] = 3;
+      raw[i * NICHE_STRIDE + 8] = i;
+    });
+    const { niches, cells } = cellNiches(raw);
+    expect(niches.length).toBe(raw.length);
+    expect(cells.length / 3).toBe(3);
+    for (let c = 0; c < cells.length; c += 3) {
+      for (let i = cells[c + 1]; i < cells[c + 2]; i += 1) {
+        const x = niches[i * NICHE_STRIDE];
+        expect(nicheCellKey(Math.floor(x / NICHE_CELL_M), 0)).toBe(cells[c]);
+      }
+    }
+    const objects = [...Array(xs.length).keys()].map(
+      (i) => niches[i * NICHE_STRIDE + 8]
+    );
+    expect(objects.toSorted()).toEqual([0, 1, 2, 3, 4]);
   });
 });

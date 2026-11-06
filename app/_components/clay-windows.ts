@@ -139,7 +139,7 @@ export interface ClayWindows {
 }
 
 /** A hash in 0…1 of two numbers. */
-const hash = (a: F, b: F): F =>
+export const windowHash = (a: F, b: F): F =>
   fract(sin(a.mul(12.9898).add(b.mul(78.233))).mul(43_758.5453));
 
 /** 1 where `x` > 0, its edge anti-aliased over `px` (m a pixel). */
@@ -248,7 +248,7 @@ function columns(i: WindowInputs, s: F, length: F) {
   );
   // no sine in this hash: the niches behind the openings place the same
   // jitter on the CPU (lib/city/window-niches.ts `jitterHash`)
-  const jitter = fract(j.mul(0.618_034).add(i.seed.mul(0.754_877_7)))
+  const jitter = fract(j.mul(0.618034).add(i.seed.mul(0.7548777)))
     .mul(2)
     .sub(1)
     .mul(free)
@@ -656,7 +656,7 @@ function arris(g: Grid, wn: V3, px: Px) {
 /** The share of windows lit at night, and a lit one's light (× the dusk
  *  light and the night): a quarter, softly — two in five at full light
  *  made every street a wall of lamps. */
-const NIGHT_WINDOWS = { lit: 0.25, light: 0.6 } as const;
+export const NIGHT_WINDOWS = { lit: 0.25, light: 0.6 } as const;
 
 /**
  * The windows on the clay (lib/city/windows.ts gives each building's
@@ -707,7 +707,10 @@ export function clayWindows(i: WindowInputs): ClayWindows {
   // speckled a street seen along its length)
   const lit = mix(
     float(NIGHT_WINDOWS.lit),
-    step(1 - NIGHT_WINDOWS.lit, hash(g.j.add(g.k.mul(17.31)), i.seed.add(3.7))),
+    step(
+      1 - NIGHT_WINDOWS.lit,
+      windowHash(g.j.add(g.k.mul(17.31)), i.seed.add(3.7))
+    ),
     px.du
   );
   const glowNear = opening.mul(r.back).mul(lit);
