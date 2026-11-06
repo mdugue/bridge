@@ -1475,7 +1475,7 @@ async function bootApp(
   const siteBounds = unionBounds(extras);
 
   // Shared world sun direction (surface→sun), kept in sync by the sun rig and
-  // read by the water glitter, the kerb shadow and the crown shimmer (by
+  // read by the water glitter, the kerb shadow and the tree feet (by
   // reference: the uniform nodes hold this very vector).
   const sunDirection = new Vector3(0, 1, 0);
   // The scene's fog, one node for every material (height-fog.ts): the range
@@ -2092,8 +2092,7 @@ async function bootApp(
   };
   let lastStyle = opts.look.get().style;
   // When the trees' crown tiers are picked (stepVegetation, below): on the
-  // pose tick, and in the next frame when the crown switch or the tiles in
-  // view change.
+  // pose tick, and in the next frame when the tiles in view change.
   const crownTiers = createLodSchedule();
   // The still pace (lib/city/frame-pace.ts): a scene that stands still
   // draws fewer frames; a look change, like any input, wakes it.
@@ -2130,8 +2129,6 @@ async function bootApp(
     }
     postStack.applyLook(look);
     nameplate.applyLook(look.style);
-    // the crown switch: the tiers in the next frame, not the next tick
-    crownTiers.force();
     const layersOn = activeDataLayers(look);
     // the traffic flows and the trams move; the bicycle counters stand
     dataLayersMove = siteDataLayers(opts.site.dataLayers).some(
@@ -3195,11 +3192,11 @@ async function bootApp(
 
   const timer = new Timer();
   // Advance the wind sway every frame (same clock as the water ripple); on
-  // the pose tick — and in the frame the tiles in view or the crown switch
-  // change, or the eye jumps (`crownTiers`, lib/city/vegetation-lod.ts) —
-  // pick every vegetation chunk's crown tier (rich / mid / far) over all
-  // loaded tiles at once (the rich crowns share one site-wide budget) and
-  // swap the cadastre's own silhouettes by distance. (Per frame it cost a
+  // the pose tick — and in the frame the tiles in view change, or the eye
+  // jumps (`crownTiers`, lib/city/vegetation-lod.ts) —
+  // pick every crown set's tier (rich / mid / far: the canopy's chunks and
+  // the cadastre's own silhouettes) over all loaded tiles at once (the rich
+  // crowns share one site-wide budget). (Per frame it cost a
   // pass over ~1 000 chunks and their plan states 60 times a second; a
   // tick's walk or flight, 18 m at the fastest, is well inside the tiers'
   // 80–100 m hysteresis bands.) A tier change changes what casts shadows,
@@ -3222,21 +3219,12 @@ async function bootApp(
     // flips redrew the shadow map for trees nobody sees.
     const shown = stream.visibleDressings();
     vegetationControls.length = 0;
-    let lodChanged = false;
-    // the look's crown switch, read once a pass: no tile keeps a copy
-    const { multiTuft } = opts.look.get();
     for (const d of shown) {
       if (d.vegetation) {
         vegetationControls.push(d.vegetation);
-        if (d.vegetation.updateLod(eye, multiTuft)) {
-          lodChanged = true;
-        }
       }
     }
-    if (vegetationLod(vegetationControls, eye, multiTuft, richTrees)) {
-      lodChanged = true;
-    }
-    if (lodChanged) {
+    if (vegetationLod(vegetationControls, eye, richTrees)) {
       invalidateShadows();
     }
     // the street furniture's cells near the eye (furniture-layer.ts)

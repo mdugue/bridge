@@ -28,7 +28,6 @@
   },
   "date": "2026-10-15T15:45:00.000Z",
   "look": {
-    "multiTuft": true,
     "style": "pastel",
     "fogPct": 20,
     "trafficLayer": false,

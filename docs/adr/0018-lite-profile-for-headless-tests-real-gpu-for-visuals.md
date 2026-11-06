@@ -25,7 +25,7 @@ needs to see a visual change at a place and time, reproducibly.
    (`bun run shots`, headed, full profile).
 5. **The Snapshot is a validated contract** (`lib/city/snapshot.ts`): the
    camera pose, the sun's time and the look's few controls (*Nebel*, the
-   crown switch, the style, the data layers — one table,
+   style, the data layers — one table,
    `lib/city/look-controls.ts`). Parsing never throws, rejects non-finite
    numbers and clamps ranges. A snapshot key is never renamed; a removed
    control's key is retired for good (`RETIRED_SNAPSHOT_KEYS`), ignored on

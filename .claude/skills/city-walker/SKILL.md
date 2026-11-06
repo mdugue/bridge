@@ -37,8 +37,7 @@ slot waits for their builder. The scene environment
 (`scene-environment.ts`, not three's `scene.environment`) holds what the
 sun and the date move — the night node, the season watch, the clock —
 and a dressing's trees follow its season from birth to release
-(`followEnvironment`); the crown switch is read by the LOD pass, the
-traffic slot follows the look's layer from its hang. The picture styles and Modell are still
+(`followEnvironment`); the traffic slot follows the look's layer from its hang. The picture styles and Modell are still
 wired by hand. The data layers' code stays in the scene chunk: the first `import()` chunk that imports three.js costs the first
 load ≈ 33 KB gz (three leaves the scene's hoisted scope), more than the
 data layers moved (ADR 0040) — measure before splitting one off.
@@ -408,8 +407,7 @@ and therefore what keeps builds out of frames:
   shared-instancing patch and render-context override were rejected.
 - Things a node material cannot reach, found in the port: the sun's shadow
   map from inside another material (three's public `shadow(light)` builds a
-  second shadow node with its own map) — the crown shimmer's gate is the
-  sun's daylight ramp now; `SkyMesh`'s own cloud horizon fade (inside its
+  second shadow node with its own map); `SkyMesh`'s own cloud horizon fade (inside its
   colour node) — the haze band covers it.
 - 3DTilesRendererJS loads fine under `WebGPURenderer`; its fade and overlay
   plugins patch GLSL and stay unused.
@@ -667,7 +665,9 @@ not sky.
   tiers per 250 m chunk, planned over the whole site on the 10 Hz pose
   tick (`lib/city/vegetation-lod.ts`, applied by `createVegetationLod`,
   whose arrays are kept between passes; `createLodSchedule` runs it in the
-  frame the tiles in view or the crown switch change, or the eye jumps): the
+  frame the tiles in view change, or the eye jumps; the cadastre's own
+  silhouettes are planned with the chunks, their cheap crown standing for
+  mid and far): the
   **rich multi-tuft crown** (~1 440 tris) near the camera (in 220 m / out
   300 m) but only within a **site-wide budget of 2 500 trees**, nearest
   chunks first — forest tiles (one tree per 7 m, up to ~1 300 per chunk)
@@ -679,11 +679,9 @@ not sky.
   tile; compute each set's bounding sphere after sharing.
 - Crown look (`buildCrownMaterial`): sway in `positionNode`
   (`instancePosition(sway.local)`, the per-tree phase from the instance's
-  world column), the shadow rigid (`castShadowPositionNode`); shimmer,
-  translucency and leaf twinkle in `colorNode`/`emissiveNode`, gated on the
-  sun's daylight ramp (the GLSL gated them on a shadow-map sample 2 m
-  toward the sun — not reachable from a node material, so a crown behind a
-  building now glows too; judge on a GPU).
+  world column), the shadow rigid (`castShadowPositionNode`); occlusion
+  and the gust's brightness pulse in `colorNode`, no `emissiveNode` (the
+  backlit glow flattened the crown, removed 2026-11-06).
 - Phones cache **168–336 MiB** of tile content at safety level 0 (148–296,
   136–272, 96–232 at levels 1–3; `tileCacheBytesFor` in
   `app/_components/scene-profile.ts`, `lruCache.min/maxBytesSize`),
@@ -737,8 +735,8 @@ not sky.
 
 Cost = `geometry_tris × instances`, paid twice (shadow pass). Still open:
 **dappled canopy shadow** (a colour-less proxy caster per chunk whose
-`maskNode` cuts the gaps — the shadow pass honours it). Radial normals,
-backlight shimmer and the LOD-gated multi-tuft crown are in
+`maskNode` cuts the gaps — the shadow pass honours it). Radial normals
+and the LOD-gated multi-tuft crown are in
 `vegetation-layer.ts`.
 `aesthetic-sandbox.html` at the repo root is the historical playground those
 were ported from; the layer file, not the sandbox, is the source of truth.
@@ -921,7 +919,7 @@ the WebGL2 backend on par in steady state but stalling while it compiles
 ## QA: self-verify on a real GPU
 
 The in-app **Snapshot** panel serializes camera + sun time + the look's
-controls (*Nebel*, the crown switch, the style, the data layers) to JSON; `__poc.handle.getCameraState()` / `applyCameraState()` replay it. To eyeball a
+controls (*Nebel*, the style, the data layers) to JSON; `__poc.handle.getCameraState()` / `applyCameraState()` replay it. To eyeball a
 change yourself:
 
 ```bash
@@ -959,7 +957,7 @@ a bridge is invisible looking straight down). Snapshot JSON shape:
   "camera": { "mode": "fly", "pos": {"x":0,"y":0,"z":0}, "epsg": {"x":0,"y":0},
               "headingDeg": 0, "pitchDeg": 0, "fov": 55 },
   "date": "2026-06-15T08:30:00.000Z",
-  "look": { "fogPct":35,"multiTuft":true,"style":"pastel" } }
+  "look": { "fogPct":35,"style":"pastel" } }
 ```
 
 **Budget the e2e specs in frames, not seconds.** Under SwiftShader every pixel

@@ -27,7 +27,6 @@ const valid: Snapshot = {
   date: "2026-06-21T12:00:00.000Z",
   look: {
     fogPct: 30,
-    multiTuft: false,
     style: "comic",
   },
 };
@@ -100,7 +99,6 @@ test("look percentages must be numbers", () => {
 });
 
 test("look flags are type- and enum-checked", () => {
-  expect(reason(withLook({ multiTuft: 1 }))).toMatch(/look.multiTuft/u);
   expect(reason(withLook({ bikeLayer: "on" }))).toMatch(/look.bikeLayer/u);
   expect(reason(withLook({ style: "ghost" }))).toMatch(/look.style/u);
   expect(reason(withLook({ style: 2 }))).toMatch(/look.style/u);
@@ -140,11 +138,9 @@ test("an old snapshot with removed controls still loads, and they are ignored", 
   if (!r.ok) {
     return;
   }
-  // Apply sets what is still a control, and nothing else.
-  expect(decodeLook(r.snapshot.look)).toEqual({
-    fogAmount: 0.3,
-    multiTuft: false,
-  });
+  // Apply sets what is still a control, and nothing else (the crowns'
+  // switch went 2026-11-06).
+  expect(decodeLook(r.snapshot.look)).toEqual({ fogAmount: 0.3 });
 });
 
 test("a removed control's key is no longer checked", () => {
@@ -156,6 +152,7 @@ test("a removed control's key is no longer checked", () => {
     { transparencyPct: "20" },
     { tintPct: "20" },
     { inkPct: null },
+    { multiTuft: 1 },
   ]) {
     expect(parseSnapshot(withLook(look)).ok).toBe(true);
   }
@@ -181,12 +178,7 @@ test("Copy writes the controls there are, and no retired key", () => {
     new Date(valid.date)
   );
   expect(Object.keys(snap.look ?? {}).sort()).toEqual(
-    [
-      "fogPct",
-      "multiTuft",
-      "style",
-      ...DATA_LAYERS.map((d) => d.snapshotKey),
-    ].sort()
+    ["fogPct", "style", ...DATA_LAYERS.map((d) => d.snapshotKey)].sort()
   );
   for (const key of RETIRED_SNAPSHOT_KEYS) {
     expect(snap.look).not.toHaveProperty(key);
@@ -218,7 +210,6 @@ test("what Copy encodes, Apply decodes back — through the same parser", () => 
   const values = {
     ...LOOK_DEFAULTS,
     fogAmount: 0.35,
-    multiTuft: false,
     style: "sincity" as const,
     trafficLayer: true,
     tramLayer: true,
@@ -256,9 +247,9 @@ test("snapshotInstant floors a hand-edited instant to the minute the slider show
 });
 
 test("decodeLook leaves absent keys out, so an older snapshot keeps the current values", () => {
-  expect(decodeLook({ fogPct: 30, multiTuft: false })).toEqual({
+  expect(decodeLook({ fogPct: 30, style: "comic" })).toEqual({
     fogAmount: 0.3,
-    multiTuft: false,
+    style: "comic",
   });
   expect(decodeLook(undefined)).toEqual({});
 });
