@@ -246,7 +246,9 @@ function columns(i: WindowInputs, s: F, length: F) {
     0,
     axis.mul(LOOSE_JITTER)
   );
-  const jitter = hash(j, i.seed)
+  // no sine in this hash: the niches behind the openings place the same
+  // jitter on the CPU (lib/city/window-niches.ts `jitterHash`)
+  const jitter = fract(j.mul(0.618_034).add(i.seed.mul(0.754_877_7)))
     .mul(2)
     .sub(1)
     .mul(free)
