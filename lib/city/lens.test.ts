@@ -21,8 +21,8 @@ test("the default 55° view is a 23 mm lens on full frame", () => {
 
 test("a far focus leaves the city all but sharp, a near one blurs it", () => {
   // a 1440 px tall frame at the default view angle
-  expect(horizonBlurPx(20, 55, 1440)).toBeCloseTo(0.57, 1);
-  expect(horizonBlurPx(3, 55, 1440)).toBeCloseTo(3.8, 1);
+  expect(horizonBlurPx(20, 55, 1440)).toBeCloseTo(0.89, 1);
+  expect(horizonBlurPx(3, 55, 1440)).toBeCloseTo(5.95, 1);
   expect(horizonBlurPx(1, 55, 1440)).toBeGreaterThan(MAX_BLUR_PX);
   // twice the pixels, twice the pixels of blur: the same angle on screen
   expect(horizonBlurPx(5, 55, 2880)).toBeCloseTo(

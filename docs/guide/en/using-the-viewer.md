@@ -530,7 +530,7 @@ Three more effects belong to the fixed look. The mist over the river
 drifts over the water from about 120 m ahead, denser only far off. The photographic
 depth of field blurs only what lies behind the focus (the foreground stays
 sharp), and the focus is always what lies at the centre of the view. It
-blurs as much as a real camera with this view's angle would at f/2.8:
+blurs as much as a real camera with this view's angle would at f/1.8:
 focused on a facade down the street, the city behind it stays all but
 sharp; focused on a lamp post close by, the background goes soft. While
 the camera moves, the blur is switched off (the eye cannot resolve it in

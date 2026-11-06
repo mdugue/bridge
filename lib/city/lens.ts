@@ -5,25 +5,26 @@
  *
  * The lens is a full-frame camera (a 24 mm tall sensor) whose focal
  * length gives the view's vertical angle — 23 mm at the default 55° —
- * stopped down to f/2.8. Thin-lens optics give the circle of confusion of
- * a point at S2 behind the focus S1 as
+ * at f/1.8, a fast prime wide open. Thin-lens optics give the circle of
+ * confusion of a point at S2 behind the focus S1 as
  *
  *   c = f² / (N · (S1 − f)) · (1 − S1 / S2)
  *
  * on the sensor; scaled to the frame's height in pixels it is the blur's
  * diameter on screen. It grows towards c∞ = f² / (N · (S1 − f)) at the
  * horizon and shrinks with the focus distance: a facade 20 m ahead leaves
- * the city behind it all but sharp (about half a pixel on a 1440 px tall
- * frame), a lamp post 3 m ahead blurs it by four.
+ * the city behind it nearly sharp (under a pixel on a 1440 px tall
+ * frame), a lamp post 3 m ahead blurs it by six.
  */
 
 /** Sensor height (mm): full frame. */
 export const SENSOR_HEIGHT_MM = 24;
-/** The aperture, an f-number: a fast wide-angle at a common opening. */
-export const APERTURE_F = 2.8;
+/** The aperture, an f-number: a fast prime wide open (f/2.8 read as too
+ *  faint, 2026-11-06). */
+export const APERTURE_F = 1.8;
 /**
  * The widest blur drawn (px, diameter): the lens blur's full circle. A
- * close focus would ask for more (twelve pixels at a metre); past this it
+ * close focus would ask for more (eighteen pixels at a metre); past this it
  * would smear rather than hint at depth.
  */
 export const MAX_BLUR_PX = 8;
