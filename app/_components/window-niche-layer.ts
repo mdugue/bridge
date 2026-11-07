@@ -66,8 +66,8 @@ import type { ClayDetailUniforms } from "./visual-style";
  * (lib/city/window-niches.ts, the shader's grid on the CPU), worked out off
  * the main thread once a full-LoD2 tile lands (window-niche-client.ts) and
  * kept per tile by cell, packed (24 bytes a window). One set of instances
- * for the site holds the niches within its reach of the eye (`NicheReach`:
- * 80 m on a desktop, 40 m on a phone), refilled as it moves; the tiles near
+ * for the site holds the niches within `NICHE_RADIUS_M` of the eye,
+ * refilled as it moves; the tiles near
  * it cut their openings within the radius it filled (less a window's
  * reach), so no opening is cut without its niche — what a niche too many
  * costs is a box unseen behind a wall. A tile far from the eye cuts
@@ -365,15 +365,13 @@ interface NicheTile {
   cutting: boolean;
 }
 
-/** How large the set is: its radius around the eye (m) and its most
- *  niches — a phone's smaller (`NICHES_PHONE`). */
-export interface NicheReach {
-  radius: number;
-  capacity: number;
-}
-
-export const NICHES_DESKTOP: NicheReach = { radius: 80, capacity: 8192 };
-export const NICHES_PHONE: NicheReach = { radius: 40, capacity: 2048 };
+/** How far from the eye windows are real niches (m), on every device;
+ *  the outer `NICHE_FADE_M` of it a band where each window turns at its
+ *  own distance (visual-style.ts `nicheMask`). */
+export const NICHE_RADIUS_M = 80;
+/** The most niches drawn at once: the densest blocks hold ≈ 3000 within
+ *  the radius; a phone's set is half as large (the nearest first). */
+export const NICHE_CAPACITY = { desktop: 8192, mobile: 4096 } as const;
 
 /** The site's niches near the eye (see the head comment). */
 export interface NicheField {
@@ -535,7 +533,8 @@ const CUT_OFF_M = 160;
 
 /** What the field asks of the app. */
 export interface NicheOptions {
-  reach: NicheReach;
+  /** the most niches drawn (`NICHE_CAPACITY`) */
+  capacity: number;
   /** builds a drawable's shaders off the frame */
   compile: (object: Object3D) => Promise<unknown>;
   /** a tile's clay cuts its openings or not (visual-style.ts
@@ -548,9 +547,9 @@ export function createNicheField(
   d: ClayDetailUniforms,
   options: NicheOptions
 ): NicheField {
-  const { reach, compile, cutOn } = options;
+  const { capacity, compile, cutOn } = options;
   const geometry = nicheGeometry();
-  const mesh = new Instances(geometry, nicheMaterial(d), reach.capacity);
+  const mesh = new Instances(geometry, nicheMaterial(d), capacity);
   mesh.name = "window-niches";
   mesh.setColorAt(0, new Color(CLAY_BASE));
   mesh.drawCount = 0;
@@ -583,9 +582,9 @@ export function createNicheField(
   const cutNear = (eye: Vector3) => {
     for (const tile of tiles.values()) {
       const far = boxDistance(tile.box, eye.x, eye.z);
-      if (far < reach.radius + CUT_ON_M) {
+      if (far < NICHE_RADIUS_M + CUT_ON_M) {
         setCut(tile, true);
-      } else if (far > reach.radius + CUT_OFF_M) {
+      } else if (far > NICHE_RADIUS_M + CUT_OFF_M) {
         setCut(tile, false);
       }
     }
@@ -610,8 +609,8 @@ export function createNicheField(
       tiles.values(),
       eye.x,
       eye.z,
-      reach.radius,
-      reach.capacity
+      NICHE_RADIUS_M,
+      capacity
     );
     const m = mesh.instanceMatrix.array as Float32Array;
     const tints = mesh.instanceTints?.array as Float32Array;

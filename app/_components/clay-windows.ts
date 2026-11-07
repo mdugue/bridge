@@ -136,6 +136,10 @@ export interface ClayWindows {
   sky: F;
   /** a factor on the sun's light (the sills', the reveals' shadows) */
   sun: F;
+  /** the window's own number in 0…1 (its column, storey and seed): where
+   *  in the niches' fade band it turns from drawn to real
+   *  (visual-style.ts `nicheMask`) */
+  pick: F;
 }
 
 /** A hash in 0…1 of two numbers. */
@@ -745,6 +749,7 @@ export function clayWindows(i: WindowInputs): ClayWindows {
   return {
     opening,
     pane: opening.mul(r.back),
+    pick: windowHash(g.j.mul(7.13).add(g.k.mul(3.71)), i.seed.add(9.1)),
     sky: opening
       .mul(r.back)
       .mul(r.ao)

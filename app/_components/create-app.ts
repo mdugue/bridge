@@ -130,11 +130,7 @@ import type { ModelHud, ModelRig, ViewMode } from "./model-rig";
 import type { ModelCamera } from "./model-camera";
 import { setViewDirection } from "./view-direction";
 import { siteMurals } from "./mural-layer";
-import {
-  createNicheField,
-  NICHES_DESKTOP,
-  NICHES_PHONE,
-} from "./window-niche-layer";
+import { createNicheField, NICHE_CAPACITY } from "./window-niche-layer";
 import { createViewLens } from "./view-lens";
 import { setPickRay } from "./view-ray";
 import {
@@ -1601,9 +1597,8 @@ async function bootApp(
   cleanups.push(() => lampReflections.dispose());
 
   // The facades share the ground's sun (the same node). The near windows
-  // are real niches (window-niche-layer.ts) — on a phone within less
-  // reach, and on none that ran short of GPU memory lately; on a desktop
-  // up to the first safety level.
+  // are real niches (window-niche-layer.ts) — not on a phone that ran
+  // short of GPU memory lately; on a desktop up to the first safety level.
   const niching = budget.safety <= (budget.tier === "mobile" ? 0 : 1);
   const styleResources = createStyleResources(
     sceneNight,
@@ -1642,7 +1637,7 @@ async function bootApp(
   let compileWith: PostStack["compile"] | null = null;
   const niches = niching
     ? createNicheField(styleResources.clayDetail, {
-        reach: budget.tier === "mobile" ? NICHES_PHONE : NICHES_DESKTOP,
+        capacity: NICHE_CAPACITY[budget.tier],
         compile: async (object) =>
           compileWith ? await compileWith(object) : undefined,
         // a tile near the eye cuts its openings: its clay's other build,

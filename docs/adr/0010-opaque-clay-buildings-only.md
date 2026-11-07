@@ -36,7 +36,7 @@ from data, read the same on every house, and stay calm.
    churches none). No window row below the ground in front of the wall.
    Near the eye the openings are cut and real niches stand behind them,
    laid on the shader's own grid, so drawn and real windows are one
-   window (a phone's reach is half a desktop's).
+   window; at the edge each window turns at its own distance.
 5. **Facade parts are soft, abstract geometry**: plinths, cornices, doors
    from OSM entrances, dormers, shopfronts — rounded profiles, never hard
    bevels, relief lit from above and never darker than the wall.
