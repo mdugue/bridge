@@ -501,11 +501,11 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   ein Hinweis sagt es, und beim Wechsel des Stils gilt die eingestellte
   Zeit wieder.
 - **Darstellung** — ganz oben der **Bildstil**, darunter der eine
-  verbliebene Regler, *Nebel* (der Entfernungsdunst, eine Prozentzahl),
-  und der Schalter *Multi-Tuft-Kronen (nah)* (reiche Mehrbüschel-Kronen
-  nahe der Kamera; aus = die einfache Krone überall). *Zurücksetzen*
-  stellt beide auf ihren Startwert zurück und lässt den Bildstil, wie er
-  ist. Der übrige Look ist fest (unten).
+  verbliebene Regler, *Nebel* (der Entfernungsdunst, eine Prozentzahl).
+  *Zurücksetzen* stellt ihn auf seinen Startwert zurück und lässt den
+  Bildstil, wie er ist. Der übrige Look ist fest (unten), auch die
+  Bäume: nahe der Kamera tragen sie immer ihre reiche Mehrbüschel-Krone,
+  soweit das Budget der Stadt reicht.
 
 Der Bildstil zeichnet dieselbe Stadt auf eine andere Art; er lässt sich
 jederzeit wechseln, per Klick oder mit `V`. Der Browser merkt sich den
@@ -550,8 +550,6 @@ Code und Wissensbasis für sie verwenden:
 | Vegetation | *Bodendetail* | Bordsteine, Rasenkanten, Stellplätze, Fahrbahnmarkierungen (Überwege, Halt-, Rad- und Mittellinien), die Gärten der Kleingartenanlagen und der Belag unter den Füßen (Asphalt, Platten, Kopfsteinpflaster aus OpenStreetMap), die Mähstreifen und Körnung der Sportplätze, aus der Nähe sichtbar |
 | | *Stadtgrün* | färbt begrünte Höfe, Vorgärten und Parks im Siedlungsgebiet und die grünen Bahnböschungen wie Wiese, aus dem Infrarot-Luftbild |
 | | *Wiesenfärbung* | färbt Wiesen saftig bis trocken aus dem Infrarot-Luftbild |
-| | *Gegenlicht-Schimmer* | Gegenlichtschimmer auf Kronen zwischen dir und der Sonne |
-| | *Blattdurchscheinen* | Durchleuchtung naher, großer Kronen (schattenabhängig) |
 | Rendering | *Kontaktschatten* | Umgebungsverdunkelung in Ecken und unter Traufen |
 | | *Himmelslicht* | enge Höfe und Straßenschluchten bekommen weniger Himmelslicht als offene Wiesen — aus Gelände und Gebäudemodell vorberechnet |
 | | *Ferne Schatten* | Schatten jenseits der gewöhnlichen Schattenreichweite: lange Schatten ferner Häuser und Hänge bei tiefer Sonne, und in der Ferne auch die Schatten der Nachbarhäuser |
@@ -641,7 +639,7 @@ und das Modell behalten ihre scharfen Linien.
   nach ihrer Art, ein Objekt aus glTF oder OBJ mit seinem Namen — und wo
   der Entwurf steht.
 - **Snapshot** — *Kopieren* kopiert deine genaue Position, Datum und
-  Uhrzeit, den Bildstil, den *Nebel*, den Kronen-Schalter und die
+  Uhrzeit, den Bildstil, den *Nebel* und die
   Datenebenen als kleinen JSON-Text; einen solchen Text in das Feld
   einfügen und *Anwenden* drücken stellt ihn wieder her. *Link kopieren*
   kopiert einen Link auf diese Seite, der mit derselben Ansicht öffnet

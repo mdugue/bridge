@@ -8,7 +8,7 @@ import {
   MeshBasicNodeMaterial,
   MeshStandardNodeMaterial,
   PlaneGeometry,
-  PointLight,
+  SpotLight,
   PointsNodeMaterial,
   Vector3,
 } from "three/webgpu";
@@ -27,7 +27,12 @@ import {
 import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
 import type { GroundContext } from "@/lib/city/ground-clamp";
 import { Instances, instancePosition } from "./instancing";
-import { buildLampMirrors } from "./lamp-reflections";
+import {
+  buildLampMirrors,
+  LAMP_CD,
+  LAMP_CONE,
+  LAMP_RANGE_M,
+} from "./lamp-reflections";
 import type { LampMirror } from "./lamp-reflections";
 import type { Pt } from "./mesh-kit";
 import type { DeviceTier } from "./scene-profile";
@@ -89,8 +94,11 @@ export const LAMP_LIGHTS: Readonly<Record<DeviceTier, LampLightBudget>> = {
  * at a far head (the third of three) happens while its light is dim. */
 const LIGHT_NEAR = 14;
 const LIGHT_FAR = 42;
-const LIGHT_BASE = 14;
-const LIGHT_RANGE = 40;
+const LIGHT_BASE = LAMP_CD;
+const LIGHT_RANGE = LAMP_RANGE_M;
+
+/** How near (m) a real light stands to a head to be that head's. */
+const HELD_M = 0.05;
 
 interface Place {
   x: number;
@@ -162,12 +170,16 @@ export interface LampControl {
 /** A small fixed pool of real point lights shared across ALL tiles' lamps. */
 export interface LampLights {
   dispose: () => void;
-  lights: PointLight[];
+  lights: SpotLight[];
   /** replaces the lamp heads the pool retargets to (tiles stream in) */
   setHeads: (heads: Vector3[]) => void;
   setNightFactor: (t: number) => void;
   /** repositions the lights onto the nearest lamp heads (call per frame) */
   updateNearest: (camPos: Vector3) => void;
+  /** how much of the head at `head` a real light lights this frame (0…1,
+   *  its share of the lamp's full light): the walls' street light
+   *  (lamp-reflections.ts `streetLight`) takes the rest */
+  heldShare: (head: Vector3) => number;
 }
 
 /** The lamps' warm light (the heads' emissive, halos, pools, real lights). */
@@ -719,9 +731,20 @@ function handOver(near: number, next: number, band: number): number {
  */
 export function createLampLights(budget: LampLightBudget): LampLights {
   let heads: Vector3[] = [];
-  const lights: PointLight[] = [];
+  const lights: SpotLight[] = [];
   for (let i = 0; i < budget.lights; i += 1) {
-    const light = new PointLight(LAMP_LIGHT, 0, LIGHT_RANGE, 2);
+    // a street lamp's shade throws its light down: a cone round the
+    // plumb line, its aim carried along as its child
+    const light = new SpotLight(
+      LAMP_LIGHT,
+      0,
+      LIGHT_RANGE,
+      LAMP_CONE.angle,
+      LAMP_CONE.penumbra,
+      2
+    );
+    light.add(light.target);
+    light.target.position.set(0, -1, 0);
     light.castShadow = false;
     lights.push(light);
   }
@@ -760,6 +783,20 @@ export function createLampLights(budget: LampLightBudget): LampLights {
         lights[s].intensity =
           nightFactor * LIGHT_BASE * falloff(Math.sqrt(dist[s])) * fade;
       }
+    },
+    heldShare: (head) => {
+      const full = nightFactor * LIGHT_BASE;
+      let share = 0;
+      for (const light of lights) {
+        if (
+          full > 0 &&
+          light.intensity > 0 &&
+          light.position.distanceToSquared(head) < HELD_M * HELD_M
+        ) {
+          share = Math.max(share, Math.min(light.intensity / full, 1));
+        }
+      }
+      return share;
     },
     dispose: () => {
       for (const light of lights) {

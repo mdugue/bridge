@@ -37,10 +37,13 @@ phone has no memory to spare (ADR 0047).
 5. **Nothing animated reaches the shadow map.** Sway casts rigidly
    through `castShadowPositionNode`; clouds, water and moving data layers
    cast nothing.
-6. **A fixed pool of real point lights**, sized per tier before the first
+6. **A fixed pool of real lamp lights**, sized per tier before the first
    frame and never changed (three on a desktop, one on a phone), retargeted
-   to the nearest lamps. Every other lamp is emissive and additive, scaled
-   by the night factor.
+   to the nearest lamps: spot lights aimed down, as a street lamp's shade
+   throws its light. The walls and a fountain's water take the lamps near
+   the eye in one loop over a fixed uniform array (48, a phone 12), each
+   less the share a real light gives it; every lamp's head, halo and pool
+   is emissive and additive. All scaled by the night factor.
 7. **Post:** the scene renders into its own target; GTAO at half
    resolution, smoothed, never gated by motion; depth of field on a
    desktop only, as wide as a real lens's, dropped while the camera moves

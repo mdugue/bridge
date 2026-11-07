@@ -221,6 +221,5 @@ export function* coarseCrownSteps(
     group,
     chunks: [],
     setSeason: (day) => applySeasons(seasons, day),
-    updateLod: () => false,
   };
 }

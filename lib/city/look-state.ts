@@ -38,9 +38,6 @@ export function clampLook(patch: Partial<LookValues>): Partial<LookValues> {
       out[def.key] = Math.min(Math.max(value, 0), 1);
     }
   }
-  if (patch.multiTuft !== undefined) {
-    out.multiTuft = patch.multiTuft;
-  }
   if (isRenderStyle(patch.style)) {
     out.style = patch.style;
   }
