@@ -21,14 +21,17 @@ import type {
   Scene,
   Texture,
   TextureNode,
+  UniformNode,
   WebGPURenderer,
 } from "three/webgpu";
 import { dof } from "three/addons/tsl/display/DepthOfFieldNode.js";
 import { ao } from "three/addons/tsl/display/GTAONode.js";
 import { smaa } from "three/addons/tsl/display/SMAANode.js";
 import {
+  asin,
   clamp,
   distance,
+  cross,
   dot,
   float,
   floor,
@@ -42,6 +45,7 @@ import {
   rtt,
   screenCoordinate,
   screenUV,
+  sin,
   smoothstep,
   texture,
   textureSize,
@@ -51,8 +55,13 @@ import {
   vec2,
   vec3,
   vec4,
+  getViewPosition,
+  normalize,
+  sign,
+  step as stepOf,
 } from "three/tsl";
 import type { VeilState } from "@/lib/city/load-frontier";
+import { horizonBlurPx, MAX_BLUR_PX } from "@/lib/city/lens";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import type { LookValues } from "@/lib/city/look-controls";
 import { NAMEPLATE_TYPES } from "@/lib/city/nameplate-type";
@@ -167,24 +176,15 @@ const GRAIN = 0.25;
 /** Tuschelinien: the outlines' strength in the graphic styles. */
 const INK = 0.7;
 
-// focusRange is the metric over which a fragment ramps from sharp to fully
-// blurred. A fixed value can't serve a 2 km-deep scene, so — like a real
-// lens — it scales with the focus distance: tight DoF up close, very deep
-// DoF far away. The band is generous on purpose: the lens should only hint
-// at depth. At 0.7 × distance (min 12 m) a crosshair on the pavement ten
-// metres ahead blurred the whole street beyond 22 m — it read as smeared,
-// not as a lens.
-const FOCUS_RANGE_FACTOR = 1.6;
-const FOCUS_RANGE_MIN = 45;
-const FOCUS_RANGE_MAX = 3000;
-/** Bokeh radius scale: a soft hint of lens, never a smear. */
-const BOKEH_SCALE = 0.5;
-function focusRangeFor(distanceM: number): number {
-  return Math.min(
-    Math.max(distanceM * FOCUS_RANGE_FACTOR, FOCUS_RANGE_MIN),
-    FOCUS_RANGE_MAX
-  );
-}
+/**
+ * The lens blur's kernel scale: `DepthOfFieldNode` reads a circle of
+ * confusion of 0…1 and averages a 64-tap disc of this radius (px) times
+ * it — so a full circle is twice this across, `MAX_BLUR_PX` (lens.ts).
+ * (The 16-tap pass after it takes the brightest of its taps: it spreads
+ * highlights into bokeh discs, it does not widen the blur. Counting it as
+ * a second blur had drawn every circle half as wide as the lens's.)
+ */
+const BOKEH_SCALE = MAX_BLUR_PX / 2;
 
 /** Depth grading reaches full strength at this view distance (m). */
 const GRADE_DISTANCE_M = 800;
@@ -194,8 +194,10 @@ export interface FocusInfo {
   bokehScale: number;
   /** the focus distance in metres: the distance to the crosshair's hit */
   focusDistance: number;
-  /** the sharp-ramp distance in metres */
-  focusRange: number;
+  /** the blur's diameter (px) at the horizon, faded in (lens.ts) */
+  horizonBlurPx: number;
+  /** how much of the blur shows, 0…1: it grows in after the camera stops */
+  fade: number;
 }
 
 export interface PostStack {
@@ -228,9 +230,11 @@ export interface PostStack {
    * stay on — the pass runs at half resolution for that — because a shadow
    * that vanishes the moment you move and reappears when you stop reads as
    * a bug, not as a saving. Layered beside the picture style's gate and
-   * Modell's: recovery brings DoF back only where those allow it.
+   * Modell's: recovery brings DoF back only where those allow it. `fade`
+   * (0…1, `lensFade` in regression.ts) is how much of the blur shows: it
+   * grows in after recovery instead of snapping on.
    */
-  setRegressed: (on: boolean) => void;
+  setRegressed: (on: boolean, fade?: number) => void;
   /** The loading veil this frame (load-veil.ts): the frontier's ring
    *  around the world-space point `centreX`, `centreZ`. */
   setLoadVeil: (state: VeilState, centreX: number, centreZ: number) => void;
@@ -374,29 +378,97 @@ function finish(input: V4, viewZ: F, f: Finish, veil: LoadVeil): V4 {
   return vec4(veil.over(graded.mul(vignette)).mul(paper), input.a);
 }
 
+/** What the lens blur reads of the scene's depth (see `lensBlurOf`). */
+interface LensDepth {
+  /** the scene's depth texture */
+  depth: Texture;
+  lens: ViewLens;
+  /** one pixel in uv */
+  texel: UniformNode<"vec2", Vector2>;
+  /** the world's up in view space */
+  viewUp: UniformNode<"vec3", Vector3>;
+}
+
 /**
- * Depth of field over `lit` (`DepthOfFieldNode`). Its input is drawn into
- * a target of its own first; `dof()` would make that target itself, with
- * the depth buffer every render target gets by default and nothing here
- * reads (a third more memory for the copy) — the picture is the same.
+ * How much the surface at `at` faces up or down (0…1): the ground, a
+ * square, a flat roof. Its normal is rebuilt from the depth of the pixel
+ * and its neighbours, each axis from the side nearer in depth so a
+ * silhouette's edge does not read as a slope.
  */
-function lensBlurOf(lit: V4, viewZ: F, focusDistance: Live, focusRange: Live) {
-  const input = rtt(lit, null, null, { depthBuffer: false });
-  // Only what lies beyond the focus goes soft. Nearer than it is read as
-  // at the focus (view Z is negative ahead): a lens blurs the foreground
-  // too, but in a first-person view the foreground is the street at your
-  // feet, the lower half of the screen — blurred, it read as a streaky
-  // veil lying flat on the screen rather than as depth. The node still
-  // runs its near-field passes, now over an empty field: the clamp saves
-  // no work, a far-only pass of our own would.
-  const behindFocus = viewZ.min(focusDistance.negate());
-  const node = dof(
-    input,
-    behindFocus,
-    focusDistance,
-    focusRange,
-    uniform(BOKEH_SCALE)
+function levelAt(d: LensDepth, at: V2): F {
+  const positionAt = (p: V2): V3 =>
+    getViewPosition(p, texture(d.depth, p).r, d.lens.inverseProjection);
+  const p = positionAt(at).toVar();
+  const nearer = (a: V3, b: V3): V3 => {
+    const da = a.z.sub(p.z).abs();
+    const db = b.z.sub(p.z).abs();
+    // the step from whichever neighbour lies nearer in depth
+    return mix(a.sub(p), p.sub(b), stepOf(db, da));
+  };
+  const tx = vec2(d.texel.x, 0);
+  const ty = vec2(0, d.texel.y);
+  const dx = nearer(positionAt(at.add(tx)), positionAt(at.sub(tx)));
+  const dy = nearer(positionAt(at.add(ty)), positionAt(at.sub(ty)));
+  const normal = normalize(cross(dx, dy));
+  return smoothstep(0.8, 0.95, dot(normal, d.viewUp).abs());
+}
+
+/**
+ * The circle of confusion (−1…1 of `MAX_BLUR_PX`, negative before the
+ * focus) of a fragment `viewZ` ahead, focus `focusDistance` ahead: a thin
+ * lens's (lens.ts), `horizonCoc` being its diameter at the horizon over
+ * `MAX_BLUR_PX`. Behind the focus c∞ · (1 − S1/S2), before it
+ * c∞ · (S1/S2 − 1). The level ground before the focus stays sharp: in a
+ * first-person view it is the street at your feet, the lower half of the
+ * screen, and blurred it read as a streaky veil lying flat on the screen
+ * rather than as depth; a tree, a lamp or a wall before the focus blurs
+ * as through a lens.
+ */
+function confusionOf(
+  viewZ: F,
+  level: F,
+  focusDistance: Live,
+  horizonCoc: Live
+): F {
+  const depth = viewZ.negate().max(0.1);
+  const behind = float(1).sub(focusDistance.div(depth.max(focusDistance)));
+  const before = focusDistance
+    .div(depth.min(focusDistance))
+    .sub(1)
+    .mul(float(1).sub(level));
+  return clamp(behind.mul(horizonCoc), 0, 1).sub(
+    clamp(before.mul(horizonCoc), 0, 1)
   );
+}
+
+/**
+ * Depth of field over `lit` (`DepthOfFieldNode`). The node ramps its
+ * circle of confusion with a smoothstep of the distance from the focus;
+ * it is handed a depth that ramps to the lens's own instead — the inverse
+ * smoothstep of it, signed, with the focus at 0 and the ramp 1 long. Its
+ * input is drawn into a target of its own first; `dof()` would make that
+ * target itself, with the depth buffer every render target gets by
+ * default and nothing here reads (a third more memory for the copy) — the
+ * picture is the same.
+ */
+function lensBlurOf(
+  lit: V4,
+  viewZ: F,
+  d: LensDepth,
+  focusDistance: Live,
+  horizonCoc: Live
+) {
+  const input = rtt(lit, null, null, { depthBuffer: false });
+  const coc = confusionOf(
+    viewZ,
+    levelAt(d, screenUV),
+    focusDistance,
+    horizonCoc
+  );
+  // smoothstep's inverse, 0.5 − sin(asin(1 − 2y) / 3), of |coc|, signed
+  const ramp = float(0.5).sub(sin(asin(float(1).sub(coc.abs().mul(2))).div(3)));
+  const signed = ramp.mul(sign(coc));
+  const node = dof(input, signed.negate(), 0, 1, uniform(BOKEH_SCALE));
   // reason: getTextureNode is DepthOfFieldNode's documented output (its
   // composite target's texture) but missing from the @types.
   const output = node as unknown as { getTextureNode: () => TextureNode };
@@ -639,9 +711,16 @@ export function createPostStack(
     );
 
   const focusDistance = uniform(HYPERFOCAL_M);
-  const focusRange = uniform(focusRangeFor(HYPERFOCAL_M));
+  // the blur's diameter at the horizon over MAX_BLUR_PX, faded in
+  const horizonCoc = uniform(0);
+  const lensDepth: LensDepth = {
+    depth: depthTexture,
+    lens,
+    texel: uniform(new Vector2(1 / size.x, 1 / size.y)),
+    viewUp: uniform(new Vector3(0, 1, 0)),
+  };
   const lensBlur = profile.dof
-    ? lensBlurOf(lit, viewZ, focusDistance, focusRange)
+    ? lensBlurOf(lit, viewZ, lensDepth, focusDistance, horizonCoc)
     : null;
   const motion = createMotionBlur(depthTexture, lens);
 
@@ -874,11 +953,22 @@ export function createPostStack(
   // Autofocus: the distance, along the view, to the crosshair's last hit.
   const focusPoint = new Vector3(0, 0, -HYPERFOCAL_M);
   const inView = new Vector3();
+  // how much of the blur shows (setRegressed), and its width at the
+  // horizon this frame (px)
+  let lensFadeNow = 1;
+  let horizonPx = 0;
   const updateFocus = () => {
-    inView.copy(focusPoint).applyMatrix4(active().matrixWorldInverse);
+    const view = active();
+    inView.copy(focusPoint).applyMatrix4(view.matrixWorldInverse);
     const d = Math.max(1, -inView.z);
     focusDistance.value = d;
-    focusRange.value = focusRangeFor(d);
+    // a parallel camera (Modell) draws no lens blur
+    const fov = "fov" in view ? (view as PerspectiveCamera).fov : 0;
+    horizonPx = fov > 0 ? horizonBlurPx(d, fov, size.y) * lensFadeNow : 0;
+    horizonCoc.value = horizonPx / MAX_BLUR_PX;
+    lensDepth.viewUp.value
+      .set(0, 1, 0)
+      .transformDirection(view.matrixWorldInverse);
   };
 
   /** set by `dispose`: what is let go later goes at once, and what is
@@ -1461,11 +1551,13 @@ export function createPostStack(
     },
     getFocusInfo: () => ({
       focusDistance: focusDistance.value,
-      focusRange: focusRange.value,
+      horizonBlurPx: horizonPx,
+      fade: lensFadeNow,
       bokehScale: BOKEH_SCALE,
     }),
     setSize: () => {
       renderer.getDrawingBufferSize(size);
+      lensDepth.texel.value.set(1 / size.x, 1 / size.y);
       target.setSize(size.x, size.y);
       beforeAa.setSize(size.x, size.y);
       // the lens blur sizes its copy when it runs; the motion blur draws
@@ -1488,8 +1580,9 @@ export function createPostStack(
       applyStyleWeights();
     },
     setLoadVeil: loadVeil.set,
-    setRegressed: (on) => {
+    setRegressed: (on, fade = 1) => {
       regressed = on;
+      lensFadeNow = fade;
     },
     setFocusTarget: (point) => {
       // No hit (sky) keeps the last focus, so tilting a degree above a far

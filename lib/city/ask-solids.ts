@@ -408,6 +408,32 @@ export function hitsInSets<T>(
   return out.sort((a, b) => a.distance - b.distance);
 }
 
+/**
+ * The nearest hit in the sets the ray meets within `far` (or null): the
+ * autofocus's question, asked ten times a second, so each set is opened
+ * only when the ray enters its box before the best hit so far.
+ */
+export function nearestInSets<T>(
+  o: Xyz,
+  d: Xyz,
+  sets: Iterable<AskSet<T>>,
+  far: number
+): AskHit<T> | null {
+  let best: AskHit<T> | null = null;
+  for (const set of sets) {
+    const reach = best ? best.distance : far;
+    const enter = rayAabb(o, d, set.box);
+    if (enter === null || enter > reach) {
+      continue;
+    }
+    const hit = set.nearest(o, d, reach);
+    if (hit && hit.distance <= reach) {
+      best = hit;
+    }
+  }
+  return best;
+}
+
 /** A pier just outside its deck's outline still belongs to it (m): a
  *  bridge's ask (bridge-ask.ts) and its outline (selection-shape.ts) reach
  *  as far. */
