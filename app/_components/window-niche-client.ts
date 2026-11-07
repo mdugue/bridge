@@ -21,7 +21,7 @@ export interface NicheJobInput {
 }
 
 export interface NicheResult {
-  niches: Float32Array;
+  niches: Uint16Array;
   cells: Float64Array;
 }
 

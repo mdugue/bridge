@@ -1156,12 +1156,6 @@ export function createClayMaterial(
   clay.emissiveNode = graph.emissive;
   // three's ShadowNode hands this the sun's filtered shadow term
   clay.receivedShadowNode = graph.receivedShadow;
-  if (graph.mask) {
-    // the openings cut for their niches; the shadow pass draws the back
-    // faces and keeps every wall whole
-    clay.maskNode = graph.mask;
-    clay.maskShadowNode = bool(true);
-  }
   setSlots(clay, {
     clayObjects: objects.texture,
     clayRows: objects.rows,
@@ -1201,10 +1195,43 @@ export function setClaySkyView(
 function applySides(clay: MeshStandardNodeMaterial, section: boolean): void {
   const wasSide = clay.side;
   clay.side = section ? DoubleSide : FrontSide;
-  setGraph(clay, section ? "clay|double" : "clay");
+  setClayKey(clay);
   if (clay.side !== wasSide) {
     clay.needsUpdate = true;
   }
+}
+
+/** The shadow pass's mask of a clay that cuts: nothing (one node, so
+ *  every such clay shares its build). */
+const keepWalls = bool(true);
+
+/** The clay's shared build: by its sides and whether it cuts openings. */
+function setClayKey(clay: MeshStandardNodeMaterial): void {
+  const sides = clay.side === DoubleSide ? "clay|double" : "clay";
+  setGraph(clay, clay.maskNode ? `${sides}|niches` : sides);
+}
+
+/**
+ * A tile's clay cuts its windows' openings for the niches behind them or
+ * not (window-niche-layer.ts, only the tiles near the eye: a clay that
+ * cuts loses its early depth test). A second build of the clay's graph;
+ * the caller compiles it off the frame. The shadow pass draws the back
+ * faces and keeps every wall whole. False when nothing changed.
+ */
+export function setClayNicheCut(
+  resources: StyleResources,
+  clay: MeshStandardNodeMaterial,
+  on: boolean
+): boolean {
+  const mask = on ? clayGraphs.get(resources.clayDetail)?.mask : undefined;
+  if ((clay.maskNode ?? undefined) === mask) {
+    return false;
+  }
+  clay.maskNode = mask ?? null;
+  clay.maskShadowNode = mask ? keepWalls : null;
+  setClayKey(clay);
+  clay.needsUpdate = true;
+  return true;
 }
 
 /**

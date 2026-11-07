@@ -130,7 +130,11 @@ import type { ModelHud, ModelRig, ViewMode } from "./model-rig";
 import type { ModelCamera } from "./model-camera";
 import { setViewDirection } from "./view-direction";
 import { siteMurals } from "./mural-layer";
-import { createNicheField } from "./window-niche-layer";
+import {
+  createNicheField,
+  NICHES_DESKTOP,
+  NICHES_PHONE,
+} from "./window-niche-layer";
 import { createViewLens } from "./view-lens";
 import { setPickRay } from "./view-ray";
 import {
@@ -245,7 +249,11 @@ import { attachInspector, inspectRequested } from "./inspector";
 import { attachTouchControls } from "./touch-controls";
 import { createVegetationLod, setCrownTime } from "./vegetation-layer";
 import type { VegetationControl } from "./vegetation-layer";
-import { createStyleResources, setClaySection } from "./visual-style";
+import {
+  createStyleResources,
+  setClayNicheCut,
+  setClaySection,
+} from "./visual-style";
 import { setWaterTime } from "./water-layer";
 import { createModelCuts } from "./model-cuts";
 import * as dataLayersModule from "./data-layers-feature";
@@ -1592,10 +1600,11 @@ async function bootApp(
   const lampReflections = createLampReflections(budget.tier);
   cleanups.push(() => lampReflections.dispose());
 
-  // The facades share the ground's sun (the same node). On a desktop at
-  // full safety the near windows are real niches (window-niche-layer.ts):
-  // the clay cuts their openings — a discard a phone's clay never builds.
-  const niching = budget.tier === "desktop" && budget.safety === 0;
+  // The facades share the ground's sun (the same node). The near windows
+  // are real niches (window-niche-layer.ts) — on a phone within less
+  // reach, and on none that ran short of GPU memory lately; on a desktop
+  // up to the first safety level.
+  const niching = budget.safety <= (budget.tier === "mobile" ? 0 : 1);
   const styleResources = createStyleResources(
     sceneNight,
     ground.sunDirection,
@@ -1632,9 +1641,21 @@ async function bootApp(
   // loop runs the stream's first update, so no tile lands without it.
   let compileWith: PostStack["compile"] | null = null;
   const niches = niching
-    ? createNicheField(styleResources.clayDetail, async (object) =>
-        compileWith ? await compileWith(object) : undefined
-      )
+    ? createNicheField(styleResources.clayDetail, {
+        reach: budget.tier === "mobile" ? NICHES_PHONE : NICHES_DESKTOP,
+        compile: async (object) =>
+          compileWith ? await compileWith(object) : undefined,
+        // a tile near the eye cuts its openings: its clay's other build,
+        // made off the frame where it can be
+        cutOn: (city, on) => {
+          const clay = city.mesh.material as MeshStandardNodeMaterial;
+          if (setClayNicheCut(styleResources, clay, on) && compileWith) {
+            void compileWith(city.mesh).catch(() => {
+              // built on its first draw then
+            });
+          }
+        },
+      })
     : null;
   if (niches) {
     scene.add(niches.mesh);

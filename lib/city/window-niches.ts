@@ -437,11 +437,89 @@ export interface NicheTable {
   winW: Float32Array;
 }
 
-/** A tile's niches from its mesh and table, sorted by cell (`cellNiches`). */
+/** Unsigned 16-bit words per packed niche (`packNiches`): 16 bytes where
+ *  `NICHE_STRIDE` floats take 44 — what a phone keeps of a tile. */
+export const PACKED_STRIDE = 8;
+
+const clampTo = (v: number, top: number) =>
+  Math.min(Math.max(Math.round(v), 0), top);
+/** A niche's sizes in 2 cm steps, rounded up: never smaller than its
+ *  opening (window-niche-layer.ts lets the box reach past it besides). */
+const SIZE_STEP_M = 0.02;
+const size = (m: number) => Math.min(Math.ceil(m / SIZE_STEP_M - 1e-6), 255);
+
+/**
+ * A tile's niches (sorted by cell, `cellNiches`) packed into 16-bit words:
+ * its place in its cell and its middle over its object's base (cm), its
+ * wall's facing (an angle), its half width and half height (2 cm, rounded
+ * up), its depth (mm), column, storey and object (24 bits).
+ */
+export function packNiches(
+  niches: Float32Array,
+  baseZ: ArrayLike<number>
+): Uint16Array {
+  const n = niches.length / NICHE_STRIDE;
+  const out = new Uint16Array(n * PACKED_STRIDE);
+  for (let i = 0; i < n; i += 1) {
+    const f = i * NICHE_STRIDE;
+    const o = i * PACKED_STRIDE;
+    const x = niches[f];
+    const z = niches[f + 2];
+    const object = niches[f + 8];
+    const angle = Math.atan2(niches[f + 4], niches[f + 3]);
+    out[o] = clampTo(
+      (x - Math.floor(x / NICHE_CELL_M) * NICHE_CELL_M) * 100,
+      65_535
+    );
+    out[o + 1] = clampTo(
+      (z - Math.floor(z / NICHE_CELL_M) * NICHE_CELL_M) * 100,
+      65_535
+    );
+    out[o + 2] = clampTo((niches[f + 1] - baseZ[object]) * 100, 65_535);
+    out[o + 3] = clampTo(((angle + Math.PI) / (2 * Math.PI)) * 65_536, 65_535);
+    out[o + 4] = size(niches[f + 5]) * 256 + size(niches[f + 6]);
+    out[o + 5] =
+      clampTo(niches[f + 7] * 1000, 255) * 256 + clampTo(niches[f + 9], 255);
+    out[o + 6] =
+      clampTo(niches[f + 10], 255) * 256 + Math.floor(object / 65_536);
+    out[o + 7] = object % 65_536;
+  }
+  return out;
+}
+
+/** One packed niche back as its `NICHE_STRIDE` floats into `out`, from the
+ *  cell it lies in (`cx`, `cz`) and its object's base. */
+export function unpackNiche(
+  p: Uint16Array,
+  i: number,
+  cx: number,
+  cz: number,
+  baseZ: ArrayLike<number>,
+  out: Float32Array
+): Float32Array {
+  const o = i * PACKED_STRIDE;
+  const object = (p[o + 6] % 256) * 65_536 + p[o + 7];
+  const angle = (p[o + 3] / 65_536) * 2 * Math.PI - Math.PI;
+  out[0] = cx * NICHE_CELL_M + p[o] / 100;
+  out[1] = baseZ[object] + p[o + 2] / 100;
+  out[2] = cz * NICHE_CELL_M + p[o + 1] / 100;
+  out[3] = Math.cos(angle);
+  out[4] = Math.sin(angle);
+  out[5] = Math.floor(p[o + 4] / 256) * SIZE_STEP_M;
+  out[6] = (p[o + 4] % 256) * SIZE_STEP_M;
+  out[7] = Math.floor(p[o + 5] / 256) / 1000;
+  out[8] = object;
+  out[9] = p[o + 5] % 256;
+  out[10] = Math.floor(p[o + 6] / 256);
+  return out;
+}
+
+/** A tile's niches from its mesh and table, sorted by cell (`cellNiches`)
+ *  and packed (`packNiches`). */
 export function nichesOf(
   mesh: NicheMesh,
   t: NicheTable
-): { niches: Float32Array; cells: Float64Array } {
+): { niches: Uint16Array; cells: Float64Array } {
   const objects = (i: number): NicheObject | undefined =>
     i < t.winAxis.length && t.winAxis[i] >= 0.05
       ? {
@@ -455,5 +533,6 @@ export function nichesOf(
           seed: t.rough[i],
         }
       : undefined;
-  return cellNiches(tileNiches(mesh, objects, (i) => t.baseZ[i]));
+  const sorted = cellNiches(tileNiches(mesh, objects, (i) => t.baseZ[i]));
+  return { niches: packNiches(sorted.niches, t.baseZ), cells: sorted.cells };
 }

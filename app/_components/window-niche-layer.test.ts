@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { NICHE_STRIDE, cellNiches } from "@/lib/city/window-niches";
+import { NICHE_STRIDE, cellNiches, packNiches } from "@/lib/city/window-niches";
 import type { CityLayer } from "./city-layer";
 import { Matrix4, Vector3 } from "three";
 import {
@@ -52,19 +52,31 @@ describe("window niche layer", () => {
       raw[i * NICHE_STRIDE] = x;
       raw[i * NICHE_STRIDE + 8] = i;
     }
-    const { niches, cells } = cellNiches(raw);
+    const sorted = cellNiches(raw);
+    const { cells } = sorted;
+    const baseZ = new Float32Array(xs.length);
+    const niches = packNiches(sorted.niches, baseZ);
     const cellMap = new Map<number, [number, number]>();
     for (let i = 0; i < cells.length; i += 3) {
       cellMap.set(cells[i], [cells[i + 1], cells[i + 2]]);
     }
     // object 1 demolished
-    const city = { stands: (i: number) => i !== 1 } as unknown as CityLayer;
-    const tile = { city, niches, cells: cellMap };
+    const city = {
+      stands: (i: number) => i !== 1,
+      table: { baseZ },
+    } as unknown as CityLayer;
+    const tile = {
+      city,
+      niches,
+      cells: cellMap,
+      box: [0, 0, 0, 0] as [number, number, number, number],
+      cutting: false,
+    };
     const all = nearNiches([tile], 0, 0, 80, 10);
     expect(all.covered).toBe(80);
     expect(
       all.picked
-        .map((c) => niches[c.i * NICHE_STRIDE + 8])
+        .map((c) => sorted.niches[c.i * NICHE_STRIDE + 8])
         .toSorted((a, b) => a - b)
     ).toEqual([0, 2, 3]);
     const two = nearNiches([tile], 0, 0, 80, 2);

@@ -34,9 +34,9 @@ from data, read the same on every house, and stay calm.
    type's. None on party walls, over doors or shopfronts; a monumental
    facade gets no town-house windows (listed palaces a kind of their own,
    churches none). No window row below the ground in front of the wall.
-   Near the eye on a desktop the openings are cut and real niches stand
-   behind them, laid on the shader's own grid, so drawn and real windows
-   are one window; a phone keeps the drawn ones.
+   Near the eye the openings are cut and real niches stand behind them,
+   laid on the shader's own grid, so drawn and real windows are one
+   window (a phone's reach is half a desktop's).
 5. **Facade parts are soft, abstract geometry**: plinths, cornices, doors
    from OSM entrances, dormers, shopfronts — rounded profiles, never hard
    bevels, relief lit from above and never darker than the wall.
@@ -70,8 +70,8 @@ from data, read the same on every house, and stay calm.
   and only on measured walls; a street with every thirtieth house windowed
   was rejected. Niches at runtime on the shader's grid (2026-11) have
   neither fault.
-- **Niches everywhere, on a phone too:** a discard in the clay costs a
-  phone's GPU its early depth test, and a near set its memory (ADR 0047).
+- **Niches cut on every tile:** a discard costs the clay its early depth
+  test, so only the tiles near the eye build it.
 - **Blending roofs toward terracotta:** destroyed the real copper greens.
 - **Raw OSM colours:** pure hues in a pastel city.
 - **A palette lookup per fragment:** class ids cannot be mipmapped.

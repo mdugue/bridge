@@ -5,6 +5,8 @@ import {
   cellNiches,
   jitterHash,
   nicheCellKey,
+  packNiches,
+  unpackNiche,
   tileNiches,
   wallColumns,
   wallRows,
@@ -93,5 +95,37 @@ describe("window niches", () => {
     }
     const objects = [...xs.keys()].map((i) => niches[i * NICHE_STRIDE + 8]);
     expect(objects.toSorted((a, b) => a - b)).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  test("a packed niche comes back within a centimetre, never smaller", () => {
+    const f = new Float32Array(NICHE_STRIDE);
+    f.set([
+      -1234.567, 123.45, 987.654, 0.6, -0.8, 0.55, 0.8, 0.15, 70_123, 3, 4,
+    ]);
+    const baseZ = new Float32Array(70_124);
+    baseZ[70_123] = 110.2;
+    const p = packNiches(f, baseZ);
+    const cx = Math.floor(f[0] / NICHE_CELL_M);
+    const cz = Math.floor(f[2] / NICHE_CELL_M);
+    const back = unpackNiche(
+      p,
+      0,
+      cx,
+      cz,
+      baseZ,
+      new Float32Array(NICHE_STRIDE)
+    );
+    for (const k of [0, 1, 2]) {
+      expect(Math.abs(back[k] - f[k])).toBeLessThan(0.006);
+    }
+    for (const k of [3, 4]) {
+      expect(Math.abs(back[k] - f[k])).toBeLessThan(0.0002);
+    }
+    for (const k of [5, 6]) {
+      expect(back[k]).toBeGreaterThanOrEqual(f[k] - 1e-6);
+      expect(back[k] - f[k]).toBeLessThan(0.02);
+    }
+    expect(Math.abs(back[7] - f[7])).toBeLessThan(0.0006);
+    expect([back[8], back[9], back[10]]).toEqual([70_123, 3, 4]);
   });
 });
