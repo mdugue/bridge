@@ -1646,7 +1646,10 @@ export function nichesPart(site: {
       return built.niches.length > 0 ? built : null;
     },
     objects: () => [],
-    bytes: (built) => built.niches.byteLength + built.cells.byteLength,
+    bytes: (built) =>
+      built.niches.byteLength +
+      built.cells.byteLength +
+      built.houses.byteLength,
     hang: (built) => site.hang(built),
     free: () => [],
   };
@@ -2092,7 +2095,7 @@ export class DressingPlugin {
       nichesPart({
         tile: tileId,
         build: async (signal) => await tileNichesOffThread(input, signal),
-        hang: (built) => field.add(city, built.niches, built.cells),
+        hang: (built) => field.add(city, built),
       })
     );
   }

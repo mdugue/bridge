@@ -34,9 +34,9 @@ from data, read the same on every house, and stay calm.
    type's. None on party walls, over doors or shopfronts; a monumental
    facade gets no town-house windows (listed palaces a kind of their own,
    churches none). No window row below the ground in front of the wall.
-   Near the eye the openings are cut and real niches stand behind them,
+   Within 250 m the openings are cut and real niches stand behind them,
    laid on the shader's own grid, so drawn and real windows are one
-   window; at the edge each window turns at its own distance.
+   window; a house turns as a whole, never a wall in part.
 5. **Facade parts are soft, abstract geometry**: plinths, cornices, doors
    from OSM entrances, dormers, shopfronts — rounded profiles, never hard
    bevels, relief lit from above and never darker than the wall.

@@ -3,6 +3,8 @@ import {
   NICHE_CELL_M,
   NICHE_STRIDE,
   cellNiches,
+  HOUSE_STRIDE,
+  houseBoxes,
   jitterHash,
   nicheCellKey,
   packNiches,
@@ -127,5 +129,21 @@ describe("window niches", () => {
     }
     expect(Math.abs(back[7] - f[7])).toBeLessThan(0.0006);
     expect([back[8], back[9], back[10]]).toEqual([70_123, 3, 4]);
+  });
+  test("each house's windows' extent, its parts together", () => {
+    // objects 0, 1 of house 0; object 2 its own house
+    const raw = new Float32Array(3 * NICHE_STRIDE);
+    for (const [i, [x, z]] of [
+      [1, 5],
+      [-4, 9],
+      [30, 30],
+    ].entries()) {
+      raw[i * NICHE_STRIDE] = x;
+      raw[i * NICHE_STRIDE + 2] = z;
+      raw[i * NICHE_STRIDE + 8] = i;
+    }
+    const boxes = houseBoxes(raw, new Uint32Array([0, 0, 2]));
+    expect(boxes.length).toBe(2 * HOUSE_STRIDE);
+    expect([...boxes]).toEqual([0, -4, 1, 5, 9, 2, 30, 30, 30, 30]);
   });
 });

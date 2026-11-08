@@ -23,6 +23,7 @@ export interface NicheJobInput {
 export interface NicheResult {
   niches: Uint16Array;
   cells: Float64Array;
+  houses: Float32Array;
 }
 
 interface Job {

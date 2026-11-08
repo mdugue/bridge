@@ -22,7 +22,11 @@ const scope = self as unknown as {
 scope.addEventListener("message", ({ data }) => {
   try {
     const out = nichesOf(data.mesh, data.table);
-    scope.postMessage({ out }, [out.niches.buffer, out.cells.buffer]);
+    scope.postMessage({ out }, [
+      out.niches.buffer,
+      out.cells.buffer,
+      out.houses.buffer,
+    ]);
   } catch (error) {
     scope.postMessage(
       { error: error instanceof Error ? error.message : String(error) },

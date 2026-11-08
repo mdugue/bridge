@@ -428,6 +428,8 @@ export function cellNiches(niches: Float32Array): {
  *  `CityObjectTable`, the floats the clay reads of it). */
 export interface NicheTable {
   baseZ: Float32Array;
+  /** each object's root Building (`CityObjectTable.root`): its house */
+  root: Uint32Array;
   eaveH: Float32Array;
   rough: Float32Array;
   storeyH: Float32Array;
@@ -519,7 +521,7 @@ export function unpackNiche(
 export function nichesOf(
   mesh: NicheMesh,
   t: NicheTable
-): { niches: Uint16Array; cells: Float64Array } {
+): { niches: Uint16Array; cells: Float64Array; houses: Float32Array } {
   const objects = (i: number): NicheObject | undefined =>
     i < t.winAxis.length && t.winAxis[i] >= 0.05
       ? {
@@ -534,5 +536,44 @@ export function nichesOf(
         }
       : undefined;
   const sorted = cellNiches(tileNiches(mesh, objects, (i) => t.baseZ[i]));
-  return { niches: packNiches(sorted.niches, t.baseZ), cells: sorted.cells };
+  return {
+    niches: packNiches(sorted.niches, t.baseZ),
+    cells: sorted.cells,
+    houses: houseBoxes(sorted.niches, t.root),
+  };
+}
+
+/** Floats per house in `houseBoxes`: its root, then its windows' extent
+ *  (x min, x max, z min, z max). */
+export const HOUSE_STRIDE = 5;
+
+/** Each house's windows' extent (`HOUSE_STRIDE`), from a `tileNiches`
+ *  list: a house turns to niches as a whole (window-niche-layer.ts), and
+ *  one may reach past the cells searched around the eye. */
+export function houseBoxes(
+  niches: Float32Array,
+  root: Uint32Array
+): Float32Array {
+  const boxes = new Map<number, [number, number, number, number]>();
+  for (let o = 0; o + NICHE_STRIDE <= niches.length; o += NICHE_STRIDE) {
+    const key = root[niches[o + 8]] ?? niches[o + 8];
+    const x = niches[o];
+    const z = niches[o + 2];
+    const box = boxes.get(key);
+    if (box) {
+      box[0] = Math.min(box[0], x);
+      box[1] = Math.max(box[1], x);
+      box[2] = Math.min(box[2], z);
+      box[3] = Math.max(box[3], z);
+    } else {
+      boxes.set(key, [x, x, z, z]);
+    }
+  }
+  const out = new Float32Array(boxes.size * HOUSE_STRIDE);
+  let o = 0;
+  for (const [key, box] of boxes) {
+    out.set([key, ...box], o);
+    o += HOUSE_STRIDE;
+  }
+  return out;
 }

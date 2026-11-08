@@ -3,7 +3,7 @@ import { NICHE_STRIDE, cellNiches, packNiches } from "@/lib/city/window-niches";
 import type { CityLayer } from "./city-layer";
 import { Matrix4, Vector3 } from "three";
 import {
-  nearNiches,
+  nearHouses,
   nicheGeometry,
   writeNicheMatrix,
 } from "./window-niche-layer";
@@ -45,8 +45,10 @@ describe("window niche layer", () => {
     }
   });
 
-  test("the niches near the eye: within the radius, standing, nearest first past capacity", () => {
-    const xs = [0, 10, 20, 30, 200];
+  test("the houses near the eye: whole, within the radius, standing, nearest first past capacity, kept past the radius a while", () => {
+    // objects 0…4; houses (roots): 0 = {0, 1}, 2 = {2}, 3 = {3, 4}
+    const xs = [0, 90, 20, 30, 200];
+    const roots = new Uint32Array([0, 0, 2, 3, 3]);
     const raw = new Float32Array(xs.length * NICHE_STRIDE);
     for (const [i, x] of xs.entries()) {
       raw[i * NICHE_STRIDE] = x;
@@ -60,10 +62,10 @@ describe("window niche layer", () => {
     for (let i = 0; i < cells.length; i += 3) {
       cellMap.set(cells[i], [cells[i + 1], cells[i + 2]]);
     }
-    // object 1 demolished
+    let demolished = -1;
     const city = {
-      stands: (i: number) => i !== 1,
-      table: { baseZ },
+      stands: (i: number) => i !== demolished,
+      table: { baseZ, root: roots },
     } as unknown as CityLayer;
     const tile = {
       city,
@@ -71,18 +73,38 @@ describe("window niche layer", () => {
       cells: cellMap,
       box: [0, 0, 0, 0] as [number, number, number, number],
       cutting: false,
+      houses: new Set<number>(),
+      boxes: new Map<number, [number, number, number, number]>([
+        [0, [0, 90, 0, 0]],
+        [2, [20, 20, 0, 0]],
+        [3, [30, 200, 0, 0]],
+      ]),
     };
-    const all = nearNiches([tile], 0, 0, 80, 10);
-    expect(all.covered).toBe(80);
-    expect(
-      all.picked
-        .map((c) => sorted.niches[c.i * NICHE_STRIDE + 8])
-        .toSorted((a, b) => a - b)
-    ).toEqual([0, 2, 3]);
-    const two = nearNiches([tile], 0, 0, 80, 2);
-    expect(two.picked.map((c) => c.dist)).toEqual([0, 20]);
-    // what it covers ends at the first niche left out
-    expect(two.covered).toBe(30);
+    const objectsOf = (houses: ReturnType<typeof nearHouses>) =>
+      houses
+        .flatMap((h) =>
+          h.niches.map((c) => sorted.niches[c.i * NICHE_STRIDE + 8])
+        )
+        .toSorted((a, b) => a - b);
+    // whole houses: house 0 with its window at 90 m, house 3 by its 30 m
+    // one with its 200 m one, past the cells searched
+    expect(objectsOf(nearHouses([tile], 0, 0, 50, 10))).toEqual([
+      0, 1, 2, 3, 4,
+    ]);
+    // three niches: houses 0 and 2 fit, 3 would not
+    expect(nearHouses([tile], 0, 0, 50, 3).map((h) => h.root)).toEqual([0, 2]);
+    // house 3 lies past the radius from x = −25 …
+    expect(nearHouses([tile], -25, 0, 50, 10).map((h) => h.root)).toEqual([
+      0, 2,
+    ]);
+    // … unless it already is one
+    tile.houses.add(3);
+    expect(nearHouses([tile], -25, 0, 50, 10).map((h) => h.root)).toEqual([
+      0, 2, 3,
+    ]);
+    // a demolished object takes its niches with it
+    demolished = 1;
+    expect(objectsOf(nearHouses([tile], 0, 0, 50, 10))).toEqual([0, 2, 3, 4]);
   });
 
   test("a niche's frame is right-handed and stands behind its wall", () => {

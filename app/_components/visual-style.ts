@@ -6,7 +6,6 @@ import {
   MeshStandardNodeMaterial,
   SRGBColorSpace,
   Vector3,
-  Vector4,
 } from "three/webgpu";
 import type { DataTexture, Node, Texture, UniformNode } from "three/webgpu";
 import {
@@ -47,6 +46,7 @@ import {
 } from "three/tsl";
 import {
   OBJECT_FLAG_FLOODLIT,
+  OBJECT_FLAG_NICHED,
   OBJECT_TEXTURE_WIDTH,
 } from "@/lib/city/city-mesh";
 import { FACADE_UNIT } from "@/lib/city/facade-reading";
@@ -375,7 +375,7 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     wn,
   });
   return {
-    mask: d.niches ? nicheMask(windows) : undefined,
+    mask: d.niches ? nicheMask(windows, flags) : undefined,
     normal: normalize(mix(viewNormal, windows.normal, windows.normalMix)),
     // A facet turned from the sun is in its own shadow, whatever its
     // rounded normal says: buildings cast with their back faces (sun-rig.ts),
@@ -421,29 +421,16 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
   };
 }
 
-/** The tile's niches as its clay reads them: the centre (scene x, z) and
- *  radius (m) within which every window has its niche behind it
- *  (window-niche-layer.ts `NicheField`); a zero radius cuts nothing. */
-export const NICHES_SLOT = "clayNiches";
-
-/** The band at the niches' edge (m): each window in it turns from drawn
- *  to real at its own distance (`ClayWindows.pick`), so the edge is no
- *  line across the street. */
-export const NICHE_FADE_M = 30;
-
 /**
  * Where the clay cuts a window's opening for the real niche behind it:
- * on a front face, in an opening (its middle half and more), within the
- * tile's niche radius (`NICHES_SLOT`) less the window's own share of the
- * fade band (`NICHE_FADE_M`). Behind it the niche's reveals and pane are
- * drawn; past that the opening is drawn on the wall.
+ * on a front face, in an opening (its middle half and more), of a house
+ * the niche set holds (OBJECT_FLAG_NICHED, set per house at runtime:
+ * window-niche-layer.ts). Behind it the niche's reveals and pane are
+ * drawn; on every other house the opening is drawn on the wall.
  */
-function nicheMask(windows: ClayWindows): Node {
-  // reason: a Vector4 slot is a vec4 uniform; slotUniform types it loosely.
-  const at = slotUniform(NICHES_SLOT, new Vector4(0, 0, 0, 0)) as unknown as V4;
-  const reach = at.z.sub(windows.pick.mul(NICHE_FADE_M));
-  const near = step(length(positionWorld.xz.sub(at.xy)), reach);
-  const cut = step(0.5, windows.opening).mul(float(frontFacing)).mul(near);
+function nicheMask(windows: ClayWindows, flags: F): Node {
+  const niched = mod(floor(floor(flags.add(0.5)).div(OBJECT_FLAG_NICHED)), 2);
+  const cut = step(0.5, windows.opening).mul(float(frontFacing)).mul(niched);
   return cut.lessThan(0.5);
 }
 
