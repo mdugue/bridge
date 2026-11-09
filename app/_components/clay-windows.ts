@@ -102,6 +102,11 @@ export interface WindowInputs {
   storey: F;
   /** the windows' strength (*Fenster*, visual-style.ts `WINDOWS`) */
   strength: F;
+  /** 1 on a house whose windows are real niches (visual-style.ts
+   *  `nicheMask`): every window drawn whole at any footprint, never
+   *  handed over to its row's or storey's mean — the cut follows the
+   *  opening, and a grazing view kept the mean on the wall, flat */
+  sharp?: F;
   /** world, surface → sun */
   sun: UniformNode<"vec3", Vector3>;
   /** world, the view's direction through the fragment (unit, into the
@@ -684,12 +689,15 @@ export function clayWindows(i: WindowInputs): ClayWindows {
     v: max(fwidth(i.h), 1e-4),
     // the window's width in pixels along the wall: its sides drawn from
     // 6, under 2.5 its row's mean across the axes
-    du: smoothstep(2.5, 6, i.spec.y.div(pu)),
+    du: max(smoothstep(2.5, 6, i.spec.y.div(pu)), i.sharp ?? float(0)),
   };
   // … and its height up the wall: drawn from 6, the storey's mean tone
   // under 2.5 — a grazing view stretches the footprint along the wall
   // only, so the rows stay where the columns can no longer be told apart
-  const detail = smoothstep(2.5, 6, max(g.tall, 0.01).div(px.v));
+  const detail = max(
+    smoothstep(2.5, 6, max(g.tall, 0.01).div(px.v)),
+    i.sharp ?? float(0)
+  );
   const on = i.strength.mul(i.wall).mul(g.here);
   const near = on.mul(detail);
   const p = parts(g, i, px);

@@ -708,6 +708,11 @@ export function createNicheField(
     const objects = new Map<NicheTile, Set<number>>();
     let k = 0;
     for (const house of houses) {
+      // a house's windows are drawn whole once it is one (visual-style.ts
+      // `sharp`): only where its clay cuts them
+      if (!house.tile.cutting) {
+        continue;
+      }
       const { table } = house.tile.city;
       let own = objects.get(house.tile);
       if (!own) {

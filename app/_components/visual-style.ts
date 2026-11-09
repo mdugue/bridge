@@ -347,6 +347,7 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     .mul(float(1).sub(build.x));
   // along the view, in Modell's parallel projection too
   const view = viewDirection();
+  const niched = d.niches ? nichedOf(flags) : undefined;
   const windows = clayWindows({
     eave: build.z,
     // the windows read no roof vertex's slots: they hold its colour
@@ -357,6 +358,7 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     spec,
     storey: build.y,
     strength: WINDOWS,
+    sharp: niched,
     sun: d.uSun,
     view,
     wall,
@@ -375,7 +377,7 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     wn,
   });
   return {
-    mask: d.niches ? nicheMask(windows, flags) : undefined,
+    mask: niched ? nicheMask(windows, niched) : undefined,
     normal: normalize(mix(viewNormal, windows.normal, windows.normalMix)),
     // A facet turned from the sun is in its own shadow, whatever its
     // rounded normal says: buildings cast with their back faces (sun-rig.ts),
@@ -428,11 +430,14 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
  * window-niche-layer.ts). Behind it the niche's reveals and pane are
  * drawn; on every other house the opening is drawn on the wall.
  */
-function nicheMask(windows: ClayWindows, flags: F): Node {
-  const niched = mod(floor(floor(flags.add(0.5)).div(OBJECT_FLAG_NICHED)), 2);
+function nicheMask(windows: ClayWindows, niched: F): Node {
   const cut = step(0.5, windows.opening).mul(float(frontFacing)).mul(niched);
   return cut.lessThan(0.5);
 }
+
+/** 1 on an object the niche set holds (OBJECT_FLAG_NICHED). */
+const nichedOf = (flags: F): F =>
+  mod(floor(floor(flags.add(0.5)).div(OBJECT_FLAG_NICHED)), 2);
 
 /** The clay's colour (clayGraph): the facade's looks over the tint, the
  *  Schnitt's poché on a cut's inside. */
