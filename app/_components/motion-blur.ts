@@ -12,10 +12,12 @@ import {
   vec4,
 } from "three/tsl";
 import {
-  blurs,
+  createBlurGate,
+  framePace,
   MAX_BLUR_PX,
   motionPixels,
   SHUTTER,
+  stepBlurGate,
 } from "@/lib/city/motion-blur";
 import type { F, V3, V4 } from "./shader-chunks";
 import type { ViewLens } from "./view-lens";
@@ -38,9 +40,15 @@ export interface MotionBlur {
    * fresh one; so does a new size or projection, or a page that comes
    * back to the front.
    * `everywhere`: the blur replaces the antialiasing (lib/city/
-   * motion-blur.ts `blurs`).
+   * motion-blur.ts `blurs`). `frameMs`: the interval since the last
+   * frame — the way is scaled to a nominal frame's (`framePace`).
    */
-  update: (size: Vector2, on: boolean, everywhere: boolean) => boolean;
+  update: (
+    size: Vector2,
+    on: boolean,
+    everywhere: boolean,
+    frameMs: number
+  ) => boolean;
   dispose: () => void;
 }
 
@@ -65,6 +73,10 @@ export function createMotionBlur(
   const viewToPrev = uniform(new Matrix4());
   const prevProjection = uniform(new Matrix4());
   const pixels = uniform(new Vector2(1, 1));
+  // the frame's way scaled to a nominal frame's (lib/city/motion-blur.ts
+  // `framePace`)
+  const pace = uniform(1);
+  const gate = createBlurGate();
 
   const at = uv();
   const z = texture(depth, at).r;
@@ -73,7 +85,7 @@ export function createMotionBlur(
     viewToPrev.mul(vec4(here, 1)).xyz,
     prevProjection
   );
-  const way = at.sub(before).mul(SHUTTER);
+  const way = at.sub(before).mul(pace.mul(SHUTTER));
   const length = way.mul(pixels).length().max(1e-4);
   // the longest smear, in uv
   const smear = way.mul(min(float(1), float(MAX_BLUR_PX).div(length))).toVar();
@@ -88,6 +100,8 @@ export function createMotionBlur(
   // one frame at a time.
   const forget = () => {
     held = false;
+    gate.on = false;
+    gate.below = 0;
   };
   document.addEventListener("visibilitychange", forget);
 
@@ -100,13 +114,13 @@ export function createMotionBlur(
       }
       return vec4(sum.div(TAPS).mul(occlusion), 1);
     },
-    update: (size, on, everywhere) => {
+    update: (size, on, everywhere, frameMs) => {
       const fresh =
         !held ||
         !size.equals(prevSize) ||
         !view.projectionMatrix.equals(prevProj);
       if (!on || lens.isOrtho()) {
-        held = false;
+        forget();
         return false;
       }
       let blurred = false;
@@ -114,14 +128,18 @@ export function createMotionBlur(
         viewToPrev.value.multiplyMatrices(prevView, view.matrixWorld);
         prevProjection.value.copy(prevProj);
         pixels.value.copy(size);
-        blurred = blurs(
-          motionPixels(
-            viewToPrev.value.elements,
-            view.projectionMatrix.elements,
-            prevProj.elements,
-            size.x,
-            size.y
-          ),
+        const k = framePace(frameMs);
+        pace.value = k;
+        const m = motionPixels(
+          viewToPrev.value.elements,
+          view.projectionMatrix.elements,
+          prevProj.elements,
+          size.x,
+          size.y
+        );
+        blurred = stepBlurGate(
+          gate,
+          { least: m.least * k, median: m.median * k, most: m.most * k },
           everywhere
         );
       }

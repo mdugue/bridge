@@ -552,7 +552,8 @@ function housesNear(
  * The houses whose windows are niches with the eye at (x, z): every one
  * whose nearest window lies within `radius`, or within `HOUSE_KEEP_M`
  * more of it while it already is one (`NicheTile.houses`) — whole houses,
- * the nearest first, as many as `capacity` niches hold.
+ * the nearest first (one already in by that much nearer), as many as
+ * `capacity` niches hold.
  */
 export function nearHouses(
   tiles: Iterable<NicheTile>,
@@ -564,7 +565,12 @@ export function nearHouses(
   const near = housesNear(tiles, x, z, radius + HOUSE_KEEP_M).filter(
     (h) => h.dist <= radius || h.tile.houses.has(h.root)
   );
-  near.sort((a, b) => a.dist - b.dist);
+  // a house that is one already ranks as if `HOUSE_KEEP_M` nearer: where
+  // the set is full, the last houses in it do not swap with the first
+  // left out at every refill
+  const rank = (h: House) =>
+    h.dist - (h.tile.houses.has(h.root) ? HOUSE_KEEP_M : 0);
+  near.sort((a, b) => rank(a) - rank(b));
   const picked: House[] = [];
   let count = 0;
   for (const house of near) {

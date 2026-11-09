@@ -231,6 +231,9 @@ export interface PostStack {
    * Modell's: recovery brings DoF back only where those allow it.
    */
   setRegressed: (on: boolean) => void;
+  /** The interval since the last frame (ms): the motion blur smears a
+   *  nominal frame's way, however uneven the frame rate. */
+  setFrameMs: (ms: number) => void;
   /** The loading veil this frame (load-veil.ts): the frontier's ring
    *  around the world-space point `centreX`, `centreZ`. */
   setLoadVeil: (state: VeilState, centreX: number, centreZ: number) => void;
@@ -785,6 +788,8 @@ export function createPostStack(
   // it), Modell `model` — recovery from one never overrides another.
   let regressed = false;
   let model = false;
+  // the interval since the last frame (`setFrameMs`)
+  let frameMs = 1000 / 60;
   // the camera moved enough this frame to draw the pastel frame blurred
   // (motion-blur.ts), where this tier has a way to draw it
   let blurred = false;
@@ -1445,7 +1450,8 @@ export function createPostStack(
       blurred = motion.update(
         size,
         moving !== null && style.shaderMode === 0 && !model && regressed,
-        moving?.pre === null
+        moving?.pre === null,
+        frameMs
       );
       const shown = frame();
       // the input named before anything is drawn or let go: `beforeAa`
@@ -1490,6 +1496,9 @@ export function createPostStack(
     setLoadVeil: loadVeil.set,
     setRegressed: (on) => {
       regressed = on;
+    },
+    setFrameMs: (ms) => {
+      frameMs = ms;
     },
     setFocusTarget: (point) => {
       // No hit (sky) keeps the last focus, so tilting a degree above a far

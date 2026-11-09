@@ -99,8 +99,9 @@ describe("window niche layer", () => {
     ]);
     // … unless it already is one
     tile.houses.add(3);
+    // (and ranks as if 20 m nearer: 35 m before house 2's 45 m)
     expect(nearHouses([tile], -25, 0, 50, 10).map((h) => h.root)).toEqual([
-      0, 2, 3,
+      0, 3, 2,
     ]);
     // a demolished object takes its niches with it
     demolished = 1;

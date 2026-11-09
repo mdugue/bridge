@@ -1477,7 +1477,13 @@ lens blur is off (`regressed`): on a desktop once half the samples move
 2 px (a smear of 1 px), on a phone once all of them do — there the blur
 replaces the FXAA, and a far city that barely moves would keep neither.
 So a walk straight ahead stays sharp and antialiased; a turn, a strafe
-or a flight blurs. Above 600 px (a jump), after a new size or
+or a flight blurs. Each frame's way is scaled to a 60 Hz frame's
+(`framePace`, ×0.25–2), so an uneven frame rate smears evenly, and once
+on the blur holds until the motion has stayed under half its threshold
+for 12 frames (`stepBlurGate`): near the threshold — a walk slowing to a
+stop, an uneven turn, a slow frame among fast ones — it switched on and
+off frame by frame before, and the windows' fine detail came and went
+with it. Above 600 px (a jump), after a new size or
 projection and when the page comes back to the front, a frame is drawn
 sharp. Where it draws, memory does not grow:
 

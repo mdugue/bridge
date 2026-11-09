@@ -3216,6 +3216,7 @@ async function bootApp(
   const updateRegression = (dt: number) => {
     const regressed = stepRegression(regression, walkMoved(camera), dt * 1000);
     postStack.setRegressed(regressed);
+    postStack.setFrameMs(dt * 1000);
     if (regressed !== regressedNow) {
       regressedNow = regressed;
       updatePocDebug({ regressed });
