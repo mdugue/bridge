@@ -564,9 +564,11 @@ Die fotografische Tiefenschärfe macht unscharf, was hinter dem Fokus liegt
 und was davor steht (ein Baum am Bildrand, eine Laterne gleich vor dir,
 die Straße zu deinen Füßen), wie bei einer echten Linse, und scharf ist immer, was in der
 Bildmitte liegt, ein Baum ebenso wie eine Fassade. Sie ist so stark wie bei einer echten Kamera mit diesem
-Bildwinkel bei Blende 1,8: Liegt der Fokus auf einer Fassade die Straße
-hinunter, bleibt die Stadt dahinter fast scharf; liegt er auf einer
-Laterne gleich vor dir, wird der Hintergrund weich. Solange sich die
+Bildwinkel und der Öffnung eines 50-mm-Objektivs bei Blende 1,8: Liegt der
+Fokus auf einer Fassade die Straße hinunter, bleibt die Stadt dahinter
+fast scharf, ein Baum wenige Schritte vor dir aber wird weich; liegt er
+auf einer Laterne gleich vor dir, wird der Hintergrund weich. Liegt in der
+Bildmitte nichts (der Himmel), stellt das Objektiv auf die Ferne. Solange sich die
 Kamera bewegt, ist die Unschärfe abgeschaltet (das Auge kann sie in
 Bewegung nicht auflösen); wenn du stehst, wächst sie in knapp einer
 Sekunde wieder herein, wie wenn ein Objektiv scharfstellt. Telefone zeichnen ohne sie: Die Unschärfe

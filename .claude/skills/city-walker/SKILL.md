@@ -902,7 +902,7 @@ reconstructed from depth, radius 2 m, occlusion raised to
 `AO_EXPONENT`, 1.5) — about what the skip saved, paid every frame. Its sample
 count (`aoSamplesFor`: 16, lite 8) rebuilds the pass's material, so it is a
 construction-time setting. DoF is dropped by switching between **two
-prebuilt `RenderPipeline`s** (with and without `DepthOfFieldNode`, both
+prebuilt `RenderPipeline`s** (with and without the lens blur, both
 built under the load screen), never by swapping one pipeline's output node,
 which re-translates the whole post graph on the main thread. SMAA carries
 the anti-aliasing (the canvas and the scene target have no MSAA) — once, in

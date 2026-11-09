@@ -530,9 +530,11 @@ depth of field blurs what lies behind the focus and what stands before it
 (a tree at the edge of the view, a lamp close by, the street at your
 feet), as a real lens does, and the focus is always what lies at the centre of the
 view, a tree as much as a facade. It
-blurs as much as a real camera with this view's angle would at f/1.8:
-focused on a facade down the street, the city behind it stays all but
-sharp; focused on a lamp post close by, the background goes soft. While
+blurs as much as a real camera with this view's angle and the opening of
+a 50 mm lens at f/1.8 would: focused on a facade down the street, the city
+behind it stays all but sharp while a tree a few steps away goes soft;
+focused on a lamp post close by, the background goes soft. When nothing
+lies at the centre (the sky), the lens focuses far. While
 the camera moves, the blur is switched off (the eye cannot resolve it in
 motion); when you stop, it grows back in over most of a second, as a lens
 pulls focus. Phones draw without it: the blur

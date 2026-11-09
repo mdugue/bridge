@@ -702,7 +702,7 @@ export interface CityWalkHandle {
   getGpuDebug: () => GpuDebug;
   /** Live DoF focus state + last crosshair raycast hit (QA/diagnostics). */
   getFocusDebug: () => {
-    bokehScale: number;
+    capPx: number;
     fade: number;
     focusDistance: number;
     horizonBlurPx: number;
