@@ -203,6 +203,7 @@ def test_a_flagpole_stands_with_its_height_and_the_flag_the_map_names():
     }
     assert _props("flag", '"height"=>"80","country"=>"EU"') == {"k": "flag", "h": 30.0, "c": "eu"}
     assert _props("flag", '"subject:wikidata"=>"Q1202"')["c"] == "sn"
+    assert _props("flag", '"country"=>"DE;EU"')["c"] == "de"  # a list: its first drawn one
     # a firm's flag: its colours are not mapped
     assert _props("flag", '"flag:type"=>"advertising","flag:name"=>"Netto"') == {"k": "flag"}
 

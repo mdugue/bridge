@@ -23,6 +23,7 @@ import {
   Matrix4,
   MeshStandardNodeMaterial,
   Quaternion,
+  SphereGeometry,
   Vector3,
 } from "three/webgpu";
 import {
@@ -31,7 +32,8 @@ import {
   distance,
   float,
   modelWorldMatrix,
-  positionLocal,
+  max,
+  positionGeometry,
   sin,
   smoothstep,
   varying,
@@ -39,16 +41,19 @@ import {
   vec4,
 } from "three/tsl";
 import type { FlagDesign } from "@/lib/city/features";
-import { FLAG_HEIGHT } from "@/lib/city/furniture";
 import { Instances, instanceMatrix, instancePosition } from "./instancing";
 import { sceneMaterial } from "./three-utils";
 import { crownSwayShare, windClock } from "./vegetation-layer";
 
-/** The cloth's size (m) on a mast of FLAG_HEIGHT: 3 : 5, a forecourt
- *  flag's; it hangs this far under the mast's top. */
+/** The cloth's size (m), 3 : 5, a forecourt flag's, whatever the mast's
+ *  height; its top hangs this far under the mast's top. */
 export const CLOTH_H = 1.2;
 export const CLOTH_L = 2;
-const CLOTH_TOP = FLAG_HEIGHT - 0.12;
+const CLOTH_TOP = -0.12;
+/** The ball on the mast's top: its radius and its centre over the top (m). */
+const BALL_R = 0.075;
+const BALL_Y = 0.05;
+const BALL = 0xb3_b3_bf; // furniture-layer.ts's RING
 /** Off the mast's axis (m): the hoist clears the mast's radius. */
 const HOIST = 0.06;
 /** Quads along the cloth and down it: six rows hold two or three bands. */
@@ -85,9 +90,10 @@ export const CLOTH_BANDS: Record<FlagDesign | "plain", readonly number[]> = {
   hh: [RED],
 };
 
-/** The cloth of one design: a flat sheet in the mast's local frame, its
- *  hoist at the mast and its fly end along local +X; non-indexed, a colour
- *  per band. */
+/** The cloth of one design and the ball on the mast's top, in a frame
+ *  whose origin is the mast's top (so neither stretches with the mast):
+ *  the sheet's hoist at the mast, its fly end along local +X;
+ *  non-indexed, a colour per band. */
 export function clothGeometry(design: FlagDesign | "plain"): BufferGeometry {
   const bands = CLOTH_BANDS[design];
   const pos: number[] = [];
@@ -115,6 +121,18 @@ export function clothGeometry(design: FlagDesign | "plain"): BufferGeometry {
       }
     }
   }
+  // the ball (at the hoist's x: the wave leaves it still)
+  const ball = new SphereGeometry(BALL_R, 10, 6).toNonIndexed();
+  ball.translate(0, BALL_Y, 0);
+  const bp = ball.getAttribute("position");
+  const bn = ball.getAttribute("normal");
+  c.setHex(BALL);
+  for (let i = 0; i < bp.count; i += 1) {
+    pos.push(bp.getX(i), bp.getY(i), bp.getZ(i));
+    nrm.push(bn.getX(i), bn.getY(i), bn.getZ(i));
+    rgb.push(c.r, c.g, c.b);
+  }
+  ball.dispose();
   const geo = new BufferGeometry();
   geo.setAttribute("position", new Float32BufferAttribute(pos, 3));
   geo.setAttribute("normal", new Float32BufferAttribute(nrm, 3));
@@ -141,14 +159,16 @@ function clothMaterial(): MeshStandardNodeMaterial {
     .sub(smoothstep(WAVE_NEAR_M, WAVE_FAR_M, distance(at, cameraPosition)))
     .mul(crownSwayShare);
   const phase = origin.x.mul(0.37).add(origin.z.mul(0.61));
-  const u = positionLocal.x.div(CLOTH_L);
-  const arg = positionLocal.x
+  // the geometry's own x: once a positionNode is set, positionLocal is
+  // the moved vertex
+  const u = max(positionGeometry.x, 0).div(CLOTH_L);
+  const arg = positionGeometry.x
     .mul(WAVE_K)
     .sub(windClock.mul(WAVE_SPEED))
     .add(phase);
   const wave = sin(arg).mul(u).mul(WAVE_AMP).mul(near);
   m.positionNode = instancePosition(
-    vec3(positionLocal.x, positionLocal.y, positionLocal.z.add(wave))
+    vec3(positionGeometry.x, positionGeometry.y, positionGeometry.z.add(wave))
   );
   // Worked out on the vertex (the instance's matrix is a vertex input) and
   // carried over; the vertex colour multiplies in after (NodeMaterial,
@@ -160,33 +180,37 @@ function clothMaterial(): MeshStandardNodeMaterial {
   return m;
 }
 
-/** A mast the cloth hangs on: where it stands (the scene frame), its yaw
- *  (downwind, `flagYaw`) and its height's scale. */
+/** A mast the cloth hangs on: its foot (the scene frame), its yaw
+ *  (downwind, `flagYaw`) and its height (m). */
 export interface Mast {
   at: Vector3;
-  scale: number;
+  height: number;
   yaw: number;
 }
 
-/** The cloths of one design on their masts (one cell's), casting no shadow. */
+/** The cloths of one design on their masts (one cell's), casting no
+ *  shadow; `geometry` is the design's `clothGeometry`, shared by a tile's
+ *  cells. */
 export function flagCloths(
   design: FlagDesign | "plain",
+  geometry: BufferGeometry,
   masts: readonly Mast[]
 ): Instances {
   const mesh = new Instances(
-    clothGeometry(design),
+    geometry,
     sceneMaterial("furniture-flag-cloth", clothMaterial),
     masts.length
   );
   const m = new Matrix4();
   const q = new Quaternion();
-  const s = new Vector3();
+  const one = new Vector3(1, 1, 1);
+  const top = new Vector3();
   const up = new Vector3(0, 1, 0);
   for (let i = 0; i < masts.length; i += 1) {
     const mast = masts[i];
     q.setFromAxisAngle(up, mast.yaw);
-    s.setScalar(mast.scale);
-    mesh.setMatrixAt(i, m.compose(mast.at, q, s));
+    top.copy(mast.at).setY(mast.at.y + mast.height);
+    mesh.setMatrixAt(i, m.compose(top, q, one));
   }
   mesh.instanceMatrix.needsUpdate = true;
   mesh.computeBoundingSphere();

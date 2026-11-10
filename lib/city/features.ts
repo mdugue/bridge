@@ -260,7 +260,13 @@ export type BinTone = "blue" | "green" | "orange" | "red" | "yellow";
 
 /** The flags drawn in their colours (furniture.py `FLAG_DESIGNS`): Germany,
  *  the European Union, Saxony, Bavaria, Hamburg. */
-export type FlagDesign = "by" | "de" | "eu" | "hh" | "sn";
+export const FLAG_DESIGNS = ["by", "de", "eu", "hh", "sn"] as const;
+export type FlagDesign = (typeof FLAG_DESIGNS)[number];
+
+/** Whether a furniture colour `c` is a flag's design. */
+export function isFlagDesign(c: string | undefined): c is FlagDesign {
+  return (FLAG_DESIGNS as readonly (string | undefined)[]).includes(c);
+}
 
 /** A playground outline and the equipment OSM maps on it (`playground=*`). */
 export type PlaygroundKind =
@@ -288,8 +294,9 @@ export type PlaygroundKind =
  * the traffic they control), fire hydrants (`hydrant`: a pillar;
  * `hydrantsign`: the sign plate of an underground one), clocks (`clock` on
  * a pole, `wallclock` on a facade — the point on the wall, `a` out of it),
- * drinking fountains (`water`), flagpoles (`flag`: `h` its tagged height,
- * `c` the flag where the map names one the viewer draws in its colours) and the "H" sign of a bus stop without a
+ * drinking fountains (`water`), flagpoles (`flag`: `h` its tagged
+ * height, `c` the flag where the map names one the viewer draws in its
+ * colours) and the "H" sign of a bus stop without a
  * shelter (`stop`). The QA's corrections added the pedestrian signals of a
  * signalled crossing (`pedsignal`, at each kerb, looking across), a car
  * signal's mast arm over a road of three lanes or more (`arm`) and its

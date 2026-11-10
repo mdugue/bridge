@@ -57,7 +57,7 @@ import type { GroundContext } from "@/lib/city/ground-clamp";
 import { subdividePolyline } from "@/lib/city/polyline";
 import { finished } from "@/lib/city/build-steps";
 import type { Steps } from "@/lib/city/build-steps";
-import { flagCloths } from "./flag-cloth";
+import { clothGeometry, flagCloths } from "./flag-cloth";
 import { Instances, instancePosition } from "./instancing";
 import { clockMinutes, sceneNight } from "./scene-environment";
 import { markThinCaster, sceneMaterial } from "./three-utils";
@@ -591,12 +591,10 @@ function wallClock(): BufferGeometry[] {
   ];
 }
 
-/** A flagpole: a slim mast with a small ball on top (the cloth is
- *  flag-cloth.ts's). */
+/** A flagpole: a slim mast, stretched to its height (the ball on top and
+ *  the cloth are flag-cloth.ts's, which do not stretch). */
 function flagpole(): BufferGeometry[] {
-  const ball = new SphereGeometry(0.075, 10, 6);
-  ball.translate(0, FLAG_HEIGHT + 0.05, 0);
-  return [pillar(0.05, FLAG_HEIGHT, [0, 0], SLATE), tinted(ball, RING)];
+  return [pillar(0.05, FLAG_HEIGHT, [0, 0], SLATE)];
 }
 
 /** A drinking fountain: a slim bronze column with a small basin in front. */
@@ -775,8 +773,12 @@ function clockHands(model: "clock" | "wallClock", stood: Stood[]): Instances {
   return mesh;
 }
 
-/** One cell's flag cloths, one set per design. */
-function flagsOf(cell: Stood[]): Instances[] {
+/** One cell's flag cloths, one set per design, on the tile's cloth of
+ *  that design (`cloths`, built on first use). */
+function flagsOf(
+  cell: Stood[],
+  cloths: Map<NonNullable<FurniturePiece["design"]>, BufferGeometry>
+): Instances[] {
   const byDesign = new Map<NonNullable<FurniturePiece["design"]>, Stood[]>();
   for (const s of cell) {
     const design = s.piece.design ?? "plain";
@@ -788,15 +790,28 @@ function flagsOf(cell: Stood[]): Instances[] {
     asCell(
       flagCloths(
         design,
+        clothOf(cloths, design),
         masts.map(({ at, piece }) => ({
           at,
           yaw: piece.yaw,
-          scale: piece.scaleY,
+          height: FLAG_HEIGHT * piece.scaleY,
         }))
       ),
       masts
     )
   );
+}
+
+function clothOf(
+  cloths: Map<NonNullable<FurniturePiece["design"]>, BufferGeometry>,
+  design: NonNullable<FurniturePiece["design"]>
+): BufferGeometry {
+  let geo = cloths.get(design);
+  if (!geo) {
+    geo = clothGeometry(design);
+    cloths.set(design, geo);
+  }
+  return geo;
 }
 
 function modelGeometry(model: FurnitureModel): BufferGeometry | null {
@@ -1129,6 +1144,10 @@ export function* furnitureSteps(
   if (byModel.size === 0 && areas.length === 0) {
     return group;
   }
+  const cloths = new Map<
+    NonNullable<FurniturePiece["design"]>,
+    BufferGeometry
+  >();
   for (const model of FURNITURE_MODELS) {
     const stood = byModel.get(model);
     const geo = stood ? modelGeometry(model) : null;
@@ -1145,8 +1164,8 @@ export function* furnitureSteps(
           group.add(asCell(clockHands(model, cell), cell));
         }
         if (model === "flag") {
-          for (const cloths of flagsOf(cell)) {
-            group.add(cloths);
+          for (const flags of flagsOf(cell, cloths)) {
+            group.add(flags);
           }
         }
       }

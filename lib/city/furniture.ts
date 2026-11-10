@@ -4,6 +4,7 @@
  * where, turned which way and how long, and which playground patches lie
  * under them. No THREE, no DOM.
  */
+import { isFlagDesign } from "./features";
 import type { BinTone, FlagDesign, FurnitureFeature } from "./features";
 import type { Point2 } from "./polyline";
 
@@ -250,9 +251,7 @@ export function flagYaw(x: number, y: number): number {
 /** A flag's cloth: its design where the bake names one. */
 function flagDesign(f: FurnitureFeature): FlagDesign | "plain" {
   const c = f.properties?.c;
-  return c === "by" || c === "de" || c === "eu" || c === "hh" || c === "sn"
-    ? c
-    : "plain";
+  return isFlagDesign(c) ? c : "plain";
 }
 
 /** Every piece the features stand as; unknown kinds and non-points are dropped. */

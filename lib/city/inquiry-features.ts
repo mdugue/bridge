@@ -20,6 +20,7 @@ import type {
   RiversideFeature,
   TreeFactsFile,
 } from "./features";
+import { isFlagDesign } from "./features";
 import {
   factLines,
   firstText,
@@ -958,7 +959,7 @@ const FLAG_NAMES: Record<FlagDesign, string> = {
 };
 
 function flagName(c: string | undefined): string {
-  return c && Object.hasOwn(FLAG_NAMES, c) ? FLAG_NAMES[c as FlagDesign] : "";
+  return isFlagDesign(c) ? FLAG_NAMES[c] : "";
 }
 
 /** A piece of furniture's heading: its name, under its group. */

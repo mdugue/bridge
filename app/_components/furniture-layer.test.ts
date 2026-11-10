@@ -196,11 +196,15 @@ test("a flagpole casts, its cloth flies in its design and casts nothing", () => 
   for (const cloth of [plain, german]) {
     expect(cloth.castShadow).toBe(false);
   }
-  // the cloth hangs at the mast's top: a 10.5 m mast lifts it by 1.5
+  // the cloth hangs at the mast's top, at its own size: a 10.5 m mast
+  // lifts it, never stretches it
   const top = new Vector3();
   const scale = new Vector3();
   const m = new Matrix4();
   german.getMatrixAt(0, m);
   m.decompose(top, new Quaternion(), scale);
-  expect(scale.y).toBeCloseTo(1.5);
+  expect(top.y).toBeCloseTo(110.5);
+  expect(scale.y).toBeCloseTo(1);
+  // one cloth per design, shared by the tile's cells
+  expect(plain.geometry).not.toBe(german.geometry);
 });

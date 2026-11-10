@@ -40,17 +40,19 @@ kerb — the kerb read from the class raster. So does a bench, bicycle
 stand, bin, post box, column, stop or shelter mapped in a street's lanes
 (the nearest way has a carriageway, `STREETS`); in a square, a pedestrian
 zone or on a platform, which the class raster's road covers too, it stays
-where it is mapped. A flagpole (`man_made=flagpole`, `k: flag`) stands where it is mapped,
-its tagged `height` (`h`, clamped to FLAG_H) and, where `flag:name`,
-`country`, `subject` or their Wikidata name a flag in FLAG_DESIGNS, that
-flag (`c`); every other flag — most are a shop's or a firm's — flies a
-pale cloth. One mapped inside a building outline stands on its roof and is
-left out (2 of Dresden's 368), and so is a flag on a facade
-(`support=wall_mounted`): none is mapped in the seven sites yet. A bus stop without a shelter
-gets the "H" sign, unless a shelter stands within 8 m. A clock on a pole
+where it is mapped. A bus stop without a shelter gets the "H" sign,
+unless a shelter stands within 8 m. A clock on a pole
 stands where it is mapped; a wall clock hangs on the nearest facade (the
 OSM building outline, ≤ 3 m), else it is dropped, as are tower clocks (the
 tower is the building model's) and sundials.
+
+A flagpole (`man_made=flagpole`, `k: flag`) stands where it is mapped, at
+its tagged `height` (`h`, clamped to FLAG_H) and, where `flag:name`,
+`country`, `subject` or their Wikidata name a flag in FLAG_DESIGNS, flying
+that flag (`c`); every other flag — most are a shop's or a firm's — flies a
+pale cloth. One mapped inside a building outline stands on its roof and is
+left out (2 of Dresden's 368), and so is a flag on a facade
+(`support=wall_mounted`): none is mapped in the seven sites yet.
 
 A bench without a `direction` that has water (the class raster's) within
 WATER_FACE_M on the side away from its way looks at the water instead
@@ -329,8 +331,9 @@ def flag(other: str | None) -> dict:
     if h is not None:
         props["h"] = round(min(max(h, FLAG_H[0]), FLAG_H[1]), 1)
     names = {
-        (tag(other, key) or "").strip().lower()
+        name.strip().lower()
         for key in ("flag:name", "country", "subject", "flag:wikidata", "subject:wikidata")
+        for name in (tag(other, key) or "").split(";")
     }
     for design, known in FLAG_DESIGNS.items():
         if names & set(known):

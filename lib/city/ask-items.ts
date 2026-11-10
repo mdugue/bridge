@@ -40,6 +40,7 @@ import type {
   TreeFeature,
   VegRowFeature,
 } from "./features";
+import { FLAG_HEIGHT } from "./furniture";
 import { epsgToWorld } from "./ground-clamp";
 import type { RecenterOffset } from "./ground-clamp";
 import type { CanopyInquiry, FeatureInquiry } from "./inquiry-features";
@@ -492,6 +493,19 @@ const STOP = { h: 2.8, r: 0.5 };
 /** How far apart a hedge's picks stand along it (m). */
 const HEDGE_STEP = 2;
 
+/** How tall a piece is picked: a signal on a mast arm by its mast
+ *  (furniture-layer.ts `signalArm`), a flagpole by its tagged height and
+ *  the ball on top, the rest by its kind. */
+function solidHeight(
+  p: NonNullable<FurnitureFeature["properties"]>,
+  base: number
+): number {
+  if (p.arm) {
+    return 6.2;
+  }
+  return p.k === "flag" ? (p.h ?? FLAG_HEIGHT) + 0.2 : base;
+}
+
 /** Each furniture kind picked as a cylinder: radius, height (m). */
 const FURNITURE_SOLID: Record<FurnitureKind, [number, number]> = {
   bench: [1, 1],
@@ -890,8 +904,7 @@ function furnitureItem(
   ctx: OwnGroundContext
 ): AskItem<FeatureInquiry>[] {
   const [r, base] = FURNITURE_SOLID[p.k] ?? [0.6, 1];
-  // a signal on a mast arm: its mast (furniture-layer.ts `signalArm`)
-  const h = p.arm ? 6.2 : base;
+  const h = solidHeight(p, base);
   if (f.geometry.type === "Point") {
     const at = f.geometry.coordinates;
     const solid = standing(at, r, h, ctx, p.deck);
