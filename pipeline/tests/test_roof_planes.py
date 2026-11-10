@@ -6,7 +6,9 @@ from scipy import ndimage as ndi
 from bake.roof_planes import (
     FLANK_TOL_M,
     PLANE_TOL_M,
+    _join_flanks,
     _share_axes,
+    creases,
     curved_surface,
     flank_cells,
     gable_surface,
@@ -139,3 +141,35 @@ def test_a_flank_across_from_two_houses_keeps_one_axis_with_both():
     _share_axes(dirs, {(1, 2): 10, (1, 3): 5})
     for k in (2, 3):
         assert abs(np.angle(np.exp(1j * (dirs[k] - dirs[1] - np.pi)))) < 1e-9
+
+
+def test_patches_of_one_flank_join_two_houses_flanks_do_not():
+    # one flank rising east, broken by a dormer across rows 20-24; then the
+    # same with the second house's roof 2 m higher, its party wall there
+    c = np.arange(20)[None, :]
+    for lift, joined in ((0.0, True), (2.0, False)):
+        h = np.repeat(10 + 0.8 * c, 45, axis=0).astype(float)
+        h[22:] += lift
+        lab = np.zeros(h.shape, np.int64)
+        lab[:20], lab[25:] = 1, 2
+        dirs = {1: 0.0, 2: 0.05}
+        flat = np.zeros(h.shape)
+        out, kept = _join_flanks(h, lab, dirs, np.ones(h.shape, bool), flat, flat + 0.8)
+        assert (len(kept) == 1) == joined
+
+
+def test_two_flanks_meet_where_their_planes_cross_not_where_the_scan_left_their_border():
+    lab = np.zeros((20, 30), np.int64)
+    lab[:, :12] = 1
+    lab[:, 12:] = 2
+    every = np.ones(lab.shape, bool)
+    cols = np.arange(30)
+    # a ridge: each rises toward the other, crossing at column 15
+    ridge = creases(lab, {1: np.array([10.0, 0.5, 0.0]), 2: np.array([25.0, -0.5, 0.0])}, every)
+    assert (ridge[:, cols < 15] == 1).all() and (ridge[:, cols > 15] == 2).all()
+    # a valley: each falls toward the other, the higher plane drawn
+    valley = creases(lab, {1: np.array([25.0, -0.5, 0.0]), 2: np.array([10.0, 0.5, 0.0])}, every)
+    assert (valley[:, cols < 15] == 1).all() and (valley[:, cols > 15] == 2).all()
+    # one flank stepping up the same way: a step, where it was
+    step = creases(lab, {1: np.array([10.0, 0.5, 0.0]), 2: np.array([12.0, 0.5, 0.0])}, every)
+    assert (step == lab).all()

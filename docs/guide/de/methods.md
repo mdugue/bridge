@@ -56,7 +56,9 @@ zur Regel passt.
   Kaufhaus mit Flachdach gezeichnet ist). Seine Schrägen werden als
   gewöhnliches Steildach gezeichnet: jedes Haus einer Zeile und jeder Knick
   eines Flügels als eigene Ebene, Traufe und First waagrecht, von Gauben
-  und Schornsteinen nicht verbeult; nur ein Wahrzeichen behält die
+  und Schornsteinen nicht verbeult, First, Grat und Kehle dort, wo sich
+  zwei Ebenen schneiden, und die Umrisse entlang der Wände des Gebäudes,
+  mit Ecken statt Rundungen; nur ein Wahrzeichen behält die
   gemessene Fläche selbst, und
   eine Schräge, die zu keiner Dachform passt, bleibt flach. Eine große Höhe
   über dem Gebäudemodell wird nur ein Schornstein oder Turm, wo

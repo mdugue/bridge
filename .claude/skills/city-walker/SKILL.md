@@ -210,7 +210,8 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   faces where it slopes — the flanks of a pitched roof section by
   section, planes, an extruded profile, or on a landmark the scan's
   surface (`roof_planes.py`) — each an error-bounded TIN cut
-  to its outline; ADR 0036).
+  to its outline, the outlines turned onto the footprint's walls
+  (`regular_cover`); ADR 0036).
 - Beyond LoD2 (plan 050, ADR 0036): geometry is added only where DOM1
   measures it **and** OSM (or, for a landmark's roof relief, Wikidata)
   names it — never from the surface model alone (cranes). `structures.py`

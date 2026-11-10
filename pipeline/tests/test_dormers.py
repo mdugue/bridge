@@ -5,6 +5,7 @@ import math
 from types import SimpleNamespace
 
 import numpy as np
+import shapely
 from scipy import ndimage as ndi
 
 from bake import dormers
@@ -651,3 +652,32 @@ def test_on_planes_keeps_a_dormer_under_the_ridge():
     d = {"of": 0, "x": 5.0, "y": 3.0, "z": 12.0, "top": 15.0, "slope": 45.0}
     dormers.on_planes([d], planes)
     assert d["z"] == 13.0 and d["top"] == 14.0 + dormers.RIDGE_SLACK_M
+
+
+def test_a_rebuilt_roof_holds_its_dormers_on_its_own_parts_not_the_lod2_faces():
+    # LoD2's gable drawn 3 m high; the roof rebuilt from DOM1 is a face
+    # rising 0.5 m/m north from 8 m (x 0..10, y 0..4) and a flat part at 9 m
+    rows, cols = 6, 12
+    ys = 5.0 - (np.arange(rows) + 0.5)  # cell centres from the north, y0 = 5
+    face = np.tile((8.0 + 0.5 * ys)[:, None], (1, cols))
+    surface = {
+        "x": -1.0,
+        "y": 5.0,
+        "res": 1.0,
+        "cols": cols,
+        "rows": rows,
+        "dz": np.round((face - 8.0) * 100).astype(int).ravel().tolist(),
+    }
+    parts = [
+        dormers.MeasuredPart(shapely.box(0, 0, 10, 4), 8.0, surface),
+        dormers.MeasuredPart(shapely.box(0, 4, 10, 8), 9.0, None),
+    ]
+    planes = dormers.RoofPlanes(gable_city(), ["a"], {"a": parts})
+    z, slope = planes.at(0, 5.0, 2.0)
+    assert abs(z - 9.0) < 1e-6 and abs(slope - math.degrees(math.atan(0.5))) < 1e-6
+    assert planes.at(0, 5.0, 6.0) == (9.0, 0.0)
+    assert abs(planes.ridge[0] - (8.0 + 0.5 * 3.5)) < 1e-6
+    d = {"of": 0, "x": 5.0, "y": 2.0, "z": 11.0, "top": 12.5, "slope": 45.0}
+    chimney = {"of": 0, "x": 5.0, "y": 6.0, "z": 12.0, "top": 10.0, "k": "chimney"}
+    dormers.on_planes([d, chimney], planes)
+    assert d["z"] == 9.0 and chimney["z"] == 9.0

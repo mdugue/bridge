@@ -55,6 +55,8 @@ its host's exact LoD2 roof face (`on_planes`): the burned 1 m roof reads
 a cell's height, which on a 45° face is up to half a metre off the face
 under a dormer's centre — one dormer in fourteen stood over 0.3 m above
 the roof the building draws, its cheeks clear of it, as many sunk in.
+On a roof rebuilt from DOM1 (roofs.py) the face is its rebuilt part
+(`MeasuredPart`): the building draws those, not the LoD2 faces.
 
 A crown overhanging a roof is irregular, overtops the ridge or stands on
 a tree point. Checked against the 20 cm orthophoto on Dresden's
@@ -600,17 +602,83 @@ def roof_faces(city: dict, oid: str) -> list[tuple[float, float, float, float, s
     return out
 
 
+class MeasuredPart:
+    """One part of a roof rebuilt from DOM1 (roofs.py): its plan, and its
+    height — flat at `z`, or a face's surface grid (cell centres)."""
+
+    def __init__(self, plan: shapely.Geometry, z: float, surface: dict | None):
+        self.plan = plan
+        self.z = z
+        self.grid = None
+        if surface is not None:
+            dz = np.asarray(surface["dz"], np.float64).reshape(surface["rows"], surface["cols"])
+            self.grid = z + dz / 100.0
+            self.x0, self.y0, self.res = surface["x"], surface["y"], surface["res"]
+
+    def at(self, x: float, y: float) -> tuple[float, float]:
+        """The part's height at (x, y) and its slope there (degrees): a
+        face's grid read between its cells, its slope over the cells
+        either side."""
+        if self.grid is None:
+            return self.z, 0.0
+        g = self.grid
+        fr = (self.y0 - y) / self.res - 0.5
+        fc = (x - self.x0) / self.res - 0.5
+        z = float(map_coordinates(g, [[fr], [fc]], order=1, mode="nearest")[0])
+        r = int(np.clip(round(fr), 1, g.shape[0] - 2)) if g.shape[0] > 2 else 0
+        c = int(np.clip(round(fc), 1, g.shape[1] - 2)) if g.shape[1] > 2 else 0
+        sx = (g[r, min(c + 1, g.shape[1] - 1)] - g[r, max(c - 1, 0)]) / (2 * self.res)
+        sy = (g[min(r + 1, g.shape[0] - 1), c] - g[max(r - 1, 0), c]) / (2 * self.res)
+        return z, math.degrees(math.atan(math.hypot(sx, sy)))
+
+    def top(self) -> float:
+        """Its highest point inside its plan."""
+        if self.grid is None:
+            return self.z
+        rows, cols = np.indices(self.grid.shape)
+        xs = self.x0 + (cols + 0.5) * self.res
+        ys = self.y0 - (rows + 0.5) * self.res
+        inside = shapely.contains_xy(self.plan, xs, ys)
+        return float(self.grid[inside].max()) if inside.any() else self.z
+
+
+def measured_parts(tile: Tile) -> dict[str, list[MeasuredPart]]:
+    """The roofs rebuilt from DOM1 on this tile (dlm/roofs_<tile>.geojson,
+    the `roofs` step's), by LoD2 object; none where it is not there."""
+    path = tile.data / "dlm" / f"roofs_{tile.id}.geojson"
+    out: dict[str, list[MeasuredPart]] = {}
+    if not path.exists():
+        return out
+    for f in json.loads(path.read_text()).get("features", []):
+        prop = f["properties"]
+        part = MeasuredPart(shapely.geometry.shape(f["geometry"]), prop["z"], prop.get("surface"))
+        out.setdefault(prop["id"], []).append(part)
+    return out
+
+
 class RoofPlanes:
     """Each object's LoD2 roof faces as planes: the roof's height and slope
     at a point exactly, where the burned 1 m roof reads a cell's (a
-    dormer on a 45° face half a cell off sat half a metre high)."""
+    dormer on a 45° face half a cell off sat half a metre high). An object
+    whose roof was rebuilt from DOM1 (`measured`) is read on its rebuilt
+    parts instead: the building draws them, not the LoD2 faces (a chimney
+    stood at the LoD2 roof's height, metres off the drawn one)."""
 
-    def __init__(self, city: dict, ids: list[str]):
+    def __init__(
+        self, city: dict, ids: list[str], measured: dict[str, list[MeasuredPart]] | None = None
+    ):
         to_metres = metres(city)
         self.faces: list[list[tuple[shapely.Geometry, tuple, tuple]]] = []
+        self.parts: list[list[MeasuredPart]] = []
         # each object's ridge: its roof faces' highest vertex
         self.ridge: list[float] = []
         for oid in ids:
+            parts = (measured or {}).get(oid, [])
+            self.parts.append(parts)
+            if parts:
+                self.faces.append([])
+                self.ridge.append(max(p.top() for p in parts))
+                continue
             faces = []
             ridge = -math.inf
             for geometry in _lod2(city["CityObjects"].get(oid, {}).get("geometry", [])):
@@ -636,6 +704,8 @@ class RoofPlanes:
         ridge, a hip or a mansard's break the neighbour's plane runs on
         above the face the point is beside."""
         p = shapely.Point(x, y)
+        if of < len(self.parts) and self.parts[of]:
+            return self._measured_at(of, p)
         over = None
         near = None
         for plan, n, p0 in self.faces[of] if of < len(self.faces) else []:
@@ -652,6 +722,16 @@ class RoofPlanes:
         if over is not None:
             return over
         return near[1] if near is not None else None
+
+    def _measured_at(self, of: int, p: shapely.Point) -> tuple[float, float] | None:
+        """A rebuilt roof at `p`: the highest part over it, else the nearest
+        within PLANE_REACH_M of its outline."""
+        over = [q.at(p.x, p.y) for q in self.parts[of] if q.plan.covers(p)]
+        if over:
+            return max(over)
+        gaps = [(q.plan.distance(p), q) for q in self.parts[of]]
+        gap, q = min(gaps, key=lambda g: g[0])
+        return q.at(p.x, p.y) if gap <= PLANE_REACH_M else None
 
 
 def on_planes(found: list[dict], planes: RoofPlanes) -> None:
@@ -1710,7 +1790,7 @@ def run(tile: Tile) -> None:
         building_groups(city, ids),
         mansard_flanks(city),
         measured_walls(tile, city, ids),
-        RoofPlanes(city, ids),
+        RoofPlanes(city, ids, measured_parts(tile)),
     )
     write_geojson(out, found, tile.epsg, tile.credit)
     chimneys = sum(1 for f in found if f["properties"].get("k") == "chimney")

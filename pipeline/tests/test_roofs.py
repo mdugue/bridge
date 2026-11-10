@@ -4,22 +4,31 @@ import json
 
 import numpy as np
 import rasterio
+import shapely
+from rasterio import features as rfeatures
 from rasterio.transform import from_origin
+from shapely import affinity
 
 from bake.common import Tile
 from bake.roofs import (
     LEVEL_MISS_SHARE,
     LEVEL_SHARE,
     MISS_SHARE,
+    Grid,
     _majority,
     _narrow,
+    _polygonal,
     form_holds,
     inclined_cells,
     level_share,
+    measured_model,
     merge_regions,
     miss_share,
     pitch_holds,
+    region_polygons,
+    regular_polygon,
     run,
+    wall_directions,
 )
 
 X0, Y0, SIZE = 400_000.0, 5_600_000.0, 200
@@ -354,3 +363,71 @@ def test_a_halls_monitor_roofs_stay_strips_where_merging_them_would_miss(tmp_pat
     doc = json.loads((tile.data / "dlm" / "roofs_t.geojson").read_text())
     parts = [f["properties"]["z"] for f in doc["features"] if f["properties"]["id"] == "flat"]
     assert sorted(parts) == [BASE + 10] * 3 + [BASE + 12.5] * 2
+
+
+def test_a_wing_beside_a_low_roof_ends_along_its_eave_not_the_scans_blur():
+    # a gable wing 20 m deep, its west eave on the footprint, its east one
+    # over a courtyard's roof 9 m below; the scan's edge wavers ±1.5 m
+    rows, cols = 70, 50
+    x = np.arange(cols) + 0.5
+    wing = 26.0 - np.abs(x - 10.0) * 0.6
+    dom = np.tile(np.where(x < 20, wing, 11.0), (rows, 1))
+    for r in range(rows):
+        edge = 20 + int(round(1.5 * np.sin(r / 4.0)))
+        dom[r, 20:edge] = wing[20:edge] if edge > 20 else dom[r, 20:edge]
+        dom[r, edge:20] = 11.0
+    own = np.ones(dom.shape, bool)
+    m = measured_model(dom, own, own, np.zeros_like(own), 20)
+    z = m.heights()
+    # where the wing ends along each row: one straight line
+    ends = [int(np.argmax(z[r] < 15.0)) for r in range(5, rows - 5)]
+    assert np.ptp(ends) <= 1
+
+
+def test_a_courtyard_drawn_from_the_scan_has_the_walls_straight_corners_of_the_building():
+    def turned(w, h, cx, cy, deg):
+        box = shapely.box(-w / 2, -h / 2, w / 2, h / 2)
+        return affinity.translate(affinity.rotate(box, deg), cx, cy)
+
+    footprint = turned(60, 40, X0 + 50, Y0 + 50, 20)
+    court = turned(30, 16, X0 + 50, Y0 + 50, 20)
+    grid = Grid((X0, Y0, X0 + 100, Y0 + 100))
+
+    def burn(g):
+        return rfeatures.rasterize([g], out_shape=(grid.rows, grid.cols), transform=grid.transform)
+
+    lab = np.where(burn(court), 2, np.where(burn(footprint), 1, 0)).astype(np.int32)
+    parts = region_polygons(lab, np.array([130.0, 120.0]), grid, footprint)
+    inner = shapely.union_all([p for p, _, rid in parts if rid == 2])
+    ring = np.asarray(inner.exterior.coords)
+    d = np.diff(ring, axis=0)
+    long = np.hypot(d[:, 0], d[:, 1]) >= 2.0
+    turn = (np.degrees(np.arctan2(d[long, 1], d[long, 0])) - 20.0) % 90.0
+    assert np.all(np.minimum(turn, 90.0 - turn) < 1.0)  # along the walls, corners square
+    assert abs(inner.area - court.area) < 0.1 * court.area
+    total = sum(p.area for p, _, _ in parts)
+    assert abs(total - footprint.area) < 1.0  # no gap, no overlap
+
+
+def test_a_part_the_tiling_leaves_inside_a_collection_is_kept():
+    square = shapely.box(0, 0, 10, 10)
+    other = shapely.box(20, 0, 25, 5)
+    mixed = shapely.GeometryCollection(
+        [shapely.MultiPolygon([square, other]), shapely.LineString([(0, 20), (5, 20)])]
+    )
+    assert abs(_polygonal(mixed).area - 125.0) < 1e-9
+    assert _polygonal(shapely.LineString([(0, 0), (1, 1)])).is_empty
+
+
+def test_each_part_of_a_split_outline_takes_the_walls_directions():
+    # a part the footprint's clip split in two: both halves are squared
+    walls = wall_directions(shapely.box(0, 0, 40, 10))
+    # a rectangle with its corners rounded off by 1 m chamfers
+    blob = shapely.Polygon([(-4, -3), (4, -3), (5, -2), (5, 2), (4, 3), (-4, 3), (-5, 2), (-5, -2)])
+    split = shapely.MultiPolygon([affinity.translate(blob, 6, 5), affinity.translate(blob, 30, 5)])
+    out = regular_polygon(split, walls)
+    assert len(shapely.get_parts(out)) == 2
+    for part in shapely.get_parts(out):
+        d = np.diff(np.asarray(part.exterior.coords), axis=0)
+        theta = np.degrees(np.arctan2(d[:, 1], d[:, 0])) % 90
+        assert np.all(np.minimum(theta, 90 - theta) < 1e-6)
