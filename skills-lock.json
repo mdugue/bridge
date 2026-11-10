@@ -67,6 +67,18 @@
       "skillPath": "skills/shadcn/SKILL.md",
       "computedHash": "b864a958765563321f485a96f4d59c0bb6539f4286ab6d8b8b66895b7ebd302d"
     },
+    "tanstack-ai": {
+      "source": "TanStack/ai",
+      "sourceType": "github",
+      "skillPath": "skills/tanstack-ai/SKILL.md",
+      "computedHash": "ae5833375e48f07b2a1eeb9b57f6d57a5ec9d1fc8e2d091f7c4808bdbb48301f"
+    },
+    "tanstack-ai-migration": {
+      "source": "TanStack/ai",
+      "sourceType": "github",
+      "skillPath": "skills/tanstack-ai-migration/SKILL.md",
+      "computedHash": "a79d2c5b19208ede359f12a5d3311d7811cdd4afed739e7aa539a2466fe6f774"
+    },
     "test-audit": {
       "source": "openclaw/openclaw",
       "sourceType": "github",

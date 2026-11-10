@@ -494,18 +494,16 @@ export function footprintCircle(points: readonly Xyz[]): {
   return { x, z, radius };
 }
 
-/** The shadow frustum's half-size never goes below 110 m (the walker's
- *  until 2026-10-11, now 121 m with a wider dead zone; Modell's steps keep
- *  the 18 % one, shadow-fit.ts `shadowDeadZone`). */
+/** The square the map's rings tile in Modell never goes below 110 m. */
 export const MODEL_SHADOW_MIN = 110;
-/** …and stops here on a desktop: 1 600 m over 3 072² ≈ 1 m texels. */
+/** …and stops here on a desktop: 1 600 m over 2 × 2048² ≈ 1.1 m texels. */
 export const MODEL_SHADOW_MAX = 1600;
 /** Half-octave steps, and how far past a boundary a change waits. */
 const SHADOW_STEPS_PER_OCTAVE = 2;
 const SHADOW_HYSTERESIS = 0.3;
 
 /**
- * The shadow frustum's half-size for a footprint radius: in half-octave
+ * The half-size of the square the map's rings tile, for a footprint radius: in half-octave
  * steps from MODEL_SHADOW_MIN, with hysteresis (a step is a full redraw of
  * the depth pass), capped at `max`.
  */

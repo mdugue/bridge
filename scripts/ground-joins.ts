@@ -17,13 +17,19 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
+import type { z } from "zod";
+import { parseBakeFile } from "../lib/city/bake-file";
+import type { BakeFile } from "../lib/city/bake-file";
 import { doorJoins } from "../lib/city/doors";
+import { DOORS_FILE } from "../lib/city/doors-file";
+import { PLINTHS_FILE } from "../lib/city/plinths-file";
+import { SHOPFRONTS_FILE } from "../lib/city/shopfronts-file";
+import { SMALL_BUILDINGS_FILE } from "../lib/city/small-buildings-file";
 import { plinthJoins } from "../lib/city/plinths";
 import type {
   DoorFeature,
   PlinthFeature,
   RailFeature,
-  ShopfrontFile,
   ShopfrontWall,
   SmallBuildingFeature,
 } from "../lib/city/features";
@@ -105,47 +111,40 @@ async function tileGround(site: Site, tile: string): Promise<Ground> {
   };
 }
 
+/** A tile's source file as its schema describes it, or none (ADR 0059). */
+function citySource<S extends z.ZodType>(
+  spec: BakeFile<S>,
+  file: string
+): z.infer<S> | undefined {
+  const path = nodePath.join(process.cwd(), file);
+  return existsSync(path)
+    ? parseBakeFile(spec, JSON.parse(readFileSync(path, "utf-8")), file)
+    : undefined;
+}
+
 /** The LoD2 walls' street side the bake draws as plinths. */
 function plinths(site: Site, tile: string): PlinthFeature[] {
-  const path = nodePath.join(
-    process.cwd(),
-    cityMeshSourceFiles(site, tile).plinths
+  return (
+    citySource(PLINTHS_FILE, cityMeshSourceFiles(site, tile).plinths)
+      ?.features ?? []
   );
-  return existsSync(path)
-    ? ((
-        JSON.parse(readFileSync(path, "utf-8")) as {
-          features?: PlinthFeature[];
-        }
-      ).features ?? [])
-    : [];
 }
 
 /** OSM's entrances the bake draws as doors on a tile's walls. */
 function doors(site: Site, tile: string): DoorFeature[] {
-  const path = nodePath.join(
-    process.cwd(),
-    cityMeshSourceFiles(site, tile).doors
+  return (
+    citySource(DOORS_FILE, cityMeshSourceFiles(site, tile).doors)?.features ??
+    []
   );
-  return existsSync(path)
-    ? ((
-        JSON.parse(readFileSync(path, "utf-8")) as {
-          features?: DoorFeature[];
-        }
-      ).features ?? [])
-    : [];
 }
 
 /** The shopfront walls the bake draws on a tile's ground floors. */
 function shopfronts(site: Site, tile: string): ShopfrontWall[] {
-  const path = nodePath.join(
-    process.cwd(),
+  const file = citySource(
+    SHOPFRONTS_FILE,
     cityMeshSourceFiles(site, tile).shopfronts
   );
-  return existsSync(path)
-    ? Object.values(
-        (JSON.parse(readFileSync(path, "utf-8")) as ShopfrontFile).buildings
-      ).flat()
-    : [];
+  return file ? Object.values(file.buildings).flat() : [];
 }
 
 /** A shopfront wall's joins: its risers' and piers' feet, the bays cut at
@@ -166,17 +165,10 @@ function shopfrontWallJoins(
 
 /** The scan's small structures the bake appends to a tile's buildings. */
 function smallBuildings(site: Site, tile: string): SmallBuildingFeature[] {
-  const path = nodePath.join(
-    process.cwd(),
-    cityMeshSourceFiles(site, tile).smallBuild
+  return (
+    citySource(SMALL_BUILDINGS_FILE, cityMeshSourceFiles(site, tile).smallBuild)
+      ?.features ?? []
   );
-  return existsSync(path)
-    ? ((
-        JSON.parse(readFileSync(path, "utf-8")) as {
-          features?: SmallBuildingFeature[];
-        }
-      ).features ?? [])
-    : [];
 }
 
 /** The monorails in a tile's rail file (pipeline/bake/rail_osm.py). */

@@ -7,8 +7,8 @@ import {
 import type { UIMessage, ModelMessage, StreamChunk } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 import { fakeText } from "@tanstack/ai/testing";
-import type { AskPromptSite } from "./ask-city";
 import { knowledgeOf } from "./ask-knowledge";
+import type { AskPromptSite } from "./ask-prompt";
 import {
   DEADLINE,
   ended,
@@ -63,8 +63,9 @@ const TILE: WissenTile = {
 const SITE: AskPromptSite = {
   epsg: 25_833,
   label: "Dresden",
-  layers: [],
-  styles: ["pastel: Pastell"],
+  layers: [
+    { key: "tramLayer", label: "Bahnen", description: "Nach dem Fahrplan" },
+  ],
 };
 
 type Chunk = { type: string } & Record<string, unknown>;
@@ -75,6 +76,29 @@ async function collect(stream: AsyncIterable<unknown>): Promise<Chunk[]> {
     chunks.push(c as Chunk);
   }
   return chunks;
+}
+
+/** The layer tool the model is offered in a city, if any. */
+async function offeredLayerTool(site: AskPromptSite) {
+  const adapter = fakeText();
+  let tools: { name: string }[] = [];
+  adapter.setResponses([
+    ({ request }) => {
+      tools = request.tools ?? [];
+      return { text: "Hallo." };
+    },
+  ]);
+  await collect(
+    runAsk({
+      adapter,
+      knowledge: knowledgeOf(INDEX, [TILE]),
+      messages: [{ role: "user", content: "Hallo" }],
+      site,
+      threadId: "t3",
+      today: new Date(2026, 9, 29),
+    })
+  );
+  return tools.find((t) => t.name === "datenschicht");
 }
 
 describe("runAsk", () => {
@@ -194,6 +218,14 @@ describe("runAsk", () => {
       })
     );
     expect(adapter.state.callCount).toBe(1);
+  });
+
+  test("the model is offered its city's layers and no layer tool without any", async () => {
+    const schema = JSON.stringify(await offeredLayerTool(SITE));
+    expect(schema).toContain("tramLayer");
+    expect(schema).toContain("Nach dem Fahrplan");
+    expect(schema).not.toContain("bikeLayer");
+    expect(await offeredLayerTool({ ...SITE, layers: [] })).toBeUndefined();
   });
 });
 
@@ -315,6 +347,18 @@ const finished = (finishReason: string) =>
 async function* list(...chunks: StreamChunk[]) {
   yield* chunks;
 }
+/** The stream's events as `types` gives them, and the closing error's code. */
+const ends = async (stream: AsyncIterable<StreamChunk>) => {
+  const chunks: StreamChunk[] = [];
+  for await (const c of stream) {
+    chunks.push(c);
+  }
+  const last = chunks.at(-1);
+  return {
+    out: await types(list(...chunks)),
+    code: last?.type === EventType.RUN_ERROR ? last.code : undefined,
+  };
+};
 async function* interrupt() {
   yield chunk("TOOL_CALL_RESULT");
   yield {
@@ -341,7 +385,7 @@ async function* whole() {
 
 describe("an answer that stops says why", () => {
   test("a run the turn cap ends after a server tool", async () => {
-    const out = await types(
+    const { out, code } = await ends(
       ended(
         of(
           "RUN_STARTED",
@@ -353,10 +397,11 @@ describe("an answer that stops says why", () => {
       )
     );
     expect(out.at(-1)).toContain("zu viele Schritte");
+    expect(code).toBe("too-many-steps");
   });
 
   test("a cut run that ends on its RUN_FINISHED after the results", async () => {
-    const out = await types(
+    const { out, code } = await ends(
       ended(
         list(
           chunk("TOOL_CALL_START"),
@@ -370,93 +415,108 @@ describe("an answer that stops says why", () => {
       )
     );
     expect(out.at(-1)).toContain("zu viele Schritte");
+    expect(code).toBe("too-many-steps");
   });
 
   test("a turn that spends its output before a word is cut, not capped", async () => {
-    const out = await types(
+    const { out, code } = await ends(
       ended(
         list(chunk("TOOL_CALL_RESULT"), finished("length")),
         new AbortController().signal
       )
     );
     expect(out.at(-1)).toContain("abgeschnitten");
+    expect(code).toBe("cut-short");
   });
 
   test("a filtered or failed answer says it broke off", async () => {
-    const out = await types(
+    const { out, code } = await ends(
       ended(list(finished("content_filter")), new AbortController().signal)
     );
     expect(out.at(-1)).toContain("brach die Antwort ab");
+    expect(code).toBe("broke-off");
   });
 
   test("an answer the model's output cut mid-sentence says so", async () => {
-    const out = await types(
+    const { out, code } = await ends(
       ended(
         list(chunk("TEXT_MESSAGE_CONTENT"), finished("length")),
         new AbortController().signal
       )
     );
     expect(out.at(-1)).toContain("abgeschnitten");
+    expect(code).toBe("cut-short");
   });
 
   test("a resumed scene tool's result needs no new words", async () => {
-    const out = await types(
+    const { out, code } = await ends(
       ended(
         list(chunk("TOOL_CALL_RESULT"), chunk("RUN_STARTED"), finished("stop")),
         new AbortController().signal
       )
     );
     expect(out.at(-1)).toBe("RUN_FINISHED");
+    expect(code).toBeUndefined();
   });
 
   test("a provider's error after a result keeps its own words", async () => {
     const error = { ...chunk("RUN_ERROR"), message: "401 invalid x-api-key" };
-    const out = await types(
+    const { out, code } = await ends(
       ended(
         list(chunk("TOOL_CALL_RESULT"), error),
         new AbortController().signal
       )
     );
     expect(out.at(-1)).toBe("RUN_ERROR:401 invalid x-api-key");
+    expect(code).toBeUndefined();
   });
 
   test("a scene tool's interrupt is not a stop", async () => {
-    const out = await types(ended(interrupt(), new AbortController().signal));
+    const { out, code } = await ends(
+      ended(interrupt(), new AbortController().signal)
+    );
     expect(out).toEqual(["TOOL_CALL_RESULT", "RUN_FINISHED"]);
+    expect(code).toBeUndefined();
   });
 
   test("an answered run ends as it is", async () => {
-    const out = await types(
+    const { out, code } = await ends(
       ended(
         of("RUN_STARTED", "TEXT_MESSAGE_END", "RUN_FINISHED"),
         new AbortController().signal
       )
     );
     expect(out).toEqual(["RUN_STARTED", "TEXT_MESSAGE_END", "RUN_FINISHED"]);
+    expect(code).toBeUndefined();
   });
 
   test("the deadline after a tool round is still the deadline", async () => {
     const c = new AbortController();
     c.abort(DEADLINE);
-    const out = await types(ended(round(), c.signal));
+    const { out, code } = await ends(ended(round(), c.signal));
     expect(out.at(-1)).toBe("RUN_ERROR:Die Antwort dauerte zu lange.");
+    expect(code).toBe("too-late");
   });
 
   test("a run that finished before the deadline stays whole", async () => {
     const c = new AbortController();
     c.abort(DEADLINE);
-    const out = await types(ended(whole(), c.signal));
+    const { out, code } = await ends(ended(whole(), c.signal));
     expect(out).toEqual(["RUN_STARTED", "RUN_FINISHED"]);
+    expect(code).toBeUndefined();
   });
 
   test("the deadline's error replaces the abort's", async () => {
     const c = new AbortController();
     c.abort(DEADLINE);
-    const out = await types(ended(of("RUN_STARTED", "RUN_ERROR"), c.signal));
+    const { out, code } = await ends(
+      ended(of("RUN_STARTED", "RUN_ERROR"), c.signal)
+    );
     expect(out).toEqual([
       "RUN_STARTED",
       "RUN_ERROR:Die Antwort dauerte zu lange.",
     ]);
+    expect(code).toBe("too-late");
   });
 });
 

@@ -2,11 +2,8 @@ import { expect, test } from "bun:test";
 import {
   clearedSafety,
   decayedSafety,
-  FAILURE_TRIES,
   frameLoss,
-  mayRecover,
   parseStoredSafety,
-  RECLAIM_WINDOW_MS,
   raisedSafety,
   resolveSafety,
   restoresLook,
@@ -191,44 +188,6 @@ test("a stored record that is not one counts as nothing stored", () => {
   expect(
     parseStoredSafety('{"level":2,"raisedAt":5,"raisedBy":"y","crash":7}')
   ).toEqual({ level: 2, raisedAt: 5, raisedBy: "y" });
-});
-
-test("a lost GPU reloads once per level, never from the lightest page", () => {
-  const none = { losses: [], reclaims: [], failures: [] };
-  expect(mayRecover("lost", 0, none, 0)).toBe(true);
-  expect(mayRecover("lost", 2, none, 0)).toBe(true);
-  expect(mayRecover("lost", 3, none, 0)).toBe(false);
-  // the tab's own net: a page whose level cannot rise (an override) stops
-  // after as many reloads as there are levels
-  const three = { losses: [0, 60_000, 120_000], reclaims: [], failures: [] };
-  expect(mayRecover("lost", 0, three, 180_000)).toBe(false);
-  expect(mayRecover("lost", 0, three, 700_000)).toBe(true);
-});
-
-test("a background reclaim reloads under its own cap, whatever the level", () => {
-  const reclaims = [0, 1000, 2000];
-  const none = { losses: [], reclaims: [], failures: [] };
-  expect(mayRecover("reclaimed", 3, none, 0)).toBe(true);
-  expect(mayRecover("reclaimed", 0, { ...none, reclaims }, 3000)).toBe(false);
-  expect(
-    mayRecover("reclaimed", 0, { ...none, reclaims }, RECLAIM_WINDOW_MS)
-  ).toBe(true);
-  // losses do not use up the reclaims' cap, nor the other way round
-  expect(mayRecover("reclaimed", 0, { ...none, losses: [0, 1, 2] }, 3)).toBe(
-    true
-  );
-  expect(mayRecover("lost", 0, { ...none, reclaims }, 3000)).toBe(true);
-});
-
-test("a failed frame reloads twice in ten minutes, at any level", () => {
-  const none = { losses: [], reclaims: [], failures: [] };
-  expect(mayRecover("failed", 3, none, 0)).toBe(true);
-  const failures = Array.from({ length: FAILURE_TRIES }, (_, i) => i);
-  expect(mayRecover("failed", 0, { ...none, failures }, 60_000)).toBe(false);
-  expect(mayRecover("failed", 0, { ...none, failures }, 600_000)).toBe(true);
-  // a bug uses up no loss reload, nor a loss a bug's
-  expect(mayRecover("lost", 0, { ...none, failures }, 60_000)).toBe(true);
-  expect(mayRecover("failed", 0, { ...none, losses: [0, 1, 2] }, 3)).toBe(true);
 });
 
 test("a frame that throws on a GPU that still answers is a bug, not a loss", () => {

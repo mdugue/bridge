@@ -35,6 +35,8 @@ import {
   WINDOW_ROWS,
   windowless,
   windowSpecs,
+  NO_WINDOWS,
+  windowForm,
   windowStorey,
   windowType,
 } from "./windows";
@@ -136,8 +138,6 @@ test("a flat-roofed town house: housing from 9 m, listed or storeys from 3.4 m",
 
 test("the storey snaps to a whole number under the eave", () => {
   expect(windowStorey(16, 3.14)).toBeCloseTo(3.2, 9);
-  // the photos' storey wins over the estimate
-  expect(windowStorey(16, 3.14, 4.1)).toBeCloseTo(4, 9);
   // nothing to snap on a low wall
   expect(windowStorey(2.5, 3)).toBe(3);
 });
@@ -283,18 +283,13 @@ describe("windowSpecs", () => {
     expect(low.spec.h).toBeCloseTo(low.storey - sill - WINDOW_ROWS.lintel, 2);
   });
 
-  test("the photos' storey only where OSM counts none", () => {
-    const wall = measured("a", model({ storey: 4.1 }));
-    const [own] = windowSpecs([host({ eaveH: 16 })], [wall], index);
+  test("the photos' storey never sets the rows: they read it short", () => {
+    // the traits still carry it (facade_traits.py), the model does not
+    const wall = measured("a", model());
+    wall.traits = { ...wall.traits, storey: 3.2 };
+    // 16 m at the neighbours' 4 m: four rows, not the photos' five
+    const [own] = windowSpecs([host({ eaveH: 16, storeyH: 4 })], [wall], index);
     expect(own.storey).toBeCloseTo(4, 9);
-    expect(own.storeyFromPhotos).toBe(true);
-    const [osm] = windowSpecs(
-      [host({ eaveH: 16, levels: true, storeyH: 3.2 })],
-      [wall],
-      index
-    );
-    expect(osm.storey).toBeCloseTo(3.2, 9);
-    expect(osm.storeyFromPhotos).toBeUndefined();
   });
 
   test("a shop's ground floor gets none", () => {
@@ -307,7 +302,7 @@ describe("windowSpecs", () => {
       [host(), host({ root: 1, centre: [400, 0] })],
       [
         measured("a", model({ axis: 4.6, w: 2.2, h: 2.4 })),
-        measured("b", model({ axis: 1.9, w: 0.75, h: 1 })),
+        measured("b", model({ axis: 1.9, w: 0.5, h: 1 })),
       ],
       index
     );
@@ -1025,4 +1020,20 @@ describe("measured axes", () => {
       measuredAxes([wall(3)], index, () => {}, { cx: 100, cy: 200 })
     ).toEqual([]);
   });
+});
+
+const formSpec = (w: number, h: number, axis = 3) => ({
+  axis,
+  h,
+  style: 0,
+  w,
+});
+
+test("a window's form: tall, square, lying or a band", () => {
+  const spec = formSpec;
+  expect(windowForm(spec(1.1, 1.9))).toBe("hochkant");
+  expect(windowForm(spec(1.2, 1.2))).toBe("quadratisch");
+  expect(windowForm(spec(1.8, 1.1))).toBe("liegend");
+  expect(windowForm(spec(2.5, 1.2))).toBe("Band");
+  expect(windowForm(NO_WINDOWS)).toBeUndefined();
 });

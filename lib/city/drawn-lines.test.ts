@@ -124,7 +124,7 @@ test("where nothing is mapped or measured, the card says the viewer assumed it",
   expect(r.Wandfarbe).toMatchObject({ method: "assumed", source: "viewer" });
   expect(r.Wandfarbe.detail).toContain("Wohngebäude");
   expect(r.Fenster).toMatchObject({
-    value: "Achsen 2,7 m, Fenster 1,15 × 1,90 m, Faschen",
+    value: "hochkant, Achsen 2,7 m, Fenster 1,15 × 1,90 m, Faschen",
     method: "assumed",
     source: "viewer",
   });
@@ -146,10 +146,9 @@ test("a storey counted in the neighbours' storey height names them (G21)", () =>
 });
 
 test("windows measured in street photos are Mapillary's, with the photos there", () => {
-  const r = rows(ask(object({ windows: "measured", storey: "photos" })));
+  const r = rows(ask(object({ windows: "measured" })));
   expect(r.Fenster).toMatchObject({ method: "detected", source: "mapillary" });
   expect(r.Fenster.url).toStartWith("https://www.mapillary.com/app/?lat=51.05");
-  expect(r.Geschosse).toMatchObject({ source: "mapillary" });
   // a neighbour's rhythm is lent, not seen on this house
   expect(rows(ask(object({ windows: "near" }))).Fenster.method).toBe("assumed");
 });
@@ -253,14 +252,14 @@ test("a door asked describes the house it opens, and the house's parts", () => {
   );
   const plinth = { ...door, objectIndex: 3, source: OBJECT_SOURCE_PLINTH };
   const r = rows(ask(door, [house, door, plinth]));
-  expect(r.Fenster.value).toStartWith("Achsen 2,7 m");
+  expect(r.Fenster.value).toContain("Achsen 2,7 m");
   expect(r.Haustüren).toMatchObject({ source: "osm" });
   expect(r["Sockel, Gesimse"]).toMatchObject({ value: "modelliert" });
   expect(r.Durchgänge).toBeUndefined();
   // a passage's lining asked describes the house it runs through
   const passage = { ...door, objectIndex: 4, source: OBJECT_SOURCE_PASSAGE };
   const through = rows(ask(passage, [house, passage]));
-  expect(through.Fenster.value).toStartWith("Achsen 2,7 m");
+  expect(through.Fenster.value).toContain("Achsen 2,7 m");
   expect(through.Durchgänge).toMatchObject({
     source: "osm",
     value: "geöffnet",

@@ -37,8 +37,12 @@ is wrong. So, per LoD2 object with a roof:
    it rises by more than `SLOPE` over a patch at least `FACE_M` (10 m)
    across, or by more than `STEEP` over one `STEEP_FACE_M` (5 m) across,
    a ridge or valley between two slopes included (`inclined_cells`): a
-   hall's vault, a pitched roof, a mansard's flank, a dome — and
-   the rest, cut into `STEP_M`
+   hall's vault, a pitched roof, a mansard's flank, a dome — or where it
+   lies on an inclined plane holding a disk a few metres across
+   (`roof_planes.planar_faces`: a gable ring's narrow, gentle flanks); each
+   face is then drawn in a form roofs are built in or goes back to the
+   rest (`roof_planes.plausible_surface`: planes, an extruded profile, the
+   scan itself only on a landmark) — and the rest, cut into `STEP_M`
    height bands, each band's connected pieces a region (a step's flank, a
    cell or two wide however steep, is no face: it stays the step between two
    levels). Regions under `MIN_PART_M2`, and those holding no disk
@@ -61,8 +65,8 @@ is wrong. So, per LoD2 object with a roof:
 
 Each part is written as its polygon with the object's `id` and `z`, the
 roof's absolute height (a face's: its median); a face also carries its
-measured `surface`, heights in centimetres from `z` on the 1 m grid,
-smoothed with its edges kept. The build stands every part from the
+`surface` (`roof_planes.py`), heights in centimetres from `z` on the 1 m
+grid. The build stands every part from the
 object's own LoD2 base to its roof — flat at `z`, or the surface as an
 error-bounded TIN (scripts/measured-roofs.ts). Cross-seam objects are
 measured on the neighbours' DOM1 too; each tile writes the objects of its
@@ -84,7 +88,9 @@ from rasterio.transform import from_origin
 from rasterio.windows import from_bounds
 from scipy import ndimage as ndi
 
+from . import roof_planes
 from .common import Tile, feature, geometry_json, overlaps, write_geojson
+from .roof_planes import fill_nearest
 from .skyview import burn_triangles
 
 RES = 1.0
@@ -124,9 +130,7 @@ FACE_M = 10.0
 STEEP = 0.5  # m per m (≈ 27°)
 STEEP_FACE_M = 5.0
 STEP_EDGE_M = 2.0  # two neighbouring cells further apart than this: a step, not a face
-SURFACE_SMOOTH = 1.0  # σ (cells) of a face's edge-preserving blur
-SURFACE_STEP_M = 1.0  # σ of the height difference it still mixes
-SURFACE_PASSES = 2
+PLAUSIBLE_ROUNDS = 3  # faces dropped as implausible, the levels re-cut, at most this often
 EXTEND_CELLS = 4  # how far past its cells a face's surface runs on its plane
 FORM_SPAN_M = 3.0  # a LoD2 roof rising less than this has no form to keep
 FORM_R = 0.85  # the scan follows a LoD2 roof's form this closely (Pearson r)
@@ -315,12 +319,6 @@ def pitch_holds(roof: np.ndarray, h: np.ndarray, own: np.ndarray, judged: np.nda
     if n == 0 or n < PITCH_SHARE * judged.sum():
         return False
     return bool((pitched & (_rise(h) > SLOPE)).sum() >= PITCH_SHARE * n)
-
-
-def fill_nearest(values: np.ndarray, known: np.ndarray) -> np.ndarray:
-    """Every cell takes the value of the nearest known cell."""
-    _, (r, c) = ndi.distance_transform_edt(~known, return_indices=True)
-    return values[r, c]
 
 
 def _region_medians(lab: np.ndarray, h: np.ndarray, n: int) -> np.ndarray:
@@ -515,68 +513,9 @@ class Model:
         return np.where(self.faces[self.lab] & (self.lab > 0), self.surface, flat)
 
 
-def _edge_preserving(v: np.ndarray, w: np.ndarray) -> np.ndarray:
-    """A Gaussian (σ SURFACE_SMOOTH cells) normalised over the cells `w`,
-    each neighbour also weighed by how close it stands in height (σ
-    SURFACE_STEP_M): the scan's noise is smoothed, a step inside a face
-    stays sharp."""
-    r = int(np.ceil(2 * SURFACE_SMOOTH))
-    pad = np.pad(v, r, mode="edge")
-    wpad = np.pad(w, r)
-    num = np.zeros_like(v)
-    den = np.zeros_like(v)
-    rows, cols = v.shape
-    for dr in range(-r, r + 1):
-        for dc in range(-r, r + 1):
-            g = np.exp(-(dr * dr + dc * dc) / (2 * SURFACE_SMOOTH**2))
-            nv = pad[r + dr : r + dr + rows, r + dc : r + dc + cols]
-            nw = wpad[r + dr : r + dr + rows, r + dc : r + dc + cols]
-            k = g * nw * np.exp(-((nv - v) ** 2) / (2 * SURFACE_STEP_M**2))
-            num += k * nv
-            den += k
-    return num / np.maximum(den, 1e-9)
-
-
-def _face_surface(h: np.ndarray, lab: np.ndarray, faces: np.ndarray, face: np.ndarray):
-    """Each face's surface: the scan on its face cells (the pieces it took in
-    are filled from them: a dormer or a crane stays off the roof), blurred
-    over the face SURFACE_PASSES times, edges kept (`_edge_preserving`): the
-    tiles, skylights and snow guards of a 1 m scan smoothed out, a dome's
-    or a vault's curve kept."""
-    out = h.copy()
-    for rid in np.flatnonzero(faces):
-        mine = lab == rid
-        if not mine.any():
-            continue
-        rows, cols = np.nonzero(ndi.binary_dilation(mine, iterations=3))
-        win = (slice(rows.min(), rows.max() + 1), slice(cols.min(), cols.max() + 1))
-        m, src = mine[win], mine[win] & face[win]
-        v = fill_nearest(h[win], src if src.any() else m)
-        w = m.astype(np.float64)
-        for _ in range(SURFACE_PASSES):
-            v = _edge_preserving(v, w)
-        sub = out[win]
-        sub[m] = v[m]
-    return out
-
-
-def measured_model(
-    dom: np.ndarray,
-    own: np.ndarray,
-    roof: np.ndarray,
-    green: np.ndarray,
-    small_cells: int,
-    with_faces: bool = True,
-    narrow: bool = True,
-) -> Model | None:
-    """The roof over `own` cells: flat levels and (unless `with_faces` is
-    off, the flat model) the measured faces; with them, unless `narrow` is
-    off, no part narrower than NARROW_M."""
-    known = roof & ~green & np.isfinite(dom)
-    if known.sum() < small_cells:
-        return None
-    h = scan_surface(dom, known)
-    face = inclined_cells(h, own) if with_faces else np.zeros_like(own)
+def _regions(h, own, face, small_cells, with_faces, narrow):
+    """The levels (`own` less `face`, in STEP_M bands) and the faces, merged
+    (`merge_regions`)."""
     bands = np.round(h / STEP_M).astype(np.int64)
     lab = np.zeros(h.shape, np.int64)
     n = 0
@@ -589,49 +528,66 @@ def measured_model(
     lab[part > 0] = part[part > 0] + n
     faces = np.zeros(n + k + 1, bool)
     faces[n + 1 :] = True
-    lab, faces = merge_regions(
-        lab, h, small_cells, faces, thin=with_faces, narrow=with_faces and narrow
-    )
-    count = int(lab.max())
-    level = _region_medians(lab, h, count)
-    surface = _face_surface(h, lab, faces, face) if faces.any() else h
+    return merge_regions(lab, h, small_cells, faces, thin=with_faces, narrow=with_faces and narrow)
+
+
+def _plausible_faces(h, lab, faces, face, landmark) -> tuple[np.ndarray, list[int]]:
+    """The surface the faces are drawn with — each as planes or one curve
+    (`roof_planes.plausible_surface`), fitted on its own face cells (what
+    it took in follows it) — and the faces that are neither."""
+    surface = h.copy()
+    implausible = []
+    for rid in np.flatnonzero(faces):
+        mine = lab == rid
+        if not mine.any():
+            continue
+        rows, cols = np.nonzero(ndi.binary_dilation(mine, iterations=EXTEND_CELLS + 2))
+        win = (slice(rows.min(), rows.max() + 1), slice(cols.min(), cols.max() + 1))
+        src = mine[win] & face[win]
+        fit = roof_planes.plausible_surface(
+            h[win], src if src.any() else mine[win], SLOPE, RES, EXTEND_CELLS, landmark
+        )
+        if fit is None:
+            implausible.append(int(rid))
+            continue
+        sub = surface[win]
+        sub[mine[win]] = fit[mine[win]]
+    return surface, implausible
+
+
+def measured_model(
+    dom: np.ndarray,
+    own: np.ndarray,
+    roof: np.ndarray,
+    green: np.ndarray,
+    small_cells: int,
+    with_faces: bool = True,
+    narrow: bool = True,
+    landmark: bool = False,
+) -> Model | None:
+    """The roof over `own` cells: flat levels and (unless `with_faces` is
+    off, the flat model) the measured faces; with them, unless `narrow` is
+    off, no part narrower than NARROW_M."""
+    known = roof & ~green & np.isfinite(dom)
+    if known.sum() < small_cells:
+        return None
+    h = scan_surface(dom, known)
+    face = np.zeros_like(own)
+    if with_faces:
+        face = inclined_cells(h, own) | roof_planes.planar_faces(h, own, step_cells(h), SLOPE, RES)
+    for rounds in range(PLAUSIBLE_ROUNDS + 1):
+        lab, faces = _regions(h, own, face, small_cells, with_faces, narrow)
+        surface, implausible = _plausible_faces(h, lab, faces, face, landmark)
+        if not implausible:
+            break
+        if rounds == PLAUSIBLE_ROUNDS:
+            # still none after the last re-cut: drawn flat at its median
+            faces[implausible] = False
+            break
+        # a face the scan shows no roof's shape on goes back to the levels
+        face &= ~np.isin(lab, implausible)
+    level = _region_medians(lab, h, int(lab.max()))
     return Model(lab, level, faces, surface)
-
-
-def _local_slopes(v: np.ndarray, w: np.ndarray, r: int = 2):
-    """Per cell, the slopes (d/dcol, d/drow) of the plane fitted to the
-    cells `w` within `r` of it (least squares)."""
-    dy, dx = np.mgrid[-r : r + 1, -r : r + 1].astype(np.float64)
-
-    def conv(a, k):
-        return ndi.correlate(a, k, mode="constant")
-
-    wz = w * v
-    one = np.ones_like(dx)
-    s = {
-        "1": conv(w, one),
-        "x": conv(w, dx),
-        "y": conv(w, dy),
-        "xx": conv(w, dx * dx),
-        "xy": conv(w, dx * dy),
-        "yy": conv(w, dy * dy),
-        "z": conv(wz, one),
-        "xz": conv(wz, dx),
-        "yz": conv(wz, dy),
-    }
-    m = np.stack(
-        [
-            np.stack([s["1"], s["x"], s["y"]], -1),
-            np.stack([s["x"], s["xx"], s["xy"]], -1),
-            np.stack([s["y"], s["xy"], s["yy"]], -1),
-        ],
-        -2,
-    )
-    rhs = np.stack([s["z"], s["xz"], s["yz"]], -1)
-    ok = np.abs(np.linalg.det(m)) > 1e-6
-    sol = np.zeros(rhs.shape)
-    sol[ok] = np.linalg.solve(m[ok], rhs[ok][..., None])[..., 0]
-    return sol[..., 1], sol[..., 2]
 
 
 def extend_face(surface: np.ndarray, mine: np.ndarray) -> np.ndarray:
@@ -641,7 +597,7 @@ def extend_face(surface: np.ndarray, mine: np.ndarray) -> np.ndarray:
     bending there."""
     if not mine.any():
         return surface
-    gx, gy = _local_slopes(surface, mine.astype(np.float64))
+    gx, gy, _ = roof_planes.local_planes(surface, mine, r=2)
     _, (r, c) = ndi.distance_transform_edt(~mine, return_indices=True)
     rows, cols = np.indices(mine.shape)
     dr, dc = rows - r, cols - c
@@ -743,11 +699,34 @@ class Rebuilt:
     miss_model: float  # the flat model's, the one the decision is made on
 
 
+def landmark_objects(tile: Tile) -> set[str]:
+    """The LoD2 objects of the landmarks of this tile and the tiles it
+    touches within MARGIN_M (landmarks.py: a landmark is listed by the tile
+    under its point, its objects may be a neighbour's)."""
+    xmin, ymin, xmax, ymax = tile.bounds
+    out: set[str] = set()
+    for tid, (left, bottom, right, top) in tile.neighbours():
+        if (
+            left > xmax + MARGIN_M
+            or right < xmin - MARGIN_M
+            or bottom > ymax + MARGIN_M
+            or top < ymin - MARGIN_M
+        ):
+            continue
+        path = tile.data / "dlm" / f"landmarks_{tid}.json"
+        if path.exists():
+            for lm in json.loads(path.read_text()).get("landmarks", []):
+                out.update(lm.get("objects", []))
+    return out
+
+
 class Area:
     """The tile and `MARGIN_M` around it, read once: DOM1, the crowns
-    (NDVI) and the highest LoD2 roof of every object."""
+    (NDVI), the highest LoD2 roof of every object and the site's landmarks'
+    objects."""
 
     def __init__(self, tile: Tile, objects: list[LodObject]):
+        self.landmarks = landmark_objects(tile)
         xmin, ymin, xmax, ymax = tile.bounds
         self.grid = Grid((xmin - MARGIN_M, ymin - MARGIN_M, xmax + MARGIN_M, ymax + MARGIN_M))
         neighbours = tile.neighbours()
@@ -813,7 +792,8 @@ def rebuild(area: Area, obj: LodObject) -> Rebuilt | None:
     miss_model = miss_share(flat.heights(), dom, judged & (flat.lab > 0))
     if miss_model > KEEP_SHARE or miss_model > miss_lod2 / 2:
         return None
-    model = measured_model(dom, own, inner, green, small)
+    landmark = obj.id in area.landmarks
+    model = measured_model(dom, own, inner, green, small, landmark=landmark)
     if model is None:
         return None
 
@@ -826,7 +806,7 @@ def rebuild(area: Area, obj: LodObject) -> Rebuilt | None:
         return drawn > KEEP_SHARE or drawn > miss_lod2 / 2
 
     if misses(model):
-        model = measured_model(dom, own, inner, green, small, narrow=False)
+        model = measured_model(dom, own, inner, green, small, narrow=False, landmark=landmark)
         # the faces' own merges may still miss more: then the flat model,
         # which met the bar, is drawn (a LoD2 off on 88 % stays no better)
         if model is None or misses(model):

@@ -97,11 +97,12 @@ from . import allometry, crown_form, lowveg
 from . import tree_archetypes as ta
 from .cadastre import Fields, Register, register_of
 from .canopy import BARE, bridge_mask, crown_green, roof_mask
+from .classes import COPSE, FOREST
 from .common import OSM_ATTRIBUTION, Tile, crs_member, feature, owns
 from .osm import has_extract, read_osm, tag
 
 H_MIN, H_MAX, D_MIN, D_MAX = 1.5, 40.0, 0.8, 30.0
-WOODLAND = (2, 3)  # the class raster's forest and copse (landcover.py)
+WOODLAND = (FOREST, COPSE)
 DEFAULT_RATIO = 0.55  # crown / height where an archetype has no sample
 DEFAULT_H = 8.0  # the height of a tile whose trees carry none at all
 T_MAX = 400.0  # trunk diameter (cm) past which the register has a typo

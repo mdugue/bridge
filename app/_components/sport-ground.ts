@@ -32,15 +32,15 @@ import {
   sportSurfaceId,
 } from "@/lib/city/sport";
 import type { F, I, Tex, V2, V3, V4 } from "./shader-chunks";
+import { GROUND_DETAIL } from "./ground-detail";
 import {
   byteOf,
   floorMod,
   gdNoise,
   loadTexel,
-  GROUND_DETAIL,
   texelAt,
   texelSize,
-} from "./ground-detail";
+} from "./shader-chunks";
 import type { GroundColour, GroundFields, GroundInputs } from "./ground-detail";
 
 /**

@@ -19,71 +19,28 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import { cn } from "cn";
-import { inquiryCard, TOLERANCE_PX } from "@/lib/city/inquiry";
-import type { Inquiry, InquiryAlong } from "@/lib/city/inquiry";
+import { kindLabel, TOLERANCE_PX } from "@/lib/city/inquiry";
+import type { InquiryAlong, KindIcon } from "@/lib/city/inquiry";
 import { cardCredits } from "@/lib/city/card-lines";
 import { useSite } from "./site-context";
 
-/** The icon a candidate is drawn with. */
-function kindIcon(inquiry: Inquiry): LucideIcon {
-  switch (inquiry.kind) {
-    case "building": {
-      return Building2Icon;
-    }
-    case "tree": {
-      return inquiry.conifer ? TreePineIcon : TreeDeciduousIcon;
-    }
-    case "monument": {
-      return LandmarkIcon;
-    }
-    case "bridge": {
-      return BridgeIcon;
-    }
-    case "traffic": {
-      return CarIcon;
-    }
-    case "bikes": {
-      return BikeIcon;
-    }
-    case "canopy": {
-      return TreeDeciduousIcon;
-    }
-    case "hedge": {
-      return ShrubIcon;
-    }
-    case "lamp": {
-      return LampFloorIcon;
-    }
-    case "furniture": {
-      return PLAY.has(inquiry.properties.k) ? FerrisWheelIcon : ArmchairIcon;
-    }
-    case "stop": {
-      return TramFrontIcon;
-    }
-    case "landing": {
-      return AnchorIcon;
-    }
-    case "design": {
-      return PencilRulerIcon;
-    }
-    default: {
-      const unknown: never = inquiry;
-      throw new Error(`unknown inquiry kind: ${String(unknown)}`);
-    }
-  }
-}
-
-const PLAY = new Set([
-  "climb",
-  "playground",
-  "playhouse",
-  "roundabout",
-  "sandpit",
-  "seesaw",
-  "slide",
-  "springy",
-  "swing",
-]);
+/** The icon a candidate is drawn with, by the name its kind gives. */
+const ICONS: Record<KindIcon, LucideIcon> = {
+  anchor: AnchorIcon,
+  armchair: ArmchairIcon,
+  bike: BikeIcon,
+  bridge: BridgeIcon,
+  building: Building2Icon,
+  car: CarIcon,
+  "ferris-wheel": FerrisWheelIcon,
+  "lamp-floor": LampFloorIcon,
+  landmark: LandmarkIcon,
+  "pencil-ruler": PencilRulerIcon,
+  shrub: ShrubIcon,
+  "tram-front": TramFrontIcon,
+  "tree-deciduous": TreeDeciduousIcon,
+  "tree-pine": TreePineIcon,
+};
 
 const whole = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 0 });
 const tenths = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 });
@@ -141,12 +98,12 @@ export const InquiryStrip = ({
   const items = useMemo(
     () =>
       along.candidates.map((c) => {
-        const card = inquiryCard(c.inquiry, null, cardCredits(site));
+        const label = kindLabel(c.inquiry, cardCredits(site));
         return {
-          icon: kindIcon(c.inquiry),
+          icon: ICONS[label.icon],
           key: c.key,
-          kicker: card.kicker,
-          label: card.title,
+          kicker: label.kicker,
+          label: label.title,
           distance: distanceLabel(c.distance),
         };
       }),

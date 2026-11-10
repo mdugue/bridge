@@ -1,8 +1,8 @@
 /**
  * The triangle-soup kit the runtime's line and bridge layers build their
- * meshes with (rail-layer.ts, tram-layer.ts, riverside-layer.ts,
- * catenary-layer.ts): an accumulator of positions and per-vertex normals
- * in the Y-up scene frame, the primitives that push into it — a triangle
+ * meshes with (rail-layer.ts, bridge-layer.ts, tram-layer.ts,
+ * riverside-layer.ts, catenary-layer.ts), and their palette (`COLORS`): an
+ * accumulator of positions and per-vertex normals in the Y-up scene frame, the primitives that push into it — a triangle
  * or quad wound to face its normal (the one guarantee: every material is
  * FrontSide), a ribbon along a run of points, a footprint's slab, a box
  * column, a strut — and the finish into a mesh of the scene-wide material
@@ -23,8 +23,26 @@ import type { Material } from "three/webgpu";
 import { finished } from "@/lib/city/build-steps";
 import type { Steps } from "@/lib/city/build-steps";
 import type { Ring2 } from "@/lib/city/decks";
+import { normalWorld } from "three/tsl";
 import { lineUnderDesign } from "./design-site";
+import { railGlints } from "./lamp-reflections";
 import { sceneMaterial } from "./three-utils";
+import { viewDirection } from "./view-direction";
+
+/** The line and bridge layers' palette. */
+export const COLORS = {
+  ballast: 0x9a_8f_85, // warm grey-brown crushed stone
+  rail: 0x4a_4a_50, // dark weathered steel
+  // the decks in the ground's own palette (lib/city/landcover.ts), the
+  // structure in the buildings' cool clay: a bridge is part of the city
+  deckStone: 0xd9_d5_cc, // cool clay (building-tint's `cool` family)
+  deckRoad: 0xc8_c8_ce, // the road class
+  deckPath: 0xe0_cd_a8, // the path class
+  deckRail: 0xb2_a9_a0, // the railway class
+  platform: 0xcf_c9_bd, // pale platform concrete
+  steel: 0xd9_dd_e0, // painted steel: the palest slate of the clay family
+  mast: 0xa9_ad_a6, // galvanised steel: the catenary's masts and portals
+};
 
 /** Accumulates a non-indexed triangle soup (positions + per-vertex normals). */
 export interface Mesh3 {
@@ -160,6 +178,9 @@ function* finishGeo(acc: Mesh3): Steps<BufferGeometry | null> {
 }
 
 export interface MatOpts {
+  /** a rail's steel: it catches the lamps by the track after dark
+   *  (lamp-reflections.ts `railGlints`) */
+  glint?: boolean;
   offsetUnits?: number;
   roughness?: number;
 }
@@ -176,7 +197,8 @@ export function material(
 ): MeshStandardNodeMaterial {
   const roughness = opts.roughness ?? 0.95;
   const offsetUnits = opts.offsetUnits ?? 0;
-  const key = `rail:${color.toString(16)}:${roughness}:${offsetUnits}`;
+  const glint = opts.glint === true;
+  const key = `rail:${color.toString(16)}:${roughness}:${offsetUnits}:${glint}`;
   return sceneMaterial(key, () => {
     const m = new MeshStandardNodeMaterial({
       color: new Color(color),
@@ -184,6 +206,9 @@ export function material(
     });
     // under a planner's design (design-site.ts)
     m.positionNode = lineUnderDesign;
+    if (glint) {
+      m.emissiveNode = railGlints(normalWorld, viewDirection().negate());
+    }
     if (offsetUnits) {
       m.polygonOffset = true;
       m.polygonOffsetFactor = -1;
@@ -448,6 +473,8 @@ export function addRibbon(
 
 export interface MeshOpts {
   cast: boolean;
+  /** a rail's steel (`MatOpts.glint`) */
+  glint?: boolean;
   /** a material of its own (the bridges' surfaces) instead of the plain one */
   material?: Material;
   offsetUnits?: number;
@@ -478,6 +505,7 @@ export function* meshSteps(
     geo,
     opts.material ??
       material(color, {
+        glint: opts.glint,
         offsetUnits: opts.offsetUnits,
         roughness: opts.roughness,
       })

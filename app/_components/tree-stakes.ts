@@ -9,7 +9,7 @@ import {
 import type { BufferGeometry } from "three/webgpu";
 import type { InventoryTree } from "@/lib/city/tree-inventory";
 import { Instances, instancePosition } from "./instancing";
-import { sceneMaterial } from "./three-utils";
+import { markThinCaster, sceneMaterial } from "./three-utils";
 
 /**
  * The stakes a young street tree is planted between (a *Dreibock*: three
@@ -105,6 +105,7 @@ export function buildTreeStakes(
   set.instanceMatrix.needsUpdate = true;
   set.computeBoundingSphere();
   set.castShadow = true;
+  markThinCaster(set);
   set.receiveShadow = true;
   set.userData.treePart = "stakes";
   return set;

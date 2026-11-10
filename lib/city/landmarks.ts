@@ -7,32 +7,11 @@
 import { overlook } from "./site";
 import type { ViewpointGeometry } from "./site";
 
-/** One landmark as the bake writes it (`landmarks_<tile>.json`). */
-export interface LandmarkEntry {
-  /** drawn height above `z` (m), the LoD2 objects' top */
-  h?: number;
-  /** Wikidata's height (m), when it has one */
-  height?: number;
-  /** Wikidata item id (Q…) */
-  id: string;
-  /** Wikipedia articles about it: how notable it is */
-  links: number;
-  /** a wall material (glass, brick, …) Wikidata names for it */
-  material?: string;
-  name: string;
-  /** the LoD2 CityObject ids that are the landmark */
-  objects: string[];
-  /** where Wikidata places it, in the site's projected CRS */
-  x: number;
-  y: number;
-  /** the ground under its objects (m) */
-  z?: number;
-}
+import type { LandmarkEntry, LandmarkFile } from "./landmarks-file";
 
-export interface LandmarkFile {
-  attribution?: string;
-  landmarks: LandmarkEntry[];
-}
+// A tile's file (`landmarks_<tile>.json`) is its schema's (ADR 0059); the
+// viewer takes the types only.
+export type { LandmarkEntry, LandmarkFile } from "./landmarks-file";
 
 /** A landmark as the tileset carries it for the HUD. */
 export interface Landmark {
@@ -71,7 +50,7 @@ function compareCodePoints(a: string, b: string): number {
  * still frames right).
  */
 export function siteLandmarks(
-  files: readonly LandmarkFile[],
+  files: readonly Pick<LandmarkFile, "landmarks">[],
   limit: number = SITE_LANDMARKS
 ): Landmark[] {
   const byId = new Map<string, LandmarkEntry>();

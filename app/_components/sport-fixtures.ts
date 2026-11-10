@@ -15,7 +15,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { epsgToWorld } from "@/lib/city/ground-clamp";
 import type { GroundContext } from "@/lib/city/ground-clamp";
 import type { SportFixture } from "@/lib/city/sport";
-import { sceneMaterial } from "./three-utils";
+import { markThinCaster, sceneMaterial } from "./three-utils";
 
 /**
  * What stands on the sports grounds (lib/city/sport.ts `sportFixtures`):
@@ -184,6 +184,7 @@ export function buildSportFixtures(
   if (frames.length > 0) {
     const mesh = new Mesh(mergeGeometries(frames.map(plain)), frameMaterial());
     mesh.castShadow = true;
+    markThinCaster(mesh, "slender");
     mesh.receiveShadow = true;
     meshes.push(mesh);
   }

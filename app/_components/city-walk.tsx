@@ -1,7 +1,7 @@
 "use client";
 
 import { createFramePace } from "@/lib/city/frame-pace";
-import { arrivalOf, placementOf } from "@/lib/city/geolocation";
+import { ARRIVAL_PARAM, arrivalOf, placementOf } from "@/lib/city/geolocation";
 import { EYE_HEIGHT } from "@/lib/city/pose";
 import type { Site, ViewpointGeometry } from "@/lib/city/site";
 import {
@@ -23,7 +23,7 @@ import type { CSSProperties, RefObject } from "react";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
-import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
+import { useCoarsePointer } from "./use-coarse-pointer";
 import { loadPercent, loadStageStates } from "@/lib/city/load-stages";
 import { dataLayersOf } from "@/lib/city/data-layers";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
@@ -36,9 +36,12 @@ import {
   decodeLook,
   encodeSnapshot,
   parseSnapshot,
+  snapshotFromSearch,
+  snapshotHref,
   snapshotInstant,
 } from "@/lib/city/snapshot";
 import type { Snapshot } from "@/lib/city/snapshot";
+import { arrivalOf as recoveryArrival } from "@/lib/city/gpu-recovery";
 import { restoresLook } from "@/lib/city/gpu-safety";
 import { AltitudeStick } from "./altitude-stick";
 import { BootError } from "./boot-error";
@@ -48,14 +51,7 @@ import { startCrashReports } from "./crash-reports";
 import { startCrashTrail } from "./crash-trail";
 import type { CrashTrail } from "./crash-trail";
 import { GpuFailureCard } from "./gpu-failure-card";
-import {
-  keepPlaceForReload,
-  peekRecoverySnapshot,
-  recoverFromGpuLoss,
-  recoverOnRequest,
-  recoveryWasReset,
-  takeRecoverySnapshot,
-} from "./gpu-recovery";
+import { pageRecovery } from "./gpu-recovery";
 import { raiseSafety, resetSafety } from "./gpu-safety";
 import { VEIL_HOLD_MS } from "./handover";
 import { streamTimings } from "./stream-timing";
@@ -479,18 +475,17 @@ const OffsiteDialog = ({
 
 /**
  * The page was opened from another city's off-site dialog with where the
- * player stands (`#at=lat,lng`, lib/city/geolocation.ts `arrivalHref` — the
- * fragment: never sent to the server, not kept by the trail): put them
- * there, on foot, and drop the fragment so a reload starts at the site's
- * spawn again.
+ * player stands (`?at=lat,lng`, lib/city/geolocation.ts `arrivalHref`; not
+ * kept by the trail): put them there, on foot, and drop the parameter so a
+ * reload starts at the site's spawn again.
  */
 function arriveAt(h: CityWalkHandle, site: Site, say: Say): void {
-  const at = arrivalOf(location.hash);
+  const at = arrivalOf(location.search);
   if (!at) {
     return;
   }
   const url = new URL(location.href);
-  url.hash = "";
+  url.searchParams.delete(ARRIVAL_PARAM);
   history.replaceState(history.state, "", url);
   const placement = placementOf(
     { ...at, accuracy: 0, headingDeg: null },
@@ -667,8 +662,9 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
   // (gpu-recovery.ts): the boot effect reads this render's time and look
   // through a ref, as it does live mode. The time and the look go back
   // before the boot, so the scene starts with them; the camera goes to the
-  // boot itself (`initialCamera`), Modell after its first frame. From
-  // safety level 2 neither the picture style nor Modell come back.
+  // boot itself (`initialCamera`), Modell after its first frame. What comes
+  // back is the arrival's (lib/city/gpu-recovery.ts `arrivalOf`): from
+  // safety level 2 without the picture style and without Modell.
   const recovery = useRef<{
     capture: () => string | null;
     prepare: (snapshot: Snapshot) => void;
@@ -685,11 +681,7 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
       },
       prepare: (snapshot) => {
         time.setInstant(snapshotInstant(snapshot));
-        const patch = decodeLook(snapshot.look);
-        if (!restoresLook(budget.safety)) {
-          delete patch.style;
-        }
-        look.set(patch);
+        look.set(decodeLook(snapshot.look));
       },
     };
   });
@@ -700,10 +692,12 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
    */
   const reloadAfterFailure = (lighter: boolean) => {
     if (lighter) {
-      recoverOnRequest(
-        recovery.current?.capture() ?? null,
-        budget.safety,
-        (from) => raiseSafety(from)
+      pageRecovery().leave(
+        {
+          kind: "lighter",
+          ladder: { level: budget.safety, raise: (from) => raiseSafety(from) },
+        },
+        recovery.current?.capture() ?? null
       );
     }
     const released = handleRef.current?.releaseGpu() ?? Promise.resolve();
@@ -712,8 +706,8 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
   /**
    * *Qualität*'s way back to full detail: level 0 from the next page on,
    * and — when this page runs lighter, its budget built at boot — that
-   * next page now, where the player stands (gpu-recovery.ts
-   * `keepPlaceForReload`). The scene goes first, whole, and the reload
+   * next page now, where the player stands (gpu-recovery.ts, a `reset`
+   * leaving). The scene goes first, whole, and the reload
    * waits for its device (create-app.ts `disposeForReload`): the heavier
    * page boots in the same process, and with this one's memory still held
    * it died on the way in. False when it could not be stored.
@@ -723,9 +717,10 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
       return false;
     }
     if (budget.safety > 0) {
-      keepPlaceForReload(recovery.current?.capture() ?? null, undefined, {
-        reset: true,
-      });
+      pageRecovery().leave(
+        { kind: "reset" },
+        recovery.current?.capture() ?? null
+      );
       const gone = handleRef.current?.disposeForReload() ?? Promise.resolve();
       void gone.then(() => location.reload());
     }
@@ -887,18 +882,28 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
       // (not which: the reports carry no position, ADR 0043)
       trail.note("boot restarted", "a place picked while loading");
     }
-    // Back where the player stood before the GPU was lost (gpu-recovery.ts):
-    // read now, taken once the scene is up — a boot that StrictMode aborts
-    // leaves it for the next.
-    const text = peekRecoverySnapshot();
-    const parsed = text ? parseSnapshot(text) : null;
-    const restored = parsed?.ok ? parsed.snapshot : null;
-    // (or where the player asked for full detail: Qualität)
-    const afterReset = restored !== null && recoveryWasReset();
-    // A place picked in the panel meanwhile wins over the recovered one,
-    // and the time and look the player set are theirs.
-    if (restored && !start) {
-      recovery.current?.prepare(restored);
+    // Back where the player stood before the GPU was lost, or asked for
+    // full detail (gpu-recovery.ts): peeked now, committed once the scene
+    // is up — a boot that StrictMode aborts leaves it for the next
+    // (`RecoverySession.peek`). A place picked in the panel meanwhile wins,
+    // and the time and look the player set are theirs. With nothing
+    // waiting, the view the page's link names (`?snap=`, snapshot.ts),
+    // the same way; the address keeps it, so a reload opens it again.
+    // Another link is another page load (a new query is a navigation, and
+    // nothing in the app routes to one), so the boot is its one reader.
+    const recoveries = pageRecovery();
+    const waiting = recoveries.peek();
+    const parsed = waiting ? parseSnapshot(waiting.snapshot) : null;
+    const linked = snapshotFromSearch(location.search);
+    const arrival = recoveryArrival({
+      snapshot: parsed?.ok ? parsed.snapshot : null,
+      reset: waiting?.reset ?? false,
+      picked: start !== null,
+      level: budget.safety,
+      linked: linked?.ok ? linked.snapshot : null,
+    });
+    if (arrival.snapshot) {
+      recovery.current?.prepare(arrival.snapshot);
     }
 
     let settled = () => {
@@ -920,7 +925,7 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
           look,
           site,
           tilesetUrl,
-          initialCamera: start ? start.camera : restored?.camera,
+          initialCamera: start ? start.camera : arrival.snapshot?.camera,
           initialView: start?.view,
           initialDate: timeNow(),
           signal: aborter.signal,
@@ -938,12 +943,10 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
           // again (gpu-safety.ts).
           onGpuLost: (how) =>
             !aborter.signal.aborted &&
-            recoverFromGpuLoss(
-              how,
-              recovery.current?.capture() ?? null,
-              budget.safety,
-              (from) => raiseSafety(from, { by: trail.startedAt })
-            )
+            recoveries.onLoss(how, recovery.current?.capture() ?? null, {
+              level: budget.safety,
+              raise: (from) => raiseSafety(from, { by: trail.startedAt }),
+            })
               ? () => location.reload()
               : null,
           onFollowEnd: () => {
@@ -961,11 +964,9 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
         handle = h;
         handleRef.current = h;
         trail.note("first frame");
+        // What waited is taken: used, or a place the player chose won.
+        recoveries.landed();
         if (start) {
-          // Not back where the GPU was lost: the player chose a place.
-          if (restored) {
-            takeRecoverySnapshot();
-          }
           // The boot stood on the camera's spot; Modell only now. A place
           // off every tile the boot streams (the lite profile's spawn tile
           // alone) is glided to from the spawn.
@@ -974,24 +975,20 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
           } else if (start.view && !standsAt(h, start.view)) {
             h.flyToViewpoint(start.view);
           }
-        } else if (restored) {
+        } else if (arrival.snapshot) {
           // The scene booted there; Modell (where the safety level keeps
           // it) and a place off every tile only now.
-          takeRecoverySnapshot();
-          h.applyCameraState(
-            restoresLook(budget.safety)
-              ? restored.camera
-              : { ...restored.camera, model: undefined }
-          );
-          if (afterReset) {
-            trail.note("quality reset", "back where the player stood");
-          } else {
-            trail.note("recovered", "after a lost GPU");
-            if (budget.safety > 0) {
-              sayHud("Mit weniger Details neu geladen – Erweitert › Qualität");
-            }
+          h.applyCameraState(arrival.snapshot.camera);
+          if (arrival.note) {
+            trail.note(arrival.note.event, arrival.note.detail);
+          }
+          if (arrival.sayLighter) {
+            sayHud("Mit weniger Details neu geladen – Erweitert › Qualität");
           }
         } else {
+          if (linked && !linked.ok) {
+            sayHud("Der Link enthält keine gültige Ansicht");
+          }
           arriveAt(h, site, sayHud);
         }
         syncTime();
@@ -1029,7 +1026,7 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
         if (!(aborter.signal.aborted || aborted)) {
           // A place that failed the boot is not tried again on the next
           // load: the recovery's snapshot goes with this boot.
-          takeRecoverySnapshot();
+          recoveries.abandoned();
           trail.note(
             "boot failed",
             bootError instanceof Error ? bootError.message : String(bootError)
@@ -1078,7 +1075,11 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
     pace,
   ]);
 
-  const copySnapshot = () => {
+  /** *Kopieren* (the JSON) or *Link kopieren* (the site's page opened at
+   *  the view, `?snap=` and no other parameter — this page's QA knobs, a
+   *  pinned `?safety=`, are this device's, not the view's): the JSON
+   *  shows either way. */
+  const copySnapshot = (as: "json" | "link") => {
     const h = handleRef.current;
     if (!h) {
       return;
@@ -1086,8 +1087,17 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
     const snap = encodeSnapshot(look.get(), h.getCameraState(), time.current());
     const text = JSON.stringify(snap, null, 2);
     setSnapshotText(text);
-    navigator.clipboard?.writeText(text).then(
-      () => setSnapshotMsg("In die Zwischenablage kopiert"),
+    const copied =
+      as === "link"
+        ? `${location.origin}${snapshotHref(location.pathname, snap)}`
+        : text;
+    navigator.clipboard?.writeText(copied).then(
+      () =>
+        setSnapshotMsg(
+          as === "link"
+            ? "Link in die Zwischenablage kopiert"
+            : "In die Zwischenablage kopiert"
+        ),
       () => setSnapshotMsg("Kopieren fehlgeschlagen — Text manuell auswählen")
     );
   };

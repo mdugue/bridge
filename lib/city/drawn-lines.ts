@@ -41,9 +41,11 @@ import type { Method } from "./methods";
 import { isMeasuredRoof, NO_FACT } from "./object-facts";
 import type { SourceKey } from "./provenance";
 import {
+  NEAR_M,
   PALACE_STOREY_M,
   palaceStorey,
   unpackStyle,
+  windowForm,
   windowType,
 } from "./windows";
 import type { WindowType } from "./windows";
@@ -380,16 +382,6 @@ function storeyRow(
         url: places.osm,
       };
     }
-    case "photos": {
-      return {
-        label: "Geschosse",
-        value,
-        method: "detected",
-        source: "mapillary",
-        detail: "Geschosshöhe in Straßenfotos gemessen",
-        url: places.photos,
-      };
-    }
     case "neighbours": {
       return {
         label: "Geschosse",
@@ -509,6 +501,7 @@ function windowValue(look: ObjectLook): string {
   const { axis, w, h, style } = look.windows;
   const s = unpackStyle(style);
   return [
+    windowForm(look.windows) ?? "",
     `Achsen ${metres(axis)}, Fenster ${decimal.format(w)} × ${decimal.format(h)} m`,
     s.frame ? "Faschen" : "",
     s.lintel ? "Verdachungen" : "",
@@ -708,7 +701,7 @@ function windowsFrom(
         ...base,
         method: "assumed",
         source: "mapillary",
-        detail: "vom nächsten gemessenen Haus gleicher Art (bis 150 m)",
+        detail: `vom nächsten gemessenen Haus gleicher Art (bis ${NEAR_M} m)`,
       };
     }
     case "none":

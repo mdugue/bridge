@@ -12,6 +12,9 @@
  * of the day before that run past midnight are still on their way.
  */
 import type { Point2 } from "./polyline";
+import type { TramPattern, TramTimetableFile } from "./tram-timetable-file";
+
+export type { TramPattern } from "./tram-timetable-file";
 
 /** The committed timetable (pipeline/bake/transit.py), and the name
  *  scripts/prepare-data.ts publishes it under (before hashing). */
@@ -156,32 +159,9 @@ export function carLength(livery: TramLivery, seed: number): number {
 
 export type TramDayKind = "saturday" | "sunday" | "weekday";
 
-export interface TramPattern {
-  /** the distance along `coords` of each stop (m) */
-  at: number[];
-  /** [from, to] vertex ranges on a bridge deck */
-  bridge: [number, number][];
-  /** the path (projected coordinates) */
-  coords: Point2[];
-  /** index into `routes` */
-  route: number;
-}
-
-export interface TramTimetable {
-  /** the operators' names as the feed gives them (GTFS `agency_name`) */
-  agencies?: string[];
-  attribution?: string;
-  days: Partial<
-    Record<TramDayKind, { date: string; trips: [number, number][] }>
-  >;
-  patterns: TramPattern[];
-  /** the running times of a pattern: arrival, departure per stop, seconds
-   *  after the trip's start */
-  profiles: { pattern: number; t: number[] }[];
-  /** per line, the index into `agencies` of who runs it */
-  routeAgency?: number[];
-  routes: string[];
-}
+/** The timetable as the bake writes it (its schema:
+ *  lib/city/tram-timetable-file.ts, ADR 0059). */
+export type TramTimetable = TramTimetableFile;
 
 export const DAY_SECONDS = 86_400;
 
