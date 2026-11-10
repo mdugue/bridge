@@ -97,6 +97,7 @@ import type { AskKey } from "./ask-key";
 import { sceneTools, showPlaces } from "./ask-scene-tools";
 import type { AskPlace, AskScene } from "./ask-scene-tools";
 import { useSite } from "./site-context";
+import { VoicePicker } from "./voice-picker";
 import { useOnce } from "./use-once";
 import { useDictation, useSpeech } from "./ask-voice";
 import type { Dictation, Speech } from "./ask-voice";
@@ -640,6 +641,7 @@ const VoiceBar = ({
           Vorlesen
         </button>
       )}
+      {reading && <VoicePicker className="h-6 text-[11px]" speech={speech} />}
       {speech.supported && (
         <button
           aria-pressed={hearing}
