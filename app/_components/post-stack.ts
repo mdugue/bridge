@@ -53,6 +53,7 @@ import {
 import type { VeilState } from "@/lib/city/load-frontier";
 import {
   horizonBlurPx,
+  lensFadeIn,
   maxBlurPx,
   MIN_FOCUS_M,
   pullFocus,
@@ -183,6 +184,9 @@ export interface FocusInfo {
   horizonBlurPx: number;
   /** how much of the blur shows, 0…1: it grows in after the camera stops */
   fade: number;
+  /** the lens shows what it will until the view changes: grown in fully,
+   *  or not drawn in this style, view or tier */
+  settled: boolean;
 }
 
 export interface PostStack {
@@ -215,11 +219,12 @@ export interface PostStack {
    * stay on — the pass runs at half resolution for that — because a shadow
    * that vanishes the moment you move and reappears when you stop reads as
    * a bug, not as a saving. Layered beside the picture style's gate and
-   * Modell's: recovery brings DoF back only where those allow it. `fade`
-   * (0…1, `lensFade` in regression.ts) is how much of the blur shows: it
-   * grows in after recovery instead of snapping on.
+   * Modell's: recovery brings DoF back only where those allow it. `stepMs`
+   * is the frame's time step (the loop's): the blur grows in by it
+   * whenever the lens comes back (`LENS_FADE_MS`, lens.ts) — after a move,
+   * or into a style or a view that draws it — and the focus follows by it.
    */
-  setRegressed: (on: boolean, fade?: number) => void;
+  setRegressed: (on: boolean, stepMs: number) => void;
   /** The loading veil this frame (load-veil.ts): the frontier's ring
    *  around the world-space point `centreX`, `centreZ`. */
   setLoadVeil: (state: VeilState, centreX: number, centreZ: number) => void;
@@ -584,16 +589,16 @@ export function createPostStack(
     );
 
   // the lens (lens-blur.ts): its focus, its blur at the horizon and its
-  // widest (px, faded in), and a pixel in uv
+  // widest (px, faded in)
   const lensUniforms = {
     focus: uniform(SKY_FOCUS_M),
     horizonPx: uniform(0),
     capPx: uniform(0),
-    pixel: uniform(new Vector2(1 / size.x, 1 / size.y)),
   };
   const lensBlur = profile.dof
     ? createLensBlur(lit, depthTexture, lens, lensUniforms)
     : null;
+  lensBlur?.setSize(size.x, size.y);
   const motion = createMotionBlur(depthTexture, lens);
 
   let style: RenderStyleDef = RENDER_STYLE_BY_ID[LOOK_DEFAULTS.style];
@@ -829,9 +834,15 @@ export function createPostStack(
   const focusPoint = new Vector3();
   let focusHit = false;
   const inView = new Vector3();
-  let lastFocusMs = -1;
-  // how much of the blur shows (setRegressed)
-  let lensFadeNow = 1;
+  // the frame's step (ms, `setRegressed`), spent by the frame's focus once
+  let lensStepMs = 0;
+  // how long the lens has been drawn (ms), and how much of it shows: it
+  // grows in whenever it comes back — after a move, or into a style or a
+  // view that draws it
+  let lensShownMs = 0;
+  let lensFadeNow = 0;
+  // the style and the view draw a lens (motion aside)
+  const lensWanted = () => lensBlur !== null && style.allowDof && !model;
   const focusTarget = (view: Camera) => {
     if (!focusHit) {
       return SKY_FOCUS_M;
@@ -840,15 +851,14 @@ export function createPostStack(
     return inView.z < 0 ? Math.max(-inView.z, MIN_FOCUS_M) : SKY_FOCUS_M;
   };
   const updateFocus = () => {
+    const step = lensStepMs;
+    lensStepMs = 0;
+    lensShownMs = lensWanted() && !regressed ? lensShownMs + step : 0;
+    lensFadeNow = lensFadeIn(lensShownMs);
     const view = active();
     const aim = focusTarget(view);
-    const now = performance.now();
     const { focus } = lensUniforms;
-    focus.value =
-      lastFocusMs < 0 || lensFadeNow === 0
-        ? aim
-        : pullFocus(focus.value, aim, now - lastFocusMs);
-    lastFocusMs = now;
+    focus.value = lensFadeNow === 0 ? aim : pullFocus(focus.value, aim, step);
     // a parallel camera (Modell) draws no lens blur
     const fov = "fov" in view ? (view as PerspectiveCamera).fov : 0;
     const shown = fov > 0 ? lensFadeNow : 0;
@@ -1440,6 +1450,7 @@ export function createPostStack(
       horizonBlurPx: lensUniforms.horizonPx.value,
       capPx: lensUniforms.capPx.value,
       fade: lensFadeNow,
+      settled: !lensWanted() || lensFadeNow >= 1,
     }),
     setSize: () => {
       renderer.getDrawingBufferSize(size);
@@ -1447,8 +1458,7 @@ export function createPostStack(
       beforeAa.setSize(size.x, size.y);
       // the lens blur sizes its copy when it runs; the motion blur draws
       // there while it does not
-      lensBlur?.input.setSize(size.x, size.y);
-      lensUniforms.pixel.value.set(1 / size.x, 1 / size.y);
+      lensBlur?.setSize(size.x, size.y);
       antialiasing.setSize(size);
       outline.setSize(size.x, size.y);
     },
@@ -1466,9 +1476,9 @@ export function createPostStack(
       applyStyleWeights();
     },
     setLoadVeil: loadVeil.set,
-    setRegressed: (on, fade = 1) => {
+    setRegressed: (on, stepMs) => {
       regressed = on;
-      lensFadeNow = fade;
+      lensStepMs += stepMs;
     },
     setFocusTarget: (point) => {
       // no hit focuses on the sky; the pull makes that gentle

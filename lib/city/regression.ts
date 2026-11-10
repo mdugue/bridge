@@ -11,8 +11,6 @@
  * of a walk does not flicker the passes back on.
  */
 
-import { lensFadeIn } from "./lens";
-
 /** Stillness required (ms) before full quality comes back. */
 export const RECOVER_MS = 250;
 
@@ -44,13 +42,4 @@ export function stepRegression(
     state.regressed = false;
   }
   return state.regressed;
-}
-
-/**
- * How much of the depth of field shows this frame (0…1): none while
- * regressed, then growing in over `LENS_FADE_MS` (lens.ts) from the
- * moment of recovery, so the blur racks in instead of snapping on.
- */
-export function lensFade(state: RegressionState): number {
-  return state.regressed ? 0 : lensFadeIn(state.stillMs - RECOVER_MS);
 }

@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
 import {
-  blurPxAt,
   FOCUS_PULL_MS,
   focalLengthMm,
   horizonBlurPx,
@@ -8,14 +7,7 @@ import {
   lensFadeIn,
   maxBlurPx,
   pullFocus,
-  SKY_FOCUS_M,
 } from "./lens";
-import {
-  createRegressionState,
-  lensFade,
-  RECOVER_MS,
-  stepRegression,
-} from "./regression";
 
 test("the default 55° view is a 23 mm lens on full frame", () => {
   expect(focalLengthMm(55)).toBeCloseTo(23.05, 1);
@@ -38,20 +30,9 @@ test("focused near, the horizon blurs; focused far, it stays sharp", () => {
   );
 });
 
-test("focused down the street, what stands near blurs", () => {
-  const horizon = horizonBlurPx(SKY_FOCUS_M, 55, 1440);
-  const cap = maxBlurPx(1440);
-  expect(blurPxAt(5, SKY_FOCUS_M, horizon, cap)).toBeCloseTo(-7.7, 1);
-  expect(blurPxAt(2, SKY_FOCUS_M, horizon, cap)).toBeCloseTo(-19.3, 1);
-  // a hand's breadth away: the widest circle
-  expect(blurPxAt(0.3, SKY_FOCUS_M, horizon, cap)).toBe(-cap);
-});
-
-test("behind the focus a point blurs towards the horizon's circle", () => {
-  expect(blurPxAt(10, 10, 3, 36)).toBe(0);
-  expect(blurPxAt(20, 10, 3, 36)).toBeCloseTo(1.5, 6);
-  expect(blurPxAt(1e9, 10, 3, 36)).toBeCloseTo(3, 6);
-  expect(blurPxAt(1e9, 1, 50, 36)).toBe(36);
+test("the widest blur is a fortieth of the frame's height", () => {
+  expect(maxBlurPx(1440)).toBeCloseTo(36, 6);
+  expect(maxBlurPx(-1)).toBe(0);
 });
 
 test("a focus inside the focal length stays finite", () => {
@@ -72,24 +53,9 @@ test("the focus is pulled in dioptres, not snapped", () => {
   );
 });
 
-test("the blur grows in after recovery instead of snapping on", () => {
-  const state = createRegressionState();
-  stepRegression(state, true, 16);
-  expect(lensFade(state)).toBe(0);
-  stepRegression(state, false, RECOVER_MS);
-  expect(state.regressed).toBe(false);
-  expect(lensFade(state)).toBe(0);
-  stepRegression(state, false, LENS_FADE_MS / 2);
-  expect(lensFade(state)).toBeCloseTo(0.5, 6);
-  stepRegression(state, false, LENS_FADE_MS / 2);
-  expect(lensFade(state)).toBe(1);
-  // moving drops it at once
-  stepRegression(state, true, 16);
-  expect(lensFade(state)).toBe(0);
-});
-
 test("the fade is monotone and eased", () => {
   expect(lensFadeIn(-5)).toBe(0);
   expect(lensFadeIn(LENS_FADE_MS * 0.1)).toBeLessThan(0.1);
+  expect(lensFadeIn(LENS_FADE_MS / 2)).toBeCloseTo(0.5, 6);
   expect(lensFadeIn(LENS_FADE_MS * 2)).toBe(1);
 });

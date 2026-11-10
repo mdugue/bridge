@@ -270,6 +270,9 @@ export interface AskSet<T> {
   along?: (o: Xyz, d: Xyz, far: number) => AskHit<T>[];
   box: Aabb;
   nearest: (o: Xyz, d: Xyz, far: number) => AskHit<T> | null;
+  /** true while `nearest` would first build something (a mesh's BVH): the
+   *  autofocus, ten times a second, passes such a set by */
+  unbuilt?: () => boolean;
 }
 
 /** The box a solid fills. */
@@ -408,25 +411,46 @@ export function hitsInSets<T>(
   return out.sort((a, b) => a.distance - b.distance);
 }
 
+/** A set's nearest hit within `far` that `keep` keeps: its next ones
+ *  (`along`) where the nearest is not. */
+function nearestKept<T>(
+  set: AskSet<T>,
+  o: Xyz,
+  d: Xyz,
+  far: number,
+  keep: (hit: AskHit<T>) => boolean
+): AskHit<T> | null {
+  const hit = set.nearest(o, d, far);
+  if (!hit || keep(hit)) {
+    return hit;
+  }
+  return set.along?.(o, d, far).find(keep) ?? null;
+}
+
 /**
  * The nearest hit in the sets the ray meets within `far` (or null): the
  * autofocus's question, asked ten times a second, so each set is opened
- * only when the ray enters its box before the best hit so far.
+ * only when the ray enters its box before the best hit so far, and a set
+ * that would first build something (`unbuilt`) is passed by. A hit at the
+ * ray's start (it starts inside a crown or a shelter) is not what lies
+ * ahead, nor one `keep` turns down (a thing a design folded away).
  */
 export function nearestInSets<T>(
   o: Xyz,
   d: Xyz,
   sets: Iterable<AskSet<T>>,
-  far: number
+  far: number,
+  keep: (hit: AskHit<T>) => boolean = () => true
 ): AskHit<T> | null {
+  const ahead = (hit: AskHit<T>) => hit.distance > 0 && keep(hit);
   let best: AskHit<T> | null = null;
   for (const set of sets) {
-    const reach = best ? best.distance : far;
+    const reach: number = best ? best.distance : far;
     const enter = rayAabb(o, d, set.box);
-    if (enter === null || enter > reach) {
+    if (enter === null || enter > reach || set.unbuilt?.()) {
       continue;
     }
-    const hit = set.nearest(o, d, reach);
+    const hit: AskHit<T> | null = nearestKept(set, o, d, reach, ahead);
     if (hit && hit.distance <= reach) {
       best = hit;
     }

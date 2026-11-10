@@ -1,4 +1,5 @@
-import type { RenderTarget, Texture, UniformNode, Vector2 } from "three/webgpu";
+import { Vector2 } from "three/webgpu";
+import type { RenderTarget, Texture } from "three/webgpu";
 import {
   clamp,
   float,
@@ -10,11 +11,13 @@ import {
   smoothstep,
   step,
   texture,
+  uniform,
   uv,
   vec2,
   vec3,
   vec4,
 } from "three/tsl";
+import { maxBlurPx } from "@/lib/city/lens";
 import type { F, Live, V2, V4 } from "./shader-chunks";
 import type { ViewLens } from "./view-lens";
 
@@ -54,9 +57,18 @@ const TAPS = 48;
 const GOLDEN = 2.39996323;
 /** Full-resolution pixels a tile spans. */
 const TILE = 8;
-/** Tiles the reach looks out each way: the widest circle's radius (1.25 %
- *  of the frame's height) over a tile, on frames up to 2880 px tall. */
-const REACH_TILES = 4;
+/** The tallest frame the reach covers (px): a 5K screen's. */
+const TALLEST_PX = 2880;
+/** Tiles the reach looks out each way: the widest circle's radius there,
+ *  and a tile more for where in their tiles the two pixels lie. */
+const REACH_TILES = Math.ceil((maxBlurPx(TALLEST_PX) / 2 + TILE) / TILE);
+/** The composite's four gather texels around a pixel. */
+const CORNERS = [
+  [0, 0],
+  [1, 0],
+  [0, 1],
+  [1, 1],
+] as const;
 
 export interface LensBlurInputs {
   /** focus distance (m) */
@@ -65,8 +77,6 @@ export interface LensBlurInputs {
   horizonPx: Live;
   /** the widest blur drawn (px, diameter) */
   capPx: Live;
-  /** one full-resolution pixel in uv */
-  pixel: UniformNode<"vec2", Vector2>;
 }
 
 export interface LensBlur {
@@ -76,6 +86,9 @@ export interface LensBlur {
   composite: Texture;
   /** the frame copy it blurs, idle while it does not run */
   input: RenderTarget;
+  /** Follows the drawing buffer: the copy (the motion blur draws there
+   *  while the lens rests) and a pixel's size in uv. */
+  setSize: (width: number, height: number) => void;
   dispose: () => void;
 }
 
@@ -94,6 +107,9 @@ export function createLensBlur(
 ): LensBlur {
   const half = { depthBuffer: false, resolutionScale: 0.5 };
   const tile = { depthBuffer: false, resolutionScale: 1 / TILE };
+  // a full-resolution pixel and a half-resolution texel, in uv
+  const pixel = uniform(new Vector2(1, 1));
+  const halfTexel = uniform(new Vector2(1, 1));
 
   const input = rtt(lit, null, null, { depthBuffer: false });
 
@@ -101,7 +117,7 @@ export function createLensBlur(
   const prefilter = rtt(
     Fn(() => {
       const at = uv();
-      const o = u.pixel.mul(0.5);
+      const o = pixel.mul(0.5);
       const corners = [
         vec2(o.x.negate(), o.y.negate()),
         vec2(o.x, o.y.negate()),
@@ -127,7 +143,7 @@ export function createLensBlur(
       let near: F = float(0);
       for (let y = 0; y < TILE / 2; y += 1) {
         for (let x = 0; x < TILE / 2; x += 1) {
-          const step2 = vec2((x - 1.5) * 2, (y - 1.5) * 2).mul(u.pixel);
+          const step2 = vec2((x - 1.5) * 2, (y - 1.5) * 2).mul(pixel);
           near = max(near, prefilter.sample(at.add(step2)).a.negate());
         }
       }
@@ -143,7 +159,7 @@ export function createLensBlur(
       let near: F = float(0);
       for (let y = -REACH_TILES; y <= REACH_TILES; y += 1) {
         for (let x = -REACH_TILES; x <= REACH_TILES; x += 1) {
-          const off = vec2(x * TILE, y * TILE).mul(u.pixel);
+          const off = vec2(x * TILE, y * TILE).mul(pixel);
           near = max(near, tiles.sample(at.add(off)).r);
         }
       }
@@ -182,7 +198,7 @@ export function createLensBlur(
             at.add(
               vec2(r * Math.cos(a), r * Math.sin(a))
                 .mul(radius)
-                .mul(u.pixel)
+                .mul(pixel)
             )
           )
           .toVar();
@@ -217,15 +233,41 @@ export function createLensBlur(
     half
   );
 
-  // 4. the composite
+  // 4. the composite: the gather's four texels around the pixel, each by
+  // its bilinear share and by how near its blur lies to the pixel's own —
+  // a texel a sharp silhouette shares lends the blurred background beside
+  // it none of its colour — and the frame's own detail kept by the share
+  // the pixel's circle and a foreground leave sharp: the gather holds
+  // behind · (1 − covered) + front · covered, and its "behind" is, for a
+  // pixel this sharp, the half-resolution frame
   const composite = rtt(
     Fn(() => {
       const at = uv();
       const sharp = input.sample(at);
-      const blurred = gather.sample(at);
-      const own = blurAt(depth, lens, u, at).abs().mul(0.5);
-      const w = max(smoothstep(0.25, 0.75, own), blurred.a);
-      return vec4(mix(sharp.rgb, blurred.rgb, w), sharp.a);
+      const c = blurAt(depth, lens, u, at).toVar();
+      const p = at.div(halfTexel).sub(0.5);
+      const base = p.floor().toVar();
+      const f = p.sub(base).toVar();
+      const weight = float(0).toVar();
+      const gathered = vec4(0).toVar();
+      const low = vec3(0).toVar();
+      for (const [x, y] of CORNERS) {
+        const texel = base.add(vec2(x + 0.5, y + 0.5)).mul(halfTexel);
+        const g = gather.sample(texel);
+        const pre = prefilter.sample(texel).toVar();
+        const share = (x ? f.x : f.x.oneMinus()).mul(y ? f.y : f.y.oneMinus());
+        const apart = pre.a.sub(c);
+        const w = share.div(apart.mul(apart).add(1)).toVar();
+        weight.addAssign(w);
+        gathered.addAssign(g.mul(w));
+        low.addAssign(pre.rgb.mul(w));
+      }
+      const norm = max(weight, 1e-4);
+      const blurred = gathered.div(norm).toVar();
+      const ownW = smoothstep(0.25, 0.75, c.abs().mul(0.5));
+      const keep = ownW.oneMinus().mul(blurred.a.oneMinus());
+      const detail = sharp.rgb.sub(low.div(norm)).mul(keep);
+      return vec4(blurred.rgb.add(detail), sharp.a);
     })(),
     null,
     null,
@@ -242,6 +284,14 @@ export function createLensBlur(
     focused: composite,
     composite: compositeTarget.texture,
     input: inputTarget,
+    setSize: (width, height) => {
+      inputTarget.setSize(width, height);
+      pixel.value.set(1 / width, 1 / height);
+      halfTexel.value.set(
+        1 / Math.max(Math.floor(width / 2), 1),
+        1 / Math.max(Math.floor(height / 2), 1)
+      );
+    },
     dispose: () => {
       for (const node of [input, prefilter, tiles, reach, gather, composite]) {
         node.dispose();

@@ -23,6 +23,8 @@
  * the look of a photograph's depth comes from a normal lens's opening.)
  */
 
+import { clamp, clamp01 } from "./math";
+
 /** Sensor height (mm): full frame. */
 export const SENSOR_HEIGHT_MM = 24;
 /** The lens's opening (mm): a 50 mm at f/1.8. */
@@ -45,14 +47,15 @@ export const MIN_FOCUS_M = 0.5;
  */
 export const FOCUS_PULL_MS = 180;
 /**
- * After the camera stops (`RECOVER_MS`, regression.ts), the blur grows in
- * over this long (ms), as a lens racks focus, instead of snapping on.
+ * When the lens comes back — the camera at rest (`RECOVER_MS`,
+ * regression.ts), or a style or view that draws it chosen — the blur grows
+ * in over this long (ms), as a lens racks focus, instead of snapping on.
  */
 export const LENS_FADE_MS = 700;
 
 /** The focal length (mm) that gives a vertical view angle of `fovDeg`. */
 export function focalLengthMm(fovDeg: number): number {
-  const half = (Math.min(Math.max(fovDeg, 1), 179) * Math.PI) / 360;
+  const half = (clamp(fovDeg, 1, 179) * Math.PI) / 360;
   return SENSOR_HEIGHT_MM / 2 / Math.tan(half);
 }
 
@@ -64,7 +67,8 @@ export function maxBlurPx(heightPx: number): number {
 /**
  * The blur's diameter (px) at the horizon, c∞, for a focus `focusM`
  * metres ahead, a vertical view angle `fovDeg` and a frame `heightPx`
- * tall. A point at S2 blurs by this times |1 − S1 / S2|.
+ * tall. A point at S2 blurs by this times |1 − S1 / S2| (lens-blur.ts
+ * `blurAt`, per pixel).
  */
 export function horizonBlurPx(
   focusM: number,
@@ -77,21 +81,6 @@ export function horizonBlurPx(
   const s1 = Math.max(focusM * 1000, f + 10);
   const onSensor = (f * PUPIL_MM) / (s1 - f);
   return (onSensor / SENSOR_HEIGHT_MM) * Math.max(heightPx, 0);
-}
-
-/**
- * The signed blur (px, diameter; negative before the focus) of a point
- * `depthM` ahead, focus `focusM`, capped at ±`capPx`.
- */
-export function blurPxAt(
-  depthM: number,
-  focusM: number,
-  horizonPx: number,
-  capPx: number
-): number {
-  const d = Math.max(depthM, 1e-3);
-  const c = horizonPx * (1 - focusM / d);
-  return Math.min(Math.max(c, -capPx), capPx);
 }
 
 /**
@@ -110,16 +99,13 @@ export function pullFocus(
   return 1 / (from + (to - from) * k);
 }
 
-/** The cubic ease (smoothstep) of `x` clamped to 0…1. */
-function ease(x: number): number {
-  const t = Math.min(Math.max(x, 0), 1);
-  return t * t * (3 - 2 * t);
-}
-
 /**
- * How much of the blur shows (0…1), `sinceRecoverMs` after the camera came
- * to rest long enough for the lens to return (0 or less: none yet).
+ * How much of the blur shows (0…1), `shownMs` after the lens came back —
+ * the camera at rest long enough (`RECOVER_MS`, regression.ts), or a style
+ * or view that draws it chosen: the cubic ease of the time over
+ * `LENS_FADE_MS`.
  */
-export function lensFadeIn(sinceRecoverMs: number): number {
-  return ease(sinceRecoverMs / LENS_FADE_MS);
+export function lensFadeIn(shownMs: number): number {
+  const t = clamp01(shownMs / LENS_FADE_MS);
+  return t * t * (3 - 2 * t);
 }

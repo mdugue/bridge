@@ -118,6 +118,43 @@ test("the nearest in sets: the first thing the ray meets, within reach", () => {
   expect(nearestInSets({ x: -10, y: 9, z: 30 }, east, sets, 1000)).toBeNull();
 });
 
+const postAt = (target: number, x: number): AskItem<number> => ({
+  target,
+  solids: [{ cylinder: { x, z: 0, y0: 0, y1: 5, r: 1 } }],
+});
+
+test("the nearest in sets looks past the thing it starts in, one turned down and one unbuilt", () => {
+  const sets = askSets([postAt(0, 0), postAt(1, 10), postAt(2, 20)], 64);
+  // from inside the first post: the next one ahead, not the start
+  const inside = nearestInSets({ x: 0, y: 2, z: 0 }, east, sets, 1000);
+  expect(inside?.target).toBe(1);
+  expect(inside?.distance).toBeCloseTo(9, 9);
+  // the second folded away: the third
+  const kept = nearestInSets(
+    { x: -10, y: 2, z: 0 },
+    east,
+    sets,
+    1000,
+    (hit) => hit.target !== 1 && hit.target !== 0
+  );
+  expect(kept?.target).toBe(2);
+  // a set that would build first is not asked
+  const unbuilt: AskSet<number> = {
+    box: { min: { x: -5, y: 0, z: -5 }, max: { x: 5, y: 5, z: 5 } },
+    nearest: () => {
+      throw new Error("asked a set that would build first");
+    },
+    unbuilt: () => true,
+  };
+  const past = nearestInSets(
+    { x: -10, y: 2, z: 0 },
+    east,
+    [unbuilt, ...sets],
+    1000
+  );
+  expect(past?.target).toBe(0);
+});
+
 test("sets of things: a box the ray misses is never opened", () => {
   const unopened: AskSet<string> = {
     box: { min: { x: 0, y: 0, z: 50 }, max: { x: 100, y: 5, z: 60 } },

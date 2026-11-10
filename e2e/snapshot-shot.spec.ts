@@ -186,9 +186,9 @@ for (const { path: file, name } of snapshotFiles()) {
         return (
           drawn >= settle &&
           // the move regressed the post stack: DoF is back once it is
-          // still, and grown in fully (lensFade)
+          // still, and grown in fully where the style draws it
           !poc?.regressed &&
-          (poc?.handle?.getFocusDebug().fade ?? 1) >= 1 &&
+          (poc?.handle?.getFocusDebug().settled ?? true) &&
           // the rings redraw one a frame, the wide ones at a distance
           !poc?.handle?.shadowBusy() &&
           // a plate far from the spawn waits for its own tiles to land

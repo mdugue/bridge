@@ -49,6 +49,7 @@ export function bridgeAskSet(
       min: { x: bounds.min.x, y: bounds.min.y, z: bounds.min.z },
       max: { x: bounds.max.x, y: bounds.max.y, z: bounds.max.z },
     },
+    unbuilt: () => meshes.some((mesh) => !mesh.geometry.boundsTree),
     nearest: (o, d, far) => {
       for (const mesh of meshes) {
         if (!mesh.geometry.boundsTree) {

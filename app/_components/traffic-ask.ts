@@ -44,6 +44,7 @@ export function trafficAskSet(
       min: { x: bounds.min.x, y: bounds.min.y, z: bounds.min.z },
       max: { x: bounds.max.x, y: bounds.max.y, z: bounds.max.z },
     },
+    unbuilt: () => !mesh.geometry.boundsTree,
     nearest: (o, d, far) => {
       if (!group.visible) {
         return null;

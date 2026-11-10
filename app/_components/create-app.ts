@@ -102,11 +102,7 @@ import type { ExportTile } from "@/lib/city/image-export";
 import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
 import type { CameraState, PlayerPose, Xyz } from "@/lib/city/pose";
 import { nearestInSets } from "@/lib/city/ask-solids";
-import {
-  createRegressionState,
-  lensFade,
-  stepRegression,
-} from "@/lib/city/regression";
+import { createRegressionState, stepRegression } from "@/lib/city/regression";
 import { spawnViewpoint, tileExtentOf } from "@/lib/city/site";
 import type { Site, ViewpointGeometry } from "@/lib/city/site";
 import { beyondExtents } from "@/lib/city/design-placement";
@@ -704,6 +700,7 @@ export interface CityWalkHandle {
   getFocusDebug: () => {
     capPx: number;
     fade: number;
+    settled: boolean;
     focusDistance: number;
     horizonBlurPx: number;
     hitDist: number | null;
@@ -3063,6 +3060,13 @@ async function bootApp(
   focusRaycaster.far = 6000;
   const focusCrosshair = new Vector2(0, 0);
   let lastFocusHit: { dist: number; name: string } | null = null;
+  const focusAt = new Vector3();
+  // every visible tile's built ask sets, without a copy ten times a second
+  function* focusSets() {
+    for (const dressing of stream.visibleDressings()) {
+      yield* dressing.asks ?? [];
+    }
+  }
   const lensBlur = postProfileFor(budget.tier).dof;
   const updateFocus = () => {
     focusRaycaster.setFromCamera(focusCrosshair, camera);
@@ -3079,15 +3083,22 @@ async function bootApp(
       hit?.distance ?? focusRaycaster.far
     );
     // the trees, lamps, furniture and monuments the probe can ask (their
-    // sets come in idle time; the focus never builds them): a tree in the
-    // middle of the view is what the lens focuses on, not the facade
-    // behind it
+    // sets come in idle time, a mesh's BVH with a question: the focus
+    // never builds either): a tree in the middle of the view is what the
+    // lens focuses on, not the facade behind it — unless a design's site
+    // folded it away, as the probe passes it by
     const { origin, direction } = focusRaycaster.ray;
     const thing = nearestInSets(
       origin,
       direction,
-      stream.visibleDressings().flatMap((d) => d.asks ?? []),
-      groundAt ?? hit?.distance ?? focusRaycaster.far
+      focusSets(),
+      groundAt ?? hit?.distance ?? focusRaycaster.far,
+      (t) =>
+        !foldedThing(
+          t.target,
+          focusRaycaster.ray.at(t.distance, focusAt),
+          offset
+        )
     );
     if (thing) {
       const point = focusRaycaster.ray.at(thing.distance, new Vector3());
@@ -3205,7 +3216,7 @@ async function bootApp(
   let regressedNow = false;
   const updateRegression = (dt: number) => {
     const regressed = stepRegression(regression, walkMoved(camera), dt * 1000);
-    postStack.setRegressed(regressed, lensFade(regression));
+    postStack.setRegressed(regressed, dt * 1000);
     if (regressed !== regressedNow) {
       regressedNow = regressed;
       updatePocDebug({ regressed });
