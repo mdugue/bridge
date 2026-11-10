@@ -197,6 +197,11 @@ export function raySlab(o: Xyz, d: Xyz, s: Slab): number | null {
   return null;
 }
 
+/** The box around every set's box, or null for none. */
+export function setsBox<T>(sets: readonly AskSet<T>[]): Aabb | null {
+  return boxAround(sets.map((set) => set.box));
+}
+
 /** Distance along the ray to the nearest of a thing's solids, or null. */
 export function raySolids(
   o: Xyz,
@@ -270,6 +275,13 @@ export interface AskSet<T> {
   along?: (o: Xyz, d: Xyz, far: number) => AskHit<T>[];
   box: Aabb;
   nearest: (o: Xyz, d: Xyz, far: number) => AskHit<T> | null;
+  /** true while `nearest` would first build something (a mesh's BVH): the
+   *  autofocus, ten times a second, passes it by — the set starts that
+   *  build off the thread when first asked */
+  unbuilt?: () => boolean;
+  /** drawn as glass, which writes no depth: the autofocus passes it by,
+   *  or the thing it aims at would blur */
+  glass?: boolean;
 }
 
 /** The box a solid fills. */
@@ -307,9 +319,18 @@ function grow(a: Aabb, b: Aabb): Aabb {
 
 /** The box all of `solids` fill together; an empty list has none. */
 function solidsBox(solids: readonly AskSolid[]): Aabb {
-  const [first, ...rest] = solids.map(solidBox);
-  if (!first) {
+  const box = boxAround(solids.map(solidBox));
+  if (!box) {
     throw new Error("an item has no solids");
+  }
+  return box;
+}
+
+/** The box around boxes, or null for none. */
+function boxAround(boxes: readonly Aabb[]): Aabb | null {
+  const [first, ...rest] = boxes;
+  if (!first) {
+    return null;
   }
   let box = first;
   for (const next of rest) {
@@ -406,6 +427,58 @@ export function hitsInSets<T>(
     }
   }
   return out.sort((a, b) => a.distance - b.distance);
+}
+
+/** A set's nearest hit within `far` that `keep` keeps: its next ones
+ *  (`along`) where the nearest is not; none from a set that would first
+ *  build something. */
+function nearestKept<T>(
+  set: AskSet<T>,
+  o: Xyz,
+  d: Xyz,
+  far: number,
+  keep: (hit: AskHit<T>) => boolean
+): AskHit<T> | null {
+  if (set.unbuilt?.()) {
+    return null;
+  }
+  const hit = set.nearest(o, d, far);
+  if (!hit || keep(hit)) {
+    return hit;
+  }
+  return set.along?.(o, d, far).find(keep) ?? null;
+}
+
+/**
+ * The nearest hit in the sets the ray meets within `far` (or null): the
+ * autofocus's question, asked ten times a second, so each set is opened
+ * only when the ray enters its box before the best hit so far, and a set
+ * that would first build something (`unbuilt`) or is drawn as glass not
+ * at all. A hit at the
+ * ray's start (it starts inside a crown or a shelter) is not what lies
+ * ahead, nor one `keep` turns down (a thing a design folded away).
+ */
+export function nearestInSets<T>(
+  o: Xyz,
+  d: Xyz,
+  sets: Iterable<AskSet<T>>,
+  far: number,
+  keep: (hit: AskHit<T>) => boolean = () => true
+): AskHit<T> | null {
+  const ahead = (hit: AskHit<T>) => hit.distance > 0 && keep(hit);
+  let best: AskHit<T> | null = null;
+  for (const set of sets) {
+    const reach: number = best ? best.distance : far;
+    const enter = rayAabb(o, d, set.box);
+    if (enter === null || enter > reach || set.glass) {
+      continue;
+    }
+    const hit: AskHit<T> | null = nearestKept(set, o, d, reach, ahead);
+    if (hit && hit.distance <= reach) {
+      best = hit;
+    }
+  }
+  return best;
 }
 
 /** A pier just outside its deck's outline still belongs to it (m): a
