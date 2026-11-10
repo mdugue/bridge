@@ -250,8 +250,9 @@ def measured_surface(h: np.ndarray, mine: np.ndarray, reach: int) -> np.ndarray:
     return v
 
 
-def _profile(u: np.ndarray, z: np.ndarray, bins: int) -> np.ndarray:
-    """The median height per 1 m bin of `u` (NaN where a bin is empty)."""
+def _profile(u: np.ndarray, z: np.ndarray, bins: int, q: float = 0.5) -> np.ndarray:
+    """The median height per 1 m bin of `u` (NaN where a bin is empty), or
+    its `q` quantile (the nearest rank below)."""
     k = np.floor(u).astype(np.int64)
     keep = (k >= 0) & (k < bins)
     k, zs = k[keep], z[keep]
@@ -261,18 +262,22 @@ def _profile(u: np.ndarray, z: np.ndarray, bins: int) -> np.ndarray:
     start = np.concatenate(([0], np.cumsum(n)[:-1]))
     out = np.full(bins, np.nan)
     has = n > 0
+    if q != 0.5:
+        out[has] = zs[start[has] + np.floor((n[has] - 1) * q).astype(np.int64)]
+        return out
     lo = start[has] + (n[has] - 1) // 2
     hi = start[has] + n[has] // 2
     out[has] = (zs[lo] + zs[hi]) / 2
     return out
 
 
-def _strips(t: np.ndarray, z: np.ndarray) -> tuple[np.ndarray, np.ndarray, float]:
-    """The median of `z` per metre-wide strip across `t` (`_profile`), the
-    cells in each strip and where the first strip starts along `t`."""
+def _strips(t: np.ndarray, z: np.ndarray, q: float = 0.5) -> tuple[np.ndarray, np.ndarray, float]:
+    """The median (or `q` quantile) of `z` per metre-wide strip across `t`
+    (`_profile`), the cells in each strip and where the first strip starts
+    along `t`."""
     t0 = float(t.min())
     k = np.floor(t - t0).astype(np.int64)
-    return _profile(t - t0, z, int(k.max()) + 1), np.bincount(k), t0
+    return _profile(t - t0, z, int(k.max()) + 1, q), np.bincount(k), t0
 
 
 def curved_surface(h: np.ndarray, mine: np.ndarray, res: float = 1.0) -> np.ndarray | None:
@@ -368,6 +373,9 @@ LANDMARK_GABLE_SHARE = 0.95  # ... of a landmark's, whose own surface is the alt
 GABLE_ON_SHARE = 0.6  # ... and this much within FLANK_TOL_M of their planes
 # a flank sagging this far off a plane across its fall line is a vault's half
 FLANK_SAG_M = 0.5
+SAG_STRIPS = 6  # ... judged over this many metre strips or more
+SAG_NOISE = 4.0  # ... and this many times the scatter the parabola leaves
+SAG_QUANTILE = 0.25  # ... on this quantile of each strip (under its dormers)
 FLANK_SHARE = 0.4  # the flanks hold this much of a face drawn as them
 FLANK_RISE_M = 1.0  # a flank rises at least this: a skylight's, a vent's, a parapet's foot does not
 # ... and takes this far across from a fifth to four fifths of its rise: a
@@ -540,14 +548,21 @@ def _flank_plane(h: np.ndarray, sel: np.ndarray, phi: float) -> tuple[np.ndarray
         keep = np.abs(z - (coef[0] + coef[1] * t)) <= FLANK_TOL_M
     plane = np.array([coef[0], coef[1] * np.cos(phi), coef[1] * np.sin(phi)])
     sag = False
-    # its sag on the strips' medians (a dormer moves none), away from the
-    # eave and the ridge, which the scan rounds: the parabola's rise over
-    # its chord at the middle, a·L²/4
+    # its sag on the strips' lower quartiles (a row of dormers along a
+    # strip lifts its median, not its lower cells; a vault lifts them all),
+    # away from the eave and the ridge, which the scan rounds: the
+    # parabola's rise over its chord at the middle, a·L²/4 — over
+    # SAG_STRIPS strips or more, and SAG_NOISE times what the parabola
+    # leaves (a few strips' scatter; a vault's arc the parabola holds)
+    low, _, _ = _strips(t, z, SAG_QUANTILE)
     lo, hi = np.percentile(t, (15, 85))
     mid = strips & (centre >= lo) & (centre <= hi)
-    if mid.sum() >= 4 and hi - lo > 2:
-        q = np.polyfit(centre[mid], prof[mid], 2, w=np.sqrt(n[mid]))
-        sag = abs(q[0]) * (hi - lo) ** 2 / 4 > FLANK_SAG_M
+    if mid.sum() >= SAG_STRIPS and hi - lo > 2:
+        w = np.sqrt(n[mid])
+        q = np.polyfit(centre[mid], low[mid], 2, w=w)
+        rise = abs(q[0]) * (hi - lo) ** 2 / 4
+        left = np.sqrt(np.average((low[mid] - np.polyval(q, centre[mid])) ** 2, weights=w**2))
+        sag = rise > FLANK_SAG_M and rise > SAG_NOISE * left
     return plane, np.asarray(sag)
 
 

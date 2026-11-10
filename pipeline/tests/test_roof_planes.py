@@ -229,6 +229,10 @@ def test_a_vaults_half_sags_a_flank_does_not():
     # a pitched flank with dormers standing on it: straight
     flank = 15 - 0.6 * cols + np.where((rows % 6 < 2) & (cols > 3) & (cols < 7), 1.5, 0.0)
     assert not bool(_flank_plane(flank, every, np.pi)[1])
+    # ... and with dormers along two thirds of its length (a street of town
+    # houses): its middle strips' medians stand on the dormers
+    dense = 15 - 0.6 * cols + np.where((rows % 6 < 4) & (cols > 3) & (cols < 7), 1.5, 0.0)
+    assert not bool(_flank_plane(dense, every, np.pi)[1])
 
 
 def test_a_landmarks_face_only_flanks_found_takes_every_buildings_bar():

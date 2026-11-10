@@ -1113,9 +1113,12 @@ visual-variable codebook is in
   (the eave's blur), 85 % of its cells (a landmark's 95 %, unless only
   the flank rule found the face: it has no other form) lie within
   0.5 m of their plane or under a blob of ≤ 30 m² up to 3 m over it, 60 %
-  on it; no flank sags (a parabola through its strips' median heights
-  rising > 0.5 m over its chord across the middle 70 % of its fall: a
-  vault's half); the flanks hold ≥ 40 % of the face and turn `orderly`;
+  on it; no flank sags (a parabola through its metre strips' lower
+  quartiles — a row of dormers lifts a strip's median, not its lower
+  cells, and a street's dormers had made An der Frauenkirche's and
+  Schloßstraße's flanks read as vaults — rising > 0.5 m over its chord
+  across the middle 70 % of its fall, over ≥ 6 strips, and four times
+  the scatter it leaves: a vault's half); the flanks hold ≥ 40 % of the face and turn `orderly`;
   and flanks holding ≥ 70 % of their cells rise from an eave — their
   lowest 30 % of cells lie along the face's edge and face into it within
   25° (`_eave`; a blanket's patches rise from wherever the scan dips: none
@@ -1190,16 +1193,16 @@ visual-variable codebook is in
   judged cells or on more than half the LoD2's share are drawn as the
   scan put them where those miss less (`drawn_miss`; a structure's roof
   the same):
-  Dresden's rebuilt roofs have 24 % fewer outline points than before the
-  regularising (the other sites 16 to 36 %). The footprint they are cut to is the
+  Dresden's rebuilt roofs have 20 % fewer outline points than before the
+  regularising (the other sites 12 to 31 %). The footprint they are cut to is the
   building's less what another roof covers, each covered piece whole
   but not one holding no 3 × 3 cells (a neighbour's eave over the party
   wall, a notch a metre deep every few metres along it), the cut's raster steps
   simplified by 0.75 m. Parts under 2 m dropped →
   `data/<site>/dlm/roofs_<tile>.geojson` (Polygons
   with the object `id`, the roof `z` and, for a face, its `surface`; the
-  provider's credit). **1 080 objects on Dresden's fifteen tiles, 2 728
-  parts, 342 of them faces** (2026-11-10; 2 814 and 367 before the flanks;
+  provider's credit). **1 080 objects on Dresden's fifteen tiles, 2 733
+  parts, 324 of them faces** (2026-11-10; 2 814 and 367 before the flanks;
   1 081, 2 755 and 222 before the plausibility rule; 886 objects, 2 227 parts before
   the band below 40 %; 2 956 parts before the strips merged; the
   Altstadt most); the step runs on every site — Hamburg 587 objects (365
