@@ -10,67 +10,37 @@ import {
   FerrisWheelIcon,
   LampFloorIcon,
   LandmarkIcon,
-  type LucideIcon,
   PencilRulerIcon,
   ShrubIcon,
   TramFrontIcon,
   TreeDeciduousIcon,
   TreePineIcon,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import { cn } from "cn";
-import {
-  type Inquiry,
-  type InquiryAlong,
-  inquiryCard,
-} from "@/lib/city/inquiry";
+import { kindLabel, TOLERANCE_PX } from "@/lib/city/inquiry";
+import type { InquiryAlong, KindIcon } from "@/lib/city/inquiry";
 import { cardCredits } from "@/lib/city/card-lines";
-import { TOLERANCE_PX } from "@/lib/city/inquiry";
 import { useSite } from "./site-context";
 
-/** The icon a candidate is drawn with. */
-function kindIcon(inquiry: Inquiry): LucideIcon {
-  switch (inquiry.kind) {
-    case "building":
-      return Building2Icon;
-    case "tree":
-      return inquiry.conifer ? TreePineIcon : TreeDeciduousIcon;
-    case "monument":
-      return LandmarkIcon;
-    case "bridge":
-      return BridgeIcon;
-    case "traffic":
-      return CarIcon;
-    case "bikes":
-      return BikeIcon;
-    case "canopy":
-      return TreeDeciduousIcon;
-    case "hedge":
-      return ShrubIcon;
-    case "lamp":
-      return LampFloorIcon;
-    case "furniture":
-      return PLAY.has(inquiry.properties.k) ? FerrisWheelIcon : ArmchairIcon;
-    case "stop":
-      return TramFrontIcon;
-    case "landing":
-      return AnchorIcon;
-    case "design":
-      return PencilRulerIcon;
-  }
-}
-
-const PLAY = new Set([
-  "climb",
-  "playground",
-  "playhouse",
-  "roundabout",
-  "sandpit",
-  "seesaw",
-  "slide",
-  "springy",
-  "swing",
-]);
+/** The icon a candidate is drawn with, by the name its kind gives. */
+const ICONS: Record<KindIcon, LucideIcon> = {
+  anchor: AnchorIcon,
+  armchair: ArmchairIcon,
+  bike: BikeIcon,
+  bridge: BridgeIcon,
+  building: Building2Icon,
+  car: CarIcon,
+  "ferris-wheel": FerrisWheelIcon,
+  "lamp-floor": LampFloorIcon,
+  landmark: LandmarkIcon,
+  "pencil-ruler": PencilRulerIcon,
+  shrub: ShrubIcon,
+  "tram-front": TramFrontIcon,
+  "tree-deciduous": TreeDeciduousIcon,
+  "tree-pine": TreePineIcon,
+};
 
 const whole = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 0 });
 const tenths = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 });
@@ -82,7 +52,7 @@ export function distanceLabel(m: number): string {
 
 /** A finger-wide ring at the tap, pulsed once: how far round the point
  *  the question looked (none when asked at the centre). */
-export function InquiryTapRing({ along }: { along: InquiryAlong }) {
+export const InquiryTapRing = ({ along }: { along: InquiryAlong }) => {
   if (!along.at || along.candidates.length < 2) {
     return null;
   }
@@ -100,7 +70,7 @@ export function InquiryTapRing({ along }: { along: InquiryAlong }) {
       }}
     />
   );
-}
+};
 
 /**
  * Everything the question's ray met, front to back (plan 052), apart from
@@ -112,7 +82,7 @@ export function InquiryTapRing({ along }: { along: InquiryAlong }) {
  * pointer on a row outlines its thing in the scene for as long as it
  * stays, a click shows it in the card.
  */
-export function InquiryStrip({
+export const InquiryStrip = ({
   along,
   onPreview,
   onSelect,
@@ -123,17 +93,17 @@ export function InquiryStrip({
   onSelect: (index: number) => void;
   /** a touch screen: chips above the bottom sheet, not a list */
   sheet?: boolean;
-}) {
+}) => {
   const site = useSite();
   const items = useMemo(
     () =>
       along.candidates.map((c) => {
-        const card = inquiryCard(c.inquiry, null, cardCredits(site));
+        const label = kindLabel(c.inquiry, cardCredits(site));
         return {
-          icon: kindIcon(c.inquiry),
+          icon: ICONS[label.icon],
           key: c.key,
-          kicker: card.kicker,
-          label: card.title,
+          kicker: label.kicker,
+          label: label.title,
           distance: distanceLabel(c.distance),
         };
       }),
@@ -144,7 +114,7 @@ export function InquiryStrip({
   useEffect(() => {
     const nav = chips.current;
     const chosen = nav?.querySelector<HTMLElement>("[aria-current]");
-    if (nav && chosen) {
+    if (along.candidates.length > 0 && nav && chosen) {
       nav.scrollLeft =
         chosen.offsetLeft - (nav.clientWidth - chosen.offsetWidth) / 2;
     }
@@ -232,4 +202,4 @@ export function InquiryStrip({
       </div>
     </nav>
   );
-}
+};

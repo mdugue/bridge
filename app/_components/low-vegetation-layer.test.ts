@@ -1,16 +1,25 @@
 import { expect, test } from "bun:test";
 import { Matrix4, Mesh, MeshStandardNodeMaterial, Vector3 } from "three/webgpu";
-import type { LowVegFeature } from "@/lib/city/features";
+import type { Object3D } from "three/webgpu";
+import type { LowVegFeature, VegRowFeature } from "@/lib/city/features";
 import {
   buildHedgeGeo,
   buildLowVegetation,
   hedgeLines,
   hedgePieces,
 } from "./low-vegetation-layer";
-import type { VegRowFeature } from "@/lib/city/features";
-import { DEFAULT_HEDGE_H } from "@/lib/city/ask-more";
+import { DEFAULT_HEDGE_H } from "@/lib/city/ask-items";
 import { isInstances } from "./instancing";
 import { sceneCensus } from "./scene-census";
+
+/** The first instanced set of a group; the test fails without one. */
+function firstInstances(children: readonly Object3D[]) {
+  const set = children.find(isInstances);
+  if (!set) {
+    throw new Error("no instanced set");
+  }
+  return set;
+}
 
 const ctx = { offset: { cx: 0, cy: 0 }, heightAt: () => 100 };
 
@@ -55,7 +64,7 @@ test("on a slope the pieces of a hedge meet at one height", () => {
     ],
     slope
   );
-  const set = group.children.filter(isInstances)[0];
+  const set = firstInstances(group.children);
   const m = new Matrix4();
   const ends = [0, 1].map((i) => {
     set.getMatrixAt(i, m);
@@ -129,7 +138,7 @@ test("the DLM's hedge rows are drawn like OSM's hedges, tree rows not", () => {
       [5, 0],
     ]),
   ]);
-  expect(group.children.filter(isInstances)[0].drawCount).toBe(2);
+  expect(firstInstances(group.children).drawCount).toBe(2);
 });
 
 test("a hedge's pieces share one height, so no step shows", () => {
@@ -142,10 +151,10 @@ test("a hedge's pieces share one height, so no step shows", () => {
     ],
     ctx
   );
-  const set = group.children.filter(isInstances)[0];
+  const set = firstInstances(group.children);
   const m = new Matrix4();
   const heights: number[] = [];
-  for (let i = 0; i < set.drawCount; i++) {
+  for (let i = 0; i < set.drawCount; i += 1) {
     set.getMatrixAt(i, m);
     heights.push(new Vector3().setFromMatrixColumn(m, 1).length());
   }

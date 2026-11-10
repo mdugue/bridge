@@ -19,18 +19,6 @@ The build bakes each city's LoD2 CityJSON, DGM1 and derived layers into an
 and TSL node materials. No database, no accounts (ADR 0001). React owns the
 HUD, three.js the canvas (ADR 0002).
 
-## Tech stack
-
-- Next.js (App Router) + TypeScript 7 (strict) + Tailwind v4, run with **bun**
-- three.js r187 `WebGPURenderer` (WebGPU, else its WebGL2 backend), TSL,
-  three's node post pipeline — no GLSL anywhere (ADR 0027);
-  `3d-tiles-renderer`, `three-mesh-bvh`
-- Build only: `cityjson-threejs-loader`, `geotiff`, `@gltf-transform/*`,
-  `meshoptimizer`
-- Offline bakes: one Python package in a uv environment (`pipeline/`:
-  numpy, rasterio, pyogrio, shapely; GDAL inside the wheels)
-- Playwright for e2e and the screenshot harness; `bun run test` for units
-
 ## Commands
 
 ```bash
@@ -53,34 +41,9 @@ bun run osm-coverage <site>  # OSM's built things no bake decided about
 bun run test:pipeline   # pytest + ruff for pipeline/
 bun run docs:diagrams   # render docs/ Mermaid blocks to docs/diagrams/*.svg
 bun run docs:matrix     # regenerate the guide's sources-by-city pages
+bun scripts/stadtwissen.ts <site> such|nah|…  # search what the twin knows
+bun scripts/walks.ts <site> check             # check a written walk (docs/walks.md)
 ```
-
-## Where things live
-
-- `app/_components/` — the viewer. Spine: `create-app.ts` (scene, loop,
-  handle), `tile-stream.ts` (streaming and the per-tile dressing plugin),
-  `post-stack.ts`, `camera-pose.ts`, `scene-status.ts` (what the HUD
-  reads), `poc-debug.ts` (the `window.__poc` QA hook). Each layer is a
-  `*-layer.ts`; each file's head comment says what it does.
-- `lib/city/` — pure, DOM-free logic with unit tests beside it.
-- `sites/` — one config per city, `providers.ts` one entry per Land.
-- `pipeline/` — the Python fetch and bakes; adapters per Land in
-  `pipeline/bake/providers/`.
-- `scripts/` — the build step (`prepare-sites.ts`, `prepare-data.ts` and
-  its steps in `scripts/prepare/`, the glTF bakes) and the dev CLIs.
-- `data/<site>/` — committed build sources and derived files;
-  `data/_raw/` gitignored downloads; `public/data/` generated.
-- `data/<site>/walks/*.json` — the written walks (`docs/walks.md`,
-  ADR 0055); `bun scripts/stadtwissen.ts <site> such|nah|…` searches
-  what the twin knows, `bun scripts/walks.ts <site> check` checks a walk.
-- `app/[site]/`, `app/page.tsx`, `app/wissen/`, `app/(legal)/` — the routes.
-- `app/api/frag/`, `app/api/schluessel/` — *Frag die Stadt*'s one stateless
-  server function and its key check (ADR 0056); `FRAG_FAKE=1` is a scripted
-  model for local tests, never set on a deployment.
-- `docs/` — the knowledge base ([README](docs/README.md)): ADRs, plans,
-  `rendering.md`, `data-pipeline.md`, `transformations.md` (the ledger of
-  every data → look transformation), the bilingual guide.
-- `e2e/` — Playwright specs and the snapshot harness.
 
 ## Skills
 
@@ -140,7 +103,8 @@ space (`shader-chunks.ts`). The glTF extras key is `tileId`, never `tile`
   kind of camera: Modell's parallel camera has its own
   (`PostStack.warmView`).
 - Everything a tile brings is built in the dressing plugin's
-  `processTileModel`, compiled before it shows, and freed in `disposeTile`
+  `processTileModel` (what lands later: a late part, `late-parts.ts`),
+  compiled before it shows, and freed in `disposeTile`
   — never in `bootApp`. Freeing is on us; what a tile adds beyond its glTF
   reaches `calculateBytesUsed`; the rules for shared buffers and dropped
   CPU copies are in the `city-walker` skill, "Tiles".
@@ -176,6 +140,17 @@ ADR 0041).
   `prepare-data.ts` imports to being in some bake's key or excused; which
   artifact needs it is yours to get right). `prepare-data.ts` is in no
   key: a bake lives in its step's module in `scripts/prepare/`, never there.
+- A JSON file a bake writes and TypeScript reads has one zod schema in
+  `lib/city/<name>-file.ts` (ADR 0059): readers take its types and
+  `parseBakeFile`, never `readJson(…) as T`; the build fails on a
+  mismatch; `bake-files.test.ts` parses every committed file, and
+  `features.test.ts` keeps the value rules a shape does not say. The
+  viewer imports a schema module by type only. Excused until a later
+  schema pass, still cast: the crown and canopy layers
+  (`scripts/coarse-crowns.ts`, `scripts/prepare/side-bakes.ts`), the lines
+  and areas (`scripts/prepare/lines.ts`), the land-cover legend's
+  `water`, and the sports and markings tables the viewer packs
+  (`tile-rasters.ts`). A new file takes a schema.
 - Nothing whose alpha or values carry data goes through an image resize or
   the browser's image decoder; class rasters are NEAREST and decoded by
   `lib/city/png-raster.ts`.
@@ -197,34 +172,37 @@ uploaded; nothing it names is fetched (ADR 0054).
 - Visual work is judged on a real GPU: drop a snapshot JSON into `shots/`
   and run `bun run shots`; read the plate and iterate. Verify from oblique
   angles, not head-on.
-- Headless specs run `/dresden?scene=lite` (SwiftShader through WebGL2)
-  and assert presence, never pixels (ADR 0018). Budget them in frames, share
-  one booted page per group, wrap HUD-only steps in `withFramesHeld`, and
-  give a spec without a sidebar a small viewport. An untagged spec lands
-  in the whole-site CI shard, already the longest; tag it
-  (`@desktop-hud`, `@phone`, `@desktop-render`) where it fits.
+- QA views: the reference views of the GPU checklist (plan 019) are
+  committed in `qa/views/` (`bun scripts/qa-views.ts` writes them; the
+  index has each one's link); `bun run shots` renders them too.
 - URL knobs: `?scene=lite`, `?gpu=webgl2`, `?safety=0…3`, `?trail=1`,
-  `?trace=1`, `?inspect=1`, `?depth=standard`, `#at=lat,lng`;
-  `?studie=1` opens the sun study's spike (plan 054).
+  `?trace=1`, `?inspect=1`, `?depth=standard`, `?at=lat,lng`,
+  `?snap=…` (a view link), `?studie=1` (the sun study's spike, plan 054).
+  URL parameters go in the query, never the fragment; one that carries a
+  place is named on the privacy page.
 
 ## Conventions
 
 - TypeScript strict; no `any` without a `// reason:` comment; no
   `console.log`; complexity cap 20 — extract helpers.
-- **oxlint + oxfmt, no ESLint, no biome.** `.oxlintrc.json` names its rules
-  explicitly; do not replace them with categories, and leave
-  `strict-boolean-expressions`, `no-unnecessary-condition` and
-  `no-confusing-void-expression` off (they flag idioms used on purpose);
-  `--type-check` stays off. typescript-eslint
-  cannot run on TypeScript 7; check oxlint's full catalogue
+- Each file's head comment says what it does.
+- `FRAG_FAKE=1` is a scripted model for local tests, never set on a
+  deployment (ADR 0056).
+- **oxlint + oxfmt, no ESLint, no biome.** `oxlint.config.ts` extends
+  ultracite's core, react and next presets, and each rule it changes says
+  why there. No `oxlint-disable` comment: change the code, or the config
+  with its reason. `--type-check` stays off.
+  typescript-eslint cannot run on TypeScript 7; check oxlint's full catalogue
   (`oxlint --print-config -D all`) before reaching for ESLint. Markdown and
   MDX are excluded from oxfmt; prose stays hand-wrapped.
 - **One TypeScript, 7.x native.** `bun check` is the fast check; tsc (in
   `next build` and CI) is the reference. Delete `tsconfig.tsbuildinfo` when
   they disagree. `allowJs: true` stays (`next build` puts it back).
 - Exact pins for the three.js stack, the glTF build tools, `delatin`, the
-  framework trio, the lint tools (bump `oxlint` and `oxlint-tsgolint`
-  together) and `suncalc`; caret for the rest; the npm MCP servers in
+  framework trio, the lint tools and `ultracite` (bump `oxlint` and
+  `oxlint-tsgolint` together), `suncalc` and `zod`, whose version is in
+  the key of every bake that reads a schema (the ground's family too);
+  caret for the rest; the npm MCP servers in
   `.mcp.json` exactly. Bun comes from `packageManager` (≥ 1.4 for
   `Bun.WebView`; the web session's start hook upgrades it).
 - No type shim for `three-mesh-bvh` (it augments `three` itself).

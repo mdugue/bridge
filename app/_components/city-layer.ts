@@ -1,25 +1,27 @@
 import {
   Box3,
   BufferAttribute,
-  type Camera,
   DataTexture,
   FloatType,
-  type Intersection,
-  type Matrix4,
-  type Mesh,
   NearestFilter,
-  type Object3D,
-  type Ray,
   RGBAFormat,
   Raycaster,
   Vector2,
 } from "three/webgpu";
+import type {
+  Camera,
+  Intersection,
+  Matrix4,
+  Mesh,
+  Object3D,
+  Ray,
+} from "three/webgpu";
 import { buildBvhOffThread, bvhBuilding, bvhLost } from "./bvh-client";
 import { rayEntry } from "./collision";
+import { replayDemolitions } from "./demolitions";
 import { streamTimings } from "./stream-timing";
 import { setPickRay } from "./view-ray";
 import {
-  type CityObjectTable,
   countBuildings as countLiveBuildings,
   shaderFlags,
   doomedObjects,
@@ -30,19 +32,22 @@ import {
   objectBandRows,
   packObjectTexels,
 } from "@/lib/city/city-mesh";
+import type { CityObjectTable } from "@/lib/city/city-mesh";
 import {
   appendTriangles,
   takeTriangles,
   wholeTrees,
 } from "@/lib/city/hidden-triangles";
-import { type ObjectFacts, readFacts } from "@/lib/city/object-facts";
+import { readFacts } from "@/lib/city/object-facts";
+import type { ObjectFacts } from "@/lib/city/object-facts";
 import type { StructuralMetadata } from "@/lib/city/property-table";
 import {
   applyFacadeReadings,
-  type FacadeReadings,
+  isFacadeReadings,
 } from "@/lib/city/facade-reading";
 import { textureBytes, trackTexture } from "./three-utils";
-import { createClayMaterial, type StyleResources } from "./visual-style";
+import { createClayMaterial } from "./visual-style";
+import type { StyleResources } from "./visual-style";
 
 /**
  * One tile's buildings: the streamed glTF mesh (scripts/bake-city-mesh.ts), its
@@ -64,8 +69,9 @@ export interface CityLayer {
   setHidden: (objects: ReadonlySet<number>) => boolean;
   dispose: () => void;
   /** what street photos say about the tile's facades, once they land
-   *  (lib/city/facade-reading.ts) */
-  facadeReadings: (readings: FacadeReadings) => void;
+   *  (lib/city/facade-reading.ts): a fetched file, guarded here; one that
+   *  is not what the build checked leaves them as they are drawn */
+  facadeReadings: (readings: unknown) => void;
   /** what the twin knows about one object (read from the table on demand) */
   facts: (objectIndex: number) => ObjectFacts;
   /** whether the tile's BVH is built (`ensureCityBvh`) — not while the
@@ -86,7 +92,7 @@ export interface CityLayer {
   indexUploaded: (index: BufferAttribute | null) => void;
   /** a demolish the worker's build holds back, settling once it has
    *  reached the index (null: none waits) — the shadows are drawn again then */
-  held: () => Promise<void> | null;
+  readonly held: Promise<void> | null;
   /** marks the objects someone asks about (the clay's pencil hatch); an
    *  empty set clears the mark */
   mark: (objects: ReadonlySet<number>) => void;
@@ -208,7 +214,7 @@ function markObjects(
   const data = texture.image.data as Float32Array;
   const band = OBJECT_TEXTURE_WIDTH * objectBandRows(table.count) * 4;
   let changed = false;
-  for (let i = 0; i < table.count; i++) {
+  for (let i = 0; i < table.count; i += 1) {
     const want = shaderFlags(table, i, marked.has(i));
     const at = 2 * band + i * 4 + 3;
     if (data[at] !== want) {
@@ -281,9 +287,8 @@ export function hangsShown(
  * Dresses a streamed city mesh: the glTF feature id and place on the wall
  * (the windows', a roof vertex flagged in it) under the names the clay
  * shader reads, the tile's clay material; its BVH comes when a ray needs
- * it (`ensureCityBvh`). `demolished` replays this session's demolitions of
- * the tile, `demolishedGroups` those of ensembles across a tile edge (a
- * part demolished while this tile was not loaded).
+ * it (`ensureCityBvh`). `demolished` and `demolishedGroups` are this
+ * session's demolitions it takes back (demolitions.ts).
  */
 export function dressCity(
   mesh: Mesh,
@@ -292,7 +297,7 @@ export function dressCity(
   demolished: ReadonlySet<number>,
   demolishedGroups: ReadonlySet<number> = new Set()
 ): CityLayer {
-  const geometry = mesh.geometry;
+  const { geometry } = mesh;
   const metadata = mesh.userData.structuralMetadata as StructuralMetadata;
   const count = metadata.tableAccessors[0]?.count ?? 0;
   for (const [from, to] of [
@@ -383,19 +388,7 @@ export function dressCity(
       geometry.computeBoundsTree();
     }
   };
-  let dead = demolished.size;
-  for (const i of demolished) {
-    alive[i] = 0;
-  }
-  if (demolishedGroups.size > 0) {
-    for (let i = 0; i < count; i++) {
-      if (alive[i] === 1 && demolishedGroups.has(table.group[i])) {
-        alive[i] = 0;
-        dead++;
-      }
-    }
-  }
-  if (dead > 0) {
+  if (replayDemolitions(alive, table.group, demolished, demolishedGroups) > 0) {
     rebuild();
   }
 
@@ -490,6 +483,7 @@ export function dressCity(
       const ids = metadata.tableAccessors[0];
       if (
         ids &&
+        isFacadeReadings(readings) &&
         "buildingId" in ids.properties &&
         applyFacadeReadings(
           table.flags,
@@ -505,32 +499,34 @@ export function dressCity(
     facts: (objectIndex) => readObjectFacts(metadata, objectIndex),
     hasBvh: () => Boolean(geometry.boundsTree),
     ensureBvh: () => ensureCityBvh(mesh),
-    held: () => held,
+    get held() {
+      return held;
+    },
     indexUploaded: (uploaded) => {
       if (uploaded !== null && uploaded === geometry.getIndex()) {
         fresh = false;
       }
     },
-    prepareBvh: () => {
+    prepareBvh: async () => {
       if (fresh) {
-        return Promise.resolve();
+        return;
       }
       prepared ??= streamTimings
         .timed(
           "tile:bvh-worker",
-          () => buildBvhOffThread(geometry, () => !disposed),
+          async () => await buildBvhOffThread(geometry, () => !disposed),
           tile
         )
         .finally(() => {
           prepared = null;
         });
-      return prepared;
+      await prepared;
     },
     hang: (object, buildingId) => {
       const ids = metadata.tableAccessors[0];
       const at: number[] = [];
       if (ids && "buildingId" in ids.properties) {
-        for (let i = 0; i < count; i++) {
+        for (let i = 0; i < count; i += 1) {
           if (String(ids.getPropertyValue("buildingId", i)) === buildingId) {
             at.push(i);
           }
@@ -555,7 +551,7 @@ const boxes = new WeakMap<Mesh, { box: Box3; matrix: Matrix4 }>();
 function worldBox(mesh: Mesh): Box3 {
   let kept = boxes.get(mesh);
   if (!kept?.matrix.equals(mesh.matrixWorld)) {
-    const geometry = mesh.geometry;
+    const { geometry } = mesh;
     if (!geometry.boundingBox) {
       geometry.computeBoundingBox();
     }
@@ -783,7 +779,7 @@ export function groupObjects(layer: CityLayer, group: number): Set<number> {
   if (group === 0) {
     return out;
   }
-  for (let i = 0; i < layer.table.count; i++) {
+  for (let i = 0; i < layer.table.count; i += 1) {
     if (layer.table.group[i] === group && layer.alive[i] === 1) {
       out.add(i);
     }

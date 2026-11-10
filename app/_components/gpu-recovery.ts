@@ -1,10 +1,6 @@
-import {
-  type GpuLoss,
-  mayRecover,
-  recentHistory,
-  type RecoveryHistory,
-  type SafetyLevel,
-} from "@/lib/city/gpu-safety";
+import { mayRecover, recentHistory } from "@/lib/city/gpu-recovery";
+import type { RecoveryHistory } from "@/lib/city/gpu-recovery";
+import type { GpuLoss, SafetyLevel } from "@/lib/city/gpu-safety";
 import { SESSION_KEYS } from "./storage-keys";
 
 /**
@@ -23,11 +19,19 @@ import { SESSION_KEYS } from "./storage-keys";
  * failed and offers "Leichter weiter". A GPU that iOS reclaimed while the
  * page was in the background says nothing about the page, nor does a
  * frame that threw on a GPU that still answers (a bug): each reloads at
- * the same level, under a cap of its own.
+ * the same level, under a cap of its own (lib/city/gpu-recovery.ts).
+ *
+ * The record and its protocol are one recovery session. A load reads what
+ * waits (`peek`) before its boot and commits once the scene is up
+ * (`landed`) or the boot failed (`abandoned`) — never on reading: React
+ * StrictMode mounts the boot twice and aborts the first before its first
+ * frame, and the second must still find the place. An aborted boot
+ * commits nothing. The session holds no copy: every call reads the store,
+ * so the double mount, the crash readers and the boot see one value.
  */
 
 const KEY = SESSION_KEYS.gpuRecovery;
-/** how long a page counts as following a recovery (recentlyRecovered) */
+/** how long a page counts as following a recovery (`followsRecovery`) */
 const RECENT_MS = 120_000;
 
 type Store = Pick<Storage, "getItem" | "setItem">;
@@ -74,168 +78,167 @@ function read(store: Store): Stored {
   }
 }
 
-/**
- * Whether the page reloads itself after its GPU went (`how`), at `level`
- * (the page's safety level): if so, `snapshot` is kept for the next load
- * (none: the page never drew, and the one it booted with stays) and, for a
- * loss in use, the stored level raised (`raise`, gpu-safety.ts; false: it
- * could not be stored). The caller reloads. False with storage
- * unavailable, or past the caps (lib/city/gpu-safety.ts `mayRecover`):
- * then the caller says the graphics failed.
- */
-export function recoverFromGpuLoss(
-  how: GpuLoss,
-  snapshot: string | null,
-  level: SafetyLevel,
-  raise: (from: SafetyLevel) => boolean,
-  store: Store | null = session(),
-  now = Date.now()
-): boolean {
-  if (!store) {
-    return false;
-  }
-  try {
-    const stored = read(store);
-    const history = historyOf(stored);
-    if (!mayRecover(how, level, history, now)) {
-      return false;
+/** The level a reload goes lighter from, and how it is raised (gpu-safety.ts). */
+export interface Ladder {
+  level: SafetyLevel;
+  /** a level lighter from the next page on; false: it could not be stored */
+  raise: (from: SafetyLevel) => boolean;
+}
+
+/** What a recovery or a reset left for this load. */
+export interface Waiting {
+  snapshot: string;
+  /** kept for Qualität's reset to full detail, not for a lost GPU */
+  reset: boolean;
+}
+
+export type Leaving =
+  | { kind: "lighter"; ladder: Ladder } // the failure card's "Leichter weiter"
+  | { kind: "reset" }; // Qualität's full detail
+
+export interface RecoverySession {
+  /** What waits for this load, without taking it. Before the boot. */
+  peek: () => Waiting | null;
+  /** The scene is up: what waited is taken (used, or a place picked won). */
+  landed: () => void;
+  /** The boot failed: what waited goes with it. */
+  abandoned: () => void;
+  /**
+   * The GPU went (`how`); `snapshot` is the place now (null: the page never
+   * drew, and the stored one stays). True: the caller reloads. The record
+   * is written first, then — for a loss in use — the level raised; a raise
+   * that cannot be stored is no reload. False with storage unavailable, or
+   * past the caps (lib/city/gpu-recovery.ts `mayRecover`): then the caller
+   * says the graphics failed.
+   */
+  onLoss: (how: GpuLoss, snapshot: string | null, ladder: Ladder) => boolean;
+  /**
+   * The player asks for a reload; the caller reloads. *Leichter weiter*: a
+   * level lighter and back where the player stood, past every cap — the
+   * raise first, whatever the store. *Qualität*'s reset: the place kept,
+   * marked `reset` so the next page's trail does not call it a lost GPU.
+   * Neither adds a reload time: such a page is no recovery. Without
+   * storage (or a snapshot) the reload starts at the spawn.
+   */
+  leave: (leaving: Leaving, snapshot: string | null) => void;
+  /**
+   * This page follows a recovery (the last reload under two minutes ago):
+   * what died before it was the lost GPU, already handled — iOS may
+   * interleave a navigation of its own that leaves a trail with nothing but
+   * its start (crash-report.tsx does not offer that one).
+   */
+  followsRecovery: () => boolean;
+}
+
+/** The record over `store` (none: every method gives up quietly, and the
+ *  lighter way out still raises the level). */
+export function createRecoverySession(
+  store: Store | null,
+  now: () => number = Date.now
+): RecoverySession {
+  /** The place kept for a reload the caller is about to make. */
+  const keepPlace = (snapshot: string | null, reset: boolean) => {
+    if (!(store && snapshot)) {
+      return;
     }
-    const recent = recentHistory(history, now);
-    const next: Stored = {
-      tries: [...recent.losses, ...(how === "lost" ? [now] : [])],
-      reclaims: [...recent.reclaims, ...(how === "reclaimed" ? [now] : [])],
-      failures: [...recent.failures, ...(how === "failed" ? [now] : [])],
-    };
-    // A page lost before its first frame has no camera of its own yet:
-    // the place it booted at waits for the next load still.
-    const kept = snapshot ?? stored.snapshot;
-    if (kept) {
-      next.snapshot = kept;
+    try {
+      const next: Stored = { ...read(store), snapshot };
+      if (reset) {
+        next.reset = true;
+      } else {
+        delete next.reset;
+      }
+      store.setItem(KEY, JSON.stringify(next));
+    } catch {
+      // The reload starts at the spawn.
     }
-    store.setItem(KEY, JSON.stringify(next));
-  } catch {
-    return false;
-  }
-  return how !== "lost" || raise(level);
-}
-
-/**
- * "Leichter weiter" on the failure card: a level lighter and back where
- * the player stood, past every cap — the player asked for it. The caller
- * reloads; without storage that reload is all there is.
- */
-export function recoverOnRequest(
-  snapshot: string | null,
-  level: SafetyLevel,
-  raise: (from: SafetyLevel) => boolean,
-  store: Store | null = session()
-): void {
-  raise(level);
-  keepPlaceForReload(snapshot, store);
-}
-
-/**
- * The place, the time and the look kept for a reload the caller is about
- * to make — *Leichter weiter*, or the sidebar's reset to full detail
- * (`reset`, so the next page's trail does not call it a lost GPU). The
- * reload times stay as they were: such a page is no recovery
- * (`recentlyRecovered`). Without storage the reload starts at the spawn.
- */
-export function keepPlaceForReload(
-  snapshot: string | null,
-  store: Store | null = session(),
-  { reset = false }: { reset?: boolean } = {}
-): void {
-  if (!(store && snapshot)) {
-    return;
-  }
-  try {
-    const next: Stored = { ...read(store), snapshot };
-    if (reset) {
-      next.reset = true;
-    } else {
-      delete next.reset;
+  };
+  /** What waited, once (the reload times stay). */
+  const take = () => {
+    if (!store) {
+      return;
     }
-    store.setItem(KEY, JSON.stringify(next));
-  } catch {
-    // The reload starts at the spawn.
-  }
-}
-
-/**
- * Whether this page follows a recovery (the last one under two minutes
- * ago): what died before it was the lost GPU, already handled — iOS may
- * interleave a navigation of its own that leaves a trail with nothing but
- * its start (crash-report.tsx does not offer that one).
- */
-export function recentlyRecovered(
-  store: Store | null = session(),
-  now = Date.now()
-): boolean {
-  if (!store) {
-    return false;
-  }
-  try {
-    const { losses, reclaims, failures } = historyOf(read(store));
-    return [...losses, ...reclaims, ...failures].some(
-      (t) => now - t < RECENT_MS
-    );
-  } catch {
-    return false;
-  }
-}
-
-/**
- * The snapshot a recovery left for this load, without taking it: a boot
- * that StrictMode aborts (or that fails before its first frame) leaves it
- * for the next one. `takeRecoverySnapshot` once the scene is up.
- */
-export function peekRecoverySnapshot(
-  store: Store | null = session()
-): string | null {
-  if (!store) {
-    return null;
-  }
-  try {
-    return read(store).snapshot ?? null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Whether the snapshot waiting for this load was kept for a reset to full
- * detail (`keepPlaceForReload`), not for a lost GPU.
- */
-export function recoveryWasReset(store: Store | null = session()): boolean {
-  if (!store) {
-    return false;
-  }
-  try {
-    return read(store).reset === true;
-  } catch {
-    return false;
-  }
-}
-
-/** The snapshot a recovery left for this load, once (the tries stay). */
-export function takeRecoverySnapshot(
-  store: Store | null = session()
-): string | null {
-  if (!store) {
-    return null;
-  }
-  try {
-    const rest = read(store);
-    const { snapshot } = rest;
-    if (!snapshot) {
-      return null;
+    try {
+      const rest = read(store);
+      if (!rest.snapshot) {
+        return;
+      }
+      delete rest.snapshot;
+      delete rest.reset;
+      store.setItem(KEY, JSON.stringify(rest));
+    } catch {
+      // Nothing to take.
     }
-    delete rest.snapshot;
-    delete rest.reset;
-    store.setItem(KEY, JSON.stringify(rest));
-    return snapshot;
-  } catch {
-    return null;
-  }
+  };
+  return {
+    peek: () => {
+      if (!store) {
+        return null;
+      }
+      try {
+        const stored = read(store);
+        return stored.snapshot
+          ? { snapshot: stored.snapshot, reset: stored.reset === true }
+          : null;
+      } catch {
+        return null;
+      }
+    },
+    landed: take,
+    abandoned: take,
+    onLoss: (how, snapshot, ladder) => {
+      if (!store) {
+        return false;
+      }
+      const at = now();
+      try {
+        const stored = read(store);
+        const history = historyOf(stored);
+        if (!mayRecover(how, ladder.level, history, at)) {
+          return false;
+        }
+        const recent = recentHistory(history, at);
+        const next: Stored = {
+          tries: [...recent.losses, ...(how === "lost" ? [at] : [])],
+          reclaims: [...recent.reclaims, ...(how === "reclaimed" ? [at] : [])],
+          failures: [...recent.failures, ...(how === "failed" ? [at] : [])],
+        };
+        // A page lost before its first frame has no camera of its own yet:
+        // the place it booted at waits for the next load still.
+        const kept = snapshot ?? stored.snapshot;
+        if (kept) {
+          next.snapshot = kept;
+        }
+        store.setItem(KEY, JSON.stringify(next));
+      } catch {
+        return false;
+      }
+      return how !== "lost" || ladder.raise(ladder.level);
+    },
+    leave: (leaving, snapshot) => {
+      if (leaving.kind === "lighter") {
+        leaving.ladder.raise(leaving.ladder.level);
+      }
+      keepPlace(snapshot, leaving.kind === "reset");
+    },
+    followsRecovery: () => {
+      if (!store) {
+        return false;
+      }
+      try {
+        const { losses, reclaims, failures } = historyOf(read(store));
+        const at = now();
+        return [...losses, ...reclaims, ...failures].some(
+          (t) => at - t < RECENT_MS
+        );
+      } catch {
+        return false;
+      }
+    },
+  };
+}
+
+/** This page's session, over session storage (none where it is refused). */
+export function pageRecovery(): RecoverySession {
+  return createRecoverySession(session());
 }

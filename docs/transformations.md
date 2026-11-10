@@ -1040,17 +1040,36 @@ visual-variable codebook is in
   where the faces then still miss more, the flat model the decision was
   taken on is drawn (13 objects over five cities, one in München whose
   LoD2 missed on 88 %).
-  A face's surface is the scan on its face cells (pieces it took in filled
-  from them), smoothed twice by an edge-preserving Gaussian (σ 1 cell, 1 m
-  height σ); written as a 1 m grid in cm from the part's `z` (its median),
+  **A face's plausibility** (since 2026-11-06, `pipeline/bake/roof_planes.py`):
+  the faces also take every plane of the roof rising > 0.15 m/m that holds a
+  disk 4 m across (`planar_faces`: a gable ring's 8 m flanks at 18°, too
+  narrow and too gentle for the rules above, had been a flight of 1 m
+  levels with a wavy step along the ring — An der Frauenkirche 5). Each face
+  is then drawn in a form roofs are built in, or not at all: **planes**
+  grown from the smoothest cells (every cell within 0.3 m of its facet's
+  plane, refitted as it grows; facets ≥ 15 m² holding a 4 m disk; the
+  border between two moved to where their planes cross, a ridge or a
+  valley), taken when they explain 75 % of the face and 70 % of their
+  inclined area faces within 15° of one axis or its right angle (`orderly`:
+  a blanket cut into planes turns every way); else **one profile extruded
+  along an axis** (a barrel, a shed's curve: the best of 90 axes, the
+  scan within 0.35 m of its 1 m-binned median profile on 75 % of the face,
+  ≥ 200 m², standing ≥ 1 m off its plane); else, on a **landmark**
+  (`landmarks_<tile>.json`'s objects — the step runs before `roofs` now),
+  the scan's own surface, smoothed twice by an edge-preserving Gaussian
+  (σ 1 cell, 1 m height σ; the Hauptbahnhof's ribbed vaults); else the
+  face's cells go back to the levels and the model is cut again (at most
+  three rounds). Until 2026-11-06 every face was the smoothed scan
+  (🗃️ below). The surface is written as a 1 m grid in cm from the part's `z` (its median),
   two cells past the outline and carried on there on the face's own local
   plane. Polygonised from the labels smoothed by a 2 m majority (twice:
   a border diagonal to the grid no longer a staircase of 1 m teeth),
   `coverage_simplify` 2 m, clipped to the footprint,
   parts under 2 m dropped → `data/<site>/dlm/roofs_<tile>.geojson` (Polygons
   with the object `id`, the roof `z` and, for a face, its `surface`; the
-  provider's credit). **1 081 objects on Dresden's fifteen tiles, 2 755
-  parts, 222 of them faces** (2026-10-21; 886 objects, 2 227 parts before
+  provider's credit). **1 080 objects on Dresden's fifteen tiles, 2 814
+  parts, 367 of them faces** (2026-11-06; 1 081, 2 755 and 222 before the
+  plausibility rule; 886 objects, 2 227 parts before
   the band below 40 %; 2 956 parts before the strips merged; the
   Altstadt most); the step runs on every site — Hamburg 587 objects (365
   before the band), Leipzig 357 (269), Unna 61 (43), Meißen 56 (46),
@@ -1534,8 +1553,29 @@ visual-variable codebook is in
   LoD2 leaves out (`pipeline/bake/dormers.py`): the excess `DOM − roof`
   against its own 9 m median, every blob 0.7 m and more over it, at any
   size and spacing (2026-10-31; until then 3–30 m², no side over 8 m),
-  clear of every tree point. On a pitched roof (25–62°, a mansard —
-  LoD2's `roofType` 3400 — to 80°) a dormer: its top 0.9–3.5 m over the
+  clear of every tree point. A building LoD2 drew as a whole over DOM1
+  (the Taschenbergpalais 1.2 m, flat parts and all) is read against DOM1
+  raised by that much first: where its cells up to 62° read 0.4–3 m
+  under the roof with a median deviation of 0.3 m at most (only that way:
+  a surface over the roof may be its own dormers and eaves); until 2026-11-02 such a roof failed the fit and had no
+  dormers at all. A part LoD2 drew off **in plan** (the Taschenbergpalais'
+  north wing about a metre south of DOM1, so that its north mansard's
+  dormers fell on the wall's edge and the eaves) is read a second time
+  moved onto DOM1: a part with steep (over 62°) faces where a move of up
+  to 1 m (0.5 m steps, the shortest of equal fits) brings the median
+  deviation over the whole part to 0.7 of what it was and at least
+  0.08 m lower, and over its steep faces to 0.7 as well; the dormers
+  that second reading finds on a moved part and the first did not
+  (none of one kind within their width) are moved back into LoD2's frame
+  and kept. Seams are read on LoD2's roof as drawn. On a pitched roof (25–62°, a mansard to 80°) a dormer;
+  a mansard is LoD2's `roofType` 3400 or, as Saxony never writes 3400,
+  read from the LoD2 roof faces: a face over 62° whose top edge a face of
+  62° or less goes on from (within 0.5 m in height and plan), where such
+  faces make ≥ 15 % and ≥ 50 m² of the building's roof; only those faces
+  take the 80° cap (a spire's faces meet at its tip, a steep annex under
+  a tall flat roof touches nothing at its top; read from the faces, as the
+  burned roof reads a step between two parts as a steep band); the break between the two is no seam to the
+  dormers on the lower roof. A dormer: its top 0.9–3.5 m over the
   roof and under the object's ridge, compact, at most 8 m down the slope
   and as wide across it as it runs; dormers the 1 m cells join are parted
   at their cores ≥ 1.2 m over the roof; none along a seam of the LoD2
@@ -1547,7 +1587,58 @@ visual-variable codebook is in
   on a flat roof clear of its outline and seams; 0.8–5 m over the roof
   (1.2 m on a seam), at most 3 m over the ridge; on a flat roof not one
   of three within 4 m (masts on a platform roof, a plant room's ducts),
-  on a pitched roof every stack, however close. Checked against
+  on a pitched roof every stack, however close. **Rows** (`in_rows`): a
+  building's dormers falling the same way (within 20°) at one depth
+  (1.5 m) form a row, set straight at its median depth and in one shape
+  (the row's median width, depth and height over the roof; shed or flat
+  as most of them are). **One grid** a stretch (2026-11-03; a row parts
+  where two stand more than 2.5 times its median gap apart, two wings or
+  a tower between): a spacing of 1.8–7 m about one dormer a slot
+  (0.75–1.3 of the median gap of those 1.8 m or more apart), where the
+  phases of all of them agree best, the slots then fitted by least
+  squares to the nearest dormer on each; taken where half of them stand
+  within 0.22 of a slot (at random a quarter). Every dormer goes on its
+  nearest slot; one whose slot a nearer one takes goes on the free slot
+  on its side, else it is that one's blob (within 0.35 of the spacing,
+  or a fragment narrower than 0.6 of the stretch's median, which also
+  chooses last) or something else and stays (a stair head). On each
+  LoD2 part the row stands at one height: the median roof height and
+  slope under it (the 1 m cells read a mansard's 70° face ±1.4 m up and
+  down: one cell either way). A single empty slot between two set takes
+  a dormer like its neighbour (DOM1 misses a small dormer more often than
+  a roof leaves one slot bare), but not on a chimney or a dormer of a
+  grid; a smaller stray there gives way. Until then (2026-11-02) the row
+  had parted into runs of their own rhythm: the palais' 24 south dormers
+  in five, 2.6–4.6 m, and the dormers off them kept DOM1's ±0.5 m.
+  Where the street photos measured the window axes of the wall below
+  (`dlm/windows_<t>.json`, within 12 m, facing the same way) the slots
+  are those axes, every one, second or third, if the dormers' phases on
+  them reach 0.8 (on Dresden's 33410_5656 twelve rows stand over a
+  measured wall and none does: DOM1 reads a dormer's centre ±0.5 m, and
+  most walls' axes are unphased). Two rows that read one dormer twice
+  (its front and back) are one, a dormer of a grid kept first; one more
+  than 1.5 m or 20° off its row, or 2.5 times its stretch's median width
+  (a Zwerchhaus), stays as it was. On a face of the palais the height
+  spread under a row (the median of its range) fell from 0.65 m to 0;
+  its south row stands on one 3.47 m grid. Dormers with one grid a
+  stretch: Dresden 13 651 (13 518 before, the filled slots), Leipzig
+  6 922, München 7 309, Unna 2 080, Meißen 1 802, Hamburg 1 739, Grimma
+  1 429; the Taschenbergpalais 95. **On the exact roof** (2026-11-03):
+  last, every dormer and chimney takes its height from its host's LoD2
+  roof face under its centre (the highest of the faces over it, else the
+  nearest within 0.3 m of its outline: past a ridge, a hip or a
+  mansard's break the neighbour's plane runs on above the face beside
+  it), a dormer its slope too and its top moved with it, a chimney's
+  measured top kept; a dormer whose face is flatter than 25° keeps its
+  row's height (`on_planes`). The burned 1 m roof
+  reads a cell's height, up to half a metre off a 45° face under a
+  centre: over all seven cities 7 % of the dormers stood more than 0.3 m
+  over the roof the building draws (0.6 % over 0.7 m), their cheeks
+  clear of it — dormers floating over the roof — and as many sank as
+  deep into it; now each stands on the face. The Taschenbergpalais'
+  street photos show one identical dormer over every window axis; DOM1
+  had read their centres up to 3 m apart
+  down the slope and 1–4 m wide. Checked against
   the 20 cm orthophoto: rows of small gabled dormers now in; DOM1 still
   misses the smallest, and a roof LoD2 drew flat over a pitched one has
   none. A chimney is a box 0.6 m a cell (at most 1.6 m) from under the
@@ -1555,7 +1646,12 @@ visual-variable codebook is in
   footprint's longer side (`chimneyMesh`). Each dormer becomes a front facing
   down the slope, two cheeks and a roof running back into the main roof:
   flat at the measured top, or a **shed dormer** (*Schleppgaube*) falling
-  with the main roof (`lib/city/dormers.ts`). Its fall (`tf`) is read
+  with the main roof (`lib/city/dormers.ts`). Under its roof, 2 cm in, an
+  inner lid facing in that no camera sees: the sun's shadow map draws back
+  faces, so the open box let the sun onto the roof inside it, and the map's
+  soft edge bled that light out as a bright line between the cheek and its
+  shadow (2026-11-03; two triangles a dormer, the same under a chimney's
+  top; +0.3 % on a building tile for the dormers). Its fall (`tf`) is read
   along its axis through the centre: DOM1 every 0.5 m over the blob and
   up to 3 m behind it while it stands ≥ 0.3 m over the roof, the front
   1.5 m left out (front wall and eave smear it), a line through ≥ 3
@@ -1607,8 +1703,12 @@ visual-variable codebook is in
   6 865 → 5 794 (1 004 canopies), Unna 6 156 → 5 587 (549 canopies). A shop's band (*Ladenlicht*)
   lights two cells in three and none on a landmark: on the Zwinger and the
   terrace parts of the Kunstakademie it lit the low walls all round.
-  *Streiflicht* drops to a tenth at night (`NIGHT_RIM`). `visual-style.ts`
-  `nightLight`.
+  *Streiflicht* is off at night (it kept a tenth until 2026-11-06: every
+  wall seen along a street and every roof from the air stood pale against
+  the night). Every wall facing a lamp near the eye takes its light
+  (`streetLight`, lamp-reflections.ts), in the cone a street lamp's shade
+  throws down, so a house front is lit at its foot and dark above the
+  lamps. `visual-style.ts` `nightLight`.
 - **Dusk glow (whole walls)** 🗃️ discontinued 2026-10-19 — a warm emissive
   wash over every wall of a commerce/public/special building (0.25 at full
   night) plus the full-strength rim: the centre glowed beige from afar and
@@ -2170,7 +2270,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   616 of 15 302, Meißen 454 of 14 506. The trunk drops to the crown's
   base (`vegetation-layer.ts` `crownFrame`, `fitTrunks`); the coarse
   level's crowns carry the same base (*The coarse level's trees* below),
-  and an asked canopy tree's solid starts there too (`ask-more.ts`).
+  and an asked canopy tree's solid starts there too (`ask-items.ts`).
   **Gated off paths and water** via the DLM
   class raster, **off the carriageways and track beds** (`ways.traffic`, below), and off everything within 10 m of a DLM bridge (a bridge's
   steel on a park bank is as tall as a crown: the Blaues Wunder's pylons came
@@ -2359,11 +2459,8 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   the budget, a camera in the Dresdner Heide's forest tiles (one tree per
   7 m) put ~9 000 rich crowns on screen — ~80 M triangles per pass over the
   site, which stalled the GPU into a lost context; the same view is now
-  ~23 M;
-  **backlight shimmer** (far cheaper than transmission; gated on the sun's
-  daylight ramp — until plan 020 on one shadow-map sample 2 m toward the sun,
-  which a node material cannot reach: node lights keep their shadow map to
-  themselves, so a crown behind a building now glows too).
+  ~23 M. No backlight glow (see *Backlit crown shimmer and translucency*
+  under rejected).
 - **The coarse level's trees** `≈ assumed` (2026-10-05) — each terrain level carries
   its own trees. The fine level draws every tree (the tiers above). The
   coarse level, which the tile renderer shows wherever the fine one is
@@ -3363,14 +3460,25 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   | rustication | 0.528 (143) | 0.517 (70) | **no** |
   | panel joints | 0.466 (334) | 0.505 (154) | **no** |
 
+  **Each opening on its own** (2026-11-06): the fetch also keeps every
+  window-sized opening an image saw whole (`op`, `facade_traits.openings`:
+  its place, width, height and how full its head's corners are). Their
+  median width and height and the median of each one's width over its
+  height (`ow`, `oh`, `oprop`) agree between two drives far better than
+  the profiles' duty on the height and the proportion: ρ 0.69, 0.71 and
+  0.76 against 0.70, 0.59 and 0.65 (Dresden's tiles pooled, 141 walls),
+  and the model takes them first. The head (straight, a segmental or a round arch) agrees at
+  ρ 0.67 but is not drawn: of five Dresden walls it read as round, two had
+  round arches and three straight windows behind half-drawn blinds.
+
   A wall gets a **model** where at least two images found an axis period
   and 60 % of them lie within 15 % of their median, the period is a window
   rhythm (1.8–4.8 m: not a stucco band, not its double) and the grid is
   regular or loose — no window on a wall without that measurement: the
   axis spacing; the window's width measured (0.7–2.2 m, a 0.6 m pier
-  kept) and its height from the measured proportion (0.8–2.4 m), else
-  Dresden's medians (width 0.44 of the axis, width over height 0.77); the
-  storey where measured (2.8–4.6 m); ornament where the texture is in
+  kept: the openings' own, else the profiles') and its height from the
+  measured proportion (0.8–2.4 m), else Dresden's medians (width 0.44 of
+  the axis, width over height 0.77); ornament where the texture is in
   the upper third. `dlm/windows_<t>.json` (per Building, per wall: the
   wall's base points, its eave, images and sequences, every trait, the
   model; the tile's ρ table; credited to Mapillary, CC BY-SA 4.0); a tile
@@ -3398,16 +3506,31 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   in a walk-up, 0.5 m in a house, 0.45 m in a block (at most 2.4 / 1.8 /
   1.45 / 1.6 m), the sill 0.85–0.9 m over the floor; a measured height
   scales that by its share of the type's median (the photos read
-  openings short — the reveal's shade, curtains —, a town house's 1.63 m
-  median against the 2 m its storeys give). A measured rhythm is drawn
+  openings short — the reveal's shade, curtains —, a town house's 1.79 m
+  median against the 2 m its storeys give; 1.63 m from the profiles
+  until 2026-11-06). A measured rhythm is drawn
   towards its type's (`TOWARD_TYPE`: the ratio to the type's value to a
-  power, bounded — the axis ^0.75 within 0.75–1.35, the width ^0.5
-  within 0.8–1.25, the height's share ^0.5 within 0.85–1.2): one wall's
-  reading is noisy (ρ 0.64–0.67 between two drives), and a row of houses
-  whose windows differ by half reads restless (Königsbrücker Straße's
-  measured widths ran from 0.78 to 1.97 m side by side). The storey
+  power, bounded — the axis ^0.75 within 0.75–1.35, the width and the
+  height's share ^0.8 within 0.65–1.5): the axis is noisy (ρ 0.67 between
+  two drives) and a row of houses whose axes differ by half reads
+  restless, but the window read off each opening keeps most of its own
+  size and shape — until 2026-11-06 it was held within a fifth of its
+  type's (width ^0.5 within 0.8–1.25), and every house's windows came out
+  alike. The Detailansicht names the form: *hochkant* (width under 0.8 of
+  the height), *quadratisch*, *liegend* (from 1.25) or *Band* (lying and
+  three quarters of its axis wide; `windowForm`). The storey
   snaps so that a whole number of floors reaches the eave (OSM's levels
-  first, else the photos', else the height's estimate), and is written
+  first, else the neighbours' storey, else the height's estimate) — never
+  the photos' storey: the row profile's period reads short (the reveal's
+  shade, a sill band, a Kniestock's row), and on Dresden's measured walls
+  of buildings OSM counts it gave the right number of rows on 47 % and
+  one too many on 42 %, the neighbours' storey 74 % and 9 % (2026-11-06;
+  until then it decided wherever OSM counts none). Where OSM's count
+  itself seems to hold the attic (a storey far lower than the
+  neighbours'), it stands: of the Dresden houses checked in street
+  photos most counts were right (new houses of 2.75 m storeys among
+  Gründerzeit ones), and where the attic was counted it was a mansard
+  that LoD2 draws as upright wall up to its break. The storey is written
   into the object's row before the plinths and shopfronts read it. A
   town house gets a Fasche round each window and a raised ground floor
   (its windows 0.45 m higher, their heads where the upper floors' are),
@@ -3642,7 +3765,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   shared with the tram stops of plan 024). The clocks' hands show the
   **scene time**: two hand quads per face, turned in the vertex shader from
   one shared uniform that `setSun` updates on the minute only
-  (`setClockTime`); the hands (a soft slate, not black) never cast, so
+  (`clockMinutes`, `scene-environment.ts`); the hands (a soft slate, not black) never cast, so
   the shadow map is not redrawn for them. All in the furniture's soft
   pastels: nothing near-black, no fine detail. The re-bake leaves every earlier object byte-identical (checked
   per tile); the new kinds are appended. Look unverified on a GPU.
@@ -3711,8 +3834,8 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   a faint glow from below and the jets a faint warm white, and a
   fountain's sculpture is lit softly from its basin (until 2026-10-20 a
   glow and jets bright enough to outshine the lit streets, "viel zu hell",
-  the maintainer) (`setFountainTime`,
-  `setFountainNight`, one shared clock and night factor). Merged/instanced,
+  the maintainer) (`setFountainTime` and the scene's `sceneNight`, one
+  shared clock and night factor). Merged/instanced,
   nine draw calls per tile at most (eight until 2026-10-21). Not walk-blocking (collision is
   buildings only).
   **What a monument is, from OSM** (2026-10-08): the DLM's Denkmal,
@@ -3744,7 +3867,10 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   `data/_raw/<provider>/wikidata/monuments_<t>.json`, Stolpersteine left
   out; the item of the monument's name within 40 m, else the nearest
   within 10 m): 15 on Dresden, the Goldener Reiter's copper and gold leaf
-  among them, `wikidata` naming the item on the card. The viewer turns
+  among them, `materialWikidata` naming the item on the card. Since
+  2026-11-05 (plan 081) a monument OSM links to its item (`wikidata`,
+  which now always means OSM's link) takes that item first, whatever
+  the distance, and no neighbour can claim it. The viewer turns
   the material into a muted tone in the clay's palette (`MATERIAL_TONE`,
   `markerTones`: warm sandstone, grey granite, bronze's dark green-brown
   patina, copper's verdigris, a soft gold): the figure takes the most
@@ -3822,14 +3948,15 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   block node is ~1 m across (`r`), not the 2.2 m basin; a point fountain
   inside a LoD2 footprint moves out within 3 m or is dropped (Dresden
   3 / 2, München 6 / 6). The jets run mid-April to October
-  (`fountainsRun`, one shared uniform, `setFountainSeason`). Scratch
+  (`fountainsRun`, one shared uniform, `fountainsOn` in
+  `scene-environment.ts`). Scratch
   bakes, HEAD code → this: forms Dresden 275 → 321, Hamburg 172 → 184,
   München 197 → 222; reliefs München 34 → 54, Dresden 82 → 88; `hm`
   Dresden 25, Hamburg 17, München 11.
 
 ### Railway & bridges
 All baked by `pipeline/bake/rail.py`, built **per fine terrain tile** in
-`app/_components/rail-layer.ts` (Y-up, part of the tile's dressing) on the
+`app/_components/rail-layer.ts` and, the bridges, `bridge-layer.ts` (Y-up, part of the tile's dressing) on the
 cross-tile `heightAt` over every loaded terrain, so tracks don't truncate at
 seams (until [ADR 0024](./adr/0024-site-streams-as-3d-tiles.md) it was built
 once for the fixed block). Replaces the old "brown smear". All geometry is
@@ -4162,7 +4289,7 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   Waldschlößchenbrücke 3 m low and rail decks up to 6 m high; per-tile
   ground — seam bridges drawn twice at two heights; see 🗃️.)*
   **The deck on its measured line** `= computed` (2026-10-20,
-  `rail-layer.ts` `onLine`, `splitDeckTop`; `lib/city/decks.ts`
+  `bridge-layer.ts` `onLine`, `splitDeckTop`; `lib/city/decks.ts`
   `deckLine`): the bake writes the deck's top every 2 m along its axis
   (`line`), but the viewer drew it from the ring's few corners — a long
   outline has four to a dozen — as flat triangles between them, which cut
@@ -4194,7 +4321,7 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   ground, a ramp runs out at the kind's grade (road 8 %, path 10 %, rail
   3 %) to where it meets the ground, column by column across the end (≤ 2 m
   apart), within 40 m (`lib/city/bridge.ts` `approachLanding`,
-  `rail-layer.ts` `approaches`): the deck's own top colour, the fascia's
+  `bridge-deck.ts` `approaches`): the deck's own top colour, the fascia's
   sides and soffit as deep as the deck (*Deck depth* below; 1.1 m until
   2026-10-21). None where the deck runs on onto another
   deck, where most of the end finds no ground in reach (a deck over a
@@ -4240,7 +4367,7 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   two within 3 m merge). Only a bridge whose class stands above its deck
   (arch, truss, suspension, cantilever, cable-stayed — Wikidata over OSM)
   keeps its ribs: over a beam bridge DOM1 sees catenary, trains and trees.
-  At runtime (`rail-layer.ts`, `lib/city/bridge.ts`): on an **arch** bridge
+  At runtime (`bridge-layer.ts`, `lib/city/bridge.ts`): on an **arch** bridge
   the tightest rib that fits a parabola (rms ≤ 1.5 m, sag ≥ 2 m, crown
   inside the run) gives its curve to every rib that follows it (the raster
   sees one side of the Waldschlößchenbrücke patchily), drawn as a steel arch
@@ -4345,7 +4472,7 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
 - **Viaduct columns** `≈ assumed` (2026-10-21, V17) — a railway beam deck
   longer than 100 m stands on paired 0.6 m columns under its edges every
   ≤ 13 m with a crossbeam under the girder (`lib/city/bridge.ts`
-  `beamSupports`, `rail-layer.ts` `addColumnPair`; Hamburg's U3 runs on
+  `beamSupports`, `bridge-layer.ts` `addColumnPair`; Hamburg's U3 runs on
   them every 10–15 m); over the stretches the class raster calls water
   (`water`, baked) a pier on the axis at every other station (≤ 26 m), and
   a fairway it crosses kept open between two piers (`fairwayOpening`).
@@ -4356,7 +4483,7 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   bridges (no measured steel arch) keep the 0.85 m ashlar wall; every other
   gets an open steel railing: a 0.2 × 0.3 m kerb flush with the fascia,
   posts every 2.5 m and a top rail 1.1 m over the deck (`lib/city/bridge.ts`
-  `parapetStyle`, `rail-layer.ts` `addRailing`); none where a frame stands
+  `parapetStyle`, `bridge-layer.ts` `addRailing`); none where a frame stands
   on the edge. Railing against ashlar: Dresden 117 / 19, Hamburg 305 / 43,
   München 44 / 16, Leipzig 38 / 3, Meißen 13 / 4, Unna 10 / 1, Grimma
   4 / 2.
@@ -4685,7 +4812,9 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   1.5 m — 2.5 m in a pedestrian area: `highway=pedestrian` or an
   `area:highway` outline within 1 m of its middle; 2026-10-21, it was
   2.5 m everywhere), `z` = the two
-  landing heights from the DGM 1 m beyond each end (3×3 m median), `n` from
+  landing heights from the DGM 1 m beyond each end (3×3 m median; the
+  committed DGMs around the tile mosaicked, so a flight across a seam keeps
+  both landings — 2026-11-04, before that both tiles dropped it), `n` from
   `step_count` when its riser is 8–25 cm, else rise ÷ 16 cm. Indoor,
   underground, tunnel and bridge flights and anything flatter than 30 cm are
   left out. Where the DGM lacks the structure a flight climbs (less than
@@ -4743,7 +4872,7 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   buildings and coarse ground, tiles in use the memory governor cannot
   free): at a seam with the sun behind the player, the neighbour's
   buildings cast no shadow until the view loads that tile;
-  the map has no colour target (`DepthOnlyShadowNode`, three r187's
+  the map has no colour target (`RingShadowNode`, three r187's
   depth-only render target). Full recipe and dead-ends in the
   [city-walker skill](../.claude/skills/city-walker/SKILL.md).
 - **Sky-view factor** `= computed` (*Himmelslicht*, plan 033) — the committed DGM1 with
@@ -4765,7 +4894,7 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   the wall too) and faded to 1 toward the eaves — a courtyard's ground floor
   dims, its eaves and every roof do not. The raster is shared by a tile's
   terrain (both levels) and its buildings, refcounted
-  (`shared-rasters.ts`); the clay binds a white texel until it lands.
+  (`tile-rasters.ts`); the clay binds a white texel until it lands.
   Where a LoD2 roof was rebuilt from DOM1 (ADR 0036) the rebuilt parts are
   burned instead, as the city mesh draws them. **The crowns count half**
   (2026-10-21, `CROWN_TRANSMISSION` 0.5): the crowns the viewer draws
@@ -4862,7 +4991,7 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   depth, 8–28 m; without GLO-30 the site's p90 − p2 as before. Unna
   28 → 12.4 m (a one-sided slope below the Haar is no valley, 🗃️ below),
   Munich 15.1 → 10.9 m, the rest unchanged. Not yet judged on a real GPU.
-- **River mist** `❝ taken` `≈ assumed` — DLM water mask (the painted splat's alpha) → a drifting,
+- **River mist** `❝ taken` `≈ assumed` — seen along the water only, gone as the eye looks down on it; DLM water mask (the painted splat's alpha) → a drifting,
   sun-lit mist sheet over the Elbe, always on. None within 120 m of
   the eye, full from 1.2 km, at most 24 % opaque and only 30 % of the way
   from the sky's tint to white (it was full from 90 m at up to 62 % and
@@ -5095,7 +5224,7 @@ GPU**.
 - **The bridges' surfaces** `≈ assumed` — a bridge was one flat colour per part (a
   pale slab over the river). The deck's top now carries its frame — the
   station and offset on the axis and the outline's edges there, a vertex
-  attribute (`aDeck`, `rail-layer.ts` `addDeckFrame`; the top split to
+  attribute (`aDeck`, `bridge-layer.ts` `addDeckFrame`; the top split to
   triangles of ≤ 6 m, `splitDeckTop`, since a curved deck's triangulation
   joins vertices up to 190 m apart and the frame is exact only at them)
   — and its material
@@ -5246,22 +5375,11 @@ research that produced them):
    disc of the same area; before, it was the distance to the mass's edge at
    the peak, which read a lone crown from a peak off its centre and a
    group's at its narrowest.)*
-7. **Cascaded Shadow Maps** — the one shadow limit the skill calls unsolved (long
-   low-sun shadows clip the 110 m frustum). *Amended 2026-09-25:* the baked
-   horizon (✅ above, [ADR 0009](./adr/0009-shadow-recipe.md))
-   now casts the long shadows past the frustum onto the ground — the far
-   field's and, beyond the frustum, the next building's — for a few texture
-   fetches; what CSM would still add is the middle distance's *shape* (a
-   tree's or a facade's shadow past the frustum, at 8 m and 22.5° the
-   horizon only has its angle, on facades too). Since the move to
-   WebGPURenderer + TSL ([ADR 0027](./adr/0027-webgpu-renderer-and-tsl.md),
-   plan 020 in [completed.md](./plans/completed.md)) three's
-   `CSMShadowNode` is available without shader patching — still a depth
-   pass per cascade on every sun or camera move, and its own decision.
-   *Amended 2026-10-31:* from the air the one map is warped over the view
-   (LiSPSM, [ADR 0009](./adr/0009-shadow-recipe.md)) and casts shapes
-   out to most of the fog's reach, facades included, without a second
-   map; on foot the limit stands.
+7. **Cascaded Shadow Maps** — *shipped as four concentric rings*
+   ([ADR 0009](./adr/0009-shadow-recipe.md)): shapes out to 2.2 km on foot and
+   from the air, on a phone in the bytes of its one map. Past the widest ring
+   the baked horizon (✅ above) casts the long shadows onto the ground. What is
+   left of this idea is virtual shadow maps, once three has multiview.
 8. **Adaptive resolution while moving** — *partly shipped*: DoF is skipped
    while the camera moves (`lib/city/regression.ts`, plan 007; a phone
    builds no DoF at all, ADR 0047). AO is **not**
@@ -5337,9 +5455,12 @@ research that produced them):
 | Idea | Why rejected | Caveat |
 |---|---|---|
 | **A depth-of-field switch and manual focus** (*Tiefenschärfe* on/off, *Fokus: Automatisch / Manuell* with a *Fokusdistanz* slider, 1–3 000 m, drawn as a ring on the minimap; until 2026-10-10) | The maintainer chose fewer settings: the depth of field must stay, but it need not be parametrised. | DoF is always on where it is built (desktops; a phone builds none, [ADR 0047](./adr/0047-phone-memory-budget-in-true-bytes.md)), focused on the crosshair; it still rests while moving, in the graphic styles and in Modell (two prebuilt pipelines, [ADR 0009](./adr/0009-shadow-recipe.md)). An old snapshot's `dof`, `focusMode` and `focusDistanceM` are ignored. |
+| **An artistic depth-of-field ramp** (sharp to fully blurred over 1.6 × the focus distance, at least 45 m; until 2026-11-06) | The maintainer found it too strong, and it snapped on the moment the camera stopped: the half-resolution blur reached its full mix halfway up the ramp, so everything past about twice the focus lost its detail whatever the distance. | A thin lens with the view's angle and a 50 mm's opening at f/1.8 (`lib/city/lens.ts`): a far focus leaves the city nearly sharp and blurs what stands near, a near one softens the city, and the blur grows in over 700 ms after a stop ([ADR 0009](./adr/0009-shadow-recipe.md)). |
+| **The view's own lens at f/1.8, drawn by three's `DepthOfFieldNode`** (a 23 mm, 13 mm across, the blur capped at 8 px; 2026-11-06 to 2026-11-09) | The maintainer saw no depth of field: a tree 6 m ahead blurred by under a pixel with the focus down the street, the node mixed a blur in by its share of the widest (a fifth of the widest showed two fifths blurred), and with nothing under the crosshair the focus stayed on a point the camera had passed (1 m). | The opening of a 50 mm (28 mm), a cap of 2.5 % of the frame's height, an own gather that draws each circle as wide as the lens makes it (`lens-blur.ts`), the sky's focus when nothing is hit. |
 | **A river-mist slider** (*Flussnebel*, until 2026-10-10: the sheet's strength 0–100 %, the sheet hidden at 0) | The maintainer chose fewer settings: the mist stays, but it is not something to tune. | The sheet is always drawn, at the slider's default (60 %: at most 24 % opaque, `MIST_OPACITY`). An old snapshot's `waterMistPct` is ignored. |
 | **Leaf flutter** (*Blattflimmern*, until 2026-10-10: small world-space value-noise specks, two octaves at ~1–2 m cells drifting with the wind, blending sunlit, sun-facing crowns toward a paler silver-sage "underside" with a faint glint; and its companion slider *Windhelligkeit*) | The maintainer chose fewer settings, and the twinkle was not free: two `leafNoise` calls — eight `sin` hashes — on every crown fragment. | The sway-coupled brightness stays, fixed at its slider's default (`GUST_BRIGHTEN`, 0.09 = 50 % of 0.18); it rides on the sway's gust signal, not on the twinkle. An old snapshot's `leafFlutterPct` and `leafBrightPct` are ignored. |
-| **The look's sliders** (25 of the HUD's 26 percent sliders, until 2026-10-10: *Talnebel*, *Tiefenfärbung*; the buildings' *Boden-Verlauf*, *Höhenlinien*, *Streiflicht*, *Farbvariation*, *Dachfarbe*, *Dachsättigung*, *Traufkante*, *Gliederung*, *Fenster*, *Fassadenbild*, *Abendlicht*, *Materialstreuung*; *Bodendetail*, *Stadtgrün*, *Wiesenfärbung*, *Gegenlicht-Schimmer*, *Blattdurchscheinen*; *Kontaktschatten*, *Himmelslicht*, *Ferne Schatten*, *Spiegelung*, *Papierkorn*, *Tuschelinien*) | The maintainer chose fewer settings ("we don't need many of the settings anyway", plan 073). A slider cost the GPU almost nothing — a uniform multiplier; every term ran at any value, 0 included — but each was a table row, a store value, a snapshot key, a writer in its owner and a guide line in two languages. | Every term stays, at its slider's default, as a named constant beside it in its owner (`TINT`, `WINDOWS`, `GROUND_DETAIL`, `SKY_VIEW`, `VALLEY_HAZE`, `AO_EXPONENT`, …), so the default picture is unchanged; the depth grading, paper grain, ink and valley haze keep their uniforms, which a picture style or Modell writes. *Nebel* and the multi-tuft switch stay. Tuning a term is a code change, judged by snapshots of place and time ([ADR 0018](./adr/0018-lite-profile-for-headless-tests-real-gpu-for-visuals.md)). An old snapshot's keys (`tintPct`, `windowsPct`, …: `RETIRED_SNAPSHOT_KEYS`) are ignored and never reused. The measured follow-up: delete what now runs at a fixed 0 (the glass sheen and the gilding's and fountain water's stand-ins under full *Spiegelung*; the river's went with its mirror, 2026-10-25) and tier-gate the costly terms (windows, facade reading, ground detail) on phones. |
+| **The look's sliders** (25 of the HUD's 26 percent sliders, until 2026-10-10: *Talnebel*, *Tiefenfärbung*; the buildings' *Boden-Verlauf*, *Höhenlinien*, *Streiflicht*, *Farbvariation*, *Dachfarbe*, *Dachsättigung*, *Traufkante*, *Gliederung*, *Fenster*, *Fassadenbild*, *Abendlicht*, *Materialstreuung*; *Bodendetail*, *Stadtgrün*, *Wiesenfärbung*, *Gegenlicht-Schimmer*, *Blattdurchscheinen*; *Kontaktschatten*, *Himmelslicht*, *Ferne Schatten*, *Spiegelung*, *Papierkorn*, *Tuschelinien*) | The maintainer chose fewer settings ("we don't need many of the settings anyway", plan 073). A slider cost the GPU almost nothing — a uniform multiplier; every term ran at any value, 0 included — but each was a table row, a store value, a snapshot key, a writer in its owner and a guide line in two languages. | Every term stays, at its slider's default, as a named constant beside it in its owner (`TINT`, `WINDOWS`, `GROUND_DETAIL`, `SKY_VIEW`, `VALLEY_HAZE`, `AO_EXPONENT`, …), so the default picture is unchanged; the depth grading, paper grain, ink and valley haze keep their uniforms, which a picture style or Modell writes. *Nebel* stays (the multi-tuft switch stayed too, until 2026-11-06: see *The near crowns' switch*). Tuning a term is a code change, judged by snapshots of place and time ([ADR 0018](./adr/0018-lite-profile-for-headless-tests-real-gpu-for-visuals.md)). An old snapshot's keys (`tintPct`, `windowsPct`, …: `RETIRED_SNAPSHOT_KEYS`) are ignored and never reused. The measured follow-up: delete what now runs at a fixed 0 (the glass sheen and the gilding's and fountain water's stand-ins under full *Spiegelung*; the river's went with its mirror, 2026-10-25) and tier-gate the costly terms (windows, facade reading, ground detail) on phones. |
+| **The near crowns' switch** (*Multi-Tuft-Kronen (nah)*, `look.multiTuft`, until 2026-11-06) | Maintainer review (2026-11-06): it should always be on; no setting needed. Off, it only swapped the near crowns for the cheap ones — a look nobody chose. | Removed: the rich crown is always allowed within the site's rich budget (`RICH_TREE_BUDGET`, a phone's `PHONE_RICH_TREE_BUDGET`). With it the cadastre's own silhouettes left their separate distance swap and joined the chunks' plan, so they now count against the same budget (a phone's included). The key is retired (`RETIRED_SNAPSHOT_KEYS`). |
 | **See-through buildings** (*Transparenz*, until 2026-10-10: the clay's opacity hash-dithered, `alphaHash`, up to 90 %, in the opaque pass) | The maintainer chose fewer settings. It was a second build of the clay's graph — compiled in the frame the slider first left 0 — and every crossing of 0 redrew the shadow map, for a look that judges nothing in the city. | The clay is always opaque; an old snapshot's `transparencyPct` is ignored. To see what a building hides, demolish it (`R`) or cut the model open (Modell's *Ausschnitt*). |
 | **The hidden soundscape** (plan 035, 2026-09-26 → 2026-10-10: wind, the city's hum, the Elbe, leaves, birds, crickets, fountains, footsteps by paving, a tram bell and the hour struck from the bell towers, all synthesized with WebAudio behind the **L** key and the *Klang (experimentell)* switch; `app/_components/soundscape/`, `lib/city/soundscape.ts`; the towers baked by `pipeline/bake/soundmarks.py` → `soundmarks_<tile>.geojson`) | Removed at the maintainer's decision (2026-10-10) to cut code and maintenance: about 3 000 lines, a bake and a tileset column for a feature that never shipped audibly — none of it was ever listened to (plan 019's listening pass stayed open). | Engine, switch, bake and committed files all went; the viewer creates no `AudioContext`. Revive only with a listening pass first, from git history (`5b59b79`). |
 | **Sports-ground lines beyond a desktop's fine level** (until 2026-10-06 on both levels on every device; until 2026-10-10 on a phone's fine level and a desktop's coarse level too: `sport_<t>.png` read there, `sport-ground.ts` in that level's colour node) | The index raster is a 2048² RGBA texture, 16 MiB on the GPU for a PNG of a few dozen kB, per tile that reads it (14 of Dresden's 15 tiles have grounds) — on a phone against a 336 MiB tile cache ([ADR 0047](./adr/0047-phone-memory-budget-in-true-bytes.md)). Beyond the fine level a pitch is a few pixels and its lines a pixel or less; on a phone the lines were the price of a sixth of a fine tile's rasters. A pitch then shows its land-cover class (`readsSportGrounds`; the level builds the shared variant without the slot); the goals and nets come from the table and stay. | A 1024² phone twin of the raster (`sport_low`, as `markings_low`) would bring the lines back on a phone at a quarter of the cost; it needs a bake and a look on a GPU. |
@@ -5368,6 +5489,7 @@ research that produced them):
 | **Invented or imported landmark geometry** (hand-modelled landmarks per city, glTF models from 3D warehouses, a stock spire or dome by type) | Not repeatable for the next city, a licence per model, and a detailed model breaks the clay style next to LoD2 boxes. | Geometry beyond LoD2 comes only from a measurement confirmed by a name ([ADR 0036](./adr/0036-lod2-roofs-that-miss-the-scan-are-rebuilt.md)). |
 | **Landmark roof relief as stacked slabs** (plan 050 as first built: the excess over the highest LoD2 roof cut into ≥ 2 m bands, at most 8, each band's smoothed outline extruded as a flat slab — a contour model) | A spire LoD2 cuts short became a stepped pyramid (Unna's Stadtkirche: LoD2 stops at 137 m, the surface model at ≈ 178 m) and the Elbphilharmonie's crests a flight of terraces — the plan's own STOP ("reads as a stack of plates"); 508 slabs on 74 objects in the first bake. | Replaced by the measured height field on the 1 m grid, lightly smoothed, built as one surface with corner heights averaged (✅ *Landmark roof relief*). Still no invented smooth roof: every height is a surface-model cell. |
 | **Rebuilt roofs as stepped flat blocks only** (ADR 0036 as first built, 2026-10-01 → 2026-10-03: every region of 1 m height bands at its median, a prism each) | Right for the flat complexes the gate was made for, wrong for every roof it caught that is not flat: the Frauenkirche's dome (its LoD2 part ~5 m under the scan, so rebuilt) became four stacked drums, the Hauptbahnhof's arched train shed a staircase of 52 ledges, the Schauspielhaus's hipped roofs contour lines — the relief's lesson again ("a stack of plates"). | Replaced by the measured faces (✅ *Roofs rebuilt from DOM1*): the same objects, flat levels where the scan is flat, its surface where it slopes or curves. |
+| **Rebuilt roofs' faces as the smoothed scan** (ADR 0036, 2026-10-03 → 2026-11-06: every face the scan's surface, two edge-preserving Gaussian passes) | Tiles, dormers, skylights and the metre of blur at every edge read as a crumpled blanket over ordinary pitched roofs, and gable flanks too narrow for a face as a flight of terraces with a wavy step: An der Frauenkirche 5's ring of roofs looked like a dune. | Replaced by the plausibility rule (✅ *Roofs rebuilt from DOM1*): planes, an extruded profile, or the scan only on a landmark. |
 | **Rebuilt roofs with strips and grid-edged outlines** (ADR 0036, 2026-10-03 → 2026-10-19: any part ≥ 20 m² wider than a cell or two drawn on its own, borders on the 1 m grid simplified at 1 m) | The strips a few metres wide (a parapet run, the ledges along a vault's eaves, a mansard's terraces, plant rooms) stood as boxes of their own height, and every border diagonal to the grid as a staircase of 1 m walls: the Hauptbahnhof, the Prager Spitze and An der Frauenkirche 5 read as heaps of blocks. | Replaced by the 2026-10-19 update (✅ *Roofs rebuilt from DOM1*): a part holds a disk 7 m across or joins a neighbour within 3 m; outlines from a 2 m majority, simplified at 2 m. |
 | **A lathed column for every mapped tower** (plan 050 as first baked: `man_made=tower`, `lighthouse` and `water_tower` measured like masts and chimneys) | Where LoD2 has a roof over the mapped foot it draws the tower already; the column stood inside it and doubled it — Meißen's cathedral towers (81/83 m), Grimma's churches, 13 of 14 towers in Munich. | `BUILT_TOWERS` under a LoD2 roof are skipped; a mast or chimney on a roof is not in LoD2 and stays. |
 | **Every Basis-DLM rail at street level** (the rail layer before 2026-09-30) | The DLM files subways and S-Bahn trunk lines as ordinary railway lines: Munich's U-Bahn (23 km) and the S-Bahn trunk line (4.2 km) ran across the Marienplatz and the Odeonsplatz as broken track, and OSM's U-Bahn platforms lay on the squares above them. | A stretch within 2 m of a DLM tunnel (`BWF=1870`) for > 15 m is cut; OSM platforms and tram ways below ground are skipped. |
@@ -5382,10 +5504,11 @@ research that produced them):
 | **Building era** (colour by construction year; plan 027 phase 3) | Coverage: OSM carries `start_date` on 52 and `year_of_construction` on 12 of 8 310 building outlines in the four first tiles, measured 2026-09-25 (0.8 %, far under the plan's 30 % bar). No official source is reachable: the LfD Sachsen heritage layer (INSPIRE WMS `iwms_gsz_schutzgebiete`, *Kulturdenkmale_Flaeche*) answers GetFeatureInfo with designation and name but no dating, its WFS paths are refused (403); the Denkmalliste's dating lives only in its web app, per object; Dresden lists its Kulturdenkmale among the themes without an open dataset (2026-09-25). | Revisit with an official Baualter dataset (the city's, or ALKIS `baujahr` where a Land fills it); listed buildings alone would colour only the monuments. |
 | **Allotment bed bands** (plan 028 as first shipped: 1.2 m soil/green/grass stripes per ≈12 m jittered-Voronoi plot over a NEAREST colony-id raster) | Maintainer feedback on a phone (2026-09-25, 33410_5658 from ≈180 m up): the colony's edge and its carved paths showed the 1 m raster's staircase, and the flat pale stripes read as a rendering glitch, not as gardens. | Replaced by a baked signed distance (LINEAR, a soft wandering edge) and analytic plots — soft greens, thin soft paths, a few warm beds, flower dots — box-filtered and faded with distance (✅ *Cultivated land*). Keep cell ids off any boundary the eye can see. |
 | **Orthophoto for facade colour** | Nadir DOP only sees roofs — no facade data. | DOP for **roofs** is fine and is now the 🧪 entry above. |
-| **Plain foliage translucency** | Reads as "noise" at instance distance. | Only OK if **shadow-gated** (kept as the shimmer transform). Since plan 020 the gate is the sun's daylight ramp plus the near/large-crown limit (a node material cannot sample the sun's shadow map) — judge on a GPU whether the noise returns. |
+| **Plain foliage translucency** | Reads as "noise" at instance distance. | Superseded by the next row: the shadow-gated version went too. |
+| **Backlit crown shimmer and translucency** (until 2026-11-06: a warm emissive glow `pow(back, 3.6)` and a broader green one `pow(back, 1.6)` on near or large crowns wherever the eye looked towards the sun, gated on the daylight ramp only since plan 020 — a node material cannot sample the sun's shadow map) | Maintainer review (2026-11-06): against the light a crown went brighter over its whole face, evenly, so it read flat and odd instead of shining through. | Removed, no replacement: a crown against the light is lit as the sun and sky light it (its occlusion, its sunlit rim). The crown material lost its emissive node and a varying. Revisit only with a real light-through term (depth through the crown), never an even glow. |
 | **VSM shadows** | "Corduroy"/grid rings on large ground at grazing sun. | Use `PCFShadowMap` + radius instead. |
 | **Large `normalBias`** | Bright peter-panning contact strip. | Keep `normalBias=0`, small negative `bias`. |
-| **Bigger shadow frustum / 4096 map** | Coarser texels → fraying / cost without gain once radius softens. | Tight ~110 m frustum at 3072 + radius (121 m on foot since 2026-10-11, paired with a 30 m dead zone: the same reach, a third fewer redraws, texels 10 % coarser — [ADR 0009](./adr/0009-shadow-recipe.md)'s update). |
+| **Bigger shadow frustum / 4096 map** | Coarser texels → fraying / cost without gain once radius softens. | Concentric rings of 2048 + radius ([ADR 0009](./adr/0009-shadow-recipe.md)); until 2026-11 a tight frustum at 3072 (121 m on foot since 2026-10-11, paired with a 30 m dead zone: the same reach, a third fewer redraws, texels 10 % coarser — [ADR 0009](./adr/0009-shadow-recipe.md)'s update). |
 | **Sobel / deferred outlines** | Hard edges clash with the watercolor look. | The asked element's outline (✅ *The outline*) is not one: a single soft silhouette of one element, on demand, never the scene's edges. |
 | **The pencil loop** (plan 052 phase 4's first mark: a wavering graphite stroke on a band of paper, once round and a little past, on the ground around an asked tree or monument and along a deck's parapets; `lib/city/pencil.ts`, `pencil-mark.ts`) | Maintainer review (2026-10-01): which element is selected should read more strongly. A ring on the ground says "here", not "this" — beside a crown among crowns, or along a deck seen from below, it did not name the element; and a building, hatched only, had no line at all. | Replaced by one screen-space outline for every kind (✅ *The outline*), in the same graphite and paper. |
 | **Selective bloom, quad leaf billboards** | No payoff yet for the cost. | Revisit only with a concrete need. |
@@ -5401,7 +5524,7 @@ research that produced them):
 | **Per-tile ground for bridge decks** | The rasters stopped at the tile edge (sampling clamped there), so a deck across a seam got two different profiles — and both tiles drew it: two decks metres apart (Schlachthofbrücke). | A DGM/DOM mosaic around the tile; the owner draws, every copy lifts rails. |
 | **`ver06_f`-only bridge decks** (rail v2 first cut) | `ver06_f` has area polygons only for (mostly rail) major spans → road/path bridges (Augustusbrücke etc.) vanished + everything mis-classified rail. | Drive from the **complete `ver06_l`** set, footprint from `ver06_f` where matched. |
 | **Motion-gated SSAO** (plan 007 as first shipped) | The contact shadows blinked on every footstep — reads as a bug, not a saving. | The AO pass runs permanently at half resolution (N8AO's `halfRes` then, GTAO since plan 020); only DoF is dropped while moving ([ADR 0009](./adr/0009-shadow-recipe.md)). |
-| **Cloud shadows / per-frame shadow updates for wind sway** | Would force the 3072² depth pass every frame over tens of thousands of trees, undoing the on-demand shadow map. | Sway and cloud drift run in the main pass only; the cast shadow stays static ([ADR 0009](./adr/0009-shadow-recipe.md)). |
+| **Cloud shadows / per-frame shadow updates for wind sway** | Would force the rings' depth passes every frame over tens of thousands of trees, undoing the on-demand shadow map. | Sway and cloud drift run in the main pass only; the cast shadow stays static ([ADR 0009](./adr/0009-shadow-recipe.md)). |
 | **Multi-echo ratio as the low-vegetation cue** (LSC, low vegetation) | Measured: only 26 % of OSM-hedge pixels reach echo ≥ 0.5, fences 56 % (AUC hedge-vs-fence 0.28); recall 25 % of observable hedge length vs 58 % for the NDVI + intensity rule. | Keep it as the *tall*-vegetation cue (100 % of > 5 m forest vs 3 % of roofs) and as a qualifier of intensity. |
 | **Blob-wide "multi-echo ≈ 0" for small structures** (plan 034 as planned) | A shed's roof edge splits the pulse (part roof, part ground), so no blob's multi-echo share is ≈ 0: 4 blobs on the spawn tile at ≤ 0.05, 43 at ≤ 0.10 (median over all band blobs 0.93); the interior share admits 377, 112 of them against tree crowns. | The rule works per cell: no multi-echo return in a cell's 3 × 3 window, the rim grown back after (the ✅ "Small structures from the laser scan"). |
 | **OSM scrub polygons filled with shrubs** (OSM-only tiles) | A jittered 3–4 m grid gave 4–9 k shrubs per neighbour tile — more than the laser scan finds on the primary — mostly under existing crowns. | OSM-only tiles get the OSM hedges only. |
@@ -5409,7 +5532,7 @@ research that produced them):
 | **Shrubs** (LSC blobs + OSM `natural=shrub` nodes, 3 226 on the primary) | Same crown-rim false positives, and the lobed dome reads as a faceted grey "boulder" at arm's length. | Kept in the bake behind `--research`; a better shrub shape is shape polish, not data. |
 | **Camera-follow grass tuft ring** | Shadow-casting instances rewritten every frame; reads as confetti. | Meadow mottle + normal perturbation in the terrain shader (✅ above). |
 | **Per-lamp real point lights** | three bakes the light count into every program (since plan 020: every light into every lit node build's key) → a recompile storm on every add/remove, plus per-light cost. | A fixed pool of 3 real lights (1 on a phone) retargeted to the nearest heads; every other lamp is emissive + sprite ([ADR 0009](./adr/0009-shadow-recipe.md)). |
-| **Plain (non-shadow-gated) foliage translucency, quad leaf billboards, selective bloom** | Noise at instance distance / no payoff for the cost. | Shadow-gated shimmer + translucency only (✅ above; daylight-gated since plan 020, see *Plain foliage translucency*). |
+| **Plain (non-shadow-gated) foliage translucency, quad leaf billboards, selective bloom** | Noise at instance distance / no payoff for the cost. | None; the gated shimmer and translucency went too (*Backlit crown shimmer and translucency*). |
 | **Baked RGB splatmap** (`landcover_rgb_<tile>.png`: RGB = pastel palette, A = water coverage, plus a 2048² variant) | The look lived in the bake: a colour change meant re-baking every tile, and the palette was spelled three times (bake, minimap, shader fallback). Its alpha was data, so every resize had to split colour from alpha — sharp premultiplies alpha across a resize, which once turned every land texel black ([ADR 0010](./adr/0010-opaque-clay-buildings-only.md), superseding ADR 0010). | The bake writes class ids only; the one palette (`lib/city/landcover.ts`) is painted on the GPU at load. A per-fragment palette lookup was rejected too: class ids cannot be mipmapped, so far boundaries would alias. |
 | **Overpass-based OSM bakes** (lamps, platforms, bridge structure) | Live queries: rate-limited and not reproducible, and one more way of reading OSM next to the local extract the walls already used ([ADR 0037](./adr/0037-sites-providers-and-per-site-data.md)). | Every OSM layer comes from one local Geofabrik `.osm.pbf` via GDAL's OSM driver (`pipeline/bake/osm.py`). The committed lamp/platform/bridge-structure files still predate this; the next re-bake moves them (`data/dresden/provenance.json`). |
 | **Bash bakes** (`scripts/extract-*.sh` + Python/Pillow heredocs) | Three languages, string-built paths, tile names and CRS spelled per script; numpy and `gdal_calc.py` were missing, so raster maths was written around Pillow ([ADR 0037](./adr/0037-sites-providers-and-per-site-data.md)). | One package, `pipeline/bake/`, on numpy/rasterio/pyogrio/shapely in a uv environment, driven per site tile by `bun run bake`. |

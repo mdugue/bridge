@@ -10,7 +10,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { isBuiltin } from "node:module";
-import { dirname, relative, resolve } from "node:path";
+import nodePath from "node:path";
 
 const EXTENSIONS = [".ts", ".tsx", "/index.ts", "/index.tsx"];
 
@@ -24,7 +24,7 @@ const transpilerFor = (file: string) => (file.endsWith(".tsx") ? TSX : TS);
  *  run). */
 function importsOf(file: string, transpiler: Bun.Transpiler): string[] {
   return transpiler
-    .scanImports(readFileSync(file, "utf8"))
+    .scanImports(readFileSync(file, "utf-8"))
     .map(({ path }) => path);
 }
 
@@ -37,9 +37,9 @@ function resolveImport(
 ): string | null {
   let base: string;
   if (spec.startsWith(".")) {
-    base = resolve(dirname(from), spec);
+    base = nodePath.resolve(nodePath.dirname(from), spec);
   } else if (spec.startsWith("@/")) {
-    base = resolve(root, spec.slice(2));
+    base = nodePath.resolve(root, spec.slice(2));
   } else {
     return null;
   }
@@ -57,12 +57,12 @@ function resolveImport(
 /** The source files `file` imports itself through relative and `@/`
  *  imports, as paths relative to `root`, sorted. */
 export function directImports(file: string, root = process.cwd()): string[] {
-  const from = resolve(root, file);
+  const from = nodePath.resolve(root, file);
   const out = new Set<string>();
   for (const path of importsOf(from, transpilerFor(from))) {
-    const next = resolveImport(from, path, resolve(root));
+    const next = resolveImport(from, path, nodePath.resolve(root));
     if (next) {
-      out.add(relative(root, next));
+      out.add(nodePath.relative(root, next));
     }
   }
   return [...out].toSorted();
@@ -79,13 +79,13 @@ export function moduleGraph(
   root = process.cwd(),
   stop: readonly string[] = []
 ): string[] {
-  const stopped = new Set(stop.map((p) => resolve(root, p)));
+  const stopped = new Set(stop.map((p) => nodePath.resolve(root, p)));
   const seen = new Set<string>();
-  const start = resolve(root, entry);
+  const start = nodePath.resolve(root, entry);
   const queue = [start];
   while (queue.length > 0) {
-    const file = queue.pop() as string;
-    if (seen.has(file)) {
+    const file = queue.pop();
+    if (file === undefined || seen.has(file)) {
       continue;
     }
     if (file !== start && stopped.has(file)) {
@@ -93,13 +93,13 @@ export function moduleGraph(
     }
     seen.add(file);
     for (const path of importsOf(file, transpilerFor(file))) {
-      const next = resolveImport(file, path, resolve(root));
+      const next = resolveImport(file, path, nodePath.resolve(root));
       if (next && !seen.has(next)) {
         queue.push(next);
       }
     }
   }
-  return [...seen].map((file) => relative(root, file)).toSorted();
+  return [...seen].map((file) => nodePath.relative(root, file)).toSorted();
 }
 
 /** The package a bare specifier names (`three/addons/x` → `three`,
@@ -140,10 +140,14 @@ export function readLockfile(text: string): LockedPackages {
 function namesOf(key: string): string[] {
   const parts = key.split("/");
   const names: string[] = [];
-  for (let i = 0; i < parts.length; i++) {
-    names.push(
-      parts[i].startsWith("@") ? `${parts[i]}/${parts[++i]}` : parts[i]
-    );
+  for (let i = 0; i < parts.length; i += 1) {
+    if (parts[i].startsWith("@")) {
+      const scope = parts[i];
+      i += 1;
+      names.push(`${scope}/${parts[i]}`);
+    } else {
+      names.push(parts[i]);
+    }
   }
   return names;
 }
@@ -156,7 +160,7 @@ function dependencyKey(
   name: string
 ): string | undefined {
   const path = namesOf(key);
-  for (let i = path.length; i >= 0; i--) {
+  for (let i = path.length; i >= 0; i -= 1) {
     const candidate = [...path.slice(0, i), name].join("/");
     if (lock[candidate]) {
       return candidate;
@@ -202,8 +206,8 @@ export function lockedVersions(
   }
   const seen = new Set<string>();
   while (queue.length > 0) {
-    const key = queue.pop() as string;
-    if (seen.has(key)) {
+    const key = queue.pop();
+    if (key === undefined || seen.has(key)) {
       continue;
     }
     seen.add(key);

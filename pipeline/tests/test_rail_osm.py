@@ -1,6 +1,7 @@
 """The rail layer's OSM stand-in (rail_osm.py) and the deck merging it uses."""
 
 import numpy as np
+import pytest
 import shapely
 import shapely.geometry
 
@@ -106,7 +107,10 @@ def test_a_ways_passage_is_as_wide_as_it_is_mapped():
 ROAD, RAILWAY = 7, 5
 
 
-def test_each_track_carries_its_bridge_layer_gauge_and_current(tmp_path, monkeypatch):
+# Hamburg, Bavaria and NRW are in zone 32: the bake reads the extract into
+# the tile's own CRS
+@pytest.mark.parametrize("epsg", [25833, 25832])
+def test_each_track_carries_its_bridge_layer_gauge_and_current(tmp_path, monkeypatch, epsg):
     nodes = {
         **straight(20, first=1),
         **straight(60, first=3),
@@ -119,7 +123,7 @@ def test_each_track_carries_its_bridge_layer_gauge_and_current(tmp_path, monkeyp
         + way(3, [5, 6], {"railway": "light_rail", "electrified": "rail", "layer": "-1"})
         + way(4, [7, 8], {"railway": "narrow_gauge", "gauge": "750"})
     )
-    tile = osm_tile(tmp_path, monkeypatch, nodes, ways)
+    tile = osm_tile(tmp_path, monkeypatch, nodes, ways, epsg=epsg)
     features = rail_osm.rails(tile)
     props = {y: along(features, y)[0]["properties"] for y in (20, 60, 100, 140)}
     assert props[20] == {"tracks": 1, "electrified": 1, "bridge": 0}

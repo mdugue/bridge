@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import {
   BAKE_ENTRIES,
   KEY_PLUMBING,
@@ -9,7 +9,7 @@ import {
 } from "./bake-entries";
 import { directImports, moduleGraph } from "./bake-sources";
 
-const ROOT = join(import.meta.dir, "..");
+const ROOT = nodePath.join(import.meta.dir, "..");
 
 /**
  * What prepare-data.ts imports that no bake's key needs: what it publishes
@@ -20,6 +20,12 @@ const NOT_A_BAKE: Record<string, string> = {
   "lib/city/provenance.ts": "published uncached every run",
   "lib/city/tram-timetable.ts": "published uncached every run",
   "lib/city/landmark-facts.ts": "published uncached every run",
+  "lib/city/landmark-facts-file.ts": "checked uncached every run",
+  "lib/city/facades-file.ts": "checked uncached every run",
+  "lib/city/murals-file.ts": "checked uncached every run",
+  "lib/city/horizon-legend-file.ts":
+    "the tileset's extras, read uncached every run",
+  "lib/city/tram-timetable-file.ts": "checked uncached every run",
   "lib/city/murals.ts": "published uncached every run",
   "lib/city/landmarks.ts": "the tileset's extras, built uncached every run",
   "lib/city/valley-fog.ts": "the tileset's extras, built uncached every run",
@@ -59,7 +65,7 @@ test("every bake entry exists and reaches no site config", () => {
   // another site's config re-bakes nothing
   for (const entries of Object.values(BAKE_ENTRIES)) {
     for (const entry of entries) {
-      expect(existsSync(join(ROOT, entry))).toBe(true);
+      expect(existsSync(nodePath.join(ROOT, entry))).toBe(true);
       expect(graph(entry).filter((p) => p.startsWith("sites/"))).toEqual([]);
     }
   }
@@ -93,8 +99,11 @@ test("every module prepare-data.ts imports is in some bake's key, or says why no
 
 test("prepare-data.ts orders the steps and bakes nothing itself", () => {
   // no key carries it: a cached artifact made here would go stale
-  const source = readFileSync(join(ROOT, "scripts/prepare-data.ts"), "utf8");
-  expect(source).not.toMatch(/\b(cached|cachedFile|cacheKey)\(/u);
+  const source = readFileSync(
+    nodePath.join(ROOT, "scripts/prepare-data.ts"),
+    "utf-8"
+  );
+  expect(source).not.toMatch(/\b(?:cached|cachedFile|cacheKey)\(/u);
   for (const step of directImports("scripts/prepare-data.ts", ROOT).filter(
     (p) => p.startsWith("scripts/prepare/") && !p.endsWith("/context.ts")
   )) {
@@ -134,11 +143,11 @@ const VALUE_EXPORTS: Record<string, Record<string, string>> = {
 test("a value module exports only what reaches keys as values", () => {
   for (const path of KEY_VALUES) {
     // the transpiler's list holds every form of export, the types aside
-    const source = readFileSync(join(ROOT, path), "utf8");
+    const source = readFileSync(nodePath.join(ROOT, path), "utf-8");
     const { exports } = new Bun.Transpiler({ loader: "ts" }).scan(source);
     const types = [
-      ...source.matchAll(/^export (?:type|interface) ([\w$]+)/gmu),
-    ].map((m) => m[1]);
+      ...source.matchAll(/^export (?:type|interface) (?<name>[\w$]+)/gmu),
+    ].map((m) => m.groups?.name ?? "");
     expect([...exports, ...types].toSorted()).toEqual(
       Object.keys(VALUE_EXPORTS[path] ?? {}).toSorted()
     );

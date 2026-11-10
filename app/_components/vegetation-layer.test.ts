@@ -3,11 +3,10 @@ import {
   Color,
   Matrix4,
   MeshStandardNodeMaterial,
-  type Object3D,
   Vector3,
 } from "three/webgpu";
+import type { Object3D } from "three/webgpu";
 import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
-import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import {
   PINE_CROWN_BASE,
   TRUNK_RINGS,
@@ -20,6 +19,7 @@ import {
   GENERIC_CROWN_W,
 } from "@/lib/city/tree-placement";
 import { isInstances } from "./instancing";
+import { inRasterTurn, setRasterTier } from "./raster-upload";
 import {
   buildConeTiers,
   buildCrownGeo,
@@ -29,10 +29,11 @@ import {
   buildVegetation,
   sceneCrowns,
   createVegetationLod,
+  loadNdviSampler,
   setCrownTime,
   TRUNK_H,
-  type VegetationContext,
 } from "./vegetation-layer";
+import type { VegetationContext } from "./vegetation-layer";
 
 /** Instances drawn under a root (each set's `drawCount`). */
 function instancesIn(root: Object3D): number {
@@ -93,37 +94,41 @@ test("canopy points become trees; off-terrain points are skipped", () => {
   expect(off.group.children).toHaveLength(0);
 });
 
-test("the control accepts the look and reports a crown tier change", () => {
+test("the pass reports a crown tier change", () => {
   const built = buildVegetation({ rows: [], canopy: [canopy(5, 12)] }, ctx);
-  expect(() => built.applyLook(LOOK_DEFAULTS)).not.toThrow();
-  // Born on the mid crown; the camera standing next to it switches to rich.
   const lod = createVegetationLod();
+  // Born on the mid crown; the camera standing next to it switches it to
+  // rich, and the next pass changes nothing.
+  expect(built.chunks[0].tier).toBe("mid");
   expect(lod([built], new Vector3(5, 100, 0))).toBe(true);
   expect(built.chunks[0].tier).toBe("rich");
   expect(lod([built], new Vector3(5, 100, 0))).toBe(false);
+  // with no rich budget left it falls back to mid
+  expect(lod([built], new Vector3(5, 100, 0), 0)).toBe(true);
+  expect(built.chunks[0].tier).toBe("mid");
 });
 
 test("a pass after a tile left plans the tiles still there, from their own tiers", () => {
   // Two tiles 2 km apart, the camera at the first: its chunk rich, the
   // other's far.
   const near = buildVegetation({ rows: [], canopy: [canopy(5, 12)] }, ctx);
-  const far = buildVegetation({ rows: [], canopy: [canopy(2_005, 12)] }, ctx);
+  const far = buildVegetation({ rows: [], canopy: [canopy(2005, 12)] }, ctx);
   const lod = createVegetationLod();
   expect(lod([near, far], new Vector3(5, 100, 0))).toBe(true);
   expect([near.chunks[0].tier, far.chunks[0].tier]).toEqual(["rich", "far"]);
   // The first tile leaves; between the far tier's in and out distances of
   // the second, it keeps the far tier it has (the state reused for it is
   // its own, not the rich one the first chunk left in that slot).
-  expect(lod([far], new Vector3(2_005 + 600, 100, 0))).toBe(false);
+  expect(lod([far], new Vector3(2005 + 600, 100, 0))).toBe(false);
   expect(far.chunks[0].tier).toBe("far");
   // Walking up to it, it goes rich.
-  expect(lod([far], new Vector3(2_005, 100, 0))).toBe(true);
+  expect(lod([far], new Vector3(2005, 100, 0))).toBe(true);
   expect(far.chunks[0].tier).toBe("rich");
 });
 
 test("far away a chunk draws the far crown and no trunks", () => {
   const built = buildVegetation({ rows: [], canopy: [canopy(5, 12)] }, ctx);
-  expect(createVegetationLod()([built], new Vector3(5_000, 100, 0))).toBe(true);
+  expect(createVegetationLod()([built], new Vector3(5000, 100, 0))).toBe(true);
   const [chunk] = built.chunks;
   expect(chunk.tier).toBe("far");
   expect([chunk.far.visible, chunk.mid.visible, chunk.rich.visible]).toEqual([
@@ -216,21 +221,22 @@ test("every tile wears the scene's crown and trunk materials; the warm-up carrie
   warm.dispose();
 });
 
+const centre = (ps: [number, number][]) =>
+  [0, 1].map((c) => ps.reduce((s, p) => s + p[c], 0) / ps.length);
+
 test("the trunk geometry's rings are the profile its girth is fitted to", () => {
   const geo = buildTrunkGeo();
   const pos = geo.getAttribute("position");
   for (const t of TRUNK_RINGS) {
     const y = t * TRUNK_H;
     const ring: [number, number][] = [];
-    for (let i = 0; i < pos.count; i++) {
+    for (let i = 0; i < pos.count; i += 1) {
       if (Math.abs(pos.getY(i) - y) < 1e-4) {
         ring.push([pos.getX(i), pos.getZ(i)]);
       }
     }
     // The bend moves a ring sideways, not apart: measure from its centre,
     // leaving out the end caps' centre vertices.
-    const centre = (ps: [number, number][]) =>
-      [0, 1].map((c) => ps.reduce((s, p) => s + p[c], 0) / ps.length);
     const [ax, az] = centre(ring);
     const rim = ring.filter(([x, z]) => Math.hypot(x - ax, z - az) > 0.02);
     const [cx, cz] = centre(rim);
@@ -322,11 +328,12 @@ test("a canopy evergreen stands as a cone of its own, in leaf all year", () => {
   }
 });
 
+const at = (x: number, pine: boolean): CanopyFeature => ({
+  geometry: { type: "Point", coordinates: [x, 0] },
+  properties: { h: 20, l: "e", ...(pine ? { pine: 1 as const } : {}) },
+});
+
 test("a canopy pine wears the pine's crown, high on its stem, a chunk of its own", () => {
-  const at = (x: number, pine: boolean): CanopyFeature => ({
-    geometry: { type: "Point", coordinates: [x, 0] },
-    properties: { h: 20, l: "e", ...(pine ? { pine: 1 as const } : {}) },
-  });
   const built = buildVegetation(
     { rows: [], canopy: [at(5, false), at(9, true)] },
     ctx
@@ -423,4 +430,70 @@ test("the cone stands in the lobed crown's box, as tall and as wide", () => {
     expect(w / lw).toBeGreaterThan(0.9);
     expect(w / lw).toBeLessThan(1.15);
   }
+});
+
+/** Answers every fetch with `response`, or with what its signal says. */
+async function withFetch<T>(
+  response: Response | null,
+  run: () => Promise<T>
+): Promise<T> {
+  const realFetch = globalThis.fetch;
+  // reason: the loader reads only `ok` and the body of a Response
+  globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+    if (response) {
+      return response;
+    }
+    return await new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => {
+        reject(new DOMException("gone", "AbortError"));
+      });
+    });
+  }) as unknown as typeof fetch;
+  try {
+    return await run();
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
+describe("the crowns' NDVI sampler", () => {
+  const BOUNDS: [number, number, number, number] = [0, 0, 100, 100];
+
+  test("an absent file is no sampler", async () => {
+    expect(
+      await withFetch(
+        new Response("", { status: 404 }),
+        async () => await loadNdviSampler("ndvi.png", BOUNDS)
+      )
+    ).toBeNull();
+  });
+
+  test("an abort is rethrown", async () => {
+    const aborter = new AbortController();
+    await withFetch(null, async () => {
+      const load = loadNdviSampler("ndvi.png", BOUNDS, aborter.signal);
+      aborter.abort();
+      await expect(load).rejects.toThrow();
+    });
+  });
+
+  test("on a phone it decodes in the raster turn, never over another raster's decode", async () => {
+    setRasterTier("mobile");
+    const { promise: decoded, resolve: finish } = Promise.withResolvers<null>();
+    const other = inRasterTurn(async () => await decoded);
+    let settled = false;
+    await withFetch(new Response(new Uint8Array([1, 2, 3])), async () => {
+      const load = loadNdviSampler("ndvi.png", BOUNDS).finally(() => {
+        settled = true;
+      });
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10);
+      });
+      expect(settled).toBe(false);
+      finish(null);
+      await other;
+      // not a PNG: no sampler, once it had its turn
+      expect(await load).toBeNull();
+    });
+  });
 });

@@ -1,14 +1,14 @@
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import { expect, test } from "@playwright/test";
 import { utmToLatLng } from "../lib/city/crs";
 import { arrivalHref } from "../lib/city/geolocation";
 import {
   decodeLook,
   parseSnapshot,
-  type Snapshot,
   snapshotInstant,
 } from "../lib/city/snapshot";
+import type { Snapshot } from "../lib/city/snapshot";
 import { siteById } from "../sites";
 
 /**
@@ -41,19 +41,19 @@ test.use(
  * yields shots/<name>.png.
  */
 
-const SHOTS_DIR = join(process.cwd(), "shots");
+const SHOTS_DIR = nodePath.join(process.cwd(), "shots");
 /**
  * Before/after pairs from one set of snapshots — the ONE mechanism:
  * `SHOTS_QUERY` is appended to the page URL (with or without its leading
  * `?`, e.g. `SHOTS_QUERY=scene=lite`), and `SHOTS_TAG=x` writes
  * `shots/<name>.x.png` so the untagged plate is not overwritten.
  */
-const SHOTS_QUERY = (process.env.SHOTS_QUERY ?? "").replace(/^\?/, "");
+const SHOTS_QUERY = (process.env.SHOTS_QUERY ?? "").replace(/^\?/u, "");
 /** The city the shots are taken in (its route): `SHOTS_SITE=leipzig`. */
 const SHOTS_SITE = process.env.SHOTS_SITE ?? "dresden";
 const SHOTS_TAG = process.env.SHOTS_TAG ?? "";
 /**
- * `SHOTS_AT=1`: boot the page at the snapshot's own place (`#at=lat,lng`
+ * `SHOTS_AT=1`: boot the page at the snapshot's own place (`?at=lat,lng`
  * from its `camera.epsg`) instead of the site's spawn. The `lite` scene
  * streams only around where it booted, so a pose a kilometre from the
  * spawn would otherwise show the wrong part of the city — the street
@@ -72,8 +72,7 @@ function shotUrl(snap: Snapshot): string {
   if (!at) {
     return `/${SHOTS_SITE}${query}`;
   }
-  const [path, hash] = arrivalHref(SHOTS_SITE, at).split("#");
-  return `${path}${query}#${hash}`;
+  return `${arrivalHref(SHOTS_SITE, at)}${SHOTS_QUERY ? `&${SHOTS_QUERY}` : ""}`;
 }
 
 /** Hide every HUD/control overlay so the shot is a clean render plate:
@@ -100,21 +99,42 @@ function hideOverlays(): void {
   }
 }
 
-function snapshotFiles(): string[] {
+/**
+ * The committed QA views (plan 048, `bun scripts/qa-views.ts`): rendered
+ * beside the dropped snapshots as `shots/qa-<name>.png`, so `shots/`
+ * stays the one output (and gitignored). One of them:
+ * `bun run shots -- --grep qa-<name>`.
+ */
+const QA_VIEWS_DIR = nodePath.join(process.cwd(), "qa", "views");
+
+/** The snapshots in `dir`, their plates named `<prefix><name>`. */
+function jsonsIn(
+  dir: string,
+  prefix: string
+): { path: string; name: string }[] {
   try {
-    return readdirSync(SHOTS_DIR).filter((f) => f.endsWith(".json"));
+    return readdirSync(dir)
+      .filter((f) => f.endsWith(".json"))
+      .map((f) => ({
+        path: nodePath.join(dir, f),
+        name: `${prefix}${f.replace(/\.json$/u, "")}`,
+      }));
   } catch {
     return [];
   }
 }
 
-for (const file of snapshotFiles()) {
-  const name = file.replace(/\.json$/, "");
+/** Each snapshot to render: the dropped ones, then the QA views. */
+function snapshotFiles(): { path: string; name: string }[] {
+  return [...jsonsIn(SHOTS_DIR, ""), ...jsonsIn(QA_VIEWS_DIR, "qa-")];
+}
+
+for (const { path: file, name } of snapshotFiles()) {
   test(`snapshot: ${name}`, async ({ page }) => {
     test.setTimeout(READY_MS + 150_000);
     // Validate before rendering: a broken shot fails loudly instead of
     // silently rendering the defaults.
-    const parsed = parseSnapshot(readFileSync(join(SHOTS_DIR, file), "utf8"));
+    const parsed = parseSnapshot(readFileSync(file, "utf-8"));
     if (!parsed.ok) {
       throw new Error(`${file}: ${parsed.reason}`);
     }
@@ -165,13 +185,20 @@ for (const file of snapshotFiles()) {
         const drawn = (poc?.frames ?? 0) - frames;
         return (
           drawn >= settle &&
-          // the move regressed the post stack: DoF is back once it is still
+          // the move regressed the post stack: DoF is back once it is
+          // still, and grown in fully where the style draws it
           !poc?.regressed &&
+          (poc?.handle?.getFocusDebug().settled ?? true) &&
+          // the rings redraw one a frame, the wide ones at a distance
+          !poc?.handle?.shadowBusy() &&
+          // a plate far from the spawn waits for its own tiles to land
+          !poc?.handle?.streamBusy() &&
           ((poc?.shadowRenders ?? 0) > shadows || drawn >= shadowless)
         );
       },
-      { ...before, settle: 3, shadowless: 30 },
-      { timeout: 120_000 }
+      // settle: frames for the stream to see the new view at all
+      { ...before, settle: 10, shadowless: 30 },
+      { timeout: READY_MS + 60_000 }
     );
 
     // Again: a notice raised after the move ("Umgebung lädt") was not
@@ -180,6 +207,8 @@ for (const file of snapshotFiles()) {
     const canvas = page.locator("canvas[data-engine]");
     await expect(canvas).toBeVisible();
     const tag = SHOTS_TAG ? `.${SHOTS_TAG}` : "";
-    await canvas.screenshot({ path: join(SHOTS_DIR, `${name}${tag}.png`) });
+    await canvas.screenshot({
+      path: nodePath.join(SHOTS_DIR, `${name}${tag}.png`),
+    });
   });
 }

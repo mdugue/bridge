@@ -1,12 +1,11 @@
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import nodePath from "node:path";
 import { DRESDEN } from "../../sites/dresden";
 import {
   wallSourceFile,
   cityMeshSourceFiles,
   COARSE_RASTER_PX,
-  type DataManifest,
   dgmSourceFiles,
   DRESSING_KINDS,
   kerbSourceFile,
@@ -15,10 +14,13 @@ import {
   pickFiles,
   SMALL_RASTER_PX,
   stairSourceFile,
+  TERRAIN_RASTER_KINDS,
   terraceSourceFile,
   tileArtifacts,
   tileIds,
 } from "./tile";
+import { TERRAIN_RASTER_KEYS } from "./tileset";
+import type { DataManifest } from "./tile";
 
 const PRIMARY_TILE = "33412_5656_2_sn";
 
@@ -33,6 +35,7 @@ test("the artifact map reproduces the served file names", () => {
     file: "landcover_33412_5656_2_sn.r2048.png",
     required: true,
     bakedFrom: { file: "landcover_33412_5656_2_sn.png", raster: 2048 },
+    terrain: { levels: { 0: ["landcoverLow"] } },
   });
 });
 
@@ -92,6 +95,29 @@ test("the dressing and OSM columns name only kinds of the table", () => {
   expect(DRESSING_KINDS).not.toContain("landcover");
 });
 
+test("the terrain column names each raster key of a level once, beside kinds of the table", () => {
+  const kinds = Object.keys(tileArtifacts(PRIMARY_TILE));
+  for (const row of TERRAIN_RASTER_KINDS) {
+    for (const kind of row.with ?? []) {
+      expect(kinds).toContain(kind);
+    }
+  }
+  for (const level of [0, 1] as const) {
+    const keys = TERRAIN_RASTER_KINDS.flatMap((r) => r.levels[level] ?? []);
+    expect(new Set(keys).size).toBe(keys.length);
+    for (const key of keys) {
+      expect(TERRAIN_RASTER_KEYS).toContain(key);
+    }
+  }
+  // the phones' colony twin is built beside the colony raster, never
+  // committed
+  const { cultivatedRaster, cultivatedLow } = tileArtifacts(PRIMARY_TILE);
+  expect(cultivatedLow.built).toBe(true);
+  expect(cultivatedLow.file).toBe(
+    cultivatedRaster.file.replace(/\.png$/u, ".r1024.png")
+  );
+});
+
 test("pickFiles keeps only the named kinds a tile has", () => {
   expect(
     pickFiles({ tram: "t.geojson", lamps: "", svf: "s.png" }, DRESSING_KINDS)
@@ -129,22 +155,25 @@ test("manifestUrl resolves hashed names and falls back to the logical one", () =
  *  outside the raw downloads, as the TypeScript side would spell it. A
  *  stem built from a variable (`f"{name}_{tile.id}…"`) is not seen. */
 function bakeNames(): Map<string, string> {
-  const dir = join(import.meta.dir, "../../pipeline/bake");
+  const dir = nodePath.join(import.meta.dir, "../../pipeline/bake");
   const names = new Map<string, string>();
   for (const file of readdirSync(dir).filter((f) => f.endsWith(".py"))) {
-    const lines = readFileSync(join(dir, file), "utf8").split("\n");
-    lines.forEach((line, i) => {
+    const lines = readFileSync(nodePath.join(dir, file), "utf-8").split("\n");
+    for (const [i, line] of lines.entries()) {
       // data/_raw/<provider>/ holds the downloads and the bakes' own
       // caches (Wikidata answers, the laser scan's research output)
       if (/\braw\b/u.test(line.split("#")[0])) {
-        return;
+        continue;
       }
       for (const m of line.matchAll(
-        /f"([a-z0-9_]+)_\{tile\.id\}\.([a-z.]+)"/gu
+        /f"(?<kind>[a-z0-9_]+)_\{tile\.id\}\.(?<ext>[a-z.]+)"/gu
       )) {
-        names.set(`${m[1]}_${PRIMARY_TILE}.${m[2]}`, `${file}:${i + 1}`);
+        names.set(
+          `${m.groups?.kind}_${PRIMARY_TILE}.${m.groups?.ext}`,
+          `${file}:${i + 1}`
+        );
       }
-    });
+    }
   }
   return names;
 }
@@ -168,7 +197,7 @@ test("every file a bake step writes or reads is one the build knows", () => {
     terraceSourceFile(DRESDEN, PRIMARY_TILE),
   ];
   for (const path of sources) {
-    known.add(basename(path));
+    known.add(nodePath.basename(path));
   }
   // the class raster's legends: the build reads landcover's and horizon's,
   // edges' and surface's document their rasters' channels for people

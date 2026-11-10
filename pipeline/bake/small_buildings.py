@@ -65,6 +65,7 @@ from rasterio.windows import Window
 from scipy import ndimage as ndi
 from shapely.geometry import shape
 
+from .classes import RAILWAY, ROAD, WATER
 from .common import Tile, column, feature, geometry_json, overlaps, owns, write_geojson
 from .dop_light import luminance
 from .lowveg import Grid, building_mask, dgm_on, disk, lsc_rasters
@@ -72,7 +73,7 @@ from .osm import has_extract, read_osm, tag
 
 RES = 0.5
 BAND = (2.0, 6.5)  # height above ground (m)
-BLOCKED = (5, 7, 8)  # railway, road, water: parked vans, trains, boats
+BLOCKED = (RAILWAY, ROAD, WATER)  # parked vans, trains, boats
 BLD_BUF_PX = 2  # the LoD2 mask grown 1 m (DSM-max binning smears eaves)
 CORE_MIN_M2 = 4.0
 AREA_M2 = (6.0, 150.0)

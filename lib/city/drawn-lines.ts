@@ -29,27 +29,26 @@ import {
   OBJECT_SOURCE_PASSAGE,
   OBJECT_SOURCE_PLINTH,
   OBJECT_SOURCE_SHOPFRONT,
-  type Rgb,
 } from "./city-mesh";
+import type { Rgb } from "./city-mesh";
 import { utmToLatLng } from "./crs";
-import { type DrawnFacts, decodeDrawn } from "./drawn-facts";
+import { decodeDrawn } from "./drawn-facts";
+import type { DrawnFacts } from "./drawn-facts";
 import { FACADE_UNIT } from "./facade-reading";
-import {
-  type BuildingInquiry,
-  type InquiryObject,
-  type ObjectLook,
-  roofLabel,
-} from "./inquiry";
+import { roofLabel } from "./inquiry";
+import type { BuildingInquiry, InquiryObject, ObjectLook } from "./inquiry";
 import type { Method } from "./methods";
 import { isMeasuredRoof, NO_FACT } from "./object-facts";
 import type { SourceKey } from "./provenance";
 import {
+  NEAR_M,
   PALACE_STOREY_M,
   palaceStorey,
   unpackStyle,
-  type WindowType,
+  windowForm,
   windowType,
 } from "./windows";
+import type { WindowType } from "./windows";
 
 /** Where a drawn value came from: a dataset of the manifest, the street
  *  photos, or the viewer itself. */
@@ -114,14 +113,16 @@ const decimal = new Intl.NumberFormat("de-DE", {
   maximumFractionDigits: 2,
 });
 
+/** One linear channel as two sRGB hex digits. */
+function channel(c: number): string {
+  const v = c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055;
+  return Math.round(Math.min(Math.max(v, 0), 1) * 255)
+    .toString(16)
+    .padStart(2, "0");
+}
+
 /** A linear-RGB colour as CSS hex (sRGB). */
 export function cssColour([r, g, b]: Rgb): string {
-  const channel = (c: number) => {
-    const v = c <= 0.003_130_8 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055;
-    return Math.round(Math.min(Math.max(v, 0), 1) * 255)
-      .toString(16)
-      .padStart(2, "0");
-  };
   return `#${channel(r)}${channel(g)}${channel(b)}`;
 }
 
@@ -144,12 +145,13 @@ function placesAt(at: [number, number] | undefined, epsg?: number): Places {
   };
 }
 
+const lod2 = (o: InquiryObject) => o.source === OBJECT_SOURCE_LOD2;
+
 /** The object whose look the card describes: the picked one if it is a
  *  LoD2 object, else (a door, a shopfront, a dormer, a plinth, a passage: they copy
  *  their host's row) the tree's LoD2 object that carries windows, or its
  *  first. */
 function describedObject(b: BuildingInquiry): InquiryObject {
-  const lod2 = (o: InquiryObject) => o.source === OBJECT_SOURCE_LOD2;
   if (lod2(b.picked)) {
     return b.picked;
   }
@@ -195,7 +197,7 @@ class Rows {
  */
 export function drawnGroups(b: BuildingInquiry, epsg?: number): DrawnGroup[] {
   const o = describedObject(b);
-  const look = o.look;
+  const { look } = o;
   // a scan's building or a gap filler has no LoD2 row to read
   if (!look || o.source !== OBJECT_SOURCE_LOD2) {
     return [];
@@ -337,6 +339,14 @@ function roofFormRow(o: InquiryObject): DrawnRow | null {
       };
 }
 
+/**
+ * Compile time: every value is named. At run time a newer bake's may still
+ * come (a tab left open reads new tiles): then the row says less, and the
+ * card stays up.
+ */
+const fromNewerBake = (_value: never) =>
+  ({ method: "assumed", source: "viewer" }) as const;
+
 function storeyRow(
   o: InquiryObject,
   look: ObjectLook,
@@ -359,7 +369,7 @@ function storeyRow(
   const from =
     d.storey ?? (o.facts.levels === NO_FACT ? "height" : ("osm" as const));
   switch (from) {
-    case "osm":
+    case "osm": {
       return {
         label: "Geschosse",
         value,
@@ -371,16 +381,8 @@ function storeyRow(
             : `building:levels = ${whole.format(o.facts.levels)}`,
         url: places.osm,
       };
-    case "photos":
-      return {
-        label: "Geschosse",
-        value,
-        method: "detected",
-        source: "mapillary",
-        detail: "Geschosshöhe in Straßenfotos gemessen",
-        url: places.photos,
-      };
-    case "neighbours":
+    }
+    case "neighbours": {
       return {
         label: "Geschosse",
         value,
@@ -390,7 +392,8 @@ function storeyRow(
           "von der Traufe gezählt, in der Geschosshöhe der kartierten Nachbarhäuser",
         url: places.osm,
       };
-    case "height":
+    }
+    case "height": {
       return {
         label: "Geschosse",
         value,
@@ -398,6 +401,10 @@ function storeyRow(
         source: "viewer",
         ...unusedLevels(o, places),
       };
+    }
+    default: {
+      return { label: "Geschosse", value, ...fromNewerBake(from) };
+    }
   }
 }
 
@@ -480,12 +487,12 @@ function wallColourRow(
     };
   }
   const use = functionWords(o.facts.function);
-  const detail =
-    d.wall === "material"
-      ? `Palette für ${MATERIAL[d.material ?? ""] ?? "das Material"}, je Haus gestreut`
-      : d.wall === "brick"
-        ? "Ziegelpalette der Nachbarschaft, je Haus gestreut"
-        : `Palette nach Nutzung${use ? ` (${use})` : ""}, je Haus gestreut`;
+  let detail = `Palette nach Nutzung${use ? ` (${use})` : ""}, je Haus gestreut`;
+  if (d.wall === "material") {
+    detail = `Palette für ${MATERIAL[d.material ?? ""] ?? "das Material"}, je Haus gestreut`;
+  } else if (d.wall === "brick") {
+    detail = "Ziegelpalette der Nachbarschaft, je Haus gestreut";
+  }
   return { ...base, method: "assumed", source: "viewer", detail };
 }
 
@@ -494,6 +501,7 @@ function windowValue(look: ObjectLook): string {
   const { axis, w, h, style } = look.windows;
   const s = unpackStyle(style);
   return [
+    windowForm(look.windows) ?? "",
     `Achsen ${metres(axis)}, Fenster ${decimal.format(w)} × ${decimal.format(h)} m`,
     s.frame ? "Faschen" : "",
     s.lintel ? "Verdachungen" : "",
@@ -516,37 +524,45 @@ function windowsRow(
   const base = { label: "Fenster", value: "keine" };
   const use = functionWords(o.facts.function);
   switch (d.noWindows) {
-    case "facade":
+    case "facade": {
       return { ...base, ...ownFacadeWhy(o, d, places) };
-    case "low":
+    }
+    case "low": {
       return {
         ...base,
         method: "computed",
         source: "lod2",
         detail: "weniger als 3,2 m Wand",
       };
-    case "use":
+    }
+    case "use": {
       return {
         ...base,
         method: "taken",
         source: "lod2",
         detail: `Nutzung ohne Fenster${use ? `: ${use}` : ""}`,
       };
-    case "small":
+    }
+    case "small": {
       return {
         ...base,
         method: "computed",
         source: "viewer",
         detail: "kein Fenster passt ins Geschoss",
       };
+    }
     case "beyond":
-    case undefined:
+    case undefined: {
       return {
         ...base,
         method: "assumed",
         source: "viewer",
         detail: "keine Angabe im Kachelstand",
       };
+    }
+    default: {
+      return { ...base, ...fromNewerBake(d.noWindows) };
+    }
   }
 }
 
@@ -654,10 +670,15 @@ function windowsFrom(
 ): DrawnRow {
   const base = { label: "Fenster", value: windowValue(look) };
   const style = unpackStyle(look.windows.style);
-  const from =
-    d.windows ?? (style.measured ? "measured" : style.near ? "near" : "type");
+  let guessed: "measured" | "near" | "type" = "type";
+  if (style.measured) {
+    guessed = "measured";
+  } else if (style.near) {
+    guessed = "near";
+  }
+  const from = d.windows ?? guessed;
   switch (from) {
-    case "measured":
+    case "measured": {
       return {
         ...base,
         method: "detected",
@@ -665,7 +686,8 @@ function windowsFrom(
         detail: "an den eigenen Wänden in Straßenfotos gemessen",
         url: places.photos,
       };
-    case "tree":
+    }
+    case "tree": {
       return {
         ...base,
         method: "detected",
@@ -673,13 +695,15 @@ function windowsFrom(
         detail: "an einem anderen Teil des Gebäudes gemessen",
         url: places.photos,
       };
-    case "near":
+    }
+    case "near": {
       return {
         ...base,
         method: "assumed",
         source: "mapillary",
-        detail: "vom nächsten gemessenen Haus gleicher Art (bis 150 m)",
+        detail: `vom nächsten gemessenen Haus gleicher Art (bis ${NEAR_M} m)`,
       };
+    }
     case "none":
     case "type": {
       // a facade of its own carries windows only as a palace's
@@ -703,6 +727,9 @@ function windowsFrom(
         detail: `nichts gemessen: wie ein ${TYPE[type]}`,
       };
     }
+    default: {
+      return { ...base, ...fromNewerBake(from) };
+    }
   }
 }
 
@@ -714,7 +741,7 @@ function palaceStoreys(
   places: Places
 ): Pick<DrawnRow, "detail" | "url"> {
   const what = `nichts gemessen: wie ein ${TYPE.palace}`;
-  const levels = o.facts.levels;
+  const { levels } = o.facts;
   const counted = levels !== NO_FACT && levels >= 1;
   const storey = palaceStorey(o.eaveH, counted ? levels : undefined);
   if (counted && Math.abs(storey * levels - o.eaveH) < 0.01) {
@@ -837,14 +864,15 @@ function roofColourRow(
   const swatch = cssColour(look.roof);
   const base = { label: "Dachfarbe", value: swatch, swatch };
   switch (d.roof) {
-    case "dop":
+    case "dop": {
       return {
         ...base,
         method: "computed",
         source: "dop",
         detail: "Median der besonnten Pixel im Luftbild, je Dachfläche",
       };
-    case "osm":
+    }
+    case "osm": {
       return {
         ...base,
         method: "computed",
@@ -852,13 +880,18 @@ function roofColourRow(
         detail: `roof:colour = ${d.roofColour ?? "?"}`,
         url: places.osm,
       };
+    }
     case "palette":
-    case undefined:
+    case undefined: {
       return {
         ...base,
         method: "assumed",
         source: "viewer",
         detail: "Ziegel- oder Schieferpalette nach Dachform",
       };
+    }
+    default: {
+      return { ...base, ...fromNewerBake(d.roof) };
+    }
   }
 }

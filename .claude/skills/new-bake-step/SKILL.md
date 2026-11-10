@@ -30,7 +30,10 @@ ADR 0037 (fetch → bake → build). Deep reference: the `city-walker` skill,
    footnote in `lib/city/source-matrix.ts`, then `bun run docs:matrix`.
 5. **A new feature file** gets a contract row in `lib/city/features.ts`
    (checked against every committed file by its test) and an entry in
-   `lib/city/tile.ts` (`ARTIFACTS`).
+   `lib/city/tile.ts` (`ARTIFACTS`). A JSON file the build reads gets a
+   schema module `lib/city/<name>-file.ts`, a row in `bake-files.test.ts`
+   and `parseBakeFile` where it is read (ADR 0059); a key the bake renames
+   changes the schema in the same commit.
 6. **If the build reads it**, list the module that bakes it in the artifact's
    row of `scripts/bake-entries.ts` (a missing entry leaves a stale cache;
    `bake-entries.test.ts` catches a module `prepare-data.ts` imports that

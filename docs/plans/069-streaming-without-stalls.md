@@ -121,8 +121,8 @@ The same long tasks are what makes walking jerky once the scene is up.
     does not apply).
   - `buildDressing` (from line 855) builds every layer and then, eagerly,
     the inquiry's ask sets (lines ~1035–1065: `treeSets`, `askSets`,
-    `bridgeAskSet`, `moreSets(...)`). `moreSets` → `canopySets`
-    (`lib/city/ask-more.ts:151–191`) **places every canopy tree a second
+    `bridgeAskSet`, `moreSets(...)`). `moreSets` → `canopySetsSteps`
+    (`lib/city/ask-items.ts`, `canopySetsSteps`; was `ask-more.ts`) **places every canopy tree a second
     time** (`canopyPlacements([f], …)` per feature, after the vegetation
     layer already placed them) for a card nobody may ever open.
 - `app/_components/create-app.ts`
@@ -173,7 +173,7 @@ live in `app/_components/tile-stream.test.ts` (exemplar: the
 - `app/_components/tile-stream.ts`, `app/_components/tile-stream.test.ts`
 - `app/_components/create-app.ts`
 - `app/_components/city-walk.tsx` (one mark at the veil drop)
-- `lib/city/ask-more.ts` only if gated step 6 needs it
+- `lib/city/ask-items.ts` only if gated step 6 needs it
 - `app/_components/city-layer.ts`, `collision.ts` only in gated step 7
 - `docs/rendering.md` (boot sequence section), `AGENTS.md` (the `?trace=1` knob in the URL-knob list)
 
@@ -363,9 +363,9 @@ Build the inquiry's ask sets after the dressing hangs, in idle time:
   missing — Safari before 18).
 - Until then a click on that tile's trees finds nothing to ask, which is
   acceptable for the first second after a tile appears.
-- Optional, in the same step if it is simple: let `canopySets` reuse the
+- Optional, in the same step if it is simple: let `canopySetsSteps` reuse the
   vegetation layer's placements instead of placing every tree again
-  (`lib/city/ask-more.ts:151–191`). If it is not simple, leave it.
+  (`lib/city/ask-items.ts`, `canopySetsSteps`). If it is not simple, leave it.
 
 Test: in `tile-stream.test.ts`, a hung dressing's `asks` is `[]` until the
 idle callback runs and then holds the sets (stub `requestIdleCallback` on

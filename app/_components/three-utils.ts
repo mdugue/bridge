@@ -1,3 +1,4 @@
+import { THIN_CASTER_RINGS } from "@/lib/city/shadow-rings";
 import type {
   BufferAttribute,
   BufferGeometry,
@@ -42,7 +43,7 @@ export function bufferBytes(
 function geometriesUnder(root: Object3D): Set<BufferGeometry> {
   const geometries = new Set<BufferGeometry>();
   root.traverse((obj) => {
-    const geometry = (obj as Object3D & { geometry?: BufferGeometry }).geometry;
+    const { geometry } = obj as Object3D & { geometry?: BufferGeometry };
     if (geometry) {
       geometries.add(geometry);
     }
@@ -152,12 +153,12 @@ export function disposeMaterial(
  */
 function untilThrough(dispose: () => void, attempts: number): unknown[] {
   const errors: unknown[] = [];
-  for (let i = 0; i < attempts; i++) {
+  for (let i = 0; i < attempts; i += 1) {
     try {
       dispose();
       return errors;
-    } catch (err) {
-      errors.push(err);
+    } catch (error) {
+      errors.push(error);
     }
   }
   return errors;
@@ -272,7 +273,7 @@ export function estimateGeometryBytes(root: Object3D): number {
  */
 export function cpuArrayBytes(
   root: Object3D,
-  seen: Set<ArrayBufferLike> = new Set()
+  seen = new Set<ArrayBufferLike>()
 ): number {
   let bytes = 0;
   for (const geometry of geometriesUnder(root)) {
@@ -380,14 +381,14 @@ export function sceneShared<T extends { dispose: () => void }>(
       return value;
     },
     retain: () => {
-      refs++;
+      refs += 1;
       let released = false;
       return () => {
         if (released) {
           return;
         }
         released = true;
-        refs--;
+        refs -= 1;
         if (refs === 0) {
           value?.dispose();
           value = null;
@@ -456,6 +457,24 @@ const materialsShared = sceneShared(() => ({
 }));
 
 /**
+ * Marks a caster thinner than a coarse shadow ring's texel: only the finest
+ * rings draw it, as many as its kind says (lib/city/shadow-rings.ts), and its
+ * shadow fades out across their edge (sun-rings.ts).
+ */
+export function markThinCaster(
+  object: Object3D,
+  kind: keyof typeof THIN_CASTER_RINGS = "tiny"
+): void {
+  object.userData.casterRings = THIN_CASTER_RINGS[kind];
+}
+
+/** Whether shadow ring `ring` draws `object` (`markThinCaster`). */
+export function castsInRing(object: Object3D, ring: number): boolean {
+  const rings: unknown = object.userData.casterRings;
+  return typeof rings !== "number" || ring < rings;
+}
+
+/**
  * A node material every tile wears, made on first use and marked
  * `userData.shared` (no tile's disposal frees it; the last app does,
  * `retainSceneMaterials`). For materials that carry no per-tile data —
@@ -520,6 +539,45 @@ export function layoutOf(geometry: BufferGeometry | undefined): string {
 }
 
 /**
+ * Runs `during` with each of `among` under `object` (itself and its
+ * descendants: a drawable, or a group or root a compile walks) shown, each
+ * put back after — what a compile walking it sees for its synchronous half.
+ * three skips a drawable whose material is hidden as it skips a hidden
+ * object, in a compile as in a frame, so a material hidden for now
+ * (scene-environment.ts `drawnAtNight`, by day: `withNightMaterialsShown`)
+ * would compile nothing and build in the first frame that shows it. One
+ * not in `among`, hidden for good, stays hidden.
+ */
+export function withMaterialsShown<T>(
+  object: Object3D,
+  among: ReadonlySet<Material>,
+  during: () => T
+): T {
+  const shown = new Map<Material, boolean>();
+  if (among.size === 0) {
+    return during();
+  }
+  object.traverse((o) => {
+    const { material } = o as Object3D & {
+      material?: Material | Material[];
+    };
+    for (const m of material ? [material].flat() : []) {
+      if (among.has(m) && !shown.has(m)) {
+        shown.set(m, m.visible);
+        m.visible = true;
+      }
+    }
+  });
+  try {
+    return during();
+  } finally {
+    for (const [m, visible] of shown) {
+      m.visible = visible;
+    }
+  }
+}
+
+/**
  * Runs `during` with `object` the only visible child of `group`, and the
  * group enabled: what a compile walking `group` sees for its synchronous
  * half — `object` under the group's clipping and nothing else of it
@@ -531,7 +589,7 @@ export function aloneUnder<T>(
   object: Object3D,
   during: () => T
 ): T {
-  const enabled = group.enabled;
+  const { enabled } = group;
   const shown = group.children.filter((c) => c.visible);
   for (const c of shown) {
     c.visible = false;

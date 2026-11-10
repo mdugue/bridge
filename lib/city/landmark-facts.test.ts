@@ -4,9 +4,18 @@ import {
   factsFor,
   indexLandmarkFacts,
   isLandmarkFactsFile,
-  type LandmarkFactsEntry,
   landmarkFactsUrl,
+  landmarkFactsSource,
 } from "./landmark-facts";
+import type { LandmarkFactsEntry } from "./landmark-facts";
+import { existsSync, readFileSync } from "node:fs";
+import nodePath from "node:path";
+import { SITES } from "../../sites";
+import { bakeFileProblems } from "./bake-file";
+import { LANDMARK_FACTS_FILE_SPEC } from "./landmark-facts-file";
+import { siteDataDir } from "./tile";
+
+const ROOT = nodePath.join(import.meta.dir, "..", "..");
 
 const FRAUENKIRCHE: LandmarkFactsEntry = {
   id: "Q157229",
@@ -84,23 +93,35 @@ test("the item named as the card names it wins on a shared Building", () => {
   expect(factsFor(index, ["DESN_fk"])).toBeNull();
 });
 
-test("the file is checked before it is read", () => {
-  expect(
-    isLandmarkFactsFile({ attribution: "a", landmarks: [FRAUENKIRCHE] })
-  ).toBe(true);
-  expect(isLandmarkFactsFile({ attribution: "a" })).toBe(false);
-  expect(
-    isLandmarkFactsFile({
-      attribution: "a",
-      landmarks: [{ ...FRAUENKIRCHE, built: [1, 2, 3] }],
-    })
-  ).toBe(false);
-  expect(
-    isLandmarkFactsFile({
-      attribution: "a",
-      landmarks: [{ ...FRAUENKIRCHE, architects: [3] }],
-    })
-  ).toBe(false);
+// The viewer's guard and the build's schema (ADR 0059) agree: what the
+// build lets through, the viewer reads; what the schema refuses, the guard
+// refuses too.
+const committed = Object.values(SITES)
+  .map((site) => nodePath.join(ROOT, landmarkFactsSource(siteDataDir(site))))
+  .filter((path) => existsSync(path));
+
+test.each(committed)("the guard accepts %s, as its schema does", (path) => {
+  const json: unknown = JSON.parse(readFileSync(path, "utf-8"));
+  expect(bakeFileProblems(LANDMARK_FACTS_FILE_SPEC, json)).toEqual([]);
+  expect(isLandmarkFactsFile(json)).toBe(true);
+});
+
+test.each([
+  ["no landmarks", { attribution: "a" }],
+  ["no attribution", { landmarks: [FRAUENKIRCHE] }],
+  ["three years", { built: [1, 2, 3] }],
+  ["an architect not named", { architects: [3] }],
+  ["no name", { name: undefined }],
+  ["a Building not named", { buildings: [1] }],
+  ["a year not whole", { rebuiltFrom: 1945.5 }],
+  ["a height as text", { height: "91" }],
+] as const)("the guard and the schema both refuse %s", (_, broken) => {
+  const file =
+    "attribution" in broken || "landmarks" in broken
+      ? broken
+      : { attribution: "a", landmarks: [{ ...FRAUENKIRCHE, ...broken }] };
+  expect(bakeFileProblems(LANDMARK_FACTS_FILE_SPEC, file)).not.toEqual([]);
+  expect(isLandmarkFactsFile(file)).toBe(false);
 });
 
 test("the tileset's extras name the file or not", () => {

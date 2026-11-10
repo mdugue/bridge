@@ -1,21 +1,20 @@
 import {
   AdditiveBlending,
   BoxGeometry,
-  type BufferGeometry,
   CircleGeometry,
   CylinderGeometry,
   Group,
-  type Material,
   Matrix4,
   MeshBasicNodeMaterial,
   MeshStandardNodeMaterial,
   PlaneGeometry,
-  PointLight,
+  SpotLight,
   PointsNodeMaterial,
   Vector3,
 } from "three/webgpu";
+import type { BufferGeometry, Material } from "three/webgpu";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { color, float, mix, select, uniform, uv, vec3, vec4 } from "three/tsl";
+import { color, float, uv, vec3, vec4 } from "three/tsl";
 import type { LampFeature } from "@/lib/city/features";
 import { yawOfBearing } from "@/lib/city/furniture";
 import {
@@ -25,13 +24,23 @@ import {
   LAMP_POST_H,
   postHeight,
 } from "@/lib/city/lamps";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import { Instances, instancePosition } from "./instancing";
+import {
+  buildLampMirrors,
+  LAMP_CD,
+  LAMP_CONE,
+  LAMP_RANGE_M,
+} from "./lamp-reflections";
+import type { LampMirror } from "./lamp-reflections";
 import type { Pt } from "./mesh-kit";
 import type { DeviceTier } from "./scene-profile";
-import type { F, Live } from "./shader-chunks";
-import { sceneMaterial } from "./three-utils";
-import { addWire, wireMesh, wires, type Wires } from "./wire-ribbons";
+import { drawnAtNight, sceneNight } from "./scene-environment";
+import type { F } from "./shader-chunks";
+import { markThinCaster, sceneMaterial } from "./three-utils";
+import { addWire, wireMesh, wires } from "./wire-ribbons";
+import type { Wires } from "./wire-ribbons";
 
 /** A post's height (m) where the bake measured none. */
 const LAMP_H = LAMP_POST_H;
@@ -85,8 +94,11 @@ export const LAMP_LIGHTS: Readonly<Record<DeviceTier, LampLightBudget>> = {
  * at a far head (the third of three) happens while its light is dim. */
 const LIGHT_NEAR = 14;
 const LIGHT_FAR = 42;
-const LIGHT_BASE = 14;
-const LIGHT_RANGE = 40;
+const LIGHT_BASE = LAMP_CD;
+const LIGHT_RANGE = LAMP_RANGE_M;
+
+/** How near (m) a real light stands to a head to be that head's. */
+const HELD_M = 0.05;
 
 interface Place {
   x: number;
@@ -104,6 +116,44 @@ interface ArmPlace extends Place {
   yaw: number;
 }
 
+/** Whether a place (projected x, y) is somewhere: by a track. */
+type ByPlace = (x: number, y: number) => boolean;
+
+/** The heads whose projected place passes `test`. */
+function headsWhere(
+  heads: readonly Vector3[],
+  ctx: GroundContext,
+  test: ByPlace
+): Vector3[] {
+  return heads.filter((h) => {
+    const p = worldToEpsg(h.x, h.z, ctx.offset);
+    return test(p.x, p.y);
+  });
+}
+
+/** The heads the river mirrors, each with its water: those the bake
+ *  found seeing the water, over it. */
+function mirroredHeads(places: LampPlaces): LampMirror[] {
+  const out: LampMirror[] = [];
+  for (let i = 0; i < places.heads.length; i += 1) {
+    const head = places.heads[i];
+    const water = places.waters[i];
+    if (water !== null && head.y > water.level) {
+      out.push({ head, ...water });
+    }
+  }
+  return out;
+}
+
+/** A lamp's water, as the bake left it (`w`, `wr`), or null. */
+function waterOf(f: LampFeature): Omit<LampMirror, "head"> | null {
+  const level = f.properties?.w;
+  if (level === undefined) {
+    return null;
+  }
+  return { level, reach: f.properties?.wr ?? null };
+}
+
 /** Per-tile lamp visuals (posts + heads + glow + ground pools) on the Y-up scene. */
 export interface LampControl {
   /** Nothing of the tile's own to free: the meshes go with the scene and
@@ -112,46 +162,39 @@ export interface LampControl {
   group: Group;
   /** world-space (Y-up) lantern-head positions, fed to the shared light pool */
   headPositions: Vector3[];
-  /** 0 (day, inert grey) → 1 (night, ignited): emissive + glow + pool opacity */
-  setNightFactor: (t: number) => void;
+  /** the heads by a track, whose light the rails catch (the same
+   *  vectors; lamp-reflections.ts) */
+  trackHeads: Vector3[];
 }
 
 /** A small fixed pool of real point lights shared across ALL tiles' lamps. */
 export interface LampLights {
   dispose: () => void;
-  lights: PointLight[];
+  lights: SpotLight[];
   /** replaces the lamp heads the pool retargets to (tiles stream in) */
   setHeads: (heads: Vector3[]) => void;
   setNightFactor: (t: number) => void;
   /** repositions the lights onto the nearest lamp heads (call per frame) */
   updateNearest: (camPos: Vector3) => void;
+  /** how much of the head at `head` a real light lights this frame (0…1,
+   *  its share of the lamp's full light): the walls' street light
+   *  (lamp-reflections.ts `streetLight`) takes the rest */
+  heldShare: (head: Vector3) => number;
 }
 
 /** The lamps' warm light (the heads' emissive, halos, pools, real lights). */
 const LAMP_LIGHT = 0xff_d0_89;
 
 /**
- * The one night factor every tile's lamps read (0 by day → 1 at night): a
- * uniform node, so a tile's `setNightFactor` is a uniform write — every
- * tile is driven with the same value, and one that streams in later is
- * born with it. The materials are then the scene's (`sceneMaterial`), one
- * node build for every tile.
- */
-export const lampNight: Live = uniform(0);
-
-/**
  * The soft radial alpha of the halos and pools, from the quad's (or disc's)
- * uv: 1 at the centre, 0.4 halfway out, 0 at the rim and past it — the
- * stops of the 64² canvas gradient this used to be, interpolated linearly
- * as the canvas did. Radially symmetric, so no uv flip can turn it.
+ * uv: (1 − r²)³, 1 at the centre, about 0.4 halfway out and flat into 0 at
+ * the rim, so a near lamp's halo has no edge against a dark sky (the linear
+ * ramp to the rim before it drew one). Radially symmetric, so no uv flip can
+ * turn it.
  */
 function glowAlpha(): F {
-  const r = uv().sub(0.5).length().mul(2);
-  return select(
-    r.lessThan(0.5),
-    mix(float(1), float(0.4), r.mul(2)),
-    mix(float(0.4), float(0), r.sub(0.5).mul(2).clamp(0, 1))
-  );
+  const r = uv().sub(0.5).length().mul(2).clamp(0, 1);
+  return float(1).sub(r.mul(r)).pow(3);
 }
 
 function placeInstances(
@@ -163,10 +206,10 @@ function placeInstances(
   const mesh = new Instances(geo, material, places.length);
   const m = new Matrix4();
   const turn = new Matrix4();
-  for (let i = 0; i < places.length; i++) {
+  for (let i = 0; i < places.length; i += 1) {
     const s = scale * (places[i].s ?? 1);
     m.makeScale(s, s, s);
-    const yaw = places[i].yaw;
+    const { yaw } = places[i];
     if (yaw !== undefined) {
       m.premultiply(turn.makeRotationY(yaw));
     }
@@ -201,6 +244,7 @@ function buildPosts(places: Place[], height: number): Instances {
   const mesh = placeInstances(geo, postMaterial(), places);
   mesh.name = "lamp-posts";
   mesh.castShadow = true;
+  markThinCaster(mesh, "slender");
   mesh.receiveShadow = true;
   return mesh;
 }
@@ -214,6 +258,7 @@ function buildPoles(places: Place[], height: number): Instances {
   const mesh = placeInstances(pole, postMaterial(), places);
   mesh.name = "lamp-poles";
   mesh.castShadow = true;
+  markThinCaster(mesh, "slender");
   mesh.receiveShadow = true;
   return mesh;
 }
@@ -237,6 +282,7 @@ function buildArms(places: ArmPlace[], height: number): Instances {
   const mesh = placeInstances(geo, postMaterial(), places);
   mesh.name = "lamp-arms";
   mesh.castShadow = true;
+  markThinCaster(mesh, "slender");
   mesh.receiveShadow = true;
   return mesh;
 }
@@ -249,6 +295,7 @@ function buildMasts(places: Place[]): Instances {
   const mesh = placeInstances(geo, postMaterial(), places);
   mesh.name = "lamp-masts";
   mesh.castShadow = true;
+  markThinCaster(mesh, "slender");
   mesh.receiveShadow = true;
   return mesh;
 }
@@ -264,7 +311,7 @@ function buildHeads(places: Place[], height = LAMP_H): Instances {
       roughness: 0.6,
     });
     m.positionNode = instancePosition();
-    m.emissiveNode = color(LAMP_LIGHT).mul(lampNight.mul(HEAD_EMISSIVE));
+    m.emissiveNode = color(LAMP_LIGHT).mul(sceneNight.mul(HEAD_EMISSIVE));
     return m;
   });
   const mesh = placeInstances(geo, mat, places);
@@ -300,14 +347,14 @@ function buildGlow(heads: Vector3[]): Instances {
     });
     m.positionNode = instancePosition(vec3(0));
     m.colorNode = vec4(color(LAMP_LIGHT), glowAlpha());
-    m.opacityNode = lampNight.mul(GLOW_OPACITY);
-    return m;
+    m.opacityNode = sceneNight.mul(GLOW_OPACITY);
+    // by day the additive halos are skipped outright
+    return drawnAtNight(m);
   });
   const mesh = placeInstances(geo, mat, heads, GLOW_SIZE);
   mesh.name = "lamp-glow";
   mesh.castShadow = false;
   mesh.receiveShadow = false;
-  mesh.visible = false;
   return mesh;
 }
 
@@ -329,15 +376,14 @@ function buildDecals(places: Pool[]): Instances {
       polygonOffsetUnits: -2,
     });
     m.positionNode = instancePosition();
-    m.opacityNode = lampNight.mul(POOL_OPACITY).mul(glowAlpha());
-    return m;
+    m.opacityNode = sceneNight.mul(POOL_OPACITY).mul(glowAlpha());
+    return drawnAtNight(m);
   });
   const decals = places.map((p) => ({ ...p, y: p.y + 0.05 }));
   const mesh = placeInstances(geo, mat, decals);
   mesh.name = "lamp-pools";
   mesh.castShadow = false;
   mesh.receiveShadow = false;
-  mesh.visible = false;
   return mesh;
 }
 
@@ -347,6 +393,9 @@ interface LampPlaces {
   arms: Map<number, ArmPlace[]>;
   /** every head, posts' and hung lamps', for the halos and the real lights */
   heads: Vector3[];
+  /** each head's water, where the river mirrors it (the bake's `w` and
+   *  `wr`), else null */
+  waters: (Omit<LampMirror, "head"> | null)[];
   hung: Place[];
   masts: Place[];
   /** the tall masts' poles by their height (m): their heads are on arms */
@@ -400,16 +449,17 @@ function hangWire(
     return;
   }
   const top = { x: head.x, y: head.y + 0.15, z: head.z };
-  wire.forEach((end, i) => {
+  for (let i = 0; i < wire.length; i += 1) {
+    const end = wire[i];
     const at = liftedPt(end, HUNG_H + WIRE_END_LIFT, ctx);
     if (!at) {
-      return;
+      continue;
     }
     addWire(out.wires, [at, top], WIRE_HALF);
     if (f.properties?.masts?.[i]) {
       out.masts.push({ x: at.x, y: at.y - HUNG_H - WIRE_END_LIFT, z: at.z });
     }
-  });
+  }
 }
 
 /** A wall lantern's bracket, from its facade (`wall`, a little higher) out
@@ -465,6 +515,7 @@ function placeMast(
   const end = { x: foot.x + dx, y: foot.y, z: foot.z - dy };
   byHeight(out.walls, h, end);
   out.heads.push(new Vector3(end.x, end.y + h, end.z));
+  out.waters.push(waterOf(f));
   // on a bridge, its deck; else the ground under the head
   const [ex, ey] = f.geometry.coordinates;
   const below = f.properties?.deck ?? ctx.heightAt(ex + dx, ey + dy) ?? foot.y;
@@ -493,6 +544,7 @@ function placeLamp(f: LampFeature, ctx: GroundContext, out: LampPlaces): void {
   const s = hung ? 1 : poolScale(h);
   out.pools.push({ ...ground, s });
   out.heads.push(new Vector3(ground.x, ground.y + h, ground.z));
+  out.waters.push(waterOf(f));
   const head = { x: ground.x, y: ground.y + h, z: ground.z };
   if (hung) {
     hangWire(f, head, ctx, out);
@@ -505,6 +557,7 @@ function lampPlaces(features: LampFeature[], ctx: GroundContext): LampPlaces {
   const out: LampPlaces = {
     arms: new Map(),
     heads: [],
+    waters: [],
     hung: [],
     masts: [],
     poles: new Map(),
@@ -535,26 +588,29 @@ function taggedHeads(places: Place[], height: number): Instances {
  * carriageway, a lantern on its bracket out of a facade or a wall, or — a
  * lamp hung across the street — a head on a wire between the facades (or
  * masts at the kerb). Mostly fake — emissive
- * heads, additive glow sprites and ground light-pool decals — driven by a
- * single `nightFactor`; the real lighting comes from a small shared
+ * heads, additive glow sprites and ground light-pool decals — driven by the
+ * scene's one night node (scene-environment.ts `sceneNight`; the halos and
+ * pools drawn only after dark, `drawnAtNight`); the real lighting comes from
+ * a small shared
  * {@link createLampLights} pool. An empty feature list yields an empty group.
  */
 export function buildLamps(
   features: LampFeature[],
-  ctx: GroundContext
+  ctx: GroundContext,
+  /** whether projected (x, y) is by a track (no test: no head is) */
+  by: { tracks?: ByPlace } = {}
 ): LampControl {
   const group = new Group();
   group.name = "lamps";
   const places = lampPlaces(features, ctx);
   const headPositions = places.heads;
+  const trackHeads = by.tracks ? headsWhere(headPositions, ctx, by.tracks) : [];
 
   if (places.pools.length === 0) {
     return {
       group,
       headPositions,
-      setNightFactor: () => {
-        // nothing to drive
-      },
+      trackHeads,
       dispose: () => {
         // empty
       },
@@ -583,22 +639,24 @@ export function buildLamps(
   if (wireSet) {
     group.add(wireSet);
   }
-  const glow = buildGlow(headPositions);
+  // the heads the river mirrors first: their columns share the halos'
+  // matrices (lamp-reflections.ts `buildLampMirrors`)
+  const mirrored = mirroredHeads(places);
+  const mirroredSet = new Set(mirrored.map((m) => m.head));
+  const glow = buildGlow([
+    ...mirrored.map((m) => m.head),
+    ...headPositions.filter((h) => !mirroredSet.has(h)),
+  ]);
   const decals = buildDecals(places.pools);
   group.add(glow, decals);
+  if (mirrored.length > 0) {
+    group.add(buildLampMirrors(glow.instanceMatrix, mirrored));
+  }
 
   return {
     group,
     headPositions,
-    setNightFactor: (t) => {
-      const nf = Math.min(Math.max(t, 0), 1);
-      // One value for every tile: the heads' emissive, the halos' and the
-      // pools' opacity all read it. Visibility stays per tile, so by day
-      // the additive passes are skipped outright.
-      lampNight.value = nf;
-      glow.visible = nf > 0.01;
-      decals.visible = nf > 0.01;
-    },
+    trackHeads,
     // disposeObject3D frees the meshes with the scene; nothing else is the
     // tile's.
     dispose: () => {
@@ -625,7 +683,7 @@ function nearestHeads(
   if (n === 0) {
     return;
   }
-  for (let i = 0; i < heads.length; i++) {
+  for (let i = 0; i < heads.length; i += 1) {
     const d = heads[i].distanceToSquared(from);
     if (!(d < dist[n - 1])) {
       continue;
@@ -634,7 +692,7 @@ function nearestHeads(
     while (s > 0 && d < dist[s - 1]) {
       idx[s] = idx[s - 1];
       dist[s] = dist[s - 1];
-      s--;
+      s -= 1;
     }
     idx[s] = i;
     dist[s] = d;
@@ -673,9 +731,20 @@ function handOver(near: number, next: number, band: number): number {
  */
 export function createLampLights(budget: LampLightBudget): LampLights {
   let heads: Vector3[] = [];
-  const lights: PointLight[] = [];
-  for (let i = 0; i < budget.lights; i++) {
-    const light = new PointLight(LAMP_LIGHT, 0, LIGHT_RANGE, 2);
+  const lights: SpotLight[] = [];
+  for (let i = 0; i < budget.lights; i += 1) {
+    // a street lamp's shade throws its light down: a cone round the
+    // plumb line, its aim carried along as its child
+    const light = new SpotLight(
+      LAMP_LIGHT,
+      0,
+      LIGHT_RANGE,
+      LAMP_CONE.angle,
+      LAMP_CONE.penumbra,
+      2
+    );
+    light.add(light.target);
+    light.target.position.set(0, -1, 0);
     light.castShadow = false;
     lights.push(light);
   }
@@ -703,7 +772,7 @@ export function createLampLights(budget: LampLightBudget): LampLights {
         return;
       }
       nearestHeads(heads, camPos, idx, dist);
-      for (let s = 0; s < lights.length; s++) {
+      for (let s = 0; s < lights.length; s += 1) {
         if (idx[s] < 0) {
           lights[s].intensity = 0;
           continue;
@@ -714,6 +783,20 @@ export function createLampLights(budget: LampLightBudget): LampLights {
         lights[s].intensity =
           nightFactor * LIGHT_BASE * falloff(Math.sqrt(dist[s])) * fade;
       }
+    },
+    heldShare: (head) => {
+      const full = nightFactor * LIGHT_BASE;
+      let share = 0;
+      for (const light of lights) {
+        if (
+          full > 0 &&
+          light.intensity > 0 &&
+          light.position.distanceToSquared(head) < HELD_M * HELD_M
+        ) {
+          share = Math.max(share, Math.min(light.intensity / full, 1));
+        }
+      }
+      return share;
     },
     dispose: () => {
       for (const light of lights) {

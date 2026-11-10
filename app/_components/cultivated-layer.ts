@@ -4,11 +4,9 @@ import {
   Color,
   Group,
   MeshStandardNodeMaterial,
-  type Node,
   Object3D,
-  type UniformNode,
-  type Vector4,
 } from "three/webgpu";
+import type { Node, UniformNode, Vector4 } from "three/webgpu";
 import {
   and,
   cos,
@@ -39,20 +37,13 @@ import {
   COLONY_GARDEN as G,
   VINE_ROW,
 } from "@/lib/city/cultivated";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import { srgbToLinear } from "@/lib/city/landcover";
 import type { Point2 } from "@/lib/city/polyline";
-import {
-  byteOf,
-  gdHash,
-  gdNoise,
-  GROUND_DETAIL,
-  type GroundColour,
-  type GroundFields,
-  type GroundInputs,
-  texelAt,
-  texelSize,
-} from "./ground-detail";
+import { GROUND_DETAIL } from "./ground-detail";
+import { byteOf, gdHash, gdNoise, texelAt, texelSize } from "./shader-chunks";
+import type { GroundColour, GroundFields, GroundInputs } from "./ground-detail";
 import { instancePosition, Instances, instanceTint } from "./instancing";
 import { hedgePieces } from "./low-vegetation-layer";
 import { rmStripes } from "./road-markings";
@@ -120,8 +111,8 @@ function ctPlot(q: V2): V3 {
   const best = float(1e9).toVar();
   const bc = vec2(c0).toVar();
   const bp = vec2(0).toVar();
-  for (let j = -1; j <= 1; j++) {
-    for (let i = -1; i <= 1; i++) {
+  for (let j = -1; j <= 1; j += 1) {
+    for (let i = -1; i <= 1; i += 1) {
       const c = c0.add(vec2(i, j)).toVar();
       const p = ctSeed(c).toVar();
       const e = q.sub(p);
@@ -134,8 +125,8 @@ function ctPlot(q: V2): V3 {
     }
   }
   let edge: F = float(1e9);
-  for (let j = -1; j <= 1; j++) {
-    for (let i = -1; i <= 1; i++) {
+  for (let j = -1; j <= 1; j += 1) {
+    for (let i = -1; i <= 1; i += 1) {
       if (i === 0 && j === 0) {
         continue;
       }
@@ -380,7 +371,8 @@ export function buildVineyards(rows: Point2[][], ctx: GroundContext): Group {
     mesh.name = "vine-rows";
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    cell.forEach((p, i) => {
+    for (let i = 0; i < cell.length; i += 1) {
+      const p = cell[i];
       dummy.position.set(p.x, p.y, p.z);
       dummy.rotation.set(0, p.rot, 0);
       dummy.scale.set(p.len, VINE_ROW.h + SINK_M, VINE_ROW.w);
@@ -388,7 +380,7 @@ export function buildVineyards(rows: Point2[][], ctx: GroundContext): Group {
       mesh.setMatrixAt(i, dummy.matrix);
       col.setHSL(0.25 + p.tint * 0.03, 0.36, 0.42 + p.tint * 0.06);
       mesh.setColorAt(i, col);
-    });
+    }
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceTints) {
       mesh.instanceTints.needsUpdate = true;

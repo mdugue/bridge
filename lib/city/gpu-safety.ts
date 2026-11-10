@@ -25,8 +25,8 @@
  * nothing. A frame that throws on a GPU
  * that still answers is a bug, not a sign (`frameLoss`).
  *
- * Also here: the caps on the automatic recovery (one reload per level,
- * gpu-recovery.ts) and where a recovered page starts. Pure: the caller
+ * The caps on the automatic recovery (one reload per level) and where a
+ * recovered page starts are lib/city/gpu-recovery.ts. Pure: the caller
  * hands it what was stored and the time. No THREE, no DOM.
  */
 
@@ -259,7 +259,7 @@ export function restoresLook(level: SafetyLevel): boolean {
   return level < 2;
 }
 
-// --- the automatic recovery's caps (gpu-recovery.ts) -----------------------
+// --- how the GPU went: the page lifecycle's and the crash reports' kinds ---
 
 /**
  * How the GPU went: `lost` — it failed in use (a device the browser
@@ -303,63 +303,4 @@ export function frameLoss(how: GpuLoss, signs: FrameSigns): GpuLoss {
     return how;
   }
   return signs.answers() ? "failed" : "lost";
-}
-
-/** When the page reloaded itself, per kind (ms since the epoch). */
-export interface RecoveryHistory {
-  losses: readonly number[];
-  reclaims: readonly number[];
-  failures: readonly number[];
-}
-
-/**
- * The tab's own net under the ladder: no more loss reloads than there are
- * levels in this window — a page whose level cannot rise (`?safety=N`)
- * would otherwise reload for ever.
- */
-export const LOSS_WINDOW_MS = 600_000;
-/** At most this many reloads after a reclaim in RECLAIM_WINDOW_MS. */
-export const RECLAIM_TRIES = 3;
-export const RECLAIM_WINDOW_MS = 1_800_000;
-/**
- * At most this many reloads after a failed frame in LOSS_WINDOW_MS: the
- * recovery's old cap — a bug that comes back with the place shows the card.
- */
-export const FAILURE_TRIES = 2;
-
-const within = (times: readonly number[], windowMs: number, now: number) =>
-  times.filter((t) => now - t < windowMs);
-
-/** The history without the reloads too long ago to count. */
-export function recentHistory(
-  history: RecoveryHistory,
-  now: number
-): RecoveryHistory {
-  return {
-    losses: within(history.losses, LOSS_WINDOW_MS, now),
-    reclaims: within(history.reclaims, RECLAIM_WINDOW_MS, now),
-    failures: within(history.failures, LOSS_WINDOW_MS, now),
-  };
-}
-
-/**
- * Whether the page may reload itself. A loss reloads once per level — the
- * reload is a level lighter — and not from the lightest; a reclaim and a
- * failed frame do not raise the level and have caps of their own.
- */
-export function mayRecover(
-  how: GpuLoss,
-  level: SafetyLevel,
-  history: RecoveryHistory,
-  now: number
-): boolean {
-  const recent = recentHistory(history, now);
-  switch (how) {
-    case "reclaimed":
-      return recent.reclaims.length < RECLAIM_TRIES;
-    case "failed":
-      return recent.failures.length < FAILURE_TRIES;
-    case "lost":
-      return level < MAX_SAFETY && recent.losses.length < MAX_SAFETY;
-  }
 }

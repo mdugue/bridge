@@ -64,11 +64,34 @@ def test_a_synthetic_facade_reads_as_its_grid():
     assert f["width"] == pytest.approx(1.2, abs=0.25)
 
 
+def test_each_opening_seen_whole_gives_its_size():
+    rgb, valid, eave = _facade()
+    # glass and frames are never one flat tone: a photo's openings are busy
+    rng = np.random.default_rng(1)
+    dark = rgb[..., 0] < 0.5
+    rgb[dark] += rng.uniform(-0.1, 0.1, (int(dark.sum()), 1))
+    f = win.image_features(traits_of(rgb, valid, eave))
+    assert f["ow"] == pytest.approx(1.2, abs=0.1)
+    assert f["oh"] == pytest.approx(1.6, abs=0.1)
+    assert f["oprop"] == pytest.approx(0.75, abs=0.06)
+
+
+def test_the_openings_own_size_comes_before_the_profiles():
+    traits = {"grid": 0.7, "width": 1.1, "prop": 0.7, "ow": 1.3, "oprop": 0.5}
+    m = win.model(traits, 3.0, frozenset({"axis", "grid", "width", "prop", "ow", "oprop"}))
+    assert (m["w"], m["h"]) == (1.3, 2.4)  # 2.6 tall, held to WINDOW_H_M
+    m = win.model(traits, 3.0, frozenset({"axis", "grid", "width", "prop"}))
+    assert (m["w"], m["h"]) == (1.1, 1.57)
+    assert win.opening_sizes([[0, 0, 120, 160, 1000, 1000]]) == {}
+
+
 def test_the_model_draws_only_what_is_reliable_and_measured():
     traits = {"grid": 0.7, "width": 1.1, "prop": 0.7, "storey": 3.4, "sill": 0.6, "orn": 0.02}
     m = win.model(traits, 3.0)
     # the sill band failed its ρ: measured, not drawn
-    assert m == {"axis": 3.0, "grid": "regular", "w": 1.1, "h": 1.57, "storey": 3.4, "orn": True}
+    # the rows come from the storeys OSM or the neighbours count, never
+    # the photos' storey (lib/city/windows.ts `windowStorey`)
+    assert m == {"axis": 3.0, "grid": "regular", "w": 1.1, "h": 1.57, "orn": True}
     assert "orn" not in win.model(traits | {"orn": 0.005}, 3.0)
     # no axis, an axis outside a window rhythm, or no grid: no windows
     assert win.model(traits, None) is None

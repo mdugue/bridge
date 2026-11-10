@@ -1,30 +1,44 @@
 "use client";
 
+/**
+ * The sun study's card (plan 054 phase 2, the spike behind `?studie=`):
+ * its recipe as chips (season, hours, playgrounds or benches, a circle),
+ * the places ranked by their share of shade, and how it was computed.
+ * It loads its inputs (sun-study-data.ts), ranks the places in slices
+ * between frames (lib/city/sun-study.ts), hands the result to the scene's
+ * hatch (study-marks.ts) and writes the recipe into the link. Its own
+ * chunk: a visitor without `?studie=` loads none of it.
+ */
 import { SunIcon, XIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "cn";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { giveBack } from "@/lib/city/build-steps";
 import { utmToLatLng } from "@/lib/city/crs";
 import type { Site } from "@/lib/city/site";
 import type { StudyMark } from "./study-marks-geometry";
 import {
-  type PeriodId,
+  DEFAULT_RECIPE,
   parseRecipe,
   PERIODS,
-  type PlaceShade,
   recipeText,
   recipeTitle,
   placeView,
   shadePlace,
-  type SubjectId,
   SUBJECTS,
-  type SunStudyRecipe,
   sunSamples,
-  type HorizonRaster,
+} from "@/lib/city/sun-study";
+import type {
+  PeriodId,
+  PlaceShade,
+  SubjectId,
+  SunStudyRecipe,
+  HorizonRaster,
 } from "@/lib/city/sun-study";
 import type { AskScene } from "./ask-scene-tools";
 import { isAbortError } from "./fetch-optional";
-import { loadStudyInputs, type NamedPlace } from "./sun-study-data";
+import { loadStudyInputs } from "./sun-study-data";
+import type { NamedPlace } from "./sun-study-data";
 
 /**
  * The sun study's card (plan 054 phase 2, the spike of 2026-11-03), open
@@ -83,6 +97,9 @@ const MIDDLE: Record<PeriodId, [number, number]> = {
   jahr: [6, 21],
 };
 
+/** A number as two digits ("09"). */
+const two = (n: number) => String(n).padStart(2, "0");
+
 /** The link with this recipe in `?studie=`, or without it. */
 function writeRecipe(recipe: SunStudyRecipe | null): void {
   const url = new URL(window.location.href);
@@ -93,11 +110,6 @@ function writeRecipe(recipe: SunStudyRecipe | null): void {
   }
   window.history.replaceState(window.history.state, "", url);
 }
-
-const nextFrame = () =>
-  new Promise<void>((resolve) => {
-    setTimeout(resolve, 0);
-  });
 
 /** Ranks every place, a few milliseconds at a time. */
 async function rank(
@@ -143,7 +155,7 @@ async function rank(
         done: places.length,
         total: inputs.places.length,
       });
-      await nextFrame();
+      await giveBack();
       slice = performance.now();
     }
   }
@@ -194,10 +206,7 @@ function useStudy(
   });
   const key = recipeText(recipe);
   useEffect(() => {
-    const ran = parseRecipe(key);
-    if (!ran) {
-      return;
-    }
+    const ran = parseRecipe(key) ?? DEFAULT_RECIPE;
     const { x, y } = ran;
     if (x === undefined || y === undefined) {
       // no camera yet: ask the scene until it has one
@@ -212,16 +221,20 @@ function useStudy(
     writeRecipe(ran);
     const abort = new AbortController();
     const report = (status: Status) => setOutcome({ key, status });
-    rank(site, { ...ran, x, y }, abort.signal, report)
-      .then((result) => report({ phase: "done", result }))
-      .catch((err: unknown) => {
-        if (!isAbortError(err) && !abort.signal.aborted) {
+    const run = async () => {
+      try {
+        const result = await rank(site, { ...ran, x, y }, abort.signal, report);
+        report({ phase: "done", result });
+      } catch (error) {
+        if (!isAbortError(error) && !abort.signal.aborted) {
           report({
             phase: "failed",
-            message: err instanceof Error ? err.message : String(err),
+            message: error instanceof Error ? error.message : String(error),
           });
         }
-      });
+      }
+    };
+    void run();
     return () => abort.abort();
   }, [key, setRecipe, site]);
   if (outcome?.key === key) {
@@ -230,7 +243,7 @@ function useStudy(
   return recipe.x === undefined ? { phase: "waiting" } : { phase: "loading" };
 }
 
-function Chips<T extends string | number>({
+const Chips = <T extends string | number>({
   label,
   options,
   value,
@@ -240,38 +253,36 @@ function Chips<T extends string | number>({
   options: [T, string][];
   value: T;
   onChange: (v: T) => void;
-}) {
-  return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <span className="w-14 text-[11px] text-muted-foreground">{label}</span>
-      <ToggleGroup
-        aria-label={label}
-        onValueChange={(v: string[]) => {
-          const hit = options.find(([o]) => String(o) === v[0]);
-          if (hit) {
-            onChange(hit[0]);
-          }
-        }}
-        size="sm"
-        spacing={1}
-        value={[String(value)]}
-        variant="outline"
-      >
-        {options.map(([o, text]) => (
-          <ToggleGroupItem
-            className="px-2 text-[12px] data-[pressed]:bg-primary data-[pressed]:text-primary-foreground"
-            key={String(o)}
-            value={String(o)}
-          >
-            {text}
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
-    </div>
-  );
-}
+}) => (
+  <div className="flex flex-wrap items-center gap-1.5">
+    <span className="w-14 text-[11px] text-muted-foreground">{label}</span>
+    <ToggleGroup
+      aria-label={label}
+      onValueChange={(v: string[]) => {
+        const hit = options.find(([o]) => String(o) === v[0]);
+        if (hit) {
+          onChange(hit[0]);
+        }
+      }}
+      size="sm"
+      spacing={1}
+      value={[String(value)]}
+      variant="outline"
+    >
+      {options.map(([o, text]) => (
+        <ToggleGroupItem
+          className="px-2 text-[12px] data-[pressed]:bg-primary data-[pressed]:text-primary-foreground"
+          key={String(o)}
+          value={String(o)}
+        >
+          {text}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
+  </div>
+);
 
-function RecipeChips({
+const RecipeChips = ({
   recipe,
   onChange,
   onHere,
@@ -279,7 +290,7 @@ function RecipeChips({
   recipe: SunStudyRecipe;
   onChange: (r: SunStudyRecipe) => void;
   onHere: () => void;
-}) {
+}) => {
   const hours = HOURS.find(([f, t]) => f === recipe.from && t === recipe.to);
   return (
     <div className="flex flex-col gap-1.5 px-4 pb-2">
@@ -337,17 +348,17 @@ function RecipeChips({
       </div>
     </div>
   );
-}
+};
 
 const pct = (v: number) => `${Math.round(v * 100)} %`;
 
-function Ranking({
+const Ranking = ({
   places,
   onPick,
 }: {
   places: Ranked[];
   onPick: (p: Ranked) => void;
-}) {
+}) => {
   if (places.length === 0) {
     return (
       <p className="px-4 py-3 text-[13px] text-muted-foreground">
@@ -387,15 +398,15 @@ function Ranking({
       ))}
     </ol>
   );
-}
+};
 
-function Method({
+const Method = ({
   recipe,
   result,
 }: {
   recipe: SunStudyRecipe;
   result: Done | null;
-}) {
+}) => {
   const p = PERIODS[recipe.period];
   return (
     <footer className="flex flex-col gap-1 border-t px-4 pt-2 pb-3 text-[11px] leading-snug text-muted-foreground">
@@ -420,19 +431,27 @@ function Method({
       )}
     </footer>
   );
+};
+
+/** What the card says while it has no ranking, or null. */
+function statusText(status: Status): string | null {
+  if (status.phase === "waiting") {
+    return "Warte auf die Szene …";
+  }
+  if (status.phase === "loading") {
+    return "Lade Horizont, Bäume und Orte …";
+  }
+  if (status.phase === "computing") {
+    return `Rechne … ${status.done} von ${status.total}`;
+  }
+  if (status.phase === "failed") {
+    return `Das ging schief: ${status.message}`;
+  }
+  return null;
 }
 
-function StatusLine({ status }: { status: Status }) {
-  const text =
-    status.phase === "waiting"
-      ? "Warte auf die Szene …"
-      : status.phase === "loading"
-        ? "Lade Horizont, Bäume und Orte …"
-        : status.phase === "computing"
-          ? `Rechne … ${status.done} von ${status.total}`
-          : status.phase === "failed"
-            ? `Das ging schief: ${status.message}`
-            : null;
+const StatusLine = ({ status }: { status: Status }) => {
+  const text = statusText(status);
   return text ? (
     <p
       className="px-4 py-3 text-[13px] text-muted-foreground"
@@ -441,16 +460,16 @@ function StatusLine({ status }: { status: Status }) {
       {text}
     </p>
   ) : null;
-}
+};
 
-export default function SunStudyCard({
+const SunStudyCard = ({
   coarse,
   site,
   scene,
   marks,
   initial,
   onClose,
-}: Props) {
+}: Props) => {
   const [recipe, setRecipe] = useState(() => centred(initial, scene));
   const status = useStudy(recipe, site, scene, setRecipe);
   const result = status.phase === "done" ? status.result : null;
@@ -480,8 +499,12 @@ export default function SunStudyCard({
   const pick = (p: Ranked) => {
     const [month, day] = MIDDLE[recipe.period];
     const year = new Date().getFullYear();
-    const date = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    scene.setTime(Math.round((recipe.from + recipe.to) / 2), date);
+    // the window's middle, on the period's middle day
+    const mid = ((recipe.from + recipe.to) / 2) * 60;
+    scene.setTime({
+      datum: `${year}-${two(month)}-${two(day)}`,
+      uhrzeit: `${two(Math.floor(mid / 60))}:${two(mid % 60)}`,
+    });
     scene.show(placeView(p, scene.from()));
   };
   return (
@@ -526,4 +549,6 @@ export default function SunStudyCard({
       <Method recipe={recipe} result={result} />
     </section>
   );
-}
+};
+
+export default SunStudyCard;

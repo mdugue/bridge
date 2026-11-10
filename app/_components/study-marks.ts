@@ -26,8 +26,10 @@ import {
   positionWorld,
   step,
 } from "three/tsl";
-import { epsgToWorld, type RecenterOffset } from "@/lib/city/ground-clamp";
-import { markTriangles, type StudyMark } from "./study-marks-geometry";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import type { RecenterOffset } from "@/lib/city/ground-clamp";
+import { markTriangles } from "./study-marks-geometry";
+import type { StudyMark } from "./study-marks-geometry";
 import { sceneMaterial } from "./three-utils";
 
 /** How far over the ground the hatch lies (m): over the playground slab. */
@@ -37,8 +39,8 @@ const LIFT_M = 0.2;
 const HATCH_PER_M = float(0.7);
 const HATCH_MIN = float(0.06);
 const HATCH_SPAN = float(0.8);
-const PAPER = color(0xf4f2ed);
-const INK = color(0x3f4fb8);
+const PAPER = color(0xf4_f2_ed);
+const INK = color(0x3f_4f_b8);
 
 function hatchMaterial(): MeshStandardNodeMaterial {
   return sceneMaterial("study-hatch", () => {
@@ -136,7 +138,8 @@ export function createStudyMarks(deps: StudyMarksDeps): StudyMarks {
     }
   };
   const show = async (marks: readonly StudyMark[]) => {
-    const mine = ++generation;
+    generation += 1;
+    const mine = generation;
     shown = marks;
     const built = markGeometry(marks, deps);
     if (!built) {
@@ -155,7 +158,7 @@ export function createStudyMarks(deps: StudyMarksDeps): StudyMarks {
     }
     drop();
     mesh = next;
-    rough = built.rough;
+    ({ rough } = built);
     deps.parent.add(next);
     deps.changed();
   };
@@ -170,13 +173,13 @@ export function createStudyMarks(deps: StudyMarksDeps): StudyMarks {
       }
     },
     clear: () => {
-      generation++;
+      generation += 1;
       shown = [];
       rough = [];
       drop();
     },
     dispose: () => {
-      generation++;
+      generation += 1;
       shown = [];
       mesh?.removeFromParent();
       mesh?.geometry.dispose();

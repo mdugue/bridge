@@ -140,12 +140,12 @@ export function parkingBand(
     kind === parkingId("street-parallel")
       ? PARKING_DEPTH.parallel
       : PARKING_DEPTH.angled;
-  const from =
-    place === parkingPlaceId("on-kerb")
-      ? -depth
-      : place === parkingPlaceId("half-on-kerb")
-        ? -1
-        : 0;
+  let from = 0;
+  if (place === parkingPlaceId("on-kerb")) {
+    from = -depth;
+  } else if (place === parkingPlaceId("half-on-kerb")) {
+    from = -1;
+  }
   return [from, from + depth];
 }
 
@@ -182,14 +182,6 @@ export function unpackSurface(byte: number): {
   return { road: byte & 7, walk: (byte >> 3) & 7, park: byte >> 6 };
 }
 
-/**
- * The street direction the raster's G channel stores (0 = unknown, else
- * 1 + bearing mod 180° over 0..254) in radians from east, or null.
- */
-export function surfaceHeading(byte: number): number | null {
-  return byte === 0 ? null : ((byte - 1) / 254) * Math.PI;
-}
-
 /** sRGB tint of a class id; unknown ids take the background tint. */
 export function landcoverSrgb(id: number): readonly [number, number, number] {
   return (LANDCOVER_CLASSES[id] ?? LANDCOVER_CLASSES[0]).srgb;
@@ -198,7 +190,7 @@ export function landcoverSrgb(id: number): readonly [number, number, number] {
 /** One sRGB byte (0..255) to linear light (0..1), the IEC 61966-2-1 curve. */
 export function srgbToLinear(byte: number): number {
   const c = byte / 255;
-  return c <= 0.040_45 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
 }
 
 /**

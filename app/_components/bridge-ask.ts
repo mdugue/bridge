@@ -1,20 +1,76 @@
-import {
-  Box3,
-  type Mesh,
-  type Object3D,
-  Raycaster,
-  Vector3,
-} from "three/webgpu";
-import {
-  type AskItem,
-  type AskSet,
-  type Slab,
-  ringDistanceXz,
-} from "@/lib/city/ask-solids";
+import { Box3, Raycaster, Vector3 } from "three/webgpu";
+import type { Mesh, Object3D } from "three/webgpu";
+import { PIER_REACH, ringDistanceXz } from "@/lib/city/ask-solids";
+import type { AskHit, AskItem, AskSet, Slab, Xyz } from "@/lib/city/ask-solids";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 
-/** A pier just outside its deck's outline still belongs to it (m). */
-const PIER_REACH = 12;
+/** The slab a deck's first solid is, if it is one. */
+const slabOf = (item: AskItem<FeatureInquiry>): Slab | null => {
+  const s = item.solids[0];
+  return s && "slab" in s ? s.slab : null;
+};
+
+/** One ray for every bridge set: a question runs to its end before the
+ *  next. */
+const raycaster = new Raycaster();
+raycaster.firstHitOnly = true;
+const origin = new Vector3();
+const direction = new Vector3();
+
+/** A tile's bridges, asked (`bridgeAskSet`): its methods on the prototype,
+ *  so a set holds its meshes, decks and box and no function of its own. */
+class BridgeAsk implements AskSet<FeatureInquiry> {
+  readonly box: AskSet<FeatureInquiry>["box"];
+  private readonly meshes: Mesh[];
+  private readonly decks: readonly AskItem<FeatureInquiry>[];
+
+  constructor(
+    meshes: Mesh[],
+    decks: readonly AskItem<FeatureInquiry>[],
+    bounds: Box3
+  ) {
+    this.meshes = meshes;
+    this.decks = decks;
+    this.box = {
+      min: { x: bounds.min.x, y: bounds.min.y, z: bounds.min.z },
+      max: { x: bounds.max.x, y: bounds.max.y, z: bounds.max.z },
+    };
+  }
+
+  /** Whether a mesh still lacks its BVH: the autofocus, which never builds
+   *  one, passes the bridge by until a question has (its meshes are not
+   *  indexed, so the BVH worker cannot take them). */
+  unbuilt(): boolean {
+    return this.meshes.some((mesh) => !mesh.geometry.boundsTree);
+  }
+
+  nearest(o: Xyz, d: Xyz, far: number): AskHit<FeatureInquiry> | null {
+    for (const mesh of this.meshes) {
+      if (!mesh.geometry.boundsTree) {
+        mesh.geometry.computeBoundsTree();
+      }
+    }
+    raycaster.set(origin.set(o.x, o.y, o.z), direction.set(d.x, d.y, d.z));
+    raycaster.far = far;
+    const hit = raycaster.intersectObjects(this.meshes, false)[0];
+    if (!hit) {
+      return null;
+    }
+    let best: AskItem<FeatureInquiry> | null = null;
+    let reach = PIER_REACH;
+    for (const deck of this.decks) {
+      const slab = slabOf(deck);
+      const gap = slab
+        ? ringDistanceXz(slab.ring, hit.point.x, hit.point.z)
+        : Number.POSITIVE_INFINITY;
+      if (gap <= reach) {
+        reach = gap;
+        best = deck;
+      }
+    }
+    return best ? { ...best, distance: hit.distance } : null;
+  }
+}
 
 /**
  * A tile's bridges as one askable set (plan 052 phase 4): rays meet the
@@ -46,44 +102,5 @@ export function bridgeAskSet(
       bounds.union(box.clone().applyMatrix4(mesh.matrixWorld));
     }
   }
-  const raycaster = new Raycaster();
-  raycaster.firstHitOnly = true;
-  const origin = new Vector3();
-  const direction = new Vector3();
-  const slabOf = (item: AskItem<FeatureInquiry>): Slab | null => {
-    const s = item.solids[0];
-    return s && "slab" in s ? s.slab : null;
-  };
-  return {
-    box: {
-      min: { x: bounds.min.x, y: bounds.min.y, z: bounds.min.z },
-      max: { x: bounds.max.x, y: bounds.max.y, z: bounds.max.z },
-    },
-    nearest: (o, d, far) => {
-      for (const mesh of meshes) {
-        if (!mesh.geometry.boundsTree) {
-          mesh.geometry.computeBoundsTree();
-        }
-      }
-      raycaster.set(origin.set(o.x, o.y, o.z), direction.set(d.x, d.y, d.z));
-      raycaster.far = far;
-      const hit = raycaster.intersectObjects(meshes, false)[0];
-      if (!hit) {
-        return null;
-      }
-      let best: AskItem<FeatureInquiry> | null = null;
-      let reach = PIER_REACH;
-      for (const deck of decks) {
-        const slab = slabOf(deck);
-        const gap = slab
-          ? ringDistanceXz(slab.ring, hit.point.x, hit.point.z)
-          : Number.POSITIVE_INFINITY;
-        if (gap <= reach) {
-          reach = gap;
-          best = deck;
-        }
-      }
-      return best ? { ...best, distance: hit.distance } : null;
-    },
-  };
+  return new BridgeAsk(meshes, decks, bounds);
 }

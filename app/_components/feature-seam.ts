@@ -72,6 +72,19 @@ export function createWatch<T>(initial: T): Watched<T> {
   };
 }
 
+/**
+ * Follows a watched value: `listener` hears the current value at once and
+ * every change after, until the returned call — the read-then-subscribe a
+ * late starter does, in one synchronous step.
+ */
+export function follow<T>(
+  watch: Pick<Watch<T>, "get" | "subscribe">,
+  listener: (value: T) => void
+): () => void {
+  listener(watch.get());
+  return watch.subscribe(listener);
+}
+
 /** The scene's instant as the HUD set it last (its sun and time). */
 export interface SceneClock {
   date: Date;
@@ -109,33 +122,31 @@ export interface LazyFeature<F> {
  * it (the importer's promise resolves in a later microtask at the soonest).
  */
 export function lazyFeature<M, F extends { dispose: () => void }>(
-  importer: () => Promise<M>,
+  importer: () => M | Promise<M>,
   start: (module: M) => F
 ): LazyFeature<F> {
   let feature: F | null = null;
   let pending: Promise<F | null> | null = null;
   let disposed = false;
+  const dropPending = (cause: unknown): never => {
+    pending = null;
+    throw cause;
+  };
   return {
-    want: () => {
+    want: async () => {
       // (a start that resolved before the spine went would hand out the
       // stopped feature)
       if (disposed) {
-        return Promise.resolve(null);
+        return null;
       }
-      pending ??= importer().then(
-        (module) => {
-          if (disposed) {
-            return null;
-          }
-          feature ??= start(module);
-          return feature;
-        },
-        (error: unknown) => {
-          pending = null;
-          throw error;
+      pending ??= Promise.resolve(importer()).then((module) => {
+        if (disposed) {
+          return null;
         }
-      );
-      return pending;
+        feature ??= start(module);
+        return feature;
+      }, dropPending);
+      return await pending;
     },
     current: () => feature,
     dispose: () => {

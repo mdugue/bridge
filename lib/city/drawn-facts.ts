@@ -34,10 +34,9 @@ export interface DrawnFacts {
   roof?: RoofColourSource;
   /** OSM's `roof:colour` as mapped */
   roofColour?: string;
-  /** where the storey height came from: OSM's count, the photos, the
-   *  storeys of the mapped buildings around it, or the estimate from the
-   *  height */
-  storey?: "height" | "neighbours" | "osm" | "photos";
+  /** where the storey height came from: OSM's count, the storeys of the
+   *  mapped buildings around it, or the estimate from the height */
+  storey?: "height" | "neighbours" | "osm";
   /** where the wall colour came from */
   wall?: WallColourSource;
   /** the Wikidata item of the landmark the object belongs to */

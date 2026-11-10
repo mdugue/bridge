@@ -12,8 +12,8 @@ import {
   OBJECT_SOURCE_GAP,
   OBJECT_SOURCE_PASSAGE,
   OBJECT_SOURCE_SHOPFRONT,
-  type OsmBuildingLut,
 } from "../lib/city/city-mesh";
+import type { OsmBuildingLut } from "../lib/city/city-mesh";
 import type {
   DoorFeature,
   DormerFeature,
@@ -30,9 +30,10 @@ import {
   TYPES,
   unpackStyle,
   WINDOW_ROWS,
-  type WindowWall,
 } from "../lib/city/windows";
+import type { WindowWall } from "../lib/city/windows";
 import { storeyHeight } from "../lib/city/building-tint";
+import type { RoofColours } from "../lib/city/building-tint";
 import {
   appendedRoofColour,
   assignWindows,
@@ -128,6 +129,249 @@ function fixture(): CityJsonDocument {
     },
   };
 }
+
+const scanShed = (x: number) => ({
+  geometry: {
+    type: "Polygon" as const,
+    coordinates: [
+      [
+        [x, 5_656_020],
+        [x + 4, 5_656_020],
+        [x + 4, 5_656_023],
+        [x, 5_656_023],
+        [x, 5_656_020],
+      ] as [number, number][],
+    ],
+  },
+  properties: { h: 2.5, z: 100 },
+});
+
+const roofPart = (x0: number, z: number) => ({
+  geometry: {
+    type: "Polygon" as const,
+    coordinates: [
+      [
+        [412_040 + x0, 5_656_000],
+        [412_045 + x0, 5_656_000],
+        [412_045 + x0, 5_656_010],
+        [412_040 + x0, 5_656_010],
+        [412_040 + x0, 5_656_000],
+      ] as [number, number][],
+    ],
+  },
+  properties: { id: "house", z },
+});
+
+const dormerOn = (x: number, of = "house"): DormerFeature => ({
+  geometry: { type: "Point", coordinates: [412_000 + x, 5_656_005] },
+  properties: { of, ax: 1, ay: 0, w: 2, d: 2, z: 110, top: 111.5, slope: 45 },
+});
+
+const dormerAt = (x: number, k?: "chimney"): DormerFeature => ({
+  geometry: { type: "Point", coordinates: [412_000 + x, 5_656_005] },
+  properties: {
+    of: "house",
+    ax: 1,
+    ay: 0,
+    w: k ? 0.6 : 2,
+    d: k ? 0.6 : 2,
+    z: 110,
+    top: 111.5,
+    slope: 45,
+    ...(k ? { k } : {}),
+  },
+});
+
+const shopfrontAt = (oid = "house"): ShopfrontWall => ({
+  oid,
+  wi: 0,
+  a: [412_040, 5_656_000],
+  b: [412_050, 5_656_000],
+  L: 10,
+  n: [0, -1],
+  z: [100, 100],
+  src: "photo",
+  bays: [
+    [1, 3],
+    [3.5, 6.5],
+  ],
+  sign: { at: [[1, 7]], z: [3.3, 3.9] },
+});
+
+const luminance = (c: readonly number[]) =>
+  0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2];
+
+const plinthPiece = (of: string, g: number): PlinthFeature => ({
+  geometry: {
+    type: "MultiLineString",
+    coordinates: [
+      [
+        [412_040, 5_656_000],
+        [412_050, 5_656_000],
+      ],
+    ],
+  },
+  properties: { of, g: [g], top: [g + 0.9] },
+});
+
+const fixtureWithBridge = (): CityJsonDocument => {
+  const doc = fixture();
+  doc.vertices.push(...boxVertices(300, 200, 6));
+  doc.CityObjects.bridge = {
+    type: "Building",
+    attributes: { function: "53001_1800" },
+    geometry: [box(16)],
+  };
+  return doc;
+};
+
+const wallTris = (p: number[], q: number[]) => [
+  p[0],
+  p[1],
+  0,
+  q[0],
+  q[1],
+  0,
+  q[0],
+  q[1],
+  5,
+  p[0],
+  p[1],
+  0,
+  q[0],
+  q[1],
+  5,
+  p[0],
+  p[1],
+  5,
+];
+
+const normalAt = (n: Float32Array, v: number) => [n[3 * v], n[3 * v + 1]];
+
+const squareRing = (x: number): [number, number][][] => [
+  [
+    [x, 0],
+    [x + 10, 0],
+    [x + 10, 10],
+    [x, 10],
+  ],
+];
+
+const ensembleFacts = (name: string, height: number) => ({
+  buildingId: `B${height}`,
+  drawn: "",
+  function: "",
+  roofType: "",
+  created: "",
+  name,
+  addr: "",
+  height,
+  roofPitch: -1,
+  area: 100,
+  levels: -1,
+});
+
+const wallQuad = (z0: number, z1: number) => [
+  0,
+  0,
+  z0,
+  4,
+  0,
+  z0,
+  4,
+  0,
+  z1,
+  0,
+  0,
+  z0,
+  4,
+  0,
+  z1,
+  0,
+  0,
+  z1,
+];
+
+const featurePart = (x: number, z: number) => ({
+  type: "Feature" as const,
+  geometry: {
+    type: "Polygon" as const,
+    coordinates: [
+      [
+        [x, 0],
+        [x + 4, 0],
+        [x + 4, 4],
+        [x, 4],
+        [x, 0],
+      ] as [number, number][],
+    ],
+  },
+  properties: { id: "a", z },
+});
+
+const trianglesZs = (p: number[]) => [p[2], p[5], p[8]];
+
+const gapSquare = (x0: number): [number, number][][] => [
+  [
+    [412_000 + x0, 5_656_020],
+    [412_008 + x0, 5_656_020],
+    [412_008 + x0, 5_656_028],
+    [412_000 + x0, 5_656_028],
+    [412_000 + x0, 5_656_020],
+  ],
+];
+
+const doorOf = (of: string): DoorFeature => ({
+  geometry: { type: "Point", coordinates: [0, 0] },
+  properties: { h: 2.2, kind: "door", nx: 0, ny: -1, of, w: 1, z: 100 },
+});
+
+const slopeRing = (x0: number, x1: number): [number, number][] => [
+  [412_000 + x0, 5_656_020],
+  [412_000 + x1, 5_656_020],
+  [412_000 + x1, 5_656_028],
+  [412_000 + x0, 5_656_028],
+  [412_000 + x0, 5_656_020],
+];
+
+const shedSquare = (x0: number): [number, number][][] => [
+  [
+    [412_000 + x0, 5_656_020],
+    [412_004 + x0, 5_656_020],
+    [412_004 + x0, 5_656_024],
+    [412_000 + x0, 5_656_024],
+    [412_000 + x0, 5_656_020],
+  ],
+];
+
+const passageXy = (x: number, y: number): [number, number] => [
+  412_000 + x,
+  5_656_000 + y,
+];
+
+const crossingXy = (x: number, y: number): [number, number] => [
+  412_000 + x,
+  5_656_000 + y,
+];
+
+const crossingThrough = (
+  id: number,
+  axis: [number, number][],
+  roof: [number, number][],
+  sides: [number, number][][],
+  portals: [number, number, number, number][]
+): PassageFeature => ({
+  geometry: { type: "LineString", coordinates: axis },
+  properties: {
+    h: null,
+    kind: "footway",
+    osm: [id],
+    w: 2.5,
+    wFrom: "kind",
+    z: [100, 100],
+    of: { house: { roof: [roof], sides, portals } },
+  },
+});
 
 test("a BuildingPart inherits its Building's function: glow and tint", () => {
   const baked = bakeCityMesh("t", fixture(), undefined, null);
@@ -318,19 +562,19 @@ test("the scan's small structures join as their own buildings, source 1", () => 
   expect(shed.glow).toBe(0);
   expect(shed.footprints[0].length).toBe(4);
   expect(shed.facts).toMatchObject({ height: 2.5, area: 12, function: "" });
-  expect(shed.facts?.buildingId).toMatch(/^scan:t:/);
+  expect(shed.facts?.buildingId).toMatch(/^scan:t:/u);
   // the box stands where the ring says, recentred on the spawn tile's offset
   const shedXs: number[] = [];
   const shedYs: number[] = [];
   const shedZs: number[] = [];
   const p = baked.vertices.positions;
-  baked.vertices.objectIds.forEach((id, v) => {
+  for (const [v, id] of baked.vertices.objectIds.entries()) {
     if (id === 3) {
       shedXs.push(p[3 * v]);
       shedYs.push(p[3 * v + 1]);
       shedZs.push(p[3 * v + 2]);
     }
-  });
+  }
   const { cx, cy } = baked.offset;
   expect(Math.min(...shedXs)).toBeCloseTo(412_020 - cx, 3);
   expect(Math.max(...shedXs)).toBeCloseTo(412_024 - cx, 3);
@@ -348,29 +592,14 @@ test("the scan's small structures join as their own buildings, source 1", () => 
 });
 
 test("a scan structure's tint key is its first corner, not its index", () => {
-  const shed = (x: number) => ({
-    geometry: {
-      type: "Polygon" as const,
-      coordinates: [
-        [
-          [x, 5_656_020],
-          [x + 4, 5_656_020],
-          [x + 4, 5_656_023],
-          [x, 5_656_023],
-          [x, 5_656_020],
-        ] as [number, number][],
-      ],
-    },
-    properties: { h: 2.5, z: 100 },
-  });
-  expect(scanStructureId("t", shed(412_020.04))).toBe(
+  expect(scanStructureId("t", scanShed(412_020.04))).toBe(
     "scan:t:412020.0:5656020.0"
   );
-  expect(scanStructureId("t", shed(412_020.04))).toBe(
-    scanStructureId("t", shed(412_020.01))
+  expect(scanStructureId("t", scanShed(412_020.04))).toBe(
+    scanStructureId("t", scanShed(412_020.01))
   );
-  expect(scanStructureId("t", shed(412_030))).not.toBe(
-    scanStructureId("t", shed(412_020))
+  expect(scanStructureId("t", scanShed(412_030))).not.toBe(
+    scanStructureId("t", scanShed(412_020))
   );
 });
 
@@ -449,21 +678,6 @@ test("gap structures: a chimney is its own object, a relief slab joins its landm
 });
 
 test("a measured roof replaces its object's LoD2 triangles, same row", () => {
-  const part = (x0: number, z: number) => ({
-    geometry: {
-      type: "Polygon" as const,
-      coordinates: [
-        [
-          [412_040 + x0, 5_656_000],
-          [412_045 + x0, 5_656_000],
-          [412_045 + x0, 5_656_010],
-          [412_040 + x0, 5_656_010],
-          [412_040 + x0, 5_656_000],
-        ] as [number, number][],
-      ],
-    },
-    properties: { id: "house", z },
-  });
   const lod2 = bakeCityMesh("t", fixture(), undefined, null);
   const baked = bakeCityMesh(
     "t",
@@ -475,7 +689,7 @@ test("a measured roof replaces its object's LoD2 triangles, same row", () => {
     "render",
     undefined,
     // two steps over the house's 10 × 10 m: 4 m and 7 m above its base
-    [part(0, 104), part(5, 107)]
+    [roofPart(0, 104), roofPart(5, 107)]
   );
   const v = baked.vertices;
   const zOf = (id: number) =>
@@ -504,10 +718,6 @@ test("a measured roof replaces its object's LoD2 triangles, same row", () => {
 });
 
 test("dormers join their host as one object, roof-flagged on top, source 4", () => {
-  const on = (x: number, of = "house"): DormerFeature => ({
-    geometry: { type: "Point", coordinates: [412_000 + x, 5_656_005] },
-    properties: { of, ax: 1, ay: 0, w: 2, d: 2, z: 110, top: 111.5, slope: 45 },
-  });
   const lod2 = bakeCityMesh("t", fixture(), undefined, null);
   const baked = bakeCityMesh(
     "t",
@@ -520,7 +730,7 @@ test("dormers join their host as one object, roof-flagged on top, source 4", () 
     undefined,
     undefined,
     // two on the house, one whose host is elsewhere (dropped)
-    { dormers: [on(43), on(47), on(5, "elsewhere")] }
+    { dormers: [dormerOn(43), dormerOn(47), dormerOn(5, "elsewhere")] }
   );
   expect(baked.objects.length).toBe(lod2.objects.length + 1);
   const house = baked.objects[2];
@@ -534,27 +744,13 @@ test("dormers join their host as one object, roof-flagged on top, source 4", () 
   // high on the roof: no plinth
   expect((dormer?.flags ?? 0) & OBJECT_FLAG_GROUNDED).toBe(0);
   const added = baked.vertices.isRoof.length - lod2.vertices.isRoof.length;
-  // per dormer: front 2, cheeks 2, roof 2 triangles
-  expect(added).toBe(2 * 6 * 3);
+  // per dormer: front 2, cheeks 2, roof 2, inner lid 2 triangles
+  expect(added).toBe(2 * 8 * 3);
   const roofs = Array.from(baked.vertices.isRoof.slice(-added));
-  expect(roofs.filter((r) => r === 1)).toHaveLength(2 * 2 * 3);
+  expect(roofs.filter((r) => r === 1)).toHaveLength(2 * 4 * 3);
 });
 
 test("a chimney joins its host with the dormers as a box, all wall", () => {
-  const at = (x: number, k?: "chimney"): DormerFeature => ({
-    geometry: { type: "Point", coordinates: [412_000 + x, 5_656_005] },
-    properties: {
-      of: "house",
-      ax: 1,
-      ay: 0,
-      w: k ? 0.6 : 2,
-      d: k ? 0.6 : 2,
-      z: 110,
-      top: 111.5,
-      slope: 45,
-      ...(k ? { k } : {}),
-    },
-  });
   const lod2 = bakeCityMesh("t", fixture(), undefined, null);
   const baked = bakeCityMesh(
     "t",
@@ -566,21 +762,21 @@ test("a chimney joins its host with the dormers as a box, all wall", () => {
     "render",
     undefined,
     undefined,
-    { dormers: [at(43), at(47, "chimney")] }
+    { dormers: [dormerAt(43), dormerAt(47, "chimney")] }
   );
   // the host's chimneys one object, its dormers another
   expect(baked.objects.length).toBe(lod2.objects.length + 2);
   const added = baked.vertices.isRoof.length - lod2.vertices.isRoof.length;
-  // the dormer's 6 triangles, the chimney's four sides and top
-  expect(added).toBe((6 + 5 * 2) * 3);
+  // the dormer's 8 triangles, the chimney's four sides, top and inner lid
+  expect(added).toBe((8 + 6 * 2) * 3);
   const roofs = Array.from(baked.vertices.isRoof.slice(-added));
-  expect(roofs.filter((r) => r === 1)).toHaveLength(2 * 3);
+  expect(roofs.filter((r) => r === 1)).toHaveLength(4 * 3);
   // the dormer's front takes a window, its cheeks and the chimney none
   const [stack, dormer] = baked.objects.slice(-2);
   expect(stack.windows).toBeUndefined();
   expect(dormer.windows?.axis).toBeGreaterThan(0);
   expect(unpackStyle(dormer.windows?.style ?? 0).dormer).toBe(true);
-  const facade = baked.vertices.facade;
+  const { facade } = baked.vertices;
   const ids = baked.vertices.objectIds;
   const lengths = (object: number) =>
     new Set(
@@ -595,21 +791,6 @@ test("a chimney joins its host with the dormers as a box, all wall", () => {
 
 test("a shopfront joins its host as glass, frame and canopy, source 6", () => {
   // the house's south wall (x 40–50 m, y 0), facing −y
-  const front = (oid = "house"): ShopfrontWall => ({
-    oid,
-    wi: 0,
-    a: [412_040, 5_656_000],
-    b: [412_050, 5_656_000],
-    L: 10,
-    n: [0, -1],
-    z: [100, 100],
-    src: "photo",
-    bays: [
-      [1, 3],
-      [3.5, 6.5],
-    ],
-    sign: { at: [[1, 7]], z: [3.3, 3.9] },
-  });
   const bake = (walls: ShopfrontWall[], glass = false) =>
     bakeCityMesh(
       "t",
@@ -624,7 +805,7 @@ test("a shopfront joins its host as glass, frame and canopy, source 6", () => {
       { shopfronts: walls }
     );
   const lod2 = bakeCityMesh("t", fixture(), undefined, null);
-  const baked = bake([front(), front("elsewhere")]);
+  const baked = bake([shopfrontAt(), shopfrontAt("elsewhere")]);
   expect(baked.objects.length).toBe(lod2.objects.length + 2);
   const house = baked.objects[2];
   const [pane, frame] = baked.objects.slice(-2);
@@ -642,15 +823,14 @@ test("a shopfront joins its host as glass, frame and canopy, source 6", () => {
   expect(pane.rough).toBeGreaterThan(0);
   expect(pane.rough).toBeLessThanOrEqual(0.3);
   // muted glass, darker and cooler than its surround — not a black hole
-  const lum = (c: readonly number[]) => 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2];
-  expect(lum(pane.tint)).toBeLessThan(0.6 * lum(frame.tint));
-  expect(lum(pane.tint)).toBeGreaterThan(0.1);
+  expect(luminance(pane.tint)).toBeLessThan(0.6 * luminance(frame.tint));
+  expect(luminance(pane.tint)).toBeGreaterThan(0.1);
   expect(pane.tint[2] / pane.tint[0]).toBeGreaterThan(
     frame.tint[2] / frame.tint[0]
   );
   // the glass's eave is its top, over the shopfront's sunk foot
   expect(pane.eaveH).toBeCloseTo(
-    paneTop(front(), house.storeyH) + SHOPFRONT_SINK,
+    paneTop(shopfrontAt(), house.storeyH) + SHOPFRONT_SINK,
     2
   );
   expect(frame.eaveH).toBeGreaterThan(4);
@@ -662,10 +842,10 @@ test("a shopfront joins its host as glass, frame and canopy, source 6", () => {
     )
   ).toBe(true);
   // a glass facade wears its own front
-  expect(bake([front()], true).objects.length).toBe(lod2.objects.length);
+  expect(bake([shopfrontAt()], true).objects.length).toBe(lod2.objects.length);
   // a canopy is a third object, in the host's own clay
   const sheltered = bake([
-    { ...front(), canopy: [{ at: [0, 10], d: 3.5, h: 4.2 }] },
+    { ...shopfrontAt(), canopy: [{ at: [0, 10], d: 3.5, h: 4.2 }] },
   ]);
   expect(sheltered.objects.length).toBe(lod2.objects.length + 3);
   const canopy = sheltered.objects.at(-1);
@@ -689,7 +869,7 @@ test("windows: a rhythm per house in its row, every wall vertex placed on its wa
     imgs: 6,
     seqs: 2,
     traits: {},
-    model: { axis: 3, grid: "regular", w: 1.2, h: 1.6, storey: 3.2 },
+    model: { axis: 3, grid: "regular", w: 1.2, h: 1.6 },
   };
   const bake = (osm?: OsmBuildingLut, doc = fixture()) =>
     bakeCityMesh(
@@ -842,7 +1022,7 @@ test("windows: a wall the ground rises past loses its ground floor alone", () =>
   expect(s.noGround).toBe(false);
   expect(s.lift).toBe(0);
   const signs = new Set<number>();
-  for (let v = 0; v < vertices.objectIds.length; v++) {
+  for (let v = 0; v < vertices.objectIds.length; v += 1) {
     const length = vertices.facade?.[4 * v + 1] ?? 0;
     if (vertices.objectIds[v] === house && length !== 0) {
       signs.add(Math.sign(length));
@@ -851,7 +1031,7 @@ test("windows: a wall the ground rises past loses its ground floor alone", () =>
   // the south wall signed as a shopfront's, the others not, with the
   // ground's height (3 m) its windows keep over
   expect([...signs].sort((a, b) => a - b)).toEqual([-1, 1]);
-  for (let v = 0; v < vertices.objectIds.length; v++) {
+  for (let v = 0; v < vertices.objectIds.length; v += 1) {
     const f = vertices.facade;
     if (f && vertices.objectIds[v] === house && f[4 * v + 1] < 0) {
       expect((f[4 * v + 2] / 32_767) * FACADE_SCALE_M).toBeCloseTo(3, 1);
@@ -883,7 +1063,7 @@ test("windows: the ground floor's clear the fine ground, wall by wall", () => {
     1 + WINDOW_ROWS.plinthGap - 1e-9
   );
   const signs = new Set<number>();
-  for (let v = 0; v < vertices.objectIds.length; v++) {
+  for (let v = 0; v < vertices.objectIds.length; v += 1) {
     const length = vertices.facade?.[4 * v + 1] ?? 0;
     if (vertices.objectIds[v] === house && length !== 0) {
       signs.add(Math.sign(length));
@@ -896,18 +1076,6 @@ test("windows: the ground floor's clear the fine ground, wall by wall", () => {
 test("a building's base moves up to the street its plinths stand on", () => {
   const doc = fixture();
   const keys = Object.keys(doc.CityObjects);
-  const piece = (of: string, g: number): PlinthFeature => ({
-    geometry: {
-      type: "MultiLineString",
-      coordinates: [
-        [
-          [412_040, 5_656_000],
-          [412_050, 5_656_000],
-        ],
-      ],
-    },
-    properties: { of, g: [g], top: [g + 0.9] },
-  });
   const pitched = () => {
     const { objects } = bakeCityMesh("t", doc, undefined, null);
     for (const o of objects) {
@@ -919,8 +1087,8 @@ test("a building's base moves up to the street its plinths stand on", () => {
   const [, part, house] = objects;
   const [base, eave, partBase] = [house.baseZ, house.eaveH, part.baseZ];
   const asBuilt = liftToStreet(objects, keys, [
-    piece("house", base + 0.3),
-    piece("house", base + 0.5),
+    plinthPiece("house", base + 0.3),
+    plinthPiece("house", base + 0.5),
   ]);
   // the higher piece's ground, the eave where it was
   expect(house.baseZ).toBeCloseTo(base + 0.5, 2);
@@ -932,34 +1100,24 @@ test("a building's base moves up to the street its plinths stand on", () => {
   // up a steep street: a metre over its lowest piece at most
   const steep = pitched();
   liftToStreet(steep, keys, [
-    piece("house", base + 0.2),
-    piece("house", base + 2),
+    plinthPiece("house", base + 0.2),
+    plinthPiece("house", base + 2),
   ]);
   expect(steep[2].baseZ).toBeCloseTo(base + 1.2, 2);
   // a base far under its street stands in a courtyard: it stays
   const deep = pitched();
-  liftToStreet(deep, keys, [piece("house", base + 1.8)]);
+  liftToStreet(deep, keys, [plinthPiece("house", base + 1.8)]);
   expect(deep[2].baseZ).toBe(base);
 });
 
 test("cityFrame is the frame the bake recenters a tile in, without the parse", () => {
   // a bridge slab the bake leaves out still spans the box the frame centres
-  const withBridge = (): CityJsonDocument => {
-    const doc = fixture();
-    doc.vertices.push(...boxVertices(300, 200, 6));
-    doc.CityObjects.bridge = {
-      type: "Building",
-      attributes: { function: "53001_1800" },
-      geometry: [box(16)],
-    };
-    return doc;
-  };
-  const frame = cityFrame("t", withBridge());
-  const baked = bakeCityMesh("t", withBridge(), undefined, null);
+  const frame = cityFrame("t", fixtureWithBridge());
+  const baked = bakeCityMesh("t", fixtureWithBridge(), undefined, null);
   expect(frame.offset).toEqual({ cx: 412_155, cy: 5_656_105 });
   expect([...frame.matrix.elements]).toEqual([...baked.matrix.elements]);
   expect(frame.offset).toEqual(baked.offset);
-  expect(frame.epsg).toBe(25833);
+  expect(frame.epsg).toBe(25_833);
 });
 
 test("normals round a curve within one object's walls, never into its roof, another object or a measured face", () => {
@@ -967,31 +1125,10 @@ test("normals round a curve within one object's walls, never into its roof, anot
   const a = (20 * Math.PI) / 180;
   const left = [-3 * Math.cos(a), 3 * Math.sin(a)];
   const right = [3, 0];
-  const wall = (p: number[], q: number[]) => [
-    p[0],
-    p[1],
-    0,
-    q[0],
-    q[1],
-    0,
-    q[0],
-    q[1],
-    5,
-    p[0],
-    p[1],
-    0,
-    q[0],
-    q[1],
-    5,
-    p[0],
-    p[1],
-    5,
-  ];
   const positions = Float32Array.from([
-    ...wall(left, [0, 0]),
-    ...wall([0, 0], right),
+    ...wallTris(left, [0, 0]),
+    ...wallTris([0, 0], right),
   ]);
-  const at = (n: Float32Array, v: number) => [n[3 * v], n[3 * v + 1]];
   const make = (ids: number[], roof: number[], normals?: number[]) =>
     vertexNormals({
       positions,
@@ -1002,11 +1139,11 @@ test("normals round a curve within one object's walls, never into its roof, anot
   const one = Array.from({ length: 12 }, () => 0);
   // vertex 1 (left facet, shared edge) and 6 (right facet, same point)
   const rounded = make(one, one);
-  expect(at(rounded, 1)[0]).toBeCloseTo(at(rounded, 6)[0], 5);
-  expect(at(rounded, 1)[1]).toBeCloseTo(at(rounded, 6)[1], 5);
+  expect(normalAt(rounded, 1)[0]).toBeCloseTo(normalAt(rounded, 6)[0], 5);
+  expect(normalAt(rounded, 1)[1]).toBeCloseTo(normalAt(rounded, 6)[1], 5);
   const flatLeft = (n: Float32Array) => {
-    expect(at(n, 1)[0]).toBeCloseTo(at(n, 0)[0], 5);
-    expect(at(n, 1)[1]).toBeCloseTo(at(n, 0)[1], 5);
+    expect(normalAt(n, 1)[0]).toBeCloseTo(normalAt(n, 0)[0], 5);
+    expect(normalAt(n, 1)[1]).toBeCloseTo(normalAt(n, 0)[1], 5);
   };
   // the right facet another object's, then a roof, then measured
   flatLeft(
@@ -1033,34 +1170,17 @@ test("normals round a curve within one object's walls, never into its roof, anot
 });
 
 test("joinEnsembles: touching trees of one name share the lowest root, its facts the whole's", () => {
-  const sq = (x: number): [number, number][][] => [
-    [
-      [x, 0],
-      [x + 10, 0],
-      [x + 10, 10],
-      [x, 10],
-    ],
-  ];
-  const facts = (name: string, height: number) => ({
-    buildingId: `B${height}`,
-    drawn: "",
-    function: "",
-    roofType: "",
-    created: "",
-    name,
-    addr: "",
-    height,
-    roofPitch: -1,
-    area: 100,
-    levels: -1,
-  });
   // 0: the complex (a Building drawn by its part 1), 2: the tower beside
   // it, 3: an unnamed house touching the tower
   const objects: Parameters<typeof joinEnsembles>[0] = [
-    { root: 0, footprints: [], facts: facts("Schloss", 30) },
-    { root: 0, footprints: sq(0), facts: facts("Schloss", 30) },
-    { root: 2, footprints: sq(10), facts: facts("Schloss", 60) },
-    { root: 3, footprints: sq(20), facts: facts("", 12) },
+    { root: 0, footprints: [], facts: ensembleFacts("Schloss", 30) },
+    { root: 0, footprints: squareRing(0), facts: ensembleFacts("Schloss", 30) },
+    {
+      root: 2,
+      footprints: squareRing(10),
+      facts: ensembleFacts("Schloss", 60),
+    },
+    { root: 3, footprints: squareRing(20), facts: ensembleFacts("", 12) },
   ];
   const trees = new Map([
     [0, [0, 1]],
@@ -1107,10 +1227,10 @@ test("a roof face the orthophoto read apart carries its own colour", () => {
   const v = baked.vertices;
   const facade = cityMesh(baked).input.vectors?._FACADE?.array;
   let roofs = 0;
-  for (let i = 0; i < v.objectIds.length; i++) {
+  for (let i = 0; i < v.objectIds.length; i += 1) {
     const own = v.roofRgb?.slice(3 * i, 3 * i + 3);
     if (v.objectIds[i] === 2 && v.isRoof[i] === 1) {
-      roofs++;
+      roofs += 1;
       expect([...(own ?? [])]).toEqual([0.5, 0.25, 0.125]);
       expect((facade?.[4 * i] ?? 0) / 32_767).toBeCloseTo(0.5, 4);
       expect((facade?.[4 * i + 3] ?? 0) / 32_767).toBeCloseTo(0.125, 4);
@@ -1125,33 +1245,13 @@ test("a roof face the orthophoto read apart carries its own colour", () => {
 
 test("a short wall standing on the roof is the roof's, a set-back storey is not", () => {
   // walls of one object over a roof at 10 m, each one surface
-  const quad = (z0: number, z1: number) => [
-    0,
-    0,
-    z0,
-    4,
-    0,
-    z0,
-    4,
-    0,
-    z1,
-    0,
-    0,
-    z0,
-    4,
-    0,
-    z1,
-    0,
-    0,
-    z1,
-  ];
   const roof = [0, 0, 10, 1, 0, 10, 0, 1, 10];
   const gable = [0, 0, 10, 6, 0, 10, 3, 0, 11.2]; // a shallow one, at the eave
   const positions = Float32Array.from([
     ...roof,
-    ...quad(10, 11), // a 1 m step on it
-    ...quad(10, 13), // a storey set back on it
-    ...quad(0, 1), // a 1 m wall on the ground
+    ...wallQuad(10, 11), // a 1 m step on it
+    ...wallQuad(10, 13), // a storey set back on it
+    ...wallQuad(0, 1), // a 1 m wall on the ground
     ...gable,
   ]);
   // each vertex's surface: the roof's three, then the walls'
@@ -1185,6 +1285,8 @@ test("a roof on posts without an outline stays a block", () => {
   const offset = { cx: 0, cy: 0 };
   expect(withOpenRoofs(v, new Set([0]), [[]], offset)).toBe(v);
   // with its outline the wall is cut under the slab and the posts stand
+  // an 8 × 8 m outline: a 4 m wide flat wing at 106 m and a mono-pitch
+  // face rising 0.5 m a metre from 108 m
   const ring: [number, number][] = [
     [0, 0],
     [4, 0],
@@ -1202,27 +1304,11 @@ test("a rebuilt roof's parts carry their own colour, its walls none", () => {
     objectIds: Float32Array.from([0, 0, 0]),
     isRoof: Float32Array.from([0, 0, 1]),
   };
-  const part = (x: number, z: number) => ({
-    type: "Feature" as const,
-    geometry: {
-      type: "Polygon" as const,
-      coordinates: [
-        [
-          [x, 0],
-          [x + 4, 0],
-          [x + 4, 4],
-          [x, 4],
-          [x, 0],
-        ] as [number, number][],
-      ],
-    },
-    properties: { id: "a", z },
-  });
   const out = withMeasuredRoofs(
     v,
     ["a"],
     { cx: 0, cy: 0 },
-    [part(0, 110), part(4, 106)],
+    [featurePart(0, 110), featurePart(4, 106)],
     {
       parts: {
         a: [
@@ -1235,12 +1321,12 @@ test("a rebuilt roof's parts carry their own colour, its walls none", () => {
   const rgb = out.roofRgb ?? new Float32Array();
   expect(rgb).toHaveLength(out.positions.length);
   let red = 0;
-  for (let i = 0; i < out.isRoof.length; i++) {
+  for (let i = 0; i < out.isRoof.length; i += 1) {
     const c = Array.from(rgb.subarray(3 * i, 3 * i + 3));
     const z = out.positions[3 * i + 2];
     if (out.isRoof[i] === 1 && z === 106) {
       expect(c).toEqual([0.5, 0.25, 0.125]);
-      red++;
+      red += 1;
     } else {
       // the first part's roof (its colour read at another level) and every
       // wall: the object's colour
@@ -1256,29 +1342,38 @@ test("an Überdachung LoD2 draws as a block stands on posts under its roof", () 
   const block = bakeCityMesh("t", fixture(), undefined, null);
   const baked = bakeCityMesh("t", fx, undefined, null);
   const v = baked.vertices;
-  const tris = [...Array(v.objectIds.length / 3).keys()]
+  const tris = Array.from({ length: v.objectIds.length / 3 }, (_, t) => t)
     .filter((t) => v.objectIds[t * 3] === 2)
     .map((t) => ({
       roof: v.isRoof[t * 3] === 1,
       p: [...v.positions.subarray(t * 9, t * 9 + 9)],
     }));
-  const zs = (p: number[]) => [p[2], p[5], p[8]];
   // 10 × 10 m: a 0.4 m slab under the roof at 112 m (float32 positions)
   const under = 112 - 0.4;
   const roof = tris.filter((t) => t.roof);
   expect(roof.length).toBeGreaterThan(0);
   expect(
-    roof.every((t) => zs(t.p).every((z) => Math.abs(z - 112) < 1e-4))
+    roof.every((t) => trianglesZs(t.p).every((z) => Math.abs(z - 112) < 1e-4))
   ).toBe(true);
   // what reaches below the slab is posts: 0.3 m across, from the base up
-  const below = tris.filter((t) => Math.min(...zs(t.p)) < under - 1e-4);
+  const below = tris.filter(
+    (t) => Math.min(...trianglesZs(t.p)) < under - 1e-4
+  );
   expect(below.length).toBe(8);
   const xs = below.flatMap((t) => [t.p[0], t.p[3], t.p[6]]);
   expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(0.3, 4);
-  expect(Math.min(...below.flatMap((t) => zs(t.p)))).toBeCloseTo(100, 4);
-  expect(Math.max(...below.flatMap((t) => zs(t.p)))).toBeCloseTo(under, 4);
+  expect(Math.min(...below.flatMap((t) => trianglesZs(t.p)))).toBeCloseTo(
+    100,
+    4
+  );
+  expect(Math.max(...below.flatMap((t) => trianglesZs(t.p)))).toBeCloseTo(
+    under,
+    4
+  );
   // its floor is gone, its underside faces down at the slab
-  const flat = tris.filter((t) => !t.roof && new Set(zs(t.p)).size === 1);
+  const flat = tris.filter(
+    (t) => !t.roof && new Set(trianglesZs(t.p)).size === 1
+  );
   expect(flat.length).toBeGreaterThan(0);
   expect(flat.every((t) => Math.abs(t.p[2] - under) < 1e-4)).toBe(true);
   // the same row: no facade to dress, a flat roof's gate, no windows
@@ -1306,27 +1401,18 @@ test("an Überdachung too low to walk under stays a block", () => {
 });
 
 test("a gap roof is a roof on posts, a building newer than the model says so, a raised part starts at its floor", () => {
-  const square = (x0: number): [number, number][][] => [
-    [
-      [412_000 + x0, 5_656_020],
-      [412_008 + x0, 5_656_020],
-      [412_008 + x0, 5_656_028],
-      [412_000 + x0, 5_656_028],
-      [412_000 + x0, 5_656_020],
-    ],
-  ];
   const gaps: StructureFeature[] = [
     {
-      geometry: { type: "Polygon", coordinates: square(0) },
+      geometry: { type: "Polygon", coordinates: gapSquare(0) },
       properties: { h: 5.8, kind: "roof", name: "Bahnsteig 1", z: 100 },
     },
     {
-      geometry: { type: "Polygon", coordinates: square(20) },
+      geometry: { type: "Polygon", coordinates: gapSquare(20) },
       properties: { h: 51.2, kind: "building", src: "osm", z: 100 },
     },
     {
       // a bridge between two buildings, 7 m over the street
-      geometry: { type: "Polygon", coordinates: square(40) },
+      geometry: { type: "Polygon", coordinates: gapSquare(40) },
       properties: { base: 7, h: 12, kind: "building", z: 100 },
     },
   ];
@@ -1400,13 +1486,9 @@ test("cornices on a town house only, the plinth on every house (G19)", () => {
 test("a structure carries no door, plinth or shopfront (G17)", () => {
   const keys = ["tank", "house"];
   const hosts = [{ fn: "51003_1000" }, { fn: "31001_1000" }];
-  const door = (of: string): DoorFeature => ({
-    geometry: { type: "Point", coordinates: [0, 0] },
-    properties: { h: 2.2, kind: "door", nx: 0, ny: -1, of, w: 1, z: 100 },
-  });
   const kept = onBuildings(
     {
-      doors: [door("tank"), door("house"), door("elsewhere")],
+      doors: [doorOf("tank"), doorOf("house"), doorOf("elsewhere")],
       shopfronts: [{ oid: "tank" }, { oid: "house" }] as ShopfrontWall[],
     },
     keys,
@@ -1421,27 +1503,18 @@ test("a structure carries no door, plinth or shopfront (G17)", () => {
 });
 
 test("a missing building the surface model shapes stands its measured parts, its eave at the lowest roof (G27)", () => {
-  // an 8 × 8 m outline: a 4 m wide flat wing at 106 m and a mono-pitch
-  // face rising 0.5 m a metre from 108 m
-  const ring = (x0: number, x1: number): [number, number][] => [
-    [412_000 + x0, 5_656_020],
-    [412_000 + x1, 5_656_020],
-    [412_000 + x1, 5_656_028],
-    [412_000 + x0, 5_656_028],
-    [412_000 + x0, 5_656_020],
-  ];
   const cols = 8;
   const rows = 12;
   const f: StructureFeature = {
-    geometry: { type: "Polygon", coordinates: [ring(0, 8)] },
+    geometry: { type: "Polygon", coordinates: [slopeRing(0, 8)] },
     properties: {
       h: 9,
       kind: "building",
       z: 100,
       parts: [
-        { coordinates: [ring(0, 4)], z: 106 },
+        { coordinates: [slopeRing(0, 4)], z: 106 },
         {
-          coordinates: [ring(4, 8)],
+          coordinates: [slopeRing(4, 8)],
           z: 109,
           surface: {
             x: 412_002,
@@ -1460,8 +1533,8 @@ test("a missing building the surface model shapes stands its measured parts, its
   expect(shaped?.eave).toBeCloseTo(6, 6);
   expect(shaped?.pitched).toBe(true);
   // the box's flat roof stands where it has no parts, or is raised
-  const box = { ...f, properties: { h: 9, kind: "building", z: 100 } };
-  expect(shapedGap(box as StructureFeature, offset)).toBeNull();
+  const flatBox = { ...f, properties: { h: 9, kind: "building", z: 100 } };
+  expect(shapedGap(flatBox as StructureFeature, offset)).toBeNull();
   const raised = { ...f, properties: { ...f.properties, base: 4 } };
   expect(shapedGap(raised as StructureFeature, offset)).toBeNull();
   const baked = bakeCityMesh(
@@ -1488,17 +1561,8 @@ test("a missing building the surface model shapes stands its measured parts, its
 });
 
 test("a shed's and a gap building's roof take the orthophoto's colour the roof colour bake read (G5)", () => {
-  const square = (x0: number): [number, number][][] => [
-    [
-      [412_000 + x0, 5_656_020],
-      [412_004 + x0, 5_656_020],
-      [412_004 + x0, 5_656_024],
-      [412_000 + x0, 5_656_024],
-      [412_000 + x0, 5_656_020],
-    ],
-  ];
   const scan = [0, 10].map((x0) => ({
-    geometry: { type: "Polygon" as const, coordinates: square(x0) },
+    geometry: { type: "Polygon" as const, coordinates: shedSquare(x0) },
     properties: { h: 2.5, z: 100 },
   }));
   const gaps: StructureFeature[] = [
@@ -1507,11 +1571,11 @@ test("a shed's and a gap building's roof take the orthophoto's colour the roof c
       properties: { h: 40, kind: "chimney", r: 2, rt: 1.2, z: 100 },
     },
     {
-      geometry: { type: "Polygon", coordinates: square(20) },
+      geometry: { type: "Polygon", coordinates: shedSquare(20) },
       properties: { h: 9, kind: "building", z: 101 },
     },
   ];
-  const roofColours = {
+  const roofColours: Partial<RoofColours> = {
     // the second shed's row was read when it stood 1 m lower: not its own
     scan: [
       [0, 100, 0.3, 0.1, 0.05],
@@ -1544,12 +1608,11 @@ test("a shed's and a gap building's roof take the orthophoto's colour the roof c
 
 test("a passage OSM maps through a house is cut open and lined", () => {
   // a footway north through the 10 × 10 m house (x 40–50) at x 45
-  const xy = (x: number, y: number): [number, number] => [
-    412_000 + x,
-    5_656_000 + y,
-  ];
   const passage: PassageFeature = {
-    geometry: { type: "LineString", coordinates: [xy(45, -0.6), xy(45, 10.6)] },
+    geometry: {
+      type: "LineString",
+      coordinates: [passageXy(45, -0.6), passageXy(45, 10.6)],
+    },
     properties: {
       h: null,
       kind: "footway",
@@ -1559,14 +1622,21 @@ test("a passage OSM maps through a house is cut open and lined", () => {
       z: [100, 100],
       of: {
         house: {
-          roof: [[xy(43.75, 0), xy(46.25, 0), xy(46.25, 10), xy(43.75, 10)]],
+          roof: [
+            [
+              passageXy(43.75, 0),
+              passageXy(46.25, 0),
+              passageXy(46.25, 10),
+              passageXy(43.75, 10),
+            ],
+          ],
           sides: [
-            [xy(46.25, 0), xy(46.25, 10)],
-            [xy(43.75, 10), xy(43.75, 0)],
+            [passageXy(46.25, 0), passageXy(46.25, 10)],
+            [passageXy(43.75, 10), passageXy(43.75, 0)],
           ],
           portals: [
-            [...xy(45, 0), 0, -1],
-            [...xy(45, 10), 0, 1],
+            [...crossingXy(45, 0), 0, -1],
+            [...crossingXy(45, 10), 0, 1],
           ],
         },
       },
@@ -1574,7 +1644,7 @@ test("a passage OSM maps through a house is cut open and lined", () => {
   };
   // an entrance mapped where the passage meets the wall
   const door: DoorFeature = {
-    geometry: { type: "Point", coordinates: xy(45, 0) },
+    geometry: { type: "Point", coordinates: passageXy(45, 0) },
     properties: {
       h: 2.2,
       kind: "main",
@@ -1620,13 +1690,13 @@ test("a passage OSM maps through a house is cut open and lined", () => {
     const y = (p[3 * t + 1] + p[3 * t + 4] + p[3 * t + 7]) / 3 + cy - 5_656_000;
     const z = (p[3 * t + 2] + p[3 * t + 5] + p[3 * t + 8]) / 3;
     if (o === lining) {
-      lined++;
+      lined += 1;
       continue;
     }
     if (o !== house || v.isRoof[t] === 1) {
       continue;
     }
-    walls++;
+    walls += 1;
     // nothing of the house left in the opening (3 m up, as a footway)
     expect(Math.abs(x - 45) < 1.25 && z < 103 && (y < 0.01 || y > 9.99)).toBe(
       false
@@ -1638,7 +1708,7 @@ test("a passage OSM maps through a house is cut open and lined", () => {
   // two walls along it, a quad each, and the ceiling
   expect(lined).toBe(2 * 2 + 2);
   // every cut piece keeps its wall's length in `_FACADE`
-  const facade = v.facade;
+  const { facade } = v;
   expect(facade).toBeDefined();
   const lengths = new Set<number>();
   for (let t = 0; t + 2 < v.objectIds.length; t += 3) {
@@ -1648,7 +1718,7 @@ test("a passage OSM maps through a house is cut open and lined", () => {
       v.isRoof[t] === 0 &&
       ys.every((y) => Math.abs(y) < 0.01)
     ) {
-      for (let k = 0; k < 3; k++) {
+      for (let k = 0; k < 3; k += 1) {
         lengths.add(facade?.[4 * (t + k) + 1] ?? 0);
       }
     }
@@ -1657,53 +1727,41 @@ test("a passage OSM maps through a house is cut open and lined", () => {
 });
 
 test("two passages crossing in a house keep their linings out of each other", () => {
-  const xy = (x: number, y: number): [number, number] => [
-    412_000 + x,
-    5_656_000 + y,
-  ];
   // a footway north through the house (x 40–50) at x 45, one east at y 5
-  const through = (
-    id: number,
-    axis: [number, number][],
-    roof: [number, number][],
-    sides: [number, number][][],
-    portals: [number, number, number, number][]
-  ): PassageFeature => ({
-    geometry: { type: "LineString", coordinates: axis },
-    properties: {
-      h: null,
-      kind: "footway",
-      osm: [id],
-      w: 2.5,
-      wFrom: "kind",
-      z: [100, 100],
-      of: { house: { roof: [roof], sides, portals } },
-    },
-  });
-  const north = through(
+  const north = crossingThrough(
     1,
-    [xy(45, -0.6), xy(45, 10.6)],
-    [xy(43.75, 0), xy(46.25, 0), xy(46.25, 10), xy(43.75, 10)],
+    [crossingXy(45, -0.6), crossingXy(45, 10.6)],
     [
-      [xy(46.25, 0), xy(46.25, 10)],
-      [xy(43.75, 10), xy(43.75, 0)],
+      crossingXy(43.75, 0),
+      crossingXy(46.25, 0),
+      crossingXy(46.25, 10),
+      crossingXy(43.75, 10),
     ],
     [
-      [...xy(45, 0), 0, -1],
-      [...xy(45, 10), 0, 1],
+      [crossingXy(46.25, 0), crossingXy(46.25, 10)],
+      [crossingXy(43.75, 10), crossingXy(43.75, 0)],
+    ],
+    [
+      [...crossingXy(45, 0), 0, -1],
+      [...crossingXy(45, 10), 0, 1],
     ]
   );
-  const east = through(
+  const east = crossingThrough(
     2,
-    [xy(39.4, 5), xy(50.6, 5)],
-    [xy(40, 3.75), xy(50, 3.75), xy(50, 6.25), xy(40, 6.25)],
+    [crossingXy(39.4, 5), crossingXy(50.6, 5)],
     [
-      [xy(40, 6.25), xy(50, 6.25)],
-      [xy(50, 3.75), xy(40, 3.75)],
+      crossingXy(40, 3.75),
+      crossingXy(50, 3.75),
+      crossingXy(50, 6.25),
+      crossingXy(40, 6.25),
     ],
     [
-      [...xy(40, 5), -1, 0],
-      [...xy(50, 5), 1, 0],
+      [crossingXy(40, 6.25), crossingXy(50, 6.25)],
+      [crossingXy(50, 3.75), crossingXy(40, 3.75)],
+    ],
+    [
+      [...crossingXy(40, 5), -1, 0],
+      [...crossingXy(50, 5), 1, 0],
     ]
   );
   const baked = bakeCityMesh(
@@ -1726,10 +1784,10 @@ test("two passages crossing in a house keep their linings out of each other", ()
     if (baked.objects[v.objectIds[t]].source !== OBJECT_SOURCE_PASSAGE) {
       continue;
     }
-    lined++;
+    lined += 1;
     // no point of a lining stands in either opening, under its ceiling
-    for (let i = 0; i <= 10; i++) {
-      for (let j = 0; i + j <= 10; j++) {
+    for (let i = 0; i <= 10; i += 1) {
+      for (let j = 0; i + j <= 10; j += 1) {
         const [a, b] = [i / 10, j / 10];
         const at = (c: number) =>
           p[3 * t + c] * (1 - a - b) +

@@ -21,19 +21,19 @@ import {
 } from "@/lib/city/point-pack";
 import { decodeGreyPng } from "@/lib/city/png-raster";
 import { samplePolyline } from "@/lib/city/polyline";
-import { type Site, tileExtentOf, tileIdOf } from "@/lib/city/site";
+import { tileExtentOf, tileIdOf } from "@/lib/city/site";
+import type { Site } from "@/lib/city/site";
 import { siteDataBase } from "@/lib/city/site-index";
 import type { WissenTile } from "@/lib/city/stadtwissen";
-import {
-  type Crown,
-  crownOf,
-  type HorizonRaster,
-  MAX_REACH_M,
-  placeLabel,
-  type StudyPlace,
-  type SunStudyRecipe,
+import { crownOf, MAX_REACH_M, placeLabel } from "@/lib/city/sun-study";
+import type {
+  Crown,
+  HorizonRaster,
+  StudyPlace,
+  SunStudyRecipe,
 } from "@/lib/city/sun-study";
-import { type DataManifest, MANIFEST_FILE, manifestUrl } from "@/lib/city/tile";
+import { MANIFEST_FILE, manifestUrl } from "@/lib/city/tile";
+import type { DataManifest } from "@/lib/city/tile";
 import { inventoryCovers } from "@/lib/city/tree-inventory";
 import {
   BASE_TREE_H,
@@ -43,8 +43,8 @@ import {
   offMonuments,
   plantedRows,
   TREE_SPACING,
-  type TreeVeto,
 } from "@/lib/city/tree-placement";
+import type { TreeVeto } from "@/lib/city/tree-placement";
 import {
   fetchFeatures,
   fetchOptionalBinary,
@@ -185,8 +185,7 @@ function rowCrowns(rows: VegRowFeature[], covers: TreeVeto): Crown[] {
       continue;
     }
     const pts = samplePolyline(f.geometry.coordinates, TREE_SPACING);
-    for (let i = 0; i < pts.length; i++) {
-      const [x, y] = pts[i];
+    for (const [i, [x, y]] of pts.entries()) {
       if (covers(x, y)) {
         continue;
       }
@@ -316,20 +315,21 @@ export async function loadStudyInputs(
   );
   const tiles = tilesFor(site, recipe, centre.x, centre.y);
   const parts = await Promise.all(
-    tiles.map(({ id, ext, inside }) =>
-      tileInputs(
-        {
-          inside,
-          minX: ext[0],
-          minY: ext[1],
-          size: ext[2] - ext[0],
-          name: (stem, kind) =>
-            manifestUrl(manifest, `${stem}_${id}.${kind}`, base),
-        },
-        recipe,
-        centre,
-        signal
-      )
+    tiles.map(
+      async ({ id, ext, inside }) =>
+        await tileInputs(
+          {
+            inside,
+            minX: ext[0],
+            minY: ext[1],
+            size: ext[2] - ext[0],
+            name: (stem, kind) =>
+              manifestUrl(manifest, `${stem}_${id}.${kind}`, base),
+          },
+          recipe,
+          centre,
+          signal
+        )
     )
   );
   const addresses = parts.flatMap((p) => p.addresses);

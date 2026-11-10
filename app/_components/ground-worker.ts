@@ -5,12 +5,8 @@
  * at a time; an index the site shares comes once, under its key, and is
  * kept here for the next level that names it.
  */
-import {
-  type GroundIndex,
-  type GroundPrepInput,
-  groundPrepTransfer,
-  prepareGround,
-} from "@/lib/city/ground-prep";
+import { groundPrepTransfer, prepareGround } from "@/lib/city/ground-prep";
+import type { GroundIndex, GroundPrepInput } from "@/lib/city/ground-prep";
 
 interface Job {
   input: GroundPrepInput;
@@ -21,13 +17,16 @@ interface Job {
 }
 
 const scope = self as unknown as {
-  onmessage: ((event: MessageEvent<Job>) => void) | null;
+  addEventListener: (
+    type: "message",
+    listener: (event: MessageEvent<Job>) => void
+  ) => void;
   postMessage: (message: unknown, transfer: Transferable[]) => void;
 };
 
 const sharedIndices = new Map<number, GroundIndex>();
 
-scope.onmessage = ({ data }) => {
+scope.addEventListener("message", ({ data }) => {
   try {
     const { input, shared, drop } = data;
     for (const key of drop) {
@@ -40,10 +39,10 @@ scope.onmessage = ({ data }) => {
       shared === undefined ? input.index : (sharedIndices.get(shared) ?? null);
     const prep = prepareGround({ ...input, index });
     scope.postMessage({ prep }, groundPrepTransfer(prep));
-  } catch (err) {
+  } catch (error) {
     scope.postMessage(
-      { error: err instanceof Error ? err.message : String(err) },
+      { error: error instanceof Error ? error.message : String(error) },
       []
     );
   }
-};
+});

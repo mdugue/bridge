@@ -46,58 +46,9 @@
 import { isStructure } from "./building-tint";
 import { DORMER_SINK } from "./dormers";
 import { OPEN_ROOF_FUNCTIONS } from "./open-roofs";
+import type { FacadeModel, WindowWall } from "./windows-file";
 
-/** What windows.py models on a wall (metres). */
-export interface FacadeModel {
-  /** the axes' spacing along the wall */
-  axis: number;
-  /** a band of horizontal joints recurring at the storey under the
-   *  windows (not drawn: it did not agree between two drives) */
-  sill?: boolean;
-  /** a set-off surround round each window */
-  frame?: boolean;
-  /** a regular grid, or a loose one (the axes a little off) */
-  grid: "loose" | "regular";
-  /** the window's height */
-  h: number;
-  /** where an axis stands: metres from the wall's start `a`, in [0, axis)
-   *  — where the drives that saw the wall registered onto each other
-   *  (pipeline/bake/window_axes.py); else the axes are centred */
-  phase?: number;
-  /** flat lisenes between the axes (not drawn: no agreement) */
-  lisene?: boolean;
-  /** much fine texture in the plaster: ornament */
-  orn?: boolean;
-  /** the storey's height, where it was measured */
-  storey?: number;
-  /** the window's width */
-  w: number;
-}
-
-/** A measured wall (`windows_<tile>.json`): its frame as in
- *  shopfronts_<tile>.json, the traits, and the model where one is drawn. */
-export interface WindowWall {
-  a: [number, number];
-  b: [number, number];
-  eave: number;
-  imgs: number;
-  L: number;
-  model?: FacadeModel;
-  n: [number, number];
-  oid: string;
-  seqs: number;
-  traits: Record<string, number>;
-  wi: number;
-  z?: [number, number];
-}
-
-/** A tile's facade traits, per Building gml:id. */
-export interface WindowFile {
-  attribution: string;
-  buildings: Record<string, WindowWall[]>;
-  /** per feature [Spearman ρ between two sequences, walls] on this tile */
-  reliability: Record<string, [number | null, number]>;
-}
+export type { FacadeModel, WindowFile, WindowWall } from "./windows-file";
 
 /**
  * A building's windows as the clay draws them (the object table's fourth
@@ -451,9 +402,10 @@ export const TYPES: Record<
     hMax: number;
     loose?: boolean;
     /** the median height the photos measured on Dresden's walls of this
-     *  type (scripts/windows-report.ts, 2026-10-09): they read the
-     *  openings short (the reveal's shade and the curtains), so a
-     *  measured height scales the type's by its share of this */
+     *  type (scripts/windows-report.ts, 2026-11-06, each opening read on
+     *  its own): they read the openings short (the reveal's shade and the
+     *  curtains), so a measured height scales the type's by its share of
+     *  this */
     seen?: number;
     sill: number;
     w: number;
@@ -466,7 +418,7 @@ export const TYPES: Record<
     w: 1.15,
     head: 0.75,
     hMax: 2.4,
-    seen: 1.63,
+    seen: 1.79,
     depth: 0.18,
     sill: 0.85,
     frame: true,
@@ -478,7 +430,7 @@ export const TYPES: Record<
     w: 1.1,
     head: 0.55,
     hMax: 1.8,
-    seen: 1.49,
+    seen: 1.71,
     depth: 0.15,
     sill: 0.9,
   },
@@ -488,7 +440,7 @@ export const TYPES: Record<
     w: 0.95,
     head: 0.5,
     hMax: 1.45,
-    seen: 1.22,
+    seen: 1.25,
     depth: 0.12,
     sill: 0.9,
     loose: true,
@@ -499,7 +451,7 @@ export const TYPES: Record<
     w: 1.2,
     head: 0.45,
     hMax: 1.6,
-    seen: 1.46,
+    seen: 1.87,
     depth: 0.09,
     sill: 0.85,
   },
@@ -619,20 +571,23 @@ export function flatTownHouse(h: {
 
 /**
  * The storey height the windows and the storey lines keep: `storeyH` (OSM's
- * levels, else the height's estimate), or the one the photos measured where
- * OSM counts none, snapped so that a whole number of storeys reaches the
- * eave — the top row then sits under the Traufgesims.
+ * levels, else its neighbours' storey or the height's estimate), snapped so
+ * that a whole number of storeys reaches the eave — the top row then sits
+ * under the Traufgesims.
+ *
+ * Never the storey the street photos measured (`FacadeModel.storey`): the
+ * period of a wall's rows of openings reads short — the reveal's shade, a
+ * sill band and a Kniestock's row count as rows of their own —, and on
+ * Dresden's measured walls of buildings OSM counts the storeys of, it gave
+ * the right number of rows on 47 % of them and one too many on 42 %; the
+ * neighbours' storey on 74 % and too many on 9 % (2026-11-06,
+ * docs/transformations.md *Windows on every house*).
  */
-export function windowStorey(
-  eaveH: number,
-  storeyH: number,
-  measured?: number
-): number {
-  const base = measured ?? storeyH;
-  if (eaveH < MIN_EAVE_M || base <= 0) {
+export function windowStorey(eaveH: number, storeyH: number): number {
+  if (eaveH < MIN_EAVE_M || storeyH <= 0) {
     return storeyH;
   }
-  const n = Math.max(1, Math.round(eaveH / base));
+  const n = Math.max(1, Math.round(eaveH / storeyH));
   const s = eaveH / n;
   return s >= 2.5 && s <= 4.8 ? s : storeyH;
 }
@@ -690,9 +645,6 @@ export interface WindowChoice {
   from: WindowSource;
   spec: WindowSpec;
   storey: number;
-  /** the storey is the one the photos measured (else `storeyH`'s,
-   *  snapped to the eave) */
-  storeyFromPhotos?: boolean;
   /** why there are none (`from` "none") */
   why?: NoWindows;
   /** the highest ground over its base its ground floor's windows clear
@@ -769,16 +721,20 @@ export function typeHeight(type: WindowType, storey: number): number {
 /**
  * How far a measured rhythm is drawn towards its type's: the ratio of the
  * measured to the type's value to a `power`, bounded. One wall's reading
- * is noisy — two drives agree on the axis at ρ 0.67, on the width at
- * 0.64, on the height (via its proportion) at 0.66 — and a row of houses
- * whose windows differ by half reads restless; the photos' house keeps
- * its character, nearer its type. The height's ratio is to what the
- * photos read on its type (`seen`): they read openings short.
+ * is noisy — two drives agree on the axis at ρ 0.67 — and a row of houses
+ * whose axes differ by half reads restless. The window itself is read off
+ * each opening the photos saw whole (pipeline/bake/windows.py
+ * `opening_sizes`: two drives agree on its height at ρ 0.71, on its
+ * proportion at 0.76), so it keeps most of its own size and shape — a
+ * square window stays square, a tall one tall (`windowForm`); held within
+ * a fifth of its type's, every house's windows came out alike. The height's ratio is
+ * to what the photos read on its type (`seen`): they read openings short
+ * (a curtain, the reveal's shade over the head).
  */
 export const TOWARD_TYPE = {
   axis: { power: 0.75, lo: 0.75, hi: 1.35 },
-  w: { power: 0.5, lo: 0.8, hi: 1.25 },
-  h: { power: 0.5, lo: 0.85, hi: 1.2 },
+  w: { power: 0.8, lo: 0.65, hi: 1.5 },
+  h: { power: 0.8, lo: 0.65, hi: 1.5 },
 } as const;
 
 /** `ratio` drawn towards 1 (`TOWARD_TYPE`). */
@@ -820,6 +776,28 @@ function fitted(
     h: Math.round(h * 100) / 100,
     style: packStyle(style),
   };
+}
+
+/** A window's form, as the Detailansicht names it: a band where its
+ *  windows nearly meet across their axes (`BAND_SHARE`) and lie wide,
+ *  else by its width over its height (`FORM_PROP`). */
+export type WindowForm = "Band" | "hochkant" | "liegend" | "quadratisch";
+
+/** Width over height: below `tall` a window stands, from `wide` it lies. */
+export const FORM_PROP = { tall: 0.8, wide: 1.25 } as const;
+/** A lying window this share of its axis wide is a band. */
+export const BAND_SHARE = 0.75;
+
+/** A spec's form (`WindowForm`); undefined without windows. */
+export function windowForm(spec: WindowSpec): WindowForm | undefined {
+  if (spec.axis <= 0 || spec.h <= 0) {
+    return undefined;
+  }
+  const p = spec.w / spec.h;
+  if (p >= FORM_PROP.wide) {
+    return spec.w >= BAND_SHARE * spec.axis ? "Band" : "liegend";
+  }
+  return p < FORM_PROP.tall ? "hochkant" : "quadratisch";
 }
 
 /**
@@ -902,7 +880,7 @@ export function windowSpecs(
     const { from, m } = host.palace
       ? { from: mine ? ("measured" as const) : ("type" as const), m: mine }
       : rhythmOf(host, mine, byRoot.get(host.root), donors);
-    const { storey, kind, photos } = storeyAndType(host, mine);
+    const { storey, kind } = storeyAndType(host);
     const { reach, spec } = overGround(host, storey, (plinth) => {
       const style = styleOf({ ...host, plinth }, kind, m, from);
       const type = TYPES[kind];
@@ -921,10 +899,7 @@ export function windowSpecs(
     if (spec.axis <= 0) {
       return { from: "none", spec, storey, why: "small" };
     }
-    const choice = { from, reach, spec, storey };
-    return photos === undefined || storey === host.storeyH
-      ? choice
-      : { ...choice, storeyFromPhotos: true };
+    return { from, reach, spec, storey };
   });
 }
 
@@ -968,21 +943,16 @@ function overGround(
   return { reach: reachOf(spec), spec };
 }
 
-/** A host's storey and type: a palace's (`palaceStorey`), else the storey
- *  snapped to the eave — the photos' only on the building itself, and only
- *  where OSM counts none — and the type its roof and storey give. */
-function storeyAndType(
-  host: WindowHost,
-  mine: FacadeModel | undefined
-): { kind: WindowType; photos?: number; storey: number } {
+/** A host's storey and type: a palace's (`palaceStorey`), else its
+ *  storey snapped to the eave (`windowStorey`), and the type its roof and
+ *  storey give. */
+function storeyAndType(host: WindowHost): { kind: WindowType; storey: number } {
   if (host.palace) {
     return { kind: "palace", storey: palaceStorey(host.eaveH, host.storeys) };
   }
-  const photos = mine && !host.levels ? mine.storey : undefined;
-  const storey = windowStorey(host.eaveH, host.storeyH, photos);
+  const storey = windowStorey(host.eaveH, host.storeyH);
   return {
     kind: windowType(host.flat, host.eaveH, storey, host.town ?? false),
-    photos,
     storey,
   };
 }
@@ -1237,17 +1207,22 @@ function wallTriangles(
   return { planes, tris };
 }
 
+const toMm = (x: number): number => Math.round(x * 1000);
+
+/** No object has a known height. */
+const noHeight = (): undefined => undefined;
+
 /** The walls of the objects `drawn` says carry windows. */
 function wallsOf(mesh: FacadeMesh, drawn: (object: number) => boolean): Wall[] {
   const p = mesh.positions;
   const { planes, tris } = wallTriangles(mesh, drawn);
   const uf = unionFind(tris.length);
   const byVertex = new Map<string, number[]>();
-  const mm = (x: number) => Math.round(x * 1000);
-  tris.forEach((t, k) => {
-    for (let c = 0; c < 3; c++) {
+  for (let k = 0; k < tris.length; k += 1) {
+    const t = tris[k];
+    for (let c = 0; c < 3; c += 1) {
       const i = 3 * (t + c);
-      const key = `${mesh.objectIds[t]}:${mm(p[i])},${mm(p[i + 1])},${mm(p[i + 2])}`;
+      const key = `${mesh.objectIds[t]}:${toMm(p[i])},${toMm(p[i + 1])},${toMm(p[i + 2])}`;
       const list = byVertex.get(key);
       if (!list) {
         byVertex.set(key, [k]);
@@ -1265,9 +1240,10 @@ function wallsOf(mesh: FacadeMesh, drawn: (object: number) => boolean): Wall[] {
       }
       list.push(k);
     }
-  });
+  }
   const groups = new Map<number, Wall>();
-  tris.forEach((t, k) => {
+  for (let k = 0; k < tris.length; k += 1) {
+    const t = tris[k];
     const root = uf.find(k);
     let w = groups.get(root);
     if (!w) {
@@ -1289,7 +1265,7 @@ function wallsOf(mesh: FacadeMesh, drawn: (object: number) => boolean): Wall[] {
       groups.set(root, w);
     }
     w.tris.push(t);
-    for (let c = 0; c < 3; c++) {
+    for (let c = 0; c < 3; c += 1) {
       const i = 3 * (t + c);
       const s = p[i] * w.n[1] - p[i + 1] * w.n[0];
       w.s0 = Math.min(w.s0, s);
@@ -1297,7 +1273,7 @@ function wallsOf(mesh: FacadeMesh, drawn: (object: number) => boolean): Wall[] {
       w.z0 = Math.min(w.z0, p[i + 2]);
       w.z1 = Math.max(w.z1, p[i + 2]);
     }
-  });
+  }
   const walls = [...groups.values()];
   for (const w of walls) {
     w.top = wallTop(w, p);
@@ -1316,7 +1292,7 @@ function wallTop(w: Wall, p: ArrayLike<number>): number {
   let top0 = Number.NEGATIVE_INFINITY;
   let top1 = Number.NEGATIVE_INFINITY;
   for (const t of w.tris) {
-    for (let c = 0; c < 3; c++) {
+    for (let c = 0; c < 3; c += 1) {
       const i = 3 * (t + c);
       const s = p[i] * w.n[1] - p[i + 1] * w.n[0];
       if (s <= w.s0 + WALL_END_M) {
@@ -1341,7 +1317,7 @@ function cellsOf(w: Wall): Set<string> {
   const CELL = 8;
   const out = new Set<string>();
   const steps = Math.max(1, Math.ceil((w.s1 - w.s0) / (CELL / 2)));
-  for (let k = 0; k <= steps; k++) {
+  for (let k = 0; k <= steps; k += 1) {
     const [x, y] = onLine(w, w.s0 + ((w.s1 - w.s0) * k) / steps);
     out.add(`${Math.floor(x / CELL)},${Math.floor(y / CELL)}`);
   }
@@ -1367,7 +1343,8 @@ function coveredBy(w: Wall, o: Wall): number {
 function markParty(walls: readonly Wall[]): void {
   const cells = walls.map(cellsOf);
   const grid = new Map<string, number[]>();
-  cells.forEach((cs, i) => {
+  for (let i = 0; i < cells.length; i += 1) {
+    const cs = cells[i];
     for (const c of cs) {
       const list = grid.get(c);
       if (list) {
@@ -1376,8 +1353,9 @@ function markParty(walls: readonly Wall[]): void {
         grid.set(c, [i]);
       }
     }
-  });
-  walls.forEach((w, i) => {
+  }
+  for (let i = 0; i < walls.length; i += 1) {
+    const w = walls[i];
     const seen = new Set<number>([i]);
     let covered = 0;
     for (const c of cells[i]) {
@@ -1394,7 +1372,7 @@ function markParty(walls: readonly Wall[]): void {
     }
     const area = (w.s1 - w.s0) * (w.z1 - w.z0);
     w.party = area > 0 ? covered / area : 0;
-  });
+  }
 }
 
 /** The walls of one object facing `n` whose plane lies within
@@ -1461,7 +1439,7 @@ export function wallRises(
     const s1 = Math.max(...s);
     const steps = Math.max(1, Math.ceil((s1 - s0) / FOOT_STEP_M));
     let rise = Number.NaN;
-    for (let k = 0; k <= steps; k++) {
+    for (let k = 0; k <= steps; k += 1) {
       const at = s0 + ((s1 - s0) * k) / steps;
       const g = groundAt(
         n[0] * (d + FRONT_M) + n[1] * at,
@@ -1483,6 +1461,9 @@ const snorm = (m: number) =>
 const NO_DOOR_SNORM = Math.round(NO_DOOR * 32_767);
 const ROOF_SNORM = Math.round(FACADE_ROOF * 32_767);
 
+const unitSnorm = (c: number): number =>
+  Math.round(Math.min(Math.max(c, 0), 1) * 32_767);
+
 /** A roof vertex's wall slots (x, y and the second door, w) hold its
  *  face's own colour, linear RGB a unit each; (0, 0, ·, 0) where it takes
  *  its object's. No window reads a roof vertex's slots (the clay masks
@@ -1496,11 +1477,10 @@ function roofColourAt(
   if (rgb === undefined || r === undefined || Number.isNaN(r)) {
     return;
   }
-  const unit = (c: number) => Math.round(Math.min(Math.max(c, 0), 1) * 32_767);
   // never all zero: that reads as "the object's"
-  out[4 * v] = Math.max(1, unit(r));
-  out[4 * v + 1] = unit(rgb[3 * v + 1]);
-  out[4 * v + 3] = unit(rgb[3 * v + 2]);
+  out[4 * v] = Math.max(1, unitSnorm(r));
+  out[4 * v + 1] = unitSnorm(rgb[3 * v + 1]);
+  out[4 * v + 3] = unitSnorm(rgb[3 * v + 2]);
 }
 
 /** Lays the doors and shopfronts onto their objects' walls. */
@@ -1685,7 +1665,7 @@ export function facadeAttribute(
 ): Int16Array<ArrayBuffer> {
   const count = mesh.objectIds.length;
   const out = new Int16Array(4 * count);
-  for (let v = 0; v < count; v++) {
+  for (let v = 0; v < count; v += 1) {
     if (mesh.isRoof[v] === 1) {
       out[4 * v + 2] = ROOF_SNORM;
       roofColourAt(out, v, mesh.roofRgb);
@@ -1694,7 +1674,7 @@ export function facadeAttribute(
       out[4 * v + 3] = NO_DOOR_SNORM;
     }
   }
-  const heightOf = heights?.of ?? (() => undefined);
+  const heightOf = heights?.of ?? noHeight;
   const walls = wallsOf(mesh, (o) => drawn(o) || heightOf(o) !== undefined);
   // party walls, doors and shopfronts among the walls that carry windows
   const windowed = walls.filter((w) => drawn(w.object));
@@ -1719,7 +1699,7 @@ export function facadeAttribute(
       ? wallSlots(w, eave, h)
       : { c: Number.NaN, length: 0, door0: NO_DOOR_SNORM, door1: eave };
     for (const t of w.tris) {
-      for (let k = 0; k < 3; k++) {
+      for (let k = 0; k < 3; k += 1) {
         const i = t + k;
         const s = p[3 * i] * w.n[1] - p[3 * i + 1] * w.n[0];
         out[4 * i] = Number.isNaN(slots.c) ? 0 : snorm(s - slots.c);
@@ -1749,25 +1729,30 @@ function wallSlots(
   }
   const party = w.party > PARTY_SHARE && above === undefined;
   // a measured wall holds its axes in the length slot (`MEASURED_AXES`)
-  const length = party
-    ? 0
-    : measured
-      ? measuredSlot(measured.n, measured.axis)
-      : snorm(Math.min(w.s1 - w.s0, LENGTH_MAX_M));
+  let length: number;
+  if (party) {
+    length = 0;
+  } else if (measured) {
+    length = measuredSlot(measured.n, measured.axis);
+  } else {
+    length = snorm(Math.min(w.s1 - w.s0, LENGTH_MAX_M));
+  }
   const [d0, d1] = w.doors
     .map((d) => ({ at: d.s - c, w: d.w }))
     .sort((a, b) => Math.abs(a.at) - Math.abs(b.at));
   const noGround = w.shop || w.doors.length > 2;
+  let door0 = NO_DOOR_SNORM;
+  if (noGround) {
+    door0 = snorm(Math.max(w.ground, 0));
+  } else if (d0 !== undefined) {
+    door0 = doorSlot(d0.at, d0.w);
+  }
   return {
     c,
     length: noGround ? -length : length,
     // a wall without ground-floor windows has none to keep off its doors:
     // its first slot holds the height its windows clear
-    door0: noGround
-      ? snorm(Math.max(w.ground, 0))
-      : d0 === undefined
-        ? NO_DOOR_SNORM
-        : doorSlot(d0.at, d0.w),
+    door0,
     // … and its second, like a wall's with at most one door, its eave
     door1: noGround || d1 === undefined ? eave : doorSlot(d1.at, d1.w),
   };

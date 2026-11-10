@@ -10,13 +10,13 @@
  * tilt. Beside the geometry, the block's silhouette as a small coverage
  * mask (`PlateGeometry.mask`): what the letters' cast shadow reads.
  */
-import { type NameplateText, titleLines } from "@/lib/city/nameplate";
-import {
-  NAMEPLATE_FACE_VARS,
-  type NameplateFace,
-  type NameplateSetting,
-  type NameplateType,
-  linesSize,
+import { titleLines } from "@/lib/city/nameplate";
+import type { NameplateText } from "@/lib/city/nameplate";
+import { NAMEPLATE_FACE_VARS, linesSize } from "@/lib/city/nameplate-type";
+import type {
+  NameplateFace,
+  NameplateSetting,
+  NameplateType,
 } from "@/lib/city/nameplate-type";
 import { signedDistanceField } from "@/lib/city/sdf";
 
@@ -169,7 +169,7 @@ export async function loadFaces(
     [
       fontOf(type.title, TITLE_PX, from),
       fontOf(type.lines, LINES_PX, from),
-    ].map((f) => document.fonts.load(f, text).catch(() => []))
+    ].map(async (f) => await document.fonts.load(f, text).catch(() => []))
   );
 }
 
@@ -207,14 +207,14 @@ function coarse(
   const width = Math.ceil(bw / f);
   const height = Math.ceil(bh / f);
   const data = new Uint8Array(width * height);
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
       let sum = 0;
       let n = 0;
-      for (let dy = 0; dy < f && y * f + dy < bh; dy++) {
-        for (let dx = 0; dx < f && x * f + dx < bw; dx++) {
+      for (let dy = 0; dy < f && y * f + dy < bh; dy += 1) {
+        for (let dx = 0; dx < f && x * f + dx < bw; dx += 1) {
           sum += alpha[(y * f + dy) * bw + x * f + dx];
-          n++;
+          n += 1;
         }
       }
       data[y * width + x] = n > 0 ? Math.round(sum / n) : 0;
@@ -263,7 +263,7 @@ function rasterise(
   ctx.fillText(ch, r + left, r + asc);
   const rgba = ctx.getImageData(0, 0, bw, bh).data;
   const alpha = new Uint8Array(bw * bh);
-  for (let i = 0; i < alpha.length; i++) {
+  for (let i = 0; i < alpha.length; i += 1) {
     alpha[i] = rgba[i * 4 + 3];
   }
   return {
@@ -290,6 +290,12 @@ interface SetLine {
   paint: Paint;
 }
 
+/** A letter with its combining marks stays one glyph. */
+const LETTERS =
+  typeof Intl.Segmenter === "function"
+    ? new Intl.Segmenter("de-DE", { granularity: "grapheme" })
+    : null;
+
 function setLine(
   ctx: Ctx,
   text: string,
@@ -303,16 +309,17 @@ function setLine(
   const font = fontOf(setting, px, from);
   ctx.font = font;
   const shown = setting.upper ? text.toLocaleUpperCase("de-DE") : text;
-  // reason: plate text is names and years; code points are what canvas measures
-  // oxlint-disable-next-line no-misused-spread
-  const chars = [...shown];
+  const chars = LETTERS
+    ? Array.from(LETTERS.segment(shown), (s) => s.segment)
+    : Array.from(shown);
   const tracking = setting.tracking * px;
   // the coverage at about COVER_PX_PER_CAP px per capital
   const f = Math.max(1, Math.round((px * 0.72) / COVER_PX_PER_CAP));
   const pens: number[] = [];
   const glyphs: Glyph[] = [];
   let prefix = "";
-  for (const [i, ch] of chars.entries()) {
+  for (let i = 0; i < chars.length; i += 1) {
+    const ch = chars[i];
     // the pen where the letter starts with its kern to the one before:
     // the run through it, less its own advance
     prefix += ch;
@@ -444,7 +451,7 @@ export function rasterPlate(
   }
   const atlas = new Uint8Array(ATLAS_WIDTH * packed.height);
   for (const g of glyphs) {
-    for (let row = 0; row < g.bh; row++) {
+    for (let row = 0; row < g.bh; row += 1) {
       atlas.set(
         g.field.subarray(row * g.bw, (row + 1) * g.bw),
         (g.ay + row) * ATLAS_WIDTH + g.ax
@@ -460,6 +467,16 @@ export function rasterPlate(
     titles,
     type,
   };
+}
+
+const widthOf = (l: SetLine) => l.width * l.scale;
+
+/** Where a line of width `w` starts in a block `width` wide. */
+function alignedStart(align: Align, width: number, w: number): number {
+  if (align === "left") {
+    return 0;
+  }
+  return align === "right" ? width - w : (width - w) / 2;
 }
 
 /**
@@ -478,17 +495,16 @@ export function layPlate(
   const baselines: number[] = [];
   const firstBaseline = FOOT * (lines.length > 0 ? lineCap : 1);
   let y = firstBaseline;
-  for (let i = lines.length - 1; i >= 0; i--) {
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
     baselines[i] = y;
     y += LINE_LEADING * lineCap;
   }
   const titleBase =
     lines.length > 0 ? y - LINE_LEADING * lineCap + lineCap + TITLE_GAP : y;
   const height = titleBase + (titles.length - 1) * TITLE_LEADING + 1 + HEAD;
-  const widthOf = (l: SetLine) => l.width * l.scale;
   const width = Math.max(...titles.map(widthOf), ...lines.map(widthOf));
   const b = new Builder();
-  const box = type.box;
+  const { box } = type;
   const pad = box?.pad ?? 0;
   if (box) {
     const x0 = -pad;
@@ -511,9 +527,9 @@ export function layPlate(
   }
   const place = (l: SetLine, baseline: number) => {
     const w = widthOf(l);
-    const start =
-      align === "left" ? 0 : align === "right" ? width - w : (width - w) / 2;
-    for (const [i, g] of l.glyphs.entries()) {
+    const start = alignedStart(align, width, w);
+    for (let i = 0; i < l.glyphs.length; i += 1) {
+      const g = l.glyphs[i];
       const x0 = start + (l.pens[i] + g.left) * l.scale;
       const y1 = baseline + g.top * l.scale;
       b.quad(
@@ -533,10 +549,12 @@ export function layPlate(
       );
     }
   };
-  for (const [i, t] of titles.entries()) {
+  for (let i = 0; i < titles.length; i += 1) {
+    const t = titles[i];
     place(t, titleBase + (titles.length - 1 - i) * TITLE_LEADING);
   }
-  for (const [i, l] of lines.entries()) {
+  for (let i = 0; i < lines.length; i += 1) {
+    const l = lines[i];
     place(l, baselines[i]);
   }
   const positions = new Float32Array(b.positions);
@@ -645,7 +663,8 @@ export function shadowMask(
   const sx = width / block.width;
   const sy = height / block.height;
   const raw = new Uint8Array(width * height);
-  for (const [q, cast] of casts.entries()) {
+  for (let q = 0; q < casts.length; q += 1) {
+    const cast = casts[q];
     const at = (corner: number) => {
       const i = (q * 4 + corner) * 3;
       return [
@@ -671,8 +690,8 @@ export function shadowMask(
     const x1 = Math.min(Math.ceil(Math.max(...xs)), width - 1);
     const y0 = Math.max(Math.floor(Math.min(...ys)), 0);
     const y1 = Math.min(Math.ceil(Math.max(...ys)), height - 1);
-    for (let y = y0; y <= y1; y++) {
-      for (let x = x0; x <= x1; x++) {
+    for (let y = y0; y <= y1; y += 1) {
+      for (let x = x0; x <= x1; x += 1) {
         const px = x + 0.5 - ox;
         const py = y + 0.5 - oy;
         const s = (px * vy - py * vx) / det;
@@ -690,11 +709,11 @@ export function shadowMask(
   }
   // softened by a 3 × 3 box: a shadow's edge is never a pixel's
   const data = new Uint8Array(width * height);
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
       let sum = 0;
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy += 1) {
+        for (let dx = -1; dx <= 1; dx += 1) {
           const xx = Math.min(Math.max(x + dx, 0), width - 1);
           const yy = Math.min(Math.max(y + dy, 0), height - 1);
           sum += raw[yy * width + xx];

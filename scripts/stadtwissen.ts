@@ -13,11 +13,13 @@ import {
   matchesQuery,
   nearby,
   WIKIDATA_PROPERTIES,
-  type WikidataProperty,
-  type WissenBuilding,
-  type WissenLandmark,
-  type WissenMonument,
   wikipediaUrl,
+} from "../lib/city/stadtwissen";
+import type {
+  WikidataProperty,
+  WissenBuilding,
+  WissenLandmark,
+  WissenMonument,
 } from "../lib/city/stadtwissen";
 import { siteFromArgs } from "../sites";
 import { loadStadtwissen } from "./stadtwissen-files";
@@ -27,7 +29,7 @@ const { index, tiles } = loadStadtwissen(site.id);
 const buildings = (): WissenBuilding[] => tiles().flatMap((t) => t.buildings);
 const monuments = (): WissenMonument[] => tiles().flatMap((t) => t.monuments);
 const monument = (m: WissenMonument & { d?: number }) =>
-  `${m.d === undefined ? "" : `${Math.round(m.d)} m  `}${m.name} · ${m.kind}${m.material ? `, ${m.material}` : ""} · (${m.x}, ${m.y})${m.wd ? ` · ${m.wd}` : ""} · ${m.id}`;
+  `${m.d === undefined ? "" : `${Math.round(m.d)} m  `}${m.name} · ${m.kind}${m.material ? `, ${m.material}` : ""} · (${m.x}, ${m.y})${m.wd ? ` · ${m.wd}` : ""}${m.materialWd ? ` · Material ${m.materialWd}` : ""} · ${m.id}`;
 
 const out = (line: string) => process.stdout.write(`${line}\n`);
 
@@ -70,50 +72,61 @@ const [command, ...args] = rest;
 switch (command) {
   case "such": {
     const q = args.join(" ");
-    index.landmarks
+    for (const line of index.landmarks
       .filter((lm) => matchesQuery(lm, q))
-      .flatMap(landmark)
-      .forEach(out);
-    monuments()
-      .filter((m) => matchesQuery(m, q))
-      .forEach((m) => out(monument(m)));
-    buildings()
+      .flatMap(landmark)) {
+      out(line);
+    }
+    for (const mon of monuments().filter((m) => matchesQuery(m, q))) {
+      out(monument(mon));
+    }
+    for (const bld of buildings()
       .filter((b) => matchesQuery(b, q))
-      .slice(0, 40)
-      .forEach((b) => out(building(b)));
+      .slice(0, 40)) {
+      out(building(bld));
+    }
     break;
   }
   case "nah": {
     const [x, y, r = "80"] = args.map(Number);
-    nearby(index.landmarks, x, y, Number(r) * 3)
-      .flatMap(landmark)
-      .forEach(out);
-    nearby(monuments(), x, y, Number(r)).forEach((m) => out(monument(m)));
-    nearby(
+    for (const line of nearby(index.landmarks, x, y, Number(r) * 3).flatMap(
+      landmark
+    )) {
+      out(line);
+    }
+    for (const mon of nearby(monuments(), x, y, Number(r))) {
+      out(monument(mon));
+    }
+    for (const bld of nearby(
       buildings().filter((b) => b.name !== undefined || b.wd !== undefined),
       x,
       y,
       Number(r)
-    ).forEach((b) => out(building(b)));
+    )) {
+      out(building(bld));
+    }
     break;
   }
   case "wahrzeichen": {
     const q = args.join(" ");
-    index.landmarks
+    for (const line of index.landmarks
       .filter((lm) => !q || matchesQuery(lm, q))
-      .flatMap(landmark)
-      .forEach(out);
+      .flatMap(landmark)) {
+      out(line);
+    }
     break;
   }
-  case "quellen":
+  case "quellen": {
     for (const [key, s] of Object.entries(index.sources)) {
       out(
         `${key}: ${s?.label} · ${s?.licence} · ${s?.credit}${s?.stand ? ` · Stand ${s.stand}` : ""}`
       );
     }
     break;
-  default:
+  }
+  default: {
     out(
       "such <Wörter> | nah <x> <y> [Radius] | wahrzeichen [Wörter] | quellen"
     );
+  }
 }

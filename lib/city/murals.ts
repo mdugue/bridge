@@ -11,6 +11,11 @@
  * at the path's start — the path runs with the wall's outside on its
  * right, so the photo reads as seen from the street.
  */
+import type { Mural, MuralFile } from "./murals-file";
+
+// The file's shape is its schema's (ADR 0059); the viewer takes the types
+// only, and `parseMurals` stays its guard.
+export type { Mural, MuralFile, MuralPhoto } from "./murals-file";
 
 /** The committed file (pipeline/bake/murals.py) and the name
  *  scripts/prepare-data.ts publishes it under (before hashing). */
@@ -22,57 +27,6 @@ export const MURALS_FILE = "murals.json";
 /** A committed WebP of a mural (`Mural.lines`, `Mural.wash` name it). */
 export function muralFileSource(dataDir: string, file: string): string {
   return `${dataDir}/murals/${file}`;
-}
-
-/** A photo's Commons credit. */
-export interface MuralPhoto {
-  author: string;
-  licence: string;
-  /** the Commons title, `File:…` */
-  title: string;
-  /** its Commons page */
-  url: string;
-}
-
-export interface Mural {
-  /** the LoD2 building it hangs on (`buildingId` in the city's table):
-   *  it goes when the building does */
-  building: string;
-  /** how the photo shows it: all of it, or the band of a line's whole
-   *  length that it shows (pipeline/bake/murals.py `choose`) */
-  how: "band" | "whole";
-  /** OSM's id: `n…` a node, `w…` a way */
-  id: string;
-  /** the pen's colour (sRGB, 0–255) */
-  ink: [number, number, number];
-  kind: string;
-  /** the pen lines' WebP (its red: 255 paper, 0 ink): its file name in
-   *  the committed folder, its published name once prepare-data has
-   *  published it */
-  lines: string;
-  name: string;
-  /** along the wall, a few cm in front of it, the wall's outside on its
-   *  right (projected metres) */
-  path: [number, number][];
-  /** the photo the drawing was made after */
-  photo: MuralPhoto;
-  /** the pen lines' width and height (pixels) */
-  px: [number, number];
-  /** its width along the wall and its height (m) */
-  size: [number, number];
-  /** the tile whose buildings hold its wall */
-  tile: string;
-  /** the wash's WebP (sRGB), named as `lines` is, and its size (pixels) */
-  wash: string;
-  washPx: [number, number];
-  /** above sea level (m) */
-  bottom: number;
-  top: number;
-}
-
-export interface MuralFile {
-  attribution: string;
-  murals: Mural[];
 }
 
 /** What the tileset's extras say of the murals: the published file and the
@@ -96,10 +50,10 @@ export function muralsOf(extras: unknown): MuralExtras["murals"] {
 /** A photo's credit line, as the HUD's sources list it: the drawing is an
  *  adaptation of the photo, under its licence. */
 export function muralCredit(mural: Pick<Mural, "name" | "photo">): string {
-  const author = mural.photo.author.replace(/^User:/, "");
+  const author = mural.photo.author.replace(/^User:/u, "");
   const name = mural.name ? `„${mural.name}“` : "";
   return `Wandbild ${name}: gezeichnet nach Foto ${author}, ${mural.photo.licence}, Wikimedia Commons`
-    .replace(/ {2,}/g, " ")
+    .replaceAll(/ {2,}/gu, " ")
     .replace(" :", ":");
 }
 
@@ -171,7 +125,7 @@ export interface MuralStrip {
 /** The outside normal (x, y on the map) of each segment of `path`. */
 function segmentNormals(path: readonly [number, number][]): [number, number][] {
   const out: [number, number][] = [];
-  for (let i = 0; i + 1 < path.length; i++) {
+  for (let i = 0; i + 1 < path.length; i += 1) {
     const dx = path[i + 1][0] - path[i][0];
     const dy = path[i + 1][1] - path[i][1];
     const len = Math.hypot(dx, dy) || 1;
@@ -188,7 +142,7 @@ export function muralStrip(
   const { path } = mural;
   const n = path.length;
   const along = [0];
-  for (let i = 1; i < n; i++) {
+  for (let i = 1; i < n; i += 1) {
     along.push(
       along[i - 1] +
         Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1])
@@ -199,7 +153,7 @@ export function muralStrip(
   const positions = new Float32Array(n * 6);
   const normals = new Float32Array(n * 6);
   const uvs = new Float32Array(n * 4);
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < n; i += 1) {
     const a = segs[Math.max(i - 1, 0)];
     const b = segs[Math.min(i, segs.length - 1)];
     const nx = a[0] + b[0];
@@ -214,7 +168,7 @@ export function muralStrip(
     uvs.set([u, 1, u, 0], i * 4);
   }
   const index = new Uint16Array((n - 1) * 6);
-  for (let i = 0; i + 1 < n; i++) {
+  for (let i = 0; i + 1 < n; i += 1) {
     const b0 = i * 2;
     const t0 = b0 + 1;
     const b1 = b0 + 2;

@@ -2,12 +2,9 @@ import { expect, test } from "bun:test";
 import type { MeshStandardNodeMaterial } from "three/webgpu";
 import type { FurnitureFeature } from "@/lib/city/features";
 import { Vector3 } from "three/webgpu";
-import {
-  buildFurniture,
-  setClockTime,
-  showFurnitureNear,
-} from "./furniture-layer";
-import { type Instances, isInstances } from "./instancing";
+import { buildFurniture, showFurnitureNear } from "./furniture-layer";
+import { isInstances } from "./instancing";
+import type { Instances } from "./instancing";
 
 const ctx = { offset: { cx: 0, cy: 0 }, heightAt: () => 100 };
 
@@ -66,12 +63,10 @@ test("the street's signs and fixtures each build an instanced model", () => {
   }
 });
 
+const build = () =>
+  buildFurniture([at({ k: "column" }), at({ k: "column", lit: true }, 5)], ctx);
+
 test("every tile wears the scene's node materials", () => {
-  const build = () =>
-    buildFurniture(
-      [at({ k: "column" }), at({ k: "column", lit: true }, 5)],
-      ctx
-    );
   const byName = (g: ReturnType<typeof build>, name: string) =>
     g.getObjectByName(name) as Instances<MeshStandardNodeMaterial>;
   const [a, b] = [build(), build()];
@@ -106,18 +101,9 @@ test("a playground's slab is a flush, polygon-offset plain mesh", () => {
   const slab = group.getObjectByName("furniture-playgrounds");
   expect(slab).toBeDefined();
   expect(isInstances(slab)).toBe(false);
-  const material = (slab as Instances<MeshStandardNodeMaterial>).material;
+  const { material } = slab as Instances<MeshStandardNodeMaterial>;
   expect(material.polygonOffset).toBe(true);
   expect(material.vertexColors).toBe(true);
-});
-
-test("the clock hands move on the minute only", () => {
-  const t = new Date(2026, 5, 15, 14, 30, 5);
-  setClockTime(t);
-  expect(setClockTime(new Date(2026, 5, 15, 14, 30, 50))).toBe(false);
-  expect(setClockTime(new Date(2026, 5, 15, 14, 31, 0))).toBe(true);
-  // 2:31 and 14:31 read the same on a dial
-  expect(setClockTime(new Date(2026, 5, 15, 2, 31, 0))).toBe(false);
 });
 
 test("a piece on a bridge stands on its deck, not on the ground below", () => {

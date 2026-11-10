@@ -50,13 +50,14 @@ export interface ReleasePlan {
  */
 export function apiOrigin(dsn: string | null, override?: string): string {
   if (override) {
-    return override.replace(/\/+$/, "");
+    return override.replace(/\/+$/u, "");
   }
   if (!dsn) {
     return "https://sentry.io";
   }
   const { protocol, host, hostname, pathname } = new URL(dsn);
-  const region = /\.ingest\.([a-z]+)\.sentry\.io$/.exec(hostname)?.[1];
+  const region = /\.ingest\.(?<region>[a-z]+)\.sentry\.io$/u.exec(hostname)
+    ?.groups?.region;
   if (region) {
     return `https://${region}.sentry.io`;
   }
@@ -107,13 +108,13 @@ export function releasePlan(env: Env): ReleasePlan | { skip: string } {
  * (it then fetches the range since the previous release), else the commit
  * itself.
  */
-export function releaseBody(plan: ReleasePlan, connected: boolean) {
+export function releaseBody(plan: ReleasePlan, repoConnected: boolean) {
   const body: Record<string, unknown> = {
     version: plan.version,
     projects: [plan.project],
   };
   if (plan.commit && plan.repository) {
-    if (connected) {
+    if (repoConnected) {
       body.refs = [{ repository: plan.repository, commit: plan.commit.id }];
     } else {
       body.commits = [{ ...plan.commit, repository: plan.repository }];
@@ -139,10 +140,11 @@ async function call(
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!response.ok) {
-    const text = (await response.text()).slice(0, 300);
+    const raw = await response.text();
+    const text = raw.slice(0, 300);
     throw new Error(`${method} ${path}: ${response.status} ${text}`);
   }
-  return response.status === 204 ? null : response.json();
+  return response.status === 204 ? null : await response.json();
 }
 
 /**
@@ -182,14 +184,16 @@ async function release(plan: ReleasePlan): Promise<void> {
     environment: plan.environment,
     url: plan.url,
   });
+  let commits = " · no commit";
+  if (linked) {
+    commits = ` · commits from ${plan.repository}`;
+  } else if (plan.commit) {
+    commits = " · its commit (connect the repository in Sentry for the range)";
+  }
   say(
-    `${plan.version} · ${plan.environment}` +
-      (plan.finalize ? " · finalized" : "") +
-      (linked
-        ? ` · commits from ${plan.repository}`
-        : plan.commit
-          ? " · its commit (connect the repository in Sentry for the range)"
-          : " · no commit")
+    `${plan.version} · ${plan.environment}${
+      plan.finalize ? " · finalized" : ""
+    }${commits}`
   );
 }
 

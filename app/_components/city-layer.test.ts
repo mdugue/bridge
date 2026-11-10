@@ -13,13 +13,13 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import "./collision";
 import { buildBvhOffThread, bvhBuilding } from "./bvh-client";
 import {
-  type CityLayer,
   cityObjectsAlong,
   ensureCityBvh,
   hangsShown,
   nearestCityHit,
   nearestWithoutBvh,
 } from "./city-layer";
+import type { CityLayer } from "./city-layer";
 
 type CountedLayer = CityLayer & { builds: number };
 
@@ -55,7 +55,7 @@ function tile(
     hasBvh: () => Boolean(geometry.boundsTree),
     ensureBvh: () => {
       if (!geometry.boundsTree) {
-        layer.builds++;
+        layer.builds += 1;
       }
       ensureCityBvh(mesh);
     },
@@ -149,11 +149,11 @@ test("the tile built next in idle time is the nearest without a BVH within reach
 test("a pick waits for a tile whose BVH the worker builds: no answer from the building behind", async () => {
   const near = tile("near", 20);
   const far = tile("far", 200, true);
-  const geometry = near.mesh.geometry;
+  const { geometry } = near.mesh;
   await buildBvhOffThread(new BoxGeometry(1, 1, 1));
   const done = buildBvhOffThread(geometry);
   // (its turn within a few microtasks of a worker that runs)
-  for (let i = 0; i < 20 && !bvhBuilding(geometry); i++) {
+  for (let i = 0; i < 20 && !bvhBuilding(geometry); i += 1) {
     await Promise.resolve();
   }
   expect(bvhBuilding(geometry)).toBe(true);

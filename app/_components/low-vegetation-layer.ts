@@ -24,13 +24,15 @@ import {
   vec4,
 } from "three/tsl";
 import type { LowVegFeature, VegRowFeature } from "@/lib/city/features";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
-import { type Point2, subdividePolyline } from "@/lib/city/polyline";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
+import { subdividePolyline } from "@/lib/city/polyline";
+import type { Point2 } from "@/lib/city/polyline";
 import { Instances, instanceMatrix, instancePosition } from "./instancing";
 import type { F, V3 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 import { bucketByCell, leafNoise, printedLeaf } from "./vegetation-layer";
-import { DEFAULT_HEDGE_H, DEFAULT_HEDGE_W } from "@/lib/city/ask-more";
+import { DEFAULT_HEDGE_H, DEFAULT_HEDGE_W } from "@/lib/city/ask-items";
 import { clamp } from "@/lib/city/math";
 
 /**
@@ -128,7 +130,7 @@ export function hedgePieces(
 ): HedgePiece[] {
   const pts = subdividePolyline(coords, HEDGE_PIECE_M);
   const segs: { a: Point2; angle: number; b: Point2; len: number }[] = [];
-  for (let i = 0; i < pts.length - 1; i++) {
+  for (let i = 0; i < pts.length - 1; i += 1) {
     const a = pts[i];
     const b = pts[i + 1];
     const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -181,6 +183,8 @@ interface Instance {
   z: number;
 }
 
+const flank = (y: number): number => 0.5 * (1 - HEDGE_TAPER * y);
+
 /**
  * The hedge's cross-section (z across, y up; base at y = 0, top at 1),
  * from the bottom-left corner over the top to the bottom-right: straight,
@@ -188,11 +192,12 @@ interface Instance {
  * trimmed hedge. The base is open (it is sunk into the lawn).
  */
 function hedgeProfile(): [number, number][] {
-  const left: [number, number][] = [];
-  const flank = (y: number): number => 0.5 * (1 - HEDGE_TAPER * y);
-  left.push([-flank(0), 0], [-flank(0.3), 0.3]);
+  const left: [number, number][] = [
+    [-flank(0), 0],
+    [-flank(0.3), 0.3],
+  ];
   const steps = 4;
-  for (let k = 0; k < steps; k++) {
+  for (let k = 0; k < steps; k += 1) {
     const phi = (k / steps) * (Math.PI / 2);
     const c = Math.cos(phi) ** (2 / HEDGE_SHOULDER_P);
     const s = Math.sin(phi) ** (2 / HEDGE_SHOULDER_P);
@@ -228,13 +233,13 @@ export function buildHedgeGeo(): BufferGeometry {
   const pos: number[] = [];
   const nrm: number[] = [];
   const index: number[] = [];
-  for (let r = 0; r <= HEDGE_RINGS; r++) {
+  for (let r = 0; r <= HEDGE_RINGS; r += 1) {
     for (const [z, y] of profile) {
       pos.push(-0.5 + r / HEDGE_RINGS, y, z);
     }
   }
-  for (let i = 0; i < HEDGE_RINGS; i++) {
-    for (let k = 0; k < n - 1; k++) {
+  for (let i = 0; i < HEDGE_RINGS; i += 1) {
+    for (let k = 0; k < n - 1; k += 1) {
       const a = i * n + k;
       const b = a + n;
       index.push(a, a + 1, b, b, a + 1, b + 1);
@@ -254,7 +259,7 @@ export function buildHedgeGeo(): BufferGeometry {
       pos.push(side * 0.5, y, z);
       nrm.push(side, 0, 0);
     }
-    for (let k = 0; k < n - 1; k++) {
+    for (let k = 0; k < n - 1; k += 1) {
       const a = centre + 1 + k;
       if (side < 0) {
         index.push(centre, a, a + 1);
@@ -359,7 +364,7 @@ function hedgeMaterial(): MeshStandardNodeMaterial {
       1.04,
       smoothstep(0.02, 0.6, varying(positionGeometry.y))
     );
-    const lumps = shape.lumps;
+    const { lumps } = shape;
     const near = float(1).sub(
       smoothstep(
         HEDGE_MOTTLE_NEAR_M,
@@ -413,7 +418,8 @@ function buildChunks(
     mesh.name = "lowveg-hedge";
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    cell.forEach((p, i) => {
+    for (let i = 0; i < cell.length; i += 1) {
+      const p = cell[i];
       dummy.position.set(p.x, p.y, p.z);
       dummy.rotation.set(0, p.rot, 0);
       dummy.scale.set(p.sx, p.sy, p.sz);
@@ -421,7 +427,7 @@ function buildChunks(
       // the shear: local x lifts by `rise` over the piece's length
       shear.makeShear(p.rise / p.sy, 0, 0, 0, 0, 0);
       mesh.setMatrixAt(i, matrix.multiplyMatrices(dummy.matrix, shear));
-    });
+    }
     mesh.instanceMatrix.needsUpdate = true;
     // Without this the cull test uses the unit geometry's sphere at the origin.
     mesh.computeBoundingSphere();

@@ -7,6 +7,7 @@
  * neither, the card shows neither.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useOnce } from "./use-once";
 
 // reason: SpeechRecognition is not in TypeScript's DOM library yet; the
 // part used here, typed by hand.
@@ -15,13 +16,16 @@ interface Recognition {
   interimResults: boolean;
   lang: string;
   onend: (() => void) | null;
-  onerror: ((event: { error: string }) => void) | null;
   onresult:
     | ((event: {
         results: ArrayLike<ArrayLike<{ transcript: string }>>;
       }) => void)
     | null;
   abort: () => void;
+  addEventListener: (
+    type: "error",
+    listener: (event: { error: string }) => void
+  ) => void;
   start: () => void;
   stop: () => void;
 }
@@ -42,14 +46,17 @@ function recognitionClass(): RecognitionClass | null {
 // (a sentence's full stop after it is not the link's)
 const LINK = String.raw`https?:\/\/(?:[^\s()]|\([^\s()]*\))*(?:[^\s().,;:!?]|\([^\s()]*\))`;
 /** [words](link): the words stay */
-const MARKDOWN_LINK = new RegExp(String.raw`\[([^\]]+)\]\(${LINK}\)`, "g");
+const MARKDOWN_LINK = new RegExp(
+  String.raw`\[(?<words>[^\]]+)\]\(${LINK}\)`,
+  "gu"
+);
 /** (link) or (Quelle: link): gone with its brackets */
 const BRACKETED_LINK = new RegExp(
   String.raw`\s?\((?:Quelle:\s*)?${LINK}\)`,
-  "g"
+  "gu"
 );
 /** a bare link */
-const BARE_LINK = new RegExp(String.raw`\s?${LINK}`, "g");
+const BARE_LINK = new RegExp(String.raw`\s?${LINK}`, "gu");
 
 /**
  * Text as it should be heard: no web links (the card shows them; a
@@ -59,23 +66,27 @@ const BARE_LINK = new RegExp(String.raw`\s?${LINK}`, "g");
 export function speakable(text: string): string {
   return (
     text
-      .replace(MARKDOWN_LINK, "$1")
-      .replace(BRACKETED_LINK, "")
-      .replace(BARE_LINK, "")
-      .replace(/^[ \t]*[-*•][ \t]+/gm, "")
+      .replaceAll(MARKDOWN_LINK, "$<words>")
+      .replaceAll(BRACKETED_LINK, "")
+      .replaceAll(BARE_LINK, "")
+      .replaceAll(/^[ \t]*[-*•][ \t]+/gmu, "")
       // Markdown's marks, but not an underscore inside a word (DESN_0815)
-      .replace(/[*#`]|(?<!\w)_|_(?!\w)/g, "")
+      .replaceAll(/[*#`]|(?<!\w)_|_(?!\w)/gu, "")
       // a line without its own end is a sentence still: a list item, a heading
       // (after a number a comma: "1726." reads as an ordinal)
-      .replace(/(\d)[ \t]*\n+/g, "$1, ")
-      .replace(/([^\s.!?:;,])[ \t]*\n+/g, "$1. ")
-      .replace(/(\d)\s?m²/g, "$1 Quadratmeter")
-      .replace(/(\d)\s?m³/g, "$1 Kubikmeter")
-      .replace(/(\d)\s?m(?![\p{L}\d])/gu, "$1 Meter")
-      .replace(/\s+/g, " ")
+      .replaceAll(/(?<n>\d)[ \t]*\n+/gu, "$<n>, ")
+      .replaceAll(/(?<c>[^\s.!?:;,])[ \t]*\n+/gu, "$<c>. ")
+      .replaceAll(/(?<n>\d)\s?m²/gu, "$<n> Quadratmeter")
+      .replaceAll(/(?<n>\d)\s?m³/gu, "$<n> Kubikmeter")
+      .replaceAll(/(?<n>\d)\s?m(?![\p{L}\d])/gu, "$<n> Meter")
+      .replaceAll(/\s+/gu, " ")
       .trim()
   );
 }
+
+// the device's default first, then Germany's German (dictation's too)
+const rank = (v: SpeechSynthesisVoice) =>
+  (v.default ? 0 : 2) + (v.lang.toLowerCase() === "de-de" ? 0 : 1);
 
 /**
  * The device's own German voice, or null. Only a local one: a network
@@ -86,10 +97,7 @@ function germanVoice(): SpeechSynthesisVoice | null {
   const local = speechSynthesis
     .getVoices()
     .filter((v) => v.localService && v.lang.toLowerCase().startsWith("de"));
-  // the device's default first, then Germany's German (dictation's too)
-  const rank = (v: SpeechSynthesisVoice) =>
-    (v.default ? 0 : 2) + (v.lang.toLowerCase() === "de-de" ? 0 : 1);
-  return local.toSorted((a, b) => rank(a) - rank(b))[0] ?? null;
+  return local.sort((a, b) => rank(a) - rank(b))[0] ?? null;
 }
 
 export interface Speech {
@@ -111,15 +119,20 @@ export interface Speech {
 export function useSpeech(): Speech {
   const [voice, setVoice] = useState<SpeechSynthesisVoice | null>(null);
   useEffect(() => {
-    if (!("speechSynthesis" in window)) {
-      return;
-    }
+    const available = "speechSynthesis" in window;
     // a reload that briefly lists none keeps the voice it had: a reading
     // answer is not cut off, the switch does not vanish
     const pick = () => setVoice((had) => germanVoice() ?? had);
-    pick();
-    speechSynthesis.addEventListener("voiceschanged", pick);
-    return () => speechSynthesis.removeEventListener("voiceschanged", pick);
+    if (available) {
+      pick();
+      // (older Safari: speechSynthesis is no EventTarget, the one pick stands)
+      speechSynthesis.addEventListener?.("voiceschanged", pick);
+    }
+    return () => {
+      if (available) {
+        speechSynthesis.removeEventListener?.("voiceschanged", pick);
+      }
+    };
   }, []);
   const supported = voice !== null;
   const stop = useCallback(() => {
@@ -163,9 +176,12 @@ export interface Dictation {
   /** why the last attempt heard nothing, in German; null when it did */
   problem: string | null;
   listening: boolean;
-  /** listens for one question and hands it over when it ends */
-  start: (onText: (text: string) => void) => void;
+  /** listens for one question and hands it over when it ends; whether
+   *  the microphone opened */
+  start: (onText: (text: string) => void) => boolean;
   stop: () => void;
+  /** ends listening and drops what was heard */
+  abort: () => void;
   supported: boolean;
 }
 
@@ -173,36 +189,45 @@ export interface Dictation {
 export function dictationProblem(error: string): string | null {
   switch (error) {
     case "aborted":
-    case "no-speech":
+    case "no-speech": {
       // they stopped, or said nothing: nothing to explain
       return null;
+    }
     case "not-allowed":
-    case "service-not-allowed":
+    case "service-not-allowed": {
       return "Das Mikrofon ist für diese Seite nicht freigegeben.";
-    case "audio-capture":
+    }
+    case "audio-capture": {
       return "Kein Mikrofon gefunden.";
-    case "network":
+    }
+    case "network": {
       return "Die Spracherkennung des Browsers ist nicht erreichbar.";
-    case "language-not-supported":
+    }
+    case "language-not-supported": {
       return "Der Browser erkennt kein Deutsch.";
-    default:
+    }
+    default: {
       return "Die Spracherkennung hat nicht geklappt.";
+    }
   }
 }
 
 /** Push to talk: one question per press, in German. */
 export function useDictation(): Dictation {
-  const [supported] = useState(() => recognitionClass() !== null);
+  const supported = useOnce(() => recognitionClass() !== null);
   const [listening, setListening] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const current = useRef<Recognition | null>(null);
   const stop = useCallback(() => {
     current.current?.stop();
   }, []);
+  const abort = useCallback(() => {
+    current.current?.abort();
+  }, []);
   const start = useCallback((onText: (text: string) => void) => {
     const Class = recognitionClass();
     if (!Class || current.current) {
-      return;
+      return false;
     }
     const r = new Class();
     r.lang = "de-DE";
@@ -217,7 +242,9 @@ export function useDictation(): Dictation {
         onText(text);
       }
     };
-    r.onerror = (event) => setProblem(dictationProblem(event.error));
+    r.addEventListener("error", (event) =>
+      setProblem(dictationProblem(event.error))
+    );
     r.onend = () => {
       current.current = null;
       setListening(false);
@@ -227,14 +254,15 @@ export function useDictation(): Dictation {
       r.start();
     } catch {
       setProblem(dictationProblem("start"));
-      return;
+      return false;
     }
     current.current = r;
     setListening(true);
+    return true;
   }, []);
   useEffect(() => () => current.current?.abort(), []);
   return useMemo(
-    () => ({ listening, problem, start, stop, supported }),
-    [listening, problem, start, stop, supported]
+    () => ({ abort, listening, problem, start, stop, supported }),
+    [abort, listening, problem, start, stop, supported]
   );
 }

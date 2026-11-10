@@ -1,7 +1,14 @@
 import { expect, test } from "bun:test";
 import { Matrix4, Vector3 } from "three/webgpu";
+import type { BufferGeometry, Material, Mesh } from "three/webgpu";
+import { createLookState } from "@/lib/city/look-state";
 import { Instances } from "./instancing";
 import { buildLamps, createLampLights, LAMP_LIGHTS } from "./lamp-layer";
+import { createSceneEnvironment, sceneNight } from "./scene-environment";
+import type { SunState } from "./sun-rig";
+
+/** The sun at a night factor. */
+const sunAt = (nightFactor: number) => ({ nightFactor }) as SunState;
 
 /** A lamp head 5 m up at (x, z), the camera's eye 1.7 m up. */
 const head = (x: number, z = 0) => new Vector3(x, 5, z);
@@ -53,7 +60,7 @@ test("a phone's one light hands over between two lamps through darkness", () => 
   for (let x = 0.1; x <= 30; x += 0.1) {
     pool.updateNearest(eye(x));
     if (!light.position.equals(at)) {
-      moves++;
+      moves += 1;
       expect(before).toBeLessThan(full * 0.05);
       expect(light.intensity).toBeLessThan(full * 0.05);
       at = light.position.clone();
@@ -148,4 +155,107 @@ test("a tall mast holds its head on its arm, its light pool under it", () => {
     12, 110, -20,
   ]);
   expect([tips[1].x, tips[1].z].map((v) => +v.toFixed(3))).toEqual([30, -22]);
+});
+
+test("the halos and pools are drawn after dark only, by their shared materials", () => {
+  const ctx = { heightAt: () => 100, offset: { cx: 0, cy: 0 } };
+  const env = createSceneEnvironment({
+    initialDate: new Date(2026, 6, 15, 12),
+    climate: { spring: 0, autumn: 0 },
+    look: createLookState(),
+    castersChanged: () => {},
+  });
+  try {
+    env.light(sunAt(0));
+    const lamps = buildLamps(
+      [
+        {
+          geometry: { type: "Point", coordinates: [10, 20] },
+          properties: { h: 5 },
+        },
+        {
+          geometry: { type: "Point", coordinates: [30, 20] },
+          properties: { h: 5 },
+        },
+      ],
+      ctx
+    );
+    const nightOnly = ["lamp-glow", "lamp-pools"].map(
+      (name) =>
+        lamps.group.getObjectByName(name) as Mesh<BufferGeometry, Material>
+    );
+    // born by day: the meshes shown, their materials hidden
+    for (const mesh of nightOnly) {
+      expect(mesh.visible).toBe(true);
+      expect(mesh.material.visible).toBe(false);
+    }
+    const versions = nightOnly.map((mesh) => mesh.material.version);
+    env.light(sunAt(1));
+    expect(sceneNight.value).toBe(1);
+    for (const mesh of nightOnly) {
+      expect(mesh.visible).toBe(true);
+      expect(mesh.material.visible).toBe(true);
+    }
+    env.light(sunAt(0));
+    for (const mesh of nightOnly) {
+      expect(mesh.visible).toBe(true);
+      expect(mesh.material.visible).toBe(false);
+    }
+    // a switch of visibility is no rebuild
+    expect(nightOnly.map((mesh) => mesh.material.version)).toEqual(versions);
+  } finally {
+    env.light(sunAt(0));
+    env.dispose();
+  }
+});
+
+test("the lamps that see the water lead the halos and carry its level and reach", () => {
+  const ctx = { heightAt: () => 100, offset: { cx: 0, cy: 0 } };
+  const lamps = buildLamps(
+    [
+      {
+        geometry: { type: "Point", coordinates: [10, 20] },
+        properties: { h: 5 },
+      },
+      // the bake found this one's light on water 2 m under the ground
+      {
+        geometry: { type: "Point", coordinates: [30, 20] },
+        properties: { h: 5, w: 98, wr: [60, 0, 0, 0, 0, 0, 0, 5] },
+      },
+    ],
+    ctx
+  );
+  const glow = lamps.group.getObjectByName("lamp-glow") as Instances;
+  const mirrors = lamps.group.getObjectByName("lamp-mirrors") as Instances;
+  expect(mirrors.capacity).toBe(1);
+  // one buffer for both: the mirrored head first, its water in its matrix
+  expect(mirrors.instanceMatrix).toBe(glow.instanceMatrix);
+  const { array } = glow.instanceMatrix;
+  expect([array[12], array[3], array[7], array[11]]).toEqual([
+    30,
+    98,
+    12,
+    64 ** 3,
+  ]);
+  expect([array[16 + 12], array[16 + 3], array[16 + 7]]).toEqual([10, 0, 0]);
+});
+
+test("a head a real light holds is that light's share, any other none", () => {
+  const pool = createLampLights(LAMP_LIGHTS.desktop);
+  const heads = [head(2), head(-4), head(30), head(200)];
+  pool.setHeads(heads);
+  pool.setNightFactor(1);
+  pool.updateNearest(eye(0));
+  // near the eye a real light gives the head its whole light
+  expect(pool.heldShare(heads[0])).toBeCloseTo(1, 5);
+  // the third light, 30 m off, is fading with its distance from the eye
+  const third = pool.heldShare(heads[2]);
+  expect(third).toBeGreaterThan(0);
+  expect(third).toBeLessThan(1);
+  // a head no light holds is left to the walls' street light
+  expect(pool.heldShare(heads[3])).toBe(0);
+  // by day no light holds any
+  pool.setNightFactor(0);
+  pool.updateNearest(eye(0));
+  expect(pool.heldShare(heads[0])).toBe(0);
 });

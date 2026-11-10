@@ -32,18 +32,16 @@ import {
   sportSurfaceId,
 } from "@/lib/city/sport";
 import type { F, I, Tex, V2, V3, V4 } from "./shader-chunks";
+import { GROUND_DETAIL } from "./ground-detail";
 import {
   byteOf,
   floorMod,
   gdNoise,
   loadTexel,
-  GROUND_DETAIL,
-  type GroundColour,
-  type GroundFields,
-  type GroundInputs,
   texelAt,
   texelSize,
-} from "./ground-detail";
+} from "./shader-chunks";
+import type { GroundColour, GroundFields, GroundInputs } from "./ground-detail";
 
 /**
  * Sports grounds in the terrain's colour node (pipeline/bake/sport.py,
@@ -101,7 +99,7 @@ const PALETTE = sportPalette();
 /** A surface's colour by id (a select chain over the few surfaces). */
 function surfaceColour(surf: I): V3 {
   let col: V3 = vec3(PALETTE[0], PALETTE[1], PALETTE[2]);
-  for (let k = 1; k < SPORT_SURFACES.length; k++) {
+  for (let k = 1; k < SPORT_SURFACES.length; k += 1) {
     const c = vec3(PALETTE[k * 3], PALETTE[k * 3 + 1], PALETTE[k * 3 + 2]);
     col = select(surf.equal(k), c, col);
   }
@@ -307,6 +305,9 @@ function nearestGround(table: Tex, t: V3[], f: V2, mpt: F, local: V2): Nearest {
       const q = vec2(dot(d, a.zw), dot(d, vec2(a.w.negate(), a.z))).toVar();
       const shape = int(b.w.add(0.5)).shiftRight(6).toVar();
       const sd = float(0).toVar();
+      const hit = (j: number): F =>
+        select(and(t[j].x.equal(row), t[j].z.greaterThan(0.5)), 1, 0);
+
       If(shape.equal(SHAPE.stadium), () => {
         const c = length(vec2(max(abs(q.x).sub(b.x), 0), q.y))
           .sub(b.y)
@@ -314,8 +315,6 @@ function nearestGround(table: Tex, t: V3[], f: V2, mpt: F, local: V2): Nearest {
         sd.assign(max(c, c.negate().sub(spBandWidth(b.xyz))));
       })
         .ElseIf(shape.equal(SHAPE.free), () => {
-          const hit = (j: number): F =>
-            select(and(t[j].x.equal(row), t[j].z.greaterThan(0.5)), 1, 0);
           const cov = mix(
             mix(hit(0), hit(1), f.x),
             mix(hit(2), hit(3), f.x),

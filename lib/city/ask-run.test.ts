@@ -1,14 +1,14 @@
 import {
+  EventType,
   chatParamsFromRequestBody,
   convertMessagesToModelMessages,
   uiMessagesToWire,
-  type UIMessage,
 } from "@tanstack/ai";
+import type { UIMessage, ModelMessage, StreamChunk } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 import { fakeText } from "@tanstack/ai/testing";
-import type { AskPromptSite } from "./ask-city";
 import { knowledgeOf } from "./ask-knowledge";
-import type { ModelMessage, StreamChunk } from "@tanstack/ai";
+import type { AskPromptSite } from "./ask-prompt";
 import {
   DEADLINE,
   ended,
@@ -63,8 +63,9 @@ const TILE: WissenTile = {
 const SITE: AskPromptSite = {
   epsg: 25_833,
   label: "Dresden",
-  layers: [],
-  styles: ["pastel: Pastell"],
+  layers: [
+    { key: "tramLayer", label: "Bahnen", description: "Nach dem Fahrplan" },
+  ],
 };
 
 type Chunk = { type: string } & Record<string, unknown>;
@@ -75,6 +76,29 @@ async function collect(stream: AsyncIterable<unknown>): Promise<Chunk[]> {
     chunks.push(c as Chunk);
   }
   return chunks;
+}
+
+/** The layer tool the model is offered in a city, if any. */
+async function offeredLayerTool(site: AskPromptSite) {
+  const adapter = fakeText();
+  let tools: { name: string }[] = [];
+  adapter.setResponses([
+    ({ request }) => {
+      tools = request.tools ?? [];
+      return { text: "Hallo." };
+    },
+  ]);
+  await collect(
+    runAsk({
+      adapter,
+      knowledge: knowledgeOf(INDEX, [TILE]),
+      messages: [{ role: "user", content: "Hallo" }],
+      site,
+      threadId: "t3",
+      today: new Date(2026, 9, 29),
+    })
+  );
+  return tools.find((t) => t.name === "datenschicht");
 }
 
 describe("runAsk", () => {
@@ -159,14 +183,26 @@ describe("runAsk", () => {
     );
     expect(adapter.state.callCount).toBe(1);
   });
+
+  test("the model is offered its city's layers and no layer tool without any", async () => {
+    const schema = JSON.stringify(await offeredLayerTool(SITE));
+    expect(schema).toContain("tramLayer");
+    expect(schema).toContain("Nach dem Fahrplan");
+    expect(schema).not.toContain("bikeLayer");
+    expect(await offeredLayerTool({ ...SITE, layers: [] })).toBeUndefined();
+  });
 });
 
 describe("scrubbed", () => {
   const KEY = "sk-ant-api03-0123456789abcdef";
   async function* errors(): AsyncIterable<StreamChunk> {
-    yield { type: "RUN_STARTED", runId: "r", threadId: "t" } as StreamChunk;
     yield {
-      type: "RUN_ERROR",
+      type: EventType.RUN_STARTED,
+      runId: "r",
+      threadId: "t",
+    };
+    yield {
+      type: EventType.RUN_ERROR,
       message: `invalid x-api-key ${KEY}`,
       code: "401",
       error: { message: KEY },
@@ -189,21 +225,22 @@ describe("scrubbed", () => {
   });
 });
 
+const turnCall = (id: string, name: string) => ({
+  type: "tool-call" as const,
+  id,
+  name,
+  arguments: "{}",
+  state: "input-complete" as const,
+});
+
 test("an answer's turns count across resumed requests, not its calls", () => {
-  const call = (id: string, name: string) => ({
-    type: "tool-call" as const,
-    id,
-    name,
-    arguments: "{}",
-    state: "input-complete" as const,
-  });
   const messages = [
     {
       id: "1",
       role: "user" as const,
       parts: [{ type: "text" as const, content: "Alt" }],
     },
-    { id: "2", role: "assistant" as const, parts: [call("o", "zeige")] },
+    { id: "2", role: "assistant" as const, parts: [turnCall("o", "zeige")] },
     {
       id: "3",
       role: "user" as const,
@@ -213,8 +250,8 @@ test("an answer's turns count across resumed requests, not its calls", () => {
       id: "4",
       role: "assistant" as const,
       parts: [
-        call("a", "suche_stadt"),
-        call("b", "fakten"),
+        turnCall("a", "suche_stadt"),
+        turnCall("b", "fakten"),
         {
           type: "tool-result" as const,
           toolCallId: "a",
@@ -227,7 +264,7 @@ test("an answer's turns count across resumed requests, not its calls", () => {
           content: "{}",
           state: "complete" as const,
         },
-        { ...call("c", "zeige"), output: { ok: true } },
+        { ...turnCall("c", "zeige"), output: { ok: true } },
       ],
     },
   ];
@@ -236,26 +273,83 @@ test("an answer's turns count across resumed requests, not its calls", () => {
   expect(roundsSinceQuestion([])).toBe(0);
 });
 
-describe("an answer that stops says why", () => {
-  const chunk = (type: string) =>
-    ({ type, timestamp: 0, toolCallId: "t1" }) as StreamChunk;
-  async function* of(...types: string[]) {
-    for (const t of types) {
-      yield chunk(t);
-    }
+const EVENT_TYPES = new Map<string, EventType>(
+  Object.values(EventType).map((v) => [v, v])
+);
+const eventType = (name: string): EventType => {
+  const found = EVENT_TYPES.get(name);
+  if (!found) {
+    throw new Error(`unknown event type ${name}`);
   }
-  const types = async (stream: AsyncIterable<StreamChunk>) => {
-    const out: string[] = [];
-    for await (const c of stream) {
-      out.push(
-        c.type === "RUN_ERROR" ? `RUN_ERROR:${String(c.message)}` : c.type
-      );
-    }
-    return out;
+  return found;
+};
+const chunk = (type: string) =>
+  ({
+    type: eventType(type),
+    timestamp: 0,
+    toolCallId: "t1",
+  }) as StreamChunk;
+async function* of(...types: string[]) {
+  for (const t of types) {
+    yield chunk(t);
+  }
+}
+const types = async (stream: AsyncIterable<StreamChunk>) => {
+  const out: string[] = [];
+  for await (const c of stream) {
+    out.push(
+      c.type === EventType.RUN_ERROR ? `RUN_ERROR:${c.message}` : c.type
+    );
+  }
+  return out;
+};
+const finished = (finishReason: string) =>
+  ({
+    ...chunk("RUN_FINISHED"),
+    metadata: { tanstack: { finishReason } },
+  }) as StreamChunk;
+async function* list(...chunks: StreamChunk[]) {
+  yield* chunks;
+}
+/** The stream's events as `types` gives them, and the closing error's code. */
+const ends = async (stream: AsyncIterable<StreamChunk>) => {
+  const chunks: StreamChunk[] = [];
+  for await (const c of stream) {
+    chunks.push(c);
+  }
+  const last = chunks.at(-1);
+  return {
+    out: await types(list(...chunks)),
+    code: last?.type === EventType.RUN_ERROR ? last.code : undefined,
   };
+};
+async function* interrupt() {
+  yield chunk("TOOL_CALL_RESULT");
+  yield {
+    ...chunk("RUN_FINISHED"),
+    outcome: { type: "interrupt", interrupts: [] },
+    metadata: { tanstack: { finishReason: "tool_calls" } },
+  } as StreamChunk;
+}
+async function* round() {
+  yield chunk("RUN_STARTED");
+  yield {
+    ...chunk("RUN_FINISHED"),
+    finishReason: "tool_calls",
+  } as StreamChunk;
+  yield chunk("TOOL_CALL_RESULT");
+}
+async function* whole() {
+  yield chunk("RUN_STARTED");
+  yield {
+    ...chunk("RUN_FINISHED"),
+    metadata: { tanstack: { finishReason: "stop" } },
+  } as StreamChunk;
+}
 
+describe("an answer that stops says why", () => {
   test("a run the turn cap ends after a server tool", async () => {
-    const out = await types(
+    const { out, code } = await ends(
       ended(
         of(
           "RUN_STARTED",
@@ -267,19 +361,11 @@ describe("an answer that stops says why", () => {
       )
     );
     expect(out.at(-1)).toContain("zu viele Schritte");
+    expect(code).toBe("too-many-steps");
   });
 
-  const finished = (finishReason: string) =>
-    ({
-      ...chunk("RUN_FINISHED"),
-      metadata: { tanstack: { finishReason } },
-    }) as StreamChunk;
-  async function* list(...chunks: StreamChunk[]) {
-    yield* chunks;
-  }
-
   test("a cut run that ends on its RUN_FINISHED after the results", async () => {
-    const out = await types(
+    const { out, code } = await ends(
       ended(
         list(
           chunk("TOOL_CALL_START"),
@@ -293,138 +379,135 @@ describe("an answer that stops says why", () => {
       )
     );
     expect(out.at(-1)).toContain("zu viele Schritte");
+    expect(code).toBe("too-many-steps");
   });
 
   test("a turn that spends its output before a word is cut, not capped", async () => {
-    const out = await types(
+    const { out, code } = await ends(
       ended(
         list(chunk("TOOL_CALL_RESULT"), finished("length")),
         new AbortController().signal
       )
     );
     expect(out.at(-1)).toContain("abgeschnitten");
+    expect(code).toBe("cut-short");
   });
 
   test("a filtered or failed answer says it broke off", async () => {
-    const out = await types(
+    const { out, code } = await ends(
       ended(list(finished("content_filter")), new AbortController().signal)
     );
     expect(out.at(-1)).toContain("brach die Antwort ab");
+    expect(code).toBe("broke-off");
   });
 
   test("an answer the model's output cut mid-sentence says so", async () => {
-    const out = await types(
+    const { out, code } = await ends(
       ended(
         list(chunk("TEXT_MESSAGE_CONTENT"), finished("length")),
         new AbortController().signal
       )
     );
     expect(out.at(-1)).toContain("abgeschnitten");
+    expect(code).toBe("cut-short");
   });
 
   test("a resumed scene tool's result needs no new words", async () => {
-    const out = await types(
+    const { out, code } = await ends(
       ended(
         list(chunk("TOOL_CALL_RESULT"), chunk("RUN_STARTED"), finished("stop")),
         new AbortController().signal
       )
     );
     expect(out.at(-1)).toBe("RUN_FINISHED");
+    expect(code).toBeUndefined();
   });
 
   test("a provider's error after a result keeps its own words", async () => {
     const error = { ...chunk("RUN_ERROR"), message: "401 invalid x-api-key" };
-    const out = await types(
+    const { out, code } = await ends(
       ended(
         list(chunk("TOOL_CALL_RESULT"), error),
         new AbortController().signal
       )
     );
     expect(out.at(-1)).toBe("RUN_ERROR:401 invalid x-api-key");
+    expect(code).toBeUndefined();
   });
 
   test("a scene tool's interrupt is not a stop", async () => {
-    async function* interrupt() {
-      yield chunk("TOOL_CALL_RESULT");
-      yield {
-        ...chunk("RUN_FINISHED"),
-        outcome: { type: "interrupt", interrupts: [] },
-        metadata: { tanstack: { finishReason: "tool_calls" } },
-      } as StreamChunk;
-    }
-    const out = await types(ended(interrupt(), new AbortController().signal));
+    const { out, code } = await ends(
+      ended(interrupt(), new AbortController().signal)
+    );
     expect(out).toEqual(["TOOL_CALL_RESULT", "RUN_FINISHED"]);
+    expect(code).toBeUndefined();
   });
 
   test("an answered run ends as it is", async () => {
-    const out = await types(
+    const { out, code } = await ends(
       ended(
         of("RUN_STARTED", "TEXT_MESSAGE_END", "RUN_FINISHED"),
         new AbortController().signal
       )
     );
     expect(out).toEqual(["RUN_STARTED", "TEXT_MESSAGE_END", "RUN_FINISHED"]);
+    expect(code).toBeUndefined();
   });
 
   test("the deadline after a tool round is still the deadline", async () => {
     const c = new AbortController();
     c.abort(DEADLINE);
-    async function* round() {
-      yield chunk("RUN_STARTED");
-      yield {
-        ...chunk("RUN_FINISHED"),
-        finishReason: "tool_calls",
-      } as StreamChunk;
-      yield chunk("TOOL_CALL_RESULT");
-    }
-    const out = await types(ended(round(), c.signal));
+    const { out, code } = await ends(ended(round(), c.signal));
     expect(out.at(-1)).toBe("RUN_ERROR:Die Antwort dauerte zu lange.");
+    expect(code).toBe("too-late");
   });
 
   test("a run that finished before the deadline stays whole", async () => {
     const c = new AbortController();
     c.abort(DEADLINE);
-    async function* whole() {
-      yield chunk("RUN_STARTED");
-      yield {
-        ...chunk("RUN_FINISHED"),
-        metadata: { tanstack: { finishReason: "stop" } },
-      } as StreamChunk;
-    }
-    const out = await types(ended(whole(), c.signal));
+    const { out, code } = await ends(ended(whole(), c.signal));
     expect(out).toEqual(["RUN_STARTED", "RUN_FINISHED"]);
+    expect(code).toBeUndefined();
   });
 
   test("the deadline's error replaces the abort's", async () => {
     const c = new AbortController();
     c.abort(DEADLINE);
-    const out = await types(ended(of("RUN_STARTED", "RUN_ERROR"), c.signal));
+    const { out, code } = await ends(
+      ended(of("RUN_STARTED", "RUN_ERROR"), c.signal)
+    );
     expect(out).toEqual([
       "RUN_STARTED",
       "RUN_ERROR:Die Antwort dauerte zu lange.",
     ]);
+    expect(code).toBe("too-late");
   });
 });
 
+const stoppedCall = (id: string, output?: unknown) => ({
+  type: "tool-call" as const,
+  id,
+  name: "was_ist_da",
+  arguments: "{}",
+  state: "input-complete" as const,
+  ...(output === undefined ? {} : { output }),
+});
+const textPart = (content: string) => ({ type: "text" as const, content });
+
 test("a stopped answer's tool call gets a stand-in result, the running answer's calls stay open", async () => {
-  const call = (id: string, output?: unknown) => ({
-    type: "tool-call" as const,
-    id,
-    name: "was_ist_da",
-    arguments: "{}",
-    state: "input-complete" as const,
-    ...(output === undefined ? {} : { output }),
-  });
-  const text = (content: string) => ({ type: "text" as const, content });
   const ui = [
-    { id: "1", role: "user" as const, parts: [text("Was ist das?")] },
+    { id: "1", role: "user" as const, parts: [textPart("Was ist das?")] },
     // stopped while was_ist_da waited: no output
-    { id: "2", role: "assistant" as const, parts: [call("s")] },
-    { id: "3", role: "user" as const, parts: [text("Und das?")] },
+    { id: "2", role: "assistant" as const, parts: [stoppedCall("s")] },
+    { id: "3", role: "user" as const, parts: [textPart("Und das?")] },
     {
       id: "4",
       role: "assistant" as const,
-      parts: [text("Moment."), call("x", { gefunden: true }), call("r")],
+      parts: [
+        textPart("Moment."),
+        stoppedCall("x", { gefunden: true }),
+        stoppedCall("r"),
+      ],
     },
   ] as UIMessage[];
   // the way the request reaches the route: the client's wire rows, read
@@ -524,23 +607,26 @@ test("a stand-in keeps a stopped answer's thinking and segments together and men
   expect(model.slice(2, 4).map((m) => m.toolCallId)).toEqual(["a", "s"]);
 });
 
+const searchCall = (id: string, args: string) => ({
+  id,
+  type: "function" as const,
+  function: { name: "suche_stadt", arguments: args },
+});
+const argumentsOf = (m: ModelMessage | undefined) =>
+  m?.toolCalls?.map((c) => c.function.arguments);
+
 test("cut-off arguments are mended in every row, answered or not", () => {
-  const call = (id: string, args: string) => ({
-    id,
-    type: "function" as const,
-    function: { name: "suche_stadt", arguments: args },
-  });
   const rows: ModelMessage[] = [
     { role: "user", content: "Wo?" },
     {
       role: "assistant",
       content: null,
       toolCalls: [
-        call("a", '{"anfrage":"Fra'),
-        call("b", "null"),
-        call("c", "[]"),
-        call("d", ""),
-        call("e", '{"anfrage":"x"}'),
+        searchCall("a", '{"anfrage":"Fra'),
+        searchCall("b", "null"),
+        searchCall("c", "[]"),
+        searchCall("d", ""),
+        searchCall("e", '{"anfrage":"x"}'),
       ],
     },
     // the output cap ended the run with a failed result for each
@@ -550,30 +636,35 @@ test("cut-off arguments are mended in every row, answered or not", () => {
       content: "{}",
     })),
     { role: "user", content: "Und?" },
-    { role: "assistant", content: null, toolCalls: [call("f", '{"anf')] },
+    { role: "assistant", content: null, toolCalls: [searchCall("f", '{"anf')] },
   ];
   const out = withStoppedCallsAnswered(rows);
-  const args = (m: ModelMessage | undefined) =>
-    m?.toolCalls?.map((c) => c.function.arguments);
-  expect(args(out[1])).toEqual(["{}", "{}", "{}", "{}", '{"anfrage":"x"}']);
+  expect(argumentsOf(out[1])).toEqual([
+    "{}",
+    "{}",
+    "{}",
+    "{}",
+    '{"anfrage":"x"}',
+  ]);
   // all answered: no stand-in, the rows as they were
   expect(out).toHaveLength(rows.length);
   // the running answer's too: a resume never finishes them
-  expect(args(out.at(-1))).toEqual(["{}"]);
+  expect(argumentsOf(out.at(-1))).toEqual(["{}"]);
+});
+
+const zeigeCall = (id: string) => ({
+  id,
+  type: "function" as const,
+  function: { name: "zeige", arguments: "{}" },
 });
 
 test("a result counts only within its own answer", () => {
-  const call = (id: string) => ({
-    id,
-    type: "function" as const,
-    function: { name: "zeige", arguments: "{}" },
-  });
   const rows: ModelMessage[] = [
     { role: "user", content: "Zeig!" },
     // stopped: the provider numbers calls afresh in every answer
-    { role: "assistant", content: null, toolCalls: [call("call_0")] },
+    { role: "assistant", content: null, toolCalls: [zeigeCall("call_0")] },
     { role: "user", content: "Nochmal." },
-    { role: "assistant", content: null, toolCalls: [call("call_0")] },
+    { role: "assistant", content: null, toolCalls: [zeigeCall("call_0")] },
     { role: "tool", toolCallId: "call_0", content: "{}" },
     { role: "user", content: "Danke." },
   ];

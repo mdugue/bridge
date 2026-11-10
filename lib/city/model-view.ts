@@ -18,7 +18,8 @@
  * ADR 0044) are within a few degrees of the true direction.
  */
 import { clamp } from "./math";
-import { DEG2RAD, directionOf, RAD2DEG, type Xyz } from "./pose";
+import { DEG2RAD, directionOf, RAD2DEG } from "./pose";
+import type { Xyz } from "./pose";
 
 /** The views (the HUD's *Projektion* cards). Ids are persisted: never rename. */
 export type ModelPresetId =
@@ -458,7 +459,7 @@ export function modelFootprint(
 ): Xyz[] {
   if (isLevelView(view)) {
     const g = modelCameraGeometry(view, viewport);
-    const ahead = groundAxes(view).ahead;
+    const { ahead } = groundAxes(view);
     const halfW = g.rightEdge;
     const a = add(view.pivot, scale(g.right, -halfW));
     const b = add(view.pivot, scale(g.right, halfW));
@@ -486,25 +487,23 @@ export function footprintCircle(points: readonly Xyz[]): {
   const n = Math.max(points.length, 1);
   const x = points.reduce((s, p) => s + p.x, 0) / n;
   const z = points.reduce((s, p) => s + p.z, 0) / n;
-  const radius = points.reduce(
-    (r, p) => Math.max(r, Math.hypot(p.x - x, p.z - z)),
-    0
-  );
+  let radius = 0;
+  for (const p of points) {
+    radius = Math.max(radius, Math.hypot(p.x - x, p.z - z));
+  }
   return { x, z, radius };
 }
 
-/** The shadow frustum's half-size never goes below 110 m (the walker's
- *  until 2026-10-11, now 121 m with a wider dead zone; Modell's steps keep
- *  the 18 % one, shadow-fit.ts `shadowDeadZone`). */
+/** The square the map's rings tile in Modell never goes below 110 m. */
 export const MODEL_SHADOW_MIN = 110;
-/** …and stops here on a desktop: 1 600 m over 3 072² ≈ 1 m texels. */
+/** …and stops here on a desktop: 1 600 m over 2 × 2048² ≈ 1.1 m texels. */
 export const MODEL_SHADOW_MAX = 1600;
 /** Half-octave steps, and how far past a boundary a change waits. */
 const SHADOW_STEPS_PER_OCTAVE = 2;
 const SHADOW_HYSTERESIS = 0.3;
 
 /**
- * The shadow frustum's half-size for a footprint radius: in half-octave
+ * The half-size of the square the map's rings tile, for a footprint radius: in half-octave
  * steps from MODEL_SHADOW_MIN, with hysteresis (a step is a full redraw of
  * the depth pass), capped at `max`.
  */
@@ -586,7 +585,7 @@ export function scaleBarFor(metresPerPixel: number, maxPx = 160): ScaleBar {
 export function scaleLabel(denominator: number): string {
   const digits = Math.max(Math.floor(Math.log10(denominator)) - 1, 0);
   const round = Math.round(denominator / 10 ** digits) * 10 ** digits;
-  return `1 : ${round.toLocaleString("de-DE").replace(/\./g, " ")}`;
+  return `1 : ${round.toLocaleString("de-DE").replaceAll(".", " ")}`;
 }
 
 /** Degrees the north arrow turns on screen (clockwise, as CSS rotate). */
@@ -809,7 +808,7 @@ const CUBE_EDGES: readonly (readonly [number, number])[] = [
 export function presetGlyph(id: ModelPresetId): GlyphLine[] {
   const { turnDeg, tiltDeg } = GLYPH_VIEW[id];
   const { forward, right, up } = modelAxes(turnDeg, tiltDeg);
-  const shear = MODEL_PRESET_BY_ID[id].shear;
+  const { shear } = MODEL_PRESET_BY_ID[id];
   const corners = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
     const p = { x: (i & 1) - 0.5, y: (i >> 2) - 0.5, z: ((i >> 1) & 1) - 0.5 };
     return {

@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
 import {
-  type Mural,
   muralBytes,
   muralCredit,
   muralStrip,
@@ -8,7 +7,15 @@ import {
   muralsOf,
   PHONE_PX_PER_M,
   parseMurals,
+  muralsSource,
 } from "./murals";
+import type { Mural } from "./murals";
+import { existsSync, readFileSync } from "node:fs";
+import nodePath from "node:path";
+import { SITES } from "../../sites";
+import { bakeFileProblems } from "./bake-file";
+import { MURALS_FILE_SPEC } from "./murals-file";
+import { siteDataDir } from "./tile";
 
 /** The Kulturpalast's west wall, north to south (as baked). */
 const weg: Mural = {
@@ -59,6 +66,21 @@ test("the file's murals, the malformed left out", () => {
   ).toEqual([weg]);
   expect(parseMurals({})).toBeNull();
   expect(parseMurals(null)).toBeNull();
+});
+
+// The viewer's guard and the build's schema (ADR 0059) agree: every mural
+// a committed file holds passes both, none is left out.
+const ROOT = nodePath.join(import.meta.dir, "..", "..");
+const committed = Object.values(SITES)
+  .map((site) => nodePath.join(ROOT, muralsSource(siteDataDir(site))))
+  .filter((path) => existsSync(path));
+
+test.each(committed)("the guard keeps every mural of %s", (path) => {
+  const json = JSON.parse(readFileSync(path, "utf-8")) as {
+    murals: unknown[];
+  };
+  expect(bakeFileProblems(MURALS_FILE_SPEC, json)).toEqual([]);
+  expect(parseMurals(json)).toHaveLength(json.murals.length);
 });
 
 test("the extras name the murals only well-formed", () => {

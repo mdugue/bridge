@@ -25,21 +25,27 @@ function edt1d(
   z[0] = -INF;
   z[1] = INF;
   f[0] = grid[offset];
-  for (let q = 1, k = 0, s = 0; q < length; q++) {
+  for (let k = 0, q = 1, s = 0; q < length; q += 1) {
     f[q] = grid[offset + q * stride];
     const q2 = q * q;
-    do {
+    let again = true;
+    while (again) {
       const r = v[k];
       s = (f[q] - f[r] + q2 - r * r) / (q - r) / 2;
-    } while (s <= z[k] && --k > -1);
-    k++;
+      again = s <= z[k];
+      if (again) {
+        k -= 1;
+        again = k > -1;
+      }
+    }
+    k += 1;
     v[k] = q;
     z[k] = s;
     z[k + 1] = INF;
   }
-  for (let q = 0, k = 0; q < length; q++) {
+  for (let k = 0, q = 0; q < length; q += 1) {
     while (z[k + 1] < q) {
-      k++;
+      k += 1;
     }
     const r = v[k];
     const qr = q - r;
@@ -54,10 +60,10 @@ function edt(grid: Float64Array, width: number, height: number): void {
   const f = new Float64Array(n);
   const v = new Uint16Array(n);
   const z = new Float64Array(n + 1);
-  for (let x = 0; x < width; x++) {
+  for (let x = 0; x < width; x += 1) {
     edt1d(grid, x, width, height, f, v, z);
   }
-  for (let y = 0; y < height; y++) {
+  for (let y = 0; y < height; y += 1) {
     edt1d(grid, y * width, 1, width, f, v, z);
   }
 }
@@ -76,7 +82,7 @@ export function signedDistanceField(
   const size = width * height;
   const outer = new Float64Array(size);
   const inner = new Float64Array(size);
-  for (let i = 0; i < size; i++) {
+  for (let i = 0; i < size; i += 1) {
     const a = alpha[i] / 255;
     if (a >= 1) {
       outer[i] = 0;
@@ -95,7 +101,7 @@ export function signedDistanceField(
   edt(outer, width, height);
   edt(inner, width, height);
   const out = new Uint8Array(size);
-  for (let i = 0; i < size; i++) {
+  for (let i = 0; i < size; i += 1) {
     const signed = Math.sqrt(outer[i]) - Math.sqrt(inner[i]);
     const value = 0.5 - signed / (2 * radius);
     out[i] = Math.round(Math.min(Math.max(value, 0), 1) * 255);

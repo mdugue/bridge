@@ -42,7 +42,13 @@ export interface Slab extends Prism {
 }
 
 export type AskSolid =
-  | { cylinder: Cylinder }
+  | {
+      cylinder: Cylinder;
+      /** a tree's crown and how it is drawn (an ellipsoid, or a cone for a
+       *  conifer that is not a pine or a yew); set on the solids a hit
+       *  makes, never on stored ones (ADR 0047) */
+      crown?: "cone" | "ellipsoid";
+    }
   | { prism: Prism }
   | { slab: Slab };
 
@@ -102,7 +108,8 @@ export function insideRingXz(
   z: number
 ): boolean {
   let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+  for (let i = 0; i < ring.length; i += 1) {
+    const j = i === 0 ? ring.length - 1 : i - 1;
     const [xi, zi] = ring[i];
     const [xj, zj] = ring[j];
     if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) {
@@ -119,7 +126,8 @@ export function rayPrism(o: Xyz, d: Xyz, p: Prism): number | null {
   }
   let best = Number.POSITIVE_INFINITY;
   // the walls: the ray against each edge in plan, then the height
-  for (let i = 0, j = p.ring.length - 1; i < p.ring.length; j = i++) {
+  for (let i = 0; i < p.ring.length; i += 1) {
+    const j = i === 0 ? p.ring.length - 1 : i - 1;
     const [ax, az] = p.ring[j];
     const ex = p.ring[i][0] - ax;
     const ez = p.ring[i][1] - az;
@@ -189,6 +197,11 @@ export function raySlab(o: Xyz, d: Xyz, s: Slab): number | null {
   return null;
 }
 
+/** The box around every set's box, or null for none. */
+export function setsBox<T>(sets: readonly AskSet<T>[]): Aabb | null {
+  return boxAround(sets.map((set) => set.box));
+}
+
 /** Distance along the ray to the nearest of a thing's solids, or null. */
 export function raySolids(
   o: Xyz,
@@ -197,12 +210,14 @@ export function raySolids(
 ): number | null {
   let best: number | null = null;
   for (const s of solids) {
-    const t =
-      "cylinder" in s
-        ? rayCylinder(o, d, s.cylinder)
-        : "prism" in s
-          ? rayPrism(o, d, s.prism)
-          : raySlab(o, d, s.slab);
+    let t: number | null;
+    if ("cylinder" in s) {
+      t = rayCylinder(o, d, s.cylinder);
+    } else if ("prism" in s) {
+      t = rayPrism(o, d, s.prism);
+    } else {
+      t = raySlab(o, d, s.slab);
+    }
     if (t !== null && (best === null || t < best)) {
       best = t;
     }
@@ -260,6 +275,13 @@ export interface AskSet<T> {
   along?: (o: Xyz, d: Xyz, far: number) => AskHit<T>[];
   box: Aabb;
   nearest: (o: Xyz, d: Xyz, far: number) => AskHit<T> | null;
+  /** true while `nearest` would first build something (a mesh's BVH): the
+   *  autofocus, ten times a second, passes it by — the set starts that
+   *  build off the thread when first asked */
+  unbuilt?: () => boolean;
+  /** drawn as glass, which writes no depth: the autofocus passes it by,
+   *  or the thing it aims at would blur */
+  glass?: boolean;
 }
 
 /** The box a solid fills. */
@@ -295,6 +317,28 @@ function grow(a: Aabb, b: Aabb): Aabb {
   };
 }
 
+/** The box all of `solids` fill together; an empty list has none. */
+function solidsBox(solids: readonly AskSolid[]): Aabb {
+  const box = boxAround(solids.map(solidBox));
+  if (!box) {
+    throw new Error("an item has no solids");
+  }
+  return box;
+}
+
+/** The box around boxes, or null for none. */
+function boxAround(boxes: readonly Aabb[]): Aabb | null {
+  const [first, ...rest] = boxes;
+  if (!first) {
+    return null;
+  }
+  let box = first;
+  for (const next of rest) {
+    box = grow(box, next);
+  }
+  return box;
+}
+
 /** Items grouped by the `cell` (m) their first solid stands in. */
 export function askSets<T>(
   items: readonly AskItem<T>[],
@@ -302,7 +346,7 @@ export function askSets<T>(
 ): AskSet<T>[] {
   const cells = new Map<string, { box: Aabb; items: AskItem<T>[] }>();
   for (const item of items) {
-    const box = item.solids.map(solidBox).reduce(grow);
+    const box = solidsBox(item.solids);
     const key = `${Math.floor(box.min.x / cell)},${Math.floor(box.min.z / cell)}`;
     const group = cells.get(key);
     if (group) {
@@ -385,6 +429,63 @@ export function hitsInSets<T>(
   return out.sort((a, b) => a.distance - b.distance);
 }
 
+/** A set's nearest hit within `far` that `keep` keeps: its next ones
+ *  (`along`) where the nearest is not; none from a set that would first
+ *  build something. */
+function nearestKept<T>(
+  set: AskSet<T>,
+  o: Xyz,
+  d: Xyz,
+  far: number,
+  keep: (hit: AskHit<T>) => boolean
+): AskHit<T> | null {
+  if (set.unbuilt?.()) {
+    return null;
+  }
+  const hit = set.nearest(o, d, far);
+  if (!hit || keep(hit)) {
+    return hit;
+  }
+  return set.along?.(o, d, far).find(keep) ?? null;
+}
+
+/**
+ * The nearest hit in the sets the ray meets within `far` (or null): the
+ * autofocus's question, asked ten times a second, so each set is opened
+ * only when the ray enters its box before the best hit so far, and a set
+ * that would first build something (`unbuilt`) or is drawn as glass not
+ * at all. A hit at the
+ * ray's start (it starts inside a crown or a shelter) is not what lies
+ * ahead, nor one `keep` turns down (a thing a design folded away).
+ */
+export function nearestInSets<T>(
+  o: Xyz,
+  d: Xyz,
+  sets: Iterable<AskSet<T>>,
+  far: number,
+  keep: (hit: AskHit<T>) => boolean = () => true
+): AskHit<T> | null {
+  const ahead = (hit: AskHit<T>) => hit.distance > 0 && keep(hit);
+  let best: AskHit<T> | null = null;
+  for (const set of sets) {
+    const reach: number = best ? best.distance : far;
+    const enter = rayAabb(o, d, set.box);
+    if (enter === null || enter > reach || set.glass) {
+      continue;
+    }
+    const hit: AskHit<T> | null = nearestKept(set, o, d, reach, ahead);
+    if (hit && hit.distance <= reach) {
+      best = hit;
+    }
+  }
+  return best;
+}
+
+/** A pier just outside its deck's outline still belongs to it (m): a
+ *  bridge's ask (bridge-ask.ts) and its outline (selection-shape.ts) reach
+ *  as far. */
+export const PIER_REACH = 12;
+
 /** How far (x, z) lies from the ring's edge in plan; 0 inside it. */
 export function ringDistanceXz(
   ring: readonly (readonly [number, number])[],
@@ -395,7 +496,8 @@ export function ringDistanceXz(
     return 0;
   }
   let best = Number.POSITIVE_INFINITY;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+  for (let i = 0; i < ring.length; i += 1) {
+    const j = i === 0 ? ring.length - 1 : i - 1;
     const [ax, az] = ring[j];
     const ex = ring[i][0] - ax;
     const ez = ring[i][1] - az;

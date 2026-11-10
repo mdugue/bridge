@@ -1,8 +1,16 @@
 import { expect, test } from "bun:test";
-import { lazyFeature, wantOnSwitchOn } from "./feature-seam";
+import {
+  createWatch,
+  follow,
+  lazyFeature,
+  wantOnSwitchOn,
+} from "./feature-seam";
 
 /** Every promise the calls before started has settled. */
-const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
+const settled = async () =>
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
 
 /** A feature that counts its starts and stops. */
 function counted() {
@@ -12,10 +20,10 @@ function counted() {
     starts: () => starts,
     stops: () => stops,
     start: () => {
-      starts++;
+      starts += 1;
       return {
         dispose: () => {
-          stops++;
+          stops += 1;
         },
       };
     },
@@ -25,9 +33,9 @@ function counted() {
 test("a feature wanted many times loads and starts once", async () => {
   let imports = 0;
   const feature = counted();
-  const lazy = lazyFeature(() => {
-    imports++;
-    return Promise.resolve({});
+  const lazy = lazyFeature(async () => {
+    imports += 1;
+    return {};
   }, feature.start);
   expect(lazy.current()).toBeNull();
   const [a, b] = await Promise.all([lazy.want(), lazy.want()]);
@@ -41,11 +49,11 @@ test("a feature wanted many times loads and starts once", async () => {
 test("a module that did not load is asked for again on the next want", async () => {
   let imports = 0;
   const feature = counted();
-  const lazy = lazyFeature(() => {
-    imports++;
+  const lazy = lazyFeature(async () => {
+    imports += 1;
     return imports === 1
-      ? Promise.reject(new Error("load"))
-      : Promise.resolve({});
+      ? await Promise.reject(new Error("load"))
+      : await Promise.resolve({});
   }, feature.start);
   const failed = await lazy.want().then(
     () => null,
@@ -59,12 +67,10 @@ test("a module that did not load is asked for again on the next want", async () 
 });
 
 test("a spine gone before the module came never starts the feature; one gone after stops it", async () => {
-  let arrive = (): void => undefined;
-  const coming = new Promise<object>((resolve) => {
-    arrive = () => resolve({});
-  });
+  const { promise: coming, resolve } = Promise.withResolvers<object>();
+  const arrive = () => resolve({});
   const early = counted();
-  const gone = lazyFeature(() => coming, early.start);
+  const gone = lazyFeature(async () => await coming, early.start);
   const wanted = gone.want();
   gone.dispose();
   arrive();
@@ -73,7 +79,7 @@ test("a spine gone before the module came never starts the feature; one gone aft
   expect(gone.current()).toBeNull();
 
   const late = counted();
-  const started = lazyFeature(() => Promise.resolve({}), late.start);
+  const started = lazyFeature(async () => ({}), late.start);
   await started.want();
   started.dispose();
   expect(late.stops()).toBe(1);
@@ -86,14 +92,16 @@ test("a spine gone before the module came never starts the feature; one gone aft
 test("the spine asks again on the next switch-on after a load that failed, not on every change while on", async () => {
   let imports = 0;
   const feature = counted();
-  const lazy = lazyFeature(() => {
-    imports++;
+  const lazy = lazyFeature(async () => {
+    imports += 1;
     return imports === 1
-      ? Promise.reject(new Error("load"))
-      : Promise.resolve({});
+      ? await Promise.reject(new Error("load"))
+      : await Promise.resolve({});
   }, feature.start);
   const failures: unknown[] = [];
-  const want = wantOnSwitchOn(lazy, (error) => failures.push(error));
+  const want = wantOnSwitchOn(lazy, (reason) => {
+    failures.push(reason);
+  });
   want(false);
   want(true);
   await settled();
@@ -109,4 +117,19 @@ test("the spine asks again on the next switch-on after a load that failed, not o
   expect(imports).toBe(2);
   expect(feature.starts()).toBe(1);
   expect(failures).toHaveLength(1);
+});
+
+test("a follower hears the value of now first, then every change, until it lets go", () => {
+  const day = createWatch(180);
+  const heard: number[] = [];
+  const unfollow = follow(day, (d) => {
+    heard.push(d);
+  });
+  expect(heard).toEqual([180]);
+  day.set(9);
+  day.set(9);
+  expect(heard).toEqual([180, 9, 9]);
+  unfollow();
+  day.set(200);
+  expect(heard).toEqual([180, 9, 9]);
 });

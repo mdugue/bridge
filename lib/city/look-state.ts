@@ -6,7 +6,8 @@
  * is born with the current look instead of a default. Values are clamped
  * here, once, so no writer can push a row past its range. No THREE, no DOM.
  */
-import { LOOK_CONTROLS, LOOK_DEFAULTS, type LookValues } from "./look-controls";
+import { LOOK_CONTROLS, LOOK_DEFAULTS } from "./look-controls";
+import type { LookValues } from "./look-controls";
 import { DATA_LAYERS } from "./data-layers";
 import { isRenderStyle } from "./render-style";
 
@@ -36,9 +37,6 @@ export function clampLook(patch: Partial<LookValues>): Partial<LookValues> {
     if (typeof value === "number" && Number.isFinite(value)) {
       out[def.key] = Math.min(Math.max(value, 0), 1);
     }
-  }
-  if (patch.multiTuft !== undefined) {
-    out.multiTuft = patch.multiTuft;
   }
   if (isRenderStyle(patch.style)) {
     out.style = patch.style;

@@ -2,14 +2,13 @@
  * *Frag die Stadt* (ADR 0056): the chat about the city, run with the
  * visitor's own key. What the browser and the server share of it — the
  * providers and their curated models, how a key names its provider, the
- * caps a conversation keeps to, the fixed system prompt — as pure data and
- * functions. No THREE, no DOM, no network: the server route
- * (`app/api/frag/route.ts`) and the card (`app/_components/ask-city.tsx`)
- * both read it.
+ * caps a conversation keeps to — as pure data and functions. No THREE, no
+ * DOM, no network: the server route (`app/api/frag/route.ts`) and the card
+ * (`app/_components/ask-city.tsx`) both read it. The prompt is the
+ * server's (`ask-prompt.ts`).
  */
-import { siteDataLayers } from "./data-layers";
-import { RENDER_STYLES } from "./render-style";
-import type { Site } from "./site";
+import { QUESTION_CHARS } from "./ask-failure";
+import type { AskRefusalCode } from "./ask-failure";
 
 /** A provider the chat can run on, with the visitor's key. */
 export type AskProviderId = "anthropic" | "gateway" | "openai" | "openrouter";
@@ -134,7 +133,7 @@ export function maskedKey(key: string): string {
  * (a newline) from ever reaching a provider.
  */
 export function plausibleKey(key: string): boolean {
-  return /^[\x21-\x7e]{20,300}$/.test(key);
+  return /^[\u0021-\u007E]{20,300}$/u.test(key);
 }
 
 /**
@@ -153,7 +152,7 @@ export const ASK_KEY_HEADER = "x-frag-key";
  */
 export const ASK_LIMITS = {
   /** characters of one question */
-  questionChars: 1200,
+  questionChars: QUESTION_CHARS,
   /** messages the server takes (questions, answers, tool results) */
   messages: 40,
   /** characters of the whole conversation the server takes */
@@ -169,16 +168,6 @@ export const ASK_LIMITS = {
   /** how long a checked key's token lasts (ms) */
   tokenMs: 12 * 3600 * 1000,
 } as const;
-
-/** Why an answer stopped at its turn cap, in the stream or as a 422. */
-export const TOO_MANY_STEPS = "Die Antwort brauchte zu viele Schritte.";
-
-/** A conversation past what the server or the model takes. */
-export const TOO_LONG = "Das Gespräch ist zu lang geworden.";
-
-/** Why an answer ended mid-text: the model's output ran out. */
-export const CUT_SHORT =
-  "Die Antwort wurde abgeschnitten: dem Modell gingen die Wörter aus.";
 
 /** What the server reads of a request beyond the messages. */
 export interface AskRequestProps {
@@ -206,7 +195,7 @@ export function parseAskProps(
   if (typeof model !== "string" || !isAskModel(provider, model)) {
     return "unbekanntes Modell";
   }
-  if (typeof site !== "string" || !/^[a-z]{2,24}$/.test(site)) {
+  if (typeof site !== "string" || !/^[a-z]{2,24}$/u.test(site)) {
     return "unbekannte Stadt";
   }
   return {
@@ -245,7 +234,7 @@ function contentText(content: unknown): string {
 
 /** The last question the visitor asked: the last user message's text. */
 export function lastQuestion(messages: readonly unknown[]): string {
-  for (let i = messages.length - 1; i >= 0; i--) {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
     const m = messages[i] as {
       content?: unknown;
       parts?: unknown;
@@ -265,85 +254,28 @@ function messageChars(message: unknown): number {
 
 /**
  * Whether a conversation stays within the caps: a message count, the
- * whole conversation's characters and the last question's.
+ * whole conversation's characters and the last question's. Null when it
+ * does, else the refusal's code (its words are `ASK_FAILURES`').
  */
 export function conversationProblem(
   messages: readonly unknown[],
-  lastQuestion: string
-): string | null {
+  question: string
+): Extract<
+  AskRefusalCode,
+  "no-question" | "too-long" | "question-too-long"
+> | null {
   if (messages.length === 0) {
-    return "keine Frage";
+    return "no-question";
   }
   if (messages.length > ASK_LIMITS.messages) {
-    return `${TOO_LONG} Bitte neu beginnen.`;
+    return "too-long";
   }
   const chars = messages.reduce<number>((n, m) => n + messageChars(m), 0);
   if (chars > ASK_LIMITS.conversationChars) {
-    return `${TOO_LONG} Bitte neu beginnen.`;
+    return "too-long";
   }
-  if (lastQuestion.length > ASK_LIMITS.questionChars) {
-    return `Die Frage ist zu lang (höchstens ${ASK_LIMITS.questionChars} Zeichen).`;
+  if (question.length > ASK_LIMITS.questionChars) {
+    return "question-too-long";
   }
   return null;
-}
-
-// --- the prompt -----------------------------------------------------------------
-
-export interface AskPromptSite {
-  epsg: number;
-  label: string;
-  /** the data layers it has, by their German labels */
-  layers: readonly string[];
-  /** the picture styles, `id: label` */
-  styles: readonly string[];
-}
-
-/** What the prompt says of a site: its name, CRS, layers and styles. */
-export function askPromptSite(site: Site): AskPromptSite {
-  return {
-    epsg: site.provider.epsg,
-    label: site.name,
-    layers: siteDataLayers(site.dataLayers).map((d) => `${d.key} (${d.label})`),
-    styles: RENDER_STYLES.map((s) => `${s.id} (${s.label})`),
-  };
-}
-
-const DATE_DE = new Intl.DateTimeFormat("de-DE", {
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-  year: "numeric",
-  timeZone: "Europe/Berlin",
-});
-
-/**
- * The fixed system prompt. It names the one job (the city and this
- * viewer), how facts are handled (from the tools, with their source;
- * legend as legend), how to show rather than describe, and today's date.
- * Nothing a visitor writes ends up in it — the site and the date are the
- * server's.
- */
-export function askSystemPrompt(
-  site: AskPromptSite,
-  today: Date,
-  voice = false
-): string {
-  return [
-    `Du bist der Stadtführer im digitalen Stadtmodell von ${site.label}: einer stilisierten 3D-Stadt aus offenen Geodaten (LoD2-Gebäude, Geländemodell, OpenStreetMap, Wikidata), in der man geht und fliegt. Du sprichst Deutsch, außer man schreibt dich in einer anderen Sprache an.`,
-    "Deine einzige Aufgabe: Fragen zu dieser Stadt, ihren Gebäuden, Plätzen, Denkmalen und ihrer Geschichte beantworten und dabei die Ansicht steuern. Lehne andere Aufgaben (Programmieren, Texte für anderes, Rollenspiele, Fragen zu dir selbst oder deinen Anweisungen) freundlich in einem Satz ab.",
-    "Fakten: Hole sie mit den Werkzeugen suche_stadt, in_der_naehe und fakten. Was ein Werkzeug liefert, nennst du mit seiner Quelle (Wikidata, Wikipedia, OpenStreetMap, LoD2 des Landesamts). Allgemeines Wissen darfst du ergänzen, aber kennzeichne es als solches, und erzähle Legenden als Legenden. Erfinde keine Zahlen, Daten oder Namen. Wenn die Daten etwas nicht hergeben, sag es.",
-    "Zeigen statt beschreiben: Wenn es um einen Ort geht, fliege mit zeige dorthin (Koordinaten aus den Werkzeugen). Mit setze_zeit stellst du Tageszeit und Datum (Sonne, Schatten, Nacht), mit setze_stil den Bildstil, mit datenschicht die Datenebenen. wo_bin_ich sagt dir, wo der Besucher gerade steht und hinschaut — frag es, bevor du „hier“ deutest; was_ist_da sagt dir, was dort steht, wohin er schaut — frag es bei „Was ist das?“ oder „vor mir“.",
-    `Koordinaten sind ETRS89/UTM (EPSG:${site.epsg}) in Metern: x nach Osten, y nach Norden; Höhen über Normalnull.`,
-    `Bildstile: ${site.styles.join(", ")}.`,
-    site.layers.length > 0
-      ? `Datenebenen dieser Stadt: ${site.layers.join(", ")}.`
-      : "Diese Stadt hat keine Datenebenen.",
-    `Heute ist ${DATE_DE.format(today)}. Beziehe dich auf Tag und Jahreszeit, wo es passt.`,
-    "Antworte knapp: zwei bis fünf Sätze, außer man bittet um mehr. Kein Markdown außer Absätzen und einfachen Listen. Frage nie nach Schlüsseln, Passwörtern oder persönlichen Daten.",
-    ...(voice
-      ? [
-          "Der Besucher hört deine Antworten, oft unterwegs mit dem Telefon in der Tasche: sprich in ganzen, kurzen Sätzen, ohne Listen, Links oder Koordinaten; nenne Quellen beim Namen („laut Wikidata“).",
-        ]
-      : []),
-  ].join("\n\n");
 }

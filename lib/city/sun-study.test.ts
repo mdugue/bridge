@@ -1,12 +1,10 @@
 import { expect, test } from "bun:test";
+import { getPosition } from "suncalc";
 import { HORIZON_PX } from "./skyview";
 import {
   BARE_LIGHT,
-  type Crown,
   DEFAULT_RECIPE,
-  germanOffsetHours,
   horizonDeg,
-  type HorizonRaster,
   LEAF_ON_LIGHT,
   leafLight,
   MAX_POINTS,
@@ -17,9 +15,9 @@ import {
   recipeText,
   recipeTitle,
   shadePlace,
-  type SunSample,
   sunSamples,
 } from "./sun-study";
+import type { Crown, HorizonRaster, SunSample } from "./sun-study";
 
 const DRESDEN = { lat: 51.05, lng: 13.74 };
 
@@ -37,12 +35,12 @@ function south(el: number): SunSample {
 }
 
 test("a recipe goes into the link and comes back", () => {
-  const r = { ...DEFAULT_RECIPE, x: 412345.4, y: 5658765.6 };
+  const r = { ...DEFAULT_RECIPE, x: 412_345.4, y: 5_658_765.6 };
   expect(recipeText(r)).toBe("sommer_11-17_spielplatz_1000m_412345_5658766");
   expect(parseRecipe(recipeText(r))).toEqual({
     ...DEFAULT_RECIPE,
-    x: 412345,
-    y: 5658766,
+    x: 412_345,
+    y: 5_658_766,
   });
   expect(parseRecipe("herbst_8-12_bank_500m")).toEqual({
     period: "herbst",
@@ -59,14 +57,23 @@ test("a recipe goes into the link and comes back", () => {
   );
 });
 
-test("the city's clock keeps summer time from March's last Sunday to October's", () => {
-  expect(germanOffsetHours(Date.UTC(2026, 6, 1, 12))).toBe(2);
-  expect(germanOffsetHours(Date.UTC(2026, 0, 15, 12))).toBe(1);
-  // 2026: 29 March and 25 October, 01:00 UTC
-  expect(germanOffsetHours(Date.UTC(2026, 2, 29, 0, 59))).toBe(1);
-  expect(germanOffsetHours(Date.UTC(2026, 2, 29, 1))).toBe(2);
-  expect(germanOffsetHours(Date.UTC(2026, 9, 25, 0, 59))).toBe(2);
-  expect(germanOffsetHours(Date.UTC(2026, 9, 25, 1))).toBe(1);
+/** The first sample of a period's 11–17 h window. */
+const firstSample = (period: "jahr" | "sommer") =>
+  sunSamples({ ...DEFAULT_RECIPE, period }, DRESDEN.lat, DRESDEN.lng, 2026)
+    .samples[0];
+
+/** The sun's azimuth at hh:10 UTC on a day of 2026. */
+const azimuthAt = (month: number, day: number, hour: number) =>
+  getPosition(
+    new Date(Date.UTC(2026, month, day, hour, 10)),
+    DRESDEN.lat,
+    DRESDEN.lng
+  ).azimuth;
+
+test("the window is the city's clock, with summer time", () => {
+  // 11:10 on 4 January is 10:10 UTC (CET), on 4 June 09:10 UTC (CEST)
+  expect(firstSample("jahr")?.az).toBeCloseTo(azimuthAt(0, 4, 10), 6);
+  expect(firstSample("sommer")?.az).toBeCloseTo(azimuthAt(5, 4, 9), 6);
 });
 
 test("crowns are bare in winter and in leaf in summer", () => {
@@ -90,8 +97,8 @@ test("a summer afternoon window samples a high sun every 20 minutes", () => {
   expect(Math.min(...samples.map((s) => s.el))).toBeGreaterThan(25);
   // south at solar noon, about 13:15 summer time in Dresden
   const noonish = samples.filter((s) => s.day === 3);
-  const highest = noonish.reduce((a, b) => (b.el > a.el ? b : a));
-  expect(Math.abs(highest.az - 180)).toBeLessThan(10);
+  const highest = noonish.toSorted((a, b) => b.el - a.el)[0];
+  expect(Math.abs((highest?.az ?? 0) - 180)).toBeLessThan(10);
 });
 
 test("the horizon reads the higher band, between two azimuths", () => {

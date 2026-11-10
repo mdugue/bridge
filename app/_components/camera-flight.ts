@@ -1,12 +1,10 @@
-import {
-  Matrix4,
-  type PerspectiveCamera,
-  Quaternion,
-  Vector3,
-} from "three/webgpu";
-import { DEG2RAD, directionOf, type Xyz } from "@/lib/city/pose";
+import { Matrix4, Quaternion, Vector3 } from "three/webgpu";
+import type { PerspectiveCamera } from "three/webgpu";
+import { DEG2RAD, directionOf } from "@/lib/city/pose";
+import type { Xyz } from "@/lib/city/pose";
 import { clamp } from "@/lib/city/math";
-import { glideHull, hullLift, type LiftPoint } from "@/lib/city/clearance";
+import { glideHull, hullLift } from "@/lib/city/clearance";
+import type { LiftPoint } from "@/lib/city/clearance";
 
 /** s — minimum flight time so even a tiny hop reads as a deliberate glide. */
 const MIN_DURATION = 1.4;

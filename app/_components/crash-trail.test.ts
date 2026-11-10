@@ -15,6 +15,10 @@ test("the trail keeps the path and the QA knobs of the URL, nothing else", () =>
   expect(trailUrl("/leipzig", "?at=51.339300,12.372600&gpu=webgl2")).toBe(
     "/leipzig?gpu=webgl2"
   );
+  // a view link's snapshot carries the camera's place too
+  expect(trailUrl("/dresden", "?safety=3&snap=eyJ2IjoxfQ")).toBe(
+    "/dresden?safety=3"
+  );
   // in the knobs' own order, whatever the given one
   expect(trailUrl("/dresden", "?trail=1&scene=lite")).toBe(
     "/dresden?scene=lite&trail=1"
@@ -27,11 +31,13 @@ test("an error that comes back every frame is noted once, then counted", () => {
   const noted: string[] = [];
   let now = 0;
   const errors = errorCoalescer(
-    (kind, text) => noted.push(kind === "error" ? text : `${kind}: ${text}`),
+    (kind, text) => {
+      noted.push(kind === "error" ? text : `${kind}: ${text}`);
+    },
     () => now
   );
   // a throw in every frame for a few frames
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 5; i += 1) {
     errors.error("boom");
     now += 1 / 60;
   }
@@ -61,7 +67,9 @@ test("the count is a breadcrumb, not a second problem", () => {
   const reports = createProblemGate();
   const sent: boolean[] = [];
   const errors = errorCoalescer(
-    (kind, detail) => sent.push(reports({ t: 0, kind, detail })),
+    (kind, detail) => {
+      sent.push(reports({ t: 0, kind, detail }));
+    },
     () => 0
   );
   errors.error("boom");
@@ -74,7 +82,9 @@ test("a page that goes to the background or leaves keeps the count", () => {
   for (const kind of ["hidden", "pagehide", "end"]) {
     const noted: string[] = [];
     const errors = errorCoalescer(
-      (k, text) => noted.push(`${k}: ${text}`),
+      (k, text) => {
+        noted.push(`${k}: ${text}`);
+      },
       () => 0
     );
     errors.error("boom");

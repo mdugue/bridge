@@ -6,30 +6,29 @@
  * other step: a change to the lines re-bakes none of them.
  */
 import { existsSync } from "node:fs";
-import type {
-  CanopyFeature,
-  FeatureCollection,
-  SmallBuildingFeature,
-  StructureFeature,
-} from "../../lib/city/features";
+import { parseBakeFile } from "../../lib/city/bake-file";
+import type { CanopyFeature, FeatureCollection } from "../../lib/city/features";
 import { tileExtentOf } from "../../lib/city/site";
+import { SMALL_BUILDINGS_FILE } from "../../lib/city/small-buildings-file";
+import { STRUCTURES_FILE } from "../../lib/city/structures-file";
 import {
   canopyStride,
   packPoints,
   pointOf,
   ROWS_MEASURED,
 } from "../../lib/city/point-pack";
-import {
-  gapRoofs,
-  lod2Roofs,
-  type RoofFootprint,
-  treesOffRoofs,
-} from "../../lib/city/roof-trees";
+import { gapRoofs, lod2Roofs, treesOffRoofs } from "../../lib/city/roof-trees";
+import type { RoofFootprint } from "../../lib/city/roof-trees";
 import { treesOffStructures } from "../../lib/city/small-buildings";
-import { cityMeshSourceFiles, sideFileSource } from "../../lib/city/tile";
+import {
+  cityMeshSourceFiles,
+  sideFileSource,
+  tileArtifacts,
+} from "../../lib/city/tile";
 import type { CityJsonDocument } from "../../lib/city/types";
 import { BAKE_ENTRIES } from "../bake-entries";
-import { type ColonyCrop, cropColonyRaster } from "../crop-raster";
+import { cropColonyRaster } from "../crop-raster";
+import type { ColonyCrop } from "../crop-raster";
 import { downsampleClassRaster } from "../downsample-raster";
 import {
   SITE,
@@ -60,30 +59,31 @@ export async function publishColonies(
 } | null> {
   const src = at(sideFileSource(SITE, file));
   const key = cacheKey([src], BAKE_ENTRIES.colonies);
-  const lowFile = file.replace(/\.png$/u, ".r1024.png");
+  const lowFile = tileArtifacts(tile).cultivatedLow.file;
   const cropFile = file.replace(/\.png$/u, ".crop.json");
   let cropping: ReturnType<typeof cropColonyRaster> | null = null;
-  const cut = () => {
+  const cut = async () => {
     cropping ??= cropColonyRaster(src);
-    return cropping;
+    return await cropping;
   };
-  const crop = parse<ColonyCrop | null>(
-    await cached(cropFile, key, async () => utf8((await cut())?.crop ?? null))
-  );
+  const crop = parse(
+    await cached(cropFile, key, async () => {
+      const cropped = await cut();
+      return utf8(cropped?.crop ?? null);
+    })
+  ) as ColonyCrop | null;
   if (!crop) {
     log(`no colony on ${tile}, skipping ${file}`);
     return null;
   }
-  const full = await cached(
-    file,
-    key,
-    async () => (await cut())?.full ?? new Uint8Array()
-  );
-  const low = await cached(
-    lowFile,
-    key,
-    async () => (await cut())?.low ?? new Uint8Array()
-  );
+  const full = await cached(file, key, async () => {
+    const cropped = await cut();
+    return cropped?.full ?? new Uint8Array();
+  });
+  const low = await cached(lowFile, key, async () => {
+    const cropped = await cut();
+    return cropped?.low ?? new Uint8Array();
+  });
   // the full raster first: the manifest lists the files in publish order
   const cultivatedRaster = publish(file, full);
   return { crop, cultivatedLow: publish(lowFile, low), cultivatedRaster };
@@ -98,10 +98,12 @@ function roofsOf(tile: string): RoofFootprint[] {
     const city = at(cityMeshSourceFiles(SITE, tile).city);
     const gaps = at(cityMeshSourceFiles(SITE, tile).structures);
     roofs = [
-      ...(existsSync(city) ? lod2Roofs(readJson<CityJsonDocument>(city)) : []),
+      ...(existsSync(city)
+        ? lod2Roofs(readJson(city) as CityJsonDocument)
+        : []),
       ...(existsSync(gaps)
         ? gapRoofs(
-            readJson<FeatureCollection<StructureFeature>>(gaps).features ?? []
+            parseBakeFile(STRUCTURES_FILE, readJson(gaps), gaps).features
           )
         : []),
     ];
@@ -135,14 +137,17 @@ export async function publishCanopy(
     BAKE_ENTRIES.canopy
   );
   const bytes = await cached(packed, key, () => {
-    const doc = readJson<FeatureCollection<CanopyFeature> & { rows?: unknown }>(
-      src
-    );
+    const doc = readJson(src) as FeatureCollection<CanopyFeature> & {
+      rows?: unknown;
+    };
     const trees = doc.features ?? [];
     let features = trees;
     if (existsSync(sheds)) {
-      const structures =
-        readJson<FeatureCollection<SmallBuildingFeature>>(sheds).features ?? [];
+      const structures = parseBakeFile(
+        SMALL_BUILDINGS_FILE,
+        readJson(sheds),
+        sheds
+      ).features;
       features = treesOffStructures(trees, structures);
       log(
         `${file}: ${trees.length - features.length} points in a scan structure dropped`
@@ -170,8 +175,10 @@ export async function publishClassRaster(
   raster: number
 ): Promise<string> {
   const key = cacheKey([src], BAKE_ENTRIES.classRaster);
-  const bytes = await cached(file, key, () =>
-    downsampleClassRaster(src, raster)
+  const bytes = await cached(
+    file,
+    key,
+    async () => await downsampleClassRaster(src, raster)
   );
   return publish(file, bytes);
 }

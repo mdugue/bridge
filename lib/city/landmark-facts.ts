@@ -6,30 +6,17 @@
  * found by the Buildings it names. No THREE, no DOM.
  */
 import type { CardFact } from "./card-lines";
+import type {
+  LandmarkFactsEntry,
+  LandmarkFactsFile,
+} from "./landmark-facts-file";
 
-/** One landmark's facts as the bake writes them. */
-export interface LandmarkFactsEntry {
-  /** the architects (Wikidata P84), at most two */
-  architects?: string[];
-  /** the years it was built: [start] or [start, end] */
-  built?: number[];
-  /** the LoD2 Buildings that are it (the viewer's `buildingId`) */
-  buildings: string[];
-  /** Wikidata's height (m) */
-  height?: number;
-  /** Wikidata item id (Q…) */
-  id: string;
-  name: string;
-  /** the years it was rebuilt: [end] or [start, end] */
-  rebuilt?: number[];
-  /** the year its rebuilding began, where no end is stated */
-  rebuiltFrom?: number;
-}
-
-export interface LandmarkFactsFile {
-  attribution: string;
-  landmarks: LandmarkFactsEntry[];
-}
+// The file's shape is its schema's (ADR 0059); the viewer takes the types
+// only, and `isLandmarkFactsFile` stays its guard.
+export type {
+  LandmarkFactsEntry,
+  LandmarkFactsFile,
+} from "./landmark-facts-file";
 
 /** The committed file (pipeline/bake/landmark_facts.py), and the name
  *  scripts/prepare-data.ts publishes it under (before hashing). */
@@ -128,7 +115,7 @@ const nameKey = (name: string) =>
   name
     .normalize("NFC")
     .toLocaleLowerCase("de-DE")
-    .replaceAll(/\s+/g, " ")
+    .replaceAll(/\s+/gu, " ")
     .trim();
 
 /**

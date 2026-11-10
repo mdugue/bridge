@@ -8,12 +8,17 @@
  * (bake-entries.ts `stadtwissen`).
  */
 import { existsSync } from "node:fs";
+import { parseBakeFile } from "../../lib/city/bake-file";
+import { MONUMENTS_FILE } from "../../lib/city/monuments-file";
+import { OSM_BUILDINGS_FILE } from "../../lib/city/osm-buildings-file";
 import type { SourceInfo, SourceKey } from "../../lib/city/provenance";
 import {
   STADTWISSEN_FILE,
-  type StadtwissenIndex,
   WIKIDATA_FACTS_FILE,
-  type WikidataFile,
+} from "../../lib/city/stadtwissen";
+import type {
+  StadtwissenIndex,
+  WikidataFile,
 } from "../../lib/city/stadtwissen";
 import {
   cityMeshSourceFiles,
@@ -25,6 +30,8 @@ import { BAKE_ENTRIES } from "../bake-entries";
 import { stadtwissenIndex, stadtwissenTile } from "../bake-stadtwissen";
 import { SITE, at, cacheKey, cached, publish, readJson, utf8 } from "./context";
 import { landmarkFile } from "./landmarks";
+
+type TileInput = Parameters<typeof stadtwissenTile>[0];
 
 /** One tile's directory, cached on the buildings, their OSM facts, the
  *  landmarks and the monuments it is read from. */
@@ -42,13 +49,18 @@ async function tileFile(tile: string): Promise<string> {
       utf8(
         stadtwissenTile({
           tile,
-          city: readJson(at(src.city)),
+          city: readJson(at(src.city)) as TileInput["city"],
           osm: existsSync(at(src.osmBuild))
-            ? readJson<{ objects: Record<string, never> }>(at(src.osmBuild))
-                .objects
+            ? parseBakeFile(
+                OSM_BUILDINGS_FILE,
+                readJson(at(src.osmBuild)),
+                src.osmBuild
+              ).objects
             : {},
           landmarks: landmarkFile(tile),
-          monuments: existsSync(monuments) ? readJson(monuments) : undefined,
+          monuments: existsSync(monuments)
+            ? parseBakeFile(MONUMENTS_FILE, readJson(monuments), monuments)
+            : undefined,
         })
       )
   );
@@ -84,7 +96,7 @@ export async function publishStadtwissen(
           return file ? [{ tile, file }] : [];
         }),
         wikidata: existsSync(wikidata)
-          ? readJson<WikidataFile>(wikidata)
+          ? (readJson(wikidata) as WikidataFile)
           : undefined,
       })
     )

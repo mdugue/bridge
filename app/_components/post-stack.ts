@@ -1,27 +1,27 @@
 import {
-  type BufferGeometry,
-  type Camera,
-  type ClippingGroup,
   DepthTexture,
   FloatType,
   HalfFloatType,
-  type Node,
   NoToneMapping,
-  type Object3D,
-  type PerspectiveCamera,
   RedFormat,
   RenderPipeline,
   RenderTarget,
   SRGBColorSpace,
-  type Scene,
-  type Texture,
-  type TextureNode,
   UnsignedByteType,
   Vector2,
   Vector3,
-  type WebGPURenderer,
 } from "three/webgpu";
-import { dof } from "three/addons/tsl/display/DepthOfFieldNode.js";
+import type {
+  BufferGeometry,
+  Camera,
+  ClippingGroup,
+  Node,
+  Object3D,
+  PerspectiveCamera,
+  Scene,
+  Texture,
+  WebGPURenderer,
+} from "three/webgpu";
 import { ao } from "three/addons/tsl/display/GTAONode.js";
 import { smaa } from "three/addons/tsl/display/SMAANode.js";
 import {
@@ -30,7 +30,6 @@ import {
   dot,
   float,
   floor,
-  fract,
   int,
   max,
   min,
@@ -52,40 +51,46 @@ import {
   vec4,
 } from "three/tsl";
 import type { VeilState } from "@/lib/city/load-frontier";
-import { LOOK_DEFAULTS, type LookValues } from "@/lib/city/look-controls";
-import { NAMEPLATE_TYPES } from "@/lib/city/nameplate-type";
 import {
-  type PaperKind,
-  RENDER_STYLE_BY_ID,
-  type RenderStyleDef,
-} from "@/lib/city/render-style";
-import { compileInLanes, compileInTurn, type Compiling } from "./compile-lanes";
+  createLensState,
+  horizonBlurPx,
+  lensSettled,
+  maxBlurPx,
+  MIN_FOCUS_M,
+  SKY_FOCUS_M,
+  stepLens,
+} from "@/lib/city/lens";
+import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
+import type { LookValues } from "@/lib/city/look-controls";
+import { NAMEPLATE_TYPES } from "@/lib/city/nameplate-type";
+import { RENDER_STYLE_BY_ID } from "@/lib/city/render-style";
+import type { PaperKind, RenderStyleDef } from "@/lib/city/render-style";
+import { compileInLanes, compileInTurn } from "./compile-lanes";
+import type { Compiling } from "./compile-lanes";
 import { crownsPrinted } from "./crown-season";
 import { DATA_MARKS, dataMarks } from "./glass";
 import { crownSwayShare } from "./vegetation-layer";
 import { fxaa } from "./fxaa";
+import { createLensBlur, LENS_TALLEST_PX } from "./lens-blur";
 import { createMotionBlur } from "./motion-blur";
 import type { SceneFog } from "./height-fog";
 import { createPaperScene } from "./paper-scene";
-import {
-  createSelectionOutline,
-  type OutlineSelection,
-} from "./selection-outline";
-import {
-  createPipelineAnchors,
-  type PipelineAnchors,
-} from "./pipeline-anchors";
+import { createSelectionOutline } from "./selection-outline";
+import type { OutlineSelection } from "./selection-outline";
+import { createPipelineAnchors } from "./pipeline-anchors";
+import type { PipelineAnchors } from "./pipeline-anchors";
+import { withNightMaterialsShown } from "./scene-environment";
 import type { PostProfile } from "./scene-profile";
+import { hash21 } from "./shader-chunks";
 import type { F, Live, V2, V3, V4 } from "./shader-chunks";
 import { aloneUnder, compileRepresentatives } from "./three-utils";
 import { createStyleDressing } from "./style-dressing";
-import { createStylize, type SunShadowMap } from "./stylize-effect";
-import { createLoadVeil, type LoadVeil } from "./load-veil";
+import { createStylize } from "./stylize-effect";
+import type { SunShadowMap } from "./stylize-effect";
+import { createLoadVeil } from "./load-veil";
+import type { LoadVeil } from "./load-veil";
 import type { ViewLens } from "./view-lens";
 import { setAskedColours } from "./visual-style";
-
-/** Initial focus distance before the first crosshair raycast lands. */
-const HYPERFOCAL_M = 600;
 
 /**
  * The contact shadows, their noise taken out. GTAO rotates its horizon
@@ -117,8 +122,8 @@ function aoSmoothed(
   const tolerance = lens.fade(z0).mul(0.04).add(0.15);
   let sum: F = float(0);
   let weights: F = float(0);
-  for (let y = -2; y <= 2; y++) {
-    for (let x = -2; x <= 2; x++) {
+  for (let y = -2; y <= 2; y += 1) {
+    for (let x = -2; x <= 2; x += 1) {
       const p = at.add(texel.mul(vec2(x, y)));
       const w = clamp(
         float(1).sub(viewZ(p).sub(z0).abs().div(tolerance)),
@@ -167,35 +172,22 @@ const GRAIN = 0.25;
 /** Tuschelinien: the outlines' strength in the graphic styles. */
 const INK = 0.7;
 
-// focusRange is the metric over which a fragment ramps from sharp to fully
-// blurred. A fixed value can't serve a 2 km-deep scene, so — like a real
-// lens — it scales with the focus distance: tight DoF up close, very deep
-// DoF far away. The band is generous on purpose: the lens should only hint
-// at depth. At 0.7 × distance (min 12 m) a crosshair on the pavement ten
-// metres ahead blurred the whole street beyond 22 m — it read as smeared,
-// not as a lens.
-const FOCUS_RANGE_FACTOR = 1.6;
-const FOCUS_RANGE_MIN = 45;
-const FOCUS_RANGE_MAX = 3000;
-/** Bokeh radius scale: a soft hint of lens, never a smear. */
-const BOKEH_SCALE = 0.5;
-function focusRangeFor(distanceM: number): number {
-  return Math.min(
-    Math.max(distanceM * FOCUS_RANGE_FACTOR, FOCUS_RANGE_MIN),
-    FOCUS_RANGE_MAX
-  );
-}
-
 /** Depth grading reaches full strength at this view distance (m). */
 const GRADE_DISTANCE_M = 800;
 
 /** Live DoF state for QA/diagnostics. */
 export interface FocusInfo {
-  bokehScale: number;
-  /** the focus distance in metres: the distance to the crosshair's hit */
+  /** the widest blur drawn (px, diameter), faded in */
+  capPx: number;
+  /** the focus distance in metres: pulled towards the crosshair's hit */
   focusDistance: number;
-  /** the sharp-ramp distance in metres */
-  focusRange: number;
+  /** the blur's diameter (px) at the horizon, faded in (lens.ts) */
+  horizonBlurPx: number;
+  /** how much of the blur shows, 0…1: it grows in after the camera stops */
+  fade: number;
+  /** the lens shows what it will until the view changes: grown in fully,
+   *  or not drawn in this style, view or tier */
+  settled: boolean;
 }
 
 export interface PostStack {
@@ -216,10 +208,15 @@ export interface PostStack {
    */
   applyLook: (look: LookValues) => void;
   dispose: () => void;
-  /** current DoF focus distance/range/bokeh (QA). */
+  /** The lens now (QA; the shots harness and an export wait for its
+   *  `settled`). */
   getFocusInfo: () => FocusInfo;
-  /** Draws the scene into its target, then the post chain to the canvas. */
-  render: () => void;
+  /** Whether the style and the view draw a lens (motion aside): the
+   *  autofocus rests where none is. */
+  lensWanted: () => boolean;
+  /** Draws the scene into its target, then the post chain to the canvas;
+   *  `stepMs`, the loop's time step, advances the lens's fade and focus. */
+  render: (stepMs: number) => void;
   /** world-space point under the crosshair; null = nothing hit (sky) */
   setFocusTarget: (point: Vector3 | null) => void;
   /**
@@ -228,7 +225,8 @@ export interface PostStack {
    * stay on — the pass runs at half resolution for that — because a shadow
    * that vanishes the moment you move and reappears when you stop reads as
    * a bug, not as a saving. Layered beside the picture style's gate and
-   * Modell's: recovery brings DoF back only where those allow it.
+   * Modell's: recovery brings DoF back only where those allow it, and its
+   * blur grows in (`LENS_FADE_MS`, lens.ts) instead of snapping on.
    */
   setRegressed: (on: boolean) => void;
   /** The loading veil this frame (load-veil.ts): the frontier's ring
@@ -310,13 +308,6 @@ export interface Overlay {
   compile: (renderer: WebGPURenderer, camera: Camera) => Promise<void>;
 }
 
-/** A cheap 2D hash for the paper grain. */
-function hash21(p: V2): F {
-  const q = fract(p.mul(vec2(123.34, 456.21)));
-  const r = q.add(dot(q, q.add(45.32)));
-  return fract(r.x.mul(r.y));
-}
-
 /** The finish's live settings (the fixed strengths times the style's
  *  weights). */
 interface Finish {
@@ -381,46 +372,6 @@ function finish(input: V4, viewZ: F, f: Finish, veil: LoadVeil): V4 {
   return vec4(veil.over(graded.mul(vignette)).mul(paper), input.a);
 }
 
-/**
- * Depth of field over `lit` (`DepthOfFieldNode`). Its input is drawn into
- * a target of its own first; `dof()` would make that target itself, with
- * the depth buffer every render target gets by default and nothing here
- * reads (a third more memory for the copy) — the picture is the same.
- */
-function lensBlurOf(lit: V4, viewZ: F, focusDistance: Live, focusRange: Live) {
-  const input = rtt(lit, null, null, { depthBuffer: false });
-  // Only what lies beyond the focus goes soft. Nearer than it is read as
-  // at the focus (view Z is negative ahead): a lens blurs the foreground
-  // too, but in a first-person view the foreground is the street at your
-  // feet, the lower half of the screen — blurred, it read as a streaky
-  // veil lying flat on the screen rather than as depth. The node still
-  // runs its near-field passes, now over an empty field: the clamp saves
-  // no work, a far-only pass of our own would.
-  const behindFocus = viewZ.min(focusDistance.negate());
-  const node = dof(
-    input,
-    behindFocus,
-    focusDistance,
-    focusRange,
-    uniform(BOKEH_SCALE)
-  );
-  // reason: getTextureNode is DepthOfFieldNode's documented output (its
-  // composite target's texture) but missing from the @types.
-  const output = node as unknown as { getTextureNode: () => TextureNode };
-  return {
-    // reason: the effect nodes' types don't carry their vec4 output.
-    focused: nodeObject(node) as unknown as V4,
-    /** the target the blur composites the frame into, each frame it runs */
-    composite: output.getTextureNode().value,
-    /** the frame copy it blurs, idle while it does not run */
-    input: input.renderTarget as RenderTarget,
-    dispose: () => {
-      node.dispose();
-      input.dispose();
-    },
-  };
-}
-
 /** The frame's antialiasing (scene-profile.ts `PostProfile.antialias`). */
 interface Antialiasing {
   /** the frame a pipeline drew before it (FXAA: into `beforeAa`); SMAA:
@@ -477,22 +428,37 @@ function antialiasingOf(
         input.value = from;
         raw.value = isRaw ? 1 : 0;
       },
-      setSize: () => undefined,
+      setSize: () => {
+        // SMAA follows the renderer's size by itself
+      },
       dispose: () => node.dispose(),
     };
   }
   const texel = uniform(new Vector2());
-  const setSize = (size: Vector2) => texel.value.set(1 / size.x, 1 / size.y);
+  const setSize = (size: Vector2) => {
+    texel.value.set(1 / size.x, 1 / size.y);
+  };
   setSize(new Vector2(scene.width, scene.height));
   const sceneAa = fxaa(scene.texture, texel);
   return {
     afterPre: fxaa(beforeAa.texture, texel),
     direct: vec4(sceneAa.rgb.mul(occlusion), sceneAa.a),
-    read: () => undefined,
+    read: () => {
+      // FXAA reads the targets it was built on
+    },
     setSize,
-    dispose: () => undefined,
+    dispose: () => {
+      // no nodes of its own to free
+    },
   };
 }
+
+// The swaps' own materials: Strich wears Papier's card, so its programs
+// are Papier's.
+const SWAP_KINDS = ["paper", "figure", "ink"] as const;
+type SwapKind = (typeof SWAP_KINDS)[number];
+const swapOf = (kind: PaperKind): SwapKind =>
+  kind === "line" ? "paper" : kind;
 
 /** What draws before the antialiasing, where, and what that then reads. */
 interface Pre {
@@ -545,8 +511,8 @@ const COMPILE_LANES = 4;
  * camera; up to r186 also by the call depth, which a scene pass nested
  * inside the post pipeline never matched) — then three's node
  * `RenderPipeline` from its colour and depth: GTAO (half resolution, normals
- * reconstructed from depth) ^ `AO_EXPONENT` → DoF (`DepthOfFieldNode`,
- * crosshair autofocus, dropped while moving; not built on a phone) → the
+ * reconstructed from depth) ^ `AO_EXPONENT` → DoF (lens-blur.ts, crosshair
+ * autofocus, dropped while moving; not built on a phone) → the
  * picture style (ink + tone; not in the default pastel style's pipelines
  * at all) → SMAA (FXAA on a phone) → depth grading, vignette and paper
  * grain → sRGB. The scene target has no MSAA; SMAA carries the
@@ -626,11 +592,17 @@ export function createPostStack(
       pow(texture(aoTexture.value, at).r, contact)
     );
 
-  const focusDistance = uniform(HYPERFOCAL_M);
-  const focusRange = uniform(focusRangeFor(HYPERFOCAL_M));
+  // the lens (lens-blur.ts): its focus, its blur at the horizon and its
+  // widest (px, faded in)
+  const lensUniforms = {
+    focus: uniform(SKY_FOCUS_M),
+    horizonPx: uniform(0),
+    capPx: uniform(0),
+  };
   const lensBlur = profile.dof
-    ? lensBlurOf(lit, viewZ, focusDistance, focusRange)
+    ? createLensBlur(lit, depthTexture, lens, lensUniforms)
     : null;
+  lensBlur?.setSize(size.x, size.y);
   const motion = createMotionBlur(depthTexture, lens);
 
   let style: RenderStyleDef = RENDER_STYLE_BY_ID[LOOK_DEFAULTS.style];
@@ -643,7 +615,7 @@ export function createPostStack(
     sunShadow,
     reversedDepth: renderer.reversedDepthBuffer,
   });
-  const paperScene = createPaperScene(scene, fog.color);
+  const paperScene = createPaperScene(scene, fog.color, renderer);
   const styleDressing = createStyleDressing(scene);
 
   const finishing: Finish = {
@@ -777,11 +749,12 @@ export function createPostStack(
   // (motion-blur.ts), where this tier has a way to draw it
   let blurred = false;
   // ...and how: before SMAA on a desktop, in place of the FXAA on a phone
-  const moving = pastel.motion
+  const motionFrame = pastel.motion
     ? { pre: pastel.motion, finished: finished.afterPre }
-    : finished.moving
-      ? { pre: null, finished: finished.moving }
-      : null;
+    : null;
+  const moving =
+    motionFrame ??
+    (finished.moving ? { pre: null, finished: finished.moving } : null);
   /** What draws before the antialiasing this frame (null: nothing), and
    *  the last pass. */
   const frame = () => {
@@ -789,7 +762,7 @@ export function createPostStack(
       return moving;
     }
     const pair = style.shaderMode > 0 ? styled : pastel;
-    const lensOn = style.allowDof && !regressed && !model;
+    const lensOn = lensWanted() && !regressed;
     const pre =
       (lensOn ? pair.dof : null) ?? (model ? pair.model : null) ?? pair.plain;
     return {
@@ -858,14 +831,44 @@ export function createPostStack(
   };
   applyStyleWeights();
 
-  // Autofocus: the distance, along the view, to the crosshair's last hit.
-  const focusPoint = new Vector3(0, 0, -HYPERFOCAL_M);
+  // Autofocus: the distance, along the view, to the crosshair's last hit
+  // — the sky's when it found nothing, or the camera has passed it — pulled
+  // there in dioptres, and at once while the blur does not show; the blur
+  // grows in whenever the lens comes back — after a move, or into a style
+  // or a view that draws it (lens.ts `stepLens`, on the loop's step).
+  const focusPoint = new Vector3();
+  let focusHit = false;
   const inView = new Vector3();
-  const updateFocus = () => {
-    inView.copy(focusPoint).applyMatrix4(active().matrixWorldInverse);
-    const d = Math.max(1, -inView.z);
-    focusDistance.value = d;
-    focusRange.value = focusRangeFor(d);
+  const lensState = createLensState();
+  let lensAim = SKY_FOCUS_M;
+  let lensFadeNow = 0;
+  // the style and the view draw a lens (motion aside)
+  const lensWanted = () => lensBlur !== null && style.allowDof && !model;
+  const focusTarget = (view: Camera) => {
+    if (!focusHit) {
+      return SKY_FOCUS_M;
+    }
+    inView.copy(focusPoint).applyMatrix4(view.matrixWorldInverse);
+    return inView.z < 0 ? Math.max(-inView.z, MIN_FOCUS_M) : SKY_FOCUS_M;
+  };
+  const updateFocus = (stepMs: number) => {
+    const view = active();
+    lensAim = focusTarget(view);
+    lensFadeNow = stepLens(
+      lensState,
+      lensWanted() && !regressed,
+      lensAim,
+      stepMs
+    );
+    const { focus } = lensUniforms;
+    focus.value = lensState.focusM;
+    // the perspective camera's angle: Modell's parallel one draws no lens
+    // (`lensWanted`), the fade is 0 there
+    lensUniforms.horizonPx.value =
+      horizonBlurPx(focus.value, camera.fov, size.y) * lensFadeNow;
+    // no wider than the gather's reach covers (lens-blur.ts)
+    lensUniforms.capPx.value =
+      maxBlurPx(Math.min(size.y, LENS_TALLEST_PX)) * lensFadeNow;
   };
 
   /** set by `dispose`: what is let go later goes at once, and what is
@@ -886,9 +889,15 @@ export function createPostStack(
    * no longer hear a geometry another walk still compiles.
    */
   const watchGone = (list: readonly Drawable[]) => {
-    const geometries = new Set(list.map((o) => o.geometry as BufferGeometry));
-    const onGone = (event: { target: BufferGeometry }) =>
+    const geometries = new Set<BufferGeometry>();
+    for (const o of list) {
+      if (o.geometry) {
+        geometries.add(o.geometry);
+      }
+    }
+    const onGone = (event: { target: BufferGeometry }) => {
       gone.add(event.target);
+    };
     for (const g of geometries) {
       g.addEventListener("dispose", onGone);
     }
@@ -922,29 +931,37 @@ export function createPostStack(
    * disposed geometry, and nothing would free them again (`compileAll`
    * skips such a drawable only when it queues it).
    */
-  const compileNow = (object: Object3D, view: Camera = camera) => {
+  const compileNow = async (object: Object3D, view: Camera = camera) => {
     if (stackDisposed || left(object)) {
-      return Promise.resolve();
+      return;
     }
     const previous = renderer.getRenderTarget();
     const { visible, frustumCulled } = object;
     object.visible = true;
     object.frustumCulled = false;
     renderer.setRenderTarget(target);
+    // not awaited inside the try: the target goes back as the call returns
+    let compiling: Promise<void>;
     try {
-      return renderer.compileAsync(object, view, scene);
+      // its materials shown too: one hidden for now (drawn only after
+      // dark) would compile nothing
+      compiling = withNightMaterialsShown(
+        object,
+        async () => await renderer.compileAsync(object, view, scene)
+      );
     } finally {
       renderer.setRenderTarget(previous);
       object.visible = visible;
       object.frustumCulled = frustumCulled;
     }
+    await compiling;
   };
   /** Queues a compile made by `now` behind the ones in flight. */
   const inTurn =
     (now: (object: Object3D) => Promise<void>) =>
-    (object: Object3D): Promise<void> =>
-      compileInTurn(renderer, () => now(object));
-  const compileOne = inTurn((object) => compileNow(object));
+    async (object: Object3D): Promise<void> =>
+      await compileInTurn(renderer, async () => await now(object));
+  const compileOne = inTurn(async (object) => await compileNow(object));
   /**
    * The cameras the frames are drawn with, one of each kind: the walk/fly
    * camera, and once it was asked for (`warmView`) Modell's parallel one.
@@ -967,28 +984,25 @@ export function createPostStack(
   // swap is made in the compile's turn, not when it is queued.
   const swappedIn =
     (kind: PaperKind, now: (object: Object3D) => Promise<void>) =>
-    (object: Object3D): Promise<void> =>
-      paperScene.swapped(object, () => now(object), kind);
+    async (object: Object3D): Promise<void> =>
+      await paperScene.swapped(object, async () => await now(object), kind);
   // a camera let go meanwhile (`dropView`) is compiled for no longer: the
   // rest of a walk queued nothing behind the tiles for it, and a compile
   // still queued when it was let go builds nothing
   const compileSwap = (kind: PaperKind, view: Camera) => {
     const swap = inTurn(
-      swappedIn(kind, (o) =>
-        views.includes(view) ? compileNow(o, view) : Promise.resolve()
-      )
+      swappedIn(kind, async (o) => {
+        if (views.includes(view)) {
+          await compileNow(o, view);
+        }
+      })
     );
-    return (object: Drawable): Promise<void> =>
-      paperScene.drawsAsPaper(object, kind) && views.includes(view)
-        ? swap(object)
-        : Promise.resolve();
+    return async (object: Drawable): Promise<void> => {
+      if (paperScene.drawsAsPaper(object, kind) && views.includes(view)) {
+        await swap(object);
+      }
+    };
   };
-  // The swaps' own materials: Strich wears Papier's card, so its programs
-  // are Papier's.
-  const SWAP_KINDS = ["paper", "figure", "ink"] as const;
-  type SwapKind = (typeof SWAP_KINDS)[number];
-  const swapOf = (kind: PaperKind): SwapKind =>
-    kind === "line" ? "paper" : kind;
   // The Ausschnitt (model-cuts.ts) is a ClippingGroup around the city.
   // three keeps ONE render object per drawable on both sides of it and
   // keys the drawable's build by the clipping: switching the group swaps
@@ -1022,9 +1036,11 @@ export function createPostStack(
     held: PipelineAnchors[],
     release: () => boolean = () => true
   ) => {
-    void compileInTurn(renderer, () => Promise.resolve()).then(() => {
+    void compileInTurn(renderer, async () => {
+      // an empty turn: it comes once the compiles queued before it are done
+    }).then(() => {
       if (!release()) {
-        return;
+        return null;
       }
       if (stackDisposed) {
         for (const a of held) {
@@ -1033,6 +1049,7 @@ export function createPostStack(
       } else {
         releaseAfterFrame.push(...held);
       }
+      return null;
     });
   };
   /**
@@ -1040,37 +1057,46 @@ export function createPostStack(
    * `aloneUnder`): the render object the call makes has the very context
    * the frames use while the cut shows. In a compile's turn only.
    */
-  const compileUnder = (
+  const compileUnder = async (
     group: ClippingGroup,
     object: Object3D,
     view: Camera
   ) => {
     if (stackDisposed) {
-      return Promise.resolve();
+      return;
     }
     const previous = renderer.getRenderTarget();
     renderer.setRenderTarget(target);
+    // not awaited inside the try: the target goes back as the call returns
+    let compiling: Promise<void>;
     try {
-      return aloneUnder(group, object, () =>
-        renderer.compileAsync(group, view, scene)
+      compiling = aloneUnder(
+        group,
+        object,
+        async () =>
+          await withNightMaterialsShown(
+            object,
+            async () => await renderer.compileAsync(group, view, scene)
+          )
       );
     } finally {
       renderer.setRenderTarget(previous);
     }
+    await compiling;
   };
   const newHold = (
     group: ClippingGroup,
     view: Camera,
     kind?: PaperKind
   ): CutHold => {
-    const under = (o: Object3D) => compileUnder(group, o, view);
-    const plain = (o: Object3D) => compileNow(o, view);
-    const anchors = [
+    const under = async (o: Object3D) => await compileUnder(group, o, view);
+    const plain = async (o: Object3D) => await compileNow(o, view);
+    const holds = [
       { a: createPipelineAnchors(inTurn(under), true), paper: false },
       { a: createPipelineAnchors(inTurn(plain), true), paper: false },
     ];
     if (kind) {
-      anchors.push(
+      holds.push(
         {
           a: createPipelineAnchors(inTurn(swappedIn(kind, under)), true),
           paper: true,
@@ -1081,7 +1107,7 @@ export function createPostStack(
         }
       );
     }
-    return { group, view, kind, anchors, done: new WeakMap() };
+    return { group, view, kind, anchors: holds, done: new WeakMap() };
   };
   /** Holds both sides of the cut for `roots`' drawables, one per build. */
   const holdAll = async (held: CutHold, roots: Object3D[]) => {
@@ -1100,7 +1126,7 @@ export function createPostStack(
     }
     // the swap's, drawable by drawable: the swap carries one drawable's
     // position node over
-    const kind = held.kind;
+    const { kind } = held;
     if (kind === undefined) {
       return;
     }
@@ -1162,7 +1188,7 @@ export function createPostStack(
       viewAnchors.get(view) ??
       dropping.get(view)?.anchors ??
       createPipelineAnchors(
-        inTurn((o) => compileNow(o, view)),
+        inTurn(async (o) => await compileNow(o, view)),
         true
       );
     dropping.delete(view);
@@ -1185,7 +1211,7 @@ export function createPostStack(
     let representatives: Drawable[] | null = null;
     // the representatives outlive one walk (every kind, every view): a
     // tile that leaves between two walks is heard too, not only during one
-    let unwatch = () => {};
+    let unwatch: (() => void) | null = null;
     try {
       // a copy: a view asked for or let go meanwhile does not shift the walk
       for (const view of only ? [only] : [...views]) {
@@ -1216,7 +1242,7 @@ export function createPostStack(
         }
       }
     } finally {
-      unwatch();
+      unwatch?.();
     }
   };
 
@@ -1240,6 +1266,19 @@ export function createPostStack(
   };
 
   let stylesWarm: Promise<void> | null = null;
+  const warmOnce = async () => {
+    try {
+      await outline.compile(renderer, camera);
+      try {
+        await overlay?.compile(renderer, camera);
+      } catch {
+        // the plate's programs build in its first frame instead
+      }
+      await warmStyles();
+    } catch {
+      // a failed warm-up costs the styles their first frames, no more
+    }
+  };
   const warmStyles = async () => {
     // A phone keeps the styles to their first frame: their pipelines, and
     // the sibling crown sets and lamp cones each would make and compile
@@ -1304,7 +1343,11 @@ export function createPostStack(
       await outline.compile(renderer, view);
       // the plate's programs: a failed build costs the plate its first
       // frame, never the scene's warm-up after it
-      await overlay?.compile(renderer, view).catch(() => undefined);
+      try {
+        await overlay?.compile(renderer, view);
+      } catch {
+        // the plate's programs build in its first frame instead
+      }
       await compileBuilds([scene], view);
     },
     dropView: (view) => {
@@ -1336,23 +1379,19 @@ export function createPostStack(
       }
     },
     releaseCut: letGo,
-    warmStyles: () => {
+    warmStyles: async () => {
       // the outline's mask and blur programs too, on every tier: the first
       // question builds nothing
-      stylesWarm ??= outline
-        .compile(renderer, camera)
-        .then(() => overlay?.compile(renderer, camera).catch(() => undefined))
-        .then(warmStyles)
-        .catch(() => undefined);
-      return stylesWarm;
+      stylesWarm ??= warmOnce();
+      await stylesWarm;
     },
     sceneChanged: () => {
       paperScene.sceneChanged();
       styleDressing.sceneChanged();
     },
     setSunAltitude: (altitudeDeg) => stylize.setSunAltitude(altitudeDeg),
-    render: () => {
-      updateFocus();
+    render: (stepMs) => {
+      updateFocus(stepMs);
       stylize.update(renderer.getPixelRatio(), size);
       // The frame names its targets and ends on the canvas, never on the
       // target it found set: a compile in flight (`compileOne`) sets the
@@ -1410,18 +1449,21 @@ export function createPostStack(
       shown.finished.render();
       overlay?.render(renderer, view);
     },
+    lensWanted: () => lensWanted(),
     getFocusInfo: () => ({
-      focusDistance: focusDistance.value,
-      focusRange: focusRange.value,
-      bokehScale: BOKEH_SCALE,
+      focusDistance: lensUniforms.focus.value,
+      horizonBlurPx: lensUniforms.horizonPx.value,
+      capPx: lensUniforms.capPx.value,
+      fade: lensFadeNow,
+      settled: lensSettled(lensState, lensWanted(), lensAim),
     }),
     setSize: () => {
       renderer.getDrawingBufferSize(size);
       target.setSize(size.x, size.y);
       beforeAa.setSize(size.x, size.y);
-      // the lens blur sizes its copy when it runs; the motion blur draws
-      // there while it does not
-      lensBlur?.input.setSize(size.x, size.y);
+      // the lens blur's targets, its copy among them (the motion blur
+      // draws there while the lens rests)
+      lensBlur?.setSize(size.x, size.y);
       antialiasing.setSize(size);
       outline.setSize(size.x, size.y);
     },
@@ -1443,8 +1485,8 @@ export function createPostStack(
       regressed = on;
     },
     setFocusTarget: (point) => {
-      // No hit (sky) keeps the last focus, so tilting a degree above a far
-      // building doesn't snap it near.
+      // no hit focuses on the sky; the pull makes that gentle
+      focusHit = point !== null;
       if (point) {
         focusPoint.copy(point);
       }

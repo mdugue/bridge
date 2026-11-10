@@ -1,15 +1,12 @@
 import { expect, test } from "bun:test";
 import { fenceGeometry } from "../lib/city/fences";
-import { checkJoins, type HeightAt } from "../lib/city/ground-join";
+import { checkJoins } from "../lib/city/ground-join";
+import type { HeightAt } from "../lib/city/ground-join";
 import { kerbGeometry } from "../lib/city/kerbs";
 import { stairGeometry } from "../lib/city/stairs";
 import { wallGeometry } from "../lib/city/walls";
-import {
-  JOIN_PARTS,
-  type JoinPart,
-  measureJoins,
-  missShare,
-} from "./ground-joins";
+import { JOIN_PARTS, measureJoins, missShare } from "./ground-joins";
+import type { JoinPart } from "./ground-joins";
 
 const offset = { cx: 0, cy: 0 };
 
@@ -149,7 +146,8 @@ test("the parts the spawn tile lacks meet the ground where they stand", async ()
     JoinPart,
     string,
   ][]) {
-    const r = (await measureJoins([tile]))[part];
+    const joins = await measureJoins([tile]);
+    const r = joins[part];
     expect(r.edges + r.feet).toBeGreaterThan(0);
     expect({
       part,

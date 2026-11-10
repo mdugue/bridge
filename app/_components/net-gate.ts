@@ -1,8 +1,5 @@
-import {
-  createVisibleClock,
-  type RetryEnv,
-  type RetryNote,
-} from "@/lib/city/fetch-retry";
+import { createVisibleClock } from "@/lib/city/fetch-retry";
+import type { RetryEnv, RetryNote } from "@/lib/city/fetch-retry";
 
 /**
  * The page's one view of its network, for every retry
@@ -57,7 +54,7 @@ function abortError(): DOMException {
 export function createNetGate(page: GatePage): NetGate {
   let leaving = false;
   const visible = () => page.document.visibilityState !== "hidden";
-  const usable = () => visible() && page.navigator.onLine !== false;
+  const usable = () => visible() && (page.navigator.onLine ?? true);
   const clock = createVisibleClock(visible(), page.now());
   const wakers = new Set<() => void>();
   const changed = () => {
@@ -82,14 +79,14 @@ export function createNetGate(page: GatePage): NetGate {
     }
     changed();
   });
-  const whenUsable = (signal?: AbortSignal): Promise<void> => {
+  const waitUsable = async (signal?: AbortSignal): Promise<void> => {
     if (signal?.aborted) {
-      return Promise.reject(abortError());
+      throw abortError();
     }
     if (usable()) {
-      return Promise.resolve();
+      return;
     }
-    return new Promise<void>((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       let probe: ReturnType<typeof setTimeout> | undefined;
       const done = () => {
         wakers.delete(wake);
@@ -115,7 +112,7 @@ export function createNetGate(page: GatePage): NetGate {
       arm();
     });
   };
-  const onUsableAgain = (listener: () => void) => {
+  const listenUsable = (listener: () => void) => {
     const wake = () => {
       if (visible()) {
         listener();
@@ -135,8 +132,8 @@ export function createNetGate(page: GatePage): NetGate {
     usable,
     leaving: () => leaving,
     visibleMs: () => clock.visibleMs(page.now()),
-    whenUsable,
-    onUsableAgain,
+    whenUsable: waitUsable,
+    onUsableAgain: listenUsable,
   };
 }
 
@@ -163,11 +160,6 @@ export function pageVisible(): boolean {
   return pageGate()?.visible() ?? true;
 }
 
-/** Visible and not offline: a request now can succeed. */
-export function pageUsable(): boolean {
-  return pageGate()?.usable() ?? true;
-}
-
 /** The page is on its way out (pagehide, not yet back from the bfcache). */
 export function pageLeaving(): boolean {
   return pageGate()?.leaving() ?? false;
@@ -184,20 +176,23 @@ export function visibleMs(): number {
  * "pageshow", or, while it is visible but offline, every
  * OFFLINE_PROBE_MS — and rejects with an AbortError when `signal` aborts.
  */
-export function whenUsable(signal?: AbortSignal): Promise<void> {
+export async function whenUsable(signal?: AbortSignal): Promise<void> {
   const page = pageGate();
   if (page) {
-    return page.whenUsable(signal);
+    await page.whenUsable(signal);
+    return;
   }
-  return signal?.aborted ? Promise.reject(abortError()) : Promise.resolve();
+  if (signal?.aborted) {
+    throw abortError();
+  }
 }
 
 /** Waits `ms`; rejects with an AbortError when `signal` aborts. */
-export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+export async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   if (signal?.aborted) {
-    return Promise.reject(abortError());
+    throw abortError();
   }
-  return new Promise<void>((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     const abort = () => {
       clearTimeout(timer);
       reject(abortError());
@@ -248,5 +243,10 @@ export function reportRetry(note: RetryNote): void {
  * navigator.onLine says, which is a hint; returns its removal.
  */
 export function onUsableAgain(listener: () => void): () => void {
-  return pageGate()?.onUsableAgain(listener) ?? (() => undefined);
+  return (
+    pageGate()?.onUsableAgain(listener) ??
+    (() => {
+      // No page gate (server render): nothing was subscribed, nothing to remove.
+    })
+  );
 }

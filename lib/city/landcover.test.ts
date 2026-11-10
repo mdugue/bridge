@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import { DRESDEN } from "../../sites/dresden";
 import {
   ARABLE_CLASS,
@@ -22,7 +22,6 @@ import {
   SURFACE_ALONG_PERIOD,
   SURFACE_KINDS,
   srgbToLinear,
-  surfaceHeading,
   surfaceId,
   SURFACE_ALONG_BITS,
   unpackSurface,
@@ -32,7 +31,7 @@ import {
 import { siteDataDir } from "./tile";
 
 // the repo root, so the committed files are found from any cwd
-const ROOT = join(import.meta.dir, "../..");
+const ROOT = nodePath.join(import.meta.dir, "../..");
 
 test("class ids are the table index, 0..9", () => {
   expect(LANDCOVER_CLASSES.map((c) => c.id)).toEqual([
@@ -49,14 +48,14 @@ test("class ids are the table index, 0..9", () => {
 });
 
 test("every committed surface legend names the same paving kinds", () => {
-  const dir = join(ROOT, siteDataDir(DRESDEN), "dlm");
+  const dir = nodePath.join(ROOT, siteDataDir(DRESDEN), "dlm");
   const legends = readdirSync(dir).filter(
     (f) => f.startsWith("surface_") && f.endsWith(".json")
   );
   expect(legends.length).toBeGreaterThan(0);
   for (const file of legends) {
     const { surfaces, parking, alongPeriod } = JSON.parse(
-      readFileSync(`${dir}/${file}`, "utf8")
+      readFileSync(`${dir}/${file}`, "utf-8")
     ) as {
       alongPeriod: number;
       parking: Record<string, string>;
@@ -70,14 +69,25 @@ test("every committed surface legend names the same paving kinds", () => {
   expect(SURFACE_KINDS.length).toBeLessThanOrEqual(8);
 });
 
+test("the edge bake writes the scale the viewer decodes", () => {
+  // the committed legends below say what was baked; this, what the next
+  // bake writes (edges.py), before a re-bake
+  const python = readFileSync(
+    nodePath.join(ROOT, "pipeline/bake/edges.py"),
+    "utf-8"
+  );
+  const scale = /^EDGE_SCALE = (?<scale>[\d.]+)/mu.exec(python)?.groups?.scale;
+  expect(Number(scale)).toBe(EDGE_SCALE);
+});
+
 test("every committed edge legend has the viewer's scale", () => {
-  const dir = join(ROOT, siteDataDir(DRESDEN), "dlm");
+  const dir = nodePath.join(ROOT, siteDataDir(DRESDEN), "dlm");
   const legends = readdirSync(dir).filter(
     (f) => f.startsWith("edges_") && f.endsWith(".json")
   );
   expect(legends.length).toBeGreaterThan(0);
   for (const file of legends) {
-    const { scale } = JSON.parse(readFileSync(`${dir}/${file}`, "utf8")) as {
+    const { scale } = JSON.parse(readFileSync(`${dir}/${file}`, "utf-8")) as {
       scale: number;
     };
     expect(scale).toBe(EDGE_SCALE);
@@ -88,26 +98,24 @@ test("a surface texel unpacks into the road and the walk material", () => {
   const byte =
     parkingId("lot") * 64 + surfaceId("paving") * 8 + surfaceId("sett");
   expect(unpackSurface(byte)).toEqual({ road: 4, walk: 3, park: 3 });
-  expect(surfaceHeading(0)).toBeNull();
-  expect(surfaceHeading(1)).toBe(0);
-  expect(surfaceHeading(128)).toBeCloseTo(Math.PI / 2, 10);
 });
 
 test("every committed legend names the same classes", () => {
   // every site folder with baked data (data/_raw is the downloads)
-  const data = join(ROOT, "data");
+  const data = nodePath.join(ROOT, "data");
   const legends = readdirSync(data)
     .filter(
-      (site) => !site.startsWith("_") && existsSync(join(data, site, "dlm"))
+      (site) =>
+        !site.startsWith("_") && existsSync(nodePath.join(data, site, "dlm"))
     )
     .flatMap((site) =>
-      readdirSync(join(data, site, "dlm"))
+      readdirSync(nodePath.join(data, site, "dlm"))
         .filter((f) => f.startsWith("landcover_") && f.endsWith(".json"))
-        .map((f) => join(data, site, "dlm", f))
+        .map((f) => nodePath.join(data, site, "dlm", f))
     );
   expect(legends.length).toBeGreaterThan(0);
   for (const file of legends) {
-    const { classes } = JSON.parse(readFileSync(file, "utf8")) as {
+    const { classes } = JSON.parse(readFileSync(file, "utf-8")) as {
       classes: Record<string, string>;
     };
     for (const c of LANDCOVER_CLASSES) {

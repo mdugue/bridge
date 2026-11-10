@@ -26,11 +26,12 @@ test("the site's landmarks: one per item, most notable first, the taller height"
   ).toHaveLength(1);
 });
 
+const housed = (id: string, links: number, objects: string[]) => ({
+  ...entry(id, links),
+  objects,
+});
+
 test("a landmark housed in a more notable one's building is that one", () => {
-  const housed = (id: string, links: number, objects: string[]) => ({
-    ...entry(id, links),
-    objects,
-  });
   const list = siteLandmarks([
     {
       landmarks: [
@@ -95,8 +96,9 @@ test("a vantage looks at the landmark from the south-south-west, higher for a ta
   );
 });
 
+const named = (id: string, name: string) => ({ ...entry(id, 2), name });
+
 test("landmarks tied on links keep the id order, whatever the locale", () => {
-  const named = (id: string, name: string) => ({ ...entry(id, 2), name });
   const list = siteLandmarks([
     {
       landmarks: [

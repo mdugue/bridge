@@ -8,7 +8,6 @@ import {
   doorSlot,
   FACADE_ROOF,
   FACADE_SCALE_M,
-  type FacadeModel,
   facadeAttribute,
   flatTownHouse,
   NEAR_M,
@@ -34,13 +33,14 @@ import {
   unpackStyle,
   WINDOW_LIFT,
   WINDOW_ROWS,
-  type WindowHost,
-  type WindowWall,
   windowless,
   windowSpecs,
+  NO_WINDOWS,
+  windowForm,
   windowStorey,
   windowType,
 } from "./windows";
+import type { FacadeModel, WindowHost, WindowWall } from "./windows";
 
 const model = (extra: Partial<FacadeModel> = {}): FacadeModel => ({
   axis: 3,
@@ -138,8 +138,6 @@ test("a flat-roofed town house: housing from 9 m, listed or storeys from 3.4 m",
 
 test("the storey snaps to a whole number under the eave", () => {
   expect(windowStorey(16, 3.14)).toBeCloseTo(3.2, 9);
-  // the photos' storey wins over the estimate
-  expect(windowStorey(16, 3.14, 4.1)).toBeCloseTo(4, 9);
   // nothing to snap on a low wall
   expect(windowStorey(2.5, 3)).toBe(3);
 });
@@ -285,18 +283,13 @@ describe("windowSpecs", () => {
     expect(low.spec.h).toBeCloseTo(low.storey - sill - WINDOW_ROWS.lintel, 2);
   });
 
-  test("the photos' storey only where OSM counts none", () => {
-    const wall = measured("a", model({ storey: 4.1 }));
-    const [own] = windowSpecs([host({ eaveH: 16 })], [wall], index);
+  test("the photos' storey never sets the rows: they read it short", () => {
+    // the traits still carry it (facade_traits.py), the model does not
+    const wall = measured("a", model());
+    wall.traits = { ...wall.traits, storey: 3.2 };
+    // 16 m at the neighbours' 4 m: four rows, not the photos' five
+    const [own] = windowSpecs([host({ eaveH: 16, storeyH: 4 })], [wall], index);
     expect(own.storey).toBeCloseTo(4, 9);
-    expect(own.storeyFromPhotos).toBe(true);
-    const [osm] = windowSpecs(
-      [host({ eaveH: 16, levels: true, storeyH: 3.2 })],
-      [wall],
-      index
-    );
-    expect(osm.storey).toBeCloseTo(3.2, 9);
-    expect(osm.storeyFromPhotos).toBeUndefined();
   });
 
   test("a shop's ground floor gets none", () => {
@@ -309,7 +302,7 @@ describe("windowSpecs", () => {
       [host(), host({ root: 1, centre: [400, 0] })],
       [
         measured("a", model({ axis: 4.6, w: 2.2, h: 2.4 })),
-        measured("b", model({ axis: 1.9, w: 0.75, h: 1 })),
+        measured("b", model({ axis: 1.9, w: 0.5, h: 1 })),
       ],
       index
     );
@@ -476,6 +469,23 @@ function boxWalls(
 
 const metres = (v: number) => (v / 32_767) * FACADE_SCALE_M;
 
+const front = (x0: number, x1: number) => ({
+  object: 0,
+  pts: [
+    [x0, 0, 0],
+    [x1, 0, 0],
+    [x1, 0, 12],
+    [x0, 0, 12],
+  ],
+});
+
+const door = (x: number) => ({
+  object: 0,
+  at: [x, 0] as [number, number],
+  n: [0, -1] as [number, number],
+  w: 1.2,
+});
+
 describe("facadeAttribute", () => {
   test("every wall vertex: its place from the wall's middle and the wall's length", () => {
     const mesh = quads([
@@ -537,15 +547,6 @@ describe("facadeAttribute", () => {
   });
 
   test("a facade of several polygons keeps the lattice on each", () => {
-    const front = (x0: number, x1: number) => ({
-      object: 0,
-      pts: [
-        [x0, 0, 0],
-        [x1, 0, 0],
-        [x1, 0, 12],
-        [x0, 0, 12],
-      ],
-    });
     const mesh = quads([front(0, 14), front(14.2, 28)]);
     const f = facadeAttribute(mesh, () => true, [], [], undefined, undefined, [
       {
@@ -604,7 +605,7 @@ describe("facadeAttribute", () => {
       // no colour of its own: the object's
       expect([f[4 * 24], f[4 * 24 + 1], f[4 * 24 + 3]]).toEqual([0, 0, 0]);
       // no wall vertex reads as one
-      for (let v = 0; v < 24; v++) {
+      for (let v = 0; v < 24; v += 1) {
         expect(f[4 * v + 2]).toBe(Math.round(32_767 * NO_DOOR));
       }
     }
@@ -646,9 +647,9 @@ describe("facadeAttribute", () => {
       [{ object: 0, a: [14, 0], b: [14, 10], n: [1, 0] }]
     );
     // the door 3 m from the south wall's middle, the way s runs there
-    const door = slotDoor(f[2]);
-    expect(Math.abs(door?.at ?? 0)).toBeCloseTo(3, 9);
-    expect(door?.w).toBeCloseTo(1.8, 9);
+    const placed = slotDoor(f[2]);
+    expect(Math.abs(placed?.at ?? 0)).toBeCloseTo(3, 9);
+    expect(placed?.w).toBeCloseTo(1.8, 9);
     expect(f[3]).toBe(Math.round(32_767 * NO_DOOR));
     expect(slotDoor(f[3])).toBeUndefined();
     // the south wall keeps its ground floor, the east one stands over a
@@ -659,12 +660,6 @@ describe("facadeAttribute", () => {
 
   test("a wall with more doors than the slots hold has no ground-floor windows", () => {
     const mesh = quads(boxWalls(0, 0, 0, 14, 10, 12));
-    const door = (x: number) => ({
-      object: 0,
-      at: [x, 0] as [number, number],
-      n: [0, -1] as [number, number],
-      w: 1.2,
-    });
     const two = facadeAttribute(mesh, () => true, [door(3), door(11)]);
     expect(metres(two[1])).toBeCloseTo(14, 1);
     const three = facadeAttribute(mesh, () => true, [
@@ -776,16 +771,16 @@ describe("a wall's own eave (G22)", () => {
 
 describe("the door slots", () => {
   test("hold a door's place to a decimetre and its width rounded up", () => {
-    for (const at of [-12.34, -0.05, 0, 3.0, 7.96, 120.5]) {
-      for (const w of [0.6, 1.2, 1.25, 1.8, 2.0, 2.24, 2.6, 4, 5.5, 6]) {
-        const door = slotDoor(doorSlot(at, w));
-        expect(Math.abs((door?.at ?? Number.NaN) - at)).toBeLessThanOrEqual(
+    for (const at of [-12.34, -0.05, 0, 3, 7.96, 120.5]) {
+      for (const w of [0.6, 1.2, 1.25, 1.8, 2, 2.24, 2.6, 4, 5.5, 6]) {
+        const decoded = slotDoor(doorSlot(at, w));
+        expect(Math.abs((decoded?.at ?? Number.NaN) - at)).toBeLessThanOrEqual(
           DOOR_SLOT.step / 2 + 1e-9
         );
-        expect(door?.w ?? 0).toBeGreaterThanOrEqual(w - 1e-9);
+        expect(decoded?.w ?? 0).toBeGreaterThanOrEqual(w - 1e-9);
         // 0.2 m classes to 2 m, whole metres from there
         const grain = w <= 2 + 1e-9 ? DOOR_SLOT.wStep : DOOR_SLOT.wideStep;
-        expect(door?.w ?? 0).toBeLessThan(w + grain);
+        expect(decoded?.w ?? 0).toBeLessThan(w + grain);
       }
     }
     expect(slotDoor(doorSlot(0, 2.6))?.w).toBeCloseTo(3, 9);
@@ -796,7 +791,7 @@ describe("the door slots", () => {
   });
 
   test("the width classes rise without a gap and end at 6 m", () => {
-    for (let c = 1; c < DOOR_SLOT.widths; c++) {
+    for (let c = 1; c < DOOR_SLOT.widths; c += 1) {
       expect(doorClassWidth(c)).toBeGreaterThan(doorClassWidth(c - 1));
       expect(doorSlot(0, doorClassWidth(c))).toBe(c);
     }
@@ -821,13 +816,13 @@ describe("the door slots", () => {
   });
 
   test("a ground-floor window keeps the gap from a door's opening", () => {
-    const door = { at: 0, w: 1.2 };
+    const opening = { at: 0, w: 1.2 };
     const w = 1.1;
-    // the gap, and half a place step for the door's rounded place
-    const edge = door.w / 2 + DOOR_GAP_M + DOOR_SLOT.step / 2 + w / 2;
-    expect(clearOfDoor(edge, w, door)).toBe(true);
-    expect(clearOfDoor(-edge, w, door)).toBe(true);
-    expect(clearOfDoor(edge - 0.01, w, door)).toBe(false);
+    // the gap, and half a place step for the opening's rounded place
+    const edge = opening.w / 2 + DOOR_GAP_M + DOOR_SLOT.step / 2 + w / 2;
+    expect(clearOfDoor(edge, w, opening)).toBe(true);
+    expect(clearOfDoor(-edge, w, opening)).toBe(true);
+    expect(clearOfDoor(edge - 0.01, w, opening)).toBe(false);
     // a wide gate keeps its windows further off
     expect(clearOfDoor(edge, w, { at: 0, w: 2.6 })).toBe(false);
   });
@@ -944,6 +939,18 @@ describe("palaces", () => {
   });
 });
 
+const wall = (axis: number): WindowWall =>
+  ({
+    a: [100, 200],
+    b: [114, 200],
+    eave: 12,
+    imgs: 6,
+    L: 14,
+    model: { axis, grid: "regular", h: 1.5, phase: 1.6, w: 1.2 },
+    n: [0, -1],
+    oid: "A",
+  }) as WindowWall;
+
 describe("measured axes", () => {
   test("the lattice's axes that fit, counted exactly", () => {
     const m = measuredColumns(0, 14, { at: 1.6, axis: 3, w: 1.2 });
@@ -976,17 +983,6 @@ describe("measured axes", () => {
   });
 
   test("each wall keeps its own measured spacing", () => {
-    const wall = (axis: number): WindowWall =>
-      ({
-        a: [100, 200],
-        b: [114, 200],
-        eave: 12,
-        imgs: 6,
-        L: 14,
-        model: { axis, grid: "regular", h: 1.5, phase: 1.6, w: 1.2 },
-        n: [0, -1],
-        oid: "A",
-      }) as WindowWall;
     const index = new Map([["A", 0]]);
     const spec = { axis: 2.3, h: 1.5, style: 0, w: 1.2 };
     const got = measuredAxes([wall(3.88)], index, () => spec, {
@@ -1021,7 +1017,23 @@ describe("measured axes", () => {
       measuredAxes([plain], index, () => spec, { cx: 100, cy: 200 })
     ).toEqual([]);
     expect(
-      measuredAxes([wall(3)], index, () => undefined, { cx: 100, cy: 200 })
+      measuredAxes([wall(3)], index, () => {}, { cx: 100, cy: 200 })
     ).toEqual([]);
   });
+});
+
+const formSpec = (w: number, h: number, axis = 3) => ({
+  axis,
+  h,
+  style: 0,
+  w,
+});
+
+test("a window's form: tall, square, lying or a band", () => {
+  const spec = formSpec;
+  expect(windowForm(spec(1.1, 1.9))).toBe("hochkant");
+  expect(windowForm(spec(1.2, 1.2))).toBe("quadratisch");
+  expect(windowForm(spec(1.8, 1.1))).toBe("liegend");
+  expect(windowForm(spec(2.5, 1.2))).toBe("Band");
+  expect(windowForm(NO_WINDOWS)).toBeUndefined();
 });

@@ -64,8 +64,10 @@ export interface WissenMonument {
   id: string;
   /** statue, fountain, column, stone (monuments.py) */
   kind: string;
-  /** its material, where the DLM names one */
+  /** its material: OSM `material`, else Wikidata's */
   material?: string;
+  /** the Wikidata item its material comes from, where OSM names none */
+  materialWd?: string;
   name: string;
   /** the Wikidata item OSM links it to */
   wd?: string;
@@ -188,17 +190,19 @@ export function wikidataTime(value: {
   precision: number;
   time: string;
 }): string {
-  const m = /^([+-])(\d+)-(\d\d)-(\d\d)/.exec(value.time);
+  const m = /^(?<sign>[+-])(?<year>\d+)-(?<month>\d\d)-(?<day>\d\d)/u.exec(
+    value.time
+  );
   if (!m) {
     return value.time;
   }
-  const year = Number(m[2]);
-  const bc = m[1] === "-" ? " v. Chr." : "";
+  const year = Number(m.groups?.year);
+  const bc = m.groups?.sign === "-" ? " v. Chr." : "";
   if (value.precision >= 11) {
-    return `${Number(m[4])}.${Number(m[3])}.${year}${bc}`;
+    return `${Number(m.groups?.day)}.${Number(m.groups?.month)}.${year}${bc}`;
   }
   if (value.precision === 10) {
-    return `${Number(m[3])}/${year}${bc}`;
+    return `${Number(m.groups?.month)}/${year}${bc}`;
   }
   if (value.precision === 8) {
     return `${Math.floor(year / 10) * 10}er${bc}`;
@@ -231,7 +235,7 @@ function quantityUnit(v: RawSnak["datavalue"]): string | undefined {
   if (v?.type !== "quantity") {
     return undefined;
   }
-  const unit = (v.value as { unit: string }).unit;
+  const { unit } = v.value as { unit: string };
   return unit === "1" ? undefined : unit.split("/").at(-1);
 }
 
@@ -250,14 +254,15 @@ function snakValue(
   }
   switch (v.type) {
     case "wikibase-entityid": {
-      const id = (v.value as { id: string }).id;
+      const { id } = v.value as { id: string };
       const label = labels[id];
       return label ? { id, v: label } : undefined;
     }
-    case "time":
+    case "time": {
       return {
         v: wikidataTime(v.value as { precision: number; time: string }),
       };
+    }
     case "quantity": {
       const q = v.value as { amount: string };
       const unit = quantityUnit(v);
@@ -270,10 +275,12 @@ function snakValue(
         ? { v: t.text }
         : undefined;
     }
-    case "string":
+    case "string": {
       return { v: String(v.value) };
-    default:
+    }
+    default: {
       return undefined;
+    }
   }
 }
 
@@ -325,8 +332,8 @@ export function foldName(text: string): string {
     .replaceAll("ü", "ue")
     .replaceAll("ß", "ss")
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
+    .replaceAll(/[̀-ͯ]/gu, "")
+    .replaceAll(/[^a-z0-9]+/gu, " ")
     .trim();
 }
 

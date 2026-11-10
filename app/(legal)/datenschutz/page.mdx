@@ -20,7 +20,10 @@ Kurz gesagt:
 - Damit Abstürze und langsame Geräte auffallen, schickt der Viewer Fehler- und
   Leistungsberichte – ohne Standort und ohne IP-Adresse. Du kannst sie
   [unten ausschalten](#fehlerberichte).
-- Dein Standort verlässt dein Gerät nie.
+- Dein Standort verlässt dein Gerät nur, wenn du einem Link folgst, der ihn
+  in seiner Adresse trägt (der Sprung in eine andere Stadt, ein kopierter
+  Ansichts-Link): dann steht er in Vercels Protokollen, wie jede
+  aufgerufene Adresse. [Mehr dazu unten](#standort).
 
 ## Verantwortlich
 
@@ -162,18 +165,48 @@ Rhino-Datei und ein GeoPackage lädt der Viewer ein Leseprogramm
 nicht von einem fremden Server. *Lage sichern* legt die Lage des
 Entwurfs als Datei in deinen Downloads ab, nirgends sonst.
 
-## Standort und Kompass
+<h2 id="standort">Standort und Kompass</h2>
 
 Die Werkzeuge *Standort* und *Live* fragen nach deinem Standort und der
 Ausrichtung deines Telefons – erst, wenn du sie antippst, und nur mit deiner
 Erlaubnis im Browser (Art. 6 Abs. 1 lit. a DSGVO, § 25 Abs. 1 TDDDG). Beides
-wird nur in deinem Browser verwendet, um dich in die Stadt zu setzen, und nie
-an mich oder Dritte gesendet; auch die Fehlerberichte enthalten es nicht.
+wird in deinem Browser verwendet, um dich in die Stadt zu setzen; die
+Fehlerberichte enthalten es nicht.
+
 Bietet das Standort-Fenster den Sprung in eine andere Stadt dieser Seite an,
-reist dein Standort dabei im Fragment der Adresse (hinter dem `#`) mit: den
-sieht nur dein Browser, nicht der Hoster, und die Seite entfernt ihn, sobald
-sie dich dort abgesetzt hat. Wie dein Browser den Standort bestimmt – manche fragen dafür einen Ortungsdienst
-ihres Herstellers –, liegt bei deinem Browser. Die Erlaubnis kannst du in
+trägt der Link deinen tatsächlichen Standort (mit sechs Nachkommastellen,
+auf Dezimeter genau) in den Parametern seiner Adresse, etwa
+`/leipzig?at=51.339300,12.372600`. Folgst du ihm, schickt dein Browser diese
+Adresse an Vercel, und sie steht wie jede aufgerufene Adresse in Vercels
+Protokollen (siehe oben, *Aufruf der Seite und Hosting*).
+Die Seite entfernt den Parameter, sobald sie dich dort abgesetzt hat.
+
+Ebenso legt *Link kopieren* (unter *Erweitert › Snapshot*) den Ort der
+Kamera – nach *Standort* oder *Live* also deinen eigenen –, die Zeit und den
+Look in die Parameter eines Links (`?snap=…`) in deine Zwischenablage; wem
+du ihn schickst, entscheidest du. Wer ihn öffnet, schickt die Adresse samt
+diesem Ort an Vercel, in dessen Protokolle; die Seite liest die Ansicht
+dann in seinem Browser und speichert sie nicht.
+
+Öffnest du die Sonnenstudie (ein Versuch, `?studie=…`), schreibt sie ihr
+Rezept in die Adresse: Zeitraum, Uhrzeit, was sie vergleicht, den Umkreis
+und dessen Mitte als Koordinaten auf den Meter, also den Ort, an dem die
+Kamera stand, als du *hier rechnen* gewählt oder die Studie geöffnet hast.
+Die Seite ändert dafür nur die Adresse in deinem Browser und schickt nichts;
+lädst du die Seite neu oder schickst du den Link weiter, geht die Adresse samt
+diesem Ort an Vercel, in dessen Protokolle. Die Daten, mit denen die Studie
+rechnet, lädt sie von dieser Seite, wie die Stadt selbst; gerechnet wird in
+deinem Browser.
+
+Die Fehler- und Leistungsberichte nennen die aufgerufene Seite ohne diese
+Parameter, und der Verlauf eines Besuchs, den dein Browser für sie festhält,
+behält von der Adresse nur die Testschalter (wie `?scene=lite`), nie `at`,
+`snap` oder `studie`. An andere Server als diese Seite schickt dein Browser nach
+seiner Voreinstellung als Referrer nur die Adresse der Seite ohne Pfad und
+Parameter.
+
+Wie dein Browser den Standort bestimmt – manche fragen dafür einen
+Ortungsdienst ihres Herstellers –, liegt bei deinem Browser. Die Erlaubnis kannst du in
 seinen Einstellungen jederzeit widerrufen.
 
 ## Live-Daten der Städte

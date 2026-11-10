@@ -10,10 +10,11 @@ import {
   ASK_KEY_HEADER,
   ASK_LIMITS,
   ASK_PROVIDER_BY_ID,
-  type AskProviderDef,
   isAskProvider,
   plausibleKey,
 } from "@/lib/city/ask-city";
+import type { AskProviderDef } from "@/lib/city/ask-city";
+import { ASK_FAILURES, askRefusalStatus } from "@/lib/city/ask-failure";
 import { issueAskToken } from "@/lib/city/ask-token";
 import { fakeModel } from "../frag/env";
 
@@ -58,9 +59,9 @@ export async function POST(request: Request): Promise<Response> {
   // the chat route refuses without it in production: say so at the check
   if (!secret && process.env.NODE_ENV === "production") {
     return refuse(
-      501,
+      askRefusalStatus("no-secret"),
       "no-secret",
-      "Frag die Stadt ist auf diesem Server nicht eingerichtet."
+      ASK_FAILURES["no-secret"].text
     );
   }
   let status: number;
@@ -70,7 +71,7 @@ export async function POST(request: Request): Promise<Response> {
       cache: "no-store",
       signal: AbortSignal.timeout(10_000),
     });
-    status = res.status;
+    ({ status } = res);
     await res.body?.cancel();
   } catch {
     return refuse(

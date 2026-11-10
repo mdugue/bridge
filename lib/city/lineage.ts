@@ -21,25 +21,26 @@ import {
   OBJECT_SOURCE_SCAN,
   OBJECT_SOURCE_SHOPFRONT,
 } from "./city-mesh";
-import { type DrawnFacts, decodeDrawn } from "./drawn-facts";
+import { decodeDrawn } from "./drawn-facts";
+import type { DrawnFacts } from "./drawn-facts";
 import { FACADE_UNIT } from "./facade-reading";
 import { germanDates } from "./card-lines";
 import type { BuildingInquiry, Inquiry } from "./inquiry";
 import type {
   BridgeInquiry,
+  CanopyInquiry,
+  HedgeInquiry,
   MonumentInquiry,
+  MoreInquiry,
   TreeInquiry,
 } from "./inquiry-features";
-import type { CanopyInquiry, MoreInquiry } from "./inquiry-more";
 import type { BikeInquiry, TrafficInquiry } from "./inquiry-traffic";
-import { type DesignInquiry, PLACED } from "./inquiry-design";
-import { isMeasuredRoof, type ObjectFacts } from "./object-facts";
-import {
-  type OsmProduct,
-  parseLod2Stand,
-  type SiteProvenance,
-  type SourceKey,
-} from "./provenance";
+import { PLACED } from "./inquiry-design";
+import type { DesignInquiry } from "./inquiry-design";
+import { isMeasuredRoof } from "./object-facts";
+import type { ObjectFacts } from "./object-facts";
+import { parseLod2Stand } from "./provenance";
+import type { OsmProduct, SiteProvenance, SourceKey } from "./provenance";
 import type { Method, Stated } from "./methods";
 import type { Provider } from "./site";
 
@@ -116,11 +117,19 @@ const spoken = (used: Said, method: Method): Stated[] =>
 class Lineage {
   readonly entries: LineageEntry[] = [];
 
+  readonly provenance: SiteProvenance | null;
+  private readonly site: LineageSite;
+  private readonly tile: string;
+
   constructor(
-    readonly provenance: SiteProvenance | null,
-    private readonly site: LineageSite,
-    private readonly tile: string
-  ) {}
+    provenance: SiteProvenance | null,
+    site: LineageSite,
+    tile: string
+  ) {
+    this.provenance = provenance;
+    this.site = site;
+    this.tile = tile;
+  }
 
   /** A source of the site's provider or the manifest's, with its edition
    *  for the tile (or `stand` when given). A "dlm" source on a site whose
@@ -213,34 +222,52 @@ export function lineage(
     "tile" in inquiry ? inquiry.tile : ""
   );
   switch (inquiry.kind) {
-    case "building":
+    case "building": {
       buildingLineage(l, inquiry, site);
       break;
-    case "tree":
+    }
+    case "tree": {
       treeLineage(l, inquiry, site);
       break;
-    case "monument":
+    }
+    case "monument": {
       monumentLineage(l, inquiry);
       break;
-    case "bridge":
+    }
+    case "bridge": {
       bridgeLineage(l, inquiry, site);
       break;
-    case "traffic":
+    }
+    case "traffic": {
       trafficLineage(l, inquiry);
       break;
-    case "bikes":
+    }
+    case "bikes": {
       bikeLineage(l, inquiry);
       break;
-    case "design":
+    }
+    case "design": {
       designLineage(l, inquiry);
       break;
-    case "canopy":
+    }
+    case "canopy": {
+      canopyLineage(l, inquiry, site);
+      break;
+    }
+    case "hedge": {
+      hedgeLineage(l, inquiry);
+      break;
+    }
     case "furniture":
-    case "hedge":
     case "lamp":
     case "landing":
-    case "stop":
-      moreLineage(l, inquiry, site);
+    case "stop": {
+      osmThingLineage(l, inquiry);
+      break;
+    }
+    default: {
+      break;
+    }
   }
   return l.entries;
 }
@@ -258,9 +285,9 @@ function buildingLineage(
 ): void {
   const all = b.tree.length > 0 ? b.tree : [b.picked];
   const facts = all.map((o) => o.facts);
-  const flags = all.reduce((sum, o) => sum | o.flags, 0);
-  const has = (bit: number) => hasObjectFlag(flags, bit);
-  const source = b.picked.source;
+  // (a flag any object of the tree carries)
+  const has = (bit: number) => all.some((o) => hasObjectFlag(o.flags, bit));
+  const { source } = b.picked;
   const lod2 = source !== OBJECT_SOURCE_SCAN && source !== OBJECT_SOURCE_GAP;
   if (source === OBJECT_SOURCE_SCAN) {
     // small_buildings.py: a box where the scan's surface stands 2–6.5 m up,
@@ -374,9 +401,6 @@ function photoUses(
       text: "Fensterrhythmus eines Nachbarhauses",
       method: "assumed",
     });
-  }
-  if (drawn.some((d) => d.storey === "photos")) {
-    uses.push({ text: "Geschosshöhe", method: "detected" });
   }
   if (all.some((o) => o.source === OBJECT_SOURCE_SHOPFRONT)) {
     uses.push({ text: "Schaufenster", method: "detected" });
@@ -608,36 +632,26 @@ function fromMapillary(m: MoreInquiry): boolean {
   );
 }
 
-function moreLineage(l: Lineage, m: MoreInquiry, site: LineageSite): void {
-  switch (m.kind) {
-    case "canopy":
-      canopyLineage(l, m, site);
-      return;
-    case "hedge":
-      l.source("dlm", [m.source === "dlm" && "Verlauf"], "taken", {
-        standIn: "trees",
-      });
-      l.source(
-        "osm",
-        [m.source !== "dlm" && m.source !== "lsc" && "Verlauf"],
-        "taken",
-        { osm: "trees" }
-      );
-      l.source("lsc", [m.source === "lsc" && "Verlauf und Höhe"], "detected");
-      l.source("lsc", [m.source === "osm+lsc" && "Höhe"], "computed");
-      l.source("dom", [m.source === "osm+dom" && "Höhe"], "computed");
-      l.source("dgm", ["der Boden"], "taken");
-      l.viewer([
-        (m.source === "osm" || m.source === "dlm") && "Höhe und Breite",
-        m.source === "osm+dom" && "Breite",
-      ]);
-      return;
-    case "furniture":
-    case "lamp":
-    case "landing":
-    case "stop":
-      osmThingLineage(l, m);
-  }
+/** A hedge's lineage: its line from the Basis-DLM, OSM or the laser scan,
+ *  its height where the scan or the surface model measured it. */
+function hedgeLineage(l: Lineage, m: HedgeInquiry): void {
+  l.source("dlm", [m.source === "dlm" && "Verlauf"], "taken", {
+    standIn: "trees",
+  });
+  l.source(
+    "osm",
+    [m.source !== "dlm" && m.source !== "lsc" && "Verlauf"],
+    "taken",
+    { osm: "trees" }
+  );
+  l.source("lsc", [m.source === "lsc" && "Verlauf und Höhe"], "detected");
+  l.source("lsc", [m.source === "osm+lsc" && "Höhe"], "computed");
+  l.source("dom", [m.source === "osm+dom" && "Höhe"], "computed");
+  l.source("dgm", ["der Boden"], "taken");
+  l.viewer([
+    (m.source === "osm" || m.source === "dlm") && "Höhe und Breite",
+    m.source === "osm+dom" && "Breite",
+  ]);
 }
 
 /** A lamp's, a piece of furniture's, a landing's or a stop's lineage: OSM's

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import type { WikidataFile } from "../lib/city/stadtwissen";
 import { WIKIDATA_FACTS_FILE } from "../lib/city/stadtwissen";
 import { tileExtentOf, tileIdOf } from "../lib/city/site";
@@ -10,9 +10,12 @@ import {
   siteDataDir,
   tileArtifacts,
 } from "../lib/city/tile";
-import { type Walk, WALKS_DIR, walkProblems } from "../lib/city/walks";
+import { WALKS_DIR, walkProblems } from "../lib/city/walks";
+import type { Walk } from "../lib/city/walks";
 import { SITES } from "../sites";
-import { monumentsOf, type MonumentCollection } from "./bake-stadtwissen";
+import { monumentsOf } from "./bake-stadtwissen";
+import { parseBakeFile } from "../lib/city/bake-file";
+import { MONUMENTS_FILE } from "../lib/city/monuments-file";
 import { readDgmFile } from "./dgm-cache";
 import { siteDgm } from "./line-levels";
 
@@ -22,18 +25,20 @@ import { siteDgm } from "./line-levels";
  * measured ground — the pitch of every view is reckoned from it — and every
  * Stadtwissen entry it names is one the build publishes.
  */
-const ROOT = join(import.meta.dir, "..");
+const ROOT = nodePath.join(import.meta.dir, "..");
 /** How far a stop's written ground may lie off the DGM (it is rounded to 0.1 m). */
 const GROUND_TOLERANCE_M = 0.2;
 
 const sitesWithWalks = Object.values(SITES).flatMap((site) => {
-  const dir = join(ROOT, siteDataDir(site), WALKS_DIR);
+  const dir = nodePath.join(ROOT, siteDataDir(site), WALKS_DIR);
   if (!existsSync(dir)) {
     return [];
   }
   const walks = readdirSync(dir)
     .filter((f) => f.endsWith(".json"))
-    .map((f) => JSON.parse(readFileSync(join(dir, f), "utf8")) as Walk);
+    .map(
+      (f) => JSON.parse(readFileSync(nodePath.join(dir, f), "utf-8")) as Walk
+    );
   return [{ site, walks }];
 });
 
@@ -65,8 +70,9 @@ for (const { site, walks } of sitesWithWalks) {
     });
 
     test("stand on the measured ground", async () => {
-      const heightAt = await siteDgm(site, (tif, tfw) =>
-        readDgmFile(tif, tfw, "native")
+      const heightAt = await siteDgm(
+        site,
+        async (tif, tfw) => await readDgmFile(tif, tfw, "native")
       );
       const off = walks.flatMap((w) =>
         w.stops.flatMap((s) => {
@@ -90,13 +96,17 @@ for (const { site, walks } of sitesWithWalks) {
           ])
         )
       );
-      const wikidataPath = join(ROOT, siteDataDir(site), WIKIDATA_FACTS_FILE);
+      const wikidataPath = nodePath.join(
+        ROOT,
+        siteDataDir(site),
+        WIKIDATA_FACTS_FILE
+      );
       const wikidata = existsSync(wikidataPath)
-        ? (JSON.parse(readFileSync(wikidataPath, "utf8")) as WikidataFile)
+        ? (JSON.parse(readFileSync(wikidataPath, "utf-8")) as WikidataFile)
         : { entities: {} };
       const monuments = new Set(
         site.tiles.flatMap((cell) => {
-          const file = join(
+          const file = nodePath.join(
             ROOT,
             sideFileSource(
               site,
@@ -105,7 +115,11 @@ for (const { site, walks } of sitesWithWalks) {
           );
           return existsSync(file)
             ? monumentsOf(
-                JSON.parse(readFileSync(file, "utf8")) as MonumentCollection
+                parseBakeFile(
+                  MONUMENTS_FILE,
+                  JSON.parse(readFileSync(file, "utf-8")),
+                  file
+                )
               ).map((m) => m.id)
             : [];
         })
@@ -114,7 +128,7 @@ for (const { site, walks } of sitesWithWalks) {
       const inCity = (id: string) =>
         site.tiles.some((cell) => {
           const tile = tileIdOf(site, cell);
-          const path = join(
+          const path = nodePath.join(
             ROOT,
             siteDataDir(site),
             "cityjson",
@@ -123,18 +137,20 @@ for (const { site, walks } of sitesWithWalks) {
           if (!cityText.has(tile)) {
             cityText.set(
               tile,
-              existsSync(path) ? readFileSync(path, "utf8") : ""
+              existsSync(path) ? readFileSync(path, "utf-8") : ""
             );
           }
           return cityText.get(tile)?.includes(`"${id}"`) ?? false;
         });
-      const missing = [...named].filter((id) =>
-        /^Q\d+$/.test(id)
-          ? !(id in wikidata.entities)
-          : /^m\d+_\d+(?:_\d+)?$/.test(id)
-            ? !monuments.has(id)
-            : !inCity(id)
-      );
+      const missing = [...named].filter((id) => {
+        if (/^Q\d+$/u.test(id)) {
+          return !(id in wikidata.entities);
+        }
+        if (/^m\d+_\d+(?:_\d+)?$/u.test(id)) {
+          return !monuments.has(id);
+        }
+        return !inCity(id);
+      });
       expect(missing).toEqual([]);
     }, 60_000);
   });

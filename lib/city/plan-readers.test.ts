@@ -18,20 +18,20 @@ function shp(
     b.setInt32(36, rings.length, true);
     b.setInt32(40, n, true);
     let start = 0;
-    rings.forEach((r, i) => {
+    for (const [i, r] of rings.entries()) {
       b.setInt32(44 + i * 4, start, true);
       start += r.length;
-    });
+    }
     const pts = rings.flat();
     const at = 44 + rings.length * 4;
-    pts.forEach(([x, y], i) => {
+    for (const [i, [x, y]] of pts.entries()) {
       b.setFloat64(at + i * 16, x, true);
       b.setFloat64(at + i * 16 + 8, y, true);
-    });
+    }
     if (z) {
-      pts.forEach(([, , h], i) => {
-        b.setFloat64(at + n * 16 + 16 + i * 8, h ?? 0, true);
-      });
+      for (const [i, pt] of pts.entries()) {
+        b.setFloat64(at + n * 16 + 16 + i * 8, pt[2] ?? 0, true);
+      }
     }
     return new Uint8Array(b.buffer);
   });
@@ -42,12 +42,12 @@ function shp(
   out.setInt32(28, 1000, true);
   out.setInt32(32, type, true);
   let at = 100;
-  records.forEach((r, i) => {
+  for (const [i, r] of records.entries()) {
     out.setInt32(at, i + 1, false);
     out.setInt32(at + 4, r.length / 2, false);
     new Uint8Array(out.buffer).set(r, at + 8);
     at += 8 + r.length;
-  });
+  }
   return out.buffer;
 }
 
@@ -62,21 +62,21 @@ function dbf(fields: string[], rows: string[][], encoder = new TextEncoder()) {
   v.setUint32(4, rows.length, true);
   v.setUint16(8, header, true);
   v.setUint16(10, recordLength, true);
-  fields.forEach((f, i) => {
+  for (const [i, f] of fields.entries()) {
     bytes.set(encoder.encode(f), 32 + i * 32);
-    bytes[32 + i * 32 + 11] = "C".charCodeAt(0);
+    bytes[32 + i * 32 + 11] = "C".codePointAt(0) ?? 0;
     bytes[32 + i * 32 + 16] = width;
-  });
+  }
   bytes[header - 1] = 0x0d;
-  rows.forEach((row, r) => {
+  for (const [r, row] of rows.entries()) {
     const at = header + r * recordLength;
     bytes[at] = 0x20;
-    row.forEach((value, i) => {
+    for (const [i, value] of row.entries()) {
       const cell = new Uint8Array(width).fill(0x20);
       cell.set(encoder.encode(value).subarray(0, width));
       bytes.set(cell, at + 1 + i * width);
-    });
-  });
+    }
+  }
   return bytes.buffer;
 }
 
@@ -121,7 +121,7 @@ describe("shapefile", () => {
   test("a .dbf without a .cpg: by its language driver, else by its bytes", () => {
     const latin = {
       encode: (t: string) =>
-        Uint8Array.from({ length: t.length }, (_, i) => t.charCodeAt(i)),
+        Uint8Array.from({ length: t.length }, (_, i) => t.codePointAt(i) ?? 0),
     } as unknown as TextEncoder;
     const ansi = dbf(["ART"], [["Bäume"]], latin);
     new DataView(ansi).setUint8(29, 0x57);
@@ -136,7 +136,7 @@ describe("shapefile", () => {
     // "Gehölz" in windows-1252: ö = 0xf6
     const latin = {
       encode: (s: string) =>
-        Uint8Array.from({ length: s.length }, (_, i) => s.charCodeAt(i)),
+        Uint8Array.from({ length: s.length }, (_, i) => s.codePointAt(i) ?? 0),
     } as unknown as TextEncoder;
     const rows = readDbf(
       dbf(["ART"], [["Gehölz"]], latin),
@@ -146,14 +146,17 @@ describe("shapefile", () => {
   });
 });
 
+function blob(wkb: number[]): Uint8Array {
+  const header = [0x47, 0x50, 0, 0b0000_0001, 0xe9, 0x64, 0, 0]; // srs 25833
+  return Uint8Array.from([...header, ...wkb]);
+}
+
+const f64 = (v: number) => [...new Uint8Array(new Float64Array([v]).buffer)];
+
+const u32 = (v: number) => [...new Uint8Array(new Uint32Array([v]).buffer)];
+
 describe("GeoPackage geometry", () => {
   /** A GP blob: header without envelope, then little-endian WKB. */
-  function blob(wkb: number[]): Uint8Array {
-    const header = [0x47, 0x50, 0, 0b0000_0001, 0xe9, 0x64, 0, 0]; // srs 25833
-    return Uint8Array.from([...header, ...wkb]);
-  }
-  const f64 = (v: number) => [...new Uint8Array(new Float64Array([v]).buffer)];
-  const u32 = (v: number) => [...new Uint8Array(new Uint32Array([v]).buffer)];
 
   test("a point Z and a multipolygon", () => {
     const point = readGpkgGeometry(
@@ -202,13 +205,13 @@ describe("LandXML", () => {
   });
 });
 
-describe("a record's class", () => {
-  const polygon = (attributes: Record<string, string | number | null>) => ({
-    kind: "polygon" as const,
-    parts: [],
-    attributes,
-  });
+const polygon = (attributes: Record<string, string | number | null>) => ({
+  kind: "polygon" as const,
+  parts: [],
+  attributes,
+});
 
+describe("a record's class", () => {
   test("a place's name does not make a park paving or road", () => {
     // Dresden's Park- und Grünanlagen: the place in `ort`, a form's link
     const park = polygon({

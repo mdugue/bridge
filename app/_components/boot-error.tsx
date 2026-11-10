@@ -11,13 +11,13 @@ import { isNetworkMessage } from "@/lib/city/fetch-retry";
  * and a way to try again without hunting for the reload button (none where
  * trying again cannot help: a browser without WebGPU or WebGL2).
  */
-export function BootError({
+export const BootError = ({
   message,
   onRetry,
 }: {
   message: string;
   onRetry?: () => void;
-}) {
+}) => {
   const network = isNetworkMessage(message);
   return (
     // (over the viewer's side panel, fixed at z-10, which stays open)
@@ -51,7 +51,7 @@ export function BootError({
       </AlertDescription>
     </Alert>
   );
-}
+};
 
 /** The HUD's line for a layer that failed after the first frame: a network
  *  cause in plain words (its tile is asked for again, tile-retry.ts). */

@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { Group, type Mesh } from "three/webgpu";
+import { Group } from "three/webgpu";
+import type { Mesh } from "three/webgpu";
 import { createStudyMarks } from "./study-marks";
 import type { StudyMark } from "./study-marks-geometry";
 
@@ -28,7 +29,7 @@ function setup() {
     roughAt: () => null,
     compile: async () => {},
     changed: () => {
-      changes++;
+      changes += 1;
     },
   });
   return { parent, marks, changes: () => changes };
@@ -58,25 +59,27 @@ test("the places come as one hatched mesh on the ground, and go", async () => {
 
 test("a newer study wins over one still compiling", async () => {
   const parent = new Group();
-  let release: () => void = () => {};
+  const gate: { release?: () => void } = {};
   let first = true;
   const marks = createStudyMarks({
     parent,
     offset: { cx: 0, cy: 0 },
     heightAt: () => 0,
     roughAt: () => null,
-    compile: () =>
-      first
-        ? new Promise<void>((resolve) => {
-            first = false;
-            release = resolve;
-          })
-        : Promise.resolve(),
+    // the first compile waits until the test lets it go
+    compile: async () => {
+      if (first) {
+        first = false;
+        await new Promise<void>((resolve) => {
+          gate.release = resolve;
+        });
+      }
+    },
     changed: () => {},
   });
   const slow = marks.show([square(0, 0.5)]);
   await marks.show([square(0, 0.1), square(20, 0.9)]);
-  release();
+  gate.release?.();
   await slow;
   expect(parent.children.length).toBe(1);
   const shade = (parent.children[0] as Mesh).geometry.getAttribute(

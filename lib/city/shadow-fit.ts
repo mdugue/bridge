@@ -1,97 +1,50 @@
 import { clamp } from "./math";
 /**
- * Shadow-frustum fit: how wide the sun's orthographic shadow frustum has to be
- * for the camera's current altitude, and how far along the view direction to
- * push its centre. Pure math — no THREE, no DOM (see sun-rig.ts for the rig
- * that applies it).
+ * The square the sun's camera streams tiles for: how wide it is for the
+ * camera's altitude and how far along the view it is pushed. Pure math, no
+ * THREE, no DOM (sun-rig.ts applies it). It draws nothing: the shadow map's
+ * own squares are the rings (shadow-rings.ts); this one only keeps loaded
+ * what casts into the view, so a building behind the player still throws its
+ * shadow forward.
  *
- * The frustum used to be a fixed 110 m half-size centred on the camera. At eye
- * level that is about right: fine texels, a soft PCF penumbra, and the
- * player always well inside it. In fly mode it is not — from 200 m up, a 110 m
- * box around the camera covers a patch of ground directly below that is barely
- * on screen, so everything the player is actually looking at falls outside the
- * shadow camera and renders unshadowed. That is the "no sun shadows when
- * flying" symptom.
- *
- * The honest fix for the whole range is Cascaded Shadow Maps. This is the
- * cheap 90%: one map whose footprint grows with altitude, so the shadowed area
- * tracks how much world is on screen. Texels get coarser as you climb, which
- * is exactly the trade a CSM far cascade makes anyway — and at 200 m up a
- * building is a few dozen pixels, so a 0.15 m texel buys nothing.
- *
- * Cost is unchanged per re-render (same map size, same 5-tap PCF); only the
- * set of casters inside the frustum grows. The radius is quantized to octaves
- * with hysteresis so climbing does not re-render the depth pass every metre.
+ * It is quantized to octaves with hysteresis, so climbing does not change
+ * what the stream asks for at every metre.
  */
 
-/**
- * Frustum half-size at eye level (walking), in metres: 121 m over a 3072²
- * map is ~0.08 m texels — small enough that the soft PCF radius hides the
- * staircase. It is the 110 m the frustum had until 2026-10-11, widened by
- * 10 % so the larger dead zone on foot (`WALK_DEAD_ZONE_M`) leaves the
- * player as far from every edge as before.
- */
+/** The square's half-size at eye level (walking), in metres. */
 export const SHADOW_BASE_RADIUS = 121;
 
-/**
- * The altitude ladder's anchor: above eye level the half-size takes the
- * octaves of 110 m (220, 440, 880), as it did before the walker's frustum
- * was widened.
- */
+/** The altitude ladder's anchor: above eye level the half-size takes the
+ *  octaves of 110 m (220, 440, 880). */
 const OCTAVE_RADIUS = 110;
 
-/**
- * Largest half-size we grow to. 880 m over 3072² is ~0.57 m texels: coarse,
- * but at the altitude that asks for it (350 m+) a shadow is a soft blob and
- * having one beats having none.
- */
+/** The largest half-size it grows to. */
 export const SHADOW_MAX_RADIUS = 880;
 
-/**
- * Frustum half-size per metre of altitude. From height h a downward-tilted
- * 55°-FOV camera sees ground out to several times h; 2.5 h covers the
- * mid-ground the eye reads while keeping texels as fine as possible.
- */
+/** Half-size per metre of altitude: from height h a downward-tilted 55°
+ *  camera sees ground out to several times h. */
 const RADIUS_PER_HEIGHT = 2.5;
 
 /**
  * How far (in log2 radius) the wanted fit must diverge from the current one
  * before the radius actually changes. Octave steps are a factor 2 apart, so
- * 0.6 leaves a comfortable band on both sides of every boundary: hovering at
- * an altitude that sits exactly on one does not flap the frustum — and a flap
- * is a full depth-pass re-render. (The bottom step, 121 → 220 m, is a factor
- * 1.8: climbing leaves 121 m at 73 m up, descending leaves 220 m at 58 m.)
+ * 0.6 leaves a band on both sides of every boundary. (The bottom step,
+ * 121 → 220 m, is a factor 1.8: climbing leaves 121 m at 73 m up, descending
+ * leaves 220 m at 58 m.)
  */
 const RADIUS_HYSTERESIS = 0.6;
 
-/**
- * Fraction of the *extra* radius (beyond the 110 m anchor) that the frustum
- * centre is pushed along the view direction above eye level. Zero at eye
- * level, so turning on the spot never moves the frustum. Airborne, it puts
- * the shadowed area where the camera is looking instead of directly
- * underneath it.
- */
+/** The fraction of the *extra* radius (beyond the 110 m anchor) its centre
+ *  is pushed along the view above eye level. Zero at eye level, so turning
+ *  on the spot never moves it. */
 const AHEAD_FRACTION = 0.5;
 
-/**
- * Metres the frustum centre may drift on foot before the map is
- * re-rendered. At eye level the centre is the camera's ground at the last
- * re-render, so between two the camera is never nearer an edge than the
- * half-size less this (across the sun's azimuth; along it the frustum's
- * footprint on the ground is longer, by 1 / sin of the sun's elevation):
- * 121 − 30 = 91 m, where the old 110 m half-size and its 19.8 m dead zone
- * left 90.2 m. Walking straight, the map is redrawn every 30 m instead of
- * every 19.8 — a third fewer depth passes for 10 % coarser texels.
- */
+/** Metres its centre may drift on foot before it follows. */
 export const WALK_DEAD_ZONE_M = 30;
 
-/**
- * Fraction of the radius the frustum centre may drift before the map is
- * re-rendered above eye level (in the air, and in Modell's parallel view,
- * whose half-octave steps from 110 m never take the walker's 121 m): the
- * camera stays ~80% of the half-size clear of every edge, so nothing on
- * screen falls out of the map between re-centres.
- */
+/** The fraction of its radius its centre may drift above eye level (in the
+ *  air, and in Modell's parallel view, whose half-octave steps from 110 m
+ *  never take the walker's 121 m). */
 export const FOLLOW_DEAD_ZONE_FRACTION = 0.18;
 
 /**

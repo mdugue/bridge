@@ -8,15 +8,14 @@
  */
 
 import {
-  type CardFact,
   factLines,
   firstText,
-  type InquiryCard,
   metres,
   positionKey,
   stated,
   whole,
 } from "./card-lines";
+import type { CardFact, CardHeading, InquiryCard } from "./card-lines";
 import type { DesignPlacement, PlacementSource } from "./design-placement";
 import type { Method } from "./methods";
 
@@ -109,11 +108,16 @@ function turnLine(degrees: number): string {
   return d === 0 ? "" : `${coordinate.format(d)}° im Uhrzeigersinn`;
 }
 
+/** A design part's heading: its own name, else what it is, else the file. */
+export function designHeading(d: DesignInquiry): CardHeading {
+  const what = ifcTypeWord(d.part.type) ?? d.part.type;
+  return { kicker: "Entwurf", title: firstText(d.part.name, what, d.file) };
+}
+
 /** The card for a part of the loaded design. */
 export function designCard(d: DesignInquiry): InquiryCard {
   const { part, placement } = d;
   const word = ifcTypeWord(part.type);
-  const what = word ?? part.type;
   const [placed, method] = PLACED[d.source];
   const facts: CardFact[] = factLines([
     ["Bauteil", word && part.type ? `${word} (${part.type})` : ""],
@@ -128,8 +132,7 @@ export function designCard(d: DesignInquiry): InquiryCard {
     ["Dreiecke", whole.format(d.triangles)],
   ]);
   return {
-    kicker: "Entwurf",
-    title: firstText(part.name, what, d.file),
+    ...designHeading(d),
     address: "",
     facts,
     id: part.id ?? positionKey(d.position),

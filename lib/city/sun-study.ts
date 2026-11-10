@@ -14,6 +14,8 @@
  * summer time). No THREE, no DOM.
  */
 import { getPosition } from "suncalc";
+import { SITE_ZONE, zonedTime } from "./bike-counts";
+import { clamp } from "./math";
 import { DEG2RAD } from "./pose";
 import type { ViewpointGeometry } from "./site";
 import {
@@ -114,13 +116,13 @@ export function parseRecipe(text: string | null): SunStudyRecipe | null {
     return null;
   }
   const m =
-    /^([a-z]+)_(\d{1,2})-(\d{1,2})_([a-z]+)_(\d{2,5})m(?:_(\d+)_(\d+))?$/u.exec(
+    /^(?<period>[a-z]+)_(?<from>\d{1,2})-(?<to>\d{1,2})_(?<what>[a-z]+)_(?<radius>\d{2,5})m(?:_(?<x>\d+)_(?<y>\d+))?$/u.exec(
       text
     );
-  if (!m) {
+  if (!m?.groups) {
     return { ...DEFAULT_RECIPE };
   }
-  const [, period, from, to, what, radius, x, y] = m;
+  const { period, from, to, what, radius, x, y } = m.groups;
   const hours = [Number(from), Number(to)];
   if (
     !(period in PERIODS) ||
@@ -170,23 +172,22 @@ export interface SunSample {
   day: number;
 }
 
-/** The hours (UTC) Central European time is ahead on `utcMs`: 2 from the
- *  last Sunday of March to the last Sunday of October, 01:00 UTC each. */
-export function germanOffsetHours(utcMs: number): number {
-  const year = new Date(utcMs).getUTCFullYear();
-  const lastSunday = (month: number) => {
-    const end = new Date(Date.UTC(year, month + 1, 0));
-    return Date.UTC(year, month, end.getUTCDate() - end.getUTCDay(), 1);
-  };
-  return utcMs >= lastSunday(2) && utcMs < lastSunday(9) ? 2 : 1;
+/** How far the city's clock is ahead of UTC on the day that starts at
+ *  `midnight` (UTC, ms): read at noon, clear of the switch at 01:00 UTC. */
+function cityOffsetMs(midnight: number): number {
+  const d = new Date(midnight);
+  const noon = zonedTime(
+    [d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate(), 12, 0, 0],
+    SITE_ZONE
+  );
+  return midnight + 12 * 3_600_000 - noon.getTime();
 }
 
 /** The light a broadleaf crown lets through on day-of-year `doy`: bare
  *  until mid-April, leafing out by mid-May, bare again from mid-November. */
 export function leafLight(doy: number): number {
-  const ramp = (t: number) => Math.min(Math.max(t, 0), 1);
-  const out = ramp((doy - 105) / 30);
-  const fall = ramp((doy - 288) / 30);
+  const out = clamp((doy - 105) / 30, 0, 1);
+  const fall = clamp((doy - 288) / 30, 0, 1);
   const leafed = out * (1 - fall);
   return BARE_LIGHT * (1 - leafed) + LEAF_ON_LIGHT * leafed;
 }
@@ -217,15 +218,15 @@ export function sunSamples(
 ): { samples: SunSample[]; days: number; stepHours: number } {
   const days = periodDays(recipe.period, year);
   const samples: SunSample[] = [];
-  days.forEach((midnight, day) => {
-    const offset = germanOffsetHours(midnight + 12 * 3_600_000);
+  for (const [day, midnight] of days.entries()) {
+    const offset = cityOffsetMs(midnight);
     const light = leafLight(dayOfYear(midnight));
     for (
       let minute = recipe.from * 60 + MINUTE_STEP / 2;
       minute < recipe.to * 60;
       minute += MINUTE_STEP
     ) {
-      const at = new Date(midnight + (minute / 60 - offset) * 3_600_000);
+      const at = new Date(midnight + minute * 60_000 - offset);
       const { azimuth, altitude } = getPosition(at, lat, lng);
       if (altitude > 0.5) {
         const az = azimuth * DEG2RAD;
@@ -240,7 +241,7 @@ export function sunSamples(
         });
       }
     }
-  });
+  }
   return { samples, days: days.length, stepHours: MINUTE_STEP / 60 };
 }
 
@@ -419,7 +420,7 @@ export type Ring = readonly (readonly [number, number])[];
 
 export function ringArea(ring: Ring): number {
   let a = 0;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
     a += (ring[j][0] + ring[i][0]) * (ring[j][1] - ring[i][1]);
   }
   return Math.abs(a / 2);
@@ -427,7 +428,7 @@ export function ringArea(ring: Ring): number {
 
 function inRing(ring: Ring, x: number, y: number): boolean {
   let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
     const [xi, yi] = ring[i];
     const [xj, yj] = ring[j];
     if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
@@ -546,7 +547,10 @@ export function shadePlace(
     Math.max(...xs),
     Math.max(...ys),
   ];
-  const minTan = samples.reduce((m, s) => Math.min(m, s.tanEl), Infinity);
+  let minTan = Infinity;
+  for (const s of samples) {
+    minTan = Math.min(minTan, s.tanEl);
+  }
   const near = crownsNear(crowns, box, minTan);
   const shades: number[] = [];
   let light = 0;

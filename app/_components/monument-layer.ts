@@ -1,7 +1,6 @@
 import {
   BoxGeometry,
   BufferAttribute,
-  type BufferGeometry,
   CapsuleGeometry,
   Color,
   ConeGeometry,
@@ -11,7 +10,6 @@ import {
   Group,
   InstancedBufferAttribute,
   LatheGeometry,
-  type Material,
   Matrix4,
   Mesh,
   MeshBasicNodeMaterial,
@@ -24,6 +22,7 @@ import {
   Vector2,
   Vector3,
 } from "three/webgpu";
+import type { BufferGeometry, Material } from "three/webgpu";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
   attribute,
@@ -56,23 +55,19 @@ import type {
   MonumentFeature,
   ReliefGrid,
 } from "@/lib/city/features";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import {
   basinLevels,
   coveredFigure,
   FINISH,
-  type Finish,
   figureShare,
-  fountainsRun,
   jetHeight,
   jetPlaces,
-  type MarkerPiece,
-  type MarkerTones,
   markerTones,
   monumentMarker,
   partFinish,
   pedestalCourses,
-  type MarkerSolid,
   openRing,
   pointBasinRadius,
   reliefSurface,
@@ -80,14 +75,22 @@ import {
   ringCentre,
   smallBasin,
 } from "@/lib/city/monuments";
+import type {
+  Finish,
+  MarkerPiece,
+  MarkerTones,
+  MarkerSolid,
+} from "@/lib/city/monuments";
 import type { Point2 } from "@/lib/city/polyline";
 import { ashlar, footprint } from "./bridge-surface";
-import { gdNoise } from "./ground-detail";
 import { Instances, instanceFloat, instancePosition } from "./instancing";
-import { dataXY, type F, type Live } from "./shader-chunks";
+import { dataXY, gdNoise } from "./shader-chunks";
+import type { F, Live } from "./shader-chunks";
 import { mirrorWeight, REFLECTIONS, skyReflection } from "./sky-reflection";
+import { fountainsOn, sceneNight } from "./scene-environment";
 import { sceneMaterial } from "./three-utils";
 import { viewDirection } from "./view-direction";
+import { streetGlints } from "./lamp-reflections";
 import { BASIN_WAVES, waveNormal, waves, waveTilt } from "./water-waves";
 
 /**
@@ -115,9 +118,9 @@ import { BASIN_WAVES, waveNormal, waves, waveTilt } from "./water-waves";
  * The fountains move, gently: every bell breathes on its own phase and
  * droplets run down its curtain, light shimmers across the water; by
  * night the water glows and a fountain's sculpture is lit from its basin;
- * from November to mid-April the jets are off (one shared clock, night
- * factor and season, `setFountainTime`/`setFountainNight`/
- * `setFountainSeason`).
+ * from November to mid-April the jets are off (one shared clock,
+ * `setFountainTime`; the night and the season are the scene
+ * environment's, `sceneNight` and `fountainsOn`).
  *
  * Built per fine terrain tile by the dressing plugin (tile-stream.ts), in
  * the Y-up frame; rims, water and reliefs are merged, markers and jets
@@ -392,8 +395,8 @@ function reliefMesh(
   const pos = geo.getAttribute("position") as BufferAttribute;
   // PlaneGeometry: vertices row by row from the top-left (+y) corner, which
   // is the grid's north-west sample.
-  for (let row = 0; row < s.rows; row++) {
-    for (let col = 0; col < s.cols; col++) {
+  for (let row = 0; row < s.rows; row += 1) {
+    for (let col = 0; col < s.cols; col += 1) {
       const i = row * s.cols + col;
       const x = s.west + col * s.step;
       const y = s.north - row * s.step;
@@ -424,10 +427,13 @@ function reliefTint(
 ): BufferAttribute {
   const figure = linear(tones.figure);
   const base = linear(tones.base);
-  const top = heights.reduce((a, b) => Math.max(a, b), 0);
+  let top = 0;
+  for (const h of heights) {
+    top = Math.max(top, h);
+  }
   const tint = new Float32Array(heights.length * 3);
   const c = new Color();
-  for (let i = 0; i < heights.length; i++) {
+  for (let i = 0; i < heights.length; i += 1) {
     c.copy(base).lerp(figure, figureShare(heights[i], top));
     tint.set([c.r, c.g, c.b], i * 3);
   }
@@ -438,7 +444,7 @@ function reliefTint(
 function withLift(geo: BufferGeometry, water: number): BufferGeometry {
   const pos = geo.getAttribute("position");
   const lift = new Float32Array(pos.count);
-  for (let i = 0; i < pos.count; i++) {
+  for (let i = 0; i < pos.count; i += 1) {
     lift[i] = Math.max(pos.getY(i) - water, 0);
   }
   geo.setAttribute("aLift", new BufferAttribute(lift, 1));
@@ -622,7 +628,7 @@ function instanced(
   const q = new Quaternion();
   const up = new Vector3(0, 1, 0);
   const tinted = places.some((p) => p.tone !== null);
-  for (let i = 0; i < places.length; i++) {
+  for (let i = 0; i < places.length; i += 1) {
     q.setFromAxisAngle(up, places[i].yaw);
     mesh.setMatrixAt(i, m.compose(places[i].at, q, places[i].scale));
     if (tinted) {
@@ -669,37 +675,28 @@ function merged(
 }
 
 /**
- * The one clock and night factor every tile's fountains share (uniform
- * nodes every material reads): `create-app.ts` advances them each frame
- * and at dusk, tiles that stream in later pick them up as they are.
+ * The one clock every tile's fountains share (a uniform node every
+ * material reads): `create-app.ts` advances it each frame, tiles that
+ * stream in later pick it up as it is. Their night and season are the
+ * scene environment's (`sceneNight`, `fountainsOn`).
  */
 const fountainTime: Live = uniform(0);
-const fountainNight: Live = uniform(0);
-/** 1 while the fountains run, 0 in the months they are drained
- *  (`fountainsRun`): a uniform, so the season turns without a rebuild. */
-const fountainSeason: Live = uniform(1);
 /** What a fountain keeps of its light after dark, beside walls only the
  *  street lamps reach: the jets' warm white (they are unlit, so their
  *  colour is their whole brightness), the water's glow from below and
  *  its shimmer's share, and the sculpture's uplight at the water. */
-const NIGHT_JET = float(0.2);
-const NIGHT_WATER = float(0.025);
+const NIGHT_JET = float(0.12);
+const NIGHT_WATER = float(0.008);
 const NIGHT_SHIMMER = float(0.2);
 const NIGHT_UPLIGHT = float(0.2);
+/** The water's own colour after dark, of its day's: a pale basin under
+ *  a street lamp lit up as a pale disc, where water at night is dark and
+ *  shows the lights it catches (lamp-reflections.ts `streetGlints`). */
+const NIGHT_WATER_TONE = float(0.15);
 
 /** The frame clock (s) the jets and the water shimmer run on. */
 export function setFountainTime(elapsed: number): void {
   fountainTime.value = elapsed;
-}
-
-/** 0 by day → 1 at night: the basins light up softly with the lamps. */
-export function setFountainNight(t: number): void {
-  fountainNight.value = Math.min(Math.max(t, 0), 1);
-}
-
-/** The scene's date: from November to mid-April the jets are off. */
-export function setFountainSeason(date: Date): void {
-  fountainSeason.value = fountainsRun(date) ? 1 : 0;
 }
 
 /** A jet's own phase (0..2π), hashed from its instance's position (the
@@ -710,7 +707,7 @@ const jetPhase = Fn((builder) => {
   }
   const at = attribute("iMat3", "vec4");
   return fract(
-    sin(dot(vec2(at.x, at.z), vec2(12.9898, 78.233))).mul(43758.5453)
+    sin(dot(vec2(at.x, at.z), vec2(12.9898, 78.233))).mul(43_758.5453)
   ).mul(6.2831);
 });
 
@@ -720,7 +717,7 @@ const jetPhase = Fn((builder) => {
  * transform) and droplets run down the curtain as soft streaks in its
  * alpha (a swirl round the lathe's u, streaks down its v). By night the
  * spray dims to a faint warm white, the little light it catches
- * (`NIGHT_JET`). Out of season (`fountainSeason` 0) a bell collapses to
+ * (`NIGHT_JET`). Out of season (`fountainsOn` 0) a bell collapses to
  * its nozzle and is fully transparent.
  */
 function sprayMaterial(): MeshBasicNodeMaterial {
@@ -738,7 +735,7 @@ function sprayMaterial(): MeshBasicNodeMaterial {
   m.positionNode = instancePosition(
     vec3(
       positionLocal.x,
-      positionLocal.y.mul(breath).mul(fountainSeason),
+      positionLocal.y.mul(breath).mul(fountainsOn),
       positionLocal.z
     )
   );
@@ -751,9 +748,9 @@ function sprayMaterial(): MeshBasicNodeMaterial {
   m.opacityNode = materialOpacity
     .mul(bellAlpha(bell.y))
     .mul(streaks)
-    .mul(fountainSeason);
+    .mul(fountainsOn);
   m.colorNode = vec4(
-    mix(materialColor.rgb, vec3(1, 0.93, 0.8).mul(NIGHT_JET), fountainNight),
+    mix(materialColor.rgb, vec3(1, 0.93, 0.8).mul(NIGHT_JET), sceneNight),
     1
   );
   return m;
@@ -763,8 +760,9 @@ function sprayMaterial(): MeshBasicNodeMaterial {
  * The water: the wind's wave field at a basin's size (water-waves.ts
  * `BASIN_WAVES`, the river's ripples smaller) tilting its normal, the sky
  * mirrored off them and a slow shimmer of light where they tilt most; by
- * night a faint glow from below in place of most of the shimmer
- * (`NIGHT_WATER`, `NIGHT_SHIMMER`).
+ * night dark (`NIGHT_WATER_TONE`), a fainter glow from below in place of
+ * most of the shimmer (`NIGHT_WATER`, `NIGHT_SHIMMER`), and the street
+ * lamps near the eye glinting on the ripples (`streetGlints`).
  */
 function waterMaterial(): MeshStandardNodeMaterial {
   const m = new MeshStandardNodeMaterial({
@@ -777,8 +775,12 @@ function waterMaterial(): MeshStandardNodeMaterial {
   const n = waveNormal(field.slope).toVar();
   m.normalNode = cameraViewMatrix.mul(vec4(n, 0)).xyz.normalize();
   const tilt = waveTilt(field.slope).toVar();
-  const shimmer = mix(float(1), NIGHT_SHIMMER, fountainNight);
+  const shimmer = mix(float(1), NIGHT_SHIMMER, sceneNight);
+  m.colorNode = materialColor.mul(mix(float(1), NIGHT_WATER_TONE, sceneNight));
+  // the glow that lifts the water out of the rim's shade by day: at night
+  // it and the glow from below alone drew a basin a pale blue-grey disc
   m.emissiveNode = materialEmissive
+    .mul(float(1).sub(sceneNight))
     .add(vec3(0.03, 0.04, 0.045).mul(tilt).mul(shimmer))
     .add(
       skyReflection(n, 0.15).mul(
@@ -787,9 +789,10 @@ function waterMaterial(): MeshStandardNodeMaterial {
     )
     .add(
       vec3(0.6, 0.8, 1)
-        .mul(fountainNight.mul(NIGHT_WATER))
+        .mul(sceneNight.mul(NIGHT_WATER))
         .mul(tilt.mul(0.4).add(0.6))
-    );
+    )
+    .add(streetGlints(n, viewDirection().negate()));
   return m;
 }
 
@@ -937,7 +940,7 @@ function litClayMaterial(): MeshStandardNodeMaterial {
   m.emissiveNode = materialEmissive.add(
     vec3(1, 0.82, 0.6)
       .mul(NIGHT_UPLIGHT)
-      .mul(fountainNight)
+      .mul(sceneNight)
       .mul(float(1).sub(smoothstep(0, 2.5, lift)))
   );
   return m;

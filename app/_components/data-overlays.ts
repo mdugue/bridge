@@ -1,21 +1,18 @@
 import type { Object3D } from "three/webgpu";
 import type { AskSet } from "@/lib/city/ask-solids";
 import type { BikeCounter } from "@/lib/city/bike-counts";
-import {
-  BIKE_FEED_READERS,
-  type BikeFeedId,
-  type BikeFeedReader,
-} from "@/lib/city/bike-feeds";
+import { BIKE_FEED_READERS } from "@/lib/city/bike-feeds";
+import type { BikeFeedId, BikeFeedReader } from "@/lib/city/bike-feeds";
 import type { DataLayerKey } from "@/lib/city/data-layers";
 import type { BridgeFeature } from "@/lib/city/features";
 import type { GroundContext } from "@/lib/city/ground-clamp";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import {
-  type TrafficHourStatus,
   trafficFactor,
   trafficHourStatus,
   trafficSpeed,
 } from "@/lib/city/traffic-hours";
+import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
 import type { TramTimetable } from "@/lib/city/tram-timetable";
 import { bikeAskSets } from "./bike-ask";
 import { createBikeFeed, createBikeLayer } from "./bike-layer";
@@ -24,13 +21,10 @@ import {
   fetchOptionalJson,
   isAbortError,
 } from "./fetch-optional";
-import { buildDeckTable } from "./rail-layer";
+import { buildDeckTable } from "./bridge-deck";
 import { setTrafficClock } from "./traffic-flow";
-import {
-  createTramCars,
-  type TramCars,
-  type TramCarsStatus,
-} from "./tram-cars";
+import { createTramCars } from "./tram-cars";
+import type { TramCars, TramCarsStatus } from "./tram-cars";
 
 /**
  * The site-wide data layers (lib/city/data-layers.ts) — the ones not cut
@@ -133,10 +127,12 @@ function bikeOverlay(
           () => {
             compiled = true;
             built.group.visible = on && alive();
+            return null;
           },
           () => {
             // the next counts try again
             compiling = false;
+            return null;
           }
         );
       }
@@ -261,9 +257,9 @@ function tramOverlay(
       built = null;
       cars.group.visible = on;
       opts.onChange?.();
-    } catch (err) {
+    } catch (error) {
       // a missing or broken file is no crash: the HUD says so
-      if (!isAbortError(err)) {
+      if (!isAbortError(error)) {
         failed();
       }
     } finally {

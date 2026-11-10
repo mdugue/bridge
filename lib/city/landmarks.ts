@@ -4,34 +4,14 @@
  * the per-tile file the build reads, the site-wide list the tileset
  * carries for the HUD, and the vantage the HUD glides to. No THREE, no DOM.
  */
-import { overlook, type ViewpointGeometry } from "./site";
+import { overlook } from "./site";
+import type { ViewpointGeometry } from "./site";
 
-/** One landmark as the bake writes it (`landmarks_<tile>.json`). */
-export interface LandmarkEntry {
-  /** drawn height above `z` (m), the LoD2 objects' top */
-  h?: number;
-  /** Wikidata's height (m), when it has one */
-  height?: number;
-  /** Wikidata item id (Q…) */
-  id: string;
-  /** Wikipedia articles about it: how notable it is */
-  links: number;
-  /** a wall material (glass, brick, …) Wikidata names for it */
-  material?: string;
-  name: string;
-  /** the LoD2 CityObject ids that are the landmark */
-  objects: string[];
-  /** where Wikidata places it, in the site's projected CRS */
-  x: number;
-  y: number;
-  /** the ground under its objects (m) */
-  z?: number;
-}
+import type { LandmarkEntry, LandmarkFile } from "./landmarks-file";
 
-export interface LandmarkFile {
-  attribution?: string;
-  landmarks: LandmarkEntry[];
-}
+// A tile's file (`landmarks_<tile>.json`) is its schema's (ADR 0059); the
+// viewer takes the types only.
+export type { LandmarkEntry, LandmarkFile } from "./landmarks-file";
 
 /** A landmark as the tileset carries it for the HUD. */
 export interface Landmark {
@@ -51,6 +31,14 @@ export const SITE_LANDMARKS = 12;
 /** A landmark without a known height is framed as if it had this one. */
 const DEFAULT_HEIGHT_M = 25;
 
+/** -1, 0 or 1 by code point (not the locale), as the bake orders ids. */
+function compareCodePoints(a: string, b: string): number {
+  if (a < b) {
+    return -1;
+  }
+  return a > b ? 1 : 0;
+}
+
 /**
  * The site's landmarks from its tiles' files: one per Wikidata item (a
  * landmark on a seam is in one file only, the bake owns it by its point),
@@ -62,7 +50,7 @@ const DEFAULT_HEIGHT_M = 25;
  * still frames right).
  */
 export function siteLandmarks(
-  files: readonly LandmarkFile[],
+  files: readonly Pick<LandmarkFile, "landmarks">[],
   limit: number = SITE_LANDMARKS
 ): Landmark[] {
   const byId = new Map<string, LandmarkEntry>();
@@ -79,11 +67,13 @@ export function siteLandmarks(
   // Ties by id, by code point (as the bake does): the order goes into the
   // content-hashed tileset, so it must not depend on the machine's locale.
   const ranked = [...byId.values()].sort(
-    (a, b) => b.links - a.links || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+    (a, b) => b.links - a.links || compareCodePoints(a.id, b.id)
   );
   for (const e of ranked) {
     // past the limit only to name what the kept ones house
-    const host = e.objects.map((o) => drawn.get(o)).find((l) => l);
+    const host = e.objects
+      .map((o) => drawn.get(o))
+      .find((l) => l !== undefined);
     if (host) {
       host.also = [...(host.also ?? []), e.name];
       continue;

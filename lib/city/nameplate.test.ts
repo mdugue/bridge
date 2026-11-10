@@ -9,7 +9,8 @@ import {
   nameplateText,
   titleLines,
 } from "./nameplate";
-import { NO_FACT, type ObjectFacts } from "./object-facts";
+import { NO_FACT } from "./object-facts";
+import type { ObjectFacts } from "./object-facts";
 
 const facts = (over: Partial<ObjectFacts> = {}): ObjectFacts => ({
   buildingId: "DESN_a",
@@ -97,14 +98,15 @@ test("an ordinary house shows its address small, or nothing", () => {
   expect(nameplateText(house, card())).toBeNull();
 });
 
+const bridge = (name?: string): Inquiry => ({
+  kind: "bridge",
+  tile: "t",
+  length: 100,
+  position: [0, 0],
+  properties: { kind: "road", ...(name ? { name } : {}) },
+});
+
 test("a named bridge carries its kind; an unnamed one nothing", () => {
-  const bridge = (name?: string): Inquiry => ({
-    kind: "bridge",
-    tile: "t",
-    length: 100,
-    position: [0, 0],
-    properties: { kind: "road", ...(name ? { name } : {}) },
-  });
   expect(
     nameplateText(bridge("Augustusbrücke"), card({ kicker: "Brücke" }))
   ).toEqual({ rank: "named", title: "Augustusbrücke", lines: ["Brücke"] });
@@ -156,7 +158,7 @@ test("a thing of the street: its name and one small line", () => {
     kind: "monument",
     tile: "t",
     position: [0, 0],
-    properties: { kind: "fountain" },
+    properties: { kind: "fountain", source: "osm" },
   };
   expect(
     nameplateText(fountain, card({ title: "Brunnen", kicker: "Brunnen" }))
@@ -185,21 +187,25 @@ test("a long title breaks between words into even lines, a joined one at its sla
   ]);
 });
 
+const at = (
+  baseZ: number,
+  eaveH: number,
+  area: number,
+  over: Partial<InquiryObject> = {}
+) =>
+  object({
+    baseZ,
+    eaveH,
+    flags: OBJECT_FLAG_LANDMARK,
+    facts: facts({ area }),
+    ...over,
+  });
+
+const eave = (tree: InquiryObject[]) => nameplateEave(building(tree));
+
+const plain = (o: InquiryObject) => ({ ...o, flags: 0 });
+
 test("a landmark's rooftop letters stand on the eave under its tower", () => {
-  const at = (
-    baseZ: number,
-    eaveH: number,
-    area: number,
-    over: Partial<InquiryObject> = {}
-  ) =>
-    object({
-      baseZ,
-      eaveH,
-      flags: OBJECT_FLAG_LANDMARK,
-      facts: facts({ area }),
-      ...over,
-    });
-  const eave = (tree: InquiryObject[]) => nameplateEave(building(tree));
   // the nave as the root (a lead, its area the whole tree's), the tower
   // a slender part (6 m wide, 40 m to its eave), a sacristy: on the nave
   const nave = at(106, 15, 1000, { lead: true });
@@ -274,6 +280,5 @@ test("a landmark's rooftop letters stand on the eave under its tower", () => {
     ])
   ).toBeNull();
   // an ordinary building, tower or not: its letters on the top
-  const plain = (o: InquiryObject) => ({ ...o, flags: 0 });
   expect(eave([plain(nave), plain(tower)])).toBeNull();
 });

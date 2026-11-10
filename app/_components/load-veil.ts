@@ -1,4 +1,5 @@
-import { type DepthTexture, Vector2 } from "three/webgpu";
+import { Vector2 } from "three/webgpu";
+import type { DepthTexture } from "three/webgpu";
 import {
   abs,
   clamp,
@@ -22,9 +23,10 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
-import { BOOT_VEIL, type VeilState } from "@/lib/city/load-frontier";
+import { BOOT_VEIL } from "@/lib/city/load-frontier";
+import type { VeilState } from "@/lib/city/load-frontier";
 import type { F, Live, V3 } from "./shader-chunks";
-import { styleNight } from "./sun-rig";
+import { sceneNight } from "./scene-environment";
 import type { ViewLens } from "./view-lens";
 
 /**
@@ -140,7 +142,7 @@ export function createLoadVeil(depth: DepthTexture, lens: ViewLens): LoadVeil {
       1
     );
     const smooth = step(w, max(d.mul(0.03), 2));
-    const ink = mix(float(1), float(RING_NIGHT), styleNight);
+    const ink = mix(float(1), float(RING_NIGHT), sceneNight);
     // the halo: the ring's ink soaking into the clay just beyond it
     const halo = float(1)
       .sub(smoothstep(0, radius.mul(HALO_SHARE).add(HALO_M), d.sub(ring)))
@@ -155,7 +157,7 @@ export function createLoadVeil(depth: DepthTexture, lens: ViewLens): LoadVeil {
     // near black, it is a dim line of its own colour.
     const dayInk = haloed.min(RING_INK.mul(1.9));
     const nightInk = RING_INK.mul(RING_NIGHT);
-    return mix(haloed, mix(dayInk, nightInk, styleNight), line);
+    return mix(haloed, mix(dayInk, nightInk, sceneNight), line);
   };
 
   // Only while it shows: after the load the pass skips the whole graph on

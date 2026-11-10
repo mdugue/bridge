@@ -1,7 +1,5 @@
 import {
-  type BufferAttribute,
   BufferGeometry,
-  type Camera,
   CustomBlending,
   Float32BufferAttribute,
   LinearFilter,
@@ -9,22 +7,26 @@ import {
   Mesh,
   MeshBasicNodeMaterial,
   NodeMaterial,
-  type Object3D,
   OneFactor,
   QuadMesh,
   RGFormat,
   RenderTarget,
   Scene,
-  type DepthTexture,
-  type Texture,
-  type UniformNode,
   UnsignedByteType,
   Vector2,
-  type WebGPURenderer,
   Color,
   DoubleSide,
   SRGBColorSpace,
   Uint32BufferAttribute,
+} from "three/webgpu";
+import type {
+  BufferAttribute,
+  Camera,
+  Object3D,
+  DepthTexture,
+  Texture,
+  UniformNode,
+  WebGPURenderer,
 } from "three/webgpu";
 import {
   float,
@@ -177,7 +179,7 @@ function blurPass(
   const at = uv();
   const step = vec2(across[0], across[1]).mul(spread).mul(texel);
   let sum = texture(source, at).rg.mul(weights[0]);
-  for (let i = 1; i < weights.length; i++) {
+  for (let i = 1; i < weights.length; i += 1) {
     const offset = step.mul(i);
     sum = sum.add(
       texture(source, at.add(offset))
@@ -190,6 +192,95 @@ function blurPass(
   material.name = name;
   return { material, quad: new QuadMesh(material) };
 }
+
+// red: the element; green: where the scene shows it. MAX keeps a shown
+// face's green under a hidden one drawn after it.
+const maskMaterial = (name: string, seen: Parameters<typeof select>[0]) => {
+  const m = new MeshBasicNodeMaterial();
+  m.colorNode = vec4(1, select(seen, float(1), float(0)), 0, 1);
+  // both faces: the LoD2's polygons do not all face out (the clay draws
+  // both sides too)
+  m.side = DoubleSide;
+  m.depthTest = false;
+  m.depthWrite = false;
+  m.fog = false;
+  m.blending = CustomBlending;
+  m.blendEquation = MaxEquation;
+  m.blendSrc = OneFactor;
+  m.blendDst = OneFactor;
+  m.name = name;
+  return m;
+};
+
+// Always a position attribute, even with nothing asked (one degenerate
+// triangle): the program is built from the geometry's attributes, and
+// the boot's compile (`compile`, before any question) must build the one
+// a question draws with — compiled without positions, every vertex sat
+// at the origin and the mask stayed empty.
+const shapeGeometry = (positions: Float32Array | null) => {
+  const geometry = new BufferGeometry();
+  geometry.setAttribute(
+    "position",
+    new Float32BufferAttribute(positions ?? new Float32Array(9), 3)
+  );
+  return geometry;
+};
+// The flow's own attributes over the asked section's triangles; nothing
+// asked: one degenerate triangle with every attribute (see above).
+const flowGeometry = (source: Mesh | null, triangles: Uint32Array) => {
+  const geometry = new BufferGeometry();
+  for (const name of FLOW_ATTRIBUTES) {
+    const own = source?.geometry.getAttribute(name) as
+      | BufferAttribute
+      | undefined;
+    const size = name === "trafficLane" ? 4 : 3;
+    geometry.setAttribute(
+      name,
+      own ?? new Float32BufferAttribute(new Float32Array(3 * size), size)
+    );
+  }
+  geometry.setIndex(new Uint32BufferAttribute(triangles, 1));
+  return geometry;
+};
+// Frees the wrapper's own index only: the attributes are the flow's,
+// and a geometry's dispose frees every attribute it holds.
+const dropFlowGeometry = (geometry: BufferGeometry, shared: boolean) => {
+  if (shared) {
+    for (const name of FLOW_ATTRIBUTES) {
+      geometry.deleteAttribute(name);
+    }
+  }
+  geometry.dispose();
+};
+
+const clearTarget = (renderer: WebGPURenderer, target: RenderTarget) => {
+  const previous = renderer.getRenderTarget();
+  const clearColor = renderer.getClearColor(new Color());
+  const clearAlpha = renderer.getClearAlpha();
+  renderer.setRenderTarget(target);
+  renderer.setClearColor(0x00_00_00, 0);
+  try {
+    renderer.clear(true, false, false);
+  } finally {
+    renderer.setClearColor(clearColor, clearAlpha);
+    renderer.setRenderTarget(previous);
+  }
+};
+
+/** One full-screen pass into `target`. */
+const pass = (
+  renderer: WebGPURenderer,
+  quad: QuadMesh,
+  target: RenderTarget
+) => {
+  const previous = renderer.getRenderTarget();
+  renderer.setRenderTarget(target);
+  try {
+    quad.render(renderer);
+  } finally {
+    renderer.setRenderTarget(previous);
+  }
+};
 
 export function createSelectionOutline(deps: {
   /** what the passes know of the camera (view-lens.ts) */
@@ -224,24 +315,6 @@ export function createSelectionOutline(deps: {
   // with depth): about 0 on its own triangles, up to `reach` in a stand-in
   const behind = positionView.z.sub(sceneZ);
   const reach = uniform(0);
-  // red: the element; green: where the scene shows it. MAX keeps a shown
-  // face's green under a hidden one drawn after it.
-  const maskMaterial = (name: string, seen: Parameters<typeof select>[0]) => {
-    const m = new MeshBasicNodeMaterial();
-    m.colorNode = vec4(1, select(seen, float(1), float(0)), 0, 1);
-    // both faces: the LoD2's polygons do not all face out (the clay draws
-    // both sides too)
-    m.side = DoubleSide;
-    m.depthTest = false;
-    m.depthWrite = false;
-    m.fog = false;
-    m.blending = CustomBlending;
-    m.blendEquation = MaxEquation;
-    m.blendSrc = OneFactor;
-    m.blendDst = OneFactor;
-    m.name = name;
-    return m;
-  };
   const material = maskMaterial(
     "selection-mask",
     behind
@@ -256,46 +329,6 @@ export function createSelectionOutline(deps: {
   );
   flowMaterial.positionNode = trafficPositionNode();
 
-  // Always a position attribute, even with nothing asked (one degenerate
-  // triangle): the program is built from the geometry's attributes, and
-  // the boot's compile (`compile`, before any question) must build the one
-  // a question draws with — compiled without positions, every vertex sat
-  // at the origin and the mask stayed empty.
-  const shapeGeometry = (positions: Float32Array | null) => {
-    const geometry = new BufferGeometry();
-    geometry.setAttribute(
-      "position",
-      new Float32BufferAttribute(positions ?? new Float32Array(9), 3)
-    );
-    return geometry;
-  };
-  // The flow's own attributes over the asked section's triangles; nothing
-  // asked: one degenerate triangle with every attribute (see above).
-  const flowGeometry = (source: Mesh | null, triangles: Uint32Array) => {
-    const geometry = new BufferGeometry();
-    for (const name of FLOW_ATTRIBUTES) {
-      const own = source?.geometry.getAttribute(name) as
-        | BufferAttribute
-        | undefined;
-      const size = name === "trafficLane" ? 4 : 3;
-      geometry.setAttribute(
-        name,
-        own ?? new Float32BufferAttribute(new Float32Array(3 * size), size)
-      );
-    }
-    geometry.setIndex(new Uint32BufferAttribute(triangles, 1));
-    return geometry;
-  };
-  // Frees the wrapper's own index only: the attributes are the flow's,
-  // and a geometry's dispose frees every attribute it holds.
-  const dropFlowGeometry = (geometry: BufferGeometry, shared: boolean) => {
-    if (shared) {
-      for (const name of FLOW_ATTRIBUTES) {
-        geometry.deleteAttribute(name);
-      }
-    }
-    geometry.dispose();
-  };
   const scene = new Scene();
   const shape = new Mesh(shapeGeometry(null), material);
   shape.frustumCulled = false;
@@ -378,34 +411,6 @@ export function createSelectionOutline(deps: {
     );
   };
 
-  const clearTarget = (renderer: WebGPURenderer, target: RenderTarget) => {
-    const previous = renderer.getRenderTarget();
-    const clearColor = renderer.getClearColor(new Color());
-    const clearAlpha = renderer.getClearAlpha();
-    renderer.setRenderTarget(target);
-    renderer.setClearColor(0x00_00_00, 0);
-    try {
-      renderer.clear(true, false, false);
-    } finally {
-      renderer.setClearColor(clearColor, clearAlpha);
-      renderer.setRenderTarget(previous);
-    }
-  };
-
-  /** One full-screen pass into `target`. */
-  const pass = (
-    renderer: WebGPURenderer,
-    quad: QuadMesh,
-    target: RenderTarget
-  ) => {
-    const previous = renderer.getRenderTarget();
-    renderer.setRenderTarget(target);
-    try {
-      quad.render(renderer);
-    } finally {
-      renderer.setRenderTarget(previous);
-    }
-  };
   /** A new question restarts the flash; nothing asked ends it. */
   const flashFrom = (flash: boolean) => {
     if (flash || !selected) {
@@ -462,7 +467,7 @@ export function createSelectionOutline(deps: {
       }
       clearTarget(renderer, mask);
       const previous = renderer.getRenderTarget();
-      const autoClear = renderer.autoClear;
+      const { autoClear } = renderer;
       renderer.setRenderTarget(mask);
       renderer.autoClear = false;
       try {
@@ -502,10 +507,10 @@ export function createSelectionOutline(deps: {
     // freed them first, and its compile then held them for good), and none
     // once the outline is disposed.
     compile: async (renderer, camera) => {
-      const inTurn = (into: RenderTarget, root: Object3D, view: Camera) =>
-        compileInTurn(renderer, () => {
+      const inTurn = async (into: RenderTarget, root: Object3D, view: Camera) =>
+        await compileInTurn(renderer, async () => {
           if (outlineDisposed) {
-            return Promise.resolve();
+            return;
           }
           held = true;
           lastUsed = performance.now();
@@ -514,12 +519,16 @@ export function createSelectionOutline(deps: {
           shape.visible = true;
           flow.visible = true;
           renderer.setRenderTarget(into);
+          // not awaited in the try: the state is restored as soon as the
+          // compile is started, as before
+          let compiling: Promise<void> | undefined;
           try {
-            return renderer.compileAsync(root, view);
+            compiling = renderer.compileAsync(root, view);
           } finally {
             [shape.visible, flow.visible] = shown;
             renderer.setRenderTarget(previous);
           }
+          await compiling;
         });
       await Promise.all([
         inTurn(mask, scene, camera),

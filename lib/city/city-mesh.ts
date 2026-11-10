@@ -1,7 +1,7 @@
-import type { FacadeMaterial } from "./building-tint";
 import type { DrawnFacts } from "./drawn-facts";
 import type { FootprintPoly } from "./minimap";
 import type { ObjectFacts } from "./object-facts";
+import type { OsmBuildingRow } from "./osm-buildings-file";
 import type { CityJsonDocument } from "./types";
 import type { WindowSpec } from "./windows";
 
@@ -29,39 +29,18 @@ export type WallMaterial =
   | "stone"
   | "wood";
 
-/** What OSM knows about one CityObject. */
-export interface OsmBuildingFacts {
-  /** its address line, for the inquiry card (ADR 0042) */
-  addr?: string;
-  /** walls, `#rrggbb` (OSM `building:colour`) */
-  colour?: string;
-  /** the walls its neighbourhood is mapped as, where they differ from the
-   *  tile's (osm_buildings.py `context`) */
-  context?: FacadeMaterial;
-  heritage?: number;
+/** What OSM knows about one CityObject: the bake's row
+ *  (`osmbuild_<tile>.json`, its schema lib/city/osm-buildings-file.ts,
+ *  ADR 0059) and what the build adds to it (scripts/prepare/city.ts
+ *  `withLandmarks`). */
+export type OsmBuildingFacts = OsmBuildingRow & {
   /** one of the city's landmarks (landmarks.py, Wikidata) */
   landmark?: number;
-  /** `building:levels`, for the inquiry card and the storey bands */
-  levels?: number;
-  material?: WallMaterial;
   /** the material is Wikidata's (a landmark's), where OSM names none */
   materialFrom?: "wikidata";
-  /** the outline's `name`, for the inquiry card */
-  name?: string;
-  /** on a root: the key of the named outline covering its tree, which the
-   *  trees one building is split into share (lib/city/ensembles.ts) */
-  outline?: string;
-  /** roof, `#rrggbb` (OSM `roof:colour`) */
-  roof_colour?: string;
-  shop?: number;
-  /** where OSM counts none of its own storeys: the storey (m) of the
-   *  mapped buildings around it of its roof form and about its eave, else
-   *  the tile's (osm_buildings.py `storey`) — its storeys are counted from
-   *  its eave with it (lib/city/building-tint.ts `neighbourStorey`) */
-  storey?: number;
   /** the Wikidata item of the landmark it belongs to (landmarks.py) */
   wikidata?: string;
-}
+};
 
 /**
  * What OSM knows about a CityObject, keyed by its id
@@ -161,7 +140,8 @@ export function markFlatRoofs(
       }
     }
   }
-  objects.forEach((o, i) => {
+  for (let i = 0; i < objects.length; i += 1) {
+    const o = objects[i];
     if (
       all[i] > 0 &&
       flat[i] >= FLAT_ROOF_SHARE * all[i] &&
@@ -169,7 +149,7 @@ export function markFlatRoofs(
     ) {
       o.flags += OBJECT_FLAG_FLAT_ROOF;
     }
-  });
+  }
 }
 
 /** A part counts as grounded when its base lies within this of its building
@@ -419,7 +399,8 @@ export function objectTable(rows: readonly CityObjectRow[]): CityObjectTable {
     winStyle: new Uint32Array(count),
     winW: new Float32Array(count),
   };
-  rows.forEach((r, i) => {
+  for (let i = 0; i < rows.length; i += 1) {
+    const r = rows[i];
     table.baseZ[i] = r.baseZ;
     table.building[i] = r.building ? 1 : 0;
     table.eaveH[i] = r.eaveH;
@@ -437,7 +418,7 @@ export function objectTable(rows: readonly CityObjectRow[]): CityObjectTable {
     table.winH[i] = r.windows?.h ?? 0;
     table.winStyle[i] = r.windows?.style ?? 0;
     table.winW[i] = r.windows?.w ?? 0;
-  });
+  }
   return table;
 }
 
@@ -461,7 +442,7 @@ export function packObjectTexels(table: CityObjectTable): Float32Array {
   const rows = objectBandRows(table.count);
   const band = OBJECT_TEXTURE_WIDTH * rows * 4;
   const out = new Float32Array(band * OBJECT_TEXEL_BANDS);
-  for (let i = 0; i < table.count; i++) {
+  for (let i = 0; i < table.count; i += 1) {
     const at = i * 4;
     out.set([...table.tint.subarray(i * 3, i * 3 + 3), table.baseZ[i]], at);
     out.set(
@@ -494,7 +475,7 @@ export function doomedObjects(
     return doomed;
   }
   const tree = root[objectIndex];
-  for (let i = 0; i < root.length; i++) {
+  for (let i = 0; i < root.length; i += 1) {
     if (root[i] === tree) {
       doomed.add(i);
     }
@@ -516,9 +497,12 @@ export function liveTriangles(
   let n = 0;
   for (let t = 0; t < index.length; t += 3) {
     if (alive(featureIds[index[t]])) {
-      out[n++] = index[t];
-      out[n++] = index[t + 1];
-      out[n++] = index[t + 2];
+      out[n] = index[t];
+      n += 1;
+      out[n] = index[t + 1];
+      n += 1;
+      out[n] = index[t + 2];
+      n += 1;
     }
   }
   return out.slice(0, n);
@@ -530,9 +514,9 @@ export function countBuildings(
   alive: (objectIndex: number) => boolean
 ): number {
   let count = 0;
-  for (let i = 0; i < building.length; i++) {
+  for (let i = 0; i < building.length; i += 1) {
     if (building[i] === 1 && alive(i)) {
-      count++;
+      count += 1;
     }
   }
   return count;
@@ -544,13 +528,14 @@ export function footprintPolys(
   alive: (objectIndex: number) => boolean
 ): FootprintPoly[] {
   const out: FootprintPoly[] = [];
-  footprints.forEach((polys, i) => {
+  for (let i = 0; i < footprints.length; i += 1) {
+    const polys = footprints[i];
     if (alive(i)) {
       for (const pts of polys) {
         out.push({ pts });
       }
     }
-  });
+  }
   return out;
 }
 

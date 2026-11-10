@@ -1,14 +1,16 @@
 import {
   AdditiveBlending,
-  type BufferAttribute,
-  type BufferGeometry,
   Color,
   ConeGeometry,
   DoubleSide,
-  type InterleavedBufferAttribute,
   MeshBasicNodeMaterial,
-  type Object3D,
-  type Scene,
+} from "three/webgpu";
+import type {
+  BufferAttribute,
+  BufferGeometry,
+  InterleavedBufferAttribute,
+  Object3D,
+  Scene,
 } from "three/webgpu";
 import {
   abs,
@@ -23,7 +25,7 @@ import {
 } from "three/tsl";
 import type { CrownStyle } from "@/lib/city/render-style";
 import { Instances, instancePosition, isInstances } from "./instancing";
-import { lampNight } from "./lamp-layer";
+import { sceneNight } from "./scene-environment";
 import { buildStyleCrownGeo } from "./vegetation-layer";
 import { eyeDirectionView } from "./view-direction";
 
@@ -90,7 +92,7 @@ function coneMaterial(height: number): MeshBasicNodeMaterial {
   const along = clamp(positionGeometry.y.div(height - 0.15), 0, 1);
   const core = pow(facing, 1.6);
   const fall = mix(0.12, 1, pow(along, 1.4));
-  const strength = mix(CONE_DAY, CONE_NIGHT, clamp(lampNight, 0, 1));
+  const strength = mix(CONE_DAY, CONE_NIGHT, clamp(sceneNight, 0, 1));
   material.colorNode = color(CONE_COLOR).mul(
     core.mul(fall).mul(strength).mul(0.55)
   );

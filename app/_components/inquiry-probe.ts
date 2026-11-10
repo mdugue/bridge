@@ -1,18 +1,17 @@
-import { type Camera, Raycaster, Vector2, Vector3 } from "three/webgpu";
-import { type AskHit, type AskSet, hitsInSets } from "@/lib/city/ask-solids";
+import { Raycaster, Vector2, Vector3 } from "three/webgpu";
+import type { Camera } from "three/webgpu";
+import { hitsInSets } from "@/lib/city/ask-solids";
+import type { AskHit, AskSet } from "@/lib/city/ask-solids";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import {
-  type Inquiry,
-  type InquiryObject,
+  isPorous,
   objectLook,
+  thingKey,
   TOLERANCE_PX,
 } from "@/lib/city/inquiry";
-import {
-  buildingKey,
-  type CityLayer,
-  cityObjectsAlong,
-  groupObjects,
-} from "./city-layer";
+import type { Inquiry, InquiryObject } from "@/lib/city/inquiry";
+import { buildingKey, cityObjectsAlong, groupObjects } from "./city-layer";
+import type { CityLayer } from "./city-layer";
 import { setPickRay } from "./view-ray";
 
 /**
@@ -97,13 +96,13 @@ export function chooseSample<T>(
   const votes = new Map<string, { best: PickSample<T>; count: number }>();
   for (const s of samples) {
     const v = votes.get(s.key);
-    if (!v) {
-      votes.set(s.key, { best: s, count: 1 });
-    } else {
+    if (v) {
       v.count += 1;
       if (s.distance < v.best.distance) {
         v.best = s;
       }
+    } else {
+      votes.set(s.key, { best: s, count: 1 });
     }
   }
   let winner: { best: PickSample<T>; count: number } | null = null;
@@ -154,7 +153,7 @@ export function ringOffsets(
 ): { x: number; y: number }[] {
   const out: { x: number; y: number }[] = [];
   for (const r of [radiusPx / 2, radiusPx]) {
-    for (let i = 0; i < RING_RAYS; i++) {
+    for (let i = 0; i < RING_RAYS; i += 1) {
       const a = ((i + (r === radiusPx ? 0.5 : 0)) / RING_RAYS) * Math.PI * 2;
       out.push({
         x: ((Math.cos(a) * r) / viewport.width) * 2,
@@ -189,44 +188,22 @@ export type OutlineSubject =
   | { building: BuildingPart[] }
   | { thing: AskHit<FeatureInquiry> };
 
-/** A thing's key for the vote: one per tree, monument, deck, counted
- *  section, counter. */
-function thingKey(t: FeatureInquiry): string {
-  switch (t.kind) {
-    case "tree":
-    case "traffic":
-      return `${t.kind}:${t.tile}:${t.index}`;
-    case "bikes":
-      return `bikes:${t.id}:${t.position.join(",")}`;
-    case "design":
-      return `design:${t.file}:${t.partIndex}`;
-    case "bridge":
-    case "monument":
-    case "canopy":
-    case "furniture":
-    case "hedge":
-    case "lamp":
-    case "landing":
-    case "stop":
-      return `${t.kind}:${t.tile}:${t.position.join(",")}`;
-  }
-}
-
-/** The kinds whose stand-in is wider than what it stands for (a crown, a
- *  hedge) or lies flat on the ground (a playground): chosen only when
- *  nothing solid stands behind them. */
-function porous(t: FeatureInquiry): boolean {
-  return (
-    t.kind === "tree" ||
-    t.kind === "canopy" ||
-    t.kind === "hedge" ||
-    (t.kind === "furniture" && t.properties.k === "playground")
-  );
-}
-
 /** How far a ray looks for a thing when no building stops it (m). */
 const FAR = 6000;
 const CENTRE = new Vector2(0, 0);
+
+/** One object of a city layer as the inquiry carries it. */
+const inquiryObject = (from: CityLayer, i: number): InquiryObject => ({
+  objectIndex: i,
+  baseZ: from.table.baseZ[i],
+  building: from.table.building[i] === 1,
+  eaveH: from.table.eaveH[i],
+  flags: from.table.flags[i],
+  lead: from.table.ensemble[i] === i,
+  source: from.table.source[i],
+  facts: from.facts(i),
+  look: objectLook(from.table, i),
+});
 
 export function createInquiryProbe(deps: {
   /** the camera the frame is drawn with (Modell's parallel one, or walk/fly's) */
@@ -323,7 +300,7 @@ export function createInquiryProbe(deps: {
         distance: thing.distance,
         hit: { thing },
         key: thingKey(thing.target),
-        porous: porous(thing.target),
+        porous: isPorous(thing.target),
       })),
     ].sort((a, b) => a.distance - b.distance);
     // (a design stands on ground pressed under it, which the ground's
@@ -344,7 +321,7 @@ export function createInquiryProbe(deps: {
   const building = (layer: CityLayer, objectIndex: number, at?: Vector3) => {
     const { table } = layer;
     const own = new Set<number>();
-    for (let i = 0; i < table.count; i++) {
+    for (let i = 0; i < table.count; i += 1) {
       if (
         table.ensemble[i] === table.ensemble[objectIndex] &&
         layer.alive[i] === 1
@@ -360,22 +337,13 @@ export function createInquiryProbe(deps: {
         parts.push({ layer: other, objects });
       }
     }
-    const object = (from: CityLayer, i: number): InquiryObject => ({
-      objectIndex: i,
-      baseZ: from.table.baseZ[i],
-      building: from.table.building[i] === 1,
-      eaveH: from.table.eaveH[i],
-      flags: from.table.flags[i],
-      lead: from.table.ensemble[i] === i,
-      source: from.table.source[i],
-      facts: from.facts(i),
-      look: objectLook(from.table, i),
-    });
     const inquiry: Inquiry = {
       kind: "building",
       tile: layer.tile,
-      picked: object(layer, objectIndex),
-      tree: parts.flatMap((p) => [...p.objects].map((i) => object(p.layer, i))),
+      picked: inquiryObject(layer, objectIndex),
+      tree: parts.flatMap((p) =>
+        [...p.objects].map((i) => inquiryObject(p.layer, i))
+      ),
       ...(at ? { at: deps.toSite(at) } : {}),
     };
     return { inquiry, parts };

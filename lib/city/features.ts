@@ -3,14 +3,34 @@
  * and the layers read — the one contract between data/<site>/dlm and the viewer.
  * features.test.ts checks every committed file against it, so a bake that
  * changes a property name fails there, not as an empty layer in the browser.
+ * The tile sources the build reads (doors … terraces) and the monuments take
+ * their properties from their schemas (lib/city/<name>-file.ts, ADR 0059).
  *
  * GeoJSON allows `"properties": null`, so properties are nullable and every
  * read goes through `?.`: one odd feature must never throw out of a layer's
  * documented non-fatal load. Coordinates are in the site's CRS (EPSG:25832/25833), never recentered.
  * No THREE, no DOM.
  */
+import type { DoorProps } from "./doors-file";
+import type { DormerProps } from "./dormers-file";
+import type { KerbProps } from "./kerbs-file";
 import type { LevelRun } from "./levels";
+import type { MeasuredRoofProps } from "./measured-roofs-file";
+import type { MonumentProps } from "./monuments-file";
+import type { PassageProps } from "./passages-file";
+import type { PlinthProps } from "./plinths-file";
 import type { Point2 } from "./polyline";
+import type { SmallBuildingProps } from "./small-buildings-file";
+import type { StairProps } from "./stairs-file";
+import type { StructureProps } from "./structures-file";
+import type { TerraceProps } from "./terraces-file";
+import type { FenceProps, GateProps, WallProps } from "./walls-file";
+
+export type { MeasuredSurface } from "./measured-roofs-file";
+export type { ReliefGrid } from "./monuments-file";
+export type { PassagePart } from "./passages-file";
+export type { ShopfrontFile, ShopfrontWall } from "./shopfronts-file";
+export type { HeightField, StructureRoofPart } from "./structures-file";
 
 export interface LineGeometry {
   coordinates: Point2[];
@@ -183,6 +203,12 @@ export interface LampFeature {
     masts?: [boolean, boolean];
     on?: "wall";
     src?: "mly";
+    /** the level (m) of the water its light falls on, past the
+     *  buildings: the river mirrors it (pipeline/bake/lamp_water.py) */
+    w?: number;
+    /** how far (m) from the lamp that water reaches, in eight compass
+     *  sectors from north: its mirror's end */
+    wr?: number[];
     wall?: Point2;
     wire?: [Point2, Point2];
   } | null;
@@ -200,6 +226,10 @@ export interface MapillaryFeature {
     hs?: LampHeightSource;
     k: "bin" | "lamp";
     masts?: [boolean, boolean];
+    /** as a `LampFeature`'s */
+    w?: number;
+    /** as a `LampFeature`'s */
+    wr?: number[];
     wire?: [Point2, Point2];
   } | null;
 }
@@ -313,250 +343,54 @@ export type MonumentForm =
  *  paving (a splash pad), or a still pool without any. */
 export type FountainStyle = "basin" | "pool" | "splash";
 
-/**
- * A monument's measured bulk: DOM1 − DGM1 on the 1 m grid, the patch that
- * stands clear of trees and facades, padded by one empty cell. Heights in
- * decimetres, row-major from the north-west corner (`west`, `north`).
- */
-export interface ReliefGrid {
-  cols: number;
-  dm: number[];
-  north: number;
-  rows: number;
-  west: number;
-}
-
+/** A monument as the bake writes it (its schema: lib/city/monuments-file.ts,
+ *  ADR 0059, which documents each property); `null` properties, as GeoJSON
+ *  allows, are guarded by the loaders. */
 export interface MonumentFeature {
   geometry: PointGeometry | PolygonGeometry;
-  properties: {
-    /** the bearing a monument without a relief faces (degrees clockwise
-     *  from north): the centre of its square, else its nearest way */
-    a?: number;
-    /** who made it (OSM `artist_name`) */
-    artist?: string;
-    /** a winter housing stood over it when the surface was flown: no
-     *  relief, its form's default (a fountain's figure as a sculpture) */
-    cover?: boolean;
-    /** a fountain with a DLM monument in it (its sculpture is measured) */
-    figure?: boolean;
-    /** what it is, from OSM (absent: nothing says) */
-    form?: MonumentForm;
-    /** its tagged height (m, OSM `height`) */
-    height?: number;
-    /** its height measured in the open where no relief is (m, clamped to
-     *  its form's range) */
-    hm?: number;
-    /** "lsc": the laser scan measured its relief or `hm`, not DOM1 */
-    hs?: "lsc";
-    kind: MonumentKind;
-    /** what it is made of, in German ("Bronze, Granit"; OSM `material`,
-     *  else Wikidata's — then `wikidata` is set) */
-    material?: string;
-    name?: string;
-    /** a point fountain's basin radius (m) where it is small: a drinking
-     *  fountain, a stone block (absent: lib/city/monuments.ts
-     *  POINT_BASIN_R) */
-    r?: number;
-    /** the measured sculpture or monument (pipeline/bake/monuments.py) */
-    relief?: ReliefGrid;
-    source?: "dlm" | "dlm+osm" | "osm";
-    style?: FountainStyle;
-    /** the Wikidata item its `material` comes from */
-    wikidata?: string;
-  } | null;
+  properties: MonumentProps | null;
 }
 
-/**
- * A small structure the laser scan saw and LoD2 lacks
- * (pipeline/bake/small_buildings.py, GeoSN; a city-mesh bake input, not
- * served): its footprint rectangle (4 corners + the closing one), the
- * lowest ground under it `z`, its top `h` above `z`, and for a pent roof
- * `hc`, the height above `z` at each of the ring's first four corners.
- */
+/* The city mesh's and the terrain's tile sources: bake inputs, never served.
+ * Each file's schema (lib/city/<name>-file.ts, ADR 0059) documents its
+ * properties and is its one shape; here a feature as the bakes pass it
+ * around, `null` properties guarded by their readers. */
+
+/** A small structure the laser scan saw and LoD2 lacks: its footprint
+ *  rectangle (4 corners + the closing one). */
 export interface SmallBuildingFeature {
   geometry: PolygonGeometry;
-  properties: { h: number; hc?: number[]; z: number } | null;
+  properties: SmallBuildingProps | null;
 }
 
-/**
- * A door on a LoD2 wall (pipeline/bake/doors.py, ODbL; a city-mesh bake
- * input, not served): an OSM entrance snapped onto the nearest footprint
- * edge of the object `of`, with the wall's outward normal (`nx`, `ny`),
- * the door's width and height (m), the ground under its sill `z` and the
- * `entrance=*` value as `kind`.
- */
+/** A door on a LoD2 wall. */
 export interface DoorFeature {
   geometry: PointGeometry;
-  properties: {
-    h: number;
-    kind: string;
-    nx: number;
-    ny: number;
-    of: string;
-    w: number;
-    z: number;
-  } | null;
+  properties: DoorProps | null;
 }
 
-/** One LoD2 object's share of a passage (`PassageFeature`): its ceiling's
- *  plan (outer rings), the walls along it (each walked with the passage on
- *  its left) and its portals `[x, y, nx, ny]` (the wall's outward normal),
- *  all EPSG. */
-export interface PassagePart {
-  portals: [number, number, number, number][];
-  roof: [number, number][][];
-  sides: [number, number][][];
-}
-
-/**
- * A passage through LoD2 buildings (pipeline/bake/passages.py, ODbL; a
- * city-mesh bake input, not served): OSM's `tunnel=building_passage` ways
- * `osm` merged end to end, as the axis it runs on through the walls; its
- * width `w` (from OSM's `width` or its `kind`, `wFrom`), OSM's clear height
- * `h` (null: the build takes the ground storey's), the ground per vertex of
- * the axis `z`, and what each LoD2 object it runs through holds of it.
- */
+/** A passage through LoD2 buildings. */
 export interface PassageFeature {
   geometry: LineGeometry;
-  properties: {
-    h: number | null;
-    kind: string;
-    of: Record<string, PassagePart>;
-    osm: number[];
-    w: number;
-    wFrom: "kind" | "width";
-    z: number[];
-  } | null;
+  properties: PassageProps | null;
 }
 
-/**
- * One wall's shopfront (pipeline/bake/shopfronts.py; Mapillary CC BY-SA 4.0,
- * the canopies from DOM1 under the provider's licence; a city-mesh bake
- * input, not served): the LoD2 object `oid` and its wall `wi` as facades.py
- * numbers them, the wall's base points `a` → `b` (EPSG; `s` runs from
- * `a`), its length, outward normal and the lowest ground in front of each
- * end (`z`). `src: "photo"`: the bays and the sign band measured in street
- * panoramas, the ground floor's top where measured (metres above the
- * ground); `src: "canopy"`: no photo measured this wall, but a canopy runs
- * on from a measured one of the same object. `row`: a glazed shop row,
- * glass from pier to pier. `canopy`: where the surface model shows a
- * canopy over the shopfront, its depth out of the wall `d` and its top
- * above the ground `h`.
- */
-export interface ShopfrontWall {
-  a: [number, number];
-  b: [number, number];
-  bays?: [number, number][];
-  canopy?: { at: [number, number]; d: number; h: number }[];
-  gf_top?: number;
-  imgs?: number;
-  L: number;
-  n: [number, number];
-  oid: string;
-  row?: boolean;
-  seqs?: number;
-  sign?: { at: [number, number][]; z?: [number, number] };
-  src: "canopy" | "photo";
-  wi: number;
-  z?: [number, number];
-}
-
-/** A tile's shopfronts, per Building gml:id (`shopfronts_<tile>.json`). */
-export interface ShopfrontFile {
-  attribution: string;
-  bin_m: number;
-  buildings: Record<string, ShopfrontWall[]>;
-}
-
-/** A building's plinth on the street side of its LoD2 walls
- *  (pipeline/bake/plinths.py, LoD2 + DGM1): level pieces of the wall's
- *  open stretches, each walked with the street to its right (a→b), its
- *  top (`top`) and the lowest ground under it (`g`), one per line, and the
- *  LoD2 object it belongs to (`of`). */
+/** A building's plinth on the street side of its LoD2 walls. */
 export interface PlinthFeature {
   geometry: MultiLineGeometry;
-  properties: { g: number[]; of: string; top: number[] } | null;
+  properties: PlinthProps | null;
 }
 
-/** A dormer the surface model shows on a pitched LoD2 roof
- *  (pipeline/bake/dormers.py, DOM1 — the provider's licence): its centre,
- *  the roof's downslope direction (`ax`, `ay`), its width across and depth
- *  along the slope (`w`, `d`), the roof's height at the centre (`z`), its
- *  measured top (`top`), the roof's slope (degrees) and the LoD2 object it
- *  sits on (`of`). A shed dormer carries its roof's fall (`tf`, degrees,
- *  down the slope); its `top` is then where that roof meets the main
- *  roof, the line it falls from. A chimney (`k`) is the same record on any
- *  roof: its box `w` × `d` along `ax`, `ay` (on a level roof its
- *  footprint's longer side), from the roof up to `top`. */
+/** A dormer or a chimney on a LoD2 roof. */
 export interface DormerFeature {
   geometry: PointGeometry;
-  properties: {
-    ax: number;
-    ay: number;
-    d: number;
-    k?: "chimney";
-    of: string;
-    slope: number;
-    tf?: number;
-    top: number;
-    w: number;
-    z: number;
-  } | null;
+  properties: DormerProps | null;
 }
 
-/** What the surface model shows and LoD2 lacks, confirmed by OSM
- *  (pipeline/bake/structures.py, ODbL): a column (chimney, tower, mast,
- *  water tower, communications tower, lighthouse) as its axis point with
- *  foot radius `r` and top radius `rt`, or a whole building or a roof on
- *  posts (`roof`: a platform roof, a carport) as its outline; `z` the
- *  lowest ground, `h` the measured height above it. */
+/** What the surface model shows and LoD2 lacks, confirmed by OSM. */
 export interface StructureFeature {
   geometry: PointGeometry | PolygonGeometry;
-  properties: {
-    /** a building OSM lifts off the ground (a bridge between two, an
-     *  overhang): its floor, m over `z`; absent: on the ground */
-    base?: number;
-    h: number;
-    kind: StructureKind;
-    name?: string;
-    /** a building's height from OSM (`height`, else `building:levels`),
-     *  where the surface model was flown before it stood (`osm`); absent:
-     *  measured */
-    src?: "osm";
-    /** a relief: the LoD2 object it sits on (and whose look it wears) */
-    of?: string;
-    /** a measured building's roof in the shape the surface model shows
-     *  (structures.py `shaped_roof`, as roofs.py rebuilds a LoD2 roof):
-     *  each part's outline, its roof at `z` metres (absolute) and a face's
-     *  `surface`; absent: the flat roof at `h` */
-    parts?: StructureRoofPart[];
-    /** a relief's height field: heights (m) above `z` on a north-up grid
-     *  from its north-west corner (x, y), row by row; -1 outside it */
-    grid?: HeightField;
-    r?: number;
-    rt?: number;
-    z: number;
-  } | null;
-}
-
-/** One part of a missing building's shaped roof: a measured roof's part
- *  (`MeasuredRoofFeature`) without the object id. */
-export interface StructureRoofPart {
-  coordinates: Point2[][];
-  surface?: MeasuredSurface;
-  z: number;
-}
-
-export interface HeightField {
-  cols: number;
-  /** per cell, where its walls end below `z` (≤ 0): the LoD2 roof under
-   *  the cell; without it every wall ends at `z` */
-  floor?: number[];
-  res: number;
-  rows: number;
-  x: number;
-  y: number;
-  z: number[];
+  properties: StructureProps | null;
 }
 
 export const STRUCTURE_KINDS = [
@@ -572,102 +406,49 @@ export const STRUCTURE_KINDS = [
 ] as const;
 export type StructureKind = (typeof STRUCTURE_KINDS)[number];
 
-/** A measured roof face's surface (pipeline/bake/roofs.py `surface`): the
- *  heights in centimetres from its part's `z`, on a north-up grid of `res`
- *  metre cells from its north-west corner (`x`, `y`), row by row from the
- *  north; it reaches two cells past the part's outline. */
-export interface MeasuredSurface {
-  cols: number;
-  dz: number[];
-  res: number;
-  rows: number;
-  x: number;
-  y: number;
-}
-
-/** A LoD2 roof that misses DOM1, rebuilt in the shape the scan shows
- *  (pipeline/bake/roofs.py, the provider's): one part of the object `id`
- *  (its LoD2 CityObject key), outline and courtyards in plan, its roof at
- *  `z` metres (absolute) — flat, or, for a face (a pitched roof, a vault, a
- *  dome), its measured `surface` (`z` then its median).
- *  scripts/measured-roofs.ts stands each part from the object's LoD2 base. */
+/** A LoD2 roof that misses DOM1, rebuilt in the shape the scan shows. */
 export interface MeasuredRoofFeature {
   geometry: PolygonGeometry;
-  properties: { id: string; surface?: MeasuredSurface; z: number } | null;
+  properties: MeasuredRoofProps | null;
 }
 
-/** OSM retaining/city walls and cliffs (pipeline/bake/walls.py, ODbL): the
- *  barrier/man_made kind or "cliff" (only retaining kinds and cliffs reshape
- *  the terrain), the height in metres (tagged, else measured in the surface
- *  model, else the kind's fallback) and, for a wall, retaining or city
- *  wall, its material (tagged, else the site's majority; lib/city/walls.ts
- *  `WALL_TONES`). A `quay` is no OSM line: measured where the water meets
- *  the land in the DGM (walls.py `quays`), its height the measured rise. */
+/** OSM retaining and city walls and cliffs, and the measured quays. */
 export interface WallFeature {
   geometry: LineGeometry;
-  properties: { h: number; kind: string; mat?: string } | null;
+  properties: WallProps | null;
 }
 
-/** OSM fences and railings, in the walls file after the walls (walls.py,
- *  ODbL): the panel (`railing`, `mesh`, `picket`, or `rail` for a handrail)
- *  and the height in metres. */
+/** OSM fences and railings, in the walls file after the walls. */
 export interface FenceFeature {
   geometry: LineGeometry;
-  properties: { h: number; kind: "fence"; type: string } | null;
+  properties: FenceProps | null;
 }
 
-/** OSM gates standing on a wall or fence line, last in the walls file
- *  (walls.py, ODbL): the gap's width (m), the line's kind, the barrier
- *  (`lift_gate`, `swing_gate`, `cycle_barrier`) where it is not a plain
- *  gate, and `seam` on a neighbouring tile's gate whose gap reaches over
- *  the seam (it cuts this tile's piece of the line too). */
+/** OSM gates standing on a wall or fence line, last in the walls file. */
 export interface GateFeature {
   geometry: PointGeometry;
-  properties: {
-    kind: "gate";
-    on: "fence" | "wall";
-    seam?: true;
-    type?: string;
-    w: number;
-  } | null;
+  properties: GateProps | null;
 }
 
 /** Everything the walls file carries. */
 export type WallFileFeature = FenceFeature | GateFeature | WallFeature;
 
-/** The kerb lines (pipeline/bake/edges.py, from the Basis-DLM road class):
- *  the smoothed carriageway edge, the road on each line's left, and where
- *  it is lowered (`low`: [from, to, kerb height] in metres along the line —
- *  at crossings, lowered or flush kerb nodes and driveways;
- *  pipeline/bake/kerb_drops.py). */
+/** The kerb lines. */
 export interface KerbFeature {
   geometry: LineGeometry;
-  properties: { low?: [number, number, number][] } | null;
+  properties: KerbProps | null;
 }
 
-/** OSM `highway=steps` flights (pipeline/bake/stairs.py, ODbL): the axis runs
- *  bottom → top; width (m), step count and the two landing heights (m). */
+/** OSM `highway=steps` flights. */
 export interface StairFeature {
   geometry: LineGeometry;
-  properties: {
-    /** what it is made of (its surface, else the site's majority) */
-    mat?: string;
-    n: number;
-    /** handrails to draw, left and right of the climb */
-    rail?: [boolean, boolean];
-    w: number;
-    /** an OSM wall or building along the left and the right side */
-    walled?: [boolean, boolean];
-    z: [number, number];
-  } | null;
+  properties: StairProps | null;
 }
 
-/** Raised OSM areas a flight climbs onto that the DGM lacks (the Brühlsche
- *  Terrasse; pipeline/bake/stairs.py, ODbL): the level (m) the build lifts
- *  the ground inside them to. */
+/** Raised OSM areas a flight climbs onto that the DGM lacks. */
 export interface TerraceFeature {
   geometry: MultiPolygonGeometry | PolygonGeometry | null;
-  properties: { z: number } | null;
+  properties: TerraceProps | null;
 }
 
 /** What a tram track runs in (pipeline/bake/tram.py): the road, a lawn

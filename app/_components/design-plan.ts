@@ -5,26 +5,21 @@ import {
   Group,
   Mesh,
   MeshStandardMaterial,
-  type Object3D,
   SRGBColorSpace,
 } from "three/webgpu";
+import type { Object3D } from "three/webgpu";
 import { latLngToUtm, utmToLatLng } from "@/lib/city/crs";
 import { detectGeoreference, utmZone } from "@/lib/city/design-placement";
 import { readDxf } from "@/lib/city/dxf";
 import { readLandXml } from "@/lib/city/landxml";
 import type { DesignPartInfo } from "@/lib/city/inquiry-design";
-import {
-  PLAN_LOOKS,
-  type PlanClass,
-  type PlanLook,
-} from "@/lib/city/plan-classes";
-import {
-  type PlanFeature,
-  type PlanPoint,
-  planMesh,
-} from "@/lib/city/plan-geometry";
+import { PLAN_LOOKS } from "@/lib/city/plan-classes";
+import type { PlanClass, PlanLook } from "@/lib/city/plan-classes";
+import { planMesh } from "@/lib/city/plan-geometry";
+import type { PlanFeature, PlanPoint } from "@/lib/city/plan-geometry";
 import { recordFeatures } from "@/lib/city/plan-records";
-import { type GeoRecord, readShapefile } from "@/lib/city/shapefile";
+import { readShapefile } from "@/lib/city/shapefile";
+import type { GeoRecord } from "@/lib/city/shapefile";
 import { readGpkgGeometry } from "@/lib/city/wkb";
 
 /**
@@ -47,10 +42,13 @@ import { readGpkgGeometry } from "@/lib/city/wkb";
 export const SQL_WASM_PATH = "/wasm/sql-wasm-browser.wasm";
 
 /** Thrown with a sentence for the panel. */
-export class PlanError extends Error {}
+export class PlanError extends Error {
+  override name = "PlanError";
+}
 
 /** The plan formats by the main file's extension. */
-export const PLAN_FORMATS = /\.(dxf|shp|gpkg|landxml)$|(?<!\.(shp|aux))\.xml$/i;
+export const PLAN_FORMATS =
+  /\.(?:dxf|shp|gpkg|landxml)$|(?<!\.(?:shp|aux))\.xml$/iu;
 
 /** The words the panel uses for a class. */
 const CLASS_WORDS: Record<PlanClass, string> = {
@@ -78,7 +76,7 @@ function lookWord(look: PlanLook): string {
 
 /** A file picked with `main` by its extension (same name first). */
 function sibling(main: File, files: readonly File[], ext: string) {
-  const stem = main.name.replace(/\.[^.]+$/, "").toLowerCase();
+  const stem = main.name.replace(/\.[^.]+$/u, "").toLowerCase();
   const all = files.filter((f) => f.name.toLowerCase().endsWith(ext));
   return (
     all.find((f) => f.name.toLowerCase() === `${stem}${ext}`) ?? all[0] ?? null
@@ -87,15 +85,17 @@ function sibling(main: File, files: readonly File[], ext: string) {
 
 /** The EPSG code a .prj's WKT names, where it says one. */
 function prjEpsg(wkt: string): number | null {
-  const code = /AUTHORITY\["EPSG",\s*"?(\d{4,5})"?\]\s*\]\s*$/.exec(wkt.trim());
+  const code = /AUTHORITY\["EPSG",\s*"?(?<epsg>\d{4,5})"?\]\s*\]\s*$/u.exec(
+    wkt.trim()
+  );
   if (code) {
-    return Number(code[1]);
+    return Number(code.groups?.epsg);
   }
-  const zone = /UTM[_ ]?zone[_ ]?(\d{2})N/i.exec(wkt);
-  if (zone && /ETRS|GRS[_ ]?1980|ETRF/i.test(wkt)) {
-    return 25_800 + Number(zone[1]);
+  const zone = /UTM[_ ]?zone[_ ]?(?<zone>\d{2})N/iu.exec(wkt);
+  if (zone && /ETRS|GRS[_ ]?1980|ETRF/iu.test(wkt)) {
+    return 25_800 + Number(zone.groups?.zone);
   }
-  if (/DHDN|Gauss|Gauß|Kruger|Krüger/i.test(wkt)) {
+  if (/DHDN|Gauss|Gauß|Kruger|Krüger/iu.test(wkt)) {
     return 31_468;
   }
   return null;
@@ -119,7 +119,9 @@ async function readGpkg(
     }[] = [];
     for (const row of columns?.values ?? []) {
       const [table, column, organization, code] = row.map(String);
-      const result = db.exec(`SELECT * FROM "${table.replace(/"/g, '""')}"`)[0];
+      const result = db.exec(
+        `SELECT * FROM "${table.replaceAll('"', '""')}"`
+      )[0];
       if (result) {
         layers.push({
           name: table,
@@ -148,12 +150,13 @@ function gpkgRecords(
       continue;
     }
     const attributes: GeoRecord["attributes"] = {};
-    result.columns.forEach((name, i) => {
+    for (let i = 0; i < result.columns.length; i += 1) {
+      const name = result.columns[i];
       const v = values[i];
       if (i !== g && (typeof v === "string" || typeof v === "number")) {
         attributes[name] = v;
       }
-    });
+    }
     for (const shape of readGpkgGeometry(blob).shapes) {
       records.push({ ...shape, attributes });
     }
@@ -175,7 +178,7 @@ async function readShapefiles(files: readonly File[]): Promise<{
 }> {
   const layers: PlanLayer[] = [];
   const unclassified: string[] = [];
-  for (const shp of files.filter((f) => /\.shp$/i.test(f.name))) {
+  for (const shp of files.filter((f) => /\.shp$/iu.test(f.name))) {
     const dbf = sibling(shp, files, ".dbf");
     const cpg = sibling(shp, files, ".cpg");
     const prj = sibling(shp, files, ".prj");
@@ -184,7 +187,7 @@ async function readShapefiles(files: readonly File[]): Promise<{
       dbf ? await dbf.arrayBuffer() : null,
       cpg ? await cpg.text() : null
     );
-    const name = shp.name.replace(/\.shp$/i, "");
+    const name = shp.name.replace(/\.shp$/iu, "");
     const { features, classes } = recordFeatures(records, name);
     layers.push({
       name,
@@ -218,7 +221,7 @@ async function readFeatures(
     };
   }
   if (name.endsWith(".shp")) {
-    return readShapefiles(files);
+    return await readShapefiles(files);
   }
   if (name.endsWith(".gpkg")) {
     const layers: PlanLayer[] = [];
@@ -243,7 +246,10 @@ async function readFeatures(
   };
 }
 
-/** Every point of the plan's features. */
+/**
+ * Every point of the plan's features.
+ * @yields {PlanPoint} each point of each feature
+ */
 function* pointsOf(features: readonly PlanFeature[]): Generator<PlanPoint> {
   for (const f of features) {
     if (f.kind === "tree") {
@@ -305,11 +311,11 @@ function inSite(
   for (const layer of layers) {
     if (layer.epsg === null || layer.epsg === epsg) {
       features.push(...layer.features);
-    } else if (utmZone(layer.epsg) !== null) {
+    } else if (utmZone(layer.epsg) === null) {
+      foreign.push(`${layer.name} (EPSG:${layer.epsg})`);
+    } else {
       features.push(...mapPoints(layer.features, carryOver(layer.epsg, epsg)));
       carried = true;
-    } else {
-      foreign.push(`${layer.name} (EPSG:${layer.epsg})`);
     }
   }
   return { features, carried, foreign };
@@ -376,7 +382,7 @@ export async function readPlan(
     throw new PlanError(`Der Plan ließ sich nicht lesen (${message}).`);
   }
   const site = inSite(read.layers, epsg);
-  let features = site.features;
+  let { features } = site;
   if (features.length === 0) {
     throw new PlanError(
       site.foreign.length > 0
@@ -415,15 +421,15 @@ export async function readPlan(
     material.name = group.cls;
     // ground: it does not stand in for a house (design-cover.ts)
     material.userData.planGround = group.cls !== "building";
-    const mesh = new Mesh(geometry, material);
+    const part = new Mesh(geometry, material);
     // what a question's card calls it (lib/city/inquiry-design.ts)
-    mesh.userData.designPart = {
+    part.userData.designPart = {
       name: null,
       type: lookWord(group.cls),
       id: null,
       material: null,
     } satisfies DesignPartInfo;
-    root.add(mesh);
+    root.add(part);
   }
   // the plan's origin in the design frame (x east, z south); doubles
   root.matrixAutoUpdate = false;

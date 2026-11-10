@@ -1,9 +1,5 @@
-import {
-  type BufferGeometry,
-  Color,
-  InstancedBufferAttribute,
-  type Material,
-} from "three/webgpu";
+import { Color, InstancedBufferAttribute } from "three/webgpu";
+import type { BufferGeometry, Material, Node } from "three/webgpu";
 import {
   abs,
   clamp,
@@ -30,7 +26,6 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
-import type { Node } from "three/webgpu";
 import {
   dayOfYear,
   EVERGREEN,
@@ -166,7 +161,7 @@ export interface CrownSeasonNodes {
    *  its thin shadow, whatever the style or the shadow camera's texel */
   keepShadow: Node<"bool">;
   /** how much of the fragment is twig (0 leaf or 1 twig): the lit pass
-   *  tints it grey-brown and takes its shimmer away */
+   *  tints it grey-brown */
   twig: F;
   /** the twig colour (linear, as `new Color(hex)` holds it), mixed in by
    *  `twig` */
@@ -316,14 +311,15 @@ const base = new Color();
 function autumnTargets(keys: CrownSeasonKey[]): Float32Array {
   base.set(CROWN_BASE_COLOR);
   const out = new Float32Array(keys.length * 3);
-  keys.forEach((k, i) => {
+  for (let i = 0; i < keys.length; i += 1) {
+    const k = keys[i];
     const [h, s, l] = phenologyOf(k.genus).hue;
     const v = k.jitter / (2 * SEASON_JITTER_DAYS); // −0.5 … 0.5
     scratch.setHSL((h + v * 0.02 + 1) % 1, s, l + v * 0.08);
     out[i * 3] = scratch.r / base.r;
     out[i * 3 + 1] = scratch.g / base.g;
     out[i * 3 + 2] = scratch.b / base.b;
-  });
+  }
   return out;
 }
 
@@ -337,13 +333,14 @@ function bloomTargets(keys: CrownSeasonKey[]): Float32Array | null {
   }
   base.set(CROWN_BASE_COLOR);
   const out = new Float32Array(keys.length * 3);
-  keys.forEach((k, i) => {
+  for (let i = 0; i < keys.length; i += 1) {
+    const k = keys[i];
     const [h, s, l] = phenologyOf(k.genus).bloom?.colour ?? [0, 0, 1];
     scratch.setHSL(h, s, l);
     out[i * 3] = scratch.r / base.r;
     out[i * 3 + 1] = scratch.g / base.g;
     out[i * 3 + 2] = scratch.b / base.b;
-  });
+  }
   return out;
 }
 
@@ -368,7 +365,7 @@ function writeInstance(
   const bare = 1 - Math.max(s.leaf, flower);
   let moved = Math.abs(arrays.bare[i] - bare) > 1e-4;
   arrays.bare[i] = bare;
-  for (let c = 0; c < 3; c++) {
+  for (let c = 0; c < 3; c += 1) {
     const j = i * 3 + c;
     const leafy =
       arrays.summer[j] + (arrays.target[j] - arrays.summer[j]) * s.autumn;
@@ -431,10 +428,11 @@ export function seasonCrowns(
       }
       let moved = false;
       let anyBare = false;
-      keys.forEach((key, i) => {
+      for (let i = 0; i < keys.length; i += 1) {
+        const key = keys[i];
         moved = writeInstance(i, key, day, arrays) || moved;
         anyBare ||= arrays.bare[i] > BARE_EPS;
-      });
+      }
       if (moved) {
         bareAttr.needsUpdate = true;
         colourAttr.needsUpdate = true;
@@ -460,7 +458,10 @@ function farTier(
   copy: (from: { bare: Float32Array; colour: Float32Array }) => void;
   mesh: Instances;
 } {
-  const colourAttr = mesh.instanceTints as InstancedBufferAttribute;
+  const colourAttr = mesh.instanceTints;
+  if (!colourAttr) {
+    throw new Error("far tier needs instanceTints");
+  }
   const bareAttr = new InstancedBufferAttribute(
     new Float32Array(slots.length),
     1
@@ -471,12 +472,13 @@ function farTier(
   return {
     mesh,
     copy: (from) => {
-      slots.forEach((slot, j) => {
+      for (let j = 0; j < slots.length; j += 1) {
+        const slot = slots[j];
         bare[j] = from.bare[slot];
         colour[j * 3] = from.colour[slot * 3];
         colour[j * 3 + 1] = from.colour[slot * 3 + 1];
         colour[j * 3 + 2] = from.colour[slot * 3 + 2];
-      });
+      }
       bareAttr.needsUpdate = true;
       colourAttr.needsUpdate = true;
     },

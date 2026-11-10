@@ -35,9 +35,7 @@
 import {
   BackSide,
   BufferGeometry,
-  type Camera,
   DataTexture,
-  DepthTexture,
   DoubleSide,
   Group,
   Float32BufferAttribute,
@@ -48,18 +46,22 @@ import {
   Mesh,
   MeshBasicNodeMaterial,
   NoToneMapping,
-  type OrthographicCamera,
-  type PerspectiveCamera,
   RedFormat,
-  type TextureNode,
-  type UniformNode,
   Scene,
   Uint16BufferAttribute,
   UnsignedByteType,
   Vector2,
   Vector3,
   Vector4,
-  type WebGPURenderer,
+} from "three/webgpu";
+import type {
+  Camera,
+  OrthographicCamera,
+  PerspectiveCamera,
+  TextureNode,
+  UniformNode,
+  WebGPURenderer,
+  DepthTexture,
 } from "three/webgpu";
 import {
   abs,
@@ -86,13 +88,6 @@ import {
 } from "three/tsl";
 import type { NameplateText } from "@/lib/city/nameplate";
 import {
-  type NameplateBlock,
-  type NameplateBody,
-  type NameplateCamera,
-  type NameplateLayout,
-  type NameplatePose,
-  type NameplateScene,
-  type Vec3,
   EXTRUDE_CAPS,
   bodySize,
   chooseNameplate,
@@ -102,22 +97,28 @@ import {
   sameLayout,
   sub,
 } from "@/lib/city/nameplate-place";
+import type {
+  NameplateBlock,
+  NameplateBody,
+  NameplateCamera,
+  NameplateLayout,
+  NameplatePose,
+  NameplateScene,
+  Vec3,
+} from "@/lib/city/nameplate-place";
 import {
   NAMEPLATE_CAPS,
   NAMEPLATE_TYPES,
-  type NameplateType,
   atNight,
   nightDim,
 } from "@/lib/city/nameplate-type";
+import type { NameplateType } from "@/lib/city/nameplate-type";
 import type { RenderStyle } from "@/lib/city/render-style";
 import { compileInTurn } from "./compile-lanes";
 import { dropDataOnUpload } from "./raster-upload";
 import { trackTexture } from "./three-utils";
 import {
-  type Align,
   PAINT,
-  type PlateGeometry,
-  type PlateRaster,
   DESKTOP_RESOLUTION,
   facesReady,
   layPlate,
@@ -125,9 +126,11 @@ import {
   loadFaces,
   rasterPlate,
 } from "./nameplate-glyphs";
+import type { Align, PlateGeometry, PlateRaster } from "./nameplate-glyphs";
 import type { F, Live, V3 } from "./shader-chunks";
 import type { SunShadowMap } from "./stylize-effect";
 import { readSunShadow, shadowStandIn } from "./sun-shadow-read";
+import type { ShadowRingNodes } from "./sun-rings";
 import type { ViewLens } from "./view-lens";
 
 /** How often the place is chosen again (ms). */
@@ -226,7 +229,7 @@ export interface Nameplate {
 }
 
 const isOrtho = (c: Camera): c is OrthographicCamera =>
-  (c as OrthographicCamera).isOrthographicCamera === true;
+  (c as OrthographicCamera).isOrthographicCamera;
 
 function atlasTexture(data: Uint8Array, width: number, height: number) {
   const t = new DataTexture(data, width, height, RedFormat, UnsignedByteType);
@@ -306,8 +309,9 @@ function writePrism(
 ): void {
   const pos = g.getAttribute("position") as Float32BufferAttribute;
   const a = pos.array as Float32Array;
-  for (const [i, c] of corners.entries()) {
-    for (let k = 0; k < 3; k++) {
+  for (let i = 0; i < corners.length; i += 1) {
+    const c = corners[i];
+    for (let k = 0; k < 3; k += 1) {
       a[i * 3 + k] = c[k];
       a[(i + 4) * 3 + k] = c[k] + d[k];
     }
@@ -328,7 +332,7 @@ function writePrism(
  *  the sun from the letters' field. Each graph holds only its own work. */
 function plateMaterials(
   deps: Pick<NameplateDeps, "depthTexture" | "lens">,
-  atlas: TextureNode<"vec4">,
+  atlas: TextureNode,
   u: PlateUniforms
 ) {
   const uvk = attribute<"vec3">("uvk", "vec3");
@@ -442,8 +446,7 @@ interface ShadowUniforms {
   /** the way to the sun in the world */
   sunWorld: UniformNode<"vec3", Vector3>;
   /** world → the sun's shadow map ([0, 1]³), its bias, whether it exists */
-  sunMatrix: UniformNode<"mat4", Matrix4>;
-  sunBias: Live;
+  sunRings: ShadowRingNodes;
   sunReady: Live;
 }
 
@@ -456,7 +459,7 @@ interface ShadowUniforms {
  */
 function shadowMaterial(
   deps: Pick<NameplateDeps, "depthTexture" | "lens">,
-  mask: TextureNode<"vec4">,
+  mask: TextureNode,
   fade: Live,
   u: ShadowUniforms,
   sunStandIn: DepthTexture,
@@ -492,12 +495,7 @@ function shadowMaterial(
     inside: onMap,
     shadowed,
     read,
-  } = readSunShadow(
-    lifted,
-    { matrix: u.sunMatrix, bias: u.sunBias, ready: u.sunReady },
-    sunStandIn,
-    reversed
-  );
+  } = readSunShadow(lifted, u.sunRings, u.sunReady, sunStandIn, reversed);
   const lit = mix(float(1), shadowed, onMap);
   const a = mask.sample(hit).r.mul(inside).mul(reach).mul(lit).mul(u.strength);
   const m = new MeshBasicNodeMaterial();
@@ -543,7 +541,7 @@ function paintColours(
     [PAINT.boxFill]: type.box ? atNight(type.box.fill, night) : h,
     [PAINT.boxEdge]: type.box ? atNight(type.box.edge, night) : h,
   };
-  for (let i = 0; i < paint.length; i++) {
+  for (let i = 0; i < paint.length; i += 1) {
     const c = colours[paint[i]];
     ink.set([c[0], c[1], c[2], dim], i * 4);
     halo.set([h[0], h[1], h[2], type.halo.alpha * dim], i * 4);
@@ -586,6 +584,19 @@ function plateCamera(
   };
 }
 
+/** Which way the plate's text is set: away from the spot it hangs off. */
+function alignFor(l: NameplateLayout | null): Align {
+  if (l?.mode === "street" || l?.mode === "far") {
+    if (l.spot === "left") {
+      return "right";
+    }
+    if (l.spot === "right") {
+      return "left";
+    }
+  }
+  return "center";
+}
+
 export function createNameplate(deps: NameplateDeps): Nameplate {
   const scene = new Scene();
   const uniforms: PlateUniforms = {
@@ -614,7 +625,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   const plate = new Mesh(emptyGeometry(), material);
   const layers = deps.phone ? SIDE_LAYERS.phone : SIDE_LAYERS.desktop;
   const sides: Mesh[] = [];
-  for (let i = layers; i >= 1; i--) {
+  for (let i = layers; i >= 1; i -= 1) {
     const side = new Mesh(plate.geometry, sideMaterial);
     side.userData.nameplateLayer = (EXTRUDE_CAPS * i) / layers;
     side.frustumCulled = false;
@@ -631,7 +642,8 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       return;
     }
     orderedBehind = behind;
-    for (const [k, side] of sides.entries()) {
+    for (let k = 0; k < sides.length; k += 1) {
+      const side = sides[k];
       // sides[k] is layer (layers − k), deepest first
       side.renderOrder = behind ? 3 + layers - 1 - k : 3 + k;
     }
@@ -660,8 +672,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     strength: uniform(0),
     colour: uniform(new Vector3()),
     sunWorld: uniform(deps.sunDirection),
-    sunMatrix: uniform(deps.sunShadow.matrix),
-    sunBias: uniform(0).onRenderUpdate(() => deps.sunShadow.bias()),
+    sunRings: deps.sunShadow.rings,
     sunReady: uniform(0),
   };
   const { material: shadowMat, read: sunRead } = shadowMaterial(
@@ -707,14 +718,6 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
   const type = () => NAMEPLATE_TYPES[style];
   /** the plate hides what is behind it (the comic's box) */
   const opaque = () => type().box !== undefined;
-  const alignFor = (l: NameplateLayout | null): Align =>
-    l?.mode === "street" || l?.mode === "far"
-      ? l.spot === "left"
-        ? "right"
-        : l.spot === "right"
-          ? "left"
-          : "center"
-      : "center";
 
   const block = (): NameplateBlock => ({
     foot: geometry?.block.foot,
@@ -826,7 +829,8 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
    *  in a style waits for them (not set twice, no swap on the plate). */
   const withFaces = () => {
     const from = deps.fonts();
-    const asked = ++generation;
+    generation += 1;
+    const asked = generation;
     // the letters as drawn (a style may set them in capitals, whose
     // part of a face can differ)
     const raw = subject
@@ -843,11 +847,11 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     letters.visible = false;
     shadow.visible = false;
     void loadFaces(type(), from, text).then(() => {
-      if (disposed || asked !== generation) {
-        return;
+      if (!disposed && asked === generation) {
+        rasterFor = null;
+        rebuild();
       }
-      rasterFor = null;
-      rebuild();
+      return null;
     });
   };
 
@@ -1087,10 +1091,11 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     // the mask's rectangle on the plate (a box reaches past the block)
     const area = geometry?.mask.area ?? { x: 0, y: 0, ...block() };
     let high = prismCorners[0];
-    for (const [i, c] of prismCorners.entries()) {
+    for (let i = 0; i < prismCorners.length; i += 1) {
+      const c = prismCorners[i];
       const x = (area.x + (i === 1 || i === 2 ? area.width : 0)) * p.cap;
       const y = (area.y + (i >= 2 ? area.height : 0)) * p.cap;
-      for (let k = 0; k < 3; k++) {
+      for (let k = 0; k < 3; k += 1) {
         c[k] = p.origin[k] + p.right[k] * x + p.up[k] * y;
       }
       if (c[1] > high[1]) {
@@ -1142,7 +1147,7 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
         mask.dispose();
         mask = maskTexture(new Uint8Array(16), 4, 4);
         maskNode.value = mask;
-        generation++;
+        generation += 1;
         return;
       }
       withFaces();
@@ -1225,8 +1230,8 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
       // onto the canvas, over the finished frame: the colours are sRGB
       // already, so the output transform stays off for this draw
       const previous = renderer.getRenderTarget();
-      const autoClear = renderer.autoClear;
-      const toneMapping = renderer.toneMapping;
+      const { autoClear } = renderer;
+      const { toneMapping } = renderer;
       const colorSpace = renderer.outputColorSpace;
       renderer.setRenderTarget(null);
       renderer.autoClear = false;
@@ -1249,28 +1254,30 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     // object from them in its frame (an upstream workaround note:
     // docs/rendering.md, "Workarounds for
     // upstream bugs").
-    compile: (renderer, camera) =>
-      compileInTurn(renderer, () => {
+    compile: async (renderer, camera) =>
+      await compileInTurn(renderer, async () => {
         if (disposed) {
-          return Promise.resolve();
+          return;
         }
         const shown = [letters.visible, shadow.visible] as const;
         const previous = renderer.getRenderTarget();
-        const toneMapping = renderer.toneMapping;
+        const { toneMapping } = renderer;
         const colorSpace = renderer.outputColorSpace;
         letters.visible = true;
         shadow.visible = true;
         renderer.setRenderTarget(null);
         renderer.toneMapping = NoToneMapping;
         renderer.outputColorSpace = LinearSRGBColorSpace;
+        let compiling: Promise<void>;
         try {
-          return renderer.compileAsync(scene, camera);
+          compiling = renderer.compileAsync(scene, camera);
         } finally {
           [letters.visible, shadow.visible] = shown;
           renderer.outputColorSpace = colorSpace;
           renderer.toneMapping = toneMapping;
           renderer.setRenderTarget(previous);
         }
+        await compiling;
       }),
     shown: () =>
       letters.visible && subject && layout

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import type {
   AreaFeature,
   BridgeFeature,
@@ -8,6 +8,7 @@ import type {
   CanopyFeature,
   CultivatedFeature,
   DoorFeature,
+  DormerFeature,
   ShopfrontFile,
   PassageFeature,
   PlinthFeature,
@@ -35,7 +36,8 @@ import type {
 import { SITES } from "../../sites";
 import { STRUCTURE_KINDS } from "./features";
 import type { WindowFile } from "./windows";
-import { type Site, tileExtentOf, tileIdOf } from "./site";
+import { tileExtentOf, tileIdOf } from "./site";
+import type { Site } from "./site";
 import { TREE_GENERA } from "./tree-season";
 import { axisFrame, BRIDGE_STEP } from "./bridge";
 import {
@@ -56,7 +58,7 @@ import {
 // skipped, `bun run site` reports it), every tile, every kind — a renamed
 // property or a geometry type the bake starts writing shows up here, not as
 // a silently empty layer.
-const ROOT = join(import.meta.dir, "..", "..");
+const ROOT = nodePath.join(import.meta.dir, "..", "..");
 
 interface Source {
   path: string;
@@ -70,7 +72,9 @@ function load<F>({ path, required }: Source): F[] {
     expect(required).toBe(false);
     return [];
   }
-  const doc = JSON.parse(readFileSync(path, "utf8")) as FeatureCollection<F> & {
+  const doc = JSON.parse(
+    readFileSync(path, "utf-8")
+  ) as FeatureCollection<F> & {
     type?: string;
   };
   expect(doc.type).toBe("FeatureCollection");
@@ -80,13 +84,13 @@ function load<F>({ path, required }: Source): F[] {
 
 /** A bake input under data/<site>/ (never served), or none. */
 function loadSource<F>(file: string): F[] {
-  const path = join(ROOT, file);
+  const path = nodePath.join(ROOT, file);
   if (!existsSync(path)) {
     return [];
   }
   return (
-    (JSON.parse(readFileSync(path, "utf8")) as FeatureCollection<F>).features ??
-    []
+    (JSON.parse(readFileSync(path, "utf-8")) as FeatureCollection<F>)
+      .features ?? []
   );
 }
 
@@ -105,7 +109,9 @@ const baked = (site: Site) =>
   tileIds(site).every((tile) =>
     Object.values(tileArtifacts(tile))
       .filter((a) => a.required && !a.bakedFrom)
-      .every((a) => existsSync(join(ROOT, sideFileSource(site, a.file))))
+      .every((a) =>
+        existsSync(nodePath.join(ROOT, sideFileSource(site, a.file)))
+      )
   );
 
 const SITES_BAKED: Site[] = Object.values(SITES).filter(baked);
@@ -116,7 +122,7 @@ const cases = SITES_BAKED.flatMap((site) =>
       Object.entries(tileArtifacts(tile)).map(([kind, a]) => [
         kind,
         {
-          path: join(ROOT, sideFileSource(site, a.file)),
+          path: nodePath.join(ROOT, sideFileSource(site, a.file)),
           required: a.required,
         },
       ])
@@ -141,16 +147,6 @@ test.each(cases)("%s: a baked canopy has trees", (_, a) => {
   if (existsSync(a.canopy.path)) {
     expect(load<CanopyFeature>(a.canopy).length).toBeGreaterThan(0);
   }
-});
-
-test.each(tiles)("%s: the roof colours are { meta, roofs }", (tile, site) => {
-  const path = join(ROOT, cityMeshSourceFiles(site, tile).roofColor);
-  if (!existsSync(path)) {
-    return;
-  }
-  const doc = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
-  expect(typeof doc.meta).toBe("object");
-  expect(doc.roofs !== null && typeof doc.roofs === "object").toBe(true);
 });
 
 test.each(cases)("%s: tree rows are hedge/treerow LineStrings", (_, a) => {
@@ -339,6 +335,49 @@ test.each(tiles)(
 );
 
 test.each(tiles)(
+  "%s: dormers and chimneys stand on a roof, square to its slope",
+  (tile, site) => {
+    const src = cityMeshSourceFiles(site, tile).dormers;
+    for (const f of loadSource<DormerFeature>(src)) {
+      expect(f.geometry.type).toBe("Point");
+      expect(isPoint2(f.geometry.coordinates)).toBe(true);
+      const p = f.properties;
+      expect(p?.of.length ?? 0).toBeGreaterThan(0);
+      expect(Math.hypot(p?.ax ?? 0, p?.ay ?? 0)).toBeCloseTo(1, 3);
+      expect(p?.slope ?? -1).toBeGreaterThanOrEqual(0);
+      expect(p?.slope ?? 90).toBeLessThan(90);
+      expect(Number.isFinite(p?.z)).toBe(true);
+      expect(Number.isFinite(p?.top)).toBe(true);
+      if (p?.k === "chimney") {
+        // its top is the surface model's own height and stays, while `z`
+        // is the exact LoD2 face under it (dormers.py on_planes): no rise
+        // to check against that face.
+        // a chimney's sides: dormers.py CHIMNEY_SIDE_M … CHIMNEY_MAX_SIDE_M
+        for (const side of [p.w, p.d]) {
+          expect(side).toBeGreaterThanOrEqual(0.6);
+          expect(side).toBeLessThanOrEqual(1.6);
+        }
+        expect(p.tf).toBeUndefined();
+      } else {
+        expect(p?.k).toBeUndefined();
+        // its top never under the face it stands on (dormers.py on_planes:
+        // max(min(top, ridge), z)), both rounded to the centimetre
+        expect((p?.top ?? 0) - (p?.z ?? 0)).toBeGreaterThanOrEqual(-0.01);
+        expect(p?.w ?? 0).toBeGreaterThan(0);
+        // its depth along the slope: dormers.py MAX_SIDE_M
+        expect(p?.d ?? 0).toBeGreaterThan(0);
+        expect(p?.d ?? 99).toBeLessThanOrEqual(8);
+        // a shed dormer's roof falls (dormers.py SHED_MIN_FALL)
+        if (p?.tf !== undefined) {
+          expect(p.tf).toBeGreaterThanOrEqual(8);
+          expect(p.tf).toBeLessThan(90);
+        }
+      }
+    }
+  }
+);
+
+test.each(tiles)(
   "%s: passages are axes through walls, each object's share in plan",
   (tile, site) => {
     const src = cityMeshSourceFiles(site, tile).passages;
@@ -375,11 +414,14 @@ test.each(tiles)(
 test.each(tiles)(
   "%s: shopfronts are walls with a frame, bays on them and a ground",
   (tile, site) => {
-    const path = join(ROOT, cityMeshSourceFiles(site, tile).shopfronts);
+    const path = nodePath.join(
+      ROOT,
+      cityMeshSourceFiles(site, tile).shopfronts
+    );
     if (!existsSync(path)) {
       return;
     }
-    const doc = JSON.parse(readFileSync(path, "utf8")) as ShopfrontFile;
+    const doc = JSON.parse(readFileSync(path, "utf-8")) as ShopfrontFile;
     expect(doc.attribution).toContain("Mapillary");
     for (const walls of Object.values(doc.buildings)) {
       for (const w of walls) {
@@ -421,11 +463,11 @@ test.each(tiles)(
 test.each(tiles)(
   "%s: window models keep to the ranges the bake draws",
   (tile, site) => {
-    const path = join(ROOT, cityMeshSourceFiles(site, tile).windows);
+    const path = nodePath.join(ROOT, cityMeshSourceFiles(site, tile).windows);
     if (!existsSync(path)) {
       return;
     }
-    const doc = JSON.parse(readFileSync(path, "utf8")) as WindowFile;
+    const doc = JSON.parse(readFileSync(path, "utf-8")) as WindowFile;
     expect(doc.attribution).toContain("Mapillary");
     for (const [rho, n] of Object.values(doc.reliability)) {
       expect(rho === null || Math.abs(rho) <= 1).toBe(true);
@@ -452,10 +494,6 @@ test.each(tiles)(
         expect(m.w).toBeGreaterThanOrEqual(0.7);
         expect(m.h).toBeGreaterThanOrEqual(0.8);
         expect(m.h).toBeLessThanOrEqual(2.4);
-        if (m.storey !== undefined) {
-          expect(m.storey).toBeGreaterThanOrEqual(2.8);
-          expect(m.storey).toBeLessThanOrEqual(4.6);
-        }
       }
     }
   }
@@ -472,14 +510,14 @@ test.each(tiles)(
       const lines = f.geometry.coordinates;
       expect(p?.g).toHaveLength(lines.length);
       expect(p?.top).toHaveLength(lines.length);
-      lines.forEach((line, i) => {
+      for (const [i, line] of lines.entries()) {
         expect(line).toHaveLength(2);
         expect(line.every(isPoint2)).toBe(true);
         // the band stands over its lowest ground, never under it; its foot
         // reaches down a light well or a ramp beside the wall, not a storey
         expect((p?.top[i] ?? 0) - (p?.g[i] ?? 0)).toBeGreaterThan(0);
         expect((p?.top[i] ?? 0) - (p?.g[i] ?? 0)).toBeLessThan(8.5);
-      });
+      }
     }
   }
 );
@@ -584,6 +622,15 @@ test.each(tiles)("%s: kerbs are LineStrings", (tile, site) => {
   }
 });
 
+// The walls first (the terrain study addresses them by index), then the
+// fences, then the gates.
+const rank = (k: string) => {
+  if (k === "gate") {
+    return 2;
+  }
+  return k === "fence" ? 1 : 0;
+};
+
 test.each(tiles)(
   "%s: walls and fences are LineStrings with a kind and a height, gates points with a width",
   (tile, site) => {
@@ -610,9 +657,6 @@ test.each(tiles)(
         expect(["railing", "mesh", "picket", "rail"]).toContain(type);
       }
     }
-    // The walls first (the terrain study addresses them by index), then the
-    // fences, then the gates.
-    const rank = (k: string) => (k === "gate" ? 2 : k === "fence" ? 1 : 0);
     const ranks = kinds.map(rank);
     expect(ranks).toEqual(ranks.toSorted((a, b) => a - b));
   }
@@ -642,7 +686,7 @@ test.each(
       continue;
     }
     const c = f.geometry.coordinates;
-    for (let i = 1; i < c.length; i++) {
+    for (let i = 1; i < c.length; i += 1) {
       if (onEdge(c[i - 1], c[i])) {
         metres += Math.hypot(c[i][0] - c[i - 1][0], c[i][1] - c[i - 1][1]);
       }
@@ -791,9 +835,14 @@ test.each(cases)(
         expect(facing).toBeGreaterThanOrEqual(0);
         expect(facing).toBeLessThanOrEqual(360);
       }
+      // OSM's link to its item; the item its material came from
       const wikidata = f.properties?.wikidata;
       if (wikidata !== undefined) {
-        expect(wikidata).toMatch(/^Q\d+$/);
+        expect(wikidata).toMatch(/^Q\d+$/u);
+      }
+      const materialWikidata = f.properties?.materialWikidata;
+      if (materialWikidata !== undefined) {
+        expect(materialWikidata).toMatch(/^Q\d+$/u);
         expect(f.properties?.material).toBeTruthy();
       }
     }
@@ -917,16 +966,16 @@ test.each(cases)(
   "%s: the tree facts follow the trees file, column by column",
   (_, a) => {
     const trees = load<TreeFeature>(a.trees);
-    const path = a.treeFacts.path;
+    const { path } = a.treeFacts;
     // a site baked before the facts file has none yet (its trees step
     // writes it on the next run); where there is one, it follows its trees
     if (!existsSync(path)) {
       return;
     }
-    const facts = JSON.parse(readFileSync(path, "utf8")) as TreeFactsFile;
+    const facts = JSON.parse(readFileSync(path, "utf-8")) as TreeFactsFile;
     expect(facts.count).toBe(trees.length);
     // the trees file's credits: the city's register, or OSM without one
-    const { attribution } = JSON.parse(readFileSync(a.trees.path, "utf8")) as {
+    const { attribution } = JSON.parse(readFileSync(a.trees.path, "utf-8")) as {
       attribution: string;
     };
     expect(facts.attribution).toBe(attribution);
@@ -943,24 +992,24 @@ test.each(cases)(
       expect(column).toHaveLength(trees.length);
       expect(column.every((v) => Number.isInteger(v) && v >= -1)).toBe(true);
     }
-    expect(facts.dates.every((d) => /^\d{4}-\d{2}-\d{2}$/.test(d))).toBe(true);
+    expect(facts.dates.every((d) => /^\d{4}-\d{2}-\d{2}$/u.test(d))).toBe(true);
     // an OSM tree has no place in the register
-    trees.forEach((f, i) => {
+    for (const [i, f] of trees.entries()) {
       if (f.properties?.s === "osm") {
         expect(facts.place[i]).toBe(-1);
       }
-    });
+    }
   }
 );
 
 test.each(cases)(
   "%s: the trees' genus table is the season model's, in order",
   (_, a) => {
-    const path = a.trees.path;
+    const { path } = a.trees;
     if (!existsSync(path)) {
       return;
     }
-    const doc = JSON.parse(readFileSync(path, "utf8")) as {
+    const doc = JSON.parse(readFileSync(path, "utf-8")) as {
       genera?: string[];
     };
     expect(doc.genera).toEqual([...TREE_GENERA]);
@@ -1059,11 +1108,11 @@ test.each(tiles)(
       sideFileSource(site, `surface_${tile}.json`),
     ];
     for (const file of files) {
-      const path = join(ROOT, file);
+      const path = nodePath.join(ROOT, file);
       if (!existsSync(path)) {
         continue;
       }
-      const { attribution } = JSON.parse(readFileSync(path, "utf8")) as {
+      const { attribution } = JSON.parse(readFileSync(path, "utf-8")) as {
         attribution?: unknown;
       };
       // The file name in the message says which one lost its credit.

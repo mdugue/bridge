@@ -22,14 +22,14 @@ function stubFetch(
 ): { calls: () => number } {
   let calls = 0;
   // reason: the stub takes the URL only; the helpers pass a string
-  globalThis.fetch = ((url: string) => {
-    calls++;
-    return Promise.resolve(answer(url, calls));
+  globalThis.fetch = (async (url: string) => {
+    calls += 1;
+    return await answer(url, calls);
   }) as unknown as typeof fetch;
   return { calls: () => calls };
 }
 
-const json = (doc: unknown) => new Response(JSON.stringify(doc));
+const json = (doc: unknown) => Response.json(doc);
 
 afterEach(() => {
   globalThis.fetch = realFetch;
@@ -43,17 +43,17 @@ afterEach(() => {
  * settled — the retries' backoff and the stall guard wait on no real time.
  */
 async function settled<T>(promise: Promise<T>, stepMs = 50): Promise<T> {
-  let done = false;
+  const state = { done: false };
   const watched = promise.finally(() => {
-    done = true;
+    state.done = true;
   });
-  for (let waited = 0; !done && waited < 120_000; waited += stepMs) {
-    for (let i = 0; i < 20; i++) {
+  for (let waited = 0; !state.done && waited < 120_000; waited += stepMs) {
+    for (let i = 0; i < 20; i += 1) {
       await Promise.resolve();
     }
     jest.advanceTimersByTime(stepMs);
   }
-  return watched;
+  return await watched;
 }
 
 test("ok JSON is returned parsed", async () => {
@@ -74,9 +74,12 @@ test("a body that is not JSON means feature off", async () => {
 
 test("a network failure is not the answer: the file is asked for again", async () => {
   jest.useFakeTimers();
-  const stub = stubFetch((_, call) =>
-    call === 1 ? Promise.reject(new TypeError("Load failed")) : json({ a: 2 })
-  );
+  const stub = stubFetch(async (_, call) => {
+    if (call === 1) {
+      throw new TypeError("Load failed");
+    }
+    return json({ a: 2 });
+  });
   expect(await settled(fetchOptionalJson<{ a: number }>("/x"))).toEqual({
     a: 2,
   });
@@ -85,10 +88,9 @@ test("a network failure is not the answer: the file is asked for again", async (
 
 test("an abort is rethrown", async () => {
   const abort = new DOMException("aborted", "AbortError");
-  stubFetch(() => Promise.reject(abort));
-  // bun-types declare the `rejects` matchers as void, but bun resolves them
-  // asynchronously — dropping the await would end the test before it runs.
-  // oxlint-disable-next-line typescript/await-thenable
+  stubFetch(async () => {
+    throw abort;
+  });
   await expect(fetchOptionalJson("/x")).rejects.toBe(abort);
 });
 
@@ -109,9 +111,9 @@ test("fetchFeaturesFrom merges the collections in URL order, a 404 among them co
 
 test("fetchFeaturesFrom rethrows an abort", async () => {
   const abort = new DOMException("aborted", "AbortError");
-  stubFetch(() => Promise.reject(abort));
-  // (bun-types declare `rejects` as void; see "an abort is rethrown")
-  // oxlint-disable-next-line typescript/await-thenable
+  stubFetch(async () => {
+    throw abort;
+  });
   await expect(fetchFeaturesFrom(["/a", "/b"])).rejects.toBe(abort);
 });
 
@@ -136,9 +138,9 @@ test("a missing binary artifact is off; an abort is rethrown", async () => {
   stubFetch(() => new Response(null, { status: 404 }));
   expect(await fetchOptionalBinary("/x.pts.gz")).toBeNull();
   const abort = new DOMException("aborted", "AbortError");
-  stubFetch(() => Promise.reject(abort));
-  // (bun-types declare `rejects` as void; see "an abort is rethrown")
-  // oxlint-disable-next-line typescript/await-thenable
+  stubFetch(async () => {
+    throw abort;
+  });
   await expect(fetchOptionalBinary("/x.pts.gz")).rejects.toBe(abort);
 });
 
@@ -150,15 +152,16 @@ test("fetchBytes answers a status no retry fixes as it is, without a body", asyn
   expect(stub.calls()).toBe(1);
 });
 
+// the gzip magic, then nothing a decoder takes
+const corrupt = () =>
+  new Response(new Uint8Array([0x1f, 0x8b, 8, 0, 0, 0, 0, 0, 0, 3, 7, 7]));
+
 test("a gzip read whole that does not inflate is a corrupt file, not the network's: no retry", async () => {
-  // the gzip magic, then nothing a decoder takes
-  const corrupt = () =>
-    new Response(new Uint8Array([0x1f, 0x8b, 8, 0, 0, 0, 0, 0, 0, 3, 7, 7]));
   const stub = stubFetch(corrupt);
   const error = await fetchBytes("/t.glb.gz", {
     budgetMs: 20_000,
     gunzip: true,
-  }).catch((err: unknown) => err);
+  }).catch((error_: unknown) => error_);
   expect(stub.calls()).toBe(1);
   expect(error).toBeInstanceOf(Error);
   // the tile healer and the boot do not wait for it
@@ -171,8 +174,6 @@ test("a gzip read whole that does not inflate is a corrupt file, not the network
 
 test("a required file that is missing throws with its status", async () => {
   stubFetch(() => new Response(null, { status: 404 }));
-  // (bun-types declare `rejects` as void; see "an abort is rethrown")
-  // oxlint-disable-next-line typescript/await-thenable
   await expect(fetchRequiredJson("/tileset.json")).rejects.toThrow(
     "Failed to fetch /tileset.json: HTTP 404"
   );
@@ -194,15 +195,10 @@ test("either signal aborts the merged one; released, neither does", () => {
 });
 
 test("an abort ends the wait at once, the work behind it going on for whoever else waits", async () => {
-  let land: (value: string) => void = () => undefined;
-  const shared = new Promise<string>((resolve) => {
-    land = resolve;
-  });
+  const { promise: shared, resolve: land } = Promise.withResolvers<string>();
   const aborter = new AbortController();
   const waiting = untilAborted(shared, aborter.signal);
   aborter.abort();
-  // (bun-types declare `rejects` as void; see "an abort is rethrown")
-  // oxlint-disable-next-line typescript/await-thenable
   await expect(waiting).rejects.toMatchObject({ name: "AbortError" });
   land("raster");
   expect(await shared).toBe("raster");
@@ -210,10 +206,37 @@ test("an abort ends the wait at once, the work behind it going on for whoever el
   const fresh = new AbortController();
   expect(await untilAborted(Promise.resolve(1), fresh.signal)).toBe(1);
   const failure = new Error("decode");
-  // oxlint-disable-next-line typescript/await-thenable
   await expect(
     untilAborted(Promise.reject(failure), fresh.signal)
   ).rejects.toBe(failure);
+});
+
+test("a wait that settles first takes its abort listener with it", async () => {
+  // a long-lived signal waited on again and again (a late part's): the
+  // listeners it holds, counted as they are added and as their own
+  // `signal` option removes them
+  let held = 0;
+  const signal = {
+    aborted: false,
+    reason: undefined,
+    addEventListener: (
+      _type: string,
+      _listener: () => void,
+      options?: AddEventListenerOptions
+    ) => {
+      held += 1;
+      options?.signal?.addEventListener("abort", () => {
+        held -= 1;
+      });
+    },
+  } as unknown as AbortSignal;
+  for (let i = 0; i < 3; i += 1) {
+    expect(await untilAborted(Promise.resolve(i), signal)).toBe(i);
+  }
+  await expect(
+    untilAborted(Promise.reject(new Error("decode")), signal)
+  ).rejects.toThrow("decode");
+  expect(held).toBe(0);
 });
 
 test("an attempt that goes silent is cut and asked for again", async () => {
@@ -221,12 +244,12 @@ test("an attempt that goes silent is cut and asked for again", async () => {
   let calls = 0;
   // the first request never answers until its signal fires, as a fetch
   // over a connection gone quiet
-  globalThis.fetch = ((_url: string, init?: RequestInit) => {
-    calls++;
+  globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+    calls += 1;
     if (calls > 1) {
-      return Promise.resolve(new Response(new Uint8Array([7, 8])));
+      return new Response(new Uint8Array([7, 8]));
     }
-    return new Promise<Response>((_, reject) => {
+    return await new Promise<Response>((_resolve, reject) => {
       init?.signal?.addEventListener("abort", () =>
         reject(new DOMException("The operation was aborted.", "AbortError"))
       );
@@ -239,8 +262,8 @@ test("an attempt that goes silent is cut and asked for again", async () => {
 });
 
 test("the caller's abort is an abort, not a stall", async () => {
-  globalThis.fetch = ((_url: string, init?: RequestInit) =>
-    new Promise<Response>((_, reject) => {
+  globalThis.fetch = (async (_url: string, init?: RequestInit) =>
+    await new Promise<Response>((_resolve, reject) => {
       init?.signal?.addEventListener("abort", () =>
         reject(new DOMException("The operation was aborted.", "AbortError"))
       );
@@ -251,6 +274,5 @@ test("the caller's abort is an abort, not a stall", async () => {
     signal: aborter.signal,
   });
   aborter.abort();
-  // oxlint-disable-next-line typescript/await-thenable
   await expect(got).rejects.toMatchObject({ name: "AbortError" });
 });

@@ -11,10 +11,11 @@ import {
   FullscreenIcon,
   HammerIcon,
   ImageDownIcon,
-  type LucideIcon,
+  LinkIcon,
   PlaneIcon,
   XIcon,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type {
   CSSProperties,
   Dispatch,
@@ -58,23 +59,17 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import {
-  LOOK_CONTROLS,
-  lookPatch,
-  type LookValues,
-} from "@/lib/city/look-controls";
-import { type DataLayerKey, siteDataLayers } from "@/lib/city/data-layers";
+import { LOOK_CONTROLS, lookPatch } from "@/lib/city/look-controls";
+import type { LookValues } from "@/lib/city/look-controls";
+import { siteDataLayers } from "@/lib/city/data-layers";
+import type { DataLayerKey } from "@/lib/city/data-layers";
 import { STUDY_DATES, STUDY_HOURS } from "@/lib/city/image-export";
 import { sitePlaces } from "@/lib/city/places";
 import type { MapTile } from "@/lib/city/minimap";
-import {
-  RENDER_STYLE_BY_ID,
-  RENDER_STYLES,
-  type RenderStyle,
-} from "@/lib/city/render-style";
+import { RENDER_STYLE_BY_ID, RENDER_STYLES } from "@/lib/city/render-style";
+import type { RenderStyle } from "@/lib/city/render-style";
 import type { PlayerPose } from "@/lib/city/pose";
 import { sunTimesOn } from "@/lib/city/sun";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
@@ -93,13 +88,11 @@ import { ProjectionPanel } from "./projection-panel";
 import { QualityPanel } from "./quality-panel";
 import type { SceneBudget } from "./scene-profile";
 import { useSceneStatus, useSceneStatusStore } from "./scene-status";
-import { type SceneTabId, SceneTabPanel, SceneTabs } from "./scene-tabs";
+import { SceneTabPanel, SceneTabs } from "./scene-tabs";
+import type { SceneTabId } from "./scene-tabs";
 import type { SunState } from "./sun-rig";
-import {
-  siteAttribution,
-  siteShortCredit,
-  type ViewpointGeometry,
-} from "@/lib/city/site";
+import { siteAttribution, siteShortCredit } from "@/lib/city/site";
+import type { ViewpointGeometry } from "@/lib/city/site";
 import { useSite } from "./site-context";
 
 /**
@@ -134,12 +127,13 @@ const SECTION_LABEL =
  * dynamic(): Next matches the call to its chunk by it.)
  */
 const Calendar = dynamic(
-  () => import("@/components/ui/calendar").then((m) => m.Calendar),
+  async () => await import("@/components/ui/calendar").then((m) => m.Calendar),
   { ssr: false, loading: () => <div className="h-60 w-48" /> }
 );
 const preloadCalendar = () => {
-  // a failed load is next/dynamic's to report when the popover renders
-  import("@/components/ui/calendar").catch(() => undefined);
+  import("@/components/ui/calendar").catch(() => {
+    // a failed load is next/dynamic's to report when the popover renders
+  });
 };
 
 /** The day on the date button, "5. März 2026" (what date-fns' `d. MMMM
@@ -174,7 +168,7 @@ function sunTimeLabel(arrow: string, date: Date | null | undefined): string {
 }
 
 /** A labelled 0–100 percent slider that writes straight to the look store. */
-function PctSlider({
+const PctSlider = ({
   description,
   id,
   label,
@@ -186,118 +180,125 @@ function PctSlider({
   label: string;
   onChange: (value: number) => void;
   value: number;
-}) {
-  return (
-    <Field>
-      <FieldLabel className="justify-between font-medium text-xs" htmlFor={id}>
-        {label}
-        <span className="font-mono font-normal text-[11px] text-muted-foreground tabular-nums">
-          {value} %
-        </span>
-      </FieldLabel>
-      <Slider
-        id={id}
-        max={100}
-        min={0}
-        onValueChange={(v) => onChange(Number(Array.isArray(v) ? v[0] : v))}
-        step={1}
-        value={[value]}
-      />
-      {description ? (
-        <FieldDescription className="text-[11px] leading-snug">
-          {description}
-        </FieldDescription>
-      ) : null}
-    </Field>
-  );
-}
+}) => (
+  <Field>
+    <FieldLabel className="justify-between font-medium text-xs" htmlFor={id}>
+      {label}
+      <span className="font-mono font-normal text-[11px] text-muted-foreground tabular-nums">
+        {value} %
+      </span>
+    </FieldLabel>
+    <Slider
+      id={id}
+      max={100}
+      min={0}
+      onValueChange={(v) => onChange(Number(Array.isArray(v) ? v[0] : v))}
+      step={1}
+      value={[value]}
+    />
+    {description ? (
+      <FieldDescription className="text-[11px] leading-snug">
+        {description}
+      </FieldDescription>
+    ) : null}
+  </Field>
+);
 
 /** Every percent slider, rendered from LOOK_CONTROLS. */
-function LookSliders({
+const LookSliders = ({
   look,
   onLook,
 }: {
   look: LookValues;
   onLook: (patch: Partial<LookValues>) => void;
-}) {
-  return (
-    <>
-      {LOOK_CONTROLS.map((def) => (
-        <PctSlider
-          description={def.description}
-          id={def.id}
-          key={def.key}
-          label={def.label}
-          onChange={(n) => onLook(lookPatch(def.key, n / 100))}
-          value={Math.round(look[def.key] * 100)}
-        />
-      ))}
-    </>
-  );
-}
+}) => (
+  <>
+    {LOOK_CONTROLS.map((def) => (
+      <PctSlider
+        description={def.description}
+        id={def.id}
+        key={def.key}
+        label={def.label}
+        onChange={(n) => onLook(lookPatch(def.key, n / 100))}
+        value={Math.round(look[def.key] * 100)}
+      />
+    ))}
+  </>
+);
 
 /**
  * The picture style: five swatch cards, exactly one pressed — the same
  * single-value ToggleGroup as walk/fly, so the keyboard moves through it
  * the same way.
  */
-function StylePicker({
+const StylePicker = ({
   onStyle,
   style,
 }: {
   onStyle: (style: RenderStyle) => void;
   style: RenderStyle;
-}) {
-  return (
-    <div className="flex flex-col gap-2 pb-2">
-      <ToggleGroup
-        aria-label="Bildstil"
-        className="grid w-full grid-cols-3 gap-1.5"
-        id="render-style"
-        onValueChange={(value: string[]) => {
-          const next = value[0] as RenderStyle | undefined;
-          if (next) {
-            onStyle(next);
-          }
-        }}
-        size="sm"
-        spacing={1}
-        value={[style]}
-        variant="outline"
-      >
-        {RENDER_STYLES.map((def) => (
-          <ToggleGroupItem
-            className="h-auto flex-col gap-1.5 rounded-lg p-1.5 pb-2 text-[11px] text-muted-foreground leading-none data-pressed:border-ring data-pressed:bg-background data-pressed:text-foreground data-pressed:ring-1 data-pressed:ring-ring"
-            data-style={def.id}
-            key={def.id}
-            title={def.description}
-            value={def.id}
-          >
-            <span
-              aria-hidden
-              className="h-7 w-full rounded-md ring-1 ring-black/10 ring-inset"
-              style={{
-                background: `linear-gradient(135deg, ${def.swatch[0]} 0 55%, ${def.swatch[1]} 55% 100%)`,
-              }}
-            />
-            {def.label}
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
-      <span className="text-[11px] text-muted-foreground leading-snug">
-        {RENDER_STYLE_BY_ID[style].description}
-        <span className="hidden [@media(pointer:fine)]:inline"> · Taste V</span>
-      </span>
-    </div>
-  );
-}
+}) => (
+  <div className="flex flex-col gap-2 pb-2">
+    <ToggleGroup
+      aria-label="Bildstil"
+      className="grid w-full grid-cols-3 gap-1.5"
+      id="render-style"
+      onValueChange={(value: string[]) => {
+        const next = value[0] as RenderStyle | undefined;
+        if (next) {
+          onStyle(next);
+        }
+      }}
+      size="sm"
+      spacing={1}
+      value={[style]}
+      variant="outline"
+    >
+      {RENDER_STYLES.map((def) => (
+        <ToggleGroupItem
+          className="h-auto flex-col gap-1.5 rounded-lg p-1.5 pb-2 text-[11px] text-muted-foreground leading-none data-pressed:border-ring data-pressed:bg-background data-pressed:text-foreground data-pressed:ring-1 data-pressed:ring-ring"
+          data-style={def.id}
+          key={def.id}
+          title={def.description}
+          value={def.id}
+        >
+          <span
+            aria-hidden
+            className="h-7 w-full rounded-md ring-1 ring-black/10 ring-inset"
+            style={{
+              background: `linear-gradient(135deg, ${def.swatch[0]} 0 55%, ${def.swatch[1]} 55% 100%)`,
+            }}
+          />
+          {def.label}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
+    <span className="text-[11px] text-muted-foreground leading-snug">
+      {RENDER_STYLE_BY_ID[style].description}
+      <span className="hidden [@media(pointer:fine)]:inline"> · Taste V</span>
+    </span>
+  </div>
+);
+
+/** Reports an element's width (px, rounded) now and as it resizes; the
+ *  returned function stops. */
+const observeWidth = (
+  el: HTMLElement,
+  report: (px: number) => void
+): (() => void) => {
+  const measure = () => report(Math.round(el.clientWidth));
+  measure();
+  const ro = new ResizeObserver(measure);
+  ro.observe(el);
+  return () => ro.disconnect();
+};
 
 /**
  * The minimap card: click to teleport, the blue dot is you. The footprints
  * and the pose come from the scene's status (scene-status.ts); the pose
  * moves the dot on the map's canvas without a render.
  */
-function MinimapCard({
+const MinimapCard = ({
   bounds,
   landcoverTiles,
   onTeleport,
@@ -305,14 +306,14 @@ function MinimapCard({
   bounds: TerrainBounds;
   landcoverTiles: MapTile[];
   onTeleport: (epsgX: number, epsgY: number) => void;
-}) {
+}) => {
   const footprints = useSceneStatus("footprints");
   const status = useSceneStatusStore();
   const subscribePose = useCallback(
-    (cb: (pose: PlayerPose) => void) =>
+    (onPose: (pose: PlayerPose) => void) =>
       status.subscribe("pose", (pose) => {
         if (pose) {
-          cb(pose);
+          onPose(pose);
         }
       }),
     [status]
@@ -321,17 +322,10 @@ function MinimapCard({
   // rather than a CSS width: measure the card and hand it the result.
   const ref = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState(0);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) {
-      return;
-    }
-    const measure = () => setSize(Math.round(el.clientWidth));
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+  useEffect(
+    () => (ref.current ? observeWidth(ref.current, setSize) : undefined),
+    []
+  );
   return (
     <div className="px-3 pb-3">
       <div
@@ -354,14 +348,14 @@ function MinimapCard({
       </div>
     </div>
   );
-}
+};
 
 /**
  * The key/action table — the full list the floating bar only shows the first
  * four of, folded away until asked for: the bar already teaches the first
  * steps. Touch devices get the gestures instead: a phone has no W A S D.
  */
-function ControlTable({ coarse }: { coarse: boolean }) {
+const ControlTable = ({ coarse }: { coarse: boolean }) => {
   const model = useSceneStatus("mode") === "model";
   return (
     <Collapsible className="border-t px-4 pt-1.5 pb-2">
@@ -390,21 +384,21 @@ function ControlTable({ coarse }: { coarse: boolean }) {
       </CollapsibleContent>
     </Collapsible>
   );
-}
+};
 
 /**
  * Walk, fly or Modell: one segmented control under the map, and Modell's
  * *Projektion* right beneath it while it is on — the mode and what it
  * offers stay together instead of ending up under the list of places.
  */
-function ViewModeSwitch({
+const ViewModeSwitch = ({
   disabled,
   onMode,
 }: {
   /** the scene is still loading: there is no camera to switch yet */
   disabled: boolean;
   onMode: (mode: ViewMode) => void;
-}) {
+}) => {
   const mode = useSceneStatus("mode");
   return (
     <ToggleGroup
@@ -438,7 +432,7 @@ function ViewModeSwitch({
       </ToggleGroupItem>
     </ToggleGroup>
   );
-}
+};
 
 const MODE_ITEM =
   "h-7 text-muted-foreground data-pressed:bg-background data-pressed:text-foreground data-pressed:shadow-sm";
@@ -446,12 +440,14 @@ const MODE_ITEM =
 const STUDY_CHIP =
   "h-6 rounded-full px-2 font-mono text-[10px] tabular-nums text-muted-foreground data-pressed:border-ring data-pressed:bg-background data-pressed:text-foreground data-pressed:ring-1 data-pressed:ring-ring";
 
+const dateKey = (d: { month: number; day: number }) => `${d.month}-${d.day}`;
+
 /**
  * The shadow study's instants (plan 055): the equinox and the solstices
  * of the shown year, and four hours — one click each, and the whole grid
  * as one sheet.
  */
-function ShadowStudy({
+const ShadowStudy = ({
   day,
   disabled,
   minutes,
@@ -467,8 +463,7 @@ function ShadowStudy({
   /** the scene is up: there is a picture to save */
   ready: boolean;
   updateSun: (day: Date, minutes: number) => void;
-}) {
-  const dateKey = (d: { month: number; day: number }) => `${d.month}-${d.day}`;
+}) => {
   const today = STUDY_DATES.find(
     (d) => d.month === day.getMonth() && d.day === day.getDate()
   );
@@ -541,10 +536,14 @@ function ShadowStudy({
       </button>
     </div>
   );
-}
+};
+
+/** A date's minute of the day as a share of the day, else `fallback`. */
+const dayShare = (date: Date | null | undefined, fallback: number) =>
+  isRealDate(date) ? minutesOfDay(date) / (24 * 60) : fallback;
 
 /** Sun and time: the date, the minute, and where the sun stands because of it. */
-function SunControls({
+const SunControls = ({
   day,
   latLng,
   minutes,
@@ -568,7 +567,7 @@ function SunControls({
   ready: boolean;
   sun: SunState | null;
   updateSun: (day: Date, minutes: number) => void;
-}) {
+}) => {
   // The minute under the thumb while it moves: the thumb and the clock show
   // it at once, while the scene (once a frame) and the rest of the HUD (as
   // a transition) follow behind; letting go hands it over as the minute.
@@ -579,9 +578,6 @@ function SunControls({
   const dragging = moving !== null;
   const reached = useRef<number | null>(null);
   useEffect(() => {
-    if (!dragging) {
-      return;
-    }
     const cancel = () => {
       const last = reached.current;
       setMoving(null);
@@ -589,12 +585,15 @@ function SunControls({
         updateSun(day, last);
       }
     };
-    window.addEventListener("pointercancel", cancel);
-    window.addEventListener("touchcancel", cancel);
-    return () => {
-      window.removeEventListener("pointercancel", cancel);
-      window.removeEventListener("touchcancel", cancel);
+    const listen = () => {
+      window.addEventListener("pointercancel", cancel);
+      window.addEventListener("touchcancel", cancel);
+      return () => {
+        window.removeEventListener("pointercancel", cancel);
+        window.removeEventListener("touchcancel", cancel);
+      };
     };
+    return dragging ? listen() : undefined;
   }, [dragging, day, updateSun]);
   const resting = ownLight !== null;
   const times = latLng ? sunTimesOn(day, latLng.lat, latLng.lng) : null;
@@ -602,10 +601,8 @@ function SunControls({
   const sunset = times?.sunset;
   // The track is the day itself: night at both ends, the warm band anchored to
   // this date's real sunrise and sunset rather than to fixed hours.
-  const at = (date: Date | null | undefined, fallback: number) =>
-    isRealDate(date) ? minutesOfDay(date) / (24 * 60) : fallback;
-  const rise = at(sunrise, 0.29);
-  const set = at(sunset, 0.8);
+  const rise = dayShare(sunrise, 0.29);
+  const set = dayShare(sunset, 0.8);
   const gradient =
     "linear-gradient(90deg,#2a3050 0%," +
     `#4a4a78 ${(rise - 0.03) * 100}%,#f0c79a ${(rise + 0.02) * 100}%,` +
@@ -714,10 +711,10 @@ function SunControls({
       />
     </div>
   );
-}
+};
 
 /** A tool row: icon, what it does, and the key that also does it. */
-function ToolButton({
+const ToolButton = ({
   disabled = false,
   hint,
   icon: Icon,
@@ -732,7 +729,7 @@ function ToolButton({
   onClick: () => void;
   /** told while the button is pointed at or focused, and when it no longer is */
   onAim?: (aiming: boolean) => void;
-}) {
+}) => {
   // A panel that closes (the phone's sheet) unmounts the button without a
   // blur or a pointer leave.
   useEffect(() => () => onAim?.(false), [onAim]);
@@ -754,19 +751,19 @@ function ToolButton({
       </span>
     </button>
   );
-}
+};
 
 /**
  * Modell's *Projektion*, while Modell is shown: at its view's rate (the
  * pose tick), so it reads the view itself rather than the whole panel.
  */
-function ModelProjection({
+const ModelProjection = ({
   handleRef,
   onExport,
 }: {
   handleRef: RefObject<CityWalkHandle | null>;
   onExport: () => void;
-}) {
+}) => {
   const mode = useSceneStatus("mode");
   const view = useSceneStatus("modelView");
   if (mode !== "model" || !view) {
@@ -784,10 +781,10 @@ function ModelProjection({
       view={view}
     />
   );
-}
+};
 
 /** The counters: what the scene holds, and how fast it draws. */
-function SceneCounters() {
+const SceneCounters = () => {
   const stats = useSceneStatus("stats");
   const fps = useSceneStatus("fps");
   return (
@@ -813,7 +810,7 @@ function SceneCounters() {
       </div>
     </div>
   );
-}
+};
 
 /**
  * Everything the panel is handed is the HUD's own state (the time, the
@@ -827,7 +824,8 @@ export interface SceneSidebarProps {
   /** the page's budget: its safety level and what that level sets */
   budget: SceneBudget;
   coarse: boolean;
-  copySnapshot: () => void;
+  /** the snapshot to the clipboard: its JSON, or a link to this view */
+  copySnapshot: (as: "json" | "link") => void;
   /**
    * The centre-aimed tool is pointed at or focused: the HUD marks the
    * middle it will act on, which no dot marks otherwise.
@@ -885,9 +883,14 @@ export interface SceneSidebarProps {
   previewSun: (day: Date, minutes: number) => void;
 }
 
-export function SceneSidebar(props: SceneSidebarProps) {
+export const SceneSidebar = (props: SceneSidebarProps) => {
   const { toggleSidebar } = useSidebar();
   const { handleRef, look, onLook } = props;
+  const {
+    applySnapshot: handleApplySnapshot,
+    copySnapshot: handleCopySnapshot,
+    resetLook: handleResetLook,
+  } = props;
   const site = useSite();
   // the site as the tileset describes it: set once per boot
   const info = useSceneStatus("site");
@@ -996,7 +999,7 @@ export function SceneSidebar(props: SceneSidebarProps) {
                 <span className={SECTION_LABEL}>Darstellung</span>
                 <button
                   className="text-[11px] text-primary hover:underline"
-                  onClick={props.resetLook}
+                  onClick={handleResetLook}
                   title="Nebel und Kronen zurück auf ihren Startwert — der Bildstil bleibt"
                   type="button"
                 >
@@ -1009,22 +1012,6 @@ export function SceneSidebar(props: SceneSidebarProps) {
               />
               <FieldGroup className="gap-3 pt-1">
                 <LookSliders look={look} onLook={onLook} />
-                <Field orientation="horizontal">
-                  <FieldLabel
-                    className="font-medium text-xs"
-                    htmlFor="tree-multituft"
-                  >
-                    Multi-Tuft-Kronen (nah)
-                  </FieldLabel>
-                  <Switch
-                    checked={look.multiTuft}
-                    id="tree-multituft"
-                    onCheckedChange={(checked) =>
-                      onLook({ multiTuft: checked })
-                    }
-                    size="sm"
-                  />
-                </Field>
               </FieldGroup>
             </div>
           </SceneTabPanel>
@@ -1075,7 +1062,7 @@ export function SceneSidebar(props: SceneSidebarProps) {
               <div className="grid grid-cols-2 gap-1.5">
                 <Button
                   disabled={!props.ready}
-                  onClick={props.copySnapshot}
+                  onClick={() => handleCopySnapshot("json")}
                   size="sm"
                   type="button"
                 >
@@ -1084,7 +1071,7 @@ export function SceneSidebar(props: SceneSidebarProps) {
                 </Button>
                 <Button
                   disabled={!props.canTravel}
-                  onClick={props.applySnapshot}
+                  onClick={handleApplySnapshot}
                   size="sm"
                   type="button"
                   variant="outline"
@@ -1092,7 +1079,21 @@ export function SceneSidebar(props: SceneSidebarProps) {
                   <ClipboardPasteIcon data-icon="inline-start" />
                   Anwenden
                 </Button>
+                <Button
+                  className="col-span-2"
+                  disabled={!props.ready}
+                  onClick={() => handleCopySnapshot("link")}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  <LinkIcon data-icon="inline-start" />
+                  Link kopieren
+                </Button>
               </div>
+              <span className="text-[11px] text-muted-foreground">
+                Der Link enthält den Ort der Kamera.
+              </span>
               <Textarea
                 className="font-mono text-[10px] leading-snug"
                 id="snapshot"
@@ -1123,7 +1124,7 @@ export function SceneSidebar(props: SceneSidebarProps) {
       </SidebarFooter>
     </Sidebar>
   );
-}
+};
 
 /**
  * The footer, two rows high: the one-line credit (OpenStreetMap and the
@@ -1131,7 +1132,7 @@ export function SceneSidebar(props: SceneSidebarProps) {
  * the murals' photos with them — so the trigger does not move; below it the way to Impressum, Datenschutz and
  * /wissen — in a new tab, so the walk stays — and the one call to action.
  */
-function SourcesFooter() {
+const SourcesFooter = () => {
   const site = useSite();
   // the murals' photos (mural-layer.ts), each credited as its licence asks
   const photos = useSceneStatus("site")?.photoCredits ?? [];
@@ -1190,4 +1191,4 @@ function SourcesFooter() {
       </div>
     </Collapsible>
   );
-}
+};

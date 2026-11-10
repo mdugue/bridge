@@ -4,8 +4,12 @@ import { createMissingPartWord } from "./missing-part-word";
 function word(gone = () => false) {
   const shown: string[] = [];
   const w = createMissingPartWord({
-    say: (m) => shown.push(m),
-    clear: () => shown.push("(clear)"),
+    say: (m) => {
+      shown.push(m);
+    },
+    clear: () => {
+      shown.push("(clear)");
+    },
     gone,
   });
   return { shown, w };

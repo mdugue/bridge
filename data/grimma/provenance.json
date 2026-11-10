@@ -69,8 +69,8 @@
   "geosn": {
     "Basis-DLM": {
       "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/DtPWngtLEJP8K3k/basisdlm_sn_shape.zip",
-      "lastModified": "2026-10-20",
-      "editionInUse": "every derived file: the package released 2026-10-20 (basisdlm_akt.csv and the inner package dated 2026-10-20), downloaded and baked 2026-11-01"
+      "lastModified": "2026-11-04",
+      "editionInUse": "every derived file: the package released 2026-11-04 (basisdlm_akt.csv and the inner package dated 2026-11-04), downloaded and baked 2026-11-05 (the 2026-10-20 package before)"
     },
     "DGM1": {
       "tiles": {

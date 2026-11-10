@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import {
   OBJECT_FLAG_SHOP,
   OBJECT_SOURCE_GAP,
@@ -6,11 +6,13 @@ import {
   OBJECT_SOURCE_SCAN,
 } from "./city-mesh";
 import { encodeDrawn } from "./drawn-facts";
-import type { InquiryObject } from "./inquiry";
-import type { TreeInquiry } from "./inquiry-features";
-import type { LampInquiry } from "./inquiry-more";
-import { type LineageEntry, type LineageSite, lineage } from "./lineage";
-import { MEASURED_ROOF, NO_FACT, type ObjectFacts } from "./object-facts";
+import type { Inquiry, InquiryObject } from "./inquiry";
+import type { LampInquiry, TreeInquiry } from "./inquiry-features";
+import { lineage } from "./lineage";
+import type { LineageEntry, LineageSite } from "./lineage";
+import { MEASURED_ROOF, NO_FACT } from "./object-facts";
+import type { ObjectFacts } from "./object-facts";
+import type { Stated } from "./methods";
 import type { SiteProvenance } from "./provenance";
 
 const geosn = {
@@ -108,7 +110,7 @@ test("a LoD2 building whose roof was rebuilt: the model, the surface model for t
   expect(model.stand).toBe("Modell 2024");
   expect(model.url).toBe("https://www.geodaten.sachsen.de/");
   // the rebuilt roof is the surface model's, not the model's
-  expect(said(model).join()).not.toContain("Dachform");
+  expect(said(model).join(",")).not.toContain("Dachform");
   expect(surface.stand).toBe("01.03.2024");
   // a roof put in where the model misses the surface is detected, the
   // model's own lines are taken as published
@@ -333,9 +335,10 @@ test("without a Basis-DLM a bridge's deck and a tree row are OSM's, with its lic
   expect(deck.stand).toBe("01.08.2026");
 });
 
+const used = (entries: LineageEntry[], source: string) =>
+  entries.find((e) => e.source === source)?.used.map((u) => u.text) ?? [];
+
 test("a lamp says the wall it hangs on and the carriageway its arm reaches over", () => {
-  const used = (entries: LineageEntry[], source: string) =>
-    entries.find((e) => e.source === source)?.used.map((u) => u.text) ?? [];
   const lamp: LampInquiry = { kind: "lamp", tile: "t", position: [0, 0] };
   const onWall = lineage({ ...lamp, wall: "wall" }, provenance, saxony);
   expect(used(onWall, "OpenStreetMap")).toEqual([
@@ -364,16 +367,17 @@ test("a lamp says the wall it hangs on and the carriageway its arm reaches over"
   ]);
 });
 
+const entry = (drawn: string, source: string) => {
+  const b = object({ source: OBJECT_SOURCE_GAP, facts: facts({ drawn }) });
+  const found = lineage(
+    { kind: "building", tile: "t", picked: b, tree: [b] },
+    provenance,
+    saxony
+  ).find((e) => e.source === source);
+  return found?.used ?? [];
+};
+
 test("a building LoD2 lacks: OSM's outline, and its height the surface model's or OSM's", () => {
-  const entry = (drawn: string, source: string) => {
-    const b = object({ source: OBJECT_SOURCE_GAP, facts: facts({ drawn }) });
-    const found = lineage(
-      { kind: "building", tile: "t", picked: b, tree: [b] },
-      provenance,
-      saxony
-    ).find((e) => e.source === source);
-    return found?.used ?? [];
-  };
   // measured: the surface model computes its height
   expect(entry("", "Digitales Oberflächenmodell DOM1")).toEqual([
     { text: "seine Höhe über Gelände und Stadtmodell", method: "computed" },
@@ -386,4 +390,222 @@ test("a building LoD2 lacks: OSM's outline, and its height the surface model's o
   expect(entry(newer, "OpenStreetMap").map((u) => u.text)).toContain(
     "seine Höhe: die kartierte oder die Geschosse"
   );
+});
+
+// --- each kind's lineage as it stands (plan 080 Step 0) ---
+
+const at: [number, number] = [0, 0];
+
+const KINDS: Record<string, Inquiry> = {
+  "hedge dlm": {
+    kind: "hedge",
+    tile: "t",
+    position: at,
+    length: 12,
+    source: "dlm",
+  },
+  "hedge osm": {
+    kind: "hedge",
+    tile: "t",
+    position: at,
+    length: 12,
+    source: "osm",
+    height: 2,
+  },
+  "hedge lsc": {
+    kind: "hedge",
+    tile: "t",
+    position: at,
+    length: 12,
+    source: "lsc",
+    height: 2,
+  },
+  "hedge osm+lsc": {
+    kind: "hedge",
+    tile: "t",
+    position: at,
+    length: 12,
+    source: "osm+lsc",
+    height: 2,
+  },
+  "hedge osm+dom": {
+    kind: "hedge",
+    tile: "t",
+    position: at,
+    length: 12,
+    source: "osm+dom",
+    height: 2,
+  },
+  furniture: {
+    kind: "furniture",
+    tile: "t",
+    position: at,
+    properties: { k: "bench", a: 225 },
+  },
+  stop: { kind: "stop", tile: "t", position: at, name: "Albertplatz" },
+  landing: {
+    kind: "landing",
+    tile: "t",
+    position: at,
+    properties: { k: "pier" },
+  },
+  monument: {
+    kind: "monument",
+    tile: "t",
+    position: at,
+    properties: {
+      kind: "fountain",
+      name: "Gänsedieb-Brunnen",
+      source: "dlm+osm",
+      style: "basin",
+    },
+  },
+  traffic: {
+    kind: "traffic",
+    tile: "t",
+    index: 0,
+    position: at,
+    bearing: 110,
+    properties: {
+      t: 15_000,
+      f: 9000,
+      b: 6000,
+      y: 2025,
+      m: "detector",
+      n: "Antonstraße",
+    },
+    credit: "Verkehrsmengen: Landeshauptstadt Dresden, dl-de/by-2-0",
+  },
+  bikes: {
+    kind: "bikes",
+    id: "100",
+    name: "Albertbrücke",
+    where: "",
+    directions: [{ count: 212, toward: "Neustadt" }],
+    measuredAt: null,
+    now: new Date(0),
+    position: at,
+    staleAfterMs: 3_600_000,
+    credit: "Radzählstellen: Landeshauptstadt Dresden, dl-de/by-2-0",
+  },
+};
+
+const SN = {
+  credit: "Quelle: GeoSN, dl-de/by-2-0",
+  url: "https://www.geodaten.sachsen.de/",
+};
+const OSM = {
+  source: "OpenStreetMap",
+  stand: "26.09.2026",
+  credit: "© OpenStreetMap-Mitwirkende, ODbL",
+  url: "https://www.openstreetmap.org/copyright",
+};
+const taken = (text: string): Stated => ({ text, method: "taken" });
+const ground = (text = "der Boden"): LineageEntry => ({
+  source: "Digitales Geländemodell DGM1",
+  used: [taken(text)],
+  stand: "",
+  ...SN,
+});
+const viewer = (text: string): LineageEntry => ({
+  source: "Im Viewer",
+  used: [{ text, method: "assumed" }],
+  stand: "",
+  credit: "",
+});
+
+const LINEAGES: Record<string, LineageEntry[]> = {
+  "hedge dlm": [
+    { source: "Basis-DLM", used: [taken("Verlauf")], stand: "", ...SN },
+    ground(),
+    viewer("Höhe und Breite"),
+  ],
+  "hedge osm": [
+    { ...OSM, used: [taken("Verlauf")] },
+    ground(),
+    viewer("Höhe und Breite"),
+  ],
+  "hedge lsc": [
+    {
+      source: "Laserscan",
+      used: [{ text: "Verlauf und Höhe", method: "detected" }],
+      stand: "",
+      ...SN,
+    },
+    ground(),
+  ],
+  "hedge osm+lsc": [
+    { ...OSM, used: [taken("Verlauf")] },
+    {
+      source: "Laserscan",
+      used: [{ text: "Höhe", method: "computed" }],
+      stand: "",
+      ...SN,
+    },
+    ground(),
+  ],
+  "hedge osm+dom": [
+    { ...OSM, used: [taken("Verlauf")] },
+    {
+      source: "Digitales Oberflächenmodell DOM1",
+      used: [{ text: "Höhe", method: "computed" }],
+      stand: "01.03.2024",
+      ...SN,
+    },
+    ground(),
+    viewer("Breite"),
+  ],
+  furniture: [
+    { ...OSM, used: [taken("Standort, Art und was OSM zur Form sagt")] },
+    ground(),
+    viewer("die Form je Art"),
+  ],
+  stop: [
+    { ...OSM, used: [taken("Standort und Name")] },
+    ground(),
+    viewer("das Haltestellenschild"),
+  ],
+  landing: [
+    { ...OSM, used: [taken("der Umriss und die Art")] },
+    ground(),
+    viewer("Steg, Ponton und Höhe am Wasser"),
+  ],
+  monument: [
+    {
+      source: "Basis-DLM",
+      used: [taken("Standort und Art")],
+      stand: "",
+      ...SN,
+    },
+    { ...OSM, used: [taken("das Becken"), taken("das Wasserspiel")] },
+    ground(),
+    viewer("die Form der Markierung"),
+  ],
+  traffic: [
+    {
+      source: "Verkehrszählung",
+      used: [taken("wie breit die Bänder je Richtung fließen")],
+      stand: "",
+      credit: "Verkehrsmengen: Landeshauptstadt Dresden, dl-de/by-2-0",
+    },
+    ground("ihr Verlauf über dem Gelände"),
+    viewer("der Verkehr zur Stunde der Szene (typischer Tagesgang)"),
+  ],
+  bikes: [
+    {
+      source: "Fahrradzählstelle, live",
+      used: [taken("wie hoch die Säulen je Richtung stehen")],
+      stand: "",
+      credit: "Radzählstellen: Landeshauptstadt Dresden, dl-de/by-2-0",
+    },
+    ground(),
+  ],
+};
+
+describe("each kind's lineage", () => {
+  for (const [name, fx] of Object.entries(KINDS)) {
+    test(name, () => {
+      expect(lineage(fx, provenance, saxony)).toEqual(LINEAGES[name]);
+    });
+  }
 });

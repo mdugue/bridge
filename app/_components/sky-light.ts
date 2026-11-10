@@ -1,18 +1,18 @@
 import {
-  DataArrayTexture,
   DataTexture,
   LinearFilter,
-  LinearMipmapLinearFilter,
   MeshStandardNodeMaterial,
-  type MeshStandardNodeMaterialParameters,
   NoColorSpace,
   RedFormat,
-  RGBAFormat,
-  type Texture,
   UnsignedByteType,
   Vector2,
-  type Vector3,
-  type WebGPURenderer,
+} from "three/webgpu";
+import type {
+  MeshStandardNodeMaterialParameters,
+  Texture,
+  Vector3,
+  Node,
+  UniformNode,
 } from "three/webgpu";
 import {
   asin,
@@ -37,8 +37,6 @@ import {
   texture,
   vec2,
 } from "three/tsl";
-import type { Node, UniformNode } from "three/webgpu";
-import { decodeGreyPng, type GreyRaster } from "@/lib/city/png-raster";
 import {
   FACADE_SVF_GAIN,
   FACADE_SVF_OFFSET_M,
@@ -46,35 +44,16 @@ import {
   HORIZON_LAYERS,
   HORIZON_MAX_DEG,
   HORIZON_SOFT_DEG,
-  HORIZON_TEXTURE_LAYERS,
   NEAR_BAND_FADE_FROM,
   NEAR_MAX_DEG,
 } from "@/lib/city/skyview";
 import { groundUnderDesign } from "./design-site";
-import { isAbortError } from "./fetch-optional";
 import { nightShadowFree } from "./lantern";
-import {
-  type Slots,
-  setGraph,
-  setSlots,
-  slotTexture,
-  slotUniform,
-} from "./material-slots";
-import {
-  dataXY,
-  type F,
-  rasterUv,
-  type Tex,
-  type V2,
-  type V3,
-} from "./shader-chunks";
-import {
-  dropDataOnUpload,
-  fetchRasterBytes,
-  inRasterTurn,
-  uploadNow,
-} from "./raster-upload";
-import { sceneShared, textureBytes, trackTexture } from "./three-utils";
+import { setGraph, setSlots, slotTexture, slotUniform } from "./material-slots";
+import type { Slots } from "./material-slots";
+import { dataXY, rasterUv } from "./shader-chunks";
+import type { F, Tex, V2, V3 } from "./shader-chunks";
+import { sceneShared } from "./three-utils";
 
 /**
  * The city's large-scale light (plan 033), from two baked rasters
@@ -91,11 +70,10 @@ import { sceneShared, textureBytes, trackTexture } from "./three-utils";
  * - **Ferne Schatten** (horizon): per texel the skyline's elevation angle
  *   in 16 azimuths, in two bands — occluders 80–1 500 m out, and 8–80 m
  *   out. Where the sun stands below it, the sun's direct light is cut: the
- *   long low-sun shadows the shadow map's frustum ends, and beyond the
- *   frustum the shadows of the buildings next door. Inside the frustum the
- *   shadow map has the near occluders (with their shapes), so the near band
- *   only fades in over the frustum's last 20 % (`shadowReach`, kept by the
- *   sun rig) and counts whole beyond it. It is the material's
+ *   long low-sun shadows the shadow map's rings end, and beyond their reach
+ *   the shadows of the buildings next door. Inside it the shadow map has the
+ *   near occluders (with their shapes), so the near band only fades in over
+ *   the reach's last 20 % (`shadowReach`, kept by the sun rig) and counts whole beyond it. It is the material's
  *   `receivedShadowNode`, combined with the shadow map by `min`, never a
  *   product: where both see the same occluder it must not darken twice.
  *   The ground only, with what is baked into it (kerbs, fences, stairs,
@@ -122,7 +100,7 @@ export const HORIZON_SHADE: F = float(0.8);
 /**
  * A tile's baked light as the ground and the things baked into its fine
  * terrain read it (kerbs, fences, stairs, walls): the terrain's own
- * rasters, where they lie, and the frustum and the sun it binds (uniform
+ * rasters, where they lie, and the rings' reach and the sun it binds (uniform
  * nodes, shared by every tile). Without it a kerb on a
  * far-shadowed street stayed sunlit on a shadowed carriageway.
  */
@@ -132,7 +110,7 @@ export interface GroundLight {
   /** the tile's recentered north-west corner and size (data frame, m) */
   origin: [number, number];
   size: [number, number];
-  /** the shadow frustum's centre (data frame x, y) and half-size (z) */
+  /** the centre (data frame x, y) and half-size (z) of the widest shadow ring the near band defers to */
   shadowReach: UniformNode<"vec3", Vector3>;
   /** world (Y-up), surface → sun */
   sunDirection: UniformNode<"vec3", Vector3>;
@@ -169,7 +147,7 @@ function hzAngle(horizon: Tex, uv: V2, k: F, base: number, maxDeg: number): F {
 /**
  * How much of the sun clears the skyline (1 = all), before its strength:
  * the far band always; the near band by its weight, 0 inside the shadow
- * frustum and 1 beyond it — skipped where it is 0, which is most of what
+ * rings' reach and 1 beyond it — skipped where it is 0, which is most of what
  * is on screen.
  */
 function hzSunVisible(light: GroundLight, horizon: Tex, uv: V2): F {
@@ -288,7 +266,7 @@ function lightGraph(
       nightShadowFree
     );
     // three's ShadowNode calls this with the light's shadow term (the
-    // filtered shadow map, 1 outside its frustum) and multiplies the light
+    // filtered shadow map, 1 outside its rings) and multiplies the light
     // colour by what it returns. The @types declare it without the
     // argument, hence the optional parameter; the term is a float (a vec3
     // only with coloured, transmitted shadows, which the scene does not use).
@@ -449,110 +427,3 @@ export function openSkyTexture(): DataTexture {
 
 /** An app's hold on the open-sky texel; call the result on dispose. */
 export const retainOpenSkyTexture = white.retain;
-
-// --- loading -------------------------------------------------------------------------
-
-/**
- * A baked light raster: fetched, then decoded by the viewer's own PNG
- * decoder (never the browser's), made a texture by `make` and on the GPU in
- * its turn (raster-upload.ts: one raster at a time site-wide, its CPU bytes
- * dropped at the upload). Absent, undecodable, refused by `make` or failed
- * to upload → null (the light stays as it was); rethrows an abort.
- */
-async function loadLightRaster<T extends Texture>(
-  url: string,
-  make: (raster: GreyRaster) => T | null,
-  renderer?: WebGPURenderer,
-  signal?: AbortSignal
-): Promise<T | null> {
-  try {
-    const bytes = await fetchRasterBytes(url, signal);
-    return await inRasterTurn(async () => {
-      const raster = await decodeGreyPng(bytes);
-      signal?.throwIfAborted();
-      const tex = make(raster);
-      if (tex) {
-        tex.flipY = false;
-        tex.unpackAlignment = 1;
-        tex.colorSpace = NoColorSpace;
-        tex.needsUpdate = true;
-        dropDataOnUpload(tex);
-        uploadNow(tex, renderer);
-      }
-      return tex;
-    }, signal);
-  } catch (err) {
-    if (isAbortError(err)) {
-      throw err;
-    }
-    return null;
-  }
-}
-
-/**
- * The sky-view raster as a RED texture, LINEAR + mipmapped (a soft field).
- * See `loadLightRaster`.
- */
-export function loadSkyViewTexture(
-  url: string,
-  signal?: AbortSignal,
-  renderer?: WebGPURenderer
-): Promise<Texture | null> {
-  return loadLightRaster(
-    url,
-    (raster) => {
-      const tex = new DataTexture(
-        raster.data,
-        raster.width,
-        raster.height,
-        RedFormat,
-        UnsignedByteType
-      );
-      tex.magFilter = LinearFilter;
-      tex.minFilter = LinearMipmapLinearFilter;
-      tex.generateMipmaps = true;
-      trackTexture(tex, textureBytes(raster.width, raster.height, 1, true));
-      return tex;
-    },
-    renderer,
-    signal
-  );
-}
-
-/**
- * The horizon raster as an 8-layer RGBA array texture (the far band's four
- * planes, then the near band's): the PNG is the planes stacked
- * north-to-south, each n rows of n RGBA texels with the bytes interleaved —
- * exactly a DataArrayTexture's layer-major layout. LINEAR (the angles
- * interpolate), no mipmaps. Absent, or an older one-band raster → null.
- */
-export function loadHorizonTexture(
-  url: string,
-  signal?: AbortSignal,
-  renderer?: WebGPURenderer
-): Promise<DataArrayTexture | null> {
-  return loadLightRaster(
-    url,
-    (raster) => {
-      const n = raster.width / 4;
-      if (raster.height !== n * HORIZON_TEXTURE_LAYERS) {
-        return null;
-      }
-      const tex = new DataArrayTexture(
-        raster.data,
-        n,
-        n,
-        HORIZON_TEXTURE_LAYERS
-      );
-      tex.format = RGBAFormat;
-      tex.type = UnsignedByteType;
-      tex.magFilter = LinearFilter;
-      tex.minFilter = LinearFilter;
-      tex.generateMipmaps = false;
-      trackTexture(tex, textureBytes(n, n * HORIZON_TEXTURE_LAYERS, 4, false));
-      return tex;
-    },
-    renderer,
-    signal
-  );
-}
