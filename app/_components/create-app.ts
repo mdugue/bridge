@@ -101,6 +101,10 @@ import { exportScale, exportTiles } from "@/lib/city/image-export";
 import type { ExportTile } from "@/lib/city/image-export";
 import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
 import type { CameraState, PlayerPose, Xyz } from "@/lib/city/pose";
+import { toleranceBox } from "@/lib/city/ask-items";
+import { nearestInSets, rayAabb, setsBox } from "@/lib/city/ask-solids";
+import type { Aabb, AskHit } from "@/lib/city/ask-solids";
+import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import { createRegressionState, stepRegression } from "@/lib/city/regression";
 import { spawnViewpoint, tileExtentOf } from "@/lib/city/site";
 import type { Site, ViewpointGeometry } from "@/lib/city/site";
@@ -188,7 +192,7 @@ import {
   updatePocDebug,
 } from "./poc-debug";
 import { createPostStack } from "./post-stack";
-import type { PostStack } from "./post-stack";
+import type { FocusInfo, PostStack } from "./post-stack";
 import { createNameplate } from "./nameplate-layer";
 import {
   cityHides,
@@ -266,6 +270,12 @@ const DEFAULT_FOV = 55;
  *  plus a margin, so tiles still loading read as haze, not as an edge. */
 const PARTIAL_WORLD_FOG_FAR = 1100;
 const SKY_COLOR = 0x9f_b6_cc;
+/** How deep under the ground a design may stand for the focus (m): a
+ *  site's ground is pressed under the design (design-site.ts), which the
+ *  ground's rays do not see — a sunken court, not a design across a hill. */
+const DESIGN_PRESS_M = 5;
+/** The longest step the lens's fade and focus take in one frame (ms). */
+const LENS_STEP_MAX_MS = 100;
 /** How often the crash trail takes a heartbeat (crash-trail.ts). */
 const TRAIL_BEAT_MS = 2000;
 /** How often the GPU's frame time is read back (ms): a few per beat. */
@@ -697,10 +707,7 @@ export interface CityWalkHandle {
    */
   getGpuDebug: () => GpuDebug;
   /** Live DoF focus state + last crosshair raycast hit (QA/diagnostics). */
-  getFocusDebug: () => {
-    bokehScale: number;
-    focusDistance: number;
-    focusRange: number;
+  getFocusDebug: () => FocusInfo & {
     hitDist: number | null;
     hitName: string | null;
   };
@@ -2443,6 +2450,10 @@ async function bootApp(
           : standInDepth(solids),
     };
   };
+  // an instance a design's site folded away: not there to be asked, nor
+  // to focus on
+  const folded = (target: FeatureInquiry, at: { x: number; z: number }) =>
+    foldedThing(target, at, offset);
   const probe = createInquiryProbe({
     camera: activeCamera,
     cities: () => stream.visibleCities(),
@@ -2463,7 +2474,7 @@ async function bootApp(
     toSite: (p) => [p.x + offset.cx, offset.cy - p.z],
     // an instance a design's site folded away is not there to be asked
     // (a hedge's by where the ray met it: a row folds piece by piece)
-    folded: ({ target }, at) => foldedThing(target, at, offset),
+    folded: ({ target }, at) => folded(target, at),
   });
   // A tree's card fetches what the register says about it (ADR 0042).
   const treeFactsUrl = (tile: string) => {
@@ -3058,14 +3069,76 @@ async function bootApp(
   cleanups.push(() => resizeObserver.disconnect());
 
   // Crosshair autofocus for the photographic DoF (throttled like the pose):
-  // every visible tile's buildings (their BVHs), and the ground by marching
-  // its height grid — the nearer hit wins.
+  // every visible tile's buildings (their BVHs), the ground by marching its
+  // height grid, and the things the probe can ask (trees, lamps, …) — the
+  // nearest hit wins.
   const focusRaycaster = new Raycaster();
   focusRaycaster.firstHitOnly = true;
   focusRaycaster.far = 6000;
   const focusCrosshair = new Vector2(0, 0);
   let lastFocusHit: { dist: number; name: string } | null = null;
-  const lensBlur = postProfileFor(budget.tier).dof;
+  const focusAt = new Vector3();
+  // What the probe can ask that the lens can focus on, without a copy ten
+  // times a second: the built ask sets of every visible tile whose sets'
+  // box the ray enters before `far` (the box kept while a tile's list
+  // stays as long), and a design's. Not glass, which writes no depth —
+  // focused on, the thing aimed at would blur: a set in the tiles' lists
+  // drawn as glass says so (`AskSet.glass`, the traffic flows), and the
+  // data layers' counters are never in them (one hung there takes the
+  // flag).
+  const focusBoxes = new WeakMap<object, { count: number; box: Aabb | null }>();
+  function* focusSets(o: Xyz, d: Xyz, far: number) {
+    for (const dressing of stream.visibleDressings()) {
+      const sets = dressing.asks;
+      if (!sets) {
+        continue;
+      }
+      let kept = focusBoxes.get(sets);
+      if (kept?.count !== sets.length) {
+        kept = { count: sets.length, box: setsBox(sets) };
+        focusBoxes.set(sets, kept);
+      }
+      const enter = kept.box ? rayAabb(o, d, kept.box) : null;
+      if (enter !== null && enter <= far) {
+        yield* sets;
+      }
+    }
+  }
+  // what the lens may focus on of what a ray met: not a box the probe
+  // tolerates round a landing stage or a playground's outline (it stands
+  // over the surface drawn), nor what a design's site folded away
+  const focusable = (t: AskHit<FeatureInquiry>) =>
+    !toleranceBox(t) &&
+    !folded(t.target, focusRaycaster.ray.at(t.distance, focusAt));
+  // The trees, lamps, furniture and monuments the probe can ask (their
+  // sets come in idle time, a mesh's BVH with a question: the focus never
+  // builds either) before `far`: a tree in the middle of the view is what
+  // the lens focuses on, not the facade behind it. A design stands on
+  // ground pressed under it, which the ground's rays do not know: it may
+  // lie behind the ground they meet by as far as the ray runs to sink
+  // `DESIGN_PRESS_M` (far at a walker's grazing angle), never behind a
+  // building (`buildingFar`).
+  const focusThing = (far: number, buildingFar: number) => {
+    const { origin, direction } = focusRaycaster.ray;
+    const tileThing = nearestInSets(
+      origin,
+      direction,
+      focusSets(origin, direction, far),
+      far,
+      focusable
+    );
+    const designThing = nearestInSets(
+      origin,
+      direction,
+      design?.asks() ?? [],
+      tileThing?.distance ??
+        Math.min(
+          buildingFar,
+          far + DESIGN_PRESS_M / Math.max(-direction.y, 1e-3)
+        )
+    );
+    return designThing ?? tileThing;
+  };
   const updateFocus = () => {
     focusRaycaster.setFromCamera(focusCrosshair, camera);
     // Only the tiles whose BVH is built: the focus never builds one (ten
@@ -3080,6 +3153,16 @@ async function bootApp(
       focusRaycaster,
       hit?.distance ?? focusRaycaster.far
     );
+    const thing = focusThing(
+      groundAt ?? hit?.distance ?? focusRaycaster.far,
+      hit?.distance ?? focusRaycaster.far
+    );
+    if (thing) {
+      const point = focusRaycaster.ray.at(thing.distance, new Vector3());
+      lastFocusHit = { dist: thing.distance, name: thing.target.kind };
+      postStack.setFocusTarget(point);
+      return;
+    }
     if (groundAt !== null && (!hit || groundAt < hit.distance)) {
       const point = focusRaycaster.ray.at(groundAt, new Vector3());
       lastFocusHit = {
@@ -3188,8 +3271,11 @@ async function bootApp(
   const walkMoved = watchMotion();
   const regression = createRegressionState();
   let regressedNow = false;
+  // the camera moved this frame (the focus rests then)
+  let walkMovedNow = false;
   const updateRegression = (dt: number) => {
-    const regressed = stepRegression(regression, walkMoved(camera), dt * 1000);
+    walkMovedNow = walkMoved(camera);
+    const regressed = stepRegression(regression, walkMovedNow, dt * 1000);
     postStack.setRegressed(regressed);
     if (regressed !== regressedNow) {
       regressedNow = regressed;
@@ -3613,7 +3699,11 @@ async function bootApp(
    *  one a frame), or after a bounded wait: a stream of landing tiles never
    *  holds it for good. */
   const aimCaptureTile = () => {
-    const waiting = !capture && captureQueue.length > 0 && sunRig.shadowBusy();
+    // the shadow rings redrawn, and the lens grown in and focused
+    const waiting =
+      !capture &&
+      captureQueue.length > 0 &&
+      (sunRig.shadowBusy() || !postStack.getFocusInfo().settled);
     captureHeldFrom = waiting ? (captureHeldFrom ?? performance.now()) : null;
     if (
       captureHeldFrom !== null &&
@@ -3826,20 +3916,40 @@ async function bootApp(
       return;
     }
     // (the loading veil breathes, sweeps and lifts at the full rate)
+    // (a lens still growing in or pulling focus draws at the full rate:
+    // paced, it steps in jumps)
     const busy =
       moved ||
       exporting ||
       !sceneSettled ||
+      !postStack.getFocusInfo().settled ||
       dataLayersMove ||
       veilShown ||
       sunRig.shadowBusy();
     sceneStill = stillness.frame(time, busy);
     opts.pace.setStill(sceneStill);
   };
+  // A ray through the buildings and a march over the ground, ten times a
+  // second: only where there is a lens blur to focus (not on a phone),
+  // and not while the camera moves or the style or view draws none (the
+  // lens shows nothing then), nor through an export (it began on a settled
+  // lens, and its tiles share one focus). Cast at once the frame the lens
+  // is wanted again: it returns faded out, its focus jumping to the aim
+  // for a few frames (`FOCUS_SNAP_MS`).
+  let lensWasWanted = false;
+  const tickFocus = (poseTick: boolean) => {
+    const wanted = postStack.lensWanted() && capture === null;
+    const back = wanted && !lensWasWanted;
+    lensWasWanted = wanted;
+    if (wanted && !walkMovedNow && (poseTick || back)) {
+      updateFocus();
+    }
+  };
   const frame = (time: number) => {
     const frameStart = streamTimings.now();
     timer.update(pocFrameTime(time));
-    const dt = Math.min(timer.getDelta(), 0.05);
+    const frameDt = timer.getDelta();
+    const dt = Math.min(frameDt, 0.05);
     const elapsed = timer.getElapsed();
     // The 10 Hz tick (the minimap's pose, the BVHs near, the focus, the
     // tree tiers): read here, as the trees step before it is spent.
@@ -3861,7 +3971,9 @@ async function bootApp(
     if (modelRig.owns()) {
       applyFog();
     }
-    updateRegression(dt);
+    // on the lens's clock: a paced frame brings it back as soon as it
+    // grows it in
+    updateRegression(Math.min(frameDt, LENS_STEP_MAX_MS / 1000));
     // What to stream, from where the cameras look now.
     const view = activeCamera();
     view.updateMatrixWorld();
@@ -3896,13 +4008,9 @@ async function bootApp(
       } else {
         tickModelOff();
         opts.onPose?.(pose.getPose());
-        // a ray through the buildings and a march over the ground: only
-        // where there is a lens blur to focus (not on a phone)
-        if (lensBlur) {
-          updateFocus();
-        }
       }
     }
+    tickFocus(poseTick);
     // FPS at ~2 Hz on its own channel — must NOT churn the heavier stats
     // emit (a whole-scene walk; it also hands the HUD the footprints).
     if (timer.getElapsed() >= fpsDue) {
@@ -3928,7 +4036,12 @@ async function bootApp(
       exporting
     );
     const renderStart = streamTimings.now();
-    framedBuilds.draw(postStack.render);
+    // the lens's fade and focus on the clock up to `LENS_STEP_MAX_MS`, not
+    // the capped step: a paced frame (Hörmodus, 2 fps) grows it in within
+    // a few frames, and a stall as the stream lands still does not pop it
+    framedBuilds.draw(() =>
+      postStack.render(Math.min(frameDt * 1000, LENS_STEP_MAX_MS))
+    );
     const renderEnd = streamTimings.now();
     takeCaptureTile();
     frames += 1;

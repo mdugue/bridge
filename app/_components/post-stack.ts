@@ -20,10 +20,8 @@ import type {
   PerspectiveCamera,
   Scene,
   Texture,
-  TextureNode,
   WebGPURenderer,
 } from "three/webgpu";
-import { dof } from "three/addons/tsl/display/DepthOfFieldNode.js";
 import { ao } from "three/addons/tsl/display/GTAONode.js";
 import { smaa } from "three/addons/tsl/display/SMAANode.js";
 import {
@@ -53,6 +51,15 @@ import {
   vec4,
 } from "three/tsl";
 import type { VeilState } from "@/lib/city/load-frontier";
+import {
+  createLensState,
+  horizonBlurPx,
+  lensSettled,
+  maxBlurPx,
+  MIN_FOCUS_M,
+  SKY_FOCUS_M,
+  stepLens,
+} from "@/lib/city/lens";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import type { LookValues } from "@/lib/city/look-controls";
 import { NAMEPLATE_TYPES } from "@/lib/city/nameplate-type";
@@ -64,6 +71,7 @@ import { crownsPrinted } from "./crown-season";
 import { DATA_MARKS, dataMarks } from "./glass";
 import { crownSwayShare } from "./vegetation-layer";
 import { fxaa } from "./fxaa";
+import { createLensBlur, LENS_TALLEST_PX } from "./lens-blur";
 import { createMotionBlur } from "./motion-blur";
 import type { SceneFog } from "./height-fog";
 import { createPaperScene } from "./paper-scene";
@@ -83,9 +91,6 @@ import { createLoadVeil } from "./load-veil";
 import type { LoadVeil } from "./load-veil";
 import type { ViewLens } from "./view-lens";
 import { setAskedColours } from "./visual-style";
-
-/** Initial focus distance before the first crosshair raycast lands. */
-const HYPERFOCAL_M = 600;
 
 /**
  * The contact shadows, their noise taken out. GTAO rotates its horizon
@@ -167,35 +172,22 @@ const GRAIN = 0.25;
 /** Tuschelinien: the outlines' strength in the graphic styles. */
 const INK = 0.7;
 
-// focusRange is the metric over which a fragment ramps from sharp to fully
-// blurred. A fixed value can't serve a 2 km-deep scene, so — like a real
-// lens — it scales with the focus distance: tight DoF up close, very deep
-// DoF far away. The band is generous on purpose: the lens should only hint
-// at depth. At 0.7 × distance (min 12 m) a crosshair on the pavement ten
-// metres ahead blurred the whole street beyond 22 m — it read as smeared,
-// not as a lens.
-const FOCUS_RANGE_FACTOR = 1.6;
-const FOCUS_RANGE_MIN = 45;
-const FOCUS_RANGE_MAX = 3000;
-/** Bokeh radius scale: a soft hint of lens, never a smear. */
-const BOKEH_SCALE = 0.5;
-function focusRangeFor(distanceM: number): number {
-  return Math.min(
-    Math.max(distanceM * FOCUS_RANGE_FACTOR, FOCUS_RANGE_MIN),
-    FOCUS_RANGE_MAX
-  );
-}
-
 /** Depth grading reaches full strength at this view distance (m). */
 const GRADE_DISTANCE_M = 800;
 
 /** Live DoF state for QA/diagnostics. */
 export interface FocusInfo {
-  bokehScale: number;
-  /** the focus distance in metres: the distance to the crosshair's hit */
+  /** the widest blur drawn (px, diameter), faded in */
+  capPx: number;
+  /** the focus distance in metres: pulled towards the crosshair's hit */
   focusDistance: number;
-  /** the sharp-ramp distance in metres */
-  focusRange: number;
+  /** the blur's diameter (px) at the horizon, faded in (lens.ts) */
+  horizonBlurPx: number;
+  /** how much of the blur shows, 0…1: it grows in after the camera stops */
+  fade: number;
+  /** the lens shows what it will until the view changes: grown in fully,
+   *  or not drawn in this style, view or tier */
+  settled: boolean;
 }
 
 export interface PostStack {
@@ -216,10 +208,15 @@ export interface PostStack {
    */
   applyLook: (look: LookValues) => void;
   dispose: () => void;
-  /** current DoF focus distance/range/bokeh (QA). */
+  /** The lens now (QA; the shots harness and an export wait for its
+   *  `settled`). */
   getFocusInfo: () => FocusInfo;
-  /** Draws the scene into its target, then the post chain to the canvas. */
-  render: () => void;
+  /** Whether the style and the view draw a lens (motion aside): the
+   *  autofocus rests where none is. */
+  lensWanted: () => boolean;
+  /** Draws the scene into its target, then the post chain to the canvas;
+   *  `stepMs`, the loop's time step, advances the lens's fade and focus. */
+  render: (stepMs: number) => void;
   /** world-space point under the crosshair; null = nothing hit (sky) */
   setFocusTarget: (point: Vector3 | null) => void;
   /**
@@ -228,7 +225,8 @@ export interface PostStack {
    * stay on — the pass runs at half resolution for that — because a shadow
    * that vanishes the moment you move and reappears when you stop reads as
    * a bug, not as a saving. Layered beside the picture style's gate and
-   * Modell's: recovery brings DoF back only where those allow it.
+   * Modell's: recovery brings DoF back only where those allow it, and its
+   * blur grows in (`LENS_FADE_MS`, lens.ts) instead of snapping on.
    */
   setRegressed: (on: boolean) => void;
   /** The loading veil this frame (load-veil.ts): the frontier's ring
@@ -374,50 +372,6 @@ function finish(input: V4, viewZ: F, f: Finish, veil: LoadVeil): V4 {
   return vec4(veil.over(graded.mul(vignette)).mul(paper), input.a);
 }
 
-/**
- * Depth of field over `lit` (`DepthOfFieldNode`). Its input is drawn into
- * a target of its own first; `dof()` would make that target itself, with
- * the depth buffer every render target gets by default and nothing here
- * reads (a third more memory for the copy) — the picture is the same.
- */
-function lensBlurOf(lit: V4, viewZ: F, focusDistance: Live, focusRange: Live) {
-  const input = rtt(lit, null, null, { depthBuffer: false });
-  // Only what lies beyond the focus goes soft. Nearer than it is read as
-  // at the focus (view Z is negative ahead): a lens blurs the foreground
-  // too, but in a first-person view the foreground is the street at your
-  // feet, the lower half of the screen — blurred, it read as a streaky
-  // veil lying flat on the screen rather than as depth. The node still
-  // runs its near-field passes, now over an empty field: the clamp saves
-  // no work, a far-only pass of our own would.
-  const behindFocus = viewZ.min(focusDistance.negate());
-  const node = dof(
-    input,
-    behindFocus,
-    focusDistance,
-    focusRange,
-    uniform(BOKEH_SCALE)
-  );
-  // reason: getTextureNode is DepthOfFieldNode's documented output (its
-  // composite target's texture) but missing from the @types.
-  const output = node as unknown as { getTextureNode: () => TextureNode };
-  const inputTarget = input.renderTarget;
-  if (!inputTarget) {
-    throw new Error("lens blur: the frame copy has no render target");
-  }
-  return {
-    // reason: the effect nodes' types don't carry their vec4 output.
-    focused: nodeObject(node) as unknown as V4,
-    /** the target the blur composites the frame into, each frame it runs */
-    composite: output.getTextureNode().value,
-    /** the frame copy it blurs, idle while it does not run */
-    input: inputTarget,
-    dispose: () => {
-      node.dispose();
-      input.dispose();
-    },
-  };
-}
-
 /** The frame's antialiasing (scene-profile.ts `PostProfile.antialias`). */
 interface Antialiasing {
   /** the frame a pipeline drew before it (FXAA: into `beforeAa`); SMAA:
@@ -557,8 +511,8 @@ const COMPILE_LANES = 4;
  * camera; up to r186 also by the call depth, which a scene pass nested
  * inside the post pipeline never matched) — then three's node
  * `RenderPipeline` from its colour and depth: GTAO (half resolution, normals
- * reconstructed from depth) ^ `AO_EXPONENT` → DoF (`DepthOfFieldNode`,
- * crosshair autofocus, dropped while moving; not built on a phone) → the
+ * reconstructed from depth) ^ `AO_EXPONENT` → DoF (lens-blur.ts, crosshair
+ * autofocus, dropped while moving; not built on a phone) → the
  * picture style (ink + tone; not in the default pastel style's pipelines
  * at all) → SMAA (FXAA on a phone) → depth grading, vignette and paper
  * grain → sRGB. The scene target has no MSAA; SMAA carries the
@@ -638,11 +592,17 @@ export function createPostStack(
       pow(texture(aoTexture.value, at).r, contact)
     );
 
-  const focusDistance = uniform(HYPERFOCAL_M);
-  const focusRange = uniform(focusRangeFor(HYPERFOCAL_M));
+  // the lens (lens-blur.ts): its focus, its blur at the horizon and its
+  // widest (px, faded in)
+  const lensUniforms = {
+    focus: uniform(SKY_FOCUS_M),
+    horizonPx: uniform(0),
+    capPx: uniform(0),
+  };
   const lensBlur = profile.dof
-    ? lensBlurOf(lit, viewZ, focusDistance, focusRange)
+    ? createLensBlur(lit, depthTexture, lens, lensUniforms)
     : null;
+  lensBlur?.setSize(size.x, size.y);
   const motion = createMotionBlur(depthTexture, lens);
 
   let style: RenderStyleDef = RENDER_STYLE_BY_ID[LOOK_DEFAULTS.style];
@@ -802,7 +762,7 @@ export function createPostStack(
       return moving;
     }
     const pair = style.shaderMode > 0 ? styled : pastel;
-    const lensOn = style.allowDof && !regressed && !model;
+    const lensOn = lensWanted() && !regressed;
     const pre =
       (lensOn ? pair.dof : null) ?? (model ? pair.model : null) ?? pair.plain;
     return {
@@ -871,14 +831,44 @@ export function createPostStack(
   };
   applyStyleWeights();
 
-  // Autofocus: the distance, along the view, to the crosshair's last hit.
-  const focusPoint = new Vector3(0, 0, -HYPERFOCAL_M);
+  // Autofocus: the distance, along the view, to the crosshair's last hit
+  // — the sky's when it found nothing, or the camera has passed it — pulled
+  // there in dioptres, and at once while the blur does not show; the blur
+  // grows in whenever the lens comes back — after a move, or into a style
+  // or a view that draws it (lens.ts `stepLens`, on the loop's step).
+  const focusPoint = new Vector3();
+  let focusHit = false;
   const inView = new Vector3();
-  const updateFocus = () => {
-    inView.copy(focusPoint).applyMatrix4(active().matrixWorldInverse);
-    const d = Math.max(1, -inView.z);
-    focusDistance.value = d;
-    focusRange.value = focusRangeFor(d);
+  const lensState = createLensState();
+  let lensAim = SKY_FOCUS_M;
+  let lensFadeNow = 0;
+  // the style and the view draw a lens (motion aside)
+  const lensWanted = () => lensBlur !== null && style.allowDof && !model;
+  const focusTarget = (view: Camera) => {
+    if (!focusHit) {
+      return SKY_FOCUS_M;
+    }
+    inView.copy(focusPoint).applyMatrix4(view.matrixWorldInverse);
+    return inView.z < 0 ? Math.max(-inView.z, MIN_FOCUS_M) : SKY_FOCUS_M;
+  };
+  const updateFocus = (stepMs: number) => {
+    const view = active();
+    lensAim = focusTarget(view);
+    lensFadeNow = stepLens(
+      lensState,
+      lensWanted() && !regressed,
+      lensAim,
+      stepMs
+    );
+    const { focus } = lensUniforms;
+    focus.value = lensState.focusM;
+    // the perspective camera's angle: Modell's parallel one draws no lens
+    // (`lensWanted`), the fade is 0 there
+    lensUniforms.horizonPx.value =
+      horizonBlurPx(focus.value, camera.fov, size.y) * lensFadeNow;
+    // no wider than the gather's reach covers (lens-blur.ts)
+    lensUniforms.capPx.value =
+      maxBlurPx(Math.min(size.y, LENS_TALLEST_PX)) * lensFadeNow;
   };
 
   /** set by `dispose`: what is let go later goes at once, and what is
@@ -1400,8 +1390,8 @@ export function createPostStack(
       styleDressing.sceneChanged();
     },
     setSunAltitude: (altitudeDeg) => stylize.setSunAltitude(altitudeDeg),
-    render: () => {
-      updateFocus();
+    render: (stepMs) => {
+      updateFocus(stepMs);
       stylize.update(renderer.getPixelRatio(), size);
       // The frame names its targets and ends on the canvas, never on the
       // target it found set: a compile in flight (`compileOne`) sets the
@@ -1459,18 +1449,21 @@ export function createPostStack(
       shown.finished.render();
       overlay?.render(renderer, view);
     },
+    lensWanted: () => lensWanted(),
     getFocusInfo: () => ({
-      focusDistance: focusDistance.value,
-      focusRange: focusRange.value,
-      bokehScale: BOKEH_SCALE,
+      focusDistance: lensUniforms.focus.value,
+      horizonBlurPx: lensUniforms.horizonPx.value,
+      capPx: lensUniforms.capPx.value,
+      fade: lensFadeNow,
+      settled: lensSettled(lensState, lensWanted(), lensAim),
     }),
     setSize: () => {
       renderer.getDrawingBufferSize(size);
       target.setSize(size.x, size.y);
       beforeAa.setSize(size.x, size.y);
-      // the lens blur sizes its copy when it runs; the motion blur draws
-      // there while it does not
-      lensBlur?.input.setSize(size.x, size.y);
+      // the lens blur's targets, its copy among them (the motion blur
+      // draws there while the lens rests)
+      lensBlur?.setSize(size.x, size.y);
       antialiasing.setSize(size);
       outline.setSize(size.x, size.y);
     },
@@ -1492,8 +1485,8 @@ export function createPostStack(
       regressed = on;
     },
     setFocusTarget: (point) => {
-      // No hit (sky) keeps the last focus, so tilting a degree above a far
-      // building doesn't snap it near.
+      // no hit focuses on the sky; the pull makes that gentle
+      focusHit = point !== null;
       if (point) {
         focusPoint.copy(point);
       }
