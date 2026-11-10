@@ -579,7 +579,7 @@ def _plausible_faces(h, lab, faces, face, landmark, flank_only, fits=None):
         src = mine[win] & face[win]
         flanks = (mine & flank_only).sum() > 0.5 * mine.sum()
         cells = src if src.any() else mine[win]
-        key = (rows.min(), cols.min(), cells.shape, mine[win].tobytes(), cells.tobytes(), flanks)
+        key = (rows.min(), cols.min(), cells.shape, cells.tobytes(), flanks)
         if key not in fits:
             fits[key] = roof_planes.plausible_fit(
                 h[win], cells, SLOPE, RES, EXTEND_CELLS, landmark, flanks
@@ -653,16 +653,21 @@ def _pockets(rest: np.ndarray, closed: np.ndarray, small_cells: int) -> np.ndarr
 
 
 def _kept_whole(lab: np.ndarray, take: np.ndarray, small_cells: int) -> list[int]:
-    """The regions `take` would leave smaller than `small_cells` or
-    narrower than NARROW_M where they were not: a strip between two
-    wings' eaves would stand as a box between their walls."""
+    """The regions `take` would leave — any piece of them — smaller than
+    `small_cells` or narrower than NARROW_M where they were not: a strip
+    between two wings' eaves, a corner pinched off by one, would stand as a
+    box between their walls."""
     kept = []
     for r in np.unique(lab[take]):
-        region = lab == r
-        rest = region & ~take
-        n = int(rest.sum())
-        thin = _narrow(rest.astype(np.int64), 1)[0] and not _narrow(region.astype(np.int64), 1)[0]
-        if n < small_cells or thin:
+        box = roof_planes.grown_box(lab == r, 1)
+        region = lab[box] == r
+        pieces, n = ndi.label(region & ~take[box])
+        if not n:
+            kept.append(int(r))
+            continue
+        sizes = np.bincount(pieces.ravel(), minlength=n + 1)[1:]
+        thin = _narrow(pieces, n) & ~_narrow(region.astype(np.int64), 1)[0]
+        if (sizes < small_cells).any() or thin.any():
             kept.append(int(r))
     return kept
 
@@ -688,19 +693,20 @@ def measured_model(
     with_faces: bool = True,
     narrow: bool = True,
     landmark: bool = False,
-    cells: tuple[np.ndarray, np.ndarray] | None = None,
+    scan: Scan | None = None,
 ) -> Model | None:
     """The roof over `own` cells: flat levels and (unless `with_faces` is
     off, the flat model) the measured faces; with them, unless `narrow` is
-    off, no part narrower than NARROW_M. `cells`: the faces' cells
-    (`face_cells`) when already found."""
+    off, no part narrower than NARROW_M. `scan`: the scan over `roof` and
+    its faces' cells, when one model of the same cells was made before."""
     known = roof & ~green & np.isfinite(dom)
     if known.sum() < small_cells:
         return None
-    h = scan_surface(dom, known)
+    scan = scan or Scan(scan_surface(dom, known), own)
+    h = scan.h
     face, flank_only = np.zeros_like(own), np.zeros_like(own)
     if with_faces:
-        face, flank_only = (c.copy() for c in cells) if cells else _face_cells(h, own)
+        face, flank_only = (c.copy() for c in scan.cells())
     fits: dict = {}
     for rounds in range(PLAUSIBLE_ROUNDS + 1):
         lab, faces = _regions(h, own, face, small_cells, with_faces, narrow)
@@ -713,20 +719,30 @@ def measured_model(
             # still none after the last re-cut: drawn flat at its median
             faces[implausible] = False
             break
-        # a face the scan shows no roof's shape on goes back to the levels
+        # a face the scan shows no roof's shape on goes back to the levels,
+        # its flank cells too: they no longer make a face flank-only
         face &= ~np.isin(lab, implausible)
+        flank_only &= face
     drawn = {k: v for k, v in gables.items() if faces[k]}
     _straight_eaves(h, lab, faces, surface, drawn, small_cells)
     level = _region_medians(lab, h, int(lab.max()))
     return Model(lab, level, faces, surface)
 
 
-def face_cells(
-    dom: np.ndarray, own: np.ndarray, roof: np.ndarray, green: np.ndarray
-) -> tuple[np.ndarray, np.ndarray]:
-    """The cells `measured_model` draws as faces over `own`, and those only
-    the flank rule found (`_face_cells`), on the scan over `roof`."""
-    return _face_cells(scan_surface(dom, roof & ~green & np.isfinite(dom)), own)
+@dataclass
+class Scan:
+    """The scan's surface over an object's roof (`scan_surface`) and, once
+    asked for, the cells of `own` it draws as faces (`cells`)."""
+
+    h: np.ndarray
+    own: np.ndarray
+    found: tuple[np.ndarray, np.ndarray] | None = None
+
+    def cells(self) -> tuple[np.ndarray, np.ndarray]:
+        """The face cells and those only the flank rule found (`_face_cells`)."""
+        if self.found is None:
+            self.found = _face_cells(self.h, self.own)
+        return self.found
 
 
 def _face_cells(h: np.ndarray, own: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -830,7 +846,7 @@ def building_walls(footprint) -> Walls:
     direction: two walls of one front a fraction of a degree apart would
     snap its edges two ways, a step between them."""
     lines, theta, length = [], [], []
-    for poly in shapely.get_parts(shapely.simplify(footprint, WALL_LINE_M)):
+    for poly in shapely.get_parts(_polygonal(shapely.simplify(footprint, WALL_LINE_M))):
         if poly.geom_type != "Polygon":
             continue
         for ring in (poly.exterior, *poly.interiors):
@@ -866,9 +882,9 @@ def _snapped(theta: float, mid: np.ndarray, walls: Walls) -> tuple[float, np.nda
     among those within REGULAR_DEG of it — a wing's inner edge runs along
     its own outer wall, not along whichever wall of a bending block is
     closest in direction (a courtyard's side cut into teeth) — and, where
-    the edge lies within WALL_ON_M of that wall, its middle moved onto the
-    wall: an edge along the outline is the outline, no sliver and no jog
-    beside it. None off every wall."""
+    the edge lies within WALL_ON_M of that wall, on the wall itself (its
+    own line, not its group's mean direction): an edge along the outline
+    is the outline, no sliver and no jog beside it. None off every wall."""
     if not len(walls):
         return None
     dev = (theta - walls.dirs + np.pi / 2) % np.pi - np.pi / 2
@@ -880,9 +896,11 @@ def _snapped(theta: float, mid: np.ndarray, walls: Walls) -> tuple[float, np.nda
     snap = float(theta - dev[k])
     if gap.min() > WALL_ON_M:
         return snap, None
-    u = np.array([np.cos(snap), np.sin(snap)])
-    p0 = np.asarray(walls.lines[k].interpolate(0.5, normalized=True).coords[0])
-    return snap, p0 + u * float(u @ (mid - p0))
+    a, b = np.asarray(walls.lines[k].coords)[:, :2]
+    u = (b - a) / np.hypot(*(b - a))
+    if u @ np.array([np.cos(theta), np.sin(theta)]) < 0:
+        u = -u
+    return float(np.arctan2(u[1], u[0])), a + u * float(u @ (mid - a))
 
 
 def _ring_lines(pts: np.ndarray, walls: Walls) -> list[list]:
@@ -919,12 +937,14 @@ def _ring_lines(pts: np.ndarray, walls: Walls) -> list[list]:
 
 def _one_line(prev: list, line: list) -> bool:
     """Two of `_ring_lines`' lines on one wall's direction within
-    REGULAR_JOG_M of each other."""
+    REGULAR_JOG_M of each other — two on walls only on one wall's line
+    (a jog in the footprint stays a jog)."""
+    jog = STRAIGHT_M if prev[6] and line[6] else REGULAR_JOG_M
     return (
         prev[2]
         and line[2]
         and abs(abs(float(prev[1] @ line[1])) - 1) < 1e-9
-        and abs(_cross(prev[1], line[0] - prev[0])) <= REGULAR_JOG_M
+        and abs(_cross(prev[1], line[0] - prev[0])) <= jog
     )
 
 
@@ -1231,15 +1251,19 @@ def rebuild(area: Area, obj: LodObject) -> Rebuilt | None:
     if float((dom[judged] < obj.base + GROUND_M).mean()) > OPEN_SHARE:
         return None
     small = int(MIN_PART_M2 / (RES * RES))
-    flat = measured_model(dom, own, inner, green, small, with_faces=False)
+    known = inner & ~green & np.isfinite(dom)
+    if known.sum() < small:
+        return None
+    # one scan for every model of these cells
+    scan = Scan(scan_surface(dom, known), own)
+    flat = measured_model(dom, own, inner, green, small, with_faces=False, scan=scan)
     if flat is None:
         return None
     miss_model = miss_share(flat.heights(), dom, judged & (flat.lab > 0))
     if miss_model > KEEP_SHARE or miss_model > miss_lod2 / 2:
         return None
     landmark = obj.id in area.landmarks
-    cells = face_cells(dom, own, inner, green)
-    model = measured_model(dom, own, inner, green, small, landmark=landmark, cells=cells)
+    model = measured_model(dom, own, inner, green, small, landmark=landmark, scan=scan)
     if model is None:
         return None
 
@@ -1253,7 +1277,7 @@ def rebuild(area: Area, obj: LodObject) -> Rebuilt | None:
 
     if misses(model):
         model = measured_model(
-            dom, own, inner, green, small, narrow=False, landmark=landmark, cells=cells
+            dom, own, inner, green, small, narrow=False, landmark=landmark, scan=scan
         )
         # the faces' own merges may still miss more: then the flat model,
         # which met the bar, is drawn (a LoD2 off on 88 % stays no better)

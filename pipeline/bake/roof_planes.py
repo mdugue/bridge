@@ -717,7 +717,7 @@ def _assign(hs, lab, planes, mine, reach: int, held_on=None) -> np.ndarray:
     return out
 
 
-def _grown_box(mask: np.ndarray, by: int) -> tuple[slice, slice]:
+def grown_box(mask: np.ndarray, by: int) -> tuple[slice, slice]:
     """The bounding box of `mask` grown by `by` cells, within the grid."""
     rows, cols = np.nonzero(mask)
     return (
@@ -782,8 +782,12 @@ def creases(lab: np.ndarray, planes: dict[int, np.ndarray], mine: np.ndarray) ->
             sense = _crease_sense(planes[a], planes[b], centre[a], centre[b])
             if not sense:
                 continue
-            # the two planes' cells and a reach around them: all that moves
-            box = _grown_box((lab == a) | (lab == b), CREASE_REACH + 1)
+            # the two planes' cells and a reach around them: all that moves;
+            # none left, the pairs before took them all
+            both = (lab == a) | (lab == b)
+            if not both.any():
+                continue
+            box = grown_box(both, CREASE_REACH + 1)
             here, was = lab[box], scan[box]
             sel = (here == a) | (here == b)
             r, c = rows[box][sel], cols[box][sel]

@@ -330,20 +330,33 @@ def _clipped_squares(poly, a, xs, ys, res, candidates) -> np.ndarray:
     return np.concatenate([xy, zz.reshape(fr.shape)[..., None]], axis=2)
 
 
-def measured_triangles(path: Path) -> tuple[set[str], np.ndarray]:
-    """The roofs rebuilt from DOM1 (roofs.py): the ids they replace and their
-    tops as (n, 3, 3) triangles — a flat part at its `z`, a face on its
-    measured surface. Missing file → none."""
+def rebuilt_parts(path: Path) -> list[tuple[str, float, shapely.Geometry, dict | None]]:
+    """The parts of the roofs rebuilt from DOM1 (roofs.py's
+    `dlm/roofs_<t>.geojson`): each its LoD2 object's id, its `z`, its plan
+    and a face's `surface` (None on a flat part). Missing file → none."""
     if not path.exists():
-        return set(), np.zeros((0, 3, 3))
-    features = json.loads(path.read_text()).get("features", [])
-    ids = {f["properties"]["id"] for f in features}
+        return []
+    return [
+        (
+            f["properties"]["id"],
+            f["properties"]["z"],
+            shapely.geometry.shape(f["geometry"]),
+            f["properties"].get("surface"),
+        )
+        for f in json.loads(path.read_text()).get("features", [])
+    ]
+
+
+def measured_triangles(path: Path) -> tuple[set[str], np.ndarray]:
+    """The roofs rebuilt from DOM1 (`rebuilt_parts`): the ids they replace
+    and their tops as (n, 3, 3) triangles — a flat part at its `z`, a face
+    on its measured surface. Missing file → none."""
+    parts = rebuilt_parts(path)
+    ids = {oid for oid, _, _, _ in parts}
     tris = []
-    for f in features:
-        z = f["properties"]["z"]
-        poly = shapely.geometry.shape(f["geometry"])
-        if "surface" in f["properties"]:
-            tris.extend(face_triangles(poly, f["properties"]["surface"], z))
+    for _, z, poly, surface in parts:
+        if surface is not None:
+            tris.extend(face_triangles(poly, surface, z))
             continue
         for t in shapely.get_parts(shapely.constrained_delaunay_triangles(poly)):
             xy = np.asarray(t.exterior.coords)[:3]

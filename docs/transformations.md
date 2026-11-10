@@ -961,12 +961,14 @@ visual-variable codebook is in
   cell more than `VOID_M` = 1 m below the LoD2 roof under it is no
   surface (the laser saw through a sound opening, glass or dark slate)
   and is filled from the nearest measured cell (`fill_voids`) before the
-  excess is taken — each connected void on its own, unless it spans more
-  than half the LoD2 roof's cells (`roof_holes`, `VOID_SHARE`, since
-  2026-11-10): there the LoD2 roof stands too high or spans an open bowl,
-  and the fill lifted the Leipzig opera's hall onto its low wing and the
-  trees around the Freilichtbühne in the Großer Garten over its seats; a
-  tower's sound openings beside it are still filled. The case: Unna's Evangelische Stadtkirche — LoD2 draws
+  excess is taken — each connected void on its own, when it is a hole in
+  the roof (`roof_holes`, since 2026-11-10): at most 25 m²
+  (`VOID_HOLE_M2`: a sound opening, a skylight), or shut in by the LoD2
+  roof and spanning at most half of it (`VOID_SHARE`: a glass roof over a
+  courtyard). A void reaching the roof's edge is a part the LoD2 drew too
+  high, a larger one an open bowl: the fill lifted the Leipzig opera's
+  hall onto its low wing and the trees around the Freilichtbühne in the
+  Großer Garten over its seats. The case: Unna's Evangelische Stadtkirche — LoD2 draws
   the church as one gabled block (ridge ≈ 137 m, eaves ≈ 122 m), the west
   tower (walls ≈ 147 m, spire ≈ 187 m) is only in DOM1; the relief used to
   hover at the ridge height with its walls ending in the air beside the
@@ -1152,9 +1154,10 @@ visual-variable codebook is in
   of a longer one one direction: a wing's inner edge runs along its own
   outer wall, not along whichever wall of a bending block is closest in
   direction (An der Frauenkirche 5's ten directions cut its courtyard's
-  sides into teeth), and an edge within 1 m of that wall runs on it (an
-  edge along the outline is the outline, no sliver beside it);
-  neighbours parallel within 1 m are one line, an edge off every wall
+  sides into teeth), and an edge within 1 m of that wall runs on it, on
+  the wall's own line (an edge along the outline is the outline, no
+  sliver beside it); neighbours parallel within 1 m are one line — two
+  on two walls only on one line, a jog in the footprint stays —, an edge off every wall
   shorter than 4 m (a rounded corner) is left out, and the lines meet
   where they cross, unless a corner would stand 1.5 m off the outline (a
   round tower keeps its points). The parts are then tiled again, the
@@ -1744,7 +1747,8 @@ visual-variable codebook is in
   `z`, a face's surface grid read between its cells, its slope on the
   quarter of the 3 × 3 cells around that lies on one plane — beside a
   ridge, hip or valley not a mix of two flanks —, its ridge the
-  highest of them); until then such a roof's dormers and chimneys stood
+  highest of them; a dormer where the rebuilt roof is flatter than 25°
+  is dropped, the building draws no pitch to carry it); until then such a roof's dormers and chimneys stood
   at the LoD2 faces it replaces, metres off the drawn roof — some
   chimneys' measured tops under their own feet (Dresden's rebuilt roofs
   hold 417 dormers now, 50 before; the block at Schloßstraße and

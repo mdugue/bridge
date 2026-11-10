@@ -679,8 +679,11 @@ def test_a_rebuilt_roof_holds_its_dormers_on_its_own_parts_not_the_lod2_faces():
     assert abs(planes.ridge[0] - (8.0 + 0.5 * 3.5)) < 1e-6
     d = {"of": 0, "x": 5.0, "y": 2.0, "z": 11.0, "top": 12.5, "slope": 45.0}
     chimney = {"of": 0, "x": 5.0, "y": 6.0, "z": 12.0, "top": 10.0, "k": "chimney"}
-    dormers.on_planes([d, chimney], planes)
+    assert dormers.on_planes([d, chimney], planes) == [d, chimney]
     assert d["z"] == 9.0 and chimney["z"] == 9.0
+    # a dormer on the rebuilt flat part: no pitch drawn to carry it
+    flat = {"of": 0, "x": 5.0, "y": 6.0, "z": 12.0, "top": 13.5, "slope": 45.0}
+    assert dormers.on_planes([flat], planes) == []
 
 
 def test_a_dormer_beside_a_rebuilt_ridge_reads_its_flanks_pitch():

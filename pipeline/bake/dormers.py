@@ -112,7 +112,7 @@ from scipy.ndimage import map_coordinates
 from .common import Tile, feature, owns, write_geojson
 from .osm_buildings import _lod2, footprints, root_of
 from .roof_colour import ring_normal, ring_slope, surface_rings
-from .skyview import surface_heights
+from .skyview import rebuilt_parts, surface_heights
 from .structures import Surfaces
 
 MIN_SLOPE = 25.0
@@ -637,8 +637,8 @@ class MeasuredPart:
 
     def at(self, x: float, y: float) -> tuple[float, float]:
         """The part's height at (x, y) and its slope there (degrees): a
-        face's grid read between its cells, its slope that of the flattest
-        quarter around the nearest cell (`_quarter_slope`) — beside a
+        face's grid read between its cells, its slope that of the quarter
+        around the nearest cell lying on one plane (`_quarter_slope`) — beside a
         ridge, a hip or a valley of the rebuilt surface the cells either
         side lie on different flanks, and their mean reads neither."""
         if self.grid is None:
@@ -663,14 +663,9 @@ class MeasuredPart:
 def measured_parts(tile: Tile) -> dict[str, list[MeasuredPart]]:
     """The roofs rebuilt from DOM1 on this tile (dlm/roofs_<tile>.geojson,
     the `roofs` step's), by LoD2 object; none where it is not there."""
-    path = tile.data / "dlm" / f"roofs_{tile.id}.geojson"
     out: dict[str, list[MeasuredPart]] = {}
-    if not path.exists():
-        return out
-    for f in json.loads(path.read_text()).get("features", []):
-        prop = f["properties"]
-        part = MeasuredPart(shapely.geometry.shape(f["geometry"]), prop["z"], prop.get("surface"))
-        out.setdefault(prop["id"], []).append(part)
+    for oid, z, plan, surface in rebuilt_parts(tile.data / "dlm" / f"roofs_{tile.id}.geojson"):
+        out.setdefault(oid, []).append(MeasuredPart(plan, z, surface))
     return out
 
 
@@ -741,6 +736,10 @@ class RoofPlanes:
             return over
         return near[1] if near is not None else None
 
+    def rebuilt(self, of: int) -> bool:
+        """Whether object `of`'s roof is read on its rebuilt parts."""
+        return of < len(self.parts) and bool(self.parts[of])
+
     def _measured_at(self, of: int, p: shapely.Point) -> tuple[float, float] | None:
         """A rebuilt roof at `p`: the highest part over it, else the nearest
         within PLANE_REACH_M of its outline."""
@@ -752,16 +751,21 @@ class RoofPlanes:
         return q.at(p.x, p.y) if gap <= PLANE_REACH_M else None
 
 
-def on_planes(found: list[dict], planes: RoofPlanes) -> None:
+def on_planes(found: list[dict], planes: RoofPlanes) -> list[dict]:
     """Each dormer and chimney at its host's exact roof (`RoofPlanes`):
     its `z` there; a dormer's slope there too, its top the same height
     over it (its row's one height over the roof: read against the roof,
     it moves with it) but at most RIDGE_SLACK_M over the ridge, and a
     shed's fall at most SHED_MARGIN under the slope. A chimney's top is
-    the surface model's own height and stays. A dormer whose face there is
-    flatter than MIN_SLOPE (beside a step onto a flat part) keeps its
-    row's height and slope."""
+    the surface model's own height and stays. A dormer whose LoD2 face
+    there is flatter than MIN_SLOPE (beside a step onto a flat part) keeps
+    its row's height and slope; one on a roof rebuilt from DOM1 flatter
+    there than MIN_SLOPE is dropped: the building draws no pitch to carry
+    it, and at the LoD2's height it would float over the drawn roof or
+    sink into it. The dormers and chimneys kept, in place."""
+    kept = []
     for d in found:
+        kept.append(d)
         e = planes.at(d["of"], d["x"], d["y"])
         if e is None:
             continue
@@ -770,6 +774,8 @@ def on_planes(found: list[dict], planes: RoofPlanes) -> None:
             d["z"] = round(z, 2)
             continue
         if slope < MIN_SLOPE:
+            if planes.rebuilt(d["of"]):
+                kept.pop()
             continue
         d["top"] = round(d["top"] + z - d["z"], 2)
         d["z"] = round(z, 2)
@@ -778,6 +784,7 @@ def on_planes(found: list[dict], planes: RoofPlanes) -> None:
         d["slope"] = round(slope, 1)
         if "tf" in d:
             d["tf"] = round(min(d["tf"], slope - SHED_MARGIN), 1)
+    return kept
 
 
 def mansard_flanks(city: dict) -> list[shapely.Geometry]:
@@ -1098,7 +1105,7 @@ def find(
     building = [roofs.groups[d["of"]] for d in found]
     found = in_rows(found, building, walls or {}, roofs.place)
     if planes is not None:
-        on_planes(found, planes)
+        found = on_planes(found, planes)
     out: list[dict] = []
     level: list[bool] = []
     for d in found:
