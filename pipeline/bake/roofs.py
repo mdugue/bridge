@@ -531,10 +531,12 @@ def _regions(h, own, face, small_cells, with_faces, narrow):
     return merge_regions(lab, h, small_cells, faces, thin=with_faces, narrow=with_faces and narrow)
 
 
-def _plausible_faces(h, lab, faces, face, landmark) -> tuple[np.ndarray, list[int]]:
-    """The surface the faces are drawn with — each as planes or one curve
-    (`roof_planes.plausible_surface`), fitted on its own face cells (what
-    it took in follows it) — and the faces that are neither."""
+def _plausible_faces(h, lab, faces, face, landmark, flank_only) -> tuple[np.ndarray, list[int]]:
+    """The surface the faces are drawn with — each as flanks, planes or one
+    curve (`roof_planes.plausible_surface`), fitted on its own face cells
+    (what it took in follows it) — and the faces that are none of them. A
+    face most of whose cells only the flank rule found (`flank_only`) is
+    drawn as flanks or not at all."""
     surface = h.copy()
     implausible = []
     for rid in np.flatnonzero(faces):
@@ -544,8 +546,9 @@ def _plausible_faces(h, lab, faces, face, landmark) -> tuple[np.ndarray, list[in
         rows, cols = np.nonzero(ndi.binary_dilation(mine, iterations=EXTEND_CELLS + 2))
         win = (slice(rows.min(), rows.max() + 1), slice(cols.min(), cols.max() + 1))
         src = mine[win] & face[win]
+        flanks = (mine & flank_only).sum() > 0.5 * mine.sum()
         fit = roof_planes.plausible_surface(
-            h[win], src if src.any() else mine[win], SLOPE, RES, EXTEND_CELLS, landmark
+            h[win], src if src.any() else mine[win], SLOPE, RES, EXTEND_CELLS, landmark, flanks
         )
         if fit is None:
             implausible.append(int(rid))
@@ -572,12 +575,17 @@ def measured_model(
     if known.sum() < small_cells:
         return None
     h = scan_surface(dom, known)
-    face = np.zeros_like(own)
+    face = flank_only = np.zeros_like(own)
     if with_faces:
-        face = inclined_cells(h, own) | roof_planes.planar_faces(h, own, step_cells(h), SLOPE, RES)
+        step = step_cells(h)
+        sloped = inclined_cells(h, own) | roof_planes.planar_faces(h, own, step, SLOPE, RES)
+        flanks = roof_planes.flank_cells(h, own, step, SLOPE, RES)
+        # the ridge between two flanks is level for a cell or two
+        face = ndi.binary_closing(sloped | flanks, structure=np.ones((3, 3), bool)) & own & ~step
+        flank_only = flanks & ~sloped
     for rounds in range(PLAUSIBLE_ROUNDS + 1):
         lab, faces = _regions(h, own, face, small_cells, with_faces, narrow)
-        surface, implausible = _plausible_faces(h, lab, faces, face, landmark)
+        surface, implausible = _plausible_faces(h, lab, faces, face, landmark, flank_only)
         if not implausible:
             break
         if rounds == PLAUSIBLE_ROUNDS:

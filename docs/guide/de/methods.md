@@ -53,7 +53,12 @@ zur Regel passt.
   Dachfläche, baut der Viewer das Dach aus der Messung neu — schon bei einem
   Fünftel, wo die Oberfläche dort eben ist und das Dach des Modells sich
   neigt, wo die Oberfläche es nicht tut (ein flaches Walmdach, das über ein
-  Kaufhaus mit Flachdach gezeichnet ist). Eine große Höhe
+  Kaufhaus mit Flachdach gezeichnet ist). Seine Schrägen werden als
+  gewöhnliches Steildach gezeichnet: jedes Haus einer Zeile und jeder Knick
+  eines Flügels als eigene Ebene, Traufe und First waagrecht, von Gauben
+  und Schornsteinen nicht verbeult; nur ein Wahrzeichen behält die
+  gemessene Fläche selbst, und
+  eine Schräge, die zu keiner Dachform passt, bleibt flach. Eine große Höhe
   über dem Gebäudemodell wird nur ein Schornstein oder Turm, wo
   OpenStreetMap ihn nennt. Das Kleine auf dem Dach kommt allein aus dem
   Oberflächenmodell: jede Erhebung über einem geneigten Dach ist eine

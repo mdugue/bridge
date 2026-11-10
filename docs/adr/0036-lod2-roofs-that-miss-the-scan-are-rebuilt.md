@@ -35,12 +35,16 @@ is trees, pylons and the cranes of the flight day.
 4. **Rebuilt parts are architectural, not raster-shaped:** no part
    narrower than a few metres, outlines straight rather than on the 1 m
    grid, steep flanks drawn as faces.
-5. **A face is drawn in a form roofs are built in, or not at all:** as
-   planes turned the ways one roof's flanks turn, or as one profile
-   extruded along an axis (a barrel, a shed's curve). The scan's own
-   surface — a dome, a hall's ribbed vaults — only on a landmark, where
-   Wikidata vouches that the building is that unusual. A face the scan
-   shows in no such form goes back to flat levels.
+5. **A face is drawn in a form roofs are built in, or not at all:** first
+   as the flanks of a pitched roof — each section of a row of houses or
+   of a bending wing on its own plane, rising from an eave, level along
+   it, opposite flanks meeting at a level ridge, dormers left to their own
+   step — where its feet lie along the eaves; else as planes turned the
+   ways one roof's flanks turn, or as one profile extruded along an axis
+   (a barrel, a shed's curve). The scan's own surface — a dome, a hall's
+   ribbed vaults — only on a landmark, where Wikidata vouches that the
+   building is that unusual. A face the scan shows in no such form goes
+   back to flat levels.
 6. **Where the scan predates a building OSM maps**, the mapped height
    stands, guarded by OSM's date and the outline's coverage.
 7. **Every rule is general.** No list of buildings, no per-building fix.
@@ -69,3 +73,6 @@ is trees, pylons and the cranes of the flight day.
 - **The scan's surface, smoothed, on every face:** tiles, dormers and the
   edges' blur read as a crumpled blanket over ordinary pitched roofs (An
   der Frauenkirche 5).
+- **Planes grown from the scan as the first form:** on a street of town
+  houses every dormer breaks a plane, and the face fell apart into
+  slivers and blobs (the block at Schloßstraße and Sporergasse).

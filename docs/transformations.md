@@ -961,7 +961,11 @@ visual-variable codebook is in
   cell more than `VOID_M` = 1 m below the LoD2 roof under it is no
   surface (the laser saw through a sound opening, glass or dark slate)
   and is filled from the nearest measured cell (`fill_voids`) before the
-  excess is taken. The case: Unna's Evangelische Stadtkirche — LoD2 draws
+  excess is taken — unless such cells cover more than half the footprint
+  (`VOID_SHARE`, since 2026-11-10): there the LoD2 roof stands too high
+  or spans an open bowl, and the fill lifted the Leipzig opera's hall onto
+  its low wing and the trees around the Freilichtbühne in the Großer
+  Garten over its seats. The case: Unna's Evangelische Stadtkirche — LoD2 draws
   the church as one gabled block (ridge ≈ 137 m, eaves ≈ 122 m), the west
   tower (walls ≈ 147 m, spire ≈ 187 m) is only in DOM1; the relief used to
   hover at the ridge height with its walls ending in the air beside the
@@ -1060,16 +1064,54 @@ visual-variable codebook is in
   (σ 1 cell, 1 m height σ; the Hauptbahnhof's ribbed vaults); else the
   face's cells go back to the levels and the model is cut again (at most
   three rounds). Until 2026-11-06 every face was the smoothed scan
-  (🗃️ below). The surface is written as a 1 m grid in cm from the part's `z` (its median),
+  (🗃️ below).
+  **Flanks first** (since 2026-11-10, `gable_surface`, tried before the
+  planes): the scan smoothed over the roof's calm cells (σ 1.5 cells: a
+  dormer's 2–3 m melts into its flank) falls into patches facing one of
+  the roof's directions (the peaks of its slope-weighted aspect histogram,
+  within 35°, a 3 × 3 majority twice). A patch of ≥ 20 m² that holds a 3 m
+  square and rises ≥ 1 m, and steadily — a fifth to four fifths of its
+  rise spread over ≥ 1.5 m, where the edge of a block raised over a flat
+  roof rises within a metre or two — is a flank, and its cells face cells
+  too (`flank_cells`, with the crowns between flanks: a ridge the scan
+  rounds). A flank one plane holds on less than 85 % of its cells is cut
+  along its length where the scan's height off its plane splits into two
+  even runs (a party wall where the ridges of a row of houses step, the
+  middle of a bending wing), and its parts again, as long as the sections
+  (at most 16) fit their own planes on 5 % more of its cells. Each flank's
+  plane rises along its direction alone, so eaves and ridge are level:
+  fitted through the median of each metre across it (the first and last
+  left out), then on its cells within 0.5 m (dormers and chimneys trimmed
+  away); two neighbouring flanks facing within 15° of opposite share one
+  axis (a level ridge). A level patch between them (a crown, a mansard's
+  top) is a level plane; a cell near a flank (4 cells) whose plane holds
+  it — the scan on it or up to 3 m over it, a dormer — is the flank's;
+  what is left takes planes of its own (`plane_facets`), every other cell
+  the nearby plane closest to the scan, the borders where the planes
+  cross. The flanks are the face when, judged a cell in from its edge
+  (the eave's blur), 85 % of its cells (a landmark's 95 %) lie within
+  0.5 m of their plane or under a blob of ≤ 30 m² up to 3 m over it, 60 %
+  on it; no flank sags (> 0.5 m off its line over the middle of its fall:
+  a vault's half); the flanks hold ≥ 40 % of the face and turn `orderly`;
+  and flanks holding ≥ 70 % of their cells rise from an eave — their
+  lowest 30 % of cells lie along the face's edge and face into it within
+  25° (`_eave`; a blanket's patches rise from wherever the scan dips: none
+  of 288 random blankets passes). An der Frauenkirche 5's ring is now 15
+  flanks meeting at hips; the block at Schloßstraße and Sporergasse 23
+  flanks, the scan within 0.5 m of the drawn roof on 71 % of its cells
+  (35 % with the planes first). A face most of whose cells only the
+  flank rule found is drawn as flanks or not at all: the planes or a
+  landmark's surface would draw the dormers' blobs it was found past.
+  The surface is written as a 1 m grid in cm from the part's `z` (its median),
   two cells past the outline and carried on there on the face's own local
   plane. Polygonised from the labels smoothed by a 2 m majority (twice:
   a border diagonal to the grid no longer a staircase of 1 m teeth),
   `coverage_simplify` 2 m, clipped to the footprint,
   parts under 2 m dropped → `data/<site>/dlm/roofs_<tile>.geojson` (Polygons
   with the object `id`, the roof `z` and, for a face, its `surface`; the
-  provider's credit). **1 080 objects on Dresden's fifteen tiles, 2 814
-  parts, 367 of them faces** (2026-11-06; 1 081, 2 755 and 222 before the
-  plausibility rule; 886 objects, 2 227 parts before
+  provider's credit). **1 080 objects on Dresden's fifteen tiles, 2 721
+  parts, 342 of them faces** (2026-11-10; 2 814 and 367 before the flanks;
+  1 081, 2 755 and 222 before the plausibility rule; 886 objects, 2 227 parts before
   the band below 40 %; 2 956 parts before the strips merged; the
   Altstadt most); the step runs on every site — Hamburg 587 objects (365
   before the band), Leipzig 357 (269), Unna 61 (43), Meißen 56 (46),

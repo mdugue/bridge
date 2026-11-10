@@ -262,6 +262,26 @@ def test_a_rebuilt_face_burns_its_measured_surface(tmp_path):
         assert np.allclose(burned[1:-1, col], 120.0 + col, atol=1e-6)
 
 
+def test_a_rebuilt_face_ends_at_its_outline():
+    import shapely
+
+    from bake.skyview import face_triangles
+
+    # an outline off the cell centres, cut at a slant: no square of the
+    # grid fits its edges, and nothing may reach past them
+    poly = shapely.Polygon([(0.3, 0.3), (9.7, 0.3), (9.7, 6.2), (0.3, 9.7)])
+    dz = [[(c - 2) * 100 for c in range(14)] for _ in range(14)]
+    surface = {"x": -2, "y": 12, "res": 1, "cols": 14, "rows": 14, "dz": sum(dz, [])}
+    tris = face_triangles(poly, surface, 120.0)
+    xy = tris[..., :2]
+    e1, e2 = xy[:, 1] - xy[:, 0], xy[:, 2] - xy[:, 0]
+    area = 0.5 * np.abs(e1[:, 0] * e2[:, 1] - e1[:, 1] * e2[:, 0])
+    assert math.isclose(area.sum(), poly.area, rel_tol=1e-9)
+    assert shapely.contains_xy(poly.buffer(1e-6), xy[..., 0].ravel(), xy[..., 1].ravel()).all()
+    # still on the slope, 1 m per metre east, 120 m at x = 0.5
+    assert np.allclose(tris[..., 2], 119.5 + xy[..., 0], atol=1e-6)
+
+
 def test_extend_edges_keeps_what_is_measured():
     a = np.array([[np.nan, 1.0, 2.0], [np.nan, 3.0, np.nan]], np.float32)
     out = extend_edges(a)

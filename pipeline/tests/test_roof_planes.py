@@ -1,10 +1,14 @@
 """What a measured roof face may be drawn as (pipeline/bake/roof_planes.py)."""
 
 import numpy as np
+from scipy import ndimage as ndi
 
 from bake.roof_planes import (
+    FLANK_TOL_M,
     PLANE_TOL_M,
     curved_surface,
+    flank_cells,
+    gable_surface,
     planar_faces,
     plane_facets,
     plausible_surface,
@@ -34,8 +38,6 @@ def test_a_gable_is_two_planes_meeting_at_its_ridge():
 def test_a_crumpled_blanket_is_no_face_unless_a_landmark():
     rng = np.random.default_rng(3)
     # smooth bumps a couple of metres high, no plane, no axis
-    from scipy import ndimage as ndi
-
     h = 10 + ndi.gaussian_filter(rng.normal(0, 1, (40, 40)), 3) * 8
     mine = np.ones(h.shape, bool)
     assert plausible_surface(h, mine, SLOPE) is None
@@ -68,3 +70,62 @@ def test_a_ring_of_gentle_narrow_flanks_is_a_face_not_terraces():
     # one face, drawn as its two planes, not a flight of 1 m levels
     assert model.faces.sum() == 1 and int(model.lab.max()) == 1
     assert np.abs(model.heights()[5:55] - _gable(60, 16, 8.0, 0.33)[5:55]).max() < 2 * PLANE_TOL_M
+
+
+def _dormers(h, rows, cols, lift=1.5):
+    """Boxes `lift` over the flank at each (row, col) top-left corner, 3 × 3 m."""
+    h = h.copy()
+    for r in rows:
+        for c in cols:
+            h[r : r + 3, c : c + 3] += lift
+    return h
+
+
+def test_a_gable_with_a_row_of_dormers_is_still_its_two_flanks():
+    # a 24 m deep block, 90 m long, its south flank broken by eleven dormers
+    # (DOM1 over a street of town houses): no plane holds the scan, the
+    # flanks do
+    clean = _gable(rows=90, cols=24, ridge=12.0, pitch=0.8)
+    noise = np.random.default_rng(1).normal(0, 0.12, clean.shape)
+    h = _dormers(clean, range(4, 86, 8), [3]) + noise
+    out = gable_surface(h, np.ones(h.shape, bool))
+    assert out is not None
+    # the dormers are not in it: the flanks run straight past them
+    assert np.abs(out - clean)[2:-2, 1:-1].max() < FLANK_TOL_M
+    assert np.abs(out[10] - out[80]).max() < 0.1
+
+
+def test_houses_in_a_row_keep_each_its_own_ridge():
+    # three gables side by side along one street, ridges 2 m apart in
+    # height: each section its own plane, not one averaged across them
+    rows = []
+    for top in (10.0, 12.0, 10.5):
+        rows.append(_gable(rows=20, cols=20, ridge=10.0, pitch=0.9) + top - 10)
+    clean = np.vstack(rows)
+    h = clean + np.random.default_rng(2).normal(0, 0.1, clean.shape)
+    out = plausible_surface(h, np.ones(h.shape, bool), SLOPE)
+    assert out is not None
+    # off the party walls the surface is each house's own flanks
+    for k in range(3):
+        band = slice(20 * k + 3, 20 * k + 17)
+        assert np.median(np.abs(out[band, 2:-2] - clean[band, 2:-2])) < FLANK_TOL_M
+
+
+def test_a_block_raised_on_a_flat_roof_has_no_flanks():
+    # a box 1.6 m over a flat roof, its edge blurred by the scan: a step
+    # between two levels, not four flanks of a hip
+    h = np.full((50, 50), 20.0)
+    h[15:35, 12:38] += 1.6
+    h = ndi.gaussian_filter(h, 0.8)
+    own = np.ones(h.shape, bool)
+    assert not flank_cells(h, own, step_cells(h), SLOPE).any()
+    assert gable_surface(h, own) is None
+
+
+def test_flanks_rising_from_wherever_the_scan_dips_are_no_gable():
+    # smooth bumps over a long block: patches face every way, their feet
+    # nowhere near its eaves
+    for seed in range(4):
+        rng = np.random.default_rng(seed)
+        h = 10 + ndi.gaussian_filter(rng.normal(0, 1, (20, 60)), 3) * 10
+        assert gable_surface(h, np.ones(h.shape, bool)) is None

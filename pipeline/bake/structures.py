@@ -195,8 +195,10 @@ RELIEF_MIN_PART_M2 = 6.0
 RELIEF_LANDMARKS = 12
 # How far a relief's heights are smoothed (cells, Gaussian sigma).
 RELIEF_SMOOTH = 1.0
-# A surface-model cell this far below the LoD2 roof under it is a void.
+# A surface-model cell this far below the LoD2 roof under it is a void,
+# unless the scan lies so far below on more than this share of the roof.
 VOID_M = 1.0
+VOID_SHARE = 0.5
 # How far a relief's walls sink into the roof they stand on (m).
 FLOOR_SINK_M = 0.3
 
@@ -582,7 +584,13 @@ def relief(s: Surfaces, geom: shapely.Geometry, of: str) -> list[dict]:
     # what each cell stands on: its own LoD2 roof, else the ground
     ground = s.ground[win]
     floor = np.where(np.isfinite(roof), np.fmax(roof, ground), ground)
-    dom = np.where(inside, fill_voids(s.dom[win], inside & (s.dom[win] < floor - VOID_M)), np.nan)
+    void = inside & (s.dom[win] < floor - VOID_M)
+    # a void is a hole in the roof; where the scan lies under most of it, the
+    # LoD2 roof stands too high, and filling it from the cells around would
+    # lift a taller neighbour onto it (an opera's hall onto its low wing)
+    if void.sum() > VOID_SHARE * inside.sum():
+        void[:] = False
+    dom = np.where(inside, fill_voids(s.dom[win], void), np.nan)
     excess = np.nan_to_num(dom - top, nan=-1e9)
     over = excess >= RELIEF_MIN_M
     cells = s.field.res**2

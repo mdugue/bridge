@@ -207,8 +207,9 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   the canopy points they veto at build time), `scripts/measured-roofs.ts`
   (a LoD2 roof that misses DOM1 — the free-form roofs of complex buildings —
   replaced by what `pipeline/bake/roofs.py` measures: flat levels, and
-  faces where it slopes — planes, an extruded profile, or on a landmark
-  the scan's surface (`roof_planes.py`) — each an error-bounded TIN cut
+  faces where it slopes — the flanks of a pitched roof section by
+  section, planes, an extruded profile, or on a landmark the scan's
+  surface (`roof_planes.py`) — each an error-bounded TIN cut
   to its outline; ADR 0036).
 - Beyond LoD2 (plan 050, ADR 0036): geometry is added only where DOM1
   measures it **and** OSM (or, for a landmark's roof relief, Wikidata)

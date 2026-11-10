@@ -266,22 +266,57 @@ def _burn_chunk(out, idx, col, row, c0, r0, w, count, z) -> None:
 
 def face_triangles(poly: shapely.Geometry, surface: dict, z: float) -> np.ndarray:
     """A measured face's surface (roofs.py `surface`) as (n, 3, 3)
-    triangles: two per square between four cell centres, where the square's
-    middle lies inside the part."""
+    triangles: two per square between four cell centres inside the part;
+    a square its outline crosses clipped to it, the pieces lifted off the
+    square's four corners (bilinear) — a face ends at its outline, never
+    half a cell over its neighbour's roof (a tower's small base beside it
+    took that roof's height as its own)."""
     res = surface["res"]
     a = z + np.asarray(surface["dz"], np.float64).reshape(surface["rows"], surface["cols"]) / 100
     xs = surface["x"] + (np.arange(surface["cols"]) + 0.5) * res
     ys = surface["y"] - (np.arange(surface["rows"]) + 0.5) * res
-    mx, my = np.meshgrid((xs[:-1] + xs[1:]) / 2, (ys[:-1] + ys[1:]) / 2)
-    r, c = np.nonzero(shapely.contains_xy(poly, mx, my))
-    if not len(r):
-        return np.zeros((0, 3, 3))
+    gx, gy = np.meshgrid(xs, ys)
+    inner = shapely.contains_xy(poly, gx, gy)
+    full = inner[:-1, :-1] & inner[:-1, 1:] & inner[1:, :-1] & inner[1:, 1:]
+    r, c = np.nonzero(full)
 
     def corner(dr, dc):
         return np.column_stack([xs[c + dc], ys[r + dr], a[r + dr, c + dc]])
 
     p00, p01, p10, p11 = corner(0, 0), corner(0, 1), corner(1, 0), corner(1, 1)
-    return np.concatenate([np.stack([p00, p01, p11], axis=1), np.stack([p00, p11, p10], axis=1)])
+    out = [np.stack([p00, p01, p11], axis=1), np.stack([p00, p11, p10], axis=1)]
+    out.append(_clipped_squares(poly, a, xs, ys, ~full))
+    return np.concatenate(out)
+
+
+def _clipped_squares(poly, a, xs, ys, candidates) -> np.ndarray:
+    """The squares among `candidates` the part's outline crosses, clipped
+    to it and triangulated, each vertex at the square's bilinear height."""
+    res = xs[1] - xs[0] if len(xs) > 1 else 1.0
+    r, c = np.nonzero(candidates)
+    boxes = shapely.box(xs[c], ys[r + 1], xs[c + 1], ys[r])
+    hit = shapely.intersects(boxes, poly)
+    r, c, boxes = r[hit], c[hit], boxes[hit]
+    if not len(r):
+        return np.zeros((0, 3, 3))
+    pieces, at = shapely.get_parts(shapely.intersection(boxes, poly), return_index=True)
+    polygonal = (shapely.get_type_id(pieces) == 3) & (shapely.area(pieces) > 1e-9)
+    pieces, at = pieces[polygonal], at[polygonal]
+    if not len(pieces):
+        return np.zeros((0, 3, 3))
+    triangulated = shapely.constrained_delaunay_triangles(pieces)
+    tris, back = shapely.get_parts(triangulated, return_index=True)
+    xy = shapely.get_coordinates(tris).reshape(len(tris), 4, 2)[:, :3]
+    rr, cc = r[at[back]][:, None], c[at[back]][:, None]
+    u = (xy[..., 0] - xs[cc]) / res
+    v = (ys[rr] - xy[..., 1]) / res
+    zz = (
+        a[rr, cc] * (1 - u) * (1 - v)
+        + a[rr, cc + 1] * u * (1 - v)
+        + a[rr + 1, cc] * (1 - u) * v
+        + a[rr + 1, cc + 1] * u * v
+    )
+    return np.concatenate([xy, zz[..., None]], axis=2)
 
 
 def measured_triangles(path: Path) -> tuple[set[str], np.ndarray]:

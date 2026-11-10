@@ -146,6 +146,19 @@ def test_an_ordinary_roofs_antennas_make_no_relief():
     assert structures.relief(s, cell_box(20, 20, 60, 60), "x") == []
 
 
+def test_a_low_wing_drawn_too_high_borrows_no_relief_from_the_hall_beside_it():
+    roof = np.full((N, N), np.nan)
+    roof[20:40, 20:80] = GROUND + 8  # the wing, LoD2 2 m over the scan
+    roof[40:80, 20:80] = GROUND + 36  # the hall beside it
+    roof[39, 50:70] = GROUND + 36  # ... reaching into the wing's outline
+    dom = np.where(np.isfinite(roof), roof, GROUND)
+    dom[20:39, 20:80] = GROUND + 6
+    dom[39, 20:50] = dom[39, 70:80] = GROUND + 6
+    s = surfaces(dom, roof)
+    # no void to fill from the hall's cells: the wing's roof is simply high
+    assert structures.relief(s, cell_box(20, 20, 20, 60), "wing") == []
+
+
 def test_a_landmark_point_beside_its_building_finds_it():
     city = {"CityObjects": {"hall": {"children": ["part"]}, "part": {"parents": ["hall"]}}}
     ids = ["part"]
