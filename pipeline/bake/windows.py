@@ -474,13 +474,17 @@ GLASS_IMAGES = 2
 GLASS_SHARE = 2 / 3
 
 
-def glass_records(lines: list[str]) -> dict[tuple[str, int, float], list[int]]:
+def glass_records(
+    lines: list[str], plan: dict[str, list[list]] | None = None
+) -> dict[tuple[str, int, float], list[int]]:
     """Per wall (`wall_key`) the glass readings (‰) of the photos that saw
     enough of it from near enough (`GLASS_NEAR_M`), one a sequence — its
     photo that saw most of the wall — so that two readings are two passes,
-    not two frames of one; of the GLASS_SEQ sequences that saw most of it
-    (a cache read under an earlier plan may hold more than the fetch now
-    picks)."""
+    not two frames of one; of the GLASS_SEQ sequences that saw most of it.
+    Given the `plan` the cache was read through for (`plan_of`), only the
+    photos it picked for each wall: one an earlier plan under other limits
+    picked does not count."""
+    picked = None if plan is None else {(i, tuple(k)) for i, keys in plan.items() for k in keys}
     best: dict[tuple, tuple[float, int]] = {}
     for line in lines:
         try:
@@ -488,6 +492,8 @@ def glass_records(lines: list[str]) -> dict[tuple[str, int, float], list[int]]:
         except ValueError:
             continue
         for w in r.get("walls", []):
+            if picked is not None and (r.get("img"), wall_key(w)) not in picked:
+                continue
             if "gl" in w and w.get("dist", 0) <= GLASS_NEAR_M:
                 key = (*wall_key(w), r.get("seq", r["img"]))
                 cov = w.get("cov", 0)
@@ -597,9 +603,16 @@ def write(path: Path, buildings: dict, reliability: dict, outer: dict | None = N
 
 
 def decided_glass(lines: list[str]) -> dict[tuple[str, int, float], dict]:
-    """Per wall (`wall_key`) its glass entry from the cache's readings
+    """Per wall (`wall_key`) its glass entry from the readings of a cache
+    read through (`complete`), of the photos its plan picked
     (`glass_records`, `wall_glass`), where it has enough of them."""
-    return {k: g for k, rs in glass_records(lines).items() if (g := wall_glass(rs)) is not None}
+    try:
+        plan = json.loads(lines[-1]).get("plan") if lines else None
+    except (ValueError, AttributeError):
+        plan = None
+    return {
+        k: g for k, rs in glass_records(lines, plan).items() if (g := wall_glass(rs)) is not None
+    }
 
 
 def prior_glass(out: Path) -> dict[tuple[str, int, float], dict]:

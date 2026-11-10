@@ -1796,8 +1796,9 @@ visual-variable codebook is in
   no source names a building's material, its walls are read on the street
   photos of every camera (`facade_glass.py`): `bun run fetch` asks
   Mapillary for every photo near the tile (`<t>.photos.json`), picks per
-  LoD2 outer wall the photo of each of up to four sequences that sees it
-  best (within 60 m, ≤ 60° off its normal, near enough that its pixel at
+  LoD2 outer wall the photo of each of up to eight sequences that sees it
+  best — twice the four the decision keeps, since a tree or a bus that
+  hides a view shows only in the reading — (within 60 m, ≤ 60° off its normal, near enough that its pixel at
   the wall's nearest point spans no more than the reading's 10 cm — a
   panorama at ~33 m —, a free line of sight, a framed photo with ≥ 30 %
   of the wall's upper part in its frame), turns its upright thumbnail and
@@ -1816,7 +1817,9 @@ visual-variable codebook is in
   hash of the prompts, the model, the crop's limits and the
   rectification's, and ends with a line saying every photo its plan
   picked was read, for the walls and planner limits it was planned for
-  (`plan_key`; where the cache is missing or not read through, the
+  (`plan_key`), and which photo it picked for which wall — the decision
+  reads those alone, not one an earlier plan under other limits picked
+  (where the cache is missing or not read through, the
   windows bake keeps the glass its file holds rather than drop it, and
   says so; a wall planned later on a photo already read, or
   numbered anew by a new LoD2 edition — a wall is its object, number and
@@ -1832,10 +1835,14 @@ visual-variable codebook is in
   camera's parameters are OpenSfM's (fx, fy, cx, cy, k1, k2, …): its focal
   and radial terms are read from there; a framed photo's frame is its own
   shape where Mapillary gives it. A photo the model could not read in
-  (a worker out of memory) is retried at the next fetch and given up
-  after three tries; one Mapillary has taken down since (HTTP 404, 410, or
-  its "does not exist" answer) is cached as skipped, while a refused token
-  is never read as a missing photo.
+  (a worker out of memory), the network failing, or the token refused,
+  is read again at the next fetch; one whose own thumbnail the CDN
+  refuses is given up after three fetches since it was last read (but
+  not in a run where all of ten or more were refused: that is a proxy's
+  or the network's refusal); one Mapillary has taken down since (HTTP
+  404, 410, or its "does not exist" answer) is cached as skipped. A
+  photo is planned at its thumbnail's own size, which is smaller where
+  the original was.
   The building bake gives an object material `glass`, from `photos`, when
   its glass walls make at least half the length of its walls read and a
   quarter of all its outer walls, or 15 m and a twentieth of them

@@ -39,7 +39,7 @@ may name a folder holding earlier downloads (`img/<id>.jpg`,
 
 The glass reading (ADR 0060) plans differently: every photo of any camera
 within `GLASS_NEAR_M` (`<raw>/mapillary/facades/<tile>.photos.json`), the
-best of each of `GLASS_SEQ` sequences per wall (`plan_glass`), each read by
+best of each of `GLASS_PLAN_SEQ` sequences per wall (`plan_glass`), each read by
 facade_glass.py into `<tile>.glass.<key>.jsonl`, ended by a line that says
 it was read through (`complete`); windows.py decides from it.
 
@@ -54,6 +54,7 @@ import collections
 import concurrent.futures as cf
 import datetime
 import hashlib
+import http.client
 import json
 import math
 import os
@@ -96,7 +97,10 @@ PHOTO_FIELDS = (
 FRAMED = ("perspective", "brown", "fisheye")  # the framed cameras read
 GLASS_NEAR_M = 60.0
 GLASS_IN_FRAME = 0.3
-GLASS_SEQ = 4
+GLASS_SEQ = 4  # the sequences a wall's decision keeps (windows.glass_records)
+# the sequences planned: twice as many, since what hides a view — a tree, a
+# bus, scaffolding — shows only in the reading, which keeps those that saw most
+GLASS_PLAN_SEQ = 2 * GLASS_SEQ
 THUMB_PX = 2048  # the thumbnail's long side (thumb_2048_url)
 MAX_FAILS = 3  # a photo that failed this many fetches is given up (`_done`)
 
@@ -360,11 +364,14 @@ def in_frame(wall: dict, photo: dict, xy, rot: np.ndarray) -> float:
 
 
 def pixel_angle(photo: dict) -> float:
-    """The radians a pixel of the photo's thumbnail spans ahead (its long
-    side THUMB_PX)."""
+    """The radians a pixel of the photo's thumbnail spans ahead: its long
+    side THUMB_PX, or the original's where that is smaller (Mapillary does
+    not scale a photo up)."""
     from .facade_measure import project
 
-    return float(project(np.array([[0.0, 0.0, 1.0]]), THUMB_PX, THUMB_PX, camera_of(photo))[3])
+    side = max(photo.get("width") or 0, photo.get("height") or 0)
+    px = min(THUMB_PX, side) if side else THUMB_PX
+    return float(project(np.array([[0.0, 0.0, 1.0]]), px, px, camera_of(photo))[3])
 
 
 def _to_segment(x: float, y: float, a, b) -> float:
@@ -384,8 +391,8 @@ def glass_candidates(
     MAX_RES_M (a panorama's pixel spans 9 cm at 30 m: the reading masks
     what is coarser), no other footprint in the line of sight, and — a
     framed photo — at least GLASS_IN_FRAME of the wall in its frame; the
-    best seen first, one of each of the GLASS_SEQ sequences that see it
-    best. `rots` the photos' poses on the grid, `angles` their
+    best seen first, one of each of the GLASS_PLAN_SEQ sequences that see
+    it best. `rots` the photos' poses on the grid, `angles` their
     `pixel_angle`s."""
     from .facade_measure import MAX_RES_M
 
@@ -413,7 +420,7 @@ def glass_candidates(
         seq = images[i]["sequence"]
         if seq not in best or score > best[seq][0]:
             best[seq] = (score, int(i))
-    ranked = sorted(best.items(), key=lambda kv: -kv[1][0])[:GLASS_SEQ]
+    ranked = sorted(best.items(), key=lambda kv: -kv[1][0])[:GLASS_PLAN_SEQ]
     return {seq: i for seq, (_, i) in ranked}
 
 
@@ -560,8 +567,8 @@ def _get(url: str, *, auth: bool = True, tries: int = 5) -> bytes:
             if e.code != 429 and e.code < 500:
                 raise
             err = e
-        except (OSError, TimeoutError) as e:
-            err = e
+        except (OSError, TimeoutError, http.client.HTTPException) as e:
+            err = e  # dropped, timed out, or cut mid-body (IncompleteRead)
         time.sleep(min(60, 2 ** (attempt + 1)))
     raise Transient(f"{type(err).__name__}: {err}")
 
@@ -658,14 +665,12 @@ def _poses(ids: list[str]) -> dict[str, dict]:
             return json.loads(_get(f"{GRAPH}/?{q}"))
         except urllib.error.HTTPError as err:
             # one image taken down fails its whole batch: ask in halves, and
-            # leave out the one alone that is gone (no pose: skipped); a
-            # token's error raises at the first single id
+            # leave out the one alone that is gone (no pose: skipped); any
+            # other error (a token's) raises
+            if not gone(err):
+                raise
             if len(chunk) == 1:
-                if gone(err):
-                    return {}
-                raise
-            if err.code >= 500 or err.code in (401, 429):
-                raise
+                return {}
             half = len(chunk) // 2
             return one(chunk[:half]) | one(chunk[half:])
 
@@ -730,8 +735,11 @@ def raw_frame(a: np.ndarray, orientation: int | None) -> np.ndarray | None:
 
 def measure_image(job: dict) -> dict:
     """One image measured on its walls: {"img", "seq", "walls": [...]}, or
-    {"img", "skip"} when it cannot be (no pose), or {"img", "fail"} on a
-    network failure (not cached: the next run tries again)."""
+    {"img", "skip"} when it cannot be (no pose, taken down), or
+    {"img", "fail"} when it could not be read now: the next run tries again.
+    A failure that is the photo's own — its thumbnail refused, not the
+    network, the token or the model — says `own` (the glass cache notes it
+    and gives the photo up after MAX_FAILS, `_done`)."""
     from . import facade_glass, facade_measure, facade_traits
     from .facade_measure import EYE_M, class_map, load_image, rotation_matrix
 
@@ -754,12 +762,20 @@ def measure_image(job: dict) -> dict:
     source = Path(job["source"]) if job.get("source") else None
     try:
         dets = _detections(iid, source)
-        path, ours = _thumbnail(iid, job["url"], Path(job["scratch"]), source)
     except urllib.error.HTTPError as err:
         if gone(err):  # taken down: no later fetch will find it
             return {"img": iid, "skip": f"gone (HTTP {err.code})"}
         return {"img": iid, "fail": f"HTTPError: {err}"[:200]}
     except (OSError, ValueError) as err:
+        return {"img": iid, "fail": f"{type(err).__name__}: {err}"[:200]}
+    try:
+        path, ours = _thumbnail(iid, job["url"], Path(job["scratch"]), source)
+    except urllib.error.HTTPError as err:
+        if gone(err):
+            return {"img": iid, "skip": f"gone (HTTP {err.code})"}
+        # the CDN refusing this one photo (made private): its own failure
+        return {"img": iid, "fail": f"HTTPError: {err}"[:200], "own": True}
+    except OSError as err:
         return {"img": iid, "fail": f"{type(err).__name__}: {err}"[:200]}
     try:
         img = raw_frame(load_image(path), exif)
@@ -791,9 +807,13 @@ def measure_image(job: dict) -> dict:
                 )
             else:
                 m = measure(w | {"zg": zg}, img, cls, rot, cam)
-        except (facade_glass.ModelError, MemoryError) as err:  # not the photo's fault: again later
-            return {"img": iid, "fail": f"model: {type(err).__name__}: {err}"[:200]}
         except Exception as err:  # noqa: BLE001 — record it, measure the rest
+            # the model failing (or the worker out of memory over it) is
+            # not the photo's fault: read it again later
+            if isinstance(err, facade_glass.ModelError) or (
+                kind == "glass" and isinstance(err, MemoryError)
+            ):
+                return {"img": iid, "fail": f"model: {type(err).__name__}: {err}"[:200]}
             m = {"err": repr(err)[:100]}
         out.append(head | m)
     return {"img": iid, "seq": job["seq"], "walls": out}
@@ -804,8 +824,10 @@ def measure_image(job: dict) -> dict:
 
 def _done(path: Path) -> dict[str, set[tuple[str, int, float]] | None]:
     """Per image already in the cache the walls it was read on; None for
-    one that could not be read at all (a skip, or a failure on MAX_FAILS
-    fetches — the glass cache notes each: it is not asked again)."""
+    one not to be asked again: a skip, or one whose thumbnail was refused
+    on MAX_FAILS fetches since it was last read (the glass cache notes
+    each; a photo read on one wall and refused since is given up for the
+    walls planned on it later too)."""
     if not path.exists():
         return {}
     done: dict[str, set[tuple[str, int, float]] | None] = {}
@@ -821,9 +843,10 @@ def _done(path: Path) -> dict[str, set[tuple[str, int, float]] | None]:
         elif "skip" in r:
             done[iid] = None
         elif (have := done.setdefault(iid, set())) is not None:
+            fails[iid] = 0
             have.update(wall_key(w) for w in r.get("walls", []))
     for iid, n in fails.items():
-        if n >= MAX_FAILS and iid not in done:
+        if n >= MAX_FAILS:
             done[iid] = None
     return done
 
@@ -854,21 +877,30 @@ def plan_key(ws: list[dict]) -> str:
     (`wall_key`) and the planner's limits. A cache read through under
     another — a new LoD2 edition, a changed limit — is not read through."""
     what = (
-        (GLASS_NEAR_M, GLASS_IN_FRAME, GLASS_SEQ, MIN_DIST_M, MIN_COS, THUMB_PX),
+        (GLASS_NEAR_M, GLASS_IN_FRAME, GLASS_PLAN_SEQ, MIN_DIST_M, MIN_COS, THUMB_PX),
         (SINCE_YEAR, FRAMED),
         sorted(wall_key(w) for w in ws),
     )
     return hashlib.sha256(repr(what).encode()).hexdigest()[:10]
 
 
-def mark_complete(path: Path, key: str) -> None:
+def plan_of(jobs: dict[str, dict]) -> dict[str, list[list]]:
+    """The glass plan as the read-through line keeps it: per photo the
+    walls (`wall_key`) it was picked for."""
+    return {i: sorted(list(wall_key(w)) for w in jobs[i]["walls"]) for i in sorted(jobs)}
+
+
+def mark_complete(path: Path, key: str, plan: dict[str, list[list]] | None = None) -> None:
     """Ends the glass cache with the line that says every photo the plan
-    `key` picked was read (`complete`), unless it already does."""
+    `key` picked was read (`complete`), and which it picked for which wall
+    (`plan_of`: the decision reads those alone, not what an earlier plan
+    picked) — unless it already ends so."""
     lines = path.read_text().splitlines() if path.exists() else []
-    if not complete(lines, key):
+    line = json.dumps({"complete": key, "plan": plan or {}}, separators=(",", ":"))
+    if not lines or lines[-1] != line:
         path.parent.mkdir(parents=True, exist_ok=True)
         with _append(path) as f:
-            f.write(json.dumps({"complete": key}) + "\n")
+            f.write(line + "\n")
 
 
 def complete(lines: list[str], key: str) -> bool:
@@ -972,7 +1004,7 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
     print(f"{tile.id}: {len(jobs)} {seen_by} see its walls, {len(todo)} to measure ({kind})")
     if not todo:
         if kind == "glass":
-            mark_complete(out, plan_key(ws))
+            mark_complete(out, plan_key(ws), plan_of(jobs))
         return
     if kind == "glass":
         from . import facade_glass
@@ -985,6 +1017,7 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
     source = os.environ.get(SOURCE_ENV)
     counts = collections.Counter()
     in_model = 0
+    owns: list[dict] = []
     t0 = last = time.time()
     with (
         _append(out) as f,
@@ -1015,11 +1048,12 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
                 outcome = "fail" if "fail" in r else "skip" if "skip" in r else "measured"
                 counts[outcome] += 1
                 in_model += outcome == "fail" and r["fail"].startswith("model")
-                # the glass cache notes a failure too: given up after
-                # MAX_FAILS, so one photo cannot keep it from read-through
-                if outcome != "fail" or kind == "glass":
-                    f.write(json.dumps(r, separators=(",", ":")) + "\n")
-                    f.flush()
+                if outcome == "fail":
+                    if r.get("own"):
+                        owns.append(r)
+                    continue
+                f.write(json.dumps(r, separators=(",", ":")) + "\n")
+                f.flush()
             if time.time() - last > 60 or start + 400 >= len(todo):
                 last = time.time()
                 n = sum(counts.values())
@@ -1032,8 +1066,22 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
     if counts["fail"]:
         model_part = f" ({in_model} of them in the model)" if in_model else ""
         print(f"{tile.id}: {counts['fail']} images failed{model_part} — rerun the fetch")
-    if kind == "glass" and not _todo(jobs, _done(out), True):
-        mark_complete(out, plan_key(ws))
+    if kind == "glass":
+        _note_fails(out, owns, len(todo))
+        if not _todo(jobs, _done(out), True):
+            mark_complete(out, plan_key(ws), plan_of(jobs))
+
+
+def _note_fails(out: Path, owns: list[dict], tried: int) -> None:
+    """The glass cache notes the photos whose own thumbnail was refused
+    (given up after MAX_FAILS fetches, so one photo cannot keep the cache
+    from read-through) — unless all of ten or more were: that is the
+    network's or a proxy's refusal, not the photos'."""
+    if not owns or (len(owns) == tried and tried >= 10):
+        return
+    with _append(out) as f:
+        for r in owns:
+            f.write(json.dumps(r, separators=(",", ":")) + "\n")
 
 
 def _records(path: Path) -> list[dict]:

@@ -210,9 +210,10 @@ def test_a_wall_keeps_the_passes_the_fetch_plans():
         )
         for k, (c, g) in enumerate([(0.9, 990), (0.3, 100), (0.8, 980), (0.7, 970), (0.6, 960)])
     ]
-    # an earlier plan read five passes: the four that saw most count
+    # five passes read (the plan picks more than the decision keeps, for
+    # what a tree hides shows only in the reading): the four that saw most
     assert win.glass_records(lines) == {("a", 0, 10.0): [990, 980, 970, 960]}
-    assert facades.GLASS_SEQ == 4
+    assert facades.GLASS_SEQ == 4 < facades.GLASS_PLAN_SEQ
 
 
 def test_a_photo_read_is_read_again_only_for_a_wall_planned_since(tmp_path):
@@ -321,12 +322,94 @@ def test_the_windows_bake_keeps_its_glass_where_the_readings_are_not_there(tmp_p
 
 def test_a_photo_that_keeps_failing_is_given_up(tmp_path):
     cache = tmp_path / "c.jsonl"
-    fail = json.dumps({"img": "p", "fail": "HTTPError: 500"})
+    fail = json.dumps({"img": "p", "fail": "HTTPError: 403", "own": True})
     cache.write_text("\n".join([fail] * (facades.MAX_FAILS - 1)))
     jobs = {"p": {"walls": [{"oid": "a", "wi": 0, "L": 10.0}]}}
     assert facades._todo(jobs, facades._done(cache), by_wall=True) == ["p"]
     cache.write_text("\n".join([fail] * facades.MAX_FAILS))
     assert facades._todo(jobs, facades._done(cache), by_wall=True) == []
+    # read on one wall, refused since for a wall planned later: given up too
+    read = json.dumps({"img": "p", "seq": "s", "walls": [{"oid": "a", "wi": 0, "L": 10.0}]})
+    later = {"p": {"walls": [{"oid": "a", "wi": 0, "L": 10.0}, {"oid": "b", "wi": 0, "L": 5.0}]}}
+    cache.write_text("\n".join([fail, fail, read, fail]))  # the fails before count no more
+    assert facades._todo(later, facades._done(cache), by_wall=True) == ["p"]
+    cache.write_text("\n".join([read] + [fail] * facades.MAX_FAILS))
+    assert facades._todo(later, facades._done(cache), by_wall=True) == []
+
+
+def test_a_run_refused_everywhere_notes_no_failure(tmp_path):
+    cache = tmp_path / "c.jsonl"
+    own = [{"img": f"p{i}", "fail": "HTTPError: 403", "own": True} for i in range(12)]
+    facades._note_fails(cache, own, 12)  # a proxy's or the network's, not the photos'
+    assert not cache.exists()
+    facades._note_fails(cache, own[:2], 12)
+    assert len(cache.read_text().splitlines()) == 2
+    facades._note_fails(cache, own[:1], 1)  # the one stubborn photo left
+    assert len(cache.read_text().splitlines()) == 3
+
+
+def test_the_decision_reads_only_the_photos_the_plan_picked(tmp_path):
+    def reading(img, seq, gl):
+        return json.dumps(
+            {
+                "img": img,
+                "seq": seq,
+                "walls": [{"oid": "a", "wi": 0, "L": 10.0, "gl": gl, "cov": 0.9}],
+            }
+        )
+
+    lines = [reading("p", "s", 990), reading("q", "t", 980), reading("r", "u", 100)]
+    jobs = {i: {"walls": [{"oid": "a", "wi": 0, "L": 10.0}]} for i in ("p", "q")}
+    cache = tmp_path / "c.jsonl"
+    cache.write_text("\n".join(lines) + "\n")
+    facades.mark_complete(cache, "k", facades.plan_of(jobs))
+    read = cache.read_text().splitlines()
+    assert facades.complete(read, "k")
+    # r, picked by an earlier plan, no longer counts: two of two say glass
+    assert win.decided_glass(read)[("a", 0, 10.0)] == {"glass": True, "n": 2, "p": 985}
+    # a new plan with the same limits and walls is noted anew
+    facades.mark_complete(cache, "k", facades.plan_of({"p": jobs["p"]}))
+    assert facades.complete(read := cache.read_text().splitlines(), "k")
+    assert ("a", 0, 10.0) not in win.decided_glass(read)  # one reading is too few
+
+
+def test_a_photo_smaller_than_its_thumbnail_is_planned_at_its_own_size():
+    camera = {"camera_type": "perspective", "camera_parameters": [0.8, 0.0, 0.0]}
+    full = facades.pixel_angle(camera | {"width": 4000, "height": 3000})
+    small = facades.pixel_angle(camera | {"width": 1024, "height": 768})
+    assert small == pytest.approx(2 * full, rel=0.01)
+    assert facades.pixel_angle(camera) == pytest.approx(full)
+
+
+def test_a_pose_batch_is_split_only_round_an_image_that_is_gone(monkeypatch):
+    import io
+    import urllib.error
+
+    def err(code, kind):
+        body = json.dumps({"error": {"type": kind}}).encode()
+        return urllib.error.HTTPError("u", code, "x", {}, io.BytesIO(body))
+
+    asked = []
+
+    def get(url, **_):
+        ids = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)["ids"][0].split(",")
+        asked.append(ids)
+        if "gone" in ids:
+            raise err(400, "GraphMethodException")
+        return json.dumps({i: {"computed_rotation": [0, 0, 0]} for i in ids}).encode()
+
+    monkeypatch.setattr(facades, "_get", get)
+    assert sorted(facades._poses(["a", "gone", "b", "c"])) == ["a", "b", "c"]
+
+    def refused(url, **_):
+        asked.append(url)
+        raise err(400, "OAuthException")
+
+    monkeypatch.setattr(facades, "_get", refused)
+    asked.clear()
+    with pytest.raises(urllib.error.HTTPError):
+        facades._poses(["a", "b", "c", "d"])
+    assert len(asked) == 1  # a token's error is not split
 
 
 def test_only_a_missing_image_is_gone_never_a_token():
