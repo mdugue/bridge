@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  FOCUS_SNAP_MS,
   createLensState,
   FOCUS_PULL_MS,
   focalLengthMm,
@@ -82,4 +83,10 @@ test("the lens grows in while drawn, starts over when not, and focuses at once w
   // a move drops it; it comes back from none
   expect(stepLens(lens, false, 80, 16)).toBe(0);
   expect(stepLens(lens, true, 80, 16)).toBeLessThan(0.01);
+  // just back, the first aim the ray finds is taken at once; later pulled
+  stepLens(lens, true, 5, 16);
+  expect(lens.focusM).toBe(5);
+  stepLens(lens, true, 5, FOCUS_SNAP_MS);
+  stepLens(lens, true, 50, 16);
+  expect(lens.focusM).toBeLessThan(50);
 });

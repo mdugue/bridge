@@ -128,14 +128,20 @@ export interface LensState {
   focusM: number;
 }
 
+/** How long after the lens comes back its focus still jumps to the aim
+ *  (ms): the focus ray's 10 Hz tick and a frame, so the first aim the ray
+ *  finds where the view rests is taken at once while the blur is all but
+ *  faded out (≈ 1 % in), not pulled to in view. */
+export const FOCUS_SNAP_MS = 150;
+
 export function createLensState(): LensState {
   return { shownMs: 0, focusM: SKY_FOCUS_M };
 }
 
 /**
  * Advances the lens by one frame of `stepMs`: drawn (`drawn`), it grows in
- * and its focus follows `aimM` in dioptres; not drawn, it starts over and
- * its focus is at the aim at once — what it shows when it comes back.
+ * and its focus follows `aimM` in dioptres; not drawn, and for
+ * `FOCUS_SNAP_MS` after it returns, its focus is at the aim at once.
  * Returns how much of the blur shows (0…1).
  */
 export function stepLens(
@@ -146,7 +152,10 @@ export function stepLens(
 ): number {
   state.shownMs = drawn ? state.shownMs + Math.max(stepMs, 0) : 0;
   const fade = lensFadeIn(state.shownMs);
-  state.focusM = fade === 0 ? aimM : pullFocus(state.focusM, aimM, stepMs);
+  state.focusM =
+    state.shownMs <= FOCUS_SNAP_MS
+      ? aimM
+      : pullFocus(state.focusM, aimM, stepMs);
   return fade;
 }
 

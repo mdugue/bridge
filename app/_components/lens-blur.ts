@@ -210,8 +210,8 @@ export function createLensBlur(
       // the lens it fills, and what lies behind shows through the rest —
       // at a near blur's silhouette, half — as a lens sees past an edge
       const selfFront = smoothstep(1, 3, cC.negate()).toVar();
-      const back = centre.rgb.toVar();
       const backW = mix(float(1), float(1e-3), selfFront).toVar();
+      const back = centre.rgb.mul(backW).toVar();
       const front = vec3(0).toVar();
       const frontW = float(0).toVar();
       for (let i = 0; i < TAPS; i += 1) {

@@ -273,6 +273,8 @@ const SKY_COLOR = 0x9f_b6_cc;
  *  site's ground is pressed under the design (design-site.ts), which the
  *  ground's rays do not see — a sunken court, not a design across a hill. */
 const DESIGN_PRESS_M = 5;
+/** The longest step the lens's fade and focus take in one frame (ms). */
+const LENS_STEP_MAX_MS = 100;
 /** How often the crash trail takes a heartbeat (crash-trail.ts). */
 const TRAIL_BEAT_MS = 2000;
 /** How often the GPU's frame time is read back (ms): a few per beat. */
@@ -3915,6 +3917,8 @@ async function bootApp(
     sceneStill = stillness.frame(time, busy);
     opts.pace.setStill(sceneStill);
   };
+  const focusDue = () =>
+    lensBlur && postStack.lensWanted() && !walkMovedNow && capture === null;
   const frame = (time: number) => {
     const frameStart = streamTimings.now();
     timer.update(pocFrameTime(time));
@@ -3980,8 +3984,9 @@ async function bootApp(
         // where there is a lens blur to focus (not on a phone), and not
         // while the camera moves or the style draws none (the lens shows
         // nothing then; it comes back faded out, and the focus jumps to
-        // the next ray's while it is)
-        if (lensBlur && postStack.lensWanted() && !walkMovedNow) {
+        // the next ray's while it is), nor through an export: it began on
+        // a settled lens, and its tiles share one focus
+        if (focusDue()) {
           updateFocus();
         }
       }
@@ -4011,9 +4016,12 @@ async function bootApp(
       exporting
     );
     const renderStart = streamTimings.now();
-    // the lens's fade and focus on the clock, not the capped step: a paced
-    // frame (Hörmodus, 2 fps) still grows it in over its 700 ms
-    framedBuilds.draw(() => postStack.render(frameDt * 1000));
+    // the lens's fade and focus on the clock up to `LENS_STEP_MAX_MS`, not
+    // the capped step: a paced frame (Hörmodus, 2 fps) grows it in within
+    // a few frames, and a stall as the stream lands still does not pop it
+    framedBuilds.draw(() =>
+      postStack.render(Math.min(frameDt * 1000, LENS_STEP_MAX_MS))
+    );
     const renderEnd = streamTimings.now();
     takeCaptureTile();
     frames += 1;
