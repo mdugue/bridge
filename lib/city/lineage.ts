@@ -623,6 +623,12 @@ const OSM_THINGS: Record<
   landing: ["der Umriss und die Art", "Steg, Ponton und Höhe am Wasser"],
 };
 
+/** The OSM extract a thing was read from: the furniture's own (baked
+ *  again on its own for the flagpoles), else the trees' and lamps'. */
+function productOf(m: MoreInquiry): OsmProduct {
+  return m.kind === "furniture" ? "furniture" : "trees";
+}
+
 /** Whether a thing was found by Mapillary in street photos, not read
  *  from OSM (pipeline/bake/mapillary.py). */
 function fromMapillary(m: MoreInquiry): boolean {
@@ -669,9 +675,11 @@ function osmThingLineage(
       credit: "Mapillary, CC BY-SA 4.0",
       url: MAPILLARY_URL,
     });
-    l.source("osm", lampFromOsm(m), "taken", { osm: "trees" });
+    l.source("osm", lampFromOsm(m), "taken", { osm: productOf(m) });
   } else {
-    l.source("osm", [read, ...lampFromOsm(m)], "taken", { osm: "trees" });
+    l.source("osm", [read, ...lampFromOsm(m)], "taken", {
+      osm: productOf(m),
+    });
   }
   if (m.kind === "lamp" && m.heightFrom) {
     // lamp_heights.py: the street's (or its kind's) median post height
@@ -689,7 +697,13 @@ function osmThingLineage(
     ],
     "taken"
   );
-  l.viewer([drawn]);
+  l.viewer([
+    drawn,
+    // a flag's wind and cloth are the viewer's (furniture.ts `flagYaw`)
+    m.kind === "furniture" &&
+      m.properties.k === "flag" &&
+      "der Wind, in den die Fahne weht, und ihr Tuch",
+  ]);
 }
 
 /** What a lamp's place took from OSM beyond its own point: the wall it

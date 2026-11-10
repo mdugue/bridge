@@ -21,6 +21,7 @@ import type {
 } from "three/webgpu";
 import { uniform } from "three/tsl";
 import { fogRangeFor, streamFarFor } from "@/lib/city/atmosphere";
+import { FLAG_HEIGHT_MAX } from "@/lib/city/furniture";
 import { plateOf } from "@/lib/city/ground-plate";
 import { utmToLatLng } from "@/lib/city/crs";
 import { WALL_CLEARANCE } from "@/lib/city/clearance";
@@ -179,7 +180,11 @@ import { createSceneFog, installSceneFog, VALLEY_HAZE } from "./height-fog";
 import { attachKeyboardControls } from "./keyboard-controls";
 import { createLampLights, LAMP_LIGHTS } from "./lamp-layer";
 import { createLampReflections, uniqueHeads } from "./lamp-reflections";
-import { createLantern, invalidateLanternShadow } from "./lantern";
+import {
+  createLantern,
+  invalidateLanternShadow,
+  LANTERN_RANGE,
+} from "./lantern";
 import { setFountainTime } from "./monument-layer";
 import { showFurnitureNear } from "./furniture-layer";
 import { setMapAltitude } from "./map-overlay";
@@ -248,6 +253,7 @@ import {
 } from "./stream-timing";
 import { attachInspector, inspectRequested } from "./inspector";
 import { attachTouchControls } from "./touch-controls";
+import { setFlagTime } from "./flag-cloth";
 import { createVegetationLod, setCrownTime } from "./vegetation-layer";
 import type { VegetationControl } from "./vegetation-layer";
 import {
@@ -3341,12 +3347,34 @@ async function bootApp(
   const vegetationLod = createVegetationLod();
   const richTrees =
     budget.tier === "mobile" ? PHONE_RICH_TREE_BUDGET : RICH_TREE_BUDGET;
+  /** How far the lantern's hand and a mast's top may lie off the eye and
+   *  the cells' box, which spans the pieces' feet (m): the tallest mast
+   *  and the hand's few metres. */
+  const LANTERN_SLACK_M = FLAG_HEIGHT_MAX + 5;
+  /** The frame's furniture flips: the eye they are measured from (none in
+   *  Modell), the world box they span (the rings it can fall on redraw,
+   *  once a frame however many sets flipped: a flagpole's cell flips 800 m
+   *  out, not every ring need) and whether one lay within the lantern's
+   *  light (held at the hand, a little off the eye: LANTERN_SLACK_M). */
+  const cellFlips = {
+    eye: null as Vector3 | null,
+    box: new Box3(),
+    lantern: false,
+  };
+  const cellFlipped = (box: Readonly<Box3>) => {
+    const { eye } = cellFlips;
+    if (!eye || box.distanceToPoint(eye) <= LANTERN_RANGE + LANTERN_SLACK_M) {
+      cellFlips.lantern = true;
+    }
+    cellFlips.box.union(box);
+  };
   /** `eye`: where the tiers are measured from (Modell: above the pivot);
    *  `tick`: the frame's pose tick is due. */
   const stepVegetation = (elapsed: number, eye: Vector3, tick: boolean) => {
     // one wind clock for every crown, the coarse ones standing in on a
     // bare fine level too
     setCrownTime(elapsed);
+    setFlagTime(elapsed);
     // the real window niches around the eye (window-niche-layer.ts), not
     // in Modell: every frame (cheap until it moves or what is shown
     // changes), so a full tile swapped for its parent takes its boxes
@@ -3370,18 +3398,29 @@ async function bootApp(
     }
     // the street furniture's cells near the eye (furniture-layer.ts)
     // (none hidden in Modell: its views and exports draw one scale)
-    const furnitureEye = modelRig.owns() ? null : eye;
-    let cellChanged = false;
+    cellFlips.eye = modelRig.owns() ? null : eye;
+    cellFlips.lantern = false;
+    const flipped = cellFlips.box.makeEmpty();
     for (const d of shown) {
       for (const part of [d.furniture, d.tram]) {
-        if (part && showFurnitureNear(part, furnitureEye)) {
-          cellChanged = true;
+        if (part) {
+          showFurnitureNear(part, cellFlips.eye, cellFlipped);
         }
       }
     }
-    if (cellChanged) {
+    if (cellFlips.lantern) {
       invalidateLanternShadow(lantern);
-      sunRig.invalidateShadow(undefined, NEAR_CHANGE_RINGS);
+    }
+    if (!flipped.isEmpty()) {
+      sunRig.invalidateShadow(
+        {
+          minX: flipped.min.x,
+          maxX: flipped.max.x,
+          minZ: flipped.min.z,
+          maxZ: flipped.max.z,
+        },
+        NEAR_CHANGE_RINGS
+      );
     }
   };
 

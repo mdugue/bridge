@@ -3806,6 +3806,31 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   is searched to 30 m, then taken from the way, instead of the signal
   being dropped. Signals: Dresden 784 → 1 338, Hamburg 588 → 894, München
   571 → 837.
+- **Flagpoles** `❝ taken` `≈ assumed` (2026-11-10) — the same bake and layer:
+  every `man_made=flagpole` point stands as a slim mast, 7 m or its tagged
+  `height` (3–30 m, one outside is left out; few are tagged), with a cloth
+  in the wind (`k: flag`).
+  The flag is drawn in its colours only where the map names it (`flag:name`,
+  `flag:wikidata`, `subject`, `country`: the first whose name the map fills
+  decides — a Wikidata item the viewer does not know leaves it to the next
+  —, the flag's own name first — Germany, the EU, Saxony, Bavaria, Hamburg),
+  as pastel bands without emblem; every other one — most are a shop's or
+  a firm's (`flag:type=advertising`, never in a country's colours), some a
+  city's — flies a pale cloth; `country` counts only on a national flag (no
+  `flag:type` or `national`) that names no Wikidata item of its own or of
+  what it stands for (`flag:wikidata`, `subject:wikidata`) — on a
+  firm's or a city's it is where they are; a `european` one flies Europe's.
+  ≈ assumed: the wind (one bearing for the city, from the west-south-west,
+  ±12° a mast by a hash), the cloth's size and its ripple. A mast mapped
+  inside a building outline or on its line stands on its roof and is left
+  out (7 masts: Dresden 2, Hamburg 2, München 3; not under a building's
+  raised floors or over one under the street, not under a canopy, a carport or a shelter, in a
+  stadium, a ruin, a building site or an outline tagged `building=no`), as is one tagged on a roof (`support=roof`,
+  `location=roof` or `rooftop`); a flag on a facade (`support=wall_mounted`) is not
+  mapped in any of the seven sites' extracts and would be left out. The
+  cloth moves, so its shadow is the sheet at rest
+  (`castShadowPositionNode`, ADR 0009). Masts after the fresh BBBike
+  extracts of 2026-11-07 (Last-Modified): see the bake's counts in the PR.
 - **Playgrounds** `❝ taken` `◎ detected` — OSM `leisure=playground` outlines (≥ 20 m²; 339 over the
   fifteen tiles, 88 on the four first) → a pale sand floor flush on the ground (a breath warmer than the paving), seated on the
   ground under each ring vertex (densified to 2 m), and **only the

@@ -1,8 +1,8 @@
 """OSM street furniture → one point layer per tile: benches, picnic tables,
 litter bins, bicycle stands, bollards, post boxes, stop shelters and stop
 signs, advertising columns, traffic signals, fire hydrants (the pillars,
-and the sign plates of the underground ones), clocks and drinking
-fountains.
+and the sign plates of the underground ones), clocks, drinking
+fountains and flagpoles.
 
 Every object is a Point with its kind (`k`) and, where it has a front, the
 compass bearing it faces (`a`, degrees clockwise from north). OSM seldom
@@ -40,11 +40,24 @@ kerb — the kerb read from the class raster. So does a bench, bicycle
 stand, bin, post box, column, stop or shelter mapped in a street's lanes
 (the nearest way has a carriageway, `STREETS`); in a square, a pedestrian
 zone or on a platform, which the class raster's road covers too, it stays
-where it is mapped. A bus stop without a shelter
-gets the "H" sign, unless a shelter stands within 8 m. A clock on a pole
+where it is mapped. A bus stop without a shelter gets the "H" sign,
+unless a shelter stands within 8 m. A clock on a pole
 stands where it is mapped; a wall clock hangs on the nearest facade (the
 OSM building outline, ≤ 3 m), else it is dropped, as are tower clocks (the
 tower is the building model's) and sundials.
+
+A flagpole (`man_made=flagpole`, `k: flag`) stands where it is mapped, at
+its tagged `height` (`h`, where it lies in FLAG_H) and, where `flag:name`,
+`subject`, `country` or their Wikidata name a flag in FLAG_DESIGNS (the
+flag's own name first: `flag:name=Sachsen` on `country=DE` flies Saxony's),
+flying that flag (`c`); every other flag — most are a shop's or a firm's,
+or a city's (`flag:name=Dresden` on `country=DE` is no German flag) — flies
+a pale cloth. One mapped inside a building outline or on its line (but a
+canopy's, a carport's or a stadium's) stands on its roof and is left out
+(7 masts: Dresden 2, Hamburg 2, München 3; not one under a building's
+raised floors or over one under the street), and so is one
+tagged on a roof (`support=roof`, `location=roof` or `rooftop`) or on a facade
+(`support=wall_mounted`): none of the latter is mapped in the seven sites yet.
 
 A bench without a `direction` that has water (the class raster's) within
 WATER_FACE_M on the side away from its way looks at the water instead
@@ -87,6 +100,7 @@ from __future__ import annotations
 
 import colorsys
 import dataclasses
+import functools
 import json
 import math
 import re
@@ -113,7 +127,7 @@ from .common import (
     write_geojson,
 )
 from .landcover_osm import DUAL, LANE_M, ROAD_HALF_WIDTH, lanes, one_way
-from .osm import has_extract, osm_metres, osm_width, read_osm, read_ways, tag
+from .osm import below_ground, has_extract, osm_metres, osm_width, read_osm, read_ways, tag
 
 BLOCKED = (RAILWAY, WATER)
 DECK_KINDS = ("road", "path")  # what stands on a bridge stands on these, never a rail deck
@@ -152,7 +166,8 @@ POINT_WHERE = (
     'OR other_tags LIKE \'%"leisure"=>"picnic_table"%\' '
     'OR other_tags LIKE \'%"public_transport"=>"platform"%\' '
     'OR other_tags LIKE \'%"advertising"=>"column"%\' '
-    'OR other_tags LIKE \'%"emergency"=>"fire_hydrant"%\''
+    'OR other_tags LIKE \'%"emergency"=>"fire_hydrant"%\' '
+    "OR man_made = 'flagpole'"
 )
 # The ways with a carriageway (not footways, paths, platforms or tracks).
 STREETS = (
@@ -165,7 +180,7 @@ STREETS = (
 # covers squares, platforms and pedestrian zones, where things stand on it).
 KERBSIDE = {"bench", "bike", "bin", "column", "picnic", "postbox", "shelter", "stop", "water"}
 # Kinds without a front: they get no bearing.
-ROUND = {"bollard", "bin", "column", "hydrant"}
+ROUND = {"bollard", "bin", "column", "flag", "hydrant"}
 # On a bridge deck these move out of a street's lanes to the deck's edge: the
 # kerbside pieces, a signal (mapped at its stop line) and a hydrant's sign
 # (on its lid). On the ground the latter two move to the class raster's
@@ -173,6 +188,52 @@ ROUND = {"bollard", "bin", "column", "hydrant"}
 ON_DECK_KERB = KERBSIDE | {"signal", "hydrantsign"}
 HYDRANT = {"pillar": "hydrant", "underground": "hydrantsign"}
 CLOCK = {"pole": "clock", "wall": "wallclock", "wall_mounted": "wallclock"}
+WALL_SUPPORT = {"wall", "wall_mounted"}  # a flag on a facade: not mapped as such yet
+ROOF = "roof"  # a flag on a roof (`support`/`location`): the roof is not drawn
+ROOF_LOCATIONS = frozenset({ROOF, "rooftop"})
+# a tagged flagpole height outside this is left out (m; lib/city/furniture.ts
+# FLAG_HEIGHT_MAX)
+FLAG_H = (3.0, 30.0)
+# The flags the viewer draws in their colours, by `flag:name`/`country`/`subject`
+# (lower case); every other flag flies a pale cloth.
+FLAG_DESIGNS = {
+    "de": (
+        *("de", "deutschland", "germany", "bundesrepublik deutschland", "q183", "q48160"),
+        *("bundesflagge", "flagge deutschlands", "flag of germany", "deutschlandfahne"),
+        *("deutsche flagge", "deutschlandflagge", "bundesdienstflagge"),
+    ),
+    "eu": (
+        *("eu", "europe", "europa", "european union", "europäische union", "q458", "q122482"),
+        *("europaflagge", "europafahne", "flag of europe", "flag of the european union"),
+    ),
+    "sn": (
+        *("sachsen", "saxony", "freistaat sachsen", "q1202", "q693701"),
+        *("sachsenflagge", "flagge sachsens", "flag of saxony"),
+    ),
+    "by": (
+        *("bayern", "bavaria", "freistaat bayern", "q980", "q707471"),
+        *("bayerische flagge", "flagge bayerns", "flag of bavaria"),
+    ),
+    "hh": (
+        "hamburg",
+        "freie und hansestadt hamburg",
+        "q1055",
+        "q645967",
+        "hamburger flagge",
+        "flag of hamburg",
+    ),
+}
+# The keys that name a flag, in groups (a name, a Wikidata item), the flag's
+# own first: the first group whose name the map fills decides (a name the
+# viewer does not draw: a pale cloth).
+FLAG_KEYS = (
+    ("flag:name", "flag:wikidata"),
+    ("subject", "subject:wikidata"),
+    ("country", "country:wikidata"),
+)
+# Building outlines over open ground: a flagpole in one stands on the ground.
+OPEN_BUILDINGS = {"roof", "carport", "stadium", "no", "construction", "ruins", "shelter"}
+DESIGN_OF = {name: design for design, names in FLAG_DESIGNS.items() for name in names}
 # OSM `playground=*` → the equipment model the viewer stands (others dropped).
 EQUIPMENT = {
     "swing": "swing",
@@ -249,8 +310,15 @@ def bearing(dx: float, dy: float) -> float:
     return math.degrees(math.atan2(dx, dy)) % 360
 
 
-def kind_of(barrier: str | None, highway: str | None, other: str | None) -> str | None:
+def kind_of(
+    barrier: str | None, highway: str | None, other: str | None, man_made: str | None = None
+) -> str | None:
     """What a tagged OSM point is as street furniture, or None."""
+    if man_made == "flagpole":
+        support = (tag(other, "support") or "").lower()
+        where = (tag(other, "location") or "").lower()
+        aloft = support in WALL_SUPPORT or bool(ROOF_LOCATIONS & {support, where})
+        return None if aloft else "flag"
     if barrier == "bollard":
         return "bollard"
     if tag(other, "leisure") == "picnic_table":
@@ -296,6 +364,50 @@ def bollard(other: str | None) -> dict:
         props["h"] = round(min(max(h, BOLLARD_M[0]), BOLLARD_M[1]), 2)
     if (tag(other, "material") or "") in METAL:
         props["metal"] = True
+    return props
+
+
+def flag(other: str | None) -> dict:
+    """A flagpole's tagged height (m; one past FLAG_H is no mast's, and
+    left out: the card shows only what the map says) and the flag it flies
+    where the map names one the viewer draws in its colours (`c`)."""
+    props: dict = {}
+    h = osm_metres(tag(other, "height"))
+    if h is not None and FLAG_H[0] <= h <= FLAG_H[1]:
+        props["h"] = round(h, 1)
+    kind = (tag(other, "flag:type") or "").strip().lower() or None
+    if kind == "advertising":
+        return props  # a firm's flag: its colours are not mapped
+    if kind == "european":
+        # Europe's flag, wherever it stands and whatever its name, unless
+        # that names another flag the viewer draws
+        name = (tag(other, "flag:name") or "").split(";")[0].strip().lower()
+        props["c"] = DESIGN_OF.get(name, "eu")
+        return props
+    # the keys that name the flag itself first, then what it stands for,
+    # then where; in a `;` list the first one the viewer draws. A group's
+    # name the viewer does not draw decides (a pale cloth); an item it does
+    # not know does not (the map's Wikidata may name the flag or its land)
+    # `country` names the land a national flag stands for; on a firm's, a
+    # city's or a club's flag it is where the firm is, not the flag
+    national = kind in (None, "national")
+    for names_key, item_key in FLAG_KEYS:
+        if names_key == "country" and not national:
+            break
+        # a flag that names its own item, or what it stands for, is that
+        # flag, not its land's
+        if names_key == "country" and (
+            tag(other, "flag:wikidata") or tag(other, "subject:wikidata")
+        ):
+            break
+        names = [n.strip().lower() for n in (tag(other, names_key) or "").split(";")]
+        items = [n.strip().lower() for n in (tag(other, item_key) or "").split(";")]
+        design = next((DESIGN_OF[n] for n in [*names, *items] if n in DESIGN_OF), None)
+        if design is not None:
+            props["c"] = design
+            return props
+        if any(names):
+            return props
     return props
 
 
@@ -704,13 +816,59 @@ def _side_of(q: shapely.Point, p: shapely.Point, deg: float) -> bool:
     return (p.x - q.x) * math.sin(rad) + (p.y - q.y) * math.cos(rad) >= 0
 
 
+def off_ground(other: str | None) -> bool:
+    """A building outline that is not on the ground a mast stands on: under
+    the street (`below_ground`) or raised over it (`building:min_level`,
+    `min_height`: an arcade's or a bridge's upper floors)."""
+    if below_ground(other):
+        return True
+    raised = osm_metres(tag(other, "min_height")) or 0.0
+    try:
+        lifted = float(tag(other, "building:min_level") or 0)
+    except ValueError:
+        lifted = 0.0
+    return raised > 0 or lifted > 0
+
+
 class Facades:
-    """The OSM building outlines a wall clock hangs on."""
+    """The OSM building outlines a wall clock hangs on (and a flagpole
+    mapped inside one stands on its roof, which is not drawn)."""
 
     def __init__(self, tile: Tile) -> None:
-        geoms, _ = read_osm(tile, "multipolygons", "building IS NOT NULL", ["building"])
-        self.walls = [g.boundary for g in geoms if g.geom_type in ("Polygon", "MultiPolygon")]
-        self.tree = shapely.STRtree(self.walls) if self.walls else None
+        geoms, fields = read_osm(
+            tile, "multipolygons", "building IS NOT NULL", ["building", "other_tags"]
+        )
+        kept = [
+            (g, kind, other)
+            for g, kind, other in zip(geoms, fields["building"], fields["other_tags"], strict=True)
+            if g is not None and g.geom_type in ("Polygon", "MultiPolygon")
+        ]
+        self.areas = [g for g, _, _ in kept]
+        # a roof over open ground (a canopy, a carport, a stadium's ring), a
+        # building under the street or one raised over it: a mast under or
+        # in it stands on the ground
+        self.roofs = [
+            g for g, kind, other in kept if kind not in OPEN_BUILDINGS and not off_ground(other)
+        ]
+
+    # each index built on first use: a flag asks only `inner`, a wall clock
+    # only `tree`
+    @functools.cached_property
+    def walls(self) -> list:
+        return [g.boundary for g in self.areas]
+
+    @functools.cached_property
+    def tree(self) -> shapely.STRtree | None:
+        return shapely.STRtree(self.walls) if self.walls else None
+
+    @functools.cached_property
+    def inner(self) -> shapely.STRtree | None:
+        return shapely.STRtree(self.roofs) if self.roofs else None
+
+    def inside(self, p: shapely.Point) -> bool:
+        """Whether p lies inside a building outline or on its line (a node
+        of the building's way) — not one over open ground."""
+        return self.inner is not None and len(self.inner.query(p, predicate="intersects")) > 0
 
     def hang(self, p: shapely.Point) -> tuple[shapely.Point, float] | None:
         """The facade point nearest p (≤ WALL_CLOCK_M) and the bearing out
@@ -838,25 +996,37 @@ def _props(k: str, other: str | None, bins: str | None = None) -> dict:
         props.update(bollard(other))
     if k == "column" and tag(other, "lit") == "yes":
         props["lit"] = True
+    if k == "flag":
+        props.update(flag(other))
     return props
 
 
 def _points(tile: Tile, gate: Gate, ways, lines, streets) -> list[dict]:
     geoms, fields = read_osm(
-        tile, "points", POINT_WHERE, ["barrier", "highway", "other_tags"], margin=0.0005
+        tile,
+        "points",
+        POINT_WHERE,
+        ["barrier", "highway", "man_made", "other_tags"],
+        margin=0.0005,
     )
     kinds = [
-        kind_of(barrier, highway, other)
-        for barrier, highway, other in zip(
-            fields["barrier"], fields["highway"], fields["other_tags"], strict=True
+        kind_of(barrier, highway, other, man_made)
+        for barrier, highway, man_made, other in zip(
+            fields["barrier"],
+            fields["highway"],
+            fields["man_made"],
+            fields["other_tags"],
+            strict=True,
         )
     ]
-    facades = Facades(tile) if "wallclock" in kinds else None
+    facades = Facades(tile) if "wallclock" in kinds or "flag" in kinds else None
     bins = site_bin_tone(tile) if "bin" in kinds else None
     out, shelters, stops = [], [], []
     for g, k, other in zip(geoms, kinds, fields["other_tags"], strict=True):
         if k is None or hidden(other):
             continue
+        if k == "flag" and facades is not None and facades.inside(g):
+            continue  # on a roof: the building model's, not the ground's
         stood = _stood(k, g, other, gate, ways, lines, streets, facades)
         if stood is None:
             continue
