@@ -816,11 +816,11 @@ test("a shop window is cut into its wall: reveals in its clay, glass at the back
     );
   const lod2 = bakeCityMesh("t", fixture(), undefined, null);
   const baked = bake([shopfrontAt(), shopfrontAt("elsewhere")]);
-  // a glass per bay, the fascia
+  // a glass per bay, the painted sign
   expect(baked.objects.length).toBe(lod2.objects.length + 3);
   const house = 2;
-  const [pane, pane2, frame] = baked.objects.slice(-3);
-  for (const o of [pane, pane2, frame]) {
+  const [pane, pane2, sign] = baked.objects.slice(-3);
+  for (const o of [pane, pane2, sign]) {
     expect(o.root).toBe(baked.objects[house].root);
     expect(o.source).toBe(OBJECT_SOURCE_SHOPFRONT);
     expect(o.building).toBe(false);
@@ -828,10 +828,14 @@ test("a shop window is cut into its wall: reveals in its clay, glass at the back
     expect(o.flags & OBJECT_FLAG_OWN_COLOUR).toBe(OBJECT_FLAG_OWN_COLOUR);
   }
   expect(pane.flags & OBJECT_FLAG_GLASS).toBe(OBJECT_FLAG_GLASS);
-  expect(frame.flags & OBJECT_FLAG_GLASS).toBe(0);
+  expect(sign.flags & OBJECT_FLAG_GLASS).toBe(0);
+  // the sign a shade darker than its wall
+  expect(luminance(sign.tint)).toBeLessThan(
+    luminance(baked.objects[house].tint)
+  );
   expect(pane.rough).toBeGreaterThan(0);
   expect(pane.rough).toBeLessThanOrEqual(0.3);
-  expect(luminance(pane.tint)).toBeLessThan(0.6 * luminance(frame.tint));
+  expect(luminance(pane.tint)).toBeLessThan(0.6 * luminance(sign.tint));
   expect(luminance(pane.tint)).toBeGreaterThan(0.1);
   // the glass's eave is its top over the shopfront's foot
   expect(pane.eaveH).toBeCloseTo(
@@ -845,6 +849,7 @@ test("a shop window is cut into its wall: reveals in its clay, glass at the back
   let inBay = 0;
   let reveal = 0;
   const glassYs = new Set<number>();
+  const signYs: number[] = [];
   for (let t = 0; t + 2 < objectIds.length; t += 3) {
     const xs = [0, 1, 2].map((k) => positions[3 * (t + k)] + cx - 412_040);
     const ys = [0, 1, 2].map(
@@ -867,7 +872,13 @@ test("a shop window is cut into its wall: reveals in its clay, glass at the back
         glassYs.add(Math.round(y * 1000) / 1000);
       }
     }
+    if (objectIds[t] === baked.objects.length - 1) {
+      // painted: flush on the wall, nothing standing out of it
+      signYs.push(...ys);
+    }
   }
+  expect(signYs.length).toBeGreaterThan(0);
+  expect(signYs.every((y) => Math.abs(y) < 1e-3)).toBe(true);
   expect(inBay).toBe(0);
   // four reveals of two triangles each, per window
   expect(reveal).toBe(16);

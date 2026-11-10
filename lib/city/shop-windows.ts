@@ -65,6 +65,10 @@ export interface WallCut {
   /** each cut opening's corners on the wall's face (s0z0, s1z0, s1z1,
    *  s0z1) */
   corners: V3[][];
+  /** what the openings took out of the wall, triangulated on each
+   *  triangle's own plane and wound as it was (positions, flat) — a
+   *  painted sign laid back flush; empty unless asked for */
+  taken: number[];
 }
 
 const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -203,12 +207,15 @@ function triangulate(f: Flat, polys: readonly ClipPolygon[]): number[] {
  * Cuts `openings` into the wall: the triangles of `triangles` lying on it
  * (facing `axes.n`, on its plane) lose the rectangles, each remainder
  * triangulated on its own triangle's plane. An opening the wall covers
- * less than MIN_COVER of stays uncut (not in `openings`).
+ * less than MIN_COVER of stays uncut (not in `openings`). With `keep`,
+ * what was cut out comes back too (`taken`): a sign painted on the wall,
+ * the same plane in another object.
  */
 export function cutWall(
   axes: WallAxes,
   openings: readonly Opening[],
-  triangles: readonly WallTriangle[]
+  triangles: readonly WallTriangle[],
+  keep = false
 ): WallCut {
   const flats = facing(axes, triangles);
   const kept: Opening[] = [];
@@ -251,14 +258,20 @@ export function cutWall(
     );
   }
   const replaced: CutTriangle[] = [];
+  const taken: number[] = [];
   for (const [f, rects] of cuts) {
     const tri: ClipPolygon = [[...f.two, f.two[0]]];
     replaced.push({
       id: f.id,
       positions: triangulate(f, difference(tri, ...rects)),
     });
+    if (keep) {
+      for (const rect of rects) {
+        taken.push(...triangulate(f, intersection(tri, rect)));
+      }
+    }
   }
-  return { openings: kept, replaced, corners };
+  return { openings: kept, replaced, corners, taken };
 }
 
 /** Two triangles over a quad, wound to face `want`. */

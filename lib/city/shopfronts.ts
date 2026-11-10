@@ -3,12 +3,11 @@
  * ground floor's bays and store signs measured in Mapillary's street
  * panoramas, the canopy over them in the surface model) as geometry the
  * building bake appends to the tile's mesh (scripts/bake-city-mesh.ts),
- * soft and abstract: per run of bays one surround standing out of the wall
- * — its outer edge rolling over a rounded shoulder, its front flat — with
- * a niche per bay, the front turning into it over a rounded reveal, and
- * the glass at the niche's back, a muted tone a little darker and cooler
- * than the wall (no mullions, no boards, no frame edges). A fascia band
- * where a sign was seen, rounded the same way, and the canopy where the
+ * soft and abstract: per bay a shop window to cut into the wall (the
+ * bake's lib/city/shop-windows.ts: an opening, its reveals, the glass at
+ * its back; no mullions, no boards, no frame edges). A store sign
+ * painted on where one was seen (a rectangle the bake cuts out of the wall
+ * and lays back flush in a darker tone), and the canopy where the
  * surface model shows one: a slab out over the pavement with a deep
  * fascia at its edge, its edges rounded (the Hauptstraße's GDR pavilions).
  * A glazed row (`row`: glass from pier to pier) sits on a lower riser. No
@@ -51,8 +50,6 @@ export const QUANTUM_M = 0.034;
 export const SHOPFRONT = {
   back: 0.15,
   fasciaH: 0.5,
-  fasciaProud: 0.1,
-  fasciaRound: 0.045,
   glass: 0.06,
   head: 0.18,
   minPier: 0.2,
@@ -109,9 +106,9 @@ const FASCIA_OVER_M = 0.1;
 /** A shop window at least this tall (m, from its sill over the stall riser
  *  or the plinth), or its bay stays wall. */
 export const MIN_OPENING_M = 1.2;
-/** The tallest fascia (m): a sign band measured taller (big lettering, a
- *  banner) is a band this tall at its foot, not a slab over the storey. */
-export const FASCIA_MAX_M = 1;
+/** The tallest painted sign (m): a sign band measured taller (big lettering, a
+ *  banner) is a band this tall at its foot, not a dark slab over the storey. */
+export const FASCIA_MAX_M = 0.6;
 
 /** Triangles with a normal per vertex (unit; smooth over a round). */
 export interface Shaded {
@@ -122,8 +119,9 @@ export interface Shaded {
 export interface ShopfrontMesh {
   /** the canopies: slab and fascia, rounded */
   canopy: Shaded;
-  /** the fascia bands */
-  frame: Shaded;
+  /** the store signs to paint onto the wall: each band's rectangle, cut
+   *  out of its wall and laid back flush in a darker tone */
+  signs: ShopOpening[];
   /** the shop windows to cut into the wall, one per bay */
   openings: ShopOpening[];
 }
@@ -297,31 +295,6 @@ interface Rect {
 
 type Frame = ReturnType<typeof wallFrame>;
 
-/** A point of a soft edge's cross-section: `e` out from the rectangle's
- *  edge (in the wall's plane; negative inside it), `o` out of the wall,
- *  and its normal's components along the edge's outward direction (`nu`)
- *  and out of the wall (`no`). */
-interface EdgePoint {
-  e: number;
-  no: number;
-  nu: number;
-  o: number;
-}
-
-/** The outer shoulder of a band standing `proud` out of the wall: up out
- *  of the wall (from `back` inside it), then a quarter round of radius `r`
- *  into the front. */
-function shoulder(back: number, proud: number, r: number): EdgePoint[] {
-  const out: EdgePoint[] = [{ e: 0, o: -back, nu: 1, no: 0 }];
-  for (let k = 0; k <= ROUND_STEPS; k += 1) {
-    const a = ((Math.PI / 2) * k) / ROUND_STEPS;
-    const c = Math.cos(a);
-    const s = Math.sin(a);
-    out.push({ e: -r + r * c, o: proud - r + r * s, nu: c, no: s });
-  }
-  return out;
-}
-
 /** The unit direction `ds` along the wall, `dout` out of it, `dz` up. */
 function dir3(f: Frame, ds: number, dout: number, dz: number): V3 {
   const v: V3 = [f.t[0] * ds + f.n[0] * dout, f.t[1] * ds + f.n[1] * dout, dz];
@@ -372,115 +345,6 @@ function polygon(
   }
 }
 
-/** The values of `xs` strictly between lo and hi. */
-const between = (xs: readonly number[], lo: number, hi: number) =>
-  xs.filter((x) => x > lo + 1e-6 && x < hi - 1e-6);
-
-/**
- * A soft edge round `r` (a band's shoulder, a niche's reveal): the
- * cross-section `profile` swept round the rectangle, the corners mitred
- * (each section point on the rectangle offset by its `e`), each side cut
- * at the breaks the front's grid has on it (`sBreaks` along, `zBreaks`
- * up), so no vertex of the front lies on a side's edge (a T-junction
- * cracks open once the glTF quantises them). `open`: no bottom side, the
- * rectangle's foot in the ground, not offset.
- */
-function softEdge(
-  out: Shaded,
-  f: Frame,
-  r: Rect,
-  profile: readonly EdgePoint[],
-  breaks: { s: readonly number[]; z: readonly number[] },
-  open = false
-): void {
-  const eMin = Math.min(...profile.map((p) => p.e));
-  const rect = (e: number): Rect => ({
-    s0: r.s0 - e,
-    s1: r.s1 + e,
-    z0: open ? r.z0 : r.z0 - e,
-    z1: r.z1 + e,
-  });
-  const sIn = between(breaks.s, r.s0 - eMin, r.s1 + eMin);
-  const zIn = between(breaks.z, open ? r.z0 : r.z0 - eMin, r.z1 + eMin);
-  // each side: its points on a loop (along, up), its outward direction
-  type Side = [(q: Rect) => [number, number][], number, number];
-  const sides: Side[] = [
-    [(q) => [q.s0, ...sIn, q.s1].map((s) => [s, q.z1]), 0, 1],
-    [(q) => [q.z1, ...zIn.toReversed(), q.z0].map((z) => [q.s1, z]), 1, 0],
-    [(q) => [q.z0, ...zIn, q.z1].map((z) => [q.s0, z]), -1, 0],
-  ];
-  if (!open) {
-    sides.push([
-      (q) => [q.s1, ...sIn.toReversed(), q.s0].map((s) => [s, q.z0]),
-      0,
-      -1,
-    ]);
-  }
-  for (const [points, us, uz] of sides) {
-    for (let k = 0; k + 1 < profile.length; k += 1) {
-      const [p, q] = [profile[k], profile[k + 1]];
-      const lp = points(rect(p.e));
-      const lq = points(rect(q.e));
-      const np = dir3(f, p.nu * us, p.no, p.nu * uz);
-      const nq = dir3(f, q.nu * us, q.no, q.nu * uz);
-      const facing = dir3(
-        f,
-        (p.nu + q.nu) * us,
-        p.no + q.no,
-        (p.nu + q.nu) * uz
-      );
-      for (let j = 0; j + 1 < lp.length; j += 1) {
-        polygon(
-          out,
-          [
-            f.at(lp[j][0], p.o, lp[j][1]),
-            f.at(lp[j + 1][0], p.o, lp[j + 1][1]),
-            f.at(lq[j + 1][0], q.o, lq[j + 1][1]),
-            f.at(lq[j][0], q.o, lq[j][1]),
-          ],
-          [np, np, nq, nq],
-          facing
-        );
-      }
-    }
-  }
-}
-
-/**
- * A band standing `proud` out of the wall over `outer` (a fascia), its
- * outer edge rolling over a quarter round of `round` into its flat front.
- */
-function softBand(
-  out: Shaded,
-  f: Frame,
-  outer: Rect,
-  band: { proud: number; round: number }
-): void {
-  const { proud, round } = band;
-  const face: Rect = {
-    s0: outer.s0 + round,
-    s1: outer.s1 - round,
-    z0: outer.z0 + round,
-    z1: outer.z1 - round,
-  };
-  const n = dir3(f, 0, 1, 0);
-  polygon(
-    out,
-    [
-      f.at(face.s0, proud, face.z0),
-      f.at(face.s1, proud, face.z0),
-      f.at(face.s1, proud, face.z1),
-      f.at(face.s0, proud, face.z1),
-    ],
-    [n, n, n, n],
-    n
-  );
-  softEdge(out, f, outer, shoulder(SHOPFRONT.back, proud, round), {
-    s: [face.s0, face.s1],
-    z: [face.z0, face.z1],
-  });
-}
-
 /** A shop window to cut into the wall (lib/city/shop-windows.ts): its
  *  rectangle and how far its run's wall stands out of the footprint line. */
 export interface ShopOpening {
@@ -509,8 +373,8 @@ export function shopfrontMesh(
 ): ShopfrontMesh {
   const out: ShopfrontMesh = {
     canopy: { normals: [], positions: [] },
-    frame: { normals: [], positions: [] },
     openings: [],
+    signs: [],
   };
   const top = paneTop(w, storeyH);
   const { head } = SHOPFRONT;
@@ -542,12 +406,15 @@ export function shopfrontMesh(
     // over a window it keeps a strip of wall above the opening
     const bottom = opened ? Math.max(z0, top + FASCIA_OVER_M) : z0;
     const height = Math.max(Math.min(z1 - bottom, FASCIA_MAX_M), 0.3);
-    softBand(
-      out.frame,
-      wallFrame(w, offset, shift(span)),
-      { s0: span[0], s1: span[1], z0: g + bottom, z1: g + bottom + height },
-      { proud: SHOPFRONT.fasciaProud, round: SHOPFRONT.fasciaRound }
-    );
+    out.signs.push({
+      rect: {
+        s0: span[0],
+        s1: span[1],
+        z0: g + bottom,
+        z1: g + bottom + height,
+      },
+      shift: shift(span),
+    });
   }
   return out;
 }

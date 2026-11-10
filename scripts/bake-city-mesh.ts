@@ -131,7 +131,7 @@ import {
 } from "../lib/city/shopfronts";
 import type { ShopOpening } from "../lib/city/shopfronts";
 import { cutWall, openingBox } from "../lib/city/shop-windows";
-import type { CutTriangle } from "../lib/city/shop-windows";
+import type { CutTriangle, WallAxes, WallCut } from "../lib/city/shop-windows";
 import {
   factColumns,
   inheritedOsm,
@@ -2339,17 +2339,18 @@ const WALL_TINT_SHOWN = 0.6;
  *  app/_components/visual-style.ts). */
 const PANE_SLATE: [number, number, number] = [0.07, 0.09, 0.12];
 const PANE_ROUGH = 0.2;
-/** A shopfront's surround and fascia: its wall as shown, a shade darker
- *  and a touch cooler — part of the wall, not a frame. */
-const SURROUND_COOL: [number, number, number] = [0.52, 0.55, 0.6];
+/** A painted store sign: its wall as shown, darker and a touch cooler —
+ *  paint on the wall, not a board on it. */
+const SIGN_COOL: [number, number, number] = [0.52, 0.55, 0.6];
 /** A host this far above the ground in front of its wall stands on another
  *  part (a storey on a podium, a roof terrace): no shopfront on it. */
 const SHOP_HOST_ABOVE_M = 2;
 
-/** The shop glass and the surround for a host of tint `tint` (linear). */
+/** The shop glass and the painted sign for a host of tint `tint`
+ *  (linear). */
 export function shopfrontColours(tint: readonly number[]): {
   glass: [number, number, number];
-  surround: [number, number, number];
+  sign: [number, number, number];
 } {
   const wall = mixRgb(CLAY_BASE, tint, WALL_TINT_SHOWN);
   return {
@@ -2358,10 +2359,10 @@ export function shopfrontColours(tint: readonly number[]): {
       PANE_SLATE,
       0.45
     ),
-    surround: mixRgb(
-      wall.map((c) => c * 0.9),
-      SURROUND_COOL,
-      0.12
+    sign: mixRgb(
+      wall.map((c) => c * 0.8),
+      SIGN_COOL,
+      0.2
     ),
   };
 }
@@ -2374,11 +2375,12 @@ export function shopfrontColours(tint: readonly number[]): {
  * in place, their remainder appended in their own objects), its reveals
  * appended in the host's own clay, the glass at the back one object per
  * window (its `eaveH` the pane's top, where the head's soft shadow falls —
- * `paneShade` in visual-style.ts). The fascias as one object (rounded:
- * their own smooth normals), the canopy in the host's own clay; the
- * host's building tree (asking or demolishing one takes the building), no
- * footprint, no storey band or eave line on them, `source` 6 (a wall with
- * a sign and no bay gets its fascia alone). The host's plinth breaks for
+ * `paneShade` in visual-style.ts). The store signs painted on: each sign
+ * band cut out of the wall the same way and laid back flush as one object
+ * in a darker tone (no relief), after the windows; the canopy in the
+ * host's own clay; the host's building tree (asking or demolishing one
+ * takes the building), no footprint, no storey band or eave line on them,
+ * `source` 6 (a wall with a sign and no bay gets its sign alone). The host's plinth breaks for
  * each window (`shopWindowBreaks`, before the plinths are laid).
  * Skipped: a host the tile does not hold, a glass or metal
  * facade (its own front), a host not on the ground; a bay is cut where an
@@ -2436,8 +2438,21 @@ export function appendShopfronts(
       );
       pushTriangles(appended, pane.reveals, hostIndex);
     }
-    if (mesh.frame.positions.length > 0) {
-      part(mesh.frame, colours.surround, OBJECT_FLAG_OWN_COLOUR, host.rough);
+    const sign = cutOnWall(
+      baked,
+      w,
+      mesh.signs,
+      triangles,
+      appended,
+      true
+    ).flatMap(({ cut: c }) => c.taken);
+    if (sign.length > 0) {
+      part(
+        { positions: sign, normals: sign.map(() => Number.NaN) },
+        colours.sign,
+        OBJECT_FLAG_OWN_COLOUR,
+        host.rough
+      );
     }
     // the canopy is the building's own: its clay and tint, lit like its
     // walls (not a frame's darker own colour), the shop wash left to the
@@ -2511,11 +2526,36 @@ function cutShopWindows(
   triangles: readonly number[],
   out: ShopParts
 ): CutWindow[] {
+  const base = footAt(w, [0, w.L]);
+  return cutOnWall(baked, w, openings, triangles, out).flatMap(
+    ({ axes, cut }) =>
+      cut.openings.map((o, k) => ({
+        ...openingBox(axes, cut.corners[k]),
+        top: cm(o.z1 - base),
+      }))
+  );
+}
+
+/**
+ * Cuts the rectangles `openings` into the wall `w` stands on: the LoD2
+ * triangles of its building tree and the remainders earlier cuts left
+ * (`out.walls`), each run's wall where `wallShiftAt` found it. A cut LoD2
+ * triangle collapses onto its first vertex (the per-vertex columns of the
+ * LoD2 stream stay aligned), its remainder goes to `out.walls`. `keep`:
+ * each cut hands back what it took (`taken`, a painted sign).
+ */
+function cutOnWall(
+  baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
+  w: ShopfrontWall,
+  openings: readonly ShopOpening[],
+  triangles: readonly number[],
+  out: ShopParts,
+  keep = false
+): { axes: WallAxes; cut: WallCut }[] {
   const p = baked.vertices.positions;
   const ids = baked.vertices.objectIds;
   const at = (i: number): V3 => [p[3 * i], p[3 * i + 1], p[3 * i + 2]];
-  const base = footAt(w, [0, w.L]);
-  const windows: CutWindow[] = [];
+  const cuts: { axes: WallAxes; cut: WallCut }[] = [];
   for (const shift of new Set(openings.map((o) => o.shift))) {
     const rects = openings.filter((o) => o.shift === shift).map((o) => o.rect);
     const axes = wallFrame(w, baked.offset, shift);
@@ -2534,14 +2574,11 @@ function cutShopWindows(
           }))
         : []
     );
-    const cut = cutWall(axes, rects, [...lod2, ...remainders]);
+    const cut = cutWall(axes, rects, [...lod2, ...remainders], keep);
     replaceCut(cut.replaced, p, ids, out);
-    for (const [k, o] of cut.openings.entries()) {
-      const box = openingBox(axes, cut.corners[k]);
-      windows.push({ ...box, top: cm(o.z1 - base) });
-    }
+    cuts.push({ axes, cut });
   }
-  return windows;
+  return cuts;
 }
 
 /** The triangles of a flat position list (9 a triangle). */

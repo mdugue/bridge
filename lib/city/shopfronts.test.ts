@@ -159,7 +159,6 @@ function parts(mesh: ShopfrontMesh): { part: string; p: number[] }[] {
       out.push({ part, p: positions.slice(i, i + 9) });
     }
   };
-  add("frame", mesh.frame.positions);
   add("canopy", mesh.canopy.positions);
   return out;
 }
@@ -283,7 +282,7 @@ describe("the mesh", () => {
           }
         }
         // the per-vertex normals agree with the winding
-        for (const s of [mesh.frame, mesh.canopy]) {
+        for (const s of [mesh.canopy]) {
           expect(s.normals).toHaveLength(s.positions.length);
           for (const [t, { n }] of triangles(s.positions).entries()) {
             const m = [0, 1, 2].map(
@@ -318,8 +317,8 @@ describe("the mesh", () => {
         shift: 0.1,
       },
     ]);
-    // no surround: the fascia alone stands on the wall, and none here
-    expect(mesh.frame.positions).toEqual([]);
+    // no surround, and no sign measured here: nothing on the wall
+    expect(mesh.signs).toEqual([]);
   });
 
   test("the plinth breaks where a window is cut, nowhere else", () => {
@@ -398,22 +397,26 @@ describe("the mesh", () => {
     }
   });
 
-  test("no window under a ground floor too low; a sign alone is a fascia", () => {
+  test("no window under a ground floor too low; a sign alone is painted", () => {
     const low = wall({ gf_top: 1.6 });
     const none = shopfrontMesh(low, wallBays(low, []), 4, OFFSET);
     expect(none.openings).toEqual([]);
-    expect(none.frame.positions).toEqual([]);
+    expect(none.signs).toEqual([]);
     const signed = wall({ bays: [], sign: { at: [[2, 8]], z: [3, 3.6] } });
     const mesh = shopfrontMesh(signed, [], 4, OFFSET);
     expect(mesh.openings).toEqual([]);
-    const zs = triangles(mesh.frame.positions).map(({ c }) => c[2]);
-    expect(Math.min(...zs)).toBeGreaterThan(102.9);
+    // painted where it was seen, at its measured band
+    expect(mesh.signs).toHaveLength(1);
+    const [band] = mesh.signs;
+    expect([band.rect.s0, band.rect.s1]).toEqual([2, 8]);
+    expect(band.rect.z0).toBeCloseTo(103);
+    expect(band.rect.z1).toBeCloseTo(103.6);
     // a sign band measured 2 m tall is a band no taller than FASCIA_MAX_M
     const tall = wall({ bays: [], sign: { at: [[2, 8]], z: [3, 5] } });
-    const tops = triangles(
-      shopfrontMesh(tall, [], 4, OFFSET).frame.positions
-    ).map(({ c }) => c[2]);
-    expect(Math.max(...tops)).toBeLessThanOrEqual(103 + FASCIA_MAX_M);
+    const [high] = shopfrontMesh(tall, [], 4, OFFSET).signs;
+    expect(high.rect.z1 - high.rect.z0).toBeLessThanOrEqual(
+      FASCIA_MAX_M + 1e-9
+    );
   });
 
   test("a glazed row sits on a lower riser, one wide window", () => {

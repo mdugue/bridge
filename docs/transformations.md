@@ -3381,8 +3381,10 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   from 0.5 m (a glazed row: 0.3 m) to the measured ground-floor top (3 m
   where none; under a canopy's slab, into which the head reaches over
   a strip of wall under 0.25 m) —
-  no mullions, no frame boards —, a rounded fascia band 10 cm proud at
-  the measured sign band (none under a canopy: its fascia is the sign
+  no mullions, no frame boards —, the store sign painted flush on the wall
+  at the measured sign band (cut out of the wall and laid back in a darker
+  tone; until 2026-11-10 a rounded fascia 10 cm proud, which read as a
+  slab — Manuel chose "nur aufgemalt") (none under a canopy: its fascia is the sign
   band); a canopy is a slab 0.3 m thick under its measured top from the
   wall out to a 0.2 m deep fascia at its edge, at most 1 m tall, with
   2.6 m headroom, its outer edges rounded, in the host's own clay (its
