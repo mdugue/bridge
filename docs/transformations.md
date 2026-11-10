@@ -3547,14 +3547,19 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   every wall. The lift is a class of 0.05 m up to 1.55 m; a wall whose
   ground or plinth rises past its reach (at most 2.2 m over the base,
   `GROUND_REACH_M`, and no higher than leaves the ground floor's windows
-  at least 0.8 of their width tall, `overGround`; a shop's: its first
-  floor's) loses its own ground floor, signed like a shopfront's, the
+  at least 0.8 of their width tall, `overGround`) loses its own ground floor, signed like a shopfront's, the
   building's other walls keep theirs. Such a wall keeps that height
   (`_FACADE`'s first door slot) and draws no row under it, so where the
   ground rises more than a storey the upper floors' windows go too (the
   Kunstakademie on the terrace). Dresden, 2026-10-20: wall feet whose
   windows the fine ground covered 11 925 → 0 (of ~610 000), objects
-  without a ground floor 6 258 → 3 590 (the rest are shops). **The storeys
+  without a ground floor 6 258 → 3 590 (the rest were shops). Only a
+  wall the photos saw shop bays on gives its ground floor up (2026-11-10,
+  Manuel, Alaunstraße: a house with an OSM shop or café lost the ground
+  floor's windows on every wall, and a wall where one drive read a store
+  sign alone — 318 of Dresden's 1 003 shopfront walls — kept blank
+  plaster under its fascia; now both keep the house's windows, the shop
+  zone still painted darker). **The storeys
   count from the street** (`liftToStreet`): a LoD2 base is the lowest
   ground round the whole footprint — a courtyard's, a light well's, a
   cellar ramp's — and lay a median 0.3 m under the street on the spawn

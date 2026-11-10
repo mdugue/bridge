@@ -2843,7 +2843,6 @@ export function assignWindows(
       (extra[i]?.palace ?? false) &&
       (o.flags & NO_WINDOW_FLAGS) === 0,
     root: o.root,
-    shop: hasObjectFlag(o.flags, OBJECT_FLAG_SHOP),
     storeyH: o.storeyH,
     storeys: extra[i]?.storeys,
     town: extra[i]?.town,

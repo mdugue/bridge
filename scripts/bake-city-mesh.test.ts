@@ -1807,18 +1807,22 @@ test("two passages crossing in a house keep their linings out of each other", ()
 test("windows: only a shopfront the photos saw bays on takes the ground floor's", () => {
   const doc = fixture();
   const house = Object.keys(doc.CityObjects).indexOf("house");
-  const signsOf = (wall: ShopfrontWall) => {
-    const { vertices } = bakeCityMesh(
+  const signsOf = (wall?: ShopfrontWall) => {
+    const { objects, vertices } = bakeCityMesh(
       "t",
       doc,
       undefined,
       null,
-      undefined,
+      // an OSM shop in the house: no ground floor taken by itself
+      { house: { shop: 1 } },
       undefined,
       "render",
       undefined,
       undefined,
-      { shopfronts: [wall] }
+      { shopfronts: wall ? [wall] : [] }
+    );
+    expect(unpackStyle(objects[house].windows?.style ?? 0).noGround).toBe(
+      false
     );
     const signs = new Set<number>();
     for (let v = 0; v < vertices.objectIds.length; v += 1) {
@@ -1833,4 +1837,6 @@ test("windows: only a shopfront the photos saw bays on takes the ground floor's"
   expect(signsOf(shopfrontAt())).toEqual([-1, 1]);
   // a fascia read alone: every wall keeps its ground-floor windows
   expect(signsOf({ ...shopfrontAt(), bays: [] })).toEqual([1]);
+  // no photo at all: the shop's house keeps its ground floor all round
+  expect(signsOf()).toEqual([1]);
 });
