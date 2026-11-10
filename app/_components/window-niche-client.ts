@@ -139,6 +139,10 @@ function transfers(input: NicheJobInput): Transferable[] {
 function runSoon(job: Job): void {
   running = job;
   setTimeout(() => {
+    // (stopped meanwhile: settled already)
+    if (running !== job) {
+      return;
+    }
     running = null;
     if (job.signal.aborted) {
       job.reject(job.signal.reason);
@@ -210,4 +214,23 @@ export async function tileNichesOffThread(
     queue.push(job);
     next();
   });
+}
+
+/**
+ * Stops the worker before the page reloads (create-app.ts `stopWorkers`,
+ * once the stream is gone): what its last tiles left in its heap goes
+ * now, not when the old document is collected. The job it held and those
+ * queued settle as given up (their tiles went with the scene); a later job
+ * starts a new worker.
+ */
+export function stopNicheWorker(): void {
+  worker?.terminate();
+  worker = null;
+  answered = false;
+  const held = running;
+  running = null;
+  held?.reject(new Error("niche worker stopped"));
+  for (const job of queue.splice(0)) {
+    job.reject(new Error("niche worker stopped"));
+  }
 }

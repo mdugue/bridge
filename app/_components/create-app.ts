@@ -125,6 +125,7 @@ import {
 } from "@/lib/city/vegetation-lod";
 import { stopBvhWorker } from "./bvh-client";
 import { stopGroundWorker } from "./ground-prep-client";
+import { stopNicheWorker } from "./window-niche-client";
 import type { GlideOptions } from "./camera-flight";
 import { createCameraPose } from "./camera-pose";
 import type { FollowAim } from "./camera-pose";
@@ -1308,7 +1309,7 @@ async function teardownWhole(
   await releaseRenderer(renderer);
 }
 
-/** Before a reload, once the stream is gone: the ground and BVH workers
+/** Before a reload, once the stream is gone: the ground, BVH and niche workers
  *  go, and their heaps with them, not when the old document is collected
  *  (the new page boots in the old one's process). Not in `releaseGpu`:
  *  there the stream lives on (the tiles still parsing send their jobs),
@@ -1317,6 +1318,7 @@ async function teardownWhole(
 function stopWorkers(): void {
   stopGroundWorker();
   stopBvhWorker();
+  stopNicheWorker();
 }
 
 /** The renderer and its device (or its context), and its canvas. */

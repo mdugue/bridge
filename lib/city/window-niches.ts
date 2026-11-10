@@ -72,9 +72,7 @@ const LENIENT_M = 1e-3;
 
 /** The columns of a wall whose length slot holds `lengthCode` (snorm16,
  *  signed): their axes from the wall's middle (m), each one's column as the
- *  shader counts it (`js`), and the window's width. Where the count lies
- *  within a hair of the next (the shader's f32 may round it either way)
- *  both counts' columns. */
+ *  shader counts it (`js`), and the window's width. */
 export function wallColumns(
   o: NicheObject,
   lengthCode: number
@@ -91,19 +89,17 @@ export function wallColumns(
   const style = Math.floor(o.style + 0.5);
   const dormer = bit(style, WINDOW_STYLE.dormer) === 1;
   const edge = dormer ? DORMER_WINDOW.edge : WINDOW_ROWS.edge;
-  const length = (units / 32_767) * FACADE_SCALE_M;
-  const room = length - 2 * edge - w;
+  // in f32, as the shader counts them (`columns` in clay-windows.ts): on
+  // the edge of the next count an f64 count would place every column half
+  // an axis off
+  const f = Math.fround;
+  const length = f(f(units / 32_767) * FACADE_SCALE_M);
+  const room = f(f(length - f(2 * edge)) - f(w));
   const counts: number[] = [];
   if (measured) {
     counts.push(nMeasured);
   } else if (room >= 0) {
-    const q = room / axis + 1e-4;
-    counts.push(Math.floor(q) + 1);
-    // on the edge: the other count too
-    const near = Math.round(q);
-    if (Math.abs(q - near) < 1e-3 && near >= 1) {
-      counts.push(near === Math.floor(q) + 1 ? near + 1 : near);
-    }
+    counts.push(Math.floor(f(f(room / f(axis)) + f(1e-4))) + 1);
   }
   const centres: number[] = [];
   const js: number[] = [];
