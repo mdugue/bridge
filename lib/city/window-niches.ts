@@ -170,7 +170,12 @@ export function wallOpenings(
     return [];
   }
   const depth = revealDepth(o.style);
-  const rows = wallRows(o, eaveCode, topH);
+  // a wall whose ground floor has no windows (a shopfront's, its windows
+  // real holes in the wall; one buried, one with many doors) is signed:
+  // no niche there, where one could reach into a shop window
+  const rows = wallRows(o, eaveCode, topH).filter(
+    (r) => lengthCode > 0 || r.k > 0
+  );
   return centres.flatMap((s, j) =>
     rows.map((r) => ({
       s,
@@ -218,14 +223,15 @@ interface NicheWall {
   top: number;
 }
 
-/** A triangle's horizontal unit normal in the scene frame, or undefined
- *  when it is no wall (as upright as the clay's `wall` term wants). */
+/** A triangle's horizontal normal in the scene frame, as long as its
+ *  area's horizontal share (twice it), or undefined when it is no wall (as
+ *  upright as the clay's `wall` term may still cut). */
 function uprightNormal(
   p: ArrayLike<number>,
   a: number,
   b: number,
   c: number
-): [number, number] | undefined {
+): { x: number; z: number } | undefined {
   const e1 = [
     p[3 * b] - p[3 * a],
     p[3 * b + 1] - p[3 * a + 1],
@@ -240,18 +246,23 @@ function uprightNormal(
   const ny = e1[2] * e2[0] - e1[0] * e2[2];
   const nz = e1[0] * e2[1] - e1[1] * e2[0];
   const len = Math.hypot(nx, ny, nz);
-  const lh = Math.hypot(nx, nz);
-  // the clay's wall: |n.y| under 0.5 (smoothstep 0.5–0.7)
-  if (len < 1e-9 || Math.abs(ny) > 0.5 * len) {
+  // the clay's wall: |n.y| under 0.7 (its weight 1 − smoothstep(0.5,
+  // 0.7)): every face the clay may cut, a superset
+  if (len < 1e-9 || Math.abs(ny) > 0.7 * len || Math.hypot(nx, nz) < 1e-9) {
     return undefined;
   }
-  return [nx / lh, nz / lh];
+  return { x: nx, z: nz };
 }
 
 /** Whether (s, y) lies in one of a wall's triangles (a hair inside). */
 function onWall(tris: readonly number[], s: number, y: number): boolean {
-  for (let i = 0; i < tris.length; i += 6) {
-    const [ax, ay, bx, by, cx, cy] = tris.slice(i, i + 6);
+  for (let i = 0; i + 5 < tris.length; i += 6) {
+    const ax = tris[i];
+    const ay = tris[i + 1];
+    const bx = tris[i + 2];
+    const by = tris[i + 3];
+    const cx = tris[i + 4];
+    const cy = tris[i + 5];
     const d = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
     if (Math.abs(d) < 1e-9) {
       continue;
@@ -268,11 +279,26 @@ function onWall(tris: readonly number[], s: number, y: number): boolean {
 
 const snormOf = (code: number) => code / 32_767;
 
-/** Walls whose planes stand this far apart (m) are told apart; one LoD2
- *  wall's triangles lie well within it. */
-const WALL_PLANE_STEP_M = 0.5;
+/** A wall's triangles before they are told apart by plane: its codes,
+ *  its normal summed over its triangles (area-weighted, horizontal) and
+ *  its plane's offset. */
+interface WallPiece {
+  wall: NicheWall;
+  sx: number;
+  sz: number;
+  d: number;
+}
 
-/** Gathers a city mesh's window-carrying walls by object, codes and plane. */
+/** Two pieces of one object with the same codes are one wall when they
+ *  face the same way within this (cos) … */
+const SAME_FACING_COS = Math.cos((2 * Math.PI) / 180);
+/** … and their planes stand within this (m): the glTF's positions are
+ *  quantised (3.4 cm), so one LoD2 wall's triangles disagree a little,
+ *  while a U's wing ends or a house's front and back stand metres apart. */
+const SAME_PLANE_M = 0.15;
+
+/** Gathers a city mesh's window-carrying walls by object, codes and plane
+ *  (each wall's normal the mean of its triangles'). */
 function gatherWalls(
   mesh: NicheMesh,
   objects: (object: number) => NicheObject | undefined,
@@ -280,7 +306,7 @@ function gatherWalls(
 ): NicheWall[] {
   const p = mesh.positions;
   const f = mesh.facade;
-  const walls = new Map<string, NicheWall>();
+  const pieces = new Map<string, WallPiece[]>();
   const count = mesh.index ? mesh.index.length : mesh.objectIds.length;
   for (let t = 0; t + 2 < count; t += 3) {
     const a = mesh.index ? mesh.index[t] : t;
@@ -296,36 +322,51 @@ function gatherWalls(
     if (!n) {
       continue;
     }
-    // and its plane: two walls of one object facing the same way with the
-    // same codes (a U's wing ends) are two walls, each its own anchor
-    const plane = Math.round(
-      (n[0] * p[3 * a] + n[1] * p[3 * a + 2]) / WALL_PLANE_STEP_M
+    const key = `${object}:${length}:${f[4 * a + 3]}`;
+    const list = pieces.get(key) ?? [];
+    pieces.set(key, list);
+    const d = n.x * p[3 * a] + n.z * p[3 * a + 2];
+    const unit = Math.hypot(n.x, n.z);
+    let piece = list.find(
+      (q) =>
+        (q.sx * n.x + q.sz * n.z) / (Math.hypot(q.sx, q.sz) * unit) >=
+          SAME_FACING_COS && Math.abs(q.d - d / unit) <= SAME_PLANE_M
     );
-    const key = `${object}:${length}:${f[4 * a + 3]}:${Math.round(n[0] * 1000)}:${Math.round(n[1] * 1000)}:${plane}`;
-    let w = walls.get(key);
-    const z0 = base(object);
-    if (!w) {
-      w = {
-        object,
-        length,
-        eave: f[4 * a + 3],
-        nx: n[0],
-        nz: n[1],
-        px: p[3 * a],
-        pz: p[3 * a + 2],
-        s0: snormOf(f[4 * a]) * FACADE_SCALE_M,
-        tris: [],
-        top: Number.NEGATIVE_INFINITY,
+    if (!piece) {
+      piece = {
+        wall: {
+          object,
+          length,
+          eave: f[4 * a + 3],
+          nx: 0,
+          nz: 0,
+          px: p[3 * a],
+          pz: p[3 * a + 2],
+          s0: snormOf(f[4 * a]) * FACADE_SCALE_M,
+          tris: [],
+          top: Number.NEGATIVE_INFINITY,
+        },
+        sx: 0,
+        sz: 0,
+        d: d / unit,
       };
-      walls.set(key, w);
+      list.push(piece);
     }
+    piece.sx += n.x;
+    piece.sz += n.z;
+    const z0 = base(object);
     for (const v of [a, b, c]) {
       const h = p[3 * v + 1] - z0;
-      w.tris.push(snormOf(f[4 * v]) * FACADE_SCALE_M, h);
-      w.top = Math.max(w.top, h);
+      piece.wall.tris.push(snormOf(f[4 * v]) * FACADE_SCALE_M, h);
+      piece.wall.top = Math.max(piece.wall.top, h);
     }
   }
-  return [...walls.values()];
+  return [...pieces.values()].flatMap((list) =>
+    list.map(({ wall, sx, sz }) => {
+      const l = Math.hypot(sx, sz) || 1;
+      return { ...wall, nx: sx / l, nz: sz / l };
+    })
+  );
 }
 
 /**

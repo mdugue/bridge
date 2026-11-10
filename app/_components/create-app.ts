@@ -1642,6 +1642,7 @@ async function bootApp(
   // scene renders into). It is created a few lines below, before the render
   // loop runs the stream's first update, so no tile lands without it.
   let compileWith: PostStack["compile"] | null = null;
+  let recompileWith: PostStack["recompile"] | null = null;
   const niches = niching
     ? createNicheField(styleResources.clayDetail, {
         capacity: NICHE_CAPACITY[budget.tier],
@@ -1651,8 +1652,9 @@ async function bootApp(
         // made off the frame where it can be
         cutOn: (city, on) => {
           const clay = city.mesh.material as MeshStandardNodeMaterial;
-          if (setClayNicheCut(styleResources, clay, on) && compileWith) {
-            void compileWith(city.mesh).catch(() => {
+          // the clay changed in place: compiled again, not skipped as done
+          if (setClayNicheCut(styleResources, clay, on) && recompileWith) {
+            void recompileWith(city.mesh).catch(() => {
               // built on its first draw then
             });
           }
@@ -2021,6 +2023,7 @@ async function bootApp(
   );
   cleanups.push(() => postStack.dispose());
   compileWith = postStack.compile;
+  recompileWith = postStack.recompile;
   // The thing asked, named in the city beside it (nameplate-layer.ts):
   // drawn after the frame, onto the canvas.
   const nameplate = createNameplate({
@@ -3308,7 +3311,6 @@ async function bootApp(
     walkMovedNow = walkMoved(camera);
     const regressed = stepRegression(regression, walkMovedNow, dt * 1000);
     postStack.setRegressed(regressed);
-    postStack.setFrameMs(dt * 1000);
     if (regressed !== regressedNow) {
       regressedNow = regressed;
       updatePocDebug({ regressed });
@@ -3364,7 +3366,7 @@ async function bootApp(
     const furnitureEye = modelRig.owns() ? null : eye;
     // the real window niches around it (window-niche-layer.ts), not in
     // Modell either
-    niches?.update(furnitureEye);
+    niches?.update(furnitureEye, stream.visibleCities());
     let cellChanged = false;
     for (const d of shown) {
       for (const part of [d.furniture, d.tram]) {

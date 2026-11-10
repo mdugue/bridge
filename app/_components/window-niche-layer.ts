@@ -43,6 +43,8 @@ import {
   windowHash,
   PANE_SKY_NIGHT_DIM,
   PANE_SKY_RGB,
+  WINDOW_GLOW_RGB,
+  paneFresnel,
 } from "./clay-windows";
 import type { CityLayer } from "./city-layer";
 import { Instances, instanceTint } from "./instancing";
@@ -51,7 +53,7 @@ import { nightShadowFree } from "./lantern";
 import type { F, V3, V4 } from "./shader-chunks";
 import { viewDirection } from "./view-direction";
 import type { NicheJobInput, NicheResult } from "./window-niche-client";
-import { CLAY_BASE, DUSK_GLOW } from "./visual-style";
+import { CLAY_BASE, DUSK_GLOW, TINT_SHARE } from "./visual-style";
 import type { ClayDetailUniforms } from "./visual-style";
 
 /**
@@ -351,8 +353,7 @@ export function nicheMaterial(d: ClayDetailUniforms): MeshStandardNodeMaterial {
   // the pane: the sky at a grazing view, brighter toward its head; after
   // dark one in four lit (the clay's hash, its column, storey and seed)
   const fres = float(1).sub(clamp(abs(dot(viewDirection(), out)), 0, 1));
-  const f2 = fres.mul(fres);
-  const schlick = float(0.04).add(float(0.96).mul(f2.mul(f2).mul(fres)));
+  const schlick = paneFresnel(fres);
   const head = clamp(local.y.div(max(size.y, 0.1)).mul(0.5).add(0.5), 0, 1);
   const paneSky = back
     .mul(head.mul(WINDOW_SKY.up).add(schlick.mul(WINDOW_SKY.fresnel)))
@@ -365,7 +366,7 @@ export function nicheMaterial(d: ClayDetailUniforms): MeshStandardNodeMaterial {
   m.emissiveNode = vec3(...PANE_SKY_RGB)
     .mul(paneSky)
     .add(
-      vec3(1, 0.78, 0.48)
+      vec3(...WINDOW_GLOW_RGB)
         .mul(back.mul(on).mul(NIGHT_WINDOWS.light))
         .mul(DUSK_GLOW)
         .mul(d.uNight)
@@ -406,8 +407,11 @@ export interface NicheField {
   /** a tile's niches (`nichesOf`' output) on its city; returns what
    *  takes them off again */
   add: (city: CityLayer, built: NicheResult) => () => void;
-  /** fills the set around the eye (null: none, Modell) */
-  update: (eye: Vector3 | null) => void;
+  /** fills the set around the eye (null: none, Modell) from the tiles
+   *  `shown` now (the stream's shown cities: a full tile its coarser
+   *  parent still stands in for gets none — its walls are not the ones
+   *  drawn) */
+  update: (eye: Vector3 | null, shown: readonly CityLayer[]) => void;
   /** what stands changed (a demolish, a design): filled again at the
    *  next update */
   invalidate: () => void;
@@ -427,9 +431,9 @@ function wallColour(table: CityObjectTable, i: number, out: Color): Color {
     return out.copy(base);
   }
   return out.setRGB(
-    base.r + (r - base.r) * 0.6,
-    base.g + (g - base.g) * 0.6,
-    base.b + (b - base.b) * 0.6
+    base.r + (r - base.r) * TINT_SHARE,
+    base.g + (g - base.g) * TINT_SHARE,
+    base.b + (b - base.b) * TINT_SHARE
   );
 }
 
@@ -672,6 +676,12 @@ export function createNicheField(
   const none: ReadonlySet<number> = new Set();
   const last = new Vector3(Number.POSITIVE_INFINITY, 0, 0);
   let dirty = true;
+  /** the cities shown at the last update, and whether it had an eye */
+  let showing = new Set<CityLayer>();
+  let shownList: readonly CityLayer[] = [];
+  /** the houses the set holds now (`fill`) */
+  let lastPicked = "";
+  let eyeKnown = false;
   let compiled = false;
   let compiling = false;
   const colour = new Color();
@@ -714,6 +724,7 @@ export function createNicheField(
     tile.city.setNiched(objects);
   };
   const clear = () => {
+    lastPicked = "";
     for (const tile of tiles.values()) {
       if (tile.houses.size > 0) {
         setHouses(tile, none);
@@ -722,12 +733,22 @@ export function createNicheField(
   };
   const fill = (eye: Vector3) => {
     const houses = nearHouses(
-      tiles.values(),
+      [...tiles.values()].filter((t) => showing.has(t.city)),
       eye.x,
       eye.z,
       NICHE_RADIUS_M,
       capacity
     );
+    // the same houses as last time: the same boxes, nothing to write or
+    // upload (a walk along a street refills every 6 m)
+    const picked = houses
+      .filter((h) => h.tile.cutting)
+      .map((h) => `${h.tile.city.tile}:${h.root}:${h.niches.length}`)
+      .join("|");
+    if (picked === lastPicked && mesh.visible === picked.length > 0) {
+      return;
+    }
+    lastPicked = picked;
     const m = mesh.instanceMatrix.array as Float32Array;
     const tints = mesh.instanceTints?.array as Float32Array;
     const objects = new Map<NicheTile, Set<number>>();
@@ -770,6 +791,17 @@ export function createNicheField(
     }
     mesh.visible = k > 0;
   };
+  /** what stands changed: filled again at once where the set is drawn
+   *  (no box left in the air for a frame), else at the next update */
+  const refillNow = () => {
+    if (compiled && eyeKnown) {
+      dirty = false;
+      cutNear(last);
+      fill(last);
+    } else {
+      dirty = true;
+    }
+  };
   return {
     mesh,
     add: (city, { niches, cells, houses }) => {
@@ -798,14 +830,24 @@ export function createNicheField(
       tiles.set(city, tile);
       dirty = true;
       startCompile();
+      // taken down as the tile leaves, its clay and object texture freed
+      // with it: nothing of it is touched, the set drops its niches now
       return () => {
         tiles.delete(city);
-        setHouses(tile, none);
-        setCut(tile, false);
-        dirty = true;
+        refillNow();
       };
     },
-    update: (eye) => {
+    update: (eye, shown) => {
+      // (the stream's list is the same array until what is shown changes)
+      if (shown !== shownList) {
+        shownList = shown;
+        const on = new Set(shown);
+        if (on.size !== showing.size || shown.some((c) => !showing.has(c))) {
+          showing = on;
+          dirty = true;
+        }
+      }
+      eyeKnown = eye !== null && compiled;
       if (!(eye && compiled)) {
         if (mesh.visible) {
           mesh.visible = false;
@@ -826,7 +868,7 @@ export function createNicheField(
       fill(eye);
     },
     invalidate: () => {
-      dirty = true;
+      refillNow();
     },
     dispose: () => {
       for (const tile of tiles.values()) {

@@ -106,6 +106,13 @@ function startWorker(): Worker | null {
       giveUp();
     }
   });
+  // a reply that cannot be read leaves its job waiting for ever, and every
+  // job behind it: as good as a dead worker
+  w.addEventListener("messageerror", () => {
+    if (worker === w) {
+      giveUp();
+    }
+  });
   return w;
 }
 
@@ -153,7 +160,20 @@ export async function tileNichesOffThread(
   signal: AbortSignal
 ): Promise<NicheResult> {
   return await new Promise<NicheResult>((resolve, reject) => {
-    queue.push({ input, signal, resolve, reject });
+    const job: Job = { input, signal, resolve, reject };
+    // a tile that leaves while its job waits lets go of its copy at once
+    signal.addEventListener(
+      "abort",
+      () => {
+        const at = queue.indexOf(job);
+        if (at !== -1) {
+          queue.splice(at, 1);
+          job.reject(signal.reason);
+        }
+      },
+      { once: true }
+    );
+    queue.push(job);
     next();
   });
 }

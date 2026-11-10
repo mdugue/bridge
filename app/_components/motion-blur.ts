@@ -137,9 +137,12 @@ export function createMotionBlur(
           size.x,
           size.y
         );
+        // a jump is told by how far the picture moved, not by the pace:
+        // a teleport on a slow frame stays a jump, a fast pan on a fast
+        // display none
         blurred = stepBlurGate(
           gate,
-          { least: m.least * k, median: m.median * k, most: m.most * k },
+          { least: m.least * k, median: m.median * k, most: m.most },
           everywhere
         );
       }

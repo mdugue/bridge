@@ -84,6 +84,16 @@ export const WINDOW_SKY = { up: 0.06, fresnel: 0.5 } as const;
 export const PANE_SKY_RGB = [0.55, 0.66, 0.8] as const;
 /** How much of a pane's sky the night takes. */
 export const PANE_SKY_NIGHT_DIM = 0.85;
+/** A lit window's warm light after dark (× its strength, the dusk glow
+ *  and the night), drawn or a niche's. */
+export const WINDOW_GLOW_RGB = [1, 0.78, 0.48] as const;
+
+/** Schlick's Fresnel for glass (F0 0.04) from `fres` = 1 − |n·v|: the
+ *  panes' sky lift at a grazing view. */
+export function paneFresnel(fres: F): F {
+  const f2 = fres.mul(fres);
+  return float(0.04).add(float(0.96).mul(f2.mul(f2).mul(fres)));
+}
 
 /** The wall rolls into the opening at its sides and head over a quarter
  *  round this wide (m): soft plaster, a line of light where the sun
@@ -765,8 +775,7 @@ export function clayWindows(i: WindowInputs): ClayWindows {
   );
   const world = normalize(mix(wallSide, r.normal, opening));
   const fres = float(1).sub(clamp(abs(dot(i.view, i.wn)), 0, 1));
-  const f2 = fres.mul(fres);
-  const schlick = float(0.04).add(float(0.96).mul(f2.mul(f2).mul(fres)));
+  const schlick = paneFresnel(fres);
   const head = clamp(g.v.div(max(g.tall, 0.1)), 0, 1).mul(px.du);
   return {
     opening,
@@ -782,7 +791,7 @@ export function clayWindows(i: WindowInputs): ClayWindows {
     sun: mix(1, r.lit.mul(mix(1, WINDOW_TONE.backSun, r.back)), opening).mul(
       float(1).sub(p.shadow.mul(near))
     ),
-    glow: vec3(1, 0.78, 0.48).mul(
+    glow: vec3(...WINDOW_GLOW_RGB).mul(
       glowNear.add(glowFar).mul(NIGHT_WINDOWS.light)
     ),
     colour: (col: V3) => {

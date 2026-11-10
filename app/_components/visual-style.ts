@@ -66,6 +66,7 @@ import {
   PANE_SKY_RGB,
   WINDOW_PANE_ROUGHNESS,
   clayWindows,
+  paneFresnel,
 } from "./clay-windows";
 import type { ClayWindows } from "./clay-windows";
 import { streetLight } from "./lamp-reflections";
@@ -130,8 +131,10 @@ export interface ClayDetailUniforms {
 /** Farbvariation: the clay colour each building takes from its use and
  *  height, mixed into the base — a middling mix breaks the uniform massing
  *  and stays painterly. The shopfronts' baked colours assume it
- *  (scripts/bake-city-mesh.ts `WALL_TINT_SHOWN`): tune both together. */
-const TINT = float(0.6);
+ *  (scripts/bake-city-mesh.ts `WALL_TINT_SHOWN`): tune both together; the
+ *  niches read it as it is (window-niche-layer.ts `wallColour`). */
+export const TINT_SHARE = 0.6;
+const TINT = float(TINT_SHARE);
 /** Dachfarbe: terracotta or slate per roof, from its form and pitch —
  *  roofs carry more colour than walls, the strongest readability cue. */
 const ROOF_TINT = float(0.7);
@@ -1064,8 +1067,7 @@ function paneShade(h: F, top: F): F {
  *  its wall, and a stronger sky would wash it out to the wall's tone. */
 function paneSky(d: ClayDetailUniforms, h: F, fres: F): V3 {
   const upper = smoothstep(0.8, 2.6, h);
-  const f2 = fres.mul(fres);
-  const schlick = float(0.04).add(float(0.96).mul(f2.mul(f2).mul(fres)));
+  const schlick = paneFresnel(fres);
   return vec3(...PANE_SKY_RGB).mul(
     upper
       .mul(0.04)

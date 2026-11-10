@@ -149,8 +149,7 @@ export function stepBlurGate(
     gate.below = 0;
     return false;
   }
-  const measure = everywhere ? motion.least : motion.median;
-  gate.below = measure < BLUR_MIN_PX / SHUTTER / 2 ? gate.below + 1 : 0;
+  gate.below = motion.median < BLUR_MIN_PX / SHUTTER / 2 ? gate.below + 1 : 0;
   if (gate.below >= BLUR_HOLD_FRAMES) {
     gate.on = false;
     gate.below = 0;

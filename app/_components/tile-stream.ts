@@ -33,6 +33,7 @@ import type {
   VegRowFeature,
 } from "@/lib/city/features";
 import { orchardTrees, vineRows } from "@/lib/city/cultivated";
+import { HOUSE_STRIDE } from "@/lib/city/window-niches";
 import type { LookValues } from "@/lib/city/look-controls";
 import {
   pointFeatures,
@@ -1631,6 +1632,10 @@ export function muralsPart(site: MuralSite): LatePart<MuralLayer> {
  * the site's set (window-niche-layer.ts) — nothing of the tile's to
  * compile — and taken off it when the tile goes.
  */
+/** What a Map entry with its small array costs on a JS heap (bytes, a
+ *  generous measure): the niche field's cells and houses. */
+const NICHE_MAP_ENTRY_BYTES = 96;
+
 export function nichesPart(site: {
   tile: string;
   build: (signal: AbortSignal) => Promise<NicheResult>;
@@ -1646,10 +1651,14 @@ export function nichesPart(site: {
       return built.niches.length > 0 ? built : null;
     },
     objects: () => [],
+    // the packed niches and, as the field holds them, a Map entry and a
+    // small array per cell and per house besides the typed lists
     bytes: (built) =>
       built.niches.byteLength +
       built.cells.byteLength +
-      built.houses.byteLength,
+      built.houses.byteLength +
+      (built.cells.length / 3) * NICHE_MAP_ENTRY_BYTES +
+      (built.houses.length / HOUSE_STRIDE) * NICHE_MAP_ENTRY_BYTES,
     hang: (built) => site.hang(built),
     free: () => [],
   };

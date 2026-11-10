@@ -200,6 +200,10 @@ export interface PostStack {
    * started too (compile-lanes.ts): a tile drops its CPU copies on it.
    */
   compile: (object: Object3D) => Promise<void>;
+  /** `compile` again for a material changed in place (a clay that turns
+   *  to cutting its niches' openings, a new build of the same material
+   *  object): the record of what compiled is dropped for it first. */
+  recompile: (object: Object3D) => Promise<void>;
   /**
    * Pushes the picture style into the passes: its weights on the depth
    * grading, the paper grain and the ink. (Their strengths and the contact
@@ -215,7 +219,8 @@ export interface PostStack {
    *  autofocus rests where none is. */
   lensWanted: () => boolean;
   /** Draws the scene into its target, then the post chain to the canvas;
-   *  `stepMs`, the loop's time step, advances the lens's fade and focus. */
+   *  `stepMs`, the loop's time step, advances the lens's fade and focus
+   *  and paces the motion blur. */
   render: (stepMs: number) => void;
   /** world-space point under the crosshair; null = nothing hit (sky) */
   setFocusTarget: (point: Vector3 | null) => void;
@@ -229,9 +234,6 @@ export interface PostStack {
    * blur grows in (`LENS_FADE_MS`, lens.ts) instead of snapping on.
    */
   setRegressed: (on: boolean) => void;
-  /** The interval since the last frame (ms): the motion blur smears a
-   *  nominal frame's way, however uneven the frame rate. */
-  setFrameMs: (ms: number) => void;
   /** The loading veil this frame (load-veil.ts): the frontier's ring
    *  around the world-space point `centreX`, `centreZ`. */
   setLoadVeil: (state: VeilState, centreX: number, centreZ: number) => void;
@@ -748,8 +750,6 @@ export function createPostStack(
   // it), Modell `model` — recovery from one never overrides another.
   let regressed = false;
   let model = false;
-  // the interval since the last frame (`setFrameMs`)
-  let frameMs = 1000 / 60;
   /** The scene into its target; `after` undoes the frame's dressing. */
   const drawScene = (view: Camera, after: () => void) => {
     try {
@@ -1318,7 +1318,7 @@ export function createPostStack(
     await compileBuilds([scene]);
   };
 
-  return {
+  const stack: PostStack = {
     compile: async (root) => {
       const drawables = drawablesOf(root);
       // a tile that leaves before its holds and other cameras' anchors are
@@ -1337,6 +1337,12 @@ export function createPostStack(
       } finally {
         unwatch();
       }
+    },
+    recompile: async (root) => {
+      for (const d of drawablesOf(root)) {
+        compiled.delete(d);
+      }
+      await stack.compile(root);
     },
     anchorCount: () => anchors.count(),
     holdCut: async (group, roots, view) => {
@@ -1447,7 +1453,8 @@ export function createPostStack(
         size,
         moving !== null && style.shaderMode === 0 && !model && regressed,
         moving?.pre === null,
-        frameMs
+        // the loop's step: the blur smears a nominal frame's way
+        stepMs
       );
       const shown = frame();
       // the input named before anything is drawn or let go: `beforeAa`
@@ -1495,9 +1502,6 @@ export function createPostStack(
     setLoadVeil: loadVeil.set,
     setRegressed: (on) => {
       regressed = on;
-    },
-    setFrameMs: (ms) => {
-      frameMs = ms;
     },
     setFocusTarget: (point) => {
       // no hit focuses on the sky; the pull makes that gentle
@@ -1549,4 +1553,5 @@ export function createPostStack(
       target.dispose();
     },
   };
+  return stack;
 }

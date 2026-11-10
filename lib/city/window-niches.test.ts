@@ -78,6 +78,45 @@ describe("window niches", () => {
     }
   });
 
+  test("one wall stays one when quantising tilts its triangles", () => {
+    // the same 12 m wall, one corner of its second triangle 1.5 cm out
+    const positions = [
+      -6, 100, 0, 6, 100, 0, 6, 112.5, 0, -6, 100, 0, 6, 112.5, 0.015, -6,
+      112.5, 0,
+    ];
+    const facade: number[] = [];
+    for (let v = 0; v < 6; v += 1) {
+      facade.push(code(-positions[3 * v]), code(12), 32_767, 32_767);
+    }
+    const niches = tileNiches(
+      { positions, facade, objectIds: [0, 0, 0, 0, 0, 0] },
+      () => house,
+      () => 100
+    );
+    // one niche an opening, not two a little apart
+    expect(niches.length / NICHE_STRIDE).toBe(16);
+  });
+
+  test("a wall without ground-floor windows gets no niche there", () => {
+    const positions = [
+      -6, 100, 0, 6, 100, 0, 6, 112.5, 0, -6, 100, 0, 6, 112.5, 0, -6, 112.5, 0,
+    ];
+    const facade: number[] = [];
+    for (let v = 0; v < 6; v += 1) {
+      // signed: a shopfront's ground floor, its windows real holes
+      facade.push(code(-positions[3 * v]), -code(12), 32_767, 32_767);
+    }
+    const niches = tileNiches(
+      { positions, facade, objectIds: [0, 0, 0, 0, 0, 0] },
+      () => house,
+      () => 100
+    );
+    expect(niches.length / NICHE_STRIDE).toBe(12);
+    for (let i = 0; i < niches.length; i += NICHE_STRIDE) {
+      expect(niches[i + 10]).toBeGreaterThan(0);
+    }
+  });
+
   test("two walls of one object facing one way are two walls", () => {
     // a U's wing ends: the same 12 m wall at z = 0 and, 20 m along x and
     // 8 m back, at z = −8, same codes
