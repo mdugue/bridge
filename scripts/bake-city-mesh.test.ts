@@ -1803,3 +1803,34 @@ test("two passages crossing in a house keep their linings out of each other", ()
   }
   expect(lined).toBeGreaterThan(0);
 });
+
+test("windows: only a shopfront the photos saw bays on takes the ground floor's", () => {
+  const doc = fixture();
+  const house = Object.keys(doc.CityObjects).indexOf("house");
+  const signsOf = (wall: ShopfrontWall) => {
+    const { vertices } = bakeCityMesh(
+      "t",
+      doc,
+      undefined,
+      null,
+      undefined,
+      undefined,
+      "render",
+      undefined,
+      undefined,
+      { shopfronts: [wall] }
+    );
+    const signs = new Set<number>();
+    for (let v = 0; v < vertices.objectIds.length; v += 1) {
+      const length = vertices.facade?.[4 * v + 1] ?? 0;
+      if (vertices.objectIds[v] === house && length !== 0) {
+        signs.add(Math.sign(length));
+      }
+    }
+    return [...signs].sort((a, b) => a - b);
+  };
+  // shop windows seen: the south wall's ground floor goes to the shop
+  expect(signsOf(shopfrontAt())).toEqual([-1, 1]);
+  // a fascia read alone: every wall keeps its ground-floor windows
+  expect(signsOf({ ...shopfrontAt(), bays: [] })).toEqual([1]);
+});

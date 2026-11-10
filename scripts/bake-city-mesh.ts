@@ -2905,8 +2905,11 @@ function facadeOf(
       },
     ];
   });
+  // only a wall the photos saw shop windows on loses its ground-floor
+  // windows: one where they read a sign alone (318 of Dresden's 1003, most
+  // from a single drive) kept a blank ground floor under its fascia
   const shops = (onWalls.shopfronts ?? []).flatMap((w) => {
-    const object = index.get(w.oid);
+    const object = (w.bays?.length ?? 0) > 0 ? index.get(w.oid) : undefined;
     return object === undefined
       ? []
       : [
