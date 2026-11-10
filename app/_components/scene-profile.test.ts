@@ -137,6 +137,7 @@ test("postProfileFor leaves the costly post work to the desktop", () => {
   expect(desktop).toEqual({
     dof: true,
     antialias: "smaa",
+    taa: true,
     warmStyles: "outline-only",
     warmPaper: false,
   });
@@ -145,6 +146,7 @@ test("postProfileFor leaves the costly post work to the desktop", () => {
   expect(phone).toEqual({
     dof: false,
     antialias: "fxaa",
+    taa: false,
     warmStyles: "outline-only",
     warmPaper: false,
   });

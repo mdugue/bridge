@@ -65,6 +65,7 @@ import { DATA_MARKS, dataMarks } from "./glass";
 import { crownSwayShare } from "./vegetation-layer";
 import { fxaa } from "./fxaa";
 import { createMotionBlur } from "./motion-blur";
+import { createTemporalAA } from "./temporal-aa";
 import type { SceneFog } from "./height-fog";
 import { createPaperScene } from "./paper-scene";
 import { createSelectionOutline } from "./selection-outline";
@@ -647,6 +648,11 @@ export function createPostStack(
     ? lensBlurOf(lit, viewZ, focusDistance, focusRange)
     : null;
   const motion = createMotionBlur(depthTexture, lens);
+  // the pastel frame averaged over jittered frames (temporal-aa.ts): a
+  // desktop's
+  const temporal = profile.taa
+    ? createTemporalAA(target, depthTexture, lens, size)
+    : null;
 
   let style: RenderStyleDef = RENDER_STYLE_BY_ID[LOOK_DEFAULTS.style];
   const stylize = createStylize({
@@ -790,6 +796,30 @@ export function createPostStack(
   let model = false;
   // the interval since the last frame (`setFrameMs`)
   let frameMs = 1000 / 60;
+  /** The scene into its target, jittered and averaged into the history
+   *  under the pastel look (temporal-aa.ts; the graphic styles keep their
+   *  ink crisp, Modell its sheets); `after` undoes the frame's dressing. */
+  const drawScene = (view: Camera, after: () => void) => {
+    const jittered =
+      temporal !== null &&
+      style.shaderMode === 0 &&
+      !model &&
+      temporal.jitter(view, size);
+    try {
+      renderer.render(scene, view);
+    } finally {
+      if (jittered) {
+        temporal?.unjitter(view);
+      }
+      after();
+      renderer.setRenderTarget(null);
+    }
+    if (jittered) {
+      temporal?.resolve(renderer, false);
+    } else {
+      temporal?.reset();
+    }
+  };
   // the camera moved enough this frame to draw the pastel frame blurred
   // (motion-blur.ts), where this tier has a way to draw it
   let blurred = false;
@@ -1430,13 +1460,10 @@ export function createPostStack(
       const restore = swap ? paperScene.begin(swap) : null;
       stylize.captureFog();
       const view = active();
-      try {
-        renderer.render(scene, view);
-      } finally {
+      drawScene(view, () => {
         restore?.();
         dressed?.();
-        renderer.setRenderTarget(null);
-      }
+      });
       // a released cut's builds go once a frame has drawn without them
       if (releaseAfterFrame.length > 0) {
         for (const a of releaseAfterFrame) {
@@ -1479,6 +1506,7 @@ export function createPostStack(
       lensBlur?.input.setSize(size.x, size.y);
       antialiasing.setSize(size);
       outline.setSize(size.x, size.y);
+      temporal?.setSize(size);
     },
     setSelection: (selection, flash) => outline.set(selection, flash),
     sceneDepth: depthTexture,
@@ -1509,6 +1537,7 @@ export function createPostStack(
     },
     dispose: () => {
       stackDisposed = true;
+      temporal?.dispose();
       // a walk still running compiles for no other camera, and makes no
       // anchors that nothing would free
       views.splice(1);

@@ -115,6 +115,10 @@ export interface ClayDetailUniforms {
   /** the app draws real niches behind the near windows
    *  (window-niche-layer.ts): the clay cuts their openings */
   niches?: boolean;
+  /** a niched house's windows under `NICHE_PREFILTER_PX` wide hand over
+   *  to their mean tone as every other house's do (a phone, without
+   *  temporal antialiasing: scene-profile.ts `PostProfile.taa`) */
+  prefilter?: boolean;
 }
 
 // --- the fixed look ----------------------------------------------------------
@@ -359,6 +363,7 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     storey: build.y,
     strength: WINDOWS,
     sharp: niched,
+    sharpFromPx: d.prefilter ? NICHE_PREFILTER_PX : undefined,
     sun: d.uSun,
     view,
     wall,
@@ -434,6 +439,11 @@ function nicheMask(windows: ClayWindows, niched: F): Node {
   const cut = step(0.5, windows.opening).mul(float(frontFacing)).mul(niched);
   return cut.lessThan(0.5);
 }
+
+/** Under this width (px) a niched house's window hands over to its mean
+ *  tone where there is no temporal antialiasing to settle it (a phone):
+ *  narrower, a niche hops from pixel to pixel as the eye moves. */
+export const NICHE_PREFILTER_PX = 2;
 
 /** 1 on an object the niche set holds (OBJECT_FLAG_NICHED). */
 const nichedOf = (flags: F): F =>
@@ -1112,10 +1122,11 @@ function askedColour(col: V3, h: F, wall: F, flags: F, wn: V3): V3 {
 export function createStyleResources(
   night: Live,
   sun: UniformNode<"vec3", Vector3> = uniform(new Vector3(0, 1, 0)),
-  niches = false
+  niches = false,
+  prefilter = false
 ): StyleResources {
   return {
-    clayDetail: { uNight: night, uSun: sun, niches },
+    clayDetail: { uNight: night, uSun: sun, niches, prefilter },
     materials: new Set(),
     section: false,
   };

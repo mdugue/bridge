@@ -347,6 +347,14 @@ export interface PostProfile {
    */
   antialias: "smaa" | "fxaa";
   /**
+   * Temporal antialiasing (temporal-aa.ts): a window a pixel wide in a
+   * street seen along its length stops crawling as the eye moves. Two
+   * full-resolution half-float targets (≈ 30 MB at 2560×1440): a desktop
+   * only — a phone's windows hand over to their mean tone under two
+   * pixels instead (visual-style.ts `NICHE_PREFILTER_PX`).
+   */
+  taa: boolean;
+  /**
    * What the idle warm-up after the load prepares: every picture style
    * (their pipelines, their scene dressing), or only the outline of an
    * asked element — on a phone a style builds on its first frame instead
@@ -376,12 +384,14 @@ export function postProfileFor(tier: DeviceTier): PostProfile {
     ? {
         dof: false,
         antialias: "fxaa",
+        taa: false,
         warmStyles: "outline-only",
         warmPaper: false,
       }
     : {
         dof: true,
         antialias: "smaa",
+        taa: true,
         warmStyles: "outline-only",
         warmPaper: false,
       };

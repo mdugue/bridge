@@ -107,6 +107,10 @@ export interface WindowInputs {
    *  handed over to its row's or storey's mean — the cut follows the
    *  opening, and a grazing view kept the mean on the wall, flat */
   sharp?: F;
+  /** `sharp` only on windows at least this wide (px); narrower they hand
+   *  over to their mean as any other house's do (visual-style.ts
+   *  `NICHE_PREFILTER_PX`) */
+  sharpFromPx?: number;
   /** world, surface → sun */
   sun: UniformNode<"vec3", Vector3>;
   /** world, the view's direction through the fragment (unit, into the
@@ -684,19 +688,25 @@ export const NIGHT_WINDOWS = { lit: 0.25, light: 0.6 } as const;
 export function clayWindows(i: WindowInputs): ClayWindows {
   const pu = max(fwidth(i.facade.x.mul(FACADE_SCALE_M)), 1e-4);
   const g = grid(i);
+  const sharp =
+    i.sharp && i.sharpFromPx !== undefined
+      ? i.sharp.mul(
+          smoothstep(i.sharpFromPx - 0.5, i.sharpFromPx + 0.5, i.spec.y.div(pu))
+        )
+      : i.sharp;
   const px: Px = {
     u: pu,
     v: max(fwidth(i.h), 1e-4),
     // the window's width in pixels along the wall: its sides drawn from
     // 6, under 2.5 its row's mean across the axes
-    du: max(smoothstep(2.5, 6, i.spec.y.div(pu)), i.sharp ?? float(0)),
+    du: max(smoothstep(2.5, 6, i.spec.y.div(pu)), sharp ?? float(0)),
   };
   // … and its height up the wall: drawn from 6, the storey's mean tone
   // under 2.5 — a grazing view stretches the footprint along the wall
   // only, so the rows stay where the columns can no longer be told apart
   const detail = max(
     smoothstep(2.5, 6, max(g.tall, 0.01).div(px.v)),
-    i.sharp ?? float(0)
+    sharp ?? float(0)
   );
   const on = i.strength.mul(i.wall).mul(g.here);
   const near = on.mul(detail);

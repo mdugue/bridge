@@ -1603,7 +1603,10 @@ async function bootApp(
   const styleResources = createStyleResources(
     sceneNight,
     ground.sunDirection,
-    niching
+    niching,
+    // a phone has no temporal antialiasing: its windows under two pixels
+    // wide hand over to their mean tone, niche or not
+    budget.tier === "mobile"
   );
 
   // The HUD lets the heavy dressing start after the handover (startStreaming).
