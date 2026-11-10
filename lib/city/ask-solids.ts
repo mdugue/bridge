@@ -244,15 +244,7 @@ export function rayDeckTop(
 
 /** The box around every set's box, or null for none. */
 export function setsBox<T>(sets: readonly AskSet<T>[]): Aabb | null {
-  const [first, ...rest] = sets;
-  if (!first) {
-    return null;
-  }
-  let { box } = first;
-  for (const set of rest) {
-    box = grow(box, set.box);
-  }
-  return box;
+  return boxAround(sets.map((set) => set.box));
 }
 
 /** Distance along the ray to the nearest of a thing's solids, or null. */
@@ -374,9 +366,18 @@ function grow(a: Aabb, b: Aabb): Aabb {
 
 /** The box all of `solids` fill together; an empty list has none. */
 function solidsBox(solids: readonly AskSolid[]): Aabb {
-  const [first, ...rest] = solids.map(solidBox);
-  if (!first) {
+  const box = boxAround(solids.map(solidBox));
+  if (!box) {
     throw new Error("an item has no solids");
+  }
+  return box;
+}
+
+/** The box around boxes, or null for none. */
+function boxAround(boxes: readonly Aabb[]): Aabb | null {
+  const [first, ...rest] = boxes;
+  if (!first) {
+    return null;
   }
   let box = first;
   for (const next of rest) {

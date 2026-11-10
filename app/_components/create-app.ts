@@ -3130,7 +3130,6 @@ async function bootApp(
     );
     return designThing ?? tileThing;
   };
-  const lensBlur = postProfileFor(budget.tier).dof;
   const updateFocus = () => {
     focusRaycaster.setFromCamera(focusCrosshair, camera);
     // Only the tiles whose BVH is built: the focus never builds one (ten
@@ -3695,7 +3694,11 @@ async function bootApp(
     const waiting =
       !capture &&
       captureQueue.length > 0 &&
-      (sunRig.shadowBusy() || !postStack.getFocusInfo().settled);
+      (sunRig.shadowBusy() ||
+        !postStack.getFocusInfo().settled ||
+        // a near building tile still without its BVH: the focus ray
+        // passes through its facade until it lands
+        bvhPending);
     captureHeldFrom = waiting ? (captureHeldFrom ?? performance.now()) : null;
     if (
       captureHeldFrom !== null &&
@@ -3908,10 +3911,13 @@ async function bootApp(
       return;
     }
     // (the loading veil breathes, sweeps and lifts at the full rate)
+    // (a lens still growing in or pulling focus draws at the full rate:
+    // paced, it steps in jumps)
     const busy =
       moved ||
       exporting ||
       !sceneSettled ||
+      !postStack.getFocusInfo().settled ||
       dataLayersMove ||
       veilShown ||
       sunRig.shadowBusy();
@@ -3927,7 +3933,7 @@ async function bootApp(
   // for a few frames (`FOCUS_SNAP_MS`).
   let lensWasWanted = false;
   const tickFocus = (poseTick: boolean) => {
-    const wanted = lensBlur && postStack.lensWanted() && capture === null;
+    const wanted = postStack.lensWanted() && capture === null;
     const back = wanted && !lensWasWanted;
     lensWasWanted = wanted;
     if (wanted && !walkMovedNow && (poseTick || back)) {
