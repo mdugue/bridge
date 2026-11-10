@@ -199,6 +199,7 @@ FLAG_DESIGNS = {
     "de": (
         *("de", "deutschland", "germany", "bundesrepublik deutschland", "q183", "q48160"),
         *("bundesflagge", "flagge deutschlands", "flag of germany", "deutschlandfahne"),
+        *("deutsche flagge", "deutschlandflagge", "bundesdienstflagge"),
     ),
     "eu": (
         *("eu", "europe", "europa", "european union", "europäische union", "q458", "q122482"),
@@ -216,6 +217,7 @@ FLAG_DESIGNS = {
         "hamburg",
         "freie und hansestadt hamburg",
         "q1055",
+        "q645967",
         "hamburger flagge",
         "flag of hamburg",
     ),
@@ -391,8 +393,11 @@ def flag(other: str | None) -> dict:
     for names_key, item_key in FLAG_KEYS:
         if names_key == "country" and not national:
             break
-        # a flag that names its own item is that flag, not its land's
-        if names_key == "country" and tag(other, "flag:wikidata"):
+        # a flag that names its own item, or what it stands for, is that
+        # flag, not its land's
+        if names_key == "country" and (
+            tag(other, "flag:wikidata") or tag(other, "subject:wikidata")
+        ):
             break
         names = [n.strip().lower() for n in (tag(other, names_key) or "").split(";")]
         items = [n.strip().lower() for n in (tag(other, item_key) or "").split(";")]

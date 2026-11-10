@@ -215,15 +215,18 @@ test("a flagpole casts, its cloth flies in its design and casts at rest", () => 
   m.decompose(top, new Quaternion(), scale);
   expect(top.y).toBeCloseTo(110.5);
   expect(scale.y).toBeCloseTo(1);
-  // one cloth per design for the site: another tile's sets draw from it,
-  // and freeing a tile leaves it be
+  // one cloth per design for the site: another tile's sets draw from its
+  // arrays (no copy), each through attributes of its own — three frees a
+  // vertex attribute with any geometry that drew it, so a shared one would
+  // go with the first tile that leaves
   const again = buildFurniture([at({ k: "flag" })], ctx).children.find(
     (c) => c.name === "furniture-flag-plain"
   ) as Instances;
-  expect(position(again)).toBe(position(plain));
-  expect(position(german)).not.toBe(position(plain));
-  expect(isSceneShared(position(plain))).toBe(true);
-  // its index too: a view shares it, and freeing one tile keeps it
+  expect(position(again).array).toBe(position(plain).array);
+  expect(position(again)).not.toBe(position(plain));
+  expect(position(german).array).not.toBe(position(plain).array);
+  expect(isSceneShared(position(plain))).toBe(false);
+  // its index is shared: a view shares it, and freeing one tile keeps it
   expect(again.geometry.index).toBe(plain.geometry.index);
   expect(plain.geometry.index && isSceneShared(plain.geometry.index)).toBe(
     true
@@ -235,7 +238,9 @@ test("a flagpole shows from further than a bench", () => {
   // the eye 600 m off: the bench's cell hides, the mast's and its cloth's
   // stay
   const changed = new Box3();
-  showFurnitureNear(group, new Vector3(600, 110, 0), changed);
+  showFurnitureNear(group, new Vector3(600, 110, 0), (box) => {
+    changed.union(box);
+  });
   // what changed is the bench's cell alone: the rings that can hold it
   // redraw, not every one
   expect(changed.min.x).toBeCloseTo(5 - 3);

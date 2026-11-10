@@ -539,7 +539,7 @@ function clothSolid(
   mast: AskSolid
 ): AskSolid | null {
   if (!("cylinder" in mast)) {
-    return null;
+    return null; // a mast is always a cylinder (`standing`)
   }
   const yaw = flagYaw(ex, ey);
   // local +X turned by yaw: (cos, −sin) in the scene's x–z; across it

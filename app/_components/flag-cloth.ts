@@ -18,6 +18,7 @@
  * colours are not mapped.
  */
 import {
+  BufferAttribute,
   BufferGeometry,
   Color,
   DoubleSide,
@@ -225,9 +226,9 @@ export interface Mast {
   yaw: number;
 }
 
-/** Each design's cloth, one for the scene: every tile's sets draw from it,
- *  and no tile's disposal frees it (`markSceneShared`); the last app that
- *  holds it does (`retainFlagCloths`). */
+/** Each design's cloth, one for the scene, made once: every tile's sets
+ *  draw from its arrays and its index (`clothOfSet`); the last app that
+ *  holds it lets it go (`retainFlagCloths`). */
 const siteCloths = new Map<FlagDesign | "plain", BufferGeometry>();
 const clothsShared = sceneShared(() => ({
   dispose: () => {
@@ -246,14 +247,30 @@ function siteCloth(design: FlagDesign | "plain"): BufferGeometry {
   let geo = siteCloths.get(design);
   if (!geo) {
     geo = clothGeometry(design);
-    // its index too: every tile's view draws from it (instancing.ts)
-    for (const attribute of [...Object.values(geo.attributes), geo.index]) {
-      if (attribute) {
-        markSceneShared(attribute);
-      }
+    // its index is every tile's (instancing.ts's views draw from it)
+    if (geo.index) {
+      markSceneShared(geo.index);
     }
     siteCloths.set(design, geo);
   }
+  return geo;
+}
+
+/**
+ * One set's cloth: the site's index, and its vertex attributes over the
+ * site's arrays (no CPU copy) but its own. three frees a vertex attribute
+ * whenever a geometry that drew it is disposed — still on it or taken off
+ * before (`RenderObject.onGeometryDispose`) —, so one shared across tiles
+ * would go with the first tile that leaves; an index it leaves be.
+ */
+function clothOfSet(design: FlagDesign | "plain"): BufferGeometry {
+  const site = siteCloth(design);
+  const geo = new BufferGeometry();
+  for (const [name, a] of Object.entries(site.attributes)) {
+    geo.setAttribute(name, new BufferAttribute(a.array, a.itemSize));
+  }
+  geo.setIndex(site.index);
+  geo.boundingSphere = site.boundingSphere?.clone() ?? null;
   return geo;
 }
 
@@ -264,7 +281,7 @@ export function flagCloths(
   masts: readonly Mast[]
 ): Instances {
   const mesh = new Instances(
-    siteCloth(design),
+    clothOfSet(design),
     sceneMaterial("furniture-flag-cloth", clothMaterial),
     masts.length
   );

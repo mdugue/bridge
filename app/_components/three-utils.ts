@@ -69,7 +69,11 @@ const sceneSharedAttributes = new WeakSet<object>();
  * destroyed buffer, and the frame fail. A marked attribute is taken off a
  * geometry before it is disposed (`detachShared`, which `disposeGeometry`
  * and `disposeObject3D` run first; `detachSceneShared` ahead of a dispose
- * that is not ours) and lives as long as its app's device.
+ * that is not ours) and lives as long as its app's device. An index
+ * only: a vertex attribute taken off goes all the same (three r187's
+ * `RenderObject.onGeometryDispose` frees every one the drawable used that
+ * its geometry no longer holds) — a set shares vertex arrays through
+ * attributes of its own (flag-cloth.ts `clothOfSet`).
  */
 export function markSceneShared(attribute: AnyAttribute): void {
   sceneSharedAttributes.add(attribute);

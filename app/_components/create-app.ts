@@ -3303,12 +3303,27 @@ async function bootApp(
   const vegetationLod = createVegetationLod();
   const richTrees =
     budget.tier === "mobile" ? PHONE_RICH_TREE_BUDGET : RICH_TREE_BUDGET;
-  /** The world box of the furniture cells a frame shows or hides. */
-  const changedCells = new Box3();
   /** How far the lantern's hand and a mast's top may lie off the eye and
    *  the cells' box, which spans the pieces' feet (m): the tallest mast
    *  and the hand's few metres. */
   const LANTERN_SLACK_M = FLAG_HEIGHT_MAX + 5;
+  /** The frame's furniture flips: the eye they are measured from (none in
+   *  Modell) and whether one lay within the lantern's light. */
+  const cellFlips = { eye: null as Vector3 | null, lantern: false };
+  /** A furniture cell shown or hidden: the rings its own box can fall on
+   *  redraw (a flagpole's cell flips 800 m out: not every ring), and the
+   *  lantern where it lies within its light (held at the hand, a little
+   *  off the eye: LANTERN_SLACK_M). */
+  const cellFlipped = (box: Readonly<Box3>) => {
+    const { eye } = cellFlips;
+    if (!eye || box.distanceToPoint(eye) <= LANTERN_RANGE + LANTERN_SLACK_M) {
+      cellFlips.lantern = true;
+    }
+    sunRig.invalidateShadow(
+      { minX: box.min.x, maxX: box.max.x, minZ: box.min.z, maxZ: box.max.z },
+      NEAR_CHANGE_RINGS
+    );
+  };
   /** `eye`: where the tiers are measured from (Modell: above the pivot);
    *  `tick`: the frame's pose tick is due. */
   const stepVegetation = (elapsed: number, eye: Vector3, tick: boolean) => {
@@ -3334,35 +3349,17 @@ async function bootApp(
     }
     // the street furniture's cells near the eye (furniture-layer.ts)
     // (none hidden in Modell: its views and exports draw one scale)
-    const furnitureEye = modelRig.owns() ? null : eye;
-    // (the rings redrawn only where the cells that changed can fall: a
-    // flagpole's cell flips 800 m out)
-    const cellsChanged = changedCells.makeEmpty();
+    cellFlips.eye = modelRig.owns() ? null : eye;
+    cellFlips.lantern = false;
     for (const d of shown) {
       for (const part of [d.furniture, d.tram]) {
         if (part) {
-          showFurnitureNear(part, furnitureEye, cellsChanged);
+          showFurnitureNear(part, cellFlips.eye, cellFlipped);
         }
       }
     }
-    if (!cellsChanged.isEmpty()) {
-      // the lantern only where a cell flipped within its light (held at
-      // the hand, a little off the eye: LANTERN_SLACK_M)
-      if (
-        !furnitureEye ||
-        cellsChanged.distanceToPoint(eye) <= LANTERN_RANGE + LANTERN_SLACK_M
-      ) {
-        invalidateLanternShadow(lantern);
-      }
-      sunRig.invalidateShadow(
-        {
-          minX: cellsChanged.min.x,
-          maxX: cellsChanged.max.x,
-          minZ: cellsChanged.min.z,
-          maxZ: cellsChanged.max.z,
-        },
-        NEAR_CHANGE_RINGS
-      );
+    if (cellFlips.lantern) {
+      invalidateLanternShadow(lantern);
     }
   };
 

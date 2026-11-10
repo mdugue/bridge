@@ -1088,13 +1088,14 @@ const cellBox = new Box3();
  * stops' signs) whose pieces are near `eye` (the scene frame), hides the
  * far ones; none hidden without an eye (Modell: its views and exports
  * draw the whole picture at one scale). True when any changed (the shadow
- * map must then be redrawn); `changed`, when given, grows by the world box
- * of every cell that did — only the rings that can hold it need a redraw.
+ * map must then be redrawn); `changed`, when given, hears the world box of
+ * every cell that did (borrowed: read it at once) — only the rings that
+ * can hold it need a redraw, each cell's own.
  */
 export function showFurnitureNear(
   root: Object3D,
   eye: Vector3 | null,
-  changed?: Box3
+  changed?: (box: Readonly<Box3>) => void
 ): boolean {
   let any = false;
   root.traverse((child) => {
@@ -1115,7 +1116,7 @@ export function showFurnitureNear(
       any = true;
       if (changed) {
         // without an eye the box was not placed yet
-        changed.union(
+        changed(
           eye ? cellBox : cellBox.copy(box).applyMatrix4(child.matrixWorld)
         );
       }

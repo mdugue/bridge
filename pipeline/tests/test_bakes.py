@@ -214,6 +214,10 @@ def test_a_flagpole_stands_with_its_height_and_the_flag_the_map_names():
     assert _props("flag", '"flag:wikidata"=>"Q122482"')["c"] == "eu"
     # a flag that names its own item (Berlin's) is no German flag
     assert "c" not in _props("flag", '"flag:wikidata"=>"Q64","country"=>"DE"')
+    # ...nor one that stands for a place the viewer does not draw (Dresden)
+    assert "c" not in _props("flag", '"subject:wikidata"=>"Q1731","country"=>"DE"')
+    assert _props("flag", '"flag:wikidata"=>"Q645967"')["c"] == "hh"
+    assert _props("flag", '"flag:name"=>"Deutsche Flagge","country"=>"DE"')["c"] == "de"
     # ...and Saxony's own item flies Saxony's
     assert _props("flag", '"flag:wikidata"=>"Q693701","country"=>"DE"')["c"] == "sn"
     # the map's case does not matter
