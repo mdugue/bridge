@@ -3402,6 +3402,15 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   Hamburg 1 of 165, Meißen and Grimma none. Without the facade cache the
   step only takes the passages out of the committed file (it used to
   write an empty one).
+  **Openings in the wall** (2026-11-10, Manuel: the shop windows to
+  follow the windows' logic, "direkt beides zusammen"): each bay is cut
+  out of its LoD2 wall, a 0.2 m box of reveals in the wall's clay behind
+  it and the glass at its back, its sill over the plinth as a window's
+  (`lib/city/shop-windows.ts`); the surround 15 cm proud with a soft niche
+  per bay is gone, and with it the risers' feet on the ground (ADR 0030's
+  `shopfronts` joins). Dresden's Neustadt tile (33412_5656): 327 of 344
+  bays cut (the rest stand where no LoD2 wall covers them), its vertices
+  5.71 → 5.63 million (−1.4 %).
 
 - **Windows on every house (*Fenster*)** `◎ detected` `≈ assumed` `= computed` —
   drawn by the clay ([ADR 0010](./adr/0010-opaque-clay-buildings-only.md)), their rhythm

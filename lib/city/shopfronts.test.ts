@@ -7,20 +7,20 @@ import {
   FASCIA_MAX_M,
   fasciaSpans,
   MIN_BAY_M,
+  MIN_OPENING_M,
   MIN_WALL_M,
   paneTop,
   QUANTUM_M,
   SHOPFRONT,
-  SHOPFRONT_SINK,
   ROW_SILL_M,
   SHOPFRONT_TOP_M,
-  shopfrontJoins,
   shopfrontMesh,
   STOREY_CLEAR_M,
   wallBays,
   wallShiftAt,
 } from "./shopfronts";
 import type { ShopfrontMesh } from "./shopfronts";
+import { WINDOW_ROWS } from "./windows";
 
 const OFFSET = { cx: 1000, cy: 2000 };
 
@@ -101,7 +101,7 @@ describe("the bays", () => {
     expect(spans[0][1]).toBeGreaterThan(4 + 0.5);
   });
 
-  test("bays close together share a surround, with a pier between", () => {
+  test("bays close together keep a pier between them", () => {
     const runs = bayRuns(
       [
         [1, 3],
@@ -111,14 +111,14 @@ describe("the bays", () => {
       ],
       12
     );
-    // the first three share one surround, the last stands apart
+    // the first three run together, the last stands apart
     expect(runs.map((r) => r.bays.length)).toEqual([3, 1]);
     const [first, second] = runs;
     // a gap narrower than minPier is widened around its middle
     expect(first.bays[1][0] - first.bays[0][1]).toBeCloseTo(SHOPFRONT.minPier);
     expect((first.bays[1][0] + first.bays[0][1]) / 2).toBeCloseTo(3.025);
     expect(first.span).toEqual([1 - SHOPFRONT.pier, 6.5 + SHOPFRONT.pier]);
-    // and two surrounds keep MIN_WALL_M of wall between them
+    // and two runs keep MIN_WALL_M of wall between them
     expect(second.span[0] - first.span[1]).toBeGreaterThanOrEqual(MIN_WALL_M);
   });
 });
@@ -160,9 +160,6 @@ function parts(mesh: ShopfrontMesh): { part: string; p: number[] }[] {
   };
   add("frame", mesh.frame.positions);
   add("canopy", mesh.canopy.positions);
-  for (const pane of mesh.panes) {
-    add("pane", pane.positions);
-  }
   return out;
 }
 
@@ -269,23 +266,12 @@ const sheltered = (reversed = false) =>
 
 const flat = (p: number[]) => [p[0], 0, p[2], p[3], 0, p[5], p[6], 0, p[8]];
 
-const top = (gfTop: number) => {
-  const w = wall({
-    canopy: [{ at: [0, 12], d: 4, h: 4.3 }],
-    gf_top: gfTop,
-  });
-  const zs = triangles(
-    shopfrontMesh(w, wallBays(w, []), 5, OFFSET).frame.positions
-  ).map(({ c }) => c[2]);
-  return Math.max(...zs);
-};
-
 describe("the mesh", () => {
   for (const reversed of [false, true]) {
     test(`every face looks out of the wall, wound as it is shaded (${reversed ? "b → a" : "a → b"})`, () => {
       for (const w of [busy(reversed), sheltered(reversed)]) {
         const mesh = shopfrontMesh(w, wallBays(w, []), 5, OFFSET);
-        expect(mesh.panes.length).toBeGreaterThan(0);
+        expect(mesh.openings.length).toBeGreaterThan(0);
         for (const { part, p } of parts(mesh)) {
           const [{ n, c }] = triangles(p);
           // nothing lies behind the wall, nothing faces into it (+y) — but
@@ -312,7 +298,7 @@ describe("the mesh", () => {
     });
   }
 
-  test("the glass at the niche's back, from the sill to its top, one pane a run", () => {
+  test("a window per bay, from the sill to the pane's top", () => {
     const w = wall({
       gf_top: 3.2,
       bays: [
@@ -320,90 +306,50 @@ describe("the mesh", () => {
         [3.6, 6],
       ],
     });
-    const mesh = shopfrontMesh(w, wallBays(w, []), 4, OFFSET);
-    // the two bays 0.6 m apart share a surround
-    expect(mesh.panes).toHaveLength(1);
-    const [pane] = mesh.panes;
-    expect(pane.top).toBeCloseTo(103.2);
-    const ys = new Set<number>();
-    const zs: number[] = [];
-    for (let i = 0; i < pane.positions.length; i += 3) {
-      ys.add(Math.round(pane.positions[i + 1] * 1000) / 1000);
-      zs.push(pane.positions[i + 2]);
-    }
-    expect([...ys]).toEqual([-SHOPFRONT.glass]);
-    expect(Math.min(...zs)).toBeCloseTo(100 + SHOPFRONT.sill);
-    expect(Math.max(...zs)).toBeCloseTo(103.2);
-    // the surround stands further out, so the glass reads recessed
-    const frameYs = triangles(mesh.frame.positions).map(({ c }) => c[1]);
-    expect(Math.min(...frameYs)).toBeCloseTo(-SHOPFRONT.proud);
+    const mesh = shopfrontMesh(w, wallBays(w, []), 4, OFFSET, () => 0.1);
+    expect(mesh.openings).toEqual([
+      {
+        rect: { s0: 1, s1: 3, z0: 100 + SHOPFRONT.sill, z1: 103.2 },
+        shift: 0.1,
+      },
+      {
+        rect: { s0: 3.6, s1: 6, z0: 100 + SHOPFRONT.sill, z1: 103.2 },
+        shift: 0.1,
+      },
+    ]);
+    // no surround: the fascia alone stands on the wall, and none here
+    expect(mesh.frame.positions).toEqual([]);
   });
 
-  test("no mullions: nothing in front of the glass inside a bay", () => {
-    for (const w of [busy(), sheltered()]) {
-      const mesh = shopfrontMesh(w, wallBays(w, []), 5, OFFSET);
-      // the bays as drawn: a pier between two close ones widened
-      const bays = bayRuns(wallBays(w, []), w.L).flatMap((r) => r.bays);
-      const [pane] = mesh.panes;
-      for (const { part, p } of parts(mesh)) {
-        const [{ c }] = triangles(p);
-        const s = c[0];
-        const inBay = bays.some(([s0, s1]) => s > s0 + 0.01 && s < s1 - 0.01);
-        if (
-          part !== "pane" &&
-          inBay &&
-          c[2] > 100.6 &&
-          c[2] < pane.top - 0.01
-        ) {
-          // only the canopy's slab and fascia, far out and above
-          expect(part).toBe("canopy");
-        }
-      }
-    }
+  test("a window's sill keeps over the plinth, as a window's does", () => {
+    const w = wall({ bays: [[1, 3]] });
+    const mesh = shopfrontMesh(
+      w,
+      wallBays(w, []),
+      4,
+      OFFSET,
+      undefined,
+      () => 101
+    );
+    expect(mesh.openings[0].rect.z0).toBeCloseTo(101 + WINDOW_ROWS.plinthGap);
+    // a plinth so high no window is left: the bay stays wall
+    const high = shopfrontMesh(
+      w,
+      wallBays(w, []),
+      4,
+      OFFSET,
+      undefined,
+      () => 102
+    );
+    expect(high.openings).toEqual([]);
+    expect(MIN_OPENING_M).toBeGreaterThan(1);
   });
 
-  test("the reveal turns into the front over a quarter round, shaded smooth", () => {
-    const w = wall({ bays: [[2, 6]] });
-    const mesh = shopfrontMesh(w, wallBays(w, []), 4, OFFSET);
-    const { positions, normals } = mesh.frame;
-    const { proud, reveal } = SHOPFRONT;
-    // the reveal's points on the bay's left edge (s = 2), its side's
-    let round = 0;
-    for (let i = 0; i < positions.length; i += 3) {
-      const [x, y, z] = positions.slice(i, i + 3);
-      const side = Math.abs(normals[i + 2]) < 1e-9;
-      if (
-        !side ||
-        z < 100 ||
-        z > 104 ||
-        x < 2 - reveal - 1e-6 ||
-        x > 2 + 1e-6
-      ) {
-        continue;
-      }
-      const out = -y;
-      if (out < proud - reveal - 1e-6) {
-        continue;
-      }
-      // on the quarter circle about (s 2 − r, out proud − r)
-      expect(Math.hypot(x - (2 - reveal), out - (proud - reveal))).toBeCloseTo(
-        reveal,
-        6
-      );
-      // its normal the circle's: from facing into the bay to facing out
-      const n = normals.slice(i, i + 3);
-      expect(n[0]).toBeCloseTo((x - (2 - reveal)) / reveal, 6);
-      expect(-n[1]).toBeCloseTo((out - (proud - reveal)) / reveal, 6);
-      if (-n[1] > 0.2 && -n[1] < 0.95) {
-        round += 1;
-      }
-    }
-    expect(round).toBeGreaterThan(0);
-    // the round ends in the front's own normal: no edge where they meet
-    for (let i = 0; i < positions.length; i += 3) {
-      if (Math.abs(-positions[i + 1] - proud) < 1e-9) {
-        expect(normals[i + 1]).toBeCloseTo(-1, 6);
-      }
+  test("under a canopy the window ends under its slab, a head below it", () => {
+    const w = wall({ canopy: [{ at: [0, 12], d: 4, h: 4.3 }], gf_top: 4 });
+    const mesh = shopfrontMesh(w, wallBays(w, []), 5, OFFSET);
+    for (const o of mesh.openings) {
+      expect(o.rect.z1).toBeCloseTo(104.3 - CANOPY.slab - SHOPFRONT.head);
     }
   });
 
@@ -455,11 +401,11 @@ describe("the mesh", () => {
   test("no window under a ground floor too low; a sign alone is a fascia", () => {
     const low = wall({ gf_top: 1.6 });
     const none = shopfrontMesh(low, wallBays(low, []), 4, OFFSET);
-    expect(none.panes).toEqual([]);
+    expect(none.openings).toEqual([]);
     expect(none.frame.positions).toEqual([]);
     const signed = wall({ bays: [], sign: { at: [[2, 8]], z: [3, 3.6] } });
     const mesh = shopfrontMesh(signed, [], 4, OFFSET);
-    expect(mesh.panes).toEqual([]);
+    expect(mesh.openings).toEqual([]);
     const zs = triangles(mesh.frame.positions).map(({ c }) => c[2]);
     expect(Math.min(...zs)).toBeGreaterThan(102.9);
     // a sign band measured 2 m tall is a band no taller than FASCIA_MAX_M
@@ -470,14 +416,11 @@ describe("the mesh", () => {
     expect(Math.max(...tops)).toBeLessThanOrEqual(103 + FASCIA_MAX_M);
   });
 
-  test("a glazed row sits on a lower riser, one wide pane", () => {
+  test("a glazed row sits on a lower riser, one wide window", () => {
     const w = wall({ bays: [[0, 12]], row: true });
     const mesh = shopfrontMesh(w, wallBays(w, []), 4, OFFSET);
-    const [pane] = mesh.panes;
-    const zs = pane.positions.filter((_, i) => i % 3 === 2);
-    expect(Math.min(...zs)).toBeCloseTo(100 + ROW_SILL_M);
-    // one quad: two triangles
-    expect(pane.positions).toHaveLength(2 * 9);
+    expect(mesh.openings).toHaveLength(1);
+    expect(mesh.openings[0].rect.z0).toBeCloseTo(100 + ROW_SILL_M);
   });
 
   for (const reversed of [false, true]) {
@@ -518,15 +461,6 @@ describe("the mesh", () => {
     });
   }
 
-  test("a head close under a canopy reaches up into its slab, never onto it", () => {
-    const slab = 104.3 - CANOPY.slab;
-    // a strip of wall under the slab: the head reaches up into it
-    expect(top(3.8)).toBeGreaterThan(slab + 0.02);
-    expect(top(3.8)).toBeLessThan(104.3);
-    // a tall gap stays wall: the head ends well under the slab
-    expect(top(3)).toBeLessThan(slab - CANOPY.reach + 0.01);
-  });
-
   test("a low canopy's fascia keeps the headroom", () => {
     const w = wall({ canopy: [{ at: [0, 12], d: 3, h: 3 }], gf_top: 2.2 });
     const zs = triangles(shopfrontMesh(w, [], 4, OFFSET).canopy.positions).map(
@@ -546,16 +480,4 @@ describe("the mesh", () => {
     const back = [0, -0.1, 90, 0, -0.1, 110, 12, -0.1, 90];
     expect(wallShiftAt(wall(), [1, 3], OFFSET, back, [0])).toBe(0);
   });
-});
-
-test("the feet go into the ground along the risers and piers", () => {
-  const w = wall({ z: [100, 101] });
-  const joins = shopfrontJoins(w, wallBays(w, []));
-  expect(joins.length).toBeGreaterThan(4);
-  for (const j of joins) {
-    expect(j.kind).toBe("foot");
-    expect(j.y).toBeCloseTo(2000 - SHOPFRONT.proud);
-    const ground = 100 + (j.x - 1000) / 12;
-    expect(j.z).toBeLessThanOrEqual(ground - SHOPFRONT_SINK + 1e-9);
-  }
 });

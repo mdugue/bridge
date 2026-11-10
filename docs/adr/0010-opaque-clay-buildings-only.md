@@ -31,19 +31,21 @@ from data, read the same on every house, and stay calm.
    at a grazing view. Their rhythm per
    building is measured where open street photos saw it (Panoramax,
    Mapillary — never Google Street View), else a neighbour's, else its
-   type's. None on party walls, over doors or shopfronts; a monumental
+   type's. None on party walls, over doors or a measured shopfront; a monumental
    facade gets no town-house windows (listed palaces a kind of their own,
    churches none). No window row below the ground in front of the wall.
    Within 250 m the openings are cut and real niches stand behind them,
    laid on the shader's own grid, so drawn and real windows are one
    window; a house turns as a whole, never a wall in part.
 5. **Facade parts are soft, abstract geometry**: plinths, cornices, doors
-   from OSM entrances, dormers, shopfronts — rounded profiles, never hard
+   from OSM entrances, dormers, shop fascias — rounded profiles, never hard
    bevels, relief lit from above and never darker than the wall.
    Landmarks get none of the generic parts.
 6. **Glass where it helps the facade read**, calm and muted, never a
-   mirror of the scene: a shop's ground floor shows glass at the back of a
-   soft niche, a window's back mirrors a little sky as its pane would.
+   mirror of the scene: a shop window is an opening cut into its wall,
+   reveals in the wall's clay and glass at its back, as a window is a
+   recess (a real one at every distance, as wide as the measured bay); a
+   window's back mirrors a little sky as its pane would.
 7. **Night:** walls do not glow; every unlit or additive layer is dimmed by
    the one night factor.
 8. **Water is matte** (a sun path, glints, gentle waves); fountains keep

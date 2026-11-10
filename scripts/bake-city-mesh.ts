@@ -91,6 +91,7 @@ import {
   wallShiftAlong,
   wallShiftKnots,
 } from "../lib/city/doors";
+import type { V3 } from "../lib/city/doors";
 import { chimneyMesh, dormerMesh } from "../lib/city/dormers";
 import {
   bandMeshes,
@@ -118,12 +119,17 @@ import {
   doorSpans,
   footAt,
   paneTop,
+  plinthTopAlong,
   CANOPY,
   SHOPFRONT,
   shopfrontMesh,
   wallBays,
+  wallFrame,
   wallShiftAt,
 } from "../lib/city/shopfronts";
+import type { ShopOpening } from "../lib/city/shopfronts";
+import { cutWall, openingBox } from "../lib/city/shop-windows";
+import type { CutTriangle } from "../lib/city/shop-windows";
 import {
   factColumns,
   inheritedOsm,
@@ -1703,7 +1709,14 @@ function dressWalls(
       doors: outsidePassages(onBuilt.doors, passages, keys, baked),
     }),
   };
-  const blind = appendBeyondLod2(tile, baked, keys, { ...onWalls, ...extra });
+  const opened = new Set<ShopfrontWall>();
+  const blind = appendBeyondLod2(
+    tile,
+    baked,
+    keys,
+    { ...onWalls, ...extra },
+    opened
+  );
   // standing on the ground or on a roof: as LoD2 built them
   markGrounded(baked.objects, asBuilt);
   // the parts laid on the walls copied their host's row: windows are the
@@ -1722,7 +1735,8 @@ function dressWalls(
     reachOf,
     rises && { at: rises, reach: reachOf },
     portalDoors(passages),
-    blind
+    blind,
+    opened
   );
   return passages;
 }
@@ -1846,7 +1860,9 @@ function appendBeyondLod2(
     gaps?: readonly StructureFeature[];
     roofColours?: Partial<RoofColours>;
     scan?: readonly SmallBuildingFeature[];
-  }
+  },
+  /** filled with the walls a shop window was cut into */
+  opened: Set<ShopfrontWall>
 ): number[] {
   // Each append copies the whole vertex stream and leaves its parts' plain
   // arrays behind: Bun's lazy collector let them pile up over the six, and
@@ -1875,7 +1891,15 @@ function appendBeyondLod2(
   }
   if (extra.shopfronts) {
     // before the doors: a bay is cut at a door, which the doors then draw
-    appendShopfronts(baked, extra.shopfronts, extra.doors ?? [], objectIndex);
+    for (const w of appendShopfronts(
+      baked,
+      extra.shopfronts,
+      extra.doors ?? [],
+      objectIndex,
+      extra.plinths
+    )) {
+      opened.add(w);
+    }
     collectAfterAppend();
   }
   if (extra.doors) {
@@ -2328,37 +2352,45 @@ export function shopfrontColours(tint: readonly number[]): {
 
 /**
  * The shopfronts on the LoD2 walls (pipeline/bake/shopfronts.py: bays and
- * signs from street photos, canopies from the surface model), appended as
- * part of the object they front, like the doors: per wall one object per
- * run of glass (its `eaveH` the pane's top, where the head's soft shadow
- * falls — `paneShade` in visual-style.ts), the surrounds and fascias as one
- * (rounded: their own smooth normals), the canopy in the host's own clay;
- * the host's building tree (asking or demolishing one takes the
- * building), no footprint, no storey band or eave line on them, `source` 6
- * (a wall with a sign and no bay gets its fascia alone).
+ * signs from street photos, canopies from the surface model). Each bay a
+ * shop window cut into its wall (lib/city/shop-windows.ts): the LoD2
+ * triangles on the wall's plane lose the opening (the cut ones collapsed
+ * in place, their remainder appended in their own objects), its reveals
+ * appended in the host's own clay, the glass at the back one object per
+ * window (its `eaveH` the pane's top, where the head's soft shadow falls —
+ * `paneShade` in visual-style.ts). The fascias as one object (rounded:
+ * their own smooth normals), the canopy in the host's own clay; the
+ * host's building tree (asking or demolishing one takes the building), no
+ * footprint, no storey band or eave line on them, `source` 6 (a wall with
+ * a sign and no bay gets its fascia alone). A window's sill keeps over the
+ * host's plinth as a window's does (`plinthTopAlong`).
  * Skipped: a host the tile does not hold, a glass or metal
  * facade (its own front), a host not on the ground; a bay is cut where an
- * OSM door stands. Returns the walls drawn.
+ * OSM door stands. Returns the walls a shop window was cut into.
  */
 export function appendShopfronts(
   baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
   walls: readonly ShopfrontWall[],
   doors: readonly DoorFeature[],
-  objectIndex: ReadonlyMap<string, number>
-): number {
-  const positions: number[] = [];
-  const normals: number[] = [];
-  const objectIds: number[] = [];
+  objectIndex: ReadonlyMap<string, number>,
+  plinths: readonly PlinthFeature[] = []
+): Set<ShopfrontWall> {
+  const appended: ShopParts = {
+    positions: [],
+    normals: [],
+    objectIds: [],
+    walls: [],
+  };
   const trees = treeTriangles(baked);
   const hostRootOf = (id: string) => {
     const i = objectIndex.get(id);
     return i === undefined ? undefined : baked.objects[i]?.root;
   };
-  let drawn = 0;
+  const opened = new Set<ShopfrontWall>();
   for (const w of walls) {
     const hostIndex = objectIndex.get(w.oid);
     const host = hostIndex === undefined ? undefined : baked.objects[hostIndex];
-    if (!(host && w.z) || !shopHost(host, w)) {
+    if (!(hostIndex !== undefined && host && w.z) || !shopHost(host, w)) {
       continue;
     }
     const bays = wallBays(
@@ -2366,70 +2398,34 @@ export function appendShopfronts(
       doorSpans(w, doors, (of) => hostRootOf(of) === host.root)
     );
     const triangles = trees.get(host.root) ?? [];
-    const mesh = shopfrontMesh(w, bays, host.storeyH, baked.offset, (span) =>
-      wallShiftAt(w, span, baked.offset, baked.vertices.positions, triangles)
+    const mesh = shopfrontMesh(
+      w,
+      bays,
+      host.storeyH,
+      baked.offset,
+      (span) =>
+        wallShiftAt(w, span, baked.offset, baked.vertices.positions, triangles),
+      (span) => plinthTopAlong(w, plinths, span)
     );
-    if (
-      mesh.panes.length === 0 &&
-      mesh.frame.positions.length === 0 &&
-      mesh.canopy.positions.length === 0
-    ) {
-      continue;
+    const cut = cutShopWindows(baked, w, mesh.openings, triangles, appended);
+    if (cut.length > 0) {
+      opened.add(w);
     }
-    drawn += 1;
-    const base = footAt(w, [0, w.L]);
-    const above = cm(
-      Math.max(...(w.z ?? [0])) -
-        base +
-        Math.max(
-          paneTop(w, host.storeyH) + SHOPFRONT.head + CANOPY.tuck,
-          w.sign?.z?.[1] ?? 0,
-          ...(w.canopy ?? []).map((c) => c.h)
-        ) +
-        1
-    );
-    const part = (
-      tris: Shaded,
-      tint: [number, number, number],
-      flags: number,
-      rough: number,
-      eaveH = above
-    ) => {
-      const index = baked.objects.length;
-      positions.push(...tris.positions);
-      normals.push(...tris.normals);
-      for (let i = 0; i < tris.positions.length / 9; i += 1) {
-        objectIds.push(index, index, index);
-      }
-      baked.objects.push({
-        ...host,
-        building: false,
-        baseZ: cm(base),
-        // above the shopfront: no eave stroke, no storey band on it
-        eaveH,
-        storeyH: above,
-        glow: 0,
-        // its own colour, none of the host's OSM looks (no shop wash)
-        flags,
-        rough,
-        tint,
-        source: OBJECT_SOURCE_SHOPFRONT,
-        footprints: [],
-      });
-    };
+    const part = shopPart(baked, appended, host, w);
     const colours = shopfrontColours(host.tint);
-    for (const pane of mesh.panes) {
+    for (const pane of cut) {
       part(
         {
-          positions: pane.positions,
-          normals: pane.positions.map(() => Number.NaN),
+          positions: pane.glass,
+          normals: pane.glass.map(() => Number.NaN),
         },
         colours.glass,
         OBJECT_FLAG_OWN_COLOUR + OBJECT_FLAG_GLASS,
         PANE_ROUGH,
         // the glass's eave is its top: the head's shadow under it
-        cm(pane.top - base)
+        pane.top
       );
+      pushTriangles(appended, pane.reveals, hostIndex);
     }
     if (mesh.frame.positions.length > 0) {
       part(mesh.frame, colours.surround, OBJECT_FLAG_OWN_COLOUR, host.rough);
@@ -2441,19 +2437,207 @@ export function appendShopfronts(
       part(mesh.canopy, host.tint, host.flags & ~OBJECT_FLAG_SHOP, host.rough);
     }
   }
+  for (const t of appended.walls) {
+    if (t.alive) {
+      pushTriangles(appended, t.positions, t.object);
+    }
+  }
   const v = baked.vertices;
   baked.vertices = {
-    positions: concat(v.positions, positions),
-    objectIds: concat(v.objectIds, objectIds),
+    positions: concat(v.positions, appended.positions),
+    objectIds: concat(v.objectIds, appended.objectIds),
     isRoof: concat(
       v.isRoof,
-      objectIds.map(() => 0)
+      appended.objectIds.map(() => 0)
     ),
-    normals: shadedNormalsAfter(v, normals),
+    normals: shadedNormalsAfter(v, appended.normals),
 
     ...lod2RoofColours(v),
   };
-  return drawn;
+  return opened;
+}
+
+/** What `appendShopfronts` adds to the tile: triangles with their objects
+ *  and normals, and the walls' remainders after a cut (one may be cut
+ *  again by the next wall's windows on the same plane). */
+interface ShopParts {
+  normals: number[];
+  objectIds: number[];
+  positions: number[];
+  walls: { alive: boolean; object: number; positions: number[] }[];
+}
+
+/** Appends flat triangles (`positions`, 9 a triangle) to `object`. */
+function pushTriangles(
+  out: ShopParts,
+  positions: readonly number[],
+  object: number
+): void {
+  out.positions.push(...positions);
+  for (let i = 0; i < positions.length; i += 3) {
+    out.normals.push(Number.NaN, Number.NaN, Number.NaN);
+    out.objectIds.push(object);
+  }
+}
+
+/** A window cut into a wall: its glass, reveals and the pane's top over
+ *  the shopfront's foot (cm, the glass object's `eaveH`). */
+interface CutWindow {
+  glass: number[];
+  reveals: number[];
+  top: number;
+}
+
+/**
+ * Cuts the shop windows `openings` into the wall `w` stands on: the LoD2
+ * triangles of its building tree and the remainders earlier cuts left
+ * (`out.walls`), each run's wall where `wallShiftAt` found it. A cut LoD2
+ * triangle collapses onto its first vertex (the per-vertex columns of the
+ * LoD2 stream stay aligned), its remainder goes to `out.walls`.
+ */
+function cutShopWindows(
+  baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
+  w: ShopfrontWall,
+  openings: readonly ShopOpening[],
+  triangles: readonly number[],
+  out: ShopParts
+): CutWindow[] {
+  const p = baked.vertices.positions;
+  const ids = baked.vertices.objectIds;
+  const at = (i: number): V3 => [p[3 * i], p[3 * i + 1], p[3 * i + 2]];
+  const base = footAt(w, [0, w.L]);
+  const windows: CutWindow[] = [];
+  for (const shift of new Set(openings.map((o) => o.shift))) {
+    const rects = openings.filter((o) => o.shift === shift).map((o) => o.rect);
+    const axes = wallFrame(w, baked.offset, shift);
+    const lod2 = triangles
+      .filter(
+        (t) =>
+          (baked.objects[ids[t]]?.source ?? OBJECT_SOURCE_LOD2) ===
+          OBJECT_SOURCE_LOD2
+      )
+      .map((t) => ({ id: t, p: [at(t), at(t + 1), at(t + 2)] as const }));
+    const remainders = out.walls.flatMap((r, k) =>
+      r.alive
+        ? splitTriangles(r.positions).map((tri, j) => ({
+            id: -1 - (k * 1e6 + j),
+            p: tri,
+          }))
+        : []
+    );
+    const cut = cutWall(axes, rects, [...lod2, ...remainders]);
+    replaceCut(cut.replaced, p, ids, out);
+    for (const [k, o] of cut.openings.entries()) {
+      const box = openingBox(axes, cut.corners[k]);
+      windows.push({ ...box, top: cm(o.z1 - base) });
+    }
+  }
+  return windows;
+}
+
+/** The triangles of a flat position list (9 a triangle). */
+function splitTriangles(positions: readonly number[]): [V3, V3, V3][] {
+  const out: [V3, V3, V3][] = [];
+  for (let i = 0; i + 8 < positions.length; i += 9) {
+    out.push([
+      [positions[i], positions[i + 1], positions[i + 2]],
+      [positions[i + 3], positions[i + 4], positions[i + 5]],
+      [positions[i + 6], positions[i + 7], positions[i + 8]],
+    ]);
+  }
+  return out;
+}
+
+/** Puts a cut's remainders in place of what it cut: a LoD2 triangle (id ≥
+ *  0, its first vertex) collapsed onto its first vertex, a remainder (id
+ *  −1 − (k·10⁶ + j): `out.walls[k]`'s triangle j) taken out of its list. */
+function replaceCut(
+  replaced: readonly CutTriangle[],
+  p: Float32Array,
+  ids: ArrayLike<number>,
+  out: ShopParts
+): void {
+  const dropped = new Map<number, Set<number>>();
+  for (const r of replaced) {
+    if (r.id >= 0) {
+      const i = 3 * r.id;
+      p.copyWithin(i + 3, i, i + 3);
+      p.copyWithin(i + 6, i, i + 3);
+      out.walls.push({
+        alive: true,
+        object: ids[r.id],
+        positions: r.positions,
+      });
+      continue;
+    }
+    const code = -1 - r.id;
+    const k = Math.floor(code / 1e6);
+    const set = dropped.get(k) ?? new Set<number>();
+    set.add(code - k * 1e6);
+    dropped.set(k, set);
+    out.walls.push({
+      alive: true,
+      object: out.walls[k].object,
+      positions: r.positions,
+    });
+  }
+  for (const [k, gone] of dropped) {
+    const tris = splitTriangles(out.walls[k].positions);
+    out.walls[k].positions = tris
+      .filter((_, j) => !gone.has(j))
+      .flatMap((tri): number[] => [...tri[0], ...tri[1], ...tri[2]]);
+  }
+}
+
+/** A shopfront part's appender: one object in the host's building tree
+ *  (no footprint, its own colour and flags), `eaveH` its top over the
+ *  shopfront's foot. */
+function shopPart(
+  baked: Pick<BakedCityMesh, "objects">,
+  out: ShopParts,
+  host: CityObjectRow,
+  w: ShopfrontWall
+) {
+  const base = footAt(w, [0, w.L]);
+  const above = cm(
+    Math.max(...(w.z ?? [0])) -
+      base +
+      Math.max(
+        paneTop(w, host.storeyH) + SHOPFRONT.head + CANOPY.tuck,
+        w.sign?.z?.[1] ?? 0,
+        ...(w.canopy ?? []).map((c) => c.h)
+      ) +
+      1
+  );
+  return (
+    tris: Shaded,
+    tint: [number, number, number],
+    flags: number,
+    rough: number,
+    eaveH = above
+  ) => {
+    const index = baked.objects.length;
+    out.positions.push(...tris.positions);
+    out.normals.push(...tris.normals);
+    for (let i = 0; i < tris.positions.length / 9; i += 1) {
+      out.objectIds.push(index, index, index);
+    }
+    baked.objects.push({
+      ...host,
+      building: false,
+      baseZ: cm(base),
+      // above the shopfront: no eave stroke, no storey band on it
+      eaveH,
+      storeyH: above,
+      glow: 0,
+      // its own colour, none of the host's OSM looks (no shop wash)
+      flags,
+      rough,
+      tint,
+      source: OBJECT_SOURCE_SHOPFRONT,
+      footprints: [],
+    });
+  };
 }
 
 /** Whether a host may wear a shopfront: not a glass or metal facade (its
@@ -2884,7 +3068,9 @@ function facadeOf(
   reach: (object: number) => number,
   rises?: Parameters<typeof facadeAttribute>[4],
   portals: readonly FacadeDoor[] = [],
-  blind: readonly number[] = []
+  blind: readonly number[] = [],
+  /** the walls a shop window was cut into: theirs is the ground floor */
+  opened: ReadonlySet<ShopfrontWall> = new Set()
 ): Int16Array<ArrayBuffer> {
   const { cx, cy } = baked.offset;
   const index = new Map(keys.map((id, i) => [id, i]));
@@ -2904,11 +3090,12 @@ function facadeOf(
       },
     ];
   });
-  // only a wall the photos saw shop windows on loses its ground-floor
-  // windows: one where they read a sign alone (318 of Dresden's 1003, most
-  // from a single drive) kept a blank ground floor under its fascia
+  // only a wall a shop window was cut into loses its ground-floor
+  // windows: one where the photos read a sign alone (318 of Dresden's
+  // 1003, most from a single drive), or whose bays found no wall, kept a
+  // blank ground floor under its fascia
   const shops = (onWalls.shopfronts ?? []).flatMap((w) => {
-    const object = (w.bays?.length ?? 0) > 0 ? index.get(w.oid) : undefined;
+    const object = opened.has(w) ? index.get(w.oid) : undefined;
     return object === undefined
       ? []
       : [

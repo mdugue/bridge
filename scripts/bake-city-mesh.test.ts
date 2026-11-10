@@ -24,6 +24,7 @@ import type {
 } from "../lib/city/features";
 import { ensembleGroup } from "../lib/city/ensembles";
 import { paneTop, SHOPFRONT_SINK } from "../lib/city/shopfronts";
+import { SHOP_WINDOW_DEPTH_M } from "../lib/city/shop-windows";
 import { SMALL_BUILDING_SINK } from "../lib/city/small-buildings";
 import {
   FACADE_SCALE_M,
@@ -789,7 +790,9 @@ test("a chimney joins its host with the dormers as a box, all wall", () => {
   expect(lengths(baked.objects.length - 2)).toEqual(new Set([0]));
 });
 
-test("a shopfront joins its host as glass, frame and canopy, source 6", () => {
+const mid = (v: number[]) => (v[0] + v[1] + v[2]) / 3;
+
+test("a shop window is cut into its wall: reveals in its clay, glass at the back", () => {
   // the house's south wall (x 40–50 m, y 0), facing −y
   const bake = (walls: ShopfrontWall[], glass = false) =>
     bakeCityMesh(
@@ -806,11 +809,12 @@ test("a shopfront joins its host as glass, frame and canopy, source 6", () => {
     );
   const lod2 = bakeCityMesh("t", fixture(), undefined, null);
   const baked = bake([shopfrontAt(), shopfrontAt("elsewhere")]);
-  expect(baked.objects.length).toBe(lod2.objects.length + 2);
-  const house = baked.objects[2];
-  const [pane, frame] = baked.objects.slice(-2);
-  for (const o of [pane, frame]) {
-    expect(o.root).toBe(house.root);
+  // a glass per bay, the fascia
+  expect(baked.objects.length).toBe(lod2.objects.length + 3);
+  const house = 2;
+  const [pane, pane2, frame] = baked.objects.slice(-3);
+  for (const o of [pane, pane2, frame]) {
+    expect(o.root).toBe(baked.objects[house].root);
     expect(o.source).toBe(OBJECT_SOURCE_SHOPFRONT);
     expect(o.building).toBe(false);
     expect(o.footprints).toEqual([]);
@@ -818,41 +822,101 @@ test("a shopfront joins its host as glass, frame and canopy, source 6", () => {
   }
   expect(pane.flags & OBJECT_FLAG_GLASS).toBe(OBJECT_FLAG_GLASS);
   expect(frame.flags & OBJECT_FLAG_GLASS).toBe(0);
-  // own-colour glass carries its roughness itself, not a jitter in
-  // [−1, 1] as every other row: smooth enough to hold a calm reflection
   expect(pane.rough).toBeGreaterThan(0);
   expect(pane.rough).toBeLessThanOrEqual(0.3);
-  // muted glass, darker and cooler than its surround — not a black hole
   expect(luminance(pane.tint)).toBeLessThan(0.6 * luminance(frame.tint));
   expect(luminance(pane.tint)).toBeGreaterThan(0.1);
-  expect(pane.tint[2] / pane.tint[0]).toBeGreaterThan(
-    frame.tint[2] / frame.tint[0]
-  );
-  // the glass's eave is its top, over the shopfront's sunk foot
+  // the glass's eave is its top over the shopfront's foot
   expect(pane.eaveH).toBeCloseTo(
-    paneTop(shopfrontAt(), house.storeyH) + SHOPFRONT_SINK,
+    paneTop(shopfrontAt(), baked.objects[house].storeyH) + SHOPFRONT_SINK,
     2
   );
-  expect(frame.eaveH).toBeGreaterThan(4);
-  // the surround and the canopy shaded smooth: their own normals
-  const normals = baked.vertices.normals ?? new Float32Array();
-  expect(
-    normals.some(
-      (n) => !Number.isNaN(n) && Math.abs(n) > 0.2 && Math.abs(n) < 0.95
-    )
-  ).toBe(true);
+  const { objectIds, positions } = baked.vertices;
+  const { cx, cy } = baked.offset;
+  // the house's own faces: nothing of its wall left over a bay, and the
+  // reveals running 0.2 m into it
+  let inBay = 0;
+  let reveal = 0;
+  const glassYs = new Set<number>();
+  for (let t = 0; t + 2 < objectIds.length; t += 3) {
+    const xs = [0, 1, 2].map((k) => positions[3 * (t + k)] + cx - 412_040);
+    const ys = [0, 1, 2].map(
+      (k) => positions[3 * (t + k) + 1] + cy - 5_656_000
+    );
+    const zs = [0, 1, 2].map((k) => positions[3 * (t + k) + 2]);
+    if (objectIds[t] === house) {
+      const onWall = ys.every((y) => Math.abs(y) < 1e-3);
+      const inside =
+        (mid(xs) > 1 && mid(xs) < 3) || (mid(xs) > 3.5 && mid(xs) < 6.5);
+      if (onWall && inside && mid(zs) > 100.6 && mid(zs) < 102.9) {
+        inBay += 1;
+      }
+      if (ys.some((y) => y > 0.19) && ys.every((y) => y < 0.21)) {
+        reveal += 1;
+      }
+    }
+    if (objectIds[t] === baked.objects.length - 3) {
+      for (const y of ys) {
+        glassYs.add(Math.round(y * 1000) / 1000);
+      }
+    }
+  }
+  expect(inBay).toBe(0);
+  // four reveals of two triangles each, per window
+  expect(reveal).toBe(16);
+  expect([...glassYs]).toEqual([SHOP_WINDOW_DEPTH_M]);
   // a glass facade wears its own front
   expect(bake([shopfrontAt()], true).objects.length).toBe(lod2.objects.length);
-  // a canopy is a third object, in the host's own clay
+  // a canopy is one more object, in the host's own clay
   const sheltered = bake([
     { ...shopfrontAt(), canopy: [{ at: [0, 10], d: 3.5, h: 4.2 }] },
   ]);
-  expect(sheltered.objects.length).toBe(lod2.objects.length + 3);
   const canopy = sheltered.objects.at(-1);
   expect(canopy?.source).toBe(OBJECT_SOURCE_SHOPFRONT);
   expect(canopy?.tint).toEqual(sheltered.objects[2].tint);
   expect((canopy?.flags ?? 0) & OBJECT_FLAG_GLASS).toBe(0);
   expect((canopy?.flags ?? 0) & OBJECT_FLAG_OWN_COLOUR).toBe(0);
+});
+
+test("a shop window keeps over the house's plinth, as a window does", () => {
+  const plinths: PlinthFeature[] = [
+    {
+      type: "Feature",
+      geometry: {
+        type: "MultiLineString",
+        coordinates: [
+          [
+            [412_040, 5_656_000],
+            [412_050, 5_656_000],
+          ],
+        ],
+      },
+      properties: { of: "house", g: [100], top: [101] },
+    } as PlinthFeature,
+  ];
+  const baked = bakeCityMesh(
+    "t",
+    fixture(),
+    undefined,
+    null,
+    undefined,
+    undefined,
+    "render",
+    undefined,
+    undefined,
+    { shopfronts: [shopfrontAt()], plinths }
+  );
+  const pane = baked.objects.findIndex(
+    (o) => (o.flags & OBJECT_FLAG_GLASS) !== 0
+  );
+  const { objectIds, positions } = baked.vertices;
+  let low = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < objectIds.length; i += 1) {
+    if (objectIds[i] === pane) {
+      low = Math.min(low, positions[3 * i + 2]);
+    }
+  }
+  expect(low).toBeCloseTo(101 + WINDOW_ROWS.plinthGap, 3);
 });
 
 test("windows: a rhythm per house in its row, every wall vertex placed on its wall", () => {

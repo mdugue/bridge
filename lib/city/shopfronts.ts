@@ -31,9 +31,9 @@
  */
 import { rayHit, trianglesOnRays } from "./doors";
 import type { V3 } from "./doors";
-import type { DoorFeature, ShopfrontWall } from "./features";
-import { joinsAlong, SINK } from "./ground-join";
-import type { JoinPoint } from "./ground-join";
+import type { DoorFeature, PlinthFeature, ShopfrontWall } from "./features";
+import { SINK } from "./ground-join";
+import { WINDOW_ROWS } from "./windows";
 
 /** The building glTF's position step (m): 16-bit positions over a 2 km
  *  tile's buildings (scripts/tile-glb.ts). Anything along the wall stands
@@ -105,8 +105,11 @@ export const SHOPFRONT_WALL_REACH = 0.6;
 /** A door (OSM entrance) keeps this much of the bay clear beside its
  *  surround. */
 const DOOR_CLEAR_M = 0.3;
-/** How far a fascia reaches down into the surround's head under it (m). */
-const FASCIA_INTO_M = 0.08;
+/** The wall a fascia leaves over a shop window's head (m). */
+const FASCIA_OVER_M = 0.1;
+/** A shop window at least this tall (m, from its sill over the stall riser
+ *  or the plinth), or its bay stays wall. */
+export const MIN_OPENING_M = 1.2;
 /** The tallest fascia (m): a sign band measured taller (big lettering, a
  *  banner) is a band this tall at its foot, not a slab over the storey. */
 export const FASCIA_MAX_M = 1;
@@ -117,19 +120,13 @@ export interface Shaded {
   positions: number[];
 }
 
-/** One run's glass: its triangles and the pane's top (absolute). */
-export interface Pane {
-  positions: number[];
-  top: number;
-}
-
 export interface ShopfrontMesh {
   /** the canopies: slab and fascia, rounded */
   canopy: Shaded;
-  /** the surrounds and the fascia bands */
+  /** the fascia bands */
   frame: Shaded;
-  /** the glass, one per run of bays */
-  panes: Pane[];
+  /** the shop windows to cut into the wall, one per bay */
+  openings: ShopOpening[];
 }
 
 /** A run along the wall, metres from `a`. */
@@ -326,19 +323,6 @@ function shoulder(back: number, proud: number, r: number): EdgePoint[] {
   return out;
 }
 
-/** A niche's reveal: from `inner` (behind the glass) out of the wall to a
- *  quarter round of radius `r` that turns it into the front at `proud`. */
-function reveal(inner: number, proud: number, r: number): EdgePoint[] {
-  const out: EdgePoint[] = [{ e: 0, o: inner, nu: -1, no: 0 }];
-  for (let k = 0; k <= ROUND_STEPS; k += 1) {
-    const a = ((Math.PI / 2) * k) / ROUND_STEPS;
-    const c = Math.cos(a);
-    const s = Math.sin(a);
-    out.push({ e: r - r * c, o: proud - r + r * s, nu: -c, no: s });
-  }
-  return out;
-}
-
 /** The unit direction `ds` along the wall, `dout` out of it, `dz` up. */
 function dir3(f: Frame, ds: number, dout: number, dz: number): V3 {
   const v: V3 = [f.t[0] * ds + f.n[0] * dout, f.t[1] * ds + f.n[1] * dout, dz];
@@ -463,207 +447,114 @@ function softEdge(
   }
 }
 
-const grid = (lo: number, hi: number, xs: number[]) =>
-  [...new Set([lo, hi, ...xs.filter((x) => x > lo && x < hi)])].toSorted(
-    (a, b) => a - b
-  );
-
 /**
- * A band standing `proud` out of the wall over `outer`, its outer edge
- * rolling over a quarter round of `round` into its flat front, with a
- * niche at each of `holes`: the front turning into it over a quarter round
- * of SHOPFRONT.reveal, its reveal running back to `inner` (behind the
- * glass). The front is cut on one grid, every cell edge to edge with its
- * neighbours and the rounds. `open`: its foot in the ground (no bottom).
+ * A band standing `proud` out of the wall over `outer` (a fascia), its
+ * outer edge rolling over a quarter round of `round` into its flat front.
  */
 function softBand(
   out: Shaded,
   f: Frame,
   outer: Rect,
-  holes: readonly Rect[],
-  band: { inner: number; open: boolean; proud: number; round: number }
+  band: { proud: number; round: number }
 ): void {
-  const { open, proud, round } = band;
-  const ri = SHOPFRONT.reveal;
+  const { proud, round } = band;
   const face: Rect = {
     s0: outer.s0 + round,
     s1: outer.s1 - round,
-    z0: open ? outer.z0 : outer.z0 + round,
+    z0: outer.z0 + round,
     z1: outer.z1 - round,
   };
-  const cut = holes.map((h) => ({
-    s0: h.s0 - ri,
-    s1: h.s1 + ri,
-    z0: h.z0 - ri,
-    z1: h.z1 + ri,
-  }));
-  const s = grid(
-    face.s0,
-    face.s1,
-    cut.flatMap((h) => [h.s0, h.s1])
-  );
-  const z = grid(
-    face.z0,
-    face.z1,
-    cut.flatMap((h) => [h.z0, h.z1])
-  );
   const n = dir3(f, 0, 1, 0);
-  for (let i = 0; i + 1 < s.length; i += 1) {
-    for (let j = 0; j + 1 < z.length; j += 1) {
-      const sc = (s[i] + s[i + 1]) / 2;
-      const zc = (z[j] + z[j + 1]) / 2;
-      if (cut.some((h) => sc > h.s0 && sc < h.s1 && zc > h.z0 && zc < h.z1)) {
-        continue;
-      }
-      polygon(
-        out,
-        [
-          f.at(s[i], proud, z[j]),
-          f.at(s[i + 1], proud, z[j]),
-          f.at(s[i + 1], proud, z[j + 1]),
-          f.at(s[i], proud, z[j + 1]),
-        ],
-        [n, n, n, n],
-        n
-      );
-    }
-  }
-  const breaks = { s, z };
-  softEdge(out, f, outer, shoulder(SHOPFRONT.back, proud, round), breaks, open);
-  for (const h of holes) {
-    softEdge(out, f, h, reveal(band.inner, proud, ri), breaks);
-  }
+  polygon(
+    out,
+    [
+      f.at(face.s0, proud, face.z0),
+      f.at(face.s1, proud, face.z0),
+      f.at(face.s1, proud, face.z1),
+      f.at(face.s0, proud, face.z1),
+    ],
+    [n, n, n, n],
+    n
+  );
+  softEdge(out, f, outer, shoulder(SHOPFRONT.back, proud, round), {
+    s: [face.s0, face.s1],
+    z: [face.z0, face.z1],
+  });
+}
+
+/** A shop window to cut into the wall (lib/city/shop-windows.ts): its
+ *  rectangle and how far its run's wall stands out of the footprint line. */
+export interface ShopOpening {
+  rect: Rect;
+  shift: number;
 }
 
 /**
- * A wall's shopfront triangles (mesh frame: x = epsgX − cx, y = epsgY − cy,
- * z up), counter-clockwise from outside, laid `shift(span)` metres out of
- * the footprint line onto the wall (`wallShiftAt`): per run of bays a
- * surround (`bayRuns`) with its niches and their glass, the fascia bands,
- * the canopies. Empty where no bay is left and no sign was seen, or the
- * ground floor is too low for a pane and no sign was seen (a sign alone
- * is a fascia). Only the faces one can see: no back (in the wall), no
- * bottom (in the ground).
+ * A wall's shopfront (mesh frame: x = epsgX − cx, y = epsgY − cy, z up),
+ * laid `shift(span)` metres out of the footprint line onto the wall
+ * (`wallShiftAt`): the shop windows to cut into it, one per bay (`bayRuns`
+ * keeps a pier between them), each from its sill — the stall riser's top,
+ * and at least `WINDOW_ROWS.plinthGap` over a plinth there, as a window's
+ * (`plinthTop`) — to the pane's top (`paneTop`, under a canopy's slab);
+ * the fascia bands and the canopies as triangles, counter-clockwise from
+ * outside. No window where the ground floor leaves less than
+ * MIN_OPENING_M: a sign alone is a fascia. Only the faces one can see: no
+ * back (in the wall), no bottom (in the ground).
  */
 export function shopfrontMesh(
   w: ShopfrontWall,
   bays: readonly Span[],
   storeyH: number,
   offset: { cx: number; cy: number },
-  shift: (span: Span) => number = () => 0
+  shift: (span: Span) => number = () => 0,
+  plinthTop?: (span: Span) => number | undefined
 ): ShopfrontMesh {
   const out: ShopfrontMesh = {
     canopy: { normals: [], positions: [] },
     frame: { normals: [], positions: [] },
-    panes: [],
+    openings: [],
   };
   const top = paneTop(w, storeyH);
-  const sill = sillOf(w);
-  // no window where the ground floor is too low for one: the fascia alone
-  const windows = top - sill >= MIN_PANE_M ? bays : [];
-  const { glass, head, proud, shoulder: round, tuck } = SHOPFRONT;
-  const runs = bayRuns(windows, w.L).map((run) => ({
-    ...run,
-    span: clearOf(run.span, canopyEnds(w), -1),
-  }));
-  for (const run of runs) {
-    const f = wallFrame(w, offset, shift(run.span));
-    const g = Math.max(groundAt(w, run.span[0]), groundAt(w, run.span[1]));
-    // under a canopy the head ends under its slab — or, where only a
-    // strip of wall would be left between them, reaches up into it
-    const slab = canopySlabOver(w, run.span);
-    const paneZ = Math.min(g + top, (slab ?? Number.POSITIVE_INFINITY) - head);
-    const reach =
-      slab !== undefined && slab - (paneZ + head) < CANOPY.reach
-        ? slab + CANOPY.tuck
-        : paneZ + head;
-    if (paneZ - (g + sill) < MIN_PANE_M / 2) {
-      continue;
-    }
-    const holes = run.bays.map(([s0, s1]) => ({
-      s0,
-      s1,
-      z0: g + sill,
-      z1: paneZ,
-    }));
-    softBand(
-      out.frame,
-      f,
-      {
-        s0: run.span[0],
-        s1: run.span[1],
-        z0: footAt(w, run.span),
-        z1: reach,
-      },
-      holes,
-      { inner: glass - tuck, open: true, proud, round }
-    );
-    const pane: Pane = { positions: [], top: paneZ };
-    const n = dir3(f, 0, 1, 0);
-    for (const h of holes) {
-      const flat: Shaded = { normals: [], positions: pane.positions };
-      polygon(
-        flat,
-        [
-          f.at(h.s0, glass, h.z0),
-          f.at(h.s1, glass, h.z0),
-          f.at(h.s1, glass, h.z1),
-          f.at(h.s0, glass, h.z1),
-        ],
-        [n, n, n, n],
-        n
+  const { head } = SHOPFRONT;
+  let opened = false;
+  for (const run of bayRuns(bays, w.L)) {
+    const off = shift(run.span);
+    for (const bay of run.bays) {
+      const g = Math.max(groundAt(w, bay[0]), groundAt(w, bay[1]));
+      const slab = canopySlabOver(w, bay);
+      const z1 = Math.min(g + top, (slab ?? Number.POSITIVE_INFINITY) - head);
+      const z0 = Math.max(
+        g + sillOf(w),
+        (plinthTop?.(bay) ?? Number.NEGATIVE_INFINITY) + WINDOW_ROWS.plinthGap
       );
+      if (z1 - z0 < MIN_OPENING_M) {
+        continue;
+      }
+      out.openings.push({
+        rect: { s0: bay[0], s1: bay[1], z0, z1 },
+        shift: off,
+      });
+      opened = true;
     }
-    out.panes.push(pane);
   }
   for (const c of w.canopy ?? []) {
     const span: Span = [Math.max(0, c.at[0]), Math.min(w.L, c.at[1])];
     canopyMesh(out.canopy, w, c, top, wallFrame(w, offset, shift(span)));
   }
-  const runEnds = runs.flatMap((r) => r.span);
-  for (const span of fasciaSpans(w).map((sp) => clearOf(sp, runEnds, 1))) {
+  for (const span of fasciaSpans(w)) {
     const g = Math.max(groundAt(w, span[0]), groundAt(w, span[1]));
     const [z0, z1] = w.sign?.z ?? [top, top + SHOPFRONT.fasciaH];
-    // over a window it reaches down into the surround's head
-    const bottom =
-      windows.length > 0 ? Math.max(z0, top + head) - FASCIA_INTO_M : z0;
+    // over a window it keeps a strip of wall above the opening
+    const bottom = opened ? Math.max(z0, top + FASCIA_OVER_M) : z0;
     const height = Math.max(Math.min(z1 - bottom, FASCIA_MAX_M), 0.3);
     softBand(
       out.frame,
       wallFrame(w, offset, shift(span)),
       { s0: span[0], s1: span[1], z0: g + bottom, z1: g + bottom + height },
-      [],
-      {
-        inner: 0,
-        open: false,
-        proud: SHOPFRONT.fasciaProud,
-        round: SHOPFRONT.fasciaRound,
-      }
+      { proud: SHOPFRONT.fasciaProud, round: SHOPFRONT.fasciaRound }
     );
   }
   return out;
-}
-
-/** How far a part's end keeps from another's end it would meet face to
- *  face (m): their end faces would lie on one another. */
-const END_CLEAR_M = 0.06;
-
-/** `span` with each end that lies within END_CLEAR_M of one of `ends`
- *  moved END_CLEAR_M off it: inwards (`dir` −1) or outwards (1). */
-function clearOf([s0, s1]: Span, ends: readonly number[], dir: 1 | -1): Span {
-  const near = (s: number) => ends.some((e) => Math.abs(e - s) < END_CLEAR_M);
-  return [
-    near(s0) ? s0 - dir * END_CLEAR_M : s0,
-    near(s1) ? s1 + dir * END_CLEAR_M : s1,
-  ];
-}
-
-/** Where the canopies on a wall end (m along it). */
-function canopyEnds(w: ShopfrontWall): number[] {
-  return (w.canopy ?? []).flatMap((c) => [
-    Math.max(0, c.at[0]),
-    Math.min(w.L, c.at[1]),
-  ]);
 }
 
 /** The underside of the lowest canopy slab over any of `span` (absolute),
@@ -866,27 +757,42 @@ export function wallShiftAt(
   return Number.isFinite(shift) ? shift : 0;
 }
 
-/** Where a shopfront meets the ground (ADR 0030): the feet of its
- *  surrounds along their fronts, EPSG. Where the ground in front is higher
- *  than the lower end's the foot sinks deeper; where it falls away (a step
- *  down off the pavement) the foot is checked here. */
-export function shopfrontJoins(
+/** The highest plinth top (absolute) along `span` of the wall: the pieces
+ *  of its host's plinth (pipeline/bake/plinths.py) lying on the wall's
+ *  line and over the span; undefined where none runs there. */
+export function plinthTopAlong(
   w: ShopfrontWall,
-  bays: readonly Span[]
-): JoinPoint[] {
-  if (!w.z) {
-    return [];
-  }
-  const out = SHOPFRONT.proud;
+  plinths: readonly PlinthFeature[],
+  [s0, s1]: Span
+): number | undefined {
   const tx = (w.b[0] - w.a[0]) / w.L;
   const ty = (w.b[1] - w.a[1]) / w.L;
-  const pt = (s: number, z: number) => ({
-    x: w.a[0] + tx * s + w.n[0] * out,
-    y: w.a[1] + ty * s + w.n[1] * out,
-    z,
-  });
-  return bayRuns(bays, w.L).flatMap(({ span }) => {
-    const foot = footAt(w, span);
-    return joinsAlong("foot", pt(span[0], foot), pt(span[1], foot));
-  });
+  const sOf = ([x, y]: readonly number[]) =>
+    (x - w.a[0]) * tx + (y - w.a[1]) * ty;
+  const offOf = ([x, y]: readonly number[]) =>
+    (x - w.a[0]) * w.n[0] + (y - w.a[1]) * w.n[1];
+  let top: number | undefined;
+  for (const f of plinths) {
+    const p = f.properties;
+    if (p?.of !== w.oid) {
+      continue;
+    }
+    for (const [i, line] of f.geometry.coordinates.entries()) {
+      const a = line[0];
+      const b = line.at(-1) ?? a;
+      const [sa, sb] = [sOf(a), sOf(b)].toSorted((u, v) => u - v);
+      const along =
+        Math.abs(sOf(b) - sOf(a)) > 0.9 * Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (
+        along &&
+        Math.abs(offOf(a)) <= SHOPFRONT_WALL_REACH &&
+        Math.abs(offOf(b)) <= SHOPFRONT_WALL_REACH &&
+        sb > s0 &&
+        sa < s1
+      ) {
+        top = Math.max(top ?? p.top[i], p.top[i]);
+      }
+    }
+  }
+  return top;
 }
