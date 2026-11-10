@@ -6,13 +6,11 @@ import {
   nearestInSets,
   nearestItem,
   rayCylinder,
-  rayDeckTop,
   rayPrism,
-  raySlab,
   ringDistanceXz,
   setsBox,
 } from "./ask-solids";
-import type { AskItem, AskSet, Slab } from "./ask-solids";
+import type { AskItem, AskSet } from "./ask-solids";
 
 const east = { x: 1, y: 0, z: 0 };
 const down = { x: 0, y: -1, z: 0 };
@@ -141,7 +139,7 @@ test("the nearest in sets looks past the thing it starts in, one turned down and
     (hit) => hit.target !== 1 && hit.target !== 0
   );
   expect(kept?.target).toBe(2);
-  // a set that would build first is not asked, unless roughly
+  // a set that would build first is not asked
   const unbuilt: AskSet<number> = {
     box: { min: { x: -5, y: 0, z: -5 }, max: { x: 5, y: 5, z: 5 } },
     nearest: () => {
@@ -156,16 +154,6 @@ test("the nearest in sets looks past the thing it starts in, one turned down and
     1000
   );
   expect(past?.target).toBe(0);
-  const rough = nearestInSets(
-    { x: -10, y: 2, z: 0 },
-    east,
-    [
-      { ...unbuilt, rough: () => ({ target: 9, distance: 3, solids: [] }) },
-      ...sets,
-    ],
-    1000
-  );
-  expect(rough?.target).toBe(9);
   // glass is passed by
   const glass: AskSet<number> = {
     ...unbuilt,
@@ -217,66 +205,6 @@ test("sets of things: hits from overlapping sets interleave nearest first, a set
   expect(
     hitsInSets(o, east, [...a, nearestOnly], 100).map((h) => h.target)
   ).toEqual(["a10", "b20", "a30"]);
-});
-
-test("a ray comes down onto a deck's top, from above it or standing on it", () => {
-  // a deck 100 m long, its top rising from 10 m to 12 m eastwards
-  const deck: Slab = {
-    ring: [
-      [0, -5],
-      [100, -5],
-      [100, 5],
-      [0, 5],
-    ],
-    y0: 10,
-    y1: 12,
-    above: 2,
-    below: 1,
-    topAt: (x) => 10 + x / 50,
-  };
-  // standing on it, 1.6 m over its top at x = 20, looking along and down
-  const look = { x: Math.cos(0.1), y: -Math.sin(0.1), z: 0 };
-  const t = rayDeckTop({ x: 20, y: 10.4 + 1.6, z: 0 }, look, deck, 1000);
-  expect(t).not.toBeNull();
-  // the point lies on the top, within a step
-  const x = 20 + (t ?? 0) * look.x;
-  expect(Math.abs(12 - (t ?? 0) * Math.sin(0.1) - (10 + x / 50))).toBeLessThan(
-    0.05
-  );
-  // looking up, or beyond reach: nothing
-  expect(
-    rayDeckTop({ x: 20, y: 12, z: 0 }, { x: 1, y: 0, z: 0 }, deck, 1000)
-  ).toBeNull();
-  expect(rayDeckTop({ x: 20, y: 12, z: 0 }, look, deck, 3)).toBeNull();
-});
-
-test("a deck seen from above its box, or level from its end", () => {
-  const deck: Slab = {
-    ring: [
-      [0, -5],
-      [100, -5],
-      [100, 5],
-      [0, 5],
-    ],
-    y0: 10,
-    y1: 12,
-    above: 2,
-    below: 1,
-    topAt: (x) => 10 + x / 50,
-  };
-  // from 20 m over it, steeply down onto x = 50 (top 11 m)
-  const d = { x: 30, y: -9, z: 0 };
-  const len = Math.hypot(d.x, d.y);
-  const look = { x: d.x / len, y: d.y / len, z: 0 };
-  const t = rayDeckTop({ x: 20, y: 20, z: 0 }, look, deck, 1000);
-  expect(t).toBeCloseTo(len, 0);
-  // level from beside its low end: where the rising top reaches the ray
-  // (x = 25), and its band at once (what the probe tolerates)
-  expect(rayDeckTop({ x: -5, y: 10.5, z: 0 }, east, deck, 1000)).toBeCloseTo(
-    30,
-    0
-  );
-  expect(raySlab({ x: -5, y: 10.5, z: 0 }, east, deck)).toBeCloseTo(5, 0);
 });
 
 test("the box around sets: none for no sets", () => {

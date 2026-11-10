@@ -197,55 +197,6 @@ export function raySlab(o: Xyz, d: Xyz, s: Slab): number | null {
   return null;
 }
 
-/**
- * Where the ray first comes down onto a slab's top (`topAt`), or the top
- * rises to it, within its
- * ring and `far`, or null: the deck you stand on as well as one beside
- * you — a ray from within the slab's band (`raySlab` meets it at once)
- * still finds the top ahead.
- */
-export function rayDeckTop(
-  o: Xyz,
-  d: Xyz,
-  s: Slab,
-  far: number
-): number | null {
-  const enter = rayPrism(o, d, s);
-  if (enter === null || enter > far) {
-    return null;
-  }
-  // down to the slab's lowest top, or across its ring, at the latest
-  let span = 0;
-  const [x0, z0] = s.ring[0] ?? [0, 0];
-  for (const [x, z] of s.ring) {
-    span = Math.max(span, Math.hypot(x - x0, z - z0));
-  }
-  const across = (2 * span) / Math.max(Math.hypot(d.x, d.z), 1e-6);
-  // (a level or rising ray meets a deck only where the deck rises to it)
-  const leave = Math.min(
-    far,
-    d.y < 0
-      ? enter + (o.y + enter * d.y - s.y0) / -d.y
-      : Number.POSITIVE_INFINITY,
-    enter + across
-  );
-  let above: boolean | null = null;
-  for (let t = enter; t <= leave; t += SLAB_STEP) {
-    const x = o.x + t * d.x;
-    const z = o.z + t * d.z;
-    if (!insideRingXz(s.ring, x, z)) {
-      above = null;
-      continue;
-    }
-    const over = o.y + t * d.y > s.topAt(x, z);
-    if (above === true && !over) {
-      return t;
-    }
-    above = over;
-  }
-  return null;
-}
-
 /** The box around every set's box, or null for none. */
 export function setsBox<T>(sets: readonly AskSet<T>[]): Aabb | null {
   return boxAround(sets.map((set) => set.box));
@@ -325,11 +276,9 @@ export interface AskSet<T> {
   box: Aabb;
   nearest: (o: Xyz, d: Xyz, far: number) => AskHit<T> | null;
   /** true while `nearest` would first build something (a mesh's BVH): the
-   *  autofocus, ten times a second, asks `rough` instead, or passes it by */
+   *  autofocus, ten times a second, passes it by — the set starts that
+   *  build off the thread when first asked */
   unbuilt?: () => boolean;
-  /** the nearest hit by the things' solids alone, building nothing (a
-   *  bridge's decks as slabs) */
-  rough?: (o: Xyz, d: Xyz, far: number) => AskHit<T> | null;
   /** drawn as glass, which writes no depth: the autofocus passes it by,
    *  or the thing it aims at would blur */
   glass?: boolean;
@@ -481,8 +430,8 @@ export function hitsInSets<T>(
 }
 
 /** A set's nearest hit within `far` that `keep` keeps: its next ones
- *  (`along`) where the nearest is not; a set that would first build
- *  something answers roughly (`rough`), or not at all. */
+ *  (`along`) where the nearest is not; none from a set that would first
+ *  build something. */
 function nearestKept<T>(
   set: AskSet<T>,
   o: Xyz,
@@ -491,8 +440,7 @@ function nearestKept<T>(
   keep: (hit: AskHit<T>) => boolean
 ): AskHit<T> | null {
   if (set.unbuilt?.()) {
-    const rough = set.rough?.(o, d, far) ?? null;
-    return rough && keep(rough) ? rough : null;
+    return null;
   }
   const hit = set.nearest(o, d, far);
   if (!hit || keep(hit)) {
@@ -505,8 +453,8 @@ function nearestKept<T>(
  * The nearest hit in the sets the ray meets within `far` (or null): the
  * autofocus's question, asked ten times a second, so each set is opened
  * only when the ray enters its box before the best hit so far, and a set
- * that would first build something (`unbuilt`) answers by its solids
- * alone (`rough`) or not at all; one drawn as glass not at all. A hit at the
+ * that would first build something (`unbuilt`) or is drawn as glass not
+ * at all. A hit at the
  * ray's start (it starts inside a crown or a shelter) is not what lies
  * ahead, nor one `keep` turns down (a thing a design folded away).
  */

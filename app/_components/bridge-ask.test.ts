@@ -3,6 +3,7 @@ import { BoxGeometry, Group, Mesh } from "three/webgpu";
 import type { AskItem, Slab } from "@/lib/city/ask-solids";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import { bridgeAskSet } from "./bridge-ask";
+import { buildBvhOffThread } from "./bvh-client";
 // the BVH the set builds on its first question (collision.ts patches it in)
 import "./collision";
 
@@ -36,27 +37,27 @@ const bridge = () => {
 };
 
 const down = { x: 0, y: -1, z: 0 };
-const east = { x: 1, y: 0, z: 0 };
 
-test("before its BVH a bridge answers by its deck, then by what is drawn", () => {
+test("asked first by the autofocus, a bridge has the worker build its BVH", async () => {
   const { rail, mesh } = bridge();
   const set = bridgeAskSet(rail, [deck]);
+  // unbuilt: passed by, and its build sent off the thread
   expect(set?.unbuilt?.()).toBe(true);
-  // from above, down onto the deck's top
-  expect(set?.rough?.({ x: 20, y: 20, z: 0 }, down, 100)?.distance).toBeCloseTo(
+  await buildBvhOffThread(mesh.geometry);
+  expect(set?.unbuilt?.()).toBe(false);
+  // then the drawn bridge answers, named by its deck
+  expect(set?.nearest({ x: 20, y: 20, z: 0 }, down, 100)?.distance).toBeCloseTo(
     10,
-    0
+    5
   );
-  // level, from the bank: into the deck under its top, not the band over it
-  expect(
-    set?.rough?.({ x: -5, y: 9.5, z: 0 }, east, 100)?.distance
-  ).toBeCloseTo(5, 0);
-  expect(set?.rough?.({ x: -5, y: 10.8, z: 0 }, east, 100)).toBeNull();
-  // a question builds the BVH; then the drawn bridge answers
+});
+
+test("asked first by a question, a bridge builds its BVH at once", () => {
+  const { rail, mesh } = bridge();
+  const set = bridgeAskSet(rail, [deck]);
   expect(set?.nearest({ x: 20, y: 20, z: 0 }, down, 100)?.distance).toBeCloseTo(
     10,
     5
   );
   expect(mesh.geometry.boundsTree).toBeDefined();
-  expect(set?.unbuilt?.()).toBe(false);
 });

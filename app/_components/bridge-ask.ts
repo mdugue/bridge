@@ -1,35 +1,14 @@
 import { Box3, Raycaster, Vector3 } from "three/webgpu";
 import type { Mesh, Object3D } from "three/webgpu";
-import {
-  PIER_REACH,
-  rayDeckTop,
-  raySlab,
-  ringDistanceXz,
-} from "@/lib/city/ask-solids";
+import { PIER_REACH, ringDistanceXz } from "@/lib/city/ask-solids";
 import type { AskHit, AskItem, AskSet, Slab, Xyz } from "@/lib/city/ask-solids";
+import { buildBvhOffThread, bvhBuilding } from "./bvh-client";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 
 /** The slab a deck's first solid is, if it is one. */
 const slabOf = (item: AskItem<FeatureInquiry>): Slab | null => {
   const s = item.solids[0];
   return s && "slab" in s ? s.slab : null;
-};
-
-/** Where a ray meets a deck before its BVH: down onto its top, else (a
- *  ray level with it or from below) into the deck itself — under its top,
- *  not the band the probe tolerates over it — if ahead. */
-const roughDeck = (o: Xyz, d: Xyz, slab: Slab, far: number): number | null => {
-  const top = rayDeckTop(o, d, slab, far);
-  if (top !== null) {
-    return top;
-  }
-  const at = raySlab(o, d, slab);
-  if (at === null || at <= 0 || at > far) {
-    return null;
-  }
-  const x = o.x + at * d.x;
-  const z = o.z + at * d.z;
-  return o.y + at * d.y <= slab.topAt(x, z) ? at : null;
 };
 
 /** One ray for every bridge set: a question runs to its end before the
@@ -40,12 +19,13 @@ const origin = new Vector3();
 const direction = new Vector3();
 
 /** A tile's bridges, asked (`bridgeAskSet`): its methods on the prototype,
- *  so a set holds its meshes, decks and box and no function of its own
- *  (a phone, which never asks `rough`, pays nothing for it; ADR 0047). */
+ *  so a set holds its meshes, decks and box and no function of its own. */
 class BridgeAsk implements AskSet<FeatureInquiry> {
   readonly box: AskSet<FeatureInquiry>["box"];
   private readonly meshes: Mesh[];
   private readonly decks: readonly AskItem<FeatureInquiry>[];
+  /** whether the meshes' BVHs were sent to the worker */
+  private sent = false;
 
   constructor(
     meshes: Mesh[],
@@ -60,28 +40,31 @@ class BridgeAsk implements AskSet<FeatureInquiry> {
     };
   }
 
+  /** Whether a mesh still lacks its BVH: the autofocus, which never builds
+   *  one in a frame, passes the bridge by — and, asking, has the worker
+   *  build them (bvh-client.ts), so the next ray meets the drawn bridge. */
   unbuilt(): boolean {
-    return this.meshes.some((mesh) => !mesh.geometry.boundsTree);
-  }
-
-  /** before a question built the BVHs: where the ray comes down onto a
-   *  deck's top — the one underfoot too — or into a deck seen level or
-   *  from below */
-  rough(o: Xyz, d: Xyz, far: number): AskHit<FeatureInquiry> | null {
-    let best: AskHit<FeatureInquiry> | null = null;
-    let reach = far;
-    for (const deck of this.decks) {
-      const slab = slabOf(deck);
-      const t = slab ? roughDeck(o, d, slab, reach) : null;
-      if (t !== null) {
-        best = { ...deck, distance: t };
-        reach = t;
+    const missing = this.meshes.some((mesh) => !mesh.geometry.boundsTree);
+    if (missing && !this.sent) {
+      this.sent = true;
+      for (const mesh of this.meshes) {
+        buildBvhOffThread(mesh.geometry, () => mesh.parent !== null).catch(
+          () => {
+            // a failed build leaves the bridge to the probe, which builds
+            // it on its question
+          }
+        );
       }
     }
-    return best;
+    return missing;
   }
 
   nearest(o: Xyz, d: Xyz, far: number): AskHit<FeatureInquiry> | null {
+    // a mesh whose arrays are with the worker: no answer until they are
+    // back (bvh-client.ts)
+    if (this.meshes.some((mesh) => bvhBuilding(mesh.geometry))) {
+      return null;
+    }
     for (const mesh of this.meshes) {
       if (!mesh.geometry.boundsTree) {
         mesh.geometry.computeBoundsTree();
@@ -116,7 +99,8 @@ class BridgeAsk implements AskSet<FeatureInquiry> {
  * names its deck: the outline it lies in, or the nearest within reach.
  * Data solids would not do here: the masonry under an arch is bridge, the
  * open space under a beam bridge is not. The bridge meshes get their BVH
- * on the first question that reaches them, not with the tile.
+ * on the first question that reaches them, or from the worker when the
+ * autofocus first meets them — not with the tile.
  */
 export function bridgeAskSet(
   rail: Object3D | undefined,
