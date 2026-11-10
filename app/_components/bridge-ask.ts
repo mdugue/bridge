@@ -26,6 +26,83 @@ const roughDeck = (o: Xyz, d: Xyz, slab: Slab, far: number): number | null => {
   return at !== null && at > 0 && at <= far ? at : null;
 };
 
+/** One ray for every bridge set: a question runs to its end before the
+ *  next. */
+const raycaster = new Raycaster();
+raycaster.firstHitOnly = true;
+const origin = new Vector3();
+const direction = new Vector3();
+
+/** A tile's bridges, asked (`bridgeAskSet`): its methods on the prototype,
+ *  so a set holds its meshes, decks and box and no function of its own
+ *  (a phone, which never asks `rough`, pays nothing for it; ADR 0047). */
+class BridgeAsk implements AskSet<FeatureInquiry> {
+  readonly box: AskSet<FeatureInquiry>["box"];
+  private readonly meshes: Mesh[];
+  private readonly decks: readonly AskItem<FeatureInquiry>[];
+
+  constructor(
+    meshes: Mesh[],
+    decks: readonly AskItem<FeatureInquiry>[],
+    bounds: Box3
+  ) {
+    this.meshes = meshes;
+    this.decks = decks;
+    this.box = {
+      min: { x: bounds.min.x, y: bounds.min.y, z: bounds.min.z },
+      max: { x: bounds.max.x, y: bounds.max.y, z: bounds.max.z },
+    };
+  }
+
+  unbuilt(): boolean {
+    return this.meshes.some((mesh) => !mesh.geometry.boundsTree);
+  }
+
+  /** before a question built the BVHs: where the ray comes down onto a
+   *  deck's top — the one underfoot too — or into a deck seen level or
+   *  from below */
+  rough(o: Xyz, d: Xyz, far: number): AskHit<FeatureInquiry> | null {
+    let best: AskHit<FeatureInquiry> | null = null;
+    let reach = far;
+    for (const deck of this.decks) {
+      const slab = slabOf(deck);
+      const t = slab ? roughDeck(o, d, slab, reach) : null;
+      if (t !== null) {
+        best = { ...deck, distance: t };
+        reach = t;
+      }
+    }
+    return best;
+  }
+
+  nearest(o: Xyz, d: Xyz, far: number): AskHit<FeatureInquiry> | null {
+    for (const mesh of this.meshes) {
+      if (!mesh.geometry.boundsTree) {
+        mesh.geometry.computeBoundsTree();
+      }
+    }
+    raycaster.set(origin.set(o.x, o.y, o.z), direction.set(d.x, d.y, d.z));
+    raycaster.far = far;
+    const hit = raycaster.intersectObjects(this.meshes, false)[0];
+    if (!hit) {
+      return null;
+    }
+    let best: AskItem<FeatureInquiry> | null = null;
+    let reach = PIER_REACH;
+    for (const deck of this.decks) {
+      const slab = slabOf(deck);
+      const gap = slab
+        ? ringDistanceXz(slab.ring, hit.point.x, hit.point.z)
+        : Number.POSITIVE_INFINITY;
+      if (gap <= reach) {
+        reach = gap;
+        best = deck;
+      }
+    }
+    return best ? { ...best, distance: hit.distance } : null;
+  }
+}
+
 /**
  * A tile's bridges as one askable set (plan 052 phase 4): rays meet the
  * drawn bridge itself — deck, arches, piers, the measured steel above
@@ -56,57 +133,5 @@ export function bridgeAskSet(
       bounds.union(box.clone().applyMatrix4(mesh.matrixWorld));
     }
   }
-  const raycaster = new Raycaster();
-  raycaster.firstHitOnly = true;
-  const origin = new Vector3();
-  const direction = new Vector3();
-  return {
-    box: {
-      min: { x: bounds.min.x, y: bounds.min.y, z: bounds.min.z },
-      max: { x: bounds.max.x, y: bounds.max.y, z: bounds.max.z },
-    },
-    unbuilt: () => meshes.some((mesh) => !mesh.geometry.boundsTree),
-    // before a question built the BVHs: where the ray comes down onto a
-    // deck's top — the one underfoot too — or into a deck seen level or
-    // from below
-    rough: (o, d, far) => {
-      let best: AskHit<FeatureInquiry> | null = null;
-      let reach = far;
-      for (const deck of decks) {
-        const slab = slabOf(deck);
-        const t = slab ? roughDeck(o, d, slab, reach) : null;
-        if (t !== null) {
-          best = { ...deck, distance: t };
-          reach = t;
-        }
-      }
-      return best;
-    },
-    nearest: (o, d, far) => {
-      for (const mesh of meshes) {
-        if (!mesh.geometry.boundsTree) {
-          mesh.geometry.computeBoundsTree();
-        }
-      }
-      raycaster.set(origin.set(o.x, o.y, o.z), direction.set(d.x, d.y, d.z));
-      raycaster.far = far;
-      const hit = raycaster.intersectObjects(meshes, false)[0];
-      if (!hit) {
-        return null;
-      }
-      let best: AskItem<FeatureInquiry> | null = null;
-      let reach = PIER_REACH;
-      for (const deck of decks) {
-        const slab = slabOf(deck);
-        const gap = slab
-          ? ringDistanceXz(slab.ring, hit.point.x, hit.point.z)
-          : Number.POSITIVE_INFINITY;
-        if (gap <= reach) {
-          reach = gap;
-          best = deck;
-        }
-      }
-      return best ? { ...best, distance: hit.distance } : null;
-    },
-  };
+  return new BridgeAsk(meshes, decks, bounds);
 }

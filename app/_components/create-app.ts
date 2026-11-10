@@ -2446,6 +2446,10 @@ async function bootApp(
           : standInDepth(solids),
     };
   };
+  // an instance a design's site folded away: not there to be asked, nor
+  // to focus on
+  const folded = (target: FeatureInquiry, at: { x: number; z: number }) =>
+    foldedThing(target, at, offset);
   const probe = createInquiryProbe({
     camera: activeCamera,
     cities: () => stream.visibleCities(),
@@ -2466,7 +2470,7 @@ async function bootApp(
     toSite: (p) => [p.x + offset.cx, offset.cy - p.z],
     // an instance a design's site folded away is not there to be asked
     // (a hedge's by where the ray met it: a row folds piece by piece)
-    folded: ({ target }, at) => foldedThing(target, at, offset),
+    folded: ({ target }, at) => folded(target, at),
   });
   // A tree's card fetches what the register says about it (ADR 0042).
   const treeFactsUrl = (tile: string) => {
@@ -3073,9 +3077,11 @@ async function bootApp(
   // What the probe can ask that the lens can focus on, without a copy ten
   // times a second: the built ask sets of every visible tile whose sets'
   // box the ray enters before `far` (the box kept while a tile's list
-  // stays as long), and a design's. Not the data layers' counters nor a
-  // traffic flow: glass, which writes no depth — focused on, the thing
-  // aimed at would blur.
+  // stays as long), and a design's. Not glass, which writes no depth —
+  // focused on, the thing aimed at would blur: a set in the tiles' lists
+  // drawn as glass says so (`AskSet.glass`, the traffic flows), and the
+  // data layers' counters are never in them (one hung there takes the
+  // flag).
   const focusBoxes = new WeakMap<object, { count: number; box: Aabb | null }>();
   function* focusSets(o: Xyz, d: Xyz, far: number) {
     for (const dressing of stream.visibleDressings()) {
@@ -3099,7 +3105,7 @@ async function bootApp(
   // over the surface drawn), nor what a design's site folded away
   const focusable = (t: AskHit<FeatureInquiry>) =>
     !toleranceBox(t) &&
-    !foldedThing(t.target, focusRaycaster.ray.at(t.distance, focusAt), offset);
+    !folded(t.target, focusRaycaster.ray.at(t.distance, focusAt));
   // The trees, lamps, furniture and monuments the probe can ask (their
   // sets come in idle time, a mesh's BVH with a question: the focus never
   // builds either) before `far`: a tree in the middle of the view is what
@@ -3917,8 +3923,22 @@ async function bootApp(
     sceneStill = stillness.frame(time, busy);
     opts.pace.setStill(sceneStill);
   };
-  const focusDue = () =>
-    lensBlur && postStack.lensWanted() && !walkMovedNow && capture === null;
+  // A ray through the buildings and a march over the ground, ten times a
+  // second: only where there is a lens blur to focus (not on a phone),
+  // and not while the camera moves or the style or view draws none (the
+  // lens shows nothing then), nor through an export (it began on a settled
+  // lens, and its tiles share one focus). Cast at once the frame the lens
+  // is wanted again: it returns faded out, its focus jumping to the aim
+  // for a few frames (`FOCUS_SNAP_MS`).
+  let lensWasWanted = false;
+  const tickFocus = (poseTick: boolean) => {
+    const wanted = lensBlur && postStack.lensWanted() && capture === null;
+    const back = wanted && !lensWasWanted;
+    lensWasWanted = wanted;
+    if (wanted && !walkMovedNow && (poseTick || back)) {
+      updateFocus();
+    }
+  };
   const frame = (time: number) => {
     const frameStart = streamTimings.now();
     timer.update(pocFrameTime(time));
@@ -3980,17 +4000,9 @@ async function bootApp(
       } else {
         tickModelOff();
         opts.onPose?.(pose.getPose());
-        // a ray through the buildings and a march over the ground: only
-        // where there is a lens blur to focus (not on a phone), and not
-        // while the camera moves or the style draws none (the lens shows
-        // nothing then; it comes back faded out, and the focus jumps to
-        // the next ray's while it is), nor through an export: it began on
-        // a settled lens, and its tiles share one focus
-        if (focusDue()) {
-          updateFocus();
-        }
       }
     }
+    tickFocus(poseTick);
     // FPS at ~2 Hz on its own channel — must NOT churn the heavier stats
     // emit (a whole-scene walk; it also hands the HUD the footprints).
     if (timer.getElapsed() >= fpsDue) {

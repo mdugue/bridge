@@ -1461,8 +1461,8 @@ export function createPostStack(
       renderer.getDrawingBufferSize(size);
       target.setSize(size.x, size.y);
       beforeAa.setSize(size.x, size.y);
-      // the lens blur sizes its copy when it runs; the motion blur draws
-      // there while it does not
+      // the lens blur's targets, its copy among them (the motion blur
+      // draws there while the lens rests)
       lensBlur?.setSize(size.x, size.y);
       antialiasing.setSize(size);
       outline.setSize(size.x, size.y);

@@ -129,10 +129,10 @@ export interface LensState {
 }
 
 /** How long after the lens comes back its focus still jumps to the aim
- *  (ms): the focus ray's 10 Hz tick and a frame, so the first aim the ray
- *  finds where the view rests is taken at once while the blur is all but
- *  faded out (≈ 1 % in), not pulled to in view. */
-export const FOCUS_SNAP_MS = 150;
+ *  (ms): a few frames — the autofocus casts its ray the frame the lens is
+ *  wanted again — while the blur is all but faded out (0.15 % in at
+ *  50 ms), so a stale focus is not pulled from in view. */
+export const FOCUS_SNAP_MS = 50;
 
 export function createLensState(): LensState {
   return { shownMs: 0, focusM: SKY_FOCUS_M };

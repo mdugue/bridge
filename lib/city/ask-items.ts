@@ -916,6 +916,7 @@ function furnitureItem(
   }
   return [
     {
+      // a box over the outline, not its shape (`toleranceBox`)
       solids: [
         { prism: { ring: ringXz(ring, ctx.offset), y0: y - 0.3, y1: y + h } },
       ],
@@ -963,6 +964,7 @@ export function landingItems(
       continue;
     }
     out.push({
+      // a box round the stage, not its shape (`toleranceBox`)
       solids: [
         {
           prism: {

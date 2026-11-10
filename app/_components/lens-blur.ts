@@ -231,9 +231,9 @@ export function createLensBlur(
         // twice the pixel's own circle
         const behind = step(cC, s.a);
         const own = mix(rs, min(rs, rC.mul(2)), behind).toVar();
-        // its circle reaches the pixel over a soft edge as wide as a
-        // seventh of it (px): its own, so a wide search fringes no
-        // narrow circle
+        // its circle reaches the pixel over a soft edge 0.3 of its radius
+        // wide (px, ±0.15): its own, so a wide search fringes no narrow
+        // circle
         const edge = max(float(0.5), own.mul(0.15));
         const reaches = clamp(
           own.sub(radius.mul(r)).div(edge.mul(2)).add(0.5),
@@ -290,18 +290,26 @@ export function createLensBlur(
       const weight = float(0).toVar();
       const gathered = vec4(0).toVar();
       const low = vec3(0).toVar();
+      // the half-resolution path (its 2 × 2 prefilter, the upsample) is
+      // itself about a 3 px blur: a circle under that keeps the frame's
+      // detail in part, so a slight blur is not drawn wider than it is
+      const ownW = smoothstep(0.5, 2, c.abs().mul(0.5)).toVar();
       for (const [x, y] of CORNERS) {
         const texel = base.add(vec2(x + 0.5, y + 0.5)).mul(halfTexel);
         const g = gather.sample(texel);
         const pre = prefilter.sample(texel).toVar();
         const share = (x ? f.x : f.x.oneMinus()).mul(y ? f.y : f.y.oneMinus());
-        // only a texel nearer than the pixel (by more than half a pixel's
-        // blur) is held off: a blurred edge's own pixels take the texels
-        // behind them, whose gather the edge already covers — weighing
-        // both ways drew its silhouette in half-resolution steps. Never
-        // quite nothing: four texels all far off in blur still average by
-        // their shares instead of darkening the pixel.
-        const apart = max(c.sub(pre.a).sub(0.5), 0);
+        // a texel apart in blur by more than half a pixel's is held off:
+        // a nearer one always, a farther one only from a pixel that keeps
+        // its detail — a sharp silhouette takes no blurred background
+        // (nor its blur's residue on its detail), while a blurred edge's
+        // own pixels take the texels behind them, whose gather the edge
+        // already covers (weighing both ways drew it in half-resolution
+        // steps). Never quite nothing: four texels all far off in blur
+        // still average by their shares instead of darkening the pixel.
+        const apart = max(c.sub(pre.a).sub(0.5), 0).add(
+          max(pre.a.sub(c).sub(0.5), 0).mul(ownW.oneMinus())
+        );
         const near = float(1).div(apart.mul(apart).add(1)).add(1e-6);
         const w = share.mul(near).toVar();
         weight.addAssign(w);
@@ -310,10 +318,6 @@ export function createLensBlur(
       }
       const norm = max(weight, 1e-8);
       const blurred = gathered.div(norm).toVar();
-      // the half-resolution path (its 2 × 2 prefilter, the upsample) is
-      // itself about a 3 px blur: a circle under that keeps the frame's
-      // detail in part, so a slight blur is not drawn wider than it is
-      const ownW = smoothstep(0.5, 2, c.abs().mul(0.5));
       const keep = ownW.oneMinus().mul(blurred.a.oneMinus());
       const detail = sharp.rgb.sub(low.div(norm)).mul(keep);
       return vec4(blurred.rgb.add(detail), sharp.a);
@@ -335,13 +339,16 @@ export function createLensBlur(
     setSize: (width, height) => {
       inputTarget.setSize(width, height);
       pixel.value.set(1 / width, 1 / height);
-      const halfW = Math.max(Math.floor(width / 2), 1);
-      const halfH = Math.max(Math.floor(height / 2), 1);
+      // rounded up: a target a texel short would step its texels a
+      // fraction wider than 2 (and the tiles' wider than 8) px, and skip a
+      // row of the frame where the fractions add up to one
+      const halfW = Math.max(Math.ceil(width / 2), 1);
+      const halfH = Math.max(Math.ceil(height / 2), 1);
       prefilter.setSize(halfW, halfH);
       gather.setSize(halfW, halfH);
       halfTexel.value.set(1 / halfW, 1 / halfH);
-      const tileW = Math.max(Math.floor(width / TILE), 1);
-      const tileH = Math.max(Math.floor(height / TILE), 1);
+      const tileW = Math.max(Math.ceil(width / TILE), 1);
+      const tileH = Math.max(Math.ceil(height / TILE), 1);
       tiles.setSize(tileW, tileH);
       reach.setSize(tileW, tileH);
     },
