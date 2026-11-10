@@ -354,3 +354,22 @@ test("a stretch breaks along a segment on its line, not one aside", () => {
     )
   ).toEqual([st]);
 });
+
+test("a narrow shop window's break is not bridged again", () => {
+  const st = { a: [0, 0], b: [10, 0], lo: 99.9, hi: 100.7, host: 1 };
+  // a 1.1 m window and its 5 cm either side: less than BRIDGE_M
+  const broken = withoutSegments(
+    [st],
+    [
+      [
+        [3, 0],
+        [4.2, 0],
+      ],
+    ]
+  );
+  const { stretches } = joinStretches(broken, "plinth");
+  expect(stretches.map((s) => [s.a[0], s.b[0]])).toEqual([
+    [0, 3],
+    [4.2, 10],
+  ]);
+});

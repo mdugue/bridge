@@ -705,16 +705,31 @@ export const NIGHT_WINDOWS = { lit: 0.25, light: 0.6 } as const;
  */
 export function clayWindows(i: WindowInputs): ClayWindows {
   const pu = max(fwidth(i.facade.x.mul(FACADE_SCALE_M)), 1e-4);
+  const pv = max(fwidth(i.h), 1e-4);
   const g = grid(i);
+  // whole and cut only while the window is `sharpFromPx` wide and tall: a
+  // steep view squeezes it up the wall as a grazing one along it
   const sharp =
     i.sharp && i.sharpFromPx !== undefined
-      ? i.sharp.mul(
-          smoothstep(i.sharpFromPx - 0.5, i.sharpFromPx + 0.5, i.spec.y.div(pu))
-        )
+      ? i.sharp
+          .mul(
+            smoothstep(
+              i.sharpFromPx - 0.5,
+              i.sharpFromPx + 0.5,
+              i.spec.y.div(pu)
+            )
+          )
+          .mul(
+            smoothstep(
+              i.sharpFromPx - 0.5,
+              i.sharpFromPx + 0.5,
+              max(g.tall, 0.01).div(pv)
+            )
+          )
       : i.sharp;
   const px: Px = {
     u: pu,
-    v: max(fwidth(i.h), 1e-4),
+    v: pv,
     // the window's width in pixels along the wall: its sides drawn from
     // 6, under 2.5 its row's mean across the axes
     du: max(smoothstep(2.5, 6, i.spec.y.div(pu)), sharp ?? float(0)),

@@ -3654,13 +3654,13 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   back, a side reveal or the head or sill reveal, each with its normal
   and its share smoothed over the pixel's footprint), its reveals the
   wall's plaster ×0.93, its back the wall's colour ×(0.40, 0.43, 0.50),
-  lit by a quarter of the sun plaster would get, the sun reaching in only
+  lit by half the sun plaster would get, the sun reaching in only
   through the opening and only where it falls on the wall at a fair angle
-  (`receivedShadowNode`); a sill 6 cm tall and 4.5 cm proud, 6 cm past
+  (`receivedShadowNode`); a sill 7 cm tall and 7 cm proud, 6 cm past
   the opening either side, throwing the sun's shadow down the wall; a
   Fasche 11 cm wide, 1.5 cm proud and 3.5 % lighter, with a hairline of
-  contact shade; a Verdachung 9 cm tall, 5 cm proud; the wall rolling
-  into the opening over a 3 cm quarter round at its sides and head
+  contact shade; a Verdachung 9 cm tall, 10 cm proud; the wall rolling
+  into the opening over a 6 cm quarter round at its sides and head
   (normals only, where it spans a pixel). Every edge is anti-aliased by
   the pixel's footprint along the wall and up; where a window is under
   6 pixels wide the drawing fades into the facade's mean tone (the wall

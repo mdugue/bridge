@@ -358,7 +358,16 @@ export function nicheMaterial(d: ClayDetailUniforms): MeshStandardNodeMaterial {
   const fres = float(1).sub(clamp(abs(dot(viewDirection(), out)), 0, 1));
   const schlick = paneFresnel(fres);
   const head = clamp(local.y.div(max(size.y, 0.1)).mul(0.5).add(0.5), 0, 1);
+  // the recess's shade on the pane's sky as the drawn back's (clay-windows
+  // `recess`: 0.6 at the back, less in its corners and under its head),
+  // so a window keeps its light as it turns from drawn to real
+  const backEdge = min(open.x.sub(abs(local.x)), open.y.sub(abs(local.y)));
+  const underHead = smoothstep(0, max(size.z.mul(3), 0.4), open.y.sub(local.y));
+  const paneAo = mix(0.6, 1, smoothstep(0, 0.2, backEdge))
+    .mul(mix(0.55, 1, underHead))
+    .mul(0.6);
   const paneSky = back
+    .mul(paneAo)
     .mul(head.mul(WINDOW_SKY.up).add(schlick.mul(WINDOW_SKY.fresnel)))
     .mul(float(1).sub(d.uNight.mul(PANE_SKY_NIGHT_DIM)));
   const jks = flat(vec3(c0.w, c1.w, c2.w) as V3);
@@ -716,7 +725,8 @@ export function createNicheField(
         boxDistance(tile.box, eye.x, eye.z),
         Math.max(eye.y - tile.top, 0)
       );
-      if (far < NICHE_RADIUS_M + CUT_ON_M) {
+      // (a tile not shown, cached or stood in for, is not built to cut)
+      if (far < NICHE_RADIUS_M + CUT_ON_M && showing.has(tile.city)) {
         setCut(tile, true);
       } else if (far > NICHE_RADIUS_M + CUT_OFF_M) {
         setCut(tile, false);
@@ -906,6 +916,12 @@ export function createNicheField(
           mesh.visible = false;
           clear();
           dirty = true;
+        }
+        // Modell: no tile cuts (its clay keeps its early depth test)
+        if (eye === null) {
+          for (const tile of tiles.values()) {
+            setCut(tile, false);
+          }
         }
         return;
       }

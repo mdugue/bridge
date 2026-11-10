@@ -1711,12 +1711,14 @@ function dressWalls(
     }),
   };
   const opened = new Map<ShopfrontWall, ReadonlySet<number>>();
+  const cutFrom = new Map<number, number>();
   const blind = appendBeyondLod2(
     tile,
     baked,
     keys,
     { ...onWalls, ...extra },
-    opened
+    opened,
+    cutFrom
   );
   // standing on the ground or on a roof: as LoD2 built them
   markGrounded(baked.objects, asBuilt);
@@ -1734,12 +1736,35 @@ function dressWalls(
     keys,
     onWalls,
     reachOf,
-    rises && { at: rises, reach: reachOf },
+    rises && { at: risesAfterCuts(rises, cutFrom), reach: reachOf },
     portalDoors(passages),
     blind,
     opened
   );
   return passages;
+}
+
+/** The ground's rise in front of each triangle (`groundRises`, by the
+ *  LoD2's triangles) carried onto the remainders the shop windows' and
+ *  signs' cuts appended (`from`: appended triangle → the one it was cut
+ *  from); a wall cut keeps its rise. */
+function risesAfterCuts(
+  rises: Float32Array,
+  from: ReadonlyMap<number, number>
+): Float32Array {
+  if (from.size === 0) {
+    return rises;
+  }
+  let count = rises.length;
+  for (const t of from.keys()) {
+    count = Math.max(count, t + 1);
+  }
+  const out = new Float32Array(count);
+  out.set(rises);
+  for (const [t, source] of from) {
+    out[t] = rises[source] ?? 0;
+  }
+  return out;
 }
 
 /** What stands on the walls of buildings alone: the doors, plinths and
@@ -1864,7 +1889,10 @@ function appendBeyondLod2(
   },
   /** filled with the walls a shop window was cut into, each with the
    *  objects it cut (its host's, a sibling part's coplanar wall) */
-  opened: Map<ShopfrontWall, ReadonlySet<number>>
+  opened: Map<ShopfrontWall, ReadonlySet<number>>,
+  /** filled with each remainder triangle a cut appended and the LoD2
+   *  triangle it was cut from */
+  cutFrom: Map<number, number>
 ): number[] {
   // Each append copies the whole vertex stream and leaves its parts' plain
   // arrays behind: Bun's lazy collector let them pile up over the six, and
@@ -1900,8 +1928,12 @@ function appendBeyondLod2(
   }
   if (shops.length > 0) {
     // before the doors: a bay is cut at a door, which the doors then draw
-    for (const [w, objects] of appendShopfronts(baked, shops)) {
+    const cut = appendShopfronts(baked, shops);
+    for (const [w, objects] of cut.opened) {
       opened.set(w, objects);
+    }
+    for (const [t, source] of cut.from) {
+      cutFrom.set(t, source);
     }
     collectAfterAppend();
   }
@@ -2440,12 +2472,14 @@ export function planShopfronts(
  * each window (`shopWindowBreaks`, before the plinths are laid).
  * Skipped: a host the tile does not hold, a glass or metal
  * facade (its own front), a host not on the ground; a bay is cut where an
- * OSM door stands. Returns the walls a shop window was cut into.
+ * OSM door stands. Returns the walls a shop window was cut into (each with
+ * the objects cut) and, per remainder triangle appended, the LoD2 triangle
+ * it was cut from (by triangle: the ground's rise in front is its).
  */
 export function appendShopfronts(
   baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
   plans: readonly ShopPlan[]
-): Map<ShopfrontWall, Set<number>> {
+): { opened: Map<ShopfrontWall, Set<number>>; from: Map<number, number> } {
   const appended: ShopParts = {
     positions: [],
     normals: [],
@@ -2502,10 +2536,15 @@ export function appendShopfronts(
       part(mesh.canopy, host.tint, host.flags & ~OBJECT_FLAG_SHOP, host.rough);
     }
   }
+  const v = baked.vertices;
+  const from = new Map<number, number>();
   for (const t of appended.walls) {
+    const first = (v.positions.length + appended.positions.length) / 9;
+    for (let j = 0; j < t.positions.length / 9; j += 1) {
+      from.set(first + j, t.from / 3);
+    }
     pushTriangles(appended, t.positions, t.object);
   }
-  const v = baked.vertices;
   baked.vertices = {
     positions: concat(v.positions, appended.positions),
     objectIds: concat(v.objectIds, appended.objectIds),
@@ -2517,7 +2556,7 @@ export function appendShopfronts(
 
     ...lod2RoofColours(v),
   };
-  return opened;
+  return { opened, from };
 }
 
 /** What `appendShopfronts` adds to the tile: triangles with their objects
@@ -2527,8 +2566,9 @@ interface ShopParts {
   normals: number[];
   objectIds: number[];
   positions: number[];
-  /** the cut walls' remainders, each with its object and building tree */
-  walls: { object: number; positions: number[]; root: number }[];
+  /** the cut walls' remainders, each with its object, building tree and
+   *  the LoD2 triangle it was cut from (its first vertex) */
+  walls: { object: number; positions: number[]; root: number; from: number }[];
 }
 
 /** Appends flat triangles (`positions`, 9 a triangle) to `object`. */
@@ -2681,6 +2721,7 @@ function replaceCut(
         object: ids[r.id],
         positions: r.positions,
         root: baked.objects[ids[r.id]]?.root ?? -1,
+        from: r.id,
       });
       continue;
     }
@@ -2693,6 +2734,7 @@ function replaceCut(
       object: out.walls[k].object,
       positions: r.positions,
       root: out.walls[k].root,
+      from: out.walls[k].from,
     });
   }
   for (const [k, gone] of dropped) {

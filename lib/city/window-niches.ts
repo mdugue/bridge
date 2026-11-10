@@ -295,14 +295,15 @@ function onWall(tris: readonly number[], s: number, y: number): boolean {
 const snormOf = (code: number) => code / 32_767;
 
 /** A wall's triangles before they are told apart by plane: its codes,
- *  its normal summed over its triangles (area-weighted, horizontal), its
- *  first plane offset and its offsets summed by the same weights. */
+ *  its normal summed over its triangles (area-weighted, horizontal), and
+ *  their centroids' offsets from its first corner summed by the same
+ *  weights (its mean plane). */
 interface WallPiece {
   wall: NicheWall;
   sx: number;
   sz: number;
-  d: number;
-  dSum: number;
+  ox: number;
+  oz: number;
   weight: number;
 }
 
@@ -318,21 +319,26 @@ const SAME_PLANE_M = 0.15;
 const SAME_RUN_M = 0.25;
 
 /** Whether a triangle (normal `n`, first vertex at `x, z` with facade
- *  coordinate `s`, plane offset `d` per unit) belongs to `q`'s wall. */
+ *  coordinate `s`) belongs to `q`'s wall. */
 function samePiece(
   q: WallPiece,
   n: { x: number; z: number },
   x: number,
   z: number,
-  s: number,
-  d: number
+  s: number
 ): boolean {
   const ql = Math.hypot(q.sx, q.sz);
   const unit = Math.hypot(n.x, n.z);
   if ((q.sx * n.x + q.sz * n.z) / (ql * unit) < SAME_FACING_COS) {
     return false;
   }
-  if (Math.abs(q.d - d) > SAME_PLANE_M) {
+  // the corner's distance from q's plane, not the offsets' difference: a
+  // hair's tilt of each triangle's own normal is metres of offset 1 km
+  // from the origin
+  if (
+    Math.abs(q.sx * (x - q.wall.px) + q.sz * (z - q.wall.pz)) / ql >
+    SAME_PLANE_M
+  ) {
     return false;
   }
   // along the wall, t = (n.z, −n.x) (see tileNiches)
@@ -369,9 +375,8 @@ function gatherWalls(
     const list = pieces.get(key) ?? [];
     pieces.set(key, list);
     const unit = Math.hypot(n.x, n.z);
-    const d = (n.x * p[3 * a] + n.z * p[3 * a + 2]) / unit;
     const s = snormOf(f[4 * a]) * FACADE_SCALE_M;
-    let piece = list.find((q) => samePiece(q, n, p[3 * a], p[3 * a + 2], s, d));
+    let piece = list.find((q) => samePiece(q, n, p[3 * a], p[3 * a + 2], s));
     if (!piece) {
       piece = {
         wall: {
@@ -389,15 +394,19 @@ function gatherWalls(
         },
         sx: 0,
         sz: 0,
-        d,
-        dSum: 0,
+        ox: 0,
+        oz: 0,
         weight: 0,
       };
       list.push(piece);
     }
     piece.sx += n.x;
     piece.sz += n.z;
-    piece.dSum += d * unit;
+    // (its centroid's offset)
+    const mx = (p[3 * a] + p[3 * b] + p[3 * c]) / 3;
+    const mz = (p[3 * a + 2] + p[3 * b + 2] + p[3 * c + 2]) / 3;
+    piece.ox += (mx - piece.wall.px) * unit;
+    piece.oz += (mz - piece.wall.pz) * unit;
     piece.weight += unit;
     const z0 = base(object);
     for (const v of [a, b, c]) {
@@ -407,12 +416,12 @@ function gatherWalls(
     }
   }
   return [...pieces.values()].flatMap((list) =>
-    list.map(({ wall, sx, sz, dSum, weight }) => {
+    list.map(({ wall, sx, sz, ox, oz, weight }) => {
       const l = Math.hypot(sx, sz) || 1;
       const nx = sx / l;
       const nz = sz / l;
       // anchored on the wall's mean plane, not on one quantised vertex's
-      const off = dSum / (weight || 1) - (nx * wall.px + nz * wall.pz);
+      const off = (nx * ox + nz * oz) / (weight || 1);
       return {
         ...wall,
         nx,
@@ -437,8 +446,16 @@ export function tileNiches(
   base: (object: number) => number
 ): Float32Array {
   const out: number[] = [];
-  for (const w of gatherWalls(mesh, objects, base)) {
-    const o = objects(w.object);
+  // one row per object, not per triangle (`nichesOf`' reader builds one)
+  const rows = new Map<number, NicheObject | undefined>();
+  const rowOf = (object: number) => {
+    if (!rows.has(object)) {
+      rows.set(object, objects(object));
+    }
+    return rows.get(object);
+  };
+  for (const w of gatherWalls(mesh, rowOf, base)) {
+    const o = rowOf(w.object);
     if (!o) {
       continue;
     }

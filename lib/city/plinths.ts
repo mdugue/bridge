@@ -398,6 +398,10 @@ export interface Stretch {
   lo: number;
   hi: number;
   host: number;
+  /** its start or end is where a shop window broke it (`withoutSegments`):
+   *  no gap is bridged there */
+  brokenA?: boolean;
+  brokenB?: boolean;
 }
 
 /** A plinth feature's pieces as stretches of `host`. */
@@ -417,7 +421,9 @@ const BREAK_REACH_M = 0.6;
 /** `stretches` with the parts along `segments` taken out (EPSG; a shop
  *  window the plinth breaks for): a segment breaks a stretch it runs along
  *  (parallel, within BREAK_REACH_M of its line); a piece shorter than
- *  5 cm left over is dropped. */
+ *  5 cm left over is dropped. An end a break made is marked: the joining
+ *  bridges no gap there (`joinStretches`), or a narrow window's would
+ *  close again. */
 export function withoutSegments(
   stretches: readonly Stretch[],
   segments: readonly (readonly (readonly number[])[])[]
@@ -452,7 +458,13 @@ export function withoutSegments(
       return [st];
     }
     const at = (u: number) => [st.a[0] + t[0] * u, st.a[1] + t[1] * u];
-    return keep.map(([k0, k1]) => ({ ...st, a: at(k0), b: at(k1) }));
+    return keep.map(([k0, k1]) => ({
+      ...st,
+      a: at(k0),
+      b: at(k1),
+      brokenA: k0 > 0 || st.brokenA,
+      brokenB: k1 < len || st.brokenB,
+    }));
   });
 }
 
@@ -555,6 +567,10 @@ function linkOf(
   const cos = u[0] * v[0] + u[1] * v[1];
   if (d <= MEET_M) {
     return cos > minCos ? { d, corner: cos < 0.9998 } : undefined;
+  }
+  // a shop window's break stays open
+  if (s.brokenB || t.brokenA) {
+    return undefined;
   }
   const ahead = u[0] * g[0] + u[1] * g[1];
   const aside = Math.abs(u[0] * g[1] - u[1] * g[0]);

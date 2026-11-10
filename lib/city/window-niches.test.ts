@@ -176,6 +176,24 @@ describe("window niches", () => {
     expect(near).toBe(16);
   });
 
+  test("one wall stays one 1 km from the origin", () => {
+    // the quantised wall of the test above, 1 km along x
+    const positions = [
+      -6, 100, 0, 6, 100, 0, 6, 112.5, 0, -6, 100, 0, 6, 112.5, 0.015, -6,
+      112.5, 0,
+    ].map((v, k) => (k % 3 === 0 ? v + 1000 : v));
+    const facade: number[] = [];
+    for (let v = 0; v < 6; v += 1) {
+      facade.push(code(1000 - positions[3 * v]), code(12), 32_767, 32_767);
+    }
+    const niches = tileNiches(
+      { positions, facade, objectIds: [0, 0, 0, 0, 0, 0] },
+      () => house,
+      () => 100
+    );
+    expect(niches.length / NICHE_STRIDE).toBe(16);
+  });
+
   test("a wall's niches stand on its mean plane, not one vertex's", () => {
     // quantising put one triangle's corners 2 cm out, the anchor among them
     const positions = [

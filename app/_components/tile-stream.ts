@@ -419,6 +419,9 @@ interface Dressed {
    *  grid's index and water index): the tile renderer counts them in the
    *  tile's glTF, but they stay when the tile goes */
   sharedBytes?: number;
+  /** its walls' copy for the niche worker while it waits for its build
+   *  (`addNiches`): weighed with the tile until handed over */
+  nicheCopyBytes?: number;
   /** the city's hold on its shared sky-view raster (not weighed) */
   svf?: RasterHold;
   terrain?: TerrainLayer;
@@ -1913,7 +1916,13 @@ export class DressingPlugin {
       (bytes, texture) => bytes + trackedBytesOf(texture),
       0
     );
-    return held + own + dressed.late.bytes() - (dressed.sharedBytes ?? 0);
+    return (
+      held +
+      own +
+      dressed.late.bytes() +
+      (dressed.nicheCopyBytes ?? 0) -
+      (dressed.sharedBytes ?? 0)
+    );
   }
 
   private readonly url = (file: string): string =>
@@ -2100,6 +2109,16 @@ export class DressingPlugin {
     if (!input) {
       return;
     }
+    const { mesh: copy, table } = input;
+    entry.nicheCopyBytes =
+      copy.positions.byteLength +
+      copy.facade.byteLength +
+      copy.objectIds.byteLength +
+      (copy.index?.byteLength ?? 0) +
+      (Object.values(table) as ArrayBufferView[]).reduce(
+        (bytes, a) => bytes + a.byteLength,
+        0
+      );
     entry.late.add(
       nichesPart({
         tile: tileId,
@@ -2108,6 +2127,9 @@ export class DressingPlugin {
         build: async (signal) => {
           const own = input;
           input = null;
+          // handed over: its weight goes with it (the result's is the
+          // part's from its build on)
+          entry.nicheCopyBytes = 0;
           if (!own) {
             throw new Error("a tile's niches built twice");
           }
