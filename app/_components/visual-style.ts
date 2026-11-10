@@ -11,6 +11,7 @@ import type { DataTexture, Node, Texture, UniformNode } from "three/webgpu";
 import {
   abs,
   attribute,
+  bool,
   cameraWorldMatrix,
   clamp,
   dot,
@@ -45,6 +46,7 @@ import {
 } from "three/tsl";
 import {
   OBJECT_FLAG_FLOODLIT,
+  OBJECT_FLAG_NICHED,
   OBJECT_TEXTURE_WIDTH,
 } from "@/lib/city/city-mesh";
 import { FACADE_UNIT } from "@/lib/city/facade-reading";
@@ -59,7 +61,13 @@ import {
   slotTexture,
   slotUniform,
 } from "./material-slots";
-import { clayWindows } from "./clay-windows";
+import {
+  PANE_SKY_NIGHT_DIM,
+  PANE_SKY_RGB,
+  WINDOW_PANE_ROUGHNESS,
+  clayWindows,
+  paneFresnel,
+} from "./clay-windows";
 import type { ClayWindows } from "./clay-windows";
 import { streetLight } from "./lamp-reflections";
 import { nightShadowFree } from "./lantern";
@@ -87,6 +95,9 @@ interface ClayGraph {
   /** the sun's light where a window's sill or reveal shades it */
   receivedShadow: (shadow?: Node) => Node;
   roughness: F;
+  /** false where a window opening is cut for the niche behind it
+   *  (window-niche-layer.ts); only where the app draws niches */
+  mask?: Node;
 }
 
 /**
@@ -107,6 +118,9 @@ export interface ClayDetailUniforms {
   /** world, surface → sun (the sun rig's vector, shared by reference):
    *  the windows' own shadows */
   uSun: UniformNode<"vec3", Vector3>;
+  /** the app draws real niches behind the near windows
+   *  (window-niche-layer.ts): the clay cuts their openings */
+  niches?: boolean;
 }
 
 // --- the fixed look ----------------------------------------------------------
@@ -117,8 +131,10 @@ export interface ClayDetailUniforms {
 /** Farbvariation: the clay colour each building takes from its use and
  *  height, mixed into the base — a middling mix breaks the uniform massing
  *  and stays painterly. The shopfronts' baked colours assume it
- *  (scripts/bake-city-mesh.ts `WALL_TINT_SHOWN`): tune both together. */
-const TINT = float(0.6);
+ *  (scripts/bake-city-mesh.ts `WALL_TINT_SHOWN`): tune both together; the
+ *  niches read it as it is (window-niche-layer.ts `wallColour`). */
+export const TINT_SHARE = 0.6;
+const TINT = float(TINT_SHARE);
 /** Dachfarbe: terracotta or slate per roof, from its form and pitch —
  *  roofs carry more colour than walls, the strongest readability cue. */
 const ROOF_TINT = float(0.7);
@@ -151,7 +167,7 @@ const WINDOWS = float(1);
 const FACADE_READING = float(1);
 /** Abendlicht: the lit windows' strength after dark (clay-windows.ts),
  *  and the shops' (`SHOP_LIGHT`). */
-const DUSK_GLOW = float(0.5);
+export const DUSK_GLOW = float(0.5);
 /** Streiflicht's share on a face turned from the sun, by day: the rim
  *  is the sky's light on a grazing wall, and lit as fully there a wall in
  *  its own shade read as bright as a sunlit one beside the dark shadow it
@@ -313,7 +329,8 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
   // interpolated float's last-bit drift into a different window position
   // every pixel — a loose grid's openings frayed at their sides.
   const rough = varying(c.z).setInterpolation(InterpolationSamplingType.FLAT);
-  const flags = varying(c.w);
+  // flat as well: a packed word (the niche bit is 2^16)
+  const flags = varying(c.w).setInterpolation(InterpolationSamplingType.FLAT);
   // A triangle that was degenerate when its flat normal was baked has a zero
   // normal, and position quantisation can give it area again: it then
   // rasterises with normalize(0) = NaN lighting — single black pixels on
@@ -339,16 +356,18 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     .mul(float(1).sub(build.x));
   // along the view, in Modell's parallel projection too
   const view = viewDirection();
+  const niched = d.niches ? nichedOf(flags) : undefined;
   const windows = clayWindows({
     eave: build.z,
     // the windows read no roof vertex's slots: they hold its colour
     facade: varying(mix(facade, vec4(0, 0, FACADE_ROOF, NO_DOOR), roof)),
     h,
     seed: rough,
-    shop: shopOf(flags),
     spec,
     storey: build.y,
     strength: WINDOWS,
+    sharp: niched,
+    sharpFromPx: NICHE_PREFILTER_PX,
     sun: d.uSun,
     view,
     wall,
@@ -367,6 +386,7 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     wn,
   });
   return {
+    mask: niched ? nicheMask(windows, niched) : undefined,
     normal: normalize(mix(viewNormal, windows.normal, windows.normalMix)),
     // A facet turned from the sun is in its own shadow, whatever its
     // rounded normal says: buildings cast with their back faces (sun-rig.ts),
@@ -382,11 +402,16 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     },
     // Materialstreuung: nudge roughness per building so the matte sheen
     // varies house-to-house (clamped to stay matte, no shiny clay).
-    roughness: facadeRoughness(
-      clamp(float(1).add(ROUGHNESS.mul(rough)), 0.55, 1),
-      facadeMaterial(flags, wall),
-      shopPane(flags),
-      rough
+    // a window's back is a pane: smooth, the sun glints in it
+    roughness: mix(
+      facadeRoughness(
+        clamp(float(1).add(ROUGHNESS.mul(rough)), 0.55, 1),
+        facadeMaterial(flags, wall),
+        shopPane(flags),
+        rough
+      ),
+      WINDOW_PANE_ROUGHNESS,
+      windows.pane
     ),
     colour,
     // Himmelslicht: the courtyard's ground floor gets less of the sky;
@@ -396,9 +421,39 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     // as its colour takes their light (lamp-reflections.ts `streetLight`)
     emissive: clayGlow(d, build, h, wall, flags, wn, sn)
       .add(windows.glow.mul(DUSK_GLOW).mul(d.uNight))
-      .add(colour.mul(streetLight(wn))),
+      .add(colour.mul(streetLight(wn)))
+      // a window's back mirrors the sky as a shop window's pane does
+      // (`paneSky`), dimmed after dark
+      .add(
+        vec3(...PANE_SKY_RGB).mul(
+          windows.sky.mul(float(1).sub(d.uNight.mul(PANE_SKY_NIGHT_DIM)))
+        )
+      ),
   };
 }
+
+/**
+ * Where the clay cuts a window's opening for the real niche behind it:
+ * on a front face, in an opening (its middle half and more), of a house
+ * the niche set holds (OBJECT_FLAG_NICHED, set per house at runtime:
+ * window-niche-layer.ts). Behind it the niche's reveals and pane are
+ * drawn; on every other house the opening is drawn on the wall.
+ */
+function nicheMask(windows: ClayWindows, niched: F): Node {
+  // only a window drawn whole: under NICHE_PREFILTER_PX the opening is
+  // its row's mean, and a cut through it would run along the whole row
+  const cut = step(0.5, windows.cut).mul(float(frontFacing)).mul(niched);
+  return cut.lessThan(0.5);
+}
+
+/** Under this width (px) a niched house's window hands over to its mean
+ *  tone (every tier; a temporal antialiasing tried in its place smeared):
+ *  narrower, a niche hops from pixel to pixel as the eye moves. */
+export const NICHE_PREFILTER_PX = 2;
+
+/** 1 on an object the niche set holds (OBJECT_FLAG_NICHED). */
+const nichedOf = (flags: F): F =>
+  mod(floor(floor(flags.add(0.5)).div(OBJECT_FLAG_NICHED)), 2);
 
 /** The clay's colour (clayGraph): the facade's looks over the tint, the
  *  Schnitt's poché on a cut's inside. */
@@ -781,8 +836,7 @@ function facadeRoughness(
 }
 
 /** 1 on a shop window's pane: glass (4) that wears its own colour (64) —
- *  the shopfronts' panes (lib/city/shopfronts.ts), the one exception to
- *  the glass veto. Its `rough` column is then a roughness, not a jitter. */
+ *  the shopfronts' panes (lib/city/shopfronts.ts). Its `rough` column is then a roughness, not a jitter. */
 function shopPane(flags: F): F {
   const f = floor(flags.add(0.5));
   return mod(floor(f.div(64)), 2).mul(mod(floor(f.div(4)), 2));
@@ -1014,13 +1068,12 @@ function paneShade(h: F, top: F): F {
  *  its wall, and a stronger sky would wash it out to the wall's tone. */
 function paneSky(d: ClayDetailUniforms, h: F, fres: F): V3 {
   const upper = smoothstep(0.8, 2.6, h);
-  const f2 = fres.mul(fres);
-  const schlick = float(0.04).add(float(0.96).mul(f2.mul(f2).mul(fres)));
-  return vec3(0.55, 0.66, 0.8).mul(
+  const schlick = paneFresnel(fres);
+  return vec3(...PANE_SKY_RGB).mul(
     upper
       .mul(0.04)
       .add(schlick.mul(0.15))
-      .mul(float(1).sub(d.uNight.mul(0.85)))
+      .mul(float(1).sub(d.uNight.mul(PANE_SKY_NIGHT_DIM)))
   );
 }
 
@@ -1073,10 +1126,11 @@ function askedColour(col: V3, h: F, wall: F, flags: F, wn: V3): V3 {
  */
 export function createStyleResources(
   night: Live,
-  sun: UniformNode<"vec3", Vector3> = uniform(new Vector3(0, 1, 0))
+  sun: UniformNode<"vec3", Vector3> = uniform(new Vector3(0, 1, 0)),
+  niches = false
 ): StyleResources {
   return {
-    clayDetail: { uNight: night, uSun: sun },
+    clayDetail: { uNight: night, uSun: sun, niches },
     materials: new Set(),
     section: false,
   };
@@ -1155,10 +1209,43 @@ export function setClaySkyView(
 function applySides(clay: MeshStandardNodeMaterial, section: boolean): void {
   const wasSide = clay.side;
   clay.side = section ? DoubleSide : FrontSide;
-  setGraph(clay, section ? "clay|double" : "clay");
+  setClayKey(clay);
   if (clay.side !== wasSide) {
     clay.needsUpdate = true;
   }
+}
+
+/** The shadow pass's mask of a clay that cuts: nothing (one node, so
+ *  every such clay shares its build). */
+const keepWalls = bool(true);
+
+/** The clay's shared build: by its sides and whether it cuts openings. */
+function setClayKey(clay: MeshStandardNodeMaterial): void {
+  const sides = clay.side === DoubleSide ? "clay|double" : "clay";
+  setGraph(clay, clay.maskNode ? `${sides}|niches` : sides);
+}
+
+/**
+ * A tile's clay cuts its windows' openings for the niches behind them or
+ * not (window-niche-layer.ts, only the tiles near the eye: a clay that
+ * cuts loses its early depth test). A second build of the clay's graph;
+ * the caller compiles it off the frame. The shadow pass draws the back
+ * faces and keeps every wall whole. False when nothing changed.
+ */
+export function setClayNicheCut(
+  resources: StyleResources,
+  clay: MeshStandardNodeMaterial,
+  on: boolean
+): boolean {
+  const mask = on ? clayGraphs.get(resources.clayDetail)?.mask : undefined;
+  if ((clay.maskNode ?? undefined) === mask) {
+    return false;
+  }
+  clay.maskNode = mask ?? null;
+  clay.maskShadowNode = mask ? keepWalls : null;
+  setClayKey(clay);
+  clay.needsUpdate = true;
+  return true;
 }
 
 /**

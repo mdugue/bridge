@@ -40,7 +40,6 @@ import {
   textureLoad,
   uniform,
   varying,
-  vec2,
   vec3,
   vec4,
 } from "three/tsl";
@@ -54,7 +53,7 @@ import { dataPosition } from "./shader-chunks";
 import type { Live, V3, V4 } from "./shader-chunks";
 import { sceneNight } from "./scene-environment";
 import { viewDirection } from "./view-direction";
-import { shopOf, wallEaveUp } from "./visual-style";
+import { wallEaveUp } from "./visual-style";
 
 /**
  * The Papier style's scene half (lib/city/render-style.ts `paperScene`):
@@ -188,16 +187,13 @@ const windowGlow = Fn((builder: NodeBuilder) => {
       dataPosition().z.sub(a.w)
     )
   );
-  // flat: they seed and pack
-  const word = varying(vec2(c.z, c.w)).setInterpolation(
-    InterpolationSamplingType.FLAT
-  );
+  // flat: it seeds the windows' hashes
+  const seed = varying(c.z).setInterpolation(InterpolationSamplingType.FLAT);
   const windows = clayWindows({
     eave: build.z,
     facade: varying(mix(facade, vec4(0, 0, FACADE_ROOF, NO_DOOR), roof)),
     h: max(build.w, 0),
-    seed: word.x,
-    shop: shopOf(word.y),
+    seed,
     spec: varying(band(3)).setInterpolation(InterpolationSamplingType.FLAT),
     storey: build.y,
     strength: float(1),

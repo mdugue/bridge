@@ -398,6 +398,10 @@ export interface Stretch {
   lo: number;
   hi: number;
   host: number;
+  /** its start or end is where a shop window broke it (`withoutSegments`):
+   *  no gap is bridged there */
+  brokenA?: boolean;
+  brokenB?: boolean;
 }
 
 /** A plinth feature's pieces as stretches of `host`. */
@@ -409,6 +413,58 @@ export function plinthStretches(f: PlinthFeature, host: number): Stretch[] {
     hi: q.top,
     host,
   }));
+}
+
+/** How far off a stretch's line a segment may lie to break it (m). */
+const BREAK_REACH_M = 0.6;
+
+/** `stretches` with the parts along `segments` taken out (EPSG; a shop
+ *  window the plinth breaks for): a segment breaks a stretch it runs along
+ *  (both its ends within BREAK_REACH_M of the stretch's line); a piece a
+ *  break leaves shorter than 5 cm is dropped. An end a break made is marked: the joining
+ *  bridges no gap there (`joinStretches`), or a narrow window's would
+ *  close again. */
+export function withoutSegments(
+  stretches: readonly Stretch[],
+  segments: readonly (readonly (readonly number[])[])[]
+): Stretch[] {
+  return stretches.flatMap((st) => {
+    const len = Math.hypot(st.b[0] - st.a[0], st.b[1] - st.a[1]);
+    if (len < 1e-6) {
+      return [st];
+    }
+    const t = [(st.b[0] - st.a[0]) / len, (st.b[1] - st.a[1]) / len];
+    const alongOf = (p: readonly number[]) =>
+      (p[0] - st.a[0]) * t[0] + (p[1] - st.a[1]) * t[1];
+    const aside = (p: readonly number[]) =>
+      Math.abs((p[0] - st.a[0]) * t[1] - (p[1] - st.a[1]) * t[0]);
+    let keep: [number, number][] = [[0, len]];
+    for (const [c0, c1] of segments) {
+      if (aside(c0) > BREAK_REACH_M || aside(c1) > BREAK_REACH_M) {
+        continue;
+      }
+      const [u0, u1] = [alongOf(c0), alongOf(c1)].toSorted((x, y) => x - y);
+      keep = keep.flatMap(([k0, k1]): [number, number][] =>
+        u1 <= k0 || u0 >= k1
+          ? [[k0, k1]]
+          : ([
+              [k0, Math.min(k1, u0)],
+              [Math.max(k0, u1), k1],
+            ].filter(([a, b]) => b - a >= 0.05) as [number, number][])
+      );
+    }
+    if (keep.length === 1 && keep[0][0] === 0 && keep[0][1] === len) {
+      return [st];
+    }
+    const at = (u: number) => [st.a[0] + t[0] * u, st.a[1] + t[1] * u];
+    return keep.map(([k0, k1]) => ({
+      ...st,
+      a: at(k0),
+      b: at(k1),
+      brokenA: k0 > 0 || st.brokenA,
+      brokenB: k1 < len || st.brokenB,
+    }));
+  });
 }
 
 /** A cornice along a plinth feature's stretches, its underside at `z`:
@@ -510,6 +566,10 @@ function linkOf(
   const cos = u[0] * v[0] + u[1] * v[1];
   if (d <= MEET_M) {
     return cos > minCos ? { d, corner: cos < 0.9998 } : undefined;
+  }
+  // a shop window's break stays open
+  if (s.brokenB || t.brokenA) {
+    return undefined;
   }
   const ahead = u[0] * g[0] + u[1] * g[1];
   const aside = Math.abs(u[0] * g[1] - u[1] * g[0]);

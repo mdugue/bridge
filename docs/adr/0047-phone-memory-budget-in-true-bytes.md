@@ -48,6 +48,11 @@ just failed, in a loop, until a frozen canvas.
 - An attribute read on the CPU after the dressing stays off the drop lists;
   a buffer the site shares is detached before its geometry is disposed.
 - A device that crashed once runs plainer for days, and says so.
+- Granted exceptions (Manuel): the dormers' and chimneys' shadow-only
+  undersides (2026-11-03, +0.46 % a building tile); the window niches
+  near the eye (2026-11-07: 16 bytes a window, ≈ 2.3 MB the densest
+  tile, weighed in its tile, so the cache holds less beside it; 2026-11-08
+  out to 250 m: a phone's set of 16 384, ≈ 1.25 MB on the GPU).
 
 ## Alternatives
 

@@ -200,6 +200,10 @@ export interface PostStack {
    * started too (compile-lanes.ts): a tile drops its CPU copies on it.
    */
   compile: (object: Object3D) => Promise<void>;
+  /** `compile` again for a material changed in place (a clay that turns
+   *  to cutting its niches' openings, a new build of the same material
+   *  object): the record of what compiled is dropped for it first. */
+  recompile: (object: Object3D) => Promise<void>;
   /**
    * Pushes the picture style into the passes: its weights on the depth
    * grading, the paper grain and the ink. (Their strengths and the contact
@@ -215,8 +219,10 @@ export interface PostStack {
    *  autofocus rests where none is. */
   lensWanted: () => boolean;
   /** Draws the scene into its target, then the post chain to the canvas;
-   *  `stepMs`, the loop's time step, advances the lens's fade and focus. */
-  render: (stepMs: number) => void;
+   *  `stepMs`, the loop's time step, advances the lens's fade and focus;
+   *  `moveMs`, the step the camera moved by (its own cap), paces the motion
+   *  blur (default `stepMs`). */
+  render: (stepMs: number, moveMs?: number) => void;
   /** world-space point under the crosshair; null = nothing hit (sky) */
   setFocusTarget: (point: Vector3 | null) => void;
   /**
@@ -745,6 +751,15 @@ export function createPostStack(
   // it), Modell `model` — recovery from one never overrides another.
   let regressed = false;
   let model = false;
+  /** The scene into its target; `after` undoes the frame's dressing. */
+  const drawScene = (view: Camera, after: () => void) => {
+    try {
+      renderer.render(scene, view);
+    } finally {
+      after();
+      renderer.setRenderTarget(null);
+    }
+  };
   // the camera moved enough this frame to draw the pastel frame blurred
   // (motion-blur.ts), where this tier has a way to draw it
   let blurred = false;
@@ -1304,7 +1319,7 @@ export function createPostStack(
     await compileBuilds([scene]);
   };
 
-  return {
+  const stack: PostStack = {
     compile: async (root) => {
       const drawables = drawablesOf(root);
       // a tile that leaves before its holds and other cameras' anchors are
@@ -1323,6 +1338,12 @@ export function createPostStack(
       } finally {
         unwatch();
       }
+    },
+    recompile: async (root) => {
+      for (const d of drawablesOf(root)) {
+        compiled.delete(d);
+      }
+      await stack.compile(root);
     },
     anchorCount: () => anchors.count(),
     holdCut: async (group, roots, view) => {
@@ -1390,7 +1411,7 @@ export function createPostStack(
       styleDressing.sceneChanged();
     },
     setSunAltitude: (altitudeDeg) => stylize.setSunAltitude(altitudeDeg),
-    render: (stepMs) => {
+    render: (stepMs, moveMs = stepMs) => {
       updateFocus(stepMs);
       stylize.update(renderer.getPixelRatio(), size);
       // The frame names its targets and ends on the canvas, never on the
@@ -1415,13 +1436,10 @@ export function createPostStack(
       const restore = swap ? paperScene.begin(swap) : null;
       stylize.captureFog();
       const view = active();
-      try {
-        renderer.render(scene, view);
-      } finally {
+      drawScene(view, () => {
         restore?.();
         dressed?.();
-        renderer.setRenderTarget(null);
-      }
+      });
       // a released cut's builds go once a frame has drawn without them
       if (releaseAfterFrame.length > 0) {
         for (const a of releaseAfterFrame) {
@@ -1435,7 +1453,9 @@ export function createPostStack(
       blurred = motion.update(
         size,
         moving !== null && style.shaderMode === 0 && !model && regressed,
-        moving?.pre === null
+        moving?.pre === null,
+        // the camera's step: the blur smears a nominal frame's way
+        moveMs
       );
       const shown = frame();
       // the input named before anything is drawn or let go: `beforeAa`
@@ -1534,4 +1554,5 @@ export function createPostStack(
       target.dispose();
     },
   };
+  return stack;
 }

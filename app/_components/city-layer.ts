@@ -96,6 +96,9 @@ export interface CityLayer {
   /** marks the objects someone asks about (the clay's pencil hatch); an
    *  empty set clears the mark */
   mark: (objects: ReadonlySet<number>) => void;
+  /** the objects whose windows are real niches now: the clay cuts their
+   *  openings (window-niche-layer.ts); an empty set cuts none */
+  setNiched: (objects: ReadonlySet<number>) => void;
   /**
    * Hangs something drawn beside the mesh on a building (a mural,
    * mural-layer.ts): it is shown while all of the building is — gone with
@@ -104,6 +107,9 @@ export interface CityLayer {
    * every part's alike); one the tile does not hold is shown always.
    */
   hang: (object: Object3D, buildingId: string) => void;
+  /** whether an object is drawn: not demolished, no design standing in
+   *  for it (what stands on its walls goes with it, window-niche-layer.ts) */
+  stands: (objectIndex: number) => boolean;
   mesh: Mesh;
   table: CityObjectTable;
   /** what the table's columns and the texture packed from them keep on the
@@ -203,19 +209,21 @@ function readObjectFacts(
 }
 
 /**
- * Writes the asked flag into the packed table's flags texel (band 2, w):
- * set on `marked`, cleared everywhere else. True when a texel changed.
+ * Writes the runtime flags into the packed table's flags texel (band 2,
+ * w): asked on `marked`, niched on `niched`, cleared everywhere else.
+ * True when a texel changed.
  */
 function markObjects(
   texture: DataTexture,
   table: CityObjectTable,
-  marked: ReadonlySet<number>
+  marked: ReadonlySet<number>,
+  niched: ReadonlySet<number>
 ): boolean {
   const data = texture.image.data as Float32Array;
   const band = OBJECT_TEXTURE_WIDTH * objectBandRows(table.count) * 4;
   let changed = false;
   for (let i = 0; i < table.count; i += 1) {
-    const want = shaderFlags(table, i, marked.has(i));
+    const want = shaderFlags(table, i, marked.has(i), niched.has(i));
     const at = 2 * band + i * 4 + 3;
     if (data[at] !== want) {
       data[at] = want;
@@ -412,6 +420,8 @@ export function dressCity(
   };
   // the asked objects, kept for the facade readings' repack
   let marked: ReadonlySet<number> = new Set();
+  // the objects whose windows are niches now (window-niche-layer.ts)
+  let niched: ReadonlySet<number> = new Set();
   /** what hangs on a building (`hang`): shown while its objects are */
   const hangers: { at: number[]; object: Object3D }[] = [];
   const showHangers = () => {
@@ -491,7 +501,7 @@ export function dressCity(
           readings,
           (i) => table.source[i] === OBJECT_SOURCE_DORMER
         ) &&
-        markObjects(objects.texture, table, marked)
+        markObjects(objects.texture, table, marked, niched)
       ) {
         objects.texture.needsUpdate = true;
       }
@@ -535,9 +545,16 @@ export function dressCity(
       hangers.push({ at, object });
       showHangers();
     },
+    stands: (i) => alive[i] === 1 && !hidden.has(i),
     mark: (next) => {
       marked = next;
-      if (markObjects(objects.texture, table, marked)) {
+      if (markObjects(objects.texture, table, marked, niched)) {
+        objects.texture.needsUpdate = true;
+      }
+    },
+    setNiched: (next) => {
+      niched = next;
+      if (markObjects(objects.texture, table, marked, niched)) {
         objects.texture.needsUpdate = true;
       }
     },

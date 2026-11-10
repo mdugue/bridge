@@ -126,6 +126,7 @@ import {
 } from "@/lib/city/vegetation-lod";
 import { stopBvhWorker } from "./bvh-client";
 import { stopGroundWorker } from "./ground-prep-client";
+import { stopNicheWorker } from "./window-niche-client";
 import type { GlideOptions } from "./camera-flight";
 import { createCameraPose } from "./camera-pose";
 import type { FollowAim } from "./camera-pose";
@@ -135,6 +136,7 @@ import type { ModelHud, ModelRig, ViewMode } from "./model-rig";
 import type { ModelCamera } from "./model-camera";
 import { setViewDirection } from "./view-direction";
 import { siteMurals } from "./mural-layer";
+import { createNicheField, NICHE_CAPACITY } from "./window-niche-layer";
 import { createViewLens } from "./view-lens";
 import { setPickRay } from "./view-ray";
 import {
@@ -254,7 +256,11 @@ import { attachTouchControls } from "./touch-controls";
 import { setFlagTime } from "./flag-cloth";
 import { createVegetationLod, setCrownTime } from "./vegetation-layer";
 import type { VegetationControl } from "./vegetation-layer";
-import { createStyleResources, setClaySection } from "./visual-style";
+import {
+  createStyleResources,
+  setClayNicheCut,
+  setClaySection,
+} from "./visual-style";
 import { setWaterTime } from "./water-layer";
 import { createModelCuts } from "./model-cuts";
 import * as dataLayersModule from "./data-layers-feature";
@@ -1309,7 +1315,7 @@ async function teardownWhole(
   await releaseRenderer(renderer);
 }
 
-/** Before a reload, once the stream is gone: the ground and BVH workers
+/** Before a reload, once the stream is gone: the ground, BVH and niche workers
  *  go, and their heaps with them, not when the old document is collected
  *  (the new page boots in the old one's process). Not in `releaseGpu`:
  *  there the stream lives on (the tiles still parsing send their jobs),
@@ -1318,6 +1324,7 @@ async function teardownWhole(
 function stopWorkers(): void {
   stopGroundWorker();
   stopBvhWorker();
+  stopNicheWorker();
 }
 
 /** The renderer and its device (or its context), and its canvas. */
@@ -1604,8 +1611,15 @@ async function bootApp(
   const lampReflections = createLampReflections(budget.tier);
   cleanups.push(() => lampReflections.dispose());
 
-  // The facades share the ground's sun (the same node).
-  const styleResources = createStyleResources(sceneNight, ground.sunDirection);
+  // The facades share the ground's sun (the same node). The near windows
+  // are real niches (window-niche-layer.ts) — not on a phone that ran
+  // short of GPU memory lately; on a desktop up to the first safety level.
+  const niching = budget.safety <= (budget.tier === "mobile" ? 0 : 1);
+  const styleResources = createStyleResources(
+    sceneNight,
+    ground.sunDirection,
+    niching
+  );
 
   // The HUD lets the heavy dressing start after the handover (startStreaming).
   let openGate: (() => void) | undefined;
@@ -1636,6 +1650,29 @@ async function bootApp(
   // scene renders into). It is created a few lines below, before the render
   // loop runs the stream's first update, so no tile lands without it.
   let compileWith: PostStack["compile"] | null = null;
+  let recompileWith: PostStack["recompile"] | null = null;
+  const niches = niching
+    ? createNicheField(styleResources.clayDetail, {
+        capacity: NICHE_CAPACITY[budget.tier],
+        compile: async (object) =>
+          compileWith ? await compileWith(object) : undefined,
+        // a tile near the eye cuts its openings: its clay's other build,
+        // made off the frame where it can be
+        cutOn: (city, on) => {
+          const clay = city.mesh.material as MeshStandardNodeMaterial;
+          // the clay changed in place: compiled again, not skipped as done
+          if (setClayNicheCut(styleResources, clay, on) && recompileWith) {
+            void recompileWith(city.mesh).catch(() => {
+              // built on its first draw then
+            });
+          }
+        },
+      })
+    : null;
+  if (niches) {
+    scene.add(niches.mesh);
+    cleanups.push(() => niches.dispose());
+  }
   // The scene's night, season and clock (scene-environment.ts): the
   // night node every material reads, the season the trees follow (their
   // colour and leaf cover rewritten on a change of calendar day, never per
@@ -1737,6 +1774,7 @@ async function bootApp(
       environment: env,
       offset,
       murals: murals.source,
+      niches,
       onChange: queueChange,
       renderer,
       styleResources,
@@ -1993,6 +2031,7 @@ async function bootApp(
   );
   cleanups.push(() => postStack.dispose());
   compileWith = postStack.compile;
+  recompileWith = postStack.recompile;
   // The thing asked, named in the city beside it (nameplate-layer.ts):
   // drawn after the frame, onto the canvas.
   const nameplate = createNameplate({
@@ -2817,6 +2856,10 @@ async function bootApp(
         uploadIndex(layer);
       }
     }
+    if (changed) {
+      // what a design stands in for loses its niches
+      niches?.invalidate();
+    }
     return changed;
   };
   design = createDesignLayer({
@@ -2952,6 +2995,8 @@ async function bootApp(
     if (!(chosen && demolitions.demolish(chosen.layer, chosen.objectIndex))) {
       return;
     }
+    // the demolished house's niches go with it
+    niches?.invalidate();
     flattened = null;
     invalidateShadows();
     scheduleStats();
@@ -3330,6 +3375,11 @@ async function bootApp(
     // bare fine level too
     setCrownTime(elapsed);
     setFlagTime(elapsed);
+    // the real window niches around the eye (window-niche-layer.ts), not
+    // in Modell: every frame (cheap until it moves or what is shown
+    // changes), so a full tile swapped for its parent takes its boxes
+    // along at once
+    niches?.update(modelRig.owns() ? null : eye, stream.visibleCities());
     if (!crownTiers.due(tick, eye)) {
       return;
     }
@@ -4069,8 +4119,9 @@ async function bootApp(
     // the lens's fade and focus on the clock up to `LENS_STEP_MAX_MS`, not
     // the capped step: a paced frame (Hörmodus, 2 fps) grows it in within
     // a few frames, and a stall as the stream lands still does not pop it
+    // (the motion blur on the step the camera moved by, `dt`)
     framedBuilds.draw(() =>
-      postStack.render(Math.min(frameDt * 1000, LENS_STEP_MAX_MS))
+      postStack.render(Math.min(frameDt * 1000, LENS_STEP_MAX_MS), dt * 1000)
     );
     const renderEnd = streamTimings.now();
     takeCaptureTile();
