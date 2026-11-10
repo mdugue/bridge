@@ -101,7 +101,8 @@ import { exportScale, exportTiles } from "@/lib/city/image-export";
 import type { ExportTile } from "@/lib/city/image-export";
 import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
 import type { CameraState, PlayerPose, Xyz } from "@/lib/city/pose";
-import { nearestInSets } from "@/lib/city/ask-solids";
+import { nearestInSets, rayAabb, setsBox } from "@/lib/city/ask-solids";
+import type { Aabb } from "@/lib/city/ask-solids";
 import { createRegressionState, stepRegression } from "@/lib/city/regression";
 import { spawnViewpoint, tileExtentOf } from "@/lib/city/site";
 import type { Site, ViewpointGeometry } from "@/lib/city/site";
@@ -3061,13 +3062,26 @@ async function bootApp(
   const focusCrosshair = new Vector2(0, 0);
   let lastFocusHit: { dist: number; name: string } | null = null;
   const focusAt = new Vector3();
-  // what the probe can ask, without a copy ten times a second: every
-  // visible tile's built ask sets, the data layers' and a design's
-  function* focusSets() {
+  // What the probe can ask that the lens can focus on, without a copy ten
+  // times a second: the built ask sets of every visible tile whose sets'
+  // box the ray enters before `far` (the box kept while a tile's list
+  // stays as long), and a design's. Not the data layers' counters nor a
+  // traffic flow: glass, which writes no depth — focused on, the thing
+  // aimed at would blur.
+  const focusBoxes = new WeakMap<object, { count: number; box: Aabb | null }>();
+  function* focusSets(o: Xyz, d: Xyz, far: number) {
     for (const dressing of stream.visibleDressings()) {
-      yield* dressing.asks ?? [];
+      const sets = dressing.asks ?? [];
+      let kept = focusBoxes.get(sets);
+      if (kept?.count !== sets.length) {
+        kept = { count: sets.length, box: setsBox(sets) };
+        focusBoxes.set(sets, kept);
+      }
+      const enter = kept.box && rayAabb(o, d, kept.box);
+      if (enter !== null && enter !== undefined && enter <= far) {
+        yield* sets;
+      }
     }
-    yield* dataLayers.current()?.asks() ?? [];
     yield* design?.asks() ?? [];
   }
   const lensBlur = postProfileFor(budget.tier).dof;
@@ -3091,12 +3105,14 @@ async function bootApp(
     // lens focuses on, not the facade behind it — unless a design's site
     // folded it away, as the probe passes it by
     const { origin, direction } = focusRaycaster.ray;
+    const far = groundAt ?? hit?.distance ?? focusRaycaster.far;
     const thing = nearestInSets(
       origin,
       direction,
-      focusSets(),
-      groundAt ?? hit?.distance ?? focusRaycaster.far,
+      focusSets(origin, direction, far),
+      far,
       (t) =>
+        t.target.kind !== "traffic" &&
         !foldedThing(
           t.target,
           focusRaycaster.ray.at(t.distance, focusAt),

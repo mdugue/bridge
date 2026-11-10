@@ -1,7 +1,7 @@
 import { Box3, Raycaster, Vector3 } from "three/webgpu";
 import type { Mesh, Object3D } from "three/webgpu";
-import { nearestItem, PIER_REACH, ringDistanceXz } from "@/lib/city/ask-solids";
-import type { AskItem, AskSet, Slab } from "@/lib/city/ask-solids";
+import { PIER_REACH, rayDeckTop, ringDistanceXz } from "@/lib/city/ask-solids";
+import type { AskHit, AskItem, AskSet, Slab } from "@/lib/city/ask-solids";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 
 /** The slab a deck's first solid is, if it is one. */
@@ -50,8 +50,21 @@ export function bridgeAskSet(
       max: { x: bounds.max.x, y: bounds.max.y, z: bounds.max.z },
     },
     unbuilt: () => meshes.some((mesh) => !mesh.geometry.boundsTree),
-    // before a question built the BVHs: the decks' slabs
-    rough: (o, d, far) => nearestItem(o, d, decks, far),
+    // before a question built the BVHs: where the ray comes down onto a
+    // deck's top — the one underfoot too
+    rough: (o, d, far) => {
+      let best: AskHit<FeatureInquiry> | null = null;
+      let reach = far;
+      for (const deck of decks) {
+        const slab = slabOf(deck);
+        const t = slab ? rayDeckTop(o, d, slab, reach) : null;
+        if (t !== null) {
+          best = { ...deck, distance: t };
+          reach = t;
+        }
+      }
+      return best;
+    },
     nearest: (o, d, far) => {
       for (const mesh of meshes) {
         if (!mesh.geometry.boundsTree) {

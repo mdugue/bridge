@@ -197,6 +197,54 @@ export function raySlab(o: Xyz, d: Xyz, s: Slab): number | null {
   return null;
 }
 
+/**
+ * Where the ray first comes down onto a slab's top (`topAt`) within its
+ * ring and `far`, or null: the deck you stand on as well as one beside
+ * you — a ray from within the slab's band (`raySlab` meets it at once)
+ * still finds the top ahead.
+ */
+export function rayDeckTop(
+  o: Xyz,
+  d: Xyz,
+  s: Slab,
+  far: number
+): number | null {
+  const enter = rayPrism(o, d, s);
+  if (enter === null || enter > far || d.y >= 0) {
+    return null;
+  }
+  // down to the slab's lowest top, at the latest
+  const leave = Math.min(far, enter + (o.y + enter * d.y - s.y0) / -d.y);
+  let above: boolean | null = null;
+  for (let t = enter; t <= leave; t += SLAB_STEP) {
+    const x = o.x + t * d.x;
+    const z = o.z + t * d.z;
+    if (!insideRingXz(s.ring, x, z)) {
+      above = null;
+      continue;
+    }
+    const over = o.y + t * d.y > s.topAt(x, z);
+    if (above === true && !over) {
+      return t;
+    }
+    above = over;
+  }
+  return null;
+}
+
+/** The box around every set's box, or null for none. */
+export function setsBox<T>(sets: readonly AskSet<T>[]): Aabb | null {
+  const [first, ...rest] = sets;
+  if (!first) {
+    return null;
+  }
+  let { box } = first;
+  for (const set of rest) {
+    box = grow(box, set.box);
+  }
+  return box;
+}
+
 /** Distance along the ray to the nearest of a thing's solids, or null. */
 export function raySolids(
   o: Xyz,

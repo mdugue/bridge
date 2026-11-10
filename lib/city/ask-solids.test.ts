@@ -6,10 +6,12 @@ import {
   nearestInSets,
   nearestItem,
   rayCylinder,
+  rayDeckTop,
   rayPrism,
   ringDistanceXz,
+  setsBox,
 } from "./ask-solids";
-import type { AskItem, AskSet } from "./ask-solids";
+import type { AskItem, AskSet, Slab } from "./ask-solids";
 
 const east = { x: 1, y: 0, z: 0 };
 const down = { x: 0, y: -1, z: 0 };
@@ -205,4 +207,43 @@ test("sets of things: hits from overlapping sets interleave nearest first, a set
   expect(
     hitsInSets(o, east, [...a, nearestOnly], 100).map((h) => h.target)
   ).toEqual(["a10", "b20", "a30"]);
+});
+
+test("a ray comes down onto a deck's top, from above it or standing on it", () => {
+  // a deck 100 m long, its top rising from 10 m to 12 m eastwards
+  const deck: Slab = {
+    ring: [
+      [0, -5],
+      [100, -5],
+      [100, 5],
+      [0, 5],
+    ],
+    y0: 10,
+    y1: 12,
+    above: 2,
+    below: 1,
+    topAt: (x) => 10 + x / 50,
+  };
+  // standing on it, 1.6 m over its top at x = 20, looking along and down
+  const look = { x: Math.cos(0.1), y: -Math.sin(0.1), z: 0 };
+  const t = rayDeckTop({ x: 20, y: 10.4 + 1.6, z: 0 }, look, deck, 1000);
+  expect(t).not.toBeNull();
+  // the point lies on the top, within a step
+  const x = 20 + (t ?? 0) * look.x;
+  expect(Math.abs(12 - (t ?? 0) * Math.sin(0.1) - (10 + x / 50))).toBeLessThan(
+    0.05
+  );
+  // looking up, or beyond reach: nothing
+  expect(
+    rayDeckTop({ x: 20, y: 12, z: 0 }, { x: 1, y: 0, z: 0 }, deck, 1000)
+  ).toBeNull();
+  expect(rayDeckTop({ x: 20, y: 12, z: 0 }, look, deck, 3)).toBeNull();
+});
+
+test("the box around sets: none for no sets", () => {
+  expect(setsBox([])).toBeNull();
+  const sets = askSets([postAt(0, 0), postAt(1, 100)], 64);
+  const box = setsBox(sets);
+  expect(box?.min.x).toBeCloseTo(-1, 9);
+  expect(box?.max.x).toBeCloseTo(101, 9);
 });

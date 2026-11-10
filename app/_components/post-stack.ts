@@ -208,11 +208,12 @@ export interface PostStack {
    */
   applyLook: (look: LookValues) => void;
   dispose: () => void;
-  /** current DoF focus distance/range/bokeh (QA). */
+  /** The lens now (QA; the shots harness and an export wait for its
+   *  `settled`). */
   getFocusInfo: () => FocusInfo;
   /** Draws the scene into its target, then the post chain to the canvas;
    *  `stepMs`, the loop's time step, advances the lens's fade and focus. */
-  render: (stepMs?: number) => void;
+  render: (stepMs: number) => void;
   /** world-space point under the crosshair; null = nothing hit (sky) */
   setFocusTarget: (point: Vector3 | null) => void;
   /**
@@ -1387,7 +1388,7 @@ export function createPostStack(
       styleDressing.sceneChanged();
     },
     setSunAltitude: (altitudeDeg) => stylize.setSunAltitude(altitudeDeg),
-    render: (stepMs = 0) => {
+    render: (stepMs) => {
       updateFocus(stepMs);
       stylize.update(renderer.getPixelRatio(), size);
       // The frame names its targets and ends on the canvas, never on the

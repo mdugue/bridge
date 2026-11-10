@@ -106,8 +106,9 @@ export function createLensBlur(
   lens: ViewLens,
   u: LensBlurInputs
 ): LensBlur {
-  const half = { depthBuffer: false, resolutionScale: 0.5 };
-  const tile = { depthBuffer: false, resolutionScale: 1 / TILE };
+  // the half-resolution and tile targets are sized by `setSize`, never
+  // to nothing (three's own scale floors a 7 px wide frame's tiles to 0)
+  const small = { depthBuffer: false };
   // a full-resolution pixel and a half-resolution texel, in uv
   const pixel = uniform(new Vector2(1, 1));
   const halfTexel = uniform(new Vector2(1, 1));
@@ -132,9 +133,9 @@ export function createLensBlur(
       }
       return vec4(input.sample(at).rgb, c);
     })(),
-    null,
-    null,
-    half
+    1,
+    1,
+    small
   );
   // read texel by texel: a blur interpolated across a depth edge is one no
   // pixel has (a sharp post's edge read as half the background's blur,
@@ -155,9 +156,9 @@ export function createLensBlur(
       }
       return vec4(near.mul(0.5), 0, 0, 1);
     })(),
-    null,
-    null,
-    tile
+    1,
+    1,
+    small
   );
   const reach = rtt(
     Fn(() => {
@@ -175,9 +176,9 @@ export function createLensBlur(
       }
       return vec4(near, 0, 0, 1);
     })(),
-    null,
-    null,
-    tile
+    1,
+    1,
+    small
   );
 
   // 3. the gather
@@ -238,9 +239,9 @@ export function createLensBlur(
       const covered = clamp(frontW, 0, 1);
       return vec4(mix(behindColour, frontColour, covered), covered);
     })(),
-    null,
-    null,
-    half
+    1,
+    1,
+    small
   );
 
   // 4. the composite: the gather's four texels around the pixel, each by
@@ -267,12 +268,15 @@ export function createLensBlur(
         const pre = prefilter.sample(texel).toVar();
         const share = (x ? f.x : f.x.oneMinus()).mul(y ? f.y : f.y.oneMinus());
         const apart = pre.a.sub(c);
-        const w = share.div(apart.mul(apart).add(1)).toVar();
+        // never quite nothing: four texels all far off in blur still
+        // average by their shares instead of darkening the pixel
+        const near = float(1).div(apart.mul(apart).add(1)).add(1e-6);
+        const w = share.mul(near).toVar();
         weight.addAssign(w);
         gathered.addAssign(g.mul(w));
         low.addAssign(pre.rgb.mul(w));
       }
-      const norm = max(weight, 1e-4);
+      const norm = max(weight, 1e-8);
       const blurred = gathered.div(norm).toVar();
       const ownW = smoothstep(0.25, 0.75, c.abs().mul(0.5));
       const keep = ownW.oneMinus().mul(blurred.a.oneMinus());
@@ -296,10 +300,15 @@ export function createLensBlur(
     setSize: (width, height) => {
       inputTarget.setSize(width, height);
       pixel.value.set(1 / width, 1 / height);
-      halfTexel.value.set(
-        1 / Math.max(Math.floor(width / 2), 1),
-        1 / Math.max(Math.floor(height / 2), 1)
-      );
+      const halfW = Math.max(Math.floor(width / 2), 1);
+      const halfH = Math.max(Math.floor(height / 2), 1);
+      prefilter.setSize(halfW, halfH);
+      gather.setSize(halfW, halfH);
+      halfTexel.value.set(1 / halfW, 1 / halfH);
+      const tileW = Math.max(Math.floor(width / TILE), 1);
+      const tileH = Math.max(Math.floor(height / TILE), 1);
+      tiles.setSize(tileW, tileH);
+      reach.setSize(tileW, tileH);
     },
     dispose: () => {
       for (const node of [input, prefilter, tiles, reach, gather, composite]) {
