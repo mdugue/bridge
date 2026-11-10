@@ -5,6 +5,7 @@ import {
   objectFlags,
   OBJECT_FLAG_GLASS,
 } from "./city-mesh";
+import { inheritedOsm } from "./object-facts";
 import { photoGlassObjects, withPhotoGlass } from "./photo-glass";
 import type { WindowWall } from "./windows-file";
 
@@ -79,6 +80,7 @@ describe("glass fronts from the street photos", () => {
     // is glass on its own
     expect(inheritedLook(lut?.p, lut?.B).material).toBeUndefined();
     expect(inheritedFlags(lut?.p, lut?.B) & OBJECT_FLAG_GLASS).toBe(0);
+    expect(inheritedOsm(lut?.p, lut?.B)?.material).toBeUndefined();
     expect(inheritedLook(lut?.q, lut?.B).materialFrom).toBe("photos");
   });
 

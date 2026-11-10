@@ -1813,8 +1813,11 @@ visual-variable codebook is in
   sky, trees or a street, is the less likely (a crop of sky above a cantilevered roof read 0.92 glass against
   the two walls alone). The cache is `<t>.glass.<key>.jsonl`, named by a
   hash of the prompts, the model, the crop's limits and the
-  rectification's; the photo is deleted. `windows.py` keeps one reading a
-  sequence (the photo that saw most of the wall) and calls a wall glass
+  rectification's (a cache under another key stops the windows bake,
+  which would drop every glass front; a wall planned later on a photo
+  already read is read on it at the next fetch); the photo is deleted.
+  `windows.py` keeps one reading a sequence (the photo that saw most of
+  the wall), of the four sequences that saw most, and calls a wall glass
   where at least two such readings exist and two thirds of them reach 0.95 (`wall_glass`; at 0.9 metal
   cladding, ribbon-window blocks and a plastered house with balconies came
   through); the wall keeps its window model, since a material OSM names

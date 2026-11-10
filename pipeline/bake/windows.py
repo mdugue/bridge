@@ -69,7 +69,7 @@ import numpy as np
 from . import facade_glass
 from .common import Tile
 from .facade_traits import STEP_M
-from .facades import ATTRIBUTION, GLASS_NEAR_M, glass_path, traits_path, walls
+from .facades import ATTRIBUTION, GLASS_NEAR_M, GLASS_SEQ, glass_path, traits_path, walls
 from .osm_buildings import root_of
 from .shopfronts import _Raster, _wall_entry
 from .window_axes import wall_phase
@@ -462,7 +462,8 @@ def glass_records(lines: list[str]) -> dict[tuple[str, int], list[int]]:
     """Per wall the glass readings (‰) of the photos that saw enough of it
     from near enough (`GLASS_NEAR_M`), one a sequence — its photo that saw
     most of the wall — so that two readings are two passes, not two frames
-    of one."""
+    of one; of the GLASS_SEQ sequences that saw most of it, as the fetch
+    plans them (a cache read under an earlier plan may hold more)."""
     best: dict[tuple[str, int, str], tuple[float, int]] = {}
     for line in lines:
         try:
@@ -475,10 +476,13 @@ def glass_records(lines: list[str]) -> dict[tuple[str, int], list[int]]:
                 key = (w["oid"], w["wi"], r.get("seq", r["img"]))
                 if key not in best or cov > best[key][0]:
                     best[key] = (cov, int(w["gl"]))
-    by: dict[tuple[str, int], list[int]] = collections.defaultdict(list)
-    for (oid, wi, _), (_, gl) in sorted(best.items()):
-        by[(oid, wi)].append(gl)
-    return dict(by)
+    seqs: dict[tuple[str, int], list[tuple[float, str, int]]] = collections.defaultdict(list)
+    for (oid, wi, seq), (cov, gl) in best.items():
+        seqs[(oid, wi)].append((cov, seq, gl))
+    return {
+        key: [gl for _, _, gl in sorted(rs, key=lambda r: (-r[0], r[1]))[:GLASS_SEQ]]
+        for key, rs in sorted(seqs.items())
+    }
 
 
 def wall_glass(readings: list[int]) -> dict | None:
@@ -581,8 +585,12 @@ def run(tile: Tile) -> None:
         write(out, {}, {})
         return
     if not gpath.exists() and any(gpath.parent.glob(f"{tile.id}.glass.*.jsonl")):
-        # read under other prompts, model or limits (facade_glass.reading_key)
-        print(f"{tile.id}: WARNING the glass readings are stale — fetch again; no wall is glass")
+        # read under other prompts, model or limits (facade_glass.reading_key):
+        # baking on would drop every glass front the committed file holds
+        raise SystemExit(
+            f"{tile.id}: the glass readings are stale (not {gpath.name}) — "
+            f"run the glass fetch again before baking the windows"
+        )
     city = json.loads(tile.cityjson.read_text())
     by_wall = _records(path) if path.exists() else {}
     glass = glass_records(gpath.read_text().splitlines()) if gpath.exists() else {}

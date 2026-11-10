@@ -98,7 +98,8 @@ def test_a_panorama_too_far_to_resolve_the_wall_is_not_read():
     images.append(_photo(0) | {"sequence": "framed"})
     rots = [rotation_matrix(o["computed_rotation"]) for o in images]
     ptree = shapely.STRtree(shapely.points(at))
-    got = facades.glass_candidates(wall, images, at, rots, ptree, shapely.STRtree([]))
+    angles = [facades.pixel_angle(o) for o in images]
+    got = facades.glass_candidates(wall, images, at, rots, angles, ptree, shapely.STRtree([]))
     assert set(got) == {"near", "framed"}
 
 
@@ -190,6 +191,38 @@ def test_two_frames_of_one_pass_are_one_reading():
     ]
     # the frame that saw most of the wall speaks for its sequence
     assert win.glass_records(lines) == {("a", 0): [400]}
+
+
+def test_a_wall_keeps_the_passes_the_fetch_plans():
+    lines = [
+        json.dumps(
+            {"img": f"i{k}", "seq": f"s{k}", "walls": [{"oid": "a", "wi": 0, "cov": c, "gl": g}]}
+        )
+        for k, (c, g) in enumerate([(0.9, 990), (0.3, 100), (0.8, 980), (0.7, 970), (0.6, 960)])
+    ]
+    # an earlier plan read five passes: the four that saw most count
+    assert win.glass_records(lines) == {("a", 0): [990, 980, 970, 960]}
+    assert facades.GLASS_SEQ == 4
+
+
+def test_a_photo_read_is_read_again_only_for_a_wall_planned_since(tmp_path):
+    cache = tmp_path / "c.jsonl"
+    cache.write_text(
+        "\n".join(
+            json.dumps(r)
+            for r in (
+                {"img": "p", "seq": "s", "walls": [{"oid": "a", "wi": 0}]},
+                {"img": "q", "seq": "s", "walls": [{"oid": "a", "wi": 0, "off": "ground"}]},
+                {"img": "r", "skip": "no pose or thumbnail"},
+            )
+        )
+    )
+    wall = [{"oid": "a", "wi": 0}]
+    both = [*wall, {"oid": "b", "wi": 0}]
+    jobs = {"p": {"walls": both}, "q": {"walls": wall}, "r": {"walls": both}, "n": {"walls": wall}}
+    done = facades._done(cache)
+    assert facades._todo(jobs, done, by_wall=True) == ["n", "p"]
+    assert facades._todo(jobs, done, by_wall=False) == ["n"]
 
 
 def test_a_wall_seen_only_for_glass_enters_with_its_glass_alone():
