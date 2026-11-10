@@ -190,11 +190,54 @@ def rotation_matrix(rotvec) -> np.ndarray:
     return np.eye(3) + math.sin(theta) * kx + (1 - math.cos(theta)) * kx @ kx
 
 
-def rectify(wall: dict, img: np.ndarray, cls: np.ndarray, rot: np.ndarray, cam: tuple):
-    """The wall as the panorama sees it: (rgb, metres a pixel, latitude,
+def project(C: np.ndarray, wd: int, h: int, camera: dict | None = None):
+    """Camera-frame points (x right, y down, z ahead; OpenSfM's frame) onto
+    the image: (u, v, seen, radians a pixel). `camera` is Mapillary's
+    `camera_type` and `camera_parameters`; None or "spherical" is an
+    equirectangular panorama. A perspective, Brown or fisheye photo
+    (OpenSfM's models, the image's longer side normalised to 1) sees only
+    what lies ahead within its frame."""
+    kind = (camera or {}).get("type", "spherical")
+    if kind in ("spherical", "equirectangular"):
+        lon = np.arctan2(C[..., 0], C[..., 2])
+        lat = np.arctan2(-C[..., 1], np.hypot(C[..., 0], C[..., 2]))
+        u = (lon / (2 * np.pi) + 0.5) * wd
+        v = (0.5 - lat / np.pi) * h
+        return u, v, np.ones(u.shape, bool), 2 * np.pi / wd
+    f, k1, k2 = (list(camera.get("params") or []) + [0.0, 0.0, 0.0])[:3]
+    if not f:
+        f = 0.85
+    z = C[..., 2]
+    ahead = z > 0.1
+    zz = np.where(ahead, z, 1.0)
+    xn, yn = C[..., 0] / zz, C[..., 1] / zz
+    r2 = xn * xn + yn * yn
+    if kind == "fisheye":
+        r = np.sqrt(r2)
+        th = np.arctan(r)
+        d = th * (1 + k1 * th**2 + k2 * th**4) / np.maximum(r, 1e-9)
+    else:  # perspective, brown (its tangential terms left out)
+        d = 1 + k1 * r2 + k2 * r2 * r2
+    m = max(wd, h)
+    u = wd / 2 + f * d * xn * m
+    v = h / 2 + f * d * yn * m
+    seen = ahead & (u >= 0) & (u < wd) & (v >= 0) & (v < h) & (r2 < 1.5)
+    return u, v, seen, 1.0 / (f * m)
+
+
+def rectify(
+    wall: dict,
+    img: np.ndarray,
+    cls: np.ndarray,
+    rot: np.ndarray,
+    cam: tuple,
+    camera: dict | None = None,
+):
+    """The wall as the photo sees it: (rgb, metres a pixel, latitude,
     class) per wall pixel, row 0 at the eave. `wall` carries a, b (its ends),
     L, n (outward normal), eave (height) and zg (the ground in front of
-    it); `cam` is (x, y, z) of the camera."""
+    it); `cam` is (x, y, z) of the camera, `camera` its model (`project`).
+    A wall pixel the photo does not see is classed "nothing" (0)."""
     h, wd = img.shape[:2]
     (ax, ay), (bx, by), length, height = wall["a"], wall["b"], wall["L"], wall["eave"]
     x, y, z0 = cam
@@ -206,20 +249,20 @@ def rectify(wall: dict, img: np.ndarray, cls: np.ndarray, rot: np.ndarray, cam: 
     Z = wall["zg"] + ZZ - z0
     P = np.stack([X, Y, Z], -1)
     C = P @ rot.T
-    lon = np.arctan2(C[..., 0], C[..., 2])
     lat = np.arctan2(-C[..., 1], np.hypot(C[..., 0], C[..., 2]))
-    u = (lon / (2 * np.pi) + 0.5) * wd
-    v = (0.5 - lat / np.pi) * h
+    u, v, seen, per_px = project(C, wd, h, camera)
     out = np.stack(
         [ndi.map_coordinates(img[..., c], [v, u], order=1, mode="wrap") for c in range(3)], -1
     )
     cu = (u * cls.shape[1] / wd) % cls.shape[1]
     cv = v * cls.shape[0] / h
     klass = ndi.map_coordinates(cls, [cv, cu], order=0, mode="nearest")
+    klass = np.where(seen, klass, 0)
+    out[~seen] = 0
     dist = np.linalg.norm(C, axis=-1)
     normal = np.array([wall["n"][0], wall["n"][1], 0.0])
     cosi = np.abs((P @ normal) / np.maximum(dist, 1e-6))
-    res = dist * 2 * np.pi / wd / np.maximum(cosi, 0.2)
+    res = dist * per_px / np.maximum(cosi, 0.2)
     return out, res, lat, klass
 
 

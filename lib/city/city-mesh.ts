@@ -36,8 +36,9 @@ export type WallMaterial =
 export type OsmBuildingFacts = OsmBuildingRow & {
   /** one of the city's landmarks (landmarks.py, Wikidata) */
   landmark?: number;
-  /** the material is Wikidata's (a landmark's), where OSM names none */
-  materialFrom?: "wikidata";
+  /** the material is Wikidata's (a landmark's) or the street photos'
+   *  (a glass front, lib/city/photo-glass.ts), where OSM names none */
+  materialFrom?: "photos" | "wikidata";
   /** the Wikidata item of the landmark it belongs to (landmarks.py) */
   wikidata?: string;
 };

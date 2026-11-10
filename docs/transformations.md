@@ -1779,7 +1779,8 @@ visual-variable codebook is in
   material (P186) fills in where OSM names none. Counts per tile in
   `osmbuild_<tile>.json` (`meta.objects_look`).
 - **Glass and metal facades** `❝ taken` `≈ assumed` (*Streiflicht*; plan 050) — the material's
-  glass and metal set object flags (4, 8; a part takes its root's): the
+  glass and metal (OSM's, or glass the street photos found, *Glass facades
+  from street photos* below) set object flags (4, 8; a part takes its root's): the
   clay turns a little cooler (×(0.93, 0.99, 1.07), metal at 60 %) and
   smoother (roughness 0.42 glass, 0.5 metal), and glass mirrors the sky
   (*Spiegelung*, `sky-reflection.ts`: a mipmapped cube map of the sky
@@ -1790,6 +1791,32 @@ visual-variable codebook is in
   and no drawn windows (*Windows on every house* leaves glass and metal
   plain) — the window-grid veto holds (🗃️ below). `osmColour` / `clayGlow` in `visual-style.ts`. Conservative strengths,
   not yet judged on a real GPU.
+- **Glass facades from street photos** `◎ detected` (ADR 0060) — where
+  no source names a building's material, its walls are read on the street
+  photos of every camera (`facade_glass.py`): `bun run fetch` asks
+  Mapillary for every photo near the tile (`<t>.photos.json`), picks per
+  LoD2 outer wall the photo of each of up to four sequences that sees it
+  best (within 60 m, ≤ 60° off its normal, a free line of sight, a framed
+  photo with ≥ 30 % of the wall's upper part in its frame), rectifies it
+  onto the wall (`facade_measure.rectify`, the camera's own model) and
+  asks CLIP (ViT-B/32, ONNX) whether the upper wall, where the photo sees
+  a quarter of it, is "a glass facade" or "a wall with windows"; the
+  probability is cached per photo and wall. A photo Mapillary drew no
+  building in (none of the uploads before 2021 on the Congress Center's
+  tile, many since) is read on the wall the geometry puts in it, less what
+  its segmentation found in front, and only where a third description,
+  sky, trees or a street, is the less likely (a crop of sky above a cantilevered roof read 0.92 glass against
+  the two walls alone). The cache is `<t>.glass.v1.jsonl`; the photo is
+  deleted. `windows.py` calls a wall glass where at least two
+  readings exist and two thirds of them reach 0.9 (`wall_glass`); such a
+  wall gets no window model. The building bake gives an object material
+  `glass`, from `photos`, when its glass walls make at least half the
+  length of its walls read (`lib/city/photo-glass.ts`): it then draws as
+  *Glass and metal facades* above. On the probe (Dresden, 2026-11-10)
+  every known glass front read 0.91–1.00 on its clear views (Prager
+  Spitze, Glaskugelhaus, Gläserne Manufaktur, Ammonhof, Congress Center)
+  and no plastered or stone wall above 0.9 but one clad in white panels;
+  the facade profiles' openings share had read a stucco house at 0.99.
 - **Landmarks from Wikidata** `◎ detected` `❝ taken` (HUD *Erkunden* → *Orte*; plan 050)
   — `bun run fetch` asks Wikidata per tile (`wikibase:box`, instance of a
   subclass of *architectural structure* Q811979, ≥ 2 sitelinks, top 80;

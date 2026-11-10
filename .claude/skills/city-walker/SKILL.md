@@ -228,7 +228,9 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   under a LoD2 roof is LoD2's own (`BUILT_TOWERS`) — no second column. OSM `building:material` / `building:colour` /
   `roof:colour` reach the clay only through `osmColourTint` (hue kept,
   saturation ≤ 0.45, lightness clamped) and the palette families; glass
-  (flag 4) and metal (8) are a cool tint, lower roughness and, on glass, a
+  (flag 4; also where the street photos read a glass front, ADR 0060,
+  `facade_glass.py` → `lib/city/photo-glass.ts`) and metal (8) are a cool
+  tint, lower roughness and, on glass, a
   Fresnel sky sheen (`visual-style.ts`: `osmColour`, `clayGlow`) — no
   panes, no textures (the window grid is vetoed). Landmarks (flag 16) come from Wikidata
   (`landmarks.py`, cached at fetch time), the site's twelve in the

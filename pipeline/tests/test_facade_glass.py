@@ -1,0 +1,156 @@
+"""Glass fronts from street photos: the camera models, the photos a wall is
+read on, the crop the model sees, and the per-wall decision."""
+
+import json
+import math
+
+import numpy as np
+import pytest
+
+from bake import facade_glass, facades
+from bake import windows as win
+from bake.facade_measure import project
+
+
+def test_a_panorama_sees_all_round():
+    C = np.array([[0.0, 0.0, 1.0], [0.0, 0.0, -1.0], [1.0, 0.0, 0.0]])
+    u, v, seen, _ = project(C, 2048, 1024, None)
+    assert seen.all()
+    assert u[0] == pytest.approx(1024)  # straight ahead: the image's middle
+    assert v[0] == pytest.approx(512)
+
+
+def test_a_framed_photo_sees_only_ahead_within_its_frame():
+    camera = {"type": "perspective", "params": [0.8, 0.0, 0.0]}
+    C = np.array([[0.0, 0.0, 10.0], [0.0, 0.0, -10.0], [20.0, 0.0, 10.0], [1.0, -1.0, 10.0]])
+    u, v, seen, per_px = project(C, 2000, 1500, camera)
+    assert seen.tolist() == [True, False, False, True]
+    assert (u[0], v[0]) == pytest.approx((1000, 750))
+    # x right, y down: a point up and right lands up and right of the middle
+    assert u[3] > 1000 and v[3] < 750
+    assert per_px == pytest.approx(1 / (0.8 * 2000))
+
+
+def test_a_fisheye_bends_by_the_angle():
+    camera = {"type": "fisheye", "params": [0.5, 0.0, 0.0]}
+    C = np.array([[1.0, 0.0, 1.0]])  # 45° to the right
+    u, _, seen, _ = project(C, 1000, 1000, camera)
+    assert seen[0]
+    assert u[0] == pytest.approx(500 + 0.5 * math.pi / 4 * 1000)
+
+
+def _wall(eave: float = 12.0) -> dict:
+    return {"a": (0.0, 0.0), "b": (20.0, 0.0), "eave": eave, "n": (0.0, -1.0), "L": 20.0}
+
+
+def _photo(heading_deg: float, pano: bool = False) -> dict:
+    """A photo whose camera looks along `heading_deg` (0 north, 90 east),
+    level, as Mapillary's computed rotation (world → camera)."""
+    h = math.radians(heading_deg)
+    forward = np.array([math.sin(h), math.cos(h), 0.0])
+    right = np.array([math.cos(h), -math.sin(h), 0.0])
+    down = np.array([0.0, 0.0, -1.0])
+    R = np.stack([right, down, forward])  # rows: the camera's axes in the world
+    angle = math.acos(max(-1.0, min(1.0, (np.trace(R) - 1) / 2)))
+    axis = np.array([R[2, 1] - R[1, 2], R[0, 2] - R[2, 0], R[1, 0] - R[0, 1]])
+    rotvec = axis / np.linalg.norm(axis) * angle
+    return {
+        "is_pano": pano,
+        "camera_type": "spherical" if pano else "perspective",
+        "camera_parameters": None if pano else [0.8, 0.0, 0.0],
+        "computed_rotation": rotvec.tolist(),
+    }
+
+
+def test_a_photo_reads_a_wall_only_when_it_looks_at_it():
+    wall = _wall()
+    at = (10.0, -25.0)  # 25 m south of the wall's middle, the wall to the north
+    assert facades.in_frame(wall, _photo(0), at) > 0.9
+    assert facades.in_frame(wall, _photo(180), at) == 0.0
+    assert facades.in_frame(wall, _photo(180, pano=True), at) == 1.0
+
+
+def test_the_crop_keeps_the_seen_upper_wall_and_greys_the_rest():
+    rgb = np.zeros((100, 200, 3))
+    rgb[:, :, 2] = 1.0
+    upper = np.zeros((100, 200), bool)
+    upper[10:60, 20:120] = True
+    upper[30:40, 50:60] = False
+    crop = facade_glass.upper_crop(rgb, upper)
+    assert crop.shape == (50, 100, 3)
+    assert crop[0, 0].tolist() == [0, 0, 255]
+    assert crop[25, 35].tolist() == np.round(facade_glass.MEAN * 255).astype(int).tolist()
+    assert facade_glass.upper_crop(rgb, np.zeros_like(upper)) is None
+
+
+def test_the_model_sees_a_long_wall_whole():
+    # padded to a square, not centre-cropped: a long wall keeps its ends
+    crop = np.zeros((50, 400, 3), np.uint8)
+    crop[:, :20] = 255
+    x = facade_glass._pixels(crop)
+    assert x.shape == (1, 3, facade_glass.SIZE, facade_glass.SIZE)
+    middle = facade_glass.SIZE // 2
+    assert x[0, 0, middle, 2] > x[0, 0, middle, 100]
+
+
+def _lines(readings: dict[tuple[str, int], list[tuple[int, float]]]) -> list[str]:
+    out = []
+    for (oid, wi), rs in readings.items():
+        for k, (gl, cov) in enumerate(rs):
+            w = {"oid": oid, "wi": wi, "cov": cov} | ({} if gl is None else {"gl": gl})
+            out.append(json.dumps({"img": f"{oid}{wi}{k}", "seq": "s", "walls": [w]}))
+    return out
+
+
+def test_a_photo_without_a_building_segment_is_read_only_as_a_facade(monkeypatch):
+    seg = np.zeros((8, 8), np.uint8)
+    assert facade_glass.unsegmented(seg)
+    seg[2, 2] = 1
+    assert not facade_glass.unsegmented(seg)
+
+    class Stub:
+        def __init__(self, glass, other):
+            self.p = (glass, other)
+
+        def glass(self, _crop):
+            return self.p
+
+    rgb = np.full((60, 60, 3), 0.5)
+    upper = np.ones((60, 60), bool)
+    monkeypatch.setattr(facade_glass, "model", lambda *_: Stub(0.95, 0.9))
+    # sky above a canopy: glass against a wall, but most likely no facade
+    assert facade_glass.glass_of(rgb, upper, "", "", segmented=False) is None
+    assert facade_glass.glass_of(rgb, upper, "", "", segmented=True) == 950
+    monkeypatch.setattr(facade_glass, "model", lambda *_: Stub(0.95, 0.1))
+    assert facade_glass.glass_of(rgb, upper, "", "", segmented=False) == 950
+
+
+def test_a_wall_is_glass_where_most_of_its_clear_views_say_so():
+    got = win.glass_records(
+        _lines(
+            {
+                ("ICC", 0): [(990, 0.6), (950, 0.4), (400, 0.5)],
+                ("house", 0): [(990, 0.6), (300, 0.5), (200, 0.5)],
+                ("glimpse", 0): [(990, 0.6), (990, 0.1)],  # one view too narrow
+                ("blind", 0): [(None, 0.6), (None, 0.6)],
+            }
+        )
+    )
+    assert win.wall_glass(got[("ICC", 0)]) == {"glass": True, "n": 3, "p": 950}
+    assert win.wall_glass(got[("house", 0)])["glass"] is False
+    assert win.wall_glass(got[("glimpse", 0)]) is None
+    assert ("blind", 0) not in got
+
+
+def test_a_glass_wall_draws_no_windows_and_a_wall_seen_only_for_glass_enters():
+    from tests.synthetic import blocks_city
+
+    city = blocks_city({"hall": (0, 0, 30, 20, 15.0)})
+    ws = facades.walls(city)
+    assert len(ws) == 4
+    glass = {(w["oid"], w["wi"]): [980, 960] for w in ws}
+    buildings, _ = win.windows(city, {}, None, glass)
+    entries = buildings["hall-root"]
+    assert len(entries) == 4
+    assert all(e["glass"]["glass"] and "model" not in e for e in entries)
+    assert all(e["imgs"] == 0 and e["traits"] == {} for e in entries)

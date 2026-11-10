@@ -21,6 +21,7 @@ import { SHOPFRONTS_FILE } from "../../lib/city/shopfronts-file";
 import { SMALL_BUILDINGS_FILE } from "../../lib/city/small-buildings-file";
 import { STRUCTURES_FILE } from "../../lib/city/structures-file";
 import { onFormations } from "../../lib/city/track-formation";
+import { withPhotoGlass } from "../../lib/city/photo-glass";
 import { WINDOWS_FILE } from "../../lib/city/windows-file";
 import { cityMeshSourceFiles } from "../../lib/city/tile";
 import { FAR_CITY_SIMPLIFY } from "../../lib/city/tileset";
@@ -136,12 +137,19 @@ function parseCity(
   const windows = windowFile
     ? Object.values(windowFile.buildings).flat()
     : undefined;
+  // the walls the street photos read as glass, where no source names one
+  const rootOfWall = new Map(
+    Object.entries(windowFile?.buildings ?? {}).flatMap(([root, ws]) =>
+      ws.map((w) => [w.oid, root] as const)
+    )
+  );
+  const lut = withPhotoGlass(osmLut, windows, (id) => rootOfWall.get(id));
   return bakeCityMesh(
     tile,
     doc,
     roofColours,
     tile === TILES[0] ? null : spawnFrame().matrix,
-    osmLut,
+    lut,
     scan,
     osmDoc?.context ?? "render",
     gaps,

@@ -111,6 +111,7 @@ why Munich is yellow there in [Sources by city](./sources-by-city.md).
 | Sheds and garden houses | Laser scan | `◎ detected` |
 | Roof colour | Aerial photo | `= computed` |
 | Facade colour and material, where mapped | OpenStreetMap | `❝ taken` |
+| Glass facades where nothing is mapped | street photos (Mapillary), read by an image model | `◎ detected` |
 | Brick or plaster where nothing is mapped | OpenStreetMap, the neighbourhood | `≈ assumed` |
 | Tint per building, storey bands | the viewer | `≈ assumed` |
 | Front doors | OpenStreetMap, the entrances | `❝ taken` |

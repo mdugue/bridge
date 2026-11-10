@@ -81,6 +81,16 @@ MAX_SEQ = 3
 # saw the wall (window_axes.py), so as many as there are, up to this
 MAX_SEQ_TRAITS = 6
 
+# the glass reading (facade_glass.py): any camera, a little further out
+PHOTO_FIELDS = (
+    "id,computed_geometry,computed_rotation,captured_at,sequence,is_pano,"
+    "camera_type,camera_parameters"
+)
+FRAMED = ("perspective", "brown", "fisheye")  # the framed cameras read
+GLASS_NEAR_M = 60.0
+GLASS_IN_FRAME = 0.3
+GLASS_SEQ = 4
+
 BUSY_CALM, BUSY_BUSY = 0.35, 0.7
 DARK_LOW, DARK_HIGH = 0.15, 0.25
 SHOP_GF_OPEN = 0.8
@@ -140,6 +150,16 @@ def measured_path(tile: Tile) -> Path:
 
 def _images_path(tile: Tile) -> Path:
     return cache_dir(tile) / f"{tile.id}.images.json"
+
+
+def _photos_path(tile: Tile) -> Path:
+    """Every photo near the tile, panorama or not, with its camera."""
+    return cache_dir(tile) / f"{tile.id}.photos.json"
+
+
+def glass_path(tile: Tile) -> Path:
+    """The glass readings, one JSON line a photo (facade_glass.py)."""
+    return cache_dir(tile) / f"{tile.id}.glass.v1.jsonl"
 
 
 def _signs_path(tile: Tile) -> Path:
@@ -266,6 +286,115 @@ def plan(city: dict, images: list[dict], epsg: int, max_seq: int = MAX_SEQ) -> d
                 o = keep[i]
                 job = jobs.setdefault(
                     o["id"], {"seq": seq, "xy": [float(pos[i][0]), float(pos[i][1])], "walls": []}
+                )
+                job["walls"].append({k: w[k] for k in ("oid", "wi", "a", "b", "L", "n", "eave")})
+    return jobs
+
+
+def camera_of(photo: dict) -> dict:
+    """A photo's camera model (facade_measure.project)."""
+    if photo.get("is_pano"):
+        return {"type": "spherical"}
+    return {
+        "type": photo.get("camera_type") or "perspective",
+        "params": photo.get("camera_parameters"),
+    }
+
+
+def photos(images: list[dict], epsg: int) -> tuple[list[dict], np.ndarray]:
+    """The usable photos of any camera (posed, since SINCE_YEAR) and their
+    positions in the tile's CRS."""
+    since = datetime.datetime(SINCE_YEAR, 1, 1, tzinfo=datetime.UTC).timestamp() * 1000
+    keep = [
+        o
+        for o in images
+        if o.get("computed_geometry")
+        and o.get("computed_rotation")
+        and o.get("captured_at", 0) >= since
+        and (o.get("is_pano") or o.get("camera_type") in FRAMED)
+    ]
+    to_tile = Transformer.from_crs(4326, epsg, always_xy=True)
+    pos = np.array(
+        [to_tile.transform(*o["computed_geometry"]["coordinates"][:2]) for o in keep], float
+    ).reshape(-1, 2)
+    return keep, pos
+
+
+def in_frame(wall: dict, photo: dict, xy) -> float:
+    """The share of a coarse grid over the wall's upper part (GROUND_M to the
+    eave, the ground taken level) that falls inside the photo's frame —
+    1 for a panorama, which sees all round."""
+    from .facade_measure import EYE_M, GROUND_M, project, rotation_matrix
+
+    camera = camera_of(photo)
+    if camera["type"] == "spherical":
+        return 1.0
+    (ax, ay), (bx, by) = wall["a"], wall["b"]
+    s = np.linspace(0.05, 0.95, 7)
+    z = np.linspace(GROUND_M, max(wall["eave"] - 0.3, GROUND_M + 0.1), 5)
+    S, Z = np.meshgrid(s, z)
+    P = np.stack([ax + (bx - ax) * S - xy[0], ay + (by - ay) * S - xy[1], Z - EYE_M], -1).reshape(
+        -1, 3
+    )
+    C = P @ rotation_matrix(photo["computed_rotation"]).T
+    _, _, seen, _ = project(C, 4, 3, camera)
+    return float(seen.mean())
+
+
+def glass_candidates(wall: dict, images: list[dict], pos: np.ndarray, ptree, ftree) -> dict:
+    """The photos that see `wall` for its glass reading, by sequence: within
+    GLASS_NEAR_M (a glass front stands back from the street, behind a
+    forecourt or a plaza), at least MIN_DIST_M away, at most 60° off its
+    normal, no other footprint in the line of sight, and — a framed photo —
+    at least GLASS_IN_FRAME of the wall in its frame; the best seen first,
+    one of each of the GLASS_SEQ sequences that see it best."""
+    (ax, ay), (bx, by) = wall["a"], wall["b"]
+    mx, my = (ax + bx) / 2, (ay + by) / 2
+    nx, ny = wall["n"]
+    best: dict[str, tuple[float, int]] = {}
+    for i in ptree.query(shapely.Point(mx, my).buffer(GLASS_NEAR_M)):
+        x, y = pos[i]
+        d = math.hypot(mx - x, my - y)
+        if d < MIN_DIST_M:
+            continue
+        cos = (nx * (x - mx) + ny * (y - my)) / d
+        if cos < MIN_COS:
+            continue
+        sight = shapely.LineString([(x, y), (mx + nx * 0.5, my + ny * 0.5)])
+        if any(j != wall["k"] for j in ftree.query(sight, predicate="intersects")):
+            continue
+        frame = in_frame(wall, images[i], (x, y))
+        if frame < GLASS_IN_FRAME:
+            continue
+        score = frame * cos / max(d, MIN_DIST_M)
+        seq = images[i]["sequence"]
+        if seq not in best or score > best[seq][0]:
+            best[seq] = (score, int(i))
+    ranked = sorted(best.items(), key=lambda kv: -kv[1][0])[:GLASS_SEQ]
+    return {seq: [i] for seq, (_, i) in ranked}
+
+
+def plan_glass(city: dict, images: list[dict], epsg: int) -> dict[str, dict]:
+    """Per photo id: its sequence, position, camera and the walls it is to
+    read for glass (`glass_candidates`)."""
+    ws = walls(city)
+    _, polys = footprints(city)
+    ftree = shapely.STRtree(polys)
+    keep, pos = photos(images, epsg)
+    ptree = shapely.STRtree(shapely.points(pos))
+    jobs: dict[str, dict] = {}
+    for w in ws:
+        for seq, idx in glass_candidates(w, keep, pos, ptree, ftree).items():
+            for i in idx:
+                o = keep[i]
+                job = jobs.setdefault(
+                    o["id"],
+                    {
+                        "seq": seq,
+                        "xy": [float(pos[i][0]), float(pos[i][1])],
+                        "camera": camera_of(o),
+                        "walls": [],
+                    },
                 )
                 job["walls"].append({k: w[k] for k in ("oid", "wi", "a", "b", "L", "n", "eave")})
     return jobs
@@ -504,10 +633,11 @@ def measure_image(job: dict) -> dict:
     """One image measured on its walls: {"img", "seq", "walls": [...]}, or
     {"img", "skip"} when it cannot be (no pose), or {"img", "fail"} on a
     network failure (not cached: the next run tries again)."""
-    from . import facade_measure, facade_traits
+    from . import facade_glass, facade_measure, facade_traits
     from .facade_measure import EYE_M, class_map, load_image, rotation_matrix
 
-    measure = facade_traits.measure if job.get("kind") == "traits" else facade_measure.measure
+    kind = job.get("kind")
+    measure = facade_traits.measure if kind == "traits" else facade_measure.measure
     iid = job["img"]
     if not job.get("rot") or not job.get("url"):
         return {"img": iid, "skip": "no pose or thumbnail"}
@@ -537,7 +667,12 @@ def measure_image(job: dict) -> dict:
         zc = _ground(x, y)
         cam = (x, y, (zc if zc is not None else zg) + EYE_M)
         try:
-            m = measure(w | {"zg": zg}, img, cls, rot, cam)
+            if kind == "glass":
+                m = facade_glass.measure(
+                    w | {"zg": zg}, img, cls, rot, cam, job["camera"], tuple(job["model"])
+                )
+            else:
+                m = measure(w | {"zg": zg}, img, cls, rot, cam)
         except Exception as err:  # noqa: BLE001 — record it, measure the rest
             m = {"err": repr(err)[:100]}
         dist = math.hypot(x - (ax + bx) / 2, y - (ay + by) / 2)
@@ -596,20 +731,34 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
         _images_path(tile),
         lambda: _search_tile(tile, "images", {"fields": IMAGE_FIELDS, "is_pano": "true"}, NEAR_M),
     )
-    jobs = plan(
-        json.loads(tile.cityjson.read_text()),
-        images,
-        tile.epsg,
-        MAX_SEQ_TRAITS if kind == "traits" else MAX_SEQ,
-    )
-    out = traits_path(tile) if kind == "traits" else cache_path(tile)
+    city = json.loads(tile.cityjson.read_text())
+    model: list[str] = []
+    if kind == "glass":
+        from . import facade_glass
+
+        every = _cached_json(
+            _photos_path(tile),
+            lambda: _search_tile(tile, "images", {"fields": PHOTO_FIELDS}, GLASS_NEAR_M),
+        )
+        jobs = plan_glass(city, every, tile.epsg)
+        root = facade_glass.fetch_model(tile.raw)
+        model = [str(root), str(facade_glass.write_classes(root))]
+        out = glass_path(tile)
+    else:
+        jobs = plan(city, images, tile.epsg, MAX_SEQ_TRAITS if kind == "traits" else MAX_SEQ)
+        out = traits_path(tile) if kind == "traits" else cache_path(tile)
     x0, y0, x1, y1 = tile.bounds
     # the poses turned onto the grid only in the traits cache (v4): the
     # facades cache keeps its measurements as they were taken
-    gamma = grid_convergence(tile.epsg, (x0 + x1) / 2, (y0 + y1) / 2) if kind == "traits" else 0.0
+    gamma = (
+        grid_convergence(tile.epsg, (x0 + x1) / 2, (y0 + y1) / 2)
+        if kind in ("traits", "glass")
+        else 0.0
+    )
     done = _done(out)
     todo = sorted(set(jobs) - done)
-    print(f"{tile.id}: {len(jobs)} panoramas see its walls, {len(todo)} to measure ({kind})")
+    seen_by = "photos" if kind == "glass" else "panoramas"
+    print(f"{tile.id}: {len(jobs)} {seen_by} see its walls, {len(todo)} to measure ({kind})")
     if not todo:
         return
     scratch = cache_dir(tile) / ".img"
@@ -637,6 +786,7 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
                     "source": source,
                     "kind": kind,
                     "gamma": gamma,
+                    "model": model,
                 }
                 for i in batch
             ]
