@@ -132,6 +132,10 @@ export function wallRows(
     (Math.floor(style / WINDOW_STYLE.lift) % WINDOW_LIFT.classes) *
     WINDOW_LIFT.step;
   const rows: { v0: number; v1: number; k: number }[] = [];
+  // a row past a broken object's numbers would never end the loop
+  if (!(Number.isFinite(topH) && Number.isFinite(first + storey))) {
+    return rows;
+  }
   for (let k = 0; ; k += 1) {
     const line = k === 0 ? 0 : first + (k - 1) * storey;
     if (line > topH) {
@@ -280,13 +284,15 @@ function onWall(tris: readonly number[], s: number, y: number): boolean {
 const snormOf = (code: number) => code / 32_767;
 
 /** A wall's triangles before they are told apart by plane: its codes,
- *  its normal summed over its triangles (area-weighted, horizontal) and
- *  its plane's offset. */
+ *  its normal summed over its triangles (area-weighted, horizontal), its
+ *  first plane offset and its offsets summed by the same weights. */
 interface WallPiece {
   wall: NicheWall;
   sx: number;
   sz: number;
   d: number;
+  dSum: number;
+  weight: number;
 }
 
 /** Two pieces of one object with the same codes are one wall when they
@@ -296,6 +302,32 @@ const SAME_FACING_COS = Math.cos((2 * Math.PI) / 180);
  *  quantised (3.4 cm), so one LoD2 wall's triangles disagree a little,
  *  while a U's wing ends or a house's front and back stand metres apart. */
 const SAME_PLANE_M = 0.15;
+/** … and their facade coordinate runs on: two wings either side of a
+ *  risalit stand in one plane, each with its own `s` from its own end. */
+const SAME_RUN_M = 0.25;
+
+/** Whether a triangle (normal `n`, first vertex at `x, z` with facade
+ *  coordinate `s`, plane offset `d` per unit) belongs to `q`'s wall. */
+function samePiece(
+  q: WallPiece,
+  n: { x: number; z: number },
+  x: number,
+  z: number,
+  s: number,
+  d: number
+): boolean {
+  const ql = Math.hypot(q.sx, q.sz);
+  const unit = Math.hypot(n.x, n.z);
+  if ((q.sx * n.x + q.sz * n.z) / (ql * unit) < SAME_FACING_COS) {
+    return false;
+  }
+  if (Math.abs(q.d - d) > SAME_PLANE_M) {
+    return false;
+  }
+  // along the wall, t = (n.z, −n.x) (see tileNiches)
+  const along = (-q.sz * (x - q.wall.px) + q.sx * (z - q.wall.pz)) / ql;
+  return Math.abs(q.wall.s0 + along - s) <= SAME_RUN_M;
+}
 
 /** Gathers a city mesh's window-carrying walls by object, codes and plane
  *  (each wall's normal the mean of its triangles'). */
@@ -325,13 +357,10 @@ function gatherWalls(
     const key = `${object}:${length}:${f[4 * a + 3]}`;
     const list = pieces.get(key) ?? [];
     pieces.set(key, list);
-    const d = n.x * p[3 * a] + n.z * p[3 * a + 2];
     const unit = Math.hypot(n.x, n.z);
-    let piece = list.find(
-      (q) =>
-        (q.sx * n.x + q.sz * n.z) / (Math.hypot(q.sx, q.sz) * unit) >=
-          SAME_FACING_COS && Math.abs(q.d - d / unit) <= SAME_PLANE_M
-    );
+    const d = (n.x * p[3 * a] + n.z * p[3 * a + 2]) / unit;
+    const s = snormOf(f[4 * a]) * FACADE_SCALE_M;
+    let piece = list.find((q) => samePiece(q, n, p[3 * a], p[3 * a + 2], s, d));
     if (!piece) {
       piece = {
         wall: {
@@ -342,18 +371,22 @@ function gatherWalls(
           nz: 0,
           px: p[3 * a],
           pz: p[3 * a + 2],
-          s0: snormOf(f[4 * a]) * FACADE_SCALE_M,
+          s0: s,
           tris: [],
           top: Number.NEGATIVE_INFINITY,
         },
         sx: 0,
         sz: 0,
-        d: d / unit,
+        d,
+        dSum: 0,
+        weight: 0,
       };
       list.push(piece);
     }
     piece.sx += n.x;
     piece.sz += n.z;
+    piece.dSum += d * unit;
+    piece.weight += unit;
     const z0 = base(object);
     for (const v of [a, b, c]) {
       const h = p[3 * v + 1] - z0;
@@ -362,9 +395,19 @@ function gatherWalls(
     }
   }
   return [...pieces.values()].flatMap((list) =>
-    list.map(({ wall, sx, sz }) => {
+    list.map(({ wall, sx, sz, dSum, weight }) => {
       const l = Math.hypot(sx, sz) || 1;
-      return { ...wall, nx: sx / l, nz: sz / l };
+      const nx = sx / l;
+      const nz = sz / l;
+      // anchored on the wall's mean plane, not on one quantised vertex's
+      const off = dSum / (weight || 1) - (nx * wall.px + nz * wall.pz);
+      return {
+        ...wall,
+        nx,
+        nz,
+        px: wall.px + nx * off,
+        pz: wall.pz + nz * off,
+      };
     })
   );
 }

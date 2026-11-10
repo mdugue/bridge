@@ -389,6 +389,8 @@ export interface NicheTile {
   cutting: boolean;
   /** the houses (root objects) whose windows are niches now */
   houses: Set<number>;
+  /** their objects, as the clay was last told */
+  niched: ReadonlySet<number>;
   /** each house's windows' extent (x min, x max, z min, z max) */
   boxes: Map<number, [number, number, number, number]>;
 }
@@ -397,7 +399,8 @@ export interface NicheTile {
  *  nearest window), on every device: a house turns as a whole. */
 export const NICHE_RADIUS_M = 250;
 /** The most niches drawn at once: the densest blocks hold ≈ 3000 within
- *  80 m; a phone's set is half as large (the nearest houses first, so in
+ *  80 m (and many more within `NICHE_RADIUS_M`, where the cap ends the
+ *  set); a phone's set is half as large (the nearest houses first, so in
  *  the densest blocks its radius ends nearer). */
 export const NICHE_CAPACITY = { desktop: 32_768, mobile: 16_384 } as const;
 
@@ -720,6 +723,15 @@ export function createNicheField(
   };
   /** what a tile's clay cuts: its houses' objects with niches */
   const setHouses = (tile: NicheTile, objects: ReadonlySet<number>) => {
+    // a tile whose objects stay as they were is left alone (its clay's
+    // object texture uploads again on every change)
+    if (
+      objects.size === tile.niched.size &&
+      [...objects].every((o) => tile.niched.has(o))
+    ) {
+      return;
+    }
+    tile.niched = objects;
     tile.houses = new Set([...objects].map((o) => tile.city.table.root[o]));
     tile.city.setNiched(objects);
   };
@@ -785,9 +797,17 @@ export function createNicheField(
       setHouses(tile, objects.get(tile) ?? none);
     }
     mesh.drawCount = k;
-    mesh.instanceMatrix.needsUpdate = true;
-    if (mesh.instanceTints) {
-      mesh.instanceTints.needsUpdate = true;
+    // only the drawn instances upload, not the whole set's buffer (none
+    // drawn: nothing)
+    for (const [drawn, size] of [
+      [mesh.instanceMatrix, 16],
+      [mesh.instanceTints, 3],
+    ] as const) {
+      if (drawn && k > 0) {
+        drawn.clearUpdateRanges();
+        drawn.addUpdateRange(0, k * size);
+        drawn.needsUpdate = true;
+      }
     }
     mesh.visible = k > 0;
   };
@@ -825,16 +845,23 @@ export function createNicheField(
         box: cellBox(map.keys()),
         cutting: false,
         houses: new Set(),
+        niched: none,
         boxes,
       };
       tiles.set(city, tile);
       dirty = true;
       startCompile();
       // taken down as the tile leaves, its clay and object texture freed
-      // with it: nothing of it is touched, the set drops its niches now
+      // with it: nothing of it is touched. A tile with niches drawn drops
+      // them now (no box left in the air); one without only marks the set
+      // (a flight that evicts many far tiles refills once)
       return () => {
         tiles.delete(city);
-        refillNow();
+        if (tile.houses.size > 0) {
+          refillNow();
+        } else {
+          dirty = true;
+        }
       };
     },
     update: (eye, shown) => {

@@ -160,19 +160,29 @@ export async function tileNichesOffThread(
   signal: AbortSignal
 ): Promise<NicheResult> {
   return await new Promise<NicheResult>((resolve, reject) => {
-    const job: Job = { input, signal, resolve, reject };
     // a tile that leaves while its job waits lets go of its copy at once
-    signal.addEventListener(
-      "abort",
-      () => {
-        const at = queue.indexOf(job);
-        if (at !== -1) {
-          queue.splice(at, 1);
-          job.reject(signal.reason);
-        }
+    const onAbort = () => {
+      const at = queue.indexOf(job);
+      if (at !== -1) {
+        queue.splice(at, 1);
+        job.reject(signal.reason);
+      }
+    };
+    // settled, the job lets go of the signal (which lives as long as the
+    // tile), and with it of its input
+    const job: Job = {
+      input,
+      signal,
+      resolve: (out) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(out);
       },
-      { once: true }
-    );
+      reject: (err) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(err instanceof Error ? err : new Error(String(err)));
+      },
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
     queue.push(job);
     next();
   });

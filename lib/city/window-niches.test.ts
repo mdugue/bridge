@@ -148,6 +148,60 @@ describe("window niches", () => {
     expect([...zs].toSorted((a, b) => a - b)).toEqual([-8, 0]);
   });
 
+  test("two walls of one object in one plane are two walls", () => {
+    // wings either side of a risalit: the same 12 m wall at z = 0, once
+    // around x = 0 and once 20 m along, each with its own s, same codes
+    const one = [
+      -6, 100, 0, 6, 100, 0, 6, 112.5, 0, -6, 100, 0, 6, 112.5, 0, -6, 112.5, 0,
+    ];
+    const two = one.map((v, k) => (k % 3 === 0 ? v + 20 : v));
+    const positions = [...one, ...two];
+    const facade: number[] = [];
+    for (let v = 0; v < 12; v += 1) {
+      const x = positions[3 * v] - (v < 6 ? 0 : 20);
+      facade.push(code(-x), code(12), 32_767, 32_767);
+    }
+    const niches = tileNiches(
+      { positions, facade, objectIds: Array.from({ length: 12 }, () => 0) },
+      () => house,
+      () => 100
+    );
+    // each wing its own 16, none doubled on the other
+    let near = 0;
+    for (let i = 0; i < niches.length; i += NICHE_STRIDE) {
+      near += Math.abs(niches[i]) < 6 ? 1 : 0;
+    }
+    expect(niches.length / NICHE_STRIDE).toBe(32);
+    expect(near).toBe(16);
+  });
+
+  test("a wall's niches stand on its mean plane, not one vertex's", () => {
+    // quantising put one triangle's corners 2 cm out, the anchor among them
+    const positions = [
+      -6, 100, 0.02, 6, 100, 0.02, 6, 112.5, 0.02, -6, 100, 0, 6, 112.5, 0, -6,
+      112.5, 0,
+    ];
+    const facade: number[] = [];
+    for (let v = 0; v < 6; v += 1) {
+      facade.push(code(-positions[3 * v]), code(12), 32_767, 32_767);
+    }
+    const niches = tileNiches(
+      { positions, facade, objectIds: [0, 0, 0, 0, 0, 0] },
+      () => house,
+      () => 100
+    );
+    for (let i = 0; i < niches.length; i += NICHE_STRIDE) {
+      expect(niches[i + 2]).toBeCloseTo(0.01, 4);
+    }
+  });
+
+  test("an object without numbers gets no rows (and the count ends)", () => {
+    expect(wallRows({ ...house, storey: Number.NaN }, 32_767, 12.5)).toEqual(
+      []
+    );
+    expect(wallRows(house, 32_767, Number.POSITIVE_INFINITY)).toEqual([]);
+  });
+
   test("niches sorted by cell keep every niche, each cell one run", () => {
     const xs = [5, 70, 6, -40, 71];
     const raw = new Float32Array(xs.length * NICHE_STRIDE);

@@ -74,6 +74,7 @@ describe("window niche layer", () => {
       box: [0, 0, 0, 0] as [number, number, number, number],
       cutting: false,
       houses: new Set<number>(),
+      niched: new Set<number>(),
       boxes: new Map<number, [number, number, number, number]>([
         [0, [0, 90, 0, 0]],
         [2, [20, 20, 0, 0]],

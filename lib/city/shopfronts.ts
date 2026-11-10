@@ -65,33 +65,31 @@ export const STOREY_CLEAR_M = 0.2;
 export const MIN_PANE_M = 1.5;
 /** A bay narrower than this (after a door is cut out of it) is dropped. */
 export const MIN_BAY_M = 1.2;
-/** Two runs of bays with less wall than this between their surrounds are
- *  one surround (two surrounds side by side would meet face to face). */
+/** Two runs of bays with less wall than this between their end piers are
+ *  one run (a sliver of wall between two would read as a crack). */
 export const MIN_WALL_M = 0.4;
 /** A glazed row's stall riser (m above the ground): the modernist rows
  *  glaze nearly to the pavement. */
 export const ROW_SILL_M = 0.3;
 /** A canopy (m): its slab's thickness under its measured top, its fascia's
  *  depth, the tallest fascia, the headroom the fascia keeps over the
- *  ground, the round of its outer edges, how far a surround's head
- *  reaches up into the slab over it, and the most wall left between the
- *  head and the slab for the head to reach up (a taller gap stays wall). */
+ *  ground, the round of its outer edges, and the margin over a window's
+ *  head a shop part's height keeps (`tuck`). */
 export const CANOPY = {
   fasciaD: 0.2,
   fasciaH: 1,
   headroom: 2.6,
   round: 0.09,
-  reach: 0.25,
   slab: 0.3,
   tuck: 0.08,
 } as const;
-/** A shopfront's feet go this far into the ground (each surround on its
- *  ends' lower ground). */
+/** A shopfront's feet go this far into the ground (each run on its ends'
+ *  lower ground). */
 export const SHOPFRONT_SINK = SINK.box;
 /** How far from the footprint line a part looks for its wall, either way. */
 export const SHOPFRONT_WALL_REACH = 0.6;
 /** A door (OSM entrance) keeps this much of the bay clear beside its
- *  surround. */
+ *  frame. */
 const DOOR_CLEAR_M = 0.3;
 /** The wall a fascia leaves over a shop window's head (m). */
 const FASCIA_OVER_M = 0.1;
@@ -169,7 +167,7 @@ function without(spans: readonly Span[], cut: Span): Span[] {
 }
 
 /** The doors on this wall (the same building, within reach of its line),
- *  as the spans their surrounds and a clearance take. */
+ *  as the spans their frames and a clearance take. */
 export function doorSpans(
   w: ShopfrontWall,
   doors: readonly DoorFeature[],
@@ -220,7 +218,7 @@ export function sillOf(w: ShopfrontWall): number {
   return w.row ? ROW_SILL_M : SHOPFRONT.sill;
 }
 
-/** A run of bays under one surround: its bays (left to right) and its
+/** A run of shop windows side by side: its bays (left to right) and its
  *  span along the wall, the end piers included. */
 export interface BayRun {
   bays: Span[];
@@ -228,8 +226,8 @@ export interface BayRun {
 }
 
 /**
- * The bays in runs, each under one surround: a bay with less than two
- * piers and MIN_WALL_M of wall to the one before it shares its surround,
+ * The bays in runs: a bay with less than two piers and MIN_WALL_M of wall
+ * to the one before it joins its run,
  * the pier between them at least SHOPFRONT.minPier wide (two bays closer
  * than that drawn back from the gap's middle); a run's end piers
  * SHOPFRONT.pier wide, inside the wall.

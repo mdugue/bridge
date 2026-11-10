@@ -1710,7 +1710,7 @@ function dressWalls(
       doors: outsidePassages(onBuilt.doors, passages, keys, baked),
     }),
   };
-  const opened = new Set<ShopfrontWall>();
+  const opened = new Map<ShopfrontWall, ReadonlySet<number>>();
   const blind = appendBeyondLod2(
     tile,
     baked,
@@ -1862,8 +1862,9 @@ function appendBeyondLod2(
     roofColours?: Partial<RoofColours>;
     scan?: readonly SmallBuildingFeature[];
   },
-  /** filled with the walls a shop window was cut into */
-  opened: Set<ShopfrontWall>
+  /** filled with the walls a shop window was cut into, each with the
+   *  objects it cut (its host's, a sibling part's coplanar wall) */
+  opened: Map<ShopfrontWall, ReadonlySet<number>>
 ): number[] {
   // Each append copies the whole vertex stream and leaves its parts' plain
   // arrays behind: Bun's lazy collector let them pile up over the six, and
@@ -1899,8 +1900,8 @@ function appendBeyondLod2(
   }
   if (shops.length > 0) {
     // before the doors: a bay is cut at a door, which the doors then draw
-    for (const w of appendShopfronts(baked, shops)) {
-      opened.add(w);
+    for (const [w, objects] of appendShopfronts(baked, shops)) {
+      opened.set(w, objects);
     }
     collectAfterAppend();
   }
@@ -2387,8 +2388,6 @@ export function planShopfronts(
 ): ShopPlan[] {
   const trees = treeTriangles(baked);
   const p = baked.vertices.positions;
-  const ids = baked.vertices.objectIds;
-  const at = (i: number): V3 => [p[3 * i], p[3 * i + 1], p[3 * i + 2]];
   const hostRootOf = (id: string) => {
     const i = objectIndex.get(id);
     return i === undefined ? undefined : baked.objects[i]?.root;
@@ -2405,13 +2404,7 @@ export function planShopfronts(
       doorSpans(w, doors, (of) => hostRootOf(of) === host.root)
     );
     const triangles = trees.get(host.root) ?? [];
-    const lod2 = triangles
-      .filter(
-        (t) =>
-          (baked.objects[ids[t]]?.source ?? OBJECT_SOURCE_LOD2) ===
-          OBJECT_SOURCE_LOD2
-      )
-      .map((t) => ({ id: t, p: [at(t), at(t + 1), at(t + 2)] as const }));
+    const lod2 = lod2Triangles(baked, triangles);
     const mesh = shopfrontMesh(
       w,
       bays,
@@ -2449,18 +2442,26 @@ export function planShopfronts(
 export function appendShopfronts(
   baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
   plans: readonly ShopPlan[]
-): Set<ShopfrontWall> {
+): Map<ShopfrontWall, Set<number>> {
   const appended: ShopParts = {
     positions: [],
     normals: [],
     objectIds: [],
     walls: [],
   };
-  const opened = new Set<ShopfrontWall>();
+  const opened = new Map<ShopfrontWall, Set<number>>();
   for (const { w, host, hostIndex, mesh, triangles } of plans) {
-    const cut = cutShopWindows(baked, w, mesh.openings, triangles, appended);
+    const objects = new Set<number>();
+    const cut = cutShopWindows(
+      baked,
+      w,
+      mesh.openings,
+      triangles,
+      appended,
+      objects
+    );
     if (cut.length > 0) {
-      opened.add(w);
+      opened.set(w, objects);
     }
     const part = shopPart(baked, appended, host, w);
     const colours = shopfrontColours(host.tint);
@@ -2560,15 +2561,20 @@ function cutShopWindows(
   w: ShopfrontWall,
   openings: readonly ShopOpening[],
   triangles: readonly number[],
-  out: ShopParts
+  out: ShopParts,
+  objects: Set<number>
 ): CutWindow[] {
   const base = footAt(w, [0, w.L]);
   return cutOnWall(baked, w, openings, triangles, out, {}).flatMap(
-    ({ axes, cut }) =>
-      cut.openings.map((o, k) => ({
+    ({ axes, cut, objects: of }) => {
+      for (const o of of) {
+        objects.add(o);
+      }
+      return cut.openings.map((o, k) => ({
         ...openingBox(axes, cut.corners[k]),
         top: cm(o.z1 - base),
-      }))
+      }));
+    }
   );
 }
 
@@ -2579,7 +2585,8 @@ function cutShopWindows(
  * `wallShiftAt` found it. A cut LoD2 triangle collapses onto its first
  * vertex (the per-vertex columns of the LoD2 stream stay aligned), its
  * remainder goes to `out.walls`. `cutWall`'s options: `keep` hands back
- * what each cut took (`taken`, a painted sign).
+ * what each cut took (`taken`, a painted sign). Each cut names the objects
+ * whose triangles it cut.
  */
 function cutOnWall(
   baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
@@ -2588,22 +2595,14 @@ function cutOnWall(
   triangles: readonly number[],
   out: ShopParts,
   options: { keep?: boolean; minCover?: number }
-): { axes: WallAxes; cut: WallCut }[] {
-  const p = baked.vertices.positions;
+): { axes: WallAxes; cut: WallCut; objects: Set<number> }[] {
   const ids = baked.vertices.objectIds;
-  const at = (i: number): V3 => [p[3 * i], p[3 * i + 1], p[3 * i + 2]];
-  const cuts: { axes: WallAxes; cut: WallCut }[] = [];
+  const cuts: { axes: WallAxes; cut: WallCut; objects: Set<number> }[] = [];
   const root = baked.objects[ids[triangles[0] ?? -1]]?.root;
   for (const shift of new Set(openings.map((o) => o.shift))) {
     const rects = openings.filter((o) => o.shift === shift).map((o) => o.rect);
     const axes = wallFrame(w, baked.offset, shift);
-    const lod2 = triangles
-      .filter(
-        (t) =>
-          (baked.objects[ids[t]]?.source ?? OBJECT_SOURCE_LOD2) ===
-          OBJECT_SOURCE_LOD2
-      )
-      .map((t) => ({ id: t, p: [at(t), at(t + 1), at(t + 2)] as const }));
+    const lod2 = lod2Triangles(baked, triangles);
     // only this building tree's: another's coplanar wall is not this one
     const remainders = out.walls.flatMap((r, k) =>
       r.root === root
@@ -2614,10 +2613,36 @@ function cutOnWall(
         : []
     );
     const cut = cutWall(axes, rects, [...lod2, ...remainders], options);
+    // the objects cut (a sibling part's coplanar wall too), read before
+    // the remainders' list changes
+    const objects = new Set(
+      cut.replaced.map(({ id }) =>
+        id >= 0 ? ids[id] : out.walls[Math.floor((-1 - id) / 1e6)].object
+      )
+    );
     replaceCut(cut.replaced, baked, out);
-    cuts.push({ axes, cut });
+    cuts.push({ axes, cut, objects });
   }
   return cuts;
+}
+
+/** A building tree's LoD2 triangles (by first vertex) as `cutWall` takes
+ *  them: what the bake added on the walls (plinths, signs, reveals) is no
+ *  wall to cut. */
+function lod2Triangles(
+  baked: Pick<BakedCityMesh, "objects" | "vertices">,
+  triangles: readonly number[]
+): { id: number; p: readonly [V3, V3, V3] }[] {
+  const p = baked.vertices.positions;
+  const ids = baked.vertices.objectIds;
+  const at = (i: number): V3 => [p[3 * i], p[3 * i + 1], p[3 * i + 2]];
+  return triangles
+    .filter(
+      (t) =>
+        (baked.objects[ids[t]]?.source ?? OBJECT_SOURCE_LOD2) ===
+        OBJECT_SOURCE_LOD2
+    )
+    .map((t) => ({ id: t, p: [at(t), at(t + 1), at(t + 2)] as const }));
 }
 
 /** The triangles of a flat position list (9 a triangle). */
@@ -3173,7 +3198,7 @@ function facadeOf(
   portals: readonly FacadeDoor[] = [],
   blind: readonly number[] = [],
   /** the walls a shop window was cut into: theirs is the ground floor */
-  opened: ReadonlySet<ShopfrontWall> = new Set()
+  opened: ReadonlyMap<ShopfrontWall, ReadonlySet<number>> = new Map()
 ): Int16Array<ArrayBuffer> {
   const { cx, cy } = baked.offset;
   const index = new Map(keys.map((id, i) => [id, i]));
@@ -3197,19 +3222,16 @@ function facadeOf(
   // windows: one where the photos read a sign alone (318 of Dresden's
   // 1003, most from a single drive), or whose bays found no wall, kept a
   // blank ground floor under its fascia
-  const shops = (onWalls.shopfronts ?? []).flatMap((w) => {
-    const object = opened.has(w) ? index.get(w.oid) : undefined;
-    return object === undefined
-      ? []
-      : [
-          {
-            object,
-            a: [w.a[0] - cx, w.a[1] - cy] as [number, number],
-            b: [w.b[0] - cx, w.b[1] - cy] as [number, number],
-            n: w.n,
-          },
-        ];
-  });
+  // (every object a window was cut into: a sibling part's coplanar wall
+  // as well as the host's)
+  const shops = (onWalls.shopfronts ?? []).flatMap((w) =>
+    [...(opened.get(w) ?? [])].map((object) => ({
+      object,
+      a: [w.a[0] - cx, w.a[1] - cy] as [number, number],
+      b: [w.b[0] - cx, w.b[1] - cy] as [number, number],
+      n: w.n,
+    }))
+  );
   const facade = facadeAttribute(
     baked.vertices,
     (i) => (baked.objects[i]?.windows?.axis ?? 0) > 0,

@@ -1626,16 +1626,16 @@ export function muralsPart(site: MuralSite): LatePart<MuralLayer> {
   };
 }
 
+/** What a Map entry with its small array costs on a JS heap (bytes, a
+ *  generous measure): the niche field's cells and houses. */
+const NICHE_MAP_ENTRY_BYTES = 96;
+
 /**
  * A city tile's window niches as a late part of its content root
  * (late-parts.ts): worked out off the thread, weighed from then, handed to
  * the site's set (window-niche-layer.ts) — nothing of the tile's to
  * compile — and taken off it when the tile goes.
  */
-/** What a Map entry with its small array costs on a JS heap (bytes, a
- *  generous measure): the niche field's cells and houses. */
-const NICHE_MAP_ENTRY_BYTES = 96;
-
 export function nichesPart(site: {
   tile: string;
   build: (signal: AbortSignal) => Promise<NicheResult>;
@@ -2096,14 +2096,23 @@ export class DressingPlugin {
     if (!(field && city)) {
       return;
     }
-    const input = nicheInput(scene, mesh, city.table);
+    let input = nicheInput(scene, mesh, city.table);
     if (!input) {
       return;
     }
     entry.late.add(
       nichesPart({
         tile: tileId,
-        build: async (signal) => await tileNichesOffThread(input, signal),
+        // the copy is the job's once handed over: the part, held while the
+        // tile stands, keeps no reference to it
+        build: async (signal) => {
+          const own = input;
+          input = null;
+          if (!own) {
+            throw new Error("a tile's niches built twice");
+          }
+          return await tileNichesOffThread(own, signal);
+        },
         hang: (built) => field.add(city, built),
       })
     );
