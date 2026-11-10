@@ -31,7 +31,6 @@ import {
 import {
   cos,
   float,
-  fract,
   modelWorldMatrix,
   max,
   positionGeometry,
@@ -45,6 +44,7 @@ import {
 import type { FlagDesign } from "@/lib/city/features";
 import { FLAG_CLOTH_H, FLAG_CLOTH_L } from "@/lib/city/furniture";
 import { Instances, instanceMatrix, instancePosition } from "./instancing";
+import { hash21 } from "./shader-chunks";
 import {
   markSceneShared,
   markThinCaster,
@@ -180,8 +180,9 @@ function clothMaterial(): MeshStandardNodeMaterial {
   });
   const origin = instanceMatrix().mul(vec4(0, 0, 0, 1)).xyz;
   const near = swayNear(origin);
-  // wrapped to a turn, so sin and cos stay accurate kilometres out
-  const phase = fract(origin.x.mul(0.059).add(origin.z.mul(0.097))).mul(TURN);
+  // a hash of where the mast stands, so a row's masts do not wave in
+  // step; a turn at most, so sin and cos stay accurate kilometres out
+  const phase = hash21(origin.xz).mul(TURN);
   // the geometry's own position: once a positionNode is set,
   // positionLocal is the moved vertex. 0 at the hoist and on the ball
   // (over the cloth's top), 1 at the fly end

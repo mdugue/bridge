@@ -3791,8 +3791,9 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   `height` (3–30 m, one outside is left out; few are tagged), with a cloth
   in the wind (`k: flag`).
   The flag is drawn in its colours only where the map names it (`flag:name`,
-  `flag:wikidata`, `subject`, `country`: the first the map fills decides,
-  the flag's own name first — Germany, the EU, Saxony, Bavaria, Hamburg),
+  `flag:wikidata`, `subject`, `country`: the first whose name the map fills
+  decides — a Wikidata item the viewer does not know leaves it to the next
+  —, the flag's own name first — Germany, the EU, Saxony, Bavaria, Hamburg),
   as pastel bands without emblem; every other one — most are a shop's or
   a firm's (`flag:type=advertising`, never in a country's colours), some a
   city's — flies a pale cloth; `country` counts only on a national flag (no

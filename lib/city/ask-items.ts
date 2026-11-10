@@ -504,8 +504,9 @@ const STOP = { h: 2.8, r: 0.5 };
 /** How far apart a hedge's picks stand along it (m). */
 const HEDGE_STEP = 2;
 
-/** A flagpole's ball over its top (m), picked with the mast. */
-const FLAG_BALL = 0.2;
+/** A flagpole's ball over its top (m, flag-cloth.ts draws it to 0.125),
+ *  picked with the mast. */
+const FLAG_BALL = 0.15;
 
 /** How tall a piece is picked: a signal on a mast arm by its mast
  *  (furniture-layer.ts `signalArm`), a flagpole by its tagged height and

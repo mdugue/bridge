@@ -3304,6 +3304,9 @@ async function bootApp(
     budget.tier === "mobile" ? PHONE_RICH_TREE_BUDGET : RICH_TREE_BUDGET;
   /** The world box of the furniture cells a frame shows or hides. */
   const changedCells = new Box3();
+  /** How far the lantern's hand and a mast's top may lie off the eye and
+   *  the cells' box (m). */
+  const LANTERN_SLACK_M = 35;
   /** `eye`: where the tiers are measured from (Modell: above the pivot);
    *  `tick`: the frame's pose tick is due. */
   const stepVegetation = (elapsed: number, eye: Vector3, tick: boolean) => {
@@ -3341,8 +3344,12 @@ async function bootApp(
       }
     }
     if (!cellsChanged.isEmpty()) {
-      // the lantern only where a cell flipped within its light
-      if (!furnitureEye || cellsChanged.distanceToPoint(eye) <= LANTERN_RANGE) {
+      // the lantern only where a cell flipped within its light (held at
+      // the hand, a little off the eye: LANTERN_SLACK_M)
+      if (
+        !furnitureEye ||
+        cellsChanged.distanceToPoint(eye) <= LANTERN_RANGE + LANTERN_SLACK_M
+      ) {
         invalidateLanternShadow(lantern);
       }
       sunRig.invalidateShadow(
