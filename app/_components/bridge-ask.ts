@@ -3,7 +3,7 @@ import type { Mesh, Object3D } from "three/webgpu";
 import {
   PIER_REACH,
   rayDeckTop,
-  rayPrism,
+  raySlab,
   ringDistanceXz,
 } from "@/lib/city/ask-solids";
 import type { AskHit, AskItem, AskSet, Slab, Xyz } from "@/lib/city/ask-solids";
@@ -16,14 +16,14 @@ const slabOf = (item: AskItem<FeatureInquiry>): Slab | null => {
 };
 
 /** Where a ray meets a deck before its BVH: down onto its top, else (a
- *  ray level with it or from below) into its box, if ahead. */
+ *  ray level with it or from below) into the deck's own band, if ahead. */
 const roughDeck = (o: Xyz, d: Xyz, slab: Slab, far: number): number | null => {
   const top = rayDeckTop(o, d, slab, far);
   if (top !== null) {
     return top;
   }
-  const enter = rayPrism(o, d, slab);
-  return enter !== null && enter > 0 && enter <= far ? enter : null;
+  const at = raySlab(o, d, slab);
+  return at !== null && at > 0 && at <= far ? at : null;
 };
 
 /**

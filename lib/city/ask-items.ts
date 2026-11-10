@@ -919,7 +919,6 @@ function furnitureItem(
       solids: [
         { prism: { ring: ringXz(ring, ctx.offset), y0: y - 0.3, y1: y + h } },
       ],
-      tolerance: true,
       target: {
         kind: "furniture",
         tile: ctx.tile,
@@ -928,6 +927,20 @@ function furnitureItem(
       },
     },
   ];
+}
+
+/**
+ * Whether an item's solids are a box the probe tolerates round what is
+ * drawn — a landing stage's, an outline's prism over the surface it marks
+ * (`furnitureItems`, `landingItems`) — not its shape: a ray may name it,
+ * the lens never focuses on it. Read from the item, never stored on it
+ * (ADR 0047).
+ */
+export function toleranceBox(item: AskItem<FeatureInquiry>): boolean {
+  return (
+    item.target.kind === "landing" ||
+    (item.target.kind === "furniture" && item.solids.some((s) => "prism" in s))
+  );
 }
 
 /** The landing stages and pontoons (their outlines; groynes and ferry
@@ -961,7 +974,6 @@ export function landingItems(
           },
         },
       ],
-      tolerance: true,
       target: {
         kind: "landing",
         tile: ctx.tile,

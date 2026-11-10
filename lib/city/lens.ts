@@ -88,13 +88,18 @@ export function horizonBlurPx(
  * (1/m): a step from 5 m to 50 m and one from 50 m to 5 m take as long,
  * and the far field, where a metre means little, moves little.
  */
+/** A focus distance in dioptres (1/m), no nearer than `MIN_FOCUS_M`. */
+export function dioptres(m: number): number {
+  return 1 / Math.max(m, MIN_FOCUS_M);
+}
+
 export function pullFocus(
   currentM: number,
   targetM: number,
   dtMs: number
 ): number {
-  const from = 1 / Math.max(currentM, MIN_FOCUS_M);
-  const to = 1 / Math.max(targetM, MIN_FOCUS_M);
+  const from = dioptres(currentM);
+  const to = dioptres(targetM);
   const k = 1 - Math.exp(-Math.max(dtMs, 0) / FOCUS_PULL_MS);
   return 1 / (from + (to - from) * k);
 }
@@ -156,8 +161,6 @@ export function lensSettled(
   if (!wanted) {
     return true;
   }
-  const off = Math.abs(
-    1 / Math.max(state.focusM, MIN_FOCUS_M) - 1 / Math.max(aimM, MIN_FOCUS_M)
-  );
+  const off = Math.abs(dioptres(state.focusM) - dioptres(aimM));
   return lensFadeIn(state.shownMs) >= 1 && off < FOCUS_SETTLED_DIOPTRES;
 }

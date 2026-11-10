@@ -41,8 +41,8 @@ import type { ViewLens } from "./view-lens";
  *    by its area over its circle's — the share of the lens a blurred
  *    foreground hides — and is laid over the rest.
  * 4. The composite at full resolution: the gather where the pixel's own
- *    circle is wider than a pixel or a foreground covers it, the sharp
- *    frame elsewhere.
+ *    circle is wider than about 4 px or a foreground covers it, the sharp
+ *    frame below a pixel, the two mixed between.
  *
  * Three's `DepthOfFieldNode` drew this before: it mixes its blur in by the
  * circle's share of its widest, so a circle a fifth as wide as the widest
@@ -181,6 +181,14 @@ export function createLensBlur(
     small
   );
 
+  // texel by texel too: a tile's reach blended with its neighbours' (0
+  // past the dilation) fell short where a near blur's rim ends, cutting it
+  // in tile steps
+  for (const node of [tiles, reach]) {
+    node.value.minFilter = NearestFilter;
+    node.value.magFilter = NearestFilter;
+  }
+
   // 3. the gather
   const gather = rtt(
     Fn(() => {
@@ -284,7 +292,10 @@ export function createLensBlur(
       }
       const norm = max(weight, 1e-8);
       const blurred = gathered.div(norm).toVar();
-      const ownW = smoothstep(0.25, 0.75, c.abs().mul(0.5));
+      // the half-resolution path (its 2 × 2 prefilter, the upsample) is
+      // itself about a 3 px blur: a circle under that keeps the frame's
+      // detail in part, so a slight blur is not drawn wider than it is
+      const ownW = smoothstep(0.5, 2, c.abs().mul(0.5));
       const keep = ownW.oneMinus().mul(blurred.a.oneMinus());
       const detail = sharp.rgb.sub(low.div(norm)).mul(keep);
       return vec4(blurred.rgb.add(detail), sharp.a);

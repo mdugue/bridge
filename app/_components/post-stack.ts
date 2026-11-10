@@ -859,14 +859,15 @@ export function createPostStack(
     );
     const { focus } = lensUniforms;
     focus.value = lensState.focusM;
-    // a parallel camera (Modell) draws no lens blur
-    const fov = lens.isOrtho() ? 0 : (view as PerspectiveCamera).fov;
-    const shown = fov > 0 ? lensFadeNow : 0;
+    // a parallel camera is Modell's, where `lensWanted` faded the lens out
     lensUniforms.horizonPx.value =
-      horizonBlurPx(focus.value, fov, size.y) * shown;
+      lensFadeNow > 0
+        ? horizonBlurPx(focus.value, (view as PerspectiveCamera).fov, size.y) *
+          lensFadeNow
+        : 0;
     // no wider than the gather's reach covers (lens-blur.ts)
     lensUniforms.capPx.value =
-      maxBlurPx(Math.min(size.y, LENS_TALLEST_PX)) * shown;
+      maxBlurPx(Math.min(size.y, LENS_TALLEST_PX)) * lensFadeNow;
   };
 
   /** set by `dispose`: what is let go later goes at once, and what is

@@ -101,6 +101,7 @@ import { exportScale, exportTiles } from "@/lib/city/image-export";
 import type { ExportTile } from "@/lib/city/image-export";
 import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
 import type { CameraState, PlayerPose, Xyz } from "@/lib/city/pose";
+import { toleranceBox } from "@/lib/city/ask-items";
 import { nearestInSets, rayAabb, setsBox } from "@/lib/city/ask-solids";
 import type { Aabb, AskHit } from "@/lib/city/ask-solids";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
@@ -268,11 +269,10 @@ const DEFAULT_FOV = 55;
  *  plus a margin, so tiles still loading read as haze, not as an edge. */
 const PARTIAL_WORLD_FOG_FAR = 1100;
 const SKY_COLOR = 0x9f_b6_cc;
-/** How far behind the ground a ray meets a design may stand for the
- *  focus (m): a site's ground is pressed under the design (design-site.ts),
- *  which the ground's rays do not see — a pit or a sunken court, not a
- *  design across the hill. */
-const DESIGN_PRESS_M = 20;
+/** How deep under the ground a design may stand for the focus (m): a
+ *  site's ground is pressed under the design (design-site.ts), which the
+ *  ground's rays do not see — a sunken court, not a design across a hill. */
+const DESIGN_PRESS_M = 5;
 /** How often the crash trail takes a heartbeat (crash-trail.ts). */
 const TRAIL_BEAT_MS = 2000;
 /** How often the GPU's frame time is read back (ms): a few per beat. */
@@ -3096,15 +3096,16 @@ async function bootApp(
   // tolerates round a landing stage or a playground's outline (it stands
   // over the surface drawn), nor what a design's site folded away
   const focusable = (t: AskHit<FeatureInquiry>) =>
-    !t.tolerance &&
+    !toleranceBox(t) &&
     !foldedThing(t.target, focusRaycaster.ray.at(t.distance, focusAt), offset);
   // The trees, lamps, furniture and monuments the probe can ask (their
   // sets come in idle time, a mesh's BVH with a question: the focus never
   // builds either) before `far`: a tree in the middle of the view is what
   // the lens focuses on, not the facade behind it. A design stands on
   // ground pressed under it, which the ground's rays do not know: it may
-  // lie behind the ground they meet, by as much as a site is pressed
-  // (`DESIGN_PRESS_M`), never behind a building (`buildingFar`) or a hill.
+  // lie behind the ground they meet by as far as the ray runs to sink
+  // `DESIGN_PRESS_M` (far at a walker's grazing angle), never behind a
+  // building (`buildingFar`).
   const focusThing = (far: number, buildingFar: number) => {
     const { origin, direction } = focusRaycaster.ray;
     const tileThing = nearestInSets(
@@ -3118,7 +3119,11 @@ async function bootApp(
       origin,
       direction,
       design?.asks() ?? [],
-      tileThing?.distance ?? Math.min(buildingFar, far + DESIGN_PRESS_M)
+      tileThing?.distance ??
+        Math.min(
+          buildingFar,
+          far + DESIGN_PRESS_M / Math.max(-direction.y, 1e-3)
+        )
     );
     return designThing ?? tileThing;
   };
@@ -3913,7 +3918,8 @@ async function bootApp(
   const frame = (time: number) => {
     const frameStart = streamTimings.now();
     timer.update(pocFrameTime(time));
-    const dt = Math.min(timer.getDelta(), 0.05);
+    const frameDt = timer.getDelta();
+    const dt = Math.min(frameDt, 0.05);
     const elapsed = timer.getElapsed();
     // The 10 Hz tick (the minimap's pose, the BVHs near, the focus, the
     // tree tiers): read here, as the trees step before it is spent.
@@ -4005,7 +4011,9 @@ async function bootApp(
       exporting
     );
     const renderStart = streamTimings.now();
-    framedBuilds.draw(() => postStack.render(dt * 1000));
+    // the lens's fade and focus on the clock, not the capped step: a paced
+    // frame (Hörmodus, 2 fps) still grows it in over its 700 ms
+    framedBuilds.draw(() => postStack.render(frameDt * 1000));
     const renderEnd = streamTimings.now();
     takeCaptureTile();
     frames += 1;

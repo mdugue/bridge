@@ -59,10 +59,6 @@ const SLAB_STEP = 0.25;
 export interface AskItem<T> {
   solids: readonly AskSolid[];
   target: T;
-  /** The solids are a box the probe tolerates round what is drawn (an
-   *  outline's prism stands over the surface it marks), not its shape: a
-   *  ray may name it, the lens never focuses on it. */
-  tolerance?: true;
 }
 
 /** What a ray met: how far along, what, and its solids (for its mark). */
