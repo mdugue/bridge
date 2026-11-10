@@ -426,3 +426,52 @@ def test_only_a_missing_image_is_gone_never_a_token():
     assert facades.gone(err(400, missing))
     assert not facades.gone(err(400, b'{"error": {"type": "OAuthException", "code": 190}}'))
     assert not facades.gone(err(403)) and not facades.gone(err(401))
+
+
+def test_a_photo_list_made_for_other_fields_is_asked_anew(tmp_path):
+    path = tmp_path / "t.photos.json"
+    path.write_text(json.dumps({"retrieved": "x", "data": [{"id": "1"}]}))  # before width, height
+    asked = []
+
+    def make():
+        asked.append(1)
+        return [{"id": "1", "width": 4000}]
+
+    assert facades._cached_json(path, make, "id,width") == [{"id": "1", "width": 4000}]
+    assert facades._cached_json(path, make, "id,width") == [{"id": "1", "width": 4000}]
+    assert len(asked) == 1
+
+
+def test_a_wall_the_model_fails_on_keeps_the_photos_other_walls(monkeypatch, tmp_path):
+    from bake import facade_measure
+
+    monkeypatch.setattr(facades, "_detections", lambda *_: [])
+    monkeypatch.setattr(facades, "_thumbnail", lambda *_: (tmp_path / "x.jpg", False))
+    monkeypatch.setattr(facade_measure, "load_image", lambda _: np.zeros((4, 4, 3)))
+    monkeypatch.setattr(facade_measure, "class_map", lambda _: np.zeros((4, 4)))
+    monkeypatch.setattr(facades, "_ground", lambda *_: 100.0)
+    monkeypatch.setattr(facade_glass, "model", lambda *_: None)
+
+    def measure(w, *_):
+        if w["oid"] == "long":
+            raise MemoryError("a 300 m crop")
+        return {"gl": 990, "cov": 0.9}
+
+    monkeypatch.setattr(facade_glass, "measure", measure)
+    wall = {"wi": 0, "a": [0, 0], "b": [10, 0], "L": 10.0, "n": [0, 1], "eave": 12.0}
+    job = {
+        "img": "p",
+        "seq": "s",
+        "kind": "glass",
+        "rot": [0.0, 0.0, 0.0],
+        "url": "u",
+        "xy": [5.0, 20.0],
+        "camera": {"type": "perspective", "params": [0.8, 0.0, 0.0]},
+        "model": ["m", "c"],
+        "scratch": str(tmp_path),
+        "walls": [wall | {"oid": "short"}, wall | {"oid": "long"}],
+    }
+    r = facades.measure_image(job)
+    assert [w["oid"] for w in r["walls"]] == ["short"] and r["also_fail"].startswith("model")
+    only = facades.measure_image(job | {"walls": [wall | {"oid": "long"}]})
+    assert only["own"] and "walls" not in only

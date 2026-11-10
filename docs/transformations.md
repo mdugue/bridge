@@ -1834,15 +1834,17 @@ visual-variable codebook is in
   or a material OSM names keeps it from drawing as glass. A Brown
   camera's parameters are OpenSfM's (fx, fy, cx, cy, k1, k2, …): its focal
   and radial terms are read from there; a framed photo's frame is its own
-  shape where Mapillary gives it. A photo the model could not read in
-  (a worker out of memory), the network failing, or the token refused,
-  is read again at the next fetch; one whose own thumbnail the CDN
-  refuses is given up after three fetches since it was last read (but
-  not in a run where all of ten or more were refused: that is a proxy's
-  or the network's refusal); one Mapillary has taken down since (HTTP
-  404, 410, or its "does not exist" answer) is cached as skipped. A
-  photo is planned at its thumbnail's own size, which is smaller where
-  the original was.
+  shape where Mapillary gives it (the photo list is asked anew when the
+  fields it asks for change). A photo the network or the token failed is
+  read again at the next fetch; one whose own thumbnail the CDN refuses,
+  or a wall whose crop the model fails on (a worker out of memory over a
+  very long wall; the photo's other walls are kept), is read again and
+  given up after three fetches since it was last read — but not where
+  ten or more and most of a run failed: that is a proxy's, the CDN's or
+  the machine's failure. One Mapillary has taken down since (HTTP 404,
+  410, or its "does not exist" answer) is cached as skipped. A photo is
+  planned at its thumbnail's own size, which is smaller where the
+  original was.
   The building bake gives an object material `glass`, from `photos`, when
   its glass walls make at least half the length of its walls read and a
   quarter of all its outer walls, or 15 m and a twentieth of them

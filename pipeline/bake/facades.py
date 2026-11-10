@@ -621,14 +621,19 @@ def _search_tile(tile: Tile, path: str, query: dict, margin: float) -> list[dict
     return list(found.values())
 
 
-def _cached_json(path: Path, make) -> list[dict]:
+def _cached_json(path: Path, make, fields: str | None = None) -> list[dict]:
+    """`make()`'s list, cached in `path` — asked anew where the cache was
+    made for other `fields` (a field added to the request reaches it)."""
     if path.exists():
-        return json.loads(path.read_text())["data"]
+        doc = json.loads(path.read_text())
+        if fields is None or doc.get("fields") == fields:
+            return doc["data"]
     data = make()
     path.parent.mkdir(parents=True, exist_ok=True)
     retrieved = datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds")
     tmp = path.with_suffix(".part")
-    tmp.write_text(json.dumps({"retrieved": retrieved, "licence": ATTRIBUTION, "data": data}))
+    doc = {"retrieved": retrieved, "licence": ATTRIBUTION, "data": data}
+    tmp.write_text(json.dumps(doc | ({"fields": fields} if fields else {})))
     tmp.replace(path)
     return data
 
@@ -776,11 +781,13 @@ def measure_image(job: dict) -> dict:
             return {"img": iid, "skip": f"gone (HTTP {err.code})"}
         # the CDN refusing this one photo (made private): its own failure
         return {"img": iid, "fail": f"HTTPError: {err}"[:200], "own": True}
-    except OSError as err:
+    except (OSError, ValueError) as err:
         return {"img": iid, "fail": f"{type(err).__name__}: {err}"[:200]}
     try:
         img = raw_frame(load_image(path), exif)
         cls = raw_frame(class_map(dets), exif)
+    except MemoryError as err:  # the worker's, not the file's: again later
+        return {"img": iid, "fail": f"{type(err).__name__}: {err}"[:200]}
     except Exception as err:  # noqa: BLE001 — a broken file is skipped, not fatal
         return {"img": iid, "skip": f"unreadable ({type(err).__name__})"}
     finally:
@@ -789,6 +796,7 @@ def measure_image(job: dict) -> dict:
     rot = onto_grid(rotation_matrix(job["rot"]), job.get("gamma", 0.0))
     x, y = job["xy"]
     out = []
+    model_fail = None
     for w in job["walls"]:
         (ax, ay), (bx, by) = w["a"], w["b"]
         mx, my = (ax + bx) / 2 + w["n"][0] * 1.5, (ay + by) / 2 + w["n"][1] * 1.5
@@ -810,16 +818,21 @@ def measure_image(job: dict) -> dict:
                 m = measure(w | {"zg": zg}, img, cls, rot, cam)
         except Exception as err:  # noqa: BLE001 — record it, measure the rest
             # the model failing on this crop, or the worker out of memory
-            # over it (a very long wall): read again later, and given up
-            # after MAX_FAILS like a refused thumbnail (`_note_fails`)
+            # over it (a very long wall): this wall is left unread, read
+            # again later, and given up after MAX_FAILS like a refused
+            # thumbnail (`_note_fails`); the photo's other walls are kept
             if isinstance(err, facade_glass.ModelError) or (
                 kind == "glass" and isinstance(err, MemoryError)
             ):
-                fail = f"model: {type(err).__name__}: {err}"[:200]
-                return {"img": iid, "fail": fail, "own": True}
+                model_fail = f"model: {type(err).__name__}: {err}"[:200]
+                continue
             m = {"err": repr(err)[:100]}
         out.append(head | m)
-    return {"img": iid, "seq": job["seq"], "walls": out}
+    if model_fail and not out:
+        return {"img": iid, "fail": model_fail, "own": True}
+    return {"img": iid, "seq": job["seq"], "walls": out} | (
+        {"also_fail": model_fail} if model_fail else {}
+    )
 
 
 # --- fetch and run ----------------------------------------------------------
@@ -987,6 +1000,7 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
         every = _cached_json(
             _photos_path(tile),
             lambda: _search_tile(tile, "images", {"fields": PHOTO_FIELDS}, GLASS_NEAR_M),
+            PHOTO_FIELDS,
         )
         ws = walls(city)
         jobs = plan_glass(city, every, tile.epsg, gamma, ws)
@@ -1055,6 +1069,8 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
                     if r.get("own"):
                         owns.append(r)
                     continue
+                if also := r.pop("also_fail", None):  # a wall the model failed on
+                    owns.append({"img": r["img"], "fail": also, "own": True})
                 f.write(json.dumps(r, separators=(",", ":")) + "\n")
                 f.flush()
             if time.time() - last > 60 or start + 400 >= len(todo):
