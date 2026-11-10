@@ -30,6 +30,9 @@ export interface InquiryCard {
   title: string;
 }
 
+/** A card's heading alone: what the strip of candidates shows. */
+export type CardHeading = Pick<InquiryCard, "kicker" | "title">;
+
 export const decimal = new Intl.NumberFormat("de-DE", {
   maximumFractionDigits: 1,
 });

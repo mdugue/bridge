@@ -42,7 +42,8 @@ from data, read the same on every house, and stay calm.
 7. **Night:** walls do not glow; every unlit or additive layer is dimmed by
    the one night factor.
 8. **Water is matte** (a sun path, glints, gentle waves); fountains keep
-   their sky mirror.
+   their sky mirror. After dark the river mirrors the lamps by the water,
+   as points of light on the waves, never the scene.
 
 ## Consequences
 

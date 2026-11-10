@@ -182,14 +182,6 @@ export function unpackSurface(byte: number): {
   return { road: byte & 7, walk: (byte >> 3) & 7, park: byte >> 6 };
 }
 
-/**
- * The street direction the raster's G channel stores (0 = unknown, else
- * 1 + bearing mod 180° over 0..254) in radians from east, or null.
- */
-export function surfaceHeading(byte: number): number | null {
-  return byte === 0 ? null : ((byte - 1) / 254) * Math.PI;
-}
-
 /** sRGB tint of a class id; unknown ids take the background tint. */
 export function landcoverSrgb(id: number): readonly [number, number, number] {
   return (LANDCOVER_CLASSES[id] ?? LANDCOVER_CLASSES[0]).srgb;

@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import {
   BoxGeometry,
   BufferAttribute,
@@ -13,23 +13,22 @@ import {
   RGBAFormat,
   Vector3,
 } from "three/webgpu";
-import type { Texture, WebGPURenderer } from "three/webgpu";
+import type { WebGPURenderer } from "three/webgpu";
 import { uniform } from "three/tsl";
 import type { TerrainExtras } from "@/lib/city/tileset";
-import type { SharedRasters } from "./shared-rasters";
 import {
   createGridShare,
   createTerrainMaterial,
   dressTerrain,
-  readsSportGrounds,
 } from "./terrain-layer";
-import type {
-  GroundUniforms,
-  SplatLayer,
-  SplatRasters,
-  SportRasters,
-} from "./terrain-layer";
+import type { GroundUniforms, SplatLayer } from "./terrain-layer";
 import { isSceneShared } from "./three-utils";
+import { createTileRasters } from "./tile-rasters";
+
+const realFetch = globalThis.fetch;
+afterEach(() => {
+  globalThis.fetch = realFetch;
+});
 
 const ground = (): GroundUniforms => ({
   shadowReach: uniform(new Vector3()),
@@ -78,12 +77,7 @@ test("the baked light folds in only where the tile has its rasters", () => {
   expect(lit.aoNode).not.toBeNull();
 });
 
-test("only a desktop's fine level reads the sports grounds; the rest build as every tile without them", () => {
-  expect(readsSportGrounds(0, false)).toBe(true);
-  // no coarse level, and nothing on a phone
-  expect(readsSportGrounds(1, false)).toBe(false);
-  expect(readsSportGrounds(0, true)).toBe(false);
-  expect(readsSportGrounds(1, true)).toBe(false);
+test("a level without the sports grounds builds as every tile without them", () => {
   const look = ground();
   const sport = { raster: raster(RGBAFormat), table: raster(RGBAFormat) };
   const bare = createTerrainMaterial(splat({ ground: look }));
@@ -151,30 +145,26 @@ test("the coarse tiles draw with one index and one water index for the site", ()
   expect(grids.index(3, gridTile(0).index)).not.toBe(site);
 });
 
-/** Shared rasters whose loads answer `acquire`, their releases noted. */
-function share<T>(
-  acquire: () => Promise<T | null>,
-  released: string[] = []
-): SharedRasters<T> {
-  return {
-    acquire,
-    release: (key) => {
-      released.push(key);
-    },
-    held: () => 0,
-    clear: () => {},
-  };
-}
-
-const none = async () => null;
-
-test("a level whose tile leaves while it waits for a shared raster lets go at once, without waiting for that raster", async () => {
-  const released: string[] = [];
-  // the class raster another level is still decoding: it lands only when
-  // the test says
-  const { promise: landing, resolve: land } =
-    Promise.withResolvers<SplatRasters | null>();
-  const splats = share<SplatRasters>(async () => await landing, released);
+test("a level whose tile leaves while it waits for its rasters lets go at once: their loads stop", async () => {
+  const signals: AbortSignal[] = [];
+  // a class raster that never answers, until its load is aborted
+  // reason: the loader reads only `ok` and the body of a Response
+  globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+    if (init?.signal) {
+      signals.push(init.signal);
+    }
+    return await new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => {
+        reject(new DOMException("gone", "AbortError"));
+      });
+    });
+  }) as unknown as typeof fetch;
+  const rasters = createTileRasters({
+    url: (file) => file,
+    lowRasters: false,
+    onShareChange: () => {},
+    renderer: {} as WebGPURenderer,
+  });
   const aborter = new AbortController();
   const outcome = outcomeOf(
     dressTerrain(
@@ -191,15 +181,10 @@ test("a level whose tile leaves while it waits for a shared raster lets go at on
       } as unknown as TerrainExtras,
       new Matrix4(),
       {
-        fileUrl: (file) => file,
         fogColor: uniform(new Color()),
-        lowRasters: false,
         ground: ground(),
         offset: { cx: 0, cy: 0 },
-        renderer: {} as WebGPURenderer,
-        splats,
-        ndvis: share<Texture>(none),
-        sports: share<SportRasters>(none),
+        rasters: rasters.holder({}),
         signal: aborter.signal,
       }
     )
@@ -207,9 +192,9 @@ test("a level whose tile leaves while it waits for a shared raster lets go at on
   await new Promise((resolve) => {
     setTimeout(resolve, 0);
   });
+  expect(signals.map((signal) => signal.aborted)).toEqual([false]);
   aborter.abort();
   expect(await outcome).toBe("AbortError");
-  // its hold is gone already: the last holder gone, the shared load stops
-  expect(released).toEqual(["landcover.png"]);
-  land(null);
+  // its hold is gone already: the last holder gone, the load stops
+  expect(signals.map((signal) => signal.aborted)).toEqual([true]);
 });

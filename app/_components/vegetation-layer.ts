@@ -37,7 +37,6 @@ import {
   normalize,
   positionGeometry,
   positionWorld,
-  pow,
   sin,
   smoothstep,
   step,
@@ -52,8 +51,6 @@ import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
 import { groundSlope } from "@/lib/city/ground-clamp";
 import type { GroundContext } from "@/lib/city/ground-clamp";
 import { srgbToLinear } from "@/lib/city/landcover";
-import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
-import type { LookValues } from "@/lib/city/look-controls";
 import { decodeGreyPng } from "@/lib/city/png-raster";
 import { maxWindowSampler } from "@/lib/city/raster-sampler";
 import type { RasterSampler } from "@/lib/city/raster-sampler";
@@ -94,8 +91,6 @@ import {
   createCrownPlanScratch,
   keepInFarTier,
   planCrownTiers,
-  RICH_IN_M,
-  RICH_OUT_M,
 } from "@/lib/city/vegetation-lod";
 import type { ChunkLodState, CrownTier } from "@/lib/city/vegetation-lod";
 import {
@@ -106,7 +101,8 @@ import {
 } from "./conifer-crown";
 import { finished, inRuns } from "@/lib/city/build-steps";
 import type { Steps } from "@/lib/city/build-steps";
-import { fetchOptionalBinary } from "./fetch-optional";
+import { isAbortError } from "./fetch-optional";
+import { fetchRasterBytes, inRasterTurn } from "./raster-upload";
 import {
   instanceFloat,
   Instances,
@@ -116,9 +112,8 @@ import {
 } from "./instancing";
 import type { F, Live, V2, V3, V4 } from "./shader-chunks";
 import { setGraph, setSlots } from "./material-slots";
-import { gdHash } from "./ground-detail";
+import { gdHash } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
-import { viewDirection } from "./view-direction";
 import { TRUNK_BASE } from "@/lib/city/tree-family";
 import {
   buildFootGeos,
@@ -176,9 +171,10 @@ export interface VegetationFeatures {
 export interface VegetationContext extends GroundContext {
   /**
    * Shared world-space sun direction (surface→sun), updated by the sun rig.
-   * The crown materials' `sunDirection` uniform node holds it by reference
-   * for the backlit shimmer. May be absent (the shimmer then keeps the
-   * direction it has — straight up until a tile hands one in).
+   * The crown uniforms' `sunDirection` node holds it by reference for the
+   * tree feet (tree-foot.ts, a tile without baked light). May be absent
+   * (the node then keeps the direction it has — straight up until a tile
+   * hands one in).
    */
   sunDirection?: Vector3;
   /**
@@ -193,49 +189,48 @@ export interface VegetationContext extends GroundContext {
   ) => FootMaterials | undefined;
 }
 
-/**
- * Crown LOD hysteresis, measured to the NEAREST tree in a chunk (camera distance
- * minus the chunk's instance-sphere radius), not the centroid — otherwise a tree
- * a few metres away could stay cheap because its 250 m chunk's centre is far. A
- * cheap chunk switches to rich within NEAR_IN; a rich chunk only drops past
- * NEAR_OUT, so chunks straddling the line don't flicker. These drive
- * swapCrownLod (the cadastre's own silhouettes); the canopy chunks take the
- * same distances through createVegetationLod, which adds the far tier and
- * the site-wide rich budget.
- */
-export const LOD_NEAR_IN_M = RICH_IN_M;
-export const LOD_NEAR_OUT_M = RICH_OUT_M;
 /** Far-tier crowns of a thinned (dense) chunk are drawn this much wider. */
 const FAR_THIN_WIDEN = 1.35;
 
 /**
- * Runtime handle for a loaded vegetation group: the LOD swap (on the pose
- * tick, create-app.ts) plus the rich-crown toggle.
+ * Runtime handle for a loaded vegetation group: what the crown pass plans
+ * (`createVegetationLod`, on the pose tick, create-app.ts — the canopy's
+ * chunks, the cadastre's own silhouettes and the trunk-only cells' feet,
+ * over every loaded tile at once) and the season. The look has no say in
+ * the crowns: the rich one shows wherever the plan puts it. (The gust's
+ * brightening is fixed: `GUST_BRIGHTEN`.)
  */
 export interface VegetationControl {
-  /**
-   * Pushes the vegetation's part of the look into the crowns: the
-   * multi-tuft crown LOD toggle. (The backlit shimmer, the translucency
-   * and the gust's brightening are fixed: `SHIMMER`, `TRANSLUCENCY`,
-   * `GUST_BRIGHTEN`.)
-   */
-  applyLook: (look: LookValues) => void;
-  /** the tile's canopy chunks; `createVegetationLod` sets their crown tier
-   *  over every loaded tile at once */
+  /** the tile's canopy chunks: their crown tier, trunks and feet */
   chunks: VegetationChunk[];
+  /** the cadastre's own silhouettes (tree-inventory-layer.ts), planned
+   *  with the chunks against the same rich budget */
+  cells?: CrownCell[];
+  /** the trunk-only cells' feet (no crowns of their own to plan) */
+  looseFeet?: LooseFeet[];
   group: Group;
-  /** whether the look allows the rich crown (the multi-tuft toggle) */
-  multiTuft: () => boolean;
   /**
    * Moves the crowns to `day` (days since 1 January; lib/city/tree-season.ts):
    * autumn colour and bare crowns. Called on a date change, never per frame;
    * returns true when any crown changed (the shadow map must then be redrawn).
    */
   setSeason: (day: number) => boolean;
-  /** swaps the crowns a layer keeps outside the chunks (the cadastre's own
-   *  silhouettes, swapCrownLod); true when any changed (the shadow map must
-   *  then be redrawn). The canopy's chunks are `createVegetationLod`'s. */
-  updateLod: (cameraPos: Vector3) => boolean;
+}
+
+/**
+ * One chunk's reshaped silhouettes of the cadastre (a flame, a cone, a
+ * pine, a dome; tree-inventory-layer.ts): the cheap crown and the rich
+ * one, exactly one visible. Planned as a chunk is (`createVegetationLod`):
+ * the rich one where the plan says rich, the cheap one at mid and far
+ * (it has no coarser crown; its trunks ride in the canopy's chunks).
+ */
+export interface CrownCell {
+  kind: "cell";
+  cheap: Instances;
+  rich: Instances;
+  tier: CrownTier;
+  /** its trees (what the rich-crown budget counts) */
+  trees: number;
 }
 
 /**
@@ -276,40 +271,6 @@ export function applySeasons(cells: SeasonalCrowns[], day: number): boolean {
   let changed = false;
   for (const cell of cells) {
     changed = cell.apply(day) || changed;
-  }
-  return changed;
-}
-
-/** A chunk's two crown sets; exactly one is visible (swapCrownLod). */
-export interface CellLod {
-  cheap: Instances;
-  rich: Instances;
-}
-
-/**
- * Rich crown only near the camera (and only when multi-tuft is enabled);
- * far chunks fall back to the cheap crown. Distance is to the NEAREST tree
- * in the chunk (sphere centre minus radius) with enter/exit hysteresis.
- * Returns true when any chunk swapped (the shadow map must then be redrawn).
- */
-export function swapCrownLod(
-  cells: CellLod[],
-  cameraPos: Vector3,
-  multiTuft: boolean
-): boolean {
-  let changed = false;
-  for (const c of cells) {
-    const sphere = c.cheap.geometry.boundingSphere;
-    const near = sphere
-      ? cameraPos.distanceTo(sphere.center) - sphere.radius
-      : Number.POSITIVE_INFINITY;
-    const wantRich =
-      multiTuft && near < (c.rich.visible ? LOD_NEAR_OUT_M : LOD_NEAR_IN_M);
-    if (wantRich !== c.rich.visible) {
-      changed = true;
-    }
-    c.rich.visible = wantRich;
-    c.cheap.visible = !wantRich;
   }
   return changed;
 }
@@ -552,7 +513,8 @@ export function buildCrownGeo(detail = 2): BufferGeometry {
 /**
  * Rich multi-tuft crown for NEAR trees (LOD): a squashed core plus heavily
  * overlapping, elongated lobes merged into one mass, then RADIAL normals. ~18×
- * the cheap crown's triangles, so it is only ever shown within LOD_NEAR_M. ONE
+ * the cheap crown's triangles, so it is only ever shown near the eye, within
+ * the site's rich budget (lib/city/vegetation-lod.ts). ONE
  * shared geometry (fixed seed) — instance rotation hides the repetition.
  */
 export function buildCrownGeoRich(): BufferGeometry {
@@ -692,7 +654,8 @@ export function leafNoise(p: V2): F {
 }
 
 /** The crown's live uniform nodes, shared by every crown material of the
- *  scene (the sun rig writes the sun, the loop the clock). */
+ *  scene (the sun rig writes the sun, the loop the clock). The crowns read
+ *  only the clock; the sun is the tree feet's (`buildVegetation`). */
 export interface CrownUniforms {
   /** world-space surface → sun; its value is the sun rig's vector, by
    *  reference (sceneCrowns) */
@@ -850,65 +813,20 @@ function crownForm(): V3 {
  */
 const GUST_BRIGHTEN = 0.09;
 
-/** Gegenlicht-Schimmer: the warm glow of a crown between the eye and the
- *  sun — fixed at what its slider stood at (plan 073). */
-const SHIMMER = float(0.45);
-/** Blattdurchscheinen: the broader backlit glow of near and large crowns
- *  — fixed at what its slider stood at (plan 073). */
-const TRANSLUCENCY = float(0.5);
-
 /**
- * The crown's light terms (all in world space, off the swayed fragment's
- * `positionWorld`): the backlit shimmer, the translucency and the
- * sway-coupled brightness. `base` is the crown's own colour (tint,
- * twigs); returns the lit colour and the emissive glow. All are lit-pass
- * terms only (the shadow pass draws the crown rigid,
- * `castShadowPositionNode`, and keeps nothing of its colour but the
- * alpha), and they need no extra attribute or buffer upload.
- *
- * The shimmer and translucency glow where the sun is behind the canopy.
- * The GLSL crown gated both on the sun's shadow map sampled 2 m toward the
- * sun (so a building behind the tree killed the glow while the crown's own
- * self-shadow did not). Node lights keep their
- * shadow map to themselves: three's public TSL offers only `shadow(light)`,
- * which builds a second shadow node that renders its own map, and the
- * scene's shadow node is the light node's, reachable only from inside the
- * lighting pass. So the gate is the daylight ramp alone — the sun's own
- * intensity ramp (sun-rig.ts, `clamp(sun.y · 5)`), so the glow fades out
- * with the sun instead of lingering into the night; a crown behind a
- * building now glows too.
+ * The crown's lit colour: its own (`base`: tint, twigs) brightened leaning
+ * into a gust and dimmed rocking back — the SAME centred gust signal that
+ * bends the geometry (`crownSway`), so the average colour is unchanged. A
+ * lit-pass term only (the shadow pass draws the crown rigid,
+ * `castShadowPositionNode`, and keeps nothing of its colour but the alpha).
+ * The crown has no glow of its own: the backlit shimmer and the leaves'
+ * translucency (plan 073's fixed sliders) brightened a crown seen against
+ * the sun evenly over its whole face, which flattened it (removed
+ * 2026-11-06); against the light it now reads as the sun and sky light
+ * it, its sunlit rim bright, its face in its own shade.
  */
-function crownLight(
-  u: CrownUniforms,
-  base: V3,
-  gust: F,
-  crownScale: F
-): { colour: V3; emissive: V3 } {
-  const sun = u.sunDirection;
-  const shimVis = clamp(sun.y.mul(5), 0, 1);
-  const daylight = clamp(sun.y, 0, 1);
-  const view = viewDirection().negate();
-  const back = clamp(dot(view, sun.negate()), 0, 1);
-  const far = distance(cameraPosition, positionWorld);
-  const shimmer = SHIMMER.mul(pow(back, 3.6))
-    .mul(shimVis)
-    .mul(vec3(0.95, 0.85, 0.45));
-  // Backlit translucency: a BROADER subsurface glow (low exponent) with the
-  // same gate, limited to near OR large crowns and to daytime so it never
-  // reads as far-field "noise".
-  const trLarge = smoothstep(1.2, 3, crownScale);
-  const trNear = float(1).sub(smoothstep(120, 260, far));
-  const translucency = TRANSLUCENCY.mul(pow(back, 1.6))
-    .mul(shimVis)
-    .mul(max(trLarge, trNear).mul(daylight))
-    .mul(vec3(0.45, 0.62, 0.3));
-  // Sway-coupled brightness — the SAME centred gust signal that bends the
-  // geometry, so the whole crown brightens leaning in and dims rocking
-  // back; centred so the average colour is unchanged.
-  return {
-    colour: base.mul(gust.mul(GUST_BRIGHTEN).add(1)),
-    emissive: shimmer.add(translucency),
-  };
+function gustLit(base: V3, gust: F): V3 {
+  return base.mul(gust.mul(GUST_BRIGHTEN).add(1));
 }
 
 /** The crown's underside at the most (its colour × this, cool): the sky
@@ -941,10 +859,10 @@ function crownOcclusion(shape: V3): V3 {
 }
 
 /**
- * Sage crown material with a backlit shimmer: when the sun is behind the
- * canopy the camera-facing leaves glow warm (crownLight). Shared by every
- * crown set of the scene, every tier (sceneCrowns). The uniforms are live:
- * the sun and the clock move without a rebuild. `bare` builds the
+ * Sage crown material: the crown's own occlusion and the gust's brightness
+ * pulse on its tint (`gustLit`), no glow of its own. Shared by every
+ * crown set of the scene, every tier (sceneCrowns). The clock is live:
+ * the wind moves without a rebuild. `bare` builds the
  * seasonal variant: the per-instance leaf cover thins the crown to twigs
  * (crown-season.ts) through `maskNode`, which the shadow pass honours, so
  * the thinned crown thins its shadow too; a chunk wears it only while any
@@ -968,7 +886,6 @@ export function buildCrownMaterial(
   const sway = crownSway(u.time, shape);
   m.positionNode = instancePosition(sway.local);
   m.castShadowPositionNode = instancePosition(shape);
-  const crownScale = varying(length(instanceColumn(1).xyz));
   // (a printed crown has no brightness pulse: its light is cut in two
   // steps, and the pulse would flip it between them); one varying for
   // the occlusion and the pulse (WebGPU's sixteen are scarce)
@@ -980,31 +897,17 @@ export function buildCrownMaterial(
   const gust = shading.w;
   const tinted = materialColor.mul(instanceTint()).mul(occluded);
   if (!bare) {
-    const lit = crownLight(
-      u,
-      printedCrown(tinted, tinted, float(0)),
-      gust,
-      crownScale
-    );
-    m.colorNode = lit.colour;
-    m.emissiveNode = lit.emissive.mul(float(1).sub(crownsPrinted));
+    m.colorNode = gustLit(printedCrown(tinted, tinted, float(0)), gust);
     return m;
   }
   const season = crownSeasonNodes();
   m.maskNode = season.keep;
   m.maskShadowNode = season.keepShadow;
   const kept = mix(tinted, season.twigColour, season.twig);
-  const lit = crownLight(
-    u,
+  m.colorNode = gustLit(
     printedCrown(mix(kept, season.veilColour, season.veil), kept, season.twig),
-    gust,
-    crownScale
+    gust
   );
-  m.colorNode = lit.colour;
-  // Twigs of a bare crown neither shimmer nor glow.
-  m.emissiveNode = lit.emissive
-    .mul(float(1).sub(season.twig))
-    .mul(float(1).sub(crownsPrinted));
   return m;
 }
 
@@ -1915,21 +1818,11 @@ function* buildTrees(
 }
 
 /** A cell of trunks alone (the register's, their crowns elsewhere) and
- *  their feet: no chunk, so `showLooseFeet` switches the feet. */
-interface LooseFeet {
+ *  their feet: no chunk, so the crown pass shows the feet by the trunks'
+ *  own distance (`createVegetationLod`). */
+export interface LooseFeet {
   feet: Instances[];
   trunks: Instances;
-}
-
-/** The feet of the trunk-only cells only where one of their trunks is
- *  near enough to show them (as `createVegetationLod` does a chunk's). */
-function showLooseFeet(all: readonly LooseFeet[], cameraPos: Vector3): void {
-  for (const { feet, trunks } of all) {
-    const on = nearestOf(trunks, cameraPos) < FOOT_SHOWN_M;
-    for (const f of feet) {
-      f.visible = on && seasonalFoot(f);
-    }
-  }
 }
 
 /**
@@ -1945,14 +1838,18 @@ export async function loadNdviSampler(
   bounds: TerrainBounds,
   signal?: AbortSignal
 ): Promise<RasterSampler | null> {
-  // retried like any optional file, an abort rethrown (fetch-optional.ts)
-  const png = await fetchOptionalBinary(url, signal);
-  if (!png) {
-    return null;
-  }
+  // retried like any raster; decoded in the site's raster turn, so on a
+  // phone it never overlaps another raster's decode (raster-upload.ts)
   try {
-    return maxWindowSampler(await decodeGreyPng(new Uint8Array(png)), bounds);
-  } catch {
+    const png = await fetchRasterBytes(url, signal);
+    return await inRasterTurn(
+      async () => maxWindowSampler(await decodeGreyPng(png), bounds),
+      signal
+    );
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
     return null;
   }
 }
@@ -1991,7 +1888,6 @@ export function* vegetationSteps(
   // read the same nodes — the wind clock among them, which the render loop
   // advances once per frame (`setCrownTime`, the water ripple's seconds).
   const crownMats = sceneCrowns(ctx.sunDirection);
-  let { multiTuft } = LOOK_DEFAULTS;
   let chunks: VegetationChunk[] = [];
   let seasons: SeasonalCrowns[] = [];
   let loose: LooseFeet[] = [];
@@ -2026,17 +1922,8 @@ export function* vegetationSteps(
   return {
     group,
     chunks,
-    applyLook: (look) => {
-      ({ multiTuft } = look);
-    },
-    multiTuft: () => multiTuft,
+    looseFeet: loose,
     setSeason: (day) => applySeasons(seasons, day),
-    // The chunks' tiers are createVegetationLod's; the canopy keeps no other
-    // crowns, only the trunk-only cells' feet (no shadow casters).
-    updateLod: (cameraPos) => {
-      showLooseFeet(loose, cameraPos);
-      return false;
-    },
   };
 }
 
@@ -2078,13 +1965,62 @@ function showTier(chunk: VegetationChunk, tier: CrownTier): void {
   // (the feet: `createVegetationLod`, by the nearest tree's distance)
 }
 
+/** Shows a cell's tier; true when its crown changed (mid and far both
+ *  show the cheap one, so a flip between them changes no caster). */
+function showCellTier(cell: CrownCell, tier: CrownTier): boolean {
+  const swapped = (cell.tier === "rich") !== (tier === "rich");
+  cell.tier = tier;
+  cell.rich.visible = tier === "rich";
+  cell.cheap.visible = tier !== "rich";
+  return swapped;
+}
+
+/** A planned set: a canopy chunk or a cadastre cell. */
+const isCell = (item: VegetationChunk | CrownCell): item is CrownCell =>
+  "kind" in item && item.kind === "cell";
+
+/** Metres from `cameraPos` to a planned set's nearest crown. */
+function nearestCrown(
+  item: VegetationChunk | CrownCell,
+  cameraPos: Vector3
+): number {
+  return isCell(item)
+    ? nearestOf(item.cheap, cameraPos)
+    : nearestTree(item, cameraPos);
+}
+
+/** Shows a chunk's feet only where one of its trees is near enough
+ *  (tree-foot.ts fades them out by FOOT_SHOWN_M): a far chunk draws none
+ *  of their sets. */
+function showChunkFeet(chunk: VegetationChunk, cameraPos: Vector3): void {
+  const feet = chunk.feet ?? [];
+  const on =
+    feet.length > 0 &&
+    chunk.tier !== "far" &&
+    nearestTrunk(chunk, cameraPos) < FOOT_SHOWN_M;
+  for (const set of feet) {
+    set.visible = on && seasonalFoot(set);
+  }
+}
+
+/** The trunk-only cells' feet, by their own trunks' distance. */
+function showLooseFeet(all: readonly LooseFeet[], cameraPos: Vector3): void {
+  for (const { feet, trunks } of all) {
+    const on = nearestOf(trunks, cameraPos) < FOOT_SHOWN_M;
+    for (const f of feet) {
+      f.visible = on && seasonalFoot(f);
+    }
+  }
+}
+
 /**
- * Picks every loaded chunk's crown tier at once (lib/city/vegetation-lod.ts):
- * the rich-crown budget is shared by the whole site, not granted per tile.
- * The returned pass answers true when any chunk changed — what casts
+ * Picks every loaded crown set's tier at once (lib/city/vegetation-lod.ts):
+ * the canopy's chunks and the cadastre's silhouettes, under one rich-crown
+ * budget for the whole site, not one per tile or per layer. Then the
+ * feet. The returned pass answers true when any tier changed — what casts
  * shadows changed, so the shadow map must be redrawn. It keeps its arrays
- * and the chunks' plan states between passes (one each per chunk, ~1 000
- * over a site, were allocated on every pass): only what a pass met stays
+ * and the plan states between passes (one each per set, ~1 000 over a
+ * site, were allocated on every pass): only what a pass met stays
  * referenced, so a tile that left is let go at the next.
  */
 export function createVegetationLod(): (
@@ -2092,25 +2028,30 @@ export function createVegetationLod(): (
   cameraPos: Vector3,
   richBudget?: number
 ) => boolean {
-  const all: VegetationChunk[] = [];
+  const all: (VegetationChunk | CrownCell)[] = [];
   const states: ChunkLodState[] = [];
   const scratch = createCrownPlanScratch();
+  let n = 0;
+  const plan = (item: VegetationChunk | CrownCell, cameraPos: Vector3) => {
+    all[n] = item;
+    let state = states[n];
+    if (!state) {
+      state = { current: item.tier, near: 0, trees: 0 };
+      states[n] = state;
+    }
+    state.current = item.tier;
+    state.near = nearestCrown(item, cameraPos);
+    state.trees = item.trees;
+    n += 1;
+  };
   return (controls, cameraPos, richBudget) => {
-    let n = 0;
+    n = 0;
     for (const control of controls) {
-      const allowRich = control.multiTuft();
       for (const chunk of control.chunks) {
-        all[n] = chunk;
-        let state = states[n];
-        if (!state) {
-          state = { allowRich, current: chunk.tier, near: 0, trees: 0 };
-          states[n] = state;
-        }
-        state.allowRich = allowRich;
-        state.current = chunk.tier;
-        state.near = nearestTree(chunk, cameraPos);
-        state.trees = chunk.trees;
-        n += 1;
+        plan(chunk, cameraPos);
+      }
+      for (const cell of control.cells ?? []) {
+        plan(cell, cameraPos);
       }
     }
     all.length = n;
@@ -2118,21 +2059,21 @@ export function createVegetationLod(): (
     const tiers = planCrownTiers(states, richBudget, scratch);
     let changed = false;
     for (let i = 0; i < n; i += 1) {
-      if (tiers[i] !== all[i].tier) {
-        showTier(all[i], tiers[i]);
+      const item = all[i];
+      if (isCell(item)) {
+        if (tiers[i] !== item.tier && showCellTier(item, tiers[i])) {
+          changed = true;
+        }
+        continue;
+      }
+      if (tiers[i] !== item.tier) {
+        showTier(item, tiers[i]);
         changed = true;
       }
-      // the feet only where one of their trees is near enough to show them
-      // (tree-foot.ts fades them out by FOOT_SHOWN_M): a far chunk draws
-      // none of their sets
-      const feet = all[i].feet ?? [];
-      const feetOn =
-        feet.length > 0 &&
-        tiers[i] !== "far" &&
-        nearestTrunk(all[i], cameraPos) < FOOT_SHOWN_M;
-      for (const set of feet) {
-        set.visible = feetOn && seasonalFoot(set);
-      }
+      showChunkFeet(item, cameraPos);
+    }
+    for (const control of controls) {
+      showLooseFeet(control.looseFeet ?? [], cameraPos);
     }
     return changed;
   };

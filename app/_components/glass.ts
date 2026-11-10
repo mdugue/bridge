@@ -24,7 +24,7 @@ import {
 import type { DataMarks } from "@/lib/city/render-style";
 import { mapFadeNode } from "./map-overlay";
 import type { F, Live, V3 } from "./shader-chunks";
-import { styleNight } from "./sun-rig";
+import { sceneNight } from "./scene-environment";
 import { eyeDirectionView, viewParallel } from "./view-direction";
 
 /**
@@ -276,7 +276,7 @@ export function dataMarkColour(i: DataMarkInputs): V3 {
   const pale = mix(vec3(1), vivid, 0.75);
   const card = behind ?? vec3(1);
   const tissue = mix(card, card.mul(pale).add(pale.mul(0.12)), 0.8)
-    .add(i.tint.mul(styleNight.mul(0.35)))
+    .add(i.tint.mul(sceneNight.mul(0.35)))
     .add(light.mul(0.25));
   const plan = mix(
     mix(vec3(0.55, 0.63, 0.88), vec3(0.42, 0.24, 0.62), i.scale),
@@ -286,7 +286,7 @@ export function dataMarkColour(i: DataMarkInputs): V3 {
   const glowing = vec3(1, 0.82, 0.5).mul(light.mul(0.6).add(0.55));
   // (a plan — Modell's parallel view — has no night: its marks keep their
   // plan colours)
-  const planNight = styleNight.mul(float(1).sub(viewParallel));
+  const planNight = sceneNight.mul(float(1).sub(viewParallel));
   const planned = mix(
     mix(plan, glowing, planNight),
     vec3(0.08),

@@ -11,22 +11,24 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
+import type { z } from "zod";
 import {
   hasObjectFlag,
   OBJECT_FLAG_FLAT_ROOF,
   withoutTrafficStructures,
 } from "../lib/city/city-mesh";
 import type { OsmBuildingLut } from "../lib/city/city-mesh";
-import type {
-  DoorFeature,
-  FeatureCollection,
-  ShopfrontFile,
-} from "../lib/city/features";
-import type { LandmarkFile } from "../lib/city/landmarks";
+import { parseBakeFile } from "../lib/city/bake-file";
+import type { BakeFile } from "../lib/city/bake-file";
+import { DOORS_FILE } from "../lib/city/doors-file";
+import { SHOPFRONTS_FILE } from "../lib/city/shopfronts-file";
+import { OSM_BUILDINGS_FILE } from "../lib/city/osm-buildings-file";
+import { LANDMARKS_FILE } from "../lib/city/landmarks-file";
 import { cityMeshSourceFiles, tileIds } from "../lib/city/tile";
 import type { CityJsonDocument } from "../lib/city/types";
 import { FACADE_SCALE_M, unpackStyle, windowType } from "../lib/city/windows";
-import type { FacadeModel, WindowFile, WindowType } from "../lib/city/windows";
+import type { FacadeModel, WindowType } from "../lib/city/windows";
+import { WINDOWS_FILE } from "../lib/city/windows-file";
 import { siteFromArgs } from "../sites";
 import { bakeCityMesh } from "./bake-city-mesh";
 
@@ -35,6 +37,15 @@ const read = (path: string): unknown =>
   existsSync(nodePath.join(ROOT, path))
     ? JSON.parse(readFileSync(nodePath.join(ROOT, path), "utf-8"))
     : undefined;
+
+/** A tile's source file as its schema describes it, or none (ADR 0059). */
+function parsed<S extends z.ZodType>(
+  spec: BakeFile<S>,
+  path: string
+): z.infer<S> | undefined {
+  const json = read(path);
+  return json === undefined ? undefined : parseBakeFile(spec, json, path);
+}
 
 const median = (xs: number[]) => {
   const s = [...xs].sort((a, b) => a - b);
@@ -89,14 +100,20 @@ for (const tile of tiles) {
   if (!doc) {
     continue;
   }
-  const file = read(src.windows) as WindowFile | undefined;
+  const file = parsed(WINDOWS_FILE, src.windows);
   const walls = Object.values(file?.buildings ?? {}).flat();
   // the OSM facts and the landmarks: the windows' gate reads them
+  const osmJson = read(src.osmBuild);
   const osm: OsmBuildingLut = {
-    ...(read(src.osmBuild) as { objects?: OsmBuildingLut } | undefined)
-      ?.objects,
+    ...(osmJson === undefined
+      ? {}
+      : parseBakeFile(OSM_BUILDINGS_FILE, osmJson, src.osmBuild).objects),
   };
-  const landmarks = read(src.landmarks) as LandmarkFile | undefined;
+  const landmarksJson = read(src.landmarks);
+  const landmarks =
+    landmarksJson === undefined
+      ? undefined
+      : parseBakeFile(LANDMARKS_FILE, landmarksJson, src.landmarks);
   for (const lm of landmarks?.landmarks ?? []) {
     for (const id of lm.objects) {
       osm[id] = { ...osm[id], landmark: 1 };
@@ -114,10 +131,9 @@ for (const tile of tiles) {
     undefined,
     undefined,
     {
-      doors: (read(src.doors) as FeatureCollection<DoorFeature> | undefined)
-        ?.features,
+      doors: parsed(DOORS_FILE, src.doors)?.features,
       shopfronts: Object.values(
-        (read(src.shopfronts) as ShopfrontFile | undefined)?.buildings ?? {}
+        parsed(SHOPFRONTS_FILE, src.shopfronts)?.buildings ?? {}
       ).flat(),
       windows: walls,
     }

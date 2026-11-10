@@ -15,10 +15,17 @@ import {
   TRAM_LIVERIES,
 } from "./tram-timetable";
 import type { TramOperator, TramTimetable } from "./tram-timetable";
+import { parseBakeFile } from "./bake-file";
+import { TRAMS_FILE } from "./tram-timetable-file";
 
 /** One line, one pattern: three stops 0, 400 and 1000 m along a path
  *  that turns north at 600 m; a bridge from 600 m on. */
 const TT: TramTimetable = {
+  // the file's members the cars do not read; no operator named
+  attribution: "",
+  crs: { type: "name", properties: { name: "urn:ogc:def:crs:EPSG::25833" } },
+  agencies: [],
+  routeAgency: [],
   routes: ["11"],
   patterns: [
     {
@@ -109,9 +116,12 @@ const OPERATOR: Record<string, TramOperator> = {
 };
 
 test.each(SITES)("%s: the committed timetable is whole", (site) => {
-  const tt = JSON.parse(
-    readFileSync(nodePath.join(DATA, site, "transit", "trams.json"), "utf-8")
-  ) as TramTimetable;
+  const path = nodePath.join(DATA, site, "transit", "trams.json");
+  const tt = parseBakeFile(
+    TRAMS_FILE,
+    JSON.parse(readFileSync(path, "utf-8")),
+    path
+  );
   if (tt.agencies) {
     expect(tt.routeAgency).toHaveLength(tt.routes.length);
     for (const [i] of tt.routes.entries()) {
@@ -163,7 +173,7 @@ test("the GTFS agencies stand for their operators' liveries", () => {
     routeAgency: [0],
   };
   expect(routeOperator(tt, 0)).toBe("dvb");
-  // a timetable from before the agencies: the neutral car
+  // no agency named: the neutral car
   expect(routeOperator(TT, 0)).toBe("neutral");
 });
 

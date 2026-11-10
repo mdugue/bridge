@@ -1,5 +1,6 @@
 "use client";
 
+import { SHADOW_RINGS } from "@/lib/city/shadow-rings";
 import { RotateCcwIcon } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -145,7 +146,9 @@ export const QualityPanel = ({
           {ratio.toLocaleString("de-DE", { maximumFractionDigits: 2 })}×
         </span>
         <span>Schattenkarte</span>
-        <span className="font-mono tabular-nums">{shadow}²</span>
+        <span className="font-mono tabular-nums">
+          {SHADOW_RINGS} × {shadow}²
+        </span>
         <span>Kachelspeicher</span>
         <span className="font-mono tabular-nums">bis {bytesLabel(cache)}</span>
       </div>

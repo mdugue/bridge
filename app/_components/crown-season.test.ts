@@ -160,5 +160,8 @@ test("only the seasonal crown masks (the shadow pass honours it), and twigs lose
     expect(m.castShadowPositionNode).not.toBeNull();
     expect(m.castShadowPositionNode).not.toBe(m.positionNode);
   }
-  expect(seasonal.emissiveNode).not.toBe(plain.emissiveNode);
+  // no glow of its own, against the light or otherwise
+  expect(plain.emissiveNode).toBeNull();
+  expect(seasonal.emissiveNode).toBeNull();
+  expect(seasonal.colorNode).not.toBe(plain.colorNode);
 });

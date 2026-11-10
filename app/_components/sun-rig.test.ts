@@ -1,20 +1,30 @@
-import { expect, jest, test } from "bun:test";
+import { afterEach, beforeEach, expect, jest, test } from "bun:test";
 import {
   Box3,
   Color,
   DirectionalLight,
+  Object3D,
   PerspectiveCamera,
   RenderTarget,
   Scene,
   Vector3,
   Vector4,
 } from "three/webgpu";
-import type { DepthTexture, ShadowNode } from "three/webgpu";
+import type { DepthTexture, Matrix4, ShadowNode } from "three/webgpu";
 import { uniform } from "three/tsl";
 import { SHADOW_BASE_RADIUS, SHADOW_MAX_RADIUS } from "@/lib/city/shadow-fit";
+import { NEAR_CHANGE_RINGS, SHADOW_RINGS } from "@/lib/city/shadow-rings";
 import { shadowMapSizeFor } from "./scene-profile";
 import { createSunRig } from "./sun-rig";
-import type { AirView } from "./sun-rig";
+import { castsInRing, markThinCaster } from "./three-utils";
+
+// A ring's redraws are paced by the clock, and these tests step through time.
+beforeEach(() => {
+  jest.useFakeTimers();
+});
+afterEach(() => {
+  jest.useRealTimers();
+});
 
 // Dresden — the primary tile's latitude/longitude.
 const DRESDEN = { lat: 51.05, lng: 13.74 };
@@ -40,14 +50,13 @@ function rig(shadowMapSize = shadowMapSizeFor("full")) {
   if (!sun) {
     throw new Error("the rig adds no sun");
   }
+  // by day, unless a test says otherwise: by night no ring draws
+  sunRig.update(new Date("2026-06-21T12:00:00+02:00"));
   return { sunRig, sun, fogColor };
 }
 
 /** Looking due north and level — the horizontal part of a world direction. */
 const LEVEL_NORTH = new Vector3(0, 0, -1);
-
-/** A site whose ground lies between 90 and 140 m, the fog ending at 2.6 km. */
-const AIR: AirView = { fogEnd: 2600, groundLow: 90, groundHigh: 140 };
 
 /** The walk/fly camera at `position`, looking along `direction`. */
 function eyeAt(position: Vector3, direction: Vector3): PerspectiveCamera {
@@ -70,7 +79,7 @@ function followAt(
   ground: number
 ) {
   const d = direction.clone().normalize();
-  sunRig.follow(eyeAt(position, d), d, ground, AIR);
+  sunRig.follow(eyeAt(position, d), d, ground);
 }
 
 /** Where the square the sun's camera streams for is centred (world). */
@@ -103,14 +112,72 @@ test("the map is marked for redraw once at construction", () => {
   expect(sunRig.shadowPending()).toBe(true);
 });
 
-test("follow inside the dead zone does not redraw", () => {
-  const { sunRig, sun } = rig();
-  walkTo(sunRig, 0, 0); // first call re-centres
-  expect(sun.shadow.needsUpdate).toBe(true);
+/** The rings' shadow node, as three draws with it. */
+function ringNode(sun: DirectionalLight) {
+  // reason: three reads the light's shadow node from an undeclared member,
+  // and renderShadow is ShadowNode's documented override
+  return (sun.shadow as unknown as { shadowNode: ShadowNode })
+    .shadowNode as unknown as {
+    renderShadow: (frame: unknown) => void;
+    shadowMap: RenderTarget | null;
+  };
+}
+
+/** What three does in a frame with a ring due: draws one layer. Returns it,
+ *  or null when none was due. */
+function drawOne(
+  sun: DirectionalLight,
+  seen?: { thin: boolean }
+): number | null {
+  const node = ringNode(sun);
+  node.shadowMap ??= new RenderTarget(4, 4);
+  const layers: number[] = [];
+  // three's own: it draws what reaches it
+  let drawObject: (object: unknown) => void = () => {
+    if (seen) {
+      seen.thin = true;
+    }
+  };
+  node.renderShadow({
+    scene: new Scene(),
+    renderer: {
+      getRenderObjectFunction: () => drawObject,
+      render: () => {
+        drawObject({ userData: { casterRings: 1 } });
+      },
+      setRenderObjectFunction: (f: (object: unknown) => void) => {
+        drawObject = f;
+      },
+      setRenderTarget: (_target: unknown, at: number) => {
+        layers.push(at);
+      },
+    },
+  });
   sun.shadow.needsUpdate = false;
+  return layers[0] ?? null;
+}
+
+/** Draws every ring that is asked for, across as many frames as they take. */
+function drawAll(sun: DirectionalLight): number[] {
+  const layers: number[] = [];
+  for (let frame = 0; frame < 16; frame += 1) {
+    jest.advanceTimersByTime(1000);
+    const layer = drawOne(sun);
+    if (layer !== null) {
+      layers.push(layer);
+    }
+  }
+  return layers;
+}
+
+test("follow inside every dead zone does not redraw", () => {
+  const { sunRig, sun } = rig();
+  walkTo(sunRig, 0, 0); // first call places the rings
+  expect(sun.shadow.needsUpdate).toBe(true);
+  drawAll(sun);
   for (const [x, z] of [
     [5, 0],
-    [0, 19],
+    [0, 12],
     [-10, 10],
   ]) {
     walkTo(sunRig, x, z);
@@ -119,38 +186,42 @@ test("follow inside the dead zone does not redraw", () => {
   }
 });
 
-test("follow beyond the dead zone re-centres and redraws", () => {
+test("past its dead zone the finest ring redraws, on the ground", () => {
   const { sunRig, sun } = rig();
   walkTo(sunRig, 0, 0);
-  sun.shadow.needsUpdate = false;
-  walkTo(sunRig, 35, 0);
+  drawAll(sun);
+  walkTo(sunRig, 20, 0);
   expect(sun.shadow.needsUpdate).toBe(true);
-  // Snapped to the texel grid: within one texel (0.08 m at 3072²) of the
+  // the wider rings are still where they were
+  expect(drawAll(sun)).toEqual([0]);
+  // Snapped to its texel grid: within one texel (0.08 m at 2048²) of the
   // point, and anchored to the GROUND rather than to the eye.
-  expect(sun.target.position.distanceTo(new Vector3(35, 100, 0))).toBeLessThan(
+  expect(sun.target.position.distanceTo(new Vector3(20, 100, 0))).toBeLessThan(
     0.1
   );
 });
 
-test("walking 500 m straight redraws the map once every 30 m", () => {
-  const { sunRig, sun } = rig();
-  let redraws = 0;
-  for (let x = 0; x <= 500; x += 0.25) {
-    sun.shadow.needsUpdate = false;
-    walkTo(sunRig, x, 0);
-    if (sun.shadow.needsUpdate) {
-      redraws += 1;
-    }
-  }
-  // the first re-centre and one per 30 m (26 with the old 19.8 m zone)
-  expect(redraws).toBe(1 + Math.floor(500 / 30));
-});
-
-test("turning on the spot at eye level never moves the frustum", () => {
+test("walking on, each ring redraws in proportion to its size", () => {
   const { sunRig, sun } = rig();
   walkTo(sunRig, 0, 0);
+  drawAll(sun);
+  const redraws = [0, 0, 0, 0];
+  for (let x = 0; x <= 2000; x += 1) {
+    jest.advanceTimersByTime(1000);
+    walkTo(sunRig, x, 0);
+    const layer = drawOne(sun);
+    if (layer !== null) {
+      redraws[layer] += 1;
+    }
+  }
+  expect(redraws).toEqual([125, 41, 13, 4]);
+});
+
+test("turning on the spot at eye level draws no ring", () => {
+  const { sunRig, sun } = rig();
+  walkTo(sunRig, 0, 0);
+  drawAll(sun);
   const centre = sun.target.position.clone();
-  sun.shadow.needsUpdate = false;
   for (let deg = 0; deg < 360; deg += 15) {
     const a = (deg * Math.PI) / 180;
     // level, and pitched down by 30°
@@ -167,8 +238,8 @@ test("turning on the spot at eye level never moves the frustum", () => {
   expect(sun.target.position).toEqual(centre);
 });
 
-test("climbing straight up re-fits the stream's square and redraws", () => {
-  const { sunRig, sun } = rig();
+test("climbing straight up re-fits the stream's square", () => {
+  const { sunRig } = rig();
   walkTo(sunRig, 0, 0);
   const square = sunRig.shadowCamera as unknown as {
     far: number;
@@ -177,23 +248,17 @@ test("climbing straight up re-fits the stream's square and redraws", () => {
   };
   const half = () => square.right;
   expect(half()).toBe(SHADOW_BASE_RADIUS);
-  expect(sun.shadow.camera.right).toBe(SHADOW_BASE_RADIUS);
-  sun.shadow.needsUpdate = false;
-  // 110 m above the same spot, looking level: the square grows an octave and
-  // the map redraws even though x/z never changed.
+  // 110 m above the same spot, looking level: the square grows an octave
   followAt(sunRig, new Vector3(0, 210, 0), LEVEL_NORTH, 100);
-  expect(sun.shadow.needsUpdate).toBe(true);
   expect(half()).toBeGreaterThan(SHADOW_BASE_RADIUS);
   expect(half()).toBeLessThanOrEqual(SHADOW_MAX_RADIUS);
   // The square's depth range keeps its 1.2x margin around the light
   // distance, so the widened frustum still brackets the ground it covers.
   expect(square.near).toBeCloseTo(half() * 2 - half() * 1.2, 5);
   expect(square.far).toBeCloseTo(half() * 2 + half() * 1.2, 5);
-  // Back down to eye level: the tight street-level frustum returns, and the
-  // map is the square again.
+  // Back down to eye level: the tight street-level frustum returns.
   walkTo(sunRig, 0, 0);
   expect(half()).toBe(SHADOW_BASE_RADIUS);
-  expect(sun.shadow.camera.right).toBe(SHADOW_BASE_RADIUS);
 });
 
 test("airborne, the square is pushed toward what the camera looks at", () => {
@@ -209,22 +274,16 @@ test("airborne, the square is pushed toward what the camera looks at", () => {
   expect(Math.abs(squareCentre(sunRig).z)).toBeLessThan(1);
 });
 
-test("the shadow map is its depth alone, no colour target beside it", () => {
+test("the shadow map is its depth alone, one layer a ring", () => {
   const { sun } = rig(512);
-  // reason: three reads the light's shadow node from an undeclared member
-  const node = (sun.shadow as unknown as { shadowNode?: ShadowNode })
-    .shadowNode as unknown as {
+  const node = ringNode(sun) as unknown as {
     setupRenderTarget: (
       shadow: unknown,
       builder: unknown
     ) => { depthTexture: DepthTexture; shadowMap: RenderTarget };
   };
-  expect(node).toBeDefined();
-  // the two members of a node builder the base reads
   const { shadowMap, depthTexture } = node.setupRenderTarget(sun.shadow, {
     renderer: { reversedDepthBuffer: false },
-    createRenderTarget: (width: number, height: number) =>
-      new RenderTarget(width, height),
   });
   expect(shadowMap.textures).toHaveLength(0);
   // the depth the PCF filter compares against is still the map's
@@ -232,38 +291,101 @@ test("the shadow map is its depth alone, no colour target beside it", () => {
   // and it is this map's own, freed with it (three frees a target's depth
   // only where the texture names that target)
   expect(depthTexture.renderTarget).toBe(shadowMap);
+  expect(depthTexture.isArrayTexture).toBe(true);
+  expect(shadowMap.depth).toBe(SHADOW_RINGS);
   expect(shadowMap.width).toBe(512);
   shadowMap.dispose();
 });
 
-test("the shadow map takes the size it is given (lite = 512²)", () => {
+test("the rings take the size they are given", () => {
   const { sunRig, sun } = rig(512);
   expect(sun.shadow.mapSize.x).toBe(512);
-  // the depth's four bytes
-  expect(sunRig.shadowMapBytes).toBe(512 * 512 * 4);
-  // Coarser texel (0.47 m over the 242 m frustum): the re-centre still snaps
-  // to it, so the frustum lands within one texel of the point.
+  // four layers of the depth's four bytes
+  expect(sunRig.shadowMapBytes).toBe(512 * 512 * 4 * SHADOW_RINGS);
+  // Coarser texel (0.31 m over the finest ring's 160 m): a re-centre still
+  // snaps to it, so the ring lands within one texel of the point.
   walkTo(sunRig, 0, 0);
+  drawAll(sun);
   walkTo(sunRig, 35, 0);
+  drawAll(sun);
   expect(sun.target.position.distanceTo(new Vector3(35, 100, 0))).toBeLessThan(
-    0.48
+    0.32
   );
 });
 
-test("the sun moving always redraws", () => {
+test("a change near the eye leaves the widest ring alone", () => {
   const { sunRig, sun } = rig();
   walkTo(sunRig, 0, 0);
-  sun.shadow.needsUpdate = false;
-  sunRig.update(new Date("2026-06-21T10:00:00Z"));
-  expect(sun.shadow.needsUpdate).toBe(true);
+  drawAll(sun);
+  sunRig.invalidateShadow(undefined, NEAR_CHANGE_RINGS);
+  expect(drawAll(sun).toSorted((a, b) => a - b)).toEqual([0, 1, 2]);
 });
 
-test("invalidateShadow redraws", () => {
+test("a change far off asks only the rings it can fall on", () => {
   const { sunRig, sun } = rig();
-  sun.shadow.needsUpdate = false;
+  sunRig.update(new Date("2026-06-21T12:00:00+02:00"));
+  walkTo(sunRig, 0, 0);
+  drawAll(sun);
+  sunRig.invalidateShadow({ maxX: 1700, maxZ: 1200, minX: 1500, minZ: 1000 });
+  expect(drawAll(sun)).toEqual([3]);
+  // and under the camera, all of them
+  sunRig.invalidateShadow({ maxX: 10, maxZ: 10, minX: -10, minZ: -10 });
+  expect(drawAll(sun).toSorted((a, b) => a - b)).toEqual([0, 1, 2, 3]);
+});
+
+test("no ring draws from under the ground on a drag out of the night", () => {
+  const { sunRig, sun } = rig();
+  sunRig.update(new Date("2026-06-21T02:00:00+02:00"));
+  walkTo(sunRig, 0, 0);
+  // the first day step of a drag waits for its pace, the light with it
+  sunRig.update(new Date("2026-06-21T10:00:00+02:00"), true);
+  walkTo(sunRig, 0, 0);
+  expect(sunRig.shadowPending()).toBe(false);
+  expect(sun.position.y).toBeLessThan(sun.target.position.y);
+  jest.advanceTimersByTime(100);
+  expect(sunRig.shadowPending()).toBe(true);
+  expect(sun.position.y).toBeGreaterThan(sun.target.position.y);
+});
+
+test("the sun moving redraws every ring", () => {
+  const { sunRig, sun } = rig();
+  walkTo(sunRig, 0, 0);
+  drawAll(sun);
+  sunRig.update(new Date("2026-06-21T10:00:00Z"));
+  expect(sun.shadow.needsUpdate).toBe(true);
+  expect(drawAll(sun).toSorted((a, b) => a - b)).toEqual([0, 1, 2, 3]);
+});
+
+test("by night three's own first ask of the map draws no ring", () => {
+  const { sunRig, sun } = rig();
+  sunRig.update(new Date("2026-06-21T02:00:00+02:00"));
+  walkTo(sunRig, 0, 0);
+  expect(drawOne(sun)).toBeNull();
+});
+
+test("a ring nothing draws stops counting as work in hand", () => {
+  const { sunRig, sun } = rig();
+  walkTo(sunRig, 0, 0);
+  drawAll(sun);
+  sunRig.invalidateShadow();
+  expect(sunRig.shadowBusy()).toBe(true);
+  jest.advanceTimersByTime(6000);
+  expect(sunRig.shadowBusy()).toBe(false);
+});
+
+test("invalidateShadow redraws every ring, one a frame", () => {
+  const { sunRig, sun } = rig();
+  walkTo(sunRig, 0, 0);
+  drawAll(sun);
+  expect(sunRig.shadowBusy()).toBe(false);
   sunRig.invalidateShadow();
   expect(sun.shadow.needsUpdate).toBe(true);
   expect(sunRig.shadowPending()).toBe(true);
+  expect(sunRig.shadowBusy()).toBe(true);
+  expect(drawOne(sun)).toBe(0);
+  expect(sunRig.shadowBusy()).toBe(true);
+  expect(drawAll(sun).toSorted((a, b) => a - b)).toEqual([1, 2, 3]);
+  expect(sunRig.shadowBusy()).toBe(false);
 });
 
 test("dispose frees the shadow map and is safe before any render", () => {
@@ -365,9 +487,9 @@ test("a drag's steps redraw the shadow map at most every 100 ms", () => {
   }
 });
 
-/** Where a world point lands on the shadow map (x, y in 0…1 on it). */
-function onMap(sun: DirectionalLight, p: Vector3): { x: number; y: number } {
-  const q = new Vector4(p.x, p.y, p.z, 1).applyMatrix4(sun.shadow.matrix);
+/** Where a world point lands on a ring (x, y in 0…1 on it). */
+function onRing(m: Matrix4, p: Vector3): { x: number; y: number } {
+  const q = new Vector4(p.x, p.y, p.z, 1).applyMatrix4(m);
   return { x: q.x / q.w, y: q.y / q.w };
 }
 
@@ -378,98 +500,158 @@ const inside = ({ x, y }: { x: number; y: number }) =>
 const FLYING = new Vector3(0, 250, 0);
 const LOOK = new Vector3(0, -Math.sin(Math.PI / 7.2), -Math.cos(Math.PI / 7.2));
 
-test("from the air the map is warped over the view, out to the fog", () => {
+function rings(sunRig: ReturnType<typeof createSunRig>) {
+  return sunRig.shadowMap.rings;
+}
+
+test("from the air the rings reach the ground out to the fog", () => {
   const { sunRig, sun } = rig();
   sunRig.update(new Date("2026-06-21T10:00:00+02:00"));
   followAt(sunRig, FLYING, LOOK, 100);
-  // the square of old reached ~600 m ahead; the warped map reaches the
-  // ground 1.8 km out, and still holds the ground under the view's bottom
+  drawAll(sun);
+  const widest = rings(sunRig).matrix[SHADOW_RINGS - 1].value;
   for (const z of [-200, -600, -1200, -1800]) {
-    expect(inside(onMap(sun, new Vector3(0, 100, z)))).toBe(true);
+    expect(inside(onRing(widest, new Vector3(0, 100, z)))).toBe(true);
   }
-  // behind the camera, out of view, it holds nothing
-  expect(inside(onMap(sun, new Vector3(0, 100, 600)))).toBe(false);
   // the stream's square is the one it was
   expect((sunRig.shadowCamera as unknown as { right: number }).right).toBe(440);
   // the horizon's near band takes over where the map ends
-  expect(sunRig.shadowReach.z).toBeGreaterThan(1800);
+  expect(sunRig.shadowReach.z).toBe(720);
 });
 
-test("turning a little from the air keeps the map; turning on redraws it", () => {
+// A map warped over the view lost its near texels at a low sun, looking
+// along the light: ten times as wide, and the lamp posts' shadows gone.
+test("a ring's texels do not depend on where the camera looks", () => {
   const { sunRig, sun } = rig();
-  sunRig.update(new Date("2026-06-21T10:00:00+02:00"));
-  followAt(sunRig, FLYING, LOOK, 100);
-  expect(sun.shadow.needsUpdate).toBe(true);
-  sun.shadow.needsUpdate = false;
-  const turned = (deg: number) =>
-    LOOK.clone().applyAxisAngle(new Vector3(0, 1, 0), (deg * Math.PI) / 180);
-  followAt(sunRig, FLYING, turned(6), 100);
-  followAt(sunRig, FLYING.clone().add(new Vector3(5, 0, -40)), LOOK, 100);
-  expect(sun.shadow.needsUpdate).toBe(false);
-  followAt(sunRig, FLYING, turned(40), 100);
-  expect(sun.shadow.needsUpdate).toBe(true);
+  sunRig.update(new Date("2026-11-04T14:00:00+01:00"));
+  const across = new Vector3(sun.position.x, 0, sun.position.z);
+  for (let deg = 0; deg < 360; deg += 30) {
+    const look = LOOK.clone().applyAxisAngle(
+      new Vector3(0, 1, 0),
+      (deg * Math.PI) / 180
+    );
+    followAt(sunRig, new Vector3(0, 130, 0), look, 100);
+    drawAll(sun);
+    const matrix = rings(sunRig).matrix[0].value;
+    const side = new Vector3(-across.z, 0, across.x).normalize();
+    const a = onRing(matrix, new Vector3(0, 100, 0));
+    const b = onRing(matrix, new Vector3(0, 100, 0).add(side));
+    const texels = Math.hypot(b.x - a.x, b.y - a.y) * 2048;
+    // a metre across the light: 12.8 texels of 0.078 m
+    expect(texels).toBeCloseTo(12.8, 0);
+  }
 });
 
-test("the sun moving fits the warp to it anew", () => {
+test("the finest rings go as the camera climbs, and are drawn no more", () => {
   const { sunRig, sun } = rig();
   sunRig.update(new Date("2026-06-21T10:00:00+02:00"));
-  followAt(sunRig, FLYING, LOOK, 100);
-  const before = sun.shadow.matrix.clone();
-  sun.shadow.needsUpdate = false;
-  sunRig.update(new Date("2026-06-21T15:00:00+02:00"));
-  expect(sun.shadow.needsUpdate).toBe(true);
-  expect(sun.shadow.matrix.equals(before)).toBe(false);
-  expect(inside(onMap(sun, new Vector3(0, 100, -1200)))).toBe(true);
+  followAt(sunRig, new Vector3(0, 110, 0), LOOK, 100);
+  drawAll(sun);
+  expect(rings(sunRig).fade.map((f) => f.value)).toEqual([1, 1, 1, 1]);
+  followAt(sunRig, new Vector3(0, 430, 0), LOOK, 100);
+  expect(rings(sunRig).fade[0].value).toBe(0);
+  expect(rings(sunRig).fade[1].value).toBe(1);
+  drawAll(sun);
+  sunRig.invalidateShadow();
+  expect(drawAll(sun).toSorted((a, b) => a - b)).toEqual([1, 2, 3]);
+});
+
+test("a ring back in view shows nothing until it is drawn anew", () => {
+  const { sunRig, sun } = rig();
+  sunRig.update(new Date("2026-06-21T10:00:00+02:00"));
+  followAt(sunRig, new Vector3(0, 500, 0), LOOK, 100);
+  drawAll(sun);
+  followAt(sunRig, new Vector3(0, 280, 0), LOOK, 100);
+  expect(rings(sunRig).fade[0].value).toBe(0);
+  expect(sunRig.shadowBusy()).toBe(true);
+  drawAll(sun);
+  followAt(sunRig, new Vector3(0, 280, 0), LOOK, 100);
+  expect(rings(sunRig).fade[0].value).toBeGreaterThan(0);
+});
+
+/** Which rings draw a caster of `kind`. */
+const ringsDrawing = (kind: "slender" | "tiny") => {
+  const object = new Object3D();
+  markThinCaster(object, kind);
+  return [0, 1, 2, 3].map((ring) => castsInRing(object, ring));
+};
+
+test("the rings draw a thin caster as far as its kind reaches", () => {
+  const { sunRig, sun } = rig();
+  sunRig.update(new Date("2026-06-21T10:00:00+02:00"));
+  walkTo(sunRig, 0, 0);
+  expect(ringsDrawing("tiny")).toEqual([true, false, false, false]);
+  expect(ringsDrawing("slender")).toEqual([true, true, true, false]);
+  expect(castsInRing(new Object3D(), 3)).toBe(true);
+  // the ring's draw goes by it: the widest passes over a marked caster
+  const finest = { thin: false };
+  expect(drawOne(sun, finest)).toBe(0);
+  expect(finest.thin).toBe(true);
+  const next = { thin: false };
+  expect(drawOne(sun, next)).toBe(1);
+  expect(next.thin).toBe(false);
 });
 
 for (const [where, at] of [
   ["on foot", new Vector3(0, 101.7, 0)],
   ["from the air", FLYING],
 ] as const) {
-  test(`a glide's light moves only with its map ${where}`, () => {
-    jest.useFakeTimers();
-    try {
-      const { sunRig, sun } = rig();
-      sunRig.update(new Date("2026-06-21T10:00:00+02:00"));
-      followAt(sunRig, at, LOOK, 100);
-      sun.shadow.needsUpdate = false; // three drew it
-      const drawn = sun.shadow.matrix.clone();
-      const lit = sun.position.clone();
-      // a step inside the pace: the map waits, so does the light — a light
-      // moved off its map reads every shadow off its caster
-      sunRig.update(new Date("2026-06-21T10:02:00+02:00"), true);
-      sunRig.update(new Date("2026-06-21T10:04:00+02:00"), true);
-      expect(sun.shadow.needsUpdate).toBe(false);
-      expect(sun.shadow.matrix.equals(drawn)).toBe(true);
-      expect(sun.position.equals(lit)).toBe(true);
-      // the paced redraw moves both, to where the sun stands now
-      jest.advanceTimersByTime(100);
-      expect(sun.shadow.needsUpdate).toBe(true);
-      expect(sun.shadow.matrix.equals(drawn)).toBe(false);
-      sunRig.dispose();
-    } finally {
-      jest.useRealTimers();
-    }
+  test(`a ring keeps its matrix until it is drawn again ${where}`, () => {
+    const { sunRig, sun } = rig();
+    sunRig.update(new Date("2026-06-21T10:00:00+02:00"));
+    followAt(sunRig, at, LOOK, 100);
+    drawAll(sun);
+    const drawn = rings(sunRig).matrix[0].value.clone();
+    // the sun moves: the light turns with it at once …
+    jest.advanceTimersByTime(1000);
+    sunRig.update(new Date("2026-06-21T10:02:00+02:00"), true);
+    expect(sun.shadow.needsUpdate).toBe(true);
+    // … and a ring not yet drawn still reads what it drew, where it drew it
+    expect(rings(sunRig).matrix[0].value.equals(drawn)).toBe(true);
+    expect(drawOne(sun)).toBe(0);
+    expect(rings(sunRig).matrix[0].value.equals(drawn)).toBe(false);
+    sunRig.dispose();
   });
 }
 
-test("landing, and Modell, give the map back to the square", () => {
+test("Modell tiles its picture's square with the four rings", () => {
   const { sunRig, sun } = rig();
   sunRig.update(new Date("2026-06-21T10:00:00+02:00"));
-  followAt(sunRig, FLYING, LOOK, 100);
-  expect(sun.shadow.camera.right).not.toBe(440);
-  // 25 m up is still in the air (the switch has a hysteresis) …
-  followAt(sunRig, new Vector3(0, 125, 0), LOOK, 100);
-  expect(sun.shadow.camera.right).not.toBe(SHADOW_BASE_RADIUS);
-  // … on the ground it is the walker's square
-  sun.shadow.needsUpdate = false;
-  walkTo(sunRig, 0, 0);
-  expect(sun.shadow.needsUpdate).toBe(true);
-  expect(sun.shadow.camera.right).toBe(SHADOW_BASE_RADIUS);
-  expect(sun.shadow.bias).toBe(-0.0003);
-  // Modell fits the square to its picture
-  followAt(sunRig, FLYING, LOOK, 100);
   sunRig.followFootprint(0, 100, -300, 200, 880);
-  expect(sun.shadow.camera.right).toBe(sun.shadow.camera.top);
-  expect(inside(onMap(sun, new Vector3(0, 100, -300)))).toBe(true);
+  drawAll(sun);
+  // and they follow the picture itself, not the stream's coarser square
+  sunRig.followFootprint(0, 100, -300, 200, 880);
+  expect(sunRig.shadowBusy()).toBe(false);
+  sunRig.followFootprint(40, 100, -300, 200, 880);
+  expect(sunRig.shadowBusy()).toBe(true);
+  drawAll(sun);
+  sunRig.followFootprint(0, 100, -300, 200, 880);
+  drawAll(sun);
+  expect(rings(sunRig).fade.map((f) => f.value)).toEqual([1, 1, 1, 1]);
+  // every corner of the square lies on a ring, and its middle on all of them
+  const half = (sunRig.shadowCamera as unknown as { right: number }).right;
+  for (const [x, z] of [
+    [-half * 0.7, -300 - half * 0.7],
+    [half * 0.7, -300 - half * 0.7],
+    [-half * 0.7, -300 + half * 0.7],
+    [half * 0.7, -300 + half * 0.7],
+  ]) {
+    const p = new Vector3(x, 100, z);
+    expect(rings(sunRig).matrix.some((m) => inside(onRing(m.value, p)))).toBe(
+      true
+    );
+  }
+  const middle = new Vector3(0, 100, -300);
+  expect(
+    rings(sunRig).matrix.every((m) => inside(onRing(m.value, middle)))
+  ).toBe(true);
+  expect(sunRig.shadowReach.z).toBeGreaterThan(half);
+  // the thin casters too: there is no finer ring to leave them to
+  sunRig.invalidateShadow();
+  const widest = { thin: false };
+  for (let i = 0; i < SHADOW_RINGS; i += 1) {
+    drawOne(sun, widest);
+    jest.advanceTimersByTime(1000);
+  }
+  expect(widest.thin).toBe(true);
 });

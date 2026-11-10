@@ -1,5 +1,5 @@
 import { Color, Matrix3, Vector2, Vector3 } from "three/webgpu";
-import type { DepthTexture, Matrix4 } from "three/webgpu";
+import type { DepthTexture } from "three/webgpu";
 import {
   abs,
   asin,
@@ -24,6 +24,7 @@ import {
   max,
   min,
   mix,
+  mod,
   normalize,
   pow,
   select,
@@ -43,9 +44,11 @@ import type { RenderStyleDef } from "@/lib/city/render-style";
 import { DATA_HUE } from "./glass";
 import { fogFactorAt } from "./height-fog";
 import type { SceneFog } from "./height-fog";
+import { hash21 } from "./shader-chunks";
 import type { F, V2, V3, V4 } from "./shader-chunks";
-import { styleNight } from "./sun-rig";
+import { sceneNight } from "./scene-environment";
 import { readSunShadow, shadowStandIn } from "./sun-shadow-read";
+import type { ShadowRingNodes } from "./sun-rings";
 import type { ViewLens } from "./view-lens";
 
 /**
@@ -218,12 +221,6 @@ const PENS: Record<number, Pen> = {
 };
 
 // --- small helpers --------------------------------------------------------
-
-function hash21(p: V2): F {
-  const q = fract(p.mul(vec2(123.34, 456.21)));
-  const r = q.add(dot(q, q.add(45.32)));
-  return fract(r.x.mul(r.y));
-}
 
 function valueNoise(p: V2): F {
   const i = floor(p);
@@ -398,13 +395,10 @@ export interface StylizeInputs {
 
 /** What the styles read of the sun's shadow map (sun-rig.ts `shadowMap`). */
 export interface SunShadowMap {
-  /** its depth, null until the first lit material made it */
+  /** its depth array, null until the first lit material made it */
   depth: () => DepthTexture | null;
-  /** world → map ([0, 1]³), kept current by three */
-  matrix: Matrix4;
-  /** the depth bias the scene's own lookup adds (three's `shadow.bias`):
-   *  a fixed one on foot, one per fit of the warped map from the air */
-  bias: () => number;
+  /** the rings' uniforms, as the scene's own lookup reads them */
+  rings: ShadowRingNodes;
 }
 
 export interface Stylize {
@@ -459,19 +453,27 @@ const rainLayer = (
 ): F => {
   const az = atan(dir.z, dir.x);
   const el = asin(clamp(dir.y, -1, 1));
-  const qy = el.mul(cellsPerRad * 0.22).add(time.mul(speed));
+  // The clock wraps at 2560 cells: 10 × 256 along y and 0.9 × 2560 = 9 × 256
+  // along x, so the wrap moves the cell by whole keys and keeps `fract(q)`
+  // — no seam, and the streak's place in its cell stays precise all session.
+  const qy = el.mul(cellsPerRad * 0.22).add(mod(time.mul(speed), 2560));
   const q = vec2(az.mul(cellsPerRad).add(qy.mul(0.9)), qy);
   const cell = floor(q).toVar();
   const f = fract(q).toVar();
-  const present = step(0.84, hash21(cell.add(seed)));
-  const x0 = hash21(cell.add(seed + 7.1))
+  // The cell index, wrapped: the hash keeps its precision (unwrapped:
+  // columns after ≈ 51 min, a constant after ≈ 3.4 h). 256 cells are more
+  // than a screen shows, and small enough that `hash21` stays even: over
+  // 512–1024 its columns are twice as strong.
+  const key = mod(cell, 256);
+  const present = step(0.84, hash21(key.add(seed)));
+  const x0 = hash21(key.add(seed + 7.1))
     .mul(0.6)
     .add(0.2);
-  const y0 = hash21(cell.add(seed + 3.3))
+  const y0 = hash21(key.add(seed + 3.3))
     .mul(0.4)
     .add(0.1)
     .toVar();
-  const len = hash21(cell.add(seed + 9.9))
+  const len = hash21(key.add(seed + 9.9))
     .mul(0.22)
     .add(0.28);
   // At least a pixel wide, whatever the layer's scale.
@@ -516,9 +518,9 @@ export function createStylize(inputs: StylizeInputs): Stylize {
   const mode = uniform(1);
   const ink = uniform(0.7);
   const dusk = uniform(0);
-  // the sun rig's night factor (sun-rig.ts `styleNight`): the nights of
+  // the sun rig's night factor (scene-environment.ts `sceneNight`): the nights of
   // Papier and Strich follow the lamps, not the fading sun
-  const night = styleNight;
+  const night = sceneNight;
   const pixelScale = uniform(1);
   const resolution = uniform(new Vector2(1, 1));
   const upView = uniform(new Vector3(0, 1, 0));
@@ -533,8 +535,6 @@ export function createStylize(inputs: StylizeInputs): Stylize {
   const standIn = shadowStandIn(inputs.reversedDepth);
   // every read of it, so `update` can bind the map to each
   const shadowReads: ReturnType<typeof texture>[] = [];
-  const shadowMatrix = uniform(inputs.sunShadow.matrix);
-  const shadowBias = uniform(0).onRenderUpdate(() => inputs.sunShadow.bias());
   const shadowReady = uniform(0);
   const pen = {
     sil: uniform(new Vector2(0.012, 0.045)),
@@ -584,10 +584,10 @@ export function createStylize(inputs: StylizeInputs): Stylize {
    * cast shadow: the pixel's world point tested against the sun's own
    * shadow map — the shadow the scene drew, exactly, whatever the colour
    * of the surface (a post pass cannot tell a dark roof in the sun from a
-   * pale one in shade by its colour). Off the map's frustum (it follows
-   * the camera, a few hundred metres round) the caller's `beyond` stands
-   * in — the style's guess from lightness —, faded in over the frustum's
-   * last 4 % so its edge draws no line; below the horizon nothing is in
+   * pale one in shade by its colour). Off the map's rings (they follow
+   * the camera, about two kilometres round) the caller's `beyond` stands
+   * in — the style's guess from lightness —, faded in over the widest's
+   * edge band so its edge draws no line; below the horizon nothing is in
    * the sun. 0..1, the map's own 2×2 filter at a shadow's edge.
    */
   const inSun = (world: V3, n: V3, z: F, beyond: F): F => {
@@ -596,7 +596,8 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     const lifted = world.add(n.mul(z.mul(0.0015).add(0.12)));
     const { inside, shadowed, read } = readSunShadow(
       lifted,
-      { matrix: shadowMatrix, bias: shadowBias, ready: shadowReady },
+      inputs.sunShadow.rings,
+      shadowReady,
       standIn,
       inputs.reversedDepth
     );

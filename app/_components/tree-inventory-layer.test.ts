@@ -2,12 +2,15 @@ import { expect, test } from "bun:test";
 import { Matrix4, Vector3 } from "three/webgpu";
 import type { Object3D } from "three/webgpu";
 import type { CanopyFeature, TreeFeature } from "@/lib/city/features";
-import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { PINE_CROWN_BASE } from "@/lib/city/tree-inventory";
 import { pineSilhouette } from "./conifer-crown";
 import { isInstances } from "./instancing";
 import { buildTreeInventory } from "./tree-inventory-layer";
-import { buildVegetation, sceneCrowns } from "./vegetation-layer";
+import {
+  buildVegetation,
+  createVegetationLod,
+  sceneCrowns,
+} from "./vegetation-layer";
 import type { VegetationContext } from "./vegetation-layer";
 
 /** The sets under a root and the instances they draw (`drawCount`). */
@@ -182,9 +185,24 @@ test("empty input builds nothing and vetoes nothing; the control still works", (
   expect(inv.instances).toHaveLength(0);
   expect(inv.keepTree(0, 0)).toBe(true);
   const built = buildTreeInventory([tree(5, 2)], ctx);
-  expect(() => built.control.applyLook(LOOK_DEFAULTS)).not.toThrow();
-  expect(built.control.updateLod(new Vector3(5, 100, 0))).toBe(true);
-  expect(built.control.updateLod(new Vector3(5, 100, 0))).toBe(false);
+  // its silhouettes are planned with the canopy's chunks: rich near the
+  // camera, the next pass changes nothing, and with no rich budget left
+  // the cheap one again
+  const [cell] = built.control.cells ?? [];
+  const lod = createVegetationLod();
+  expect(cell.tier).toBe("mid");
+  expect(lod([built.control], new Vector3(5, 100, 0))).toBe(true);
+  expect([cell.tier, cell.rich.visible, cell.cheap.visible]).toEqual([
+    "rich",
+    true,
+    false,
+  ]);
+  expect(lod([built.control], new Vector3(5, 100, 0))).toBe(false);
+  expect(lod([built.control], new Vector3(5, 100, 0), 0)).toBe(true);
+  expect([cell.rich.visible, cell.cheap.visible]).toEqual([false, true]);
+  // mid to far shows the same cheap crown: no shadow redraw
+  expect(lod([built.control], new Vector3(5000, 100, 0))).toBe(false);
+  expect(cell.tier).toBe("far");
 });
 
 test("a deciduous silhouette bares in winter, a conifer never", () => {

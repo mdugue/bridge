@@ -11,6 +11,11 @@
  * at the path's start — the path runs with the wall's outside on its
  * right, so the photo reads as seen from the street.
  */
+import type { Mural, MuralFile } from "./murals-file";
+
+// The file's shape is its schema's (ADR 0059); the viewer takes the types
+// only, and `parseMurals` stays its guard.
+export type { Mural, MuralFile, MuralPhoto } from "./murals-file";
 
 /** The committed file (pipeline/bake/murals.py) and the name
  *  scripts/prepare-data.ts publishes it under (before hashing). */
@@ -22,57 +27,6 @@ export const MURALS_FILE = "murals.json";
 /** A committed WebP of a mural (`Mural.lines`, `Mural.wash` name it). */
 export function muralFileSource(dataDir: string, file: string): string {
   return `${dataDir}/murals/${file}`;
-}
-
-/** A photo's Commons credit. */
-export interface MuralPhoto {
-  author: string;
-  licence: string;
-  /** the Commons title, `File:…` */
-  title: string;
-  /** its Commons page */
-  url: string;
-}
-
-export interface Mural {
-  /** the LoD2 building it hangs on (`buildingId` in the city's table):
-   *  it goes when the building does */
-  building: string;
-  /** how the photo shows it: all of it, or the band of a line's whole
-   *  length that it shows (pipeline/bake/murals.py `choose`) */
-  how: "band" | "whole";
-  /** OSM's id: `n…` a node, `w…` a way */
-  id: string;
-  /** the pen's colour (sRGB, 0–255) */
-  ink: [number, number, number];
-  kind: string;
-  /** the pen lines' WebP (its red: 255 paper, 0 ink): its file name in
-   *  the committed folder, its published name once prepare-data has
-   *  published it */
-  lines: string;
-  name: string;
-  /** along the wall, a few cm in front of it, the wall's outside on its
-   *  right (projected metres) */
-  path: [number, number][];
-  /** the photo the drawing was made after */
-  photo: MuralPhoto;
-  /** the pen lines' width and height (pixels) */
-  px: [number, number];
-  /** its width along the wall and its height (m) */
-  size: [number, number];
-  /** the tile whose buildings hold its wall */
-  tile: string;
-  /** the wash's WebP (sRGB), named as `lines` is, and its size (pixels) */
-  wash: string;
-  washPx: [number, number];
-  /** above sea level (m) */
-  bottom: number;
-  top: number;
-}
-
-export interface MuralFile {
-  attribution: string;
-  murals: Mural[];
 }
 
 /** What the tileset's extras say of the murals: the published file and the

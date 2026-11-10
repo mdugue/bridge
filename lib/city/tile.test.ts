@@ -14,10 +14,12 @@ import {
   pickFiles,
   SMALL_RASTER_PX,
   stairSourceFile,
+  TERRAIN_RASTER_KINDS,
   terraceSourceFile,
   tileArtifacts,
   tileIds,
 } from "./tile";
+import { TERRAIN_RASTER_KEYS } from "./tileset";
 import type { DataManifest } from "./tile";
 
 const PRIMARY_TILE = "33412_5656_2_sn";
@@ -33,6 +35,7 @@ test("the artifact map reproduces the served file names", () => {
     file: "landcover_33412_5656_2_sn.r2048.png",
     required: true,
     bakedFrom: { file: "landcover_33412_5656_2_sn.png", raster: 2048 },
+    terrain: { levels: { 0: ["landcoverLow"] } },
   });
 });
 
@@ -90,6 +93,29 @@ test("the dressing and OSM columns name only kinds of the table", () => {
   }
   expect(DRESSING_KINDS).toContain("vegrows");
   expect(DRESSING_KINDS).not.toContain("landcover");
+});
+
+test("the terrain column names each raster key of a level once, beside kinds of the table", () => {
+  const kinds = Object.keys(tileArtifacts(PRIMARY_TILE));
+  for (const row of TERRAIN_RASTER_KINDS) {
+    for (const kind of row.with ?? []) {
+      expect(kinds).toContain(kind);
+    }
+  }
+  for (const level of [0, 1] as const) {
+    const keys = TERRAIN_RASTER_KINDS.flatMap((r) => r.levels[level] ?? []);
+    expect(new Set(keys).size).toBe(keys.length);
+    for (const key of keys) {
+      expect(TERRAIN_RASTER_KEYS).toContain(key);
+    }
+  }
+  // the phones' colony twin is built beside the colony raster, never
+  // committed
+  const { cultivatedRaster, cultivatedLow } = tileArtifacts(PRIMARY_TILE);
+  expect(cultivatedLow.built).toBe(true);
+  expect(cultivatedLow.file).toBe(
+    cultivatedRaster.file.replace(/\.png$/u, ".r1024.png")
+  );
 });
 
 test("pickFiles keeps only the named kinds a tile has", () => {

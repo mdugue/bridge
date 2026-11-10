@@ -44,7 +44,7 @@ still closed makes Playwright run its own build and server, which rebuilds
 `prepare-sites` with one site prunes the others'
 `public/data` (fine here). `PW_CHROMIUM` points Playwright at the
 container's own Chromium, which the repository's Playwright pin does not
-find by itself. `SHOTS_AT=1` boots each page at its photo (`#at=lat,lng`):
+find by itself. `SHOTS_AT=1` boots each page at its photo (`?at=lat,lng`):
 `lite` streams only around where it booted, so a pose a kilometre from the
 spawn would show the wrong part of town. A shot takes 7–11 minutes
 there (`SHOTS_SMALL` waits up to 15 for the scene); eight are over an hour.

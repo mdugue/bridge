@@ -51,7 +51,7 @@ The bake writes `dlm/windows_<tile>.json`:
     {"attribution", "reliability": {feature: [ρ, walls]},
      "buildings": {"<gml:id>": [{"oid", "wi", "a", "b", "L", "n", "z",
        "imgs", "seqs", "traits": {...}, "model": {"axis", "grid", "w",
-       "h", "phase"?, "storey"?, "frame"?, "sill"?, "lisene"?, "orn"?},
+       "h", "phase"?, "frame"?, "sill"?, "lisene"?, "orn"?},
        "drives"?}, …]}}
 
 with the wall's frame as in shopfronts.py (`_wall_entry`). Its own file,
@@ -85,6 +85,7 @@ MIN_IMAGES = 2
 AXIS_TOL = 0.15  # the images' axis periods agree this well (relative) ...
 AXIS_AGREE = 0.6  # ... in this share of them
 MIN_RHO = 0.6
+MIN_OPENINGS = 2  # whole openings an image must see to give their size
 MIN_PAIRS = 30  # walls a feature's ρ needs
 FEATURES = (
     "axis",
@@ -106,16 +107,35 @@ FEATURES = (
     "plinth_h",
     "rustic",
     "panel",
+    "ow",
+    "oh",
+    "oprop",
 )
 # ρ ≥ MIN_RHO over Dresden's thirteen measured tiles pooled (1 931 walls,
 # 2026-10-09; docs/transformations.md has every feature's ρ). `sill` passed
 # on the spawn tile alone (0.65 over 48 walls) and failed pooled (0.53
 # over 85): it is out.
+# The openings' own size joined on 2026-11-06 (Dresden pooled again, 141
+# walls: ow 0.69, oh 0.71, oprop 0.76); `storey` no longer sets the rows
+# (lib/city/windows.ts `windowStorey`) and fell to 0.59 there.
 RELIABLE: frozenset[str] = frozenset(
-    {"axis", "grid", "storey", "share", "dark", "wduty", "width", "height", "prop", "orn"}
+    {
+        "axis",
+        "grid",
+        "storey",
+        "share",
+        "dark",
+        "wduty",
+        "width",
+        "height",
+        "prop",
+        "orn",
+        "ow",
+        "oh",
+        "oprop",
+    }
 )
 AXIS_DRAWN = (1.8, 4.8)  # a window axis drawn: no stucco band, no double period
-STOREY_DRAWN = (2.8, 4.6)
 WINDOW_W_M = (0.7, 2.2)
 WINDOW_H_M = (0.8, 2.4)
 MIN_PIER_M = 0.6  # wall left between two windows at least
@@ -284,7 +304,26 @@ def image_features(r: dict) -> dict:
         out["rustic"] = g / up
     pe, pv = period(eh, *PANEL_M), period(ev, *PANEL_M)
     out["panel"] = min(pe[1] if pe else 0.0, pv[1] if pv else 0.0)
+    out |= opening_sizes(r.get("op"))
     return out
+
+
+def opening_sizes(op: list[list[int]] | None) -> dict:
+    """The size of the openings an image saw whole (facade_traits.py
+    `openings`), where it saw at least `MIN_OPENINGS`: their median width
+    and height (`ow`, `oh`, m) and the median of each one's width over its
+    height (`oprop`). Read off each opening, not off a profile's duty: two
+    drives agree on the height and the proportion better (ρ 0.71 and 0.76
+    against the profiles' 0.59 and 0.65, the width alike at 0.69; Dresden's
+    tiles pooled, 2026-11-06)."""
+    ops = op or []
+    if len(ops) < MIN_OPENINGS:
+        return {}
+    return {
+        "ow": float(np.median([o[2] for o in ops])) / 100,
+        "oh": float(np.median([o[3] for o in ops])) / 100,
+        "oprop": float(np.median([o[2] / o[3] for o in ops])),
+    }
 
 
 # --- per wall (pure) --------------------------------------------------------
@@ -373,26 +412,29 @@ def _clamp(x: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, x))
 
 
+def _first(traits: dict, reliable: frozenset[str], *names: str) -> float | None:
+    """The first of the features that is reliable and measured: the
+    openings' own size before the profiles'."""
+    return next((traits[n] for n in names if n in reliable and n in traits), None)
+
+
 def model(traits: dict, axis: float | None, reliable: frozenset[str] = RELIABLE) -> dict | None:
     """The abstract facade a wall's traits give (see the module), or None:
     no reliable axis in AXIS_DRAWN (a window rhythm, not a stucco band or a
     double period), or no grid. Each part only from a reliable feature;
-    the window's width and proportion fall back to Dresden's medians where
-    theirs is not."""
+    the window's width and proportion are the whole openings' (`ow`,
+    `oprop`), else the profiles' (`width`, `prop`), else Dresden's medians."""
     if axis is None or "axis" not in reliable or not AXIS_DRAWN[0] <= axis <= AXIS_DRAWN[1]:
         return None
     g = traits.get("grid", 0.0)
     grid = "regular" if g >= REGULAR else "loose" if g >= LOOSE else None
     if grid is None or "grid" not in reliable:
         return None
-    width = traits.get("width") if "width" in reliable else None
-    w = _clamp(width if width is not None else WIDTH_SHARE * axis, *WINDOW_W_M)
+    w = _clamp(_first(traits, reliable, "ow", "width") or WIDTH_SHARE * axis, *WINDOW_W_M)
     w = min(w, axis - MIN_PIER_M)
-    prop = traits.get("prop") if "prop" in reliable else None
+    prop = _first(traits, reliable, "oprop", "prop")
     h = _clamp(w / (prop if prop is not None else PROPORTION), *WINDOW_H_M)
     out: dict = {"axis": round(axis, 2), "grid": grid, "w": round(w, 2), "h": round(h, 2)}
-    if "storey" in reliable and (st := traits.get("storey")) is not None:
-        out["storey"] = round(_clamp(st, *STOREY_DRAWN), 2)
     for name, least in FLAG_MIN.items():
         if name in reliable and traits.get(name, -1.0) >= least:
             out[name] = True

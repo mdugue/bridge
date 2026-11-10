@@ -136,10 +136,10 @@ bietet an, wohin es stattdessen gehen kann: zu einem der Aussichtspunkte, zu
 einer Stelle, die du auf der Karte wählst, oder du bleibst, wo du bist.
 Stehst du in einer anderen Stadt, die diese Seite auch zeigt, sagt das
 Fenster das zuerst und bietet an, dorthin zu springen: Ihr Viewer öffnet
-sich mit dir dort, wo du stehst (die Position reist im Fragment des Links
-mit, das nie beim Server ankommt). Browser fragen dafür um Erlaubnis
-(iPhones auch für den
-Kompass); der Standort verlässt das Gerät nicht — auch nicht in einem
+sich mit dir dort, wo du stehst (die Position reist in den Parametern des
+Links mit, `?at=`, und landet so im Zugriffsprotokoll des Hosters, wenn du
+ihm folgst). Browser fragen dafür um Erlaubnis (iPhones auch für den
+Kompass); sonst verlässt der Standort das Gerät nicht — auch nicht in einem
 Absturzbericht (siehe *Wenn es abstürzt*).
 
 *Live* erscheint, sobald dein Telefon Kompasswerte liefert (auf dem iPhone
@@ -498,9 +498,12 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   deinem Browser ([Datenschutz](/datenschutz#frag-die-stadt)). Auch über
   *Fragen* in der Werkzeugleiste. Als **Sprachführer**: *Sprechen* nimmt
   eine Frage per Mikrofon an (wo der Browser Sprache erkennt),
-  *Vorlesen* liest die Antworten vor, und der *Hörmodus* dunkelt die
-  Ränder leicht ab und lässt die Szene ruhen — für unterwegs, das
-  Telefon in der Tasche, zusammen mit *Live* in der Werkzeugleiste.
+  *Vorlesen* liest die Antworten vor (eingeschaltet gleich die letzte),
+  und der *Hörmodus* dunkelt die Ränder leicht ab und lässt die Szene
+  ruhen — für unterwegs, das Telefon in der Tasche, zusammen mit *Live*
+  in der Werkzeugleiste; endet er, endet auch das Vorlesen, das er
+  eingeschaltet hat. Abbrechen hält eine Antwort an, und die Ansicht
+  bleibt stehen, wo sie gerade ist.
   „Was ist das da vorne?“ fragt das Stadtmodell nach dem, was in der
   Bildmitte steht (im Modell: wo es ausgerichtet ist), und öffnet dessen
   Karte.
@@ -526,11 +529,11 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   ein Hinweis sagt es, und beim Wechsel des Stils gilt die eingestellte
   Zeit wieder.
 - **Darstellung** — ganz oben der **Bildstil**, darunter der eine
-  verbliebene Regler, *Nebel* (der Entfernungsdunst, eine Prozentzahl),
-  und der Schalter *Multi-Tuft-Kronen (nah)* (reiche Mehrbüschel-Kronen
-  nahe der Kamera; aus = die einfache Krone überall). *Zurücksetzen*
-  stellt beide auf ihren Startwert zurück und lässt den Bildstil, wie er
-  ist. Der übrige Look ist fest (unten).
+  verbliebene Regler, *Nebel* (der Entfernungsdunst, eine Prozentzahl).
+  *Zurücksetzen* stellt ihn auf seinen Startwert zurück und lässt den
+  Bildstil, wie er ist. Der übrige Look ist fest (unten), auch die
+  Bäume: nahe der Kamera tragen sie immer ihre reiche Mehrbüschel-Krone,
+  soweit das Budget der Stadt reicht.
 
 Der Bildstil zeichnet dieselbe Stadt auf eine andere Art; er lässt sich
 jederzeit wechseln, per Klick oder mit `V`. Der Browser merkt sich den
@@ -575,8 +578,6 @@ Code und Wissensbasis für sie verwenden:
 | Vegetation | *Bodendetail* | Bordsteine, Rasenkanten, Stellplätze, Fahrbahnmarkierungen (Überwege, Halt-, Rad- und Mittellinien), die Gärten der Kleingartenanlagen und der Belag unter den Füßen (Asphalt, Platten, Kopfsteinpflaster aus OpenStreetMap), die Mähstreifen und Körnung der Sportplätze, aus der Nähe sichtbar |
 | | *Stadtgrün* | färbt begrünte Höfe, Vorgärten und Parks im Siedlungsgebiet und die grünen Bahnböschungen wie Wiese, aus dem Infrarot-Luftbild |
 | | *Wiesenfärbung* | färbt Wiesen saftig bis trocken aus dem Infrarot-Luftbild |
-| | *Gegenlicht-Schimmer* | Gegenlichtschimmer auf Kronen zwischen dir und der Sonne |
-| | *Blattdurchscheinen* | Durchleuchtung naher, großer Kronen (schattenabhängig) |
 | Rendering | *Kontaktschatten* | Umgebungsverdunkelung in Ecken und unter Traufen |
 | | *Himmelslicht* | enge Höfe und Straßenschluchten bekommen weniger Himmelslicht als offene Wiesen — aus Gelände und Gebäudemodell vorberechnet |
 | | *Ferne Schatten* | Schatten jenseits der gewöhnlichen Schattenreichweite: lange Schatten ferner Häuser und Hänge bei tiefer Sonne, und in der Ferne auch die Schatten der Nachbarhäuser |
@@ -586,18 +587,25 @@ Code und Wissensbasis für sie verwenden:
 
 Drei weitere Effekte gehören zum festen Look. Der Nebel über dem Fluss
 treibt erst ab etwa 120 m vor dir über dem Wasser, dichter erst in der
-Ferne.
-Die fotografische Tiefenschärfe macht nur unscharf, was hinter dem Fokus
-liegt (der Vordergrund bleibt scharf), und scharf ist immer, was in der
-Bildmitte liegt. Solange sich die Kamera bewegt, ist die Unschärfe
-abgeschaltet (das Auge kann sie in Bewegung nicht auflösen) und kommt
-zurück, sobald du stehst. Telefone zeichnen ohne sie: Die Unschärfe
-braucht mehr Grafikspeicher, als ein Telefon für einen Hauch erübrigen
-kann, den ein kleiner Bildschirm kaum zeigt. Und solange du im
-Pastell-Look gehst, dich drehst oder fliegst, verwischt das Bild leicht
-entlang der Kamerabewegung, wie bei einer Kamera mit kurzer Belichtung;
-auch auf Telefonen, ohne zusätzlichen Speicher. Die anderen Bildstile
-und das Modell behalten ihre scharfen Linien.
+Ferne. Die fotografische Tiefenschärfe macht unscharf, was hinter dem Fokus
+liegt und was davor steht (ein Baum am Bildrand, eine Laterne gleich vor
+dir, die Straße zu deinen Füßen), wie bei einer echten Linse, und scharf ist
+immer, was in der Bildmitte liegt, ein Baum ebenso wie eine Fassade. Sie ist
+so stark wie bei einer echten Kamera mit diesem Bildwinkel und der Öffnung
+eines 50-mm-Objektivs bei Blende 1,8: Liegt der Fokus auf einer Fassade die
+Straße hinunter, bleibt die Stadt dahinter fast scharf, ein Baum wenige
+Schritte vor dir aber wird weich; liegt er auf einer Laterne gleich vor dir,
+wird der Hintergrund weich. Liegt in der Bildmitte nichts (der Himmel),
+stellt das Objektiv auf die Ferne. Solange sich die Kamera bewegt, ist die
+Unschärfe abgeschaltet (das Auge kann sie in Bewegung nicht auflösen); wenn
+du stehst, wächst sie in knapp einer Sekunde wieder herein, wie wenn ein
+Objektiv scharfstellt. Telefone zeichnen ohne sie: Die Unschärfe braucht
+mehr Grafikspeicher, als ein Telefon für einen Hauch erübrigen kann, den ein
+kleiner Bildschirm kaum zeigt. Und solange du im Pastell-Look gehst, dich
+drehst oder fliegst, verwischt das Bild leicht entlang der Kamerabewegung,
+wie bei einer Kamera mit kurzer Belichtung; auch auf Telefonen, ohne
+zusätzlichen Speicher. Die anderen Bildstile und das Modell behalten ihre
+scharfen Linien.
 
 ### Erweitert
 
@@ -661,9 +669,14 @@ und das Modell behalten ihre scharfen Linien.
   nach ihrer Art, ein Objekt aus glTF oder OBJ mit seinem Namen — und wo
   der Entwurf steht.
 - **Snapshot** — *Kopieren* kopiert deine genaue Position, Datum und
-  Uhrzeit, den Bildstil, den *Nebel*, den Kronen-Schalter und die
+  Uhrzeit, den Bildstil, den *Nebel* und die
   Datenebenen als kleinen JSON-Text; einen solchen Text in das Feld
-  einfügen und *Anwenden* drücken stellt ihn wieder her. So wird eine
+  einfügen und *Anwenden* drücken stellt ihn wieder her. *Link kopieren*
+  kopiert einen Link auf diese Seite, der mit derselben Ansicht öffnet
+  (der Snapshot steht in den Parametern der Adresse, `?snap=`, und landet
+  so bei jedem Öffnen im Zugriffsprotokoll des Hosters; Absturzberichte
+  lassen ihn weg); er enthält den Ort der Kamera, nach *Standort* oder
+  *Live* also deinen. So wird eine
   bestimmte Ansicht geteilt oder für einen Screenshot reproduziert. Ein
   Snapshot von vor dem festen Look lädt weiter; die Regler, die er nennt,
   werden übergangen. Ein fehlerhafter Snapshot wird mit einer Meldung

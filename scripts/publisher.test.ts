@@ -26,10 +26,12 @@ test("a name carries its content's hash and keeps a compound extension", () => {
 test("the same bytes are written once; a run names its files in the manifest and prunes the rest", () => {
   const dir = fresh();
   writeFileSync(path.join(dir, "stale.1234abcd.json"), "old");
+  // what a run killed mid-write leaves: a part file, never the served name
+  writeFileSync(path.join(dir, "a.5678abcd.json.4242.part"), "o");
   const first = createPublisher(dir, { warming: false });
   const name = first.publish("a.json", bytes("one"));
   first.publishPlain("site-stats.json", bytes("{}"));
-  expect(first.finish()).toEqual({ artifacts: 1, written: 1, pruned: 1 });
+  expect(first.finish()).toEqual({ artifacts: 1, written: 1, pruned: 2 });
   expect(readdirSync(dir).toSorted()).toEqual(
     [MANIFEST_FILE, name, "site-stats.json"].toSorted()
   );
