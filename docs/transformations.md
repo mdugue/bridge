@@ -1812,12 +1812,21 @@ visual-variable codebook is in
   exist and two thirds of them reach 0.95 (`wall_glass`; at 0.9 metal
   cladding, ribbon-window blocks and a plastered house with balconies came
   through); the wall keeps its window model, since a material OSM names
-  overrides the photos and a glass building draws no windows anyway. A
-  Brown camera's parameters are OpenSfM's (fx, fy, cx, cy, k1, k2, …): its
-  focal and radial terms are read from there. The building bake gives an object material
-  `glass`, from `photos`, when its glass walls make at least half the
-  length of its walls read (`lib/city/photo-glass.ts`): it then draws as
-  *Glass and metal facades* above. On the probe (Dresden, 2026-11-10)
+  overrides the photos and a glass building draws no windows anyway, but
+  lends it to no other building (`windowSpecs`: a curtain wall's mullions
+  are no rhythm for the stone wing or the house next door). A Brown
+  camera's parameters are OpenSfM's (fx, fy, cx, cy, k1, k2, …): its focal
+  and radial terms are read from there; a framed photo's frame is its own
+  shape where Mapillary gives it. A photo the model could not read in
+  (a worker out of memory) is not cached, and is read on the next fetch.
+  The building bake gives an object material `glass`, from `photos`, when
+  its glass walls make at least half the length of its walls read and a
+  quarter of all its outer walls, or 15 m and a twentieth of them
+  (`windows_<t>.json`'s `outer`; `lib/city/photo-glass.ts`) — a stone
+  house whose one glazed stair tower was all the photos read stays stone,
+  and so does a mall with a 16 m glazed entrance in 547 m of walls; never
+  a Building whose parts were read (they would inherit it). It then draws
+  as *Glass and metal facades* above. On the probe (Dresden, 2026-11-10)
   every known glass front read 0.91–1.00 on its clear views (Prager
   Spitze, Glaskugelhaus, Gläserne Manufaktur, Ammonhof, Congress Center)
   and no plastered or stone wall above 0.9 but one clad in white panels;

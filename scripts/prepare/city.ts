@@ -138,12 +138,7 @@ function parseCity(
     ? Object.values(windowFile.buildings).flat()
     : undefined;
   // the walls the street photos read as glass, where no source names one
-  const rootOfWall = new Map(
-    Object.entries(windowFile?.buildings ?? {}).flatMap(([root, ws]) =>
-      ws.map((w) => [w.oid, root] as const)
-    )
-  );
-  const lut = withPhotoGlass(osmLut, windows, (id) => rootOfWall.get(id));
+  const lut = withPhotoGlass(osmLut, windowFile);
   return bakeCityMesh(
     tile,
     doc,

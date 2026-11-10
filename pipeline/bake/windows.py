@@ -69,7 +69,7 @@ import numpy as np
 from . import facade_glass
 from .common import Tile
 from .facade_traits import STEP_M
-from .facades import ATTRIBUTION, glass_path, traits_path, walls
+from .facades import ATTRIBUTION, GLASS_NEAR_M, glass_path, traits_path, walls
 from .osm_buildings import root_of
 from .shopfronts import _Raster, _wall_entry
 from .window_axes import wall_phase
@@ -459,7 +459,8 @@ GLASS_SHARE = 2 / 3
 
 
 def glass_records(lines: list[str]) -> dict[tuple[str, int], list[int]]:
-    """Per wall the glass readings (‰) of the photos that saw enough of it."""
+    """Per wall the glass readings (‰) of the photos that saw enough of it
+    from near enough (`GLASS_NEAR_M`)."""
     by: dict[tuple[str, int], list[int]] = collections.defaultdict(list)
     for line in lines:
         try:
@@ -467,7 +468,7 @@ def glass_records(lines: list[str]) -> dict[tuple[str, int], list[int]]:
         except ValueError:
             continue
         for w in r.get("walls", []):
-            if "gl" in w and w.get("cov", 0) >= GLASS_COVER:
+            if "gl" in w and w.get("cov", 0) >= GLASS_COVER and w.get("dist", 0) <= GLASS_NEAR_M:
                 by[(w["oid"], w["wi"])].append(int(w["gl"]))
     return dict(by)
 
@@ -538,8 +539,22 @@ def windows(city: dict, by_wall: dict, ground=None, glass: dict | None = None) -
     return dict(sorted(out.items())), agreement(all_seqs)
 
 
-def write(path: Path, buildings: dict, reliability: dict) -> None:
+def outer_lengths(city: dict, buildings: dict) -> dict[str, float]:
+    """Per object with a wall read for glass, the length of all its outer
+    walls (`walls`): the building bake weighs its glass against it, so one
+    glazed stair tower read alone does not make a stone house glass."""
+    read = {w["oid"] for ws in buildings.values() for w in ws if "glass" in w}
+    total: dict[str, float] = collections.defaultdict(float)
+    for w in walls(city):
+        if w["oid"] in read:
+            total[w["oid"]] += math.hypot(w["b"][0] - w["a"][0], w["b"][1] - w["a"][1])
+    return {oid: round(v, 1) for oid, v in sorted(total.items())}
+
+
+def write(path: Path, buildings: dict, reliability: dict, outer: dict | None = None) -> None:
     doc = {"attribution": ATTRIBUTION, "reliability": reliability, "buildings": buildings}
+    if outer:
+        doc["outer"] = outer
     path.write_text(json.dumps(doc, separators=(",", ":"), sort_keys=True))
 
 
@@ -551,11 +566,14 @@ def run(tile: Tile) -> None:
             print(f"{tile.id}: no facade traits measured — no wall gets windows")
         write(out, {}, {})
         return
+    if not gpath.exists() and any(gpath.parent.glob(f"{tile.id}.glass.*.jsonl")):
+        # read under other prompts, model or limits (facade_glass.reading_key)
+        print(f"{tile.id}: WARNING the glass readings are stale — fetch again; no wall is glass")
     city = json.loads(tile.cityjson.read_text())
     by_wall = _records(path) if path.exists() else {}
     glass = glass_records(gpath.read_text().splitlines()) if gpath.exists() else {}
     buildings, reliability = windows(city, by_wall, _Raster(tile.dgm), glass)
-    write(out, buildings, reliability)
+    write(out, buildings, reliability, outer_lengths(city, buildings))
     n_walls = sum(len(v) for v in buildings.values())
     modelled = sum("model" in w for v in buildings.values() for w in v)
     read = sum("glass" in w for v in buildings.values() for w in v)

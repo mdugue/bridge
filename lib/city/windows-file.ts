@@ -48,9 +48,9 @@ const wallGlass = z.strictObject({
 });
 
 /** A measured wall: its frame as in shopfronts_<tile>.json, the traits, and
- *  the model where one is drawn. A wall the photos read as glass has no
- *  model; one no panorama measured has its glass alone (no traits, `imgs`
- *  0). */
+ *  the model where one is drawn. A wall the photos read as glass keeps its
+ *  model (it lends it to no other building, windows.ts); one no panorama
+ *  measured has its glass alone (no traits, `imgs` 0). */
 const windowWall = z.strictObject({
   a: point2,
   b: point2,
@@ -73,6 +73,10 @@ const windowWall = z.strictObject({
 const windowFile = z.strictObject({
   attribution: z.string(),
   buildings: z.record(z.string(), z.array(windowWall)),
+  /** per object with a wall read for glass: the length of all its outer
+   *  walls, m (facades.walls), against which its glass is weighed
+   *  (photo-glass.ts) */
+  outer: z.record(z.string(), z.number().nonnegative()).optional(),
   /** per feature [Spearman ρ between two sequences, walls] on this tile */
   reliability: z.record(z.string(), z.tuple([z.number().nullable(), z.int()])),
 });

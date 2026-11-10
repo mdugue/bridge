@@ -22,8 +22,9 @@ do.
    ONNX), comparing each rectified upper wall with "a glass facade" and "a
    wall with windows". A wall is glass where most of at least two photos
    that see a quarter of it say so with 0.95 or more; an object is glass
-   where its walls read as glass make half the length read. Never a rule
-   for a named building.
+   where its walls read as glass make half the length read and a quarter
+   of all its outer walls, or 15 m and a twentieth of them. Never a rule for a named
+   building.
 2. **Every camera is read for it**, panoramas and framed photos
    (perspective, Brown, fisheye) alike, within 60 m of the wall and with
    the wall in the frame. The other facade traits stay the panoramas'.

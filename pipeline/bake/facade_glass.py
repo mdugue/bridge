@@ -29,6 +29,7 @@ per wall from all the images that saw it."""
 from __future__ import annotations
 
 import hashlib
+import os
 from functools import cache
 from pathlib import Path
 
@@ -70,6 +71,8 @@ PROMPTS = {
         "a blurry photo of a road",
     ),
 }
+# the classes' rows in the embeddings, in this order (`Model.glass`)
+CLASSES = ("glass", "wall", "other")
 LOGIT_SCALE = 100.0  # CLIP's learned temperature
 MEAN = np.array([0.48145466, 0.4578275, 0.40821073])
 STD = np.array([0.26862954, 0.26130258, 0.27577711])
@@ -81,11 +84,24 @@ OTHER_MAX = 0.5  # an unsegmented crop more likely sky, trees or street is not r
 READ_VERSION = 1  # bump when the rectification or the crop changes what is read
 
 
+def _prompts() -> tuple:
+    return tuple((c, PROMPTS[c]) for c in CLASSES)
+
+
 def reading_key() -> str:
-    """What a cached reading depends on, hashed: the prompts, the model, the
-    crop's limits. It names the cache (facades.glass_path), so a change reads
-    every photo again instead of mixing old readings with new."""
-    what = (READ_VERSION, sorted(PROMPTS.items()), REPO, MIN_PX, MIN_COVER, OTHER_MAX, SIZE)
+    """What a cached reading depends on, hashed: the prompts in their order,
+    the model, the crop's limits and the rectification's (facade_measure).
+    It names the cache (facades.glass_path), so a change reads every photo
+    again instead of mixing old readings with new."""
+    from .facade_measure import GROUND_M, MAX_RES_M, PX
+
+    what = (
+        READ_VERSION,
+        _prompts(),
+        REPO,
+        (MIN_PX, MIN_COVER, OTHER_MAX, SIZE, LOGIT_SCALE, MEAN.tolist(), STD.tolist()),
+        (PX, GROUND_M, MAX_RES_M),
+    )
     return hashlib.sha256(repr(what).encode()).hexdigest()[:10]
 
 
@@ -95,11 +111,8 @@ def model_dir(raw: Path) -> Path:
 
 
 def _sha256(path: Path) -> str:
-    h = hashlib.sha256()
     with open(path, "rb") as f:
-        for block in iter(lambda: f.read(1 << 20), b""):
-            h.update(block)
-    return h.hexdigest()
+        return hashlib.file_digest(f, "sha256").hexdigest()
 
 
 @cache
@@ -110,9 +123,12 @@ def fetch_model(raw: Path) -> Path:
     root = model_dir(raw)
     for name, sha in FILES.items():
         path = root / name
-        download(f"{REPO}/{SOURCE[name]}", path)
-        if _sha256(path) != sha:
+        for _ in range(2):  # a file of an older pin is fetched again
+            download(f"{REPO}/{SOURCE[name]}", path)
+            if _sha256(path) == sha:
+                break
             path.unlink()
+        else:
             raise OSError(f"{name}: SHA-256 differs from the pinned model")
     return root
 
@@ -120,8 +136,9 @@ def fetch_model(raw: Path) -> Path:
 def write_classes(root: Path) -> Path:
     """The prompts' embeddings (`PROMPTS`, one row a class), computed with the
     text encoder and saved beside the model, so a worker loads the vision
-    encoder alone. Rewritten when the prompts change (their hash names it)."""
-    key = hashlib.sha256(repr(sorted(PROMPTS.items())).encode()).hexdigest()[:12]
+    encoder alone. Named by the prompts, their order and the model, so a
+    change computes them again; written whole or not at all."""
+    key = hashlib.sha256(repr((_prompts(), REPO)).encode()).hexdigest()[:12]
     path = root / f"classes-{key}.npy"
     if not path.exists():
         import onnxruntime as ort
@@ -129,8 +146,10 @@ def write_classes(root: Path) -> Path:
 
         text = ort.InferenceSession(str(root / "text_model.onnx"))
         tok = Tokenizer.from_file(str(root / "tokenizer.json"))
-        classes = np.stack([_text_embedding(text, tok, ps) for ps in PROMPTS.values()])
-        np.save(path, classes.astype(np.float32))
+        classes = np.stack([_text_embedding(text, tok, ps) for _, ps in _prompts()])
+        part = path.with_suffix(f".{os.getpid()}.npy")
+        np.save(part, classes.astype(np.float32))
+        part.replace(path)
     return path
 
 

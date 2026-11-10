@@ -23,6 +23,7 @@ import type { BakeFile } from "../lib/city/bake-file";
 import { DOORS_FILE } from "../lib/city/doors-file";
 import { SHOPFRONTS_FILE } from "../lib/city/shopfronts-file";
 import { OSM_BUILDINGS_FILE } from "../lib/city/osm-buildings-file";
+import { withPhotoGlass } from "../lib/city/photo-glass";
 import { LANDMARKS_FILE } from "../lib/city/landmarks-file";
 import { cityMeshSourceFiles, tileIds } from "../lib/city/tile";
 import type { CityJsonDocument } from "../lib/city/types";
@@ -104,7 +105,7 @@ for (const tile of tiles) {
   const walls = Object.values(file?.buildings ?? {}).flat();
   // the OSM facts and the landmarks: the windows' gate reads them
   const osmJson = read(src.osmBuild);
-  const osm: OsmBuildingLut = {
+  const facts: OsmBuildingLut = {
     ...(osmJson === undefined
       ? {}
       : parseBakeFile(OSM_BUILDINGS_FILE, osmJson, src.osmBuild).objects),
@@ -116,9 +117,11 @@ for (const tile of tiles) {
       : parseBakeFile(LANDMARKS_FILE, landmarksJson, src.landmarks);
   for (const lm of landmarks?.landmarks ?? []) {
     for (const id of lm.objects) {
-      osm[id] = { ...osm[id], landmark: 1 };
+      facts[id] = { ...facts[id], landmark: 1 };
     }
   }
+  // and the street photos' glass, as the tile bake folds it in
+  const osm = withPhotoGlass(facts, file);
   const t0 = performance.now();
   const baked = bakeCityMesh(
     tile,

@@ -288,11 +288,13 @@ function buildingLineage(
   // (a flag any object of the tree carries)
   const has = (bit: number) => all.some((o) => hasObjectFlag(o.flags, bit));
   const drawn = all.map((o) => decodeDrawn(o.facts.drawn));
-  // the glass every glazed part has is the street photos' (photo-glass.ts)
-  const photoGlass = all.every(
+  // a facade's glass OSM names, not the street photos' (photo-glass.ts) and
+  // not a shop window's pane (its own glass object)
+  const osmGlass = all.some(
     (o, i) =>
-      !hasObjectFlag(o.flags, OBJECT_FLAG_GLASS) ||
-      drawn[i]?.materialFrom === "photos"
+      o.source !== OBJECT_SOURCE_SHOPFRONT &&
+      hasObjectFlag(o.flags, OBJECT_FLAG_GLASS) &&
+      drawn[i]?.materialFrom !== "photos"
   );
   const { source } = b.picked;
   const lod2 = source !== OBJECT_SOURCE_SCAN && source !== OBJECT_SOURCE_GAP;
@@ -335,8 +337,7 @@ function buildingLineage(
   l.source(
     "osm",
     [
-      ((has(OBJECT_FLAG_GLASS) && !photoGlass) || has(OBJECT_FLAG_METAL)) &&
-        "Glas oder Metall der Fassade",
+      (osmGlass || has(OBJECT_FLAG_METAL)) && "Glas oder Metall der Fassade",
       // osm_buildings.py: a shop point inside the footprint, or snapped to
       // the nearest one within a few metres
       has(OBJECT_FLAG_SHOP) && ["Schaufenster im Erdgeschoss", "detected"],

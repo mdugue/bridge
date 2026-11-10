@@ -661,15 +661,18 @@ export const NEAR_M = 30;
  *  (m, or this share of it). */
 const NEAR_EAVE = { m: 4, share: 0.35 } as const;
 
-/** The best-seen model on each object's measured walls (most images). */
+/** The best-seen model on each object's measured walls (most images);
+ *  `lending`: only the walls the photos did not read as glass, whose
+ *  mullions are no rhythm for another building's windows. */
 function measuredModels(
   walls: readonly WindowWall[],
-  index: ReadonlyMap<string, number>
+  index: ReadonlyMap<string, number>,
+  lending = false
 ): Map<number, FacadeModel> {
   const best = new Map<number, { imgs: number; m: FacadeModel }>();
   for (const w of walls) {
     const i = index.get(w.oid);
-    if (!w.model || i === undefined) {
+    if (!w.model || i === undefined || (lending && w.glass?.glass)) {
       continue;
     }
     const have = best.get(i);
@@ -864,11 +867,12 @@ export function windowSpecs(
   index: ReadonlyMap<string, number>
 ): WindowChoice[] {
   const own = measuredModels(walls, index);
+  const lent = measuredModels(walls, index, true);
   const byRoot = new Map<number, FacadeModel>();
-  for (const [i, m] of own) {
+  for (const [i, m] of lent) {
     byRoot.set(hosts[i].root, byRoot.get(hosts[i].root) ?? m);
   }
-  const donors = [...own].map(([i, m]) => ({ host: hosts[i], m }));
+  const donors = [...lent].map(([i, m]) => ({ host: hosts[i], m }));
   return hosts.map((host, i): WindowChoice => {
     const why = barred(host);
     if (why) {

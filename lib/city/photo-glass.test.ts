@@ -33,17 +33,26 @@ describe("glass fronts from the street photos", () => {
     expect([...got]).toEqual(["hall"]);
   });
 
+  test("a short glass wall read alone needs a quarter of the outer walls", () => {
+    const walls = [wall("tower", 8, true), wall("pavilion", 8, true)];
+    const got = photoGlassObjects(walls, { tower: 60, pavilion: 24 });
+    expect([...got]).toEqual(["pavilion"]);
+    // 15 m reads as glass on a hall, not on a mall 30 times its glass
+    const front = [wall("hall", 16, true), wall("mall", 16, true)];
+    const big = photoGlassObjects(front, { hall: 300, mall: 547 });
+    expect([...big]).toEqual(["hall"]);
+  });
+
   test("the photos give glass only where no source names a material", () => {
-    const walls = [
-      wall("a", 20, true),
-      wall("b", 20, true),
-      wall("c", 20, true),
-    ];
-    const roots: Record<string, string> = { a: "A", b: "B", c: "C" };
     const lut = withPhotoGlass(
       { b: { material: "brick" }, C: { material: "stone" } },
-      walls,
-      (id) => roots[id]
+      {
+        buildings: {
+          A: [wall("a", 20, true)],
+          B: [wall("b", 20, true)],
+          C: [wall("c", 20, true)],
+        },
+      }
     );
     expect(lut?.a).toEqual({ material: "glass", materialFrom: "photos" });
     expect(lut?.b).toEqual({ material: "brick" });
@@ -52,14 +61,17 @@ describe("glass fronts from the street photos", () => {
   });
 
   test("a Building with parts keeps its glass to itself", () => {
-    const walls = [wall("B", 30, true), wall("p", 20, false)];
-    const roots: Record<string, string> = { B: "B", p: "B" };
-    const lut = withPhotoGlass({}, walls, (id) => roots[id]);
+    const lut = withPhotoGlass(
+      {},
+      { buildings: { B: [wall("B", 30, true), wall("p", 20, false)] } }
+    );
     expect(lut?.B).toBeUndefined();
   });
 
   test("a tile the photos found no glass on keeps its table", () => {
     const lut = { a: { levels: 3 } };
-    expect(withPhotoGlass(lut, [wall("a", 20, false)], () => {})).toBe(lut);
+    expect(
+      withPhotoGlass(lut, { buildings: { a: [wall("a", 20, false)] } })
+    ).toBe(lut);
   });
 });

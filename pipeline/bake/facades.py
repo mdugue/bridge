@@ -84,7 +84,7 @@ MAX_SEQ_TRAITS = 6
 # the glass reading (facade_glass.py): any camera, a little further out
 PHOTO_FIELDS = (
     "id,computed_geometry,computed_rotation,captured_at,sequence,is_pano,"
-    "camera_type,camera_parameters"
+    "camera_type,camera_parameters,width,height"
 )
 FRAMED = ("perspective", "brown", "fisheye")  # the framed cameras read
 GLASS_NEAR_M = 60.0
@@ -99,6 +99,9 @@ SIGN_WALL_M = 2.0  # the walls signs are matched to (any eave)
 
 WORKERS = max(2, (os.cpu_count() or 2) + 2)  # downloads overlap the measuring
 WORKERS_ENV = "MAPILLARY_WORKERS"  # fewer, where another fetch shares the line
+# each worker of the glass reading holds its own vision model (~0.4 GB with
+# its runtime and a 2048 px image): no more than this many by default
+GLASS_WORKERS = min(WORKERS, 4)
 SOURCE_ENV = "MAPILLARY_FACADE_SOURCE"
 
 
@@ -323,11 +326,13 @@ def photos(images: list[dict], epsg: int) -> tuple[list[dict], np.ndarray]:
     return keep, pos
 
 
-def in_frame(wall: dict, photo: dict, xy) -> float:
+def in_frame(wall: dict, photo: dict, xy, rot: np.ndarray) -> float:
     """The share of a coarse grid over the wall's upper part (GROUND_M to the
     eave, the ground taken level) that falls inside the photo's frame —
-    1 for a panorama, which sees all round."""
-    from .facade_measure import EYE_M, GROUND_M, project, rotation_matrix
+    1 for a panorama, which sees all round. `rot` is the pose on the grid,
+    as the reading turns it (`onto_grid`); the frame is the photo's own
+    shape where Mapillary gives it, else 4:3."""
+    from .facade_measure import EYE_M, GROUND_M, project
 
     camera = camera_of(photo)
     if camera["type"] == "spherical":
@@ -339,12 +344,14 @@ def in_frame(wall: dict, photo: dict, xy) -> float:
     P = np.stack([ax + (bx - ax) * S - xy[0], ay + (by - ay) * S - xy[1], Z - EYE_M], -1).reshape(
         -1, 3
     )
-    C = P @ rotation_matrix(photo["computed_rotation"]).T
-    _, _, seen, _ = project(C, 4, 3, camera)
+    C = P @ rot.T
+    _, _, seen, _ = project(C, photo.get("width") or 4, photo.get("height") or 3, camera)
     return float(seen.mean())
 
 
-def glass_candidates(wall: dict, images: list[dict], pos: np.ndarray, ptree, ftree) -> dict:
+def glass_candidates(
+    wall: dict, images: list[dict], pos: np.ndarray, rots: list, ptree, ftree
+) -> dict:
     """The photos that see `wall` for its glass reading, by sequence: within
     GLASS_NEAR_M (a glass front stands back from the street, behind a
     forecourt or a plaza), at least MIN_DIST_M away, at most 60° off its
@@ -358,7 +365,7 @@ def glass_candidates(wall: dict, images: list[dict], pos: np.ndarray, ptree, ftr
     for i in ptree.query(shapely.Point(mx, my).buffer(GLASS_NEAR_M)):
         x, y = pos[i]
         d = math.hypot(mx - x, my - y)
-        if d < MIN_DIST_M:
+        if d < MIN_DIST_M or d > GLASS_NEAR_M:
             continue
         cos = (nx * (x - mx) + ny * (y - my)) / d
         if cos < MIN_COS:
@@ -366,7 +373,7 @@ def glass_candidates(wall: dict, images: list[dict], pos: np.ndarray, ptree, ftr
         sight = shapely.LineString([(x, y), (mx + nx * 0.5, my + ny * 0.5)])
         if any(j != wall["k"] for j in ftree.query(sight, predicate="intersects")):
             continue
-        frame = in_frame(wall, images[i], (x, y))
+        frame = in_frame(wall, images[i], (x, y), rots[i])
         if frame < GLASS_IN_FRAME:
             continue
         score = frame * cos / max(d, MIN_DIST_M)
@@ -377,17 +384,21 @@ def glass_candidates(wall: dict, images: list[dict], pos: np.ndarray, ptree, ftr
     return {seq: [i] for seq, (_, i) in ranked}
 
 
-def plan_glass(city: dict, images: list[dict], epsg: int) -> dict[str, dict]:
+def plan_glass(city: dict, images: list[dict], epsg: int, gamma: float = 0.0) -> dict[str, dict]:
     """Per photo id: its sequence, position, camera and the walls it is to
-    read for glass (`glass_candidates`)."""
+    read for glass (`glass_candidates`); `gamma` the grid convergence the
+    reading turns each pose by."""
+    from .facade_measure import rotation_matrix
+
     ws = walls(city)
     _, polys = footprints(city)
     ftree = shapely.STRtree(polys)
     keep, pos = photos(images, epsg)
+    rots = [onto_grid(rotation_matrix(o["computed_rotation"]), gamma) for o in keep]
     ptree = shapely.STRtree(shapely.points(pos))
     jobs: dict[str, dict] = {}
     for w in ws:
-        for seq, idx in glass_candidates(w, keep, pos, ptree, ftree).items():
+        for seq, idx in glass_candidates(w, keep, pos, rots, ptree, ftree).items():
             for i in idx:
                 o = keep[i]
                 job = jobs.setdefault(
@@ -658,6 +669,11 @@ def measure_image(job: dict) -> dict:
     finally:
         if ours:
             path.unlink(missing_ok=True)
+    if kind == "glass":
+        try:
+            facade_glass.model(*job["model"])
+        except Exception as err:  # noqa: BLE001 — not this photo's fault: read it again later
+            return {"img": iid, "fail": f"model: {type(err).__name__}: {err}"[:200]}
     rot = onto_grid(rotation_matrix(job["rot"]), job.get("gamma", 0.0))
     x, y = job["xy"]
     out = []
@@ -736,16 +752,6 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
     )
     city = json.loads(tile.cityjson.read_text())
     model: list[str] = []
-    if kind == "glass":
-        every = _cached_json(
-            _photos_path(tile),
-            lambda: _search_tile(tile, "images", {"fields": PHOTO_FIELDS}, GLASS_NEAR_M),
-        )
-        jobs = plan_glass(city, every, tile.epsg)
-        out = glass_path(tile)
-    else:
-        jobs = plan(city, images, tile.epsg, MAX_SEQ_TRAITS if kind == "traits" else MAX_SEQ)
-        out = traits_path(tile) if kind == "traits" else cache_path(tile)
     x0, y0, x1, y1 = tile.bounds
     # the poses turned onto the grid only in the traits cache (v4): the
     # facades cache keeps its measurements as they were taken
@@ -754,6 +760,16 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
         if kind in ("traits", "glass")
         else 0.0
     )
+    if kind == "glass":
+        every = _cached_json(
+            _photos_path(tile),
+            lambda: _search_tile(tile, "images", {"fields": PHOTO_FIELDS}, GLASS_NEAR_M),
+        )
+        jobs = plan_glass(city, every, tile.epsg, gamma)
+        out = glass_path(tile)
+    else:
+        jobs = plan(city, images, tile.epsg, MAX_SEQ_TRAITS if kind == "traits" else MAX_SEQ)
+        out = traits_path(tile) if kind == "traits" else cache_path(tile)
     done = _done(out)
     todo = sorted(set(jobs) - done)
     seen_by = "photos" if kind == "glass" else "panoramas"
@@ -774,7 +790,7 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
     with (
         open(out, "a") as f,
         cf.ProcessPoolExecutor(
-            int(os.environ.get(WORKERS_ENV) or WORKERS),
+            int(os.environ.get(WORKERS_ENV) or (GLASS_WORKERS if kind == "glass" else WORKERS)),
             initializer=_init_worker,
             initargs=(str(tile.dgm),),
         ) as ex,

@@ -9,7 +9,7 @@ import pytest
 
 from bake import facade_glass, facades
 from bake import windows as win
-from bake.facade_measure import project
+from bake.facade_measure import project, rotation_matrix
 
 
 def test_a_panorama_sees_all_round():
@@ -69,12 +69,21 @@ def _photo(heading_deg: float, pano: bool = False) -> dict:
     }
 
 
+def _in_frame(wall: dict, photo: dict, at, gamma: float = 0.0) -> float:
+    rot = facades.onto_grid(rotation_matrix(photo["computed_rotation"]), gamma)
+    return facades.in_frame(wall, photo, at, rot)
+
+
 def test_a_photo_reads_a_wall_only_when_it_looks_at_it():
     wall = _wall()
     at = (10.0, -25.0)  # 25 m south of the wall's middle, the wall to the north
-    assert facades.in_frame(wall, _photo(0), at) > 0.9
-    assert facades.in_frame(wall, _photo(180), at) == 0.0
-    assert facades.in_frame(wall, _photo(180, pano=True), at) == 1.0
+    assert _in_frame(wall, _photo(0), at) > 0.9
+    assert _in_frame(wall, _photo(180), at) == 0.0
+    assert _in_frame(wall, _photo(180, pano=True), at) == 1.0
+    # a portrait photo sees less of a wide, low wall than the 4:3 default
+    low, near = _wall(eave=5.0), (10.0, -15.0)
+    tall = _photo(0) | {"width": 3, "height": 4}
+    assert _in_frame(low, tall, near) < _in_frame(low, _photo(0), near)
 
 
 def test_the_crop_keeps_the_seen_upper_wall_and_greys_the_rest():
@@ -161,3 +170,5 @@ def test_a_wall_seen_only_for_glass_enters_with_its_glass_alone():
     assert len(entries) == 4
     assert all(e["glass"]["glass"] and "model" not in e for e in entries)
     assert all(e["imgs"] == 0 and e["traits"] == {} for e in entries)
+    # the hall's glass is weighed against all its outer walls
+    assert win.outer_lengths(city, buildings) == {entries[0]["oid"]: 100.0}
