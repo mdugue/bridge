@@ -218,6 +218,32 @@ test("a listed public building without a storey count is said to be one", () => 
   expect(r.Fenster.detail).toContain("Baudenkmal");
 });
 
+test("a landmark the photos read as glass has no windows for its glass", () => {
+  const r = rows(
+    ask(
+      object(
+        {
+          material: "glass",
+          materialFrom: "photos",
+          windows: "none",
+          noWindows: "facade",
+          wikidata: "Q1",
+        },
+        {
+          flags:
+            OBJECT_FLAG_GROUNDED + OBJECT_FLAG_LANDMARK + OBJECT_FLAG_GLASS,
+          look: look({ windows: { axis: 0, w: 0, h: 0, style: 0 } }),
+        }
+      )
+    )
+  );
+  expect(r.Fenster).toMatchObject({
+    value: "keine",
+    method: "detected",
+    source: "mapillary",
+  });
+});
+
 test("a palace's windows are said to be its type's", () => {
   const r = rows(
     ask(

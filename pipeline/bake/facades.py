@@ -37,6 +37,12 @@ yet. A rerun skips what is measured. `MAPILLARY_FACADE_SOURCE`
 may name a folder holding earlier downloads (`img/<id>.jpg`,
 `det/<id>.json`), read instead of the network and never deleted.
 
+The glass reading (ADR 0060) plans differently: every photo of any camera
+within `GLASS_NEAR_M` (`<raw>/mapillary/facades/<tile>.photos.json`), the
+best of each of `GLASS_SEQ` sequences per wall (`plan_glass`), each read by
+facade_glass.py into `<tile>.glass.<key>.jsonl`, ended by a line that says
+it was read through (`complete`); windows.py decides from it.
+
 The bake writes `dlm/facades_<tile>.json`:
 `{"attribution": …, "buildings": {"<gml:id>": [busy, dark, shop]}}`, read
 by lib/city/facade-reading.ts. Its own file, credited to Mapillary: the
@@ -759,12 +765,12 @@ def measure_image(job: dict) -> dict:
 # --- fetch and run ----------------------------------------------------------
 
 
-def _done(path: Path) -> dict[str, set[tuple[str, int]] | None]:
+def _done(path: Path) -> dict[str, set[tuple[str, int, float]] | None]:
     """Per image already in the cache the walls it was read on; None for
     one that could not be read at all (a skip: it is not asked again)."""
     if not path.exists():
         return {}
-    done: dict[str, set[tuple[str, int]] | None] = {}
+    done: dict[str, set[tuple[str, int, float]] | None] = {}
     for line in path.read_text().splitlines():
         try:
             r = json.loads(line)
@@ -774,7 +780,7 @@ def _done(path: Path) -> dict[str, set[tuple[str, int]] | None]:
         if "skip" in r:
             done[iid] = None
         elif (have := done.setdefault(iid, set())) is not None:
-            have.update((w["oid"], w["wi"]) for w in r.get("walls", []))
+            have.update(wall_key(w) for w in r.get("walls", []))
     return done
 
 
@@ -787,20 +793,45 @@ def _todo(jobs: dict[str, dict], done: dict, by_wall: bool) -> list[str]:
         if i not in done:
             return False
         have = done[i]
-        return (
-            not by_wall
-            or have is None
-            or all((w["oid"], w["wi"]) in have for w in jobs[i]["walls"])
-        )
+        return not by_wall or have is None or all(wall_key(w) in have for w in jobs[i]["walls"])
 
     return sorted(i for i in jobs if not read(i))
 
 
-def _unread(job: dict, have: set[tuple[str, int]] | None) -> dict:
+def wall_key(w: dict) -> tuple[str, int, float]:
+    """A wall as a cached reading names it: its object, its number and its
+    length — a new LoD2 edition numbering an object's walls anew does not
+    pass one wall's readings to another."""
+    return (w["oid"], w["wi"], round(w["L"], 2))
+
+
+def mark_complete(path: Path) -> None:
+    """Ends the glass cache with the line that says every photo its plan
+    picked was read (`complete`), unless it already does."""
+    if not complete(path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a") as f:
+            f.write('{"complete":true}\n')
+
+
+def complete(path: Path) -> bool:
+    """Whether a glass cache was read through: its last line says so — a
+    run killed or with failures since added image lines after it, or none
+    (`mark_complete`)."""
+    if not path.exists():
+        return False
+    lines = path.read_text().splitlines()
+    try:
+        return bool(lines) and json.loads(lines[-1]).get("complete") is True
+    except ValueError:
+        return False
+
+
+def _unread(job: dict, have: set[tuple[str, int, float]] | None) -> dict:
     """The job on the walls its image was not yet read on (`_done`)."""
     if not have:
         return job
-    return job | {"walls": [w for w in job["walls"] if (w["oid"], w["wi"]) not in have]}
+    return job | {"walls": [w for w in job["walls"] if wall_key(w) not in have]}
 
 
 def _fetch_signs(tile: Tile) -> None:
@@ -840,16 +871,11 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
     if not os.environ.get("MAPILLARY_TOKEN"):
         print(f"{tile.id}: no MAPILLARY_TOKEN — the facades not measured")
         return
-    _fetch_signs(tile)
-    images = _cached_json(
-        _images_path(tile),
-        lambda: _search_tile(tile, "images", {"fields": IMAGE_FIELDS, "is_pano": "true"}, NEAR_M),
-    )
     city = json.loads(tile.cityjson.read_text())
     model: list[str] = []
     x0, y0, x1, y1 = tile.bounds
-    # the poses turned onto the grid only in the traits cache (v4): the
-    # facades cache keeps its measurements as they were taken
+    # the poses turned onto the grid in the traits (v4) and glass caches:
+    # the facades cache keeps its measurements as they were taken
     gamma = (
         grid_convergence(tile.epsg, (x0 + x1) / 2, (y0 + y1) / 2)
         if kind in ("traits", "glass")
@@ -862,10 +888,14 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
         )
         jobs = plan_glass(city, every, tile.epsg, gamma)
         out = glass_path(tile)
-        # read, if only of nothing: the windows bake asks for it
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.touch()
     else:
+        _fetch_signs(tile)
+        images = _cached_json(
+            _images_path(tile),
+            lambda: _search_tile(
+                tile, "images", {"fields": IMAGE_FIELDS, "is_pano": "true"}, NEAR_M
+            ),
+        )
         jobs = plan(city, images, tile.epsg, MAX_SEQ_TRAITS if kind == "traits" else MAX_SEQ)
         out = traits_path(tile) if kind == "traits" else cache_path(tile)
     done = _done(out)
@@ -873,6 +903,8 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
     seen_by = "photos" if kind == "glass" else "panoramas"
     print(f"{tile.id}: {len(jobs)} {seen_by} see its walls, {len(todo)} to measure ({kind})")
     if not todo:
+        if kind == "glass":
+            mark_complete(out)
         return
     if kind == "glass":
         from . import facade_glass
@@ -927,6 +959,8 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
         leftover.unlink()
     if counts["fail"]:
         print(f"{tile.id}: {counts['fail']} images failed on the network — rerun the fetch")
+    elif kind == "glass":
+        mark_complete(out)
 
 
 def _records(path: Path) -> list[dict]:

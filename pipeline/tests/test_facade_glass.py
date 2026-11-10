@@ -135,11 +135,11 @@ def test_the_model_sees_a_long_wall_whole():
     assert x[0, 0, middle, 2] > x[0, 0, middle, 100]
 
 
-def _lines(readings: dict[tuple[str, int], list[tuple[int, float]]]) -> list[str]:
+def _lines(readings: dict[tuple[str, int, float], list[tuple[int, float]]]) -> list[str]:
     out = []
-    for (oid, wi), rs in readings.items():
+    for (oid, wi, length), rs in readings.items():
         for k, (gl, cov) in enumerate(rs):
-            w = {"oid": oid, "wi": wi, "cov": cov} | ({} if gl is None else {"gl": gl})
+            w = {"oid": oid, "wi": wi, "L": length, "cov": cov} | ({} if gl is None else {"gl": gl})
             out.append(json.dumps({"img": f"{oid}{wi}{k}", "seq": f"s{k}", "walls": [w]}))
     return out
 
@@ -171,37 +171,43 @@ def test_a_wall_is_glass_where_most_of_its_clear_views_say_so():
     got = win.glass_records(
         _lines(
             {
-                ("ICC", 0): [(990, 0.6), (950, 0.4), (400, 0.5)],
-                ("house", 0): [(990, 0.6), (300, 0.5), (200, 0.5)],
-                ("glimpse", 0): [(990, 0.6), (None, 0.1)],  # one view too narrow to read
-                ("blind", 0): [(None, 0.6), (None, 0.6)],
+                ("ICC", 0, 10.0): [(990, 0.6), (950, 0.4), (400, 0.5)],
+                ("house", 0, 10.0): [(990, 0.6), (300, 0.5), (200, 0.5)],
+                ("glimpse", 0, 10.0): [(990, 0.6), (None, 0.1)],  # one view too narrow to read
+                ("blind", 0, 10.0): [(None, 0.6), (None, 0.6)],
             }
         )
     )
-    assert win.wall_glass(got[("ICC", 0)]) == {"glass": True, "n": 3, "p": 950}
-    assert win.wall_glass(got[("house", 0)])["glass"] is False
-    assert win.wall_glass(got[("glimpse", 0)]) is None
-    assert ("blind", 0) not in got
+    assert win.wall_glass(got[("ICC", 0, 10.0)]) == {"glass": True, "n": 3, "p": 950}
+    assert win.wall_glass(got[("house", 0, 10.0)])["glass"] is False
+    assert win.wall_glass(got[("glimpse", 0, 10.0)]) is None
+    assert ("blind", 0, 10.0) not in got
 
 
 def test_two_frames_of_one_pass_are_one_reading():
     lines = [
-        json.dumps({"img": i, "seq": "s", "walls": [{"oid": "a", "wi": 0, "cov": c, "gl": g}]})
+        json.dumps(
+            {"img": i, "seq": "s", "walls": [{"oid": "a", "wi": 0, "L": 10.0, "cov": c, "gl": g}]}
+        )
         for i, c, g in (("1", 0.5, 990), ("2", 0.8, 400))
     ]
     # the frame that saw most of the wall speaks for its sequence
-    assert win.glass_records(lines) == {("a", 0): [400]}
+    assert win.glass_records(lines) == {("a", 0, 10.0): [400]}
 
 
 def test_a_wall_keeps_the_passes_the_fetch_plans():
     lines = [
         json.dumps(
-            {"img": f"i{k}", "seq": f"s{k}", "walls": [{"oid": "a", "wi": 0, "cov": c, "gl": g}]}
+            {
+                "img": f"i{k}",
+                "seq": f"s{k}",
+                "walls": [{"oid": "a", "wi": 0, "L": 10.0, "cov": c, "gl": g}],
+            }
         )
         for k, (c, g) in enumerate([(0.9, 990), (0.3, 100), (0.8, 980), (0.7, 970), (0.6, 960)])
     ]
     # an earlier plan read five passes: the four that saw most count
-    assert win.glass_records(lines) == {("a", 0): [990, 980, 970, 960]}
+    assert win.glass_records(lines) == {("a", 0, 10.0): [990, 980, 970, 960]}
     assert facades.GLASS_SEQ == 4
 
 
@@ -211,21 +217,40 @@ def test_a_photo_read_is_read_again_only_for_a_wall_planned_since(tmp_path):
         "\n".join(
             json.dumps(r)
             for r in (
-                {"img": "p", "seq": "s", "walls": [{"oid": "a", "wi": 0}]},
-                {"img": "q", "seq": "s", "walls": [{"oid": "a", "wi": 0, "off": "ground"}]},
+                {"img": "p", "seq": "s", "walls": [{"oid": "a", "wi": 0, "L": 10.0}]},
+                {
+                    "img": "q",
+                    "seq": "s",
+                    "walls": [{"oid": "a", "wi": 0, "L": 10.0, "off": "ground"}],
+                },
                 {"img": "r", "skip": "no pose or thumbnail"},
             )
         )
     )
-    wall = [{"oid": "a", "wi": 0}]
-    both = [*wall, {"oid": "b", "wi": 0}]
+    wall = [{"oid": "a", "wi": 0, "L": 10.0}]
+    both = [*wall, {"oid": "b", "wi": 0, "L": 10.0}]
     jobs = {"p": {"walls": both}, "q": {"walls": wall}, "r": {"walls": both}, "n": {"walls": wall}}
     done = facades._done(cache)
     assert facades._todo(jobs, done, by_wall=True) == ["n", "p"]
     assert facades._todo(jobs, done, by_wall=False) == ["n"]
     # read again on the wall it lacks alone
-    assert facades._unread(jobs["p"], done["p"])["walls"] == [{"oid": "b", "wi": 0}]
+    assert facades._unread(jobs["p"], done["p"])["walls"] == [{"oid": "b", "wi": 0, "L": 10.0}]
     assert facades._unread(jobs["n"], done.get("n")) is jobs["n"]
+    # a new LoD2 edition's wall 0 of another length is another wall
+    renumbered = {"p": {"walls": [{"oid": "a", "wi": 0, "L": 12.0}]}}
+    assert facades._todo(renumbered, done, by_wall=True) == ["p"]
+
+
+def test_a_glass_cache_is_read_through_when_its_last_line_says_so(tmp_path):
+    cache = tmp_path / "c.jsonl"
+    assert not facades.complete(cache)
+    facades.mark_complete(cache)  # a plan with nothing to read
+    assert facades.complete(cache)
+    facades.mark_complete(cache)
+    assert cache.read_text().count("complete") == 1
+    with open(cache, "a") as f:  # a later run, killed or failing
+        f.write(json.dumps({"img": "p", "seq": "s", "walls": []}) + "\n")
+    assert not facades.complete(cache)
 
 
 def test_a_crop_the_model_cannot_read_is_not_the_photos_fault(monkeypatch):
@@ -246,7 +271,7 @@ def test_a_wall_seen_only_for_glass_enters_with_its_glass_alone():
     city = blocks_city({"hall": (0, 0, 30, 20, 15.0)})
     ws = facades.walls(city)
     assert len(ws) == 4
-    glass = {(w["oid"], w["wi"]): [980, 960] for w in ws}
+    glass = {facades.wall_key(w): [980, 960] for w in ws}
     buildings, _ = win.windows(city, {}, None, glass)
     entries = buildings["hall-root"]
     assert len(entries) == 4

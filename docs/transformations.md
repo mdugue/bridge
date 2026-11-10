@@ -1780,7 +1780,8 @@ visual-variable codebook is in
   `osmbuild_<tile>.json` (`meta.objects_look`).
 - **Glass and metal facades** `❝ taken` `≈ assumed` (*Streiflicht*; plan 050) — the material's
   glass and metal (OSM's, or glass the street photos found, *Glass facades
-  from street photos* below) set object flags (4, 8; a part takes its root's): the
+  from street photos* below) set object flags (4, 8; a part takes its root's
+  mapped material, never its photo glass): the
   clay turns a little cooler (×(0.93, 0.99, 1.07), metal at 60 %) and
   smoother (roughness 0.42 glass, 0.5 metal), and glass mirrors the sky
   (*Spiegelung*, `sky-reflection.ts`: a mipmapped cube map of the sky
@@ -1813,18 +1814,21 @@ visual-variable codebook is in
   sky, trees or a street, is the less likely (a crop of sky above a cantilevered roof read 0.92 glass against
   the two walls alone). The cache is `<t>.glass.<key>.jsonl`, named by a
   hash of the prompts, the model, the crop's limits and the
-  rectification's (a cache under another key stops the windows bake,
-  which would drop every glass front; a wall planned later on a photo
-  already read is read on it at the next fetch); the photo is deleted.
+  rectification's, and ends with a line saying every photo its plan
+  picked was read (where the cache under the current key is missing or
+  not read through, the windows bake stops rather than drop the glass
+  fronts its file holds; a wall planned later on a photo already read, or
+  numbered anew by a new LoD2 edition — a wall is its object, number and
+  length —, is read at the next fetch); the photo is deleted.
   `windows.py` keeps one reading a sequence (the photo that saw most of
   the wall), of the four sequences that saw most, and calls a wall glass
   where at least two such readings exist and two thirds of them reach 0.95 (`wall_glass`; at 0.9 metal
   cladding, ribbon-window blocks and a plastered house with balconies came
-  through); the wall keeps its window model, since a material OSM names
-  overrides the photos and a glass building draws no windows anyway, but
-  lends it to no other building, nor to its own object's stone walls
-  (`windowSpecs`: a curtain wall's mullions are no rhythm for the stone
-  wing or the house next door). A Brown
+  through); the wall keeps its window model in the file, for the record,
+  but it is no rhythm for any building (`windowSpecs`: a curtain wall's
+  mullions are none for the stone wing, the house next door, or its own
+  house where a glazed stair tower too short to make it glass or a
+  material OSM names keeps it from drawing as glass). A Brown
   camera's parameters are OpenSfM's (fx, fy, cx, cy, k1, k2, …): its focal
   and radial terms are read from there; a framed photo's frame is its own
   shape where Mapillary gives it. A photo the model could not read in

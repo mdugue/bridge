@@ -618,7 +618,10 @@ function ownFacadeWhy(
       detail: `eigene Fassade: ${use || "monumentale Nutzung"}`,
     };
   }
-  if (!d.own && hasObjectFlag(o.flags, OBJECT_FLAG_LANDMARK)) {
+  const photoGlass =
+    hasObjectFlag(o.flags, OBJECT_FLAG_GLASS) && d.materialFrom === "photos";
+  // a landmark the photos read as glass has no windows for its glass
+  if (!d.own && hasObjectFlag(o.flags, OBJECT_FLAG_LANDMARK) && !photoGlass) {
     return landmarkWhy(o, d);
   }
   if (d.own === "listed") {
@@ -647,7 +650,7 @@ function ownFacadeWhy(
     };
   }
   if (hasObjectFlag(o.flags, OBJECT_FLAG_GLASS)) {
-    return d.materialFrom === "photos"
+    return photoGlass
       ? {
           method: "detected",
           source: "mapillary",

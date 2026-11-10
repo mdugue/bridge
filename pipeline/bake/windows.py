@@ -75,7 +75,16 @@ import numpy as np
 
 from .common import Tile
 from .facade_traits import STEP_M
-from .facades import ATTRIBUTION, GLASS_NEAR_M, GLASS_SEQ, glass_path, traits_path, walls
+from .facades import (
+    ATTRIBUTION,
+    GLASS_NEAR_M,
+    GLASS_SEQ,
+    complete,
+    glass_path,
+    traits_path,
+    wall_key,
+    walls,
+)
 from .osm_buildings import root_of
 from .shopfronts import _Raster, _wall_entry
 from .window_axes import wall_phase
@@ -464,27 +473,28 @@ GLASS_IMAGES = 2
 GLASS_SHARE = 2 / 3
 
 
-def glass_records(lines: list[str]) -> dict[tuple[str, int], list[int]]:
-    """Per wall the glass readings (‰) of the photos that saw enough of it
-    from near enough (`GLASS_NEAR_M`), one a sequence — its photo that saw
-    most of the wall — so that two readings are two passes, not two frames
-    of one; of the GLASS_SEQ sequences that saw most of it, as the fetch
-    plans them (a cache read under an earlier plan may hold more)."""
-    best: dict[tuple[str, int, str], tuple[float, int]] = {}
+def glass_records(lines: list[str]) -> dict[tuple[str, int, float], list[int]]:
+    """Per wall (`wall_key`) the glass readings (‰) of the photos that saw
+    enough of it from near enough (`GLASS_NEAR_M`), one a sequence — its
+    photo that saw most of the wall — so that two readings are two passes,
+    not two frames of one; of the GLASS_SEQ sequences that saw most of it,
+    as the fetch plans them (a cache read under an earlier plan may hold
+    more)."""
+    best: dict[tuple, tuple[float, int]] = {}
     for line in lines:
         try:
             r = json.loads(line)
         except ValueError:
             continue
         for w in r.get("walls", []):
-            cov = w.get("cov", 0)
             if "gl" in w and w.get("dist", 0) <= GLASS_NEAR_M:
-                key = (w["oid"], w["wi"], r.get("seq", r["img"]))
+                key = (*wall_key(w), r.get("seq", r["img"]))
+                cov = w.get("cov", 0)
                 if key not in best or cov > best[key][0]:
                     best[key] = (cov, int(w["gl"]))
-    seqs: dict[tuple[str, int], list[tuple[float, str, int]]] = collections.defaultdict(list)
-    for (oid, wi, seq), (cov, gl) in best.items():
-        seqs[(oid, wi)].append((cov, seq, gl))
+    seqs: dict[tuple, list[tuple[float, str, int]]] = collections.defaultdict(list)
+    for (*wall, seq), (cov, gl) in best.items():
+        seqs[tuple(wall)].append((cov, seq, gl))
     return {
         key: [gl for _, _, gl in sorted(rs, key=lambda r: (-r[0], r[1]))[:GLASS_SEQ]]
         for key, rs in sorted(seqs.items())
@@ -537,7 +547,7 @@ def windows(
     for w in ws:
         recs = by_wall.get((w["oid"], w["wi"]), [])
         seqs = by_sequence(recs) if recs else {}
-        gl = wall_glass((glass or {}).get((w["oid"], w["wi"]), []))
+        gl = wall_glass((glass or {}).get(wall_key(w), []))
         if not seqs and gl is None:
             continue
         if seqs:
@@ -551,9 +561,8 @@ def windows(
         }
         if gl is not None:
             entry["glass"] = gl
-        # a glass wall keeps its model: whether its building draws as glass,
-        # and so without windows, is the building bake's call
-        # (lib/city/photo-glass.ts), which a material OSM names overrides
+        # a glass wall keeps its model for the record: no building takes
+        # its mullions for a rhythm (lib/city/windows.ts `measuredModels`)
         if seqs and (m := model(traits, axis_agrees(seqs))) is not None:
             if (at := wall_phase(recs, m["axis"])) is not None:
                 m["phase"] = at["phase"]
@@ -583,32 +592,35 @@ def write(path: Path, buildings: dict, reliability: dict, outer: dict | None = N
 
 
 def _had_glass(out: Path) -> bool:
-    """Whether the tile's windows file holds walls read for glass."""
+    """Whether the tile's windows file holds a wall read as glass."""
     try:
-        return bool(json.loads(out.read_text()).get("outer"))
+        doc = json.loads(out.read_text())
     except (OSError, ValueError):
         return False
+    return any(
+        w.get("glass", {}).get("glass") for ws in doc.get("buildings", {}).values() for w in ws
+    )
 
 
 def run(tile: Tile) -> None:
     out = tile.out("dlm", f"windows_{tile.id}.json")
     path, gpath = traits_path(tile), glass_path(tile)
-    if tile.mapillary and not gpath.exists() and _had_glass(out):
-        # none read, or read under other prompts, model or limits
-        # (facade_glass.reading_key): baking on would drop every glass front
-        # the committed file holds
+    if tile.mapillary and not complete(gpath) and _had_glass(out):
+        # none read, read in part, or under other prompts, model or limits
+        # (facade_glass.reading_key): baking on would drop glass fronts the
+        # committed file holds
         raise SystemExit(
-            f"{tile.id}: {out.name} holds glass fronts but there is no {gpath.name} — "
-            f"run the glass fetch before baking the windows"
+            f"{tile.id}: {out.name} holds glass fronts but {gpath.name} is missing or "
+            f"not read through — run the glass fetch before baking the windows"
         )
-    if not tile.mapillary or not (path.exists() or gpath.exists()):
+    glass = glass_records(gpath.read_text().splitlines()) if gpath.exists() else {}
+    if not tile.mapillary or not (path.exists() or glass):
         if tile.mapillary:
             print(f"{tile.id}: no facade traits measured — no wall gets windows")
         write(out, {}, {})
         return
     city = json.loads(tile.cityjson.read_text())
     by_wall = _records(path) if path.exists() else {}
-    glass = glass_records(gpath.read_text().splitlines()) if gpath.exists() else {}
     ws = walls(city)
     buildings, reliability = windows(city, by_wall, _Raster(tile.dgm), glass, ws)
     write(out, buildings, reliability, outer_lengths(ws, buildings))

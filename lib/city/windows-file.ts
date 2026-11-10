@@ -49,7 +49,7 @@ const wallGlass = z.strictObject({
 
 /** A measured wall: its frame as in shopfronts_<tile>.json, the traits, and
  *  the model where one is drawn. A wall the photos read as glass keeps its
- *  model (it lends it to no other building, windows.ts); one no panorama
+ *  model for the record (no building takes it, windows.ts); one no panorama
  *  measured has its glass alone (no traits, `imgs` 0). */
 const windowWall = z.strictObject({
   a: point2,

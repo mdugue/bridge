@@ -661,35 +661,27 @@ export const NEAR_M = 30;
  *  (m, or this share of it). */
 const NEAR_EAVE = { m: 4, share: 0.35 } as const;
 
-/** The best-seen model on each object's measured walls (most images):
- *  `lent` of the walls the photos did not read as glass, whose mullions
- *  are no rhythm for another building's windows; `own` that, or where an
- *  object has no other, its glass walls'. */
+/** The best-seen model on each object's measured walls (most images),
+ *  of the walls the photos did not read as glass: a curtain wall's
+ *  mullions are no window rhythm — not for its own object, which a glass
+ *  wall too short to make it glass (`photoGlassObjects`) or a material OSM
+ *  names keeps from drawing as glass, nor for another building. */
 function measuredModels(
   walls: readonly WindowWall[],
   index: ReadonlyMap<string, number>
-): { own: Map<number, FacadeModel>; lent: Map<number, FacadeModel> } {
-  const best = [
-    new Map<number, { imgs: number; m: FacadeModel }>(),
-    new Map<number, { imgs: number; m: FacadeModel }>(),
-  ];
+): Map<number, FacadeModel> {
+  const best = new Map<number, { imgs: number; m: FacadeModel }>();
   for (const w of walls) {
     const i = index.get(w.oid);
-    if (!w.model || i === undefined) {
+    if (!w.model || i === undefined || w.glass?.glass) {
       continue;
     }
-    const of = best[w.glass?.glass ? 1 : 0];
-    const have = of.get(i);
+    const have = best.get(i);
     if (!have || w.imgs > have.imgs) {
-      of.set(i, { imgs: w.imgs, m: w.model });
+      best.set(i, { imgs: w.imgs, m: w.model });
     }
   }
-  const lent = new Map([...best[0]].map(([i, b]) => [i, b.m]));
-  const own = new Map([...best[1]].map(([i, b]) => [i, b.m]));
-  for (const [i, m] of lent) {
-    own.set(i, m);
-  }
-  return { lent, own };
+  return new Map([...best].map(([i, b]) => [i, b.m]));
 }
 
 /** The measured model nearest to a host (`NEAR_M`), of its roof form and
@@ -875,12 +867,12 @@ export function windowSpecs(
   walls: readonly WindowWall[],
   index: ReadonlyMap<string, number>
 ): WindowChoice[] {
-  const { own, lent } = measuredModels(walls, index);
+  const own = measuredModels(walls, index);
   const byRoot = new Map<number, FacadeModel>();
-  for (const [i, m] of lent) {
+  for (const [i, m] of own) {
     byRoot.set(hosts[i].root, byRoot.get(hosts[i].root) ?? m);
   }
-  const donors = [...lent].map(([i, m]) => ({ host: hosts[i], m }));
+  const donors = [...own].map(([i, m]) => ({ host: hosts[i], m }));
   return hosts.map((host, i): WindowChoice => {
     const why = barred(host);
     if (why) {
