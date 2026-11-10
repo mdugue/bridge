@@ -98,7 +98,10 @@ GLASS_NEAR_M = 60.0
 GLASS_IN_FRAME = 0.3
 GLASS_SEQ = 4
 THUMB_PX = 2048  # the thumbnail's long side (thumb_2048_url)
-GONE = (404, 410)  # an image taken down since its search: cached as skipped
+# an image taken down or made private since its search: cached as skipped
+# (the Graph API answers 400 for an id it no longer has); not 401 (the
+# token), 408 or 429 (the line), which a later fetch may get past
+GONE = (400, 403, 404, 410)
 
 BUSY_CALM, BUSY_BUSY = 0.35, 0.7
 DARK_LOW, DARK_HIGH = 0.15, 0.25
@@ -638,7 +641,17 @@ def _poses(ids: list[str]) -> dict[str, dict]:
                 "fields": "computed_rotation,thumb_2048_url,exif_orientation",
             }
         )
-        return json.loads(_get(f"{GRAPH}/?{q}"))
+        try:
+            return json.loads(_get(f"{GRAPH}/?{q}"))
+        except urllib.error.HTTPError as err:
+            # one image taken down fails its whole batch: ask in halves, and
+            # leave out the one alone (no pose: skipped)
+            if err.code not in GONE:
+                raise
+            if len(chunk) == 1:
+                return {}
+            half = len(chunk) // 2
+            return one(chunk[:half]) | one(chunk[half:])
 
     out: dict[str, dict] = {}
     with cf.ThreadPoolExecutor(4) as ex:

@@ -1816,8 +1816,9 @@ visual-variable codebook is in
   hash of the prompts, the model, the crop's limits and the
   rectification's, and ends with a line saying every photo its plan
   picked was read, for the walls and planner limits it was planned for
-  (`plan_key`; where the cache is not read through, or is missing and the
-  file holds glass fronts, the windows bake stops rather than drop them; a wall planned later on a photo already read, or
+  (`plan_key`; where the cache is missing or not read through, the
+  windows bake keeps the glass its file holds rather than drop it, and
+  says so; a wall planned later on a photo already read, or
   numbered anew by a new LoD2 edition — a wall is its object, number and
   length —, is read at the next fetch); the photo is deleted.
   `windows.py` keeps one reading a sequence (the photo that saw most of
@@ -1832,7 +1833,8 @@ visual-variable codebook is in
   and radial terms are read from there; a framed photo's frame is its own
   shape where Mapillary gives it. A photo the model could not read in
   (a worker out of memory) is not cached, and is read on the next fetch;
-  one taken down since (HTTP 404, 410) is cached as skipped.
+  one taken down or made private since (HTTP 400, 403, 404, 410) is
+  cached as skipped.
   The building bake gives an object material `glass`, from `photos`, when
   its glass walls make at least half the length of its walls read and a
   quarter of all its outer walls, or 15 m and a twentieth of them

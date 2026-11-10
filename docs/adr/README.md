@@ -45,7 +45,7 @@ how it is built.
 
 Numbers missing from the index belonged to records merged into others;
 they are never reused. A new record takes the next number after the
-highest ever used (0059), checked against main and the open PRs' branches.
+highest ever used (0060), checked against main and the open PRs' branches.
 
 ## Format
 

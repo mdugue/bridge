@@ -539,16 +539,17 @@ def windows(
     ws: list[dict] | None = None,
 ) -> tuple[dict, dict]:
     """Per Building gml:id its measured walls with traits and model, and
-    the agreement table. `glass` holds each wall's glass readings
-    (`glass_records`); a wall no panorama measured enters with its glass
-    alone. `ws` the city's `walls`, where the caller has them."""
+    the agreement table. `glass` holds each wall's glass entry by
+    `wall_key` (`wall_glass` of its readings, `decided_glass`); a wall no
+    panorama measured enters with its glass alone. `ws` the city's
+    `walls`, where the caller has them."""
     ws = walls(city) if ws is None else ws
     out: dict[str, list[dict]] = collections.defaultdict(list)
     all_seqs = []
     for w in ws:
         recs = by_wall.get((w["oid"], w["wi"]), [])
         seqs = by_sequence(recs) if recs else {}
-        gl = wall_glass((glass or {}).get(wall_key(w), []))
+        gl = (glass or {}).get(wall_key(w))
         if not seqs and gl is None:
             continue
         if seqs:
@@ -595,29 +596,25 @@ def write(path: Path, buildings: dict, reliability: dict, outer: dict | None = N
     path.write_text(json.dumps(doc, separators=(",", ":"), sort_keys=True))
 
 
-def _had_glass(out: Path) -> bool:
-    """Whether the tile's windows file holds a wall read as glass."""
+def decided_glass(lines: list[str]) -> dict[tuple[str, int, float], dict]:
+    """Per wall (`wall_key`) its glass entry from the cache's readings
+    (`glass_records`, `wall_glass`), where it has enough of them."""
+    return {k: g for k, rs in glass_records(lines).items() if (g := wall_glass(rs)) is not None}
+
+
+def prior_glass(out: Path) -> dict[tuple[str, int, float], dict]:
+    """Per wall (`wall_key`) the glass entry the tile's windows file holds:
+    kept where the readings to decide anew are not there."""
     try:
         doc = json.loads(out.read_text())
     except (OSError, ValueError):
-        return False
-    return any(
-        w.get("glass", {}).get("glass") for ws in doc.get("buildings", {}).values() for w in ws
-    )
-
-
-def glass_gate(lines: list[str] | None, key: str, had_glass: bool) -> str | None:
-    """Why the windows bake must not run on the glass cache's `lines`
-    (None: no cache), or None: baking on a cache read in part or for other
-    walls or limits (`plan_key`), or on none where the tile's file holds
-    glass fronts, would drop some of them."""
-    if lines is not None and not complete(lines, key):
-        return "is not read through for these walls"
-    if lines is None and had_glass:
-        # none read, or under other prompts, model or limits
-        # (facade_glass.reading_key)
-        return "is missing, and the windows file holds glass fronts"
-    return None
+        return {}
+    return {
+        wall_key(w): w["glass"]
+        for ws in doc.get("buildings", {}).values()
+        for w in ws
+        if "glass" in w
+    }
 
 
 def run(tile: Tile) -> None:
@@ -629,9 +626,18 @@ def run(tile: Tile) -> None:
     city = json.loads(tile.cityjson.read_text())
     ws = walls(city)
     lines = gpath.read_text().splitlines() if gpath.exists() else None
-    if (stop := glass_gate(lines, plan_key(ws), _had_glass(out))) is not None:
-        raise SystemExit(f"{tile.id}: {gpath.name} {stop} — run the glass fetch before baking")
-    glass = glass_records(lines or [])
+    if lines is not None and complete(lines, plan_key(ws)):
+        glass = decided_glass(lines)
+    else:
+        # none read here, read in part, or for other walls, limits
+        # (plan_key), prompts or model (reading_key): the glass the file
+        # holds is kept, never dropped
+        glass = prior_glass(out)
+        if glass:
+            print(
+                f"{tile.id}: WARNING {gpath.name} is missing or not read through — "
+                f"the windows file's glass kept; run the glass fetch"
+            )
     if not (path.exists() or glass):
         print(f"{tile.id}: no facade traits measured — no wall gets windows")
         write(out, {}, {})

@@ -281,7 +281,7 @@ def test_a_wall_seen_only_for_glass_enters_with_its_glass_alone():
     city = blocks_city({"hall": (0, 0, 30, 20, 15.0)})
     ws = facades.walls(city)
     assert len(ws) == 4
-    glass = {facades.wall_key(w): [980, 960] for w in ws}
+    glass = {facades.wall_key(w): win.wall_glass([980, 960]) for w in ws}
     buildings, _ = win.windows(city, {}, None, glass)
     entries = buildings["hall-root"]
     assert len(entries) == 4
@@ -303,18 +303,17 @@ def test_a_glass_wall_has_no_window_model(monkeypatch):
     monkeypatch.setattr(win, "model", lambda *_: {"axis": 3.0, "grid": "regular"})
     monkeypatch.setattr(win, "wall_phase", lambda *_: None)
     by_wall = {(w["oid"], w["wi"]): [{"seq": "s"}] for w in ws}
-    glass = {facades.wall_key(ws[0]): [980, 960]}
+    glass = {facades.wall_key(ws[0]): win.wall_glass([980, 960])}
     entries = win.windows(city, by_wall, None, glass)[0]["hall-root"]
     # the curtain wall's mullions are no rhythm: for no building, no dormer
     assert ["model" in e for e in entries] == [False, True, True, True]
 
 
-def test_the_windows_bake_stops_where_it_would_drop_glass():
-    done = ['{"img": "p", "seq": "s", "walls": []}', json.dumps({"complete": "k"})]
-    assert win.glass_gate(done, "k", had_glass=True) is None
-    assert win.glass_gate(None, "k", had_glass=False) is None  # never read for glass
-    # read in part, for other walls, begun but empty, or gone with glass
-    assert win.glass_gate(done[:1], "k", had_glass=False) is not None
-    assert win.glass_gate(done, "other", had_glass=False) is not None
-    assert win.glass_gate([], "k", had_glass=False) is not None
-    assert win.glass_gate(None, "k", had_glass=True) is not None
+def test_the_windows_bake_keeps_its_glass_where_the_readings_are_not_there(tmp_path):
+    read = ['{"img": "p", "seq": "s", "walls": []}', json.dumps({"complete": "k"})]
+    assert win.decided_glass(read) == {}
+    out = tmp_path / "windows.json"
+    assert win.prior_glass(out) == {}  # never baked
+    entry = {"oid": "a", "wi": 0, "L": 10.0, "glass": {"glass": True, "n": 2, "p": 980}}
+    out.write_text(json.dumps({"buildings": {"a": [entry, {"oid": "a", "wi": 1, "L": 5.0}]}}))
+    assert win.prior_glass(out) == {("a", 0, 10.0): entry["glass"]}
