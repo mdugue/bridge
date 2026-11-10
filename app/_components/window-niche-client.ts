@@ -10,7 +10,7 @@ import type { NicheMesh, NicheTable } from "@/lib/city/window-niches";
  * queued is skipped. Where no worker starts (a test, a browser that
  * refuses it, a module that fails to load: the first job is copied, not
  * handed over, until the worker has answered) or it dies, the work runs
- * here, on the main thread.
+ * here, on the main thread, one job a task.
  */
 export interface NicheJobInput {
   mesh: NicheMesh & {
@@ -65,15 +65,9 @@ function giveUp(): void {
   } else {
     held?.reject(new Error("niche worker died with a tile's niches"));
   }
-  const left = [...queue];
-  queue.length = 0;
-  for (const job of left) {
-    if (job.signal.aborted) {
-      job.reject(job.signal.reason);
-    } else {
-      runHere(job);
-    }
-  }
+  // the rest one a task, as `next` hands them on here: a flight's dozen
+  // tiles must not freeze the page in one
+  next();
 }
 
 interface Reply {
@@ -140,6 +134,21 @@ function transfers(input: NicheJobInput): Transferable[] {
   return [...buffers] as Transferable[];
 }
 
+/** A job run here in a task of its own, the next one after it: one a
+ *  task, not all in this one. */
+function runSoon(job: Job): void {
+  running = job;
+  setTimeout(() => {
+    running = null;
+    if (job.signal.aborted) {
+      job.reject(job.signal.reason);
+    } else {
+      runHere(job);
+    }
+    next();
+  }, 0);
+}
+
 function next(): void {
   while (!running) {
     const job = queue.shift();
@@ -152,8 +161,8 @@ function next(): void {
     }
     const w = startWorker();
     if (!w) {
-      runHere(job);
-      continue;
+      runSoon(job);
+      return;
     }
     running = job;
     try {

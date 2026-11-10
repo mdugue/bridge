@@ -950,7 +950,7 @@ test("the plinth breaks for a shop window, which reaches down to its riser", () 
     spanSegments(shopfrontAt(), [
       [0.95, 3.05],
       [3.45, 6.55],
-    ])
+    ]).map((at) => ({ at, root: bare.objects[house].root }))
   );
   let plinth = 0;
   let inBay = 0;

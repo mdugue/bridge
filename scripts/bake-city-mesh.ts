@@ -2036,8 +2036,9 @@ export function appendPlinths(
   baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
   plinths: readonly PlinthFeature[],
   objectIndex: ReadonlyMap<string, number>,
-  /** EPSG segments the plinth band breaks for (`shopWindowBreaks`) */
-  breaks: readonly (readonly (readonly number[])[])[] = []
+  /** EPSG segments the plinth band breaks for (`shopWindowBreaks`), each
+   *  with the building tree whose plinth alone it breaks */
+  breaks: readonly PlinthBreak[] = []
 ): void {
   const parts: AppendedPart[] = [];
   const walls = treeTriangles(baked);
@@ -2097,7 +2098,10 @@ export function appendPlinths(
       continue;
     }
     bands.plinth.push(
-      ...withoutSegments(plinthStretches(f, hostIndex), breaks)
+      ...withoutSegments(
+        plinthStretches(f, hostIndex),
+        breaks.filter((b) => b.root === host.root).map((b) => b.at)
+      )
     );
     if (!carriesCornices(host)) {
       continue;
@@ -2641,11 +2645,15 @@ function cutOnWall(
 ): { axes: WallAxes; cut: WallCut; objects: Set<number> }[] {
   const ids = baked.vertices.objectIds;
   const cuts: { axes: WallAxes; cut: WallCut; objects: Set<number> }[] = [];
-  const root = baked.objects[ids[triangles[0] ?? -1]]?.root;
+  // (no tree, nothing to cut: no remainder of another matches)
+  if (triangles.length === 0) {
+    return cuts;
+  }
+  const root = baked.objects[ids[triangles[0]]]?.root ?? -1;
+  const lod2 = lod2Triangles(baked, triangles);
   for (const shift of new Set(openings.map((o) => o.shift))) {
     const rects = openings.filter((o) => o.shift === shift).map((o) => o.rect);
     const axes = wallFrame(w, baked.offset, shift);
-    const lod2 = lod2Triangles(baked, triangles);
     // only this building tree's: another's coplanar wall is not this one
     const remainders = out.walls.flatMap((r, k) =>
       r.root === root
@@ -2796,17 +2804,24 @@ function shopPart(
   };
 }
 
+/** A segment the plinth breaks for (EPSG) and the building tree whose
+ *  plinth it breaks: a neighbour's set back beside it keeps its own. */
+export interface PlinthBreak {
+  at: readonly (readonly number[])[];
+  root: number;
+}
+
 /** The segments the plinth breaks for: each window the plan cuts, a
  *  little wider. */
-function shopWindowBreaks(plans: readonly ShopPlan[]): [number, number][][] {
-  return plans.flatMap(({ w, mesh }) =>
+function shopWindowBreaks(plans: readonly ShopPlan[]): PlinthBreak[] {
+  return plans.flatMap(({ w, mesh, host }) =>
     spanSegments(
       w,
       mesh.openings.map(({ rect }): [number, number] => [
         rect.s0 - PLINTH_BREAK_M,
         rect.s1 + PLINTH_BREAK_M,
       ])
-    )
+    ).map((at) => ({ at, root: host.root }))
   );
 }
 

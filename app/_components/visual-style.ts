@@ -329,7 +329,8 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
   // interpolated float's last-bit drift into a different window position
   // every pixel — a loose grid's openings frayed at their sides.
   const rough = varying(c.z).setInterpolation(InterpolationSamplingType.FLAT);
-  const flags = varying(c.w);
+  // flat as well: a packed word (the niche bit is 2^16)
+  const flags = varying(c.w).setInterpolation(InterpolationSamplingType.FLAT);
   // A triangle that was degenerate when its flat normal was baked has a zero
   // normal, and position quantisation can give it area again: it then
   // rasterises with normalize(0) = NaN lighting — single black pixels on

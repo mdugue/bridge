@@ -66,6 +66,10 @@ export function jitterHash(j: number, seed: number): number {
   return x - Math.floor(x);
 }
 
+/** How much the CPU's tests give against the shader's (m): its f32 may
+ *  keep a window an f64 test on the edge drops. */
+const LENIENT_M = 1e-3;
+
 /** The columns of a wall whose length slot holds `lengthCode` (snorm16,
  *  signed): their axes from the wall's middle (m) and the window's width. */
 export function wallColumns(
@@ -145,8 +149,10 @@ export function wallRows(
     }
     const up = k === 0 ? lift : 0;
     const height = Math.min(line + sill + tall, top) - line - sill - up;
-    const fits = k > 0 || sill + tall <= first - WINDOW_ROWS.lintel;
-    if (height >= WINDOW_ROWS.min && fits) {
+    // (a hair lenient: the shader decides in f32, and a row it keeps must
+    // be here — a superset)
+    const fits = k > 0 || sill + tall <= first - WINDOW_ROWS.lintel + LENIENT_M;
+    if (height >= WINDOW_ROWS.min - LENIENT_M && fits) {
       rows.push({ v0: line + sill + up, v1: line + sill + up + height, k });
     }
   }
@@ -198,7 +204,10 @@ export function wallOpenings(
   const placed = doors.flatMap((code) => slotDoor(code) ?? []);
   return centres.flatMap((s, j) =>
     rows
-      .filter((r) => r.k > 0 || placed.every((d) => clearOfDoor(s, w, d)))
+      .filter(
+        (r) =>
+          r.k > 0 || placed.every((d) => clearOfDoor(s, w - 2 * LENIENT_M, d))
+      )
       .map((r) => ({
         s,
         half: w / 2,
