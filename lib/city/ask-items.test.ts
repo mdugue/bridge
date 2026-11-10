@@ -499,6 +499,12 @@ const toleranceItem = (kind: string, solids: AskSolid[]) =>
     typeof toleranceBox
   >[0];
 
+const monumentItem = (kind: string, solids: AskSolid[]) =>
+  ({
+    solids,
+    target: { kind: "monument", properties: { kind } },
+  }) as unknown as Parameters<typeof toleranceBox>[0];
+
 test("the lens never focuses on a box the probe tolerates", () => {
   const prism: AskSolid = { prism: { ring: [], y0: 0, y1: 1 } };
   const post: AskSolid = { cylinder: { x: 0, z: 0, y0: 0, y1: 1, r: 0.1 } };
@@ -506,4 +512,7 @@ test("the lens never focuses on a box the probe tolerates", () => {
   expect(toleranceBox(toleranceItem("furniture", [prism]))).toBe(true);
   expect(toleranceBox(toleranceItem("furniture", [post]))).toBe(false);
   expect(toleranceBox(toleranceItem("tree", [post]))).toBe(false);
+  expect(toleranceBox(monumentItem("fountain", [post]))).toBe(true);
+  expect(toleranceBox(monumentItem("statue", [prism]))).toBe(true);
+  expect(toleranceBox(monumentItem("statue", [post]))).toBe(false);
 });

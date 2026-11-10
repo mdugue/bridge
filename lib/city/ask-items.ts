@@ -944,14 +944,20 @@ function furnitureItem(
 /**
  * Whether an item's solids are a box the probe tolerates round what is
  * drawn — a landing stage's, an outline's prism over the surface it marks
- * (`furnitureItems`, `landingItems`) — not its shape: a ray may name it,
- * the lens never focuses on it. Read from the item, never stored on it
+ * (`furnitureItems`, `landingItems`), a fountain's basin up to its
+ * figure's top (`monumentSolid`) — not its shape: a ray may name it, the
+ * lens never focuses on it. Read from the item, never stored on it
  * (ADR 0047).
  */
 export function toleranceBox(item: AskItem<FeatureInquiry>): boolean {
+  const { target } = item;
+  const prism = item.solids.some((s) => "prism" in s);
   return (
-    item.target.kind === "landing" ||
-    (item.target.kind === "furniture" && item.solids.some((s) => "prism" in s))
+    target.kind === "landing" ||
+    (target.kind === "furniture" && prism) ||
+    // a basin's box reaches up to its figure's top (`monumentSolid`)
+    (target.kind === "monument" &&
+      (prism || target.properties.kind === "fountain"))
   );
 }
 
