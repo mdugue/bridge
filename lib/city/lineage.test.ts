@@ -157,6 +157,24 @@ test("glass the street photos read is theirs, a shop window's pane OSM's neither
   expect(photos && said(photos)).toContain("Glasfassade");
 });
 
+test("a facade material Wikidata names is Wikidata's", () => {
+  const tower = object({
+    flags: OBJECT_FLAG_GLASS,
+    facts: facts({
+      drawn: encodeDrawn({ material: "glass", materialFrom: "wikidata" }),
+    }),
+  });
+  const entries = lineage(
+    { kind: "building", tile: "t", picked: tower, tree: [tower] },
+    provenance,
+    saxony
+  );
+  const osm = entries.find((e) => e.source === "OpenStreetMap");
+  expect(osm && said(osm)).not.toContain("Glas oder Metall der Fassade");
+  const wikidata = entries.find((e) => e.source === "Wikidata");
+  expect(wikidata && said(wikidata)).toContain("das Material der Fassade");
+});
+
 test("a shed from the laser scan claims neither the model nor a roof colour", () => {
   const shed = object({ source: OBJECT_SOURCE_SCAN });
   const entries = lineage(

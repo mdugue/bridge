@@ -460,16 +460,24 @@ GLASS_SHARE = 2 / 3
 
 def glass_records(lines: list[str]) -> dict[tuple[str, int], list[int]]:
     """Per wall the glass readings (‰) of the photos that saw enough of it
-    from near enough (`GLASS_NEAR_M`)."""
-    by: dict[tuple[str, int], list[int]] = collections.defaultdict(list)
+    from near enough (`GLASS_NEAR_M`), one a sequence — its photo that saw
+    most of the wall — so that two readings are two passes, not two frames
+    of one."""
+    best: dict[tuple[str, int, str], tuple[float, int]] = {}
     for line in lines:
         try:
             r = json.loads(line)
         except ValueError:
             continue
         for w in r.get("walls", []):
-            if "gl" in w and w.get("cov", 0) >= GLASS_COVER and w.get("dist", 0) <= GLASS_NEAR_M:
-                by[(w["oid"], w["wi"])].append(int(w["gl"]))
+            cov = w.get("cov", 0)
+            if "gl" in w and cov >= GLASS_COVER and w.get("dist", 0) <= GLASS_NEAR_M:
+                key = (w["oid"], w["wi"], r.get("seq", r["img"]))
+                if key not in best or cov > best[key][0]:
+                    best[key] = (cov, int(w["gl"]))
+    by: dict[tuple[str, int], list[int]] = collections.defaultdict(list)
+    for (oid, wi, _), (_, gl) in sorted(best.items()):
+        by[(oid, wi)].append(gl)
     return dict(by)
 
 
@@ -502,12 +510,18 @@ def _records(path: Path) -> dict[tuple[str, int], list[dict]]:
     return by
 
 
-def windows(city: dict, by_wall: dict, ground=None, glass: dict | None = None) -> tuple[dict, dict]:
+def windows(
+    city: dict,
+    by_wall: dict,
+    ground=None,
+    glass: dict | None = None,
+    ws: list[dict] | None = None,
+) -> tuple[dict, dict]:
     """Per Building gml:id its measured walls with traits and model, and
     the agreement table. `glass` holds each wall's glass readings
     (`glass_records`); a wall no panorama measured enters with its glass
-    alone."""
-    ws = walls(city)
+    alone. `ws` the city's `walls`, where the caller has them."""
+    ws = walls(city) if ws is None else ws
     out: dict[str, list[dict]] = collections.defaultdict(list)
     all_seqs = []
     for w in ws:
@@ -539,15 +553,15 @@ def windows(city: dict, by_wall: dict, ground=None, glass: dict | None = None) -
     return dict(sorted(out.items())), agreement(all_seqs)
 
 
-def outer_lengths(city: dict, buildings: dict) -> dict[str, float]:
+def outer_lengths(ws: list[dict], buildings: dict) -> dict[str, float]:
     """Per object with a wall read for glass, the length of all its outer
     walls (`walls`): the building bake weighs its glass against it, so one
     glazed stair tower read alone does not make a stone house glass."""
-    read = {w["oid"] for ws in buildings.values() for w in ws if "glass" in w}
+    read = {w["oid"] for entries in buildings.values() for w in entries if "glass" in w}
     total: dict[str, float] = collections.defaultdict(float)
-    for w in walls(city):
+    for w in ws:
         if w["oid"] in read:
-            total[w["oid"]] += math.hypot(w["b"][0] - w["a"][0], w["b"][1] - w["a"][1])
+            total[w["oid"]] += w["L"]
     return {oid: round(v, 1) for oid, v in sorted(total.items())}
 
 
@@ -572,8 +586,9 @@ def run(tile: Tile) -> None:
     city = json.loads(tile.cityjson.read_text())
     by_wall = _records(path) if path.exists() else {}
     glass = glass_records(gpath.read_text().splitlines()) if gpath.exists() else {}
-    buildings, reliability = windows(city, by_wall, _Raster(tile.dgm), glass)
-    write(out, buildings, reliability, outer_lengths(city, buildings))
+    ws = walls(city)
+    buildings, reliability = windows(city, by_wall, _Raster(tile.dgm), glass, ws)
+    write(out, buildings, reliability, outer_lengths(ws, buildings))
     n_walls = sum(len(v) for v in buildings.values())
     modelled = sum("model" in w for v in buildings.values() for w in v)
     read = sum("glass" in w for v in buildings.values() for w in v)

@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { objectFlags, OBJECT_FLAG_GLASS } from "./city-mesh";
+import {
+  inheritedFlags,
+  inheritedLook,
+  objectFlags,
+  OBJECT_FLAG_GLASS,
+} from "./city-mesh";
 import { photoGlassObjects, withPhotoGlass } from "./photo-glass";
 import type { WindowWall } from "./windows-file";
 
@@ -63,9 +68,32 @@ describe("glass fronts from the street photos", () => {
   test("a Building with parts keeps its glass to itself", () => {
     const lut = withPhotoGlass(
       {},
-      { buildings: { B: [wall("B", 30, true), wall("p", 20, false)] } }
+      {
+        buildings: {
+          B: [wall("B", 30, true), wall("p", 20, false), wall("q", 20, true)],
+        },
+      }
     );
-    expect(lut?.B).toBeUndefined();
+    expect(lut?.B?.materialFrom).toBe("photos");
+    // a part the photos read as stone takes none of it, one read as glass
+    // is glass on its own
+    expect(inheritedLook(lut?.p, lut?.B).material).toBeUndefined();
+    expect(inheritedFlags(lut?.p, lut?.B) & OBJECT_FLAG_GLASS).toBe(0);
+    expect(inheritedLook(lut?.q, lut?.B).materialFrom).toBe("photos");
+  });
+
+  test("a material named on the root keeps its parts from the photos", () => {
+    const lut = withPhotoGlass(
+      { B: { material: "stone" } },
+      { buildings: { B: [wall("B", 30, true), wall("q", 20, true)] } }
+    );
+    expect(lut?.q).toBeUndefined();
+    expect(inheritedLook(lut?.q, lut?.B).material).toBe("stone");
+  });
+
+  test("without the outer walls' length, a glass front needs its metres", () => {
+    expect(photoGlassObjects([wall("a", 10, true)])).toEqual(new Set());
+    expect(photoGlassObjects([wall("a", 20, true)])).toEqual(new Set(["a"]));
   });
 
   test("a tile the photos found no glass on keeps its table", () => {

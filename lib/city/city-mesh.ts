@@ -215,8 +215,15 @@ export function inheritedFlags(
     shop: (own?.shop ?? 0) + (root?.shop ?? 0),
     heritage: (own?.heritage ?? 0) + (root?.heritage ?? 0),
     landmark: (own?.landmark ?? 0) + (root?.landmark ?? 0),
-    material: own?.material ?? root?.material,
+    material: own?.material ?? passed(root)?.material,
   });
+}
+
+/** What of a root Building's material its parts take: one OSM or Wikidata
+ *  names, never the glass the photos read on the root's own walls
+ *  (lib/city/photo-glass.ts) — a part they did not read keeps its own. */
+function passed(root?: OsmBuildingFacts): OsmBuildingFacts | undefined {
+  return root?.materialFrom === "photos" ? undefined : root;
 }
 
 /** An object's look from OSM, its own facts over its root Building's. */
@@ -227,12 +234,13 @@ export function inheritedLook(
   OsmBuildingFacts,
   "colour" | "context" | "material" | "materialFrom" | "roof_colour"
 > {
+  const from = own?.material ? own : passed(root);
   return {
     colour: own?.colour ?? root?.colour,
     context: own?.context ?? root?.context,
-    material: own?.material ?? root?.material,
     // where the material came from goes with the material
-    materialFrom: own?.material ? own.materialFrom : root?.materialFrom,
+    material: from?.material,
+    materialFrom: from?.materialFrom,
     roof_colour: own?.roof_colour ?? root?.roof_colour,
   };
 }

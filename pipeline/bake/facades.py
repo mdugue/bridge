@@ -90,6 +90,7 @@ FRAMED = ("perspective", "brown", "fisheye")  # the framed cameras read
 GLASS_NEAR_M = 60.0
 GLASS_IN_FRAME = 0.3
 GLASS_SEQ = 4
+THUMB_PX = 2048  # the thumbnail's long side (thumb_2048_url)
 
 BUSY_CALM, BUSY_BUSY = 0.35, 0.7
 DARK_LOW, DARK_HIGH = 0.15, 0.25
@@ -100,7 +101,7 @@ SIGN_WALL_M = 2.0  # the walls signs are matched to (any eave)
 WORKERS = max(2, (os.cpu_count() or 2) + 2)  # downloads overlap the measuring
 WORKERS_ENV = "MAPILLARY_WORKERS"  # fewer, where another fetch shares the line
 # each worker of the glass reading holds its own vision model (~0.4 GB with
-# its runtime and a 2048 px image): no more than this many by default
+# its runtime and a 2048 px image): no more than this many
 GLASS_WORKERS = min(WORKERS, 4)
 SOURCE_ENV = "MAPILLARY_FACADE_SOURCE"
 
@@ -349,15 +350,35 @@ def in_frame(wall: dict, photo: dict, xy, rot: np.ndarray) -> float:
     return float(seen.mean())
 
 
+def pixel_angle(photo: dict) -> float:
+    """The radians a pixel of the photo's thumbnail spans ahead (its long
+    side THUMB_PX)."""
+    from .facade_measure import project
+
+    return float(project(np.array([[0.0, 0.0, 1.0]]), THUMB_PX, THUMB_PX, camera_of(photo))[3])
+
+
+def _to_segment(x: float, y: float, a, b) -> float:
+    (ax, ay), (bx, by) = a, b
+    dx, dy = bx - ax, by - ay
+    t = min(1.0, max(0.0, ((x - ax) * dx + (y - ay) * dy) / max(dx * dx + dy * dy, 1e-9)))
+    return math.hypot(ax + t * dx - x, ay + t * dy - y)
+
+
 def glass_candidates(
     wall: dict, images: list[dict], pos: np.ndarray, rots: list, ptree, ftree
 ) -> dict:
     """The photos that see `wall` for its glass reading, by sequence: within
     GLASS_NEAR_M (a glass front stands back from the street, behind a
     forecourt or a plaza), at least MIN_DIST_M away, at most 60° off its
-    normal, no other footprint in the line of sight, and — a framed photo —
-    at least GLASS_IN_FRAME of the wall in its frame; the best seen first,
-    one of each of the GLASS_SEQ sequences that see it best."""
+    normal, near enough that its nearest part is resolved finer than
+    MAX_RES_M (a panorama's pixel spans 9 cm at 30 m: the reading masks
+    what is coarser), no other footprint in the line of sight, and — a
+    framed photo — at least GLASS_IN_FRAME of the wall in its frame; the
+    best seen first, one of each of the GLASS_SEQ sequences that see it
+    best."""
+    from .facade_measure import MAX_RES_M
+
     (ax, ay), (bx, by) = wall["a"], wall["b"]
     mx, my = (ax + bx) / 2, (ay + by) / 2
     nx, ny = wall["n"]
@@ -369,6 +390,8 @@ def glass_candidates(
             continue
         cos = (nx * (x - mx) + ny * (y - my)) / d
         if cos < MIN_COS:
+            continue
+        if _to_segment(x, y, wall["a"], wall["b"]) * pixel_angle(images[i]) > MAX_RES_M:
             continue
         sight = shapely.LineString([(x, y), (mx + nx * 0.5, my + ny * 0.5)])
         if any(j != wall["k"] for j in ftree.query(sight, predicate="intersects")):
@@ -559,6 +582,8 @@ def _search(path: str, query: dict, cell, to_wgs, depth: int = 0) -> list[dict]:
         if depth >= 3:
             raise
         data = None
+    if data is not None and len(data) >= LIMIT and depth >= 3:
+        print(f"WARNING {path}: a cell still holds {LIMIT} or more at 1/64 — some are left out")
     if data is not None and (len(data) < LIMIT or depth >= 3):
         return data
     x0, y0, x1, y1 = cell
@@ -590,13 +615,16 @@ def _cached_json(path: Path, make) -> list[dict]:
 
 
 def _poses(ids: list[str]) -> dict[str, dict]:
-    """Each image's computed rotation and thumbnail URL (fetched just before
-    use: the URLs expire)."""
+    """Each image's computed rotation, thumbnail URL (fetched just before
+    use: the URLs expire) and EXIF orientation (`raw_frame`)."""
     chunks = [ids[i : i + 50] for i in range(0, len(ids), 50)]
 
     def one(chunk):
         q = urllib.parse.urlencode(
-            {"ids": ",".join(chunk), "fields": "computed_rotation,thumb_2048_url"}
+            {
+                "ids": ",".join(chunk),
+                "fields": "computed_rotation,thumb_2048_url,exif_orientation",
+            }
         )
         return json.loads(_get(f"{GRAPH}/?{q}"))
 
@@ -643,6 +671,22 @@ def _thumbnail(iid: str, url: str, scratch: Path, source: Path | None) -> tuple[
     return path, True
 
 
+# Mapillary's pose (OpenSfM's) is in the frame the photo was stored in; its
+# thumbnail and its segmentation are upright, the EXIF orientation applied.
+# Each orientation's turn back, as np.rot90's k; a mirrored one is not read.
+TO_STORED = {1: 0, 3: 2, 6: 1, 8: -1}
+
+
+def raw_frame(a: np.ndarray, orientation: int | None) -> np.ndarray | None:
+    """An upright raster (the thumbnail, the class map) turned back into the
+    stored frame the pose is in; None for a mirrored orientation (2, 4, 5,
+    7)."""
+    k = TO_STORED.get(orientation or 1)
+    if k is None:
+        return None
+    return np.ascontiguousarray(np.rot90(a, k)) if k else a
+
+
 def measure_image(job: dict) -> dict:
     """One image measured on its walls: {"img", "seq", "walls": [...]}, or
     {"img", "skip"} when it cannot be (no pose), or {"img", "fail"} on a
@@ -655,6 +699,11 @@ def measure_image(job: dict) -> dict:
     iid = job["img"]
     if not job.get("rot") or not job.get("url"):
         return {"img": iid, "skip": "no pose or thumbnail"}
+    if kind == "glass":
+        try:
+            facade_glass.model(*job["model"])
+        except Exception as err:  # noqa: BLE001 — not this photo's fault: read it again later
+            return {"img": iid, "fail": f"model: {type(err).__name__}: {err}"[:200]}
     source = Path(job["source"]) if job.get("source") else None
     try:
         dets = _detections(iid, source)
@@ -662,18 +711,15 @@ def measure_image(job: dict) -> dict:
     except (OSError, ValueError) as err:
         return {"img": iid, "fail": f"{type(err).__name__}: {err}"[:200]}
     try:
-        img = load_image(path)
-        cls = class_map(dets)
+        img = raw_frame(load_image(path), job.get("exif"))
+        cls = raw_frame(class_map(dets), job.get("exif"))
     except Exception as err:  # noqa: BLE001 — a broken file is skipped, not fatal
         return {"img": iid, "skip": f"unreadable ({type(err).__name__})"}
     finally:
         if ours:
             path.unlink(missing_ok=True)
-    if kind == "glass":
-        try:
-            facade_glass.model(*job["model"])
-        except Exception as err:  # noqa: BLE001 — not this photo's fault: read it again later
-            return {"img": iid, "fail": f"model: {type(err).__name__}: {err}"[:200]}
+    if img is None:
+        return {"img": iid, "skip": f"mirrored (EXIF orientation {job.get('exif')})"}
     rot = onto_grid(rotation_matrix(job["rot"]), job.get("gamma", 0.0))
     x, y = job["xy"]
     out = []
@@ -735,6 +781,13 @@ def _fetch_signs(tile: Tile) -> None:
     )
 
 
+def _workers(kind: str) -> int:
+    """The fetch's worker processes: MAPILLARY_WORKERS or WORKERS, at most
+    GLASS_WORKERS for the glass reading (each holds the CLIP model)."""
+    n = int(os.environ.get(WORKERS_ENV) or WORKERS)
+    return min(n, GLASS_WORKERS) if kind == "glass" else n
+
+
 def fetch(tile: Tile, kind: str = "facades") -> None:
     """Measure the tile's facades on its panoramas, caching per image:
     `kind` "facades" the readings and the ground floor's profile
@@ -790,7 +843,7 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
     with (
         open(out, "a") as f,
         cf.ProcessPoolExecutor(
-            int(os.environ.get(WORKERS_ENV) or (GLASS_WORKERS if kind == "glass" else WORKERS)),
+            _workers(kind),
             initializer=_init_worker,
             initargs=(str(tile.dgm),),
         ) as ex,
@@ -801,6 +854,7 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
             work = [
                 jobs[i]
                 | {"img": i, "rot": poses.get(i, {}).get("computed_rotation")}
+                | {"exif": poses.get(i, {}).get("exif_orientation")}
                 | {
                     "url": poses.get(i, {}).get("thumb_2048_url"),
                     "scratch": str(scratch),

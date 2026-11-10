@@ -1796,9 +1796,14 @@ visual-variable codebook is in
   photos of every camera (`facade_glass.py`): `bun run fetch` asks
   Mapillary for every photo near the tile (`<t>.photos.json`), picks per
   LoD2 outer wall the photo of each of up to four sequences that sees it
-  best (within 60 m, ≤ 60° off its normal, a free line of sight, a framed
-  photo with ≥ 30 % of the wall's upper part in its frame), rectifies it
-  onto the wall (`facade_measure.rectify`, the camera's own model) and
+  best (within 60 m, ≤ 60° off its normal, near enough that its pixel at
+  the wall's nearest point spans no more than the reading's 10 cm — a
+  panorama at ~33 m —, a free line of sight, a framed photo with ≥ 30 %
+  of the wall's upper part in its frame), turns its upright thumbnail and
+  segmentation back into the frame its pose is in (the EXIF orientation:
+  ~6 % of Dresden's framed photos are stored upside down; a mirrored one
+  is not read), rectifies it onto the wall
+  (`facade_measure.rectify`, the camera's own model) and
   asks CLIP (ViT-B/32, ONNX) whether the upper wall, where the photo sees
   a quarter of it, is "a glass facade" or "a wall with windows"; the
   probability is cached per photo and wall. A photo Mapillary drew no
@@ -1807,14 +1812,16 @@ visual-variable codebook is in
   its segmentation found in front, and only where a third description,
   sky, trees or a street, is the less likely (a crop of sky above a cantilevered roof read 0.92 glass against
   the two walls alone). The cache is `<t>.glass.<key>.jsonl`, named by a
-  hash of the prompts, the model and the crop's limits; the photo is
-  deleted. `windows.py` calls a wall glass where at least two readings
-  exist and two thirds of them reach 0.95 (`wall_glass`; at 0.9 metal
+  hash of the prompts, the model, the crop's limits and the
+  rectification's; the photo is deleted. `windows.py` keeps one reading a
+  sequence (the photo that saw most of the wall) and calls a wall glass
+  where at least two such readings exist and two thirds of them reach 0.95 (`wall_glass`; at 0.9 metal
   cladding, ribbon-window blocks and a plastered house with balconies came
   through); the wall keeps its window model, since a material OSM names
   overrides the photos and a glass building draws no windows anyway, but
-  lends it to no other building (`windowSpecs`: a curtain wall's mullions
-  are no rhythm for the stone wing or the house next door). A Brown
+  lends it to no other building, nor to its own object's stone walls
+  (`windowSpecs`: a curtain wall's mullions are no rhythm for the stone
+  wing or the house next door). A Brown
   camera's parameters are OpenSfM's (fx, fy, cx, cy, k1, k2, …): its focal
   and radial terms are read from there; a framed photo's frame is its own
   shape where Mapillary gives it. A photo the model could not read in
@@ -1824,8 +1831,10 @@ visual-variable codebook is in
   quarter of all its outer walls, or 15 m and a twentieth of them
   (`windows_<t>.json`'s `outer`; `lib/city/photo-glass.ts`) — a stone
   house whose one glazed stair tower was all the photos read stays stone,
-  and so does a mall with a 16 m glazed entrance in 547 m of walls; never
-  a Building whose parts were read (they would inherit it). It then draws
+  and so does a mall with a 16 m glazed entrance in 547 m of walls; a
+  file without `outer` asks the 15 m alone. The photos' glass is the
+  object's own: a Building's passes to none of its parts
+  (`inheritedLook`), each part is read on its own walls. It then draws
   as *Glass and metal facades* above. On the probe (Dresden, 2026-11-10)
   every known glass front read 0.91–1.00 on its clear views (Prager
   Spitze, Glaskugelhaus, Gläserne Manufaktur, Ammonhof, Congress Center)

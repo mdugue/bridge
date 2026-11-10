@@ -8,10 +8,9 @@ import type { z } from "zod";
 import { parseBakeFile } from "../../lib/city/bake-file";
 import type { BakeFile } from "../../lib/city/bake-file";
 import { withoutTrafficStructures } from "../../lib/city/city-mesh";
-import type { OsmBuildingLut } from "../../lib/city/city-mesh";
 import { DOORS_FILE } from "../../lib/city/doors-file";
 import { DORMERS_FILE } from "../../lib/city/dormers-file";
-import type { LandmarkFile } from "../../lib/city/landmarks";
+import { withLandmarks } from "../../lib/city/landmark-lut";
 import { MEASURED_ROOFS_FILE } from "../../lib/city/measured-roofs-file";
 import { OSM_BUILDINGS_FILE } from "../../lib/city/osm-buildings-file";
 import { PASSAGES_FILE } from "../../lib/city/passages-file";
@@ -53,36 +52,6 @@ import { offset, spawnFrame } from "./frame";
 import { groundFile, heightOver } from "./ground";
 
 // --- 2. content -----------------------------------------------------------------
-
-/**
- * The OSM facts per object with the tile's landmarks folded in: each of a
- * landmark's objects is marked, and takes the wall material Wikidata names
- * where OSM names none.
- */
-function withLandmarks(
-  lut: OsmBuildingLut | undefined,
-  file: LandmarkFile | undefined
-): OsmBuildingLut | undefined {
-  if (!file?.landmarks.length) {
-    return lut;
-  }
-  const out: OsmBuildingLut = { ...lut };
-  for (const lm of file.landmarks) {
-    for (const id of lm.objects) {
-      const own = out[id];
-      out[id] = {
-        ...own,
-        landmark: 1,
-        wikidata: lm.id,
-        material: own?.material ?? lm.material,
-        ...(!own?.material && lm.material
-          ? { materialFrom: "wikidata" as const }
-          : {}),
-      };
-    }
-  }
-  return out;
-}
 
 /** A tile's source file as its schema describes it, or none (ADR 0059). */
 function tileSource<S extends z.ZodType>(

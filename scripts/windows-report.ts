@@ -17,13 +17,13 @@ import {
   OBJECT_FLAG_FLAT_ROOF,
   withoutTrafficStructures,
 } from "../lib/city/city-mesh";
-import type { OsmBuildingLut } from "../lib/city/city-mesh";
 import { parseBakeFile } from "../lib/city/bake-file";
 import type { BakeFile } from "../lib/city/bake-file";
 import { DOORS_FILE } from "../lib/city/doors-file";
 import { SHOPFRONTS_FILE } from "../lib/city/shopfronts-file";
 import { OSM_BUILDINGS_FILE } from "../lib/city/osm-buildings-file";
 import { withPhotoGlass } from "../lib/city/photo-glass";
+import { withLandmarks } from "../lib/city/landmark-lut";
 import { LANDMARKS_FILE } from "../lib/city/landmarks-file";
 import { cityMeshSourceFiles, tileIds } from "../lib/city/tile";
 import type { CityJsonDocument } from "../lib/city/types";
@@ -105,23 +105,17 @@ for (const tile of tiles) {
   const walls = Object.values(file?.buildings ?? {}).flat();
   // the OSM facts and the landmarks: the windows' gate reads them
   const osmJson = read(src.osmBuild);
-  const facts: OsmBuildingLut = {
-    ...(osmJson === undefined
-      ? {}
-      : parseBakeFile(OSM_BUILDINGS_FILE, osmJson, src.osmBuild).objects),
-  };
+  const facts =
+    osmJson === undefined
+      ? undefined
+      : parseBakeFile(OSM_BUILDINGS_FILE, osmJson, src.osmBuild).objects;
   const landmarksJson = read(src.landmarks);
   const landmarks =
     landmarksJson === undefined
       ? undefined
       : parseBakeFile(LANDMARKS_FILE, landmarksJson, src.landmarks);
-  for (const lm of landmarks?.landmarks ?? []) {
-    for (const id of lm.objects) {
-      facts[id] = { ...facts[id], landmark: 1 };
-    }
-  }
   // and the street photos' glass, as the tile bake folds it in
-  const osm = withPhotoGlass(facts, file);
+  const osm = withPhotoGlass(withLandmarks(facts, landmarks), file);
   const t0 = performance.now();
   const baked = bakeCityMesh(
     tile,

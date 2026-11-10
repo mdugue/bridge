@@ -38,12 +38,14 @@ export function photoGlassObjects(
     sum.glass += w.glass.glass ? w.L : 0;
     read.set(w.oid, sum);
   }
+  // an object without its outer walls' length (an older file) needs its
+  // metres of glass
   const enough = (oid: string, glass: number) => {
-    const all = outer[oid] ?? 0;
-    return (
-      glass >= GLASS_OUTER_SHARE * all ||
-      (glass >= GLASS_MIN_M && glass >= GLASS_OUTER_LEAST * all)
-    );
+    const all = outer[oid];
+    return all === undefined
+      ? glass >= GLASS_MIN_M
+      : glass >= GLASS_OUTER_SHARE * all ||
+          (glass >= GLASS_MIN_M && glass >= GLASS_OUTER_LEAST * all);
   };
   return new Set(
     [...read]
@@ -60,40 +62,35 @@ export function photoGlassObjects(
 /**
  * The OSM table with the photos' glass: material `glass`, from `photos`,
  * on each object the photos read as glass and no source names a material
- * of (an object's own or, through `inheritedLook`, its root Building's) —
- * never on a Building whose parts were read, which would pass it on to
- * them. Both the tile bake and the windows report build their table so.
+ * of (an object's own or, through `inheritedLook`, its root Building's).
+ * A root's photo glass passes to none of its parts (`inheritedLook`): each
+ * part is read on its own walls. Both the tile bake and the windows report
+ * build their table so.
  */
 export function withPhotoGlass(
   lut: OsmBuildingLut | undefined,
   file: Pick<WindowFile, "buildings" | "outer"> | undefined
 ): OsmBuildingLut | undefined {
   const roots = Object.entries(file?.buildings ?? {});
-  const walls = roots.flatMap(([, ws]) => ws);
-  const glass = photoGlassObjects(walls, file?.outer);
+  const glass = photoGlassObjects(
+    roots.flatMap(([, ws]) => ws),
+    file?.outer
+  );
   if (glass.size === 0) {
     return lut;
   }
   const rootOf = new Map<string, string>();
-  // a Building with parts of its own: its look would pass to every part
-  // (`inheritedLook`), the ones the photos read as solid too
-  const parents = new Set<string>();
   for (const [root, ws] of roots) {
     for (const w of ws) {
       rootOf.set(w.oid, root);
-      if (w.oid !== root) {
-        parents.add(root);
-      }
     }
   }
   const out: OsmBuildingLut = { ...lut };
   for (const id of glass) {
-    if (parents.has(id)) {
-      continue;
-    }
-    const own: OsmBuildingFacts | undefined = out[id];
+    const own: OsmBuildingFacts | undefined = lut?.[id];
     const root = rootOf.get(id);
-    const named = own?.material ?? (root ? out[root]?.material : undefined);
+    // the sources' material, not the photos' set on the root just before
+    const named = own?.material ?? (root ? lut?.[root]?.material : undefined);
     if (!named) {
       out[id] = { ...own, material: "glass", materialFrom: "photos" };
     }

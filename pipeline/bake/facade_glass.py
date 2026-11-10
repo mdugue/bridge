@@ -81,7 +81,9 @@ PAD_ID = 49407  # CLIP's end-of-text token, its padding too
 MIN_PX = 1200  # an upper wall seen by fewer pixels (20 a metre) is not read
 MIN_COVER = 0.25  # nor one a photo sees less of (its share of the upper wall)
 OTHER_MAX = 0.5  # an unsegmented crop more likely sky, trees or street is not read
-READ_VERSION = 1  # bump when the rectification or the crop changes what is read
+# bump when the rectification or the crop changes what is read
+# (2: a photo turned back into its pose's frame, facades.raw_frame)
+READ_VERSION = 2
 
 
 def _prompts() -> tuple:
@@ -90,17 +92,18 @@ def _prompts() -> tuple:
 
 def reading_key() -> str:
     """What a cached reading depends on, hashed: the prompts in their order,
-    the model, the crop's limits and the rectification's (facade_measure).
+    the model, the crop's limits and the rectification's (facade_measure,
+    the camera's height among them).
     It names the cache (facades.glass_path), so a change reads every photo
     again instead of mixing old readings with new."""
-    from .facade_measure import GROUND_M, MAX_RES_M, PX
+    from .facade_measure import EYE_M, GROUND_M, MAX_RES_M, PX
 
     what = (
         READ_VERSION,
         _prompts(),
         REPO,
         (MIN_PX, MIN_COVER, OTHER_MAX, SIZE, LOGIT_SCALE, MEAN.tolist(), STD.tolist()),
-        (PX, GROUND_M, MAX_RES_M),
+        (PX, GROUND_M, MAX_RES_M, EYE_M),
     )
     return hashlib.sha256(repr(what).encode()).hexdigest()[:10]
 

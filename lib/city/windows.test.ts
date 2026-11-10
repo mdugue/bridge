@@ -210,6 +210,16 @@ describe("windowSpecs", () => {
     // its mullions are no rhythm for its wing or the house next door
     expect(b.from).toBe("type");
     expect(c.from).toBe("type");
+    // beside a stone wall, the stone wall's rhythm is its own, however
+    // much better the glass one was seen
+    const stone = { ...measured("a", model({ axis: 2.2 })), imgs: 1 };
+    const [mixed] = windowSpecs(hosts, [{ ...glassy, imgs: 9 }, stone], index);
+    expect(mixed.spec.axis).not.toBeCloseTo(
+      windowSpecs(hosts, [glassy], index)[0].spec.axis
+    );
+    expect(mixed.spec.axis).toBeCloseTo(
+      windowSpecs(hosts, [stone], index)[0].spec.axis
+    );
   });
 
   test("a neighbour lends its rhythm within NEAR_M only (G14)", () => {

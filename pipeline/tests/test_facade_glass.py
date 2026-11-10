@@ -86,6 +86,31 @@ def test_a_photo_reads_a_wall_only_when_it_looks_at_it():
     assert _in_frame(low, tall, near) < _in_frame(low, _photo(0), near)
 
 
+def test_a_panorama_too_far_to_resolve_the_wall_is_not_read():
+    import shapely
+
+    wall = _wall() | {"k": 0}
+    # a panorama's pixel spans MAX_RES_M at ~33 m: one at 25 m reads the
+    # wall, one at 45 m would only fetch a photo the reading masks whole
+    at = np.array([(10.0, -25.0), (10.0, -45.0), (10.0, -45.0)])
+    pano = _photo(0, pano=True)
+    images = [pano | {"sequence": "near"}, pano | {"sequence": "far"}]
+    images.append(_photo(0) | {"sequence": "framed"})
+    rots = [rotation_matrix(o["computed_rotation"]) for o in images]
+    ptree = shapely.STRtree(shapely.points(at))
+    got = facades.glass_candidates(wall, images, at, rots, ptree, shapely.STRtree([]))
+    assert set(got) == {"near", "framed"}
+
+
+def test_a_photo_stored_turned_is_turned_back_into_its_poses_frame():
+    up = np.arange(6).reshape(2, 3)
+    assert facades.raw_frame(up, None) is up
+    assert facades.raw_frame(up, 3).tolist() == np.rot90(up, 2).tolist()
+    assert facades.raw_frame(up, 6).shape == (3, 2)
+    assert facades.raw_frame(up, 6)[0].tolist() == [2, 5]  # turned back left
+    assert facades.raw_frame(up, 2) is None  # mirrored: not read
+
+
 def test_the_crop_keeps_the_seen_upper_wall_and_greys_the_rest():
     rgb = np.zeros((100, 200, 3))
     rgb[:, :, 2] = 1.0
@@ -114,7 +139,7 @@ def _lines(readings: dict[tuple[str, int], list[tuple[int, float]]]) -> list[str
     for (oid, wi), rs in readings.items():
         for k, (gl, cov) in enumerate(rs):
             w = {"oid": oid, "wi": wi, "cov": cov} | ({} if gl is None else {"gl": gl})
-            out.append(json.dumps({"img": f"{oid}{wi}{k}", "seq": "s", "walls": [w]}))
+            out.append(json.dumps({"img": f"{oid}{wi}{k}", "seq": f"s{k}", "walls": [w]}))
     return out
 
 
@@ -158,6 +183,15 @@ def test_a_wall_is_glass_where_most_of_its_clear_views_say_so():
     assert ("blind", 0) not in got
 
 
+def test_two_frames_of_one_pass_are_one_reading():
+    lines = [
+        json.dumps({"img": i, "seq": "s", "walls": [{"oid": "a", "wi": 0, "cov": c, "gl": g}]})
+        for i, c, g in (("1", 0.5, 990), ("2", 0.8, 400))
+    ]
+    # the frame that saw most of the wall speaks for its sequence
+    assert win.glass_records(lines) == {("a", 0): [400]}
+
+
 def test_a_wall_seen_only_for_glass_enters_with_its_glass_alone():
     from tests.synthetic import blocks_city
 
@@ -171,4 +205,4 @@ def test_a_wall_seen_only_for_glass_enters_with_its_glass_alone():
     assert all(e["glass"]["glass"] and "model" not in e for e in entries)
     assert all(e["imgs"] == 0 and e["traits"] == {} for e in entries)
     # the hall's glass is weighed against all its outer walls
-    assert win.outer_lengths(city, buildings) == {entries[0]["oid"]: 100.0}
+    assert win.outer_lengths(ws, buildings) == {entries[0]["oid"]: 100.0}

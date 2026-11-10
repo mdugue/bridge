@@ -288,13 +288,15 @@ function buildingLineage(
   // (a flag any object of the tree carries)
   const has = (bit: number) => all.some((o) => hasObjectFlag(o.flags, bit));
   const drawn = all.map((o) => decodeDrawn(o.facts.drawn));
-  // a facade's glass OSM names, not the street photos' (photo-glass.ts) and
-  // not a shop window's pane (its own glass object)
-  const osmGlass = all.some(
+  // a facade's glass or metal OSM names — not Wikidata's or the street
+  // photos' (photo-glass.ts), which have their own lines, and not a shop
+  // window's pane (its own glass object)
+  const osmMaterial = all.some(
     (o, i) =>
       o.source !== OBJECT_SOURCE_SHOPFRONT &&
-      hasObjectFlag(o.flags, OBJECT_FLAG_GLASS) &&
-      drawn[i]?.materialFrom !== "photos"
+      (hasObjectFlag(o.flags, OBJECT_FLAG_GLASS) ||
+        hasObjectFlag(o.flags, OBJECT_FLAG_METAL)) &&
+      drawn[i]?.materialFrom === undefined
   );
   const { source } = b.picked;
   const lod2 = source !== OBJECT_SOURCE_SCAN && source !== OBJECT_SOURCE_GAP;
@@ -337,7 +339,7 @@ function buildingLineage(
   l.source(
     "osm",
     [
-      (osmGlass || has(OBJECT_FLAG_METAL)) && "Glas oder Metall der Fassade",
+      osmMaterial && "Glas oder Metall der Fassade",
       // osm_buildings.py: a shop point inside the footprint, or snapped to
       // the nearest one within a few metres
       has(OBJECT_FLAG_SHOP) && ["Schaufenster im Erdgeschoss", "detected"],
@@ -356,6 +358,8 @@ function buildingLineage(
       (has(OBJECT_FLAG_LANDMARK) && all.every((o) => !o.facts.drawn))
         ? "eines der Wahrzeichen der Stadt"
         : "",
+      drawn.some((d) => d.materialFrom === "wikidata") &&
+        "das Material der Fassade",
     ],
     "detected"
   );
