@@ -3793,11 +3793,13 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   `flag:wikidata`, `subject`, `country`: the first the map fills decides,
   the flag's own name first — Germany, the EU, Saxony, Bavaria, Hamburg),
   as pastel bands without emblem; every other one — most are a shop's or
-  a firm's (`flag:type=advertising`), some a city's — flies a pale cloth.
+  a firm's (`flag:type=advertising`, never in a country's colours), some a
+  city's — flies a pale cloth.
   ≈ assumed: the wind (one bearing for the city, from the west-south-west,
   ±12° a mast by a hash), the cloth's size and its ripple. A mast mapped
   inside a building outline or on its line stands on its roof and is left
-  out (Dresden 2 of 368; not under a canopy, a carport or in a stadium), as is one tagged on a roof (`support` or
+  out (Dresden 2 of 368; not under a canopy, a carport, in a stadium or in an
+  outline tagged `building=no`), as is one tagged on a roof (`support` or
   `location=roof`); a flag on a facade (`support=wall_mounted`) is not
   mapped in any of the seven sites' extracts and would be left out. The
   cloth moves, so its shadow is the sheet at rest

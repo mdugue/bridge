@@ -223,6 +223,11 @@ test("a flagpole casts, its cloth flies in its design and casts at rest", () => 
   expect(position(again)).toBe(position(plain));
   expect(position(german)).not.toBe(position(plain));
   expect(isSceneShared(position(plain))).toBe(true);
+  // its index too: a view shares it, and freeing one tile keeps it
+  expect(again.geometry.index).toBe(plain.geometry.index);
+  expect(plain.geometry.index && isSceneShared(plain.geometry.index)).toBe(
+    true
+  );
 });
 
 test("a flagpole shows from further than a bench", () => {

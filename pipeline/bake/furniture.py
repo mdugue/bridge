@@ -199,11 +199,16 @@ FLAG_DESIGNS = {
     "by": ("bayern", "bavaria", "freistaat bayern", "q980"),
     "hh": ("hamburg", "freie und hansestadt hamburg", "q1055"),
 }
-# The keys that name a flag, in groups, the flag's own first: the first
-# group the map fills decides (a name the viewer does not draw: a pale cloth).
-FLAG_KEYS = (("flag:name", "flag:wikidata"), ("subject", "subject:wikidata"), ("country",))
+# The keys that name a flag, in groups (a name, a Wikidata item), the flag's
+# own first: the first group whose name the map fills decides (a name the
+# viewer does not draw: a pale cloth).
+FLAG_KEYS = (
+    ("flag:name", "flag:wikidata"),
+    ("subject", "subject:wikidata"),
+    ("country", "country:wikidata"),
+)
 # Building outlines over open ground: a flagpole in one stands on the ground.
-OPEN_BUILDINGS = {"roof", "carport", "stadium"}
+OPEN_BUILDINGS = {"roof", "carport", "stadium", "no"}
 DESIGN_OF = {name: design for design, names in FLAG_DESIGNS.items() for name in names}
 # OSM `playground=*` → the equipment model the viewer stands (others dropped).
 EQUIPMENT = {
@@ -344,17 +349,21 @@ def flag(other: str | None) -> dict:
     h = osm_metres(tag(other, "height"))
     if h is not None:
         props["h"] = round(min(max(h, FLAG_H[0]), FLAG_H[1]), 1)
+    if tag(other, "flag:type") == "advertising":
+        return props  # a firm's flag: its colours are not mapped
     # the keys that name the flag itself first, then what it stands for,
-    # then where; in a `;` list the first one the viewer draws
-    for group in FLAG_KEYS:
-        names = [n.strip().lower() for key in group for n in (tag(other, key) or "").split(";")]
-        names = [n for n in names if n]
-        if not names:
-            continue
-        design = next((DESIGN_OF[n] for n in names if n in DESIGN_OF), None)
+    # then where; in a `;` list the first one the viewer draws. A group's
+    # name the viewer does not draw decides (a pale cloth); an item it does
+    # not know does not (the map's Wikidata may name the flag or its land)
+    for names_key, item_key in FLAG_KEYS:
+        names = [n.strip().lower() for n in (tag(other, names_key) or "").split(";")]
+        items = [n.strip().lower() for n in (tag(other, item_key) or "").split(";")]
+        design = next((DESIGN_OF[n] for n in [*names, *items] if n in DESIGN_OF), None)
         if design is not None:
             props["c"] = design
-        return props
+            return props
+        if any(names):
+            return props
     return props
 
 

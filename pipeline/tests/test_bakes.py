@@ -212,6 +212,10 @@ def test_a_flagpole_stands_with_its_height_and_the_flag_the_map_names():
     assert _props("flag", '"flag:name"=>"Sachsen","country"=>"DE"')["c"] == "sn"
     # a flag the viewer does not draw is not its country's
     assert "c" not in _props("flag", '"flag:name"=>"Dresden","country"=>"DE"')
+    # an item the viewer does not know leaves it to what the flag stands for
+    assert _props("flag", '"flag:wikidata"=>"Q1","subject"=>"Bayern"')["c"] == "by"
+    # an advertising flag is a firm's, wherever it stands
+    assert "c" not in _props("flag", '"flag:type"=>"advertising","country"=>"DE"')
     # a firm's flag: its colours are not mapped
     assert _props("flag", '"flag:type"=>"advertising","flag:name"=>"Netto"') == {"k": "flag"}
 

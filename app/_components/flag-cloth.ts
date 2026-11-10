@@ -48,10 +48,8 @@ import { Instances, instanceMatrix, instancePosition } from "./instancing";
 import { markSceneShared, markThinCaster, sceneMaterial } from "./three-utils";
 import { swayNear } from "./vegetation-layer";
 
-/** The cloth's size (m, lib/city/furniture.ts); its top hangs this far
- *  under the mast's top. */
-const CLOTH_H = FLAG_CLOTH_H;
-const CLOTH_L = FLAG_CLOTH_L;
+/** How far under the mast's top the cloth's top hangs (m); its size is
+ *  lib/city/furniture.ts's FLAG_CLOTH_H × FLAG_CLOTH_L. */
 const CLOTH_TOP = -0.12;
 /** The ball on the mast's top: its radius and its centre over the top (m). */
 const BALL_R = 0.075;
@@ -66,11 +64,11 @@ const ROWS = 6;
 /** The wave: its amplitude at the fly end (m), its wavenumber along the
  *  cloth (radians a metre: a 1.85 m wave) and how fast it runs (radians a
  *  second). */
-const WAVE_AMP = 0.22;
+const WAVE_AMP = float(0.22);
 const WAVE_K = 3.4;
 const WAVE_SPEED = 4.2;
 /** How dark a fold turned from the eye goes at the wave's steepest. */
-const FOLD_SHADE = 0.22;
+const FOLD_SHADE = float(0.22);
 const TURN = Math.PI * 2;
 
 /* The cloths, in the scene's pastels (furniture-layer.ts's palette). */
@@ -83,7 +81,7 @@ const GREEN = 0xb9_c9_a8;
 const BLUE_BY = 0xb7_cd_e6;
 
 /** Each design's bands, top to bottom (each an equal share of the rows). */
-export const CLOTH_BANDS: Record<FlagDesign | "plain", readonly number[]> = {
+const CLOTH_BANDS: Record<FlagDesign | "plain", readonly number[]> = {
   plain: [CLOTH],
   de: [BLACK, RED, GOLD],
   eu: [BLUE_EU],
@@ -96,7 +94,7 @@ export const CLOTH_BANDS: Record<FlagDesign | "plain", readonly number[]> = {
  *  whose origin is the mast's top (so neither stretches with the mast):
  *  the sheet's hoist at the mast, its fly end along local +X; indexed,
  *  each row its own vertices (a colour per band). */
-export function clothGeometry(design: FlagDesign | "plain"): BufferGeometry {
+function clothGeometry(design: FlagDesign | "plain"): BufferGeometry {
   const bands = CLOTH_BANDS[design];
   const pos: number[] = [];
   const rgb: number[] = [];
@@ -105,11 +103,11 @@ export function clothGeometry(design: FlagDesign | "plain"): BufferGeometry {
   const c = new Color();
   for (let r = 0; r < ROWS; r += 1) {
     c.setHex(bands[Math.floor((r * bands.length) / ROWS)]);
-    const y0 = CLOTH_TOP - (r * CLOTH_H) / ROWS;
-    const y1 = CLOTH_TOP - ((r + 1) * CLOTH_H) / ROWS;
+    const y0 = CLOTH_TOP - (r * FLAG_CLOTH_H) / ROWS;
+    const y1 = CLOTH_TOP - ((r + 1) * FLAG_CLOTH_H) / ROWS;
     const first = pos.length / 3;
     for (let i = 0; i <= COLUMNS; i += 1) {
-      const x = HOIST + (i * (CLOTH_L - HOIST)) / COLUMNS;
+      const x = HOIST + (i * (FLAG_CLOTH_L - HOIST)) / COLUMNS;
       pos.push(x, y0, 0, x, y1, 0);
       rgb.push(c.r, c.g, c.b, c.r, c.g, c.b);
       nrm.push(0, 0, 1, 0, 0, 1);
@@ -175,7 +173,7 @@ function clothMaterial(): MeshStandardNodeMaterial {
   // positionLocal is the moved vertex. 0 at the hoist and on the ball
   // (over the cloth's top), 1 at the fly end
   const u = max(positionGeometry.x.sub(HOIST), 0)
-    .div(CLOTH_L - HOIST)
+    .div(FLAG_CLOTH_L - HOIST)
     .mul(step(positionGeometry.y, CLOTH_TOP / 2));
   const arg = positionGeometry.x.mul(WAVE_K).sub(waveClock).add(phase);
   const wave = sin(arg).mul(u).mul(WAVE_AMP).mul(near);
@@ -213,12 +211,15 @@ export interface Mast {
 const siteCloths = new Map<FlagDesign | "plain", BufferGeometry>();
 
 /** The site's cloth of one design (`clothGeometry`, made on first use). */
-export function siteCloth(design: FlagDesign | "plain"): BufferGeometry {
+function siteCloth(design: FlagDesign | "plain"): BufferGeometry {
   let geo = siteCloths.get(design);
   if (!geo) {
     geo = clothGeometry(design);
-    for (const attribute of Object.values(geo.attributes)) {
-      markSceneShared(attribute);
+    // its index too: every tile's view draws from it (instancing.ts)
+    for (const attribute of [...Object.values(geo.attributes), geo.index]) {
+      if (attribute) {
+        markSceneShared(attribute);
+      }
     }
     siteCloths.set(design, geo);
   }

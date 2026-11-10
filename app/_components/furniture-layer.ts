@@ -796,8 +796,7 @@ function flagsOf(cell: Stood[]): Instances[] {
           height: FLAG_HEIGHT * piece.scaleY,
         }))
       ),
-      cell,
-      FLAG_REACH
+      cell
     )
   );
 }
@@ -1059,19 +1058,17 @@ function byCell(stood: Stood[]): Stood[][] {
 }
 
 /** Marks a set as a cell's, with the box its pieces stand in (scene frame,
- *  a few metres for the pieces' own size) and the band it shows in. */
-function asCell(
-  mesh: Instances,
-  stood: Stood[],
-  reach: Reach = FURNITURE_REACH
-): Instances {
+ *  a few metres for the pieces' own size) and the band it shows in (a
+ *  flag's, `FLAG_IN_M`, else `FURNITURE_IN_M`). */
+function asCell(mesh: Instances, stood: Stood[]): Instances {
   const box = new Box3();
   for (const s of stood) {
     box.expandByPoint(s.at);
   }
   mesh.userData.furnitureCell = box.expandByScalar(3);
-  if (reach !== FURNITURE_REACH) {
-    mesh.userData.furnitureReach = reach;
+  // a cell is one model's (its cloths and hands go with it)
+  if (stood[0]?.piece.model === "flag") {
+    mesh.userData.furnitureReach = FLAG_REACH;
   }
   return mesh;
 }
@@ -1163,9 +1160,7 @@ export function* furnitureSteps(
           cell,
           model === "columnLit" ? materials.glow() : materials.matte()
         );
-        group.add(
-          asCell(mesh, cell, model === "flag" ? FLAG_REACH : undefined)
-        );
+        group.add(asCell(mesh, cell));
         if (model === "clock" || model === "wallClock") {
           group.add(asCell(clockHands(model, cell), cell));
         }
