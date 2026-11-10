@@ -1,7 +1,13 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { bridgeItems, monumentItems, moreSets, treeSets } from "./ask-items";
+import {
+  bridgeItems,
+  monumentItems,
+  moreSets,
+  toleranceBox,
+  treeSets,
+} from "./ask-items";
 import { hitsInSets, nearestItem } from "./ask-solids";
 import type { AskSolid } from "./ask-solids";
 import type {
@@ -486,4 +492,18 @@ test("a tall mast is asked at its post and at the head on its arm", () => {
   expect(head && "arm" in head ? head.arm : undefined).toBe(true);
   expect(north(113, 1.8)).toBeUndefined(); // nothing under the arm
   expect(north(113, 0)?.kind).toBe("lamp"); // the post
+});
+
+const toleranceItem = (kind: string, solids: AskSolid[]) =>
+  ({ solids, target: { kind } }) as unknown as Parameters<
+    typeof toleranceBox
+  >[0];
+
+test("the lens never focuses on a box the probe tolerates", () => {
+  const prism: AskSolid = { prism: { ring: [], y0: 0, y1: 1 } };
+  const post: AskSolid = { cylinder: { x: 0, z: 0, y0: 0, y1: 1, r: 0.1 } };
+  expect(toleranceBox(toleranceItem("landing", [prism]))).toBe(true);
+  expect(toleranceBox(toleranceItem("furniture", [prism]))).toBe(true);
+  expect(toleranceBox(toleranceItem("furniture", [post]))).toBe(false);
+  expect(toleranceBox(toleranceItem("tree", [post]))).toBe(false);
 });

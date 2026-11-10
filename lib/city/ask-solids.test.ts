@@ -8,6 +8,7 @@ import {
   rayCylinder,
   rayDeckTop,
   rayPrism,
+  raySlab,
   ringDistanceXz,
   setsBox,
 } from "./ask-solids";
@@ -247,6 +248,32 @@ test("a ray comes down onto a deck's top, from above it or standing on it", () =
     rayDeckTop({ x: 20, y: 12, z: 0 }, { x: 1, y: 0, z: 0 }, deck, 1000)
   ).toBeNull();
   expect(rayDeckTop({ x: 20, y: 12, z: 0 }, look, deck, 3)).toBeNull();
+});
+
+test("a deck seen from above its box, or level from its end", () => {
+  const deck: Slab = {
+    ring: [
+      [0, -5],
+      [100, -5],
+      [100, 5],
+      [0, 5],
+    ],
+    y0: 10,
+    y1: 12,
+    above: 2,
+    below: 1,
+    topAt: (x) => 10 + x / 50,
+  };
+  // from 20 m over it, steeply down onto x = 50 (top 11 m)
+  const d = { x: 30, y: -9, z: 0 };
+  const len = Math.hypot(d.x, d.y);
+  const look = { x: d.x / len, y: d.y / len, z: 0 };
+  const t = rayDeckTop({ x: 20, y: 20, z: 0 }, look, deck, 1000);
+  expect(t).toBeCloseTo(len, 0);
+  // level from beside its low end: no top to come down onto, but its band
+  // (what a bridge's rough focus takes then)
+  expect(rayDeckTop({ x: -5, y: 10.5, z: 0 }, east, deck, 1000)).toBeNull();
+  expect(raySlab({ x: -5, y: 10.5, z: 0 }, east, deck)).toBeCloseTo(5, 0);
 });
 
 test("the box around sets: none for no sets", () => {

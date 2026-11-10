@@ -83,16 +83,16 @@ export function horizonBlurPx(
   return (onSensor / SENSOR_HEIGHT_MM) * Math.max(heightPx, 0);
 }
 
-/**
- * The focus `dtMs` later, following `targetM` from `currentM` in dioptres
- * (1/m): a step from 5 m to 50 m and one from 50 m to 5 m take as long,
- * and the far field, where a metre means little, moves little.
- */
 /** A focus distance in dioptres (1/m), no nearer than `MIN_FOCUS_M`. */
 export function dioptres(m: number): number {
   return 1 / Math.max(m, MIN_FOCUS_M);
 }
 
+/**
+ * The focus `dtMs` later, following `targetM` from `currentM` in dioptres
+ * (1/m): a step from 5 m to 50 m and one from 50 m to 5 m take as long,
+ * and the far field, where a metre means little, moves little.
+ */
 export function pullFocus(
   currentM: number,
   targetM: number,

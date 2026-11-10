@@ -211,6 +211,9 @@ export interface PostStack {
   /** The lens now (QA; the shots harness and an export wait for its
    *  `settled`). */
   getFocusInfo: () => FocusInfo;
+  /** Whether the style and the view draw a lens (motion aside): the
+   *  autofocus rests where none is. */
+  lensWanted: () => boolean;
   /** Draws the scene into its target, then the post chain to the canvas;
    *  `stepMs`, the loop's time step, advances the lens's fade and focus. */
   render: (stepMs: number) => void;
@@ -759,7 +762,7 @@ export function createPostStack(
       return moving;
     }
     const pair = style.shaderMode > 0 ? styled : pastel;
-    const lensOn = style.allowDof && !regressed && !model;
+    const lensOn = lensWanted() && !regressed;
     const pre =
       (lensOn ? pair.dof : null) ?? (model ? pair.model : null) ?? pair.plain;
     return {
@@ -859,12 +862,10 @@ export function createPostStack(
     );
     const { focus } = lensUniforms;
     focus.value = lensState.focusM;
-    // a parallel camera is Modell's, where `lensWanted` faded the lens out
+    // the perspective camera's angle: Modell's parallel one draws no lens
+    // (`lensWanted`), the fade is 0 there
     lensUniforms.horizonPx.value =
-      lensFadeNow > 0
-        ? horizonBlurPx(focus.value, (view as PerspectiveCamera).fov, size.y) *
-          lensFadeNow
-        : 0;
+      horizonBlurPx(focus.value, camera.fov, size.y) * lensFadeNow;
     // no wider than the gather's reach covers (lens-blur.ts)
     lensUniforms.capPx.value =
       maxBlurPx(Math.min(size.y, LENS_TALLEST_PX)) * lensFadeNow;
@@ -1448,6 +1449,7 @@ export function createPostStack(
       shown.finished.render();
       overlay?.render(renderer, view);
     },
+    lensWanted: () => lensWanted(),
     getFocusInfo: () => ({
       focusDistance: lensUniforms.focus.value,
       horizonBlurPx: lensUniforms.horizonPx.value,

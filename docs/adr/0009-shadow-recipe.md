@@ -44,12 +44,12 @@ phone has no memory to spare (ADR 0047).
    the eye in one loop over a fixed uniform array (48, a phone 12), each
    less the share a real light gives it; every lamp's head, halo and pool
    is emissive and additive. All scaled by the night factor.
-7. **Post:** the scene renders into its own target; GTAO at half
-   resolution, smoothed, never gated by motion; depth of field on a
-   desktop only, as wide as a real lens's and drawn by its own gather
-   (`lens-blur.ts`), dropped while the camera moves
-   by switching between two prebuilt pipelines and grown back in after; SMAA on a desktop, FXAA on a phone; grading,
-   grain and vignette in the output node. No tone mapping.
+7. **Post:** the scene renders into its own target; GTAO at half resolution,
+   smoothed, never gated by motion; depth of field on a desktop only, as
+   wide as a real lens's and drawn by its own gather (`lens-blur.ts`),
+   dropped while the camera moves by switching between two prebuilt
+   pipelines and grown back in after; SMAA on a desktop, FXAA on a phone;
+   grading, grain and vignette in the output node. No tone mapping.
 
 ## Consequences
 

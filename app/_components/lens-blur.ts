@@ -39,7 +39,9 @@ import type { ViewLens } from "./view-lens";
  *    farther than twice the pixel's own circle (a sharp edge does not take
  *    the blurred background's colour); what lies in front covers the pixel
  *    by its area over its circle's — the share of the lens a blurred
- *    foreground hides — and is laid over the rest.
+ *    foreground hides — and is laid over the rest. A pixel blurred before
+ *    the focus counts its own layer as that foreground, so at its edge
+ *    what lies behind shows through.
  * 4. The composite at full resolution: the gather where the pixel's own
  *    circle is wider than about 4 px or a foreground covers it, the sharp
  *    frame below a pixel, the two mixed between.
@@ -203,8 +205,13 @@ export function createLensBlur(
         .toVar();
       // the area each tap stands for, over π
       const share = radius.mul(radius).div(TAPS).toVar();
+      // a pixel itself blurred before the focus is a foreground's own:
+      // its layer (what lies as near or nearer) covers it by the share of
+      // the lens it fills, and what lies behind shows through the rest —
+      // at a near blur's silhouette, half — as a lens sees past an edge
+      const selfFront = smoothstep(1, 3, cC.negate()).toVar();
       const back = centre.rgb.toVar();
-      const backW = float(1).toVar();
+      const backW = mix(float(1), float(1e-3), selfFront).toVar();
       const front = vec3(0).toVar();
       const frontW = float(0).toVar();
       for (let i = 0; i < TAPS; i += 1) {
@@ -233,10 +240,21 @@ export function createLensBlur(
           0,
           1
         ).toVar();
-        // in front of the pixel by more than a pixel's blur
-        const ahead = float(1).sub(step(cC.sub(1), s.a));
-        back.addAssign(s.rgb.mul(reaches.mul(float(1).sub(ahead))));
-        backW.addAssign(reaches.mul(float(1).sub(ahead)));
+        // in front of the pixel by more than a pixel's blur; for a near
+        // blur's own pixel, its layer: as near, within a pixel's blur
+        const ahead = mix(
+          float(1).sub(step(cC.sub(1), s.a)),
+          float(1).sub(step(cC.add(1), s.a)),
+          selfFront
+        ).toVar();
+        // what lies behind: where its circle reaches the pixel, or for a
+        // near blur's own pixel, all of it within the search (it shows
+        // through where the foreground's circles leave the lens open)
+        const fill = mix(reaches, float(1), selfFront)
+          .mul(float(1).sub(ahead))
+          .toVar();
+        back.addAssign(s.rgb.mul(fill));
+        backW.addAssign(fill);
         const covers = reaches
           .mul(ahead)
           .mul(min(float(1), share.div(max(own.mul(own), 1e-3))))

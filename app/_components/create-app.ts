@@ -3978,10 +3978,10 @@ async function bootApp(
         opts.onPose?.(pose.getPose());
         // a ray through the buildings and a march over the ground: only
         // where there is a lens blur to focus (not on a phone), and not
-        // while the camera moves (the lens shows nothing then; the still
-        // frames before it returns aim it). In a style without the blur
-        // too, so a switch back finds the focus where the view rests.
-        if (lensBlur && !walkMovedNow) {
+        // while the camera moves or the style draws none (the lens shows
+        // nothing then; it comes back faded out, and the focus jumps to
+        // the next ray's while it is)
+        if (lensBlur && postStack.lensWanted() && !walkMovedNow) {
           updateFocus();
         }
       }
