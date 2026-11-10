@@ -82,8 +82,9 @@ MIN_PX = 1200  # an upper wall seen by fewer pixels (20 a metre) is not read
 MIN_COVER = 0.25  # nor one a photo sees less of (its share of the upper wall)
 OTHER_MAX = 0.5  # an unsegmented crop more likely sky, trees or street is not read
 # bump when the rectification or the crop changes what is read
-# (2: a photo turned back into its pose's frame, facades.raw_frame)
-READ_VERSION = 2
+# (2: a photo turned back into its pose's frame, facades.raw_frame;
+# 3: a fisheye seen out to its frame, facade_measure.project)
+READ_VERSION = 3
 
 
 def _prompts() -> tuple:
@@ -91,20 +92,9 @@ def _prompts() -> tuple:
 
 
 class ModelError(RuntimeError):
-    """The model could not read a crop (a worker out of memory): not the
-    photo's fault, so it is read again on the next fetch."""
-
-
-@cache
-def _runtime_faults() -> tuple[type[BaseException], ...]:
-    """onnxruntime's errors of a session that ran short of what it needs
-    (memory, its execution provider); an invalid input stays the photo's."""
-    try:
-        from onnxruntime.capi import onnxruntime_pybind11_state as state
-    except ImportError:
-        return ()
-    names = ("Fail", "RuntimeException", "EPFail")
-    return tuple(getattr(state, n) for n in names if hasattr(state, n))
+    """The model could not read a crop (a worker out of memory, a model
+    changed under the code): not the photo's fault, so it is read again on
+    the next fetch — up to facades.MAX_FAILS times."""
 
 
 def reading_key() -> str:
@@ -143,13 +133,16 @@ def fetch_model(raw: Path) -> Path:
     root = model_dir(raw)
     for name, sha in FILES.items():
         path = root / name
-        for _ in range(2):  # a file of an older pin is fetched again
-            download(f"{REPO}/{SOURCE[name]}", path)
-            if _sha256(path) == sha:
-                break
-            path.unlink()
-        else:
+        if path.exists() and _sha256(path) == sha:
+            continue
+        # fetched under this process's own name and checked before it takes
+        # the shared one: two fetches starting at once never mix their bytes
+        own = root / f"{name}.{os.getpid()}"
+        download(f"{REPO}/{SOURCE[name]}", own)
+        if _sha256(own) != sha:
+            own.unlink()
             raise OSError(f"{name}: SHA-256 differs from the pinned model")
+        own.replace(path)
     return root
 
 
@@ -248,10 +241,8 @@ def glass_of(
         return None
     try:
         glass, other = model(root, classes).glass(crop)
-    except Exception as err:
-        if isinstance(err, (MemoryError, *_runtime_faults())):
-            raise ModelError(f"{type(err).__name__}: {err}") from err
-        raise
+    except Exception as err:  # memory, the runtime, a changed model: all of it ours
+        raise ModelError(f"{type(err).__name__}: {err}") from err
     if not segmented and other > OTHER_MAX:
         return None
     return round(1000 * glass)

@@ -633,11 +633,11 @@ def run(tile: Tile) -> None:
         # (plan_key), prompts or model (reading_key): the glass the file
         # holds is kept, never dropped
         glass = prior_glass(out)
-        if glass:
-            print(
-                f"{tile.id}: WARNING {gpath.name} is missing or not read through — "
-                f"the windows file's glass kept; run the glass fetch"
-            )
+        print(
+            f"{tile.id}: WARNING {gpath.name} is missing or not read through — "
+            f"{'the windows file’s glass kept' if glass else 'no wall read for glass'}; "
+            f"run the glass fetch"
+        )
     if not (path.exists() or glass):
         print(f"{tile.id}: no facade traits measured — no wall gets windows")
         write(out, {}, {})

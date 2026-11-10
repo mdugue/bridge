@@ -1832,9 +1832,10 @@ visual-variable codebook is in
   camera's parameters are OpenSfM's (fx, fy, cx, cy, k1, k2, …): its focal
   and radial terms are read from there; a framed photo's frame is its own
   shape where Mapillary gives it. A photo the model could not read in
-  (a worker out of memory) is not cached, and is read on the next fetch;
-  one taken down or made private since (HTTP 400, 403, 404, 410) is
-  cached as skipped.
+  (a worker out of memory) is retried at the next fetch and given up
+  after three tries; one Mapillary has taken down since (HTTP 404, 410, or
+  its "does not exist" answer) is cached as skipped, while a refused token
+  is never read as a missing photo.
   The building bake gives an object material `glass`, from `photos`, when
   its glass walls make at least half the length of its walls read and a
   quarter of all its outer walls, or 15 m and a twentieth of them

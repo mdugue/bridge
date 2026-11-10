@@ -98,10 +98,7 @@ GLASS_NEAR_M = 60.0
 GLASS_IN_FRAME = 0.3
 GLASS_SEQ = 4
 THUMB_PX = 2048  # the thumbnail's long side (thumb_2048_url)
-# an image taken down or made private since its search: cached as skipped
-# (the Graph API answers 400 for an id it no longer has); not 401 (the
-# token), 408 or 429 (the line), which a later fetch may get past
-GONE = (400, 403, 404, 410)
+MAX_FAILS = 3  # a photo that failed this many fetches is given up (`_done`)
 
 BUSY_CALM, BUSY_BUSY = 0.35, 0.7
 DARK_LOW, DARK_HIGH = 0.15, 0.25
@@ -629,6 +626,22 @@ def _cached_json(path: Path, make) -> list[dict]:
     return data
 
 
+def gone(err: urllib.error.HTTPError) -> bool:
+    """Whether an HTTP error says the image is no more: 404 or 410, or the
+    Graph API's 400 for an id it does not have (a GraphMethodException) —
+    never a token's or a permission's error (an OAuthException, a 403),
+    which a later fetch with a good token gets past."""
+    if err.code in (404, 410):
+        return True
+    if err.code != 400:
+        return False
+    try:
+        body = json.loads(err.read() or b"{}")
+    except (ValueError, OSError):
+        return False
+    return body.get("error", {}).get("type") == "GraphMethodException"
+
+
 def _poses(ids: list[str]) -> dict[str, dict]:
     """Each image's computed rotation, thumbnail URL (fetched just before
     use: the URLs expire) and EXIF orientation (`raw_frame`)."""
@@ -645,11 +658,14 @@ def _poses(ids: list[str]) -> dict[str, dict]:
             return json.loads(_get(f"{GRAPH}/?{q}"))
         except urllib.error.HTTPError as err:
             # one image taken down fails its whole batch: ask in halves, and
-            # leave out the one alone (no pose: skipped)
-            if err.code not in GONE:
-                raise
+            # leave out the one alone that is gone (no pose: skipped); a
+            # token's error raises at the first single id
             if len(chunk) == 1:
-                return {}
+                if gone(err):
+                    return {}
+                raise
+            if err.code >= 500 or err.code in (401, 429):
+                raise
             half = len(chunk) // 2
             return one(chunk[:half]) | one(chunk[half:])
 
@@ -740,7 +756,7 @@ def measure_image(job: dict) -> dict:
         dets = _detections(iid, source)
         path, ours = _thumbnail(iid, job["url"], Path(job["scratch"]), source)
     except urllib.error.HTTPError as err:
-        if err.code in GONE:  # taken down: no later fetch will find it
+        if gone(err):  # taken down: no later fetch will find it
             return {"img": iid, "skip": f"gone (HTTP {err.code})"}
         return {"img": iid, "fail": f"HTTPError: {err}"[:200]}
     except (OSError, ValueError) as err:
@@ -788,20 +804,27 @@ def measure_image(job: dict) -> dict:
 
 def _done(path: Path) -> dict[str, set[tuple[str, int, float]] | None]:
     """Per image already in the cache the walls it was read on; None for
-    one that could not be read at all (a skip: it is not asked again)."""
+    one that could not be read at all (a skip, or a failure on MAX_FAILS
+    fetches — the glass cache notes each: it is not asked again)."""
     if not path.exists():
         return {}
     done: dict[str, set[tuple[str, int, float]] | None] = {}
+    fails: collections.Counter = collections.Counter()
     for line in path.read_text().splitlines():
         try:
             r = json.loads(line)
             iid = r["img"]
         except (ValueError, KeyError):
-            continue  # a line cut by a killed run
-        if "skip" in r:
+            continue  # a line cut by a killed run, the read-through line
+        if "fail" in r:
+            fails[iid] += 1
+        elif "skip" in r:
             done[iid] = None
         elif (have := done.setdefault(iid, set())) is not None:
             have.update(wall_key(w) for w in r.get("walls", []))
+    for iid, n in fails.items():
+        if n >= MAX_FAILS and iid not in done:
+            done[iid] = None
     return done
 
 
@@ -992,7 +1015,9 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
                 outcome = "fail" if "fail" in r else "skip" if "skip" in r else "measured"
                 counts[outcome] += 1
                 in_model += outcome == "fail" and r["fail"].startswith("model")
-                if outcome != "fail":
+                # the glass cache notes a failure too: given up after
+                # MAX_FAILS, so one photo cannot keep it from read-through
+                if outcome != "fail" or kind == "glass":
                     f.write(json.dumps(r, separators=(",", ":")) + "\n")
                     f.flush()
             if time.time() - last > 60 or start + 400 >= len(todo):
@@ -1005,9 +1030,9 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
     for leftover in scratch.glob("*.jpg"):
         leftover.unlink()
     if counts["fail"]:
-        model_part = f" ({in_model} of them in the model: memory?)" if in_model else ""
+        model_part = f" ({in_model} of them in the model)" if in_model else ""
         print(f"{tile.id}: {counts['fail']} images failed{model_part} — rerun the fetch")
-    elif kind == "glass":
+    if kind == "glass" and not _todo(jobs, _done(out), True):
         mark_complete(out, plan_key(ws))
 
 

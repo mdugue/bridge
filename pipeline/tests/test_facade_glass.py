@@ -317,3 +317,27 @@ def test_the_windows_bake_keeps_its_glass_where_the_readings_are_not_there(tmp_p
     entry = {"oid": "a", "wi": 0, "L": 10.0, "glass": {"glass": True, "n": 2, "p": 980}}
     out.write_text(json.dumps({"buildings": {"a": [entry, {"oid": "a", "wi": 1, "L": 5.0}]}}))
     assert win.prior_glass(out) == {("a", 0, 10.0): entry["glass"]}
+
+
+def test_a_photo_that_keeps_failing_is_given_up(tmp_path):
+    cache = tmp_path / "c.jsonl"
+    fail = json.dumps({"img": "p", "fail": "HTTPError: 500"})
+    cache.write_text("\n".join([fail] * (facades.MAX_FAILS - 1)))
+    jobs = {"p": {"walls": [{"oid": "a", "wi": 0, "L": 10.0}]}}
+    assert facades._todo(jobs, facades._done(cache), by_wall=True) == ["p"]
+    cache.write_text("\n".join([fail] * facades.MAX_FAILS))
+    assert facades._todo(jobs, facades._done(cache), by_wall=True) == []
+
+
+def test_only_a_missing_image_is_gone_never_a_token():
+    import io
+    import urllib.error
+
+    def err(code, body=b""):
+        return urllib.error.HTTPError("u", code, "x", {}, io.BytesIO(body))
+
+    assert facades.gone(err(404)) and facades.gone(err(410))
+    missing = b'{"error": {"type": "GraphMethodException", "code": 100}}'
+    assert facades.gone(err(400, missing))
+    assert not facades.gone(err(400, b'{"error": {"type": "OAuthException", "code": 190}}'))
+    assert not facades.gone(err(403)) and not facades.gone(err(401))
