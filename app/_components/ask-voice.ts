@@ -400,9 +400,12 @@ export interface Dictation {
   /** why the last attempt heard nothing, in German; null when it did */
   problem: string | null;
   listening: boolean;
-  /** listens for one question and hands it over when it ends */
-  start: (onText: (text: string) => void) => void;
+  /** listens for one question and hands it over when it ends; whether
+   *  the microphone opened */
+  start: (onText: (text: string) => void) => boolean;
   stop: () => void;
+  /** ends listening and drops what was heard */
+  abort: () => void;
   supported: boolean;
 }
 
@@ -442,10 +445,13 @@ export function useDictation(): Dictation {
   const stop = useCallback(() => {
     current.current?.stop();
   }, []);
+  const abort = useCallback(() => {
+    current.current?.abort();
+  }, []);
   const start = useCallback((onText: (text: string) => void) => {
     const Class = recognitionClass();
     if (!Class || current.current) {
-      return;
+      return false;
     }
     const r = new Class();
     r.lang = "de-DE";
@@ -472,14 +478,15 @@ export function useDictation(): Dictation {
       r.start();
     } catch {
       setProblem(dictationProblem("start"));
-      return;
+      return false;
     }
     current.current = r;
     setListening(true);
+    return true;
   }, []);
   useEffect(() => () => current.current?.abort(), []);
   return useMemo(
-    () => ({ listening, problem, start, stop, supported }),
-    [listening, problem, start, stop, supported]
+    () => ({ abort, listening, problem, start, stop, supported }),
+    [abort, listening, problem, start, stop, supported]
   );
 }

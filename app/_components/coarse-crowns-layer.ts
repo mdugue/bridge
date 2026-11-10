@@ -220,12 +220,6 @@ export function* coarseCrownSteps(
   return {
     group,
     chunks: [],
-    applyLook: () => {
-      // the crown uniforms are the scene's: the look reaches these through
-      // whichever control writes it
-    },
-    multiTuft: () => false,
     setSeason: (day) => applySeasons(seasons, day),
-    updateLod: () => false,
   };
 }

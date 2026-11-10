@@ -48,7 +48,6 @@ export interface CameraStateJson {
 }
 
 export interface SnapshotLook {
-  multiTuft?: boolean;
   /** the picture style; absent in older snapshots (they keep the current one) */
   style?: RenderStyle;
   /**
@@ -171,10 +170,7 @@ function checkDate(v: unknown): string {
 }
 
 function checkLookFlags(look: Record<string, unknown>): void {
-  for (const key of [
-    "multiTuft",
-    ...DATA_LAYERS.map((def) => def.snapshotKey),
-  ]) {
+  for (const key of DATA_LAYERS.map((def) => def.snapshotKey)) {
     if (look[key] !== undefined && typeof look[key] !== "boolean") {
       throw new SnapshotError(`look.${key} must be a boolean`);
     }
@@ -200,17 +196,14 @@ function checkLook(v: unknown): SnapshotLook {
 
 /**
  * The persisted document for the live values: one `<snapshotKey>` percent per
- * table row, the two flags, the data layers and the sun instant. What Copy writes.
+ * table row, the style, the data layers and the sun instant. What Copy writes.
  */
 export function encodeSnapshot(
   look: LookValues,
   camera: CameraStateJson,
   date: Date
 ): Snapshot {
-  const lookJson: SnapshotLook = {
-    multiTuft: look.multiTuft,
-    style: look.style,
-  };
+  const lookJson: SnapshotLook = { style: look.style };
   for (const def of LOOK_CONTROLS) {
     lookJson[def.snapshotKey] = Math.round(look[def.key] * 100);
   }
@@ -228,7 +221,7 @@ export function encodeSnapshot(
 /**
  * The look values a parsed snapshot carries, as a store patch: every percent
  * key that is present (older snapshots omit newer controls, which keep their
- * current value) and each of the two flags and the data layers when present;
+ * current value) and the style and the data layers when present;
  * a removed control's key is left out. Ranges are clamped by the store on
  * apply. What Apply reads.
  */
@@ -244,9 +237,6 @@ export function decodeLook(
     if (typeof raw === "number") {
       patch[def.key] = raw / 100;
     }
-  }
-  if (look.multiTuft !== undefined) {
-    patch.multiTuft = look.multiTuft;
   }
   if (look.style !== undefined) {
     patch.style = look.style;
@@ -297,4 +287,84 @@ export function parseSnapshot(text: string): SnapshotParse {
     }
     throw error;
   }
+}
+
+/**
+ * A view link (plan 048): the snapshot in the address's query,
+ * `/<site>?snap=<base64url of its JSON>` — a query, not a fragment, so a
+ * link shows in the host's request log and sits beside other parameters.
+ * It reaches the host when opened (the privacy page says so); the crash
+ * trail keeps only the QA knobs of a query (crash-trail.ts `trailUrl`),
+ * so no report carries it. The link carries the snapshot exactly as *Kopieren* writes it and means
+ * what pasting that does: no second format, the same `parseSnapshot`.
+ */
+export const SNAPSHOT_PARAM = "snap";
+
+/** A param longer than this is refused unread (a whole snapshot is ≈ 0.4 KB). */
+export const SNAPSHOT_PARAM_MAX = 4096;
+
+const BASE64URL = /^[\w-]*$/u;
+
+function toBase64Url(text: string): string {
+  let binary = "";
+  for (const byte of new TextEncoder().encode(text)) {
+    binary += String.fromCodePoint(byte);
+  }
+  return btoa(binary)
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/[=]+$/u, "");
+}
+
+/** The UTF-8 text a base64url param holds, or null. */
+function fromBase64Url(param: string): string | null {
+  if (!BASE64URL.test(param)) {
+    return null;
+  }
+  try {
+    const padded =
+      param.replaceAll("-", "+").replaceAll("_", "/") +
+      "=".repeat((4 - (param.length % 4)) % 4);
+    const bytes = Uint8Array.from(atob(padded), (c) => c.codePointAt(0) ?? 0);
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
+/** The `snap` value of a view link: the snapshot's JSON, base64url. */
+export function snapshotToParam(snapshot: Snapshot): string {
+  return toBase64Url(JSON.stringify(snapshot));
+}
+
+/** A view link's `snap` value, read back through `parseSnapshot`; never throws. */
+export function snapshotFromParam(param: string): SnapshotParse {
+  if (param.length > SNAPSHOT_PARAM_MAX) {
+    return { ok: false, reason: "View link too long" };
+  }
+  const text = fromBase64Url(param);
+  return text === null
+    ? { ok: false, reason: "View link is not base64url" }
+    : parseSnapshot(text);
+}
+
+/**
+ * `<path>?snap=…`: the page at `path`, opened at the snapshot's view. A
+ * query `path` already has (a QA knob, `/dresden?safety=3`) is kept, and
+ * `snap` set after it.
+ */
+export function snapshotHref(path: string, snapshot: Snapshot): string {
+  const at = path.indexOf("?");
+  const params = new URLSearchParams(at === -1 ? "" : path.slice(at));
+  params.set(SNAPSHOT_PARAM, snapshotToParam(snapshot));
+  return `${at === -1 ? path : path.slice(0, at)}?${params.toString()}`;
+}
+
+/**
+ * The view a page was opened with (its `?snap=…`, given `location.search`),
+ * or null when the query names none.
+ */
+export function snapshotFromSearch(search: string): SnapshotParse | null {
+  const param = new URLSearchParams(search).get(SNAPSHOT_PARAM);
+  return param === null ? null : snapshotFromParam(param);
 }

@@ -218,3 +218,23 @@ def test_a_quarter_that_still_fails_at_the_deepest_split_raises(monkeypatch):
     monkeypatch.setattr(facades, "_get", get)
     with pytest.raises(facades.Transient):
         facades._search("images", {"fields": "id"}, (X0, Y0, X0 + 200, Y0 + 200), to_wgs)
+
+
+def test_an_openings_head_reads_straight_segmental_or_round():
+    from bake.facade_traits import openings
+
+    h, w = 300, 400
+    holes = np.zeros((h, w), bool)
+    yy, xx = np.mgrid[0:h, 0:w]
+    holes[40:76, 20:44] = True  # straight, 1.2 × 1.8 m
+    holes |= ((yy >= 60) & (yy < 100) & (xx >= 100) & (xx < 124)) & (
+        (yy >= 72) | (np.hypot(xx - 111.5, yy - 71.5) <= 12)
+    )  # a Rundbogen
+    r = (12 * 12 + 4.8 * 4.8) / (2 * 4.8)
+    holes |= ((yy >= 60) & (yy < 100) & (xx >= 200) & (xx < 224)) & (
+        np.hypot(xx - 211.5, yy - (60 + r) + 0.5) <= r
+    )  # a Stichbogen
+    got = {o[0]: o for o in openings(holes, np.ones((h, w), bool), 5, 290)}
+    assert got[100][2:] == [120, 180, 1000, 1000]
+    assert got[500][4:] == [0, 0]
+    assert got[1000][4] < 600 and got[1000][5] == 0

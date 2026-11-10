@@ -3,7 +3,12 @@ import type { Camera } from "three/webgpu";
 import { hitsInSets } from "@/lib/city/ask-solids";
 import type { AskHit, AskSet } from "@/lib/city/ask-solids";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
-import { objectLook, TOLERANCE_PX } from "@/lib/city/inquiry";
+import {
+  isPorous,
+  objectLook,
+  thingKey,
+  TOLERANCE_PX,
+} from "@/lib/city/inquiry";
 import type { Inquiry, InquiryObject } from "@/lib/city/inquiry";
 import {
   buildingKey,
@@ -252,49 +257,6 @@ export type OutlineSubject =
   | { building: BuildingPart[] }
   | { thing: AskHit<FeatureInquiry> };
 
-/** A thing's key for the vote: one per tree, monument, deck, counted
- *  section, counter. */
-function thingKey(t: FeatureInquiry): string {
-  switch (t.kind) {
-    case "tree":
-    case "traffic": {
-      return `${t.kind}:${t.tile}:${t.index}`;
-    }
-    case "bikes": {
-      return `bikes:${t.id}:${t.position.join(",")}`;
-    }
-    case "design": {
-      return `design:${t.file}:${t.partIndex}`;
-    }
-    case "bridge":
-    case "monument":
-    case "canopy":
-    case "furniture":
-    case "hedge":
-    case "lamp":
-    case "landing":
-    case "stop": {
-      return `${t.kind}:${t.tile}:${t.position.join(",")}`;
-    }
-    default: {
-      const unknown: never = t;
-      throw new Error(`unknown inquiry kind: ${String(unknown)}`);
-    }
-  }
-}
-
-/** The kinds whose stand-in is wider than what it stands for (a crown, a
- *  hedge) or lies flat on the ground (a playground): chosen only when
- *  nothing solid stands behind them. */
-function porous(t: FeatureInquiry): boolean {
-  return (
-    t.kind === "tree" ||
-    t.kind === "canopy" ||
-    t.kind === "hedge" ||
-    (t.kind === "furniture" && t.properties.k === "playground")
-  );
-}
-
 /** How far a ray looks for a thing when no building stops it (m). */
 const FAR = 6000;
 const CENTRE = new Vector2(0, 0);
@@ -425,7 +387,7 @@ export function createInquiryProbe(deps: {
         distance: thing.distance,
         hit: { thing },
         key: thingKey(thing.target),
-        porous: porous(thing.target),
+        porous: isPorous(thing.target),
       })),
     ].sort((a, b) => a.distance - b.distance);
     // (a design stands on ground pressed under it, which the ground's

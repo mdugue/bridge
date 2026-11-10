@@ -161,7 +161,7 @@ export interface CrownSeasonNodes {
    *  its thin shadow, whatever the style or the shadow camera's texel */
   keepShadow: Node<"bool">;
   /** how much of the fragment is twig (0 leaf or 1 twig): the lit pass
-   *  tints it grey-brown and takes its shimmer away */
+   *  tints it grey-brown */
   twig: F;
   /** the twig colour (linear, as `new Color(hex)` holds it), mixed in by
    *  `twig` */

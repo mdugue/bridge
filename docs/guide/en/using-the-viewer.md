@@ -129,10 +129,10 @@ says how far and offers where to go instead: one of the vantage points, a
 spot you pick on the map, or staying where you are. If you stand in
 another city this site also shows, the window says so first and offers to
 jump there: its viewer opens with you standing where you are (the
-position travels in the link's fragment, which never reaches the server).
-Browsers ask for permission first
-(iPhones for the compass too); the location never leaves the device — not
-even in a crash report (see *When it crashes*).
+position travels in the link's query, `?at=`, so the host's request log
+records it when you follow the link). Browsers ask for permission first
+(iPhones for the compass too); otherwise the location never leaves the
+device — not even in a crash report (see *When it crashes*).
 
 *Live* appears as soon as your phone reports compass readings (an iPhone
 asks for permission on the first tap; a computer without a compass never
@@ -468,9 +468,11 @@ The button in the corner opens a panel with three tabs.
   ([privacy](/datenschutz#frag-die-stadt)). Also from *Fragen* in the
   toolbar. As a **voice guide**: *Sprechen* takes a question by
   microphone (where the browser recognises speech), *Vorlesen* reads the
-  answers aloud, and the *Hörmodus* softly darkens the edges and lets
-  the scene rest — for walking with the phone in your pocket, together with
-  *Live* in the toolbar. "What is that up ahead?" asks the city model
+  answers aloud (switched on, the last one at once), and the *Hörmodus*
+  softly darkens the edges and lets the scene rest — for walking with
+  the phone in your pocket, together with *Live* in the toolbar; ending
+  it ends the reading it switched on. Stopping an answer halts it, and
+  the view stays where it is. "What is that up ahead?" asks the city model
   what stands at the centre of the view (in Modell: where it is aligned)
   and opens its card.
 - **Steuerung** ("controls") — the full controls table, folded until you
@@ -493,11 +495,11 @@ The button in the corner opens a panel with three tabs.
   rest (they draw in their own light); a note says so, and switching the
   style back brings the time set back.
 - **Darstellung** ("look") — the **Bildstil** (picture style) on top,
-  then the one slider left, *Nebel* (the distance haze, a percentage),
-  and the *Multi-Tuft-Kronen (nah)* switch (rich multi-tuft crowns near
-  the camera; off = the cheap crown everywhere). *Zurücksetzen* ("reset")
-  returns both to their start values and leaves the picture style as it
-  is. The rest of the look is fixed (below).
+  then the one slider left, *Nebel* (the distance haze, a percentage).
+  *Zurücksetzen* ("reset") returns it to its start value and leaves the
+  picture style as it is. The rest of the look is fixed (below), the
+  trees too: near the camera they always wear their rich multi-tuft
+  crown, as far as the city's budget goes.
 
 A picture style draws the same city another way; switch it at any time,
 with a click or with `V`. The browser remembers the last style for your
@@ -542,8 +544,6 @@ knowledge base use for them:
 | Vegetation | *Bodendetail* | kerbs, lawn edges, parking bays, road markings (crossings, stop, cycle and centre lines), the gardens of allotment colonies and the paving underfoot (asphalt, slabs, cobbles from OpenStreetMap), the mown stripes and grain of sports grounds, visible up close |
 | | *Stadtgrün* | paints green courtyards, front gardens and parks inside built-up areas, and the railway's green embankments, like meadow, from the infrared aerial photo |
 | | *Wiesenfärbung* | tints meadows lush-to-dry from the infrared aerial photo |
-| | *Gegenlicht-Schimmer* | backlight shimmer on crowns between you and the sun |
-| | *Blattdurchscheinen* | translucency of nearby, large crowns (shadow-dependent) |
 | Rendering | *Kontaktschatten* | ambient-occlusion contact shadows in corners and under eaves |
 | | *Himmelslicht* | narrow courtyards and street canyons get less skylight than open meadows — precomputed from the terrain and the building model |
 | | *Ferne Schatten* | shadows beyond the ordinary shadow range: the long shadows of distant buildings and slopes at a low sun, and in the distance the shadows of the buildings next door too |
@@ -551,17 +551,24 @@ knowledge base use for them:
 | | *Papierkorn* | the paper grain over the whole image (running film grain in *Film noir* and *Sin City*) |
 | | *Tuschelinien* | how strong the outlines are in *Comic*, *Film noir*, *Sin City*, *Papier* and *Strich* |
 
-Three more effects belong to the fixed look. The mist over the river
-drifts over the water from about 120 m ahead, denser only far off. The photographic
-depth of field blurs only what lies behind the focus (the foreground stays
-sharp), and the focus is always what lies at the centre of the view. While
-the camera moves, the blur is switched off (the eye cannot resolve it in
-motion) and comes back when you stop. Phones draw without it: the blur
-needs more graphics memory than a phone can spare for a hint a small
-screen barely shows. And while you walk, turn or fly in the pastel look,
-the picture is smeared slightly along the camera's movement, as a camera
-with a short exposure would show it; on phones too, at no extra memory.
-The other picture styles and Modell keep their sharp lines.
+Three more effects belong to the fixed look. The mist over the river drifts
+over the water from about 120 m ahead, denser only far off. The photographic
+depth of field blurs what lies behind the focus and what stands before it (a
+tree at the edge of the view, a lamp close by, the street at your feet), as
+a real lens does, and the focus is always what lies at the centre of the
+view, a tree as much as a facade. It blurs as much as a real camera with
+this view's angle and the opening of a 50 mm lens at f/1.8 would: focused on
+a facade down the street, the city behind it stays all but sharp while a
+tree a few steps away goes soft; focused on a lamp post close by, the
+background goes soft. When nothing lies at the centre (the sky), the lens
+focuses far. While the camera moves, the blur is switched off (the eye
+cannot resolve it in motion); when you stop, it grows back in over most of a
+second, as a lens pulls focus. Phones draw without it: the blur needs more
+graphics memory than a phone can spare for a hint a small screen barely
+shows. And while you walk, turn or fly in the pastel look, the picture is
+smeared slightly along the camera's movement, as a camera with a short
+exposure would show it; on phones too, at no extra memory. The other picture
+styles and Modell keep their sharp lines.
 
 ### Erweitert ("Advanced")
 
@@ -621,10 +628,15 @@ The other picture styles and Modell keep their sharp lines.
   element with its type and GlobalId, a plan's surface by its class, a
   glTF's or OBJ's object by its name — and where the design stands.
 - **Snapshot** — *Kopieren* copies your exact position, the date and time,
-  the picture style, *Nebel*, the crown switch and the data layers as a
+  the picture style, *Nebel* and the data layers as a
   small JSON text; paste such a text into the box and press *Anwenden* to
-  restore it. This is how a specific view is shared or reproduced for a
-  screenshot. A snapshot from before the look was fixed still loads; the
+  restore it. *Link kopieren* copies a link to this page that opens at the
+  same view (the snapshot rides in the address's query, `?snap=`, so the
+  host's request log records it whenever the link is opened; crash reports
+  leave it out); it carries the camera's place, after *Standort* or *Live*
+  your own. This is how a
+  specific view is shared or reproduced for a screenshot. A snapshot from
+  before the look was fixed still loads; the
   sliders it names are ignored. A malformed snapshot is rejected with a
   message instead of breaking the scene.
 - **Qualität** ("quality") — the step the viewer draws at on your device

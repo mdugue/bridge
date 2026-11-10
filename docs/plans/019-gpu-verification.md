@@ -22,9 +22,9 @@
 - **Effort**: M (one to two days of looking, plus the tuning it finds);
   sections can be done in separate sittings
 - **Risk**: LOW — observation and constants
-- **Depends on**: none; plan 048 part B (committed QA views) makes it
-  repeatable — if 048 has landed, use `qa/views/*.json` instead of
-  hand-made snapshots
+- **Depends on**: none; plan 048 part B (committed QA views) has landed:
+  use [`qa/views/`](../../qa/views/README.md) instead of hand-made
+  snapshots
 - **Planned at**: commit `2c2f228`, 2026-09-24; rewritten 2026-10-01 as
   the single GPU checklist (the old before/after-branch method is gone:
   the branch it compared is long merged)
@@ -54,24 +54,47 @@ bun dev        # bakes public/data, then serves https://localhost:3000 (self-sig
   `?gpu=webgl2` forces the WebGL2 backend (`app/_components/scene-profile.ts`).
   Check sections A–G on **both**.
 - **Snapshots**: the in-app Snapshot panel ("Kopieren") copies the camera,
-  the time and the look as JSON. Save it as `shots/<name>.json`, then
+  the time and the look as JSON ("Link kopieren": a link that opens
+  there). Save it as `shots/<name>.json`, then
   `bun run shots` (headed, full profile) writes `shots/<name>.png`. Never
   judge from `?scene=lite` (AGENTS.md: lite is for CI only).
 - **Oblique angles**, never only head-on (AGENTS.md: a tree through a
   bridge is invisible from straight above).
-- **Reference views** (make each once, keep the JSON; plan 048 commits
-  them as `qa/views/`):
+- **Reference views** are committed (plan 048): `qa/views/<name>.json`,
+  written by `bun scripts/qa-views.ts` from the data. Their index,
+  [`qa/views/README.md`](../../qa/views/README.md), says what each
+  checks and gives its link (`/dresden?snap=…`: put the preview's or
+  production's origin in front — on a phone too). `bun run shots`
+  renders them as
+  `shots/qa-<name>.png` (`-- --grep qa-<name>` for one). The poses were
+  computed, not looked at: a view framed badly is fixed in the
+  generator's table, under its name.
 
 | View | Where / when | Used by |
 |---|---|---|
-| `shore-eye` | Elbe bank below the Brühlsche Terrasse at eye level, 11:00 | B, K (riverside) |
-| `meadow-eye` | Großer Garten edge at eye level, 17:30 | B, K (trees, NDVI) |
-| `seam-eye` | on a tile border at eye level, looking across (e.g. E 412 000 in the Neustadt) | D, K (rails, walls, fences across a seam) |
-| `seam-fly` | 200 m above a four-tile corner (E 412 000 / N 5 658 000), pitched −35° | D, E |
+| `shore-eye` | Elbe bank below the Brühlsche Terrasse (the landing stage) at eye level, 11:00 | B, K (riverside) |
+| `meadow-eye` | Großer Garten's lawn towards the Palais at eye level, 17:30 | B, K (trees, NDVI) |
+| `seam-eye` | Antonstraße across the seam at E 412 000 at eye level, sun behind | D, K, M (shadow camera) |
+| `seam-fly` | 200 m above the four-tile corner (E 412 000 / N 5 658 000), pitched −35° | D, E, M |
 | `oblique-400` | 400 m up, oblique over the Altstadt | D, H |
-| `low-sun` | Neumarkt, 07:30 on 21 December | E |
-| `roof-close` | a roof at 30 m, 13:00 | C |
-| `night-street` | Hauptstraße (Neustadt) at eye level, 21:00 | K (lamps, shop glow), G (noir) |
+| `low-sun` | Neumarkt, **09:00** on 21 December (07:30 is before sunrise) | E |
+| `roof-close` | Neustadt roofs from ≈ 30 m above them, 13:00 | C |
+| `night-street`, `night-street-noir` | Hauptstraße (Neustadt) at eye level, 21:00 in September | K (lamps, shop glow), G (noir) |
+
+Section M's views: `street-crossings` and `street-crossings-comic`
+(FXAA), `ao-wall-foot` (AO in one byte), `pitches-200` (the coarse
+level without sports grounds), `seam-eye` and `seam-fly` (the shadow
+camera's stream), `oblique-400-paper`, `-line`, `-figure` (dropped CPU
+copies), `ask-cone-tree`, `ask-round-crown`, `ask-bridge` and
+`traffic-albertstrasse` (the outline); `modell-comic` opened with
+`?gpu=webgl2&trail=1` for the recovery checks. Section N's:
+`modell-iso-low`, `modell-iso-high`, `modell-plan-low`,
+`modell-plan-high`, `modell-iso-line` against `modell-fly-low`
+(Modell); `frozen-start`, `neumarkt-dusk`, `elbufer-evening` (plan
+073). The black squares (plan 049) need no view: the start of
+`/leipzig` and `/hamburg` (`SHOTS_SITE`). The other plans' device
+checks have theirs in the index (069, 070, 071, 076, 077, 078, 080,
+083, 084).
 
 ## Checks
 
@@ -121,15 +144,15 @@ bun dev        # bakes public/data, then serves https://localhost:3000 (self-sig
 - [ ] `low-sun`: long shadows of buildings behind the camera stay (the sun's
   shadow camera is a streaming camera); turning on the spot at `seam-eye`
   never blinks a shadow (`displayActiveTiles`).
-- [ ] Fly up from eye level to 600 m: the shadow frustum grows in octaves
-  (`lib/city/shadow-fit.ts`, 110 → 880 m) without visible jumps; the
-  shadowed patch sits where the camera looks.
-- [ ] Past the frustum, the baked horizon (ADR 0009) takes over without a
-  seam: the near band fades in over the frustum's last 20 %
-  (`hzSunVisible`, sky-light.ts); look at the hand-over ring at a low sun.
-- [ ] Eye-level shadows clip ahead at a low sun? If long shadows visibly
-  end a few tens of metres ahead, note it — the backlog's "shadow centre
-  biased ahead at eye level" (README, Open work 11) is the fix to try.
+- [ ] Fly up from eye level to 600 m: no visible seam or jump where one of
+  the four rings (`lib/city/shadow-rings.ts`, half-sizes 80 … 2160 m)
+  cross-fades into the next, and none when a ring redraws after drifting
+  (`seam-fly`, `oblique-400`).
+- [ ] Past the widest ring, the baked horizon (ADR 0009) takes over without
+  a seam (`hzSunVisible`, sky-light.ts); look at the hand-over at a low
+  sun.
+- [ ] Eye-level shadows at a low sun, looking along the light (`low-sun`):
+  long shadows do not end a few tens of metres ahead.
 - [ ] Night: after dusk no tile stays pinned where the last daytime shadow
   was (plan 038 step 1 — check `getGpuDebug()` after a night flight).
 - Knobs: `shadow.radius`, `bias` in `app/_components/sun-rig.ts` (keep
@@ -153,11 +176,12 @@ bun dev        # bakes public/data, then serves https://localhost:3000 (self-sig
 - [ ] Each style (key `V`: Comic, Film noir, Sin City, Papier) at
   `oblique-400`, `night-street` and eye level: ink lines calm (no crawling
   on grazing streets), tone as intended, no NaN-black pixels.
-- [ ] Papier: fences, walls and stairs show from both sides; winter crowns
-  are bare, not solid (plan 039 step 4); the style switch does not hitch
-  once the scene is idle (`PostStack.warmStyles`).
+- [x] Papier: a wall shows from both sides (judged 2026-11-05 on a Mac GPU,
+  plan 039 step 4; winter crowns are whole on purpose).
+- [ ] Papier: the style switch does not hitch once the scene is idle
+  (`PostStack.warmStyles`), with the double-sided stand-ins' programs.
 - [ ] Sin City rain after an hour in the style still falls in streaks, not
-  columns (plan 039 step 2).
+  columns (plan 039 step 2; an arithmetic fix, not watched for an hour).
 - [ ] Film noir's lamp cones at night under every lamp.
 
 ### H. Frame time and memory (desktop)
@@ -179,6 +203,15 @@ bun dev        # bakes public/data, then serves https://localhost:3000 (self-sig
   fly-over on each backend.
 - [ ] The water and mist sheets: count their triangles per frame
   (`renderer.info`) — the backlog's item 8 is ranked on a pre-TIN count.
+- Measured 2026-11-05 on an M1 Max (WebGPU, Chromium, 1600 × 1000 at 2×;
+  the rings, plan 083): frames at vsync, 16.7 ms median at `oblique-400`,
+  `ask-frauenkirche`, `seam-eye` and `night-street`; `seam-eye` and the
+  traffic layer on drop frames (p95 33 ms). Boot: ready in 6.8–8.0 s,
+  `boot:veil-to-loaded` 3.9–4.1 s. Memory over three rounds of jumps across
+  the site: 951 MB held at the start, 1 349 MB after the first, the same
+  after the second and the third (cache 1.29 of 1.72 GB, CPU 449 MB): it
+  settles. Jumps, not flights: hitches on the way, the other GPU and the
+  rest of this section stay open.
 - Knobs: the tile cache (`tileCacheBytesFor`, `scene-profile.ts`),
   `errorTarget`.
 
@@ -625,8 +658,8 @@ so there is nothing to listen to.
 
 Not checks of something built — judgements the backlog waits for:
 the pixel-ratio drop while moving (README Open work 6, needs a ~1 s hold),
-atmospheric motes (7), the geometry kit's winding unification (21, plan
-046's maintenance note: needs a headed before/after comparison), and a
+atmospheric motes (7), the geometry kit's winding unification (21:
+needs a headed before/after comparison), and a
 user-facing quality tier (Direction 5).
 
 ### M. The phone crash fixes (2026-10-06, ADRs 0047–0048)
@@ -706,6 +739,28 @@ desktop use Chrome with WebGPU and repeat with `?gpu=webgl2`.
   that stays without network for a minute of a visible page shows *Keine
   Verbindung zum Server* with *Erneut versuchen*. A reload while tiles
   load sends no `load-error` or `boot failed` report.
+
+### N. Left by plans closed on 2026-11-04
+
+Each line comes from a record in [completed.md](./completed.md); the
+record says what was built.
+
+- [ ] **Modell (plan 055).** In Isometrie and Lageplan at a low and a
+  high sun: the specular and halo terms (their branches are built for
+  the perspective camera; the parallel one stands 20 km back), the water's
+  glitter, and *Strich*'s washes — no flat, blown or missing term
+  against the same view in Fliegen.
+- [ ] **Black squares (plan 049).** Small black squares showed in some
+  headless SwiftShader shots of the non-Dresden sites (one dressing
+  layer): look once with `bun run shots` on Leipzig and Hamburg.
+- [ ] **The frozen look (plan 073).** Plates of the fixed look table
+  against production at the PR's three snapshots (the start view, the
+  Neumarkt at dusk, the Neustädter Elbufer in the June evening sun);
+  then measure what the fixed terms cost on a phone (the clay's windows
+  and facade reading, the ground detail) and, with a plate pair each,
+  delete the terms that compute nothing visible under the full
+  *Spiegelung* (the glass sheen in `clayGlow`, the gilding's and the
+  water's stand-ins).
 
 ## STOP conditions
 

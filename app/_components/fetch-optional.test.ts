@@ -211,6 +211,34 @@ test("an abort ends the wait at once, the work behind it going on for whoever el
   ).rejects.toBe(failure);
 });
 
+test("a wait that settles first takes its abort listener with it", async () => {
+  // a long-lived signal waited on again and again (a late part's): the
+  // listeners it holds, counted as they are added and as their own
+  // `signal` option removes them
+  let held = 0;
+  const signal = {
+    aborted: false,
+    reason: undefined,
+    addEventListener: (
+      _type: string,
+      _listener: () => void,
+      options?: AddEventListenerOptions
+    ) => {
+      held += 1;
+      options?.signal?.addEventListener("abort", () => {
+        held -= 1;
+      });
+    },
+  } as unknown as AbortSignal;
+  for (let i = 0; i < 3; i += 1) {
+    expect(await untilAborted(Promise.resolve(i), signal)).toBe(i);
+  }
+  await expect(
+    untilAborted(Promise.reject(new Error("decode")), signal)
+  ).rejects.toThrow("decode");
+  expect(held).toBe(0);
+});
+
 test("an attempt that goes silent is cut and asked for again", async () => {
   jest.useFakeTimers();
   let calls = 0;

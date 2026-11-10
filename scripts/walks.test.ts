@@ -14,7 +14,8 @@ import { WALKS_DIR, walkProblems } from "../lib/city/walks";
 import type { Walk } from "../lib/city/walks";
 import { SITES } from "../sites";
 import { monumentsOf } from "./bake-stadtwissen";
-import type { MonumentCollection } from "./bake-stadtwissen";
+import { parseBakeFile } from "../lib/city/bake-file";
+import { MONUMENTS_FILE } from "../lib/city/monuments-file";
 import { readDgmFile } from "./dgm-cache";
 import { siteDgm } from "./line-levels";
 
@@ -114,7 +115,11 @@ for (const { site, walks } of sitesWithWalks) {
           );
           return existsSync(file)
             ? monumentsOf(
-                JSON.parse(readFileSync(file, "utf-8")) as MonumentCollection
+                parseBakeFile(
+                  MONUMENTS_FILE,
+                  JSON.parse(readFileSync(file, "utf-8")),
+                  file
+                )
               ).map((m) => m.id)
             : [];
         })
