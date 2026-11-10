@@ -626,19 +626,6 @@ export function nearestCityHit(
   return best;
 }
 
-/** Whether a building tile without a BVH lies on the ray before `far`:
- *  a ray that asks only built tiles (`nearestCityHit`, not building)
- *  may have passed through a facade there. */
-export function unbuiltOnRay(
-  raycaster: Raycaster,
-  layers: readonly CityLayer[],
-  far: number
-): boolean {
-  return layersOnRay(raycaster.ray, far, layers).some(
-    ({ enter, layer }) => enter <= far && !layer.hasBvh()
-  );
-}
-
 /**
  * The building tile nearest world (x, z) without a BVH, within `reach` m
  * of its box (in plan; 0 inside it), or null: the one create-app.ts builds

@@ -140,7 +140,6 @@ import {
   countBuildings,
   ensureCityBvh,
   nearestCityHit,
-  unbuiltOnRay,
   nearestWithoutBvh,
   pickCityObject,
 } from "./city-layer";
@@ -3069,12 +3068,6 @@ async function bootApp(
   focusRaycaster.far = 6000;
   const focusCrosshair = new Vector2(0, 0);
   let lastFocusHit: { dist: number; name: string } | null = null;
-  // the last focus ray passed through a building tile without its BVH: its
-  // aim may lie behind a facade, so an export and a plate wait for the
-  // next (`focusSettled`)
-  let focusBlind = false;
-  const focusSettled = () =>
-    postStack.getFocusInfo().settled && !(focusBlind && postStack.lensWanted());
   const focusAt = new Vector3();
   // What the probe can ask that the lens can focus on, without a copy ten
   // times a second: the built ask sets of every visible tile whose sets'
@@ -3137,16 +3130,6 @@ async function bootApp(
     );
     return designThing ?? tileThing;
   };
-  // whether a building tile without its BVH lies before the nearest of
-  // the focus ray's answers — within the reach the near tiles get theirs
-  // (`BVH_NEAR_M`): a far one never does, and lies past the lens's depth
-  const noteFocusBlind = (...answers: (number | null | undefined)[]) => {
-    let nearest = BVH_NEAR_M;
-    for (const t of answers) {
-      nearest = Math.min(nearest, t ?? nearest);
-    }
-    focusBlind = unbuiltOnRay(focusRaycaster, stream.visibleCities(), nearest);
-  };
   const updateFocus = () => {
     focusRaycaster.setFromCamera(focusCrosshair, camera);
     // Only the tiles whose BVH is built: the focus never builds one (ten
@@ -3165,7 +3148,6 @@ async function bootApp(
       groundAt ?? hit?.distance ?? focusRaycaster.far,
       hit?.distance ?? focusRaycaster.far
     );
-    noteFocusBlind(thing?.distance, groundAt, hit?.distance);
     if (thing) {
       const point = focusRaycaster.ray.at(thing.distance, new Vector3());
       lastFocusHit = { dist: thing.distance, name: thing.target.kind };
@@ -3712,7 +3694,7 @@ async function bootApp(
     const waiting =
       !capture &&
       captureQueue.length > 0 &&
-      (sunRig.shadowBusy() || !focusSettled());
+      (sunRig.shadowBusy() || !postStack.getFocusInfo().settled);
     captureHeldFrom = waiting ? (captureHeldFrom ?? performance.now()) : null;
     if (
       captureHeldFrom !== null &&
@@ -4575,7 +4557,6 @@ async function bootApp(
     },
     getFocusDebug: () => ({
       ...postStack.getFocusInfo(),
-      settled: focusSettled(),
       hitDist: lastFocusHit?.dist ?? null,
       hitName: lastFocusHit?.name ?? null,
     }),
