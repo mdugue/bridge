@@ -210,6 +210,9 @@ def test_a_flagpole_stands_with_its_height_and_the_flag_the_map_names():
     assert "c" not in _props("flag", '"flag:type"=>"municipal","country"=>"DE"')
     assert _props("flag", '"flag:type"=>"national","country"=>"DE"')["c"] == "de"
     assert _props("flag", '"flag:wikidata"=>"Q122482"')["c"] == "eu"
+    # a flag that names its own item (Saxony's) is no German flag
+    assert "c" not in _props("flag", '"flag:wikidata"=>"Q693701","country"=>"DE"')
+    assert _props("flag", '"flag:name"=>"Bundesflagge","country"=>"DE"')["c"] == "de"
     assert _props("flag", '"subject:wikidata"=>"Q1202"')["c"] == "sn"
     assert _props("flag", '"country"=>"DE;EU"')["c"] == "de"  # a list: its first drawn one
     assert _props("flag", '"country"=>"EU;DE"')["c"] == "eu"
@@ -225,15 +228,17 @@ def test_a_flagpole_stands_with_its_height_and_the_flag_the_map_names():
     assert _props("flag", '"flag:type"=>"advertising","flag:name"=>"Netto"') == {"k": "flag"}
 
 
-def test_a_flagpole_on_a_building_outline_counts_as_on_its_roof():
+def test_a_flagpole_on_a_building_outline_counts_as_on_its_roof(monkeypatch):
+    import numpy as np
     import shapely
 
-    from bake.furniture import Facades
+    from bake import furniture
 
-    facades = Facades.__new__(Facades)
-    facades.areas = [shapely.box(0, 0, 10, 10), shapely.box(20, 0, 30, 10)]
-    # the second is a petrol station's canopy (`building=roof`)
-    facades.roofs = facades.areas[:1]
+    # a house, and a petrol station's canopy (`building=roof`)
+    geoms = np.array([shapely.box(0, 0, 10, 10), shapely.box(20, 0, 30, 10)])
+    kinds = np.array(["house", "roof"])
+    monkeypatch.setattr(furniture, "read_osm", lambda *_: (geoms, {"building": kinds}))
+    facades = furniture.Facades(None)
     assert facades.inside(shapely.Point(5, 5))
     # a node of the building's way: on its line
     assert facades.inside(shapely.Point(10, 10))

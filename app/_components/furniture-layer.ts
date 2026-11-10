@@ -796,7 +796,8 @@ function flagsOf(cell: Stood[]): Instances[] {
           height: FLAG_HEIGHT * piece.scaleY,
         }))
       ),
-      cell
+      cell,
+      "flag"
     )
   );
 }
@@ -1063,14 +1064,17 @@ function byCell(stood: Stood[]): Stood[][] {
 /** Marks a set as a cell's, with the box its pieces stand in (scene frame,
  *  a few metres for the pieces' own size) and the band it shows in (a
  *  flag's, `FLAG_IN_M`, else `FURNITURE_IN_M`). */
-function asCell(mesh: Instances, stood: Stood[]): Instances {
+function asCell(
+  mesh: Instances,
+  stood: Stood[],
+  model?: FurnitureModel
+): Instances {
   const box = new Box3();
   for (const s of stood) {
     box.expandByPoint(s.at);
   }
   mesh.userData.furnitureCell = box.expandByScalar(3);
-  // a cell is one model's (its cloths and hands go with it)
-  const model = stood[0]?.piece.model;
+  // the model whose cell it is (its cloths and hands go with it)
   const reach = model && FURTHER_REACH[model];
   if (reach) {
     mesh.userData.furnitureReach = reach;
@@ -1098,9 +1102,9 @@ export function showFurnitureNear(
     if (!box) {
       return;
     }
-    cellBox.copy(box).applyMatrix4(child.matrixWorld);
     let near = true;
     if (eye) {
+      cellBox.copy(box).applyMatrix4(child.matrixWorld);
       const [into, out] =
         (child.userData.furnitureReach as Reach | undefined) ?? FURNITURE_REACH;
       const reach = child.visible ? out : into;
@@ -1109,7 +1113,12 @@ export function showFurnitureNear(
     if (near !== child.visible) {
       child.visible = near;
       any = true;
-      changed?.union(cellBox);
+      if (changed) {
+        // without an eye the box was not placed yet
+        changed.union(
+          eye ? cellBox : cellBox.copy(box).applyMatrix4(child.matrixWorld)
+        );
+      }
     }
   });
   return any;
@@ -1168,9 +1177,9 @@ export function* furnitureSteps(
           cell,
           model === "columnLit" ? materials.glow() : materials.matte()
         );
-        group.add(asCell(mesh, cell));
+        group.add(asCell(mesh, cell, model));
         if (model === "clock" || model === "wallClock") {
-          group.add(asCell(clockHands(model, cell), cell));
+          group.add(asCell(clockHands(model, cell), cell, model));
         }
         if (model === "flag") {
           for (const flags of flagsOf(cell)) {

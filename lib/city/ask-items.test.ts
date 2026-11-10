@@ -535,8 +535,11 @@ test("a flagpole is asked at its mast and at its cloth, downwind of it", () => {
   // the cloth's top is the mast's: 110 m ground, a 10 m mast
   expect(200 - (cloth?.distance ?? 0)).toBeCloseTo(120);
   expect(downAt(-FLAG_CLOTH_L / 2)).toBeUndefined();
-  // the cloth's cylinder is a box round the sheet: the lens passes it by
+  // the cloth's box is a tolerance the lens passes by; the mast is not
   expect(cloth && toleranceBox(cloth)).toBe(true);
+  const mastHit = downAt(0);
+  expect(mastHit?.target).toBe(cloth?.target);
+  expect(mastHit && toleranceBox(mastHit)).toBe(false);
 });
 
 const toleranceItem = (kind: string, solids: AskSolid[]) =>

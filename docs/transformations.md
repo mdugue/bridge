@@ -3796,8 +3796,8 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   as pastel bands without emblem; every other one — most are a shop's or
   a firm's (`flag:type=advertising`, never in a country's colours), some a
   city's — flies a pale cloth; `country` counts only on a national flag (no
-  `flag:type`, `national`, `european`), on a firm's or a city's it is where
-  they are.
+  `flag:type`, `national`, `european`) that names no Wikidata item of its
+  own — on a firm's or a city's it is where they are.
   ≈ assumed: the wind (one bearing for the city, from the west-south-west,
   ±12° a mast by a hash), the cloth's size and its ripple. A mast mapped
   inside a building outline or on its line stands on its roof and is left

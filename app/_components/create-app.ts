@@ -177,7 +177,11 @@ import { createSceneFog, installSceneFog, VALLEY_HAZE } from "./height-fog";
 import { attachKeyboardControls } from "./keyboard-controls";
 import { createLampLights, LAMP_LIGHTS } from "./lamp-layer";
 import { createLampReflections, uniqueHeads } from "./lamp-reflections";
-import { createLantern, invalidateLanternShadow } from "./lantern";
+import {
+  createLantern,
+  invalidateLanternShadow,
+  LANTERN_RANGE,
+} from "./lantern";
 import { setFountainTime } from "./monument-layer";
 import { showFurnitureNear } from "./furniture-layer";
 import { setMapAltitude } from "./map-overlay";
@@ -3298,10 +3302,10 @@ async function bootApp(
   const vegetationLod = createVegetationLod();
   const richTrees =
     budget.tier === "mobile" ? PHONE_RICH_TREE_BUDGET : RICH_TREE_BUDGET;
-  /** `eye`: where the tiers are measured from (Modell: above the pivot);
-   *  `tick`: the frame's pose tick is due. */
   /** The world box of the furniture cells a frame shows or hides. */
   const changedCells = new Box3();
+  /** `eye`: where the tiers are measured from (Modell: above the pivot);
+   *  `tick`: the frame's pose tick is due. */
   const stepVegetation = (elapsed: number, eye: Vector3, tick: boolean) => {
     // one wind clock for every crown, the coarse ones standing in on a
     // bare fine level too
@@ -3337,7 +3341,10 @@ async function bootApp(
       }
     }
     if (!cellsChanged.isEmpty()) {
-      invalidateLanternShadow(lantern);
+      // the lantern only where a cell flipped within its light
+      if (!furnitureEye || cellsChanged.distanceToPoint(eye) <= LANTERN_RANGE) {
+        invalidateLanternShadow(lantern);
+      }
       sunRig.invalidateShadow(
         {
           minX: cellsChanged.min.x,

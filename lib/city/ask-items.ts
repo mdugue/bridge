@@ -520,9 +520,12 @@ function solidHeight(
   return p.k === "flag" && p.h !== undefined ? p.h + FLAG_BALL : base;
 }
 
-/** A flag's cloth, picked as a cylinder round its middle (it flies
- *  downwind of the mast, `flagYaw`, and ripples a little): the mast's
- *  solid `mast`, at EPSG (x, y). */
+/** How thick a flag's cloth is picked (m): the sheet and its ripple. */
+const CLOTH_PICK_M = 0.5;
+
+/** A flag's cloth, picked as a thin box round the sheet (it flies downwind
+ *  of the mast, `flagYaw`, and ripples a little): the mast's solid `mast`,
+ *  at EPSG (x, y). A box, not its shape (`toleranceBox`). */
 function clothSolid(
   [ex, ey]: readonly [number, number],
   mast: AskSolid
@@ -531,16 +534,23 @@ function clothSolid(
     return null;
   }
   const yaw = flagYaw(ex, ey);
-  const half = FLAG_CLOTH_L / 2;
-  // local +X turned by yaw: (cos, −sin) in the scene's x–z
+  // local +X turned by yaw: (cos, −sin) in the scene's x–z; across it
+  // (sin, cos)
+  const [ax, az] = [Math.cos(yaw), -Math.sin(yaw)];
+  const [bx, bz] = [-az * (CLOTH_PICK_M / 2), ax * (CLOTH_PICK_M / 2)];
+  const { x, z } = mast.cylinder;
+  const [fx, fz] = [x + ax * FLAG_CLOTH_L, z + az * FLAG_CLOTH_L];
   const top = mast.cylinder.y1 - FLAG_BALL;
   return {
-    cylinder: {
-      x: mast.cylinder.x + Math.cos(yaw) * half,
-      z: mast.cylinder.z - Math.sin(yaw) * half,
+    prism: {
+      ring: [
+        [x + bx, z + bz],
+        [fx + bx, fz + bz],
+        [fx - bx, fz - bz],
+        [x - bx, z - bz],
+      ],
       y0: top - FLAG_CLOTH_H - 0.2,
       y1: top,
-      r: half,
     },
   };
 }
@@ -947,20 +957,24 @@ function furnitureItem(
   if (f.geometry.type === "Point") {
     const at = f.geometry.coordinates;
     const solid = standing(at, r, h, ctx, p.deck);
-    const cloth = solid && p.k === "flag" ? clothSolid(at, solid) : null;
-    return solid
+    if (!solid) {
+      return [];
+    }
+    const target: FeatureInquiry = {
+      kind: "furniture",
+      tile: ctx.tile,
+      position: [at[0], at[1]],
+      properties: p,
+    };
+    // a flag's cloth its own item, asked as the mast: its box a tolerance,
+    // the mast still a thing the lens may focus on
+    const cloth = p.k === "flag" ? clothSolid(at, solid) : null;
+    return cloth
       ? [
-          {
-            solids: cloth ? [solid, cloth] : [solid],
-            target: {
-              kind: "furniture",
-              tile: ctx.tile,
-              position: [at[0], at[1]],
-              properties: p,
-            },
-          },
+          { solids: [solid], target },
+          { solids: [cloth], target },
         ]
-      : [];
+      : [{ solids: [solid], target }];
   }
   const ring = f.geometry.coordinates[0];
   const centre = ringCentre(ring);
@@ -988,8 +1002,8 @@ function furnitureItem(
  * Whether an item's solids are a box the probe tolerates round what is
  * drawn — a landing stage's, an outline's prism over the surface it marks
  * (`furnitureItems`, `landingItems`), a fountain's basin up to its
- * figure's top (`monumentSolid`), a flag's cloth's cylinder — not its
- * shape: a ray may name it, the lens never focuses on it. Read from the
+ * figure's top (`monumentSolid`), a flag's cloth's box (`clothSolid`) —
+ * not its shape: a ray may name it, the lens never focuses on it. Read from the
  * item, never stored on it (ADR 0047).
  */
 export function toleranceBox(item: AskItem<FeatureInquiry>): boolean {
@@ -998,9 +1012,6 @@ export function toleranceBox(item: AskItem<FeatureInquiry>): boolean {
   return (
     target.kind === "landing" ||
     (target.kind === "furniture" && prism) ||
-    // a flag's cloth is picked by a cylinder round the whole sheet
-    // (`clothSolid`), not by its shape
-    (target.kind === "furniture" && target.properties?.k === "flag") ||
     // a basin's box reaches up to its figure's top (`monumentSolid`)
     (target.kind === "monument" &&
       (prism || target.properties.kind === "fountain"))

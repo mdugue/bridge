@@ -34,7 +34,7 @@ const LANTERN_COLOUR = 0xff_d6_a0;
  *  ~1.1 m over the ground, it lights the feet about as a street lamp does
  *  under its head and fades out over a few metres. */
 const LANTERN_CD = 1.6;
-const LANTERN_RANGE = 14;
+export const LANTERN_RANGE = 14;
 /** Where it is held: below the eye, to the right, ahead (m). */
 const HAND = { down: 0.6, right: 0.35, ahead: 0.3 } as const;
 /** The camera's height over the ground (m) where it fades out: carried on

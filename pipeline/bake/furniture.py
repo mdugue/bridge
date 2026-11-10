@@ -193,8 +193,14 @@ FLAG_H = (3.0, 30.0)  # a tagged flagpole height outside this is left out (m)
 # The flags the viewer draws in their colours, by `flag:name`/`country`/`subject`
 # (lower case); every other flag flies a pale cloth.
 FLAG_DESIGNS = {
-    "de": ("de", "deutschland", "germany", "bundesrepublik deutschland", "q183", "q48160"),
-    "eu": ("eu", "europe", "europa", "european union", "europäische union", "q458", "q122482"),
+    "de": (
+        *("de", "deutschland", "germany", "bundesrepublik deutschland", "q183", "q48160"),
+        *("bundesflagge", "flagge deutschlands", "flag of germany", "deutschlandfahne"),
+    ),
+    "eu": (
+        *("eu", "europe", "europa", "european union", "europäische union", "q458", "q122482"),
+        *("europaflagge", "europafahne", "flag of europe", "flag of the european union"),
+    ),
     "sn": ("sachsen", "saxony", "freistaat sachsen", "q1202"),
     "by": ("bayern", "bavaria", "freistaat bayern", "q980"),
     "hh": ("hamburg", "freie und hansestadt hamburg", "q1055"),
@@ -362,6 +368,9 @@ def flag(other: str | None) -> dict:
     national = kind in (None, "national", "european")
     for names_key, item_key in FLAG_KEYS:
         if names_key == "country" and not national:
+            break
+        # a flag that names its own item is that flag, not its land's
+        if names_key == "country" and tag(other, "flag:wikidata"):
             break
         names = [n.strip().lower() for n in (tag(other, names_key) or "").split(";")]
         items = [n.strip().lower() for n in (tag(other, item_key) or "").split(";")]
