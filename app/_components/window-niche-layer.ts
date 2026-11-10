@@ -790,7 +790,12 @@ export function createNicheField(
     // (as a set: their order by distance changes with every step)
     const picked = houses
       .filter((h) => h.tile.cutting)
-      .map((h) => `${h.tile.city.tile}:${h.root}:${h.niches.length}`)
+      // (its niches by their sum too: one object hidden and another
+      // shown with as many windows is not the same house)
+      .map(
+        (h) =>
+          `${h.tile.city.tile}:${h.root}:${h.niches.length}:${h.niches.reduce((sum, n) => sum + n.i, 0)}`
+      )
       .toSorted()
       .join("|");
     if (picked === lastPicked && mesh.visible === picked.length > 0) {

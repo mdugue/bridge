@@ -1759,7 +1759,8 @@ function risesAfterCuts(
   for (const t of from.keys()) {
     count = Math.max(count, t + 1);
   }
-  const out = new Float32Array(count);
+  // (NaN: no ground known, as `wallRises` has it for what is no wall)
+  const out = new Float32Array(count).fill(Number.NaN);
   out.set(rises);
   for (const [t, source] of from) {
     out[t] = rises[source] ?? 0;

@@ -542,8 +542,9 @@ const LEDGE_REACH_M = 0.3;
  * and along it), and between the front and the wall its underside or its
  * top (`face`: its normal down when the eye is under it — `under` 1 —,
  * else up). Seen from under it a sill covers the bottom of its window;
- * from over it its top is lit by the sky. `cover` 1 where either is (in
- * height only: the window's own width lies within the ledge's).
+ * from over it its top is lit by the sky. `cover` 1 where either is
+ * drawn (along the wall as well: a ledge slid sideways leaves the window's
+ * other side open).
  */
 function ledge(
   g: Grid,
@@ -566,17 +567,16 @@ function ledge(
   const faceV = cover(g.v.sub(lo), px.v)
     .mul(cover(hi.sub(g.v), px.v))
     .mul(float(1).sub(frontV));
-  return {
-    front: along(g, part.span, g.u.sub(slide), px).mul(frontV),
-    face: along(
-      g,
-      part.span.add(abs(slide).mul(0.5)),
-      g.u.sub(slide.mul(0.5)),
-      px
-    ).mul(faceV),
-    cover: max(frontV, faceV),
-    under,
-  };
+  const front = along(g, part.span, g.u.sub(slide), px).mul(frontV);
+  const face = along(
+    g,
+    part.span.add(abs(slide).mul(0.5)),
+    g.u.sub(slide.mul(0.5)),
+    px
+  ).mul(faceV);
+  // (where it is drawn: slid along the wall it no longer covers the side
+  // of the window it slid from)
+  return { front, face, cover: max(front, face), under };
 }
 
 /** The parts round the opening (`WINDOW_PARTS`): where each is (1 on its

@@ -71,11 +71,14 @@ export function jitterHash(j: number, seed: number): number {
 const LENIENT_M = 1e-3;
 
 /** The columns of a wall whose length slot holds `lengthCode` (snorm16,
- *  signed): their axes from the wall's middle (m) and the window's width. */
+ *  signed): their axes from the wall's middle (m), each one's column as the
+ *  shader counts it (`js`), and the window's width. Where the count lies
+ *  within a hair of the next (the shader's f32 may round it either way)
+ *  both counts' columns. */
 export function wallColumns(
   o: NicheObject,
   lengthCode: number
-): { centres: number[]; w: number } {
+): { centres: number[]; js: number[]; w: number } {
   const units = Math.abs(lengthCode);
   const measured = units >= MEASURED_AXES.base;
   const code = Math.max(units - MEASURED_AXES.base, 0);
@@ -90,27 +93,37 @@ export function wallColumns(
   const edge = dormer ? DORMER_WINDOW.edge : WINDOW_ROWS.edge;
   const length = (units / 32_767) * FACADE_SCALE_M;
   const room = length - 2 * edge - w;
-  let n: number;
+  const counts: number[] = [];
   if (measured) {
-    n = nMeasured;
-  } else {
-    n = room >= 0 ? Math.floor(Math.max(room, 0) / axis + 1e-4) + 1 : 0;
+    counts.push(nMeasured);
+  } else if (room >= 0) {
+    const q = room / axis + 1e-4;
+    counts.push(Math.floor(q) + 1);
+    // on the edge: the other count too
+    const near = Math.round(q);
+    if (Math.abs(q - near) < 1e-3 && near >= 1) {
+      counts.push(near === Math.floor(q) + 1 ? near + 1 : near);
+    }
   }
-  if (o.axis < 0.05 || length < 0.5 || n < 1) {
-    return { centres: [], w };
+  const centres: number[] = [];
+  const js: number[] = [];
+  if (o.axis < 0.05 || length < 0.5) {
+    return { centres, js, w };
   }
-  const off = (n - 1) / 2;
   const free = Math.min(
     Math.max((axis - w - WINDOW_ROWS.gap) / 2, 0),
     axis * LOOSE_JITTER
   );
   const loose = bit(style, WINDOW_STYLE.loose) === 1 && !measured;
-  const centres: number[] = [];
-  for (let j = 0; j < n; j += 1) {
-    const jitter = loose ? (jitterHash(j, o.seed) * 2 - 1) * free : 0;
-    centres.push((j - off) * axis + jitter);
+  for (const n of counts.filter((c) => c >= 1)) {
+    const off = (n - 1) / 2;
+    for (let j = 0; j < n; j += 1) {
+      const jitter = loose ? (jitterHash(j, o.seed) * 2 - 1) * free : 0;
+      centres.push((j - off) * axis + jitter);
+      js.push(j);
+    }
   }
-  return { centres, w };
+  return { centres, js, w };
 }
 
 /** The rows on a wall up to `topH` m over the base whose second door slot
@@ -185,7 +198,7 @@ export function wallOpenings(
   topH: number,
   doors: readonly number[] = []
 ): WallOpening[] {
-  const { centres, w } = wallColumns(o, lengthCode);
+  const { centres, js, w } = wallColumns(o, lengthCode);
   if (centres.length === 0) {
     return [];
   }
@@ -202,7 +215,7 @@ export function wallOpenings(
     (r) => lengthCode > 0 || r.k > 0
   );
   const placed = doors.flatMap((code) => slotDoor(code) ?? []);
-  return centres.flatMap((s, j) =>
+  return centres.flatMap((s, at) =>
     rows
       .filter(
         (r) =>
@@ -214,7 +227,7 @@ export function wallOpenings(
         v0: r.v0,
         v1: r.v1,
         depth,
-        j,
+        j: js[at],
         k: r.k,
       }))
   );

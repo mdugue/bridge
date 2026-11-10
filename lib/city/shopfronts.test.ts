@@ -344,7 +344,9 @@ describe("the mesh", () => {
     expect(shopfrontMesh(low, wallBays(low, []), 4, OFFSET).openings).toEqual(
       []
     );
-    // a bay the wall does not take is no window, and the sign stays low
+    // a bay the wall does not take is no window, and the sign goes over
+    // the drawn ground-floor windows' heads (storey 4 m − a 0.3 m lintel,
+    // 0.1 m over)
     const signed = wall({
       bays: [[1, 3]],
       gf_top: 3,
@@ -359,7 +361,7 @@ describe("the mesh", () => {
       () => false
     );
     expect(refused.openings).toEqual([]);
-    expect(refused.signs[0].rect.z0).toBeCloseTo(101.5);
+    expect(refused.signs[0].rect.z0).toBeCloseTo(103.8);
     // with the window cut, the sign hung too low goes up over it
     const cut = shopfrontMesh(signed, wallBays(signed, []), 4, OFFSET);
     expect(cut.signs[0].rect.z0).toBeGreaterThan(cut.openings[0].rect.z1);
@@ -427,12 +429,12 @@ describe("the mesh", () => {
     const signed = wall({ bays: [], sign: { at: [[2, 8]], z: [3, 3.6] } });
     const mesh = shopfrontMesh(signed, [], 4, OFFSET);
     expect(mesh.openings).toEqual([]);
-    // painted where it was seen, at its measured band
+    // painted where it was seen, over the drawn windows' heads (3.7 m)
     expect(mesh.signs).toHaveLength(1);
     const [band] = mesh.signs;
     expect([band.rect.s0, band.rect.s1]).toEqual([2, 8]);
-    expect(band.rect.z0).toBeCloseTo(103);
-    expect(band.rect.z1).toBeCloseTo(103.6);
+    expect(band.rect.z0).toBeCloseTo(103.8);
+    expect(band.rect.z1).toBeCloseTo(104.1);
     // a sign band measured 2 m tall is a band no taller than FASCIA_MAX_M
     const tall = wall({ bays: [], sign: { at: [[2, 8]], z: [3, 5] } });
     const [high] = shopfrontMesh(tall, [], 4, OFFSET).signs;

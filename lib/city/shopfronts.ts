@@ -32,6 +32,7 @@ import { rayHit, trianglesOnRays } from "./doors";
 import type { V3 } from "./doors";
 import type { DoorFeature, ShopfrontWall } from "./features";
 import { SINK } from "./ground-join";
+import { WINDOW_ROWS } from "./windows";
 
 /** The building glTF's position step (m): 16-bit positions over a 2 km
  *  tile's buildings (scripts/tile-glb.ts). Anything along the wall stands
@@ -404,6 +405,14 @@ export function shopfrontMesh(
       if (rect.s1 > span[0] && rect.s0 < span[1]) {
         bottom = Math.max(bottom, rect.z1 + FASCIA_OVER_M);
       }
+    }
+    // a wall no window was cut into keeps its drawn ground-floor windows
+    // (`facadeOf`): the sign over their heads, which stay under the first
+    // storey line by a lintel (the clay's `WINDOW_ROWS`)
+    if (out.openings.length === 0) {
+      const drawnHead =
+        Math.max(storeyH, WINDOW_ROWS.firstLine) - WINDOW_ROWS.lintel;
+      bottom = Math.max(bottom, g + drawnHead + FASCIA_OVER_M);
     }
     const height = Math.max(Math.min(g + z1 - bottom, FASCIA_MAX_M), 0.3);
     out.signs.push({

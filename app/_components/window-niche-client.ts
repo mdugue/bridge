@@ -170,8 +170,9 @@ function next(): void {
       // load) the job is copied, so it can still run here
       w.postMessage(job.input, answered ? transfers(job.input) : []);
     } catch {
-      running = null;
-      runHere(job);
+      // here then, in a task of its own
+      runSoon(job);
+      return;
     }
   }
 }
