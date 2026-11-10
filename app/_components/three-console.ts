@@ -50,16 +50,25 @@ function print(
   }
 }
 
+/** The routes this module set, each with the function it passes on to. */
+const routes = new WeakMap<ConsoleFunction, ConsoleFunction | null>();
+
 /**
  * Routes three's errors to `noteError` (the trail's coalescing error
  * note) as well as to the console function that was there before, or
- * the console. Returns the undo, which puts that function back.
+ * the console. Returns the undo, which puts that function back. A route
+ * set while another app's is still in place (StrictMode's second mount,
+ * a reload's new app before the old one's teardown) replaces it instead
+ * of passing on to it, so an error is noted once.
  */
 export function routeThreeErrors(
   noteError: (text: string) => void
 ): () => void {
   // three's own is null until one is set (its typing says otherwise)
-  const before = getConsoleFunction() as ConsoleFunction | null;
+  let before = getConsoleFunction() as ConsoleFunction | null;
+  while (before && routes.has(before)) {
+    before = routes.get(before) ?? null;
+  }
   const routed: ConsoleFunction = (type, message, ...params) => {
     if (type === "error") {
       try {
@@ -74,6 +83,7 @@ export function routeThreeErrors(
       print(type, message, params);
     }
   };
+  routes.set(routed, before);
   setConsoleFunction(routed);
   return () => {
     if (getConsoleFunction() === routed) {

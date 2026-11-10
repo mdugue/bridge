@@ -82,3 +82,27 @@ test("only the parts of a call that read as text go into the line", () => {
     ])
   ).toBe("THREE.Loader: failed tile 404 Not Found");
 });
+
+test("a second app's route replaces the first's: an error is noted once", () => {
+  const noted: string[] = [];
+  const first = routeThreeErrors((text) => {
+    noted.push(`first ${text}`);
+  });
+  const second = routeThreeErrors((text) => {
+    noted.push(`second ${text}`);
+  });
+  const original = console.error;
+  console.error = () => {
+    // swallowed for the test
+  };
+  try {
+    error("once");
+    // the first app's teardown comes late: the second's route stays
+    first();
+    error("again");
+    second();
+  } finally {
+    console.error = original;
+  }
+  expect(noted).toEqual(["second THREE.once", "second THREE.again"]);
+});
