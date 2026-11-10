@@ -11,6 +11,7 @@ import {
   OBJECT_SOURCE_DORMER,
   OBJECT_SOURCE_GAP,
   OBJECT_SOURCE_PASSAGE,
+  OBJECT_SOURCE_PLINTH,
   OBJECT_SOURCE_SHOPFRONT,
 } from "../lib/city/city-mesh";
 import type { OsmBuildingLut } from "../lib/city/city-mesh";
@@ -23,7 +24,13 @@ import type {
   StructureFeature,
 } from "../lib/city/features";
 import { ensembleGroup } from "../lib/city/ensembles";
-import { paneTop, SHOPFRONT_SINK } from "../lib/city/shopfronts";
+import {
+  paneTop,
+  SHOPFRONT,
+  SHOPFRONT_SINK,
+  spanSegments,
+} from "../lib/city/shopfronts";
+import { SHOP_WINDOW_DEPTH_M } from "../lib/city/shop-windows";
 import { SMALL_BUILDING_SINK } from "../lib/city/small-buildings";
 import {
   FACADE_SCALE_M,
@@ -50,6 +57,7 @@ import {
   withMeasuredRoofs,
   withOpenRoofs,
   withRoofSteps,
+  appendPlinths,
 } from "./bake-city-mesh";
 
 /** A box as a CityJSON LoD2 solid over the eight vertices from `first`. */
@@ -789,7 +797,9 @@ test("a chimney joins its host with the dormers as a box, all wall", () => {
   expect(lengths(baked.objects.length - 2)).toEqual(new Set([0]));
 });
 
-test("a shopfront joins its host as glass, frame and canopy, source 6", () => {
+const mid = (v: number[]) => (v[0] + v[1] + v[2]) / 3;
+
+test("a shop window is cut into its wall: reveals in its clay, glass at the back", () => {
   // the house's south wall (x 40–50 m, y 0), facing −y
   const bake = (walls: ShopfrontWall[], glass = false) =>
     bakeCityMesh(
@@ -806,53 +816,158 @@ test("a shopfront joins its host as glass, frame and canopy, source 6", () => {
     );
   const lod2 = bakeCityMesh("t", fixture(), undefined, null);
   const baked = bake([shopfrontAt(), shopfrontAt("elsewhere")]);
-  expect(baked.objects.length).toBe(lod2.objects.length + 2);
-  const house = baked.objects[2];
-  const [pane, frame] = baked.objects.slice(-2);
-  for (const o of [pane, frame]) {
-    expect(o.root).toBe(house.root);
+  // a glass per bay, the painted sign
+  expect(baked.objects.length).toBe(lod2.objects.length + 3);
+  const house = 2;
+  const [pane, pane2, sign] = baked.objects.slice(-3);
+  for (const o of [pane, pane2, sign]) {
+    expect(o.root).toBe(baked.objects[house].root);
     expect(o.source).toBe(OBJECT_SOURCE_SHOPFRONT);
     expect(o.building).toBe(false);
     expect(o.footprints).toEqual([]);
     expect(o.flags & OBJECT_FLAG_OWN_COLOUR).toBe(OBJECT_FLAG_OWN_COLOUR);
   }
   expect(pane.flags & OBJECT_FLAG_GLASS).toBe(OBJECT_FLAG_GLASS);
-  expect(frame.flags & OBJECT_FLAG_GLASS).toBe(0);
-  // own-colour glass carries its roughness itself, not a jitter in
-  // [−1, 1] as every other row: smooth enough to hold a calm reflection
+  expect(sign.flags & OBJECT_FLAG_GLASS).toBe(0);
+  // the sign a shade darker than its wall
+  expect(luminance(sign.tint)).toBeLessThan(
+    luminance(baked.objects[house].tint)
+  );
   expect(pane.rough).toBeGreaterThan(0);
   expect(pane.rough).toBeLessThanOrEqual(0.3);
-  // muted glass, darker and cooler than its surround — not a black hole
-  expect(luminance(pane.tint)).toBeLessThan(0.6 * luminance(frame.tint));
+  expect(luminance(pane.tint)).toBeLessThan(0.6 * luminance(sign.tint));
   expect(luminance(pane.tint)).toBeGreaterThan(0.1);
-  expect(pane.tint[2] / pane.tint[0]).toBeGreaterThan(
-    frame.tint[2] / frame.tint[0]
-  );
-  // the glass's eave is its top, over the shopfront's sunk foot
+  // the glass's eave is its top over the shopfront's foot
   expect(pane.eaveH).toBeCloseTo(
-    paneTop(shopfrontAt(), house.storeyH) + SHOPFRONT_SINK,
+    paneTop(shopfrontAt(), baked.objects[house].storeyH) + SHOPFRONT_SINK,
     2
   );
-  expect(frame.eaveH).toBeGreaterThan(4);
-  // the surround and the canopy shaded smooth: their own normals
-  const normals = baked.vertices.normals ?? new Float32Array();
-  expect(
-    normals.some(
-      (n) => !Number.isNaN(n) && Math.abs(n) > 0.2 && Math.abs(n) < 0.95
-    )
-  ).toBe(true);
+  const { objectIds, positions } = baked.vertices;
+  const { cx, cy } = baked.offset;
+  // the house's own faces: nothing of its wall left over a bay, and the
+  // reveals running 0.2 m into it
+  let inBay = 0;
+  let reveal = 0;
+  const glassYs = new Set<number>();
+  const signYs: number[] = [];
+  for (let t = 0; t + 2 < objectIds.length; t += 3) {
+    const xs = [0, 1, 2].map((k) => positions[3 * (t + k)] + cx - 412_040);
+    const ys = [0, 1, 2].map(
+      (k) => positions[3 * (t + k) + 1] + cy - 5_656_000
+    );
+    const zs = [0, 1, 2].map((k) => positions[3 * (t + k) + 2]);
+    if (objectIds[t] === house) {
+      const onWall = ys.every((y) => Math.abs(y) < 1e-3);
+      const inside =
+        (mid(xs) > 1 && mid(xs) < 3) || (mid(xs) > 3.5 && mid(xs) < 6.5);
+      if (onWall && inside && mid(zs) > 100.6 && mid(zs) < 102.9) {
+        inBay += 1;
+      }
+      if (ys.some((y) => y > 0.19) && ys.every((y) => y < 0.21)) {
+        reveal += 1;
+      }
+    }
+    if (objectIds[t] === baked.objects.length - 3) {
+      for (const y of ys) {
+        glassYs.add(Math.round(y * 1000) / 1000);
+      }
+    }
+    if (objectIds[t] === baked.objects.length - 1) {
+      // painted: flush on the wall, nothing standing out of it
+      signYs.push(...ys);
+    }
+  }
+  expect(signYs.length).toBeGreaterThan(0);
+  expect(signYs.every((y) => Math.abs(y) < 1e-3)).toBe(true);
+  expect(inBay).toBe(0);
+  // four reveals of two triangles each, per window, and a strip more
+  // where the wall's diagonal meets an opening's edge (its vertex shared,
+  // no T-junction): the diagonal crosses each window's edge once here
+  expect(reveal).toBe(16 + 2 * 2);
+  expect([...glassYs]).toEqual([SHOP_WINDOW_DEPTH_M]);
   // a glass facade wears its own front
   expect(bake([shopfrontAt()], true).objects.length).toBe(lod2.objects.length);
-  // a canopy is a third object, in the host's own clay
+  // a canopy is one more object, in the host's own clay
   const sheltered = bake([
     { ...shopfrontAt(), canopy: [{ at: [0, 10], d: 3.5, h: 4.2 }] },
   ]);
-  expect(sheltered.objects.length).toBe(lod2.objects.length + 3);
   const canopy = sheltered.objects.at(-1);
   expect(canopy?.source).toBe(OBJECT_SOURCE_SHOPFRONT);
   expect(canopy?.tint).toEqual(sheltered.objects[2].tint);
   expect((canopy?.flags ?? 0) & OBJECT_FLAG_GLASS).toBe(0);
   expect((canopy?.flags ?? 0) & OBJECT_FLAG_OWN_COLOUR).toBe(0);
+});
+
+test("the plinth breaks for a shop window, which reaches down to its riser", () => {
+  const plinths: PlinthFeature[] = [
+    {
+      type: "Feature",
+      geometry: {
+        type: "MultiLineString",
+        coordinates: [
+          [
+            [412_040, 5_656_000],
+            [412_050, 5_656_000],
+          ],
+        ],
+      },
+      properties: { of: "house", g: [100], top: [101] },
+    } as PlinthFeature,
+  ];
+  const baked = bakeCityMesh(
+    "t",
+    fixture(),
+    undefined,
+    null,
+    undefined,
+    undefined,
+    "render",
+    undefined,
+    undefined,
+    { shopfronts: [shopfrontAt()], plinths }
+  );
+  const pane = baked.objects.findIndex(
+    (o) => (o.flags & OBJECT_FLAG_GLASS) !== 0
+  );
+  const { objectIds, positions } = baked.vertices;
+  let low = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < objectIds.length; i += 1) {
+    if (objectIds[i] === pane) {
+      low = Math.min(low, positions[3 * i + 2]);
+    }
+  }
+  expect(low).toBeCloseTo(100 + SHOPFRONT.sill, 3);
+  // the plinth laid with the windows' breaks: none of it over a bay
+  const bare = bakeCityMesh("t", fixture(), undefined, null);
+  const keys = Object.keys(fixture().CityObjects);
+  const house = keys.indexOf("house");
+  // a pitched-roof house's plinth (a flat-roofed block carries none)
+  bare.objects[house].flags &= ~OBJECT_FLAG_FLAT_ROOF;
+  appendPlinths(
+    bare,
+    plinths,
+    new Map(keys.map((k, i) => [k, i])),
+    spanSegments(shopfrontAt(), [
+      [0.95, 3.05],
+      [3.45, 6.55],
+    ]).map((at) => ({ at, root: bare.objects[house].root }))
+  );
+  let plinth = 0;
+  let inBay = 0;
+  for (let i = 0; i < bare.vertices.objectIds.length; i += 1) {
+    if (
+      bare.objects[bare.vertices.objectIds[i]]?.source !== OBJECT_SOURCE_PLINTH
+    ) {
+      continue;
+    }
+    plinth += 1;
+    const x = bare.vertices.positions[3 * i] + bare.offset.cx - 412_040;
+    if ((x > 1 && x < 3) || (x > 3.5 && x < 6.5)) {
+      inBay += 1;
+    }
+  }
+  expect(plinth).toBeGreaterThan(0);
+  expect(inBay).toBe(0);
 });
 
 test("windows: a rhythm per house in its row, every wall vertex placed on its wall", () => {
@@ -1802,4 +1917,41 @@ test("two passages crossing in a house keep their linings out of each other", ()
     }
   }
   expect(lined).toBeGreaterThan(0);
+});
+
+test("windows: only a shopfront the photos saw bays on takes the ground floor's", () => {
+  const doc = fixture();
+  const house = Object.keys(doc.CityObjects).indexOf("house");
+  const signsOf = (wall?: ShopfrontWall) => {
+    const { objects, vertices } = bakeCityMesh(
+      "t",
+      doc,
+      undefined,
+      null,
+      // an OSM shop in the house: no ground floor taken by itself
+      { house: { shop: 1 } },
+      undefined,
+      "render",
+      undefined,
+      undefined,
+      { shopfronts: wall ? [wall] : [] }
+    );
+    expect(unpackStyle(objects[house].windows?.style ?? 0).noGround).toBe(
+      false
+    );
+    const signs = new Set<number>();
+    for (let v = 0; v < vertices.objectIds.length; v += 1) {
+      const length = vertices.facade?.[4 * v + 1] ?? 0;
+      if (vertices.objectIds[v] === house && length !== 0) {
+        signs.add(Math.sign(length));
+      }
+    }
+    return [...signs].sort((a, b) => a - b);
+  };
+  // shop windows seen: the south wall's ground floor goes to the shop
+  expect(signsOf(shopfrontAt())).toEqual([-1, 1]);
+  // a fascia read alone: every wall keeps its ground-floor windows
+  expect(signsOf({ ...shopfrontAt(), bays: [] })).toEqual([1]);
+  // no photo at all: the shop's house keeps its ground floor all round
+  expect(signsOf()).toEqual([1]);
 });

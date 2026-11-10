@@ -75,7 +75,7 @@ For each building both show, note what differs, by category:
 - **Fehlt / zu viel**: a building, a tree, a wall, a kiosk the twin lacks
   or invents; **Lage** (an object metres off).
 
-Ignore what the twin draws on purpose (stylised clay, no glass, no
+Ignore what the twin draws on purpose (stylised clay, windows without panes or mullions, no
 signage, no people or cars, the pastel light) and what the photo's season
 or time explains.
 
