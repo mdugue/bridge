@@ -199,8 +199,10 @@ export function createLensBlur(
       const cC = centre.a.toVar();
       const rC = cC.abs().mul(0.5).toVar();
       // how far to look: the pixel's own circle, or a foreground's
-      const radius = max(rC, reach.sample(at).r)
-        .min(u.capPx.mul(0.5))
+      // (a seventh past the own circle: its soft rim, ±0.15 of it, is
+      // sampled whole, so a surface at one depth covers itself fully)
+      const radius = max(rC.mul(1.15), reach.sample(at).r)
+        .min(u.capPx.mul(0.575))
         .max(0.5)
         .toVar();
       // the area each tap stands for, over π

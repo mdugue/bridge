@@ -198,7 +198,8 @@ export function raySlab(o: Xyz, d: Xyz, s: Slab): number | null {
 }
 
 /**
- * Where the ray first comes down onto a slab's top (`topAt`) within its
+ * Where the ray first comes down onto a slab's top (`topAt`), or the top
+ * rises to it, within its
  * ring and `far`, or null: the deck you stand on as well as one beside
  * you — a ray from within the slab's band (`raySlab` meets it at once)
  * still finds the top ahead.
@@ -210,7 +211,7 @@ export function rayDeckTop(
   far: number
 ): number | null {
   const enter = rayPrism(o, d, s);
-  if (enter === null || enter > far || d.y >= 0) {
+  if (enter === null || enter > far) {
     return null;
   }
   // down to the slab's lowest top, or across its ring, at the latest
@@ -220,9 +221,12 @@ export function rayDeckTop(
     span = Math.max(span, Math.hypot(x - x0, z - z0));
   }
   const across = (2 * span) / Math.max(Math.hypot(d.x, d.z), 1e-6);
+  // (a level or rising ray meets a deck only where the deck rises to it)
   const leave = Math.min(
     far,
-    enter + (o.y + enter * d.y - s.y0) / -d.y,
+    d.y < 0
+      ? enter + (o.y + enter * d.y - s.y0) / -d.y
+      : Number.POSITIVE_INFINITY,
     enter + across
   );
   let above: boolean | null = null;

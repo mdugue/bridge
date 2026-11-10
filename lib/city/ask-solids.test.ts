@@ -270,9 +270,12 @@ test("a deck seen from above its box, or level from its end", () => {
   const look = { x: d.x / len, y: d.y / len, z: 0 };
   const t = rayDeckTop({ x: 20, y: 20, z: 0 }, look, deck, 1000);
   expect(t).toBeCloseTo(len, 0);
-  // level from beside its low end: no top to come down onto, but its band
-  // (what a bridge's rough focus takes then)
-  expect(rayDeckTop({ x: -5, y: 10.5, z: 0 }, east, deck, 1000)).toBeNull();
+  // level from beside its low end: where the rising top reaches the ray
+  // (x = 25), and its band at once (what the probe tolerates)
+  expect(rayDeckTop({ x: -5, y: 10.5, z: 0 }, east, deck, 1000)).toBeCloseTo(
+    30,
+    0
+  );
   expect(raySlab({ x: -5, y: 10.5, z: 0 }, east, deck)).toBeCloseTo(5, 0);
 });
 
