@@ -360,7 +360,8 @@ test.each(tiles)(
       if (p?.k === "chimney") {
         // its top is the surface model's own height and stays, while `z`
         // is the exact LoD2 face under it (dormers.py on_planes): no rise
-        // to check against that face.
+        // to check against that face. On a roof rebuilt from DOM1 both move
+        // onto the rebuilt part together, its measured height kept.
         // a chimney's sides: dormers.py CHIMNEY_SIDE_M … CHIMNEY_MAX_SIDE_M
         for (const side of [p.w, p.d]) {
           expect(side).toBeGreaterThanOrEqual(0.6);

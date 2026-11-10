@@ -49,6 +49,12 @@ reproducible, but they can be wrong where the world does not fit the rule.
   viewer rebuilds the roof from the measurement — on a fifth of it already
   where the surface is level there and the model's roof slopes where the
   surface does not (a low hipped roof drawn over a flat department store).
+  Its slopes are drawn as an ordinary pitched roof: each house of a row
+  and each bend of a wing on its own plane, eaves and ridges level, not
+  dented by its dormers and chimneys, ridges, hips and valleys where two
+  planes cross, and outlines running along the building's walls and
+  meeting at corners rather than curves; only a landmark keeps the measured surface
+  itself, and a slope that fits no roof form stays flat.
   A tall height above the building
   model becomes a chimney or tower only where OpenStreetMap names one. The
   roof's small things come from the surface model alone: every bump over

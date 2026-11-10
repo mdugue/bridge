@@ -55,6 +55,8 @@ its host's exact LoD2 roof face (`on_planes`): the burned 1 m roof reads
 a cell's height, which on a 45° face is up to half a metre off the face
 under a dormer's centre — one dormer in fourteen stood over 0.3 m above
 the roof the building draws, its cheeks clear of it, as many sunk in.
+On a roof rebuilt from DOM1 (roofs.py) the face is its rebuilt part
+(`MeasuredPart`): the building draws those, not the LoD2 faces.
 
 A crown overhanging a roof is irregular, overtops the ridge or stands on
 a tree point. Checked against the 20 cm orthophoto on Dresden's
@@ -110,6 +112,7 @@ from scipy.ndimage import map_coordinates
 from .common import Tile, feature, owns, write_geojson
 from .osm_buildings import _lod2, footprints, root_of
 from .roof_colour import ring_normal, ring_slope, surface_rings
+from .skyview import rebuilt_parts, surface_heights
 from .structures import Surfaces
 
 MIN_SLOPE = 25.0
@@ -600,17 +603,99 @@ def roof_faces(city: dict, oid: str) -> list[tuple[float, float, float, float, s
     return out
 
 
+def _quarter_slope(g: np.ndarray, r: int, c: int) -> float:
+    """The rise per cell at (r, c) on a quarter of its 3 × 3 cells that
+    lies on one plane: the steps to the row and column neighbours on one
+    side each, of the quarters whose diagonal cell they predict best (to a
+    centimetre) the steepest — one flank's, not a mix of two across a
+    crease, nor the level a symmetric ridge's two top cells make."""
+    quarters = []
+    for dr in (-1, 1):
+        for dc in (-1, 1):
+            rr, cc = r + dr, c + dc
+            if not (0 <= rr < g.shape[0] and 0 <= cc < g.shape[1]):
+                continue
+            sy, sx = g[rr, c] - g[r, c], g[r, cc] - g[r, c]
+            quarters.append((abs(g[rr, cc] - (g[r, c] + sx + sy)), float(np.hypot(sx, sy))))
+    if not quarters:
+        return 0.0
+    best = min(off for off, _ in quarters)
+    return max(slope for off, slope in quarters if off <= best + 0.01)
+
+
+class MeasuredPart:
+    """One part of a roof rebuilt from DOM1 (roofs.py): its plan, and its
+    height — flat at `z`, or a face's surface grid (cell centres)."""
+
+    def __init__(self, plan: shapely.Geometry, z: float, surface: dict | None):
+        self.plan = plan
+        self.z = z
+        self.grid = None
+        if surface is not None:
+            self.grid, self.xs, self.ys = surface_heights(surface, z)
+            self.x0, self.y0, self.res = surface["x"], surface["y"], surface["res"]
+
+    def at(self, x: float, y: float) -> tuple[float, float]:
+        """The part's height at (x, y) and its slope there (degrees): a
+        face's grid read between its cells, its slope that of the quarter
+        around the nearest cell lying on one plane (`_quarter_slope`) — beside a
+        ridge, a hip or a valley of the rebuilt surface the cells either
+        side lie on different flanks, and their mean reads neither."""
+        if self.grid is None:
+            return self.z, 0.0
+        g = self.grid
+        fr = (self.y0 - y) / self.res - 0.5
+        fc = (x - self.x0) / self.res - 0.5
+        z = float(map_coordinates(g, [[fr], [fc]], order=1, mode="nearest")[0])
+        r = int(np.clip(round(fr), 0, g.shape[0] - 1))
+        c = int(np.clip(round(fc), 0, g.shape[1] - 1))
+        return z, math.degrees(math.atan(_quarter_slope(g, r, c) / self.res))
+
+    def top(self) -> float:
+        """Its highest point inside its plan: of the cell centres inside it
+        and its outline's points (a strip narrower than a cell holds no
+        centre, its crest still lies on its outline)."""
+        if self.grid is None:
+            return self.z
+        xs, ys = np.meshgrid(self.xs, self.ys)
+        inside = shapely.contains_xy(self.plan, xs, ys)
+        rim = shapely.get_coordinates(self.plan)
+        edge = max(self.at(float(x), float(y))[0] for x, y in rim) if len(rim) else self.z
+        return max(float(self.grid[inside].max()), edge) if inside.any() else edge
+
+
+def measured_parts(tile: Tile) -> dict[str, list[MeasuredPart]]:
+    """The roofs rebuilt from DOM1 on this tile (dlm/roofs_<tile>.geojson,
+    the `roofs` step's), by LoD2 object; none where it is not there."""
+    out: dict[str, list[MeasuredPart]] = {}
+    for oid, z, plan, surface in rebuilt_parts(tile.data / "dlm" / f"roofs_{tile.id}.geojson"):
+        out.setdefault(oid, []).append(MeasuredPart(plan, z, surface))
+    return out
+
+
 class RoofPlanes:
     """Each object's LoD2 roof faces as planes: the roof's height and slope
     at a point exactly, where the burned 1 m roof reads a cell's (a
-    dormer on a 45° face half a cell off sat half a metre high)."""
+    dormer on a 45° face half a cell off sat half a metre high). An object
+    whose roof was rebuilt from DOM1 (`measured`) is read on its rebuilt
+    parts instead: the building draws them, not the LoD2 faces (a chimney
+    stood at the LoD2 roof's height, metres off the drawn one)."""
 
-    def __init__(self, city: dict, ids: list[str]):
+    def __init__(
+        self, city: dict, ids: list[str], measured: dict[str, list[MeasuredPart]] | None = None
+    ):
         to_metres = metres(city)
         self.faces: list[list[tuple[shapely.Geometry, tuple, tuple]]] = []
+        self.parts: list[list[MeasuredPart]] = []
         # each object's ridge: its roof faces' highest vertex
         self.ridge: list[float] = []
         for oid in ids:
+            parts = (measured or {}).get(oid, [])
+            self.parts.append(parts)
+            if parts:
+                self.faces.append([])
+                self.ridge.append(max(p.top() for p in parts))
+                continue
             faces = []
             ridge = -math.inf
             for geometry in _lod2(city["CityObjects"].get(oid, {}).get("geometry", [])):
@@ -636,6 +721,8 @@ class RoofPlanes:
         ridge, a hip or a mansard's break the neighbour's plane runs on
         above the face the point is beside."""
         p = shapely.Point(x, y)
+        if of < len(self.parts) and self.parts[of]:
+            return self._measured_at(of, p)
         over = None
         near = None
         for plan, n, p0 in self.faces[of] if of < len(self.faces) else []:
@@ -653,22 +740,69 @@ class RoofPlanes:
             return over
         return near[1] if near is not None else None
 
+    def rebuilt(self, of: int) -> bool:
+        """Whether object `of`'s roof is read on its rebuilt parts."""
+        return of < len(self.parts) and bool(self.parts[of])
 
-def on_planes(found: list[dict], planes: RoofPlanes) -> None:
+    def carries(self, d: dict, e: tuple[float, float] | None) -> bool:
+        """Whether the roof drawn under dormer or chimney `d` (`e`, its
+        `at`) holds it: on a roof rebuilt from DOM1, not where it stands
+        off every part, nor a dormer where the part is flatter than
+        MIN_SLOPE."""
+        if not self.rebuilt(d["of"]):
+            return True
+        if e is None:
+            return False
+        return d.get("k") == "chimney" or e[1] >= MIN_SLOPE
+
+    def keeps(self, d: dict) -> bool:
+        """`carries`, `d`'s roof looked up (on a rebuilt roof only)."""
+        if not self.rebuilt(d["of"]):
+            return True
+        return self.carries(d, self.at(d["of"], d["x"], d["y"]))
+
+    def _measured_at(self, of: int, p: shapely.Point) -> tuple[float, float] | None:
+        """A rebuilt roof at `p`: the highest part over it, else the nearest
+        within PLANE_REACH_M of its outline."""
+        over = [q.at(p.x, p.y) for q in self.parts[of] if q.plan.covers(p)]
+        if over:
+            return max(over)
+        gaps = [(q.plan.distance(p), q) for q in self.parts[of]]
+        gap, q = min(gaps, key=lambda g: g[0])
+        return q.at(p.x, p.y) if gap <= PLANE_REACH_M else None
+
+
+def on_planes(found: list[dict], planes: RoofPlanes) -> list[dict]:
     """Each dormer and chimney at its host's exact roof (`RoofPlanes`):
     its `z` there; a dormer's slope there too, its top the same height
     over it (its row's one height over the roof: read against the roof,
     it moves with it) but at most RIDGE_SLACK_M over the ridge, and a
     shed's fall at most SHED_MARGIN under the slope. A chimney's top is
-    the surface model's own height and stays. A dormer whose face there is
-    flatter than MIN_SLOPE (beside a step onto a flat part) keeps its
-    row's height and slope."""
+    the surface model's own height and stays. A dormer whose LoD2 face
+    there is flatter than MIN_SLOPE (beside a step onto a flat part) keeps
+    its row's height and slope; one on a roof rebuilt from DOM1 flatter
+    there than MIN_SLOPE is dropped: the building draws no pitch to carry
+    it, and at the LoD2's height it would float over the drawn roof or
+    sink into it — as is a dormer or chimney off every rebuilt part of its
+    host (a part dropped, or cut where another roof covers it). A
+    chimney on a rebuilt part keeps its measured height over the roof it
+    was read on, a chimney elsewhere its measured top. The
+    dormers and chimneys kept, in place."""
+    kept = []
     for d in found:
         e = planes.at(d["of"], d["x"], d["y"])
+        if not planes.carries(d, e):
+            continue
+        kept.append(d)
         if e is None:
             continue
         z, slope = e
         if d.get("k") == "chimney":
+            # its measured top over the roof it was read on, on the drawn
+            # one (that roof may stand off DOM1 by `shifts`' lift; the
+            # rebuilt one does not)
+            if planes.rebuilt(d["of"]):
+                d["top"] = round(d["top"] + z - d["z"], 2)
             d["z"] = round(z, 2)
             continue
         if slope < MIN_SLOPE:
@@ -680,6 +814,7 @@ def on_planes(found: list[dict], planes: RoofPlanes) -> None:
         d["slope"] = round(slope, 1)
         if "tf" in d:
             d["tf"] = round(min(d["tf"], slope - SHED_MARGIN), 1)
+    return kept
 
 
 def mansard_flanks(city: dict) -> list[shapely.Geometry]:
@@ -997,10 +1132,14 @@ def find(
         for d in extra:
             d["x"], d["y"] = moved.back(d)
         found += [d for d in extra if not twice(d, found)]
+    # what a rebuilt roof cannot carry goes before the rows are set, so no
+    # row is fitted to it, nor a neighbour dropped for it
+    if planes is not None:
+        found = [d for d in found if planes.keeps(d)]
     building = [roofs.groups[d["of"]] for d in found]
     found = in_rows(found, building, walls or {}, roofs.place)
     if planes is not None:
-        on_planes(found, planes)
+        found = on_planes(found, planes)
     out: list[dict] = []
     level: list[bool] = []
     for d in found:
@@ -1710,7 +1849,7 @@ def run(tile: Tile) -> None:
         building_groups(city, ids),
         mansard_flanks(city),
         measured_walls(tile, city, ids),
-        RoofPlanes(city, ids),
+        RoofPlanes(city, ids, measured_parts(tile)),
     )
     write_geojson(out, found, tile.epsg, tile.credit)
     chimneys = sum(1 for f in found if f["properties"].get("k") == "chimney")
