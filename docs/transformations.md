@@ -3797,8 +3797,8 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   ±12° a mast by a hash), the cloth's size and its ripple. A mast mapped
   inside a building outline stands on its roof and is left out (Dresden 2
   of 368); a flag on a facade (`support=wall_mounted`) is not mapped in any
-  of the seven sites' extracts and would be left out. The cloth moves, so it
-  never casts (ADR 0009). Masts after the fresh BBBike extracts of
+  of the seven sites' extracts and would be left out. The cloth moves, so its
+  shadow is the sheet at rest (`castShadowPositionNode`, ADR 0009). Masts after the fresh BBBike extracts of
   2026-11-10: see the bake's counts in the PR.
 - **Playgrounds** `❝ taken` `◎ detected` — OSM `leisure=playground` outlines (≥ 20 m²; 339 over the
   fifteen tiles, 88 on the four first) → a pale sand floor flush on the ground (a breath warmer than the paving), seated on the

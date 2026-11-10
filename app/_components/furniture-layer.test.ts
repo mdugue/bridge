@@ -176,7 +176,7 @@ test("a clock's hands go with its cell", () => {
   ]);
 });
 
-test("a flagpole casts, its cloth flies in its design and casts nothing", () => {
+test("a flagpole casts, its cloth flies in its design and casts at rest", () => {
   const group = buildFurniture(
     [
       at({ k: "flag" }),
@@ -194,7 +194,11 @@ test("a flagpole casts, its cloth flies in its design and casts nothing", () => 
   expect(plain.drawCount).toBe(2);
   expect(german.drawCount).toBe(1);
   for (const cloth of [plain, german]) {
-    expect(cloth.castShadow).toBe(false);
+    // the shadow pass draws the sheet at rest, never the wave
+    expect(cloth.castShadow).toBe(true);
+    const mat = cloth.material as MeshStandardNodeMaterial;
+    expect(mat.castShadowPositionNode).not.toBeNull();
+    expect(mat.castShadowPositionNode).not.toBe(mat.positionNode);
   }
   // the cloth hangs at the mast's top, at its own size: a 10.5 m mast
   // lifts it, never stretches it

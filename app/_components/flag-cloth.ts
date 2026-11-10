@@ -4,8 +4,10 @@
  * wind clock — a travelling wave that grows from the hoist to the fly end,
  * bent on the vertex before the mast's instance transform. Its folds are
  * shaded by the wave's own slope, so the sheet reads as cloth without a
- * normal of its own. The cloth moves, so it never reaches the shadow map
- * (ADR 0009): the mast casts, the cloth does not. Far off the ripple fades
+ * normal of its own. The cloth moves, so its shadow is the sheet at rest
+ * (`castShadowPositionNode`, ADR 0009): the shadow map never redraws for
+ * the wave, and at 1.2 × 2 m the still shadow under a rippling cloth does
+ * not show. Far off the ripple fades
  * out, as the crowns' sway does (a sub-pixel wave only shimmers), and a
  * picture style's sway share stills it.
  *
@@ -42,7 +44,7 @@ import {
 } from "three/tsl";
 import type { FlagDesign } from "@/lib/city/features";
 import { Instances, instanceMatrix, instancePosition } from "./instancing";
-import { sceneMaterial } from "./three-utils";
+import { markThinCaster, sceneMaterial } from "./three-utils";
 import { crownSwayShare, windClock } from "./vegetation-layer";
 
 /** The cloth's size (m), 3 : 5, a forecourt flag's, whatever the mast's
@@ -170,6 +172,8 @@ function clothMaterial(): MeshStandardNodeMaterial {
   m.positionNode = instancePosition(
     vec3(positionGeometry.x, positionGeometry.y, positionGeometry.z.add(wave))
   );
+  // the shadow pass draws the sheet at rest: a still caster
+  m.castShadowPositionNode = instancePosition(positionGeometry);
   // Worked out on the vertex (the instance's matrix is a vertex input) and
   // carried over; the vertex colour multiplies in after (NodeMaterial,
   // vertexColors).
@@ -188,8 +192,8 @@ export interface Mast {
   yaw: number;
 }
 
-/** The cloths of one design on their masts (one cell's), casting no
- *  shadow; `geometry` is the design's `clothGeometry`, shared by a tile's
+/** The cloths of one design on their masts (one cell's), casting the
+ *  sheet's shadow at rest; `geometry` is the design's `clothGeometry`, shared by a tile's
  *  cells. */
 export function flagCloths(
   design: FlagDesign | "plain",
@@ -214,7 +218,8 @@ export function flagCloths(
   }
   mesh.instanceMatrix.needsUpdate = true;
   mesh.computeBoundingSphere();
-  mesh.castShadow = false;
+  mesh.castShadow = true;
+  markThinCaster(mesh, "slender");
   mesh.receiveShadow = true;
   mesh.name = `furniture-flag-${design}`;
   return mesh;
