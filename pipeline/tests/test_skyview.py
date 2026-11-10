@@ -267,9 +267,11 @@ def test_a_rebuilt_face_ends_at_its_outline():
 
     from bake.skyview import face_triangles
 
-    # an outline off the cell centres, cut at a slant: no square of the
-    # grid fits its edges, and nothing may reach past them
-    poly = shapely.Polygon([(0.3, 0.3), (9.7, 0.3), (9.7, 6.2), (0.3, 9.7)])
+    # an outline off the cell centres, cut at a slant, with a light well
+    # between four cell centres: no square of the grid fits its edges, and
+    # nothing may reach past them
+    hole = [(4.6, 3.6), (5.4, 3.6), (5.4, 4.4), (4.6, 4.4)]
+    poly = shapely.Polygon([(0.3, 0.3), (9.7, 0.3), (9.7, 6.2), (0.3, 9.7)], [hole])
     dz = [[(c - 2) * 100 for c in range(14)] for _ in range(14)]
     surface = {"x": -2, "y": 12, "res": 1, "cols": 14, "rows": 14, "dz": sum(dz, [])}
     tris = face_triangles(poly, surface, 120.0)

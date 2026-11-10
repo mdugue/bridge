@@ -581,7 +581,8 @@ def measured_model(
         sloped = inclined_cells(h, own) | roof_planes.planar_faces(h, own, step, SLOPE, RES)
         flanks = roof_planes.flank_cells(h, own, step, SLOPE, RES)
         # the ridge between two flanks is level for a cell or two
-        face = ndi.binary_closing(sloped | flanks, structure=np.ones((3, 3), bool)) & own & ~step
+        found = sloped | flanks
+        face = (ndi.binary_closing(found, structure=np.ones((3, 3), bool)) | found) & own & ~step
         flank_only = flanks & ~sloped
     for rounds in range(PLAUSIBLE_ROUNDS + 1):
         lab, faces = _regions(h, own, face, small_cells, with_faces, narrow)

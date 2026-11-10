@@ -6,6 +6,7 @@ from scipy import ndimage as ndi
 from bake.roof_planes import (
     FLANK_TOL_M,
     PLANE_TOL_M,
+    _share_axes,
     curved_surface,
     flank_cells,
     gable_surface,
@@ -88,7 +89,7 @@ def test_a_gable_with_a_row_of_dormers_is_still_its_two_flanks():
     clean = _gable(rows=90, cols=24, ridge=12.0, pitch=0.8)
     noise = np.random.default_rng(1).normal(0, 0.12, clean.shape)
     h = _dormers(clean, range(4, 86, 8), [3]) + noise
-    out = gable_surface(h, np.ones(h.shape, bool))
+    out = gable_surface(h, np.ones(h.shape, bool), SLOPE)
     assert out is not None
     # the dormers are not in it: the flanks run straight past them
     assert np.abs(out - clean)[2:-2, 1:-1].max() < FLANK_TOL_M
@@ -119,7 +120,7 @@ def test_a_block_raised_on_a_flat_roof_has_no_flanks():
     h = ndi.gaussian_filter(h, 0.8)
     own = np.ones(h.shape, bool)
     assert not flank_cells(h, own, step_cells(h), SLOPE).any()
-    assert gable_surface(h, own) is None
+    assert gable_surface(h, own, SLOPE) is None
 
 
 def test_flanks_rising_from_wherever_the_scan_dips_are_no_gable():
@@ -128,4 +129,13 @@ def test_flanks_rising_from_wherever_the_scan_dips_are_no_gable():
     for seed in range(4):
         rng = np.random.default_rng(seed)
         h = 10 + ndi.gaussian_filter(rng.normal(0, 1, (20, 60)), 3) * 10
-        assert gable_surface(h, np.ones(h.shape, bool)) is None
+        assert gable_surface(h, np.ones(h.shape, bool), SLOPE) is None
+
+
+def test_a_flank_across_from_two_houses_keeps_one_axis_with_both():
+    # one south flank, the north flanks of two houses across the ridge:
+    # whichever pair comes second, every pair shares one axis
+    dirs = {1: np.deg2rad(95.0), 2: np.deg2rad(-90.0), 3: np.deg2rad(-100.0)}
+    _share_axes(dirs, {(1, 2): 10, (1, 3): 5})
+    for k in (2, 3):
+        assert abs(np.angle(np.exp(1j * (dirs[k] - dirs[1] - np.pi)))) < 1e-9

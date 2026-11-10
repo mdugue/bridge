@@ -278,6 +278,12 @@ def face_triangles(poly: shapely.Geometry, surface: dict, z: float) -> np.ndarra
     gx, gy = np.meshgrid(xs, ys)
     inner = shapely.contains_xy(poly, gx, gy)
     full = inner[:-1, :-1] & inner[:-1, 1:] & inner[1:, :-1] & inner[1:, 1:]
+    # ... and no corner of the outline or a hole within the square
+    r, c = np.nonzero(full)
+    edge = shapely.boundary(poly)
+    shapely.prepare(edge)
+    crossed = shapely.intersects(shapely.box(xs[c], ys[r + 1], xs[c + 1], ys[r]), edge)
+    full[r[crossed], c[crossed]] = False
     r, c = np.nonzero(full)
 
     def corner(dr, dc):
@@ -285,14 +291,13 @@ def face_triangles(poly: shapely.Geometry, surface: dict, z: float) -> np.ndarra
 
     p00, p01, p10, p11 = corner(0, 0), corner(0, 1), corner(1, 0), corner(1, 1)
     out = [np.stack([p00, p01, p11], axis=1), np.stack([p00, p11, p10], axis=1)]
-    out.append(_clipped_squares(poly, a, xs, ys, ~full))
+    out.append(_clipped_squares(poly, a, xs, ys, res, ~full))
     return np.concatenate(out)
 
 
-def _clipped_squares(poly, a, xs, ys, candidates) -> np.ndarray:
+def _clipped_squares(poly, a, xs, ys, res, candidates) -> np.ndarray:
     """The squares among `candidates` the part's outline crosses, clipped
     to it and triangulated, each vertex at the square's bilinear height."""
-    res = xs[1] - xs[0] if len(xs) > 1 else 1.0
     r, c = np.nonzero(candidates)
     boxes = shapely.box(xs[c], ys[r + 1], xs[c + 1], ys[r])
     hit = shapely.intersects(boxes, poly)
