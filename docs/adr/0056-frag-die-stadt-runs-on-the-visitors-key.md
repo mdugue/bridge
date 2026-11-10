@@ -22,9 +22,10 @@ load into the browser.
    their order, the run, how it ends — is `answerTurn`
    (`lib/city/ask-run.ts`); the route (`app/api/frag/route.ts`) only
    binds it to the provider's adapter (TanStack AI: Anthropic, OpenAI,
-   OpenRouter, the Vercel AI Gateway) or the scripted one, the
-   Stadtwissen and the secret. It keeps no conversation, no key and no
-   log of either. `POST /api/schluessel` checks a key once without
+   Google Gemini, OpenRouter, the Vercel AI Gateway; the curated models
+   in `ask-city.ts`, a fast and a thorough one per maker) or the scripted
+   one, the Stadtwissen and the secret. It keeps no conversation, no key
+   and no log of either. `POST /api/schluessel` checks a key once without
    spending tokens and returns a token (an HMAC with the site's
    `FRAG_SECRET`, `lib/city/ask-token.ts`) the chat route requires.
    Every refusal, and every end the stream would not explain (the turn

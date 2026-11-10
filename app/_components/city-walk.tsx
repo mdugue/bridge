@@ -62,7 +62,7 @@ import type { HudTool } from "./hud-toolbar";
 import type { ExportContext } from "./image-export";
 import { InquiryCard } from "./inquiry-card";
 import { InquiryStrip, InquiryTapRing } from "./inquiry-strip";
-import { PickStack } from "./pick-stack";
+import { PickStack, PickSwipe } from "./pick-stack";
 import { useLiveMode } from "./live-mode";
 import { LocateMessage, useHudMessage, useLocateMe } from "./locate-button";
 import type { Say } from "./locate-button";
@@ -81,6 +81,7 @@ import { SceneSidebar } from "./scene-sidebar";
 import { WalkCard } from "./walk-player";
 import { useAskScene } from "./ask-scene";
 import { frameTargets } from "@/lib/city/ask-view";
+import { stepped } from "@/lib/city/pick-swipe";
 import { SidebarPace } from "./sidebar-pace";
 import {
   afterTask,
@@ -1482,7 +1483,15 @@ const InquiryPanel = ({
         <>
           {stack()}
           {strip}
-          {card}
+          {/* a sideways swipe across the sheet leafs through the picks */}
+          <PickSwipe
+            enabled={picked.picks.length > 1}
+            onStep={(by) =>
+              onActivate(stepped(picked.active, by, picked.picks.length))
+            }
+          >
+            {card}
+          </PickSwipe>
         </>
       ) : (
         <div className="pointer-events-none absolute inset-y-4 left-4 z-20 flex w-[min(22rem,calc(100%-2rem))] lg:w-[min(28rem,calc(100%-2rem))] 2xl:w-[32rem] flex-col items-stretch gap-2">
