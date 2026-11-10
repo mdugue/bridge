@@ -336,15 +336,24 @@ export function nicheMaterial(d: ClayDetailUniforms): MeshStandardNodeMaterial {
     );
     return shadow ? (shadow as F).mul(own) : own;
   };
-  // less sky deeper in, and in the corners
+  // the sky it sees as the drawn recess's (clay-windows `recess`): a
+  // reveal from `revealSky` at the wall to 0.6 deep in, the back 0.6, less
+  // in its corners and under its head
   const deep = clamp(local.z.div(max(size.z, 0.01)), 0, 1);
-  const edge = min(
-    min(open.x.sub(abs(local.x)), open.y.sub(abs(local.y))),
-    mix(size.z.sub(local.z), float(1), back)
+  const backEdge = min(open.x.sub(abs(local.x)), open.y.sub(abs(local.y)));
+  const underHead = smoothstep(0, max(size.z.mul(3), 0.4), open.y.sub(local.y));
+  const recessAo = mix(
+    mix(1, WINDOW_TONE.revealSky, float(1).sub(back)),
+    0.6,
+    deep
+  ).mul(
+    mix(
+      1,
+      mix(0.6, 1, smoothstep(0, 0.2, backEdge)).mul(mix(0.55, 1, underHead)),
+      back
+    )
   );
-  const corner = mix(0.55, 1, smoothstep(0, 0.1, edge));
-  const sky = mix(mix(1, WINDOW_TONE.revealSky, deep), 0.7, back);
-  m.aoNode = corner.mul(sky);
+  m.aoNode = recessAo;
   const plaster = instanceTint();
   const albedo = mix(
     plaster.mul(WINDOW_TONE.reveal),
@@ -358,16 +367,10 @@ export function nicheMaterial(d: ClayDetailUniforms): MeshStandardNodeMaterial {
   const fres = float(1).sub(clamp(abs(dot(viewDirection(), out)), 0, 1));
   const schlick = paneFresnel(fres);
   const head = clamp(local.y.div(max(size.y, 0.1)).mul(0.5).add(0.5), 0, 1);
-  // the recess's shade on the pane's sky as the drawn back's (clay-windows
-  // `recess`: 0.6 at the back, less in its corners and under its head),
-  // so a window keeps its light as it turns from drawn to real
-  const backEdge = min(open.x.sub(abs(local.x)), open.y.sub(abs(local.y)));
-  const underHead = smoothstep(0, max(size.z.mul(3), 0.4), open.y.sub(local.y));
-  const paneAo = mix(0.6, 1, smoothstep(0, 0.2, backEdge))
-    .mul(mix(0.55, 1, underHead))
-    .mul(0.6);
+  // the recess's shade on the pane's sky as on the drawn back's, so a
+  // window keeps its light as it turns from drawn to real
   const paneSky = back
-    .mul(paneAo)
+    .mul(recessAo)
     .mul(head.mul(WINDOW_SKY.up).add(schlick.mul(WINDOW_SKY.fresnel)))
     .mul(float(1).sub(d.uNight.mul(PANE_SKY_NIGHT_DIM)));
   const jks = flat(vec3(c0.w, c1.w, c2.w) as V3);

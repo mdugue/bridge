@@ -163,6 +163,10 @@ export function revealDepth(style: number): number {
   );
 }
 
+/** A dormer window's niche at most this deep (m): a roof of up to 60°
+ *  climbs 0.17 m behind it, under the window's sill. */
+const DORMER_NICHE_DEPTH_M = 0.1;
+
 /** Every opening a wall may show: its columns × its rows (a superset of
  *  what the shader draws, see the head comment). `doors`: the wall's two
  *  door slots (`_FACADE` z and w, as integers): no ground-floor opening
@@ -179,7 +183,12 @@ export function wallOpenings(
   if (centres.length === 0) {
     return [];
   }
-  const depth = revealDepth(o.style);
+  // a dormer's window sits DORMER_WINDOW.sill over the roof, which climbs
+  // behind its front: a box as deep as a wall's would reach into it
+  const dormer = bit(Math.floor(o.style + 0.5), WINDOW_STYLE.dormer) === 1;
+  const depth = dormer
+    ? Math.min(revealDepth(o.style), DORMER_NICHE_DEPTH_M)
+    : revealDepth(o.style);
   // a wall whose ground floor has no windows (a shopfront's, its windows
   // real holes in the wall; one buried, one with many doors) is signed:
   // no niche there, where one could reach into a shop window
@@ -296,14 +305,15 @@ const snormOf = (code: number) => code / 32_767;
 
 /** A wall's triangles before they are told apart by plane: its codes,
  *  its normal summed over its triangles (area-weighted, horizontal), and
- *  their centroids' offsets from its first corner summed by the same
- *  weights (its mean plane). */
+ *  their centroids' offsets from its first corner, in place and in facade
+ *  coordinate, summed by the same weights (its mean place). */
 interface WallPiece {
   wall: NicheWall;
   sx: number;
   sz: number;
   ox: number;
   oz: number;
+  os: number;
   weight: number;
 }
 
@@ -341,7 +351,7 @@ function samePiece(
   ) {
     return false;
   }
-  // along the wall, t = (n.z, −n.x) (see tileNiches)
+  // along the wall, t = (−n.z, n.x) (see tileNiches)
   const along = (-q.sz * (x - q.wall.px) + q.sx * (z - q.wall.pz)) / ql;
   return Math.abs(q.wall.s0 + along - s) <= SAME_RUN_M;
 }
@@ -396,6 +406,7 @@ function gatherWalls(
         sz: 0,
         ox: 0,
         oz: 0,
+        os: 0,
         weight: 0,
       };
       list.push(piece);
@@ -405,8 +416,11 @@ function gatherWalls(
     // (its centroid's offset)
     const mx = (p[3 * a] + p[3 * b] + p[3 * c]) / 3;
     const mz = (p[3 * a + 2] + p[3 * b + 2] + p[3 * c + 2]) / 3;
+    const ms =
+      ((f[4 * a] + f[4 * b] + f[4 * c]) / (3 * 32_767)) * FACADE_SCALE_M;
     piece.ox += (mx - piece.wall.px) * unit;
     piece.oz += (mz - piece.wall.pz) * unit;
+    piece.os += (ms - piece.wall.s0) * unit;
     piece.weight += unit;
     const z0 = base(object);
     for (const v of [a, b, c]) {
@@ -416,18 +430,19 @@ function gatherWalls(
     }
   }
   return [...pieces.values()].flatMap((list) =>
-    list.map(({ wall, sx, sz, ox, oz, weight }) => {
+    list.map(({ wall, sx, sz, ox, oz, os, weight }) => {
       const l = Math.hypot(sx, sz) || 1;
-      const nx = sx / l;
-      const nz = sz / l;
-      // anchored on the wall's mean plane, not on one quantised vertex's
-      const off = (nx * ox + nz * oz) / (weight || 1);
+      const w = weight || 1;
+      // anchored on its triangles' mean place and facade coordinate, not
+      // on one quantised vertex's (3.4 cm, 1.6 cm): on its mean plane and
+      // along it where the shader's windows stand
       return {
         ...wall,
-        nx,
-        nz,
-        px: wall.px + nx * off,
-        pz: wall.pz + nz * off,
+        nx: sx / l,
+        nz: sz / l,
+        px: wall.px + ox / w,
+        pz: wall.pz + oz / w,
+        s0: wall.s0 + os / w,
       };
     })
   );
@@ -459,7 +474,7 @@ export function tileNiches(
     if (!o) {
       continue;
     }
-    // along the wall: t = (n.z, −n.x) in the scene's (x, z) — the data
+    // along the wall: t = (−n.z, n.x) in the scene's (x, z) — the data
     // frame's (n.y, −n.x) with z = −y
     const tx = -w.nz;
     const tz = w.nx;

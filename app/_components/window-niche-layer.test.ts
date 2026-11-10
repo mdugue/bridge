@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { NICHE_STRIDE, cellNiches, packNiches } from "@/lib/city/window-niches";
 import type { CityLayer } from "./city-layer";
-import { Matrix4, Vector3 } from "three";
+import { Matrix4, Vector3 } from "three/webgpu";
 import {
   nearHouses,
   nicheGeometry,

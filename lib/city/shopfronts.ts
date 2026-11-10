@@ -370,7 +370,6 @@ export function shopfrontMesh(
   };
   const top = paneTop(w, storeyH);
   const { head } = SHOPFRONT;
-  let opened = false;
   for (const run of bayRuns(bays, w.L)) {
     const off = shift(run.span);
     for (const bay of run.bays) {
@@ -387,7 +386,6 @@ export function shopfrontMesh(
       };
       if (cuts(o)) {
         out.openings.push(o);
-        opened = true;
       }
     }
   }
@@ -398,16 +396,18 @@ export function shopfrontMesh(
   for (const span of fasciaSpans(w)) {
     const g = Math.max(groundAt(w, span[0]), groundAt(w, span[1]));
     const [z0, z1] = w.sign?.z ?? [top, top + SHOPFRONT.fasciaH];
-    // over a window it keeps a strip of wall above the opening
-    const bottom = opened ? Math.max(z0, top + FASCIA_OVER_M) : z0;
-    const height = Math.max(Math.min(z1 - bottom, FASCIA_MAX_M), 0.3);
+    // over a window it keeps a strip of wall above the opening: each
+    // opening under it by its own ground (on a slope the sign's is not the
+    // bay's), so no edge of the sign meets a window's head
+    let bottom = g + z0;
+    for (const { rect } of out.openings) {
+      if (rect.s1 > span[0] && rect.s0 < span[1]) {
+        bottom = Math.max(bottom, rect.z1 + FASCIA_OVER_M);
+      }
+    }
+    const height = Math.max(Math.min(g + z1 - bottom, FASCIA_MAX_M), 0.3);
     out.signs.push({
-      rect: {
-        s0: span[0],
-        s1: span[1],
-        z0: g + bottom,
-        z1: g + bottom + height,
-      },
+      rect: { s0: span[0], s1: span[1], z0: bottom, z1: bottom + height },
       shift: shift(span),
     });
   }

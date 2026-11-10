@@ -420,8 +420,8 @@ const BREAK_REACH_M = 0.6;
 
 /** `stretches` with the parts along `segments` taken out (EPSG; a shop
  *  window the plinth breaks for): a segment breaks a stretch it runs along
- *  (parallel, within BREAK_REACH_M of its line); a piece shorter than
- *  5 cm left over is dropped. An end a break made is marked: the joining
+ *  (both its ends within BREAK_REACH_M of the stretch's line); a piece a
+ *  break leaves shorter than 5 cm is dropped. An end a break made is marked: the joining
  *  bridges no gap there (`joinStretches`), or a narrow window's would
  *  close again. */
 export function withoutSegments(
@@ -447,12 +447,11 @@ export function withoutSegments(
       keep = keep.flatMap(([k0, k1]): [number, number][] =>
         u1 <= k0 || u0 >= k1
           ? [[k0, k1]]
-          : [
+          : ([
               [k0, Math.min(k1, u0)],
               [Math.max(k0, u1), k1],
-            ]
+            ].filter(([a, b]) => b - a >= 0.05) as [number, number][])
       );
-      keep = keep.filter(([k0, k1]) => k1 - k0 >= 0.05);
     }
     if (keep.length === 1 && keep[0][0] === 0 && keep[0][1] === len) {
       return [st];

@@ -288,7 +288,8 @@ export interface TileStreamContext {
    *  null where it has none */
   murals?: MuralSource | null;
   /** the real niches behind the near windows (window-niche-layer.ts), from
-   *  a city tile's full LoD2; null where none are drawn (a phone) */
+   *  a city tile's full LoD2; null where none are drawn (a safety level
+   *  past theirs) */
   niches?: NicheField | null;
   /** the scene fog's colour (height-fog.ts): the water's sky tint */
   fogColor: UniformNode<"color", Color>;
@@ -419,8 +420,8 @@ interface Dressed {
    *  grid's index and water index): the tile renderer counts them in the
    *  tile's glTF, but they stay when the tile goes */
   sharedBytes?: number;
-  /** its walls' copy for the niche worker while it waits for its build
-   *  (`addNiches`): weighed with the tile until handed over */
+  /** its walls' copy for the niche worker (`addNiches`): weighed with
+   *  the tile until its niches are worked out */
   nicheCopyBytes?: number;
   /** the city's hold on its shared sky-view raster (not weighed) */
   svf?: RasterHold;
@@ -2127,13 +2128,20 @@ export class DressingPlugin {
         build: async (signal) => {
           const own = input;
           input = null;
-          // handed over: its weight goes with it (the result's is the
-          // part's from its build on)
-          entry.nicheCopyBytes = 0;
           if (!own) {
             throw new Error("a tile's niches built twice");
           }
-          return await tileNichesOffThread(own, signal);
+          try {
+            return await tileNichesOffThread(own, signal);
+          } finally {
+            // worked out (or given up): its weight goes, the result's is
+            // the part's from here on (a tile that left is not reweighed)
+            entry.nicheCopyBytes = 0;
+            const tile = this.tileOf.get(scene);
+            if (tile && !this.released.has(scene)) {
+              this.tiles?.recalculateBytesUsed(tile);
+            }
+          }
         },
         hang: (built) => field.add(city, built),
       })
