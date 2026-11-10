@@ -93,8 +93,8 @@ def _prompts() -> tuple:
 
 class ModelError(RuntimeError):
     """The model could not read a crop (a worker out of memory, a model
-    changed under the code): not the photo's fault, so it is read again on
-    the next fetch — up to facades.MAX_FAILS times."""
+    changed under the code): read again on the next fetch, up to
+    facades.MAX_FAILS times (`facades._note_fails`)."""
 
 
 def reading_key() -> str:

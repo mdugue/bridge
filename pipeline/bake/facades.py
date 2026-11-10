@@ -737,9 +737,10 @@ def measure_image(job: dict) -> dict:
     """One image measured on its walls: {"img", "seq", "walls": [...]}, or
     {"img", "skip"} when it cannot be (no pose, taken down), or
     {"img", "fail"} when it could not be read now: the next run tries again.
-    A failure that is the photo's own — its thumbnail refused, not the
-    network, the token or the model — says `own` (the glass cache notes it
-    and gives the photo up after MAX_FAILS, `_done`)."""
+    A failure that is the photo's own — its thumbnail refused, or the model
+    failing on its crop; not the network, the token or a model that does
+    not load — says `own` (the glass cache notes it and gives the photo up
+    after MAX_FAILS, `_done`)."""
     from . import facade_glass, facade_measure, facade_traits
     from .facade_measure import EYE_M, class_map, load_image, rotation_matrix
 
@@ -808,12 +809,14 @@ def measure_image(job: dict) -> dict:
             else:
                 m = measure(w | {"zg": zg}, img, cls, rot, cam)
         except Exception as err:  # noqa: BLE001 — record it, measure the rest
-            # the model failing (or the worker out of memory over it) is
-            # not the photo's fault: read it again later
+            # the model failing on this crop, or the worker out of memory
+            # over it (a very long wall): read again later, and given up
+            # after MAX_FAILS like a refused thumbnail (`_note_fails`)
             if isinstance(err, facade_glass.ModelError) or (
                 kind == "glass" and isinstance(err, MemoryError)
             ):
-                return {"img": iid, "fail": f"model: {type(err).__name__}: {err}"[:200]}
+                fail = f"model: {type(err).__name__}: {err}"[:200]
+                return {"img": iid, "fail": fail, "own": True}
             m = {"err": repr(err)[:100]}
         out.append(head | m)
     return {"img": iid, "seq": job["seq"], "walls": out}
@@ -890,13 +893,13 @@ def plan_of(jobs: dict[str, dict]) -> dict[str, list[list]]:
     return {i: sorted(list(wall_key(w)) for w in jobs[i]["walls"]) for i in sorted(jobs)}
 
 
-def mark_complete(path: Path, key: str, plan: dict[str, list[list]] | None = None) -> None:
+def mark_complete(path: Path, key: str, plan: dict[str, list[list]]) -> None:
     """Ends the glass cache with the line that says every photo the plan
     `key` picked was read (`complete`), and which it picked for which wall
     (`plan_of`: the decision reads those alone, not what an earlier plan
     picked) — unless it already ends so."""
     lines = path.read_text().splitlines() if path.exists() else []
-    line = json.dumps({"complete": key, "plan": plan or {}}, separators=(",", ":"))
+    line = json.dumps({"complete": key, "plan": plan}, separators=(",", ":"))
     if not lines or lines[-1] != line:
         path.parent.mkdir(parents=True, exist_ok=True)
         with _append(path) as f:
@@ -1073,11 +1076,11 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
 
 
 def _note_fails(out: Path, owns: list[dict], tried: int) -> None:
-    """The glass cache notes the photos whose own thumbnail was refused
-    (given up after MAX_FAILS fetches, so one photo cannot keep the cache
-    from read-through) — unless all of ten or more were: that is the
-    network's or a proxy's refusal, not the photos'."""
-    if not owns or (len(owns) == tried and tried >= 10):
+    """The glass cache notes the photos that failed on their own (`own`:
+    given up after MAX_FAILS fetches, so one photo cannot keep the cache
+    from read-through) — unless ten or more and most of the run did: that
+    is a proxy's, the CDN's or the machine's failure, not the photos'."""
+    if not owns or (len(owns) >= 10 and 2 * len(owns) > tried):
         return
     with _append(out) as f:
         for r in owns:

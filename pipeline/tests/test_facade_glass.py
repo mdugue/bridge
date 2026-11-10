@@ -250,9 +250,9 @@ def test_a_glass_cache_is_read_through_when_its_last_line_says_so(tmp_path):
     cache = tmp_path / "c.jsonl"
     lines = lambda: cache.read_text().splitlines()  # noqa: E731
     assert not facades.complete([], "k")
-    facades.mark_complete(cache, "k")  # a plan with nothing to read
+    facades.mark_complete(cache, "k", {})  # a plan with nothing to read
     assert facades.complete(lines(), "k")
-    facades.mark_complete(cache, "k")
+    facades.mark_complete(cache, "k", {})
     assert cache.read_text().count("complete") == 1
     # read through for other walls or limits is not read through
     assert not facades.complete(lines(), "other")
@@ -341,6 +341,8 @@ def test_a_run_refused_everywhere_notes_no_failure(tmp_path):
     cache = tmp_path / "c.jsonl"
     own = [{"img": f"p{i}", "fail": "HTTPError: 403", "own": True} for i in range(12)]
     facades._note_fails(cache, own, 12)  # a proxy's or the network's, not the photos'
+    assert not cache.exists()
+    facades._note_fails(cache, own, 20)  # most of a run refused: the same
     assert not cache.exists()
     facades._note_fails(cache, own[:2], 12)
     assert len(cache.read_text().splitlines()) == 2
