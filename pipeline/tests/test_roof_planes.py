@@ -229,3 +229,15 @@ def test_a_vaults_half_sags_a_flank_does_not():
     # a pitched flank with dormers standing on it: straight
     flank = 15 - 0.6 * cols + np.where((rows % 6 < 2) & (cols > 3) & (cols < 7), 1.5, 0.0)
     assert not bool(_flank_plane(flank, every, np.pi)[1])
+
+
+def test_a_landmarks_face_only_flanks_found_takes_every_buildings_bar():
+    # a gable with a tenth of its cells 1.2 m under its planes (a cluttered
+    # roof): flanks for any building; a landmark's face the flank rule
+    # alone found has no other form, so the same holds for it
+    clean = _gable(rows=60, cols=24, ridge=12.0, pitch=0.8)
+    off = np.random.default_rng(4).random(clean.shape) < 0.1
+    h = clean - np.where(off, 1.2, 0.0)
+    every = np.ones(h.shape, bool)
+    assert plausible_fit(h, every, SLOPE, flanks_only=True) is not None
+    assert plausible_fit(h, every, SLOPE, landmark=True, flanks_only=True) is not None

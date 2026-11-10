@@ -991,7 +991,11 @@ def plausible_fit(
     module's head). With `flanks_only` (a face only the flank rule found),
     as flanks or None. With the surface, drawn as flanks, each cell's eave
     (`gable_fit`), else None."""
-    gable = gable_fit(h, mine, slope, res, LANDMARK_GABLE_SHARE if landmark else GABLE_SHARE)
+    # a landmark's flanks explain nearly all of it: else its scan is drawn;
+    # a face only the flank rule found has no other form, and every
+    # building's bar
+    strict = landmark and not flanks_only
+    gable = gable_fit(h, mine, slope, res, LANDMARK_GABLE_SHARE if strict else GABLE_SHARE)
     if gable is not None or flanks_only:
         return gable
     lab, planes = plane_facets(h, mine, res)

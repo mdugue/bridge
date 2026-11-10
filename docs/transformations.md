@@ -1108,7 +1108,8 @@ visual-variable codebook is in
   planes cross further off (a flank joined over a bend) no island of the
   other plane stands far from the border; other borders, a row of houses
   stepping, stay where the scan put them. The flanks are the face when, judged a cell in from its edge
-  (the eave's blur), 85 % of its cells (a landmark's 95 %) lie within
+  (the eave's blur), 85 % of its cells (a landmark's 95 %, unless only
+  the flank rule found the face: it has no other form) lie within
   0.5 m of their plane or under a blob of ≤ 30 m² up to 3 m over it, 60 %
   on it; no flank sags (a parabola through its strips' median heights
   rising > 0.5 m over its chord across the middle 70 % of its fall: a
@@ -1170,12 +1171,14 @@ visual-variable codebook is in
   simplified by 0.3 m (`coverage_simplify`, the outline kept: the
   notches where two borders meet a few centimetres apart), and points on
   a straight edge within the file's centimetre (where a neighbour's
-  border met it) dropped — each would be one more wall in the mesh:
+  border met it) dropped, as one coverage so neighbours drop the same
+  ones of their shared border (`_straightened`) — each would be one more
+  wall in the mesh:
   Dresden's rebuilt roofs have 24 % fewer outline points than before the
   regularising (the other sites 16 to 36 %). The footprint they are cut to is the
-  building's less what another roof covers, but not a strip of covered
-  cells narrower than three (a neighbour's eave over the party wall, a
-  notch a metre deep every few metres along it), the cut's raster steps
+  building's less what another roof covers, each covered piece whole
+  but not one holding no 3 × 3 cells (a neighbour's eave over the party
+  wall, a notch a metre deep every few metres along it), the cut's raster steps
   simplified by 0.75 m. Parts under 2 m dropped →
   `data/<site>/dlm/roofs_<tile>.geojson` (Polygons
   with the object `id`, the roof `z` and, for a face, its `surface`; the

@@ -84,7 +84,7 @@ own CityJSON.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -577,9 +577,10 @@ def _plausible_faces(h, lab, faces, face, landmark, flank_only, fits=None):
         rows, cols = np.nonzero(ndi.binary_dilation(mine, iterations=EXTEND_CELLS + 2))
         win = (slice(rows.min(), rows.max() + 1), slice(cols.min(), cols.max() + 1))
         src = mine[win] & face[win]
-        flanks = (mine & flank_only).sum() > 0.5 * mine.sum()
+        own = mine & face
+        flanks = (own & flank_only).sum() > 0.5 * max(int(own.sum()), 1)
         cells = src if src.any() else mine[win]
-        key = (rows.min(), cols.min(), cells.shape, cells.tobytes(), flanks)
+        key = (rows.min(), cols.min(), cells.shape, cells.tobytes(), flanks, landmark)
         if key not in fits:
             fits[key] = roof_planes.plausible_fit(
                 h[win], cells, SLOPE, RES, EXTEND_CELLS, landmark, flanks
@@ -607,6 +608,8 @@ def _straight_eaves(h, lab, faces, surface, gables, small_cells: int) -> None:
     face's; so does a level all the gables together would leave smaller
     than `small_cells` or narrower than NARROW_M (`_kept_whole`). The
     gables are judged together, on the levels as merged; in place."""
+    if not gables:
+        return
     level = np.concatenate([[np.nan], _region_medians(lab, h, int(lab.max()))])
     plans = []
     for rid, (win, fit, eave) in gables.items():
@@ -707,11 +710,10 @@ def measured_model(
     face, flank_only = np.zeros_like(own), np.zeros_like(own)
     if with_faces:
         face, flank_only = (c.copy() for c in scan.cells())
-    fits: dict = {}
     for rounds in range(PLAUSIBLE_ROUNDS + 1):
         lab, faces = _regions(h, own, face, small_cells, with_faces, narrow)
         surface, implausible, gables = _plausible_faces(
-            h, lab, faces, face, landmark, flank_only, fits
+            h, lab, faces, face, landmark, flank_only, scan.fits
         )
         if not implausible:
             break
@@ -737,6 +739,9 @@ class Scan:
     h: np.ndarray
     own: np.ndarray
     found: tuple[np.ndarray, np.ndarray] | None = None
+    # the faces' fits by window and cells (`_plausible_faces`): a face no
+    # round and no second model changed is not fitted again
+    fits: dict = field(default_factory=dict)
 
     def cells(self) -> tuple[np.ndarray, np.ndarray]:
         """The face cells and those only the flank rule found (`_face_cells`)."""
@@ -962,9 +967,8 @@ def _joined(prev: list, line: list) -> list:
 def _regular_ring(coords, walls: Walls) -> list:
     """The ring with its edges on the walls' directions and its corners
     where their lines cross (`_ring_lines`); a corner that would stand more
-    than REGULAR_MOVE_M off the ring keeps the points it stood for."""
+    than REGULAR_MOVE_M off the points it stands for keeps them."""
     pts = np.asarray(coords)[:-1, :2]
-    ring = shapely.LinearRing(coords)
     lines = _ring_lines(pts, walls) if len(pts) >= 4 else []
     if len(lines) < 3 or not any(line[2] for line in lines):
         return list(coords)
@@ -983,7 +987,10 @@ def _regular_ring(coords, walls: Walls) -> list:
         else:
             t = _cross(q - p, v) / det
             corners = [p + u * t]
-        if max(ring.distance(shapely.Point(c)) for c in corners) > REGULAR_MOVE_M:
+        # off the stretch of the ring it stands for, not the ring anywhere:
+        # across a narrow part every point lies near the other side
+        here = shapely.LineString(pts[span]) if len(span) > 1 else shapely.Point(pts[span[0]])
+        if max(here.distance(shapely.Point(c)) for c in corners) > REGULAR_MOVE_M:
             corners = [pts[k] for k in span]
         out.extend(corners)
     out.append(out[0])
@@ -1118,6 +1125,21 @@ def _noded_cover(polys: list) -> np.ndarray | None:
     return np.asarray([_polygonal(shapely.union_all(faces[owner == i])) for i in range(len(polys))])
 
 
+def _straightened(polys: list) -> list:
+    """The parts with the points on their straight edges dropped (within
+    STRAIGHT_M of their neighbours' line: where a border met an edge in the
+    tiling, each one more wall in the mesh) — as one coverage, so two
+    neighbours drop the same points of the border they share and no crack
+    or overlap opens along it; each part alone only where they are none."""
+    try:
+        cover = np.asarray(polys, dtype=object)
+        if len(polys) > 1 and shapely.coverage_is_valid(cover):
+            return list(shapely.coverage_simplify(cover, STRAIGHT_M, simplify_boundary=True))
+    except shapely.errors.GEOSException:
+        pass
+    return [shapely.simplify(shapely.make_valid(p), STRAIGHT_M) for p in polys]
+
+
 def region_polygons(
     lab: np.ndarray, heights: np.ndarray, grid: Grid, footprint, outline=None
 ) -> list[tuple[shapely.Geometry, float, int]]:
@@ -1141,15 +1163,11 @@ def region_polygons(
     cover = [_polygonal(shapely.intersection(p, footprint)) for p in cover]
     order = sorted(range(len(cover)), key=lambda i: -heights[ids[i] - 1])
     walls = building_walls(footprint if outline is None else outline)
-    cover = clean_cover(regular_cover(cover, order, footprint, walls))
+    cover = _straightened(clean_cover(regular_cover(cover, order, footprint, walls)))
     out = []
     for poly, rid in zip(cover, ids, strict=True):
         # on the centimetre grid the file is written on, so it stays valid
-        # (points on a straight edge — where a neighbour's border met it
-        # in the tiling — dropped: each would be one more wall in the mesh)
-        clipped = shapely.set_precision(
-            shapely.simplify(shapely.make_valid(poly), STRAIGHT_M), 0.01
-        )
+        clipped = shapely.set_precision(shapely.make_valid(poly), 0.01)
         for part in shapely.get_parts(clipped):
             if part.geom_type == "Polygon" and part.area >= MIN_POLY_M2:
                 out.append((part, float(heights[rid - 1]), rid))
@@ -1242,20 +1260,19 @@ def rebuild(area: Area, obj: LodObject) -> Rebuilt | None:
     miss_lod2 = miss_share(roof, dom, judged)
     if miss_lod2 <= LEVEL_MISS_SHARE or form_holds(roof[judged], dom[judged]):
         return None
-    if miss_lod2 <= MISS_SHARE:
-        h = scan_surface(dom, judged)
-        if level_share(roof, dom, h, judged) < LEVEL_SHARE or pitch_holds(roof, h, own, judged):
-            return None
+    # one scan for every judgement and model of these cells (the models'
+    # `known` cells are the judged ones)
+    scan = Scan(scan_surface(dom, judged), own)
+    if miss_lod2 <= MISS_SHARE and (
+        level_share(roof, dom, scan.h, judged) < LEVEL_SHARE
+        or pitch_holds(roof, scan.h, own, judged)
+    ):
+        return None
     # the scan sees open ground over much of it: the footprint is out of date
     # (a block torn down since), not just the roof
     if float((dom[judged] < obj.base + GROUND_M).mean()) > OPEN_SHARE:
         return None
     small = int(MIN_PART_M2 / (RES * RES))
-    known = inner & ~green & np.isfinite(dom)
-    if known.sum() < small:
-        return None
-    # one scan for every model of these cells
-    scan = Scan(scan_surface(dom, known), own)
     flat = measured_model(dom, own, inner, green, small, with_faces=False, scan=scan)
     if flat is None:
         return None
@@ -1283,12 +1300,15 @@ def rebuild(area: Area, obj: LodObject) -> Rebuilt | None:
         # which met the bar, is drawn (a LoD2 off on 88 % stays no better)
         if model is None or misses(model):
             model = flat
-    # the footprint's own outline, less what another roof covers — not a
-    # strip of cells narrower than three (a neighbour's eave reaching over
-    # the party wall: a notch a metre deep every few metres along it), and
-    # the cut's raster steps smoothed to its lines
+    # the footprint's own outline, less what another roof covers — each
+    # piece of it whole, not one holding no 3 × 3 square (a neighbour's
+    # eave reaching over the party wall: a notch a metre deep every few
+    # metres along it) —, the cut's raster steps smoothed to its lines
     outline = footprint
-    mask = ndi.binary_opening(covered & np.isfinite(roof), structure=np.ones((3, 3), bool))
+    under = covered & np.isfinite(roof)
+    pieces, _ = ndi.label(under)
+    wide = np.unique(pieces[ndi.binary_opening(under, structure=np.ones((3, 3), bool))])
+    mask = np.isin(pieces, wide[wide > 0])
     if mask.any():
         shapes = rfeatures.shapes(mask.astype(np.uint8), mask=mask, transform=grid.transform)
         cut = shapely.union_all([shapely.geometry.shape(g) for g, _ in shapes])

@@ -762,12 +762,17 @@ def on_planes(found: list[dict], planes: RoofPlanes) -> list[dict]:
     its row's height and slope; one on a roof rebuilt from DOM1 flatter
     there than MIN_SLOPE is dropped: the building draws no pitch to carry
     it, and at the LoD2's height it would float over the drawn roof or
-    sink into it. The dormers and chimneys kept, in place."""
+    sink into it — as is a dormer or chimney off every rebuilt part of its
+    host (a part dropped, or cut where another roof covers it). The
+    dormers and chimneys kept, in place."""
     kept = []
     for d in found:
         kept.append(d)
         e = planes.at(d["of"], d["x"], d["y"])
         if e is None:
+            # off every part of a rebuilt roof: nothing drawn under it
+            if planes.rebuilt(d["of"]):
+                kept.pop()
             continue
         z, slope = e
         if d.get("k") == "chimney":

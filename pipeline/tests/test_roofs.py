@@ -21,6 +21,7 @@ from bake.roofs import (
     _majority,
     _narrow,
     _polygonal,
+    _straightened,
     building_walls,
     clean_cover,
     form_holds,
@@ -534,3 +535,15 @@ def test_straight_eaves_leave_no_strip_between_two_wings_a_box():
     # both wings taking three each leave a strip narrower than NARROW_M
     take[:, 10:13] = take[:, 18:21] = True
     assert _kept_whole(lab, take, small_cells=10) == [2]
+
+
+def test_parts_sharing_a_border_drop_its_straight_points_together():
+    # two parts whose shared border wobbles by under a centimetre: dropped
+    # as one coverage, no crack or overlap opens between them
+    wobble = [(x, 5 + 0.006 * ((x * 7) % 3 - 1)) for x in np.linspace(0, 20, 41)]
+    south = shapely.Polygon([(0, 0), (20, 0), *wobble[::-1]])
+    north = shapely.Polygon([*wobble, (20, 10), (0, 10)])
+    out = _straightened([south, north])
+    assert len(out[0].exterior.coords) < len(south.exterior.coords)
+    assert shapely.area(shapely.intersection(out[0], out[1])) < 1e-9
+    assert abs(shapely.union_all(out).area - 200.0) < 1e-9
