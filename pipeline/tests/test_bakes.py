@@ -198,6 +198,7 @@ def test_a_flagpole_stands_with_its_height_and_the_flag_the_map_names():
     # nor on a roof, which is not drawn
     assert kind_of(None, None, '"support"=>"roof"', "flagpole") is None
     assert kind_of(None, None, '"location"=>"roof"', "flagpole") is None
+    assert kind_of(None, None, '"location"=>"rooftop"', "flagpole") is None
     assert _props("flag", None) == {"k": "flag"}
     assert _props("flag", '"height"=>"12 m","flag:name"=>"Germany"') == {
         "k": "flag",
@@ -210,8 +211,12 @@ def test_a_flagpole_stands_with_its_height_and_the_flag_the_map_names():
     assert "c" not in _props("flag", '"flag:type"=>"municipal","country"=>"DE"')
     assert _props("flag", '"flag:type"=>"national","country"=>"DE"')["c"] == "de"
     assert _props("flag", '"flag:wikidata"=>"Q122482"')["c"] == "eu"
-    # a flag that names its own item (Saxony's) is no German flag
-    assert "c" not in _props("flag", '"flag:wikidata"=>"Q693701","country"=>"DE"')
+    # a flag that names its own item (Berlin's) is no German flag
+    assert "c" not in _props("flag", '"flag:wikidata"=>"Q64","country"=>"DE"')
+    # ...and Saxony's own item flies Saxony's
+    assert _props("flag", '"flag:wikidata"=>"Q693701","country"=>"DE"')["c"] == "sn"
+    # the map's case does not matter
+    assert _props("flag", '"flag:type"=>"Advertising","country"=>"DE"') == {"k": "flag"}
     assert _props("flag", '"flag:name"=>"Bundesflagge","country"=>"DE"')["c"] == "de"
     # a European flag in Germany is Europe's
     assert _props("flag", '"flag:type"=>"european","country"=>"DE"')["c"] == "eu"

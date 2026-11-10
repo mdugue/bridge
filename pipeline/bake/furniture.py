@@ -54,8 +54,8 @@ flying that flag (`c`); every other flag — most are a shop's or a firm's,
 or a city's (`flag:name=Dresden` on `country=DE` is no German flag) — flies
 a pale cloth. One mapped inside a building outline or on its line (but a
 canopy's, a carport's or a stadium's) stands on its roof and is left out
-(2 of Dresden's 368), and so is one
-tagged on a roof (`support`/`location=roof`) or on a facade
+(2 masts in Dresden), and so is one
+tagged on a roof (`support=roof`, `location=roof` or `rooftop`) or on a facade
 (`support=wall_mounted`): none of the latter is mapped in the seven sites yet.
 
 A bench without a `direction` that has water (the class raster's) within
@@ -189,6 +189,7 @@ HYDRANT = {"pillar": "hydrant", "underground": "hydrantsign"}
 CLOCK = {"pole": "clock", "wall": "wallclock", "wall_mounted": "wallclock"}
 WALL_SUPPORT = {"wall", "wall_mounted"}  # a flag on a facade: not mapped as such yet
 ROOF = "roof"  # a flag on a roof (`support`/`location`): the roof is not drawn
+ROOF_LOCATIONS = frozenset({ROOF, "rooftop"})
 FLAG_H = (3.0, 30.0)  # a tagged flagpole height outside this is left out (m)
 # The flags the viewer draws in their colours, by `flag:name`/`country`/`subject`
 # (lower case); every other flag flies a pale cloth.
@@ -201,8 +202,14 @@ FLAG_DESIGNS = {
         *("eu", "europe", "europa", "european union", "europäische union", "q458", "q122482"),
         *("europaflagge", "europafahne", "flag of europe", "flag of the european union"),
     ),
-    "sn": ("sachsen", "saxony", "freistaat sachsen", "q1202", "sachsenflagge", "flag of saxony"),
-    "by": ("bayern", "bavaria", "freistaat bayern", "q980", "bayerische flagge", "flag of bavaria"),
+    "sn": (
+        *("sachsen", "saxony", "freistaat sachsen", "q1202", "q693701"),
+        *("sachsenflagge", "flagge sachsens", "flag of saxony"),
+    ),
+    "by": (
+        *("bayern", "bavaria", "freistaat bayern", "q980", "q707471"),
+        *("bayerische flagge", "flagge bayerns", "flag of bavaria"),
+    ),
     "hh": (
         "hamburg",
         "freie und hansestadt hamburg",
@@ -304,7 +311,8 @@ def kind_of(
     """What a tagged OSM point is as street furniture, or None."""
     if man_made == "flagpole":
         support = tag(other, "support")
-        aloft = support in WALL_SUPPORT or ROOF in (support, tag(other, "location"))
+        where = (tag(other, "location") or "").lower()
+        aloft = support in WALL_SUPPORT or support == ROOF or where in ROOF_LOCATIONS
         return None if aloft else "flag"
     if barrier == "bollard":
         return "bollard"
@@ -362,7 +370,7 @@ def flag(other: str | None) -> dict:
     h = osm_metres(tag(other, "height"))
     if h is not None and FLAG_H[0] <= h <= FLAG_H[1]:
         props["h"] = round(h, 1)
-    kind = tag(other, "flag:type")
+    kind = (tag(other, "flag:type") or "").strip().lower() or None
     if kind == "advertising":
         return props  # a firm's flag: its colours are not mapped
     if kind == "european" and not tag(other, "flag:name"):

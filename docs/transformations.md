@@ -3802,9 +3802,9 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   ≈ assumed: the wind (one bearing for the city, from the west-south-west,
   ±12° a mast by a hash), the cloth's size and its ripple. A mast mapped
   inside a building outline or on its line stands on its roof and is left
-  out (Dresden 2 of 368; not under a canopy, a carport or a shelter, in a
-  stadium, a ruin, a building site or an outline tagged `building=no`), as is one tagged on a roof (`support` or
-  `location=roof`); a flag on a facade (`support=wall_mounted`) is not
+  out (2 masts in Dresden; not under a canopy, a carport or a shelter, in a
+  stadium, a ruin, a building site or an outline tagged `building=no`), as is one tagged on a roof (`support=roof`,
+  `location=roof` or `rooftop`); a flag on a facade (`support=wall_mounted`) is not
   mapped in any of the seven sites' extracts and would be left out. The
   cloth moves, so its shadow is the sheet at rest
   (`castShadowPositionNode`, ADR 0009). Masts after the fresh BBBike

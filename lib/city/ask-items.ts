@@ -525,7 +525,7 @@ function solidHeight(
   if (p.arm) {
     return 6.2;
   }
-  return p.k === "flag" && p.h !== undefined ? p.h + FLAG_BALL : base;
+  return p.k === "flag" && p.h ? p.h + FLAG_BALL : base;
 }
 
 /** How thick a flag's cloth is picked (m): the sheet and its ripple. */
