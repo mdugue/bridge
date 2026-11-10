@@ -358,7 +358,6 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     facade: varying(mix(facade, vec4(0, 0, FACADE_ROOF, NO_DOOR), roof)),
     h,
     seed: rough,
-    shop: shopOf(flags),
     spec,
     storey: build.y,
     strength: WINDOWS,

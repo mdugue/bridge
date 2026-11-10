@@ -3558,8 +3558,10 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   Manuel, Alaunstraße: a house with an OSM shop or café lost the ground
   floor's windows on every wall, and a wall where one drive read a store
   sign alone — 318 of Dresden's 1 003 shopfront walls — kept blank
-  plaster under its fascia; now both keep the house's windows, the shop
-  zone still painted darker). **The storeys
+  plaster under its fascia — the bake's style word and the clay's
+  `shopOf` gate, which also took a sign the photos read, each blanked it;
+  now both keep the house's windows, the shop zone still painted
+  darker). **The storeys
   count from the street** (`liftToStreet`): a LoD2 base is the lowest
   ground round the whole footprint — a courtyard's, a light well's, a
   cellar ramp's — and lay a median 0.3 m under the street on the spawn

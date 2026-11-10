@@ -95,8 +95,6 @@ export interface WindowInputs {
   /** a per-building hash in −1…1 (its roughness jitter): a loose grid's
    *  offsets, the lit windows at night */
   seed: F;
-  /** 1 where the ground floor is a shop's (OSM, or the photos' sign) */
-  shop: F;
   /** the object's window row: axis, width, height, style */
   spec: V4;
   storey: F;
@@ -296,7 +294,8 @@ function doorClear(slot: F, centre: F, half: F): F {
  *  row — the ground floor's from the base, each upper one's from its
  *  storey line, none past the eave's clearance nor under the ground in
  *  front of a wall without ground-floor windows; the ground floor's only
- *  where no shop, shopfront or door stands. */
+ *  where no measured shopfront or door stands (an OSM shop or a sign the
+ *  photos read keeps them: only a shopfront's bays take its wall's). */
 function grid(i: WindowInputs): Grid {
   const s = i.facade.x.mul(FACADE_SCALE_M);
   const signed = i.facade.y.mul(FACADE_SCALE_M);
@@ -340,7 +339,6 @@ function grid(i: WindowInputs): Grid {
   const half = c.w.mul(0.5);
   const groundOk = float(1)
     .sub(bit(c.style, WINDOW_STYLE.noGround))
-    .mul(float(1).sub(i.shop))
     .mul(step(-0.01, signed))
     .mul(doorClear(i.facade.z, c.centre, half))
     .mul(doorClear(i.facade.w, c.centre, half))
