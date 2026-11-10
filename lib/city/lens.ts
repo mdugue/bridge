@@ -130,8 +130,8 @@ export interface LensState {
 
 /** How long after the lens comes back its focus still jumps to the aim
  *  (ms): a few frames — the autofocus casts its ray the frame the lens is
- *  wanted again — while the blur is all but faded out (0.15 % in at
- *  50 ms), so a stale focus is not pulled from in view. */
+ *  wanted again — while the blur is all but faded out (1.5 % in at
+ *  50 ms: half a pixel at the 36 px cap), so a stale focus is not pulled from in view. */
 export const FOCUS_SNAP_MS = 50;
 
 export function createLensState(): LensState {

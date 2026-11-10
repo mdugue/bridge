@@ -248,9 +248,11 @@ export function createLensBlur(
           selfFront
         ).toVar();
         // what lies behind: where its circle reaches the pixel, or for a
-        // near blur's own pixel, all of it within the search (it shows
-        // through where the foreground's circles leave the lens open)
-        const fill = mix(reaches, float(1), selfFront)
+        // near blur's own pixel, all of it within the pixel's own circle
+        // (it shows through where the foreground's circles leave the lens
+        // open; a wider search for a nearer foreground looks past it)
+        const inOwn = clamp(rC.sub(radius.mul(r)).add(0.5), 0, 1);
+        const fill = mix(reaches, inOwn, selfFront)
           .mul(float(1).sub(ahead))
           .toVar();
         back.addAssign(s.rgb.mul(fill));
