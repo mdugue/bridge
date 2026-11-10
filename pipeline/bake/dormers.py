@@ -204,6 +204,10 @@ CHIMNEY_CROWD_M = 4.0
 CHIMNEY_STACK_CELLS = 4
 CHIMNEY_MIN_LIFT_M = 0.8
 CHIMNEY_MAX_LIFT_M = 5.0
+# A chimney whose measured top stands less than CHIMNEY_DRAWN_LIFT_M (m)
+# over the rebuilt part under it is dropped: the part, drawn from the same
+# scan, holds it already.
+CHIMNEY_DRAWN_LIFT_M = 0.4
 CHIMNEY_SIDE_M = 0.6
 CHIMNEY_MAX_SIDE_M = 1.6
 # how far a chimney may reach over the object's highest roof cell (m)
@@ -740,14 +744,23 @@ class RoofPlanes:
         """Whether object `of`'s roof is read on its rebuilt parts."""
         return of < len(self.parts) and bool(self.parts[of])
 
-    def carries(self, d: dict) -> bool:
-        """Whether the roof drawn under dormer or chimney `d` holds it: on
-        a roof rebuilt from DOM1, not where it stands off every part, nor
-        a dormer where the part is flatter than MIN_SLOPE."""
+    def carries(self, d: dict, e: tuple[float, float] | None) -> bool:
+        """Whether the roof drawn under dormer or chimney `d` (`e`, its
+        `at`) holds it: on a roof rebuilt from DOM1, not where it stands
+        off every part, nor a dormer where the part is flatter than
+        MIN_SLOPE, nor a chimney whose measured top the part reaches to
+        within CHIMNEY_DRAWN_LIFT_M (the rebuilt roof holds it)."""
         if not self.rebuilt(d["of"]):
             return True
-        e = self.at(d["of"], d["x"], d["y"])
-        return e is not None and (d.get("k") == "chimney" or e[1] >= MIN_SLOPE)
+        if e is None:
+            return False
+        if d.get("k") == "chimney":
+            return d["top"] >= e[0] + CHIMNEY_DRAWN_LIFT_M
+        return e[1] >= MIN_SLOPE
+
+    def keeps(self, d: dict) -> bool:
+        """`carries`, `d`'s roof looked up."""
+        return self.carries(d, self.at(d["of"], d["x"], d["y"]))
 
     def _measured_at(self, of: int, p: shapely.Point) -> tuple[float, float] | None:
         """A rebuilt roof at `p`: the highest part over it, else the nearest
@@ -772,14 +785,16 @@ def on_planes(found: list[dict], planes: RoofPlanes) -> list[dict]:
     there than MIN_SLOPE is dropped: the building draws no pitch to carry
     it, and at the LoD2's height it would float over the drawn roof or
     sink into it — as is a dormer or chimney off every rebuilt part of its
-    host (a part dropped, or cut where another roof covers it). The
+    host (a part dropped, or cut where another roof covers it), and a
+    chimney whose measured top the rebuilt part reaches to within
+    CHIMNEY_DRAWN_LIFT_M (the part holds it already). The
     dormers and chimneys kept, in place."""
     kept = []
     for d in found:
-        if not planes.carries(d):
+        e = planes.at(d["of"], d["x"], d["y"])
+        if not planes.carries(d, e):
             continue
         kept.append(d)
-        e = planes.at(d["of"], d["x"], d["y"])
         if e is None:
             continue
         z, slope = e
@@ -1116,7 +1131,7 @@ def find(
     # what a rebuilt roof cannot carry goes before the rows are set, so no
     # row is fitted to it, nor a neighbour dropped for it
     if planes is not None:
-        found = [d for d in found if planes.carries(d)]
+        found = [d for d in found if planes.keeps(d)]
     building = [roofs.groups[d["of"]] for d in found]
     found = in_rows(found, building, walls or {}, roofs.place)
     if planes is not None:

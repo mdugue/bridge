@@ -18,6 +18,7 @@ from bake.roofs import (
     Grid,
     Model,
     _gap_owner,
+    _holds,
     _kept_whole,
     _majority,
     _narrow,
@@ -25,13 +26,13 @@ from bake.roofs import (
     _straightened,
     building_walls,
     clean_cover,
+    drawn_miss,
     form_holds,
     inclined_cells,
     level_share,
     measured_model,
     merge_regions,
     miss_share,
-    misses_drawn,
     pitch_holds,
     region_polygons,
     regular_polygon,
@@ -425,16 +426,19 @@ def test_parts_drawn_over_another_levels_cells_miss_as_drawn():
     lab[:, :20], lab[:, 20:] = 1, 2
     level = np.array([10.0, 14.0])
     model = Model(lab, level, np.zeros(3, bool), np.full(lab.shape, np.nan))
-    dom = level[lab - 1]
-    judged = np.ones(lab.shape, bool)
+    miss = drawn_miss(model, grid, level[lab - 1], np.ones(lab.shape, bool))
     left, right = shapely.box(X0, Y0, X0 + 20, Y0 + 20), shapely.box(X0 + 20, Y0, X0 + 40, Y0 + 20)
-    held = [(left, 10.0, 1), (right, 14.0, 2)]
-    assert not misses_drawn(held, model, grid, dom, judged, 1.0)
-    over = [
-        (shapely.box(X0, Y0, X0 + 35, Y0 + 20), 10.0, 1),
-        (shapely.box(X0 + 35, Y0, X0 + 40, Y0 + 20), 14.0, 2),
-    ]
-    assert misses_drawn(over, model, grid, dom, judged, 1.0)
+    assert miss([(left, 10.0, 1), (right, 14.0, 2)]) == 0.0
+    wide, rest = shapely.box(X0, Y0, X0 + 35, Y0 + 20), shapely.box(X0 + 35, Y0, X0 + 40, Y0 + 20)
+    assert abs(miss([(wide, 10.0, 1), (rest, 14.0, 2)]) - 15 / 40) < 1e-9
+
+
+def test_a_fix_up_that_leaves_a_spike_does_not_hold():
+    square = shapely.box(0, 0, 10, 10)
+    # the same square with a sliver 5 m long and 0.2 m wide on one side
+    spiked = shapely.Polygon([(0, 0), (10, 0), (10, 5), (15, 5.1), (10, 5.2), (10, 10), (0, 10)])
+    assert _holds([square], [square])
+    assert not _holds([spiked], [square])
 
 
 def test_a_part_the_tiling_leaves_inside_a_collection_is_kept():

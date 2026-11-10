@@ -687,6 +687,9 @@ def test_a_rebuilt_roof_holds_its_dormers_on_its_own_parts_not_the_lod2_faces():
     # ... and a chimney off every rebuilt part
     off = {"of": 0, "x": 5.0, "y": 9.0, "z": 12.0, "top": 13.0, "k": "chimney"}
     assert dormers.on_planes([off], planes) == []
+    # ... and one the rebuilt part already holds: its top 0.2 m over it
+    stub = {"of": 0, "x": 5.0, "y": 6.0, "z": 8.0, "top": 9.2, "k": "chimney"}
+    assert dormers.on_planes([stub], planes) == []
 
 
 def test_a_dormer_beside_a_rebuilt_ridge_reads_its_flanks_pitch():

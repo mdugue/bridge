@@ -1180,11 +1180,13 @@ visual-variable codebook is in
   border met it) dropped, as one coverage so neighbours drop the same
   ones of their shared border (`_straightened`, its edges noded again) —
   each would be one more wall in the mesh; a step of these fix-ups that
-  changes the parts' union by more than 2 % or halves a part keeps the
-  parts as they were (`_holds`), and parts laid on the walls that, as
-  drawn, miss DOM1 on more than 30 % of their judged cells or on more
-  than half the LoD2's share are drawn as the scan put them, unlaid
-  (`misses_drawn`):
+  changes the parts' union by more than 2 % or halves a part, or adds a
+  spike (a corner under 15° between edges over 0.5 m: a sliver two turned
+  borders left), keeps the parts as they were (`_holds`), and parts laid
+  on the walls that, as drawn, miss DOM1 on more than 30 % of their
+  judged cells or on more than half the LoD2's share are drawn as the
+  scan put them where those miss less (`drawn_miss`; a structure's roof
+  the same):
   Dresden's rebuilt roofs have 24 % fewer outline points than before the
   regularising (the other sites 16 to 36 %). The footprint they are cut to is the
   building's less what another roof covers, each covered piece whole
@@ -1762,9 +1764,11 @@ visual-variable codebook is in
   quarter of the 3 × 3 cells around that lies on one plane — beside a
   ridge, hip or valley not a mix of two flanks —, its ridge the
   highest of them; a dormer where the rebuilt roof is flatter than 25°,
-  and a dormer or chimney off every rebuilt part of its host, is dropped
-  before the rows are set (`RoofPlanes.carries`) — the building draws no
-  pitch, or no roof there, to carry it); until then such a roof's dormers and chimneys stood
+  a dormer or chimney off every rebuilt part of its host, and a chimney
+  whose measured top stands less than 0.4 m over the rebuilt part (the
+  part, drawn from the same scan, holds it), is dropped before the rows
+  are set (`RoofPlanes.carries`) — the building draws no pitch, or no
+  roof there, to carry it); until then such a roof's dormers and chimneys stood
   at the LoD2 faces it replaces, metres off the drawn roof — some
   chimneys' measured tops under their own feet (Dresden's rebuilt roofs
   hold 417 dormers now, 50 before; the block at Schloßstraße and

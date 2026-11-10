@@ -563,8 +563,10 @@ def _flank_classes(h, calm, slope_min):
     cls = np.zeros(h.shape, np.int64)
     if len(peaks) == 0:
         return hs, slope, aspect, cls, 0
-    off = np.abs(np.angle(np.exp(1j * (aspect[..., None] - peaks))))
-    cls = np.where(inclined & (off.min(-1) < np.deg2rad(FLANK_TOL_DEG)), off.argmin(-1) + 1, 0)
+    # each inclined cell's turn off each peak, wrapped to ±π
+    off = np.abs((aspect[inclined][:, None] - peaks + np.pi) % (2 * np.pi) - np.pi)
+    near = off.min(-1) < np.deg2rad(FLANK_TOL_DEG)
+    cls[inclined] = np.where(near, off.argmin(-1) + 1, 0)
     # a majority over 3 × 3, twice: the speckle of tiles and snow guards out
     for _ in range(2):
         best = np.zeros_like(cls)

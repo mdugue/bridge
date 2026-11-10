@@ -84,8 +84,10 @@ own CityJSON.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 import rasterio
@@ -138,6 +140,10 @@ WALL_LINE_M = 0.1  # a footprint vertex this near the line of its neighbours spl
 STRAIGHT_M = 0.01  # a point within the file's grid of the line of its neighbours is no corner
 CLEAN_M = 0.3  # the tiled parts' borders simplified this much (√ of the area dropped)
 HOLD_SHARE = 0.02  # a fix-up of the parts may change their union's area by this much
+# a corner sharper than SPIKE_DEG between two edges over SPIKE_EDGE_M is a
+# spike: a sliver two parts' turned borders left; a fix-up adds none
+SPIKE_DEG = 15.0
+SPIKE_EDGE_M = 0.5
 GAP_FACE_M2 = 1.0  # a sliver no part holds, this small, goes to a part beside it
 TILE_GRID_M = 0.01  # the parts are tiled again on the file's centimetre grid
 GAP_TOUCH_M = 1.0  # a gap between regularised parts lies beside a part along this much
@@ -636,13 +642,14 @@ def _straight_eaves(h, lab, faces, surface, gables, small_cells: int) -> None:
         take &= ~np.isin(sub, kept)
         sub[take] = rid
         top[take] = fit[take]
-    # a face's cells past its eave go to the level only joined to what is
-    # left of it: never a strip of it beyond a column the face took
+    # a face's cells past its eave go to their level only joined to what
+    # is left of it: never a strip of it beyond a column the face took,
+    # nor an island of a level the gables took whole
     for _, win, _, _, give, to in plans:
         sub = lab[win]
-        level = (sub > 0) & ~faces[sub]
-        give &= ndi.binary_propagation(level, mask=give | level)
-        sub[give] = to[give]
+        for t in np.unique(to[give]):
+            mine = give & (to == t)
+            sub[ndi.binary_propagation(sub == t, mask=mine | (sub == t)) & mine] = t
 
 
 def _pockets(rest: np.ndarray, closed: np.ndarray, small_cells: int) -> np.ndarray:
@@ -913,14 +920,25 @@ def _snapped(theta: float, mid: np.ndarray, walls: Walls) -> tuple[float, np.nda
     return float(np.arctan2(u[1], u[0])), a + u * float(u @ (mid - a))
 
 
-def _ring_lines(pts: np.ndarray, walls: Walls) -> list[list]:
-    """The ring's edges as lines [point, direction, snapped, first, last
-    corner index, length, on a wall]: an edge near a wall's direction
-    turned onto it (`_snapped`),
-    a run of them in one line merged where they lie within REGULAR_JOG_M,
-    a short edge off every wall (a rounded corner's chamfer) left out."""
+class RingLine(NamedTuple):
+    """One of `_ring_lines`' lines."""
+
+    point: np.ndarray  # a point on it
+    dir: np.ndarray  # its unit direction
+    snapped: bool  # turned onto a wall's direction
+    first: int  # the ring's point it starts at
+    last: int  # ... and ends at
+    length: float  # of the edges it stands for
+    on: bool  # on a wall's own line
+
+
+def _ring_lines(pts: np.ndarray, walls: Walls) -> list[RingLine]:
+    """The ring's edges as lines: an edge near a wall's direction turned
+    onto it (`_snapped`), a run of them in one line merged where they lie
+    within REGULAR_JOG_M, a short edge off every wall (a rounded corner's
+    chamfer) left out."""
     n = len(pts)
-    lines: list[list] = []
+    lines: list[RingLine] = []
     for i in range(n):
         a, b = pts[i], pts[(i + 1) % n]
         d = b - a
@@ -930,11 +948,12 @@ def _ring_lines(pts: np.ndarray, walls: Walls) -> list[list]:
         if snap is None and length < REGULAR_KEEP_M:
             continue
         if snap is None:
-            line = [(a + b) / 2, d / length, False, i, (i + 1) % n, length, False]
+            line = RingLine((a + b) / 2, d / length, False, i, (i + 1) % n, length, False)
         else:
             u = np.array([np.cos(snap[0]), np.sin(snap[0])])
             on = snap[1] is not None
-            line = [snap[1] if on else (a + b) / 2, u, True, i, (i + 1) % n, length, on]
+            point = snap[1] if on else (a + b) / 2
+            line = RingLine(point, u, True, i, (i + 1) % n, length, on)
         if lines and _one_line(lines[-1], line):
             lines[-1] = _joined(lines[-1], line)
             continue
@@ -945,29 +964,29 @@ def _ring_lines(pts: np.ndarray, walls: Walls) -> list[list]:
     return lines
 
 
-def _one_line(prev: list, line: list) -> bool:
+def _one_line(prev: RingLine, line: RingLine) -> bool:
     """Two of `_ring_lines`' lines running on one wall's direction the
     same way within REGULAR_JOG_M of each other — two on walls only on one
     wall's line (a jog in the footprint stays a jog), never two running
     back (a slit's or a tongue's sides)."""
-    jog = STRAIGHT_M if prev[6] and line[6] else REGULAR_JOG_M
+    jog = STRAIGHT_M if prev.on and line.on else REGULAR_JOG_M
     return (
-        prev[2]
-        and line[2]
-        and abs(float(prev[1] @ line[1]) - 1) < 1e-9
-        and abs(_cross(prev[1], line[0] - prev[0])) <= jog
+        prev.snapped
+        and line.snapped
+        and abs(float(prev.dir @ line.dir) - 1) < 1e-9
+        and abs(_cross(prev.dir, line.point - prev.point)) <= jog
     )
 
 
-def _joined(prev: list, line: list) -> list:
+def _joined(prev: RingLine, line: RingLine) -> RingLine:
     """`prev` and the `line` after it as one line, through their
     length-weighted middle — or on the wall where one of them lies on it."""
-    w0, w1 = prev[5], line[5]
-    if prev[6] != line[6]:
-        mid = prev[0] if prev[6] else line[0]
+    w0, w1 = prev.length, line.length
+    if prev.on != line.on:
+        mid = prev.point if prev.on else line.point
     else:
-        mid = (prev[0] * w0 + line[0] * w1) / (w0 + w1)
-    return [mid, prev[1], True, prev[3], line[4], w0 + w1, prev[6] or line[6]]
+        mid = (prev.point * w0 + line.point * w1) / (w0 + w1)
+    return RingLine(mid, prev.dir, True, prev.first, line.last, w0 + w1, prev.on or line.on)
 
 
 def _regular_ring(coords, walls: Walls) -> list:
@@ -976,15 +995,15 @@ def _regular_ring(coords, walls: Walls) -> list:
     than REGULAR_MOVE_M off the points it stands for keeps them."""
     pts = np.asarray(coords)[:-1, :2]
     lines = _ring_lines(pts, walls) if len(pts) >= 4 else []
-    if len(lines) < 3 or not any(line[2] for line in lines):
+    if len(lines) < 3 or not any(line.snapped for line in lines):
         return list(coords)
     out = []
     n = len(pts)
     for j, line in enumerate(lines):
         prev = lines[j - 1]
         # the points between the two lines this corner stands for
-        span = [(prev[4] + k) % n for k in range((line[3] - prev[4]) % n + 1)]
-        p, u, q, v = prev[0], prev[1], line[0], line[1]
+        span = [(prev.last + k) % n for k in range((line.first - prev.last) % n + 1)]
+        p, u, q, v = prev.point, prev.dir, line.point, line.dir
         det = _cross(u, v)
         if abs(det) < 1e-9:
             # parallel: a jog, each line's foot of the point between them
@@ -1164,23 +1183,51 @@ def _straightened(polys: list) -> list:
 def _holds(new: list, old: list) -> bool:
     """Whether the parts `new` still cover what `old` did: their union
     within HOLD_SHARE of its area, no part of 4 × MIN_POLY_M2 or more
-    shrunk to under half — a fix-up that loses a roof part is not one."""
+    shrunk to under half, no spike more (`_spikes`) — a fix-up that loses
+    a roof part, or leaves a sliver wall, is not one."""
     before = shapely.area(shapely.union_all(old))
     if abs(shapely.area(shapely.union_all(new)) - before) > HOLD_SHARE * before:
+        return False
+    if _spikes(new) > _spikes(old):
         return False
     return all(
         p.area >= 0.5 * q.area for p, q in zip(new, old, strict=True) if q.area >= 4 * MIN_POLY_M2
     )
 
 
+def _spikes(polys: list) -> int:
+    """The corners of the parts sharper than SPIKE_DEG between two edges
+    longer than SPIKE_EDGE_M."""
+    n = 0
+    rings = shapely.get_rings(shapely.get_parts(np.asarray(polys, dtype=object)))
+    for ring in rings:
+        c = shapely.get_coordinates(ring)[:-1]
+        if len(c) < 3:
+            continue
+        a, b = np.roll(c, 1, axis=0) - c, np.roll(c, -1, axis=0) - c
+        la, lb = np.hypot(*a.T), np.hypot(*b.T)
+        long = (la > SPIKE_EDGE_M) & (lb > SPIKE_EDGE_M)
+        cos = (a * b).sum(axis=1) / np.maximum(la * lb, 1e-12)
+        n += int((long & (cos > np.cos(np.radians(SPIKE_DEG)))).sum())
+    return n
+
+
 def region_polygons(
-    lab: np.ndarray, heights: np.ndarray, grid: Grid, footprint, outline=None, regular=True
+    lab: np.ndarray,
+    heights: np.ndarray,
+    grid: Grid,
+    footprint,
+    outline=None,
+    miss: Callable[[list], float] | None = None,
+    bar: float = KEEP_SHARE,
 ) -> list[tuple[shapely.Geometry, float, int]]:
     """The regions in plan: polygonised, simplified as one coverage, its
     edges along the walls of `outline` (the building's own, uncut by
-    another roof's cells; the footprint where None: `regular_cover`, unless
-    not `regular`), clipped to the footprint; each with its height and
-    label."""
+    another roof's cells; the footprint where None: `regular_cover`),
+    clipped to the footprint; each with its height and label. Laid along
+    the walls, the regions hand cells to one another: where the parts so
+    drawn miss DOM1 (`miss`, `drawn_miss`) on more than `bar` and more
+    than as the scan put them, they are drawn as the scan put them."""
     # every footprint point under a region: the labels grown outward a cell
     grown = fill_nearest(lab, lab > 0)
     near = ndi.binary_dilation(lab > 0, iterations=2)
@@ -1196,20 +1243,65 @@ def region_polygons(
     )
     cover = [_polygonal(shapely.intersection(p, footprint)) for p in cover]
     order = sorted(range(len(cover)), key=lambda i: -heights[ids[i] - 1])
-    if regular:
-        walls = building_walls(footprint if outline is None else outline)
-        laid = clean_cover(regular_cover(cover, order, footprint, walls))
-        # what the regularising lost, it may not: the parts as clipped then
-        cover = laid if _holds(laid, cover) else cover
-    cover = _straightened(cover)
+    walls = building_walls(footprint if outline is None else outline)
+    laid = clean_cover(regular_cover(cover, order, footprint, walls))
+    # what the regularising lost, it may not: the parts as clipped then
+    if not _holds(laid, cover):
+        return _drawn(cover, ids, heights)
+    out = _drawn(laid, ids, heights)
+    if miss is None or (share := miss(out)) <= bar:
+        return out
+    plain = _drawn(cover, ids, heights)
+    return plain if miss(plain) < share else out
+
+
+def _drawn(cover: list, ids: list[int], heights: np.ndarray) -> list:
+    """The parts of `cover` as written (`_straightened`, on the centimetre
+    grid, none under MIN_POLY_M2), each with its height and label."""
     out = []
-    for poly, rid in zip(cover, ids, strict=True):
+    for poly, rid in zip(_straightened(cover), ids, strict=True):
         # on the centimetre grid the file is written on, so it stays valid
         clipped = shapely.set_precision(shapely.make_valid(poly), 0.01)
         for part in shapely.get_parts(clipped):
             if part.geom_type == "Polygon" and part.area >= MIN_POLY_M2:
                 out.append((part, float(heights[rid - 1]), rid))
     return out
+
+
+def drawn_miss(
+    model: Model, grid: Grid, dom: np.ndarray, judged: np.ndarray
+) -> Callable[[list], float]:
+    """The share of the `judged` cells under parts drawn of `model`
+    (`region_polygons`) where they miss DOM1 by more than MISS_M: each
+    part at its level, a face on its surface carried past its cells
+    (`extend_face`, as `surface_grid` writes it)."""
+
+    def share(drawn: list) -> float:
+        lab = rfeatures.rasterize(
+            [(poly, rid) for poly, _, rid in drawn],
+            out_shape=grid.shape,
+            transform=grid.transform,
+            fill=0,
+            dtype="int32",
+        )
+        h = np.concatenate([[np.nan], model.level])[lab]
+        for rid in np.unique(lab[lab > 0]):
+            if not model.faces[rid]:
+                continue
+            at = lab == rid
+            mine = model.lab == rid
+            box = roof_planes.grown_box(at | mine, EXTEND_CELLS + 2)
+            sub = extend_face(model.surface[box], mine[box])
+            h[box][at[box]] = sub[at[box]]
+        return miss_share(h, dom, judged & (lab > 0))
+
+    return share
+
+
+def miss_bar(miss_lod2: float) -> float:
+    """The share of its cells a rebuilt roof may miss DOM1 on: KEEP_SHARE,
+    and half the LoD2's."""
+    return min(KEEP_SHARE, miss_lod2 / 2)
 
 
 @dataclass
@@ -1314,8 +1406,9 @@ def rebuild(area: Area, obj: LodObject) -> Rebuilt | None:
     flat = measured_model(dom, own, inner, green, small, with_faces=False, scan=scan)
     if flat is None:
         return None
+    bar = miss_bar(miss_lod2)
     miss_model = miss_share(flat.heights(), dom, judged & (flat.lab > 0))
-    if miss_model > KEEP_SHARE or miss_model > miss_lod2 / 2:
+    if miss_model > bar:
         return None
     landmark = obj.id in area.landmarks
     model = measured_model(dom, own, inner, green, small, landmark=landmark, scan=scan)
@@ -1327,8 +1420,7 @@ def rebuild(area: Area, obj: LodObject) -> Rebuilt | None:
     # hall's monitor roofs, 5 m strips 3 m over the rest, merged into blocks
     # that miss as much as the LoD2 did), they stay
     def misses(m: Model) -> bool:
-        drawn = miss_share(m.heights(), dom, judged & (m.lab > 0))
-        return drawn > KEEP_SHARE or drawn > miss_lod2 / 2
+        return miss_share(m.heights(), dom, judged & (m.lab > 0)) > bar
 
     if misses(model):
         model = measured_model(
@@ -1351,12 +1443,15 @@ def rebuild(area: Area, obj: LodObject) -> Rebuilt | None:
         shapes = rfeatures.shapes(mask.astype(np.uint8), mask=mask, transform=grid.transform)
         cut = shapely.union_all([shapely.geometry.shape(g) for g, _ in shapes])
         footprint = _polygonal(shapely.difference(footprint, shapely.simplify(cut, CUT_SMOOTH_M)))
-    drawn = region_polygons(model.lab, model.level, grid, footprint, outline)
-    # the regions laid along the walls hand cells from one to another: where
-    # that makes the parts as drawn miss DOM1 more than the model may, they
-    # stay where the scan put them
-    if drawn and misses_drawn(drawn, model, grid, dom, judged, miss_lod2):
-        drawn = region_polygons(model.lab, model.level, grid, footprint, outline, regular=False)
+    drawn = region_polygons(
+        model.lab,
+        model.level,
+        grid,
+        footprint,
+        outline,
+        miss=drawn_miss(model, grid, dom, judged),
+        bar=bar,
+    )
     parts = []
     for poly, z, rid in drawn:
         if z < obj.base + GROUND_M:
@@ -1367,33 +1462,6 @@ def rebuild(area: Area, obj: LodObject) -> Rebuilt | None:
     if not parts:
         return None
     return Rebuilt(obj.id, parts, miss_lod2, miss_model)
-
-
-def drawn_heights(drawn: list, model: Model, grid: Grid) -> np.ndarray:
-    """The roof the parts `drawn` (`region_polygons`) stand for per cell:
-    each part's level, or its face's surface carried past the face's cells
-    (`extend_face`, as `surface_grid` writes it); NaN outside them."""
-    lab = rfeatures.rasterize(
-        [(poly, rid) for poly, _, rid in drawn],
-        out_shape=grid.shape,
-        transform=grid.transform,
-        fill=0,
-        dtype="int32",
-    )
-    out = np.concatenate([[np.nan], model.level])[lab]
-    for rid in np.unique(lab[lab > 0]):
-        if model.faces[rid]:
-            at = lab == rid
-            out[at] = extend_face(model.surface, model.lab == rid)[at]
-    return np.where(lab > 0, out, np.nan)
-
-
-def misses_drawn(drawn, model, grid, dom, judged, miss_lod2) -> bool:
-    """Whether the parts as drawn miss DOM1 on more than KEEP_SHARE of the
-    judged cells under them, or more than half the share the LoD2 did."""
-    h = drawn_heights(drawn, model, grid)
-    share = miss_share(h, dom, judged & np.isfinite(h))
-    return share > KEEP_SHARE or share > miss_lod2 / 2
 
 
 def run(tile: Tile) -> None:

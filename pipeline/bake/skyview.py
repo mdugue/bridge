@@ -333,7 +333,9 @@ def _clipped_squares(poly, a, xs, ys, res, candidates) -> np.ndarray:
 def rebuilt_parts(path: Path) -> list[tuple[str, float, shapely.Geometry, dict | None]]:
     """The parts of the roofs rebuilt from DOM1 (roofs.py's
     `dlm/roofs_<t>.geojson`): each its LoD2 object's id, its `z`, its plan
-    and a face's `surface` (None on a flat part). Missing file → none."""
+    and a face's `surface` (None on a flat part). Missing file → none; a
+    feature that is no Polygon or names no object is skipped, as
+    roof_colour.py's reader does."""
     if not path.exists():
         return []
     return [
@@ -344,6 +346,7 @@ def rebuilt_parts(path: Path) -> list[tuple[str, float, shapely.Geometry, dict |
             f["properties"].get("surface"),
         )
         for f in json.loads(path.read_text()).get("features", [])
+        if (f.get("geometry") or {}).get("type") == "Polygon" and "id" in f.get("properties", {})
     ]
 
 

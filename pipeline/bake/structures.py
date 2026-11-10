@@ -488,7 +488,8 @@ def shaped_roof(
     if roofs.miss_share(model.heights(), dom, known & (model.lab > 0)) > roofs.KEEP_SHARE:
         return None
     parts = []
-    for poly, top, rid in roofs.region_polygons(model.lab, model.level, grid, geom):
+    miss = roofs.drawn_miss(model, grid, dom, known)
+    for poly, top, rid in roofs.region_polygons(model.lab, model.level, grid, geom, miss=miss):
         if top < z + roofs.GROUND_M:
             continue
         if not model.faces[rid] and top > top_at + MAST_RISE_M:
