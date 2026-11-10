@@ -108,6 +108,7 @@ import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import { createRegressionState, stepRegression } from "@/lib/city/regression";
 import { spawnViewpoint, tileExtentOf } from "@/lib/city/site";
 import type { Site, ViewpointGeometry } from "@/lib/city/site";
+import type { SitePoint } from "@/lib/city/ask-view";
 import { beyondExtents } from "@/lib/city/design-placement";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { parseTilesetExtras, tileTopsOf } from "@/lib/city/tileset";
@@ -697,6 +698,14 @@ export interface CityWalkHandle {
    * so restoring it is the same animated glide as any curated one.
    */
   captureViewpoint: () => ViewpointGeometry;
+  /**
+   * The first loaded building a sight line meets between two points of
+   * the site (EPSG, `z` m a.s.l.), or null — *Frag die Stadt*'s framing
+   * (lib/city/ask-view.ts). Only tiles with a BVH are asked.
+   */
+  sightHit: (eye: SitePoint, point: SitePoint) => SitePoint | null;
+  /** the walk/fly camera's width over its height (the canvas's shape) */
+  viewAspect: () => number;
   /** Captures the full camera pose for a reproducible snapshot. */
   getCameraState: () => CameraState;
   /**
@@ -3065,6 +3074,9 @@ async function bootApp(
   // nearest hit wins.
   const focusRaycaster = new Raycaster();
   focusRaycaster.firstHitOnly = true;
+  // *Frag die Stadt*'s framing (lib/city/ask-view.ts): its sight lines
+  const sightRaycaster = new Raycaster();
+  sightRaycaster.firstHitOnly = true;
   focusRaycaster.far = 6000;
   const focusCrosshair = new Vector2(0, 0);
   let lastFocusHit: { dist: number; name: string } | null = null;
@@ -4462,6 +4474,24 @@ async function bootApp(
       return pose.flyToViewpoint(view, glide);
     },
     captureViewpoint: pose.captureViewpoint,
+    viewAspect: () => camera.aspect,
+    sightHit: (from3, point) => {
+      const a = epsgToWorld(from3.x, from3.y, offset);
+      const b = epsgToWorld(point.x, point.y, offset);
+      const from = new Vector3(a.x, from3.z, a.z);
+      const to = new Vector3(b.x, point.z, b.z);
+      const length = from.distanceTo(to);
+      sightRaycaster.set(from, to.sub(from).normalize());
+      sightRaycaster.far = length;
+      // the tiles whose BVH is built: a sight line never builds one
+      const hit = nearestCityHit(sightRaycaster, stream.visibleCities(), false)
+        ?.hit.point;
+      if (!hit) {
+        return null;
+      }
+      const at = worldToEpsg(hit.x, hit.z, offset);
+      return { x: at.x, y: at.y, z: hit.y };
+    },
     placeAt: (view) =>
       toSpot(view.epsg.x, view.epsg.y, () => pose.placeAt(view)),
     teleportTo: (x, y) => toSpot(x, y, () => pose.teleportTo(x, y)),

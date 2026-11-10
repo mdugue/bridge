@@ -8,6 +8,7 @@ import { clientTools } from "@tanstack/ai-client";
 import {
   layerTool,
   lookTool,
+  SHOW_TARGETS,
   showTool,
   styleTool,
   timeProblem,
@@ -15,8 +16,8 @@ import {
   whereTool,
 } from "@/lib/city/ask-tools";
 import type { TimeChange } from "@/lib/city/ask-tools";
-import { askView } from "@/lib/city/ask-view";
-import type { AskTarget } from "@/lib/city/ask-view";
+import { frameTargets, streetView } from "@/lib/city/ask-view";
+import type { AskTarget, FrameContext } from "@/lib/city/ask-view";
 import type { DataLayerKey } from "@/lib/city/data-layers";
 import type { RenderStyle } from "@/lib/city/render-style";
 import type { ViewpointGeometry } from "@/lib/city/site";
@@ -34,10 +35,14 @@ export interface AskScene {
    *  what is left out stays. The instant it set, as text, and why the
    *  picture does not follow where the style keeps its own light. */
   setTime: (change: TimeChange) => { hinweis?: string; zeit: string };
-  /** glides to a view; false while there is no scene to move */
-  show: (view: ViewpointGeometry) => boolean;
+  /** glides to a view, its eye over `ground` (m a.s.l.) where given;
+   *  false while there is no scene to move */
+  show: (view: ViewpointGeometry, ground?: number) => boolean;
   /** whether a point (site CRS) lies on one of the site's tiles */
   within: (x: number, y: number) => boolean;
+  /** what the framing reads of the moment: the screen, the sun, the
+   *  loaded buildings' sight lines (lib/city/ask-view.ts) */
+  frame: () => Omit<FrameContext, "from">;
   /** the player's pose, mode, time, style and layers, for the model */
   where: () => Record<string, unknown>;
   /** asks what stands at the centre of the view (and opens its card);
@@ -58,17 +63,7 @@ export function sceneTools(scene: AskScene) {
     lookTool.client(
       async (_input, context) => await scene.look(context?.abortSignal)
     ),
-    showTool.client((input) => {
-      const target: AskTarget = input;
-      if (!scene.within(target.x, target.y)) {
-        return { ok: false, ausserhalb: true, hinweis: OUTSIDE };
-      }
-      return scene.show(
-        askView(target, scene.from() ?? target, input.aus_der_luft ?? false)
-      )
-        ? { ok: true }
-        : { ok: false, hinweis: "Die Szene lädt noch." };
-    }),
+    showTool.client((input) => showPlaces(scene, input)),
     timeTool.client(({ uhrzeit, datum }) => {
       const problem = timeProblem({ uhrzeit, datum });
       return problem
@@ -88,3 +83,69 @@ export function sceneTools(scene: AskScene) {
  *  latitude/longitude or swapped axes. */
 const OUTSIDE =
   "Dieser Punkt liegt nicht in der Stadt. x ist der Rechtswert, y der Hochwert in Metern, wie suche_stadt sie liefert — keine Grad.";
+
+/** What the model hears while there is no scene to move yet. */
+const LOADING = { ok: false, hinweis: "Die Szene lädt noch." };
+
+/** A place `zeige` names: where it is, what it is called. */
+export type AskPlace = AskTarget & { name: string };
+
+/**
+ * The farthest an aerial view of several places stands off them (m):
+ * beyond it a 20 m house is a few pixels on a phone and the fog nears
+ * (on a phone the stream ends at 2.2 km). Further spread places are
+ * shown one at a time, from their chips.
+ */
+export const AERIAL_REACH = 900;
+
+/**
+ * Flies to `places` — every one in one view, or the first alone (`alle`
+ * false, or spread too far for one) — and says what it showed. On foot
+ * the walker stands before the first. A place off the city's tiles is
+ * left out; none on them is refused.
+ */
+export function showPlaces(
+  scene: AskScene,
+  ask: { alle?: boolean; aus_der_luft?: boolean; ziele: readonly AskPlace[] }
+): Record<string, unknown> {
+  const places = ask.ziele
+    .filter((p) => scene.within(p.x, p.y))
+    .slice(0, SHOW_TARGETS);
+  const [first] = places;
+  if (!first) {
+    return { ok: false, ausserhalb: true, hinweis: OUTSIDE };
+  }
+  const from = scene.from();
+  if (ask.aus_der_luft === false) {
+    return scene.show(streetView(first, from ?? first))
+      ? { ok: true, gezeigt: [first.name] }
+      : LOADING;
+  }
+  const context = { ...scene.frame(), from };
+  const all = ask.alle !== false && places.length > 1;
+  const framed = all ? frameTargets(places, context) : null;
+  if (framed && framed.distance <= AERIAL_REACH) {
+    return scene.show(framed.view, framed.ground)
+      ? {
+          ok: true,
+          gezeigt: places.map((p) => p.name),
+          abstand_m: framed.distance,
+        }
+      : LOADING;
+  }
+  const alone = frameTargets([first], context);
+  if (!scene.show(alone.view, alone.ground)) {
+    return LOADING;
+  }
+  return {
+    ok: true,
+    gezeigt: [first.name],
+    abstand_m: alone.distance,
+    ...(framed
+      ? {
+          hinweis:
+            "Die Orte liegen zu weit auseinander für eine Ansicht: gezeigt ist der erste, die anderen stehen als Knöpfe unter der Antwort.",
+        }
+      : {}),
+  };
+}

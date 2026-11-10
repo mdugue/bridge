@@ -17,6 +17,7 @@ import type { LookState } from "@/lib/city/look-state";
 import { siteHoldsPoint } from "@/lib/city/geolocation";
 import type { LandmarkFactsIndex } from "@/lib/city/landmark-facts";
 import { METHODS } from "@/lib/city/methods";
+import { sunDirectionEnu } from "@/lib/city/sun";
 import { RENDER_STYLE_BY_ID } from "@/lib/city/render-style";
 import type { RenderStyle } from "@/lib/city/render-style";
 import type { Site } from "@/lib/city/site";
@@ -273,7 +274,7 @@ export function useAskScene(
           handleRef.current?.stopGlide();
         }
       },
-      show: (view) => {
+      show: (view, ground) => {
         const h = handleRef.current;
         if (!h) {
           return false;
@@ -281,6 +282,7 @@ export function useAskScene(
         const mine = {};
         glides.answer = mine;
         h.flyToViewpoint(view, {
+          ...(ground === undefined ? {} : { ground }),
           onProgress: (t) => {
             if (t >= 1 && glides.answer === mine) {
               glides.answer = null;
@@ -290,6 +292,19 @@ export function useAskScene(
         return true;
       },
       within: (x, y) => siteHoldsPoint(site, x, y),
+      frame: () => {
+        const h = handleRef.current;
+        const sun = h
+          ? sunDirectionEnu(current(), h.latLng.lat, h.latLng.lng)
+          : null;
+        return {
+          aspect: h
+            ? h.viewAspect()
+            : window.innerWidth / Math.max(window.innerHeight, 1),
+          sun: sun && sun.up > 0 ? { east: sun.east, north: sun.north } : null,
+          ...(h ? { sightHit: h.sightHit } : {}),
+        };
+      },
       setTime: (change) => {
         const at = instantAt(current(), change);
         setInstant(at);

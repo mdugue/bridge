@@ -153,8 +153,10 @@ export const ASK_KEY_HEADER = "x-frag-key";
 export const ASK_LIMITS = {
   /** characters of one question */
   questionChars: QUESTION_CHARS,
-  /** messages the server takes (questions, answers, tool results) */
-  messages: 40,
+  /** messages the server takes (questions, answers, tool results): an
+   *  answer with a search, a view and its follow-ups is seven of them;
+   *  the characters below are the cost's real bound */
+  messages: 48,
   /** characters of the whole conversation the server takes */
   conversationChars: 60_000,
   /** model turns of one request (each tool round is one) */

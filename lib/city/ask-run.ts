@@ -13,6 +13,7 @@
  */
 import {
   chat,
+  combineStrategies,
   chatParamsFromRequestBody,
   convertMessagesToModelMessages,
   EventType,
@@ -20,6 +21,7 @@ import {
   toServerSentEventsResponse,
 } from "@tanstack/ai";
 import type {
+  AgentLoopStrategy,
   AnyTextAdapter,
   ModelMessage,
   StreamChunk,
@@ -39,6 +41,7 @@ import type { AskFailureCode, AskRefusalCode } from "./ask-failure";
 import {
   factsOf,
   nearKnowledge,
+  nearReach,
   searchKnowledge,
   sourcesOf,
 } from "./ask-knowledge";
@@ -48,10 +51,12 @@ import type { AskPromptSite } from "./ask-prompt";
 import { verifyAskToken } from "./ask-token";
 import {
   factsTool,
+  NEAR_RADIUS,
   nearTool,
   sceneToolsFor,
   searchTool,
   sourcesTool,
+  suggestTool,
 } from "./ask-tools";
 
 /** The Stadtwissen tools, bound to one site's knowledge. */
@@ -63,13 +68,34 @@ export function knowledgeTools(k: Knowledge) {
         ? { treffer: hits }
         : { treffer: [], hinweis: "Nichts gefunden — anders schreiben?" };
     }),
-    nearTool.server(({ x, y, radius }) => ({
-      treffer: nearKnowledge(k, x, y, radius ?? 120),
-    })),
+    nearTool.server(({ x, y, radius }) => {
+      // the reach said, so the answer can say what it took for near
+      const reach = nearReach(radius ?? NEAR_RADIUS);
+      return {
+        umkreis_m: reach.buildings,
+        wahrzeichen_bis_m: reach.landmarks,
+        treffer: nearKnowledge(k, x, y, reach.buildings),
+      };
+    }),
     factsTool.server(({ id }) => factsOf(k, id) ?? { fehler: "unbekannte id" }),
     sourcesTool.server(() => ({ quellen: sourcesOf(k) })),
+    // the chips are the card's: the server only takes them in
+    suggestTool.server(() => ({ ok: true })),
   ];
 }
+
+/**
+ * A turn whose only tool calls are the follow-ups (`vorschlaege`) ends
+ * the answer: the chips need no reply, and another model turn would
+ * only cost the visitor's key a round trip to acknowledge them.
+ */
+export const endsAtSuggestions: AgentLoopStrategy = ({ messages }) => {
+  const last = messages.findLast((m) => m.role === "assistant");
+  const calls = last?.toolCalls ?? [];
+  return !(
+    calls.length > 0 && calls.every((c) => c.function.name === suggestTool.name)
+  );
+};
 
 export interface AskRun {
   adapter: AnyTextAdapter;
@@ -262,9 +288,12 @@ export function runAsk(run: AskRun) {
       ...knowledgeTools(run.knowledge),
       ...sceneToolsFor(run.site.layers),
     ],
-    agentLoopStrategy: maxIterations(
-      Math.min(ASK_LIMITS.iterations, run.turns ?? ASK_LIMITS.iterations)
-    ),
+    agentLoopStrategy: combineStrategies([
+      maxIterations(
+        Math.min(ASK_LIMITS.iterations, run.turns ?? ASK_LIMITS.iterations)
+      ),
+      endsAtSuggestions,
+    ]),
     // the prompt and the tools are the same for every request of a site:
     // the provider's cache holds them (Anthropic's cache_control, OpenAI's
     // automatic prefix cache), the conversation's thread is the key
@@ -317,6 +346,7 @@ export async function* ended(
 ): AsyncIterable<StreamChunk> {
   let last: StreamChunk | undefined;
   let before: StreamChunk | undefined;
+  const round = new LastRound();
   try {
     for await (const chunk of stream) {
       // the abort's own error would say less than the deadline's
@@ -325,14 +355,47 @@ export async function* ended(
       }
       before = last;
       last = chunk;
+      round.see(chunk);
       yield chunk;
     }
   } finally {
     onEnd();
   }
-  const why = stopText(runEnd(last, before), signal.reason === DEADLINE);
+  let end = runEnd(last, before);
+  // a round of follow-ups only ends the answer (`endsAtSuggestions`)
+  if (end === "cut" && round.onlySuggestions()) {
+    end = "stop";
+  }
+  const why = stopText(end, signal.reason === DEADLINE);
   if (why) {
     yield runError(ASK_FAILURES[why].text, why);
+  }
+}
+
+/** The tool names of the stream's last round of calls. */
+class LastRound {
+  private names: string[] = [];
+  private answered = false;
+
+  see(chunk: StreamChunk): void {
+    if (chunk.type === EventType.TOOL_CALL_START) {
+      // the first call after a round's results opens the next round
+      if (this.answered) {
+        this.names = [];
+        this.answered = false;
+      }
+      const c = chunk as { toolCallName?: unknown; toolName?: unknown };
+      const name = c.toolCallName ?? c.toolName;
+      this.names.push(typeof name === "string" ? name : "");
+    } else if (chunk.type === EventType.TOOL_CALL_RESULT) {
+      this.answered = true;
+    }
+  }
+
+  onlySuggestions(): boolean {
+    return (
+      this.names.length > 0 && this.names.every((n) => n === suggestTool.name)
+    );
   }
 }
 

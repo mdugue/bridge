@@ -1114,7 +1114,31 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
         delta: "Die Frauenkirche baute George Bähr (Quelle: Wikidata).",
       },
       { type: "TEXT_MESSAGE_END", messageId: "m1" },
+      // the follow-ups, a server tool: chips under the answer
+      {
+        type: "TOOL_CALL_START",
+        toolCallId: "c1",
+        toolCallName: "vorschlaege",
+      },
+      {
+        type: "TOOL_CALL_ARGS",
+        toolCallId: "c1",
+        delta: '{"fragen":["Wann wurde sie geweiht?"]}',
+      },
+      {
+        type: "TOOL_CALL_END",
+        toolCallId: "c1",
+        input: { fragen: ["Wann wurde sie geweiht?"] },
+      },
       { type: "RUN_FINISHED", runId: "r1", threadId: "t" },
+      {
+        type: "TOOL_CALL_RESULT",
+        messageId: "m1",
+        toolCallId: "c1",
+        content: '{"ok":true}',
+        role: "tool",
+      },
+      { type: "RUN_FINISHED", runId: "r2", threadId: "t" },
     ];
     let asked = 0;
     await page.route("**/api/frag", async (route) => {
@@ -1164,6 +1188,9 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       // (the refused answer keeps its empty, labelled row, as an
       // uncoded refusal did before: the answer's label is the last)
       await expect(card.getByText("KI", { exact: true }).last()).toBeVisible();
+      await expect(
+        card.getByRole("button", { name: "Wann wurde sie geweiht?" })
+      ).toBeVisible();
       await card
         .getByRole("button", { name: "Frag die Stadt schließen" })
         .click();

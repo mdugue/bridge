@@ -2121,7 +2121,9 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   `gml:id`, OSM name, address, storeys and shops, the ALKIS use and roof
   form decoded (`adv-codes.ts`), the height (the largest
   `measuredHeight` of the Building and its parts), its position (the
-  extent's centre and base) and Q-id —, and the tile's named monuments
+  extent's centre and base), its footprint's radius (half the extent's
+  diagonal, what *Frag die Stadt* frames a place by; a landmark's is
+  its buildings' farthest reach, capped at 1 km) and Q-id —, and the tile's named monuments
   (`stadtwissen_<tile>.json`, `scripts/bake-stadtwissen.ts`); and per
   site the landmarks with an excerpt of Wikidata's statements in words
   (instance of, architect, style, named after, location, creator,

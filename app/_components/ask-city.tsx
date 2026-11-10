@@ -46,6 +46,8 @@ import {
   providerForKey,
 } from "@/lib/city/ask-city";
 import type { AskProviderId } from "@/lib/city/ask-city";
+import { nearReach } from "@/lib/city/ask-knowledge";
+import { NEAR_RADIUS } from "@/lib/city/ask-tools";
 import { askFailure, codedRefusals } from "@/lib/city/ask-failure";
 import { createAskSession } from "@/lib/city/ask-session";
 import type { AskSession } from "@/lib/city/ask-session";
@@ -60,6 +62,7 @@ import {
 } from "@/components/ui/message-scroller";
 import { Trace, TraceIcon, TraceLine, TraceTitle } from "@/components/ui/trace";
 import { cn } from "cn";
+import { AnswerChipRows, answerChips } from "./ask-chips";
 import { clearAskKey, readAskKey, writeAskKey } from "./ask-key";
 import type { AskKey } from "./ask-key";
 import { sceneTools } from "./ask-scene-tools";
@@ -654,6 +657,14 @@ const Conversation = ({
       setText("");
     }
   };
+  // a chip's question is asked as typed, and leaves a typed draft where
+  // it is
+  const askChip = (question: string) => {
+    const q = question.trim().slice(0, ASK_LIMITS.questionChars);
+    if (q) {
+      session.dispatch({ type: "typed", text: q });
+    }
+  };
   // a spoken question gets a spoken answer; one heard while an answer
   // still loads (or while the key is checked again, or before a run is
   // attached) waits in the field,
@@ -708,19 +719,34 @@ const Conversation = ({
                   ))}
                 </div>
               )}
-              {chat.messages.map((m, i) => (
-                <MessageScrollerItem key={m.id}>
-                  <ChatMessage
-                    // an answer that used the browser's tools comes as
-                    // several messages: the label marks its first
-                    labelled={chat.messages[i - 1]?.role !== "assistant"}
-                    // only the last message of a running answer still
-                    // waits on its tools; anything else was stopped
-                    live={chat.isLoading && i === chat.messages.length - 1}
-                    message={m}
-                  />
-                </MessageScrollerItem>
-              ))}
+              {chat.messages.map((m, i) => {
+                // an answer that used the browser's tools comes as several
+                // messages: the label marks its first, the chips its last
+                const last =
+                  m.role === "assistant" &&
+                  chat.messages[i + 1]?.role !== "assistant";
+                const pending =
+                  chat.isLoading && i === chat.messages.length - 1;
+                return (
+                  <MessageScrollerItem key={m.id}>
+                    <ChatMessage
+                      labelled={chat.messages[i - 1]?.role !== "assistant"}
+                      // only the last message of a running answer still
+                      // waits on its tools; anything else was stopped
+                      live={pending}
+                      message={m}
+                    />
+                    {last && !pending && (
+                      <AnswerChipRows
+                        ask={askChip}
+                        busy={chat.isLoading}
+                        chips={answerChips(chat.messages, i)}
+                        scene={scene}
+                      />
+                    )}
+                  </MessageScrollerItem>
+                );
+              })}
               {failure && (
                 <p className="text-[12px] text-destructive" role="alert">
                   {failure.text}{" "}
@@ -856,6 +882,17 @@ function refusalLine(output: unknown): string | null {
     : argText(said.hinweis) || "Abgelehnt";
 }
 
+/** What `zeige` showed, once the browser has run it: the places
+ *  together, or the first alone when they lie too far apart. */
+function showLine(args: Record<string, unknown>, output: unknown): string {
+  if (args.aus_der_luft === false) {
+    return "Geht hin";
+  }
+  const shown = (output as { gezeigt?: unknown } | undefined)?.gezeigt;
+  const n = Array.isArray(shown) ? shown.length : 1;
+  return n > 1 ? `Zeigt ${n} Orte` : "Fliegt hin";
+}
+
 /** What a tool call says it did, in the trace under an answer. */
 function toolLine(name: string, input: unknown, output?: unknown): string {
   const args = (input ?? {}) as Record<string, unknown>;
@@ -868,7 +905,7 @@ function toolLine(name: string, input: unknown, output?: unknown): string {
       return `Sucht „${argText(args.anfrage)}“`;
     }
     case "in_der_naehe": {
-      return "Sieht sich in der Nähe um";
+      return `Sieht sich im Umkreis von ${nearReach(typeof args.radius === "number" ? args.radius : NEAR_RADIUS).buildings} m um`;
     }
     case "fakten": {
       return `Liest die Fakten zu ${argText(args.id)}`;
@@ -883,7 +920,7 @@ function toolLine(name: string, input: unknown, output?: unknown): string {
       return "Fragt, was dort steht, wohin die Ansicht zeigt";
     }
     case "zeige": {
-      return args.aus_der_luft ? "Fliegt hin" : "Geht hin";
+      return showLine(args, output);
     }
     case "setze_zeit": {
       return timeLine(args.uhrzeit, args.datum);
@@ -963,7 +1000,10 @@ const ChatMessage = ({
       </Message>
     );
   }
-  const calls = message.parts.filter((p) => p.type === "tool-call");
+  // the follow-ups are the chips under the answer, not a step of it
+  const calls = message.parts
+    .filter((p) => p.type === "tool-call")
+    .filter((p) => p.name !== "vorschlaege");
   return (
     <Message>
       <MessageContent>
