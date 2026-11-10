@@ -34,6 +34,7 @@ import {
   positionLocal,
   sin,
   smoothstep,
+  varying,
   vec3,
   vec4,
 } from "three/tsl";
@@ -149,10 +150,13 @@ function clothMaterial(): MeshStandardNodeMaterial {
   m.positionNode = instancePosition(
     vec3(positionLocal.x, positionLocal.y, positionLocal.z.add(wave))
   );
-  // the vertex colour multiplies in after (NodeMaterial, vertexColors)
-  m.colorNode = vec3(
+  // Worked out on the vertex (the instance's matrix is a vertex input) and
+  // carried over; the vertex colour multiplies in after (NodeMaterial,
+  // vertexColors).
+  const fold = varying(
     float(1).sub(cos(arg).mul(u).mul(near).abs().mul(FOLD_SHADE))
   );
+  m.colorNode = vec3(fold);
   return m;
 }
 
