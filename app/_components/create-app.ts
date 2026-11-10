@@ -102,7 +102,8 @@ import type { ExportTile } from "@/lib/city/image-export";
 import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
 import type { CameraState, PlayerPose, Xyz } from "@/lib/city/pose";
 import { nearestInSets, rayAabb, setsBox } from "@/lib/city/ask-solids";
-import type { Aabb } from "@/lib/city/ask-solids";
+import type { Aabb, AskHit } from "@/lib/city/ask-solids";
+import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import { createRegressionState, stepRegression } from "@/lib/city/regression";
 import { spawnViewpoint, tileExtentOf } from "@/lib/city/site";
 import type { Site, ViewpointGeometry } from "@/lib/city/site";
@@ -3071,19 +3072,52 @@ async function bootApp(
   const focusBoxes = new WeakMap<object, { count: number; box: Aabb | null }>();
   function* focusSets(o: Xyz, d: Xyz, far: number) {
     for (const dressing of stream.visibleDressings()) {
-      const sets = dressing.asks ?? [];
+      const sets = dressing.asks;
+      if (!sets) {
+        continue;
+      }
       let kept = focusBoxes.get(sets);
       if (kept?.count !== sets.length) {
         kept = { count: sets.length, box: setsBox(sets) };
         focusBoxes.set(sets, kept);
       }
-      const enter = kept.box && rayAabb(o, d, kept.box);
-      if (enter !== null && enter !== undefined && enter <= far) {
+      const enter = kept.box ? rayAabb(o, d, kept.box) : null;
+      if (enter !== null && enter <= far) {
         yield* sets;
       }
     }
-    yield* design?.asks() ?? [];
   }
+  // what the lens may focus on of what a ray met: not a box the probe
+  // tolerates round a landing stage or a playground's outline (it stands
+  // over the surface drawn), nor what a design's site folded away
+  const focusable = (t: AskHit<FeatureInquiry>) =>
+    t.target.kind !== "landing" &&
+    !(t.target.kind === "furniture" && t.solids.some((s) => "prism" in s)) &&
+    !foldedThing(t.target, focusRaycaster.ray.at(t.distance, focusAt), offset);
+  // The trees, lamps, furniture and monuments the probe can ask (their
+  // sets come in idle time, a mesh's BVH with a question: the focus never
+  // builds either) before `far`: a tree in the middle of the view is what
+  // the lens focuses on, not the facade behind it. A design stands on
+  // ground pressed under it, which the ground's rays do not know: it is
+  // never behind the ground, only behind a building (`buildingFar`), as
+  // for the probe.
+  const focusThing = (far: number, buildingFar: number) => {
+    const { origin, direction } = focusRaycaster.ray;
+    const tileThing = nearestInSets(
+      origin,
+      direction,
+      focusSets(origin, direction, far),
+      far,
+      focusable
+    );
+    const designThing = nearestInSets(
+      origin,
+      direction,
+      design?.asks() ?? [],
+      tileThing?.distance ?? buildingFar
+    );
+    return designThing ?? tileThing;
+  };
   const lensBlur = postProfileFor(budget.tier).dof;
   const updateFocus = () => {
     focusRaycaster.setFromCamera(focusCrosshair, camera);
@@ -3099,25 +3133,9 @@ async function bootApp(
       focusRaycaster,
       hit?.distance ?? focusRaycaster.far
     );
-    // the trees, lamps, furniture and monuments the probe can ask (their
-    // sets come in idle time, a mesh's BVH with a question: the focus
-    // never builds either): a tree in the middle of the view is what the
-    // lens focuses on, not the facade behind it — unless a design's site
-    // folded it away, as the probe passes it by
-    const { origin, direction } = focusRaycaster.ray;
-    const far = groundAt ?? hit?.distance ?? focusRaycaster.far;
-    const thing = nearestInSets(
-      origin,
-      direction,
-      focusSets(origin, direction, far),
-      far,
-      (t) =>
-        t.target.kind !== "traffic" &&
-        !foldedThing(
-          t.target,
-          focusRaycaster.ray.at(t.distance, focusAt),
-          offset
-        )
+    const thing = focusThing(
+      groundAt ?? hit?.distance ?? focusRaycaster.far,
+      hit?.distance ?? focusRaycaster.far
     );
     if (thing) {
       const point = focusRaycaster.ray.at(thing.distance, new Vector3());
@@ -3233,8 +3251,11 @@ async function bootApp(
   const walkMoved = watchMotion();
   const regression = createRegressionState();
   let regressedNow = false;
+  // the camera moved this frame (the focus rests then)
+  let walkMovedNow = false;
   const updateRegression = (dt: number) => {
-    const regressed = stepRegression(regression, walkMoved(camera), dt * 1000);
+    walkMovedNow = walkMoved(camera);
+    const regressed = stepRegression(regression, walkMovedNow, dt * 1000);
     postStack.setRegressed(regressed);
     if (regressed !== regressedNow) {
       regressedNow = regressed;
@@ -3946,8 +3967,10 @@ async function bootApp(
         tickModelOff();
         opts.onPose?.(pose.getPose());
         // a ray through the buildings and a march over the ground: only
-        // where there is a lens blur to focus (not on a phone)
-        if (lensBlur) {
+        // where there is a lens blur to focus (not on a phone), and not
+        // while the camera moves or the style draws none (the lens shows
+        // nothing then; the still frames before it returns aim it)
+        if (lensBlur && postStack.lensWanted() && !walkMovedNow) {
           updateFocus();
         }
       }

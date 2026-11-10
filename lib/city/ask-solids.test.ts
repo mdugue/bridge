@@ -165,6 +165,15 @@ test("the nearest in sets looks past the thing it starts in, one turned down and
     1000
   );
   expect(rough?.target).toBe(9);
+  // glass is passed by
+  const glass: AskSet<number> = {
+    ...unbuilt,
+    unbuilt: undefined,
+    glass: true,
+  };
+  expect(
+    nearestInSets({ x: -10, y: 2, z: 0 }, east, [glass, ...sets], 1000)?.target
+  ).toBe(0);
 });
 
 test("sets of things: a box the ray misses is never opened", () => {

@@ -213,8 +213,18 @@ export function rayDeckTop(
   if (enter === null || enter > far || d.y >= 0) {
     return null;
   }
-  // down to the slab's lowest top, at the latest
-  const leave = Math.min(far, enter + (o.y + enter * d.y - s.y0) / -d.y);
+  // down to the slab's lowest top, or across its ring, at the latest
+  let span = 0;
+  const [x0, z0] = s.ring[0] ?? [0, 0];
+  for (const [x, z] of s.ring) {
+    span = Math.max(span, Math.hypot(x - x0, z - z0));
+  }
+  const across = (2 * span) / Math.max(Math.hypot(d.x, d.z), 1e-6);
+  const leave = Math.min(
+    far,
+    enter + (o.y + enter * d.y - s.y0) / -d.y,
+    enter + across
+  );
   let above: boolean | null = null;
   for (let t = enter; t <= leave; t += SLAB_STEP) {
     const x = o.x + t * d.x;
@@ -324,6 +334,9 @@ export interface AskSet<T> {
   /** the nearest hit by the things' solids alone, building nothing (a
    *  bridge's decks as slabs) */
   rough?: (o: Xyz, d: Xyz, far: number) => AskHit<T> | null;
+  /** drawn as glass, which writes no depth: the autofocus passes it by,
+   *  or the thing it aims at would blur */
+  glass?: boolean;
 }
 
 /** The box a solid fills. */
@@ -488,7 +501,7 @@ function nearestKept<T>(
  * autofocus's question, asked ten times a second, so each set is opened
  * only when the ray enters its box before the best hit so far, and a set
  * that would first build something (`unbuilt`) answers by its solids
- * alone (`rough`) or not at all. A hit at the
+ * alone (`rough`) or not at all; one drawn as glass not at all. A hit at the
  * ray's start (it starts inside a crown or a shelter) is not what lies
  * ahead, nor one `keep` turns down (a thing a design folded away).
  */
@@ -504,7 +517,7 @@ export function nearestInSets<T>(
   for (const set of sets) {
     const reach: number = best ? best.distance : far;
     const enter = rayAabb(o, d, set.box);
-    if (enter === null || enter > reach) {
+    if (enter === null || enter > reach || set.glass) {
       continue;
     }
     const hit: AskHit<T> | null = nearestKept(set, o, d, reach, ahead);

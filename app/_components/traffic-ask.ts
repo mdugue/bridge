@@ -44,7 +44,8 @@ export function trafficAskSet(
       min: { x: bounds.min.x, y: bounds.min.y, z: bounds.min.z },
       max: { x: bounds.max.x, y: bounds.max.y, z: bounds.max.z },
     },
-    unbuilt: () => !mesh.geometry.boundsTree,
+    // the flows are drawn as glass: the autofocus passes them by
+    glass: true,
     nearest: (o, d, far) => {
       if (!group.visible) {
         return null;

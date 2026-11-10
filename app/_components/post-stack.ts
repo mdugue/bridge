@@ -211,6 +211,9 @@ export interface PostStack {
   /** The lens now (QA; the shots harness and an export wait for its
    *  `settled`). */
   getFocusInfo: () => FocusInfo;
+  /** Whether the style and the view draw a lens (motion aside): the
+   *  autofocus rests where none is. */
+  lensWanted: () => boolean;
   /** Draws the scene into its target, then the post chain to the canvas;
    *  `stepMs`, the loop's time step, advances the lens's fade and focus. */
   render: (stepMs: number) => void;
@@ -860,7 +863,7 @@ export function createPostStack(
     const { focus } = lensUniforms;
     focus.value = lensState.focusM;
     // a parallel camera (Modell) draws no lens blur
-    const fov = "fov" in view ? (view as PerspectiveCamera).fov : 0;
+    const fov = lens.isOrtho() ? 0 : (view as PerspectiveCamera).fov;
     const shown = fov > 0 ? lensFadeNow : 0;
     lensUniforms.horizonPx.value =
       horizonBlurPx(focus.value, fov, size.y) * shown;
@@ -1447,6 +1450,7 @@ export function createPostStack(
       shown.finished.render();
       overlay?.render(renderer, view);
     },
+    lensWanted: () => lensWanted(),
     getFocusInfo: () => ({
       focusDistance: lensUniforms.focus.value,
       horizonBlurPx: lensUniforms.horizonPx.value,
