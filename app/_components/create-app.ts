@@ -3307,21 +3307,21 @@ async function bootApp(
    *  and the hand's few metres. */
   const LANTERN_SLACK_M = FLAG_HEIGHT_MAX + 5;
   /** The frame's furniture flips: the eye they are measured from (none in
-   *  Modell) and whether one lay within the lantern's light. */
-  const cellFlips = { eye: null as Vector3 | null, lantern: false };
-  /** A furniture cell shown or hidden: the rings its own box can fall on
-   *  redraw (a flagpole's cell flips 800 m out: not every ring), and the
-   *  lantern where it lies within its light (held at the hand, a little
-   *  off the eye: LANTERN_SLACK_M). */
+   *  Modell), the world box they span (the rings it can fall on redraw,
+   *  once a frame however many sets flipped: a flagpole's cell flips 800 m
+   *  out, not every ring need) and whether one lay within the lantern's
+   *  light (held at the hand, a little off the eye: LANTERN_SLACK_M). */
+  const cellFlips = {
+    eye: null as Vector3 | null,
+    box: new Box3(),
+    lantern: false,
+  };
   const cellFlipped = (box: Readonly<Box3>) => {
     const { eye } = cellFlips;
     if (!eye || box.distanceToPoint(eye) <= LANTERN_RANGE + LANTERN_SLACK_M) {
       cellFlips.lantern = true;
     }
-    sunRig.invalidateShadow(
-      { minX: box.min.x, maxX: box.max.x, minZ: box.min.z, maxZ: box.max.z },
-      NEAR_CHANGE_RINGS
-    );
+    cellFlips.box.union(box);
   };
   /** `eye`: where the tiers are measured from (Modell: above the pivot);
    *  `tick`: the frame's pose tick is due. */
@@ -3350,6 +3350,7 @@ async function bootApp(
     // (none hidden in Modell: its views and exports draw one scale)
     cellFlips.eye = modelRig.owns() ? null : eye;
     cellFlips.lantern = false;
+    const flipped = cellFlips.box.makeEmpty();
     for (const d of shown) {
       for (const part of [d.furniture, d.tram]) {
         if (part) {
@@ -3359,6 +3360,17 @@ async function bootApp(
     }
     if (cellFlips.lantern) {
       invalidateLanternShadow(lantern);
+    }
+    if (!flipped.isEmpty()) {
+      sunRig.invalidateShadow(
+        {
+          minX: flipped.min.x,
+          maxX: flipped.max.x,
+          minZ: flipped.min.z,
+          maxZ: flipped.max.z,
+        },
+        NEAR_CHANGE_RINGS
+      );
     }
   };
 

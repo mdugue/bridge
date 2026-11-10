@@ -56,6 +56,7 @@ test("every site tile has the editions its buildings and ground came from", () =
   }
   // the furniture baked again on its own (the flagpoles) quotes its own
   const stands = manifest.sources.osm.stands ?? {};
+  expect(stands.furniture).toBeDefined();
   expect(`${stands.furniture}` >= `${stands.trees}`).toBe(true);
   expect(manifest.sources.wikidata.stand).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
   expect(manifest.sources.trees.stand).toBe("2026-10-01");

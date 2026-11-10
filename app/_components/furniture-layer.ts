@@ -97,8 +97,8 @@ import { markThinCaster, sceneMaterial } from "./three-utils";
  * the Y-up frame, stood on that tile's ground. The five materials (matte,
  * glowing, the flush slab's, the hands', the cloth's) carry nothing of a
  * tile — the clock, the wind and the dusk are module uniforms — so every
- * tile wears the same ones (`sceneMaterial`), and the cloths one geometry
- * per design for the site. Non-fatal: missing or empty input yields an
+ * tile wears the same ones (`sceneMaterial`); the cloths are one geometry
+ * per tile and design, freed with the tile (`tileCloths`). Non-fatal: missing or empty input yields an
  * empty group.
  */
 

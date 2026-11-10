@@ -333,8 +333,9 @@ change, not a re-bake
   - **When they draw.** A ring asks to redraw when its wanted centre has
     drifted a fifth of its half-size, the sun moves or a caster changes
     (`invalidateShadows()`: a crown tier's swap, a season change that thins or
-    fills crowns, a demolish). A furniture cell's flip within 400 m of the eye
-    leaves the widest ring alone (`NEAR_CHANGE_RINGS`). A capture and the
+    fills crowns, a demolish). A furniture cell's flip (within 350–400 m of the eye,
+    a flagpole's within 800–900 m) asks only the finer rings its box can fall
+    on (`NEAR_CHANGE_RINGS`), and the lantern only within its light. A capture and the
     boot's light stage wait for all four rings (`shadowBusy`). A tile's parts that land, leave or take over ask only the rings
     the tile can fall on (`ringTouches`, seen along the light), and only if
     what shows did change: the stream reports every tile that comes into or
