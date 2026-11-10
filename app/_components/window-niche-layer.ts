@@ -315,6 +315,9 @@ export function nicheMaterial(d: ClayDetailUniforms): MeshStandardNodeMaterial {
     vec3(unitPos.x.mul(hw), unitPos.y.mul(hh), unitPos.z.mul(dep).negate())
   ) as V3;
   const size = flat(vec3(hw, hh, dep));
+  // the opening itself: the box reaches NICHE_OVERLAP_M past it behind
+  // the wall, where neither the sun nor the eye gets in
+  const open = size.xy.sub(NICHE_OVERLAP_M);
   const back = flat(step(0.5, unitNor.z) as F);
   // the sun in the niche's frame: past the reveals' edges or not
   const sunIn = flat(
@@ -324,8 +327,8 @@ export function nicheMaterial(d: ClayDetailUniforms): MeshStandardNodeMaterial {
   const ex = local.x.add(sunIn.x.mul(reach));
   const ey = local.y.add(sunIn.y.mul(reach));
   const lit = step(0, sunIn.z)
-    .mul(smoothstep(-0.015, 0.015, size.x.sub(abs(ex))))
-    .mul(smoothstep(-0.015, 0.015, size.y.sub(abs(ey))));
+    .mul(smoothstep(-0.015, 0.015, open.x.sub(abs(ex))))
+    .mul(smoothstep(-0.015, 0.015, open.y.sub(abs(ey))));
   m.receivedShadowNode = (shadow?: unknown) => {
     const own = max(
       lit.mul(mix(1, WINDOW_TONE.backSun, back)),
@@ -336,7 +339,7 @@ export function nicheMaterial(d: ClayDetailUniforms): MeshStandardNodeMaterial {
   // less sky deeper in, and in the corners
   const deep = clamp(local.z.div(max(size.z, 0.01)), 0, 1);
   const edge = min(
-    min(size.x.sub(abs(local.x)), size.y.sub(abs(local.y))),
+    min(open.x.sub(abs(local.x)), open.y.sub(abs(local.y))),
     mix(size.z.sub(local.z), float(1), back)
   );
   const corner = mix(0.55, 1, smoothstep(0, 0.1, edge));
@@ -385,6 +388,8 @@ export interface NicheTile {
   cells: Map<number, [number, number]>;
   /** the cells' extent (scene x, z) */
   box: [number, number, number, number];
+  /** its highest niche's middle (scene y) */
+  top: number;
   /** its clay cuts openings (`NicheOptions.cutOn`) */
   cutting: boolean;
   /** the houses (root objects) whose windows are niches now */
@@ -504,7 +509,7 @@ const scratch = new Float32Array(NICHE_STRIDE);
 function scanCells(
   tile: NicheTile,
   cells: [number, number, number, number],
-  eye: [number, number],
+  eye: readonly [number, number, number],
   into: Map<number, House>,
   only?: number
 ): void {
@@ -522,7 +527,9 @@ function scanCells(
         if ((only !== undefined && key !== only) || !tile.city.stands(f[8])) {
           continue;
         }
-        const dist = Math.hypot(f[0] - eye[0], f[2] - eye[1]);
+        // from the air the height counts too (NaN: in plan only)
+        const up = Number.isNaN(eye[2]) ? 0 : Math.max(eye[2] - f[1], 0);
+        const dist = Math.hypot(f[0] - eye[0], f[2] - eye[1], up);
         let house = into.get(key);
         if (!house) {
           house = { tile, root: key, dist, niches: [] };
@@ -550,13 +557,14 @@ function housesNear(
   tiles: Iterable<NicheTile>,
   x: number,
   z: number,
-  reach: number
+  reach: number,
+  y: number
 ): House[] {
   const out: House[] = [];
   const searched = cellsOf(x - reach, x + reach, z - reach, z + reach);
   for (const tile of tiles) {
     const own = new Map<number, House>();
-    scanCells(tile, searched, [x, z], own);
+    scanCells(tile, searched, [x, z, y], own);
     for (const house of own.values()) {
       if (house.dist > reach) {
         continue;
@@ -571,7 +579,7 @@ function housesNear(
           cells[3] > searched[3])
       ) {
         const whole = new Map<number, House>();
-        scanCells(tile, cells, [x, z], whole, house.root);
+        scanCells(tile, cells, [x, z, y], whole, house.root);
         out.push(whole.get(house.root) ?? house);
       } else {
         out.push(house);
@@ -586,16 +594,18 @@ function housesNear(
  * whose nearest window lies within `radius`, or within `HOUSE_KEEP_M`
  * more of it while it already is one (`NicheTile.houses`) — whole houses,
  * the nearest first (one already in by that much nearer), as many as
- * `capacity` niches hold.
+ * `capacity` niches hold. With the eye's height `y` a window under it is
+ * that much farther (from the air, fewer houses).
  */
 export function nearHouses(
   tiles: Iterable<NicheTile>,
   x: number,
   z: number,
   radius: number,
-  capacity: number
+  capacity: number,
+  y = Number.NaN
 ): House[] {
-  const near = housesNear(tiles, x, z, radius + HOUSE_KEEP_M).filter(
+  const near = housesNear(tiles, x, z, radius + HOUSE_KEEP_M, y).filter(
     (h) => h.dist <= radius || h.tile.houses.has(h.root)
   );
   // a house that is one already ranks as if `HOUSE_KEEP_M` nearer: where
@@ -672,6 +682,9 @@ export function createNicheField(
   mesh.setColorAt(0, new Color(CLAY_BASE));
   mesh.drawCount = 0;
   mesh.frustumCulled = false;
+  // after the clay (0), as the terrain: a box behind an uncut wall fails
+  // the depth test before it is shaded
+  mesh.renderOrder = 1;
   mesh.castShadow = false;
   mesh.receiveShadow = true;
   mesh.visible = false;
@@ -698,7 +711,11 @@ export function createNicheField(
   /** the tiles near the eye cut, those far from it stop */
   const cutNear = (eye: Vector3) => {
     for (const tile of tiles.values()) {
-      const far = boxDistance(tile.box, eye.x, eye.z);
+      // (from the air the height over its highest window counts too)
+      const far = Math.hypot(
+        boxDistance(tile.box, eye.x, eye.z),
+        Math.max(eye.y - tile.top, 0)
+      );
       if (far < NICHE_RADIUS_M + CUT_ON_M) {
         setCut(tile, true);
       } else if (far > NICHE_RADIUS_M + CUT_OFF_M) {
@@ -749,7 +766,8 @@ export function createNicheField(
       eye.x,
       eye.z,
       NICHE_RADIUS_M,
-      capacity
+      capacity,
+      eye.y
     );
     // the same houses as last time: the same boxes, nothing to write or
     // upload (a walk along a street refills every 6 m)
@@ -835,14 +853,22 @@ export function createNicheField(
         ]);
       }
       const map = new Map<number, [number, number]>();
+      let top = Number.NEGATIVE_INFINITY;
       for (let i = 0; i + 2 < cells.length; i += 3) {
         map.set(cells[i], [cells[i + 1], cells[i + 2]]);
+        for (let k = cells[i + 1]; k < cells[i + 2]; k += 1) {
+          top = Math.max(
+            top,
+            unpackNiche(niches, k, 0, 0, city.table.baseZ, scratch)[1]
+          );
+        }
       }
       const tile: NicheTile = {
         city,
         niches,
         cells: map,
         box: cellBox(map.keys()),
+        top,
         cutting: false,
         houses: new Set(),
         niched: none,
@@ -883,10 +909,7 @@ export function createNicheField(
         }
         return;
       }
-      if (
-        !dirty &&
-        Math.hypot(eye.x - last.x, eye.z - last.z) < REFILL_MOVE_M
-      ) {
+      if (!dirty && eye.distanceTo(last) < REFILL_MOVE_M) {
         return;
       }
       dirty = false;

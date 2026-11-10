@@ -22,6 +22,8 @@ import {
   WINDOW_ROWS,
   WINDOW_SILL,
   WINDOW_STYLE,
+  clearOfDoor,
+  slotDoor,
   slotWallEave,
 } from "./windows";
 
@@ -162,12 +164,16 @@ export function revealDepth(style: number): number {
 }
 
 /** Every opening a wall may show: its columns × its rows (a superset of
- *  what the shader draws, see the head comment). */
+ *  what the shader draws, see the head comment). `doors`: the wall's two
+ *  door slots (`_FACADE` z and w, as integers): no ground-floor opening
+ *  within `DOOR_GAP_M` of a door they hold, as the clay's `doorClear` —
+ *  a passage's portal among them, a real hole a niche would show in. */
 export function wallOpenings(
   o: NicheObject,
   lengthCode: number,
   eaveCode: number,
-  topH: number
+  topH: number,
+  doors: readonly number[] = []
 ): WallOpening[] {
   const { centres, w } = wallColumns(o, lengthCode);
   if (centres.length === 0) {
@@ -180,16 +186,19 @@ export function wallOpenings(
   const rows = wallRows(o, eaveCode, topH).filter(
     (r) => lengthCode > 0 || r.k > 0
   );
+  const placed = doors.flatMap((code) => slotDoor(code) ?? []);
   return centres.flatMap((s, j) =>
-    rows.map((r) => ({
-      s,
-      half: w / 2,
-      v0: r.v0,
-      v1: r.v1,
-      depth,
-      j,
-      k: r.k,
-    }))
+    rows
+      .filter((r) => r.k > 0 || placed.every((d) => clearOfDoor(s, w, d)))
+      .map((r) => ({
+        s,
+        half: w / 2,
+        v0: r.v0,
+        v1: r.v1,
+        depth,
+        j,
+        k: r.k,
+      }))
   );
 }
 
@@ -215,6 +224,8 @@ export const NICHE_STRIDE = 11;
 interface NicheWall {
   object: number;
   length: number;
+  /** its door slots: the first, and the second (a door or its eave) */
+  door: number;
   eave: number;
   nx: number;
   nz: number;
@@ -354,7 +365,7 @@ function gatherWalls(
     if (!n) {
       continue;
     }
-    const key = `${object}:${length}:${f[4 * a + 3]}`;
+    const key = `${object}:${length}:${f[4 * a + 2]}:${f[4 * a + 3]}`;
     const list = pieces.get(key) ?? [];
     pieces.set(key, list);
     const unit = Math.hypot(n.x, n.z);
@@ -366,6 +377,7 @@ function gatherWalls(
         wall: {
           object,
           length,
+          door: f[4 * a + 2],
           eave: f[4 * a + 3],
           nx: 0,
           nz: 0,
@@ -434,12 +446,15 @@ export function tileNiches(
     // frame's (n.y, −n.x) with z = −y
     const tx = -w.nz;
     const tz = w.nx;
-    for (const op of wallOpenings(o, w.length, w.eave, w.top)) {
+    for (const op of wallOpenings(o, w.length, w.eave, w.top, [
+      w.door,
+      w.eave,
+    ])) {
       const mid = (op.v0 + op.v1) / 2;
       // any of its middle and corners (a hair in) on the wall: a niche
       // too many stays unseen behind it, one too few is a hole
-      const ins = Math.max(op.half - 0.05, 0);
-      const inv = Math.max((op.v1 - op.v0) / 2 - 0.05, 0);
+      const ins = Math.max(op.half - 0.01, 0);
+      const inv = Math.max((op.v1 - op.v0) / 2 - 0.01, 0);
       const probes = [
         [0, 0],
         [-ins, -inv],

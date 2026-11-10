@@ -219,9 +219,10 @@ export interface PostStack {
    *  autofocus rests where none is. */
   lensWanted: () => boolean;
   /** Draws the scene into its target, then the post chain to the canvas;
-   *  `stepMs`, the loop's time step, advances the lens's fade and focus
-   *  and paces the motion blur. */
-  render: (stepMs: number) => void;
+   *  `stepMs`, the loop's time step, advances the lens's fade and focus;
+   *  `moveMs`, the step the camera moved by (its own cap), paces the motion
+   *  blur (default `stepMs`). */
+  render: (stepMs: number, moveMs?: number) => void;
   /** world-space point under the crosshair; null = nothing hit (sky) */
   setFocusTarget: (point: Vector3 | null) => void;
   /**
@@ -1410,7 +1411,7 @@ export function createPostStack(
       styleDressing.sceneChanged();
     },
     setSunAltitude: (altitudeDeg) => stylize.setSunAltitude(altitudeDeg),
-    render: (stepMs) => {
+    render: (stepMs, moveMs = stepMs) => {
       updateFocus(stepMs);
       stylize.update(renderer.getPixelRatio(), size);
       // The frame names its targets and ends on the canvas, never on the
@@ -1453,8 +1454,8 @@ export function createPostStack(
         size,
         moving !== null && style.shaderMode === 0 && !model && regressed,
         moving?.pre === null,
-        // the loop's step: the blur smears a nominal frame's way
-        stepMs
+        // the camera's step: the blur smears a nominal frame's way
+        moveMs
       );
       const shown = frame();
       // the input named before anything is drawn or let go: `beforeAa`

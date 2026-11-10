@@ -3345,6 +3345,11 @@ async function bootApp(
     // one wind clock for every crown, the coarse ones standing in on a
     // bare fine level too
     setCrownTime(elapsed);
+    // the real window niches around the eye (window-niche-layer.ts), not
+    // in Modell: every frame (cheap until it moves or what is shown
+    // changes), so a full tile swapped for its parent takes its boxes
+    // along at once
+    niches?.update(modelRig.owns() ? null : eye, stream.visibleCities());
     if (!crownTiers.due(tick, eye)) {
       return;
     }
@@ -3364,9 +3369,6 @@ async function bootApp(
     // the street furniture's cells near the eye (furniture-layer.ts)
     // (none hidden in Modell: its views and exports draw one scale)
     const furnitureEye = modelRig.owns() ? null : eye;
-    // the real window niches around it (window-niche-layer.ts), not in
-    // Modell either
-    niches?.update(furnitureEye, stream.visibleCities());
     let cellChanged = false;
     for (const d of shown) {
       for (const part of [d.furniture, d.tram]) {
@@ -4076,8 +4078,9 @@ async function bootApp(
     // the lens's fade and focus on the clock up to `LENS_STEP_MAX_MS`, not
     // the capped step: a paced frame (Hörmodus, 2 fps) grows it in within
     // a few frames, and a stall as the stream lands still does not pop it
+    // (the motion blur on the step the camera moved by, `dt`)
     framedBuilds.draw(() =>
-      postStack.render(Math.min(frameDt * 1000, LENS_STEP_MAX_MS))
+      postStack.render(Math.min(frameDt * 1000, LENS_STEP_MAX_MS), dt * 1000)
     );
     const renderEnd = streamTimings.now();
     takeCaptureTile();

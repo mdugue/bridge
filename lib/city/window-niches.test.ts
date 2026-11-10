@@ -11,10 +11,11 @@ import {
   unpackNiche,
   tileNiches,
   wallColumns,
+  wallOpenings,
   wallRows,
 } from "./window-niches";
 import type { NicheObject } from "./window-niches";
-import { FACADE_SCALE_M, packStyle, WINDOW_DEPTH } from "./windows";
+import { doorSlot, FACADE_SCALE_M, packStyle, WINDOW_DEPTH } from "./windows";
 
 const house: NicheObject = {
   axis: 2.5,
@@ -193,6 +194,20 @@ describe("window niches", () => {
     for (let i = 0; i < niches.length; i += NICHE_STRIDE) {
       expect(niches[i + 2]).toBeCloseTo(0.01, 4);
     }
+  });
+
+  test("no ground-floor opening beside a door or a passage's portal", () => {
+    const free = wallOpenings(house, code(12), 32_767, 12.5);
+    // a 3.5 m portal in the wall's middle: the two middle columns' ground
+    // floor (±1.25 m) go, the outer ones (±3.75 m) and the storeys stay
+    const portal = wallOpenings(house, code(12), 32_767, 12.5, [
+      doorSlot(0, 3.5),
+      32_767,
+    ]);
+    expect(free.length - portal.length).toBe(2);
+    expect(portal.filter((o) => o.k === 0).map((o) => o.s)).toEqual([
+      -3.75, 3.75,
+    ]);
   });
 
   test("an object without numbers gets no rows (and the count ends)", () => {

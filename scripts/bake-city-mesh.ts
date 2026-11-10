@@ -2386,6 +2386,9 @@ export function planShopfronts(
   doors: readonly DoorFeature[],
   objectIndex: ReadonlyMap<string, number>
 ): ShopPlan[] {
+  if (walls.length === 0) {
+    return [];
+  }
   const trees = treeTriangles(baked);
   const p = baked.vertices.positions;
   const hostRootOf = (id: string) => {

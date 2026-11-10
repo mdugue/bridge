@@ -72,6 +72,7 @@ describe("window niche layer", () => {
       niches,
       cells: cellMap,
       box: [0, 0, 0, 0] as [number, number, number, number],
+      top: 0,
       cutting: false,
       houses: new Set<number>(),
       niched: new Set<number>(),
@@ -103,6 +104,12 @@ describe("window niche layer", () => {
     // (and ranks as if 20 m nearer: 35 m before house 2's 45 m)
     expect(nearHouses([tile], -25, 0, 50, 10).map((h) => h.root)).toEqual([
       0, 3, 2,
+    ]);
+    // from 45 m up (the windows at y = 0), house 2's 20 m are 49 m and
+    // house 3's 30 m 54 m: past the radius
+    tile.houses.clear();
+    expect(nearHouses([tile], 0, 0, 50, 10, 45).map((h) => h.root)).toEqual([
+      0, 2,
     ]);
     // a demolished object takes its niches with it
     demolished = 1;
