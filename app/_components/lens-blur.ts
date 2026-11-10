@@ -1,4 +1,4 @@
-import { Vector2 } from "three/webgpu";
+import { NearestFilter, Vector2 } from "three/webgpu";
 import type { RenderTarget, Texture } from "three/webgpu";
 import {
   clamp,
@@ -57,11 +57,12 @@ const TAPS = 48;
 const GOLDEN = 2.39996323;
 /** Full-resolution pixels a tile spans. */
 const TILE = 8;
-/** The tallest frame the reach covers (px): a 5K screen's. */
-const TALLEST_PX = 2880;
+/** The tallest frame the reach covers (px): a 5K screen's. A taller one
+ *  draws the blur no wider than here (post-stack.ts caps it). */
+export const LENS_TALLEST_PX = 2880;
 /** Tiles the reach looks out each way: the widest circle's radius there,
  *  and a tile more for where in their tiles the two pixels lie. */
-const REACH_TILES = Math.ceil((maxBlurPx(TALLEST_PX) / 2 + TILE) / TILE);
+const REACH_TILES = Math.ceil((maxBlurPx(LENS_TALLEST_PX) / 2 + TILE) / TILE);
 /** The composite's four gather texels around a pixel. */
 const CORNERS = [
   [0, 0],
@@ -135,6 +136,11 @@ export function createLensBlur(
     null,
     half
   );
+  // read texel by texel: a blur interpolated across a depth edge is one no
+  // pixel has (a sharp post's edge read as half the background's blur,
+  // and laid over it as a foreground)
+  prefilter.value.minFilter = NearestFilter;
+  prefilter.value.magFilter = NearestFilter;
 
   // 2. the widest near circle's radius in each tile, then around it
   const tiles = rtt(
@@ -160,7 +166,11 @@ export function createLensBlur(
       for (let y = -REACH_TILES; y <= REACH_TILES; y += 1) {
         for (let x = -REACH_TILES; x <= REACH_TILES; x += 1) {
           const off = vec2(x * TILE, y * TILE).mul(pixel);
-          near = max(near, tiles.sample(at.add(off)).r);
+          const { r } = tiles.sample(at.add(off));
+          // only as far as its circle reaches: the nearest two pixels of
+          // tiles this many apart lie a tile less apart
+          const apart = (Math.max(Math.abs(x), Math.abs(y)) - 1) * TILE;
+          near = apart > 0 ? max(near, r.mul(step(apart, r))) : max(near, r);
         }
       }
       return vec4(near, 0, 0, 1);
@@ -280,7 +290,6 @@ export function createLensBlur(
     throw new Error("lens blur: a pass has no render target");
   }
   return {
-    // reason: an rtt node is a texture node; its vec4 output at the pixel
     focused: composite,
     composite: compositeTarget.texture,
     input: inputTarget,

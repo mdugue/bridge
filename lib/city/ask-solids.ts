@@ -271,8 +271,11 @@ export interface AskSet<T> {
   box: Aabb;
   nearest: (o: Xyz, d: Xyz, far: number) => AskHit<T> | null;
   /** true while `nearest` would first build something (a mesh's BVH): the
-   *  autofocus, ten times a second, passes such a set by */
+   *  autofocus, ten times a second, asks `rough` instead, or passes it by */
   unbuilt?: () => boolean;
+  /** the nearest hit by the things' solids alone, building nothing (a
+   *  bridge's decks as slabs) */
+  rough?: (o: Xyz, d: Xyz, far: number) => AskHit<T> | null;
 }
 
 /** The box a solid fills. */
@@ -412,7 +415,8 @@ export function hitsInSets<T>(
 }
 
 /** A set's nearest hit within `far` that `keep` keeps: its next ones
- *  (`along`) where the nearest is not. */
+ *  (`along`) where the nearest is not; a set that would first build
+ *  something answers roughly (`rough`), or not at all. */
 function nearestKept<T>(
   set: AskSet<T>,
   o: Xyz,
@@ -420,6 +424,10 @@ function nearestKept<T>(
   far: number,
   keep: (hit: AskHit<T>) => boolean
 ): AskHit<T> | null {
+  if (set.unbuilt?.()) {
+    const rough = set.rough?.(o, d, far) ?? null;
+    return rough && keep(rough) ? rough : null;
+  }
   const hit = set.nearest(o, d, far);
   if (!hit || keep(hit)) {
     return hit;
@@ -431,7 +439,8 @@ function nearestKept<T>(
  * The nearest hit in the sets the ray meets within `far` (or null): the
  * autofocus's question, asked ten times a second, so each set is opened
  * only when the ray enters its box before the best hit so far, and a set
- * that would first build something (`unbuilt`) is passed by. A hit at the
+ * that would first build something (`unbuilt`) answers by its solids
+ * alone (`rough`) or not at all. A hit at the
  * ray's start (it starts inside a crown or a shelter) is not what lies
  * ahead, nor one `keep` turns down (a thing a design folded away).
  */
@@ -447,7 +456,7 @@ export function nearestInSets<T>(
   for (const set of sets) {
     const reach: number = best ? best.distance : far;
     const enter = rayAabb(o, d, set.box);
-    if (enter === null || enter > reach || set.unbuilt?.()) {
+    if (enter === null || enter > reach) {
       continue;
     }
     const hit: AskHit<T> | null = nearestKept(set, o, d, reach, ahead);

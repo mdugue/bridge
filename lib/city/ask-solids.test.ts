@@ -138,7 +138,7 @@ test("the nearest in sets looks past the thing it starts in, one turned down and
     (hit) => hit.target !== 1 && hit.target !== 0
   );
   expect(kept?.target).toBe(2);
-  // a set that would build first is not asked
+  // a set that would build first is not asked, unless roughly
   const unbuilt: AskSet<number> = {
     box: { min: { x: -5, y: 0, z: -5 }, max: { x: 5, y: 5, z: 5 } },
     nearest: () => {
@@ -153,6 +153,16 @@ test("the nearest in sets looks past the thing it starts in, one turned down and
     1000
   );
   expect(past?.target).toBe(0);
+  const rough = nearestInSets(
+    { x: -10, y: 2, z: 0 },
+    east,
+    [
+      { ...unbuilt, rough: () => ({ target: 9, distance: 3, solids: [] }) },
+      ...sets,
+    ],
+    1000
+  );
+  expect(rough?.target).toBe(9);
 });
 
 test("sets of things: a box the ray misses is never opened", () => {

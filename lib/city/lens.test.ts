@@ -1,12 +1,15 @@
 import { expect, test } from "bun:test";
 import {
+  createLensState,
   FOCUS_PULL_MS,
   focalLengthMm,
   horizonBlurPx,
   LENS_FADE_MS,
   lensFadeIn,
+  lensSettled,
   maxBlurPx,
   pullFocus,
+  stepLens,
 } from "./lens";
 
 test("the default 55° view is a 23 mm lens on full frame", () => {
@@ -58,4 +61,25 @@ test("the fade is monotone and eased", () => {
   expect(lensFadeIn(LENS_FADE_MS * 0.1)).toBeLessThan(0.1);
   expect(lensFadeIn(LENS_FADE_MS / 2)).toBeCloseTo(0.5, 6);
   expect(lensFadeIn(LENS_FADE_MS * 2)).toBe(1);
+});
+
+test("the lens grows in while drawn, starts over when not, and focuses at once while unseen", () => {
+  const lens = createLensState();
+  // not drawn (moving, or a style without it): nothing shows, the focus
+  // is where it is aimed
+  expect(stepLens(lens, false, 8, 16)).toBe(0);
+  expect(lens.focusM).toBe(8);
+  expect(lensSettled(lens, true, 8)).toBe(false);
+  expect(lensSettled(lens, false, 8)).toBe(true);
+  // drawn: half the fade later half of it shows, the focus pulled
+  expect(stepLens(lens, true, 8, LENS_FADE_MS / 2)).toBeCloseTo(0.5, 6);
+  stepLens(lens, true, 80, FOCUS_PULL_MS);
+  expect(lens.focusM).toBeGreaterThan(8);
+  expect(lens.focusM).toBeLessThan(80);
+  expect(lensSettled(lens, true, 80)).toBe(false);
+  stepLens(lens, true, 80, FOCUS_PULL_MS * 20);
+  expect(lensSettled(lens, true, 80)).toBe(true);
+  // a move drops it; it comes back from none
+  expect(stepLens(lens, false, 80, 16)).toBe(0);
+  expect(stepLens(lens, true, 80, 16)).toBeLessThan(0.01);
 });

@@ -3061,11 +3061,14 @@ async function bootApp(
   const focusCrosshair = new Vector2(0, 0);
   let lastFocusHit: { dist: number; name: string } | null = null;
   const focusAt = new Vector3();
-  // every visible tile's built ask sets, without a copy ten times a second
+  // what the probe can ask, without a copy ten times a second: every
+  // visible tile's built ask sets, the data layers' and a design's
   function* focusSets() {
     for (const dressing of stream.visibleDressings()) {
       yield* dressing.asks ?? [];
     }
+    yield* dataLayers.current()?.asks() ?? [];
+    yield* design?.asks() ?? [];
   }
   const lensBlur = postProfileFor(budget.tier).dof;
   const updateFocus = () => {
@@ -3216,7 +3219,7 @@ async function bootApp(
   let regressedNow = false;
   const updateRegression = (dt: number) => {
     const regressed = stepRegression(regression, walkMoved(camera), dt * 1000);
-    postStack.setRegressed(regressed, dt * 1000);
+    postStack.setRegressed(regressed);
     if (regressed !== regressedNow) {
       regressedNow = regressed;
       updatePocDebug({ regressed });
@@ -3639,7 +3642,11 @@ async function bootApp(
    *  one a frame), or after a bounded wait: a stream of landing tiles never
    *  holds it for good. */
   const aimCaptureTile = () => {
-    const waiting = !capture && captureQueue.length > 0 && sunRig.shadowBusy();
+    // the shadow rings redrawn, and the lens grown in and focused
+    const waiting =
+      !capture &&
+      captureQueue.length > 0 &&
+      (sunRig.shadowBusy() || !postStack.getFocusInfo().settled);
     captureHeldFrom = waiting ? (captureHeldFrom ?? performance.now()) : null;
     if (
       captureHeldFrom !== null &&
@@ -3954,7 +3961,7 @@ async function bootApp(
       exporting
     );
     const renderStart = streamTimings.now();
-    framedBuilds.draw(postStack.render);
+    framedBuilds.draw(() => postStack.render(dt * 1000));
     const renderEnd = streamTimings.now();
     takeCaptureTile();
     frames += 1;

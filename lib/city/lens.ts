@@ -109,3 +109,55 @@ export function lensFadeIn(shownMs: number): number {
   const t = clamp01(shownMs / LENS_FADE_MS);
   return t * t * (3 - 2 * t);
 }
+
+/** How near the focus must have come to its aim (1/m) to count as there:
+ *  a millimetre at 1 m, ten centimetres at 10 m. */
+export const FOCUS_SETTLED_DIOPTRES = 1e-3;
+
+/** The lens from frame to frame: how long it has been drawn, and where it
+ *  focuses. */
+export interface LensState {
+  /** how long the lens has been drawn (ms); 0 while it is not */
+  shownMs: number;
+  /** the focus (m) */
+  focusM: number;
+}
+
+export function createLensState(): LensState {
+  return { shownMs: 0, focusM: SKY_FOCUS_M };
+}
+
+/**
+ * Advances the lens by one frame of `stepMs`: drawn (`drawn`), it grows in
+ * and its focus follows `aimM` in dioptres; not drawn, it starts over and
+ * its focus is at the aim at once — what it shows when it comes back.
+ * Returns how much of the blur shows (0…1).
+ */
+export function stepLens(
+  state: LensState,
+  drawn: boolean,
+  aimM: number,
+  stepMs: number
+): number {
+  state.shownMs = drawn ? state.shownMs + Math.max(stepMs, 0) : 0;
+  const fade = lensFadeIn(state.shownMs);
+  state.focusM = fade === 0 ? aimM : pullFocus(state.focusM, aimM, stepMs);
+  return fade;
+}
+
+/** Whether the lens shows what it will until the view changes: grown in
+ *  and focused on its aim — or not wanted at all (a style or a view that
+ *  draws none). */
+export function lensSettled(
+  state: LensState,
+  wanted: boolean,
+  aimM: number
+): boolean {
+  if (!wanted) {
+    return true;
+  }
+  const off = Math.abs(
+    1 / Math.max(state.focusM, MIN_FOCUS_M) - 1 / Math.max(aimM, MIN_FOCUS_M)
+  );
+  return lensFadeIn(state.shownMs) >= 1 && off < FOCUS_SETTLED_DIOPTRES;
+}

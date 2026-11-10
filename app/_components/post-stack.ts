@@ -52,12 +52,13 @@ import {
 } from "three/tsl";
 import type { VeilState } from "@/lib/city/load-frontier";
 import {
+  createLensState,
   horizonBlurPx,
-  lensFadeIn,
+  lensSettled,
   maxBlurPx,
   MIN_FOCUS_M,
-  pullFocus,
   SKY_FOCUS_M,
+  stepLens,
 } from "@/lib/city/lens";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import type { LookValues } from "@/lib/city/look-controls";
@@ -70,7 +71,7 @@ import { crownsPrinted } from "./crown-season";
 import { DATA_MARKS, dataMarks } from "./glass";
 import { crownSwayShare } from "./vegetation-layer";
 import { fxaa } from "./fxaa";
-import { createLensBlur } from "./lens-blur";
+import { createLensBlur, LENS_TALLEST_PX } from "./lens-blur";
 import { createMotionBlur } from "./motion-blur";
 import type { SceneFog } from "./height-fog";
 import { createPaperScene } from "./paper-scene";
@@ -209,8 +210,9 @@ export interface PostStack {
   dispose: () => void;
   /** current DoF focus distance/range/bokeh (QA). */
   getFocusInfo: () => FocusInfo;
-  /** Draws the scene into its target, then the post chain to the canvas. */
-  render: () => void;
+  /** Draws the scene into its target, then the post chain to the canvas;
+   *  `stepMs`, the loop's time step, advances the lens's fade and focus. */
+  render: (stepMs?: number) => void;
   /** world-space point under the crosshair; null = nothing hit (sky) */
   setFocusTarget: (point: Vector3 | null) => void;
   /**
@@ -219,12 +221,10 @@ export interface PostStack {
    * stay on — the pass runs at half resolution for that — because a shadow
    * that vanishes the moment you move and reappears when you stop reads as
    * a bug, not as a saving. Layered beside the picture style's gate and
-   * Modell's: recovery brings DoF back only where those allow it. `stepMs`
-   * is the frame's time step (the loop's): the blur grows in by it
-   * whenever the lens comes back (`LENS_FADE_MS`, lens.ts) — after a move,
-   * or into a style or a view that draws it — and the focus follows by it.
+   * Modell's: recovery brings DoF back only where those allow it, and its
+   * blur grows in (`LENS_FADE_MS`, lens.ts) instead of snapping on.
    */
-  setRegressed: (on: boolean, stepMs: number) => void;
+  setRegressed: (on: boolean) => void;
   /** The loading veil this frame (load-veil.ts): the frontier's ring
    *  around the world-space point `centreX`, `centreZ`. */
   setLoadVeil: (state: VeilState, centreX: number, centreZ: number) => void;
@@ -507,8 +507,8 @@ const COMPILE_LANES = 4;
  * camera; up to r186 also by the call depth, which a scene pass nested
  * inside the post pipeline never matched) — then three's node
  * `RenderPipeline` from its colour and depth: GTAO (half resolution, normals
- * reconstructed from depth) ^ `AO_EXPONENT` → DoF (`DepthOfFieldNode`,
- * crosshair autofocus, dropped while moving; not built on a phone) → the
+ * reconstructed from depth) ^ `AO_EXPONENT` → DoF (lens-blur.ts, crosshair
+ * autofocus, dropped while moving; not built on a phone) → the
  * picture style (ink + tone; not in the default pastel style's pipelines
  * at all) → SMAA (FXAA on a phone) → depth grading, vignette and paper
  * grain → sRGB. The scene target has no MSAA; SMAA carries the
@@ -829,17 +829,14 @@ export function createPostStack(
 
   // Autofocus: the distance, along the view, to the crosshair's last hit
   // — the sky's when it found nothing, or the camera has passed it — pulled
-  // there in dioptres (lens.ts `pullFocus`), and at once while the blur
-  // does not show.
+  // there in dioptres, and at once while the blur does not show; the blur
+  // grows in whenever the lens comes back — after a move, or into a style
+  // or a view that draws it (lens.ts `stepLens`, on the loop's step).
   const focusPoint = new Vector3();
   let focusHit = false;
   const inView = new Vector3();
-  // the frame's step (ms, `setRegressed`), spent by the frame's focus once
-  let lensStepMs = 0;
-  // how long the lens has been drawn (ms), and how much of it shows: it
-  // grows in whenever it comes back — after a move, or into a style or a
-  // view that draws it
-  let lensShownMs = 0;
+  const lensState = createLensState();
+  let lensAim = SKY_FOCUS_M;
   let lensFadeNow = 0;
   // the style and the view draw a lens (motion aside)
   const lensWanted = () => lensBlur !== null && style.allowDof && !model;
@@ -850,21 +847,25 @@ export function createPostStack(
     inView.copy(focusPoint).applyMatrix4(view.matrixWorldInverse);
     return inView.z < 0 ? Math.max(-inView.z, MIN_FOCUS_M) : SKY_FOCUS_M;
   };
-  const updateFocus = () => {
-    const step = lensStepMs;
-    lensStepMs = 0;
-    lensShownMs = lensWanted() && !regressed ? lensShownMs + step : 0;
-    lensFadeNow = lensFadeIn(lensShownMs);
+  const updateFocus = (stepMs: number) => {
     const view = active();
-    const aim = focusTarget(view);
+    lensAim = focusTarget(view);
+    lensFadeNow = stepLens(
+      lensState,
+      lensWanted() && !regressed,
+      lensAim,
+      stepMs
+    );
     const { focus } = lensUniforms;
-    focus.value = lensFadeNow === 0 ? aim : pullFocus(focus.value, aim, step);
+    focus.value = lensState.focusM;
     // a parallel camera (Modell) draws no lens blur
     const fov = "fov" in view ? (view as PerspectiveCamera).fov : 0;
     const shown = fov > 0 ? lensFadeNow : 0;
     lensUniforms.horizonPx.value =
       horizonBlurPx(focus.value, fov, size.y) * shown;
-    lensUniforms.capPx.value = maxBlurPx(size.y) * shown;
+    // no wider than the gather's reach covers (lens-blur.ts)
+    lensUniforms.capPx.value =
+      maxBlurPx(Math.min(size.y, LENS_TALLEST_PX)) * shown;
   };
 
   /** set by `dispose`: what is let go later goes at once, and what is
@@ -1386,8 +1387,8 @@ export function createPostStack(
       styleDressing.sceneChanged();
     },
     setSunAltitude: (altitudeDeg) => stylize.setSunAltitude(altitudeDeg),
-    render: () => {
-      updateFocus();
+    render: (stepMs = 0) => {
+      updateFocus(stepMs);
       stylize.update(renderer.getPixelRatio(), size);
       // The frame names its targets and ends on the canvas, never on the
       // target it found set: a compile in flight (`compileOne`) sets the
@@ -1450,7 +1451,7 @@ export function createPostStack(
       horizonBlurPx: lensUniforms.horizonPx.value,
       capPx: lensUniforms.capPx.value,
       fade: lensFadeNow,
-      settled: !lensWanted() || lensFadeNow >= 1,
+      settled: lensSettled(lensState, lensWanted(), lensAim),
     }),
     setSize: () => {
       renderer.getDrawingBufferSize(size);
@@ -1476,9 +1477,8 @@ export function createPostStack(
       applyStyleWeights();
     },
     setLoadVeil: loadVeil.set,
-    setRegressed: (on, stepMs) => {
+    setRegressed: (on) => {
       regressed = on;
-      lensStepMs += stepMs;
     },
     setFocusTarget: (point) => {
       // no hit focuses on the sky; the pull makes that gentle
