@@ -38,27 +38,19 @@ import { SINK } from "./ground-join";
  *  at least about two of these off it. */
 export const QUANTUM_M = 0.034;
 
-/** How a shopfront stands on its wall (metres): how far the surround
- *  reaches back into the wall (LoD2's wall is not where the footprint
- *  line is, to the centimetre) and stands out of it, the glass's face out
- *  of the wall (the niche's back, well clear of the wall's face), how far
- *  the reveal runs on behind the glass, the rounds of the reveal and of
- *  the outer shoulder, a pier's width (and the narrowest one between two
+/** How a shopfront stands on its wall (metres): how far a canopy reaches
+ *  back into the wall (LoD2's wall is not where the footprint line is, to
+ *  the centimetre), a pier's width (and the narrowest one between two
  *  bays), the stall riser's top (the pane's sill) above the ground, the
- *  head over the pane, and a fascia's height where its band was not
- *  measured, how far it stands out and its round. */
+ *  head over the pane, and a sign's height where its band was not
+ *  measured. */
 export const SHOPFRONT = {
   back: 0.15,
   fasciaH: 0.5,
-  glass: 0.06,
   head: 0.18,
   minPier: 0.2,
   pier: 0.25,
-  proud: 0.15,
-  reveal: 0.07,
-  shoulder: 0.06,
   sill: 0.5,
-  tuck: 0.03,
 } as const;
 /** Facets per quarter round: two, each about one and a half of the
  *  glTF's position quanta long — finer facets came out of the quantising
@@ -357,19 +349,21 @@ export interface ShopOpening {
  * laid `shift(span)` metres out of the footprint line onto the wall
  * (`wallShiftAt`): the shop windows to cut into it, one per bay (`bayRuns`
  * keeps a pier between them), each from its sill — the stall riser's top;
- * the plinth breaks for it (`shopWindowSpans`) — to the pane's top
- * (`paneTop`, under a canopy's slab);
- * the fascia bands and the canopies as triangles, counter-clockwise from
- * outside. No window where the ground floor leaves less than
- * MIN_OPENING_M: a sign alone is a fascia. Only the faces one can see: no
- * back (in the wall), no bottom (in the ground).
+ * the plinth breaks for it — to the pane's top (`paneTop`, under a
+ * canopy's slab), and only where `cuts` says the wall takes it (the bake
+ * asks its LoD2 wall); the signs to paint, over the windows where any is
+ * cut; the canopies as triangles, counter-clockwise from outside. No
+ * window where the ground floor leaves less than MIN_OPENING_M: a sign
+ * alone is painted. Only the faces one can see: no back (in the wall), no
+ * bottom (in the ground).
  */
 export function shopfrontMesh(
   w: ShopfrontWall,
   bays: readonly Span[],
   storeyH: number,
   offset: { cx: number; cy: number },
-  shift: (span: Span) => number = () => 0
+  shift: (span: Span) => number = () => 0,
+  cuts: (o: ShopOpening) => boolean = () => true
 ): ShopfrontMesh {
   const out: ShopfrontMesh = {
     canopy: { normals: [], positions: [] },
@@ -389,11 +383,14 @@ export function shopfrontMesh(
       if (z1 - z0 < MIN_OPENING_M) {
         continue;
       }
-      out.openings.push({
+      const o: ShopOpening = {
         rect: { s0: bay[0], s1: bay[1], z0, z1 },
         shift: off,
-      });
-      opened = true;
+      };
+      if (cuts(o)) {
+        out.openings.push(o);
+        opened = true;
+      }
     }
   }
   for (const c of w.canopy ?? []) {
@@ -617,28 +614,6 @@ export function wallShiftAt(
     }
   }
   return Number.isFinite(shift) ? shift : 0;
-}
-
-/** The shop windows' spans along the wall (`shopfrontMesh` cuts one per
- *  bay where the ground floor leaves MIN_OPENING_M): where the plinth
- *  breaks for them. */
-export function shopWindowSpans(
-  w: ShopfrontWall,
-  bays: readonly Span[],
-  storeyH: number
-): Span[] {
-  const top = paneTop(w, storeyH);
-  return bayRuns(bays, w.L)
-    .flatMap((run) => run.bays)
-    .filter((bay) => {
-      const g = Math.max(groundAt(w, bay[0]), groundAt(w, bay[1]));
-      const slab = canopySlabOver(w, bay);
-      const z1 = Math.min(
-        g + top,
-        (slab ?? Number.POSITIVE_INFINITY) - SHOPFRONT.head
-      );
-      return z1 - (g + sillOf(w)) >= MIN_OPENING_M;
-    });
 }
 
 /** The spans of the wall as EPSG segments (a stretch of a band on the

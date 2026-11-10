@@ -61,16 +61,35 @@ test("the wall loses the opening, nothing more, facing as it did", () => {
     const z = (t[0][2] + t[1][2] + t[2][2]) / 3;
     expect(s > 2 && s < 5 && z > 100.5 && z < 103).toBe(false);
   }
-  const want = [
-    [2, 0, 100.5],
-    [5, 0, 100.5],
-    [5, 0, 103],
-    [2, 0, 103],
-  ];
-  for (const [k, corner] of cut.corners[0].entries()) {
-    for (const [c, x] of corner.entries()) {
-      expect(x).toBeCloseTo(want[k][c], 9);
-    }
+  // the loop round the opening: its corners in order, and where the
+  // quad's diagonal (s0z0 → s1z1 of the wall) crosses its edge, the
+  // remainder's vertex there, the same point
+  const loop = cut.corners[0];
+  const sz = loop.map(([x, , z]) => [x, z]);
+  for (const corner of [
+    [2, 100.5],
+    [5, 100.5],
+    [5, 103],
+    [2, 103],
+  ]) {
+    expect(
+      sz.some(
+        ([x, z]) =>
+          Math.abs(x - corner[0]) < 1e-9 && Math.abs(z - corner[1]) < 1e-9
+      )
+    ).toBe(true);
+  }
+  expect(sz[0][0]).toBeCloseTo(2, 9);
+  expect(sz[0][1]).toBeCloseTo(100.5, 9);
+  // the diagonal z = 100 + 0.6 s meets the s0 side at z 101.2
+  expect(
+    sz.some(([x, z]) => Math.abs(x - 2) < 1e-9 && Math.abs(z - 101.2) < 1e-9)
+  ).toBe(true);
+  const remainder = new Set(
+    left.flat().map((p) => p.map((c) => c.toFixed(9)).join(","))
+  );
+  for (const q of loop) {
+    expect(remainder.has(q.map((c) => c.toFixed(9)).join(","))).toBe(true);
   }
 });
 

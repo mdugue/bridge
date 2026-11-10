@@ -108,6 +108,14 @@ test("the blur holds through a slowing walk, and stops once the camera has", () 
   expect(stepBlurGate(gate, at(1.5), false)).toBe(false);
 });
 
+test("where the blur stands in for the antialiasing it holds nothing", () => {
+  const gate = createBlurGate();
+  expect(stepBlurGate(gate, at(3), true)).toBe(true);
+  // under a pixel's smear the next frame is sharp at once
+  expect(stepBlurGate(gate, at(1.5), true)).toBe(false);
+  expect(gate.on).toBe(false);
+});
+
 test("a frame's way is scaled to a nominal frame's", () => {
   expect(framePace(NOMINAL_FRAME_MS)).toBeCloseTo(1);
   expect(framePace(NOMINAL_FRAME_MS * 2)).toBeCloseTo(0.5);

@@ -126,6 +126,8 @@ export function createBlurGate(): BlurGate {
  * Whether this frame is drawn blurred, with hysteresis: on once `blurs`
  * says so, off only after `BLUR_HOLD_FRAMES` frames in a row under half
  * its threshold. A jump draws one frame sharp and leaves the state.
+ * `everywhere` (the blur in the antialiasing's place) holds nothing: a
+ * frame is blurred only while every sample smears a pixel.
  */
 export function stepBlurGate(
   gate: BlurGate,
@@ -140,7 +142,11 @@ export function stepBlurGate(
     gate.below = 0;
     return true;
   }
-  if (!gate.on) {
+  // where the blur stands in for the antialiasing (a phone), a frame
+  // that smears under a pixel would keep neither: no hold
+  if (!gate.on || everywhere) {
+    gate.on = false;
+    gate.below = 0;
     return false;
   }
   const measure = everywhere ? motion.least : motion.median;

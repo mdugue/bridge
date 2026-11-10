@@ -61,7 +61,12 @@ import {
   slotTexture,
   slotUniform,
 } from "./material-slots";
-import { WINDOW_PANE_ROUGHNESS, clayWindows } from "./clay-windows";
+import {
+  PANE_SKY_NIGHT_DIM,
+  PANE_SKY_RGB,
+  WINDOW_PANE_ROUGHNESS,
+  clayWindows,
+} from "./clay-windows";
 import type { ClayWindows } from "./clay-windows";
 import { streetLight } from "./lamp-reflections";
 import { nightShadowFree } from "./lantern";
@@ -115,10 +120,6 @@ export interface ClayDetailUniforms {
   /** the app draws real niches behind the near windows
    *  (window-niche-layer.ts): the clay cuts their openings */
   niches?: boolean;
-  /** a niched house's windows under `NICHE_PREFILTER_PX` wide hand over
-   *  to their mean tone as every other house's do (a phone, without
-   *  temporal antialiasing: scene-profile.ts `PostProfile.taa`) */
-  prefilter?: boolean;
 }
 
 // --- the fixed look ----------------------------------------------------------
@@ -362,7 +363,7 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     storey: build.y,
     strength: WINDOWS,
     sharp: niched,
-    sharpFromPx: d.prefilter ? NICHE_PREFILTER_PX : undefined,
+    sharpFromPx: NICHE_PREFILTER_PX,
     sun: d.uSun,
     view,
     wall,
@@ -420,8 +421,8 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
       // a window's back mirrors the sky as a shop window's pane does
       // (`paneSky`), dimmed after dark
       .add(
-        vec3(0.55, 0.66, 0.8).mul(
-          windows.sky.mul(float(1).sub(d.uNight.mul(0.85)))
+        vec3(...PANE_SKY_RGB).mul(
+          windows.sky.mul(float(1).sub(d.uNight.mul(PANE_SKY_NIGHT_DIM)))
         )
       ),
   };
@@ -435,12 +436,14 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
  * drawn; on every other house the opening is drawn on the wall.
  */
 function nicheMask(windows: ClayWindows, niched: F): Node {
-  const cut = step(0.5, windows.opening).mul(float(frontFacing)).mul(niched);
+  // only a window drawn whole: under NICHE_PREFILTER_PX the opening is
+  // its row's mean, and a cut through it would run along the whole row
+  const cut = step(0.5, windows.cut).mul(float(frontFacing)).mul(niched);
   return cut.lessThan(0.5);
 }
 
 /** Under this width (px) a niched house's window hands over to its mean
- *  tone where there is no temporal antialiasing to settle it (a phone):
+ *  tone (every tier; a temporal antialiasing tried in its place smeared):
  *  narrower, a niche hops from pixel to pixel as the eye moves. */
 export const NICHE_PREFILTER_PX = 2;
 
@@ -1063,11 +1066,11 @@ function paneSky(d: ClayDetailUniforms, h: F, fres: F): V3 {
   const upper = smoothstep(0.8, 2.6, h);
   const f2 = fres.mul(fres);
   const schlick = float(0.04).add(float(0.96).mul(f2.mul(f2).mul(fres)));
-  return vec3(0.55, 0.66, 0.8).mul(
+  return vec3(...PANE_SKY_RGB).mul(
     upper
       .mul(0.04)
       .add(schlick.mul(0.15))
-      .mul(float(1).sub(d.uNight.mul(0.85)))
+      .mul(float(1).sub(d.uNight.mul(PANE_SKY_NIGHT_DIM)))
   );
 }
 
@@ -1121,11 +1124,10 @@ function askedColour(col: V3, h: F, wall: F, flags: F, wn: V3): V3 {
 export function createStyleResources(
   night: Live,
   sun: UniformNode<"vec3", Vector3> = uniform(new Vector3(0, 1, 0)),
-  niches = false,
-  prefilter = false
+  niches = false
 ): StyleResources {
   return {
-    clayDetail: { uNight: night, uSun: sun, niches, prefilter },
+    clayDetail: { uNight: night, uSun: sun, niches },
     materials: new Set(),
     section: false,
   };

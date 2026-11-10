@@ -268,6 +268,10 @@ function onWall(tris: readonly number[], s: number, y: number): boolean {
 
 const snormOf = (code: number) => code / 32_767;
 
+/** Walls whose planes stand this far apart (m) are told apart; one LoD2
+ *  wall's triangles lie well within it. */
+const WALL_PLANE_STEP_M = 0.5;
+
 /** Gathers a city mesh's window-carrying walls by object, codes and plane. */
 function gatherWalls(
   mesh: NicheMesh,
@@ -292,7 +296,12 @@ function gatherWalls(
     if (!n) {
       continue;
     }
-    const key = `${object}:${length}:${f[4 * a + 3]}:${Math.round(n[0] * 1000)}:${Math.round(n[1] * 1000)}`;
+    // and its plane: two walls of one object facing the same way with the
+    // same codes (a U's wing ends) are two walls, each its own anchor
+    const plane = Math.round(
+      (n[0] * p[3 * a] + n[1] * p[3 * a + 2]) / WALL_PLANE_STEP_M
+    );
+    const key = `${object}:${length}:${f[4 * a + 3]}:${Math.round(n[0] * 1000)}:${Math.round(n[1] * 1000)}:${plane}`;
     let w = walls.get(key);
     const z0 = base(object);
     if (!w) {
@@ -443,6 +452,9 @@ export interface NicheTable {
  *  `NICHE_STRIDE` floats take 44 — what a phone keeps of a tile. */
 export const PACKED_STRIDE = 8;
 
+/** A niche's depth in 2 mm steps: up to 0.51 m, past the deepest reveal
+ *  (`WINDOW_DEPTH`, 0.27 m), which millimetres in a byte cut short. */
+const DEPTH_UNITS = 500;
 const clampTo = (v: number, top: number) =>
   Math.min(Math.max(Math.round(v), 0), top);
 /** A niche's sizes in 2 cm steps, rounded up: never smaller than its
@@ -454,7 +466,7 @@ const size = (m: number) => Math.min(Math.ceil(m / SIZE_STEP_M - 1e-6), 255);
  * A tile's niches (sorted by cell, `cellNiches`) packed into 16-bit words:
  * its place in its cell and its middle over its object's base (cm), its
  * wall's facing (an angle), its half width and half height (2 cm, rounded
- * up), its depth (mm), column, storey and object (24 bits).
+ * up), its depth (2 mm), column, storey and object (24 bits).
  */
 export function packNiches(
   niches: Float32Array,
@@ -481,7 +493,8 @@ export function packNiches(
     out[o + 3] = clampTo(((angle + Math.PI) / (2 * Math.PI)) * 65_536, 65_535);
     out[o + 4] = size(niches[f + 5]) * 256 + size(niches[f + 6]);
     out[o + 5] =
-      clampTo(niches[f + 7] * 1000, 255) * 256 + clampTo(niches[f + 9], 255);
+      clampTo(niches[f + 7] * DEPTH_UNITS, 255) * 256 +
+      clampTo(niches[f + 9], 255);
     out[o + 6] =
       clampTo(niches[f + 10], 255) * 256 + Math.floor(object / 65_536);
     out[o + 7] = object % 65_536;
@@ -509,7 +522,7 @@ export function unpackNiche(
   out[4] = Math.sin(angle);
   out[5] = Math.floor(p[o + 4] / 256) * SIZE_STEP_M;
   out[6] = (p[o + 4] % 256) * SIZE_STEP_M;
-  out[7] = Math.floor(p[o + 5] / 256) / 1000;
+  out[7] = Math.floor(p[o + 5] / 256) / DEPTH_UNITS;
   out[8] = object;
   out[9] = p[o + 5] % 256;
   out[10] = Math.floor(p[o + 6] / 256);

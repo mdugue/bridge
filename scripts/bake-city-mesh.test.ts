@@ -880,8 +880,10 @@ test("a shop window is cut into its wall: reveals in its clay, glass at the back
   expect(signYs.length).toBeGreaterThan(0);
   expect(signYs.every((y) => Math.abs(y) < 1e-3)).toBe(true);
   expect(inBay).toBe(0);
-  // four reveals of two triangles each, per window
-  expect(reveal).toBe(16);
+  // four reveals of two triangles each, per window, and a strip more
+  // where the wall's diagonal meets an opening's edge (its vertex shared,
+  // no T-junction): the diagonal crosses each window's edge once here
+  expect(reveal).toBe(16 + 2 * 2);
   expect([...glassYs]).toEqual([SHOP_WINDOW_DEPTH_M]);
   // a glass facade wears its own front
   expect(bake([shopfrontAt()], true).objects.length).toBe(lod2.objects.length);

@@ -15,7 +15,6 @@ import {
   ROW_SILL_M,
   SHOPFRONT_TOP_M,
   shopfrontMesh,
-  shopWindowSpans,
   spanSegments,
   STOREY_CLEAR_M,
   wallBays,
@@ -330,7 +329,9 @@ describe("the mesh", () => {
       gf_top: 3,
     });
     // the second bay is narrower than MIN_BAY_M: no window, no break
-    const spans = shopWindowSpans(w, wallBays(w, []), 4);
+    const spans = shopfrontMesh(w, wallBays(w, []), 4, OFFSET).openings.map(
+      (o): [number, number] => [o.rect.s0, o.rect.s1]
+    );
     expect(spans).toEqual([[1, 3]]);
     expect(spanSegments(w, spans)).toEqual([
       [
@@ -340,7 +341,28 @@ describe("the mesh", () => {
     ]);
     // a ground floor too low for a window: none
     const low = wall({ gf_top: 1.6 });
-    expect(shopWindowSpans(low, wallBays(low, []), 4)).toEqual([]);
+    expect(shopfrontMesh(low, wallBays(low, []), 4, OFFSET).openings).toEqual(
+      []
+    );
+    // a bay the wall does not take is no window, and the sign stays low
+    const signed = wall({
+      bays: [[1, 3]],
+      gf_top: 3,
+      sign: { at: [[0, 4]], z: [1.5, 2] },
+    });
+    const refused = shopfrontMesh(
+      signed,
+      wallBays(signed, []),
+      4,
+      OFFSET,
+      () => 0,
+      () => false
+    );
+    expect(refused.openings).toEqual([]);
+    expect(refused.signs[0].rect.z0).toBeCloseTo(101.5);
+    // with the window cut, the sign hung too low goes up over it
+    const cut = shopfrontMesh(signed, wallBays(signed, []), 4, OFFSET);
+    expect(cut.signs[0].rect.z0).toBeGreaterThan(cut.openings[0].rect.z1);
     expect(MIN_OPENING_M).toBeGreaterThan(1);
   });
 

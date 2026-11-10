@@ -120,7 +120,6 @@ import {
   doorSpans,
   footAt,
   paneTop,
-  shopWindowSpans,
   spanSegments,
   CANOPY,
   SHOPFRONT,
@@ -129,7 +128,7 @@ import {
   wallFrame,
   wallShiftAt,
 } from "../lib/city/shopfronts";
-import type { ShopOpening } from "../lib/city/shopfronts";
+import type { ShopfrontMesh, ShopOpening } from "../lib/city/shopfronts";
 import { cutWall, openingBox } from "../lib/city/shop-windows";
 import type { CutTriangle, WallAxes, WallCut } from "../lib/city/shop-windows";
 import {
@@ -1887,29 +1886,20 @@ function appendBeyondLod2(
     );
     collectAfterAppend();
   }
+  // laid out before the plinths, which break for the windows it cuts
+  const shops = planShopfronts(
+    baked,
+    extra.shopfronts ?? [],
+    extra.doors ?? [],
+    objectIndex
+  );
   if (extra.plinths) {
-    // the plinth breaks for the shop windows cut into its wall
-    appendPlinths(
-      baked,
-      extra.plinths,
-      objectIndex,
-      shopWindowBreaks(
-        baked,
-        extra.shopfronts ?? [],
-        extra.doors ?? [],
-        objectIndex
-      )
-    );
+    appendPlinths(baked, extra.plinths, objectIndex, shopWindowBreaks(shops));
     collectAfterAppend();
   }
-  if (extra.shopfronts) {
+  if (shops.length > 0) {
     // before the doors: a bay is cut at a door, which the doors then draw
-    for (const w of appendShopfronts(
-      baked,
-      extra.shopfronts,
-      extra.doors ?? [],
-      objectIndex
-    )) {
+    for (const w of appendShopfronts(baked, shops)) {
       opened.add(w);
     }
     collectAfterAppend();
@@ -2367,6 +2357,76 @@ export function shopfrontColours(tint: readonly number[]): {
   };
 }
 
+/** A shopfront the tile will get: its wall, its host and the host's
+ *  building tree's triangles, and what goes on the wall — only the
+ *  windows its LoD2 wall takes (`shopfrontMesh`'s `cuts`). */
+export interface ShopPlan {
+  host: CityObjectRow;
+  hostIndex: number;
+  mesh: ShopfrontMesh;
+  triangles: number[];
+  w: ShopfrontWall;
+}
+
+/**
+ * The shopfronts on the LoD2 walls, laid out before anything is cut or
+ * laid: each run's wall found by rays into the untouched LoD2
+ * (`wallShiftAt`; a wall cut before would no longer be found), and each
+ * bay asked of the wall it is to be cut into (`cutWall` on the tree's
+ * LoD2 triangles: openings on one plane never overlap, so what covers it
+ * now covers it after the cuts before it), so the plinth breaks for the
+ * windows cut and no other (`shopWindowBreaks`). Skipped: a host the tile
+ * does not hold, a glass or metal facade (its own front), a host not on
+ * the ground; a bay is cut where an OSM door stands.
+ */
+export function planShopfronts(
+  baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
+  walls: readonly ShopfrontWall[],
+  doors: readonly DoorFeature[],
+  objectIndex: ReadonlyMap<string, number>
+): ShopPlan[] {
+  const trees = treeTriangles(baked);
+  const p = baked.vertices.positions;
+  const ids = baked.vertices.objectIds;
+  const at = (i: number): V3 => [p[3 * i], p[3 * i + 1], p[3 * i + 2]];
+  const hostRootOf = (id: string) => {
+    const i = objectIndex.get(id);
+    return i === undefined ? undefined : baked.objects[i]?.root;
+  };
+  const plans: ShopPlan[] = [];
+  for (const w of walls) {
+    const hostIndex = objectIndex.get(w.oid);
+    const host = hostIndex === undefined ? undefined : baked.objects[hostIndex];
+    if (!(hostIndex !== undefined && host && w.z) || !shopHost(host, w)) {
+      continue;
+    }
+    const bays = wallBays(
+      w,
+      doorSpans(w, doors, (of) => hostRootOf(of) === host.root)
+    );
+    const triangles = trees.get(host.root) ?? [];
+    const lod2 = triangles
+      .filter(
+        (t) =>
+          (baked.objects[ids[t]]?.source ?? OBJECT_SOURCE_LOD2) ===
+          OBJECT_SOURCE_LOD2
+      )
+      .map((t) => ({ id: t, p: [at(t), at(t + 1), at(t + 2)] as const }));
+    const mesh = shopfrontMesh(
+      w,
+      bays,
+      host.storeyH,
+      baked.offset,
+      (span) => wallShiftAt(w, span, baked.offset, p, triangles),
+      (o) =>
+        cutWall(wallFrame(w, baked.offset, o.shift), [o.rect], lod2).openings
+          .length > 0
+    );
+    plans.push({ host, hostIndex, mesh, triangles, w });
+  }
+  return plans;
+}
+
 /**
  * The shopfronts on the LoD2 walls (pipeline/bake/shopfronts.py: bays and
  * signs from street photos, canopies from the surface model). Each bay a
@@ -2388,9 +2448,7 @@ export function shopfrontColours(tint: readonly number[]): {
  */
 export function appendShopfronts(
   baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
-  walls: readonly ShopfrontWall[],
-  doors: readonly DoorFeature[],
-  objectIndex: ReadonlyMap<string, number>
+  plans: readonly ShopPlan[]
 ): Set<ShopfrontWall> {
   const appended: ShopParts = {
     positions: [],
@@ -2398,26 +2456,8 @@ export function appendShopfronts(
     objectIds: [],
     walls: [],
   };
-  const trees = treeTriangles(baked);
-  const hostRootOf = (id: string) => {
-    const i = objectIndex.get(id);
-    return i === undefined ? undefined : baked.objects[i]?.root;
-  };
   const opened = new Set<ShopfrontWall>();
-  for (const w of walls) {
-    const hostIndex = objectIndex.get(w.oid);
-    const host = hostIndex === undefined ? undefined : baked.objects[hostIndex];
-    if (!(hostIndex !== undefined && host && w.z) || !shopHost(host, w)) {
-      continue;
-    }
-    const bays = wallBays(
-      w,
-      doorSpans(w, doors, (of) => hostRootOf(of) === host.root)
-    );
-    const triangles = trees.get(host.root) ?? [];
-    const mesh = shopfrontMesh(w, bays, host.storeyH, baked.offset, (span) =>
-      wallShiftAt(w, span, baked.offset, baked.vertices.positions, triangles)
-    );
+  for (const { w, host, hostIndex, mesh, triangles } of plans) {
     const cut = cutShopWindows(baked, w, mesh.openings, triangles, appended);
     if (cut.length > 0) {
       opened.add(w);
@@ -2438,14 +2478,11 @@ export function appendShopfronts(
       );
       pushTriangles(appended, pane.reveals, hostIndex);
     }
-    const sign = cutOnWall(
-      baked,
-      w,
-      mesh.signs,
-      triangles,
-      appended,
-      true
-    ).flatMap(({ cut: c }) => c.taken);
+    // a sign takes whatever of it the wall covers
+    const sign = cutOnWall(baked, w, mesh.signs, triangles, appended, {
+      keep: true,
+      minCover: 0,
+    }).flatMap(({ cut: c }) => c.taken);
     if (sign.length > 0) {
       part(
         { positions: sign, normals: sign.map(() => Number.NaN) },
@@ -2462,9 +2499,7 @@ export function appendShopfronts(
     }
   }
   for (const t of appended.walls) {
-    if (t.alive) {
-      pushTriangles(appended, t.positions, t.object);
-    }
+    pushTriangles(appended, t.positions, t.object);
   }
   const v = baked.vertices;
   baked.vertices = {
@@ -2488,7 +2523,8 @@ interface ShopParts {
   normals: number[];
   objectIds: number[];
   positions: number[];
-  walls: { alive: boolean; object: number; positions: number[] }[];
+  /** the cut walls' remainders, each with its object and building tree */
+  walls: { object: number; positions: number[]; root: number }[];
 }
 
 /** Appends flat triangles (`positions`, 9 a triangle) to `object`. */
@@ -2527,7 +2563,7 @@ function cutShopWindows(
   out: ShopParts
 ): CutWindow[] {
   const base = footAt(w, [0, w.L]);
-  return cutOnWall(baked, w, openings, triangles, out).flatMap(
+  return cutOnWall(baked, w, openings, triangles, out, {}).flatMap(
     ({ axes, cut }) =>
       cut.openings.map((o, k) => ({
         ...openingBox(axes, cut.corners[k]),
@@ -2538,11 +2574,12 @@ function cutShopWindows(
 
 /**
  * Cuts the rectangles `openings` into the wall `w` stands on: the LoD2
- * triangles of its building tree and the remainders earlier cuts left
- * (`out.walls`), each run's wall where `wallShiftAt` found it. A cut LoD2
- * triangle collapses onto its first vertex (the per-vertex columns of the
- * LoD2 stream stay aligned), its remainder goes to `out.walls`. `keep`:
- * each cut hands back what it took (`taken`, a painted sign).
+ * triangles of its building tree (`triangles`) and the remainders earlier
+ * cuts in that tree left (`out.walls`), each run's wall where
+ * `wallShiftAt` found it. A cut LoD2 triangle collapses onto its first
+ * vertex (the per-vertex columns of the LoD2 stream stay aligned), its
+ * remainder goes to `out.walls`. `cutWall`'s options: `keep` hands back
+ * what each cut took (`taken`, a painted sign).
  */
 function cutOnWall(
   baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
@@ -2550,12 +2587,13 @@ function cutOnWall(
   openings: readonly ShopOpening[],
   triangles: readonly number[],
   out: ShopParts,
-  keep = false
+  options: { keep?: boolean; minCover?: number }
 ): { axes: WallAxes; cut: WallCut }[] {
   const p = baked.vertices.positions;
   const ids = baked.vertices.objectIds;
   const at = (i: number): V3 => [p[3 * i], p[3 * i + 1], p[3 * i + 2]];
   const cuts: { axes: WallAxes; cut: WallCut }[] = [];
+  const root = baked.objects[ids[triangles[0] ?? -1]]?.root;
   for (const shift of new Set(openings.map((o) => o.shift))) {
     const rects = openings.filter((o) => o.shift === shift).map((o) => o.rect);
     const axes = wallFrame(w, baked.offset, shift);
@@ -2566,16 +2604,17 @@ function cutOnWall(
           OBJECT_SOURCE_LOD2
       )
       .map((t) => ({ id: t, p: [at(t), at(t + 1), at(t + 2)] as const }));
+    // only this building tree's: another's coplanar wall is not this one
     const remainders = out.walls.flatMap((r, k) =>
-      r.alive
+      r.root === root
         ? splitTriangles(r.positions).map((tri, j) => ({
             id: -1 - (k * 1e6 + j),
             p: tri,
           }))
         : []
     );
-    const cut = cutWall(axes, rects, [...lod2, ...remainders], keep);
-    replaceCut(cut.replaced, p, ids, out);
+    const cut = cutWall(axes, rects, [...lod2, ...remainders], options);
+    replaceCut(cut.replaced, baked, out);
     cuts.push({ axes, cut });
   }
   return cuts;
@@ -2599,10 +2638,11 @@ function splitTriangles(positions: readonly number[]): [V3, V3, V3][] {
  *  −1 − (k·10⁶ + j): `out.walls[k]`'s triangle j) taken out of its list. */
 function replaceCut(
   replaced: readonly CutTriangle[],
-  p: Float32Array,
-  ids: ArrayLike<number>,
+  baked: Pick<BakedCityMesh, "objects" | "vertices">,
   out: ShopParts
 ): void {
+  const p = baked.vertices.positions;
+  const ids = baked.vertices.objectIds;
   const dropped = new Map<number, Set<number>>();
   for (const r of replaced) {
     if (r.id >= 0) {
@@ -2610,9 +2650,9 @@ function replaceCut(
       p.copyWithin(i + 3, i, i + 3);
       p.copyWithin(i + 6, i, i + 3);
       out.walls.push({
-        alive: true,
         object: ids[r.id],
         positions: r.positions,
+        root: baked.objects[ids[r.id]]?.root ?? -1,
       });
       continue;
     }
@@ -2622,9 +2662,9 @@ function replaceCut(
     set.add(code - k * 1e6);
     dropped.set(k, set);
     out.walls.push({
-      alive: true,
       object: out.walls[k].object,
       positions: r.positions,
+      root: out.walls[k].root,
     });
   }
   for (const [k, gone] of dropped) {
@@ -2686,39 +2726,18 @@ function shopPart(
   };
 }
 
-/** Where the plinths break for the shop windows (EPSG segments along
- *  their walls, 5 cm wider each side so no band bridges the gap): the
- *  spans `shopfrontMesh` will cut, on the walls `appendShopfronts` draws. */
-function shopWindowBreaks(
-  baked: Pick<BakedCityMesh, "objects">,
-  walls: readonly ShopfrontWall[],
-  doors: readonly DoorFeature[],
-  objectIndex: ReadonlyMap<string, number>
-): [number, number][][] {
-  const treeOf = (id: string) => {
-    const i = objectIndex.get(id);
-    return i === undefined ? undefined : baked.objects[i]?.root;
-  };
-  return walls.flatMap((w) => {
-    const i = objectIndex.get(w.oid);
-    const host = i === undefined ? undefined : baked.objects[i];
-    if (!(host && w.z) || !shopHost(host, w)) {
-      return [];
-    }
-    const bays = wallBays(
+/** The segments the plinth breaks for: each window the plan cuts, a
+ *  little wider. */
+function shopWindowBreaks(plans: readonly ShopPlan[]): [number, number][][] {
+  return plans.flatMap(({ w, mesh }) =>
+    spanSegments(
       w,
-      doorSpans(w, doors, (of) => treeOf(of) === host.root)
-    );
-    return spanSegments(
-      w,
-      shopWindowSpans(w, bays, host.storeyH).map(
-        ([s0, s1]): [number, number] => [
-          s0 - PLINTH_BREAK_M,
-          s1 + PLINTH_BREAK_M,
-        ]
-      )
-    );
-  });
+      mesh.openings.map(({ rect }): [number, number] => [
+        rect.s0 - PLINTH_BREAK_M,
+        rect.s1 + PLINTH_BREAK_M,
+      ])
+    )
+  );
 }
 
 /** How much wider than its window the plinth's break is (m). */

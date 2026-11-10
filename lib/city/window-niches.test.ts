@@ -14,7 +14,7 @@ import {
   wallRows,
 } from "./window-niches";
 import type { NicheObject } from "./window-niches";
-import { FACADE_SCALE_M, packStyle } from "./windows";
+import { FACADE_SCALE_M, packStyle, WINDOW_DEPTH } from "./windows";
 
 const house: NicheObject = {
   axis: 2.5,
@@ -78,6 +78,37 @@ describe("window niches", () => {
     }
   });
 
+  test("two walls of one object facing one way are two walls", () => {
+    // a U's wing ends: the same 12 m wall at z = 0 and, 20 m along x and
+    // 8 m back, at z = −8, same codes
+    const one = [
+      -6, 100, 0, 6, 100, 0, 6, 112.5, 0, -6, 100, 0, 6, 112.5, 0, -6, 112.5, 0,
+    ];
+    // x + 20, y as it is, z = −8
+    const moved = [(x: number) => x + 20, (y: number) => y, () => -8];
+    const two = one.map((v, k) => moved[k % 3](v));
+    const positions = [...one, ...two];
+    const facade: number[] = [];
+    for (let v = 0; v < 12; v += 1) {
+      const x = positions[3 * v] - (v < 6 ? 0 : 20);
+      facade.push(code(-x), code(12), 32_767, 32_767);
+    }
+    const niches = tileNiches(
+      { positions, facade, objectIds: Array.from({ length: 12 }, () => 0) },
+      () => house,
+      () => 100
+    );
+    expect(niches.length / NICHE_STRIDE).toBe(32);
+    const zs = new Set<number>();
+    for (let i = 0; i < niches.length; i += NICHE_STRIDE) {
+      zs.add(Math.round(niches[i + 2]));
+      // each on its own wall, within its own 12 m
+      const centre = niches[i + 2] > -4 ? 0 : 20;
+      expect(Math.abs(niches[i] - centre)).toBeLessThan(6);
+    }
+    expect([...zs].toSorted((a, b) => a - b)).toEqual([-8, 0]);
+  });
+
   test("niches sorted by cell keep every niche, each cell one run", () => {
     const xs = [5, 70, 6, -40, 71];
     const raw = new Float32Array(xs.length * NICHE_STRIDE);
@@ -127,8 +158,20 @@ describe("window niches", () => {
       expect(back[k]).toBeGreaterThanOrEqual(f[k] - 1e-6);
       expect(back[k] - f[k]).toBeLessThan(0.02);
     }
-    expect(Math.abs(back[7] - f[7])).toBeLessThan(0.0006);
+    expect(Math.abs(back[7] - f[7])).toBeLessThan(0.0011);
     expect([back[8], back[9], back[10]]).toEqual([70_123, 3, 4]);
+    // the deepest reveal comes back as deep
+    const deepest = WINDOW_DEPTH.base + WINDOW_DEPTH.step * 7;
+    f[7] = deepest;
+    const deep = unpackNiche(
+      packNiches(f, baseZ),
+      0,
+      cx,
+      cz,
+      baseZ,
+      new Float32Array(NICHE_STRIDE)
+    );
+    expect(Math.abs(deep[7] - deepest)).toBeLessThan(0.0011);
   });
   test("each house's windows' extent, its parts together", () => {
     // objects 0, 1 of house 0; object 2 its own house

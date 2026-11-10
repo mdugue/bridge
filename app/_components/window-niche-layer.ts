@@ -41,6 +41,8 @@ import {
   WINDOW_SKY,
   WINDOW_TONE,
   windowHash,
+  PANE_SKY_NIGHT_DIM,
+  PANE_SKY_RGB,
 } from "./clay-windows";
 import type { CityLayer } from "./city-layer";
 import { Instances, instanceTint } from "./instancing";
@@ -81,10 +83,33 @@ const HOUSE_KEEP_M = 20;
  *  box behind a cut would be a hole into the building; past the opening
  *  the box stays unseen behind the wall. */
 const NICHE_OVERLAP_M = 0.04;
-/** How far the eye moves before the set is filled again (m), and how
- *  often it is anyway (a demolish, a design, a tile landing). */
+/** How far the eye moves before the set is filled again (m); a tile
+ *  landing or leaving, a demolish or a design fill it at once
+ *  (`invalidate`), and standing still it is left as it is. */
 const REFILL_MOVE_M = 6;
-const REFILL_MS = 1000;
+
+/** The corners the triangles starting at `kept` use, each once, and
+ *  the triangles over them. */
+function cornersOf(
+  kept: readonly number[],
+  corner: (t: number) => number,
+  count: number
+): { corners: number[]; triangles: Uint32Array } {
+  const slot = new Int32Array(count).fill(-1);
+  const corners: number[] = [];
+  const triangles = new Uint32Array(kept.length * 3);
+  for (const [k, t] of kept.entries()) {
+    for (let c = 0; c < 3; c += 1) {
+      const v = corner(t + c);
+      if (slot[v] === -1) {
+        slot[v] = corners.length;
+        corners.push(v);
+      }
+      triangles[3 * k + c] = slot[v];
+    }
+  }
+  return { corners, triangles };
+}
 
 /** The tile's mesh and table, copied for the worker (window-niche-client.ts):
  *  places in the Y-up scene frame, `_FACADE` codes, objects, triangles. */
@@ -141,27 +166,25 @@ export function nicheInput(
       kept.push(t);
     }
   }
-  const n = kept.length * 3;
-  const positions = new Float32Array(n * 3);
-  const codes = new Int16Array(n * 4);
-  const objectIds = new Uint32Array(n);
+  // indexed, each corner copied once: a wall's corners are shared by its
+  // triangles, and a de-indexed copy took three to six times the memory
+  const { corners, triangles } = cornersOf(kept, corner, position.count);
+  const positions = new Float32Array(corners.length * 3);
+  const codes = new Int16Array(corners.length * 4);
+  const objectIds = new Uint32Array(corners.length);
   const p = new Vector3();
-  for (let k = 0; k < kept.length; k += 1) {
-    for (let c = 0; c < 3; c += 1) {
-      const v = corner(kept[k] + c);
-      const i = 3 * k + c;
-      p.fromBufferAttribute(position, v).applyMatrix4(toData);
-      positions[3 * i] = p.x;
-      positions[3 * i + 1] = p.z;
-      positions[3 * i + 2] = -p.y;
-      for (let q = 0; q < 4; q += 1) {
-        codes[4 * i + q] = code(v, q);
-      }
-      objectIds[i] = Math.round(ids.getX(v));
+  for (const [i, v] of corners.entries()) {
+    p.fromBufferAttribute(position, v).applyMatrix4(toData);
+    positions[3 * i] = p.x;
+    positions[3 * i + 1] = p.z;
+    positions[3 * i + 2] = -p.y;
+    for (let q = 0; q < 4; q += 1) {
+      codes[4 * i + q] = code(v, q);
     }
+    objectIds[i] = Math.round(ids.getX(v));
   }
   return {
-    mesh: { positions, facade: codes, objectIds },
+    mesh: { positions, facade: codes, objectIds, index: triangles },
     table: {
       baseZ: table.baseZ.slice(),
       root: table.root.slice(),
@@ -333,13 +356,13 @@ export function nicheMaterial(d: ClayDetailUniforms): MeshStandardNodeMaterial {
   const head = clamp(local.y.div(max(size.y, 0.1)).mul(0.5).add(0.5), 0, 1);
   const paneSky = back
     .mul(head.mul(WINDOW_SKY.up).add(schlick.mul(WINDOW_SKY.fresnel)))
-    .mul(float(1).sub(d.uNight.mul(0.85)));
+    .mul(float(1).sub(d.uNight.mul(PANE_SKY_NIGHT_DIM)));
   const jks = flat(vec3(c0.w, c1.w, c2.w) as V3);
   const on = step(
     1 - NIGHT_WINDOWS.lit,
     windowHash(jks.x.add(jks.y.mul(17.31)), jks.z.add(3.7))
   );
-  m.emissiveNode = vec3(0.55, 0.66, 0.8)
+  m.emissiveNode = vec3(...PANE_SKY_RGB)
     .mul(paneSky)
     .add(
       vec3(1, 0.78, 0.48)
@@ -385,15 +408,18 @@ export interface NicheField {
   add: (city: CityLayer, built: NicheResult) => () => void;
   /** fills the set around the eye (null: none, Modell) */
   update: (eye: Vector3 | null) => void;
-  /** the set compiled: it may draw (`compile` once a tile has niches) */
-  ready: () => boolean;
+  /** what stands changed (a demolish, a design): filled again at the
+   *  next update */
+  invalidate: () => void;
   dispose: () => void;
 }
+
+const CLAY_BASE_COLOUR = new Color(CLAY_BASE);
 
 /** The colour of an object's walls as the clay mixes it (visual-style.ts
  *  `clayColour`: the base, toward its tint where it has one). */
 function wallColour(table: CityObjectTable, i: number, out: Color): Color {
-  const base = new Color(CLAY_BASE);
+  const base = CLAY_BASE_COLOUR;
   const r = table.tint[3 * i];
   const g = table.tint[3 * i + 1];
   const b = table.tint[3 * i + 2];
@@ -645,7 +671,6 @@ export function createNicheField(
   const tiles = new Map<CityLayer, NicheTile>();
   const none: ReadonlySet<number> = new Set();
   const last = new Vector3(Number.POSITIVE_INFINITY, 0, 0);
-  let lastAt = 0;
   let dirty = true;
   let compiled = false;
   let compiling = false;
@@ -789,21 +814,20 @@ export function createNicheField(
         }
         return;
       }
-      const now = performance.now();
       if (
         !dirty &&
-        Math.hypot(eye.x - last.x, eye.z - last.z) < REFILL_MOVE_M &&
-        now - lastAt < REFILL_MS
+        Math.hypot(eye.x - last.x, eye.z - last.z) < REFILL_MOVE_M
       ) {
         return;
       }
       dirty = false;
       last.copy(eye);
-      lastAt = now;
       cutNear(eye);
       fill(eye);
     },
-    ready: () => compiled,
+    invalidate: () => {
+      dirty = true;
+    },
     dispose: () => {
       for (const tile of tiles.values()) {
         setHouses(tile, none);

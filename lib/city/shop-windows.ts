@@ -62,8 +62,11 @@ export interface WallCut {
   openings: Opening[];
   /** the triangles that lost a piece, each with its remainder */
   replaced: CutTriangle[];
-  /** each cut opening's corners on the wall's face (s0z0, s1z0, s1z1,
-   *  s0z1) */
+  /** each cut opening's edge on the wall's face as a loop from its s0z0
+   *  corner round by s1z0, s1z1 and s0z1: its corners and every vertex
+   *  the wall's remainder has on it, the same points (no T-junction
+   *  between the wall and the reveals for the glTF's quantisation to
+   *  crack open) */
   corners: V3[][];
   /** what the openings took out of the wall, triangulated on each
    *  triangle's own plane and wound as it was (positions, flat) — a
@@ -207,19 +210,20 @@ function triangulate(f: Flat, polys: readonly ClipPolygon[]): number[] {
  * Cuts `openings` into the wall: the triangles of `triangles` lying on it
  * (facing `axes.n`, on its plane) lose the rectangles, each remainder
  * triangulated on its own triangle's plane. An opening the wall covers
- * less than MIN_COVER of stays uncut (not in `openings`). With `keep`,
- * what was cut out comes back too (`taken`): a sign painted on the wall,
- * the same plane in another object.
+ * less than `minCover` of (MIN_COVER) stays uncut (not in `openings`).
+ * With `keep`, what was cut out comes back too (`taken`): a sign painted
+ * on the wall, the same plane in another object, which takes whatever of
+ * it the wall covers (`minCover` 0).
  */
 export function cutWall(
   axes: WallAxes,
   openings: readonly Opening[],
   triangles: readonly WallTriangle[],
-  keep = false
+  { keep = false, minCover = MIN_COVER } = {}
 ): WallCut {
   const flats = facing(axes, triangles);
   const kept: Opening[] = [];
-  const corners: V3[][] = [];
+  const planes: Flat[] = [];
   // per triangle the openings that cut it
   const cuts = new Map<Flat, ClipPolygon[]>();
   for (const o of openings) {
@@ -240,22 +244,14 @@ export function cutWall(
       }
     }
     const area = (o.s1 - o.s0) * (o.z1 - o.z0);
-    if (!best || area <= 0 || covered < MIN_COVER * area) {
+    if (!best || area <= 0 || covered < minCover * area) {
       continue;
     }
     kept.push(o);
     for (const f of on) {
       cuts.set(f, [...(cuts.get(f) ?? []), rect]);
     }
-    const plane = best.f;
-    corners.push(
-      [
-        [o.s0, o.z0],
-        [o.s1, o.z0],
-        [o.s1, o.z1],
-        [o.s0, o.z1],
-      ].map((p) => lift(plane, p))
-    );
+    planes.push(best.f);
   }
   const replaced: CutTriangle[] = [];
   const taken: number[] = [];
@@ -271,7 +267,64 @@ export function cutWall(
       }
     }
   }
+  const corners = kept.map((o, k) => edgeLoop(axes, o, planes[k], replaced));
   return { openings: kept, replaced, corners, taken };
+}
+
+/** Where along an opening's edge loop (s0z0 → s1z0 → s1z1 → s0z1) a
+ *  point of it lies, 0…4; undefined off the edge. */
+function loopAt(o: Opening, s: number, z: number): number | undefined {
+  const e = 1e-6;
+  const inS = s > o.s0 - e && s < o.s1 + e;
+  const inZ = z > o.z0 - e && z < o.z1 + e;
+  if (Math.abs(z - o.z0) < e && inS) {
+    return (s - o.s0) / (o.s1 - o.s0);
+  }
+  if (Math.abs(s - o.s1) < e && inZ) {
+    return 1 + (z - o.z0) / (o.z1 - o.z0);
+  }
+  if (Math.abs(z - o.z1) < e && inS) {
+    return 2 + (o.s1 - s) / (o.s1 - o.s0);
+  }
+  if (Math.abs(s - o.s0) < e && inZ) {
+    // the s0z0 corner closes the loop at 0, not 4
+    const t = 3 + (o.z1 - z) / (o.z1 - o.z0);
+    return t > 4 - 1e-9 ? 0 : t;
+  }
+  return undefined;
+}
+
+/** An opening's edge loop: its corners (the wall's own vertex there, else
+ *  lifted onto `plane`) and the remainder's vertices along it, in order. */
+function edgeLoop(
+  axes: WallAxes,
+  o: Opening,
+  plane: Flat,
+  replaced: readonly CutTriangle[]
+): V3[] {
+  const origin = axes.at(0, 0, 0);
+  const found = new Map<number, V3>();
+  for (const { positions } of replaced) {
+    for (let i = 0; i + 2 < positions.length; i += 3) {
+      const q: V3 = [positions[i], positions[i + 1], positions[i + 2]];
+      const at = loopAt(o, dot(sub(q, origin), axes.t), q[2]);
+      if (at !== undefined) {
+        found.set(Math.round(at * 1e6), q);
+      }
+    }
+  }
+  for (const [k, [cs, cz]] of [
+    [o.s0, o.z0],
+    [o.s1, o.z0],
+    [o.s1, o.z1],
+    [o.s0, o.z1],
+  ].entries()) {
+    const key = k * 1e6;
+    if (!found.has(key)) {
+      found.set(key, lift(plane, [cs, cz]));
+    }
+  }
+  return [...found.entries()].toSorted(([a], [b]) => a - b).map(([, q]) => q);
 }
 
 /** Two triangles over a quad, wound to face `want`. */
@@ -282,27 +335,46 @@ function quad(out: number[], [a, b, c, d]: readonly V3[], want: V3): void {
 }
 
 /** An opening's box behind the wall's face: the reveals (sill, head, two
- *  sides, each facing into the opening) and the glass at the back. */
+ *  sides, each facing into the opening), a strip between each pair of
+ *  the edge loop's points (`cutWall`'s `corners`), and the glass at the
+ *  back, a fan over the loop's back. */
 export function openingBox(
   axes: WallAxes,
-  corners: readonly V3[],
+  loop: readonly V3[],
   depth = SHOP_WINDOW_DEPTH_M
 ): { glass: number[]; reveals: number[] } {
   const [n0, n1] = [axes.n[0], axes.n[1]];
-  const back = corners.map((p): V3 => [
-    p[0] - n0 * depth,
-    p[1] - n1 * depth,
-    p[2],
-  ]);
-  const [f0, f1, f2, f3] = corners;
-  const [b0, b1, b2, b3] = back;
-  const reveals: number[] = [];
+  const backOf = (p: V3): V3 => [p[0] - n0 * depth, p[1] - n1 * depth, p[2]];
   const minusT: V3 = [-axes.t[0], -axes.t[1], 0];
-  quad(reveals, [f0, f1, b1, b0], [0, 0, 1]);
-  quad(reveals, [f3, f2, b2, b3], [0, 0, -1]);
-  quad(reveals, [f0, f3, b3, b0], axes.t);
-  quad(reveals, [f1, f2, b2, b1], minusT);
+  const reveals: number[] = [];
+  for (let k = 0; k < loop.length; k += 1) {
+    const a = loop[k];
+    const b = loop[(k + 1) % loop.length];
+    const ds = dot(sub(b, a), axes.t);
+    const dz = b[2] - a[2];
+    // along the bottom (+s) the sill faces up, up the s1 side it faces
+    // −t, back along the head down, down the s0 side +t
+    let want: V3 = Math.abs(ds) >= Math.abs(dz) ? [0, 0, 1] : minusT;
+    if (Math.abs(ds) >= Math.abs(dz) && ds < 0) {
+      want = [0, 0, -1];
+    } else if (Math.abs(ds) < Math.abs(dz) && dz < 0) {
+      want = axes.t;
+    }
+    quad(reveals, [a, b, backOf(b), backOf(a)], want);
+  }
+  const back = loop.map(backOf);
+  const mid: V3 = [0, 1, 2].map(
+    (c) => back.reduce((sum, p) => sum + p[c], 0) / back.length
+  ) as V3;
   const glass: number[] = [];
-  quad(glass, back, axes.n);
+  for (let k = 0; k < back.length; k += 1) {
+    const a = back[k];
+    const b = back[(k + 1) % back.length];
+    const n = cross(sub(a, mid), sub(b, mid));
+    const wound = dot(n, axes.n) < 0 ? [mid, b, a] : [mid, a, b];
+    for (const q of wound) {
+      glass.push(...q);
+    }
+  }
   return { glass, reveals };
 }

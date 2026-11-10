@@ -51,7 +51,9 @@ function giveUp(): void {
   broken = true;
   worker?.terminate();
   worker = null;
-  const left = running ? [running, ...queue] : [...queue];
+  // the job the worker held handed its buffers over: it cannot run here
+  running?.reject(new Error("niche worker died with a tile's niches"));
+  const left = [...queue];
   running = null;
   queue.length = 0;
   for (const job of left) {

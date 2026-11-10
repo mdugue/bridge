@@ -79,6 +79,12 @@ export const WINDOW_PANE_ROUGHNESS = 0.25;
 
 export const WINDOW_SKY = { up: 0.06, fresnel: 0.5 } as const;
 
+/** The pale sky a pane mirrors (a shop window's, a window's back, a
+ *  niche's), the same in every shader that draws one. */
+export const PANE_SKY_RGB = [0.55, 0.66, 0.8] as const;
+/** How much of a pane's sky the night takes. */
+export const PANE_SKY_NIGHT_DIM = 0.85;
+
 /** The wall rolls into the opening at its sides and head over a quarter
  *  round this wide (m): soft plaster, a line of light where the sun
  *  catches it — drawn only where it spans a pixel or more. */
@@ -107,7 +113,7 @@ export interface WindowInputs {
   sharp?: F;
   /** `sharp` only on windows at least this wide (px); narrower they hand
    *  over to their mean as any other house's do (visual-style.ts
-   *  `NICHE_PREFILTER_PX`) */
+   *  `NICHE_PREFILTER_PX`; with `sharp`) */
   sharpFromPx?: number;
   /** world, surface → sun */
   sun: UniformNode<"vec3", Vector3>;
@@ -134,6 +140,10 @@ export interface ClayWindows {
   normalMix: F;
   /** 1 in an opening (anti-aliased), near enough to be drawn */
   opening: F;
+  /** the opening where it is drawn whole (`sharp`): where a niche's cut
+   *  may follow it. Under `sharpFromPx` the opening is its row's mean
+   *  coverage, a band along the whole row, and nothing is cut (0) */
+  cut: F;
   /** 1 on the opening's back that the view sees: a pane, smooth (the
    *  clay's roughness drawn to `WINDOW_PANE_ROUGHNESS`, so the sun glints
    *  in it as in a shop window) */
@@ -760,6 +770,7 @@ export function clayWindows(i: WindowInputs): ClayWindows {
   const head = clamp(g.v.div(max(g.tall, 0.1)), 0, 1).mul(px.du);
   return {
     opening,
+    cut: opening.mul(sharp ?? float(0)),
     pane: opening.mul(r.back),
     sky: opening
       .mul(r.back)

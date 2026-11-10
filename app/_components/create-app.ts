@@ -1610,11 +1610,7 @@ async function bootApp(
   const styleResources = createStyleResources(
     sceneNight,
     ground.sunDirection,
-    niching,
-    // without temporal antialiasing (scene-profile.ts `PostProfile.taa`)
-    // windows under two pixels wide hand over to their mean tone, niche
-    // or not
-    !postProfileFor(budget.tier).taa
+    niching
   );
 
   // The HUD lets the heavy dressing start after the handover (startStreaming).
@@ -2849,6 +2845,10 @@ async function bootApp(
         uploadIndex(layer);
       }
     }
+    if (changed) {
+      // what a design stands in for loses its niches
+      niches?.invalidate();
+    }
     return changed;
   };
   design = createDesignLayer({
@@ -2984,6 +2984,8 @@ async function bootApp(
     if (!(chosen && demolitions.demolish(chosen.layer, chosen.objectIndex))) {
       return;
     }
+    // the demolished house's niches go with it
+    niches?.invalidate();
     flattened = null;
     invalidateShadows();
     scheduleStats();
