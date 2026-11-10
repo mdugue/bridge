@@ -1135,7 +1135,8 @@ visual-variable codebook is in
   of the level smaller than a part that the joined cells shut in joins
   too; the face's cells past the eave go only where they reach the level
   (a strip shut off from it stays the face's). All the gables are judged
-  together, their takes before their gives: a level they would leave
+  together, their takes before their gives, a cell two take going to
+  the higher plane (as a valley is drawn): a level they would leave
   smaller than a part or narrower than 7 m (`NARROW_M`, a strip between
   two wings standing as a box) keeps its cells. An der
   Frauenkirche 5's ring is now 16 flanks meeting at hips; the block at
@@ -1163,7 +1164,7 @@ visual-variable codebook is in
   direction (An der Frauenkirche 5's ten directions cut its courtyard's
   sides into teeth), and an edge within 1 m of that wall runs on it, on
   the wall's own line (an edge along the outline is the outline, no
-  sliver beside it); neighbours parallel within 1 m are one line — two
+  sliver beside it); neighbours parallel within 1 m (where their edges lie, before one moved onto its wall; within 2°, one front's walls) are one line — two
   on two walls only on one line, a jog in the footprint stays —, an edge off every wall
   shorter than 4 m (a rounded corner) is left out, and the lines meet
   where they cross, unless a corner would stand 1.5 m off the outline (a

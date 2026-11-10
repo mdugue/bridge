@@ -444,6 +444,16 @@ def test_a_fix_up_that_leaves_a_spike_or_drops_a_part_does_not_hold():
     assert not _holds([shapely.union(square, small), shapely.Polygon()], [square, small])
 
 
+def test_an_edge_on_a_wall_and_its_neighbour_off_it_are_one_line():
+    # the south and north walls 0.57° apart, one front: the part's first
+    # south edge lies on the wall, the next 1.1 m off it
+    footprint = shapely.Polygon([(0, 0), (40, 0), (40, 10.4), (0, 10)])
+    part = shapely.Polygon([(0.5, 0.7), (20, 0.7), (39.9, 1.45), (39.9, 10), (0.5, 9.9)])
+    out = regular_polygon(part, building_walls(footprint))
+    south = [y for _, y in out.exterior.coords if y < 5]
+    assert max(south) < 1e-6  # on the wall, no skewed edge and no step
+
+
 def test_a_part_the_tiling_leaves_inside_a_collection_is_kept():
     square = shapely.box(0, 0, 10, 10)
     other = shapely.box(20, 0, 25, 5)

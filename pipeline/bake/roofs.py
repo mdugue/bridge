@@ -637,9 +637,14 @@ def _straight_eaves(h, lab, faces, surface, gables, small_cells: int) -> None:
     for _, win, _, take, _, _ in plans:
         taken[win] |= take
     kept = _kept_whole(lab, taken, small_cells)
+    # a cell two gables take (an inside corner over a courtyard) goes to
+    # the higher plane over it, as a valley is drawn (`creases`)
+    best = np.full(lab.shape, -np.inf)
+    for _, win, fit, take, _, _ in plans:
+        best[win] = np.where(take, np.fmax(best[win], fit), best[win])
     for rid, win, fit, take, _, _ in plans:
         sub, top = lab[win], surface[win]
-        take &= ~np.isin(sub, kept)
+        take &= ~np.isin(sub, kept) & (fit >= best[win])
         sub[take] = rid
         top[take] = fit[take]
     # a face's cells past its eave go to their level only joined to what
@@ -740,8 +745,8 @@ def measured_model(
         alone = np.isin(lab, [rid for rid, flanks in implausible if flanks])
         face &= ~(dropped & ~alone) & ~(alone & flank_only)
         flank_only &= face
-    drawn = {k: v for k, v in gables.items() if faces[k]}
-    _straight_eaves(h, lab, faces, surface, drawn, small_cells)
+    # `gables` holds only faces drawn as flanks (an implausible one is none)
+    _straight_eaves(h, lab, faces, surface, gables, small_cells)
     level = _region_medians(lab, h, int(lab.max()))
     return Model(lab, level, faces, surface)
 
@@ -933,6 +938,7 @@ class RingLine(NamedTuple):
     last: int  # ... and ends at
     length: float  # of the edges it stands for
     on: bool  # on a wall's own line
+    mid: np.ndarray  # the length-weighted middle of the edges it stands for
 
 
 def _ring_lines(pts: np.ndarray, walls: Walls) -> list[RingLine]:
@@ -951,12 +957,13 @@ def _ring_lines(pts: np.ndarray, walls: Walls) -> list[RingLine]:
         if snap is None and length < REGULAR_KEEP_M:
             continue
         if snap is None:
-            line = RingLine((a + b) / 2, d / length, False, i, (i + 1) % n, length, False)
+            m = (a + b) / 2
+            line = RingLine(m, d / length, False, i, (i + 1) % n, length, False, m)
         else:
             u = np.array([np.cos(snap[0]), np.sin(snap[0])])
             on = snap[1] is not None
-            point = snap[1] if on else (a + b) / 2
-            line = RingLine(point, u, True, i, (i + 1) % n, length, on)
+            m = (a + b) / 2
+            line = RingLine(snap[1] if on else m, u, True, i, (i + 1) % n, length, on, m)
         if lines and _one_line(lines[-1], line):
             lines[-1] = _joined(lines[-1], line)
             continue
@@ -972,12 +979,19 @@ def _one_line(prev: RingLine, line: RingLine) -> bool:
     same way within REGULAR_JOG_M of each other — two on walls only on one
     wall's line (a jog in the footprint stays a jog), never two running
     back (a slit's or a tongue's sides)."""
-    jog = STRAIGHT_M if prev.on and line.on else REGULAR_JOG_M
+    # one front's walls lie within WALL_GROUP_DEG: an edge on one wall runs
+    # on its own direction, its neighbour off it on the group's; and how
+    # far apart two lie is read where their edges lie, not where one was
+    # moved onto its wall
+    if prev.on and line.on:
+        jog, off = STRAIGHT_M, _cross(prev.dir, line.point - prev.point)
+    else:
+        jog, off = REGULAR_JOG_M, _cross(prev.dir, line.mid - prev.mid)
     return (
         prev.snapped
         and line.snapped
-        and abs(float(prev.dir @ line.dir) - 1) < 1e-9
-        and abs(_cross(prev.dir, line.point - prev.point)) <= jog
+        and float(prev.dir @ line.dir) >= np.cos(np.deg2rad(WALL_GROUP_DEG))
+        and abs(off) <= jog
     )
 
 
@@ -985,11 +999,14 @@ def _joined(prev: RingLine, line: RingLine) -> RingLine:
     """`prev` and the `line` after it as one line, through their
     length-weighted middle — or on the wall where one of them lies on it."""
     w0, w1 = prev.length, line.length
+    middle = (prev.mid * w0 + line.mid * w1) / (w0 + w1)
     if prev.on != line.on:
-        mid = prev.point if prev.on else line.point
+        wall = prev if prev.on else line
+        point, u = wall.point, wall.dir
     else:
-        mid = (prev.point * w0 + line.point * w1) / (w0 + w1)
-    return RingLine(mid, prev.dir, True, prev.first, line.last, w0 + w1, prev.on or line.on)
+        point, u = (prev.point * w0 + line.point * w1) / (w0 + w1), prev.dir
+    on = prev.on or line.on
+    return RingLine(point, u, True, prev.first, line.last, w0 + w1, on, middle)
 
 
 def _regular_ring(coords, walls: Walls) -> list:
