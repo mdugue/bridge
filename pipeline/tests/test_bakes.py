@@ -199,6 +199,7 @@ def test_a_flagpole_stands_with_its_height_and_the_flag_the_map_names():
     assert kind_of(None, None, '"support"=>"roof"', "flagpole") is None
     assert kind_of(None, None, '"location"=>"roof"', "flagpole") is None
     assert kind_of(None, None, '"location"=>"rooftop"', "flagpole") is None
+    assert kind_of(None, None, '"support"=>"Roof"', "flagpole") is None
     assert _props("flag", None) == {"k": "flag"}
     assert _props("flag", '"height"=>"12 m","flag:name"=>"Germany"') == {
         "k": "flag",
@@ -220,6 +221,8 @@ def test_a_flagpole_stands_with_its_height_and_the_flag_the_map_names():
     assert _props("flag", '"flag:name"=>"Bundesflagge","country"=>"DE"')["c"] == "de"
     # a European flag in Germany is Europe's
     assert _props("flag", '"flag:type"=>"european","country"=>"DE"')["c"] == "eu"
+    # ...whatever the map calls it
+    assert _props("flag", '"flag:type"=>"european","flag:name"=>"EU-Flagge"')["c"] == "eu"
     assert _props("flag", '"subject:wikidata"=>"Q1202"')["c"] == "sn"
     assert _props("flag", '"country"=>"DE;EU"')["c"] == "de"  # a list: its first drawn one
     assert _props("flag", '"country"=>"EU;DE"')["c"] == "eu"

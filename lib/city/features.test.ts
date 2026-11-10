@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { FLAG_HEIGHT_MAX } from "./furniture";
 import { existsSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 import type {
@@ -232,7 +233,7 @@ test.each(cases)(
       // a flagpole's tagged height is one a mast has (furniture.py FLAG_H)
       if (kind === "flag" && f.properties?.h !== undefined) {
         expect(f.properties.h).toBeGreaterThanOrEqual(3);
-        expect(f.properties.h).toBeLessThanOrEqual(30);
+        expect(f.properties.h).toBeLessThanOrEqual(FLAG_HEIGHT_MAX);
       }
       // a mast arm hangs a signal; a colour is a bin's; the surface model
       // measures only a playground's pieces

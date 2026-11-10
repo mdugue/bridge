@@ -21,6 +21,7 @@ import type {
 } from "three/webgpu";
 import { uniform } from "three/tsl";
 import { fogRangeFor, streamFarFor } from "@/lib/city/atmosphere";
+import { FLAG_HEIGHT_MAX } from "@/lib/city/furniture";
 import { plateOf } from "@/lib/city/ground-plate";
 import { utmToLatLng } from "@/lib/city/crs";
 import { WALL_CLEARANCE } from "@/lib/city/clearance";
@@ -3305,8 +3306,9 @@ async function bootApp(
   /** The world box of the furniture cells a frame shows or hides. */
   const changedCells = new Box3();
   /** How far the lantern's hand and a mast's top may lie off the eye and
-   *  the cells' box (m). */
-  const LANTERN_SLACK_M = 35;
+   *  the cells' box, which spans the pieces' feet (m): the tallest mast
+   *  and the hand's few metres. */
+  const LANTERN_SLACK_M = FLAG_HEIGHT_MAX + 5;
   /** `eye`: where the tiers are measured from (Modell: above the pivot);
    *  `tick`: the frame's pose tick is due. */
   const stepVegetation = (elapsed: number, eye: Vector3, tick: boolean) => {

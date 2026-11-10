@@ -1035,7 +1035,7 @@ export const FURNITURE_CELL_M = 500;
 export const FURNITURE_IN_M = 350;
 export const FURNITURE_OUT_M = 400;
 /**
- * The same band for flagpoles: a 7–30 m mast and its 2 m cloth against
+ * The same band for flagpoles: a 3–30 m mast and its 2 m cloth against
  * the sky still read where a bench is gone, so they come and go further
  * out (348 masts in four of the seven cities: their draw is nothing).
  */

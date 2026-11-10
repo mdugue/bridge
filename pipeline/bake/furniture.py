@@ -190,7 +190,9 @@ CLOCK = {"pole": "clock", "wall": "wallclock", "wall_mounted": "wallclock"}
 WALL_SUPPORT = {"wall", "wall_mounted"}  # a flag on a facade: not mapped as such yet
 ROOF = "roof"  # a flag on a roof (`support`/`location`): the roof is not drawn
 ROOF_LOCATIONS = frozenset({ROOF, "rooftop"})
-FLAG_H = (3.0, 30.0)  # a tagged flagpole height outside this is left out (m)
+# a tagged flagpole height outside this is left out (m; lib/city/furniture.ts
+# FLAG_HEIGHT_MAX)
+FLAG_H = (3.0, 30.0)
 # The flags the viewer draws in their colours, by `flag:name`/`country`/`subject`
 # (lower case); every other flag flies a pale cloth.
 FLAG_DESIGNS = {
@@ -310,7 +312,7 @@ def kind_of(
 ) -> str | None:
     """What a tagged OSM point is as street furniture, or None."""
     if man_made == "flagpole":
-        support = tag(other, "support")
+        support = (tag(other, "support") or "").lower()
         where = (tag(other, "location") or "").lower()
         aloft = support in WALL_SUPPORT or support == ROOF or where in ROOF_LOCATIONS
         return None if aloft else "flag"
@@ -373,8 +375,11 @@ def flag(other: str | None) -> dict:
     kind = (tag(other, "flag:type") or "").strip().lower() or None
     if kind == "advertising":
         return props  # a firm's flag: its colours are not mapped
-    if kind == "european" and not tag(other, "flag:name"):
-        props["c"] = "eu"  # Europe's flag, wherever it stands
+    if kind == "european":
+        # Europe's flag, wherever it stands and whatever its name, unless
+        # that names another flag the viewer draws
+        name = (tag(other, "flag:name") or "").split(";")[0].strip().lower()
+        props["c"] = DESIGN_OF.get(name, "eu")
         return props
     # the keys that name the flag itself first, then what it stands for,
     # then where; in a `;` list the first one the viewer draws. A group's
