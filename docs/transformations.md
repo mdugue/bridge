@@ -5315,6 +5315,28 @@ GPU**.
 
 ## 🧪 Experimental
 
+- **Sun study over a season (spike, behind `?studie=`; plan 054 phase 2,
+  2026-11-03):** `= computed` the share of the sunlit time between two
+  hours, over the days of a season (one a week, every 20 minutes), that a
+  place spends in shade, at a child's eye (1 m). Inputs: the baked horizon
+  (`horizon_<tile>.png`, terrain and buildings, ≈ 8 m, 16 azimuths, both
+  bands), the crowns the viewer draws, sized as it sizes them (register
+  trees, canopy and the laser scan's extra crowns, the DLM's rows where the
+  canopy did not place them; under a register tree its own veto,
+  `inventoryCovers`), each a spheroid from
+  `crownBase` to its height letting 15 % of the light through in leaf and
+  65 % bare (`leafLight`: leafing mid-April to mid-May, bare from
+  mid-November), and OSM playgrounds or benches (`furniture_<tile>`) within
+  the circle; points on a grid inside each outline (≤ 160, ≥ 2 m apart).
+  Result per place: the mean, the spread from its shadiest tenth to its
+  sunniest, the direct sun a day. Drawn as a hatch on the place's ground,
+  denser with more shade (`study-marks.ts`), the ranking in the card
+  (`sun-study.tsx`). Blind to: buildings and walls nearer than 8 m, sun
+  sails, play equipment, the ground's slope under a crown. Dresden, Äußere
+  Neustadt, 1 km: 12 playgrounds in 0.2 s; the mean shade is 0.30 with the
+  trees, 0.03 from the buildings alone. Lives in `lib/city/sun-study.ts`,
+  `sun-study-data.ts`.
+
 - **DOP-lean caveat (recorded):** `= computed` standard DOP has building lean (tall roofs
   displaced over facades). Mitigated in the bake by eroding the roof footprint
   inward + a robust median; revisit with true-orthophotos if available.

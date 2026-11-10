@@ -51,7 +51,7 @@ import { RESUME_WINDOW_MS } from "./gpu-safety";
  * query), the user agent, the screen and the device's memory, the
  * renderer, the events (`scrub`bed) and the beats — no position (the trail
  * has none: the URL it keeps is the path and the QA knobs — never the
- * query's `at` or `snap`, which carry a place), no user id (a session's id names the page, not the visitor),
+ * query's `at`, `snap` or `studie`, which carry a place), no user id (a session's id names the page, not the visitor),
  * no IP address (`sdk.settings.infer_ip: "never"`: Sentry infers none),
  * no cookie. No DOM.
  */

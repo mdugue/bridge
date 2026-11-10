@@ -177,8 +177,9 @@ uploaded; nothing it names is fetched (ADR 0054).
   index has each one's link); `bun run shots` renders them too.
 - URL knobs: `?scene=lite`, `?gpu=webgl2`, `?safety=0…3`, `?trail=1`,
   `?trace=1`, `?inspect=1`, `?depth=standard`, `?at=lat,lng`,
-  `?snap=…` (a view link). URL parameters go in the query, never the
-  fragment; one that carries a place is named on the privacy page.
+  `?snap=…` (a view link), `?studie=1` (the sun study's spike, plan 054).
+  URL parameters go in the query, never the fragment; one that carries a
+  place is named on the privacy page.
 
 ## Conventions
 

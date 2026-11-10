@@ -60,3 +60,41 @@ names this use as its revival condition.
 
 - Noise, heat and air-quality maps: the city's data (Umweltatlas) is
   worth a look, but each needs its own licence check and a look decision.
+
+## Spikes (2026-11-03)
+
+The maintainer asked to try the simulation concept before building it
+(thread "Simulationen im digitalen Zwilling konzipieren": a study is a
+question answered by typed values over a set of places, its recipe in the
+link). Two throwaway spikes, flood first:
+
+- **Phase 1, offline (not in the repo).** The lowest Dresden gauge reading
+  at which each 2 m cell is wet *and* connected to the Elbe (DGM1, 2 × 2
+  maximum so narrow dykes stay; a morphological reconstruction from the
+  river; 80 s on one core), against the official extents: 2013 (878 cm,
+  city of Dresden, WFS `cls:L836`) recall 0.96, precision 0.79, IoU 0.76 —
+  a plain level fill (no connection) only 0.59; 2002 (940 cm, LfULG) recall
+  0.60, the 3.9 km² missed being the Weißeritz. What the fill floods and
+  the city did not lies behind the protection built after 2002 (Zwinger,
+  Theaterplatz, Friedrichstadt, Terrassenufer): walls and mobile walls are
+  not in a bare-earth DGM, and OSM's walls burned in change nothing. So
+  phase 1 needs the protection lines with their crests as data (the city's
+  Plan Hochwasservorsorge, LTV) and the Weißeritz as a second river.
+- **Phase 2, in the viewer behind `?studie=`.** Not the terrain term this
+  plan describes: the horizon leaves trees out, and on a playground the
+  trees make most of the shade, so the spike computes on the CPU over the
+  places a question names (`lib/city/sun-study.ts`; the ledger's
+  experimental entry has the model). A recipe — season, hours, playgrounds
+  or benches, a circle — ranks the places by their share of shade with its
+  spread, hatches them on the ground (`study-marks.ts`) and writes itself
+  into the link. The crowns are the viewer's own (its sizes, its register
+  veto, its rows). Äußere Neustadt, 1 km, summer 11–17 h: 12 playgrounds,
+  1 190 points × 234 sun positions, 111 000 crowns from three tiles,
+  loaded in 0.7–1.2 s and computed in 0.2 s (desktop browser); ≈ 13 MB
+  held while it runs (≈ 23 MB for 2 km, six tiles), then only the results.
+  Trees make the shade: 0.30 of the window on average, 0.03 from the
+  buildings alone.
+
+Open: the terrain-wide field (every texel, for the hatch beyond the
+places) as a GPU pass; names from OSM (the furniture bake drops them);
+whether a phone's CPU keeps the 0.2 s within a second.

@@ -188,10 +188,20 @@ du ihn schickst, entscheidest du. Wer ihn öffnet, schickt die Adresse samt
 diesem Ort an Vercel, in dessen Protokolle; die Seite liest die Ansicht
 dann in seinem Browser und speichert sie nicht.
 
+Öffnest du die Sonnenstudie (ein Versuch, `?studie=…`), schreibt sie ihr
+Rezept in die Adresse: Zeitraum, Uhrzeit, was sie vergleicht, den Umkreis
+und dessen Mitte als Koordinaten auf den Meter, also den Ort, an dem die
+Kamera stand, als du *hier rechnen* gewählt oder die Studie geöffnet hast.
+Die Seite ändert dafür nur die Adresse in deinem Browser und schickt nichts;
+lädst du die Seite neu oder schickst du den Link weiter, geht die Adresse samt
+diesem Ort an Vercel, in dessen Protokolle. Die Daten, mit denen die Studie
+rechnet, lädt sie von dieser Seite, wie die Stadt selbst; gerechnet wird in
+deinem Browser.
+
 Die Fehler- und Leistungsberichte nennen die aufgerufene Seite ohne diese
 Parameter, und der Verlauf eines Besuchs, den dein Browser für sie festhält,
-behält von der Adresse nur die Testschalter (wie `?scene=lite`), nie `at`
-oder `snap`. An andere Server als diese Seite schickt dein Browser nach
+behält von der Adresse nur die Testschalter (wie `?scene=lite`), nie `at`,
+`snap` oder `studie`. An andere Server als diese Seite schickt dein Browser nach
 seiner Voreinstellung als Referrer nur die Adresse der Seite ohne Pfad und
 Parameter.
 
