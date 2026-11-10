@@ -495,3 +495,22 @@ def test_a_strong_barrel_is_not_read_past_where_it_folds_back():
     C = np.array([[0.3, 0.0, 1.0], [1.0, 0.0, 1.0]])  # r² 0.09 and 1.0
     _, _, seen, _ = project(C, 2000, 1500, camera)
     assert seen.tolist() == [True, False]
+
+
+def test_only_a_photos_own_failure_counts_against_it():
+    import io
+    import urllib.error
+
+    def http(code, error):
+        body = io.BytesIO(json.dumps({"error": error}).encode())
+        return urllib.error.HTTPError("u", code, "x", {}, body)
+
+    refused = http(403, {"message": "URL signature mismatch"})  # the CDN, this photo
+    assert facades._failed("p", refused)["own"]
+    expired = http(400, {"type": "OAuthException", "code": 190})
+    assert not facades._failed("p", expired)["own"]
+    assert not facades._failed("p", http(401, {}))["own"]
+    assert not facades._failed("p", facades.Transient("HTTPError: 503"))["own"]  # the network
+    assert facades._failed("p", ValueError("bad URL"))["own"]
+    missing = http(400, {"type": "GraphMethodException"})
+    assert facades.gone(missing) and facades.gone(missing)  # the body read once, kept

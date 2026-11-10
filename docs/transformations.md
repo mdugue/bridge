@@ -1837,8 +1837,9 @@ visual-variable codebook is in
   its distortion turns (a strong barrel folds the world beyond back into
   the frame); a framed photo's frame is its own
   shape where Mapillary gives it (the photo list is asked anew when the
-  fields it asks for change). A photo the token or the model's loading
-  failed is read again at the next fetch; one whose own downloads fail,
+  fields it asks for change). A photo the network, the token or the model's
+  loading failed is read again at the next fetch; one the CDN or the API
+  refuses on its own,
   or a wall whose crop the model fails on (a worker out of memory over a
   very long wall; the photo's other walls are kept), is read again and
   given up after three fetches since it was last read — a first failure

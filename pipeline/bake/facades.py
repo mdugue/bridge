@@ -638,6 +638,18 @@ def _cached_json(path: Path, make, fields: str | None = None) -> list[dict]:
     return data
 
 
+def _graph_error(err: urllib.error.HTTPError) -> dict:
+    """The Graph API's error object in an HTTP error's body, read once (a
+    body can be read only once: it is kept on the error)."""
+    if not hasattr(err, "graph_error"):
+        try:
+            body = json.loads(err.read() or b"{}")
+        except (ValueError, OSError):
+            body = {}
+        err.graph_error = body.get("error", {}) if isinstance(body, dict) else {}
+    return err.graph_error
+
+
 def gone(err: urllib.error.HTTPError) -> bool:
     """Whether an HTTP error says the image is no more: 404 or 410, or the
     Graph API's 400 for an id it does not have (a GraphMethodException) —
@@ -645,13 +657,29 @@ def gone(err: urllib.error.HTTPError) -> bool:
     which a later fetch with a good token gets past."""
     if err.code in (404, 410):
         return True
-    if err.code != 400:
-        return False
-    try:
-        body = json.loads(err.read() or b"{}")
-    except (ValueError, OSError):
-        return False
-    return body.get("error", {}).get("type") == "GraphMethodException"
+    return err.code == 400 and _graph_error(err).get("type") == "GraphMethodException"
+
+
+def _token_refused(err: urllib.error.HTTPError) -> bool:
+    """Whether an HTTP error is the token's: a 401, or the Graph API's
+    OAuthException for a bad or expired token (code 190) or an app over
+    its limits (4, 17, 32, 613) — no photo's fault."""
+    return err.code == 401 or (
+        _graph_error(err).get("type") == "OAuthException"
+        and _graph_error(err).get("code") in (4, 17, 32, 190, 613)
+    )
+
+
+def _failed(iid: str, err: Exception) -> dict:
+    """An image's failed read: `own` where the failure is the photo's (an
+    HTTP refusal of it, a malformed answer about it) — not the network's
+    after its retries (`Transient`, a dropped connection) nor the
+    token's."""
+    if isinstance(err, urllib.error.HTTPError):
+        own = not _token_refused(err)
+    else:
+        own = isinstance(err, ValueError)
+    return {"img": iid, "fail": f"{type(err).__name__}: {err}"[:200], "own": own}
 
 
 def _poses(ids: list[str]) -> dict[str, dict]:
@@ -742,11 +770,11 @@ def measure_image(job: dict) -> dict:
     """One image measured on its walls: {"img", "seq", "walls": [...]}, or
     {"img", "skip"} when it cannot be (no pose, taken down), or
     {"img", "fail"} when it could not be read now: the next run tries again.
-    A failure of this photo's — its downloads, its decoding, the model on
-    its crop; not a token refused or a model that does not load — says
-    `own` (the glass cache notes it and gives the photo up after
-    MAX_FAILS, `_done`; one a whole run shares is not noted,
-    `_note_fails`)."""
+    A failure of this photo's — a download of it refused, its decoding,
+    the model on its crop; not the network, a token refused or a model
+    that does not load (`_failed`) — says `own`: the glass cache notes it
+    and gives the photo up after MAX_FAILS (`_done`), unless a whole run
+    shares it (`_note_fails`)."""
     from . import facade_glass, facade_measure, facade_traits
     from .facade_measure import EYE_M, class_map, load_image, rotation_matrix
 
@@ -769,23 +797,13 @@ def measure_image(job: dict) -> dict:
     source = Path(job["source"]) if job.get("source") else None
     try:
         dets = _detections(iid, source)
+        path, ours = _thumbnail(iid, job["url"], Path(job["scratch"]), source)
     except urllib.error.HTTPError as err:
         if gone(err):  # taken down: no later fetch will find it
             return {"img": iid, "skip": f"gone (HTTP {err.code})"}
-        # a token's refusal (401, 403, the Graph API's 400) is no photo's
-        token = err.code in (400, 401, 403)
-        return {"img": iid, "fail": f"HTTPError: {err}"[:200], "own": not token}
+        return _failed(iid, err)
     except (OSError, ValueError) as err:
-        return {"img": iid, "fail": f"{type(err).__name__}: {err}"[:200], "own": True}
-    try:
-        path, ours = _thumbnail(iid, job["url"], Path(job["scratch"]), source)
-    except urllib.error.HTTPError as err:
-        if gone(err):
-            return {"img": iid, "skip": f"gone (HTTP {err.code})"}
-        # the CDN refusing this one photo (made private): its own failure
-        return {"img": iid, "fail": f"HTTPError: {err}"[:200], "own": True}
-    except (OSError, ValueError) as err:
-        return {"img": iid, "fail": f"{type(err).__name__}: {err}"[:200], "own": True}
+        return _failed(iid, err)
     try:
         img = raw_frame(load_image(path), exif)
         cls = raw_frame(class_map(dets), exif)
@@ -1109,12 +1127,14 @@ def _note_fails(out: Path, owns: list[dict], tried: int, known: set[str]) -> Non
     given up after MAX_FAILS fetches, so one photo cannot keep the cache
     from read-through). Those failing for the first time are not noted
     where ten or more and most of the others in the run did: that is a
-    proxy's, the CDN's or the machine's failure, not the photos'. One that
-    failed before (`known`, a rerun asks little else) always is."""
+    proxy's, the CDN's or the machine's failure, not the photos', and
+    none is noted. One that failed before (`known`: a rerun asks little
+    else) is noted otherwise, so a rerun of the stubborn ones gives them
+    up; the network failing is never noted (`_failed`)."""
     again = [r for r in owns if r["img"] in known]
     fresh = [r for r in owns if r["img"] not in known]
     if len(fresh) >= 10 and 2 * len(fresh) > tried - len(again):
-        fresh = []
+        fresh, again = [], []  # the run's failure, not the photos'
     if not (again or fresh):
         return
     with _append(out) as f:
