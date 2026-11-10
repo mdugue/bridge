@@ -42,7 +42,12 @@ import {
   vec4,
 } from "three/tsl";
 import type { FlagDesign } from "@/lib/city/features";
-import { FLAG_CLOTH_H, FLAG_CLOTH_L } from "@/lib/city/furniture";
+import {
+  FLAG_BALL_R,
+  FLAG_BALL_Y,
+  FLAG_CLOTH_H,
+  FLAG_CLOTH_L,
+} from "@/lib/city/furniture";
 import { Instances, instanceMatrix, instancePosition } from "./instancing";
 import { hash21 } from "./shader-chunks";
 import {
@@ -56,9 +61,9 @@ import { swayNear } from "./vegetation-layer";
 /** How far under the mast's top the cloth's top hangs (m); its size is
  *  lib/city/furniture.ts's FLAG_CLOTH_H × FLAG_CLOTH_L. */
 const CLOTH_TOP = -0.12;
-/** The ball on the mast's top: its radius and its centre over the top (m). */
-const BALL_R = 0.075;
-const BALL_Y = 0.05;
+/** The ball on the mast's top (lib/city/furniture.ts). */
+const BALL_R = FLAG_BALL_R;
+const BALL_Y = FLAG_BALL_Y;
 const BALL = 0xb3_b3_bf; // furniture-layer.ts's RING
 /** Off the mast's axis (m): the hoist clears the mast's radius. */
 const HOIST = 0.06;

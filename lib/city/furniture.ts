@@ -92,6 +92,10 @@ export const FLAG_HEIGHT = 7;
  *  height (app/_components/flag-cloth.ts draws it; a pick finds it). */
 export const FLAG_CLOTH_H = 1.2;
 export const FLAG_CLOTH_L = 2;
+/** The ball on a flagpole's top: its radius and its centre over the top
+ *  (m); a pick reaches to its top. */
+export const FLAG_BALL_R = 0.075;
+export const FLAG_BALL_Y = 0.05;
 /**
  * The bearing (degrees clockwise from north) every flag flies towards: the
  * scene has no weather, so one wind for the whole city — from the

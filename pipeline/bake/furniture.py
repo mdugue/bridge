@@ -201,9 +201,15 @@ FLAG_DESIGNS = {
         *("eu", "europe", "europa", "european union", "europäische union", "q458", "q122482"),
         *("europaflagge", "europafahne", "flag of europe", "flag of the european union"),
     ),
-    "sn": ("sachsen", "saxony", "freistaat sachsen", "q1202"),
-    "by": ("bayern", "bavaria", "freistaat bayern", "q980"),
-    "hh": ("hamburg", "freie und hansestadt hamburg", "q1055"),
+    "sn": ("sachsen", "saxony", "freistaat sachsen", "q1202", "sachsenflagge", "flag of saxony"),
+    "by": ("bayern", "bavaria", "freistaat bayern", "q980", "bayerische flagge", "flag of bavaria"),
+    "hh": (
+        "hamburg",
+        "freie und hansestadt hamburg",
+        "q1055",
+        "hamburger flagge",
+        "flag of hamburg",
+    ),
 }
 # The keys that name a flag, in groups (a name, a Wikidata item), the flag's
 # own first: the first group whose name the map fills decides (a name the
@@ -214,7 +220,7 @@ FLAG_KEYS = (
     ("country", "country:wikidata"),
 )
 # Building outlines over open ground: a flagpole in one stands on the ground.
-OPEN_BUILDINGS = {"roof", "carport", "stadium", "no"}
+OPEN_BUILDINGS = {"roof", "carport", "stadium", "no", "construction", "ruins", "shelter"}
 DESIGN_OF = {name: design for design, names in FLAG_DESIGNS.items() for name in names}
 # OSM `playground=*` → the equipment model the viewer stands (others dropped).
 EQUIPMENT = {
@@ -359,13 +365,16 @@ def flag(other: str | None) -> dict:
     kind = tag(other, "flag:type")
     if kind == "advertising":
         return props  # a firm's flag: its colours are not mapped
+    if kind == "european" and not tag(other, "flag:name"):
+        props["c"] = "eu"  # Europe's flag, wherever it stands
+        return props
     # the keys that name the flag itself first, then what it stands for,
     # then where; in a `;` list the first one the viewer draws. A group's
     # name the viewer does not draw decides (a pale cloth); an item it does
     # not know does not (the map's Wikidata may name the flag or its land)
     # `country` names the land a national flag stands for; on a firm's, a
     # city's or a club's flag it is where the firm is, not the flag
-    national = kind in (None, "national", "european")
+    national = kind in (None, "national")
     for names_key, item_key in FLAG_KEYS:
         if names_key == "country" and not national:
             break

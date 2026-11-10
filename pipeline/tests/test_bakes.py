@@ -213,6 +213,8 @@ def test_a_flagpole_stands_with_its_height_and_the_flag_the_map_names():
     # a flag that names its own item (Saxony's) is no German flag
     assert "c" not in _props("flag", '"flag:wikidata"=>"Q693701","country"=>"DE"')
     assert _props("flag", '"flag:name"=>"Bundesflagge","country"=>"DE"')["c"] == "de"
+    # a European flag in Germany is Europe's
+    assert _props("flag", '"flag:type"=>"european","country"=>"DE"')["c"] == "eu"
     assert _props("flag", '"subject:wikidata"=>"Q1202"')["c"] == "sn"
     assert _props("flag", '"country"=>"DE;EU"')["c"] == "de"  # a list: its first drawn one
     assert _props("flag", '"country"=>"EU;DE"')["c"] == "eu"

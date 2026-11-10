@@ -689,7 +689,13 @@ function osmThingLineage(
     ],
     "taken"
   );
-  l.viewer([drawn]);
+  l.viewer([
+    drawn,
+    // a flag's wind and cloth are the viewer's (furniture.ts `flagYaw`)
+    m.kind === "furniture" &&
+      m.properties.k === "flag" &&
+      "der Wind, in den die Fahne weht, und ihr Tuch",
+  ]);
 }
 
 /** What a lamp's place took from OSM beyond its own point: the wall it

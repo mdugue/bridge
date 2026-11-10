@@ -40,7 +40,14 @@ import type {
   TreeFeature,
   VegRowFeature,
 } from "./features";
-import { FLAG_CLOTH_H, FLAG_CLOTH_L, FLAG_HEIGHT, flagYaw } from "./furniture";
+import {
+  FLAG_BALL_R,
+  FLAG_BALL_Y,
+  FLAG_CLOTH_H,
+  FLAG_CLOTH_L,
+  FLAG_HEIGHT,
+  flagYaw,
+} from "./furniture";
 import { epsgToWorld } from "./ground-clamp";
 import type { RecenterOffset } from "./ground-clamp";
 import type { CanopyInquiry, FeatureInquiry } from "./inquiry-features";
@@ -504,9 +511,9 @@ const STOP = { h: 2.8, r: 0.5 };
 /** How far apart a hedge's picks stand along it (m). */
 const HEDGE_STEP = 2;
 
-/** A flagpole's ball over its top (m, flag-cloth.ts draws it to 0.125),
- *  picked with the mast. */
-const FLAG_BALL = 0.15;
+/** How far a flagpole's ball reaches over its top (m), picked with the
+ *  mast. */
+const FLAG_BALL = FLAG_BALL_Y + FLAG_BALL_R;
 
 /** How tall a piece is picked: a signal on a mast arm by its mast
  *  (furniture-layer.ts `signalArm`), a flagpole by its tagged height and
