@@ -51,8 +51,8 @@ export const QUANTUM_M = 0.034;
 export const SHOPFRONT = {
   back: 0.15,
   fasciaH: 0.5,
-  fasciaProud: 0.1,
-  fasciaRound: 0.045,
+  fasciaProud: 0.06,
+  fasciaRound: 0.02,
   glass: 0.06,
   head: 0.18,
   minPier: 0.2,
@@ -111,7 +111,7 @@ const FASCIA_OVER_M = 0.1;
 export const MIN_OPENING_M = 1.2;
 /** The tallest fascia (m): a sign band measured taller (big lettering, a
  *  banner) is a band this tall at its foot, not a slab over the storey. */
-export const FASCIA_MAX_M = 1;
+export const FASCIA_MAX_M = 0.45;
 
 /** Triangles with a normal per vertex (unit; smooth over a round). */
 export interface Shaded {

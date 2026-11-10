@@ -3381,7 +3381,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   from 0.5 m (a glazed row: 0.3 m) to the measured ground-floor top (3 m
   where none; under a canopy's slab, into which the head reaches over
   a strip of wall under 0.25 m) —
-  no mullions, no frame boards —, a rounded fascia band 10 cm proud at
+  no mullions, no frame boards —, a slim rounded sign board (fascia) 6 cm proud and at most 0.45 m tall at
   the measured sign band (none under a canopy: its fascia is the sign
   band); a canopy is a slab 0.3 m thick under its measured top from the
   wall out to a 0.2 m deep fascia at its edge, at most 1 m tall, with
