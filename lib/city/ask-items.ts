@@ -144,6 +144,10 @@ const crownOf = (t: FeatureInquiry): "cone" | "ellipsoid" =>
     ? "cone"
     : "ellipsoid";
 
+/** The cylinders a packed tree is read into for a ray (never handed out). */
+const scratchTrunk: Cylinder = { x: 0, z: 0, y0: 0, y1: 0, r: TRUNK_R };
+const scratchCrown: Cylinder = { x: 0, z: 0, y0: 0, y1: 0, r: 0 };
+
 /**
  * One cell's packed trees as a set. Its own function, so the closure holds
  * only what it reads — not the build's scope (the parsed features).
@@ -162,11 +166,22 @@ function packedTreeSet(
       { x, z, y0: yb, y1: yt, r },
     ];
   };
+  // read into the two scratch cylinders: the autofocus asks ten times a
+  // second, through every tree of the cells its ray enters
   const distance = (o: Xyz, d: Xyz, k: number): number => {
-    const [trunk, crown] = cylinders(k);
+    const at = k * TREE_STRIDE;
+    scratchTrunk.x = solids[at];
+    scratchTrunk.z = solids[at + 1];
+    scratchTrunk.y0 = solids[at + 2];
+    scratchTrunk.y1 = solids[at + 3];
+    scratchCrown.x = scratchTrunk.x;
+    scratchCrown.z = scratchTrunk.z;
+    scratchCrown.y0 = scratchTrunk.y1;
+    scratchCrown.y1 = solids[at + 4];
+    scratchCrown.r = solids[at + 5];
     return Math.min(
-      rayCylinder(o, d, trunk) ?? Number.POSITIVE_INFINITY,
-      rayCylinder(o, d, crown) ?? Number.POSITIVE_INFINITY
+      rayCylinder(o, d, scratchTrunk) ?? Number.POSITIVE_INFINITY,
+      rayCylinder(o, d, scratchCrown) ?? Number.POSITIVE_INFINITY
     );
   };
   const hit = (k: number, t: number): AskHit<FeatureInquiry> => {
@@ -194,11 +209,7 @@ function packedTreeSet(
       let best = -1;
       let reach = far;
       for (let k = 0; k < index.length; k += 1) {
-        const [trunk, crown] = cylinders(k);
-        const t = Math.min(
-          rayCylinder(o, d, trunk) ?? Number.POSITIVE_INFINITY,
-          rayCylinder(o, d, crown) ?? Number.POSITIVE_INFINITY
-        );
+        const t = distance(o, d, k);
         if (t <= reach) {
           reach = t;
           best = k;
@@ -930,6 +941,7 @@ function furnitureItem(
   }
   return [
     {
+      // a box over the outline, not its shape (`toleranceBox`)
       solids: [
         { prism: { ring: ringXz(ring, ctx.offset), y0: y - 0.3, y1: y + h } },
       ],
@@ -941,6 +953,26 @@ function furnitureItem(
       },
     },
   ];
+}
+
+/**
+ * Whether an item's solids are a box the probe tolerates round what is
+ * drawn — a landing stage's, an outline's prism over the surface it marks
+ * (`furnitureItems`, `landingItems`), a fountain's basin up to its
+ * figure's top (`monumentSolid`) — not its shape: a ray may name it, the
+ * lens never focuses on it. Read from the item, never stored on it
+ * (ADR 0047).
+ */
+export function toleranceBox(item: AskItem<FeatureInquiry>): boolean {
+  const { target } = item;
+  const prism = item.solids.some((s) => "prism" in s);
+  return (
+    target.kind === "landing" ||
+    (target.kind === "furniture" && prism) ||
+    // a basin's box reaches up to its figure's top (`monumentSolid`)
+    (target.kind === "monument" &&
+      (prism || target.properties.kind === "fountain"))
+  );
 }
 
 /** The landing stages and pontoons (their outlines; groynes and ferry
@@ -963,6 +995,7 @@ export function landingItems(
       continue;
     }
     out.push({
+      // a box round the stage, not its shape (`toleranceBox`)
       solids: [
         {
           prism: {
