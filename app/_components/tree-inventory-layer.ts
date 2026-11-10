@@ -6,7 +6,6 @@ import { familyLook, TRUNK_BASE } from "@/lib/city/tree-family";
 import { ageLook } from "@/lib/city/tree-age";
 import { buildTreeStakes } from "./tree-stakes";
 import { buildTreePlan } from "./tree-plan";
-import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import {
   CROWN_SHAPES,
   inventoryCovers,
@@ -44,11 +43,10 @@ import {
   evergreenColor,
   hash,
   sceneCrowns,
-  swapCrownLod,
   TRUNK_H,
 } from "./vegetation-layer";
 import type {
-  CellLod,
+  CrownCell,
   TreeInstance,
   TreeVeto,
   VegetationContext,
@@ -62,9 +60,9 @@ import type {
  * (lib/city/tree-inventory.ts).
  *
  * It reuses everything the canopy trees are made of — the lobed crown and the
- * multi-tuft rich crown, the scene's crown materials (sway, shimmer,
- * translucency, gust brightening; the same builds as the canopy's), the
- * trunk, the 250 m chunks and the distance LOD swap — and adds
+ * multi-tuft rich crown, the scene's crown materials (sway, occlusion,
+ * gust brightening; the same builds as the canopy's), the
+ * trunk, the 250 m chunks and their crown plan — and adds
  * only what a per-instance scale cannot express: two reshaped variants of
  * the SAME two crown geometries (a flame for fastigiate cultivars, a
  * curtained dome for weeping trees) and the needle trees' two forms
@@ -373,7 +371,7 @@ function crownPair(
   items: InventoryTree[],
   geos: ShapeGeos[CrownShape],
   materials: CrownMaterials
-): { lod: CellLod; season: SeasonalCrowns } {
+): { lod: CrownCell; season: SeasonalCrowns } {
   const cheap = new Instances(geos.cheap.geo, materials.leafy, items.length);
   const rich = new Instances(geos.rich.geo, materials.leafy, items.length);
   for (const [mesh, fit] of [
@@ -392,7 +390,10 @@ function crownPair(
     items.map(seasonKeyOf),
     materials
   );
-  return { lod: { cheap, rich }, season };
+  return {
+    lod: { kind: "cell", cheap, rich, tier: "mid", trees: items.length },
+    season,
+  };
 }
 
 export interface TreeInventory {
@@ -435,7 +436,6 @@ export function* treeInventorySteps(
   group.name = "tree-inventory";
   // The scene's crown materials and uniforms, as the canopy's (sceneCrowns).
   const crownMats = sceneCrowns(ctx.sunDirection);
-  let { multiTuft } = LOOK_DEFAULTS;
   const counts = Object.fromEntries(CROWN_SHAPES.map((k) => [k, 0])) as Record<
     CrownShape,
     number
@@ -447,7 +447,7 @@ export function* treeInventorySteps(
   const trees = yield* inRuns(features, INVENTORY_RUN, (run) =>
     inventoryTrees(run, ctx, ndviAt)
   );
-  const cells: CellLod[] = [];
+  const cells: CrownCell[] = [];
   const seasons: SeasonalCrowns[] = [];
   let instances: TreeInstance[] = [];
   if (trees.length > 0) {
@@ -491,13 +491,10 @@ export function* treeInventorySteps(
       // Its trunks and broadleaf crowns ride in the canopy's chunks
       // (`instances`); only its own silhouettes are here.
       chunks: [],
-      multiTuft: () => multiTuft,
-      applyLook: (look) => {
-        ({ multiTuft } = look);
-      },
+      // planned with the canopy's chunks (vegetation-layer.ts
+      // createVegetationLod), under the same rich budget
+      cells,
       setSeason: (day) => applySeasons(seasons, day),
-      // Same rule as the canopy (vegetation-layer.ts swapCrownLod).
-      updateLod: (cameraPos) => swapCrownLod(cells, cameraPos, multiTuft),
     },
   };
 }

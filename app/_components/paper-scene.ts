@@ -1,6 +1,7 @@
 import {
   Color,
   DataTexture,
+  DoubleSide,
   InterpolationSamplingType,
   MathUtils,
   FloatType,
@@ -14,6 +15,7 @@ import type {
   Material,
   Node,
   Object3D,
+  Renderer,
   Scene,
   NodeBuilder,
   UniformNode,
@@ -50,7 +52,7 @@ import { instanceTint } from "./instancing";
 import { ownSlotTexture, ownSlotUniform } from "./material-slots";
 import { dataPosition } from "./shader-chunks";
 import type { Live, V3, V4 } from "./shader-chunks";
-import { styleNight } from "./sun-rig";
+import { sceneNight } from "./scene-environment";
 import { viewDirection } from "./view-direction";
 import { shopOf, wallEaveUp } from "./visual-style";
 
@@ -74,6 +76,17 @@ import { shopOf, wallEaveUp } from "./visual-style";
  * ground. The ground draws the water itself (`paperGroundOn`). The sky
  * dome's inside is culled by the front-sided material, so the paper-toned
  * background shows there.
+ *
+ * three takes the override's `side`, so a fence would vanish from one side.
+ * What is opaque and double-sided is drawn with a stand-in: the same card
+ * with that side and position. Only in the main pass, through the renderer's
+ * object function, which the shadow pass replaces with its own: a stand-in
+ * reaching the shadow map would read the map it draws into, and the shadow
+ * pass takes the side from the mesh's own material anyway.
+ *
+ * A bare crown's `maskNode` stays behind on purpose: the card draws it whole.
+ * Masked, the pen outlines every gap and a winter crown turns into a dark
+ * grey clot (judged on a GPU, 2026-11-05).
  */
 
 /** Warm off-white: the sheet the model is cut from. */
@@ -137,7 +150,7 @@ const ownColour = Fn((builder: NodeBuilder) => {
 });
 
 /**
- * The clay's lit windows on the card, for the night (`styleNight`): the
+ * The clay's lit windows on the card, for the night (`sceneNight`): the
  * windows' rhythm read from the drawn building tile's own object table
  * (its slots), as the clay reads it (visual-style.ts `clayGraph`) — only
  * the light in them, none of the clay's other terms. A paper model lit
@@ -219,7 +232,7 @@ function paperMaterial(): MeshStandardNodeMaterial {
     .mul(ownColour())
     .mul(vec3(0.012, 0.004, -0.014).mul(sheet).add(float(1)));
   // at night the windows glow through the card
-  material.emissiveNode = windowGlow().mul(styleNight.mul(WINDOW_LIGHT));
+  material.emissiveNode = windowGlow().mul(sceneNight.mul(WINDOW_LIGHT));
   return material;
 }
 /** A lit window's light on the card at night (the clay's is 0.5 of its
@@ -402,6 +415,37 @@ function paperOwnMaterials(object: Object3D): Material[] {
   return materials.filter((m) => m.userData.paperOwn === true);
 }
 
+/** Whether the override would lose `m`'s back. (The clay and a design stay
+ *  with the override, as their section and their plate always have.) */
+function needsStandIn(m: Material): boolean {
+  return (
+    !m.transparent &&
+    m.userData.paperOwn !== true &&
+    m.userData.figure !== true &&
+    m.side === DoubleSide
+  );
+}
+
+/** What makes a stand-in of a source material, shared by all that match. */
+function standInKey(base: Material, source: Material): string {
+  const { positionNode } = source as { positionNode?: Node | null };
+  return [
+    base.id,
+    source.side,
+    positionNode?.id,
+    source.alphaTest,
+    (source as MeshStandardNodeMaterial).alphaMap?.id,
+    ...displacementOf(source),
+  ].join(":");
+}
+
+/** What three hands the override from the drawn material besides its
+ *  position (Renderer `renderObject`): a cutout and a displacement. */
+function displacementOf(source: Material): unknown[] {
+  const m = source as MeshStandardNodeMaterial;
+  return [m.displacementMap?.id, m.displacementScale, m.displacementBias];
+}
+
 export interface PaperScene {
   /** Swaps the scene to paper for one render; returns the restore. */
   begin: (kind?: PaperKind) => () => void;
@@ -431,7 +475,12 @@ export interface PaperScene {
 export function createPaperScene(
   scene: Scene,
   /** the scene fog's colour (height-fog.ts), papered for the frame */
-  fogColor: UniformNode<"color", Color>
+  fogColor: UniformNode<"color", Color>,
+  /** draws a swap's frames' stand-ins (`needsStandIn`) */
+  renderer: Pick<
+    Renderer,
+    "getRenderObjectFunction" | "renderObject" | "setRenderObjectFunction"
+  >
 ): PaperScene {
   const card = paperMaterial();
   const materials: Record<
@@ -467,6 +516,78 @@ export function createPaperScene(
   // hidden object is left alone, and so restored as it was.
   let candidates: Record<"figure" | "paper" | "plan", Object3D[]> | null = null;
   let ownPaper: Material[] = [];
+  // One stand-in per side and position, not per mesh. A tile's
+  // leaving frees its own at the next gather.
+  const standIns = new Map<string, Material>();
+  let standInSources: Material[] = [];
+  // Compiled ahead of the scene (a landing tile's root hangs later): their
+  // stand-ins stay until their material goes, whatever a gather sees.
+  const compiledAhead = new Set<Material>();
+  const compileAhead = (source: Material) => {
+    if (!compiledAhead.has(source)) {
+      compiledAhead.add(source);
+      source.addEventListener("dispose", () => {
+        // its stand-in goes now, not at a gather that may never come (out of
+        // Papier none does): it holds the tile's own nodes and maps
+        compiledAhead.delete(source);
+        standInSources = standInSources.filter((m) => m !== source);
+        worn = {};
+        dropStaleStandIns();
+      });
+    }
+  };
+  let worn: Partial<Record<PaperKind, Map<Material, Material>>> = {};
+  const standInFor = (kind: PaperKind, source: Material): Material => {
+    const base = materials[kind];
+    const key = standInKey(base, source);
+    const known = standIns.get(key);
+    if (known) {
+      return known;
+    }
+    const made = base.clone() as MeshStandardNodeMaterial;
+    // from the source what the override would have carried over; nothing
+    // a frame's draws left on the live override (three does not put back
+    // its `transparent`, `alphaTest` and `alphaMap`)
+    const from = source as MeshStandardNodeMaterial;
+    made.side = source.side;
+    made.positionNode = from.positionNode;
+    made.transparent = false;
+    made.alphaTest = from.alphaTest;
+    made.alphaMap = from.alphaMap;
+    made.displacementMap = from.displacementMap;
+    made.displacementScale = from.displacementScale;
+    made.displacementBias = from.displacementBias;
+    made.allowOverride = false;
+    standIns.set(key, made);
+    return made;
+  };
+  /** The stand-ins `kind` draws, by the material they stand in for. The
+   *  Schwarzplan's buildings stay with the override. */
+  const wornBy = (kind: PaperKind): Map<Material, Material> => {
+    if (kind === "figure") {
+      return new Map();
+    }
+    let map = worn[kind];
+    if (!map) {
+      map = new Map(standInSources.map((m) => [m, standInFor(kind, m)]));
+      worn[kind] = map;
+    }
+    return map;
+  };
+  const dropStaleStandIns = () => {
+    const live = new Set<string>();
+    for (const base of [materials.paper, materials.ink]) {
+      for (const source of [...standInSources, ...compiledAhead]) {
+        live.add(standInKey(base, source));
+      }
+    }
+    for (const [key, material] of standIns) {
+      if (!live.has(key)) {
+        material.dispose();
+        standIns.delete(key);
+      }
+    }
+  };
   const gather = () => {
     const found = {
       paper: [] as Object3D[],
@@ -474,6 +595,7 @@ export function createPaperScene(
       plan: [] as Object3D[],
     };
     const own = new Set<Material>();
+    const sources = new Set<Material>();
     scene.traverse((object) => {
       if (hiddenInPaper(object)) {
         found.paper.push(object);
@@ -487,9 +609,17 @@ export function createPaperScene(
       for (const m of paperOwnMaterials(object)) {
         own.add(m);
       }
+      for (const m of materialsOf(object)) {
+        if (needsStandIn(m)) {
+          sources.add(m);
+        }
+      }
     });
     candidates = found;
     ownPaper = [...own];
+    standInSources = [...sources];
+    worn = {};
+    dropStaleStandIns();
     return found;
   };
   const begin = (kind: PaperKind = "paper") => {
@@ -500,7 +630,7 @@ export function createPaperScene(
       // Papier's night is drawn on dark card: its sky and its haze
       // (through a mauve dusk: halfway, day paper and night card met in
       // a dull grey)
-      const night = styleNight.value;
+      const night = sceneNight.value;
       skies.paper
         .copy(PAPER_SKY)
         .lerp(PAPER_DUSK_SKY, MathUtils.smoothstep(night, 0, 0.5))
@@ -513,6 +643,23 @@ export function createPaperScene(
     scene.background = skies[kind];
     const lists = candidates ?? gather();
     const list = kind === "figure" ? lists.figure : lists.paper;
+    const drawn = renderer.getRenderObjectFunction();
+    const wearing = wornBy(kind);
+    if (wearing.size > 0) {
+      const draw = drawn ?? renderer.renderObject.bind(renderer);
+      renderer.setRenderObjectFunction(
+        (object, s, camera, geometry, material, ...rest) => {
+          draw(
+            object,
+            s,
+            camera,
+            geometry,
+            wearing.get(material) ?? material,
+            ...rest
+          );
+        }
+      );
+    }
     for (const m of ownPaper) {
       m.allowOverride = false;
     }
@@ -535,6 +682,7 @@ export function createPaperScene(
       }
     }
     return () => {
+      renderer.setRenderObjectFunction(drawn);
       for (const object of hidden) {
         object.visible = true;
       }
@@ -562,9 +710,27 @@ export function createPaperScene(
       if (own) {
         material.positionNode = own;
       }
+      // A compile takes no object function: it finds the stand-in on the
+      // mesh, for its synchronous half (where the render object is made).
+      // (not from the gathered list: a landing tile is not in the scene yet)
+      const mesh = object as Object3D & { material?: Material | Material[] };
+      const wornBefore = mesh.material;
+      const wear = (m: Material) => {
+        if (kind === "figure" || !needsStandIn(m)) {
+          return m;
+        }
+        compileAhead(m);
+        return standInFor(kind, m);
+      };
+      if (wornBefore) {
+        mesh.material = Array.isArray(wornBefore)
+          ? wornBefore.map(wear)
+          : wear(wornBefore);
+      }
       try {
         return during();
       } finally {
+        mesh.material = wornBefore;
         material.positionNode = previous;
         restore();
       }
@@ -579,6 +745,10 @@ export function createPaperScene(
       for (const m of new Set(Object.values(materials))) {
         m.dispose();
       }
+      for (const m of standIns.values()) {
+        m.dispose();
+      }
+      standIns.clear();
     },
   };
 }

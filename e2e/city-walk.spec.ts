@@ -1,3 +1,4 @@
+import { SHADOW_RINGS } from "../lib/city/shadow-rings";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { Document, WebIO } from "@gltf-transform/core";
@@ -8,6 +9,11 @@ import proj4 from "proj4";
 import type { LookValues } from "../lib/city/look-controls";
 import { utmToLatLng } from "../lib/city/crs";
 import { EYE_HEIGHT } from "../lib/city/pose";
+import {
+  parseSnapshot,
+  snapshotFromSearch,
+  snapshotHref,
+} from "../lib/city/snapshot";
 import { tfwToBounds } from "../lib/city/tfw";
 
 /**
@@ -21,7 +27,7 @@ const slow = (ms: number) => (process.env.CI ? ms * 3 : ms);
 
 /**
  * The viewer specs run the `lite` scene profile (see scene-profile.ts): the
- * primary tile alone and a 512² shadow map. Under SwiftShader the full 2x2
+ * primary tile alone and a 256² shadow rings. Under SwiftShader the full 2x2
  * block costs ~14 s to boot and ~4 s per clay frame; lite trades away the
  * scenic context — which nothing here asserts on — for a suite that finishes
  * in a couple of minutes instead of twenty.
@@ -969,9 +975,8 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       await page.getByRole("tab", { name: "Szene" }).click();
       await expect(page.getByText("Sonne & Zeit")).toBeVisible();
       // The look is fixed: under the picture style only the fog's slider
-      // and the crowns' switch are left, in plain view.
+      // is left, in plain view.
       await expect(page.locator("#atmosphere")).toBeVisible();
-      await expect(page.locator("#tree-multituft")).toBeVisible();
       // A style that draws in its own light rests the date and time, and
       // says why; leaving it brings them back.
       await page.evaluate(() => window.__poc?.look?.set({ style: "figure" }));
@@ -1057,7 +1062,10 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       const view = page.getByTestId("walk-photo-view");
       await expect(view.locator("img")).toBeVisible();
       await page.keyboard.press("Escape");
-      await expect(view).toHaveCount(0);
+      // Escape closes it at once; it leaves the DOM after its exit
+      // animation, a frame or three, and a slow runner's SwiftShader
+      // frames take seconds each (the default 5 s ran out mid-animation)
+      await expect(view).toHaveCount(0, { timeout: slow(10_000) });
       // the place the story names is a button that picks it
       await expect(card.getByTestId("walk-mention").first()).toBeVisible();
       const first = await card.getByRole("heading").textContent();
@@ -1081,7 +1089,9 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     // ADR 0056: the key check and the answer are the server's and the
     // provider's; the spec answers for both, so CI needs no key and no
     // provider. A key the provider refuses says so; a checked one opens
-    // the conversation, whose answer is labelled KI.
+    // the conversation. A refusal of the chat route reaches the card by its
+    // code (ADR 0056: the card looks the words up), and the answer is
+    // labelled KI.
     let checks = 0;
     await page.route("**/api/schluessel", async (route) => {
       checks += 1;
@@ -1132,14 +1142,23 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       },
       { type: "RUN_FINISHED", runId: "r2", threadId: "t" },
     ];
-    await page.route(
-      "**/api/frag",
-      async (route) =>
-        await route.fulfill({
-          contentType: "text/event-stream",
-          body: events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join(""),
-        })
-    );
+    let asked = 0;
+    await page.route("**/api/frag", async (route) => {
+      asked += 1;
+      await route.fulfill(
+        asked === 1
+          ? {
+              status: 401,
+              json: { code: "bad-token", message: "Token abgelaufen." },
+            }
+          : {
+              contentType: "text/event-stream",
+              body: events
+                .map((e) => `data: ${JSON.stringify(e)}\n\n`)
+                .join(""),
+            }
+      );
+    });
     await withFramesHeld(page, async () => {
       await openSidebar(page);
       await page.getByRole("tab", { name: "Erkunden" }).click();
@@ -1160,8 +1179,21 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       await card.getByRole("button", { name: "Prüfen und loslegen" }).click();
       await card.getByTestId("ask-input").fill("Wer baute die Frauenkirche?");
       await card.getByTestId("ask-input").press("Enter");
+      // the route refuses the token: the card words it by its code
+      await expect(card.getByRole("alert")).toContainText(
+        "Der Schlüssel muss neu geprüft werden."
+      );
+      await expect(
+        card.getByRole("button", { name: "Schlüssel prüfen" })
+      ).toBeVisible();
+      // the refused answer is the browser's logged 401, asked for above
+      errors.console.length = 0;
+      await card.getByTestId("ask-input").fill("Wer baute die Frauenkirche?");
+      await card.getByTestId("ask-input").press("Enter");
       await expect(card).toContainText("George Bähr");
-      await expect(card.getByText("KI", { exact: true })).toBeVisible();
+      // (the refused answer keeps its empty, labelled row, as an
+      // uncoded refusal did before: the answer's label is the last)
+      await expect(card.getByText("KI", { exact: true }).last()).toBeVisible();
       await expect(
         card.getByRole("button", { name: "Wann wurde sie geweiht?" })
       ).toBeVisible();
@@ -1764,12 +1796,10 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     // so a dropped write cannot pass as a frame that drew without errors.
     const steps: { set: Partial<LookValues>; style: string }[] = [
       // What is left of the look: the fog (a uniform, it compiles nothing)
-      // at full strength and back down, and the crowns' switch (off swaps
-      // the near multi-tuft crowns for the cheap ones, on brings them
-      // back). The look's other strengths are constants, compiled with the
-      // boot.
-      { set: { fogAmount: 1, multiTuft: false }, style: "pastel" },
-      { set: { fogAmount: 0.35, multiTuft: true }, style: "pastel" },
+      // at full strength and back down. The look's other strengths are
+      // constants, compiled with the boot.
+      { set: { fogAmount: 1 }, style: "pastel" },
+      { set: { fogAmount: 0.35 }, style: "pastel" },
       // The picture styles: the first non-default style compiles the
       // stylize pass (one program for all of them), the next only moves its
       // uniforms and the grain's film switch; pastel switches the pass off
@@ -1793,16 +1823,43 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
         }
         look.set(values);
         const now = look.get();
-        return { style: now.style, fog: now.fogAmount, tufts: now.multiTuft };
+        return { style: now.style, fog: now.fogAmount };
       }, step.set);
       expect(applied.style).toBe(step.style);
       if ("fogAmount" in step.set) {
         expect(applied.fog).toBe(step.set.fogAmount);
-        expect(applied.tufts).toBe(step.set.multiTuft);
       }
       await waitForFrames(page, 2);
       expectNoErrors(errors);
     }
+    // Night (scene-environment.ts): the lamps' halos and pools are drawn
+    // by their shared materials after dark only, and compiled ahead by day
+    // all the same — a first night builds nothing inside a frame.
+    const builtBefore = await page.evaluate(() => {
+      const handle = window.__poc?.handle;
+      if (!handle) {
+        throw new Error("handle not published");
+      }
+      const before = handle.getRenderInfo().framedBuilds.other;
+      handle.setSun(new Date("2026-07-15T23:00:00.000Z"));
+      return before;
+    });
+    let builtAfter: number;
+    try {
+      await waitForFrames(page, 2);
+      builtAfter = await page.evaluate(
+        () => window.__poc?.handle?.getRenderInfo().framedBuilds.other ?? -1
+      );
+    } finally {
+      // back to day for the tests after, whether or not the night held;
+      // its shadow redraw lands here, not in theirs
+      await page.evaluate(() => {
+        window.__poc?.handle?.setSun(new Date("2026-07-15T10:00:00.000Z"));
+      });
+      await waitForFrames(page, 3);
+    }
+    expect(builtAfter).toBe(builtBefore);
+    expectNoErrors(errors);
   });
 
   test("quality regresses while moving and recovers when still", async () => {
@@ -1811,13 +1868,26 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     // every step). Asserted through __poc.regressed rather than pixels — the
     // pass's visual delta is exactly what SwiftShader renders least like a
     // GPU.
+    // On foot: the specs before leave the camera flying, 50 m over these
+    // frames, where the finest ring rightly redraws. What they asked of the
+    // rings is drawn first, one a frame (the last of them ends with a
+    // `setSun`, which asks all four).
+    await page.evaluate(() => {
+      const handle = window.__poc?.handle;
+      const state = handle?.getCameraState();
+      if (handle && state) {
+        handle.applyCameraState({ ...state, mode: "walk", pitchDeg: 0 });
+      }
+    });
+    await waitForFrames(page, 2);
+    await page.waitForFunction(() => !window.__poc?.handle?.shadowBusy());
     const before = await page.evaluate(() => ({
       frames: window.__poc?.frames ?? 0,
       shadows: window.__poc?.shadowRenders ?? 0,
     }));
     await page.keyboard.down("KeyW");
-    // 8 walking frames move at most 8 × 0.45 m = 3.6 m — inside the 30 m
-    // follow dead zone, so the shadow map must not be redrawn on the way.
+    // 8 walking frames move at most 8 × 0.45 m = 3.6 m — inside the finest
+    // ring's 16 m dead zone, so walking itself redraws no ring.
     await waitForFrames(page, 8);
     expect(await page.evaluate(() => window.__poc?.regressed)).toBe(true);
     const after = await page.evaluate(() => ({
@@ -1828,7 +1898,8 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     const shadowRenders = after.shadows - before.shadows;
     expect(frames).toBeGreaterThanOrEqual(8);
     // Before the dead zone this equalled `frames` (one depth pass per frame).
-    expect(shadowRenders).toBeLessThan(frames / 2);
+    // A crown tier's flip on the way asks every ring once, one a frame.
+    expect(shadowRenders).toBeLessThanOrEqual(SHADOW_RINGS);
 
     await page.keyboard.up("KeyW");
     // Recovery is frame-driven (RECOVER_MS of accumulated dt with the camera
@@ -1837,6 +1908,80 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       timeout: slow(60_000),
     });
     expectNoErrors(errors);
+  });
+});
+
+/**
+ * A view link (`?snap=`, plan 048): the page boots at the snapshot's view,
+ * and *Link kopieren* writes a link to where the camera is. Its own page:
+ * the link is read at the boot. A committed QA view on the spawn tile
+ * (the lite profile streams that one) is the link.
+ */
+test.describe("a view link", { tag: "@desktop-render" }, () => {
+  test("opens the page at the linked view, and Link kopieren writes one", async ({
+    browser,
+  }) => {
+    const parsed = parseSnapshot(
+      readFileSync(
+        path.join(process.cwd(), "qa", "views", "fountain-july-day.json"),
+        "utf-8"
+      )
+    );
+    if (!parsed.ok) {
+      throw new Error(parsed.reason);
+    }
+    const linked = parsed.snapshot;
+    const context = await browser.newContext({ viewport: DESKTOP_VIEWPORT });
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    const linkPage = await context.newPage();
+    const linkErrors = watchErrors(linkPage);
+    await linkPage.goto(snapshotHref(LITE, linked));
+    const gl = await hasWebGl(linkPage);
+    if (process.env.CI) {
+      expect(gl).toBe(true);
+    }
+    test.skip(!gl, "WebGL is genuinely unavailable in this environment");
+    await linkPage.waitForFunction(
+      () => window.__poc?.ready === true,
+      undefined,
+      { timeout: slow(120_000) }
+    );
+    const camera = await linkPage.evaluate(() =>
+      window.__poc?.handle?.getCameraState()
+    );
+    expect(camera?.mode).toBe(linked.camera.mode);
+    expect(camera?.epsg.x).toBeCloseTo(linked.camera.epsg.x, 0);
+    expect(camera?.epsg.y).toBeCloseTo(linked.camera.epsg.y, 0);
+    // the same direction (getCameraState gives it in (−180°, 180°])
+    const turned =
+      (camera?.headingDeg ?? Number.NaN) - linked.camera.headingDeg;
+    expect((((turned % 360) + 540) % 360) - 180).toBeCloseTo(0, 0);
+
+    await withFramesHeld(linkPage, async () => {
+      await openSidebar(linkPage);
+      await linkPage.getByRole("tab", { name: "Erweitert" }).click();
+      await linkPage.getByRole("button", { name: "Link kopieren" }).click();
+      await expect(
+        linkPage.getByText("Link in die Zwischenablage kopiert")
+      ).toBeVisible();
+    });
+    const copied = await linkPage.evaluate(
+      async () => await navigator.clipboard.readText()
+    );
+    const url = new URL(copied);
+    // the site's page with the view in its query and without this page's
+    // QA knobs (`?scene=lite`)
+    expect(url.pathname).toBe(SITE);
+    expect([...url.searchParams.keys()]).toEqual(["snap"]);
+    expect(url.hash).toBe("");
+    const back = snapshotFromSearch(url.search);
+    expect(back?.ok).toBe(true);
+    if (back?.ok) {
+      expect(back.snapshot.camera.epsg.x).toBeCloseTo(linked.camera.epsg.x, 0);
+      expect(back.snapshot.date).toBe(linked.date);
+    }
+    expectNoErrors(linkErrors);
+    await context.close();
   });
 });
 

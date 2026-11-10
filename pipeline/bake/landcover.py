@@ -24,6 +24,19 @@ from PIL import Image
 from rasterio.features import rasterize
 
 from . import hedges, landcover_osm, road_widths, water
+from .classes import (
+    ARABLE,
+    BUILTUP,
+    CLASSES,
+    COPSE,
+    FARMLAND,
+    FOREST,
+    MEADOW,
+    PATH,
+    RAILWAY,
+    ROAD,
+    WATER,
+)
 from .common import (
     OSM_ATTRIBUTION,
     Tile,
@@ -39,19 +52,7 @@ from .common import (
 )
 from .osm import has_extract, read_osm, tag
 
-# id → key: the legend the client's palette is keyed by (lib/city/landcover.ts).
-CLASSES = {
-    0: "background",
-    1: "farmland",
-    2: "forest",
-    3: "copse",
-    4: "builtup",
-    5: "railway",
-    6: "path",
-    7: "road",
-    8: "water",
-    9: "arable",
-}
+# id → key, the legend the client's palette is keyed by: classes.py
 
 # The Landwirtschaft (veg01) that is ploughed — Ackerland, Streuobstacker,
 # Spargel (`VEG`): bare soil or a crop as the season has it, not meadow.
@@ -149,18 +150,18 @@ def stream_buffers(tile: Tile) -> list[shapely.Geometry]:
 def burn_order(tile: Tile) -> list[tuple[int, list[shapely.Geometry]]]:
     """(class id, geometries) in burn order: later burns overwrite earlier."""
     return [
-        (1, _areas(tile, "veg01_f")),  # farmland / meadow
-        (9, arable_areas(tile)),  # of it the arable land
-        (2, _areas(tile, "veg02_f")),  # forest
-        (3, _areas(tile, "veg03_f")),  # copse
-        (4, _areas(tile, "sie02_f")),  # built-up
-        (5, _areas(tile, "ver03_f")),  # railway area
-        (6, _lines(tile, "ver02_l", 1.0)),  # paths
-        (7, _areas(tile, "ver01_f")),  # road area
-        (7, road_buffers(tile)),  # road centrelines, buffered
-        (8, _areas(tile, "gew02_f")),  # water area (alt)
-        (8, _areas(tile, "gew01_f")),  # water area
-        (8, stream_buffers(tile)),  # streams, buffered, not where piped
+        (FARMLAND, _areas(tile, "veg01_f")),  # farmland / meadow
+        (ARABLE, arable_areas(tile)),  # of it the arable land
+        (FOREST, _areas(tile, "veg02_f")),
+        (COPSE, _areas(tile, "veg03_f")),
+        (BUILTUP, _areas(tile, "sie02_f")),
+        (RAILWAY, _areas(tile, "ver03_f")),  # railway area
+        (PATH, _lines(tile, "ver02_l", 1.0)),
+        (ROAD, _areas(tile, "ver01_f")),  # road area
+        (ROAD, road_buffers(tile)),  # road centrelines, buffered
+        (WATER, _areas(tile, "gew02_f")),  # water area (alt)
+        (WATER, _areas(tile, "gew01_f")),  # water area
+        (WATER, stream_buffers(tile)),  # streams, buffered, not where piped
     ]
 
 
@@ -193,7 +194,7 @@ GREEN_LEISURE = {"park", "garden"}
 def osm_islands(tile: Tile) -> list[tuple[int, list[shapely.Geometry]]]:
     """(class id, areas) of the non-carriageway ground OSM maps inside the
     road class: pedestrian areas, islands and fountain basins as built-up
-    (4), lawns and parks as meadow (1)."""
+    (`BUILTUP`), lawns and parks as meadow (`MEADOW`)."""
     geoms, fields = read_osm(
         tile,
         "multipolygons",
@@ -218,7 +219,7 @@ def osm_islands(tile: Tile) -> list[tuple[int, list[shapely.Geometry]]]:
             or amenity == "fountain"  # the basin is drawn by the monuments
         ):
             walk.append(g)
-    return [(4, walk), (1, green)]
+    return [(BUILTUP, walk), (MEADOW, green)]
 
 
 def carve_islands(raster: np.ndarray, tile: Tile) -> int:
@@ -231,7 +232,7 @@ def carve_islands(raster: np.ndarray, tile: Tile) -> int:
         valid = [g for g in geoms if g is not None and not g.is_empty]
         if valid:
             rasterize(((g, cls) for g in valid), out=islands, transform=tile.transform(px))
-    carve = (raster == 7) & (islands > 0)
+    carve = (raster == ROAD) & (islands > 0)
     raster[carve] = islands[carve]
     return int(np.count_nonzero(carve))
 

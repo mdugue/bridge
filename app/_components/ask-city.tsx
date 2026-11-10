@@ -37,9 +37,11 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import {
   ASK_KEY_HEADER,
@@ -51,10 +53,7 @@ import {
   isAskProvider,
   maskedKey,
   plausibleKey,
-  CUT_SHORT,
   providerForKey,
-  TOO_LONG,
-  TOO_MANY_STEPS,
 } from "@/lib/city/ask-city";
 import type {
   AskModel,
@@ -66,6 +65,9 @@ import { mentionRuns } from "@/lib/city/ask-mentions";
 import type { MentionRun } from "@/lib/city/ask-mentions";
 import { starterQuestions } from "@/lib/city/ask-starters";
 import { NEAR_RADIUS } from "@/lib/city/ask-tools";
+import { askFailure, codedRefusals } from "@/lib/city/ask-failure";
+import { createAskSession } from "@/lib/city/ask-session";
+import type { AskSession } from "@/lib/city/ask-session";
 import { Button } from "@/components/ui/button";
 import { Message, MessageContent } from "@/components/ui/message";
 import {
@@ -116,6 +118,16 @@ function wantsQa(): boolean {
     new URLSearchParams(window.location.search).get("pruefstand") === "1"
   );
 }
+/** A tap's handler: the session's event, in the tap's call stack (iOS
+ *  speaks only what a tap began). */
+const pressed =
+  (
+    session: AskSession,
+    type: "hearingPressed" | "micPressed" | "readingPressed" | "stopPressed"
+  ) =>
+  () => {
+    session.dispatch({ type });
+  };
 
 interface Props {
   coarse: boolean;
@@ -131,21 +143,75 @@ const AskCity = ({ coarse, onClose, scene, site }: Props) => {
     // one) is checked again rather than refused at the first question
     return stored?.token && stored.expires > Date.now() ? stored : null;
   });
+  // one voice, one microphone and one session per card: a new key keeps
+  // the Hörmodus, reading aloud and iOS's primed engine
+  const speech = useSpeech();
+  const dictation = useDictation();
+  // the hooks' latest values, for the session's ports: set in a layout
+  // effect, which runs before every passive effect of the commit — the
+  // child Conversation's run first and dispatch (an answer's end reads
+  // it aloud), so a passive one here would hand them last render's
+  const latest = useRef({ dictation, scene, speech });
+  useLayoutEffect(() => {
+    latest.current = { dictation, scene, speech };
+  });
+  // the conversation's handler for a question the microphone heard
+  const onSpoken = useRef<(text: string) => void>(() => {
+    // no conversation: nothing to ask
+  });
+  const hearSpoken = useCallback((handler: (text: string) => void) => {
+    onSpoken.current = handler;
+  }, []);
+  const session = useOnce(() =>
+    createAskSession({
+      speech: {
+        prime: () => latest.current.speech.prime(),
+        speak: (text) => latest.current.speech.speak(text),
+        stop: () => latest.current.speech.stop(),
+        supported: () => latest.current.speech.supported,
+      },
+      dictation: {
+        start: () =>
+          latest.current.dictation.start((text) => onSpoken.current(text)),
+        stop: () => latest.current.dictation.stop(),
+        abort: () => latest.current.dictation.abort(),
+      },
+      scene: {
+        setListening: (on) => latest.current.scene.setListening(on),
+        haltAnswerGlide: () => latest.current.scene.haltAnswerGlide(),
+      },
+    })
+  );
   // the Hörmodus (the Sprachführer, ADR 0057): a soft vignette, the scene
   // barely drawn, the answers read aloud
-  const [hearing, setHearing] = useState(false);
-  // read aloud: kept here, so a new key does not silence a Hörmodus
-  const [reading, setReading] = useState(false);
+  const { hearing, reading } = useSyncExternalStore(
+    session.subscribe,
+    session.state,
+    session.state
+  );
   // a new conversation is a new card body: a new thread, new first questions
   const [round, setRound] = useState(0);
   const qa = useOnce(wantsQa);
   const [checking, setChecking] = useState(false);
   const [qaOpened, setQaOpened] = useState(false);
   const city = useSite().name;
+  useEffect(
+    () => () => {
+      session.dispatch({ type: "closed" });
+    },
+    [session]
+  );
+  // the microphone's close: an answer owed to it is read now
+  const wasListening = useRef(false);
   useEffect(() => {
-    scene.setListening(hearing);
-    return () => scene.setListening(false);
-  }, [scene, hearing]);
+    if (wasListening.current && !dictation.listening) {
+      session.dispatch({ type: "micClosed" });
+    }
+    wasListening.current = dictation.listening;
+  }, [dictation.listening, session]);
+  useEffect(() => {
+    session.dispatch({ type: "paused", on: !key });
+  }, [key, session]);
   // the key the conversation runs on, kept while the form is open
   const [held, setHeld] = useState(key);
   return (
@@ -161,7 +227,7 @@ const AskCity = ({ coarse, onClose, scene, site }: Props) => {
             aria-label="Hörmodus beenden"
             className="pointer-events-auto absolute bottom-16 left-1/2 z-20 -translate-x-1/2 rounded-full bg-black/45 px-3 py-1.5 text-[12px] text-white/85 shadow-sm backdrop-blur-sm hover:bg-black/60"
             data-testid="ask-hearing"
-            onClick={() => setHearing(false)}
+            onClick={pressed(session, "hearingPressed")}
             type="button"
           >
             Hörmodus · die Antworten werden vorgelesen · beenden
@@ -263,15 +329,16 @@ const AskCity = ({ coarse, onClose, scene, site }: Props) => {
           <div className={key && !checking ? "contents" : "hidden"}>
             <Conversation
               askKey={key ?? held}
+              dictation={dictation}
               hearing={hearing}
               key={`${held.provider}:${held.key}:${round}`}
-              onHearing={setHearing}
               onKeyProblem={() => setKey(null)}
-              paused={!key}
+              onSpoken={hearSpoken}
               reading={reading}
               scene={scene}
-              setReading={setReading}
+              session={session}
               site={site}
+              speech={speech}
             />
           </div>
         )}
@@ -280,8 +347,7 @@ const AskCity = ({ coarse, onClose, scene, site }: Props) => {
             // a forgotten key ends the conversation that runs on it
             onForget={() => {
               setHeld(null);
-              setHearing(false);
-              setReading(false);
+              session.dispatch({ type: "keyForgotten" });
             }}
             onKey={(k) => {
               writeAskKey(k);
@@ -552,114 +618,7 @@ const KeyForm = ({
 
 // --- the conversation -------------------------------------------------------------
 
-/** A provider's error that names the key or the account's credit. */
-const KEY_TROUBLE =
-  /\b(?:401|402|403|unauthori[sz]ed|forbidden|authenticat\w*|api[ _-]?key|credits?|credentials?|quota|billing|insufficient)\b/iu;
-/** The same, as the code a provider's error carries. */
-const KEY_CODES = new Set(["401", "402", "403"]);
-
-/** One failed answer's words and what the visitor can do about it. */
-const say = (text: string, key = false, reset = false) => ({
-  key,
-  reset,
-  text,
-});
-
-/** A failed answer in words, by the status the server sent, and what
- *  the visitor can do about it: check the key again or start over. */
-function errorText(error: Error): {
-  key: boolean;
-  reset: boolean;
-  text: string;
-} {
-  const { status } = error as { status?: unknown };
-  if (status === 401) {
-    return say("Der Schlüssel muss neu geprüft werden.", true);
-  }
-  if (status === 400) {
-    // an older page, or a model the server no longer offers
-    return say(
-      "Die Anfrage passt nicht zu diesem Server — lade die Seite neu."
-    );
-  }
-  if (status === 413) {
-    return say(TOO_LONG, false, true);
-  }
-  if (status === 422) {
-    return say(`${TOO_MANY_STEPS} Frag bitte anders.`, false, true);
-  }
-  if (status === 404) {
-    return say("Für diese Stadt gibt es kein Stadtwissen.");
-  }
-  if (status === 501) {
-    return say("Frag die Stadt ist auf diesem Server nicht eingerichtet.");
-  }
-  if (typeof status === "number") {
-    return say(`Der Server antwortet mit Status ${status}.`);
-  }
-  // a key revoked or out of credit after the check fails in the stream,
-  // in the provider's words: offer the check again for those only
-  const message = error.message || "Die Antwort brach ab.";
-  const code = argText((error as { code?: unknown }).code);
-  if (message === TOO_MANY_STEPS) {
-    return say(`${TOO_MANY_STEPS} Frag bitte anders.`, false, true);
-  }
-  // the codes first, the provider's words only where no code says it
-  if (KEY_CODES.has(code)) {
-    return say(message, true);
-  }
-  // the adapters' codes for a spent output budget and a full context
-  if (
-    code === "max_tokens" ||
-    (code === "incomplete" && message === "max_output_tokens")
-  ) {
-    return say(CUT_SHORT);
-  }
-  if (code === "context_overflow") {
-    return say(TOO_LONG, false, true);
-  }
-  return say(message, KEY_TROUBLE.test(message));
-}
-
 /**
- * Reads each finished answer aloud while `on` — not one that broke off,
- * failed or was stopped (the returned call, for the stop button).
- */
-function useReadAloud(
-  messages: readonly UIMessage[],
-  loading: boolean,
-  failed: boolean,
-  on: boolean,
-  speech: Speech,
-  listening: boolean
-): () => void {
-  const was = useRef(loading);
-  const stopped = useRef(false);
-  // an answer that ended while the microphone listened, read once it closes
-  const owed = useRef(false);
-  useEffect(() => {
-    if (was.current && !loading) {
-      owed.current = on && !failed && !stopped.current;
-    }
-    if (loading) {
-      stopped.current = false;
-      owed.current = false;
-    }
-    was.current = loading;
-    // reading switched off since: owed no more
-    if (!on) {
-      owed.current = false;
-    }
-    // not into an open microphone: it would hear the answer as a question
-    if (owed.current && !listening) {
-      owed.current = false;
-      speech.speak(lastAnswer(messages));
-    }
-  }, [loading, failed, on, messages, speech, listening]);
-  return useCallback(() => {
-    stopped.current = true;
-    owed.current = false;
-  }, []);
 }
 
 /** Read aloud, speak a question, the Hörmodus: where the browser can. */
@@ -667,27 +626,18 @@ const VoiceBar = ({
   busy,
   dictation,
   hearing,
-  onHearing,
-  onSpoken,
   reading,
-  setReading,
+  session,
   speech,
 }: {
   /** an answer is on its way: no second question by voice */
   busy: boolean;
   dictation: Dictation;
   hearing: boolean;
-  onHearing: (on: boolean) => void;
-  onSpoken: (text: string) => void;
   reading: boolean;
-  setReading: (on: boolean) => void;
+  session: AskSession;
   speech: Speech;
 }) => {
-  // the question goes to the conversation as it is when it is heard
-  const spoken = useRef(onSpoken);
-  useEffect(() => {
-    spoken.current = onSpoken;
-  });
   if (!(speech.supported || dictation.supported)) {
     return null;
   }
@@ -700,15 +650,7 @@ const VoiceBar = ({
           aria-pressed={dictation.listening}
           className={cn(chip, "disabled:opacity-50")}
           disabled={busy && !dictation.listening}
-          onClick={() => {
-            if (dictation.listening) {
-              dictation.stop();
-              return;
-            }
-            speech.stop();
-            speech.prime();
-            dictation.start((question) => spoken.current(question));
-          }}
+          onClick={pressed(session, "micPressed")}
           title="Frage sprechen (der Browser erkennt die Sprache)"
           type="button"
         >
@@ -720,16 +662,7 @@ const VoiceBar = ({
         <button
           aria-pressed={reading}
           className={chip}
-          onClick={() => {
-            if (reading) {
-              speech.stop();
-              // the Hörmodus promises the answers read aloud
-              onHearing(false);
-            } else {
-              speech.prime();
-            }
-            setReading(!reading);
-          }}
+          onClick={pressed(session, "readingPressed")}
           title="Antworten vorlesen"
           type="button"
         >
@@ -746,13 +679,7 @@ const VoiceBar = ({
         <button
           aria-pressed={hearing}
           className={chip}
-          onClick={() => {
-            if (!hearing) {
-              speech.prime();
-              setReading(true);
-            }
-            onHearing(!hearing);
-          }}
+          onClick={pressed(session, "hearingPressed")}
           title="Hörmodus: die Szene ruht, die Antworten werden vorgelesen — für unterwegs, das Telefon in der Tasche"
           type="button"
         >
@@ -771,28 +698,28 @@ const VoiceBar = ({
 
 const Conversation = ({
   askKey,
-  paused,
+  dictation,
   hearing,
-  onHearing,
   onKeyProblem,
+  onSpoken,
   reading,
   scene,
-  setReading,
+  session,
   site,
+  speech,
 }: {
   askKey: AskKey;
-  /** hidden while the key is checked again */
-  paused: boolean;
+  dictation: Dictation;
   hearing: boolean;
-  onHearing: (on: boolean) => void;
   onKeyProblem: () => void;
+  /** where the card's microphone hands a question to this conversation */
+  onSpoken: (handler: (text: string) => void) => void;
   reading: boolean;
   scene: AskScene;
-  setReading: (on: boolean) => void;
+  session: AskSession;
   site: string;
+  speech: Speech;
 }) => {
-  const speech = useSpeech();
-  const dictation = useDictation();
   const tools = useMemo(() => sceneTools(scene), [scene]);
   // the conversation remounts for another key (keyed by it): fixed here
   const secret = askKey.key;
@@ -806,6 +733,8 @@ const Conversation = ({
           seitenverhaeltnis: scene.frame().aspect,
         });
         return {
+          // a refusal's code reaches the card as an answer's error does
+          fetchClient: codedRefusals(fetch),
           headers: {
             [ASK_KEY_HEADER]: secret,
             ...(at ? { [ASK_VISITOR_HEADER]: at } : {}),
@@ -833,62 +762,70 @@ const Conversation = ({
     },
   });
   const handleClear = chat.clear;
-  // a closed conversation leaves no tool waiting on the scene
-  // (the answer stops first: a tool that returns at the abort would
-  // otherwise resume the run with one more request on the visitor's key)
-  const stopChat = useRef(chat.stop);
+  // the session runs this conversation's answers while it is mounted;
+  // its end stops the answer and the scene's waits (ask-session.ts)
+  const chatRef = useRef(chat);
   useEffect(() => {
-    stopChat.current = chat.stop;
+    chatRef.current = chat;
   });
-  useEffect(
-    () => () => {
-      stopChat.current();
-      scene.abandon();
-    },
-    [scene]
-  );
+  useEffect(() => {
+    const detach = session.attachRun({
+      // `voice` with the question itself: a spoken one turns reading on
+      // in the same tap, before forwardedProps has seen it
+      send: (q, voice) => {
+        void chatRef.current.sendMessage(q, { body: { voice } });
+      },
+      stop: () => chatRef.current.stop(),
+    });
+    return () => {
+      session.dispatch({ type: "conversationEnded" });
+      detach();
+    };
+  }, [session]);
+  // the chat's loading edges are the answer's start and end
+  const wasLoading = useRef(false);
+  useEffect(() => {
+    if (chat.isLoading && !wasLoading.current) {
+      session.dispatch({ type: "answerStarted" });
+    } else if (!chat.isLoading && wasLoading.current) {
+      session.dispatch({
+        type: "answerEnded",
+        text: lastAnswer(chat.messages),
+        failed: chat.error !== undefined,
+      });
+    }
+    wasLoading.current = chat.isLoading;
+  }, [chat.isLoading, chat.messages, chat.error, session]);
   useShownEffects(chat.messages, scene);
-  const stopReading = useReadAloud(
-    chat.messages,
-    chat.isLoading,
-    chat.error !== undefined,
-    reading,
-    speech,
-    dictation.listening
-  );
   const [text, setText] = useState("");
-  // `voice` with the question itself: a spoken one sets `reading` in the
-  // same handler, before forwardedProps has seen it
-  const ask = (question: string, voice = reading, fromField = true) => {
+  const ask = (question: string) => {
     const q = question.trim().slice(0, ASK_LIMITS.questionChars);
-    if (q && !chat.isLoading) {
-      if (fromField) {
-        setText("");
-      }
-      // the last answer stops: the next one is on its way
-      speech.stop();
-      if (voice) {
-        speech.prime();
-      }
-      void chat.sendMessage(q, { body: { voice } });
+    if (q && session.dispatch({ type: "typed", text: q }) === "sent") {
+      setText("");
+    }
+  };
+  // a chip's question is asked as typed, and leaves a typed draft where
+  // it is
+  const askChip = (question: string) => {
+    const q = question.trim().slice(0, ASK_LIMITS.questionChars);
+    if (q) {
+      session.dispatch({ type: "typed", text: q });
     }
   };
   // a spoken question gets a spoken answer; one heard while an answer
-  // still loads waits in the field, as a typed one would
+  // still loads (or while the key is checked again, or before a run is
+  // attached) waits in the field,
+  // empty or not: never over what was typed; a spoken question that is
+  // asked leaves a typed draft where it is
   const askSpoken = (question: string) => {
-    // (or while the key is checked again: its token would be refused)
-    if (chat.isLoading || paused) {
-      // the microphone opened before a typed question went: it waits
-      // in an empty field, never over what was typed
-      setText((t) => t || question.slice(0, ASK_LIMITS.questionChars));
-      return;
+    const q = question.trim().slice(0, ASK_LIMITS.questionChars);
+    if (q && session.dispatch({ type: "spoken", text: q }) === "draft") {
+      setText((t) => t || q);
     }
-    // read aloud only where the device can: a voice-style answer nobody
-    // hears, with no switch to undo it, helps no one
-    setReading(speech.supported);
-    // a spoken question leaves a typed draft where it is
-    ask(question, speech.supported, false);
   };
+  useEffect(() => {
+    onSpoken(askSpoken);
+  });
   // a renewed token (same key, no remount) clears the error it answered
   // (each check sets a new expiry, with or without a token)
   const [renewed, setRenewed] = useState({
@@ -897,14 +834,14 @@ const Conversation = ({
   });
   if (renewed.at !== askKey.expires) {
     // only an error the check answers: one about the key
-    const keyError = chat.error && errorText(chat.error).key;
+    const keyError = chat.error && askFailure(chat.error).key;
     setRenewed({
       at: askKey.expires,
       error: keyError ? chat.error : undefined,
     });
   }
   const failure =
-    chat.error && chat.error !== renewed.error ? errorText(chat.error) : null;
+    chat.error && chat.error !== renewed.error ? askFailure(chat.error) : null;
   const turns = turnsOf(chat.messages);
 
   return (
@@ -958,8 +895,7 @@ const Conversation = ({
                     )}
                     {chips && !pending && (
                       <AnswerChipRows
-                        // a chip's question leaves a typed draft where it is
-                        ask={(q) => ask(q, reading, false)}
+                        ask={askChip}
                         busy={chat.isLoading}
                         chips={chips}
                         scene={scene}
@@ -999,10 +935,8 @@ const Conversation = ({
         busy={chat.isLoading}
         dictation={dictation}
         hearing={hearing}
-        onHearing={onHearing}
-        onSpoken={askSpoken}
         reading={reading}
-        setReading={setReading}
+        session={session}
         speech={speech}
       />
       <form
@@ -1033,11 +967,7 @@ const Conversation = ({
         {chat.isLoading ? (
           <Button
             aria-label="Antwort abbrechen"
-            onClick={() => {
-              stopReading();
-              scene.abandon();
-              chat.stop();
-            }}
+            onClick={pressed(session, "stopPressed")}
             size="icon-sm"
             type="button"
             variant="secondary"
@@ -1071,24 +1001,42 @@ function argText(value: unknown): string {
     : "";
 }
 
-/** Why a refused call was refused, in the card's words (the model's are
- *  longer); null for a call that ran. */
+/** `setze_zeit` in the trace: its time of day, or only a new date; neither
+ *  while the arguments still stream in. */
+function timeLine(uhrzeit: unknown, datum: unknown): string {
+  if (uhrzeit) {
+    return datum
+      ? `Stellt das Datum um, die Uhr auf ${argText(uhrzeit)} Uhr`
+      : `Stellt die Uhr auf ${argText(uhrzeit)} Uhr`;
+  }
+  return datum ? "Stellt das Datum um" : "Stellt die Zeit";
+}
+
+/**
+ * A refused call says why, in the card's words (the model's are longer):
+ * `was_ist_da` says `gefunden: false` where the others say `ok: false`, and
+ * a call its schema refused comes back with an `error`, and never ran.
+ */
 function refusalLine(output: unknown): string | null {
-  const refused = output as
+  const said = output as
     | {
         ausserhalb?: unknown;
+        error?: unknown;
         gefunden?: unknown;
         hinweis?: unknown;
         ok?: unknown;
       }
     | undefined;
-  // (was_ist_da says `gefunden: false` where the others say `ok: false`)
-  if (refused?.ok !== false && refused?.gefunden !== false) {
+  if (
+    said?.ok !== false &&
+    said?.gefunden !== false &&
+    said?.error === undefined
+  ) {
     return null;
   }
-  return refused.ausserhalb === true
+  return said.ausserhalb === true
     ? "Findet den Ort nicht in der Stadt"
-    : argText(refused.hinweis) || "Abgelehnt";
+    : argText(said.hinweis) || "Abgelehnt";
 }
 
 /** What `zeige` showed, once the browser has run it: the places
@@ -1106,7 +1054,7 @@ function showLine(args: Record<string, unknown>, output: unknown): string {
 function toolLine(name: string, input: unknown, output?: unknown): string {
   const args = (input ?? {}) as Record<string, unknown>;
   const refused = refusalLine(output);
-  if (refused !== null) {
+  if (refused) {
     return refused;
   }
   switch (name) {
@@ -1132,7 +1080,7 @@ function toolLine(name: string, input: unknown, output?: unknown): string {
       return showLine(args, output);
     }
     case "setze_zeit": {
-      return `Stellt die Uhr auf ${argText(args.stunde)} Uhr`;
+      return timeLine(args.uhrzeit, args.datum);
     }
     case "setze_stil": {
       return `Wechselt den Bildstil (${argText(args.stil)})`;

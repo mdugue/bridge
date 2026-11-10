@@ -69,12 +69,10 @@ export function runShown(scene: AskScene, call: ShownCall): void {
       break;
     }
     case "setze_zeit": {
-      if (typeof a.stunde === "number") {
-        scene.setTime(
-          a.stunde,
-          typeof a.datum === "string" ? a.datum : undefined
-        );
-      }
+      scene.setTime({
+        ...(typeof a.uhrzeit === "string" ? { uhrzeit: a.uhrzeit } : {}),
+        ...(typeof a.datum === "string" ? { datum: a.datum } : {}),
+      });
       break;
     }
     case "setze_stil": {

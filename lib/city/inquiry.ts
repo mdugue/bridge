@@ -26,13 +26,42 @@ import {
   stated,
   whole,
 } from "./card-lines";
-import type { CardCredits, CardFact, InquiryCard } from "./card-lines";
-import { bridgeCard, monumentCard, treeCard } from "./inquiry-features";
+import type {
+  CardCredits,
+  CardFact,
+  CardHeading,
+  InquiryCard,
+} from "./card-lines";
+import {
+  bridgeCard,
+  bridgeHeading,
+  canopyCard,
+  canopyHeading,
+  furnitureCard,
+  furnitureHeading,
+  HEDGE_HEADING,
+  hedgeCard,
+  isPlay,
+  lampCard,
+  lampHeading,
+  landingCard,
+  landingHeading,
+  monumentCard,
+  monumentHeading,
+  stopCard,
+  stopHeading,
+  treeCard,
+  treeHeading,
+} from "./inquiry-features";
 import type { FeatureInquiry, TreeFacts } from "./inquiry-features";
-import { moreCard } from "./inquiry-more";
 import type { Stated } from "./methods";
-import { bikeCard, trafficCard } from "./inquiry-traffic";
-import { designCard } from "./inquiry-design";
+import {
+  bikeCard,
+  bikeHeading,
+  trafficCard,
+  trafficHeading,
+} from "./inquiry-traffic";
+import { designCard, designHeading } from "./inquiry-design";
 import {
   isMeasuredRoof,
   MEASURED_ROOF,
@@ -381,6 +410,179 @@ function cardFacts(
   ]);
 }
 
+/** The icon a kind of thing is drawn with in the strip of candidates, by
+ *  its Lucide name (the strip maps it to the component). */
+export type KindIcon =
+  | "anchor"
+  | "armchair"
+  | "bike"
+  | "bridge"
+  | "building"
+  | "car"
+  | "ferris-wheel"
+  | "lamp-floor"
+  | "landmark"
+  | "pencil-ruler"
+  | "shrub"
+  | "tram-front"
+  | "tree-deciduous"
+  | "tree-pine";
+
+/** What the strip of candidates shows of one: its icon and its card's
+ *  heading, without the card. */
+export interface KindLabel extends CardHeading {
+  icon: KindIcon;
+}
+
+/** What a card is made from beside the inquiry: `provenance` null until
+ *  the manifest arrived (the site's own `credits` stand in for its credit
+ *  lines), `treeFacts` until a tree's tile's facts file has
+ *  (lib/city/inquiry-features.ts), `landmarks` until a landmark's. */
+interface CardInput {
+  credits: CardCredits;
+  landmarks: LandmarkFactsIndex | null;
+  provenance: SiteProvenance | null;
+  treeFacts: TreeFacts | null;
+}
+
+type InquiryKind = Inquiry["kind"];
+type InquiryOf<K extends InquiryKind> = Extract<Inquiry, { kind: K }>;
+type FeatureKind = FeatureInquiry["kind"];
+
+/** One kind of thing: how it is told, headed and picked. */
+interface KindRow<I extends Inquiry> {
+  card: (i: I, input: CardInput) => InquiryCard;
+  /** its icon and heading (no provenance, no tree facts yet: the heading
+   *  the card shows before they arrive) */
+  label: (i: I, credits: CardCredits) => KindLabel;
+  /** its stand-in is wider than what it stands for (a crown, a hedge) or
+   *  lies flat on the ground (a playground): chosen only when nothing
+   *  solid stands behind it */
+  porous: (i: I) => boolean;
+}
+
+/** A thing's key for the probe's vote: one per tree, monument, deck,
+ *  counted section, counter. A building has none here: its key is its
+ *  ensemble in its layer (city-layer.ts `buildingKey`). */
+type KeyRow<I extends Inquiry> = I extends BuildingInquiry
+  ? { key?: never }
+  : { key: (i: I) => string };
+
+/** Every kind's row; the mapped type keeps each row's functions narrowed
+ *  to its own kind, and a new kind is a type error until it has one. */
+type KindTable = {
+  [K in InquiryKind]: KindRow<InquiryOf<K>> & KeyRow<InquiryOf<K>>;
+};
+
+const solid = () => false;
+const atTile = (t: {
+  kind: string;
+  position: [number, number];
+  tile: string;
+}) => `${t.kind}:${t.tile}:${t.position.join(",")}`;
+const atIndex = (t: { index: number; kind: string; tile: string }) =>
+  `${t.kind}:${t.tile}:${t.index}`;
+
+const KINDS: KindTable = {
+  building: {
+    card: (i, x) =>
+      withLandmarkFacts(
+        buildingCard(i, x.provenance, x.credits),
+        i,
+        x.landmarks
+      ),
+    label: (i) => ({
+      icon: "building",
+      ...buildingHeading(i, mergedFacts(i)),
+    }),
+    porous: solid,
+  },
+  tree: {
+    card: (i, x) => treeCard(i, x.treeFacts, x.provenance, x.credits),
+    label: (i, credits) => ({
+      icon: i.conifer ? "tree-pine" : "tree-deciduous",
+      ...treeHeading(i, null, credits),
+    }),
+    porous: () => true,
+    key: atIndex,
+  },
+  monument: {
+    card: (i, x) => monumentCard(i, x.provenance, x.credits),
+    label: (i) => ({ icon: "landmark", ...monumentHeading(i) }),
+    porous: solid,
+    key: atTile,
+  },
+  bridge: {
+    card: (i, x) => bridgeCard(i, x.provenance, x.credits),
+    label: (i) => ({ icon: "bridge", ...bridgeHeading(i) }),
+    porous: solid,
+    key: atTile,
+  },
+  traffic: {
+    card: (i) => trafficCard(i),
+    label: (i) => ({ icon: "car", ...trafficHeading(i) }),
+    porous: solid,
+    key: atIndex,
+  },
+  bikes: {
+    card: (i) => bikeCard(i),
+    label: (i) => ({ icon: "bike", ...bikeHeading(i) }),
+    porous: solid,
+    key: (i) => `bikes:${i.id}:${i.position.join(",")}`,
+  },
+  design: {
+    card: (i) => designCard(i),
+    label: (i) => ({ icon: "pencil-ruler", ...designHeading(i) }),
+    porous: solid,
+    key: (i) => `design:${i.file}:${i.partIndex}`,
+  },
+  canopy: {
+    card: (i, x) => canopyCard(i, x.provenance, x.credits),
+    label: (i) => ({ icon: "tree-deciduous", ...canopyHeading(i) }),
+    porous: () => true,
+    key: atTile,
+  },
+  hedge: {
+    card: (i, x) => hedgeCard(i, x.provenance, x.credits),
+    label: () => ({ icon: "shrub", ...HEDGE_HEADING }),
+    porous: () => true,
+    key: atTile,
+  },
+  lamp: {
+    card: (i, x) => lampCard(i, x.provenance, x.credits),
+    label: (i) => ({ icon: "lamp-floor", ...lampHeading(i) }),
+    porous: solid,
+    key: atTile,
+  },
+  furniture: {
+    card: (i, x) => furnitureCard(i, x.provenance),
+    label: (i) => ({
+      icon: isPlay(i) ? "ferris-wheel" : "armchair",
+      ...furnitureHeading(i),
+    }),
+    porous: (i) => i.properties.k === "playground",
+    key: atTile,
+  },
+  stop: {
+    card: (i, x) => stopCard(i, x.provenance),
+    label: (i) => ({ icon: "tram-front", ...stopHeading(i) }),
+    porous: solid,
+    key: atTile,
+  },
+  landing: {
+    card: (i, x) => landingCard(i, x.provenance),
+    label: (i) => ({ icon: "anchor", ...landingHeading(i) }),
+    porous: solid,
+    key: atTile,
+  },
+};
+
+/** The row of an inquiry's own kind (TypeScript issue 47109's pattern:
+ *  generic in the kind, so the row's functions take this inquiry). */
+function rowOf<K extends InquiryKind>(i: InquiryOf<K>): KindRow<InquiryOf<K>> {
+  return KINDS[i.kind];
+}
+
 /**
  * The card for one inquiry; `provenance` null until the manifest arrived
  * (the site's own `credits` stand in for its credit lines), `treeFacts`
@@ -393,45 +595,37 @@ export function inquiryCard(
   treeFacts: TreeFacts | null = null,
   landmarks: LandmarkFactsIndex | null = null
 ): InquiryCard {
-  switch (inquiry.kind) {
-    case "building": {
-      return withLandmarkFacts(
-        buildingCard(inquiry, provenance, credits),
-        inquiry,
-        landmarks
-      );
-    }
-    case "tree": {
-      return treeCard(inquiry, treeFacts, provenance, credits);
-    }
-    case "monument": {
-      return monumentCard(inquiry, provenance, credits);
-    }
-    case "bridge": {
-      return bridgeCard(inquiry, provenance, credits);
-    }
-    case "traffic": {
-      return trafficCard(inquiry);
-    }
-    case "bikes": {
-      return bikeCard(inquiry);
-    }
-    case "design": {
-      return designCard(inquiry);
-    }
-    case "canopy":
-    case "furniture":
-    case "hedge":
-    case "lamp":
-    case "landing":
-    case "stop": {
-      return moreCard(inquiry, provenance, credits);
-    }
-    default: {
-      const unknown: never = inquiry;
-      throw new Error(`unknown inquiry kind: ${String(unknown)}`);
-    }
-  }
+  return rowOf(inquiry).card(inquiry, {
+    credits,
+    landmarks,
+    provenance,
+    treeFacts,
+  });
+}
+
+/** A candidate's icon and heading (no provenance, no tree facts yet: the
+ *  heading the card shows before they arrive). */
+export function kindLabel(inquiry: Inquiry, credits: CardCredits): KindLabel {
+  return rowOf(inquiry).label(inquiry, credits);
+}
+
+/** Whether a thing is chosen only when nothing solid stands behind it
+ *  (KindRow `porous`). */
+export function isPorous(inquiry: Inquiry): boolean {
+  return rowOf(inquiry).porous(inquiry);
+}
+
+/** The feature kinds' keys, as the table holds them. */
+type KeyTable = { [K in FeatureKind]: { key: (i: InquiryOf<K>) => string } };
+
+function keyOf<K extends FeatureKind>(kind: K, t: InquiryOf<K>): string {
+  const keys: KeyTable = KINDS;
+  return keys[kind].key(t);
+}
+
+/** A thing's key for the probe's vote (KeyRow). */
+export function thingKey(t: FeatureInquiry): string {
+  return keyOf(t.kind, t);
 }
 
 /** A landmark's card with its Wikidata facts (the nameplate's lines) as
@@ -495,6 +689,19 @@ function buildingSources(
   );
 }
 
+/** A building's heading from its merged facts: its name under its use,
+ *  else its use, else what it is (a building, or a small structure the
+ *  laser scan found). */
+function buildingHeading(
+  inquiry: BuildingInquiry,
+  t: Pick<ReturnType<typeof mergedFacts>, "functionCode" | "name">
+): CardHeading {
+  const use = functionLabel(t.functionCode);
+  const kind =
+    inquiry.picked.source === OBJECT_SOURCE_SCAN ? "Kleinbau" : "Gebäude";
+  return { kicker: t.name && use ? use : kind, title: t.name || use || kind };
+}
+
 /** A building's card (LoD2, or a scan structure LoD2 lacks). */
 function buildingCard(
   inquiry: BuildingInquiry,
@@ -509,9 +716,6 @@ function buildingCard(
   const osmHeight = gap && decodeDrawn(pick.facts.drawn).height === "osm";
   const t = mergedFacts(inquiry);
   const use = functionLabel(t.functionCode);
-  const kind = scan ? "Kleinbau" : "Gebäude";
-  const title = t.name || use || kind;
-  const kicker = t.name && use ? use : kind;
 
   const facts = cardFacts(t, pick, scan || gap, use);
   const fromOsm = [
@@ -557,8 +761,7 @@ function buildingCard(
     );
   }
   return {
-    kicker,
-    title,
+    ...buildingHeading(inquiry, t),
     address: t.address,
     facts,
     id: pick.facts.buildingId,

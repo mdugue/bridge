@@ -33,7 +33,11 @@ retargeted/lowered as tiles land. The data layers are not wired into
 `data-layers-feature.ts`) and hear the spine through its hooks
 (`feature-seam.ts`: frame, stream change, the look store, the scene's
 clock — a watched value a late starter reads first); a tile's traffic
-slot waits for their builder. The picture styles and Modell are still
+slot waits for their builder. The scene environment
+(`scene-environment.ts`, not three's `scene.environment`) holds what the
+sun and the date move — the night node, the season watch, the clock —
+and a dressing's trees follow its season from birth to release
+(`followEnvironment`); the traffic slot follows the look's layer from its hang. The picture styles and Modell are still
 wired by hand. The data layers' code stays in the scene chunk: the first `import()` chunk that imports three.js costs the first
 load ≈ 33 KB gz (three leaves the scene's hoisted scope), more than the
 data layers moved (ADR 0040) — measure before splitting one off.
@@ -62,7 +66,7 @@ of its own (`SHADOW_STREAM_PX`, `lib/city/shadow-fit.ts`), not the map's:
 the renderer's error for an orthographic camera ignores distance, so at
 2048 px it refined the terrain under the whole frustum; at a desktop's
 128 px it refines the fine level under the eye-level frustum only (ADR
-0047), and on a phone it streams nothing (`shadowTilesStream`, plan 071:
+0047). This camera is a square of its own: it draws no shadow, the rings do, and on a phone it streams nothing (`shadowTilesStream`, plan 071:
 the tiles it kept were tiles in use the memory governor cannot free).
 On a phone the view's own stream also ends at 2.2 km (`streamFarFor`;
 not through Modell's dolly zooms, which back the camera kilometres away). A dressing plugin builds
@@ -129,7 +133,10 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   `V3`, `V4`, `Live`), `dataXY()` / `dataPosition()` (glTF positions are
   quantised, so the data frame comes from world space: world (x, y, z) =
   data (x, −z, y)), `rasterUv(xy, origin, size)` (the corner a
-  `uniform(Vector2)`, so every tile builds the same shader), `texSize`.
+  `uniform(Vector2)`, so every tile builds the same shader), and what the
+  chunks compute with: a raster's texels (`texelSize`, `texelAt`,
+  `loadTexel`, `byteOf`), `floorMod`, the hashes and the noise (`gdHash`,
+  `gdNoise`, `gdNoiseSlope`, `gdBand`, `hash21`).
 - `instancing.ts` — `Instances`, the instanced set every layer uses instead
   of `InstancedMesh`, and its nodes (`instancePosition`, `instanceTint`,
   `instanceMatrix`, `instanceFloat`).
@@ -192,14 +199,17 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   (`lib/city/markings.ts`), `cultivated-layer.ts` (colony gardens, vine
   rows; `lib/city/cultivated.ts`); and `sky-light.ts` (sky view → `aoNode`,
   far horizon → `receivedShadowNode`; `lib/city/skyview.ts`, the raster
-  shared with the buildings through `shared-rasters.ts`).
+  shared with the buildings through `tile-rasters.ts`, which hands every
+  content root its rasters by kind: the kinds table holds a raster's look,
+  tier twin and gate).
 - Buildings: `lib/city/building-tint.ts` (tint, storey height, roofs, at
   bake time), `lib/city/small-buildings.ts` (the scan's sheds as boxes, and
   the canopy points they veto at build time), `scripts/measured-roofs.ts`
   (a LoD2 roof that misses DOM1 — the free-form roofs of complex buildings —
   replaced by what `pipeline/bake/roofs.py` measures: flat levels, and
-  faces on the scan's surface where it slopes or curves, each an
-  error-bounded TIN cut to its outline; ADR 0036).
+  faces where it slopes — planes, an extruded profile, or on a landmark
+  the scan's surface (`roof_planes.py`) — each an error-bounded TIN cut
+  to its outline; ADR 0036).
 - Beyond LoD2 (plan 050, ADR 0036): geometry is added only where DOM1
   measures it **and** OSM (or, for a landmark's roof relief, Wikidata)
   names it — never from the surface model alone (cranes). `structures.py`
@@ -277,8 +287,13 @@ plan 073); a slider (only *Nebel* is left) or anything else that moves
 is a `uniform()` node every tile's materials share; writing its
 `.value` retunes live, no rebuild. A shared `Vector3`
 passed to `uniform(v)` stays a live reference. Module-level uniform nodes
-that a setter writes (`fountainTime`, `lampNight`, `mapAltitude`) are
-fine. Inside `If`/branches read textures with an explicit `.level(0)` or
+that a setter writes (`fountainTime`, `mapAltitude`) are fine; what the
+sun and the date move (`sceneNight`, `fountainsOn`, `clockMinutes`) lives
+in `scene-environment.ts`, written by `setSun` through the environment —
+a layer reads it and adds no setter. A scene-wide material drawn only
+after dark wears `drawnAtNight` (its `visible`, no rebuild); a new compile
+path shows the night-only materials under what it compiles for its call (`withNightMaterialsShown`), or
+such a material builds in the first dusk frame. Inside `If`/branches read textures with an explicit `.level(0)` or
 `textureLoad` (no implicit derivatives in non-uniform control flow).
 
 What three keys a node build (TSL → WGSL/GLSL, **on the main thread**) by,
@@ -392,8 +407,7 @@ and therefore what keeps builds out of frames:
   shared-instancing patch and render-context override were rejected.
 - Things a node material cannot reach, found in the port: the sun's shadow
   map from inside another material (three's public `shadow(light)` builds a
-  second shadow node with its own map) — the crown shimmer's gate is the
-  sun's daylight ramp now; `SkyMesh`'s own cloud horizon fade (inside its
+  second shadow node with its own map); `SkyMesh`'s own cloud horizon fade (inside its
   colour node) — the haze band covers it.
 - 3DTilesRendererJS loads fine under `WebGPURenderer`; its fade and overlay
   plugins patch GLSL and stay unused.
@@ -458,64 +472,44 @@ spreads a 5-tap Vogel disk, rotated per pixel, by `shadow.radius * texel`
 (`node_modules/three/src/nodes/lighting/ShadowFilterNode.js`). Default
 `radius` is 1 ≈ hard. (`PCFSoftShadowMap` has been deprecated since r182.)
 
-Current working setup (`sun-rig.ts` / `create-app.ts`):
+The map is **four concentric rings** (`sun-rings.ts`,
+`lib/city/shadow-rings.ts`, ADR 0009; the numbers are in
+`docs/rendering.md`):
 
 | Setting | Value | Why |
 |---|---|---|
 | `renderer.shadowMap.type` | `PCFShadowMap` | only soft option that doesn't ring (VSM "corduroy"-rings on grazing ground) |
-| `shadow.radius` | ~5 (3 for the warped map from the air) | the actual softness knob; hides the texel staircase / fraying |
+| rings (`SHADOW_RING_HALVES`) | half-sizes 80, 240, 720, 2160 m | texels fine near, coarse far, whatever the view's or the sun's direction: a map warped over the view failed at a low sun looking along its light |
+| ring edge (`shadowMapSizeFor`) | 2048 (phones 900; smaller at a raised safety level, ADR 0047) | four of 900² are less than a phone's old 2048²: they pay for what the wide rings' casters hold |
+| `shadow.radius` | 2.5 (`RING_PCF_RADIUS`) | five samples over 5 texels leave gaps: a thin shadow shows them as a stipple |
 | `shadow.normalBias` | **0** | a positive normalBias offsets the flat ground sample → bright peter-panning contact strip. Safe at 0 because terrain doesn't cast and solids cast via back faces (lit faces never self-acne) |
 | casters' depth | the material itself | no custom depth materials: the shadow pass draws `castShadowPositionNode ?? positionNode` and honours `maskNode` |
-| `shadow.bias` | ~−0.0003 (warped: 0.08 m at the nearest ground, per fit) | small constant bias, residual cleanup |
+| bias | 1.1 of a ring's texels, per ring, 2.5 m at most | residual cleanup |
 | terrain `castShadow` | **false** | a casting terrain self-shadows into triangle/staircase acne at grazing sun; ground only receives |
-| shadow map size (`shadowMapSizeFor` in scene-profile.ts) | 3072 (phones 2048; smaller at a raised safety level, ADR 0047) | soft radius lets 3072 look like 4096 at ~44% less fill |
-| the map's colour target | none (`DepthOnlyShadowNode`, set as `sun.shadow.shadowNode`: three's depth texture in a `count: 0` target, r187) | three's shadow map carries a colour texture of the shadow's `mapType` beside the depth — RGBA, as large again as the depth (16 MB at 2048²) — though only coloured shadows read it; keep `renderer.shadowMap.transmitted` off |
-| frustum half-size (`lib/city/shadow-fit.ts`) | 121 m at eye level, growing in octaves of 110 m to 880 m with altitude | camera-following, texel-snapped; small = fine texels, but a fixed 110 m leaves a fly-over entirely unshadowed |
-| `shadow.autoUpdate` | false | re-render only when the frustum centre leaves a dead zone (30 m on foot — 110 m and 19.8 m until 2026-10-11, the walker as far from every edge now, 91 m; 18% of the half-size above eye level and in Modell), when the half-size re-fits, when the sun moves, or when a caster changes (`invalidateShadows()`, incl. the crown LOD swap) |
+| the map's colour target | none (`RingShadowNode`, set as `sun.shadow.shadowNode`: a depth array in a `count: 0` target, r187) | three's shadow map carries a colour texture of the shadow's `mapType` beside the depth, as large again, though only coloured shadows read it; keep `renderer.shadowMap.transmitted` off |
+| `shadow.autoUpdate` | false | a ring redraws when it has drifted a fifth of its half-size, the sun moves or a caster changes (`invalidateShadows()`), one a frame, the longest waiting first, the wide two at a distance in time |
 
-### The frustum fit (`lib/city/shadow-fit.ts`)
+Traps of the rings:
 
-A fixed 110 m half-size centred on the camera is exactly right at eye level and
-useless in fly mode: from 200 m up it covers ground directly below the camera
-that is barely on screen, so everything the player looks at falls outside the
-shadow camera and renders flat. (That was the reported "no sun shadows when
-flying" bug; `shots/` before/after at that snapshot show it plainly.) The rig
-therefore re-fits per frame, from two pure functions:
-
-- `fitShadowRadius(heightAboveGround, current)` — half-size = 2.5 × altitude,
-  clamped to [121, 880] m and **quantized with hysteresis** (0.6 in log2) to
-  the walker's 121 m or an octave of 110 m (220, 440, 880), so hovering on a
-  step boundary cannot flap the frustum. A flap is a full depth-pass
-  re-render, which is the whole cost here.
-- `shadowFocusAhead(radius)` — how far along the camera's world direction to
-  push the centre: above eye level half of the radius above 110 m, and **zero
-  at eye level** (turning on the spot never moves the frustum). Feed it
-  the raw `dir.x`/`dir.z`, not a renormalized horizontal: the cos(pitch) factor
-  collapses the offset when looking straight down, which is what you want.
-
-The centre is anchored to the **ground** under the camera, not to the camera —
-airborne, a camera-centred frustum puts its tight depth range hundreds of metres
-above the terrain that should be shadowed. Cost per re-render is unchanged (same
-map size, same 5-tap PCF); only the caster set inside the frustum grows. This is
-the cheap 90% of CSM: texels coarsen exactly where a far cascade would coarsen
-them anyway.
-
-### From the air: the warped map (`shadow-warp.ts`, ADR 0009)
-
-Above 30 m over the ground (back below 20 m) the square keeps only the
-tile stream (`sunRig.shadowCamera`); the map itself is a light-space
-perspective shadow map fitted to the view: `fitWarpedShadow` cuts the
-view (widened 12°, out to 80 % of the fog) to the receivers' height band,
-puts the shadow camera's `up` along the view's *heading* as the sun sees
-it (the look direction put the axis askew with the sun behind and to the
-side: 2–3 × the texels), and returns a warp matrix that
-`WarpedShadowCamera` applies after its ortho box in every
-`updateProjectionMatrix` (three calls it when the backend sets the
-coordinate system). Three's lookup divides by w, the style pass
-(`stylize-effect.ts`) too, so nothing else changes. `warpCovers` keeps the
-map until the view leaves it; the sun turning fits it anew. Never read
-`sun.shadow.camera.left/right` as metres from the air: they are warped
-coordinates.
+- **One camera for all rings**, moved per ring (`placeRing`): three keeps its
+  state per drawable and camera. Never a camera per ring.
+- **A ring's matrix changes only as it is drawn.** Read a ring's map through
+  `ringLookup` (`sunRig.shadowMap.rings`); `sun.shadow.matrix` and
+  `sun.shadow.camera` hold whichever ring was drawn last.
+- **Coarse rings do not draw thin casters.** A new thin caster calls
+  `markThinCaster`: `tiny` (the finest ring alone: a coarser filter turns it
+  into a smear) or `slender` (the first three: thin but long, a lamp post).
+- **Plates and captures wait for the rings**: `handle.shadowBusy()`. They
+  redraw one a frame.
+- **Ask only what a change touches.** `invalidateShadows()` redraws all four
+  rings; a tile's change goes through `invalidateShownTiles` (only the rings it
+  can fall on, only if what shows changed), a change near the eye through
+  `sunRig.invalidateShadow(undefined, finest)`.
+- **`renderer.clear()` on a depth array throws on the WebGL2 backend**; the
+  render's own clear is what draws a layer clean.
+- The stream's square (`lib/city/shadow-fit.ts`, `sunRig.shadowCamera`) only
+  loads tiles: `fitShadowRadius` and `shadowFocusAhead` have no say over what
+  is shadowed.
 
 ### The far field: baked horizon + sky view (plan 033)
 
@@ -527,13 +521,14 @@ horizon as its material's **`receivedShadowNode`**, folded into the sun's
 shadow by `min(shadow, lit)` (`sky-light.ts` `applyGroundLight`;
 `groundLitMaterial` for what is baked into the fine terrain: kerbs, fences,
 stairs, walls) — `min`, never a product, so an occluder both see never
-darkens twice. **The near band only counts outside the shadow frustum**:
-the sun rig keeps the frustum's ground centre and half-size in
+darkens twice. **The near band only counts outside the shadow rings**:
+the sun rig keeps the ground centre and half-size of the widest ring with
+texels of 2 m at most in
 `shadowReach` (a shared `uniform(Vector3)`, live by reference); the near
-band fades in over the frustum's last 20 % and beyond it the horizon is
-max(near, far) — without it a street past the frustum lost the shadow of
-the block beside it. Change the frustum fit and this follows by itself;
-never feed the near band inside the frustum (its 8 m / 22.5° smear would
+band fades in over that ring's last 20 % and beyond it the horizon is
+max(near, far) — without it a street past the map lost the shadow of
+the block beside it. Change the rings and this follows by itself;
+never feed the near band inside them (its 8 m / 22.5° smear would
 fight the map's crisp edges). The sky view is the **`aoNode`**, which three
 multiplies into the indirect light only (after the lights; the sun is
 untouched), on the terrain and the clay facades (`createClaySky`: sampled
@@ -545,24 +540,22 @@ the frustum's edge.
 [ADR 0009](../../../docs/adr/0009-shadow-recipe.md).
 
 Dead ends (don't repeat): large `normalBias` (peter-panning), VSM at any blur
-(rings/grid on lit faces), a bigger frustum *at eye level* (coarser texels →
-fraying — the fit is careful to keep the base radius while walking), 4096 map
-(cost without visible gain once radius softens). **Open limit:** past the frustum
-the ground's shadows are the horizon's (an angle at 8 m and 22.5°, no shape,
-not on facades or trees) — only Cascaded Shadow Maps give the middle distance
-its shapes. `CSMShadowNode` is available on this renderer without patching
-materials, still a depth pass per cascade on every sun/camera move: its own
-decision (ledger 📋 #7).
+(rings/grid on lit faces), one map warped over the view (LiSPSM: gone at a low
+sun looking along its light, ADR 0009), a radius of 5 on five samples (a
+stipple). **Open limit:** past the widest ring the ground's shadows are the
+horizon's (an angle at 8 m and 22.5°, no shape, not on facades or trees).
 
 ## Surfaces (the land-cover splat)
 
-The bake writes only a **4096² class raster** (ids 0–8, `pipeline/bake/landcover.py`).
+The bake writes only a **4096² class raster** (ids 0–9, `pipeline/bake/landcover.py`;
+the ids and their names in `pipeline/bake/classes.py`).
 At runtime `landcover-splat.ts` paints it with the one palette
 (`lib/city/landcover.ts`, a `uniformArray`) into an RGBA target, one
 full-screen `QuadMesh` pass per tile (a scene-wide node material per raster
 size, `textureLoad` of the class ids; the class texture is on the GPU
 before the paint — decoded in its turn (on a phone one raster at a time
-for the site, uploaded at once, its bytes dropped; `raster-upload.ts`); a
+for the site, uploaded at once, its bytes dropped; `tile-rasters.ts`,
+`raster-upload.ts`); a
 bitmap the decoder fell back to is never closed — a closed `ImageBitmap`
 uploads empty on node pages): RGB = the pastel class colour,
 **A = water coverage** (a 3×3 tent over the water class — the soft
@@ -672,7 +665,9 @@ not sky.
   tiers per 250 m chunk, planned over the whole site on the 10 Hz pose
   tick (`lib/city/vegetation-lod.ts`, applied by `createVegetationLod`,
   whose arrays are kept between passes; `createLodSchedule` runs it in the
-  frame the tiles in view or the crown switch change, or the eye jumps): the
+  frame the tiles in view change, or the eye jumps; the cadastre's own
+  silhouettes are planned with the chunks, their cheap crown standing for
+  mid and far): the
   **rich multi-tuft crown** (~1 440 tris) near the camera (in 220 m / out
   300 m) but only within a **site-wide budget of 2 500 trees**, nearest
   chunks first — forest tiles (one tree per 7 m, up to ~1 300 per chunk)
@@ -684,16 +679,16 @@ not sky.
   tile; compute each set's bounding sphere after sharing.
 - Crown look (`buildCrownMaterial`): sway in `positionNode`
   (`instancePosition(sway.local)`, the per-tree phase from the instance's
-  world column), the shadow rigid (`castShadowPositionNode`); shimmer,
-  translucency and leaf twinkle in `colorNode`/`emissiveNode`, gated on the
-  sun's daylight ramp (the GLSL gated them on a shadow-map sample 2 m
-  toward the sun — not reachable from a node material, so a crown behind a
-  building now glows too; judge on a GPU).
+  world column), the shadow rigid (`castShadowPositionNode`); occlusion
+  and the gust's brightness pulse in `colorNode`, no `emissiveNode` (the
+  backlit glow flattened the crown, removed 2026-11-06).
 - Phones cache **168–336 MiB** of tile content at safety level 0 (148–296,
   136–272, 96–232 at levels 1–3; `tileCacheBytesFor` in
   `app/_components/scene-profile.ts`, `lruCache.min/maxBytesSize`),
   weighed as the GPU holds it (the dressing plugin's `calculateBytesUsed`,
-  less the site-shared buffers). `max` is derived: the governor's soft
+  less the site-shared buffers; a tile that left is never re-weighed —
+  the cache frees it inside its eviction, and `recalculateBytesUsed`
+  there adds its bytes back to the total for good). `max` is derived: the governor's soft
   line − the fixed costs (24 B per drawn pixel + the shadow map) −
   100 MiB; `max − min` must exceed the largest tile (128 MiB on a phone).
   The 320–600 MB before had `max` above the governor's own hard line, so
@@ -740,8 +735,8 @@ not sky.
 
 Cost = `geometry_tris × instances`, paid twice (shadow pass). Still open:
 **dappled canopy shadow** (a colour-less proxy caster per chunk whose
-`maskNode` cuts the gaps — the shadow pass honours it). Radial normals,
-backlight shimmer and the LOD-gated multi-tuft crown are in
+`maskNode` cuts the gaps — the shadow pass honours it). Radial normals
+and the LOD-gated multi-tuft crown are in
 `vegetation-layer.ts`.
 `aesthetic-sandbox.html` at the repo root is the historical playground those
 were ported from; the layer file, not the sandbox, is the source of truth.
@@ -749,9 +744,11 @@ were ported from; the layer file, not the sandbox, is the source of truth.
 ## Bridges (ADR 0041)
 
 Decks come from the Basis-DLM (`ver06_l` centrelines, `ver06_f` outlines),
-built per fine terrain tile by `rail-layer.ts`; **only the tile owning a
-deck's centre draws it** (`RailContext.owns`), every copy still lifts that
-tile's rails. The bake (`rail.py` + `bridge.py`) reads a DGM/DOM mosaic
+built per fine terrain tile by `bridge-layer.ts` (called from
+`rail-layer.ts`; the lift table and the approaches' plan are
+`bridge-deck.ts`, which a layer that only rides the decks imports alone);
+**only the tile owning a deck's centre draws it** (`BridgeContext.owns`),
+every copy still lifts that tile's rails. The bake (`rail.py` + `bridge.py`) reads a DGM/DOM mosaic
 700 m around the tile, so a seam bridge is the same in both files. What it
 measures in DOM1: the **roadway** (lower third across the deck, held
 −6/+4 m around the abutment ramp) and, on bridges whose class stands above
@@ -848,7 +845,10 @@ to the same place is a leak; a steady one is the tile cache). What a
 tile adds beyond its glTF must reach the cache's weighing
 (`DressingPlugin.calculateBytesUsed`), and a phone's memory is watched
 by `lib/city/memory-governor.ts` — see docs/rendering.md, "GPU memory on
-a phone". A content's CPU copies go once its compile has uploaded them
+a phone". A part that lands after its tile is a `LatePart`
+(`late-parts.ts`: the dressing, the murals, the traffic bodies), which
+weighs it from its build, frees it after its compile and reports for it.
+A content's CPU copies go once its compile has uploaded them
 (`dropCpuCopies` over `cpuDroppable` / `cityCpuDroppable`, ADR 0047; a
 compile resolves only once every drawable under it is uploaded, those
 another compile had started too — `compile-lanes.ts`): **an
@@ -902,7 +902,7 @@ reconstructed from depth, radius 2 m, occlusion raised to
 `AO_EXPONENT`, 1.5) — about what the skip saved, paid every frame. Its sample
 count (`aoSamplesFor`: 16, lite 8) rebuilds the pass's material, so it is a
 construction-time setting. DoF is dropped by switching between **two
-prebuilt `RenderPipeline`s** (with and without `DepthOfFieldNode`, both
+prebuilt `RenderPipeline`s** (with and without the lens blur, both
 built under the load screen), never by swapping one pipeline's output node,
 which re-translates the whole post graph on the main thread. SMAA carries
 the anti-aliasing (the canvas and the scene target have no MSAA) — once, in
@@ -919,7 +919,7 @@ the WebGL2 backend on par in steady state but stalling while it compiles
 ## QA: self-verify on a real GPU
 
 The in-app **Snapshot** panel serializes camera + sun time + the look's
-controls (*Nebel*, the crown switch, the style, the data layers) to JSON; `__poc.handle.getCameraState()` / `applyCameraState()` replay it. To eyeball a
+controls (*Nebel*, the style, the data layers) to JSON; `__poc.handle.getCameraState()` / `applyCameraState()` replay it. To eyeball a
 change yourself:
 
 ```bash
@@ -930,8 +930,19 @@ bun run shots   # = SHOTS=1 playwright test e2e/snapshot-shot.spec.ts --headed
 # appends the query to the page URL and writes shots/<name>.x.png.
 # The shots are taken at /dresden; SHOTS_SITE=leipzig takes them in another
 # built city.
+# The committed QA views (qa/views/*.json, plan 019's reference views,
+# written by `bun scripts/qa-views.ts`) render too, as shots/qa-<name>.png;
+# one of them: bun run shots -- --grep qa-<name>.
 # Plain `bun run test:e2e` ignores the harness (testIgnore in playwright.config.ts).
 ```
+
+A view also travels as a link: *Link kopieren* writes
+`/<site>?snap=<base64url of the snapshot>` (lib/city/snapshot.ts) — in
+the query, like every URL parameter, so the host's request log shows it
+(the privacy page says so; the crash trail keeps only the QA knobs);
+the boot reads it through `parseSnapshot` (a waiting GPU recovery wins,
+`lib/city/gpu-recovery.ts` `arrivalOf`). Another link is another page
+load.
 
 Headless e2e uses SwiftShader through the renderer's WebGL2 backend (headless
 Chromium has no WebGPU adapter) — shadows/AA look nothing like a real GPU, so
@@ -946,7 +957,7 @@ a bridge is invisible looking straight down). Snapshot JSON shape:
   "camera": { "mode": "fly", "pos": {"x":0,"y":0,"z":0}, "epsg": {"x":0,"y":0},
               "headingDeg": 0, "pitchDeg": 0, "fov": 55 },
   "date": "2026-06-15T08:30:00.000Z",
-  "look": { "fogPct":35,"multiTuft":true,"style":"pastel" } }
+  "look": { "fogPct":35,"style":"pastel" } }
 ```
 
 **Budget the e2e specs in frames, not seconds.** Under SwiftShader every pixel
@@ -975,7 +986,7 @@ render scale, AO samples), all resolved once in `city-walk-client.tsx`
 | Knob | full | lite | Why it is the right knob |
 |---|---|---|---|
 | tileset streamed | `tileset.json` (every site tile) | **`tileset-spawn.json`** (spawn tile only) | 3/4 of the geometry AND 3/4 of the boot (measured on the old block loader: 14 s → 4.4 s, 74 MB → 18 MB) |
-| shadow map size (`shadowMapSizeFor`) | 3072 | **512** | the depth pass is per-frame fill that does *not* shrink with the canvas |
+| shadow ring edge (`shadowMapSizeFor`) | 2048 | **256** | the depth pass is fill that does *not* shrink with the canvas |
 | `pixelRatio` | dpr≤1.5 | **0.5** | the canvas fills the viewport and the HUD needs ≥768 px to lay out, so render scale is the only honest way to cut fill-rate |
 | GTAO samples (`aoSamplesFor`) | 16 | **8** | half the AO samples; keyed on the profile, not `navigator.webdriver` (Playwright sets that in the `--headed` shot harness too, which must show the product's AO) |
 

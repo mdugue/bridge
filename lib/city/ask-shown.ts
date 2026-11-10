@@ -7,9 +7,12 @@
  * does, and the model writes on without a round trip through the
  * browser and another model turn for each.
  */
-import { SHOW_TARGETS } from "./ask-tools";
+import { SHOW_TARGETS, timeProblem } from "./ask-tools";
+import type { TimeChange } from "./ask-tools";
 import { AERIAL_REACH, frameTargets } from "./ask-view";
 import type { AskTarget } from "./ask-view";
+import { RENDER_STYLE_BY_ID } from "./render-style";
+import type { RenderStyle } from "./render-style";
 
 /** What the model gets back for a call. */
 export type ToolAnswer = Record<string, unknown>;
@@ -78,19 +81,38 @@ export function showAnswer(
       };
 }
 
-/** An hour of the day as minutes, as the scene's clock takes it: within
- *  the day, 24 its last minute. */
-export function clockMinutes(hour: number): number {
-  const minutes = Math.round(Math.min(Math.max(hour, 0), 24) * 60);
-  return Math.min(minutes, 24 * 60 - 1);
+/** Why the picture does not follow the time, where `style` keeps its own
+ *  light: said on either tool, for they come in either order. */
+export function ownLightNote(style: string | undefined): { hinweis?: string } {
+  const own =
+    style === undefined
+      ? null
+      : RENDER_STYLE_BY_ID[style as RenderStyle]?.ownLight;
+  return own ? { hinweis: own.note } : {};
 }
 
-/** `setze_zeit`'s answer: the hour as the scene's clock sets it, and the
- *  day (the tool's schema holds it to a calendar day). */
-export function timeAnswer(ask: { datum?: string; stunde: number }) {
-  const minutes = clockMinutes(ask.stunde);
-  const clock = `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
-  return { ok: true, zeit: `${ask.datum ?? "heute"}, ${clock} Uhr` };
+/** `setze_zeit`'s answer: refused for a time no clock or calendar has
+ *  (`timeProblem`), else the time as the scene's clock sets it — what the
+ *  change leaves out stays, 24:00 the day's last minute — and why the
+ *  picture will not follow where the visitor's `style` keeps its own light. */
+export function timeAnswer(change: TimeChange, style?: string): ToolAnswer {
+  const problem = timeProblem(change);
+  if (problem) {
+    return { ok: false, hinweis: problem };
+  }
+  const clock = change.uhrzeit === "24:00" ? "23:59" : change.uhrzeit;
+  const day = change.datum ?? "Tag wie bisher";
+  return {
+    ok: true,
+    zeit: clock ? `${day}, ${clock} Uhr` : `${day}, Uhrzeit wie bisher`,
+    ...ownLightNote(style),
+  };
+}
+
+/** `setze_stil`'s answer: why the picture will not follow the time, where
+ *  the style keeps its own light. */
+export function styleAnswer(ask: { stil: string }): ToolAnswer {
+  return { ok: true, ...ownLightNote(ask.stil) };
 }
 
 /** `datenschicht`'s answer: whether the site has that layer at all. */

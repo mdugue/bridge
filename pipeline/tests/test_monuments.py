@@ -271,3 +271,78 @@ def test_the_official_name_states_a_form():
     assert name_form("Büste Carl Maria von Weber") == "bust"
     assert name_form("Mariensäule") == "column"
     assert name_form("Schiller-Denkmal") is None and name_form(None) is None
+
+
+def test_osms_wikidata_link_is_read_first_of_a_list_and_only_as_a_q_id(tmp_path, monkeypatch):
+    from bake.monuments import _osm_monuments, osm_wikidata
+
+    assert osm_wikidata(None) is None
+    assert osm_wikidata('"wikidata"=>"Q12;Q34"') == "Q12"
+    assert osm_wikidata('"wikidata"=>"12"') is None
+    assert osm_wikidata('"wikidata"=>"Q12a"') is None
+    nodes = {
+        1: (50, 50, tags(historic="memorial", memorial="bust", name="Büste", wikidata="Q1;Q2")),
+        2: (90, 90, tags(historic="memorial", memorial="bust", name="Kopf", wikidata="x7")),
+    }
+    found = {m["name"]: m for m in _osm_monuments(osm_tile(tmp_path, monkeypatch, nodes))}
+    assert found["Büste"]["wikidata"] == "Q1"
+    assert found["Kopf"]["wikidata"] is None
+
+
+def test_a_dlm_monument_takes_its_osm_partners_link():
+    from bake.monuments import type_monuments
+
+    dlm = [{"geom": shapely.Point(0, 0), "kind": "statue", "name": "Reiter", "source": "dlm"}]
+    osm = [
+        {
+            "geom": shapely.Point(2, 0),
+            "name": "Reiter",
+            "form": "statue",
+            "height": None,
+            "material": None,
+            "artist": None,
+            "wikidata": "Q558537",
+        }
+    ]
+    (m,) = type_monuments(dlm, osm, None)
+    assert m["source"] == "dlm+osm"
+    assert m["wikidata"] == "Q558537"
+
+
+def test_a_monuments_own_item_comes_first_whatever_the_distance():
+    from bake.monuments import properties, wikidata_materials
+
+    def monument(x, name=None, wikidata=None):
+        return {
+            "geom": shapely.Point(x, 0),
+            "kind": "statue",
+            "name": name,
+            "source": "osm",
+            "wikidata": wikidata,
+        }
+
+    def item(x, qid, material):
+        return {"geom": shapely.Point(x, 0), "id": qid, "name": "Skulptur", "material": material}
+
+    fountain = {**monument(-50, wikidata="Q9"), "kind": "fountain"}  # its figure's item too
+    linked = monument(0, wikidata="Q9")
+    nearer = monument(28)  # 2 m from the linked item, but it is not its own
+    loose = monument(200, wikidata="Q404")  # its item is not cached: the near rule
+    plain = monument(400)
+    wikidata = [
+        item(5, "Q8", "Sandstein"),  # within 10 m of the linked monument
+        item(30, "Q9", "Bronze"),
+        item(205, "Q7", "Granit"),
+        item(404, "Q6", "Marmor"),
+    ]
+    wikidata_materials([fountain, linked, nearer, loose, plain], wikidata)
+    assert "material" not in fountain
+    assert (linked["material"], linked["materialWikidata"]) == ("Bronze", "Q9")
+    assert "material" not in nearer  # Q9 is claimed, Q8 is 23 m away
+    assert (loose["material"], loose["materialWikidata"]) == ("Granit", "Q7")
+    # written: OSM's link where OSM gives one, the material's item beside it
+    assert properties(linked)["wikidata"] == "Q9"
+    assert properties(loose)["wikidata"] == "Q404"
+    assert properties(loose)["materialWikidata"] == "Q7"
+    assert properties(plain)["materialWikidata"] == "Q6"
+    assert "wikidata" not in properties(plain)

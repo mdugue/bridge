@@ -35,17 +35,12 @@ import { buildFurniture } from "./furniture-layer";
 import { finished } from "@/lib/city/build-steps";
 import type { Steps } from "@/lib/city/build-steps";
 import { Instances, instancePosition } from "./instancing";
-import { addRibbon, meshSteps, mesh3, quad } from "./mesh-kit";
+import { addRibbon, COLORS, meshSteps, mesh3, quad } from "./mesh-kit";
 import type { Mesh3, Pt } from "./mesh-kit";
-import {
-  addRail,
-  buildDeckTable,
-  addSpanDeck,
-  COLORS,
-  lineLevelsAt,
-  spanRuns,
-} from "./rail-layer";
-import { sceneMaterial } from "./three-utils";
+import { buildDeckTable } from "./bridge-deck";
+import { addSpanDeck, spanRuns } from "./bridge-layer";
+import { addRail, lineLevelsAt } from "./rail-layer";
+import { markThinCaster, sceneMaterial } from "./three-utils";
 import { addWire, wireMesh, wires } from "./wire-ribbons";
 import type { Wires } from "./wire-ribbons";
 
@@ -608,6 +603,7 @@ function buildMasts(masts: Point2[], ctx: GroundContext): Instances | null {
   mesh.instanceMatrix.needsUpdate = true;
   mesh.computeBoundingSphere();
   mesh.castShadow = true;
+  markThinCaster(mesh, "slender");
   mesh.receiveShadow = true;
   mesh.name = "tram-masts";
   return mesh;
@@ -668,16 +664,18 @@ function* buildTracks(
     }
     yield;
   }
-  const parts: [Mesh3, number, number][] = [
-    [acc.rail, TRAM_RAIL, -1],
-    [acc.streetRail, TRAM_RAIL, -2],
-    [acc.grass, MEADOW, -1],
-    [acc.ballast, COLORS.ballast, -1],
+  // the rails' steel catches the lamps by the track after dark
+  const parts: [Mesh3, number, number, boolean][] = [
+    [acc.rail, TRAM_RAIL, -1, true],
+    [acc.streetRail, TRAM_RAIL, -2, true],
+    [acc.grass, MEADOW, -1, false],
+    [acc.ballast, COLORS.ballast, -1, false],
   ];
   const meshes: Mesh[] = [];
-  for (const [part, color, offsetUnits] of parts) {
+  for (const [part, color, offsetUnits, glint] of parts) {
     const m = yield* meshSteps(part, color, {
       cast: false,
+      glint,
       offsetUnits,
       roughness: 0.9,
     });

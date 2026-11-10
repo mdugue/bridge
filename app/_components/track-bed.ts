@@ -17,7 +17,7 @@ import {
   vec3,
 } from "three/tsl";
 import { footprint } from "./bridge-surface";
-import { gdNoise } from "./ground-detail";
+import { gdNoise } from "./shader-chunks";
 import type { Pt } from "./mesh-kit";
 import type { F, V2, V3 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
@@ -53,7 +53,7 @@ const linear = (hex: number): V3 => {
   return vec3(c.r, c.g, c.b);
 };
 
-/** The ballast (rail-layer.ts COLORS.ballast), concrete and timber
+/** The ballast (mesh-kit.ts COLORS.ballast), concrete and timber
  *  sleepers, an open floor's gaps. */
 const BALLAST = 0x9a_8f_85;
 const CONCRETE = 0xb9_b4_ab;

@@ -66,7 +66,13 @@ const TILE: WissenTile = {
   ],
 };
 const K = knowledgeOf(INDEX, [TILE]);
-const SITE = { epsg: 25_833, id: "dresden", layerKeys: ["tramLayer"] };
+const SITE = {
+  epsg: 25_833,
+  id: "dresden",
+  layers: [
+    { key: "tramLayer" as const, label: "Bahnen", description: "Fahrplan" },
+  ],
+};
 
 describe("the plan", () => {
   test("stands before the most notable landmarks, spread, and once far from all", () => {
@@ -142,8 +148,6 @@ test("an answer is recorded with its text, calls, turns and timings", async () =
       epsg: 25_833,
       label: "Dresden",
       layers: [],
-      layerKeys: [],
-      styles: [],
     },
     threadId: "q",
     today: new Date(2026, 10, 1),

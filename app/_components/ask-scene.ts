@@ -6,10 +6,12 @@
  */
 import { useMemo } from "react";
 import type { RefObject } from "react";
+import { ownLightNote } from "@/lib/city/ask-shown";
+import type { TimeChange } from "@/lib/city/ask-tools";
+import { SITE_ZONE, zonedTime } from "@/lib/city/bike-counts";
 import { cardCredits } from "@/lib/city/card-lines";
 import { activeDataLayers, siteDataLayers } from "@/lib/city/data-layers";
 import type { FramePace } from "@/lib/city/frame-pace";
-import { clockMinutes } from "@/lib/city/ask-shown";
 import { inquiryCard } from "@/lib/city/inquiry";
 import type { Inquiry } from "@/lib/city/inquiry";
 import type { LookState } from "@/lib/city/look-state";
@@ -20,7 +22,7 @@ import { sunDirectionEnu } from "@/lib/city/sun";
 import type { Site } from "@/lib/city/site";
 import type { AskScene } from "./ask-scene-tools";
 import type { CityWalkHandle } from "./create-app";
-import { isAbortError, untilAborted } from "./fetch-optional";
+import { untilAborted } from "./fetch-optional";
 import { loadLandmarkFacts } from "./landmark-facts-load";
 import { sleep, visibleMs } from "./net-gate";
 import type { SceneTime } from "./scene-time";
@@ -28,14 +30,43 @@ import type { SceneTime } from "./scene-time";
 const WHEN = new Intl.DateTimeFormat("de-DE", {
   dateStyle: "full",
   timeStyle: "short",
+  timeZone: SITE_ZONE,
 });
 
-/** `hour` of `date` (YYYY-MM-DD) or of `day`, in the visitor's clock. */
-export function instantAt(hour: number, day: Date, date?: string): Date {
-  const [y, m, d] = date
-    ? date.split("-").map(Number)
-    : [day.getFullYear(), day.getMonth() + 1, day.getDate()];
-  return new Date(y, m - 1, d, 0, clockMinutes(hour));
+const CITY_CLOCK = new Intl.DateTimeFormat("en-CA", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+  timeZone: SITE_ZONE,
+});
+
+/** The calendar date (YYYY-MM-DD) and time of day (HH:MM) an instant reads
+ *  on the city's clock. */
+function cityClock(at: Date): { datum: string; uhrzeit: string } {
+  const part = Object.fromEntries(
+    CITY_CLOCK.formatToParts(at).map((p) => [p.type, p.value])
+  );
+  return {
+    datum: `${part.year}-${part.month}-${part.day}`,
+    uhrzeit: `${part.hour}:${part.minute}`,
+  };
+}
+
+/**
+ * The instant `now` becomes under a change, in the city's clock, whichever
+ * clock the visitor's device keeps: the sun stands over the city. What the
+ * change leaves out stays as the city's clock reads it now; 24:00 is the
+ * day's last minute, not the next day.
+ */
+export function instantAt(now: Date, change: TimeChange): Date {
+  const clock = cityClock(now);
+  const [y, mo, d] = (change.datum ?? clock.datum).split("-").map(Number);
+  const asked = change.uhrzeit === "24:00" ? "23:59" : change.uhrzeit;
+  const [h, mi] = (asked ?? clock.uhrzeit).split(":").map(Number);
+  return zonedTime([y, mo, d, h, mi, 0], SITE_ZONE);
 }
 
 /** How long `was_ist_da` waits for a glide to land at most (visible ms):
@@ -64,7 +95,7 @@ async function waitWhile(
   holds: () => boolean,
   gone: () => boolean,
   maxMs: number,
-  signal: AbortSignal
+  signal?: AbortSignal
 ): Promise<boolean> {
   // the visible clock: a hidden page draws no frames, so no glide moves;
   // and a wall clock past it, so a locked phone does not hold the answer
@@ -89,7 +120,7 @@ async function waitWhile(
 async function landed(
   h: CityWalkHandle,
   gone: () => boolean,
-  signal: AbortSignal
+  signal?: AbortSignal
 ): Promise<boolean> {
   if (!(await waitWhile(h.viewMoving, gone, LAND_MAX_MS, signal))) {
     return false;
@@ -106,7 +137,7 @@ async function landed(
 async function standing(
   h: CityWalkHandle,
   gone: () => boolean,
-  signal: AbortSignal
+  signal?: AbortSignal
 ): Promise<boolean> {
   for (let round = 0; round < LAND_ROUNDS; round += 1) {
     if (!(await landed(h, gone, signal))) {
@@ -126,11 +157,6 @@ const MOVING = {
 
 const LOADING = { gefunden: false, hinweis: "Die Szene lädt noch." };
 
-const CANCELLED = {
-  gefunden: false,
-  hinweis: "Die Frage wurde abgebrochen.",
-};
-
 export function useAskScene(
   handleRef: RefObject<CityWalkHandle | null>,
   look: LookState,
@@ -142,8 +168,9 @@ export function useAskScene(
   return useMemo(() => {
     const offered = new Set(siteDataLayers(site.dataLayers).map((d) => d.key));
     const credits = cardCredits(site);
-    // was_ist_da's waits: a stopped or closed conversation ends them
-    const looks = { stop: new AbortController() };
+    // the glide an answer started, while it flies: a flight that lands, is
+    // cancelled or is replaced by another reports 1 (camera-flight.ts)
+    const glides: { answer: object | null } = { answer: null };
     return {
       from: () => {
         const c = handleRef.current?.getCameraState();
@@ -168,7 +195,7 @@ export function useAskScene(
           ebenen: activeDataLayers(values).map((d) => d.key),
         };
       },
-      look: async () => {
+      look: async (signal) => {
         const h = handleRef.current;
         if (!h) {
           return LOADING;
@@ -176,36 +203,27 @@ export function useAskScene(
         // a scene remounted while this waited (a GPU loss) is not asked
         // through the old one's handle
         const gone = () => handleRef.current !== h;
-        const { signal } = looks.stop;
-        let asked: Inquiry | null = null;
-        try {
-          // where a glide lands, not on its way
-          const there = await standing(h, gone, signal);
+        // where a glide lands, not on its way
+        const there = await standing(h, gone, signal);
+        if (gone()) {
+          return LOADING;
+        }
+        if (!there) {
+          return MOVING;
+        }
+        // at the view's subject (Modell's pivot), and once the tiles
+        // there have come: a miss is asked again — never mid-glide
+        let asked: Inquiry | null = h.inquireAt(h.focusNdc());
+        for (let i = 0; !asked && i < MISS_RETRIES; i += 1) {
+          await sleep(MISS_RETRY_MS, signal);
+          const still = !h.viewMoving() || (await standing(h, gone, signal));
           if (gone()) {
             return LOADING;
           }
-          if (!there) {
+          if (!still) {
             return MOVING;
           }
-          // at the view's subject (Modell's pivot), and once the tiles
-          // there have come: a miss is asked again — never mid-glide
           asked = h.inquireAt(h.focusNdc());
-          for (let i = 0; !asked && i < MISS_RETRIES; i += 1) {
-            await sleep(MISS_RETRY_MS, signal);
-            const still = !h.viewMoving() || (await standing(h, gone, signal));
-            if (gone()) {
-              return LOADING;
-            }
-            if (!still) {
-              return MOVING;
-            }
-            asked = h.inquireAt(h.focusNdc());
-          }
-        } catch (error) {
-          if (isAbortError(error)) {
-            return CANCELLED;
-          }
-          throw error;
         }
         if (!asked) {
           return {
@@ -221,17 +239,9 @@ export function useAskScene(
         // a landmark's facts, as the card beside it shows them
         const url =
           asked.kind === "building" ? asked.landmarkFactsUrl : undefined;
-        let landmarks: LandmarkFactsIndex | null = null;
-        if (url) {
-          try {
-            landmarks = await untilAborted(loadLandmarkFacts(url), signal);
-          } catch (error) {
-            if (isAbortError(error)) {
-              return CANCELLED;
-            }
-            throw error;
-          }
-        }
+        const landmarks: LandmarkFactsIndex | null = url
+          ? await untilAborted(loadLandmarkFacts(url), signal)
+          : null;
         const card = inquiryCard(asked, null, credits, null, landmarks);
         return {
           gefunden: true,
@@ -259,16 +269,28 @@ export function useAskScene(
         };
       },
       setListening: (on) => pace.setListening(on),
-      abandon: () => {
-        looks.stop.abort();
-        looks.stop = new AbortController();
+      haltAnswerGlide: () => {
+        // only the answer's own glide: one the visitor started since goes on
+        if (glides.answer) {
+          glides.answer = null;
+          handleRef.current?.stopGlide();
+        }
       },
       show: (view, ground) => {
         const h = handleRef.current;
         if (!h) {
           return false;
         }
-        h.flyToViewpoint(view, ground === undefined ? undefined : { ground });
+        const mine = {};
+        glides.answer = mine;
+        h.flyToViewpoint(view, {
+          ...(ground === undefined ? {} : { ground }),
+          onProgress: (t) => {
+            if (t >= 1 && glides.answer === mine) {
+              glides.answer = null;
+            }
+          },
+        });
         return true;
       },
       within: (x, y) => siteHoldsPoint(site, x, y),
@@ -286,12 +308,15 @@ export function useAskScene(
           ...(h ? { sightHit: h.sightHit, groundAt: h.groundAt } : {}),
         };
       },
-      setTime: (hour, date) => {
-        const at = instantAt(hour, current(), date);
+      setTime: (change) => {
+        const at = instantAt(current(), change);
         setInstant(at);
-        return WHEN.format(at);
+        return { zeit: WHEN.format(at), ...ownLightNote(look.get().style) };
       },
-      setStyle: (style) => look.set({ style }),
+      setStyle: (style) => {
+        look.set({ style });
+        return ownLightNote(style);
+      },
       setLayer: (key, on) => {
         if (!offered.has(key)) {
           return false;

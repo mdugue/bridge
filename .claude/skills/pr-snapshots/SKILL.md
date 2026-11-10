@@ -35,9 +35,9 @@ the PR evolves), under `## Snapshots`:
    fence, so the description stays short.
 4. **Before and after in one place where the change has a control**:
    give the pair as two snapshots that differ only in that look key
-   (e.g. `"look": {"fogPct": 0}` vs `100`, `"multiTuft": false` vs
-   `true`), so the reviewer flips between them in the same preview. Only
-   *Nebel*, the crown switch, the picture style and the data layers are
+   (e.g. `"look": {"fogPct": 0}` vs `100`, `"style": "pastel"` vs
+   `"comic"`), so the reviewer flips between them in the same preview. Only
+   *Nebel*, the picture style and the data layers are
    controls; the rest of the look is fixed — named constants in the code
    (ADR 0018, plan 073) — so a change to it has no look key: say that
    *before* is the same snapshot on the production site or the base PR's
@@ -60,7 +60,11 @@ checked by `parseSnapshot`; `camera` needs `pos` in the Y-up scene frame
 
 - In a running viewer: sidebar **Erweitert → Snapshot → Kopieren**, or
   `__poc.handle.getCameraState()` (the page needs a build with
-  `NEXT_PUBLIC_POC_DEBUG=1` or the dev server).
+  `NEXT_PUBLIC_POC_DEBUG=1` or the dev server). *Link kopieren* gives the
+  same view as a link (`?snap=…`): put it next to the JSON, with the
+  preview's origin, and the reviewer opens it in one click.
+- A committed QA view (`qa/views/`, its index has the links) may already
+  show the place: reuse it.
 - Headless, at a place given in EPSG: place the camera with
   `__poc.handle.flyToViewpoint` or `applyCameraState`, wait for
   `__poc.firstFrame`, then read `getCameraState()`. The camera needs the

@@ -40,12 +40,24 @@ describe("zeige", () => {
   });
 });
 
-test("setze_zeit says the hour as a clock does", () => {
-  expect(timeAnswer({ stunde: 18.5 }).zeit).toBe("heute, 18:30 Uhr");
-  // 24 is the day's last minute, as the scene's clock sets it
-  expect(timeAnswer({ stunde: 24, datum: "2026-12-21" }).zeit).toBe(
+test("setze_zeit says the time as the scene's clock sets it", () => {
+  expect(timeAnswer({ uhrzeit: "18:30" }).zeit).toBe(
+    "Tag wie bisher, 18:30 Uhr"
+  );
+  // 24:00 is the day's last minute, as the scene's clock sets it
+  expect(timeAnswer({ uhrzeit: "24:00", datum: "2026-12-21" }).zeit).toBe(
     "2026-12-21, 23:59 Uhr"
   );
+  expect(timeAnswer({ datum: "0929-06-21" }).ok).toBe(true);
+});
+
+test("setze_zeit refuses a time no clock or calendar has", () => {
+  expect(timeAnswer({ uhrzeit: "25:00" }).ok).toBe(false);
+  expect(timeAnswer({ datum: "2026-02-31" }).ok).toBe(false);
+  // `Date` would read the first century as 19xx
+  expect(timeAnswer({ datum: "0050-06-21" }).ok).toBe(false);
+  expect(timeAnswer({ datum: "0100-01-01" }).ok).toBe(false);
+  expect(timeAnswer({}).ok).toBe(false);
 });
 
 test("datenschicht knows which layers the city has", () => {

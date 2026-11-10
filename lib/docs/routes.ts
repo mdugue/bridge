@@ -15,7 +15,7 @@
 
 export const WISSEN = "/wissen";
 export const REPO_URL = "https://github.com/mdugue/bridge";
-export const LANGS = ["de", "en"] as const;
+const LANGS = ["de", "en"] as const;
 export type Lang = (typeof LANGS)[number];
 
 const GUIDE = "docs/guide/";

@@ -12,6 +12,7 @@
  */
 import { z } from "zod";
 import type { AskVisitor } from "./ask-city";
+import type { AskPromptSite } from "./ask-prompt";
 import { hitOf, nearKnowledge } from "./ask-knowledge";
 import type { Knowledge } from "./ask-knowledge";
 import { starterPool, withArticle } from "./ask-starters";
@@ -68,7 +69,7 @@ const FREE_PLACES = 2;
  * without one.
  */
 export function qaPlaces(k: Knowledge, count: number): QaPlace[] {
-  const sorted = [...k.index.landmarks].sort((a, b) => b.links - a.links);
+  const sorted = [...k.landmarks].sort((a, b) => b.links - a.links);
   const picked: typeof sorted = [];
   for (const lm of sorted) {
     if (picked.length >= Math.max(count - 1, 1)) {
@@ -159,7 +160,7 @@ function loneliestBuilding(k: Knowledge) {
       continue;
     }
     let d = Number.POSITIVE_INFINITY;
-    for (const lm of k.index.landmarks) {
+    for (const lm of k.landmarks) {
       d = Math.min(d, Math.hypot(lm.x - b.x, lm.y - b.y));
     }
     if (d >= ALONE_M && (!best || d > best.d)) {
@@ -193,11 +194,11 @@ function templateOf(question: string, name: string | null): string {
  */
 export function qaCases(
   k: Knowledge,
-  site: { layerKeys: readonly string[] },
+  site: Pick<AskPromptSite, "layers">,
   places: readonly QaPlace[],
   today: Date
 ): QaCase[] {
-  const landmarks = k.index.landmarks.map((lm) => ({
+  const landmarks = k.landmarks.map((lm) => ({
     name: lm.name,
     x: lm.x,
     y: lm.y,
@@ -215,7 +216,7 @@ export function qaCases(
       at: { x: place.x, y: place.y, headingDeg: place.heading },
       now,
       landmarks,
-      layers: site.layerKeys,
+      layers: site.layers.map((layer) => layer.key),
     });
     for (const c of pool) {
       if (i >= FREE_PLACES && (c.kind === "zeit" || c.kind === "frei")) {

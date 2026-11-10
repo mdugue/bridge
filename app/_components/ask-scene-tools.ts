@@ -7,6 +7,7 @@
 import { clientTools } from "@tanstack/ai-client";
 import { placesShown, showAnswer } from "@/lib/city/ask-shown";
 import { lookTool } from "@/lib/city/ask-tools";
+import type { TimeChange } from "@/lib/city/ask-tools";
 import { frameTargets, streetView } from "@/lib/city/ask-view";
 import type { AskTarget, FrameContext } from "@/lib/city/ask-view";
 import type { DataLayerKey } from "@/lib/city/data-layers";
@@ -20,10 +21,13 @@ export interface AskScene {
   from: () => { x: number; y: number } | null;
   /** switches a data layer; false where the site has none of that kind */
   setLayer: (key: DataLayerKey, on: boolean) => boolean;
-  setStyle: (style: RenderStyle) => void;
-  /** the scene's time to `hour` (of `date`, YYYY-MM-DD, or today's day);
-   *  the instant it set, as text */
-  setTime: (hour: number, date?: string) => string;
+  /** the picture style; why it will not follow the time, where it keeps
+   *  its own light */
+  setStyle: (style: RenderStyle) => { hinweis?: string };
+  /** the scene's time to a time of day and a date, in the city's clock;
+   *  what is left out stays. The instant it set, as text, and why the
+   *  picture does not follow where the style keeps its own light. */
+  setTime: (change: TimeChange) => { hinweis?: string; zeit: string };
   /** glides to a view, its eye over `ground` (m a.s.l.) where given;
    *  false while there is no scene to move */
   show: (view: ViewpointGeometry, ground?: number) => boolean;
@@ -35,23 +39,30 @@ export interface AskScene {
   /** what the framing reads of the moment: the screen, the sun, the
    *  loaded buildings' sight lines (lib/city/ask-view.ts) */
   frame: () => Omit<FrameContext, "from">;
-  /** what the first questions read of the moment (plan 081) */
+  /** what the first questions read of the moment (plan 085) */
   moment: () => StarterContext;
   /** the player's pose, mode, time, style and layers, for the model */
   where: () => Record<string, unknown>;
-  /** asks what stands at the centre of the view (and opens its card) */
-  look: () => Promise<Record<string, unknown>>;
-  /** ends the scene tools' waits (a stopped answer, a closed card) */
-  abandon: () => void;
+  /** asks what stands at the centre of the view (and opens its card);
+   *  rejects when `signal` aborts: the chat's `stop()` ends the wait and
+   *  drops what the tool ends with, so no stopped answer resumes */
+  look: (signal?: AbortSignal) => Promise<Record<string, unknown>>;
   /** the Hörmodus: the scene barely draws while the visitor listens */
   setListening: (on: boolean) => void;
+  /** stops the glide an answer started, if it still flies (the stop
+   *  button); never one the visitor started since */
+  haltAnswerGlide: () => void;
 }
 
 /** The tools the browser answers, bound to the scene: `was_ist_da`
  *  alone, a ray through the crosshair. The view-changing ones the server
  *  acknowledges and the card carries out from the stream (ask-effects.ts). */
 export function sceneTools(scene: AskScene) {
-  return clientTools(lookTool.client(async () => await scene.look()));
+  return clientTools(
+    lookTool.client(
+      async (_input, context) => await scene.look(context?.abortSignal)
+    )
+  );
 }
 
 /** What the model hears while there is no scene to move yet. */

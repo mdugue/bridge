@@ -29,7 +29,7 @@ test("the card carries out what the server said ok to, once each, in order", () 
       role: "assistant",
       parts: [
         call("1", "suche_stadt", { anfrage: "x" }, { treffer: [] }),
-        call("2", "setze_zeit", { stunde: 20 }, { ok: true }),
+        call("2", "setze_zeit", { uhrzeit: "20:00" }, { ok: true }),
         call("3", "datenschicht", { schicht: "nope", an: true }, { ok: false }),
         call("4", "zeige", { ziele: [{ name: "A", x: 1, y: 2 }] }),
         call("5", "setze_stil", { stil: "comic" }, { ok: true }),
@@ -44,9 +44,9 @@ test("the card carries out what the server said ok to, once each, in order", () 
 test("a time call sets the scene's clock, a layer call its layer", () => {
   const did: unknown[] = [];
   const scene = {
-    setTime: (h: number, d?: string) => {
-      did.push(["zeit", h, d]);
-      return "";
+    setTime: (change: unknown) => {
+      did.push(["zeit", change]);
+      return { zeit: "" };
     },
     setLayer: (k: string, on: boolean) => {
       did.push(["schicht", k, on]);
@@ -56,7 +56,7 @@ test("a time call sets the scene's clock, a layer call its layer", () => {
   runShown(scene, {
     id: "t",
     name: "setze_zeit",
-    input: { stunde: 20, datum: "2026-12-21" },
+    input: { uhrzeit: "20:00", datum: "2026-12-21" },
     output: { ok: true },
   });
   runShown(scene, {
@@ -66,7 +66,7 @@ test("a time call sets the scene's clock, a layer call its layer", () => {
     output: { ok: true },
   });
   expect(did).toEqual([
-    ["zeit", 20, "2026-12-21"],
+    ["zeit", { uhrzeit: "20:00", datum: "2026-12-21" }],
     ["schicht", "tramLayer", true],
   ]);
 });

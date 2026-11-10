@@ -23,10 +23,10 @@ import { scrubSecrets } from "@tanstack/ai/byok";
 import {
   ASK_KEY_HEADER,
   ASK_LIMITS,
-  askPromptSite,
   askReasoning,
   parseAskProps,
 } from "@/lib/city/ask-city";
+import { askPromptSite } from "@/lib/city/ask-prompt";
 import {
   answerRecorder,
   judgeMessage,
@@ -39,11 +39,11 @@ import {
   qaVisitor,
 } from "@/lib/city/ask-qa";
 import type { QaAnswer, QaCase } from "@/lib/city/ask-qa";
-import { runAsk, scrubbed } from "@/lib/city/ask-run";
+import { keyRefusal, refuse, runAsk, scrubbed } from "@/lib/city/ask-run";
+import type { KeyGate } from "@/lib/city/ask-run";
 import { siteById } from "@/sites";
 import { askAdapter, fakeAskAdapter, fakeJudgeAdapter } from "../adapters";
 import { fakeModel } from "../env";
-import { keyRefusal, refuse } from "../guard";
 import { siteKnowledge } from "../knowledge";
 
 export const maxDuration = 60;
@@ -136,22 +136,31 @@ function parseAnswer(value: unknown): QaAnswer | null {
   };
 }
 
+/** The key check and refusals, bound as /api/frag binds them. */
+function gate(scripted: boolean): KeyGate {
+  return {
+    log: (line) => console.warn(line),
+    now: Date.now,
+    production: process.env.NODE_ENV === "production",
+    scripted,
+    secret: process.env.FRAG_SECRET,
+  };
+}
+
 export async function POST(request: Request): Promise<Response> {
   const fake = fakeModel();
+  const deps = gate(fake);
+  const key = request.headers.get(ASK_KEY_HEADER)?.trim() ?? "";
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;
   } catch {
-    return refuse(400, "bad-request", "Die Anfrage ist unvollständig.");
+    return refuse(deps, "bad-request", key);
   }
   const site = siteById(typeof body.site === "string" ? body.site : "");
   const knowledge = site ? await siteKnowledge(site.id) : null;
   if (!(site && knowledge)) {
-    return refuse(
-      404,
-      "no-knowledge",
-      "Für diese Stadt gibt es kein Stadtwissen."
-    );
+    return refuse(deps, "no-knowledge", key);
   }
   const promptSite = askPromptSite(site);
   if (body.art === "plan") {
@@ -170,23 +179,22 @@ export async function POST(request: Request): Promise<Response> {
   }
   const props = parseAskProps({ ...body, voice: false });
   if (typeof props === "string") {
-    return refuse(400, "bad-props", props);
+    return refuse(deps, "bad-props", key, props);
   }
-  const key = request.headers.get(ASK_KEY_HEADER)?.trim() ?? "";
-  const refused = await keyRefusal(props, key, fake);
+  const refused = await keyRefusal(deps, key, props);
   if (refused) {
     return refused;
   }
   const c = parseCase(body.fall);
   if (!c) {
-    return refuse(400, "bad-case", "Der Fall ist unvollständig.");
+    return refuse(deps, "bad-request", key, "bad-case");
   }
   const abortController = new AbortController();
   request.signal.addEventListener("abort", () => abortController.abort());
   if (body.art === "urteil") {
     const answer = parseAnswer(body.antwort);
     if (!answer) {
-      return refuse(400, "bad-answer", "Die Antwort ist unvollständig.");
+      return refuse(deps, "bad-request", key, "bad-answer");
     }
     return await judged(c, answer, {
       adapter: fake

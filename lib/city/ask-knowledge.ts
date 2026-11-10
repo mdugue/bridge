@@ -22,14 +22,16 @@ import type {
   WissenTile,
 } from "./stadtwissen";
 
-/** A site's Stadtwissen, loaded: the index and every tile's directory. */
+/** A site's Stadtwissen, loaded: its index and every tile's directory as
+ *  one, whichever file an entry came from. */
 export interface Knowledge {
   buildings: readonly WissenBuilding[];
-  index: StadtwissenIndex;
+  landmarks: readonly WissenLandmark[];
   /** each landmark's footprint radius round its point, from the buildings
    *  that draw it (m) */
   landmarkRadius: ReadonlyMap<string, number>;
   monuments: readonly WissenMonument[];
+  sources: StadtwissenIndex["sources"];
 }
 
 export function knowledgeOf(
@@ -55,7 +57,8 @@ export function knowledgeOf(
     }
   }
   return {
-    index,
+    landmarks: index.landmarks,
+    sources: index.sources,
     buildings,
     landmarkRadius,
     monuments: tiles.flatMap((t) => t.monuments),
@@ -138,7 +141,7 @@ function buildingHit(b: WissenBuilding): KnowledgeHit {
 /** The entry an id names (a landmark's Q-id, a monument's, a Building's
  *  `gml:id`), as the tools return it; null for an id the twin lacks. */
 export function hitOf(k: Knowledge, id: string): KnowledgeHit | null {
-  const lm = k.index.landmarks.find((l) => l.id === id);
+  const lm = k.landmarks.find((l) => l.id === id);
   if (lm) {
     return landmarkHit(k, lm);
   }
@@ -156,7 +159,7 @@ export function hitOf(k: Knowledge, id: string): KnowledgeHit | null {
  * is that landmark, not a second hit.
  */
 export function searchKnowledge(k: Knowledge, query: string): KnowledgeHit[] {
-  const landmarks = k.index.landmarks
+  const landmarks = k.landmarks
     .filter((lm) => matchesQuery(lm, query))
     .sort((a, b) => b.links - a.links);
   const covered = new Set(landmarks.map((lm) => lm.id));
@@ -195,7 +198,7 @@ export function nearKnowledge(
   radius: number
 ): KnowledgeHit[] {
   const { buildings: r, landmarks: far } = nearReach(radius);
-  const landmarks = nearby(k.index.landmarks, x, y, far);
+  const landmarks = nearby(k.landmarks, x, y, far);
   const covered = new Set(landmarks.map((lm) => lm.id));
   const hits: KnowledgeHit[] = [
     ...landmarks.map((lm) => ({
@@ -256,7 +259,7 @@ export function factsOf(
   k: Knowledge,
   id: string
 ): Record<string, unknown> | null {
-  const lm = k.index.landmarks.find((l) => l.id === id);
+  const lm = k.landmarks.find((l) => l.id === id);
   if (lm) {
     return landmarkFacts(k, lm);
   }
@@ -271,7 +274,7 @@ export function factsOf(
   if (!b) {
     return null;
   }
-  const owner = b.wd ? k.index.landmarks.find((l) => l.id === b.wd) : undefined;
+  const owner = b.wd ? k.landmarks.find((l) => l.id === b.wd) : undefined;
   return {
     ...buildingHit(b),
     ...(b.roof ? { dach: b.roof } : {}),
@@ -284,7 +287,7 @@ export function factsOf(
 
 /** Who publishes the facts, under which licence. */
 export function sourcesOf(k: Knowledge): Record<string, string>[] {
-  return Object.values(k.index.sources).flatMap((s) =>
+  return Object.values(k.sources).flatMap((s) =>
     s
       ? [
           {

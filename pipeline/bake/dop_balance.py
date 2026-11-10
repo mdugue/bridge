@@ -30,9 +30,9 @@ import rasterio
 from rasterio.enums import Resampling
 
 from . import step_cache
+from .classes import ROAD
 from .common import Tile
 
-ROAD = 7  # the class raster's road (landcover.py CLASSES)
 # Dresden's sunlit carriageways' median, linear RGB, over green: its own
 # flight keeps its colours
 REF_ROAD = (0.950, 1.0, 0.938)

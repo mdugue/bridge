@@ -1,5 +1,5 @@
 /**
- * The first questions *Frag die Stadt* offers (plan 081): four, drawn
+ * The first questions *Frag die Stadt* offers (plan 085): four, drawn
  * anew each time the card opens, from the moment — the landmark ahead or
  * nearby, the scene's hour, the season and the day, what the city has
  * (its data layers) — and from a pool of curious and playful ones.
