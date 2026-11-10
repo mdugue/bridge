@@ -1180,7 +1180,8 @@ visual-variable codebook is in
   border met it) dropped, as one coverage so neighbours drop the same
   ones of their shared border (`_straightened`, its edges noded again) —
   each would be one more wall in the mesh; a step of these fix-ups that
-  changes the parts' union by more than 2 % or halves a part, or adds a
+  changes the parts' union by more than 2 %, halves a part, leaves a
+  part none of the 4 m² it is drawn from, or adds a
   spike (a corner under 15° between edges over 0.5 m: a sliver two turned
   borders left), keeps the parts as they were (`_holds`), and parts laid
   on the walls that, as drawn, miss DOM1 on more than 30 % of their
@@ -1764,11 +1765,12 @@ visual-variable codebook is in
   quarter of the 3 × 3 cells around that lies on one plane — beside a
   ridge, hip or valley not a mix of two flanks —, its ridge the
   highest of them; a dormer where the rebuilt roof is flatter than 25°,
-  a dormer or chimney off every rebuilt part of its host, and a chimney
-  whose measured top stands less than 0.4 m over the rebuilt part (the
-  part, drawn from the same scan, holds it), is dropped before the rows
-  are set (`RoofPlanes.carries`) — the building draws no pitch, or no
-  roof there, to carry it); until then such a roof's dormers and chimneys stood
+  and a dormer or chimney off every rebuilt part of its host, is dropped
+  before the rows are set (`RoofPlanes.carries`) — the building draws no
+  pitch, or no roof there, to carry it; a chimney there keeps its
+  measured height over the roof it was read on, which `shifts` may have
+  lifted off DOM1, not its measured top; a part's crest is the highest of
+  its cells and its outline, so a strip narrower than a cell has one); until then such a roof's dormers and chimneys stood
   at the LoD2 faces it replaces, metres off the drawn roof — some
   chimneys' measured tops under their own feet (Dresden's rebuilt roofs
   hold 417 dormers now, 50 before; the block at Schloßstraße and

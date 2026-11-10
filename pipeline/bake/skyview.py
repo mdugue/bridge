@@ -346,7 +346,8 @@ def rebuilt_parts(path: Path) -> list[tuple[str, float, shapely.Geometry, dict |
             f["properties"].get("surface"),
         )
         for f in json.loads(path.read_text()).get("features", [])
-        if (f.get("geometry") or {}).get("type") == "Polygon" and "id" in f.get("properties", {})
+        if (f.get("geometry") or {}).get("type") == "Polygon"
+        and "id" in (f.get("properties") or {})
     ]
 
 

@@ -433,12 +433,15 @@ def test_parts_drawn_over_another_levels_cells_miss_as_drawn():
     assert abs(miss([(wide, 10.0, 1), (rest, 14.0, 2)]) - 15 / 40) < 1e-9
 
 
-def test_a_fix_up_that_leaves_a_spike_does_not_hold():
+def test_a_fix_up_that_leaves_a_spike_or_drops_a_part_does_not_hold():
     square = shapely.box(0, 0, 10, 10)
     # the same square with a sliver 5 m long and 0.2 m wide on one side
     spiked = shapely.Polygon([(0, 0), (10, 0), (10, 5), (15, 5.1), (10, 5.2), (10, 10), (0, 10)])
     assert _holds([square], [square])
     assert not _holds([spiked], [square])
+    # nor one that hands a small part's cells to its neighbour
+    small = shapely.box(10, 0, 12, 3)
+    assert not _holds([shapely.union(square, small), shapely.Polygon()], [square, small])
 
 
 def test_a_part_the_tiling_leaves_inside_a_collection_is_kept():

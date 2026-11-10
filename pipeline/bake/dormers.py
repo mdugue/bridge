@@ -204,10 +204,6 @@ CHIMNEY_CROWD_M = 4.0
 CHIMNEY_STACK_CELLS = 4
 CHIMNEY_MIN_LIFT_M = 0.8
 CHIMNEY_MAX_LIFT_M = 5.0
-# A chimney whose measured top stands less than CHIMNEY_DRAWN_LIFT_M (m)
-# over the rebuilt part under it is dropped: the part, drawn from the same
-# scan, holds it already.
-CHIMNEY_DRAWN_LIFT_M = 0.4
 CHIMNEY_SIDE_M = 0.6
 CHIMNEY_MAX_SIDE_M = 1.6
 # how far a chimney may reach over the object's highest roof cell (m)
@@ -656,12 +652,16 @@ class MeasuredPart:
         return z, math.degrees(math.atan(_quarter_slope(g, r, c) / self.res))
 
     def top(self) -> float:
-        """Its highest point inside its plan."""
+        """Its highest point inside its plan: of the cell centres inside it
+        and its outline's points (a strip narrower than a cell holds no
+        centre, its crest still lies on its outline)."""
         if self.grid is None:
             return self.z
         xs, ys = np.meshgrid(self.xs, self.ys)
         inside = shapely.contains_xy(self.plan, xs, ys)
-        return float(self.grid[inside].max()) if inside.any() else self.z
+        rim = shapely.get_coordinates(self.plan)
+        edge = max(self.at(float(x), float(y))[0] for x, y in rim) if len(rim) else self.z
+        return max(float(self.grid[inside].max()), edge) if inside.any() else edge
 
 
 def measured_parts(tile: Tile) -> dict[str, list[MeasuredPart]]:
@@ -748,15 +748,12 @@ class RoofPlanes:
         """Whether the roof drawn under dormer or chimney `d` (`e`, its
         `at`) holds it: on a roof rebuilt from DOM1, not where it stands
         off every part, nor a dormer where the part is flatter than
-        MIN_SLOPE, nor a chimney whose measured top the part reaches to
-        within CHIMNEY_DRAWN_LIFT_M (the rebuilt roof holds it)."""
+        MIN_SLOPE."""
         if not self.rebuilt(d["of"]):
             return True
         if e is None:
             return False
-        if d.get("k") == "chimney":
-            return d["top"] >= e[0] + CHIMNEY_DRAWN_LIFT_M
-        return e[1] >= MIN_SLOPE
+        return d.get("k") == "chimney" or e[1] >= MIN_SLOPE
 
     def keeps(self, d: dict) -> bool:
         """`carries`, `d`'s roof looked up."""
@@ -785,9 +782,9 @@ def on_planes(found: list[dict], planes: RoofPlanes) -> list[dict]:
     there than MIN_SLOPE is dropped: the building draws no pitch to carry
     it, and at the LoD2's height it would float over the drawn roof or
     sink into it — as is a dormer or chimney off every rebuilt part of its
-    host (a part dropped, or cut where another roof covers it), and a
-    chimney whose measured top the rebuilt part reaches to within
-    CHIMNEY_DRAWN_LIFT_M (the part holds it already). The
+    host (a part dropped, or cut where another roof covers it). A
+    chimney on a rebuilt part keeps its measured height over the roof it
+    was read on, a chimney elsewhere its measured top. The
     dormers and chimneys kept, in place."""
     kept = []
     for d in found:
@@ -799,6 +796,11 @@ def on_planes(found: list[dict], planes: RoofPlanes) -> list[dict]:
             continue
         z, slope = e
         if d.get("k") == "chimney":
+            # its measured top over the roof it was read on, on the drawn
+            # one (that roof may stand off DOM1 by `shifts`' lift; the
+            # rebuilt one does not)
+            if planes.rebuilt(d["of"]):
+                d["top"] = round(d["top"] + z - d["z"], 2)
             d["z"] = round(z, 2)
             continue
         if slope < MIN_SLOPE:

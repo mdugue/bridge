@@ -714,7 +714,10 @@ def measured_model(
     known = roof & ~green & np.isfinite(dom)
     if known.sum() < small_cells:
         return None
-    scan = scan or Scan(scan_surface(dom, known), own)
+    if scan is None:
+        scan = Scan(scan_surface(dom, known), own)
+    elif scan.own is not own:
+        raise ValueError("a Scan is made for the cells of the model it serves")
     h = scan.h
     face, flank_only = np.zeros_like(own), np.zeros_like(own)
     if with_faces:
@@ -1088,9 +1091,12 @@ def _retiled(polys: list, order: list[int], footprint, walls: Walls) -> list:
     near = {i: shapely.buffer(out[i], 3 * g) for i in rank if not out[i].is_empty}
     for i in order:
         share = _polygonal(shapely.intersection(left, polys[i], grid_size=g))
+        # each piece judged against the parts as tiled, then given at once
+        gets: dict[int, list] = {}
         for piece in shapely.get_parts(share):
-            k = _gap_owner(piece, near, rank, i)
-            out[k] = _polygonal(shapely.union(out[k], piece, grid_size=g))
+            gets.setdefault(_gap_owner(piece, near, rank, i), []).append(piece)
+        for k, pieces in gets.items():
+            out[k] = _polygonal(shapely.union_all([out[k], *pieces], grid_size=g))
             near[k] = shapely.buffer(out[k], 3 * g)
         left = _polygonal(shapely.difference(left, share, grid_size=g))
     return out
@@ -1152,7 +1158,9 @@ def _noded_cover(polys: list, lines=None) -> np.ndarray | None:
         for f in slivers:
             touch = shapely.length(shapely.intersection(faces[f].boundary, near))
             # beside none along its outline: the nearest
-            way = touch if touch.max() > 0 else -shapely.distance(faces[f], np.asarray(polys))
+            # (an empty part none: its distance is NaN)
+            off = np.nan_to_num(shapely.distance(faces[f], np.asarray(polys)), nan=np.inf)
+            way = touch if touch.max() > 0 else -off
             owner[f] = int(np.argmax(way))
     return np.asarray([_polygonal(shapely.union_all(faces[owner == i])) for i in range(len(polys))])
 
@@ -1183,16 +1191,25 @@ def _straightened(polys: list) -> list:
 def _holds(new: list, old: list) -> bool:
     """Whether the parts `new` still cover what `old` did: their union
     within HOLD_SHARE of its area, no part of 4 × MIN_POLY_M2 or more
-    shrunk to under half, no spike more (`_spikes`) — a fix-up that loses
+    shrunk to under half, none of MIN_POLY_M2 or more shrunk under it (the
+    region it draws gone), no spike more (`_spikes`) — a fix-up that loses
     a roof part, or leaves a sliver wall, is not one."""
     before = shapely.area(shapely.union_all(old))
     if abs(shapely.area(shapely.union_all(new)) - before) > HOLD_SHARE * before:
         return False
     if _spikes(new) > _spikes(old):
         return False
-    return all(
-        p.area >= 0.5 * q.area for p, q in zip(new, old, strict=True) if q.area >= 4 * MIN_POLY_M2
-    )
+    for p, q in zip(new, old, strict=True):
+        if q.area >= 4 * MIN_POLY_M2 and p.area < 0.5 * q.area:
+            return False
+        if _largest(q) >= MIN_POLY_M2 > _largest(p):
+            return False
+    return True
+
+
+def _largest(g: shapely.Geometry) -> float:
+    """The area of the largest polygon of `g` (what `_drawn` keeps)."""
+    return max((p.area for p in shapely.get_parts(g)), default=0.0)
 
 
 def _spikes(polys: list) -> int:

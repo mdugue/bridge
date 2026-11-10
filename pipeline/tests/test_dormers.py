@@ -676,20 +676,35 @@ def test_a_rebuilt_roof_holds_its_dormers_on_its_own_parts_not_the_lod2_faces():
     z, slope = planes.at(0, 5.0, 2.0)
     assert abs(z - 9.0) < 1e-6 and abs(slope - math.degrees(math.atan(0.5))) < 1e-6
     assert planes.at(0, 5.0, 6.0) == (9.0, 0.0)
-    assert abs(planes.ridge[0] - (8.0 + 0.5 * 3.5)) < 1e-6
+    assert abs(planes.ridge[0] - (8.0 + 0.5 * 4.0)) < 1e-6  # at its plan's top edge
     d = {"of": 0, "x": 5.0, "y": 2.0, "z": 11.0, "top": 12.5, "slope": 45.0}
-    chimney = {"of": 0, "x": 5.0, "y": 6.0, "z": 12.0, "top": 10.0, "k": "chimney"}
+    chimney = {"of": 0, "x": 5.0, "y": 6.0, "z": 12.0, "top": 13.5, "k": "chimney"}
     assert dormers.on_planes([d, chimney], planes) == [d, chimney]
-    assert d["z"] == 9.0 and chimney["z"] == 9.0
+    # the chimney as tall over the drawn roof as over the roof it was read on
+    assert d["z"] == 9.0 and chimney["z"] == 9.0 and chimney["top"] == 10.5
     # a dormer on the rebuilt flat part: no pitch drawn to carry it
     flat = {"of": 0, "x": 5.0, "y": 6.0, "z": 12.0, "top": 13.5, "slope": 45.0}
     assert dormers.on_planes([flat], planes) == []
     # ... and a chimney off every rebuilt part
     off = {"of": 0, "x": 5.0, "y": 9.0, "z": 12.0, "top": 13.0, "k": "chimney"}
     assert dormers.on_planes([off], planes) == []
-    # ... and one the rebuilt part already holds: its top 0.2 m over it
-    stub = {"of": 0, "x": 5.0, "y": 6.0, "z": 8.0, "top": 9.2, "k": "chimney"}
-    assert dormers.on_planes([stub], planes) == []
+
+
+def test_a_rebuilt_strip_narrower_than_a_cell_reads_its_crest():
+    # a face rising 0.5 m/m east, its part a strip between two cell centres
+    cols = 4
+    xs = -1.0 + np.arange(cols) + 0.5
+    face = np.tile(8.0 + 0.5 * xs, (3, 1))
+    surface = {
+        "x": -1.0,
+        "y": 3.0,
+        "res": 1.0,
+        "cols": cols,
+        "rows": 3,
+        "dz": np.round((face - 8.0) * 100).astype(int).ravel().tolist(),
+    }
+    part = dormers.MeasuredPart(shapely.box(0.6, 0.5, 0.9, 2.5), 8.0, surface)
+    assert abs(part.top() - (8.0 + 0.5 * 0.9)) < 0.01
 
 
 def test_a_dormer_beside_a_rebuilt_ridge_reads_its_flanks_pitch():
