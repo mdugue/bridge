@@ -1175,8 +1175,9 @@ visual-variable codebook is in
   round tower keeps its points). The parts are then tiled again, the
   highest first, each taking what its new outline holds and nothing
   before it took; a gap none took goes to the lowest part it lies beside
-  along a metre or more (a lower roof runs on up to a higher one's
-  straight wall), else back to its old part. Then the parts are one
+  along a metre or more and a quarter of its longest contact (a lower
+  roof runs on up to a higher one's straight wall), else back to its
+  old part. Then the parts are one
   coverage again (`clean_cover`: their borders noded, a sliver under
   1 m² none holds given to the part beside it), their inner borders
   simplified by 0.3 m (`coverage_simplify`, the outline kept: the
@@ -1198,7 +1199,8 @@ visual-variable codebook is in
   building's less what another roof covers, each covered piece whole
   but not one holding no 3 × 3 cells (a neighbour's eave over the party
   wall, a notch a metre deep every few metres along it), the cut's raster steps
-  simplified by 0.75 m. Parts under 2 m dropped →
+  simplified by 0.75 m. Parts standing under 2 m over the ground, or
+  under 4 m² in plan, dropped →
   `data/<site>/dlm/roofs_<tile>.geojson` (Polygons
   with the object `id`, the roof `z` and, for a face, its `surface`; the
   provider's credit). **1 080 objects on Dresden's fifteen tiles, 2 738
