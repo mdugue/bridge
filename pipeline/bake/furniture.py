@@ -48,11 +48,13 @@ tower is the building model's) and sundials.
 
 A flagpole (`man_made=flagpole`, `k: flag`) stands where it is mapped, at
 its tagged `height` (`h`, clamped to FLAG_H) and, where `flag:name`,
-`country`, `subject` or their Wikidata name a flag in FLAG_DESIGNS, flying
-that flag (`c`); every other flag — most are a shop's or a firm's — flies a
-pale cloth. One mapped inside a building outline stands on its roof and is
-left out (2 of Dresden's 368), and so is a flag on a facade
-(`support=wall_mounted`): none is mapped in the seven sites yet.
+`subject`, `country` or their Wikidata name a flag in FLAG_DESIGNS (the
+flag's own name first: `flag:name=Sachsen` on `country=DE` flies Saxony's),
+flying that flag (`c`); every other flag — most are a shop's or a firm's —
+flies a pale cloth. One mapped inside a building outline or on its line
+stands on its roof and is left out (2 of Dresden's 368), and so is one
+tagged on a roof (`support`/`location=roof`) or on a facade
+(`support=wall_mounted`): none of the latter is mapped in the seven sites yet.
 
 A bench without a `direction` that has water (the class raster's) within
 WATER_FACE_M on the side away from its way looks at the water instead
@@ -95,6 +97,7 @@ from __future__ import annotations
 
 import colorsys
 import dataclasses
+import functools
 import json
 import math
 import re
@@ -183,6 +186,7 @@ ON_DECK_KERB = KERBSIDE | {"signal", "hydrantsign"}
 HYDRANT = {"pillar": "hydrant", "underground": "hydrantsign"}
 CLOCK = {"pole": "clock", "wall": "wallclock", "wall_mounted": "wallclock"}
 WALL_SUPPORT = {"wall", "wall_mounted"}  # a flag on a facade: not mapped as such yet
+ROOF = "roof"  # a flag on a roof (`support`/`location`): the roof is not drawn
 FLAG_H = (3.0, 30.0)  # a tagged flagpole height, clamped (m)
 # The flags the viewer draws in their colours, by `flag:name`/`country`/`subject`
 # (lower case); every other flag flies a pale cloth.
@@ -193,6 +197,9 @@ FLAG_DESIGNS = {
     "by": ("bayern", "bavaria", "freistaat bayern", "q980"),
     "hh": ("hamburg", "freie und hansestadt hamburg", "q1055"),
 }
+# The keys that name a flag, the flag's own first.
+FLAG_KEYS = ("flag:name", "flag:wikidata", "subject", "subject:wikidata", "country")
+DESIGN_OF = {name: design for design, names in FLAG_DESIGNS.items() for name in names}
 # OSM `playground=*` → the equipment model the viewer stands (others dropped).
 EQUIPMENT = {
     "swing": "swing",
@@ -274,7 +281,9 @@ def kind_of(
 ) -> str | None:
     """What a tagged OSM point is as street furniture, or None."""
     if man_made == "flagpole":
-        return None if tag(other, "support") in WALL_SUPPORT else "flag"
+        support = tag(other, "support")
+        aloft = support in WALL_SUPPORT or ROOF in (support, tag(other, "location"))
+        return None if aloft else "flag"
     if barrier == "bollard":
         return "bollard"
     if tag(other, "leisure") == "picnic_table":
@@ -330,15 +339,14 @@ def flag(other: str | None) -> dict:
     h = osm_metres(tag(other, "height"))
     if h is not None:
         props["h"] = round(min(max(h, FLAG_H[0]), FLAG_H[1]), 1)
-    names = {
-        name.strip().lower()
-        for key in ("flag:name", "country", "subject", "flag:wikidata", "subject:wikidata")
-        for name in (tag(other, key) or "").split(";")
-    }
-    for design, known in FLAG_DESIGNS.items():
-        if names & set(known):
-            props["c"] = design
-            break
+    # the key that names the flag itself first, then what it stands for; in
+    # a `;` list the first one the viewer draws
+    for key in FLAG_KEYS:
+        for name in (tag(other, key) or "").split(";"):
+            design = DESIGN_OF.get(name.strip().lower())
+            if design is not None:
+                props["c"] = design
+                return props
     return props
 
 
@@ -754,13 +762,25 @@ class Facades:
     def __init__(self, tile: Tile) -> None:
         geoms, _ = read_osm(tile, "multipolygons", "building IS NOT NULL", ["building"])
         self.areas = [g for g in geoms if g.geom_type in ("Polygon", "MultiPolygon")]
-        self.walls = [g.boundary for g in self.areas]
-        self.tree = shapely.STRtree(self.walls) if self.walls else None
-        self.inner = shapely.STRtree(self.areas) if self.areas else None
+
+    # each index built on first use: a flag asks only `inner`, a wall clock
+    # only `tree`
+    @functools.cached_property
+    def walls(self) -> list:
+        return [g.boundary for g in self.areas]
+
+    @functools.cached_property
+    def tree(self) -> shapely.STRtree | None:
+        return shapely.STRtree(self.walls) if self.walls else None
+
+    @functools.cached_property
+    def inner(self) -> shapely.STRtree | None:
+        return shapely.STRtree(self.areas) if self.areas else None
 
     def inside(self, p: shapely.Point) -> bool:
-        """Whether p lies inside a building outline."""
-        return self.inner is not None and len(self.inner.query(p, predicate="within")) > 0
+        """Whether p lies inside a building outline or on its line (a node
+        of the building's way)."""
+        return self.inner is not None and len(self.inner.query(p, predicate="intersects")) > 0
 
     def hang(self, p: shapely.Point) -> tuple[shapely.Point, float] | None:
         """The facade point nearest p (≤ WALL_CLOCK_M) and the bearing out

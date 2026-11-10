@@ -33,8 +33,10 @@ import {
   cos,
   distance,
   float,
+  fract,
   modelWorldMatrix,
   max,
+  mod,
   positionGeometry,
   sin,
   smoothstep,
@@ -43,14 +45,15 @@ import {
   vec4,
 } from "three/tsl";
 import type { FlagDesign } from "@/lib/city/features";
+import { FLAG_CLOTH_H, FLAG_CLOTH_L } from "@/lib/city/furniture";
 import { Instances, instanceMatrix, instancePosition } from "./instancing";
-import { markThinCaster, sceneMaterial } from "./three-utils";
+import { markSceneShared, markThinCaster, sceneMaterial } from "./three-utils";
 import { crownSwayShare, windClock } from "./vegetation-layer";
 
-/** The cloth's size (m), 3 : 5, a forecourt flag's, whatever the mast's
- *  height; its top hangs this far under the mast's top. */
-export const CLOTH_H = 1.2;
-export const CLOTH_L = 2;
+/** The cloth's size (m, lib/city/furniture.ts); its top hangs this far
+ *  under the mast's top. */
+const CLOTH_H = FLAG_CLOTH_H;
+const CLOTH_L = FLAG_CLOTH_L;
 const CLOTH_TOP = -0.12;
 /** The ball on the mast's top: its radius and its centre over the top (m). */
 const BALL_R = 0.075;
@@ -72,6 +75,7 @@ const WAVE_NEAR_M = 120;
 const WAVE_FAR_M = 260;
 /** How dark a fold turned from the eye goes at the wave's steepest. */
 const FOLD_SHADE = 0.22;
+const TURN = Math.PI * 2;
 
 /* The cloths, in the scene's pastels (furniture-layer.ts's palette). */
 const CLOTH = 0xf1_ec_e2;
@@ -160,20 +164,26 @@ function clothMaterial(): MeshStandardNodeMaterial {
   const near = float(1)
     .sub(smoothstep(WAVE_NEAR_M, WAVE_FAR_M, distance(at, cameraPosition)))
     .mul(crownSwayShare);
-  const phase = origin.x.mul(0.37).add(origin.z.mul(0.61));
+  // the phase and the clock wrapped to a turn, so sin and cos stay in
+  // their accurate range kilometres out and hours on
+  const phase = fract(origin.x.mul(0.059).add(origin.z.mul(0.097))).mul(TURN);
+  const clock = mod(windClock.mul(WAVE_SPEED), TURN);
   // the geometry's own x: once a positionNode is set, positionLocal is
   // the moved vertex
   const u = max(positionGeometry.x, 0).div(CLOTH_L);
-  const arg = positionGeometry.x
-    .mul(WAVE_K)
-    .sub(windClock.mul(WAVE_SPEED))
-    .add(phase);
+  const arg = positionGeometry.x.mul(WAVE_K).sub(clock).add(phase);
   const wave = sin(arg).mul(u).mul(WAVE_AMP).mul(near);
   m.positionNode = instancePosition(
     vec3(positionGeometry.x, positionGeometry.y, positionGeometry.z.add(wave))
   );
-  // the shadow pass draws the sheet at rest: a still caster
-  m.castShadowPositionNode = instancePosition(positionGeometry);
+  // the shadow pass draws the sheet at rest: a still caster; and the
+  // cloth looks its shadow up where it hangs at rest, or the wave, swung
+  // behind that sheet, would fall into its own shadow
+  const rest = instancePosition(positionGeometry);
+  m.castShadowPositionNode = rest;
+  m.receivedShadowPositionNode = varying(
+    modelWorldMatrix.mul(vec4(rest, 1)).xyz
+  );
   // Worked out on the vertex (the instance's matrix is a vertex input) and
   // carried over; the vertex colour multiplies in after (NodeMaterial,
   // vertexColors).
@@ -192,16 +202,31 @@ export interface Mast {
   yaw: number;
 }
 
+/** Each design's cloth, one for the site: every tile's sets draw from it,
+ *  and no tile's disposal frees it (`markSceneShared`). */
+const siteCloths = new Map<FlagDesign | "plain", BufferGeometry>();
+
+/** The site's cloth of one design (`clothGeometry`, made on first use). */
+export function siteCloth(design: FlagDesign | "plain"): BufferGeometry {
+  let geo = siteCloths.get(design);
+  if (!geo) {
+    geo = clothGeometry(design);
+    for (const attribute of Object.values(geo.attributes)) {
+      markSceneShared(attribute);
+    }
+    siteCloths.set(design, geo);
+  }
+  return geo;
+}
+
 /** The cloths of one design on their masts (one cell's), casting the
- *  sheet's shadow at rest; `geometry` is the design's `clothGeometry`, shared by a tile's
- *  cells. */
+ *  sheet's shadow at rest, on the site's cloth of that design. */
 export function flagCloths(
   design: FlagDesign | "plain",
-  geometry: BufferGeometry,
   masts: readonly Mast[]
 ): Instances {
   const mesh = new Instances(
-    geometry,
+    siteCloth(design),
     sceneMaterial("furniture-flag-cloth", clothMaterial),
     masts.length
   );

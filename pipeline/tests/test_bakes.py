@@ -195,6 +195,9 @@ def test_a_flagpole_stands_with_its_height_and_the_flag_the_map_names():
     assert kind_of(None, None, None, "flagpole") == "flag"
     # a flag on a facade is not mapped anywhere yet: left out, not guessed
     assert kind_of(None, None, '"support"=>"wall_mounted"', "flagpole") is None
+    # nor on a roof, which is not drawn
+    assert kind_of(None, None, '"support"=>"roof"', "flagpole") is None
+    assert kind_of(None, None, '"location"=>"roof"', "flagpole") is None
     assert _props("flag", None) == {"k": "flag"}
     assert _props("flag", '"height"=>"12 m","flag:name"=>"Germany"') == {
         "k": "flag",
@@ -204,8 +207,24 @@ def test_a_flagpole_stands_with_its_height_and_the_flag_the_map_names():
     assert _props("flag", '"height"=>"80","country"=>"EU"') == {"k": "flag", "h": 30.0, "c": "eu"}
     assert _props("flag", '"subject:wikidata"=>"Q1202"')["c"] == "sn"
     assert _props("flag", '"country"=>"DE;EU"')["c"] == "de"  # a list: its first drawn one
+    assert _props("flag", '"country"=>"EU;DE"')["c"] == "eu"
+    # the flag's own name wins over the country it stands in
+    assert _props("flag", '"flag:name"=>"Sachsen","country"=>"DE"')["c"] == "sn"
     # a firm's flag: its colours are not mapped
     assert _props("flag", '"flag:type"=>"advertising","flag:name"=>"Netto"') == {"k": "flag"}
+
+
+def test_a_flagpole_on_a_building_outline_counts_as_on_its_roof():
+    import shapely
+
+    from bake.furniture import Facades
+
+    facades = Facades.__new__(Facades)
+    facades.areas = [shapely.box(0, 0, 10, 10)]
+    assert facades.inside(shapely.Point(5, 5))
+    # a node of the building's way: on its line
+    assert facades.inside(shapely.Point(10, 10))
+    assert not facades.inside(shapely.Point(12, 5))
 
 
 def test_furniture_indoors_or_underground_is_hidden():

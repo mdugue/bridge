@@ -4,6 +4,7 @@ import type { FurnitureFeature } from "@/lib/city/features";
 import { Matrix4, Quaternion, Vector3 } from "three/webgpu";
 import { buildFurniture, showFurnitureNear } from "./furniture-layer";
 import { isInstances } from "./instancing";
+import { isSceneShared } from "./three-utils";
 import type { Instances } from "./instancing";
 
 const ctx = { offset: { cx: 0, cy: 0 }, heightAt: () => 100 };
@@ -176,6 +177,8 @@ test("a clock's hands go with its cell", () => {
   ]);
 });
 
+const position = (set: Instances) => set.geometry.getAttribute("position");
+
 test("a flagpole casts, its cloth flies in its design and casts at rest", () => {
   const group = buildFurniture(
     [
@@ -198,7 +201,10 @@ test("a flagpole casts, its cloth flies in its design and casts at rest", () => 
     expect(cloth.castShadow).toBe(true);
     const mat = cloth.material as MeshStandardNodeMaterial;
     expect(mat.castShadowPositionNode).not.toBeNull();
-    expect(mat.castShadowPositionNode).not.toBe(mat.positionNode);
+    // ...and the cloth looks its shadow up there, or the wave falls into it
+    expect(mat.receivedShadowPositionNode).not.toBeNull();
+    // the cloths show and hide with every mast of their cell
+    expect(cloth.userData.furnitureCell).toEqual(mast.userData.furnitureCell);
   }
   // the cloth hangs at the mast's top, at its own size: a 10.5 m mast
   // lifts it, never stretches it
@@ -209,6 +215,27 @@ test("a flagpole casts, its cloth flies in its design and casts at rest", () => 
   m.decompose(top, new Quaternion(), scale);
   expect(top.y).toBeCloseTo(110.5);
   expect(scale.y).toBeCloseTo(1);
-  // one cloth per design, shared by the tile's cells
-  expect(plain.geometry).not.toBe(german.geometry);
+  // one cloth per design for the site: another tile's sets draw from it,
+  // and freeing a tile leaves it be
+  const again = buildFurniture([at({ k: "flag" })], ctx).children.find(
+    (c) => c.name === "furniture-flag-plain"
+  ) as Instances;
+  expect(position(again)).toBe(position(plain));
+  expect(position(german)).not.toBe(position(plain));
+  expect(isSceneShared(position(plain))).toBe(true);
+});
+
+test("a flagpole shows from further than a bench", () => {
+  const group = buildFurniture([at({ k: "flag" }), at({ k: "bench" }, 5)], ctx);
+  // the eye 600 m off: the bench's cell hides, the mast's and its cloth's
+  // stay
+  showFurnitureNear(group, new Vector3(600, 110, 0));
+  const shown = group.children
+    .filter((c) => c.userData.furnitureCell)
+    .map((c) => [c.name, c.visible]);
+  expect(Object.fromEntries(shown)).toEqual({
+    "furniture-bench": false,
+    "furniture-flag": true,
+    "furniture-flag-plain": true,
+  });
 });

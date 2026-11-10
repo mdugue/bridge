@@ -40,7 +40,7 @@ import type {
   TreeFeature,
   VegRowFeature,
 } from "./features";
-import { FLAG_HEIGHT } from "./furniture";
+import { FLAG_CLOTH_H, FLAG_CLOTH_L, FLAG_HEIGHT, flagYaw } from "./furniture";
 import { epsgToWorld } from "./ground-clamp";
 import type { RecenterOffset } from "./ground-clamp";
 import type { CanopyInquiry, FeatureInquiry } from "./inquiry-features";
@@ -504,6 +504,9 @@ const STOP = { h: 2.8, r: 0.5 };
 /** How far apart a hedge's picks stand along it (m). */
 const HEDGE_STEP = 2;
 
+/** A flagpole's ball over its top (m), picked with the mast. */
+const FLAG_BALL = 0.2;
+
 /** How tall a piece is picked: a signal on a mast arm by its mast
  *  (furniture-layer.ts `signalArm`), a flagpole by its tagged height and
  *  the ball on top, the rest by its kind. */
@@ -514,7 +517,32 @@ function solidHeight(
   if (p.arm) {
     return 6.2;
   }
-  return p.k === "flag" ? (p.h ?? FLAG_HEIGHT) + 0.2 : base;
+  return p.k === "flag" ? (p.h ?? FLAG_HEIGHT) + FLAG_BALL : base;
+}
+
+/** A flag's cloth, picked as a cylinder round its middle (it flies
+ *  downwind of the mast, `flagYaw`, and ripples a little): the mast's
+ *  solid `mast`, at EPSG (x, y). */
+function clothSolid(
+  [ex, ey]: readonly [number, number],
+  mast: AskSolid
+): AskSolid | null {
+  if (!("cylinder" in mast)) {
+    return null;
+  }
+  const yaw = flagYaw(ex, ey);
+  const half = FLAG_CLOTH_L / 2;
+  // local +X turned by yaw: (cos, −sin) in the scene's x–z
+  const top = mast.cylinder.y1 - FLAG_BALL;
+  return {
+    cylinder: {
+      x: mast.cylinder.x + Math.cos(yaw) * half,
+      z: mast.cylinder.z - Math.sin(yaw) * half,
+      y0: top - FLAG_CLOTH_H - 0.2,
+      y1: top,
+      r: half,
+    },
+  };
 }
 
 /** Each furniture kind picked as a cylinder: radius, height (m). */
@@ -525,7 +553,7 @@ const FURNITURE_SOLID: Record<FurnitureKind, [number, number]> = {
   bollard: [0.3, 1],
   clock: [0.5, 4.2],
   column: [0.8, 3.2],
-  flag: [0.4, 7.2],
+  flag: [0.4, FLAG_HEIGHT + FLAG_BALL],
   hydrant: [0.35, 1],
   hydrantsign: [0.3, 1.5],
   pedsignal: [0.35, 2.7],
@@ -919,10 +947,11 @@ function furnitureItem(
   if (f.geometry.type === "Point") {
     const at = f.geometry.coordinates;
     const solid = standing(at, r, h, ctx, p.deck);
+    const cloth = solid && p.k === "flag" ? clothSolid(at, solid) : null;
     return solid
       ? [
           {
-            solids: [solid],
+            solids: cloth ? [solid, cloth] : [solid],
             target: {
               kind: "furniture",
               tile: ctx.tile,

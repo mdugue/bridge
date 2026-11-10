@@ -3790,16 +3790,19 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   every `man_made=flagpole` point stands as a slim mast, 7 m or its tagged
   `height` (3–30 m; few are tagged), with a cloth in the wind (`k: flag`).
   The flag is drawn in its colours only where the map names it (`flag:name`,
-  `country`, `subject` or their Wikidata: Germany, the EU, Saxony, Bavaria,
-  Hamburg), as pastel bands without emblem; every other one — most are a
-  shop's or a firm's (`flag:type=advertising`) — flies a pale cloth.
+  `flag:wikidata`, `subject`, `country`, the flag's own name first:
+  Germany, the EU, Saxony, Bavaria, Hamburg), as pastel bands without
+  emblem; every other one — most are a shop's or a firm's
+  (`flag:type=advertising`) — flies a pale cloth.
   ≈ assumed: the wind (one bearing for the city, from the west-south-west,
   ±12° a mast by a hash), the cloth's size and its ripple. A mast mapped
-  inside a building outline stands on its roof and is left out (Dresden 2
-  of 368); a flag on a facade (`support=wall_mounted`) is not mapped in any
-  of the seven sites' extracts and would be left out. The cloth moves, so its
-  shadow is the sheet at rest (`castShadowPositionNode`, ADR 0009). Masts after the fresh BBBike extracts of
-  2026-11-10: see the bake's counts in the PR.
+  inside a building outline or on its line stands on its roof and is left
+  out (Dresden 2 of 368), as is one tagged on a roof (`support` or
+  `location=roof`); a flag on a facade (`support=wall_mounted`) is not
+  mapped in any of the seven sites' extracts and would be left out. The
+  cloth moves, so its shadow is the sheet at rest
+  (`castShadowPositionNode`, ADR 0009). Masts after the fresh BBBike
+  extracts of 2026-11-07 (Last-Modified): see the bake's counts in the PR.
 - **Playgrounds** `❝ taken` `◎ detected` — OSM `leisure=playground` outlines (≥ 20 m²; 339 over the
   fifteen tiles, 88 on the four first) → a pale sand floor flush on the ground (a breath warmer than the paving), seated on the
   ground under each ring vertex (densified to 2 m), and **only the

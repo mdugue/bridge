@@ -88,6 +88,10 @@ export const BOLLARD_HEIGHT = 0.9;
 /** A flagpole's height (m) when the map says nothing — a forecourt's mast:
  *  the model is built at it. */
 export const FLAG_HEIGHT = 7;
+/** A flag's cloth (m), 3 : 5, a forecourt flag's, whatever the mast's
+ *  height (app/_components/flag-cloth.ts draws it; a pick finds it). */
+export const FLAG_CLOTH_H = 1.2;
+export const FLAG_CLOTH_L = 2;
 /**
  * The bearing (degrees clockwise from north) every flag flies towards: the
  * scene has no weather, so one wind for the whole city — from the

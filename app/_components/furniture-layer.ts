@@ -57,7 +57,7 @@ import type { GroundContext } from "@/lib/city/ground-clamp";
 import { subdividePolyline } from "@/lib/city/polyline";
 import { finished } from "@/lib/city/build-steps";
 import type { Steps } from "@/lib/city/build-steps";
-import { clothGeometry, flagCloths } from "./flag-cloth";
+import { flagCloths } from "./flag-cloth";
 import { Instances, instancePosition } from "./instancing";
 import { clockMinutes, sceneNight } from "./scene-environment";
 import { markThinCaster, sceneMaterial } from "./three-utils";
@@ -88,13 +88,16 @@ import { markThinCaster, sceneMaterial } from "./three-utils";
  * pillar; an underground one only its small sign plate on a post, drawn
  * 30 % under size so 450 of them do not read as a forest of signs), the
  * clock (a double face on a post, or a disc on its facade) whose hands
- * show the scene's time, the drinking fountain and the bus stop's "H".
+ * show the scene's time, the drinking fountain and the bus stop's "H";
+ * later the flagpole, its cloth flying in the wind (flag-cloth.ts), seen
+ * from further than a bench (`FLAG_IN_M`).
  *
  * Built per fine terrain tile by the dressing plugin (tile-stream.ts), in
- * the Y-up frame, stood on that tile's ground. The four materials (matte,
- * glowing, the flush slab's, the hands') carry nothing of a tile — the
- * clock and the dusk are module uniforms — so every tile wears the same
- * ones (`sceneMaterial`). Non-fatal: missing or empty input yields an
+ * the Y-up frame, stood on that tile's ground. The five materials (matte,
+ * glowing, the flush slab's, the hands', the cloth's) carry nothing of a
+ * tile — the clock, the wind and the dusk are module uniforms — so every
+ * tile wears the same ones (`sceneMaterial`), and the cloths one geometry
+ * per design for the site. Non-fatal: missing or empty input yields an
  * empty group.
  */
 
@@ -773,12 +776,9 @@ function clockHands(model: "clock" | "wallClock", stood: Stood[]): Instances {
   return mesh;
 }
 
-/** One cell's flag cloths, one set per design, on the tile's cloth of
- *  that design (`cloths`, built on first use). */
-function flagsOf(
-  cell: Stood[],
-  cloths: Map<NonNullable<FurniturePiece["design"]>, BufferGeometry>
-): Instances[] {
+/** One cell's flag cloths, one set per design, each showing and hiding
+ *  with the cell's masts (the cell's box, not its design's). */
+function flagsOf(cell: Stood[]): Instances[] {
   const byDesign = new Map<NonNullable<FurniturePiece["design"]>, Stood[]>();
   for (const s of cell) {
     const design = s.piece.design ?? "plain";
@@ -790,28 +790,16 @@ function flagsOf(
     asCell(
       flagCloths(
         design,
-        clothOf(cloths, design),
         masts.map(({ at, piece }) => ({
           at,
           yaw: piece.yaw,
           height: FLAG_HEIGHT * piece.scaleY,
         }))
       ),
-      masts
+      cell,
+      FLAG_REACH
     )
   );
-}
-
-function clothOf(
-  cloths: Map<NonNullable<FurniturePiece["design"]>, BufferGeometry>,
-  design: NonNullable<FurniturePiece["design"]>
-): BufferGeometry {
-  let geo = cloths.get(design);
-  if (!geo) {
-    geo = clothGeometry(design);
-    cloths.set(design, geo);
-  }
-  return geo;
 }
 
 function modelGeometry(model: FurnitureModel): BufferGeometry | null {
@@ -1046,6 +1034,17 @@ export const FURNITURE_CELL_M = 500;
  */
 export const FURNITURE_IN_M = 350;
 export const FURNITURE_OUT_M = 400;
+/**
+ * The same band for flagpoles: a 7–30 m mast and its 2 m cloth against
+ * the sky still read where a bench is gone, so they come and go further
+ * out (348 masts in seven cities: their draw is nothing).
+ */
+export const FLAG_IN_M = 800;
+export const FLAG_OUT_M = 900;
+/** What a cell's band is: [in, out] (m). */
+type Reach = readonly [number, number];
+const FURNITURE_REACH: Reach = [FURNITURE_IN_M, FURNITURE_OUT_M];
+const FLAG_REACH: Reach = [FLAG_IN_M, FLAG_OUT_M];
 
 /** The pieces of each cell (by their site coordinates). */
 function byCell(stood: Stood[]): Stood[][] {
@@ -1060,13 +1059,20 @@ function byCell(stood: Stood[]): Stood[][] {
 }
 
 /** Marks a set as a cell's, with the box its pieces stand in (scene frame,
- *  a few metres for the pieces' own size). */
-function asCell(mesh: Instances, stood: Stood[]): Instances {
+ *  a few metres for the pieces' own size) and the band it shows in. */
+function asCell(
+  mesh: Instances,
+  stood: Stood[],
+  reach: Reach = FURNITURE_REACH
+): Instances {
   const box = new Box3();
   for (const s of stood) {
     box.expandByPoint(s.at);
   }
   mesh.userData.furnitureCell = box.expandByScalar(3);
+  if (reach !== FURNITURE_REACH) {
+    mesh.userData.furnitureReach = reach;
+  }
   return mesh;
 }
 
@@ -1091,7 +1097,9 @@ export function showFurnitureNear(
     let near = true;
     if (eye) {
       cellBox.copy(box).applyMatrix4(child.matrixWorld);
-      const reach = child.visible ? FURNITURE_OUT_M : FURNITURE_IN_M;
+      const [into, out] =
+        (child.userData.furnitureReach as Reach | undefined) ?? FURNITURE_REACH;
+      const reach = child.visible ? out : into;
       near = cellBox.distanceToPoint(eye) <= reach;
     }
     if (near !== child.visible) {
@@ -1144,10 +1152,6 @@ export function* furnitureSteps(
   if (byModel.size === 0 && areas.length === 0) {
     return group;
   }
-  const cloths = new Map<
-    NonNullable<FurniturePiece["design"]>,
-    BufferGeometry
-  >();
   for (const model of FURNITURE_MODELS) {
     const stood = byModel.get(model);
     const geo = stood ? modelGeometry(model) : null;
@@ -1159,12 +1163,14 @@ export function* furnitureSteps(
           cell,
           model === "columnLit" ? materials.glow() : materials.matte()
         );
-        group.add(asCell(mesh, cell));
+        group.add(
+          asCell(mesh, cell, model === "flag" ? FLAG_REACH : undefined)
+        );
         if (model === "clock" || model === "wallClock") {
           group.add(asCell(clockHands(model, cell), cell));
         }
         if (model === "flag") {
-          for (const flags of flagsOf(cell, cloths)) {
+          for (const flags of flagsOf(cell)) {
             group.add(flags);
           }
         }

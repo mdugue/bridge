@@ -34,7 +34,7 @@ import type {
   KerbFeature,
 } from "./features";
 import { SITES } from "../../sites";
-import { STRUCTURE_KINDS } from "./features";
+import { FLAG_DESIGNS, STRUCTURE_KINDS } from "./features";
 import type { WindowFile } from "./windows";
 import { tileExtentOf, tileIdOf } from "./site";
 import type { Site } from "./site";
@@ -239,7 +239,7 @@ test.each(cases)(
         expect(
           kind === "bin"
             ? ["blue", "green", "orange", "red", "yellow"]
-            : ["by", "de", "eu", "hh", "sn"]
+            : FLAG_DESIGNS
         ).toContain(f.properties.c);
       }
       if (f.properties?.src === "dom") {
