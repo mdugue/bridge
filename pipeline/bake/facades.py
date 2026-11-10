@@ -53,6 +53,7 @@ from __future__ import annotations
 import collections
 import concurrent.futures as cf
 import datetime
+import hashlib
 import json
 import math
 import os
@@ -352,7 +353,8 @@ def in_frame(wall: dict, photo: dict, xy, rot: np.ndarray) -> float:
         -1, 3
     )
     C = P @ rot.T
-    _, _, seen, _ = project(C, photo.get("width") or 4, photo.get("height") or 3, camera)
+    size = (photo.get("width"), photo.get("height"))
+    _, _, seen, _ = project(C, *(size if all(size) else (4, 3)), camera)
     return float(seen.mean())
 
 
@@ -805,26 +807,48 @@ def wall_key(w: dict) -> tuple[str, int, float]:
     return (w["oid"], w["wi"], round(w["L"], 2))
 
 
-def mark_complete(path: Path) -> None:
-    """Ends the glass cache with the line that says every photo its plan
-    picked was read (`complete`), unless it already does."""
-    if not complete(path):
+def plan_key(ws: list[dict]) -> str:
+    """What the glass plan depends on beyond the photos, hashed: the walls
+    (`wall_key`) and the planner's limits. A cache read through under
+    another — a new LoD2 edition, a changed limit — is not read through."""
+    what = (
+        (GLASS_NEAR_M, GLASS_IN_FRAME, GLASS_SEQ, MIN_DIST_M, MIN_COS, THUMB_PX),
+        sorted(wall_key(w) for w in ws),
+    )
+    return hashlib.sha256(repr(what).encode()).hexdigest()[:10]
+
+
+def mark_complete(path: Path, key: str) -> None:
+    """Ends the glass cache with the line that says every photo the plan
+    `key` picked was read (`complete`), unless it already does."""
+    lines = path.read_text().splitlines() if path.exists() else []
+    if not complete(lines, key):
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "a") as f:
-            f.write('{"complete":true}\n')
+        with _append(path) as f:
+            f.write(json.dumps({"complete": key}) + "\n")
 
 
-def complete(path: Path) -> bool:
-    """Whether a glass cache was read through: its last line says so — a
-    run killed or with failures since added image lines after it, or none
-    (`mark_complete`)."""
-    if not path.exists():
-        return False
-    lines = path.read_text().splitlines()
+def complete(lines: list[str], key: str) -> bool:
+    """Whether a glass cache's `lines` were read through under the plan
+    `key`: its last line says so — a run killed or with failures since added
+    image lines after it, or none (`mark_complete`)."""
     try:
-        return bool(lines) and json.loads(lines[-1]).get("complete") is True
-    except ValueError:
+        return bool(lines) and json.loads(lines[-1]).get("complete") == key
+    except (ValueError, AttributeError):
         return False
+
+
+def _append(path: Path):
+    """The cache opened to add lines, a line a killed run cut short ended
+    first (else the next record would join it, and both be lost)."""
+    if path.exists() and path.stat().st_size:
+        with open(path, "rb") as f:
+            f.seek(-1, os.SEEK_END)
+            cut = f.read(1) != b"\n"
+        if cut:
+            with open(path, "a") as f:
+                f.write("\n")
+    return open(path, "a")
 
 
 def _unread(job: dict, have: set[tuple[str, int, float]] | None) -> dict:
@@ -904,7 +928,7 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
     print(f"{tile.id}: {len(jobs)} {seen_by} see its walls, {len(todo)} to measure ({kind})")
     if not todo:
         if kind == "glass":
-            mark_complete(out)
+            mark_complete(out, plan_key(walls(city)))
         return
     if kind == "glass":
         from . import facade_glass
@@ -916,9 +940,10 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
     scratch.mkdir(parents=True, exist_ok=True)
     source = os.environ.get(SOURCE_ENV)
     counts = collections.Counter()
+    in_model = 0
     t0 = last = time.time()
     with (
-        open(out, "a") as f,
+        _append(out) as f,
         cf.ProcessPoolExecutor(
             _workers(kind),
             initializer=_init_worker,
@@ -945,6 +970,7 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
             for r in ex.map(measure_image, work, chunksize=1):
                 outcome = "fail" if "fail" in r else "skip" if "skip" in r else "measured"
                 counts[outcome] += 1
+                in_model += outcome == "fail" and r["fail"].startswith("model")
                 if outcome != "fail":
                     f.write(json.dumps(r, separators=(",", ":")) + "\n")
                     f.flush()
@@ -958,9 +984,12 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
     for leftover in scratch.glob("*.jpg"):
         leftover.unlink()
     if counts["fail"]:
-        print(f"{tile.id}: {counts['fail']} images failed on the network — rerun the fetch")
+        print(
+            f"{tile.id}: {counts['fail']} images failed ({in_model} of them in the "
+            f"model: memory, MAPILLARY_WORKERS), the rest on the network — rerun the fetch"
+        )
     elif kind == "glass":
-        mark_complete(out)
+        mark_complete(out, plan_key(walls(city)))
 
 
 def _records(path: Path) -> list[dict]:

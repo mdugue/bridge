@@ -194,30 +194,6 @@ describe("windowSpecs", () => {
     expect(d.spec.axis).toBe(TYPES[windowType(false, 15, d.storey)].axis);
   });
 
-  test("a wall read as glass gives no rhythm, to its own or another", () => {
-    const hosts = [
-      host({ root: 0 }),
-      host({ root: 0, centre: [5, 0] }),
-      host({ root: 2, centre: [NEAR_M - 5, 0] }),
-    ];
-    const glassy = {
-      ...measured("a", model({ axis: 3.4 })),
-      glass: { glass: true, n: 3, p: 980 },
-    };
-    // a glazed stair tower too short to make its house glass, or a front
-    // whose material OSM names: its mullions are no window rhythm
-    const [a, b, c] = windowSpecs(hosts, [glassy], index);
-    expect([a.from, b.from, c.from]).toEqual(["type", "type", "type"]);
-    // beside a stone wall, the stone wall's rhythm is its own, however
-    // much better the glass one was seen
-    const stone = { ...measured("a", model({ axis: 2.2 })), imgs: 1 };
-    const [mixed] = windowSpecs(hosts, [{ ...glassy, imgs: 9 }, stone], index);
-    expect(mixed.from).toBe("measured");
-    expect(mixed.spec.axis).toBeCloseTo(
-      windowSpecs(hosts, [stone], index)[0].spec.axis
-    );
-  });
-
   test("a neighbour lends its rhythm within NEAR_M only (G14)", () => {
     // 60 m off: the next block's, once lent from 150 m, now the type's
     const [, far] = windowSpecs(

@@ -661,11 +661,9 @@ export const NEAR_M = 30;
  *  (m, or this share of it). */
 const NEAR_EAVE = { m: 4, share: 0.35 } as const;
 
-/** The best-seen model on each object's measured walls (most images),
- *  of the walls the photos did not read as glass: a curtain wall's
- *  mullions are no window rhythm — not for its own object, which a glass
- *  wall too short to make it glass (`photoGlassObjects`) or a material OSM
- *  names keeps from drawing as glass, nor for another building. */
+/** The best-seen model on each object's measured walls (most images); a
+ *  wall the photos read as glass has none (windows.py: a curtain wall's
+ *  mullions are no window rhythm). */
 function measuredModels(
   walls: readonly WindowWall[],
   index: ReadonlyMap<string, number>
@@ -673,7 +671,7 @@ function measuredModels(
   const best = new Map<number, { imgs: number; m: FacadeModel }>();
   for (const w of walls) {
     const i = index.get(w.oid);
-    if (!w.model || i === undefined || w.glass?.glass) {
+    if (!w.model || i === undefined) {
       continue;
     }
     const have = best.get(i);

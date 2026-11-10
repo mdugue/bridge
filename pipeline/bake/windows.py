@@ -81,6 +81,7 @@ from .facades import (
     GLASS_SEQ,
     complete,
     glass_path,
+    plan_key,
     traits_path,
     wall_key,
     walls,
@@ -477,9 +478,9 @@ def glass_records(lines: list[str]) -> dict[tuple[str, int, float], list[int]]:
     """Per wall (`wall_key`) the glass readings (‰) of the photos that saw
     enough of it from near enough (`GLASS_NEAR_M`), one a sequence — its
     photo that saw most of the wall — so that two readings are two passes,
-    not two frames of one; of the GLASS_SEQ sequences that saw most of it,
-    as the fetch plans them (a cache read under an earlier plan may hold
-    more)."""
+    not two frames of one; of the GLASS_SEQ sequences that saw most of it
+    (a cache read under an earlier plan may hold more than the fetch now
+    picks)."""
     best: dict[tuple, tuple[float, int]] = {}
     for line in lines:
         try:
@@ -561,9 +562,10 @@ def windows(
         }
         if gl is not None:
             entry["glass"] = gl
-        # a glass wall keeps its model for the record: no building takes
-        # its mullions for a rhythm (lib/city/windows.ts `measuredModels`)
-        if seqs and (m := model(traits, axis_agrees(seqs))) is not None:
+        # a glass wall has no model: its mullions are no window rhythm, for
+        # its own building, another's windows or the dormers over it
+        glazed = gl is not None and gl["glass"]
+        if seqs and not glazed and (m := model(traits, axis_agrees(seqs))) is not None:
             if (at := wall_phase(recs, m["axis"])) is not None:
                 m["phase"] = at["phase"]
                 entry["drives"] = at["drives"]
@@ -605,23 +607,32 @@ def _had_glass(out: Path) -> bool:
 def run(tile: Tile) -> None:
     out = tile.out("dlm", f"windows_{tile.id}.json")
     path, gpath = traits_path(tile), glass_path(tile)
-    if tile.mapillary and not complete(gpath) and _had_glass(out):
-        # none read, read in part, or under other prompts, model or limits
-        # (facade_glass.reading_key): baking on would drop glass fronts the
-        # committed file holds
-        raise SystemExit(
-            f"{tile.id}: {out.name} holds glass fronts but {gpath.name} is missing or "
-            f"not read through — run the glass fetch before baking the windows"
-        )
-    glass = glass_records(gpath.read_text().splitlines()) if gpath.exists() else {}
-    if not tile.mapillary or not (path.exists() or glass):
-        if tile.mapillary:
-            print(f"{tile.id}: no facade traits measured — no wall gets windows")
+    if not tile.mapillary:
         write(out, {}, {})
         return
     city = json.loads(tile.cityjson.read_text())
-    by_wall = _records(path) if path.exists() else {}
     ws = walls(city)
+    lines = gpath.read_text().splitlines() if gpath.exists() else []
+    # baking on a cache read in part, for other walls or limits (plan_key),
+    # or none where the file holds glass fronts would drop some of them
+    if lines and not complete(lines, plan_key(ws)):
+        raise SystemExit(
+            f"{tile.id}: {gpath.name} is not read through for these walls — "
+            f"run the glass fetch before baking the windows"
+        )
+    if not lines and _had_glass(out):
+        # none read, or under other prompts, model or limits
+        # (facade_glass.reading_key)
+        raise SystemExit(
+            f"{tile.id}: {out.name} holds glass fronts but there is no {gpath.name} — "
+            f"run the glass fetch before baking the windows"
+        )
+    glass = glass_records(lines)
+    if not (path.exists() or glass):
+        print(f"{tile.id}: no facade traits measured — no wall gets windows")
+        write(out, {}, {})
+        return
+    by_wall = _records(path) if path.exists() else {}
     buildings, reliability = windows(city, by_wall, _Raster(tile.dgm), glass, ws)
     write(out, buildings, reliability, outer_lengths(ws, buildings))
     n_walls = sum(len(v) for v in buildings.values())

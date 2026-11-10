@@ -1815,20 +1815,19 @@ visual-variable codebook is in
   the two walls alone). The cache is `<t>.glass.<key>.jsonl`, named by a
   hash of the prompts, the model, the crop's limits and the
   rectification's, and ends with a line saying every photo its plan
-  picked was read (where the cache under the current key is missing or
-  not read through, the windows bake stops rather than drop the glass
-  fronts its file holds; a wall planned later on a photo already read, or
+  picked was read, for the walls and planner limits it was planned for
+  (`plan_key`; where the cache is not read through, or is missing and the
+  file holds glass fronts, the windows bake stops rather than drop them; a wall planned later on a photo already read, or
   numbered anew by a new LoD2 edition — a wall is its object, number and
   length —, is read at the next fetch); the photo is deleted.
   `windows.py` keeps one reading a sequence (the photo that saw most of
   the wall), of the four sequences that saw most, and calls a wall glass
   where at least two such readings exist and two thirds of them reach 0.95 (`wall_glass`; at 0.9 metal
   cladding, ribbon-window blocks and a plastered house with balconies came
-  through); the wall keeps its window model in the file, for the record,
-  but it is no rhythm for any building (`windowSpecs`: a curtain wall's
-  mullions are none for the stone wing, the house next door, or its own
-  house where a glazed stair tower too short to make it glass or a
-  material OSM names keeps it from drawing as glass). A Brown
+  through); the wall gets no window model: a curtain wall's mullions are
+  no rhythm for the stone wing, the house next door, the dormers over it,
+  or its own house where a glazed stair tower too short to make it glass
+  or a material OSM names keeps it from drawing as glass. A Brown
   camera's parameters are OpenSfM's (fx, fy, cx, cy, k1, k2, …): its focal
   and radial terms are read from there; a framed photo's frame is its own
   shape where Mapillary gives it. A photo the model could not read in

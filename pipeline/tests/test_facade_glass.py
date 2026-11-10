@@ -36,6 +36,10 @@ def test_a_brown_camera_reads_its_focal_and_radial_terms_in_opensfm_order():
     brown = {"type": "brown", "params": [0.8, 0.79, 0.01, -0.01, 0.05, -0.02, 0.001, 0.001, 0.0]}
     plain = {"type": "perspective", "params": [0.8, 0.05, -0.02]}
     assert project(C, 2000, 1500, brown)[0] == pytest.approx(project(C, 2000, 1500, plain)[0])
+    # without its radial terms: no distortion, never fy taken for k1
+    short = {"type": "brown", "params": [0.8, 0.79, 0.01, -0.01]}
+    flat = {"type": "perspective", "params": [0.8, 0.0, 0.0]}
+    assert project(C, 2000, 1500, short)[0] == pytest.approx(project(C, 2000, 1500, flat)[0])
 
 
 def test_a_fisheye_bends_by_the_angle():
@@ -243,14 +247,20 @@ def test_a_photo_read_is_read_again_only_for_a_wall_planned_since(tmp_path):
 
 def test_a_glass_cache_is_read_through_when_its_last_line_says_so(tmp_path):
     cache = tmp_path / "c.jsonl"
-    assert not facades.complete(cache)
-    facades.mark_complete(cache)  # a plan with nothing to read
-    assert facades.complete(cache)
-    facades.mark_complete(cache)
+    lines = lambda: cache.read_text().splitlines()  # noqa: E731
+    assert not facades.complete([], "k")
+    facades.mark_complete(cache, "k")  # a plan with nothing to read
+    assert facades.complete(lines(), "k")
+    facades.mark_complete(cache, "k")
     assert cache.read_text().count("complete") == 1
-    with open(cache, "a") as f:  # a later run, killed or failing
-        f.write(json.dumps({"img": "p", "seq": "s", "walls": []}) + "\n")
-    assert not facades.complete(cache)
+    # read through for other walls or limits is not read through
+    assert not facades.complete(lines(), "other")
+    with open(cache, "a") as f:  # a later run, killed mid-line
+        f.write('{"img": "p", "seq"')
+    assert not facades.complete(lines(), "k")
+    with facades._append(cache) as f:  # the next run's line stands on its own
+        f.write(json.dumps({"img": "q", "seq": "s", "walls": []}) + "\n")
+    assert json.loads(lines()[-1])["img"] == "q"
 
 
 def test_a_crop_the_model_cannot_read_is_not_the_photos_fault(monkeypatch):
@@ -279,3 +289,21 @@ def test_a_wall_seen_only_for_glass_enters_with_its_glass_alone():
     assert all(e["imgs"] == 0 and e["traits"] == {} for e in entries)
     # the hall's glass is weighed against all its outer walls
     assert win.outer_lengths(ws, buildings) == {entries[0]["oid"]: 100.0}
+
+
+def test_a_glass_wall_has_no_window_model(monkeypatch):
+    from tests.synthetic import blocks_city
+
+    city = blocks_city({"hall": (0, 0, 30, 20, 15.0)})
+    ws = facades.walls(city)
+    # every wall measured with a clear window rhythm by the panoramas
+    monkeypatch.setattr(win, "by_sequence", lambda recs: {"s": recs})
+    monkeypatch.setattr(win, "wall_traits", lambda seqs: {})
+    monkeypatch.setattr(win, "axis_agrees", lambda seqs: True)
+    monkeypatch.setattr(win, "model", lambda *_: {"axis": 3.0, "grid": "regular"})
+    monkeypatch.setattr(win, "wall_phase", lambda *_: None)
+    by_wall = {(w["oid"], w["wi"]): [{"seq": "s"}] for w in ws}
+    glass = {facades.wall_key(ws[0]): [980, 960]}
+    entries = win.windows(city, by_wall, None, glass)[0]["hall-root"]
+    # the curtain wall's mullions are no rhythm: for no building, no dormer
+    assert ["model" in e for e in entries] == [False, True, True, True]

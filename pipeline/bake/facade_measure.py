@@ -205,10 +205,11 @@ def project(C: np.ndarray, wd: int, h: int, camera: dict | None = None):
         v = (0.5 - lat / np.pi) * h
         return u, v, np.ones(u.shape, bool), 2 * np.pi / wd
     params = list(camera.get("params") or [])
-    if kind == "brown" and len(params) >= 6:
+    if kind == "brown":
         # OpenSfM's Brown: fx, fy, cx, cy, k1, k2, p1, p2, k3 (the
-        # principal point's offset and the tangential terms left out)
-        params = [params[0], params[4], params[5]]
+        # principal point's offset and the tangential terms left out); one
+        # given without its radial terms is taken without distortion
+        params = [params[0], params[4], params[5]] if len(params) >= 6 else params[:1]
     f, k1, k2 = (params + [0.0, 0.0, 0.0])[:3]
     if not f:
         f = 0.85
