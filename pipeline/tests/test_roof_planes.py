@@ -7,6 +7,7 @@ from bake.roof_planes import (
     CREASE_REACH,
     FLANK_TOL_M,
     PLANE_TOL_M,
+    _flank_plane,
     _join_flanks,
     _share_axes,
     creases,
@@ -200,3 +201,31 @@ def test_a_crease_moves_no_cell_far_from_where_the_two_flanks_meet():
     assert (out[:, :20] == 1).all() and (out[:, far:] == 2).all()
     # near it, the crease runs where the planes cross
     assert (out[30:, 20 : far - 1] == 1).all()
+
+
+def test_two_flanks_a_pass_made_neighbours_meet_where_their_planes_cross():
+    # a valley (z = 20 − c/2 and z = c/2, crossing at column 20) with a
+    # level gutter between them in the scan's labels: the first pass gives
+    # the gutter to one flank; the two never touched in the scan, and still
+    # meet at the valley, not a step where the gutter ended
+    lab = np.zeros((20, 40), np.int64)
+    lab[:, :16], lab[:, 16:24], lab[:, 24:] = 1, 3, 2
+    planes = {
+        1: np.array([20.0, -0.5, 0.0]),
+        2: np.array([0.0, 0.5, 0.0]),
+        3: np.array([8.0, 0.0, 0.0]),
+    }
+    out = creases(lab, planes, np.ones(lab.shape, bool))
+    assert (out[:, :20] == 1).all() and (out[:, 20:] == 2).all()
+
+
+def test_a_vaults_half_sags_a_flank_does_not():
+    rows, cols = np.indices((20, 12))
+    every = np.ones((20, 12), bool)
+    # a quarter circle of 6 m radius over 6 m, its crown at column 0
+    t = np.clip(cols / 2 + 0.25, 0, 6)
+    vault = np.sqrt(np.maximum(36 - t**2, 0.0)) + 10
+    assert bool(_flank_plane(vault, every, np.pi)[1])
+    # a pitched flank with dormers standing on it: straight
+    flank = 15 - 0.6 * cols + np.where((rows % 6 < 2) & (cols > 3) & (cols < 7), 1.5, 0.0)
+    assert not bool(_flank_plane(flank, every, np.pi)[1])

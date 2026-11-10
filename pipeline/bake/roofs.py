@@ -350,12 +350,7 @@ def _region_medians(lab: np.ndarray, h: np.ndarray, n: int) -> np.ndarray:
 
 
 def _adjacency(lab: np.ndarray) -> set[tuple[int, int]]:
-    pairs = set()
-    for a, b in ((lab[:, :-1], lab[:, 1:]), (lab[:-1, :], lab[1:, :])):
-        m = (a != b) & (a > 0) & (b > 0)
-        for x, y in zip(a[m].tolist(), b[m].tolist(), strict=True):
-            pairs.add((min(x, y), max(x, y)))
-    return pairs
+    return set(roof_planes.label_borders(lab))
 
 
 def _relabel(lab: np.ndarray, roots: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -585,17 +580,19 @@ def _plausible_faces(h, lab, faces, face, landmark, flank_only):
     return surface, implausible, gables
 
 
-def _straight_eaves(h, lab, faces, surface, gables) -> None:
+def _straight_eaves(h, lab, faces, surface, gables, small_cells: int) -> None:
     """A face drawn as flanks ends where its flanks reach their eaves: the
     cells of a level well below an eave (EAVE_WALL_M, a courtyard's roof)
     that the flank's plane still stands over join the face, within
     EAVE_REACH of it, and the face's cells past the eave where the scan
     lies on that level go to it — the wall between them runs along the
     eave's level line, not along the scan's blur. A step below the eave
-    the scan shows (a terrace, a mansard's foot) stays the face's. In
-    place."""
-    level = np.concatenate([[np.nan], _region_medians(lab, h, int(lab.max()))])
+    the scan shows (a terrace, a mansard's foot) stays the face's; so does
+    a level that would be left smaller than `small_cells` or narrower than
+    NARROW_M (`_kept_whole`). In place, each gable on the levels as the
+    gables before it left them."""
     for rid, (win, fit, eave) in gables.items():
+        level = np.concatenate([[np.nan], _region_medians(lab, h, int(lab.max()))])
         sub, top, scan = lab[win], surface[win], h[win]
         mine = sub == rid
         isface = faces[sub] & (sub > 0)
@@ -604,6 +601,7 @@ def _straight_eaves(h, lab, faces, surface, gables) -> None:
             reach = fit >= eave
         take = lower & reach & ndi.binary_dilation(mine, iterations=EAVE_REACH)
         take &= _downhill(fit, mine)
+        take &= ~np.isin(sub, _kept_whole(lab, win, take, small_cells))
         give = mine & np.isfinite(eave) & ~reach
         give &= ndi.binary_dilation(lower, iterations=EAVE_REACH)
         if give.any():
@@ -612,6 +610,22 @@ def _straight_eaves(h, lab, faces, surface, gables) -> None:
             sub[give] = to[give]
         sub[take] = rid
         top[take] = fit[take]
+
+
+def _kept_whole(lab: np.ndarray, win, take: np.ndarray, small_cells: int) -> list[int]:
+    """The regions `take` (over the window `win`) would leave smaller than
+    `small_cells` or narrower than NARROW_M where they were not: a strip
+    between two wings' eaves would stand as a box between their walls."""
+    kept = []
+    for r in np.unique(lab[win][take]):
+        region = lab == r
+        rest = region.copy()
+        rest[win] &= ~take
+        n = int(rest.sum())
+        thin = _narrow(rest.astype(np.int64), 1)[0] and not _narrow(region.astype(np.int64), 1)[0]
+        if n < small_cells or thin:
+            kept.append(int(r))
+    return kept
 
 
 def _downhill(fit: np.ndarray, mine: np.ndarray) -> np.ndarray:
@@ -635,23 +649,19 @@ def measured_model(
     with_faces: bool = True,
     narrow: bool = True,
     landmark: bool = False,
+    cells: tuple[np.ndarray, np.ndarray] | None = None,
 ) -> Model | None:
     """The roof over `own` cells: flat levels and (unless `with_faces` is
     off, the flat model) the measured faces; with them, unless `narrow` is
-    off, no part narrower than NARROW_M."""
+    off, no part narrower than NARROW_M. `cells`: the faces' cells
+    (`face_cells`) when already found."""
     known = roof & ~green & np.isfinite(dom)
     if known.sum() < small_cells:
         return None
     h = scan_surface(dom, known)
-    face = flank_only = np.zeros_like(own)
+    face, flank_only = np.zeros_like(own), np.zeros_like(own)
     if with_faces:
-        step = step_cells(h)
-        sloped = inclined_cells(h, own) | roof_planes.planar_faces(h, own, step, SLOPE, RES)
-        flanks = roof_planes.flank_cells(h, own, step, SLOPE, RES)
-        # the ridge between two flanks is level for a cell or two
-        found = sloped | flanks
-        face = (ndi.binary_closing(found, structure=np.ones((3, 3), bool)) | found) & own & ~step
-        flank_only = flanks & ~sloped
+        face, flank_only = (c.copy() for c in cells) if cells else _face_cells(h, own)
     for rounds in range(PLAUSIBLE_ROUNDS + 1):
         lab, faces = _regions(h, own, face, small_cells, with_faces, narrow)
         surface, implausible, gables = _plausible_faces(h, lab, faces, face, landmark, flank_only)
@@ -663,9 +673,28 @@ def measured_model(
             break
         # a face the scan shows no roof's shape on goes back to the levels
         face &= ~np.isin(lab, implausible)
-    _straight_eaves(h, lab, faces, surface, {k: v for k, v in gables.items() if faces[k]})
+    drawn = {k: v for k, v in gables.items() if faces[k]}
+    _straight_eaves(h, lab, faces, surface, drawn, small_cells)
     level = _region_medians(lab, h, int(lab.max()))
     return Model(lab, level, faces, surface)
+
+
+def face_cells(
+    dom: np.ndarray, own: np.ndarray, roof: np.ndarray, green: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """The cells `measured_model` draws as faces over `own`, and those only
+    the flank rule found (`_face_cells`), on the scan over `roof`."""
+    return _face_cells(scan_surface(dom, roof & ~green & np.isfinite(dom)), own)
+
+
+def _face_cells(h: np.ndarray, own: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    step = step_cells(h)
+    sloped = inclined_cells(h, own) | roof_planes.planar_faces(h, own, step, SLOPE, RES)
+    flanks = roof_planes.flank_cells(h, own, step, SLOPE, RES)
+    # the ridge between two flanks is level for a cell or two
+    found = sloped | flanks
+    face = (ndi.binary_closing(found, structure=np.ones((3, 3), bool)) | found) & own & ~step
+    return face, flanks & ~sloped
 
 
 def extend_face(surface: np.ndarray, mine: np.ndarray) -> np.ndarray:
@@ -959,29 +988,27 @@ def _retiled(polys: list, order: list[int], footprint, walls: Walls) -> list:
     rank = {i: n for n, i in enumerate(order)}
     # each old part's share of the gaps on its own: a gap strip running
     # along several borders is several gaps
+    near = {i: shapely.buffer(out[i], 3 * g) for i in rank if not out[i].is_empty}
     for i in order:
         share = _polygonal(shapely.intersection(left, polys[i], grid_size=g))
         for piece in shapely.get_parts(share):
-            k = _gap_owner(piece, out, rank, i)
+            k = _gap_owner(piece, near, rank, i)
             out[k] = _polygonal(shapely.union(out[k], piece, grid_size=g))
+            near[k] = shapely.buffer(out[k], 3 * g)
         left = _polygonal(shapely.difference(left, share, grid_size=g))
     return out
 
 
-def _gap_owner(piece, out: list, rank: dict, old: int) -> int:
+def _gap_owner(piece, near: dict, rank: dict, old: int) -> int:
     """Which part a gap the regularised outlines left takes: the lowest of
     the parts it lies beside along GAP_TOUCH_M or more (and a quarter of
     its longest contact) — between a higher roof's straight wall and a
     lower one's the lower runs on up to that wall, not back to the scan's
-    wavy border — else `old`, whose outline held it."""
-    # the gap's outline within a few grid steps of the part (on the
-    # centimetre grid the two seldom share a line exactly)
+    wavy border — else `old`, whose outline held it. `near`: each
+    non-empty part grown by a few grid steps (on the centimetre grid a gap
+    and a part seldom share a line exactly)."""
     edge = piece.boundary
-    touch = {
-        i: shapely.length(shapely.intersection(edge, shapely.buffer(out[i], 3 * TILE_GRID_M)))
-        for i in rank
-        if not out[i].is_empty
-    }
+    touch = {i: shapely.length(shapely.intersection(edge, q)) for i, q in near.items()}
     least = max(GAP_TOUCH_M, 0.25 * max(touch.values(), default=0.0))
     beside = [i for i, n in touch.items() if n >= least]
     return max(beside, key=rank.get) if beside else old
@@ -996,23 +1023,35 @@ def clean_cover(polys: list) -> list:
     apart, each a wall and a vertex more in the mesh, gone."""
     if len(polys) < 2:
         return polys
+    try:
+        cover = _noded_cover(polys)
+    except shapely.errors.GEOSException:
+        # as in `regular_cover`: an overlay GEOS cannot settle, the parts as tiled
+        return polys
+    if cover is None or not shapely.coverage_is_valid(cover):
+        return polys
+    return list(shapely.coverage_simplify(cover, CLEAN_M, simplify_boundary=False))
+
+
+def _noded_cover(polys: list) -> np.ndarray | None:
+    """`clean_cover`'s coverage before its simplification: the parts'
+    borders noded, each face to the part holding it, a small one none
+    holds to the part along most of its outline."""
     lines = shapely.union_all([shapely.boundary(p) for p in polys if not p.is_empty])
     faces = np.asarray(shapely.get_parts(shapely.polygonize(shapely.get_parts(lines))))
     if not len(faces):
-        return polys
+        return None
     inner = shapely.point_on_surface(faces)
     owner = np.full(len(faces), -1)
     for i, p in enumerate(polys):
         owner[(owner < 0) & shapely.contains(p, inner)] = i
-    for f in np.flatnonzero((owner < 0) & (shapely.area(faces) < GAP_FACE_M2)):
-        edge = faces[f].boundary
-        near = [shapely.buffer(p, TILE_GRID_M) for p in polys]
-        owner[f] = int(np.argmax([shapely.length(shapely.intersection(edge, q)) for q in near]))
-    parts = [_polygonal(shapely.union_all(faces[owner == i])) for i in range(len(polys))]
-    cover = np.asarray(parts)
-    if not shapely.coverage_is_valid(cover):
-        return polys
-    return list(shapely.coverage_simplify(cover, CLEAN_M, simplify_boundary=False))
+    slivers = np.flatnonzero((owner < 0) & (shapely.area(faces) < GAP_FACE_M2))
+    if len(slivers):
+        near = shapely.buffer(np.asarray(polys), TILE_GRID_M)
+        for f in slivers:
+            touch = shapely.length(shapely.intersection(faces[f].boundary, near))
+            owner[f] = int(np.argmax(touch))
+    return np.asarray([_polygonal(shapely.union_all(faces[owner == i])) for i in range(len(polys))])
 
 
 def region_polygons(
@@ -1155,7 +1194,8 @@ def rebuild(area: Area, obj: LodObject) -> Rebuilt | None:
     if miss_model > KEEP_SHARE or miss_model > miss_lod2 / 2:
         return None
     landmark = obj.id in area.landmarks
-    model = measured_model(dom, own, inner, green, small, landmark=landmark)
+    cells = face_cells(dom, own, inner, green)
+    model = measured_model(dom, own, inner, green, small, landmark=landmark, cells=cells)
     if model is None:
         return None
 
@@ -1168,7 +1208,9 @@ def rebuild(area: Area, obj: LodObject) -> Rebuilt | None:
         return drawn > KEEP_SHARE or drawn > miss_lod2 / 2
 
     if misses(model):
-        model = measured_model(dom, own, inner, green, small, narrow=False, landmark=landmark)
+        model = measured_model(
+            dom, own, inner, green, small, narrow=False, landmark=landmark, cells=cells
+        )
         # the faces' own merges may still miss more: then the flat model,
         # which met the bar, is drawn (a LoD2 off on 88 % stays no better)
         if model is None or misses(model):

@@ -681,3 +681,23 @@ def test_a_rebuilt_roof_holds_its_dormers_on_its_own_parts_not_the_lod2_faces():
     chimney = {"of": 0, "x": 5.0, "y": 6.0, "z": 12.0, "top": 10.0, "k": "chimney"}
     dormers.on_planes([d, chimney], planes)
     assert d["z"] == 9.0 and chimney["z"] == 9.0
+
+
+def test_a_dormer_beside_a_rebuilt_ridge_reads_its_flanks_pitch():
+    # a rebuilt gable rising 0.5 m/m to its ridge at x = 5, falling beyond
+    cols = 10
+    xs = np.arange(cols) + 0.5
+    face = np.tile(10.0 - 0.5 * np.abs(xs - 5.0), (4, 1))
+    surface = {
+        "x": 0.0,
+        "y": 4.0,
+        "res": 1.0,
+        "cols": cols,
+        "rows": 4,
+        "dz": np.round((face - 8.0) * 100).astype(int).ravel().tolist(),
+    }
+    part = dormers.MeasuredPart(shapely.box(0, 0, 10, 4), 8.0, surface)
+    # the cells either side of x = 5.5 lie on opposite flanks
+    for x in (4.5, 5.5):
+        _, slope = part.at(x, 2.0)
+        assert abs(slope - math.degrees(math.atan(0.5))) < 1e-6

@@ -94,7 +94,7 @@ import shapely
 from rasterio.enums import Resampling
 from rasterio.transform import from_origin
 from rasterio.warp import reproject
-from scipy.ndimage import distance_transform_edt
+from scipy.ndimage import distance_transform_edt, map_coordinates
 
 from . import glo30
 from .common import Tile, overlaps, save_grey_png
@@ -300,7 +300,11 @@ def face_triangles(poly: shapely.Geometry, surface: dict, z: float) -> np.ndarra
 
     p00, p01, p10, p11 = corner(0, 0), corner(0, 1), corner(1, 0), corner(1, 1)
     out = [np.stack([p00, p01, p11], axis=1), np.stack([p00, p11, p10], axis=1)]
-    out.append(_clipped_squares(poly, a, xs, ys, res, ~full))
+    # the others within the outline's bounds
+    x0, y0, x1, y1 = poly.bounds
+    cols = (xs[1:] >= x0) & (xs[:-1] <= x1)
+    rows = (ys[:-1] >= y0) & (ys[1:] <= y1)
+    out.append(_clipped_squares(poly, a, xs, ys, res, ~full & rows[:, None] & cols[None, :]))
     return np.concatenate(out)
 
 
@@ -321,16 +325,11 @@ def _clipped_squares(poly, a, xs, ys, res, candidates) -> np.ndarray:
     triangulated = shapely.constrained_delaunay_triangles(pieces)
     tris, back = shapely.get_parts(triangulated, return_index=True)
     xy = shapely.get_coordinates(tris).reshape(len(tris), 4, 2)[:, :3]
-    rr, cc = r[at[back]][:, None], c[at[back]][:, None]
-    u = (xy[..., 0] - xs[cc]) / res
-    v = (ys[rr] - xy[..., 1]) / res
-    zz = (
-        a[rr, cc] * (1 - u) * (1 - v)
-        + a[rr, cc + 1] * u * (1 - v)
-        + a[rr + 1, cc] * (1 - u) * v
-        + a[rr + 1, cc + 1] * u * v
-    )
-    return np.concatenate([xy, zz[..., None]], axis=2)
+    # the grid's own coordinates (cell centres at whole numbers), bilinear
+    fc = (xy[..., 0] - xs[0]) / res
+    fr = (ys[0] - xy[..., 1]) / res
+    zz = map_coordinates(a, [fr.ravel(), fc.ravel()], order=1, mode="nearest")
+    return np.concatenate([xy, zz.reshape(fr.shape)[..., None]], axis=2)
 
 
 def measured_triangles(path: Path) -> tuple[set[str], np.ndarray]:

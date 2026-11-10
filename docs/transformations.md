@@ -961,11 +961,12 @@ visual-variable codebook is in
   cell more than `VOID_M` = 1 m below the LoD2 roof under it is no
   surface (the laser saw through a sound opening, glass or dark slate)
   and is filled from the nearest measured cell (`fill_voids`) before the
-  excess is taken — unless such cells cover more than half the footprint
-  (`VOID_SHARE`, since 2026-11-10): there the LoD2 roof stands too high
-  or spans an open bowl, and the fill lifted the Leipzig opera's hall onto
-  its low wing and the trees around the Freilichtbühne in the Großer
-  Garten over its seats. The case: Unna's Evangelische Stadtkirche — LoD2 draws
+  excess is taken — each connected void on its own, unless it spans more
+  than half the LoD2 roof's cells (`roof_holes`, `VOID_SHARE`, since
+  2026-11-10): there the LoD2 roof stands too high or spans an open bowl,
+  and the fill lifted the Leipzig opera's hall onto its low wing and the
+  trees around the Freilichtbühne in the Großer Garten over its seats; a
+  tower's sound openings beside it are still filled. The case: Unna's Evangelische Stadtkirche — LoD2 draws
   the church as one gabled block (ridge ≈ 137 m, eaves ≈ 122 m), the west
   tower (walls ≈ 147 m, spire ≈ 187 m) is only in DOM1; the relief used to
   hover at the ridge height with its walls ending in the air beside the
@@ -1107,8 +1108,9 @@ visual-variable codebook is in
   stepping, stay where the scan put them. The flanks are the face when, judged a cell in from its edge
   (the eave's blur), 85 % of its cells (a landmark's 95 %) lie within
   0.5 m of their plane or under a blob of ≤ 30 m² up to 3 m over it, 60 %
-  on it; no flank sags (> 0.5 m off its line over the middle of its fall:
-  a vault's half); the flanks hold ≥ 40 % of the face and turn `orderly`;
+  on it; no flank sags (a parabola through its strips' median heights
+  rising > 0.5 m over its chord across the middle 70 % of its fall: a
+  vault's half); the flanks hold ≥ 40 % of the face and turn `orderly`;
   and flanks holding ≥ 70 % of their cells rise from an eave — their
   lowest 30 % of cells lie along the face's edge and face into it within
   25° (`_eave`; a blanket's patches rise from wherever the scan dips: none
@@ -1122,7 +1124,9 @@ visual-variable codebook is in
   and the face's cells past the eave go to the level where the scan lies
   on that level (within 1 m; a terrace the scan shows on the roof stays
   roof), so the wall between them runs along the eave instead of the
-  scan's blur. An der
+  scan's blur — unless the level would be left smaller than a part or
+  narrower than 7 m (`NARROW_M`, a strip between two wings standing as a
+  box), which then keeps its cells. An der
   Frauenkirche 5's ring is now 16 flanks meeting at hips; the block at
   Schloßstraße and Sporergasse 23 flanks, the scan within 0.5 m of the
   drawn roof on 70 % of its cells (35 % with the planes first). A face most of whose cells only the

@@ -603,6 +603,12 @@ def roof_faces(city: dict, oid: str) -> list[tuple[float, float, float, float, s
     return out
 
 
+def _steeper(before: float, here: float, after: float) -> float:
+    """The steeper of the two one-cell steps through `here`."""
+    back, ahead = here - before, after - here
+    return float(back if abs(back) >= abs(ahead) else ahead)
+
+
 class MeasuredPart:
     """One part of a roof rebuilt from DOM1 (roofs.py): its plan, and its
     height — flat at `z`, or a face's surface grid (cell centres)."""
@@ -617,19 +623,21 @@ class MeasuredPart:
 
     def at(self, x: float, y: float) -> tuple[float, float]:
         """The part's height at (x, y) and its slope there (degrees): a
-        face's grid read between its cells, its slope over the cells
-        either side."""
+        face's grid read between its cells, its slope per axis the steeper
+        of the steps to the cells either side — beside a ridge or a valley
+        of the rebuilt surface the two lie on opposite flanks, and their
+        mean would read the flank as level."""
         if self.grid is None:
             return self.z, 0.0
         g = self.grid
         fr = (self.y0 - y) / self.res - 0.5
         fc = (x - self.x0) / self.res - 0.5
         z = float(map_coordinates(g, [[fr], [fc]], order=1, mode="nearest")[0])
-        r = int(np.clip(round(fr), 1, g.shape[0] - 2)) if g.shape[0] > 2 else 0
-        c = int(np.clip(round(fc), 1, g.shape[1] - 2)) if g.shape[1] > 2 else 0
-        sx = (g[r, min(c + 1, g.shape[1] - 1)] - g[r, max(c - 1, 0)]) / (2 * self.res)
-        sy = (g[min(r + 1, g.shape[0] - 1), c] - g[max(r - 1, 0), c]) / (2 * self.res)
-        return z, math.degrees(math.atan(math.hypot(sx, sy)))
+        r = int(np.clip(round(fr), 0, g.shape[0] - 1))
+        c = int(np.clip(round(fc), 0, g.shape[1] - 1))
+        sx = _steeper(g[r, max(c - 1, 0)], g[r, c], g[r, min(c + 1, g.shape[1] - 1)])
+        sy = _steeper(g[max(r - 1, 0), c], g[r, c], g[min(r + 1, g.shape[0] - 1), c])
+        return z, math.degrees(math.atan(math.hypot(sx, sy) / self.res))
 
     def top(self) -> float:
         """Its highest point inside its plan."""

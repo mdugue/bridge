@@ -733,3 +733,12 @@ def test_a_bridge_slab_the_mesh_leaves_out_is_never_matched():
     }
     ids, _ = landmarks.drawn_footprints(city)
     assert ids == ["house"]
+
+
+def test_a_hole_in_a_landmarks_roof_is_filled_a_roof_drawn_too_high_is_not():
+    roofed = np.ones((20, 20), bool)
+    void = np.zeros((20, 20), bool)
+    void[2:4, 2:4] = True  # a sound opening
+    void[8:, :] = True  # the low wing, under a roof LoD2 drew too high
+    out = structures.roof_holes(void, roofed)
+    assert out[2:4, 2:4].all() and not out[8:, :].any()

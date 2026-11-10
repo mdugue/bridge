@@ -267,6 +267,14 @@ def _profile(u: np.ndarray, z: np.ndarray, bins: int) -> np.ndarray:
     return out
 
 
+def _strips(t: np.ndarray, z: np.ndarray) -> tuple[np.ndarray, np.ndarray, float]:
+    """The median of `z` per metre-wide strip across `t` (`_profile`), the
+    cells in each strip and where the first strip starts along `t`."""
+    t0 = float(t.min())
+    k = np.floor(t - t0).astype(np.int64)
+    return _profile(t - t0, z, int(k.max()) + 1), np.bincount(k), t0
+
+
 def curved_surface(h: np.ndarray, mine: np.ndarray, res: float = 1.0) -> np.ndarray | None:
     """The face as one extruded profile — a vault, a barrel, a shed's
     curve: the height a function of the distance across one axis, the same
@@ -443,10 +451,8 @@ def _cut(h: np.ndarray, sel: np.ndarray, phi: float, min_cells: float) -> float 
     plane, _ = _flank_plane(h, sel, phi)
     off = h[rows, cols] - _on(plane, rows, cols)
     along = -cols * np.sin(phi) + rows * np.cos(phi)
-    along = along - along.min()
-    k = np.floor(along).astype(np.int64)
-    prof = _profile(along, off, int(k.max()) + 1)
-    n = np.bincount(k).astype(np.float64)
+    prof, n, t0 = _strips(along, off)
+    n = n.astype(np.float64)
     good = np.flatnonzero(np.isfinite(prof) & (n > 0))
     if len(good) < 2:
         return None
@@ -459,7 +465,7 @@ def _cut(h: np.ndarray, sel: np.ndarray, phi: float, min_cells: float) -> float 
     if gain[j] < 0:
         return None
     # along the flank, from where it was measured
-    return float(good[j + 1] + (-cols * np.sin(phi) + rows * np.cos(phi)).min())
+    return float(good[j + 1] + t0)
 
 
 def _sections(h, sel, aspect, weight, min_cells, res, depth=0) -> list[np.ndarray]:
@@ -468,13 +474,18 @@ def _sections(h, sel, aspect, weight, min_cells, res, depth=0) -> list[np.ndarra
     cut in two along its length (`_cut`), and each part again, where the
     sections fit their own planes better (SECTION_GAIN more of the cells)
     than the flank its one plane."""
+    return [p for p, _ in _fitted_sections(h, sel, aspect, weight, min_cells, res, depth)]
+
+
+def _fitted_sections(h, sel, aspect, weight, min_cells, res, depth):
+    """`_sections`, each with the share of it its plane explains (`_fits`)."""
     phi = _direction(aspect[sel], weight[sel])
     whole = _fits(h, sel, phi, res)
     if depth >= SECTION_DEPTH or sel.sum() < 2 * min_cells or whole >= SECTION_FIT:
-        return [sel]
+        return [(sel, whole)]
     cut = _cut(h, sel, phi, min_cells)
     if cut is None:
-        return [sel]
+        return [(sel, whole)]
     rows, cols = np.nonzero(sel)
     along = -cols * np.sin(phi) + rows * np.cos(phi)
     halves = []
@@ -484,16 +495,15 @@ def _sections(h, sel, aspect, weight, min_cells, res, depth=0) -> list[np.ndarra
         lab, n = ndi.label(m)
         halves += [lab == j for j in range(1, n + 1) if (lab == j).sum() >= min_cells]
     if len(halves) < 2:
-        return [sel]
+        return [(sel, whole)]
     # judged on the sections it ends in: the first cut alone may gain
     # nothing (three houses, the outer two on one plane); the fragments too
     # small to keep count as misses
     out = []
     for p in halves:
-        out += _sections(h, p, aspect, weight, min_cells, res, depth + 1)
-    fit = sum(_fits(h, p, _direction(aspect[p], weight[p]), res) * p.sum() for p in out)
-    if fit < (whole + SECTION_GAIN) * sel.sum():
-        return [sel]
+        out += _fitted_sections(h, p, aspect, weight, min_cells, res, depth + 1)
+    if sum(fit * p.sum() for p, fit in out) < (whole + SECTION_GAIN) * sel.sum():
+        return [(sel, whole)]
     return out
 
 
@@ -507,11 +517,10 @@ def _flank_plane(h: np.ndarray, sel: np.ndarray, phi: float) -> tuple[np.ndarray
     # a first line through the median height of each metre across the
     # flank, its first and last left out (the eave's blur, the ridge's
     # rounding): dormers and gutters do not move a median
-    k = np.floor(t - t.min()).astype(np.int64)
-    prof = _profile(t - t.min(), z, int(k.max()) + 1)
-    n = np.bincount(k)
-    centre = np.arange(len(prof)) + 0.5 + t.min()
-    good = np.isfinite(prof) & (n >= 2)
+    prof, n, t0 = _strips(t, z)
+    centre = np.arange(len(prof)) + 0.5 + t0
+    strips = np.isfinite(prof) & (n >= 2)
+    good = strips.copy()
     if good.sum() >= 5:
         good[np.flatnonzero(good)[[0, -1]]] = False
     if good.sum() >= 2:
@@ -527,12 +536,14 @@ def _flank_plane(h: np.ndarray, sel: np.ndarray, phi: float) -> tuple[np.ndarray
         keep = np.abs(z - (coef[0] + coef[1] * t)) <= FLANK_TOL_M
     plane = np.array([coef[0], coef[1] * np.cos(phi), coef[1] * np.sin(phi)])
     sag = False
-    # its sag away from the eave and the ridge, which the scan rounds
-    lo, hi = np.percentile(t[keep], (15, 85)) if keep.any() else (0.0, 0.0)
-    mid = keep & (t >= lo) & (t <= hi)
-    if mid.sum() >= 6 and hi - lo > 2:
-        q = np.polyfit(t[mid], z[mid], 2)
-        sag = abs(q[0]) * (hi - lo) ** 2 / 8 > FLANK_SAG_M
+    # its sag on the strips' medians (a dormer moves none), away from the
+    # eave and the ridge, which the scan rounds: the parabola's rise over
+    # its chord at the middle, a·L²/4
+    lo, hi = np.percentile(t, (15, 85))
+    mid = strips & (centre >= lo) & (centre <= hi)
+    if mid.sum() >= 4 and hi - lo > 2:
+        q = np.polyfit(centre[mid], prof[mid], 2, w=np.sqrt(n[mid]))
+        sag = abs(q[0]) * (hi - lo) ** 2 / 4 > FLANK_SAG_M
     return plane, np.asarray(sag)
 
 
@@ -563,9 +574,14 @@ def _flank_classes(h, calm, slope_min):
     return hs, slope, aspect, cls, len(peaks)
 
 
+def _flank_square(res: float) -> np.ndarray:
+    """A FLANK_W_M square of cells: what a flank (or a level patch) holds."""
+    return np.ones((max(int(round(FLANK_W_M / res)), 1),) * 2, bool)
+
+
 def _flank_cores(cls: np.ndarray, n: int, res: float):
     """Each direction's patches that hold a FLANK_W_M square and FLANK_M2."""
-    square = np.ones((max(int(round(FLANK_W_M / res)), 1),) * 2, bool)
+    square = _flank_square(res)
     min_cells = FLANK_M2 / (res * res)
     for c in range(1, n + 1):
         lab, k = ndi.label(ndi.binary_opening(cls == c, structure=square))
@@ -580,11 +596,8 @@ def _spread(h: np.ndarray, sel: np.ndarray, phi: float, res: float) -> float:
     to four fifths, on the median height of each cell-wide strip of the
     scan (dormers do not move a median), the profile made monotone."""
     rows, cols = np.nonzero(sel)
-    t = cols * np.cos(phi) + rows * np.sin(phi)
-    t = t - t.min()
-    k = np.floor(t).astype(np.int64)
-    prof = _profile(t, h[rows, cols], int(k.max()) + 1)
-    good = np.isfinite(prof) & (np.bincount(k) >= 2)
+    prof, n, _ = _strips(cols * np.cos(phi) + rows * np.sin(phi), h[rows, cols])
+    good = np.isfinite(prof) & (n >= 2)
     if good.sum() < 3:
         return 0.0
     x = np.flatnonzero(good) + 0.5
@@ -635,15 +648,17 @@ def _crowns(hs: np.ndarray, flanks: np.ndarray, calm: np.ndarray, res: float) ->
     return between & calm & ~flanks & (hs >= top - CROWN_DROP_M)
 
 
-def _borders(lab: np.ndarray) -> dict[tuple[int, int], int]:
+def label_borders(lab: np.ndarray) -> dict[tuple[int, int], int]:
     """Each pair of neighbouring labels and the cells of border they share."""
-    pairs: dict[tuple[int, int], int] = {}
+    lo, hi = [], []
     for a, b in ((lab[:, :-1], lab[:, 1:]), (lab[:-1, :], lab[1:, :])):
         m = (a > 0) & (b > 0) & (a != b)
-        for x, y in zip(a[m], b[m], strict=True):
-            key = (int(min(x, y)), int(max(x, y)))
-            pairs[key] = pairs.get(key, 0) + 1
-    return pairs
+        lo.append(np.minimum(a[m], b[m]))
+        hi.append(np.maximum(a[m], b[m]))
+    pairs, counts = np.unique(
+        np.stack([np.concatenate(lo), np.concatenate(hi)]), axis=1, return_counts=True
+    )
+    return {(int(x), int(y)): int(n) for (x, y), n in zip(pairs.T, counts, strict=True)}
 
 
 def _share_axes(dirs: dict[int, float], borders: dict[tuple[int, int], int]) -> None:
@@ -694,6 +709,13 @@ def _assign(hs, lab, planes, mine, reach: int, held_on=None) -> np.ndarray:
     return out
 
 
+def _border(lab: np.ndarray, a: int, b: int) -> np.ndarray:
+    """The cells of `a` and of `b` that touch the other."""
+    return ((lab == a) & ndi.binary_dilation(lab == b)) | (
+        (lab == b) & ndi.binary_dilation(lab == a)
+    )
+
+
 def _crease_sense(pa, pb, ca, cb) -> int:
     """+1 where the planes `pa` and `pb` (centred at `ca`, `cb`, row and
     column) meet at a ridge or a hip — each rises toward the other, or one
@@ -737,7 +759,7 @@ def creases(lab: np.ndarray, planes: dict[int, np.ndarray], mine: np.ndarray) ->
             )
         }
         moved = False
-        for (a, b), _ in sorted(_borders(inside).items(), key=lambda kv: (-kv[1], kv[0])):
+        for (a, b), _ in sorted(label_borders(inside).items(), key=lambda kv: (-kv[1], kv[0])):
             if a not in planes or b not in planes:
                 continue
             sense = _crease_sense(planes[a], planes[b], centre[a], centre[b])
@@ -747,10 +769,12 @@ def creases(lab: np.ndarray, planes: dict[int, np.ndarray], mine: np.ndarray) ->
             za = _on(planes[a], rows[sel], cols[sel])
             zb = _on(planes[b], rows[sel], cols[sel])
             new = np.where(sense * (zb - za) > 0, a, b)
-            # where the scan put their border, not where a pass moved it
-            border = ((scan == a) & ndi.binary_dilation(scan == b)) | (
-                (scan == b) & ndi.binary_dilation(scan == a)
-            )
+            # where the scan put their border, not where a pass moved it;
+            # two planes a pass made neighbours (it ate what lay between)
+            # never touched in the scan: their border now
+            border = _border(scan, a, b)
+            if not border.any():
+                border = _border(lab, a, b)
             near = ndi.distance_transform_edt(~border)[sel] <= CREASE_REACH
             new = np.where(near, new, lab[sel])
             if (new != lab[sel]).any():
@@ -775,7 +799,7 @@ def _join_flanks(h, lab, dirs, mine, aspect, slope, res):
     joined = True
     while joined:
         joined = False
-        for (a, b), _ in sorted(_borders(near).items(), key=lambda kv: (-kv[1], kv[0])):
+        for (a, b), _ in sorted(label_borders(near).items(), key=lambda kv: (-kv[1], kv[0])):
             turn = abs(np.angle(np.exp(1j * (dirs[a] - dirs[b]))))
             pitch = abs(np.hypot(*planes[a][1:]) - np.hypot(*planes[b][1:])) / res
             if turn > np.deg2rad(SECTION_TURN_DEG) or pitch > SECTION_PITCH:
@@ -847,14 +871,14 @@ def flank_facets(h: np.ndarray, mine: np.ndarray, slope_min: float, res: float =
     eaved = sum(int((lab == k).sum()) * _eave(lab == k, hs, inward, phi) for k, phi in dirs.items())
     eaves = eaved / float((lab > 0).sum())
     # gables: two flanks side by side facing nearly opposite ways take one axis
-    _share_axes(dirs, _borders(np.where(mine, fill_nearest(lab, lab > 0), 0)))
+    _share_axes(dirs, label_borders(np.where(mine, fill_nearest(lab, lab > 0), 0)))
     planes: dict[int, np.ndarray] = {}
     sags = False
     for k, phi in dirs.items():
         planes[k], sag = _flank_plane(h, lab == k, phi)
         sags = sags or bool(sag)
     # the level patches: a crown, a mansard's top
-    square = np.ones((max(int(round(FLANK_W_M / res)), 1),) * 2, bool)
+    square = _flank_square(res)
     level = ndi.binary_opening(mine & (lab == 0) & (slope <= slope_min * res), structure=square)
     pieces, k = ndi.label(level)
     for j in range(1, k + 1):

@@ -196,7 +196,7 @@ RELIEF_LANDMARKS = 12
 # How far a relief's heights are smoothed (cells, Gaussian sigma).
 RELIEF_SMOOTH = 1.0
 # A surface-model cell this far below the LoD2 roof under it is a void,
-# unless the scan lies so far below on more than this share of the roof.
+# unless its void (connected) spans more than this share of the roof.
 VOID_M = 1.0
 VOID_SHARE = 0.5
 # How far a relief's walls sink into the roof they stand on (m).
@@ -584,12 +584,7 @@ def relief(s: Surfaces, geom: shapely.Geometry, of: str) -> list[dict]:
     # what each cell stands on: its own LoD2 roof, else the ground
     ground = s.ground[win]
     floor = np.where(np.isfinite(roof), np.fmax(roof, ground), ground)
-    void = inside & (s.dom[win] < floor - VOID_M)
-    # a void is a hole in the roof; where the scan lies under most of it, the
-    # LoD2 roof stands too high, and filling it from the cells around would
-    # lift a taller neighbour onto it (an opera's hall onto its low wing)
-    if void.sum() > VOID_SHARE * inside.sum():
-        void[:] = False
+    void = roof_holes(inside & (s.dom[win] < floor - VOID_M), inside & np.isfinite(roof))
     dom = np.where(inside, fill_voids(s.dom[win], void), np.nan)
     excess = np.nan_to_num(dom - top, nan=-1e9)
     over = excess >= RELIEF_MIN_M
@@ -648,6 +643,21 @@ def relief(s: Surfaces, geom: shapely.Geometry, of: str) -> list[dict]:
         }
         out.append(feature(geometry_json(outline.simplify(0.5)), props))
     return out
+
+
+def roof_holes(void: np.ndarray, roofed: np.ndarray) -> np.ndarray:
+    """The voids that are holes in the roof: each connected one spanning
+    at most VOID_SHARE of the `roofed` cells (a sound opening, a glass
+    roof). Where the scan lies under more, the LoD2 roof stands too high
+    there, and filling it from the cells around would lift a taller
+    neighbour onto it (an opera's hall onto its low wing)."""
+    lab, n = ndi.label(void)
+    if not n:
+        return void
+    sizes = np.bincount(lab.ravel(), minlength=n + 1)
+    small = sizes <= VOID_SHARE * max(int(roofed.sum()), 1)
+    small[0] = False
+    return small[lab]
 
 
 def fill_voids(dom: np.ndarray, void: np.ndarray) -> np.ndarray:

@@ -16,6 +16,7 @@ from bake.roofs import (
     MISS_SHARE,
     Grid,
     _gap_owner,
+    _kept_whole,
     _majority,
     _narrow,
     _polygonal,
@@ -493,10 +494,14 @@ def test_a_gap_between_two_roofs_straight_walls_goes_to_the_lower_one():
     low = shapely.box(0, 0, 40, 9.4)
     gap = shapely.box(0, 9.4, 40, 10)
     # ranked highest first: the gap lies beside both along 40 m
-    assert _gap_owner(gap, [high, low], {0: 0, 1: 1}, old=0) == 1
+    assert _gap_owner(gap, _grown([high, low]), {0: 0, 1: 1}, old=0) == 1
     # one beside it only at an end: the other keeps it
     stub = shapely.box(39.5, 0, 40, 9.4)
-    assert _gap_owner(gap, [high, stub], {0: 0, 1: 1}, old=1) == 0
+    assert _gap_owner(gap, _grown([high, stub]), {0: 0, 1: 1}, old=1) == 0
+
+
+def _grown(parts: list) -> dict:
+    return {i: shapely.buffer(p, 0.03) for i, p in enumerate(parts)}
 
 
 def test_two_parts_borders_that_meet_a_few_centimetres_apart_are_one_line():
@@ -513,3 +518,18 @@ def test_two_parts_borders_that_meet_a_few_centimetres_apart_are_one_line():
     assert shapely.coverage_is_valid(np.asarray(out, dtype=object))
     assert len(shapely.get_coordinates(out[0])) == 5
     assert abs(out[1].area - 400) < 1e-6
+
+
+def test_straight_eaves_leave_no_strip_between_two_wings_a_box():
+    # a courtyard roof (label 2) 11 m wide between two wings' faces
+    lab = np.ones((20, 31), np.int64)
+    lab[:, 10:21] = 2
+    lab[:, 21:] = 3
+    win = (slice(0, 20), slice(0, 31))
+    # one wing's eave taking two columns of it leaves 9 m: taken
+    take = np.zeros(lab.shape, bool)
+    take[:, 10:12] = True
+    assert _kept_whole(lab, win, take, small_cells=10) == []
+    # both wings taking three each leave a strip narrower than NARROW_M
+    take[:, 10:13] = take[:, 18:21] = True
+    assert _kept_whole(lab, win, take, small_cells=10) == [2]
