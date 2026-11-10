@@ -11,9 +11,11 @@ import {
   SHOW_TARGETS,
   showTool,
   styleTool,
+  timeProblem,
   timeTool,
   whereTool,
 } from "@/lib/city/ask-tools";
+import type { TimeChange } from "@/lib/city/ask-tools";
 import { frameTargets, streetView } from "@/lib/city/ask-view";
 import type { AskTarget, FrameContext } from "@/lib/city/ask-view";
 import type { DataLayerKey } from "@/lib/city/data-layers";
@@ -27,10 +29,13 @@ export interface AskScene {
   from: () => { x: number; y: number } | null;
   /** switches a data layer; false where the site has none of that kind */
   setLayer: (key: DataLayerKey, on: boolean) => boolean;
-  setStyle: (style: RenderStyle) => void;
-  /** the scene's time to `hour` (of `date`, YYYY-MM-DD, or today's day);
-   *  the instant it set, as text */
-  setTime: (hour: number, date?: string) => string;
+  /** the picture style; why it will not follow the time, where it keeps
+   *  its own light */
+  setStyle: (style: RenderStyle) => { hinweis?: string };
+  /** the scene's time to a time of day and a date, in the city's clock;
+   *  what is left out stays. The instant it set, as text, and why the
+   *  picture does not follow where the style keeps its own light. */
+  setTime: (change: TimeChange) => { hinweis?: string; zeit: string };
   /** glides to a view, its eye over `ground` (m a.s.l.) where given;
    *  false while there is no scene to move */
   show: (view: ViewpointGeometry, ground?: number) => boolean;
@@ -42,32 +47,36 @@ export interface AskScene {
   /** what the framing reads of the moment: the screen, the sun, the
    *  loaded buildings' sight lines (lib/city/ask-view.ts) */
   frame: () => Omit<FrameContext, "from">;
-  /** what the first questions read of the moment (plan 081) */
+  /** what the first questions read of the moment (plan 085) */
   moment: () => StarterContext;
   /** the player's pose, mode, time, style and layers, for the model */
   where: () => Record<string, unknown>;
-  /** asks what stands at the centre of the view (and opens its card) */
-  look: () => Promise<Record<string, unknown>>;
-  /** ends the scene tools' waits (a stopped answer, a closed card) */
-  abandon: () => void;
+  /** asks what stands at the centre of the view (and opens its card);
+   *  rejects when `signal` aborts: the chat's `stop()` ends the wait and
+   *  drops what the tool ends with, so no stopped answer resumes */
+  look: (signal?: AbortSignal) => Promise<Record<string, unknown>>;
   /** the Hörmodus: the scene barely draws while the visitor listens */
   setListening: (on: boolean) => void;
+  /** stops the glide an answer started, if it still flies (the stop
+   *  button); never one the visitor started since */
+  haltAnswerGlide: () => void;
 }
 
 /** The tools the browser runs, bound to the scene. */
 export function sceneTools(scene: AskScene) {
   return clientTools(
     whereTool.client(() => scene.where()),
-    lookTool.client(async () => await scene.look()),
+    lookTool.client(
+      async (_input, context) => await scene.look(context?.abortSignal)
+    ),
     showTool.client((input) => showPlaces(scene, input)),
-    timeTool.client(({ stunde, datum }) => ({
-      ok: true,
-      zeit: scene.setTime(stunde, datum),
-    })),
-    styleTool.client(({ stil }) => {
-      scene.setStyle(stil);
-      return { ok: true };
+    timeTool.client(({ uhrzeit, datum }) => {
+      const problem = timeProblem({ uhrzeit, datum });
+      return problem
+        ? { ok: false, hinweis: problem }
+        : { ok: true, ...scene.setTime({ uhrzeit, datum }) };
     }),
+    styleTool.client(({ stil }) => ({ ok: true, ...scene.setStyle(stil) })),
     layerTool.client(({ schicht, an }) =>
       scene.setLayer(schicht, an)
         ? { ok: true }

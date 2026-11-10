@@ -2,8 +2,8 @@
  * Scene profile and render budget — how much world the viewer builds and how
  * expensive each frame is allowed to be.
  *
- * `full` is the product: the whole site streams (lib/city/tileset.ts), a
- * 3072² shadow map and 16-sample contact shadows (GTAO). `lite` exists for
+ * `full` is the product: the whole site streams (lib/city/tileset.ts), four
+ * shadow rings of 2048² and 16-sample contact shadows (GTAO). `lite` exists for
  * the headless e2e suite, where every frame is rasterized on the CPU by
  * SwiftShader: it streams the spawn tile only, shrinks the shadow map, halves
  * the render scale and halves the GTAO samples — the four knobs that
@@ -35,6 +35,7 @@
  */
 
 import type { SafetyLevel } from "@/lib/city/gpu-safety";
+import { SHADOW_RINGS } from "@/lib/city/shadow-rings";
 
 export type SceneProfile = "full" | "lite";
 
@@ -132,32 +133,36 @@ export function currentSceneBudget(safety: SafetyLevel = 0): SceneBudget {
   );
 }
 
-/** The shadow map's edge per safety level (0–3), per tier. */
+/** A shadow ring's edge per safety level (0–3), per tier: four of these are
+ *  the map (lib/city/shadow-rings.ts). A phone's are smaller than a power of
+ *  two, to pay for what the wide rings' casters hold beside the one 2048² it
+ *  had: 2.5 MiB more on foot, 0.8 in flight, against 3.6 saved here; at the
+ *  lower levels 1.7 in flight against 1.9 (ADR 0047).
+ */
 const SHADOW_MAP_SIZE: Record<DeviceTier, readonly number[]> = {
-  desktop: [3072, 2048, 2048, 1024],
-  mobile: [2048, 2048, 1024, 1024],
+  desktop: [2048, 1024, 1024, 512],
+  mobile: [900, 900, 360, 360],
 };
 
 /**
- * Shadow-map resolution for a profile + tier at a safety level (see
- * sun-rig.ts for the recipe).
+ * A shadow ring's edge in texels for a profile + tier at a safety level (see
+ * sun-rings.ts for the recipe).
  */
 export function shadowMapSizeFor(
   profile: SceneProfile,
   tier: DeviceTier = "desktop",
   safety: SafetyLevel = 0
 ): number {
-  // 512² is a ~36x cheaper depth pass than 3072². The shadows look coarse,
+  // 256² is a ~64x cheaper depth pass than 2048². The shadows look coarse,
   // which is fine: the headless suite asserts that shadows are ENABLED and
   // that the depth pass runs without error, never how soft an edge is (that
   // is what the --headed snapshot harness on a real GPU is for).
   if (profile === "lite") {
-    return 512;
+    return 256;
   }
-  // A phone's shadow map is a quarter of the desktop's texels and a quarter
-  // of the per-frame depth fill; the soft PCF radius hides the coarser
-  // texel over the 121 m frustum. The map is a depth texture alone
-  // (`shadowMapBytesFor`): 16 MiB at 2048², 4 MiB at 1024².
+  // A phone's rings have a fifth of the desktop's texels and of its depth
+  // fill. The map is a depth array alone (`shadowMapBytesFor`):
+  // 16 MiB at four of 1024², 4 MiB at four of 512².
   return SHADOW_MAP_SIZE[tier][safety];
 }
 
@@ -262,8 +267,10 @@ const TILE_CACHE_BYTES: Record<
  * depth, the one-byte AO and outline targets and a picture style's own
  * target while one is on: on the 402×874 iPhone 18, 12.5, 8 and 6 MiB at
  * the pixel ratios 1.5, 1.25, 1.0, 0.85 of the four levels) and the
- * shadow map (`shadowMapBytesFor`: 16 MiB at 2048², 4 at 1024²): 34,
- * 28.5, 12 and 10 MiB. The 100 MiB are ~40 for the scene-wide sets (sky,
+ * shadow map at what it held as one map (16 MiB, 4 at the lower levels): 34,
+ * 28.5, 12 and 10 MiB. The rings hold less (`shadowMapBytesFor`: 12.4 MiB at
+ * four of 900², 2.1 at four of 360²), and the rest pays for what their casters
+ * hold beside them, not for tiles. The 100 MiB are ~40 for the scene-wide sets (sky,
  * lamp pool, data layers, uniform buffers and shader text) and ~60 of
  * headroom: tiles in flight weigh nothing in the cache, it unloads only
  * past `max` and one tile over, and three counts a tree set's instance
@@ -326,11 +333,12 @@ export function aoSamplesFor(profile: SceneProfile, tier: DeviceTier): number {
  */
 export interface PostProfile {
   /**
-   * Whether depth of field exists at all. Its pass holds six targets and
-   * a full-resolution copy of its input (23 MB at an iPhone's 603×1311
-   * drawing buffer) from the first frame, standing still or not — for a
-   * lens hint a six-inch screen barely shows. Off: a phone draws without
-   * it (there is no switch for it anywhere).
+   * Whether depth of field exists at all. Its passes hold their targets
+   * (lens-blur.ts: ≈ 20 B a pixel, two full-resolution among them) from
+   * the first frame, standing still or not — three's node held 23 MB at
+   * an iPhone's 603×1311 drawing buffer — for a lens hint a six-inch
+   * screen barely shows. Off: a phone draws without it (there is no
+   * switch for it anywhere).
    */
   dof: boolean;
   /**
@@ -381,10 +389,10 @@ export function postProfileFor(tier: DeviceTier): PostProfile {
 }
 
 /**
- * GPU bytes of the sun's shadow map for its edge in texels: the depth
- * texture (4 bytes a texel; depth24plus is 32-bit on Apple GPUs), no colour
- * target (sun-rig.ts `DepthOnlyShadowNode`), no mips.
+ * GPU bytes of the sun's shadow map for a ring's edge in texels: one layer of
+ * a depth array per ring (4 bytes a texel; depth24plus is 32-bit on Apple
+ * GPUs), no colour target (sun-rings.ts `RingShadowNode`), no mips.
  */
 export function shadowMapBytesFor(size: number): number {
-  return size * size * 4;
+  return size * size * 4 * SHADOW_RINGS;
 }

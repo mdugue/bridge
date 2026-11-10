@@ -31,13 +31,16 @@ def osm_tile(
     ways: str = "",
     classes: np.ndarray | None = None,
     dgm: float = 100.0,
+    epsg: int = 25833,
 ) -> Tile:
     """`nodes` maps an id to (x, y, tags as `<tag .../>` XML); `classes` is
-    the 200 × 200 class raster (row 0 = north), all 0 when omitted."""
+    the 200 × 200 class raster (row 0 = north), all 0 when omitted. `epsg`:
+    the site's UTM zone (25832 for Hamburg, Bavaria and NRW), the same
+    coordinates read in it."""
     tile = Tile(
         "t",
         (X0, Y0, X0 + SIZE, Y0 + SIZE),
-        25833,
+        epsg,
         tmp_path / "raw",
         tmp_path / "data",
         credit="Quelle: GeoSN, dl-de/by-2-0",
@@ -51,13 +54,13 @@ def osm_tile(
         height=SIZE,
         count=1,
         dtype="float32",
-        crs="EPSG:25833",
+        crs=f"EPSG:{epsg}",
         transform=tile.transform(SIZE),
     ) as dst:
         dst.write(np.full((SIZE, SIZE), dgm, dtype="float32"), 1)
     cls = classes if classes is not None else np.zeros((SIZE, SIZE), np.uint8)
     Image.fromarray(cls.astype(np.uint8)).save(tile.out("dlm", "landcover_t.png"))
-    back = Transformer.from_crs(25833, 4326, always_xy=True)
+    back = Transformer.from_crs(epsg, 4326, always_xy=True)
     xml = []
     for i, (px, py, tags) in nodes.items():
         lon, lat = back.transform(X0 + px, Y0 + py)
@@ -115,12 +118,13 @@ def local(coords) -> tuple[float, float]:
     return round(coords[0] - X0, 1), round(coords[1] - Y0, 1)
 
 
-def slope_tile(tmp_path, monkeypatch, ways: str):
+def slope_tile(tmp_path, monkeypatch, ways: str, epsg: int = 25833):
     """A 200 m tile with a DGM that rises 4 m between y = 80 and y = 100 and
     an OSM XML extract holding `ways` over nodes 1–6: the flight's ends (1, 2),
-    and the corners of a 6 m × 30 m outline around it (3–6)."""
+    and the corners of a 6 m × 30 m outline around it (3–6); in `epsg`, as
+    `osm_tile`."""
     x0, y0 = 411000.0, 5656000.0
-    tile = Tile("t", (x0, y0, x0 + 200, y0 + 200), 25833, tmp_path / "raw", tmp_path / "data")
+    tile = Tile("t", (x0, y0, x0 + 200, y0 + 200), epsg, tmp_path / "raw", tmp_path / "data")
     tile.dgm.parent.mkdir(parents=True)
     rows = np.arange(200)[:, None] + 0.5  # row 0 = north
     y = 200 - rows
@@ -133,11 +137,11 @@ def slope_tile(tmp_path, monkeypatch, ways: str):
         height=200,
         count=1,
         dtype="float32",
-        crs="EPSG:25833",
+        crs=f"EPSG:{epsg}",
         transform=tile.transform(200),
     ) as dst:
         dst.write(z, 1)
-    back = Transformer.from_crs(25833, 4326, always_xy=True)
+    back = Transformer.from_crs(epsg, 4326, always_xy=True)
     pts = [(100, 105), (100, 75), (97, 75), (103, 75), (103, 105), (97, 105)]
     nodes = "".join(
         f'<node id="{i + 1}" lat="{lat:.9f}" lon="{lon:.9f}" version="1"/>'

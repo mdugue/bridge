@@ -52,8 +52,9 @@ from collections.abc import Callable
 import numpy as np
 import shapely
 
-from .common import Tile, column, feature, label_line, value_at
-from .osm import in_tunnel, read_osm, tag
+from .classes import BUILTUP, PATH, ROAD, WATER
+from .common import Tile, column, dgm_paths, feature, label_line, mosaic, value_at
+from .osm import in_tunnel, osm_width, read_osm, tag
 
 RAILWAYS = ("rail", "light_rail", "subway", "narrow_gauge")
 # A funicular (Standseilbahn, Schrägaufzug) is a track like a railway's,
@@ -83,8 +84,7 @@ STANDARD_GAUGE = 1.435
 # shorter than BED_MIN_M. A main line runs on its bed whatever lies beside
 # it (a residential street, a station forecourt): only `embedded` says
 # otherwise there.
-PAVED_CLASSES = {4, 6, 7}
-WATER_CLASS = 8
+PAVED_CLASSES = {BUILTUP, PATH, ROAD}
 SIDE_M = 4.0
 BED_STEP_M = 4.0
 BED_WINDOW_M = 20.0
@@ -190,7 +190,7 @@ class Paving:
         sides = [value_at(self.cls, self.bounds, x + k * nx, y + k * ny) for k in (1, -1)]
         if any(c is None for c in sides):
             return None
-        if all(c in PAVED_CLASSES | {WATER_CLASS} for c in sides) and any(
+        if all(c in PAVED_CLASSES | {WATER} for c in sides) and any(
             c in PAVED_CLASSES for c in sides
         ):
             return "paved"
@@ -379,9 +379,9 @@ def ballast(tile: Tile, features: list[dict]) -> list[dict]:
 
 def width_of(other: str | None, kind: str) -> float | None:
     """A way's mapped width: `width`, else `lanes` × 3.25 m + verges."""
-    m = re.match(r"\d+(\.\d+)?", (tag(other, "width") or "").strip())
-    if m and 1.0 <= float(m.group()) <= 60.0:
-        return float(m.group())
+    width = osm_width(tag(other, "width"))
+    if width is not None and width >= 1.0:
+        return width
     lanes = re.match(r"\d+", tag(other, "lanes") or "")
     if lanes and kind == "road":
         return int(lanes.group()) * LANE_M + VERGE_M
@@ -472,9 +472,9 @@ def passage_half(highway: str | None, other: str | None) -> float:
     """The half-width a passage under a deck opens for a way (m)."""
     from .landcover_osm import ROAD_HALF_WIDTH
 
-    m = re.match(r"\d+(\.\d+)?", (tag(other, "width") or "").strip())
-    if m and 1.0 <= float(m.group()) <= 60.0:
-        return float(m.group()) / 2 + PASSAGE_MARGIN
+    width = osm_width(tag(other, "width"))
+    if width is not None and width >= 1.0:
+        return width / 2 + PASSAGE_MARGIN
     lanes = re.match(r"\d+", tag(other, "lanes") or "")
     if lanes and 1 <= int(lanes.group()) <= 10:
         return int(lanes.group()) * PASSAGE_LANE_HALF + PASSAGE_MARGIN
@@ -623,13 +623,11 @@ def _clipped_beam(
 
 
 def dgm_ground(tile: Tile, bounds) -> Callable[[float, float], float | None]:
-    """The site's DGM1 over `bounds` (every tile's, so a beam across a seam
-    reads the same ground from either side), as a height lookup."""
+    """The site's DGM1 over `bounds` (every tile's there, so a beam across a
+    seam reads the same ground from either side), as a height lookup."""
     from rasterio.transform import rowcol
 
-    from .rail import mosaic
-
-    dgm, transform = mosaic(sorted((tile.data / "dgm").glob("dgm1_*_tiff/dgm1_*.tif")), bounds)
+    dgm, transform = mosaic(dgm_paths(tile, bounds), bounds)
 
     def at(x: float, y: float) -> float | None:
         if dgm is None:

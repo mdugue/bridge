@@ -44,6 +44,18 @@ def test_the_class_ids_are_the_client_palette_order():
     assert client == CLASSES
 
 
+def test_the_named_class_ids_are_the_numbers_the_bakes_used():
+    # the bakes name classes (classes.py); a renumbering is a deliberate
+    # change of this table, the client's and every committed raster
+    from bake import classes
+
+    named = (classes.BACKGROUND, classes.FARMLAND, classes.FOREST, classes.COPSE)
+    assert named == (0, 1, 2, 3)
+    named = (classes.BUILTUP, classes.RAILWAY, classes.PATH, classes.ROAD, classes.WATER)
+    assert named == (4, 5, 6, 7, 8)
+    assert (classes.ARABLE, classes.MEADOW) == (9, 1)
+
+
 def test_rail_without_a_dlm_leaves_committed_files_alone(tmp_path):
     from bake import rail
     from bake.common import Tile
@@ -237,14 +249,15 @@ def test_playground_equipment_is_only_what_is_mapped():
 
 
 def test_surface_values_map_to_the_paving_ids():
-    from bake.surface import surface_id
+    from bake.osm import surface_id
+    from bake.surface import SURFACE_OF
 
-    assert surface_id("asphalt") == 1
-    assert surface_id("sett;asphalt") == 4
-    assert surface_id("Paving_Stones") == 3
-    assert surface_id("grass_paver") == 6
-    assert surface_id("metal") == 0
-    assert surface_id(None) == 0
+    assert surface_id("asphalt", SURFACE_OF) == 1
+    assert surface_id("sett;asphalt", SURFACE_OF) == 4
+    assert surface_id("Paving_Stones", SURFACE_OF) == 3
+    assert surface_id("grass_paver", SURFACE_OF) == 6
+    assert surface_id("metal", SURFACE_OF) == 0
+    assert surface_id(None, SURFACE_OF) == 0
 
 
 def test_widths_parse_metres_and_reject_nonsense():
@@ -252,8 +265,13 @@ def test_widths_parse_metres_and_reject_nonsense():
 
     assert parse_width("5") == 5.0
     assert parse_width("5,5 m") == 5.5
+    assert parse_width("5.5m") == 5.5
+    assert parse_width("5.5m wide") is None  # text beyond the unit
+    assert parse_width("ca. 4 m") == 4.0
+    assert parse_width("1,5") == 1.5
     assert parse_width("narrow") is None
     assert parse_width("0") is None
+    assert parse_width("75") is None
 
 
 def test_a_sidewalk_band_lies_on_the_tagged_side_only():
@@ -1023,7 +1041,7 @@ def test_a_monument_without_an_osm_material_takes_wikidatas():
         item(300, "Q4", "Stilles Wasser", "Sandstein"),
     ]
     wikidata_materials(items, wikidata)
-    assert [(m.get("material"), m.get("wikidata")) for m in items] == [
+    assert [(m.get("material"), m.get("materialWikidata")) for m in items] == [
         ("Kupfer, Blattgold", "Q558537"),
         ("Bronze", None),
         (None, None),
@@ -1069,3 +1087,15 @@ def test_a_piece_in_a_bridge_s_lanes_stands_at_its_deck_s_edge():
     # beside a footway's line (no street) too
     path = Decks([(deck, Axis([[0, 0], [40, 0]]), [10.0] * 21)], [(street, True)])
     assert path.kerbside(shapely.Point(10, 1)).equals(shapely.Point(10, 1))
+
+
+def test_a_walls_kind_is_what_selected_it_not_another_tag_on_the_way():
+    from bake.walls import WHERE, kind_of
+
+    assert "barrier IN ('retaining_wall', 'city_wall', 'wall')" in WHERE
+    assert kind_of("retaining_wall", None, None) == "retaining_wall"
+    assert kind_of(None, "embankment", None) == "embankment"
+    assert kind_of(None, None, '"natural"=>"cliff"') == "cliff"
+    # the viewer's walls schema has no such kinds: a fence here has no `type`
+    assert kind_of("fence", None, '"natural"=>"cliff"') == "cliff"
+    assert kind_of("hedge", "embankment", None) == "embankment"

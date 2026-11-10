@@ -15,12 +15,39 @@
  * courtyard). The readings ride in the object table's flags column, above
  * the OSM flags: `FACADE_UNIT` × (busy + 4 × dark + 16 × shop).
  */
-/** [busy 0–3, dark 0–3, shop 0|1], by the Building's gml:id. */
-export type FacadeReading = [number, number, number];
+import type { FacadeReading, FacadeReadings } from "./facades-file";
 
-export interface FacadeReadings {
-  attribution: string;
-  buildings: Record<string, FacadeReading | undefined>;
+export type { FacadeReading, FacadeReadings } from "./facades-file";
+
+const isGrade = (v: unknown, max: number): boolean =>
+  Number.isInteger(v) && (v as number) >= 0 && (v as number) <= max;
+
+/** Whether `v` is one row of the file: `[busy, dark, shop]`. */
+function isReading(v: unknown): v is FacadeReading {
+  return (
+    Array.isArray(v) &&
+    v.length === 3 &&
+    isGrade(v[0], 3) &&
+    isGrade(v[1], 3) &&
+    isGrade(v[2], 1)
+  );
+}
+
+/** The viewer's guard over what it fetches: the file as its schema
+ *  (`facades-file.ts`, which the viewer takes by type only) describes it. */
+export function isFacadeReadings(v: unknown): v is FacadeReadings {
+  if (typeof v !== "object" || v === null) {
+    return false;
+  }
+  const { attribution, buildings } = v as Record<string, unknown>;
+  return (
+    Object.keys(v).length === 2 &&
+    typeof attribution === "string" &&
+    typeof buildings === "object" &&
+    buildings !== null &&
+    !Array.isArray(buildings) &&
+    Object.values(buildings).every(isReading)
+  );
 }
 
 /** The flags column's unit for the readings: the bits above the baked
@@ -59,7 +86,8 @@ export function applyFacadeReadings(
 ): boolean {
   let changed = false;
   for (let i = 0; i < flags.length; i += 1) {
-    const reading = readings.buildings[buildingOf(i)];
+    const reading: FacadeReading | undefined =
+      readings.buildings[buildingOf(i)];
     const next = withFacadeReading(
       flags[i],
       reading && aloft(i) ? [reading[0], reading[1], 0] : reading

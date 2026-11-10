@@ -263,8 +263,8 @@ und die Stellen, wo Objekte den Boden berühren, aus dem Tiefenpuffer
 abdunkeln. Der Viewer nutzt eines davon, *GTAO* (Ground-Truth Ambient
 Occlusion), in halber Auflösung.
 
-**Tiefenschärfe (DoF)** — die fotografische Unschärfe hinter der
-Fokusentfernung (der Vordergrund bleibt scharf); hier immer auf die Bildmitte fokussiert. Nicht
+**Tiefenschärfe (DoF)** — die fotografische Unschärfe vor und hinter der
+Fokusentfernung; hier immer auf die Bildmitte fokussiert. Nicht
 auf Telefonen.
 
 **Nachbearbeitung (Post-Processing)** — Effekte auf dem fertigen Bild:
@@ -360,8 +360,9 @@ veraltete Daten liefern.
 Schattenkarte, halbe Auflösung; nur für automatische Tests.
 
 **Snapshot** — der JSON-Text, der Kamera, Datum/Uhrzeit, den Bildstil,
-den Nebel, den Kronen-Schalter und die Datenebenen festhält, um eine
-Ansicht zu reproduzieren.
+den Nebel und die Datenebenen festhält, um eine
+Ansicht zu reproduzieren; ein Ansichts-Link (`?snap=`) trägt ihn in
+seiner Adresse.
 
 **Aussichtspunkt** — einer der gestalteten Standpunkte, zu denen die
 Kamera gleiten kann; einer davon ist der Startblick.

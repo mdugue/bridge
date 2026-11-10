@@ -402,7 +402,7 @@ function isGable(s: WallShape, eave: number): boolean {
 export function withFaceRoofColours(
   v: CityVertices,
   keys: readonly string[],
-  faces: RoofColours["faces"]
+  faces: RoofColours["faces"] | undefined
 ): CityVertices {
   if (!(faces && v.surfaces)) {
     return v;
@@ -853,7 +853,7 @@ export function withMeasuredRoofs(
   keys: readonly string[],
   offset: { cx: number; cy: number },
   features: readonly MeasuredRoofFeature[],
-  colours?: RoofColours
+  colours?: Partial<RoofColours>
 ): CityVertices {
   const replaced = replacedObjects(keys, measuredRoofsById(features));
   if (replaced.size === 0) {
@@ -1235,7 +1235,7 @@ function shareBuildingFacades(
 export function bakeCityMesh(
   tile: string,
   source: CityJsonDocument,
-  roofColours: RoofColours | undefined,
+  roofColours: Partial<RoofColours> | undefined,
   sharedMatrix: Matrix4 | null,
   osmLut?: OsmBuildingLut,
   scan?: readonly SmallBuildingFeature[],
@@ -1673,7 +1673,7 @@ function dressWalls(
   extra: {
     facades: FacadeMaterial;
     gaps?: readonly StructureFeature[];
-    roofColours?: RoofColours;
+    roofColours?: Partial<RoofColours>;
     scan?: readonly SmallBuildingFeature[];
   }
 ): PassagePlan[] {
@@ -1844,7 +1844,7 @@ function appendBeyondLod2(
     plinths?: readonly PlinthFeature[];
     shopfronts?: readonly ShopfrontWall[];
     gaps?: readonly StructureFeature[];
-    roofColours?: RoofColours;
+    roofColours?: Partial<RoofColours>;
     scan?: readonly SmallBuildingFeature[];
   }
 ): number[] {
@@ -2862,7 +2862,6 @@ export function assignWindows(
         ...o.drawn,
         windows: choice.from,
         ...(choice.why ? { noWindows: choice.why } : {}),
-        ...(choice.storeyFromPhotos ? { storey: "photos" as const } : {}),
       };
     }
   }

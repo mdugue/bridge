@@ -9,7 +9,7 @@ import {
 import type { LockedPackages } from "./bake-sources";
 
 /**
- * The bake cache's keys (scripts/prepare-data.ts, ADR 0003): a key covers
+ * The bake cache's keys (scripts/prepare-data.ts, ADR 0024): a key covers
  * the contents of an artifact's input files, every module its bake's
  * entries reach (bake-entries.ts), the common sources every key carries,
  * the locked versions of the packages those modules import (with their

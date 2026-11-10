@@ -29,7 +29,10 @@ import type { Instances } from "../../app/_components/instancing";
 import { sceneCensus } from "../../app/_components/scene-census";
 import { buildLowVegetation } from "../../app/_components/low-vegetation-layer";
 import { buildTreeInventory } from "../../app/_components/tree-inventory-layer";
-import { buildVegetation } from "../../app/_components/vegetation-layer";
+import {
+  buildVegetation,
+  createVegetationLod,
+} from "../../app/_components/vegetation-layer";
 import type { VegetationControl } from "../../app/_components/vegetation-layer";
 import type {
   CanopyExtraFeature,
@@ -99,12 +102,16 @@ type Mode = (typeof MODES)[number];
 /** What a mode built: its vegetation controls plus any static groups. */
 const controls: Record<
   Mode,
-  { group: Object3D; updateLod?: VegetationControl["updateLod"] }[]
+  (VegetationControl | { group: Object3D; chunks?: undefined })[]
 > = {
   canopy: [],
   kataster: [],
   shipped: [],
 };
+/** One crown planner per mode, kept across the shots (its arrays too). */
+const planners = Object.fromEntries(
+  MODES.map((m) => [m, createVegetationLod()])
+) as Record<Mode, ReturnType<typeof createVegetationLod>>;
 const buildMs: Record<Mode, number> = { canopy: 0, kataster: 0, shipped: 0 };
 const heights: ((x: number, y: number) => number | null)[] = [];
 
@@ -253,9 +260,15 @@ for (const file of shots) {
   const focus = new Vector3(pos.x + d.x * ahead, ground, pos.z + d.z * ahead);
   const entry = {} as Record<Mode, { main: PassCost; shadow: PassCost }>;
   for (const mode of MODES) {
-    for (const c of controls[mode]) {
-      c.updateLod?.(cam.position);
-    }
+    // the viewer's crown plan (rich budget, mid, far) over the mode's sets
+    // (since 2026-11-06; before, the canopy's chunks stayed on their mid
+    // crown here, so older figures are not comparable)
+    planners[mode](
+      controls[mode].filter(
+        (c): c is VegetationControl => c.chunks !== undefined
+      ),
+      cam.position
+    );
     const meshes = meshesOf(controls[mode].map((c) => c.group));
     entry[mode] = {
       main: passCost(meshes, (m) =>

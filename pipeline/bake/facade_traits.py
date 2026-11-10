@@ -21,6 +21,12 @@ under the eave):
     plaster (0 plaster … 1 black) and the openings' share
     (`facade_measure._holes`), ‰, −1 where less than `MIN_SEEN` is seen;
   - `rd` / `rh`: the same per row bin, bottom row (at GROUND_M) first;
+  - `op`: the window-sized openings seen whole, each its place, size and
+    how full its head's corners are (`openings`): the rows of windows a
+    wall holds, their size and their head (rectangular, a segmental or a
+    round arch — the head is not drawn yet: two drives agree on it at ρ
+    0.67, but of five Dresden walls it read as round, two had round arches
+    and three straight windows behind half-drawn blinds, 2026-11-06);
   - `jx`: the upper wall's vertical edges (the windows' jambs, the
     pilasters, the downpipes) per `JX_M` column, as `dark_map` packs its
     cells (`jamb_profile`, `decode_profile`): what windows.py registers
@@ -143,6 +149,60 @@ def _rows_up(profile: list[int]) -> list[int]:
     return profile[::-1]
 
 
+def openings(holes: np.ndarray, valid: np.ndarray, a: int, b: int) -> list[list[int]]:
+    """The window-sized openings of the upper band (rows `a`–`b` of the
+    rectified wall, the eave's row 0), each whole — clear of the band's
+    ends and of what the image does not see —, as `[x, top, w, h, arch,
+    seg]`: its left edge along the image's strip and its top under the
+    eave (cm), its width and height (cm), and how much of its head's
+    corners is open (‰): outside a half circle the opening's width across
+    (`arch`, a Rundbogen leaves them closed) and outside a segment rising
+    a fifth of it (`seg`, a Stichbogen). A rectangular opening fills
+    both (~1000); the shape is read from many openings (windows.py)."""
+    labels, _ = ndi.label(holes)
+    seen = ndi.binary_erosion(valid, np.ones((3, 3)), iterations=2)
+    out = []
+    for i, sl in enumerate(ndi.find_objects(labels), start=1):
+        if sl is None:
+            continue
+        r0, r1, c0, c1 = sl[0].start, sl[0].stop, sl[1].start, sl[1].stop
+        h, w = (r1 - r0) / PX, (c1 - c0) / PX
+        if not (WINDOW_W_M[0] <= w <= WINDOW_W_M[1] and WINDOW_H_M[0] <= h <= WINDOW_H_M[1]):
+            continue
+        if r0 <= a + 1 or r1 >= b - 1 or c0 <= 1 or c1 >= holes.shape[1] - 1:
+            continue
+        box = (slice(max(r0 - 3, 0), r1 + 3), slice(max(c0 - 3, 0), c1 + 3))
+        if not seen[box].all():
+            continue
+        mine = labels[r0:r1, c0:c1] == i
+        cols = np.arange(c1 - c0) + 0.5
+        rows = np.arange(r1 - r0)[:, None] + 0.5
+        half = (c1 - c0) / 2
+        # the head's corners: outside a half circle on the opening's width,
+        # and outside an arc rising a fifth of it
+        arch = (rows < half) & (np.hypot(cols - half, rows - half) > half)
+        rise = (c1 - c0) / 5
+        radius = (half * half + rise * rise) / (2 * rise)
+        seg = (rows < rise) & (np.hypot(cols - half, rows - radius) > radius)
+
+        out.append(
+            [
+                round(100 * c0 / PX),
+                round(100 * r0 / PX),
+                round(100 * w),
+                round(100 * h),
+                _filled(mine, arch),
+                _filled(mine, seg),
+            ]
+        )
+    return out
+
+
+def _filled(mine: np.ndarray, m: np.ndarray) -> int:
+    """The opening's share (‰) of the mask `m`, or −1 for an empty mask."""
+    return round(1000 * float(mine[m].mean())) if m.any() else -1
+
+
 def _surround(lum: np.ndarray, holes: np.ndarray, valid: np.ndarray, plaster: np.ndarray):
     """(signed, absolute, count): the lightness of the band RING_M round the
     window-sized openings against the plaster FAR_M out, ‰ of the plaster;
@@ -221,6 +281,7 @@ def traits_of(rgb: np.ndarray, valid: np.ndarray, eave: float) -> dict:
     if up_plain.sum() > PX * PX:
         fine = np.abs(lum - ndi.gaussian_filter(lum, 2.0))
         out["tx"] = round(1000 * float(fine[up_plain].mean()))
+    out["op"] = openings(holes & upper, valid, a, b)
     if (s := _surround(lum, holes & upper, valid, plaster)) is not None:
         out["fr"], out["fa"], out["nw"] = s
     # the ground floor's plaster against the upper's
