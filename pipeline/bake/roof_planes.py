@@ -782,26 +782,16 @@ def creases(lab: np.ndarray, planes: dict[int, np.ndarray], mine: np.ndarray) ->
             sense = _crease_sense(planes[a], planes[b], centre[a], centre[b])
             if not sense:
                 continue
-            # the two planes' cells and a reach around them: all that moves;
-            # none left, the pairs before took them all
-            both = (lab == a) | (lab == b)
-            if not both.any():
+            border = _crease_border(scan, lab, a, b)
+            if border is None:
                 continue
-            box = grown_box(both, CREASE_REACH + 1)
-            here, was = lab[box], scan[box]
+            # what can move: the two planes' cells within the reach of it
+            box = grown_box(border, CREASE_REACH + 1)
+            here = lab[box]
             sel = (here == a) | (here == b)
             r, c = rows[box][sel], cols[box][sel]
             new = np.where(sense * (_on(planes[b], r, c) - _on(planes[a], r, c)) > 0, a, b)
-            # where the scan put their border, not where a pass moved it;
-            # two planes a pass made neighbours (it ate what lay between)
-            # never touched in the scan: their border now; none, an earlier
-            # pair's move parted them again
-            border = _border(was, a, b)
-            if not border.any():
-                border = _border(here, a, b)
-            if not border.any():
-                continue
-            near = ndi.distance_transform_edt(~border)[sel] <= CREASE_REACH
+            near = ndi.distance_transform_edt(~border[box])[sel] <= CREASE_REACH
             new = np.where(near, new, here[sel])
             if (new != here[sel]).any():
                 here[sel] = new
@@ -811,27 +801,50 @@ def creases(lab: np.ndarray, planes: dict[int, np.ndarray], mine: np.ndarray) ->
     return lab
 
 
+def _crease_border(scan: np.ndarray, lab: np.ndarray, a: int, b: int) -> np.ndarray | None:
+    """Where the creases measure their reach from (over the whole grid):
+    the border the scan put between `a` and `b`, not where a pass moved
+    it; two planes a pass made neighbours (it ate what lay between) never
+    touched in the scan: their border now; None where they touch in
+    neither (the pairs before took one's cells, or parted them again)."""
+    for labels in (scan, lab):
+        both = (labels == a) | (labels == b)
+        if not both.any():
+            continue
+        box = grown_box(both, 1)
+        border = _border(labels[box], a, b)
+        if border.any():
+            out = np.zeros(lab.shape, bool)
+            out[box] = border
+            return out
+    return None
+
+
 def _join_flanks(h, lab, dirs, mine, aspect, slope, res):
     """Neighbouring flanks facing the same way joined where their planes
     differ in nothing a roof is built with: no step of SECTION_STEP_M where
     they meet (a party wall's), no turn of SECTION_TURN_DEG (a bend), no
     change of pitch of SECTION_PITCH (a mansard's break). A flank its
     dormers broke into patches, or `_sections` cut where one plane would
-    do, is one flank again; the longest shared borders first, labels
-    renumbered from 1."""
+    do, is one flank again; the longest shared borders first, each flank
+    in one join a round, labels renumbered from 1."""
     near = np.where(mine, fill_nearest(lab, lab > 0), 0)
     planes = {k: _flank_plane(h, lab == k, phi)[0] for k, phi in dirs.items()}
     rows, cols = np.indices(h.shape)
     joined = True
     while joined:
         joined = False
+        touched: set[int] = set()
         for (a, b), _ in sorted(label_borders(near).items(), key=lambda kv: (-kv[1], kv[0])):
+            if a in touched or b in touched:
+                continue
             turn = abs(np.angle(np.exp(1j * (dirs[a] - dirs[b]))))
             pitch = abs(np.hypot(*planes[a][1:]) - np.hypot(*planes[b][1:])) / res
             if turn > np.deg2rad(SECTION_TURN_DEG) or pitch > SECTION_PITCH:
                 continue
-            edge = (near == a) & ndi.binary_dilation(near == b)
-            r, c = rows[edge], cols[edge]
+            box = grown_box((near == a) | (near == b), 1)
+            edge = (near[box] == a) & ndi.binary_dilation(near[box] == b)
+            r, c = rows[box][edge], cols[box][edge]
             step = np.abs(_on(planes[a], r, c) - _on(planes[b], r, c))
             if not len(step) or np.percentile(step, 90) > SECTION_STEP_M:
                 continue
@@ -841,8 +854,8 @@ def _join_flanks(h, lab, dirs, mine, aspect, slope, res):
             lab[lab == b] = a
             near[near == b] = a
             del dirs[b], planes[b]
+            touched.update((a, b))
             joined = True
-            break
     out = np.zeros_like(lab)
     renamed = {}
     for j, k in enumerate(sorted(dirs), start=1):

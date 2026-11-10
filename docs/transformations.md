@@ -1138,7 +1138,9 @@ visual-variable codebook is in
   Schloßstraße and Sporergasse 23 flanks, the scan within 0.5 m of the
   drawn roof on 70 % of its cells (35 % with the planes first). A face most of whose cells only the
   flank rule found is drawn as flanks or not at all: the planes or a
-  landmark's surface would draw the dormers' blobs it was found past.
+  landmark's surface would draw the dormers' blobs it was found past;
+  not at all, it gives back its flank cells alone, and a sloped plane
+  closed into it is cut again as a face of its own.
   The surface is written as a 1 m grid in cm from the part's `z` (its median),
   two cells past the outline and carried on there on the face's own local
   plane. Polygonised from the labels smoothed by a 2 m majority (twice:

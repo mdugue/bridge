@@ -561,7 +561,8 @@ def _regions(h, own, face, small_cells, with_faces, narrow):
 def _plausible_faces(h, lab, faces, face, landmark, flank_only, fits=None):
     """The surface the faces are drawn with — each as flanks, planes or one
     curve (`roof_planes.plausible_fit`), fitted on its own face cells
-    (what it took in follows it) —, the faces that are none of them, and
+    (what it took in follows it) —, the faces that are none of them (each
+    with whether it was judged as flanks alone), and
     per face drawn as flanks its window, fit and eaves (`_straight_eaves`).
     A face most of whose cells only the flank rule found (`flank_only`) is
     drawn as flanks or not at all. `fits`: the fits of earlier rounds, by
@@ -577,8 +578,7 @@ def _plausible_faces(h, lab, faces, face, landmark, flank_only, fits=None):
         rows, cols = np.nonzero(ndi.binary_dilation(mine, iterations=EXTEND_CELLS + 2))
         win = (slice(rows.min(), rows.max() + 1), slice(cols.min(), cols.max() + 1))
         src = mine[win] & face[win]
-        own = mine & face
-        flanks = (own & flank_only).sum() > 0.5 * max(int(own.sum()), 1)
+        flanks = (src & flank_only[win]).sum() > 0.5 * max(int(src.sum()), 1)
         cells = src if src.any() else mine[win]
         key = (rows.min(), cols.min(), cells.shape, cells.tobytes(), flanks, landmark)
         if key not in fits:
@@ -587,7 +587,7 @@ def _plausible_faces(h, lab, faces, face, landmark, flank_only, fits=None):
             )
         fit = fits[key]
         if fit is None:
-            implausible.append(int(rid))
+            implausible.append((int(rid), flanks))
             continue
         sub = surface[win]
         sub[mine[win]] = fit[0][mine[win]]
@@ -719,11 +719,14 @@ def measured_model(
             break
         if rounds == PLAUSIBLE_ROUNDS:
             # still none after the last re-cut: drawn flat at its median
-            faces[implausible] = False
+            faces[[rid for rid, _ in implausible]] = False
             break
-        # a face the scan shows no roof's shape on goes back to the levels,
-        # its flank cells too: they no longer make a face flank-only
-        face &= ~np.isin(lab, implausible)
+        # a face the scan shows no roof's shape on goes back to the levels;
+        # one judged as flanks alone gives back only its flank cells — a
+        # sloped plane closed into it is re-cut as a face of its own
+        dropped = np.isin(lab, [rid for rid, _ in implausible])
+        alone = np.isin(lab, [rid for rid, flanks in implausible if flanks])
+        face &= ~(dropped & ~alone) & ~(alone & flank_only)
         flank_only &= face
     drawn = {k: v for k, v in gables.items() if faces[k]}
     _straight_eaves(h, lab, faces, surface, drawn, small_cells)
@@ -980,8 +983,9 @@ def _regular_ring(coords, walls: Walls) -> list:
         span = [(prev[4] + k) % n for k in range((line[3] - prev[4]) % n + 1)]
         p, u, q, v = prev[0], prev[1], line[0], line[1]
         det = _cross(u, v)
-        if abs(det) < np.sin(np.deg2rad(REGULAR_DEG)):
+        if abs(det) < 1e-9:
             # parallel: a jog, each line's foot of the point between them
+            # (a bend of a few degrees has a corner where its lines cross)
             c = pts[span[len(span) // 2]]
             corners = [p + u * float(u @ (c - p)), q + v * float(v @ (c - q))]
         else:
@@ -1104,12 +1108,16 @@ def clean_cover(polys: list) -> list:
         return polys
 
 
-def _noded_cover(polys: list) -> np.ndarray | None:
+def _noded_cover(polys: list, lines=None) -> np.ndarray | None:
     """`clean_cover`'s coverage before its simplification: the parts'
-    borders noded, each face to the part holding it, a small one none
-    holds to the part along most of its outline."""
-    lines = shapely.union_all([shapely.boundary(p) for p in polys if not p.is_empty])
-    faces = np.asarray(shapely.get_parts(shapely.polygonize(shapely.get_parts(lines))))
+    borders noded (or the `lines` given: their edges), each face to the
+    part holding it, a small one none holds to the part along most of its
+    outline."""
+    if lines is None:
+        lines = shapely.get_parts(
+            shapely.union_all([shapely.boundary(p) for p in polys if not p.is_empty])
+        )
+    faces = np.asarray(shapely.get_parts(shapely.polygonize(lines)))
     if not len(faces):
         return None
     inner = shapely.point_on_surface(faces)
@@ -1128,16 +1136,23 @@ def _noded_cover(polys: list) -> np.ndarray | None:
 def _straightened(polys: list) -> list:
     """The parts with the points on their straight edges dropped (within
     STRAIGHT_M of their neighbours' line: where a border met an edge in the
-    tiling, each one more wall in the mesh) — as one coverage, so two
-    neighbours drop the same points of the border they share and no crack
-    or overlap opens along it; each part alone only where they are none."""
+    tiling, each one more wall in the mesh) — on the coverage's edges
+    between its junctions, so two neighbours drop the same points of the
+    border they share and no crack or overlap opens along it; each part
+    alone only where they are no coverage."""
+    alone = [shapely.simplify(shapely.make_valid(p), STRAIGHT_M) for p in polys]
     try:
         cover = np.asarray(polys, dtype=object)
-        if len(polys) > 1 and shapely.coverage_is_valid(cover):
-            return list(shapely.coverage_simplify(cover, STRAIGHT_M, simplify_boundary=True))
+        if len(polys) < 2 or not shapely.coverage_is_valid(cover):
+            return alone
+        edges = shapely.line_merge(shapely.union_all([shapely.boundary(p) for p in polys]))
+        edges = shapely.simplify(shapely.get_parts(edges), STRAIGHT_M)
+        out = _noded_cover(polys, edges)
     except shapely.errors.GEOSException:
-        pass
-    return [shapely.simplify(shapely.make_valid(p), STRAIGHT_M) for p in polys]
+        return alone
+    if out is None or not shapely.coverage_is_valid(out):
+        return alone
+    return list(out)
 
 
 def region_polygons(
@@ -1260,6 +1275,10 @@ def rebuild(area: Area, obj: LodObject) -> Rebuilt | None:
     miss_lod2 = miss_share(roof, dom, judged)
     if miss_lod2 <= LEVEL_MISS_SHARE or form_holds(roof[judged], dom[judged]):
         return None
+    # the scan sees open ground over much of it: the footprint is out of date
+    # (a block torn down since), not just the roof
+    if float((dom[judged] < obj.base + GROUND_M).mean()) > OPEN_SHARE:
+        return None
     # one scan for every judgement and model of these cells (the models'
     # `known` cells are the judged ones)
     scan = Scan(scan_surface(dom, judged), own)
@@ -1267,10 +1286,6 @@ def rebuild(area: Area, obj: LodObject) -> Rebuilt | None:
         level_share(roof, dom, scan.h, judged) < LEVEL_SHARE
         or pitch_holds(roof, scan.h, own, judged)
     ):
-        return None
-    # the scan sees open ground over much of it: the footprint is out of date
-    # (a block torn down since), not just the roof
-    if float((dom[judged] < obj.base + GROUND_M).mean()) > OPEN_SHARE:
         return None
     small = int(MIN_PART_M2 / (RES * RES))
     flat = measured_model(dom, own, inner, green, small, with_faces=False, scan=scan)
