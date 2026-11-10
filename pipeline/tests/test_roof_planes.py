@@ -4,6 +4,7 @@ import numpy as np
 from scipy import ndimage as ndi
 
 from bake.roof_planes import (
+    CREASE_REACH,
     FLANK_TOL_M,
     PLANE_TOL_M,
     _join_flanks,
@@ -11,12 +12,22 @@ from bake.roof_planes import (
     creases,
     curved_surface,
     flank_cells,
-    gable_surface,
+    gable_fit,
     planar_faces,
     plane_facets,
-    plausible_surface,
+    plausible_fit,
 )
 from bake.roofs import SLOPE, measured_model, step_cells
+
+
+def gable_surface(h, mine, slope):
+    fit = gable_fit(h, mine, slope)
+    return None if fit is None else fit[0]
+
+
+def plausible_surface(h, mine, slope, landmark=False):
+    fit = plausible_fit(h, mine, slope, landmark=landmark)
+    return None if fit is None else fit[0]
 
 
 def _gable(rows=40, cols=30, ridge=15.0, pitch=0.4, noise=0.0, seed=0):
@@ -154,7 +165,7 @@ def test_patches_of_one_flank_join_two_houses_flanks_do_not():
         lab[:20], lab[25:] = 1, 2
         dirs = {1: 0.0, 2: 0.05}
         flat = np.zeros(h.shape)
-        out, kept = _join_flanks(h, lab, dirs, np.ones(h.shape, bool), flat, flat + 0.8)
+        out, kept = _join_flanks(h, lab, dirs, np.ones(h.shape, bool), flat, flat + 0.8, 1.0)
         assert (len(kept) == 1) == joined
 
 
@@ -173,3 +184,19 @@ def test_two_flanks_meet_where_their_planes_cross_not_where_the_scan_left_their_
     # one flank stepping up the same way: a step, where it was
     step = creases(lab, {1: np.array([10.0, 0.5, 0.0]), 2: np.array([12.0, 0.5, 0.0])}, every)
     assert (step == lab).all()
+
+
+def test_a_crease_moves_no_cell_far_from_where_the_two_flanks_meet():
+    lab = np.zeros((40, 40), np.int64)
+    lab[:, :20] = 1
+    lab[:, 20:] = 2
+    every = np.ones(lab.shape, bool)
+    # a ridge whose planes cross at column 20 at the top and run off across
+    # the second flank toward the bottom (c = 20 + r / 2): its far cells are
+    # no part of the crease, and stay
+    planes = {1: np.array([0.0, 0.3, 0.0]), 2: np.array([12.0, -0.3, 0.3])}
+    out = creases(lab, planes, every)
+    far = 20 + CREASE_REACH + 1
+    assert (out[:, :20] == 1).all() and (out[:, far:] == 2).all()
+    # near it, the crease runs where the planes cross
+    assert (out[30:, 20 : far - 1] == 1).all()

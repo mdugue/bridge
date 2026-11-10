@@ -15,9 +15,12 @@ from bake.roofs import (
     LEVEL_SHARE,
     MISS_SHARE,
     Grid,
+    _gap_owner,
     _majority,
     _narrow,
     _polygonal,
+    building_walls,
+    clean_cover,
     form_holds,
     inclined_cells,
     level_share,
@@ -28,7 +31,6 @@ from bake.roofs import (
     region_polygons,
     regular_polygon,
     run,
-    wall_directions,
 )
 
 X0, Y0, SIZE = 400_000.0, 5_600_000.0, 200
@@ -421,7 +423,7 @@ def test_a_part_the_tiling_leaves_inside_a_collection_is_kept():
 
 def test_each_part_of_a_split_outline_takes_the_walls_directions():
     # a part the footprint's clip split in two: both halves are squared
-    walls = wall_directions(shapely.box(0, 0, 40, 10))
+    walls = building_walls(shapely.box(0, 0, 40, 10))
     # a rectangle with its corners rounded off by 1 m chamfers
     blob = shapely.Polygon([(-4, -3), (4, -3), (5, -2), (5, 2), (4, 3), (-4, 3), (-5, 2), (-5, -2)])
     split = shapely.MultiPolygon([affinity.translate(blob, 6, 5), affinity.translate(blob, 30, 5)])
@@ -431,3 +433,83 @@ def test_each_part_of_a_split_outline_takes_the_walls_directions():
         d = np.diff(np.asarray(part.exterior.coords), axis=0)
         theta = np.degrees(np.arctan2(d[:, 1], d[:, 0])) % 90
         assert np.all(np.minimum(theta, 90 - theta) < 1e-6)
+
+
+def test_a_wing_ends_at_its_gable_over_a_lower_roof_not_past_it():
+    # the gable wing of the test above, its south end a gable over a
+    # courtyard's roof 9 m below: the wing's eave rule does not carry the
+    # flanks on over that roof, whose plane runs on level along the ridge
+    rows, cols = 70, 50
+    x = np.arange(cols) + 0.5
+    wing = 26.0 - np.abs(x - 10.0) * 0.6
+    dom = np.tile(np.where(x < 20, wing, 11.0), (rows, 1))
+    dom[45:, :] = 11.0
+    own = np.ones(dom.shape, bool)
+    m = measured_model(dom, own, own, np.zeros_like(own), 20)
+    z = m.heights()
+    assert (z[46:, :] < 15.0).all()
+
+
+def _steps(poly) -> int:
+    # the outline's edges shorter than half a metre: steps along a wall
+    d = np.diff(np.asarray(poly.exterior.coords), axis=0)
+    return int((np.hypot(d[:, 0], d[:, 1]) < 0.5).sum())
+
+
+def test_an_outline_along_a_front_of_nearly_parallel_walls_runs_straight():
+    # the south front's two walls 0.6° apart: one direction, not two with
+    # a step where an edge snaps to the other
+    footprint = shapely.Polygon([(0, 0), (40, 0), (40, 10.4), (0, 10)])
+    walls = building_walls(footprint)
+    assert len(np.unique(walls.dirs)) == 2
+    blob = shapely.Polygon([(1, 1.0), (10, 0.9), (20, 1.1), (30, 0.95), (39, 1.0), (39, 6), (1, 6)])
+    out = regular_polygon(blob, walls)
+    assert _steps(out) == 0
+
+
+def test_an_outline_whose_ring_starts_along_a_wall_has_no_step_there():
+    walls = building_walls(shapely.box(0, 0, 40, 10))
+    ring = [(20, 1.3), (30, 1.1), (39, 1.2), (39, 6), (1, 6), (1, 1.0), (10, 1.2), (20, 1.3)]
+    out = regular_polygon(shapely.Polygon(ring), walls)
+    assert _steps(out) == 0
+    assert len(out.exterior.coords) == 5
+
+
+def test_an_inner_edge_runs_along_the_nearest_wall_not_the_nearest_direction():
+    # a block whose north wall turns 8° off its south one: an edge 5 m in
+    # from the south wall, wobbling ±4°, runs along the south wall
+    footprint = shapely.Polygon([(0, 0), (40, 0), (40, 25.6), (0, 20)])
+    walls = building_walls(footprint)
+    blob = shapely.Polygon([(1, 5), (10, 5.7), (20, 5.0), (30, 5.7), (39, 5.0), (39, 9), (1, 9)])
+    out = regular_polygon(blob, walls)
+    # one straight south edge: a rectangle, no teeth turned 8° between jogs
+    assert len(out.exterior.coords) == 5
+    d = np.diff(np.asarray(out.exterior.coords), axis=0)
+    assert np.abs(d[np.abs(d[:, 0]) > 1, 1]).max() < 1e-6
+
+
+def test_a_gap_between_two_roofs_straight_walls_goes_to_the_lower_one():
+    high = shapely.box(0, 10, 40, 20)
+    low = shapely.box(0, 0, 40, 9.4)
+    gap = shapely.box(0, 9.4, 40, 10)
+    # ranked highest first: the gap lies beside both along 40 m
+    assert _gap_owner(gap, [high, low], {0: 0, 1: 1}, old=0) == 1
+    # one beside it only at an end: the other keeps it
+    stub = shapely.box(39.5, 0, 40, 9.4)
+    assert _gap_owner(gap, [high, stub], {0: 0, 1: 1}, old=1) == 0
+
+
+def test_two_parts_borders_that_meet_a_few_centimetres_apart_are_one_line():
+    # a higher part's straight wall and a lower part whose border fell
+    # 4 cm short of it along 18 m in the tiling: the sliver between them
+    # goes to the lower part: one straight border, the higher part a plain
+    # rectangle without the two corners where the sliver began and ended
+    high = shapely.box(0, 10, 40, 20)
+    low = shapely.union_all(
+        [shapely.box(0, 0, 40, 9.96), shapely.box(0, 9.96, 12, 10), shapely.box(30, 9.96, 40, 10)],
+        grid_size=0.01,
+    )
+    out = clean_cover([high, low])
+    assert shapely.coverage_is_valid(np.asarray(out, dtype=object))
+    assert len(shapely.get_coordinates(out[0])) == 5
+    assert abs(out[1].area - 400) < 1e-6

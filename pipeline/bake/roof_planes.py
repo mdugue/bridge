@@ -1,6 +1,6 @@
 """What a measured roof face may be drawn as (roofs.py, ADR 0036): planes,
 one extruded profile, or — on a landmark only — the scan itself
-(`plausible_surface`).
+(`plausible_fit`).
 
 DOM1's 1 m cells over a roof are its tiles, gutters, skylights, snow
 guards, dormers and a metre of blur at every edge. Drawn as they are, even
@@ -10,7 +10,7 @@ courtyard). Roofs are built of planes: a gable is two, a hip four, a
 mansard eight; a vault is the rare roof that curves, and then the same all
 along its axis. So a face is drawn as what it most plausibly is:
 
-0. **flanks** (`gable_surface`, tried first): the scan smoothed past its
+0. **flanks** (`gable_fit`, tried first): the scan smoothed past its
    dormers falls into patches facing one way (`_flank_classes`); each
    patch of at least `FLANK_M2` that rises `FLANK_RISE_M` is a flank, cut
    into sections where one plane does not hold it (`_sections`: a wing
@@ -379,6 +379,10 @@ EAVE_PCT = 1.0  # a flank's eave: this percentile of its plane where the scan li
 CREASE_COS = 0.3
 CREASE_LEVEL = 0.05  # a plane rising less is level: a crown, a mansard's top
 CREASE_PASSES = 3
+# ... moving only the cells within this many of where the scan put their
+# border: where the two planes cross further off (a flank joined over a
+# bend, its plane a compromise), no island of the other plane far from it
+CREASE_REACH = 6
 
 
 def _calm_smooth(h: np.ndarray, calm: np.ndarray, sigma: float) -> np.ndarray:
@@ -407,14 +411,14 @@ def _direction(aspect: np.ndarray, weight: np.ndarray) -> float:
     return float(np.angle(np.sum(weight * np.exp(1j * aspect))))
 
 
-def _fits(h: np.ndarray, sel: np.ndarray, phi: float) -> float:
+def _fits(h: np.ndarray, sel: np.ndarray, phi: float, res: float) -> float:
     """The share of the flank's cells its plane explains: within
     FLANK_TOL_M of it, or under a dormer on it (`_explained`) — a row of
     dormers is no reason to cut a flank, a house whose ridge steps is."""
     plane, _ = _flank_plane(h, sel, phi)
     rows, cols = np.indices(h.shape)
     off = np.where(sel, h - _on(plane, rows, cols), 0.0)
-    return float(_explained(off, sel, 1.0)[sel].mean())
+    return float(_explained(off, sel, res)[sel].mean())
 
 
 def _explained(off: np.ndarray, judged: np.ndarray, res: float) -> np.ndarray:
@@ -458,14 +462,14 @@ def _cut(h: np.ndarray, sel: np.ndarray, phi: float, min_cells: float) -> float 
     return float(good[j + 1] + (-cols * np.sin(phi) + rows * np.cos(phi)).min())
 
 
-def _sections(h, sel, aspect, weight, min_cells, depth=0) -> list[np.ndarray]:
+def _sections(h, sel, aspect, weight, min_cells, res, depth=0) -> list[np.ndarray]:
     """A flank cut into sections where one plane does not hold it — town
     houses in a row whose ridges step, a wing that bends with its street:
     cut in two along its length (`_cut`), and each part again, where the
     sections fit their own planes better (SECTION_GAIN more of the cells)
     than the flank its one plane."""
     phi = _direction(aspect[sel], weight[sel])
-    whole = _fits(h, sel, phi)
+    whole = _fits(h, sel, phi, res)
     if depth >= SECTION_DEPTH or sel.sum() < 2 * min_cells or whole >= SECTION_FIT:
         return [sel]
     cut = _cut(h, sel, phi, min_cells)
@@ -486,8 +490,8 @@ def _sections(h, sel, aspect, weight, min_cells, depth=0) -> list[np.ndarray]:
     # small to keep count as misses
     out = []
     for p in halves:
-        out += _sections(h, p, aspect, weight, min_cells, depth + 1)
-    fit = sum(_fits(h, p, _direction(aspect[p], weight[p])) * p.sum() for p in out)
+        out += _sections(h, p, aspect, weight, min_cells, res, depth + 1)
+    fit = sum(_fits(h, p, _direction(aspect[p], weight[p]), res) * p.sum() for p in out)
     if fit < (whole + SECTION_GAIN) * sel.sum():
         return [sel]
     return out
@@ -719,8 +723,9 @@ def creases(lab: np.ndarray, planes: dict[int, np.ndarray], mine: np.ndarray) ->
     at a ridge or a hip each cell of the two on the lower of them, at a
     valley on the higher (`_crease_sense`) — the crease a straight line,
     the surface without a step along it, wherever the scan's rounding had
-    left the border. Other borders (a step between two houses) stay."""
-    lab = lab.copy()
+    left the border, within CREASE_REACH of it. Other borders (a step
+    between two houses) stay."""
+    scan, lab = lab, lab.copy()
     rows, cols = np.indices(lab.shape)
     for _ in range(CREASE_PASSES):
         inside = np.where(mine, lab, 0)
@@ -742,6 +747,12 @@ def creases(lab: np.ndarray, planes: dict[int, np.ndarray], mine: np.ndarray) ->
             za = _on(planes[a], rows[sel], cols[sel])
             zb = _on(planes[b], rows[sel], cols[sel])
             new = np.where(sense * (zb - za) > 0, a, b)
+            # where the scan put their border, not where a pass moved it
+            border = ((scan == a) & ndi.binary_dilation(scan == b)) | (
+                (scan == b) & ndi.binary_dilation(scan == a)
+            )
+            near = ndi.distance_transform_edt(~border)[sel] <= CREASE_REACH
+            new = np.where(near, new, lab[sel])
             if (new != lab[sel]).any():
                 lab[sel] = new
                 moved = True
@@ -750,7 +761,7 @@ def creases(lab: np.ndarray, planes: dict[int, np.ndarray], mine: np.ndarray) ->
     return lab
 
 
-def _join_flanks(h, lab, dirs, mine, aspect, slope):
+def _join_flanks(h, lab, dirs, mine, aspect, slope, res):
     """Neighbouring flanks facing the same way joined where their planes
     differ in nothing a roof is built with: no step of SECTION_STEP_M where
     they meet (a party wall's), no turn of SECTION_TURN_DEG (a bend), no
@@ -766,7 +777,7 @@ def _join_flanks(h, lab, dirs, mine, aspect, slope):
         joined = False
         for (a, b), _ in sorted(_borders(near).items(), key=lambda kv: (-kv[1], kv[0])):
             turn = abs(np.angle(np.exp(1j * (dirs[a] - dirs[b]))))
-            pitch = abs(np.hypot(*planes[a][1:]) - np.hypot(*planes[b][1:]))
+            pitch = abs(np.hypot(*planes[a][1:]) - np.hypot(*planes[b][1:])) / res
             if turn > np.deg2rad(SECTION_TURN_DEG) or pitch > SECTION_PITCH:
                 continue
             edge = (near == a) & ndi.binary_dilation(near == b)
@@ -825,14 +836,14 @@ def flank_facets(h: np.ndarray, mine: np.ndarray, slope_min: float, res: float =
     min_cells = FLANK_M2 / (res * res)
     inward = _inward(mine)
     for core in _flank_cores(cls, n, res):
-        sections = _sections(h, core, aspect, slope, min_cells)
+        sections = _sections(h, core, aspect, slope, min_cells, res)
         for piece in _rising(sections, h, hs, aspect, slope, res):
             label = len(dirs) + 1
             lab[piece] = label
             dirs[label] = _direction(aspect[piece], slope[piece])
     if not dirs:
         return lab, {}, set(), False, 0.0
-    lab, dirs = _join_flanks(h, lab, dirs, mine, aspect, slope)
+    lab, dirs = _join_flanks(h, lab, dirs, mine, aspect, slope, res)
     eaved = sum(int((lab == k).sum()) * _eave(lab == k, hs, inward, phi) for k, phi in dirs.items())
     eaves = eaved / float((lab > 0).sum())
     # gables: two flanks side by side facing nearly opposite ways take one axis
@@ -866,14 +877,6 @@ def flank_facets(h: np.ndarray, mine: np.ndarray, slope_min: float, res: float =
     full = _assign(hs, lab, planes, mine, ASSIGN_REACH)
     full = settle_borders(np.where(mine, hs, 0.0), full, planes)
     return full, planes, set(dirs), sags, eaves
-
-
-def gable_surface(
-    h: np.ndarray, mine: np.ndarray, slope: float, res: float = 1.0, share: float = GABLE_SHARE
-):
-    """The face as its flanks over the whole grid, or None (`gable_fit`)."""
-    fit = gable_fit(h, mine, slope, res, share)
-    return None if fit is None else fit[0]
 
 
 def gable_fit(
@@ -917,24 +920,10 @@ def gable_fit(
     # a level line a lower roof beside it is cut along (NaN off the flanks)
     eave = np.full(h.shape, np.nan)
     for k in flanks:
-        sel = mine & (lab == k) & (np.abs(h - out) <= FLANK_TOL_M)
+        sel = mine & (near == k) & (np.abs(h - out) <= FLANK_TOL_M)
         if sel.sum():
             eave[near == k] = np.percentile(out[sel], EAVE_PCT)
     return out, eave
-
-
-def plausible_surface(
-    h: np.ndarray,
-    mine: np.ndarray,
-    slope: float,
-    res: float = 1.0,
-    reach: int = 4,
-    landmark: bool = False,
-    flanks_only: bool = False,
-) -> np.ndarray | None:
-    """The surface of `plausible_fit`, or None."""
-    fit = plausible_fit(h, mine, slope, res, reach, landmark, flanks_only)
-    return None if fit is None else fit[0]
 
 
 def plausible_fit(

@@ -1065,7 +1065,7 @@ visual-variable codebook is in
   face's cells go back to the levels and the model is cut again (at most
   three rounds). Until 2026-11-06 every face was the smoothed scan
   (🗃️ below).
-  **Flanks first** (since 2026-11-10, `gable_surface`, tried before the
+  **Flanks first** (since 2026-11-10, `gable_fit`, tried before the
   planes): the scan smoothed over the roof's calm cells (σ 1.5 cells: a
   dormer's 2–3 m melts into its flank) falls into patches facing one of
   the roof's directions (the peaks of its slope-weighted aspect histogram,
@@ -1101,7 +1101,9 @@ visual-variable codebook is in
   other (a valley) on the higher (`creases`): the crease is the line
   where the planes cross, straight and without a step, wherever the
   scan's rounding had left the border (a 3 m step along the ridge of An
-  der Frauenkirche 5's east wing); other borders, a row of houses
+  der Frauenkirche 5's east wing) — within 6 cells of it, so where the
+  planes cross further off (a flank joined over a bend) no island of the
+  other plane stands far from the border; other borders, a row of houses
   stepping, stay where the scan put them. The flanks are the face when, judged a cell in from its edge
   (the eave's blur), 85 % of its cells (a landmark's 95 %) lie within
   0.5 m of their plane or under a blob of ≤ 30 m² up to 3 m over it, 60 %
@@ -1114,12 +1116,14 @@ visual-variable codebook is in
   a face drawn as flanks ends where each flank reaches its eave — the
   lowest of its plane where the scan lies on it (the 1st percentile), a
   level line — against a level ≥ 1 m below it (a courtyard's roof): that
-  level's cells the plane still stands over within 3 cells join the face,
+  level's cells the plane still stands over within 3 cells, downhill of
+  the face (not past a gable's end, where the plane runs on level along
+  the ridge), join the face,
   and the face's cells past the eave go to the level where the scan lies
   on that level (within 1 m; a terrace the scan shows on the roof stays
   roof), so the wall between them runs along the eave instead of the
   scan's blur. An der
-  Frauenkirche 5's ring is now 17 flanks meeting at hips; the block at
+  Frauenkirche 5's ring is now 16 flanks meeting at hips; the block at
   Schloßstraße and Sporergasse 23 flanks, the scan within 0.5 m of the
   drawn roof on 70 % of its cells (35 % with the planes first). A face most of whose cells only the
   flank rule found is drawn as flanks or not at all: the planes or a
@@ -1132,17 +1136,38 @@ visual-variable codebook is in
   (`regular_cover`, since 2026-11-10): the majority rounds every corner
   and the scan's blur waves every border, so a courtyard read as an oval
   and a wing's inner eave as a dune's foot. Each edge of 2 m or more
-  turned within 15° of one of the footprint's walls (those ≥ 4 m) is
-  turned onto it, neighbours parallel within 1 m are one line, an edge
-  off every wall shorter than 4 m (a rounded corner) is left out, and the
-  lines meet where they cross, unless a corner would stand 1.5 m off the
-  outline (a round tower keeps its points); the parts are then tiled
-  again, the highest first, each taking what its new outline holds and
-  nothing before it took, what none took going back to its old part,
-  parts under 2 m dropped → `data/<site>/dlm/roofs_<tile>.geojson` (Polygons
+  is turned onto the nearest of the building's walls (in plan) among
+  those within 15° of its direction — the walls ≥ 4 m of its own
+  outline, before another roof's cells are cut from it, walls within 2°
+  of a longer one one direction: a wing's inner edge runs along its own
+  outer wall, not along whichever wall of a bending block is closest in
+  direction (An der Frauenkirche 5's ten directions cut its courtyard's
+  sides into teeth), and an edge within 1 m of that wall runs on it (an
+  edge along the outline is the outline, no sliver beside it);
+  neighbours parallel within 1 m are one line, an edge off every wall
+  shorter than 4 m (a rounded corner) is left out, and the lines meet
+  where they cross, unless a corner would stand 1.5 m off the outline (a
+  round tower keeps its points). The parts are then tiled again, the
+  highest first, each taking what its new outline holds and nothing
+  before it took; a gap none took goes to the lowest part it lies beside
+  along a metre or more (a lower roof runs on up to a higher one's
+  straight wall), else back to its old part. Then the parts are one
+  coverage again (`clean_cover`: their borders noded, a sliver under
+  1 m² none holds given to the part beside it), their inner borders
+  simplified by 0.3 m (`coverage_simplify`, the outline kept: the
+  notches where two borders meet a few centimetres apart), and points on
+  a straight edge within the file's centimetre (where a neighbour's
+  border met it) dropped — each would be one more wall in the mesh:
+  Dresden's rebuilt roofs have 24 % fewer outline points than before the
+  regularising (the other sites 16 to 36 %). The footprint they are cut to is the
+  building's less what another roof covers, but not a strip of covered
+  cells narrower than three (a neighbour's eave over the party wall, a
+  notch a metre deep every few metres along it), the cut's raster steps
+  simplified by 0.75 m. Parts under 2 m dropped →
+  `data/<site>/dlm/roofs_<tile>.geojson` (Polygons
   with the object `id`, the roof `z` and, for a face, its `surface`; the
   provider's credit). **1 080 objects on Dresden's fifteen tiles, 2 728
-  parts, 340 of them faces** (2026-11-10; 2 814 and 367 before the flanks;
+  parts, 342 of them faces** (2026-11-10; 2 814 and 367 before the flanks;
   1 081, 2 755 and 222 before the plausibility rule; 886 objects, 2 227 parts before
   the band below 40 %; 2 956 parts before the strips merged; the
   Altstadt most); the step runs on every site — Hamburg 587 objects (365
@@ -1710,8 +1735,8 @@ visual-variable codebook is in
   highest of them); until then such a roof's dormers and chimneys stood
   at the LoD2 faces it replaces, metres off the drawn roof — some
   chimneys' measured tops under their own feet (Dresden's rebuilt roofs
-  hold 399 dormers now, 50 before; the block at Schloßstraße and
-  Sporergasse 27, 4 before). The burned 1 m roof
+  hold 417 dormers now, 50 before; the block at Schloßstraße and
+  Sporergasse 26, 4 before). The burned 1 m roof
   reads a cell's height, up to half a metre off a 45° face under a
   centre: over all seven cities 7 % of the dormers stood more than 0.3 m
   over the roof the building draws (0.6 % over 0.7 m), their cheeks

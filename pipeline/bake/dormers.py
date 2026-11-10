@@ -112,6 +112,7 @@ from scipy.ndimage import map_coordinates
 from .common import Tile, feature, owns, write_geojson
 from .osm_buildings import _lod2, footprints, root_of
 from .roof_colour import ring_normal, ring_slope, surface_rings
+from .skyview import surface_heights
 from .structures import Surfaces
 
 MIN_SLOPE = 25.0
@@ -611,8 +612,7 @@ class MeasuredPart:
         self.z = z
         self.grid = None
         if surface is not None:
-            dz = np.asarray(surface["dz"], np.float64).reshape(surface["rows"], surface["cols"])
-            self.grid = z + dz / 100.0
+            self.grid, self.xs, self.ys = surface_heights(surface, z)
             self.x0, self.y0, self.res = surface["x"], surface["y"], surface["res"]
 
     def at(self, x: float, y: float) -> tuple[float, float]:
@@ -635,9 +635,7 @@ class MeasuredPart:
         """Its highest point inside its plan."""
         if self.grid is None:
             return self.z
-        rows, cols = np.indices(self.grid.shape)
-        xs = self.x0 + (cols + 0.5) * self.res
-        ys = self.y0 - (rows + 0.5) * self.res
+        xs, ys = np.meshgrid(self.xs, self.ys)
         inside = shapely.contains_xy(self.plan, xs, ys)
         return float(self.grid[inside].max()) if inside.any() else self.z
 

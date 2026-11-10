@@ -264,6 +264,17 @@ def _burn_chunk(out, idx, col, row, c0, r0, w, count, z) -> None:
     np.maximum.at(out, (rr[inside], cc[inside]), zz[inside])
 
 
+def surface_heights(surface: dict, z: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """A measured face's surface grid (roofs.py `surface`: cm from the
+    part's `z`, row by row from the north-west corner `x`, `y`) as absolute
+    heights, with its cell centres' x (per column) and y (per row)."""
+    res = surface["res"]
+    dz = np.asarray(surface["dz"], np.float64).reshape(surface["rows"], surface["cols"])
+    xs = surface["x"] + (np.arange(surface["cols"]) + 0.5) * res
+    ys = surface["y"] - (np.arange(surface["rows"]) + 0.5) * res
+    return z + dz / 100, xs, ys
+
+
 def face_triangles(poly: shapely.Geometry, surface: dict, z: float) -> np.ndarray:
     """A measured face's surface (roofs.py `surface`) as (n, 3, 3)
     triangles: two per square between four cell centres inside the part;
@@ -272,9 +283,7 @@ def face_triangles(poly: shapely.Geometry, surface: dict, z: float) -> np.ndarra
     half a cell over its neighbour's roof (a tower's small base beside it
     took that roof's height as its own)."""
     res = surface["res"]
-    a = z + np.asarray(surface["dz"], np.float64).reshape(surface["rows"], surface["cols"]) / 100
-    xs = surface["x"] + (np.arange(surface["cols"]) + 0.5) * res
-    ys = surface["y"] - (np.arange(surface["rows"]) + 0.5) * res
+    a, xs, ys = surface_heights(surface, z)
     gx, gy = np.meshgrid(xs, ys)
     inner = shapely.contains_xy(poly, gx, gy)
     full = inner[:-1, :-1] & inner[:-1, 1:] & inner[1:, :-1] & inner[1:, 1:]
