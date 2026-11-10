@@ -287,11 +287,12 @@ function buildingLineage(
   const facts = all.map((o) => o.facts);
   // (a flag any object of the tree carries)
   const has = (bit: number) => all.some((o) => hasObjectFlag(o.flags, bit));
+  const drawn = all.map((o) => decodeDrawn(o.facts.drawn));
   // the glass every glazed part has is the street photos' (photo-glass.ts)
   const photoGlass = all.every(
-    (o) =>
+    (o, i) =>
       !hasObjectFlag(o.flags, OBJECT_FLAG_GLASS) ||
-      decodeDrawn(o.facts.drawn).materialFrom === "photos"
+      drawn[i]?.materialFrom === "photos"
   );
   const { source } = b.picked;
   const lod2 = source !== OBJECT_SOURCE_SCAN && source !== OBJECT_SOURCE_GAP;
@@ -346,7 +347,6 @@ function buildingLineage(
     { osm: "buildings" }
   );
   // landmarks.py: Wikidata's item matched to the LoD2 objects it covers
-  const drawn = all.map((o) => decodeDrawn(o.facts.drawn));
   l.source(
     "wikidata",
     [

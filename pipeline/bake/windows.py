@@ -450,8 +450,8 @@ def model(traits: dict, axis: float | None, reliable: frozenset[str] = RELIABLE)
 # (2026-11-10) every known glass front read 0.91–1.00 on its clear views;
 # over all of Dresden 0.9 also took metal cladding, ribbon-window blocks and
 # a plastered house with balconies (all below 0.95 on most views), 0.95 left
-# twelve objects of which the contact sheets showed two doubtful. Two photos
-# keep a single reflection or a scaffold from deciding.
+# about a dozen objects of which the contact sheets showed two doubtful.
+# Two photos keep a single reflection or a scaffold from deciding.
 GLASS_MIN = 950  # ‰
 GLASS_COVER = facade_glass.MIN_COVER
 GLASS_IMAGES = 2
@@ -504,8 +504,8 @@ def _records(path: Path) -> dict[tuple[str, int], list[dict]]:
 def windows(city: dict, by_wall: dict, ground=None, glass: dict | None = None) -> tuple[dict, dict]:
     """Per Building gml:id its measured walls with traits and model, and
     the agreement table. `glass` holds each wall's glass readings
-    (`glass_records`): a wall read as glass draws no windows, and a wall
-    no panorama measured enters with its glass alone."""
+    (`glass_records`); a wall no panorama measured enters with its glass
+    alone."""
     ws = walls(city)
     out: dict[str, list[dict]] = collections.defaultdict(list)
     all_seqs = []
@@ -526,9 +526,10 @@ def windows(city: dict, by_wall: dict, ground=None, glass: dict | None = None) -
         }
         if gl is not None:
             entry["glass"] = gl
-        # a curtain wall has no window rhythm to model
-        curtain = gl is not None and gl["glass"]
-        if seqs and not curtain and (m := model(traits, axis_agrees(seqs))) is not None:
+        # a glass wall keeps its model: whether its building draws as glass,
+        # and so without windows, is the building bake's call
+        # (lib/city/photo-glass.ts), which a material OSM names overrides
+        if seqs and (m := model(traits, axis_agrees(seqs))) is not None:
             if (at := wall_phase(recs, m["axis"])) is not None:
                 m["phase"] = at["phase"]
                 entry["drives"] = at["drives"]

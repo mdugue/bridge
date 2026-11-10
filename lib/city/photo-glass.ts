@@ -39,7 +39,8 @@ export function photoGlassObjects(
 /**
  * The OSM table with the photos' glass: material `glass`, from `photos`,
  * on each object the photos read as glass and no source names a material
- * of (an object's own or, through `inheritedLook`, its root Building's).
+ * of (an object's own or, through `inheritedLook`, its root Building's) —
+ * never on a Building whose parts were read, which would pass it on to them.
  */
 export function withPhotoGlass(
   lut: OsmBuildingLut | undefined,
@@ -50,8 +51,20 @@ export function withPhotoGlass(
   if (glass.size === 0) {
     return lut;
   }
+  // a Building with parts of its own: its look would pass to every part
+  // (`inheritedLook`), the ones the photos read as solid too
+  const parents = new Set<string>();
+  for (const w of walls ?? []) {
+    const root = rootOf(w.oid);
+    if (root && root !== w.oid) {
+      parents.add(root);
+    }
+  }
   const out: OsmBuildingLut = { ...lut };
   for (const id of glass) {
+    if (parents.has(id)) {
+      continue;
+    }
     const own: OsmBuildingFacts | undefined = out[id];
     const root = rootOf(id);
     const named = own?.material ?? (root ? out[root]?.material : undefined);

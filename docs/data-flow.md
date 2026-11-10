@@ -315,7 +315,7 @@ flowchart LR
     iCJ["LoD2 CityJSON<br/>data/&lt;site&gt;/cityjson"]
     iWD["Wikidata bridges · landmarks<br/>wikidata/*.json"]
     iMLY["Mapillary street lights<br/>mapillary/*.v2.json"]
-    iPANO["Mapillary panoramas + photos + segmentation<br/>measured, not kept<br/>mapillary/facades/*.v2 · v4 · glass.v1.jsonl"]
+    iPANO["Mapillary panoramas + photos + segmentation<br/>measured, not kept<br/>mapillary/facades/*.v2 · v4 · glass.*.jsonl"]
     iVM["Verkehrsmengen<br/>traffic/*.geojson"]
     iGTFS["GTFS feed<br/>gtfs/nv_free.zip"]
     iGLO["Copernicus GLO-30<br/>data/_raw/glo30/&lt;site&gt;.tif"]

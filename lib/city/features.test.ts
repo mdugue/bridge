@@ -483,9 +483,6 @@ test.each(tiles)(
         expect(Math.hypot(...w.n)).toBeCloseTo(1, 3);
         // a wall no panorama measured enters with its glass reading alone
         expect(w.seqs >= 1 || w.glass !== undefined).toBe(true);
-        if (w.glass?.glass) {
-          expect(w.model).toBeUndefined();
-        }
         const m = w.model;
         if (!m) {
           continue;

@@ -78,6 +78,15 @@ PAD_ID = 49407  # CLIP's end-of-text token, its padding too
 MIN_PX = 1200  # an upper wall seen by fewer pixels (20 a metre) is not read
 MIN_COVER = 0.25  # nor one a photo sees less of (its share of the upper wall)
 OTHER_MAX = 0.5  # an unsegmented crop more likely sky, trees or street is not read
+READ_VERSION = 1  # bump when the rectification or the crop changes what is read
+
+
+def reading_key() -> str:
+    """What a cached reading depends on, hashed: the prompts, the model, the
+    crop's limits. It names the cache (facades.glass_path), so a change reads
+    every photo again instead of mixing old readings with new."""
+    what = (READ_VERSION, sorted(PROMPTS.items()), REPO, MIN_PX, MIN_COVER, OTHER_MAX, SIZE)
+    return hashlib.sha256(repr(what).encode()).hexdigest()[:10]
 
 
 def model_dir(raw: Path) -> Path:
@@ -93,8 +102,11 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+@cache
 def fetch_model(raw: Path) -> Path:
-    """The model's files, downloaded once and checked by their SHA-256."""
+    """The model's files, downloaded once and checked by their SHA-256 (once
+    a process: hashing the encoders takes seconds, and a fetch runs tile
+    after tile)."""
     root = model_dir(raw)
     for name, sha in FILES.items():
         path = root / name

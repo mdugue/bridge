@@ -51,6 +51,13 @@ describe("glass fronts from the street photos", () => {
     expect(objectFlags(lut?.a) & OBJECT_FLAG_GLASS).toBe(OBJECT_FLAG_GLASS);
   });
 
+  test("a Building with parts keeps its glass to itself", () => {
+    const walls = [wall("B", 30, true), wall("p", 20, false)];
+    const roots: Record<string, string> = { B: "B", p: "B" };
+    const lut = withPhotoGlass({}, walls, (id) => roots[id]);
+    expect(lut?.B).toBeUndefined();
+  });
+
   test("a tile the photos found no glass on keeps its table", () => {
     const lut = { a: { levels: 3 } };
     expect(withPhotoGlass(lut, [wall("a", 20, false)], () => {})).toBe(lut);

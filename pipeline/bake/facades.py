@@ -158,8 +158,11 @@ def _photos_path(tile: Tile) -> Path:
 
 
 def glass_path(tile: Tile) -> Path:
-    """The glass readings, one JSON line a photo (facade_glass.py)."""
-    return cache_dir(tile) / f"{tile.id}.glass.v1.jsonl"
+    """The glass readings, one JSON line a photo (facade_glass.py), named by
+    what they depend on (`facade_glass.reading_key`)."""
+    from .facade_glass import reading_key
+
+    return cache_dir(tile) / f"{tile.id}.glass.{reading_key()}.jsonl"
 
 
 def _signs_path(tile: Tile) -> Path:
@@ -734,15 +737,11 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
     city = json.loads(tile.cityjson.read_text())
     model: list[str] = []
     if kind == "glass":
-        from . import facade_glass
-
         every = _cached_json(
             _photos_path(tile),
             lambda: _search_tile(tile, "images", {"fields": PHOTO_FIELDS}, GLASS_NEAR_M),
         )
         jobs = plan_glass(city, every, tile.epsg)
-        root = facade_glass.fetch_model(tile.raw)
-        model = [str(root), str(facade_glass.write_classes(root))]
         out = glass_path(tile)
     else:
         jobs = plan(city, images, tile.epsg, MAX_SEQ_TRAITS if kind == "traits" else MAX_SEQ)
@@ -761,6 +760,12 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
     print(f"{tile.id}: {len(jobs)} {seen_by} see its walls, {len(todo)} to measure ({kind})")
     if not todo:
         return
+    if kind == "glass":
+        from . import facade_glass
+
+        # the model only where there is something to read
+        root = facade_glass.fetch_model(tile.raw)
+        model = [str(root), str(facade_glass.write_classes(root))]
     scratch = cache_dir(tile) / ".img"
     scratch.mkdir(parents=True, exist_ok=True)
     source = os.environ.get(SOURCE_ENV)

@@ -31,6 +31,13 @@ def test_a_framed_photo_sees_only_ahead_within_its_frame():
     assert per_px == pytest.approx(1 / (0.8 * 2000))
 
 
+def test_a_brown_camera_reads_its_focal_and_radial_terms_in_opensfm_order():
+    C = np.array([[3.0, 2.0, 10.0]])
+    brown = {"type": "brown", "params": [0.8, 0.79, 0.01, -0.01, 0.05, -0.02, 0.001, 0.001, 0.0]}
+    plain = {"type": "perspective", "params": [0.8, 0.05, -0.02]}
+    assert project(C, 2000, 1500, brown)[0] == pytest.approx(project(C, 2000, 1500, plain)[0])
+
+
 def test_a_fisheye_bends_by_the_angle():
     camera = {"type": "fisheye", "params": [0.5, 0.0, 0.0]}
     C = np.array([[1.0, 0.0, 1.0]])  # 45° to the right
@@ -142,7 +149,7 @@ def test_a_wall_is_glass_where_most_of_its_clear_views_say_so():
     assert ("blind", 0) not in got
 
 
-def test_a_glass_wall_draws_no_windows_and_a_wall_seen_only_for_glass_enters():
+def test_a_wall_seen_only_for_glass_enters_with_its_glass_alone():
     from tests.synthetic import blocks_city
 
     city = blocks_city({"hall": (0, 0, 30, 20, 15.0)})

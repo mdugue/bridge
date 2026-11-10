@@ -1806,12 +1806,15 @@ visual-variable codebook is in
   tile, many since) is read on the wall the geometry puts in it, less what
   its segmentation found in front, and only where a third description,
   sky, trees or a street, is the less likely (a crop of sky above a cantilevered roof read 0.92 glass against
-  the two walls alone). The cache is `<t>.glass.v1.jsonl`; the photo is
-  deleted. `windows.py` calls a wall glass where at least two
-  readings exist and two thirds of them reach 0.95 (`wall_glass`; at 0.9
-  metal cladding, ribbon-window blocks and a plastered house with balconies
-  came through); such a
-  wall gets no window model. The building bake gives an object material
+  the two walls alone). The cache is `<t>.glass.<key>.jsonl`, named by a
+  hash of the prompts, the model and the crop's limits; the photo is
+  deleted. `windows.py` calls a wall glass where at least two readings
+  exist and two thirds of them reach 0.95 (`wall_glass`; at 0.9 metal
+  cladding, ribbon-window blocks and a plastered house with balconies came
+  through); the wall keeps its window model, since a material OSM names
+  overrides the photos and a glass building draws no windows anyway. A
+  Brown camera's parameters are OpenSfM's (fx, fy, cx, cy, k1, k2, …): its
+  focal and radial terms are read from there. The building bake gives an object material
   `glass`, from `photos`, when its glass walls make at least half the
   length of its walls read (`lib/city/photo-glass.ts`): it then draws as
   *Glass and metal facades* above. On the probe (Dresden, 2026-11-10)

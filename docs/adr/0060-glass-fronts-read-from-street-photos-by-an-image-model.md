@@ -44,8 +44,8 @@ do.
 - A fetch needs ~0.6 GB more disk for the model and reads more photos per
   tile; the bake stays deterministic on the cached readings.
 - A changed prompt or model changes the readings: the fetch cache is
-  versioned by its file name (`glass.v1`), and the prompts' embeddings are
-  keyed by their hash.
+  named by a hash of what a reading depends on (`reading_key`), and the
+  prompts' embeddings are keyed by their hash.
 - Rejected: the facade profiles' openings share, edge grids and colour
   (they do not separate glass from stucco); a model run in the browser
   (phone memory, ADR 0047).
