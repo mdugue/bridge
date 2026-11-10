@@ -12,10 +12,17 @@ const STUB: AskScene = {
   frame: () => ({ aspect: 1.5 }),
   haltAnswerGlide: () => {},
   look: async () => ({}),
+  moment: () => ({
+    at: null,
+    now: new Date(),
+    landmarks: [],
+    layers: [],
+  }),
   setLayer: () => true,
   setListening: () => {},
   setStyle: () => ({}),
   setTime: () => ({ zeit: "" }),
+  select: () => {},
   show: () => true,
   within: () => true,
   where: () => ({}),
@@ -94,6 +101,25 @@ test("zeige takes the eye over the places' ground and shows eight at most", () =
     x: i * 20,
   }));
   expect(showPlaces(scene, { ziele: many }).gezeigt).toHaveLength(8);
+});
+
+test("what an answer shows is selected: all of them, or the answer alone", () => {
+  const selected: (readonly { x: number; y: number }[])[] = [];
+  const scene = {
+    ...STUB,
+    select: (p: readonly { x: number; y: number }[]) => selected.push(p),
+  };
+  const ziele = [
+    { name: "A", x: 0, y: 0 },
+    { name: "B", x: 60, y: 0 },
+    { name: "C", x: 5000, y: 0 },
+  ];
+  showPlaces(scene, { ziele: ziele.slice(0, 2) });
+  showPlaces(scene, { ziele, alle: false });
+  // spread too far for one view: still every place selected
+  showPlaces(scene, { ziele });
+  showPlaces(scene, { ziele: ziele.slice(0, 2), aus_der_luft: false });
+  expect(selected.map((s) => s.length)).toEqual([2, 1, 3, 2]);
 });
 
 test("setze_zeit refuses a time no clock or calendar has, and sets none", async () => {

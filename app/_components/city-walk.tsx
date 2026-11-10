@@ -19,7 +19,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import type { CSSProperties, RefObject } from "react";
+import type { CSSProperties, ReactNode, RefObject } from "react";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
@@ -62,6 +62,7 @@ import type { HudTool } from "./hud-toolbar";
 import type { ExportContext } from "./image-export";
 import { InquiryCard } from "./inquiry-card";
 import { InquiryStrip, InquiryTapRing } from "./inquiry-strip";
+import { PickStack } from "./pick-stack";
 import { useLiveMode } from "./live-mode";
 import { LocateMessage, useHudMessage, useLocateMe } from "./locate-button";
 import type { Say } from "./locate-button";
@@ -79,6 +80,7 @@ import {
 import { SceneSidebar } from "./scene-sidebar";
 import { WalkCard } from "./walk-player";
 import { useAskScene } from "./ask-scene";
+import { frameTargets } from "@/lib/city/ask-view";
 import { SidebarPace } from "./sidebar-pace";
 import {
   afterTask,
@@ -779,6 +781,19 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
   // one ends the other.
   const [asking, setAsking] = useState(false);
   const askScene = useAskScene(handleRef, look, time, site, pace);
+  // the selection's *Alle zeigen*: one view from the air that holds every
+  // pick, framed as an answer's places are (lib/city/ask-view.ts)
+  const showAllPicks = useCallback(() => {
+    const targets = handleRef.current?.pickTargets() ?? [];
+    if (targets.length > 0) {
+      const framed = frameTargets(targets, {
+        ...askScene.frame(),
+        from: askScene.from(),
+      });
+      // the eye over the ground its height was framed on
+      askScene.show(framed.view, framed.ground);
+    }
+  }, [askScene]);
   const toggleAsk = () => {
     if (!asking && walking) {
       endWalk();
@@ -1258,11 +1273,17 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
               )}
               <InquiryPanel
                 coarse={coarse}
+                onActivate={(i) => handleRef.current?.selectPick(i)}
+                onAdding={(on) => handleRef.current?.setAddingPicks(on)}
                 onClose={closeInquiry}
                 onPreview={(i) => handleRef.current?.previewCandidate(i)}
+                onRemove={(i) => {
+                  handleRef.current?.removePick(i);
+                }}
                 onSelect={(i) => {
                   handleRef.current?.selectCandidate(i);
                 }}
+                onShowAll={showAllPicks}
               />
               {/* a phone's walk sheet owns the bottom: the stick and the
                   toolbar would stand under it (a drag still looks about) */}
@@ -1393,27 +1414,51 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
 export default CityWalk;
 
 /**
- * The asked thing's card and what else the ray met: on a desktop one
- * column at the left, the card over the list; on a touch screen the sheet
- * with the chips above it. The tap's ring either way.
+ * The asked thing's card, what else the ray met and the selection: on a
+ * desktop one column at the left, the selection over the card over the
+ * list; on a touch screen the sheet with the chips and the selection
+ * above it. The tap's ring either way.
  */
 const InquiryPanel = ({
   coarse,
+  onActivate,
+  onAdding,
   onClose,
   onPreview,
+  onRemove,
   onSelect,
+  onShowAll,
 }: {
   coarse: boolean;
+  onActivate: (index: number) => void;
+  onAdding: (on: boolean) => void;
   onClose: () => void;
   onPreview: (index: number | null) => void;
+  onRemove: (index: number) => void;
   onSelect: (index: number) => void;
+  onShowAll: () => void;
 }) => {
   const asked = useSceneStatus("inquiry");
   const provenanceUrl = useSceneStatus("site")?.provenanceUrl ?? null;
   if (!asked) {
     return null;
   }
-  const { along, inquiry } = asked;
+  const { along, inquiry, picked } = asked;
+  const stack = (card?: ReactNode) => (
+    <PickStack
+      active={picked.active}
+      adding={picked.adding}
+      onActivate={onActivate}
+      onAdding={onAdding}
+      onRemove={onRemove}
+      onShowAll={onShowAll}
+      overStrip={along !== null}
+      picks={picked.picks}
+      sheet={coarse}
+    >
+      {card}
+    </PickStack>
+  );
   const strip = along && (
     <InquiryStrip
       along={along}
@@ -1435,12 +1480,13 @@ const InquiryPanel = ({
       {along && <InquiryTapRing along={along} />}
       {coarse ? (
         <>
+          {stack()}
           {strip}
           {card}
         </>
       ) : (
         <div className="pointer-events-none absolute inset-y-4 left-4 z-20 flex w-[min(22rem,calc(100%-2rem))] lg:w-[min(28rem,calc(100%-2rem))] 2xl:w-[32rem] flex-col items-stretch gap-2">
-          {card}
+          {stack(card)}
           {strip}
         </div>
       )}

@@ -1985,6 +1985,27 @@ plan's step 5 (stream at the boot's own fog) was not built.
 the stream camera, not the camera. A future look term drawn past the fog
 (`material.fog = false` on tile content) would vanish beyond its reach.
 
+## 085 — *Frag die Stadt*'s first questions read the moment · DONE (2026-10-30)
+
+**Problem.** An empty chat offered three fixed questions that knew
+nothing of where the visitor stood, the hour the scene was set to or what
+the city has.
+
+**Outcome.** `lib/city/ask-starters.ts` draws four per conversation (once
+per card body, again for *Neues Gespräch*): one **place** question (the
+landmark within 25° of the view and 1.5 km, else the nearest within
+800 m, else the neighbourhood), one **time** question (the scene's hour,
+or the season; the turn of the year, the solstice and Advent win), one
+**city** question where the site has a data layer (a flood question
+waits for the scenario tools, #211),
+and the rest from a curious and a playful pool, no two the same. It reads
+only what the page has (`AskScene.moment()`: camera, scene time, the
+tileset's landmarks, the offered layers); nothing is fetched.
+Every template is one the tools can answer (no opening hours, no events)
+and fits a phone line. A landmark's article is guessed from its last
+word's ending (`genderOf`); where it cannot be told the name stands in
+quotes.
+
 ## 072 — A cold build bakes a site's tiles on every core · DONE (2026-10-31)
 
 **Problem.** A cold build at `85a41b7` (4 cores, 15 GB, seven sites):
