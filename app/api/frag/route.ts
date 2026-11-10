@@ -4,9 +4,15 @@
  * (lib/city/ask-run.ts); this binds it to the provider's adapter or the
  * scripted one, the site's Stadtwissen, the secret, the clock and the
  * log. The key comes in the `x-frag-key` header and goes to the provider
- * and nowhere else.
+ * and nowhere else; where the visitor stands in the model comes in
+ * `x-frag-ort`, for `wo_bin_ich` and a search round them. Neither the
+ * pose nor anything else of the request is kept or logged.
  */
-import { ASK_KEY_HEADER } from "@/lib/city/ask-city";
+import {
+  ASK_KEY_HEADER,
+  ASK_VISITOR_HEADER,
+  parseAskVisitor,
+} from "@/lib/city/ask-city";
 import { askPromptSite } from "@/lib/city/ask-prompt";
 import { answerTurn } from "@/lib/city/ask-run";
 import { siteById } from "@/sites";
@@ -27,6 +33,7 @@ export async function POST(request: Request): Promise<Response> {
       body: await request.json().catch(() => null),
       key: request.headers.get(ASK_KEY_HEADER)?.trim() ?? "",
       signal: request.signal,
+      visitor: parseAskVisitor(request.headers.get(ASK_VISITOR_HEADER)),
     },
     {
       adapterFor: (props, key) =>

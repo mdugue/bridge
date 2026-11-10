@@ -2,8 +2,9 @@ import { expect, test } from "bun:test";
 import { chat, maxIterations } from "@tanstack/ai";
 import { fakeText } from "@tanstack/ai/testing";
 import { ChatClient, stream } from "@tanstack/ai-client";
-import { lookTool, SCENE_TOOLS } from "@/lib/city/ask-tools";
-import { AERIAL_REACH, sceneTools, showPlaces } from "./ask-scene-tools";
+import { BROWSER_TOOLS, lookTool } from "@/lib/city/ask-tools";
+import { AERIAL_REACH } from "@/lib/city/ask-view";
+import { sceneTools, showPlaces } from "./ask-scene-tools";
 import type { AskScene } from "./ask-scene-tools";
 import type { ViewpointGeometry } from "@/lib/city/site";
 
@@ -28,11 +29,11 @@ const STUB: AskScene = {
   where: () => ({}),
 };
 
-test("the card runs every scene tool the server hands the browser", () => {
+test("the card runs every tool the server hands the browser", () => {
   // one it does not bind leaves the run waiting for ever
   const bound = sceneTools(STUB).map((t) => t.name);
   expect(bound.sort((a, b) => a.localeCompare(b))).toEqual(
-    SCENE_TOOLS.map((t) => t.name).sort((a, b) => a.localeCompare(b))
+    BROWSER_TOOLS.map((t) => t.name).sort((a, b) => a.localeCompare(b))
   );
 });
 
@@ -120,32 +121,6 @@ test("what an answer shows is selected: all of them, or the answer alone", () =>
   showPlaces(scene, { ziele });
   showPlaces(scene, { ziele: ziele.slice(0, 2), aus_der_luft: false });
   expect(selected.map((s) => s.length)).toEqual([2, 1, 3, 2]);
-});
-
-test("setze_zeit refuses a time no clock or calendar has, and sets none", async () => {
-  const set: unknown[] = [];
-  const scene = {
-    ...STUB,
-    setTime: (change: unknown) => {
-      set.push(change);
-      return { zeit: "" };
-    },
-  };
-  const tool = sceneTools(scene).find((t) => t.name === "setze_zeit");
-  const ok = async (input: { datum?: string; uhrzeit?: string }) => {
-    const result = await tool?.execute?.(input, {} as never);
-    return (result as { ok: boolean }).ok;
-  };
-  expect(await ok({ uhrzeit: "25:00" })).toBe(false);
-  expect(await ok({ datum: "2026-02-31" })).toBe(false);
-  // `Date` would read the first century as 19xx
-  expect(await ok({ datum: "0050-06-21" })).toBe(false);
-  expect(await ok({ datum: "0100-01-01" })).toBe(false);
-  expect(await ok({})).toBe(false);
-  expect(set).toEqual([]);
-  expect(await ok({ uhrzeit: "24:00" })).toBe(true);
-  expect(await ok({ datum: "0929-06-21" })).toBe(true);
-  expect(set).toHaveLength(2);
 });
 
 /** A real chat client against a real `chat()` whose model asks `was_ist_da`

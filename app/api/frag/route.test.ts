@@ -145,19 +145,42 @@ test("a production server without a secret refuses: 501 no-secret", async () => 
   expect(logged).toEqual(["[frag] 501 no-secret"]);
 });
 
-test("the scripted answer shows the place, then says so on the resume", async () => {
+test("the scripted answer searches, shows and says so in one request", async () => {
   process.env.FRAG_FAKE = "1";
-  const first = await post(body());
-  expect(first.headers.get("Content-Type")).toContain("text/event-stream");
-  expect(first.headers.get("Cache-Control")).toBe("no-store");
+  const res = await post(body());
+  expect(res.headers.get("Content-Type")).toContain("text/event-stream");
+  expect(res.headers.get("Cache-Control")).toBe("no-store");
+  const text = await res.text();
+  const sent = events(text);
+  // zeige is acknowledged on the server: no round trip through the browser
+  expect(
+    sent.filter((e) => e.type === "TOOL_CALL_START").map((e) => e.toolCallName)
+  ).toEqual(["suche_stadt", "zeige", "vorschlaege"]);
+  expect(sent.some((e) => e.type === "RUN_ERROR")).toBe(false);
+  // the answer ends at its chips' result: nothing waits on the browser
+  expect(
+    sent.some(
+      (e) => (e.outcome as { type?: string } | undefined)?.type === "interrupt"
+    )
+  ).toBe(false);
+  const words = sent
+    .filter((e) => e.type === "TEXT_MESSAGE_CONTENT")
+    .map((e) => String(e.delta))
+    .join("");
+  expect(words.startsWith("Testantwort: Hier ist es")).toBe(true);
+  expect(text).not.toContain(KEY);
+  expect(logged).toEqual([]);
+});
+
+test("the scripted answer asks the browser what is ahead, then says so on the resume", async () => {
+  process.env.FRAG_FAKE = "1";
+  const ahead = uiMessagesToWire([question("1", "Was ist das da vorne?")]);
+  const first = await post(body({ messages: ahead }));
   const firstText = await first.text();
   const sent = events(firstText);
-  const calls = sent
-    .filter((e) => e.type === "TOOL_CALL_START")
-    .map((e) => e.toolCallName);
-  expect(calls).toEqual(["suche_stadt", "zeige"]);
-  expect(sent.some((e) => e.type === "TOOL_CALL_RESULT")).toBe(true);
-  expect(sent.some((e) => e.type === "RUN_ERROR")).toBe(false);
+  expect(
+    sent.filter((e) => e.type === "TOOL_CALL_START").map((e) => e.toolCallName)
+  ).toEqual(["was_ist_da"]);
   const last = sent.at(-1) as {
     outcome?: { interrupts?: { id: string }[]; type?: string };
     type: string;
@@ -165,7 +188,7 @@ test("the scripted answer shows the place, then says so on the resume", async ()
   expect(last.type).toBe("RUN_FINISHED");
   expect(last.outcome?.type).toBe("interrupt");
 
-  // the browser ran zeige and resumes the run with its result
+  // the browser looked and resumes the run with its result
   const snapshot = sent.findLast((e) => e.type === "MESSAGES_SNAPSHOT");
   const interrupt = last.outcome?.interrupts?.[0]?.id ?? "";
   const second = await post(
@@ -173,7 +196,11 @@ test("the scripted answer shows the place, then says so on the resume", async ()
       parentRunId: "r1",
       messages: snapshot?.messages,
       resume: [
-        { interruptId: interrupt, status: "resolved", payload: { ok: true } },
+        {
+          interruptId: interrupt,
+          status: "resolved",
+          payload: { gefunden: true, name: "Frauenkirche" },
+        },
       ],
     })
   );
@@ -182,7 +209,7 @@ test("the scripted answer shows the place, then says so on the resume", async ()
     .filter((e) => e.type === "TEXT_MESSAGE_CONTENT")
     .map((e) => String(e.delta))
     .join("");
-  expect(words.startsWith("Testantwort: Hier ist es")).toBe(true);
+  expect(words).toContain("Frauenkirche");
   expect(events(secondText).some((e) => e.type === "RUN_ERROR")).toBe(false);
   expect(firstText + secondText).not.toContain(KEY);
   expect(logged).toEqual([]);

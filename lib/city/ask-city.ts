@@ -173,6 +173,125 @@ export function plausibleKey(key: string): boolean {
  */
 export const ASK_KEY_HEADER = "x-frag-key";
 
+/**
+ * The header that carries, with every question, where the visitor stands
+ * in the model — the camera's pose, mode, scene time, style and layers,
+ * never the device's location — as URI-encoded JSON. The server answers
+ * `wo_bin_ich` and a nearby search round the visitor from it, so neither
+ * costs a round trip through the browser and another model turn. A
+ * header, not a body field: the client library sends a resumed run's
+ * body without the request's own fields.
+ */
+export const ASK_VISITOR_HEADER = "x-frag-ort";
+
+/** Where the visitor stands, as the server takes it from the header. */
+export interface AskVisitor {
+  x: number;
+  y: number;
+  hoehe_ue_nn?: number;
+  blick_grad?: number;
+  neigung_grad?: number;
+  modus?: string;
+  zeit?: string;
+  stil?: string;
+  ebenen?: string[];
+  /** the screen's width over its height: how `zeige` frames for it */
+  seitenverhaeltnis?: number;
+}
+
+/** The most characters the visitor header may carry. */
+const VISITOR_CHARS = 1000;
+const VISITOR_NUMBERS = ["hoehe_ue_nn", "blick_grad", "neigung_grad"] as const;
+const VISITOR_WORDS = ["modus", "zeit", "stil"] as const;
+
+/** A number the visitor header may carry: finite, rounded to metres. */
+function visitorNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.round(value)
+    : undefined;
+}
+
+/** A word the visitor header may carry: a short line of text. */
+function visitorWord(value: unknown): string | undefined {
+  return typeof value === "string" &&
+    value.length <= 80 &&
+    !/[\n\r]/u.test(value)
+    ? value
+    : undefined;
+}
+
+/**
+ * The visitor header, checked: a position (x, y) and what else it names
+ * of the moment, each field typed and short; null for no header, a scene
+ * still loading or anything else.
+ */
+export function parseAskVisitor(raw: string | null): AskVisitor | null {
+  if (!raw || raw.length > VISITOR_CHARS) {
+    return null;
+  }
+  let v: Record<string, unknown>;
+  try {
+    v = JSON.parse(decodeURIComponent(raw)) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+  const x = visitorNumber(v?.x);
+  const y = visitorNumber(v?.y);
+  if (x === undefined || y === undefined) {
+    return null;
+  }
+  const out: AskVisitor = { x, y };
+  for (const k of VISITOR_NUMBERS) {
+    const n = visitorNumber(v[k]);
+    if (n !== undefined) {
+      out[k] = n;
+    }
+  }
+  for (const k of VISITOR_WORDS) {
+    const w = visitorWord(v[k]);
+    if (w !== undefined) {
+      out[k] = w;
+    }
+  }
+  const aspect = v.seitenverhaeltnis;
+  if (typeof aspect === "number" && aspect >= 0.2 && aspect <= 5) {
+    out.seitenverhaeltnis = Math.round(aspect * 100) / 100;
+  }
+  if (Array.isArray(v.ebenen)) {
+    out.ebenen = v.ebenen
+      .filter(
+        (e): e is string => typeof e === "string" && /^[a-zA-Z]{1,24}$/u.test(e)
+      )
+      .slice(0, 16);
+  }
+  return out;
+}
+
+/** The visitor header's value for `pose` (the scene's `where()`), or
+ *  null while the scene has no pose. */
+export function askVisitorHeader(pose: Record<string, unknown>): string | null {
+  if (typeof pose.x !== "number" || typeof pose.y !== "number") {
+    return null;
+  }
+  const raw = encodeURIComponent(JSON.stringify(pose));
+  return raw.length <= VISITOR_CHARS ? raw : null;
+}
+
+/**
+ * How hard a model thinks for an answer: not at all for a fast one (the
+ * provider's nearest level, where it cannot switch thinking off), a
+ * little for the others. A provider's default effort is often high, and
+ * a city guide's answer is a few lookups and five sentences: the default
+ * made even the fast models slow.
+ */
+export function askReasoning(
+  provider: AskProviderId,
+  model: string
+): "low" | "off" {
+  const m = ASK_PROVIDER_BY_ID[provider].models.find((d) => d.id === model);
+  return m?.hint === "schnell" ? "off" : "low";
+}
+
 // --- caps ---------------------------------------------------------------------
 
 /**

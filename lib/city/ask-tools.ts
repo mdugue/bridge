@@ -1,12 +1,16 @@
 /**
- * *Frag die Stadt*'s tools (ADR 0056), defined once for both sides: the
- * server binds the Stadtwissen ones (`suche_stadt`, `in_der_naehe`,
- * `fakten`, `quellen`) and takes in the follow-up questions
- * (`vorschlaege`, which the card shows as chips), the card the scene ones
- * (`wo_bin_ich`, `was_ist_da`, `zeige`, `setze_zeit`, `setze_stil`,
- * `datenschicht`). The server passes them to the model (`datenschicht`
- * only where the city has a layer) and never takes a tool list from the
- * request: what the model can do is fixed here.
+ * *Frag die Stadt*'s tools (ADR 0056), defined once for both sides. The
+ * server answers the Stadtwissen ones (`suche_stadt`, `in_der_naehe`,
+ * `fakten`, `quellen`) and `wo_bin_ich` (from the pose the browser sends
+ * with the question), and takes in the follow-up questions
+ * (`vorschlaege`, the card's chips). The ones that change the view
+ * (`SHOWN_TOOLS`: `zeige`, `setze_zeit`, `setze_stil`, `datenschicht`)
+ * it acknowledges at once and the card carries out from the stream, so
+ * the model writes on without waiting for the browser; only
+ * `was_ist_da` — a ray through the crosshair — goes to the browser and
+ * back. The server passes them to the model (`datenschicht` only where
+ * the city has a layer) and never takes a tool list from the request:
+ * what the model can do is fixed here.
  */
 import { toolDefinition } from "@tanstack/ai";
 import { z } from "zod";
@@ -39,10 +43,14 @@ export const NEAR_RADIUS = 120;
 export const nearTool = toolDefinition({
   name: "in_der_naehe",
   description:
-    "Was in der Nähe eines Punkts steht, das Nächste zuerst: Wahrzeichen (bis zum Dreifachen des Umkreises), Denkmale, benannte und adressierte Gebäude, mit Abstand in Metern. Sagt, welchen Umkreis es genommen hat.",
+    "Was in der Nähe eines Punkts steht, das Nächste zuerst: Wahrzeichen (bis zum Dreifachen des Umkreises), Denkmale, benannte und adressierte Gebäude, mit Abstand in Metern. Ohne x und y um den Besucher. Sagt, um welchen Punkt und welchen Umkreis es gesucht hat.",
   inputSchema: z.object({
-    x: coordinate.describe("Rechtswert (m, nach Osten)"),
-    y: coordinate.describe("Hochwert (m, nach Norden)"),
+    x: coordinate
+      .optional()
+      .describe("Rechtswert (m, nach Osten); ohne: wo der Besucher steht"),
+    y: coordinate
+      .optional()
+      .describe("Hochwert (m, nach Norden); ohne: wo der Besucher steht"),
     radius: z
       .number()
       .min(10)
@@ -213,7 +221,7 @@ export const styleTool = toolDefinition({
 export type AskLayer = Pick<DataLayerDef, "description" | "key" | "label">;
 
 /** The layer tool, with these layers to choose from. */
-function layerToolOf(layers: readonly AskLayer[]) {
+export function layerToolOf(layers: readonly AskLayer[]) {
   const keys = layers.map((d) => d.key) as [DataLayerKey, ...DataLayerKey[]];
   return toolDefinition({
     name: "datenschicht",
@@ -230,7 +238,7 @@ function layerToolOf(layers: readonly AskLayer[]) {
 }
 
 /** Every layer of any city: what the card binds. The model is offered its
- *  own city's (`sceneToolsFor`), a subset the card's schema also takes. */
+ *  own city's (`layerToolOf`), a subset the card's schema also takes. */
 export const layerTool = layerToolOf(DATA_LAYERS);
 
 /** The longest follow-up question a chip carries. */
@@ -239,7 +247,7 @@ export const SUGGESTION_CHARS = 70;
 export const suggestTool = toolDefinition({
   name: "vorschlaege",
   description:
-    "Zeigt unter deiner Antwort bis zu drei kurze Folgefragen als Knöpfe, die der Besucher antippen kann. Rufe es am Ende jeder Antwort einmal auf, statt Folgefragen in den Text zu schreiben.",
+    "Zeigt unter deiner Antwort bis zu drei kurze Folgefragen als Knöpfe, die der Besucher antippen kann. Rufe es am Ende jeder Antwort einmal auf, im selben Zug wie den Text der Antwort, statt Folgefragen in den Text zu schreiben.",
   inputSchema: z.object({
     fragen: z
       .array(z.string().min(3).max(SUGGESTION_CHARS))
@@ -251,34 +259,23 @@ export const suggestTool = toolDefinition({
   }),
 });
 
-/** The tools the browser runs, by name: the card binds each. */
-export const SCENE_TOOLS = [
-  whereTool,
-  lookTool,
-  showTool,
-  timeTool,
-  styleTool,
-  layerTool,
-] as const;
+/** The tools the browser runs and answers, by name: the card binds each. */
+export const BROWSER_TOOLS = [lookTool] as const;
 
 /**
- * The scene tools as the model is offered them in a city with these
- * layers: the layer tool with that city's layers and words, none where it
- * has no layer. The same for every request of a site, so the provider's
- * prompt cache holds.
+ * The tools that change the view: the server acknowledges each at once
+ * (ask-run.ts), the card carries it out when its call arrives
+ * (ask-effects.ts) — the model needs nothing back from them. The server
+ * offers the layer tool with its city's layers (`layerToolOf`).
  */
-export function sceneToolsFor(layers: readonly AskLayer[]) {
-  return [
-    ...SCENE_TOOLS.filter((t) => t !== layerTool),
-    ...(layers.length > 0 ? [layerToolOf(layers)] : []),
-  ];
-}
+export const SHOWN_TOOLS = [showTool, timeTool, styleTool, layerTool] as const;
 
-/** The tools the server runs on the Stadtwissen. */
+/** The tools the server answers itself. */
 export const KNOWLEDGE_TOOLS = [
   searchTool,
   nearTool,
   factsTool,
   sourcesTool,
+  whereTool,
   suggestTool,
 ] as const;

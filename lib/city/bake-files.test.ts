@@ -168,10 +168,11 @@ test("each schema's list is the viewer's union, member for member", () => {
   expect(equal.every(Boolean)).toBe(true);
 });
 
-// zod is in no first-load chunk (ADR 0047): only the Frag-die-Stadt tools
-// and the schema modules import it, and the viewer takes their types only.
+// zod is in no first-load chunk (ADR 0047): only the Frag-die-Stadt tools,
+// the Prüfstand's verdict (its own chunk, behind `?pruefstand=1`) and the
+// schema modules import it, and the viewer takes their types only.
 const SCHEMA_MODULE = /^lib\/city\/(?:bake-file|[\w-]+-file)\.ts$/u;
-const ZOD_IMPORTERS = new Set(["lib/city/ask-tools.ts"]);
+const ZOD_IMPORTERS = new Set(["lib/city/ask-qa.ts", "lib/city/ask-tools.ts"]);
 
 function sourcesUnder(dir: string): string[] {
   return readdirSync(nodePath.join(ROOT, dir), {

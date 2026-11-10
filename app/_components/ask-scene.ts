@@ -6,6 +6,7 @@
  */
 import { useMemo } from "react";
 import type { RefObject } from "react";
+import { ownLightNote } from "@/lib/city/ask-shown";
 import type { TimeChange } from "@/lib/city/ask-tools";
 import { SITE_ZONE, zonedTime } from "@/lib/city/bike-counts";
 import { cardCredits } from "@/lib/city/card-lines";
@@ -18,8 +19,6 @@ import { siteHoldsPoint } from "@/lib/city/geolocation";
 import type { LandmarkFactsIndex } from "@/lib/city/landmark-facts";
 import { METHODS } from "@/lib/city/methods";
 import { sunDirectionEnu } from "@/lib/city/sun";
-import { RENDER_STYLE_BY_ID } from "@/lib/city/render-style";
-import type { RenderStyle } from "@/lib/city/render-style";
 import type { Site } from "@/lib/city/site";
 import type { AskScene } from "./ask-scene-tools";
 import type { CityWalkHandle } from "./create-app";
@@ -155,13 +154,6 @@ const MOVING = {
   gefunden: false,
   hinweis: "Die Ansicht ist noch unterwegs. Frag gleich noch einmal.",
 };
-
-/** Why the picture does not follow the time, where the style keeps its own
- *  light: said on either tool, for they come in either order. */
-function ownLightNote(style: RenderStyle): { hinweis?: string } {
-  const own = RENDER_STYLE_BY_ID[style].ownLight;
-  return own ? { hinweis: own.note } : {};
-}
 
 const LOADING = { gefunden: false, hinweis: "Die Szene lädt noch." };
 
