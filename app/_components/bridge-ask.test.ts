@@ -3,7 +3,6 @@ import { BoxGeometry, Group, Mesh } from "three/webgpu";
 import type { AskItem, Slab } from "@/lib/city/ask-solids";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import { bridgeAskSet } from "./bridge-ask";
-import { buildBvhOffThread } from "./bvh-client";
 // the BVH the set builds on its first question (collision.ts patches it in)
 import "./collision";
 
@@ -38,18 +37,12 @@ const bridge = () => {
 
 const down = { x: 0, y: -1, z: 0 };
 
-test("asked first by the autofocus, a bridge has the worker build its BVH", async () => {
-  const { rail, mesh } = bridge();
+test("the autofocus passes a bridge by until a question built its BVH", () => {
+  const { rail } = bridge();
   const set = bridgeAskSet(rail, [deck]);
-  // unbuilt: passed by, and its build sent off the thread
   expect(set?.unbuilt?.()).toBe(true);
-  await buildBvhOffThread(mesh.geometry);
+  set?.nearest({ x: 20, y: 20, z: 0 }, down, 100);
   expect(set?.unbuilt?.()).toBe(false);
-  // then the drawn bridge answers, named by its deck
-  expect(set?.nearest({ x: 20, y: 20, z: 0 }, down, 100)?.distance).toBeCloseTo(
-    10,
-    5
-  );
 });
 
 test("asked first by a question, a bridge builds its BVH at once", () => {
