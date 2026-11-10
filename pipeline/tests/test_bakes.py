@@ -189,6 +189,24 @@ def test_furniture_kinds_come_from_the_tags():
     assert kind_of(None, None, '"amenity"=>"restaurant"') is None
 
 
+def test_a_flagpole_stands_with_its_height_and_the_flag_the_map_names():
+    from bake.furniture import _props, kind_of
+
+    assert kind_of(None, None, None, "flagpole") == "flag"
+    # a flag on a facade is not mapped anywhere yet: left out, not guessed
+    assert kind_of(None, None, '"support"=>"wall_mounted"', "flagpole") is None
+    assert _props("flag", None) == {"k": "flag"}
+    assert _props("flag", '"height"=>"12 m","flag:name"=>"Germany"') == {
+        "k": "flag",
+        "h": 12.0,
+        "c": "de",
+    }
+    assert _props("flag", '"height"=>"80","country"=>"EU"') == {"k": "flag", "h": 30.0, "c": "eu"}
+    assert _props("flag", '"subject:wikidata"=>"Q1202"')["c"] == "sn"
+    # a firm's flag: its colours are not mapped
+    assert _props("flag", '"flag:type"=>"advertising","flag:name"=>"Netto"') == {"k": "flag"}
+
+
 def test_furniture_indoors_or_underground_is_hidden():
     from bake.furniture import hidden
 

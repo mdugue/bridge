@@ -177,6 +177,7 @@ test.each(cases)(
       "postbox",
       "shelter",
       "column",
+      "flag",
       "signal",
       "pedsignal",
       "hydrant",
@@ -221,11 +222,11 @@ test.each(cases)(
         expect(kind).toBe("column");
       }
       // what has a front faces somewhere; round things do not
-      if (["column", "hydrant", "bin", "bollard"].includes(kind)) {
+      if (["column", "flag", "hydrant", "bin", "bollard"].includes(kind)) {
         expect(bearing).toBeUndefined();
       }
       if (f.properties?.h !== undefined) {
-        expect(kind).toBe("bollard");
+        expect(["bollard", "flag"]).toContain(kind);
         expect(f.properties.h).toBeGreaterThan(0);
       }
       // a mast arm hangs a signal; a colour is a bin's; the surface model
@@ -234,10 +235,12 @@ test.each(cases)(
         expect(kind).toBe("signal");
       }
       if (f.properties?.c !== undefined) {
-        expect(kind).toBe("bin");
-        expect(["blue", "green", "orange", "red", "yellow"]).toContain(
-          f.properties.c
-        );
+        expect(["bin", "flag"]).toContain(kind);
+        expect(
+          kind === "bin"
+            ? ["blue", "green", "orange", "red", "yellow"]
+            : ["by", "de", "eu", "hh", "sn"]
+        ).toContain(f.properties.c);
       }
       if (f.properties?.src === "dom") {
         expect(["climb", "swing"]).toContain(kind);

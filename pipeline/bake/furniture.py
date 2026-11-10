@@ -1,8 +1,8 @@
 """OSM street furniture → one point layer per tile: benches, picnic tables,
 litter bins, bicycle stands, bollards, post boxes, stop shelters and stop
 signs, advertising columns, traffic signals, fire hydrants (the pillars,
-and the sign plates of the underground ones), clocks and drinking
-fountains.
+and the sign plates of the underground ones), clocks, drinking
+fountains and flagpoles.
 
 Every object is a Point with its kind (`k`) and, where it has a front, the
 compass bearing it faces (`a`, degrees clockwise from north). OSM seldom
@@ -40,7 +40,13 @@ kerb — the kerb read from the class raster. So does a bench, bicycle
 stand, bin, post box, column, stop or shelter mapped in a street's lanes
 (the nearest way has a carriageway, `STREETS`); in a square, a pedestrian
 zone or on a platform, which the class raster's road covers too, it stays
-where it is mapped. A bus stop without a shelter
+where it is mapped. A flagpole (`man_made=flagpole`, `k: flag`) stands where it is mapped,
+its tagged `height` (`h`, clamped to FLAG_H) and, where `flag:name`,
+`country`, `subject` or their Wikidata name a flag in FLAG_DESIGNS, that
+flag (`c`); every other flag — most are a shop's or a firm's — flies a
+pale cloth. One mapped inside a building outline stands on its roof and is
+left out (2 of Dresden's 368), and so is a flag on a facade
+(`support=wall_mounted`): none is mapped in the seven sites yet. A bus stop without a shelter
 gets the "H" sign, unless a shelter stands within 8 m. A clock on a pole
 stands where it is mapped; a wall clock hangs on the nearest facade (the
 OSM building outline, ≤ 3 m), else it is dropped, as are tower clocks (the
@@ -152,7 +158,8 @@ POINT_WHERE = (
     'OR other_tags LIKE \'%"leisure"=>"picnic_table"%\' '
     'OR other_tags LIKE \'%"public_transport"=>"platform"%\' '
     'OR other_tags LIKE \'%"advertising"=>"column"%\' '
-    'OR other_tags LIKE \'%"emergency"=>"fire_hydrant"%\''
+    'OR other_tags LIKE \'%"emergency"=>"fire_hydrant"%\' '
+    "OR man_made = 'flagpole'"
 )
 # The ways with a carriageway (not footways, paths, platforms or tracks).
 STREETS = (
@@ -165,7 +172,7 @@ STREETS = (
 # covers squares, platforms and pedestrian zones, where things stand on it).
 KERBSIDE = {"bench", "bike", "bin", "column", "picnic", "postbox", "shelter", "stop", "water"}
 # Kinds without a front: they get no bearing.
-ROUND = {"bollard", "bin", "column", "hydrant"}
+ROUND = {"bollard", "bin", "column", "flag", "hydrant"}
 # On a bridge deck these move out of a street's lanes to the deck's edge: the
 # kerbside pieces, a signal (mapped at its stop line) and a hydrant's sign
 # (on its lid). On the ground the latter two move to the class raster's
@@ -173,6 +180,17 @@ ROUND = {"bollard", "bin", "column", "hydrant"}
 ON_DECK_KERB = KERBSIDE | {"signal", "hydrantsign"}
 HYDRANT = {"pillar": "hydrant", "underground": "hydrantsign"}
 CLOCK = {"pole": "clock", "wall": "wallclock", "wall_mounted": "wallclock"}
+WALL_SUPPORT = {"wall", "wall_mounted"}  # a flag on a facade: not mapped as such yet
+FLAG_H = (3.0, 30.0)  # a tagged flagpole height, clamped (m)
+# The flags the viewer draws in their colours, by `flag:name`/`country`/`subject`
+# (lower case); every other flag flies a pale cloth.
+FLAG_DESIGNS = {
+    "de": ("de", "deutschland", "germany", "bundesrepublik deutschland", "q183", "q48160"),
+    "eu": ("eu", "europe", "europa", "european union", "europäische union", "q458", "q42000"),
+    "sn": ("sachsen", "saxony", "freistaat sachsen", "q1202"),
+    "by": ("bayern", "bavaria", "freistaat bayern", "q980"),
+    "hh": ("hamburg", "freie und hansestadt hamburg", "q1055"),
+}
 # OSM `playground=*` → the equipment model the viewer stands (others dropped).
 EQUIPMENT = {
     "swing": "swing",
@@ -249,8 +267,12 @@ def bearing(dx: float, dy: float) -> float:
     return math.degrees(math.atan2(dx, dy)) % 360
 
 
-def kind_of(barrier: str | None, highway: str | None, other: str | None) -> str | None:
+def kind_of(
+    barrier: str | None, highway: str | None, other: str | None, man_made: str | None = None
+) -> str | None:
     """What a tagged OSM point is as street furniture, or None."""
+    if man_made == "flagpole":
+        return None if tag(other, "support") in WALL_SUPPORT else "flag"
     if barrier == "bollard":
         return "bollard"
     if tag(other, "leisure") == "picnic_table":
@@ -296,6 +318,24 @@ def bollard(other: str | None) -> dict:
         props["h"] = round(min(max(h, BOLLARD_M[0]), BOLLARD_M[1]), 2)
     if (tag(other, "material") or "") in METAL:
         props["metal"] = True
+    return props
+
+
+def flag(other: str | None) -> dict:
+    """A flagpole's tagged height (m, clamped) and the flag it flies where
+    the map names one the viewer draws in its colours (`c`)."""
+    props: dict = {}
+    h = osm_metres(tag(other, "height"))
+    if h is not None:
+        props["h"] = round(min(max(h, FLAG_H[0]), FLAG_H[1]), 1)
+    names = {
+        (tag(other, key) or "").strip().lower()
+        for key in ("flag:name", "country", "subject", "flag:wikidata", "subject:wikidata")
+    }
+    for design, known in FLAG_DESIGNS.items():
+        if names & set(known):
+            props["c"] = design
+            break
     return props
 
 
@@ -705,12 +745,19 @@ def _side_of(q: shapely.Point, p: shapely.Point, deg: float) -> bool:
 
 
 class Facades:
-    """The OSM building outlines a wall clock hangs on."""
+    """The OSM building outlines a wall clock hangs on (and a flagpole
+    mapped inside one stands on its roof, which is not drawn)."""
 
     def __init__(self, tile: Tile) -> None:
         geoms, _ = read_osm(tile, "multipolygons", "building IS NOT NULL", ["building"])
-        self.walls = [g.boundary for g in geoms if g.geom_type in ("Polygon", "MultiPolygon")]
+        self.areas = [g for g in geoms if g.geom_type in ("Polygon", "MultiPolygon")]
+        self.walls = [g.boundary for g in self.areas]
         self.tree = shapely.STRtree(self.walls) if self.walls else None
+        self.inner = shapely.STRtree(self.areas) if self.areas else None
+
+    def inside(self, p: shapely.Point) -> bool:
+        """Whether p lies inside a building outline."""
+        return self.inner is not None and len(self.inner.query(p, predicate="within")) > 0
 
     def hang(self, p: shapely.Point) -> tuple[shapely.Point, float] | None:
         """The facade point nearest p (≤ WALL_CLOCK_M) and the bearing out
@@ -838,25 +885,37 @@ def _props(k: str, other: str | None, bins: str | None = None) -> dict:
         props.update(bollard(other))
     if k == "column" and tag(other, "lit") == "yes":
         props["lit"] = True
+    if k == "flag":
+        props.update(flag(other))
     return props
 
 
 def _points(tile: Tile, gate: Gate, ways, lines, streets) -> list[dict]:
     geoms, fields = read_osm(
-        tile, "points", POINT_WHERE, ["barrier", "highway", "other_tags"], margin=0.0005
+        tile,
+        "points",
+        POINT_WHERE,
+        ["barrier", "highway", "man_made", "other_tags"],
+        margin=0.0005,
     )
     kinds = [
-        kind_of(barrier, highway, other)
-        for barrier, highway, other in zip(
-            fields["barrier"], fields["highway"], fields["other_tags"], strict=True
+        kind_of(barrier, highway, other, man_made)
+        for barrier, highway, man_made, other in zip(
+            fields["barrier"],
+            fields["highway"],
+            fields["man_made"],
+            fields["other_tags"],
+            strict=True,
         )
     ]
-    facades = Facades(tile) if "wallclock" in kinds else None
+    facades = Facades(tile) if "wallclock" in kinds or "flag" in kinds else None
     bins = site_bin_tone(tile) if "bin" in kinds else None
     out, shelters, stops = [], [], []
     for g, k, other in zip(geoms, kinds, fields["other_tags"], strict=True):
         if k is None or hidden(other):
             continue
+        if k == "flag" and facades is not None and facades.inside(g):
+            continue  # on a roof: the building model's, not the ground's
         stood = _stood(k, g, other, gate, ways, lines, streets, facades)
         if stood is None:
             continue

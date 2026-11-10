@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { MeshStandardNodeMaterial } from "three/webgpu";
 import type { FurnitureFeature } from "@/lib/city/features";
-import { Vector3 } from "three/webgpu";
+import { Matrix4, Quaternion, Vector3 } from "three/webgpu";
 import { buildFurniture, showFurnitureNear } from "./furniture-layer";
 import { isInstances } from "./instancing";
 import type { Instances } from "./instancing";
@@ -174,4 +174,33 @@ test("a clock's hands go with its cell", () => {
     "furniture-clock",
     "furniture-clock-hands",
   ]);
+});
+
+test("a flagpole casts, its cloth flies in its design and casts nothing", () => {
+  const group = buildFurniture(
+    [
+      at({ k: "flag" }),
+      at({ k: "flag", c: "de", h: 10.5 }, 5),
+      at({ k: "flag" }, 10),
+    ],
+    ctx
+  );
+  const byName = new Map(group.children.map((c) => [c.name, c]));
+  const mast = byName.get("furniture-flag") as Instances;
+  const plain = byName.get("furniture-flag-plain") as Instances;
+  const german = byName.get("furniture-flag-de") as Instances;
+  expect(mast.drawCount).toBe(3);
+  expect(mast.castShadow).toBe(true);
+  expect(plain.drawCount).toBe(2);
+  expect(german.drawCount).toBe(1);
+  for (const cloth of [plain, german]) {
+    expect(cloth.castShadow).toBe(false);
+  }
+  // the cloth hangs at the mast's top: a 10.5 m mast lifts it by 1.5
+  const top = new Vector3();
+  const scale = new Vector3();
+  const m = new Matrix4();
+  german.getMatrixAt(0, m);
+  m.decompose(top, new Quaternion(), scale);
+  expect(scale.y).toBeCloseTo(1.5);
 });

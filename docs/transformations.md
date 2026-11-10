@@ -3786,6 +3786,20 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   is searched to 30 m, then taken from the way, instead of the signal
   being dropped. Signals: Dresden 784 → 1 338, Hamburg 588 → 894, München
   571 → 837.
+- **Flagpoles** `❝ taken` `≈ assumed` (2026-11-10) — the same bake and layer:
+  every `man_made=flagpole` point stands as a slim mast, 7 m or its tagged
+  `height` (3–30 m; few are tagged), with a cloth in the wind (`k: flag`).
+  The flag is drawn in its colours only where the map names it (`flag:name`,
+  `country`, `subject` or their Wikidata: Germany, the EU, Saxony, Bavaria,
+  Hamburg), as pastel bands without emblem; every other one — most are a
+  shop's or a firm's (`flag:type=advertising`) — flies a pale cloth.
+  ≈ assumed: the wind (one bearing for the city, from the west-south-west,
+  ±12° a mast by a hash), the cloth's size and its ripple. A mast mapped
+  inside a building outline stands on its roof and is left out (Dresden 2
+  of 368); a flag on a facade (`support=wall_mounted`) is not mapped in any
+  of the seven sites' extracts and would be left out. The cloth moves, so it
+  never casts (ADR 0009). Masts after the fresh BBBike extracts of
+  2026-11-10: see the bake's counts in the PR.
 - **Playgrounds** `❝ taken` `◎ detected` — OSM `leisure=playground` outlines (≥ 20 m²; 339 over the
   fifteen tiles, 88 on the four first) → a pale sand floor flush on the ground (a breath warmer than the paving), seated on the
   ground under each ring vertex (densified to 2 m), and **only the

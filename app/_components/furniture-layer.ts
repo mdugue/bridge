@@ -41,6 +41,7 @@ import {
 } from "three/tsl";
 import type { FurnitureFeature } from "@/lib/city/features";
 import {
+  FLAG_HEIGHT,
   FURNITURE_MODELS,
   furnitureAreas,
   furniturePieces,
@@ -56,6 +57,7 @@ import type { GroundContext } from "@/lib/city/ground-clamp";
 import { subdividePolyline } from "@/lib/city/polyline";
 import { finished } from "@/lib/city/build-steps";
 import type { Steps } from "@/lib/city/build-steps";
+import { flagCloths } from "./flag-cloth";
 import { Instances, instancePosition } from "./instancing";
 import { clockMinutes, sceneNight } from "./scene-environment";
 import { markThinCaster, sceneMaterial } from "./three-utils";
@@ -589,6 +591,14 @@ function wallClock(): BufferGeometry[] {
   ];
 }
 
+/** A flagpole: a slim mast with a small ball on top (the cloth is
+ *  flag-cloth.ts's). */
+function flagpole(): BufferGeometry[] {
+  const ball = new SphereGeometry(0.075, 10, 6);
+  ball.translate(0, FLAG_HEIGHT + 0.05, 0);
+  return [pillar(0.05, FLAG_HEIGHT, [0, 0], SLATE), tinted(ball, RING)];
+}
+
 /** A drinking fountain: a slim bronze column with a small basin in front. */
 function drinkingWater(): BufferGeometry[] {
   const basin = new SphereGeometry(
@@ -655,6 +665,7 @@ const MODEL_PARTS: Record<FurnitureModel, () => BufferGeometry[]> = {
   hydrantSign,
   clock: poleClock,
   wallClock,
+  flag: flagpole,
   water: drinkingWater,
   stop: stopSign,
 };
@@ -764,6 +775,30 @@ function clockHands(model: "clock" | "wallClock", stood: Stood[]): Instances {
   return mesh;
 }
 
+/** One cell's flag cloths, one set per design. */
+function flagsOf(cell: Stood[]): Instances[] {
+  const byDesign = new Map<NonNullable<FurniturePiece["design"]>, Stood[]>();
+  for (const s of cell) {
+    const design = s.piece.design ?? "plain";
+    const list = byDesign.get(design) ?? [];
+    list.push(s);
+    byDesign.set(design, list);
+  }
+  return [...byDesign].map(([design, masts]) =>
+    asCell(
+      flagCloths(
+        design,
+        masts.map(({ at, piece }) => ({
+          at,
+          yaw: piece.yaw,
+          scale: piece.scaleY,
+        }))
+      ),
+      masts
+    )
+  );
+}
+
 function modelGeometry(model: FurnitureModel): BufferGeometry | null {
   const parts = MODEL_PARTS[model]();
   const geo = parts.length > 0 ? mergeGeometries(parts) : null;
@@ -814,6 +849,7 @@ const TALL_FURNITURE: ReadonlySet<FurnitureModel> = new Set<FurnitureModel>([
   "clock",
   "column",
   "columnLit",
+  "flag",
   "pedSignal",
   "playhouse",
   "post",
@@ -1107,6 +1143,11 @@ export function* furnitureSteps(
         group.add(asCell(mesh, cell));
         if (model === "clock" || model === "wallClock") {
           group.add(asCell(clockHands(model, cell), cell));
+        }
+        if (model === "flag") {
+          for (const cloths of flagsOf(cell)) {
+            group.add(cloths);
+          }
         }
       }
     }

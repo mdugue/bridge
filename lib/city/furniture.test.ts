@@ -3,6 +3,10 @@ import type { FurnitureFeature } from "./features";
 import {
   BENCH_LENGTH,
   BOLLARD_HEIGHT,
+  FLAG_HEIGHT,
+  FLAG_STRAY_DEG,
+  FLAG_WIND_BEARING,
+  flagYaw,
   furnitureAreas,
   furniturePieces,
   HOOP_SPACING,
@@ -166,4 +170,27 @@ test("the QA's signals and bins: a mast arm, a crossing's signal, a bin's colour
   const [e, n] = front(pieces[1].yaw);
   expect(e).toBeCloseTo(0);
   expect(n).toBeCloseTo(1);
+});
+
+test("a flag flies downwind, its mast at its tagged height, in its design", () => {
+  const [plain, german, tall] = furniturePieces([
+    at({ k: "flag" }),
+    at({ k: "flag", c: "de" }, 140, 260),
+    at({ k: "flag", h: 14 }),
+  ]);
+  expect(plain.model).toBe("flag");
+  expect(plain.design).toBe("plain");
+  expect(german.design).toBe("de");
+  expect(plain.scaleY).toBe(1);
+  expect(tall.scaleY).toBeCloseTo(14 / FLAG_HEIGHT);
+  // the cloth (local +X) points within the stray of the wind's bearing
+  for (const p of [plain, german]) {
+    const east = Math.cos(p.yaw);
+    const north = Math.sin(p.yaw);
+    const bearing = ((Math.atan2(east, north) * 180) / Math.PI + 360) % 360;
+    expect(Math.abs(bearing - FLAG_WIND_BEARING)).toBeLessThanOrEqual(
+      FLAG_STRAY_DEG
+    );
+  }
+  expect(flagYaw(100, 200)).toBe(plain.yaw);
 });

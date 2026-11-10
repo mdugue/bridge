@@ -242,6 +242,7 @@ export type FurnitureKind =
   | "bollard"
   | "clock"
   | "column"
+  | "flag"
   | "hydrant"
   | "hydrantsign"
   | "pedsignal"
@@ -253,6 +254,13 @@ export type FurnitureKind =
   | "wallclock"
   | "water"
   | PlaygroundKind;
+
+/** A litter bin's colour, where not the model's grey. */
+export type BinTone = "blue" | "green" | "orange" | "red" | "yellow";
+
+/** The flags drawn in their colours (furniture.py `FLAG_DESIGNS`): Germany,
+ *  the European Union, Saxony, Bavaria, Hamburg. */
+export type FlagDesign = "by" | "de" | "eu" | "hh" | "sn";
 
 /** A playground outline and the equipment OSM maps on it (`playground=*`). */
 export type PlaygroundKind =
@@ -280,7 +288,8 @@ export type PlaygroundKind =
  * the traffic they control), fire hydrants (`hydrant`: a pillar;
  * `hydrantsign`: the sign plate of an underground one), clocks (`clock` on
  * a pole, `wallclock` on a facade — the point on the wall, `a` out of it),
- * drinking fountains (`water`) and the "H" sign of a bus stop without a
+ * drinking fountains (`water`), flagpoles (`flag`: `h` its tagged height,
+ * `c` the flag where the map names one the viewer draws in its colours) and the "H" sign of a bus stop without a
  * shelter (`stop`). The QA's corrections added the pedestrian signals of a
  * signalled crossing (`pedsignal`, at each kerb, looking across), a car
  * signal's mast arm over a road of three lanes or more (`arm`) and its
@@ -296,8 +305,8 @@ export interface FurnitureFeature {
     arm?: boolean;
     back?: boolean;
     /** a bin's colour, where not the model's grey: its own `colour` tag,
-     *  else the city's tagged majority */
-    c?: "blue" | "green" | "orange" | "red" | "yellow";
+     *  else the city's tagged majority; a flag's design (`FlagDesign`) */
+    c?: BinTone | FlagDesign;
     /** on a bridge: the top of its road or path deck there (m), which the
      *  piece stands on instead of the ground */
     deck?: number;

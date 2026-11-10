@@ -667,6 +667,9 @@ export interface CrownUniforms {
 /** The crowns' wind clock: one node for every tile's crowns (and a later
  *  app's), advanced once per frame by the render loop (`setCrownTime`). */
 const crownTime = uniform(0);
+/** The same wind clock (s), for what else moves in the wind (the flags,
+ *  flag-cloth.ts). */
+export const windClock: Live = crownTime;
 
 /** Advances every crown's wind sway (elapsed seconds; once per frame). */
 export function setCrownTime(seconds: number): void {

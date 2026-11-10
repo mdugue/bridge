@@ -500,6 +500,7 @@ const FURNITURE_SOLID: Record<FurnitureKind, [number, number]> = {
   bollard: [0.3, 1],
   clock: [0.5, 4.2],
   column: [0.8, 3.2],
+  flag: [0.4, 7.2],
   hydrant: [0.35, 1],
   hydrantsign: [0.3, 1.5],
   pedsignal: [0.35, 2.7],

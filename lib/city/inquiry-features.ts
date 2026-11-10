@@ -11,6 +11,7 @@
  */
 import type {
   BridgeFeature,
+  FlagDesign,
   FurnitureFeature,
   FurnitureKind,
   LampHeightSource,
@@ -907,6 +908,7 @@ const FURNITURE: Record<FurnitureKind, [string, string]> = {
   bollard: ["Poller", "Stadtmobiliar"],
   clock: ["Uhr", "Stadtmobiliar"],
   column: ["Litfaßsäule", "Stadtmobiliar"],
+  flag: ["Fahnenmast", "Stadtmobiliar"],
   hydrant: ["Hydrant", "Feuerwehr"],
   hydrantsign: ["Hydrantenschild", "Feuerwehr"],
   pedsignal: ["Fußgängerampel", "Verkehr"],
@@ -946,6 +948,19 @@ function facing(a: number | undefined): string {
   return `nach ${names[Math.round((((a % 360) + 360) % 360) / 45) % 8]}`;
 }
 
+/** The flag a mast flies, where the map names one (`FlagDesign`). */
+const FLAG_NAMES: Record<FlagDesign, string> = {
+  by: "Bayern",
+  de: "Deutschland",
+  eu: "Europäische Union",
+  hh: "Hamburg",
+  sn: "Sachsen",
+};
+
+function flagName(c: string | undefined): string {
+  return c && Object.hasOwn(FLAG_NAMES, c) ? FLAG_NAMES[c as FlagDesign] : "";
+}
+
 /** A piece of furniture's heading: its name, under its group. */
 export function furnitureHeading(f: FurnitureInquiry): CardHeading {
   const [title, kicker] = FURNITURE[f.properties.k] ?? [
@@ -975,6 +990,7 @@ export function furnitureCard(
     ["Material", p.metal ? "Metall" : ""],
     ["Beleuchtet", p.lit ? "ja" : ""],
     ["Ausleger", p.arm ? "über die Fahrbahn" : ""],
+    ["Fahne", p.k === "flag" ? flagName(p.c) : ""],
     ["Ausrichtung", p.k === "bench" || p.k === "shelter" ? facing(p.a) : ""],
   ]);
   return {
