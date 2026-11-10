@@ -42,7 +42,7 @@ import type {
 import type { DesignInquiry } from "./inquiry-design";
 import type { Stated } from "./methods";
 import type { BikeInquiry, TrafficInquiry } from "./inquiry-traffic";
-import type { SiteProvenance } from "./provenance";
+import type { OsmProduct, SiteProvenance } from "./provenance";
 
 type Props<F extends { properties: unknown }> = NonNullable<F["properties"]>;
 
@@ -673,11 +673,12 @@ function rowSource(
 function pointSource(
   what: string,
   mapillary: boolean,
-  provenance: SiteProvenance | null
+  provenance: SiteProvenance | null,
+  product: OsmProduct = "trees"
 ): Stated[] {
   return mapillary
     ? stated("detected", mapillarySource([what]))
-    : stated("taken", osmSource(provenance, [what], "trees"));
+    : stated("taken", osmSource(provenance, [what], product));
 }
 
 /** What a canopy card says for its species: DOP saw a crown, no register
@@ -1010,7 +1011,7 @@ export function furnitureCard(
               credit: "",
             })
           )
-        : pointSource(heading.title, p.src === "mly", provenance),
+        : pointSource(heading.title, p.src === "mly", provenance, "furniture"),
   };
 }
 

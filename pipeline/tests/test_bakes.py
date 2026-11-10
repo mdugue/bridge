@@ -200,6 +200,7 @@ def test_a_flagpole_stands_with_its_height_and_the_flag_the_map_names():
     assert kind_of(None, None, '"location"=>"roof"', "flagpole") is None
     assert kind_of(None, None, '"location"=>"rooftop"', "flagpole") is None
     assert kind_of(None, None, '"support"=>"Roof"', "flagpole") is None
+    assert kind_of(None, None, '"support"=>"rooftop"', "flagpole") is None
     assert _props("flag", None) == {"k": "flag"}
     assert _props("flag", '"height"=>"12 m","flag:name"=>"Germany"') == {
         "k": "flag",

@@ -410,3 +410,14 @@ test("a compile of a group sees its descendants' night-only materials shown", ()
   ).toEqual([true, true]);
   expect([night.visible, day.visible]).toEqual([false, true]);
 });
+
+test("two attributes over one array weigh twice: each is its own GPU buffer", () => {
+  const array = new Float32Array(30);
+  const root = new Group();
+  for (let i = 0; i < 2; i += 1) {
+    const geo = new BufferGeometry();
+    geo.setAttribute("position", new BufferAttribute(array, 3));
+    root.add(new Mesh(geo));
+  }
+  expect(estimateGeometryBytes(root)).toBe(2 * array.byteLength);
+});

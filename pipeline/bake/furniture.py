@@ -316,7 +316,7 @@ def kind_of(
     if man_made == "flagpole":
         support = (tag(other, "support") or "").lower()
         where = (tag(other, "location") or "").lower()
-        aloft = support in WALL_SUPPORT or support == ROOF or where in ROOF_LOCATIONS
+        aloft = support in WALL_SUPPORT or bool(ROOF_LOCATIONS & {support, where})
         return None if aloft else "flag"
     if barrier == "bollard":
         return "bollard"

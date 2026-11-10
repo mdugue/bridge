@@ -1221,7 +1221,12 @@ stays their measure; the tile cache counts true bytes.
   lists — met after the drop, three uploads an empty buffer and the draw
   fails; and a buffer the site shares (`markSceneShared`) is never on a
   geometry when that geometry is disposed — three would destroy it for
-  every tile.
+  every tile. Such a buffer is an index only: three r187 frees a vertex
+  attribute taken off before the dispose all the same (each drawable's
+  `RenderObject.onGeometryDispose` frees what it drew that its geometry no
+  longer holds), so sets that share vertex arrays each hold attributes of
+  their own over them (flag-cloth.ts `clothOfSet`; each weighs as its own
+  GPU buffer).
 - **The ground comes before the buildings.** Both tiers' queues run in
   our order, not the renderer's (`lib/city/stream-order.ts`,
   `orderStreaming`): its own sorts by screen-space error, and a tile's

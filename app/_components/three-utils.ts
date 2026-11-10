@@ -257,12 +257,12 @@ export function estimateGeometryBytes(root: Object3D, own = false): number {
       if (own && isSceneShared(attribute)) {
         continue;
       }
+      // three uploads one GPU buffer per attribute (or interleaved
+      // buffer), even where two hold one CPU array (flag-cloth.ts
+      // `clothOfSet`): each counts
       const buffer = bufferOf(attribute);
-      // the array tells two attributes over one array apart; a dropped
-      // one is its own
-      const key = buffer.array.length > 0 ? buffer.array : buffer;
-      if (!seen.has(key)) {
-        seen.add(key);
+      if (!seen.has(buffer)) {
+        seen.add(buffer);
         bytes += bufferBytes(buffer);
       }
     }
