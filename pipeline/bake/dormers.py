@@ -767,20 +767,19 @@ def on_planes(found: list[dict], planes: RoofPlanes) -> list[dict]:
     dormers and chimneys kept, in place."""
     kept = []
     for d in found:
-        kept.append(d)
         e = planes.at(d["of"], d["x"], d["y"])
+        chimney = d.get("k") == "chimney"
+        # off every part of a rebuilt roof, or a dormer on one too flat
+        if planes.rebuilt(d["of"]) and (e is None or not chimney and e[1] < MIN_SLOPE):
+            continue
+        kept.append(d)
         if e is None:
-            # off every part of a rebuilt roof: nothing drawn under it
-            if planes.rebuilt(d["of"]):
-                kept.pop()
             continue
         z, slope = e
-        if d.get("k") == "chimney":
+        if chimney:
             d["z"] = round(z, 2)
             continue
         if slope < MIN_SLOPE:
-            if planes.rebuilt(d["of"]):
-                kept.pop()
             continue
         d["top"] = round(d["top"] + z - d["z"], 2)
         d["z"] = round(z, 2)

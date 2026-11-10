@@ -899,6 +899,9 @@ def flank_facets(h: np.ndarray, mine: np.ndarray, slope_min: float, res: float =
     min_cells = FLANK_M2 / (res * res)
     inward = _inward(mine)
     for core in _flank_cores(cls, n, res):
+        # no section rises more than its core: a core that does not, unsplit
+        if np.ptp(hs[core]) < FLANK_RISE_M:
+            continue
         sections = _sections(h, core, aspect, slope, min_cells, res)
         for piece in _rising(sections, h, hs, aspect, slope, res):
             label = len(dirs) + 1

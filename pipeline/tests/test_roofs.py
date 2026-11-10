@@ -547,3 +547,22 @@ def test_parts_sharing_a_border_drop_its_straight_points_together():
     assert len(out[0].exterior.coords) < len(south.exterior.coords)
     assert shapely.area(shapely.intersection(out[0], out[1])) < 1e-9
     assert abs(shapely.union_all(out).area - 200.0) < 1e-9
+
+
+def test_a_slit_or_a_tongue_in_a_part_stays():
+    walls = building_walls(shapely.box(0, 0, 40, 20))
+    square = shapely.box(5, 5, 15, 15)
+    slit = shapely.difference(square, shapely.box(9.6, 9, 10.4, 15))
+    tongue = shapely.union(square, shapely.box(9.6, 15, 10.4, 21))
+    assert abs(regular_polygon(slit, walls).area - slit.area) < 0.5
+    assert abs(regular_polygon(tongue, walls).area - tongue.area) < 0.5
+
+
+def test_straightening_loses_no_part_where_a_short_edge_lies_on_its_neighbour():
+    # a 6 cm stub of three points at a junction: straightened onto the edge
+    # beside it, the lines must be noded again or the faces drop out
+    a = shapely.Polygon([(0, 0), (10, 0), (10, 5), (5.03, 5), (5.0, 5.004), (4.97, 5), (0, 5)])
+    b = shapely.Polygon([(0, 5), (4.97, 5), (5.0, 5.004), (5.03, 5), (10, 5), (10, 10), (0, 10)])
+    c = shapely.Polygon([(10, 0), (20, 0), (20, 10), (10, 10), (10, 5)])
+    out = _straightened([a, b, c])
+    assert [round(p.area, 3) for p in out] == [round(p.area, 3) for p in (a, b, c)]

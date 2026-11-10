@@ -137,6 +137,7 @@ WALL_ON_M = 1.0  # an outline's edge this near a wall runs on it
 WALL_LINE_M = 0.1  # a footprint vertex this near the line of its neighbours splits no wall
 STRAIGHT_M = 0.01  # a point within the file's grid of the line of its neighbours is no corner
 CLEAN_M = 0.3  # the tiled parts' borders simplified this much (√ of the area dropped)
+HOLD_SHARE = 0.02  # a fix-up of the parts may change their union's area by this much
 GAP_FACE_M2 = 1.0  # a sliver no part holds, this small, goes to a part beside it
 TILE_GRID_M = 0.01  # the parts are tiled again on the file's centimetre grid
 GAP_TOUCH_M = 1.0  # a gap between regularised parts lies beside a part along this much
@@ -358,10 +359,6 @@ def _region_medians(lab: np.ndarray, h: np.ndarray, n: int) -> np.ndarray:
     return np.asarray(ndi.median(h, lab, idx), np.float64) if n else np.zeros(0)
 
 
-def _adjacency(lab: np.ndarray) -> set[tuple[int, int]]:
-    return set(roof_planes.label_borders(lab))
-
-
 def _relabel(lab: np.ndarray, roots: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Applies a label → root map (index = old label), renumbered 1..n; also
     the new label of each old root (index = old label, 0 where not a root)."""
@@ -434,7 +431,7 @@ def merge_regions(
         # NARROW_M, and stays the slope it measures
         wide = _narrow(lab, n) & ~strip & ~faces[1:] if narrow else np.zeros(n, bool)
         size = np.where(strip | wide, 0, cells)
-        pairs = _adjacency(lab)
+        pairs = list(roof_planes.label_borders(lab))
         parent = np.arange(n + 1)
         merged = False
         # a narrow strip merges once a round, into a region not merging
@@ -575,12 +572,11 @@ def _plausible_faces(h, lab, faces, face, landmark, flank_only, fits=None):
         mine = lab == rid
         if not mine.any():
             continue
-        rows, cols = np.nonzero(ndi.binary_dilation(mine, iterations=EXTEND_CELLS + 2))
-        win = (slice(rows.min(), rows.max() + 1), slice(cols.min(), cols.max() + 1))
+        win = roof_planes.grown_box(mine, EXTEND_CELLS + 2)
         src = mine[win] & face[win]
         flanks = (src & flank_only[win]).sum() > 0.5 * max(int(src.sum()), 1)
         cells = src if src.any() else mine[win]
-        key = (rows.min(), cols.min(), cells.shape, cells.tobytes(), flanks, landmark)
+        key = (win[0].start, win[1].start, cells.shape, cells.tobytes(), flanks, landmark)
         if key not in fits:
             fits[key] = roof_planes.plausible_fit(
                 h[win], cells, SLOPE, RES, EXTEND_CELLS, landmark, flanks
@@ -666,7 +662,7 @@ def _kept_whole(lab: np.ndarray, take: np.ndarray, small_cells: int) -> list[int
         region = lab[box] == r
         pieces, n = ndi.label(region & ~take[box])
         if not n:
-            kept.append(int(r))
+            # taken whole: no box left of it
             continue
         sizes = np.bincount(pieces.ravel(), minlength=n + 1)[1:]
         thin = _narrow(pieces, n) & ~_narrow(region.astype(np.int64), 1)[0]
@@ -944,14 +940,15 @@ def _ring_lines(pts: np.ndarray, walls: Walls) -> list[list]:
 
 
 def _one_line(prev: list, line: list) -> bool:
-    """Two of `_ring_lines`' lines on one wall's direction within
-    REGULAR_JOG_M of each other — two on walls only on one wall's line
-    (a jog in the footprint stays a jog)."""
+    """Two of `_ring_lines`' lines running on one wall's direction the
+    same way within REGULAR_JOG_M of each other — two on walls only on one
+    wall's line (a jog in the footprint stays a jog), never two running
+    back (a slit's or a tongue's sides)."""
     jog = STRAIGHT_M if prev[6] and line[6] else REGULAR_JOG_M
     return (
         prev[2]
         and line[2]
-        and abs(abs(float(prev[1] @ line[1])) - 1) < 1e-9
+        and abs(float(prev[1] @ line[1]) - 1) < 1e-9
         and abs(_cross(prev[1], line[0] - prev[0])) <= jog
     )
 
@@ -1129,7 +1126,9 @@ def _noded_cover(polys: list, lines=None) -> np.ndarray | None:
         near = shapely.buffer(np.asarray(polys), TILE_GRID_M)
         for f in slivers:
             touch = shapely.length(shapely.intersection(faces[f].boundary, near))
-            owner[f] = int(np.argmax(touch))
+            # beside none along its outline: the nearest
+            way = touch if touch.max() > 0 else -shapely.distance(faces[f], np.asarray(polys))
+            owner[f] = int(np.argmax(way))
     return np.asarray([_polygonal(shapely.union_all(faces[owner == i])) for i in range(len(polys))])
 
 
@@ -1137,22 +1136,35 @@ def _straightened(polys: list) -> list:
     """The parts with the points on their straight edges dropped (within
     STRAIGHT_M of their neighbours' line: where a border met an edge in the
     tiling, each one more wall in the mesh) — on the coverage's edges
-    between its junctions, so two neighbours drop the same points of the
-    border they share and no crack or overlap opens along it; each part
-    alone only where they are no coverage."""
-    alone = [shapely.simplify(shapely.make_valid(p), STRAIGHT_M) for p in polys]
+    between its junctions, noded again, so two neighbours drop the same
+    points of the border they share and no crack or overlap opens along
+    it. Each part alone where they are no coverage; as they are where the
+    straightened edges would not tile them again (`_holds`)."""
     try:
         cover = np.asarray(polys, dtype=object)
         if len(polys) < 2 or not shapely.coverage_is_valid(cover):
-            return alone
+            return [shapely.simplify(shapely.make_valid(p), STRAIGHT_M) for p in polys]
         edges = shapely.line_merge(shapely.union_all([shapely.boundary(p) for p in polys]))
         edges = shapely.simplify(shapely.get_parts(edges), STRAIGHT_M)
-        out = _noded_cover(polys, edges)
+        # a short edge laid onto its neighbour: the lines noded again
+        out = _noded_cover(polys, shapely.get_parts(shapely.union_all(edges)))
+        if out is None or not shapely.coverage_is_valid(out) or not _holds(list(out), polys):
+            return polys
     except shapely.errors.GEOSException:
-        return alone
-    if out is None or not shapely.coverage_is_valid(out):
-        return alone
+        return polys
     return list(out)
+
+
+def _holds(new: list, old: list) -> bool:
+    """Whether the parts `new` still cover what `old` did: their union
+    within HOLD_SHARE of its area, no part of 4 × MIN_POLY_M2 or more
+    shrunk to under half — a fix-up that loses a roof part is not one."""
+    before = shapely.area(shapely.union_all(old))
+    if abs(shapely.area(shapely.union_all(new)) - before) > HOLD_SHARE * before:
+        return False
+    return all(
+        p.area >= 0.5 * q.area for p, q in zip(new, old, strict=True) if q.area >= 4 * MIN_POLY_M2
+    )
 
 
 def region_polygons(
@@ -1178,7 +1190,9 @@ def region_polygons(
     cover = [_polygonal(shapely.intersection(p, footprint)) for p in cover]
     order = sorted(range(len(cover)), key=lambda i: -heights[ids[i] - 1])
     walls = building_walls(footprint if outline is None else outline)
-    cover = _straightened(clean_cover(regular_cover(cover, order, footprint, walls)))
+    regular = clean_cover(regular_cover(cover, order, footprint, walls))
+    # what the regularising lost, it may not: the parts as clipped then
+    cover = _straightened(regular if _holds(regular, cover) else cover)
     out = []
     for poly, rid in zip(cover, ids, strict=True):
         # on the centimetre grid the file is written on, so it stays valid

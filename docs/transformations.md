@@ -965,8 +965,10 @@ visual-variable codebook is in
   the roof (`roof_holes`, since 2026-11-10): at most 25 m²
   (`VOID_HOLE_M2`: a sound opening, a skylight), or shut in by the LoD2
   roof and spanning at most half of it (`VOID_SHARE`: a glass roof over a
-  courtyard). A void reaching the roof's edge is a part the LoD2 drew too
-  high, a larger one an open bowl: the fill lifted the Leipzig opera's
+  courtyard, its scan within 3 m of the ground: it saw the floor, not a
+  lower roof). A void reaching the roof's edge is a part the LoD2 drew
+  too high, one shut in but standing well over the ground an inner hall,
+  a larger one an open bowl: the fill lifted the Leipzig opera's
   hall onto its low wing and the trees around the Freilichtbühne in the
   Großer Garten over its seats. The case: Unna's Evangelische Stadtkirche — LoD2 draws
   the church as one gabled block (ridge ≈ 137 m, eaves ≈ 122 m), the west
@@ -1174,8 +1176,10 @@ visual-variable codebook is in
   notches where two borders meet a few centimetres apart), and points on
   a straight edge within the file's centimetre (where a neighbour's
   border met it) dropped, as one coverage so neighbours drop the same
-  ones of their shared border (`_straightened`) — each would be one more
-  wall in the mesh:
+  ones of their shared border (`_straightened`, its edges noded again) —
+  each would be one more wall in the mesh; a step of these fix-ups that
+  changes the parts' union by more than 2 % or halves a part keeps the
+  parts as they were (`_holds`):
   Dresden's rebuilt roofs have 24 % fewer outline points than before the
   regularising (the other sites 16 to 36 %). The footprint they are cut to is the
   building's less what another roof covers, each covered piece whole

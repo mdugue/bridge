@@ -202,6 +202,9 @@ RELIEF_SMOOTH = 1.0
 VOID_M = 1.0
 VOID_HOLE_M2 = 25.0
 VOID_SHARE = 0.5
+# ... and a larger one's scan reaches down this near the ground (it saw the
+# floor through it, not a lower roof)
+VOID_GROUND_M = 3.0
 # How far a relief's walls sink into the roof they stand on (m).
 FLOOR_SINK_M = 0.3
 
@@ -588,7 +591,10 @@ def relief(s: Surfaces, geom: shapely.Geometry, of: str) -> list[dict]:
     ground = s.ground[win]
     floor = np.where(np.isfinite(roof), np.fmax(roof, ground), ground)
     void = roof_holes(
-        inside & (s.dom[win] < floor - VOID_M), inside & np.isfinite(roof), s.field.res
+        inside & (s.dom[win] < floor - VOID_M),
+        inside & np.isfinite(roof),
+        s.field.res,
+        s.dom[win] - ground,
     )
     dom = np.where(inside, fill_voids(s.dom[win], void), np.nan)
     excess = np.nan_to_num(dom - top, nan=-1e9)
@@ -650,22 +656,31 @@ def relief(s: Surfaces, geom: shapely.Geometry, of: str) -> list[dict]:
     return out
 
 
-def roof_holes(void: np.ndarray, roofed: np.ndarray, res: float = 1.0) -> np.ndarray:
+def roof_holes(
+    void: np.ndarray, roofed: np.ndarray, res: float = 1.0, depth: np.ndarray | None = None
+) -> np.ndarray:
     """The voids that are holes in the roof (`roofed`, at `res` m a
     cell): each connected one no larger than VOID_HOLE_M2 (a sound
     opening, a skylight), or shut in by the roof — reaching no cell
-    outside it — and spanning at most VOID_SHARE of it (a glass roof over
-    a courtyard). A void reaching the roof's edge is a part LoD2 drew too
-    high (a low wing beside a hall), or one larger than that share an
-    open bowl: filled from the cells around, a taller neighbour would
-    stand on it (an opera's hall on its low wing)."""
+    outside it —, spanning at most VOID_SHARE of it and, with the scan's
+    `depth` over the ground, seeing down to within VOID_GROUND_M of it
+    (a glass roof over a courtyard). A void reaching the roof's edge is a
+    part LoD2 drew too high (a low wing beside a hall), one standing well
+    over the ground a lower roof (an inner hall the blocks around it shut
+    in), one larger than that share an open bowl: filled from the cells
+    around, a taller neighbour would stand on it (an opera's hall on its
+    low wing)."""
     lab, n = ndi.label(void)
     if not n:
         return void
+    ids = np.arange(n + 1)
     sizes = np.bincount(lab.ravel(), minlength=n + 1)
     edge = np.unique(lab[ndi.binary_dilation(~roofed, border_value=1) & void])
     shut = np.ones(n + 1, bool)
     shut[edge] = False
+    if depth is not None:
+        low = np.asarray(ndi.median(np.nan_to_num(depth, nan=np.inf), lab, ids)) <= VOID_GROUND_M
+        shut &= low
     hole = (sizes * res * res <= VOID_HOLE_M2) | (
         shut & (sizes <= VOID_SHARE * max(int(roofed.sum()), 1))
     )

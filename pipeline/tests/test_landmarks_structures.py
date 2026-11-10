@@ -745,3 +745,13 @@ def test_a_hole_in_a_landmarks_roof_is_filled_a_roof_drawn_too_high_is_not():
     out = structures.roof_holes(void, roofed)
     assert out[2:4, 2:4].all() and out[6:14, 10:18].all()
     assert not out[18:, :].any()
+
+
+def test_an_inner_hall_drawn_too_high_is_no_hole():
+    roofed = np.ones((30, 30), bool)
+    void = np.zeros((30, 30), bool)
+    void[8:20, 8:20] = True  # shut in by the blocks around it
+    depth = np.full((30, 30), 12.0)
+    # its scan a lower roof 8 m up: no hole; down to the floor: a glass roof
+    assert not structures.roof_holes(void, roofed, 1.0, np.where(void, 8.0, depth)).any()
+    assert structures.roof_holes(void, roofed, 1.0, np.where(void, 0.5, depth))[void].all()
