@@ -21,7 +21,7 @@ do.
 1. **An open image model reads glass**: CLIP (OpenAI's ViT-B/32, MIT, as
    ONNX), comparing each rectified upper wall with "a glass facade" and "a
    wall with windows". A wall is glass where most of at least two photos
-   that see a quarter of it say so with 0.9 or more; an object is glass
+   that see a quarter of it say so with 0.95 or more; an object is glass
    where its walls read as glass make half the length read. Never a rule
    for a named building.
 2. **Every camera is read for it**, panoramas and framed photos

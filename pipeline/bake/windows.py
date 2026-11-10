@@ -447,10 +447,12 @@ def model(traits: dict, axis: float | None, reliable: frozenset[str] = RELIABLE)
 # A wall is glass where its photos say so (facade_glass.py): at least
 # GLASS_IMAGES readings of it, each from a photo that sees GLASS_COVER of
 # its upper wall, and GLASS_SHARE of them at GLASS_MIN or more. On the probe
-# (2026-11-10) every known glass front read 0.91–1.00 on its clear views
-# and no plastered or stone wall above 0.9 but one clad in white panels;
-# two photos keep a single reflection or a scaffold from deciding.
-GLASS_MIN = 900  # ‰
+# (2026-11-10) every known glass front read 0.91–1.00 on its clear views;
+# over all of Dresden 0.9 also took metal cladding, ribbon-window blocks and
+# a plastered house with balconies (all below 0.95 on most views), 0.95 left
+# twelve objects of which the contact sheets showed two doubtful. Two photos
+# keep a single reflection or a scaffold from deciding.
+GLASS_MIN = 950  # ‰
 GLASS_COVER = facade_glass.MIN_COVER
 GLASS_IMAGES = 2
 GLASS_SHARE = 2 / 3

@@ -1808,7 +1808,9 @@ visual-variable codebook is in
   sky, trees or a street, is the less likely (a crop of sky above a cantilevered roof read 0.92 glass against
   the two walls alone). The cache is `<t>.glass.v1.jsonl`; the photo is
   deleted. `windows.py` calls a wall glass where at least two
-  readings exist and two thirds of them reach 0.9 (`wall_glass`); such a
+  readings exist and two thirds of them reach 0.95 (`wall_glass`; at 0.9
+  metal cladding, ribbon-window blocks and a plastered house with balconies
+  came through); such a
   wall gets no window model. The building bake gives an object material
   `glass`, from `photos`, when its glass walls make at least half the
   length of its walls read (`lib/city/photo-glass.ts`): it then draws as
