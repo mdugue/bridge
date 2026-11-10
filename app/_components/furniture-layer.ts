@@ -1043,7 +1043,10 @@ export const FLAG_OUT_M = 900;
 /** What a cell's band is: [in, out] (m). */
 type Reach = readonly [number, number];
 const FURNITURE_REACH: Reach = [FURNITURE_IN_M, FURNITURE_OUT_M];
-const FLAG_REACH: Reach = [FLAG_IN_M, FLAG_OUT_M];
+/** The models that show from further than FURNITURE_IN_M, and their band. */
+const FURTHER_REACH: Partial<Record<FurnitureModel, Reach>> = {
+  flag: [FLAG_IN_M, FLAG_OUT_M],
+};
 
 /** The pieces of each cell (by their site coordinates). */
 function byCell(stood: Stood[]): Stood[][] {
@@ -1067,8 +1070,10 @@ function asCell(mesh: Instances, stood: Stood[]): Instances {
   }
   mesh.userData.furnitureCell = box.expandByScalar(3);
   // a cell is one model's (its cloths and hands go with it)
-  if (stood[0]?.piece.model === "flag") {
-    mesh.userData.furnitureReach = FLAG_REACH;
+  const model = stood[0]?.piece.model;
+  const reach = model && FURTHER_REACH[model];
+  if (reach) {
+    mesh.userData.furnitureReach = reach;
   }
   return mesh;
 }
@@ -1079,21 +1084,23 @@ const cellBox = new Box3();
  * stops' signs) whose pieces are near `eye` (the scene frame), hides the
  * far ones; none hidden without an eye (Modell: its views and exports
  * draw the whole picture at one scale). True when any changed (the shadow
- * map must then be redrawn).
+ * map must then be redrawn); `changed`, when given, grows by the world box
+ * of every cell that did — only the rings that can hold it need a redraw.
  */
 export function showFurnitureNear(
   root: Object3D,
-  eye: Vector3 | null
+  eye: Vector3 | null,
+  changed?: Box3
 ): boolean {
-  let changed = false;
+  let any = false;
   root.traverse((child) => {
     const box = child.userData.furnitureCell as Box3 | undefined;
     if (!box) {
       return;
     }
+    cellBox.copy(box).applyMatrix4(child.matrixWorld);
     let near = true;
     if (eye) {
-      cellBox.copy(box).applyMatrix4(child.matrixWorld);
       const [into, out] =
         (child.userData.furnitureReach as Reach | undefined) ?? FURNITURE_REACH;
       const reach = child.visible ? out : into;
@@ -1101,10 +1108,11 @@ export function showFurnitureNear(
     }
     if (near !== child.visible) {
       child.visible = near;
-      changed = true;
+      any = true;
+      changed?.union(cellBox);
     }
   });
-  return changed;
+  return any;
 }
 
 /** One tile's street furniture as instanced models on its ground. */

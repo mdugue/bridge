@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { MeshStandardNodeMaterial } from "three/webgpu";
 import type { FurnitureFeature } from "@/lib/city/features";
-import { Matrix4, Quaternion, Vector3 } from "three/webgpu";
+import { Box3, Matrix4, Quaternion, Vector3 } from "three/webgpu";
 import { buildFurniture, showFurnitureNear } from "./furniture-layer";
 import { isInstances } from "./instancing";
 import { isSceneShared } from "./three-utils";
@@ -234,7 +234,12 @@ test("a flagpole shows from further than a bench", () => {
   const group = buildFurniture([at({ k: "flag" }), at({ k: "bench" }, 5)], ctx);
   // the eye 600 m off: the bench's cell hides, the mast's and its cloth's
   // stay
-  showFurnitureNear(group, new Vector3(600, 110, 0));
+  const changed = new Box3();
+  showFurnitureNear(group, new Vector3(600, 110, 0), changed);
+  // what changed is the bench's cell alone: the rings that can hold it
+  // redraw, not every one
+  expect(changed.min.x).toBeCloseTo(5 - 3);
+  expect(changed.max.x).toBeCloseTo(5 + 3);
   const shown = group.children
     .filter((c) => c.userData.furnitureCell)
     .map((c) => [c.name, c.visible]);

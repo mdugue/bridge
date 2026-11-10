@@ -204,7 +204,12 @@ def test_a_flagpole_stands_with_its_height_and_the_flag_the_map_names():
         "h": 12.0,
         "c": "de",
     }
-    assert _props("flag", '"height"=>"80","country"=>"EU"') == {"k": "flag", "h": 30.0, "c": "eu"}
+    # a height no mast has is left out, not clamped: the card shows the map's
+    assert _props("flag", '"height"=>"80","country"=>"EU"') == {"k": "flag", "c": "eu"}
+    # a city's flag names the land it is in, not the flag
+    assert "c" not in _props("flag", '"flag:type"=>"municipal","country"=>"DE"')
+    assert _props("flag", '"flag:type"=>"national","country"=>"DE"')["c"] == "de"
+    assert _props("flag", '"flag:wikidata"=>"Q122482"')["c"] == "eu"
     assert _props("flag", '"subject:wikidata"=>"Q1202"')["c"] == "sn"
     assert _props("flag", '"country"=>"DE;EU"')["c"] == "de"  # a list: its first drawn one
     assert _props("flag", '"country"=>"EU;DE"')["c"] == "eu"

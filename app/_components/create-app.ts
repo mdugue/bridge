@@ -246,7 +246,7 @@ import {
 } from "./stream-timing";
 import { attachInspector, inspectRequested } from "./inspector";
 import { attachTouchControls } from "./touch-controls";
-import { setFlagTime } from "./flag-cloth";
+import { retainFlagCloths, setFlagTime } from "./flag-cloth";
 import { createVegetationLod, setCrownTime } from "./vegetation-layer";
 import type { VegetationControl } from "./vegetation-layer";
 import { createStyleResources, setClaySection } from "./visual-style";
@@ -1226,6 +1226,7 @@ export async function createCityWalkApp(
   const cleanups: (() => void)[] = [
     retainSceneMaterials(),
     retainOpenSkyTexture(),
+    retainFlagCloths(),
   ];
   // `?trace=1`: the stream's timings on the browser's timeline, the long
   // tasks counted, the summary printed once loaded (stream-timing.ts).
@@ -3299,6 +3300,8 @@ async function bootApp(
     budget.tier === "mobile" ? PHONE_RICH_TREE_BUDGET : RICH_TREE_BUDGET;
   /** `eye`: where the tiers are measured from (Modell: above the pivot);
    *  `tick`: the frame's pose tick is due. */
+  /** The world box of the furniture cells a frame shows or hides. */
+  const changedCells = new Box3();
   const stepVegetation = (elapsed: number, eye: Vector3, tick: boolean) => {
     // one wind clock for every crown, the coarse ones standing in on a
     // bare fine level too
@@ -3323,17 +3326,27 @@ async function bootApp(
     // the street furniture's cells near the eye (furniture-layer.ts)
     // (none hidden in Modell: its views and exports draw one scale)
     const furnitureEye = modelRig.owns() ? null : eye;
-    let cellChanged = false;
+    // (the rings redrawn only where the cells that changed can fall: a
+    // flagpole's cell flips 800 m out)
+    const cellsChanged = changedCells.makeEmpty();
     for (const d of shown) {
       for (const part of [d.furniture, d.tram]) {
-        if (part && showFurnitureNear(part, furnitureEye)) {
-          cellChanged = true;
+        if (part) {
+          showFurnitureNear(part, furnitureEye, cellsChanged);
         }
       }
     }
-    if (cellChanged) {
+    if (!cellsChanged.isEmpty()) {
       invalidateLanternShadow(lantern);
-      sunRig.invalidateShadow(undefined, NEAR_CHANGE_RINGS);
+      sunRig.invalidateShadow(
+        {
+          minX: cellsChanged.min.x,
+          maxX: cellsChanged.max.x,
+          minZ: cellsChanged.min.z,
+          maxZ: cellsChanged.max.z,
+        },
+        NEAR_CHANGE_RINGS
+      );
     }
   };
 

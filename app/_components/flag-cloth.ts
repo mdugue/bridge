@@ -45,7 +45,12 @@ import {
 import type { FlagDesign } from "@/lib/city/features";
 import { FLAG_CLOTH_H, FLAG_CLOTH_L } from "@/lib/city/furniture";
 import { Instances, instanceMatrix, instancePosition } from "./instancing";
-import { markSceneShared, markThinCaster, sceneMaterial } from "./three-utils";
+import {
+  markSceneShared,
+  markThinCaster,
+  sceneMaterial,
+  sceneShared,
+} from "./three-utils";
 import { swayNear } from "./vegetation-layer";
 
 /** How far under the mast's top the cloth's top hangs (m); its size is
@@ -64,10 +69,12 @@ const ROWS = 6;
 /** The wave: its amplitude at the fly end (m), its wavenumber along the
  *  cloth (radians a metre: a 1.85 m wave) and how fast it runs (radians a
  *  second). */
-const WAVE_AMP = float(0.22);
+const WAVE_AMP_M = 0.22;
+const WAVE_AMP = float(WAVE_AMP_M);
 const WAVE_K = 3.4;
 const WAVE_SPEED = 4.2;
-/** How dark a fold turned from the eye goes at the wave's steepest. */
+/** How dark a fold goes where the wave turns the sheet most (its slope's
+ *  size: the same seen from either side). */
 const FOLD_SHADE = float(0.22);
 const TURN = Math.PI * 2;
 
@@ -139,6 +146,12 @@ function clothGeometry(design: FlagDesign | "plain"): BufferGeometry {
   geo.setAttribute("normal", new Float32BufferAttribute(nrm, 3));
   geo.setAttribute("color", new Float32BufferAttribute(rgb, 3));
   geo.setIndex(index);
+  // the sphere every set's is made of (`Instances`): wide enough for the
+  // fly end's swing off the sheet
+  geo.computeBoundingSphere();
+  if (geo.boundingSphere) {
+    geo.boundingSphere.radius += WAVE_AMP_M;
+  }
   return geo;
 }
 
@@ -206,12 +219,24 @@ export interface Mast {
   yaw: number;
 }
 
-/** Each design's cloth, one for the site: every tile's sets draw from it,
- *  and no tile's disposal frees it (`markSceneShared`). */
+/** Each design's cloth, one for the scene: every tile's sets draw from it,
+ *  and no tile's disposal frees it (`markSceneShared`); the last app that
+ *  holds it does (`retainFlagCloths`). */
 const siteCloths = new Map<FlagDesign | "plain", BufferGeometry>();
+const clothsShared = sceneShared(() => ({
+  dispose: () => {
+    for (const geo of siteCloths.values()) {
+      geo.dispose();
+    }
+    siteCloths.clear();
+  },
+}));
+/** One app more for the site's cloths; the returned release is one less. */
+export const retainFlagCloths = clothsShared.retain;
 
 /** The site's cloth of one design (`clothGeometry`, made on first use). */
 function siteCloth(design: FlagDesign | "plain"): BufferGeometry {
+  clothsShared.get();
   let geo = siteCloths.get(design);
   if (!geo) {
     geo = clothGeometry(design);

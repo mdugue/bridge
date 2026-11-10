@@ -47,7 +47,7 @@ OSM building outline, ≤ 3 m), else it is dropped, as are tower clocks (the
 tower is the building model's) and sundials.
 
 A flagpole (`man_made=flagpole`, `k: flag`) stands where it is mapped, at
-its tagged `height` (`h`, clamped to FLAG_H) and, where `flag:name`,
+its tagged `height` (`h`, where it lies in FLAG_H) and, where `flag:name`,
 `subject`, `country` or their Wikidata name a flag in FLAG_DESIGNS (the
 flag's own name first: `flag:name=Sachsen` on `country=DE` flies Saxony's),
 flying that flag (`c`); every other flag — most are a shop's or a firm's,
@@ -189,12 +189,12 @@ HYDRANT = {"pillar": "hydrant", "underground": "hydrantsign"}
 CLOCK = {"pole": "clock", "wall": "wallclock", "wall_mounted": "wallclock"}
 WALL_SUPPORT = {"wall", "wall_mounted"}  # a flag on a facade: not mapped as such yet
 ROOF = "roof"  # a flag on a roof (`support`/`location`): the roof is not drawn
-FLAG_H = (3.0, 30.0)  # a tagged flagpole height, clamped (m)
+FLAG_H = (3.0, 30.0)  # a tagged flagpole height outside this is left out (m)
 # The flags the viewer draws in their colours, by `flag:name`/`country`/`subject`
 # (lower case); every other flag flies a pale cloth.
 FLAG_DESIGNS = {
     "de": ("de", "deutschland", "germany", "bundesrepublik deutschland", "q183", "q48160"),
-    "eu": ("eu", "europe", "europa", "european union", "europäische union", "q458", "q42000"),
+    "eu": ("eu", "europe", "europa", "european union", "europäische union", "q458", "q122482"),
     "sn": ("sachsen", "saxony", "freistaat sachsen", "q1202"),
     "by": ("bayern", "bavaria", "freistaat bayern", "q980"),
     "hh": ("hamburg", "freie und hansestadt hamburg", "q1055"),
@@ -343,19 +343,26 @@ def bollard(other: str | None) -> dict:
 
 
 def flag(other: str | None) -> dict:
-    """A flagpole's tagged height (m, clamped) and the flag it flies where
-    the map names one the viewer draws in its colours (`c`)."""
+    """A flagpole's tagged height (m; one past FLAG_H is no mast's, and
+    left out: the card shows only what the map says) and the flag it flies
+    where the map names one the viewer draws in its colours (`c`)."""
     props: dict = {}
     h = osm_metres(tag(other, "height"))
-    if h is not None:
-        props["h"] = round(min(max(h, FLAG_H[0]), FLAG_H[1]), 1)
-    if tag(other, "flag:type") == "advertising":
+    if h is not None and FLAG_H[0] <= h <= FLAG_H[1]:
+        props["h"] = round(h, 1)
+    kind = tag(other, "flag:type")
+    if kind == "advertising":
         return props  # a firm's flag: its colours are not mapped
     # the keys that name the flag itself first, then what it stands for,
     # then where; in a `;` list the first one the viewer draws. A group's
     # name the viewer does not draw decides (a pale cloth); an item it does
     # not know does not (the map's Wikidata may name the flag or its land)
+    # `country` names the land a national flag stands for; on a firm's, a
+    # city's or a club's flag it is where the firm is, not the flag
+    national = kind in (None, "national", "european")
     for names_key, item_key in FLAG_KEYS:
+        if names_key == "country" and not national:
+            break
         names = [n.strip().lower() for n in (tag(other, names_key) or "").split(";")]
         items = [n.strip().lower() for n in (tag(other, item_key) or "").split(";")]
         design = next((DESIGN_OF[n] for n in [*names, *items] if n in DESIGN_OF), None)

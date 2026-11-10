@@ -3788,13 +3788,16 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   571 → 837.
 - **Flagpoles** `❝ taken` `≈ assumed` (2026-11-10) — the same bake and layer:
   every `man_made=flagpole` point stands as a slim mast, 7 m or its tagged
-  `height` (3–30 m; few are tagged), with a cloth in the wind (`k: flag`).
+  `height` (3–30 m, one outside is left out; few are tagged), with a cloth
+  in the wind (`k: flag`).
   The flag is drawn in its colours only where the map names it (`flag:name`,
   `flag:wikidata`, `subject`, `country`: the first the map fills decides,
   the flag's own name first — Germany, the EU, Saxony, Bavaria, Hamburg),
   as pastel bands without emblem; every other one — most are a shop's or
   a firm's (`flag:type=advertising`, never in a country's colours), some a
-  city's — flies a pale cloth.
+  city's — flies a pale cloth; `country` counts only on a national flag (no
+  `flag:type`, `national`, `european`), on a firm's or a city's it is where
+  they are.
   ≈ assumed: the wind (one bearing for the city, from the west-south-west,
   ±12° a mast by a hash), the cloth's size and its ripple. A mast mapped
   inside a building outline or on its line stands on its roof and is left
