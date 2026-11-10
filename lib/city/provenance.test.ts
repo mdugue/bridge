@@ -43,11 +43,21 @@ test("every site tile has the editions its buildings and ground came from", () =
   expect(manifest.sources.osm.credit).toContain("OpenStreetMap");
   expect(manifest.sources.lod2.credit).toBe("Quelle: GeoSN, dl-de/by-2-0");
   // every OSM product a card quotes has its own edition
-  for (const product of ["buildings", "bridges", "fountains", "trees"]) {
+  for (const product of [
+    "buildings",
+    "bridges",
+    "fountains",
+    "trees",
+    "furniture",
+  ]) {
     expect(
       `${product}: ${manifest.sources.osm.stands?.[product as "trees"]}`
     ).toMatch(/: \d{4}-\d{2}-\d{2}$/u);
   }
+  // the furniture baked again on its own (the flagpoles) quotes its own
+  const stands = manifest.sources.osm.stands ?? {};
+  expect(stands.furniture).toBeDefined();
+  expect(`${stands.furniture}` >= `${stands.trees}`).toBe(true);
   expect(manifest.sources.wikidata.stand).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
   expect(manifest.sources.trees.stand).toBe("2026-10-01");
 });

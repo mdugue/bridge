@@ -11,6 +11,7 @@
  */
 import type {
   BridgeFeature,
+  FlagDesign,
   FurnitureFeature,
   FurnitureKind,
   LampHeightSource,
@@ -19,6 +20,7 @@ import type {
   RiversideFeature,
   TreeFactsFile,
 } from "./features";
+import { isFlagDesign } from "./features";
 import {
   factLines,
   firstText,
@@ -40,7 +42,7 @@ import type {
 import type { DesignInquiry } from "./inquiry-design";
 import type { Stated } from "./methods";
 import type { BikeInquiry, TrafficInquiry } from "./inquiry-traffic";
-import type { SiteProvenance } from "./provenance";
+import type { OsmProduct, SiteProvenance } from "./provenance";
 
 type Props<F extends { properties: unknown }> = NonNullable<F["properties"]>;
 
@@ -671,11 +673,12 @@ function rowSource(
 function pointSource(
   what: string,
   mapillary: boolean,
-  provenance: SiteProvenance | null
+  provenance: SiteProvenance | null,
+  product: OsmProduct = "trees"
 ): Stated[] {
   return mapillary
     ? stated("detected", mapillarySource([what]))
-    : stated("taken", osmSource(provenance, [what], "trees"));
+    : stated("taken", osmSource(provenance, [what], product));
 }
 
 /** What a canopy card says for its species: DOP saw a crown, no register
@@ -907,6 +910,7 @@ const FURNITURE: Record<FurnitureKind, [string, string]> = {
   bollard: ["Poller", "Stadtmobiliar"],
   clock: ["Uhr", "Stadtmobiliar"],
   column: ["Litfaßsäule", "Stadtmobiliar"],
+  flag: ["Fahnenmast", "Stadtmobiliar"],
   hydrant: ["Hydrant", "Feuerwehr"],
   hydrantsign: ["Hydrantenschild", "Feuerwehr"],
   pedsignal: ["Fußgängerampel", "Verkehr"],
@@ -946,6 +950,19 @@ function facing(a: number | undefined): string {
   return `nach ${names[Math.round((((a % 360) + 360) % 360) / 45) % 8]}`;
 }
 
+/** The flag a mast flies, where the map names one (`FlagDesign`). */
+const FLAG_NAMES: Record<FlagDesign, string> = {
+  by: "Bayern",
+  de: "Deutschland",
+  eu: "Europäische Union",
+  hh: "Hamburg",
+  sn: "Sachsen",
+};
+
+function flagName(c: string | undefined): string {
+  return isFlagDesign(c) ? FLAG_NAMES[c] : "";
+}
+
 /** A piece of furniture's heading: its name, under its group. */
 export function furnitureHeading(f: FurnitureInquiry): CardHeading {
   const [title, kicker] = FURNITURE[f.properties.k] ?? [
@@ -975,6 +992,7 @@ export function furnitureCard(
     ["Material", p.metal ? "Metall" : ""],
     ["Beleuchtet", p.lit ? "ja" : ""],
     ["Ausleger", p.arm ? "über die Fahrbahn" : ""],
+    ["Fahne", p.k === "flag" ? flagName(p.c) : ""],
     ["Ausrichtung", p.k === "bench" || p.k === "shelter" ? facing(p.a) : ""],
   ]);
   return {
@@ -993,7 +1011,7 @@ export function furnitureCard(
               credit: "",
             })
           )
-        : pointSource(heading.title, p.src === "mly", provenance),
+        : pointSource(heading.title, p.src === "mly", provenance, "furniture"),
   };
 }
 

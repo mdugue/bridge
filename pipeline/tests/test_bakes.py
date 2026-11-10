@@ -189,6 +189,91 @@ def test_furniture_kinds_come_from_the_tags():
     assert kind_of(None, None, '"amenity"=>"restaurant"') is None
 
 
+def test_a_flagpole_stands_with_its_height_and_the_flag_the_map_names():
+    from bake.furniture import _props, kind_of
+
+    assert kind_of(None, None, None, "flagpole") == "flag"
+    # a flag on a facade is not mapped anywhere yet: left out, not guessed
+    assert kind_of(None, None, '"support"=>"wall_mounted"', "flagpole") is None
+    # nor on a roof, which is not drawn
+    assert kind_of(None, None, '"support"=>"roof"', "flagpole") is None
+    assert kind_of(None, None, '"location"=>"roof"', "flagpole") is None
+    assert kind_of(None, None, '"location"=>"rooftop"', "flagpole") is None
+    assert kind_of(None, None, '"support"=>"Roof"', "flagpole") is None
+    assert kind_of(None, None, '"support"=>"rooftop"', "flagpole") is None
+    assert _props("flag", None) == {"k": "flag"}
+    assert _props("flag", '"height"=>"12 m","flag:name"=>"Germany"') == {
+        "k": "flag",
+        "h": 12.0,
+        "c": "de",
+    }
+    # a height no mast has is left out, not clamped: the card shows the map's
+    assert _props("flag", '"height"=>"80","country"=>"EU"') == {"k": "flag", "c": "eu"}
+    # a city's flag names the land it is in, not the flag
+    assert "c" not in _props("flag", '"flag:type"=>"municipal","country"=>"DE"')
+    assert _props("flag", '"flag:type"=>"national","country"=>"DE"')["c"] == "de"
+    assert _props("flag", '"flag:wikidata"=>"Q122482"')["c"] == "eu"
+    # a flag that names its own item (Berlin's) is no German flag
+    assert "c" not in _props("flag", '"flag:wikidata"=>"Q64","country"=>"DE"')
+    # ...nor one that stands for a place the viewer does not draw (Dresden)
+    assert "c" not in _props("flag", '"subject:wikidata"=>"Q1731","country"=>"DE"')
+    assert _props("flag", '"flag:wikidata"=>"Q645967"')["c"] == "hh"
+    assert _props("flag", '"flag:name"=>"Deutsche Flagge","country"=>"DE"')["c"] == "de"
+    # ...and Saxony's own item flies Saxony's
+    assert _props("flag", '"flag:wikidata"=>"Q693701","country"=>"DE"')["c"] == "sn"
+    # the map's case does not matter
+    assert _props("flag", '"flag:type"=>"Advertising","country"=>"DE"') == {"k": "flag"}
+    assert _props("flag", '"flag:name"=>"Bundesflagge","country"=>"DE"')["c"] == "de"
+    # a European flag in Germany is Europe's
+    assert _props("flag", '"flag:type"=>"european","country"=>"DE"')["c"] == "eu"
+    # ...whatever the map calls it
+    assert _props("flag", '"flag:type"=>"european","flag:name"=>"EU-Flagge"')["c"] == "eu"
+    assert _props("flag", '"subject:wikidata"=>"Q1202"')["c"] == "sn"
+    assert _props("flag", '"country"=>"DE;EU"')["c"] == "de"  # a list: its first drawn one
+    assert _props("flag", '"country"=>"EU;DE"')["c"] == "eu"
+    # the flag's own name wins over the country it stands in
+    assert _props("flag", '"flag:name"=>"Sachsen","country"=>"DE"')["c"] == "sn"
+    # a flag the viewer does not draw is not its country's
+    assert "c" not in _props("flag", '"flag:name"=>"Dresden","country"=>"DE"')
+    # an item the viewer does not know leaves it to what the flag stands for
+    assert _props("flag", '"flag:wikidata"=>"Q1","subject"=>"Bayern"')["c"] == "by"
+    # an advertising flag is a firm's, wherever it stands
+    assert "c" not in _props("flag", '"flag:type"=>"advertising","country"=>"DE"')
+    # a firm's flag: its colours are not mapped
+    assert _props("flag", '"flag:type"=>"advertising","flag:name"=>"Netto"') == {"k": "flag"}
+
+
+def test_a_flagpole_on_a_building_outline_counts_as_on_its_roof(monkeypatch):
+    import numpy as np
+    import shapely
+
+    from bake import furniture
+
+    # a house, a petrol station's canopy (`building=roof`), an arcade's
+    # upper floors over the street and a car park under it
+    geoms = np.array(
+        [shapely.box(x, 0, x + 10, 10) for x in (0, 20, 40, 60)],
+    )
+    kinds = np.array(["house", "roof", "yes", "parking"])
+    other = np.array(
+        [None, None, '"building:min_level"=>"4","layer"=>"1"', '"location"=>"underground"'],
+        dtype=object,
+    )
+    monkeypatch.setattr(
+        furniture, "read_osm", lambda *_: (geoms, {"building": kinds, "other_tags": other})
+    )
+    facades = furniture.Facades(None)
+    assert facades.inside(shapely.Point(5, 5))
+    # a node of the building's way: on its line
+    assert facades.inside(shapely.Point(10, 10))
+    assert not facades.inside(shapely.Point(12, 5))
+    # under a canopy: on the ground
+    assert not facades.inside(shapely.Point(25, 5))
+    # under a raised building, over an underground one: on the ground
+    assert not facades.inside(shapely.Point(45, 5))
+    assert not facades.inside(shapely.Point(65, 5))
+
+
 def test_furniture_indoors_or_underground_is_hidden():
     from bake.furniture import hidden
 

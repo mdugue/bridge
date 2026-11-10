@@ -40,6 +40,14 @@ import type {
   TreeFeature,
   VegRowFeature,
 } from "./features";
+import {
+  FLAG_BALL_R,
+  FLAG_BALL_Y,
+  FLAG_CLOTH_H,
+  FLAG_CLOTH_L,
+  FLAG_HEIGHT,
+  flagYaw,
+} from "./furniture";
 import { epsgToWorld } from "./ground-clamp";
 import type { RecenterOffset } from "./ground-clamp";
 import type { CanopyInquiry, FeatureInquiry } from "./inquiry-features";
@@ -503,6 +511,58 @@ const STOP = { h: 2.8, r: 0.5 };
 /** How far apart a hedge's picks stand along it (m). */
 const HEDGE_STEP = 2;
 
+/** How far a flagpole's ball reaches over its top (m), picked with the
+ *  mast. */
+const FLAG_BALL = FLAG_BALL_Y + FLAG_BALL_R;
+
+/** How tall a piece is picked: a signal on a mast arm by its mast
+ *  (furniture-layer.ts `signalArm`), a flagpole by its tagged height and
+ *  the ball on top, the rest (an untagged mast too) by its kind. */
+function solidHeight(
+  p: NonNullable<FurnitureFeature["properties"]>,
+  base: number
+): number {
+  if (p.arm) {
+    return 6.2;
+  }
+  return p.k === "flag" && p.h ? p.h + FLAG_BALL : base;
+}
+
+/** How thick a flag's cloth is picked (m): the sheet and its ripple. */
+const CLOTH_PICK_M = 0.5;
+
+/** A flag's cloth, picked as a thin box round the sheet (it flies downwind
+ *  of the mast, `flagYaw`, and ripples a little): the mast's solid `mast`,
+ *  at EPSG (x, y). A box, not its shape (`toleranceBox`). */
+function clothSolid(
+  [ex, ey]: readonly [number, number],
+  mast: AskSolid
+): AskSolid | null {
+  if (!("cylinder" in mast)) {
+    return null; // a mast is always a cylinder (`standing`)
+  }
+  const yaw = flagYaw(ex, ey);
+  // local +X turned by yaw: (cos, −sin) in the scene's x–z; across it
+  // (sin, cos)
+  const [ax, az] = [Math.cos(yaw), -Math.sin(yaw)];
+  const [bx, bz] = [-az * (CLOTH_PICK_M / 2), ax * (CLOTH_PICK_M / 2)];
+  const { x, z } = mast.cylinder;
+  const [fx, fz] = [x + ax * FLAG_CLOTH_L, z + az * FLAG_CLOTH_L];
+  const top = mast.cylinder.y1 - FLAG_BALL;
+  return {
+    prism: {
+      ring: [
+        [x + bx, z + bz],
+        [fx + bx, fz + bz],
+        [fx - bx, fz - bz],
+        [x - bx, z - bz],
+      ],
+      y0: top - FLAG_CLOTH_H - 0.2,
+      y1: top,
+    },
+  };
+}
+
 /** Each furniture kind picked as a cylinder: radius, height (m). */
 const FURNITURE_SOLID: Record<FurnitureKind, [number, number]> = {
   bench: [1, 1],
@@ -511,6 +571,7 @@ const FURNITURE_SOLID: Record<FurnitureKind, [number, number]> = {
   bollard: [0.3, 1],
   clock: [0.5, 4.2],
   column: [0.8, 3.2],
+  flag: [0.4, FLAG_HEIGHT + FLAG_BALL],
   hydrant: [0.35, 1],
   hydrantsign: [0.3, 1.5],
   pedsignal: [0.35, 2.7],
@@ -900,24 +961,28 @@ function furnitureItem(
   ctx: OwnGroundContext
 ): AskItem<FeatureInquiry>[] {
   const [r, base] = FURNITURE_SOLID[p.k] ?? [0.6, 1];
-  // a signal on a mast arm: its mast (furniture-layer.ts `signalArm`)
-  const h = p.arm ? 6.2 : base;
+  const h = solidHeight(p, base);
   if (f.geometry.type === "Point") {
     const at = f.geometry.coordinates;
     const solid = standing(at, r, h, ctx, p.deck);
-    return solid
+    if (!solid) {
+      return [];
+    }
+    const target: FeatureInquiry = {
+      kind: "furniture",
+      tile: ctx.tile,
+      position: [at[0], at[1]],
+      properties: p,
+    };
+    // a flag's cloth its own item, asked as the mast: its box a tolerance,
+    // the mast still a thing the lens may focus on
+    const cloth = p.k === "flag" ? clothSolid(at, solid) : null;
+    return cloth
       ? [
-          {
-            solids: [solid],
-            target: {
-              kind: "furniture",
-              tile: ctx.tile,
-              position: [at[0], at[1]],
-              properties: p,
-            },
-          },
+          { solids: [solid], target },
+          { solids: [cloth], target },
         ]
-      : [];
+      : [{ solids: [solid], target }];
   }
   const ring = f.geometry.coordinates[0];
   const centre = ringCentre(ring);
@@ -945,9 +1010,9 @@ function furnitureItem(
  * Whether an item's solids are a box the probe tolerates round what is
  * drawn — a landing stage's, an outline's prism over the surface it marks
  * (`furnitureItems`, `landingItems`), a fountain's basin up to its
- * figure's top (`monumentSolid`) — not its shape: a ray may name it, the
- * lens never focuses on it. Read from the item, never stored on it
- * (ADR 0047).
+ * figure's top (`monumentSolid`), a flag's cloth's box (`clothSolid`) —
+ * not its shape: a ray may name it, the lens never focuses on it. Read from the
+ * item, never stored on it (ADR 0047).
  */
 export function toleranceBox(item: AskItem<FeatureInquiry>): boolean {
   const { target } = item;

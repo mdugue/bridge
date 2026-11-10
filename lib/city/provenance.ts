@@ -25,7 +25,12 @@ export type SourceKey =
   | "wikidata";
 
 /** The OSM products the cards quote, each read from its own extract. */
-export type OsmProduct = "bridges" | "buildings" | "fountains" | "trees";
+export type OsmProduct =
+  | "bridges"
+  | "buildings"
+  | "fountains"
+  | "furniture"
+  | "trees";
 
 export interface SourceInfo {
   /** the data's credit line, as its licence asks for it */
@@ -73,6 +78,7 @@ const OSM_PRODUCTS: [OsmProduct, string][] = [
   ["bridges", "bridges"],
   ["fountains", "fountains"],
   ["trees", "trees"],
+  ["furniture", "furniture"],
 ];
 
 /** What the manifest needs to know of the site: whose data it is. */
@@ -106,6 +112,9 @@ function osmStands(
       stands[product] = stand;
     }
   }
+  // the street furniture came with the trees' extract, unless it was
+  // baked again on its own (the flagpoles: a later one)
+  stands.furniture ??= stands.trees;
   return stands;
 }
 

@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { FLAG_HEIGHT_MAX } from "./furniture";
 import { existsSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 import type {
@@ -34,7 +35,7 @@ import type {
   KerbFeature,
 } from "./features";
 import { SITES } from "../../sites";
-import { STRUCTURE_KINDS } from "./features";
+import { FLAG_DESIGNS, STRUCTURE_KINDS } from "./features";
 import type { WindowFile } from "./windows";
 import { tileExtentOf, tileIdOf } from "./site";
 import type { Site } from "./site";
@@ -177,6 +178,7 @@ test.each(cases)(
       "postbox",
       "shelter",
       "column",
+      "flag",
       "signal",
       "pedsignal",
       "hydrant",
@@ -221,12 +223,17 @@ test.each(cases)(
         expect(kind).toBe("column");
       }
       // what has a front faces somewhere; round things do not
-      if (["column", "hydrant", "bin", "bollard"].includes(kind)) {
+      if (["column", "flag", "hydrant", "bin", "bollard"].includes(kind)) {
         expect(bearing).toBeUndefined();
       }
       if (f.properties?.h !== undefined) {
-        expect(kind).toBe("bollard");
+        expect(["bollard", "flag"]).toContain(kind);
         expect(f.properties.h).toBeGreaterThan(0);
+      }
+      // a flagpole's tagged height is one a mast has (furniture.py FLAG_H)
+      if (kind === "flag" && f.properties?.h !== undefined) {
+        expect(f.properties.h).toBeGreaterThanOrEqual(3);
+        expect(f.properties.h).toBeLessThanOrEqual(FLAG_HEIGHT_MAX);
       }
       // a mast arm hangs a signal; a colour is a bin's; the surface model
       // measures only a playground's pieces
@@ -234,10 +241,12 @@ test.each(cases)(
         expect(kind).toBe("signal");
       }
       if (f.properties?.c !== undefined) {
-        expect(kind).toBe("bin");
-        expect(["blue", "green", "orange", "red", "yellow"]).toContain(
-          f.properties.c
-        );
+        expect(["bin", "flag"]).toContain(kind);
+        expect(
+          kind === "bin"
+            ? ["blue", "green", "orange", "red", "yellow"]
+            : FLAG_DESIGNS
+        ).toContain(f.properties.c);
       }
       if (f.properties?.src === "dom") {
         expect(["climb", "swing"]).toContain(kind);
