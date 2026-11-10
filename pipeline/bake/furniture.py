@@ -54,7 +54,8 @@ flying that flag (`c`); every other flag — most are a shop's or a firm's,
 or a city's (`flag:name=Dresden` on `country=DE` is no German flag) — flies
 a pale cloth. One mapped inside a building outline or on its line (but a
 canopy's, a carport's or a stadium's) stands on its roof and is left out
-(2 masts in Dresden), and so is one
+(7 masts: Dresden 2, Hamburg 2, München 3; not one under a building's
+raised floors or over one under the street), and so is one
 tagged on a roof (`support=roof`, `location=roof` or `rooftop`) or on a facade
 (`support=wall_mounted`): none of the latter is mapped in the seven sites yet.
 
@@ -126,7 +127,7 @@ from .common import (
     write_geojson,
 )
 from .landcover_osm import DUAL, LANE_M, ROAD_HALF_WIDTH, lanes, one_way
-from .osm import has_extract, osm_metres, osm_width, read_osm, read_ways, tag
+from .osm import below_ground, has_extract, osm_metres, osm_width, read_osm, read_ways, tag
 
 BLOCKED = (RAILWAY, WATER)
 DECK_KINDS = ("road", "path")  # what stands on a bridge stands on these, never a rail deck
@@ -815,21 +816,40 @@ def _side_of(q: shapely.Point, p: shapely.Point, deg: float) -> bool:
     return (p.x - q.x) * math.sin(rad) + (p.y - q.y) * math.cos(rad) >= 0
 
 
+def off_ground(other: str | None) -> bool:
+    """A building outline that is not on the ground a mast stands on: under
+    the street (`below_ground`) or raised over it (`building:min_level`,
+    `min_height`: an arcade's or a bridge's upper floors)."""
+    if below_ground(other):
+        return True
+    raised = osm_metres(tag(other, "min_height")) or 0.0
+    try:
+        lifted = float(tag(other, "building:min_level") or 0)
+    except ValueError:
+        lifted = 0.0
+    return raised > 0 or lifted > 0
+
+
 class Facades:
     """The OSM building outlines a wall clock hangs on (and a flagpole
     mapped inside one stands on its roof, which is not drawn)."""
 
     def __init__(self, tile: Tile) -> None:
-        geoms, fields = read_osm(tile, "multipolygons", "building IS NOT NULL", ["building"])
+        geoms, fields = read_osm(
+            tile, "multipolygons", "building IS NOT NULL", ["building", "other_tags"]
+        )
         kept = [
-            (g, kind)
-            for g, kind in zip(geoms, fields["building"], strict=True)
+            (g, kind, other)
+            for g, kind, other in zip(geoms, fields["building"], fields["other_tags"], strict=True)
             if g is not None and g.geom_type in ("Polygon", "MultiPolygon")
         ]
-        self.areas = [g for g, _ in kept]
-        # a roof over open ground (a canopy, a carport, a stadium's ring):
-        # a mast under or in it stands on the ground
-        self.roofs = [g for g, kind in kept if kind not in OPEN_BUILDINGS]
+        self.areas = [g for g, _, _ in kept]
+        # a roof over open ground (a canopy, a carport, a stadium's ring), a
+        # building under the street or one raised over it: a mast under or
+        # in it stands on the ground
+        self.roofs = [
+            g for g, kind, other in kept if kind not in OPEN_BUILDINGS and not off_ground(other)
+        ]
 
     # each index built on first use: a flag asks only `inner`, a wall clock
     # only `tree`

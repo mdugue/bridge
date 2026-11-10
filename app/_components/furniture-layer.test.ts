@@ -4,7 +4,6 @@ import type { FurnitureFeature } from "@/lib/city/features";
 import { Box3, Matrix4, Quaternion, Vector3 } from "three/webgpu";
 import { buildFurniture, showFurnitureNear } from "./furniture-layer";
 import { isInstances } from "./instancing";
-import { isSceneShared } from "./three-utils";
 import type { Instances } from "./instancing";
 
 const ctx = { offset: { cx: 0, cy: 0 }, heightAt: () => 100 };
@@ -215,22 +214,16 @@ test("a flagpole casts, its cloth flies in its design and casts at rest", () => 
   m.decompose(top, new Quaternion(), scale);
   expect(top.y).toBeCloseTo(110.5);
   expect(scale.y).toBeCloseTo(1);
-  // one cloth per design for the site: another tile's sets draw from its
-  // arrays (no copy), each through attributes of its own — three frees a
-  // vertex attribute with any geometry that drew it, so a shared one would
-  // go with the first tile that leaves
-  const again = buildFurniture([at({ k: "flag" })], ctx).children.find(
-    (c) => c.name === "furniture-flag-plain"
-  ) as Instances;
-  expect(position(again).array).toBe(position(plain).array);
-  expect(position(again)).not.toBe(position(plain));
-  expect(position(german).array).not.toBe(position(plain).array);
-  expect(isSceneShared(position(plain))).toBe(false);
-  // its index is shared: a view shares it, and freeing one tile keeps it
-  expect(again.geometry.index).toBe(plain.geometry.index);
-  expect(plain.geometry.index && isSceneShared(plain.geometry.index)).toBe(
-    true
-  );
+  // one cloth per design for the tile: its cells' sets draw from it, and
+  // it goes with the tile (another tile has its own)
+  const two = buildFurniture(
+    [at({ k: "flag" }), at({ k: "flag" }, 1200)],
+    ctx
+  ).children.filter((c) => c.name === "furniture-flag-plain") as Instances[];
+  expect(two.length).toBe(2);
+  expect(position(two[0])).toBe(position(two[1]));
+  expect(position(two[0])).not.toBe(position(plain));
+  expect(position(german)).not.toBe(position(plain));
 });
 
 test("a flagpole shows from further than a bench", () => {

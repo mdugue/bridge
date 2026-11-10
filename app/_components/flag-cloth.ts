@@ -18,7 +18,6 @@
  * colours are not mapped.
  */
 import {
-  BufferAttribute,
   BufferGeometry,
   Color,
   DoubleSide,
@@ -51,12 +50,7 @@ import {
 } from "@/lib/city/furniture";
 import { Instances, instanceMatrix, instancePosition } from "./instancing";
 import { hash21 } from "./shader-chunks";
-import {
-  markSceneShared,
-  markThinCaster,
-  sceneMaterial,
-  sceneShared,
-} from "./three-utils";
+import { markThinCaster, sceneMaterial } from "./three-utils";
 import { swayNear } from "./vegetation-layer";
 
 /** How far under the mast's top the cloth's top hangs (m); its size is
@@ -226,62 +220,33 @@ export interface Mast {
   yaw: number;
 }
 
-/** Each design's cloth, one for the scene, made once: every tile's sets
- *  draw from its arrays and its index (`clothOfSet`); the last app that
- *  holds it lets it go (`retainFlagCloths`). */
-const siteCloths = new Map<FlagDesign | "plain", BufferGeometry>();
-const clothsShared = sceneShared(() => ({
-  dispose: () => {
-    for (const geo of siteCloths.values()) {
-      geo.dispose();
-    }
-    siteCloths.clear();
-  },
-}));
-/** One app more for the site's cloths; the returned release is one less. */
-export const retainFlagCloths = clothsShared.retain;
+/** A tile's cloths, one per design, made on first ask: every cell's set
+ *  of that design draws from it, and they go with the tile, as a model's
+ *  geometry does (furniture-layer.ts `modelGeometry`). */
+export type TileCloths = (design: FlagDesign | "plain") => BufferGeometry;
 
-/** The site's cloth of one design (`clothGeometry`, made on first use). */
-function siteCloth(design: FlagDesign | "plain"): BufferGeometry {
-  clothsShared.get();
-  let geo = siteCloths.get(design);
-  if (!geo) {
-    geo = clothGeometry(design);
-    // its index is every tile's (instancing.ts's views draw from it)
-    if (geo.index) {
-      markSceneShared(geo.index);
+/** A new tile's cloths (`TileCloths`). */
+export function tileCloths(): TileCloths {
+  const made = new Map<FlagDesign | "plain", BufferGeometry>();
+  return (design) => {
+    let geo = made.get(design);
+    if (!geo) {
+      geo = clothGeometry(design);
+      made.set(design, geo);
     }
-    siteCloths.set(design, geo);
-  }
-  return geo;
-}
-
-/**
- * One set's cloth: the site's index, and its vertex attributes over the
- * site's arrays (no CPU copy) but its own. three frees a vertex attribute
- * whenever a geometry that drew it is disposed — still on it or taken off
- * before (`RenderObject.onGeometryDispose`) —, so one shared across tiles
- * would go with the first tile that leaves; an index it leaves be.
- */
-function clothOfSet(design: FlagDesign | "plain"): BufferGeometry {
-  const site = siteCloth(design);
-  const geo = new BufferGeometry();
-  for (const [name, a] of Object.entries(site.attributes)) {
-    geo.setAttribute(name, new BufferAttribute(a.array, a.itemSize));
-  }
-  geo.setIndex(site.index);
-  geo.boundingSphere = site.boundingSphere?.clone() ?? null;
-  return geo;
+    return geo;
+  };
 }
 
 /** The cloths of one design on their masts (one cell's), casting the
- *  sheet's shadow at rest, on the site's cloth of that design. */
+ *  sheet's shadow at rest, on the tile's cloth of that design. */
 export function flagCloths(
   design: FlagDesign | "plain",
-  masts: readonly Mast[]
+  masts: readonly Mast[],
+  cloths: TileCloths
 ): Instances {
   const mesh = new Instances(
-    clothOfSet(design),
+    cloths(design),
     sceneMaterial("furniture-flag-cloth", clothMaterial),
     masts.length
   );

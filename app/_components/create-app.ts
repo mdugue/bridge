@@ -251,7 +251,7 @@ import {
 } from "./stream-timing";
 import { attachInspector, inspectRequested } from "./inspector";
 import { attachTouchControls } from "./touch-controls";
-import { retainFlagCloths, setFlagTime } from "./flag-cloth";
+import { setFlagTime } from "./flag-cloth";
 import { createVegetationLod, setCrownTime } from "./vegetation-layer";
 import type { VegetationControl } from "./vegetation-layer";
 import { createStyleResources, setClaySection } from "./visual-style";
@@ -1231,7 +1231,6 @@ export async function createCityWalkApp(
   const cleanups: (() => void)[] = [
     retainSceneMaterials(),
     retainOpenSkyTexture(),
-    retainFlagCloths(),
   ];
   // `?trace=1`: the stream's timings on the browser's timeline, the long
   // tasks counted, the summary printed once loaded (stream-timing.ts).

@@ -72,8 +72,7 @@ const sceneSharedAttributes = new WeakSet<object>();
  * that is not ours) and lives as long as its app's device. An index
  * only: a vertex attribute taken off goes all the same (three r187's
  * `RenderObject.onGeometryDispose` frees every one the drawable used that
- * its geometry no longer holds) — a set shares vertex arrays through
- * attributes of its own (flag-cloth.ts `clothOfSet`).
+ * its geometry no longer holds).
  */
 export function markSceneShared(attribute: AnyAttribute): void {
   sceneSharedAttributes.add(attribute);
@@ -246,23 +245,19 @@ export function disposeObject3D(root: Object3D): unknown[] {
  * estimate for the memory HUD and the tile cache's weighing of a dressing
  * (three's own counters see only what it uploaded, and count a buffer once
  * per view of it). From the buffers' counts: a buffer whose CPU copy was
- * dropped (`dropCpuCopies`) weighs what it did. `own`: only what freeing
- * `root` frees — not the buffers the scene shares (`markSceneShared`).
+ * dropped (`dropCpuCopies`) weighs what it did.
  */
-export function estimateGeometryBytes(root: Object3D, own = false): number {
+export function estimateGeometryBytes(root: Object3D): number {
   const seen = new Set<object>();
   let bytes = 0;
   for (const geometry of geometriesUnder(root)) {
     for (const attribute of attributesOf(geometry)) {
-      if (own && isSceneShared(attribute)) {
-        continue;
-      }
-      // three uploads one GPU buffer per attribute (or interleaved
-      // buffer), even where two hold one CPU array (flag-cloth.ts
-      // `clothOfSet`): each counts
       const buffer = bufferOf(attribute);
-      if (!seen.has(buffer)) {
-        seen.add(buffer);
+      // the array tells two attributes over one array apart; a dropped
+      // one is its own
+      const key = buffer.array.length > 0 ? buffer.array : buffer;
+      if (!seen.has(key)) {
+        seen.add(key);
         bytes += bufferBytes(buffer);
       }
     }

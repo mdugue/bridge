@@ -57,7 +57,8 @@ import type { GroundContext } from "@/lib/city/ground-clamp";
 import { subdividePolyline } from "@/lib/city/polyline";
 import { finished } from "@/lib/city/build-steps";
 import type { Steps } from "@/lib/city/build-steps";
-import { flagCloths } from "./flag-cloth";
+import { flagCloths, tileCloths } from "./flag-cloth";
+import type { TileCloths } from "./flag-cloth";
 import { Instances, instancePosition } from "./instancing";
 import { clockMinutes, sceneNight } from "./scene-environment";
 import { markThinCaster, sceneMaterial } from "./three-utils";
@@ -778,7 +779,7 @@ function clockHands(model: "clock" | "wallClock", stood: Stood[]): Instances {
 
 /** One cell's flag cloths, one set per design, each showing and hiding
  *  with the cell's masts (the cell's box, not its design's). */
-function flagsOf(cell: Stood[]): Instances[] {
+function flagsOf(cell: Stood[], cloths: TileCloths): Instances[] {
   const byDesign = new Map<NonNullable<FurniturePiece["design"]>, Stood[]>();
   for (const s of cell) {
     const design = s.piece.design ?? "plain";
@@ -794,7 +795,8 @@ function flagsOf(cell: Stood[]): Instances[] {
           at,
           yaw: piece.yaw,
           height: FLAG_HEIGHT * piece.scaleY,
-        }))
+        })),
+        cloths
       ),
       cell,
       "flag"
@@ -1167,6 +1169,7 @@ export function* furnitureSteps(
   if (byModel.size === 0 && areas.length === 0) {
     return group;
   }
+  const cloths = tileCloths();
   for (const model of FURNITURE_MODELS) {
     const stood = byModel.get(model);
     const geo = stood ? modelGeometry(model) : null;
@@ -1183,7 +1186,7 @@ export function* furnitureSteps(
           group.add(asCell(clockHands(model, cell), cell, model));
         }
         if (model === "flag") {
-          for (const flags of flagsOf(cell)) {
+          for (const flags of flagsOf(cell, cloths)) {
             group.add(flags);
           }
         }

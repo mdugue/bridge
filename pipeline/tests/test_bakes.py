@@ -249,10 +249,19 @@ def test_a_flagpole_on_a_building_outline_counts_as_on_its_roof(monkeypatch):
 
     from bake import furniture
 
-    # a house, and a petrol station's canopy (`building=roof`)
-    geoms = np.array([shapely.box(0, 0, 10, 10), shapely.box(20, 0, 30, 10)])
-    kinds = np.array(["house", "roof"])
-    monkeypatch.setattr(furniture, "read_osm", lambda *_: (geoms, {"building": kinds}))
+    # a house, a petrol station's canopy (`building=roof`), an arcade's
+    # upper floors over the street and a car park under it
+    geoms = np.array(
+        [shapely.box(x, 0, x + 10, 10) for x in (0, 20, 40, 60)],
+    )
+    kinds = np.array(["house", "roof", "yes", "parking"])
+    other = np.array(
+        [None, None, '"building:min_level"=>"4","layer"=>"1"', '"location"=>"underground"'],
+        dtype=object,
+    )
+    monkeypatch.setattr(
+        furniture, "read_osm", lambda *_: (geoms, {"building": kinds, "other_tags": other})
+    )
     facades = furniture.Facades(None)
     assert facades.inside(shapely.Point(5, 5))
     # a node of the building's way: on its line
@@ -260,6 +269,9 @@ def test_a_flagpole_on_a_building_outline_counts_as_on_its_roof(monkeypatch):
     assert not facades.inside(shapely.Point(12, 5))
     # under a canopy: on the ground
     assert not facades.inside(shapely.Point(25, 5))
+    # under a raised building, over an underground one: on the ground
+    assert not facades.inside(shapely.Point(45, 5))
+    assert not facades.inside(shapely.Point(65, 5))
 
 
 def test_furniture_indoors_or_underground_is_hidden():
