@@ -236,7 +236,23 @@ export function cutWall(
   axes: WallAxes,
   openings: readonly Opening[],
   triangles: readonly WallTriangle[],
-  { keep = false, minCover = MIN_COVER } = {}
+  options: { keep?: boolean; minCover?: number } = {}
+): WallCut {
+  // polygon-clipping throws on a sliver or an edge shared within float
+  // noise: that wall is left whole (no window, no sign cut into it) rather
+  // than the tile's bake ending
+  try {
+    return cutWallOrThrow(axes, openings, triangles, options);
+  } catch {
+    return { openings: [], replaced: [], corners: [], taken: [] };
+  }
+}
+
+function cutWallOrThrow(
+  axes: WallAxes,
+  openings: readonly Opening[],
+  triangles: readonly WallTriangle[],
+  { keep = false, minCover = MIN_COVER }: { keep?: boolean; minCover?: number }
 ): WallCut {
   const flats = facing(axes, triangles);
   const kept: Opening[] = [];
