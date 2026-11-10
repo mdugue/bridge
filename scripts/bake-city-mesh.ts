@@ -2394,8 +2394,8 @@ export function shopfrontColours(tint: readonly number[]): {
   };
 }
 
-/** A shopfront the tile will get: its wall, its host and the host's
- *  building tree's triangles, and what goes on the wall — only the
+/** A shopfront the tile will get: its wall, its host and the host's own
+ *  triangles (what is cut), and what goes on the wall — only the
  *  windows its LoD2 wall takes (`shopfrontMesh`'s `cuts`). */
 export interface ShopPlan {
   host: CityObjectRow;
@@ -2409,8 +2409,9 @@ export interface ShopPlan {
  * The shopfronts on the LoD2 walls, laid out before anything is cut or
  * laid: each run's wall found by rays into the untouched LoD2
  * (`wallShiftAt`; a wall cut before would no longer be found), and each
- * bay asked of the wall it is to be cut into (`cutWall` on the tree's
- * LoD2 triangles: openings on one plane never overlap, so what covers it
+ * bay asked of the wall it is to be cut into (`cutWall` on the host's own
+ * LoD2 triangles — a sibling part's coplanar wall keeps its ground floor
+ * and is never cut: openings on one plane never overlap, so what covers it
  * now covers it after the cuts before it), so the plinth breaks for the
  * windows cut and no other (`shopWindowBreaks`). Skipped: a host the tile
  * does not hold, a glass or metal facade (its own front), a host not on
@@ -2442,14 +2443,19 @@ export function planShopfronts(
       w,
       doorSpans(w, doors, (of) => hostRootOf(of) === host.root)
     );
-    const triangles = trees.get(host.root) ?? [];
+    const tree = trees.get(host.root) ?? [];
+    // cut into the host's own wall alone: its ground floor is the one that
+    // gives its windows up (`facadeOf`), a sibling part's beside it keeps
+    // its own
+    const ids = baked.vertices.objectIds;
+    const triangles = tree.filter((t) => ids[t] === hostIndex);
     const lod2 = lod2Triangles(baked, triangles);
     const mesh = shopfrontMesh(
       w,
       bays,
       host.storeyH,
       baked.offset,
-      (span) => wallShiftAt(w, span, baked.offset, p, triangles),
+      (span) => wallShiftAt(w, span, baked.offset, p, tree),
       (o) =>
         cutWall(wallFrame(w, baked.offset, o.shift), [o.rect], lod2).openings
           .length > 0
@@ -2570,9 +2576,9 @@ interface ShopParts {
   normals: number[];
   objectIds: number[];
   positions: number[];
-  /** the cut walls' remainders, each with its object, building tree and
-   *  the LoD2 triangle it was cut from (its first vertex) */
-  walls: { object: number; positions: number[]; root: number; from: number }[];
+  /** the cut walls' remainders, each with its object and the LoD2
+   *  triangle it was cut from (its first vertex) */
+  walls: { object: number; positions: number[]; from: number }[];
 }
 
 /** Appends flat triangles (`positions`, 9 a triangle) to `object`. */
@@ -2598,7 +2604,7 @@ interface CutWindow {
 
 /**
  * Cuts the shop windows `openings` into the wall `w` stands on: the LoD2
- * triangles of its building tree and the remainders earlier cuts left
+ * triangles of its host and the remainders earlier cuts left
  * (`out.walls`), each run's wall where `wallShiftAt` found it. A cut LoD2
  * triangle collapses onto its first vertex (the per-vertex columns of the
  * LoD2 stream stay aligned), its remainder goes to `out.walls`.
@@ -2627,8 +2633,8 @@ function cutShopWindows(
 
 /**
  * Cuts the rectangles `openings` into the wall `w` stands on: the LoD2
- * triangles of its building tree (`triangles`) and the remainders earlier
- * cuts in that tree left (`out.walls`), each run's wall where
+ * triangles of its host (`triangles`) and the remainders earlier cuts in
+ * them left (`out.walls`), each run's wall where
  * `wallShiftAt` found it. A cut LoD2 triangle collapses onto its first
  * vertex (the per-vertex columns of the LoD2 stream stay aligned), its
  * remainder goes to `out.walls`. `cutWall`'s options: `keep` hands back
@@ -2649,14 +2655,15 @@ function cutOnWall(
   if (triangles.length === 0) {
     return cuts;
   }
-  const root = baked.objects[ids[triangles[0]]]?.root ?? -1;
-  const lod2 = lod2Triangles(baked, triangles);
+  const object = ids[triangles[0]];
   for (const shift of new Set(openings.map((o) => o.shift))) {
     const rects = openings.filter((o) => o.shift === shift).map((o) => o.rect);
     const axes = wallFrame(w, baked.offset, shift);
-    // only this building tree's: another's coplanar wall is not this one
+    // read again each run: the run before collapsed what it cut
+    const lod2 = lod2Triangles(baked, triangles);
+    // only this object's: another's coplanar wall is not this one
     const remainders = out.walls.flatMap((r, k) =>
-      r.root === root
+      r.object === object
         ? splitTriangles(r.positions).map((tri, j) => ({
             id: -1 - (k * 1e6 + j),
             p: tri,
@@ -2664,8 +2671,7 @@ function cutOnWall(
         : []
     );
     const cut = cutWall(axes, rects, [...lod2, ...remainders], options);
-    // the objects cut (a sibling part's coplanar wall too), read before
-    // the remainders' list changes
+    // the objects cut, read before the remainders' list changes
     const objects = new Set(
       cut.replaced.map(({ id }) =>
         id >= 0 ? ids[id] : out.walls[Math.floor((-1 - id) / 1e6)].object
@@ -2728,7 +2734,6 @@ function replaceCut(
       out.walls.push({
         object: ids[r.id],
         positions: r.positions,
-        root: baked.objects[ids[r.id]]?.root ?? -1,
         from: r.id,
       });
       continue;
@@ -2741,7 +2746,6 @@ function replaceCut(
     out.walls.push({
       object: out.walls[k].object,
       positions: r.positions,
-      root: out.walls[k].root,
       from: out.walls[k].from,
     });
   }
@@ -3282,8 +3286,7 @@ function facadeOf(
   // windows: one where the photos read a sign alone (318 of Dresden's
   // 1003, most from a single drive), or whose bays found no wall, kept a
   // blank ground floor under its fascia
-  // (every object a window was cut into: a sibling part's coplanar wall
-  // as well as the host's)
+  // (every object a window was cut into: the host's own wall)
   const shops = (onWalls.shopfronts ?? []).flatMap((w) =>
     [...(opened.get(w) ?? [])].map((object) => ({
       object,

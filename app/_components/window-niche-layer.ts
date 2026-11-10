@@ -767,8 +767,18 @@ export function createNicheField(
     }
   };
   const fill = (eye: Vector3) => {
+    // a tile none of whose windows is in reach (from the air: its highest
+    // under the eye) is not searched
+    const reach = NICHE_RADIUS_M + HOUSE_KEEP_M;
     const houses = nearHouses(
-      [...tiles.values()].filter((t) => showing.has(t.city)),
+      [...tiles.values()].filter(
+        (t) =>
+          showing.has(t.city) &&
+          Math.hypot(
+            boxDistance(t.box, eye.x, eye.z),
+            Math.max(eye.y - t.top, 0)
+          ) <= reach
+      ),
       eye.x,
       eye.z,
       NICHE_RADIUS_M,
@@ -777,9 +787,11 @@ export function createNicheField(
     );
     // the same houses as last time: the same boxes, nothing to write or
     // upload (a walk along a street refills every 6 m)
+    // (as a set: their order by distance changes with every step)
     const picked = houses
       .filter((h) => h.tile.cutting)
       .map((h) => `${h.tile.city.tile}:${h.root}:${h.niches.length}`)
+      .toSorted()
       .join("|");
     if (picked === lastPicked && mesh.visible === picked.length > 0) {
       return;

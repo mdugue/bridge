@@ -206,6 +206,23 @@ function triangulate(f: Flat, polys: readonly ClipPolygon[]): number[] {
   return out;
 }
 
+/** Whether a triangle's (s, z) bounds overlap an opening's. */
+function overlaps(two: readonly (readonly number[])[], o: Opening): boolean {
+  let [s0, s1, z0, z1] = [
+    Number.POSITIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+    Number.POSITIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+  ];
+  for (const [s, z] of two) {
+    s0 = Math.min(s0, s);
+    s1 = Math.max(s1, s);
+    z0 = Math.min(z0, z);
+    z1 = Math.max(z1, z);
+  }
+  return s1 > o.s0 && s0 < o.s1 && z1 > o.z0 && z0 < o.z1;
+}
+
 /**
  * Cuts `openings` into the wall: the triangles of `triangles` lying on it
  * (facing `axes.n`, on its plane) lose the rectangles, each remainder
@@ -233,6 +250,10 @@ export function cutWall(
     let best: { f: Flat; a: number } | undefined;
     const on: Flat[] = [];
     for (const f of flats) {
+      // (one apart from it in (s, z) cannot cut it: no clipping asked)
+      if (!overlaps(f.two, o)) {
+        continue;
+      }
       const a = areaOf(intersection([[...f.two, f.two[0]]], rect));
       if (a <= 1e-6 || Math.abs(standOff(axes, f, sc, zc)) > PLANE_M) {
         continue;

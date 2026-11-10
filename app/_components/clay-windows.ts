@@ -582,7 +582,8 @@ function ledge(
 /** The parts round the opening (`WINDOW_PARTS`): where each is (1 on its
  *  front; `face` 1 on a sill's or Verdachung's top or underside the view
  *  sees, `faceUp` its normal's sign), the sun's shadows they throw, their
- *  contact shade, and how much of the opening the sill hides (`hides`). */
+ *  contact shade, and how much of the opening a sill or Verdachung hides
+ *  (`hides`). */
 function parts(g: Grid, i: WindowInputs, px: Px) {
   const P = WINDOW_PARTS;
   const au = abs(g.u);
@@ -652,7 +653,9 @@ function parts(g: Grid, i: WindowInputs, px: Px) {
     lintel: lintel.front.mul(lintelOn),
     face: max(sill.face, lintel.face.mul(lintelOn)),
     faceUp: float(1).sub(sill.under.mul(2)),
-    hides: sill.cover,
+    // seen from under it a sill covers the opening's foot, from over it a
+    // Verdachung its head
+    hides: max(sill.cover, lintel.cover.mul(lintelOn)),
     shadow: max(underSill.shadow, underLintel.shadow.mul(lintelOn)),
     contact: max(
       underSill.contact.mul(0.3),
