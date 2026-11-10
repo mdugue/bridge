@@ -1194,15 +1194,15 @@ visual-variable codebook is in
   scan put them where those miss less (`drawn_miss`; a structure's roof
   the same):
   Dresden's rebuilt roofs have 20 % fewer outline points than before the
-  regularising (the other sites 12 to 31 %). The footprint they are cut to is the
+  regularising (the other sites 13 to 32 %). The footprint they are cut to is the
   building's less what another roof covers, each covered piece whole
   but not one holding no 3 × 3 cells (a neighbour's eave over the party
   wall, a notch a metre deep every few metres along it), the cut's raster steps
   simplified by 0.75 m. Parts under 2 m dropped →
   `data/<site>/dlm/roofs_<tile>.geojson` (Polygons
   with the object `id`, the roof `z` and, for a face, its `surface`; the
-  provider's credit). **1 080 objects on Dresden's fifteen tiles, 2 733
-  parts, 324 of them faces** (2026-11-10; 2 814 and 367 before the flanks;
+  provider's credit). **1 080 objects on Dresden's fifteen tiles, 2 738
+  parts, 335 of them faces** (2026-11-10; 2 814 and 367 before the flanks;
   1 081, 2 755 and 222 before the plausibility rule; 886 objects, 2 227 parts before
   the band below 40 %; 2 956 parts before the strips merged; the
   Altstadt most); the step runs on every site — Hamburg 587 objects (365
@@ -1778,7 +1778,7 @@ visual-variable codebook is in
   its cells and its outline, so a strip narrower than a cell has one); until then such a roof's dormers and chimneys stood
   at the LoD2 faces it replaces, metres off the drawn roof — some
   chimneys' measured tops under their own feet (Dresden's rebuilt roofs
-  hold 417 dormers now, 50 before; the block at Schloßstraße and
+  hold 359 dormers now, 50 before; the block at Schloßstraße and
   Sporergasse 26, 4 before). The burned 1 m roof
   reads a cell's height, up to half a metre off a 45° face under a
   centre: over all seven cities 7 % of the dormers stood more than 0.3 m
