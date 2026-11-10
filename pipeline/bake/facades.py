@@ -742,10 +742,11 @@ def measure_image(job: dict) -> dict:
     """One image measured on its walls: {"img", "seq", "walls": [...]}, or
     {"img", "skip"} when it cannot be (no pose, taken down), or
     {"img", "fail"} when it could not be read now: the next run tries again.
-    A failure that is the photo's own — its thumbnail refused, or the model
-    failing on its crop; not the network, the token or a model that does
-    not load — says `own` (the glass cache notes it and gives the photo up
-    after MAX_FAILS, `_done`)."""
+    A failure of this photo's — its downloads, its decoding, the model on
+    its crop; not a token refused or a model that does not load — says
+    `own` (the glass cache notes it and gives the photo up after
+    MAX_FAILS, `_done`; one a whole run shares is not noted,
+    `_note_fails`)."""
     from . import facade_glass, facade_measure, facade_traits
     from .facade_measure import EYE_M, class_map, load_image, rotation_matrix
 
@@ -771,9 +772,11 @@ def measure_image(job: dict) -> dict:
     except urllib.error.HTTPError as err:
         if gone(err):  # taken down: no later fetch will find it
             return {"img": iid, "skip": f"gone (HTTP {err.code})"}
-        return {"img": iid, "fail": f"HTTPError: {err}"[:200]}
+        # a token's refusal (401, 403, the Graph API's 400) is no photo's
+        token = err.code in (400, 401, 403)
+        return {"img": iid, "fail": f"HTTPError: {err}"[:200], "own": not token}
     except (OSError, ValueError) as err:
-        return {"img": iid, "fail": f"{type(err).__name__}: {err}"[:200]}
+        return {"img": iid, "fail": f"{type(err).__name__}: {err}"[:200], "own": True}
     try:
         path, ours = _thumbnail(iid, job["url"], Path(job["scratch"]), source)
     except urllib.error.HTTPError as err:
@@ -782,12 +785,12 @@ def measure_image(job: dict) -> dict:
         # the CDN refusing this one photo (made private): its own failure
         return {"img": iid, "fail": f"HTTPError: {err}"[:200], "own": True}
     except (OSError, ValueError) as err:
-        return {"img": iid, "fail": f"{type(err).__name__}: {err}"[:200]}
+        return {"img": iid, "fail": f"{type(err).__name__}: {err}"[:200], "own": True}
     try:
         img = raw_frame(load_image(path), exif)
         cls = raw_frame(class_map(dets), exif)
     except MemoryError as err:  # the worker's, not the file's: again later
-        return {"img": iid, "fail": f"{type(err).__name__}: {err}"[:200]}
+        return {"img": iid, "fail": f"{type(err).__name__}: {err}"[:200], "own": True}
     except Exception as err:  # noqa: BLE001 — a broken file is skipped, not fatal
         return {"img": iid, "skip": f"unreadable ({type(err).__name__})"}
     finally:
@@ -840,12 +843,21 @@ def measure_image(job: dict) -> dict:
 
 def _done(path: Path) -> dict[str, set[tuple[str, int, float]] | None]:
     """Per image already in the cache the walls it was read on; None for
-    one not to be asked again: a skip, or one whose thumbnail was refused
-    on MAX_FAILS fetches since it was last read (the glass cache notes
-    each; a photo read on one wall and refused since is given up for the
-    walls planned on it later too)."""
+    one not to be asked again: a skip, or one that failed on its own on
+    MAX_FAILS fetches since it was last read (the glass cache notes each,
+    `_note_fails`; a photo read on one wall and failing since is given up
+    for the walls planned on it later too)."""
+    return _scan(path)[0]
+
+
+def _failing(path: Path) -> set[str]:
+    """The images that failed on their own since they were last read."""
+    return {i for i, n in _scan(path)[1].items() if n}
+
+
+def _scan(path: Path) -> tuple[dict, collections.Counter]:
     if not path.exists():
-        return {}
+        return {}, collections.Counter()
     done: dict[str, set[tuple[str, int, float]] | None] = {}
     fails: collections.Counter = collections.Counter()
     for line in path.read_text().splitlines():
@@ -864,7 +876,7 @@ def _done(path: Path) -> dict[str, set[tuple[str, int, float]] | None]:
     for iid, n in fails.items():
         if n >= MAX_FAILS:
             done[iid] = None
-    return done
+    return done, fails
 
 
 def _todo(jobs: dict[str, dict], done: dict, by_wall: bool) -> list[str]:
@@ -1016,6 +1028,7 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
         jobs = plan(city, images, tile.epsg, MAX_SEQ_TRAITS if kind == "traits" else MAX_SEQ)
         out = traits_path(tile) if kind == "traits" else cache_path(tile)
     done = _done(out)
+    known = _failing(out) if kind == "glass" else set()
     todo = _todo(jobs, done, kind == "glass")
     seen_by = "photos" if kind == "glass" else "panoramas"
     print(f"{tile.id}: {len(jobs)} {seen_by} see its walls, {len(todo)} to measure ({kind})")
@@ -1086,20 +1099,26 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
         model_part = f" ({in_model} of them in the model)" if in_model else ""
         print(f"{tile.id}: {counts['fail']} images failed{model_part} — rerun the fetch")
     if kind == "glass":
-        _note_fails(out, owns, len(todo))
+        _note_fails(out, owns, len(todo), known)
         if not _todo(jobs, _done(out), True):
             mark_complete(out, plan_key(ws), plan_of(jobs))
 
 
-def _note_fails(out: Path, owns: list[dict], tried: int) -> None:
+def _note_fails(out: Path, owns: list[dict], tried: int, known: set[str]) -> None:
     """The glass cache notes the photos that failed on their own (`own`:
     given up after MAX_FAILS fetches, so one photo cannot keep the cache
-    from read-through) — unless ten or more and most of the run did: that
-    is a proxy's, the CDN's or the machine's failure, not the photos'."""
-    if not owns or (len(owns) >= 10 and 2 * len(owns) > tried):
+    from read-through). Those failing for the first time are not noted
+    where ten or more and most of the others in the run did: that is a
+    proxy's, the CDN's or the machine's failure, not the photos'. One that
+    failed before (`known`, a rerun asks little else) always is."""
+    again = [r for r in owns if r["img"] in known]
+    fresh = [r for r in owns if r["img"] not in known]
+    if len(fresh) >= 10 and 2 * len(fresh) > tried - len(again):
+        fresh = []
+    if not (again or fresh):
         return
     with _append(out) as f:
-        for r in owns:
+        for r in again + fresh:
             f.write(json.dumps(r, separators=(",", ":")) + "\n")
 
 

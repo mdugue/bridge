@@ -83,8 +83,9 @@ MIN_COVER = 0.25  # nor one a photo sees less of (its share of the upper wall)
 OTHER_MAX = 0.5  # an unsegmented crop more likely sky, trees or street is not read
 # bump when the rectification or the crop changes what is read
 # (2: a photo turned back into its pose's frame, facades.raw_frame;
-# 3: a fisheye seen out to its frame, facade_measure.project)
-READ_VERSION = 3
+# 3: a fisheye seen out to its frame, facade_measure.project;
+# 4: no lens read past where its distortion turns)
+READ_VERSION = 4
 
 
 def _prompts() -> tuple:

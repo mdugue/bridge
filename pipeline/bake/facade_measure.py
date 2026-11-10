@@ -227,9 +227,12 @@ def project(C: np.ndarray, wd: int, h: int, camera: dict | None = None):
     m = max(wd, h)
     u = wd / 2 + f * d * xn * m
     v = h / 2 + f * d * yn * m
-    # a perspective lens folds back past ~50° off its axis; a fisheye
-    # sees out to its frame
-    near_axis = (r2 < 1.5) if kind != "fisheye" else True
+    # a perspective lens folds back past ~50° off its axis, and any lens
+    # where its distortion turns (a strong barrel's radius shrinking
+    # again outwards: points beyond would fold back into the frame)
+    t2 = th**2 if kind == "fisheye" else r2
+    unfolded = 1 + 3 * k1 * t2 + 5 * k2 * t2 * t2 > 0
+    near_axis = unfolded & ((r2 < 1.5) if kind != "fisheye" else True)
     seen = ahead & (u >= 0) & (u < wd) & (v >= 0) & (v < h) & near_axis
     return u, v, seen, 1.0 / (f * m)
 

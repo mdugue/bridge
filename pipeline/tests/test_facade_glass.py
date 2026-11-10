@@ -340,14 +340,27 @@ def test_a_photo_that_keeps_failing_is_given_up(tmp_path):
 def test_a_run_refused_everywhere_notes_no_failure(tmp_path):
     cache = tmp_path / "c.jsonl"
     own = [{"img": f"p{i}", "fail": "HTTPError: 403", "own": True} for i in range(12)]
-    facades._note_fails(cache, own, 12)  # a proxy's or the network's, not the photos'
+    facades._note_fails(cache, own, 12, set())  # a proxy's or the network's, not the photos'
     assert not cache.exists()
-    facades._note_fails(cache, own, 20)  # most of a run refused: the same
+    facades._note_fails(cache, own, 20, set())  # most of a run refused: the same
     assert not cache.exists()
-    facades._note_fails(cache, own[:2], 12)
+    facades._note_fails(cache, own[:2], 12, set())
     assert len(cache.read_text().splitlines()) == 2
-    facades._note_fails(cache, own[:1], 1)  # the one stubborn photo left
+    facades._note_fails(cache, own[:1], 1, set())  # the one stubborn photo left
     assert len(cache.read_text().splitlines()) == 3
+
+
+def test_photos_that_keep_failing_on_reruns_are_given_up(tmp_path):
+    cache = tmp_path / "c.jsonl"
+    own = [{"img": f"p{i}", "fail": "HTTPError: 403", "own": True} for i in range(15)]
+    jobs = {r["img"]: {"walls": [{"oid": "a", "wi": 0, "L": 10.0}]} for r in own}
+    facades._note_fails(cache, own, 2000, set())  # 15 of a 2000-photo run
+    for _ in range(facades.MAX_FAILS - 1):
+        # a rerun asks only those, which fail again
+        todo = facades._todo(jobs, facades._done(cache), by_wall=True)
+        assert len(todo) == 15
+        facades._note_fails(cache, own, len(todo), facades._failing(cache))
+    assert facades._todo(jobs, facades._done(cache), by_wall=True) == []
 
 
 def test_the_decision_reads_only_the_photos_the_plan_picked(tmp_path):
@@ -475,3 +488,10 @@ def test_a_wall_the_model_fails_on_keeps_the_photos_other_walls(monkeypatch, tmp
     assert [w["oid"] for w in r["walls"]] == ["short"] and r["also_fail"].startswith("model")
     only = facades.measure_image(job | {"walls": [wall | {"oid": "long"}]})
     assert only["own"] and "walls" not in only
+
+
+def test_a_strong_barrel_is_not_read_past_where_it_folds_back():
+    camera = {"type": "perspective", "params": [0.6, -0.5, 0.0]}  # turns at r² = 2/3
+    C = np.array([[0.3, 0.0, 1.0], [1.0, 0.0, 1.0]])  # r² 0.09 and 1.0
+    _, _, seen, _ = project(C, 2000, 1500, camera)
+    assert seen.tolist() == [True, False]

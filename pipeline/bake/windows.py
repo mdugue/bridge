@@ -651,8 +651,9 @@ def run(tile: Tile) -> None:
             f"{'the windows file’s glass kept' if glass else 'no wall read for glass'}; "
             f"run the glass fetch"
         )
+    if not path.exists():
+        print(f"{tile.id}: no facade traits measured — no wall gets a measured rhythm")
     if not (path.exists() or glass):
-        print(f"{tile.id}: no facade traits measured — no wall gets windows")
         write(out, {}, {})
         return
     by_wall = _records(path) if path.exists() else {}
