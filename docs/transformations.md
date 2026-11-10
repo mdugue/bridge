@@ -3405,8 +3405,10 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   **Openings in the wall** (2026-11-10, Manuel: the shop windows to
   follow the windows' logic, "direkt beides zusammen"): each bay is cut
   out of its LoD2 wall, a 0.2 m box of reveals in the wall's clay behind
-  it and the glass at its back, its sill over the plinth as a window's
-  (`lib/city/shop-windows.ts`); the surround 15 cm proud with a soft niche
+  it and the glass at its back, its sill at the stall riser's top
+  (`lib/city/shop-windows.ts`); the plinth band breaks for each window (a
+  first cut set the sill 0.2 m over the plinth's levelled top, and the
+  band read as lying in front of the glass: Manuel, same day); the surround 15 cm proud with a soft niche
   per bay is gone, and with it the risers' feet on the ground (ADR 0030's
   `shopfronts` joins). Dresden's Neustadt tile (33412_5656): 327 of 344
   bays cut (the rest stand where no LoD2 wall covers them), its vertices

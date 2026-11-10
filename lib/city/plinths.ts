@@ -411,6 +411,51 @@ export function plinthStretches(f: PlinthFeature, host: number): Stretch[] {
   }));
 }
 
+/** How far off a stretch's line a segment may lie to break it (m). */
+const BREAK_REACH_M = 0.6;
+
+/** `stretches` with the parts along `segments` taken out (EPSG; a shop
+ *  window the plinth breaks for): a segment breaks a stretch it runs along
+ *  (parallel, within BREAK_REACH_M of its line); a piece shorter than
+ *  5 cm left over is dropped. */
+export function withoutSegments(
+  stretches: readonly Stretch[],
+  segments: readonly (readonly (readonly number[])[])[]
+): Stretch[] {
+  return stretches.flatMap((st) => {
+    const len = Math.hypot(st.b[0] - st.a[0], st.b[1] - st.a[1]);
+    if (len < 1e-6) {
+      return [st];
+    }
+    const t = [(st.b[0] - st.a[0]) / len, (st.b[1] - st.a[1]) / len];
+    const alongOf = (p: readonly number[]) =>
+      (p[0] - st.a[0]) * t[0] + (p[1] - st.a[1]) * t[1];
+    const aside = (p: readonly number[]) =>
+      Math.abs((p[0] - st.a[0]) * t[1] - (p[1] - st.a[1]) * t[0]);
+    let keep: [number, number][] = [[0, len]];
+    for (const [c0, c1] of segments) {
+      if (aside(c0) > BREAK_REACH_M || aside(c1) > BREAK_REACH_M) {
+        continue;
+      }
+      const [u0, u1] = [alongOf(c0), alongOf(c1)].toSorted((x, y) => x - y);
+      keep = keep.flatMap(([k0, k1]): [number, number][] =>
+        u1 <= k0 || u0 >= k1
+          ? [[k0, k1]]
+          : [
+              [k0, Math.min(k1, u0)],
+              [Math.max(k0, u1), k1],
+            ]
+      );
+      keep = keep.filter(([k0, k1]) => k1 - k0 >= 0.05);
+    }
+    if (keep.length === 1 && keep[0][0] === 0 && keep[0][1] === len) {
+      return [st];
+    }
+    const at = (u: number) => [st.a[0] + t[0] * u, st.a[1] + t[1] * u];
+    return keep.map(([k0, k1]) => ({ ...st, a: at(k0), b: at(k1) }));
+  });
+}
+
 /** A cornice along a plinth feature's stretches, its underside at `z`:
  *  the pieces joined end to end into straight runs, so a run has two
  *  ends, not one per piece. */

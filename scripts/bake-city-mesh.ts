@@ -101,6 +101,7 @@ import {
   lineStretches,
   plinthStretches,
   straightRuns,
+  withoutSegments,
 } from "../lib/city/plinths";
 import type { BandKind, HostShift, Shaded, Stretch } from "../lib/city/plinths";
 import type {
@@ -119,7 +120,8 @@ import {
   doorSpans,
   footAt,
   paneTop,
-  plinthTopAlong,
+  shopWindowSpans,
+  spanSegments,
   CANOPY,
   SHOPFRONT,
   shopfrontMesh,
@@ -1886,7 +1888,18 @@ function appendBeyondLod2(
     collectAfterAppend();
   }
   if (extra.plinths) {
-    appendPlinths(baked, extra.plinths, objectIndex);
+    // the plinth breaks for the shop windows cut into its wall
+    appendPlinths(
+      baked,
+      extra.plinths,
+      objectIndex,
+      shopWindowBreaks(
+        baked,
+        extra.shopfronts ?? [],
+        extra.doors ?? [],
+        objectIndex
+      )
+    );
     collectAfterAppend();
   }
   if (extra.shopfronts) {
@@ -1895,8 +1908,7 @@ function appendBeyondLod2(
       baked,
       extra.shopfronts,
       extra.doors ?? [],
-      objectIndex,
-      extra.plinths
+      objectIndex
     )) {
       opened.add(w);
     }
@@ -2000,7 +2012,9 @@ export function carriesCornices(
 export function appendPlinths(
   baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
   plinths: readonly PlinthFeature[],
-  objectIndex: ReadonlyMap<string, number>
+  objectIndex: ReadonlyMap<string, number>,
+  /** EPSG segments the plinth band breaks for (`shopWindowBreaks`) */
+  breaks: readonly (readonly (readonly number[])[])[] = []
 ): void {
   const parts: AppendedPart[] = [];
   const walls = treeTriangles(baked);
@@ -2059,7 +2073,9 @@ export function appendPlinths(
     if (!(p && host && hostIndex !== undefined && carriesPlinth(host, p.g))) {
       continue;
     }
-    bands.plinth.push(...plinthStretches(f, hostIndex));
+    bands.plinth.push(
+      ...withoutSegments(plinthStretches(f, hostIndex), breaks)
+    );
     if (!carriesCornices(host)) {
       continue;
     }
@@ -2362,8 +2378,8 @@ export function shopfrontColours(tint: readonly number[]): {
  * their own smooth normals), the canopy in the host's own clay; the
  * host's building tree (asking or demolishing one takes the building), no
  * footprint, no storey band or eave line on them, `source` 6 (a wall with
- * a sign and no bay gets its fascia alone). A window's sill keeps over the
- * host's plinth as a window's does (`plinthTopAlong`).
+ * a sign and no bay gets its fascia alone). The host's plinth breaks for
+ * each window (`shopWindowBreaks`, before the plinths are laid).
  * Skipped: a host the tile does not hold, a glass or metal
  * facade (its own front), a host not on the ground; a bay is cut where an
  * OSM door stands. Returns the walls a shop window was cut into.
@@ -2372,8 +2388,7 @@ export function appendShopfronts(
   baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
   walls: readonly ShopfrontWall[],
   doors: readonly DoorFeature[],
-  objectIndex: ReadonlyMap<string, number>,
-  plinths: readonly PlinthFeature[] = []
+  objectIndex: ReadonlyMap<string, number>
 ): Set<ShopfrontWall> {
   const appended: ShopParts = {
     positions: [],
@@ -2398,14 +2413,8 @@ export function appendShopfronts(
       doorSpans(w, doors, (of) => hostRootOf(of) === host.root)
     );
     const triangles = trees.get(host.root) ?? [];
-    const mesh = shopfrontMesh(
-      w,
-      bays,
-      host.storeyH,
-      baked.offset,
-      (span) =>
-        wallShiftAt(w, span, baked.offset, baked.vertices.positions, triangles),
-      (span) => plinthTopAlong(w, plinths, span)
+    const mesh = shopfrontMesh(w, bays, host.storeyH, baked.offset, (span) =>
+      wallShiftAt(w, span, baked.offset, baked.vertices.positions, triangles)
     );
     const cut = cutShopWindows(baked, w, mesh.openings, triangles, appended);
     if (cut.length > 0) {
@@ -2639,6 +2648,44 @@ function shopPart(
     });
   };
 }
+
+/** Where the plinths break for the shop windows (EPSG segments along
+ *  their walls, 5 cm wider each side so no band bridges the gap): the
+ *  spans `shopfrontMesh` will cut, on the walls `appendShopfronts` draws. */
+function shopWindowBreaks(
+  baked: Pick<BakedCityMesh, "objects">,
+  walls: readonly ShopfrontWall[],
+  doors: readonly DoorFeature[],
+  objectIndex: ReadonlyMap<string, number>
+): [number, number][][] {
+  const treeOf = (id: string) => {
+    const i = objectIndex.get(id);
+    return i === undefined ? undefined : baked.objects[i]?.root;
+  };
+  return walls.flatMap((w) => {
+    const i = objectIndex.get(w.oid);
+    const host = i === undefined ? undefined : baked.objects[i];
+    if (!(host && w.z) || !shopHost(host, w)) {
+      return [];
+    }
+    const bays = wallBays(
+      w,
+      doorSpans(w, doors, (of) => treeOf(of) === host.root)
+    );
+    return spanSegments(
+      w,
+      shopWindowSpans(w, bays, host.storeyH).map(
+        ([s0, s1]): [number, number] => [
+          s0 - PLINTH_BREAK_M,
+          s1 + PLINTH_BREAK_M,
+        ]
+      )
+    );
+  });
+}
+
+/** How much wider than its window the plinth's break is (m). */
+const PLINTH_BREAK_M = 0.05;
 
 /** Whether a host may wear a shopfront: not a glass or metal facade (its
  *  own front), and standing on the ground in front of the wall. */

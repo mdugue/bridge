@@ -31,9 +31,8 @@
  */
 import { rayHit, trianglesOnRays } from "./doors";
 import type { V3 } from "./doors";
-import type { DoorFeature, PlinthFeature, ShopfrontWall } from "./features";
+import type { DoorFeature, ShopfrontWall } from "./features";
 import { SINK } from "./ground-join";
-import { WINDOW_ROWS } from "./windows";
 
 /** The building glTF's position step (m): 16-bit positions over a 2 km
  *  tile's buildings (scripts/tile-glb.ts). Anything along the wall stands
@@ -493,9 +492,9 @@ export interface ShopOpening {
  * A wall's shopfront (mesh frame: x = epsgX − cx, y = epsgY − cy, z up),
  * laid `shift(span)` metres out of the footprint line onto the wall
  * (`wallShiftAt`): the shop windows to cut into it, one per bay (`bayRuns`
- * keeps a pier between them), each from its sill — the stall riser's top,
- * and at least `WINDOW_ROWS.plinthGap` over a plinth there, as a window's
- * (`plinthTop`) — to the pane's top (`paneTop`, under a canopy's slab);
+ * keeps a pier between them), each from its sill — the stall riser's top;
+ * the plinth breaks for it (`shopWindowSpans`) — to the pane's top
+ * (`paneTop`, under a canopy's slab);
  * the fascia bands and the canopies as triangles, counter-clockwise from
  * outside. No window where the ground floor leaves less than
  * MIN_OPENING_M: a sign alone is a fascia. Only the faces one can see: no
@@ -506,8 +505,7 @@ export function shopfrontMesh(
   bays: readonly Span[],
   storeyH: number,
   offset: { cx: number; cy: number },
-  shift: (span: Span) => number = () => 0,
-  plinthTop?: (span: Span) => number | undefined
+  shift: (span: Span) => number = () => 0
 ): ShopfrontMesh {
   const out: ShopfrontMesh = {
     canopy: { normals: [], positions: [] },
@@ -523,10 +521,7 @@ export function shopfrontMesh(
       const g = Math.max(groundAt(w, bay[0]), groundAt(w, bay[1]));
       const slab = canopySlabOver(w, bay);
       const z1 = Math.min(g + top, (slab ?? Number.POSITIVE_INFINITY) - head);
-      const z0 = Math.max(
-        g + sillOf(w),
-        (plinthTop?.(bay) ?? Number.NEGATIVE_INFINITY) + WINDOW_ROWS.plinthGap
-      );
+      const z0 = g + sillOf(w);
       if (z1 - z0 < MIN_OPENING_M) {
         continue;
       }
@@ -757,42 +752,39 @@ export function wallShiftAt(
   return Number.isFinite(shift) ? shift : 0;
 }
 
-/** The highest plinth top (absolute) along `span` of the wall: the pieces
- *  of its host's plinth (pipeline/bake/plinths.py) lying on the wall's
- *  line and over the span; undefined where none runs there. */
-export function plinthTopAlong(
+/** The shop windows' spans along the wall (`shopfrontMesh` cuts one per
+ *  bay where the ground floor leaves MIN_OPENING_M): where the plinth
+ *  breaks for them. */
+export function shopWindowSpans(
   w: ShopfrontWall,
-  plinths: readonly PlinthFeature[],
-  [s0, s1]: Span
-): number | undefined {
+  bays: readonly Span[],
+  storeyH: number
+): Span[] {
+  const top = paneTop(w, storeyH);
+  return bayRuns(bays, w.L)
+    .flatMap((run) => run.bays)
+    .filter((bay) => {
+      const g = Math.max(groundAt(w, bay[0]), groundAt(w, bay[1]));
+      const slab = canopySlabOver(w, bay);
+      const z1 = Math.min(
+        g + top,
+        (slab ?? Number.POSITIVE_INFINITY) - SHOPFRONT.head
+      );
+      return z1 - (g + sillOf(w)) >= MIN_OPENING_M;
+    });
+}
+
+/** The spans of the wall as EPSG segments (a stretch of a band on the
+ *  wall's line loses them: `withoutSegments` in plinths.ts). */
+export function spanSegments(
+  w: ShopfrontWall,
+  spans: readonly Span[]
+): [number, number][][] {
   const tx = (w.b[0] - w.a[0]) / w.L;
   const ty = (w.b[1] - w.a[1]) / w.L;
-  const sOf = ([x, y]: readonly number[]) =>
-    (x - w.a[0]) * tx + (y - w.a[1]) * ty;
-  const offOf = ([x, y]: readonly number[]) =>
-    (x - w.a[0]) * w.n[0] + (y - w.a[1]) * w.n[1];
-  let top: number | undefined;
-  for (const f of plinths) {
-    const p = f.properties;
-    if (p?.of !== w.oid) {
-      continue;
-    }
-    for (const [i, line] of f.geometry.coordinates.entries()) {
-      const a = line[0];
-      const b = line.at(-1) ?? a;
-      const [sa, sb] = [sOf(a), sOf(b)].toSorted((u, v) => u - v);
-      const along =
-        Math.abs(sOf(b) - sOf(a)) > 0.9 * Math.hypot(b[0] - a[0], b[1] - a[1]);
-      if (
-        along &&
-        Math.abs(offOf(a)) <= SHOPFRONT_WALL_REACH &&
-        Math.abs(offOf(b)) <= SHOPFRONT_WALL_REACH &&
-        sb > s0 &&
-        sa < s1
-      ) {
-        top = Math.max(top ?? p.top[i], p.top[i]);
-      }
-    }
-  }
-  return top;
+  const at = (s: number): [number, number] => [
+    w.a[0] + tx * s,
+    w.a[1] + ty * s,
+  ];
+  return spans.map(([s0, s1]) => [at(s0), at(s1)]);
 }

@@ -11,6 +11,7 @@ import {
   OBJECT_SOURCE_DORMER,
   OBJECT_SOURCE_GAP,
   OBJECT_SOURCE_PASSAGE,
+  OBJECT_SOURCE_PLINTH,
   OBJECT_SOURCE_SHOPFRONT,
 } from "../lib/city/city-mesh";
 import type { OsmBuildingLut } from "../lib/city/city-mesh";
@@ -23,7 +24,12 @@ import type {
   StructureFeature,
 } from "../lib/city/features";
 import { ensembleGroup } from "../lib/city/ensembles";
-import { paneTop, SHOPFRONT_SINK } from "../lib/city/shopfronts";
+import {
+  paneTop,
+  SHOPFRONT,
+  SHOPFRONT_SINK,
+  spanSegments,
+} from "../lib/city/shopfronts";
 import { SHOP_WINDOW_DEPTH_M } from "../lib/city/shop-windows";
 import { SMALL_BUILDING_SINK } from "../lib/city/small-buildings";
 import {
@@ -51,6 +57,7 @@ import {
   withMeasuredRoofs,
   withOpenRoofs,
   withRoofSteps,
+  appendPlinths,
 } from "./bake-city-mesh";
 
 /** A box as a CityJSON LoD2 solid over the eight vertices from `first`. */
@@ -878,7 +885,7 @@ test("a shop window is cut into its wall: reveals in its clay, glass at the back
   expect((canopy?.flags ?? 0) & OBJECT_FLAG_OWN_COLOUR).toBe(0);
 });
 
-test("a shop window keeps over the house's plinth, as a window does", () => {
+test("the plinth breaks for a shop window, which reaches down to its riser", () => {
   const plinths: PlinthFeature[] = [
     {
       type: "Feature",
@@ -916,7 +923,38 @@ test("a shop window keeps over the house's plinth, as a window does", () => {
       low = Math.min(low, positions[3 * i + 2]);
     }
   }
-  expect(low).toBeCloseTo(101 + WINDOW_ROWS.plinthGap, 3);
+  expect(low).toBeCloseTo(100 + SHOPFRONT.sill, 3);
+  // the plinth laid with the windows' breaks: none of it over a bay
+  const bare = bakeCityMesh("t", fixture(), undefined, null);
+  const keys = Object.keys(fixture().CityObjects);
+  const house = keys.indexOf("house");
+  // a pitched-roof house's plinth (a flat-roofed block carries none)
+  bare.objects[house].flags &= ~OBJECT_FLAG_FLAT_ROOF;
+  appendPlinths(
+    bare,
+    plinths,
+    new Map(keys.map((k, i) => [k, i])),
+    spanSegments(shopfrontAt(), [
+      [0.95, 3.05],
+      [3.45, 6.55],
+    ])
+  );
+  let plinth = 0;
+  let inBay = 0;
+  for (let i = 0; i < bare.vertices.objectIds.length; i += 1) {
+    if (
+      bare.objects[bare.vertices.objectIds[i]]?.source !== OBJECT_SOURCE_PLINTH
+    ) {
+      continue;
+    }
+    plinth += 1;
+    const x = bare.vertices.positions[3 * i] + bare.offset.cx - 412_040;
+    if ((x > 1 && x < 3) || (x > 3.5 && x < 6.5)) {
+      inBay += 1;
+    }
+  }
+  expect(plinth).toBeGreaterThan(0);
+  expect(inBay).toBe(0);
 });
 
 test("windows: a rhythm per house in its row, every wall vertex placed on its wall", () => {

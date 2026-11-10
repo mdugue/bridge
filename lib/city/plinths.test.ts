@@ -12,6 +12,7 @@ import {
   plinthMesh,
   plinthPieces,
   straightRuns,
+  withoutSegments,
 } from "./plinths";
 
 // a wall along +y at x = 100, the street to its right (+x)
@@ -320,4 +321,36 @@ test("a band follows a wall that bends along its stretch, without caps", () => {
   expect(front(0)).toBeCloseTo(100 + 0.1 + CORNICE.proud, 6);
   // two ends capped, none at the knot
   expect(tris.filter((t) => Math.abs(t.n[1]) > 0.99)).toHaveLength(2 * 5);
+});
+
+test("a stretch breaks along a segment on its line, not one aside", () => {
+  const st = { a: [0, 0], b: [10, 0], lo: 99.9, hi: 100.7, host: 1 };
+  const broken = withoutSegments(
+    [st],
+    [
+      [
+        [3, 0.1],
+        [5, 0.1],
+      ],
+    ]
+  );
+  expect(broken.map((s) => [s.a[0], s.b[0]])).toEqual([
+    [0, 3],
+    [5, 10],
+  ]);
+  for (const s of broken) {
+    expect(s.hi).toBe(100.7);
+  }
+  // a segment on another wall leaves it whole
+  expect(
+    withoutSegments(
+      [st],
+      [
+        [
+          [3, 2],
+          [5, 2],
+        ],
+      ]
+    )
+  ).toEqual([st]);
 });

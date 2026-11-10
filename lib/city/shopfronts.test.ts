@@ -15,12 +15,13 @@ import {
   ROW_SILL_M,
   SHOPFRONT_TOP_M,
   shopfrontMesh,
+  shopWindowSpans,
+  spanSegments,
   STOREY_CLEAR_M,
   wallBays,
   wallShiftAt,
 } from "./shopfronts";
 import type { ShopfrontMesh } from "./shopfronts";
-import { WINDOW_ROWS } from "./windows";
 
 const OFFSET = { cx: 1000, cy: 2000 };
 
@@ -321,27 +322,26 @@ describe("the mesh", () => {
     expect(mesh.frame.positions).toEqual([]);
   });
 
-  test("a window's sill keeps over the plinth, as a window's does", () => {
-    const w = wall({ bays: [[1, 3]] });
-    const mesh = shopfrontMesh(
-      w,
-      wallBays(w, []),
-      4,
-      OFFSET,
-      undefined,
-      () => 101
-    );
-    expect(mesh.openings[0].rect.z0).toBeCloseTo(101 + WINDOW_ROWS.plinthGap);
-    // a plinth so high no window is left: the bay stays wall
-    const high = shopfrontMesh(
-      w,
-      wallBays(w, []),
-      4,
-      OFFSET,
-      undefined,
-      () => 102
-    );
-    expect(high.openings).toEqual([]);
+  test("the plinth breaks where a window is cut, nowhere else", () => {
+    const w = wall({
+      bays: [
+        [1, 3],
+        [5, 6],
+      ],
+      gf_top: 3,
+    });
+    // the second bay is narrower than MIN_BAY_M: no window, no break
+    const spans = shopWindowSpans(w, wallBays(w, []), 4);
+    expect(spans).toEqual([[1, 3]]);
+    expect(spanSegments(w, spans)).toEqual([
+      [
+        [1001, 2000],
+        [1003, 2000],
+      ],
+    ]);
+    // a ground floor too low for a window: none
+    const low = wall({ gf_top: 1.6 });
+    expect(shopWindowSpans(low, wallBays(low, []), 4)).toEqual([]);
     expect(MIN_OPENING_M).toBeGreaterThan(1);
   });
 
