@@ -1860,8 +1860,8 @@ visual-variable codebook is in
   floor gave it one, 🗃️ below) and a dense old town keeps its second rank
   (a fixed 12 per tile cut it, 🗃️ below). → `data/<site>/dlm/landmarks_<tile>.json`. The build flags the
   objects (`OBJECT_FLAG_LANDMARK` = 16; no look of its own), gives them
-  the Wikidata material where OSM names none (`withLandmarks` in
-  `prepare-data.ts`), and writes the site's twelve most notable into the
+  the Wikidata material where OSM names none (`withLandmarks`,
+  `lib/city/landmark-lut.ts`), and writes the site's twelve most notable into the
   tileset's `extras.landmarks` (`siteLandmarks`) — one per building drawn:
   an item whose LoD2 objects a more notable one already holds is that
   one (the Rüstkammer and the Staatliche Kunstsammlungen in the

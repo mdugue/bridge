@@ -90,6 +90,11 @@ def _prompts() -> tuple:
     return tuple((c, PROMPTS[c]) for c in CLASSES)
 
 
+class ModelError(RuntimeError):
+    """The model could not read a crop (a worker out of memory): not the
+    photo's fault, so it is read again on the next fetch."""
+
+
 def reading_key() -> str:
     """What a cached reading depends on, hashed: the prompts in their order,
     the model, the crop's limits and the rectification's (facade_measure,
@@ -229,7 +234,10 @@ def glass_of(
     crop = upper_crop(rgb, upper)
     if crop is None:
         return None
-    glass, other = model(root, classes).glass(crop)
+    try:
+        glass, other = model(root, classes).glass(crop)
+    except Exception as err:
+        raise ModelError(f"{type(err).__name__}: {err}") from err
     if not segmented and other > OTHER_MAX:
         return None
     return round(1000 * glass)

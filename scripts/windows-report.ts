@@ -167,7 +167,12 @@ for (const tile of tiles) {
     )
   );
   for (const w of walls) {
-    const o = w.model ? baked.objects[index.get(w.oid) ?? -1] : undefined;
+    // a curtain wall's mullions are no window rhythm (`windowSpecs` lends
+    // them to none)
+    const o =
+      w.model && !w.glass?.glass
+        ? baked.objects[index.get(w.oid) ?? -1]
+        : undefined;
     if (!(o && w.model)) {
       continue;
     }

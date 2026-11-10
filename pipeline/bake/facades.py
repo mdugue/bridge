@@ -701,9 +701,10 @@ def measure_image(job: dict) -> dict:
     iid = job["img"]
     if not job.get("rot") or not job.get("url"):
         return {"img": iid, "skip": "no pose or thumbnail"}
-    # only the framed photos of the glass reading are stored turned; a
-    # panorama's thumbnail is its stored frame
-    exif = job.get("exif") if kind == "glass" else None
+    # only a framed photo is turned back: a panorama's thumbnail is
+    # equirectangular in the frame its pose is in
+    framed = kind == "glass" and job["camera"]["type"] != "spherical"
+    exif = job.get("exif") if framed else None
     if TO_STORED.get(exif or 1) is None:
         return {"img": iid, "skip": f"mirrored (EXIF orientation {exif})"}
     if kind == "glass":
@@ -747,6 +748,8 @@ def measure_image(job: dict) -> dict:
                 )
             else:
                 m = measure(w | {"zg": zg}, img, cls, rot, cam)
+        except facade_glass.ModelError as err:  # not this photo's fault: read it again later
+            return {"img": iid, "fail": f"model: {err}"[:200]}
         except Exception as err:  # noqa: BLE001 — record it, measure the rest
             m = {"err": repr(err)[:100]}
         out.append(head | m)
@@ -793,6 +796,13 @@ def _todo(jobs: dict[str, dict], done: dict, by_wall: bool) -> list[str]:
     return sorted(i for i in jobs if not read(i))
 
 
+def _unread(job: dict, have: set[tuple[str, int]] | None) -> dict:
+    """The job on the walls its image was not yet read on (`_done`)."""
+    if not have:
+        return job
+    return job | {"walls": [w for w in job["walls"] if (w["oid"], w["wi"]) not in have]}
+
+
 def _fetch_signs(tile: Tile) -> None:
     _cached_json(
         _signs_path(tile),
@@ -820,10 +830,11 @@ def _workers(kind: str) -> int:
 
 
 def fetch(tile: Tile, kind: str = "facades") -> None:
-    """Measure the tile's facades on its panoramas, caching per image:
-    `kind` "facades" the readings and the ground floor's profile
-    (facade_measure.py, the v2 cache), "traits" the trait profiles
-    (facade_traits.py, the v3 cache)."""
+    """Measure the tile's facades on its photos, caching per image:
+    `kind` "facades" the readings and the ground floor's profile on the
+    panoramas (facade_measure.py, the v2 cache), "traits" their trait
+    profiles (facade_traits.py, the v4 cache), "glass" the glass readings
+    on the photos of every camera (facade_glass.py, `glass_path`)."""
     if not tile.mapillary:
         return
     if not os.environ.get("MAPILLARY_TOKEN"):
@@ -851,10 +862,14 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
         )
         jobs = plan_glass(city, every, tile.epsg, gamma)
         out = glass_path(tile)
+        # read, if only of nothing: the windows bake asks for it
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.touch()
     else:
         jobs = plan(city, images, tile.epsg, MAX_SEQ_TRAITS if kind == "traits" else MAX_SEQ)
         out = traits_path(tile) if kind == "traits" else cache_path(tile)
-    todo = _todo(jobs, _done(out), kind == "glass")
+    done = _done(out)
+    todo = _todo(jobs, done, kind == "glass")
     seen_by = "photos" if kind == "glass" else "panoramas"
     print(f"{tile.id}: {len(jobs)} {seen_by} see its walls, {len(todo)} to measure ({kind})")
     if not todo:
@@ -882,7 +897,7 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
             batch = todo[start : start + 400]
             poses = _poses(batch)
             work = [
-                jobs[i]
+                _unread(jobs[i], done.get(i))
                 | {"img": i, "rot": poses.get(i, {}).get("computed_rotation")}
                 | {"exif": poses.get(i, {}).get("exif_orientation")}
                 | {

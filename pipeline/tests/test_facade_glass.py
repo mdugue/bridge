@@ -173,7 +173,7 @@ def test_a_wall_is_glass_where_most_of_its_clear_views_say_so():
             {
                 ("ICC", 0): [(990, 0.6), (950, 0.4), (400, 0.5)],
                 ("house", 0): [(990, 0.6), (300, 0.5), (200, 0.5)],
-                ("glimpse", 0): [(990, 0.6), (990, 0.1)],  # one view too narrow
+                ("glimpse", 0): [(990, 0.6), (None, 0.1)],  # one view too narrow to read
                 ("blind", 0): [(None, 0.6), (None, 0.6)],
             }
         )
@@ -223,6 +223,21 @@ def test_a_photo_read_is_read_again_only_for_a_wall_planned_since(tmp_path):
     done = facades._done(cache)
     assert facades._todo(jobs, done, by_wall=True) == ["n", "p"]
     assert facades._todo(jobs, done, by_wall=False) == ["n"]
+    # read again on the wall it lacks alone
+    assert facades._unread(jobs["p"], done["p"])["walls"] == [{"oid": "b", "wi": 0}]
+    assert facades._unread(jobs["n"], done.get("n")) is jobs["n"]
+
+
+def test_a_crop_the_model_cannot_read_is_not_the_photos_fault(monkeypatch):
+    class Broken:
+        def glass(self, crop):
+            raise MemoryError("out of memory")
+
+    monkeypatch.setattr(facade_glass, "model", lambda *_: Broken())
+    rgb, upper = np.full((60, 60, 3), 0.5), np.ones((60, 60), bool)
+    # raised, so the photo is not cached as read and is read again later
+    with pytest.raises(facade_glass.ModelError):
+        facade_glass.glass_of(rgb, upper, "", "", segmented=True)
 
 
 def test_a_wall_seen_only_for_glass_enters_with_its_glass_alone():

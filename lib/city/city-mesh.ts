@@ -31,8 +31,8 @@ export type WallMaterial =
 
 /** What OSM knows about one CityObject: the bake's row
  *  (`osmbuild_<tile>.json`, its schema lib/city/osm-buildings-file.ts,
- *  ADR 0059) and what the build adds to it (scripts/prepare/city.ts
- *  `withLandmarks`). */
+ *  ADR 0059) and what the build adds to it (lib/city/landmark-lut.ts
+ *  `withLandmarks`, lib/city/photo-glass.ts `withPhotoGlass`). */
 export type OsmBuildingFacts = OsmBuildingRow & {
   /** one of the city's landmarks (landmarks.py, Wikidata) */
   landmark?: number;

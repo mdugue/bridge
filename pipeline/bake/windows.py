@@ -55,7 +55,14 @@ The bake writes `dlm/windows_<tile>.json`:
        "drives"?}, …]}}
 
 with the wall's frame as in shopfronts.py (`_wall_entry`). Its own file,
-credited to Mapillary (CC BY-SA 4.0)."""
+credited to Mapillary (CC BY-SA 4.0).
+
+The street photos' glass readings (facade_glass.py, the
+`<tile>.glass.<key>.jsonl` cache) add each wall's `"glass": {"glass",
+"n", "p"}` (`wall_glass`; a wall no panorama measured enters with it
+alone) and the file's `"outer"`, per object with a wall read for glass the
+length of its outer walls: the building bake decides which objects are
+glass (lib/city/photo-glass.ts, ADR 0060)."""
 
 from __future__ import annotations
 
@@ -66,7 +73,6 @@ from pathlib import Path
 
 import numpy as np
 
-from . import facade_glass
 from .common import Tile
 from .facade_traits import STEP_M
 from .facades import ATTRIBUTION, GLASS_NEAR_M, GLASS_SEQ, glass_path, traits_path, walls
@@ -445,15 +451,15 @@ def model(traits: dict, axis: float | None, reliable: frozenset[str] = RELIABLE)
 # --- glass (pure) ------------------------------------------------------------
 
 # A wall is glass where its photos say so (facade_glass.py): at least
-# GLASS_IMAGES readings of it, each from a photo that sees GLASS_COVER of
-# its upper wall, and GLASS_SHARE of them at GLASS_MIN or more. On the probe
+# GLASS_IMAGES readings of it, each from a photo that sees MIN_COVER of
+# its upper wall (no photo that sees less is read), and GLASS_SHARE of
+# them at GLASS_MIN or more. On the probe
 # (2026-11-10) every known glass front read 0.91–1.00 on its clear views;
 # over all of Dresden 0.9 also took metal cladding, ribbon-window blocks and
 # a plastered house with balconies (all below 0.95 on most views), 0.95 left
 # about a dozen objects of which the contact sheets showed two doubtful.
 # Two photos keep a single reflection or a scaffold from deciding.
 GLASS_MIN = 950  # ‰
-GLASS_COVER = facade_glass.MIN_COVER
 GLASS_IMAGES = 2
 GLASS_SHARE = 2 / 3
 
@@ -472,7 +478,7 @@ def glass_records(lines: list[str]) -> dict[tuple[str, int], list[int]]:
             continue
         for w in r.get("walls", []):
             cov = w.get("cov", 0)
-            if "gl" in w and cov >= GLASS_COVER and w.get("dist", 0) <= GLASS_NEAR_M:
+            if "gl" in w and w.get("dist", 0) <= GLASS_NEAR_M:
                 key = (w["oid"], w["wi"], r.get("seq", r["img"]))
                 if key not in best or cov > best[key][0]:
                     best[key] = (cov, int(w["gl"]))
@@ -576,21 +582,30 @@ def write(path: Path, buildings: dict, reliability: dict, outer: dict | None = N
     path.write_text(json.dumps(doc, separators=(",", ":"), sort_keys=True))
 
 
+def _had_glass(out: Path) -> bool:
+    """Whether the tile's windows file holds walls read for glass."""
+    try:
+        return bool(json.loads(out.read_text()).get("outer"))
+    except (OSError, ValueError):
+        return False
+
+
 def run(tile: Tile) -> None:
     out = tile.out("dlm", f"windows_{tile.id}.json")
     path, gpath = traits_path(tile), glass_path(tile)
+    if tile.mapillary and not gpath.exists() and _had_glass(out):
+        # none read, or read under other prompts, model or limits
+        # (facade_glass.reading_key): baking on would drop every glass front
+        # the committed file holds
+        raise SystemExit(
+            f"{tile.id}: {out.name} holds glass fronts but there is no {gpath.name} — "
+            f"run the glass fetch before baking the windows"
+        )
     if not tile.mapillary or not (path.exists() or gpath.exists()):
         if tile.mapillary:
             print(f"{tile.id}: no facade traits measured — no wall gets windows")
         write(out, {}, {})
         return
-    if not gpath.exists() and any(gpath.parent.glob(f"{tile.id}.glass.*.jsonl")):
-        # read under other prompts, model or limits (facade_glass.reading_key):
-        # baking on would drop every glass front the committed file holds
-        raise SystemExit(
-            f"{tile.id}: the glass readings are stale (not {gpath.name}) — "
-            f"run the glass fetch again before baking the windows"
-        )
     city = json.loads(tile.cityjson.read_text())
     by_wall = _records(path) if path.exists() else {}
     glass = glass_records(gpath.read_text().splitlines()) if gpath.exists() else {}
