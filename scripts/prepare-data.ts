@@ -39,6 +39,8 @@
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
+import { hitOf, knowledgeOf } from "../lib/city/ask-knowledge";
+import type { Knowledge } from "../lib/city/ask-knowledge";
 import { PLATE_N } from "../lib/city/ground-plate";
 import type { PlateExtras } from "../lib/city/ground-plate";
 import { siteLandmarks } from "../lib/city/landmarks";
@@ -57,6 +59,7 @@ import { tileExtentOf } from "../lib/city/site";
 import {
   WALKS_DIR,
   WALKS_FILE,
+  stopPlaces,
   walkBundle,
   walkPhotoFile,
 } from "../lib/city/walks";
@@ -285,6 +288,18 @@ const walkFiles = existsSync(walksDir)
       .filter((name) => name.endsWith(".json"))
       .sort()
   : [];
+/** A walk with each stop's refs as places (`places`): the ones the
+ *  baked Stadtwissen knows by name. */
+function withPlaces(walk: Walk, knowledge: Knowledge): Walk {
+  return {
+    ...walk,
+    stops: walk.stops.map((stop) => {
+      const places = stopPlaces(stop, (id) => hitOf(knowledge, id));
+      return places.length > 0 ? { ...stop, places } : stop;
+    }),
+  };
+}
+
 /** A walk with each stop's photo published beside it (`photo.src`). The
  *  walks are checked as written (walkBundle), credits included; a stop
  *  whose copy is missing then shows none, so a preview still builds — the
@@ -312,33 +327,42 @@ function withPhotos(walk: Walk): Walk {
     }),
   };
 }
-/** The checked bundle with its photos published (checked before: a
- *  sentence about the photo stays right when only the copy is missing). */
-function publishedWalks(bundle: WalkBundle): WalkBundle {
-  return { ...bundle, walks: bundle.walks.map(withPhotos) };
+/** The checked bundle with its photos published and its refs as places
+ *  (checked before: a sentence about the photo stays right when only the
+ *  copy is missing). */
+function publishedWalks(bundle: WalkBundle, knowledge: Knowledge): WalkBundle {
+  return {
+    ...bundle,
+    walks: bundle.walks.map((w) => withPlaces(withPhotos(w), knowledge)),
+  };
 }
-const walks =
-  walkFiles.length > 0
-    ? publish(
-        WALKS_FILE,
-        utf8(
-          publishedWalks(
-            walkBundle(
-              SITE.id,
-              walkFiles.map(
-                (name) => readJson(nodePath.join(walksDir, name)) as Walk
-              )
-            )
-          )
-        )
-      )
-    : undefined;
 
-await publishStadtwissen(
+// The Stadtwissen before the walks: a stop's refs become places the card
+// can pick by name (lib/city/walks.ts `stopPlaces`).
+const wissen = await publishStadtwissen(
   baked.map((t) => t.id),
   frame.epsg,
   provenance.sources
 );
+// (read only where there are walks: Berlin has none)
+const knowledge =
+  walkFiles.length > 0 ? knowledgeOf(wissen.index, wissen.tiles) : null;
+const walks = knowledge
+  ? publish(
+      WALKS_FILE,
+      utf8(
+        publishedWalks(
+          walkBundle(
+            SITE.id,
+            walkFiles.map(
+              (name) => readJson(nodePath.join(walksDir, name)) as Walk
+            )
+          ),
+          knowledge
+        )
+      )
+    )
+  : undefined;
 
 type SiteExtras = TilesetExtras &
   PlateExtras &

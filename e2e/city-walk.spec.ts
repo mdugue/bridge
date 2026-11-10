@@ -1066,6 +1066,8 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       // animation, a frame or three, and a slow runner's SwiftShader
       // frames take seconds each (the default 5 s ran out mid-animation)
       await expect(view).toHaveCount(0, { timeout: slow(10_000) });
+      // the place the story names is a button that picks it
+      await expect(card.getByTestId("walk-mention").first()).toBeVisible();
       const first = await card.getByRole("heading").textContent();
       await card.getByTestId("walk-next").click();
       await expect(card).toContainText("Station 2 von 9");
