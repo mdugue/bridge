@@ -194,6 +194,55 @@ describe("window niches", () => {
     expect(niches.length / NICHE_STRIDE).toBe(16);
   });
 
+  test("a long quantised wall far out stays one wall, no niche twice", () => {
+    // 60 m of wall in 3 m quads 1.5 km out, every coordinate off by up to
+    // half a quantum (±1.7 cm)
+    let seed = 1;
+    const noise = () => {
+      seed = (seed * 16_807) % 2_147_483_647;
+      return (seed / 2_147_483_647 - 0.5) * 0.034;
+    };
+    for (let trial = 0; trial < 30; trial += 1) {
+      const positions: number[] = [];
+      const facade: number[] = [];
+      for (let k = 0; k < 20; k += 1) {
+        const [x0, x1] = [-30 + 3 * k, -27 + 3 * k];
+        const at = (x: number, y: number) => [
+          x + 1500 + noise(),
+          y + noise(),
+          noise(),
+        ];
+        for (const v of [
+          at(x0, 100),
+          at(x1, 100),
+          at(x1, 112.5),
+          at(x0, 100),
+          at(x1, 112.5),
+          at(x0, 112.5),
+        ]) {
+          positions.push(...v);
+          facade.push(code(1500 - v[0]), code(60), 32_767, 32_767);
+        }
+      }
+      const niches = tileNiches(
+        {
+          positions,
+          facade,
+          objectIds: Array.from({ length: positions.length / 3 }, () => 0),
+        },
+        () => house,
+        () => 100
+      );
+      const seen = new Set<string>();
+      for (let i = 0; i < niches.length; i += NICHE_STRIDE) {
+        seen.add(
+          `${Math.round(niches[i] * 2)}:${Math.round(niches[i + 1] * 2)}`
+        );
+      }
+      expect(seen.size).toBe(niches.length / NICHE_STRIDE);
+    }
+  });
+
   test("a wall's niches stand on its mean plane, not one vertex's", () => {
     // quantising put one triangle's corners 2 cm out, the anchor among them
     const positions = [

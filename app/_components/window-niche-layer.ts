@@ -45,6 +45,7 @@ import {
   PANE_SKY_RGB,
   WINDOW_GLOW_RGB,
   paneFresnel,
+  recessShade,
 } from "./clay-windows";
 import type { CityLayer } from "./city-layer";
 import { Instances, instanceTint } from "./instancing";
@@ -336,22 +337,14 @@ export function nicheMaterial(d: ClayDetailUniforms): MeshStandardNodeMaterial {
     );
     return shadow ? (shadow as F).mul(own) : own;
   };
-  // the sky it sees as the drawn recess's (clay-windows `recess`): a
-  // reveal from `revealSky` at the wall to 0.6 deep in, the back 0.6, less
-  // in its corners and under its head
+  // the sky it sees as the drawn recess's (clay-windows `recessShade`)
   const deep = clamp(local.z.div(max(size.z, 0.01)), 0, 1);
-  const backEdge = min(open.x.sub(abs(local.x)), open.y.sub(abs(local.y)));
-  const underHead = smoothstep(0, max(size.z.mul(3), 0.4), open.y.sub(local.y));
-  const recessAo = mix(
-    mix(1, WINDOW_TONE.revealSky, float(1).sub(back)),
-    0.6,
-    deep
-  ).mul(
-    mix(
-      1,
-      mix(0.6, 1, smoothstep(0, 0.2, backEdge)).mul(mix(0.55, 1, underHead)),
-      back
-    )
+  const recessAo = recessShade(
+    back,
+    deep,
+    min(open.x.sub(abs(local.x)), open.y.sub(abs(local.y))),
+    open.y.sub(local.y),
+    size.z
   );
   m.aoNode = recessAo;
   const plaster = instanceTint();

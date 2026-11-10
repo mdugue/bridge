@@ -8,7 +8,9 @@ import type { NicheMesh, NicheTable } from "@/lib/city/window-niches";
  * (`nicheInput`, window-niche-layer.ts), handed over; the result comes back
  * without a copy. Jobs go one at a time, and one whose tile left while it
  * queued is skipped. Where no worker starts (a test, a browser that
- * refuses it) or it dies, the work runs here, on the main thread.
+ * refuses it, a module that fails to load: the first job is copied, not
+ * handed over, until the worker has answered) or it dies, the work runs
+ * here, on the main thread.
  */
 export interface NicheJobInput {
   mesh: NicheMesh & {
@@ -34,6 +36,9 @@ interface Job {
 }
 
 let worker: Worker | null = null;
+/** the worker answered once: its module loaded, a job handed over to it
+ *  (its buffers transferred) is in safe hands */
+let answered = false;
 let broken = typeof Worker === "undefined";
 let running: Job | null = null;
 const queue: Job[] = [];
@@ -52,9 +57,15 @@ function giveUp(): void {
   worker?.terminate();
   worker = null;
   // the job the worker held handed its buffers over: it cannot run here
-  running?.reject(new Error("niche worker died with a tile's niches"));
-  const left = [...queue];
+  // (one sent before the worker ever answered was copied, not handed over)
+  const held = running;
   running = null;
+  if (held && !answered && !held.signal.aborted) {
+    runHere(held);
+  } else {
+    held?.reject(new Error("niche worker died with a tile's niches"));
+  }
+  const left = [...queue];
   queue.length = 0;
   for (const job of left) {
     if (job.signal.aborted) {
@@ -89,6 +100,7 @@ function startWorker(): Worker | null {
     if (worker !== w) {
       return;
     }
+    answered = true;
     const job = running;
     running = null;
     if (job) {
@@ -145,7 +157,9 @@ function next(): void {
     }
     running = job;
     try {
-      w.postMessage(job.input, transfers(job.input));
+      // until the worker has answered once (its module may yet fail to
+      // load) the job is copied, so it can still run here
+      w.postMessage(job.input, answered ? transfers(job.input) : []);
     } catch {
       running = null;
       runHere(job);

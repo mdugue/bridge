@@ -322,8 +322,13 @@ interface WallPiece {
 const SAME_FACING_COS = Math.cos((2 * Math.PI) / 180);
 /** … and their planes stand within this (m): the glTF's positions are
  *  quantised (3.4 cm), so one LoD2 wall's triangles disagree a little,
- *  while a U's wing ends or a house's front and back stand metres apart. */
-const SAME_PLANE_M = 0.15;
+ *  while a U's wing ends or a house's front and back stand metres apart —
+ *  and no more, or a niche anchored on the mean of two leaves a gap
+ *  between the nearer one's cut and its box. */
+const SAME_PLANE_M = 0.06;
+/** … plus this much a metre along it from the piece's middle (its normal
+ *  is a mean of quantised triangles', a few tenths of a degree off). */
+const SAME_TILT = 0.01;
 /** … and their facade coordinate runs on: two wings either side of a
  *  risalit stand in one plane, each with its own `s` from its own end. */
 const SAME_RUN_M = 0.25;
@@ -342,18 +347,24 @@ function samePiece(
   if ((q.sx * n.x + q.sz * n.z) / (ql * unit) < SAME_FACING_COS) {
     return false;
   }
-  // the corner's distance from q's plane, not the offsets' difference: a
-  // hair's tilt of each triangle's own normal is metres of offset 1 km
-  // from the origin
+  // the corner's distance from q's plane through its triangles' mean
+  // place (not the offsets' difference: a hair's tilt of each triangle's
+  // own normal is metres of offset 1 km from the origin; nor through its
+  // first corner, the lever of the piece's own tilt along a long wall)
+  const w = q.weight || 1;
+  const dx = x - (q.wall.px + q.ox / w);
+  const dz = z - (q.wall.pz + q.oz / w);
+  // along the wall, t = (−n.z, n.x) (see tileNiches)
+  const along = (-q.sz * dx + q.sx * dz) / ql;
+  // (and as much more as the piece's normal, a mean of quantised ones,
+  // may still be off over the way along: `SAME_TILT`)
   if (
-    Math.abs(q.sx * (x - q.wall.px) + q.sz * (z - q.wall.pz)) / ql >
-    SAME_PLANE_M
+    Math.abs(q.sx * dx + q.sz * dz) / ql >
+    SAME_PLANE_M + SAME_TILT * Math.abs(along)
   ) {
     return false;
   }
-  // along the wall, t = (−n.z, n.x) (see tileNiches)
-  const along = (-q.sz * (x - q.wall.px) + q.sx * (z - q.wall.pz)) / ql;
-  return Math.abs(q.wall.s0 + along - s) <= SAME_RUN_M;
+  return Math.abs(q.wall.s0 + q.os / w + along - s) <= SAME_RUN_M;
 }
 
 /** Gathers a city mesh's window-carrying walls by object, codes and plane
@@ -487,12 +498,18 @@ export function tileNiches(
       // too many stays unseen behind it, one too few is a hole
       const ins = Math.max(op.half - 0.01, 0);
       const inv = Math.max((op.v1 - op.v0) / 2 - 0.01, 0);
+      // (the middle, the corners and the edges' middles: a strip of wall
+      // across an opening's edge meets one)
       const probes = [
         [0, 0],
         [-ins, -inv],
         [ins, -inv],
         [-ins, inv],
         [ins, inv],
+        [0, -inv],
+        [0, inv],
+        [-ins, 0],
+        [ins, 0],
       ];
       if (!probes.some(([ds, dv]) => onWall(w.tris, op.s + ds, mid + dv))) {
         continue;

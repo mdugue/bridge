@@ -476,22 +476,29 @@ function recess(g: Grid, view: V3, wn: V3, sun: V3, px: Px) {
   // under the head, which hides the sky from it (a band three reveals
   // deep)
   const edge = min(g.half.sub(abs(uh)), min(vh, g.tall.sub(vh)));
-  const underHead = smoothstep(0, max(g.depth.mul(3), 0.4), g.tall.sub(vh));
-  // a reveal sees the sky only past the wall it turns from (the
-  // quarter of it a wall sees, not half), so it starts `revealSky` as
-  // light as the wall — at 1 a shaded front's reveals read as plain wall
-  const ao = mix(
-    mix(1, WINDOW_TONE.revealSky, float(1).sub(back)),
-    0.6,
-    z.div(g.depth)
-  ).mul(
+  const ao = recessShade(back, z.div(g.depth), edge, g.tall.sub(vh), g.depth);
+  return { ao, back, lit, normal };
+}
+
+/**
+ * The sky a window's recess sees (its ambient occlusion), the drawn one's
+ * and the real niche's alike (window-niche-layer.ts): `back` 1 on its
+ * back, 0 on a reveal; `deep` how far in (0 at the wall, 1 at the back);
+ * on the back `edge` (m) to its nearest reveal and `head` (m) under its
+ * head; `depth` the recess's. A reveal sees the sky only past the wall it
+ * turns from (the quarter of it a wall sees, not half), so it starts
+ * `revealSky` as light as the wall — at 1 a shaded front's reveals read
+ * as plain wall; the back 0.6, less in its corners and under its head.
+ */
+export function recessShade(back: F, deep: F, edge: F, head: F, depth: F): F {
+  const underHead = smoothstep(0, max(depth.mul(3), 0.4), head);
+  return mix(mix(1, WINDOW_TONE.revealSky, float(1).sub(back)), 0.6, deep).mul(
     mix(
       1,
       mix(0.6, 1, smoothstep(0, 0.2, edge)).mul(mix(0.55, 1, underHead)),
       back
     )
   );
-  return { ao, back, lit, normal };
 }
 
 /** A ledge standing `proud` out of the wall whose underside lies `under`
