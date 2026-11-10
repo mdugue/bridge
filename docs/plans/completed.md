@@ -580,6 +580,40 @@ PRs the plan staged became one port; plan 008 step 7 is moot.
 - CSM (`CSMShadowNode`) and clustered lamp lights are in reach now, each
   its own decision.
 
+## 022 — Re-bake from the current editions, the whole chain · DONE (2026-11-05)
+
+**Problem.** Planned 2026-09-24 for the four original Dresden tiles,
+which then still carried the old bash bake's land cover, canopy, NDVI and
+roof colours from the June 2026 Basis-DLM; about thirteen later steps
+read the class raster, so a re-bake had to be the whole chain, step by
+step (plan 040 step 1), not the land cover alone.
+
+**Outcome.** Overtaken in part: every site was re-baked by the Python
+pipeline on 2026-10-20/21 and 2026-11-01 (the 2026-10-20 package). On
+2026-11-05 GeoSN served a new package (`basisdlm_akt.csv` and the inner
+ZIP dated 2026-11-04), and the collected re-bake (with plans 040, 045
+and 081) ran every tile step of the four Saxon sites on it. Land cover
+against the committed bake: Dresden's three western tiles (33408_*)
+99.986–99.995 % of texels the same, no class lost (class 1 −1 % on
+33408_5654), the other twelve identical; Leipzig, Grimma and Meißen
+identical. Downstream on those three tiles: canopy ±1–4 points, edges,
+kerbs, markings, surface and sky view. NDVI and roof colours unchanged
+(same flight). The OSM input was the committed bake's (BBBike city
+extracts of 2026-10-31; Geofabrik reset every connection from the
+container), so the diff isolates the edition and the code. No plates
+were taken (no GPU); nothing in the diff called for one.
+
+**Keep in mind.**
+- The package is replaced under the same URL: record
+  `basisdlm_akt.csv`'s date at every download (each Saxon site's
+  `provenance.json`, the guide's editions table).
+- GeoSN's laser scan answered 404 (2026-11-05), so the Saxon `lowveg`
+  and `small-buildings` files are still the September bake's
+  (maintainer actions).
+- Hamburg's OSM land cover moved by up to 2.1 % on 2026-11-05, but that
+  was plan 045's parser (steps `width=100 cm` had burned 100 m wide
+  paths), not an edition.
+
 ## 023 — The ground up close: kerbs, paving, lawn edges, urban green · CLOSED (2026-09-25; phases 1–3 and 5 built; rest rejected or moved)
 
 **Problem.** At eye level the ground fills half the frame and was the
@@ -1295,6 +1329,68 @@ of an `update()` that requested nothing new (3DTilesRendererJS 0.5.3) —
 re-check that on an upgrade. Releasing ⌘ releases every held key, a key
 still held included (re-press it): macOS gives no keyup to tell them apart.
 
+## 039 — Bridge ramps, rain that lasts, Papier's ribbons · DONE (2026-11-05)
+
+**Problem.** A ramp quad whose first column is flush with the ground had a
+zero normal (`normalize(0)` is NaN on the GPU: a black face). Sin City's
+rain hashed a cell index that grows with the clock and lost its pattern
+after about an hour. Papier's override drew double-sided things from one
+side.
+
+**Decision.** `rampNormal` sums both triangles' normals; a pair of flush
+columns draws nothing. The rain's cell is `mod(cell, 1024)` before the
+hash. Opaque double-sided materials draw a stand-in, the card with their
+side and position, shared per side and position, freed at the gather after
+its last mesh left (`paper-scene.ts`). Step 3 (rails under a deck) was moot
+since ADR 0041.
+
+**Deviations from the plan, both found by reading three or a plate.** The
+plan swapped `mesh.material` for the frame. A stand-in has `allowOverride =
+false`, so the shadow pass would draw it too, reading the shadow map it
+draws into. So a frame hands stand-ins over through the renderer's object
+function, which the shadow pass replaces with its own; only `swapped`
+(a compile takes no object function) wears one on the mesh. The plan also
+carried `maskNode` over so that winter crowns stay bare: on a Mac GPU the
+pen outlined every gap and the crowns turned into dark grey clots, so the
+card draws them whole, as before. The clay and a design (`userData.figure`)
+stay with the override.
+
+**Verified.** The ramp test fails without the fix (the flush column has to
+be the *first*: as the last, the old normal had area). Plates on a Mac GPU
+of a retaining wall from both sides, against the stand-ins switched off:
+without them trunk feet and grass show through its missing back, with them
+it covers. An eye-level colony view with no ribbon: unchanged. Not done:
+the rain watched for an hour, a ribbon judged in Sin City (plan 019).
+
+**Keep in mind.** A new opaque double-sided material gets its stand-in by
+itself; a new see-through one stays hidden in Papier. Masks stay out unless
+the pen learns to ignore them.
+
+## 040 — Bakes that read finished neighbours, keep their seam stairs, never trust a half-written file · DONE (2026-11-05)
+
+**Problem.** (2026-10-01) `bun run bake` ran tile-major while several
+steps read their neighbours' outputs; the stairs bake read only its own
+tile's DGM, so a flight crossing a seam had no landing and was dropped by
+both tiles (0 of 1 197 flights crossed one); the ingest extracted
+non-atomically with no timeouts; `prepare-data` trusted a half-written
+file by name; the `/wissen` hero was baked square on a 5 × 3 site.
+
+**Outcome.** Refreshed against `8b8ec332` (2026-11-04): the runner was
+step-major already (`Bake.step`, `--jobs`), the fetch's timeouts, `.part`
+writes and complete-DLM check and the hero's `cell * rows` were built.
+Built then: step 1's tests (every `run` in `STEPS` once; a failing step
+names site, tile and step; the stairs/walls/rail-from-OSM fixtures on EPSG
+25832 too), step 2 (`stairs.Dgm` on a mosaic of the committed DGMs within
+50 m, `mosaic` in `common.py`), step 4 for the publisher (the cache already
+wrote through a part file). The stairs re-bake ran 2026-11-05 on every
+tile of every site: Dresden 6 flights more, Leipzig 1, München 4, a few
+redrawn; Meißen, Grimma, Hamburg, Unna none more.
+
+**Keep in mind.** A step that reads a neighbour's file runs for every tile
+before the next step (never `--tile` alone for such a step). A flight's
+landing comes from the mosaic, so a missing neighbour DGM drops the flight
+again.
+
 ## 041 — Tests where the regressions are · DONE (2026-10-03)
 
 **Outcome.** The tile cache's raster weighing moved into `RasterShares`
@@ -1337,6 +1433,46 @@ stays written out, Next matches its chunk by it).
 **Keep in mind.** Anything new that changes footprints (an undo of a
 demolish) bumps `footprintVersion`.
 
+## 043 — The city BVH in a worker · CLOSED (2026-11-04; built in another shape)
+
+**Problem.** `dressCity` built three-mesh-bvh's BVH over every city tile
+synchronously inside `processTileModel`: a median 75 ms a tile (38–116 ms
+for 90–209 k triangles, Bun, desktop-class), plausibly 3–5× on a phone,
+rebuilt each time the memory governor reloads a tile.
+
+**What happened.** Stopped twice. 2026-10-03: the worker built and
+tested (indirect mode, serialized nodes transferred, 0.2 ms to
+deserialize), but the build seemed not to bundle — Turbopack copies the
+worker's source to `/_next/static/media/*.worker.ts`. 2026-10-11 (the
+spawn tile only, after plan 069 made the BVH lazy): that asset is a
+leftover nothing loads; Next 16.3.7's Turbopack **does** bundle the
+worker (`turbopack-worker-<hash>.js` + `importScripts`). Stopped instead
+at the chunk: three's core and three-mesh-bvh shared with the worker left
+the scene chunk's scope (ADR 0040), +20.8 KB gz first-load JS (904 985 →
+925 796), and mobile-emulated the first frame came later (the lite boot
+has nothing to overlap once its ground has landed; the worker's build ran
+3× slower beside SwiftShader's frames). Built on 2026-10-26 (`038d55a`)
+in another shape: the BVH is lazy (plan 069 step 7 — a ray builds a
+tile's when it first reaches it), and the tiles within 400 m are built
+ahead **in the BVH worker** (`bvh-client.ts`, `bvh-worker.ts`): on the
+main thread a dense tile had taken 0.2 s on a desktop and 0.8–1.6 s on
+the phone profile, the longest stall of a flight. The spawn tile's stays
+on the main thread at the placing (ADR 0032); `docs/rendering.md` has
+the whole rule.
+
+**Keep in mind.**
+- The positions and index are handed over, not copied (35 MB a dense
+  tile), so while `bvhBuilding` says so nothing reads the tile's CPU
+  arrays: a step waits, a pick answers nothing, a demolish and the outline
+  wait, the autofocus passes it over (AGENTS.md, Rendering).
+- The job carries the positions as GLTFLoader gives them (int16,
+  `normalized`, interleaved at stride 4); three-mesh-bvh's
+  `GenerateMeshBVHWorker` would throw on that attribute.
+- The worker's first-load chunk cost was not measured again after
+  `038d55a` (it imports `three/webgpu` and three-mesh-bvh). If it matters,
+  the 2026-10-11 options stand: a worker bundle of our own (`Bun.build`
+  into `public/`), or a worker without three (`buildPackedTree`).
+
 ## 044 — The canopy points packed, not GeoJSON · DONE (2026-10-03)
 
 **Problem.** The canopy and scan-tree points were the browser's biggest
@@ -1359,6 +1495,468 @@ a millimetre.
 **Keep in mind.** If the dressing still shows a long task here, hand the
 `Float32Array` to the vegetation instead of feature objects (phase 2), and
 pack the street-tree cadastre (`trees`) with a small column set.
+
+## 045 — One source for the raster decoders and the class ids · DONE (2026-11-05)
+
+**Problem.** (2026-10-01) A decoder copied instead of shared let a test
+pin a copy the shipped code did not use (`surfaceHeading` decoded
+0–180° while bake and shader used 0–360°); the land-cover class ids were
+integer literals in eleven bake modules; OSM numbers were parsed by
+helpers with different rules (`"1,5"` was 1.0 in one, 1.5 in another).
+
+**Outcome.** Refreshed against `8b8ec332`, steps 1–4 (2026-11-04).
+`surfaceHeading` deleted (no caller; ground-detail.ts's `div(254)` is
+the one live decode, the bake's `heading_code` pinned by `test_bakes.py`).
+The class ids in `pipeline/bake/classes.py`, named in every bake, values
+pinned by a pytest (a module of their own: landcover.py imports the
+modules that name classes). One parser family in `osm.py`: `osm_number`
+(decimal comma, units), `osm_metres` (metres; `cm`/`mm` converted; feet,
+ranges and lists none), `osm_width` (within 0–60 m) — for every width,
+height and length reader (stairs, walls, hedges, bollards, piers, gates,
+platforms, decks, carriageways, driveways, the class raster's ways, the
+monuments' `height`); `step_count` stays on `osm_number`. The byte scales
+(`EDGE_SCALE`, cultivated, markings) pinned by text across languages.
+Re-baked 2026-11-05 on every site: the visible change is Hamburg's OSM
+land cover, where 36 flights of steps tagged `width=100 cm` had burned
+100 m wide paths round the Hauptbahnhof (32566_5934 97.9 % of texels the
+same, 32564_5934 99.45 %; the paths went back to railway, background and
+settlement, and the furniture standing on them went too); elsewhere one
+wall height each in Leipzig and Hamburg.
+
+**Keep in mind.** A new reader of a tagged length goes through
+`osm_metres`/`osm_width` with its own bounds, never a regex of its own.
+The Saxon `lowveg` (hedge heights) waits for GeoSN's laser scan.
+
+## 046 — Moves only: split the god modules and sweep · CLOSED (2026-11-04; drifted, the rest in the backlog)
+
+**Problem (2026-10-01).** `rail-layer.ts` (2 191 lines) was also the
+geometry library of the tram and riverside layers; `bootApp` one
+≈ 1 040-line closure with telemetry and picking inside; `ground-detail.ts`
+the de-facto TSL helper library; `water-layer.ts` ↔ `terrain-layer.ts`
+an import cycle; vendored shadcn components, exports and a `hooks/` file
+nobody needed. Planned as moves only — no formula, constant or geometry
+change.
+
+**What happened.** Never executed as written; it drifted (2026-10-06
+amendment) and the code moved under it. Done elsewhere by 2026-11-04:
+the mesh kit (`app/_components/mesh-kit.ts`, shared by rail, tram,
+riverside and catenary, its winding tested — backlog item 21); the pure
+deck table (`lib/city/decks.ts`); the cycle (`splat-uv.ts`; water keeps
+a type-only import of `SplatLayer`); the GPU-loss trio
+(`lib/city/page-lifecycle.ts`, plan 066); most of the dead exports
+(dropped or moved into their tests in the 2026-10-24 test audit;
+`screenOfPoint` kept for QA). Step 2 — telemetry and picking as
+section-sized modules out of `bootApp`, now 4 539 lines — is dropped:
+the 2026-11-04 review found such sections read 10–20 of `bootApp`'s
+locals and fail the deletion test, so only pure functions move (backlog
+item 14); demolitions are item 26's. What is still worth doing — the
+rest of the rail split, a home for the TSL helpers, the sweep — is
+backlog item 27.
+
+**Keep in mind.** New layers import geometry from `mesh-kit.ts`, never
+from `rail-layer.ts`. `aesthetic-sandbox.html` waits for the
+maintainer (README, Maintainer actions).
+
+## 049 — Many sites: fetch, bake, build, a route per site · DONE (2026-10-01)
+
+**Problem.** Plan 017 made one site configurable; nothing made several
+operable. Each Land's portal had to be read by hand, the providers ship
+CityGML (the build reads CityJSON, and `citygml-tools` needs a JRE), and
+Dresden's data lay flat in `data/`.
+
+**Decision (ADR 0037).** What belongs to a **provider** (the Land: EPSG,
+credit and licence, portal, OSM extract, which products are open — DOM1,
+RGBI or RGB, a Basis-DLM, a laser scan —, the tile suffix) is one typed
+table, `sites/providers.ts`; a **site** is a label, tiles, viewpoints and
+its provider. Raw downloads are shared per provider
+(`data/_raw/<provider>/`: Leipzig, Meißen, Grimma and Dresden share one
+statewide DLM and one OSM extract); committed sources are per site
+(`data/<site>/{dgm,cityjson,dlm,dop}` + `provenance.json`). Three
+stages: `bun run fetch <site>` (network; adapters per Land in
+`pipeline/bake/providers/`), `bun run bake <site>` (offline), `bun dev` /
+`bun run build`; `bun run site <site>` reports (`lib/city/site-report.ts`).
+
+**Outcome.** A streaming CityGML → CityJSON converter for the AdV LoD2
+profile every Land publishes (`pipeline/bake/citygml.py`), no Java; a
+building belongs to the tile holding its envelope centre (plan 057 made
+the fetch honour that). The DGM sources are written compact: tiled
+DEFLATE GeoTIFF with the float predictor, rounded to centimetres — 5.6
+instead of 15 MB a tile, ≤ 5 mm off after the resample. Dresden's
+manifest stayed byte-identical through the move. Round 2 (2026-09-27)
+dropped the `SITE` variable: one deployment serves every ready site
+under `/<site>` (`app/[site]/page.tsx`, prerendered, unknown ids 404,
+`/city` → `/dresden`); `scripts/prepare-sites.ts` prepares each into
+`public/data/<site>/` and writes `sites.json`; `/` is a start page with a
+card per city on its `site-map.webp`. Leipzig, Meißen, Grimma, Unna,
+München and Hamburg were fetched, baked and — the maintainer's decision
+— committed (≈ 310 MB beside Dresden's 470 MB; plain git, the largest
+file 16 MB, no LFS).
+
+**Numbers.** OSM land cover against the DLM on Leipzig's centre tile:
+71 % of texels agree (water 95 %, settlement 78 %, roads 55 %).
+`public/data` for seven sites ≈ 340 MB.
+
+**Keep in mind.**
+- Berlin is configured, never fetched (`gdi.berlin.de` failed TLS from
+  the container; the adapter follows the ATOM feeds' documentation) —
+  README Open work item 2.
+- The OSM layers of the non-Saxon sites and Unna were baked from
+  stand-in extracts (BBBike, openstreetmap.fr), named in each
+  `provenance.json`. NRW's, Bavaria's, Hamburg's and Berlin's laser scans
+  are not read by their adapters.
+- Open on a GPU: small black squares in some headless SwiftShader shots
+  (one dressing layer, likely the lite profile) — plan 019, section N.
+
+## 055 — Modell, the city in parallel projection · DONE (2026-10-03; three looks unjudged on a GPU — plan 019)
+
+**Problem.** Planners read a city in parallel projection — Isometrie,
+Vogelschau, Militärperspektive, Lageplan, Ansicht, Schnitt — with a
+scale bar, a north arrow, a Schwarzplan and shadow studies. The viewer
+had one perspective camera, and every depth-reading post term, every
+distance-keyed LOD and the shadow fit assumed it.
+
+**Decisions (the maintainer, 2026-10-03).** A third camera mode,
+*Modell*, beside Gehen and Fliegen (`M`); a real `OrthographicCamera`,
+not a long lens (exact, the oblique projection possible, no float32
+depth games 40 km out); all five phases at once; *Strich* and
+*Schwarzplan* are picture styles in every mode (`V` cycles seven); the
+scale bar carries its numbers as HUD legend on the HUD's glass (ADR 0042
+holds: nothing pinned into the scene); free roaming stays parallel
+(Isometrie keeps its 35.26° tilt, `atan(1/√2)`, the turn free).
+
+**Outcome ([ADR 0044](../adr/0044-modell-parallel-projections.md)).**
+A pure rig (`lib/city/model-view.ts`) and its binder
+(`app/_components/model-rig.ts`); the Militärperspektive a sheared ortho
+matrix, so picking goes through one ndc unproject for every camera. **One
+pipeline:** the post passes read the active camera through `view-lens.ts`,
+and the parallel camera stands `MODEL_STANDOFF` (20 km) back so the
+scene's perspective-built branches stay right to a fraction of a degree
+— entering Modell builds nothing. The Schnitt cuts at the near plane, the
+clay drawn two-sided while it shows, its back faces the poché (the paper
+styles are one-sided: a cut building is open). The Ausschnitt clips by
+four uniform planes, buildings included (keeping whole buildings by
+centroid needs a per-object centroid — not done); its first use builds
+the clipped programs in the frame. The export is tiled one tile per
+animation frame (SMAA and GTAO render once a frame), up to 4× the canvas
+and 25 MP. The shadow study is one sheet of 3 dates × 4 hours (21.3.,
+21.6., 21.12.; 9, 12, 15, 18 Uhr device time), ≤ 6 000 px wide.
+Follow-ups (2026-10-04): the twist's sign (`twistedTurn`), trees at every
+scale (each terrain level carries its trees, the coarse one a third, √3
+wider), the bridges' surfaces.
+
+**Look rules.** Paper, not sky, where the site ends; no distance fog,
+depth grading, vignette or DoF ("far" is "higher up the sheet"); ink
+lines constant in screen pixels; the vegetation LOD keyed to the view's
+scale, not the camera's distance.
+
+**Rejected.** Modell as a picture style (a projection changes picking,
+LOD, shadows and streaming); Isometrie as the 2:1 game dimetry (edges at
+26.57°); a canvas or SVG redraw of the plan (the minimap is that).
+
+**Keep in mind.** Still to judge on a real GPU: the specular and halo
+branches built for the perspective camera, the water's glitter in a
+parallel view, Strich's washes (plan 019, section N). The study's hours
+are the device's, not Dresden's (backlog: *the scene clock's zone*). Not
+in scope then: ALKIS parcels and B-Pläne under the model, a measuring
+tool.
+
+## 056 — The markings rasters test finds its data again · DONE (2026-10-07)
+
+**Problem.** The one test of the committed road-marking rasters globbed
+`data/dlm/`, gone since the data moved per site (2026-09-30); pytest
+turns an empty `parametrize` into a skip, so for a week the suite was
+green (`359 passed, 1 skipped`) while 32 re-baked tables went unchecked.
+It also hard-coded EPSG:25833.
+
+**Outcome.** The test walks `data/*/dlm` as `test_committed.py` does,
+reads each table's `crs`, ids read `site/tile`; `pipeline/pyproject.toml`
+sets `empty_parameter_set_mark = "fail_at_collect"`. 32 tables over seven
+sites, 0 skipped. Deviation: the bound scales with the raster
+(`DROPPED_OK × size / px` — 0.5 % at 2048², 1 % on the phones' 1024²).
+The one table over 0.5 %, Leipzig `33318_5688_2_sn` row 22 (a signalled
+crossing over a zebra at an angle), loses 0.8 % at 1024² and 0 % at
+2048²: the shared corner texels are twice as wide there — what the code
+bakes, not stale data.
+
+**Keep in mind.** Every test over committed data uses the `data/*/dlm`
+glob. `fail_at_collect` fails a checkout without any `data/<site>/`:
+revisit the setting, not the test, if the data ever leaves the repo.
+
+## 057 — Seam buildings are fetched and kept · DONE (2026-10-07)
+
+**Problem.** The converter keeps a building only in the tile holding its
+envelope centre, which assumes the provider's files overlap at the seams.
+Saxony's 2 km files do not: GeoSN files each building once, by another
+rule. Dresden's committed tiles (converted whole by the older path) hold
+9–34 buildings a tile centred outside it, 0–2 of them in a neighbour;
+Leipzig's pipeline-converted tiles held none — so 10–35 buildings
+dropped silently per 2 km seam. The 1 km providers read only the cells
+inside the tile and lost the rim alike.
+
+**Outcome.** `cells(tile, km, margin)` and `own_cells`
+(`pipeline/bake/fetch.py`): sn, nw, hh and be read one ring of cells for
+LoD2 (the rasters keep margin 0 — their mosaics are clipped to the
+tile); `convert()` dedupes by `gml:id`. A margin cell is skipped only on
+a 404/410 (past the Land's border); any other failure raises. Saxony's
+LoD2 ZIPs stay under `data/_raw/sn/downloads/LoD2_CityGML/` (a site of N
+tiles reads N + 2√N + 4). Adapter tests for sn and nw. Deviation:
+`by.py` untouched — Bavaria's LoD2 is a 2 km grid (a STOP condition);
+backlog, *Bavaria's LoD2 reads its own 2 km cells only*.
+
+**Keep in mind.** The ownership rule and the margin are a pair: whoever
+changes `owns()` or the tile size keeps "every file that can hold an
+owned building is read" true. Re-fetching Leipzig, Grimma and Meißen is a
+maintainer action (README; `_step` skips an existing CityJSON — delete it
+first).
+
+## 058 — The Standort hand-off stays off the server · DONE (2026-10-07)
+
+**Problem.** When *Standort* found the visitor in another city of the
+deployment, the dialog linked `/<site>?at=lat,lng` (six decimals). That
+put the position in the host's request log and in `Referer`s, in the
+crash trail in local storage (it recorded `pathname + search` at mount,
+before the first frame stripped the query) and in the crash card's text
+— against the privacy page's "Dein Standort verlässt dein Gerät nie".
+The automatic reports were not affected (`path()` drops the query).
+
+**Outcome.** The fix travels in the fragment, `#at=lat,lng` (never sent
+to a server, never in a `Referer`), dropped with `replaceState` at the
+first frame; the trail keeps only the known QA knobs of a query
+(`TRAIL_QUERY`, `crash-trail.ts`); the privacy page, the guide and
+AGENTS.md's knobs say so. Deviations: `arrivalOf` requires the leading
+`#` (`URLSearchParams` strips a `?` too), and `crash-trail.test.ts` is
+new (`trailUrl` is pure).
+
+**Reversed (2026-11-05).** The maintainer moved the hand-off back to the
+query, `?at=lat,lng` (with plan 048's `?snap=`): URL parameters go in the
+query, for diagnosis in the host's request log and so several parameters
+sit side by side. What stays: the trail keeps only `TRAIL_QUERY`, the
+reports send the path alone, `arriveAt` drops `at` with `replaceState`,
+and the privacy page now says plainly that the link carries the real
+position into Vercel's request log.
+
+**Keep in mind.** A position in a URL goes in the query and is named on
+the privacy page (ADR 0043). A new query knob worth seeing in a crash
+record joins `TRAIL_QUERY`; one that carries a place never does.
+
+## 059 — Storage keys pinned to the privacy page · DONE (2026-10-07)
+
+**Problem.** ADR 0043's rule (a storage key or third-party request is not
+done until `/datenschutz` names it) was kept by eye and had slipped: ten
+keys in eight files, nine on the page (`crash-trail.reported` missing).
+The reports' opt-out — the switch, `reportsDeclined()` before every
+beacon, the in-memory "no" — had no test at any layer, and CI builds
+without a DSN.
+
+**Outcome.** `app/_components/storage-keys.ts`, one table every writer
+imports its key from; a unit test that each key's literal and each
+live-feed host appears in the page's text (the page names keys in
+backticks); tests for `report-choice.ts` and the sender's gate. No
+behaviour change. Deviation: the report-choice test loads its own module
+instance (a query specifier) — Bun's test files share a registry and the
+sender's test loads it with a DSN. The BroadcastChannel name
+`crash-trail` and the Sentry logger label stay literals (not storage
+keys).
+
+**Keep in mind.** A new key: a row in `STORAGE_KEYS` and its name on the
+page; a new live host: the page (plan 053's feeds are next). Not built:
+one try-wrapped storage accessor for the hand-rolled wrappers (optional),
+and an e2e that toggles the switch (CI's build would need a dummy
+`NEXT_PUBLIC_SENTRY_DSN`).
+
+## 060 — The spine fails loudly and settles · DONE (2026-10-07)
+
+**Problem.** Eight untested defects in the viewer's spine: (1) a
+dressing build that failed was swallowed (`.catch(() => {})`) — bare
+tiles, no note, and an allocation failure bypassed the memory emergency;
+(2) three's `Animation` asks for the next frame before it calls the loop,
+so a throw before the render re-threw every frame — a 60 Hz storm into
+the trail's `localStorage` write and the problems counter, no reload;
+(3) a failed Ausschnitt hold stayed "pending"; (4) one HUD error latch a
+page hid later failures; (5) a dressing whose compile outlasted the 3 s
+wait was hung on a released root; (6) heartbeats after the render stopped
+counted as 0-fps frames; (7) `exitNow` during Modell's entry kept the
+dolly's FOV; (8) a `pointercancel` scored as a tap.
+
+**Outcome.** All eight. Deviations: the HUD's layer word takes the bare
+message (the HUD prefixes it); a cut-out failure goes through the same
+latch and is a problem kind; a layer word covered by a network one shows
+again when that clears; the trail's coalescing is a tested
+`errorCoalescer`; steps 1 and 5 drive the private queue through casts
+(no fake timers); `model-rig.test.ts` is new.
+
+**Keep in mind.** Every new way a tile can be incomplete (a builder, a
+compile, a fetch) ends in a trail note with a kind in `PROBLEM_KINDS`
+and, where the visitor sees a hole, in `onError`. A throw from the
+stream's update on a working GPU is `"failed"` (a same-level reload),
+not `"lost"` — `frameLoss`'s answers probe decides.
+
+## 061 — The bake cache keyed per artifact · DONE (2026-10-07)
+
+**Problem.** Every artifact's cache key held every module reachable from
+`prepare-data.ts`: 68 modules, all ten `sites/*.ts` and the palette among
+them. 40 of 267 commits since the cache was born re-baked every site
+(≈ 2 min locally before `bun dev` served, ≈ 110 s on each of three CI
+shards).
+
+**Outcome.** Each `cacheKey` walks its own bake's entries (the import
+graph from each, plus `prepare-data.ts`, the site's own config,
+`bun.lock`, `patches/`); the levels CLI split into
+`scripts/line-levels-cli.ts` so no bake reaches `sites/`; the fine
+terrain keys on every tile's passages, the stats on the footprints'
+content. Measured on Dresden: warm 1–2 s; still warm (2.0 s) after a
+Leipzig config edit; a palette edit re-baked only the map picture
+(3.3 s); a Dresden config edit the site (≈ 3 min). The entries became
+one table later, `scripts/bake-entries.ts`, held by
+`bake-entries.test.ts` (AGENTS.md, Data).
+
+**Keep in mind.** A new artifact names its bake's entry modules. The
+terrain keys include `scripts/line-levels.ts`, the city key
+`scripts/measured-roofs.ts`. CI's restore key stays coarse on purpose.
+
+## 062 — Traffic bodies built on the first switch-on · DONE (2026-10-07)
+
+**Problem.** The counted motor traffic is off at start (ADR 0040) but
+its bodies were built, compiled and weighed for every fine and coarse
+level at every load: the spawn tile's 209 sections (47.4 km of lanes)
+≈ 260 000 vertices ≈ 21 MB of GPU buffers for the fine level, ≈ 3.3 MB
+a coarse level, plus JS copies — reasoned at 50–100 MB of a phone's
+336 MiB tile cache, and the build ran inside every dressing's longest
+task.
+
+**Outcome.** The feature lists (30–60 kB a tile) stay in the dressing;
+`TrafficSlot` (`tile-stream.ts`) builds the bodies on the first switch-on
+per tile, in a task of its own: compiled hidden, then shown, weighed and
+asked; kept while off, freed with the tile, nothing hung on a tile
+released mid-build. Deviation: step 1 (no vertex normals) dropped — the
+glass reads them.
+
+**Keep in mind.** Features at load, bodies on demand, bytes reported
+when built: the rule for a fourth data layer. `hide()` keeps the bodies;
+it may dispose them if phone memory ever asks. Plan 083 proposes one
+lifecycle for these bodies, the dressings and the murals.
+
+## 063 — The build and the fetch fail loudly · DONE (2026-10-07)
+
+**Problem.** Five places hid a failure or depended on the machine: a
+freshly baked site without the hand-kept `provenance.json` passed the
+readiness check and then killed `prepare-data` — no site served; every
+error in the TIN builder fell back to the grid as "NoData"; `bun run
+fetch` exited 0 whatever failed, four per-tile fetches ran outside
+`_step`, and a non-JSON Wikidata answer aborted the rest; the Wikidata
+and GTFS caches were written in place (a killed run left truncated JSON
+every later fetch kept); `siteLandmarks` broke ties with a locale-less
+`localeCompare`, so `tileset.json`'s hash and the HUD's list depended on
+the build machine's locale (Dresden: 194 of 289 landmarks tied).
+
+**Outcome.** All five. A site without the record builds, and
+`scripts/site-report.ts` notes it (`absentSiteFiles` in
+`lib/city/site-report.ts`); only a NoData grid falls back; the fetch
+exits non-zero on a required product and guards every per-tile fetch;
+the caches go through `.part` + rename (tests in
+`pipeline/tests/test_caches.py`); landmarks tie by id, as the Python
+ranking does. An unreadable trams cache is derived again rather than
+kept.
+
+**Keep in mind.** A new per-tile fetch goes inside `_step`/`_try`, a new
+cache writer through `.part`, a new required product into `fetch_tile`'s
+required list. A DGM with holes still gets the grid (backlog: *DGM NoData
+blended by the resample*).
+
+## 064 — CI hashes what it means and clones what it reads · DONE (2026-11-04)
+
+**Problem.** Measured on `.github/workflows/ci.yml` at `4b0310a`: the
+Next-cache key's `hashFiles('**/*.ts', …)` walked `node_modules` (11 541
+files against the repo's 476); every job cloned 811 MB of geodata (the
+comment said ~130 MB), lint and typecheck included; the shard comment
+said ~100 / ~135 / ~125 s where run 37476256017 measured 149 / 220 /
+340 s.
+
+**Outcome.** The Next-cache key hashes the repo's own source folders
+(`types/**/*.ts` added on review); Lint and Typecheck check out sparsely
+without `data/` (`sparse-checkout` with `!/data/`, cone mode off — two
+lines a job); the shards re-cut by tag from run 37496735478, `@phone`
+moved to the HUD shard (the rendering group shares one booted page and
+cannot be split by tag without a second boot). Implemented 2026-10-07
+(`3de5ea2d`, `3fb9a505`); CI on `main` has run green since (e.g. runs of
+2026-11-03/04).
+
+**Keep in mind.** The spread criterion (shards within ~60 s) was never
+met: the whole-site shard sets the floor (169–415 s for its one spec
+since it streams five dressed tiles), measured 457 / 321 / 246 s on
+2026-10-24 — the workflow's comment records the numbers and says a
+cheaper whole-site boot, not re-tagging, would help. A new job that
+reads `data/` must not copy the sparse checkout; a new top-level source
+folder joins the Next-cache pattern list.
+
+## 065 — The docs say what the code does · DONE (2026-10-07)
+
+**Problem.** The docs an agent loads first were wrong against the code:
+the city-walker skill gave EPSG:25833 and `_sn` tiles for every site
+(three of seven are 25832) and missed the `traffic` and `transit` bakes;
+README said "nothing persisted"; ADR 0001's storage list lacked
+`gpu-safety`; ADRs 0024 and 0010 named deleted scripts; the ledger and
+the data-streams survey listed built rows as open; AGENTS.md put
+`report-choice` under `app/(legal)/`; `?at`/`safety` were missing among
+the URL reads.
+
+**Outcome.** Steps 1–6 as planned: the skill's frame per provider, the
+complete bake list, README's CRS and storage, the ADR references, the
+ledger (#15 marks only its built part ✅) and the survey (a Status
+column). Not built: step 7, a backtick-path check in `links.test.ts` —
+it also fails on paths that open plans propose to create (its STOP
+condition).
+
+**Keep in mind.** Without that check, a path move repeats this plan;
+the skill's coordinate section stays per provider as long as the CRS is
+(ADR 0037).
+
+## 066 — The page lifecycle as a pure machine · DONE (2026-10-07)
+
+**Problem.** The policies of ADR 0047's safety ladder were pure and
+tested, but the wiring — which signal reaches which policy, in which
+order, with which trail notes — was ≈ 130 lines of closures in `bootApp`
+over a dozen `let`s, untested (no e2e loses a device), and the five fixes
+of 2026-10-06 had each changed an edge of it.
+
+**Outcome.** `lib/city/page-lifecycle.ts`: signals (`deviceLost`,
+`frameFailed`, `allocationFailed`, `hidden`, `shown`, `dispose`) and a
+clock in, effects out (`stopRender`, `note`, `reload`, `fatal`, `shed`,
+`governorForce`, `holdShadows`, `raise`) — the shape of `boot-phases.ts`;
+`create-app.ts` keeps a binder. 15 tests name the incident sequences.
+Deviations: `gpuAnswers`/`gpuFailure` are lazy thunks (the probe is asked
+only where the closures asked it); an initial `hiddenAt` for a page that
+starts hidden; `onGpuLost` is asked inside `dispatch`, before the stop's
+effects (the trail's note order unchanged). `create-app.ts` shrank by 45
+lines, not ≥ 80: the binder keeps the effect map.
+
+**Keep in mind.** A new lifecycle decision is a signal/effect pair with
+a test; a decision that needs the DOM is a binder concern. `frameLoss`'s
+"emergency before it" has no time window (rejected list); a test pins
+it. Plan 079 builds the recovery session on this machine.
+
+## 067 — Data layers and the twin: small fixes · DONE (2026-10-07)
+
+**Problem.** Six defects in the newest layers: one failed timetable load
+left the tram layer dead for the session (`loading` never reset); Dresden's
+bicycle counts were judged in the viewer's zone (all grey in Tokyo, a
+dead counter lit in New York); orchard trees were drawn but not askable;
+a card on a non-Saxon site credited GeoSN and Dresden; a null element in
+a feed threw out of the poll every five minutes; the bicycle feed polled
+in hidden tabs.
+
+**Outcome.** All six. Deviations: the tram failure is
+`TramCarsStatus.failed`, shown by `TramStatusLine` in
+`data-layers-panel.tsx`; orchard trees are marked `s: "orchard"` (a flag
+bit in `ask-items.ts`); the zone is a fact of the feed
+(`BikeFeedReader.zone`); credits come from `cardCredits(site)`
+(`card-lines.ts`), `GEOSN_CREDIT` deleted.
+
+**Keep in mind.** An overlay's lazy `load()` resets its flag in
+`finally` and reports a failure through its status. A feed's times are
+its city's zone, never the viewer's. Left: the bike card still formats
+the count time in the visitor's zone (`inquiry-traffic.ts`) — part of the
+backlog's *scene clock's zone*.
 
 ## 068 — The tile stream loads only what the fog lets you see · DONE (2026-10-10)
 
@@ -1387,7 +1985,7 @@ plan's step 5 (stream at the boot's own fog) was not built.
 the stream camera, not the camera. A future look term drawn past the fog
 (`material.fog = false` on tile content) would vanish beyond its reach.
 
-## 081 — *Frag die Stadt*'s first questions read the moment · DONE (2026-10-30)
+## 085 — *Frag die Stadt*'s first questions read the moment · DONE (2026-10-30)
 
 **Problem.** An empty chat offered three fixed questions that knew
 nothing of where the visitor stood, the hour the scene was set to or what
@@ -1408,3 +2006,262 @@ and fits a phone line. A landmark's article is guessed from its last
 word's ending (`genderOf`); where it cannot be told the name stands in
 quotes.
 
+## 072 — A cold build bakes a site's tiles on every core · DONE (2026-10-31)
+
+**Problem.** A cold build at `85a41b7` (4 cores, 15 GB, seven sites):
+`prepare-sites` 419 s, of which **414 s** one single-threaded process
+baking Dresden's 15 tiles one after another, three cores idle for its
+last ~280 s; `next build` 61 s. And cold is common: the fine level's key
+covers every tile's terrain inputs (ADR 0030), so an edit to a shared
+bake module re-bakes all of Dresden.
+
+**Outcome.** Tile warmers: a `--if-cached` plain run first (a warm build
+runs no warmer), then one process per cold tile, admitted by cores and
+memory (`scripts/warmers.ts` `bakeLimits`: 80 % of the memory or the
+container's limit, a tile warmer counted at 3 GB, any other bake at
+1.6 GB; `PREPARE_JOBS`, `PREPARE_MEMORY_GB`), the smaller sites first.
+Atomic cache entries (`scripts/bake-cache.ts`); each tile's fine ground
+its own entry (`scripts/ground-pack.ts`, ≈ 6.7 MB a Dresden tile), the
+site ground reading a tile's heights only once a point asks; to rebuild
+from the entry `bake-tiles.ts` split each mesher into shaping and meshing
+halves. Every `manifest.json` identical to main's on every cold run.
+History: on 2026-10-10 Vercel's builder (4 cores, 8.6 GB) showed no gain
+(322 s against main's 232–235 s, two sites side by side already), so the
+warmers were opt-in; by 2026-10-31 a whole cold site peaked at 4.5–6.1
+GiB in one process, Vercel baked one site at a time, and two tile
+warmers at once took all seven sites from 11:07 to 5:19 min on a box
+held to that builder. Default since: on (`PREPARE_WARMERS=0` turns them
+off) — `docs/data-pipeline.md`, *Bakes side by side*.
+
+**Numbers.** Dresden cold, step 1: buildings 268.9 s, fine 265.3 s (the
+site ground's first call, fifteen TINs, 202.7 s), coarse 31.8 s, line
+levels 105.6 s. A ground warmer is Delatin and the DGM's LZW; a tile
+warmer's top: `rayHit` (doors) 5.9 %, `unionArea` 4.2 %. Step 2 (a
+cheaper gzip) skipped: 11.0 s over Dresden's 45 glbs at level 9, and a
+level change rewrites every `.glb.gz`. Peak RSS: Dresden in one process
+4.5–4.9 GiB, a tile warmer at most 2.7 GB; the warmers' start-up costs
+≈ 10 % more CPU.
+
+**Keep in mind.** Anything site-wide (computed from every tile) is cached
+before the warmers start, or every warmer computes it again. Backlog
+(2026-10-10 list): a finer fine-level key (the tiles a bake read, 1–9
+not 15), tile warmers admitted by a size-based estimate. Optional, the
+maintainer's: `typescript.ignoreBuildErrors` would drop `next build`'s
+second type-check (6 s) that CI's typecheck job already runs.
+
+## 073 — The look table frozen · DONE (2026-10-10)
+
+**Problem.** Asked whether the sidebar's free parameters cost performance
+or bundle. From the code: a slider that is a uniform costs almost
+nothing on the GPU (each term runs at any value, 0 included — only
+deleting a term saves work); the few real costs are construction-time
+choices (DoF, contact shadows, multi-tuft crowns, `transparency`'s
+hashed-alpha rebuild); the cost is code — the table, its store, a
+versioned snapshot codec, the sidebar's groups, two guides a test pins
+to the labels.
+
+**Outcome.** On the performance PR the maintainer removed *Transparenz*
+and *Blattflimmern* (*Windhelligkeit* baked) and fixed *Flussnebel* and
+*Tiefenschärfe*; this plan fixed the other 25 percent rows with the
+default table ("continue … don't ask in between"). *Nebel* is the one
+slider left and the multi-tuft switch stays; every other value is a
+named constant in its owner, its old `initial` (`GROUND_SHADE`, `RIM`,
+`WINDOWS`, `AO_EXPONENT`, …); four keep an internal uniform that a style
+or Modell writes (the valley haze, the grading, the grain among them). Old
+snapshots still load: their 32 keys are parsed and never written
+(`RETIRED_SNAPSHOT_KEYS`). ADR 0018 amended. Production code +382 −820
+lines; ≈ 3 kB gzip (all chunks 996 759 → 993 509 B): the gain is code
+and UI, not bytes. The default picture is the same by construction.
+
+**Keep in mind.**
+- Tuning a look is an edit of a named constant, reviewed with snapshots
+  of place and time.
+- Open on a GPU (plan 019, section N): plates of the frozen table against
+  production (none taken in the container); then, measured, delete or
+  tier-gate the most expensive fixed terms on phones (the clay's windows
+  and facade reading, the terrain's ground detail) and the terms that
+  compute nothing visible under the fixed full *Spiegelung*
+  (`REFLECTIONS` = 1: the glass sheen in `clayGlow`, the gilding's
+  stand-in in `monument-layer.ts`, the water's fog-colour stand-in), each
+  with a plate pair.
+- Two comments in modules the bakes import still call a term a slider
+  (`lib/city/building-tint.ts`, `scripts/bake-city-mesh.ts`): fix them
+  with the next change that re-bakes the buildings anyway.
+
+## 075 — Window axes from street photos · DONE (2026-11-01)
+
+**Problem.** The window-grid veto (the ledger's discontinued table) was
+loosened on 2026-10-07 for one case: window axes **measured** in open
+street photos may show — nothing where nothing was measured. Google
+Street View is out by its terms; Panoramax and Mapillary are CC BY-SA.
+
+**What the spikes found.** Panoramax on the spawn tile: 789 photos, all
+looking along the street, median horizontal accuracy 29.7 m — 58
+footprints (1.6 %) with a facade seen under 60°. Mapillary: 32 379
+images, 8 097 360° panoramas with computed poses; 536 walls seen face-on
+from two or more sequences; rectifying a panorama onto the LoD2 wall at
+20 px/m gives clean strips — but the SfM poses are metre-level (the same
+rhythm 0.6 m apart between sequences), and fitting each pose to the
+skyline (1–3° misfit: trees, the camera car's roof boxes, LoD2's eaves)
+or each reconstruction rigidly onto the footprints (moved 0.5–2.5 m,
+drives agreed *less*) did not fix it.
+
+**Outcome.** First (2026-10-09), only what does not move with the camera:
+per wall the column profile's period and peak, the storey, the openings'
+width, proportion and ornament (`pipeline/bake/facade_traits.py`,
+`windows.py`), each only where two sequences agree (Spearman ρ ≥ 0.6);
+the clay draws windows from that rhythm on every house (ADR 0010,
+PR #143): over Dresden's fifteen tiles 891 buildings carry their own
+rhythm, 4 823 borrow a measured neighbour's (same roof form and eave),
+31 361 take their type's (the photos' medians). Then (2026-11-01) the
+axes' positions, without needing each pose: the strips of one wall are
+registered onto each other by their **vertical edges** (darkness profiles
+were dominated by tree shadows) — two drives agree within 0.25 m in
+≈ 60 % of confident pairs, and three or more drives of ~0.2 m error each
+leave a standard error of 0.12 m (`window_axes.py`, `lib/city/windows.ts`
+`measuredColumns`; ledger, *Windows on every house*). The meridian
+convergence (~1° in Dresden) had been missing from every pose.
+
+**Keep in mind.** The drawing is the clay's recess per window, not the
+planned pencil lines, and no panes or glass. Mapillary needs a client
+token in the environment at fetch time, never committed.
+
+## 081 — One schema per file a bake hands over · DONE (2026-11-05)
+
+**Problem.** The files the Python bakes write and TypeScript reads had
+their shape written three or four times (the dict literal, pytest
+asserts, a TypeScript interface, sometimes a hand guard) and nothing
+compared the copies: a renamed key or a number turned string passed every
+check and a layer, card or directory went silently poorer. One drift was
+live: a monument's `wikidata` named the item its *material* came from,
+while the Stadtwissen and the card read it as the item OSM links it to.
+
+**Decision.** ADR 0059: one zod schema per hand-over file in
+`lib/city/<name>-file.ts` (`bake-file.ts`: `BakeFile`, `parseBakeFile`,
+which returns its input typed and throws file, key path, writer and the
+`--step` to re-bake); records are `z.strictObject`; a union the viewer
+has is a `z.enum` held equal to it by a type-level test. The build parses
+every such file (per tile in the step modules of `scripts/prepare/`,
+site-wide files in `prepare-data.ts`, uncached) and fails on a mismatch;
+`bake-files.test.ts` parses every committed file; the viewer imports a
+schema module by type only and keeps its hand guards, pinned to the
+schemas by agreement tests. zod is pinned exactly (its version is in
+three bake keys).
+
+**Outcome.** Steps 0–7 (2026-11-04): seven schemas (landmark facts,
+landmarks, osmbuild, monuments, murals, trams, roof colours); Dresden's
+and Hamburg's manifests byte-identical through the reader moves; zod only
+in the *Frag die Stadt* chunk. Deviations: `heritage`/`shop`
+non-negative ints, not the literal 1; members the writer always writes
+required. Step 8 (2026-11-05): `wikidata` is OSM's link (the first Q-id
+of the tag; a DLM monument takes its OSM partner's, an OSM fountain
+carries its own), `materialWikidata` the item a material came from; a
+monument linked to a cached item takes that item's material whatever the
+distance, every monument linked to it does (a fountain and its figure, a
+group of sculptures share one item), and no neighbour can claim it; then
+the name (40 m) and nearest (10 m) rules as before. The Stadtwissen
+carries `wd` and `materialWd`, the card credits Wikidata for a material
+by `materialWikidata`. Step 9 re-baked every site (inputs: the committed
+bake's BBBike extracts, Unna's openstreetmap.fr extract of 2026-11-05):
+OSM links Dresden 237, Hamburg 92, München 87, Leipzig 38, Meißen 2,
+Grimma 1, Unna 0; Wikidata materials 67 (Dresden 18 — the three other
+Tageszeiten on the Brühlsche Terrasse and the second Schildlöwe gained
+their group's Bronze —, Leipzig 23, München 13, Hamburg 12, Meißen 1);
+nothing else changed in the files. Phone bytes (ADR 0047, accepted
+2026-11-04): Dresden's monuments 199 491 → 205 926 B (+3.2 %), all
+sites +12.3 kB. Every walk's monument ids resolve.
+
+**Keep in mind.**
+- A bake that renames a key changes its schema in the same commit; the
+  committed data is re-baked before that commit merges.
+- The fetch caches only the items its box query finds (five classes,
+  with a `P186`): of the OSM-linked monuments (no fountains), 254 link
+  an item the cache lacks, 159 of them without any material — the
+  follow-up is backlog item 28.
+- Not in scope and still open: `facades_<tile>.json` and the tile
+  sources' schema pass (backlog item 26).
+
+## 083 — One lifecycle for a tile's late parts · DONE (2026-11-04)
+
+**Problem.** Three things land on a tile's content root after the root
+itself — a terrain level's dressing, a city tile's murals, a data layer's
+traffic bodies — and `DressingPlugin` built, compiled, weighed, hung and
+freed each by a hand-written copy of one guard sequence. Of the six
+`fix(load)` commits that changed that sequence (2026-11-02/03), four were
+weight or gone checks landed in the dressing's copy only: the murals were
+built for a tile that had left (D1), every part aborted only once the
+root's compiles ended (D2), the murals and traffic bodies weighed nothing
+between build and hang (D5, ADR 0047's class), the murals' failures were
+never classed as allocation failures (D8), and a throw after their build
+was an unhandled rejection (D9). The traffic bodies took the fine rank on
+the coarse level too (D10).
+
+**Decision.** One module, `app/_components/late-parts.ts` (Design B of
+the plan): a per-root registry the plugin owns (`createLateParts`, four
+members: `add`, `bytes`, `leave`, `release`) over the site's lane
+(`createLateLane`), and a `LatePart` per kind of part with two policy
+fields — `rank` (its place in the lane; null outside it) and `hangAt`
+(`"wait"`: hangs once its compile wait is over, a hand-over waits on it,
+comes down again if the compile then runs out of memory; `"compile"`:
+hangs once its compile has ended). Three adapters: `dressingPart`,
+`muralsPart` and the traffic slot's part (owned by the dressing's handle).
+The module hides the order (turn → gone → build → gone → compile → weigh
+→ wait → ready → `loaded` → hang), every gone check, the abort, the
+one-ahead compile throttle, the weight from build to free, free after the
+compile, the failure classification and the timings
+(`<kind>:queue-wait`, `:build`, `:compile`).
+
+**Kept on evidence.** A `"compile"` part holds the lane through its compile
+wait (finding 4): a traffic body's compile is one large upload (≈ 20 MiB
+fine), and overlapping them would put a second one in flight on a phone.
+Its cost headless (full profile, desktop): the eight bodies of the start
+view's switch-on hold the lane ≈ 110–130 s of the ≈ 135–185 s to the last
+body under SwiftShader (timers starve there); judge it on a desktop GPU
+before letting `"compile"` parts overlap on the desktop tier (the plan's
+gate: more than 1 s spent in the hold). Measured 2026-11-05 on an M1 Max
+(WebGPU, Albertstraße, 14 bodies, three switch-ons): 40–468 ms in all the
+compiles, 0.8 s in the builds, under the gate, so `"compile"` parts keep
+the lane on the desktop too. The hold reaches the fine
+dressings too: a coarse level's bodies take the coarse rank (D10), so
+after a switch-on up to `MAX_LATE_OVERTAKES` (4) of them may go ahead of
+a fine dressing queued before them, each holding the lane through its
+build and compile — at most ≈ 4 × (build + 3 s) on a GPU whose compiles
+outlast the wait, the same bound the coarse dressings already have, and
+only while a switch-on's bodies queue (the layer is off at the boot,
+ADR 0040). Not changed: it is the same open measure — the hold's length
+on a desktop GPU — and a part that holds without overtaking, or
+overtakes counted by hold time, would be new lane machinery for a delay
+nobody has seen there yet.
+
+**Deviations from the plan.** `hang` returns the part's take-down (no
+tenth field); a `"wait"` part's `settled` says `"hung"` as it hangs (the
+loading frontier counts the dressing done there, as before) and a late
+out-of-memory drop happens after; a `"wait"` part whose compile ran out
+of memory within the wait never hangs (the dressing did not). The lane's
+rank orders only the builds queued while it is busy. The murals' adapter
+takes the drawings' builder (`build`) from the plugin, so its test needs
+no `createImageBitmap`. The tests' fake host is `late-parts.fixture.ts`,
+shared by the module's and the adapters' tests; the stream's tests reach
+no private member (17 casts, from 26).
+
+**Measured** (SwiftShader, `NEXT_PUBLIC_POC_DEBUG` builds per step, the
+plan's step-0 script and a `?trace=1` start; 1-min load 2–4.6, this
+container shared with other sessions): every `framedBuilds` delta 0 and
+`anchors` 62/63 at every step; the phone-emulated lite boot's
+`gpuBytes`, `memory.total` and `cpuBytesOf().total` within the base's
+own two-run range (the BVH's 17.4/20.7 MB is bimodal on the base too) and
+its traffic switch-on peak no higher (239.35 MB); veil to loaded, pooled
+over every run of the evening, base median 224 s (183–314, seven runs),
+step 4 median 233 s (194–299, seven runs) — within the noise, which an
+order effect dominated (a base/branch pair run in the opposite order
+flipped by 119 s); the switch-on's last body at 135–185 s (base 158–202
+s), the coarse bodies first (D10), the start tile's fine bodies at 77–90 s.
+The murals' record (Fürstenzug start): the same four drawings fetched and
+the same texture count and bytes as the base.
+
+**Keep in mind.** A new thing that lands on a tile after the tile is a
+`LatePart` adapter, never a new hand-written sequence; `hangAt: "wait"`
+only for what a level's hand-over waits on. A rule about late parts is
+fixed in `late-parts.ts` and tested through the fake host. `ready` must
+never wait on `loaded`. Open: the hold's cost on a desktop GPU (above);
+real-GPU plates were not needed (no check moved).

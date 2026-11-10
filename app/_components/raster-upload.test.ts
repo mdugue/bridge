@@ -1,8 +1,13 @@
 import { afterEach, expect, jest, test } from "bun:test";
 import { deflateSync } from "node:zlib";
-import { LinearMipmapLinearFilter } from "three/webgpu";
+import {
+  DataArrayTexture,
+  LinearFilter,
+  LinearMipmapLinearFilter,
+} from "three/webgpu";
 import type { Texture, WebGPURenderer } from "three/webgpu";
-import { loadNdviTexture } from "./terrain-layer";
+import { loadDataRaster } from "./raster-upload";
+import type { RasterLook } from "./raster-upload";
 import { trackedBytesOf } from "./three-utils";
 
 /** One PNG chunk: length, type, body (the CRC left at 0). */
@@ -86,13 +91,24 @@ function fakeRenderer(seen: { mips: boolean; min: number }[]) {
   } as unknown as WebGPURenderer;
 }
 
+const NDVI: RasterLook = {
+  channels: 1,
+  filter: "linear",
+  mipmaps: true,
+  anisotropy: 16,
+  browserFallback: true,
+};
+
 test("a raster is on the GPU, set up as it samples, when its load resolves — its bytes gone", async () => {
   serve(greyPng(4, 4, new Uint8Array(16).fill(200)));
   const seen: { mips: boolean; min: number }[] = [];
-  const texture = await loadNdviTexture("ndvi.png", fakeRenderer(seen));
-  if (!texture) {
+  const raster = await loadDataRaster("ndvi.png", NDVI, {
+    renderer: fakeRenderer(seen),
+  });
+  if (!raster) {
     throw new Error("the raster did not load");
   }
+  const { texture } = raster;
   // uploaded once, with its mip chain already asked for (fixed at the upload)
   expect(seen).toEqual([{ mips: true, min: LinearMipmapLinearFilter }]);
   expect((texture.image as { data: unknown }).data).toBeNull();
@@ -113,7 +129,9 @@ test("a raster whose download hit a blip is asked for again, not taken for absen
   }) as unknown as typeof fetch;
   const seen: { mips: boolean; min: number }[] = [];
   expect(
-    await settled(loadNdviTexture("ndvi.png", fakeRenderer(seen)))
+    await settled(
+      loadDataRaster("ndvi.png", NDVI, { renderer: fakeRenderer(seen) })
+    )
   ).not.toBeNull();
   expect(calls).toBe(2);
 });
@@ -127,8 +145,55 @@ test("a raster the GPU refuses is absent, and freed", async () => {
       throw new RangeError("Allocation failure.");
     },
   } as unknown as WebGPURenderer;
-  expect(await loadNdviTexture("ndvi.png", renderer)).toBeNull();
+  expect(await loadDataRaster("ndvi.png", NDVI, { renderer })).toBeNull();
   expect(refused).not.toBeNull();
   // disposed: no longer counted
   expect(trackedBytesOf(refused as unknown as Texture)).toBe(0);
+});
+
+const HORIZON: RasterLook = { channels: 4, filter: "linear", layers: 8 };
+
+test("a layered raster is an array of square layers, or no raster at all in another shape", async () => {
+  // 2 × 2 RGBA texels a layer: 8 bytes wide, 2 rows a layer
+  serve(greyPng(8, 2 * 8, new Uint8Array(8 * 16)));
+  const seen: { mips: boolean; min: number }[] = [];
+  const raster = await loadDataRaster("horizon.png", HORIZON, {
+    renderer: fakeRenderer(seen),
+  });
+  if (!raster) {
+    throw new Error("the raster did not load");
+  }
+  expect(raster.texture).toBeInstanceOf(DataArrayTexture);
+  const image = raster.texture.image as {
+    data: unknown;
+    depth: number;
+    height: number;
+    width: number;
+  };
+  expect([image.width, image.height, image.depth]).toEqual([2, 2, 8]);
+  expect(raster.texture.minFilter).toBe(LinearFilter);
+  expect(seen).toEqual([{ mips: false, min: LinearFilter }]);
+  expect(image.data).toBeNull();
+  expect(trackedBytesOf(raster.texture)).toBe(2 * 2 * 8 * 4);
+
+  // seven layers' height: the wrong shape
+  serve(greyPng(8, 2 * 7, new Uint8Array(8 * 14)));
+  expect(
+    await loadDataRaster("horizon.png", HORIZON, {
+      renderer: fakeRenderer([]),
+    })
+  ).toBeNull();
+});
+
+test("a PNG the decoder rejects is absent without the browser fallback", async () => {
+  serve(new Uint8Array([1, 2, 3, 4]));
+  const seen: { mips: boolean; min: number }[] = [];
+  expect(
+    await loadDataRaster(
+      "svf.png",
+      { channels: 1, filter: "linear", mipmaps: true },
+      { renderer: fakeRenderer(seen) }
+    )
+  ).toBeNull();
+  expect(seen).toEqual([]);
 });

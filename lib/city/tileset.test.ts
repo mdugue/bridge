@@ -5,6 +5,7 @@ import {
   COARSE_TERRAIN_ERROR,
   FAR_CITY_ERROR,
   parseTilesetExtras,
+  terrainRasterExtras,
   tileBox,
   tileTopsOf,
 } from "./tileset";
@@ -114,4 +115,78 @@ test("a point on a seam belongs to exactly one tile", () => {
   expect(ownsPoint(east, ...onSeam)).toBe(true);
   expect(ownsPoint(east, 411_950, 5_657_000)).toBe(false);
   expect(ownsPoint(east, 413_999.9, 5_657_999.9)).toBe(true);
+});
+
+test("a terrain level's raster extras are what prepare-data wrote by hand, key for key", () => {
+  // the published names of a tile with every raster, and the outputs of
+  // the hand-written extras (scripts/prepare/terrain.ts `described` and
+  // `paintAndLight`, before plan 077 step 1) over the same fixtures: the
+  // glb's bytes and the cache keys follow the order, so the strings are
+  // pinned
+  const every = {
+    landcover: "lc.png",
+    landcoverLow: "lcl.png",
+    landcoverCoarse: "lcc.png",
+    ndvi: "ndvi.png",
+    surface: "surface.png",
+    edges: "edges.png",
+    sport: "sport.png",
+    sportTable: "sport.json",
+    cultivatedRaster: "cult.png",
+    cultivatedLow: "cultl.png",
+    markings: "mk.png",
+    markingsLow: "mkl.png",
+    markingsTable: "mk.json",
+    svf: "svf.png",
+    horizon: "hz.png",
+  };
+  type Crop = [number, number, number, number, number];
+  const crop: Crop = [1, 2, 3, 4, 4096];
+  const cases: [Partial<typeof every>, 0 | 1, Crop | undefined, string][] = [
+    [
+      every,
+      0,
+      crop,
+      '{"landcover":"lc.png","landcoverLow":"lcl.png","ndvi":"ndvi.png","surface":"surface.png","edges":"edges.png","sport":"sport.png","sportTable":"sport.json","cultivated":"cult.png","cultivatedCrop":[1,2,3,4,4096],"cultivatedLow":"cultl.png","markings":"mk.png","markingsTable":"mk.json","markingsLow":"mkl.png","svf":"svf.png","horizon":"hz.png"}',
+    ],
+    [
+      every,
+      1,
+      crop,
+      '{"landcover":"lcc.png","landcoverLow":"lcc.png","ndvi":"ndvi.png","sport":"sport.png","sportTable":"sport.json","svf":"svf.png","horizon":"hz.png"}',
+    ],
+    // no low twins
+    [
+      {
+        ...every,
+        landcoverLow: undefined,
+        markingsLow: undefined,
+        cultivatedLow: undefined,
+      },
+      0,
+      crop,
+      '{"landcover":"lc.png","landcoverLow":"","ndvi":"ndvi.png","surface":"surface.png","edges":"edges.png","sport":"sport.png","sportTable":"sport.json","cultivated":"cult.png","cultivatedCrop":[1,2,3,4,4096],"markings":"mk.png","markingsTable":"mk.json","svf":"svf.png","horizon":"hz.png"}',
+    ],
+    // a table without its raster, a raster without its table
+    [
+      { ...every, sport: undefined, markingsTable: undefined },
+      0,
+      crop,
+      '{"landcover":"lc.png","landcoverLow":"lcl.png","ndvi":"ndvi.png","surface":"surface.png","edges":"edges.png","cultivated":"cult.png","cultivatedCrop":[1,2,3,4,4096],"cultivatedLow":"cultl.png","svf":"svf.png","horizon":"hz.png"}',
+    ],
+    // a colony raster without a crop
+    [
+      every,
+      0,
+      undefined,
+      '{"landcover":"lc.png","landcoverLow":"lcl.png","ndvi":"ndvi.png","surface":"surface.png","edges":"edges.png","sport":"sport.png","sportTable":"sport.json","markings":"mk.png","markingsTable":"mk.json","markingsLow":"mkl.png","svf":"svf.png","horizon":"hz.png"}',
+    ],
+    [{}, 0, undefined, '{"landcover":"","landcoverLow":""}'],
+    [{}, 1, undefined, '{"landcover":"","landcoverLow":""}'],
+  ];
+  for (const [names, level, colonies, written] of cases) {
+    expect(JSON.stringify(terrainRasterExtras(names, level, colonies))).toBe(
+      written
+    );
+  }
 });

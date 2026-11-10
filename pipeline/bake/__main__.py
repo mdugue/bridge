@@ -11,6 +11,7 @@ import datetime
 import hashlib
 import multiprocessing
 import os
+import sys
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
@@ -26,6 +27,7 @@ from . import (
     fetch,
     furniture,
     lamp_heights,
+    lamp_water,
     lamps,
     landcover,
     landmark_facts,
@@ -111,9 +113,19 @@ STEPS = {
     "riverside": riverside.run,
     # The site's counted motor traffic (its source, cached by the fetch).
     "traffic": traffic.run,
-    # After NDVI (a crown over a roof is not the roof): the LoD2 roofs that
-    # miss DOM1, rebuilt in its form (scripts/bake-city-mesh.ts).
+    # Wikidata's notable buildings (fetched by `bun run fetch`), matched to
+    # the LoD2 objects that draw them: marked, named, listed in the HUD.
+    # After osm-buildings (its names), before roofs (a landmark's roof may
+    # curve as the scan shows).
+    "landmarks": landmarks.run,
+    # After NDVI (a crown over a roof is not the roof) and the landmarks:
+    # the LoD2 roofs that miss DOM1, rebuilt in its form
+    # (scripts/bake-city-mesh.ts).
     "roofs": roofs.run,
+    # After the lamp heights and the roofs (the rebuilt ones occlude): which
+    # lamps see the water past the buildings, and its level there, for the
+    # river's mirror of them.
+    "lamp-water": lamp_water.run,
     # Last: thinned against the canopy and the cadastre, masked by the walls
     # and the bridges.
     "lowveg": lowveg.run,
@@ -129,9 +141,6 @@ STEPS = {
     # rail (bridges), monuments and furniture (stop shelters): the small
     # structures LoD2 lacks, appended to the city mesh at build time.
     "small-buildings": small_buildings.run,
-    # Wikidata's notable buildings (fetched by `bun run fetch`), matched to
-    # the LoD2 objects that draw them: marked, named, listed in the HUD.
-    "landmarks": landmarks.run,
     # After landmarks (their roofs' relief): DOM1 against LoD2, confirmed by
     # OSM — the chimneys, towers and masts LoD2 leaves out, the buildings it
     # does not carry yet, and a landmark's roof form it flattens (plan 050).
@@ -210,15 +219,21 @@ def step_key(step: str, research: bool, spec_hash: str) -> dict:
 
 def recorded_tile(spec, step: str, tile, research: bool, key: dict, save: bool) -> None:
     """The step on the tile, its run recorded (step_cache.py) — or, with the
-    cache off, its old record dropped."""
-    manifest = step_cache.manifest_path(spec.raw, spec.site, step, tile.id)
-    if not save:
-        Path(manifest).unlink(missing_ok=True)
-        run_tile(step, tile, spec.tiles, research)
-        return
-    with step_cache.recording([os.getcwd(), str(spec.data), str(spec.raw)]) as rec:
-        run_tile(step, tile, spec.tiles, research)
-    step_cache.save(manifest, key, rec)
+    cache off, its old record dropped. A step that fails says on which
+    site, tile and step before the error goes on (in a worker of a
+    `--jobs` run as well): tile 11 of 15 names itself."""
+    try:
+        manifest = step_cache.manifest_path(spec.raw, spec.site, step, tile.id)
+        if not save:
+            Path(manifest).unlink(missing_ok=True)
+            run_tile(step, tile, spec.tiles, research)
+            return
+        with step_cache.recording([os.getcwd(), str(spec.data), str(spec.raw)]) as rec:
+            run_tile(step, tile, spec.tiles, research)
+        step_cache.save(manifest, key, rec)
+    except (Exception, SystemExit) as exc:  # a step's `SystemExit("no OSM extract")` too
+        print(f"{spec.site} {tile.id} {step}: {exc}", file=sys.stderr)
+        raise
 
 
 def warm(spec, step: str, tiles, jobs: int) -> None:

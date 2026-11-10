@@ -7,6 +7,7 @@
  * THREE, no DOM.
  */
 import { tileIdOf } from "./site";
+import type { TerrainRasterKey } from "./tileset";
 import type { Site } from "./site";
 
 /**
@@ -106,6 +107,16 @@ export interface TileArtifact {
   file: string;
   /** false = the loader treats a missing file as "feature off" */
   required: boolean;
+  /** named in the terrain extras (`terrainRasterExtras`, tileset.ts) */
+  terrain?: TerrainNaming;
+}
+
+/** Where a raster (or its table) is named in the terrain extras: per
+ *  level, the extras keys that carry its file, and the kinds it is written
+ *  only beside (a table and its raster, a twin and its full file). */
+export interface TerrainNaming {
+  levels: Partial<Record<0 | 1, readonly TerrainRasterKey[]>>;
+  with?: readonly string[];
 }
 
 /** The edge of the class raster the minimap reads (it paints 256² per
@@ -120,8 +131,9 @@ export const SMALL_RASTER_PX = 512;
  * named in the tileset's tile list for the inquiry card (ADR 0042),
  * fetched only when something is asked — and `osm`: the file is derived
  * from OpenStreetMap, so its JSON carries the ODbL credit (checked over
- * every committed file by features.test.ts). The raster rows the terrain
- * reads are named by prepare-data.ts's terrain extras.
+ * every committed file by features.test.ts) — and `terrain`: the extras
+ * keys a terrain level names the raster under (tileset.ts
+ * `terrainRasterExtras`, in the extras' own key order).
  */
 interface ArtifactSpec {
   ask?: true;
@@ -133,6 +145,7 @@ interface ArtifactSpec {
   file: (tile: string) => string;
   osm?: true;
   required?: true;
+  terrain?: TerrainNaming;
 }
 
 const named =
@@ -141,19 +154,25 @@ const named =
     `${stem}_${tile}.${ext}`;
 
 const ARTIFACTS = {
-  landcover: { file: named("landcover", "png"), required: true },
+  landcover: {
+    file: named("landcover", "png"),
+    required: true,
+    terrain: { levels: { 0: ["landcover"] } },
+  },
   // The edge phones get (MOBILE_RASTER_PX), downsampled (NEAREST) by
   // prepare-data from the committed 4096² raster.
   landcoverLow: {
     file: (tile) => `landcover_${tile}.r${MOBILE_RASTER_PX}.png`,
     required: true,
     bakedFrom: { file: named("landcover", "png"), raster: MOBILE_RASTER_PX },
+    terrain: { levels: { 0: ["landcoverLow"] } },
   },
   // The coarse level's (COARSE_RASTER_PX), on every tier.
   landcoverCoarse: {
     file: (tile) => `landcover_${tile}.r${COARSE_RASTER_PX}.png`,
     required: true,
     bakedFrom: { file: named("landcover", "png"), raster: COARSE_RASTER_PX },
+    terrain: { levels: { 1: ["landcover", "landcoverLow"] } },
   },
   // The minimap's class raster: 1/16 of the phone raster's pixels.
   landcoverSmall: {
@@ -168,26 +187,48 @@ const ARTIFACTS = {
   },
   // Optional: the canopy bake skips a tile without DOM1 (rows still plant).
   canopy: { file: named("canopy", "geojson"), dressing: true },
-  ndvi: { file: named("ndvi", "png") },
+  ndvi: {
+    file: named("ndvi", "png"),
+    terrain: { levels: { 0: ["ndvi"], 1: ["ndvi"] } },
+  },
   // Optional: the OSM paving raster (pipeline/bake/surface.py); without
   // it the ground draws the land-cover class's default pattern.
-  surface: { file: named("surface", "png") },
+  surface: {
+    file: named("surface", "png"),
+    terrain: { levels: { 0: ["surface"] } },
+  },
   // Optional: the smoothed road/meadow edge distances
   // (pipeline/bake/edges.py); without them the shader reads the class
   // texels (kerb band only, no parking lanes).
-  edges: { file: named("edges", "png") },
+  edges: { file: named("edges", "png"), terrain: { levels: { 0: ["edges"] } } },
   // Optional: the OSM sports grounds (pipeline/bake/sport.py) — the index
   // raster and the table of grounds it names; without them the ground
   // under a pitch is its land-cover class.
-  sport: { file: named("sport", "png") },
-  sportTable: { file: named("sport", "json"), osm: true },
+  sport: {
+    file: named("sport", "png"),
+    terrain: { levels: { 0: ["sport"], 1: ["sport"] }, with: ["sportTable"] },
+  },
+  sportTable: {
+    file: named("sport", "json"),
+    osm: true,
+    terrain: {
+      levels: { 0: ["sportTable"], 1: ["sportTable"] },
+      with: ["sport"],
+    },
+  },
   // Optional: the sky-view factor and the far horizon
   // (pipeline/bake/skyview.py, from the committed DGM + LoD2, the drawn
   // crowns half-transparent, Copernicus GLO-30 beyond the site): the
   // ambient light the city lets through and the long shadows past the
   // shadow map. Without them the light is as before.
-  svf: { file: named("svf", "png") },
-  horizon: { file: named("horizon", "png") },
+  svf: {
+    file: named("svf", "png"),
+    terrain: { levels: { 0: ["svf"], 1: ["svf"] } },
+  },
+  horizon: {
+    file: named("horizon", "png"),
+    terrain: { levels: { 0: ["horizon"], 1: ["horizon"] } },
+  },
   // Optional: what street photos say about each building's facade
   // (lib/city/facade-reading.ts; Mapillary, CC BY-SA 4.0): the clay's
   // relief, tone and shop plinth. Without it the facades are as before.
@@ -195,11 +236,24 @@ const ARTIFACTS = {
   // Optional: the road markings (pipeline/bake/markings.py) — the index
   // raster (rows, lane bits, centre offset) and the table of crossings
   // and stop lines; without them the roads stay unpainted.
-  markings: { file: named("markings", "png") },
+  markings: {
+    file: named("markings", "png"),
+    terrain: { levels: { 0: ["markings"] }, with: ["markingsTable"] },
+  },
   // The same at 1024² for phones (`lowRasters`): 4 MiB of GPU memory
   // instead of 16, the table's rows still resolved (a wider core).
-  markingsLow: { file: named("markings_low", "png") },
-  markingsTable: { file: named("markings", "json"), osm: true },
+  markingsLow: {
+    file: named("markings_low", "png"),
+    terrain: {
+      levels: { 0: ["markingsLow"] },
+      with: ["markings", "markingsTable"],
+    },
+  },
+  markingsTable: {
+    file: named("markings", "json"),
+    osm: true,
+    terrain: { levels: { 0: ["markingsTable"] }, with: ["markings"] },
+  },
   // Optional: allotment colonies, orchards and vineyards
   // (pipeline/bake/cultivated.py) — the features (orchard trees, vine
   // rows) and the colony raster the ground paints beds on.
@@ -208,7 +262,19 @@ const ARTIFACTS = {
     dressing: true,
     osm: true,
   },
-  cultivatedRaster: { file: named("cultivated", "png") },
+  // (named `cultivated` in the extras: the GeoJSON owns the kind's name;
+  // written only with its crop, prepare-data's `colonyCrops`)
+  cultivatedRaster: {
+    file: named("cultivated", "png"),
+    terrain: { levels: { 0: ["cultivated"] } },
+  },
+  // Its half-resolution twin for phones, cropped with it by prepare-data
+  // (`publishColonies`): no committed source.
+  cultivatedLow: {
+    file: (tile) => `cultivated_${tile}.r1024.png`,
+    built: true,
+    terrain: { levels: { 0: ["cultivatedLow"] }, with: ["cultivatedRaster"] },
+  },
   lamps: { file: named("lamps", "geojson"), dressing: true, osm: true },
   // Basis-DLM monuments, plus the OSM fountain basins where the tile has
   // them: the bake credits OSM only then, so the row is not `osm`.
@@ -292,6 +358,17 @@ export const ASK_KINDS: readonly AskKind[] = kindsWith("ask");
 /** Side files derived from OSM (their JSON must carry the ODbL credit). */
 export const OSM_KINDS: readonly TileArtifactKind[] = kindsWith("osm");
 
+/** The rows named in the terrain extras (their `terrain` column), in the
+ *  table's order. */
+export const TERRAIN_RASTER_KINDS: readonly ({
+  kind: TileArtifactKind;
+} & TerrainNaming)[] = (Object.keys(ARTIFACTS) as TileArtifactKind[]).flatMap(
+  (kind) => {
+    const naming = (ARTIFACTS[kind] as ArtifactSpec).terrain;
+    return naming ? [{ kind, ...naming }] : [];
+  }
+);
+
 /** The files of `kinds` a tile has, by kind (absent ones left out: an absent
  *  file is a feature off, never a request that can only 404). */
 export function pickFiles<K extends TileArtifactKind>(
@@ -324,6 +401,7 @@ export function tileArtifacts(
       file: spec.file(tile),
       required: spec.required === true,
       ...(spec.built ? { built: true as const } : {}),
+      ...(spec.terrain ? { terrain: spec.terrain } : {}),
       ...(spec.bakedFrom
         ? {
             bakedFrom: {

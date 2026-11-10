@@ -63,6 +63,16 @@ test("a tile's directory: named, addressed, listed and landmark Buildings", () =
           properties: { name: "Brunnen", kind: "fountain" },
         },
         {
+          geometry: { type: "Point", coordinates: [30, 40] },
+          properties: {
+            name: "Reiter",
+            kind: "statue",
+            material: "Bronze",
+            materialWikidata: "Q2",
+            wikidata: "Q3",
+          },
+        },
+        {
           geometry: { type: "Point", coordinates: [11, 21] },
           properties: { kind: "stone" },
         },
@@ -98,6 +108,16 @@ test("a tile's directory: named, addressed, listed and landmark Buildings", () =
   ]);
   expect(tile.monuments).toEqual([
     { id: "m10_21", name: "Brunnen", kind: "fountain", x: 10.4, y: 20.6 },
+    {
+      id: "m30_40",
+      name: "Reiter",
+      kind: "statue",
+      material: "Bronze",
+      materialWd: "Q2",
+      wd: "Q3",
+      x: 30,
+      y: 40,
+    },
   ]);
 });
 
@@ -165,8 +185,11 @@ test("the index lists each landmark once, most notable first, with its facts", (
 });
 
 const plaque = (name: string) => ({
-  geometry: { type: "Point", coordinates: [411_000.2, 5_656_000.4] },
-  properties: { name, kind: "stone" },
+  geometry: {
+    type: "Point" as const,
+    coordinates: [411_000.2, 5_656_000.4] as [number, number],
+  },
+  properties: { name, kind: "stone" as const },
 });
 
 const ids = (names: string[]) =>
@@ -175,7 +198,7 @@ const ids = (names: string[]) =>
 test("monuments in one metre keep their ids by name, whatever the order", () => {
   const square = {
     geometry: {
-      type: "Polygon",
+      type: "Polygon" as const,
       // closed on its first corner: the centre, not pulled towards it
       coordinates: [
         [
@@ -185,9 +208,9 @@ test("monuments in one metre keep their ids by name, whatever the order", () => 
           [0, 10],
           [0, 0],
         ],
-      ],
+      ] as [number, number][][],
     },
-    properties: { name: "Sockel", kind: "column" },
+    properties: { name: "Sockel", kind: "column" as const },
   };
   expect(ids(["Bach", "Arndt"])).toEqual([
     ["m411000_5656000", "Arndt"],

@@ -11,14 +11,15 @@ import {
   pageStillOpen,
   previousTrail,
 } from "./crash-trail";
-import { recentlyRecovered } from "./gpu-recovery";
+import { pageRecovery } from "./gpu-recovery";
 import { useOnce } from "./use-once";
 
 /**
  * The previous page's crash trail (crash-trail.ts), offered as text to
  * copy: shown when that page died while in use — unless it reloaded itself
  * to recover a lost GPU, or this page follows a recovery and the record
- * holds nothing but its start (offerAsCrash, gpu-recovery.ts) — or always with
+ * holds nothing but its start (offerAsCrash, gpu-recovery.ts
+ * `followsRecovery`) — or always with
  * `?trail=1`; and not a page still open in another tab, whose record only
  * looks ended (crash-trail.ts `pageStillOpen`). Where the build reports
  * crashes (crash-reports.ts), the card says the report already went out.
@@ -38,7 +39,7 @@ function initialOffer(): Offer | null {
   if (!previous) {
     return null;
   }
-  const crashed = offerAsCrash(previous, recentlyRecovered());
+  const crashed = offerAsCrash(previous, pageRecovery().followsRecovery());
   const always = new URLSearchParams(location.search).get("trail") === "1";
   return always || crashed ? { trail: previous, crashed, always } : null;
 }

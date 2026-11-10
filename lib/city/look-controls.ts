@@ -41,15 +41,13 @@ export interface LookControlDef {
 /**
  * Every look value the scene renders with, as the scene consumes it: the
  * table rows as 0..1 floats (percent is only how the HUD and the snapshot
- * show them), the two controls that are not percent sliders, and one flag
+ * show them), the picture style (not a percent slider), and one flag
  * per data layer (data-layers.ts). The look's other terms have no control:
  * each is a named constant in its owner, fixed at what its slider stood at
  * by default (ADR 0018).
  */
 export interface LookValues
   extends Record<LookKey, number>, Record<DataLayerKey, boolean> {
-  /** rich multi-tuft crown near the camera (LOD); off = cheap crown everywhere */
-  multiTuft: boolean;
   /** the picture style (render-style.ts): pastel, comic, film noir, Sin City, Papier */
   style: RenderStyle;
 }
@@ -108,15 +106,17 @@ export const RETIRED_SNAPSHOT_KEYS: readonly string[] = [
   "reflectionPct",
   "grainPct",
   "inkPct",
+  // 2026-11-06: the near crowns' switch (the multi-tuft crown is always
+  // allowed, within the rich budget)
+  "multiTuft",
 ];
 
-/** What the scene boots with: each row's `initial` plus the two flags,
+/** What the scene boots with: each row's `initial` plus the style,
  *  every data layer off. */
 export const LOOK_DEFAULTS: Readonly<LookValues> = Object.freeze<LookValues>({
   ...(Object.fromEntries(
     LOOK_CONTROLS.map((def) => [def.key, def.initial])
   ) as Record<LookKey, number>),
-  multiTuft: true,
   style: DEFAULT_RENDER_STYLE,
   ...DATA_LAYER_DEFAULTS,
 });

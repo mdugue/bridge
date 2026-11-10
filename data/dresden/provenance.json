@@ -133,8 +133,8 @@
       "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/DtPWngtLEJP8K3k/basisdlm_sn_shape.zip",
       "downloadPage": "https://www.geodaten.sachsen.de/downloadbereich-basis-dlm-4168.html",
       "schema": "AAA-Anwendungsschema 7.1.2 (since 2025); Grundaktualisierung every 3–5 years, Spitzenaktualisierung of priority objects every 3, 6 or 12 months",
-      "editionInUse": "every derived file: the package released 2026-10-20 (basisdlm_akt.csv and the inner package dated 2026-10-20), downloaded and baked 2026-11-01",
-      "lastModified": "2026-10-20"
+      "editionInUse": "every derived file: the package released 2026-11-04 (basisdlm_akt.csv and the inner package dated 2026-11-04), downloaded and baked 2026-11-05 (the 2026-10-20 package before)",
+      "lastModified": "2026-11-04"
     }
   },
   "dresden": {

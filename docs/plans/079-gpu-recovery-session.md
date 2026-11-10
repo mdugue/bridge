@@ -1,6 +1,6 @@
 # Plan 079: A page that lost its GPU comes back where it stood, through one recovery session
 
-**Status:** TODO
+**Status:** BUILT (2026-11-04) — steps 1–6; device checks open, see the README row
 
 > **Executor instructions.** Read the whole plan first. Run each step's
 > check before the next step. If a STOP condition occurs, stop and report;

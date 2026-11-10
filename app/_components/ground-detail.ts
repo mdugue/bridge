@@ -10,7 +10,6 @@ import {
   float,
   floor,
   fract,
-  Fn,
   If,
   int,
   ivec2,
@@ -25,8 +24,6 @@ import {
   smoothstep,
   step,
   texture,
-  textureLoad,
-  textureSize,
   vec2,
   vec3,
   vec4,
@@ -51,7 +48,16 @@ import {
 import type { SurfaceKind } from "@/lib/city/landcover";
 import { KERB_HEIGHT } from "@/lib/city/kerbs";
 import { LANE_BITS } from "@/lib/city/markings";
-import type { F, I, Tex, V2, V3, V4 } from "./shader-chunks";
+import {
+  byteOf,
+  floorMod,
+  gdBand,
+  gdHash,
+  gdNoise,
+  texelAt,
+  texelSize,
+} from "./shader-chunks";
+import type { F, I, I2, Tex, V2, V3, V4 } from "./shader-chunks";
 
 /**
  * Ground detail in the terrain's colour node, next to the meadow mottle
@@ -102,7 +108,6 @@ import type { F, I, Tex, V2, V3, V4 } from "./shader-chunks";
  * branch would otherwise be assigned there only.
  */
 
-type I2 = Node<"ivec2">;
 type B = Node<"bool">;
 
 /**
@@ -223,97 +228,6 @@ const id = (kind: SurfaceKind) => surfaceId(kind);
 // bays 2.5 and 5.5 m, slabs 0.5, sett 0.15, concrete plates 5.5, grass
 // pavers 0.55 — so the wrap of the baked coordinate never shows.
 const ALONG_PERIOD = SURFACE_ALONG_PERIOD;
-
-// --- shared helpers (the sport, marking and colony chunks use them too) -------
-
-/** GLSL's `mod`: floored, so negative values wrap like the bake's. */
-export const floorMod = (x: F, y: F | number): F =>
-  x.sub(floor(x.div(y)).mul(y));
-
-/** A raster's size in texels (level 0). */
-export const texelSize = (t: Tex, uv: V2): I2 =>
-  // reason: TextureSizeNode is typed as a bare Node; it is a uvec2.
-  ivec2(textureSize(texture(t, uv), int(0)) as unknown as Node<"uvec2">);
-
-// reason: TSL's clamp runs on integer vectors (WGSL clamp on vec2<i32>),
-// but its typings only cover float ones.
-const clampI2 = clamp as unknown as (x: I2, lo: I2, hi: I2) => I2;
-
-/** The texel at `p`, clamped into the raster (`size` from `texelSize`). */
-export const texelAt = (t: Tex, p: I2, size: I2): V4 =>
-  textureLoad(t, clampI2(p, ivec2(0, 0), size.sub(ivec2(1, 1))));
-
-/** The texel at `p` of a table texture (the row lookups: always inside). */
-export const loadTexel = (t: Tex, p: I2): V4 => textureLoad(t, p);
-
-/** A byte of a UNORM8 channel as a float 0..255 (rounded). */
-export const byteOf = (v: F): F => floor(v.mul(255).add(0.5));
-
-// The helpers every chunk calls many times are shader functions (a layout
-// each), not inlined node trees: inlined, the ~100 hash calls of the ground,
-// garden and pitch terms blew the fragment shader up several times over.
-
-/** Hash without sin (stable at large coordinates), Dave Hoskins' hash12. */
-export const gdHash = Fn(
-  ([p]: [V2]): F => {
-    const a = fract(vec3(p.x, p.y, p.x).mul(0.1031)).toVar();
-    a.addAssign(dot(a, a.yzx.add(33.33)));
-    return fract(a.x.add(a.y).mul(a.z));
-  },
-  { p: "vec2", return: "float" }
-);
-
-/** Value noise on the hash. */
-export const gdNoise = Fn(
-  ([p]: [V2]): F => {
-    const i = floor(p).toVar();
-    const f0 = fract(p).toVar();
-    const f = f0
-      .mul(f0)
-      .mul(vec2(3).sub(f0.mul(2)))
-      .toVar();
-    return mix(
-      mix(gdHash(i), gdHash(i.add(vec2(1, 0))), f.x),
-      mix(gdHash(i.add(vec2(0, 1))), gdHash(i.add(vec2(1, 1))), f.x),
-      f.y
-    );
-  },
-  { p: "vec2", return: "float" }
-);
-
-/** `gdNoise`'s gradient at `p` (per unit of `p`), analytic: its four
- *  corner hashes once, not a noise read per difference. */
-export const gdNoiseSlope = Fn(
-  ([p]: [V2]): V2 => {
-    const i = floor(p).toVar();
-    const f0 = fract(p).toVar();
-    const u = f0
-      .mul(f0)
-      .mul(vec2(3).sub(f0.mul(2)))
-      .toVar();
-    const du = f0.mul(float(1).sub(f0)).mul(6);
-    const a = gdHash(i).toVar();
-    const b = gdHash(i.add(vec2(1, 0)))
-      .sub(a)
-      .toVar();
-    const c = gdHash(i.add(vec2(0, 1)))
-      .sub(a)
-      .toVar();
-    const d = gdHash(i.add(vec2(1, 1)))
-      .sub(a)
-      .sub(b)
-      .sub(c);
-    return du.mul(vec2(b.add(d.mul(u.y)), c.add(d.mul(u.x))));
-  },
-  { p: "vec2", return: "vec2" }
-);
-
-/** 1 inside [a, b] (m), anti-aliased over w on either edge. */
-export const gdBand = Fn(
-  ([d, a, b, w]: [F, F, F, F]): F =>
-    smoothstep(a.sub(w), a.add(w), d).sub(smoothstep(b.sub(w), b.add(w), d)),
-  { d: "float", a: "float", b: "float", w: "float", return: "float" }
-);
 
 // --- ground-detail private helpers ---------------------------------------------
 
