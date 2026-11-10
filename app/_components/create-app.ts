@@ -191,7 +191,7 @@ import {
   updatePocDebug,
 } from "./poc-debug";
 import { createPostStack } from "./post-stack";
-import type { PostStack } from "./post-stack";
+import type { FocusInfo, PostStack } from "./post-stack";
 import { createNameplate } from "./nameplate-layer";
 import {
   cityHides,
@@ -706,12 +706,7 @@ export interface CityWalkHandle {
    */
   getGpuDebug: () => GpuDebug;
   /** Live DoF focus state + last crosshair raycast hit (QA/diagnostics). */
-  getFocusDebug: () => {
-    capPx: number;
-    fade: number;
-    settled: boolean;
-    focusDistance: number;
-    horizonBlurPx: number;
+  getFocusDebug: () => FocusInfo & {
     hitDist: number | null;
     hitName: string | null;
   };
@@ -3965,7 +3960,9 @@ async function bootApp(
     if (modelRig.owns()) {
       applyFog();
     }
-    updateRegression(dt);
+    // on the lens's clock: a paced frame brings it back as soon as it
+    // grows it in
+    updateRegression(Math.min(frameDt, LENS_STEP_MAX_MS / 1000));
     // What to stream, from where the cameras look now.
     const view = activeCamera();
     view.updateMatrixWorld();

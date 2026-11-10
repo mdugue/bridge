@@ -16,14 +16,20 @@ const slabOf = (item: AskItem<FeatureInquiry>): Slab | null => {
 };
 
 /** Where a ray meets a deck before its BVH: down onto its top, else (a
- *  ray level with it or from below) into the deck's own band, if ahead. */
+ *  ray level with it or from below) into the deck itself — under its top,
+ *  not the band the probe tolerates over it — if ahead. */
 const roughDeck = (o: Xyz, d: Xyz, slab: Slab, far: number): number | null => {
   const top = rayDeckTop(o, d, slab, far);
   if (top !== null) {
     return top;
   }
   const at = raySlab(o, d, slab);
-  return at !== null && at > 0 && at <= far ? at : null;
+  if (at === null || at <= 0 || at > far) {
+    return null;
+  }
+  const x = o.x + at * d.x;
+  const z = o.z + at * d.z;
+  return o.y + at * d.y <= slab.topAt(x, z) ? at : null;
 };
 
 /** One ray for every bridge set: a question runs to its end before the

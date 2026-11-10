@@ -143,6 +143,10 @@ const crownOf = (t: FeatureInquiry): "cone" | "ellipsoid" =>
     ? "cone"
     : "ellipsoid";
 
+/** The cylinders a packed tree is read into for a ray (never handed out). */
+const scratchTrunk: Cylinder = { x: 0, z: 0, y0: 0, y1: 0, r: TRUNK_R };
+const scratchCrown: Cylinder = { x: 0, z: 0, y0: 0, y1: 0, r: 0 };
+
 /**
  * One cell's packed trees as a set. Its own function, so the closure holds
  * only what it reads — not the build's scope (the parsed features).
@@ -161,11 +165,22 @@ function packedTreeSet(
       { x, z, y0: yb, y1: yt, r },
     ];
   };
+  // read into the two scratch cylinders: the autofocus asks ten times a
+  // second, through every tree of the cells its ray enters
   const distance = (o: Xyz, d: Xyz, k: number): number => {
-    const [trunk, crown] = cylinders(k);
+    const at = k * TREE_STRIDE;
+    scratchTrunk.x = solids[at];
+    scratchTrunk.z = solids[at + 1];
+    scratchTrunk.y0 = solids[at + 2];
+    scratchTrunk.y1 = solids[at + 3];
+    scratchCrown.x = scratchTrunk.x;
+    scratchCrown.z = scratchTrunk.z;
+    scratchCrown.y0 = scratchTrunk.y1;
+    scratchCrown.y1 = solids[at + 4];
+    scratchCrown.r = solids[at + 5];
     return Math.min(
-      rayCylinder(o, d, trunk) ?? Number.POSITIVE_INFINITY,
-      rayCylinder(o, d, crown) ?? Number.POSITIVE_INFINITY
+      rayCylinder(o, d, scratchTrunk) ?? Number.POSITIVE_INFINITY,
+      rayCylinder(o, d, scratchCrown) ?? Number.POSITIVE_INFINITY
     );
   };
   const hit = (k: number, t: number): AskHit<FeatureInquiry> => {
@@ -193,11 +208,7 @@ function packedTreeSet(
       let best = -1;
       let reach = far;
       for (let k = 0; k < index.length; k += 1) {
-        const [trunk, crown] = cylinders(k);
-        const t = Math.min(
-          rayCylinder(o, d, trunk) ?? Number.POSITIVE_INFINITY,
-          rayCylinder(o, d, crown) ?? Number.POSITIVE_INFINITY
-        );
+        const t = distance(o, d, k);
         if (t <= reach) {
           reach = t;
           best = k;

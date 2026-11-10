@@ -150,10 +150,12 @@ export function stepLens(
   aimM: number,
   stepMs: number
 ): number {
+  // the first step back snaps however long it is (a slow frame)
+  const back = state.shownMs === 0;
   state.shownMs = drawn ? state.shownMs + Math.max(stepMs, 0) : 0;
   const fade = lensFadeIn(state.shownMs);
   state.focusM =
-    state.shownMs <= FOCUS_SNAP_MS
+    back || state.shownMs <= FOCUS_SNAP_MS
       ? aimM
       : pullFocus(state.focusM, aimM, stepMs);
   return fade;
