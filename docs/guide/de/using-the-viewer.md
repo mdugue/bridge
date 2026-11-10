@@ -559,18 +559,25 @@ Code und Wissensbasis für sie verwenden:
 
 Drei weitere Effekte gehören zum festen Look. Der Nebel über dem Fluss
 treibt erst ab etwa 120 m vor dir über dem Wasser, dichter erst in der
-Ferne.
-Die fotografische Tiefenschärfe macht nur unscharf, was hinter dem Fokus
-liegt (der Vordergrund bleibt scharf), und scharf ist immer, was in der
-Bildmitte liegt. Solange sich die Kamera bewegt, ist die Unschärfe
-abgeschaltet (das Auge kann sie in Bewegung nicht auflösen) und kommt
-zurück, sobald du stehst. Telefone zeichnen ohne sie: Die Unschärfe
-braucht mehr Grafikspeicher, als ein Telefon für einen Hauch erübrigen
-kann, den ein kleiner Bildschirm kaum zeigt. Und solange du im
-Pastell-Look gehst, dich drehst oder fliegst, verwischt das Bild leicht
-entlang der Kamerabewegung, wie bei einer Kamera mit kurzer Belichtung;
-auch auf Telefonen, ohne zusätzlichen Speicher. Die anderen Bildstile
-und das Modell behalten ihre scharfen Linien.
+Ferne. Die fotografische Tiefenschärfe macht unscharf, was hinter dem Fokus
+liegt und was davor steht (ein Baum am Bildrand, eine Laterne gleich vor
+dir, die Straße zu deinen Füßen), wie bei einer echten Linse, und scharf ist
+immer, was in der Bildmitte liegt, ein Baum ebenso wie eine Fassade. Sie ist
+so stark wie bei einer echten Kamera mit diesem Bildwinkel und der Öffnung
+eines 50-mm-Objektivs bei Blende 1,8: Liegt der Fokus auf einer Fassade die
+Straße hinunter, bleibt die Stadt dahinter fast scharf, ein Baum wenige
+Schritte vor dir aber wird weich; liegt er auf einer Laterne gleich vor dir,
+wird der Hintergrund weich. Liegt in der Bildmitte nichts (der Himmel),
+stellt das Objektiv auf die Ferne. Solange sich die Kamera bewegt, ist die
+Unschärfe abgeschaltet (das Auge kann sie in Bewegung nicht auflösen); wenn
+du stehst, wächst sie in knapp einer Sekunde wieder herein, wie wenn ein
+Objektiv scharfstellt. Telefone zeichnen ohne sie: Die Unschärfe braucht
+mehr Grafikspeicher, als ein Telefon für einen Hauch erübrigen kann, den ein
+kleiner Bildschirm kaum zeigt. Und solange du im Pastell-Look gehst, dich
+drehst oder fliegst, verwischt das Bild leicht entlang der Kamerabewegung,
+wie bei einer Kamera mit kurzer Belichtung; auch auf Telefonen, ohne
+zusätzlichen Speicher. Die anderen Bildstile und das Modell behalten ihre
+scharfen Linien.
 
 ### Erweitert
 

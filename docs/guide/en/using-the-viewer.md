@@ -524,17 +524,24 @@ knowledge base use for them:
 | | *Papierkorn* | the paper grain over the whole image (running film grain in *Film noir* and *Sin City*) |
 | | *Tuschelinien* | how strong the outlines are in *Comic*, *Film noir*, *Sin City*, *Papier* and *Strich* |
 
-Three more effects belong to the fixed look. The mist over the river
-drifts over the water from about 120 m ahead, denser only far off. The photographic
-depth of field blurs only what lies behind the focus (the foreground stays
-sharp), and the focus is always what lies at the centre of the view. While
-the camera moves, the blur is switched off (the eye cannot resolve it in
-motion) and comes back when you stop. Phones draw without it: the blur
-needs more graphics memory than a phone can spare for a hint a small
-screen barely shows. And while you walk, turn or fly in the pastel look,
-the picture is smeared slightly along the camera's movement, as a camera
-with a short exposure would show it; on phones too, at no extra memory.
-The other picture styles and Modell keep their sharp lines.
+Three more effects belong to the fixed look. The mist over the river drifts
+over the water from about 120 m ahead, denser only far off. The photographic
+depth of field blurs what lies behind the focus and what stands before it (a
+tree at the edge of the view, a lamp close by, the street at your feet), as
+a real lens does, and the focus is always what lies at the centre of the
+view, a tree as much as a facade. It blurs as much as a real camera with
+this view's angle and the opening of a 50 mm lens at f/1.8 would: focused on
+a facade down the street, the city behind it stays all but sharp while a
+tree a few steps away goes soft; focused on a lamp post close by, the
+background goes soft. When nothing lies at the centre (the sky), the lens
+focuses far. While the camera moves, the blur is switched off (the eye
+cannot resolve it in motion); when you stop, it grows back in over most of a
+second, as a lens pulls focus. Phones draw without it: the blur needs more
+graphics memory than a phone can spare for a hint a small screen barely
+shows. And while you walk, turn or fly in the pastel look, the picture is
+smeared slightly along the camera's movement, as a camera with a short
+exposure would show it; on phones too, at no extra memory. The other picture
+styles and Modell keep their sharp lines.
 
 ### Erweitert ("Advanced")
 
