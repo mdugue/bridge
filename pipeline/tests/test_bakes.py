@@ -210,6 +210,8 @@ def test_a_flagpole_stands_with_its_height_and_the_flag_the_map_names():
     assert _props("flag", '"country"=>"EU;DE"')["c"] == "eu"
     # the flag's own name wins over the country it stands in
     assert _props("flag", '"flag:name"=>"Sachsen","country"=>"DE"')["c"] == "sn"
+    # a flag the viewer does not draw is not its country's
+    assert "c" not in _props("flag", '"flag:name"=>"Dresden","country"=>"DE"')
     # a firm's flag: its colours are not mapped
     assert _props("flag", '"flag:type"=>"advertising","flag:name"=>"Netto"') == {"k": "flag"}
 
@@ -220,11 +222,15 @@ def test_a_flagpole_on_a_building_outline_counts_as_on_its_roof():
     from bake.furniture import Facades
 
     facades = Facades.__new__(Facades)
-    facades.areas = [shapely.box(0, 0, 10, 10)]
+    facades.areas = [shapely.box(0, 0, 10, 10), shapely.box(20, 0, 30, 10)]
+    # the second is a petrol station's canopy (`building=roof`)
+    facades.roofs = facades.areas[:1]
     assert facades.inside(shapely.Point(5, 5))
     # a node of the building's way: on its line
     assert facades.inside(shapely.Point(10, 10))
     assert not facades.inside(shapely.Point(12, 5))
+    # under a canopy: on the ground
+    assert not facades.inside(shapely.Point(25, 5))
 
 
 def test_furniture_indoors_or_underground_is_hidden():

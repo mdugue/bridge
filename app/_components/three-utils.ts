@@ -242,13 +242,17 @@ export function disposeObject3D(root: Object3D): unknown[] {
  * estimate for the memory HUD and the tile cache's weighing of a dressing
  * (three's own counters see only what it uploaded, and count a buffer once
  * per view of it). From the buffers' counts: a buffer whose CPU copy was
- * dropped (`dropCpuCopies`) weighs what it did.
+ * dropped (`dropCpuCopies`) weighs what it did. `own`: only what freeing
+ * `root` frees — not the buffers the scene shares (`markSceneShared`).
  */
-export function estimateGeometryBytes(root: Object3D): number {
+export function estimateGeometryBytes(root: Object3D, own = false): number {
   const seen = new Set<object>();
   let bytes = 0;
   for (const geometry of geometriesUnder(root)) {
     for (const attribute of attributesOf(geometry)) {
+      if (own && isSceneShared(attribute)) {
+        continue;
+      }
       const buffer = bufferOf(attribute);
       // the array tells two attributes over one array apart; a dropped
       // one is its own

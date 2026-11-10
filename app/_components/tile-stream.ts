@@ -1506,9 +1506,11 @@ export function dressingPart(site: DressingSite): LatePart<TileDressing> {
     hangAt: "wait",
     build: site.build,
     objects: (d) => compileRepresentatives(dressingParts(d)),
+    // what evicting the tile frees: not the site's shared buffers (the
+    // flags' cloths)
     bytes: (d) =>
       dressingParts(d).reduce(
-        (sum, part) => sum + estimateGeometryBytes(part),
+        (sum, part) => sum + estimateGeometryBytes(part, true),
         0
       ),
     hang: (d, self) => {

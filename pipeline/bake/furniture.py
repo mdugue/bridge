@@ -50,9 +50,11 @@ A flagpole (`man_made=flagpole`, `k: flag`) stands where it is mapped, at
 its tagged `height` (`h`, clamped to FLAG_H) and, where `flag:name`,
 `subject`, `country` or their Wikidata name a flag in FLAG_DESIGNS (the
 flag's own name first: `flag:name=Sachsen` on `country=DE` flies Saxony's),
-flying that flag (`c`); every other flag — most are a shop's or a firm's —
-flies a pale cloth. One mapped inside a building outline or on its line
-stands on its roof and is left out (2 of Dresden's 368), and so is one
+flying that flag (`c`); every other flag — most are a shop's or a firm's,
+or a city's (`flag:name=Dresden` on `country=DE` is no German flag) — flies
+a pale cloth. One mapped inside a building outline or on its line (but a
+canopy's, a carport's or a stadium's) stands on its roof and is left out
+(2 of Dresden's 368), and so is one
 tagged on a roof (`support`/`location=roof`) or on a facade
 (`support=wall_mounted`): none of the latter is mapped in the seven sites yet.
 
@@ -197,8 +199,11 @@ FLAG_DESIGNS = {
     "by": ("bayern", "bavaria", "freistaat bayern", "q980"),
     "hh": ("hamburg", "freie und hansestadt hamburg", "q1055"),
 }
-# The keys that name a flag, the flag's own first.
-FLAG_KEYS = ("flag:name", "flag:wikidata", "subject", "subject:wikidata", "country")
+# The keys that name a flag, in groups, the flag's own first: the first
+# group the map fills decides (a name the viewer does not draw: a pale cloth).
+FLAG_KEYS = (("flag:name", "flag:wikidata"), ("subject", "subject:wikidata"), ("country",))
+# Building outlines over open ground: a flagpole in one stands on the ground.
+OPEN_BUILDINGS = {"roof", "carport", "stadium"}
 DESIGN_OF = {name: design for design, names in FLAG_DESIGNS.items() for name in names}
 # OSM `playground=*` → the equipment model the viewer stands (others dropped).
 EQUIPMENT = {
@@ -339,14 +344,17 @@ def flag(other: str | None) -> dict:
     h = osm_metres(tag(other, "height"))
     if h is not None:
         props["h"] = round(min(max(h, FLAG_H[0]), FLAG_H[1]), 1)
-    # the key that names the flag itself first, then what it stands for; in
-    # a `;` list the first one the viewer draws
-    for key in FLAG_KEYS:
-        for name in (tag(other, key) or "").split(";"):
-            design = DESIGN_OF.get(name.strip().lower())
-            if design is not None:
-                props["c"] = design
-                return props
+    # the keys that name the flag itself first, then what it stands for,
+    # then where; in a `;` list the first one the viewer draws
+    for group in FLAG_KEYS:
+        names = [n.strip().lower() for key in group for n in (tag(other, key) or "").split(";")]
+        names = [n for n in names if n]
+        if not names:
+            continue
+        design = next((DESIGN_OF[n] for n in names if n in DESIGN_OF), None)
+        if design is not None:
+            props["c"] = design
+        return props
     return props
 
 
@@ -760,8 +768,16 @@ class Facades:
     mapped inside one stands on its roof, which is not drawn)."""
 
     def __init__(self, tile: Tile) -> None:
-        geoms, _ = read_osm(tile, "multipolygons", "building IS NOT NULL", ["building"])
-        self.areas = [g for g in geoms if g.geom_type in ("Polygon", "MultiPolygon")]
+        geoms, fields = read_osm(tile, "multipolygons", "building IS NOT NULL", ["building"])
+        kept = [
+            (g, kind)
+            for g, kind in zip(geoms, fields["building"], strict=True)
+            if g is not None and g.geom_type in ("Polygon", "MultiPolygon")
+        ]
+        self.areas = [g for g, _ in kept]
+        # a roof over open ground (a canopy, a carport, a stadium's ring):
+        # a mast under or in it stands on the ground
+        self.roofs = [g for g, kind in kept if kind not in OPEN_BUILDINGS]
 
     # each index built on first use: a flag asks only `inner`, a wall clock
     # only `tree`
@@ -775,11 +791,11 @@ class Facades:
 
     @functools.cached_property
     def inner(self) -> shapely.STRtree | None:
-        return shapely.STRtree(self.areas) if self.areas else None
+        return shapely.STRtree(self.roofs) if self.roofs else None
 
     def inside(self, p: shapely.Point) -> bool:
         """Whether p lies inside a building outline or on its line (a node
-        of the building's way)."""
+        of the building's way) — not one over open ground."""
         return self.inner is not None and len(self.inner.query(p, predicate="intersects")) > 0
 
     def hang(self, p: shapely.Point) -> tuple[shapely.Point, float] | None:

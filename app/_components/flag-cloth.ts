@@ -7,9 +7,9 @@
  * normal of its own. The cloth moves, so its shadow is the sheet at rest
  * (`castShadowPositionNode`, ADR 0009): the shadow map never redraws for
  * the wave, and at 1.2 × 2 m the still shadow under a rippling cloth does
- * not show. Far off the ripple fades
- * out, as the crowns' sway does (a sub-pixel wave only shimmers), and a
- * picture style's sway share stills it.
+ * not show. Far off the ripple fades out, as the crowns' sway does (a
+ * sub-pixel wave only shimmers, `swayNear`), and a picture style's sway
+ * share stills it.
  *
  * A flag the map names (`FlagDesign`) wears its colours in the scene's
  * pastels — horizontal bands, no emblem (the stars of Europe, Hamburg's
@@ -29,17 +29,15 @@ import {
   Vector3,
 } from "three/webgpu";
 import {
-  cameraPosition,
   cos,
-  distance,
   float,
   fract,
   modelWorldMatrix,
   max,
-  mod,
   positionGeometry,
   sin,
-  smoothstep,
+  step,
+  uniform,
   varying,
   vec3,
   vec4,
@@ -48,7 +46,7 @@ import type { FlagDesign } from "@/lib/city/features";
 import { FLAG_CLOTH_H, FLAG_CLOTH_L } from "@/lib/city/furniture";
 import { Instances, instanceMatrix, instancePosition } from "./instancing";
 import { markSceneShared, markThinCaster, sceneMaterial } from "./three-utils";
-import { crownSwayShare, windClock } from "./vegetation-layer";
+import { swayNear } from "./vegetation-layer";
 
 /** The cloth's size (m, lib/city/furniture.ts); its top hangs this far
  *  under the mast's top. */
@@ -65,14 +63,12 @@ const HOIST = 0.06;
 const COLUMNS = 10;
 const ROWS = 6;
 
-/** The wave: its amplitude at the fly end (m), its length along the cloth
- *  (m) and how fast it runs (radians a second). */
+/** The wave: its amplitude at the fly end (m), its wavenumber along the
+ *  cloth (radians a metre: a 1.85 m wave) and how fast it runs (radians a
+ *  second). */
 const WAVE_AMP = 0.22;
 const WAVE_K = 3.4;
 const WAVE_SPEED = 4.2;
-/** Within this distance (m) the cloth ripples fully, past WAVE_FAR_M not at all. */
-const WAVE_NEAR_M = 120;
-const WAVE_FAR_M = 260;
 /** How dark a fold turned from the eye goes at the wave's steepest. */
 const FOLD_SHADE = 0.22;
 const TURN = Math.PI * 2;
@@ -98,59 +94,71 @@ export const CLOTH_BANDS: Record<FlagDesign | "plain", readonly number[]> = {
 
 /** The cloth of one design and the ball on the mast's top, in a frame
  *  whose origin is the mast's top (so neither stretches with the mast):
- *  the sheet's hoist at the mast, its fly end along local +X;
- *  non-indexed, a colour per band. */
+ *  the sheet's hoist at the mast, its fly end along local +X; indexed,
+ *  each row its own vertices (a colour per band). */
 export function clothGeometry(design: FlagDesign | "plain"): BufferGeometry {
   const bands = CLOTH_BANDS[design];
   const pos: number[] = [];
   const rgb: number[] = [];
   const nrm: number[] = [];
+  const index: number[] = [];
   const c = new Color();
   for (let r = 0; r < ROWS; r += 1) {
     c.setHex(bands[Math.floor((r * bands.length) / ROWS)]);
     const y0 = CLOTH_TOP - (r * CLOTH_H) / ROWS;
     const y1 = CLOTH_TOP - ((r + 1) * CLOTH_H) / ROWS;
+    const first = pos.length / 3;
+    for (let i = 0; i <= COLUMNS; i += 1) {
+      const x = HOIST + (i * (CLOTH_L - HOIST)) / COLUMNS;
+      pos.push(x, y0, 0, x, y1, 0);
+      rgb.push(c.r, c.g, c.b, c.r, c.g, c.b);
+      nrm.push(0, 0, 1, 0, 0, 1);
+    }
     for (let i = 0; i < COLUMNS; i += 1) {
-      const x0 = HOIST + (i * (CLOTH_L - HOIST)) / COLUMNS;
-      const x1 = HOIST + ((i + 1) * (CLOTH_L - HOIST)) / COLUMNS;
-      for (const [x, y] of [
-        [x0, y0],
-        [x0, y1],
-        [x1, y1],
-        [x0, y0],
-        [x1, y1],
-        [x1, y0],
-      ]) {
-        pos.push(x, y, 0);
-        rgb.push(c.r, c.g, c.b);
-        nrm.push(0, 0, 1);
-      }
+      const top0 = first + i * 2;
+      const [bottom0, top1, bottom1] = [top0 + 1, top0 + 2, top0 + 3];
+      index.push(top0, bottom0, bottom1, top0, bottom1, top1);
     }
   }
-  // the ball (at the hoist's x: the wave leaves it still)
-  const ball = new SphereGeometry(BALL_R, 10, 6).toNonIndexed();
+  // the ball (above the cloth's top: the wave leaves it still)
+  const ball = new SphereGeometry(BALL_R, 10, 6);
   ball.translate(0, BALL_Y, 0);
   const bp = ball.getAttribute("position");
   const bn = ball.getAttribute("normal");
+  const first = pos.length / 3;
   c.setHex(BALL);
   for (let i = 0; i < bp.count; i += 1) {
     pos.push(bp.getX(i), bp.getY(i), bp.getZ(i));
     nrm.push(bn.getX(i), bn.getY(i), bn.getZ(i));
     rgb.push(c.r, c.g, c.b);
   }
+  for (const i of ball.index?.array ?? []) {
+    index.push(first + i);
+  }
   ball.dispose();
   const geo = new BufferGeometry();
   geo.setAttribute("position", new Float32BufferAttribute(pos, 3));
   geo.setAttribute("normal", new Float32BufferAttribute(nrm, 3));
   geo.setAttribute("color", new Float32BufferAttribute(rgb, 3));
+  geo.setIndex(index);
   return geo;
+}
+
+/** The wave's clock, wrapped to a turn on the CPU (`setFlagTime`): sin and
+ *  cos stay in their accurate range however long the page is open. */
+const waveClock = uniform(0);
+
+/** Advances every cloth's wave (the scene's elapsed seconds, the crowns'
+ *  wind clock; once per frame). */
+export function setFlagTime(seconds: number): void {
+  waveClock.value = (seconds * WAVE_SPEED) % TURN;
 }
 
 /**
  * The cloth's material: the wave bent on the vertex (along local Z, growing
- * with the distance from the hoist), the per-mast phase from where the
- * mast stands (its matrix's translation: no attribute), and the fold shade
- * from the wave's slope.
+ * from the hoist to the fly end, none on the ball), the per-mast phase from
+ * where the mast stands (its matrix's translation: no attribute), and the
+ * fold shade from the wave's slope.
  */
 function clothMaterial(): MeshStandardNodeMaterial {
   const m = new MeshStandardNodeMaterial({
@@ -160,29 +168,27 @@ function clothMaterial(): MeshStandardNodeMaterial {
     side: DoubleSide,
   });
   const origin = instanceMatrix().mul(vec4(0, 0, 0, 1)).xyz;
-  const at = modelWorldMatrix.mul(vec4(origin, 1)).xyz;
-  const near = float(1)
-    .sub(smoothstep(WAVE_NEAR_M, WAVE_FAR_M, distance(at, cameraPosition)))
-    .mul(crownSwayShare);
-  // the phase and the clock wrapped to a turn, so sin and cos stay in
-  // their accurate range kilometres out and hours on
+  const near = swayNear(origin);
+  // wrapped to a turn, so sin and cos stay accurate kilometres out
   const phase = fract(origin.x.mul(0.059).add(origin.z.mul(0.097))).mul(TURN);
-  const clock = mod(windClock.mul(WAVE_SPEED), TURN);
-  // the geometry's own x: once a positionNode is set, positionLocal is
-  // the moved vertex
-  const u = max(positionGeometry.x, 0).div(CLOTH_L);
-  const arg = positionGeometry.x.mul(WAVE_K).sub(clock).add(phase);
+  // the geometry's own position: once a positionNode is set,
+  // positionLocal is the moved vertex. 0 at the hoist and on the ball
+  // (over the cloth's top), 1 at the fly end
+  const u = max(positionGeometry.x.sub(HOIST), 0)
+    .div(CLOTH_L - HOIST)
+    .mul(step(positionGeometry.y, CLOTH_TOP / 2));
+  const arg = positionGeometry.x.mul(WAVE_K).sub(waveClock).add(phase);
   const wave = sin(arg).mul(u).mul(WAVE_AMP).mul(near);
   m.positionNode = instancePosition(
     vec3(positionGeometry.x, positionGeometry.y, positionGeometry.z.add(wave))
   );
-  // the shadow pass draws the sheet at rest: a still caster; and the
-  // cloth looks its shadow up where it hangs at rest, or the wave, swung
-  // behind that sheet, would fall into its own shadow
-  const rest = instancePosition(positionGeometry);
-  m.castShadowPositionNode = rest;
+  // the shadow pass draws the sheet at rest: a still caster
+  m.castShadowPositionNode = instancePosition(positionGeometry);
+  // and the cloth looks its shadow up where it hangs at rest, or the wave,
+  // swung behind that sheet, would fall into its own shadow (the matrix
+  // alone: `instancePosition` turns the normal, once is enough)
   m.receivedShadowPositionNode = varying(
-    modelWorldMatrix.mul(vec4(rest, 1)).xyz
+    modelWorldMatrix.mul(instanceMatrix().mul(vec4(positionGeometry, 1))).xyz
   );
   // Worked out on the vertex (the instance's matrix is a vertex input) and
   // carried over; the vertex colour multiplies in after (NodeMaterial,

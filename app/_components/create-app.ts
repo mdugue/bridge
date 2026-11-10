@@ -246,6 +246,7 @@ import {
 } from "./stream-timing";
 import { attachInspector, inspectRequested } from "./inspector";
 import { attachTouchControls } from "./touch-controls";
+import { setFlagTime } from "./flag-cloth";
 import { createVegetationLod, setCrownTime } from "./vegetation-layer";
 import type { VegetationControl } from "./vegetation-layer";
 import { createStyleResources, setClaySection } from "./visual-style";
@@ -3302,6 +3303,7 @@ async function bootApp(
     // one wind clock for every crown, the coarse ones standing in on a
     // bare fine level too
     setCrownTime(elapsed);
+    setFlagTime(elapsed);
     if (!crownTiers.due(tick, eye)) {
       return;
     }

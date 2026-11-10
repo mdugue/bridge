@@ -140,6 +140,16 @@ test("estimateGeometryBytes counts each geometry once, index included", () => {
   root.add(new Mesh(geometry, new MeshBasicNodeMaterial()));
   root.add(new Mesh(geometry, new MeshBasicNodeMaterial()));
   expect(estimateGeometryBytes(root)).toBe(expected);
+  // what freeing the root frees leaves out a buffer the scene shares
+  const { index } = geometry;
+  if (!index) {
+    throw new Error("a box has an index");
+  }
+  markSceneShared(index);
+  expect(estimateGeometryBytes(root, true)).toBe(
+    expected - index.array.byteLength
+  );
+  expect(estimateGeometryBytes(root)).toBe(expected);
 });
 
 /** A quantised glTF-like mesh: interleaved positions and normals, an index. */

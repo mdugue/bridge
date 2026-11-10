@@ -509,7 +509,7 @@ const FLAG_BALL = 0.2;
 
 /** How tall a piece is picked: a signal on a mast arm by its mast
  *  (furniture-layer.ts `signalArm`), a flagpole by its tagged height and
- *  the ball on top, the rest by its kind. */
+ *  the ball on top, the rest (an untagged mast too) by its kind. */
 function solidHeight(
   p: NonNullable<FurnitureFeature["properties"]>,
   base: number
@@ -517,7 +517,7 @@ function solidHeight(
   if (p.arm) {
     return 6.2;
   }
-  return p.k === "flag" ? (p.h ?? FLAG_HEIGHT) + FLAG_BALL : base;
+  return p.k === "flag" && p.h !== undefined ? p.h + FLAG_BALL : base;
 }
 
 /** A flag's cloth, picked as a cylinder round its middle (it flies

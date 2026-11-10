@@ -280,28 +280,31 @@ export function furniturePieces(
       );
       continue;
     }
-    if (model === "flag") {
-      pieces.push({
-        ...on,
-        model,
-        x,
-        y,
-        yaw: flagYaw(x, y),
-        design: flagDesign(f),
-        ...scalesOf(model, f),
-      });
-      continue;
-    }
     pieces.push({
       ...on,
       model,
       x,
       y,
-      yaw: faced ? yawOfBearing(a) : scatterYaw(x, y),
+      yaw: pieceYaw(model, x, y, faced ? a : undefined),
+      ...(model === "flag" ? { design: flagDesign(f) } : {}),
       ...scalesOf(model, f),
     });
   }
   return pieces;
+}
+
+/** Where a piece faces: a flag downwind (`flagYaw`), the rest its mapped
+ *  bearing, else a stable scatter. */
+function pieceYaw(
+  model: FurnitureModel,
+  x: number,
+  y: number,
+  bearing: number | undefined
+): number {
+  if (model === "flag") {
+    return flagYaw(x, y);
+  }
+  return bearing === undefined ? scatterYaw(x, y) : yawOfBearing(bearing);
 }
 
 /** A playground or a sandpit drawn as an area: its outline, open. */

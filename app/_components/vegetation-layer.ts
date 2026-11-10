@@ -667,9 +667,6 @@ export interface CrownUniforms {
 /** The crowns' wind clock: one node for every tile's crowns (and a later
  *  app's), advanced once per frame by the render loop (`setCrownTime`). */
 const crownTime = uniform(0);
-/** The same wind clock (s), for what else moves in the wind (the flags,
- *  flag-cloth.ts). */
-export const windClock: Live = crownTime;
 
 /** Advances every crown's wind sway (elapsed seconds; once per frame). */
 export function setCrownTime(seconds: number): void {
@@ -700,6 +697,19 @@ const SWAY_FAR_M = 260;
 export const crownSwayShare = uniform(1);
 
 /**
+ * How much of its sway a thing moving in the wind keeps (0–1): all of it
+ * near the eye, none past SWAY_FAR_M, times the picture style's share.
+ * `origin` is where it stands (local, the instance's translation). The
+ * crowns' and the flags' (flag-cloth.ts) one band.
+ */
+export function swayNear(origin: V3): F {
+  const at = modelWorldMatrix.mul(vec4(origin, 1)).xyz;
+  return float(1)
+    .sub(smoothstep(SWAY_NEAR_M, SWAY_FAR_M, distance(at, cameraPosition)))
+    .mul(crownSwayShare);
+}
+
+/**
  * The wind sway: the crown bent in its own space, before the instance
  * transform — stiff at the base (where it meets the trunk) and loose at the
  * top. The per-tree phase comes from the instance's world column (its
@@ -716,10 +726,7 @@ function crownSway(time: Live, base: V3): { gust: F; local: V3 } {
   // motion, only as the crown's edge and stipple hitting other pixels each
   // frame — a shimmer over the whole distance. It, and the brightness
   // pulse on it, fade out with the tree's distance from the eye.
-  const at = modelWorldMatrix.mul(vec4(instanceColumn(3).xyz, 1)).xyz;
-  const near = float(1)
-    .sub(smoothstep(SWAY_NEAR_M, SWAY_FAR_M, distance(at, cameraPosition)))
-    .mul(crownSwayShare);
+  const near = swayNear(instanceColumn(3).xyz);
   const gust = sin(time.mul(0.38).add(phase))
     .add(sin(time.mul(0.8).add(phase.mul(1.7))).mul(0.5))
     .mul(near);
