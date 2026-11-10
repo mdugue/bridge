@@ -1604,9 +1604,10 @@ async function bootApp(
     sceneNight,
     ground.sunDirection,
     niching,
-    // a phone has no temporal antialiasing: its windows under two pixels
-    // wide hand over to their mean tone, niche or not
-    budget.tier === "mobile"
+    // without temporal antialiasing (scene-profile.ts `PostProfile.taa`)
+    // windows under two pixels wide hand over to their mean tone, niche
+    // or not
+    !postProfileFor(budget.tier).taa
   );
 
   // The HUD lets the heavy dressing start after the handover (startStreaming).

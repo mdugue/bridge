@@ -436,8 +436,7 @@ The full recipe with its rejected alternatives (VSM rings, large
 
 The scene renders **top-level into its own half-float target** with a
 depth texture (`post-stack.ts`), and three's node `RenderPipeline` reads
-colour and depth from it — on a desktop under the pastel look after the
-temporal antialiasing, below —: `GTAO (half resolution, normals from depth) ^
+colour and depth from it: `GTAO (half resolution, normals from depth) ^
 AO_EXPONENT → DepthOfFieldNode (desktop; skipped while moving; in motion
 the camera's motion blur instead, pastel only) → the
 picture style → SMAANode (FXAA on a phone) → depth grading + vignette +
@@ -447,8 +446,9 @@ and a tile's `compileAsync` prepare the very build its frames use (a
 build is keyed by the target's attachments and the kind of camera; up to
 three r186 also by the call depth, which a scene pass nested in the
 pipeline never matched). The target has no MSAA (`antialias: false`); SMAA or FXAA
-carries the anti-aliasing, and on a desktop the **temporal
-antialiasing** before it (`temporal-aa.ts`, pastel only, perspective only,
+carries the anti-aliasing. A **temporal antialiasing** is built but off
+on every tier (`PostProfile.taa`; 2026-11-10: windows smeared in a
+sideways walk and the frame rate dropped on a desktop) (`temporal-aa.ts`, pastel only, perspective only,
 not while an export offsets the view): each frame is drawn a fraction of
 a pixel off the last (Halton 2, 3, eight offsets, `setViewOffset` around
 the scene's render only), and averaged into a history the camera's
@@ -459,9 +459,9 @@ both weighted by 1 / (1 + luma) (a highlight a pixel wide does not
 pulse); the result is copied back over the scene target, so every pass
 after reads it in place. Two half-float history targets (ping-pong, 16
 bytes a pixel). A window a pixel or two wide in a street seen along its
-length no longer crawls as the eye moves sideways. A phone has none: a
-niched house's windows under 2 px wide hand over to their mean tone
-there (`NICHE_PREFILTER_PX`). There is no tone mapping: the look was tuned
+length no longer crawls as the eye moves sideways. Without it a niched
+house's windows under 2 px wide hand over to their mean tone, as every
+other house's do under 6 (`NICHE_PREFILTER_PX`). There is no tone mapping: the look was tuned
 without it. The GTAO sample count is a construction-time setting (16;
 8 on a phone and in the lite profile). 3DTilesRendererJS's fade and overlay plugins patch
 GLSL and stay unused.
@@ -947,7 +947,7 @@ the safety levels 1, 2 and 3:
 | Shadow camera streams at | 128 px, by day; from level 2 never | never | as the tier |
 | Rasters decoding at once (`RASTER_TURNS`) | 5 | 1 | as the tier |
 | Pixel ratio | ≤ 1.5 (1.25, 1.0, 1.0; ≤ 2 until 2026-10-10: a retina laptop's 5.2 MP of post stack, 1.5 is 56 % of it), × 0.85 / 0.72 / 0.6 while the GPU misses 50 fps (`lib/city/resolution-scale.ts`) | ≤ 1.5 (1.25, 1.0, 0.85), × 0.85 / 0.72 while it misses 40 fps | 0.5, never scaled |
-| Post (`postProfileFor`) | DoF, SMAA, temporal antialiasing, only the outline warmed | no DoF, FXAA, no temporal antialiasing, only the outline warmed | as the tier |
+| Post (`postProfileFor`) | DoF, SMAA, only the outline warmed | no DoF, FXAA, only the outline warmed | as the tier |
 | Land-cover rasters | L0 4096², its splat 2048² (85 → 21 MiB with mips, since 2026-10-10), L1 1024² | L0 2048², L1 1024²; no sports raster | as the tier |
 | GTAO samples | 16 | 8 | 8 |
 | Frames behind the sidebar (`lib/city/frame-pace.ts`) | every frame (the panel floats beside the scene) | 12 fps while its sheet covers the scene, none while it scrolls and 250 ms after (the scene shared the GPU with the compositor drawing the scroll, and the scroll lagged the finger); the sheet's backdrop is not blurred | as the tier |

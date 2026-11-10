@@ -137,7 +137,7 @@ test("postProfileFor leaves the costly post work to the desktop", () => {
   expect(desktop).toEqual({
     dof: true,
     antialias: "smaa",
-    taa: true,
+    taa: false,
     warmStyles: "outline-only",
     warmPaper: false,
   });

@@ -349,9 +349,9 @@ export interface PostProfile {
   /**
    * Temporal antialiasing (temporal-aa.ts): a window a pixel wide in a
    * street seen along its length stops crawling as the eye moves. Two
-   * full-resolution half-float targets (≈ 30 MB at 2560×1440): a desktop
-   * only — a phone's windows hand over to their mean tone under two
-   * pixels instead (visual-style.ts `NICHE_PREFILTER_PX`).
+   * full-resolution half-float targets (≈ 30 MB at 2560×1440). Off on
+   * every tier: windows hand over to their mean tone under two pixels
+   * instead (visual-style.ts `NICHE_PREFILTER_PX`).
    */
   taa: boolean;
   /**
@@ -391,7 +391,9 @@ export function postProfileFor(tier: DeviceTier): PostProfile {
     : {
         dof: true,
         antialias: "smaa",
-        taa: true,
+        // off since 2026-11-10: windows smeared in a sideways walk and the
+        // frame rate dropped (Manuel); the windows' prefilter instead
+        taa: false,
         warmStyles: "outline-only",
         warmPaper: false,
       };
