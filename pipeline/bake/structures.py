@@ -195,8 +195,16 @@ RELIEF_MIN_PART_M2 = 6.0
 RELIEF_LANDMARKS = 12
 # How far a relief's heights are smoothed (cells, Gaussian sigma).
 RELIEF_SMOOTH = 1.0
-# A surface-model cell this far below the LoD2 roof under it is a void.
+# A surface-model cell this far below the LoD2 roof under it is a void,
+# filled when its void (connected) is a hole in the roof: no larger than
+# VOID_HOLE_M2, or shut in by the roof and spanning no more than
+# VOID_SHARE of it.
 VOID_M = 1.0
+VOID_HOLE_M2 = 25.0
+VOID_SHARE = 0.5
+# ... and a larger one's scan reaches down this near the ground (it saw the
+# floor through it, not a lower roof)
+VOID_GROUND_M = 3.0
 # How far a relief's walls sink into the roof they stand on (m).
 FLOOR_SINK_M = 0.3
 
@@ -480,7 +488,8 @@ def shaped_roof(
     if roofs.miss_share(model.heights(), dom, known & (model.lab > 0)) > roofs.KEEP_SHARE:
         return None
     parts = []
-    for poly, top, rid in roofs.region_polygons(model.lab, model.level, grid, geom):
+    miss = roofs.drawn_miss(model, grid, dom, known)
+    for poly, top, rid in roofs.region_polygons(model.lab, model.level, grid, geom, miss=miss):
         if top < z + roofs.GROUND_M:
             continue
         if not model.faces[rid] and top > top_at + MAST_RISE_M:
@@ -582,7 +591,13 @@ def relief(s: Surfaces, geom: shapely.Geometry, of: str) -> list[dict]:
     # what each cell stands on: its own LoD2 roof, else the ground
     ground = s.ground[win]
     floor = np.where(np.isfinite(roof), np.fmax(roof, ground), ground)
-    dom = np.where(inside, fill_voids(s.dom[win], inside & (s.dom[win] < floor - VOID_M)), np.nan)
+    void = roof_holes(
+        inside & (s.dom[win] < floor - VOID_M),
+        inside & np.isfinite(roof),
+        s.field.res,
+        s.dom[win] - ground,
+    )
+    dom = np.where(inside, fill_voids(s.dom[win], void), np.nan)
     excess = np.nan_to_num(dom - top, nan=-1e9)
     over = excess >= RELIEF_MIN_M
     cells = s.field.res**2
@@ -640,6 +655,38 @@ def relief(s: Surfaces, geom: shapely.Geometry, of: str) -> list[dict]:
         }
         out.append(feature(geometry_json(outline.simplify(0.5)), props))
     return out
+
+
+def roof_holes(
+    void: np.ndarray, roofed: np.ndarray, res: float = 1.0, depth: np.ndarray | None = None
+) -> np.ndarray:
+    """The voids that are holes in the roof (`roofed`, at `res` m a
+    cell): each connected one no larger than VOID_HOLE_M2 (a sound
+    opening, a skylight), or shut in by the roof — reaching no cell
+    outside it —, spanning at most VOID_SHARE of it and, with the scan's
+    `depth` over the ground, seeing down to within VOID_GROUND_M of it
+    (a glass roof over a courtyard). A void reaching the roof's edge is a
+    part LoD2 drew too high (a low wing beside a hall), one standing well
+    over the ground a lower roof (an inner hall the blocks around it shut
+    in), one larger than that share an open bowl: filled from the cells
+    around, a taller neighbour would stand on it (an opera's hall on its
+    low wing)."""
+    lab, n = ndi.label(void)
+    if not n:
+        return void
+    ids = np.arange(n + 1)
+    sizes = np.bincount(lab.ravel(), minlength=n + 1)
+    edge = np.unique(lab[ndi.binary_dilation(~roofed, border_value=1) & void])
+    shut = np.ones(n + 1, bool)
+    shut[edge] = False
+    if depth is not None:
+        low = np.asarray(ndi.median(np.nan_to_num(depth, nan=np.inf), lab, ids)) <= VOID_GROUND_M
+        shut &= low
+    hole = (sizes * res * res <= VOID_HOLE_M2) | (
+        shut & (sizes <= VOID_SHARE * max(int(roofed.sum()), 1))
+    )
+    hole[0] = False
+    return hole[lab]
 
 
 def fill_voids(dom: np.ndarray, void: np.ndarray) -> np.ndarray:

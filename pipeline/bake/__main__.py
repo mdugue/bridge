@@ -150,10 +150,10 @@ STEPS = {
     # LoD2 lacks are read too); after landcover: the site's carriageways
     # give its flight's cast.
     "roof-colour": roof_colour.run,
-    # After roofs (the rebuilt ones are measured already) and the tree bakes
-    # (a crown over a roof is no dormer) and windows (the measured window
-    # axes its rows stand over): the dormers DOM1 shows on the pitched LoD2
-    # roofs.
+    # After roofs (a rebuilt roof is read, and its dormers stand, on its
+    # rebuilt parts) and the tree bakes (a crown over a roof is no dormer)
+    # and windows (the measured window axes its rows stand over): the
+    # dormers DOM1 shows on the pitched roofs.
     "dormers": dormers.run,
 }
 

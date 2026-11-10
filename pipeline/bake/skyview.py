@@ -94,7 +94,7 @@ import shapely
 from rasterio.enums import Resampling
 from rasterio.transform import from_origin
 from rasterio.warp import reproject
-from scipy.ndimage import distance_transform_edt
+from scipy.ndimage import distance_transform_edt, map_coordinates
 
 from . import glo30
 from .common import Tile, overlaps, save_grey_png
@@ -264,40 +264,103 @@ def _burn_chunk(out, idx, col, row, c0, r0, w, count, z) -> None:
     np.maximum.at(out, (rr[inside], cc[inside]), zz[inside])
 
 
-def face_triangles(poly: shapely.Geometry, surface: dict, z: float) -> np.ndarray:
-    """A measured face's surface (roofs.py `surface`) as (n, 3, 3)
-    triangles: two per square between four cell centres, where the square's
-    middle lies inside the part."""
+def surface_heights(surface: dict, z: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """A measured face's surface grid (roofs.py `surface`: cm from the
+    part's `z`, row by row from the north-west corner `x`, `y`) as absolute
+    heights, with its cell centres' x (per column) and y (per row)."""
     res = surface["res"]
-    a = z + np.asarray(surface["dz"], np.float64).reshape(surface["rows"], surface["cols"]) / 100
+    dz = np.asarray(surface["dz"], np.float64).reshape(surface["rows"], surface["cols"])
     xs = surface["x"] + (np.arange(surface["cols"]) + 0.5) * res
     ys = surface["y"] - (np.arange(surface["rows"]) + 0.5) * res
-    mx, my = np.meshgrid((xs[:-1] + xs[1:]) / 2, (ys[:-1] + ys[1:]) / 2)
-    r, c = np.nonzero(shapely.contains_xy(poly, mx, my))
-    if not len(r):
-        return np.zeros((0, 3, 3))
+    return z + dz / 100, xs, ys
+
+
+def face_triangles(poly: shapely.Geometry, surface: dict, z: float) -> np.ndarray:
+    """A measured face's surface (roofs.py `surface`) as (n, 3, 3)
+    triangles: two per square between four cell centres inside the part;
+    a square its outline crosses clipped to it, the pieces lifted off the
+    square's four corners (bilinear) — a face ends at its outline, never
+    half a cell over its neighbour's roof (a tower's small base beside it
+    took that roof's height as its own)."""
+    res = surface["res"]
+    a, xs, ys = surface_heights(surface, z)
+    gx, gy = np.meshgrid(xs, ys)
+    inner = shapely.contains_xy(poly, gx, gy)
+    full = inner[:-1, :-1] & inner[:-1, 1:] & inner[1:, :-1] & inner[1:, 1:]
+    # ... and no corner of the outline or a hole within the square
+    r, c = np.nonzero(full)
+    edge = shapely.boundary(poly)
+    shapely.prepare(edge)
+    crossed = shapely.intersects(shapely.box(xs[c], ys[r + 1], xs[c + 1], ys[r]), edge)
+    full[r[crossed], c[crossed]] = False
+    r, c = np.nonzero(full)
 
     def corner(dr, dc):
         return np.column_stack([xs[c + dc], ys[r + dr], a[r + dr, c + dc]])
 
     p00, p01, p10, p11 = corner(0, 0), corner(0, 1), corner(1, 0), corner(1, 1)
-    return np.concatenate([np.stack([p00, p01, p11], axis=1), np.stack([p00, p11, p10], axis=1)])
+    out = [np.stack([p00, p01, p11], axis=1), np.stack([p00, p11, p10], axis=1)]
+    # the others within the outline's bounds
+    x0, y0, x1, y1 = poly.bounds
+    cols = (xs[1:] >= x0) & (xs[:-1] <= x1)
+    rows = (ys[:-1] >= y0) & (ys[1:] <= y1)
+    out.append(_clipped_squares(poly, a, xs, ys, res, ~full & rows[:, None] & cols[None, :]))
+    return np.concatenate(out)
+
+
+def _clipped_squares(poly, a, xs, ys, res, candidates) -> np.ndarray:
+    """The squares among `candidates` the part's outline crosses, clipped
+    to it and triangulated, each vertex at the square's bilinear height."""
+    r, c = np.nonzero(candidates)
+    boxes = shapely.box(xs[c], ys[r + 1], xs[c + 1], ys[r])
+    hit = shapely.intersects(boxes, poly)
+    r, c, boxes = r[hit], c[hit], boxes[hit]
+    if not len(r):
+        return np.zeros((0, 3, 3))
+    pieces = shapely.get_parts(shapely.intersection(boxes, poly))
+    pieces = pieces[(shapely.get_type_id(pieces) == 3) & (shapely.area(pieces) > 1e-9)]
+    if not len(pieces):
+        return np.zeros((0, 3, 3))
+    tris = shapely.get_parts(shapely.constrained_delaunay_triangles(pieces))
+    xy = shapely.get_coordinates(tris).reshape(len(tris), 4, 2)[:, :3]
+    # the grid's own coordinates (cell centres at whole numbers), bilinear
+    fc = (xy[..., 0] - xs[0]) / res
+    fr = (ys[0] - xy[..., 1]) / res
+    zz = map_coordinates(a, [fr.ravel(), fc.ravel()], order=1, mode="nearest")
+    return np.concatenate([xy, zz.reshape(fr.shape)[..., None]], axis=2)
+
+
+def rebuilt_parts(path: Path) -> list[tuple[str, float, shapely.Geometry, dict | None]]:
+    """The parts of the roofs rebuilt from DOM1 (roofs.py's
+    `dlm/roofs_<t>.geojson`): each its LoD2 object's id, its `z`, its plan
+    and a face's `surface` (None on a flat part). Missing file → none; a
+    feature that is no Polygon or names no object is skipped, as
+    roof_colour.py's reader does."""
+    if not path.exists():
+        return []
+    return [
+        (
+            f["properties"]["id"],
+            f["properties"]["z"],
+            shapely.geometry.shape(f["geometry"]),
+            f["properties"].get("surface"),
+        )
+        for f in json.loads(path.read_text()).get("features", [])
+        if (f.get("geometry") or {}).get("type") == "Polygon"
+        and "id" in (f.get("properties") or {})
+    ]
 
 
 def measured_triangles(path: Path) -> tuple[set[str], np.ndarray]:
-    """The roofs rebuilt from DOM1 (roofs.py): the ids they replace and their
-    tops as (n, 3, 3) triangles — a flat part at its `z`, a face on its
-    measured surface. Missing file → none."""
-    if not path.exists():
-        return set(), np.zeros((0, 3, 3))
-    features = json.loads(path.read_text()).get("features", [])
-    ids = {f["properties"]["id"] for f in features}
+    """The roofs rebuilt from DOM1 (`rebuilt_parts`): the ids they replace
+    and their tops as (n, 3, 3) triangles — a flat part at its `z`, a face
+    on its measured surface. Missing file → none."""
+    parts = rebuilt_parts(path)
+    ids = {oid for oid, _, _, _ in parts}
     tris = []
-    for f in features:
-        z = f["properties"]["z"]
-        poly = shapely.geometry.shape(f["geometry"])
-        if "surface" in f["properties"]:
-            tris.extend(face_triangles(poly, f["properties"]["surface"], z))
+    for _, z, poly, surface in parts:
+        if surface is not None:
+            tris.extend(face_triangles(poly, surface, z))
             continue
         for t in shapely.get_parts(shapely.constrained_delaunay_triangles(poly)):
             xy = np.asarray(t.exterior.coords)[:3]
