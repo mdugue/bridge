@@ -576,8 +576,10 @@ def windows(
 
 def outer_lengths(ws: list[dict], buildings: dict) -> dict[str, float]:
     """Per object with a wall read for glass, the length of all its outer
-    walls (`walls`): the building bake weighs its glass against it, so one
-    glazed stair tower read alone does not make a stone house glass."""
+    walls (`ws`: the caller passes every edge, however short — a bay's or
+    a setback's count too): the building bake weighs its glass against it,
+    so one glazed stair tower read alone does not make a stone house
+    glass."""
     read = {w["oid"] for entries in buildings.values() for w in entries if "glass" in w}
     total: dict[str, float] = collections.defaultdict(float)
     for w in ws:
@@ -604,6 +606,20 @@ def _had_glass(out: Path) -> bool:
     )
 
 
+def glass_gate(lines: list[str] | None, key: str, had_glass: bool) -> str | None:
+    """Why the windows bake must not run on the glass cache's `lines`
+    (None: no cache), or None: baking on a cache read in part or for other
+    walls or limits (`plan_key`), or on none where the tile's file holds
+    glass fronts, would drop some of them."""
+    if lines is not None and not complete(lines, key):
+        return "is not read through for these walls"
+    if lines is None and had_glass:
+        # none read, or under other prompts, model or limits
+        # (facade_glass.reading_key)
+        return "is missing, and the windows file holds glass fronts"
+    return None
+
+
 def run(tile: Tile) -> None:
     out = tile.out("dlm", f"windows_{tile.id}.json")
     path, gpath = traits_path(tile), glass_path(tile)
@@ -612,29 +628,17 @@ def run(tile: Tile) -> None:
         return
     city = json.loads(tile.cityjson.read_text())
     ws = walls(city)
-    lines = gpath.read_text().splitlines() if gpath.exists() else []
-    # baking on a cache read in part, for other walls or limits (plan_key),
-    # or none where the file holds glass fronts would drop some of them
-    if lines and not complete(lines, plan_key(ws)):
-        raise SystemExit(
-            f"{tile.id}: {gpath.name} is not read through for these walls — "
-            f"run the glass fetch before baking the windows"
-        )
-    if not lines and _had_glass(out):
-        # none read, or under other prompts, model or limits
-        # (facade_glass.reading_key)
-        raise SystemExit(
-            f"{tile.id}: {out.name} holds glass fronts but there is no {gpath.name} — "
-            f"run the glass fetch before baking the windows"
-        )
-    glass = glass_records(lines)
+    lines = gpath.read_text().splitlines() if gpath.exists() else None
+    if (stop := glass_gate(lines, plan_key(ws), _had_glass(out))) is not None:
+        raise SystemExit(f"{tile.id}: {gpath.name} {stop} — run the glass fetch before baking")
+    glass = glass_records(lines or [])
     if not (path.exists() or glass):
         print(f"{tile.id}: no facade traits measured — no wall gets windows")
         write(out, {}, {})
         return
     by_wall = _records(path) if path.exists() else {}
     buildings, reliability = windows(city, by_wall, _Raster(tile.dgm), glass, ws)
-    write(out, buildings, reliability, outer_lengths(ws, buildings))
+    write(out, buildings, reliability, outer_lengths(walls(city, min_len=0.01), buildings))
     n_walls = sum(len(v) for v in buildings.values())
     modelled = sum("model" in w for v in buildings.values() for w in v)
     read = sum("glass" in w for v in buildings.values() for w in v)

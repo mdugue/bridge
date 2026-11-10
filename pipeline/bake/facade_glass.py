@@ -95,6 +95,7 @@ class ModelError(RuntimeError):
     photo's fault, so it is read again on the next fetch."""
 
 
+@cache
 def _runtime_faults() -> tuple[type[BaseException], ...]:
     """onnxruntime's errors of a session that ran short of what it needs
     (memory, its execution provider); an invalid input stays the photo's."""
@@ -104,9 +105,6 @@ def _runtime_faults() -> tuple[type[BaseException], ...]:
         return ()
     names = ("Fail", "RuntimeException", "EPFail")
     return tuple(getattr(state, n) for n in names if hasattr(state, n))
-
-
-_RUNTIME_FAULTS = _runtime_faults()
 
 
 def reading_key() -> str:
@@ -250,8 +248,10 @@ def glass_of(
         return None
     try:
         glass, other = model(root, classes).glass(crop)
-    except (MemoryError, *_RUNTIME_FAULTS) as err:
-        raise ModelError(f"{type(err).__name__}: {err}") from err
+    except Exception as err:
+        if isinstance(err, (MemoryError, *_runtime_faults())):
+            raise ModelError(f"{type(err).__name__}: {err}") from err
+        raise
     if not segmented and other > OTHER_MAX:
         return None
     return round(1000 * glass)

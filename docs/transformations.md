@@ -1831,11 +1831,12 @@ visual-variable codebook is in
   camera's parameters are OpenSfM's (fx, fy, cx, cy, k1, k2, …): its focal
   and radial terms are read from there; a framed photo's frame is its own
   shape where Mapillary gives it. A photo the model could not read in
-  (a worker out of memory) is not cached, and is read on the next fetch.
+  (a worker out of memory) is not cached, and is read on the next fetch;
+  one taken down since (HTTP 404, 410) is cached as skipped.
   The building bake gives an object material `glass`, from `photos`, when
   its glass walls make at least half the length of its walls read and a
   quarter of all its outer walls, or 15 m and a twentieth of them
-  (`windows_<t>.json`'s `outer`; `lib/city/photo-glass.ts`) — a stone
+  (`windows_<t>.json`'s `outer`, every outer edge however short; `lib/city/photo-glass.ts`) — a stone
   house whose one glazed stair tower was all the photos read stays stone,
   and so does a mall with a 16 m glazed entrance in 547 m of walls; a
   file without `outer` asks the 15 m alone. The photos' glass is the

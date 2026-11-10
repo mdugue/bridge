@@ -98,6 +98,7 @@ GLASS_NEAR_M = 60.0
 GLASS_IN_FRAME = 0.3
 GLASS_SEQ = 4
 THUMB_PX = 2048  # the thumbnail's long side (thumb_2048_url)
+GONE = (404, 410)  # an image taken down since its search: cached as skipped
 
 BUSY_CALM, BUSY_BUSY = 0.35, 0.7
 DARK_LOW, DARK_HIGH = 0.15, 0.25
@@ -413,16 +414,18 @@ def glass_candidates(
         if seq not in best or score > best[seq][0]:
             best[seq] = (score, int(i))
     ranked = sorted(best.items(), key=lambda kv: -kv[1][0])[:GLASS_SEQ]
-    return {seq: [i] for seq, (_, i) in ranked}
+    return {seq: i for seq, (_, i) in ranked}
 
 
-def plan_glass(city: dict, images: list[dict], epsg: int, gamma: float = 0.0) -> dict[str, dict]:
+def plan_glass(
+    city: dict, images: list[dict], epsg: int, gamma: float = 0.0, ws: list[dict] | None = None
+) -> dict[str, dict]:
     """Per photo id: its sequence, position, camera and the walls it is to
     read for glass (`glass_candidates`); `gamma` the grid convergence the
     reading turns each pose by."""
     from .facade_measure import rotation_matrix
 
-    ws = walls(city)
+    ws = walls(city) if ws is None else ws
     _, polys = footprints(city)
     ftree = shapely.STRtree(polys)
     keep, pos = photos(images, epsg)
@@ -431,19 +434,18 @@ def plan_glass(city: dict, images: list[dict], epsg: int, gamma: float = 0.0) ->
     ptree = shapely.STRtree(shapely.points(pos))
     jobs: dict[str, dict] = {}
     for w in ws:
-        for seq, idx in glass_candidates(w, keep, pos, rots, angles, ptree, ftree).items():
-            for i in idx:
-                o = keep[i]
-                job = jobs.setdefault(
-                    o["id"],
-                    {
-                        "seq": seq,
-                        "xy": [float(pos[i][0]), float(pos[i][1])],
-                        "camera": camera_of(o),
-                        "walls": [],
-                    },
-                )
-                job["walls"].append({k: w[k] for k in ("oid", "wi", "a", "b", "L", "n", "eave")})
+        for seq, i in glass_candidates(w, keep, pos, rots, angles, ptree, ftree).items():
+            o = keep[i]
+            job = jobs.setdefault(
+                o["id"],
+                {
+                    "seq": seq,
+                    "xy": [float(pos[i][0]), float(pos[i][1])],
+                    "camera": camera_of(o),
+                    "walls": [],
+                },
+            )
+            job["walls"].append({k: w[k] for k in ("oid", "wi", "a", "b", "L", "n", "eave")})
     return jobs
 
 
@@ -724,6 +726,10 @@ def measure_image(job: dict) -> dict:
     try:
         dets = _detections(iid, source)
         path, ours = _thumbnail(iid, job["url"], Path(job["scratch"]), source)
+    except urllib.error.HTTPError as err:
+        if err.code in GONE:  # taken down: no later fetch will find it
+            return {"img": iid, "skip": f"gone (HTTP {err.code})"}
+        return {"img": iid, "fail": f"HTTPError: {err}"[:200]}
     except (OSError, ValueError) as err:
         return {"img": iid, "fail": f"{type(err).__name__}: {err}"[:200]}
     try:
@@ -756,8 +762,8 @@ def measure_image(job: dict) -> dict:
                 )
             else:
                 m = measure(w | {"zg": zg}, img, cls, rot, cam)
-        except facade_glass.ModelError as err:  # not this photo's fault: read it again later
-            return {"img": iid, "fail": f"model: {err}"[:200]}
+        except (facade_glass.ModelError, MemoryError) as err:  # not the photo's fault: again later
+            return {"img": iid, "fail": f"model: {type(err).__name__}: {err}"[:200]}
         except Exception as err:  # noqa: BLE001 — record it, measure the rest
             m = {"err": repr(err)[:100]}
         out.append(head | m)
@@ -813,6 +819,7 @@ def plan_key(ws: list[dict]) -> str:
     another — a new LoD2 edition, a changed limit — is not read through."""
     what = (
         (GLASS_NEAR_M, GLASS_IN_FRAME, GLASS_SEQ, MIN_DIST_M, MIN_COS, THUMB_PX),
+        (SINCE_YEAR, FRAMED),
         sorted(wall_key(w) for w in ws),
     )
     return hashlib.sha256(repr(what).encode()).hexdigest()[:10]
@@ -910,7 +917,8 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
             _photos_path(tile),
             lambda: _search_tile(tile, "images", {"fields": PHOTO_FIELDS}, GLASS_NEAR_M),
         )
-        jobs = plan_glass(city, every, tile.epsg, gamma)
+        ws = walls(city)
+        jobs = plan_glass(city, every, tile.epsg, gamma, ws)
         out = glass_path(tile)
     else:
         _fetch_signs(tile)
@@ -928,7 +936,7 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
     print(f"{tile.id}: {len(jobs)} {seen_by} see its walls, {len(todo)} to measure ({kind})")
     if not todo:
         if kind == "glass":
-            mark_complete(out, plan_key(walls(city)))
+            mark_complete(out, plan_key(ws))
         return
     if kind == "glass":
         from . import facade_glass
@@ -984,12 +992,10 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
     for leftover in scratch.glob("*.jpg"):
         leftover.unlink()
     if counts["fail"]:
-        print(
-            f"{tile.id}: {counts['fail']} images failed ({in_model} of them in the "
-            f"model: memory, MAPILLARY_WORKERS), the rest on the network — rerun the fetch"
-        )
+        model_part = f" ({in_model} of them in the model: memory?)" if in_model else ""
+        print(f"{tile.id}: {counts['fail']} images failed{model_part} — rerun the fetch")
     elif kind == "glass":
-        mark_complete(out, plan_key(walls(city)))
+        mark_complete(out, plan_key(ws))
 
 
 def _records(path: Path) -> list[dict]:

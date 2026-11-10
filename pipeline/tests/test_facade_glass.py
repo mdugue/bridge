@@ -307,3 +307,14 @@ def test_a_glass_wall_has_no_window_model(monkeypatch):
     entries = win.windows(city, by_wall, None, glass)[0]["hall-root"]
     # the curtain wall's mullions are no rhythm: for no building, no dormer
     assert ["model" in e for e in entries] == [False, True, True, True]
+
+
+def test_the_windows_bake_stops_where_it_would_drop_glass():
+    done = ['{"img": "p", "seq": "s", "walls": []}', json.dumps({"complete": "k"})]
+    assert win.glass_gate(done, "k", had_glass=True) is None
+    assert win.glass_gate(None, "k", had_glass=False) is None  # never read for glass
+    # read in part, for other walls, begun but empty, or gone with glass
+    assert win.glass_gate(done[:1], "k", had_glass=False) is not None
+    assert win.glass_gate(done, "other", had_glass=False) is not None
+    assert win.glass_gate([], "k", had_glass=False) is not None
+    assert win.glass_gate(None, "k", had_glass=True) is not None
