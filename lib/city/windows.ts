@@ -71,7 +71,8 @@ export const NO_WINDOWS: WindowSpec = { axis: 0, h: 0, style: 0, w: 0 };
  *  - `loose`: the axes are a little off a regular grid (`LOOSE_JITTER`);
  *  - `frame`: a Fasche, a set-off band round each window;
  *  - `lintel`: a Verdachung, a small cornice over each window (ornament);
- *  - `noGround`: no window on the ground floor (a shop's);
+ *  - `noGround`: no window on the ground floor (none left over the
+ *    plinth, or a squat row);
  *  - `measured`/`near`: where the rhythm comes from (its own walls, a
  *    neighbour's; neither: its type) — the shader ignores both;
  *  - the reveal's depth class from bit 6 (`WINDOW_DEPTH`), the sill's
@@ -620,8 +621,6 @@ export interface WindowHost {
   plinth?: number;
   /** the root of its building tree */
   root: number;
-  /** a shop on its ground floor (OSM) */
-  shop: boolean;
   storeyH: number;
   /** the storeys OSM counts (a palace's storey reads them) */
   storeys?: number;
@@ -911,8 +910,8 @@ export function windowSpecs(
  * `plinth`) that still leaves it a ground floor, and the height its
  * lowest windows clear (`reach`): a wall the ground or a plinth rises
  * higher in front of loses its own ground floor, the others keep theirs —
- * one steep wall no longer takes every wall's. Without a ground floor (a
- * shop's, or none left) the reach is the first floor's.
+ * one steep wall no longer takes every wall's. Without a ground floor (none
+ * left) the reach is the first floor's.
  */
 function overGround(
   host: WindowHost,
@@ -962,7 +961,9 @@ function storeyAndType(host: WindowHost): { kind: WindowType; storey: number } {
 /** A host's window style: its type's reveal and sill, the photos' grid,
  *  Fasche and ornament where they saw them — the type's Fasche on a
  *  rendered front only, never on brick —, its ground floor's lift over
- *  the plinth (no ground floor over a shop or past the lift's classes). */
+ *  the plinth (none past the lift's classes). An OSM shop alone takes no
+ *  ground floor: only a wall the photos saw shop bays on gives its own up
+ *  (`placeOnWalls`), so a shop no photo measured keeps the house's windows. */
 function styleOf(
   host: WindowHost,
   kind: WindowType,
@@ -978,7 +979,7 @@ function styleOf(
     lintel: m?.orn ?? false,
     frame:
       (m?.frame ?? false) || ((type.frame ?? false) && !(host.brick ?? false)),
-    noGround: host.shop || lift === undefined,
+    noGround: lift === undefined,
     lift: lift ?? 0,
     measured: from === "measured" || from === "tree",
     near: from === "near",

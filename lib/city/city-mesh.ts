@@ -85,6 +85,10 @@ export const OBJECT_FLAG_OWN_FACADE = 512;
  *  (lib/city/facade-reading.ts `FACADE_UNIT`), so not in the 16-bit
  *  column but beside it (`shaderFlags`). */
 export const OBJECT_FLAG_FLOODLIT = 32_768;
+/** A house whose windows are real niches now (window-niche-layer.ts): set
+ *  in the packed texture at runtime only, never baked; the clay cuts its
+ *  openings (`nicheMask`). */
+export const OBJECT_FLAG_NICHED = 65_536;
 /** The share of landmarks floodlit after dark: a city lights a few of its
  *  showpieces, not every one (the clay's *Anstrahlung*). */
 export const FLOODLIT_SHARE = 0.6;
@@ -271,16 +275,18 @@ export function isFloodlit(
 }
 
 /** The flags column as the clay reads it: the table's flags with the
- *  runtime-only bits, floodlit and asked. */
+ *  runtime-only bits, floodlit, asked and niched. */
 export function shaderFlags(
   table: Pick<CityObjectTable, "ensemble" | "flags" | "group" | "rough">,
   i: number,
-  asked = false
+  asked = false,
+  niched = false
 ): number {
   return (
     table.flags[i] +
     (isFloodlit(table, i) ? OBJECT_FLAG_FLOODLIT : 0) +
-    (asked ? OBJECT_FLAG_ASKED : 0)
+    (asked ? OBJECT_FLAG_ASKED : 0) +
+    (niched ? OBJECT_FLAG_NICHED : 0)
   );
 }
 

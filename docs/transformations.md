@@ -3450,8 +3450,10 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   from 0.5 m (a glazed row: 0.3 m) to the measured ground-floor top (3 m
   where none; under a canopy's slab, into which the head reaches over
   a strip of wall under 0.25 m) —
-  no mullions, no frame boards —, a rounded fascia band 10 cm proud at
-  the measured sign band (none under a canopy: its fascia is the sign
+  no mullions, no frame boards —, the store sign painted flush on the wall
+  at the measured sign band (cut out of the wall and laid back in a darker
+  tone; until 2026-11-10 a rounded fascia 10 cm proud, which read as a
+  slab — Manuel chose "nur aufgemalt") (none under a canopy: its fascia is the sign
   band); a canopy is a slab 0.3 m thick under its measured top from the
   wall out to a 0.2 m deep fascia at its edge, at most 1 m tall, with
   2.6 m headroom, its outer edges rounded, in the host's own clay (its
@@ -3460,9 +3462,9 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   soft shadow over its top (`paneShade`); it is smooth (roughness 0.2)
   and catches the sun calmly; the upper pane and a grazing view hold a
   calm sky (`paneSky`), so it reads as glass
-  out of the sun too. Shop windows on a shop's ground floor are the one
-  exception to the glass veto (🗃️ *Procedural window grid*, user
-  decision 2026-10-08); a wall no photo shows as a shopfront gets none
+  out of the sun too. Shop windows on a shop's ground floor were the
+  first exception to the glass veto (🗃️ *Procedural window grid*, user
+  decision 2026-10-08; the veto lifted 2026-11-06); a wall no photo shows as a shopfront gets none
   (🗃️ *A shop window at an OSM shop node*).
   **Passages** (2026-10-21, G20): a bay crossed by an OSM
   `tunnel=building_passage` or `covered=arcade` way (4 m inside the wall
@@ -3471,6 +3473,17 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   Hamburg 1 of 165, Meißen and Grimma none. Without the facade cache the
   step only takes the passages out of the committed file (it used to
   write an empty one).
+  **Openings in the wall** (2026-11-10, Manuel: the shop windows to
+  follow the windows' logic, "direkt beides zusammen"): each bay is cut
+  out of its LoD2 wall, a 0.2 m box of reveals in the wall's clay behind
+  it and the glass at its back, its sill at the stall riser's top
+  (`lib/city/shop-windows.ts`); the plinth band breaks for each window (a
+  first cut set the sill 0.2 m over the plinth's levelled top, and the
+  band read as lying in front of the glass: Manuel, same day); the surround 15 cm proud with a soft niche
+  per bay is gone, and with it the risers' feet on the ground (ADR 0030's
+  `shopfronts` joins). Dresden's Neustadt tile (33412_5656): 327 of 344
+  bays cut (the rest stand where no LoD2 wall covers them), its vertices
+  5.71 → 5.63 million (−1.4 %).
 
 - **Windows on every house (*Fenster*)** `◎ detected` `≈ assumed` `= computed` —
   drawn by the clay ([ADR 0010](./adr/0010-opaque-clay-buildings-only.md)), their rhythm
@@ -3616,14 +3629,21 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   every wall. The lift is a class of 0.05 m up to 1.55 m; a wall whose
   ground or plinth rises past its reach (at most 2.2 m over the base,
   `GROUND_REACH_M`, and no higher than leaves the ground floor's windows
-  at least 0.8 of their width tall, `overGround`; a shop's: its first
-  floor's) loses its own ground floor, signed like a shopfront's, the
+  at least 0.8 of their width tall, `overGround`) loses its own ground floor, signed like a shopfront's, the
   building's other walls keep theirs. Such a wall keeps that height
   (`_FACADE`'s first door slot) and draws no row under it, so where the
   ground rises more than a storey the upper floors' windows go too (the
   Kunstakademie on the terrace). Dresden, 2026-10-20: wall feet whose
   windows the fine ground covered 11 925 → 0 (of ~610 000), objects
-  without a ground floor 6 258 → 3 590 (the rest are shops). **The storeys
+  without a ground floor 6 258 → 3 590 (the rest were shops). Only a
+  wall the photos saw shop bays on gives its ground floor up (2026-11-10,
+  Manuel, Alaunstraße: a house with an OSM shop or café lost the ground
+  floor's windows on every wall, and a wall where one drive read a store
+  sign alone — 318 of Dresden's 1 003 shopfront walls — kept blank
+  plaster under its fascia — the bake's style word and the clay's
+  `shopOf` gate, which also took a sign the photos read, each blanked it;
+  now both keep the house's windows, the shop zone still painted
+  darker). **The storeys
   count from the street** (`liftToStreet`): a LoD2 base is the lowest
   ground round the whole footprint — a courtyard's, a light well's, a
   cellar ramp's — and lay a median 0.3 m under the street on the spawn
@@ -3703,13 +3723,13 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   back, a side reveal or the head or sill reveal, each with its normal
   and its share smoothed over the pixel's footprint), its reveals the
   wall's plaster ×0.93, its back the wall's colour ×(0.40, 0.43, 0.50),
-  lit by a quarter of the sun plaster would get, the sun reaching in only
+  lit by half the sun plaster would get, the sun reaching in only
   through the opening and only where it falls on the wall at a fair angle
-  (`receivedShadowNode`); a sill 6 cm tall and 4.5 cm proud, 6 cm past
+  (`receivedShadowNode`); a sill 7 cm tall and 7 cm proud, 6 cm past
   the opening either side, throwing the sun's shadow down the wall; a
   Fasche 11 cm wide, 1.5 cm proud and 3.5 % lighter, with a hairline of
-  contact shade; a Verdachung 9 cm tall, 5 cm proud; the wall rolling
-  into the opening over a 3 cm quarter round at its sides and head
+  contact shade; a Verdachung 9 cm tall, 10 cm proud; the wall rolling
+  into the opening over a 6 cm quarter round at its sides and head
   (normals only, where it spans a pixel). Every edge is anti-aliased by
   the pixel's footprint along the wall and up; where a window is under
   6 pixels wide the drawing fades into the facade's mean tone (the wall
@@ -5531,7 +5551,7 @@ research that produced them):
 | **DGM1 micro-relief as a normal texture** (plan 023 phase 7: a 1 m normal map over the "2 m mesh") | The fine level is a ±0.15 m TIN of the native DGM (ADR 0030), not a 2 m grid, and `terrainNormal` (`terrain-layer.ts`) deliberately pulls near-flat normals up: the DGM's ruts, survey wobble and 8-bit normals read as dirty flecks under a low sun. Kerbs are real geometry now. | Revisit only if a real-GPU plate shows the ground too flat — and then as a softer calm threshold, not more relief. |
 | **A shop window at an OSM shop node** (2026-10-08, the shopfronts' first bake: a wall no photo showed as a shopfront, with an OSM `shop=*` or café node within 3 m, got one 2.4 m bay centred on the node — 1 074 walls over the fifteen Dresden tiles, all but the spawn tile's) | A node says a shop is there, not where its windows are or how wide: the lone narrow bay with its riser, head and piers read as a door, not a shop window (the Hauptstraße's GDR pavilions, glass from end to end, showed a row of "doors"; owner's review). Better no window than a wrong one. | Every tile's panoramas are measured now; a wall they do not show stays plain. The OSM shop still tints the ground floor (*Ladenzone*) and lights it at dusk. |
 | **Window niches as geometry** (PR #143 as first pushed, 2026-10-09: each measured window cut into its wall as a niche, rounded 6 cm into a 14 cm reveal, the wall re-triangulated round it) | Too plump: a rounded niche must survive the 2 km tile's 16-bit quantised positions, so its radii were centimetres wide and the openings read as soft lumps (owner's review: "Die Fensterformen sind zu plump"); every window cost triangles (+0.84 % over the site for 4 000 windows — all windows of all houses would have been millions); and only measured walls had them, 527 buildings, about 3 % of Dresden's, so a street of plain houses carried every thirtieth one windowed. | The same measurement now drives windows drawn by the clay on every house (*Windows on every house*, ADR 0010): no triangles, the recess a parallax look into the wall. |
-| **Procedural window grid** on facades | Reads as a modern office block, fights the historic LoD2 silhouette (user veto). | Faint storey banding is the only kept remnant. Re-affirmed by plan 050: a glass facade (OSM `building:material=glass`) gets a cool tint and a sky sheen, never panes, mullions or a texture. Two exceptions, both measured, never procedural: (1, user decision 2026-10-08) **shop windows on a shop's ground floor may show glass** — dark, slightly reflecting panes where street photos measured the bays, divided only by a shop window's own mullions, never a grid and never above the ground floor (*Shopfronts from street photos*); (2, Manuel's requests of 2026-10-09) **every house may show windows, drawn by the clay as recesses in the wall's own colour, darker and cooler inside** — each building's own rhythm (its axis spacing, width and storey where street photos measured it at Spearman ρ ≥ 0.6 between two drives, else borrowed from the nearest measured house of its roof form and eave, else its type's, calibrated to the photos' medians), its storeys from OSM's levels or its height, centred on each wall; **no glass, no panes, no mullions, no texture**, and never on a party wall, beside a door, over a shopfront, on a church, a hall, or a glass or metal facade — a palace, museum, theatre, parliament or court gets tall windows of its own type on storeys of ~5.5 m (*Windows on every house*, ADR 0010). What stays vetoed is the uniform grid pasted over facades regardless of the building. |
+| **Procedural window grid** on facades | Reads as a modern office block, fights the historic LoD2 silhouette (user veto). | Faint storey banding is the only kept remnant. Re-affirmed by plan 050: a glass facade (OSM `building:material=glass`) gets a cool tint and a sky sheen, never panes, mullions or a texture. Two exceptions, both measured, never procedural: (1, user decision 2026-10-08) **shop windows on a shop's ground floor may show glass** — dark, slightly reflecting panes where street photos measured the bays, divided only by a shop window's own mullions, never a grid and never above the ground floor (*Shopfronts from street photos*); (2, Manuel's requests of 2026-10-09) **every house may show windows, drawn by the clay as recesses in the wall's own colour, darker and cooler inside** — each building's own rhythm (its axis spacing, width and storey where street photos measured it at Spearman ρ ≥ 0.6 between two drives, else borrowed from the nearest measured house of its roof form and eave, else its type's, calibrated to the photos' medians), its storeys from OSM's levels or its height, centred on each wall; **no panes, no mullions, no texture** (since 2026-11-06, when Manuel lifted the glass veto, their back mirrors a little sky at a grazing view as a shop window's pane does), and never on a party wall, beside a door, over a shopfront, on a church, a hall, or a glass or metal facade — a palace, museum, theatre, parliament or court gets tall windows of its own type on storeys of ~5.5 m (*Windows on every house*, ADR 0010). What stays vetoed is the uniform grid pasted over facades regardless of the building. |
 | **Structures from the surface model alone** (plan 050: every tall gap between DOM1 and `max(DGM1, LoD2 roof)` as a column or block) | The gap is mostly not buildings: tree crowns, power pylons, and on the flight day the construction cranes — Leipzig's centre showed dozens of 50–95 m spikes with no mapped structure, Hamburg 90–98 m ones beside a 2023 building. | Only where OSM names the structure (`man_made=*`, a building outline) does the surface model measure it; a landmark's roof relief is the one gap drawn without a mapped outline, and only over its own LoD2 roof. |
 | **Invented or imported landmark geometry** (hand-modelled landmarks per city, glTF models from 3D warehouses, a stock spire or dome by type) | Not repeatable for the next city, a licence per model, and a detailed model breaks the clay style next to LoD2 boxes. | Geometry beyond LoD2 comes only from a measurement confirmed by a name ([ADR 0036](./adr/0036-lod2-roofs-that-miss-the-scan-are-rebuilt.md)). |
 | **Landmark roof relief as stacked slabs** (plan 050 as first built: the excess over the highest LoD2 roof cut into ≥ 2 m bands, at most 8, each band's smoothed outline extruded as a flat slab — a contour model) | A spire LoD2 cuts short became a stepped pyramid (Unna's Stadtkirche: LoD2 stops at 137 m, the surface model at ≈ 178 m) and the Elbphilharmonie's crests a flight of terraces — the plan's own STOP ("reads as a stack of plates"); 508 slabs on 74 objects in the first bake. | Replaced by the measured height field on the 1 m grid, lightly smoothed, built as one surface with corner heights averaged (✅ *Landmark roof relief*). Still no invented smooth roof: every height is a surface-model cell. |
