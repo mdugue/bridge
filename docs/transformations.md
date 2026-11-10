@@ -1124,9 +1124,13 @@ visual-variable codebook is in
   and the face's cells past the eave go to the level where the scan lies
   on that level (within 1 m; a terrace the scan shows on the roof stays
   roof), so the wall between them runs along the eave instead of the
-  scan's blur — unless the level would be left smaller than a part or
-  narrower than 7 m (`NARROW_M`, a strip between two wings standing as a
-  box), which then keeps its cells. An der
+  scan's blur; a column whose centre lies within half a cell's fall of
+  the eave line counts as on it (a flank turned off the grid by a
+  fraction of a degree ends the same way along its length), and a pocket
+  of the level smaller than a part that the joined cells shut in joins
+  too. All the gables are judged together: a level they would leave
+  smaller than a part or narrower than 7 m (`NARROW_M`, a strip between
+  two wings standing as a box) keeps its cells. An der
   Frauenkirche 5's ring is now 16 flanks meeting at hips; the block at
   Schloßstraße and Sporergasse 23 flanks, the scan within 0.5 m of the
   drawn roof on 70 % of its cells (35 % with the planes first). A face most of whose cells only the
@@ -1142,7 +1146,9 @@ visual-variable codebook is in
   and a wing's inner eave as a dune's foot. Each edge of 2 m or more
   is turned onto the nearest of the building's walls (in plan) among
   those within 15° of its direction — the walls ≥ 4 m of its own
-  outline, before another roof's cells are cut from it, walls within 2°
+  outline (a vertex within 0.1 m of its neighbours' line, a roof face's
+  corner left in the union, splits no wall), before another roof's cells
+  are cut from it, walls within 2°
   of a longer one one direction: a wing's inner edge runs along its own
   outer wall, not along whichever wall of a bending block is closest in
   direction (An der Frauenkirche 5's ten directions cut its courtyard's
@@ -1735,7 +1741,9 @@ visual-variable codebook is in
   measured top kept; a dormer whose face is flatter than 25° keeps its
   row's height (`on_planes`). On a roof rebuilt from DOM1 (`roofs`)
   the host's face is its rebuilt part (since 2026-11-10: a flat part's
-  `z`, a face's surface grid read between its cells, its ridge the
+  `z`, a face's surface grid read between its cells, its slope on the
+  quarter of the 3 × 3 cells around that lies on one plane — beside a
+  ridge, hip or valley not a mix of two flanks —, its ridge the
   highest of them); until then such a roof's dormers and chimneys stood
   at the LoD2 faces it replaces, metres off the drawn roof — some
   chimneys' measured tops under their own feet (Dresden's rebuilt roofs

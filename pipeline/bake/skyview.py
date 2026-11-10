@@ -317,13 +317,11 @@ def _clipped_squares(poly, a, xs, ys, res, candidates) -> np.ndarray:
     r, c, boxes = r[hit], c[hit], boxes[hit]
     if not len(r):
         return np.zeros((0, 3, 3))
-    pieces, at = shapely.get_parts(shapely.intersection(boxes, poly), return_index=True)
-    polygonal = (shapely.get_type_id(pieces) == 3) & (shapely.area(pieces) > 1e-9)
-    pieces, at = pieces[polygonal], at[polygonal]
+    pieces = shapely.get_parts(shapely.intersection(boxes, poly))
+    pieces = pieces[(shapely.get_type_id(pieces) == 3) & (shapely.area(pieces) > 1e-9)]
     if not len(pieces):
         return np.zeros((0, 3, 3))
-    triangulated = shapely.constrained_delaunay_triangles(pieces)
-    tris, back = shapely.get_parts(triangulated, return_index=True)
+    tris = shapely.get_parts(shapely.constrained_delaunay_triangles(pieces))
     xy = shapely.get_coordinates(tris).reshape(len(tris), 4, 2)[:, :3]
     # the grid's own coordinates (cell centres at whole numbers), bilinear
     fc = (xy[..., 0] - xs[0]) / res

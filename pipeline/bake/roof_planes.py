@@ -419,14 +419,16 @@ def _direction(aspect: np.ndarray, weight: np.ndarray) -> float:
     return float(np.angle(np.sum(weight * np.exp(1j * aspect))))
 
 
-def _fits(h: np.ndarray, sel: np.ndarray, phi: float, res: float) -> float:
-    """The share of the flank's cells its plane explains: within
-    FLANK_TOL_M of it, or under a dormer on it (`_explained`) — a row of
-    dormers is no reason to cut a flank, a house whose ridge steps is."""
+def _fits(h: np.ndarray, sel: np.ndarray, phi: float, res: float) -> tuple[float, np.ndarray]:
+    """The share of the flank's cells its plane explains — within
+    FLANK_TOL_M of it, or under a dormer on it (`_explained`): a row of
+    dormers is no reason to cut a flank, a house whose ridge steps is —
+    and the plane."""
     plane, _ = _flank_plane(h, sel, phi)
-    rows, cols = np.indices(h.shape)
-    off = np.where(sel, h - _on(plane, rows, cols), 0.0)
-    return float(_explained(off, sel, res)[sel].mean())
+    rows, cols = np.nonzero(sel)
+    off = np.zeros(h.shape)
+    off[rows, cols] = h[rows, cols] - _on(plane, rows, cols)
+    return float(_explained(off, sel, res)[sel].mean()), plane
 
 
 def _explained(off: np.ndarray, judged: np.ndarray, res: float) -> np.ndarray:
@@ -441,14 +443,16 @@ def _explained(off: np.ndarray, judged: np.ndarray, res: float) -> np.ndarray:
     return on | small[blobs]
 
 
-def _cut(h: np.ndarray, sel: np.ndarray, phi: float, min_cells: float) -> float | None:
+def _cut(
+    h: np.ndarray, sel: np.ndarray, phi: float, plane: np.ndarray, min_cells: float
+) -> float | None:
     """Where along the flank to cut it in two: the border between two
     cell-wide strips across it that best splits the scan's height off the
     flank's plane into two even runs (most of their variance between the
     two) — a party wall where the ridge steps, the middle of a bend —
-    leaving `min_cells` on either side; None where none does."""
+    leaving `min_cells` on either side; None where none does. `plane`:
+    the flank's (`_flank_plane`)."""
     rows, cols = np.nonzero(sel)
-    plane, _ = _flank_plane(h, sel, phi)
     off = h[rows, cols] - _on(plane, rows, cols)
     along = -cols * np.sin(phi) + rows * np.cos(phi)
     prof, n, t0 = _strips(along, off)
@@ -480,10 +484,10 @@ def _sections(h, sel, aspect, weight, min_cells, res, depth=0) -> list[np.ndarra
 def _fitted_sections(h, sel, aspect, weight, min_cells, res, depth):
     """`_sections`, each with the share of it its plane explains (`_fits`)."""
     phi = _direction(aspect[sel], weight[sel])
-    whole = _fits(h, sel, phi, res)
+    whole, plane = _fits(h, sel, phi, res)
     if depth >= SECTION_DEPTH or sel.sum() < 2 * min_cells or whole >= SECTION_FIT:
         return [(sel, whole)]
-    cut = _cut(h, sel, phi, min_cells)
+    cut = _cut(h, sel, phi, plane, min_cells)
     if cut is None:
         return [(sel, whole)]
     rows, cols = np.nonzero(sel)
@@ -644,7 +648,11 @@ def _crowns(hs: np.ndarray, flanks: np.ndarray, calm: np.ndarray, res: float) ->
     reach = max(int(round(CROWN_M / res)), 1)
     size = 2 * reach + 1
     top = ndi.maximum_filter(np.where(flanks, hs, -np.inf), size=size)
-    between = ndi.binary_closing(flanks, structure=np.ones((size, size), bool))
+    # closed on a grid padded past its edge: a ridge running to a gable at
+    # the window's edge keeps its crown there
+    padded = np.pad(flanks, size, mode="edge")
+    between = ndi.binary_closing(padded, structure=np.ones((size, size), bool))
+    between = between[size:-size, size:-size]
     return between & calm & ~flanks & (hs >= top - CROWN_DROP_M)
 
 
@@ -709,6 +717,15 @@ def _assign(hs, lab, planes, mine, reach: int, held_on=None) -> np.ndarray:
     return out
 
 
+def _grown_box(mask: np.ndarray, by: int) -> tuple[slice, slice]:
+    """The bounding box of `mask` grown by `by` cells, within the grid."""
+    rows, cols = np.nonzero(mask)
+    return (
+        slice(max(rows.min() - by, 0), rows.max() + by + 1),
+        slice(max(cols.min() - by, 0), cols.max() + by + 1),
+    )
+
+
 def _border(lab: np.ndarray, a: int, b: int) -> np.ndarray:
     """The cells of `a` and of `b` that touch the other."""
     return ((lab == a) & ndi.binary_dilation(lab == b)) | (
@@ -765,20 +782,25 @@ def creases(lab: np.ndarray, planes: dict[int, np.ndarray], mine: np.ndarray) ->
             sense = _crease_sense(planes[a], planes[b], centre[a], centre[b])
             if not sense:
                 continue
-            sel = (lab == a) | (lab == b)
-            za = _on(planes[a], rows[sel], cols[sel])
-            zb = _on(planes[b], rows[sel], cols[sel])
-            new = np.where(sense * (zb - za) > 0, a, b)
+            # the two planes' cells and a reach around them: all that moves
+            box = _grown_box((lab == a) | (lab == b), CREASE_REACH + 1)
+            here, was = lab[box], scan[box]
+            sel = (here == a) | (here == b)
+            r, c = rows[box][sel], cols[box][sel]
+            new = np.where(sense * (_on(planes[b], r, c) - _on(planes[a], r, c)) > 0, a, b)
             # where the scan put their border, not where a pass moved it;
             # two planes a pass made neighbours (it ate what lay between)
-            # never touched in the scan: their border now
-            border = _border(scan, a, b)
+            # never touched in the scan: their border now; none, an earlier
+            # pair's move parted them again
+            border = _border(was, a, b)
             if not border.any():
-                border = _border(lab, a, b)
+                border = _border(here, a, b)
+            if not border.any():
+                continue
             near = ndi.distance_transform_edt(~border)[sel] <= CREASE_REACH
-            new = np.where(near, new, lab[sel])
-            if (new != lab[sel]).any():
-                lab[sel] = new
+            new = np.where(near, new, here[sel])
+            if (new != here[sel]).any():
+                here[sel] = new
                 moved = True
         if not moved:
             break

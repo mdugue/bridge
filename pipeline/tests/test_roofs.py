@@ -3,6 +3,7 @@
 import json
 
 import numpy as np
+import pytest
 import rasterio
 import shapely
 from rasterio import features as rfeatures
@@ -368,7 +369,8 @@ def test_a_halls_monitor_roofs_stay_strips_where_merging_them_would_miss(tmp_pat
     assert sorted(parts) == [BASE + 10] * 3 + [BASE + 12.5] * 2
 
 
-def test_a_wing_beside_a_low_roof_ends_along_its_eave_not_the_scans_blur():
+@pytest.mark.parametrize("phase", [0.0, 2.0])
+def test_a_wing_beside_a_low_roof_ends_along_its_eave_not_the_scans_blur(phase):
     # a gable wing 20 m deep, its west eave on the footprint, its east one
     # over a courtyard's roof 9 m below; the scan's edge wavers ±1.5 m
     rows, cols = 70, 50
@@ -376,7 +378,7 @@ def test_a_wing_beside_a_low_roof_ends_along_its_eave_not_the_scans_blur():
     wing = 26.0 - np.abs(x - 10.0) * 0.6
     dom = np.tile(np.where(x < 20, wing, 11.0), (rows, 1))
     for r in range(rows):
-        edge = 20 + int(round(1.5 * np.sin(r / 4.0)))
+        edge = 20 + int(round(1.5 * np.sin(r / 4.0 + phase)))
         dom[r, 20:edge] = wing[20:edge] if edge > 20 else dom[r, 20:edge]
         dom[r, edge:20] = 11.0
     own = np.ones(dom.shape, bool)
@@ -525,11 +527,10 @@ def test_straight_eaves_leave_no_strip_between_two_wings_a_box():
     lab = np.ones((20, 31), np.int64)
     lab[:, 10:21] = 2
     lab[:, 21:] = 3
-    win = (slice(0, 20), slice(0, 31))
     # one wing's eave taking two columns of it leaves 9 m: taken
     take = np.zeros(lab.shape, bool)
     take[:, 10:12] = True
-    assert _kept_whole(lab, win, take, small_cells=10) == []
+    assert _kept_whole(lab, take, small_cells=10) == []
     # both wings taking three each leave a strip narrower than NARROW_M
     take[:, 10:13] = take[:, 18:21] = True
-    assert _kept_whole(lab, win, take, small_cells=10) == [2]
+    assert _kept_whole(lab, take, small_cells=10) == [2]

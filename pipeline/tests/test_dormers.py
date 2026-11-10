@@ -701,3 +701,23 @@ def test_a_dormer_beside_a_rebuilt_ridge_reads_its_flanks_pitch():
     for x in (4.5, 5.5):
         _, slope = part.at(x, 2.0)
         assert abs(slope - math.degrees(math.atan(0.5))) < 1e-6
+
+
+def test_a_dormer_beside_a_rebuilt_hip_reads_one_flanks_pitch():
+    # two flanks falling 0.5 m/m east and north meet at a hip along x = y
+    n = 10
+    xs = np.arange(n) + 0.5
+    ys = n - (np.arange(n) + 0.5)
+    face = 10.0 - 0.5 * np.maximum(xs[None, :], ys[:, None])
+    surface = {
+        "x": 0.0,
+        "y": float(n),
+        "res": 1.0,
+        "cols": n,
+        "rows": n,
+        "dz": np.round((face - 5.0) * 100).astype(int).ravel().tolist(),
+    }
+    part = dormers.MeasuredPart(shapely.box(0, 0, n, n), 5.0, surface)
+    for x, y in ((4.5, 4.5), (4.5, 5.5), (5.5, 4.5)):
+        _, slope = part.at(x, y)
+        assert abs(slope - math.degrees(math.atan(0.5))) < 1e-6

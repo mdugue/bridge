@@ -41,8 +41,12 @@ is wrong. So, per LoD2 object with a roof:
    lies on an inclined plane holding a disk a few metres across
    (`roof_planes.planar_faces`: a gable ring's narrow, gentle flanks); each
    face is then drawn in a form roofs are built in or goes back to the
-   rest (`roof_planes.plausible_fit`: planes, an extruded profile, the
-   scan itself only on a landmark) — and the rest, cut into `STEP_M`
+   rest (`roof_planes.plausible_fit`: first the roof's flanks — a gable's
+   or a hipped roof's, section by section, ridges and valleys where their
+   planes cross (`flank_cells` finds them past their dormers) —, then
+   planes, an extruded profile, the scan itself only on a landmark); a
+   face drawn as flanks ends along its eaves against a lower level
+   (`_straight_eaves`) — and the rest, cut into `STEP_M`
    height bands, each band's connected pieces a region (a step's flank, a
    cell or two wide however steep, is no face: it stays the step between two
    levels). Regions under `MIN_PART_M2`, and those holding no disk
@@ -61,7 +65,11 @@ is wrong. So, per LoD2 object with a roof:
    stay apart;
 5. the regions are polygonised from their labels smoothed by a majority
    (a border diagonal to the grid is no staircase), simplified as one
-   coverage (shared edges stay shared) and clipped to the LoD2 footprint.
+   coverage (shared edges stay shared) and clipped to the LoD2 footprint
+   less what another roof covers; then built of the building's walls
+   (`regular_cover`: each edge turned onto the nearest wall, the parts
+   tiled again highest first, the gaps to the lowest part beside them)
+   and made one coverage again (`clean_cover`).
 
 Each part is written as its polygon with the object's `id` and `z`, the
 roof's absolute height (a face's: its median); a face also carries its
@@ -126,6 +134,7 @@ REGULAR_JOG_M = 1.0  # two parallel edges further apart than this meet at a jog
 WALL_MIN_M = 4.0
 WALL_GROUP_DEG = 2.0  # walls this close in direction are one front's
 WALL_ON_M = 1.0  # an outline's edge this near a wall runs on it
+WALL_LINE_M = 0.1  # a footprint vertex this near the line of its neighbours splits no wall
 STRAIGHT_M = 0.01  # a point within the file's grid of the line of its neighbours is no corner
 CLEAN_M = 0.3  # the tiled parts' borders simplified this much (√ of the area dropped)
 GAP_FACE_M2 = 1.0  # a sliver no part holds, this small, goes to a part beside it
@@ -549,13 +558,15 @@ def _regions(h, own, face, small_cells, with_faces, narrow):
     return merge_regions(lab, h, small_cells, faces, thin=with_faces, narrow=with_faces and narrow)
 
 
-def _plausible_faces(h, lab, faces, face, landmark, flank_only):
+def _plausible_faces(h, lab, faces, face, landmark, flank_only, fits=None):
     """The surface the faces are drawn with — each as flanks, planes or one
     curve (`roof_planes.plausible_fit`), fitted on its own face cells
     (what it took in follows it) —, the faces that are none of them, and
     per face drawn as flanks its window, fit and eaves (`_straight_eaves`).
     A face most of whose cells only the flank rule found (`flank_only`) is
-    drawn as flanks or not at all."""
+    drawn as flanks or not at all. `fits`: the fits of earlier rounds, by
+    the face's cells (a face no round changed is not fitted again)."""
+    fits = {} if fits is None else fits
     surface = h.copy()
     implausible = []
     gables = {}
@@ -567,9 +578,13 @@ def _plausible_faces(h, lab, faces, face, landmark, flank_only):
         win = (slice(rows.min(), rows.max() + 1), slice(cols.min(), cols.max() + 1))
         src = mine[win] & face[win]
         flanks = (mine & flank_only).sum() > 0.5 * mine.sum()
-        fit = roof_planes.plausible_fit(
-            h[win], src if src.any() else mine[win], SLOPE, RES, EXTEND_CELLS, landmark, flanks
-        )
+        cells = src if src.any() else mine[win]
+        key = (rows.min(), cols.min(), cells.shape, mine[win].tobytes(), cells.tobytes(), flanks)
+        if key not in fits:
+            fits[key] = roof_planes.plausible_fit(
+                h[win], cells, SLOPE, RES, EXTEND_CELLS, landmark, flanks
+            )
+        fit = fits[key]
         if fit is None:
             implausible.append(int(rid))
             continue
@@ -584,43 +599,67 @@ def _straight_eaves(h, lab, faces, surface, gables, small_cells: int) -> None:
     """A face drawn as flanks ends where its flanks reach their eaves: the
     cells of a level well below an eave (EAVE_WALL_M, a courtyard's roof)
     that the flank's plane still stands over join the face, within
-    EAVE_REACH of it, and the face's cells past the eave where the scan
-    lies on that level go to it — the wall between them runs along the
-    eave's level line, not along the scan's blur. A step below the eave
-    the scan shows (a terrace, a mansard's foot) stays the face's; so does
-    a level that would be left smaller than `small_cells` or narrower than
-    NARROW_M (`_kept_whole`). In place, each gable on the levels as the
-    gables before it left them."""
+    EAVE_REACH of it and downhill of it (`_downhill`) — with the level's
+    pockets the joined cells close off —, and the face's cells past the
+    eave where the scan lies on that level go to it: the wall between them
+    runs along the eave's level line, not along the scan's blur. A step
+    below the eave the scan shows (a terrace, a mansard's foot) stays the
+    face's; so does a level all the gables together would leave smaller
+    than `small_cells` or narrower than NARROW_M (`_kept_whole`). The
+    gables are judged together, on the levels as merged; in place."""
+    level = np.concatenate([[np.nan], _region_medians(lab, h, int(lab.max()))])
+    plans = []
     for rid, (win, fit, eave) in gables.items():
-        level = np.concatenate([[np.nan], _region_medians(lab, h, int(lab.max()))])
-        sub, top, scan = lab[win], surface[win], h[win]
+        sub = lab[win]
         mine = sub == rid
         isface = faces[sub] & (sub > 0)
+        # a cell whose centre lies within half a cell's fall of the eave
+        # line is on it: every column along a flank turned off the grid
+        # by a fraction of a degree ends the same way
+        gy, gx = np.gradient(fit)
         with np.errstate(invalid="ignore"):
             lower = (sub > 0) & ~mine & ~isface & (level[sub] < eave - EAVE_WALL_M)
-            reach = fit >= eave
+            reach = fit >= eave - 0.5 * np.hypot(gx, gy)
         take = lower & reach & ndi.binary_dilation(mine, iterations=EAVE_REACH)
         take &= _downhill(fit, mine)
-        take &= ~np.isin(sub, _kept_whole(lab, win, take, small_cells))
+        take |= _pockets(lower & ~take, mine | take, small_cells)
         give = mine & np.isfinite(eave) & ~reach
         give &= ndi.binary_dilation(lower, iterations=EAVE_REACH)
-        if give.any():
-            to = fill_nearest(np.where(lower, sub, 0), lower)
-            give &= np.abs(scan - level[to]) <= EAVE_WALL_M
-            sub[give] = to[give]
+        to = fill_nearest(np.where(lower, sub, 0), lower) if give.any() else sub
+        give &= np.abs(h[win] - level[to]) <= EAVE_WALL_M
+        plans.append((rid, win, fit, take, give, to))
+    taken = np.zeros(lab.shape, bool)
+    for _, win, _, take, _, _ in plans:
+        taken[win] |= take
+    kept = _kept_whole(lab, taken, small_cells)
+    for rid, win, fit, take, give, to in plans:
+        sub, top = lab[win], surface[win]
+        take &= ~np.isin(sub, kept)
+        sub[give] = to[give]
         sub[take] = rid
         top[take] = fit[take]
 
 
-def _kept_whole(lab: np.ndarray, win, take: np.ndarray, small_cells: int) -> list[int]:
-    """The regions `take` (over the window `win`) would leave smaller than
-    `small_cells` or narrower than NARROW_M where they were not: a strip
-    between two wings' eaves would stand as a box between their walls."""
+def _pockets(rest: np.ndarray, closed: np.ndarray, small_cells: int) -> np.ndarray:
+    """The pieces of `rest` under `small_cells` that `closed` shuts in: a
+    level's pocket in the scan's wavy eave whose ends the face took."""
+    shut = ndi.binary_fill_holes(closed) & rest
+    pieces, n = ndi.label(shut)
+    if not n:
+        return shut
+    small = np.bincount(pieces.ravel(), minlength=n + 1) < small_cells
+    small[0] = False
+    return small[pieces]
+
+
+def _kept_whole(lab: np.ndarray, take: np.ndarray, small_cells: int) -> list[int]:
+    """The regions `take` would leave smaller than `small_cells` or
+    narrower than NARROW_M where they were not: a strip between two
+    wings' eaves would stand as a box between their walls."""
     kept = []
-    for r in np.unique(lab[win][take]):
+    for r in np.unique(lab[take]):
         region = lab == r
-        rest = region.copy()
-        rest[win] &= ~take
+        rest = region & ~take
         n = int(rest.sum())
         thin = _narrow(rest.astype(np.int64), 1)[0] and not _narrow(region.astype(np.int64), 1)[0]
         if n < small_cells or thin:
@@ -662,9 +701,12 @@ def measured_model(
     face, flank_only = np.zeros_like(own), np.zeros_like(own)
     if with_faces:
         face, flank_only = (c.copy() for c in cells) if cells else _face_cells(h, own)
+    fits: dict = {}
     for rounds in range(PLAUSIBLE_ROUNDS + 1):
         lab, faces = _regions(h, own, face, small_cells, with_faces, narrow)
-        surface, implausible, gables = _plausible_faces(h, lab, faces, face, landmark, flank_only)
+        surface, implausible, gables = _plausible_faces(
+            h, lab, faces, face, landmark, flank_only, fits
+        )
         if not implausible:
             break
         if rounds == PLAUSIBLE_ROUNDS:
@@ -781,12 +823,14 @@ class Walls:
 
 
 def building_walls(footprint) -> Walls:
-    """The footprint's walls at least WALL_MIN_M long, each wall within
+    """The footprint's walls at least WALL_MIN_M long — a straight front
+    split by vertices off it by under WALL_LINE_M (roof faces' corners in
+    the union, the cadastre's nodes) one wall —, each wall within
     WALL_GROUP_DEG of a longer one taking their length-weighted mean
     direction: two walls of one front a fraction of a degree apart would
     snap its edges two ways, a step between them."""
     lines, theta, length = [], [], []
-    for poly in shapely.get_parts(footprint):
+    for poly in shapely.get_parts(shapely.simplify(footprint, WALL_LINE_M)):
         if poly.geom_type != "Polygon":
             continue
         for ring in (poly.exterior, *poly.interiors):
@@ -1025,12 +1069,12 @@ def clean_cover(polys: list) -> list:
         return polys
     try:
         cover = _noded_cover(polys)
+        if cover is None or not shapely.coverage_is_valid(cover):
+            return polys
+        return list(shapely.coverage_simplify(cover, CLEAN_M, simplify_boundary=False))
     except shapely.errors.GEOSException:
         # as in `regular_cover`: an overlay GEOS cannot settle, the parts as tiled
         return polys
-    if cover is None or not shapely.coverage_is_valid(cover):
-        return polys
-    return list(shapely.coverage_simplify(cover, CLEAN_M, simplify_boundary=False))
 
 
 def _noded_cover(polys: list) -> np.ndarray | None:

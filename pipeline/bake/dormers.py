@@ -603,10 +603,24 @@ def roof_faces(city: dict, oid: str) -> list[tuple[float, float, float, float, s
     return out
 
 
-def _steeper(before: float, here: float, after: float) -> float:
-    """The steeper of the two one-cell steps through `here`."""
-    back, ahead = here - before, after - here
-    return float(back if abs(back) >= abs(ahead) else ahead)
+def _quarter_slope(g: np.ndarray, r: int, c: int) -> float:
+    """The rise per cell at (r, c) on a quarter of its 3 × 3 cells that
+    lies on one plane: the steps to the row and column neighbours on one
+    side each, of the quarters whose diagonal cell they predict best (to a
+    centimetre) the steepest — one flank's, not a mix of two across a
+    crease, nor the level a symmetric ridge's two top cells make."""
+    quarters = []
+    for dr in (-1, 1):
+        for dc in (-1, 1):
+            rr, cc = r + dr, c + dc
+            if not (0 <= rr < g.shape[0] and 0 <= cc < g.shape[1]):
+                continue
+            sy, sx = g[rr, c] - g[r, c], g[r, cc] - g[r, c]
+            quarters.append((abs(g[rr, cc] - (g[r, c] + sx + sy)), float(np.hypot(sx, sy))))
+    if not quarters:
+        return 0.0
+    best = min(off for off, _ in quarters)
+    return max(slope for off, slope in quarters if off <= best + 0.01)
 
 
 class MeasuredPart:
@@ -623,10 +637,10 @@ class MeasuredPart:
 
     def at(self, x: float, y: float) -> tuple[float, float]:
         """The part's height at (x, y) and its slope there (degrees): a
-        face's grid read between its cells, its slope per axis the steeper
-        of the steps to the cells either side — beside a ridge or a valley
-        of the rebuilt surface the two lie on opposite flanks, and their
-        mean would read the flank as level."""
+        face's grid read between its cells, its slope that of the flattest
+        quarter around the nearest cell (`_quarter_slope`) — beside a
+        ridge, a hip or a valley of the rebuilt surface the cells either
+        side lie on different flanks, and their mean reads neither."""
         if self.grid is None:
             return self.z, 0.0
         g = self.grid
@@ -635,9 +649,7 @@ class MeasuredPart:
         z = float(map_coordinates(g, [[fr], [fc]], order=1, mode="nearest")[0])
         r = int(np.clip(round(fr), 0, g.shape[0] - 1))
         c = int(np.clip(round(fc), 0, g.shape[1] - 1))
-        sx = _steeper(g[r, max(c - 1, 0)], g[r, c], g[r, min(c + 1, g.shape[1] - 1)])
-        sy = _steeper(g[max(r - 1, 0), c], g[r, c], g[min(r + 1, g.shape[0] - 1), c])
-        return z, math.degrees(math.atan(math.hypot(sx, sy) / self.res))
+        return z, math.degrees(math.atan(_quarter_slope(g, r, c) / self.res))
 
     def top(self) -> float:
         """Its highest point inside its plan."""
