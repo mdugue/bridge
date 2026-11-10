@@ -1098,7 +1098,7 @@ visual-variable codebook is in
   25° (`_eave`; a blanket's patches rise from wherever the scan dips: none
   of 288 random blankets passes). An der Frauenkirche 5's ring is now 15
   flanks meeting at hips; the block at Schloßstraße and Sporergasse 23
-  flanks, the scan within 0.5 m of the drawn roof on 71 % of its cells
+  flanks, the scan within 0.5 m of the drawn roof on 72 % of its cells
   (35 % with the planes first). A face most of whose cells only the
   flank rule found is drawn as flanks or not at all: the planes or a
   landmark's surface would draw the dormers' blobs it was found past.
@@ -1109,8 +1109,8 @@ visual-variable codebook is in
   `coverage_simplify` 2 m, clipped to the footprint,
   parts under 2 m dropped → `data/<site>/dlm/roofs_<tile>.geojson` (Polygons
   with the object `id`, the roof `z` and, for a face, its `surface`; the
-  provider's credit). **1 080 objects on Dresden's fifteen tiles, 2 721
-  parts, 342 of them faces** (2026-11-10; 2 814 and 367 before the flanks;
+  provider's credit). **1 080 objects on Dresden's fifteen tiles, 2 720
+  parts, 344 of them faces** (2026-11-10; 2 814 and 367 before the flanks;
   1 081, 2 755 and 222 before the plausibility rule; 886 objects, 2 227 parts before
   the band below 40 %; 2 956 parts before the strips merged; the
   Altstadt most); the step runs on every site — Hamburg 587 objects (365
