@@ -1133,7 +1133,9 @@ visual-variable codebook is in
   the eave line counts as on it (a flank turned off the grid by a
   fraction of a degree ends the same way along its length), and a pocket
   of the level smaller than a part that the joined cells shut in joins
-  too. All the gables are judged together: a level they would leave
+  too; the face's cells past the eave go only where they reach the level
+  (a strip shut off from it stays the face's). All the gables are judged
+  together, their takes before their gives: a level they would leave
   smaller than a part or narrower than 7 m (`NARROW_M`, a strip between
   two wings standing as a box) keeps its cells. An der
   Frauenkirche 5's ring is now 16 flanks meeting at hips; the block at
@@ -1179,7 +1181,10 @@ visual-variable codebook is in
   ones of their shared border (`_straightened`, its edges noded again) —
   each would be one more wall in the mesh; a step of these fix-ups that
   changes the parts' union by more than 2 % or halves a part keeps the
-  parts as they were (`_holds`):
+  parts as they were (`_holds`), and parts laid on the walls that, as
+  drawn, miss DOM1 on more than 30 % of their judged cells or on more
+  than half the LoD2's share are drawn as the scan put them, unlaid
+  (`misses_drawn`):
   Dresden's rebuilt roofs have 24 % fewer outline points than before the
   regularising (the other sites 16 to 36 %). The footprint they are cut to is the
   building's less what another roof covers, each covered piece whole
@@ -1756,8 +1761,10 @@ visual-variable codebook is in
   `z`, a face's surface grid read between its cells, its slope on the
   quarter of the 3 × 3 cells around that lies on one plane — beside a
   ridge, hip or valley not a mix of two flanks —, its ridge the
-  highest of them; a dormer where the rebuilt roof is flatter than 25°
-  is dropped, the building draws no pitch to carry it); until then such a roof's dormers and chimneys stood
+  highest of them; a dormer where the rebuilt roof is flatter than 25°,
+  and a dormer or chimney off every rebuilt part of its host, is dropped
+  before the rows are set (`RoofPlanes.carries`) — the building draws no
+  pitch, or no roof there, to carry it); until then such a roof's dormers and chimneys stood
   at the LoD2 faces it replaces, metres off the drawn roof — some
   chimneys' measured tops under their own feet (Dresden's rebuilt roofs
   hold 417 dormers now, 50 before; the block at Schloßstraße and

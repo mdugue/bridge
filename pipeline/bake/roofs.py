@@ -631,12 +631,18 @@ def _straight_eaves(h, lab, faces, surface, gables, small_cells: int) -> None:
     for _, win, _, take, _, _ in plans:
         taken[win] |= take
     kept = _kept_whole(lab, taken, small_cells)
-    for rid, win, fit, take, give, to in plans:
+    for rid, win, fit, take, _, _ in plans:
         sub, top = lab[win], surface[win]
         take &= ~np.isin(sub, kept)
-        sub[give] = to[give]
         sub[take] = rid
         top[take] = fit[take]
+    # a face's cells past its eave go to the level only joined to what is
+    # left of it: never a strip of it beyond a column the face took
+    for _, win, _, _, give, to in plans:
+        sub = lab[win]
+        level = (sub > 0) & ~faces[sub]
+        give &= ndi.binary_propagation(level, mask=give | level)
+        sub[give] = to[give]
 
 
 def _pockets(rest: np.ndarray, closed: np.ndarray, small_cells: int) -> np.ndarray:
@@ -1168,12 +1174,13 @@ def _holds(new: list, old: list) -> bool:
 
 
 def region_polygons(
-    lab: np.ndarray, heights: np.ndarray, grid: Grid, footprint, outline=None
+    lab: np.ndarray, heights: np.ndarray, grid: Grid, footprint, outline=None, regular=True
 ) -> list[tuple[shapely.Geometry, float, int]]:
     """The regions in plan: polygonised, simplified as one coverage, its
     edges along the walls of `outline` (the building's own, uncut by
-    another roof's cells; the footprint where None: `regular_cover`),
-    clipped to the footprint; each with its height and label."""
+    another roof's cells; the footprint where None: `regular_cover`, unless
+    not `regular`), clipped to the footprint; each with its height and
+    label."""
     # every footprint point under a region: the labels grown outward a cell
     grown = fill_nearest(lab, lab > 0)
     near = ndi.binary_dilation(lab > 0, iterations=2)
@@ -1189,10 +1196,12 @@ def region_polygons(
     )
     cover = [_polygonal(shapely.intersection(p, footprint)) for p in cover]
     order = sorted(range(len(cover)), key=lambda i: -heights[ids[i] - 1])
-    walls = building_walls(footprint if outline is None else outline)
-    regular = clean_cover(regular_cover(cover, order, footprint, walls))
-    # what the regularising lost, it may not: the parts as clipped then
-    cover = _straightened(regular if _holds(regular, cover) else cover)
+    if regular:
+        walls = building_walls(footprint if outline is None else outline)
+        laid = clean_cover(regular_cover(cover, order, footprint, walls))
+        # what the regularising lost, it may not: the parts as clipped then
+        cover = laid if _holds(laid, cover) else cover
+    cover = _straightened(cover)
     out = []
     for poly, rid in zip(cover, ids, strict=True):
         # on the centimetre grid the file is written on, so it stays valid
@@ -1342,8 +1351,14 @@ def rebuild(area: Area, obj: LodObject) -> Rebuilt | None:
         shapes = rfeatures.shapes(mask.astype(np.uint8), mask=mask, transform=grid.transform)
         cut = shapely.union_all([shapely.geometry.shape(g) for g, _ in shapes])
         footprint = _polygonal(shapely.difference(footprint, shapely.simplify(cut, CUT_SMOOTH_M)))
+    drawn = region_polygons(model.lab, model.level, grid, footprint, outline)
+    # the regions laid along the walls hand cells from one to another: where
+    # that makes the parts as drawn miss DOM1 more than the model may, they
+    # stay where the scan put them
+    if drawn and misses_drawn(drawn, model, grid, dom, judged, miss_lod2):
+        drawn = region_polygons(model.lab, model.level, grid, footprint, outline, regular=False)
     parts = []
-    for poly, z, rid in region_polygons(model.lab, model.level, grid, footprint, outline):
+    for poly, z, rid in drawn:
         if z < obj.base + GROUND_M:
             continue
         z = round(z, 2)
@@ -1352,6 +1367,33 @@ def rebuild(area: Area, obj: LodObject) -> Rebuilt | None:
     if not parts:
         return None
     return Rebuilt(obj.id, parts, miss_lod2, miss_model)
+
+
+def drawn_heights(drawn: list, model: Model, grid: Grid) -> np.ndarray:
+    """The roof the parts `drawn` (`region_polygons`) stand for per cell:
+    each part's level, or its face's surface carried past the face's cells
+    (`extend_face`, as `surface_grid` writes it); NaN outside them."""
+    lab = rfeatures.rasterize(
+        [(poly, rid) for poly, _, rid in drawn],
+        out_shape=grid.shape,
+        transform=grid.transform,
+        fill=0,
+        dtype="int32",
+    )
+    out = np.concatenate([[np.nan], model.level])[lab]
+    for rid in np.unique(lab[lab > 0]):
+        if model.faces[rid]:
+            at = lab == rid
+            out[at] = extend_face(model.surface, model.lab == rid)[at]
+    return np.where(lab > 0, out, np.nan)
+
+
+def misses_drawn(drawn, model, grid, dom, judged, miss_lod2) -> bool:
+    """Whether the parts as drawn miss DOM1 on more than KEEP_SHARE of the
+    judged cells under them, or more than half the share the LoD2 did."""
+    h = drawn_heights(drawn, model, grid)
+    share = miss_share(h, dom, judged & np.isfinite(h))
+    return share > KEEP_SHARE or share > miss_lod2 / 2
 
 
 def run(tile: Tile) -> None:

@@ -740,6 +740,15 @@ class RoofPlanes:
         """Whether object `of`'s roof is read on its rebuilt parts."""
         return of < len(self.parts) and bool(self.parts[of])
 
+    def carries(self, d: dict) -> bool:
+        """Whether the roof drawn under dormer or chimney `d` holds it: on
+        a roof rebuilt from DOM1, not where it stands off every part, nor
+        a dormer where the part is flatter than MIN_SLOPE."""
+        if not self.rebuilt(d["of"]):
+            return True
+        e = self.at(d["of"], d["x"], d["y"])
+        return e is not None and (d.get("k") == "chimney" or e[1] >= MIN_SLOPE)
+
     def _measured_at(self, of: int, p: shapely.Point) -> tuple[float, float] | None:
         """A rebuilt roof at `p`: the highest part over it, else the nearest
         within PLANE_REACH_M of its outline."""
@@ -767,16 +776,14 @@ def on_planes(found: list[dict], planes: RoofPlanes) -> list[dict]:
     dormers and chimneys kept, in place."""
     kept = []
     for d in found:
-        e = planes.at(d["of"], d["x"], d["y"])
-        chimney = d.get("k") == "chimney"
-        # off every part of a rebuilt roof, or a dormer on one too flat
-        if planes.rebuilt(d["of"]) and (e is None or not chimney and e[1] < MIN_SLOPE):
+        if not planes.carries(d):
             continue
         kept.append(d)
+        e = planes.at(d["of"], d["x"], d["y"])
         if e is None:
             continue
         z, slope = e
-        if chimney:
+        if d.get("k") == "chimney":
             d["z"] = round(z, 2)
             continue
         if slope < MIN_SLOPE:
@@ -1106,6 +1113,10 @@ def find(
         for d in extra:
             d["x"], d["y"] = moved.back(d)
         found += [d for d in extra if not twice(d, found)]
+    # what a rebuilt roof cannot carry goes before the rows are set, so no
+    # row is fitted to it, nor a neighbour dropped for it
+    if planes is not None:
+        found = [d for d in found if planes.carries(d)]
     building = [roofs.groups[d["of"]] for d in found]
     found = in_rows(found, building, walls or {}, roofs.place)
     if planes is not None:

@@ -16,6 +16,7 @@ from bake.roofs import (
     LEVEL_SHARE,
     MISS_SHARE,
     Grid,
+    Model,
     _gap_owner,
     _kept_whole,
     _majority,
@@ -30,6 +31,7 @@ from bake.roofs import (
     measured_model,
     merge_regions,
     miss_share,
+    misses_drawn,
     pitch_holds,
     region_polygons,
     regular_polygon,
@@ -413,6 +415,26 @@ def test_a_courtyard_drawn_from_the_scan_has_the_walls_straight_corners_of_the_b
     assert abs(inner.area - court.area) < 0.1 * court.area
     total = sum(p.area for p, _, _ in parts)
     assert abs(total - footprint.area) < 1.0  # no gap, no overlap
+
+
+def test_parts_drawn_over_another_levels_cells_miss_as_drawn():
+    # two levels 4 m apart, side by side; drawn as the model holds them,
+    # and then with the lower one laid over most of the higher one's cells
+    grid = Grid((X0, Y0, X0 + 40, Y0 + 20))
+    lab = np.zeros((20, 40), np.int64)
+    lab[:, :20], lab[:, 20:] = 1, 2
+    level = np.array([10.0, 14.0])
+    model = Model(lab, level, np.zeros(3, bool), np.full(lab.shape, np.nan))
+    dom = level[lab - 1]
+    judged = np.ones(lab.shape, bool)
+    left, right = shapely.box(X0, Y0, X0 + 20, Y0 + 20), shapely.box(X0 + 20, Y0, X0 + 40, Y0 + 20)
+    held = [(left, 10.0, 1), (right, 14.0, 2)]
+    assert not misses_drawn(held, model, grid, dom, judged, 1.0)
+    over = [
+        (shapely.box(X0, Y0, X0 + 35, Y0 + 20), 10.0, 1),
+        (shapely.box(X0 + 35, Y0, X0 + 40, Y0 + 20), 14.0, 2),
+    ]
+    assert misses_drawn(over, model, grid, dom, judged, 1.0)
 
 
 def test_a_part_the_tiling_leaves_inside_a_collection_is_kept():
