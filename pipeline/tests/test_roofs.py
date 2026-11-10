@@ -454,6 +454,22 @@ def test_an_edge_on_a_wall_and_its_neighbour_off_it_are_one_line():
     assert max(south) < 1e-6  # on the wall, no skewed edge and no step
 
 
+def test_a_step_between_two_walls_of_one_front_keeps_its_corners():
+    # the south front stepping out 1.5 m halfway, its two walls 0.5° apart;
+    # the part follows it 0.4 m in
+    t = np.tan(np.radians(0.5))
+    footprint = shapely.Polygon([(0, 0), (20, 0), (20, 1.5), (40, 1.5 + 20 * t), (40, 12), (0, 12)])
+    part = shapely.Polygon(
+        [(0.4, 0.4), (19.6, 0.4), (19.6, 1.9), (39.6, 1.9 + 20 * t), (39.6, 11.6), (0.4, 11.6)]
+    )
+    out = regular_polygon(part, building_walls(footprint))
+    south = sorted((x, y) for x, y in out.exterior.coords[:-1] if y < 5)
+    # each wall's line, the step square to them: no skewed edge
+    assert all(abs(y) < 0.01 for x, y in south if x < 19)
+    assert all(abs(y - (1.5 + (x - 20) * t)) < 0.01 for x, y in south if x > 20)
+    assert len(south) == 4
+
+
 def test_a_part_the_tiling_leaves_inside_a_collection_is_kept():
     square = shapely.box(0, 0, 10, 10)
     other = shapely.box(20, 0, 25, 5)

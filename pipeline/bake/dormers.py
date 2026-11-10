@@ -756,7 +756,9 @@ class RoofPlanes:
         return d.get("k") == "chimney" or e[1] >= MIN_SLOPE
 
     def keeps(self, d: dict) -> bool:
-        """`carries`, `d`'s roof looked up."""
+        """`carries`, `d`'s roof looked up (on a rebuilt roof only)."""
+        if not self.rebuilt(d["of"]):
+            return True
         return self.carries(d, self.at(d["of"], d["x"], d["y"]))
 
     def _measured_at(self, of: int, p: shapely.Point) -> tuple[float, float] | None:

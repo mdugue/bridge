@@ -1167,7 +1167,8 @@ visual-variable codebook is in
   sliver beside it); neighbours parallel within 1 m (where their edges lie, before one moved onto its wall; within 2°, one front's walls) are one line — two
   on two walls only on one line, a jog in the footprint stays —, an edge off every wall
   shorter than 4 m (a rounded corner) is left out, and the lines meet
-  where they cross, unless a corner would stand 1.5 m off the outline (a
+  where they cross (two within 2° of each other at a jog, each square to
+  the other), unless a corner would stand 1.5 m off the outline (a
   round tower keeps its points). The parts are then tiled again, the
   highest first, each taking what its new outline holds and nothing
   before it took; a gap none took goes to the lowest part it lies beside

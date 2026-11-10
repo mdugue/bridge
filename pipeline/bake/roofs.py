@@ -1025,9 +1025,11 @@ def _regular_ring(coords, walls: Walls) -> list:
         span = [(prev.last + k) % n for k in range((line.first - prev.last) % n + 1)]
         p, u, q, v = prev.point, prev.dir, line.point, line.dir
         det = _cross(u, v)
-        if abs(det) < 1e-9:
-            # parallel: a jog, each line's foot of the point between them
-            # (a bend of a few degrees has a corner where its lines cross)
+        if abs(det) < np.sin(np.deg2rad(WALL_GROUP_DEG)):
+            # parallel, or on one front's walls (an edge on a wall runs on
+            # its own direction, one off it on the front's): a jog, each
+            # line's foot of the point between them (a bend of a few
+            # degrees has a corner where its lines cross)
             c = pts[span[len(span) // 2]]
             corners = [p + u * float(u @ (c - p)), q + v * float(v @ (c - q))]
         else:
