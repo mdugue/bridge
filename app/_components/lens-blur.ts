@@ -193,8 +193,6 @@ export function createLensBlur(
         .min(u.capPx.mul(0.5))
         .max(0.5)
         .toVar();
-      // a tap's circle reaches the pixel over this soft edge (px)
-      const edge = max(float(0.5), radius.mul(0.15)).toVar();
       // the area each tap stands for, over π
       const share = radius.mul(radius).div(TAPS).toVar();
       const back = centre.rgb.toVar();
@@ -218,6 +216,10 @@ export function createLensBlur(
         // twice the pixel's own circle
         const behind = step(cC, s.a);
         const own = mix(rs, min(rs, rC.mul(2)), behind).toVar();
+        // its circle reaches the pixel over a soft edge as wide as a
+        // seventh of it (px): its own, so a wide search fringes no
+        // narrow circle
+        const edge = max(float(0.5), own.mul(0.15));
         const reaches = clamp(
           own.sub(radius.mul(r)).div(edge.mul(2)).add(0.5),
           0,
@@ -245,9 +247,9 @@ export function createLensBlur(
   );
 
   // 4. the composite: the gather's four texels around the pixel, each by
-  // its bilinear share and by how near its blur lies to the pixel's own —
-  // a texel a sharp silhouette shares lends the blurred background beside
-  // it none of its colour — and the frame's own detail kept by the share
+  // its bilinear share, a texel nearer than the pixel held off by how
+  // much — a pixel behind a sharp silhouette takes none of its colour —
+  // and the frame's own detail kept by the share
   // the pixel's circle and a foreground leave sharp: the gather holds
   // behind · (1 − covered) + front · covered, and its "behind" is, for a
   // pixel this sharp, the half-resolution frame
@@ -267,9 +269,13 @@ export function createLensBlur(
         const g = gather.sample(texel);
         const pre = prefilter.sample(texel).toVar();
         const share = (x ? f.x : f.x.oneMinus()).mul(y ? f.y : f.y.oneMinus());
-        const apart = pre.a.sub(c);
-        // never quite nothing: four texels all far off in blur still
-        // average by their shares instead of darkening the pixel
+        // only a texel nearer than the pixel (by more than half a pixel's
+        // blur) is held off: a blurred edge's own pixels take the texels
+        // behind them, whose gather the edge already covers — weighing
+        // both ways drew its silhouette in half-resolution steps. Never
+        // quite nothing: four texels all far off in blur still average by
+        // their shares instead of darkening the pixel.
+        const apart = max(c.sub(pre.a).sub(0.5), 0);
         const near = float(1).div(apart.mul(apart).add(1)).add(1e-6);
         const w = share.mul(near).toVar();
         weight.addAssign(w);

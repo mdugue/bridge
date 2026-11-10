@@ -268,6 +268,11 @@ const DEFAULT_FOV = 55;
  *  plus a margin, so tiles still loading read as haze, not as an edge. */
 const PARTIAL_WORLD_FOG_FAR = 1100;
 const SKY_COLOR = 0x9f_b6_cc;
+/** How far behind the ground a ray meets a design may stand for the
+ *  focus (m): a site's ground is pressed under the design (design-site.ts),
+ *  which the ground's rays do not see — a pit or a sunken court, not a
+ *  design across the hill. */
+const DESIGN_PRESS_M = 20;
 /** How often the crash trail takes a heartbeat (crash-trail.ts). */
 const TRAIL_BEAT_MS = 2000;
 /** How often the GPU's frame time is read back (ms): a few per beat. */
@@ -3091,16 +3096,15 @@ async function bootApp(
   // tolerates round a landing stage or a playground's outline (it stands
   // over the surface drawn), nor what a design's site folded away
   const focusable = (t: AskHit<FeatureInquiry>) =>
-    t.target.kind !== "landing" &&
-    !(t.target.kind === "furniture" && t.solids.some((s) => "prism" in s)) &&
+    !t.tolerance &&
     !foldedThing(t.target, focusRaycaster.ray.at(t.distance, focusAt), offset);
   // The trees, lamps, furniture and monuments the probe can ask (their
   // sets come in idle time, a mesh's BVH with a question: the focus never
   // builds either) before `far`: a tree in the middle of the view is what
   // the lens focuses on, not the facade behind it. A design stands on
-  // ground pressed under it, which the ground's rays do not know: it is
-  // never behind the ground, only behind a building (`buildingFar`), as
-  // for the probe.
+  // ground pressed under it, which the ground's rays do not know: it may
+  // lie behind the ground they meet, by as much as a site is pressed
+  // (`DESIGN_PRESS_M`), never behind a building (`buildingFar`) or a hill.
   const focusThing = (far: number, buildingFar: number) => {
     const { origin, direction } = focusRaycaster.ray;
     const tileThing = nearestInSets(
@@ -3114,7 +3118,7 @@ async function bootApp(
       origin,
       direction,
       design?.asks() ?? [],
-      tileThing?.distance ?? buildingFar
+      tileThing?.distance ?? Math.min(buildingFar, far + DESIGN_PRESS_M)
     );
     return designThing ?? tileThing;
   };
@@ -3968,9 +3972,10 @@ async function bootApp(
         opts.onPose?.(pose.getPose());
         // a ray through the buildings and a march over the ground: only
         // where there is a lens blur to focus (not on a phone), and not
-        // while the camera moves or the style draws none (the lens shows
-        // nothing then; the still frames before it returns aim it)
-        if (lensBlur && postStack.lensWanted() && !walkMovedNow) {
+        // while the camera moves (the lens shows nothing then; the still
+        // frames before it returns aim it). In a style without the blur
+        // too, so a switch back finds the focus where the view rests.
+        if (lensBlur && !walkMovedNow) {
           updateFocus();
         }
       }

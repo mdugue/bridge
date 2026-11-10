@@ -919,6 +919,7 @@ function furnitureItem(
       solids: [
         { prism: { ring: ringXz(ring, ctx.offset), y0: y - 0.3, y1: y + h } },
       ],
+      tolerance: true,
       target: {
         kind: "furniture",
         tile: ctx.tile,
@@ -960,6 +961,7 @@ export function landingItems(
           },
         },
       ],
+      tolerance: true,
       target: {
         kind: "landing",
         tile: ctx.tile,

@@ -1,13 +1,29 @@
 import { Box3, Raycaster, Vector3 } from "three/webgpu";
 import type { Mesh, Object3D } from "three/webgpu";
-import { PIER_REACH, rayDeckTop, ringDistanceXz } from "@/lib/city/ask-solids";
-import type { AskHit, AskItem, AskSet, Slab } from "@/lib/city/ask-solids";
+import {
+  PIER_REACH,
+  rayDeckTop,
+  rayPrism,
+  ringDistanceXz,
+} from "@/lib/city/ask-solids";
+import type { AskHit, AskItem, AskSet, Slab, Xyz } from "@/lib/city/ask-solids";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 
 /** The slab a deck's first solid is, if it is one. */
 const slabOf = (item: AskItem<FeatureInquiry>): Slab | null => {
   const s = item.solids[0];
   return s && "slab" in s ? s.slab : null;
+};
+
+/** Where a ray meets a deck before its BVH: down onto its top, else (a
+ *  ray level with it or from below) into its box, if ahead. */
+const roughDeck = (o: Xyz, d: Xyz, slab: Slab, far: number): number | null => {
+  const top = rayDeckTop(o, d, slab, far);
+  if (top !== null) {
+    return top;
+  }
+  const enter = rayPrism(o, d, slab);
+  return enter !== null && enter > 0 && enter <= far ? enter : null;
 };
 
 /**
@@ -51,13 +67,14 @@ export function bridgeAskSet(
     },
     unbuilt: () => meshes.some((mesh) => !mesh.geometry.boundsTree),
     // before a question built the BVHs: where the ray comes down onto a
-    // deck's top — the one underfoot too
+    // deck's top — the one underfoot too — or into a deck seen level or
+    // from below
     rough: (o, d, far) => {
       let best: AskHit<FeatureInquiry> | null = null;
       let reach = far;
       for (const deck of decks) {
         const slab = slabOf(deck);
-        const t = slab ? rayDeckTop(o, d, slab, reach) : null;
+        const t = slab ? roughDeck(o, d, slab, reach) : null;
         if (t !== null) {
           best = { ...deck, distance: t };
           reach = t;
