@@ -74,6 +74,11 @@ export function readShp(
   while (at + 8 <= view.byteLength) {
     const length = view.getInt32(at + 4, false) * 2;
     const content = at + 8;
+    // A record holds its shape type at least and ends inside the file: a
+    // cut or corrupt length would otherwise never advance, or run on.
+    if (length < 4 || content + length > view.byteLength) {
+      throw new Error("beschädigte .shp-Datei");
+    }
     const type = view.getInt32(content, true);
     if (POINT.has(type)) {
       const x = view.getFloat64(content + 4, true);
@@ -147,9 +152,17 @@ export function readDbf(
   const view = new DataView(bytes);
   const decoder =
     given ?? ldidDecoder(view.getUint8(29), new Uint8Array(bytes));
-  const count = view.getUint32(4, true);
+  const claimed = view.getUint32(4, true);
   const headerLength = view.getUint16(8, true);
   const recordLength = view.getUint16(10, true);
+  if (recordLength < 1 || headerLength < 33) {
+    throw new Error("beschädigte .dbf-Datei");
+  }
+  // no more records than the file holds, whatever its header claims
+  const held = Math.max(
+    0,
+    Math.floor((view.byteLength - headerLength) / recordLength)
+  );
   const fields: { name: string; type: string; length: number }[] = [];
   const raw = new Uint8Array(bytes);
   for (let at = 32; at < headerLength - 1 && raw[at] !== 0x0d; at += 32) {
@@ -162,6 +175,7 @@ export function readDbf(
     });
   }
   const out: Record<string, string | number | null>[] = [];
+  const count = Math.min(claimed, held);
   for (let r = 0; r < count; r += 1) {
     let at = headerLength + r * recordLength + 1;
     const record: Record<string, string | number | null> = {};

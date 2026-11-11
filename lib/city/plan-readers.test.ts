@@ -144,6 +144,32 @@ describe("shapefile", () => {
     );
     expect(rows[0].ART).toBe("Gehölz");
   });
+
+  test("a record length that does not advance is a broken file, not a loop", () => {
+    const stuck = new DataView(shp(5, [[square(0, 0, 10)]]).slice(0));
+    // −4 words: the next record would start where this one did
+    stuck.setInt32(104, -4, false);
+    expect(() => readShapefile(stuck.buffer, null, null)).toThrow(
+      "beschädigte .shp-Datei"
+    );
+    const long = new DataView(shp(5, [[square(0, 0, 10)]]).slice(0));
+    long.setInt32(104, 1_000_000, false);
+    expect(() => readShapefile(long.buffer, null, null)).toThrow(
+      "beschädigte .shp-Datei"
+    );
+  });
+
+  test("a .dbf reads the records it holds, whatever its header counts", () => {
+    const claims = new DataView(dbf(["ART"], [["Wiese"], ["Rasen"]]).slice(0));
+    claims.setUint32(4, 4_000_000_000, true);
+    expect(readDbf(claims.buffer, null).map((r) => r.ART)).toEqual([
+      "Wiese",
+      "Rasen",
+    ]);
+    const empty = new DataView(dbf(["ART"], [["Wiese"]]).slice(0));
+    empty.setUint16(10, 0, true);
+    expect(() => readDbf(empty.buffer, null)).toThrow("beschädigte .dbf-Datei");
+  });
 });
 
 function blob(wkb: number[]): Uint8Array {
