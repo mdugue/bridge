@@ -158,9 +158,22 @@ export function createSmaa(input: TextureNode, size: Vector2): Smaa {
   edges.value.name = "SMAA.edges";
 
   const edgesAt = (at: V2): V4 => read(edges, at);
-  /** How many pixels a search's last step overshot, from the search table. */
+  /**
+   * How many pixels a search's last step overshot, from the search table:
+   * its half for the direction (`bias`), read at the texel's centre — the
+   * 33 values of an edge sum over 64 + 2 texels, as SMAA lays them out.
+   * (Three's node read `e.x / 2 + bias`: a sum of 1 on a search to the
+   * left, a crossing line a pixel wide, fell into the right half.)
+   */
   const overshoot = (e: V2, bias: number): F =>
-    texture(search, vec2(e.x.mul(0.5).add(bias), e.y), float(0)).r.mul(255);
+    texture(
+      search,
+      vec2(
+        e.x.mul(32 / SMAA_SEARCH_WIDTH).add(bias + 0.5 / SMAA_SEARCH_WIDTH),
+        e.y.mul(32 / SMAA_SEARCH_HEIGHT).add(0.5 / SMAA_SEARCH_HEIGHT)
+      ),
+      float(0)
+    ).r.mul(255);
   /** A pattern's two weights at `distance` (√px to either end). */
   const areaOf = (distance: V2, e1: F, e2: F): V2 =>
     texture(
