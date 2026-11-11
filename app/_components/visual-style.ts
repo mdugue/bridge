@@ -378,11 +378,14 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
   // Der Skyline-Spiegel (city-mirror.ts): what a window's back and a glass
   // wall mirror, read once on the facet
   const mirror = createCityMirror(d.uSun).at(wn, h);
+  // a glass wall's panes between its mullions and transoms
+  const glass = glassPane(flags, wall, h, build.y, wn);
   // the wall's own looks (relief, tone, ledges) stay off the openings
   const plaster = wall.mul(float(1).sub(windows.opening));
   const colour = clayAlbedo(windows, {
     build,
     flags,
+    glass,
     h,
     plaster,
     sn,
@@ -424,7 +427,7 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     ao: createClaySky().ao(h, build.z, SKY_VIEW).mul(windows.ao),
     // after dark the street lamps light the walls that face them, each
     // as its colour takes their light (lamp-reflections.ts `streetLight`)
-    emissive: clayGlow(d, { build, h, wall, flags, wn, sn, mirror })
+    emissive: clayGlow(d, { build, h, wall, flags, wn, sn, mirror, glass })
       .add(windows.glow.mul(DUSK_GLOW).mul(d.uNight))
       .add(colour.mul(streetLight(wn)))
       // a window's back mirrors the sky as a shop window's pane does
@@ -467,6 +470,7 @@ function clayAlbedo(
   parts: {
     build: V4;
     flags: F;
+    glass: F;
     h: F;
     plaster: F;
     tint: V3;
@@ -475,7 +479,7 @@ function clayAlbedo(
     sn: V3;
   }
 ): V3 {
-  const { build, flags, h, plaster, tint, wall, wn, sn } = parts;
+  const { build, flags, glass, h, plaster, tint, wall, wn, sn } = parts;
   // A mix, not a select: three emits a select as if/else, and the facade
   // drawn inside its arm — the windows first among it — would be built
   // twice (the normal, light and glow read it outside), its derivatives in
@@ -493,7 +497,7 @@ function clayAlbedo(
             wn
           )
         )
-        .mul(facadeBody(flags, wall, sn)),
+        .mul(facadeBody(flags, wall, sn, glass)),
       h,
       wall,
       flags,
@@ -819,10 +823,10 @@ function facadeMaterial(flags: F, wall: F): { glass: F; metal: F } {
  * strength (REFLECTIONS), at 0 the clay it was. The clay's own colour
  * gives way by part of it (clayGraph), as a pane's would.
  */
-function facadeMirror(flags: F, wall: F, normal: V3): F {
+function facadeMirror(flags: F, wall: F, normal: V3, glass: F): F {
   const m = facadeMaterial(flags, wall);
   return mirrorWeight(normal, GLASS_MIRROR.base)
-    .mul(facadeGlass(flags, wall))
+    .mul(glass)
     .add(mirrorWeight(normal, 0.1).mul(m.metal.mul(0.35)))
     .mul(REFLECTIONS);
 }
@@ -843,14 +847,46 @@ function facadeGlass(flags: F, wall: F): F {
   return facadeMaterial(flags, wall).glass.mul(float(1).sub(shopPane(flags)));
 }
 
+/** A glass wall's frame (Pfosten und Riegel): mullions every `mullion`
+ *  metres along the wall, a transom at every storey, `width` wide. */
+export const GLASS_FRAME = { mullion: 1.5, width: 0.08 } as const;
+
+/** 1 on a line of `width` every `period` along `x` (m), anti-aliased by
+ *  the pixel's footprint; where the lines come closer than a few pixels,
+ *  their share of the wall (the mean tone). */
+function frameLines(x: F, period: F | number, width: number): F {
+  const p = typeof period === "number" ? float(period) : period;
+  const fw = max(fwidth(x), 1e-4);
+  const off = abs(fract(x.div(p).add(0.5)).sub(0.5)).mul(p);
+  const line = float(1).sub(
+    smoothstep(fw.mul(-0.5).add(width / 2), fw.mul(0.5).add(width / 2), off)
+  );
+  const sharp = float(1).sub(smoothstep(p.mul(0.12), p.mul(0.3), fw));
+  return mix(float(width).div(p), line, sharp);
+}
+
+/** Where a glass wall is pane (1) and where frame (0): the flag's glass
+ *  (`facadeGlass`) less its mullions and transoms. The mullions are laid
+ *  along the facet from the world's origin — a wall's own rhythm, not a
+ *  measured one (photos read glass, not its frame). */
+function glassPane(flags: F, wall: F, h: F, storey: F, wn: V3): F {
+  const t = normalize(vec2(wn.z.negate(), wn.x).add(1e-5));
+  const s = positionWorld.x.mul(t.x).add(positionWorld.z.mul(t.y));
+  const frame = max(
+    frameLines(s, GLASS_FRAME.mullion, GLASS_FRAME.width),
+    frameLines(h, max(storey, 2.8), GLASS_FRAME.width)
+  );
+  return facadeGlass(flags, wall).mul(float(1).sub(frame));
+}
+
 /** What of the clay's own colour a glass or metal wall keeps: it gives way
  *  to the mirror as a pane's would, and on glass to the dark behind it. */
-function facadeBody(flags: F, wall: F, normal: V3): F {
+function facadeBody(flags: F, wall: F, normal: V3, glass: F): F {
   return float(1).sub(
     min(
-      facadeMirror(flags, wall, normal)
+      facadeMirror(flags, wall, normal, glass)
         .mul(0.6)
-        .add(facadeGlass(flags, wall).mul(GLASS_MIRROR.body)),
+        .add(glass.mul(GLASS_MIRROR.body)),
       0.94
     )
   );
@@ -934,9 +970,10 @@ function clayGlow(
     wn: V3;
     sn: V3;
     mirror: MirrorSeen;
+    glass: F;
   }
 ): V3 {
-  const { build, h, wall, flags, wn, sn, mirror } = at;
+  const { build, h, wall, flags, wn, sn, mirror, glass } = at;
   const view = viewDirection().negate();
   const fres = float(1).sub(clamp(dot(view, sn), 0, 1));
   // a shop window has its own grazing light (paneSky), not the clay's rim
@@ -979,8 +1016,8 @@ function clayGlow(
       // same, blurred
       .add(
         mirror
-          .colour(mix(0.22, GLASS_MIRROR.roughness, facadeGlass(flags, wall)))
-          .mul(facadeMirror(flags, wall, sn))
+          .colour(mix(0.22, GLASS_MIRROR.roughness, glass))
+          .mul(facadeMirror(flags, wall, sn, glass))
       )
       .add(paneSky(d, h, fres).mul(paneShade(h, build.z)).mul(pane))
       .add(askedLight)

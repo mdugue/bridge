@@ -46,7 +46,8 @@ from data, read the same on every house, and stay calm.
    a window is a recess (a real one at every distance, as wide as the
    measured bay). Panes and glass walls mirror the street's skyline and
    the sky above it, read from the baked horizon — a stand-in house below
-   the skyline, never a second render of the scene.
+   the skyline, never a second render of the scene. A glass wall shows its
+   frame — mullions and a transom a storey — the one grid on a facade.
 7. **Night:** walls do not glow; every unlit or additive layer is dimmed by
    the one night factor.
 8. **Water is matte** (a sun path, glints, gentle waves); fountains keep
