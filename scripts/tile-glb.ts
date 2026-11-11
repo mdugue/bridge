@@ -209,9 +209,16 @@ type ChildInput = NonNullable<MeshInput["children"]>[number];
  * normal, colour and texture coordinate are bit for bit the same become
  * one. A quad's two triangles share two corners and a ribbon's quads their
  * ends, so a tile's kerbs, stairs and walls draw the same picture from
- * about a third of the vertices.
+ * about a third of the vertices. Not for a child with custom attributes.
  */
 export function indexed(child: ChildInput): ChildInput {
+  // (a column this does not compare would merge vertices that differ in
+  // it and stay at the soup's length beside the welded ones)
+  if (child.attributes || child.vectors) {
+    throw new Error(
+      `indexed: the child "${child.name}" carries custom attributes; give it indices`
+    );
+  }
   const columns: [Float32Array, number][] = [
     [child.positions, 3],
     [child.normals, 3],
