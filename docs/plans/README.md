@@ -623,7 +623,22 @@ ids are the report's.
    `sceneChanged` event), the start sequence, the inquiry, the view
    (pose, Modell), the design, the handle. The report's risk stands:
    those share the 60 `let`s that only events remove.
-8. **The desktop's post (F8, K5, F11, L6)** — TODO.
+8. **The desktop's post (F8, K5, F11, L6)** — **F8, K5, F11 done**
+   (2026-11-11). The desktop's SMAA is `smaa.ts`: the edges in RG8, the
+   weights in RGBA8, the blend in the pass that reads it — 6 bytes a
+   pixel where three's node held 24 (107 → 27 MiB at 2880 × 1620, one
+   full-screen pass less). **K5:** the edges are found on square-rooted
+   colours. **F11:** the two tables are worked out
+   (`lib/city/smaa-tables.ts`, held to three's pictures by a test); the
+   viewer's JS is 1 096.0 → 1 061.3 kB (−34.7). Checked in the container on
+   SwiftShader only (the low sun and the night street of `qa/views/`,
+   beside three's at 400 %: the same edges); the look on a real GPU and
+   on WebGPU is the maintainer's to judge. **Left out:** the lens blur's
+   copy of the frame (36 MiB) — under SMAA it is also the motion blur's
+   target, and dropping it means a target allocated when a motion
+   starts, to be measured on a real GPU in a PR of its own; **L6** (the
+   AO's 5 × 5 smoothing made separable) changes the picture and its gain
+   is GPU time no container measures.
 
 Not planned, for the maintainer: F14 (the re-baked rasters of 16 days
 are 633 MB of superseded blobs: squash-merge data PRs, or rewrite the
