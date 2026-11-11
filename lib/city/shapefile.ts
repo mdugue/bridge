@@ -70,8 +70,13 @@ export function readShp(
     throw new Error("keine .shp-Datei");
   }
   const out: ({ kind: GeoRecord["kind"]; parts: PlanPoint[][] } | null)[] = [];
+  // The records end where the header says the file does (in 16-bit
+  // words): what a writer padded behind them is no record.
+  const declared = view.getInt32(24, false) * 2;
+  const end =
+    declared >= 100 ? Math.min(declared, view.byteLength) : view.byteLength;
   let at = 100;
-  while (at + 8 <= view.byteLength) {
+  while (at + 8 <= end) {
     const length = view.getInt32(at + 4, false) * 2;
     const content = at + 8;
     // A record holds its shape type at least and ends inside the file: a
