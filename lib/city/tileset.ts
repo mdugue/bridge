@@ -279,13 +279,10 @@ export interface TilesetTileInfo {
   /** the inquiry card's files, fetched when something is asked */
   ask?: TileAskFiles;
   bounds: TerrainBounds;
-  /** the minimap's picture of the tile's buildings: a grey raster of
-   *  their cover (lib/city/footprint-figure.ts) */
-  figure: string;
   /**
-   * the buildings' footprints per object, packed (lib/city/footprint-pack.ts):
-   * fetched only for what needs a building's outline — a demolished one cut
-   * out of the minimap's picture, the buildings a design covers.
+   * minimap footprints per object, packed (lib/city/footprint-pack.ts).
+   * Here rather than in the city content, so the minimap shows every
+   * building from the start, whatever has streamed in.
    */
   footprints: string;
   id: string;

@@ -123,12 +123,8 @@ export const BAKE_ENTRIES = {
     "lib/city/fences.ts",
     "lib/city/tile.ts",
   ],
-  /** a tile's buildings as the minimap's picture, from its footprints */
-  figure: [
-    "scripts/prepare/figure.ts",
-    "lib/city/footprint-figure.ts",
-    "lib/city/footprint-pack.ts",
-  ],
+  /** the site's minimap picture: land cover, bridge decks, buildings */
+  minimap: ["scripts/prepare/minimap.ts", "scripts/bake-minimap.ts"],
   /** the ground plate under every tile without terrain */
   plate: [
     "scripts/prepare/plate.ts",

@@ -258,7 +258,7 @@ is the codebook.
 | Ausschnitt | the city's group in a `ClippingGroup` with the rectangle's four planes, shown once its programs are compiled and held off the frames (`holdCut`); shadows not clipped; a plinth of four poché strips from the ground down to a common base | the terrain heights | `model-cuts.ts`, `lib/city/section.ts`, `post-stack.ts` |
 | Ink lines | the second difference of inverse view depth (`1/z` is affine across a plane): relative jump → silhouette, relative change of slope → crease; per style a pen: Papier and Film noir sway (±2 px over ~120 px) and tremble, swell and thin within a stroke, lift off now and then and sit a little off the fill, the other styles' pens hold still in a flight; detail falls away with distance (silhouette ramp widens, folds fade, the pen gets finer); no folds in open ground; a step under ~3 px tall well below the horizon (a rail, a kerb, a track's bed hiding the ground behind it) draws no line, measured as the height between the taps in pixels on every axis but the level one — such a step's raster flips in a move; faded towards a per-style floor (`farInk`) with the fog factor, so the far city keeps its outlines | depth buffer | `stylize-effect.ts` (*Tuschelinien*) |
 | A loaded design | the visitor's glTF, IFC, OBJ or Rhino file, or a landscape plan (DXF, Shapefile, GeoPackage, LandXML: surfaces in the palette's colours on the ground, low-poly trees, blocks, a planned ground) (ADR 0054): one geometry, model-maker's white (`design-white`, one scene material, double-sided, matte) or the file's colours and textures; casts and takes the sun's shadows; the LoD2 objects whose footprints its plan covers for half or more drop out of their tile's index; its plan's hull drawn on the minimap as a building; in its site (the plan with its ground plate, one raster, `designSite`) the instanced sets fold their instances away (`instancePosition`) and the ground with its walls, kerbs, stairs and fences, the water and (within 4 m of the floor, `lineUnderDesign`) rails, ballast, platforms and tram tracks are pressed under its floor, the tiles under it cutting the ground above the floor (`maskNode`, there only: it costs the early depth test) | the visitor's file | `design-layer.ts`, `design-read.ts`, `design-ifc.ts`, `design-formats.ts`, `design-plan.ts`, `lib/city/plan-geometry.ts`, `design-site.ts`, `lib/city/design-cover.ts`, `lib/city/ifc-georef.ts` |
-| Minimap | site tile bounds + 512² class raster in the palette + the bridge decks in the colour of the class they carry (hairline edge) + each tile's baked picture of its buildings (`figure_<tile>.png`, 192² grey cover, 10.4 m a pixel, inked in slate at 62 %); a demolished or design-covered building cut out by its exact outline, the only time a tile's footprints are fetched | DGM1, Basis-DLM, LoD2 | `minimap.tsx`, `lib/city/minimap.ts`, `lib/city/footprint-figure.ts` |
+| Minimap | one picture of the site the build draws (`minimap.webp`, 640 px wide: land cover in the palette, bridge decks in the colour of the class they carry, buildings as slate ink by their cover of each pixel), shown as an image; over it one canvas for what changed since (a demolished or design-covered building painted over in the built-up ground's colour along its exact outline, the only time a tile's footprints are fetched; a design's plan as ink) and one for the player and Modell's frame. A tileset of one tile (`?scene=lite`) shows its part of the picture | DGM1, Basis-DLM, LoD2 | `minimap.tsx`, `lib/city/minimap.ts`, `scripts/bake-minimap.ts`, `lib/city/footprint-figure.ts` |
 
 The German label in parentheses above names the term as the guide does.
 Its strength is fixed: a named constant beside the term in its owner,
@@ -1000,7 +1000,7 @@ pre-gzipped glTF with meshopt compression and quantised positions):
 | buildings `city_<tile>.glb.gz` | up to 4.3 MB, Dresden's fifteen 37 MB (2026-11-11, the bands' rounds one facet each; 41 MB with three to four, 59 MB while the bands were cut every metre); the far level, without doors and bands, up to 2.8 MB, 25 MB (33 MB with them) | up to 0.63 M a tile, 5.3 M over Dresden (7.1 M with the rounds faceted, 22.4 M before that); the far level up to 0.23 M, 2.2 M (3.5 M with doors and bands) |
 | fine terrain `terrain_<tile>_l0.glb.gz` (TIN, ADR 0030) | 1.3–3.6 MB | 0.30–0.49 M (TIN + skirt; the 1024² grid it replaced: ≈2.1 M, 2.15–2.45 MB) |
 | coarse terrain `terrain_<tile>_l1.glb.gz` | 0.4–0.55 MB | ≈0.53 M (512² grid + skirt) |
-| figure (minimap) | up to 14 kB; the footprints (0.23–0.33 MB) only on demand | — |
+| footprints (minimap) | only on demand, 0.23–0.33 MB (the minimap's picture is one image of the site, 87 kB, not a tile's) | — |
 | class raster 4096² / 2048² | 0.22–0.25 / ≈0.08 MB | — |
 | NDVI raster | 0.3–0.45 MB | — |
 | paving raster (fine level) | 0.6–0.86 MB | — |
@@ -1560,7 +1560,7 @@ two contents — beside the scene's chunk, the renderer's start and the
 scene's setup. The stream takes each from there once
 (`tile-content-fetch.ts`), the tileset too, which it used to fetch a
 second time. Before, the first tile was asked for in the first frame.
-Every tile's figure (the minimap) follows the handover.
+The minimap's picture is an image the sidebar loads when it shows.
 
 The **first frame** waits on the spawn tile's buildings and *any* of its
 terrain levels (`bootApp` in `create-app.ts`); the player is then placed
@@ -1802,8 +1802,8 @@ two measure **what the cameras see**, not the whole site: *Umgebung* is
 the tile renderer's own load progress, *Details* the dressings built
 against those queued. Both only move forward. Once everything in view is
 in, the pill leaves; later loads (a flight) show a small, late *Umgebung
-lädt* hint instead (`onBusy`). The minimap loads every tile's figure
-up front (named in the tileset's root extras), so it is complete from the
+lädt* hint instead (`onBusy`). The minimap shows the site's picture
+(named in the tileset's root extras), so it is complete from the
 start; a tile's footprints come only when a building of it is demolished
 or a design asks which buildings it covers (`load` waits for them).
 
