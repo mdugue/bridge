@@ -50,7 +50,6 @@ import {
 import { bedsIn, shapeDigest } from "./lines";
 import { landmarkFile } from "./landmarks";
 import { sideFiles } from "./side-files";
-import { bakeFigure } from "./figure";
 import { offset, spawnFrame } from "./frame";
 import { groundFile, heightOver } from "./ground";
 
@@ -130,7 +129,6 @@ export async function bakeCity(tile: string): Promise<{
   far: string;
   file: string;
   files: CityFiles;
-  figure: string;
   footprints: string;
   maxZ: number;
 }> {
@@ -171,12 +169,12 @@ export async function bakeCity(tile: string): Promise<{
   // of it at every start. Pre-gzipped like the glTF (static hosts do not
   // compress binary types).
   const footprintsFile = `footprints_${tile}.fpr.gz`;
-  const packed = await cached(footprintsFile, key, () =>
-    gz(packFootprints(built().footprints))
+  const footprints = publish(
+    footprintsFile,
+    await cached(footprintsFile, key, () =>
+      gz(packFootprints(built().footprints))
+    )
   );
-  const footprints = publish(footprintsFile, packed);
-  // what the minimap draws of them (scripts/prepare/figure.ts)
-  const figure = await bakeFigure(tile, packed);
   const { maxZ } = parse(
     await cached(`city_${tile}.json`, key, () =>
       utf8({ maxZ: built().maxElevation })
@@ -245,7 +243,6 @@ export async function bakeCity(tile: string): Promise<{
     far: publish(farName, farGlb),
     file: publish(name, glb),
     files,
-    figure,
     footprints,
     maxZ,
   };

@@ -8,15 +8,34 @@ import type { FootprintPack } from "./footprint-pack";
 import type { TerrainBounds } from "./terrain-geometry";
 import type { CityJsonDocument } from "./types";
 
-/** One site tile's layers on the minimap: the 512² class raster, the
- *  bridge decks and the buildings' picture drawn over it (published URLs). */
-export interface MapTile {
+/** The picture's cache name; published under a content-hashed one. */
+export const MINIMAP_FILE = "minimap.webp";
+
+/**
+ * What the tileset's root extras say of the minimap: the site's picture
+ * (scripts/bake-minimap.ts: land cover, bridge decks and buildings, north
+ * up) by its published name and the extent it shows (EPSG), which is the
+ * whole site's also where a tileset lists one tile of it. Here and not in
+ * lib/city/tileset.ts, whose every change re-bakes the grounds.
+ */
+export interface MinimapExtras {
+  map?: { bounds: TerrainBounds; file: string };
+}
+
+/** The picture, where the build drew one. */
+export function minimapOf(extras: unknown): MinimapExtras["map"] {
+  const map = (extras as MinimapExtras | null)?.map;
+  return typeof map?.file === "string" &&
+    Array.isArray(map.bounds) &&
+    map.bounds.length === 4
+    ? map
+    : undefined;
+}
+
+/** The picture as the viewer shows it: its URL and its extent (EPSG). */
+export interface MapPicture {
   bounds: TerrainBounds;
-  bridges?: string;
-  /** the picture of its buildings' cover (lib/city/footprint-figure.ts) */
-  figure?: string;
-  id: string;
-  src: string;
+  url: string;
 }
 
 /** A bridge deck on the minimap: its outline (EPSG) and what it carries. */
@@ -59,18 +78,17 @@ export interface FootprintPoly {
 }
 
 /**
- * What the minimap takes out of its tiles' pictures of the buildings: per
- * tile with a gap, its packed footprints (lib/city/footprint-pack.ts) and
- * which objects are `gone` (taken down, or replaced by a design); and
- * loose outlines drawn as buildings (a design's plan). A new object
- * whenever any of it changes, the same one otherwise.
+ * What the minimap draws over its picture: per tile with a gap, its packed
+ * footprints (lib/city/footprint-pack.ts) and which objects are `gone`
+ * (taken down, or replaced by a design), painted over in the ground's
+ * colour; and loose outlines drawn as buildings (a design's plan). A new
+ * object whenever any of it changes, the same one otherwise.
  */
 export interface MapFootprints {
   outlines: readonly FootprintPoly[];
   tiles: readonly {
     gone: (object: number) => boolean;
     pack: FootprintPack;
-    tile: string;
   }[];
 }
 
