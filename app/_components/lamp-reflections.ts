@@ -314,10 +314,13 @@ export function streetLight(n: V3): V3 {
       distance(at.xz, STREET.eye.xz),
       STREET.far.add(LAMP_RANGE_M)
     );
+    // (a variable: the loop's condition would work the bound out again
+    // at every lamp)
+    const lamps = int(float(STREET.count).mul(near)).toVar();
     Loop(
       {
         start: int(0),
-        end: int(float(STREET.count).mul(near)),
+        end: lamps,
         type: "int",
         condition: "<",
       },
