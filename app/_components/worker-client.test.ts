@@ -246,3 +246,19 @@ test("a stop ends the held job and those waiting, and the next job starts a new 
   expect(here).toEqual([]);
   client.stop();
 });
+
+test("a job aborted before its turn here is not worked on", async () => {
+  const { workers, here, spec } = rig();
+  const client = createWorkerClient(spec);
+  const aborter = new AbortController();
+  const held = failureOf(client.run(1, aborter.signal));
+  await settle();
+  workers[0].say({ ready: true });
+  await settle();
+  // the worker dies with the job, and nobody waits for it any more
+  aborter.abort();
+  workers[0].fail();
+  const failed = await held;
+  expect(failed?.name).toBe("AbortError");
+  expect(here).toEqual([]);
+});
