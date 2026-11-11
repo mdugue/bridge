@@ -202,7 +202,51 @@ export function wallShiftKnots(
     }
     return shift;
   });
-  return { f, s: fillGaps(f, read) };
+  return thinned({ f, s: fillGaps(f, read) });
+}
+
+/** A band may stand this much further off its wall than the wall was read
+ *  at a knot left out, and sink this much into it: the first is under the
+ *  tile's position step (16 bits over its extent, 3.4 cm), the second a
+ *  sixth of the least a band stands proud (the Gurtgesims' 6 cm). */
+export const KNOT_OFF_M = 0.03;
+export const KNOT_SUNK_M = 0.01;
+
+/**
+ * The knots without those the wall does not need: a knot stays only where
+ * the straight line between the knots kept round it would leave the wall
+ * as read there — sunk into it by more than `KNOT_SUNK_M` or standing more
+ * than `KNOT_OFF_M` off it. A flat wall keeps its two ends, a bent one a
+ * knot at each bend; every piece between two knots is a piece of every
+ * band's mesh, and a wall read each metre was a hundred thousand of them a
+ * dense tile for some fourteen thousand straight walls.
+ */
+export function thinned(k: WallKnots): WallKnots {
+  const last = k.f.length - 1;
+  if (last < 2) {
+    return k;
+  }
+  const keep = [0];
+  let from = 0;
+  while (from < last) {
+    // the furthest knot the line from `from` reaches with every knot
+    // between them on it
+    let to = from + 1;
+    for (let j = from + 2; j <= last; j += 1) {
+      let fits = true;
+      for (let m = from + 1; m < j && fits; m += 1) {
+        const w = (k.f[m] - k.f[from]) / (k.f[j] - k.f[from]);
+        const off = k.s[from] + (k.s[j] - k.s[from]) * w - k.s[m];
+        fits = off <= KNOT_OFF_M && off >= -KNOT_SUNK_M;
+      }
+      if (fits) {
+        to = j;
+      }
+    }
+    keep.push(to);
+    from = to;
+  }
+  return { f: keep.map((i) => k.f[i]), s: keep.map((i) => k.s[i]) };
 }
 
 /** The triangles whose box reaches the box round a stretch (mesh frame)

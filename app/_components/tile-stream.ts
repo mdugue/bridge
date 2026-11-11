@@ -1921,6 +1921,8 @@ export class DressingPlugin {
     return (
       held +
       own +
+      // a city's table, its texture and its positions' padding
+      (dressed.city?.heldBytes ?? 0) +
       dressed.late.bytes() +
       (dressed.nicheCopyBytes ?? 0) -
       (dressed.sharedBytes ?? 0)

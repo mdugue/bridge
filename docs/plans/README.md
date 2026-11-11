@@ -473,11 +473,34 @@ ids are the report's.
    (stream, glb, far glb) — the stream would have to be written to the
    cache, 400 MB a dense tile; the table read back from the glb (it
    saves a parse only when the far glb alone is stale).
-3. **Bands, kerbs and the vertex format (F1, F3, F4, F9, F10, T8)** —
-   TODO; re-bakes every site. F1: plinth, cornice and eave bands are
-   88.7 % of a dense tile's triangles (Dresden 33412_5656: 1.63 M of
-   1.84 M) because `KNOT_M = 1` cuts every band each metre. The
-   maintainer decides how much of the band's profile may go.
+3. **Bands, kerbs and what the cache weighs (F1, F3, F9, T8) — built
+   (2026-11-11); re-bakes every site's buildings and fine terrain.** F1:
+   a band is cut where its wall bends, not every metre
+   (`lib/city/doors.ts` `thinned`: a knot stays where the line between
+   its neighbours would sink the band more than 1 cm into the wall as
+   read or stand it more than 3 cm off). Dresden's fifteen tiles: 22.4 M
+   → 7.1 M triangles, 20.1 M → 10.4 M vertices, 59 → 41 MB of download;
+   the dense tile 33412_5656 1.84 M → 0.57 M, its bands 1.63 M → 0.36 M
+   (still 63 %: ten to twelve triangles a piece of the rounded profile).
+   The maintainer decides whether the rounds become one facet and
+   whether the far level carries bands at all (asked 2026-11-11). The
+   far level hardly moves (4.08 M → 3.68 M triangles, 37 → 35 MB): its
+   simplifier had already taken the knots, and it is now nearly as heavy
+   as the near one — F4's part for it stands. A tile's bake peaks at
+   1.26 GiB (1.9), so `TILE_PEAK` is 2.0 GB and Vercel's builder bakes
+   three tiles at once. F3: the fine terrain's kerbs, stairs and walls
+   are indexed (`tile-glb.ts` `indexed`, exact: the same picture):
+   Dresden's kerbs 9.2 M → 4.6 M vertices, the fine level's glb 66 →
+   48 MB decoded, 33 → 31 MB of download. F9: a city tile weighs its
+   table, its texture and its positions' padding in the cache
+   (`CityLayer.heldBytes`). T8: the numbers this moved (rendering.md's
+   table, `tileset.ts`, the workflow's sizes). **Left, each a PR of its
+   own to judge on a phone:** F4 (the object id in the position's
+   padding and a lighter far-level vertex: a vertex format the WebGPU
+   path alone can prove, and after F1 worth a third of what the report
+   counted), F10 (one table file for both levels: a second request a
+   tile before it can be dressed, for 0.4 MB a tile both levels of which
+   load).
 4. **Rails (F2)** — TODO: non-indexed float geometry, 31.9 MB a rail
    tile; the maintainer decides between a leaner layer and the spike of
    baking them into the fine ground (PR #156, plan 074 A).
