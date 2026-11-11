@@ -95,7 +95,7 @@ export const FLOODLIT_SHARE = 0.6;
 /** A roof triangle within this of level counts as flat (cos 10°). */
 const FLAT_NORMAL_Z = 0.985;
 /** A roof triangle within this of upright is a step's wall the bake clad
- *  as roof (scripts/bake-city-mesh.ts `withRoofSteps`; cos 85°): no part
+ *  as roof (scripts/city-lod2.ts `withRoofSteps`; cos 85°): no part
  *  of the roof's area. */
 const STEP_NORMAL_Z = 0.087;
 /** An object whose roof is flat over this share of its area is flat-roofed:
@@ -167,7 +167,7 @@ export const GROUNDED_SLACK_M = 3;
  * building is its own tree, so it always does). A Building drawn only by
  * its parts has no geometry (no height, base 0) and takes no part. `asBuilt`
  * holds the base and eave of the objects the storeys' street lift moved
- * (scripts/bake-city-mesh.ts `liftToStreet`) as LoD2 built them: whether a
+ * (scripts/city-windows.ts `liftToStreet`) as LoD2 built them: whether a
  * part stands on the ground is LoD2's, and a part lifted while the tree's
  * lowest, in a courtyard, stayed would end up over the slack. In place.
  */
@@ -331,7 +331,7 @@ export interface CityObjectRow {
   tint: Rgb;
   /** a flat-roofed town house (lib/city/windows.ts `flatTownHouse`): the
    *  bake dresses it with a town house's plinth and cornices, not as a
-   *  block (scripts/bake-city-mesh.ts `markTownHouses`); not in the table */
+   *  block (scripts/city-windows.ts `markTownHouses`); not in the table */
   townHouse?: boolean;
   /** the windows the clay draws on its walls (lib/city/windows.ts; none
    *  when absent) */

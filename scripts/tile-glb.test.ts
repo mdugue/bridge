@@ -353,3 +353,23 @@ test("the viewer reads back every column the bake writes, as 3DTilesRendererJS's
     Object.keys(theirs[0]).toSorted()
   );
 });
+
+test("an owned mesh is written the same, turned where it lies", async () => {
+  const input = {
+    name: "city",
+    indices: new Uint32Array([0, 1, 2, 3, 4, 5]),
+    extras: { kind: "city", tileId: "t" },
+  };
+  const copied = await writeMeshGlb({ ...input, positions, normals });
+  const own = positions.slice();
+  const owned = await writeMeshGlb({
+    ...input,
+    positions: own,
+    normals: normals.slice(),
+    owned: true,
+  });
+  expect(Buffer.from(owned).equals(Buffer.from(copied))).toBe(true);
+  // (x, y, z) → (x, z, −y), in the caller's array
+  expect(Array.from(own.subarray(9, 12))).toEqual([5, 1, -5]);
+  expect(Array.from(positions.subarray(9, 12))).toEqual([5, 5, 1]);
+});

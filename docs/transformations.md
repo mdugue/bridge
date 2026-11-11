@@ -932,7 +932,7 @@ visual-variable codebook is in
   the ALKIS roofs on posts (`51009_1610` Überdachung, `51009_1611`
   Carport) as solid blocks down to the ground: a platform under one
   vanished, a fuel station's pumps stood inside it.
-  `scripts/bake-city-mesh.ts` (`withOpenRoofs`) cuts their walls to a
+  `scripts/city-roofs.ts` (`withOpenRoofs`) cuts their walls to a
   fascia as deep as the slab above, drops the floor and adds an underside
   and the same posts, where at least 1.8 m stays clear (a bin shelter or a
   cellar entrance under that reads as well as a block); they take no
@@ -1605,7 +1605,7 @@ visual-variable codebook is in
   lined stood open into its interior — the bake writes the ceiling's
   plan, the walls along it (and across it at a shut end) and its portals
   (`dlm/passages_<t>.geojson`). The
-  building bake (`bake-city-mesh.ts` `withPassages`, the geometry in
+  building bake (`city-passages.ts` `withPassages`, the geometry in
   `lib/city/building-passages.ts`) gives it its clear height —
   `maxheight:physical` or `maxheight` where plausible, else the larger of
   3.8 m for a drive, 5 m for a track (a contact wire's lowest in a
@@ -2119,7 +2119,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   without windows, no window fitting the storey), and the landmark's
   Wikidata item → one ENUM column `drawn` of the same table, a short
   `key=value;…` text (`lib/city/drawn-facts.ts`, `drawnOf` and
-  `assignWindows` in `scripts/bake-city-mesh.ts`). The card's *Daten*
+  `assignWindows` in `scripts/city-windows.ts`). The card's *Daten*
   section reads it with the object's style row and lists every drawn
   value with its source, its badge and a link to the place (OSM's objects
   there, Mapillary's photos there, the Wikidata item:

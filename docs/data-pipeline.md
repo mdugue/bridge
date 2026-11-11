@@ -878,7 +878,12 @@ own build, where München went silent at its second tile until the
 45-minute limit. A collection after each append, after the mesh, before
 the far glb and after it (`bake-city-mesh.ts` `appendBeyondLod2`,
 `prepare/city.ts`) brings München to 4.47 GiB and Dresden to 3.81, the
-bytes unchanged.
+bytes unchanged. Since 2026-11-11 no append goes through plain arrays
+(`scripts/vertex-stream.ts`), and a tile's peak, which lay in the
+passages' cut, the rounded normals and the glb's writer, is lower: the
+mesh is released once its glb is written, the writer turns its arrays in
+place. München's heaviest tile alone 2.58 → 1.88 GiB, the bytes
+unchanged; four tiles side by side still reach 1.9 GiB.
 
 **Where a tile's time goes.** The buildings are nearly all of a cold
 bake (the ground and side files a few seconds a tile). München's heaviest
