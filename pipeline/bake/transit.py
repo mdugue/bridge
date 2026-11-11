@@ -171,7 +171,7 @@ def site_trams(zip_path: Path, bounds, epsg: int) -> dict:
         for c in _rows(z, "calendar_dates.txt"):
             if c["service_id"] in services:
                 exceptions[c["service_id"]][c["date"]] = c["exception_type"]
-        published = max(datetime.date(*i.date_time[:3]) for i in z.infolist())
+        published = _zip_date(z)
     used = {t["route"] for t in kept.values()}
     return {
         "routes": {rid: routes[rid] for rid in used},
@@ -183,6 +183,18 @@ def site_trams(zip_path: Path, bounds, epsg: int) -> dict:
         # the newest of the feed's tables: the day it was put together
         "published": published.isoformat(),
     }
+
+
+def _zip_date(z: zipfile.ZipFile) -> datetime.date:
+    """The newest date of the archive's entries; 1980-01-01 (the DOS
+    epoch, `feed_date`'s "without dates") for entries that carry none."""
+    newest = datetime.date(1980, 1, 1)
+    for info in z.infolist():
+        try:
+            newest = max(newest, datetime.date(*info.date_time[:3]))
+        except ValueError:
+            continue  # (an entry zipped without a date: month and day 0)
+    return newest
 
 
 def gtfs_dir(raw: Path) -> Path:
