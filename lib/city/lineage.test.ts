@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
+  OBJECT_FLAG_GLASS,
+  OBJECT_FLAG_OWN_COLOUR,
   OBJECT_FLAG_SHOP,
   OBJECT_SOURCE_GAP,
   OBJECT_SOURCE_LOD2,
   OBJECT_SOURCE_SCAN,
+  OBJECT_SOURCE_SHOPFRONT,
 } from "./city-mesh";
 import { encodeDrawn } from "./drawn-facts";
 import type { Inquiry, InquiryObject } from "./inquiry";
@@ -129,6 +132,47 @@ test("a LoD2 building whose roof was rebuilt: the model, the surface model for t
   expect(osm.credit).toBe("© OpenStreetMap-Mitwirkende, ODbL");
   // the viewer's own work credits nobody
   expect(entries.at(-1)?.credit).toBe("");
+});
+
+test("glass the street photos read is theirs, a shop window's pane OSM's neither", () => {
+  const hall = object({
+    flags: OBJECT_FLAG_GLASS,
+    facts: facts({
+      drawn: encodeDrawn({ material: "glass", materialFrom: "photos" }),
+    }),
+  });
+  const pane = object({
+    building: false,
+    flags: OBJECT_FLAG_OWN_COLOUR + OBJECT_FLAG_GLASS,
+    source: OBJECT_SOURCE_SHOPFRONT,
+  });
+  const entries = lineage(
+    { kind: "building", tile: "t", picked: hall, tree: [hall, pane] },
+    provenance,
+    saxony
+  );
+  const osm = entries.find((e) => e.source === "OpenStreetMap");
+  expect(osm && said(osm)).not.toContain("Glas oder Metall der Fassade");
+  const photos = entries.find((e) => e.source === "Mapillary");
+  expect(photos && said(photos)).toContain("Glasfassade");
+});
+
+test("a facade material Wikidata names is Wikidata's", () => {
+  const tower = object({
+    flags: OBJECT_FLAG_GLASS,
+    facts: facts({
+      drawn: encodeDrawn({ material: "glass", materialFrom: "wikidata" }),
+    }),
+  });
+  const entries = lineage(
+    { kind: "building", tile: "t", picked: tower, tree: [tower] },
+    provenance,
+    saxony
+  );
+  const osm = entries.find((e) => e.source === "OpenStreetMap");
+  expect(osm && said(osm)).not.toContain("Glas oder Metall der Fassade");
+  const wikidata = entries.find((e) => e.source === "Wikidata");
+  expect(wikidata && said(wikidata)).toContain("das Material der Fassade");
 });
 
 test("a shed from the laser scan claims neither the model nor a roof colour", () => {

@@ -271,6 +271,7 @@ def fetch_tile(spec: Spec, tile: Tile, source: Adapter, lsc: bool = False) -> li
     _try("Mapillary objects", tile, lambda: mapillary.fetch(tile))
     _try("Mapillary facades", tile, lambda: facades.fetch(tile))
     _try("Mapillary facade traits", tile, lambda: facades.fetch(tile, "traits"))
+    _try("Mapillary glass facades", tile, lambda: facades.fetch(tile, "glass"))
     _try(
         "Wikidata bridges",
         tile,

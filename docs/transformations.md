@@ -1930,7 +1930,9 @@ visual-variable codebook is in
   material (P186) fills in where OSM names none. Counts per tile in
   `osmbuild_<tile>.json` (`meta.objects_look`).
 - **Glass and metal facades** `❝ taken` `≈ assumed` (*Streiflicht*; plan 050) — the material's
-  glass and metal set object flags (4, 8; a part takes its root's): the
+  glass and metal (OSM's, or glass the street photos found, *Glass facades
+  from street photos* below) set object flags (4, 8; a part takes its root's
+  mapped material, never its photo glass): the
   clay turns a little cooler (×(0.93, 0.99, 1.07), metal at 60 %) and
   smoother (roughness 0.42 glass, 0.5 metal), and glass mirrors the sky
   (*Spiegelung*, `sky-reflection.ts`: a mipmapped cube map of the sky
@@ -1941,6 +1943,76 @@ visual-variable codebook is in
   and no drawn windows (*Windows on every house* leaves glass and metal
   plain) — the window-grid veto holds (🗃️ below). `osmColour` / `clayGlow` in `visual-style.ts`. Conservative strengths,
   not yet judged on a real GPU.
+- **Glass facades from street photos** `◎ detected` (ADR 0060) — where
+  no source names a building's material, its walls are read on the street
+  photos of every camera (`facade_glass.py`): `bun run fetch` asks
+  Mapillary for every photo near the tile (`<t>.photos.json`), picks per
+  LoD2 outer wall the photo of each of up to eight sequences that sees it
+  best — twice the four the decision keeps, since a tree or a bus that
+  hides a view shows only in the reading — (within 60 m, ≤ 60° off its normal, near enough that its pixel at
+  the wall's nearest point spans no more than the reading's 10 cm — a
+  panorama at ~33 m —, a free line of sight, a framed photo with ≥ 30 %
+  of the wall's upper part in its frame), turns its upright thumbnail and
+  segmentation back into the frame its pose is in (the EXIF orientation:
+  ~6 % of Dresden's framed photos are stored upside down; a mirrored one
+  is not read), rectifies it onto the wall
+  (`facade_measure.rectify`, the camera's own model) and
+  asks CLIP (ViT-B/32, ONNX) whether the upper wall, where the photo sees
+  a quarter of it, is "a glass facade" or "a wall with windows"; the
+  probability is cached per photo and wall. A photo Mapillary drew no
+  building in (none of the uploads before 2021 on the Congress Center's
+  tile, many since) is read on the wall the geometry puts in it, less what
+  its segmentation found in front, and only where a third description,
+  sky, trees or a street, is the less likely (a crop of sky above a cantilevered roof read 0.92 glass against
+  the two walls alone). The cache is `<t>.glass.<key>.jsonl`, named by a
+  hash of the prompts, the model, the crop's limits and the
+  rectification's, and ends with a line saying every photo its plan
+  picked was read, for the walls and planner limits it was planned for
+  (`plan_key`), and which photo it picked for which wall — the decision
+  reads those alone, not one an earlier plan under other limits picked
+  (where the cache is missing or not read through, the
+  windows bake keeps the glass its file holds rather than drop it, and
+  says so; a wall planned later on a photo already read, or
+  numbered anew by a new LoD2 edition — a wall is its object, number and
+  length —, is read at the next fetch); the photo is deleted.
+  `windows.py` keeps one reading a sequence (the photo that saw most of
+  the wall), of the four sequences that saw most, and calls a wall glass
+  where at least two such readings exist and two thirds of them reach 0.95 (`wall_glass`; at 0.9 metal
+  cladding, ribbon-window blocks and a plastered house with balconies came
+  through); the wall gets no window model: a curtain wall's mullions are
+  no rhythm for the stone wing, the house next door, the dormers over it,
+  or its own house where a glazed stair tower too short to make it glass
+  or a material OSM names keeps it from drawing as glass. A Brown
+  camera's parameters are OpenSfM's (fx, fy, cx, cy, k1, k2, …): its focal
+  and radial terms are read from there, and no lens is read past where
+  its distortion turns (a strong barrel folds the world beyond back into
+  the frame); a framed photo's frame is its own
+  shape where Mapillary gives it (the photo list is asked anew when the
+  fields it asks for change). A photo the network, the token or the model's
+  loading failed is read again at the next fetch; one the CDN or the API
+  refuses on its own,
+  or a wall whose crop the model fails on (a worker out of memory over a
+  very long wall; the photo's other walls are kept), is read again and
+  given up after three fetches since it was last read — a first failure
+  is not counted where ten or more and most of a run failed: that is a
+  proxy's, the CDN's or the machine's failure. One Mapillary has taken down since (HTTP 404,
+  410, or its "does not exist" answer) is cached as skipped. A photo is
+  planned at its thumbnail's own size, which is smaller where the
+  original was.
+  The building bake gives an object material `glass`, from `photos`, when
+  its glass walls make at least half the length of its walls read and a
+  quarter of all its outer walls, or 15 m and a twentieth of them
+  (`windows_<t>.json`'s `outer`, every outer edge however short; `lib/city/photo-glass.ts`) — a stone
+  house whose one glazed stair tower was all the photos read stays stone,
+  and so does a mall with a 16 m glazed entrance in 547 m of walls; a
+  file without `outer` asks the 15 m alone. The photos' glass is the
+  object's own: a Building's passes to none of its parts
+  (`inheritedLook`), each part is read on its own walls. It then draws
+  as *Glass and metal facades* above. On the probe (Dresden, 2026-11-10)
+  every known glass front read 0.91–1.00 on its clear views (Prager
+  Spitze, Glaskugelhaus, Gläserne Manufaktur, Ammonhof, Congress Center)
+  and no plastered or stone wall above 0.9 but one clad in white panels;
+  the facade profiles' openings share had read a stucco house at 0.99.
 - **Landmarks from Wikidata** `◎ detected` `❝ taken` (HUD *Erkunden* → *Orte*; plan 050)
   — `bun run fetch` asks Wikidata per tile (`wikibase:box`, instance of a
   subclass of *architectural structure* Q811979, ≥ 2 sitelinks, top 80;
@@ -1958,8 +2030,8 @@ visual-variable codebook is in
   floor gave it one, 🗃️ below) and a dense old town keeps its second rank
   (a fixed 12 per tile cut it, 🗃️ below). → `data/<site>/dlm/landmarks_<tile>.json`. The build flags the
   objects (`OBJECT_FLAG_LANDMARK` = 16; no look of its own), gives them
-  the Wikidata material where OSM names none (`withLandmarks` in
-  `prepare-data.ts`), and writes the site's twelve most notable into the
+  the Wikidata material where OSM names none (`withLandmarks`,
+  `lib/city/landmark-lut.ts`), and writes the site's twelve most notable into the
   tileset's `extras.landmarks` (`siteLandmarks`) — one per building drawn:
   an item whose LoD2 objects a more notable one already holds is that
   one (the Rüstkammer and the Staatliche Kunstsammlungen in the

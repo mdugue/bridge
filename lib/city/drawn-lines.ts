@@ -429,6 +429,16 @@ function materialRow(
   d: DrawnFacts,
   places: Places
 ): DrawnRow {
+  if (d.material && d.materialFrom === "photos") {
+    return {
+      label: "Material",
+      value: MATERIAL[d.material] ?? d.material,
+      method: "detected",
+      source: "mapillary",
+      detail: "Straßenfotos: die Wände zeigen eine Glasfassade",
+      url: places.photos,
+    };
+  }
   if (d.material) {
     const wikidata = d.materialFrom === "wikidata";
     return {
@@ -608,7 +618,10 @@ function ownFacadeWhy(
       detail: `eigene Fassade: ${use || "monumentale Nutzung"}`,
     };
   }
-  if (!d.own && hasObjectFlag(o.flags, OBJECT_FLAG_LANDMARK)) {
+  const photoGlass =
+    hasObjectFlag(o.flags, OBJECT_FLAG_GLASS) && d.materialFrom === "photos";
+  // a landmark the photos read as glass has no windows for its glass
+  if (!d.own && hasObjectFlag(o.flags, OBJECT_FLAG_LANDMARK) && !photoGlass) {
     return landmarkWhy(o, d);
   }
   if (d.own === "listed") {
@@ -637,12 +650,19 @@ function ownFacadeWhy(
     };
   }
   if (hasObjectFlag(o.flags, OBJECT_FLAG_GLASS)) {
-    return {
-      method: "taken",
-      source: "osm",
-      detail: "Glasfassade (building:material)",
-      url: places.osm,
-    };
+    return photoGlass
+      ? {
+          method: "detected",
+          source: "mapillary",
+          detail: "Glasfassade, auf den Straßenfotos erkannt",
+          url: places.photos,
+        }
+      : {
+          method: "taken",
+          source: "osm",
+          detail: "Glasfassade (building:material)",
+          url: places.osm,
+        };
   }
   if (hasObjectFlag(o.flags, OBJECT_FLAG_METAL)) {
     return {

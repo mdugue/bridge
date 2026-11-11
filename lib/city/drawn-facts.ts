@@ -24,8 +24,9 @@ export interface DrawnFacts {
    *  model's: a building LoD2 lacks that the model was flown before
    *  (pipeline/bake/structures.py) */
   height?: "osm";
-  /** the material is Wikidata's (a landmark's), where OSM names none */
-  materialFrom?: "wikidata";
+  /** the material is Wikidata's (a landmark's) or the street photos'
+   *  (a glass front), where OSM names none */
+  materialFrom?: "photos" | "wikidata";
   /** why the facade is its own: its use (ALKIS), a hall's storeys (OSM),
    *  a listed public building whose storeys OSM does not count, or its
    *  building's, whose storey count does not fit the part */

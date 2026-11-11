@@ -491,7 +491,18 @@ test.each(tiles)(
           1
         );
         expect(Math.hypot(...w.n)).toBeCloseTo(1, 3);
-        expect(w.seqs).toBeGreaterThanOrEqual(1);
+        // a wall no panorama measured enters with its glass reading alone
+        expect(w.seqs >= 1 || w.glass !== undefined).toBe(true);
+        if (w.seqs === 0) {
+          expect([w.imgs, Object.keys(w.traits).length]).toEqual([0, 0]);
+        }
+        // a curtain wall's mullions are no window rhythm
+        expect(w.glass?.glass && w.model).toBeFalsy();
+        // each object read for glass is weighed against its outer walls,
+        // the walls read among them
+        if (w.glass) {
+          expect(doc.outer?.[w.oid] ?? 0).toBeGreaterThanOrEqual(w.L - 0.1);
+        }
         const m = w.model;
         if (!m) {
           continue;

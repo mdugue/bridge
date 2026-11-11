@@ -287,6 +287,17 @@ function buildingLineage(
   const facts = all.map((o) => o.facts);
   // (a flag any object of the tree carries)
   const has = (bit: number) => all.some((o) => hasObjectFlag(o.flags, bit));
+  const drawn = all.map((o) => decodeDrawn(o.facts.drawn));
+  // a facade's glass or metal OSM names — not Wikidata's or the street
+  // photos' (photo-glass.ts), which have their own lines, and not a shop
+  // window's pane (its own glass object)
+  const osmMaterial = all.some(
+    (o, i) =>
+      o.source !== OBJECT_SOURCE_SHOPFRONT &&
+      (hasObjectFlag(o.flags, OBJECT_FLAG_GLASS) ||
+        hasObjectFlag(o.flags, OBJECT_FLAG_METAL)) &&
+      drawn[i]?.materialFrom === undefined
+  );
   const { source } = b.picked;
   const lod2 = source !== OBJECT_SOURCE_SCAN && source !== OBJECT_SOURCE_GAP;
   if (source === OBJECT_SOURCE_SCAN) {
@@ -328,8 +339,7 @@ function buildingLineage(
   l.source(
     "osm",
     [
-      (has(OBJECT_FLAG_GLASS) || has(OBJECT_FLAG_METAL)) &&
-        "Glas oder Metall der Fassade",
+      osmMaterial && "Glas oder Metall der Fassade",
       // osm_buildings.py: a shop point inside the footprint, or snapped to
       // the nearest one within a few metres
       has(OBJECT_FLAG_SHOP) && ["Schaufenster im Erdgeschoss", "detected"],
@@ -340,7 +350,6 @@ function buildingLineage(
     { osm: "buildings" }
   );
   // landmarks.py: Wikidata's item matched to the LoD2 objects it covers
-  const drawn = all.map((o) => decodeDrawn(o.facts.drawn));
   l.source(
     "wikidata",
     [
@@ -349,6 +358,8 @@ function buildingLineage(
       (has(OBJECT_FLAG_LANDMARK) && all.every((o) => !o.facts.drawn))
         ? "eines der Wahrzeichen der Stadt"
         : "",
+      drawn.some((d) => d.materialFrom === "wikidata") &&
+        "das Material der Fassade",
     ],
     "detected"
   );
@@ -404,6 +415,9 @@ function photoUses(
   }
   if (all.some((o) => o.source === OBJECT_SOURCE_SHOPFRONT)) {
     uses.push({ text: "Schaufenster", method: "detected" });
+  }
+  if (drawn.some((d) => d.materialFrom === "photos")) {
+    uses.push({ text: "Glasfassade", method: "detected" });
   }
   if (all.some((o) => o.flags >= FACADE_UNIT)) {
     uses.push({

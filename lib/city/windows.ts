@@ -660,7 +660,9 @@ export const NEAR_M = 30;
  *  (m, or this share of it). */
 const NEAR_EAVE = { m: 4, share: 0.35 } as const;
 
-/** The best-seen model on each object's measured walls (most images). */
+/** The best-seen model on each object's measured walls (most images); a
+ *  wall the photos read as glass has none (windows.py: a curtain wall's
+ *  mullions are no window rhythm). */
 function measuredModels(
   walls: readonly WindowWall[],
   index: ReadonlyMap<string, number>

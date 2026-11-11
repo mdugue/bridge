@@ -31,13 +31,14 @@ export type WallMaterial =
 
 /** What OSM knows about one CityObject: the bake's row
  *  (`osmbuild_<tile>.json`, its schema lib/city/osm-buildings-file.ts,
- *  ADR 0059) and what the build adds to it (scripts/prepare/city.ts
- *  `withLandmarks`). */
+ *  ADR 0059) and what the build adds to it (lib/city/landmark-lut.ts
+ *  `withLandmarks`, lib/city/photo-glass.ts `withPhotoGlass`). */
 export type OsmBuildingFacts = OsmBuildingRow & {
   /** one of the city's landmarks (landmarks.py, Wikidata) */
   landmark?: number;
-  /** the material is Wikidata's (a landmark's), where OSM names none */
-  materialFrom?: "wikidata";
+  /** the material is Wikidata's (a landmark's) or the street photos'
+   *  (a glass front, lib/city/photo-glass.ts), where OSM names none */
+  materialFrom?: "photos" | "wikidata";
   /** the Wikidata item of the landmark it belongs to (landmarks.py) */
   wikidata?: string;
 };
@@ -218,8 +219,21 @@ export function inheritedFlags(
     shop: (own?.shop ?? 0) + (root?.shop ?? 0),
     heritage: (own?.heritage ?? 0) + (root?.heritage ?? 0),
     landmark: (own?.landmark ?? 0) + (root?.landmark ?? 0),
-    material: own?.material ?? root?.material,
+    material: own?.material ?? passedToParts(root)?.material,
   });
+}
+
+/** A root Building's facts as its parts take them: the material OSM or
+ *  Wikidata names, never the glass the photos read on the root's own walls
+ *  (lib/city/photo-glass.ts) — a part they did not read keeps its own. */
+export function passedToParts(
+  root?: OsmBuildingFacts
+): OsmBuildingFacts | undefined {
+  if (root?.materialFrom !== "photos") {
+    return root;
+  }
+  const { material: _m, materialFrom: _f, ...rest } = root;
+  return rest;
 }
 
 /** An object's look from OSM, its own facts over its root Building's. */
@@ -230,12 +244,13 @@ export function inheritedLook(
   OsmBuildingFacts,
   "colour" | "context" | "material" | "materialFrom" | "roof_colour"
 > {
+  const from = own?.material ? own : passedToParts(root);
   return {
     colour: own?.colour ?? root?.colour,
     context: own?.context ?? root?.context,
-    material: own?.material ?? root?.material,
     // where the material came from goes with the material
-    materialFrom: own?.material ? own.materialFrom : root?.materialFrom,
+    material: from?.material,
+    materialFrom: from?.materialFrom,
     roof_colour: own?.roof_colour ?? root?.roof_colour,
   };
 }
