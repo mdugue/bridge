@@ -257,8 +257,10 @@ export function createSmaa(input: TextureNode, size: Vector2): Smaa {
         const e1 = edgesAt(vec2(left, o1.y)).r.toVar();
         const right = searched("x", 1, o0.zw, ends.y).toVar();
         const e2 = edgesAt(vec2(right.add(texel.x), o1.y)).r.toVar();
+        // (whole pixels, as SMAA rounds them: a search's float error would
+        // land between two of the table's distances)
         const d = vec2(left, right).div(texel.x).sub(pixel.x);
-        out.rg.assign(areaOf(sqrt(abs(d)), e1, e2));
+        out.rg.assign(areaOf(sqrt(abs(d.round())), e1, e2));
       });
       If(e.x.greaterThan(0), () => {
         // an edge to the left: its ends above and below
@@ -267,7 +269,7 @@ export function createSmaa(input: TextureNode, size: Vector2): Smaa {
         const down = searched("y", 1, o1.zw, ends.w).toVar();
         const e2 = edgesAt(vec2(o0.x, down.add(texel.y))).g.toVar();
         const d = vec2(up, down).div(texel.y).sub(pixel.y);
-        out.ba.assign(areaOf(sqrt(abs(d)), e1, e2));
+        out.ba.assign(areaOf(sqrt(abs(d.round())), e1, e2));
       });
       return out;
     })(),
