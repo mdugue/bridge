@@ -848,20 +848,31 @@ function facadeGlass(flags: F, wall: F): F {
 }
 
 /** A glass wall's frame (Pfosten und Riegel): mullions every `mullion`
- *  metres along the wall, a transom at every storey, `width` wide. */
-export const GLASS_FRAME = { mullion: 1.5, width: 0.08 } as const;
+ *  metres along the wall, a transom at every storey, `width` wide, and how
+ *  much of the wall's clay they show (`strength`: a slender, pale frame,
+ *  the glass still read through its edge). */
+export const GLASS_FRAME = {
+  mullion: 1.5,
+  width: 0.035,
+  strength: 0.55,
+} as const;
 
-/** 1 on a line of `width` every `period` along `x` (m), anti-aliased by
- *  the pixel's footprint; where the lines come closer than a few pixels,
- *  their share of the wall (the mean tone). */
+/**
+ * How much of the pixel a line of `width` every `period` along `x` (m)
+ * covers: a box filter over the pixel's footprint, so a line thinner than
+ * a pixel is a pixel wide at its share of it, never a hard pixel's step;
+ * where the lines come closer than a few pixels, their share of the wall
+ * (the mean tone).
+ */
 function frameLines(x: F, period: F | number, width: number): F {
   const p = typeof period === "number" ? float(period) : period;
   const fw = max(fwidth(x), 1e-4);
   const off = abs(fract(x.div(p).add(0.5)).sub(0.5)).mul(p);
-  const line = float(1).sub(
-    smoothstep(fw.mul(-0.5).add(width / 2), fw.mul(0.5).add(width / 2), off)
+  const wide = max(fw, width);
+  const line = clamp(wide.mul(0.5).sub(off).div(fw).add(0.5), 0, 1).mul(
+    float(width).div(wide)
   );
-  const sharp = float(1).sub(smoothstep(p.mul(0.12), p.mul(0.3), fw));
+  const sharp = float(1).sub(smoothstep(p.mul(0.06), p.mul(0.16), fw));
   return mix(float(width).div(p), line, sharp);
 }
 
@@ -876,7 +887,9 @@ function glassPane(flags: F, wall: F, h: F, storey: F, wn: V3): F {
     frameLines(s, GLASS_FRAME.mullion, GLASS_FRAME.width),
     frameLines(h, max(storey, 2.8), GLASS_FRAME.width)
   );
-  return facadeGlass(flags, wall).mul(float(1).sub(frame));
+  return facadeGlass(flags, wall).mul(
+    float(1).sub(frame.mul(GLASS_FRAME.strength))
+  );
 }
 
 /** What of the clay's own colour a glass or metal wall keeps: it gives way

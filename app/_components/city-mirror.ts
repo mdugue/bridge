@@ -81,7 +81,7 @@ export const MIRROR_OFFSET_M = 4;
 export const MIRROR_WINDOW = { storey: 3.3, axis: 2.8 } as const;
 /** The mirrored house's tone against the sky at the horizon: in the sun,
  *  in shade, its windows' share of that. */
-export const MIRROR_TONE = { lit: 0.85, shade: 0.42, window: 0.45 } as const;
+export const MIRROR_TONE = { lit: 0.85, shade: 0.42, window: 0.8 } as const;
 /** How much of the far band's skyline hazes into the sky. */
 export const MIRROR_FAR_HAZE = 0.55;
 
@@ -181,11 +181,12 @@ export function createCityMirror(sun: V3): CityMirror {
     const along = radians(az).mul(NEAR_M);
     const row = hitH.div(MIRROR_WINDOW.storey);
     const axis = along.div(MIRROR_WINDOW.axis);
-    const inRow = smoothstep(0.3, 0.38, fract(row)).mul(
-      float(1).sub(smoothstep(0.78, 0.86, fract(row)))
+    // soft-edged: a reflection off a pane is never as crisp as the wall
+    const inRow = smoothstep(0.2, 0.45, fract(row)).mul(
+      float(1).sub(smoothstep(0.7, 0.92, fract(row)))
     );
-    const inAxis = smoothstep(0.25, 0.33, fract(axis)).mul(
-      float(1).sub(smoothstep(0.67, 0.75, fract(axis)))
+    const inAxis = smoothstep(0.15, 0.4, fract(axis)).mul(
+      float(1).sub(smoothstep(0.6, 0.85, fract(axis)))
     );
     const sharp = float(1).sub(
       smoothstep(0.25, 0.6, max(fwidth(row), fwidth(axis)))
